@@ -21,8 +21,10 @@ const GLOBAL_BOOL_FLAGS = new Set([
 ]);
 
 // Long options matched by prefix, because git accepts any unique abbreviation.
+// --help is rewritten to `git help <cmd>`, which may launch a browser/help viewer.
 const EXEC_CAPABLE_LONG = Object.freeze([
   "--ext-diff", "--textconv", "--filters", "--output", "--open-files-in-pager", "--show-signature",
+  "--help",
 ]);
 const GREP_PAGER_SHORT = "O";
 const SIGNATURE_PLACEHOLDER_RE = /%G|%\(signature/;

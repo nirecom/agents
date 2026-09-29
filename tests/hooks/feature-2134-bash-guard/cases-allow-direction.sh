@@ -8,7 +8,7 @@
 # sanctioned form here -- the plain command, or the same characters neutralised by single
 # quotes. Since #2264 an unremarkable command is passThrough (no output, the host decides);
 # since #2403 a plain single read-only command (git/gh read, ls/grep/...) is allow via the
-# N3-N5 classes (cases-allow-readonly.sh), alongside this repo's own scripts.
+# N3-N5 classes (tests/hooks/feature-2403-readonly-judge.sh), alongside this repo's own scripts.
 
 a1_sanctioned_forms() {
     local name cmd want got

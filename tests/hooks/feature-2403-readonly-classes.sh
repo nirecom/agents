@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2403-readonly-classes.sh
 # Tests: hooks/lib/readonly-command-classes.js, hooks/lib/readonly-syntax-adapters.js, hooks/lib/bash-write-patterns/git-read-ir.js, hooks/lib/bash-write-patterns/gh-read.js, hooks/lib/gh-api-argv.js, hooks/bash-guard/readonly-class.js, install/readonly-command-classes.json, hooks/confirm-forge-target-ownership/gh-api-argv.js
-# Tags: hook, bash-guard, readonly-allow, classifier, fail-closed, git, gh, security, scope:issue-specific, pwsh-not-required, TL1
+# Tags: hook, bash-guard, readonly-allow, classifier, fail-closed, git, gh, security, scope:issue-specific, pwsh-not-required, TL2
 # #2403 unit layer for the N3/N4/N5 read-only allow classes; judge-level rows live in
-# tests/hooks/feature-2134-bash-guard/cases-allow-readonly.sh.
+# tests/hooks/feature-2403-readonly-judge.sh.
+
+# TL3 gap: this TL2 run calls the classifier modules in-process, so it cannot catch whether
+# Claude Code actually invokes hooks/bash-guard.js on a real Bash tool call, how settings.json
+# and the host permission layer interact with the resulting allow, or real transcript behavior.
 
 set -euo pipefail
 
@@ -110,7 +114,7 @@ row("L9 a non-string root falls back to the default", "d=gh,git;g=" + REAL, shap
 '
 case_end
 
-case_begin "data-file-contents" "hooks/lib/readonly-command-classes.js"
+case_begin "data-file-contents" "install/readonly-command-classes.json"
 ro_section DATA 10 "$RO_REAL"'
 let D = null;
 try { D = JSON.parse(require("fs").readFileSync(A + "/install/readonly-command-classes.json", "utf8")); } catch (e) { D = null; }
@@ -160,7 +164,7 @@ for (const tok of ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fls", "-fp
 case_end
 
 case_begin "git-pure-read" "hooks/lib/bash-write-patterns/git-read-ir.js"
-ro_section GIT 106 '
+ro_section GIT 181 '
 const R = load("hooks/lib/bash-write-patterns/git-read-ir.js"), RP = "git-read-ir.js";
 const W = load("hooks/lib/bash-write-patterns/git-write-ir.js");
 const POS = [
@@ -172,6 +176,22 @@ const POS = [
   ["remote"], ["remote", "-v"], ["remote", "--verbose"], ["remote", "get-url", "origin"], ["remote", "show"],
   ["remote", "show", "-n", "origin"], ["stash", "list"], ["stash", "show"], ["worktree", "list"],
   ["worktree", "list", "--porcelain"], ["rev-parse", "--git-path", "x"], ["var", "GIT_EDITOR"],
+  ["--glob-pathspecs", "log"], ["--noglob-pathspecs", "log"], ["--icase-pathspecs", "log"],
+  ["worktree", "list", "--verbose"], ["branch", "--merged", "HEAD"],
+  // tag -n: the spaced form (TAG_LIST_FLAGS) and the attached -n<num> form (TAG_N_NUM_RE).
+  ["tag", "-n", "5"], ["tag", "-n", "0"], ["tag", "-l", "-n5"], ["tag", "-n5", "-l", "v*"], ["tag", "-l", "-n1", "v*"],
+  // Every GLOBAL_VALUE_FLAGS / BRANCH_READ_FLAGS / BRANCH_LIST_FLAGS / TAG_READ_FLAGS /
+  // TAG_LIST_FLAGS / WORKTREE_LIST_FLAGS member not exercised above.
+  ["--work-tree", "/x", "status"], ["branch", "-r"], ["branch", "-v"], ["branch", "-vv"], ["branch", "--show-current"],
+  ["branch", "-l"], ["branch", "--no-merged", "HEAD"], ["branch", "--points-at", "HEAD"],
+  ["branch", "-l", "--format=%(refname:short)"], ["branch", "--format", "%(refname)", "--list"],
+  ["tag", "--list", "v*"], ["tag", "--contains", "HEAD"], ["tag", "--merged", "HEAD"], ["tag", "--no-merged", "HEAD"],
+  ["tag", "--points-at", "HEAD"], ["tag", "--sort=-creatordate", "-l"], ["tag", "--sort=-creatordate"],
+  ["tag", "--sort", "refname", "-l"], ["tag", "--format=%(refname)", "-l", "v*"], ["tag", "--format", "%(refname)", "-l"],
+  ["tag", "-n"], ["worktree", "list", "-v"], ["worktree", "list", "-z"], ["worktree", "list", "--porcelain", "-z"],
+  ["remote", "show", "-n"],
+  // -h prints usage only; --help after -- is a pathspec; --histogram is no prefix of --help.
+  ["log", "-h"], ["status", "-h"], ["log", "--", "--help"], ["diff", "--histogram"],
 ];
 const NEG = [
   [], ["-c", "a=b", "log"], ["--config-env=a=B", "log"], ["--exec-path=/x", "status"], ["-p", "log"], ["--paginate", "log"],
@@ -184,6 +204,21 @@ const NEG = [
   ["remote", "add", "a", "b"], ["remote", "set-url", "a", "b"], ["stash"], ["stash", "drop"], ["stash", "pop"],
   ["worktree", "remove", "x"], ["worktree", "add", "x"], ["worktree", "list", "--expire", "x"],
   ["diff", "--text"], ["rev-list", "--filter=blob:none", "HEAD"],
+  // Fail-closed today: git-write-ir sees no TAG_READ_FLAGS token in a lone -n<num>, so calls it a write.
+  ["tag", "-n5"], ["tag", "-n1", "v*"],
+  // Globals: a short value flag with =, a value flag with no value, no subcommand, a bool with =.
+  ["-C=/x", "status"], ["--git-dir"], ["-C", "/x"], ["--no-pager=1", "log"],
+  // The SIDE_EFFECT_READ_SUBCOMMANDS not listed above.
+  ["instaweb"], ["gui"], ["gitk"],
+  // git-write-ir matches BRANCH_READ_FLAGS by exact token, so their = forms read as a write.
+  ["branch", "--format=%(refname)"], ["branch", "--merged=HEAD"],
+  // An operand with no list flag is a create/pattern form; a spaced --sort value is an operand
+  // (or, when it starts with -, an unknown flag).
+  ["branch", "--show-current", "x"], ["branch", "-r", "x"], ["tag", "--sort", "refname"],
+  ["tag", "--sort", "-creatordate", "-l"], ["tag", "--sort=-creatordate", "v1"],
+  // worktree list takes only whole WORKTREE_LIST_FLAGS tokens; remote get-url takes one bare name.
+  ["worktree", "list", "--porcelain", "x"], ["worktree", "list", "-vz"],
+  ["remote", "get-url", "--push", "origin"], ["remote", "get-url"],
 ];
 // EXEC_CAPABLE_OPTIONS: full, unique-prefix and = forms of every option that launches a program.
 const EXEC = [
@@ -196,6 +231,15 @@ const EXEC = [
   ["log", "--show-signature"], ["log", "--show-sig"], ["log", "--show-signature=x"],
   ["log", "--format=%G?"], ["log", "--pretty=format:%GS"], ["show", "--format=%GK"], ["log", "--format", "%GG"],
   ["for-each-ref", "--format=%(signature)"],
+  ["tag", "-l", "--format=%(signature)"], ["branch", "-l", "--format=%GS"], ["stash", "list", "--format=%GS"],
+  ["grep", "-nO", "x"],
+  // --help dispatches to `git help <cmd>` (may open a browser); unique prefixes count too.
+  // branch/tag/remote/worktree --help were already rejected by isConditionalRead; stash list was not.
+  ["log", "--help"], ["status", "--help"], ["diff", "--hel"], ["show", "--he"], ["log", "--h"],
+  ["branch", "--help"], ["tag", "--help"], ["worktree", "list", "--help"], ["remote", "--help"],
+  ["stash", "list", "--help"],
+  // Fail-closed: git rewrites only a leading exact --help, but any spelling is rejected.
+  ["log", "--help=x"], ["log", "--oneline", "--help"],
 ];
 for (const a of POS) row("pure-read " + J(a), true, call(R, RP, "isGitPureReadArgv", a));
 for (const a of NEG) row("not pure-read " + J(a), false, call(R, RP, "isGitPureReadArgv", a));
@@ -205,7 +249,7 @@ row("invariant: no positive is a git write", "", W ? POS.filter((a) => W.isGitWr
 case_end
 
 case_begin "gh-read" "hooks/lib/bash-write-patterns/gh-read.js"
-ro_section GH 90 '
+ro_section GH 153 '
 const R = load("hooks/lib/bash-write-patterns/gh-read.js"), RP = "gh-read.js";
 const P = load("hooks/lib/bash-write-patterns/patterns.js");
 const POS = [
@@ -216,6 +260,18 @@ const POS = [
   ["pr", "view", "1", "-R", "o/r"], ["pr", "view", "1", "--repo=o/r"],
   ["api", "repos/o/r/issues"], ["api", "repos/o/r/pulls", "--jq", ".[].number"], ["api", "-X", "GET", "x"],
   ["api", "--paginate", "x"], ["api", "-H", "Accept: application/json", "x"],
+  // API_READ_METHOD_RE (forge-write-extract.js) treats GET and HEAD as reads, in every spelling.
+  ["api", "--method", "GET", "repos/o/r/issues"], ["api", "--method=GET", "repos/o/r/issues"],
+  ["api", "-X", "HEAD", "repos/o/r/issues"],
+  // repo view selector boundary: a host-less OWNER/REPO (one slash) stays a read, at any position;
+  // a one-slash flag value is not host-qualified; the 2+-slash screen is scoped to repo view only.
+  ["repo", "view", "owner/repo"], ["-R", "o/r", "repo", "view"], ["repo", "view", "-R", "o/r"],
+  ["repo", "view", "-b", "feature/x"], ["repo", "view", "o/r", "-b", "main"],
+  ["pr", "view", "feature/x"], ["pr", "view", "a/b/c"], ["issue", "view", "12"],
+  // A short bool flag with no R in its letter run stays a read (SHORT_REPO_CLUSTER_RE boundary).
+  ["pr", "view", "1", "-c"],
+  // Lowercase r is not R: the cluster check is case-sensitive (-cr is no real gh flag; boundary only).
+  ["pr", "view", "1", "-cr"],
 ];
 const NEG = [
   [], ["pr", "create"], ["pr", "checkout", "1"], ["pr", "merge", "1"], ["issue", "close", "1"], ["issue", "create"],
@@ -230,6 +286,14 @@ const NEG = [
   ["-R", "h/o/r", "pr", "view", "1"], ["pr", "view", "1", "-R", "h/o/r"], ["--repo=h/o/r", "pr", "view", "1"],
   ["pr", "view", "1", "--repo", "h/o/r"], ["-R", "o", "pr", "view", "1"], ["-R", "o/r", "api", "x"],
   ["--repo", "o/r", "api", "x"], ["--unknown", "pr", "view", "1"],
+  // Attached -R<value> is refused at any position, host-less value included: the spelling itself.
+  // ["-Ro/r", ...] is refused by skipGlobals (pre-subcommand), not by repoValuesOk.
+  ["pr", "view", "1", "-Rh.example/o/r"], ["-Ro/r", "issue", "list"], ["issue", "list", "-Ro/r"],
+  // Clustered -R: pflag splits -cR<value> into -c + -R <value>, so any letter run holding R is
+  // refused, attached or spaced value, host-less value included.
+  ["pr", "view", "1", "-cRh.example/o/r"], ["pr", "view", "1", "-cR", "h.example/o/r"], ["run", "view", "1", "-vRo/r"],
+  ["-cR", "o/r", "pr", "list"], ["issue", "list", "-cRo/r"],
+  ["pr", "view", "1", "-cvRo/r"], ["pr", "view", "1", "-cR", "o/r"],
   ["api", "-X", "POST", "x"], ["api", "--method", "DELETE", "x"], ["api", "x", "-f", "a=b"], ["api", "x", "-F", "a=b"],
   ["api", "x", "--field", "a=b"], ["api", "x", "--raw-field", "a=b"], ["api", "x", "--input", "f"],
   ["api", "-H", "X-HTTP-Method-Override: DELETE", "x"], ["api", "--header", "x-http-method-override: PATCH", "x"],
@@ -248,7 +312,22 @@ const NEG = [
   ["api", "--cache", "1h", "repos/o/r"],
   ["api", "https://attacker.invalid/path"],
   ["pr", "view", "https://attacker.invalid/o/r/pull/1"],
+  // repo view [HOST/]OWNER/REPO: any 2+-slash token after `repo view` names a foreign host, even
+  // behind a valid -R; flag values are refused too (fail-closed), in spaced and = spellings.
+  ["repo", "view", "attacker.invalid/o/r"], ["repo", "view", "github.com/o/r"], ["repo", "view", "o/r/extra"],
+  ["-R", "o/r", "repo", "view", "h/o/r"], ["repo", "view", "h/o/r", "-R", "o/r"], ["repo", "view", "a//b"],
+  ["repo", "view", "-b", "a/b/c"], ["repo", "view", "--branch=a/b/c"],
 ];
+// Method matrix: every spelling scanGhApiFlags accepts x GET/HEAD (API_READ_METHOD_RE is /i) is a
+// read, and x every write verb is not; a spelling already listed above is not repeated.
+const SPELL = [(m) => ["-X", m], (m) => ["-X" + m], (m) => ["--method", m], (m) => ["--method=" + m]];
+const seen = new Set([...POS, ...NEG].map((a) => J(a.slice(0, -1))));
+const add = (list, a) => { const k = J(a.slice(0, -1)); if (!seen.has(k)) { seen.add(k); list.push(a); } };
+for (const m of ["GET", "HEAD", "get", "head"]) for (const s of SPELL) add(POS, ["api", ...s(m), "x"]);
+for (const m of ["POST", "PUT", "PATCH", "DELETE", "post"])
+  for (const s of [...SPELL, (v) => ["-X=" + v]]) add(NEG, ["api", ...s(m), "x"]);
+// -X=GET: pflag would read GET, but the scan keeps "=GET" as the method, so it fails closed.
+for (const m of ["GET", "HEAD", "get", "head"]) add(NEG, ["api", "-X=" + m, "x"]);
 for (const a of POS) row("gh read " + J(a), true, call(R, RP, "isGhReadArgv", a, a));
 for (const a of NEG) row("not gh read " + J(a), false, call(R, RP, "isGhReadArgv", a, a));
 row("invariant: no positive is a gh write", "", P ? POS.filter((a) => P.isGhWriteArgv(a)).map(J).join(" ") : "<MISSING:patterns>");
@@ -256,16 +335,11 @@ row("invariant: no positive is a gh write", "", P ? POS.filter((a) => P.isGhWrit
 case_end
 
 case_begin "gh-api-argv-lib" "hooks/lib/gh-api-argv.js"
-ro_section GHAPI 12 '
-const L = load("hooks/lib/gh-api-argv.js"), C = load("hooks/confirm-forge-target-ownership/gh-api-argv.js");
+ro_section GHAPI 8 '
+const L = load("hooks/lib/gh-api-argv.js");
 const LP = "hooks/lib/gh-api-argv.js";
 row("G1 lib exports scanGhApiFlags / hasInputFlag / PAYLOAD_FIELD_FLAGS",
     "function,function,true", L ? [typeof L.scanGhApiFlags, typeof L.hasInputFlag, L.PAYLOAD_FIELD_FLAGS instanceof Set].join(",") : "<MISSING:" + LP + ">");
-row("G2 the old module re-exports the same objects (one SSOT)", "true,true,true",
-    L && C ? [C.scanGhApiFlags === L.scanGhApiFlags, C.hasInputFlag === L.hasInputFlag, C.PAYLOAD_FIELD_FLAGS === L.PAYLOAD_FIELD_FLAGS].join(",") : "<MISSING>");
-row("G3 the old module keeps isGhApiWriteArgv", "function", C ? typeof C.isGhApiWriteArgv : "<MISSING>");
-let src = ""; try { src = require("fs").readFileSync(A + "/hooks/confirm-forge-target-ownership/gh-api-argv.js", "utf8"); } catch (e) {}
-row("G4 the old module still references isGhApiWriteFromFlags", "true", src.includes("isGhApiWriteFromFlags"));
 row("G5 PAYLOAD_FIELD_FLAGS unchanged", "--field,--raw-field,-F,-f", L && L.PAYLOAD_FIELD_FLAGS instanceof Set ? [...L.PAYLOAD_FIELD_FLAGS].sort().join(",") : "<MISSING>");
 const s = call(L, LP, "scanGhApiFlags", ["-X", "POST", "x"]);
 row("G6 scan: -X POST x", J({ flags: [["-X", "POST"]], endpoint: "x", ambiguous: false }),
@@ -278,6 +352,17 @@ const fl = (a) => { const r = call(L, LP, "scanGhApiFlags", a); return typeof r 
 row("G10 scan: attached -XPOST is a method flag", J([["-X", "POST"]]), fl(["-XPOST", "x"]));
 row("G11 scan: --method=POST is a method flag", J([["--method", "POST"]]), fl(["--method=POST", "x"]));
 row("G12 scan: payload flag after an explicit GET is still recorded", J([["-X", "GET"], ["-f", "a=b"]]), fl(["-X", "GET", "x", "-f", "a=b"]));
+'
+case_end
+
+case_begin "gh-api-argv-confirm-forge-shim" "hooks/confirm-forge-target-ownership/gh-api-argv.js"
+ro_section GHAPI-SHIM 4 '
+const L = load("hooks/lib/gh-api-argv.js"), C = load("hooks/confirm-forge-target-ownership/gh-api-argv.js");
+row("G2 the old module re-exports the same objects (one SSOT)", "true,true,true",
+    L && C ? [C.scanGhApiFlags === L.scanGhApiFlags, C.hasInputFlag === L.hasInputFlag, C.PAYLOAD_FIELD_FLAGS === L.PAYLOAD_FIELD_FLAGS].join(",") : "<MISSING>");
+row("G3 the old module keeps isGhApiWriteArgv", "function", C ? typeof C.isGhApiWriteArgv : "<MISSING>");
+let src = ""; try { src = require("fs").readFileSync(A + "/hooks/confirm-forge-target-ownership/gh-api-argv.js", "utf8"); } catch (e) {}
+row("G4 the old module still references isGhApiWriteFromFlags", "true", src.includes("isGhApiWriteFromFlags"));
 row("G9 isGhApiWriteArgv verdicts unchanged", "true,false", C ? [C.isGhApiWriteArgv(["-X", "POST", "x"]), C.isGhApiWriteArgv(["x"])].join(",") : "<MISSING>");
 '
 case_end

@@ -1,12 +1,137 @@
-# tests/hooks/feature-2134-bash-guard/cases-allow-readonly.sh
-# Tests: hooks/bash-guard/judge.js, hooks/bash-guard/readonly-class.js, hooks/bash-guard/reasons.js, hooks/bash-guard/allow.js
+#!/usr/bin/env bash
+# tests/hooks/feature-2403-readonly-judge.sh
+# Tests: hooks/bash-guard/readonly-class.js, hooks/lib/bash-write-patterns/git-read-ir.js, hooks/lib/bash-write-patterns/gh-read.js, hooks/lib/readonly-syntax-adapters.js, hooks/bash-guard/judge.js
 # Tags: hook, bash-guard, classifier, readonly-allow, interlock, newline-guard, scope:issue-specific, pwsh-not-required, TL2
-# R1-R8: the N3/N4/N5 read-only allow classes at judge level (#2403). Sourced by the dispatcher.
+# R1-R8: the N3/N4/N5 read-only allow classes at judge level (#2403), driven through
+# judgeBashCommand by tests/hooks/feature-2134-bash-guard/judge-probe.js. Unit rows live in
+# tests/hooks/feature-2403-readonly-classes.sh.
+
+set -uo pipefail
+
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 # WHY (#2403): settings.json globs (`git diff *`, `find *`) cannot bound argv; bash-guard reads
 # the IR, so every positive gets a near-miss twin that must NOT allow (write, side effect,
 # exec-capable option, foreign host, path cmd0, credential read, newline smuggling).
-# bg_write_state (cases-interlock.sh) must already be sourced for R8.
+
+# TL3 gap: this TL2 run calls judgeBashCommand directly, so it cannot catch whether Claude Code
+# actually invokes hooks/bash-guard.js on a real Bash tool call and honors permissionDecision
+# allow, how settings.json and the host permission layer interact with that allow, or real
+# transcript behavior. Only a real `claude -p` session exercises those seams.
+
+ROWS=0
+ROWS_EXPECTED=206
+
+check() {
+    local name="$1" want="$2" got="$3"
+    if [[ "$want" == "$got" ]]; then pass "$name"; else fail "$name" "want=[$want] got=[$got]"; fi
+}
+
+TMPROOT="$(make_tmp)" || { echo "FAIL: harness -- make_tmp failed"; exit 1; }
+trap 'rm -rf "$TMPROOT"' EXIT
+
+# Fixture isolation (rules/test/fixture-isolation.md): workflow + plans dirs dual-pinned by the
+# harness, session ids unset by the harness, HOME pointed at a fixture home with no allow rules.
+harness_isolate "$TMPROOT"
+FIXTURE_HOME="$TMPROOT/home"
+mkdir -p "$FIXTURE_HOME/.claude"
+printf '%s\n' '{"permissions":{"allow":[],"deny":[]}}' > "$FIXTURE_HOME/.claude/settings.json"
+
+# rj_write_state <sid> <status>: every workflow step at one status. "complete" is the settled
+# default session (probe's default sid); "pending" arms the early write gate (R8).
+RJ_STEPS="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests run_tests review_security docs user_verification cleanup pre_final_report_gate"
+rj_write_state() {
+    local sid="$1" status="$2" step steps=""
+    for step in $RJ_STEPS; do
+        steps="$steps,\"$step\":{\"status\":\"$status\",\"updated_at\":null}"
+    done
+    printf '{"version":1,"session_id":"%s","created_at":"2026-01-01T00:00:00.000Z","is_bugfix":false,"git_branch":"feature/2403-allow-read-only-gh-read","steps":{%s},"workflow_type":"wf-code"}' \
+        "$sid" "${steps#,}" > "$CLAUDE_WORKFLOW_DIR/$sid.json"
+}
+rj_write_state "sid-bg-armed" "complete"
+
+WIN_PROBE="$(np "$AGENTS_DIR/tests/hooks/feature-2134-bash-guard/judge-probe.js")"
+CMDFILE="$TMPROOT/cmd.txt"
+
+# probe <mode> <command-text> [sessionId]: one line from judge-probe.js. The command text goes
+# through a file so the shell cannot rewrite the literals under test. In a record pass
+# (RJ_PREFETCH=1) the call is only queued; otherwise it is served from RJ_CACHE when present.
+RJ_PREFETCH=0
+declare -A RJ_CACHE=()
+RJ_BATCH_IN="$TMPROOT/batch-in.bin"
+RJ_BATCH_OUT="$TMPROOT/batch-out.bin"
+RJ_BATCH_STDIN="$TMPROOT/batch-stdin.txt"
+RJ_BATCH_FIELDS=10
+probe() {
+    local mode="$1" cmd="$2" sid="${3:-}" key
+    # Same 10-field record judge-probe.js batch mode reads (tool/spath/cwd/root fields unused).
+    local -a rec=("$mode" "$cmd" "$sid" "" "" "$FIXTURE_HOME" "" "" "" "")
+    if [[ "$RJ_PREFETCH" == 1 ]]; then printf '%s\0' "${rec[@]}" >> "$RJ_BATCH_IN"; return 0; fi
+    printf -v key '%s\x1f' "${rec[@]}"
+    if [[ -n "${RJ_CACHE[$key]+x}" ]]; then printf '%s' "${RJ_CACHE[$key]}"; return 0; fi
+    printf '%s' "$cmd" > "$CMDFILE"
+    HOME="$FIXTURE_HOME" USERPROFILE="$FIXTURE_HOME" \
+        run_with_timeout 30 node "$WIN_PROBE" "$mode" "$(np "$CMDFILE")" "$sid" 2>/dev/null
+}
+
+# verdict_code_of <command-text> [sessionId] -> "<verdict>|<code>"; <MISSING:...>/<THREW:...> verbatim.
+verdict_code_of() {
+    local line rest
+    line="$(probe judge "$1" "${2:-}")"
+    case "$line" in
+        "<"*) printf '%s' "$line" ;;
+        *) rest="${line#*$'\t'}"; printf '%s|%s' "${line%%$'\t'*}" "${rest%%$'\t'*}" ;;
+    esac
+}
+
+# mkcmd <table-field> -> command text: padding stripped, a literal two-character `\n` turned into
+# a real newline. Tables are `~`-separated so a `|` case survives intact.
+mkcmd() {
+    local s="$1"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    printf '%s' "${s//\\n/$'\n'}"
+}
+
+# rj_batch_run <label>: answer the queued records in one node and fill RJ_CACHE. A result count
+# short of the record count (or a missing END marker) FAILS loudly and leaves the cache empty.
+rj_batch_run() {
+    local label="$1" n i key
+    local -a recs res
+    RJ_CACHE=()
+    [[ -s "$RJ_BATCH_IN" ]] || return 0
+    mapfile -d '' -t recs < "$RJ_BATCH_IN"
+    n=$(( ${#recs[@]} / RJ_BATCH_FIELDS ))
+    : > "$RJ_BATCH_OUT"
+    HOME="$FIXTURE_HOME" USERPROFILE="$FIXTURE_HOME" \
+        run_with_timeout 300 node "$WIN_PROBE" batch "$(np "$RJ_BATCH_IN")" "$(np "$RJ_BATCH_OUT")" 2>/dev/null
+    : > "$RJ_BATCH_IN"
+    mapfile -d '' -t res < "$RJ_BATCH_OUT"
+    if (( ${#recs[@]} % RJ_BATCH_FIELDS != 0 || ${#res[@]} != n + 1 )) || [[ "${res[n]:-}" != "<END:$n>" ]]; then
+        fail "BATCH/$label: the batch answered ${#res[@]} lines for $n rows (want $n + <END:$n>)" "${res[*]:0:3}"
+        return 1
+    fi
+    for (( i = 0; i < n; i++ )); do
+        printf -v key '%s\x1f' "${recs[@]:i*RJ_BATCH_FIELDS:RJ_BATCH_FIELDS}"
+        RJ_CACHE[$key]="${res[i]}"
+    done
+}
+
+# rj_batched_stdin <table-fn> [args] <table: speed only. A silent RECORD pass queues every probe
+# (counters restored, output discarded), one node answers the queue, then the real pass asserts
+# row by row from the cache. A row the record pass missed spawns its own node as before.
+rj_batched_stdin() {
+    local buf="" p="$PASS" f="$FAIL" s="$SKIP" r="$ROWS"
+    IFS= read -r -d '' buf || true
+    printf '%s' "$buf" > "$RJ_BATCH_STDIN"
+    RJ_PREFETCH=1; "$@" < "$RJ_BATCH_STDIN" > /dev/null 2>&1; RJ_PREFETCH=0
+    PASS="$p"; FAIL="$f"; SKIP="$s"; ROWS="$r"
+    rj_batch_run "$2"
+    "$@" < "$RJ_BATCH_STDIN"
+    RJ_CACHE=()
+}
 
 # ra_rows <label> [sid] -- reads `name ~ command ~ verdict|code` rows from stdin.
 ra_rows() {
@@ -18,14 +143,14 @@ ra_rows() {
         cmd="$(mkcmd "$cmd")"
         ROWS=$((ROWS + 1))
         got="$(verdict_code_of "$cmd" "$sid")"
-        assert_eq "$label/$name: [$cmd]" "$want" "$got"
+        check "$label/$name: [$cmd]" "$want" "$got"
     done
 }
 
 case_begin "readonly-positive" "hooks/bash-guard/readonly-class.js"
 # R1: every class answers with its own reason code, so a row cannot pass by landing in a
 # sibling class (a gh read reported as GENERIC would hide a missing delegate).
-bg_batched_stdin ra_rows R1 <<'TABLE'
+rj_batched_stdin ra_rows R1 <<'TABLE'
 n3-ls            ~ ls -la                                ~ allow|BG-ALLOW-READONLY-GENERIC
 n3-cat           ~ cat README.md                         ~ allow|BG-ALLOW-READONLY-GENERIC
 n3-head          ~ head -n 5 f                           ~ allow|BG-ALLOW-READONLY-GENERIC
@@ -52,10 +177,14 @@ n4-pr-view       ~ gh pr view 12                         ~ allow|BG-ALLOW-READON
 n4-issue-R-post  ~ gh issue list -R o/r                  ~ allow|BG-ALLOW-READONLY-GH
 n4-R-prefix      ~ gh -R o/r pr view 1                   ~ allow|BG-ALLOW-READONLY-GH
 n4-api-get       ~ gh api repos/o/r/issues               ~ allow|BG-ALLOW-READONLY-GH
+n4-api-method-eq ~ gh api --method=GET repos/o/r         ~ allow|BG-ALLOW-READONLY-GH
+n4-api-X-head    ~ gh api -X HEAD repos/o/r              ~ allow|BG-ALLOW-READONLY-GH
+n4-api-method-hd ~ gh api --method HEAD repos/o/r        ~ allow|BG-ALLOW-READONLY-GH
+n4-lower-r-clus  ~ gh pr view 1 -cr                      ~ allow|BG-ALLOW-READONLY-GH
 TABLE
 # `HEAD~1` carries the table separator, so this positive sits outside the table.
 ROWS=$((ROWS + 1))
-assert_eq "R1/n5-no-pager: [git --no-pager diff HEAD~1]" \
+check "R1/n5-no-pager: [git --no-pager diff HEAD~1]" \
     "allow|BG-ALLOW-READONLY-GIT" "$(verdict_code_of 'git --no-pager diff HEAD~1')"
 case_end
 
@@ -73,7 +202,7 @@ ra_generic_cmd() {
         uname) echo "uname -a" ;; df) echo "df -h" ;; which|type) echo "$1 node" ;; *) echo "$1 f" ;;
     esac
 }
-bg_batched_stdin ra_rows R1b < <(
+rj_batched_stdin ra_rows R1b < <(
     for n in "${RA_GENERIC[@]}"; do printf 'gen-%s ~ %s ~ allow|BG-ALLOW-READONLY-GENERIC\n' "$n" "$(ra_generic_cmd "$n")"; done
     for s in "${RA_PURE[@]}"; do printf 'git-%s ~ git %s ~ allow|BG-ALLOW-READONLY-GIT\n' "$s" "$s"; done
 )
@@ -82,7 +211,7 @@ case_end
 case_begin "readonly-git-negative" "hooks/lib/bash-write-patterns/git-read-ir.js"
 # R2: git writes, side-effecting reads, disallowed globals, and the holes the existing
 # read/write classifier leaves open (`branch --delete -r`, `remote -v add`, `config edit`).
-bg_batched_stdin ra_rows R2 <<'TABLE'
+rj_batched_stdin ra_rows R2 <<'TABLE'
 add              ~ git add .                             ~ passThrough|BG-NO-HIT
 fetch            ~ git fetch                             ~ passThrough|BG-NO-HIT
 difftool         ~ git difftool                          ~ passThrough|BG-NO-HIT
@@ -108,7 +237,7 @@ case_end
 case_begin "readonly-git-exec-capable" "hooks/lib/bash-write-patterns/git-read-ir.js"
 # R3: options that launch an external program from a read (codex C1). Prefix forms included,
 # because git accepts any unique abbreviation of a long option.
-bg_batched_stdin ra_rows R3 <<'TABLE'
+rj_batched_stdin ra_rows R3 <<'TABLE'
 diff-textconv    ~ git diff --textconv                   ~ passThrough|BG-NO-HIT
 show-textconv    ~ git show --textconv HEAD              ~ passThrough|BG-NO-HIT
 diff-textc       ~ git diff --textc                      ~ passThrough|BG-NO-HIT
@@ -127,14 +256,16 @@ verify-commit    ~ git verify-commit HEAD                ~ passThrough|BG-NO-HIT
 verify-tag       ~ git verify-tag v1                     ~ passThrough|BG-NO-HIT
 remote-show-name ~ git remote show origin                ~ passThrough|BG-NO-HIT
 ls-remote-upload ~ git ls-remote --upload-pack=x origin  ~ passThrough|BG-NO-HIT
+log-help         ~ git log --help                        ~ passThrough|BG-NO-HIT
 TABLE
 case_end
 
 case_begin "readonly-gh-negative" "hooks/lib/bash-write-patterns/gh-read.js"
 # R4: gh writes, non-allowlisted subcommands, --web, and gh api with a write/payload/override.
-# R5: --hostname before AND after the subcommand, and host-qualified -R (codex C2) -- a read
+# R5: --hostname before AND after the subcommand, host-qualified, attached or clustered -R (codex C2) and a host-qualified
+# `repo view` selector -- a read
 # must never send the gh token to a host the user did not choose.
-bg_batched_stdin ra_rows R4 <<'TABLE'
+rj_batched_stdin ra_rows R4 <<'TABLE'
 pr-create        ~ gh pr create                          ~ passThrough|BG-NO-HIT
 issue-close      ~ gh issue close 1                      ~ passThrough|BG-NO-HIT
 pr-merge         ~ gh pr merge 1                         ~ passThrough|BG-NO-HIT
@@ -166,7 +297,7 @@ api-input-eq     ~ gh api x --input=f                    ~ passThrough|BG-NO-HIT
 api-H-attach-ov  ~ gh api '-HX-HTTP-Method-Override: DELETE' x ~ passThrough|BG-NO-HIT
 api-header-eq-ov ~ gh api '--header=X-HTTP-Method-Override: DELETE' x ~ passThrough|BG-NO-HIT
 TABLE
-bg_batched_stdin ra_rows R5 <<'TABLE'
+rj_batched_stdin ra_rows R5 <<'TABLE'
 host-pre-api     ~ gh --hostname h api x                 ~ passThrough|BG-NO-HIT
 host-eq-pre-api  ~ gh --hostname=h api x                 ~ passThrough|BG-NO-HIT
 host-mid-api     ~ gh api --hostname h x                 ~ passThrough|BG-NO-HIT
@@ -177,6 +308,11 @@ R-host-pre       ~ gh -R h.example/o/r pr view 1         ~ passThrough|BG-NO-HIT
 repo-host-post   ~ gh pr view 1 --repo=h.example/o/r     ~ passThrough|BG-NO-HIT
 R-before-api     ~ gh -R o/r api x                       ~ passThrough|BG-NO-HIT
 unknown-global   ~ gh --unknown pr view 1                ~ passThrough|BG-NO-HIT
+repo-view-host   ~ gh repo view attacker.invalid/o/r     ~ passThrough|BG-NO-HIT
+r-R-attach       ~ gh pr view 1 -Rh.example/o/r          ~ passThrough|BG-NO-HIT
+r-R-cluster      ~ gh pr view 1 -cRh.example/o/r         ~ passThrough|BG-NO-HIT
+r-R-cluster-2l   ~ gh pr view 1 -cvRo/r                  ~ passThrough|BG-NO-HIT
+r-R-clus-space   ~ gh pr view 1 -cR o/r                  ~ passThrough|BG-NO-HIT
 TABLE
 case_end
 
@@ -184,7 +320,7 @@ case_begin "readonly-generic-negative" "hooks/lib/readonly-syntax-adapters.js"
 # R6: N3 near-misses -- find actions that write or exec, per-command deny flags (prefix and
 # short-cluster forms), commands with no class, path/.exe/wrapper-spelled cmd0, and reads of
 # credential or dotenv files that the credential guards own.
-bg_batched_stdin ra_rows R6 <<'TABLE'
+rj_batched_stdin ra_rows R6 <<'TABLE'
 find-delete      ~ find . -delete                        ~ passThrough|BG-NO-HIT
 find-exec-plus   ~ find . -exec rm {} +                  ~ passThrough|BG-NO-HIT
 find-fprint0     ~ find . -fprint0 out                   ~ passThrough|BG-NO-HIT
@@ -206,7 +342,7 @@ cred-home-var    ~ cat $HOME/.ssh/id_rsa                 ~ passThrough|BG-NO-HIT
 TABLE
 # `~/.ssh` carries the table separator, so the credential row sits outside the table.
 ROWS=$((ROWS + 1))
-assert_eq "R6/credential-cat: [cat ~/.ssh/id_rsa]" \
+check "R6/credential-cat: [cat ~/.ssh/id_rsa]" \
     "passThrough|BG-NO-HIT" "$(verdict_code_of 'cat ~/.ssh/id_rsa')"
 case_end
 
@@ -214,7 +350,7 @@ case_begin "readonly-structural" "hooks/bash-guard/judge.js"
 # R7: structure outranks class. deny forms stay deny (deny > allow); a newline or CR turns one
 # visible command into two, so it skips the WHOLE allow path -- self-script included (the SELF_*
 # newline hole this issue closes); forms settings.json denies must never become allow.
-bg_batched_stdin ra_rows R7 <<'TABLE'
+rj_batched_stdin ra_rows R7 <<'TABLE'
 env-prefix       ~ A=1 ls                                ~ deny|BG-ENV-PREFIX
 env-ext-diff     ~ GIT_EXTERNAL_DIFF=x git diff          ~ deny|BG-ENV-PREFIX
 pipe             ~ ls | head                             ~ deny|BG-PIPE
@@ -228,11 +364,11 @@ settings-reset   ~ git reset --hard                      ~ passThrough|BG-NO-HIT
 settings-clean   ~ git clean -fd                         ~ passThrough|BG-NO-HIT
 TABLE
 ROWS=$((ROWS + 1))
-assert_eq "R7/cr-git: a CR inside the command skips the allow path" \
+check "R7/cr-git: a CR inside the command skips the allow path" \
     "passThrough|BG-NO-HIT" "$(verdict_code_of $'git status\rrm -rf x')"
 # Vacuity guard for newline-self: the same self-script without the newline IS allowed.
 ROWS=$((ROWS + 1))
-assert_eq "R7/self-script-baseline: the one-line self-script still allows" \
+check "R7/self-script-baseline: the one-line self-script still allows" \
     "allow|BG-ALLOW-SELF-SCRIPT" "$(verdict_code_of 'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list')"
 case_end
 
@@ -240,12 +376,12 @@ case_begin "readonly-interlock" "hooks/bash-guard/judge.js"
 # R8: while the early write gate is armed, bash-guard stays silent EXCEPT for a plain
 # read-only command (the gate blocks Edit/Write only; clarify-intent research is read-heavy).
 # Anything else -- compound, write, self-script, unparseable, newline -- stays INTERLOCK_QUIET.
-BG_SID_RO_GATE="sid-bg-ro-gate-armed"
-bg_write_state "$BG_SID_RO_GATE" "pending"
+RJ_SID_RO_GATE="sid-bg-ro-gate-armed"
+rj_write_state "$RJ_SID_RO_GATE" "pending"
 ROWS=$((ROWS + 1))
-assert_eq "R8/vacuity: the fixture session has the early write gate active" \
-    "true	workflow_init	-" "$(probe gate '' "$BG_SID_RO_GATE")"
-bg_batched_stdin ra_rows R8 "$BG_SID_RO_GATE" <<'TABLE'
+check "R8/vacuity: the fixture session has the early write gate active" \
+    "true	workflow_init	-" "$(probe gate '' "$RJ_SID_RO_GATE")"
+rj_batched_stdin ra_rows R8 "$RJ_SID_RO_GATE" <<'TABLE'
 git-status       ~ git status                            ~ allow|BG-ALLOW-READONLY-GIT
 ls               ~ ls -la                                ~ allow|BG-ALLOW-READONLY-GENERIC
 gh-pr-view       ~ gh pr view 1                          ~ allow|BG-ALLOW-READONLY-GH
@@ -257,5 +393,12 @@ newline          ~ git status\nls                        ~ passThrough|BG-INTERL
 TABLE
 case_end
 
-# Row count (dispatcher ROWS_EXPECTED): R1 26+1, R1b 19+32, R2 19, R3 18, R4 30, R5 10,
-# R6 18+1, R7 11+2, R8 1+8 = 196.
+case_begin "row-budget" "hooks/bash-guard/judge.js"
+# A drifted heredoc delimiter or an early return would leave a table reporting green with no
+# rows. R1 30+1, R1b 19+32, R2 19, R3 19, R4 30, R5 15, R6 18+1, R7 11+2, R8 1+8 = 206.
+check "BUDGET: every table-driven loop executed its full row count" "$ROWS_EXPECTED" "$ROWS"
+case_end
+
+echo ""
+echo "Results: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
+[[ "$FAIL" -eq 0 ]]

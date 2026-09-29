@@ -220,9 +220,8 @@ bg_batched_stdin() {
 # leaves a file that counts only its failures reporting green. Breakdown: detect 14 +
 # allow-direction 13 + hit-scope 5 + xargs-pipe 5 + negative 10 + not-forbidden 3 +
 # forbidden-literals-doc-sync 4 + tool-scope 2 + fail-open 3 + interlock 7 + notify-sentinel 19 +
-# notify-interpreter 15 + allow-self-script 42 + allow-readonly 196 + precedence 8 + message 27 +
-# runtime 20.
-ROWS_EXPECTED=393
+# notify-interpreter 15 + allow-self-script 42 + precedence 8 + message 27 + runtime 20.
+ROWS_EXPECTED=197
 
 # TL3 gap (what this test does NOT catch):
 # - Whether Claude Code actually INVOKES hooks/bash-guard.js on a real Bash tool call. The
@@ -247,7 +246,6 @@ ROWS_EXPECTED=393
 . "$PART_DIR/cases-notify-sentinel.sh"
 . "$PART_DIR/cases-notify-interpreter.sh"
 . "$PART_DIR/cases-allow-self-script.sh"
-. "$PART_DIR/cases-allow-readonly.sh"
 . "$PART_DIR/cases-precedence.sh"
 . "$PART_DIR/cases-message.sh"
 . "$PART_DIR/cases-runtime-pretooluse.sh"

@@ -71,14 +71,15 @@ allowed by a positive argv judge instead of a spelling.
   options are an allowlist (`-C`, `--git-dir`, `--work-tree`, `--no-pager`, …); `-c` /
   `--config-env` / `--exec-path` / `-p` never allow. Exec-capable options are rejected by
   unique-prefix match (`--ext-diff`, `--textconv`, `--filters`, `--output`,
-  `--open-files-in-pager`, `--show-signature`, `grep -O`) along with `%G*` / `%(signature`
+  `--open-files-in-pager`, `--show-signature`, `--help`, `grep -O`) along with `%G*` / `%(signature`
   format placeholders. Accepted residual: config-driven launches the argv cannot see
   (`core.pager`, `core.fsmonitor`, repository `diff.external`) — the permission prompt never
   guarded those either.
 - gh (`hooks/lib/bash-write-patterns/gh-read.js`): a subcommand allowlist of list/view/status/
-  diff/checks reads, `-R`/`--repo OWNER/REPO` only, no `--web`/`-w`, and `gh api` only when
+  diff/checks reads, `-R`/`--repo OWNER/REPO` only (attached/clustered `-R` refused), no `--web`/`-w`, and `gh api` only when
   `hooks/lib/gh-api-argv.js` finds no write method, payload flag, method-override header or
-  unknown flag. `--hostname` rejects at any position: a non-default host is a different forge.
+  unknown flag. `--hostname` rejects at any position: a non-default host is a different forge;
+  a host-qualified positional `repo view HOST/OWNER/REPO` is refused for the same reason.
 - Interlock: while the early-write gate blocks, deny/notify/self-script stay quiet but a
   read-only allow still speaks — only when deny and notify find nothing (see
   [settings/hooks.md](settings/hooks.md)).

@@ -1,8 +1,9 @@
 "use strict";
 // hooks/lib/bash-write-patterns/gh-read.js — the positive "read" judgement for gh (#2403 N4).
 // isGhWriteArgv is a denylist, so it is only an extra invariant here: the reason to allow is
-// this module's own allowlist. --hostname is refused at every position and -R/--repo must be
-// a host-less OWNER/REPO, so a prompt-free read never sends the gh token to another host.
+// this module's own allowlist. --hostname is refused at every position, and both -R/--repo
+// and the positional `repo view` selector must be a host-less OWNER/REPO, so a prompt-free
+// read never sends the gh token to another host.
 
 const { isGhWriteArgv, resolveGhSubArgv } = require("./patterns");
 const { isGhApiWriteFromFlags } = require("../forge-write-extract");
@@ -20,12 +21,16 @@ const REPO_VALUE_RE = /^[^/]+\/[^/]+$/;
 const HEADER_FLAGS = new Set(["-H", "--header"]);
 const METHOD_OVERRIDE_RE = /x-http-method-override/i;
 const SHORT_WEB_RE = /^-[A-Za-z]*w[A-Za-z]*(=.*)?$/;
+// Any single-dash token other than exactly "-R" whose leading letter run contains R.
+const SHORT_REPO_CLUSTER_RE = /^-[A-Za-z]*R/;
 
 const isHostname = (tok) => tok === "--hostname" || tok.startsWith("--hostname=");
+const isHostQualified = (tok) => tok.split("/").length > 2;
 const isWeb = (tok) => tok === "--web" || tok.startsWith("--web=") || SHORT_WEB_RE.test(tok);
 
 // Walks tokens for -R/--repo and checks each value. Returns false on a bad value or an
-// attached -R<value> spelling (never needed, so refused rather than parsed).
+// attached (-R<value>) or clustered (-cR<value>, -cR <value>) -R spelling — never needed,
+// so refused rather than parsed.
 function repoValuesOk(tokens) {
   for (let i = 0; i < tokens.length; i += 1) {
     const tok = tokens[i];
@@ -34,7 +39,7 @@ function repoValuesOk(tokens) {
       i += 1;
     } else if (tok.startsWith("--repo=")) {
       if (!REPO_VALUE_RE.test(tok.slice("--repo=".length))) return false;
-    } else if (/^-R./.test(tok)) {
+    } else if (SHORT_REPO_CLUSTER_RE.test(tok)) {
       return false;
     }
   }
@@ -86,6 +91,8 @@ function isGhReadArgv(argv, _argvRaw) {
 
     const sub0 = subArgv[0];
     if (sub0 === "api") return subIdx === 0 && isApiRead(subArgv.slice(1));
+    // Only `repo view` takes a [HOST/]OWNER/REPO positional; fail closed on any 2+-slash token.
+    if (sub0 === "repo" && subArgv[1] === "view" && subArgv.slice(2).some(isHostQualified)) return false;
     const allowed = Object.prototype.hasOwnProperty.call(READ_SUBCOMMANDS, sub0) ? READ_SUBCOMMANDS[sub0] : null;
     return allowed !== null && allowed.has(subArgv[1]);
   } catch (_e) {
