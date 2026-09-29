@@ -1,20 +1,12 @@
 "use strict";
 // lang-check: ignore — pre-existing origin/main content, unmodified by this session's merge.
 // Evidence-based completion resolver (SSOT for step → evidence predicate).
-//
-// Read-only module: never mutates workflow state. Callers (workflow-gate,
-// the next-step script, reconcile-state CLI, and the WORKFLOW_ON handler)
-// consult hasCompletionEvidence() to decide whether a step that is still
-// `pending` in state JSON can be treated as complete based on on-disk
-// artifacts. fail-open contract: any error or missing file yields false
-// (pending treatment preserved) — this never throws.
-//
-// NON-AUTHORITATIVE for the approval-gated steps: this predicate is a heuristic,
-// not completion authority. For `outline` and `detail` it cannot distinguish
-// "review has not started" from "review finished but the user has not approved
-// yet" — both leave the same on-disk shape. Authority for those two steps is the
-// approval record owned by completion-approval.js, enforced at the writeState
-// boundary. A true result here is a necessary, never a sufficient, condition.
+// Read-only: never mutates state. hasCompletionEvidence() tells callers whether a
+// `pending` step can be treated as complete from on-disk artifacts; any error or
+// missing file yields false (fail-open, never throws).
+// NON-AUTHORITATIVE for approval-gated steps (outline / detail): the on-disk shape
+// cannot tell "review not started" from "reviewed, not approved". Authority is the
+// approval record in completion-approval.js; a true result here is necessary, never sufficient.
 
 const path = require("path");
 const { execSync, execFileSync } = require("child_process");
@@ -105,6 +97,15 @@ function resolveRepoDir(opts) {
   }
 }
 
+// #2327: write_code_scope_manifest recorded at write_code completion, or undefined.
+// A state-read failure throws, so the docs branch fails closed (no evidence).
+function readWriteCodeSnapshot(sessionId, opts) {
+  const state = opts.state || (sessionId ? require("./state-io").readState(sessionId) : null);
+  const raw = state && state.steps && state.steps.write_code && state.steps.write_code.write_code_scope_manifest;
+  if (typeof raw !== "string") return raw || undefined;
+  try { return JSON.parse(raw); } catch (_) { return { v: 1, unavailable: true }; }
+}
+
 // step がエビデンスベースで完了とみなせるかを確認する。
 // 失敗（例外・ファイル不在）は fail-open で false を返す（throw しない）。
 //
@@ -123,7 +124,8 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
     if (step === "docs") {
       const repoDir = resolveRepoDir(opts);
       if (!repoDir) return false;
-      return hasStagedDocChanges(repoDir) || hasWorktreeNotesDocEvidence(repoDir);
+      const writeCodeSnapshot = readWriteCodeSnapshot(sessionId, opts);
+      return hasStagedDocChanges(repoDir, { writeCodeSnapshot }) || hasWorktreeNotesDocEvidence(repoDir);
     }
     if (step === "outline") {
       if (!hasPlanArtifact("outline", sessionId)) return false;
@@ -160,6 +162,8 @@ function describeEvidence(step) {
   if (step === "docs") {
     return [
       "a staged file is under docs/ or matches *.md (any name/location, case-insensitive)",
+      "a *.md write-code staged (same blob OID as write_code_scope_manifest) does not count; "
+        + "an unavailable manifest leaves only docs/ files",
       "in a linked worktree: WORKTREE_NOTES.md ## History Notes / ## Changelog Notes has a non-'(none)' bullet",
     ];
   }

@@ -52,6 +52,9 @@ WCD-6. Present the final edited file list + skipped-check notes + scope-expansio
    - stdout `OFF`: skip this step; proceed (no user wait).
    - stdout `ON` or `ERROR`: present the file list and notes; record each per `skills/_shared/handoff-record.md` (`--step write_code`; `--class E --key write-code:checks-skipped` / `--class D --key write-code:scope-expansion`).
 
+WCD-7. Stage the implementation files so the write_code snapshot sees them: `node "$AGENTS_CONFIG_DIR/bin/stage-review-scope-files.js" --worktree "<cwd>" -- <WCD-5 edited files>`
+   - Exit non-zero: stop — do not emit the completion sentinel; report via /supervisor-report.
+
 ## A-layer language essence (complement of B-layer — zero overlap with `rules/coding/*.md`)
 
 - **Python:** read `rules/coding/python.md` before the first Python Edit. All Python invariants (including modern type syntax) are owned by the B-layer.
@@ -87,4 +90,5 @@ Each is best-effort: if the tool or config is absent, skip AND emit `<tool> not 
 
 ## Completion
 
-Emit `echo "<<WORKFLOW_MARK_STEP_write_code_complete>>"` via Bash once WCD-6 passes; skip it when the subagent failed or the WCD-6 review was rejected — fix the work and re-run WCD-4 first.
+Emit `echo "<<WORKFLOW_MARK_STEP_write_code_complete>>"` via Bash after WCD-7 exits 0; skip it when the subagent failed or the WCD-6 review was rejected — fix the work and re-run WCD-4 first.
+Then run `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --session "$SESSION_ID"` and follow its ACTION — it routes to /review-tests when write_code changed the review scope.

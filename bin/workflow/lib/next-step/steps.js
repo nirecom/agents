@@ -55,6 +55,9 @@ const STEP_HINT = Object.freeze({
   pre_final_report_gate: "Run /session-close from the main worktree.",
 });
 
+// #2327: NEXT_HINT when review_tests was reopened by a write_code completion.
+const REVIEW_TESTS_REOPEN_HINT = "Run /review-tests via the Skill tool: write_code changed the review scope after the first review. When it completes, run next-step again and follow its ACTION; do not re-run /write-code.";
+
 // WF_META_AUTO_SKIP / effectiveStatus now live in
 // hooks/workflow-state/effective-state.js (SSOT).
 
@@ -92,6 +95,7 @@ function isTerminalStep(step) {
   checkNoQuote(STEP_TO_SKILL, "STEP_TO_SKILL");
   checkNoQuote(STEP_DESC, "STEP_DESC");
   checkNoQuote(STEP_HINT, "STEP_HINT");
+  checkNoQuote({ REVIEW_TESTS_REOPEN_HINT }, "REVIEW_TESTS_REOPEN_HINT");
 })();
 
-module.exports = { STEP_TO_SKILL, STEP_DESC, STEP_HINT, isTerminalStep };
+module.exports = { STEP_TO_SKILL, STEP_DESC, STEP_HINT, REVIEW_TESTS_REOPEN_HINT, isTerminalStep };

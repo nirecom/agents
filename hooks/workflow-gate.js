@@ -19,6 +19,7 @@ const { parse } = require("./lib/command-ir");
 // workflow-mark.js (SSOT: hooks/lib/tool-command-text.js, sentinel-command.js).
 const { isCommandTool, commandTextOf, commandListOf } = require("./lib/tool-command-text");
 const { analyzeSentinelCommand } = require("./lib/sentinel-command");
+const { isBaselineEvidenceRecordCommand } = require("./lib/workflow-driver-commands");
 
 // Steps tracked by the workflow but not enforced at commit time.
 // `final_report` is a TERMINAL step (SSOT: state-io TERMINAL_STEPS) recorded
@@ -151,6 +152,11 @@ if (require.main === module) {
   // sentinel decomposition uses analyzeSentinelCommand (SSOT: sentinel-command.js).
   const command = commandTextOf(toolName, toolInput);
   if (!command) approve();
+
+  // Internal-only door (#2431): owner and rationale in lib/workflow-driver-commands.js.
+  if (commandListOf(toolName, toolInput).some(isBaselineEvidenceRecordCommand)) {
+    block("workflow-gate: `run-tests-baseline-evidence record` is internal to bin/run-tests-baseline — run bin/run-tests-baseline instead.");
+  }
 
   // SENTINEL GUARD (#382): block exactly what workflow-mark.js (PostToolUse) would
   // silently drop. analyzeSentinelCommand decomposes the call identically for both
@@ -385,7 +391,7 @@ if (require.main === module) {
   // Check all steps
   const incomplete = [];
   // Annotates entries pushed to `incomplete` — currently used for review_tests
-  // stale-token / no-staged-tests messaging (issue #833).
+  // stale-fingerprint / fingerprint-missing / fingerprint-unavailable messaging (#833, #2327).
   const incompleteReasons = {};
   // Session-specific skippable steps: BUGFIX sessions exclude write_tests/review_tests (#1147).
   const skippable = getSkippableSteps(sessionId);

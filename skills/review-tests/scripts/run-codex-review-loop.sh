@@ -9,14 +9,14 @@ set -euo pipefail
 : "${EXTENSIONS_USED:?EXTENSIONS_USED not set}"
 
 # #1361: terminal marker written after a non-success terminal exit. Line 1 = terminal
-# rc, line 2 = staged-tests fingerprint at that moment (same computeStagedTestsToken
+# rc, line 2 = review-scope fingerprint at that moment (same computeReviewScopeFingerprint
 # SSOT the gate uses for stale-review detection).
 TERMINAL_FILE="${PLANS_DIR}/${SESSION_ID}-test-review-terminal.txt"
 # Accept marker for residual HIGH after an exit 6 terminal: its presence authorizes the
 # fingerprint-mismatch branch to clear the guard even when the prior terminal was exit 6.
 # Equivalent accept path to the WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED sentinel.
 EXIT6_ACCEPT_FILE="${PLANS_DIR}/${SESSION_ID}-review-tests-exit6-accepted.txt"
-# Dedicated exit code for "re-invoked after a terminal exit with tests unchanged".
+# Dedicated exit code for "re-invoked after a terminal exit with review scope unchanged".
 # Does not collide with bin/run-codex-review-loop's codes (0-7).
 EXIT_REINVOKE_AFTER_TERMINAL=8
 # exit 6 termination occurred, content changed, but residual HIGH not accepted → re-run blocked.
@@ -33,11 +33,14 @@ record_codex_exit() {
     --pointer "$PLANS_DIR/$SESSION_ID-test-review.md" --origin step-end >/dev/null 2>&1 || true
 }
 
-# Print the current staged-tests fingerprint on stdout. Returns non-zero when it
-# cannot be computed (node/require/git failure, or no staged tests → empty token).
-compute_staged_tests_fingerprint() {
-  local repo_root="$1" fp
-  fp="$(node -e 'const {computeStagedTestsToken}=require(process.env.AGENTS_CONFIG_DIR+"/hooks/workflow-gate/review-tests-evidence.js"); process.stdout.write(computeStagedTestsToken(process.argv[1])||"")' "$repo_root" 2>/dev/null)" || return 1
+# Print the current review-scope fingerprint on stdout. Returns 4 when the calculation
+# reports ok: false (git error — HALT), 1 on any other failure (node/require) or an
+# empty scope, so the guard below stays fail-closed.
+compute_review_scope_fingerprint() {
+  local repo_root="$1" fp rc=0
+  fp="$(node -e 'const {computeReviewScopeFingerprint}=require(process.env.AGENTS_CONFIG_DIR+"/hooks/workflow-gate/review-tests-evidence.js"); const r=computeReviewScopeFingerprint(process.argv[1]); if(!r.ok){process.stderr.write("review-scope fingerprint unavailable: "+r.error+"\n"); process.exit(4);} process.stdout.write(r.fingerprint||"")' "$repo_root" 2>/dev/null)" || rc=$?
+  if (( rc == 4 )); then return 4; fi
+  (( rc == 0 )) || return 1
   [[ -n "$fp" ]] || return 1
   printf '%s' "$fp"
 }
@@ -80,25 +83,29 @@ if [[ -f "$TERMINAL_FILE" ]]; then
   PREV_RC="$(sed -n '1p' "$TERMINAL_FILE" 2>/dev/null || true)"
   PREV_FP="$(sed -n '2p' "$TERMINAL_FILE" 2>/dev/null || true)"
   CUR_FP=""
-  if ! CUR_FP="$(compute_staged_tests_fingerprint "$REPO_ROOT_VAL")"; then
-    CUR_FP=""
+  FP_RC=0
+  CUR_FP="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || FP_RC=$?
+  if (( FP_RC == 4 )); then
+    echo "[review-tests] ERROR: the review-scope fingerprint calculation failed (git error in $REPO_ROOT_VAL). HALT." >&2
+    record_codex_exit 4 "HALT"
+    exit 4
   fi
   if [[ -z "$CUR_FP" || -z "$PREV_FP" ]]; then
-    # fail-CLOSED: a compare failure is not evidence that tests changed.
-    echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and the staged-tests fingerprint could not be compared. Keeping the guard armed. Accept the gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-edit and re-stage tests/ before re-running." >&2
+    # fail-CLOSED: a compare failure is not evidence that the review scope changed.
+    echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and the review-scope fingerprint could not be compared. Keeping the guard armed. Accept the gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-edit and re-stage the review scope (tests or implementation files) before re-running." >&2
     record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
   fi
   if [[ "$CUR_FP" == "$PREV_FP" ]]; then
-    echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and tests/ are unchanged. Re-looping now would defeat the 2+1 round cap. Accept the coverage gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-create/re-stage tests/ and run again." >&2
+    echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and the review scope is unchanged. Re-looping now would defeat the 2+1 round cap. Accept the coverage gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-edit and re-stage the review scope and run again." >&2
     record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
     exit "$EXIT_REINVOKE_AFTER_TERMINAL"
   fi
   if [ "${PREV_RC:-}" = "6" ] && [ ! -f "$EXIT6_ACCEPT_FILE" ]; then
-    printf '[review-tests] Tests changed after an exit 6 terminal, but residual HIGH findings are not accepted.\n  Accept marker: %s\n  Create it: touch "%s"\n  Or: emit WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED (both are equivalent accept paths).\n  Accept the residual HIGH by one of the above, then re-run.\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
+    printf '[review-tests] Review scope changed after an exit 6 terminal, but residual HIGH findings are not accepted.\n  Accept marker: %s\n  Create it: touch "%s"\n  Or: emit WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED (both are equivalent accept paths).\n  Accept the residual HIGH by one of the above, then re-run.\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
     exit "$EXIT_EXIT6_UNACCEPTED"
   fi
-  # Fingerprint mismatch = tests were re-edited = legitimate restart → auto-clear.
+  # Fingerprint mismatch = the review scope was re-edited = legitimate restart → auto-clear.
   rm -f "$TERMINAL_FILE"
 fi
 
@@ -110,7 +117,7 @@ arm_terminal_guard() {
     # exit 1 (round-continuing) must NOT arm (#2276 S9-c). exit 4 is config error, no guard.
     2|3|6|7)
       fp=""
-      fp="$(compute_staged_tests_fingerprint "$REPO_ROOT_VAL")" || fp=""
+      fp="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || fp=""
       local _tmp
       _tmp="$(mktemp "${PLANS_DIR}/.sg-XXXXXX" 2>/dev/null)" || break
       printf '%s\n%s\n' "$rc" "$fp" > "$_tmp" || { rm -f "$_tmp"; break; }
@@ -173,7 +180,20 @@ PROTECTION_TESTS="$AGENTS_CONFIG_DIR/skills/_shared/test-design/protection-fix-t
 if [[ -s "$PROTECTION_TESTS" ]]; then args+=(--context "$PROTECTION_TESTS"); fi
 if [[ -n "$CHANGED_FILES_CTX" ]]; then args+=(--context "$CHANGED_FILES_CTX"); fi
 RC=0
-"$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" || RC=$?
+# #1455: the reviewer output is captured (and still streamed) so a line-start
+# INPUT_ERROR <path> can HALT via the same detector the CC fallback uses.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REVIEW_OUT="$(mktemp "${PLANS_DIR}/.rt-out-XXXXXX")" || exit 4
+"$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" | tee "$REVIEW_OUT" || RC=${PIPESTATUS[0]}
+DETECT_RC=0
+bash "$SCRIPT_DIR/detect-input-error.sh" "$REVIEW_OUT" || DETECT_RC=$?
+rm -f "$REVIEW_OUT"
+if (( DETECT_RC != 0 )); then
+  # Input contract violated (or output unreadable): HALT without arming the terminal guard.
+  echo "[review-tests] ERROR: the reviewer could not read a review target (INPUT_ERROR); HALT." >&2
+  record_codex_exit 4 "HALT"
+  exit 4
+fi
 arm_terminal_guard "$RC" || true
 case "$RC" in
   4|7) record_codex_exit "$RC" "HALT" ;;

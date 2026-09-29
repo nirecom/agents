@@ -135,24 +135,27 @@ run_R1() {
     local tmp out rc problems row code want_path sid
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
-    for row in "4:HALT" "7:HALT" "8:no-sentinel"; do
-        code="${row%%:*}"; want_path="${row##*:}"
+    local want_rc
+    for row in "4:HALT" "7:HALT" "8:HALT"; do
+        code="${row%%:*}"; want_path="${row##*:}"; want_rc="$code"
         sid="codex-exit-$code"
         if [ "$code" = "8" ]; then
-            # Arm the guard: a terminal marker whose fingerprint cannot be
-            # compared (no git repo under the target) takes the fail-CLOSED exit.
+            # Armed guard + no git repo under the target: the fingerprint
+            # calculation returns ok:false, which is a HALT (exit 4), not exit 8.
             printf '2\nprev-fingerprint\n' > "$tmp/wf/$sid-test-review-terminal.txt"
             run_loop "$tmp" "$sid" 0 "$tmp/target"; rc=$?
+            want_rc=4
         else
             run_loop "$tmp" "$sid" "$code" "$tmp/target"; rc=$?
         fi
-        [ "$rc" -eq "$code" ] || problems="$problems [$code]exit-code-changed:$rc"
+        [ "$rc" -eq "$want_rc" ] || problems="$problems [$code]exit-code-changed:$rc"
+        code="$want_rc"
         out="$(inspect "$tmp" "$sid" "$code" "$want_path")"
         [ "$out" = "OK" ] || problems="$problems [$code]entry:'$out'"
     done
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
-        pass "R1: exits 4, 7 and 8 each record one class D review-tests:codex-exit entry naming the code and the path taken, without changing the exit code"
+        pass "R1: exits 4, 7 and the armed-guard fingerprint HALT (4) each record one class D review-tests:codex-exit entry naming the code and the path taken, without changing the exit code"
     else
         fail "R1: —$problems"
     fi

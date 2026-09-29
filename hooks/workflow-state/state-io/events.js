@@ -42,16 +42,20 @@ function isGenuineProvenance(provenance) {
 // table drives ordering and documentation only, so a newly introduced key
 // still round-trips verbatim instead of being dropped.
 const STEP_ANNOTATION_KEYS = [
-  "token",
+  "review_scope_manifest",
   "wsid",
   "warnings_summary",
   "warnings_accepted_reason",
-  "invalidate_reason",
+  "reopen_reason",
+  "write_code_scope_manifest",
   "skip_reason",
   "skip_verdict",
   "skip_judgment",
   "reset_reason",
   "run_outcome",
+  "failing_tests",
+  "baseline_classification",
+  "completion_basis",
 ];
 
 // Step-entry fields that are STRUCTURE, never annotation. An annotation named

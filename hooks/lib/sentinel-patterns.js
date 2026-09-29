@@ -106,10 +106,10 @@ const CONFIRM_DETAIL_RE_DQ = /^echo "<<WORKFLOW_CONFIRM_DETAIL: ([^>]+)>>"$/;
 const CONFIRM_DETAIL_LOOKSLIKE_RE = /^echo "<<WORKFLOW_CONFIRM_DETAIL([: ].*)?>>"$/;
 
 // review_tests step (issue #833): structural QA gate that pairs with write_tests.
-// COMPLETE carries a `token=<hex>` payload that fingerprints the staged tests/
-// snapshot at sentinel-emission time — workflow-gate compares against a freshly
-// computed token to detect re-edits-after-review (stale-token / anti-bypass).
-// WARNINGS carries `token=<hex>` plus an advisory summary; still marks complete
+// COMPLETE carries a `fingerprint=<hex>` payload for the staged review scope
+// (tests + implementation files) — the handler verifies it against its own manifest,
+// and workflow-gate re-checks freshness (stale-fingerprint / anti-bypass, #2327).
+// WARNINGS carries `fingerprint=<hex>` plus an advisory summary; still marks complete
 // so the workflow can progress but records the warnings for downstream visibility.
 const REVIEW_TESTS_COMPLETE_RE_DQ =
   /^echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: ([^>]+)>>"$/;
