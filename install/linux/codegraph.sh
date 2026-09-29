@@ -36,11 +36,12 @@ if [ "$_cg_rc" -ne 1 ]; then
     exit 0
 fi
 
-# Always ask npm for @latest; an installed binary is kept when the update fails.
+# Pinned to 1.6.0: 1.6.1 regressed with Windows console flicker (#2456).
+# An installed binary is kept when the update fails.
 _cg_updated=0
 if command -v npm >/dev/null 2>&1; then
-    echo "Updating CodeGraph to latest..."
-    if npm install -g --ignore-scripts "@colbymchenry/codegraph@latest" </dev/null; then
+    echo "Installing CodeGraph 1.6.0..."
+    if npm install -g --ignore-scripts "@colbymchenry/codegraph@1.6.0" </dev/null; then
         _cg_updated=1
         printf "${C_GREEN}CodeGraph is up to date.${C_RESET}\n"
     elif ! command -v codegraph >/dev/null 2>&1; then
