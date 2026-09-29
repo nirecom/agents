@@ -163,15 +163,37 @@ t30_run() { # answers every queued triple in one node, then asserts every row in
     done
 }
 
-t30_detect_table() {
-    local id slot mode want label
-    T30_REQ_FILE="$TMPROOT/t30-ask-req.bin"
+# Each span below is its own batch: reset the queue, queue rows, then t30_run.
+t30_batch_begin() { # <batch-id>
+    T30_NAMES=(); T30_WANTS=(); T30_GOT=(); T30_REQ_IDX=()
+    T30_REQ_FILE="$TMPROOT/t30-ask-req-$1.bin"
     : > "$T30_REQ_FILE"
+}
+
+t30_queue_rows() { # stdin: id|slot|mode|want|label
+    local id slot mode want label
     while IFS='|' read -r id slot mode want label; do
         [ -n "$id" ] || continue
         t30_row "T30[$id]: $label" "$want" "$slot" "$mode"
-    done <<'T30_CASES'
+    done
+}
+
+t30_setup
+
+# Target: the expected set is base + extension, which is the assembly module's merge.
+case_begin "t30-expected-set-includes-extension" "install/lib/settings-assembly.js"
+t30_batch_begin expected-set
+t30_queue_rows <<'T30_EXT_CASES'
 ext-missing-drifted|a|drifted|true|deleting the extension rule from the deployed file is drift -- the expected set is base + extension
+T30_EXT_CASES
+t30_row "T30[ext-missing-named]: the deleted extension rule is named in missingPermissions.allow, so the warning can say which rule went" \
+    "listed" a missing-allow 'Bash(ext-hand-written *)'
+t30_run
+case_end
+
+case_begin "t30-detect-drift" "hooks/lib/settings-drift.js"
+t30_batch_begin detect
+t30_queue_rows <<'T30_CASES'
 user-added-ok|b|drifted|false|a rule the user added to the deployed file is NOT drift: the check is one-directional containment, so a local addition is not reported as damage
 broken-list-still-judges|c|drifted|true|with the SSOT list unreadable the check still judges base and extension, and catches the base rule that went missing
 broken-list-no-key|c|gen-key|absent|#2264: no generatorUnavailable key is reported -- the list no longer feeds settings.json, so its breakage is not this detector's business
@@ -181,21 +203,20 @@ healthy-no-key|a|gen-key|absent|CONTROL: the healthy fixture carries no such key
 fake-root-quiet|d|drifted|false|a tree with no install layer at all does not throw -- the session-start path must survive a repo the module was merely copied into
 fake-root-flag|d|source-unreadable|yes|and reports sourceUnreadable, the existing shape the fix-846 suite already pins
 T30_CASES
-    t30_row "T30[ext-missing-named]: the deleted extension rule is named in missingPermissions.allow, so the warning can say which rule went" \
-        "listed" a missing-allow 'Bash(ext-hand-written *)'
-    t30_row "T30[broken-named]: and with the list unreadable the base finding is still named" \
-        "listed" c missing-allow 'Bash(base-hand-written *)'
-    # The other direction of the same pair: slot e must name NOTHING. A classifier that
-    # reported the list failure as a missing permission would fail only this row.
-    t30_row "T30[intact-broken-nothing-named]: with base and extension intact the broken list adds no entry to missingPermissions.allow" \
-        "NOT-LISTED:0" e missing-allow 'Bash(base-hand-written *)'
-    t30_run
-}
+t30_row "T30[broken-named]: and with the list unreadable the base finding is still named" \
+    "listed" c missing-allow 'Bash(base-hand-written *)'
+# The other direction of the same pair: slot e must name NOTHING. A classifier that
+# reported the list failure as a missing permission would fail only this row.
+t30_row "T30[intact-broken-nothing-named]: with base and extension intact the broken list adds no entry to missingPermissions.allow" \
+    "NOT-LISTED:0" e missing-allow 'Bash(base-hand-written *)'
+t30_run
+case_end
 
 # The last row follows the whole path rather than the module: hooks/session-start.js is where
 # the user would see a warning. The hooks tree is copied into a fixture root so agentsRoot
 # resolves there, never at the real repo. With the list broken and nothing drifted, the
 # session start must say NOTHING about a generator (#2264: there is none to fail).
+case_begin "t30-session-start-quiet" "hooks/session-start.js"
 t30_session_setup() {
     local d="$TMPROOT/t30-session"
     mkdir -p "$d/home/.claude" "$d/install"
@@ -239,7 +260,6 @@ session-no-generator-warning|hooks/session-start.js prints no generator warning 
 T30_SESSION_CASES
 }
 
-t30_setup
-t30_detect_table
 t30_session_setup
 t30_session_table
+case_end

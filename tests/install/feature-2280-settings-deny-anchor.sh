@@ -20,12 +20,12 @@ PART_DIR="$AGENTS_DIR/tests/install/feature-2280-settings-deny-anchor"
 # (P13-P37 = NO-MATCH); bash-guard denies the chain operator itself instead.
 # OUT OF SCOPE: deployed ~/.claude/settings.json drift, JSON re-assembly, #2266 redesign.
 
-PASS=0
-FAIL=0
+. "$AGENTS_DIR/tests/lib/harness.sh"
+
 PEND=0
 ROWS=0
 
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+# fail/assert_eq stay local, after the harness: the detail line and <name> <want> <got> order differ.
 fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
 pend() { echo "PEND: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; PEND=$((PEND + 1)); }
 

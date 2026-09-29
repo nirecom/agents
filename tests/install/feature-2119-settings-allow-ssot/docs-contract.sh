@@ -58,6 +58,8 @@ t23_probe() { # <mode:line|file> <ere-list> -> present|ABSENT|sentinel
 # THE EXCLUSION LIST IS THE OTHER HALF OF THE ADMISSION CRITERION. Each excluded FAMILY gets its
 # own row, so deleting one from the sentence cannot hide behind the survivors -- and since an
 # entry is now auto-approved by a hook rather than by a rule, the criterion matters MORE.
+# Target: these rows pin the documented contract of the reader/bash-guard allow path.
+case_begin "t23-reader-contract-documented" "hooks/lib/allow-command-list.js"
 t23_docs_table() {
     local id mode eres label
     while IFS='%' read -r id mode eres label; do
@@ -83,11 +85,14 @@ single-writer%line%assemble-settings~only|single|sole%names install/assemble-set
 allow-vs-hooks%line%allow~PreToolUse~not |never |cannot %keeps the marker-bypass corollary: an allow rule does not disable a PreToolUse safety hook
 T23_CASES
 }
+t23_docs_table
+case_end
 
 # THE STALE HALF. A superseded paragraph does not look wrong -- it stays a fluent description of
 # the previous release, and a reader who finds it first has no way to tell which of two confident
 # accounts is current. Absence is therefore asserted, not merely presence of the new text. #2264
 # retires the generator and every per-command count with it, so all the counts join this list.
+case_begin "t23-stale-prose-gone" "docs/architecture/claude-code/settings.md"
 t23_stale_table() {
     local id mode eres label
     while IFS='%' read -r id mode eres label; do
@@ -108,6 +113,5 @@ stale-reviewer%file%review-settings-allow%no longer points a reader at bin/revie
 stale-precommit-gate%line%pre-commit~allow|settings\.json~gate|block|review|drift%no longer describes a pre-commit gate over the allow rules
 T23_STALE_CASES
 }
-
-t23_docs_table
 t23_stale_table
+case_end

@@ -9,6 +9,7 @@
 # right answer -- and would hide a real regression the day the parser stops quoting properly.
 # `\;` and `{}` in the find row are the exact shapes round 1 wanted to special-case.
 
+case_begin "negative-look-alike-non-hits" "hooks/bash-guard/detect.js"
 n1_non_hits() {
     local name cmd want got
     while IFS='~' read -r name cmd want; do
@@ -43,14 +44,19 @@ TABLE
 # (exec-capable, and a `;` separator), the fd-redirect rows (not a plain single command) and
 # echo (no class) stay passThrough.
 bg_batched n1_non_hits
+case_end
 
 # N2: the sanctioned `bash -c '... && ...'` form used across skills/_shared. The `&&` sits
 # inside single quotes, so it is not a separator -- if this ever denies, roughly eight prompt
 # assets stop working and the workflow blocks itself the way #2120 did. The `bash -c` wrapper
 # is not matched by the self-script allow (#2265), so it passes through rather than allows.
+case_begin "negative-bash-c-quoted-chain" "hooks/bash-guard/judge.js"
 assert_eq "N2: an && inside single quotes is not a separator" \
     "passThrough" "$(verdict_of "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" RUN_TL4 on'")"
+case_end
 
 # N3: an escaped separator in unquoted context. The pre-#2121 lexer mis-split this, which is
 # why the new parser is a prerequisite for the guard rather than an independent change.
+case_begin "negative-escaped-separator" "hooks/lib/command-ir.js"
 assert_eq "N3: an escaped && is not a separator" "passThrough" "$(verdict_of 'echo a \&\& b')"
+case_end

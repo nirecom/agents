@@ -13,6 +13,7 @@ set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PART_DIR="$AGENTS_DIR/tests/hooks/feature-2134-bash-guard"
 PROBE_JS="$PART_DIR/judge-probe.js"
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 # THE CONTRACT UNDER TEST. bash-guard is a PRESENTATION guard, not a safety guard.
 # judgeBashCommand(input) returns one of four verdicts, deny > notify > allow > passThrough:
@@ -25,19 +26,11 @@ PROBE_JS="$PART_DIR/judge-probe.js"
 # `||` and background `&` (absent from the approved forbidden set), the L1 doc-sync check
 # (S5) and the L2 prompt-issuance inventory (S6) -- both have their own suites.
 
-PASS=0
-FAIL=0
-SKIP=0
 ROWS=0
 
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+# Suite-local overrides, defined AFTER the harness so they win: fail's two-line detail format,
+# the <name> <want> <got> assert_eq signature the fragments use, and the plain-timeout wrapper.
 fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
-skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
-
-# case_begin <name> <target> / case_end: static catalog markers (bin/check-case-markers.sh).
-# Local shims instead of tests/lib/harness.sh, whose assert_eq has a different signature.
-case_begin() { echo "--- case: $1 ($2) ---"; }
-case_end() { :; }
 
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -250,8 +243,10 @@ ROWS_EXPECTED=197
 . "$PART_DIR/cases-message.sh"
 . "$PART_DIR/cases-runtime-pretooluse.sh"
 
+case_begin "row-budget" "hooks/bash-guard/judge.js"
 assert_eq "BUDGET: every table-driven loop executed its full row count (a short count means an empty or unreachable table reported green)" \
     "$ROWS_EXPECTED" "$ROWS"
+case_end
 
 BG_SPAWNS=""
 IFS= read -r -d '' BG_SPAWNS < "$BG_SPAWN_LOG" || true

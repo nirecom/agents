@@ -20,9 +20,9 @@ ALLOW_SSOT="$REPO_ROOT/install/settings-allow-commands.txt"
 CLI_REL="bin/workflow/read-session-facts"
 CLI="$REPO_ROOT/$CLI_REL"
 
-PASS=0; FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+AGENTS_DIR="$REPO_ROOT"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1 -- expected [$2] got [$3]"; fi; }
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
@@ -37,10 +37,13 @@ echo "=== INV-6: the bundled reader is registered in the allow-list SSOT ==="
 # ssot-structure.sh checks the file's shape in general; this is the issue-specific pin
 # that goes red the day THIS CLI is dropped from the list and every caller starts
 # prompting for permission again.
+case_begin "V1ab-ssot-lists-cli" "install/settings-allow-commands.txt"
 if [ -f "$ALLOW_SSOT" ]; then pass "V1a: the allow-list SSOT exists"
 else fail "V1a: the allow-list SSOT exists -- not found at $ALLOW_SSOT"; fi
 check "V1b: $CLI_REL is listed exactly once" 1 \
   "$(grep -cxF -- "$CLI_REL" "$ALLOW_SSOT" 2>/dev/null || true)"
+case_end
+case_begin "V1cd-cli-file-and-shebang" "bin/workflow/read-session-facts"
 if [ -f "$CLI" ]; then pass "V1c: the CLI file exists"
 else fail "V1c: the CLI file exists -- not found at $CLI"; fi
 SHEBANG="$(head -n 1 "$CLI" 2>/dev/null || echo "")"
@@ -48,10 +51,13 @@ case "$SHEBANG" in
   *node*) pass "V1d: the shebang resolves to node" ;;
   *) fail "V1d: the shebang resolves to node -- got [$SHEBANG]" ;;
 esac
+case_end
 # Non-vacuity for V1b: an entry that has always been there must still count once, so a
 # `grep` that silently matched nothing cannot make V1b green by accident.
+case_begin "V1e-ssot-control-entry" "install/settings-allow-commands.txt"
 check "V1e: control -- bin/confirm-off is still listed exactly once" 1 \
   "$(grep -cxF -- "bin/confirm-off" "$ALLOW_SSOT" 2>/dev/null || true)"
+case_end
 
 echo ""
 echo "=== INV-6b: bash-guard's self-script allow path admits this CLI ==="
@@ -83,23 +89,37 @@ BG_OUT="$(bg_judge_batch "node \"\$AGENTS_CONFIG_DIR/$CLI_REL\" --session x" \
 bg_row() { printf '%s\n' "$BG_OUT" | sed -n "s/^$1	//p"; }
 BG_N="$(printf '%s\n' "$BG_OUT" | grep -c '^[0-9]	' || true)"
 [ "$BG_N" = 2 ] || fail "V1-batch: the batched judge returned $BG_N result lines for 2 rows (vacuity guard)"
+case_begin "V1f-bash-guard-self-script-allow" "hooks/bash-guard/allow.js"
 check "V1f: node \"\$AGENTS_CONFIG_DIR/$CLI_REL\" is allowed as a self script" \
   "allow	BG-ALLOW-SELF-SCRIPT" "$(bg_row 0)"
+case_end
+case_begin "V1g-lookalike-not-in-list" "hooks/lib/allow-command-list.js"
 check "V1g: control -- a lookalike name absent from the SSOT is not allowed" \
   "passThrough	BG-NO-HIT" "$(bg_row 1)"
+case_end
 
 echo ""
 RC_ALL=0
 FAILED=""
 [ "$FAIL" -eq 0 ] || { RC_ALL=1; FAILED=" inv-6"; }
-for c in contract values security; do
+run_suite() {
+  local c="$1" rc
   echo "########## $c ##########"
   if bash "$SUBDIR/$c.sh"; then :; else
     rc=$?
     if [ "$rc" -eq 77 ]; then echo "SKIPPED: $c"; else RC_ALL=1; FAILED="$FAILED $c"; fi
   fi
   echo ""
-done
+}
+case_begin "suite-contract" "bin/workflow/lib/session-facts/keys.js"
+run_suite contract
+case_end
+case_begin "suite-values" "bin/workflow/lib/session-facts/gate-facts.js"
+run_suite values
+case_end
+case_begin "suite-security" "bin/workflow/lib/session-facts/collect.js"
+run_suite security
+case_end
 
 echo "########## feature-2102-session-facts summary ##########"
 if [ "$RC_ALL" -eq 0 ]; then

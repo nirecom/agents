@@ -13,10 +13,13 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 bq_hdr "=== ST: git WRITE_PATTERNS / STRIP_KINDS retire (RED-pending-impl) ==="
+case_begin "c3-git-kind-retired" "hooks/lib/bash-write-patterns/patterns.js"
 bq_row "ST1 WRITE_PATTERNS git count == 0" "0" kind_count git
 bq_row "ST2 STRIP_KINDS has no git"        "false" strip_has git
+case_end
 
 bq_hdr "=== GW: isGitWriteIR — 18 write forms true (RED-pending-impl) ==="
+case_begin "c3-git-write-ir-writes" "hooks/lib/bash-write-patterns/patterns.js"
 bq_table git_write <<'GW_TABLE'
 GW01 commit^git commit -m x^true
 GW02 push^git push^true
@@ -41,8 +44,10 @@ GW-BUG1-seq read-then-write^git status && git commit -m x^true
 GW-BUG1-seq write-then-read^git commit -m x && git status^true
 GW-BUG1-seq write-in-middle^git status && git push && git log^true
 GW_TABLE
+case_end
 
 bq_hdr "=== GR: isGitWriteIR — read forms false (RED-pending-impl) ==="
+case_begin "c3-git-write-ir-reads" "hooks/lib/bash-write-patterns/patterns.js"
 bq_table git_write <<'GR_TABLE'
 GR1 status false^git status^false
 GR2 log false^git log^false
@@ -56,10 +61,12 @@ GR-add-patch interactive patch no path false^git add -p^false
 GR-add-dashdash no path args false^git add --^false
 GR-BUG1-seq all-read false^git status && git log^false
 GR_TABLE
+case_end
 
 bq_hdr "=== C2: SECURITY global-flag order (RED-pending-impl) ==="
 # resolveGitSubArgv must skip leading global flags so the subcommand is reached;
 # otherwise a global flag shifts argv and the write subcommand is missed.
+case_begin "c3-git-global-flag-order" "hooks/lib/bash-write-patterns/patterns.js"
 bq_table git_write <<'C2_TABLE'
 C2-1 -C path then commit^git -C /other commit^true
 C2-2 --no-pager then push^git --no-pager push^true
@@ -67,10 +74,12 @@ C2-3 -c sshCommand then commit^git -c core.sshCommand=x commit^true
 C2-4 --config-env separated then commit^git --config-env core.hooksPath=VAR commit^true
 C2-5 --config-env=attached then commit^git --config-env=core.hooksPath=VAR commit^true
 C2_TABLE
+case_end
 
 bq_hdr "=== C3: SECURITY config-injection reachability (RED-pending-impl) ==="
 # git -c key=val / --config-env must keep the command reaching the safety
 # predicate even for a READ subcommand (else it fast-allows past hasGitHooksBypass).
+case_begin "c3-git-config-injection" "hooks/lib/bash-write-patterns/patterns.js"
 bq_table git_write <<'C3_TABLE'
 C3-1 -c hooksPath then status → true^git -c core.hooksPath=/tmp status^true
 C3-2 --config-env then status → true^git --config-env core.hooksPath=VAR status^true
@@ -78,24 +87,32 @@ C3-3 -c arbitrary key then log → true^git -c foo.bar=baz log^true
 C3-4 plain status false (no injection)^git status^false
 C3-5 -C then log false (no injection)^git -C /x log^false
 C3_TABLE
+case_end
 
 bq_hdr "=== CL: classify fail-before-fix for git (RED-pending-impl) ==="
+case_begin "c3-classify-git-read" "hooks/lib/bash-write-patterns/classify.js"
 bq_row "CL1 classify(git commit) → read post-retire" "read" classify 'git commit -m x'
 # Sanity: read git stays read (PASS now and after).
 bq_row "CL2 classify(git status) → read (sanity)" "read" classify 'git status'
+case_end
 
 bq_hdr "=== IC: isReadOnlyInterpreterC git guard (PASS now — #820) ==="
 # bash -c 'git commit' must NOT demote to read (#820 bare git guard).
+case_begin "c3-interpreter-c-git-guard" "hooks/lib/bash-write-patterns/classify.js"
 bq_row "IC1 bash -c git commit → not read-only" "false" ro_interp_c 'bash -c "git commit"'
+case_end
 
 bq_hdr "=== EX: extractGitWriteTargets self-target contract (RED-pending-impl) ==="
 # __NULL__ = null repoRoot. Rows travel over stdin, so /repo is never MSYS-rewritten.
+case_begin "c3-extract-git-self-target" "hooks/lib/bash-write-targets/git.js"
 bq_row "EX1 git commit + /repo → self-target" '[{"resolveVia":"self","path":"/repo"}]' extract_git 'git commit -m x' '/repo'
 bq_row "EX2 git commit + null repoRoot → null (fail-closed)" 'null' extract_git 'git commit -m x' '__NULL__'
 bq_row "EX3 git status + /repo → [] (non-write)" '[]' extract_git 'git status' '/repo'
+case_end
 
 bq_hdr "=== MG: collectBashWriteTargets git merge (RED-pending-impl) ==="
 # Two-arg collectBashWriteTargets(ir, repoRoot) merges the git self-target.
+case_begin "c3-collect-git-merge" "hooks/enforce-worktree/bash-write-scope.js"
 bq_row "MG1 collect(git commit,/repo) → self-target, no parseFailure" \
   '{"targets":[{"resolveVia":"self","path":"/repo"}],"parseFailure":false}' collect_git 'git commit -m x' '/repo' no
 # MG2: null repoRoot for a git write → parseFailure true (fail-closed); targets
@@ -108,6 +125,7 @@ bq_row "MG3 collect(git commit) omitted repoRoot → targets null (back-compat)"
 # and MUST NOT inject a git self-target (git extraction fires only on isGitWriteIR).
 bq_row "MG-nongit-2arg collect(rm /tmp/foo,/repo) → rm ancestor target only, no self-target" \
   '{"targets":[{"resolveVia":"ancestor","path":"/tmp/foo"}],"parseFailure":false}' collect_git 'rm /tmp/foo' '/repo' no
+case_end
 
 bq_hdr "=== L2: downstream reachability (RED-pending / preservation, HIGH) ==="
 # git self-target must reach main-worktree-allows predicates, NOT terminate like
@@ -117,6 +135,7 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 REPO="$(setup_main_checkout "$TMP_ROOT" main)"
 [ -z "$REPO" ] && { bq_flush; skip "L2 fixture unavailable"; report_totals; exit "$FAIL"; }
 
+case_begin "c3-l2-git-main-worktree" "hooks/enforce-worktree.js"
 # Create a fast-forwardable branch so `git merge` is a genuine fast-forward.
 git -C "$TMP_ROOT/main" checkout -q -b ff
 echo "more" >> "$TMP_ROOT/main/README.md"
@@ -136,6 +155,7 @@ bq_row "L2-4 git -c core.hooksPath=/dev/null commit → block (git-hooks-bypass)
 # L2-5 (SECURITY C3): a config-injection READ subcommand must not fast-allow.
 bq_row "L2-5 git -c core.hooksPath=/dev/null status (read) → block (C3 reachability)" \
   block guard "$REPO" 'git -c core.hooksPath=/dev/null status'
+case_end
 # Flush before the SB fixture prep so L2-1..5 see the pre-prep working tree.
 bq_flush
 
@@ -143,7 +163,9 @@ bq_flush
 # (getSessionRepoRoots always adds the CWD repo; a non-git CWD fail-closes to
 # DENY, the opposite decision) — see fix-1391 Section D.
 # L3 gap: only a live claude -p session with real ADDITIONAL_REPOS proves it.
+case_begin "c3-l2-out-of-session-git-allow" "hooks/enforce-worktree.js"
 skip "L2-6 out-of-session git commit ALLOW — needs multi-repo session-root wiring (see fix-1391 Section D); covered at L3"
+case_end
 
 bq_hdr "=== SB: SECURITY sequenced/redirect write-detection bypasses (BUG 1/2/3) ==="
 # Fixture prep: an EXCLUDE-covered dir (.worktree-backup is a BUILTIN exclude) and
@@ -152,16 +174,21 @@ mkdir -p "$TMP_ROOT/main/.worktree-backup/x"
 echo "src" > "$TMP_ROOT/main/src.txt"
 
 # BUG 1: a later git-write segment makes the whole command a write → block.
+case_begin "c3-sb-sequenced-git-write-block" "hooks/enforce-worktree.js"
 bq_row "SB1 (BUG1) git status && git commit from main → block" \
   block guard "$REPO" 'git status && git commit --allow-empty -m x'
 # BUG 2 (git): the git self-target (repoRoot) is never EXCLUDE-covered → block.
 bq_row "SB2 (BUG2-git) cp .worktree-backup/x/f && git commit from main → block" \
   block guard "$REPO" 'cp src.txt .worktree-backup/x/f && git commit --allow-empty -m pwned'
+case_end
 # BUG 2 (gh): a gh-write segment has no local file target, so isEverySegmentExcluded
 # must fail closed (unit level; the live hook routes gh through its scope branch).
+case_begin "c3-sb-gh-segment-not-excluded" "hooks/enforce-worktree/bash-write-scope.js"
 bq_row "SB3 (BUG2-gh) isEverySegmentExcluded(cp .worktree-backup && gh pr merge) → false (fail-closed, no gh EXCLUDE)" \
   false ese_default 'cp src.txt .worktree-backup/x/f && gh pr merge 123' "$REPO"
+case_end
 # Control (no over-block): a legit all-excluded sequenced file write still ALLOWs.
+case_begin "c3-sb-excluded-and-dev-null" "hooks/enforce-worktree.js"
 bq_row "SB4 control mkdir -p .worktree-backup/x && cp → allow (no over-block)" \
   allow guard "$REPO" 'mkdir -p .worktree-backup/x && cp src.txt .worktree-backup/x/f'
 # BUG 3: `> sub/dev/null` is a real in-scope file; exact `/dev/null` stays read.
@@ -169,6 +196,7 @@ bq_row "SB5 (BUG3) echo x > sub/dev/null from main → block (real in-scope file
   block guard "$REPO" 'echo x > sub/dev/null'
 bq_row "SB6 (BUG3) echo x > /dev/null from main → allow (null device, exact match)" \
   allow guard "$REPO" 'echo x > /dev/null'
+case_end
 bq_flush
 
 report_totals

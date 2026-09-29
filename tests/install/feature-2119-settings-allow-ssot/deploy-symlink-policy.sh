@@ -204,11 +204,9 @@ t43_field() { # <verdict> <n> -> field
     printf '%s' "$1" | cut -d'/' -f"$2"
 }
 
-t43_symlink_table() {
+# Row runner shared by every T43 span; each span feeds its own rows on stdin.
+t43_run_rows() {
     local slot field want label
-    ROWS=$((ROWS + 1))
-    assert_eq "T43[mechanism]: MECHANISM CHECK -- this host really creates a symlink rather than a copy (if not, every T43 row below is a no-op against an ordinary file)" \
-        "ok" "$T43_MECH"
     while IFS='|' read -r slot field want label; do
         [ -n "$slot" ] || continue
         ROWS=$((ROWS + 1))
@@ -224,7 +222,16 @@ t43_symlink_table() {
                 fi ;;
         esac
         assert_eq "T43[$slot/f$field]: $label" "$want" "$(t43_field "$(t43_slot "$slot")" "$field")"
-    done <<'T43_CASES'
+    done
+}
+
+t43_setup
+
+case_begin "t43-leaf-link-policy" "install/lib/settings-deploy.js"
+ROWS=$((ROWS + 1))
+assert_eq "T43[mechanism]: MECHANISM CHECK -- this host really creates a symlink rather than a copy (if not, every T43 row below is a no-op against an ordinary file)" \
+    "ok" "$T43_MECH"
+t43_run_rows <<'T43_CASES'
 asm-plain-file|1|zero|CONTROL: an ordinary regular deploy target is untouched by any of this -- the assembler still exits 0
 asm-plain-file|2|regular|and the target is still a regular file, so symlink handling did not convert a plain file into something else
 asm-plain-file|4|rules-present|carrying the base's rules
@@ -244,17 +251,25 @@ asm-broken|1|zero|a link whose target does not resolve at all still deploys succ
 asm-broken|2|regular|falling to the DETACH side: a broken link cannot be honoured, so the write must not chase it
 asm-broken|4|rules-present|and the deployed path carries the base's rules
 asm-broken|5|noted|with the link named on stderr, the same way the in-repo detach is
+T43_CASES
+case_end
+
+# Target: the CLI runs the fail-closed input check before handing off to the writer.
+case_begin "t43-failclosed-before-detach" "install/assemble-settings.js"
+t43_run_rows <<'T43_FAILCLOSED_CASES'
 asm-failclosed|1|nonzero|D3 BEFORE A1: with the base's permissions.allow broken, the deploy fails closed even though the target is a detachable in-repo link
 asm-failclosed|2|link|and the link is STILL a link -- the fail-closed check runs BEFORE the detach, so a failing deploy never unlinks something it then cannot replace
 asm-failclosed|3|orig-identical|leaving the repository original byte-identical, which is what "nothing was written" means here
+T43_FAILCLOSED_CASES
+case_end
+
+case_begin "t43-parent-link-refusal" "install/lib/settings-deploy.js"
+t43_run_rows <<'T43_PARENT_CASES'
 asm-parent-into-repo|1|nonzero|THE PARENT IS THE LINK: `~/.claude` itself resolves into the checkout, which a leaf-only lstat never sees. Unlinking is not available -- removing a directory link orphans everything else under it -- so this shape falls to the module's fail-closed side and the deploy REFUSES
 asm-parent-into-repo|3|orig-identical|leaving the repository original byte-identical: the whole point is that the deployed product never reaches the checkout's own tracked settings.json
 asm-parent-into-repo|7|inside-untouched|and the file BEHIND the link is untouched too, which is the observation the repository digest alone cannot make -- a write that landed there would still leave `$dir/settings.json` identical
 asm-parent-into-repo|4|rules-present|the previous deployment still stands: refusing wrote nothing, so the operator is left with the last good file rather than a truncated one
 asm-parent-into-repo|6|STALE|and it is the OLD deployment, not a fresh one -- the second pass's base sentinel never reached it, which is what "nothing was written" means for this row
 asm-parent-into-repo|5|noted|with the link named on stderr, because a refusal the operator cannot locate is indistinguishable from a hang
-T43_CASES
-}
-
-t43_setup
-t43_symlink_table
+T43_PARENT_CASES
+case_end

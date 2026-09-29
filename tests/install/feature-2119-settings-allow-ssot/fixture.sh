@@ -128,12 +128,22 @@ run_assemble() { # <fixture> <arg>...
 # breaking one thing. The deployed bytes do not depend on the fixture path, so the recipe runs
 # ONCE per key and each case gets its own private copy (never the template itself). The done
 # marker lives on disk, outside the template, so a build inside a `$(...)` case still counts.
+# Only a SUCCESSFUL build is cached (builder rc 0 AND ASM_RC 0): a failed one is deleted and the
+# case gets an empty dir, so its healthy-baseline rows fail loudly instead of reusing a broken tree.
 tpl_copy() { # <dest-dir> <key> <builder-fn> [fixture] -- `fixture` runs mk_fixture first
-    local tpl="$TMPROOT/tpl-$2"
+    local tpl="$TMPROOT/tpl-$2" rc=0
     if [[ ! -f "$tpl.done" ]]; then
         rm -rf "$tpl"
         if [[ "${4:-}" = "fixture" ]]; then mk_fixture "tpl-$2" > /dev/null; fi
-        "$3" "$tpl"
+        ASM_RC=0
+        "$3" "$tpl" || rc=$?
+        if [[ "$rc" -ne 0 || "$ASM_RC" -ne 0 ]]; then
+            printf 'tpl_copy: template %s build FAILED (builder rc=%s, ASM_RC=%s); not cached, case gets an empty dir\n' \
+                "$2" "$rc" "$ASM_RC" >&2
+            rm -rf "$tpl"
+            mkdir -p "$1"
+            return 1
+        fi
         : > "$tpl.done"
     fi
     mkdir -p "$1"
@@ -155,23 +165,21 @@ tpl_build_plain() { # <fixture>
 
 # Presence rows, asserted ONCE here: "the CLI is missing" and "the modules it delegates to
 # are missing" are different diagnoses. Every later row reports a sentinel instead.
+case_begin "fixture-lib-assembly" "install/lib/settings-assembly.js"
 fixture_lib_present() {
     local got="absent"
     have_lib && got="present"
     assert_eq "fixture: all of $LIB_REL_LIST exist (absent means MODULE_NOT_FOUND)" "present" "$got"
 }
-
-fixture_assemble_present() {
-    local got="absent"
-    [ -f "$ASSEMBLE" ] && got="present"
-    assert_eq "fixture: $ASSEMBLE_REL exists (the deploy CLI every fixture copies)" "present" "$got"
-}
-
-case_begin "fixture-lib-assembly" "install/lib/settings-assembly.js"
 fixture_lib_present # one row checks every file of $LIB_REL_LIST, settings-deploy.js included
 case_end
 case_begin "fixture-lib-deploy" "install/lib/settings-deploy.js"
 case_end
 case_begin "fixture-assemble" "install/assemble-settings.js"
+fixture_assemble_present() {
+    local got="absent"
+    [ -f "$ASSEMBLE" ] && got="present"
+    assert_eq "fixture: $ASSEMBLE_REL exists (the deploy CLI every fixture copies)" "present" "$got"
+}
 fixture_assemble_present
 case_end

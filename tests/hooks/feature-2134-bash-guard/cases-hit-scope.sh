@@ -10,6 +10,9 @@
 # carve-out may remove only the hit it names. There is no single-command predicate to
 # regress to -- H3 asserts none was reintroduced.
 
+BG_DIR="$AGENTS_DIR/hooks/bash-guard"
+
+case_begin "hit-scope-per-occurrence" "hooks/bash-guard/detect.js"
 h1_hit_scope() {
     local name cmd want_verdict want_ids got
     while IFS='~' read -r name cmd want_verdict want_ids; do
@@ -41,9 +44,10 @@ bg_batched h1_hit_scope
 h2_ids="$(probe hit-ids 'echo a | xargs rm > out.log')"
 assert_eq "H2: the xargs carve-out drops only 'pipe' and leaves the redirect hit standing" \
     "redirect-out" "$h2_ids"
+case_end
 
 # H3: no blanket single-command predicate anywhere under hooks/bash-guard/.
-BG_DIR="$AGENTS_DIR/hooks/bash-guard"
+case_begin "hit-scope-no-blanket-filter" "hooks/bash-guard/judge.js"
 if [ -d "$BG_DIR" ]; then
     h3_got="$(grep -rl "isSingleCommand" "$BG_DIR" 2>/dev/null | wc -l | tr -d ' ')"
 else
@@ -62,3 +66,4 @@ assert_eq "H4b: nothing under hooks/bash-guard still calls applyExemptions" "0" 
 if [ -e "$AGENTS_DIR/hooks/lib/settings-allow-match.js" ]; then h4_lib="present"; else h4_lib="absent"; fi
 assert_eq "H4c: hooks/lib/settings-allow-match.js (its only consumer was exemptions.js) is gone" \
     "absent" "$h4_lib"
+case_end

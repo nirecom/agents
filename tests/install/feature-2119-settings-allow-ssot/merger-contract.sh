@@ -56,6 +56,9 @@ t34_setup() {
     T34_RC="$ASM_RC"
 }
 
+t34_setup
+
+case_begin "t34-merge-rules" "install/lib/settings-assembly.js"
 # BATCHED: one node answers every requested field (argv[2..]) from the one deployed file,
 # one NUL-terminated answer per field, in request order.
 T34_PROBE_JS='
@@ -130,9 +133,12 @@ T34_CASES
         assert_eq "T34[${ids[$i]}]: ${labels[$i]}" "${wants[$i]}" "${NUL_RECS[$i]}"
     done
 }
+t34_merge_table
+case_end
 
 # The error half. A malformed extension must not be partially applied: the previous deployment is
 # what the developer's live session is running on, so a half-merged file is worse than no merge.
+case_begin "t34-malformed-extension-rejected" "install/assemble-settings.js"
 t34_bad_case() { # <bad-json|non-object|perm-array> -> "rc/state" | sentinel
     have_lib || { missing_lib; return; }
     [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
@@ -168,7 +174,5 @@ non-object|nonzero/unchanged|an extension that parses to a non-object is rejecte
 perm-array|nonzero/unchanged|an extension whose permissions is an ARRAY where an object is expected is rejected, not index-merged into nonsense keys
 T34_BAD_CASES
 }
-
-t34_setup
-t34_merge_table
 t34_bad_table
+case_end

@@ -5,6 +5,17 @@
 # The gen-settings-allow.js half of each table retired with the generator in #2264.
 
 T40_TOOL="bin/fx-tool"
+
+# Shared by T40 and T41: both verdicts are `/`-joined fields.
+t40_field() { # <verdict> <n> -> field
+    case "$1" in
+        '<MISSING:'*) printf '%s' "$1"; return ;;
+    esac
+    printf '%s' "$1" | cut -d'/' -f"$2"
+}
+
+# Target: creating the missing destination directory is the single writer's job.
+case_begin "t40-first-install" "install/lib/settings-deploy.js"
 T40_MARKER='Bash(t40-base-marker *)'
 
 # T40 -- FIRST INSTALL. Every other fixture in this suite starts with a `home/.claude` directory
@@ -42,13 +53,6 @@ t40_case() { # <no-claude-dir|no-home> -> "pre/rc/state/rules" | sentinel
     printf '%s/%s/%s/%s' "$pre" "$rcv" "$state" "$rules"
 }
 
-t40_field() { # <verdict> <n> -> field
-    case "$1" in
-        '<MISSING:'*) printf '%s' "$1"; return ;;
-    esac
-    printf '%s' "$1" | cut -d'/' -f"$2"
-}
-
 T40_VERDICTS=""
 
 t40_setup() {
@@ -80,6 +84,10 @@ no-home|3|created|and the whole path down to ~/.claude/settings.json is created
 no-home|4|rules-present|complete with the base's rules
 T40_CASES
 }
+
+t40_setup
+t40_firstinstall_table
+case_end
 
 T41_MECH=""
 
@@ -140,30 +148,40 @@ t41_slot() { # <slot> -> verdict
     printf '%s\n' "$T41_VERDICTS" | grep "^$1=" | sed "s/^$1=//"
 }
 
-t41_basedoc_table() {
+# Row runner shared by both T41 spans; each span feeds its own rows on stdin.
+t41_run_rows() {
     local slot field want label
-    ROWS=$((ROWS + 1))
-    assert_eq "T41[mechanism]: MECHANISM CHECK -- a directory occupying settings.json really is unreadable to node on this host (if not, the is-dir rows below are no-ops)" \
-        "blocked" "$T41_MECH"
     while IFS='|' read -r slot field want label; do
         [ -n "$slot" ] || continue
         ROWS=$((ROWS + 1))
         assert_eq "T41[$slot/f$field]: $label" "$want" "$(t40_field "$(t41_slot "$slot")" "$field")"
-    done <<'T41_CASES'
-absent|1|nonzero|a base settings.json that is not there stops install/assemble-settings.js -- reading it as an empty document would deploy a file stripped of every hand-written rule
+    done
+}
+
+t41_setup
+
+# Target: buildAssembledSettings reads the base and throws; the fail-closed state and the
+# message are that module's contract.
+case_begin "t41-base-read-failclosed" "install/lib/settings-assembly.js"
+ROWS=$((ROWS + 1))
+assert_eq "T41[mechanism]: MECHANISM CHECK -- a directory occupying settings.json really is unreadable to node on this host (if not, the is-dir rows below are no-ops)" \
+    "blocked" "$T41_MECH"
+t41_run_rows <<'T41_CASES'
 absent|2|unchanged|and the previous deployment survives byte-identical, which is strictly safer than a settings.json missing every hand-written rule
 absent|3|named|the message names settings.json, so the operator learns WHICH input is missing rather than that "assembly failed"
 absent|4|code-stated|and carries the cause code, which is what separates "not there" from "there but unreadable" at a glance
-is-dir|1|nonzero|a base settings.json present but unreadable is the SAME contract as absent, not a softer one
 is-dir|2|unchanged|with the previous deployment intact
 is-dir|3|named|and the file named in the message
 is-dir|4|code-stated|and the cause code stated, so an EISDIR is not reported as if the file were simply missing
 T41_CASES
-}
+case_end
+
+# Target: the non-zero exit is the CLI's contract.
+case_begin "t41-base-read-exit" "install/assemble-settings.js"
+t41_run_rows <<'T41_RC_CASES'
+absent|1|nonzero|a base settings.json that is not there stops install/assemble-settings.js -- reading it as an empty document would deploy a file stripped of every hand-written rule
+is-dir|1|nonzero|a base settings.json present but unreadable is the SAME contract as absent, not a softer one
+T41_RC_CASES
+case_end
 
 # T43 lives in the sibling deploy-symlink-policy.sh.
-
-t40_setup
-t40_firstinstall_table
-t41_setup
-t41_basedoc_table

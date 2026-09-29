@@ -10,6 +10,7 @@
 # detect() unchanged; rows b-d prove the narrowing holds: a redirect, a non-xargs pipe and a
 # chain survive. A clean xargs pipe has no hit and nothing to allow, so it passes through.
 
+case_begin "xargs-pipe-carve-out" "hooks/bash-guard/detect.js"
 x1_xargs_pipe() {
     local name cmd want_verdict want_ids got
     while IFS='~' read -r name cmd want_verdict want_ids; do
@@ -35,24 +36,29 @@ TABLE
 }
 
 bg_batched x1_xargs_pipe
+case_end
 
 # X6: in `ls | grep x | xargs rm` the SURVIVING hit is the FIRST pipe (right side `grep`),
 # not merely "some pipe". The expected index is read from separatorLinks, so the assertion
 # stays true whatever numbering the IR uses -- what it pins is WHICH pipe survived.
+case_begin "xargs-pipe-surviving-pipe" "hooks/lib/command-ir.js"
 x6_cmd='ls | grep x | xargs rm'
 x6_links="$(probe links "$x6_cmd")"
 x6_first="$(printf '%s' "$x6_links" | tr ',' '\n' | awk -F: '$2=="|"{print $1; exit}')"
 assert_eq "X6: the pipe left of a non-xargs command is the hit that survives" \
     "pipe@separator:${x6_first}" "$(probe hits "$x6_cmd")"
+case_end
 
 # X7: position linkage, not index arithmetic. `& git.exe status` and `git pull &` each yield
 # one segment and one separator, so `segments[i+1]` cannot tell them apart; only
 # separatorLinks knows which side is empty. A regression to index arithmetic fails here, and
 # the xargs carve-out silently forgives the wrong pipe.
+case_begin "xargs-pipe-separator-links" "hooks/lib/command-ir.js"
 assert_eq "X7a: a LEADING separator links to a right segment and a null left segment" \
     "0:&:-:0" "$(probe links '& git.exe status')"
 assert_eq "X7b: a TRAILING separator links to a left segment and a null right segment" \
     "0:&:0:-" "$(probe links 'git pull &')"
+case_end
 
 # SKIPPED: proving that `... | xargs -I{} sh -c '...'` cannot be used to smuggle a compound
 #          command past the guard.

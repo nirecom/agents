@@ -61,7 +61,8 @@ allowed by a positive argv judge instead of a spelling.
   Reason codes: `BG-ALLOW-READONLY-GIT` / `BG-ALLOW-READONLY-GH` / `BG-ALLOW-READONLY-GENERIC`.
 - Hook allow does not override `permissions.deny` or `permissions.ask`, same as the self-script allow.
 - Only one plain command: no separator, redirect, substitution, group, heredoc, env prefix,
-  path-qualified or `.exe` command word, `command`/`builtin` wrapper. Any argv that touches a
+  path-qualified or `.exe` command word, `builtin` wrapper, or `command` used as a wrapper
+  (`command -v` / `-V` lookups are a generic class of their own). Any argv that touches a
   credential or dotenv path (`hooks/lib/credential-check.js`, `hooks/lib/dotenv-check.js`) never
   allows, whichever class matched. Neither does an argument the shell would expand (unquoted
   glob/brace, `$`, backtick or backslash outside single quotes) nor a query/fragment-suffixed or

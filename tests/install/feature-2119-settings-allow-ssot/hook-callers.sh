@@ -132,27 +132,47 @@ t37_case() { # <merge|checkout> <settings|ssot|cmdfile|unrelated|failure> -> ver
     printf '%s/%s/%s' "$state" "$rules" "$diag"
 }
 
-t37_caller_table() {
+# Row runner shared by every T37 span; each span feeds its own rows on stdin.
+t37_run_rows() {
     local hook kind want label
     while IFS='|' read -r hook kind want label; do
         [ -n "$hook" ] || continue
         ROWS=$((ROWS + 1))
         assert_eq "T37[$hook/$kind]: $label" "$want" "$(t37_case "$hook" "$kind")"
-    done <<'T37_CASES'
-merge|settings|changed/marker/-|post-merge on a settings.json change runs the REAL assembler and the caller's own ~/.claude/settings.json gains the new base rule -- the stub suite only ever proved a sentinel file was touched
-checkout|settings|changed/marker/-|CPR-ORTH: post-checkout does the same across a branch switch, through the same real assembler
-merge|ssot|absent/-/-|#2264: post-merge on an allow-list edit no longer deploys -- the list feeds bash-guard at runtime, and the trigger regex dropped it
-checkout|ssot|absent/-/-|CPR-ORTH: post-checkout ignores the same allow-list edit
-merge|cmdfile|absent/-/-|#2264: stage 2 is gone -- an edit to an SSOT-LISTED command file no longer triggers post-merge
-checkout|cmdfile|absent/-/-|and post-checkout ignores that same edit
-merge|unrelated|absent/-/-|NEGATIVE CONTROL post-merge: a path outside the trigger leaves the home untouched
-checkout|unrelated|absent/-/-|NEGATIVE CONTROL post-checkout: the same
-merge|failure|unchanged/no-marker/seen|post-merge merging a settings.json whose permissions.allow is a string keeps the ALREADY-deployed settings byte-identical (D3 fail-closed) and lets the assembler's own reason reach the operator, because the `2>/dev/null` that hid it is gone
-checkout|failure|unchanged/no-marker/seen|CPR-ORTH: post-checkout fails closed on the same broken base and stays just as audible
-T37_CASES
+    done
 }
 
-t37_caller_table
+# Target: the deployed file gaining the new base rule is the writer's observable result.
+case_begin "t37-settings-change-deploys" "install/lib/settings-deploy.js"
+t37_run_rows <<'T37_SETTINGS_CASES'
+merge|settings|changed/marker/-|post-merge on a settings.json change runs the REAL assembler and the caller's own ~/.claude/settings.json gains the new base rule -- the stub suite only ever proved a sentinel file was touched
+checkout|settings|changed/marker/-|CPR-ORTH: post-checkout does the same across a branch switch, through the same real assembler
+T37_SETTINGS_CASES
+case_end
+
+case_begin "t37-post-merge-trigger" "hooks/post-merge"
+t37_run_rows <<'T37_MERGE_CASES'
+merge|ssot|absent/-/-|#2264: post-merge on an allow-list edit no longer deploys -- the list feeds bash-guard at runtime, and the trigger regex dropped it
+merge|cmdfile|absent/-/-|#2264: stage 2 is gone -- an edit to an SSOT-LISTED command file no longer triggers post-merge
+merge|unrelated|absent/-/-|NEGATIVE CONTROL post-merge: a path outside the trigger leaves the home untouched
+T37_MERGE_CASES
+case_end
+
+case_begin "t37-post-checkout-trigger" "hooks/post-checkout"
+t37_run_rows <<'T37_CHECKOUT_CASES'
+checkout|ssot|absent/-/-|CPR-ORTH: post-checkout ignores the same allow-list edit
+checkout|cmdfile|absent/-/-|and post-checkout ignores that same edit
+checkout|unrelated|absent/-/-|NEGATIVE CONTROL post-checkout: the same
+T37_CHECKOUT_CASES
+case_end
+
+# Target: the fail-closed exit and the diagnostic both come from the real assembler CLI.
+case_begin "t37-assembler-failure-audible" "install/assemble-settings.js"
+t37_run_rows <<'T37_FAILURE_CASES'
+merge|failure|unchanged/no-marker/seen|post-merge merging a settings.json whose permissions.allow is a string keeps the ALREADY-deployed settings byte-identical (D3 fail-closed) and lets the assembler's own reason reach the operator, because the `2>/dev/null` that hid it is gone
+checkout|failure|unchanged/no-marker/seen|CPR-ORTH: post-checkout fails closed on the same broken base and stays just as audible
+T37_FAILURE_CASES
+case_end
 
 T38_BASH="$(command -v bash 2>/dev/null || true)"
 T38_SHIM_CMDS="git grep tr dirname sed cut timeout perl"
@@ -189,7 +209,8 @@ t38_shim_canary() { # <shimdir> -> "<no-node|NODE-FOUND>/<git-ok|GIT-MISSING>"
     [ -n "$T38_BASH" ] || { printf '<MISSING:bash>'; return; }
     ( PATH="$1"; export PATH
       if [ -n "$(command -v node 2>/dev/null || true)" ]; then printf 'NODE-FOUND'; else printf 'no-node'; fi
-      if [ -n "$(command -v git 2>/dev/null || true)" ]; then printf '/git-ok'; else printf '/GIT-MISSING'; fi )
+      if [ -n "$(command -v git 2>/dev/null || true)" ]; then printf '/git-ok'; else printf '/GIT-MISSING'; fi
+    )
 }
 
 t38_have() { # <no-node|with-node> -> ok | sentinel
@@ -266,4 +287,6 @@ checkout|with-node|rc=0/deployed/silent|and the same control for post-checkout
 T38_CASES
 }
 
+case_begin "t38-no-node-branch" "hooks/post-merge"
 t38_nonode_table
+case_end

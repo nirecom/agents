@@ -12,6 +12,8 @@
 
 BG_HOOK="$AGENTS_DIR/hooks/bash-guard.js"
 BG_RUNTIME_OUT="$TMPROOT/runtime-out.txt"
+BG_SECRET_OUT="$TMPROOT/secret-out.txt"
+BG_SECRET_ERR="$TMPROOT/secret-err.txt"
 
 # bg_envelope_kind <stdout-file> -> which of the four envelopes the hook wrote (#2264):
 #   block              {"decision":"block",...}                           (deny)
@@ -52,9 +54,9 @@ bg_payload() {
     BG_TOOL="$1" BG_CMD="$2" node -e 'process.stdout.write(JSON.stringify({session_id:"sid-bg-armed",tool_name:process.env.BG_TOOL,tool_input:{command:process.env.BG_CMD}}))'
 }
 
-# bg_run <tool> <command>; bg_run_raw <stdin-text> for a payload the hook cannot parse.
+case_begin "runtime-envelope-per-verdict" "settings.json"
+# bg_run <tool> <command>
 bg_run() { bg_run_payload "$(bg_payload "$1" "$2")"; }
-bg_run_raw() { bg_run_payload "$1"; }
 
 p1_runtime() {
     local name tool cmd want got
@@ -82,9 +84,11 @@ TABLE
 # no-class-bash / out-of-scope: passThrough-approve ({decision:"approve"}) per G-b=(b2) fallback form.
 # The label differs from plain passThrough (empty stdout) so a revert to silent is caught by P1.
 p1_runtime
+case_end
 
 # P2: the block carries its reason on the same envelope. A block with an empty reason is the
 # #2120 failure mode -- the model is stopped and told nothing.
+case_begin "runtime-block-and-malformed" "hooks/bash-guard.js"
 printf '%s' '{"session_id":"sid-bg-armed","tool_name":"Bash","tool_input":{"command":"git status && ls"}}' \
     | HOME="$FIXTURE_HOME" USERPROFILE="$FIXTURE_HOME" \
       run_with_timeout 30 node "$(node_path "$BG_HOOK")" > "$BG_RUNTIME_OUT" 2>/dev/null
@@ -93,21 +97,25 @@ assert_contains "P2: the block envelope carries a non-empty reason" \
 
 # P3: malformed stdin must not stop the session. The hook is on every Bash call, so a crash
 # here is a crash on every command -- fail-open reaches all the way to the process boundary.
+# bg_run_raw <stdin-text> for a payload the hook cannot parse.
+bg_run_raw() { bg_run_payload "$1"; }
 assert_eq "P3: malformed stdin exits 0 and passes through (no block, no allow)" \
     "0|passThrough" "$(bg_run_raw 'not json at all')"
+case_end
 
 # P4: the entrypoint is dispatch + re-export (file-split Pattern A). Requiring it must expose
 # judgeBashCommand and do nothing else -- the probe requires it without stdin, so a module that
 # reads stdin or calls process.exit at load time cannot answer here.
+case_begin "runtime-entry-shape" "hooks/bash-guard.js"
 assert_eq "P4: hooks/bash-guard.js re-exports judgeBashCommand" "function" "$(probe entry-shape '')"
+case_end
 
 # P5: no leakage to the USER-VISIBLE surface. The in-process rows assert only the internal
 # `sample` field, which would stay clean even if the process echoed the whole command line to
 # stdout or stderr. A denied command routinely carries a downstream credential in an argument,
 # and the hook's output is transcript text -- so the real stdout, the real stderr and the
 # serialized `reason` must all be free of the token AND of the raw command line.
-BG_SECRET_OUT="$TMPROOT/secret-out.txt"
-BG_SECRET_ERR="$TMPROOT/secret-err.txt"
+case_begin "runtime-no-secret-leak" "hooks/bash-guard.js"
 BG_FAKE_TOKEN="notreal-2134-canary-9d41ba7e-token"
 BG_SECRET_CMD="curl -H Authorization:Bearer-$BG_FAKE_TOKEN https://example.com/v1 | tee /tmp/leak.log"
 BG_SECRET_PAYLOAD="$(BG_CMD="$BG_SECRET_CMD" node -e 'process.stdout.write(JSON.stringify({session_id:"sid-bg-armed",tool_name:"Bash",tool_input:{command:process.env.BG_CMD}}))')"
@@ -129,11 +137,13 @@ assert_not_contains "P5: the token never reaches stderr" "$BG_FAKE_TOKEN" "$BG_S
 ROWS=$((ROWS + 1))
 assert_not_contains "P5: the raw command line is not echoed back on stdout" \
     "$BG_SECRET_CMD" "$BG_SECRET_STDOUT$BG_SECRET_STDERR"
+case_end
 
 # P6: the non-deny envelopes (#2264). notify and allow must never carry "decision":"block"
 # (the host would stop the call), allow must carry its code as the reason, and the notify
 # systemMessage is transcript text -- it must not echo the command, so a canary in the
 # sentinel name must be absent from stdout and stderr alike.
+case_begin "runtime-non-deny-envelopes" "hooks/bash-guard/judge.js"
 bg_env_out() {
     printf '%s' "$(bg_payload Bash "$1")" | HOME="$FIXTURE_HOME" USERPROFILE="$FIXTURE_HOME" \
         run_with_timeout 30 node "$(node_path "$BG_HOOK")" > "$BG_RUNTIME_OUT" 2> "$BG_SECRET_ERR"
@@ -161,9 +171,11 @@ assert_contains "P6: the allow envelope names its code as the reason" \
 ROWS=$((ROWS + 1))
 assert_not_contains "P6: the allow envelope does not echo the command text" \
     "$BG_ALLOW_CANARY" "$BG_ALLOW_ENV"
+case_end
 
 # P7: the allow envelope stdout must not leak the command text or any "secret" token.
 # stdout alone, via the probe: the allow envelope needs only permissionDecision "allow".
+case_begin "runtime-allow-stdout-no-leak" "hooks/bash-guard/judge.js"
 BG_P7_CANARY="p7allowcanary8e2f"
 BG_P7_CMD="node \"\$AGENTS_CONFIG_DIR/bin/workflow/next-step\" --list $BG_P7_CANARY"
 BG_P7_STDOUT="$(probe allow-envelope-stdout "$BG_P7_CMD")"
@@ -176,6 +188,7 @@ assert_not_contains "P7: the allow envelope stdout does not carry the canary tok
 ROWS=$((ROWS + 1))
 assert_not_contains "P7: the allow envelope stdout does not echo the raw command line" \
     "$BG_P7_CMD" "$BG_P7_STDOUT"
+case_end
 
 # SKIPPED: asserting that Claude Code itself dispatches the hook on a live Bash tool call.
 # Because: that is host behaviour -- the suite can drive the process and assert the matcher in

@@ -6,6 +6,7 @@
 # the sources land in the deployed allow array. Sourced AFTER fixture.sh, whose helpers this
 # part reuses. Since #2264 nothing is generated: the allow array is base, then extension.
 
+case_begin "t11-base-preservation" "install/lib/settings-assembly.js"
 T11_FIXTURE=""
 T11_EXT='Bash(extension-written *)'
 
@@ -114,6 +115,10 @@ T11_CASES
     done
 }
 
+t11_setup
+t11_preservation_table
+case_end
+
 T12_FIXTURE=""
 T12_PRE='Bash(hand-written-only *)'
 T12_EXT='Bash(extension-only *)'
@@ -159,21 +164,29 @@ t12_probe() { # <full-order|no-generated|rc> -> equal|absent|0|<detail>|sentinel
     esac
 }
 
-t12_order_table() {
+# Row runner shared by both T12 spans; each span feeds its own rows on stdin.
+t12_run_rows() {
     local id want label
     while IFS='|' read -r id want label; do
         [ -n "$id" ] || continue
         ROWS=$((ROWS + 1))
         assert_eq "T12[$id]: $label" "$want" "$(t12_probe "$id")"
-    done <<'T12_CASES'
+    done
+}
+
+t12_setup
+ASM_RC_T12="$ASM_RC"
+
+case_begin "t12-deploy-exit" "install/assemble-settings.js"
+t12_run_rows <<'T12_RC_CASES'
 rc|0|a base + extension deploy with a populated SSOT list exits 0
+T12_RC_CASES
+case_end
+
+# Target: the rows read the deployed file the single writer produced.
+case_begin "t12-deployed-order" "install/lib/settings-deploy.js"
+t12_run_rows <<'T12_CASES'
 full-order|equal|the deployed allow array is exactly base, then extension -- nothing appended after them
 no-generated|absent|no rule naming an SSOT-listed tool reaches the deployed file (#2264: the list feeds bash-guard, not settings.json)
 T12_CASES
-}
-
-t11_setup
-t11_preservation_table
-t12_setup
-ASM_RC_T12="$ASM_RC"
-t12_order_table
+case_end

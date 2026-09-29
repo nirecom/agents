@@ -22,25 +22,34 @@ q1_precedence_rows() {
 
         got="$(verdict_code_of "$cmd" "$sid")"
         assert_eq "Q1/$name: verdict|code" "$want" "$got"
-    done <<'TABLE'
-# --- deny beats notify ---
+    done
+}
+
+# Q1 rows are read from stdin (bg_batched_stdin) so each case below carries its own table.
+# deny beats notify, and deny beats allow: a self-script plus one forbidden literal is a deny.
+case_begin "precedence-deny-wins" "hooks/bash-guard/detect.js"
+bg_batched_stdin q1_precedence_rows <<'TABLE'
 deny-over-l2      ~ echo "<<WORKFLOW_MARK_STEP_x>>" && ls                           ~ -     ~ deny|BG-CHAIN-AND
 deny-over-l3      ~ "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list | cat        ~ -     ~ deny|BG-PIPE
-# --- deny beats allow: a self-script plus one forbidden literal is a deny, not an allow ---
 deny-over-allow-a ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list && ls   ~ -     ~ deny|BG-CHAIN-AND
 deny-over-allow-r ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list > o.txt ~ -     ~ deny|BG-REDIRECT-OUT
-# --- notify beats allow: the exec-position self-script is notified, never allowed ---
+TABLE
+case_end
+
+# notify beats allow (the exec-position self-script is notified, never allowed); allow beats passThrough.
+case_begin "precedence-allow-boundary" "hooks/bash-guard/allow.js"
+bg_batched_stdin q1_precedence_rows <<'TABLE'
 notify-over-allow ~ "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list              ~ -     ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
-# --- allow beats passThrough ---
 allow-over-pass   ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list         ~ -     ~ allow|BG-ALLOW-SELF-SCRIPT
-# --- pre-verdict gates: never allow ---
+TABLE
+case_end
+
+# pre-verdict gates: never allow.
+case_begin "verdict-precedence" "hooks/bash-guard/judge.js"
+bg_batched_stdin q1_precedence_rows <<'TABLE'
 interlock-quiet   ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list         ~ ARMED ~ passThrough|BG-INTERLOCK-QUIET
 parse-fail-open   ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" "unterminated  ~ -     ~ passThrough|BG-PARSE-FAILURE
 TABLE
-}
-
-case_begin "verdict-precedence" "hooks/bash-guard/judge.js"
-bg_batched q1_precedence_rows
 case_end
 
 # notify-over-allow is the only reachable notify/allow overlap: matchSelfScript needs cmd0 to be

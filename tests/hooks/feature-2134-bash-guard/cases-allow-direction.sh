@@ -10,6 +10,7 @@
 # since #2403 a plain single read-only command (git/gh read, ls/grep/...) is allow via the
 # N3-N5 classes (tests/hooks/feature-2403-readonly-judge.sh), alongside this repo's own scripts.
 
+case_begin "allow-direction-sanctioned-forms" "hooks/bash-guard/forbidden-literals.js"
 a1_sanctioned_forms() {
     local name cmd want got
     while IFS='~' read -r name cmd want; do
@@ -46,18 +47,23 @@ TABLE
 # the payload, which bash-guard must not resolve against process.cwd() -- so no allow.
 
 bg_batched a1_sanctioned_forms
+case_end
 
 # A2: a passed-through command carries no literal id -- nothing was detected and then forgiven.
 # `make build` is neither a self-script nor a read-only class member (#2403), so it stays
 # the canonical no-hit passThrough.
+case_begin "allow-direction-no-hit-code" "hooks/bash-guard/judge.js"
 a2_line="$(probe judge "make build")"
 assert_eq "A2: a no-hit command reports passThrough with the NO_HIT code and no literal" \
     "passThrough	BG-NO-HIT	-" "$a2_line"
 assert_not_contains "A2: a no-hit verdict does not name a forbidden literal" "redirect" "$a2_line"
+case_end
 
 # A3: argument count is not the axis -- rules/shell-commands.md exempts "one standalone
 # command with its own flags and arguments", however many of them there are. grep is an N3
 # generic read-only class member, so since #2403 the verdict is allow. The glob is quoted: an
 # unquoted `*` is shell-expanded, which the read-only classes refuse on their own axis.
+case_begin "allow-direction-many-flags" "hooks/bash-guard/detect.js"
 assert_eq "A3: a long single command with many flags is not blocked" \
     "allow" "$(verdict_of "grep -rn --include='*.js' --color=never needle /tmp/haystack")"
+case_end

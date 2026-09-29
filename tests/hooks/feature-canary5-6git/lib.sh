@@ -15,11 +15,13 @@ set -uo pipefail
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL='*'
 
-PASS=0; FAIL=0; SKIP=0
-
 # Worktree root — passed by the dispatcher as $1; fall back to two-levels-up.
 WORKTREE="${1:-}"
 [ -n "$WORKTREE" ] && [ -d "$WORKTREE" ] || WORKTREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+
+AGENTS_DIR="$WORKTREE"
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found — skipping tests"; exit 77; }
 
@@ -31,17 +33,16 @@ else
 fi
 GUARD_JS="${WT_NODE}/hooks/enforce-worktree.js"
 
+# Overrides the harness assert_eq/run_with_timeout: bq_flush passes <name> <want> <got>,
+# and the node batch keeps its timeout/perl fallback.
 assert_eq() {
   local name="$1" want="$2" got="$3"
   if [ "$want" = "$got" ]; then
-    echo "PASS: $name"; PASS=$((PASS + 1))
+    pass "$name"
   else
-    echo "FAIL: $name — want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; FAIL=$((FAIL + 1))
+    fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"
   fi
 }
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
 run_with_timeout() {
   local secs="$1"; shift
