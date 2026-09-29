@@ -46,14 +46,14 @@ WS-5. Create the parent directory (platform-aware):
    `enforce-worktree.js` only grants its `New-Item -ItemType Directory` exemption to
    isolated commands — any shell operator removes the exemption and the command is
    rejected as a write from the main worktree. Run it as its own Bash call.
-   The same rule applies to step WS-6 (`git worktree add`).
+   The same rule applies to WS-6 (`git worktree add`).
 
-WS-6. Create the worktree (isolated command — same chaining caveat as step WS-5):
+WS-6. Create the worktree (isolated command — same chaining caveat as WS-5):
    ```
    git worktree add <path> -b <BRANCH_TYPE>/<TASK_NAME>
    ```
 
-WS-7. Dispatch the `worktree-copy` worker per `skills/_shared/worker-dispatch.md`. Payload: `worktree_path` (Step WS-3 path), `branch` (`<BRANCH_TYPE>/<TASK_NAME>`), `session_id` (omit when unknown), `artifact_dir` (the `PLANS_DIR` from WD-1).
+WS-7. Dispatch the `worktree-copy` worker per `skills/_shared/worker-dispatch.md`. Payload: `worktree_path` (WS-3 path), `branch` (`<BRANCH_TYPE>/<TASK_NAME>`), `session_id` (omit when unknown), `artifact_dir` (the `PLANS_DIR` from WD-1).
 
    Check `CONFIRM_WORKTREE` via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_WORKTREE on'`
    `--headless` at WS-2 signals either no workflow session or a subagent/fork context where `AskUserQuestion` is unreachable — treat `CONFIRM_WORKTREE` as OFF in both cases.

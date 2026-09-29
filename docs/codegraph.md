@@ -7,10 +7,14 @@ This repository only wires it in; it is never a required dependency.
 ## Enabling
 
 Set `CODEGRAPH=on` in `.env`, then **re-run** `install.ps1` / `install.sh`. The installer installs the
-npm package at the version pinned in `install/codegraph-constants.txt` (with `--ignore-scripts`, so no
-upstream lifecycle script runs) and registers the MCP server with `claude mcp add`.
+npm package at `@latest` (with `--ignore-scripts`, so no upstream lifecycle script runs) and registers
+the MCP server with `claude mcp add`.
 
 Close Claude Code while the installer runs — it writes `~/.claude.json`, which a live session also writes.
+
+After registration the installer patches `~/.claude.json` to set `alwaysLoad: true` on the codegraph entry.
+Without this flag, Claude Code defers `codegraph_explore`'s schema until a `ToolSearch` call is made,
+requiring a manual preamble that defeats the goal of having the tool always available without extra steps.
 
 ## Disabling
 

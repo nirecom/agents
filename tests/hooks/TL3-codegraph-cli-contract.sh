@@ -3,16 +3,18 @@
 # Tests: hooks/lib/codegraph-boundary.js, bin/codegraph-lifecycle.js
 # Tags: TL3, codegraph, cli-contract, scope:issue-specific
 #
-# Real-binary contract for `codegraph` (M37-M40, S5-14): version pin match,
+# Real-binary contract for `codegraph` (M37-M40, S5-14): semver --version,
 # prompt-hook no-op contract, prompt-hook against a self-authored fixture
 # index, fixture-home write-containment. HOME+USERPROFILE both pin a
 # fixture home; no CODEGRAPH_TELEMETRY/DO_NOT_TRACK (bare upstream contract).
 # TL3 gap: TL1/TL2 exercise a stub only; a real binary + RUN_TL3=on catches
-# version drift, an upstream contract break, or a fixture-home leak.
+# a broken --version, an upstream contract break, or a fixture-home leak.
 
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 # Skip-gate 1: RUN_TL3 must be explicitly on (rules/test/claude-e2e.md).
 [ -x "$AGENTS_DIR/bin/get-config-var" ] || { echo "SKIP: $AGENTS_DIR/bin/get-config-var not found or not executable" >&2; exit 77; }
@@ -24,11 +26,6 @@ fi
 if ! command -v codegraph >/dev/null 2>&1; then
   echo "SKIP: codegraph CLI not found on PATH" >&2; exit 77
 fi
-
-CONSTANTS_FILE="$AGENTS_DIR/install/codegraph-constants.txt"
-[ -f "$CONSTANTS_FILE" ] || { echo "SKIP: $CONSTANTS_FILE not found" >&2; exit 77; }
-PINNED_VERSION="$(grep -E '^CODEGRAPH_VERSION=' "$CONSTANTS_FILE" | head -n1 | cut -d= -f2-)"
-[ -n "$PINNED_VERSION" ] || { echo "SKIP: CODEGRAPH_VERSION not found in $CONSTANTS_FILE" >&2; exit 77; }
 
 # Unset inherited session/workflow env so this run cannot resolve real state
 # (rules/test/fixture-isolation.md).
@@ -56,25 +53,22 @@ export USERPROFILE="$FIXTURE_HOME"
 unset CODEGRAPH_TELEMETRY
 unset DO_NOT_TRACK
 
-PASS=0; FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
-
 # snapshot_codegraph_tree: sorted relative-path+digest listing of the fixture
 # home's .codegraph/ tree, so M40 can diff before/after (S5-14 isolation).
 snapshot_codegraph_tree() {
   if [ -d "$FIXTURE_HOME/.codegraph" ]; then
-    find "$FIXTURE_HOME/.codegraph" -type f | sort | while IFS= read -r f; do
+    while IFS= read -r f; do
       rel="${f#"$FIXTURE_HOME"/}"
       sum="$(cksum "$f" 2>/dev/null | awk '{print $1, $2}')"
       echo "$rel $sum"
-    done
+    done < <(find "$FIXTURE_HOME/.codegraph" -type f | sort)
   fi
 }
 
 SNAPSHOT_BEFORE="$(snapshot_codegraph_tree)"
 
-# --- M37: `codegraph --version` matches the pinned CODEGRAPH_VERSION -------
+case_begin "M37: codegraph --version semver contract" "bin/codegraph-lifecycle.js"
+# --- M37: `codegraph --version` answers a semver (no pin since #2254) ------
 VERSION_STDOUT="$(mktemp)"
 VERSION_STDERR="$(mktemp)"
 if bash "$AGENTS_DIR/bin/run-with-timeout.sh" 60 codegraph --version >"$VERSION_STDOUT" 2>"$VERSION_STDERR"; then
@@ -86,13 +80,15 @@ fi
 VERSION_OUT_TRIMMED="$(tr -d '[:space:]' <"$VERSION_STDOUT")"
 VERSION_ERR_BYTES="$(wc -c <"$VERSION_STDERR" | tr -d '[:space:]')"
 
-if [ "$VERSION_EXIT" -eq 0 ] && [ "$VERSION_OUT_TRIMMED" = "$PINNED_VERSION" ] && [ "$VERSION_ERR_BYTES" = "0" ]; then
-  pass "M37: codegraph --version matches pinned $PINNED_VERSION, exit 0, stderr empty"
+if [ "$VERSION_EXIT" -eq 0 ] && [[ "$VERSION_OUT_TRIMMED" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] && [ "$VERSION_ERR_BYTES" = "0" ]; then
+  pass "M37: codegraph --version answers semver $VERSION_OUT_TRIMMED, exit 0, stderr empty"
 else
-  fail "M37: expected version=$PINNED_VERSION exit=0 stderr=0B; got version=$VERSION_OUT_TRIMMED exit=$VERSION_EXIT stderr_bytes=$VERSION_ERR_BYTES"
+  fail "M37: expected a semver version, exit=0, stderr=0B; got version=$VERSION_OUT_TRIMMED exit=$VERSION_EXIT stderr_bytes=$VERSION_ERR_BYTES"
 fi
 rm -f "$VERSION_STDOUT" "$VERSION_STDERR"
+case_end
 
+case_begin "M38: prompt-hook no-op on unstructured prompt" "hooks/lib/codegraph-boundary.js"
 # --- M38: prompt-hook no-op contract on an unstructured prompt -------------
 HOOK38_STDOUT="$(mktemp)"
 HOOK38_STDERR="$(mktemp)"
@@ -109,7 +105,9 @@ else
   fail "M38: expected exit=0 stderr=0B stdout=empty-or-<codegraph_context; got exit=$HOOK38_EXIT stderr_bytes=$HOOK38_ERR_BYTES stdout=$(printf '%s' "$HOOK38_OUT" | head -c 80)"
 fi
 rm -f "$HOOK38_STDOUT" "$HOOK38_STDERR"
+case_end
 
+case_begin "M39: prompt-hook with self-authored fixture index" "hooks/lib/codegraph-boundary.js"
 # --- M39: prompt-hook against a self-authored fixture index ----------------
 FIXTURE_SYMBOL="agentsFixtureSentinelSymbol2215"
 cat > "$FIXTURE_PROJECT/fixture-symbol.js" <<EOF
@@ -149,7 +147,9 @@ case "$HOOK39_OUT" in
     ;;
 esac
 rm -f "$HOOK39_STDOUT" "$HOOK39_STDERR"
+case_end
 
+case_begin "M40: fixture home write-containment and HOME/USERPROFILE pin" "bin/codegraph-lifecycle.js"
 # --- M40: fixture home write-containment + HOME/USERPROFILE pin ------------
 SNAPSHOT_AFTER="$(snapshot_codegraph_tree)"
 
@@ -164,6 +164,8 @@ if [ -n "$SNAPSHOT_AFTER" ] && [ "$SNAPSHOT_BEFORE" != "$SNAPSHOT_AFTER" ]; then
 else
   fail "M40: expected fixture home .codegraph/ tree to differ before/after M37-M39 ran"
 fi
+
+case_end
 
 echo "Results: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

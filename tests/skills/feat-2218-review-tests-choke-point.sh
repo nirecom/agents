@@ -75,6 +75,20 @@ run_loop_at() {
           "$RWT" 60 bash "$LOOP" >/dev/null 2>&1 )
 }
 
+# #2430: handoff-append writes only inside the workflow active period, so a case
+# that expects a codex-exit entry seeds workflow_init complete for its sid.
+seed_active() {
+    local tmp="$1" sid="$2"
+    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        HOME="$tmp/home" USERPROFILE="$tmp/home" \
+        "$RWT" 30 node -e "
+const S = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+S.writeState('$sid', S.createInitialState('$sid', { cwd: '/rt/fixture', git_branch: 'feature/rt' }));
+S.markStep('$sid', 'workflow_init', 'complete');
+" >/dev/null 2>&1
+}
+
 # Read the entry back through the module's own reader: the grammar belongs to
 # the writer, this file only claims what the record must say.
 inspect() {
@@ -92,6 +106,7 @@ if (all.length !== 1) problems.push('codex-exit-entries:' + all.length);
 else {
   const e = all[0];
   if (e.class !== 'D') problems.push('class:' + e.class);
+  if (e.origin !== 'procedure-point') problems.push('origin:' + e.origin);
   const s = String(e.summary);
   if (!new RegExp('(^|[^0-9])' + process.env.WANT_CODE + '([^0-9]|$)').test(s)) problems.push('summary-omits-exit-code:' + s);
   if (s.toLowerCase().indexOf(process.env.WANT_PATH.toLowerCase()) === -1) problems.push('summary-omits-path:' + s);
@@ -139,6 +154,7 @@ run_R1() {
     for row in "4:HALT" "7:HALT" "8:HALT"; do
         code="${row%%:*}"; want_path="${row##*:}"; want_rc="$code"
         sid="codex-exit-$code"
+        seed_active "$tmp" "$sid"
         if [ "$code" = "8" ]; then
             # Armed guard + no git repo under the target: the fingerprint
             # calculation returns ok:false, which is a HALT (exit 4), not exit 8.
@@ -189,6 +205,7 @@ run_R3() {
     local tmp problems n
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
+    seed_active "$tmp" "repeat-sid-r3"
     run_loop "$tmp" "repeat-sid-r3" 4 "$tmp/target"
     run_loop "$tmp" "repeat-sid-r3" 4 "$tmp/target"
     run_loop "$tmp" "repeat-sid-r3" 4 "$tmp/target"
@@ -213,6 +230,7 @@ run_R4() {
     local tmp rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf/unwritable-sid-r4-handoff.md"
+    seed_active "$tmp" "unwritable-sid-r4"
     run_loop "$tmp" "unwritable-sid-r4" 4 "$tmp/target"; rc=$?
     [ "$rc" -eq 4 ] || problems="$problems exit-changed-by-a-failed-artifact-write:$rc"
     rm -rf "$tmp" 2>/dev/null || true
@@ -258,6 +276,7 @@ run_R6() {
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
     sid="codex-exit-8-nostate-nongit"
+    seed_active "$tmp" "$sid"
     printf '2\nprev-fingerprint\n' > "$tmp/wf/$sid-test-review-terminal.txt"
     run_loop_at "$tmp" "$tmp" "$sid" 0 "NOSTATE"; rc=$?
     [ "$rc" -eq 8 ] || problems="$problems exit-code:$rc"
@@ -284,6 +303,7 @@ run_R7() {
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
     sid="codex-exit-8-emptytarget"
+    seed_active "$tmp" "$sid"
     printf '2\nprev-fingerprint\n' > "$tmp/wf/$sid-test-review-terminal.txt"
     run_loop_at "$tmp" "$tmp" "$sid" 0 ""; rc=$?
     [ "$rc" -eq 8 ] || problems="$problems exit-code:$rc"

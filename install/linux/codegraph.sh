@@ -12,16 +12,8 @@ if [ -z "${C_RESET+x}" ]; then
     fi
 fi
 
-# install/codegraph-constants.txt is the single source of truth for the pinned
-# version and the telemetry env pair; install/win/codegraph.ps1 reads the same file.
-# Only the version is read here — see the matching comment in codegraph.ps1 for why
-# the pair must not be exported from an installer script.
-CODEGRAPH_VERSION=""
-while IFS='=' read -r _cg_key _cg_value; do
-    case "$_cg_key" in
-        CODEGRAPH_VERSION) CODEGRAPH_VERSION="$_cg_value" ;;
-    esac
-done < "$AGENTS_ROOT/install/codegraph-constants.txt"
+# The telemetry pair in install/codegraph-constants.txt is NOT exported here:
+# it would leak into every child. codegraph-mcp.js hands it to its own children.
 
 NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 if [ -s "$NVM_DIR/nvm.sh" ]; then
@@ -44,25 +36,25 @@ if [ "$_cg_rc" -ne 1 ]; then
     exit 0
 fi
 
-if ! command -v npm >/dev/null 2>&1; then
+# Pinned to 1.6.0: 1.6.1 regressed with Windows console flicker (#2456).
+# An installed binary is kept when the update fails.
+_cg_updated=0
+if command -v npm >/dev/null 2>&1; then
+    echo "Installing CodeGraph 1.6.0..."
+    if npm install -g --ignore-scripts "@colbymchenry/codegraph@1.6.0" </dev/null; then
+        _cg_updated=1
+        printf "${C_GREEN}CodeGraph is up to date.${C_RESET}\n"
+    elif ! command -v codegraph >/dev/null 2>&1; then
+        printf "${C_YELLOW}CodeGraph installation failed. Re-run to retry.${C_RESET}\n" >&2
+        exit 0
+    fi
+elif ! command -v codegraph >/dev/null 2>&1; then
     printf "${C_YELLOW}npm not found. Run: nvm install --lts${C_RESET}\n" >&2
     exit 0
 fi
 
-if [ -z "$CODEGRAPH_VERSION" ]; then
-    printf "${C_YELLOW}CODEGRAPH_VERSION missing from install/codegraph-constants.txt. CodeGraph step skipped.${C_RESET}\n" >&2
-    exit 0
-fi
-
-if command -v codegraph >/dev/null 2>&1; then
-    printf "${C_GRAY}CodeGraph is already installed.${C_RESET}\n"
-else
-    echo "Installing CodeGraph..."
-    if ! npm install -g --ignore-scripts "@colbymchenry/codegraph@$CODEGRAPH_VERSION" </dev/null; then
-        printf "${C_YELLOW}CodeGraph installation failed. Re-run to retry.${C_RESET}\n" >&2
-        exit 0
-    fi
-    printf "${C_GREEN}CodeGraph installed.${C_RESET}\n"
+if [ "$_cg_updated" -ne 1 ]; then
+    printf "${C_YELLOW}CodeGraph could not be updated (npm missing or failed); keeping the installed version.${C_RESET}\n" >&2
 fi
 
 node "$AGENTS_ROOT/install/codegraph-mcp.js" register </dev/null

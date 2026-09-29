@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/enforce-system-ops.js
-# Tags: system-ops, enforce, hook, classifier, table-driven, mutation-probe, security, scope:cross-cutting, pwsh-not-required, TL2
+# Tags: system-ops, enforce, hook, classifier, table-driven, mutation-probe, security, scope:cross-cutting, pwsh-not-required, TL2, scope:common
 #
 # Table-driven classifier coverage for hooks/enforce-system-ops.js (review gap C8).
 #

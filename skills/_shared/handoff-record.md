@@ -1,8 +1,10 @@
 # Handoff Record Catalog
 
-What each step writes into the handoff artifact. When to write it is owned by the calling skill's step; the line grammar is owned by `docs/architecture/claude-code/handoff-artifact.md`.
+What each step writes into the handoff artifact. When to write it is owned by the calling skill's in-skill step; the line grammar is owned by `docs/architecture/claude-code/handoff-artifact.md`.
 
-Write every entry with `node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append"`, passing `--class` / `--step` / `--key` / `--summary` / `--pointer` / `--origin`.
+Write every entry with `node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append"`, passing `--class` / `--step` / `--key` / `--summary` / `--pointer` / `--origin procedure-point`.
+
+Outside the workflow active period the CLI writes nothing and prints `WRITTEN=0 REASON=inactive`; continue the procedure unchanged.
 
 Use `--pointer -` when no canonical artifact owns the detail.
 

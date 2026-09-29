@@ -583,3 +583,11 @@ Changes: Scratchpad script auto-approve now supports `bash <script>.sh [literal-
 ### FEATURE: PR #2424 (2026-09-27)
 Background: feat(#2388): enforce case_begin/case_end markers for new multi-path ....
 Changes: New test files with several `# Tests:` paths must wrap each case in column-0 `case_begin`/`case_end`. Edits and commits that leave such a file without valid markers are now blocked. Rules: `skills/_shared/test-design/case-markers.md`. (#2388)
+
+### FEATURE: PR #2437 (2026-09-28)
+Background: fix(codegraph): stop ToolSearch deferring the codegraph_explore schema (#2254)
+Changes: codegraph_explore is now always available without a ToolSearch preamble: the installer patches ~/.claude.json to set alwaysLoad:true after registering the MCP server.;The codegraph npm package is now always installed at @latest, eliminating the pinned-version mismatch warning.
+
+### FEATURE: PR #2439 (2026-09-28)
+Background: fix(#2435,#1270): always block agents memory writes; cite canonical rule
+Changes: Direct writes to the agents-repo memory directory are now always blocked (except under WORKFLOW_OFF); the rejection message explains why and points to `/issue-create` and `rules/mid-workflow-findings.md`.

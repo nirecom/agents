@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/scan-outbound.sh
-# Tags: scan, filter, outbound, hook, bin
+# Tags: scan, filter, outbound, hook, bin, scope:issue-specific
 # Test suite for `.private-info-blocklist` warn-mode in bin/scan-outbound.sh
 #
 # Tests target POST-implementation behavior:

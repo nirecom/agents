@@ -26,7 +26,7 @@ the model queries `bin/workflow/next-step` for the next step; a PreToolUse hook 
 blocks `git commit` until every required step completes or is explicitly skipped with a reason.
 
 The same state machine runs in several modes depending on the work. **WF-CODE** is the standard
-implementation flow with all 17 steps active; **WF-META** is a planning-only variant for
+implementation flow with every step active; **WF-META** is a planning-only variant for
 meta-label issues that auto-skips the implementation steps (7–15). The full per-mode step lists
 live in [docs/architecture/claude-code/workflow.md](docs/architecture/claude-code/workflow.md#workflow-types-in-next-step---list).
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/enforce-system-ops.js
-# Tags: system-ops, enforce, hook, bin, tests
+# Tags: system-ops, enforce, hook, bin, tests, scope:issue-specific
 # Tests for hooks/enforce-system-ops.js — system-ops PreToolUse guard.
 #
 # Blocks destructive/global system operations from the Bash tool unless

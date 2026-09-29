@@ -4,7 +4,7 @@
 # and scans WORKTREE_BASE_DIR for orphan directories git's worktree registry
 # does not track. Deletes by default; pass --dry-run to preview.
 # Usage: sweep-worktrees.sh [--dry-run] [--min-age-hours N] [--ci-mode]
-#                           [--apply] [--skip-gh-check] [--simulate-eperm]
+#                           [--apply] [--force] [--skip-gh-check] [--simulate-eperm]
 # Entrypoint only — flag parsing, environment checks, the registered-worktree
 # main loop, and pass sequencing; the passes live in bin/sweep-worktrees/
 # (rules/coding/file-split.md Pattern A). Exit 0 on normal completion (a
@@ -32,6 +32,7 @@ source "$SCRIPT_DIR/sweep-worktrees/summary.sh"
 sweep_write_mode_init
 MIN_AGE_HOURS=24
 CI_MODE=0
+FORCE=0
 SKIP_GH_CHECK=0
 SIMULATE_EPERM=0
 SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
@@ -116,6 +117,10 @@ EOF
   --sweep-age-days N    Age threshold in days for the empty-parent pass
                         (default 30; env SWEEP_AGE_DAYS).
   --ci-mode             Emit JSON summary on stdout (instead of plain text).
+  --force               Pass --force to git worktree remove, bypassing the
+                        dirty-tree check (removes worktrees with uncommitted
+                        or untracked files). PR-merged and freshness gates
+                        still apply.
   --skip-gh-check       Skip the gh PR merged-state check (testing only).
   --simulate-eperm      Pretend every worktree remove failed with EPERM
                         (testing only).
@@ -127,6 +132,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --apply) sweep_write_mode_apply ;;
     --dry-run) sweep_write_mode_dry_run ;;
+    --force) FORCE=1 ;;
     --min-age-hours)
       shift
       MIN_AGE_HOURS="${1:?--min-age-hours requires a value}"
@@ -249,7 +255,8 @@ process_record() {
   fi
 
   # Clean working tree check (tracked files only — untracked ignored).
-  if ! is_clean_tracked_only "$wt_path"; then
+  # Skipped when --force is set; git worktree remove will receive --force too.
+  if [[ "$FORCE" != "1" ]] && ! is_clean_tracked_only "$wt_path"; then
     skipped_dirty=$((skipped_dirty + 1)) || true
     return 0
   fi
@@ -276,7 +283,10 @@ process_record() {
 
   local err_file
   err_file="$(mktemp 2>/dev/null || printf '%s' "/tmp/wt_remove_err.$$")"
-  if git -C "$MAIN_ROOT" worktree remove "$wt_path" 2>"$err_file"; then
+  local force_flag=""
+  [[ "$FORCE" == "1" ]] && force_flag="--force"
+  # shellcheck disable=SC2086
+  if git -C "$MAIN_ROOT" worktree remove $force_flag "$wt_path" 2>"$err_file"; then
     worktree_removed=$((worktree_removed + 1)) || true
   else
     local err

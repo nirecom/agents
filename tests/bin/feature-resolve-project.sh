@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/feature-resolve-project.sh
 # Tests: bin/github-issues/lib/resolve-project.sh
-# Tags: workflow, github, issues, plans, bin
+# Tags: workflow, github, issues, plans, bin, scope:issue-specific
 #
 # Dispatch + aggregate entrypoint for the feature-resolve-project split suite.
 # All logic lives in tests/bin/feature-resolve-project/ per rules/coding/file-split.md.

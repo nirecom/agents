@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/migration/state.sh
-# Tags: migration, repo, history, docs, todo
+# Tags: migration, repo, history, docs, todo, scope:issue-specific
 # Tests for feat/migrate-repo — bin/github-issues/migration/state.sh
 #
 # state.sh provides the .migration-state.json helpers used by the

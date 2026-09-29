@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-820-push-hardening.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/shared-cmd-utils.js
-# Tags: worktree, enforce, hook, security, interpreter, rce
+# Tags: worktree, enforce, hook, security, interpreter, rce, scope:issue-specific
 #
 # Integration tests for fix #820: interpreter-wrapper + RCE-flag hardening
 # in isAllowedPushAllExcluded.

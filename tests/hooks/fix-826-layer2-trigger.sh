@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-826-layer2-trigger.sh
 # Tests: hooks/lib/supervisor-state-writer.js
-# Tags: supervisor, em-supervisor, layer2, appendfinding
+# Tags: supervisor, em-supervisor, layer2, appendfinding, scope:issue-specific
 # RED for issue #826.
 
 set -u

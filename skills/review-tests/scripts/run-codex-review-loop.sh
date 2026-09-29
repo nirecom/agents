@@ -30,7 +30,7 @@ record_codex_exit() {
   node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append" \
     --session "$SESSION_ID" --class D --step review_tests --key review-tests:codex-exit \
     --summary "codex test review ended at exit $rc via $path_taken, before the completion sentinel" \
-    --pointer "$PLANS_DIR/$SESSION_ID-test-review.md" --origin step-end >/dev/null 2>&1 || true
+    --pointer "$PLANS_DIR/$SESSION_ID-test-review.md" --origin procedure-point >/dev/null 2>&1 || true
 }
 
 # Print the current review-scope fingerprint on stdout. Returns 4 when the calculation

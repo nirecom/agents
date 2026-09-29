@@ -2,31 +2,12 @@
 # tests/bin/feature-1673-finalize-multipass.sh
 # Tests: bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/workers/issue-close-finalize/state.js, skills/issue-close-finalize/SKILL.md
 # Tags: worker-dispatch, issue-close-finalize, multi-pass, state-machine, payload-seq, atomic-write, TL2, scope:issue-specific
-#
-# Issue #1673 — one dispatch advances exactly one pass. The loop, the LLM
-# judgement and the AskUserQuestion stay in the calling main context; the
-# dispatcher holds no memory between passes, so the durable state file is the
-# only thing connecting them.
-#
-# Ported from tests/feature-644-agent-delegation/phase3-finalize-multipass.sh and
-# phase3-state-file-contract.sh, which asserted the same contract against the
-# agents/*.md prompt by grep. The contract is now executable, so it is asserted
-# on behaviour instead of on prose.
-#
-# Groups 1-4 can the process seam (spawn-stub.js) so the argv each pass builds is
-# recorded rather than inferred. Group 5 drops the stub and lets the REAL
-# run-loop-step.js run: the `decline` branch is the one state transition that
-# spawns no child of its own, so it is the one that can be exercised end-to-end
-# without touching `gh`.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - The real run-initial.sh / run-finalize-terminal.sh, both of which call `gh`
-#     against a live repo (covered at the single-seam tier by
-#     tests/bin/TL3-worker-dispatch-issue-close-finalize.sh).
-#   - skills/issue-close-finalize/SKILL.md actually emitting -1/-2/-3 payloads in
-#     a real session.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1673 — one dispatch advances exactly one pass; the durable state file is the only link
+# between passes. Groups 1-4 stub the process seam (spawn-stub.js) to record each pass's argv;
+# Group 5 runs the REAL run-loop-step.js on the `decline` branch (the one child-free transition).
+# TL3 gap: the real run-initial.sh / run-finalize-terminal.sh against live `gh`
+# (tests/bin/TL3-worker-dispatch-issue-close-finalize.sh) and real-session payload emission;
+# mitigated at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh: skill-orchestration).
 
 set -u
 
@@ -238,7 +219,7 @@ group_sequence() {
     s3="$(sha_of "$PLANS_RAW/$SID-worker-issue-close-finalize-3.json")"
 
     p4="$(write_payload 4 "{\"phase\":\"finalize_terminal\",\"root_issue_number\":$ROOT,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"session_id\":\"$SID\",\"outcome_file_path\":\"$OUTCOME\",\"artifact_dir\":\"$PLANS\"}")"
-    dispatch "$p4" '[{"stdout":"STATUS=terminal\nSUMMARY=Steps H/I/J/K complete for #1600\n"}]'
+    dispatch "$p4" '[{"stdout":"STATUS=terminal\nSUMMARY=ICF-H..ICF-K complete for #1600\n"}]'
     # STATUS=terminal from the script maps to `complete` in the worker contract.
     assert_eq "seq/4-terminal-status" "complete" "$(field_of status)"
     assert_has "seq/4-child-is-run-finalize-terminal" "runTerminal" "$(call_args)"

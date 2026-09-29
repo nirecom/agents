@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-mark.js
-# Tags: workflow-mark, hook, TL3, run-e2e, scope:permanent
+# Tags: workflow-mark, hook, TL3, run-e2e, scope:permanent, scope:issue-specific
 #
 # Issue #943 — per-hook seam TL3 test: workflow-mark.js (PostToolUse).
 # Real `claude -p` session emits a WORKFLOW_MARK_STEP sentinel via Bash;

@@ -185,6 +185,18 @@ else
     pass "13b: exit 3 fallback NEEDS_REVISION verdict routes to RPS-3 (Triage)"
 fi
 
+# Shared by 13c/14/14b: succeeds when TEXT ROUTES into Triage (RPS-3) or Present.
+# An explicit skip statement ("skips RPS-3") is not routing, so it is removed before
+# the label ban; a negated skip ("does not skip RPS-3") is routing and fails fast.
+enters_triage_or_present() {
+    local text="$1" labels="RPS-3|$PRESENT_LABEL" stripped
+    if printf '%s\n' "$text" | grep -qE "(not|never|n't)[[:space:]]+skip"; then
+        return 0
+    fi
+    stripped="$(printf '%s\n' "$text" | sed -E "s/(^|[^[:alnum:]])[Ss]kip(s|ped|ping)?[[:space:]]+($labels)([^0-9]|\$)/\1\4/g")"
+    printf '%s\n' "$stripped" | grep -qE "$labels"
+}
+
 # --- Normal case 13c (#2154, CPR-ORTH with case 14): the exit 3 fallback path's
 # APPROVED verdict is the symmetric counterpart of exit 0 APPROVED — it carries
 # no concerns, so it must reach RPS-5 (Summary) and touch neither RPS-3 (Triage)
@@ -200,7 +212,7 @@ else
         fail "13c: exit 3 branch states no APPROVED verdict for the fallback agent — line: $line3"
     elif ! printf '%s' "$appr3" | grep -qF "$SUMMARY_LABEL"; then
         fail "13c: exit 3 fallback APPROVED does not route to $SUMMARY_LABEL (Summary) — clause: $appr3"
-    elif printf '%s' "$appr3" | grep -qE "RPS-3|$PRESENT_LABEL"; then
+    elif enters_triage_or_present "$appr3"; then
         fail "13c: exit 3 fallback APPROVED (no concerns) must not enter Triage or Present — clause: $appr3"
     else
         pass "13c: exit 3 fallback APPROVED verdict routes to $SUMMARY_LABEL (Summary) only"
@@ -209,17 +221,42 @@ fi
 
 # --- Normal case 14 (#2154): APPROVED (exit 0) skips triage and goes to Summary.
 # Routed by ROLE (case 7b), not by the bare RPS-5 token: a document that swapped
-# the RPS-4/RPS-5 bodies would otherwise still satisfy this row.
+# the RPS-4/RPS-5 bodies would otherwise still satisfy this row. Several '- exit 0'
+# lines may exist (the RPS-3 block states "skips RPS-3"); all are checked together.
 line0="$(grep -E '^- exit 0 ' "$SKILL" 2>/dev/null || true)"
 if [ -z "$line0" ]; then
     fail "14: no '- exit 0' branch line found in SKILL.md"
 elif ! printf '%s' "$line0" | grep -qF "$SUMMARY_LABEL"; then
     fail "14: exit 0 branch does not route to the Summary step $SUMMARY_LABEL — line: $line0"
-elif printf '%s' "$line0" | grep -qE "RPS-3|$PRESENT_LABEL"; then
+elif enters_triage_or_present "$line0"; then
     fail "14: exit 0 (no concerns) must not enter Triage or the Present step $PRESENT_LABEL — line: $line0"
 else
     pass "14: exit 0 APPROVED branch routes to the Summary step $SUMMARY_LABEL only"
 fi
+
+# --- Adversarial 14b: the predicate itself must separate routing from a skip statement.
+while IFS='|' read -r name input want; do
+    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+    name="${name//[[:space:]]/}"
+    want="${want//[[:space:]]/}"
+    input="${input# }"
+    input="${input% }"
+    got="clean"
+    if enters_triage_or_present "$input"; then got="enters"; fi
+    if [[ "$got" == "$want" ]]; then
+        pass "14b/$name: '$input' -> $got"
+    else
+        fail "14b/$name: '$input' -> want=$want got=$got"
+    fi
+done <<'TABLE'
+arrow-to-triage | - exit 0 APPROVED → RPS-3 | enters
+arrow-to-present | - exit 0 → RPS-4 | enters
+summary-then-present-via-triage | - exit 0 APPROVED → RPS-5; present via RPS-3 | enters
+negated-skip-is-routing | - exit 0 does not skip RPS-3 | enters
+skip-then-route-to-present | - exit 0 skips RPS-3 → RPS-4 | enters
+summary-only | - exit 0 APPROVED → RPS-5 (no RISK items). | clean
+explicit-skip-statement | - exit 0 carries no concerns and skips RPS-3. | clean
+TABLE
 
 # --- Normal case 15 (#2154): RPS-3's body instructs a triage DECISION, not just
 # a pointer at the hierarchy file. Asserted on the whole RPS-3 block (up to the

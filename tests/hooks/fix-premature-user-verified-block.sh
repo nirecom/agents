@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate.js.
-# Tags: workflow, gate, hook, worktree, sentinel
+# Tags: workflow, gate, hook, worktree, sentinel, scope:issue-specific
 # Tests for premature <<WORKFLOW_USER_VERIFIED>> block in hooks/workflow-gate.js.
 #
 # Feature: when ENFORCE_WORKTREE=on AND cwd is a linked worktree AND there is

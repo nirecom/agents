@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/fix-595-bypass-e2e.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js.
-# Tags: worktree, enforce, hook, history, docs, security, interpreter-wrapper, fix-802
+# Tags: worktree, enforce, hook, history, docs, security, interpreter-wrapper, fix-802, scope:issue-specific
 #
 # E2E integration tests for bypass predicates still active in
 # hooks/enforce-worktree.js after the #687 positive-allow redesign.

@@ -2,16 +2,9 @@
 # Tests: agents/outline-planner.md, agents/outline-reviewer.md, skills/_shared/codex-review-loop.md, skills/make-outline-plan/SKILL.md, hooks/stop-confirm-plan-guard.js
 # Tags: outline, planning, sentinel, workflow, skill, scope:common
 # Contract tests for make-outline-plan skill (Stage 2: outline-planner + outline-reviewer)
-# L3 gap (what this test does NOT catch):
-# - real Claude Code session where orchestrator auto-selects approach and MOP-8 sentinel fires
-#   correctly (only verifiable in a live session; AskUserQuestion no longer used in MOP-7)
-# - VS Code turn-final text rendering for the prose rationale summary (only verifiable live)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-# Target files (expected to FAIL until implementation is complete):
-#   $HOME/.claude/skills/make-outline-plan/SKILL.md
-#   $HOME/.claude/agents/outline-planner.md
-#   $HOME/.claude/agents/outline-reviewer.md
+# L3 gap: live MOP-8 sentinel auto-selection and VS Code prose-summary rendering are
+#   verifiable only in a live session; checked at WORKFLOW_USER_VERIFIED preflight
+#   via bin/check-verification-gate.sh category: skill-orchestration.
 # Exit 0 always — this is a contract test, not a CI gate yet.
 
 # Timeout guard: if running without the sentinel, re-exec under timeout
@@ -311,9 +304,9 @@ SKILL_789="$AGENTS_ROOT_789/skills/make-outline-plan/SKILL.md"
 assert_absent "$SKILL_789" 'Pass all approaches' \
     "789-1: 'Pass all approaches' bypass option abolished from SKILL.md (#1522)"
 
-# 789-2: Step 8 references confirm-plan Steps 1+2 (always-execute contract)
-assert_contains "$SKILL_789" 'Steps 1.{0,5}2' \
-    "789-2: SKILL.md Step 8 references confirm-plan Steps 1+2 (always-execute contract)"
+# 789-2: MOP-8 references confirm-plan CPA-1+CPA-2 (always-execute contract)
+assert_contains "$SKILL_789" 'CPA-1.{0,5}CPA-2' \
+    "789-2: SKILL.md MOP-8 references confirm-plan CPA-1+CPA-2 (always-execute contract)"
 
 # 789-3: WORKFLOW_CONFIRM_OUTLINE sentinel retained in SKILL.md (ON path)
 assert_contains "$SKILL_789" 'WORKFLOW_CONFIRM_OUTLINE' \
