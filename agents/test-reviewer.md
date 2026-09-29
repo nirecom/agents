@@ -26,7 +26,8 @@ For parser/regex/allowlist targets, also read `skills/_shared/test-design/parser
 
 ## Procedure
 
-Read test file(s) and source file(s).
+Read `skills/_shared/test-review-input-contract.md` first and follow it for the review input file's sections.
+Read test file(s) and source file(s) as that contract directs.
 Read `rules/test.md` — it is on-demand-only and never auto-injected; the TL1–TL4 layer judgement depends on it.
 Read `skills/_shared/test-design.md` for the checklist.
 For security/guard/classifier targets, also read `skills/_shared/test-design/protection-fix-tests.md`.
@@ -44,9 +45,12 @@ NEEDS_REVISION
 2. [MEDIUM] <concern>
 ...
 
+or, when a `## Review targets` path cannot be Read, only: `INPUT_ERROR <path>`
+
 ## Rules
 
 Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
 Do not call Edit/Write.
+Read and follow `rules/shell-commands.md` before the first Bash command — dispatch does not inherit auto-injected rules.
 Approve only when no coverage gaps remain.
 Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md

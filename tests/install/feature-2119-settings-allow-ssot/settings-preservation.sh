@@ -6,6 +6,7 @@
 # the sources land in the deployed allow array. Sourced AFTER fixture.sh, whose helpers this
 # part reuses. Since #2264 nothing is generated: the allow array is base, then extension.
 
+case_begin "t11-base-preservation" "install/lib/settings-assembly.js"
 T11_FIXTURE=""
 T11_EXT='Bash(extension-written *)'
 
@@ -54,17 +55,19 @@ t11_setup() {
 }
 
 # Comparison is delegated to node, not to `cmp`: a text diff can only say "different", which
-# is exactly what the deploy is supposed to make the two files.
-t11_probe() { # <deep|keyorder|prefix|grew> -> equal|yes|<diff detail>|sentinel
-    have_lib || { missing_lib; return; }
-    node -e '
+# is exactly what the deploy is supposed to make the two files. BATCHED: one node answers every
+# requested mode (argv[3..]) with one NUL-terminated verdict each, in request order.
+T11_PROBE_JS='
       const fs = require("fs");
-      const mode = process.argv[3];
+      const modes = process.argv.slice(3);
       let before, after;
       try {
         before = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
         after = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-      } catch (e) { console.log("UNPARSEABLE:" + e.message); process.exit(0); }
+      } catch (e) {
+        process.stdout.write(modes.map(() => "UNPARSEABLE:" + e.message + "\0").join(""));
+        process.exit(0);
+      }
       const strip = (o) => {
         const c = JSON.parse(JSON.stringify(o));
         if (c.permissions) delete c.permissions.allow;
@@ -72,35 +75,49 @@ t11_probe() { # <deep|keyorder|prefix|grew> -> equal|yes|<diff detail>|sentinel
       };
       const ba = ((before.permissions || {}).allow) || [];
       const aa = ((after.permissions || {}).allow) || [];
-      if (mode === "deep") {
-        const b = JSON.stringify(strip(before)), a = JSON.stringify(strip(after));
-        console.log(b === a ? "equal" : "LOST-OR-CHANGED: before=" + b + " after=" + a);
-      } else if (mode === "keyorder") {
-        const b = Object.keys(before).join(",") + "|" + Object.keys(before.permissions || {}).join(",");
-        const a = Object.keys(after).join(",") + "|" + Object.keys(after.permissions || {}).join(",");
-        console.log(b === a ? "yes" : "REORDERED: before=" + b + " after=" + a);
-      } else if (mode === "prefix") {
-        console.log(ba.every((v, i) => aa[i] === v) ? "yes" : "PREFIX-BROKEN");
-      } else {
-        console.log(aa.length === ba.length + 1 ? "yes" : "LENGTH:" + ba.length + "->" + aa.length);
-      }
-    ' "$(node_path "$T11_FIXTURE/before.json")" "$(node_path "$(deployed_file "$T11_FIXTURE")")" "$1" \
-      2>/dev/null || printf 'NODE-ERROR'
-}
+      const one = (mode) => {
+        if (mode === "deep") {
+          const b = JSON.stringify(strip(before)), a = JSON.stringify(strip(after));
+          return b === a ? "equal" : "LOST-OR-CHANGED: before=" + b + " after=" + a;
+        } else if (mode === "keyorder") {
+          const b = Object.keys(before).join(",") + "|" + Object.keys(before.permissions || {}).join(",");
+          const a = Object.keys(after).join(",") + "|" + Object.keys(after.permissions || {}).join(",");
+          return b === a ? "yes" : "REORDERED: before=" + b + " after=" + a;
+        } else if (mode === "prefix") {
+          return ba.every((v, i) => aa[i] === v) ? "yes" : "PREFIX-BROKEN";
+        }
+        return aa.length === ba.length + 1 ? "yes" : "LENGTH:" + ba.length + "->" + aa.length;
+      };
+      process.stdout.write(modes.map((m) => one(m) + "\0").join(""));
+'
 
 t11_preservation_table() {
-    local id want label
+    local id want label i ids=() wants=() labels=()
     while IFS='|' read -r id want label; do
         [ -n "$id" ] || continue
-        ROWS=$((ROWS + 1))
-        assert_eq "T11[$id]: $label" "$want" "$(t11_probe "$id")"
+        ids+=("$id"); wants+=("$want"); labels+=("$label")
     done <<'T11_CASES'
 deep|equal|every base field except permissions.allow reaches the deployed file unchanged (env, hooks, statusLine, deny, ask, additionalDirectories, $schema, model)
 keyorder|yes|the top-level and permissions key order is unchanged (a rebuilt object reorders them)
 prefix|yes|the base allow entries remain the leading prefix of the deployed array
 grew|yes|the deployed allow array grew by exactly the one extension entry -- positive control, and nothing generated rode along
 T11_CASES
+    if have_lib; then
+        nul_records "T11 preservation probe" "${#ids[@]}" node -e "$T11_PROBE_JS" \
+            "$(node_path "$T11_FIXTURE/before.json")" "$(node_path "$(deployed_file "$T11_FIXTURE")")" "${ids[@]}"
+    else
+        NUL_RECS=()
+        for i in "${!ids[@]}"; do NUL_RECS+=("$(missing_lib)"); done
+    fi
+    for i in "${!ids[@]}"; do
+        ROWS=$((ROWS + 1))
+        assert_eq "T11[${ids[$i]}]: ${labels[$i]}" "${wants[$i]}" "${NUL_RECS[$i]}"
+    done
 }
+
+t11_setup
+t11_preservation_table
+case_end
 
 T12_FIXTURE=""
 T12_PRE='Bash(hand-written-only *)'
@@ -147,21 +164,29 @@ t12_probe() { # <full-order|no-generated|rc> -> equal|absent|0|<detail>|sentinel
     esac
 }
 
-t12_order_table() {
+# Row runner shared by both T12 spans; each span feeds its own rows on stdin.
+t12_run_rows() {
     local id want label
     while IFS='|' read -r id want label; do
         [ -n "$id" ] || continue
         ROWS=$((ROWS + 1))
         assert_eq "T12[$id]: $label" "$want" "$(t12_probe "$id")"
-    done <<'T12_CASES'
+    done
+}
+
+t12_setup
+ASM_RC_T12="$ASM_RC"
+
+case_begin "t12-deploy-exit" "install/assemble-settings.js"
+t12_run_rows <<'T12_RC_CASES'
 rc|0|a base + extension deploy with a populated SSOT list exits 0
+T12_RC_CASES
+case_end
+
+# Target: the rows read the deployed file the single writer produced.
+case_begin "t12-deployed-order" "install/lib/settings-deploy.js"
+t12_run_rows <<'T12_CASES'
 full-order|equal|the deployed allow array is exactly base, then extension -- nothing appended after them
 no-generated|absent|no rule naming an SSOT-listed tool reaches the deployed file (#2264: the list feeds bash-guard, not settings.json)
 T12_CASES
-}
-
-t11_setup
-t11_preservation_table
-t12_setup
-ASM_RC_T12="$ASM_RC"
-t12_order_table
+case_end

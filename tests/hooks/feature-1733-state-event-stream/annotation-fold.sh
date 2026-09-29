@@ -3,18 +3,10 @@
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/review-tests.js, hooks/workflow-state/state-io/skip-verdict.js, hooks/workflow-state/skip-signal-resolver.js
 # Tags: workflow-state, event-stream, annotations, review-tests, skip-verdict, last-write-wins, scope:issue-specific, pwsh-not-required, TL2
 #
-# Before #1733, markStep REPLACED the whole step entry, so review-tests.js,
-# skip-verdict.js and skip-signal-resolver.js all carried sibling fields by hand to
-# avoid destroying them. Splitting annotations into their own events removes that
-# hazard, but introduces the opposite one: a field that should be gone can now linger.
-# Both directions are covered here — merge must keep siblings, and deletion must be an
+# Annotation event coverage for #1733: merge keeps siblings; deletion must be an
 # EXPLICIT event (value:null or step_annotations_cleared), never implicit.
-#
-# TL3 gap (what this test does NOT catch):
-# - the /review-tests skill's own orchestration: these cases call the recorder modules
-#   directly, so a SKILL.md step that stops invoking markReviewTestsComplete is invisible.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# TL3 gap: skill orchestration checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: skill-orchestration.
 
 CASE_TAG="ann"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
@@ -101,21 +93,22 @@ console.log("token=" + cur().steps.review_tests.token);
     assert_eq "N5/clear-not-sticky" "token=t2" "$NODE_OUT"
 fi
 
-echo "== N6: clearReviewTestsWarnings keeps token/wsid (the carry-by-hand hazard) =="
+echo "== N6: clearReviewTestsWarnings keeps review_scope_manifest/wsid (the carry-by-hand hazard) =="
 if run_case "N6/clear-warnings-keeps-fingerprint"; then
     next_sid
     nodejs "$SID" "$PRE"'
 const RT = require("./hooks/workflow-state/state-io/review-tests");
-RT.markReviewTestsComplete(sid, "tok-1", { wsid: "wsid-1", warnings_summary: "2 advisory findings" });
+RT.markReviewTestsComplete(sid, { "tests/a.sh": "oid-1" }, { wsid: "wsid-1", warnings_summary: "2 advisory findings" });
 const before = cur().steps.review_tests;
 RT.clearReviewTestsWarnings(sid);
 const after = cur().steps.review_tests;
 console.log("before_warn=" + (before.warnings_summary || "(none)") +
             " after_warn=" + (after.warnings_summary || "(none)") +
-            " token=" + after.token + " wsid=" + after.wsid + " status=" + after.status);
+            " manifest=" + JSON.stringify(after.review_scope_manifest && after.review_scope_manifest.files) +
+            " wsid=" + after.wsid + " status=" + after.status);
 '
     assert_eq "N6/clear-warnings-keeps-fingerprint" \
-        "before_warn=2 advisory findings after_warn=(none) token=tok-1 wsid=wsid-1 status=complete" "$NODE_OUT"
+        "before_warn=2 advisory findings after_warn=(none) manifest={\"tests/a.sh\":\"oid-1\"} wsid=wsid-1 status=complete" "$NODE_OUT"
 fi
 
 echo "== N7: clearReviewTestsWarnings with nothing to clear appends no annotation (idempotent) =="
@@ -123,31 +116,16 @@ if run_case "N7/clear-warnings-noop"; then
     next_sid
     nodejs "$SID" "$PRE"'
 const RT = require("./hooks/workflow-state/state-io/review-tests");
-RT.markReviewTestsComplete(sid, "tok-1", { wsid: "wsid-1" });
+RT.markReviewTestsComplete(sid, { "tests/a.sh": "oid-1" }, { wsid: "wsid-1" });
 const n0 = rd().events.length;
 RT.clearReviewTestsWarnings(sid);
 const n1 = rd().events.length;
 RT.clearReviewTestsWarnings(sid);
 const n2 = rd().events.length;
-console.log("grew_first=" + (n1 - n0) + " grew_second=" + (n2 - n1) + " token=" + cur().steps.review_tests.token);
+const m = cur().steps.review_tests.review_scope_manifest;
+console.log("grew_first=" + (n1 - n0) + " grew_second=" + (n2 - n1) + " manifest=" + JSON.stringify(m && m.files));
 '
-    assert_eq "N7/clear-warnings-noop" "grew_first=0 grew_second=0 token=tok-1" "$NODE_OUT"
-fi
-
-echo "== N8: invalidateReviewTests explicitly nulls the fingerprint and warning keys =="
-if run_case "N8/invalidate-explicit-nulls"; then
-    next_sid
-    nodejs "$SID" "$PRE"'
-const RT = require("./hooks/workflow-state/state-io/review-tests");
-RT.markReviewTestsComplete(sid, "tok-1", { wsid: "wsid-1", warnings_summary: "2 findings", warnings_accepted_reason: "ok" });
-RT.invalidateReviewTests(sid, "tests re-edited");
-const e = cur().steps.review_tests;
-const gone = ["token", "wsid", "warnings_summary", "warnings_accepted_reason"].filter((k) => k in e);
-console.log("still_present=" + (gone.join(",") || "0") +
-            " invalidate_reason=" + e.invalidate_reason + " status=" + e.status);
-'
-    assert_eq "N8/invalidate-explicit-nulls" \
-        "still_present=0 invalidate_reason=tests re-edited status=pending" "$NODE_OUT"
+    assert_eq "N7/clear-warnings-noop" "grew_first=0 grew_second=0 manifest={\"tests/a.sh\":\"oid-1\"}" "$NODE_OUT"
 fi
 
 echo "== N9: recordSkipVerdict lands as an annotation and readSkipVerdict round-trips it =="

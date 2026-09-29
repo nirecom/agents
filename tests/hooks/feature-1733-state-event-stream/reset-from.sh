@@ -3,18 +3,10 @@
 # Tests: hooks/workflow-mark/reset-handler.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-state/state-io/events.js
 # Tags: workflow-state, event-stream, reset-from, workflow-init, append-only, regression, scope:issue-specific, pwsh-not-required, TL2
 #
-# RESET_FROM used to rebuild the state from createInitialState and write the whole thing
-# back, which (a) destroyed the audit trail and (b) silently dropped closes_issues /
-# workflow_type / session_model / last_pushed_sha — a pre-existing bug that append-only
-# fixes structurally. Both halves are pinned here: the stream may only GROW, and the
-# top-level settings must survive. The same batch shape is used by the workflow_init
-# downstream reset, so that route is covered too (CPR-ORTH symmetry).
-#
-# TL3 gap (what this test does NOT catch):
-# - the real PreToolUse Bash hook that parses the RESET_FROM sentinel out of a command
-#   line; handlers are invoked as modules here.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# RESET_FROM + append-only integrity. Two invariants pinned: stream may only GROW, and
+# top-level settings survive. The same batch shape is used by workflow_init downstream
+# reset (CPR-ORTH symmetry). TL3 gap: real PreToolUse Bash hook not exercised here —
+# see bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="reset"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
@@ -28,7 +20,7 @@ S.markStep(sid, "clarify_intent", "complete");
 S.markStep(sid, "research", "skipped", { skip_reason: "nothing to survey" });
 S.markStep(sid, "outline", "complete");
 S.markStep(sid, "detail", "complete");
-S.markStep(sid, "review_tests", "complete", { token: "tok-1", wsid: "wsid-1" });
+S.markStep(sid, "review_tests", "complete", { review_scope_manifest: {v:1,files:{"tests/f.sh":"tok-1"}}, wsid: "wsid-1" });
 S.recordSessionModel(sid, { id: "claude-opus-5", source: "transcript" });
 S.setLastPushedSha(sid, "0".repeat(40));
 { const st = S.readState(sid); st.closes_issues = [1733]; st.workflow_type = "wf-code"; S.writeState(sid, st); }
@@ -97,12 +89,12 @@ const i = S.VALID_STEPS.indexOf("detail");
 const expected = S.VALID_STEPS.slice(i);
 const missing = expected.filter((s) => !cleared.includes(s));
 console.log("missing_clear=" + (missing.join(",") || "0") +
-            " review_tests_token=" + ("token" in st.steps.review_tests) +
+            " review_scope_manifest_absent=" + !("review_scope_manifest" in st.steps.review_tests) +
             " research_skip_reason=" + st.steps.research.skip_reason);
 '
     # research is BEFORE detail, so its annotation must survive; review_tests is after.
     assert_eq "R4/annotations-cleared-forward" \
-        "missing_clear=0 review_tests_token=false research_skip_reason=nothing to survey" "$NODE_OUT"
+        "missing_clear=0 review_scope_manifest_absent=true research_skip_reason=nothing to survey" "$NODE_OUT"
 fi
 
 echo "== R5: top-level settings survive RESET_FROM (the reset-drops-toplevel regression) =="
@@ -186,11 +178,11 @@ const cleared = ev.filter((e) => e.kind === "step_annotations_cleared" && e.orig
 console.log("append_only=" + (ev.length > before) +
             " cleared_events=" + (cleared.length > 0) +
             " review_tests=" + st.steps.review_tests.status +
-            " token_gone=" + !("token" in st.steps.review_tests) +
+            " manifest_gone=" + !("review_scope_manifest" in st.steps.review_tests) +
             " closes_issues=" + JSON.stringify(st.closes_issues));
 '
     assert_eq "R9/workflow-init-downstream-reset" \
-        "append_only=true cleared_events=true review_tests=pending token_gone=true closes_issues=[1733]" "$NODE_OUT"
+        "append_only=true cleared_events=true review_tests=pending manifest_gone=true closes_issues=[1733]" "$NODE_OUT"
 fi
 
 echo "== R10: reset_reason from a post-merge reset is readable as an annotation =="

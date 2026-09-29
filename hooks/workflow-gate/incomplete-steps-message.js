@@ -19,7 +19,7 @@ function buildIncompleteStepsMessage(incomplete, incompleteReasons, docsOnly) {
     detail:  '/make-detail-plan   OR if unnecessary: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     branching_complete: 'Read rules/branch.md + rules/worktree.md (on-demand-only), then: echo "<<WORKFLOW_BRANCHING_COMPLETE: main|branch: {name}|worktree: {path}>>"',
     write_tests: '/write-tests (then git add tests/)  OR if unnecessary: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    review_tests: '/review-tests skill (emits <<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex}>> on adequate coverage; re-editing tests/ after a passing review invalidates the pairing — re-run /review-tests)',
+    review_tests: '/review-tests skill (emits <<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint={hex}>> on adequate coverage; re-editing staged tests or implementation files after a passing review invalidates the pairing — re-run /review-tests)',
     run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run `bash tests/run-all.sh <files>` directly — the PostToolUse hook (workflow-run-tests.js) marks complete only from its RUN_CONTRACT line. Ad-hoc test commands (e.g. `pytest tests/`) no longer auto-complete: they demote run_tests to pending. When every staged file is human-facing documentation: echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>" (rejected otherwise).',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {reason}>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     docs: '/update-docs (then either: git add docs/*.md / *.md, OR — inside a linked worktree — let /update-docs stage bullets into WORKTREE_NOTES.md ## History Notes / ## Changelog Notes per #436)',
@@ -42,9 +42,19 @@ function buildIncompleteStepsMessage(incomplete, incompleteReasons, docsOnly) {
         `  ${step}: echo "<<WORKFLOW_MARK_STEP_${step}_complete>>"`
       );
     }
-    if (step === "review_tests" && incompleteReasons[step] === "stale-token") {
+    if (step === "review_tests" && incompleteReasons[step] === "stale-fingerprint") {
       lines.push(
-        "    (note: tests were re-edited after a passing review — staged-tests fingerprint changed; re-run /review-tests)"
+        "    (note: stale-fingerprint — the staged review scope (tests or implementation files) changed after a passing review; re-run /review-tests)"
+      );
+    }
+    if (step === "review_tests" && incompleteReasons[step] === "fingerprint-missing") {
+      lines.push(
+        "    (note: fingerprint-missing — no review-scope manifest is recorded (legacy token-only or unrecorded review); re-run /review-tests for a full review)"
+      );
+    }
+    if (step === "review_tests" && incompleteReasons[step] === "fingerprint-unavailable") {
+      lines.push(
+        "    (note: fingerprint-unavailable — the review-scope fingerprint could not be computed (git error); run /review-tests from the linked worktree)"
       );
     }
     if (step === "review_tests" && incompleteReasons[step] === "stale-wsid") {

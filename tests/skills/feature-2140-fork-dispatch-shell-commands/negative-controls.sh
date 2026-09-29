@@ -68,7 +68,7 @@ NEGATED_WRITE_BODY='   Do not write a scratchpad script that runs `bash "$AGENTS
 # G18 (review-security C1, HIGH): a review-tests fixture whose RT-2 body reintroduces the exact
 # `VAR=$(...)` command-substitution form -- the R6 regression guard must say "yes" (violation
 # present), proving it can actually fail, not just vacuously pass the real (already-fixed) file.
-COMMAND_SUBSTITUTION_RT2_BODY='TOKEN=$(node "$AGENTS_CONFIG_DIR/bin/compute-staged-tests-token.js" "${WORKTREE:-}")'
+COMMAND_SUBSTITUTION_RT2_BODY='FINGERPRINT=$(node "$AGENTS_CONFIG_DIR/bin/compute-review-scope-fingerprint.js" "${WORKTREE:-}")'
 
 # GOOD_ACTION_LINE: the fixed step-2 wording (a scratchpad script, no command substitution on
 # the Bash tool's own line). BUGGY_ACTION_LINE: the original #2140 bug pattern -- proves the F2

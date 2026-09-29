@@ -226,8 +226,9 @@ if run_case "EV8/annotation-keys"; then
     next_sid
     _ev_script=$(cat <<'JS'
 const bad = [];
-const want = ["invalidate_reason", "reset_reason", "run_outcome", "skip_judgment", "skip_reason",
-  "skip_verdict", "token", "warnings_accepted_reason", "warnings_summary", "wsid"];
+const want = ["baseline_classification", "completion_basis", "failing_tests", "reopen_reason",
+  "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
+  "skip_verdict", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const exported = Array.from(E.STEP_ANNOTATION_KEYS || []).slice().sort();
 if (exported.join(",") !== want.join(",")) bad.push("STEP_ANNOTATION_KEYS=" + exported.join(","));
 want.forEach((k) => {

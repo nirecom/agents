@@ -8,6 +8,7 @@ const { confirmSentinelFor } = require("../../../../hooks/workflow-state/complet
 // single writer. Their own gates keep the narrower side-effect set they have
 // today — no A-4 co-write, no workflow_init downstream reset.
 const { recordStepVerdict } = require("../../../../hooks/workflow-state/record-step-verdict");
+const { formatReviewTestsReopenNotice } = require("../../../../hooks/workflow-state/review-tests-reopen");
 
 function runReset(session, step) {
   const sid = resolveSessionId({ sessionIdFromInput: session });
@@ -52,6 +53,8 @@ function runMark(session, step) {
     process.exit(1);
   }
   process.stdout.write("MARK=" + step + " status=complete\n");
+  const reopenNotice = formatReviewTestsReopenNotice(res);
+  if (reopenNotice) process.stderr.write("next-step: " + reopenNotice + "\n");
   process.exit(0);
 }
 

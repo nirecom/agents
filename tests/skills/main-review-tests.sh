@@ -166,5 +166,115 @@ fi
 case_end
 
 echo ""
+echo "--- P: feature-2327 review-tests SKILL.md checks ---"
+
+# P1: RT-6 has the second-review line (write_code complete: follow next-step, no re-run /write-code)
+# Stop the awk block at the next RT-N. or ## header to avoid capturing Rules section.
+if [ -f "$SKILL" ]; then
+  RT6_BLOCK=$(awk '/^RT-6\./{f=1} f && (/^RT-[0-9]/ || /^## /) && !/^RT-6/{exit} f{print}' "$SKILL")
+  if echo "$RT6_BLOCK" | grep -qiE "/write-code|write_code"; then
+    pass "P1a RT-6 references write-code in second-review guidance"
+  else
+    fail "P1a RT-6 does not mention write-code (expected second-review guidance)"
+  fi
+  if echo "$RT6_BLOCK" | grep -qiE "do not re.run|not re-run|not re.run"; then
+    pass "P1b RT-6 says do not re-run /write-code after second review"
+  else
+    fail "P1b RT-6 missing do-not-re-run /write-code guidance"
+  fi
+fi
+
+# P2: RT-3 exit 8 line says "review scope unchanged" not "test files unchanged"
+if [ -f "$SKILL" ]; then
+  EXIT8_LINES=$(grep -i "exit 8" "$SKILL")
+  if echo "$EXIT8_LINES" | grep -qi "review scope unchanged"; then
+    pass "P2a RT-3 exit 8 uses 'review scope unchanged'"
+  else
+    fail "P2a RT-3 exit 8 missing 'review scope unchanged'"
+  fi
+  if echo "$EXIT8_LINES" | grep -qi "test files unchanged"; then
+    fail "P2b RT-3 exit 8 still contains 'test files unchanged' (must be updated)"
+  else
+    pass "P2b RT-3 exit 8 does not say 'test files unchanged'"
+  fi
+fi
+
+# P3: RT-5a uses bin/compute-review-scope-fingerprint.js and mentions HALT on non-zero
+if [ -f "$SKILL" ]; then
+  RT5A_BLOCK=$(awk '/^RT-5a\./{f=1} f && /^RT-[0-9]/ && !/^RT-5a/{exit} f{print}' "$SKILL")
+  if echo "$RT5A_BLOCK" | grep -qF "compute-review-scope-fingerprint"; then
+    pass "P3a RT-5a references compute-review-scope-fingerprint.js"
+  else
+    fail "P3a RT-5a does not reference compute-review-scope-fingerprint.js"
+  fi
+  if echo "$RT5A_BLOCK" | grep -qiE "HALT|halt|non.zero"; then
+    pass "P3b RT-5a mentions HALT on non-zero"
+  else
+    fail "P3b RT-5a missing HALT on non-zero"
+  fi
+fi
+
+# P4: RT-5b/5c payload uses fingerprint= not token=
+if [ -f "$SKILL" ]; then
+  SENTINEL_LINES=$(grep -E "WORKFLOW_REVIEW_TESTS_(COMPLETE|WARNINGS)" "$SKILL")
+  if echo "$SENTINEL_LINES" | grep -qE "fingerprint=\\\$\{FINGERPRINT\}|fingerprint=\${FINGERPRINT}"; then
+    pass "P4a RT-5b/5c payload uses fingerprint=\${FINGERPRINT}"
+  else
+    fail "P4a RT-5b/5c payload does not use fingerprint=\${FINGERPRINT}"
+  fi
+  if echo "$SENTINEL_LINES" | grep -qF "token="; then
+    fail "P4b RT-5b/5c sentinel still uses token= (must use fingerprint=)"
+  else
+    pass "P4b RT-5b/5c sentinel does not use token="
+  fi
+fi
+
+# P5: RT-2 references bin/select-review-scope.js
+if [ -f "$SKILL" ] && grep -qF "select-review-scope" "$SKILL"; then
+  pass "P5 RT-2 references bin/select-review-scope.js"
+else
+  fail "P5 RT-2 missing reference to bin/select-review-scope.js"
+fi
+
+# P6: RT-2 Round-2 LOW items preserved
+if [ -f "$SKILL" ]; then
+  if grep -qF "EXTENSIONS_USED=0" "$SKILL"; then
+    pass "P6a RT-2 has Initialize EXTENSIONS_USED=0"
+  else
+    fail "P6a RT-2 missing Initialize EXTENSIONS_USED=0"
+  fi
+  if grep -qF "resolve-plans-dir" "$SKILL"; then
+    pass "P6b RT-2 references resolve-plans-dir.md for PLANS_DIR"
+  else
+    fail "P6b RT-2 missing resolve-plans-dir.md reference"
+  fi
+  if grep -qiE "Write tool|Write-tool" "$SKILL"; then
+    pass "P6c RT-2 mentions Write tool (no Bash assembly)"
+  else
+    fail "P6c RT-2 missing Write-tool-only instruction"
+  fi
+fi
+
+# P7: Rules section delegates scope to bin/select-review-scope.js
+if [ -f "$SKILL" ]; then
+  RULES_BLOCK=$(awk '/^## Rules/{f=1} f && /^## / && !/^## Rules/{exit} f{print}' "$SKILL")
+  if echo "$RULES_BLOCK" | grep -qF "select-review-scope"; then
+    pass "P7 Rules section delegates scope to bin/select-review-scope.js"
+  else
+    fail "P7 Rules section does not delegate scope to bin/select-review-scope.js"
+  fi
+fi
+
+# P8: SKILL.md <=100 lines
+if [ -f "$SKILL" ]; then
+  LINES_P8=$(wc -l < "$SKILL")
+  if [ "$LINES_P8" -le 100 ]; then
+    pass "P8 review-tests SKILL.md is $LINES_P8 lines (<=100)"
+  else
+    fail "P8 review-tests SKILL.md is $LINES_P8 lines, exceeds 100"
+  fi
+fi
+
+echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 [ "$FAIL" -eq 0 ]

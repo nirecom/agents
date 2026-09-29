@@ -2,7 +2,7 @@
 // Staged-change evidence helpers: detect whether tests, docs, or any files are
 // staged — provides the evidential basis for workflow step verification decisions.
 
-const { execSync } = require("child_process");
+const { execSync, execFileSync } = require("child_process");
 const path = require("path");
 
 // Evidence-based check: staged files contain tests/ changes.
@@ -62,21 +62,51 @@ function resolveExternalDocsRepo(repoDir) {
   return null;
 }
 
-// Evidence-based check: staged files contain docs/*.md or *.md changes
-function hasStagedDocChanges(repoDir) {
-  const hasDocs = (dir) => {
+// Staged blob OID per path (one `git ls-files -s` call); an unlisted path maps to undefined.
+function stagedOids(dir, paths) {
+  const out = execFileSync("git", ["ls-files", "-s", "-z", "--", ...paths], {
+    cwd: dir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+  });
+  const oids = {};
+  for (const rec of out.split("\0").filter(Boolean)) {
+    const tab = rec.indexOf("\t");
+    oids[rec.slice(tab + 1)] = rec.slice(0, tab).split(" ")[1];
+  }
+  return oids;
+}
+
+// #2327 C1: a `.md` write-code staged (recorded in write_code_scope_manifest with
+// the same OID) is not docs work. Unavailable snapshot → only docs/ counts; an
+// OID lookup failure drops the candidate (fail-closed toward "no docs evidence").
+function dropWriteCodeStaged(dir, candidates, snapshot) {
+  if (!snapshot || !snapshot.files || typeof snapshot.files !== "object") {
+    return candidates.filter((f) => f.startsWith("docs/"));
+  }
+  const recorded = candidates.filter((f) => Object.prototype.hasOwnProperty.call(snapshot.files, f));
+  if (recorded.length === 0) return candidates;
+  let oids;
+  try { oids = stagedOids(dir, recorded); } catch (_) { oids = {}; }
+  return candidates.filter((f) => !recorded.includes(f) || (oids[f] && oids[f] !== snapshot.files[f]));
+}
+
+// Evidence-based check: staged files contain docs/*.md or *.md changes.
+// opts.writeCodeSnapshot (repoDir only) excludes .md files write-code itself staged.
+function hasStagedDocChanges(repoDir, opts = {}) {
+  const hasDocs = (dir, withSnapshot) => {
     try {
       const out = execSync("git diff --cached --name-only", {
         cwd: dir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
       });
-      return out.trim().split("\n").some((f) => f.startsWith("docs/") || /\.md$/i.test(f));
+      const candidates = out.trim().split("\n").filter((f) => f.startsWith("docs/") || /\.md$/i.test(f));
+      const kept = withSnapshot ? dropWriteCodeStaged(dir, candidates, opts.writeCodeSnapshot) : candidates;
+      return kept.length > 0;
     } catch (e) {
       return false;
     }
   };
-  if (hasDocs(repoDir)) return true;
+  if (hasDocs(repoDir, opts.writeCodeSnapshot != null)) return true;
   const externalRepo = resolveExternalDocsRepo(repoDir);
-  return externalRepo !== null && hasDocs(externalRepo);
+  return externalRepo !== null && hasDocs(externalRepo, false);
 }
 
 // Return true if dir has any staged changes.
