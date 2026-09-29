@@ -7,6 +7,7 @@
 # referenced by worktree-end WE-11, session-close SC-8, and the issue-close-finalize residual pass.
 # TL1 (static prompt text); CLI behavior: tests/bin/feature-530-notes-promotion-triage-flow.sh
 # and tests/bin/feature-worktree-end-step55-promotion.sh.
+# lang-check: ignore — the Japanese strings below are intentional fixture/probe data (bilingual regex alternatives and ja accept/reject samples).
 
 set -u
 
