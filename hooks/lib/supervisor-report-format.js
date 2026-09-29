@@ -2,11 +2,12 @@
 
 const path = require("path");
 const { getConvLangInjection } = require("./conv-lang");
+const { formatAgentModelLine } = require("./role-model");
 
-// Pure-function formatter for EM Supervisor alert/audit block reasons.
+// Formatter for EM Supervisor alert/audit block reasons.
 // Used by hooks/supervisor-guard.js branches (2) cumSev=error and
-// (3) alertArmedAt / sentinel-hang. No side effects; receives pre-populated
-// data from the guard.
+// (3) alertArmedAt / sentinel-hang. Receives pre-populated data from the guard;
+// its only read is the .env lookup behind each spawn line's model line.
 
 function wsidLabel(workflowSessionId) {
   return workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
@@ -55,6 +56,7 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
     lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
     for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
     lines.push(`Recommended action: follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`);
+    lines.push(formatAgentModelLine("alert"));
     return lines.join("\n");
   }
 
@@ -82,6 +84,7 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
   lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
   lines.push(`Recommended action: follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`);
+  lines.push(formatAgentModelLine("alert"));
   return lines.join("\n");
 }
 
@@ -111,6 +114,7 @@ function formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath
     lines.push("Trigger: scheduled alert review (alert_armed_at set).");
   }
   lines.push(`Action: invoke agents/supervisor.md (${supervisorPath}) as a subagent - run the JD checklist, provide first-aid guidance, then recommend /issue-create for root-cause fix.`);
+  lines.push(formatAgentModelLine("alert"));
   lines.push("To resume: clear the alert_armed_at field in the supervisor state file after the review is complete.");
   lines.push(`Clear: set alert.alert_armed_at = null in the state file.`);
   lines.push(`File: ${stateFilePath}`);
@@ -131,6 +135,7 @@ function formatWorktreeOffProposalReason(sessionId, workflowSessionId, superviso
   if (convLang) lines.push(convLang);
   lines.push("[EM Supervisor] OFF proposal pre-detected.");
   lines.push(`Action: invoke agents/supervisor.md (${supervisorPath}) as a subagent to review the off-proposal.`);
+  lines.push(formatAgentModelLine("alert"));
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
@@ -154,6 +159,7 @@ function formatPreMergeBlockReason(cause, sessionId, workflowSessionId, auditAge
     lines.push(`Reason: ${cause}`);
   }
   lines.push("Action: Run agents/supervisor-audit.md as a subagent.");
+  lines.push(formatAgentModelLine("reviewer"));
   lines.push("Re-run the merge after the audit completes.");
   if (stateSessionId) lines.push(`Effective state session ID: ${stateSessionId}`);
   if (sessionId) lines.push(`Session ID: ${sessionId}`);
@@ -190,6 +196,7 @@ function formatL3StageBoundaryReason(stage, verdict, sessionId, stateFilePath) {
   lines.push(`[EM Supervisor] Audit mode review at CONFIRM_${stage}: ${verdict}.`);
   lines.push("Trigger: stage-boundary sentinel detected in assistant transcript.");
   lines.push(`Action: invoke agents/supervisor-audit.md as a subagent.`);
+  lines.push(formatAgentModelLine("reviewer"));
   if (sessionId) lines.push(`Session ID: ${sessionId}`);
   if (stateFilePath) lines.push(`State file: ${stateFilePath}`);
   return lines.join("\n");
@@ -200,6 +207,7 @@ function formatL3SeverityThresholdReason(cumSev, verdict, sessionId, stateFilePa
   lines.push(`[EM Supervisor] Audit mode review (cumulative_severity=${cumSev}): ${verdict}.`);
   lines.push("Trigger: cumulative severity reached audit threshold.");
   lines.push(`Action: invoke agents/supervisor-audit.md as a subagent.`);
+  lines.push(formatAgentModelLine("reviewer"));
   if (sessionId) lines.push(`Session ID: ${sessionId}`);
   if (stateFilePath) lines.push(`State file: ${stateFilePath}`);
   return lines.join("\n");

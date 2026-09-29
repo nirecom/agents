@@ -2,7 +2,6 @@
 name: save-research
 description: Save useful research findings to my-specs-repo research-results for future reference.
 model: sonnet
-effort: low
 argument-hint: "<topic-slug>"
 context: fork
 ---

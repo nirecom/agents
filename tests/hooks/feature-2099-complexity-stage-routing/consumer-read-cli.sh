@@ -1,10 +1,11 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/consumer-read-cli.sh
-# Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts
+# Tests: tests/hooks/feature-2099-complexity-stage-routing.sh
 # Tags: complexity, routing, consumers, helpers, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh before the consumer
 # suites, whose cases call these. No cases of its own: split out of
 # consumer-orchestration-cases.sh at the 500-line HARD limit (Pattern A).
+# Single-path # Tests: (the sourcing runner) — the calling cases own the targets.
 D2099_READ_CLI_LOADED=1
 
 # --- which CLI each consumer reads its stored evaluation THROUGH --------------
@@ -95,4 +96,7 @@ d2099_consumer_read() {
     # NO_SIGNALS_LINE branch stays reachable.
     [ -n "$sig" ] || return 0
     printf 'signals=%s\n' "${sig#COMPLEXITY_SIGNALS=}"
+    mdl=$(printf '%s\n' "$out" | grep -m1 -- "^COMPLEXITY_MODEL_$stage=")
+    [ -n "$mdl" ] || return 0
+    printf 'model=%s\n' "${mdl#COMPLEXITY_MODEL_$stage=}"
 }

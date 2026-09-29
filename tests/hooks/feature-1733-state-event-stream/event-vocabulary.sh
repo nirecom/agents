@@ -12,13 +12,17 @@
 # category in bin/check-verification-gate.sh.
 
 CASE_TAG="voc"
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=../../../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # The table is deliberately written out here rather than derived from the source: a test
 # that reads its expectations from the module under test asserts nothing. Each entry is
 # {kind: {required extra fields with a valid value}}.
-VOCAB_JS='const E = require("./hooks/workflow-state/state-io/events");
+VOCAB_JS=$(cat <<'JS'
+const E = require("./hooks/workflow-state/state-io/events");
 const SAMPLE = {
   step_status: { step: "research", status: "complete" },
   step_annotation: { step: "research", key: "token", value: "t1" },
@@ -38,25 +42,31 @@ const mk = (kind, over) => Object.assign({ kind: kind, provenance: "observed", o
 const accepts = (ev) => { try { S.appendEvents(sid, [ev]); return true; } catch (e) { return false; } };
 const rejects = (ev) => !accepts(ev);
 const report = (bad) => console.log(bad.length ? "BAD " + bad.join(" | ") : "OK");
-'
+JS
+)
 
+case_begin "ev1-event-kinds-set-equality" "hooks/workflow-state/state-io/events.js"
 echo "== EV1: EVENT_KINDS is exactly the nine documented kinds, in both directions =="
 if run_case "EV1/event-kinds-set-equality"; then
     next_sid
-    nodejs "$SID" "$PRE$VOCAB_JS"'
+    _ev_script=$(cat <<'JS'
 const exported = Array.from(E.EVENT_KINDS || []).slice().sort();
 const table = KINDS.slice().sort();
 const missing = table.filter((k) => !exported.includes(k));
 const extra = exported.filter((k) => !table.includes(k));
 console.log([exported.length, missing.join(",") || "-", extra.join(",") || "-"].join(" "));
-'
+JS
+)
+    nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
     assert_eq "EV1/event-kinds-set-equality" "9 - -" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev2-every-kind-accepted" "hooks/workflow-state/state-io/events.js"
 echo "== EV2: every EVENT_KINDS member is accepted with its required fields present =="
 if run_case "EV2/every-kind-accepted"; then
     next_sid
-    nodejs "$SID" "$PRE$VOCAB_JS"'
+    _ev_script=$(cat <<'JS'
 S.markStep(sid, "workflow_init", "complete");
 const bad = KINDS.filter((k) => !accepts(mk(k))).map((k) => k + ":rejected");
 // The stream must have grown by exactly one event per kind, each carrying the common
@@ -70,14 +80,18 @@ evsAll.forEach((e, i) => {
   if (e.origin !== "vocab-test") bad.push(e.kind + ":origin=" + e.origin);
 });
 report(bad);
-'
+JS
+)
+    nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
     assert_eq "EV2/every-kind-accepted" "OK" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev3-required-fields-per-kind" "hooks/workflow-state/state-io/events.js"
 echo "== EV3: for every kind, dropping any single required field is rejected =="
 if run_case "EV3/required-fields-per-kind"; then
     next_sid
-    nodejs "$SID" "$PRE$VOCAB_JS"'
+    _ev_script=$(cat <<'JS'
 const bad = [];
 KINDS.forEach((k) => {
   Object.keys(SAMPLE[k]).forEach((f) => {
@@ -93,14 +107,18 @@ KINDS.forEach((k) => {
   });
 });
 report(bad);
-'
+JS
+)
+    nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
     assert_eq "EV3/required-fields-per-kind" "OK" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev4-unknown-kind-rejected" "hooks/workflow-state/state-io/events.js"
 echo "== EV4: a kind outside EVENT_KINDS is rejected, whatever else it carries =="
 if run_case "EV4/unknown-kind-rejected"; then
     next_sid
-    nodejs "$SID" "$PRE$VOCAB_JS"'
+    _ev_script=$(cat <<'JS'
 S.markStep(sid, "workflow_init", "complete");
 const bad = [];
 const impostors = ["step", "status", "step_statuses", "STEP_STATUS", "", "worktree_entered", "reset_from"];
@@ -115,14 +133,18 @@ impostors.forEach((k) => {
 });
 if (rd().events.length !== 1) bad.push("stream-grew=" + rd().events.length);
 report(bad);
-'
+JS
+)
+    nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
     assert_eq "EV4/unknown-kind-rejected" "OK" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev5-provenance-domain" "hooks/workflow-state/state-io/events.js"
 echo "== EV5: PROVENANCE_VALUES is the full domain and is enforced on every kind =="
 if run_case "EV5/provenance-domain"; then
     next_sid
-    nodejs "$SID" "$PRE$VOCAB_JS"'
+    _ev_script=$(cat <<'JS'
 const bad = [];
 const exported = Array.from(E.PROVENANCE_VALUES || []).slice().sort();
 const want = ["backfilled", "declared", "observed"];
@@ -134,14 +156,18 @@ KINDS.forEach((k) => {
   });
 });
 report(bad);
-'
+JS
+)
+    nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
     assert_eq "EV5/provenance-domain" "OK" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev6-status-domain" "hooks/workflow-state/state-io/core.js"
 echo "== EV6: step_status.status accepts the four workflow statuses and nothing else =="
 if run_case "EV6/status-domain"; then
     next_sid
-    nodejs "$SID" "$PRE$VOCAB_JS$APPROVE_GATED_JS"'
+    _ev_script=$(cat <<'JS'
 const bad = [];
 ["pending", "in_progress", "complete", "skipped"].forEach((st) => {
   if (!accepts(mk("step_status", { status: st }))) bad.push(st + ":rejected");
@@ -161,14 +187,18 @@ const C = require("./hooks/workflow-state/state-io/core");
   if (!rejects(mk("step_status", { step: s }))) bad.push("badstep" + i + ":accepted");
 });
 report(bad);
-'
+JS
+)
+    nodejs "$SID" "$PRE$VOCAB_JS$APPROVE_GATED_JS$_ev_script"
     assert_eq "EV6/status-domain" "OK" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev7-transition-and-path-source-domain" "hooks/workflow-state/state-io/events.js"
 echo "== EV7: worktree.transition and path_source have closed vocabularies =="
 if run_case "EV7/transition-and-path-source-domain"; then
     next_sid
-    nodejs "$SID" "$PRE$VOCAB_JS"'
+    _ev_script=$(cat <<'JS'
 const bad = [];
 ["entered", "exited"].forEach((t) => {
   if (!accepts(mk("worktree", { transition: t }))) bad.push("transition:" + t + ":rejected");
@@ -183,14 +213,18 @@ const bad = [];
   if (!rejects(mk("worktree", { path_source: p }))) bad.push("badsource" + i + ":accepted");
 });
 report(bad);
-'
+JS
+)
+    nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
     assert_eq "EV7/transition-and-path-source-domain" "OK" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev8-annotation-keys" "hooks/workflow-state/state-io/events.js"
 echo "== EV8: STEP_ANNOTATION_KEYS is the known-key table — known keys pass, unknown keys are kept (warn, never drop) =="
 if run_case "EV8/annotation-keys"; then
     next_sid
-    nodejs "$SID" "$PRE$VOCAB_JS"'
+    _ev_script=$(cat <<'JS'
 const bad = [];
 const want = ["baseline_classification", "completion_basis", "failing_tests", "reopen_reason",
   "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
@@ -209,28 +243,36 @@ want.forEach((k) => {
 const kept = rd().events.filter((e) => e.kind === "step_annotation" && e.key === "future_field");
 if (kept.length !== 1 || JSON.stringify(kept[0].value) !== JSON.stringify({ a: 1 })) bad.push("unknown-key-not-stored-verbatim");
 report(bad);
-'
+JS
+)
+    nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
     assert_eq "EV8/annotation-keys" "OK" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev9-persisted-keys-set-equality" "hooks/workflow-state/state-io/projection.js"
 echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the twelve documented keys =="
 if run_case "EV9/persisted-keys-set-equality"; then
     next_sid
-    nodejs "$SID" "$PRE"'
+    _ev_script=$(cat <<'JS'
 const P = require("./hooks/workflow-state/state-io/projection");
 const want = ["closes_issues", "created_at", "current", "events", "last_pushed_sha",
   "merge_base_baseline", "session_id", "session_start_context", "session_worktree", "verbose_prompt",
   "version", "workflow_type"].sort();
 const got = Array.from(P.PERSISTED_TOP_LEVEL_KEYS || []).slice().sort();
 console.log(got.length + " " + (got.join(",") === want.join(",") ? "MATCH" : "GOT:" + got.join(",")));
-'
+JS
+)
+    nodejs "$SID" "$PRE$_ev_script"
     assert_eq "EV9/persisted-keys-set-equality" "12 MATCH" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev10-persisted-keys-round-trip" "hooks/workflow-state/state-io/projection.js"
 echo "== EV10: every PERSISTED_TOP_LEVEL_KEYS member survives a write/read round trip =="
 if run_case "EV10/persisted-keys-round-trip"; then
     next_sid
-    nodejs "$SID" "$PRE"'
+    _ev_script=$(cat <<'JS'
 const P = require("./hooks/workflow-state/state-io/projection");
 const bad = [];
 // Caller-set keys, one per updateTopLevel call so a failure names the key.
@@ -259,14 +301,18 @@ const allow = Array.from(P.PERSISTED_TOP_LEVEL_KEYS || []);
 const stray = Object.keys(disk).filter((k) => !allow.includes(k));
 if (stray.length) bad.push("stray=" + stray.join(","));
 console.log(bad.length ? "BAD " + bad.join(" | ") : "OK");
-'
+JS
+)
+    nodejs "$SID" "$PRE$_ev_script"
     assert_eq "EV10/persisted-keys-round-trip" "OK" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev11-unknown-top-level-key" "hooks/workflow-state/state-io/core.js"
 echo "== EV11: a top-level key outside the allowlist is refused with UnknownStateKeyError =="
 if run_case "EV11/unknown-top-level-key"; then
     next_sid
-    nodejs "$SID" "$PRE"'
+    _ev_script=$(cat <<'JS'
 // Bootstrap: the state file for a fresh sid does not exist yet, and raw() reads it
 // with no fail-open — a no-op updateTopLevel materialises it before before=raw() is
 // captured, so the refused writes below are compared against a real "no-op" baseline
@@ -283,14 +329,18 @@ const before = raw();
 // A refused write must not have written anything.
 if (raw() !== before) bad.push("file-changed-after-refusal");
 console.log(bad.length ? "BAD " + bad.join(" | ") : "OK");
-'
+JS
+)
+    nodejs "$SID" "$PRE$_ev_script"
     assert_eq "EV11/unknown-top-level-key" "OK" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev12-projection-keys-never-persisted" "hooks/workflow-state/state-io/projection.js"
 echo "== EV12: every PROJECTION_KEYS member is structurally impossible at the top level =="
 if run_case "EV12/projection-keys-never-persisted"; then
     next_sid
-    nodejs "$SID" "$PRE"'
+    _ev_script=$(cat <<'JS'
 const P = require("./hooks/workflow-state/state-io/projection");
 const bad = [];
 const want = ["complexity_evaluation", "cwd", "git_branch", "is_bugfix", "plan_approvals",
@@ -309,10 +359,14 @@ got.forEach((k) => {
 const st = S.readState(sid);
 if (!st.current || !st.current.steps || st.current.steps.research.status !== "complete") bad.push("projection-corrupted");
 console.log(bad.length ? "BAD " + bad.join(" | ") : "OK");
-'
+JS
+)
+    nodejs "$SID" "$PRE$_ev_script"
     assert_eq "EV12/projection-keys-never-persisted" "OK" "$NODE_OUT"
 fi
+case_end
 
+case_begin "ev13-complexity-levels-shape-atomic" "hooks/workflow-state/state-io/events.js"
 echo "== EV13: complexity_evaluation.levels is optional, shape-checked, and rejected ATOMICALLY =="
 if run_case "EV13/complexity-levels-shape-atomic"; then
     next_sid
@@ -320,9 +374,9 @@ if run_case "EV13/complexity-levels-shape-atomic"; then
     # validates afterwards throws exactly the same InvalidEventError while leaving the
     # malformed event in a log that has no delete operation. The only assertion that
     # separates the two is the file itself: same bytes, same event count, after the throw.
-    nodejs "$SID" "$PRE$VOCAB_JS"'
+    _ev_script=$(cat <<'JS'
 const bad = [];
-const ok = { detail: "low", write_tests: "high", write_code: "high" };
+const ok = { outline: "low", detail: "low", write_tests: "high", write_code: "high" };
 // Optional: an event with no `levels` at all is valid.
 if (!accepts(mk("complexity_evaluation"))) bad.push("absent-levels:rejected");
 if (!accepts(mk("complexity_evaluation", { levels: ok }))) bad.push("valid-levels:rejected");
@@ -353,9 +407,12 @@ if (ce.some((e) => e.levels !== undefined && JSON.stringify(e.levels) !== JSON.s
   bad.push("a-malformed-levels-survived");
 }
 report(bad);
-'
+JS
+)
+    nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
     assert_eq "EV13/complexity-levels-shape-atomic" "OK" "$NODE_OUT"
 fi
+case_end
 
 feature_banner
 finish "event-vocabulary"

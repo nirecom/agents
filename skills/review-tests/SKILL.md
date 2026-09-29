@@ -63,7 +63,7 @@ RT-3. Invoke `"$AGENTS_CONFIG_DIR/skills/review-tests/scripts/run-codex-review-l
 - exit 8 → terminal guard was previously armed (review scope unchanged since last terminal); HALT.
 - exit 9 → HALT。exit 6 終端後、対象が変化したが未 accept。accept（マーカー or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED`）後に再実行。
 - 二つの accept 経路が存在する: (1) sentinel = write-code のブロック解除 + guard クリア; (2) マーカー = shell からのみ可視。
-- exit 3 → silently launch `test-reviewer` subagent; its dispatch prompt says: Read and follow `rules/shell-commands.md` before the first Bash command. APPROVED → RT-5 COMPLETE; NEEDS_REVISION → RT-5 WARNINGS.
+- exit 3 → silently launch `test-reviewer` subagent with `model:` = the `model=` line of `node "$AGENTS_CONFIG_DIR/bin/resolve-role-model" --role reviewer`; its dispatch prompt says: Read and follow `rules/shell-commands.md` before the first Bash command. APPROVED → RT-5 COMPLETE; NEEDS_REVISION → RT-5 WARNINGS.
   Save the subagent output via the Write tool to `<PLANS_DIR>/<session-id>-test-review-fallback-raw.md`, then run `bash "$AGENTS_CONFIG_DIR/skills/review-tests/scripts/detect-input-error.sh" <that file>` as one standalone command; exit 4 (`INPUT_ERROR <path>`) → HALT like exit 4, emit no sentinel.
 - exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback; do NOT emit sentinel.
 - exit 5 AUTO_EXTEND → same as exit 1 (gaps remain within the extension budget): present gaps → RT-5 WARNINGS; address and re-run.

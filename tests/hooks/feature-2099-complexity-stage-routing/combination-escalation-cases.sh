@@ -11,7 +11,7 @@
 # combination row (D2) — neither member escalates that stage alone.
 d2099c_combination_membership() {
     local got
-    got=$(run_node '
+    got=$(run_with_timeout node - 2>&1 <<'JS'
 const m = require(process.env.CR_MOD_N);
 // [label, signals, expected]. Expectations come from the D2 detail row:
 // solo = {S2-architecture, S5-breaking}; combination = [S1b-wide-change, S6-long-plan].
@@ -49,7 +49,8 @@ for (const c of CASES) {
   catch (e) { out = "THREW:" + (e && e.name); }
   console.log(c[0] + " " + out + (out === c[2] ? "" : " WANT=" + c[2]));
 }
-')
+JS
+)
     assert_block "CE-1 detail's combination row escalates on SET MEMBERSHIP — any order, any superset, duplicates included — and on nothing less" "$got" <<'EOF'
 pair-ordered high
 pair-reversed high
@@ -78,7 +79,7 @@ EOF
 # to a canonical string passes CE-1's ordered row and fails 5 of 6 permutations here.
 d2099c_permutation_invariance() {
     local got
-    got=$(run_node '
+    got=$(run_with_timeout node - 2>&1 <<'JS'
 const m = require(process.env.CR_MOD_N);
 function permutations(a) {
   if (a.length <= 1) { return [a]; }
@@ -101,7 +102,8 @@ for (const s of SETS) {
   const disagreeing = levels.filter(function (l) { return l !== s[2]; }).length;
   console.log(s[0] + " perms=" + perms.length + " want=" + s[2] + " disagreeing=" + disagreeing);
 }
-')
+JS
+)
     assert_block "CE-2 the combination verdict is invariant under every permutation of the same signal set" "$got" <<'EOF'
 pair perms=2 want=high disagreeing=0
 pair+noise perms=6 want=high disagreeing=0
@@ -135,7 +137,7 @@ d2099c_cli_membership() {
 # so V-1's singleton rejection (validate-table-cases.sh) stays reachable.
 d2099c_combination_is_multi_member_only() {
     local got
-    got=$(run_node '
+    got=$(run_with_timeout node - 2>&1 <<'JS'
 const m = require(process.env.CR_MOD_N);
 const rows = [];
 for (const s of m.ROUTING_STAGES) {
@@ -145,12 +147,24 @@ for (const s of m.ROUTING_STAGES) {
     : "none"));
 }
 console.log(rows.join(" "));
-')
-    assert_eq "CE-4 only detail carries a combination row, and every combination has 2+ members" \
-        "detail=2 write_tests=none write_code=none" "$got"
+JS
+)
+    assert_eq "CE-4 only outline and detail carry combination rows, and every combination has 2+ members" \
+        "outline=2 detail=2 write_tests=none write_code=none" "$got"
 }
 
+case_begin "combination-membership-set-semantics" "hooks/workflow-state/complexity-routing.js"
 d2099c_combination_membership
+case_end
+
+case_begin "combination-permutation-invariance" "hooks/workflow-state/complexity-routing.js"
 d2099c_permutation_invariance
+case_end
+
+case_begin "combination-cli-membership" "bin/workflow/derive-complexity-level"
 d2099c_cli_membership
+case_end
+
+case_begin "combination-multi-member-only" "hooks/workflow-state/complexity-routing.js"
 d2099c_combination_is_multi_member_only
+case_end

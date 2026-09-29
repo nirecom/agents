@@ -2,7 +2,6 @@
 name: aws-scan-cost
 description: Query current AWS billing data and identify top cost drivers using Cost Explorer.
 model: sonnet
-effort: medium
 context: fork
 ---
 

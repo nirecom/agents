@@ -1,6 +1,7 @@
 ---
 name: review-plan-codex
 description: Adversarial plan review via OpenAI Codex CLI. Reviews plans and approach proposals for blind spots and issues Claude may have missed.
+model: sonnet
 ---
 
 Adversarial plan review via OpenAI Codex CLI.

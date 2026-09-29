@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 "use strict";
 // bin/workflow/derive-complexity-level
-// Stateless per-stage level derivation (#2099) — fallback for MDP-3/WT-6/WCD-3
-// when no recorded evaluation exists.
+// Stateless per-stage level derivation (#2099) — fallback for MOP-2/MDP-3/WT-6/WCD-3
+// when no recorded evaluation exists. Prints level=<v> then model=<alias>.
 //
 // Usage:
-//   derive-complexity-level --stage <detail|write_tests|write_code> --signals <csv>
-//   derive-complexity-level --stage <detail|write_tests|write_code> --signals-file <path>
+//   derive-complexity-level --stage <outline|detail|write_tests|write_code> --signals <csv>
+//   derive-complexity-level --stage <outline|detail|write_tests|write_code> --signals-file <path>
 //   derive-complexity-level --print-markdown-table
 //   derive-complexity-level --print-signal-ids
 //
@@ -14,16 +14,18 @@
 // never reaches command-argument position (#2099 CF-8a); both forms share the
 // same parse, so an unrecognized token routes to the undecidable level either way.
 //
-// Fails open: unusable routing table -> stderr DERIVATION_UNAVAILABLE, level=high, exit 0.
+// Fails open: unusable routing table -> stderr DERIVATION_UNAVAILABLE, level=high
+// (with the producer-high model), exit 0.
 
 const fs = require("fs");
 const path = require("path");
 const routing = require(path.join(__dirname, "..", "..", "hooks", "workflow-state"));
+const { modelForLevel } = require(path.join(__dirname, "..", "..", "hooks", "lib", "role-model.js"));
 
 function usage(msg) {
   if (msg) process.stderr.write("derive-complexity-level: " + msg + "\n");
   process.stderr.write(
-    "usage: derive-complexity-level --stage <" + routing.ROUTING_STAGES.join("|") +
+    "usage: derive-complexity-level --stage <" + Object.keys(routing.STAGE_ROUTING).join("|") +
       "> (--signals <csv> | --signals-file <path>)\n" +
       "       derive-complexity-level --print-markdown-table\n" +
       "       derive-complexity-level --print-signal-ids\n"
@@ -76,8 +78,8 @@ function main() {
     process.exit(0);
   }
 
-  if (!args.stage || !routing.ROUTING_STAGES.includes(args.stage)) {
-    usage("--stage must be one of " + routing.ROUTING_STAGES.join(", "));
+  if (!args.stage || !Object.prototype.hasOwnProperty.call(routing.STAGE_ROUTING, args.stage)) {
+    usage("--stage must be one of " + Object.keys(routing.STAGE_ROUTING).join(", "));
   }
   if (args.signals !== undefined && args.signalsFile !== undefined) {
     usage("--signals and --signals-file are mutually exclusive — pass exactly one");
@@ -108,13 +110,13 @@ function main() {
   } catch (e) {
     if (e instanceof routing.RoutingTableUnavailableError) {
       process.stderr.write("DERIVATION_UNAVAILABLE\n");
-      process.stdout.write("level=high\n");
+      process.stdout.write("level=high\nmodel=" + modelForLevel("high") + "\n");
       process.exit(0);
     }
     throw e;
   }
 
-  process.stdout.write("level=" + level + "\n");
+  process.stdout.write("level=" + level + "\nmodel=" + modelForLevel(level) + "\n");
   process.exit(0);
 }
 

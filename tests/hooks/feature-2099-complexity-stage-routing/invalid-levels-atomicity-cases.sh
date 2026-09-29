@@ -22,7 +22,7 @@ d2099il_bad_levels_json() {
         # One stage value out of vocabulary, the OTHERS deliberately disagreeing
         # with what the signals derive — so "partially trusted" is observable.
         partial)    printf '{"detail":"high","write_tests":"high","write_code":"medium"}' ;;
-        good)       printf '{"detail":"low","write_tests":"low","write_code":"high"}' ;;
+        good)       printf '{"outline":"low","detail":"low","write_tests":"low","write_code":"high"}' ;;
     esac
 }
 
@@ -59,7 +59,7 @@ capitalized -> level=high levels=null
 array -> level=high levels=null
 string -> level=high levels=null
 partial -> level=high levels=null
-good -> level=high levels={"detail":"low","write_tests":"low","write_code":"high"}
+good -> level=high levels={"outline":"low","detail":"low","write_tests":"low","write_code":"high"}
 EOF
 }
 
@@ -92,7 +92,7 @@ EOF
     # Teeth for IL-2: the re-derivation is the SAME answer the stateless CLI
     # gives for those signals — not a constant the reader happens to emit.
     assert_eq "IL-3 ... and that re-derivation matches the stateless derive CLI for the same signals" \
-        "$(run_with_timeout node "$BIN_DERIVE" --stage write_code --signals "S1-multi-file" 2>/dev/null)" \
+        "$(run_with_timeout node "$BIN_DERIVE" --stage write_code --signals "S1-multi-file" 2>/dev/null | head -1)" \
         "$(run_with_timeout node "$BIN_READ" --session "$(d2099il_seed_raw bad-value)" --stage write_code 2>/dev/null | head -1)"
 
     # And the `partial` row above only has teeth because its stored detail value
@@ -109,7 +109,7 @@ d2099il_aggregate_read_completes_levels() {
     sid=$(d2099il_seed_raw bad-value)
     got=$(run_with_timeout node "$BIN_READ" --session "$sid" 2>/dev/null | tr '\n' ';')
     assert_eq "IL-5 back-compat mode emits the re-derived levels= map" \
-        "level=high;signals=S1-multi-file;levels={\"detail\":\"low\",\"write_tests\":\"low\",\"write_code\":\"high\"};" "$got"
+        "level=high;signals=S1-multi-file;levels={\"outline\":\"low\",\"detail\":\"low\",\"write_tests\":\"low\",\"write_code\":\"high\"};" "$got"
     assert_not_contains "IL-6 ... and no out-of-vocabulary value leaks onto stdout" "medium" "$got"
     assert_eq "IL-6a ... and the completed read is still exit 0" \
         "0" "$(run_with_timeout node "$BIN_READ" --session "$sid" >/dev/null 2>&1; echo $?)"
@@ -123,7 +123,7 @@ d2099il_append_is_refused_atomically() {
     local sid before after_bytes after_count err
     sid=$(new_session il-append)
     before=$(d2099_state_bytes "$sid")
-    err=$(BARREL="$BARREL_N" SID="$sid" run_with_timeout node -e '
+    err=$(BARREL="$BARREL_N" SID="$sid" run_with_timeout node - 2>&1 <<'JS'
 const b = require(process.env.BARREL);
 try {
   b.appendEvents(process.env.SID, [{
@@ -137,7 +137,8 @@ try {
   }]);
   console.log("NO_THROW");
 } catch (e) { console.log(e.name); }
-' 2>&1)
+JS
+)
     assert_eq "IL-7 appendEvents refuses a levels map with an out-of-vocabulary stage value" \
         "InvalidEventError" "$err"
     after_bytes=$(d2099_state_bytes "$sid")
@@ -168,13 +169,13 @@ fs.writeFileSync(b.getStatePath(process.env.SID), JSON.stringify({
 }
 
 d2099il_migrated_shape() {
-    BARREL="$BARREL_N" SID="$1" run_with_timeout node -e '
+    BARREL="$BARREL_N" SID="$1" run_with_timeout node - 2>&1 <<'JS'
 const b = require(process.env.BARREL);
 const s = b.readState(process.env.SID);
 const ev = ((s && s.events) || []).filter((e) => e && e.kind === "complexity_evaluation");
 if (!ev.length) { console.log("events=0"); }
 else { console.log("events=" + ev.length + " level=" + ev[0].level + " levels=" + JSON.stringify(ev[0].levels)); }
-' 2>&1
+JS
 }
 
 # IL-10: every migrated evaluation carries a WELL-FORMED levels map or no map at
@@ -193,10 +194,10 @@ d2099il_migration_emits_only_wellformed_levels() {
     done
     assert_block "IL-10 migration emits a well-formed levels map, or no event at all for an unmappable verdict" \
         "$(printf '%s' "$out")" <<'EOF'
-opus -> events=1 level=high levels={"detail":"high","write_tests":"high","write_code":"high"}
-sonnet -> events=1 level=low levels={"detail":"low","write_tests":"low","write_code":"high"}
+opus -> events=1 level=high levels={"outline":"high","detail":"high","write_tests":"high","write_code":"high"}
+sonnet -> events=1 level=low levels={"outline":"low","detail":"low","write_tests":"low","write_code":"high"}
 unknown -> events=0
-low -> events=1 level=low levels={"detail":"low","write_tests":"low","write_code":"high"}
+low -> events=1 level=low levels={"outline":"low","detail":"low","write_tests":"low","write_code":"high"}
 EOF
 }
 
@@ -223,7 +224,7 @@ d2099il_migration_out_of_vocabulary_aggregate() {
     local sid got
     sid=$(d2099il_write_v1 medium '{"level":"medium","signals":[],"recorded_at":"2026-01-01T00:00:00.000Z"}')
     assert_eq "IL-13 an out-of-vocabulary aggregate level survives migration verbatim (no level vocabulary check)" \
-        'events=1 level=medium levels={"detail":"low","write_tests":"low","write_code":"low"}' \
+        'events=1 level=medium levels={"outline":"low","detail":"low","write_tests":"low","write_code":"low"}' \
         "$(d2099il_migrated_shape "$sid")"
     got=$(RESOLVER="$RESOLVER_N" SID="$sid" run_with_timeout node -e '
 const r = require(process.env.RESOLVER);
@@ -233,10 +234,24 @@ console.log(String(r.hasComplexityEvaluation(process.env.SID)));
         "false" "$got"
 }
 
+case_begin "projection-strips-malformed-levels" "hooks/workflow-state/state-io/projection.js"
 d2099il_projection_strips_malformed_levels
+case_end
+case_begin "stage-read-rederived-from-signals" "hooks/workflow-state/skip-signal-resolver/complexity.js"
 d2099il_stage_read_is_rederived
+case_end
+case_begin "aggregate-read-completes-levels-backcompat" "bin/workflow/read-complexity-evaluation"
 d2099il_aggregate_read_completes_levels
+case_end
+case_begin "append-refused-atomically-bad-levels" "hooks/workflow-state/state-io/events.js"
 d2099il_append_is_refused_atomically
+case_end
+case_begin "migration-emits-only-wellformed-levels" "hooks/workflow-state/state-io/migrations/v1-to-v2.js"
 d2099il_migration_emits_only_wellformed_levels
+case_end
+case_begin "migration-unmappable-verdict-reads-none" "hooks/workflow-state/state-io/migrations/v1-to-v2.js"
 d2099il_migration_unmappable_reads_none
+case_end
+case_begin "migration-out-of-vocabulary-aggregate-level" "hooks/workflow-state/state-io/migrations/v1-to-v2.js"
 d2099il_migration_out_of_vocabulary_aggregate
+case_end

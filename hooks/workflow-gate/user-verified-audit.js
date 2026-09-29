@@ -22,6 +22,7 @@ const {
   stepCompleteCause,
 } = require("../lib/audit-triggers");
 const { NON_BLOCK_TERMINAL_VERDICTS } = require("../lib/supervisor-state-schema");
+const { formatAgentModelLine } = require("../lib/role-model");
 
 const TR_RANK = { TR1: 1, TR2: 2, TR3: 3, TR4: 4, TR5: 5, TR6: 6 };
 
@@ -128,6 +129,7 @@ function armReason(armResult) {
     "[EM Supervisor] user_verification (TR5) audit required before the sentinel is accepted.",
     `An audit run has been armed (${runId}${subChecks ? `: ${subChecks}` : ""}).`,
     "Run agents/supervisor-audit.md as a subagent, then re-issue the sentinel.",
+    formatAgentModelLine("reviewer"),
   ].join("\n");
 }
 

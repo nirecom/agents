@@ -20,6 +20,8 @@ d2099h_compat_view() {
     run_with_timeout node "$BIN_READ" --session "$1" 2>/dev/null | tr '\n' ';'
 }
 
+d2099h_model_for() { case "$1" in high) echo "opus";; *) echo "sonnet";; esac; }
+
 # R-33: idempotency at the RAW EVENT layer, through both entry points. The
 # projection is last-write-wins, but appendEvents() does no dedup, coalescing or
 # rewriting of history, so repeating an identical evaluation deliberately
@@ -71,13 +73,13 @@ console.log("events=" + ev.length + " folded=" + (ce ? ce.signals.join(",") : "N
 # Both raw events stay in the append-only log throughout (detail.md D6).
 #
 # Rows: label | first signals | second signals | stage matrix after | compat view after
-D2099_REEVAL='low-to-high||S2-architecture,S5-breaking|high|high|high|high|S2-architecture,S5-breaking
-high-to-low|S3-security||low|low|low|low|none
-map-replacement|S2-architecture|S1-multi-file|low|low|high|high|S1-multi-file'
+D2099_REEVAL='low-to-high||S2-architecture,S5-breaking|high|high|high|high|high|S2-architecture,S5-breaking
+high-to-low|S3-security||low|low|low|low|low|none
+map-replacement|S2-architecture|S1-multi-file|low|low|low|high|high|S1-multi-file'
 
 d2099_reevaluation_replaces_projection() {
-    local label first second d wt wc agg sig sid want
-    while IFS='|' read -r label first second d wt wc agg sig; do
+    local label first second ol d wt wc agg sig sid want
+    while IFS='|' read -r label first second ol d wt wc agg sig; do
         [ -n "$label" ] || continue
         sid=$(new_session "reeval-$label")
 
@@ -93,11 +95,11 @@ d2099_reevaluation_replaces_projection() {
 
         run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "$second" >/dev/null 2>&1
 
-        want="detail:level=$d;signals=${sig}; write_tests:level=$wt;signals=${sig}; write_code:level=$wc;signals=${sig}; "
+        want="detail:level=$d;signals=${sig};model=$(d2099h_model_for "$d"); write_tests:level=$wt;signals=${sig};model=$(d2099h_model_for "$wt"); write_code:level=$wc;signals=${sig};model=$(d2099h_model_for "$wc"); "
         assert_eq "R-46 [$label] every stage reader observes ONLY the second evaluation's levels and signals" \
             "$want" "$(d2099h_stage_matrix "$sid")"
         assert_eq "R-46a [$label] ... and the whole record — level, signals and the levels map — is the second evaluation's, not a mix" \
-            "level=$agg;signals=$sig;levels={\"detail\":\"$d\",\"write_tests\":\"$wt\",\"write_code\":\"$wc\"};" \
+            "level=$agg;signals=$sig;levels={\"outline\":\"$ol\",\"detail\":\"$d\",\"write_tests\":\"$wt\",\"write_code\":\"$wc\"};" \
             "$(d2099h_compat_view "$sid")"
         assert_eq "R-47 [$label] ... while BOTH raw evaluations remain in the append-only log" \
             "2" "$(d2099_raw_ce_count "$sid")"
@@ -106,5 +108,9 @@ $D2099_REEVAL
 EOF
 }
 
+case_begin "r33-raw-event-idempotency" "bin/workflow/record-complexity-evaluation"
 d2099_raw_event_idempotency
+case_end
+case_begin "r45-reevaluation-replaces-projection" "hooks/workflow-state/state-io/projection.js"
 d2099_reevaluation_replaces_projection
+case_end

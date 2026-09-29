@@ -19,6 +19,7 @@ ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` fro
 | CAP | 2 | 2 |
 | MAX_EXTENSIONS | 1 | 1 |
 | PLANNER_AGENT | `outline-planner` | `detail-planner` |
+| PLANNER_MODEL | `model=` from MOP-2 | `model=` from MDP-3 |
 | REVIEWER_AGENT | `outline-reviewer` | `detail-reviewer` |
 | ACCEPTED_TRADEOFFS_FILE | first readable of `intent` | first readable of `outline` → `intent` |
 | NON_APPROVED_VERDICT | `MISSING_ALTERNATIVE:` | `NEEDS_REVISION` |
@@ -34,6 +35,7 @@ ACCEPTED_TRADEOFFS_FILE is resolved by `bin/resolve-accepted-tradeoffs-file` fro
 | CAP | 2 | 2 |
 | MAX_EXTENSIONS | 1 | 1 |
 | PLANNER_AGENT | (none — review-only) | (none — review-only) |
+| PLANNER_MODEL | (none — review-only) | (none — review-only) |
 | REVIEWER_AGENT | `plan-security-reviewer` | `test-reviewer` |
 | ACCEPTED_TRADEOFFS_FILE | first readable of `outline` → `intent` | first readable of `detail` → `outline` → `intent` |
 | NON_APPROVED_VERDICT | `NEEDS_REVISION` | `NEEDS_REVISION` |
@@ -47,6 +49,7 @@ A NON_APPROVED_VERDICT (exit 1) is round-continuing: the caller addresses the co
 Exit 0 = APPROVED (review-tests fires `WORKFLOW_REVIEW_TESTS_COMPLETE`).
 Exit 2 / 5 / 6 CAN occur under the unified cap (ESCALATE, AUTO_EXTEND, HIGH_UNRESOLVED) — they no longer "do not occur".
 Exit 3 = codex CLI unusable → caller silently launches CC REVIEWER_AGENT fallback (for `security-code`, the `security-scanner` subagent, re-run at the same round via `--prestaged-report`).
+Every REVIEWER_AGENT (and `security-scanner`) launch passes `model:` = the `model=` line of `node "$AGENTS_CONFIG_DIR/bin/resolve-role-model" --role reviewer`.
 Exit 4 = HALT — same as Contract B; no fallback.
 
 ## FORMAT vs LEDGER_FORMAT
@@ -144,9 +147,9 @@ Quick reference (public exit codes — Contract B):
 | Exit | Name | Orchestrator action |
 |---|---|---|
 | 0 | APPROVED | Write/confirm phase. |
-| 1 | CONTINUE | Capture RAW → append round log → re-invoke planner. |
+| 1 | CONTINUE | Capture RAW → append round log → re-invoke planner with `model: PLANNER_MODEL`. |
 | 2 | ESCALATE | Present concern summary → stop loop. |
-| 3 | codex CLI unusable | Silently launch `REVIEWER_AGENT` fallback. |
+| 3 | codex CLI unusable | Silently launch `REVIEWER_AGENT` fallback with the `resolve-role-model --role reviewer` model. |
 | 4 | HALT | Surface stderr verbatim; do not fall back. |
 | 5 | AUTO_EXTEND | `EXTENSIONS_USED += 1` → re-enter loop. |
 | 6 | HIGH_UNRESOLVED | Present HIGH concern summary → stop loop; do not proceed to write/confirm. |

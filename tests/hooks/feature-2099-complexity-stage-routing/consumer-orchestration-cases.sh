@@ -120,31 +120,29 @@ d2099_run_skill_cmd() {
         run_with_timeout bash -c "$cmd" 2>/dev/null
 }
 
-# The model that FILE says a level maps to — read out of the document under
-# test, so a skill that changed its own mapping cannot silently pass. Bounded to
-# the read step's own section: a mapping stated somewhere else in the file is not
-# the mapping this step applies (round-10 C1).
+# d2099_orch_model_for — reads model= from BIN_DERIVE for the given level.
+# After #2100 skills carry no hardcoded model table (CPR-ORTH with d2099_doc_model_for).
 d2099_orch_model_for() {
     case "$2" in high|low) ;; *) echo "NO_LEVEL"; return ;; esac
-    d2099_section_for_cli "$1" "$(d2099_model_map_cli "$(d2099_skill_dir_name "$1")")" \
-        | grep -oE "$2 *(→|->) *(opus|sonnet)" | head -1 | sed -E 's/.*(→|->) *//'
+    local sigs; [ "$2" = "high" ] && sigs="S2-architecture" || sigs=""
+    run_with_timeout node "$BIN_DERIVE" --stage detail --signals "$sigs" 2>/dev/null \
+        | grep '^model=' | head -1 | sed 's/^model=//'
 }
 
-# The whole consumer procedure driven by the skill's own command line: run it,
-# parse the level, map to a model. FALLBACK when the CLI answered NONE.
+# d2099_orch_model — drives the skill's command, parses the model= line directly.
+# FALLBACK when the CLI answered NONE; after #2100 model= comes from the read output.
 d2099_orch_model() {
-    local f="$1" sid="$2" out first lvl model
+    local f="$1" sid="$2" out first model
     out=$(d2099_consumer_read "$f" "$sid")
     first=$(printf '%s\n' "$out" | head -1)
     [ "$first" = "__NO_COMMAND__" ] && { echo "NO_COMMAND_IN_SKILL"; return; }
     [ "$first" = "NONE" ] && { echo "FALLBACK"; return; }
+    model=$(printf '%s\n' "$out" | grep '^model=' | head -1 | sed 's/^model=//')
+    [ -n "$model" ] && { echo "$model"; return; }
     case "$first" in
-        level=*) lvl="${first#level=}" ;;
-        *) echo "UNPARSEABLE:$first"; return ;;
+        level=*) echo "NO_MODEL_LINE_FOR:${first#level=}" ;;
+        *) echo "UNPARSEABLE:$first" ;;
     esac
-    model=$(d2099_orch_model_for "$f" "$lvl")
-    [ -n "$model" ] || { echo "NO_DOCUMENTED_MAPPING_FOR:$lvl"; return; }
-    echo "$model"
 }
 
 # CO-1/CO-2: the extraction must have teeth. If a skill carried no runnable
@@ -403,11 +401,25 @@ EOF
 # L3 gap: an orchestrator that resolves the slot right and hands Agent something
 #   else. Closest substitute: CO-9..CO-14. Only a TL3 transcript review closes it.
 
+case_begin "orchestration-commands-are-real" "skills/make-detail-plan/SKILL.md"
 d2099_orch_commands_are_real
+case_end
+
+case_begin "orchestration-recorded-selects-model" "bin/workflow/read-complexity-evaluation"
 d2099_orch_recorded_selects_model
+case_end
+
+case_begin "orchestration-none-fallback" "bin/workflow/derive-complexity-level"
 d2099_orch_none_fallback
+case_end
+
+case_begin "orchestration-agent-handoff" "skills/make-detail-plan/SKILL.md"
 d2099_orch_agent_handoff
+case_end
+
+case_begin "orchestration-dispatched-model-cases" "bin/workflow/read-complexity-evaluation"
 d2099_orch_dispatched_model_cases
+case_end
 
 # Why CO-11..CO-14 IS the closest feasible approximation, not a convenient one.
 # The chain is judge -> write point -> stored record -> read step -> `model:` slot

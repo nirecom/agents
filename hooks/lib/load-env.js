@@ -294,9 +294,34 @@ function loadDefaultEnvGlobal() {
   return false;
 }
 
+// resolveConfigVar is the value-resolution rule bin/get-config-var exposes:
+// a non-empty caller export wins, then the effective .env (repoRoot overlay when
+// given, else the injected process.env), then defaultValue, then "".
+// The export is captured BEFORE loading so a .env value is never mistaken for it.
+function resolveConfigVar(name, defaultValue, opts) {
+  const exported = process.env[name];
+  let loadFailed = false;
+  try {
+    loadDefaultEnv();
+  } catch (_) {
+    loadFailed = true;
+  }
+  const repoRoot = opts && opts.repoRoot;
+  let v;
+  if (exported && exported.length) {
+    v = exported;
+  } else if (repoRoot) {
+    v = readEffectiveEnvFile(repoRoot)[name];
+  } else {
+    v = process.env[name];
+  }
+  return { value: v && v.length ? v : defaultValue || "", loadFailed };
+}
+
 module.exports = {
   loadEnv,
   loadDefaultEnv,
+  resolveConfigVar,
   filterOsBlocks,
   parseEnv,
   readEnvFile,

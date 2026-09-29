@@ -1,5 +1,7 @@
 "use strict";
 
+const { formatAgentModelLine } = require("./role-model");
+
 function escapeTokens(str) {
   return typeof str === "string" ? str.replace(/</g, "‹") : str;
 }
@@ -17,17 +19,10 @@ function aggregateCategories(findings) {
 }
 
 /**
- * Format alert findings for display after the Final Report.
- * Returns a string when there is content to show, null when nothing to surface.
- *
+ * Format alert findings for display after the Final Report; null when nothing to surface.
  * @param {Array} findings - alert.findings array from supervisor state
- * @param {Object} opts
- * @param {string} opts.sessionId
- * @param {string|null} [opts.workflowSessionId]
- * @param {string} opts.supervisorPath
- * @param {string} opts.stateFilePath
- * @param {boolean} [opts.summaryOnly] - when true, return a 1-line summary instead of the full list
- * @param {boolean} [opts.actionableOnly] - when true, return only severity>=warning findings, one line each; zero actionable → 1-line "no actionable findings" message
+ * @param {Object} opts - { sessionId, workflowSessionId?, supervisorPath, stateFilePath,
+ *   summaryOnly? (1-line summary), actionableOnly? (severity>=warning lines only) }
  */
 function formatLayer2Findings(findings, opts) {
   if (!Array.isArray(findings) || findings.length === 0) return null;
@@ -98,6 +93,7 @@ function formatLayer2Findings(findings, opts) {
   lines.push(`Workflow session ID: ${wsidLabel}`);
   lines.push(`Full audit trail: ${stateFilePath}`);
   lines.push(`Recommended action: review and address per agents/supervisor.md (${supervisorPath}).`);
+  lines.push(formatAgentModelLine("alert"));
 
   return lines.join("\n");
 }

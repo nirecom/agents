@@ -2,7 +2,6 @@
 name: aws-scan-resources
 description: Enumerate AWS compute, storage, network, and IAM resources and write a structured inventory to AWS_STATE_DIR.
 model: sonnet
-effort: medium
 context: fork
 ---
 

@@ -4,17 +4,18 @@
 // CLI wrapper for readComplexityEvaluation(). Used by SKILL.md Bash calls.
 //
 // Usage:
-//   read-complexity-evaluation --session <sid> [--stage <detail|write_tests|write_code>]
+//   read-complexity-evaluation --session <sid> [--stage <outline|detail|write_tests|write_code>]
 //
-// With --stage, line 1 carries THAT stage's level; without it, the aggregate
-// level plus a `levels=` JSON line when derivable.
+// With --stage, line 1 carries THAT stage's level and a trailing model=<alias>
+// line; without it, the aggregate level plus a `levels=` JSON line when derivable.
 // Resolved record: level=<v> then signals=<csv or none>. No record / underivable: NONE.
 // Exits 0 in both cases; exits 1 on bad args.
 
 const path = require("path");
-const { readComplexityEvaluation, ROUTING_STAGES, canonicalizeSignalsForPersistence } = require(
+const { readComplexityEvaluation, ROUTING_STAGES, STAGE_ROUTING, canonicalizeSignalsForPersistence } = require(
   path.join(__dirname, "..", "..", "hooks", "workflow-state")
 );
+const { modelForLevel } = require(path.join(__dirname, "..", "..", "hooks", "lib", "role-model.js"));
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -50,8 +51,8 @@ function main() {
     process.stderr.write("read-complexity-evaluation: --session is required and must match /^[A-Za-z0-9_-]+$/\n");
     process.exit(1);
   }
-  if (stage !== null && !ROUTING_STAGES.includes(stage)) {
-    process.stderr.write("read-complexity-evaluation: --stage must be one of " + ROUTING_STAGES.join(", ") + "\n");
+  if (stage !== null && !Object.prototype.hasOwnProperty.call(STAGE_ROUTING, stage)) {
+    process.stderr.write("read-complexity-evaluation: --stage must be one of " + Object.keys(STAGE_ROUTING).join(", ") + "\n");
     process.exit(1);
   }
 
@@ -79,7 +80,7 @@ function main() {
         process.stdout.write("NONE\n");
         process.exit(0);
       }
-      process.stdout.write("level=" + level + "\n" + signalsLine);
+      process.stdout.write("level=" + level + "\n" + signalsLine + "model=" + modelForLevel(level) + "\n");
       process.exit(0);
     }
     let out = "level=" + ce.level + "\n" + signalsLine;
