@@ -3,7 +3,7 @@
 //
 // Complexity used to be ONE high/low judgment shared by every stage, so
 // `write_tests` inherited `write_code`'s threshold. Routing authority now lives
-// here — one frozen table, three stages — so a stage's threshold moves alone.
+// here — one frozen table, one row per routed stage — so a stage's threshold moves alone.
 // The judging prompt emits SIGNALS only; level derivation is code-side.
 
 // require() must ALWAYS succeed: this module is reached through the
@@ -11,7 +11,7 @@
 // at load but only RECORDS its verdict; derivation throws at CALL time instead,
 // and each caller owns its own fail-open direction.
 
-const ROUTING_STAGES = Object.freeze(["detail", "write_tests", "write_code"]);
+const ROUTING_STAGES = Object.freeze(["outline", "detail", "write_tests", "write_code"]);
 
 // Signal vocabulary. S1-S6 keep the rubric's spellings since #1350;
 // S1b-wide-change is new in #2099 (>=8 files; implies S1 — a rubric-side rule,
@@ -43,6 +43,13 @@ const LEVELS = Object.freeze(["high", "low"]);
 // combination_escalation entries are always length >= 2; a length-1
 // solo-equivalent case belongs in legacy_equivalent_escalation.
 const STAGE_ROUTING = Object.freeze({
+  outline: Object.freeze({
+    default_level: "low",
+    solo_escalation: Object.freeze(["S2-architecture", "S5-breaking"]),
+    legacy_equivalent_escalation: Object.freeze([]),
+    combination_escalation: Object.freeze([Object.freeze(["S1b-wide-change", "S6-long-plan"])]),
+    undecidable_level: "high",
+  }),
   detail: Object.freeze({
     default_level: "low",
     solo_escalation: Object.freeze(["S2-architecture", "S5-breaking"]),
@@ -107,8 +114,7 @@ function validateRoutingTable(table = STAGE_ROUTING) {
     if (missing.length) errors.push("table is missing stage(s): " + missing.join(", "));
     if (extra.length) errors.push("table has unknown stage(s): " + extra.join(", "));
 
-    for (const stage of ROUTING_STAGES) {
-      if (!keys.includes(stage)) continue;
+    for (const stage of keys.filter((k) => ROUTING_STAGES.includes(k))) {
       const entry = table[stage];
       if (!isPlainObject(entry)) {
         errors.push(`${stage}: entry must be a plain object (non-null, non-array)`);
@@ -230,7 +236,7 @@ function deriveStageLevel(stage, signals) {
   return rule.default_level;
 }
 
-// deriveStageLevels(signals) -> frozen { detail, write_tests, write_code }.
+// deriveStageLevels(signals) -> frozen { <stage>: level } over ROUTING_STAGES.
 function deriveStageLevels(signals) {
   assertTableUsable();
   const out = {};

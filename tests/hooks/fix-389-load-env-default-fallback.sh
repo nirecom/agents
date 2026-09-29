@@ -2,31 +2,18 @@
 # tests/hooks/fix-389-load-env-default-fallback.sh
 # Tests: hooks/lib/load-env.js
 # Tags: env, load-env, worktree, scope:issue-specific
-# RED for issue #389.
-#
-# STATUS:
-#   T389-1..6 — GREEN today and must stay green (untouched by #1569 / #1630).
-#   T389-7    — GREEN today; it PINS the deliberate policy asymmetry introduced
-#               by C4: loadDefaultEnv keeps its short-circuit (an explicit
-#               AGENTS_CONFIG_DIR is the ONLY config source and never falls
-#               through to the module / realpath candidates), whereas
-#               resolveAgentsConfigDir DOES fall through. Sharing
-#               configDirCandidates() between them must not merge the two
-#               selection policies.
-#   T389-8    — RED until C4 lands (candidate values are not yet routed through
-#               normalizeCwd + path.resolve, so a Windows-POSIX env value is
-#               passed to path.join verbatim and the .env is never found).
-#               SKIPPED on non-win32.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-# - actual symlink resolution in a live ~\.claude\ → C:\git\agents\ setup
-# - ENOLINK or unusual symlink types on Windows NTFS
-# - a real hook process whose AGENTS_CONFIG_DIR was dropped by a subagent spawn
+# RED for #389. STATUS: T389-1..7 GREEN (T389-7 pins the C4 short-circuit; see config-dir-cases.sh);
+# T389-8 RED until C4 (SKIP off win32); CV-1..5 (#2100) RED until resolveConfigVar lands.
+# TL3 gap (what this TL2 test does NOT catch): live ~\.claude\ → C:\git\agents\ symlink
+# resolution, ENOLINK / unusual NTFS symlink types, a hook whose AGENTS_CONFIG_DIR a subagent spawn dropped.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
+
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
 else
@@ -35,11 +22,6 @@ fi
 
 LOAD_ENV="$AGENTS_DIR/hooks/lib/load-env.js"
 LOAD_ENV_NODE="$_AGENTS_DIR_NODE/hooks/lib/load-env.js"
-
-PASS=0; FAIL=0; SKIP=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -74,18 +56,11 @@ process.stdout.write(JSON.stringify({ok, val: process.env.TEST_T389_1_KEY || ''}
 }
 
 # T389-2: the realpath fallback (~/.claude/hooks/lib/... → real C:/git/agents/...)
-# still exists and is still USED.
-#
-# Retargeted for C4: the realpathSync call moved out of load-env.js into
-# hooks/lib/agents-config-dir.js (configDirCandidates), so grepping load-env.js
-# for `realpathSync(` no longer touches the code it claims to cover — it was
-# passing on an explanatory COMMENT that happened to contain the token. This is
-# now behavioural on the module that actually produces the candidate:
-#   (a) enumeration — with AGENTS_CONFIG_DIR unset, configDirCandidates() emits a
-#       `realpath`-sourced candidate. Deleting the realpathSync call makes the
-#       source disappear; a comment cannot satisfy this.
-#   (b) selection — when the module-anchored candidate does NOT validate, the
-#       realpath candidate is the one adopted (the symlinked-install case).
+# still exists and is still USED. Behavioural on agents-config-dir.js (C4 moved
+# realpathSync there; a load-env.js grep would pass on a comment):
+#   (a) enumeration — AGENTS_CONFIG_DIR unset yields a `realpath`-sourced candidate.
+#   (b) selection — when the module anchor does NOT validate, the realpath
+#       candidate is adopted (the symlinked-install case).
 # Real symlink resolution on a live ~/.claude install stays the TL3 gap.
 run_t389_2() {
     local label="T389-2: realpath candidate is enumerated and adopted (agents-config-dir.js)"
@@ -230,16 +205,48 @@ loadDefaultEnv();
 
 # shellcheck source=./fix-389-load-env-default-fallback/config-dir-cases.sh
 . "$(dirname "${BASH_SOURCE[0]}")/fix-389-load-env-default-fallback/config-dir-cases.sh"
+# shellcheck source=./fix-389-load-env-default-fallback/resolve-config-var-cases.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fix-389-load-env-default-fallback/resolve-config-var-cases.sh"
 
-
+case_begin "t389-1-agents-config-dir-env-loaded" "hooks/lib/load-env.js"
 run_t389_1
+case_end
+case_begin "t389-2-realpath-candidate-adopted" "hooks/lib/load-env.js"
 run_t389_2
+case_end
+case_begin "t389-3-no-env-graceful-noop" "hooks/lib/load-env.js"
 run_t389_3
+case_end
+case_begin "t389-4-empty-env-overwritten-by-dotenv" "hooks/lib/load-env.js"
 run_t389_4
+case_end
+case_begin "t389-5-nonempty-env-wins-over-dotenv" "hooks/lib/load-env.js"
 run_t389_5
+case_end
+case_begin "t389-6-debug-logs-key-not-value" "hooks/lib/load-env.js"
 run_t389_6
+case_end
+case_begin "t389-7-explicit-config-dir-no-fallthrough" "hooks/lib/load-env.js"
 run_t389_7
+case_end
+case_begin "t389-8-windows-posix-config-dir-normalized" "hooks/lib/load-env.js"
 run_t389_8
+case_end
+case_begin "cv-1-process-env-beats-dotenv" "hooks/lib/load-env.js"
+run_cv_1
+case_end
+case_begin "cv-2-empty-env-falls-to-dotenv-with-overlay" "hooks/lib/load-env.js"
+run_cv_2
+case_end
+case_begin "cv-3-repo-root-reads-effective-env" "hooks/lib/load-env.js"
+run_cv_3
+case_end
+case_begin "cv-4-absent-everywhere-returns-default" "hooks/lib/load-env.js"
+run_cv_4
+case_end
+case_begin "cv-5-load-fail-sets-flag" "hooks/lib/load-env.js"
+run_cv_5
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

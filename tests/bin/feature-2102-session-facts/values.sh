@@ -2,7 +2,7 @@
 # Tests: bin/workflow/read-session-facts, bin/workflow/lib/session-facts/collect.js, bin/workflow/lib/session-facts/gate-facts.js, bin/workflow/lib/session-facts/keys.js, skills/write-tests/SKILL.md, skills/write-code/SKILL.md
 # Tags: tl2, workflow, session-facts, values, gates, plans-dir, complexity, scope:issue-specific, pwsh-not-required
 
-# contract.sh proves the eight keys are always THERE; this file proves they are RIGHT.
+# contract.sh proves the ten keys are always THERE; this file proves they are RIGHT.
 # A wrong GATE_* value silently skips a user confirmation and a wrong COMPLEXITY_LEVEL_*
 # picks the wrong model, so every family is checked differentially against the
 # single-purpose reader it composes -- the reader must compose, never re-implement.
@@ -79,7 +79,7 @@ write_env() {
   esac
 }
 
-# One node: the (c) complexity fixtures (cx1, cx2, cx4 -- one file per session id; cx3
+# One node: the (c) and (g) complexity fixtures (cx1, cx2, cx4, gmod, ghaiku -- one file per session id; cx3
 # deliberately has none) plus two pure probes, HOME_PD for (b) v and GDEF for (d).
 VFIX_OUT="$(run_with_timeout node -e '
   const fs = require("fs"), path = require("path"), os = require("os");
@@ -87,11 +87,15 @@ VFIX_OUT="$(run_with_timeout node -e '
     sid + ".json"), JSON.stringify({ steps: {}, complexity_evaluation: body })); }
     catch (e) { process.stderr.write("fixture " + sid + ": " + e.message + "\n"); } };
   const at = "2026-09-04T00:00:00.000Z";
-  put("cx1", { level: "high", levels: { detail: "high", write_tests: "high", write_code: "low" },
+  put("cx1", { level: "high", levels: { outline: "high", detail: "high", write_tests: "high", write_code: "low" },
     signals: ["S1-multi-file", "S5-breaking"], recorded_at: at });
-  put("cx2", { level: "low", levels: { detail: "low", write_tests: "low", write_code: "low" },
+  put("cx2", { level: "low", levels: { outline: "low", detail: "low", write_tests: "low", write_code: "low" },
     signals: [], recorded_at: at });
   put("cx4", { level: "high", signals: ["S1-multi-file"], recorded_at: at });
+  const gmix = { level: "high", levels: { outline: "low", detail: "high", write_tests: "high", write_code: "low" },
+    signals: ["S1-multi-file"], recorded_at: at };
+  put("gmod", gmix);
+  put("ghaiku", gmix);
   let gdef = "MODULE_LOAD_FAILED";
   try {
     const m = require(process.env.KEYS_MOD);
@@ -360,6 +364,44 @@ check_round_trips "$WT_SKILL"
 case_end
 case_begin "f-write-code-round-trips" "skills/write-code/SKILL.md"
 check_round_trips "$WC_SKILL"
+case_end
+
+echo ""
+case_begin "complexity-model-keys" "bin/workflow/lib/session-facts/collect.js"
+echo "=== (g) COMPLEXITY_MODEL_* keys: no record → NONE; record present → alias ==="
+# PRODUCER_HIGH_MODEL/PRODUCER_LOW_MODEL are unset here so defaults from ROLE_TABLE apply in (g ii).
+# For (g iii) the non-default value is planted in the fixture CFG's .env to prove
+# that the config-file code path (not just process env) is exercised.
+# gmod/ghaiku state fixtures are written by the batched fixture node above (a).
+unset PRODUCER_HIGH_MODEL PRODUCER_LOW_MODEL 2>/dev/null || true
+
+# (g i) no record → both MODEL keys are NONE
+run_facts "$CFG" "gnorecord"
+check "(g i) no record -- COMPLEXITY_MODEL_write_tests is NONE" "NONE" "$(val_of COMPLEXITY_MODEL_write_tests)"
+check "(g i) no record -- COMPLEXITY_MODEL_write_code is NONE" "NONE" "$(val_of COMPLEXITY_MODEL_write_code)"
+check "(g i) no record -- level keys are also NONE (non-vacuity: the run was real)" "NONE" "$(val_of COMPLEXITY_LEVEL_write_tests)"
+
+# (g ii) record present: high write_tests, low write_code → default aliases opus / sonnet.
+# PRODUCER_HIGH_MODEL=opus and PRODUCER_LOW_MODEL=sonnet are exported explicitly so the
+# test does not rely on any ambient .env value; using the named defaults makes the mapping
+# between level and alias visible in the test source.
+export PRODUCER_HIGH_MODEL=opus PRODUCER_LOW_MODEL=sonnet
+run_facts "$CFG" gmod
+check "(g ii) write_tests level=high → model=opus" "opus" "$(val_of COMPLEXITY_MODEL_write_tests)"
+check "(g ii) write_code level=low → model=sonnet" "sonnet" "$(val_of COMPLEXITY_MODEL_write_code)"
+check "(g ii) levels are what the fixture says (non-vacuity)" "high" "$(val_of COMPLEXITY_LEVEL_write_tests)"
+unset PRODUCER_HIGH_MODEL PRODUCER_LOW_MODEL 2>/dev/null || true
+
+# (g iii) PRODUCER_LOW_MODEL=haiku via .env → low-stage model is haiku.
+# This proves the .env config path (not just process.env priority), which is the
+# production path a user would actually configure.
+CFG_HAIKU="$TMPDIR_BASE/cfg-haiku"; mk_cfg "$CFG_HAIKU"
+printf 'PRODUCER_LOW_MODEL=haiku\nPRODUCER_HIGH_MODEL=opus\n' > "$CFG_HAIKU/.env"
+run_facts "$CFG_HAIKU" ghaiku
+check "(g iii) PRODUCER_LOW_MODEL=haiku in .env → write_code model=haiku" "haiku" "$(val_of COMPLEXITY_MODEL_write_code)"
+check "(g iii) PRODUCER_HIGH_MODEL=opus in .env → write_tests model=opus" "opus" "$(val_of COMPLEXITY_MODEL_write_tests)"
+check "(g iii) fixture .env really has haiku (non-vacuity)" 1 \
+  "$(grep -cF 'PRODUCER_LOW_MODEL=haiku' "$CFG_HAIKU/.env" 2>/dev/null || true)"
 case_end
 
 echo ""

@@ -2,7 +2,7 @@
 # Tests: bin/workflow/read-session-facts, bin/workflow/lib/session-facts/keys.js, bin/workflow/lib/session-facts/collect.js, bin/workflow/lib/session-facts/gate-facts.js
 # Tags: tl2, workflow, session-facts, contract, keys, budget, scope:issue-specific, pwsh-not-required
 
-# The v1 output contract: same eight keys, same order, every time, whatever the session
+# The v2 output contract: same ten keys, same order, every time, whatever the session
 # looks like. A consumer SKILL.md parses positionally-stable KEY=VALUE lines, so a key
 # that silently appears, vanishes or moves is a breaking change that must cost a
 # FACTS_VERSION bump. This file is the machine that charges that cost.
@@ -85,17 +85,17 @@ strict_keys_of() {
 }
 check_shape() {
   local id="$1" f="$2"
-  check "$id: exactly 8 lines" 8 "$(wc -l < "$f" | tr -d ' ')"
+  check "$id: exactly 10 lines" 10 "$(wc -l < "$f" | tr -d ' ')"
   check "$id: the last byte is a newline (nothing truncated)" 1 "$(tail -c 1 "$f" | wc -l | tr -d ' ')"
   check "$id: every line is KEY=VALUE, in the expected order" "$EXPECTED_KEYS" \
     "$(strict_keys_of "$(cat "$f" 2>/dev/null || echo "")")"
 }
 
-# The v1 key list, retyped here on purpose. This is the ONE deliberate CPR-SSOT
+# The v2 key list, retyped here on purpose. This is the ONE deliberate CPR-SSOT
 # exception in the suite: keys.js and this literal are two independent witnesses to the
 # same external contract, so changing either side alone must go red. Deriving the
 # expectation from keys.js would make the test agree with any edit, including a wrong one.
-EXPECTED_KEYS="FACTS_VERSION SESSION_ID PLANS_DIR GATE_CONFIRM_TESTS GATE_CONFIRM_CODE COMPLEXITY_LEVEL_write_tests COMPLEXITY_LEVEL_write_code COMPLEXITY_SIGNALS "
+EXPECTED_KEYS="FACTS_VERSION SESSION_ID PLANS_DIR GATE_CONFIRM_TESTS GATE_CONFIRM_CODE COMPLEXITY_LEVEL_write_tests COMPLEXITY_LEVEL_write_code COMPLEXITY_MODEL_write_tests COMPLEXITY_MODEL_write_code COMPLEXITY_SIGNALS "
 
 # One node: the C1 keys probe plus every state fixture (C2, C2u, C3c; one file per
 # session id, so none can see another). Prints "KEYS=<list>" for C1.
@@ -103,7 +103,7 @@ UUID_SID="b923a2da-5f5d-494b-bfb3-568dce3bf8e9"
 FIX_OUT="$(UUID_SID_LIT="$UUID_SID" run_with_timeout node -e '
   const fs = require("fs"), path = require("path"), wf = process.env.CLAUDE_WORKFLOW_DIR;
   let keys;
-  try { keys = (require(process.env.KEYS_MOD).FACTS_V1_KEYS || []).join(" ") + " "; }
+  try { keys = (require(process.env.KEYS_MOD).FACTS_KEYS || []).join(" ") + " "; }
   catch (e) { keys = "MODULE_LOAD_FAILED"; }
   const cx = (signals) => ({ level: "high",
     levels: { detail: "high", write_tests: "high", write_code: "low" },
@@ -119,8 +119,8 @@ KEYS_JS="$(printf '%s\n' "$FIX_OUT" | sed -n 's/^KEYS=//p')"
 
 case_begin "C1-keys-witness" "bin/workflow/lib/session-facts/keys.js"
 echo "=== C1: keys.js is the implementation-side witness of the same list ==="
-check "C1a: FACTS_V1_KEYS matches the independently retyped list, in order" "$EXPECTED_KEYS" "$KEYS_JS"
-check "C1b: the list is exactly eight keys" 8 "$(printf '%s' "$EXPECTED_KEYS" | wc -w | tr -d ' ')"
+check "C1a: FACTS_KEYS matches the independently retyped list, in order" "$EXPECTED_KEYS" "$KEYS_JS"
+check "C1b: the list is exactly ten keys" 10 "$(printf '%s' "$EXPECTED_KEYS" | wc -w | tr -d ' ')"
 case_end
 
 echo ""
@@ -132,12 +132,12 @@ echo "=== C2: a typical session -- full key set, in order, FACTS_VERSION first =
 run_facts "$CFG_FULL" --session c2
 check "C2a: exits 0" 0 "$RC"
 check "C2b: the emitted keys match the expected list, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
-check "C2c: line 1 is the version line" "FACTS_VERSION=1" "$(printf '%s\n' "$OUT" | head -n 1)"
+check "C2c: line 1 is the version line" "FACTS_VERSION=2" "$(printf '%s\n' "$OUT" | head -n 1)"
 check "C2d: the session id is echoed back" "SESSION_ID=c2" "$(printf '%s\n' "$OUT" | sed -n '2p')"
 check_not_contains "C2e: no ACTION line (this CLI reports, it does not decide)" "ACTION=" "$OUT"
 check_not_contains "C2f: no NEXT_SKILL line" "NEXT_SKILL=" "$OUT"
 check_not_contains "C2g: no NEXT_HINT line" "NEXT_HINT=" "$OUT"
-check "C2h: no line is emitted twice" 8 "$(printf '%s\n' "$OUT" | sed -n 's/=.*//p' | sort -u | wc -l | tr -d ' ')"
+check "C2h: no line is emitted twice" 10 "$(printf '%s\n' "$OUT" | sed -n 's/=.*//p' | sort -u | wc -l | tr -d ' ')"
 check_shape "C2i" "$OUTF"
 # Non-vacuity for check_shape: the strict reader must actually flag a non-conforming line
 # rather than skip it the way keys_of does.
@@ -167,15 +167,15 @@ echo "=== C3: the key set never shrinks -- three degraded fixtures ==="
 # output by key must never have to branch on a key's absence.
 run_facts "$CFG_FULL" --session c3nostate
 check "C3a: no state file -- exits 0" 0 "$RC"
-check "C3a2: no state file -- all eight keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
+check "C3a2: no state file -- all ten keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3a3: no state file" "$OUTF"
 run_facts "$CFG_BARE" --session c3noenv
 check "C3b: no .env and no get-config-var -- exits 0" 0 "$RC"
-check "C3b2: no .env -- all eight keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
+check "C3b2: no .env -- all ten keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3b3: no .env" "$OUTF"
 run_facts "$CFG_FULL" --session c3nocx
 check "C3c: state file without a complexity record -- exits 0" 0 "$RC"
-check "C3c2: no complexity record -- all eight keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
+check "C3c2: no complexity record -- all ten keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3c3: no complexity record" "$OUTF"
 case_end
 
@@ -183,7 +183,7 @@ echo ""
 case_begin "C4-static-key-names" "bin/workflow/lib/session-facts/keys.js"
 echo "=== C4: key names are static literals, not derived from ROUTING_STAGES ==="
 # Injected via --require so the CLI's own module graph sees the stub. If key names were
-# generated from the stage list, a fourth stage would add a ninth key.
+# generated from the stage list, an extra fake stage would add an eleventh key.
 STUB="$TMPDIR_BASE/stub-stages.js"
 printf '%s\n' \
   '"use strict";' \
@@ -200,13 +200,13 @@ WFS="$REPO_N/hooks/workflow-state"; export WFS
 STUB_PROOF="$(run_with_timeout node --require "$STUB" -e '
   const wf = require(process.env.WFS);
   process.stdout.write(String(wf.ROUTING_STAGES.length));' 2>/dev/null || echo "STUB_FAILED")"
-check "C4a: the stub really adds a fourth routing stage (non-vacuity)" 4 "$STUB_PROOF"
+check "C4a: the stub really adds a routing stage (non-vacuity)" 5 "$STUB_PROOF"
 RC=0
 AGENTS_CONFIG_DIR="$(nrm "$CFG_FULL")" run_with_timeout node --require "$STUB" "$RSF" \
   --session c2 >"$OUTF" 2>"$ERRF" || RC=$?
 OUT="$(cat "$OUTF" 2>/dev/null || echo "")"
 check "C4b: under the stub the key set is unchanged" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
-check "C4c: under the stub the key count is still eight" 8 "$(printf '%s\n' "$OUT" | grep -c '=' || true)"
+check "C4c: under the stub the key count is still ten" 10 "$(printf '%s\n' "$OUT" | grep -c '=' || true)"
 case_end
 
 echo ""
@@ -356,7 +356,7 @@ case_begin "C8-no-env-secret-leak" "bin/workflow/lib/session-facts/collect.js"
 echo "=== C8: the snapshot carries the two gate verdicts, never the .env behind them ==="
 # The reader opens the config dir's .env to answer two boolean questions, and its output
 # is pasted into a transcript. Anything else living in that file -- API keys, tokens --
-# must not ride along (OWASP ASVS V8). The eight-key contract implies this, but a
+# must not ride along (OWASP ASVS V8). The ten-key contract implies this, but a
 # key-name assertion cannot see a secret smuggled into a VALUE, so it is witnessed here
 # on the raw bytes of both streams.
 CFG_SEC="$TMPDIR_BASE/cfg-sec"; mk_cfg "$CFG_SEC"
@@ -376,7 +376,7 @@ case_end
 
 echo ""
 case_begin "C9-exit3-keeps-shape" "bin/workflow/lib/session-facts/collect.js"
-echo "=== C9: exit 3 degrades a VALUE -- the eight-line shape is unchanged ==="
+echo "=== C9: exit 3 degrades a VALUE -- the ten-line shape is unchanged ==="
 # The fail-closed PLANS_DIR path is the one place the CLI exits nonzero while still
 # reporting. A build that abandoned the contract there -- dropping keys, or appending a
 # diagnostic to stdout -- would leave the caller parsing a shape it never expects.

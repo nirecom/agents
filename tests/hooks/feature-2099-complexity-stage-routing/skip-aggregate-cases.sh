@@ -11,7 +11,7 @@
 # case where the two agree, so every fixture below makes them DISAGREE.
 d2099s_resolve() {
     local sid="$1" target="$2"
-    RESOLVER="$RESOLVER_N" SID="$sid" TARGET="$target" run_with_timeout node -e '
+    RESOLVER="$RESOLVER_N" SID="$sid" TARGET="$target" run_with_timeout node - <<'JS' 2>/dev/null
 const r = require(process.env.RESOLVER);
 const v = r.resolveSkipConditionsFromComplexity(process.env.SID, process.env.TARGET);
 if (v === null || v === undefined) { console.log("NOT_ELIGIBLE"); }
@@ -19,7 +19,7 @@ else if (typeof v !== "object") { console.log("BAD_SHAPE:" + typeof v); }
 else if (Object.keys(v).length === 0) { console.log("EMPTY_OBJECT"); }
 else if (Object.values(v).every(function (x) { return x === true; })) { console.log("ELIGIBLE"); }
 else { console.log("PARTIAL:" + JSON.stringify(v)); }
-' 2>/dev/null
+JS
 }
 
 # Inject a record whose aggregate and per-stage fields point opposite ways, then
@@ -52,7 +52,7 @@ d2099s_aggregate_low_beats_stage_high() {
     local sid t seeded
     sid=$(new_session saggr1)
     seeded=$(d2099s_seed "$sid" \
-        '{"level":"low","signals":[],"levels":{"detail":"high","write_tests":"high","write_code":"high"}}')
+        '{"level":"low","signals":[],"levels":{"outline":"high","detail":"high","write_tests":"high","write_code":"high"}}')
     assert_eq "SA-0 the disagreeing record survives the projection (else the cases below are vacuous)" \
         "SEEDED" "$seeded"
 
@@ -68,7 +68,7 @@ d2099s_aggregate_high_beats_stage_low() {
     local sid t seeded
     sid=$(new_session saggr2)
     seeded=$(d2099s_seed "$sid" \
-        '{"level":"high","signals":["S2-architecture"],"levels":{"detail":"low","write_tests":"low","write_code":"low"}}')
+        '{"level":"high","signals":["S2-architecture"],"levels":{"outline":"low","detail":"low","write_tests":"low","write_code":"low"}}')
     assert_eq "SA-2 the inverse record survives the projection" "SEEDED" "$seeded"
 
     for t in outline detail; do
@@ -83,7 +83,7 @@ d2099s_signals_half_of_the_rule() {
     local sid t seeded
     sid=$(new_session saggr3)
     seeded=$(d2099s_seed "$sid" \
-        '{"level":"low","signals":["S1-multi-file"],"levels":{"detail":"low","write_tests":"low","write_code":"low"}}')
+        '{"level":"low","signals":["S1-multi-file"],"levels":{"outline":"low","detail":"low","write_tests":"low","write_code":"low"}}')
     assert_eq "SA-4 the level-low-with-signals record survives the projection" "SEEDED" "$seeded"
 
     for t in outline detail; do
@@ -106,7 +106,15 @@ d2099s_absent_levels_map() {
     done
 }
 
+case_begin "sa1-aggregate-low-beats-stage-high" "hooks/workflow-state/skip-signal-resolver/complexity.js"
 d2099s_aggregate_low_beats_stage_high
+case_end
+case_begin "sa3-aggregate-high-beats-stage-low" "hooks/workflow-state/skip-signal-resolver/complexity.js"
 d2099s_aggregate_high_beats_stage_low
+case_end
+case_begin "sa5-signals-half-of-rule" "hooks/workflow-state/skip-signal-resolver/complexity.js"
 d2099s_signals_half_of_the_rule
+case_end
+case_begin "sa6-absent-levels-map" "hooks/workflow-state/skip-signal-resolver/complexity.js"
 d2099s_absent_levels_map
+case_end

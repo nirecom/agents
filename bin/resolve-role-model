@@ -1,0 +1,51 @@
+#!/usr/bin/env node
+"use strict";
+// bin/resolve-role-model — print the model alias a subagent role should run on.
+//
+// Usage:
+//   resolve-role-model --role <reviewer|alert|producer-high|producer-low>
+//
+// stdout: model=<alias>\n. exit 0 on success (a disallowed .env value falls back
+// to the role default with a stderr warning that names the key, never the value).
+// exit 1: usage error. Role table and resolution live in hooks/lib/role-model.js.
+
+const path = require("path");
+const roleModel = require(path.join(__dirname, "..", "hooks", "lib", "role-model.js"));
+
+function usage(msg) {
+  if (msg) process.stderr.write("resolve-role-model: " + msg + "\n");
+  process.stderr.write("usage: resolve-role-model --role <" + Object.keys(roleModel.ROLE_TABLE).join("|") + ">\n");
+  process.exit(1);
+}
+
+function parseArgs(argv) {
+  let role = null;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--role") {
+      const v = argv[i + 1];
+      if (v === undefined || v.startsWith("--")) usage("--role requires a value");
+      role = v;
+      i++;
+    } else {
+      usage("unknown argument: " + a);
+    }
+  }
+  if (role === null) usage("--role is required");
+  if (!Object.prototype.hasOwnProperty.call(roleModel.ROLE_TABLE, role)) usage("unknown role: " + role);
+  return role;
+}
+
+function main() {
+  const role = parseArgs(process.argv.slice(2));
+  const r = roleModel.resolveRoleModel(role);
+  if (r.invalid) {
+    process.stderr.write(
+      "resolve-role-model: " + r.key + " is not an allowed alias (value withheld); using default " + r.model + "\n"
+    );
+  }
+  process.stdout.write("model=" + r.model + "\n");
+  process.exit(0);
+}
+
+main();

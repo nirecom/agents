@@ -10,7 +10,7 @@
 # a CLI comparing one field passes while the other two go unchecked.
 d2099h_rb_shim() {
     case "$1" in
-        levels) echo 'levels: { detail: "high", write_tests: "high", write_code: "high" }' ;;
+        levels) echo 'levels: { outline: "high", detail: "high", write_tests: "high", write_code: "high" }' ;;
         level) echo 'level: "low"' ;;
         signals) echo 'signals: ["S5-breaking"]' ;;
     esac
@@ -236,7 +236,7 @@ d2099h_assert_sig_invalid() {
     fi
     assert_contains "$desc — receipt" "RECORDED_COMPLEXITY" "$out"
     assert_eq "$desc — reads back as undecidable-high, unrecognized tokens collapsed to UNRECOGNIZED(count)" \
-        "level=high;signals=$want_signals;" \
+        "level=high;signals=$want_signals;model=opus;" \
         "$(run_with_timeout node "$BIN_READ" --session "$sid" --stage detail 2>/dev/null | tr '\n' ';')"
     assert_eq "$desc — one event, no skip annotation" "ce=1 skip=0" "$(d2099_side_effects "$sid")"
 }
@@ -307,12 +307,13 @@ INV
 # 4000-char id rides along so a per-element bound is exercised too.
 d2099h_signals_oversized() {
     local huge sid rc out stored st
-    huge=$(run_with_timeout node -e '
+    huge=$(run_with_timeout node - 2>/dev/null <<'JS'
 const ids = [];
 for (let i = 0; i < 400; i++) { ids.push("S" + i + "-generated-signal-name"); }
 ids.push("S-" + "x".repeat(4000));
 console.log(ids.join(","));
-' 2>/dev/null)
+JS
+)
     if [ -z "$huge" ]; then
         fail "H-SIG-BIG the oversized payload could not be generated — the case would be vacuous"
         return
@@ -392,9 +393,26 @@ d2099h_empty_state_file() {
 }
 
 
+case_begin "read-back-field-invariant" "hooks/workflow-state/state-io.js"
 d2099h_read_back_per_field
+case_end
+
+case_begin "unusable-workflow-dir" "bin/workflow/record-complexity-evaluation"
 d2099h_unusable_workflow_dir
+case_end
+
+case_begin "corrupt-state-file" "hooks/workflow-state/state-io.js"
 d2099h_corrupt_state_file
+case_end
+
+case_begin "empty-state-file" "hooks/workflow-state/state-io.js"
 d2099h_empty_state_file
+case_end
+
+case_begin "signals-normalization" "bin/workflow/record-complexity-evaluation"
 d2099h_signals_normalization
+case_end
+
+case_begin "signals-oversized" "bin/workflow/record-complexity-evaluation"
 d2099h_signals_oversized
+case_end

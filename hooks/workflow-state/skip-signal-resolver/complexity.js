@@ -20,13 +20,9 @@ function resolveStageLevels(level, signals, stored) {
   if (stored && typeof stored === "object" && !Array.isArray(stored)) {
     const keys = Object.keys(stored);
     const wellFormed =
-      keys.length === ROUTING_STAGES.length &&
+      !keys.some((k) => !ROUTING_STAGES.includes(k)) &&
       ROUTING_STAGES.every((s) => stored[s] === "high" || stored[s] === "low");
-    if (wellFormed) {
-      const out = {};
-      for (const s of ROUTING_STAGES) out[s] = stored[s];
-      return out;
-    }
+    if (wellFormed) return Object.assign({}, stored);
   }
   try {
     return Object.assign({}, deriveLegacyStageLevels(level, signals));

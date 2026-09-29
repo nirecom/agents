@@ -105,15 +105,14 @@ function assertStreamIntegrity(events) {
   }
 }
 
-// A `levels` map is carried into the read model only when it is exactly
-// { detail, write_tests, write_code } with high|low values — same check as
+// A `levels` map is carried into the read model only when its keys are exactly
+// ROUTING_STAGES with high|low values — same check as
 // events.js validateEvent. Anything else folds to null, so the read side
 // re-derives rather than partially trusting a malformed map.
 function isWellFormedStageLevels(levels) {
   if (!levels || typeof levels !== "object" || Array.isArray(levels)) return false;
   const { ROUTING_STAGES } = require("../complexity-routing");
-  const keys = Object.keys(levels);
-  if (keys.length !== ROUTING_STAGES.length) return false;
+  if (Object.keys(levels).some((k) => !ROUTING_STAGES.includes(k))) return false;
   return ROUTING_STAGES.every((s) => levels[s] === "high" || levels[s] === "low");
 }
 
