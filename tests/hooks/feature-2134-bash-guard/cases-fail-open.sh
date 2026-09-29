@@ -10,6 +10,7 @@
 # a throw inside judge() pass through (no output, the host's own prompt decides) -- never
 # allow, which would bypass that prompt. A flip to fail-closed must delete these rows.
 
+case_begin "fail-open-parse-failure" "hooks/lib/command-ir.js"
 o1_parse_failure() {
     local name cmd got
     while IFS='~' read -r name cmd; do
@@ -28,31 +29,38 @@ unclosed-ansic  ~ echo $'oops && ls
 TABLE
 }
 
-o1_parse_failure
+bg_batched o1_parse_failure
+case_end
 
 # O2: a null command reaches judge() without a deny. The Bash tool always supplies one, so
 # this is the shape a malformed or future payload takes.
+case_begin "fail-open-hostile-payload" "hooks/bash-guard.js"
 assert_eq "O2: a null tool_input.command does not deny" "passThrough" "$(probe judge-null-command '')"
 
 # O3: an input whose `command` getter throws does not deny either. Pattern 1 (negative
 # assertion): the claim is that nothing was blocked, not that no stack trace printed.
 assert_eq "O3: a throwing tool_input does not deny" "passThrough" "$(probe judge-throwing-input '')"
+case_end
 
 # O5: fail-open lands on passThrough and NEVER on allow (#2264). allow now skips the
 # permission prompt, so an exception that allowed would silently remove the safety net.
 # The throwing cwd getter is read after parse succeeds, i.e. inside the catch's reach on a
 # command that would otherwise be a self-script allow candidate.
+case_begin "fail-open-never-allow" "hooks/bash-guard/judge.js"
 for o5_mode in judge-null-command judge-throwing-input; do
     assert_not_contains "O5/$o5_mode: a fail-open verdict is never allow" "allow" "$(probe "$o5_mode" '')"
 done
 o5_cwd="$(probe judge-throwing-cwd 'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list')"
 assert_eq "O5/throwing-cwd: an exception reading cwd falls to passThrough, not allow" \
     "passThrough" "$o5_cwd"
+case_end
 
 # O4: fail-open is a FALLBACK, not the resting state -- a well-formed compound command on the
 # same path still denies. Without this row O1-O3 would pass against a guard that allows all.
+case_begin "fail-open-not-blanket" "hooks/bash-guard/judge.js"
 assert_eq "O4: a parseable compound command still denies (fail-open is not blanket allow)" \
     "deny" "$(verdict_of 'echo one; echo two')"
+case_end
 
 # SKIPPED: forcing parse() itself to throw from inside judge() to exercise the outer catch.
 # Because: parse() is required directly, so there is no seam to inject a fault through at

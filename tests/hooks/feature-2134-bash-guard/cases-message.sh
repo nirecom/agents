@@ -9,6 +9,7 @@
 # `bash <path>` invocation to use, and the rule that owns the policy. Each fragment below is
 # one thing the model would otherwise have to re-derive.
 
+case_begin "message-deny-fragments" "hooks/bash-guard/message.js"
 m1_message_fragments() {
     local name want got
     got="$(probe judge-message 'git status && ls')"
@@ -32,32 +33,41 @@ TABLE
 }
 
 m1_message_fragments
+case_end
 
 # M2: the message names the literal that tripped, not just "a forbidden literal". Two different
 # denies must not produce the same text, or the ALLOWED: line is decoration.
+case_begin "message-names-literal" "hooks/bash-guard/message.js"
 BG_HEREDOC_MSG="$(probe judge-message "$(mkcmd 'cat <<EOF\nx\nEOF')")"
 case "$BG_HEREDOC_MSG" in "<"*) BG_HEREDOC_MSG="" ;; esac
 assert_contains "M2: a heredoc deny names the heredoc literal" "heredoc" "$BG_HEREDOC_MSG"
 assert_not_contains "M2: a heredoc deny does not name an unrelated literal" \
     "chain-and" "$BG_HEREDOC_MSG"
+case_end
 
 # M3: a passThrough carries no message. A guard that narrates its silence is noise on every command.
-assert_eq "M3: a passThrough produces no message" "" "$(probe judge-message 'git status')"
+# `make build`: no class claims it (git status became an N5 allow in #2403).
+case_begin "message-pass-through-silent" "hooks/bash-guard/judge.js"
+assert_eq "M3: a passThrough produces no message" "" "$(probe judge-message 'make build')"
+case_end
 
 # M7: the three non-deny registries (#2264). Each is frozen, disjoint from REASON_CODES, and
 # BG-ALLOW-RULE is gone with the command-scoped exemption it attributed.
+case_begin "message-non-deny-registries" "hooks/bash-guard/reasons.js"
 m7_row() {
     ROWS=$((ROWS + 1))
     assert_eq "M7/$1: reasons.js exports the exact frozen registry" "$2" "$(probe "$1" '')"
 }
 m7_row pass-through-codes "INTERLOCK_QUIET=BG-INTERLOCK-QUIET,NO_HIT=BG-NO-HIT,PARSE_FAILURE=BG-PARSE-FAILURE,TOOL_OUT_OF_SCOPE=BG-TOOL-OUT-OF-SCOPE"
 m7_row notify-codes "SCRIPT_NO_INTERPRETER=BG-NOTIFY-SCRIPT-NO-INTERPRETER,SENTINEL_NO_ECHO=BG-NOTIFY-SENTINEL-NO-ECHO,SENTINEL_UNRECOGNIZED=BG-NOTIFY-SENTINEL-UNRECOGNIZED"
-m7_row allow-codes "SELF_BARE=BG-ALLOW-SELF-BARE,SELF_SCRIPT=BG-ALLOW-SELF-SCRIPT"
+m7_row allow-codes "READONLY_GENERIC=BG-ALLOW-READONLY-GENERIC,READONLY_GH=BG-ALLOW-READONLY-GH,READONLY_GIT=BG-ALLOW-READONLY-GIT,SELF_BARE=BG-ALLOW-SELF-BARE,SELF_SCRIPT=BG-ALLOW-SELF-SCRIPT"
 assert_not_contains "M7: BG-ALLOW-RULE is retired from every registry" "BG-ALLOW-RULE" \
     "$(probe pass-through-codes '')$(probe notify-codes '')$(probe allow-codes '')"
+case_end
 
 # M8: a notify message names the fix and ends with its code tag, and never echoes the command.
-m8_msg="$(probe judge-message '"<<WORKFLOW_MARK_STEP_m8canary_complete>>"')"
+case_begin "message-notify-text" "hooks/bash-guard/message.js"
+m8_msg="$(probe judge-message '"<''<WORKFLOW_MARK_STEP_m8canary_complete>>"')"
 ROWS=$((ROWS + 1))
 assert_contains "M8: the L1 notify message ends with its [bash-guard <code>] tag" \
     "[bash-guard BG-NOTIFY-SENTINEL-NO-ECHO]" "$m8_msg"
@@ -65,10 +75,12 @@ ROWS=$((ROWS + 1))
 assert_contains "M8: the L1 notify message tells the model to issue it through echo" "echo" "$m8_msg"
 ROWS=$((ROWS + 1))
 assert_not_contains "M8: the notify message does not echo the command text back" "m8canary" "$m8_msg"
+case_end
 
 # M4: every reason code lives in the BG- namespace. The workflow-gate tiers own T-A..T-E, and a
-# collision would make one code mean two things in the transcript.
+# collision would make one code mean two things in the transcript. BG_CODES is shared by M4 and M5.
 BG_CODES="$(probe reason-codes '')"
+case_begin "message-reason-code-namespace" "hooks/bash-guard/reasons.js"
 # Positive pin FIRST: without this, an empty BG_CODES (e.g. reason-codes mode missing or
 # returning "") would make both grep -c checks below report 0 and read as green for the wrong
 # reason -- a registry that lost every code would pass the same as a clean one.
@@ -103,6 +115,7 @@ assert_eq "M4: no bash-guard code collides with the workflow-gate T-A..T-E names
 ROWS=$((ROWS + 1))
 bg_nonprefixed="$(printf '%s' "$BG_CODES" | tr ',' '\n' | grep -cv '^BG-' || true)"
 assert_eq "M4: every reason code is BG-prefixed" "0" "$bg_nonprefixed"
+case_end
 
 # M5: the code a deny reports is one reasons.js declares -- judge.js must not invent a string
 # at the call site, which is how a code ends up in a transcript that no document explains.
@@ -111,6 +124,7 @@ assert_eq "M4: every reason code is BG-prefixed" "0" "$bg_nonprefixed"
 # "-" whenever `code` is null). Every real BG- code also contains a literal "-", so
 # `assert_contains ... "-"` passes identically either way -- false-green. Assert the exact
 # expected code and a strict shape that excludes the bare placeholder instead.
+case_begin "message-deny-code-declared" "hooks/bash-guard/judge.js"
 bg_deny_code="$(probe judge 'git status && ls' | awk -F'\t' '{print $2}')"
 [ -n "$bg_deny_code" ] || bg_deny_code="<NO-CODE>"
 ROWS=$((ROWS + 1))
@@ -126,11 +140,13 @@ else
     pass "M5: the deny's code is not the bare '-' placeholder"
 fi
 assert_contains "M5: the deny's code is declared in reasons.js" "$bg_deny_code" "$BG_CODES"
+case_end
 
 # M6: the escape-hatch line is really sourced from buildScriptEscapeHatch() ->
 # describeAllowedTargets(), not from message.js's catch-block fallback. A substring like
 # "scratchpad" appears in BOTH, so it proves nothing; pin a scratchpad root carrying a marker
 # segment that no fallback string could ever contain, and demand it verbatim.
+case_begin "message-escape-hatch-source" "hooks/bash-guard/message.js"
 BG_MARKER_SEG="bg-msg-marker-7f3a91"
 SCRATCHPAD="$(run_with_timeout 30 node -e 'const os=require("os"),p=require("path");process.stdout.write(p.join(os.tmpdir(),"claude",process.argv[1]))' "$BG_MARKER_SEG")"
 export SCRATCHPAD
@@ -150,6 +166,7 @@ assert_contains "M6: the deny message carries the exact resolved scratchpad path
 ROWS=$((ROWS + 1))
 assert_contains "M6: the deny message carries the marker segment itself (not a fallback)" \
     "$BG_MARKER_SEG" "$BG_MARKED_MSG"
+case_end
 
 # SKIPPED: asserting the message's exact wording or line order.
 # Because: wording is edited far more often than behaviour, and pinning it turns every copy

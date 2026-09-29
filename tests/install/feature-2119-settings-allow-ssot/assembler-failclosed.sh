@@ -21,13 +21,17 @@ t29_case() { # <case-id> -> "rc/state/reason" | sentinel
     have_lib || { missing_lib; return; }
     [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
     local dir target before after rcv state reason
-    dir="$(mk_fixture "t29-$1")"
-    mk_tool "$dir" bin/fx-tool env-bash
-    write_ssot "$dir" bin/fx-tool
-    write_settings "$dir" --
     # Every failure case is DEPLOYED HEALTHY FIRST: "left byte-identical" is only a claim when
-    # there is a previous deployed file to preserve.
-    [ "$1" = "healthy" ] || run_assemble "$dir"
+    # there is a previous deployed file to preserve. The healthy control is built from scratch
+    # with NO prior deploy, so its "written" verdict is about this run.
+    if [[ "$1" = "healthy" ]]; then
+        dir="$(mk_fixture "t29-$1")"
+        mk_tool "$dir" bin/fx-tool env-bash
+        write_ssot "$dir" bin/fx-tool
+        write_settings "$dir" --
+    else
+        dir="$(tpl_fixture "t29-$1" plain tpl_build_plain)"
+    fi
     case "$1" in
         no-base)       rm -f "$dir/settings.json" ;;
         allow-type)    printf '%s\n' '{ "permissions": { "allow": "Bash(not-an-array *)" } }' > "$dir/settings.json" ;;
@@ -87,13 +91,20 @@ t29_field() { # <slot> <n> -> field
     printf '%s' "$v" | cut -d'/' -f"$2"
 }
 
-t29_failclosed_table() {
+# Row runner shared by both T29 spans; each span feeds its own rows on stdin.
+t29_run_rows() {
     local id slot field want label
     while IFS='|' read -r id slot field want label; do
         [ -n "$id" ] || continue
         ROWS=$((ROWS + 1))
         assert_eq "T29[$id]: $label" "$want" "$(t29_field "$slot" "$field")"
-    done <<'T29_CASES'
+    done
+}
+
+t29_setup
+
+case_begin "t29-base-failclosed" "install/lib/settings-assembly.js"
+t29_run_rows <<'T29_CASES'
 nobase-rc|nobase|1|nonzero|a deleted base settings.json stops install/assemble-settings.js with a non-zero exit -- it is never created from scratch
 nobase-file|nobase|2|unchanged|and the previously deployed settings.json is left byte-identical, not truncated or half-rewritten
 nobase-why|nobase|3|reason-stated|the output names the cause, so the operator can fix it instead of guessing why the install failed
@@ -101,13 +112,18 @@ allowtype-rc|allowtype|1|nonzero|a base whose permissions.allow is not an array 
 allowtype-file|allowtype|2|unchanged|leaving the previous deployment in place
 ok-rc|ok|1|zero|POSITIVE CONTROL: a healthy fixture deploys and exits 0, so the rows above are not passing because everything fails
 ok-written|ok|2|written|and the deployed file exists afterwards
+T29_CASES
+case_end
+
+case_begin "t29-list-independence" "install/assemble-settings.js"
+t29_run_rows <<'T29_IND_CASES'
 ind-nossot|ind-nossot|1|zero|#2264: a deleted settings-allow-commands.txt no longer stops the deploy -- the list feeds bash-guard, not settings.json
 ind-bad|ind-bad|1|zero|an SSOT entry with no resolvable shebang no longer stops the deploy either
 ind-nocmd|ind-nocmd|1|zero|an SSOT entry naming a missing file no longer stops the deploy
 ind-nopath|ind-nopath|1|zero|a missing path-exposed-commands.txt no longer stops the deploy
 ind-pathdir|ind-pathdir|1|zero|a directory occupying path-exposed-commands.txt no longer stops the deploy (CPR-ORTH: every list input is independent of it)
-T29_CASES
-}
+T29_IND_CASES
+case_end
 
 # T36 -- WRITE FAILURE AT THE DESTINATION. Every T29 failure stops BEFORE the writer is
 # reached, so the writer's own error path -- the one where a truncate-then-write implementation
@@ -116,6 +132,7 @@ T29_CASES
 # MECHANISM: chmod 0444 on the already-deployed destination FILE. Node's writeFileSync into a
 # 0444 file throws EPERM and leaves the bytes intact, while a read-only PARENT DIRECTORY is not
 # honoured on Windows at all. A directory occupying the path leaves no prior file to compare.
+case_begin "t36-write-failure" "install/lib/settings-deploy.js"
 T36_MECH=""
 T36_ASM=""
 T36_OK=""
@@ -148,11 +165,7 @@ t36_case() { # <asm|ok> -> "rc/state/artifacts" | sentinel
     have_lib || { missing_lib; return; }
     [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
     local dir target home before after names_before names_after rcv state arts
-    dir="$(mk_fixture "t36-$1")"
-    mk_tool "$dir" bin/fx-tool env-bash
-    write_ssot "$dir" bin/fx-tool
-    write_settings "$dir" --
-    run_assemble "$dir"
+    dir="$(tpl_fixture "t36-$1" plain tpl_build_plain)"
     target="$(deployed_file "$dir")"
     home="$dir/home/.claude"
     before="$(file_digest "$target")"
@@ -211,7 +224,6 @@ ok-file|ok|2|MODIFIED|and the deployed file really does change, proving the writ
 T36_CASES
 }
 
-t29_setup
-t29_failclosed_table
 t36_setup
 t36_writefail_table
+case_end

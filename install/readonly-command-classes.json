@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "delegate": { "git": "git-pure-read", "gh": "gh-read" },
+  "generic": {
+    "ls": { "syntax": "getopt" },
+    "cat": { "syntax": "getopt" },
+    "head": { "syntax": "getopt" },
+    "tail": { "syntax": "getopt" },
+    "wc": { "syntax": "getopt" },
+    "stat": { "syntax": "getopt" },
+    "pwd": { "syntax": "getopt" },
+    "uname": { "syntax": "getopt" },
+    "which": { "syntax": "getopt" },
+    "type": { "syntax": "getopt" },
+    "df": { "syntax": "getopt", "denyFlags": ["--sync"] },
+    "du": { "syntax": "getopt" },
+    "grep": { "syntax": "getopt" },
+    "file": { "syntax": "getopt", "denyFlags": ["-C", "--compile", "-m", "-S", "--no-sandbox", "-z", "--uncompress", "-Z", "--uncompress-noreport", "-p", "--preserve-date"] },
+    "tree": { "syntax": "getopt", "denyFlags": ["-o", "-R"] },
+    "rg": { "syntax": "getopt", "denyFlags": ["--pre", "--hostname-bin", "-z", "--search-zip"] },
+    "ag": { "syntax": "getopt", "denyFlags": ["--pager"] },
+    "find": { "syntax": "find" },
+    "command": { "syntax": "getopt", "requireLeading": ["-v", "-V"] }
+  }
+}

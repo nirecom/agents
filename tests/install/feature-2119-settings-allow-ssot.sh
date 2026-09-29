@@ -12,6 +12,7 @@ set -uo pipefail
 # `node bin/workflow/next-step` the model actually issues. Measured denials confirmed it.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 # THE ROOT CAUSE has two halves. (1) Each spelling family had only its argument-bearing form,
 # so the argument-less invocation had no rule at all. (2) The rules lived in the repository's
@@ -45,20 +46,12 @@ LIB_REL_LIST="install/lib/settings-assembly.js, settings-deploy.js"
 # as untouched even though these cases now really do deploy (into fixture-private homes).
 # T53 only READS that file.
 
-PASS=0
-FAIL=0
-SKIP=0
-
 # LAYER. Static/structural, plus fixture-driven integration that never touches the real tree
 # or the real home: the install layer is COPIED into a temp fixture, run with cwd set there,
 # and pointed at a fixture-private HOME per subprocess.
 
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+# fail/assert_eq stay local, after the harness: the detail line and <name> <want> <got> order differ.
 fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
-skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
-# Label-only markers (tests/lib/harness.sh is not sourced): targets are for static grep.
-case_begin() { :; }
-case_end() { :; }
 
 # SKIPPED: asserting that bash-guard's allow actually stops the permission prompt in a live
 #          Claude Code session.
@@ -118,6 +111,25 @@ run_with_timeout() {
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
+# BATCH EVALUATION. One process answers a whole table as NUL-terminated records. Run in the
+# CURRENT shell (never inside `$(...)`): a short record count means a row went unanswered, so
+# the suite stops loudly rather than letting a missing slot compare as an empty string.
+NUL_SEQ=0
+NUL_RECS=()
+nul_records() { # <label> <want-count> <cmd>... -> NUL_RECS
+    local label="$1" want="$2" out
+    shift 2
+    NUL_SEQ=$((NUL_SEQ + 1))
+    out="$TMPROOT/nul-$NUL_SEQ.bin"
+    NUL_RECS=()
+    "$@" > "$out" 2> "$out.err"
+    mapfile -d '' -t NUL_RECS < "$out"
+    if [[ "${#NUL_RECS[@]}" -ne "$want" ]]; then
+        echo "FAIL: harness -- $label returned ${#NUL_RECS[@]} records, want $want: $(head -c 400 "$out.err")"
+        exit 1
+    fi
+}
+
 # The SSOT reader, shared by every structural case: one entry per line, `#` comments and
 # blank lines dropped, trailing whitespace stripped -- the same shape the sibling
 # install/path-exposed-commands.txt consumer reads.
@@ -167,10 +179,14 @@ canary_setup
 . "$PART_DIR/no-generated-spellings.sh"  # T51 (one synthetic entry)
 . "$PART_DIR/real-spellings-gone.sh"     # T52 (every real SSOT entry) + T53 (real deployment); not ROWS-counted
 
+case_begin "t22-home-canary" "install/lib/settings-deploy.js"
 t22_home_canary
+case_end
 
+case_begin "t10-row-budget" "install/settings-allow-commands.txt"
 assert_eq "T10: every table-driven loop executed its full row count (a short count means an empty or unreachable table reported green)" \
     "$ROWS_EXPECTED" "$ROWS"
+case_end
 
 echo ""
 echo "Total: $PASS passed, $FAIL failed, $SKIP skipped"

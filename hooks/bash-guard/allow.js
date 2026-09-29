@@ -70,4 +70,4 @@ function matchSelfScript(ir, ctx, opts) {
   }
 }
 
-module.exports = { matchSelfScript };
+module.exports = { matchSelfScript, isPlainSingleCommand };

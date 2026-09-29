@@ -33,9 +33,9 @@ CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"; export CLAUDE_WORKFLOW_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CONFIRM_TESTS CONFIRM_CODE
 
-PASS=0; FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+AGENTS_DIR="$REPO_ROOT"
+# shellcheck source=../../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1 -- expected [$2] got [$3]"; fi; }
 check_contains() {
   case "$3" in *"$2"*) pass "$1" ;; *) fail "$1 -- expected [$2] in: $3" ;; esac
@@ -69,17 +69,6 @@ run_facts() {
   AGENTS_CONFIG_DIR="$(nrm "$1")" run_with_timeout node "$RSF" --session "$2" >"$OUTF" 2>"$ERRF" || RC=$?
   OUT="$(cat "$OUTF" 2>/dev/null || echo "")"; ERR="$(cat "$ERRF" 2>/dev/null || echo "")"
 }
-run_facts_pd() {
-  RC=0
-  if [ "$3" = "__UNSET__" ]; then
-    ( unset WORKFLOW_PLANS_DIR
-      AGENTS_CONFIG_DIR="$(nrm "$1")" run_with_timeout node "$RSF" --session "$2" ) >"$OUTF" 2>"$ERRF" || RC=$?
-  else
-    WORKFLOW_PLANS_DIR="$3" AGENTS_CONFIG_DIR="$(nrm "$1")" \
-      run_with_timeout node "$RSF" --session "$2" >"$OUTF" 2>"$ERRF" || RC=$?
-  fi
-  OUT="$(cat "$OUTF" 2>/dev/null || echo "")"; ERR="$(cat "$ERRF" 2>/dev/null || echo "")"
-}
 val_of() { printf '%s\n' "$OUT" | sed -n "s/^$1=//p" | head -n 1; }
 write_env() {
   : > "$CFG/.env"
@@ -90,9 +79,74 @@ write_env() {
   esac
 }
 
+# One node: the (c) complexity fixtures (cx1, cx2, cx4 -- one file per session id; cx3
+# deliberately has none) plus two pure probes, HOME_PD for (b) v and GDEF for (d).
+VFIX_OUT="$(run_with_timeout node -e '
+  const fs = require("fs"), path = require("path"), os = require("os");
+  const put = (sid, body) => { try { fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR,
+    sid + ".json"), JSON.stringify({ steps: {}, complexity_evaluation: body })); }
+    catch (e) { process.stderr.write("fixture " + sid + ": " + e.message + "\n"); } };
+  const at = "2026-09-04T00:00:00.000Z";
+  put("cx1", { level: "high", levels: { detail: "high", write_tests: "high", write_code: "low" },
+    signals: ["S1-multi-file", "S5-breaking"], recorded_at: at });
+  put("cx2", { level: "low", levels: { detail: "low", write_tests: "low", write_code: "low" },
+    signals: [], recorded_at: at });
+  put("cx4", { level: "high", signals: ["S1-multi-file"], recorded_at: at });
+  let gdef = "MODULE_LOAD_FAILED";
+  try {
+    const m = require(process.env.KEYS_MOD);
+    gdef = "NO_GATE_DEFAULT_TABLE";
+    for (const v of Object.values(m)) {
+      if (v && typeof v === "object" && !Array.isArray(v) && typeof v.CONFIRM_TESTS === "string") {
+        gdef = v.CONFIRM_TESTS + " " + String(v.CONFIRM_CODE); break;
+      }
+    }
+  } catch (e) { gdef = "MODULE_LOAD_FAILED"; }
+  process.stdout.write("HOME_PD=" + path.join(os.homedir(), ".workflow-plans") + "\nGDEF=" + gdef + "\n");' || echo "")"
+HOME_PD="$(printf '%s\n' "$VFIX_OUT" | sed -n 's/^HOME_PD=//p')"
+GDEF="$(printf '%s\n' "$VFIX_OUT" | sed -n 's/^GDEF=//p')"
+[ -n "$GDEF" ] || GDEF="MODULE_LOAD_FAILED"
+DEF_T="${GDEF%% *}"
+
+# (e) adoption and (f) round-trip checks, run once per consumer SKILL.md.
+check_adoption() {
+  local f="$1" n
+  n="$(basename "$(dirname "$f")")"
+  if [ "$(grep -cF -- "read-session-facts" "$f" 2>/dev/null || true)" -ge 1 ]; then
+    pass "(e) $n adopts the bundled reader"
+  else fail "(e) $n adopts the bundled reader -- literal not found"; fi
+  if [ "$(grep -cF -- "PLANS_DIR=NONE" "$f" 2>/dev/null || true)" -ge 1 ]; then
+    pass "(e) $n documents the PLANS_DIR=NONE halt"
+  else fail "(e) $n documents the PLANS_DIR=NONE halt -- literal not found"; fi
+}
+count_lit() { grep -oF -- "$2" "$1" 2>/dev/null | wc -l | tr -d ' '; }
+CONFIRM_CALL='"$AGENTS_CONFIG_DIR/bin/confirm-off"'
+check_round_trips() {
+  local f="$1" n
+  n="$(basename "$(dirname "$f")")"
+  check "(f) $n issues the bundled read exactly once" 1 "$(count_lit "$f" "bin/workflow/read-session-facts")"
+  check "(f) $n no longer resolves the plans dir on its own" 0 "$(count_lit "$f" "resolve-plans-dir")"
+  check "(f) $n no longer reads the complexity record on its own" 0 \
+    "$(count_lit "$f" "read-complexity-evaluation")"
+  check "(f) $n keeps exactly one confirm-off call -- the post-action probe" 1 \
+    "$(count_lit "$f" "$CONFIRM_CALL")"
+  # Non-vacuity: an unrelated CLI the migration must NOT touch is still invoked, so a
+  # `grep` that silently matched nothing cannot make the three zeros above green.
+  if [ "$(count_lit "$f" "derive-complexity-level")" -ge 1 ]; then
+    pass "(f) $n control -- the low-signal fallback still calls derive-complexity-level"
+  else fail "(f) $n control -- derive-complexity-level literal not found"; fi
+  # Ordering: the bundled read is the up-front call, the surviving probe comes after it.
+  FACTS_LN="$(grep -nF -- "bin/workflow/read-session-facts" "$f" 2>/dev/null | head -n 1 | cut -d: -f1)"
+  PROBE_LN="$(grep -nF -- "$CONFIRM_CALL" "$f" 2>/dev/null | head -n 1 | cut -d: -f1)"
+  if [ -n "$FACTS_LN" ] && [ -n "$PROBE_LN" ] && [ "$FACTS_LN" -lt "$PROBE_LN" ]; then
+    pass "(f) $n reads the bundle before the post-action probe"
+  else fail "(f) $n reads the bundle before the post-action probe -- facts@$FACTS_LN probe@$PROBE_LN"; fi
+}
+
 echo "=== (a) gate mapping: .env value -> ON/OFF/ERROR, for both gates ==="
 # Columns: key|.env value|expected. `Off` proves case-insensitivity; `yes` and the empty
 # string prove the fail-safe direction is ON (never silently skip a confirmation).
+case_begin "a-gate-matrix" "bin/workflow/lib/session-facts/gate-facts.js"
 run_gate_matrix() {
   local k v want got direct
   while IFS='|' read -r k v want; do
@@ -123,8 +177,10 @@ CONFIRM_CODE|__UNSET__|ON
 CONFIRM_CODE|yes|ON
 CONFIRM_CODE|__EMPTY__|ON
 MATRIX
+case_end
 
 echo ""
+case_begin "a-gate-independence-and-error" "bin/workflow/lib/session-facts/gate-facts.js"
 printf 'CONFIRM_TESTS=off\nCONFIRM_CODE=on\n' > "$CFG/.env"
 run_facts "$CFG" "gi"
 check "(a) independence: TESTS=off and CODE=on are not swapped -- TESTS" "OFF" "$(val_of GATE_CONFIRM_TESTS)"
@@ -133,9 +189,11 @@ run_facts "$CFG_BARE" "ge"
 check "(a) ERROR: no get-config-var -- TESTS" "ERROR" "$(val_of GATE_CONFIRM_TESTS)"
 check "(a) ERROR: no get-config-var -- CODE" "ERROR" "$(val_of GATE_CONFIRM_CODE)"
 check "(a) ERROR is expressed as a value, exit stays 0" 0 "$RC"
+case_end
 
 # One-sided failure. A Promise.all implementation rejects wholesale and loses the gate
 # that DID resolve; Promise.allSettled keeps it. This cell is the difference.
+case_begin "a-one-sided-gate-failure" "bin/workflow/lib/session-facts/gate-facts.js"
 CFG_HALF="$TMPDIR_BASE/cfg-half"; mk_cfg "$CFG_HALF"
 printf 'CONFIRM_TESTS=off\nCONFIRM_CODE=off\n' > "$CFG_HALF/.env"
 mv "$CFG_HALF/bin/get-config-var" "$CFG_HALF/bin/get-config-var-real"
@@ -150,9 +208,22 @@ run_facts "$CFG_HALF" "gh"
 check "(a) one-sided failure: the healthy gate keeps its value" "OFF" "$(val_of GATE_CONFIRM_TESTS)"
 check "(a) one-sided failure: only the broken gate is ERROR" "ERROR" "$(val_of GATE_CONFIRM_CODE)"
 check "(a) one-sided failure: exit stays 0" 0 "$RC"
+case_end
 
 echo ""
+case_begin "b-plans-dir-resolution" "bin/workflow/lib/session-facts/collect.js"
 echo "=== (b) PLANS_DIR resolution and its fail-closed contract ==="
+run_facts_pd() {
+  RC=0
+  if [ "$3" = "__UNSET__" ]; then
+    ( unset WORKFLOW_PLANS_DIR
+      AGENTS_CONFIG_DIR="$(nrm "$1")" run_with_timeout node "$RSF" --session "$2" ) >"$OUTF" 2>"$ERRF" || RC=$?
+  else
+    WORKFLOW_PLANS_DIR="$3" AGENTS_CONFIG_DIR="$(nrm "$1")" \
+      run_with_timeout node "$RSF" --session "$2" >"$OUTF" 2>"$ERRF" || RC=$?
+  fi
+  OUT="$(cat "$OUTF" 2>/dev/null || echo "")"; ERR="$(cat "$ERRF" 2>/dev/null || echo "")"
+}
 PD_A="$(nrm "$TMPDIR_BASE/pd-env")"; mkdir -p "$TMPDIR_BASE/pd-env"
 PD_B="$(nrm "$TMPDIR_BASE/pd-dotenv")"; mkdir -p "$TMPDIR_BASE/pd-dotenv"
 printf 'WORKFLOW_PLANS_DIR=%s\n' "$PD_B" > "$CFG_PD/.env"
@@ -172,9 +243,6 @@ check_contains "(b) iv: stderr names the absolute-path requirement" "absolute" "
 # Fixture note: this one cell deliberately runs with WORKFLOW_PLANS_DIR unset while
 # CLAUDE_WORKFLOW_DIR is pinned. read-session-facts only reads, so nothing can be
 # written into the developer's real plans dir.
-HOME_PD="$(run_with_timeout node -e '
-  const os = require("os"), path = require("path");
-  process.stdout.write(path.join(os.homedir(), ".workflow-plans"));')"
 run_facts_pd "$CFG" "pd5" "__UNSET__"
 check "(b) v: unset falls back to the home plans dir" "$(norm_path "$HOME_PD")" "$(norm_path "$(val_of PLANS_DIR)")"
 check "(b) v: exit 0" 0 "$RC"
@@ -202,24 +270,18 @@ case "$RC" in
     fail "(b) vi: unexpected exit $RC -- neither the exit-3 fail-closed path nor a clean exit-0 normalization"
     ;;
 esac
+case_end
 
 echo ""
+case_begin "c-persisted-complexity" "bin/workflow/lib/session-facts/collect.js"
 echo "=== (c) persisted complexity, read per stage without cross-talk ==="
-mk_cx() {
-  SID="$1" BODY="$2" run_with_timeout node -e '
-    const fs = require("fs"), path = require("path");
-    const body = JSON.parse(process.env.BODY);
-    fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.SID + ".json"),
-      JSON.stringify({ steps: {}, complexity_evaluation: body }));'
-}
-mk_cx cx1 '{"level":"high","levels":{"detail":"high","write_tests":"high","write_code":"low"},"signals":["S1-multi-file","S5-breaking"],"recorded_at":"2026-09-04T00:00:00.000Z"}'
+# cx1/cx2/cx4 state fixtures are written by the batched fixture node above (a).
 run_facts "$CFG" cx1
 check "(c) i: write_tests level" "high" "$(val_of COMPLEXITY_LEVEL_write_tests)"
 check "(c) i: write_code level is NOT the write_tests level" "low" "$(val_of COMPLEXITY_LEVEL_write_code)"
 check "(c) i: signals are the recorded csv" "S1-multi-file,S5-breaking" "$(val_of COMPLEXITY_SIGNALS)"
 DIRECT_WT="$(run_with_timeout node "$RCE" --session cx1 --stage write_tests 2>/dev/null | sed -n 's/^level=//p')"
 check "(c) i: agrees with read-complexity-evaluation --stage write_tests" "$DIRECT_WT" "$(val_of COMPLEXITY_LEVEL_write_tests)"
-mk_cx cx2 '{"level":"low","levels":{"detail":"low","write_tests":"low","write_code":"low"},"signals":[],"recorded_at":"2026-09-04T00:00:00.000Z"}'
 run_facts "$CFG" cx2
 check "(c) ii: empty signals read as the lowercase none of the existing reader" "none" "$(val_of COMPLEXITY_SIGNALS)"
 check "(c) ii: levels still resolve" "low" "$(val_of COMPLEXITY_LEVEL_write_tests)"
@@ -241,7 +303,6 @@ printf '%s\n' \
   '  }' \
   '  return m;' \
   '};' > "$STUB"
-mk_cx cx4 '{"level":"high","signals":["S1-multi-file"],"recorded_at":"2026-09-04T00:00:00.000Z"}'
 RC=0
 AGENTS_CONFIG_DIR="$(nrm "$CFG")" run_with_timeout node --require "$STUB" "$RSF" \
   --session cx4 >"$OUTF" 2>"$ERRF" || RC=$?
@@ -249,50 +310,43 @@ OUT="$(cat "$OUTF" 2>/dev/null || echo "")"
 check "(c) iv: underivable per-stage view -- write_tests" "NONE" "$(val_of COMPLEXITY_LEVEL_write_tests)"
 check "(c) iv: underivable per-stage view -- write_code" "NONE" "$(val_of COMPLEXITY_LEVEL_write_code)"
 check "(c) iv: degradation is a value, not an exit code" 0 "$RC"
+case_end
 
 echo ""
 echo "=== (d) the post-action gate probe is NOT served from the bundled snapshot ==="
 # WT-8 / WCD-6 run AFTER a long subagent. A human may flip CONFIRM_* to on in between,
 # and re-serving the pre-subagent value would silently skip the review the human asked
 # for -- a fail-OPEN error on a gate. Hence the probe stays an independent call.
+case_begin "d-post-action-probe-not-snapshot" "bin/workflow/read-session-facts"
 printf 'CONFIRM_TESTS=off\n' > "$CFG/.env"
 run_facts "$CFG" nc1
 check "(d) the bundled reader saw the pre-change value" "OFF" "$(val_of GATE_CONFIRM_TESTS)"
 printf 'CONFIRM_TESTS=on\n' > "$CFG/.env"
 LATE="$(AGENTS_CONFIG_DIR="$(nrm "$CFG")" run_with_timeout bash "$CFG/bin/confirm-off" CONFIRM_TESTS on 2>/dev/null || true)"
 check "(d) the later probe reports the NEW value" "ON" "$LATE"
-GDEF="$(run_with_timeout node -e '
-  (function () {
-    try {
-      const m = require(process.env.KEYS_MOD);
-      for (const v of Object.values(m)) {
-        if (v && typeof v === "object" && !Array.isArray(v) && typeof v.CONFIRM_TESTS === "string") {
-          process.stdout.write(v.CONFIRM_TESTS + " " + String(v.CONFIRM_CODE)); return;
-        }
-      }
-      process.stdout.write("NO_GATE_DEFAULT_TABLE");
-    } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }
-  })();' 2>/dev/null || echo "MODULE_LOAD_FAILED")"
+case_end
+case_begin "d-gate-defaults-table" "bin/workflow/lib/session-facts/keys.js"
 check "(d) keys.js owns the gate defaults table" "on on" "$GDEF"
-DEF_T="${GDEF%% *}"
+case_end
+case_begin "d-write-tests-wt8-probe" "skills/write-tests/SKILL.md"
 check "(d) write-tests keeps exactly one WT-8 probe, at the keys.js default" 1 \
   "$(grep -cF -- "confirm-off\" CONFIRM_TESTS $DEF_T" "$WT_SKILL" 2>/dev/null || true)"
+case_end
+case_begin "d-write-code-wcd6-probe" "skills/write-code/SKILL.md"
 check "(d) write-code keeps exactly one WCD-6 probe, at the keys.js default" 1 \
   "$(grep -cF -- "confirm-off\" CONFIRM_CODE $DEF_T" "$WC_SKILL" 2>/dev/null || true)"
+case_end
 
 echo ""
 echo "=== (e) the caller-side stop contract is written down, not just intended ==="
 # exit 3 only helps if the prompt tells the model to stop. Pin the prose so a future
 # edit cannot quietly drop it and leave the model building NONE/<sid>-... paths.
-for f in "$WT_SKILL" "$WC_SKILL"; do
-  n="$(basename "$(dirname "$f")")"
-  if [ "$(grep -cF -- "read-session-facts" "$f" 2>/dev/null || true)" -ge 1 ]; then
-    pass "(e) $n adopts the bundled reader"
-  else fail "(e) $n adopts the bundled reader -- literal not found"; fi
-  if [ "$(grep -cF -- "PLANS_DIR=NONE" "$f" 2>/dev/null || true)" -ge 1 ]; then
-    pass "(e) $n documents the PLANS_DIR=NONE halt"
-  else fail "(e) $n documents the PLANS_DIR=NONE halt -- literal not found"; fi
-done
+case_begin "e-write-tests-stop-contract" "skills/write-tests/SKILL.md"
+check_adoption "$WT_SKILL"
+case_end
+case_begin "e-write-code-stop-contract" "skills/write-code/SKILL.md"
+check_adoption "$WC_SKILL"
+case_end
 
 echo ""
 echo "=== (f) the round trips are actually GONE from the primary path ==="
@@ -301,28 +355,12 @@ echo "=== (f) the round trips are actually GONE from the primary path ==="
 # keeping all three legacy calls. So count the call sites. Exactly one bundled read, zero
 # of each superseded lookup, and exactly one surviving confirm-off -- the deliberate
 # post-action gate probe (d) requires, counted separately and never folded in.
-count_lit() { grep -oF -- "$2" "$1" 2>/dev/null | wc -l | tr -d ' '; }
-CONFIRM_CALL='"$AGENTS_CONFIG_DIR/bin/confirm-off"'
-for f in "$WT_SKILL" "$WC_SKILL"; do
-  n="$(basename "$(dirname "$f")")"
-  check "(f) $n issues the bundled read exactly once" 1 "$(count_lit "$f" "bin/workflow/read-session-facts")"
-  check "(f) $n no longer resolves the plans dir on its own" 0 "$(count_lit "$f" "resolve-plans-dir")"
-  check "(f) $n no longer reads the complexity record on its own" 0 \
-    "$(count_lit "$f" "read-complexity-evaluation")"
-  check "(f) $n keeps exactly one confirm-off call -- the post-action probe" 1 \
-    "$(count_lit "$f" "$CONFIRM_CALL")"
-  # Non-vacuity: an unrelated CLI the migration must NOT touch is still invoked, so a
-  # `grep` that silently matched nothing cannot make the three zeros above green.
-  if [ "$(count_lit "$f" "derive-complexity-level")" -ge 1 ]; then
-    pass "(f) $n control -- the low-signal fallback still calls derive-complexity-level"
-  else fail "(f) $n control -- derive-complexity-level literal not found"; fi
-  # Ordering: the bundled read is the up-front call, the surviving probe comes after it.
-  FACTS_LN="$(grep -nF -- "bin/workflow/read-session-facts" "$f" 2>/dev/null | head -n 1 | cut -d: -f1)"
-  PROBE_LN="$(grep -nF -- "$CONFIRM_CALL" "$f" 2>/dev/null | head -n 1 | cut -d: -f1)"
-  if [ -n "$FACTS_LN" ] && [ -n "$PROBE_LN" ] && [ "$FACTS_LN" -lt "$PROBE_LN" ]; then
-    pass "(f) $n reads the bundle before the post-action probe"
-  else fail "(f) $n reads the bundle before the post-action probe -- facts@$FACTS_LN probe@$PROBE_LN"; fi
-done
+case_begin "f-write-tests-round-trips" "skills/write-tests/SKILL.md"
+check_round_trips "$WT_SKILL"
+case_end
+case_begin "f-write-code-round-trips" "skills/write-code/SKILL.md"
+check_round_trips "$WC_SKILL"
+case_end
 
 echo ""
 echo "=== Results ==="

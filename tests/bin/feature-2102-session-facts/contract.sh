@@ -31,9 +31,9 @@ CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"; export CLAUDE_WORKFLOW_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 
-PASS=0; FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+AGENTS_DIR="$REPO_ROOT"
+# shellcheck source=../../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1 -- expected [$2] got [$3]"; fi; }
 check_not_contains() {
   case "$3" in *"$2"*) fail "$1 -- did NOT expect [$2] in: $3" ;; *) pass "$1" ;; esac
@@ -97,31 +97,38 @@ check_shape() {
 # expectation from keys.js would make the test agree with any edit, including a wrong one.
 EXPECTED_KEYS="FACTS_VERSION SESSION_ID PLANS_DIR GATE_CONFIRM_TESTS GATE_CONFIRM_CODE COMPLEXITY_LEVEL_write_tests COMPLEXITY_LEVEL_write_code COMPLEXITY_SIGNALS "
 
+# One node: the C1 keys probe plus every state fixture (C2, C2u, C3c; one file per
+# session id, so none can see another). Prints "KEYS=<list>" for C1.
+UUID_SID="b923a2da-5f5d-494b-bfb3-568dce3bf8e9"
+FIX_OUT="$(UUID_SID_LIT="$UUID_SID" run_with_timeout node -e '
+  const fs = require("fs"), path = require("path"), wf = process.env.CLAUDE_WORKFLOW_DIR;
+  let keys;
+  try { keys = (require(process.env.KEYS_MOD).FACTS_V1_KEYS || []).join(" ") + " "; }
+  catch (e) { keys = "MODULE_LOAD_FAILED"; }
+  const cx = (signals) => ({ level: "high",
+    levels: { detail: "high", write_tests: "high", write_code: "low" },
+    signals, recorded_at: "2026-09-04T00:00:00.000Z" });
+  const put = (sid, body) => { try { fs.writeFileSync(path.join(wf, sid + ".json"), JSON.stringify(body)); }
+    catch (e) { process.stderr.write("fixture " + sid + ": " + e.message + "\n"); } };
+  put("c2", { steps: {}, complexity_evaluation: cx(["S1-multi-file", "S2-architecture"]) });
+  put(process.env.UUID_SID_LIT, { steps: {}, complexity_evaluation: cx(["S1-multi-file"]) });
+  put("c3nocx", { steps: {} });
+  process.stdout.write("KEYS=" + keys + "\n");' || echo "")"
+KEYS_JS="$(printf '%s\n' "$FIX_OUT" | sed -n 's/^KEYS=//p')"
+[ -n "$KEYS_JS" ] || KEYS_JS="MODULE_LOAD_FAILED"
+
+case_begin "C1-keys-witness" "bin/workflow/lib/session-facts/keys.js"
 echo "=== C1: keys.js is the implementation-side witness of the same list ==="
-KEYS_JS="$(run_with_timeout node -e '
-  try {
-    const m = require(process.env.KEYS_MOD);
-    process.stdout.write((m.FACTS_V1_KEYS || []).join(" ") + " ");
-  } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }' 2>/dev/null || echo "MODULE_LOAD_FAILED")"
 check "C1a: FACTS_V1_KEYS matches the independently retyped list, in order" "$EXPECTED_KEYS" "$KEYS_JS"
 check "C1b: the list is exactly eight keys" 8 "$(printf '%s' "$EXPECTED_KEYS" | wc -w | tr -d ' ')"
+case_end
 
 echo ""
+case_begin "C2-typical-session-shape" "bin/workflow/lib/session-facts/collect.js"
 echo "=== C2: a typical session -- full key set, in order, FACTS_VERSION first ==="
 # Typical = a resolvable PLANS_DIR, a recorded complexity evaluation, both gates
 # answerable. This is the shape the reader will actually meet in write-tests.
-run_with_timeout node -e '
-  const fs = require("fs"), path = require("path");
-  const steps = {};
-  fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, "c2.json"), JSON.stringify({
-    steps,
-    complexity_evaluation: {
-      level: "high",
-      levels: { detail: "high", write_tests: "high", write_code: "low" },
-      signals: ["S1-multi-file", "S2-architecture"],
-      recorded_at: "2026-09-04T00:00:00.000Z",
-    },
-  }));'
+# (state fixture c2.json written by the batched fixture node above C1)
 run_facts "$CFG_FULL" --session c2
 check "C2a: exits 0" 0 "$RC"
 check "C2b: the emitted keys match the expected list, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
@@ -137,31 +144,24 @@ check_shape "C2i" "$OUTF"
 check "C2j: control -- strict_keys_of names an injected banner line" \
   "FACTS_VERSION BADLINE[WARNING: spoofed] SESSION_ID " \
   "$(strict_keys_of "$(printf 'FACTS_VERSION=1\nWARNING: spoofed\nSESSION_ID=c2')")"
+case_end
 
 echo ""
+case_begin "C2u-uuid-session-accepted" "bin/workflow/read-session-facts"
 echo "=== C2u: a UUID-shaped --session id (the real CLAUDE_SESSION_ID shape) is accepted ==="
 # Every other fixture in this file is pure alphanumeric ("c2", "c3nostate", ...); a
 # regression narrowing SESSION_ID_RE to reject hyphens would leave all of them green
 # while rejecting 100% of real sessions -- CLAUDE_SESSION_ID is always a UUID. This is
 # the accept-side counterpart of security.sh S1's reject table (CPR-ORTH).
-UUID_SID="b923a2da-5f5d-494b-bfb3-568dce3bf8e9"
-UUID_SID_LIT="$UUID_SID" run_with_timeout node -e '
-  const fs = require("fs"), path = require("path");
-  fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.UUID_SID_LIT + ".json"), JSON.stringify({
-    steps: {},
-    complexity_evaluation: {
-      level: "high",
-      levels: { detail: "high", write_tests: "high", write_code: "low" },
-      signals: ["S1-multi-file"],
-      recorded_at: "2026-09-04T00:00:00.000Z",
-    },
-  }));'
+# (UUID_SID and its state fixture are set up by the batched fixture node above C1)
 run_facts "$CFG_FULL" --session "$UUID_SID"
 check "C2u-a: a UUID session id exits 0 (SESSION_ID_RE accepts hyphens)" 0 "$RC"
 check "C2u-b: the emitted keys match the expected list, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check "C2u-c: the UUID session id is echoed back verbatim" "SESSION_ID=$UUID_SID" "$(printf '%s\n' "$OUT" | sed -n '2p')"
+case_end
 
 echo ""
+case_begin "C3-key-set-never-shrinks" "bin/workflow/lib/session-facts/collect.js"
 echo "=== C3: the key set never shrinks -- three degraded fixtures ==="
 # Values may degrade to NONE/ERROR; keys may not disappear. A consumer that indexes the
 # output by key must never have to branch on a key's absence.
@@ -173,16 +173,14 @@ run_facts "$CFG_BARE" --session c3noenv
 check "C3b: no .env and no get-config-var -- exits 0" 0 "$RC"
 check "C3b2: no .env -- all eight keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3b3: no .env" "$OUTF"
-run_with_timeout node -e '
-  const fs = require("fs"), path = require("path");
-  fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, "c3nocx.json"),
-    JSON.stringify({ steps: {} }));'
 run_facts "$CFG_FULL" --session c3nocx
 check "C3c: state file without a complexity record -- exits 0" 0 "$RC"
 check "C3c2: no complexity record -- all eight keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3c3: no complexity record" "$OUTF"
+case_end
 
 echo ""
+case_begin "C4-static-key-names" "bin/workflow/lib/session-facts/keys.js"
 echo "=== C4: key names are static literals, not derived from ROUTING_STAGES ==="
 # Injected via --require so the CLI's own module graph sees the stub. If key names were
 # generated from the stage list, a fourth stage would add a ninth key.
@@ -209,8 +207,10 @@ AGENTS_CONFIG_DIR="$(nrm "$CFG_FULL")" run_with_timeout node --require "$STUB" "
 OUT="$(cat "$OUTF" 2>/dev/null || echo "")"
 check "C4b: under the stub the key set is unchanged" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check "C4c: under the stub the key count is still eight" 8 "$(printf '%s\n' "$OUT" | grep -c '=' || true)"
+case_end
 
 echo ""
+case_begin "C5-output-size-budget" "bin/workflow/read-session-facts"
 echo "=== C5: output size budget -- 512 bytes for a typical session ==="
 # #2102 exists to cut tokens. Measured today: ~243 bytes. The budget is the guard that
 # forces "are we reversing the point of this issue?" the next time a key is proposed.
@@ -220,8 +220,10 @@ if [ "${BYTES:-99999}" -le 512 ]; then pass "C5a: stdout is $BYTES bytes (budget
 else fail "C5a: stdout is $BYTES bytes -- over the 512-byte budget"; fi
 if [ "${BYTES:-0}" -gt 0 ]; then pass "C5b: the budget was measured on real output"
 else fail "C5b: the budget was measured on real output -- stdout was empty"; fi
+case_end
 
 echo ""
+case_begin "C6-structural-parallel-pin" "bin/workflow/lib/session-facts/gate-facts.js"
 echo "=== C6: the two gate children are launched in parallel (structural pin) ==="
 # Wall-clock is too environment-dependent to assert, so the pin is on the shape:
 # a synchronous spawn per gate serialises them. Measured on Windows for the eight-key
@@ -235,8 +237,10 @@ if [ -f "$GATE_FACTS_SRC" ]; then
 else
   fail "C6a: gate-facts.js exists -- not found at $GATE_FACTS_SRC"
 fi
+case_end
 
 echo ""
+case_begin "C6-behavioral-concurrency" "bin/workflow/lib/session-facts/gate-facts.js"
 echo "=== C6 (behavioral): the two gate children actually run concurrently ==="
 # C6a-c pin the STRUCTURE (no sync spawn literal); this proves the BEHAVIOR that
 # structural pin exists to protect. Both CONFIRM_TESTS and CONFIRM_CODE are answered by
@@ -320,8 +324,10 @@ if [ -f "$MARKERS_LIVE/CONFIRM_TESTS.start" ] && [ -f "$MARKERS_LIVE/CONFIRM_COD
 else
   fail "C6d: gate-facts.js not yet implemented -- the instrumented confirm-off children never ran (no barrier files under $MARKERS_LIVE); stderr: $ERR"
 fi
+case_end
 
 echo ""
+case_begin "C7-usage-errors-fail-closed" "bin/workflow/read-session-facts"
 echo "=== C7: usage errors are exit 1, silent on stdout, loud on stderr ==="
 # Fail-closed: a caller must never mistake a usage error for a fact set.
 for bad in "--session" "--session|c 2" "--session|c2|--bogus" "" ; do
@@ -343,8 +349,10 @@ for bad in "--session" "--session|c 2" "--session|c2|--bogus" "" ; do
   check_not_contains "C7: [$label] the exit 1 came from argument parsing" \
     "Cannot find module" "$(cat "$ERRF" 2>/dev/null || echo "")"
 done
+case_end
 
 echo ""
+case_begin "C8-no-env-secret-leak" "bin/workflow/lib/session-facts/collect.js"
 echo "=== C8: the snapshot carries the two gate verdicts, never the .env behind them ==="
 # The reader opens the config dir's .env to answer two boolean questions, and its output
 # is pasted into a transcript. Anything else living in that file -- API keys, tokens --
@@ -364,8 +372,10 @@ check_not_contains "C8d: the secret's variable name is absent too" "ANTHROPIC_AP
 # that the run under measurement actually produced the gate lines.
 check "C8e: the run really emitted the gate facts (non-vacuity)" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C8f" "$OUTF"
+case_end
 
 echo ""
+case_begin "C9-exit3-keeps-shape" "bin/workflow/lib/session-facts/collect.js"
 echo "=== C9: exit 3 degrades a VALUE -- the eight-line shape is unchanged ==="
 # The fail-closed PLANS_DIR path is the one place the CLI exits nonzero while still
 # reporting. A build that abandoned the contract there -- dropping keys, or appending a
@@ -379,8 +389,10 @@ check "C9c: PLANS_DIR is the degraded value, not a diagnostic" "PLANS_DIR=NONE" 
   "$(sed -n '3p' "$OUTF")"
 if [ -s "$ERRF" ]; then pass "C9d: the reason went to stderr"
 else fail "C9d: the reason went to stderr -- stderr was empty"; fi
+case_end
 
 echo ""
+case_begin "C10-idempotent-read-only" "bin/workflow/read-session-facts"
 echo "=== C10: the reader is idempotent and leaves the three dirs untouched ==="
 # A "reader" that writes is a hidden mutation on the hot path: two identical calls must
 # be indistinguishable, and the state, plans and config dirs must survive byte-identical.
@@ -423,6 +435,7 @@ if [ "$(dir_fp "$FP_TARGETS")" = "$FP_BEFORE" ]; then
   fail "C10f: control -- the fingerprint did not notice an added file"
 else pass "C10f: control -- the fingerprint notices an added file"; fi
 rm -f "$WORKFLOW_DIR/fp-control.txt"
+case_end
 
 echo ""
 echo "=== Results ==="
