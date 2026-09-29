@@ -46,10 +46,12 @@ skills/issue-close-finalize/SKILL.md|C2-ICF-initial|## Delegation — initial pa
 # names only one of them does not describe the real dependency chain.
 ICF_PHASES="initial loop_step finalize_terminal"
 
+# $1 (optional) = only the SERIAL_TABLE row whose rel equals it; all rows when omitted.
 group_serial_annotation() {
-    local rel label start end maxl phases path bf detail dlen ph missing ctx
+    local only="${1:-}" rel label start end maxl phases path bf detail dlen ph missing ctx
     while IFS='|' read -r rel label start end maxl phases; do
         [ -z "${rel// /}" ] && continue
+        [ -n "$only" ] && [ "$rel" != "$only" ] && continue
         path="$AGENTS_DIR/$rel"
         block_to_file "$label" "$path" "$start" "$end" "$maxl" || continue
         bf="$BLOCK_FILE"

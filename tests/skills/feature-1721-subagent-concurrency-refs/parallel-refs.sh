@@ -24,10 +24,12 @@ shared_ref_context() {
     awk -v p="$SHARED_REL" 'index($0, p) { n = 3 } n > 0 { print; n-- }' "$1"
 }
 
+# $1 (optional) = only the PARALLEL_TABLE row whose rel equals it; all rows when omitted.
 group_parallel_refs() {
-    local rel label start end maxl path bf ctx
+    local only="${1:-}" rel label start end maxl path bf ctx
     while IFS='|' read -r rel label start end maxl; do
         [ -z "${rel// /}" ] && continue
+        [ -n "$only" ] && [ "$rel" != "$only" ] && continue
         path="$AGENTS_DIR/$rel"
         block_to_file "$label" "$path" "$start" "$end" "$maxl" || continue
         bf="$BLOCK_FILE"

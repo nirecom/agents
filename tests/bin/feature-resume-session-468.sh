@@ -13,12 +13,11 @@ CLI="$AGENTS_DIR/bin/resume-session-detect"
 # CLAUDE_ENV_FILE — every case below would then read the developer's live
 # session out of an empty fixture store and see only {"type":"none"}.
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
-PASS=0
-FAIL=0
 
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
+# Overrides the harness run_with_timeout: callers here pass no seconds argument.
 run_with_timeout() {
     if command -v timeout >/dev/null 2>&1; then
         timeout 120 "$@"
@@ -157,14 +156,60 @@ assert_stdout_contains() {
 }
 
 FRAG_DIR="$AGENTS_DIR/tests/bin/feature-resume-session-468"
-for frag in detect-routing skill-procedure-order lookahead-origin cross-session-injection cross-session-skill-contract from-boundary; do
-    if [[ ! -f "$FRAG_DIR/$frag.sh" ]]; then
-        fail "fragment missing: $FRAG_DIR/$frag.sh"
-        continue
-    fi
+
+case_begin "detect-routing" "bin/resume-session-detect"
+if [[ ! -f "$FRAG_DIR/detect-routing.sh" ]]; then
+    fail "fragment missing: $FRAG_DIR/detect-routing.sh"
+else
     # shellcheck source=/dev/null
-    . "$FRAG_DIR/$frag.sh"
-done
+    . "$FRAG_DIR/detect-routing.sh"
+fi
+case_end
+
+case_begin "skill-procedure-order" "skills/resume-session/SKILL.md"
+if [[ ! -f "$FRAG_DIR/skill-procedure-order.sh" ]]; then
+    fail "fragment missing: $FRAG_DIR/skill-procedure-order.sh"
+else
+    # shellcheck source=/dev/null
+    . "$FRAG_DIR/skill-procedure-order.sh"
+fi
+case_end
+
+case_begin "lookahead-origin" "bin/resume-session-detect"
+if [[ ! -f "$FRAG_DIR/lookahead-origin.sh" ]]; then
+    fail "fragment missing: $FRAG_DIR/lookahead-origin.sh"
+else
+    # shellcheck source=/dev/null
+    . "$FRAG_DIR/lookahead-origin.sh"
+fi
+case_end
+
+case_begin "cross-session-injection" "bin/resume-session-detect"
+if [[ ! -f "$FRAG_DIR/cross-session-injection.sh" ]]; then
+    fail "fragment missing: $FRAG_DIR/cross-session-injection.sh"
+else
+    # shellcheck source=/dev/null
+    . "$FRAG_DIR/cross-session-injection.sh"
+fi
+case_end
+
+case_begin "cross-session-skill-contract" "skills/resume-session/SKILL.md"
+if [[ ! -f "$FRAG_DIR/cross-session-skill-contract.sh" ]]; then
+    fail "fragment missing: $FRAG_DIR/cross-session-skill-contract.sh"
+else
+    # shellcheck source=/dev/null
+    . "$FRAG_DIR/cross-session-skill-contract.sh"
+fi
+case_end
+
+case_begin "from-boundary" "bin/resume-session-detect"
+if [[ ! -f "$FRAG_DIR/from-boundary.sh" ]]; then
+    fail "fragment missing: $FRAG_DIR/from-boundary.sh"
+else
+    # shellcheck source=/dev/null
+    . "$FRAG_DIR/from-boundary.sh"
+fi
+case_end
 
 echo ""
 echo "=== Results ==="

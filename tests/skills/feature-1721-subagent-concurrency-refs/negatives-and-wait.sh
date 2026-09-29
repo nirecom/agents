@@ -26,17 +26,27 @@ group_wi10_no_inline_text() {
 # NA-judged skills must not acquire an SC-P annotation (scope-creep guard).
 NA_SKILLS="write-tests review-tests make-outline-plan make-detail-plan clarify-intent"
 
-group_na_skills_no_scp() {
-    local s path hits missing
-    hits=""; missing=""
-    for s in $NA_SKILLS; do
+# D2 is split into scan (per skill, accumulating) + report so each skill can sit
+# in its own case span; `:=` keeps the accumulators across a re-source.
+: "${NA_SCP_HITS:=}"
+: "${NA_SCP_MISSING:=}"
+
+# $@ (optional) = skills to scan; all NA_SKILLS when omitted.
+group_na_skills_scan() {
+    local s path list="${*:-$NA_SKILLS}"
+    for s in $list; do
         path="$AGENTS_DIR/skills/$s/SKILL.md"
         if [ ! -f "$path" ]; then
-            missing="$missing $s"
+            NA_SCP_MISSING="$NA_SCP_MISSING $s"
             continue
         fi
-        grep -qF 'SC-P' "$path" && hits="$hits $s"
+        grep -qF 'SC-P' "$path" && NA_SCP_HITS="$NA_SCP_HITS $s"
     done
+}
+
+group_na_skills_report() {
+    local hits="$NA_SCP_HITS" missing="$NA_SCP_MISSING"
+    NA_SCP_HITS=""; NA_SCP_MISSING=""
     if [ -n "$missing" ]; then
         fail "D2: NA-judged SKILL.md missing:$missing"
         return
@@ -46,6 +56,11 @@ group_na_skills_no_scp() {
     else
         fail "D2: SC-P scope creep into NA-judged skill(s):$hits"
     fi
+}
+
+group_na_skills_no_scp() {
+    group_na_skills_scan
+    group_na_skills_report
 }
 
 # ===========================================================================
@@ -65,10 +80,12 @@ skills/write-tests/SKILL.md|E2-WT-7|WT-7.|WT-8.|30"
 # Alphanumeric characters required on the SC-W line besides the token itself.
 SC_W_MIN_DETAIL=20
 
+# $1 (optional) = only the WAIT_TABLE row whose rel equals it; all rows when omitted.
 group_wait_annotation() {
-    local rel label start end maxl path target count other wctx
+    local only="${1:-}" rel label start end maxl path target count other wctx
     while IFS='|' read -r rel label start end maxl; do
         [ -z "${rel// /}" ] && continue
+        [ -n "$only" ] && [ "$rel" != "$only" ] && continue
         path="$AGENTS_DIR/$rel"
         if [ "$start" = "-" ]; then
             if [ ! -f "$path" ]; then
