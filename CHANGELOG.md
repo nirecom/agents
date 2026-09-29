@@ -591,3 +591,7 @@ Changes: codegraph_explore is now always available without a ToolSearch preamble
 ### FEATURE: PR #2439 (2026-09-28)
 Background: fix(#2435,#1270): always block agents memory writes; cite canonical rule
 Changes: Direct writes to the agents-repo memory directory are now always blocked (except under WORKFLOW_OFF); the rejection message explains why and points to `/issue-create` and `rules/mid-workflow-findings.md`.
+
+### FEATURE: PR #2463 (2026-09-30)
+Background: fix(#2447,#1680): rtk-rewrite native-isolation guard; enforce-worktree stale-cwd fix
+Changes: rtk-rewrite: git commands issued inside an EnterWorktree (native isolation) session are no longer refused by the rewrite hook (#2447);enforce-worktree: commands run after ExitWorktree (e.g. `git worktree remove`) are no longer blocked by a stale linked-worktree cwd (#1680)
