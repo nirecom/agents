@@ -79,7 +79,9 @@ allowed by a positive argv judge instead of a spelling.
   diff/checks reads, `-R`/`--repo OWNER/REPO` only (attached/clustered `-R` refused), no `--web`/`-w`, and `gh api` only when
   `hooks/lib/gh-api-argv.js` finds no write method, payload flag, method-override header or
   unknown flag. `--hostname` rejects at any position: a non-default host is a different forge;
-  a host-qualified positional `repo view HOST/OWNER/REPO` is refused for the same reason.
+  every repo selector (`-R`/`--repo` and the `repo view` positional) is restricted to the GitHub
+  OWNER/REPO charset, so host-qualified `HOST/OWNER/REPO` and scp `git@HOST:OWNER/REPO` are refused
+  for the same reason.
 - Interlock: while the early-write gate blocks, deny/notify/self-script stay quiet but a
   read-only allow still speaks — only when deny and notify find nothing (see
   [settings/hooks.md](settings/hooks.md)).

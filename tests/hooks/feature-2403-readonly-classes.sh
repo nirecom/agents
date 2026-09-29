@@ -249,7 +249,7 @@ row("invariant: no positive is a git write", "", W ? POS.filter((a) => W.isGitWr
 case_end
 
 case_begin "gh-read" "hooks/lib/bash-write-patterns/gh-read.js"
-ro_section GH 153 '
+ro_section GH 165 '
 const R = load("hooks/lib/bash-write-patterns/gh-read.js"), RP = "gh-read.js";
 const P = load("hooks/lib/bash-write-patterns/patterns.js");
 const POS = [
@@ -272,6 +272,8 @@ const POS = [
   ["pr", "view", "1", "-c"],
   // Lowercase r is not R: the cluster check is case-sensitive (-cr is no real gh flag; boundary only).
   ["pr", "view", "1", "-cr"],
+  // GitHub-charset OWNER/REPO (hyphen, dot) passes REPO_VALUE_RE as a -R value and a repo view positional.
+  ["repo", "view", "octo/demo"], ["issue", "list", "-R", "octo-org/demo.js"],
 ];
 const NEG = [
   [], ["pr", "create"], ["pr", "checkout", "1"], ["pr", "merge", "1"], ["issue", "close", "1"], ["issue", "create"],
@@ -317,6 +319,13 @@ const NEG = [
   ["repo", "view", "attacker.invalid/o/r"], ["repo", "view", "github.com/o/r"], ["repo", "view", "o/r/extra"],
   ["-R", "o/r", "repo", "view", "h/o/r"], ["repo", "view", "h/o/r", "-R", "o/r"], ["repo", "view", "a//b"],
   ["repo", "view", "-b", "a/b/c"], ["repo", "view", "--branch=a/b/c"],
+  // scp git@HOST:OWNER/REPO selects HOST (gh would send the token there): every -R/--repo spelling
+  // and the repo view positional; `.`/`..` segments and `:` in a value are outside OWNER/REPO.
+  ["issue", "list", "-R", "git@host.invalid:octo/demo"], ["issue", "list", "--repo=git@host.invalid:octo/demo"],
+  ["issue", "list", "--repo", "git@host.invalid:octo/demo"], ["-R", "git@host.invalid:octo/demo", "issue", "list"],
+  ["repo", "view", "git@host.invalid:octo/demo"], ["repo", "view", "https://h.example/o/r"],
+  ["issue", "list", "-R", "../r"], ["issue", "list", "-R", "o/.."], ["issue", "list", "-R", "o/r:x"],
+  ["repo", "view", "--web"],
 ];
 // Method matrix: every spelling scanGhApiFlags accepts x GET/HEAD (API_READ_METHOD_RE is /i) is a
 // read, and x every write verb is not; a spelling already listed above is not repeated.

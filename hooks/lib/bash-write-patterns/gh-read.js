@@ -1,9 +1,9 @@
 "use strict";
 // hooks/lib/bash-write-patterns/gh-read.js — the positive "read" judgement for gh (#2403 N4).
 // isGhWriteArgv is a denylist, so it is only an extra invariant here: the reason to allow is
-// this module's own allowlist. --hostname is refused at every position, and both -R/--repo
-// and the positional `repo view` selector must be a host-less OWNER/REPO, so a prompt-free
-// read never sends the gh token to another host.
+// this module's own allowlist. --hostname is refused at every position, and every repo
+// selector (-R/--repo and the `repo view` positional) must be a GitHub-charset OWNER/REPO, so
+// HOST/OWNER/REPO and scp `git@HOST:OWNER/REPO` never send the gh token to another host.
 
 const { isGhWriteArgv, resolveGhSubArgv } = require("./patterns");
 const { isGhApiWriteFromFlags } = require("../forge-write-extract");
@@ -17,7 +17,9 @@ const READ_SUBCOMMANDS = Object.freeze({
   release: new Set(["list", "view"]),
   label: new Set(["list"]),
 });
-const REPO_VALUE_RE = /^[^/]+\/[^/]+$/;
+const REPO_VALUE_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+// Characters that make a token a candidate repo selector (path, scp user@, scp host:).
+const SELECTOR_CHAR_RE = /[/@:]/;
 const HEADER_FLAGS = new Set(["-H", "--header"]);
 const METHOD_OVERRIDE_RE = /x-http-method-override/i;
 const SHORT_WEB_RE = /^-[A-Za-z]*w[A-Za-z]*(=.*)?$/;
@@ -25,7 +27,8 @@ const SHORT_WEB_RE = /^-[A-Za-z]*w[A-Za-z]*(=.*)?$/;
 const SHORT_REPO_CLUSTER_RE = /^-[A-Za-z]*R/;
 
 const isHostname = (tok) => tok === "--hostname" || tok.startsWith("--hostname=");
-const isHostQualified = (tok) => tok.split("/").length > 2;
+const isRepoValue = (v) =>
+  REPO_VALUE_RE.test(v) && v.split("/").every((seg) => seg !== "." && seg !== "..");
 const isWeb = (tok) => tok === "--web" || tok.startsWith("--web=") || SHORT_WEB_RE.test(tok);
 
 // Walks tokens for -R/--repo and checks each value. Returns false on a bad value or an
@@ -35,15 +38,24 @@ function repoValuesOk(tokens) {
   for (let i = 0; i < tokens.length; i += 1) {
     const tok = tokens[i];
     if (tok === "-R" || tok === "--repo") {
-      if (!REPO_VALUE_RE.test(String(tokens[i + 1]))) return false;
+      if (!isRepoValue(String(tokens[i + 1]))) return false;
       i += 1;
     } else if (tok.startsWith("--repo=")) {
-      if (!REPO_VALUE_RE.test(tok.slice("--repo=".length))) return false;
+      if (!isRepoValue(tok.slice("--repo=".length))) return false;
     } else if (SHORT_REPO_CLUSTER_RE.test(tok)) {
       return false;
     }
   }
   return true;
+}
+
+// `repo view` takes an [HOST/]OWNER/REPO or URL positional, so any selector-shaped token after it
+// (a bare token, or a flag's =value) must pass the same isRepoValue; fail closed otherwise.
+function repoViewTokenOk(tok) {
+  const eq = tok.indexOf("=");
+  if (tok[0] === "-" && eq < 0) return true;
+  const value = tok[0] === "-" ? tok.slice(eq + 1) : tok;
+  return !SELECTOR_CHAR_RE.test(value) || isRepoValue(value);
 }
 
 // Returns the subcommand index, or -1 when a pre-subcommand flag is not -R/--repo.
@@ -91,8 +103,7 @@ function isGhReadArgv(argv, _argvRaw) {
 
     const sub0 = subArgv[0];
     if (sub0 === "api") return subIdx === 0 && isApiRead(subArgv.slice(1));
-    // Only `repo view` takes a [HOST/]OWNER/REPO positional; fail closed on any 2+-slash token.
-    if (sub0 === "repo" && subArgv[1] === "view" && subArgv.slice(2).some(isHostQualified)) return false;
+    if (sub0 === "repo" && subArgv[1] === "view" && !subArgv.slice(2).every(repoViewTokenOk)) return false;
     const allowed = Object.prototype.hasOwnProperty.call(READ_SUBCOMMANDS, sub0) ? READ_SUBCOMMANDS[sub0] : null;
     return allowed !== null && allowed.has(subArgv[1]);
   } catch (_e) {

@@ -22,7 +22,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # transcript behavior. Only a real `claude -p` session exercises those seams.
 
 ROWS=0
-ROWS_EXPECTED=206
+ROWS_EXPECTED=209
 
 check() {
     local name="$1" want="$2" got="$3"
@@ -313,6 +313,9 @@ r-R-attach       ~ gh pr view 1 -Rh.example/o/r          ~ passThrough|BG-NO-HIT
 r-R-cluster      ~ gh pr view 1 -cRh.example/o/r         ~ passThrough|BG-NO-HIT
 r-R-cluster-2l   ~ gh pr view 1 -cvRo/r                  ~ passThrough|BG-NO-HIT
 r-R-clus-space   ~ gh pr view 1 -cR o/r                  ~ passThrough|BG-NO-HIT
+r-R-scp          ~ gh issue list -R git@host.invalid:octo/demo ~ passThrough|BG-NO-HIT
+r-R-scp-eq       ~ gh issue list --repo=git@host.invalid:octo/demo ~ passThrough|BG-NO-HIT
+r-view-scp       ~ gh repo view git@host.invalid:octo/demo ~ passThrough|BG-NO-HIT
 TABLE
 case_end
 
@@ -395,7 +398,7 @@ case_end
 
 case_begin "row-budget" "hooks/bash-guard/judge.js"
 # A drifted heredoc delimiter or an early return would leave a table reporting green with no
-# rows. R1 30+1, R1b 19+32, R2 19, R3 19, R4 30, R5 15, R6 18+1, R7 11+2, R8 1+8 = 206.
+# rows. R1 30+1, R1b 19+32, R2 19, R3 19, R4 30, R5 18, R6 18+1, R7 11+2, R8 1+8 = 209.
 check "BUDGET: every table-driven loop executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 case_end
 
