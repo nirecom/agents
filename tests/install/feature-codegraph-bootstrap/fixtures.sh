@@ -44,7 +44,7 @@ fi
 # The exact argv install/codegraph-mcp.js must hand the CLI, derived from the SSOT.
 WANT_MCP_ADD="mcp add codegraph --scope user --env CODEGRAPH_TELEMETRY=$CG_TELEMETRY --env DO_NOT_TRACK=$CG_DNT -- codegraph serve --mcp"
 WANT_MCP_REMOVE="mcp remove codegraph -s user"
-WANT_NPM_INSTALL="install -g --ignore-scripts @colbymchenry/codegraph@latest"
+WANT_NPM_INSTALL="install -g --ignore-scripts @colbymchenry/codegraph@1.6.0"
 
 CLAUDE_MD_BODY="# fixture CLAUDE.md — must survive the installer untouched"
 SETTINGS_BODY='{"permissions":{"allow":["Bash(ls:*)"]},"hooks":{}}'
@@ -107,7 +107,7 @@ build_home() {
         nokey)   printf '%s\n' "$head}" > "$j" ;;
         present) printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":$server}}" > "$j" ;;
         present-al) printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":{$base,$ourenv,\"alwaysLoad\":true}}}" > "$j" ;;
-        crowded) printf '%s\n' "$head,\"mcpServers\":{\"other\":{\"type\":\"stdio\",\"command\":\"other-srv\",\"args\":[\"--label\",\"café\"]},\"codegraph\":$server},\"projects\":{\"/w/p\":{\"allowedTools\":[],\"history\":[1,2.5,\"x\"]}}}" > "$j" ;;
+        crowded) printf '%s\n' "$head,\"mcpServers\":{\"other\":{\"type\":\"stdio\",\"command\":\"other-srv\",\"args\":[\"--label\",\"café\"]},\"codegraph\":$server},\"projects\":{\"/work/proj\":{\"allowedTools\":[],\"history\":[1,2.5,\"x\"]}}}" > "$j" ;;
         foreign) printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":{\"type\":\"stdio\",\"command\":\"codegraph\",\"args\":[\"serve\"],$ourenv}}}" > "$j" ;;
         nonobject)   printf '%s\n' "$head,\"mcpServers\":{\"codegraph\":\"codegraph serve --mcp\"}}" > "$j" ;;
         broken)  printf '%s\n' "$head,\"mcpServers\":{" > "$j" ;;
