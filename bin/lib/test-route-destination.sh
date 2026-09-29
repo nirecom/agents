@@ -46,6 +46,7 @@ trd_normalize_token() {
   [[ "$t" != /* ]] || return 1
   [[ "/$t/" != */../* ]] || return 1
   tfm_token_format_ok "$t" || return 1
+  TRD_NORMALIZED="$t"
   printf '%s' "$t"
 }
 
@@ -60,17 +61,36 @@ trd_canonicalize_set() {
   local _trd_set_name="${1:?trd_canonicalize_set: array name required}"
   shift
   eval "$_trd_set_name=()"
-  local t norm
-  local -a _trd_norm=()
+  local t
+  _TRD_SORTED=()
   for t in "$@"; do
-    norm="$(trd_normalize_token "$t")" || return 1
-    _trd_norm+=("$norm")
+    trd_normalize_token "$t" >/dev/null || return 1
+    _trd_insert_sorted "$TRD_NORMALIZED"
   done
-  [[ "${#_trd_norm[@]}" -gt 0 ]] || return 1
-  while IFS= read -r t; do
-    [[ -n "$t" ]] && eval "$_trd_set_name+=(\"\$t\")"
-  done < <(printf '%s\n' "${_trd_norm[@]}" | LC_ALL=C sort -u)
+  [[ "${#_TRD_SORTED[@]}" -gt 0 ]] || return 1
+  for t in "${_TRD_SORTED[@]}"; do
+    eval "$_trd_set_name+=(\"\$t\")"
+  done
   return 0
+}
+
+# _trd_insert_sorted <token> — adds <token> to _TRD_SORTED keeping it equal to
+# `LC_ALL=C sort -u` output; fork-free because sets hold a handful of tokens and
+# a sort process per corpus file dominated the scan on MSYS (#2455).
+_trd_insert_sorted() {
+  local LC_ALL=C
+  local v="$1" j tmp
+  for ((j = 0; j < ${#_TRD_SORTED[@]}; j++)); do
+    [[ "${_TRD_SORTED[j]}" == "$v" ]] && return 0
+  done
+  _TRD_SORTED+=("$v")
+  j=$((${#_TRD_SORTED[@]} - 1))
+  while [[ "$j" -gt 0 && "${_TRD_SORTED[j]}" < "${_TRD_SORTED[j - 1]}" ]]; do
+    tmp="${_TRD_SORTED[j]}"
+    _TRD_SORTED[j]="${_TRD_SORTED[j - 1]}"
+    _TRD_SORTED[j - 1]="$tmp"
+    j=$((j - 1))
+  done
 }
 
 # trd_set_key <token>... — the canonical set as one LF-joined comparison key.
@@ -194,7 +214,8 @@ trd_candidates() {
     [[ "$ok" -eq 1 ]] || continue
     lines="$(trd_file_lines "$file")" || continue
     extra=$((TRD_CORPUS_NTOK[i] - qn))
-    entry="$extra"$'\t'"$lines"$'\t'"$(tdg_escape_field "$file")"
+    tdg_escape_field "$file" >/dev/null
+    entry="$extra"$'\t'"$lines"$'\t'"$TDG_ESCAPED"
     eval "$_trd_cands_name+=(\"\$entry\")"
   done
   return 0
