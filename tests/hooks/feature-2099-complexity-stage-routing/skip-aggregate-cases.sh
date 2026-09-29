@@ -11,7 +11,7 @@
 # case where the two agree, so every fixture below makes them DISAGREE.
 d2099s_resolve() {
     local sid="$1" target="$2"
-    RESOLVER="$RESOLVER_N" SID="$sid" TARGET="$target" run_with_timeout node -e '
+    RESOLVER="$RESOLVER_N" SID="$sid" TARGET="$target" run_with_timeout node - <<'JS' 2>/dev/null
 const r = require(process.env.RESOLVER);
 const v = r.resolveSkipConditionsFromComplexity(process.env.SID, process.env.TARGET);
 if (v === null || v === undefined) { console.log("NOT_ELIGIBLE"); }
@@ -19,7 +19,7 @@ else if (typeof v !== "object") { console.log("BAD_SHAPE:" + typeof v); }
 else if (Object.keys(v).length === 0) { console.log("EMPTY_OBJECT"); }
 else if (Object.values(v).every(function (x) { return x === true; })) { console.log("ELIGIBLE"); }
 else { console.log("PARTIAL:" + JSON.stringify(v)); }
-' 2>/dev/null
+JS
 }
 
 # Inject a record whose aggregate and per-stage fields point opposite ways, then
@@ -106,7 +106,15 @@ d2099s_absent_levels_map() {
     done
 }
 
+case_begin "sa1-aggregate-low-beats-stage-high" "hooks/workflow-state/skip-signal-resolver/complexity.js"
 d2099s_aggregate_low_beats_stage_high
+case_end
+case_begin "sa3-aggregate-high-beats-stage-low" "hooks/workflow-state/skip-signal-resolver/complexity.js"
 d2099s_aggregate_high_beats_stage_low
+case_end
+case_begin "sa5-signals-half-of-rule" "hooks/workflow-state/skip-signal-resolver/complexity.js"
 d2099s_signals_half_of_the_rule
+case_end
+case_begin "sa6-absent-levels-map" "hooks/workflow-state/skip-signal-resolver/complexity.js"
 d2099s_absent_levels_map
+case_end

@@ -307,12 +307,13 @@ INV
 # 4000-char id rides along so a per-element bound is exercised too.
 d2099h_signals_oversized() {
     local huge sid rc out stored st
-    huge=$(run_with_timeout node -e '
+    huge=$(run_with_timeout node - 2>/dev/null <<'JS'
 const ids = [];
 for (let i = 0; i < 400; i++) { ids.push("S" + i + "-generated-signal-name"); }
 ids.push("S-" + "x".repeat(4000));
 console.log(ids.join(","));
-' 2>/dev/null)
+JS
+)
     if [ -z "$huge" ]; then
         fail "H-SIG-BIG the oversized payload could not be generated — the case would be vacuous"
         return
@@ -392,9 +393,26 @@ d2099h_empty_state_file() {
 }
 
 
+case_begin "read-back-field-invariant" "hooks/workflow-state/state-io.js"
 d2099h_read_back_per_field
+case_end
+
+case_begin "unusable-workflow-dir" "bin/workflow/record-complexity-evaluation"
 d2099h_unusable_workflow_dir
+case_end
+
+case_begin "corrupt-state-file" "hooks/workflow-state/state-io.js"
 d2099h_corrupt_state_file
+case_end
+
+case_begin "empty-state-file" "hooks/workflow-state/state-io.js"
 d2099h_empty_state_file
+case_end
+
+case_begin "signals-normalization" "bin/workflow/record-complexity-evaluation"
 d2099h_signals_normalization
+case_end
+
+case_begin "signals-oversized" "bin/workflow/record-complexity-evaluation"
 d2099h_signals_oversized
+case_end

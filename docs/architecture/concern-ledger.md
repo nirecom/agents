@@ -91,7 +91,7 @@ Writing the resulting file safely is a separate question from naming it safely, 
 
 ## One primary, one fallback, one ledger
 
-`/review-code-security` runs a single primary reviewer — codex, via `bin/run-codex-review-loop --format security-code` → `bin/review-code-codex` — and falls back to the `security-scanner` subagent (model: `MODEL_REVIEWER`) only when codex is unavailable (loop exit 3). The two never run in the same round; the fallback re-enters the same loop with `--prestaged-report`, so its report is staged, reduced, judged, and finalized by exactly the code the codex round uses. The `review-security-shared` ledger token is shared by both so they address one ledger and one round counter.
+`/review-code-security` runs a single primary reviewer — codex, via `bin/run-codex-review-loop --format security-code` → `bin/review-code-codex` — and falls back to the `security-scanner` subagent (model: `REVIEWER_MODEL`) only when codex is unavailable (loop exit 3). The two never run in the same round; the fallback re-enters the same loop with `--prestaged-report`, so its report is staged, reduced, judged, and finalized by exactly the code the codex round uses. The `review-security-shared` ledger token is shared by both so they address one ledger and one round counter.
 
 `cl_allowed_producers review-security-shared` is the closed set `{review-code-codex, security-scanner}`: a round completes on either producer alone, but no other producer name can stage into it. Whichever runs is handed the same rendered block of still-open concerns before it starts, so "have you seen this before" is answered identically, and a still-valid concern is re-reported under the ID it already has.
 

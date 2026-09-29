@@ -10,6 +10,10 @@
 
 set -uo pipefail
 
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
+
 DISPATCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/feature-feat-928-supervisor-report-format" && pwd)"
 
 TEST_GROUPS=(formatter-unit guard-integration model-line)
@@ -18,6 +22,7 @@ TOTAL_PASS=0
 TOTAL_FAIL=0
 FAILED_GROUPS=()
 
+case_begin "dispatch-group-results" "hooks/lib/supervisor-report-format.js"
 for group in "${TEST_GROUPS[@]}"; do
     out="$(bash "$DISPATCH_DIR/$group.sh" 2>&1)"
     rc=$?
@@ -44,4 +49,5 @@ if [ "${#FAILED_GROUPS[@]}" -gt 0 ]; then
     echo "Failed groups: ${FAILED_GROUPS[*]}"
     exit 1
 fi
+case_end
 exit 0

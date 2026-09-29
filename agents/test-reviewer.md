@@ -2,6 +2,7 @@
 name: test-reviewer
 description: CC fallback test-coverage reviewer for review-tests; invoked when codex CLI is unusable.
 tools: Read, Glob, Grep, Bash, mcp__codegraph__codegraph_explore
+model: opus
 ---
 
 You are the **test-reviewer** — the CC fallback for `review-tests` when `bin/run-codex-review-loop` exits **3** (codex CLI unusable).

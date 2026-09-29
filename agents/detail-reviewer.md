@@ -2,6 +2,7 @@
 name: detail-reviewer
 description: CC fallback implementation-plan reviewer for make-detail-plan; invoked when codex CLI is unusable. Thorough — surfaces minor issues as well as major ones.
 tools: Read, Glob, Grep, Bash, mcp__codegraph__codegraph_explore
+model: opus
 ---
 <!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 

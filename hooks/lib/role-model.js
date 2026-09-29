@@ -6,10 +6,10 @@
 // role default, so a .env value can never inject arbitrary text.
 
 const ROLE_TABLE = Object.freeze({
-  reviewer: Object.freeze({ key: "MODEL_REVIEWER", default: "opus" }),
-  "producer-high": Object.freeze({ key: "MODEL_PRODUCER_HIGH", default: "opus" }),
-  "producer-low": Object.freeze({ key: "MODEL_PRODUCER_LOW", default: "sonnet" }),
-  alert: Object.freeze({ key: "MODEL_ALERT", default: "sonnet" }),
+  reviewer: Object.freeze({ key: "REVIEWER_MODEL", default: "opus" }),
+  "producer-high": Object.freeze({ key: "PRODUCER_HIGH_MODEL", default: "opus" }),
+  "producer-low": Object.freeze({ key: "PRODUCER_LOW_MODEL", default: "sonnet" }),
+  alert: Object.freeze({ key: "ALERT_MODEL", default: "sonnet" }),
 });
 
 const ALLOWED_MODEL_ALIASES = Object.freeze(["opus", "sonnet", "haiku"]);

@@ -18,6 +18,10 @@ set -uo pipefail
 # via bin/check-verification-gate.sh category: skill-orchestration.
 
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+# Sourced first: the local helpers below keep their own semantics (ERRORS counter,
+# <desc> <want> <got> assert_eq, fixed-120s run_with_timeout) and override harness's.
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -67,8 +71,8 @@ export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 # Model-producer aliases used by #2100 model= line tests. Exported so every
 # child node process (BIN_DERIVE, BIN_READ) inherits them regardless of what
 # a developer's .env sets.
-export MODEL_PRODUCER_HIGH=opus
-export MODEL_PRODUCER_LOW=sonnet
+export PRODUCER_HIGH_MODEL=opus
+export PRODUCER_LOW_MODEL=sonnet
 
 # Do not inherit the outer Claude Code session into resolveSessionId().
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
@@ -306,6 +310,8 @@ d2099_assert_section_cli_unique() {
 
 CASE_DIR="$(dirname "$0")/feature-2099-complexity-stage-routing"
 
+# One dispatch case: per-scenario markers live in each sourced case file.
+case_begin "dispatch-case-files" "hooks/workflow-state/complexity-routing.js"
 # shellcheck source=./feature-2099-complexity-stage-routing/derivation-cases.sh
 . "$CASE_DIR/derivation-cases.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/validate-table-cases.sh
@@ -413,6 +419,7 @@ CASE_DIR="$(dirname "$0")/feature-2099-complexity-stage-routing"
 # Sourced last: it re-sources the two live case files inside a harness.
 # shellcheck source=./feature-2099-complexity-stage-routing/tl3-gate-cases.sh
 . "$CASE_DIR/tl3-gate-cases.sh"
+case_end
 
 echo ""
 echo "=== Results ==="

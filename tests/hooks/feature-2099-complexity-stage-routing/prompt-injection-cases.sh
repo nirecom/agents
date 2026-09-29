@@ -203,7 +203,15 @@ d2099_live_judge_resists_injection() {
     fi
 }
 
+case_begin "pi-1-rubric-treats-input-as-data" "skills/_shared/judge-task-complexity.md"
 d2099_rubric_treats_input_as_data
+case_end
+case_begin "pi-2-forged-verdict-does-not-lower-routing" "hooks/workflow-state/complexity-routing.js"
 d2099_forged_verdict_does_not_lower_routing
+case_end
+case_begin "pi-4-routing-module-no-side-effect-surface" "hooks/workflow-state/complexity-routing.js"
 d2099_routing_module_has_no_side_effect_surface
+case_end
+case_begin "pi-5-live-judge-resists-injection" "skills/_shared/judge-task-complexity.md"
 d2099_live_judge_resists_injection
+case_end

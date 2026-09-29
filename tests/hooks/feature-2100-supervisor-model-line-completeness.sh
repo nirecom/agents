@@ -112,7 +112,7 @@ am_render() {
     local cfg; cfg="$(mktemp -d "$WORK/cfg.XXXX")"
     printf '%b' "$1" > "$cfg/.env"
     (cd "$NEUTRAL" || exit 1
-     env -u MODEL_REVIEWER -u MODEL_ALERT -u MODEL_PRODUCER_HIGH -u MODEL_PRODUCER_LOW \
+     env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL -u PRODUCER_LOW_MODEL \
         -u CLAUDE_PROJECT_DIR -u CLAUDE_CODE_SUBAGENT_MODEL AGENTS_CONFIG_DIR="$(np "$cfg")" \
         bash "$RWT" 10 node -e "$AM_JS" >"$WORK/out" 2>"$WORK/err")
     AM_RC=$?
@@ -140,26 +140,26 @@ am_expect() {
     fi
 }
 
-case_begin "AM-1 MODEL_REVIEWER reaches the audit-arm model line" "hooks/supervisor-guard/audit-arm.js"
-am_render 'MODEL_REVIEWER=haiku\nMODEL_ALERT=opus\n'
-am_expect "AM-1 MODEL_REVIEWER=haiku" haiku
+case_begin "AM-1 REVIEWER_MODEL reaches the audit-arm model line" "hooks/supervisor-guard/audit-arm.js"
+am_render 'REVIEWER_MODEL=haiku\nALERT_MODEL=opus\n'
+am_expect "AM-1 REVIEWER_MODEL=haiku" haiku
 case_end
 
 case_begin "AM-2 role-swap keeps the reviewer default" "hooks/supervisor-guard/audit-arm.js"
 am_render ''
 base="$AM_OUT"
-am_render 'MODEL_ALERT=haiku\n'
-am_expect "AM-2 MODEL_ALERT only -> opus" opus
+am_render 'ALERT_MODEL=haiku\n'
+am_expect "AM-2 ALERT_MODEL only -> opus" opus
 if [ -n "$base" ] && [ "$AM_OUT" = "$base" ]; then
     pass "AM-2 output byte-identical to the no-.env baseline"
 else
-    fail "AM-2 swap" "MODEL_ALERT changed the audit-arm reason (or empty baseline)"
+    fail "AM-2 swap" "ALERT_MODEL changed the audit-arm reason (or empty baseline)"
 fi
 case_end
 
-case_begin "AM-3 invalid MODEL_REVIEWER falls back, value withheld" "hooks/supervisor-guard/audit-arm.js"
-am_render 'MODEL_REVIEWER=gpt-amleak\n'
-am_expect "AM-3 invalid MODEL_REVIEWER -> opus" opus
+case_begin "AM-3 invalid REVIEWER_MODEL falls back, value withheld" "hooks/supervisor-guard/audit-arm.js"
+am_render 'REVIEWER_MODEL=gpt-amleak\n'
+am_expect "AM-3 invalid REVIEWER_MODEL -> opus" opus
 if printf '%s%s' "$AM_OUT" "$AM_ERR" | grep -q 'amleak'; then
     fail "AM-3 withheld" "invalid value echoed into reason/stderr"
 elif [ -z "$AM_OUT" ]; then
@@ -170,7 +170,7 @@ fi
 case_end
 
 case_begin "AM-4 surrounding audit-arm lines unchanged" "hooks/supervisor-guard/audit-arm.js"
-am_render 'MODEL_REVIEWER=haiku\n'
+am_render 'REVIEWER_MODEL=haiku\n'
 stripped="$(printf '%s\n' "$AM_OUT" | grep -v 'Subagent model:')"
 want_block="$(printf 'Run the audit mode strategic review agent with this run-id (run-am):\n  Agent file: /tmp/am-audit.md\n\nsupervisor-audit を該当 run-id (run-am) 付きで起動する。')"
 case "$stripped" in

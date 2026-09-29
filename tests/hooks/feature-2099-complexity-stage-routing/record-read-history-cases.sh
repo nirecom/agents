@@ -108,5 +108,9 @@ $D2099_REEVAL
 EOF
 }
 
+case_begin "r33-raw-event-idempotency" "bin/workflow/record-complexity-evaluation"
 d2099_raw_event_idempotency
+case_end
+case_begin "r45-reevaluation-replaces-projection" "hooks/workflow-state/state-io/projection.js"
 d2099_reevaluation_replaces_projection
+case_end

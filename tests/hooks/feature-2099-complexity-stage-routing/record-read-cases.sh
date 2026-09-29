@@ -10,7 +10,7 @@
 # stream, bypassing recordComplexityEvaluation and its validation. This is the
 # only way to prove readLastRawComplexityEvent does NOT backfill (detail.md D6).
 d2099_inject_raw_event() {
-    BARREL="$BARREL_N" SID="$1" RAW="$2" run_with_timeout node -e '
+    BARREL="$BARREL_N" SID="$1" RAW="$2" run_with_timeout node - <<'JS' 2>&1
 const fs = require("fs");
 const b = require(process.env.BARREL);
 const p = b.getStatePath(process.env.SID);
@@ -27,36 +27,36 @@ s.events = (s.events || []).concat([Object.assign({
 // injected one.
 s.events.forEach(function (e, i) { e.seq = i + 1; });
 fs.writeFileSync(p, JSON.stringify(s, null, 2));
-' 2>&1
+JS
 }
 
 # Counts the raw complexity_evaluation events in a session's append-only log.
 # The store never rewrites history, so this is the accessor every "was/was not
 # persisted" assertion must go through (detail.md D6).
 d2099_raw_ce_count() {
-    BARREL="$BARREL_N" SID="$1" run_with_timeout node -e '
+    BARREL="$BARREL_N" SID="$1" run_with_timeout node - <<'JS' 2>/dev/null
 const b = require(process.env.BARREL);
 const s = b.readState(process.env.SID);
 const ev = ((s && s.events) || []).filter(function (e) { return e && e.kind === "complexity_evaluation"; });
 console.log(String(ev.length));
-' 2>/dev/null
+JS
 }
 
 # Byte snapshot of the session state file — the only way to prove an append was
 # refused ATOMICALLY rather than written and then complained about.
 d2099_state_bytes() {
-    BARREL="$BARREL_N" SID="$1" run_with_timeout node -e '
+    BARREL="$BARREL_N" SID="$1" run_with_timeout node - <<'JS' 2>/dev/null
 const fs = require("fs");
 const b = require(process.env.BARREL);
 try { console.log(String(fs.readFileSync(b.getStatePath(process.env.SID)).length)); }
 catch (e) { console.log("NO_FILE"); }
-' 2>/dev/null
+JS
 }
 
 # Side-effect probe for the malformed-invocation cases: did a rejected CLI call
 # leave a complexity_evaluation event or any skip-related annotation behind?
 d2099_side_effects() {
-    BARREL="$BARREL_N" SID="$1" run_with_timeout node -e '
+    BARREL="$BARREL_N" SID="$1" run_with_timeout node - <<'JS' 2>/dev/null
 const b = require(process.env.BARREL);
 const s = b.readState(process.env.SID);
 const ev = ((s && s.events) || []);
@@ -65,18 +65,18 @@ const skip = ev.filter(function (e) {
   return e && e.kind === "step_annotation" && /^skip_/.test(String(e.key));
 }).length;
 console.log("ce=" + ce + " skip=" + skip);
-' 2>/dev/null
+JS
 }
 
 # Pre-assertion companion for d2099_inject_raw_event: prints the folded record
 # so a case can prove the injection survived before asserting on it.
 d2099_projected_ce() {
-    BARREL="$BARREL_N" SID="$1" run_with_timeout node -e '
+    BARREL="$BARREL_N" SID="$1" run_with_timeout node - <<'JS' 2>&1
 const b = require(process.env.BARREL);
 const s = b.readState(process.env.SID);
 if (!s) { console.log("__NO_STATE__"); }
 else { console.log(JSON.stringify(s.complexity_evaluation)); }
-' 2>&1
+JS
 }
 
 # R-1/R-2: record -> read round trip, and the per-stage divergence that is the
@@ -198,8 +198,8 @@ d2099_trailing_flag_usage() {
 # R-16: the API arity change. The 3-arg legacy call must throw loudly rather
 # than being silently reinterpreted as (sessionId, signals).
 d2099_api_arity() {
-    local got
-    got=$(run_node '
+    local got _script
+    read -r -d '' _script <<'JS' || true
 const b = require(process.env.BARREL_N);
 const sid = "s2099-arity-" + process.pid;
 // Materialized, not merely constructed — createInitialState writes no file.
@@ -221,7 +221,8 @@ console.log([
   typeof b.readStageComplexityLevel,
   b.readStageComplexityLevel(sid, "detail"),
 ].join(" "));
-')
+JS
+    got=$(run_node "$_script")
     # S3-security is a DIVERGENT row (detail.md D2): solo_escalation for write_tests
     # and legacy_equivalent for write_code, but absent from detail's escalation
     # sets — so the levels map is low/high/high and readStageComplexityLevel("detail")
@@ -239,7 +240,7 @@ d2099_raw_read_back() {
     sid=$(new_session raw)
     d2099_inject_raw_event "$sid" '{"level":"high","signals":["S2-architecture"]}' >/dev/null
 
-    got=$(BARREL="$BARREL_N" SID="$sid" run_with_timeout node -e '
+    got=$(BARREL="$BARREL_N" SID="$sid" run_with_timeout node - <<'JS' 2>&1
 const b = require(process.env.BARREL);
 const sid = process.env.SID;
 const raw = b.readLastRawComplexityEvent(sid);
@@ -252,14 +253,15 @@ console.log([
     ? [compat.levels.detail, compat.levels.write_tests, compat.levels.write_code].join(",")
     : String(compat && compat.levels)),
 ].join(" "));
-' 2>&1)
+JS
+)
     assert_eq "R-17 readLastRawComplexityEvent returns the missing levels as-is while the consumer read backfills" \
         "raw_levels=undefined raw_level=high raw_signals=S2-architecture compat_levels=high,high,high" "$got"
 
     local sid2
     sid2=$(new_session rawbad)
     d2099_inject_raw_event "$sid2" '{"level":"low","signals":["S6-long-plan"],"levels":{"detail":"maybe"}}' >/dev/null
-    got=$(BARREL="$BARREL_N" SID="$sid2" run_with_timeout node -e '
+    got=$(BARREL="$BARREL_N" SID="$sid2" run_with_timeout node - <<'JS' 2>&1
 const b = require(process.env.BARREL);
 const sid = process.env.SID;
 const raw = b.readLastRawComplexityEvent(sid);
@@ -271,7 +273,8 @@ console.log([
   "compat_levels=" + [compat.levels.detail, compat.levels.write_tests, compat.levels.write_code].join(","),
   "read_back=" + (readBackAgrees ? "PASSES" : "DETECTS_MISMATCH"),
 ].join(" "));
-' 2>&1)
+JS
+)
     assert_eq "R-18 a malformed persisted levels is never partially adopted, and read-back comparison catches it" \
         "raw_levels={\"detail\":\"maybe\"} compat_levels=low,low,high read_back=DETECTS_MISMATCH" "$got"
 }
@@ -282,8 +285,8 @@ console.log([
 # landed would satisfy the first half alone while leaving an invalid event in an
 # append-only log that has no way to remove it.
 d2099_event_and_projection_contract() {
-    local got
-    got=$(run_node '
+    local got _script
+    read -r -d '' _script <<'JS' || true
 const fs = require("fs");
 const b = require(process.env.BARREL_N);
 const base = { kind: "complexity_evaluation", level: "low", signals: [], provenance: "observed", origin: "test" };
@@ -332,7 +335,8 @@ const pl = proj.levels;
 out.push("projected=" + (pl ? [pl.detail, pl.write_tests, pl.write_code].join(",") : "absent"));
 out.push("frozen=" + (pl && Object.isFrozen(pl) ? "yes" : "no"));
 console.log(out.join(" "));
-')
+JS
+    got=$(run_node "$_script")
     assert_eq "R-19 events.js validates levels on append; projection folds a valid one" \
         "missing-key=InvalidEventError extra-key=InvalidEventError bad-value=InvalidEventError not-object=InvalidEventError null-value=InvalidEventError projected=low,high,high frozen=yes" \
         "$got"
@@ -357,10 +361,24 @@ d2099_security() {
     assert_eq "R-23 read-complexity-evaluation rejects an unknown --stage" "1" "$rc"
 }
 
+case_begin "r1-round-trip-record-read" "bin/workflow/record-complexity-evaluation"
 d2099_round_trip
+case_end
+case_begin "r6-zero-signal-and-presence" "bin/workflow/record-complexity-evaluation"
 d2099_zero_signal_and_presence
+case_end
+case_begin "r35-trailing-flag-usage" "bin/workflow/record-complexity-evaluation"
 d2099_trailing_flag_usage
+case_end
+case_begin "r16-api-arity" "hooks/workflow-state/state-io/session-fields.js"
 d2099_api_arity
+case_end
+case_begin "r17-raw-read-back" "hooks/workflow-state/state-io/events.js"
 d2099_raw_read_back
+case_end
+case_begin "r19-event-projection-contract" "hooks/workflow-state/state-io/events.js"
 d2099_event_and_projection_contract
+case_end
+case_begin "r20-security-regressions" "bin/workflow/record-complexity-evaluation"
 d2099_security
+case_end

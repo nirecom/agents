@@ -40,7 +40,7 @@ MOP-2. **Select the planner model, then delegate.** Run `bash -c 'node "$AGENTS_
    If `NONE`: dispatch `subagent_type: complexity-judge` with the `intent.md` path + task context (rubric: `skills/_shared/judge-task-complexity.md`). Write the raw output to `<PLANS_DIR>/<session-id>-outline-judge-raw.txt` (Write tool — untrusted text via file only). Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-outline-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-outline-signals.txt"`. Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage outline --signals-file "<PLANS_DIR>/<session-id>-outline-signals.txt"` and use its `model=<alias>` line — never judge the level inline.
    Emit (Claude text, not Bash): `Model selected: **<model= alias>** (signals: [ids from the `signals=` line, or "none"])`.
    Delegate to **outline-planner** (Agent tool, `subagent_type: outline-planner`, `model: <model= from MOP-2>`). Pass full contents of `<session-id>-intent.md` and task context.
-   Every outline-planner launch — here, the MOP-3 revise re-run, the MOP-4 re-prompt, the MOP-4a re-prompt, the MOP-5 exit 1 re-delegate, and the MOP-8 revise re-run — passes the same `model: <model= from MOP-2>`.
+   Every outline-planner launch — here, the MOP-3 revise re-run, the MOP-4 re-prompt, the MOP-4a re-prompt, the MOP-5 CONTINUE re-delegate, and the MOP-8 revise re-run — passes the same `model: <model= from MOP-2>`.
    Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
 MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):

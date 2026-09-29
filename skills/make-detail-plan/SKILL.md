@@ -30,7 +30,7 @@ Emit (Claude text, not Bash): `Model selected: **<model= alias>** (signals: [ids
 ### MDP-4 — Initial draft
 
 Delegate to **planner** (Agent tool, `subagent_type: detail-planner`, `model: <model= from MDP-3>`). Pass task context + intent/outline contents.
-Every detail-planner launch — here, the MDP-5 exit 1 re-delegate, the MDP-7 revise and re-prompt, and the research re-prompt — passes the same `model: <model= from MDP-3>`.
+Every detail-planner launch — here, the MDP-5 CONTINUE re-delegate, the MDP-7 revise and re-prompt, and the research re-prompt — passes the same `model: <model= from MDP-3>`.
 Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
 ### MDP-4a — Sentinel detection (fallback notice)

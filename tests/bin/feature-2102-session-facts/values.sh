@@ -17,6 +17,9 @@ set -uo pipefail
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+AGENTS_DIR="$REPO_ROOT"
+# shellcheck source=../../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 REPO_N="$(nrm "$REPO_ROOT")"
 RSF="$REPO_N/bin/workflow/read-session-facts"
@@ -33,9 +36,6 @@ CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"; export CLAUDE_WORKFLOW_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CONFIRM_TESTS CONFIRM_CODE
 
-PASS=0; FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1 -- expected [$2] got [$3]"; fi; }
 check_contains() {
   case "$3" in *"$2"*) pass "$1" ;; *) fail "$1 -- expected [$2] in: $3" ;; esac
@@ -90,6 +90,7 @@ write_env() {
   esac
 }
 
+case_begin "gate-mapping-env-to-on-off-error" "bin/workflow/lib/session-facts/gate-facts.js"
 echo "=== (a) gate mapping: .env value -> ON/OFF/ERROR, for both gates ==="
 # Columns: key|.env value|expected. `Off` proves case-insensitivity; `yes` and the empty
 # string prove the fail-safe direction is ON (never silently skip a confirmation).
@@ -150,8 +151,10 @@ run_facts "$CFG_HALF" "gh"
 check "(a) one-sided failure: the healthy gate keeps its value" "OFF" "$(val_of GATE_CONFIRM_TESTS)"
 check "(a) one-sided failure: only the broken gate is ERROR" "ERROR" "$(val_of GATE_CONFIRM_CODE)"
 check "(a) one-sided failure: exit stays 0" 0 "$RC"
+case_end
 
 echo ""
+case_begin "plans-dir-resolution-fail-closed" "bin/workflow/read-session-facts"
 echo "=== (b) PLANS_DIR resolution and its fail-closed contract ==="
 PD_A="$(nrm "$TMPDIR_BASE/pd-env")"; mkdir -p "$TMPDIR_BASE/pd-env"
 PD_B="$(nrm "$TMPDIR_BASE/pd-dotenv")"; mkdir -p "$TMPDIR_BASE/pd-dotenv"
@@ -202,8 +205,10 @@ case "$RC" in
     fail "(b) vi: unexpected exit $RC -- neither the exit-3 fail-closed path nor a clean exit-0 normalization"
     ;;
 esac
+case_end
 
 echo ""
+case_begin "persisted-complexity-per-stage" "bin/workflow/lib/session-facts/collect.js"
 echo "=== (c) persisted complexity, read per stage without cross-talk ==="
 mk_cx() {
   SID="$1" BODY="$2" run_with_timeout node -e '
@@ -249,8 +254,10 @@ OUT="$(cat "$OUTF" 2>/dev/null || echo "")"
 check "(c) iv: underivable per-stage view -- write_tests" "NONE" "$(val_of COMPLEXITY_LEVEL_write_tests)"
 check "(c) iv: underivable per-stage view -- write_code" "NONE" "$(val_of COMPLEXITY_LEVEL_write_code)"
 check "(c) iv: degradation is a value, not an exit code" 0 "$RC"
+case_end
 
 echo ""
+case_begin "post-action-gate-not-from-snapshot" "bin/workflow/lib/session-facts/gate-facts.js"
 echo "=== (d) the post-action gate probe is NOT served from the bundled snapshot ==="
 # WT-8 / WCD-6 run AFTER a long subagent. A human may flip CONFIRM_* to on in between,
 # and re-serving the pre-subagent value would silently skip the review the human asked
@@ -261,7 +268,7 @@ check "(d) the bundled reader saw the pre-change value" "OFF" "$(val_of GATE_CON
 printf 'CONFIRM_TESTS=on\n' > "$CFG/.env"
 LATE="$(AGENTS_CONFIG_DIR="$(nrm "$CFG")" run_with_timeout bash "$CFG/bin/confirm-off" CONFIRM_TESTS on 2>/dev/null || true)"
 check "(d) the later probe reports the NEW value" "ON" "$LATE"
-GDEF="$(run_with_timeout node -e '
+GDEF=$(run_with_timeout node - 2>/dev/null <<'JS' || echo "MODULE_LOAD_FAILED"
   (function () {
     try {
       const m = require(process.env.KEYS_MOD);
@@ -272,15 +279,19 @@ GDEF="$(run_with_timeout node -e '
       }
       process.stdout.write("NO_GATE_DEFAULT_TABLE");
     } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }
-  })();' 2>/dev/null || echo "MODULE_LOAD_FAILED")"
+  })();
+JS
+)
 check "(d) keys.js owns the gate defaults table" "on on" "$GDEF"
 DEF_T="${GDEF%% *}"
 check "(d) write-tests keeps exactly one WT-8 probe, at the keys.js default" 1 \
   "$(grep -cF -- "confirm-off\" CONFIRM_TESTS $DEF_T" "$WT_SKILL" 2>/dev/null || true)"
 check "(d) write-code keeps exactly one WCD-6 probe, at the keys.js default" 1 \
   "$(grep -cF -- "confirm-off\" CONFIRM_CODE $DEF_T" "$WC_SKILL" 2>/dev/null || true)"
+case_end
 
 echo ""
+case_begin "caller-side-stop-contract-documented" "skills/write-tests/SKILL.md"
 echo "=== (e) the caller-side stop contract is written down, not just intended ==="
 # exit 3 only helps if the prompt tells the model to stop. Pin the prose so a future
 # edit cannot quietly drop it and leave the model building NONE/<sid>-... paths.
@@ -293,8 +304,10 @@ for f in "$WT_SKILL" "$WC_SKILL"; do
     pass "(e) $n documents the PLANS_DIR=NONE halt"
   else fail "(e) $n documents the PLANS_DIR=NONE halt -- literal not found"; fi
 done
+case_end
 
 echo ""
+case_begin "round-trips-removed-from-primary-path" "skills/write-tests/SKILL.md"
 echo "=== (f) the round trips are actually GONE from the primary path ==="
 # The point of #2102 is fewer Bash calls per skill invocation, and nothing above measures
 # that: (e) only proves the bundled reader was ADOPTED, which a skill could do while
@@ -323,15 +336,17 @@ for f in "$WT_SKILL" "$WC_SKILL"; do
     pass "(f) $n reads the bundle before the post-action probe"
   else fail "(f) $n reads the bundle before the post-action probe -- facts@$FACTS_LN probe@$PROBE_LN"; fi
 done
+case_end
 
 echo ""
+case_begin "complexity-model-keys" "bin/workflow/lib/session-facts/collect.js"
 echo "=== (g) COMPLEXITY_MODEL_* keys: no record → NONE; record present → alias ==="
 # These assertions require hooks/lib/role-model.js and the updated collect.js.
 # They FAIL until that implementation is present (test-first).
-# MODEL_PRODUCER_HIGH/LOW are unset here so defaults from ROLE_TABLE apply in (g ii).
+# PRODUCER_HIGH_MODEL/PRODUCER_LOW_MODEL are unset here so defaults from ROLE_TABLE apply in (g ii).
 # For (g iii) the non-default value is planted in the fixture CFG's .env to prove
 # that the config-file code path (not just process env) is exercised.
-unset MODEL_PRODUCER_HIGH MODEL_PRODUCER_LOW 2>/dev/null || true
+unset PRODUCER_HIGH_MODEL PRODUCER_LOW_MODEL 2>/dev/null || true
 
 # (g i) no record → both MODEL keys are NONE
 run_facts "$CFG" "gnorecord"
@@ -340,28 +355,29 @@ check "(g i) no record -- COMPLEXITY_MODEL_write_code is NONE" "NONE" "$(val_of 
 check "(g i) no record -- level keys are also NONE (non-vacuity: the run was real)" "NONE" "$(val_of COMPLEXITY_LEVEL_write_tests)"
 
 # (g ii) record present: high write_tests, low write_code → default aliases opus / sonnet.
-# MODEL_PRODUCER_HIGH=opus and MODEL_PRODUCER_LOW=sonnet are exported explicitly so the
+# PRODUCER_HIGH_MODEL=opus and PRODUCER_LOW_MODEL=sonnet are exported explicitly so the
 # test does not rely on any ambient .env value; using the named defaults makes the mapping
 # between level and alias visible in the test source.
-export MODEL_PRODUCER_HIGH=opus MODEL_PRODUCER_LOW=sonnet
+export PRODUCER_HIGH_MODEL=opus PRODUCER_LOW_MODEL=sonnet
 mk_cx gmod '{"level":"high","levels":{"outline":"low","detail":"high","write_tests":"high","write_code":"low"},"signals":["S1-multi-file"],"recorded_at":"2026-09-04T00:00:00.000Z"}'
 run_facts "$CFG" gmod
 check "(g ii) write_tests level=high → model=opus" "opus" "$(val_of COMPLEXITY_MODEL_write_tests)"
 check "(g ii) write_code level=low → model=sonnet" "sonnet" "$(val_of COMPLEXITY_MODEL_write_code)"
 check "(g ii) levels are what the fixture says (non-vacuity)" "high" "$(val_of COMPLEXITY_LEVEL_write_tests)"
-unset MODEL_PRODUCER_HIGH MODEL_PRODUCER_LOW 2>/dev/null || true
+unset PRODUCER_HIGH_MODEL PRODUCER_LOW_MODEL 2>/dev/null || true
 
-# (g iii) MODEL_PRODUCER_LOW=haiku via .env → low-stage model is haiku.
+# (g iii) PRODUCER_LOW_MODEL=haiku via .env → low-stage model is haiku.
 # This proves the .env config path (not just process.env priority), which is the
 # production path a user would actually configure.
 CFG_HAIKU="$TMPDIR_BASE/cfg-haiku"; mk_cfg "$CFG_HAIKU"
-printf 'MODEL_PRODUCER_LOW=haiku\nMODEL_PRODUCER_HIGH=opus\n' > "$CFG_HAIKU/.env"
+printf 'PRODUCER_LOW_MODEL=haiku\nPRODUCER_HIGH_MODEL=opus\n' > "$CFG_HAIKU/.env"
 mk_cx ghaiku '{"level":"high","levels":{"outline":"low","detail":"high","write_tests":"high","write_code":"low"},"signals":["S1-multi-file"],"recorded_at":"2026-09-04T00:00:00.000Z"}'
 run_facts "$CFG_HAIKU" ghaiku
-check "(g iii) MODEL_PRODUCER_LOW=haiku in .env → write_code model=haiku" "haiku" "$(val_of COMPLEXITY_MODEL_write_code)"
-check "(g iii) MODEL_PRODUCER_HIGH=opus in .env → write_tests model=opus" "opus" "$(val_of COMPLEXITY_MODEL_write_tests)"
+check "(g iii) PRODUCER_LOW_MODEL=haiku in .env → write_code model=haiku" "haiku" "$(val_of COMPLEXITY_MODEL_write_code)"
+check "(g iii) PRODUCER_HIGH_MODEL=opus in .env → write_tests model=opus" "opus" "$(val_of COMPLEXITY_MODEL_write_tests)"
 check "(g iii) fixture .env really has haiku (non-vacuity)" 1 \
-  "$(grep -cF 'MODEL_PRODUCER_LOW=haiku' "$CFG_HAIKU/.env" 2>/dev/null || true)"
+  "$(grep -cF 'PRODUCER_LOW_MODEL=haiku' "$CFG_HAIKU/.env" 2>/dev/null || true)"
+case_end
 
 echo ""
 echo "=== Results ==="

@@ -2,9 +2,10 @@
 # tests/agents/feature-2100-model-effort-lint.sh
 # Tests: agents/outline-planner.md, agents/detail-planner.md, agents/outline-reviewer.md, agents/detail-reviewer.md, agents/test-reviewer.md, agents/plan-security-reviewer.md, agents/security-scanner.md, agents/supervisor-audit.md, agents/supervisor.md, agents/complexity-judge.md, agents/skip-verifier.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, skills/review-docs/SKILL.md, skills/review-tests/SKILL.md, skills/review-plan-security/SKILL.md, skills/review-code-security/SKILL.md, skills/review-code-codex/SKILL.md, skills/review-plan-codex/SKILL.md, skills/commit-push/SKILL.md
 # Tags: agents, skills, frontmatter, lint, model-routing, static, scope:issue-specific
-# L-1..L-6 (#2100 Step 8c, TL1): model:/effort: frontmatter lint. Only the FIRST
-# `---` pair is frontmatter; body mentions never count. L-1/L-2 (codex)/L-3 are
-# RED until Step 7 edits the frontmatter; L-4/L-5/L-6 are GREEN today.
+# L-1..L-6 (#2100, TL1): model:/effort: frontmatter lint. Only the FIRST `---`
+# pair is frontmatter; body mentions never count. L-1 routed-agent fallback
+# model: pins, L-2 orchestrator sonnet pins, L-3 effort-free, L-4 commit-push,
+# L-5 fixed-model agents, L-6 extractor negative control.
 
 set -u
 # Anchor to THIS checkout: an inherited AGENTS_DIR would otherwise win in harness.sh.
@@ -62,33 +63,56 @@ lint_value() {
     fi
 }
 
-# --- L-1: the 9 routed agents carry no model: (the caller passes it) ---------
+# role_default <role> — the role's default read from ROLE_TABLE (hooks/lib/role-model.js
+# owns it), so a changed default moves the expected fallback with it.
+role_default() {
+    ROLE_MODEL_JS="$(np "$AGENTS_DIR/hooks/lib/role-model.js")" ROLE_NAME="$1" node - 2>/dev/null <<'JS'
+const t = require(process.env.ROLE_MODEL_JS).ROLE_TABLE[process.env.ROLE_NAME];
+process.stdout.write(t && typeof t.default === "string" ? t.default : "");
+JS
+}
+
+# lint_role <label> <rel> <role> — frontmatter model: equals the role's ROLE_TABLE
+# default; an unreadable default fails instead of matching an absent model: as "".
+lint_role() {
+    local label="$1" rel="$2" role="$3" want
+    want="$(role_default "$role")"
+    if [ -z "$want" ]; then
+        fail "$label" "ROLE_TABLE default for role '$role' unreadable"
+    else
+        lint_value "$label (role $role -> $want)" "$rel" model "$want"
+    fi
+}
+
+# --- L-1: the 9 routed agents keep a frontmatter model: fallback equal to their role default ---
+# agent -> role: reviewer = outline/detail/test/plan-security reviewers, security-scanner,
+# supervisor-audit; producer-high = outline-planner; producer-low = detail-planner; alert = supervisor.
 case_begin "L-1 outline-planner" "agents/outline-planner.md"
-lint_absent "L-1 outline-planner has no model:" "agents/outline-planner.md" model
+lint_role "L-1 outline-planner fallback model:" "agents/outline-planner.md" producer-high
 case_end
 case_begin "L-1 detail-planner" "agents/detail-planner.md"
-lint_absent "L-1 detail-planner has no model:" "agents/detail-planner.md" model
+lint_role "L-1 detail-planner fallback model:" "agents/detail-planner.md" producer-low
 case_end
 case_begin "L-1 outline-reviewer" "agents/outline-reviewer.md"
-lint_absent "L-1 outline-reviewer has no model:" "agents/outline-reviewer.md" model
+lint_role "L-1 outline-reviewer fallback model:" "agents/outline-reviewer.md" reviewer
 case_end
 case_begin "L-1 detail-reviewer" "agents/detail-reviewer.md"
-lint_absent "L-1 detail-reviewer has no model:" "agents/detail-reviewer.md" model
+lint_role "L-1 detail-reviewer fallback model:" "agents/detail-reviewer.md" reviewer
 case_end
 case_begin "L-1 test-reviewer" "agents/test-reviewer.md"
-lint_absent "L-1 test-reviewer has no model:" "agents/test-reviewer.md" model
+lint_role "L-1 test-reviewer fallback model:" "agents/test-reviewer.md" reviewer
 case_end
 case_begin "L-1 plan-security-reviewer" "agents/plan-security-reviewer.md"
-lint_absent "L-1 plan-security-reviewer has no model:" "agents/plan-security-reviewer.md" model
+lint_role "L-1 plan-security-reviewer fallback model:" "agents/plan-security-reviewer.md" reviewer
 case_end
 case_begin "L-1 security-scanner" "agents/security-scanner.md"
-lint_absent "L-1 security-scanner has no model:" "agents/security-scanner.md" model
+lint_role "L-1 security-scanner fallback model:" "agents/security-scanner.md" reviewer
 case_end
 case_begin "L-1 supervisor-audit" "agents/supervisor-audit.md"
-lint_absent "L-1 supervisor-audit has no model:" "agents/supervisor-audit.md" model
+lint_role "L-1 supervisor-audit fallback model:" "agents/supervisor-audit.md" reviewer
 case_end
 case_begin "L-1 supervisor" "agents/supervisor.md"
-lint_absent "L-1 supervisor has no model:" "agents/supervisor.md" model
+lint_role "L-1 supervisor fallback model:" "agents/supervisor.md" alert
 case_end
 
 # --- L-2: the 8 orchestrator skills pin exactly model: sonnet ----------------

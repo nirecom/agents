@@ -116,5 +116,9 @@ d2099_wrapper_injection() {
     fi
 }
 
+case_begin "r24-cli-read-back-invariant" "bin/workflow/record-complexity-evaluation"
 d2099_cli_read_back_invariant
+case_end
+case_begin "r29-wrapper-injection" "bin/workflow/record-complexity-and-skip"
 d2099_wrapper_injection
+case_end

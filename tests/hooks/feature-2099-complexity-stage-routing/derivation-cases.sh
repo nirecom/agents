@@ -274,9 +274,21 @@ L1-high-signals=low,low,high L1-low-signals=low,low,high L2-high-empty=high,high
 EOF
 }
 
+case_begin "exports-surface-and-ssot-values" "hooks/workflow-state/complexity-routing.js"
 d2099_exports
+case_end
+case_begin "derive-stage-level-matrix" "hooks/workflow-state/complexity-routing.js"
 d2099_matrix
+case_end
+case_begin "write-code-equivalence-and-aggregate-independence" "hooks/workflow-state/complexity-routing.js"
 d2099_equivalence
+case_end
+case_begin "derive-stage-levels-bulk-and-purity" "hooks/workflow-state/complexity-routing.js"
 d2099_bulk_and_purity
+case_end
+case_begin "is-zero-signal-low-truth-table" "hooks/workflow-state/complexity-routing.js"
 d2099_zero_signal_low
+case_end
+case_begin "derive-legacy-stage-levels" "hooks/workflow-state/complexity-routing.js"
 d2099_legacy_derivation
+case_end

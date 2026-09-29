@@ -6,6 +6,9 @@
 # spawn instruction is formatAgentModelLine(<role>). RED until Step 6 lands.
 # Runnable standalone: bash tests/hooks/feature-feat-928-supervisor-report-format/model-line.sh
 
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=../../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
@@ -53,7 +56,7 @@ ml_render() {
     printf '%b' "$content" > "$ML_WORK/cfg/.env"
     (
         cd "$ML_WORK/neutral" || exit 1
-        run_with_timeout 10 env -u MODEL_REVIEWER -u MODEL_ALERT -u MODEL_PRODUCER_HIGH -u MODEL_PRODUCER_LOW \
+        run_with_timeout 10 env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL -u PRODUCER_LOW_MODEL \
             -u CLAUDE_CODE_SUBAGENT_MODEL -u CLAUDE_PROJECT_DIR \
             -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
             AGENTS_CONFIG_DIR="$(_to_node_path "$ML_WORK/cfg")" \
@@ -104,27 +107,30 @@ RE_H6='^Action: Run agents/supervisor-audit[.]md as a subagent'
 RE_H78='^Action: invoke agents/supervisor-audit[.]md as a subagent'
 
 ml_render base ''
-ml_render haiku 'MODEL_ALERT=haiku\nMODEL_REVIEWER=haiku\n'
-ml_render alert_only 'MODEL_ALERT=haiku\n'
-ml_render reviewer_only 'MODEL_REVIEWER=haiku\n'
-ml_render invalid 'MODEL_ALERT=gpt-mlleak\nMODEL_REVIEWER=claude-mlleak-5\n'
+ml_render haiku 'ALERT_MODEL=haiku\nREVIEWER_MODEL=haiku\n'
+ml_render alert_only 'ALERT_MODEL=haiku\n'
+ml_render reviewer_only 'REVIEWER_MODEL=haiku\n'
+ml_render invalid 'ALERT_MODEL=gpt-mlleak\nREVIEWER_MODEL=claude-mlleak-5\n'
 
 # --- SF-M1: fixture alias reaches the line after every spawn instruction -----
-ml_check "SF-M1 H1 cumSev (no findings) -> MODEL_ALERT" haiku H1 "$RE_H12" haiku
-ml_check "SF-M1 H2 cumSev (findings) -> MODEL_ALERT" haiku H2 "$RE_H12" haiku
-ml_check "SF-M1 H3 L2-armed -> MODEL_ALERT" haiku H3 "$RE_H34" haiku
-ml_check "SF-M1 H4 worktree-off proposal -> MODEL_ALERT" haiku H4 "$RE_H34" haiku
-ml_check "SF-M1 H6 pre-merge block -> MODEL_REVIEWER" haiku H6 "$RE_H6" haiku
-ml_check "SF-M1 H7 L3 stage boundary -> MODEL_REVIEWER" haiku H7 "$RE_H78" haiku
-ml_check "SF-M1 H8 L3 severity threshold -> MODEL_REVIEWER" haiku H8 "$RE_H78" haiku
+case_begin "sf-m1-spawn-model-line" "hooks/lib/supervisor-report-format.js"
+ml_check "SF-M1 H1 cumSev (no findings) -> ALERT_MODEL" haiku H1 "$RE_H12" haiku
+ml_check "SF-M1 H2 cumSev (findings) -> ALERT_MODEL" haiku H2 "$RE_H12" haiku
+ml_check "SF-M1 H3 L2-armed -> ALERT_MODEL" haiku H3 "$RE_H34" haiku
+ml_check "SF-M1 H4 worktree-off proposal -> ALERT_MODEL" haiku H4 "$RE_H34" haiku
+ml_check "SF-M1 H6 pre-merge block -> REVIEWER_MODEL" haiku H6 "$RE_H6" haiku
+ml_check "SF-M1 H7 L3 stage boundary -> REVIEWER_MODEL" haiku H7 "$RE_H78" haiku
+ml_check "SF-M1 H8 L3 severity threshold -> REVIEWER_MODEL" haiku H8 "$RE_H78" haiku
+case_end
 
 # --- SF-M1 role-swap: only the matching role's key moves the line ------------
-ml_check "SF-M1 swap H1 ignores MODEL_REVIEWER" reviewer_only H1 "$RE_H12" sonnet
-ml_check "SF-M1 swap H3 ignores MODEL_REVIEWER" reviewer_only H3 "$RE_H34" sonnet
-ml_check "SF-M1 swap H4 ignores MODEL_REVIEWER" reviewer_only H4 "$RE_H34" sonnet
-ml_check "SF-M1 swap H6 ignores MODEL_ALERT" alert_only H6 "$RE_H6" opus
-ml_check "SF-M1 swap H7 ignores MODEL_ALERT" alert_only H7 "$RE_H78" opus
-ml_check "SF-M1 swap H8 ignores MODEL_ALERT" alert_only H8 "$RE_H78" opus
+case_begin "sf-m1-role-swap-isolation" "hooks/lib/supervisor-report-format.js"
+ml_check "SF-M1 swap H1 ignores REVIEWER_MODEL" reviewer_only H1 "$RE_H12" sonnet
+ml_check "SF-M1 swap H3 ignores REVIEWER_MODEL" reviewer_only H3 "$RE_H34" sonnet
+ml_check "SF-M1 swap H4 ignores REVIEWER_MODEL" reviewer_only H4 "$RE_H34" sonnet
+ml_check "SF-M1 swap H6 ignores ALERT_MODEL" alert_only H6 "$RE_H6" opus
+ml_check "SF-M1 swap H7 ignores ALERT_MODEL" alert_only H7 "$RE_H78" opus
+ml_check "SF-M1 swap H8 ignores ALERT_MODEL" alert_only H8 "$RE_H78" opus
 swap_diff=""
 for h in H1 H2 H3 H4; do
     cmp -s "$ML_WORK/out/base/$h.txt" "$ML_WORK/out/reviewer_only/$h.txt" || swap_diff="$swap_diff $h"
@@ -139,26 +145,31 @@ elif [ -z "$swap_diff" ]; then
 else
     fail "SF-M1 swap: output changed under the other role's key:$swap_diff"
 fi
+case_end
 
 # --- SF-M2: disallowed values fall back to the role default, value withheld ---
-ml_check "SF-M2 H2 invalid MODEL_ALERT -> sonnet" invalid H2 "$RE_H12" sonnet
-ml_check "SF-M2 H3 invalid MODEL_ALERT -> sonnet" invalid H3 "$RE_H34" sonnet
-ml_check "SF-M2 H6 invalid MODEL_REVIEWER -> opus" invalid H6 "$RE_H6" opus
-ml_check "SF-M2 H7 invalid MODEL_REVIEWER -> opus" invalid H7 "$RE_H78" opus
+case_begin "sf-m2-invalid-model-fallback" "hooks/lib/supervisor-report-format.js"
+ml_check "SF-M2 H2 invalid ALERT_MODEL -> sonnet" invalid H2 "$RE_H12" sonnet
+ml_check "SF-M2 H3 invalid ALERT_MODEL -> sonnet" invalid H3 "$RE_H34" sonnet
+ml_check "SF-M2 H6 invalid REVIEWER_MODEL -> opus" invalid H6 "$RE_H6" opus
+ml_check "SF-M2 H7 invalid REVIEWER_MODEL -> opus" invalid H7 "$RE_H78" opus
 leak="$(grep -l -e 'mlleak' "$ML_WORK"/out/invalid/*.txt "$ML_WORK/out/invalid.err" 2>/dev/null)"
 if [ -f "$ML_WORK/out/invalid/H1.txt" ] && [ -z "$leak" ]; then
     pass "SF-M2 invalid values never echoed into any formatter output"
 else
     fail "SF-M2 invalid value leaked or no output (${leak:-no output})"
 fi
+case_end
 
 # --- SF-M3 negative control: no spawn instruction -> no model line ------------
+case_begin "sf-m3-no-spawn-line-no-model" "hooks/lib/supervisor-report-format.js"
 fb="$ML_WORK/out/haiku/FB.txt"
 if [ -f "$fb" ] && grep -q 'freshness backstop denied the merge' "$fb" && ! grep -q 'Subagent model:' "$fb"; then
     pass "SF-M3 formatFreshnessBackstopReason carries no Subagent model: line"
 else
     fail "SF-M3 formatFreshnessBackstopReason output unexpected: $(head -c 300 "$fb" 2>/dev/null)"
 fi
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

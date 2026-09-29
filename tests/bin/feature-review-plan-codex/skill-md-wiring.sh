@@ -7,6 +7,7 @@
 # ---------------------------------------------------------------------------
 # 27. make-detail-plan SKILL.md invokes run-codex-review-loop; shim has context strings
 # ---------------------------------------------------------------------------
+case_begin "make-detail-plan-skill-md-wiring" "skills/make-detail-plan/SKILL.md"
 DETAIL_SKILL="$AGENTS_ROOT/skills/make-detail-plan/SKILL.md"
 SHARED_LOOP="$AGENTS_ROOT/skills/_shared/codex-review-loop.md"
 EXIT_CODES_DOC="$AGENTS_ROOT/skills/_shared/codex-review-loop/exit-codes.md"
@@ -56,10 +57,12 @@ fi
 if [[ $ERRS27 -eq 0 ]]; then
   pass "make-detail-plan SKILL.md + shared loop: context wiring, wrapper invoked, exit-4 rule, no duplication"
 fi
+case_end
 
 # ---------------------------------------------------------------------------
 # 28. SKILL.md files use flat ~/.workflow-plans/ paths (#866 — no drafts/)
 # ---------------------------------------------------------------------------
+case_begin "skill-md-flat-plans-paths" "skills/make-detail-plan/SKILL.md"
 OUTLINE_SKILL="$AGENTS_ROOT/skills/make-outline-plan/SKILL.md"
 ERRS28=0
 
@@ -104,10 +107,12 @@ fi
 if [[ $ERRS28 -eq 0 ]]; then
   pass "SKILL.md files: both use flat ~/.workflow-plans/ paths (no drafts/, %TEMP%, /tmp/)"
 fi
+case_end
 
 # ---------------------------------------------------------------------------
 # 29. make-outline-plan SKILL.md invokes run-codex-review-loop; exit-4 rule present
 # ---------------------------------------------------------------------------
+case_begin "make-outline-plan-skill-md-wiring" "skills/make-outline-plan/SKILL.md"
 ERRS29=0
 
 if ! grep -qF 'run-codex-review-loop' "$OUTLINE_SKILL"; then
@@ -133,6 +138,7 @@ fi
 if [[ $ERRS29 -eq 0 ]]; then
   pass "make-outline-plan + shared loop: wrapper invoked, exit-4 rule, no duplication, context ref"
 fi
+case_end
 
 # ---------------------------------------------------------------------------
 # 30. (#2100) codex-review-loop.md + exit-codes.md: PLANNER_MODEL param and
@@ -144,6 +150,7 @@ fi
 #   exit-codes.md: row 1 mentions PLANNER_MODEL; row 3 mentions
 #   "resolve-role-model --role reviewer".
 # All four assertions FAIL until the implementation writes are done.
+case_begin "codex-review-loop-planner-model" "skills/_shared/codex-review-loop.md"
 ERRS30=0
 
 if grep -qF 'PLANNER_MODEL' "$SHARED_LOOP"; then
@@ -173,4 +180,5 @@ else
   fail "30d: exit-codes.md missing resolve-role-model --role reviewer (detail.md Step 5 — not yet written)"
   ERRS30=$((ERRS30 + 1))
 fi
+case_end
 

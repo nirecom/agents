@@ -123,7 +123,7 @@ d2099il_append_is_refused_atomically() {
     local sid before after_bytes after_count err
     sid=$(new_session il-append)
     before=$(d2099_state_bytes "$sid")
-    err=$(BARREL="$BARREL_N" SID="$sid" run_with_timeout node -e '
+    err=$(BARREL="$BARREL_N" SID="$sid" run_with_timeout node - 2>&1 <<'JS'
 const b = require(process.env.BARREL);
 try {
   b.appendEvents(process.env.SID, [{
@@ -137,7 +137,8 @@ try {
   }]);
   console.log("NO_THROW");
 } catch (e) { console.log(e.name); }
-' 2>&1)
+JS
+)
     assert_eq "IL-7 appendEvents refuses a levels map with an out-of-vocabulary stage value" \
         "InvalidEventError" "$err"
     after_bytes=$(d2099_state_bytes "$sid")
@@ -168,13 +169,13 @@ fs.writeFileSync(b.getStatePath(process.env.SID), JSON.stringify({
 }
 
 d2099il_migrated_shape() {
-    BARREL="$BARREL_N" SID="$1" run_with_timeout node -e '
+    BARREL="$BARREL_N" SID="$1" run_with_timeout node - 2>&1 <<'JS'
 const b = require(process.env.BARREL);
 const s = b.readState(process.env.SID);
 const ev = ((s && s.events) || []).filter((e) => e && e.kind === "complexity_evaluation");
 if (!ev.length) { console.log("events=0"); }
 else { console.log("events=" + ev.length + " level=" + ev[0].level + " levels=" + JSON.stringify(ev[0].levels)); }
-' 2>&1
+JS
 }
 
 # IL-10: every migrated evaluation carries a WELL-FORMED levels map or no map at
@@ -233,10 +234,24 @@ console.log(String(r.hasComplexityEvaluation(process.env.SID)));
         "false" "$got"
 }
 
+case_begin "projection-strips-malformed-levels" "hooks/workflow-state/state-io/projection.js"
 d2099il_projection_strips_malformed_levels
+case_end
+case_begin "stage-read-rederived-from-signals" "hooks/workflow-state/skip-signal-resolver/complexity.js"
 d2099il_stage_read_is_rederived
+case_end
+case_begin "aggregate-read-completes-levels-backcompat" "bin/workflow/read-complexity-evaluation"
 d2099il_aggregate_read_completes_levels
+case_end
+case_begin "append-refused-atomically-bad-levels" "hooks/workflow-state/state-io/events.js"
 d2099il_append_is_refused_atomically
+case_end
+case_begin "migration-emits-only-wellformed-levels" "hooks/workflow-state/state-io/migrations/v1-to-v2.js"
 d2099il_migration_emits_only_wellformed_levels
+case_end
+case_begin "migration-unmappable-verdict-reads-none" "hooks/workflow-state/state-io/migrations/v1-to-v2.js"
 d2099il_migration_unmappable_reads_none
+case_end
+case_begin "migration-out-of-vocabulary-aggregate-level" "hooks/workflow-state/state-io/migrations/v1-to-v2.js"
 d2099il_migration_out_of_vocabulary_aggregate
+case_end

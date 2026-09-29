@@ -25,7 +25,7 @@ harness_isolate "$WORK/iso"
 NEUTRAL="$WORK/neutral"; mkdir -p "$NEUTRAL"
 
 # rm_run <env-file-content> <node|cli> <script-or-args...> [--env VAR=val...]
-# Sets RM_OUT / RM_ERR / RM_RC. Fresh cfg dir per call; ambient MODEL_* and
+# Sets RM_OUT / RM_ERR / RM_RC. Fresh cfg dir per call; ambient *_MODEL role keys and
 # project-overlay variables are stripped so the developer's .env never leaks in.
 RM_OUT=""; RM_ERR=""; RM_RC=0
 rm_run() {
@@ -46,7 +46,7 @@ rm_run() {
     else
         cmd=(node "$(np "$RRM")" "${args[@]}")
     fi
-    (cd "$NEUTRAL" && env -u MODEL_REVIEWER -u MODEL_ALERT -u MODEL_PRODUCER_HIGH -u MODEL_PRODUCER_LOW \
+    (cd "$NEUTRAL" && env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL -u PRODUCER_LOW_MODEL \
         -u CLAUDE_PROJECT_DIR -u CLAUDE_CODE_SUBAGENT_MODEL AGENTS_CONFIG_DIR="$(np "$cfg")" "${envs[@]}" \
         bash "$RWT" 10 "${cmd[@]}" >"$WORK/out" 2>"$WORK/err")
     RM_RC=$?
@@ -70,7 +70,7 @@ case_begin "RM-1 defaults" "hooks/lib/role-model.js"
 if have_impl "RM-1 lib defaults"; then
     rm_run "" node "$ROLES_JS
 process.stdout.write(roles.map((r) => { const x = rm.resolveRoleModel(r); return r + '=' + x.model + ':' + x.key + ':' + x.invalid; }).join(','));"
-    assert_eq "$RM_OUT" "reviewer=opus:MODEL_REVIEWER:false,producer-high=opus:MODEL_PRODUCER_HIGH:false,producer-low=sonnet:MODEL_PRODUCER_LOW:false,alert=sonnet:MODEL_ALERT:false"
+    assert_eq "$RM_OUT" "reviewer=opus:REVIEWER_MODEL:false,producer-high=opus:PRODUCER_HIGH_MODEL:false,producer-low=sonnet:PRODUCER_LOW_MODEL:false,alert=sonnet:ALERT_MODEL:false"
 fi
 case_end
 case_begin "RM-1 CLI defaults" "bin/resolve-role-model"
@@ -88,7 +88,7 @@ case_end
 case_begin "RM-1b fail-open without load-env" "hooks/lib/role-model.js"
 if have_impl "RM-1b fail-open"; then
     iso="$WORK/lonely/hooks/lib"; mkdir -p "$iso"; cp "$ROLE_MODEL" "$iso/"
-    rm_run "MODEL_REVIEWER=haiku\n" node "const rm = require('$(np "$iso")/role-model.js');
+    rm_run "REVIEWER_MODEL=haiku\n" node "const rm = require('$(np "$iso")/role-model.js');
 process.stdout.write(rm.resolveRoleModel('reviewer').model + ',' + rm.resolveRoleModel('alert').model);"
     assert_eq "$RM_RC:$RM_OUT" "0:opus,sonnet"
 fi
@@ -97,14 +97,14 @@ case_end
 # --- RM-2: .env value reaches the resolver; exported env beats .env ----------
 case_begin "RM-2 .env and env precedence" "hooks/lib/role-model.js"
 if have_impl "RM-2"; then
-    rm_run "MODEL_REVIEWER=haiku\nMODEL_ALERT=opus\n" node "$ROLES_JS
-process.stdout.write(rm.resolveRoleModel('reviewer').model + ',' + rm.resolveRoleModel('alert').model);" --env MODEL_ALERT=haiku
+    rm_run "REVIEWER_MODEL=haiku\nALERT_MODEL=opus\n" node "$ROLES_JS
+process.stdout.write(rm.resolveRoleModel('reviewer').model + ',' + rm.resolveRoleModel('alert').model);" --env ALERT_MODEL=haiku
     assert_eq "$RM_OUT" "haiku,haiku"
 fi
 case_end
 case_begin "RM-2 CLI reads .env" "bin/resolve-role-model"
 if have_cli "RM-2 CLI"; then
-    rm_run "MODEL_PRODUCER_LOW=haiku\n" cli --role producer-low
+    rm_run "PRODUCER_LOW_MODEL=haiku\n" cli --role producer-low
     assert_eq "$RM_RC:$RM_OUT" "0:model=haiku"
 fi
 case_end
@@ -113,7 +113,7 @@ case_end
 case_begin "RM-3 normalization" "hooks/lib/role-model.js"
 if have_impl "RM-3"; then
     # Non-default targets, so a silent fallback cannot pass for normalization.
-    rm_run 'MODEL_REVIEWER=" Haiku "\nMODEL_ALERT=OPUS\nMODEL_PRODUCER_HIGH=" Sonnet"\n' node "$ROLES_JS
+    rm_run 'REVIEWER_MODEL=" Haiku "\nALERT_MODEL=OPUS\nPRODUCER_HIGH_MODEL=" Sonnet"\n' node "$ROLES_JS
 const a = rm.resolveRoleModel('reviewer'), b = rm.resolveRoleModel('alert'), c = rm.resolveRoleModel('producer-high');
 process.stdout.write([a.model, a.invalid, b.model, b.invalid, c.model, c.invalid].join(','));"
     assert_eq "$RM_OUT" "haiku,false,opus,false,sonnet,false"
@@ -126,14 +126,14 @@ case_begin "RM-4 invalid -> default (lib)" "hooks/lib/role-model.js"
 if have_impl "RM-4 lib"; then
     got=""
     for v in "${RM4_VALUES[@]}"; do
-        rm_run "MODEL_REVIEWER=$v\nMODEL_ALERT=$v\nMODEL_PRODUCER_HIGH=$v\nMODEL_PRODUCER_LOW=$v\n" node "$ROLES_JS
+        rm_run "REVIEWER_MODEL=$v\nALERT_MODEL=$v\nPRODUCER_HIGH_MODEL=$v\nPRODUCER_LOW_MODEL=$v\n" node "$ROLES_JS
 process.stdout.write(roles.map((r) => { const x = rm.resolveRoleModel(r); return x.model + ':' + x.invalid; }).join('/'));"
         got="$got$v=$RM_OUT;"
     done
     want=""
     for v in "${RM4_VALUES[@]}"; do want="${want}$v=opus:true/opus:true/sonnet:true/sonnet:true;"; done
     assert_eq "$got" "$want"
-    rm_run 'MODEL_REVIEWER="haiku\nrm4leakmarker"\n' node "$ROLES_JS
+    rm_run 'REVIEWER_MODEL="haiku\nrm4leakmarker"\n' node "$ROLES_JS
 const a = rm.resolveRoleModel('reviewer'); process.stdout.write(a.model + ':' + a.invalid);"
     assert_eq "$RM_OUT" "opus:true"
 fi
@@ -141,11 +141,11 @@ case_end
 case_begin "RM-4 invalid -> default (CLI, value withheld)" "bin/resolve-role-model"
 if have_cli "RM-4 CLI"; then
     for v in "${RM4_VALUES[@]}" 'haiku\nrm4leakmarker'; do
-        rm_run "MODEL_REVIEWER=\"$v\"\n" cli --role reviewer
+        rm_run "REVIEWER_MODEL=\"$v\"\n" cli --role reviewer
         shown="${v%%\\n*}"; [ "$shown" = "haiku" ] && shown="rm4leakmarker"
         if [ "$RM_RC" != 0 ] || [ "$RM_OUT" != "model=opus" ]; then
             fail "RM-4 CLI $v" "rc=$RM_RC out=$RM_OUT (want rc=0 model=opus)"
-        elif ! printf '%s' "$RM_ERR" | grep -q 'MODEL_REVIEWER'; then
+        elif ! printf '%s' "$RM_ERR" | grep -q 'REVIEWER_MODEL'; then
             fail "RM-4 CLI $v" "stderr does not name the key: $RM_ERR"
         elif printf '%s' "$RM_ERR$RM_OUT" | grep -qF -- "$shown"; then
             fail "RM-4 CLI $v" "value leaked: err=$RM_ERR"
@@ -154,7 +154,7 @@ if have_cli "RM-4 CLI"; then
         fi
     done
     # CPR-ORTH: the other three roles fall back to their own default and name their own key.
-    for row in "producer-high|MODEL_PRODUCER_HIGH|opus" "producer-low|MODEL_PRODUCER_LOW|sonnet" "alert|MODEL_ALERT|sonnet"; do
+    for row in "producer-high|PRODUCER_HIGH_MODEL|opus" "producer-low|PRODUCER_LOW_MODEL|sonnet" "alert|ALERT_MODEL|sonnet"; do
         IFS='|' read -r role key dflt <<<"$row"
         rm_run "$key=gpt-rm4leak\n" cli --role "$role"
         if [ "$RM_RC" != 0 ] || [ "$RM_OUT" != "model=$dflt" ]; then
@@ -168,7 +168,7 @@ if have_cli "RM-4 CLI"; then
         fi
     done
     # Negative control: a valid value produces no warning at all.
-    rm_run "MODEL_REVIEWER=haiku\n" cli --role reviewer
+    rm_run "REVIEWER_MODEL=haiku\n" cli --role reviewer
     assert_eq "$RM_RC:$RM_OUT:$RM_ERR" "0:model=haiku:"
 fi
 case_end
@@ -194,33 +194,33 @@ process.stdout.write(['high', 'low', 'medium', undefined, 'NONE'].map((l) => rm.
     rm_run "" node "$ML_JS"
     assert_eq "$RM_OUT" "opus,sonnet,opus,opus,opus"
     # Distinct non-default values prove which role each level reads.
-    rm_run "MODEL_PRODUCER_HIGH=haiku\nMODEL_PRODUCER_LOW=opus\n" node "$ML_JS"
+    rm_run "PRODUCER_HIGH_MODEL=haiku\nPRODUCER_LOW_MODEL=opus\n" node "$ML_JS"
     assert_eq "$RM_OUT" "haiku,opus,haiku,haiku,haiku"
 fi
 case_end
 
-# --- RM-7: ROLE_TABLE keys/defaults == the MODEL_* lines of .env.example ------
+# --- RM-7: ROLE_TABLE keys/defaults == the *_MODEL role lines of .env.example -
 case_begin "RM-7 .env.example parity" ".env.example"
 if have_impl "RM-7"; then
     rm_run "" node "$ROLES_JS
 process.stdout.write(Object.keys(rm.ROLE_TABLE).map((r) => { const x = rm.resolveRoleModel(r); return x.key + '=' + x.model; }).sort().join(','));"
     table="$RM_OUT"
-    example="$(grep -E '^MODEL_[A-Z0-9_]+=' "$ENV_EXAMPLE" | tr -d '\r' | sort | paste -sd, -)"
+    example="$(grep -E '^[A-Z0-9_]+_MODEL=' "$ENV_EXAMPLE" | grep -vE '^(ANTHROPIC|CLAUDE)_' | tr -d '\r' | sort | paste -sd, -)"
     if [ -z "$table" ]; then
         fail "RM-7" "ROLE_TABLE produced nothing (rc=$RM_RC err=$RM_ERR)"
     elif [ -z "$example" ]; then
-        fail "RM-7" ".env.example has no MODEL_* lines yet (want $table)"
+        fail "RM-7" ".env.example has no *_MODEL role lines yet (want $table)"
     else
         assert_eq "$example" "$table"
     fi
-    assert_eq "$table" "MODEL_ALERT=sonnet,MODEL_PRODUCER_HIGH=opus,MODEL_PRODUCER_LOW=sonnet,MODEL_REVIEWER=opus"
+    assert_eq "$table" "ALERT_MODEL=sonnet,PRODUCER_HIGH_MODEL=opus,PRODUCER_LOW_MODEL=sonnet,REVIEWER_MODEL=opus"
 fi
 case_end
 
 # --- RM-8: unknown role is a programming error (TypeError), not fail-open -----
 case_begin "RM-8 unknown role throws" "hooks/lib/role-model.js"
 if have_impl "RM-8"; then
-    rm_run "MODEL_REVIEWER=haiku\n" node "$ROLES_JS
+    rm_run "REVIEWER_MODEL=haiku\n" node "$ROLES_JS
 const t = (f) => { try { f(); return 'none'; } catch (e) { return e instanceof TypeError ? 'TypeError' : 'other'; } };
 process.stdout.write([t(() => rm.formatAgentModelLine('nope')), t(() => rm.resolveRoleModel('nope')), rm.formatAgentModelLine('reviewer')].join('|'));"
     assert_eq "$RM_OUT" 'TypeError|TypeError|Subagent model: pass model: "haiku" to the Agent tool.'
@@ -231,11 +231,11 @@ case_end
 case_begin "RM-9 .env.local overlay through the CLI" "bin/resolve-role-model"
 if have_cli "RM-9"; then
     proj="$WORK/rm9-proj"; mkdir -p "$proj"
-    printf 'MODEL_REVIEWER=haiku\n' > "$proj/.env.local"
-    rm_run "MODEL_REVIEWER=sonnet\n" cli --role reviewer --env CLAUDE_PROJECT_DIR="$(np "$proj")"
+    printf 'REVIEWER_MODEL=haiku\n' > "$proj/.env.local"
+    rm_run "REVIEWER_MODEL=sonnet\n" cli --role reviewer --env CLAUDE_PROJECT_DIR="$(np "$proj")"
     with_local="$RM_RC:$RM_OUT"
     # Negative control: same global .env, no project root -> the global value.
-    rm_run "MODEL_REVIEWER=sonnet\n" cli --role reviewer
+    rm_run "REVIEWER_MODEL=sonnet\n" cli --role reviewer
     assert_eq "$with_local|$RM_RC:$RM_OUT" "0:model=haiku|0:model=sonnet"
 fi
 case_end

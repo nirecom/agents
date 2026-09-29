@@ -401,11 +401,25 @@ EOF
 # L3 gap: an orchestrator that resolves the slot right and hands Agent something
 #   else. Closest substitute: CO-9..CO-14. Only a TL3 transcript review closes it.
 
+case_begin "orchestration-commands-are-real" "skills/make-detail-plan/SKILL.md"
 d2099_orch_commands_are_real
+case_end
+
+case_begin "orchestration-recorded-selects-model" "bin/workflow/read-complexity-evaluation"
 d2099_orch_recorded_selects_model
+case_end
+
+case_begin "orchestration-none-fallback" "bin/workflow/derive-complexity-level"
 d2099_orch_none_fallback
+case_end
+
+case_begin "orchestration-agent-handoff" "skills/make-detail-plan/SKILL.md"
 d2099_orch_agent_handoff
+case_end
+
+case_begin "orchestration-dispatched-model-cases" "bin/workflow/read-complexity-evaluation"
 d2099_orch_dispatched_model_cases
+case_end
 
 # Why CO-11..CO-14 IS the closest feasible approximation, not a convenient one.
 # The chain is judge -> write point -> stored record -> read step -> `model:` slot

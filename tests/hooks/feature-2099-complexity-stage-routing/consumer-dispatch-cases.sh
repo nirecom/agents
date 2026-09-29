@@ -9,7 +9,7 @@
 # Agent call itself stays the TL3 gap the parent runner already declares.
 
 # d2099_doc_model_for <skill.md> <level> — reads model= from BIN_DERIVE via
-# MODEL_PRODUCER_HIGH/LOW. After #2100 skills carry no hardcoded model table.
+# PRODUCER_HIGH_MODEL/PRODUCER_LOW_MODEL. After #2100 skills carry no hardcoded model table.
 d2099_doc_model_for() {
     case "$2" in high|low) ;; *) echo "NO_LEVEL"; return ;; esac
     local sigs; [ "$2" = "high" ] && sigs="S2-architecture" || sigs=""
@@ -151,38 +151,38 @@ d2099_none_selects_fallback() {
         "opus" "$(d2099_dispatch_model "$wcd" "$sid2" write_code)"
 }
 
-# CD-17: MODEL_PRODUCER_LOW override. With the env var set to a non-default alias,
+# CD-17: PRODUCER_LOW_MODEL override. With the env var set to a non-default alias,
 # a low-level dispatch must resolve to that alias, not the hard-coded default.
 d2099_env_override_selects_model() {
     local mdp sid
     mdp="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
     sid=$(new_session cdhaiku)
     run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "" >/dev/null 2>&1
-    assert_eq "CD-17 MODEL_PRODUCER_LOW=haiku routes low dispatch to haiku" \
+    assert_eq "CD-17 PRODUCER_LOW_MODEL=haiku routes low dispatch to haiku" \
         "haiku" \
-        "$(MODEL_PRODUCER_LOW=haiku d2099_dispatch_model "$mdp" "$sid" detail)"
+        "$(PRODUCER_LOW_MODEL=haiku d2099_dispatch_model "$mdp" "$sid" detail)"
 }
 
 # CD-18..24 (#2100 Step 3/5 MOP-2): the outline stage is routed like detail and
-# its model= follows MODEL_PRODUCER_LOW / MODEL_PRODUCER_HIGH, recorded or derived
+# its model= follows PRODUCER_LOW_MODEL / PRODUCER_HIGH_MODEL, recorded or derived
 # (CD-18..21, CLI side), and MOP-2 hands that model= to outline-planner (CD-22..24).
 d2099_outline_stage_selects_model() {
     local mop sid_lo sid_hi
     mop="$AGENTS_DIR/skills/make-outline-plan/SKILL.md"
     sid_lo=$(new_session cdoutlo)
     run_with_timeout node "$BIN_RECORD" --session "$sid_lo" --signals "S1-multi-file" >/dev/null 2>&1
-    assert_eq "CD-18 MOP-2's read (stage outline) answers model=haiku for a recorded low (MODEL_PRODUCER_LOW=haiku)" \
-        "haiku" "$(MODEL_PRODUCER_LOW=haiku d2099_dispatch_model "$mop" "$sid_lo" outline)"
+    assert_eq "CD-18 MOP-2's read (stage outline) answers model=haiku for a recorded low (PRODUCER_LOW_MODEL=haiku)" \
+        "haiku" "$(PRODUCER_LOW_MODEL=haiku d2099_dispatch_model "$mop" "$sid_lo" outline)"
     assert_eq "CD-19 the same outline record keeps the sonnet default without the override" \
         "sonnet" "$(d2099_dispatch_model "$mop" "$sid_lo" outline)"
 
     sid_hi=$(new_session cdouthi)
     run_with_timeout node "$BIN_RECORD" --session "$sid_hi" --signals "S2-architecture" >/dev/null 2>&1
-    assert_eq "CD-20 MOP-2's read (stage outline) answers model=haiku for a recorded high (MODEL_PRODUCER_HIGH=haiku)" \
-        "haiku" "$(MODEL_PRODUCER_HIGH=haiku d2099_dispatch_model "$mop" "$sid_hi" outline)"
+    assert_eq "CD-20 MOP-2's read (stage outline) answers model=haiku for a recorded high (PRODUCER_HIGH_MODEL=haiku)" \
+        "haiku" "$(PRODUCER_HIGH_MODEL=haiku d2099_dispatch_model "$mop" "$sid_hi" outline)"
 
     local derived
-    derived=$(MODEL_PRODUCER_LOW=haiku run_with_timeout node "$BIN_DERIVE" --stage outline --signals "" 2>/dev/null \
+    derived=$(PRODUCER_LOW_MODEL=haiku run_with_timeout node "$BIN_DERIVE" --stage outline --signals "" 2>/dev/null \
         | tr -d '\r' | grep -E '^(level|model)=' | paste -sd'|' -)
     assert_eq "CD-21 the NONE fallback derives level=low and model=haiku for stage outline" \
         "level=low|model=haiku" "$derived"
@@ -202,8 +202,22 @@ d2099_outline_stage_selects_model() {
         "$(d2099_section_has_re "$mop" MOP-2 'model: *"?(opus|sonnet|haiku)"?[ ,)`]')"
 }
 
+case_begin "documented-model-mapping" "skills/make-detail-plan/SKILL.md"
 d2099_documented_mapping
+case_end
+
+case_begin "recorded-verdict-selects-model" "bin/workflow/read-complexity-evaluation"
 d2099_recorded_verdict_selects_model
+case_end
+
+case_begin "none-selects-fallback" "bin/workflow/read-complexity-evaluation"
 d2099_none_selects_fallback
+case_end
+
+case_begin "env-override-selects-model" "bin/workflow/derive-complexity-level"
 d2099_env_override_selects_model
+case_end
+
+case_begin "outline-stage-selects-model" "bin/workflow/derive-complexity-level"
 d2099_outline_stage_selects_model
+case_end

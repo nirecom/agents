@@ -4,24 +4,30 @@
 # Structural tests for skills/review-code-security/SKILL.md
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+AGENTS_DIR="$ROOT"
 PASS=0
 FAIL=0
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SKILL="$ROOT/skills/review-code-security/SKILL.md"
 PRIVATE_INFO_DOC="$ROOT/docs/scan-outbound.md"
 
 echo "=== review-code-security skill structural tests ==="
 
+case_begin "skill-file-exists" "skills/review-code-security/SKILL.md"
 # --- Normal case 1: SKILL.md exists ---
 if [ -f "$SKILL" ]; then
     pass "SKILL.md exists"
 else
     fail "SKILL.md does not exist"
 fi
+case_end
 
+case_begin "frontmatter-required-fields" "skills/review-code-security/SKILL.md"
 # --- Normal case 2: frontmatter has required fields ---
 for field in name description model; do
     if [ -f "$SKILL" ] && grep -qE "^${field}:" "$SKILL" 2>/dev/null; then
@@ -30,7 +36,9 @@ for field in name description model; do
         fail "frontmatter missing '$field'"
     fi
 done
+case_end
 
+case_begin "frontmatter-effort-absent" "skills/review-code-security/SKILL.md"
 # --- Normal case 2b: effort is ABSENT (effort: line removed in #2100) ---
 # Requires write_code to delete 'effort:' from frontmatter — FAILS until then.
 if [ -f "$SKILL" ] && grep -qE '^effort:' "$SKILL" 2>/dev/null; then
@@ -38,14 +46,18 @@ if [ -f "$SKILL" ] && grep -qE '^effort:' "$SKILL" 2>/dev/null; then
 else
     pass "frontmatter 'effort:' is absent"
 fi
+case_end
 
+case_begin "name-field-correct" "skills/review-code-security/SKILL.md"
 # --- Normal case 3: name field is review-code-security ---
 if [ -f "$SKILL" ] && grep -qE '^name: review-code-security$' "$SKILL" 2>/dev/null; then
     pass "name is 'review-code-security'"
 else
     fail "name is not 'review-code-security'"
 fi
+case_end
 
+case_begin "required-sections-present" "skills/review-code-security/SKILL.md"
 # --- Normal case 4: has ## Procedure, ## Rules, ## Patterns by Axis sections ---
 for section in "Procedure" "Rules" "Patterns by Axis"; do
     if [ -f "$SKILL" ] && grep -qE "^## ${section}" "$SKILL" 2>/dev/null; then
@@ -54,7 +66,9 @@ for section in "Procedure" "Rules" "Patterns by Axis"; do
         fail "missing ## $section section"
     fi
 done
+case_end
 
+case_begin "axis-headers-present" "skills/review-code-security/SKILL.md"
 # --- Normal case 5: has the 3 axis headers ---
 for axis in "Axis 1: Information Leakage" "Axis 2: Third-Party Access" "Axis 3: External Access"; do
     if [ -f "$SKILL" ] && grep -qF "### $axis" "$SKILL" 2>/dev/null; then
@@ -63,14 +77,18 @@ for axis in "Axis 1: Information Leakage" "Axis 2: Third-Party Access" "Axis 3: 
         fail "missing '### $axis' header"
     fi
 done
+case_end
 
+case_begin "owasp-cwe-citations" "skills/review-code-security/SKILL.md"
 # --- Normal case 6: contains OWASP or CWE- citations ---
 if [ -f "$SKILL" ] && grep -qE '(OWASP|CWE-)' "$SKILL" 2>/dev/null; then
     pass "contains OWASP/CWE citations"
 else
     fail "missing OWASP/CWE citations"
 fi
+case_end
 
+case_begin "security-scanner-launch-model" "skills/review-code-security/SKILL.md"
 # --- Normal case 7 (#2100 Step 5): the security-scanner launch (RCS-2 exit 3
 # fallback) passes the model from resolve-role-model --role reviewer. FAILS until then.
 spawn="$(grep -E '[Ll]aunch (the )?`security-scanner`' "$SKILL" 2>/dev/null || true)"
@@ -85,42 +103,54 @@ elif ! printf '%s' "$spawn" | grep -qE 'model[=:]'; then
 else
     pass "7: security-scanner launch passes model= from resolve-role-model --role reviewer"
 fi
+case_end
 
+case_begin "cross-references-review-plan-security" "skills/review-code-security/SKILL.md"
 # --- Normal case 8: cross-references /review-plan-security ---
 if [ -f "$SKILL" ] && grep -qF '/review-plan-security' "$SKILL" 2>/dev/null; then
     pass "cross-references /review-plan-security"
 else
     fail "does not cross-reference /review-plan-security"
 fi
+case_end
 
+case_begin "references-scan-outbound" "skills/review-code-security/SKILL.md"
 # --- Normal case 9: references docs/scan-outbound.md ---
 if [ -f "$SKILL" ] && grep -qF 'docs/scan-outbound.md' "$SKILL" 2>/dev/null; then
     pass "references docs/scan-outbound.md"
 else
     fail "does not reference docs/scan-outbound.md"
 fi
+case_end
 
+case_begin "automated-coverage-phrase" "skills/review-code-security/SKILL.md"
 # --- Normal case 10: contains 'Automated coverage' phrase ---
 if [ -f "$SKILL" ] && perl -lne 'if (/Automated coverage/i) { $found=1 } END { exit($found ? 0 : 1) }' "$SKILL" 2>/dev/null; then
     pass "SKILL.md contains 'Automated coverage' phrase"
 else
     fail "SKILL.md does not contain 'Automated coverage' phrase"
 fi
+case_end
 
+case_begin "no-absolute-paths" "skills/review-code-security/SKILL.md"
 # --- Edge case 11: no absolute paths (public repo leak check) ---
 if [ -f "$SKILL" ] && grep -qiE '(^|[^a-zA-Z])(c:/|/home/|/Users/)' "$SKILL" 2>/dev/null; then
     fail "absolute path found in SKILL.md (public repo leak)"
 else
     pass "no absolute paths in SKILL.md"
 fi
+case_end
 
+case_begin "no-private-repo-references" "skills/review-code-security/SKILL.md"
 # --- Edge case 12: no references to my-private-repo/ ---
 if [ -f "$SKILL" ] && grep -qF 'my-private-repo/' "$SKILL" 2>/dev/null; then
     fail "SKILL.md references my-private-repo/ (private repo leak)"
 else
     pass "no references to my-private-repo/ in SKILL.md"
 fi
+case_end
 
+case_begin "aws-key-pattern-in-code-blocks" "skills/review-code-security/SKILL.md"
 # --- Security case 13: AWS key pattern appears only inside backticks/code blocks ---
 # Strategy: strip fenced code blocks (``` ... ```) and inline backtick spans, then search.
 if [ -f "$SKILL" ]; then
@@ -133,7 +163,9 @@ if [ -f "$SKILL" ]; then
 else
     pass "SKILL.md absent — security pattern check skipped (file-existence failure already recorded)"
 fi
+case_end
 
+case_begin "scan-outbound-mentions-exactly-once" "skills/review-code-security/SKILL.md"
 # --- Idempotency case 14: docs/scan-outbound.md mentions review-code-security exactly once ---
 if [ -f "$PRIVATE_INFO_DOC" ]; then
     count=$(grep -c 'review-code-security' "$PRIVATE_INFO_DOC" 2>/dev/null || true)
@@ -146,20 +178,25 @@ if [ -f "$PRIVATE_INFO_DOC" ]; then
 else
     fail "docs/scan-outbound.md does not exist"
 fi
+case_end
 
+case_begin "completion-section-present" "skills/review-code-security/SKILL.md"
 # --- Normal case 15: SKILL.md has a ## Completion section ---
 if [ -f "$SKILL" ] && grep -qE '^## Completion' "$SKILL" 2>/dev/null; then
     pass "SKILL.md has ## Completion section"
 else
     fail "SKILL.md missing ## Completion section"
 fi
+case_end
 
+case_begin "completion-sentinel-present" "skills/review-code-security/SKILL.md"
 # --- Normal case 16: Completion section contains review_security_complete sentinel ---
 if [ -f "$SKILL" ] && grep -qF 'WORKFLOW_MARK_STEP_review_security_complete' "$SKILL" 2>/dev/null; then
     pass "Completion section contains review_security_complete sentinel"
 else
     fail "Completion section missing review_security_complete sentinel"
 fi
+case_end
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

@@ -11,6 +11,9 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
+
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
 else
@@ -19,11 +22,6 @@ fi
 
 LOAD_ENV="$AGENTS_DIR/hooks/lib/load-env.js"
 LOAD_ENV_NODE="$_AGENTS_DIR_NODE/hooks/lib/load-env.js"
-
-PASS=0; FAIL=0; SKIP=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -210,19 +208,45 @@ loadDefaultEnv();
 # shellcheck source=./fix-389-load-env-default-fallback/resolve-config-var-cases.sh
 . "$(dirname "${BASH_SOURCE[0]}")/fix-389-load-env-default-fallback/resolve-config-var-cases.sh"
 
+case_begin "t389-1-agents-config-dir-env-loaded" "hooks/lib/load-env.js"
 run_t389_1
+case_end
+case_begin "t389-2-realpath-candidate-adopted" "hooks/lib/load-env.js"
 run_t389_2
+case_end
+case_begin "t389-3-no-env-graceful-noop" "hooks/lib/load-env.js"
 run_t389_3
+case_end
+case_begin "t389-4-empty-env-overwritten-by-dotenv" "hooks/lib/load-env.js"
 run_t389_4
+case_end
+case_begin "t389-5-nonempty-env-wins-over-dotenv" "hooks/lib/load-env.js"
 run_t389_5
+case_end
+case_begin "t389-6-debug-logs-key-not-value" "hooks/lib/load-env.js"
 run_t389_6
+case_end
+case_begin "t389-7-explicit-config-dir-no-fallthrough" "hooks/lib/load-env.js"
 run_t389_7
+case_end
+case_begin "t389-8-windows-posix-config-dir-normalized" "hooks/lib/load-env.js"
 run_t389_8
+case_end
+case_begin "cv-1-process-env-beats-dotenv" "hooks/lib/load-env.js"
 run_cv_1
+case_end
+case_begin "cv-2-empty-env-falls-to-dotenv-with-overlay" "hooks/lib/load-env.js"
 run_cv_2
+case_end
+case_begin "cv-3-repo-root-reads-effective-env" "hooks/lib/load-env.js"
 run_cv_3
+case_end
+case_begin "cv-4-absent-everywhere-returns-default" "hooks/lib/load-env.js"
 run_cv_4
+case_end
+case_begin "cv-5-load-fail-sets-flag" "hooks/lib/load-env.js"
 run_cv_5
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

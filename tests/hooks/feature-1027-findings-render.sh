@@ -10,6 +10,9 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
+
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
 else
@@ -18,12 +21,6 @@ fi
 
 RENDER_SRC="$AGENTS_DIR/hooks/lib/supervisor-findings-render.js"
 RENDER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-findings-render.js"
-
-PASS=0; FAIL=0; SKIP=0
-
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -241,8 +238,8 @@ r9_render() {
     command -v cygpath >/dev/null 2>&1 && cfg="$(cygpath -m "$cfg")"
     (
         cd "$R9_WORK/neutral" || exit 1
-        run_with_timeout 10 env -u MODEL_REVIEWER -u MODEL_ALERT -u MODEL_PRODUCER_HIGH \
-            -u MODEL_PRODUCER_LOW -u CLAUDE_PROJECT_DIR -u CLAUDE_SESSION_ID \
+        run_with_timeout 10 env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL \
+            -u PRODUCER_LOW_MODEL -u CLAUDE_PROJECT_DIR -u CLAUDE_SESSION_ID \
             -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE AGENTS_CONFIG_DIR="$cfg" \
             CLAUDE_WORKFLOW_DIR="$R9_WORK/wf" WORKFLOW_PLANS_DIR="$R9_WORK/plans" node -e "
 const r = require('$RENDER_NODE');
@@ -276,12 +273,12 @@ r9_expect() {
 run_r9() {
     require_source "$RENDER_SRC" "R9: full-mode alert model line" || return
     local out
-    out="$(r9_render 'MODEL_ALERT=haiku\nMODEL_REVIEWER=opus\n' '{}')"
-    r9_expect "R9 SF-M1: MODEL_ALERT=haiku reaches the full-mode model line" "$out" haiku
-    out="$(r9_render 'MODEL_REVIEWER=haiku\n' '{}')"
-    r9_expect "R9 SF-M1 swap: MODEL_REVIEWER alone leaves the alert default (sonnet)" "$out" sonnet
-    out="$(r9_render 'MODEL_ALERT=gpt-r9leak\n' '{}')"
-    r9_expect "R9 SF-M2: invalid MODEL_ALERT falls back to sonnet" "$out" sonnet
+    out="$(r9_render 'ALERT_MODEL=haiku\nREVIEWER_MODEL=opus\n' '{}')"
+    r9_expect "R9 SF-M1: ALERT_MODEL=haiku reaches the full-mode model line" "$out" haiku
+    out="$(r9_render 'REVIEWER_MODEL=haiku\n' '{}')"
+    r9_expect "R9 SF-M1 swap: REVIEWER_MODEL alone leaves the alert default (sonnet)" "$out" sonnet
+    out="$(r9_render 'ALERT_MODEL=gpt-r9leak\n' '{}')"
+    r9_expect "R9 SF-M2: invalid ALERT_MODEL falls back to sonnet" "$out" sonnet
     if printf '%s' "$out" | grep -q 'r9leak'; then
         fail "R9 SF-M2: invalid value echoed into output"
     elif ! printf '%s' "$out" | grep -q '^Recommended action: review and address'; then
@@ -296,7 +293,7 @@ run_r10() {
     require_source "$RENDER_SRC" "R10: summary/actionable modes carry no model line" || return
     local out mode
     for mode in summaryOnly actionableOnly; do
-        out="$(r9_render 'MODEL_ALERT=haiku\n' "{ $mode: true }")"
+        out="$(r9_render 'ALERT_MODEL=haiku\n' "{ $mode: true }")"
         if printf '%s' "$out" | grep -q '^\[EM Supervisor\]' && ! printf '%s' "$out" | grep -q 'Subagent model:'; then
             pass "R10 SF-M3: $mode output has no Subagent model: line"
         else
@@ -305,18 +302,47 @@ run_r10() {
     done
 }
 
+case_begin "zero-findings-null" "hooks/lib/supervisor-findings-render.js"
 run_r1
+case_end
+
+case_begin "warning-notice-rendering" "hooks/lib/supervisor-findings-render.js"
 run_r2
+case_end
+
+case_begin "error-no-notice-rendering" "hooks/lib/supervisor-findings-render.js"
 run_r3
+case_end
+
+case_begin "notices-only-count-line" "hooks/lib/supervisor-findings-render.js"
 run_r4
+case_end
+
+case_begin "opts-fields-verbatim" "hooks/lib/supervisor-findings-render.js"
 run_r5
+case_end
+
+case_begin "workflow-session-id-null-unavailable" "hooks/lib/supervisor-findings-render.js"
 run_r6
+case_end
+
+case_begin "two-warnings-numbered" "hooks/lib/supervisor-findings-render.js"
 run_r7
+case_end
+
+case_begin "reporter-field-in-output" "hooks/lib/supervisor-findings-render.js"
 run_r8
+case_end
+
+case_begin "alert-model-line-full-mode" "hooks/lib/supervisor-findings-render.js"
 run_r9
+case_end
+
+case_begin "summary-actionable-no-model-line" "hooks/lib/supervisor-findings-render.js"
 run_r10
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
-exit $FAIL
+exit "$FAIL"

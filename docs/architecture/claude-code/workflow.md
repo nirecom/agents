@@ -320,11 +320,13 @@ verdict per stage so each step routes on its own evidence:
   compatibility completion, so a `levels` that was never written comes back `undefined` rather
   than being silently reconstructed. Never use it on a normal consumer path.
 - **Level → model (#2100).** A level never names a model: `hooks/lib/role-model.js` maps `high` to
-  `MODEL_PRODUCER_HIGH` and `low` to `MODEL_PRODUCER_LOW` (`.env`; allowed aliases and defaults in
-  its `ROLE_TABLE`), and reviewer/supervisor launches resolve `MODEL_REVIEWER` / `MODEL_ALERT` the
+  `PRODUCER_HIGH_MODEL` and `low` to `PRODUCER_LOW_MODEL` (`.env`; allowed aliases and defaults in
+  its `ROLE_TABLE`), and reviewer/supervisor launches resolve `REVIEWER_MODEL` / `ALERT_MODEL` the
   same way. `read-complexity-evaluation --stage`, `derive-complexity-level`, and
   `read-session-facts` (contract v2: `COMPLEXITY_MODEL_write_tests` / `COMPLEXITY_MODEL_write_code`)
-  print the resolved alias; skills pass it as the Agent tool's `model:` instead of agent frontmatter.
+  print the resolved alias; skills pass it as the Agent tool's `model` parameter, which wins over
+  agent frontmatter. The routed agents keep a frontmatter `model:` equal to their `ROLE_TABLE`
+  default only as a fallback for a dropped parameter (anthropics/claude-code#83920).
 
 ## Steps and owners
 
