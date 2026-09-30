@@ -1,7 +1,7 @@
 # tests/hooks/feature-2134-bash-guard/cases-interlock.sh
 # Tests: hooks/lib/early-write-gate.js, hooks/bash-guard/judge.js, hooks/workflow-gate/early-gate.js
 # Tags: hook, bash-guard, early-write-gate, workflow-off, precedence, scope:issue-specific, pwsh-not-required, TL2
-# I1-I4: the early-write-gate interlock and its bypass precedence. Sourced by the dispatcher.
+# I1-I6: the early-write-gate interlock and its bypass precedence. Sourced by the dispatcher.
 
 # WHY AN INTERLOCK AT ALL (codex round 1, C6). While the early write gate is actively blocking
 # a pre-init session, a second deny from bash-guard buries the one message that says how to
@@ -96,6 +96,17 @@ assert_eq "I5a: a session id with no state file on disk (not the argv-default fa
 ROWS=$((ROWS + 1))
 assert_eq "I5b: a session id with no state file on disk also reports inactive with reason no-state" \
     "false	-	no-state" "$(probe gate '' "$BG_SID_NO_STATE")"
+case_end
+
+# I6: the interlock outranks the self-script allow -- an armed gate keeps even an allowable
+# `bash -c 'cd <root> && <self-script>'` quiet, so no allow is issued while the gate owns the screen.
+case_begin "interlock-gate-armed-self-script" "hooks/bash-guard/judge.js"
+BG_SID_ARMED_SELF="sid-bg-gate-armed-self-script"
+bg_write_state "$BG_SID_ARMED_SELF" "pending"
+ROWS=$((ROWS + 1))
+assert_eq "I6: an armed gate defers a bash -c self-script wrapper to the interlock, not allow" \
+    "passThrough|BG-INTERLOCK-QUIET" \
+    "$(verdict_code_of 'bash -c '\''cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on'\''' "$BG_SID_ARMED_SELF")"
 case_end
 
 # SKIPPED: the pendingTier=Tier2/Tier3 variants of I1.
