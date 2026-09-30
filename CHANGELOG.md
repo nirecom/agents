@@ -603,3 +603,7 @@ Changes: review-tests re-reviews only the changed tests when no implementation f
 ### FEATURE: PR #2432 (2026-09-30)
 Background: feat(#2403): add external read-only allow classes N3/N4/N5 to bash-guard classifier
 Changes: Common read-only commands (ls, cat, head, tail, grep, rg, find, git status/log/diff/branch, gh pr view/issue list/api GET, and more) no longer prompt for permission. A positive argv judge allows them automatically and screens every argument for credential and dotenv path access before granting the allow verdict.
+
+### FEATURE: PR #2438 (2026-09-30)
+Background: feat(#2100): route model for reviewer/producer/alert roles through .e...
+Changes: Model selection for reviewer, producer, and alert subagent roles is now configurable per-host via `.env` keys: REVIEWER_MODEL (default `opus`), PRODUCER_HIGH_MODEL (default `opus`), PRODUCER_LOW_MODEL (default `sonnet`), ALERT_MODEL (default `sonnet`). Previously hard-coded choices are centralized in `hooks/lib/role-model.js` and overridable without touching agent/skill files. Values outside `opus`/`sonnet`/`haiku` fall back to the role default. Pre-release `MODEL_*` spellings (e.g. MODEL_REVIEWER) are not read — rename them if present. All `effort:` frontmatter removed from agents and skills.
