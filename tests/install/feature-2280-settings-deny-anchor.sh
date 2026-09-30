@@ -20,12 +20,12 @@ PART_DIR="$AGENTS_DIR/tests/install/feature-2280-settings-deny-anchor"
 # (P13-P37 = NO-MATCH); bash-guard denies the chain operator itself instead.
 # OUT OF SCOPE: deployed ~/.claude/settings.json drift, JSON re-assembly, #2266 redesign.
 
-PASS=0
-FAIL=0
+. "$AGENTS_DIR/tests/lib/harness.sh"
+
 PEND=0
 ROWS=0
 
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+# fail/assert_eq stay local, after the harness: the detail line and <name> <want> <got> order differ.
 fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
 pend() { echo "PEND: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; PEND=$((PEND + 1)); }
 
@@ -87,7 +87,7 @@ ANCHORED="$NEW_RULE_PRESENT"
 check_deny_row() { # <id> <command> <target-deny-pattern|any> <MATCHED|NO-MATCH> <depends-on-anchoring>
     local id="$1" cmd="$2" pat="$3" want="$4" depends="$5" got detail
     ROWS=$((ROWS + 1))
-    deny_probe "$SETTINGS" "$cmd"
+    dp_get "$id" # the caller queued ($id, $SETTINGS, $cmd) and ran the batch
     got="$DENY_VERDICT"
     detail="cmd=[$cmd] target-pattern=[$pat]"
     if [ "$got" != "$want" ]; then
@@ -127,14 +127,97 @@ t_launch_form_completeness
 t_bug_reproduction_evidence
 t_row_well_formed_selftest
 
+# #2403: the read-only allow enumeration (former lines 21-75) retired into bash-guard's N3-N5
+# classes. Checked as a CLASS (any cmd0 / git read spelling), not a line list, so a re-added
+# variant spelling (`Bash(git log*)`) fails too; permissions.allow only -- deny is untouched.
+# RA_KEPT: every permissions.allow entry OUTSIDE the retired block (former lines 21-75), all 67,
+# so the retirement cannot take a non-read-only entry with it. Heredoc: entries carry quotes.
+RA_KEPT="$(cat <<'KEPT'
+["Read(**/.env.example)","Read(**/.env.sample)","Read(**/.env.template)","Read(**/.env.dist)",
+ "Grep(**/.env.example)","Grep(**/.env.sample)","Grep(**/.env.template)","Grep(**/.env.dist)",
+ "Bash(git add .)","Bash(git add -A)","Bash(git add *)","Bash(git -C * add *)",
+ "Bash(git push)","Bash(git push origin *)","Bash(git -C * push)","Bash(git -C * push origin *)",
+ "Bash(git -C * push -u origin *)","Bash(git push -u origin *)",
+ "Bash(git push *--force-with-lease*)","Bash(git -C * push *--force-with-lease*)",
+ "Bash(git fetch origin *)","Bash(git -C * fetch origin *)",
+ "Bash(git fetch --prune origin)","Bash(git -C * fetch --prune origin)",
+ "Bash(git pull --rebase --autostash origin *)","Bash(git -C * pull --rebase --autostash origin *)",
+ "Write(**/.git/info/pending-branch-delete)",
+ "Bash(Remove-Item -LiteralPath \"**\\.git\\info\\pending-branch-delete\")",
+ "Bash(rm \"**/.git/info/pending-branch-delete\")",
+ "Bash(git commit *)","Bash(git -C * commit *)","Bash(cd * && git commit *)",
+ "Bash(chmod +x *.sh)","Bash(chmod +x */hooks/*)",
+ "Bash(echo \"<<WORKFLOW_MARK_STEP_*>>\")","Bash(echo '<<WORKFLOW_MARK_STEP_*>>')",
+ "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")","Bash(echo \"<<WORKFLOW_OUTLINE_NOT_NEEDED: *>>\")",
+ "Bash(echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: *>>\")","Bash(echo \"<<WORKFLOW_RUN_TESTS_NOT_NEEDED: *>>\")",
+ "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")","Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: *>>\")",
+ "Bash(echo \"<<WORKFLOW_NEXT_STEP_PAUSE: *>>\")","Bash(echo \"<<WORKFLOW_NEXT_STEP_RESUME: *>>\")",
+ "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: *>>\")","Bash(doc-append *)",
+ "Write(**/tests/**)","Edit(**/tests/**)","WebSearch",
+ "WebFetch(domain:developer.mozilla.org)","WebFetch(domain:docs.python.org)","WebFetch(domain:learn.microsoft.com)",
+ "WebFetch(domain:man7.org)","WebFetch(domain:docs.anthropic.com)","WebFetch(domain:platform.openai.com)",
+ "WebFetch(domain:ai.google.dev)","WebFetch(domain:docs.github.com)","WebFetch(domain:github.com)",
+ "WebFetch(domain:code.claude.com)","WebFetch(domain:platform.claude.com)","WebFetch(domain:anthropic.com)",
+ "WebFetch(domain:modelcontextprotocol.io)","WebFetch(domain:spec.modelcontextprotocol.io)",
+ "WebFetch(domain:code.visualstudio.com)",
+ "Bash(node * hooks/cleanup-orphan-dir.js *)","Bash(node *\\hooks\\cleanup-orphan-dir.js *)",
+ "mcp__codegraph__codegraph_explore"]
+KEPT
+)"
+export RA_KEPT
+# One node emits all four modes as NUL-delimited records (retired, kept, kept-count, extra);
+# a load error is emitted for every mode, exactly as each per-mode call used to print it.
+RETIRED_ALLOW_JS='
+const fs = require("fs");
+const settingsPath = process.argv[process.argv.length - 1];
+const MODES = ["retired", "kept", "kept-count", "extra"];
+const emit = (vals) => process.stdout.write(vals.map((v) => String(v) + "\0").join(""));
+let allow, KEPT;
+try { allow = JSON.parse(fs.readFileSync(settingsPath, "utf8")).permissions.allow; }
+catch (e) { emit(MODES.map(() => "ERROR:unreadable-settings")); process.exit(0); }
+if (!Array.isArray(allow)) { emit(MODES.map(() => "ERROR:no-allow-array")); process.exit(0); }
+try { KEPT = JSON.parse(process.env.RA_KEPT || ""); } catch (e) { emit(MODES.map(() => "ERROR:bad-RA_KEPT")); process.exit(0); }
+const RETIRED = /^Bash\((cd \* && )?(git (-C \* )?(status|log|diff|show|branch|tag|remote|rev-parse|stash)|head|tail|less|wc|file|stat|ls|find|tree|du|df|grep|rg|ag|which|type|command|uname|pwd)\b/;
+emit([
+  allow.filter((e) => typeof e === "string" && RETIRED.test(e)).join(","),
+  KEPT.filter((e) => !allow.includes(e)).join(","),
+  KEPT.length,
+  allow.filter((e) => !KEPT.includes(e)).length,
+]);
+'
+t_retired_readonly_allow() {
+    local ra=()
+    dp_node_path "$SETTINGS"
+    mapfile -d '' -t ra < <(node -e "$RETIRED_ALLOW_JS" "$DP_NODE_PATH")
+    if (( ${#ra[@]} != 4 )); then
+        echo "FAIL: harness -- retired-allow batch returned ${#ra[@]} records (want 4)"; exit 1
+    fi
+    ROWS=$((ROWS + 1))
+    assert_eq "RA1: no read-only Bash allow spelling (git read / ls / grep / find ...) remains in permissions.allow" \
+        "" "${ra[0]}"
+    ROWS=$((ROWS + 1))
+    assert_eq "RA2: every non-read-only allow entry (all 67 outside the retired block) is kept" \
+        "" "${ra[1]}"
+    ROWS=$((ROWS + 1))
+    assert_eq "RA2b: the pinned kept list itself is complete (vacuity guard)" \
+        "67" "${ra[2]}"
+    ROWS=$((ROWS + 1))
+    assert_eq "RA4: permissions.allow is exactly the kept set (nothing beyond the 67 remains)" \
+        "0" "${ra[3]}"
+    ROWS=$((ROWS + 1))
+    if deny_list_has "$SETTINGS" "git push --force"; then pass "RA3: the force-push deny survives the allow retirement"
+    else fail "RA3: the force-push deny survives the allow retirement" "Bash(git push --force) missing from permissions.deny"; fi
+}
+t_retired_readonly_allow
+
 # EXECUTED-ROW BUDGET. Every table increments ROWS; a drifted delimiter or an early return
 # in front of a loop would otherwise leave a file that counts only its failures reporting green.
 # crosscheck 14 (one verdict row each; the allow-module agreement row retired with #2264) + robustness 13 (12 + E4b shape pin) + regression table 80 (61 prior +
 # N6-N13 MUST-trigger narration rows + L6-L15 sanctioned-command counterweights + P37
 # refspec compound tail) + launch-form completeness 48 (12 triggers x 4 launch forms -- round-4
 # C8 added +refspec/positional-force/git-clean triggers, PEND under ANCHORED=0) +
-# bug-reproduction-evidence 1 + row_is_well_formed selftest 4.
-ROWS_EXPECTED=161
+# bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403).
+ROWS_EXPECTED=166
 assert_eq "T-budget: every table executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

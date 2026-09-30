@@ -2,11 +2,12 @@
 // hooks/bash-guard/judge.js — the 4-value verdict, deny > notify > allow > passThrough.
 //
 // tool_name must be exactly "Bash" (runInTerminal / runCommands may drive pwsh, where a
-// backtick is a line continuation and `{ }` a script block) -> the early-write-gate
-// interlock silences the guard while that gate owns the screen -> parse() failing is
-// FAIL-OPEN, the one named exception to deny-on-doubt in hooks/ -> detect() decides deny
-// -> detectIneffective() decides notify -> matchSelfScript() decides allow. Every failure
-// lands on passThrough, never allow: allow skips the permission prompt.
+// backtick is a line continuation and `{ }` a script block) -> parse() failing is FAIL-OPEN,
+// the one named exception to deny-on-doubt in hooks/ -> detect() decides deny ->
+// detectIneffective() decides notify -> matchSelfScript() then matchReadOnlyCommand() decide
+// allow. A newline or CR skips the whole allow path: the IR does not split on it (#1253), so
+// one "plain" command could run a second line. While the early write gate blocks, only a
+// read-only allow may speak. Every failure lands on passThrough: allow skips the prompt.
 
 const path = require("path");
 const { parse, analysisOf } = require("../lib/command-ir");
@@ -14,10 +15,12 @@ const { earlyWriteGateStatus } = require("../lib/early-write-gate");
 const { normalizeCwd } = require("../lib/path-normalize");
 const { detect, detectIneffective } = require("./detect");
 const { matchSelfScript } = require("./allow");
+const { matchReadOnlyCommand } = require("./readonly-class");
 const { PASS_THROUGH_CODES, reasonCodeFor } = require("./reasons");
 const { buildDenyMessage, buildNotifyMessage } = require("./message");
 
 const IN_SCOPE_TOOL = "Bash";
+const LINE_BREAK_RE = /[\r\n]/;
 
 const verdictOf = (verdict, code, fields) => ({
   verdict,
@@ -48,6 +51,26 @@ function readCwd(input) {
   return null;
 }
 
+const contextOf = (ir, commandText, input, agentsRoot) =>
+  ({ ir, analysis: analysisOf(ir), commandText, cwd: readCwd(input), agentsRoot });
+
+// Interlock (C6): the early write gate blocks Edit/Write, not Bash reads, so a plain
+// read-only command still allows; deny, notify and self-script stay silent.
+function judgeUnderInterlock(commandText, input) {
+  const quiet = passThrough(PASS_THROUGH_CODES.INTERLOCK_QUIET);
+  try {
+    if (LINE_BREAK_RE.test(commandText)) return quiet;
+    const ir = parse(commandText);
+    if (ir.parseFailure === true || detect(ir).length > 0) return quiet;
+    const ctx = contextOf(ir, commandText, input);
+    if (detectIneffective(ir, ctx).length > 0) return quiet;
+    const allowCode = matchReadOnlyCommand(ir, ctx);
+    return allowCode ? verdictOf("allow", allowCode) : quiet;
+  } catch (_e) {
+    return quiet;
+  }
+}
+
 /**
  * @param {object} input a PreToolUse hook payload
  * @param {{root?: string}} [opts] agents root override — a test seam; the hook never passes it
@@ -63,10 +86,9 @@ function judgeBashCommand(input, opts) {
     const commandText = readCommand(input);
     if (!commandText || commandText.trim() === "") return passThrough(PASS_THROUGH_CODES.NO_HIT);
 
-    // Interlock (C6): defer only while the early write gate is actually blocking. The
-    // status reader reads WORKFLOW_OFF first, so a marker that deactivates the gate does
+    // The status reader reads WORKFLOW_OFF first, so a marker that deactivates the gate does
     // not silence this guard — the marker never bypassed a presentation rule.
-    if (earlyWriteGateStatus(input.session_id).active) return passThrough(PASS_THROUGH_CODES.INTERLOCK_QUIET);
+    if (earlyWriteGateStatus(input.session_id).active) return judgeUnderInterlock(commandText, input);
 
     const ir = parse(commandText);
     if (ir.parseFailure === true) return passThrough(PASS_THROUGH_CODES.PARSE_FAILURE);
@@ -84,14 +106,15 @@ function judgeBashCommand(input, opts) {
       });
     }
 
-    const ctx = { ir, analysis: analysisOf(ir), commandText, cwd: readCwd(input), agentsRoot: root };
+    const ctx = contextOf(ir, commandText, input, root);
     const notices = detectIneffective(ir, ctx);
     if (notices.length > 0) {
       const notifyId = notices[0].notifyId;
       return verdictOf("notify", notifyId, { notifyId, message: buildNotifyMessage(notices[0], notifyId) });
     }
 
-    const allowCode = matchSelfScript(ir, ctx, { root });
+    if (LINE_BREAK_RE.test(commandText)) return passThrough(PASS_THROUGH_CODES.NO_HIT);
+    const allowCode = matchSelfScript(ir, ctx, { root }) || matchReadOnlyCommand(ir, ctx);
     if (allowCode) return verdictOf("allow", allowCode);
 
     return passThrough(PASS_THROUGH_CODES.NO_HIT);

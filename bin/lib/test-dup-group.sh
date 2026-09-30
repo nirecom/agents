@@ -17,6 +17,7 @@ source "$_TDG_DIR/test-frontmatter-fix.sh"
 TDG_VERDICT=""
 
 # tdg_escape_field <string> — the reversible per-element transform above.
+# Also sets TDG_ESCAPED so hot loops can skip the command substitution (#2455).
 tdg_escape_field() {
   local s="${1-}"
   s="${s//\\/\\\\}"
@@ -24,6 +25,7 @@ tdg_escape_field() {
   s="${s//$'\n'/\\n}"
   s="${s//$'\r'/\\r}"
   s="${s//,/\\,}"
+  TDG_ESCAPED="$s"
   printf '%s' "$s"
 }
 
@@ -104,8 +106,15 @@ tdg_split_escaped_csv() {
 # live here; format validity is tfm_token_format_ok's answer alone.
 tdg_classify() {
   local file="${1:?tdg_classify: file required}"
-  local tok
   tfm_parse_tests_line "$file"
+  tdg_classify_parsed
+  printf '%s\n' "$TDG_VERDICT"
+}
+
+# tdg_classify_parsed — sets TDG_VERDICT from the TFM_* globals the last
+# tfm_parse_tests_line / tfm_parse_tests_matches call left behind.
+tdg_classify_parsed() {
+  local tok
   if [[ "$TFM_HEADER_COUNT" -ge 2 ]]; then
     TDG_VERDICT="duplicate_header"
   elif [[ "$TFM_PRESENT" -eq 0 || -z "$TFM_TESTS_CSV" || "${#TFM_TOKENS[@]}" -eq 0 ]]; then
@@ -125,7 +134,6 @@ tdg_classify() {
       fi
     done
   fi
-  printf '%s\n' "$TDG_VERDICT"
 }
 
 # tdg_scan_corpus <repo-root> — emits `axis<TAB>key<TAB>escaped-file` per
@@ -133,28 +141,69 @@ tdg_classify() {
 # tests/{hooks,bin,skills,agents,install,tests}/*.sh. Non-canonical directories
 # (split-test fragments, _archive, lib, fixtures) are excluded by allowlist.
 # That range is a contract, not an accident.
+# Every file's `^# Tests:` matches are collected by ONE awk process (#2455):
+# per-file grep/sed forks made a ~2400-file scan take minutes on MSYS. A path
+# holding a LF cannot travel through awk's line-oriented list, so any such
+# corpus falls back to the per-file tfm_parse_tests_line path for every file.
 _TDG_CANONICAL_CATEGORIES=(hooks bin skills agents install tests)
 tdg_scan_corpus() {
   local root="${1:?tdg_scan_corpus: repo root required}"
-  local f rel esc_file full_key tok cat
+  local f cat line matches="" cur=-1 batch=1
+  local -a files=()
   for cat in "${_TDG_CANONICAL_CATEGORIES[@]}"; do
     for f in "$root"/tests/"$cat"/*.sh; do
-    [[ -f "$f" ]] || continue
-    rel="${f#"$root"/}"
-    esc_file="$(tdg_escape_field "$rel")"
-    tdg_classify "$f" >/dev/null
-    if [[ "$TDG_VERDICT" != "ok" ]]; then
-      printf 'skip\t%s\t%s\n' "$TDG_VERDICT" "$esc_file"
-      continue
-    fi
-    full_key=""
-    for tok in "${TFM_TOKENS[@]}"; do
-      full_key="${full_key:+$full_key,}$(tdg_escape_field "$tok")"
+      [[ -f "$f" ]] || continue
+      [[ "$f" == *$'\n'* ]] && batch=0
+      files+=("$f")
     done
-    printf 'full\t%s\t%s\n' "$full_key" "$esc_file"
-    printf 'token\t%s\t%s\n' "$(tdg_escape_field "${TFM_TOKENS[0]}")" "$esc_file"
   done
+  [[ "${#files[@]}" -gt 0 ]] || return 0
+  if [[ "$batch" -eq 0 ]]; then
+    for f in "${files[@]}"; do
+      tfm_parse_tests_line "$f"
+      _tdg_scan_emit "$root" "$f"
+    done
+    return 0
+  fi
+  while IFS= read -r line; do
+    if [[ "$line" == "F" ]]; then
+      if [[ "$cur" -ge 0 ]]; then
+        tfm_parse_tests_matches "$matches"
+        _tdg_scan_emit "$root" "${files[cur]}"
+      fi
+      cur=$((cur + 1))
+      matches=""
+    else
+      matches="${matches:+$matches$'\n'}$line"
+    fi
+  done < <(printf '%s\n' "${files[@]}" | LC_ALL=C awk '
+    { f = $0; print "F"; n = 0
+      while ((getline l < f) > 0) { n++; if (l ~ /^# Tests:/) print n ":" l }
+      close(f) }')
+  if [[ "$cur" -ge 0 ]]; then
+    tfm_parse_tests_matches "$matches"
+    _tdg_scan_emit "$root" "${files[cur]}"
+  fi
+}
+
+# _tdg_scan_emit <repo-root> <file> — the rows for one file whose TFM_* globals
+# are already parsed.
+_tdg_scan_emit() {
+  local root="$1" f="$2" esc_file full_key="" tok
+  tdg_escape_field "${f#"$root"/}" >/dev/null
+  esc_file="$TDG_ESCAPED"
+  tdg_classify_parsed
+  if [[ "$TDG_VERDICT" != "ok" ]]; then
+    printf 'skip\t%s\t%s\n' "$TDG_VERDICT" "$esc_file"
+    return 0
+  fi
+  for tok in "${TFM_TOKENS[@]}"; do
+    tdg_escape_field "$tok" >/dev/null
+    full_key="${full_key:+$full_key,}$TDG_ESCAPED"
   done
+  printf 'full\t%s\t%s\n' "$full_key" "$esc_file"
+  tdg_escape_field "${TFM_TOKENS[0]}" >/dev/null
+  printf 'token\t%s\t%s\n' "$TDG_ESCAPED" "$esc_file"
 }
 
 # tdg_group_rows <repo-root> — the aggregated data rows, without the header.

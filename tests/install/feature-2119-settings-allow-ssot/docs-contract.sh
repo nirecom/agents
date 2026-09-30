@@ -14,17 +14,23 @@ SETTINGS_DOC="$AGENTS_DIR/$SETTINGS_DOC_REL"
 # Co-occurrence on ONE line, not anywhere in a long document: settings.md already talks about
 # `settings.json`, hooks and allow rules in unrelated sections, so a file-wide grep for each
 # token separately would pass on a document that never states the contract.
+# One `grep -Ein` per ere over the whole file (the same engine and flags as before), then the
+# line numbers are intersected: a line counts only when EVERY ere matched it.
 doc_line_matches() { # <file> <ere>... -> 0 when one line matches every ere
     local file="$1"; shift
-    local line ere ok
+    local ere h key n=0
+    local -A seen=()
     [ -f "$file" ] || return 1
-    while IFS= read -r line; do
-        ok=yes
-        for ere in "$@"; do
-            printf '%s\n' "$line" | grep -Eqi -- "$ere" || { ok=no; break; }
-        done
-        [ "$ok" = yes ] && return 0
-    done < "$file"
+    for ere in "$@"; do
+        n=$((n + 1))
+        while IFS= read -r h; do
+            key="${h%%:*}"
+            [[ "${seen[$key]:-0}" -eq $((n - 1)) ]] && seen[$key]=$n
+        done < <(grep -Ein -- "$ere" "$file")
+    done
+    for key in "${!seen[@]}"; do
+        [[ "${seen[$key]}" -eq "$n" ]] && return 0
+    done
     return 1
 }
 
@@ -52,6 +58,8 @@ t23_probe() { # <mode:line|file> <ere-list> -> present|ABSENT|sentinel
 # THE EXCLUSION LIST IS THE OTHER HALF OF THE ADMISSION CRITERION. Each excluded FAMILY gets its
 # own row, so deleting one from the sentence cannot hide behind the survivors -- and since an
 # entry is now auto-approved by a hook rather than by a rule, the criterion matters MORE.
+# Target: these rows pin the documented contract of the reader/bash-guard allow path.
+case_begin "t23-reader-contract-documented" "hooks/lib/allow-command-list.js"
 t23_docs_table() {
     local id mode eres label
     while IFS='%' read -r id mode eres label; do
@@ -77,11 +85,14 @@ single-writer%line%assemble-settings~only|single|sole%names install/assemble-set
 allow-vs-hooks%line%allow~PreToolUse~not |never |cannot %keeps the marker-bypass corollary: an allow rule does not disable a PreToolUse safety hook
 T23_CASES
 }
+t23_docs_table
+case_end
 
 # THE STALE HALF. A superseded paragraph does not look wrong -- it stays a fluent description of
 # the previous release, and a reader who finds it first has no way to tell which of two confident
 # accounts is current. Absence is therefore asserted, not merely presence of the new text. #2264
 # retires the generator and every per-command count with it, so all the counts join this list.
+case_begin "t23-stale-prose-gone" "docs/architecture/claude-code/settings.md"
 t23_stale_table() {
     local id mode eres label
     while IFS='%' read -r id mode eres label; do
@@ -102,6 +113,5 @@ stale-reviewer%file%review-settings-allow%no longer points a reader at bin/revie
 stale-precommit-gate%line%pre-commit~allow|settings\.json~gate|block|review|drift%no longer describes a pre-commit gate over the allow rules
 T23_STALE_CASES
 }
-
-t23_docs_table
 t23_stale_table
+case_end

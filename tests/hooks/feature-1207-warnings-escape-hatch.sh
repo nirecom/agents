@@ -1,29 +1,11 @@
 #!/bin/bash
 # tests/hooks/feature-1207-warnings-escape-hatch.sh
 # Tests: hooks/workflow-gate/review-tests-checker.js, hooks/workflow-state/state-io.js
-# Tags: review-tests, warnings-escape-hatch, warnings-accepted, token-preservation, scope:issue-specific
-#
-# Issue #1207 — WARNINGS escape hatch: after clearReviewTestsWarnings(), the
-# gate must no longer block, but the existing token must be PRESERVED so the
-# stale-token guard still fires if tests/ content changes post-acceptance.
-#
-# Current state: clearReviewTestsWarnings() does not exist in state-io.js.
-# The gate (review-tests-checker.js) correctly blocks when warnings_summary is
-# set (line 38-39), but there is no way to accept warnings and clear the field
-# while keeping the token intact.
-#
-# EXPECTED:
-#   Cases 18 (WARNINGS blocks gate) — PASSES now (existing behavior correct).
-#   Cases 19-21 — FAIL until clearReviewTestsWarnings() is implemented.
-#
-# L3 gap (what this L2 test does NOT catch):
-# - Whether WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED sentinel flows through the
-#   full hook pipeline (workflow-mark.js PostToolUse → state-io.js) in a live
-#   Claude Code session with a real session ID.
-# - Whether the sentinel is blocked by the chain-boundary guard when chained
-#   with another command (guard enforcement is in workflow-gate.js PreToolUse).
-# Closest-to-action mitigation: sentinel regex coverage in the table-driven
-# tests in feature-833-review-tests-sentinel-ssot.sh (section 3).
+# Tags: review-tests, warnings-escape-hatch, warnings-accepted, token-preservation, manifest-preservation, scope:issue-specific
+# #1207: after clearReviewTestsWarnings(), gate must no longer block, but
+# review_scope_manifest must be PRESERVED so the stale-fingerprint guard still fires
+# on scope change. Cases 19-25 FAIL until clearReviewTestsWarnings() is implemented.
+# L3 gap: full hook pipeline (workflow-mark.js PostToolUse) needs a real session.
 
 set -uo pipefail
 
@@ -79,16 +61,19 @@ export WORKFLOW_PLANS_DIR
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Write a workflow state with review_tests status/token/warnings_summary.
+# Write a workflow state with review_tests status/review_scope_manifest/warnings_summary.
 write_review_tests_state() {
-    local sid="$1" status="$2" token="$3" warnings_summary="$4"
+    local sid="$1" status="$2" manifest="$3" warnings_summary="$4"
     node -e '
         const fs = require("fs");
         const path = require("path");
-        const [sid, status, token, ws] = process.argv.slice(1);
+        const [sid, status, manifest, ws] = process.argv.slice(1);
         const dir = process.env.CLAUDE_WORKFLOW_DIR;
         const step = { status, updated_at: new Date().toISOString() };
-        if (token) step.token = token;
+        if (manifest) {
+            try { step.review_scope_manifest = JSON.parse(manifest); }
+            catch (e) { step.review_scope_manifest = manifest; }
+        }
         if (ws) step.warnings_summary = ws;
         const state = {
             version: 1,
@@ -97,37 +82,40 @@ write_review_tests_state() {
             steps: { review_tests: step }
         };
         fs.writeFileSync(path.join(dir, sid + ".json"), JSON.stringify(state, null, 2));
-    ' -- "$sid" "$status" "$token" "$warnings_summary"
+    ' -- "$sid" "$status" "$manifest" "$warnings_summary"
 }
 
-# Read a field from review_tests step.
+# Read a field from review_tests step. Returns "NULL" if absent, JSON string if object.
 read_step_field() {
     local sid="$1" field="$2"
+    # readState folds the event stream a state-io write leaves behind.
     node -e '
-        const fs = require("fs");
-        const path = require("path");
-        const [sid, field] = process.argv.slice(1);
-        const dir = process.env.CLAUDE_WORKFLOW_DIR;
+        const [io, sid, field] = process.argv.slice(1);
         try {
-            const state = JSON.parse(fs.readFileSync(path.join(dir, sid + ".json"), "utf8"));
-            const val = (state.steps.review_tests || {})[field];
-            process.stdout.write(val == null ? "NULL" : String(val));
+            const state = require(io).readState(sid) || {};
+            const val = ((state.steps || {}).review_tests || {})[field];
+            if (val == null) { process.stdout.write("NULL"); }
+            else if (typeof val === "object") { process.stdout.write(JSON.stringify(val)); }
+            else { process.stdout.write(String(val)); }
         } catch (e) {
             process.stdout.write("ERROR:" + e.message);
         }
-    ' -- "$sid" "$field"
+    ' -- "$STATE_IO_JS" "$sid" "$field"
 }
 
 # Call checkReviewTests() with a synthetic step object (no git repo needed).
 # Returns the action: "skip", "block", or "not_handled".
 call_checker() {
-    local sid="$1" status="$2" token="$3" warnings_summary="$4" repo_dir="${5:-/nonexistent}"
+    local sid="$1" status="$2" manifest="$3" warnings_summary="$4" repo_dir="${5:-/nonexistent}"
     node -e '
         const path = require("path");
         const { checkReviewTests } = require(process.argv[1]);
-        const [sid, status, token, ws, repoDir] = process.argv.slice(2);
+        const [sid, status, manifest, ws, repoDir] = process.argv.slice(2);
         const stepState = { status };
-        if (token) stepState.token = token;
+        if (manifest) {
+            try { stepState.review_scope_manifest = JSON.parse(manifest); }
+            catch (e) { stepState.review_scope_manifest = manifest; }
+        }
         if (ws) stepState.warnings_summary = ws;
         const opts = {
             docsOnly: false,
@@ -141,7 +129,7 @@ call_checker() {
         } catch (e) {
             process.stdout.write("ERROR:" + e.message);
         }
-    ' -- "$CHECKER_JS" "$sid" "$status" "$token" "$warnings_summary" "$repo_dir"
+    ' -- "$CHECKER_JS" "$sid" "$status" "$manifest" "$warnings_summary" "$repo_dir"
 }
 
 # Call clearReviewTestsWarnings() from state-io.js (planned new export).
@@ -164,13 +152,16 @@ call_clear_warnings() {
     ' -- "$STATE_IO_JS" "$sid"
 }
 
+# Fake manifest JSON for test fixtures (minimal valid manifest).
+FAKE_MANIFEST='{"v":1,"files":{"tests/fake.sh":"abc123def456789012"}}'
+
 # ---------------------------------------------------------------------------
-# Case 18 — WARNINGS state with token=T, warnings_summary set → gate blocks.
+# Case 18 — WARNINGS state with manifest+warnings_summary set → gate blocks.
 #   This is existing correct behavior (checker.js line 38-39). Should PASS now.
 # ---------------------------------------------------------------------------
 SID18="test-sid-1207-18"
-write_review_tests_state "$SID18" "complete" "abc123def456" "token=abc123def456 warnings=2 INFO=1"
-action18="$(call_checker "$SID18" "complete" "abc123def456" "token=abc123def456 warnings=2 INFO=1")"
+write_review_tests_state "$SID18" "complete" "$FAKE_MANIFEST" "fingerprint=abc123def456 warnings=2 INFO=1"
+action18="$(call_checker "$SID18" "complete" "$FAKE_MANIFEST" "fingerprint=abc123def456 warnings=2 INFO=1")"
 if [[ "$action18" == "block" ]]; then
     pass "18: WARNINGS state + warnings_summary set → gate blocks (existing behavior correct)"
 else
@@ -178,93 +169,90 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case 19 — After clearReviewTestsWarnings() → state has token preserved,
+# Case 19 — After clearReviewTestsWarnings() → review_scope_manifest preserved,
 #           warnings_summary=null.
 #   EXPECTED: FAIL until clearReviewTestsWarnings() is implemented.
 # ---------------------------------------------------------------------------
 SID19="test-sid-1207-19"
-write_review_tests_state "$SID19" "complete" "abc123def456" "token=abc123def456 warnings=2"
+write_review_tests_state "$SID19" "complete" "$FAKE_MANIFEST" "fingerprint=abc123def456 warnings=2"
 clear_result="$(call_clear_warnings "$SID19")"
 if [[ "$clear_result" == "NOT_IMPLEMENTED" ]]; then
     fail "19: clearReviewTestsWarnings() is not yet implemented in state-io.js"
 elif [[ "$clear_result" == "OK" ]]; then
-    token_after="$(read_step_field "$SID19" "token")"
+    manifest_after="$(read_step_field "$SID19" "review_scope_manifest")"
     ws_after="$(read_step_field "$SID19" "warnings_summary")"
-    if [[ "$token_after" == "abc123def456" && "$ws_after" == "NULL" ]]; then
-        pass "19: clearReviewTestsWarnings() preserves token and clears warnings_summary"
+    if [[ "$manifest_after" != "NULL" && "$ws_after" == "NULL" ]]; then
+        pass "19: clearReviewTestsWarnings() preserves review_scope_manifest and clears warnings_summary"
     else
-        fail "19: after clear — token=[$token_after] (expected abc123def456), warnings_summary=[$ws_after] (expected NULL)"
+        fail "19: after clear — manifest=[$manifest_after] (expected non-NULL), warnings_summary=[$ws_after] (expected NULL)"
     fi
 else
     fail "19: clearReviewTestsWarnings() returned error: $clear_result"
 fi
 
 # ---------------------------------------------------------------------------
-# Case 20 — Same staged token + no warnings_summary → gate does NOT block.
-#   Simulates the state after clearReviewTestsWarnings(): complete, token
-#   preserved, warnings_summary absent. We provide a repoDir with no staged
-#   tests so computeStagedTestsToken returns null → gate skips.
-#   EXPECTED: FAIL until clearReviewTestsWarnings() works (depends on case 19).
+# Case 20 — Same staged manifest + no warnings_summary → gate does NOT block.
+#   Simulates the state after clearReviewTestsWarnings(): complete, manifest
+#   preserved, warnings_summary absent. A real fixture repo stages the same
+#   tests/fake.sh the manifest records, so the fingerprint matches — an
+#   unreadable repoDir would fail closed (fingerprint-unavailable) instead.
 # ---------------------------------------------------------------------------
+REPO20="$TMPDIR_BASE/repo20"
+mkdir -p "$REPO20/tests"
+git -C "$REPO20" init -q
+git -C "$REPO20" config core.hooksPath /dev/null
+git -C "$REPO20" config user.email t@test.com
+git -C "$REPO20" config user.name T
+printf 'seed\n' > "$REPO20/README.md"
+git -C "$REPO20" add README.md
+git -C "$REPO20" commit -qm init
+printf 'echo fake\n' > "$REPO20/tests/fake.sh"
+git -C "$REPO20" add tests/fake.sh
+OID20="$(git -C "$REPO20" rev-parse :tests/fake.sh)"
+MANIFEST20="{\"v\":1,\"files\":{\"tests/fake.sh\":\"$OID20\"}}"
+REPO20_N="$REPO20"
+command -v cygpath >/dev/null 2>&1 && REPO20_N="$(cygpath -m "$REPO20")"
 SID20="test-sid-1207-20"
-# Write the state that clearReviewTestsWarnings should produce: complete, token
-# set, no warnings_summary field.
-write_review_tests_state "$SID20" "complete" "abc123def456" ""
-action20="$(call_checker "$SID20" "complete" "abc123def456" "" "/nonexistent")"
+write_review_tests_state "$SID20" "complete" "$MANIFEST20" ""
+action20="$(call_checker "$SID20" "complete" "$MANIFEST20" "" "$REPO20_N")"
 if [[ "$action20" == "skip" ]]; then
-    pass "20: complete + token + no warnings_summary + no staged tests → gate skips"
+    pass "20: complete + manifest matching staged set + no warnings_summary → gate skips"
 else
     fail "20: expected skip (gate approved), got [$action20]"
 fi
 
 # ---------------------------------------------------------------------------
-# Case 21 (token-loss regression) — Implementation that drops the token when
-#   clearing warnings causes the stale-token guard to later accept ANY staged
-#   content (because storedToken is null → gate skips). This regression
-#   undermines the anti-bypass protection.
-#   We simulate by checking: after clearReviewTestsWarnings(), if the token
-#   is null, a DIFFERENT staged token still produces a gate skip (false approval).
-#   The test asserts that the token IS preserved — if not, it's a regression.
-#   EXPECTED: FAIL until clearReviewTestsWarnings() preserves the token.
+# Case 21 (manifest-loss regression) — Implementation that drops the manifest
+#   when clearing warnings causes the stale-fingerprint guard to accept ANY staged
+#   content (because storedManifest is null → gate skips). Test asserts manifest IS preserved.
+#   EXPECTED: FAIL until clearReviewTestsWarnings() preserves review_scope_manifest.
 # ---------------------------------------------------------------------------
 SID21="test-sid-1207-21"
-write_review_tests_state "$SID21" "complete" "original-token-xyz" "token=original-token-xyz warnings=1"
+write_review_tests_state "$SID21" "complete" "$FAKE_MANIFEST" "fingerprint=original warnings=1"
 clear_result21="$(call_clear_warnings "$SID21")"
 if [[ "$clear_result21" == "NOT_IMPLEMENTED" ]]; then
-    fail "21: token-loss regression guard — clearReviewTestsWarnings() not implemented"
+    fail "21: manifest-loss regression guard — clearReviewTestsWarnings() not implemented"
 elif [[ "$clear_result21" == "OK" ]]; then
-    token_after21="$(read_step_field "$SID21" "token")"
-    if [[ "$token_after21" == "original-token-xyz" ]]; then
-        pass "21: token-loss guard — clearReviewTestsWarnings() preserves original token"
-    elif [[ "$token_after21" == "NULL" || -z "$token_after21" ]]; then
-        fail "21: REGRESSION — clearReviewTestsWarnings() dropped the token (stale-token guard now bypassed)"
+    manifest_after21="$(read_step_field "$SID21" "review_scope_manifest")"
+    if [[ "$manifest_after21" != "NULL" && -n "$manifest_after21" ]]; then
+        pass "21: manifest-loss guard — clearReviewTestsWarnings() preserves review_scope_manifest"
+    elif [[ "$manifest_after21" == "NULL" || -z "$manifest_after21" ]]; then
+        fail "21: REGRESSION — clearReviewTestsWarnings() dropped review_scope_manifest (stale-fingerprint guard now bypassed)"
     else
-        fail "21: unexpected token after clear: [$token_after21]"
+        fail "21: unexpected manifest after clear: [$manifest_after21]"
     fi
 else
     fail "21: clearReviewTestsWarnings() returned error: $clear_result21"
 fi
 
 # ---------------------------------------------------------------------------
-# Case 22 (C2) — End-to-end dispatch: WARNINGS_ACCEPTED sentinel flows through
-#   workflow-mark.js dispatch and calls clearReviewTestsWarnings().
-#
-#   Dispatch path (from hooks/workflow-mark.js):
-#     JSON stdin → isSentinel() filter → sentinelParts loop → reviewTestsHandler.handle()
-#     (reviewTestsHandler must handle WARNINGS_ACCEPTED and call clearReviewTestsWarnings)
-#
-#   We simulate a PostToolUse event by feeding JSON to workflow-mark.js stdin,
-#   then read the resulting state to verify warnings_summary was cleared and
-#   token was preserved.
-#
-#   EXPECTED: FAIL until:
-#     1. REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ is added to sentinel-patterns.js
-#     2. reviewTestsHandler handles the sentinel and calls clearReviewTestsWarnings()
-#     3. clearReviewTestsWarnings() is implemented in state-io.js
+# Case 22 (C2) — WARNINGS_ACCEPTED sentinel dispatched → manifest preserved,
+# warnings cleared. EXPECTED: FAIL until REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ
+# added, reviewTestsHandler handles it, clearReviewTestsWarnings() implemented.
 # ---------------------------------------------------------------------------
 WORKFLOW_MARK_JS="$AGENTS_DIR/hooks/workflow-mark.js"
 SID22="test-sid-1207-22"
-write_review_tests_state "$SID22" "complete" "tok22abc" "token=tok22abc warnings=3"
+write_review_tests_state "$SID22" "complete" "$FAKE_MANIFEST" "fingerprint=tok22abc warnings=3"
 
 if [[ ! -f "$WORKFLOW_MARK_JS" ]]; then
     fail "22: precondition missing — hooks/workflow-mark.js"
@@ -287,18 +275,18 @@ else
     dispatch_rc=0
     dispatch_out=$(echo "$event22" | "$RWT" 120 node "$WORKFLOW_MARK_JS" 2>&1) || dispatch_rc=$?
 
-    # After dispatch: warnings_summary must be null, token must be preserved.
-    tok22_after="$(read_step_field "$SID22" "token")"
+    # After dispatch: warnings_summary must be null, review_scope_manifest must be preserved.
+    manifest22_after="$(read_step_field "$SID22" "review_scope_manifest")"
     ws22_after="$(read_step_field "$SID22" "warnings_summary")"
 
-    if [[ "$tok22_after" == "tok22abc" && "$ws22_after" == "NULL" ]]; then
-        pass "22: WARNINGS_ACCEPTED dispatch — full wire: sentinel→dispatch→clearReviewTestsWarnings (token preserved, warnings cleared)"
+    if [[ "$manifest22_after" != "NULL" && "$ws22_after" == "NULL" ]]; then
+        pass "22: WARNINGS_ACCEPTED dispatch — full wire: sentinel→dispatch→clearReviewTestsWarnings (manifest preserved, warnings cleared)"
     elif [[ "$ws22_after" != "NULL" ]]; then
         fail "22: dispatch did not clear warnings_summary (still [$ws22_after]); sentinel may not be registered or handler missing"
-    elif [[ "$tok22_after" != "tok22abc" ]]; then
-        fail "22: dispatch cleared warnings but DROPPED token (was [tok22abc], now [$tok22_after])"
+    elif [[ "$manifest22_after" == "NULL" ]]; then
+        fail "22: dispatch cleared warnings but DROPPED review_scope_manifest (stale-fingerprint guard bypassed)"
     else
-        fail "22: unexpected state after dispatch (tok=[$tok22_after] ws=[$ws22_after] rc=$dispatch_rc)"
+        fail "22: unexpected state after dispatch (manifest=[$manifest22_after] ws=[$ws22_after] rc=$dispatch_rc)"
     fi
 fi
 
@@ -307,18 +295,18 @@ fi
 #   EXPECTED: FAIL until clearReviewTestsWarnings() is implemented.
 # ---------------------------------------------------------------------------
 SID23="test-sid-1207-23"
-write_review_tests_state "$SID23" "complete" "idempotent-tok" "token=idempotent-tok warnings=1"
+write_review_tests_state "$SID23" "complete" "$FAKE_MANIFEST" "fingerprint=idempotent warnings=1"
 clear_r23a="$(call_clear_warnings "$SID23")"
 clear_r23b="$(call_clear_warnings "$SID23")"
 if [[ "$clear_r23a" == "NOT_IMPLEMENTED" || "$clear_r23b" == "NOT_IMPLEMENTED" ]]; then
     fail "23: clearReviewTestsWarnings() not implemented (idempotency cannot be tested)"
 elif [[ "$clear_r23a" == "OK" && "$clear_r23b" == "OK" ]]; then
-    tok23="$(read_step_field "$SID23" "token")"
+    manifest23="$(read_step_field "$SID23" "review_scope_manifest")"
     ws23="$(read_step_field "$SID23" "warnings_summary")"
-    if [[ "$tok23" == "idempotent-tok" && "$ws23" == "NULL" ]]; then
-        pass "23: clearReviewTestsWarnings() is idempotent (second call safe, token preserved)"
+    if [[ "$manifest23" != "NULL" && "$ws23" == "NULL" ]]; then
+        pass "23: clearReviewTestsWarnings() is idempotent (second call safe, manifest preserved)"
     else
-        fail "23: after two calls — tok=[$tok23] ws=[$ws23]"
+        fail "23: after two calls — manifest=[$manifest23] ws=[$ws23]"
     fi
 else
     fail "23: clearReviewTestsWarnings() returned errors: first=[$clear_r23a] second=[$clear_r23b]"

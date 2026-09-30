@@ -1,0 +1,58 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/run-tests-baseline-evidence — state hand-off for bin/run-tests-baseline (#2431).
+//   failing --session <sid>
+//     exit 0: `SEQ=<n>` then one failing test path per line; exit 3: not classifiable.
+//   record --session <sid> --seq <n> --classification <file> [--base <sha>]
+//     exit 0 completed, 1 classification unmet, 2 usage, 3 state moved or not pending.
+
+const path = require("path");
+const lib = require(path.join(__dirname, "lib", "run-tests-baseline-evidence"));
+const { normalizeCwd } = require(path.join(__dirname, "..", "..", "hooks", "lib", "path-normalize"));
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+const USAGE =
+  "usage: run-tests-baseline-evidence failing --session <sid>\n" +
+  "       run-tests-baseline-evidence record --session <sid> --seq <n> --classification <file> [--base <sha>]";
+
+function finish(code, stdout, stderr) {
+  if (stdout) process.stdout.write(stdout);
+  if (stderr) process.stderr.write(`run-tests-baseline-evidence: ${stderr}\n`);
+  process.exit(code);
+}
+
+function usage(msg) {
+  finish(lib.EXIT.USAGE, null, `${msg}\n${USAGE}`);
+}
+
+function parseArgs(argv) {
+  const opts = {};
+  const known = { "--session": "session", "--seq": "seq", "--classification": "classification", "--base": "base" };
+  for (let i = 0; i < argv.length; i++) {
+    const key = known[argv[i]];
+    if (key === undefined || i + 1 >= argv.length) usage(`bad argument: ${argv[i]}`);
+    opts[key] = argv[++i];
+  }
+  return opts;
+}
+
+function main() {
+  const [sub, ...rest] = process.argv.slice(2);
+  const opts = parseArgs(rest);
+  if (!opts.session || !SESSION_ID_RE.test(opts.session)) usage("--session is required");
+
+  if (sub === "failing") {
+    const r = lib.failing(opts.session);
+    finish(r.code, r.stdout, r.stderr);
+  }
+  if (sub === "record") {
+    if (!opts.seq || !/^[1-9][0-9]*$/.test(opts.seq)) usage("--seq <positive integer> is required");
+    if (!opts.classification) usage("--classification <file> is required");
+    const file = normalizeCwd(opts.classification) || opts.classification;
+    const r = lib.recordFromFile(opts.session, Number(opts.seq), file, opts.base);
+    finish(r.code, r.code === lib.EXIT.OK ? "RECORDED completion_basis=baseline-preexisting\n" : null, r.reason);
+  }
+  usage(`unknown subcommand: ${sub === undefined ? "(none)" : sub}`);
+}
+
+main();

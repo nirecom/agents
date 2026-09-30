@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // bin/workflow/read-session-facts
-// One process, one fixed eight-key record: the reads write-tests and write-code
+// One process, one fixed record (keys: lib/session-facts/keys.js): the reads write-tests and write-code
 // each needed three separate Bash round trips for (#2102).
 // Reporting only — it never emits ACTION / NEXT_SKILL / NEXT_HINT.
 

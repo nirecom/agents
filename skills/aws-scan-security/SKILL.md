@@ -2,7 +2,6 @@
 name: aws-scan-security
 description: Evaluate IAM posture, public exposure, and security service status of the current AWS account.
 model: opus
-effort: high
 context: fork
 ---
 

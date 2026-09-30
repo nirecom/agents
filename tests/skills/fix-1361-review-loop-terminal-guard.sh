@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # tests/skills/fix-1361-review-loop-terminal-guard.sh
 # Tests: skills/review-tests/scripts/run-codex-review-loop.sh, hooks/workflow-state/state-io.js, hooks/workflow-mark/review-tests-handler.js
-# Tags: review-tests, review-loop, terminal-guard, fingerprint, staged-tests, exit9, scope:issue-specific, pwsh-not-required, TL2
+# Tags: review-tests, review-loop, terminal-guard, fingerprint, staged-tests, review-scope, exit9, scope:issue-specific, pwsh-not-required, TL2
 #
 # #1361: after a terminal exit (1/2/6), a caller that re-invokes the script with
 # tests UNCHANGED must be blocked (exit 8) instead of silently restarting ROUND=1.
-# The reset seam is the staged-tests fingerprint (computeStagedTestsToken SSOT):
+# The reset seam is the review-scope fingerprint (computeReviewScopeFingerprint SSOT):
 # a MISMATCH auto-clears the marker, a COMPUTATION FAILURE keeps it (fail-CLOSED).
 # TL3 gap: a real /review-tests invocation with the real shared wrapper and a
 # session-bound worktree — checked at the WORKFLOW_USER_VERIFIED preflight.
@@ -32,8 +32,9 @@ if ! command -v git >/dev/null 2>&1; then
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 0
 fi
 
-# NOTE (detail plan): invalidateReviewTests() is DEAD (no runtime callers) — it is
-# intentionally NOT the reset seam. The real anchor is the staged-tests fingerprint.
+# NOTE (detail plan): the terminal guard file holds 2 lines: rc (exit code) and the
+# review-scope fingerprint. The reset seam is the fingerprint mismatch, not invalidateReviewTests
+# (which has been deleted). A mismatch auto-clears the marker; a compute failure keeps it (fail-CLOSED).
 
 # --- Build a fake AGENTS_CONFIG_DIR with stub bin scripts + real evidence.js ---
 build_fake_config() {
@@ -285,7 +286,7 @@ run_case_g() {
     plans=$(make_tmp); fake=$(build_fake_config yes); repo=$(build_repo)
     term="$plans/sid1361$TERMINAL_SUFFIX"
     # Full attack sequence (mirrors case f): arm via a real exit-6 run so the marker
-    # carries the live staged-tests fingerprint, then re-edit + re-stage to flip it,
+    # carries the live review-scope fingerprint, then re-edit + re-stage to flip it,
     # then re-invoke. The exit-9 gate must fire before the auto-clear rm.
     run_loop "$plans" "$fake" "$repo" 6 >/dev/null   # arm exit-6 marker (real fingerprint)
     if [ ! -f "$term" ]; then

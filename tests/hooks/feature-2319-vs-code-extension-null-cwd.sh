@@ -13,6 +13,8 @@
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 nrm() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
 AGENTS_NODE="$(nrm "$AGENTS_DIR")"
 HOOKS_NODE="$AGENTS_NODE/hooks"
@@ -21,10 +23,6 @@ WRITER_NODE="$HOOKS_NODE/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$HOOKS_NODE/lib/supervisor-state-schema.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1${2:+ — $2}"; FAIL=$((FAIL + 1)); }
 assert_eq() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "expected '$3', got '$2'"; fi; }
 assert_match() {
     if printf '%s' "$2" | grep -Eq "$3"; then pass "$1"; else fail "$1" "'$2' does not match /$3/"; fi
@@ -113,7 +111,7 @@ settled_run() {
     KIO="$(artifact_key intent,outline)" \
     KIOD="$(artifact_key intent,outline,detail)" \
     FK="$(fresh_key)" \
-    DK="$(artifact_key detail)" node -e "
+    DK="$(artifact_key detail)" node - <<JS
 const e = process.env;
 process.stdout.write(JSON.stringify({
   ledger: [{
@@ -134,7 +132,7 @@ process.stdout.write(JSON.stringify({
   declared_files: { snapshot_at: '2026-01-01T00:00:00.000Z', run_id: 'run-0021',
     detail_key: e.DK, files: ['seed.txt', 'extra.txt'], truncated: false },
 }));
-"
+JS
 }
 
 # A single terminal TR5 CONTINUE run at the given freshness key (pre-merge backstop).
@@ -167,25 +165,26 @@ fs.writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(st));
 }
 
 state_field() {
-    WR="$WRITER_NODE" SESS="$SID" RSPATH="$1" node -e "
+    WR="$WRITER_NODE" SESS="$SID" RSPATH="$1" node - <<JS 2>&1
 const writer = require(process.env.WR);
 let v;
 try { v = writer.readState(process.env.SESS); } catch (e) { process.stdout.write('read-error'); process.exit(0); }
 for (const k of process.env.RSPATH.split('.')) v = v === null || v === undefined ? undefined : v[k];
 process.stdout.write(v === undefined ? 'none' : (typeof v === 'object' ? JSON.stringify(v) : String(v)));
-" 2>&1
+JS
 }
 
 # gate_ext <cwd-mode> <command> — spawn the REAL gate FROM $REPO (so process.cwd()
 # is the worktree) with an extension-shaped payload. cwd-mode: absent | null | empty.
 gate_ext() {
     local mode="$1" cmd="$2" payload
-    payload="$(CMDTEXT="$cmd" MODE="$mode" SESS="$SID" node -e "
+    payload=$(CMDTEXT="$cmd" MODE="$mode" SESS="$SID" node - <<JS
 const ti = { command: process.env.CMDTEXT };
 if (process.env.MODE === 'null') ti.cwd = null;
 else if (process.env.MODE === 'empty') ti.cwd = '';
 process.stdout.write(JSON.stringify({ tool_name: 'Bash', tool_input: ti, session_id: process.env.SESS }));
-")"
+JS
+)
     ( cd "$REPO" && printf '%s' "$payload" | bash "$RWT" 60 node "$AGENTS_DIR/hooks/workflow-gate.js" 2>/dev/null )
 }
 decision_of() {
@@ -202,6 +201,7 @@ process.stdout.write(o ? String(o.reason || '') : 'parse-error');
 }
 
 # Symptom 1 — the USER_VERIFIED audit gate must not infinite-arm on a null cwd.
+case_begin "s1-sentinel-approve-per-cwd-mode" "hooks/workflow-gate.js"
 for mode in absent null empty; do
     seed_settled >/dev/null
     out="$(gate_ext "$mode" "$SENTINEL_UV")"
@@ -210,8 +210,10 @@ for mode in absent null empty; do
     assert_eq "S1-$mode: approving the sentinel arms no re-audit (no infinite loop)" \
         "$(state_field audit.audit_phase)" "null"
 done
+case_end
 
 # Infinite-loop regression: re-issuing after it settles keeps approving.
+case_begin "s1-infinite-loop-regression" "hooks/workflow-gate.js"
 seed_settled >/dev/null
 d1="$(decision_of "$(gate_ext null "$SENTINEL_UV")")"
 d2="$(decision_of "$(gate_ext null "$SENTINEL_UV")")"
@@ -219,8 +221,10 @@ d3="$(decision_of "$(gate_ext null "$SENTINEL_UV")")"
 assert_eq "S1-loop: 1st re-issue approves under null cwd" "$d1" "approve"
 assert_eq "S1-loop: 2nd re-issue approves under null cwd" "$d2" "approve"
 assert_eq "S1-loop: 3rd re-issue approves — no arm/deny ping-pong" "$d3" "approve"
+case_end
 
 # Symptom 2 — the pre-merge backstop must reach freshness, not fail-closed.
+case_begin "s2-pre-merge-freshness-per-cwd-mode" "hooks/workflow-gate.js"
 FK="$(fresh_key)"
 for mode in absent null empty; do
     seed_continue "$FK" >/dev/null
@@ -230,6 +234,7 @@ for mode in absent null empty; do
     assert_nomatch "S2-$mode: the merge never falls into the fail-closed TypeError path" \
         "$(reason_of "$out")" 'failed to evaluate \(fail-closed\)'
 done
+case_end
 
 # Defense-in-depth (#2319 Steps 3-4): each consumer's OWN null-CWD guard holds
 # independently of the workflow-gate.js Step-1 primary fix. The S1/S2 cases above
@@ -242,9 +247,10 @@ UVA_NODE="$HOOKS_NODE/workflow-gate/user-verified-audit.js"
 # S3 — supervisor-check.js pre-merge backstop: a null hookCwd with a resolveRepoDirFn
 # that THROWS on (null, null) must not crash. The inner try-catch falls back to
 # process.cwd() and the backstop still evaluates a fresh CONTINUE TR5 to approve.
+case_begin "s3-supervisor-check-null-cwd-fallback" "hooks/workflow-gate/supervisor-check.js"
 FK="$(fresh_key)"
 seed_continue "$FK" >/dev/null
-s3_out="$( cd "$REPO" && SC="$SC_NODE" SESS="$SID" node -e "
+s3_out=$( cd "$REPO" && SC="$SC_NODE" SESS="$SID" node - <<JS 2>/dev/null
 const { checkSupervisorPreMerge } = require(process.env.SC);
 const problems = [];
 let called = false;
@@ -258,15 +264,18 @@ catch (e) { problems.push('threw:' + e.message); }
 if (!called) problems.push('resolver-not-reached');
 if (!r || r.authoritative !== true) problems.push('not-authoritative:' + JSON.stringify(r));
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
-" 2>/dev/null )"
+JS
+)
 assert_eq "S3-supervisor-check: a null hookCwd falls back to process.cwd(), reaches the resolver, and still evaluates authoritatively without throwing" \
     "$s3_out" "OK"
+case_end
 
 # S4 — user-verified-audit.js TR5 gate: a null hookCwd is null-guarded at entry
 # (cwd = hookCwd || process.cwd()). A settled TR5 CONTINUE run approves through the
 # resolved cwd without throwing.
+case_begin "s4-user-verified-audit-null-cwd-fallback" "hooks/workflow-gate/user-verified-audit.js"
 seed_settled >/dev/null
-s4_out="$( cd "$REPO" && UVA="$UVA_NODE" SESS="$SID" node -e "
+s4_out=$( cd "$REPO" && UVA="$UVA_NODE" SESS="$SID" node - <<JS 2>/dev/null
 const { checkUserVerifiedAudit } = require(process.env.UVA);
 const problems = [];
 let approved = false;
@@ -280,9 +289,59 @@ catch (e) { problems.push('threw:' + e.message); }
 if (!r || r.authoritative !== true) problems.push('not-authoritative:' + JSON.stringify(r));
 if (!approved) problems.push('not-approved');
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
-" 2>/dev/null )"
+JS
+)
 assert_eq "S4-user-verified-audit: a null hookCwd resolves a usable cwd (process.cwd()) and the settled TR5 run approves without throwing" \
     "$s4_out" "OK"
+case_end
+
+# S5 (#2100 Step 6 H10, SF-M1/SF-M2) — the TR5 arm reason names the reviewer model
+# right after its supervisor-audit spawn line. Fresh SID + fixture cfg per render;
+# ambient MODEL_* stripped. RED until Step 6 lands (S5-arm is GREEN today).
+s5_reason() {
+    local sid="$1" cfg="$WORK/cfg-$1" js
+    js=$(cat <<'JS'
+const { checkUserVerifiedAudit } = require(process.env.UVA);
+const writer = require(process.env.WR);
+const schema = require(process.env.SC);
+require('fs').writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(schema.createEmptyState(process.env.SESS)));
+let reason = null;
+checkUserVerifiedAudit(process.env.SESS, process.env.RCWD, {
+  approveFn: () => { reason = 'APPROVED'; },
+  blockFn: (r) => { reason = String(r); },
+});
+process.stdout.write(reason === null ? 'NO-DECISION' : reason);
+JS
+)
+    mkdir -p "$cfg"
+    printf '%b' "$2" > "$cfg/.env"
+    ( cd "$REPO" && env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL -u PRODUCER_LOW_MODEL \
+        -u CLAUDE_PROJECT_DIR -u WORKFLOW_SESSION_ID AGENTS_CONFIG_DIR="$(nrm "$cfg")" \
+        UVA="$UVA_NODE" WR="$WRITER_NODE" SC="$SCHEMA_NODE" SESS="$sid" RCWD="$REPO_NODE" \
+        bash "$RWT" 30 node -e "$js" 2>&1 )
+}
+s5_after() {
+    printf '%s\n' "$1" | awk 'hit { print; exit } /^Run agents\/supervisor-audit[.]md as a subagent, then re-issue the sentinel[.]$/ { hit = 1 }'
+}
+s5_model() { printf 'Subagent model: pass model: "%s" to the Agent tool.' "$1"; }
+
+case_begin "s5-reviewer-model-in-arm-reason" "hooks/workflow-gate/user-verified-audit.js"
+s5_out="$(s5_reason ext2100a 'REVIEWER_MODEL=haiku\nALERT_MODEL=opus\n')"
+assert_match "S5-arm: an unaudited TR5 sentinel arms and blocks with the audit spawn line" \
+    "$s5_out" '^\[EM Supervisor\] user_verification \(TR5\) audit required'
+assert_eq "S5-haiku: REVIEWER_MODEL=haiku is the line right after the spawn line" \
+    "$(s5_after "$s5_out")" "$(s5_model haiku)"
+assert_eq "S5-haiku: exactly one Subagent model: line" \
+    "$(printf '%s\n' "$s5_out" | grep -c '^Subagent model:')" "1"
+s5_out="$(s5_reason ext2100b 'ALERT_MODEL=haiku\n')"
+assert_eq "S5-swap: ALERT_MODEL alone leaves the reviewer default (opus)" \
+    "$(s5_after "$s5_out")" "$(s5_model opus)"
+s5_out="$(s5_reason ext2100c 'REVIEWER_MODEL=gpt-uvaleak\n')"
+assert_eq "S5-invalid: a disallowed REVIEWER_MODEL falls back to opus" \
+    "$(s5_after "$s5_out")" "$(s5_model opus)"
+assert_nomatch "S5-invalid: the disallowed value is never echoed into the reason" \
+    "$s5_out" 'uvaleak|^NO-DECISION$'
+case_end
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

@@ -1,7 +1,7 @@
 "use strict";
 // bin/workflow/lib/session-facts/keys.js
-// The v1 output contract of bin/workflow/read-session-facts: which keys are
-// printed, and in which order.
+// The output contract (version FACTS_VERSION) of bin/workflow/read-session-facts:
+// which keys are printed, and in which order.
 
 // Adding, removing, renaming, or reordering a key here is a breaking change —
 // bump FACTS_VERSION and update docs/architecture/claude-code/workflow.md and
@@ -10,7 +10,7 @@
 // measured process-cost tradeoff in its header).
 // Static literals on purpose: never derive these names from VALID_STEPS or
 // ROUTING_STAGES, or a new workflow stage would silently grow the contract.
-const FACTS_V1_KEYS = [
+const FACTS_KEYS = [
   "FACTS_VERSION",
   "SESSION_ID",
   "PLANS_DIR",
@@ -18,10 +18,12 @@ const FACTS_V1_KEYS = [
   "GATE_CONFIRM_CODE",
   "COMPLEXITY_LEVEL_write_tests",
   "COMPLEXITY_LEVEL_write_code",
+  "COMPLEXITY_MODEL_write_tests",
+  "COMPLEXITY_MODEL_write_code",
   "COMPLEXITY_SIGNALS",
 ];
 
-const FACTS_VERSION = 1;
+const FACTS_VERSION = 2;
 
 // The `<default>` argument each gate is probed with. SSOT for the bundled reader
 // AND for the post-action probe still written out in the consuming SKILL.md.
@@ -30,4 +32,4 @@ const GATE_DEFAULTS = {
   CONFIRM_CODE: "on",
 };
 
-module.exports = { FACTS_V1_KEYS, FACTS_VERSION, GATE_DEFAULTS };
+module.exports = { FACTS_KEYS, FACTS_VERSION, GATE_DEFAULTS };

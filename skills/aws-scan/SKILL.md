@@ -2,7 +2,6 @@
 name: aws-scan
 description: Orchestrate a full AWS infrastructure scan across resources, security, cost, and applications.
 model: opus
-effort: high
 context: fork
 ---
 

@@ -9,7 +9,7 @@
 # L-1..L-4: the legacy shapes, read through the consumer-facing API.
 d2099_legacy_shapes() {
     local got
-    got=$(run_node '
+    got=$(run_with_timeout node - 2>&1 <<'JS'
 const fs = require("fs");
 const path = require("path");
 const b = require(process.env.BARREL_N);
@@ -72,10 +72,10 @@ const ROWS = [
   // opposite (high/low/low) proves the migration preserves the RECORDED map
   // verbatim instead of silently re-deriving and overwriting the routing
   // decision a session already made.
-  ["L8-wellformed", { level: "high", signals: ["S1-multi-file"], levels: { detail: "high", write_tests: "low", write_code: "low" }, recorded_at: AT }, seedV1],
+  ["L8-wellformed", { level: "high", signals: ["S1-multi-file"], levels: { outline: "low", detail: "high", write_tests: "low", write_code: "low" }, recorded_at: AT }, seedV1],
   ["BAD-partial", { level: "high", signals: ["S1-multi-file"], levels: { detail: "low" }, recorded_at: AT }, seedEvent],
   ["BAD-value", { level: "high", signals: ["S1-multi-file"], levels: { detail: "low", write_tests: "yes", write_code: "high" }, recorded_at: AT }, seedEvent],
-  ["STORED-wins", { level: "low", signals: [], levels: { detail: "high", write_tests: "high", write_code: "high" }, recorded_at: AT }, seedEvent],
+  ["STORED-wins", { level: "low", signals: [], levels: { outline: "high", detail: "high", write_tests: "high", write_code: "high" }, recorded_at: AT }, seedEvent],
   // A persisted record whose signals array holds NON-STRING elements. The read
   // contract accepts any array, so this must not throw: every non-string
   // stringifies to a token outside SIGNAL_IDS and falls to undecidable-high,
@@ -96,7 +96,8 @@ for (const r of ROWS) {
 // silently dropped this would read 0 and the table below would be vacuous.
 out.unshift("projected=" + projected + "/" + ROWS.length);
 console.log(out.join("\n"));
-')
+JS
+)
     assert_block "L-1 every legacy complexity_evaluation shape resolves per the compatibility table" "$got" <<'EOF'
 projected=12/13
 L1-arch=high:high/high/high
@@ -146,7 +147,7 @@ out.push("missing=" + b.readStageComplexityLevel("s2099-absent-" + process.pid, 
 console.log(out.join(" "));
 ')
     assert_eq "L-5 readStageComplexityLevel backfills legacy records and rejects an unknown stage" \
-        "seeded=yes detail=low write_tests=low write_code=high stage=TypeError missing=null" "$got"
+        "seeded=yes outline=low detail=low write_tests=low write_code=high stage=TypeError missing=null" "$got"
 }
 
 # L-6 (row L4): a v1 state file must come out of migration with levels attached
@@ -159,7 +160,7 @@ console.log(out.join(" "));
 # measured an untouched v1 file with no `events` key at all (round-9 C2).
 d2099_v1_migration() {
     local got want_levels
-    got=$(run_node '
+    got=$(run_with_timeout node - 2>&1 <<'JS'
 const fs = require("fs");
 const b = require(process.env.BARREL_N);
 const sid = "s2099-v1-" + process.pid;
@@ -200,8 +201,9 @@ console.log([
   "raw_events=" + rawAfter.length,
   "raw_levels=" + (rawAfter.length ? JSON.stringify(rawAfter[0].levels) : "none"),
 ].join(" "));
-')
-    want_levels="{\"detail\":\"high\",\"write_tests\":\"high\",\"write_code\":\"high\"}"
+JS
+)
+    want_levels="{\"outline\":\"high\",\"detail\":\"high\",\"write_tests\":\"high\",\"write_code\":\"high\"}"
     assert_eq "L-6 v1-to-v2 backfills the complexity event with derived levels, in memory and once a writer persists it" \
         "level=high levels=high/high/high mem_events=1 mem_levels=$want_levels raw_before=0 persisted=true raw_events=1 raw_levels=$want_levels" \
         "$got"
@@ -219,7 +221,7 @@ d2099_v1_migration_fail_open() {
         fail "L-7 unattributable: the isolated broken-table tree at $D2099_ISO was never built, so 'derivation unavailable' could not be produced"
         return
     fi
-    got=$(ISO_BARREL="$(to_node_path "$D2099_ISO/hooks/workflow-state.js")" run_with_timeout node -e '
+    got=$(ISO_BARREL="$(to_node_path "$D2099_ISO/hooks/workflow-state.js")" run_with_timeout node - 2>/dev/null <<'JS'
 const fs = require("fs");
 const b = require(process.env.ISO_BARREL);
 const sid = "s2099-v1fo-" + process.pid;
@@ -266,13 +268,22 @@ console.log([
   "raw_events=" + rawAfter.length,
   "raw_has_levels=" + hasKey(rawAfter),
 ].join(" "));
-' 2>/dev/null)
+JS
+)
     assert_eq "L-7 an underivable v1 record still migrates, keeps level/signals, and omits levels rather than inventing them" \
         "migrated=yes level=high signals=[\"S1-multi-file\",\"S2-architecture\"] ce_levels=null mem_events=1 mem_has_levels=false raw_before=0 persisted=true raw_events=1 raw_has_levels=false" \
         "$got"
 }
 
+case_begin "legacy-shapes-compatibility-table" "hooks/workflow-state/skip-signal-resolver.js"
 d2099_legacy_shapes
+case_end
+case_begin "legacy-stage-reader-backfill-and-unknown-stage" "hooks/workflow-state/skip-signal-resolver.js"
 d2099_legacy_stage_reader
+case_end
+case_begin "v1-migration-backfills-levels-in-memory-and-persisted" "hooks/workflow-state/state-io/migrations/v1-to-v2.js"
 d2099_v1_migration
+case_end
+case_begin "v1-migration-fail-open-omits-levels-when-underivable" "hooks/workflow-state/state-io/migrations/v1-to-v2.js"
 d2099_v1_migration_fail_open
+case_end

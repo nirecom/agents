@@ -9,44 +9,54 @@
 # right answer -- and would hide a real regression the day the parser stops quoting properly.
 # `\;` and `{}` in the find row are the exact shapes round 1 wanted to special-case.
 
+case_begin "negative-look-alike-non-hits" "hooks/bash-guard/detect.js"
 n1_non_hits() {
-    local name cmd got
-    while IFS='~' read -r name cmd; do
+    local name cmd want got
+    while IFS='~' read -r name cmd want; do
         [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
         name="${name//[[:space:]]/}"
+        want="${want//[[:space:]]/}"
         cmd="$(mkcmd "$cmd")"
         ROWS=$((ROWS + 1))
 
         got="$(verdict_of "$cmd")"
-        assert_eq "N1/$name: not denied (passes through)" "passThrough" "$got"
+        assert_eq "N1/$name: not denied ($want)" "$want" "$got"
 
         got="$(probe hit-ids "$cmd")"
         assert_eq "N1/$name: no hit was ever created (non-hit, not an exemption)" "" "$got"
     done <<'TABLE'
-plain-single    ~ git log --oneline -5
-find-exec       ~ find . -name '*.tmp' -exec rm {} \;
-quoted-semi     ~ grep 'a;b' file.txt
-quoted-pipe     ~ cat "my|file.txt"
-semi-in-path    ~ cat '/tmp/weird;dir/file.txt'
-quoted-sentinel ~ echo "<<WORKFLOW_RESET_FROM_detail: reason>>"
-arith-expansion ~ echo $((1+2))
-fd-dup          ~ ls 2>&1
-fd-close        ~ ls 2>&-
-bare-assignment ~ A=1
+plain-single    ~ git log --oneline -5                          ~ allow
+find-exec       ~ find . -name '*.tmp' -exec rm {} \;           ~ passThrough
+quoted-semi     ~ grep 'a;b' file.txt                           ~ allow
+quoted-pipe     ~ cat "my|file.txt"                             ~ allow
+semi-in-path    ~ cat '/tmp/weird;dir/file.txt'                 ~ allow
+quoted-sentinel ~ echo "<<WORKFLOW_RESET_FROM_detail: reason>>" ~ passThrough
+arith-expansion ~ echo $((1+2))                                 ~ passThrough
+fd-dup          ~ ls 2>&1                                       ~ passThrough
+fd-close        ~ ls 2>&-                                       ~ passThrough
+bare-assignment ~ A=1                                           ~ passThrough
 TABLE
 }
 
 # The last four rows are near-misses on the SHAPE of a literal: `$((` is arithmetic, `2>&1`
 # and `2>&-` move a descriptor instead of writing a file, and a bare `A=1` prefixes nothing.
-n1_non_hits
+# Since #2403 the read-only classes turn the plain git/grep/cat rows into allow; find -exec
+# (exec-capable, and a `;` separator), the fd-redirect rows (not a plain single command) and
+# echo (no class) stay passThrough.
+bg_batched n1_non_hits
+case_end
 
 # N2: the sanctioned `bash -c '... && ...'` form used across skills/_shared. The `&&` sits
 # inside single quotes, so it is not a separator -- if this ever denies, roughly eight prompt
 # assets stop working and the workflow blocks itself the way #2120 did. Since #2265 the
 # `bash -c` wrapper is re-judged by the self-script allow, so it is allowed, not passed through.
+case_begin "negative-bash-c-quoted-chain" "hooks/bash-guard/judge.js"
 assert_eq "N2: an && inside single quotes is not a separator" \
     "allow" "$(verdict_of "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" RUN_TL4 on'")"
+case_end
 
 # N3: an escaped separator in unquoted context. The pre-#2121 lexer mis-split this, which is
 # why the new parser is a prerequisite for the guard rather than an independent change.
+case_begin "negative-escaped-separator" "hooks/lib/command-ir.js"
 assert_eq "N3: an escaped && is not a separator" "passThrough" "$(verdict_of 'echo a \&\& b')"
+case_end

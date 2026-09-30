@@ -11,14 +11,34 @@ SSOT_LIST="$(ssot_entries "$SSOT")"
 # T0 is a FAIL, never a SKIP. A skip here is the exact failure mode this suite exists to
 # prevent: the SSOT is the whole feature, so "not built yet" and "deleted by accident" have
 # to be the same red line.
+case_begin "t0-ssot-exists" "install/settings-allow-commands.txt"
 t0_ssot_exists() {
     assert_eq "T0: $SSOT_REL exists (IMPLEMENTATION MISSING while absent -- this is a FAIL, not a SKIP)" \
         "yes" "$SSOT_PRESENT"
 }
+t0_ssot_exists
+case_end
+
+case_begin "t1a-entries-exist" "install/settings-allow-commands.txt"
+t1a_entries_exist() {
+    if [ "$SSOT_PRESENT" != "yes" ]; then
+        fail "T1a: cannot check entry existence -- $SSOT_REL is missing (IMPLEMENTATION MISSING)"
+        return
+    fi
+    local missing="" e
+    while IFS= read -r e; do
+        [ -n "$e" ] || continue
+        [ -f "$AGENTS_DIR/$e" ] || missing="$missing $e"
+    done <<< "$SSOT_LIST"
+    assert_eq "T1a: every SSOT entry resolves to a real file under the agents root" "" "$missing"
+}
+t1a_entries_exist
+case_end
 
 # The interpreter is never written in the SSOT; it is read from the shebang. The resolution
 # hooks/lib/allow-command-list.js must implement is spelled out here as the reference: `env <x>`
 # takes the following token, and anything that is not bash or node is unresolved (no allow).
+case_begin "t1b-shebangs-resolve" "hooks/lib/allow-command-list.js"
 resolve_shebang() { # <file> -> bash|node|unresolved
     local line first
     [ -f "$1" ] || { printf 'unresolved'; return; }
@@ -35,19 +55,6 @@ resolve_shebang() { # <file> -> bash|node|unresolved
     case "$first" in bash|node) printf '%s' "$first" ;; *) printf 'unresolved' ;; esac
 }
 
-t1a_entries_exist() {
-    if [ "$SSOT_PRESENT" != "yes" ]; then
-        fail "T1a: cannot check entry existence -- $SSOT_REL is missing (IMPLEMENTATION MISSING)"
-        return
-    fi
-    local missing="" e
-    while IFS= read -r e; do
-        [ -n "$e" ] || continue
-        [ -f "$AGENTS_DIR/$e" ] || missing="$missing $e"
-    done <<< "$SSOT_LIST"
-    assert_eq "T1a: every SSOT entry resolves to a real file under the agents root" "" "$missing"
-}
-
 t1b_shebangs_resolve() {
     if [ "$SSOT_PRESENT" != "yes" ]; then
         fail "T1b: cannot check shebangs -- $SSOT_REL is missing (IMPLEMENTATION MISSING)"
@@ -61,11 +68,14 @@ t1b_shebangs_resolve() {
     done <<< "$SSOT_LIST"
     assert_eq "T1b: every SSOT entry's shebang resolves to bash or node (anything else is fail-closed)" "" "$bad"
 }
+t1b_shebangs_resolve
+case_end
 
 # T2a is the conservative-charset gate. Each entry is a path bash-guard auto-approves (#2264),
 # so a `..`, a leading slash, a drive letter or a glob metacharacter would WIDEN the approved
 # set rather than merely name a file -- the one place here where a typo is a security change
 # and not a broken build.
+case_begin "t2a-charset" "install/settings-allow-commands.txt"
 t2a_charset() {
     if [ "$SSOT_PRESENT" != "yes" ]; then
         fail "T2a: cannot check the entry charset -- $SSOT_REL is missing (IMPLEMENTATION MISSING)"
@@ -82,7 +92,10 @@ t2a_charset() {
     assert_eq "T2a: every entry is a plain relative path (no .., no leading slash, no drive letter, no glob metacharacter)" \
         "" "$bad"
 }
+t2a_charset
+case_end
 
+case_begin "t2b-no-duplicates" "install/settings-allow-commands.txt"
 t2b_no_duplicates() {
     if [ "$SSOT_PRESENT" != "yes" ]; then
         fail "T2b: cannot check for duplicates -- $SSOT_REL is missing (IMPLEMENTATION MISSING)"
@@ -92,7 +105,10 @@ t2b_no_duplicates() {
     dups="$(printf '%s\n' "$SSOT_LIST" | sort | uniq -d | tr '\n' ' ' | sed -e 's/[[:space:]]*$//')"
     assert_eq "T2b: the SSOT carries no duplicate entry" "" "$dups"
 }
+t2b_no_duplicates
+case_end
 
+case_begin "t2c-non-empty" "install/settings-allow-commands.txt"
 t2c_non_empty() {
     local n got
     n="$(printf '%s\n' "$SSOT_LIST" | grep -c . || true)"
@@ -100,6 +116,8 @@ t2c_non_empty() {
     [ "${n:-0}" -gt 0 ] && got="non-empty"
     assert_eq "T2c: the SSOT is non-empty (it currently lists ${n:-0} entries)" "non-empty" "$got"
 }
+t2c_non_empty
+case_end
 
 in_ssot() { # <entry> -> yes|no
     printf '%s\n' "$SSOT_LIST" | grep -Fxq -- "$1" && { printf 'yes'; return; }
@@ -109,6 +127,7 @@ in_ssot() { # <entry> -> yes|no
 # T3a -- EXCLUSION REGRESSION PIN. Four commands were deliberately dropped, each for a
 # different admission-criterion reason. The reason lives in the row label, so anyone
 # re-adding one has to delete a sentence explaining why it must not be there.
+case_begin "t3a-exclusions" "install/settings-allow-commands.txt"
 t3a_exclusions() {
     local entry label
     while IFS='|' read -r entry label; do
@@ -122,6 +141,8 @@ hooks/record-off-skill-invocation.js|hook body launched by the platform, not by 
 bin/github-issues/issue-body-append.sh|gh write: edits an existing issue body, changing state outside the repo (criterion a)
 T3A_CASES
 }
+t3a_exclusions
+case_end
 
 # T3b -- ADMISSION SNAPSHOT PIN. Presence rows alone cannot see a silent shrink, so the exact
 # membership is pinned: one row per entry plus a count assertion. A member that stops meeting
@@ -132,6 +153,7 @@ T3A_CASES
 # worker-dispatch.js) stay out. #2201 admitted two; #2102 admitted read-session-facts (it was
 # never pinned here, so the count row is what caught it); #2075 admitted find-tests-for-source.sh;
 # #2265 admitted handoff-append.
+case_begin "t3b-snapshot" "install/settings-allow-commands.txt"
 t3b_snapshot() {
     local entry n
     while IFS= read -r entry; do
@@ -169,6 +191,8 @@ T3B_CASES
     n="$(printf '%s\n' "$SSOT_LIST" | grep -c . || true)"
     assert_eq "T3b: the SSOT holds exactly the 26 pinned entries and nothing else" "26" "${n:-0}"
 }
+t3b_snapshot
+case_end
 
 # T46 -- THE READER, NOT THE FILE. Every row above reads the SSOT through ssot_entries, and the
 # allow-command-list.js reads both list files again in production: split on \n, strip TRAILING
@@ -177,6 +201,8 @@ T3B_CASES
 # and one-directional: an entry the harness drops but the reader keeps becomes an auto-approved
 # path that no test in this suite ever looks at, and the reverse hides a real entry from T1a's
 # existence check and T2a's charset gate. Each row therefore pins the parse AND the agreement.
+# Target: the path-exposed list is the second file this shared line format governs.
+case_begin "t46-reader-format" "install/path-exposed-commands.txt"
 T46_DIR="$TMPROOT/t46"
 
 t46_write() { # <case> <file>
@@ -195,35 +221,37 @@ t46_write() { # <case> <file>
 
 # The production contract restated here, the way resolve_shebang restates the interpreter rule:
 # importing allow-command-list.js's own reader could only prove it equals itself.
-t46_reference() { # <file> -> comma-joined entries
-    node -e '
-      const fs = require("fs");
-      let raw = "";
-      try { raw = fs.readFileSync(process.argv[1], "utf8"); } catch (e) { raw = ""; }
-      console.log(raw.split("\n").map((l) => l.replace(/\s+$/, ""))
-        .filter((l) => l.length > 0 && !/^\s*#/.test(l)).join(","));
-    ' "$(node_path "$1")" 2>/dev/null || printf 'NODE-ERROR'
-}
+# BATCHED: one node reads every case file named on argv (each its own file, so no case sees
+# another's bytes) and emits one NUL-terminated comma-joined result per file, in argv order.
+T46_REFERENCE_JS='
+  const fs = require("fs");
+  const out = process.argv.slice(1).map((f) => {
+    let raw = "";
+    try { raw = fs.readFileSync(f, "utf8"); } catch (e) { raw = ""; }
+    return raw.split("\n").map((l) => l.replace(/\s+$/, ""))
+      .filter((l) => l.length > 0 && !/^\s*#/.test(l)).join(",");
+  });
+  process.stdout.write(out.map((s) => s + "\0").join(""));
+'
 
 # Bracketed so a leading space inside an entry, and an empty result, are both visible in the
 # table's want column instead of being eaten by it.
-t46_probe() { # <case> -> [entries] | DISAGREE...
-    local f h r
-    mkdir -p "$T46_DIR"
-    f="$T46_DIR/$1.txt"
-    if [ "$1" = "absent-file" ]; then rm -f "$f"; else t46_write "$1" "$f"; fi
-    h="$(ssot_entries "$f" | tr '\n' ',' | sed -e 's/,$//')"
-    r="$(t46_reference "$f")"
+t46_probe() { # <case-file> <reference-result> -> [entries] | DISAGREE...
+    local h r="$2"
+    h="$(ssot_entries "$1" | tr '\n' ',' | sed -e 's/,$//')"
     [ "$h" = "$r" ] || { printf 'DISAGREE harness[%s] reader[%s]' "$h" "$r"; return; }
     printf '[%s]' "$h"
 }
 
 t46_reader_table() {
-    local id want label
+    local id want label f i dir_np ids=() wants=() labels=() files=()
+    mkdir -p "$T46_DIR"
+    dir_np="$(node_path "$T46_DIR")"
     while IFS='|' read -r id want label; do
         [ -n "$id" ] || continue
-        ROWS=$((ROWS + 1))
-        assert_eq "T46[$id]: $label" "$want" "$(t46_probe "$id")"
+        f="$T46_DIR/$id.txt"
+        if [ "$id" = "absent-file" ]; then rm -f "$f"; else t46_write "$id" "$f"; fi
+        ids+=("$id"); wants+=("$want"); labels+=("$label"); files+=("$dir_np/$id.txt")
     done <<'T46_CASES'
 crlf|[bin/a,bin/b]|a CRLF file parses to the same entries as an LF one -- a surviving \r would become part of the entry and match nothing
 crlf-no-final|[bin/a,bin/b]|CRLF plus a comment, a blank line and no final newline at once: the last entry is still read
@@ -236,14 +264,12 @@ blank-only|[]|a file of nothing but blank and whitespace-only lines reads as zer
 empty-file|[]|a zero-byte file reads as zero entries
 absent-file|[]|a file that does not exist reads as zero entries rather than erroring out of the sourcing part file
 T46_CASES
+    nul_records "T46 reference reader" "${#ids[@]}" node -e "$T46_REFERENCE_JS" "${files[@]}"
+    for i in "${!ids[@]}"; do
+        ROWS=$((ROWS + 1))
+        assert_eq "T46[${ids[$i]}]: ${labels[$i]}" "${wants[$i]}" \
+            "$(t46_probe "$T46_DIR/${ids[$i]}.txt" "${NUL_RECS[$i]}")"
+    done
 }
-
-t0_ssot_exists
-t1a_entries_exist
-t1b_shebangs_resolve
-t2a_charset
-t2b_no_duplicates
-t2c_non_empty
-t3a_exclusions
-t3b_snapshot
 t46_reader_table
+case_end

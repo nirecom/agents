@@ -10,7 +10,7 @@ Edit source code for the current task.
 ## Procedure
 
 WCD-0. Read the session facts once, before the pre-launch steps that consume them: `node "$AGENTS_CONFIG_DIR/bin/workflow/read-session-facts" --session "$SESSION_ID"`
-   - `PLANS_DIR=` (substitute for every `<PLANS_DIR>` below), `GATE_CONFIRM_CODE=` (the WCD-2 gate: `ON`/`OFF`/`ERROR`), `COMPLEXITY_LEVEL_write_code=` and `COMPLEXITY_SIGNALS=` (the WCD-3 level and signals).
+   - `PLANS_DIR=` (substitute for every `<PLANS_DIR>` below), `GATE_CONFIRM_CODE=` (the WCD-2 gate: `ON`/`OFF`/`ERROR`), `COMPLEXITY_LEVEL_write_code=`, `COMPLEXITY_MODEL_write_code=` and `COMPLEXITY_SIGNALS=` (the WCD-3 level, model and signals).
    - If the command exits non-zero, or `PLANS_DIR=NONE`, stop — do not proceed with any step that uses `<PLANS_DIR>`; report via /supervisor-report; never construct a path like `NONE/<session-id>-...`.
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 Read `rules/ops.md` before any destructive or system-state-changing command (including inside WCD-4 self-repair) — on-demand-only, never auto-injected; it owns the recovery-options-first decision path.
@@ -21,15 +21,15 @@ WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: pat
    - `OFF`: proceed to WCD-3.
    - `ON` or `ERROR`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
 
-WCD-3. If `COMPLEXITY_LEVEL_write_code` from WCD-0 is not `NONE`, use it and `COMPLEXITY_SIGNALS` directly, then derive the model via `high→opus, low→sonnet`; skip the fallback below.
+WCD-3. If `COMPLEXITY_LEVEL_write_code` from WCD-0 is not `NONE`, use `COMPLEXITY_MODEL_write_code` as the model and `COMPLEXITY_SIGNALS` directly; skip the fallback below.
    - If `NONE` (fail-open):
-     - Dispatch `subagent_type: complexity-judge` (pass intent/outline/detail + WCD-2 file list); write raw output to `<PLANS_DIR>/<session-id>-write-code-judge-raw.txt` (Write tool — untrusted text via file only).
+     - Dispatch `subagent_type: complexity-judge` (pass intent/outline/detail + WCD-2 file list; rubric: `skills/_shared/judge-task-complexity.md`); write raw output to `<PLANS_DIR>/<session-id>-write-code-judge-raw.txt` (Write tool — untrusted text via file only).
      - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-code-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-write-code-signals.txt"`.
-     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_code --signals-file "<PLANS_DIR>/<session-id>-write-code-signals.txt"` and use its `level=<v>` — never judge the level inline.
-   Emit in Claude text output (NOT Bash echo): `> Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])`
+     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_code --signals-file "<PLANS_DIR>/<session-id>-write-code-signals.txt"` and use its `model=<alias>` line — never judge the level inline.
+   Emit in Claude text output (NOT Bash echo): `> Model selected: **<model alias>** (signals: [comma-separated triggered signal IDs, or "none"])`
 WCD-3a. Emit `echo "<<WORKFLOW_MARK_STEP_write_code_in_progress>>"` via Bash immediately before the WCD-4 subagent launch.
 
-WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model derived from level in WCD-3>` — the model parameter receives `"opus"` or `"sonnet"`, never `"high"` or `"low"`) with a prompt containing:
+WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model alias from WCD-3>` — the model alias, never the level `high` / `low`) with a prompt containing:
    - Target files and planned edit summary from WCD-2.
    - A-layer language essence block (see below).
    - Directive: "Read `rules/coding.md` (the hub — on-demand-only, so it does not reach you otherwise) and `rules/coding/<lang>.md` for each language present, before the first Edit."
@@ -51,6 +51,9 @@ WCD-6. Present the final edited file list + skipped-check notes + scope-expansio
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
    - stdout `OFF`: skip WCD-6; proceed (no user wait).
    - stdout `ON` or `ERROR`: present the file list and notes; record each per `skills/_shared/handoff-record.md` (`--step write_code`; `--class E --key write-code:checks-skipped` / `--class D --key write-code:scope-expansion`).
+
+WCD-7. Stage the implementation files so the write_code snapshot sees them: `node "$AGENTS_CONFIG_DIR/bin/stage-review-scope-files.js" --worktree "<cwd>" -- <WCD-5 edited files>`
+   - Exit non-zero: stop — do not emit the completion sentinel; report via /supervisor-report.
 
 ## A-layer language essence (complement of B-layer — zero overlap with `rules/coding/*.md`)
 
@@ -87,4 +90,5 @@ Each is best-effort: if the tool or config is absent, skip AND emit `<tool> not 
 
 ## Completion
 
-Emit `echo "<<WORKFLOW_MARK_STEP_write_code_complete>>"` via Bash once WCD-6 passes; skip it when the subagent failed or the WCD-6 review was rejected — fix the work and re-run WCD-4 first.
+Emit `echo "<<WORKFLOW_MARK_STEP_write_code_complete>>"` via Bash after WCD-7 exits 0; skip it when the subagent failed or the WCD-6 review was rejected — fix the work and re-run WCD-4 first.
+Then run `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --session "$SESSION_ID"` and follow its ACTION — it routes to /review-tests when write_code changed the review scope.

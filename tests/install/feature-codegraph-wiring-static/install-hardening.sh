@@ -21,8 +21,8 @@ while IFS='|' read -r name rel needle; do
     case "$name" in \#*) continue ;; esac
     assert_contains "$name" "$(trim "$rel")" "$(trim "$needle")"
 done <<'W12_TABLE'
-W12-08 | install/linux/codegraph.sh | npm install -g --ignore-scripts "@colbymchenry/codegraph@latest"
-W12-09 | install/win/codegraph.ps1  | npm install -g --ignore-scripts "@colbymchenry/codegraph@latest"
+W12-08 | install/linux/codegraph.sh | npm install -g --ignore-scripts "@colbymchenry/codegraph@1.6.0"
+W12-09 | install/win/codegraph.ps1  | npm install -g --ignore-scripts "@colbymchenry/codegraph@1.6.0"
 W12-10 | hooks/lib/codegraph-boundary.js | codegraph-constants.txt
 W12_TABLE
 

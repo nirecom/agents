@@ -79,25 +79,47 @@ _is_root_like_token() {
 # 0 when absent). The last three are structural metadata read only by --dup-groups.
 tfm_parse_tests_line() {
   local file="$1"
+  local matches
+  matches="$(grep -n -E '^# Tests:' "$file" 2>/dev/null || true)"
+  tfm_parse_tests_matches "$matches"
+}
+
+# _tfm_trim <string> — sets _TFM_TRIMMED; the fork-free twin of
+# `sed 's/^[[:space:]]*//;s/[[:space:]]*$//'` (#2455: forks dominate on MSYS).
+_tfm_trim() {
+  local t="${1-}"
+  t="${t#"${t%%[![:space:]]*}"}"
+  t="${t%"${t##*[![:space:]]}"}"
+  _TFM_TRIMMED="$t"
+}
+
+# tfm_parse_tests_matches <grep -n output> — the fork-free body of
+# tfm_parse_tests_line, fed `lineno:line` rows for `^# Tests:` matches so a
+# corpus scan can collect every file's matches in one process (#2455).
+tfm_parse_tests_matches() {
+  local matches="${1-}"
   TFM_PRESENT=0
   TFM_TESTS_CSV=""
   TFM_TOKENS=()
   TFM_EMPTY_ELEMENT=0
   TFM_HEADER_COUNT=0
   TFM_HEADER_LINENO=0
-
-  local matches
-  matches="$(grep -n -E '^# Tests:' "$file" 2>/dev/null || true)"
   [[ -z "$matches" ]] && return 0
 
-  TFM_HEADER_COUNT="$(printf '%s\n' "$matches" | grep -c '' || true)"
+  local rest="$matches" count=1
+  while [[ "$rest" == *$'\n'* ]]; do
+    rest="${rest#*$'\n'}"
+    count=$((count + 1))
+  done
+  TFM_HEADER_COUNT="$count"
   local first="${matches%%$'\n'*}"
   TFM_HEADER_LINENO="${first%%:*}"
   TFM_PRESENT=1
 
   local csv="${first#*:}"
   csv="${csv#\# Tests:}"
-  csv="$(printf '%s' "$csv" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  _tfm_trim "$csv"
+  csv="$_TFM_TRIMMED"
   TFM_TESTS_CSV="$csv"
   [[ -z "$csv" ]] && return 0
 
@@ -110,7 +132,8 @@ tfm_parse_tests_line() {
   IFS=',' read -r -a raw_tokens <<< "$csv,#"
   unset 'raw_tokens[${#raw_tokens[@]}-1]'
   for raw in "${raw_tokens[@]}"; do
-    trimmed="$(printf '%s' "$raw" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    _tfm_trim "$raw"
+    trimmed="$_TFM_TRIMMED"
     if [[ -z "$trimmed" ]]; then
       TFM_EMPTY_ELEMENT=1
       continue

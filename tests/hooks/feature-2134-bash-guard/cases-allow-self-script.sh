@@ -73,20 +73,34 @@ w1_fixture_rows() {
         cwd_json="$(bg_cwd_json "$cwd" "$FX_M" "$FX_MSYS")"
         got="$(BG_PROBE_AGENTS_ROOT="$FX_M" BG_PROBE_CTX_CWD_JSON="$cwd_json" probe self-script "$cmd")"
         assert_eq "W1/$name: matchSelfScript" "$want" "$got"
-    done <<'TABLE'
-# --- positives ---
+    done
+}
+
+# W1 rows are read from stdin (bg_batched_stdin) so each case below carries its own table.
+# Positives are allow codes; `null` rows are permission prompts that must survive.
+case_begin "self-script-fixture-interpreter" "hooks/bash-guard/allow.js"
+bg_batched_stdin w1_fixture_rows <<'TABLE'
 env-form        ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" --x          ~ -     ~ BG-ALLOW-SELF-SCRIPT
 env-braced      ~ bash "${AGENTS_CONFIG_DIR}/bin/fx-bash"            ~ -     ~ BG-ALLOW-SELF-SCRIPT
 node-entry      ~ node "$AGENTS_CONFIG_DIR/bin/fx-node.js" a b       ~ -     ~ BG-ALLOW-SELF-SCRIPT
 subdir-bin-bash ~ bash "$AGENTS_CONFIG_DIR/bin/tool/fx-sub"          ~ -     ~ BG-ALLOW-SELF-SCRIPT
 bash-exe        ~ bash.exe "$AGENTS_CONFIG_DIR/bin/fx-bash"          ~ -     ~ BG-ALLOW-SELF-SCRIPT
 abs-interp      ~ /usr/bin/bash "$AGENTS_CONFIG_DIR/bin/fx-bash"     ~ -     ~ BG-ALLOW-SELF-SCRIPT
-abs-root        ~ bash "@ROOT@/bin/fx-bash"                          ~ -     ~ BG-ALLOW-SELF-SCRIPT
-win-root        ~ bash "@WIN@\bin\fx-bash"                           ~ -     ~ BG-ALLOW-SELF-SCRIPT
-msys-root       ~ bash "@MSYS@/bin/fx-bash"                          ~ -     ~ BG-ALLOW-SELF-SCRIPT
-rel-at-root     ~ bash bin/fx-bash                                   ~ ROOT  ~ BG-ALLOW-SELF-SCRIPT
-abs-bad-cwd     ~ bash "@ROOT@/bin/fx-bash"                          ~ OTHER ~ BG-ALLOW-SELF-SCRIPT
-bare-exposed    ~ fx-bare --x                                        ~ -     ~ BG-ALLOW-SELF-BARE
+interp-mismatch ~ node "$AGENTS_CONFIG_DIR/bin/fx-bash"              ~ -     ~ null
+interp-mismatch2 ~ bash "$AGENTS_CONFIG_DIR/bin/fx-node.js"          ~ -     ~ null
+other-interp    ~ sh "$AGENTS_CONFIG_DIR/bin/fx-bash"                ~ -     ~ null
+or-suffix       ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" || true      ~ -     ~ null
+bg-suffix       ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" &            ~ -     ~ null
+redirect-in     ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" < in.txt     ~ -     ~ null
+exec-position   ~ "$AGENTS_CONFIG_DIR/bin/fx-bash"                   ~ -     ~ null
+env-args-quoted ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" --summary "a (b) c" --p "$HOME" ~ - ~ BG-ALLOW-SELF-SCRIPT
+TABLE
+case_end
+
+# bashc-*: a single-quoted `bash -c` body is re-judged once, as one plain command or exactly
+# `cd <root> && <command>`; any other shape inside it keeps the prompt.
+case_begin "self-script-fixture-bash-c" "hooks/bash-guard/allow.js"
+bg_batched_stdin w1_fixture_rows <<'TABLE'
 bash-c-wrapper  ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/fx-bash"'    ~ -     ~ BG-ALLOW-SELF-SCRIPT
 bashc-cd-env    ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/fx-bash"' ~ - ~ BG-ALLOW-SELF-SCRIPT
 bashc-cd-rel    ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash bin/fx-bash' ~ -  ~ BG-ALLOW-SELF-SCRIPT
@@ -94,22 +108,6 @@ bashc-cd-root   ~ bash -c 'cd "@ROOT@" && node bin/fx-node.js'       ~ -     ~ B
 bashc-bare      ~ bash -c 'fx-bare --x'                              ~ -     ~ BG-ALLOW-SELF-BARE
 bashc-cd-bare   ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && fx-bare'       ~ -     ~ BG-ALLOW-SELF-BARE
 bashc-rel-root  ~ bash -c 'bash bin/fx-bash'                         ~ ROOT  ~ BG-ALLOW-SELF-SCRIPT
-env-args-quoted ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" --summary "a (b) c" --p "$HOME" ~ - ~ BG-ALLOW-SELF-SCRIPT
-# --- negatives: each one is a permission prompt that must survive ---
-interp-mismatch ~ node "$AGENTS_CONFIG_DIR/bin/fx-bash"              ~ -     ~ null
-interp-mismatch2 ~ bash "$AGENTS_CONFIG_DIR/bin/fx-node.js"          ~ -     ~ null
-other-interp    ~ sh "$AGENTS_CONFIG_DIR/bin/fx-bash"                ~ -     ~ null
-dotdot          ~ bash "$AGENTS_CONFIG_DIR/bin/../bin/fx-bash"       ~ -     ~ null
-rel-other-cwd   ~ bash bin/fx-bash                                   ~ OTHER ~ null
-rel-no-cwd      ~ bash bin/fx-bash                                   ~ -     ~ null
-or-suffix       ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" || true      ~ -     ~ null
-bg-suffix       ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" &            ~ -     ~ null
-redirect-in     ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" < in.txt     ~ -     ~ null
-not-listed      ~ bash "$AGENTS_CONFIG_DIR/bin/fx-notlisted"         ~ -     ~ null
-bare-unexposed  ~ fx-bash                                            ~ -     ~ null
-bare-unlisted   ~ fx-unlisted                                        ~ -     ~ null
-exec-position   ~ "$AGENTS_CONFIG_DIR/bin/fx-bash"                   ~ -     ~ null
-root-lookalike  ~ bash "@ROOT@-evil/bin/fx-bash"                     ~ -     ~ null
 bashc-nested    ~ bash -c 'bash -c fx-bare'                          ~ -     ~ null
 bashc-two-seps  ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && fx-bare && fx-bare' ~ - ~ null
 bashc-semicolon ~ bash -c 'cd "$AGENTS_CONFIG_DIR"; fx-bare'         ~ -     ~ null
@@ -127,16 +125,32 @@ bashc-unlisted  ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/fx-notlisted"' ~ -   ~ n
 sh-c-wrapper    ~ sh -c 'fx-bare'                                    ~ -     ~ null
 bashc-cd-lookalike ~ bash -c 'cd "@ROOT@-evil" && bash bin/fx-bash'  ~ -     ~ null
 TABLE
-}
-
-case_begin "self-script-fixture-root" "hooks/bash-guard/allow.js"
-w1_fixture_rows
 case_end
 
 # root-lookalike: the root must be stripped on a path BOUNDARY, or `<root>-evil/bin/x` would
 # normalize to an entry. abs-bad-cwd: an absolute or $AGENTS_CONFIG_DIR form never reads cwd.
-# bashc-*: a single-quoted `bash -c` body is re-judged once, as one plain command or exactly
-# `cd <root> && <command>`; any other shape inside it keeps the prompt.
+case_begin "self-script-fixture-path-forms" "hooks/lib/path-normalize.js"
+bg_batched_stdin w1_fixture_rows <<'TABLE'
+abs-root        ~ bash "@ROOT@/bin/fx-bash"                          ~ -     ~ BG-ALLOW-SELF-SCRIPT
+win-root        ~ bash "@WIN@\bin\fx-bash"                           ~ -     ~ BG-ALLOW-SELF-SCRIPT
+msys-root       ~ bash "@MSYS@/bin/fx-bash"                          ~ -     ~ BG-ALLOW-SELF-SCRIPT
+rel-at-root     ~ bash bin/fx-bash                                   ~ ROOT  ~ BG-ALLOW-SELF-SCRIPT
+abs-bad-cwd     ~ bash "@ROOT@/bin/fx-bash"                          ~ OTHER ~ BG-ALLOW-SELF-SCRIPT
+dotdot         ~ bash "$AGENTS_CONFIG_DIR/bin/../bin/fx-bash"       ~ -     ~ null
+rel-other-cwd   ~ bash bin/fx-bash                                   ~ OTHER ~ null
+rel-no-cwd      ~ bash bin/fx-bash                                   ~ -     ~ null
+root-lookalike  ~ bash "@ROOT@-evil/bin/fx-bash"                     ~ -     ~ null
+TABLE
+case_end
+
+case_begin "self-script-fixture-list-membership" "hooks/lib/allow-command-list.js"
+bg_batched_stdin w1_fixture_rows <<'TABLE'
+bare-exposed    ~ fx-bare --x                                        ~ -     ~ BG-ALLOW-SELF-BARE
+not-listed      ~ bash "$AGENTS_CONFIG_DIR/bin/fx-notlisted"         ~ -     ~ null
+bare-unexposed  ~ fx-bash                                            ~ -     ~ null
+bare-unlisted   ~ fx-unlisted                                        ~ -     ~ null
+TABLE
+case_end
 
 w2_real_rows() {
     local name cmd tcwd icwd want got tj ij
@@ -153,11 +167,29 @@ w2_real_rows() {
         tj="$(bg_cwd_json "$tcwd" "$RL_M" "$RL_MSYS")"; ij="$(bg_cwd_json "$icwd" "$RL_M" "$RL_MSYS")"
         got="$(BG_PROBE_TOOL_CWD_JSON="$tj" BG_PROBE_INPUT_CWD_JSON="$ij" verdict_code_of "$cmd")"
         assert_eq "W2/$name: verdict|code" "$want" "$got"
-    done <<'TABLE'
+    done
+}
+
+case_begin "self-script-real-settings-list" "install/settings-allow-commands.txt"
+bg_batched_stdin w2_real_rows <<'TABLE'
 node-next-step     ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ -       ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
 bash-confirm-off   ~ bash "$AGENTS_CONFIG_DIR/bin/confirm-off" RUN_TL4 on    ~ -       ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
-bare-path-exposed  ~ review-code-codex --help                                ~ -       ~ -    ~ allow|BG-ALLOW-SELF-BARE
 real-mismatch      ~ bash "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ -       ~ -    ~ passThrough|BG-NO-HIT
+handoff-append     ~ node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append" --class A --summary "a (b) c" ~ - ~ - ~ allow|BG-ALLOW-SELF-SCRIPT
+TABLE
+case_end
+
+case_begin "self-script-real-path-exposed" "install/path-exposed-commands.txt"
+bg_batched_stdin w2_real_rows <<'TABLE'
+bare-path-exposed  ~ review-code-codex --help                                ~ -       ~ -    ~ allow|BG-ALLOW-SELF-BARE
+TABLE
+case_end
+
+# rel-blank-tool-cwd: a whitespace-only tool_input.cwd is skipped, so input.cwd is used.
+# rel-tool-cwd-wins: tool_input.cwd is read first; a valid non-root value is not overridden.
+# Non-string, relative or absent cwd never resolves a relative form (no process.cwd() guess).
+case_begin "self-script-real-cwd-resolution" "hooks/bash-guard/judge.js"
+bg_batched_stdin w2_real_rows <<'TABLE'
 rel-tool-cwd       ~ node bin/workflow/next-step --list                      ~ ROOT    ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
 rel-input-cwd      ~ node bin/workflow/next-step --list                      ~ -       ~ ROOT ~ allow|BG-ALLOW-SELF-SCRIPT
 rel-msys-cwd       ~ node bin/workflow/next-step --list                      ~ MSYS    ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
@@ -169,8 +201,16 @@ rel-object-cwd     ~ node bin/workflow/next-step --list                      ~ {
 rel-relative-cwd   ~ node bin/workflow/next-step --list                      ~ "bin"   ~ -    ~ passThrough|BG-NO-HIT
 env-bad-cwd        ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ 42      ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
 abs-bad-cwd        ~ node "@ROOT@/bin/workflow/next-step" --list             ~ "bin"   ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
+TABLE
+case_end
+
+# bashc-inner-*: the inner body only chooses allow vs passThrough; it never escalates to deny
+# or notify. bashc-outer-and: a separator OUTSIDE the quotes is still judged as before.
+# arg-*: an unsafe construct in an ARGUMENT (not the script path) never earns allow; plain
+# forms keep their existing deny, and an embedded newline (quoted or bare) keeps the prompt.
+case_begin "self-script-real-bash-c-and-args" "hooks/bash-guard/judge.js"
+bg_batched_stdin w2_real_rows <<'TABLE'
 bashc-cd-real      ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_X on' ~ - ~ - ~ allow|BG-ALLOW-SELF-SCRIPT
-handoff-append     ~ node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append" --class A --summary "a (b) c" ~ - ~ - ~ allow|BG-ALLOW-SELF-SCRIPT
 bashc-inner-pipe   ~ bash -c 'review-code-codex --help | cat'                ~ -       ~ -    ~ passThrough|BG-NO-HIT
 bashc-inner-exec   ~ bash -c '"$AGENTS_CONFIG_DIR/bin/confirm-off" X on'     ~ -       ~ -    ~ passThrough|BG-NO-HIT
 bashc-outer-and    ~ bash -c 'review-code-codex' && true                     ~ -       ~ -    ~ deny|BG-CHAIN-AND
@@ -193,15 +233,4 @@ arg-redir-in       ~ bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on < in.txt ~ -
 arg-redir-in-bashc ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on < in.txt' ~ - ~ - ~ passThrough|BG-NO-HIT
 arg-redir-in-bashc-cd ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on < in.txt' ~ - ~ - ~ passThrough|BG-NO-HIT
 TABLE
-}
-
-# rel-blank-tool-cwd: a whitespace-only tool_input.cwd is skipped, so input.cwd is used.
-# rel-tool-cwd-wins: tool_input.cwd is read first; a valid non-root value is not overridden.
-# Non-string, relative or absent cwd never resolves a relative form (no process.cwd() guess).
-# bashc-inner-*: the inner body only chooses allow vs passThrough; it never escalates to deny
-# or notify. bashc-outer-and: a separator OUTSIDE the quotes is still judged as before.
-# arg-*: an unsafe construct in an ARGUMENT (not the script path) never earns allow; plain
-# forms keep their existing deny, and an embedded newline (quoted or bare) keeps the prompt.
-case_begin "self-script-real-lists" "hooks/bash-guard/judge.js"
-w2_real_rows
 case_end

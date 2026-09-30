@@ -56,16 +56,19 @@ t34_setup() {
     T34_RC="$ASM_RC"
 }
 
-t34_probe() { # <field> -> value | sentinel
-    have_lib || { missing_lib; return; }
-    [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
-    node -e '
+t34_setup
+
+case_begin "t34-merge-rules" "install/lib/settings-assembly.js"
+# BATCHED: one node answers every requested field (argv[2..]) from the one deployed file,
+# one NUL-terminated answer per field, in request order.
+T34_PROBE_JS='
       const fs = require("fs");
+      const fields = process.argv.slice(2);
       let d = null;
       try { d = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); }
       catch (e) { d = null; }
       if (d === null) {
-        process.stdout.write("UNPARSEABLE");
+        process.stdout.write(fields.map(() => "UNPARSEABLE\0").join(""));
       } else {
         const p = d.permissions || {}, h = d.hooks || {};
         const pick = (o, ks) => ks.map((k) => String((o || {})[k])).join("~");
@@ -82,23 +85,36 @@ t34_probe() { # <field> -> value | sentinel
           "top-scalar": String(d.model),
           "top-base-only": String(d.cleanupPeriodDays)
         };
-        const v = out[process.argv[2]];
-        process.stdout.write(v === undefined ? "NO-SUCH-FIELD" : v);
+        process.stdout.write(fields.map((f) => {
+          const v = out[f];
+          return (v === undefined ? "NO-SUCH-FIELD" : v) + "\0";
+        }).join(""));
       }
-    ' "$(node_path "$(deployed_file "$T34_FX")")" "$1" 2>/dev/null || printf 'PROBE-FAILED'
+'
+
+t34_probe_all() { # <field>... -> NUL_RECS, one answer (or sentinel) per field
+    local f
+    if ! have_lib || [[ ! -f "$ASSEMBLE" ]]; then
+        NUL_RECS=()
+        for f in "$@"; do
+            if have_lib; then NUL_RECS+=("$(missing_assemble)"); else NUL_RECS+=("$(missing_lib)"); fi
+        done
+        return
+    fi
+    nul_records "T34 merge probe" "$#" \
+        node -e "$T34_PROBE_JS" "$(node_path "$(deployed_file "$T34_FX")")" "$@"
 }
 
 # The table is `!`-delimited: two of the wants are themselves `~`-joined triples and several
 # carry a literal `|`-free rule string, so the usual pipe would split a want in half.
 t34_merge_table() {
-    local id want label
+    local id want label i ids=() wants=() labels=()
     ROWS=$((ROWS + 1))
     assert_eq "T34[healthy-rc]: base + extension assemble and deploy cleanly (every row below reads that deployment)" \
         "0" "$T34_RC"
     while IFS='!' read -r id want label; do
         [ -n "$id" ] || continue
-        ROWS=$((ROWS + 1))
-        assert_eq "T34[$id]: $label" "$want" "$(t34_probe "$id")"
+        ids+=("$id"); wants+=("$want"); labels+=("$label")
     done <<'T34_CASES'
 hooks-concat!BaseMatcher,ExtMatcher!an event present in BOTH files concatenates base-then-extension -- an extension hook must never REPLACE the repository's own
 hooks-new-event!ext-start.js!an event the base does not declare at all arrives from the extension intact
@@ -111,19 +127,27 @@ attribution-merge!base~from-ext~ext!attribution merges by the same rule (CPR-ORT
 top-scalar!ext-model!a top-level scalar is extension-wins
 top-base-only!7!a top-level key the extension never mentions survives the merge untouched
 T34_CASES
+    t34_probe_all "${ids[@]}"
+    for i in "${!ids[@]}"; do
+        ROWS=$((ROWS + 1))
+        assert_eq "T34[${ids[$i]}]: ${labels[$i]}" "${wants[$i]}" "${NUL_RECS[$i]}"
+    done
 }
+t34_merge_table
+case_end
 
 # The error half. A malformed extension must not be partially applied: the previous deployment is
 # what the developer's live session is running on, so a half-merged file is worse than no merge.
+case_begin "t34-malformed-extension-rejected" "install/assemble-settings.js"
 t34_bad_case() { # <bad-json|non-object|perm-array> -> "rc/state" | sentinel
     have_lib || { missing_lib; return; }
     [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
     local fx target before after rcv state
-    fx="$(mk_fixture "t34-$1")"
-    mk_tool "$fx" bin/fx-tool env-bash
-    write_ssot "$fx" bin/fx-tool
-    t34_write_pair "$fx"
-    run_assemble "$fx"
+    # A private copy of the already-deployed T34_FX (same recipe, same deployed bytes), so the
+    # break below never reaches the fixture the merge rows read.
+    fx="$TMPROOT/t34-$1"
+    mkdir -p "$fx"
+    cp -Rp "$T34_FX/." "$fx/"
     target="$(deployed_file "$fx")"
     before="$(file_digest "$target")"
     case "$1" in
@@ -150,7 +174,5 @@ non-object|nonzero/unchanged|an extension that parses to a non-object is rejecte
 perm-array|nonzero/unchanged|an extension whose permissions is an ARRAY where an object is expected is rejected, not index-merged into nonsense keys
 T34_BAD_CASES
 }
-
-t34_setup
-t34_merge_table
 t34_bad_table
+case_end

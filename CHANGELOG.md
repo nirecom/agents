@@ -591,3 +591,19 @@ Changes: codegraph_explore is now always available without a ToolSearch preamble
 ### FEATURE: PR #2439 (2026-09-28)
 Background: fix(#2435,#1270): always block agents memory writes; cite canonical rule
 Changes: Direct writes to the agents-repo memory directory are now always blocked (except under WORKFLOW_OFF); the rejection message explains why and points to `/issue-create` and `rules/mid-workflow-findings.md`.
+
+### FEATURE: PR #2463 (2026-09-30)
+Background: fix(#2447,#1680): rtk-rewrite native-isolation guard; enforce-worktree stale-cwd fix
+Changes: rtk-rewrite: git commands issued inside an EnterWorktree (native isolation) session are no longer refused by the rewrite hook (#2447);enforce-worktree: commands run after ExitWorktree (e.g. `git worktree remove`) are no longer blocked by a stale linked-worktree cwd (#1680)
+
+### FEATURE: PR #2462 (2026-09-30)
+Background: feat(#2327): scope review-tests re-review to changed tests and implementation, classify run-tests failures against merge-base
+Changes: review-tests re-reviews only the changed tests when no implementation file changed, and the second review now runs before run-tests instead of at commit (#2327, #2287, #1455).;run-tests re-runs failing tests at the merge-base and passes the step only when every failure already failed there (#2431).
+
+### FEATURE: PR #2432 (2026-09-30)
+Background: feat(#2403): add external read-only allow classes N3/N4/N5 to bash-guard classifier
+Changes: Common read-only commands (ls, cat, head, tail, grep, rg, find, git status/log/diff/branch, gh pr view/issue list/api GET, and more) no longer prompt for permission. A positive argv judge allows them automatically and screens every argument for credential and dotenv path access before granting the allow verdict.
+
+### FEATURE: PR #2438 (2026-09-30)
+Background: feat(#2100): route model for reviewer/producer/alert roles through .e...
+Changes: Model selection for reviewer, producer, and alert subagent roles is now configurable per-host via `.env` keys: REVIEWER_MODEL (default `opus`), PRODUCER_HIGH_MODEL (default `opus`), PRODUCER_LOW_MODEL (default `sonnet`), ALERT_MODEL (default `sonnet`). Previously hard-coded choices are centralized in `hooks/lib/role-model.js` and overridable without touching agent/skill files. Values outside `opus`/`sonnet`/`haiku` fall back to the role default. Pre-release `MODEL_*` spellings (e.g. MODEL_REVIEWER) are not read — rename them if present. All `effort:` frontmatter removed from agents and skills.

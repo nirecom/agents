@@ -125,7 +125,7 @@ d2099_consumer_fail_open() {
     assert_contains "FO-6 ... with a ROUTING_TABLE_UNAVAILABLE diagnostic on stderr" "ROUTING_TABLE_UNAVAILABLE" "$out"
 
     rc=0; out=$(run_with_timeout node "$D2099_ISO/bin/workflow/derive-complexity-level" --stage write_tests --signals "" 2>/dev/null) || rc=$?
-    assert_eq "FO-7 derive-complexity-level always answers, erring toward capability" "level=high" "$out"
+    assert_eq "FO-7 derive-complexity-level always answers, erring toward capability" $'level=high\nmodel=opus' "$out"
     assert_eq "FO-8 ... and exits 0 (NONE is not in its vocabulary)" "0" "$rc"
 
     out=$(run_with_timeout node "$D2099_ISO/bin/workflow/derive-complexity-level" --stage write_tests --signals "" 2>&1 >/dev/null)
@@ -202,7 +202,15 @@ d2099_wrapper_contract() {
     assert_eq "FO-18 a signal-bearing evaluation still needs human judgment" "judgment" "$out"
 }
 
+case_begin "isolation-barrel-load-and-derive-fail-open" "hooks/workflow-state.js"
 d2099_isolation_barrel
+case_end
+case_begin "consumer-fail-open-read-derive-record" "bin/workflow/read-complexity-evaluation"
 d2099_consumer_fail_open
+case_end
+case_begin "backcompat-mode-fail-open" "bin/workflow/read-complexity-evaluation"
 d2099_backcompat_mode_fail_open
+case_end
+case_begin "wrapper-contract-signals-and-exit-codes" "bin/workflow/record-complexity-and-skip"
 d2099_wrapper_contract
+case_end

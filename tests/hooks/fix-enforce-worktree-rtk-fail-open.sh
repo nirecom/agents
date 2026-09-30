@@ -21,10 +21,58 @@ harness_isolate "$T/iso"
 
 HOOKS_N="$(np "$AGENTS_DIR/hooks")"
 
+# BATCHED UNIT CASES (speed only; every assertion still runs one by one). A cold node per
+# rtk_eval costs ~1s, so `rtk_batched <fn>` runs <fn> twice: a silent RECORD pass in which
+# rtk_eval only queues its (body, args) (counters and output discarded), ONE node that answers
+# the queue, then the real pass, whose rtk_eval calls are served from RTK_CACHE. A call the
+# record pass did not queue misses the cache and spawns as before. Sharing one process is safe:
+# every body is a pure function of its args over modules that load no fixture or session state.
+RTK_PREFETCH=0
+declare -A RTK_CACHE=()
+RTK_Q="$T/rtk-batch-in.bin"
+RTK_OUT="$T/rtk-batch-out.bin"
+RTK_Q_N="$(np "$RTK_Q")"
+RTK_OUT_N="$(np "$RTK_OUT")"
+# The batch driver: records are `body \0 nargs \0 arg...`; each answer is what the per-call
+# `$(rtk_eval ...)` would capture, NUL-terminated, then `<END:N>` for the count check.
+RTK_BATCH_JS=""
+IFS= read -r -d '' RTK_BATCH_JS <<'JS' || true
+const fs = require("fs"), util = require("util");
+const H = process.argv[1];
+const su = require(H + "/lib/bash-write-patterns/segment-utils");
+const gw = require(H + "/lib/bash-write-patterns/git-write-ir");
+const { detectWritePredicate } = require(H + "/enforce-worktree/write-detector");
+const { parse } = require(H + "/lib/command-ir");
+const parts = fs.readFileSync(process.argv[2], "utf8").split("\0");
+parts.pop();
+const res = [];
+for (let i = 0; i < parts.length;) {
+  const body = parts[i], n = Number(parts[i + 1]), argv = parts.slice(i + 2, i + 2 + n);
+  i += 2 + n;
+  const lines = [];
+  const con = { log: (...a) => lines.push(util.format(...a)) };
+  try {
+    new Function("H", "argv", "su", "gw", "detectWritePredicate", "parse", "console", body)(
+      H, argv, su, gw, detectWritePredicate, parse, con);
+  } catch (e) {
+    lines.push("<THREW:" + String((e && e.message) || e).split("\n")[0] + ">");
+  }
+  res.push(lines.join("\n").replace(/\n+$/, "").replace(/\0/g, ""));
+}
+fs.writeFileSync(process.argv[3], res.map((r) => r + "\0").join("") + "<END:" + res.length + ">\0");
+JS
+
 # rtk_eval <js-body> [args...] — run a JS body with `H` bound to the hooks dir and
 # `argv` bound to the extra args; prints whatever the body prints.
 rtk_eval() {
     local body="$1"; shift
+    local key
+    if [[ "$RTK_PREFETCH" == 1 ]]; then
+        printf '%s\0' "$body" "$#" "$@" >> "$RTK_Q"
+        return 0
+    fi
+    printf -v key '%s\x1f' "$#" "$body" "$@"
+    if [[ -n "${RTK_CACHE[$key]+x}" ]]; then printf '%s' "${RTK_CACHE[$key]}"; return 0; fi
     run_with_timeout 30 node -e "
       const H = process.argv[1];
       const argv = process.argv.slice(2);
@@ -34,6 +82,45 @@ rtk_eval() {
       const { parse } = require(H + '/lib/command-ir');
       ${body}
     " "$HOOKS_N" "$@" 2>&1 || true
+}
+
+# rtk_batch_run <label>: answer the queue in one node and fill RTK_CACHE. A result count short
+# of the record count (or a missing END marker) FAILS loudly and leaves the cache empty.
+rtk_batch_run() {
+    local label="$1" i=0 a n key
+    local -a recs res keys=()
+    RTK_CACHE=()
+    [[ -s "$RTK_Q" ]] || return 0
+    mapfile -d '' -t recs < "$RTK_Q"
+    : > "$RTK_OUT"
+    run_with_timeout 120 node -e "$RTK_BATCH_JS" "$HOOKS_N" "$RTK_Q_N" "$RTK_OUT_N" > /dev/null 2>&1 || true
+    : > "$RTK_Q"
+    mapfile -d '' -t res < "$RTK_OUT"
+    while (( i + 1 < ${#recs[@]} )); do
+        a="${recs[i+1]}"
+        printf -v key '%s\x1f' "$a" "${recs[i]}" "${recs[@]:i+2:a}"
+        keys+=("$key")
+        i=$(( i + 2 + a ))
+    done
+    n=${#keys[@]}
+    if (( i != ${#recs[@]} || ${#res[@]} != n + 1 )) || [[ "${res[n]:-}" != "<END:$n>" ]]; then
+        fail "BATCH/$label: the batch answered ${#res[@]} lines for $n calls (want $n + <END:$n>)"
+        return 0
+    fi
+    for (( i = 0; i < n; i++ )); do
+        RTK_CACHE[${keys[i]}]="${res[i]}"
+    done
+}
+
+rtk_batched() {
+    local p="$PASS" f="$FAIL" s="$SKIP"
+    RTK_PREFETCH=1
+    "$@" > /dev/null 2>&1 || true
+    RTK_PREFETCH=0
+    PASS="$p"; FAIL="$f"; SKIP="$s"
+    rtk_batch_run "$1"
+    "$@"
+    RTK_CACHE=()
 }
 
 # eff_cmd <cmd0> [argv...] — resolveEffectiveCommand for a synthetic segment.
@@ -46,101 +133,142 @@ detect() {
     rtk_eval 'const r = detectWritePredicate(parse(argv[0])); console.log(r ? "WRITE:" + r.name : "NULL");' "$1"
 }
 
+# set_of <export-name> -> sorted comma list, or <MISSING:name> when not an exported Set.
+set_of() {
+    rtk_eval 'const s = gw[argv[0]]; console.log(s instanceof Set ? [...s].sort().join(",") : "<MISSING:" + argv[0] + ">");' "$1"
+}
+
 expect_eq() {
     local label="$1" got="$2" want="$3"
     if [[ "$got" == "$want" ]]; then pass "$label"; else fail "$label" "want=$want got=$got"; fi
 }
 
-case_begin "rtk-spec-registration" "hooks/lib/bash-write-patterns/segment-utils.js"
-# A1: wrapperSpecFor is module-private; WRAPPER_SPECS is the exported SSOT it reads.
-got="$(rtk_eval '
-  const s = su.WRAPPER_SPECS.rtk;
-  const has = (k, v) => !!s && s[k] instanceof Set && s[k].has(v);
-  if (!s) console.log("MISSING");
-  else console.log([has("passthroughDispatchVerbs","proxy"), has("shellBodyVerbs","run"),
-               has("nativeVerbs","env"), has("nativeVerbs","find"), has("nativeVerbs","read")].join(","));
-')"
-expect_eq "A1. WRAPPER_SPECS.rtk registered with proxy/run/native(env,find,read) verbs" "$got" "true,true,true,true,true"
-case_end
+rtk_unit_cases() {
+    case_begin "rtk-spec-registration" "hooks/lib/bash-write-patterns/segment-utils.js"
+    # A1: wrapperSpecFor is module-private; WRAPPER_SPECS is the exported SSOT it reads.
+    got="$(rtk_eval '
+      const s = su.WRAPPER_SPECS.rtk;
+      const has = (k, v) => !!s && s[k] instanceof Set && s[k].has(v);
+      if (!s) console.log("MISSING");
+      else console.log([has("passthroughDispatchVerbs","proxy"), has("shellBodyVerbs","run"),
+                   has("nativeVerbs","env"), has("nativeVerbs","find"), has("nativeVerbs","read")].join(","));
+    ')"
+    expect_eq "A1. WRAPPER_SPECS.rtk registered with proxy/run/native(env,find,read) verbs" "$got" "true,true,true,true,true"
+    case_end
 
-case_begin "rtk-peel-effective-command" "hooks/lib/bash-write-patterns/segment-utils.js"
-expect_eq "A2. rtk git commit -m msg → effective command git" "$(eff_cmd rtk git commit -m msg)" "git"
-expect_eq "A3. rtk proxy git commit → effective command git (passthroughDispatchVerbs)" "$(eff_cmd rtk proxy git commit)" "git"
-expect_eq "A5. rtk read foo → stays rtk (native verb stops peeling)" "$(eff_cmd rtk read foo)" "rtk"
-expect_eq "A6. rtk env → stays rtk (no collision with WRAPPER_SPECS.env)" "$(eff_cmd rtk env)" "rtk"
-expect_eq "A7. rtk find . -name *.json → stays rtk (no collision with find)" "$(eff_cmd rtk find . -name '*.json')" "rtk"
-expect_eq "A9. rtk proxy rtk proxy git commit → double-nest resolves to git" "$(eff_cmd rtk proxy rtk proxy git commit)" "git"
-# rtk global flags are all boolean (rtk --help); -vv must not trip AMBIGUOUS.
-expect_eq "A10. rtk -vv git commit → effective command git (boolean global flag)" "$(eff_cmd rtk -vv git commit)" "git"
-case_end
+    case_begin "rtk-peel-effective-command" "hooks/lib/bash-write-patterns/segment-utils.js"
+    expect_eq "A2. rtk git commit -m msg → effective command git" "$(eff_cmd rtk git commit -m msg)" "git"
+    expect_eq "A3. rtk proxy git commit → effective command git (passthroughDispatchVerbs)" "$(eff_cmd rtk proxy git commit)" "git"
+    expect_eq "A5. rtk read foo → stays rtk (native verb stops peeling)" "$(eff_cmd rtk read foo)" "rtk"
+    expect_eq "A6. rtk env → stays rtk (no collision with WRAPPER_SPECS.env)" "$(eff_cmd rtk env)" "rtk"
+    expect_eq "A7. rtk find . -name *.json → stays rtk (no collision with find)" "$(eff_cmd rtk find . -name '*.json')" "rtk"
+    expect_eq "A9. rtk proxy rtk proxy git commit → double-nest resolves to git" "$(eff_cmd rtk proxy rtk proxy git commit)" "git"
+    # rtk global flags are all boolean (rtk --help); -vv must not trip AMBIGUOUS.
+    expect_eq "A10. rtk -vv git commit → effective command git (boolean global flag)" "$(eff_cmd rtk -vv git commit)" "git"
+    case_end
 
-case_begin "rtk-git-argv" "hooks/lib/bash-write-patterns/git-write-ir.js"
-got="$(rtk_eval 'console.log(JSON.stringify(gw.resolveGitArgvForSegment({ cmd0: "rtk", argv: ["git","commit","-m","msg"] })));')"
-expect_eq "A2b. resolveGitArgvForSegment(rtk git commit -m msg) → git argv" "$got" '["commit","-m","msg"]'
-got="$(rtk_eval 'console.log(String(gw.isGitWriteIR(parse(argv[0]))));' 'rtk git commit -m msg')"
-expect_eq "A2c. isGitWriteIR(rtk git commit -m msg) → true" "$got" "true"
-case_end
+    case_begin "rtk-git-argv" "hooks/lib/bash-write-patterns/git-write-ir.js"
+    got="$(rtk_eval 'console.log(JSON.stringify(gw.resolveGitArgvForSegment({ cmd0: "rtk", argv: ["git","commit","-m","msg"] })));')"
+    expect_eq "A2b. resolveGitArgvForSegment(rtk git commit -m msg) → git argv" "$got" '["commit","-m","msg"]'
+    got="$(rtk_eval 'console.log(String(gw.isGitWriteIR(parse(argv[0]))));' 'rtk git commit -m msg')"
+    expect_eq "A2c. isGitWriteIR(rtk git commit -m msg) → true" "$got" "true"
+    case_end
 
-case_begin "rtk-write-predicate" "hooks/enforce-worktree/write-detector.js"
-got="$(detect 'rtk git commit -m msg')"
-[[ "$got" == WRITE:* ]] && pass "A8. detectWritePredicate(rtk git commit) → non-null ($got)" \
-    || fail "A8. detectWritePredicate(rtk git commit) should be non-null (fail-open gap)" "got=$got"
+    case_begin "rtk-write-predicate" "hooks/enforce-worktree/write-detector.js"
+    got="$(detect 'rtk git commit -m msg')"
+    [[ "$got" == WRITE:* ]] && pass "A8. detectWritePredicate(rtk git commit) → non-null ($got)" \
+        || fail "A8. detectWritePredicate(rtk git commit) should be non-null (fail-open gap)" "got=$got"
 
-got="$(detect 'rtk run "git commit -m msg"')"
-[[ "$got" == WRITE:* ]] && pass "A4. rtk run \"git commit -m msg\" → WRITE via shell body ($got)" \
-    || fail "A4. rtk run shell body must be WRITE, not fail-open" "got=$got"
+    got="$(detect 'rtk run "git commit -m msg"')"
+    [[ "$got" == WRITE:* ]] && pass "A4. rtk run \"git commit -m msg\" → WRITE via shell body ($got)" \
+        || fail "A4. rtk run shell body must be WRITE, not fail-open" "got=$got"
 
-got="$(detect 'rtk proxy rtk proxy git commit -m msg')"
-[[ "$got" == WRITE:* ]] && pass "A9b. double-nest rtk proxy … git commit → WRITE ($got)" \
-    || fail "A9b. double-nest rtk proxy git commit must be WRITE" "got=$got"
+    got="$(detect 'rtk proxy rtk proxy git commit -m msg')"
+    [[ "$got" == WRITE:* ]] && pass "A9b. double-nest rtk proxy … git commit → WRITE ($got)" \
+        || fail "A9b. double-nest rtk proxy git commit must be WRITE" "got=$got"
 
-got="$(detect 'rtk git status')"
-expect_eq "A11. rtk git status → NULL (read stays read after peel)" "$got" "NULL"
+    got="$(detect 'rtk git status')"
+    expect_eq "A11. rtk git status → NULL (read stays read after peel)" "$got" "NULL"
 
-got="$(detect 'rtk read foo')"
-expect_eq "A12. rtk read foo → NULL (native verb is not a write)" "$got" "NULL"
-case_end
+    got="$(detect 'rtk read foo')"
+    expect_eq "A12. rtk read foo → NULL (native verb is not a write)" "$got" "NULL"
+    case_end
 
-# hooks/rtk-rewrite.js substituteRtkHead rewrites the head to the resolved binary
-# (quoted, forward-slashed, .exe on win32), so the guard sees that form, not bare rtk.
-case_begin "rtk-absolute-path-head" "hooks/lib/bash-write-patterns/segment-utils.js"
-got="$(detect '"C:/x/WinGet/Links/rtk.exe" git commit -m x')"
-[[ "$got" == WRITE:* ]] && pass "A18. \"C:/x/WinGet/Links/rtk.exe\" git commit → WRITE ($got)" \
-    || fail "A18. quoted absolute rtk.exe head must peel like bare rtk" "got=$got"
-expect_eq "A19. /opt/homebrew/bin/rtk git status → NULL" "$(detect '/opt/homebrew/bin/rtk git status')" "NULL"
-case_end
+    # hooks/rtk-rewrite.js substituteRtkHead rewrites the head to the resolved binary
+    # (quoted, forward-slashed, .exe on win32), so the guard sees that form, not bare rtk.
+    case_begin "rtk-absolute-path-head" "hooks/lib/bash-write-patterns/segment-utils.js"
+    got="$(detect '"C:/x/WinGet/Links/rtk.exe" git commit -m x')"
+    [[ "$got" == WRITE:* ]] && pass "A18. \"C:/x/WinGet/Links/rtk.exe\" git commit → WRITE ($got)" \
+        || fail "A18. quoted absolute rtk.exe head must peel like bare rtk" "got=$got"
+    expect_eq "A19. /opt/homebrew/bin/rtk git status → NULL" "$(detect '/opt/homebrew/bin/rtk git status')" "NULL"
+    case_end
 
-# CPR-ORTH: rtk wraps gh as well as git.
-case_begin "rtk-gh-write-predicate" "hooks/enforce-worktree/write-detector.js"
-# Controls: the unwrapped forms are already WRITE, so A14/A17 isolate the rtk peel.
-for c in 'gh issue create -t x -b y' 'npm install'; do
-    got="$(detect "$c")"
-    [[ "$got" == WRITE:* ]] && pass "A13s. control: $c → WRITE ($got)" \
-        || fail "A13s. control: $c must be WRITE" "got=$got"
-done
-# gh pr create is not a Group B gh write (unwrapped verdict is NULL), so CPR-ORTH
-# demands only that the rtk-peeled verdict equal the unwrapped one.
-expect_eq "A13. rtk gh pr create → same verdict as gh pr create" \
-    "$(detect 'rtk gh pr create -t x -b y')" "$(detect 'gh pr create -t x -b y')"
-got="$(detect 'rtk gh issue create -t x -b y')"
-[[ "$got" == WRITE:* ]] && pass "A14. rtk gh issue create → WRITE ($got)" \
-    || fail "A14. rtk gh issue create must be WRITE" "got=$got"
-expect_eq "A15. rtk gh pr view 12 → NULL (read-only)" "$(detect 'rtk gh pr view 12')" "NULL"
-case_end
+    # CPR-ORTH: rtk wraps gh as well as git.
+    case_begin "rtk-gh-write-predicate" "hooks/enforce-worktree/write-detector.js"
+    # Controls: the unwrapped forms are already WRITE, so A14/A17 isolate the rtk peel.
+    for c in 'gh issue create -t x -b y' 'npm install'; do
+        got="$(detect "$c")"
+        [[ "$got" == WRITE:* ]] && pass "A13s. control: $c → WRITE ($got)" \
+            || fail "A13s. control: $c must be WRITE" "got=$got"
+    done
+    # gh pr create is not a Group B gh write (unwrapped verdict is NULL), so CPR-ORTH
+    # demands only that the rtk-peeled verdict equal the unwrapped one.
+    expect_eq "A13. rtk gh pr create → same verdict as gh pr create" \
+        "$(detect 'rtk gh pr create -t x -b y')" "$(detect 'gh pr create -t x -b y')"
+    got="$(detect 'rtk gh issue create -t x -b y')"
+    [[ "$got" == WRITE:* ]] && pass "A14. rtk gh issue create → WRITE ($got)" \
+        || fail "A14. rtk gh issue create must be WRITE" "got=$got"
+    expect_eq "A15. rtk gh pr view 12 → NULL (read-only)" "$(detect 'rtk gh pr view 12')" "NULL"
+    case_end
 
-# Fail-closed boundary: an unparseable rtk option must not fail-open.
-case_begin "rtk-fail-closed" "hooks/lib/bash-write-patterns/segment-utils.js"
-got="$(detect 'rtk --unknown-opt git commit -m x')"
-[[ "$got" == WRITE:* ]] && pass "A16. rtk --unknown-opt git commit → WRITE via scanWrappedVerb ($got)" \
-    || fail "A16. AMBIGUOUS rtk option must fall back to raw scan (WRITE)" "got=$got"
-# Hooks-bypass form: a git global -c option between git and the verb must not hide the write.
-got="$(detect 'rtk git -c core.hooksPath=/dev/null commit -m x')"
-[[ "$got" == WRITE:* ]] && pass "A20. rtk git -c core.hooksPath=/dev/null commit → WRITE ($got)" \
-    || fail "A20. rtk git -c core.hooksPath=... commit must be WRITE" "got=$got"
-got="$(detect 'rtk npm install')"
-[[ "$got" == WRITE:* ]] && pass "A17. rtk npm install → WRITE ($got)" \
-    || fail "A17. rtk npm install must be WRITE" "got=$got"
-case_end
+    # Fail-closed boundary: an unparseable rtk option must not fail-open.
+    case_begin "rtk-fail-closed" "hooks/lib/bash-write-patterns/segment-utils.js"
+    got="$(detect 'rtk --unknown-opt git commit -m x')"
+    [[ "$got" == WRITE:* ]] && pass "A16. rtk --unknown-opt git commit → WRITE via scanWrappedVerb ($got)" \
+        || fail "A16. AMBIGUOUS rtk option must fall back to raw scan (WRITE)" "got=$got"
+    # Hooks-bypass form: a git global -c option between git and the verb must not hide the write.
+    got="$(detect 'rtk git -c core.hooksPath=/dev/null commit -m x')"
+    [[ "$got" == WRITE:* ]] && pass "A20. rtk git -c core.hooksPath=/dev/null commit → WRITE ($got)" \
+        || fail "A20. rtk git -c core.hooksPath=... commit must be WRITE" "got=$got"
+    got="$(detect 'rtk npm install')"
+    [[ "$got" == WRITE:* ]] && pass "A17. rtk npm install → WRITE ($got)" \
+        || fail "A17. rtk npm install must be WRITE" "got=$got"
+    case_end
+
+    # --- #2403: READ_SUBCOMMANDS split into PURE (N5 allow) and SIDE_EFFECT reads -----
+    # The split must not move a single subcommand across the write boundary: the union stays
+    # the pre-split 43 and isGitWriteArgv answers exactly as before.
+    case_begin "read-subcommand-split" "hooks/lib/bash-write-patterns/git-write-ir.js"
+    local RS_PURE RS_SIDE RS_UNION_43
+    RS_PURE="annotate,blame,cat-file,check-attr,check-ignore,check-ref-format,cherry,count-objects,describe,diff,diff-files,diff-index,diff-tree,for-each-ref,grep,log,ls-files,ls-tree,merge-base,name-rev,range-diff,rev-list,rev-parse,shortlog,show,show-branch,show-ref,status,var,verify-pack,version,whatchanged"
+    RS_SIDE="archive,difftool,fetch,gitk,gui,help,instaweb,ls-remote,merge-tree,verify-commit,verify-tag"
+    RS_UNION_43="annotate,archive,blame,cat-file,check-attr,check-ignore,check-ref-format,cherry,count-objects,describe,diff,diff-files,diff-index,diff-tree,difftool,fetch,for-each-ref,gitk,grep,gui,help,instaweb,log,ls-files,ls-remote,ls-tree,merge-base,merge-tree,name-rev,range-diff,rev-list,rev-parse,shortlog,show,show-branch,show-ref,status,var,verify-commit,verify-pack,verify-tag,version,whatchanged"
+    expect_eq "S1. PURE_READ_SUBCOMMANDS is exactly the 32 pure reads" "$(set_of PURE_READ_SUBCOMMANDS)" "$RS_PURE"
+    expect_eq "S2. SIDE_EFFECT_READ_SUBCOMMANDS is exactly the 11 side-effecting reads" "$(set_of SIDE_EFFECT_READ_SUBCOMMANDS)" "$RS_SIDE"
+    expect_eq "S3. READ_SUBCOMMANDS is exported and still the pre-split 43" "$(set_of READ_SUBCOMMANDS)" "$RS_UNION_43"
+    got="$(rtk_eval '
+      const p = gw.PURE_READ_SUBCOMMANDS, s = gw.SIDE_EFFECT_READ_SUBCOMMANDS;
+      if (!(p instanceof Set) || !(s instanceof Set)) console.log("<MISSING>");
+      else console.log([...p].filter((x) => s.has(x)).join(",") || "disjoint");
+    ')"
+    expect_eq "S4. PURE and SIDE_EFFECT are disjoint" "$got" "disjoint"
+    expect_eq "S5. BRANCH_READ_FLAGS is exported unchanged" "$(set_of BRANCH_READ_FLAGS)" \
+        "--contains,--format,--list,--merged,--no-merged,--points-at,--show-current,-a,-l,-r,-v,-vv"
+    expect_eq "S6. TAG_READ_FLAGS is exported unchanged" "$(set_of TAG_READ_FLAGS)" \
+        "--contains,--format,--list,--merged,--no-merged,--points-at,--sort,--verify,-l,-n,-v"
+    # S7: isGitWriteArgv is untouched by the split -- side-effect reads stay non-write here
+    # (the N5 allow excludes them elsewhere), and writes stay writes.
+    got="$(rtk_eval '
+      const rows = [["status"],["fetch"],["verify-tag","v1"],["archive","HEAD"],["help","-w","log"],
+                    ["commit","-m","x"],["branch","-d","x"],["push"],["config","--unset","a"],["frobnicate"]];
+      console.log(rows.map((r) => String(gw.isGitWriteArgv(r))).join(","));
+    ')"
+    expect_eq "S7. isGitWriteArgv verdicts unchanged across the split" "$got" \
+        "false,false,false,false,false,true,true,true,true,true"
+    case_end
+}
+
+rtk_batched rtk_unit_cases
 
 # --- Hook-level: hooks/enforce-worktree.js end to end -----------------------
 MAIN="$(np "$T/main")"
