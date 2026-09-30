@@ -607,3 +607,7 @@ Changes: Common read-only commands (ls, cat, head, tail, grep, rg, find, git sta
 ### FEATURE: PR #2438 (2026-09-30)
 Background: feat(#2100): route model for reviewer/producer/alert roles through .e...
 Changes: Model selection for reviewer, producer, and alert subagent roles is now configurable per-host via `.env` keys: REVIEWER_MODEL (default `opus`), PRODUCER_HIGH_MODEL (default `opus`), PRODUCER_LOW_MODEL (default `sonnet`), ALERT_MODEL (default `sonnet`). Previously hard-coded choices are centralized in `hooks/lib/role-model.js` and overridable without touching agent/skill files. Values outside `opus`/`sonnet`/`haiku` fall back to the role default. Pre-release `MODEL_*` spellings (e.g. MODEL_REVIEWER) are not read — rename them if present. All `effort:` frontmatter removed from agents and skills.
+
+### FEATURE: PR #2474 (2026-09-30)
+Background: feat(#2265): allow self-scripts via bash-guard classifier; drop 206 s...
+Changes: Agents' own scripts no longer trigger a permission prompt when run from a linked worktree, by relative path, or wrapped as `bash -c 'cd "$AGENTS_CONFIG_DIR" && …'`. The 206 static allow rules in settings.json are gone.;Security: a newline-separated command after an allowlisted script no longer inherits the automatic allow.
