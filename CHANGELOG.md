@@ -599,3 +599,7 @@ Changes: rtk-rewrite: git commands issued inside an EnterWorktree (native isolat
 ### FEATURE: PR #2462 (2026-09-30)
 Background: feat(#2327): scope review-tests re-review to changed tests and implementation, classify run-tests failures against merge-base
 Changes: review-tests re-reviews only the changed tests when no implementation file changed, and the second review now runs before run-tests instead of at commit (#2327, #2287, #1455).;run-tests re-runs failing tests at the merge-base and passes the step only when every failure already failed there (#2431).
+
+### FEATURE: PR #2432 (2026-09-30)
+Background: feat(#2403): add external read-only allow classes N3/N4/N5 to bash-guard classifier
+Changes: Common read-only commands (ls, cat, head, tail, grep, rg, find, git status/log/diff/branch, gh pr view/issue list/api GET, and more) no longer prompt for permission. A positive argv judge allows them automatically and screens every argument for credential and dotenv path access before granting the allow verdict.
