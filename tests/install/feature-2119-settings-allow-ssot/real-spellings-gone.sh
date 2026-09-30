@@ -129,20 +129,16 @@ t53_real_deploy() {
     got="$(t53_probe_real_deploy "$dump")"
     case "$got" in
         absent)
-            assert_eq "T53[real-deploy]: real settings.json not found — skipping" "skip" "skip"
+            skip "T53[real-deploy]: real settings.json not found"
             return ;;
         foreign-checkout)
-            assert_eq "T53[real-deploy]: real settings.json was deployed from \$AGENTS_CONFIG_DIR, not this checkout — skipping" "skip" "skip"
+            skip "T53[real-deploy]: real settings.json was deployed from \$AGENTS_CONFIG_DIR, not this checkout"
             return ;;
     esac
     assert_eq "T53[real-deploy]: real deployed allow list has zero \`Bash(<cmd> *)\` entries the checkout's base/extension do not own" \
         "present 0" "$got"
-    # --- BEGIN temporary: static settings.json allow rules → classifier allow migration added 2026-09-29 ---
-    # deletion-condition: the bash-guard classifier allows relative-path and `bash -c 'cd "$AGENTS_CONFIG_DIR" && ...'` forms and the #2265 static rules are removed from settings.json (https://github.com/nirecom/agents/issues/2265#issuecomment-5874202460); then uncomment the assert below and delete this block's markers.
-    # The static relative `Bash(<I> <P> *)` rules match the retired-spelling set, so this assert is disabled meanwhile.
-    # assert_eq "T53[real-deploy]: real deployed allow list carries no retired spelling of a real SSOT entry" \
-    #     "none" "$(t52_retired_spellings_in "$dump")"
-    # --- END temporary: static settings.json allow rules → classifier allow migration ---
+    assert_eq "T53[real-deploy]: real deployed allow list carries no retired spelling of a real SSOT entry" \
+        "none" "$(t52_retired_spellings_in "$dump")"
 }
 
 t52_setup

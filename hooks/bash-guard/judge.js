@@ -51,7 +51,8 @@ function readCwd(input) {
   return null;
 }
 
-const contextOf = (ir, commandText, input) => ({ ir, analysis: analysisOf(ir), commandText, cwd: readCwd(input) });
+const contextOf = (ir, commandText, input, agentsRoot) =>
+  ({ ir, analysis: analysisOf(ir), commandText, cwd: readCwd(input), agentsRoot });
 
 // Interlock (C6): the early write gate blocks Edit/Write, not Bash reads, so a plain
 // read-only command still allows; deny, notify and self-script stay silent.
@@ -72,12 +73,14 @@ function judgeUnderInterlock(commandText, input) {
 
 /**
  * @param {object} input a PreToolUse hook payload
+ * @param {{root?: string}} [opts] agents root override — a test seam; the hook never passes it
  * @returns {{verdict: "allow"|"deny"|"notify"|"passThrough", code: string,
  *            literalId: string|null, notifyId: string|null, sample: string|null,
  *            message: string}}
  */
-function judgeBashCommand(input) {
+function judgeBashCommand(input, opts) {
   try {
+    const root = opts && typeof opts.root === "string" && opts.root !== "" ? opts.root : undefined;
     if (!input || input.tool_name !== IN_SCOPE_TOOL) return passThrough(PASS_THROUGH_CODES.TOOL_OUT_OF_SCOPE);
 
     const commandText = readCommand(input);
@@ -103,7 +106,7 @@ function judgeBashCommand(input) {
       });
     }
 
-    const ctx = contextOf(ir, commandText, input);
+    const ctx = contextOf(ir, commandText, input, root);
     const notices = detectIneffective(ir, ctx);
     if (notices.length > 0) {
       const notifyId = notices[0].notifyId;
@@ -111,7 +114,7 @@ function judgeBashCommand(input) {
     }
 
     if (LINE_BREAK_RE.test(commandText)) return passThrough(PASS_THROUGH_CODES.NO_HIT);
-    const allowCode = matchSelfScript(ir, ctx) || matchReadOnlyCommand(ir, ctx);
+    const allowCode = matchSelfScript(ir, ctx, { root }) || matchReadOnlyCommand(ir, ctx);
     if (allowCode) return verdictOf("allow", allowCode);
 
     return passThrough(PASS_THROUGH_CODES.NO_HIT);

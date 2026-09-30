@@ -5,12 +5,14 @@
 // A match here lets bash-guard answer permissionDecision "allow", which skips the prompt, so
 // every failure narrows: an unreadable list is "no targets", a malformed entry is dropped,
 // an unknown shebang resolves to no interpreter, and nothing here throws.
-// resolveEntry() maps one command-line spelling of a script path to its list entry; it is
-// shared by the allow path (hooks/bash-guard/allow.js) and the L3 notify (detect.js).
+// resolveScript() maps one command-line spelling of a script path to its list entry in the
+// checkout it names (the agents root or a linked worktree of it); resolveEntry() is its entry-only
+// view, shared by the allow path (hooks/bash-guard/allow.js) and the L3 notify (detect.js).
 
 const fs = require("fs");
 const path = require("path");
 const { normalizeCwd } = require("./path-normalize");
+const { checkoutRootOf } = require("./checkout-identity");
 
 const DEFAULT_ROOT = path.resolve(__dirname, "..", "..");
 const ALLOW_LIST_REL = path.join("install", "settings-allow-commands.txt");
@@ -21,6 +23,11 @@ const ENV_PREFIX_RE = /^(?:\$AGENTS_CONFIG_DIR|\$\{AGENTS_CONFIG_DIR\})\//;
 const SHEBANG_READ_BYTES = 512;
 
 const cache = new Map();
+
+const toSlash = (p) => p.split("\\").join("/");
+const canonAbs = (p) => toSlash(normalizeCwd(p) || p).replace(/\/+$/, "");
+const isAbsSpelling = (p) => /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("/") || p.startsWith("\\");
+const foldCase = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
 
 function isValidEntry(entry) {
   if (typeof entry !== "string" || entry === "") return false;
@@ -46,12 +53,13 @@ function readListFile(file) {
  */
 function loadAllowTargets(root) {
   const base = typeof root === "string" && root !== "" ? root : DEFAULT_ROOT;
-  if (cache.has(base)) return cache.get(base);
+  const key = foldCase(canonAbs(base));
+  if (cache.has(key)) return cache.get(key);
   const entries = Object.freeze(readListFile(path.join(base, ALLOW_LIST_REL)).filter(isValidEntry));
   const exposed = new Set(readListFile(path.join(base, PATH_LIST_REL)));
   const exposedBare = new Set(entries.map((e) => path.posix.basename(e)).filter((n) => exposed.has(n)));
   const targets = Object.freeze({ entries, exposedBare });
-  cache.set(base, targets);
+  cache.set(key, targets);
   return targets;
 }
 
@@ -92,43 +100,81 @@ function interpreterOf(root, entry) {
   }
 }
 
-const toSlash = (p) => p.split("\\").join("/");
-const canonAbs = (p) => toSlash(normalizeCwd(p) || p).replace(/\/+$/, "");
-const isAbsSpelling = (p) => /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("/") || p.startsWith("\\");
-const foldCase = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
+const hasDotSegment = (p) => p.split("/").some((seg) => seg === ".." || seg === ".");
 
-// Absolute and $AGENTS_CONFIG_DIR spellings never read cwd; a relative one resolves only
-// against a cwd that IS the root. The root is stripped on a path boundary (root + "/").
-function relativeToRoot(spelling, root, cwd) {
+function stripRoot(abs, rootAbs) {
+  const prefix = rootAbs + "/";
+  return foldCase(abs).startsWith(foldCase(prefix)) ? abs.slice(prefix.length) : null;
+}
+
+/**
+ * The checkout a working directory stands at the ROOT of: the agents root itself, or a linked
+ * worktree of it (same git common dir). A subdirectory of either is not a checkout root.
+ * @param {string} dir an absolute directory
+ * @param {string} [root] agents root
+ * @returns {string|null}
+ */
+function checkoutAt(dir, root) {
+  if (typeof dir !== "string" || dir === "") return null;
+  const base = typeof root === "string" && root !== "" ? root : DEFAULT_ROOT;
+  const dirAbs = canonAbs(dir);
+  if (foldCase(dirAbs) === foldCase(canonAbs(base))) return base;
+  const wt = checkoutRootOf(dirAbs, base);
+  return wt !== null && foldCase(canonAbs(wt)) === foldCase(dirAbs) ? wt : null;
+}
+
+// $AGENTS_CONFIG_DIR spellings name the agents root whatever the cwd. An absolute spelling is
+// stripped on a path boundary of the agents root, else of the linked worktree it lies in; a
+// relative one resolves only against a cwd that is a checkout root (see checkoutAt).
+function locate(spelling, root, cwd) {
   const env = ENV_PREFIX_RE.exec(spelling);
-  if (env) return spelling.slice(env[0].length);
-  const rootAbs = canonAbs(root);
+  if (env) return { rel: spelling.slice(env[0].length), checkoutRoot: root };
   if (isAbsSpelling(spelling)) {
     const abs = canonAbs(spelling);
-    const prefix = rootAbs + "/";
-    return foldCase(abs).startsWith(foldCase(prefix)) ? abs.slice(prefix.length) : null;
+    const underRoot = stripRoot(abs, canonAbs(root));
+    if (underRoot !== null) return { rel: underRoot, checkoutRoot: root };
+    if (hasDotSegment(abs)) return null;
+    const wt = checkoutRootOf(abs, root);
+    const rel = wt === null ? null : stripRoot(abs, canonAbs(wt));
+    return rel === null ? null : { rel, checkoutRoot: wt };
   }
-  if (typeof cwd !== "string" || cwd === "") return null;
-  if (foldCase(canonAbs(cwd)) !== foldCase(rootAbs)) return null;
-  return spelling.replace(/^\.\//, "");
+  const checkoutRoot = checkoutAt(cwd, root);
+  return checkoutRoot === null ? null : { rel: spelling.replace(/^\.\//, ""), checkoutRoot };
 }
 
 /**
  * @param {string[]} spellings candidate spellings of one path token (see spellingsOf)
  * @param {string} [root] agents root
  * @param {string|null} [cwd] a verified absolute cwd, or null
+ * @returns {{entry: string, checkoutRoot: string}|null} the entry, judged against the list of the
+ *          checkout the path lies in, and that checkout's root; or null
+ */
+function resolveScript(spellings, root, cwd) {
+  try {
+    const base = typeof root === "string" && root !== "" ? root : DEFAULT_ROOT;
+    for (const s of Array.isArray(spellings) ? spellings : []) {
+      if (typeof s !== "string" || s === "") continue;
+      const loc = locate(s, base, cwd);
+      if (loc === null || hasDotSegment(loc.rel)) continue;
+      if (loadAllowTargets(loc.checkoutRoot).entries.includes(loc.rel)) {
+        return { entry: loc.rel, checkoutRoot: loc.checkoutRoot };
+      }
+    }
+    return null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+/**
+ * @param {string[]} spellings
+ * @param {string} [root]
+ * @param {string|null} [cwd]
  * @returns {string|null} the allow-list entry the path names, or null
  */
 function resolveEntry(spellings, root, cwd) {
-  const base = typeof root === "string" && root !== "" ? root : DEFAULT_ROOT;
-  const { entries } = loadAllowTargets(base);
-  for (const s of Array.isArray(spellings) ? spellings : []) {
-    if (typeof s !== "string" || s === "") continue;
-    const rel = relativeToRoot(s, base, cwd);
-    if (rel === null || rel.split("/").some((seg) => seg === ".." || seg === ".")) continue;
-    if (entries.includes(rel)) return rel;
-  }
-  return null;
+  const hit = resolveScript(spellings, root, cwd);
+  return hit ? hit.entry : null;
 }
 
 // The cooked token loses the backslashes of a double-quoted Windows path, so the raw token
@@ -160,6 +206,8 @@ module.exports = {
   INTERPRETERS,
   loadAllowTargets,
   interpreterOf,
+  checkoutAt,
+  resolveScript,
   resolveEntry,
   spellingsOf,
 };
