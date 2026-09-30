@@ -50,12 +50,14 @@ function readCwd(input) {
 
 /**
  * @param {object} input a PreToolUse hook payload
+ * @param {{root?: string}} [opts] agents root override — a test seam; the hook never passes it
  * @returns {{verdict: "allow"|"deny"|"notify"|"passThrough", code: string,
  *            literalId: string|null, notifyId: string|null, sample: string|null,
  *            message: string}}
  */
-function judgeBashCommand(input) {
+function judgeBashCommand(input, opts) {
   try {
+    const root = opts && typeof opts.root === "string" && opts.root !== "" ? opts.root : undefined;
     if (!input || input.tool_name !== IN_SCOPE_TOOL) return passThrough(PASS_THROUGH_CODES.TOOL_OUT_OF_SCOPE);
 
     const commandText = readCommand(input);
@@ -82,14 +84,14 @@ function judgeBashCommand(input) {
       });
     }
 
-    const ctx = { ir, analysis: analysisOf(ir), commandText, cwd: readCwd(input) };
+    const ctx = { ir, analysis: analysisOf(ir), commandText, cwd: readCwd(input), agentsRoot: root };
     const notices = detectIneffective(ir, ctx);
     if (notices.length > 0) {
       const notifyId = notices[0].notifyId;
       return verdictOf("notify", notifyId, { notifyId, message: buildNotifyMessage(notices[0], notifyId) });
     }
 
-    const allowCode = matchSelfScript(ir, ctx);
+    const allowCode = matchSelfScript(ir, ctx, { root });
     if (allowCode) return verdictOf("allow", allowCode);
 
     return passThrough(PASS_THROUGH_CODES.NO_HIT);

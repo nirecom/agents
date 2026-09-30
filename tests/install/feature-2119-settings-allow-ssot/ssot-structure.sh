@@ -130,7 +130,8 @@ T3A_CASES
 # unannounced addition visible, since every presence row still passes when the file grows.
 # The three that PR #2158's security review removed (get-config-var, request-off-clearance,
 # worker-dispatch.js) stay out. #2201 admitted two; #2102 admitted read-session-facts (it was
-# never pinned here, so the count row is what caught it); #2075 admitted find-tests-for-source.sh.
+# never pinned here, so the count row is what caught it); #2075 admitted find-tests-for-source.sh;
+# #2265 admitted handoff-append.
 t3b_snapshot() {
     local entry n
     while IFS= read -r entry; do
@@ -163,9 +164,10 @@ bin/worktree-notes-append.js
 bin/workflow/read-session-facts
 skills/issue-create/scripts/make-empty-verdict.sh
 bin/find-tests-for-source.sh
+bin/workflow/handoff-append
 T3B_CASES
     n="$(printf '%s\n' "$SSOT_LIST" | grep -c . || true)"
-    assert_eq "T3b: the SSOT holds exactly the 25 pinned entries and nothing else" "25" "${n:-0}"
+    assert_eq "T3b: the SSOT holds exactly the 26 pinned entries and nothing else" "26" "${n:-0}"
 }
 
 # T46 -- THE READER, NOT THE FILE. Every row above reads the SSOT through ssot_entries, and the

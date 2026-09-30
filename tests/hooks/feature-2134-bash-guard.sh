@@ -146,8 +146,8 @@ mkcmd() {
 # leaves a file that counts only its failures reporting green. Breakdown: detect 14 +
 # allow-direction 13 + hit-scope 5 + xargs-pipe 5 + negative 10 + not-forbidden 3 +
 # forbidden-literals-doc-sync 4 + tool-scope 2 + fail-open 3 + interlock 7 + notify-sentinel 19 +
-# notify-interpreter 15 + allow-self-script 42 + precedence 8 + message 27 + runtime 19.
-ROWS_EXPECTED=196
+# notify-interpreter 15 + allow-self-script 88 + precedence 8 + message 27 + runtime 19.
+ROWS_EXPECTED=242
 
 # TL3 gap (what this test does NOT catch):
 # - Whether Claude Code actually INVOKES hooks/bash-guard.js on a real Bash tool call. The

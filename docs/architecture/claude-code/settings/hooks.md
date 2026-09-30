@@ -69,8 +69,9 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
     Reason codes: `BG-NOTIFY-SENTINEL-NO-ECHO` / `BG-NOTIFY-SENTINEL-UNRECOGNIZED` / `BG-NOTIFY-SCRIPT-NO-INTERPRETER`.
   - **allow**: command is an agents-own script from `install/settings-allow-commands.txt` or a
     bare name from `install/path-exposed-commands.txt`. IR-normalizes cwd and path to check
-    against both lists via `hooks/lib/allow-command-list.js`. Requires a valid absolute `cwd`
-    for repo-relative forms; absent or non-absolute `cwd` falls through to passThrough.
+    against both lists via `hooks/lib/allow-command-list.js` (agents root or a linked worktree;
+    single-quoted `bash -c` re-judged once — see [settings.md](../settings.md) "Self-script allow
+    in bash-guard"). Repo-relative forms need an absolute `cwd`, else passThrough.
     Output: `{hookSpecificOutput:{hookEventName:"PreToolUse", permissionDecision:"allow",
     permissionDecisionReason:"bash-guard BG-ALLOW-*"}}`.
     Reason codes: `BG-ALLOW-SELF-SCRIPT` / `BG-ALLOW-SELF-BARE`.
