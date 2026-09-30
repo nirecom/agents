@@ -29,6 +29,32 @@ else
 
 _GLAB_PS1_WIN="$(ps_path "$_GLAB_PS1")"
 
+# Driver for the TCP reachability guard (#2476): <mode> open = loopback TcpListener whose
+# port goes to GLAB_PROBE_PORT (LISTENER_PENDING=True proves the probe connected); closed =
+# same port after Stop (connection refused); none = no listener, default port 443.
+_ps_driver() {  # $1=dir $2=hostname $3=token $4=subfolder $5=open|closed|none
+    local cfg; cfg="$(win_path "$1")"
+    cat > "$1/driver.ps1" << PS1EOF
+\$env:PATH = '$cfg;' + \$env:PATH
+\$env:AGENTS_CONFIG_DIR = '$cfg'
+Set-Location '$cfg'
+\$env:GITLAB = 'on'
+\$env:GITLAB_HOSTNAME = '$2'
+\$env:GITLAB_TOKEN = '$3'
+\$env:GITLAB_SUBFOLDER = '$4'
+if ('$5' -ne 'none') {
+    \$_l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    \$_l.Start()
+    \$env:GLAB_PROBE_PORT = [string]\$_l.LocalEndpoint.Port
+    Write-Host "PROBE_PORT=\$env:GLAB_PROBE_PORT"
+    if ('$5' -eq 'closed') { \$_l.Stop() }
+}
+try { & '$_GLAB_PS1_WIN' } finally {
+    if ('$5' -eq 'open') { Write-Host "LISTENER_PENDING=\$(\$_l.Pending())"; \$_l.Stop() }
+}
+PS1EOF
+}
+
 case_begin "P1" "install/win/glab.ps1"
 # P1: GITLAB=off → exit 0, winget NOT called (flag gate)
 P1="$TMP/p1"
@@ -49,31 +75,30 @@ fi
 case_end
 
 case_begin "P2" "install/win/glab.ps1"
-# P2: GITLAB=on, glab in PATH, HOSTNAME+TOKEN → auth login called with --hostname and --token
-# Note: uses example.com with the real resolver (no PS-side DNS mock — [System.Net.Dns] is not
-# injectable here). PA covers the DNS-success path deterministically via localhost. (TL3 gap)
+# P2: GITLAB=on, glab in PATH, HOSTNAME+TOKEN (reachable loopback listener) → auth login
+#     called with --hostname and --stdin; the token arrives on stdin, never in argv.
+#     No external network is touched.
 P2="$TMP/p2"
 mkdir -p "$P2"
 P2_AUTH_WIN="$(win_path "$P2/auth-args.txt")"
+P2_STDIN_WIN="$(win_path "$P2/auth-stdin.txt")"
 printf '@echo off\nexit /b 1\n' > "$P2/winget.cmd"
-printf '@echo off\nif "%%1"=="--version" (echo glab version 1.0.0 & exit /b 0)\nif "%%1"=="auth" (\n  if "%%2"=="status" (exit /b 1)\n  if "%%2"=="login" (echo %%* >> "%s" & exit /b 0)\n)\nif "%%1"=="config" (exit /b 0)\nexit /b 0\n' \
-    "$P2_AUTH_WIN" > "$P2/glab.cmd"
-cat > "$P2/driver.ps1" << PS1EOF
-\$env:PATH = '$(win_path "$P2");' + \$env:PATH
-\$env:GITLAB = 'on'
-\$env:GITLAB_HOSTNAME = 'example.com'
-\$env:GITLAB_TOKEN = 'glpat-test'
-& '$_GLAB_PS1_WIN'
-PS1EOF
+printf '@echo off\nif "%%1"=="--version" (echo glab version 1.0.0 & exit /b 0)\nif "%%1"=="auth" (\n  if "%%2"=="status" (exit /b 1)\n  if "%%2"=="login" (echo %%* >> "%s" & findstr "^" >> "%s" & exit /b 0)\n)\nif "%%1"=="config" (exit /b 0)\nexit /b 0\n' \
+    "$P2_AUTH_WIN" "$P2_STDIN_WIN" > "$P2/glab.cmd"
+_ps_driver "$P2" 127.0.0.1 glpat-test '' open
 run_glab_ps1 "$P2"
 P2_AUTH="$(cat "$P2/auth-args.txt" 2>/dev/null || echo "")"
+P2_STDIN="$(tr -d '\r' 2>/dev/null < "$P2/auth-stdin.txt" || echo "")"
 if [ "$P_RC" -eq 0 ] && \
    printf '%s' "$P2_AUTH" | grep -qi -- "--hostname" && \
-   printf '%s' "$P2_AUTH" | grep -qi "example.com" && \
-   printf '%s' "$P2_AUTH" | grep -qi -- "--token"; then
-    pass "P2: glab.ps1 — GITLAB_HOSTNAME+TOKEN -> auth login called with --hostname and --token"
+   printf '%s' "$P2_AUTH" | grep -qi "127.0.0.1" && \
+   printf '%s' "$P2_AUTH" | grep -qi -- "--stdin" && \
+   ! printf '%s' "$P2_AUTH" | grep -qi -- "--token" && \
+   ! printf '%s' "$P2_AUTH" | grep -q "glpat-test" && \
+   [ "$P2_STDIN" = "glpat-test" ]; then
+    pass "P2: glab.ps1 — GITLAB_HOSTNAME+TOKEN -> auth login called with --hostname and --stdin, token on stdin only"
 else
-    fail "P2: rc=$P_RC auth_args='$P2_AUTH' out=$(printf '%s' "$P_OUT" | head -2)"
+    fail "P2: rc=$P_RC auth_args='$P2_AUTH' stdin='$P2_STDIN' out=$(printf '%s' "$P_OUT" | head -2)"
 fi
 case_end
 
@@ -86,14 +111,7 @@ P3_CONFIG_WIN="$(win_path "$P3/config-args.txt")"
 printf '@echo off\nexit /b 1\n' > "$P3/winget.cmd"
 printf '@echo off\nif "%%1"=="--version" (echo glab version 1.0.0 & exit /b 0)\nif "%%1"=="auth" (\n  if "%%2"=="status" (exit /b 1)\n  if "%%2"=="login" (echo %%* >> "%s" & exit /b 0)\n)\nif "%%1"=="config" (\n  if "%%2"=="set" (echo %%* >> "%s" & exit /b 0)\n)\nexit /b 0\n' \
     "$P3_AUTH_WIN" "$P3_CONFIG_WIN" > "$P3/glab.cmd"
-cat > "$P3/driver.ps1" << PS1EOF
-\$env:PATH = '$(win_path "$P3");' + \$env:PATH
-\$env:GITLAB = 'on'
-\$env:GITLAB_HOSTNAME = 'example.com'
-\$env:GITLAB_TOKEN = 'glpat-test'
-\$env:GITLAB_SUBFOLDER = 'group1/gitlab'
-& '$_GLAB_PS1_WIN'
-PS1EOF
+_ps_driver "$P3" 127.0.0.1 glpat-test group1/gitlab open
 run_glab_ps1 "$P3"
 P3_CONFIG="$(cat "$P3/config-args.txt" 2>/dev/null || echo "")"
 if [ "$P_RC" -eq 0 ] && \
@@ -186,99 +204,78 @@ fi
 case_end
 
 case_begin "PA" "install/win/glab.ps1"
-# PA (C2): GITLAB=on + HOSTNAME=localhost (always resolvable, no network) + TOKEN ->
-#          DNS success path -> auth login called with --hostname localhost --token.
+# PA: GITLAB=on + HOSTNAME=127.0.0.1 + TOKEN + open loopback listener on GLAB_PROBE_PORT ->
+#     the TCP probe connects (LISTENER_PENDING=True) -> auth login called with --hostname/--stdin,
+#     token on stdin only.
 PA="$TMP/pa"
 mkdir -p "$PA"
 PA_AUTH_WIN="$(win_path "$PA/auth-args.txt")"
-PA_CFG_WIN="$(win_path "$PA")"
+PA_STDIN_WIN="$(win_path "$PA/auth-stdin.txt")"
 printf '@echo off\nexit /b 1\n' > "$PA/winget.cmd"
-printf '@echo off\nif "%%1"=="--version" (echo glab version 1.0.0 & exit /b 0)\nif "%%1"=="auth" (\n  if "%%2"=="status" (exit /b 1)\n  if "%%2"=="login" (echo %%* >> "%s" & exit /b 0)\n)\nif "%%1"=="config" (exit /b 0)\nexit /b 0\n' \
-    "$PA_AUTH_WIN" > "$PA/glab.cmd"
-cat > "$PA/driver.ps1" << PS1EOF
-\$env:PATH = '$PA_CFG_WIN;' + \$env:PATH
-\$env:AGENTS_CONFIG_DIR = '$PA_CFG_WIN'
-Set-Location '$PA_CFG_WIN'
-\$env:GITLAB = 'on'
-\$env:GITLAB_HOSTNAME = 'localhost'
-\$env:GITLAB_TOKEN = 'glpat-test'
-& '$_GLAB_PS1_WIN'
-PS1EOF
+printf '@echo off\nif "%%1"=="--version" (echo glab version 1.0.0 & exit /b 0)\nif "%%1"=="auth" (\n  if "%%2"=="status" (exit /b 1)\n  if "%%2"=="login" (echo %%* >> "%s" & findstr "^" >> "%s" & exit /b 0)\n)\nif "%%1"=="config" (exit /b 0)\nexit /b 0\n' \
+    "$PA_AUTH_WIN" "$PA_STDIN_WIN" > "$PA/glab.cmd"
+_ps_driver "$PA" 127.0.0.1 glpat-test '' open
 run_glab_ps1 "$PA"
 PA_AUTH="$(cat "$PA/auth-args.txt" 2>/dev/null || echo "")"
+PA_STDIN="$(tr -d '\r' 2>/dev/null < "$PA/auth-stdin.txt" || echo "")"
 if [ "$P_RC" -eq 0 ] && \
    printf '%s' "$PA_AUTH" | grep -qi -- "--hostname" && \
-   printf '%s' "$PA_AUTH" | grep -qi "localhost" && \
-   printf '%s' "$PA_AUTH" | grep -qi -- "--token"; then
-    pass "PA: glab.ps1 — resolvable host (localhost) -> DNS success, auth login called with --hostname/--token"
+   printf '%s' "$PA_AUTH" | grep -qi "127.0.0.1" && \
+   printf '%s' "$PA_AUTH" | grep -qi -- "--stdin" && \
+   ! printf '%s' "$PA_AUTH" | grep -qi -- "--token" && \
+   ! printf '%s' "$PA_AUTH" | grep -q "glpat-test" && \
+   [ "$PA_STDIN" = "glpat-test" ] && \
+   printf '%s' "$P_OUT" | grep -q "LISTENER_PENDING=True"; then
+    pass "PA: glab.ps1 — probe connected to GLAB_PROBE_PORT listener, auth login called with --hostname/--stdin, token on stdin only"
 else
-    fail "PA: rc=$P_RC auth_args='$PA_AUTH' out=$(printf '%s' "$P_OUT" | head -2)"
+    fail "PA: rc=$P_RC auth_args='$PA_AUTH' stdin='$PA_STDIN' out=$(printf '%s' "$P_OUT" | grep -E 'PENDING|WARN|Cannot' | head -3)"
 fi
 case_end
 
 case_begin "PB" "install/win/glab.ps1"
-# PB (C3): GITLAB=on + HOSTNAME=localhost but NO TOKEN -> partial creds:
-#          glab auth status NOT called, manual-setup message printed.
-# TL3 gap: PS DNS is Job-based (not getent/host), so DNS invocation for this path is not markable at TL2.
+# PB: GITLAB=on + HOSTNAME=127.0.0.1 but NO TOKEN -> partial creds: auth status NOT called,
+#     manual-setup message printed, and the probe never connects (LISTENER_PENDING=False).
 PB="$TMP/pb"
 mkdir -p "$PB"
 PB_STATUS_WIN="$(win_path "$PB/auth-status-marker.txt")"
-PB_CFG_WIN="$(win_path "$PB")"
 printf '@echo off\nexit /b 1\n' > "$PB/winget.cmd"
 printf '@echo off\nif "%%1"=="--version" (echo glab version 1.0.0 & exit /b 0)\nif "%%1"=="auth" (\n  if "%%2"=="status" (echo %%* >> "%s" & exit /b 0)\n)\nexit /b 0\n' \
     "$PB_STATUS_WIN" > "$PB/glab.cmd"
-cat > "$PB/driver.ps1" << PS1EOF
-\$env:PATH = '$PB_CFG_WIN;' + \$env:PATH
-\$env:AGENTS_CONFIG_DIR = '$PB_CFG_WIN'
-Set-Location '$PB_CFG_WIN'
-\$env:GITLAB = 'on'
-\$env:GITLAB_HOSTNAME = 'localhost'
-\$env:GITLAB_TOKEN = ''
-& '$_GLAB_PS1_WIN'
-PS1EOF
+_ps_driver "$PB" 127.0.0.1 '' '' open
 run_glab_ps1 "$PB"
 if [ "$P_RC" -eq 0 ] && [ ! -f "$PB/auth-status-marker.txt" ] && \
+   printf '%s' "$P_OUT" | grep -q "LISTENER_PENDING=False" && \
    printf '%s' "$P_OUT" | grep -qi "manual\|GITLAB_HOSTNAME\|GITLAB_TOKEN"; then
-    pass "PB: glab.ps1 — HOSTNAME without TOKEN -> manual auth message, auth status not called"
+    pass "PB: glab.ps1 — HOSTNAME without TOKEN -> manual auth message, auth status + probe not called"
 else
     fail "PB: rc=$P_RC status_called=$([ -f "$PB/auth-status-marker.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
 fi
 case_end
 
 case_begin "PC" "install/win/glab.ps1"
-# PC (C3): GITLAB=on + NO HOSTNAME + TOKEN set -> partial creds:
-#          glab auth status NOT called, manual-setup message printed.
-# TL3 gap: PS DNS is Job-based (not getent/host), so "DNS skipped for no-HOSTNAME" is not markable at TL2.
+# PC: GITLAB=on + NO HOSTNAME + TOKEN set -> partial creds: auth status NOT called,
+#     manual-setup message printed, and the probe never connects (LISTENER_PENDING=False).
 PC="$TMP/pc"
 mkdir -p "$PC"
 PC_STATUS_WIN="$(win_path "$PC/auth-status-marker.txt")"
-PC_CFG_WIN="$(win_path "$PC")"
 printf '@echo off\nexit /b 1\n' > "$PC/winget.cmd"
 printf '@echo off\nif "%%1"=="--version" (echo glab version 1.0.0 & exit /b 0)\nif "%%1"=="auth" (\n  if "%%2"=="status" (echo %%* >> "%s" & exit /b 0)\n)\nexit /b 0\n' \
     "$PC_STATUS_WIN" > "$PC/glab.cmd"
-cat > "$PC/driver.ps1" << PS1EOF
-\$env:PATH = '$PC_CFG_WIN;' + \$env:PATH
-\$env:AGENTS_CONFIG_DIR = '$PC_CFG_WIN'
-Set-Location '$PC_CFG_WIN'
-\$env:GITLAB = 'on'
-\$env:GITLAB_HOSTNAME = ''
-\$env:GITLAB_TOKEN = 'glpat-test'
-& '$_GLAB_PS1_WIN'
-PS1EOF
+_ps_driver "$PC" '' glpat-test '' open
 run_glab_ps1 "$PC"
 if [ "$P_RC" -eq 0 ] && [ ! -f "$PC/auth-status-marker.txt" ] && \
+   printf '%s' "$P_OUT" | grep -q "LISTENER_PENDING=False" && \
    printf '%s' "$P_OUT" | grep -qi "manual\|GITLAB_HOSTNAME\|GITLAB_TOKEN"; then
-    pass "PC: glab.ps1 — TOKEN without HOSTNAME -> manual auth message, auth status not called"
+    pass "PC: glab.ps1 — TOKEN without HOSTNAME -> manual auth message, auth status + probe not called"
 else
     fail "PC: rc=$P_RC status_called=$([ -f "$PC/auth-status-marker.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
 fi
 case_end
 
 case_begin "P7" "install/win/glab.ps1"
-# P7 (C1): GITLAB=on + HOSTNAME + TOKEN + unresolvable host -> the DNS guard's timeout
-#          bounds the probe; the script finishes under the run wrapper and auth login is
-#          NOT called. Timing guard: elapsed must stay under _PS_TIMEOUT (hang detector).
-# Note: uses fast NXDOMAIN, not a true DNS hang; Wait-Job -Timeout 3 branch is a TL3 gap.
+# P7: GITLAB=on + HOSTNAME + TOKEN + unresolvable host -> the guard fails fast; the script
+#     finishes under the run wrapper and auth login is NOT called (elapsed < _PS_TIMEOUT).
+# The true connect hang (3s cut) is P9.
 P7="$TMP/p7"
 mkdir -p "$P7"
 P7_LOGIN_WIN="$(win_path "$P7/login-called.txt")"
@@ -303,6 +300,48 @@ if [ "$P_RC" -eq 0 ] && [ ! -f "$P7/login-called.txt" ] && [ "$_p7_elapsed" -lt 
     pass "P7: glab.ps1 — unresolvable host -> DNS probe bounded (${_p7_elapsed}s), auth login skipped"
 else
     fail "P7: rc=$P_RC elapsed=${_p7_elapsed}s login_called=$([ -f "$P7/login-called.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
+fi
+case_end
+
+# glab stub recording `auth login` into $2 (P8/P9).
+_ps_login_stub() {  # $1=dir $2=marker (win path)
+    printf '@echo off\nexit /b 1\n' > "$1/winget.cmd"
+    printf '@echo off\nif "%%1"=="--version" (echo glab version 1.0.0 & exit /b 0)\nif "%%1"=="auth" (\n  if "%%2"=="login" (echo %%* >> "%s" & exit /b 0)\n)\nexit /b 0\n' \
+        "$2" > "$1/glab.cmd"
+}
+
+case_begin "P8" "install/win/glab.ps1"
+# P8: HOSTNAME=127.0.0.1 + closed loopback port -> connection refused -> auth skipped with
+#     the neutral warning "Cannot connect to 127.0.0.1:<port>".
+P8="$TMP/p8"
+mkdir -p "$P8"
+_ps_login_stub "$P8" "$(win_path "$P8/login-called.txt")"
+_ps_driver "$P8" 127.0.0.1 glpat-test '' closed
+run_glab_ps1 "$P8"
+P8_PORT="$(printf '%s' "$P_OUT" | tr -d '\r' | sed -n 's/^PROBE_PORT=//p' | head -n1)"
+if [ "$P_RC" -eq 0 ] && [ ! -f "$P8/login-called.txt" ] && [ -n "$P8_PORT" ] && \
+   printf '%s' "$P_OUT" | grep -q "Cannot connect to 127.0.0.1:$P8_PORT"; then
+    pass "P8: glab.ps1 — closed port $P8_PORT -> 'Cannot connect to' warning, auth login skipped"
+else
+    fail "P8: rc=$P_RC port=$P8_PORT login_called=$([ -f "$P8/login-called.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
+fi
+case_end
+
+case_begin "P9" "install/win/glab.ps1"
+# P9: HOSTNAME=192.0.2.1 (TEST-NET-1, never answers) on the default port -> the connect is
+#     cut at 3s; the whole run must finish in under 8s with auth login skipped.
+P9="$TMP/p9"
+mkdir -p "$P9"
+_ps_login_stub "$P9" "$(win_path "$P9/login-called.txt")"
+_ps_driver "$P9" 192.0.2.1 glpat-test '' none
+_p9_start=$SECONDS
+run_glab_ps1 "$P9"
+_p9_elapsed=$((SECONDS - _p9_start))
+if [ "$P_RC" -eq 0 ] && [ ! -f "$P9/login-called.txt" ] && [ "$_p9_elapsed" -lt 8 ] && \
+   printf '%s' "$P_OUT" | grep -q "Cannot connect to 192.0.2.1:443"; then
+    pass "P9: glab.ps1 — unanswered connect cut in ${_p9_elapsed}s (<8s), warning printed, auth login skipped"
+else
+    fail "P9: rc=$P_RC elapsed=${_p9_elapsed}s login_called=$([ -f "$P9/login-called.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
 fi
 case_end
 

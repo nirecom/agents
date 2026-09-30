@@ -3,11 +3,10 @@
 # Tags: install, glab-install, gitlab, auth-idempotent, non-interactive, scope:issue-specific, TL2, pwsh-required
 #
 # Tests glab sub-script added in issue #2308, updated for GITLAB flag + non-interactive auth.
-# Verifies glab.sh flag gate, install/upgrade, auth behavior, DNS guard, and that install.sh calls glab.sh.
-# TL3 gaps: real pkg mgrs / glab auth login (TTY) / winget+keyring; DNS+3s faked (fail T8/P5, success T5/TA/PA, hang T10/P7; real-net + PS [System.Net.Dns] via P2 untested).
-#   (C1) PS Wait-Job -Timeout 3 on a truly hanging Job — Windows-native only, .NET DNS not TL2-mockable.
-#   (C2) macOS 'timeout 3 host' branch — Darwin-native only (TA-MAC fakes uname=Darwin, real host untested).
-#   (C3) PS Job-based DNS (not getent/host) — PC "DNS skipped no-HOSTNAME" / PB "DNS run, partial creds" not TL2-markable.
+# Verifies glab.sh flag gate, install/upgrade, auth behavior, TCP reachability guard, and that install.sh calls glab.sh.
+# TL3 gaps: real pkg mgrs / glab auth login (TTY) / winget+keyring. Probe faked: fail T8, success T5/T6/TA; real: hang T10/P9 (TEST-NET), loopback T11/P2/P3/PA/P8.
+#   (C2) macOS real /dev/tcp + gtimeout / bg+kill paths — Darwin-native only (TA-MAC fakes uname=Darwin: OS independence only).
+#   Also untested: a real GitLab host on 443, and a bash built without /dev/tcp.
 # Closest-to-action mitigation: bin/check-verification-gate.sh category: installer at WORKFLOW_USER_VERIFIED.
 
 set -u

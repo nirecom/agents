@@ -146,7 +146,7 @@ echo "--- I4: the inline \$PROFILE-sourcing block is guarded like every Invoke-I
 PROFILE_BLOCK="$(awk '
     /Adding profile sourcing/ { on = 1 }
     on { print }
-    on && /^Remove-Variable _snippetPath/ { exit }
+    on && /^[[:space:]]*Remove-Variable _snippetPath/ { exit }
 ' "$INSTALL_PS1")"
 case "$PROFILE_BLOCK" in
     *"try {"*"catch {"*'$script:FailedSteps += "Adding profile sourcing"'*)

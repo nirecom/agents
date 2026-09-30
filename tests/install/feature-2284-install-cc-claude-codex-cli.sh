@@ -5,6 +5,7 @@
 # Dispatcher — logic in tests/install/feature-2284-install-cc-claude-codex-cli/ (split at 500-line limit).
 # TL3 gap: real process detection and real update execution; see sub-file headers for details.
 # Closest-to-action: bin/check-verification-gate.sh category: installer.
+# #2476: sub-files unset WAIT_CC_RESULT (parent memo: clear/timeout short-circuits the helper).
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

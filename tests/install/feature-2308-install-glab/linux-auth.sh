@@ -1,3 +1,10 @@
+# TCP probe seam (#2476, shared with linux-dns.sh): a fake `timeout` that records its
+# args ("3 <bash> -c … <host> <port>") and exits <rc> WITHOUT exec — no real connection.
+make_probe_timeout() {  # $1=path  $2=rc  $3=record file
+    printf '#!/usr/bin/env bash\necho "$@" >> "%s"\nexit %s\n' "$3" "$2" > "$1"
+    chmod +x "$1"
+}
+
 # ---------------------------------------------------------------------------
 # Section 1: GITLAB flag gate
 # ---------------------------------------------------------------------------
@@ -123,12 +130,14 @@ fi
 case_end
 
 case_begin "T5" "install/linux/glab.sh"
-# T5: GITLAB=on + HOSTNAME + TOKEN → glab auth login called with --hostname and --token flags
+# T5: GITLAB=on + HOSTNAME + TOKEN → glab auth login called with --hostname and --stdin, the
+# token arrives on stdin and never on argv (--token would expose it in process listings).
 # DNS guard success is mocked (getent/host exit 0, fake timeout execs the probe) so T5 stays
 # deterministic once the DNS guard lands — no real network resolution of example.com required.
 T5_BIN="$TMP/t5-bin"
 mkdir -p "$T5_BIN"
 T5_AUTH_ARGS="$TMP/t5-auth-args.txt"
+T5_STDIN="$TMP/t5-auth-stdin.txt"
 cat > "$T5_BIN/glab" << 'GLAB_STUB'
 #!/usr/bin/env bash
 case "$1" in
@@ -136,19 +145,19 @@ case "$1" in
   auth)
     if [ "${2:-}" = "login" ]; then
       echo "$@" >> "AUTH_ARGS_PLACEHOLDER"
+      cat > "STDIN_PLACEHOLDER"
     fi
     exit 0 ;;
   config) exit 0 ;;
   *) exit 0 ;;
 esac
 GLAB_STUB
-sed -i "s|AUTH_ARGS_PLACEHOLDER|$T5_AUTH_ARGS|" "$T5_BIN/glab"
+sed -i -e "s|AUTH_ARGS_PLACEHOLDER|$T5_AUTH_ARGS|" -e "s|STDIN_PLACEHOLDER|$T5_STDIN|" "$T5_BIN/glab"
 chmod +x "$T5_BIN/glab"
-# DNS guard success mock: resolvers exit 0; fake timeout drops the duration then execs the probe.
-printf '#!/usr/bin/env bash\nexit 0\n' > "$T5_BIN/getent"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$T5_BIN/host"
-printf '#!/usr/bin/env bash\nshift\nexec "$@"\n' > "$T5_BIN/timeout"
-chmod +x "$T5_BIN/getent" "$T5_BIN/host" "$T5_BIN/timeout"
+# Probe seam (#2476): the fake timeout records its args and exits 0 WITHOUT exec, so the
+# TCP probe never opens a real connection to example.com:443.
+T5_PROBE_ARGS="$TMP/t5-probe-args.txt"
+make_probe_timeout "$T5_BIN/timeout" 0 "$T5_PROBE_ARGS"
 
 if [ "$GLAB_SH_OK" = "1" ]; then
     run_with_timeout 15 env -i PATH="$T5_BIN:$PATH" HOME="$TMP/home-t5" \
@@ -156,12 +165,18 @@ if [ "$GLAB_SH_OK" = "1" ]; then
         bash "$GLAB_SH" >/dev/null 2>/dev/null </dev/null
     RC=$?
     AUTH_ARGS="$(cat "$T5_AUTH_ARGS" 2>/dev/null || echo "")"
+    AUTH_STDIN="$(cat "$T5_STDIN" 2>/dev/null || echo "")"
+    PROBE_ARGS="$(cat "$T5_PROBE_ARGS" 2>/dev/null || echo "")"
     if [ "$RC" -eq 0 ] && echo "$AUTH_ARGS" | grep -q -- "--hostname" && \
        echo "$AUTH_ARGS" | grep -q "example.com" && \
-       echo "$AUTH_ARGS" | grep -q -- "--token"; then
-        pass "T5: glab.sh — GITLAB_HOSTNAME+TOKEN -> auth login called with --hostname and --token"
+       echo "$AUTH_ARGS" | grep -q -- "--stdin" && \
+       ! echo "$AUTH_ARGS" | grep -q -- "--token" && \
+       ! echo "$AUTH_ARGS" | grep -q "glpat-test" && \
+       [ "$AUTH_STDIN" = "glpat-test" ] && \
+       echo "$PROBE_ARGS" | grep -qE '(^| )3 .*example\.com.* 443( |$)'; then
+        pass "T5: glab.sh — probe seam (3s, host, 443) reachable -> auth login with --hostname and --stdin, token on stdin only"
     else
-        fail "T5: rc=$RC auth_args='$AUTH_ARGS'"
+        fail "T5: rc=$RC auth_args='$AUTH_ARGS' stdin='$AUTH_STDIN' probe_args='$PROBE_ARGS'"
     fi
 else
     fail "T5: install/linux/glab.sh not found"
@@ -188,6 +203,8 @@ esac
 GLAB_STUB
 sed -i "s|CONFIG_ARGS_PLACEHOLDER|$T6_CONFIG_ARGS|" "$T6_BIN/glab"
 chmod +x "$T6_BIN/glab"
+# Probe seam reports reachable so the subfolder step is reached without real network.
+make_probe_timeout "$T6_BIN/timeout" 0 "$TMP/t6-probe-args.txt"
 
 if [ "$GLAB_SH_OK" = "1" ]; then
     run_with_timeout 15 env -i PATH="$T6_BIN:$PATH" HOME="$TMP/home-t6" \

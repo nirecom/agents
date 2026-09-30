@@ -54,11 +54,11 @@ already_installed_line() {
     fi
 }
 
-# First `exit 0` after line $2.
+# First `exit 0` after line $2, ignoring lines $3..$4 (the guard's own skip branch).
 early_exit_line_after() {
-    local file="$1" after="$2"
-    awk -v after="$after" '
-        NR > after &&
+    local file="$1" after="$2" skip_lo="${3:-0}" skip_hi="${4:-0}"
+    awk -v after="$after" -v lo="$skip_lo" -v hi="$skip_hi" '
+        NR > after && !(NR >= lo && NR <= hi) &&
         ($0 ~ /^[[:space:]]*exit[[:space:]]+0([[:space:]]|$)/ ||
          $0 ~ /[{;][[:space:]]*exit[[:space:]]+0([[:space:]]|\}|$)/) { print NR; exit }
     ' "$file"
@@ -133,15 +133,44 @@ update_is_skip_gated() {
     _skip_between "$file" "$wline" "$uline"
 }
 
+# "<first> <last>" of the guard's skip branch: the `if` consuming its exit code (sh `if !`
+# on the guard line; ps `$LASTEXITCODE` within 3 lines) through its one-line end or `fi`/`}`.
+guard_skip_range() {
+    local file="$1" w="$2" kind="$3" i="" n line end
+    if [ "$kind" = "sh" ]; then
+        sed -n "${w}p" "$file" | grep -Eq '^[[:space:]]*if[[:space:]]+!' && i="$w"
+    else
+        for n in 1 2 3; do
+            if sed -n "$((w + n))p" "$file" | grep -Eq '^[[:space:]]*if[[:space:]]*\(.*\$LASTEXITCODE'; then
+                i=$((w + n)); break
+            fi
+        done
+    fi
+    [ -n "$i" ] || return 0
+    line="$(sed -n "${i}p" "$file")"
+    if printf '%s\n' "$line" | grep -Eq '(\{.*\}[[:space:]]*$|then.*(;|[[:space:]])fi([[:space:]]|;|$))'; then
+        echo "$i $i"; return 0
+    fi
+    end="$(awk -v s="$i" 'NR > s && /^[[:space:]]*(fi|\})[[:space:]]*$/ { print NR; exit }' "$file")"
+    [ -n "$end" ] && echo "$i $end"
+    return 0
+}
+
 # Update reachable from already-installed path (not dead code after an early exit).
+# Excludes only the skip branch of a guard between install check and update (#2476).
 update_is_reachable_when_installed() {
-    local file="$1" cli="$2" kind="$3" uline tline eline
+    local file="$1" cli="$2" kind="$3" uline tline eline wline range lo=0 hi=0
     uline="$(update_line "$file" "$cli")"
     [ -n "$uline" ] || return 1
     tline="$(already_installed_line "$file" "$cli" "$kind")"
     [ -n "$tline" ] || return 0
     [ "$uline" -lt "$tline" ] && return 0
-    eline="$(early_exit_line_after "$file" "$tline")"
+    wline="$(wait_ref_line "$file")"
+    if [ -n "$wline" ] && [ "$wline" -gt "$tline" ] && [ "$wline" -lt "$uline" ]; then
+        range="$(guard_skip_range "$file" "$wline" "$kind")"
+        if [ -n "$range" ]; then lo="${range% *}"; hi="${range#* }"; fi
+    fi
+    eline="$(early_exit_line_after "$file" "$tline" "$lo" "$hi")"
     [ -n "$eline" ] || return 0
     [ "$uline" -lt "$eline" ]
 }
@@ -358,6 +387,37 @@ if [ "$_reach_live" = "1" ] && [ "$_reach_dead" = "0" ]; then
 else
     fail "MUT-reach: reachability detector (live=$_reach_live expected 1, dead=$_reach_dead expected 0)"
 fi
+
+# #2476: the guard's own skip-branch `exit 0` must not mark the update dead, while an
+# unconditional `exit 0` after the guard still must.
+cat > "$MUT_DIR/reach-ps-multi.ps1" << 'REACH_PS_MULTI_EOF'
+if (Get-Command claude -ErrorAction SilentlyContinue) {
+    & pwsh -NoProfile -File (Join-Path $AgentsRoot "install\lib\wait-cc-exit.ps1")
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "CC running; skipping update."
+        exit 0
+    }
+    claude update
+    exit 0
+}
+REACH_PS_MULTI_EOF
+sed '6a\    exit 0' "$MUT_DIR/good.sh" > "$MUT_DIR/reach-uncond.sh"
+sed '3a\    exit 0' "$MUT_DIR/good.ps1" > "$MUT_DIR/reach-uncond.ps1"
+
+_reach_probe() {
+    local name="$1" file="$2" kind="$3" want="$4" got=0
+    update_is_reachable_when_installed "$file" "claude" "$kind" && got=1
+    if [ "$got" = "$want" ]; then
+        pass "MUT-reach-$name: reachability detector returns $got as required"
+    else
+        fail "MUT-reach-$name: reachability detector returned $got, expected $want"
+    fi
+}
+_reach_probe guarded-sh           "$MUT_DIR/good.sh"            sh 1
+_reach_probe guarded-ps           "$MUT_DIR/good.ps1"           ps 1
+_reach_probe guarded-ps-multiline "$MUT_DIR/reach-ps-multi.ps1" ps 1
+_reach_probe uncond-after-sh      "$MUT_DIR/reach-uncond.sh"    sh 0
+_reach_probe uncond-after-ps      "$MUT_DIR/reach-uncond.ps1"   ps 0
 
 # ---------------------------------------------------------------------------
 # Group E: exit-code contract — guard timeout must not abort the caller.

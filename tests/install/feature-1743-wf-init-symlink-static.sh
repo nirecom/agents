@@ -252,11 +252,11 @@ _guard_precedes_assemble() {
 # Scanning the whole range from guard to assemble is a false-green trap because
 # dotfileslink.sh already contains unrelated `exit 0` and `return` lines in that span.
 #
-# Two patterns are accepted:
-#   POSIX: `if ! bash .../wait-cc-exit.sh; then … exit 0; fi`
-#           `bash .../wait-cc-exit.sh || { …; exit 0; }`
-#   PS:     `& pwsh … wait-cc-exit.ps1` then `if ($LASTEXITCODE -ne 0) { …; exit 0 }`
-#
+# Narrow skip (both platforms since #2476): assemble sits inside the success branch, so
+# hooksPath/launchers still run on a timeout. The exit-on-timeout form stays accepted.
+#   POSIX narrow: `if bash .../wait-cc-exit.sh; then assemble; fi`
+#   PS narrow:    `& pwsh … wait-cc-exit.ps1` then `if ($LASTEXITCODE -eq 0) { assemble }`
+#   exit form:    `if ! bash …; then … exit 0; fi` / `|| { …; exit 0; }` / PS `-ne 0 { …; exit 0 }`
 _guard_skips_assemble() {
     local file="$1" w a to _bound=false _guard_line
     w="$(_wait_ref_line "$file")"
@@ -265,11 +265,15 @@ _guard_skips_assemble() {
 
     _guard_line="$(sed -n "${w}p" "$file")"
 
-    # Pattern 2 — positive-if (narrow skip): `if bash .../wait-cc-exit; then assemble; fi`
-    # Assemble is inside the then-block; no exit 0 needed. hooksPath/doc-append still run.
-    # Accept when guard line is a positive `if` (no `!`) with the wait-cc-exit call.
+    # Pattern 2 — narrow skip: POSIX positive `if` on the guard line, or PS
+    # `if ($LASTEXITCODE -eq 0)` within 3 lines; assemble within 6 lines either way.
     if printf '%s' "$_guard_line" | grep -Eq '^[[:space:]]*if[[:space:]]' \
     && ! printf '%s' "$_guard_line" | grep -q '!' \
+    && [ "$((a - w))" -le 6 ]; then
+        return 0
+    fi
+    if sed -n "$((w + 1)),$((w + 3))p" "$file" \
+        | grep -Eq 'if[[:space:]]*\([[:space:]]*\$LASTEXITCODE[[:space:]]+-eq[[:space:]]+0[[:space:]]*\)' \
     && [ "$((a - w))" -le 6 ]; then
         return 0
     fi
@@ -349,6 +353,14 @@ fi
 
 # --- B5: mutation probes — detectors must discriminate, not merely be red today ---
 
+# _skip_probe <name> <file> <want 0|1> <what>: _guard_skips_assemble must return <want>.
+_skip_probe() {
+    local got=0
+    _guard_skips_assemble "$2" && got=1
+    if [ "$got" = "$3" ]; then pass "$1: skip detector returns $got — $4"
+    else fail "$1: skip detector returned $got, expected $3 — $4"; fi
+}
+
 # B5a: removing the guard reference must make B1 red.
 _mut_guard="$TMP_DIR/dotfileslink-no-guard.sh"
 grep -vE 'wait-cc-exit\.(sh|ps1)' "$SH_FILE" > "$_mut_guard"
@@ -388,13 +400,7 @@ if ! bash "$AGENTS_ROOT/install/lib/wait-cc-exit.sh"; then
 fi
 node "$AGENTS_ROOT/install/assemble-settings.js"
 GOOD_EOF
-_mut_good_skips=0
-_guard_skips_assemble "$_mut_good" && _mut_good_skips=1
-if [ "$_mut_good_skips" = "1" ]; then
-    pass "B5c: B2 detector reports skip present on a correctly guarded caller"
-else
-    fail "B5c: B2 detector gives false-red on a correctly guarded caller"
-fi
+_skip_probe B5c "$_mut_good" 1 "correctly guarded POSIX caller (exit form)"
 
 # B5h: narrow-skip SH — positive-if pattern (assemble in then-block, hooksPath outside) → B2 green.
 _mut_narrow_sh="$TMP_DIR/dotfileslink-narrow.sh"
@@ -407,13 +413,7 @@ if bash "$AGENTS_ROOT/install/lib/wait-cc-exit.sh"; then
 fi
 git config --file "$HOME/.gitconfig" core.hooksPath "$AGENTS_ROOT/hooks"
 NARROW_SH_EOF
-_mut_narrow_sh_skips=0
-_guard_skips_assemble "$_mut_narrow_sh" && _mut_narrow_sh_skips=1
-if [ "$_mut_narrow_sh_skips" = "1" ]; then
-    pass "B5h: B2 detector accepts narrow-skip (positive-if with assemble in then-block)"
-else
-    fail "B5h: B2 detector false-negative on narrow-skip pattern (positive-if)"
-fi
+_skip_probe B5h "$_mut_narrow_sh" 1 "POSIX narrow skip (positive-if with assemble in then-block)"
 
 # B5f: too-early SH — guard before DOTFILESLINK_LINKS_ONLY must fail _guard_scope_ok_dotfiles.
 _mut_early_sh="$TMP_DIR/dotfileslink-too-early.sh"
@@ -464,13 +464,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 node "$PSScriptRoot/../../install/assemble-settings.js"
 GOOD_PS_EOF
-_mut_good_ps_skips=0
-_guard_skips_assemble "$_mut_good_ps" && _mut_good_ps_skips=1
-if [ "$_mut_good_ps_skips" = "1" ]; then
-    pass "B5d: B4 detector reports skip present on a correctly guarded PS caller"
-else
-    fail "B5d: B4 detector gives false-red on a correctly guarded PS caller"
-fi
+_skip_probe B5d "$_mut_good_ps" 1 "correctly guarded PS caller (exit form)"
 
 # B5e: PS noskip — guard without $LASTEXITCODE check must make B4 red.
 _mut_noskip_ps="$TMP_DIR/dotfileslink-noskip.ps1"
@@ -478,13 +472,25 @@ cat > "$_mut_noskip_ps" << 'NOSKIP_PS_EOF'
 & pwsh -NoProfile -File "$PSScriptRoot/../../install/lib/wait-cc-exit.ps1"
 node "$PSScriptRoot/../../install/assemble-settings.js"
 NOSKIP_PS_EOF
-_mut_noskip_ps_skips=0
-_guard_skips_assemble "$_mut_noskip_ps" && _mut_noskip_ps_skips=1
-if [ "$_mut_noskip_ps_skips" = "0" ]; then
-    pass "B5e: B4 detector reports no skip when PS guard exit code is not checked"
-else
-    fail "B5e: B4 detector is false-green when PS guard exit code is not checked"
-fi
+_skip_probe B5e "$_mut_noskip_ps" 0 "PS guard exit code not checked"
+
+# B5i: PS narrow skip (#2476 dotfileslink.ps1 shape) — assemble inside `-eq 0` → green.
+_mut_narrow_ps="$TMP_DIR/dotfileslink-narrow.ps1"
+cat > "$_mut_narrow_ps" << 'NARROW_PS_EOF'
+& pwsh -NoProfile -File (Join-Path $AgentsRoot "install\lib\wait-cc-exit.ps1")
+if ($LASTEXITCODE -eq 0) {
+    & node (Join-Path $AgentsRoot "install\assemble-settings.js")
+    if ($LASTEXITCODE -ne 0) { throw "assemble-settings.js failed (exit $LASTEXITCODE)" }
+} else {
+    Write-Warning "Claude Code still running — skipping settings.json write."
+}
+NARROW_PS_EOF
+_skip_probe B5i "$_mut_narrow_ps" 1 "PS narrow skip (assemble inside if (\$LASTEXITCODE -eq 0))"
+
+# B5j: inverted PS narrow form — assemble inside `-ne 0`, no exit/return → red.
+_mut_inverted_ps="$TMP_DIR/dotfileslink-inverted.ps1"
+sed 's/-eq 0) {$/-ne 0) {/' "$_mut_narrow_ps" > "$_mut_inverted_ps"
+_skip_probe B5j "$_mut_inverted_ps" 0 "inverted PS branch (assemble runs only on timeout)"
 
 echo "---"
 echo "PASS: $PASS  FAIL: $FAIL"

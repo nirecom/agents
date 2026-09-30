@@ -105,19 +105,35 @@ Subgroups are supported through the variable-depth `%2F`-encoded path.
 Epics, roadmap/timeline, `.gitlab-ci.yml`, and a MSYS2 path-correction helper
 for `glab` (added only if a real need appears) are out of scope here.
 
-## 10. Installer DNS reachability guard
+## 10. Installer GitLab reachability guard
 
-Before attempting `glab auth login`, both installer scripts check whether
-`GITLAB_HOSTNAME` resolves via DNS (3-second hard timeout). If resolution
-fails the auth step is skipped with a yellow WARNING; the glab binary itself
-is not removed. This prevents hangs when a `.env` shared from a work machine
-is applied on a personal machine that is off-VPN or otherwise cannot reach the
-corporate GitLab host.
+Before attempting `glab auth login`, both installer scripts open a TCP
+connection to `GITLAB_HOSTNAME` on port 443, with a 3-second hard limit that
+covers name resolution and the connect together. If the connection fails or
+times out, the auth step is skipped with a yellow WARNING
+(`Cannot connect to <host>:<port> ...`); the glab binary itself is not
+removed. This prevents a long `glab auth login` hang when a `.env` names a
+host this network cannot reach.
 
-The `glab auth status` credential-probe fallback was removed from both
-installers at the same time: it could silently probe cached credentials for an
-unreachable host, bypassing the DNS guard.
+The guard used to check DNS resolution only. That did not work: a host this
+network cannot reach can still resolve through public DNS, so the guard passed
+and `glab auth login` waited about 10 seconds before failing.
 
-Timeout mechanism by platform: `timeout 3 getent hosts` on Linux; a
-`gtimeout`/`timeout`/POSIX kill-after chain on macOS; PowerShell
-`Start-Job` + `Wait-Job -Timeout 3` on Windows.
+Probe mechanism by platform:
+
+- Windows: `TcpClient.ConnectAsync` + `Wait(3000)`. `Start-Job` was dropped
+  because starting the job alone takes about 0.4 seconds.
+- Linux / macOS: bash `/dev/tcp`, bounded by the first available of
+  `timeout`, `gtimeout`, or a background + kill-after fallback. The probe is
+  OS-independent; bash's own connect diagnostics are discarded.
+
+The SSH host (`GITLAB_SSH_HOSTNAME`, port 22) is not probed. `GLAB_PROBE_PORT`
+overrides the probed port for tests only; it is not a user setting.
+
+The `glab auth status` credential-probe fallback stays removed from both
+installers: it could silently probe cached credentials for an unreachable
+host, bypassing the guard.
+
+When the guard passes, the installers hand the token to `glab auth login
+--stdin` instead of `--token <value>`, so the token never appears on a
+process command line.

@@ -6,6 +6,8 @@
 # TL2 — real script execution with mocked process/update stubs.
 # TL3 gap: real fnm/node/npm/network operations; see wait-helper.sh TL3 gap.
 set -u
+# #2476 result memo: the PS path inherits the parent env; keep a leftover value out.
+unset WAIT_CC_RESULT
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CC_SH="$AGENTS_DIR/install/linux/claude-code.sh"

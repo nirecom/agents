@@ -8,6 +8,8 @@
 # Tests: install/lib/wait-cc-exit.sh, install/lib/wait-cc-exit.ps1
 # Tags: installer, wait-cc-exit, pwsh-required, scope:issue-specific
 set -u
+# #2476 result memo: a leftover WAIT_CC_RESULT would short-circuit every case below.
+unset WAIT_CC_RESULT
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 WAIT_SH="$AGENTS_DIR/install/lib/wait-cc-exit.sh"
@@ -88,6 +90,7 @@ else
     fi
 
     _rc="$(run_wait_sh alive-until 2)"
+    _a3_err="$(cat "$TMP_DIR/helper-stderr")"
     _calls=0
     [ -f "$COUNTER_FILE" ] && _calls="$(cat "$COUNTER_FILE")"
     if [ "$_rc" = "0" ] && [ "$_calls" -gt 1 ]; then
@@ -104,11 +107,14 @@ else
         fail "A7: wait-cc-exit.sh missing WAIT_CC_POLL_INTERVAL:-3 or WAIT_CC_MAX_POLLS:-10"
     fi
 
-    # A8: must detect process by the exact name "claude", not "claude-code" or similar.
-    if grep -qE 'pgrep[[:space:]].*-x[[:space:]]+"?claude"?' "$WAIT_SH"; then
-        pass "A8: wait-cc-exit.sh detects process via pgrep -x \"claude\""
-    else
+    # A8: must detect process by the exact name "claude", not "claude-code" or similar,
+    # and (#2476) list the PID pgrep reported (the alive-until run above).
+    if ! grep -qE 'pgrep[[:space:]].*-x[[:space:]]+"?claude"?' "$WAIT_SH"; then
         fail "A8: wait-cc-exit.sh does not use pgrep -x \"claude\" (wrong/missing process name)"
+    elif ! printf '%s' "$_a3_err" | grep -q 'PID 12345'; then
+        fail "A8: wait-cc-exit.sh does not list the waited PID (no 'PID 12345' on stderr)"
+    else
+        pass "A8: wait-cc-exit.sh detects process via pgrep -x \"claude\" and lists PID 12345"
     fi
 fi
 
@@ -164,11 +170,13 @@ else
         fail "A9: wait-cc-exit.ps1 missing WAIT_CC_POLL_INTERVAL=3 or WAIT_CC_MAX_POLLS=10 defaults"
     fi
 
-    # A10: must use "claude" as the exact process name
-    if grep -iE 'Get-Process[[:space:]]+-Name' "$WAIT_PS" | grep -qi '"claude"'; then
-        pass "A10: wait-cc-exit.ps1 detects process via Get-Process -Name \"claude\""
+    # A10: must use "claude" as the exact process name and (#2476) filter each
+    # process through Test-CCWaitTarget (Desktop app shell exclusion).
+    if grep -iE 'Get-Process[[:space:]]+-Name' "$WAIT_PS" | grep -qi '"claude"' \
+    && grep -q 'Test-CCWaitTarget' "$WAIT_PS"; then
+        pass "A10: wait-cc-exit.ps1 uses Get-Process -Name \"claude\" filtered by Test-CCWaitTarget"
     else
-        fail "A10: wait-cc-exit.ps1 does not use Get-Process -Name \"claude\""
+        fail "A10: wait-cc-exit.ps1 lacks Get-Process -Name \"claude\" or the Test-CCWaitTarget filter"
     fi
 fi
 
