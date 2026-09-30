@@ -136,7 +136,7 @@ win-root        ~ bash "@WIN@\bin\fx-bash"                           ~ -     ~ B
 msys-root       ~ bash "@MSYS@/bin/fx-bash"                          ~ -     ~ BG-ALLOW-SELF-SCRIPT
 rel-at-root     ~ bash bin/fx-bash                                   ~ ROOT  ~ BG-ALLOW-SELF-SCRIPT
 abs-bad-cwd     ~ bash "@ROOT@/bin/fx-bash"                          ~ OTHER ~ BG-ALLOW-SELF-SCRIPT
-dotdot         ~ bash "$AGENTS_CONFIG_DIR/bin/../bin/fx-bash"       ~ -     ~ null
+dotdot          ~ bash "$AGENTS_CONFIG_DIR/bin/../bin/fx-bash"       ~ -     ~ null
 rel-other-cwd   ~ bash bin/fx-bash                                   ~ OTHER ~ null
 rel-no-cwd      ~ bash bin/fx-bash                                   ~ -     ~ null
 root-lookalike  ~ bash "@ROOT@-evil/bin/fx-bash"                     ~ -     ~ null
@@ -208,6 +208,7 @@ case_end
 # or notify. bashc-outer-and: a separator OUTSIDE the quotes is still judged as before.
 # arg-*: an unsafe construct in an ARGUMENT (not the script path) never earns allow; plain
 # forms keep their existing deny, and an embedded newline (quoted or bare) keeps the prompt.
+# bashc-git-*: a read-only body that is not a self-script is not unwrapped for the read-only allow.
 case_begin "self-script-real-bash-c-and-args" "hooks/bash-guard/judge.js"
 bg_batched_stdin w2_real_rows <<'TABLE'
 bashc-cd-real      ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_X on' ~ - ~ - ~ allow|BG-ALLOW-SELF-SCRIPT
@@ -232,5 +233,92 @@ arg-heredoc-bashc-cd ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_
 arg-redir-in       ~ bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on < in.txt ~ -       ~ -    ~ passThrough|BG-NO-HIT
 arg-redir-in-bashc ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on < in.txt' ~ - ~ - ~ passThrough|BG-NO-HIT
 arg-redir-in-bashc-cd ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on < in.txt' ~ - ~ - ~ passThrough|BG-NO-HIT
+bashc-git-status   ~ bash -c 'git status'                                    ~ -       ~ -    ~ passThrough|BG-NO-HIT
+bashc-cd-git-log   ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && git log --oneline -5' ~ -    ~ -    ~ passThrough|BG-NO-HIT
 TABLE
+# arg-crsep-bashc: a CR in the body keeps the prompt like a newline; mkcmd cannot carry \r, so
+# off-table. Built outside $(...): Git Bash drops a $'\r' written inside a command substitution.
+BG_CR=$'\r'
+BG_CRSEP_CMD="bash -c 'bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" X on${BG_CR}rm -f x'"
+ROWS=$((ROWS + 1))
+assert_eq "W2/arg-crsep-bashc: the command text really carries a CR (vacuity guard)" \
+    "yes" "$([[ "${#BG_CR}" == 1 && "$BG_CRSEP_CMD" == *"$BG_CR"* ]] && echo yes || echo no)"
+assert_eq "W2/arg-crsep-bashc: verdict|code" "passThrough|BG-NO-HIT" "$(verdict_code_of "$BG_CRSEP_CMD")"
+case_end
+
+# F1 (#2265 review_security): an unrelated dir whose one-line `.git` FILE names a nonexistent
+# <real common dir>/worktrees/<name> is not a linked worktree of the agents checkout, so a
+# script listed in ITS OWN install/settings-allow-commands.txt must not earn allow. Nothing is
+# written under the real common dir; the forged gitdir path is only named, never created.
+FG_ROOT="$TMPROOT/f1-forged-agents"
+mkdir -p "$FG_ROOT/install" "$FG_ROOT/bin"
+printf '%s\n' '# forged allow list' 'bin/fg-x' > "$FG_ROOT/install/settings-allow-commands.txt"
+: > "$FG_ROOT/install/path-exposed-commands.txt"
+printf '%s\n' '#!/usr/bin/env bash' 'true' > "$FG_ROOT/bin/fg-x"
+FG_COMMON="$(git -C "$AGENTS_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+FG_GHOST="$(node_path "${FG_COMMON:-/nonexistent}")/worktrees/bg-f1-ghost-${TMPROOT##*.}"
+printf 'gitdir: %s\n' "$FG_GHOST" > "$FG_ROOT/.git"
+FG_M="$(node_path "$FG_ROOT")"
+
+case_begin "self-script-forged-gitdir-checkout" "hooks/bash-guard/judge.js"
+assert_eq "F1 vacuity: the agents checkout's common dir was resolved" "yes" \
+    "$([[ -n "$FG_COMMON" && -d "$FG_COMMON" ]] && echo yes || echo no)"
+assert_eq "F1 vacuity: the forged gitdir really does not exist" "absent" \
+    "$([[ -e "$FG_GHOST" ]] && echo present || echo absent)"
+ROWS=$((ROWS + 2))
+assert_eq "W2/f1-forged-abs: verdict|code" "passThrough|BG-NO-HIT" \
+    "$(verdict_code_of "bash \"$FG_M/bin/fg-x\"")"
+assert_eq "W2/f1-forged-bashc-cd: verdict|code" "passThrough|BG-NO-HIT" \
+    "$(verdict_code_of "bash -c 'cd \"$FG_M\" && bash bin/fg-x'")"
+case_end
+
+# Same fixture shape, differing only in genuineness: a git-initialized fixture agents root whose
+# REAL linked worktree carries the identical list + script is allow (control), while the forged
+# twin against that same root is not. So the forged rows above fail on identity, not on shape.
+GF_MAIN="$TMPROOT/f1-genuine-agents"; GF_WT="$TMPROOT/f1-genuine-wt"; GF_FORGED="$TMPROOT/f1-forged-twin"
+for gf_dir in "$GF_MAIN" "$GF_FORGED"; do
+    mkdir -p "$gf_dir/install" "$gf_dir/bin"
+    cp "$FG_ROOT/install/settings-allow-commands.txt" "$FG_ROOT/install/path-exposed-commands.txt" "$gf_dir/install/"
+    cp "$FG_ROOT/bin/fg-x" "$gf_dir/bin/fg-x"
+done
+harness_git_init "$GF_MAIN"
+git -C "$GF_MAIN" config core.autocrlf false
+git -C "$GF_MAIN" add -A
+git -C "$GF_MAIN" -c user.email=fixture@example.com -c user.name=fixture commit -qm fixture
+git -C "$GF_MAIN" worktree add -q "$GF_WT" 2>/dev/null
+printf 'gitdir: %s\n' "$(node_path "$GF_MAIN/.git/worktrees")/ghost-twin" > "$GF_FORGED/.git"
+GF_MAIN_M="$(node_path "$GF_MAIN")"; GF_WT_M="$(node_path "$GF_WT")"; GF_FORGED_M="$(node_path "$GF_FORGED")"
+
+case_begin "self-script-genuine-worktree-vs-forged-twin" "hooks/bash-guard/allow.js"
+assert_eq "F1 vacuity: the genuine worktree carries the listed script" "yes" \
+    "$([[ -f "$GF_WT/bin/fg-x" && -f "$GF_WT/.git" ]] && echo yes || echo no)"
+ROWS=$((ROWS + 3))
+assert_eq "W1/f1-genuine-wt-abs: matchSelfScript" "BG-ALLOW-SELF-SCRIPT" \
+    "$(BG_PROBE_AGENTS_ROOT="$GF_MAIN_M" probe self-script "bash \"$GF_WT_M/bin/fg-x\"")"
+assert_eq "W1/f1-genuine-wt-bashc-cd: matchSelfScript" "BG-ALLOW-SELF-SCRIPT" \
+    "$(BG_PROBE_AGENTS_ROOT="$GF_MAIN_M" probe self-script "bash -c 'cd \"$GF_WT_M\" && bash bin/fg-x'")"
+assert_eq "W1/f1-forged-twin-abs: matchSelfScript" "null" \
+    "$(BG_PROBE_AGENTS_ROOT="$GF_MAIN_M" probe self-script "bash \"$GF_FORGED_M/bin/fg-x\"")"
+ROWS=$((ROWS + 1))
+assert_eq "W1/f1-forged-twin-bashc-cd: matchSelfScript" "null" \
+    "$(BG_PROBE_AGENTS_ROOT="$GF_MAIN_M" probe self-script "bash -c 'cd \"$GF_FORGED_M\" && bash bin/fg-x'")"
+case_end
+
+# The `.git` DIRECTORY form of the forgery: a twin whose `.git` is a directory link to the
+# FIXTURE root's .git (never the real repo's, so the tmp cleanup cannot reach outside TMPROOT).
+GF_JUNC="$TMPROOT/f1-junction-twin"
+mkdir -p "$GF_JUNC/install" "$GF_JUNC/bin"
+cp "$FG_ROOT/install/settings-allow-commands.txt" "$FG_ROOT/install/path-exposed-commands.txt" "$GF_JUNC/install/"
+cp "$FG_ROOT/bin/fg-x" "$GF_JUNC/bin/fg-x"
+GF_JUNC_M="$(node_path "$GF_JUNC")"
+
+case_begin "self-script-linked-dot-git-twin" "hooks/bash-guard/allow.js"
+ROWS=$((ROWS + 1))
+if run_with_timeout 30 node -e 'require("fs").symlinkSync(process.argv[1], process.argv[2], "junction")' \
+    "$(node_path "$GF_MAIN/.git")" "$GF_JUNC_M/.git" 2>/dev/null; then
+    assert_eq "W1/f1-junction-twin-abs: matchSelfScript" "null" \
+        "$(BG_PROBE_AGENTS_ROOT="$GF_MAIN_M" probe self-script "bash \"$GF_JUNC_M/bin/fg-x\"")"
+else
+    skip "W1/f1-junction-twin-abs: directory link creation failed on this host"
+fi
 case_end

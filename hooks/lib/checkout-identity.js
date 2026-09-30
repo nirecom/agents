@@ -1,11 +1,11 @@
 "use strict";
 // hooks/lib/checkout-identity.js — "is this directory a checkout of THAT repository?", from git
-// metadata alone (file reads, no subprocess).
-//
-// Repository identity is the git COMMON dir: a main checkout answers `<root>/.git`, and every
-// linked worktree answers that same directory, because its `.git` FILE points into
-// `<main>/.git/worktrees/<name>` and git records the way back in that directory's `commondir`.
-// Shared by the run_tests provenance check and the bash-guard self-script allow resolver.
+// metadata alone (no subprocess). Shared by run_tests provenance and the bash-guard allow resolver.
+// Identity is the git COMMON dir: a main checkout's `<root>/.git`, or, for a linked worktree whose
+// `.git` FILE points at `<common>/worktrees/<name>`, the dir that registration's `commondir` names.
+// A one-line `gitdir:` pointer is forgeable, so it counts only when git's registration agrees: the
+// gitdir is a direct child of `<common>/worktrees/`, has a `commondir`, and its `gitdir`
+// back-reference names THIS `.git`. A `.git` that is itself a symlink or junction is rejected.
 
 const fs = require("fs");
 const path = require("path");
@@ -35,28 +35,49 @@ function gitCommonDir(root) {
   const dotGit = path.join(root, ".git");
   let st;
   try {
-    st = fs.statSync(dotGit);
+    st = fs.lstatSync(dotGit);
   } catch (_e) {
     return null;
   }
-  if (st.isDirectory()) return realpathOrNull(dotGit);
+  if (st.isSymbolicLink()) return null;
+  const realDotGit = realpathOrNull(dotGit);
+  if (realDotGit === null) return null;
+
+  if (st.isDirectory()) {
+    const realRoot = realpathOrNull(root);
+    if (realRoot === null || !samePath(realDotGit, path.join(realRoot, ".git"))) return null;
+    return realDotGit;
+  }
   if (!st.isFile()) return null;
+  return linkedWorktreeCommonDir(dotGit, realDotGit, root);
+}
 
-  let gitdir;
+function readTrimmedOrEmpty(p) {
   try {
-    const m = /^\s*gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(dotGit, "utf8"));
-    if (m === null) return null;
-    gitdir = path.resolve(root, m[1]);
+    return fs.readFileSync(p, "utf8").trim();
   } catch (_e) {
-    return null;
+    return "";
   }
+}
 
-  // A missing `commondir` falls back to the documented `worktrees/<name>` nesting.
-  try {
-    const rel = fs.readFileSync(path.join(gitdir, "commondir"), "utf8").trim();
-    if (rel !== "") return realpathOrNull(path.resolve(gitdir, rel));
-  } catch (_e) { /* no commondir file */ }
-  return realpathOrNull(path.resolve(gitdir, "..", ".."));
+// `.git` FILE form: accept only when git's registration of the worktree agrees (see header).
+function linkedWorktreeCommonDir(dotGit, realDotGit, root) {
+  const m = /^\s*gitdir:\s*(.+?)\s*$/m.exec(readTrimmedOrEmpty(dotGit));
+  if (m === null) return null;
+  const gitdir = realpathOrNull(path.resolve(root, normalizeCwd(m[1]) || m[1]));
+  if (gitdir === null) return null;
+
+  const rel = readTrimmedOrEmpty(path.join(gitdir, "commondir"));
+  if (rel === "") return null;
+  const common = realpathOrNull(path.resolve(gitdir, rel));
+  if (common === null || !samePath(path.dirname(gitdir), path.join(common, "worktrees"))) return null;
+
+  // `git worktree add --relative-paths` writes the back-reference relative to the gitdir.
+  const backref = readTrimmedOrEmpty(path.join(gitdir, "gitdir"));
+  if (backref === "") return null;
+  const realBackref = realpathOrNull(path.resolve(gitdir, normalizeCwd(backref) || backref));
+  if (realBackref === null || !samePath(realBackref, realDotGit)) return null;
+  return common;
 }
 
 /**

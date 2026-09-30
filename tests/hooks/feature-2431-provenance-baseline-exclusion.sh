@@ -267,6 +267,39 @@ esac
 
 case_end
 
+# ============================================================================
+case_begin "provenance-baseline-exclusion-sibling-module" "hooks/workflow-run-tests/provenance-identity.js"
+# ============================================================================
+
+# P2x: the module lives in the MAIN checkout and the emitter in a sibling linked worktree, so
+# the only root that can vouch is cwdRoot. A fresh worktree, because P2 already marked PROV_WT.
+PROV_WT2="$TMPD/prov-wt2"
+git -C "$PROV_MAIN" worktree add --detach "$PROV_WT2" HEAD >/dev/null 2>&1
+PROV_WT2_WIN="$(np "$PROV_WT2")"
+PROV_MAIN_JS="$(np "$PROV_MAIN")/hooks/workflow-run-tests/provenance-identity.js"
+
+# P2x-control: unmarked, the sibling is accepted as cwdRoot (so P2x below is not vacuous).
+_p2xc=$(verify_emitter "run-all" "$PROV_WT2_WIN/tests/run-all.sh" "$PROV_WT2_WIN" "$PROV_MAIN_JS")
+case "$_p2xc" in
+    run-all) pass "P2x-control/unmarked-sibling-trusted-via-cwd-root" ;;
+    *)       fail "P2x-control/unmarked-sibling-trusted-via-cwd-root" "got $_p2xc" ;;
+esac
+
+# P2x: once the sibling is marked, cwdRoot is skipped and the main module's own root does not match.
+PROV_WT2_GITDIR="$(get_gitdir "$PROV_WT2_WIN")"
+run_with_timeout 30 node "$(np "$MARKER_JS")" mark "$PROV_WT2_WIN" 2>/dev/null || true
+if [ -n "$PROV_WT2_GITDIR" ] && [ -f "$PROV_WT2_GITDIR/agents-baseline-checkout" ]; then
+    _p2x=$(verify_emitter "run-all" "$PROV_WT2_WIN/tests/run-all.sh" "$PROV_WT2_WIN" "$PROV_MAIN_JS")
+    case "$_p2x" in
+        "(none)") pass "P2x/marked-sibling-not-trusted-by-main-module" ;;
+        *)        fail "P2x/marked-sibling-not-trusted-by-main-module" "got $_p2x" ;;
+    esac
+else
+    fail "P2x/marked-sibling-not-trusted-by-main-module" "fixture marker not written in '$PROV_WT2_GITDIR'"
+fi
+
+case_end
+
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

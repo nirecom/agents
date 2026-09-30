@@ -36,7 +36,7 @@ commit_one() {
 harness_git_init "$T/main"; commit_one "$T/main"
 git -C "$T/main" worktree add -q "$T/wt" 2>/dev/null
 git -C "$T/main" worktree add -q "$T/wt2" 2>/dev/null
-# wt2 loses its commondir file: identity must come from the worktrees/<name> nesting fallback.
+# wt2 loses its commondir file: with no `../..` nesting fallback (F1) it is no longer a checkout.
 rm -f "$T/main/.git/worktrees/wt2/commondir"
 harness_git_init "$T/foreign"; commit_one "$T/foreign"
 git -C "$T/foreign" worktree add -q "$T/fakewt" 2>/dev/null
@@ -64,7 +64,7 @@ const hit = Object.keys(labels).find((k) => canon(labels[k]) === canon(String(ou
 process.stdout.write(hit || `OTHER:${out}`);
 JS
 probe() {
-  CI_LABELS="{\"MAIN_GIT\":\"$(np "$T/main/.git")\",\"FOREIGN_GIT\":\"$(np "$T/foreign/.git")\",\"MAIN\":\"$(np "$T/main")\",\"WT\":\"$(np "$T/wt")\",\"WT2\":\"$(np "$T/wt2")\",\"NESTED\":\"$(np "$T/main/vendor/nested")\",\"FAKEWT\":\"$(np "$T/fakewt")\",\"FOREIGN\":\"$(np "$T/foreign")\"}" \
+  CI_LABELS="{\"MAIN_GIT\":\"$(np "$T/main/.git")\",\"FOREIGN_GIT\":\"$(np "$T/foreign/.git")\",\"MAIN\":\"$(np "$T/main")\",\"WT\":\"$(np "$T/wt")\",\"WT2\":\"$(np "$T/wt2")\",\"NESTED\":\"$(np "$T/main/vendor/nested")\",\"FAKEWT\":\"$(np "$T/fakewt")\",\"FOREIGN\":\"$(np "$T/foreign")\",\"WTREL\":\"$(np "$T/wtrel")\",\"WT4\":\"$(np "$T/wt4")\"}" \
     run_with_timeout 30 node "$(np "$T/probe.js")" "$(np "$CI_MODULE")" "$@"
 }
 
@@ -91,7 +91,7 @@ case_begin "git-common-dir-main-and-worktrees" "hooks/lib/checkout-identity.js"
 ci_table <<'TABLE'
 gitCommonDir | main    | - | MAIN_GIT    | main checkout (.git directory) -> its .git
 gitCommonDir | wt      | - | MAIN_GIT    | linked worktree (.git file -> commondir) -> main .git
-gitCommonDir | wt2     | - | MAIN_GIT    | worktree without commondir -> worktrees/<name> fallback
+gitCommonDir | wt2     | - | null        | worktree without commondir -> null (no ../.. fallback)
 gitCommonDir | foreign | - | FOREIGN_GIT | foreign repo -> its own .git
 gitCommonDir | fakewt  | - | FOREIGN_GIT | worktree of the foreign repo -> foreign .git
 TABLE
@@ -110,7 +110,7 @@ ci_table <<'TABLE'
 checkoutRootOf | main/sub/deep | main | MAIN | main subdirectory -> main root
 checkoutRootOf | wt/sub        | main | WT   | linked worktree subdirectory -> worktree root
 checkoutRootOf | wt            | main | WT   | linked worktree root itself -> worktree root
-checkoutRootOf | wt2           | main | WT2  | worktree without commondir -> worktree root
+checkoutRootOf | wt2           | main | null | worktree without commondir -> null (no ../.. fallback)
 TABLE
 case_end
 
@@ -123,6 +123,219 @@ checkoutRootOf | main/vendor/nested/sub | main  | null | nested foreign repo ins
 checkoutRootOf | main/sub               | plain | null | anchor that is not a checkout -> null
 TABLE
 check "checkout-identity: all 17 table rows executed" "17" "$CI_ROWS"
+case_end
+
+# F1 (#2265 review_security): a `.git` FILE is a linked worktree only when its gitdir exists
+# directly under <common>/worktrees/ and that gitdir's `gitdir` back-reference names THIS
+# `.git`; a `.git` DIRECTORY only when it is not a link to another checkout's `.git`.
+# forged: gitdir names a nonexistent worktrees/<name> of main (one-line forgery).
+# stolen: gitdir names wt's REAL registration, whose back-reference names wt, not stolen.
+# outside: a hand-made gitdir outside <common>/worktrees/ with commondir + gitdir back-reference.
+mkdir -p "$T/forged/sub" "$T/stolen/sub" "$T/outside/sub" "$T/outside-gd"
+printf 'gitdir: %s\n' "$(np "$T/main/.git/worktrees/ghost-forged")" > "$T/forged/.git"
+printf 'gitdir: %s\n' "$(np "$T/main/.git/worktrees/wt")" > "$T/stolen/.git"
+printf '%s\n' "$(np "$T/main/.git")" > "$T/outside-gd/commondir"
+printf '%s\n' "$(np "$T/outside/.git")" > "$T/outside-gd/gitdir"
+printf 'gitdir: %s\n' "$(np "$T/outside-gd")" > "$T/outside/.git"
+# junction: an unrelated dir whose `.git` is a directory link to main's real `.git`.
+# mainlink: the whole main checkout reached through a link (control: must stay accepted).
+mkdir -p "$T/junction/sub"
+ci_link() {
+  run_with_timeout 30 node -e 'require("fs").symlinkSync(process.argv[1], process.argv[2], "junction")' "$(np "$1")" "$(np "$2")" 2>/dev/null
+}
+CI_LINKS=yes
+ci_link "$T/main/.git" "$T/junction/.git" || CI_LINKS=no
+ci_link "$T/main" "$T/mainlink" || CI_LINKS=no
+
+case_begin "f1-forged-gitdir-rejected" "hooks/lib/checkout-identity.js"
+CI_ROWS=0
+check "F1 vacuity: forged gitdir target really does not exist" "absent" \
+  "$([[ -e "$T/main/.git/worktrees/ghost-forged" ]] && echo present || echo absent)"
+check "F1 vacuity: stolen gitdir is wt's real registration" "yes" \
+  "$([[ -f "$T/main/.git/worktrees/wt/gitdir" ]] && echo yes || echo no)"
+ci_table <<'TABLE'
+gitCommonDir   | forged      | -    | null | (a) .git file -> nonexistent main worktrees/<name> -> null
+checkoutRootOf | forged/sub  | main | null | (a) forged worktree subdirectory -> null
+gitCommonDir   | stolen      | -    | null | (b) .git file -> another worktree's registration -> null
+checkoutRootOf | stolen/sub  | main | null | (b) stolen registration subdirectory -> null
+gitCommonDir   | outside     | -    | null | (c) gitdir outside <common>/worktrees/ -> null
+checkoutRootOf | outside/sub | main | null | (c) out-of-tree gitdir subdirectory -> null
+TABLE
+check "F1: all 6 forged-gitdir rows executed" "6" "$CI_ROWS"
+case_end
+
+case_begin "f1-linked-dot-git-directory-rejected" "hooks/lib/checkout-identity.js"
+if [[ "$CI_LINKS" == yes ]]; then
+  CI_ROWS=0
+  ci_table <<'TABLE'
+gitCommonDir   | junction     | -    | null     | (d) .git linked to main's .git -> null
+checkoutRootOf | junction/sub | main | null     | (d) linked-.git subdirectory -> null
+gitCommonDir   | mainlink     | -    | MAIN_GIT | control: whole checkout reached through a link -> main .git
+checkoutRootOf | mainlink/sub | main | MAIN     | control: linked checkout subdirectory -> main root
+TABLE
+  check "F1: all 4 linked-.git rows executed" "4" "$CI_ROWS"
+else
+  skip "F1 (d): directory link creation failed on this host"
+fi
+case_end
+
+# (e) controls: genuine checkouts built by `git init` / `git worktree add` keep resolving.
+case_begin "f1-genuine-checkouts-still-accepted" "hooks/lib/checkout-identity.js"
+CI_ROWS=0
+ci_table <<'TABLE'
+gitCommonDir   | main          | -    | MAIN_GIT | control: genuine main checkout -> main .git
+gitCommonDir   | wt            | -    | MAIN_GIT | control: genuine linked worktree -> main .git
+checkoutRootOf | main/sub/deep | main | MAIN     | control: genuine main subdirectory -> main root
+checkoutRootOf | wt/sub        | wt   | WT       | control: genuine worktree anchored on itself -> worktree root
+TABLE
+check "F1: all 4 genuine-checkout rows executed" "4" "$CI_ROWS"
+case_end
+
+# decoy: a gitdir that mimics `worktrees/x` by NAME only, under a lookalike dir outside the real
+# <common>/worktrees/, with a correct back-reference and commondir -> main .git.
+mkdir -p "$T/decoy/sub" "$T/decoyco/worktrees/x"
+printf 'gitdir: %s\n' "$(np "$T/decoyco/worktrees/x")" > "$T/decoy/.git"
+printf '%s\n' "$(np "$T/decoy/.git")" > "$T/decoyco/worktrees/x/gitdir"
+printf '%s\n' "$(np "$T/main/.git")" > "$T/decoyco/worktrees/x/commondir"
+# wt3: a real registration whose `<gitdir>/gitdir` back-reference file was deleted.
+git -C "$T/main" worktree add -q "$T/wt3" 2>/dev/null
+mkdir -p "$T/wt3/sub"
+rm -f "$T/main/.git/worktrees/wt3/gitdir"
+
+case_begin "f1-decoy-and-missing-backref-rejected" "hooks/lib/checkout-identity.js"
+check "F1 vacuity: decoy gitdir exists" "yes" "$([[ -d "$T/decoyco/worktrees/x" ]] && echo yes || echo no)"
+check "F1 vacuity: decoy back-reference names decoy/.git" "$(np "$T/decoy/.git")" \
+  "$(tr -d '\r\n' < "$T/decoyco/worktrees/x/gitdir")"
+check "F1 vacuity: wt3 registration exists without its back-reference" "yes" \
+  "$([[ -f "$T/main/.git/worktrees/wt3/commondir" && ! -e "$T/main/.git/worktrees/wt3/gitdir" ]] && echo yes || echo no)"
+CI_ROWS=0
+ci_table <<'TABLE'
+gitCommonDir   | decoy      | -    | null | decoy worktrees/x outside <common>/worktrees/ -> null
+checkoutRootOf | decoy/sub  | main | null | decoy worktrees/x subdirectory -> null
+gitCommonDir   | wt3        | -    | null | registration with its gitdir back-reference deleted -> null
+checkoutRootOf | wt3/sub    | main | null | back-reference-less registration subdirectory -> null
+TABLE
+check "F1: all 4 decoy/back-reference rows executed" "4" "$CI_ROWS"
+case_end
+
+# symfile: an unrelated dir whose `.git` FILE is a symlink to wt's genuine `.git` file. The
+# back-reference names wt/.git, so this dir must not inherit wt's identity.
+mkdir -p "$T/symfile/sub"
+case_begin "f1-symlinked-dot-git-file-rejected" "hooks/lib/checkout-identity.js"
+if run_with_timeout 30 node -e 'require("fs").symlinkSync(process.argv[1], process.argv[2], "file")' \
+    "$(np "$T/wt/.git")" "$(np "$T/symfile/.git")" 2>/dev/null; then
+  CI_ROWS=0
+  ci_table <<'TABLE'
+gitCommonDir   | symfile     | -    | null | .git file symlinked to wt's .git file -> null
+checkoutRootOf | symfile/sub | main | null | symlinked-.git-file subdirectory -> null
+TABLE
+  check "F1: all 2 symlinked-.git-file rows executed" "2" "$CI_ROWS"
+else
+  skip "F1: file symlink creation failed on this host (symlinked .git file rows)"
+fi
+case_end
+
+# wtrel: genuine worktree with RELATIVE gitdir / back-reference (git >= 2.48).
+# wt4: genuine worktree whose `.git` file is rewritten to reach its registration through `..`.
+# dotdot: a forged `..` spelling that lands on a nonexistent worktrees/<name>.
+git -C "$T/main" worktree add -q "$T/wt4" 2>/dev/null
+mkdir -p "$T/wt4/sub" "$T/dotdot/sub"
+printf 'gitdir: %s\n' "$(np "$T/main/.git/worktrees")/../worktrees/wt4" > "$T/wt4/.git"
+printf 'gitdir: %s\n' "$(np "$T/main/.git/worktrees")/wt/../ghost-dotdot" > "$T/dotdot/.git"
+
+case_begin "f1-dotdot-gitdir-spellings" "hooks/lib/checkout-identity.js"
+CI_ROWS=0
+ci_table <<'TABLE'
+gitCommonDir   | wt4        | -    | MAIN_GIT | control: genuine registration reached via .. -> main .git
+checkoutRootOf | wt4/sub    | main | WT4      | control: genuine .. -spelled worktree subdirectory -> root
+gitCommonDir   | dotdot     | -    | null     | forged .. spelling onto a nonexistent worktrees/<name> -> null
+checkoutRootOf | dotdot/sub | main | null     | forged .. spelling subdirectory -> null
+TABLE
+check "F1: all 4 dotdot rows executed" "4" "$CI_ROWS"
+case_end
+
+case_begin "f1-relative-paths-worktree-accepted" "hooks/lib/checkout-identity.js"
+if git -C "$T/main" worktree add -q --relative-paths "$T/wtrel" 2>/dev/null; then
+  mkdir -p "$T/wtrel/sub"
+  check "F1 vacuity: wtrel back-reference is relative" "relative" \
+    "$(grep -Eq '^([A-Za-z]:|/)' "$T/main/.git/worktrees/wtrel/gitdir" && echo absolute || echo relative)"
+  CI_ROWS=0
+  ci_table <<'TABLE'
+gitCommonDir   | wtrel     | -    | MAIN_GIT | control: --relative-paths worktree -> main .git
+checkoutRootOf | wtrel/sub | main | WTREL    | control: --relative-paths worktree subdirectory -> root
+TABLE
+  check "F1: all 2 relative-paths rows executed" "2" "$CI_ROWS"
+else
+  skip "F1: git worktree add --relative-paths unsupported by this git"
+fi
+case_end
+
+# Windows spellings of the same genuine checkouts: case-folded, lowercase drive, MSYS /c/...
+case_begin "f1-win32-path-spellings-accepted" "hooks/lib/checkout-identity.js"
+CI_WT="$(np "$T/wt")"; CI_MAIN="$(np "$T/main")"
+if [[ "$CI_WT" =~ ^([A-Za-z]):(/.*)$ ]]; then
+  CI_WT_MSYS="/${BASH_REMATCH[1],,}${BASH_REMATCH[2]}"
+  [[ "$CI_MAIN" =~ ^([A-Za-z]):(/.*)$ ]]
+  CI_MAIN_MSYS="/${BASH_REMATCH[1],,}${BASH_REMATCH[2]}"
+  check "gitCommonDir: upper-cased worktree spelling -> main .git" "MAIN_GIT" "$(probe gitCommonDir "${CI_WT^^}")"
+  check "gitCommonDir: lower-cased worktree spelling -> main .git" "MAIN_GIT" "$(probe gitCommonDir "${CI_WT,,}")"
+  check "gitCommonDir: lowercase-drive worktree spelling -> main .git" "MAIN_GIT" "$(probe gitCommonDir "${CI_WT,}")"
+  check "gitCommonDir: lower-cased main spelling -> main .git" "MAIN_GIT" "$(probe gitCommonDir "${CI_MAIN,,}")"
+  check "checkoutRootOf: upper-cased worktree under lower-cased anchor -> worktree root" "WT" \
+    "$(probe checkoutRootOf "${CI_WT^^}/SUB" "${CI_MAIN,,}")"
+  check "checkoutRootOf: MSYS worktree spelling under MSYS anchor -> worktree root" "WT" \
+    "$(probe checkoutRootOf "$CI_WT_MSYS/sub" "$CI_MAIN_MSYS")"
+  check "checkoutRootOf: MSYS main subdirectory under native anchor -> main root" "MAIN" \
+    "$(probe checkoutRootOf "$CI_MAIN_MSYS/sub/deep" "$CI_MAIN")"
+else
+  skip "F1: Windows drive-letter spellings not applicable on this host"
+fi
+case_end
+
+# decoy2: a `..` spelling that climbs OUT of <common>/worktrees/ into a lookalike
+# decoyco2/worktrees/x carrying a correct back-reference and commondir -> main .git.
+mkdir -p "$T/decoy2/sub" "$T/decoyco2/worktrees/x"
+printf 'gitdir: %s\n' "$(np "$T/main/.git/worktrees")/../../../decoyco2/worktrees/x" > "$T/decoy2/.git"
+printf '%s\n' "$(np "$T/decoy2/.git")" > "$T/decoyco2/worktrees/x/gitdir"
+printf '%s\n' "$(np "$T/main/.git")" > "$T/decoyco2/worktrees/x/commondir"
+# wt5: a real registration whose commondir file exists but is empty.
+git -C "$T/main" worktree add -q "$T/wt5" 2>/dev/null
+mkdir -p "$T/wt5/sub"
+: > "$T/main/.git/worktrees/wt5/commondir"
+
+case_begin "f1-dotdot-escape-and-empty-commondir-rejected" "hooks/lib/checkout-identity.js"
+check "F1 vacuity: decoyco2/worktrees/x exists" "yes" "$([[ -d "$T/decoyco2/worktrees/x" ]] && echo yes || echo no)"
+check "F1 vacuity: decoyco2 back-reference names decoy2/.git" "$(np "$T/decoy2/.git")" \
+  "$(tr -d '\r\n' < "$T/decoyco2/worktrees/x/gitdir")"
+check "F1 vacuity: wt5 commondir exists and is empty" "yes" \
+  "$([[ -f "$T/main/.git/worktrees/wt5/commondir" && ! -s "$T/main/.git/worktrees/wt5/commondir" ]] && echo yes || echo no)"
+CI_ROWS=0
+ci_table <<'TABLE'
+gitCommonDir   | decoy2     | -    | null | .. escapes <common>/worktrees/ into a lookalike -> null
+checkoutRootOf | decoy2/sub | main | null | .. escape subdirectory -> null
+gitCommonDir   | wt5        | -    | null | registration with an empty commondir -> null
+checkoutRootOf | wt5/sub    | main | null | empty-commondir registration subdirectory -> null
+TABLE
+check "F1: all 4 dotdot-escape/empty-commondir rows executed" "4" "$CI_ROWS"
+case_end
+
+# wtlink: the genuine worktree wt reached through a directory link on its PARENT path. Its
+# `.git` is a regular file (not a link), so realpath(wtlink/.git) == wt/.git == the
+# back-reference: accepted. Contrast f1-symlinked-dot-git-file-rejected, where `.git` ITSELF
+# is the link inside an unrelated directory.
+case_begin "f1-linked-parent-of-genuine-worktree-accepted" "hooks/lib/checkout-identity.js"
+if ci_link "$T/wt" "$T/wtlink"; then
+  check "F1 vacuity: wtlink/.git is a regular file, not a link" "yes" \
+    "$([[ -f "$T/wtlink/.git" && ! -L "$T/wtlink/.git" ]] && echo yes || echo no)"
+  CI_ROWS=0
+  ci_table <<'TABLE'
+gitCommonDir   | wtlink     | -    | MAIN_GIT | control: genuine worktree via linked parent -> main .git
+checkoutRootOf | wtlink/sub | main | WT       | control: linked-parent worktree subdirectory -> worktree root
+TABLE
+  check "F1: all 2 linked-parent rows executed" "2" "$CI_ROWS"
+else
+  skip "F1: directory link creation failed on this host (linked-parent worktree rows)"
+fi
 case_end
 
 # prov_has <regex> -> yes / no, or missing when the file itself is gone (never a silent "no").
@@ -185,6 +398,34 @@ abs:fwt/tests/run-all.sh  | fwt       | false | foreign repo's worktree, absolut
 abs:fwt/tests/run-all.sh  | wt        | false | foreign emitter claimed from a same-repo worktree
 TABLE
 check "verifyEmitterIdentity: all 6 table rows executed" "6" "$EM_ROWS"
+case_end
+
+# F1: a directory that only CLAIMS to be a worktree of E/main (forged `.git` file, or `.git`
+# linked to E/main's real `.git`) must not make its own tests/run-all.sh a trusted emitter.
+mkdir -p "$E/forged/tests" "$E/linked/tests"
+printf 'gitdir: %s\n' "$(np "$E/main/.git/worktrees/ghost-forged")" > "$E/forged/.git"
+printf '#!/usr/bin/env bash\n' > "$E/forged/tests/run-all.sh"
+printf '#!/usr/bin/env bash\n' > "$E/linked/tests/run-all.sh"
+EM_LINKED=yes
+ci_link "$E/main/.git" "$E/linked/.git" || EM_LINKED=no
+
+case_begin "f1-verify-emitter-identity-forged-checkouts" "hooks/workflow-run-tests/provenance-identity.js"
+EM_ROWS=0
+em_table <<'TABLE'
+tests/run-all.sh           | forged | false | forged gitdir dir, relative spelling
+abs:forged/tests/run-all.sh | forged | false | forged gitdir dir, absolute spelling
+TABLE
+check "verifyEmitterIdentity: all 2 forged rows executed" "2" "$EM_ROWS"
+if [[ "$EM_LINKED" == yes ]]; then
+  EM_ROWS=0
+  em_table <<'TABLE'
+tests/run-all.sh           | linked | false | .git linked to E/main's .git, relative spelling
+abs:linked/tests/run-all.sh | linked | false | .git linked to E/main's .git, absolute spelling
+TABLE
+  check "verifyEmitterIdentity: all 2 linked rows executed" "2" "$EM_ROWS"
+else
+  skip "F1: directory link creation failed on this host (linked-.git emitter rows)"
+fi
 case_end
 
 echo ""
