@@ -1,6 +1,6 @@
 #!/bin/bash
 # glab.sh - Install GitLab CLI and configure authentication
-# Sibling: dotfiles/install/linux/glab.sh (same pattern; kept separate for self-sufficiency)
+# Self-contained installer (no dotfiles sibling; see docs/architecture/gitlab-support.md).
 # Usage: Called by install.sh or run independently
 export SYSTEM_OPS_APPROVED=1
 
@@ -63,38 +63,45 @@ _token="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_TOKEN 2>/dev/null || tru
 _subfolder="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_SUBFOLDER 2>/dev/null || true)"
 _ssh_host="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_SSH_HOSTNAME 2>/dev/null || true)"
 
+# _glab_probe <host> <port>: TCP connect via bash /dev/tcp, name resolution included, 3s hard
+# limit. $BASH (the running shell), not PATH's bash, so a PATH-mocked bash cannot stand in.
+_glab_probe() {
+    local _sh="${BASH:-bash}" _probe_pid _kill_pid _rc=0
+    # shellcheck disable=SC2016  # $1/$2 expand inside the probe shell, not here
+    local _connect='exec 3<>"/dev/tcp/$1/$2"'
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 3 "$_sh" -c "$_connect" _ "$1" "$2" >/dev/null 2>&1
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout 3 "$_sh" -c "$_connect" _ "$1" "$2" >/dev/null 2>&1
+    else
+        # No timeout utility: background + kill-after for 3s hard limit
+        "$_sh" -c "$_connect" _ "$1" "$2" >/dev/null 2>&1 &
+        _probe_pid=$!
+        ( sleep 3; kill "$_probe_pid" 2>/dev/null ) &
+        _kill_pid=$!
+        wait "$_probe_pid" 2>/dev/null || _rc=$?
+        kill "$_kill_pid" 2>/dev/null
+        wait "$_kill_pid" 2>/dev/null
+        return "$_rc"
+    fi
+}
+
 if [ -n "$_hostname" ] && [ -n "$_token" ]; then
-    # DNS reachability guard (3s hard timeout): getent on Linux, host on macOS.
-    _dns_rc=0
-    case "$(uname -s)" in
-        Darwin)
-            if command -v gtimeout >/dev/null 2>&1; then
-                gtimeout 3 host "$_hostname" >/dev/null 2>&1; _dns_rc=$?
-            elif command -v timeout >/dev/null 2>&1; then
-                timeout 3 host "$_hostname" >/dev/null 2>&1; _dns_rc=$?
-            else
-                # No timeout utility: background + kill-after for 3s hard limit
-                host "$_hostname" >/dev/null 2>&1 &
-                _dns_pid=$!
-                ( sleep 3; kill "$_dns_pid" 2>/dev/null ) &
-                _kill_pid=$!
-                wait "$_dns_pid" 2>/dev/null; _dns_rc=$?
-                kill "$_kill_pid" 2>/dev/null
-                wait "$_kill_pid" 2>/dev/null
-            fi
-            ;;
-        *)
-            timeout 3 getent hosts "$_hostname" >/dev/null 2>&1; _dns_rc=$?
-            ;;
-    esac
-    if [ "$_dns_rc" -ne 0 ]; then
-        printf "${C_YELLOW}WARNING: Cannot reach %s (DNS check failed). Skipping glab authentication.${C_RESET}\n" "$_hostname" >&2
+    # GLAB_PROBE_PORT is a test seam; production always probes 443.
+    _port=443
+    if [[ "${GLAB_PROBE_PORT:-}" =~ ^[0-9]{1,5}$ ]] && (( 10#$GLAB_PROBE_PORT >= 1 && 10#$GLAB_PROBE_PORT <= 65535 )); then
+        _port=$((10#$GLAB_PROBE_PORT))
+    fi
+    _probe_rc=0
+    _glab_probe "$_hostname" "$_port" || _probe_rc=$?
+    if [ "$_probe_rc" -ne 0 ]; then
+        printf "${C_YELLOW}WARNING: Cannot connect to %s:%s (TCP connect failed or timed out within 3s). Skipping glab authentication.${C_RESET}\n" "$_hostname" "$_port" >&2
     else
         printf "Configuring glab authentication for %s...\n" "$_hostname"
-        _auth_args=(auth login --hostname "$_hostname" --token "$_token" --api-protocol https --git-protocol ssh)
+        # Token on stdin, not argv: a command line is visible in every process listing.
+        _auth_args=(auth login --hostname "$_hostname" --stdin --api-protocol https --git-protocol ssh)
         [ -n "$_ssh_host" ] && _auth_args+=(--ssh-hostname "$_ssh_host")
-        glab "${_auth_args[@]}"
-        if [ $? -ne 0 ]; then
+        if ! printf '%s' "$_token" | glab "${_auth_args[@]}"; then
             printf "${C_YELLOW}glab auth login failed.${C_RESET}\n" >&2
         else
             printf "${C_GREEN}glab: authenticated.${C_RESET}\n"

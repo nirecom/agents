@@ -158,6 +158,11 @@ The installer appends the profile sourcing to your PowerShell `$PROFILE` automat
 new terminal afterward to load it. It also enables git long-path support (`core.longpaths`) so
 deep worktree paths don't hit the Windows `Filename too long` limit.
 
+If Claude Code is running when the installer starts, the installer waits once (up to 30 s) and
+lists the PID and path of each process it is waiting on; the Claude Desktop app itself is not
+waited on. On timeout the install continues but skips the `~/.claude/settings.json` write and the
+`claude` / `codex` updates — close Claude Code and re-run the installer to apply them.
+
 **Configure and authenticate**
 
 Sourcing the profile exports `AGENTS_CONFIG_DIR` / `AGENTS_DIR` for you — no manual setup. All

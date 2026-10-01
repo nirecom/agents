@@ -41,6 +41,13 @@ if ! type npm >/dev/null 2>&1; then
     exit 1
 fi
 
+# Wait for Claude Code once; the children's wait helper answers from WAIT_CC_RESULT.
+unset WAIT_CC_RESULT
+echo ""
+printf -- "${C_BOLD}--- Waiting for Claude Code to exit ---${C_RESET}\n"
+if bash "${AGENTS_ROOT}/install/lib/wait-cc-exit.sh"; then WAIT_CC_RESULT=clear; else WAIT_CC_RESULT=timeout; fi
+export WAIT_CC_RESULT
+
 echo ""
 printf -- "${C_BOLD}--- Creating symlinks ---${C_RESET}\n"
 "$AGENTS_ROOT/install/linux/dotfileslink.sh"
