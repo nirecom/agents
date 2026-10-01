@@ -623,3 +623,7 @@ Changes: Fixed codex reviews and supervisor runs failing to start on Windows wit
 ### FEATURE: PR #2487 (2026-10-01)
 Background: fix(#2479): read chunked hook stdin via a shared EOF-safe reader
 Changes: Fixed: the run_tests hook no longer silently skips recording the test outcome when Claude Code delivers its payload in several chunks, which previously left the run_tests step blocked; stdin reading now goes through a shared EOF-safe reader and logs a one-line diagnostic on failure.
+
+### FEATURE: PR #2477 (2026-10-01)
+Background: feat(#2476): wait for Claude Code once per install, skip Claude Deskt...
+Changes: Installer: no longer waits on the Claude Desktop app, waits for Claude Code at most once per install and shows the PID and path of each process it waits on; on timeout only the settings.json write and the claude/codex updates are skipped.;Installer: the GitLab auth step is skipped within 3 s when GITLAB_HOSTNAME:443 cannot be reached (previously a DNS-only check let `glab auth login` hang), and the GitLab token is no longer passed on the command line.
