@@ -49,16 +49,32 @@ GLAB_SH_OK=0
 # Sections 1–4: Linux/macOS tests (install.sh / install/linux/glab.sh)
 # ---------------------------------------------------------------------------
 _SUBDIR="$AGENTS_DIR/tests/install/feature-2308-install-glab"
+source "$_SUBDIR/linux-lib.sh"
+
+case_begin "glab-sh-flag-gate-install-and-auth" "install/linux/glab.sh"
 if [ "$_on_windows_bash" = "0" ]; then
     source "$_SUBDIR/linux-auth.sh"
+fi
+case_end
+
+case_begin "glab-sh-tcp-reachability-guard" "install/linux/glab.sh"
+if [ "$_on_windows_bash" = "0" ]; then
     source "$_SUBDIR/linux-dns.sh"
+fi
+case_end
+
+case_begin "install-sh-always-calls-glab-sh" "install.sh"
+if [ "$_on_windows_bash" = "0" ]; then
     source "$_SUBDIR/linux-install.sh"
 fi
+case_end
 
 # ---------------------------------------------------------------------------
 # Section 5: Windows/pwsh tests (install/win/glab.ps1)
 # ---------------------------------------------------------------------------
+case_begin "glab-ps1-install-auth-and-reachability" "install/win/glab.ps1"
 source "$_SUBDIR/windows.sh"
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

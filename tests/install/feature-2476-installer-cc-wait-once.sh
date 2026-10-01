@@ -34,6 +34,7 @@ WAIT_SH="$AGENTS_DIR/install/lib/wait-cc-exit.sh"
 WAIT_PS="$AGENTS_DIR/install/lib/wait-cc-exit.ps1"
 TARGET_PS="$AGENTS_DIR/install/lib/wait-cc-exit-target.ps1"
 _SUBDIR="$AGENTS_DIR/tests/install/feature-2476-installer-cc-wait-once"
+source "$_SUBDIR/parent-placement-lib.sh"
 
 case_begin "desktop-shell-excluded-by-path-predicate" "install/lib/wait-cc-exit-target.ps1"
 source "$_SUBDIR/target-predicate.sh"
@@ -48,8 +49,12 @@ source "$_SUBDIR/display.sh"
 source "$_SUBDIR/display-mock.sh"
 case_end
 
-case_begin "parents-wait-once-before-children" "install.ps1"
-source "$_SUBDIR/parent-placement.sh"
+case_begin "ps-parent-waits-once-before-children" "install.ps1"
+source "$_SUBDIR/parent-placement-ps.sh"
+case_end
+
+case_begin "sh-parent-waits-once-before-children" "install.sh"
+source "$_SUBDIR/parent-placement-sh.sh"
 case_end
 
 case_begin "dotfileslink-ps-skips-only-settings-write" "install/win/dotfileslink.ps1"

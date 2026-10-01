@@ -1,8 +1,15 @@
 # TCP reachability guard (#2476; the file name predates it): glab.sh probes
 # <hostname>:<port> through bash /dev/tcp bounded by `timeout 3`. make_probe_timeout
-# (linux-auth.sh) fakes that seam; T10/T11 use the real timeout and /dev/tcp instead.
+# (linux-lib.sh) fakes that seam; T10/T11 use the real timeout and /dev/tcp instead.
 
-case_begin "T8" "install/linux/glab.sh"
+# Helper (T8/T9): glab stub touching MARKER when `auth <SUB>` runs; else exit 0.
+# AGENTS_CONFIG_DIR is pinned to the (dot-env-less) fake bin dir so the developer's
+# real .env cannot leak GITLAB_HOSTNAME/TOKEN into the no-cred paths (fixture isolation).
+make_glab_stub() {  # $1=path  $2=auth-subcmd  $3=marker
+    printf '#!/usr/bin/env bash\nif [ "$1" = "--version" ]; then echo "glab version 1.0.0"; exit 0; fi\nif [ "$1" = "auth" ] && [ "$2" = "%s" ]; then touch "%s"; exit 0; fi\nexit 0\n' "$2" "$3" > "$1"
+    chmod +x "$1"
+}
+
 # T8: GITLAB=on + HOSTNAME + TOKEN + probe failure -> auth login NOT called, warning printed, exit 0
 T8_BIN="$TMP/t8-bin"; mkdir -p "$T8_BIN"
 T8_LOGIN_MARKER="$TMP/t8-login-called"
@@ -22,9 +29,7 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "T8: install/linux/glab.sh not found"
 fi
-case_end
 
-case_begin "T9" "install/linux/glab.sh"
 # T9: GITLAB=on + no HOSTNAME -> manual auth message; glab auth status NOT called
 T9_BIN="$TMP/t9-bin"; mkdir -p "$T9_BIN"
 T9_STATUS_MARKER="$TMP/t9-auth-status-marker"
@@ -42,9 +47,7 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "T9: install/linux/glab.sh not found"
 fi
-case_end
 
-case_begin "T10" "install/linux/glab.sh"
 # T10: hanging connect — GITLAB_HOSTNAME=192.0.2.1 (TEST-NET-1, never answers) with the REAL
 #      timeout and /dev/tcp: the probe must be cut at 3s, auth skipped, exit 0 inside the 8s wrapper.
 T10_BIN="$TMP/t10-bin"; mkdir -p "$T10_BIN"
@@ -66,7 +69,6 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "T10: install/linux/glab.sh not found"
 fi
-case_end
 
 # glab stub recording `auth login` args into $2 and its stdin into $2.stdin (TA / TA-MAC).
 _make_login_recorder() {  # $1=path  $2=record file
@@ -74,7 +76,6 @@ _make_login_recorder() {  # $1=path  $2=record file
     chmod +x "$1"
 }
 
-case_begin "TA" "install/linux/glab.sh"
 # TA: probe success -> auth login IS called (--stdin, token on stdin, no --token) AND the probe
 #     got the configured hostname and 443.
 TA_BIN="$TMP/ta-bin"; mkdir -p "$TA_BIN"
@@ -103,9 +104,7 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "TA: install/linux/glab.sh not found"
 fi
-case_end
 
-case_begin "TA-MAC" "install/linux/glab.sh"
 # TA-MAC: fake uname=Darwin -> the probe is OS-independent: it still goes through timeout
 #   with host and 443, and neither `host` nor `getent` (the old DNS tools) is called.
 TA_MAC_BIN="$TMP/ta-mac-bin"; mkdir -p "$TA_MAC_BIN"
@@ -137,7 +136,6 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "TA-MAC: install/linux/glab.sh not found"
 fi
-case_end
 
 # TL3 gap — TA-MAC-NOTO: the Darwin gtimeout and background+kill fallbacks (no `timeout`) need
 # a real macOS host; /usr/bin/timeout cannot be reliably removed from PATH on Linux.
@@ -152,7 +150,6 @@ _make_probe_markers() {  # $1=bin dir  $2=marker
     done
 }
 
-case_begin "TB" "install/linux/glab.sh"
 # TB: GITLAB=on + HOSTNAME but NO TOKEN -> auth status NOT called, manual message, no probe, exit 0.
 # AGENTS_CONFIG_DIR pinned to the (dot-env-less) fake bin dir so the real .env cannot leak GITLAB_TOKEN.
 TB_BIN="$TMP/tb-bin"; mkdir -p "$TB_BIN"
@@ -174,9 +171,7 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "TB: install/linux/glab.sh not found"
 fi
-case_end
 
-case_begin "TC" "install/linux/glab.sh"
 # TC: GITLAB=on + NO HOSTNAME + TOKEN -> auth status NOT called, manual message, no probe, exit 0.
 # AGENTS_CONFIG_DIR pinned to the fake bin dir so the real .env cannot leak GITLAB_HOSTNAME.
 TC_BIN="$TMP/tc-bin"; mkdir -p "$TC_BIN"
@@ -198,9 +193,7 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "TC: install/linux/glab.sh not found"
 fi
-case_end
 
-case_begin "T11" "install/linux/glab.sh"
 # T11: closed loopback port through the REAL /dev/tcp -> auth skipped with the warning, and
 #      bash's own "Connection refused" diagnostic must not leak to the output.
 T11_BIN="$TMP/t11-bin"; mkdir -p "$T11_BIN"
@@ -224,4 +217,3 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "T11: install/linux/glab.sh not found"
 fi
-case_end

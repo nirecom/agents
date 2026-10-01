@@ -1,16 +1,9 @@
-# Sourced by tests/install/feature-2476-installer-cc-wait-once.sh.
-# Static: each parent installer runs the wait helper once, after its Node.js check
+# Sourced by tests/install/feature-2476-installer-cc-wait-once.sh (needs parent-placement-lib.sh).
+# Static: install.ps1 runs the wait helper once, after its Node.js check
 # and before the first child (dotfileslink), and publishes the verdict as WAIT_CC_RESULT.
 
 _PP_PS1="$AGENTS_DIR/install.ps1"
-_PP_SH="$AGENTS_DIR/install.sh"
 
-# _pp_line <file> <ERE> [after-line] -> first matching line number after <after-line>, or 0
-_pp_line() {
-    PP_RE="$2" awk -v after="${3:-0}" 'NR > after && $0 ~ ENVIRON["PP_RE"] { print NR; found=1; exit } END { if (!found) print 0 }' "$1"
-}
-
-# --- install.ps1 ---
 # The installer body sits one level deep inside the env-restoring try/finally.
 _pp_fnm="$(_pp_line "$_PP_PS1" '^[[:space:]]*Write-Host "--- Checking Node\.js \(fnm\) ---"')"
 _pp_fnm_end="$(_pp_line "$_PP_PS1" '^    }[[:space:]]*$' "$_pp_fnm")"
@@ -127,20 +120,4 @@ if [ -z "$_pp_bad" ]; then
     pass "PP-ps-2215-anchors: the 4 feature-2215 awk anchors match exactly once each"
 else
     fail "PP-ps-2215-anchors: anchor count drift" "$_pp_bad"
-fi
-
-# --- install.sh ---
-_pp_npm="$(_pp_line "$_PP_SH" '^if ! type npm')"
-_pp_npm_end="$(_pp_line "$_PP_SH" '^fi' "$_pp_npm")"
-_pp_unset="$(_pp_line "$_PP_SH" '^unset WAIT_CC_RESULT' "$_pp_npm_end")"
-_pp_shcall="$(_pp_line "$_PP_SH" '^if bash .*wait-cc-exit\.sh.*then WAIT_CC_RESULT=clear;? *else WAIT_CC_RESULT=timeout' "$_pp_unset")"
-_pp_export="$(_pp_line "$_PP_SH" '^export WAIT_CC_RESULT' "$_pp_shcall")"
-_pp_shdot="$(_pp_line "$_PP_SH" 'install/linux/dotfileslink\.sh')"
-
-if [ "$_pp_npm_end" -gt 0 ] && [ "$_pp_unset" -gt "$_pp_npm_end" ] && [ "$_pp_shcall" -gt "$_pp_unset" ] \
-   && [ "$_pp_export" -gt "$_pp_shcall" ] && [ "$_pp_shdot" -gt "$_pp_export" ]; then
-    pass "PP-sh-order: unset -> helper (clear/timeout) -> export, after nvm check, before dotfileslink.sh"
-else
-    fail "PP-sh-order: want nvm_end < unset < helper < export < dotfileslink.sh" \
-        "nvm_end=$_pp_npm_end unset=$_pp_unset call=$_pp_shcall export=$_pp_export dotfileslink=$_pp_shdot"
 fi

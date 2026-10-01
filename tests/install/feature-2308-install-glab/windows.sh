@@ -55,7 +55,6 @@ try { & '$_GLAB_PS1_WIN' } finally {
 PS1EOF
 }
 
-case_begin "P1" "install/win/glab.ps1"
 # P1: GITLAB=off → exit 0, winget NOT called (flag gate)
 P1="$TMP/p1"
 mkdir -p "$P1"
@@ -72,9 +71,7 @@ if [ "$P_RC" -eq 0 ] && [ ! -f "$P1/winget-called.txt" ]; then
 else
     fail "P1: rc=$P_RC winget_called=$([ -f "$P1/winget-called.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -2)"
 fi
-case_end
 
-case_begin "P2" "install/win/glab.ps1"
 # P2: GITLAB=on, glab in PATH, HOSTNAME+TOKEN (reachable loopback listener) → auth login
 #     called with --hostname and --stdin; the token arrives on stdin, never in argv.
 #     No external network is touched.
@@ -100,9 +97,7 @@ if [ "$P_RC" -eq 0 ] && \
 else
     fail "P2: rc=$P_RC auth_args='$P2_AUTH' stdin='$P2_STDIN' out=$(printf '%s' "$P_OUT" | head -2)"
 fi
-case_end
 
-case_begin "P3" "install/win/glab.ps1"
 # P3: GITLAB=on, glab in PATH, HOSTNAME+TOKEN+SUBFOLDER → glab config set subfolder called
 P3="$TMP/p3"
 mkdir -p "$P3"
@@ -121,9 +116,7 @@ if [ "$P_RC" -eq 0 ] && \
 else
     fail "P3: rc=$P_RC config_args='$P3_CONFIG' out=$(printf '%s' "$P_OUT" | head -2)"
 fi
-case_end
 
-case_begin "P4" "install/win/glab.ps1"
 # P4: GITLAB=on, glab in PATH, no creds → auth login NOT called
 P4="$TMP/p4"
 mkdir -p "$P4"
@@ -146,9 +139,7 @@ if [ "$P_RC" -eq 0 ] && [ ! -f "$P4/login-called.txt" ]; then
 else
     fail "P4: rc=$P_RC login_called=$([ -f "$P4/login-called.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -2)"
 fi
-case_end
 
-case_begin "P5" "install/win/glab.ps1"
 # P5: GITLAB=on + HOSTNAME + TOKEN + DNS failure (unresolvable host) -> auth login NOT called, warning printed
 # AGENTS_CONFIG_DIR + neutral CWD isolate the fixture from the developer's real .env.
 P5="$TMP/p5"
@@ -174,9 +165,7 @@ if [ "$P_RC" -eq 0 ] && [ ! -f "$P5/login-called.txt" ] && \
 else
     fail "P5: rc=$P_RC login_called=$([ -f "$P5/login-called.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
 fi
-case_end
 
-case_begin "P6" "install/win/glab.ps1"
 # P6: GITLAB=on + no HOSTNAME -> manual auth message; glab auth status NOT called
 P6="$TMP/p6"
 mkdir -p "$P6"
@@ -201,9 +190,7 @@ if [ "$P_RC" -eq 0 ] && [ ! -f "$P6/auth-status-marker.txt" ] && \
 else
     fail "P6: rc=$P_RC status_called=$([ -f "$P6/auth-status-marker.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
 fi
-case_end
 
-case_begin "PA" "install/win/glab.ps1"
 # PA: GITLAB=on + HOSTNAME=127.0.0.1 + TOKEN + open loopback listener on GLAB_PROBE_PORT ->
 #     the TCP probe connects (LISTENER_PENDING=True) -> auth login called with --hostname/--stdin,
 #     token on stdin only.
@@ -230,9 +217,7 @@ if [ "$P_RC" -eq 0 ] && \
 else
     fail "PA: rc=$P_RC auth_args='$PA_AUTH' stdin='$PA_STDIN' out=$(printf '%s' "$P_OUT" | grep -E 'PENDING|WARN|Cannot' | head -3)"
 fi
-case_end
 
-case_begin "PB" "install/win/glab.ps1"
 # PB: GITLAB=on + HOSTNAME=127.0.0.1 but NO TOKEN -> partial creds: auth status NOT called,
 #     manual-setup message printed, and the probe never connects (LISTENER_PENDING=False).
 PB="$TMP/pb"
@@ -250,9 +235,7 @@ if [ "$P_RC" -eq 0 ] && [ ! -f "$PB/auth-status-marker.txt" ] && \
 else
     fail "PB: rc=$P_RC status_called=$([ -f "$PB/auth-status-marker.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
 fi
-case_end
 
-case_begin "PC" "install/win/glab.ps1"
 # PC: GITLAB=on + NO HOSTNAME + TOKEN set -> partial creds: auth status NOT called,
 #     manual-setup message printed, and the probe never connects (LISTENER_PENDING=False).
 PC="$TMP/pc"
@@ -270,9 +253,7 @@ if [ "$P_RC" -eq 0 ] && [ ! -f "$PC/auth-status-marker.txt" ] && \
 else
     fail "PC: rc=$P_RC status_called=$([ -f "$PC/auth-status-marker.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
 fi
-case_end
 
-case_begin "P7" "install/win/glab.ps1"
 # P7: GITLAB=on + HOSTNAME + TOKEN + unresolvable host -> the guard fails fast; the script
 #     finishes under the run wrapper and auth login is NOT called (elapsed < _PS_TIMEOUT).
 # The true connect hang (3s cut) is P9.
@@ -301,7 +282,6 @@ if [ "$P_RC" -eq 0 ] && [ ! -f "$P7/login-called.txt" ] && [ "$_p7_elapsed" -lt 
 else
     fail "P7: rc=$P_RC elapsed=${_p7_elapsed}s login_called=$([ -f "$P7/login-called.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
 fi
-case_end
 
 # glab stub recording `auth login` into $2 (P8/P9).
 _ps_login_stub() {  # $1=dir $2=marker (win path)
@@ -310,7 +290,6 @@ _ps_login_stub() {  # $1=dir $2=marker (win path)
         "$2" > "$1/glab.cmd"
 }
 
-case_begin "P8" "install/win/glab.ps1"
 # P8: HOSTNAME=127.0.0.1 + closed loopback port -> connection refused -> auth skipped with
 #     the neutral warning "Cannot connect to 127.0.0.1:<port>".
 P8="$TMP/p8"
@@ -325,9 +304,7 @@ if [ "$P_RC" -eq 0 ] && [ ! -f "$P8/login-called.txt" ] && [ -n "$P8_PORT" ] && 
 else
     fail "P8: rc=$P_RC port=$P8_PORT login_called=$([ -f "$P8/login-called.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
 fi
-case_end
 
-case_begin "P9" "install/win/glab.ps1"
 # P9: HOSTNAME=192.0.2.1 (TEST-NET-1, never answers) on the default port -> the connect is
 #     cut at 3s; the whole run must finish in under 8s with auth login skipped.
 P9="$TMP/p9"
@@ -343,6 +320,5 @@ if [ "$P_RC" -eq 0 ] && [ ! -f "$P9/login-called.txt" ] && [ "$_p9_elapsed" -lt 
 else
     fail "P9: rc=$P_RC elapsed=${_p9_elapsed}s login_called=$([ -f "$P9/login-called.txt" ] && echo yes || echo no) out=$(printf '%s' "$P_OUT" | head -3)"
 fi
-case_end
 
 fi  # end pwsh skip gate

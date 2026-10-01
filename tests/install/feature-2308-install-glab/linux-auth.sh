@@ -1,15 +1,9 @@
-# TCP probe seam (#2476, shared with linux-dns.sh): a fake `timeout` that records its
-# args ("3 <bash> -c … <host> <port>") and exits <rc> WITHOUT exec — no real connection.
-make_probe_timeout() {  # $1=path  $2=rc  $3=record file
-    printf '#!/usr/bin/env bash\necho "$@" >> "%s"\nexit %s\n' "$3" "$2" > "$1"
-    chmod +x "$1"
-}
+# Sourced by tests/install/feature-2308-install-glab.sh (needs linux-lib.sh).
 
 # ---------------------------------------------------------------------------
 # Section 1: GITLAB flag gate
 # ---------------------------------------------------------------------------
 
-case_begin "T1" "install/linux/glab.sh"
 # T1: GITLAB not set → exit 0, no package manager called (flag gate)
 T1_BIN="$TMP/t1-bin"
 mkdir -p "$T1_BIN"
@@ -31,13 +25,11 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "T1: install/linux/glab.sh not found"
 fi
-case_end
 
 # ---------------------------------------------------------------------------
 # Section 2: install/upgrade and fallback behavior (GITLAB=on)
 # ---------------------------------------------------------------------------
 
-case_begin "T2" "install/linux/glab.sh"
 # T2: GITLAB=on, not installed, package manager fails → exit 0, warning printed
 T2_BIN="$TMP/t2-bin"
 mkdir -p "$T2_BIN"
@@ -61,13 +53,11 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "T2: install/linux/glab.sh not found"
 fi
-case_end
 
 # ---------------------------------------------------------------------------
 # Section 3: auth behavior (GITLAB=on, glab installed)
 # ---------------------------------------------------------------------------
 
-case_begin "T3" "install/linux/glab.sh"
 # T3: GITLAB=on, already authenticated (auth status 0) → auth login never called
 T3_BIN="$TMP/t3-bin"
 mkdir -p "$T3_BIN"
@@ -96,9 +86,7 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "T3: install/linux/glab.sh not found"
 fi
-case_end
 
-case_begin "T4" "install/linux/glab.sh"
 # T4: GITLAB=on, no HOSTNAME/TOKEN, not authenticated → auth login NOT called (no creds)
 T4_BIN="$TMP/t4-bin"
 mkdir -p "$T4_BIN"
@@ -127,9 +115,7 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "T4: install/linux/glab.sh not found"
 fi
-case_end
 
-case_begin "T5" "install/linux/glab.sh"
 # T5: GITLAB=on + HOSTNAME + TOKEN → glab auth login called with --hostname and --stdin, the
 # token arrives on stdin and never on argv (--token would expose it in process listings).
 # DNS guard success is mocked (getent/host exit 0, fake timeout execs the probe) so T5 stays
@@ -181,9 +167,7 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "T5: install/linux/glab.sh not found"
 fi
-case_end
 
-case_begin "T6" "install/linux/glab.sh"
 # T6: GITLAB=on + HOSTNAME + TOKEN + SUBFOLDER → glab config set subfolder called
 T6_BIN="$TMP/t6-bin"
 mkdir -p "$T6_BIN"
@@ -221,12 +205,3 @@ if [ "$GLAB_SH_OK" = "1" ]; then
 else
     fail "T6: install/linux/glab.sh not found"
 fi
-case_end
-
-# Helper (T8/T9): glab stub touching MARKER when `auth <SUB>` runs; else exit 0.
-# AGENTS_CONFIG_DIR is pinned to the (dot-env-less) fake bin dir so the developer's
-# real .env cannot leak GITLAB_HOSTNAME/TOKEN into the no-cred paths (fixture isolation).
-make_glab_stub() {  # $1=path  $2=auth-subcmd  $3=marker
-    printf '#!/usr/bin/env bash\nif [ "$1" = "--version" ]; then echo "glab version 1.0.0"; exit 0; fi\nif [ "$1" = "auth" ] && [ "$2" = "%s" ]; then touch "%s"; exit 0; fi\nexit 0\n' "$2" "$3" > "$1"
-    chmod +x "$1"
-}
