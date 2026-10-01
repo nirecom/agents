@@ -502,7 +502,7 @@ if [[ -n "$PROJECT_ROOT_ARG" ]]; then
   fi
 fi
 
-PROMPT="${SCOPE_WARNING}${PREAMBLE}
+CODEX_PROMPT="${SCOPE_WARNING}${PREAMBLE}
 
 ${NFR_BLOCK}${PRIOR_INSTRUCTIONS}## Concern Delta output format
 
@@ -537,5 +537,5 @@ ${DIFF}
 [DIFF END]"
 
 INPUT_LINES=$DIFF_LINES
-codex_core_run "$PROMPT"
+codex_core_run "$CODEX_PROMPT"
 exit 0

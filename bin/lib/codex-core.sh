@@ -10,6 +10,9 @@ export SYSTEM_OPS_APPROVED=1
 # so a script that already sources this library needs no second source line.
 # shellcheck source=codex-timeout.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/codex-timeout.sh"
+# Re-exports the guard functions and CODEX_INPUT_CHAR_LIMIT from lib/cli-exec-guard.sh.
+# shellcheck source=cli-exec-guard.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/cli-exec-guard.sh"
 
 # codex_core_init <label>
 # Sets: CODEX_LABEL, LOG_DIR, START_TS, START_EPOCH, SESSION_ID, BRANCH
@@ -154,7 +157,11 @@ codex_core_run() {
 
   printf '%s' "$prompt" > "$TMPFILE"
 
-  local codex_out codex_exit
+  local codex_out codex_exit _guard_reason
+  if ! _guard_reason="$(cli_exec_guard_input_size "$TMPFILE" "$CODEX_INPUT_CHAR_LIMIT")"; then
+    echo "## ${CODEX_LABEL}: FAILED — ${_guard_reason}"
+    codex_core_log failed "$_guard_reason" "$_input_lines"; return 0
+  fi
   codex_out=""
   codex_exit=0
 
@@ -178,6 +185,7 @@ codex_core_run() {
     *)
       local stderr_tail
       stderr_tail=$(tail -3 "$CODEX_STDERR" | tr '\n' ' ')
+      [[ "$codex_exit" -eq 127 ]] && stderr_tail="$(cli_exec_guard_diagnose_127 codex) ${stderr_tail}"
       echo "## ${CODEX_LABEL}: FAILED — codex exec exit code ${codex_exit}: ${stderr_tail}"
       codex_core_log failed "exit code ${codex_exit}" "$_input_lines"
       ;;

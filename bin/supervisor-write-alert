@@ -22,6 +22,7 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--set-l2-phase",
   "--set-alert-eligible-phase",
   "--ingest-generated-jsonl",
+  "--set-transcript-cursor",
 ]);
 const KNOWN_BOOL_FLAGS = new Set(["--clear-alert-armed-at", "--clear-l2-armed-at", "--increment-alert-retry-count", "--mark-findings-surfaced"]);
 
@@ -36,7 +37,8 @@ function usage(msg) {
     " [--finding-status <draft|confirmed>]]" +
     " [--confirm-finding-ids <csv>] [--drop-finding-ids <csv>]" +
     " [--set-alert-phase <pending|done|paused|closed>]" +
-    " [--mark-findings-surfaced] [--set-alert-eligible-phase <post_final_report_window|null>]"
+    " [--mark-findings-surfaced] [--set-alert-eligible-phase <post_final_report_window|null>]" +
+    " [--set-transcript-cursor <json>]"
   );
   process.exit(1);
 }
@@ -77,6 +79,7 @@ const hasDropIds = "drop-finding-ids" in args;
 const hasMarkFindingsSurfaced = flags.has("--mark-findings-surfaced");
 const hasSetAlertEligiblePhase = "set-alert-eligible-phase" in args;
 const hasIngestJsonl = "ingest-generated-jsonl" in args;
+const hasSetTranscriptCursor = "set-transcript-cursor" in args;
 
 const findingKeys = ["finding-categories", "finding-severity", "finding-detail", "finding-reporter"];
 const findingPresent = findingKeys.filter((k) => k in args);
@@ -159,7 +162,7 @@ const hasIncrementRetry = flags.has("--increment-alert-retry-count");
 
 if (hasIncrementRetry) {
   const hasOtherMutating = hasAlertArmedAt || hasClearAlertArmedAt || hasLastRunAt || hasCumulativeSeverity ||
-    hasSetAlertPhase || hasAnyFinding || hasConfirmIds || hasDropIds || hasMarkFindingsSurfaced || hasSetAlertEligiblePhase;
+    hasSetAlertPhase || hasAnyFinding || hasConfirmIds || hasDropIds || hasMarkFindingsSurfaced || hasSetAlertEligiblePhase || hasSetTranscriptCursor;
   if (hasOtherMutating) {
     usage("--increment-alert-retry-count is mutually exclusive with other mutating flags");
   }
@@ -168,7 +171,7 @@ if (hasIncrementRetry) {
   process.exit(0);
 }
 
-if (!hasAlertArmedAt && !hasClearAlertArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetAlertPhase && !hasConfirmIds && !hasDropIds && !hasMarkFindingsSurfaced && !hasSetAlertEligiblePhase && !hasIngestJsonl) {
+if (!hasAlertArmedAt && !hasClearAlertArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetAlertPhase && !hasConfirmIds && !hasDropIds && !hasMarkFindingsSurfaced && !hasSetAlertEligiblePhase && !hasIngestJsonl && !hasSetTranscriptCursor) {
   usage("at least one mutating flag required");
 }
 
@@ -207,6 +210,10 @@ if (hasSetAlertEligiblePhase) {
   } else {
     usage(`--set-alert-eligible-phase must be one of ${ALERT_ELIGIBLE_PHASE_VALUES.filter(v => v !== null).join("|")}|null`);
   }
+}
+
+if (hasSetTranscriptCursor) {
+  try { patch.transcript_cursor = JSON.parse(args["set-transcript-cursor"]); } catch (_) { usage("--set-transcript-cursor must be JSON"); }
 }
 
 if (hasAllFindings) {

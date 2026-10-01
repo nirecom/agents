@@ -70,7 +70,7 @@ EOF
         cp "$AGENTS_WORKTREE/bin/$f" "$agents_dir/bin/$f"
         chmod +x "$agents_dir/bin/$f"
     done
-    for f in codex-core.sh codex-timeout.sh concern-ledger.sh safe-plans-path.sh; do
+    for f in codex-core.sh codex-timeout.sh cli-exec-guard.sh concern-ledger.sh safe-plans-path.sh; do
         [[ -f "$AGENTS_WORKTREE/bin/lib/$f" ]] && cp "$AGENTS_WORKTREE/bin/lib/$f" "$agents_dir/bin/lib/$f"
     done
     [[ -d "$AGENTS_WORKTREE/bin/lib/concern-ledger" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$agents_dir/bin/lib/"

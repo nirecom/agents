@@ -40,7 +40,7 @@ Before reading anything else, record that the review has started: `node bin/supe
 Read these inputs before deciding:
 - The supervisor state file in full — pay attention to `layer1.findings`, `alert.findings`, `alert.cumulative_severity`, `alert.alert_phase`, and any prior `audit` history.
 - The session plan artifacts under `<plans-dir>/` — `<wsid>-intent.md`, `<wsid>-outline.md`, `<wsid>-detail.md` when present. Use `hooks/lib/workflow-plans-dir.js` to resolve `<plans-dir>` and `hooks/lib/resolve-workflow-session-id.js` to resolve `<wsid>`.
-- Recent assistant transcript turns relevant to the arm trigger that fired.
+- Transcript turns relevant to the arm trigger that fired — on `STATUS: SUCCESS` the engine already assembled them via `hooks/lib/supervisor-codex-input.js`; read the transcript yourself only on the fallback path (SKIPPED / FAILED) or the UNAVAILABLE fallback.
 
 ### UNAVAILABLE fallback
 

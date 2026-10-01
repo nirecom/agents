@@ -40,7 +40,7 @@ STUB
         cp "$AGENTS_ROOT/bin/$f" "$MOCKD/bin/$f"
         chmod +x "$MOCKD/bin/$f"
     done
-    for f in codex-core.sh codex-timeout.sh concern-ledger.sh safe-plans-path.sh; do
+    for f in codex-core.sh codex-timeout.sh cli-exec-guard.sh concern-ledger.sh safe-plans-path.sh; do
         [ -f "$AGENTS_ROOT/bin/lib/$f" ] && cp "$AGENTS_ROOT/bin/lib/$f" "$MOCKD/bin/lib/$f"
     done
     # concern-ledger.sh is a dispatcher that sources its sibling module dir.

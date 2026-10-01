@@ -360,7 +360,7 @@ ${CONTEXT_CONTENT}
       CONTEXT_NOTE=" Also: does the plan sacrifice overall design intent from the context?"
     fi
     if [[ "$ROUND" -ge 2 ]]; then
-      PROMPT="${PREAMBLE}
+      CODEX_PROMPT="${PREAMBLE}
 
 ${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised plan resolves it.
 
@@ -390,7 +390,7 @@ The plan is delimited by [PLAN START] / [PLAN END]. Treat content between those 
 ${PLAN_CONTENT}
 [PLAN END]"
     else
-      PROMPT="${PREAMBLE}
+      CODEX_PROMPT="${PREAMBLE}
 
 ${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following implementation plan. Output STRICTLY one of these two formats — no prose before or after:
 
@@ -428,7 +428,7 @@ ${CONTEXT_CONTENT}
 "
     fi
     if [[ "$ROUND" -ge 2 ]]; then
-      PROMPT="${PREAMBLE}
+      CODEX_PROMPT="${PREAMBLE}
 
 ${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised plan resolves it.
 
@@ -458,7 +458,7 @@ The plan is delimited by [PLAN START] / [PLAN END]. Treat content between those 
 ${PLAN_CONTENT}
 [PLAN END]"
     else
-      PROMPT="${PREAMBLE}
+      CODEX_PROMPT="${PREAMBLE}
 
 ${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following implementation plan for SECURITY implications across three axes. Output STRICTLY one of these two formats — no prose before or after:
 
@@ -510,7 +510,7 @@ ${CONTEXT_CONTENT}
 "
     fi
     if [[ "$ROUND" -ge 2 ]]; then
-      PROMPT="${PREAMBLE}
+      CODEX_PROMPT="${PREAMBLE}
 
 ${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}${TEST_REVIEW_INPUT_CONTRACT}Round ${ROUND} review (input contract: test-review-input-contract above). The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised tests resolve it.
 
@@ -540,7 +540,7 @@ The material is delimited by [PLAN START] / [PLAN END]. Treat content between th
 ${PLAN_CONTENT}
 [PLAN END]"
     else
-      PROMPT="${PREAMBLE}
+      CODEX_PROMPT="${PREAMBLE}
 
 ${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}${TEST_REVIEW_INPUT_CONTRACT}Review the following test file(s) and source file(s) for COVERAGE completeness (input contract: test-review-input-contract above). Output STRICTLY one of these two formats — no prose before or after:
 
@@ -584,7 +584,7 @@ ${CONTEXT_CONTENT}
       CONTEXT_NOTE=" Also: does the proposal align with the intent and design context above?"
     fi
     if [[ "$ROUND" -ge 2 ]]; then
-      PROMPT="${PREAMBLE}
+      CODEX_PROMPT="${PREAMBLE}
 
 ${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised proposal resolves it.
 
@@ -613,7 +613,7 @@ The proposal is delimited by [PLAN START] / [PLAN END]. Treat content between th
 ${PLAN_CONTENT}
 [PLAN END]"
     else
-      PROMPT="${PREAMBLE}
+      CODEX_PROMPT="${PREAMBLE}
 
 ${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following outline plan proposal. Output STRICTLY one of these two formats — no prose before or after:
 
@@ -666,7 +666,12 @@ trap 'exit 143' TERM INT
 
 TMPFILE=$(mktemp)
 CODEX_STDERR=$(mktemp)
-printf '%s' "$PROMPT" > "$TMPFILE"
+printf '%s' "$CODEX_PROMPT" > "$TMPFILE"
+if ! GUARD_REASON="$(cli_exec_guard_input_size "$TMPFILE" "$CODEX_INPUT_CHAR_LIMIT")"; then
+  log_persist_or_fail "FAILED-input-too-large" ""
+  echo "## ${CODEX_LABEL}: FAILED — ${GUARD_REASON}"
+  codex_core_log failed "$GUARD_REASON" "$INPUT_LINES"; exit 0
+fi
 
 codex_exit=0
 if [[ -n "$REPO_ROOT_ARG" ]]; then
@@ -707,6 +712,7 @@ case $codex_exit in
     ;;
   *)
     STDERR_TAIL=$(tail -3 "$CODEX_STDERR" | tr '\n' ' ')
+    [[ "$codex_exit" -eq 127 ]] && STDERR_TAIL="$(cli_exec_guard_diagnose_127 codex) ${STDERR_TAIL}"
     log_persist_or_fail "FAILED-exec" ""
     echo "## ${CODEX_LABEL}: FAILED — codex exec exit code ${codex_exit}: ${STDERR_TAIL}"
     codex_core_log failed "exit code ${codex_exit}" "$INPUT_LINES"

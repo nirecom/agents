@@ -70,6 +70,24 @@ expect "S4: the class E row names RESET_FROM" "$(grep -E '^\| *E *\|' "$DOC" | g
 expect "S4: no other class row names RESET_FROM" "$(grep -E '^\| *[ABCDFG] *\|' "$DOC" | grep -c 'RESET_FROM')" "0"
 case_end
 
+# #2475: the supervisor codex engine became a second (read-only) handoff reader.
+case_begin "flush-rule-names-two-handoff-readers" "rules/handoff-emergency-flush.md"
+RULE="$AGENTS_DIR/rules/handoff-emergency-flush.md"
+expect "S5: the flush rule no longer says nothing else consumes the artifact" "$(grep -c 'nothing else consumes it' "$RULE")" "0"
+expect "S5: the flush rule names the supervisor as a reader" "$(grep -qi 'supervisor' "$RULE" && echo yes || echo no)" "yes"
+case_end
+
+case_begin "handoff-doc-names-two-readers" "docs/architecture/claude-code/handoff-artifact.md"
+DOC="$AGENTS_DIR/docs/architecture/claude-code/handoff-artifact.md"
+expect "S5: the handoff doc no longer calls /resume-session the only reader" "$(grep -c "only reader is \`/resume-session\`" "$DOC")" "0"
+expect "S5: the handoff doc names the supervisor codex engine" "$(grep -qiE 'supervisor.{0,40}codex|codex.{0,40}supervisor' "$DOC" && echo yes || echo no)" "yes"
+case_end
+
+case_begin "glossary-handoff-names-two-readers" "docs/glossary.md"
+GL_LINE="$(grep -F -- '-handoff.md`' "$AGENTS_DIR/docs/glossary.md" | grep -F 'resume-session')"
+expect "S5: glossary handoff definition names the supervisor as a reader" "$(printf '%s\n' "$GL_LINE" | grep -qi 'supervisor' && echo yes || echo no)" "yes"
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -gt 0 ] && exit 1

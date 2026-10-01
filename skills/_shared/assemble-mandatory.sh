@@ -89,18 +89,18 @@ done
   exit 2
 }
 
-TMP=$(mktemp -d -p "$(dirname "$OUT")" assemble.XXXX)
-trap 'rm -rf "$TMP"' EXIT
+WORK_DIR=$(mktemp -d -p "$(dirname "$OUT")" assemble.XXXX)
+trap 'rm -rf "$WORK_DIR"' EXIT
 
 # In-place detection: when PLANNER_OUT and OUT resolve to the same file (the
 # in-place mode used after the drafts/ flatten in #866), the Phase 6 final write
 # would overwrite the file before the awk passes finish reading it. Snapshot
-# the planner output into $TMP so the read path is decoupled from $OUT.
+# the planner output into $WORK_DIR so the read path is decoupled from $OUT.
 # Argument-driven gate (--source-kind), not inferred from layout.
 PLANNER_OUT_READ="$PLANNER_OUT"
 if [[ "$(readlink -f "$PLANNER_OUT" 2>/dev/null || echo "$PLANNER_OUT")" == \
       "$(readlink -f "$OUT" 2>/dev/null || echo "$OUT")" ]]; then
-  PLANNER_OUT_READ="$TMP/planner_out_snapshot"
+  PLANNER_OUT_READ="$WORK_DIR/planner_out_snapshot"
   cp -- "$PLANNER_OUT" "$PLANNER_OUT_READ" \
     || { echo "assemble-mandatory: snapshot copy failed" >&2; exit 2; }
 fi
@@ -138,7 +138,7 @@ fi
 # Class members is intentionally NOT injected (#2228): its SSOT is intent.md.
 "$EXTRACT" "$SOURCE" \
   --section "$ISSUES_SECTION_NAME" --section "Accepted Tradeoffs" \
-  --with-headers > "$TMP/injected_block"
+  --with-headers > "$WORK_DIR/injected_block"
 
 # --- Phase 3: Normalize legacy heading to canonical. ---
 if [[ "$ISSUES_SECTION_NAME" == "Issue" ]]; then
@@ -146,8 +146,8 @@ if [[ "$ISSUES_SECTION_NAME" == "Issue" ]]; then
   awk '
     /^## Issue[[:space:]]*$/ { print "## Issues"; next }
     { print }
-  ' "$TMP/injected_block" > "$TMP/injected_block_norm"
-  mv "$TMP/injected_block_norm" "$TMP/injected_block"
+  ' "$WORK_DIR/injected_block" > "$WORK_DIR/injected_block_norm"
+  mv "$WORK_DIR/injected_block_norm" "$WORK_DIR/injected_block"
 fi
 
 # --- Phase 4: Extract H1 from planner output ---
@@ -158,26 +158,26 @@ if [[ -z "$H1_LINE" ]]; then
 fi
 
 # --- Phase 5: Strip H1 + mandatory sections from planner body ---
-awk -v names="$MANDATORY_NAMES" -f "$STRIP_AWK" "$PLANNER_OUT_READ" > "$TMP/remaining_body"
+awk -v names="$MANDATORY_NAMES" -f "$STRIP_AWK" "$PLANNER_OUT_READ" > "$WORK_DIR/remaining_body"
 
 # --- Phase 6: Assemble ---
 # Trim trailing blank lines from injected_block so that section bodies do not
 # accumulate extra newlines. We re-add exactly one blank line as separator.
-sed -e :a -e '/^$/{$d;N;ba' -e '}' "$TMP/injected_block" > "$TMP/injected_block_trimmed"
+sed -e :a -e '/^$/{$d;N;ba' -e '}' "$WORK_DIR/injected_block" > "$WORK_DIR/injected_block_trimmed"
 
 # Trim leading blank lines from remaining_body (the stripped planner body) so
 # the separator we add doesn't compound with planner-side leading blanks.
-awk 'NF { found=1 } found { print }' "$TMP/remaining_body" > "$TMP/remaining_body_trimmed"
+awk 'NF { found=1 } found { print }' "$WORK_DIR/remaining_body" > "$WORK_DIR/remaining_body_trimmed"
 
 # Assemble into a temp file. The move to $OUT happens ONLY after every check
 # below passes (#2228 / C5): verifying the temp and moving on success means a
 # failed verify never replaces a prior valid $OUT with an invalid artifact.
-ASSEMBLED="$TMP/out_assembled"
+ASSEMBLED="$WORK_DIR/out_assembled"
 {
   printf '%s\n\n' "$H1_LINE"
-  cat "$TMP/injected_block_trimmed"
+  cat "$WORK_DIR/injected_block_trimmed"
   printf '\n'
-  cat "$TMP/remaining_body_trimmed"
+  cat "$WORK_DIR/remaining_body_trimmed"
 } > "$ASSEMBLED"
 
 # --- Phase 7: Verify (against the temp, before the move) ---
@@ -267,7 +267,7 @@ if [[ "$OUT" == *-outline.md ]]; then
       BEGIN { in_fence=0 }
       /^```/ || /^~~~/ { in_fence = !in_fence; next }
       !in_fence && /^## / { sub(/^## /, ""); sub(/[[:space:]]*$/, ""); print; exit }
-    ' "$TMP/remaining_body_trimmed")"
+    ' "$WORK_DIR/remaining_body_trimmed")"
     if [[ -n "$first_body_h2" && "$first_body_h2" != "$EXPECTED_FIRST" ]]; then
       verify_fail "first body section is '## $first_body_h2' but must be '## $EXPECTED_FIRST' (importance-first order, #2228)"
     fi

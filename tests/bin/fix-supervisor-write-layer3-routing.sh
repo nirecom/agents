@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/fix-supervisor-write-layer3-routing.sh
 # Tests: bin/supervisor-write-audit
-# Tags: supervisor, em-supervisor, layer3, fix, scope:issue-specific
+# Tags: supervisor, em-supervisor, layer3, fix, scope:issue-specific, transcript-cursor
 # L3 gap (what this test does NOT catch):
 # - real Claude Code Stop event firing — tests invoke CLI directly, not via hook registration
 # - WORKFLOW_SESSION_ID propagation into a live session (Anthropic bug #27987)
@@ -203,12 +203,120 @@ run_r6() {
     fi
 }
 
+# --- #2475: --set-transcript-cursor on the audit writer ---------------------
+# AUDIT_CLI targets the live bin/supervisor-write-audit (CLI above names the
+# retired supervisor-write-layer3 path, so R1-R6 SKIP; that is pre-existing).
+AUDIT_CLI="$AGENTS_DIR/bin/supervisor-write-audit"
+AUDIT_CLI_NODE="$_AGENTS_DIR_NODE/bin/supervisor-write-audit"
+T_CURSOR_JSON='{"transcript_path":"/t/a.jsonl","line":5,"last_uuid":"u5","updated_at":"2026-01-01T00:00:00Z"}'
+
+read_state_field() {
+    local tmp="$1" sid="$2" path="$3"
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_NODE');
+const st = w.readState('$sid');
+let cur = st;
+for (const p of '$path'.split('.')) { if (cur == null) break; cur = cur[p]; }
+process.stdout.write(JSON.stringify(cur));
+" 2>/dev/null
+}
+
+# run_audit_cli <plans-dir> <args...> — explicit --session-id, no env ids (no mirror write).
+run_audit_cli() {
+    local tmp="$1"; shift
+    (
+        unset WORKFLOW_SESSION_ID CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        export WORKFLOW_PLANS_DIR="$tmp"
+        run_with_timeout 5 node "$AUDIT_CLI_NODE" "$@"
+    )
+}
+
+run_t1() {
+    local label="T1: audit --set-transcript-cursor alone writes audit.transcript_cursor (alert untouched)"
+    [ -f "$AUDIT_CLI" ] || { skip "$label (CLI not present)"; return; }
+    local tmp rc line alert count
+    tmp="$(mktemp -d)"
+    run_audit_cli "$tmp" --session-id t1-sid --set-transcript-cursor "$T_CURSOR_JSON" >/dev/null 2>&1
+    rc=$?
+    line=$(read_state_field "$tmp" t1-sid "audit.transcript_cursor.line")
+    alert=$(read_state_field "$tmp" t1-sid "alert.transcript_cursor")
+    count=$(count_state_files "$tmp")
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$line" = "5" ] && [ "$alert" = "null" ] && [ "$count" = "1" ]; then
+        pass "$label"
+    else
+        fail "$label (rc=$rc, line=$line, alert=$alert, count=$count)"
+    fi
+}
+
+run_t2() {
+    local label="T2: --increment-audit-retry-count + --set-transcript-cursor is mutually exclusive"
+    [ -f "$AUDIT_CLI" ] || { skip "$label (CLI not present)"; return; }
+    local tmp rc err
+    tmp="$(mktemp -d)"
+    err=$(run_audit_cli "$tmp" --session-id t2-sid --increment-audit-retry-count --set-transcript-cursor "$T_CURSOR_JSON" 2>&1 >/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 1 ] && printf '%s' "$err" | grep -q 'mutually exclusive'; then
+        pass "$label"
+    else
+        fail "$label (rc=$rc, err=$err)"
+    fi
+}
+
+# t3_reject <label> <value>: invalid cursor exits 1 and the prior cursor survives.
+t3_reject() {
+    local label="$1" value="$2" tmp rc before after
+    tmp="$(mktemp -d)"
+    run_audit_cli "$tmp" --session-id t3-sid --set-transcript-cursor "$T_CURSOR_JSON" >/dev/null 2>&1
+    before=$(read_state_field "$tmp" t3-sid "audit.transcript_cursor")
+    run_audit_cli "$tmp" --session-id t3-sid --set-transcript-cursor "$value" >/dev/null 2>&1
+    rc=$?
+    after=$(read_state_field "$tmp" t3-sid "audit.transcript_cursor")
+    rm -rf "$tmp"
+    if [ $rc -eq 1 ] && [ -n "$before" ] && [ "$before" != "null" ] && [ "$before" = "$after" ]; then
+        pass "$label"
+    else
+        fail "$label (rc=$rc, before=$before, after=$after)"
+    fi
+}
+
+run_t3() {
+    [ -f "$AUDIT_CLI" ] || { skip "T3: invalid audit cursor values (CLI not present)"; return; }
+    t3_reject "T3a: audit cursor line -1 rejected, state unchanged" \
+        '{"transcript_path":"/t/a.jsonl","line":-1,"last_uuid":"u5","updated_at":"2026-01-01T00:00:00Z"}'
+    t3_reject "T3b: audit cursor non-JSON rejected, state unchanged" 'not-json'
+    t3_reject "T3c: audit cursor non-string last_uuid rejected, state unchanged" \
+        '{"transcript_path":"/t/a.jsonl","line":2,"last_uuid":7,"updated_at":"2026-01-01T00:00:00Z"}'
+}
+
+run_t4() {
+    local label="T4: audit --set-audit-phase after the cursor keeps audit.transcript_cursor"
+    [ -f "$AUDIT_CLI" ] || { skip "$label (CLI not present)"; return; }
+    local tmp rc line
+    tmp="$(mktemp -d)"
+    run_audit_cli "$tmp" --session-id t4-sid --set-transcript-cursor "$T_CURSOR_JSON" >/dev/null 2>&1
+    run_audit_cli "$tmp" --session-id t4-sid --set-audit-phase in_progress >/dev/null 2>&1
+    rc=$?
+    line=$(read_state_field "$tmp" t4-sid "audit.transcript_cursor.line")
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$line" = "5" ]; then
+        pass "$label"
+    else
+        fail "$label (rc=$rc, line=$line)"
+    fi
+}
+
 run_r1
 run_r2
 run_r3
 run_r4
 run_r5
 run_r6
+run_t1
+run_t2
+run_t3
+run_t4
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
