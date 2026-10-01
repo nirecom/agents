@@ -1,24 +1,14 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-run-tests.js
 # Tags: workflow, tests, runner, hook, bin, scope:common
-# L3 gap (what this test does NOT catch):
-# - This suite exercises the hook at L2: each case pipes a hand-built PostToolUse
-#   stdin JSON payload directly into hooks/workflow-run-tests.js and asserts on the
-#   resulting workflow-state file. It does NOT run a real Claude Code session.
-# - Real Claude Code session where PostToolUse fires after a live bash test run
-# - Actual settings.json hook registration and PostToolUse event delivery (does the
-#   harness actually invoke this hook, with this stdin shape, on a real Bash tool call?)
-# That residual registration/event-delivery verification is L3 and is DEFERRED per #942
-# (full claude -p E2E containerization is out of scope; L3 e2e is gated on RUN_TL3
-# elsewhere). No claude -p E2E test is added here — this is a documented skip record.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
 # Tests for hooks/workflow-run-tests.js
-# This hook is a PostToolUse handler that auto-marks run_tests based on Bash command + exit code.
-#
-# Dispatcher: shared helpers/fixtures live in main-workflow-run-tests/common.sh;
-# case groups live in normal-and-guard.sh, error-and-edge.sh,
-# error-and-edge-control.sh, idempotency-security.sh, contract-trust.sh.
+# This PostToolUse hook marks run_tests from the RUN_CONTRACT line of tests/run-all.sh (or the worker-dispatch test-runner), never from a raw exit code.
+# L3 gap: L2 only — cases pipe hand-built PostToolUse stdin JSON into the hook; no real Claude Code
+#   session, settings.json hook registration, or PostToolUse event delivery is exercised.
+#   L3 is deferred per #942 (gated on RUN_TL3 elsewhere); no claude -p E2E is added here.
+#   Mitigation: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh category: hook-registration.
+# Dispatcher: shared helpers in main-workflow-run-tests/common.sh; case groups in normal-and-guard.sh,
+#   error-and-edge.sh, error-and-edge-control.sh, idempotency-security.sh, contract-trust.sh.
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"

@@ -23,20 +23,10 @@ const { stampTestFailureRisk } = require("./workflow-run-tests/test-failure-risk
 const { sanitizeLine, collapseControl, redactSecrets } = require("./lib/output-sanitize");
 const { normalizeCwd } = require("./lib/path-normalize");
 
-const MAX_TRIGGER_LEN = 300;
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const HOOK_NAME = "workflow-run-tests";
+const MAX_TRIGGER_LEN = 300;
 
 // `payload` is the PostToolUse hook response. Only `systemMessage` is ever put
 // there, and it is HUMAN-FACING DIAGNOSTICS ONLY: nothing in this hook, and
@@ -195,10 +185,14 @@ function demotionReason(hasProvenance, ambiguous, contract, toolResponse, vetoed
 }
 
 let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (e) {
-  done(); // fail-open on malformed stdin
+const hookInput = readHookInput();
+if (hookInput.kind !== "ok") {
+  try {
+    fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, hookInput, "run_tests not recorded") + "\n");
+  } catch (e) {}
+  done();
+} else {
+  input = hookInput.input;
 }
 
 if (!input || input.tool_name !== "Bash") done();

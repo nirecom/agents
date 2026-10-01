@@ -6,30 +6,17 @@
 // different file than the top-level path, so every fragment carries its own path.
 // Pure helpers never throw on malformed input — callers rely on that for fail-open.
 
-const fs = require("fs");
+const { readStdinText } = require("./read-stdin");
 // Re-exported from the shared post-edit module (#2388, CPR-SSOT).
 const { pathOf, normalizePath, applyEdits } = require("./post-edit-content");
 
 const TARGET_TOOLS = new Set(["Write", "Edit", "MultiEdit", "editFiles"]);
 
 function readStdinJson() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  for (;;) {
-    let n = 0;
-    try {
-      n = fs.readSync(0, buf, 0, buf.length, null);
-    } catch (e) {
-      if (e && e.code === "EAGAIN") continue;
-      if (e && e.code === "EOF") break;
-      throw e;
-    }
-    if (n === 0) break;
-    chunks.push(Buffer.from(buf.subarray(0, n)));
-  }
-  const raw = Buffer.concat(chunks).toString("utf8");
+  const r = readStdinText();
+  if (r.kind === "read-error") throw r.error;
   try {
-    return JSON.parse(raw);
+    return JSON.parse(r.text);
   } catch (e) {
     return null;
   }
