@@ -12,7 +12,7 @@ _did_run() {
     local sid="sid-did-$RANDOM$RANDOM"
     local wsid="wsid-did-$RANDOM$RANDOM"
     local tf="$TMPDIR_BASE/transcript-did.jsonl"
-    printf '{"type":"user","text":"transcript-sentinel-tau"}\n' > "$tf"
+    printf '%s\n' '{"type":"user","origin":{"kind":"human"},"message":{"role":"user","content":"transcript-sentinel-tau"},"uuid":"u1","timestamp":"2026-01-01T00:00:00Z"}' > "$tf"
 
     # Artifact resolved via wsid (passed explicitly) vs a sid-named decoy (never passed).
     local wsid_art="$WORKFLOW_PLANS_DIR/${wsid}-detail.md"

@@ -33,7 +33,7 @@ After reading `<wsid>-intent.md`, run `bin/supervisor-check-session-active --wsi
 - `<plans-dir>/<wsid>-outline.md`
 - `<plans-dir>/<wsid>-detail.md`
 - `<plans-dir>/<effective-state-sid>-supervisor-state.json` (Layer 1 findings — advisory only)
-- Recent transcript turns
+- Transcript (`<transcript-path>`) — on `STATUS: SUCCESS` the engine already assembled it via `hooks/lib/supervisor-codex-input.js`; read it yourself only on the fallback path (SKIPPED / FAILED) or the UNAVAILABLE fallback.
 - `skills/_shared/off-legitimacy-rubric.md` — read only when checklist item 6 fires (off-proposal trigger).
 - Use `hooks/lib/workflow-plans-dir.js` to resolve `<plans-dir>`.
 

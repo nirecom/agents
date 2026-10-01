@@ -144,13 +144,17 @@ classify_codex_failure() {
   fi
 }
 
-# human_approval_fallback <reason_class>
+# human_approval_fallback <reason_class> [detail]
 # Called when the codex examiner is unavailable. Checks OFFCLR_APPROVAL_INPUT
 # first (test seam / non-interactive approval); falls back to /dev/tty when
 # available. Exits 1 with UNAVAILABLE audit when neither path produces a reason.
+# A non-empty detail (e.g. a cli-exec-guard message) rides in every audit reason.
 human_approval_fallback() {
   local reason_class="$1"
   local human_reason=""
+  if [[ -n "${2:-}" ]]; then
+    reason_class="$reason_class ($2)"
+  fi
 
   if [[ -n "${OFFCLR_APPROVAL_INPUT:-}" ]]; then
     # Test seam / non-interactive: read reason from file path in env var.
@@ -347,6 +351,24 @@ if [[ ! -x "$TIMEOUT_WRAPPER" ]]; then
   exit 1
 fi
 
+# Same refusal as the wrapper: no input guard means no bounded examiner call.
+EXEC_GUARD_LIB="$SCRIPT_DIR/lib/cli-exec-guard.sh"
+if [[ ! -r "$EXEC_GUARD_LIB" ]]; then
+  append_audit "UNAVAILABLE" "codex input guard missing at $EXEC_GUARD_LIB"
+  echo "Examiner unavailable: codex input guard not found at $EXEC_GUARD_LIB." >&2
+  emergency_hint "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')"
+  exit 1
+fi
+# shellcheck source=lib/cli-exec-guard.sh
+source "$EXEC_GUARD_LIB"
+
+GUARD_RC=0
+GUARD_REASON="$(cli_exec_guard_input_size "$PROMPT_FILE" "$CODEX_INPUT_CHAR_LIMIT")" || GUARD_RC=$?
+if [[ $GUARD_RC -ne 0 ]]; then
+  echo "Examiner not launched: $GUARD_REASON" >&2
+  human_approval_fallback "input-guard" "$GUARD_REASON"
+fi
+
 set +e
 CODEX_OUT="$("$TIMEOUT_WRAPPER" "$EXAMINER_TIMEOUT_SECS" "$CODEX_BIN" exec --skip-git-repo-check - < "$PROMPT_FILE" 2>"$CODEX_ERR_FILE")"
 CODEX_RC=$?
@@ -363,7 +385,12 @@ if [[ $CODEX_RC -ne 0 ]]; then
     cat "$CODEX_ERR_FILE" >&2
   fi
   CLASS="$(classify_codex_failure)"
-  human_approval_fallback "$CLASS"
+  CODEX_FAIL_DETAIL=""
+  if [[ $CODEX_RC -eq 127 ]]; then
+    CODEX_FAIL_DETAIL="$(cli_exec_guard_diagnose_127 codex)"
+    echo "$CODEX_FAIL_DETAIL" >&2
+  fi
+  human_approval_fallback "$CLASS" "$CODEX_FAIL_DETAIL"
 fi
 
 # Structured parse (never regex-scraping): take the last NONCE-BOUND JSON object

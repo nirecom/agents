@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const { withStateLock } = require("./lock");
-const { validateFinding, validate, SEVERITY_VALUES, ALERT_PHASE_VALUES, ALERT_ELIGIBLE_PHASE_VALUES, ALERT_RETRY_THRESHOLD } = require("../supervisor-state-schema");
+const { validateFinding, validate, validateTranscriptCursor, SEVERITY_VALUES, ALERT_PHASE_VALUES, ALERT_ELIGIBLE_PHASE_VALUES, ALERT_RETRY_THRESHOLD } = require("../supervisor-state-schema");
 const findingStatus = require("../supervisor-finding-status");
 const {
   ALERT_PATCH_KEYS,
@@ -29,6 +29,7 @@ function writeAlertStateCore(sessionId, patch) {
   if ("alert_cause" in patch && patch.alert_cause !== null && typeof patch.alert_cause !== "string") return false;
   if ("findings_surfaced_at" in patch && patch.findings_surfaced_at !== null && typeof patch.findings_surfaced_at !== "string") return false;
   if ("alert_eligible_phase" in patch && !ALERT_ELIGIBLE_PHASE_VALUES.includes(patch.alert_eligible_phase)) return false;
+  if ("transcript_cursor" in patch && !validateTranscriptCursor(patch.transcript_cursor).ok) return false;
 
   // Validate findings
   if ("findings" in patch) {
@@ -70,6 +71,7 @@ function writeAlertStateCore(sessionId, patch) {
     alert_retry_count: 0,
     findings_surfaced_at: null,
     alert_eligible_phase: null,
+    transcript_cursor: null,
     ...existing,
   };
 
@@ -87,6 +89,7 @@ function writeAlertStateCore(sessionId, patch) {
   if ("alert_retry_count" in patch) alert.alert_retry_count = patch.alert_retry_count;
   if ("findings_surfaced_at" in patch) alert.findings_surfaced_at = patch.findings_surfaced_at;
   if ("alert_eligible_phase" in patch) alert.alert_eligible_phase = patch.alert_eligible_phase;
+  if ("transcript_cursor" in patch) alert.transcript_cursor = patch.transcript_cursor;
 
   // #905: terminal states must never carry a stale alert_armed_at.
   if (effectivePhase === "done" || effectivePhase === "paused" || effectivePhase === "closed") {

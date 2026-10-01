@@ -65,6 +65,9 @@ EOF
   if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" ]]; then
     cp "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" "$agents_dir/bin/lib/codex-timeout.sh"
   fi
+  if [[ -f "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" ]]; then
+    cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$agents_dir/bin/lib/cli-exec-guard.sh"
+  fi
 
   # Copy safe-plans-path.sh + the concern-ledger CLI/library bundle (mandatory
   # dependencies of run-codex-review-loop's preflight; see #2088/#2025)
@@ -180,6 +183,9 @@ invoke_real_review_plan_codex() {
   fi
   if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" ]]; then
     cp "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" "$mock_dir/bin/lib/codex-timeout.sh"
+  fi
+  if [[ -f "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" ]]; then
+    cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$mock_dir/bin/lib/cli-exec-guard.sh"
   fi
   AGENTS_CONFIG_DIR="$mock_dir" run_with_timeout "$mock_dir/bin/review-plan-codex" \
     --format "$fmt" \

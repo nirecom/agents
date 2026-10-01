@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2374-off-clearance-fallback.sh
 # Tests: bin/request-off-clearance
-# Tags: off-clearance, examiner, fallback, human-approval, audit, exit-codes, security, scope:issue-specific, pwsh-not-required, TL2, dup-group-keep:size-hard-limit
+# Tags: off-clearance, examiner, fallback, human-approval, audit, exit-codes, security, scope:issue-specific, pwsh-not-required, TL2, dup-group-keep:size-hard-limit, input-size-guard, exit-127
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=./lib/request-off-clearance-harness.sh
 . "$AGENTS_DIR/tests/lib/request-off-clearance-harness.sh"
 
@@ -214,5 +214,98 @@ run_FB_fallback() {
 }
 
 run_FB_fallback
+
+# ============================================================================
+# GD - CODEX INPUT GUARD (#2475). bin/lib/cli-exec-guard.sh must cover this
+# launcher too: an over-limit prompt never spawns codex and takes the examiner-
+# unavailable fallback with the guard's message; exit 127 names its cause.
+# ============================================================================
+
+# gd_shadow_config <dir> <rubric-chars> — AGENTS_CONFIG_DIR whose rubric is <n>
+# chars (the rubric is cat-ed into PROMPT_FILE unsliced, unlike argv-bound
+# --detail); every other module/bridge is the real one re-exported unchanged.
+gd_shadow_config() {
+    local dir="$1" n="$2" real="$OFFCLR_AGENTS_NODE" m
+    mkdir -p "$dir/bin" "$dir/hooks/lib" "$dir/hooks/workflow-state/state-io" "$dir/skills/_shared"
+    for m in hooks/workflow-state/index.js hooks/workflow-state/state-io/core.js \
+             hooks/lib/supervisor-state-writer.js hooks/lib/off-clearance-mint-lock.js \
+             hooks/lib/consume-exact-file.js; do
+        printf 'module.exports = require("%s/%s");\n' "$real" "$m" > "$dir/$m"
+    done
+    printf '#!/usr/bin/env bash\nexec bash %s "$@"\n' "$(printf '%q' "$OFFCLR_AGENTS_DIR/bin/resolve-session-id")" > "$dir/bin/resolve-session-id"
+    chmod +x "$dir/bin/resolve-session-id"
+    node -e 'require("fs").writeFileSync(process.argv[1], "r".repeat(Number(process.argv[2])))' \
+        "$(node_path "$dir/skills/_shared/off-legitimacy-rubric.md")" "$n"
+}
+
+# codex_marker_stub <marker> <rc> — a codex that records it was spawned, drains stdin, exits <rc>.
+codex_marker_stub() {
+    printf '#!/usr/bin/env bash\n: > %s\ncat > /dev/null\nexit %s\n' "$(printf '%q' "$1")" "$2"
+}
+
+run_GD_guard() {
+    local tmp tn ok shadow marker
+
+    # GD-1 prompt > 1048576 chars -> codex NOT spawned, "input too large" surfaced
+    # (stderr or audit), UNAVAILABLE fallback, no token.
+    tmp=$(make_tmp); tn=$(node_path "$tmp"); shadow="$tmp/shadow-big"; marker="$tmp/codex-ran"
+    gd_shadow_config "$shadow" 1100000
+    REQ_SID="gd1sid"; REQ_CONFIG_DIR="$(node_path "$shadow")"
+    run_req "$tn" "$(codex_marker_stub "$marker" 1)" --target workflow --category workflow-bug --detail "bug"
+    ok=1
+    [ "$RC" -eq 1 ] || ok=0
+    [ ! -e "$marker" ] || ok=0
+    { echo "$OUT$ERR" | grep -qF "input too large" || state_has "$tmp" "input too large"; } || ok=0
+    state_has "$tmp" "UNAVAILABLE" || ok=0
+    [ "$(token_count "$tmp")" = "0" ] || ok=0
+    if [ "$ok" = "1" ]; then
+        pass "GD-1 over-limit prompt -> codex not spawned, 'input too large' surfaced, UNAVAILABLE, NO token"
+    else
+        fail "GD-1 want rc=1 + codex not spawned + 'input too large' + UNAVAILABLE + no token; got rc=$RC spawned=$([ -e "$marker" ] && echo yes || echo no) tokens=$(token_count "$tmp") err=$(printf '%q' "$ERR")"
+    fi
+    rm -r -f "$tmp" 2>/dev/null || true
+
+    # GD-2 (CPR-ORTH) the same shadow seam with a normal-size rubric -> codex IS
+    # spawned and no guard message appears: the guard must not over-block.
+    tmp=$(make_tmp); tn=$(node_path "$tmp"); shadow="$tmp/shadow-small"; marker="$tmp/codex-ran"
+    gd_shadow_config "$shadow" 2000
+    REQ_SID="gd2sid"; REQ_CONFIG_DIR="$(node_path "$shadow")"
+    run_req "$tn" "$(codex_marker_stub "$marker" 1)" --target workflow --category workflow-bug --detail "bug"
+    ok=1
+    [ -e "$marker" ] || ok=0
+    echo "$OUT$ERR" | grep -qF "input too large" && ok=0
+    state_has "$tmp" "input too large" && ok=0
+    if [ "$ok" = "1" ]; then
+        pass "GD-2 normal-size prompt -> codex spawned, no 'input too large'"
+    else
+        fail "GD-2 want codex spawned + no guard message; got rc=$RC spawned=$([ -e "$marker" ] && echo yes || echo no) err=$(printf '%q' "$ERR")"
+    fi
+    rm -r -f "$tmp" 2>/dev/null || true
+
+    # GD-3 codex exits 127 -> the failure reason carries the diagnose_127 line.
+    tmp=$(make_tmp); tn=$(node_path "$tmp"); marker="$tmp/codex-ran"
+    REQ_SID="gd3sid"
+    run_req "$tn" "$(codex_marker_stub "$marker" 127)" --target workflow --category workflow-bug --detail "bug"
+    ok=1
+    [ "$RC" -eq 1 ] || ok=0
+    { echo "$OUT$ERR" | grep -qF "exit 127:" || state_has "$tmp" "exit 127:"; } || ok=0
+    [ "$(token_count "$tmp")" = "0" ] || ok=0
+    if [ "$ok" = "1" ]; then
+        pass "GD-3 codex exit 127 -> 'exit 127:' diagnosis surfaced, NO token"
+    else
+        fail "GD-3 want rc=1 + 'exit 127:' in stderr/audit + no token; got rc=$RC tokens=$(token_count "$tmp") err=$(printf '%q' "$ERR")"
+    fi
+    rm -r -f "$tmp" 2>/dev/null || true
+
+    # GD-4 static pin: deleting the guard wiring must fail a test.
+    if grep -qF 'cli-exec-guard.sh' "$OFFCLR_REQ" && grep -qF 'cli_exec_guard_input_size' "$OFFCLR_REQ" \
+        && grep -qF 'cli_exec_guard_diagnose_127' "$OFFCLR_REQ" && grep -qE '1048576|CODEX_INPUT_CHAR_LIMIT' "$OFFCLR_REQ"; then
+        pass "GD-4 request-off-clearance sources cli-exec-guard.sh with the codex input limit"
+    else
+        fail "GD-4 request-off-clearance must source bin/lib/cli-exec-guard.sh, call both guard functions, and use the 1048576 limit"
+    fi
+}
+
+run_GD_guard
 
 offclr_report

@@ -127,7 +127,7 @@ Terms for the session breadcrumb system (`docs/architecture/claude-code/handoff-
 ### handoff artifact
 
 - **Full name**: Handoff artifact
-- **Definition**: An append-only, per-session Markdown file (`<PLANS_DIR>/<sid>-handoff.md`) that records micro-state a fresh session cannot recover from plan files alone — user decisions, workarounds, rejected approaches, and open questions. Written through a single function; read back by `/resume-session`.
+- **Definition**: An append-only, per-session Markdown file (`<PLANS_DIR>/<sid>-handoff.md`) that records micro-state a fresh session cannot recover from plan files alone — user decisions, workarounds, rejected approaches, and open questions. Written through a single function; read back by `/resume-session` and, read-only, by the supervisor codex engine (`hooks/lib/supervisor-codex-input.js`).
 - **Related**: [architecture/claude-code/handoff-artifact.md](architecture/claude-code/handoff-artifact.md)
 
 ### workflow active period
@@ -172,6 +172,22 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 | **audit checklist** | The three items supervisor-audit judges — cross-stage coherence, recurrence patterns, systemic risk. They are a checklist, not mutually exclusive axes, so they are never called "three axes" (the unrelated security-review "three axes" is a different concept). | [agents/supervisor-audit.md](../agents/supervisor-audit.md) |
 | **review round / CAP / MAX_EXTENSIONS** | Existing shared codex-review-loop parameters. A round is one reviewer run; CAP is the normal ceiling; MAX_EXTENSIONS is the extra rounds allowed only while HIGH concerns remain. "2+1" means CAP=2 / MAX_EXTENSIONS=1. The review side coins no alias for these. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
 | **prestaged report** | A reviewer output produced outside the loop and handed to `run-codex-review-loop --prestaged-report`, letting the opus fallback rejoin the shared loop through the same stage / reduce / finalize code path as the codex round. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
+
+## Supervisor codex input
+
+Terms for the assembled Codex review input (`docs/architecture/claude-code/supervisor-codex-input.md`).
+
+### transcript cursor
+
+- **Full name**: Transcript cursor
+- **Definition**: The per-mode marker (`alert.transcript_cursor`, `audit.transcript_cursor` in the supervisor state file) of how far the session transcript has already been reviewed. Actions are collected from the cursor onward; it advances only on `STATUS: SUCCESS` and resets to the start when the transcript no longer matches it.
+- **Related**: [architecture/claude-code/supervisor-codex-input.md — The transcript cursor](architecture/claude-code/supervisor-codex-input.md#the-transcript-cursor)
+
+### codex input guard
+
+- **Full name**: Codex input guard
+- **Definition**: The pre-launch size check every codex launch path runs on the exact file it hands to codex, against `CODEX_INPUT_CHAR_LIMIT` (owned by `bin/lib/cli-exec-guard.sh`). An over-limit or unmeasurable input fails the launch explicitly instead of being truncated.
+- **Related**: [architecture/claude-code/supervisor-codex-input.md — The input guard](architecture/claude-code/supervisor-codex-input.md#the-input-guard)
 
 ## Concern ledger
 

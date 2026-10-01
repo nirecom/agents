@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-885-supervisor-state-schema-axis-a.sh
 # Tests: hooks/lib/supervisor-state-schema.js
-# Tags: supervisor-state-schema, finding-schema, axis-a, feature-885, scope:issue-specific
+# Tags: supervisor-state-schema, finding-schema, axis-a, feature-885, scope:issue-specific, transcript-cursor
 # Tests for issue #885 — Axis A finding schema extension.
 #
 # Verifies validateFinding accepts the new optional fields (reason, context,
@@ -129,6 +129,63 @@ expect_invalid "A10: co_blocked_by with non-string element rejected" \
 # --- A11: co_blocked_by empty array -> valid (key present, empty) ------------
 expect_valid "A11: co_blocked_by empty array valid" \
 "{ categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 'r', co_blocked_by: [] }"
+
+# --- #2475: transcript_cursor on alert/audit ---------------------------------
+# expect_cursor <label> <cursor-js-literal> <want ok: true|false>
+expect_cursor() {
+    local label="$1" cursor="$2" want="$3"
+    local out rc
+    out=$(run_with_timeout 5 node -e "
+const s = require('$SCHEMA_MODULE_NODE');
+if (typeof s.validateTranscriptCursor !== 'function') { console.error('validateTranscriptCursor not exported'); process.exit(2); }
+const r = s.validateTranscriptCursor($cursor);
+if (!r || r.ok !== $want) { console.error('expected ok=$want, got: '+JSON.stringify(r)); process.exit(2); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "$label"
+    else
+        fail "$label (rc=$rc, out=$out)"
+    fi
+}
+
+GOOD_CURSOR="{ transcript_path: '/t/a.jsonl', line: 5, last_uuid: 'u5', updated_at: '2026-01-01T00:00:00Z' }"
+
+expect_cursor "TC1: validateTranscriptCursor accepts null" "null" "true"
+expect_cursor "TC2: validateTranscriptCursor accepts a well-formed cursor" "$GOOD_CURSOR" "true"
+expect_cursor "TC3: validateTranscriptCursor accepts last_uuid null" \
+"{ transcript_path: '/t/a.jsonl', line: 0, last_uuid: null, updated_at: '2026-01-01T00:00:00Z' }" "true"
+expect_cursor "TC4: negative line rejected" \
+"{ transcript_path: '/t/a.jsonl', line: -1, last_uuid: 'u5', updated_at: '2026-01-01T00:00:00Z' }" "false"
+expect_cursor "TC5: non-integer line rejected" \
+"{ transcript_path: '/t/a.jsonl', line: 1.5, last_uuid: 'u5', updated_at: '2026-01-01T00:00:00Z' }" "false"
+expect_cursor "TC6: empty transcript_path rejected" \
+"{ transcript_path: '', line: 5, last_uuid: 'u5', updated_at: '2026-01-01T00:00:00Z' }" "false"
+expect_cursor "TC7: non-string last_uuid rejected" \
+"{ transcript_path: '/t/a.jsonl', line: 5, last_uuid: 5, updated_at: '2026-01-01T00:00:00Z' }" "false"
+expect_cursor "TC8: empty updated_at rejected" \
+"{ transcript_path: '/t/a.jsonl', line: 5, last_uuid: 'u5', updated_at: '' }" "false"
+expect_cursor "TC9: string line rejected" \
+"{ transcript_path: '/t/a.jsonl', line: '5', last_uuid: 'u5', updated_at: '2026-01-01T00:00:00Z' }" "false"
+
+# TC10/TC11: createEmptyState seeds both cursors null; validate() rejects a bad one.
+tc_out=$(run_with_timeout 5 node -e "
+const s = require('$SCHEMA_MODULE_NODE');
+const st = s.createEmptyState('s');
+const a = st.alert && Object.prototype.hasOwnProperty.call(st.alert, 'transcript_cursor') ? st.alert.transcript_cursor : 'missing';
+const u = st.audit && Object.prototype.hasOwnProperty.call(st.audit, 'transcript_cursor') ? st.audit.transcript_cursor : 'missing';
+const base = s.validate(st);
+const bad = s.createEmptyState('s'); bad.alert.transcript_cursor = { transcript_path: '/t', line: -1, last_uuid: null, updated_at: 'x' };
+const badAudit = s.createEmptyState('s'); badAudit.audit.transcript_cursor = { transcript_path: '', line: 1, last_uuid: null, updated_at: 'x' };
+const good = s.createEmptyState('s'); good.alert.transcript_cursor = $GOOD_CURSOR;
+console.log([a === null, u === null, base.ok === true, s.validate(bad).ok === false, s.validate(badAudit).ok === false, s.validate(good).ok === true].join(','));
+" 2>&1)
+if [ "$tc_out" = "true,true,true,true,true,true" ]; then
+    pass "TC10: createEmptyState seeds alert/audit transcript_cursor null; validate() checks both cursors"
+else
+    fail "TC10: createEmptyState/validate transcript_cursor contract (got: $tc_out; want all true: alertNull,auditNull,emptyValid,badAlertRejected,badAuditRejected,goodAccepted)"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

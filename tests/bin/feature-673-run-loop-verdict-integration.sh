@@ -64,6 +64,9 @@ EOF
     if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" ]]; then
       cp "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" "$agents_dir/bin/lib/codex-timeout.sh"
     fi
+    if [[ -f "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" ]]; then
+      cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$agents_dir/bin/lib/cli-exec-guard.sh"
+    fi
     if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh" ]]; then
       cp "$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh" \
          "$agents_dir/bin/lib/codex-review-loop/ledger-verdict.sh"

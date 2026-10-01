@@ -56,15 +56,15 @@ if [[ -n "$TARGET" ]] && ! printf '%s' "$TARGET" | grep -qE '^[1-9][0-9]*$'; the
     exit 2
 fi
 
-TMP="${OUT}.tmp"
-trap 'rm -f "$TMP"' EXIT
+TMP_OUT="${OUT}.tmp"
+trap 'rm -f "$TMP_OUT"' EXIT
 
 # node is a native Windows binary under Git Bash — a POSIX-style path is not
 # resolvable there (rules/coding/nodejs.md).
 if command -v cygpath >/dev/null 2>&1; then
-    TMP_NODE="$(cygpath -m "$(dirname "$TMP")")/$(basename "$TMP")"
+    TMP_NODE="$(cygpath -m "$(dirname "$TMP_OUT")")/$(basename "$TMP_OUT")"
 else
-    TMP_NODE="$TMP"
+    TMP_NODE="$TMP_OUT"
 fi
 
 # This is a THIRD producer of schema_version / same_fix. Both are read out of the
@@ -102,6 +102,6 @@ const artifact = {
 fs.writeFileSync(process.argv[1], JSON.stringify(artifact, null, 2) + "\n");
 ' "$TMP_NODE"
 
-mv -f "$TMP" "$OUT"
+mv -f "$TMP_OUT" "$OUT"
 trap - EXIT
 printf '%s\n' "$OUT"
