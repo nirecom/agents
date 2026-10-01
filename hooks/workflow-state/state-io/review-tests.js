@@ -36,24 +36,56 @@ function markReviewTestsComplete(sessionId, files, extraFields = {}) {
   markStep(sessionId, "review_tests", "complete", { ...buildReviewScopeAnnotation(map), wsid, ...extraFields });
 }
 
+const CLEAR_OUTCOME = Object.freeze({
+  RECOVERED: "recovered",
+  WARNINGS_CLEARED: "warnings-cleared",
+  NOTHING_TO_CLEAR: "nothing-to-clear",
+  MANIFEST_UNAVAILABLE: "manifest-unavailable",
+  NO_STATE: "no-state",
+});
+
+// #2434 swap point: the only place that knows where the acceptance reason is recorded.
+function warningsAcceptedReasonEvents(reason, ann) {
+  return [ann("warnings_accepted_reason", reason || null, "declared")];
+}
+
 // WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED. The "anything to clear?" decision is taken
 // INSIDE the lock; the clear, the reason and the current review-scope manifest (#2287)
 // land in ONE batch, so a warning appended afterwards is never tombstoned.
+// A write_code-reopened review_tests (#2482) is restored to complete in the same batch;
+// without a manifest it stays reopened (fail-closed: the commit gate needs the manifest).
 function clearReviewTestsWarnings(sessionId, reason, manifest) {
   assertValidSessionId(sessionId); // explicit guard: readState's try-catch swallows errors
-  if (!readState(sessionId)) return; // fail-open: nothing to clear
+  if (!readState(sessionId)) return CLEAR_OUTCOME.NO_STATE; // fail-open: nothing to clear
   const files = manifestFiles(manifest);
   const origin = "clear-review-tests-warnings";
-  const ann = (key, value, provenance) => ({ kind: "step_annotation", step: "review_tests", key, value, provenance, origin });
+  const ann = (key, value, provenance, o = origin) => ({ kind: "step_annotation", step: "review_tests", key, value, provenance, origin: o });
+  let outcome = CLEAR_OUTCOME.NOTHING_TO_CLEAR;
   events.appendEvents(sessionId, (_events, current) => {
+    outcome = CLEAR_OUTCOME.NOTHING_TO_CLEAR;
     const existing = (current && current.steps && current.steps.review_tests) || {};
+    if (existing.status === "pending" && REVIEW_TESTS_REOPEN_REASONS.includes(existing.reopen_reason)) {
+      if (!files) {
+        outcome = CLEAR_OUTCOME.MANIFEST_UNAVAILABLE;
+        return [];
+      }
+      const ro = "accept-reopened-review-tests";
+      const rann = (key, value, provenance) => ann(key, value, provenance, ro);
+      const out = [{ kind: "step_status", step: "review_tests", status: "complete", provenance: "declared", origin: ro }];
+      for (const [key, value] of Object.entries(buildReviewScopeAnnotation(files))) out.push(rann(key, value, "observed"));
+      out.push(rann("warnings_summary", null, "observed"), ...warningsAcceptedReasonEvents(reason, rann));
+      outcome = CLEAR_OUTCOME.RECOVERED;
+      return out;
+    }
     if (!existing.warnings_summary) return []; // nothing to clear
-    const out = [ann("warnings_summary", null, "observed"), ann("warnings_accepted_reason", reason || null, "declared")];
+    const out = [ann("warnings_summary", null, "observed"), ...warningsAcceptedReasonEvents(reason, ann)];
     if (files) {
       for (const [key, value] of Object.entries(buildReviewScopeAnnotation(files))) out.push(ann(key, value, "observed"));
     }
+    outcome = CLEAR_OUTCOME.WARNINGS_CLEARED;
     return out;
   });
+  return outcome;
 }
 
 // Remove the review-loop terminal marker written by run-codex-review-loop.sh
@@ -105,6 +137,7 @@ function recordWriteCodeCompletionScope(sessionId, snapshot, decide) {
 
 module.exports = {
   REVIEW_TESTS_REOPEN_REASONS,
+  CLEAR_OUTCOME,
   buildReviewScopeAnnotation,
   markReviewTestsComplete,
   clearReviewTestsWarnings,

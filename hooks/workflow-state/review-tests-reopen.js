@@ -59,4 +59,4 @@ function formatReviewTestsReopenNotice(res) {
   return null;
 }
 
-module.exports = { reopenReviewTestsAfterWriteCode, formatReviewTestsReopenNotice };
+module.exports = { reopenReviewTestsAfterWriteCode, formatReviewTestsReopenNotice, resolveReopenRepoDir };
