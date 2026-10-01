@@ -611,3 +611,7 @@ Changes: Model selection for reviewer, producer, and alert subagent roles is now
 ### FEATURE: PR #2474 (2026-09-30)
 Background: feat(#2265): allow self-scripts via bash-guard classifier; drop 206 s...
 Changes: Agents' own scripts no longer trigger a permission prompt when run from a linked worktree, by relative path, or wrapped as `bash -c 'cd "$AGENTS_CONFIG_DIR" && …'`. The 206 static allow rules in settings.json are gone.;Security: a newline-separated command after an allowlisted script no longer inherits the automatic allow.
+
+### FEATURE: PR #2485 (2026-10-01)
+Background: fix(#2482): let WARNINGS_ACCEPTED restore a review_tests step reopened by write_code
+Changes: Fixed: after write_code reopens review_tests, `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` restores the step to complete instead of leaving the session stuck; the warning message now lists the characters the accept reason must not contain.
