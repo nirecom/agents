@@ -1,5 +1,5 @@
 # glab.ps1 - Install GitLab CLI and configure authentication
-# Sibling: dotfiles/install/win/glab.ps1 (same pattern; kept separate for self-sufficiency)
+# Self-contained installer (no dotfiles sibling; see docs/architecture/gitlab-support.md).
 # Usage: Called by install.ps1 or run independently
 
 Set-StrictMode -Version Latest
@@ -60,32 +60,39 @@ $_subfolder = (& "$AgentsRoot\bin\get-config-var.ps1" GITLAB_SUBFOLDER 2>$null) 
 $_sshHost   = (& "$AgentsRoot\bin\get-config-var.ps1" GITLAB_SSH_HOSTNAME 2>$null) -join ""
 
 if ($_hostname -and $_token) {
-    # DNS reachability guard: resolve in a job with a 3s hard timeout.
-    $_dnsJob = Start-Job -ScriptBlock { param($h); [System.Net.Dns]::GetHostEntry($h) } -ArgumentList $_hostname
-    $_waited = Wait-Job -Job $_dnsJob -Timeout 3
-    if (-not $_waited -or $_dnsJob.State -ne 'Completed') {
-        Stop-Job -Job $_dnsJob
-        Remove-Job -Job $_dnsJob -Force
-        Write-Warning "Cannot reach $_hostname (DNS check timed out or failed). Skipping glab authentication."
+    # TCP reachability guard: name resolution + connect, 3s hard limit in total.
+    # GLAB_PROBE_PORT is a test seam; production always probes 443.
+    $_port = 443
+    $_candidate = 0
+    if ($env:GLAB_PROBE_PORT -match '^\d+$' -and [int]::TryParse($env:GLAB_PROBE_PORT, [ref]$_candidate) `
+        -and $_candidate -ge 1 -and $_candidate -le 65535) {
+        $_port = $_candidate
+    }
+    $_reachable = $false
+    $_tcp = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $_task = $_tcp.ConnectAsync($_hostname, $_port)
+        if ($_task.Wait(3000)) { $_reachable = $_tcp.Connected }
+    } catch {
+        $_reachable = $false
+    } finally {
+        $_tcp.Dispose()
+    }
+    if (-not $_reachable) {
+        Write-Warning "Cannot connect to ${_hostname}:${_port} (TCP connect failed or timed out within 3s). Skipping glab authentication."
     } else {
-        $_dnsErr = $null
-        try { Receive-Job -Job $_dnsJob -ErrorAction Stop | Out-Null } catch { $_dnsErr = $_ }
-        Remove-Job -Job $_dnsJob -Force
-        if ($_dnsErr) {
-            Write-Warning "Cannot reach $_hostname (DNS resolution failed). Skipping glab authentication."
+        Write-Host "Configuring glab authentication for $_hostname..."
+        # Token on stdin, not argv: a command line is visible in every process listing.
+        $_authArgs = @("auth", "login", "--hostname", $_hostname, "--stdin", "--api-protocol", "https", "--git-protocol", "ssh")
+        if ($_sshHost) { $_authArgs += @("--ssh-hostname", $_sshHost) }
+        $_token | & glab @_authArgs
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "glab auth login failed (exit code $LASTEXITCODE)."
         } else {
-            Write-Host "Configuring glab authentication for $_hostname..."
-            $_authArgs = @("auth", "login", "--hostname", $_hostname, "--token", $_token, "--api-protocol", "https", "--git-protocol", "ssh")
-            if ($_sshHost) { $_authArgs += @("--ssh-hostname", $_sshHost) }
-            & glab @_authArgs
-            if ($LASTEXITCODE -ne 0) {
-                Write-Warning "glab auth login failed (exit code $LASTEXITCODE)."
-            } else {
-                Write-Host "glab: authenticated." -ForegroundColor Green
-                if ($_subfolder) {
-                    glab config set --host $_hostname subfolder $_subfolder
-                    Write-Host "glab: subfolder set to '$_subfolder'." -ForegroundColor Green
-                }
+            Write-Host "glab: authenticated." -ForegroundColor Green
+            if ($_subfolder) {
+                glab config set --host $_hostname subfolder $_subfolder
+                Write-Host "glab: subfolder set to '$_subfolder'." -ForegroundColor Green
             }
         }
     }

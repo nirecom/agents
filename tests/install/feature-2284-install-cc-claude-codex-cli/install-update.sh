@@ -8,20 +8,7 @@
 # Tests: install/linux/claude-code.sh, install/win/claude-code.ps1, install/linux/codex.sh, install/win/codex.ps1
 # Tags: installer, wait-cc-exit, pwsh-required, scope:issue-specific
 set -u
-
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-CC_SH="$AGENTS_DIR/install/linux/claude-code.sh"
-CC_PS="$AGENTS_DIR/install/win/claude-code.ps1"
-CODEX_SH="$AGENTS_DIR/install/linux/codex.sh"
-CODEX_PS="$AGENTS_DIR/install/win/codex.ps1"
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-
-TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+# Sourced by the dispatcher outside any case span: detector helpers only (cases run in its spans).
 
 # ---------------------------------------------------------------------------
 # Detector functions — each reads the file it receives on every call.
@@ -54,11 +41,11 @@ already_installed_line() {
     fi
 }
 
-# First `exit 0` after line $2.
+# First `exit 0` after line $2, ignoring lines $3..$4 (the guard's own skip branch).
 early_exit_line_after() {
-    local file="$1" after="$2"
-    awk -v after="$after" '
-        NR > after &&
+    local file="$1" after="$2" skip_lo="${3:-0}" skip_hi="${4:-0}"
+    awk -v after="$after" -v lo="$skip_lo" -v hi="$skip_hi" '
+        NR > after && !(NR >= lo && NR <= hi) &&
         ($0 ~ /^[[:space:]]*exit[[:space:]]+0([[:space:]]|$)/ ||
          $0 ~ /[{;][[:space:]]*exit[[:space:]]+0([[:space:]]|\}|$)/) { print NR; exit }
     ' "$file"
@@ -133,15 +120,44 @@ update_is_skip_gated() {
     _skip_between "$file" "$wline" "$uline"
 }
 
+# "<first> <last>" of the guard's skip branch: the `if` consuming its exit code (sh `if !`
+# on the guard line; ps `$LASTEXITCODE` within 3 lines) through its one-line end or `fi`/`}`.
+guard_skip_range() {
+    local file="$1" w="$2" kind="$3" i="" n line end
+    if [ "$kind" = "sh" ]; then
+        sed -n "${w}p" "$file" | grep -Eq '^[[:space:]]*if[[:space:]]+!' && i="$w"
+    else
+        for n in 1 2 3; do
+            if sed -n "$((w + n))p" "$file" | grep -Eq '^[[:space:]]*if[[:space:]]*\(.*\$LASTEXITCODE'; then
+                i=$((w + n)); break
+            fi
+        done
+    fi
+    [ -n "$i" ] || return 0
+    line="$(sed -n "${i}p" "$file")"
+    if printf '%s\n' "$line" | grep -Eq '(\{.*\}[[:space:]]*$|then.*(;|[[:space:]])fi([[:space:]]|;|$))'; then
+        echo "$i $i"; return 0
+    fi
+    end="$(awk -v s="$i" 'NR > s && /^[[:space:]]*(fi|\})[[:space:]]*$/ { print NR; exit }' "$file")"
+    [ -n "$end" ] && echo "$i $end"
+    return 0
+}
+
 # Update reachable from already-installed path (not dead code after an early exit).
+# Excludes only the skip branch of a guard between install check and update (#2476).
 update_is_reachable_when_installed() {
-    local file="$1" cli="$2" kind="$3" uline tline eline
+    local file="$1" cli="$2" kind="$3" uline tline eline wline range lo=0 hi=0
     uline="$(update_line "$file" "$cli")"
     [ -n "$uline" ] || return 1
     tline="$(already_installed_line "$file" "$cli" "$kind")"
     [ -n "$tline" ] || return 0
     [ "$uline" -lt "$tline" ] && return 0
-    eline="$(early_exit_line_after "$file" "$tline")"
+    wline="$(wait_ref_line "$file")"
+    if [ -n "$wline" ] && [ "$wline" -gt "$tline" ] && [ "$wline" -lt "$uline" ]; then
+        range="$(guard_skip_range "$file" "$wline" "$kind")"
+        if [ -n "$range" ]; then lo="${range% *}"; hi="${range#* }"; fi
+    fi
+    eline="$(early_exit_line_after "$file" "$tline" "$lo" "$hi")"
     [ -n "$eline" ] || return 0
     [ "$uline" -lt "$eline" ]
 }
@@ -203,21 +219,9 @@ check_update_group() {
     fi
 }
 
-# --- Group C: claude-code installers ---
-check_update_group "C" "$CC_SH" "claude" "sh"
-check_update_group "C4" "$CC_PS" "claude" "ps"
-
-# --- Group D: codex installers ---
-check_update_group "D" "$CODEX_SH" "codex" "sh"
-check_update_group "D4" "$CODEX_PS" "codex" "ps"
-
-# --- CPR-ORTH: guard is symmetric across both platforms ---
-for _pair in "claude:$CC_SH:$CC_PS" "codex:$CODEX_SH:$CODEX_PS"; do
-    _cli="${_pair%%:*}"
-    _rest="${_pair#*:}"
-    _sh="${_rest%%:*}"
-    _ps="${_rest#*:}"
-    _sh_ok=0; _ps_ok=0
+# CPR-ORTH: the update guard is symmetric across both platforms (one call per CLI).
+orth_update_guard_pair() {
+    local _cli="$1" _sh="$2" _ps="$3" _sh_ok=0 _ps_ok=0
     update_is_skip_gated "$_sh" "$_cli" "sh" && _sh_ok=1
     update_is_skip_gated "$_ps" "$_cli" "ps" && _ps_ok=1
     if [ "$_sh_ok" = "1" ] && [ "$_ps_ok" = "1" ]; then
@@ -225,216 +229,4 @@ for _pair in "claude:$CC_SH:$CC_PS" "codex:$CODEX_SH:$CODEX_PS"; do
     else
         fail "ORTH: one-sided $_cli update guard (posix=$_sh_ok, win=$_ps_ok; both must be 1)"
     fi
-done
-
-# ---------------------------------------------------------------------------
-# Mutation probes — detectors must discriminate, not merely be red today.
-# ---------------------------------------------------------------------------
-
-MUT_DIR="$TMP_DIR/mut"
-mkdir -p "$MUT_DIR"
-
-# Reference implementation: guard scoped after install check, skip path present.
-cat > "$MUT_DIR/good.sh" << 'GOOD_SH_EOF'
-#!/bin/bash
-set -euo pipefail
-if type claude >/dev/null 2>&1; then
-    if ! bash "$AGENTS_ROOT/install/lib/wait-cc-exit.sh"; then
-        echo "CC running; skipping update." >&2; exit 0
-    fi
-    claude update || true
-    exit 0
-fi
-echo "Installing Claude Code..."
-GOOD_SH_EOF
-
-cat > "$MUT_DIR/good.ps1" << 'GOOD_PS_EOF'
-if (Get-Command claude -ErrorAction SilentlyContinue) {
-    & pwsh -NoProfile -File (Join-Path $AgentsRoot "install\lib\wait-cc-exit.ps1")
-    if ($LASTEXITCODE -ne 0) { Write-Warning "CC running; skipping update."; exit 0 }
-    claude update
-    if ($LASTEXITCODE -ne 0) { Write-Warning "claude update failed; retry manually." }
-    exit 0
 }
-Write-Host "Installing..."
-GOOD_PS_EOF
-
-# Guard exit code discarded (|| true) — HIGH-1 ungated shape.
-cat > "$MUT_DIR/ungated.sh" << 'UNGATED_EOF'
-#!/bin/bash
-set -euo pipefail
-if type claude >/dev/null 2>&1; then
-    bash "$AGENTS_ROOT/install/lib/wait-cc-exit.sh" || true
-    claude update || true
-    exit 0
-fi
-UNGATED_EOF
-
-# Guard reference in a comment only.
-sed 's|^    if ! bash|    # if ! bash|' "$MUT_DIR/good.sh" > "$MUT_DIR/commented.sh"
-
-# Skip path removed (guard call valid but no exit 0 inside the branch).
-grep -v 'exit 0' "$MUT_DIR/good.sh" > "$MUT_DIR/noskip.sh"
-
-# Guard placed BEFORE the already-installed check (too-early — HIGH-1).
-cat > "$MUT_DIR/too-early.sh" << 'TOO_EARLY_EOF'
-#!/bin/bash
-set -euo pipefail
-if ! bash "$AGENTS_ROOT/install/lib/wait-cc-exit.sh"; then
-    echo "CC running; skipping update." >&2; exit 0
-fi
-if type claude >/dev/null 2>&1; then
-    claude update || true
-    exit 0
-fi
-echo "Installing..."
-TOO_EARLY_EOF
-
-# update line commented out.
-cat > "$MUT_DIR/commented-update.sh" << 'COMMENTED_UPDATE_EOF'
-#!/bin/bash
-if type claude >/dev/null 2>&1; then
-    # claude update || true
-    exit 0
-fi
-COMMENTED_UPDATE_EOF
-
-_probe() {
-    local name="$1" file="$2" cli="$3" kind="$4" want="$5" got=0
-    update_is_skip_gated "$file" "$cli" "$kind" && got=1
-    if [ "$got" = "$want" ]; then
-        pass "MUT-$name: skip-gate detector returns $got as required"
-    else
-        fail "MUT-$name: skip-gate detector returned $got, expected $want"
-    fi
-}
-
-_probe "good-sh"     "$MUT_DIR/good.sh"      "claude" "sh" 1
-_probe "good-ps"     "$MUT_DIR/good.ps1"     "claude" "ps" 1
-_probe "ungated"     "$MUT_DIR/ungated.sh"   "claude" "sh" 0
-_probe "commented"   "$MUT_DIR/commented.sh" "claude" "sh" 0
-_probe "noskip"      "$MUT_DIR/noskip.sh"    "claude" "sh" 0
-
-# Scope probe: too-early guard must fail update_guard_is_scoped.
-_scope_good=0; _scope_early=0
-update_guard_is_scoped "$MUT_DIR/good.sh" "claude" "sh" && _scope_good=1
-update_guard_is_scoped "$MUT_DIR/too-early.sh" "claude" "sh" && _scope_early=1
-if [ "$_scope_good" = "1" ] && [ "$_scope_early" = "0" ]; then
-    pass "MUT-scope: scope detector accepts in-branch guard and rejects too-early guard"
-else
-    fail "MUT-scope: scope detector (good=$_scope_good expected 1, early=$_scope_early expected 0)"
-fi
-
-# Commented-update probe: update_line must not match a commented line.
-_cu_line="$(update_line "$MUT_DIR/commented-update.sh" "claude")"
-if [ -z "$_cu_line" ]; then
-    pass "MUT-commented-update: commented update line not detected as invocation"
-else
-    fail "MUT-commented-update: commented update line falsely detected at line=$_cu_line"
-fi
-
-# Reachability probes.
-cat > "$MUT_DIR/reach-live.sh" << 'REACH_LIVE_EOF'
-#!/bin/bash
-if type claude >/dev/null 2>&1; then
-    claude update || true
-    exit 0
-fi
-REACH_LIVE_EOF
-cat > "$MUT_DIR/reach-dead.sh" << 'REACH_DEAD_EOF'
-#!/bin/bash
-if type claude >/dev/null 2>&1; then
-    echo "already installed"
-    exit 0
-fi
-claude update || true
-REACH_DEAD_EOF
-
-_reach_live=0; _reach_dead=0
-update_is_reachable_when_installed "$MUT_DIR/reach-live.sh" "claude" "sh" && _reach_live=1
-update_is_reachable_when_installed "$MUT_DIR/reach-dead.sh" "claude" "sh" && _reach_dead=1
-if [ "$_reach_live" = "1" ] && [ "$_reach_dead" = "0" ]; then
-    pass "MUT-reach: reachability detector separates in-branch from post-exit update"
-else
-    fail "MUT-reach: reachability detector (live=$_reach_live expected 1, dead=$_reach_dead expected 0)"
-fi
-
-# ---------------------------------------------------------------------------
-# Group E: exit-code contract — guard timeout must not abort the caller.
-# ---------------------------------------------------------------------------
-
-cat > "$TMP_DIR/fake-guard.sh" << 'FAKE_GUARD_EOF'
-#!/bin/bash
-exit 1
-FAKE_GUARD_EOF
-chmod +x "$TMP_DIR/fake-guard.sh"
-
-cat > "$TMP_DIR/caller.sh" << 'CALLER_EOF'
-#!/bin/bash
-set -euo pipefail
-if ! bash "$1"; then
-    echo "skipped"
-    exit 0
-fi
-echo "updated"
-CALLER_EOF
-
-_e1_rc=0
-_e1_out="$(bash "$TMP_DIR/caller.sh" "$TMP_DIR/fake-guard.sh" 2>&1)" || _e1_rc=$?
-if [ "$_e1_rc" = "0" ] && [ "$_e1_out" = "skipped" ]; then
-    pass "E1: under set -e a guard timeout skips the update and the caller exits 0"
-else
-    fail "E1: guard timeout broke the caller contract (rc=$_e1_rc, out=$_e1_out)"
-fi
-
-if ! command -v pwsh > /dev/null 2>&1; then
-    echo "SKIP: E2/E2b require pwsh (not installed)"
-else
-    # E2: with PSNativeCommandUseErrorActionPreference=$false (pre-7.4 default),
-    # $LASTEXITCODE-check soft-fail shape exits 0.
-    cat > "$TMP_DIR/caller.ps1" << 'CALLER_PS_EOF'
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-$PSNativeCommandUseErrorActionPreference = $false
-& /usr/bin/false
-if ($LASTEXITCODE -ne 0) {
-    Write-Warning "update failed; continuing"
-}
-Write-Output "continued"
-exit 0
-CALLER_PS_EOF
-    _e2_rc=0
-    _e2_out="$(pwsh -NoProfile -File "$TMP_DIR/caller.ps1" 2>&1)" || _e2_rc=$?
-    if [ "$_e2_rc" = "0" ] && printf '%s' "$_e2_out" | grep -q "continued"; then
-        pass "E2: PSNativeCommandUseErrorActionPreference=false — LASTEXITCODE soft-fail exits 0"
-    else
-        fail "E2: LASTEXITCODE soft-fail shape aborts (rc=$_e2_rc, out=$_e2_out)"
-    fi
-
-    # E2b: with PSNativeCommandUseErrorActionPreference=$true (pwsh 7.4+ default),
-    # the installer must use try/catch so a failed native command is still handled gracefully.
-    cat > "$TMP_DIR/caller-trycatch.ps1" << 'CALLER_TC_EOF'
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-$PSNativeCommandUseErrorActionPreference = $true
-try {
-    & /usr/bin/false
-} catch {
-    Write-Warning "update failed; continuing"
-}
-Write-Output "continued"
-exit 0
-CALLER_TC_EOF
-    _e2b_rc=0
-    _e2b_out="$(pwsh -NoProfile -File "$TMP_DIR/caller-trycatch.ps1" 2>&1)" || _e2b_rc=$?
-    if [ "$_e2b_rc" = "0" ] && printf '%s' "$_e2b_out" | grep -q "continued"; then
-        pass "E2b: PSNativeCommandUseErrorActionPreference=true — try/catch soft-fail exits 0"
-    else
-        fail "E2b: try/catch soft-fail shape aborts under true (rc=$_e2b_rc, out=$_e2b_out)"
-    fi
-fi
-
-echo "---"
-echo "PASS: $PASS  FAIL: $FAIL"
-[ "$FAIL" -eq 0 ] || exit 1
-exit 0

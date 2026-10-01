@@ -47,7 +47,6 @@ run_install() {
         >/dev/null 2>/dev/null
 }
 
-case_begin "T7" "install.sh"
 # T7: install.sh always calls glab.sh (GITLAB gate lives inside glab.sh, not install.sh)
 if [ "$INSTALL_SH_OK" = "1" ]; then
     build_fake_root "t7"
@@ -63,4 +62,3 @@ if [ "$INSTALL_SH_OK" = "1" ]; then
 else
     fail "T7: install.sh not found"
 fi
-case_end
