@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# Tests: install.ps1, install.sh, install/lib/wait-cc-exit-target.ps1, install/lib/wait-cc-exit.ps1, install/lib/wait-cc-exit.sh, install/win/dotfileslink.ps1
+# Tests: install.ps1, install.sh, install/lib/wait-cc-exit.sh
 # Tags: installer, wait-cc-exit, TL2, pwsh-required, scope:issue-specific
 # #2476: parent waits for Claude Code once, hands the verdict to children via WAIT_CC_RESULT.
+# pwsh-executing cases: tests/install/feature-2476-installer-cc-wait-once.Tests.ps1.
 
 # TL3 gap:
-#   - Real Desktop app (MSIX under WindowsApps) beside a CLI claude: real Get-Process .Path.
-#   - install.ps1 / install.sh end-to-end (fnm/nvm, winget, network): static placement only.
+#   - install.sh end-to-end (nvm, network): static placement only.
 #   - macOS `ps -o comm=` path lookup: Darwin-native only.
-#   - ping.exe copies may be blocked (Defender/AppLocker); the store-path skip is predicate-only.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: installer.
 
@@ -27,26 +26,16 @@ ON_WINDOWS_BASH=0
 case "$_uname_s" in MINGW*|MSYS*|CYGWIN*) ON_WINDOWS_BASH=1 ;; esac
 unset _uname_s
 
-HAVE_PWSH=0
-command -v pwsh >/dev/null 2>&1 && HAVE_PWSH=1
-
 WAIT_SH="$AGENTS_DIR/install/lib/wait-cc-exit.sh"
-WAIT_PS="$AGENTS_DIR/install/lib/wait-cc-exit.ps1"
-TARGET_PS="$AGENTS_DIR/install/lib/wait-cc-exit-target.ps1"
 _SUBDIR="$AGENTS_DIR/tests/install/feature-2476-installer-cc-wait-once"
 source "$_SUBDIR/parent-placement-lib.sh"
-
-case_begin "desktop-shell-excluded-by-path-predicate" "install/lib/wait-cc-exit-target.ps1"
-source "$_SUBDIR/target-predicate.sh"
-case_end
 
 case_begin "result-memo-short-circuits-helpers" "install/lib/wait-cc-exit.sh"
 source "$_SUBDIR/memo.sh"
 case_end
 
-case_begin "helpers-list-waited-pids" "install/lib/wait-cc-exit.ps1"
+case_begin "helpers-list-waited-pids" "install/lib/wait-cc-exit.sh"
 source "$_SUBDIR/display.sh"
-source "$_SUBDIR/display-mock.sh"
 case_end
 
 case_begin "ps-parent-waits-once-before-children" "install.ps1"
@@ -55,10 +44,6 @@ case_end
 
 case_begin "sh-parent-waits-once-before-children" "install.sh"
 source "$_SUBDIR/parent-placement-sh.sh"
-case_end
-
-case_begin "dotfileslink-ps-skips-only-settings-write" "install/win/dotfileslink.ps1"
-source "$_SUBDIR/dotfileslink-ps.sh"
 case_end
 
 case_begin "children-honor-parent-memo" "install/lib/wait-cc-exit.sh"

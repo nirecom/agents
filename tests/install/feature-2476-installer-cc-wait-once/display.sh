@@ -1,7 +1,8 @@
 # Sourced by tests/install/feature-2476-installer-cc-wait-once.sh.
 # PID display contract: "  PID <id>  <path|(unknown)>" on the first poll and whenever
-# the PID set changes (sh: stderr, ps: Write-Host); none for the internal mock/override
-# modes. The sh helper decides "running" from the return code only.
+# the PID set changes (sh: stderr); none for the internal mock modes. The sh helper
+# decides "running" from the return code only. The pwsh helper's D-ps-* cases live in
+# tests/install/feature-2476-installer-cc-wait-once.Tests.ps1.
 
 _DISP_BIN="$TMP/disp-bin"
 mkdir -p "$_DISP_BIN"
@@ -80,98 +81,5 @@ else
         pass "D-sh-real: real 'claude' process PID $_d_pid listed"
     else
         fail "D-sh-real: PID $_d_pid not listed" "$(head -n 3 "$TMP/disp-real.err")"
-    fi
-fi
-
-# D-ps-real (Windows only): a CLI-like claude.exe is listed, and so is a Desktop-shell
-# lookalike under the user-writable $TMP — only the drive-rooted store path is skipped.
-if [ "$ON_WINDOWS_BASH" = "0" ]; then
-    skip "D-ps-real: Get-Process path listing needs a Windows host"
-elif [ "$HAVE_PWSH" = "0" ] || [ ! -f "$WAIT_PS" ]; then
-    skip "D-ps-real: pwsh or wait-cc-exit.ps1 unavailable"
-else
-    _d_cli="$TMP/cli/claude.exe"
-    _d_desk="$TMP/WindowsApps/Claude_test/app/Claude.exe"
-    mkdir -p "$(dirname "$_d_cli")" "$(dirname "$_d_desk")"
-    cp "$(cygpath -u "$SYSTEMROOT")/System32/PING.EXE" "$_d_cli"
-    cp "$(cygpath -u "$SYSTEMROOT")/System32/PING.EXE" "$_d_desk"
-    cat > "$TMP/disp-driver.ps1" << 'PS1EOF'
-param([string]$Helper, [string]$Cli, [string]$Desk)
-$ErrorActionPreference = 'Stop'
-try {
-    $p1 = Start-Process -FilePath $Cli -ArgumentList '-n','30','127.0.0.1' -WindowStyle Hidden -PassThru
-    $p2 = Start-Process -FilePath $Desk -ArgumentList '-n','30','127.0.0.1' -WindowStyle Hidden -PassThru
-} catch { Write-Output "STARTFAIL $($_.Exception.Message)"; exit 0 }
-try {
-    Start-Sleep -Milliseconds 500
-    Remove-Item Env:WAIT_CC_RESULT, Env:WAIT_CC_PROCESS_OVERRIDE -ErrorAction SilentlyContinue
-    $env:WAIT_CC_POLL_INTERVAL = '1'; $env:WAIT_CC_MAX_POLLS = '1'
-    $out = & pwsh -NoProfile -NonInteractive -File $Helper *>&1 | Out-String
-    Write-Output "P1=$($p1.Id)"
-    Write-Output "P2=$($p2.Id)"
-    Write-Output $out
-} finally {
-    Stop-Process -Id $p1.Id, $p2.Id -Force -ErrorAction SilentlyContinue
-}
-PS1EOF
-    _d_ps="$(bash "$RWT" 60 pwsh -NoProfile -NonInteractive -File "$(np "$TMP/disp-driver.ps1")" \
-        -Helper "$(np "$WAIT_PS")" -Cli "$(cygpath -w "$_d_cli")" -Desk "$(cygpath -w "$_d_desk")" 2>&1 | tr -d '\r')"
-    if printf '%s' "$_d_ps" | grep -q '^STARTFAIL'; then
-        skip "D-ps-real: copied ping.exe could not start ($(printf '%s' "$_d_ps" | head -n 1))"
-    else
-        _d_p1="$(printf '%s\n' "$_d_ps" | sed -n 's/^P1=//p' | head -n 1)"
-        _d_p2="$(printf '%s\n' "$_d_ps" | sed -n 's/^P2=//p' | head -n 1)"
-        if printf '%s' "$_d_ps" | grep -qiE "PID ${_d_p1}  .*cli.claude\.exe" \
-           && printf '%s' "$_d_ps" | grep -qiE "PID ${_d_p2}  .*WindowsApps.Claude_test.app.Claude\.exe"; then
-            pass "D-ps-real: CLI claude.exe PID $_d_p1 and user-writable lookalike PID $_d_p2 both listed with path"
-        else
-            fail "D-ps-real: want 'PID $_d_p1  <...cli\\claude.exe>' and 'PID $_d_p2  <...WindowsApps\\Claude_test\\app\\Claude.exe>'" \
-                "$(printf '%s' "$_d_ps" | grep -E 'PID|poll|P[12]=' | head -n 6)"
-        fi
-    fi
-fi
-
-# D-ps-lookalike-only (Windows only): a Desktop-shell lookalike under the user-writable
-# $TMP is still waited on (rc 1 after the poll budget, its PID listed), so a renamed
-# binary cannot dodge the wait. Other live claude processes only add PID lines.
-if [ "$ON_WINDOWS_BASH" = "0" ]; then
-    skip "D-ps-lookalike-only: Get-Process path listing needs a Windows host"
-elif [ "$HAVE_PWSH" = "0" ] || [ ! -f "$WAIT_PS" ]; then
-    skip "D-ps-lookalike-only: pwsh or wait-cc-exit.ps1 unavailable"
-else
-    _d_desk="$TMP/WindowsApps/Claude_test/app/Claude.exe"
-    mkdir -p "$(dirname "$_d_desk")"
-    [ -f "$_d_desk" ] || cp "$(cygpath -u "$SYSTEMROOT")/System32/PING.EXE" "$_d_desk"
-    cat > "$TMP/disp-desk.ps1" << 'PS1EOF'
-param([string]$Helper, [string]$Desk)
-$ErrorActionPreference = 'Stop'
-try {
-    $p = Start-Process -FilePath $Desk -ArgumentList '-n','30','127.0.0.1' -WindowStyle Hidden -PassThru
-} catch { Write-Output "SKIPWHY launch failed: $($_.Exception.Message)"; exit 0 }
-try {
-    Start-Sleep -Milliseconds 500
-    $procs = @(Get-Process -Name claude -ErrorAction SilentlyContinue)
-    if (-not ($procs | Where-Object Id -eq $p.Id)) { Write-Output "SKIPWHY copy PID $($p.Id) not visible as Get-Process -Name claude"; exit 0 }
-    Remove-Item Env:WAIT_CC_RESULT, Env:WAIT_CC_PROCESS_OVERRIDE -ErrorAction SilentlyContinue
-    $env:WAIT_CC_POLL_INTERVAL = '1'; $env:WAIT_CC_MAX_POLLS = '1'
-    $out = & pwsh -NoProfile -NonInteractive -File $Helper *>&1 | Out-String
-    Write-Output "RC=$LASTEXITCODE"
-    Write-Output "P=$($p.Id)"
-    Write-Output $out
-} finally {
-    Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-}
-PS1EOF
-    _d_ps="$(bash "$RWT" 60 pwsh -NoProfile -NonInteractive -File "$(np "$TMP/disp-desk.ps1")" \
-        -Helper "$(np "$WAIT_PS")" -Desk "$(cygpath -w "$_d_desk")" 2>&1 | tr -d '\r')"
-    _d_p="$(printf '%s\n' "$_d_ps" | sed -n 's/^P=//p' | head -n 1)"
-    if printf '%s' "$_d_ps" | grep -q '^SKIPWHY'; then
-        skip "D-ps-lookalike-only: $(printf '%s\n' "$_d_ps" | sed -n 's/^SKIPWHY //p' | head -n 1)"
-    elif printf '%s\n' "$_d_ps" | grep -q '^RC=1$' \
-         && printf '%s' "$_d_ps" | grep -qiE "PID ${_d_p}  .*WindowsApps.Claude_test.app.Claude\.exe"; then
-        pass "D-ps-lookalike-only: user-writable Desktop lookalike PID $_d_p -> waited (rc 1), PID listed"
-    else
-        fail "D-ps-lookalike-only: want RC=1 and 'PID $_d_p  <...WindowsApps\\Claude_test\\app\\Claude.exe>'" \
-            "$(printf '%s' "$_d_ps" | head -n 5)"
     fi
 fi

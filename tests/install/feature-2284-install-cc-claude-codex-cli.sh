@@ -82,10 +82,6 @@ case_begin "sh-guard-timeout-keeps-caller-exit-0" "install/linux/claude-code.sh"
 source "$SUITE_DIR/exit-contract-sh.sh"
 case_end
 
-case_begin "ps-update-failure-keeps-caller-exit-0" "install/win/claude-code.ps1"
-source "$SUITE_DIR/exit-contract-ps.sh"
-case_end
-
 # --- Group F: real installer execution with stubs ---
 
 case_begin "claude-code-sh-exec-update-gated" "install/linux/claude-code.sh"
@@ -96,21 +92,8 @@ case_begin "codex-sh-exec-update-gated" "install/linux/codex.sh"
 _run_exec_group_sh "F2" "$CODEX_SH" "codex"
 case_end
 
-case_begin "claude-code-ps-exec-update-gated" "install/win/claude-code.ps1"
-if ! command -v pwsh > /dev/null 2>&1; then
-    echo "SKIP: F3 requires pwsh (not installed)"
-else
-    _run_exec_group_ps "F3" "$CC_PS" "claude"
-fi
-case_end
-
-case_begin "codex-ps-exec-update-gated" "install/win/codex.ps1"
-if ! command -v pwsh > /dev/null 2>&1; then
-    echo "SKIP: F4 requires pwsh (not installed)"
-else
-    _run_exec_group_ps "F4" "$CODEX_PS" "codex"
-fi
-case_end
+# pwsh-executing cases (A4-A6, E2/E2b, F3/F4) live in
+# tests/install/feature-2284-install-cc-claude-codex-cli.Tests.ps1.
 
 echo "---"
 echo "PASS: $PASS  FAIL: $FAIL"

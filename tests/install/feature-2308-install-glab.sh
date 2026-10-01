@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: install.sh, install/linux/glab.sh, install/win/glab.ps1
+# Tests: install.sh, install/linux/glab.sh
 # Tags: install, glab-install, gitlab, auth-idempotent, non-interactive, scope:issue-specific, TL2, pwsh-required
 #
 # Tests glab sub-script added in issue #2308, updated for GITLAB flag + non-interactive auth.
@@ -19,7 +19,7 @@ GLAB_SH="$AGENTS_DIR/install/linux/glab.sh"
 
 # ---------------------------------------------------------------------------
 # Detect Windows bash: install.sh / glab.sh (Sections 1–4) skip there;
-# install/win/glab.ps1 (Section 5) is tested via pwsh regardless of platform.
+# install/win/glab.ps1 is tested by the sibling .Tests.ps1 (Pester).
 # ---------------------------------------------------------------------------
 _uname_s="$(uname -s 2>/dev/null || true)"
 _on_windows_bash=0
@@ -69,12 +69,7 @@ if [ "$_on_windows_bash" = "0" ]; then
 fi
 case_end
 
-# ---------------------------------------------------------------------------
-# Section 5: Windows/pwsh tests (install/win/glab.ps1)
-# ---------------------------------------------------------------------------
-case_begin "glab-ps1-install-auth-and-reachability" "install/win/glab.ps1"
-source "$_SUBDIR/windows.sh"
-case_end
+# install/win/glab.ps1 cases (P1-P9, PA-PC): tests/install/feature-2308-install-glab.Tests.ps1.
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

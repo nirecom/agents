@@ -1,11 +1,11 @@
 #!/bin/bash
 # tests/install/feature-2284-install-cc-claude-codex-cli/exec-integration.sh
 # Sub-file: TL2 execution-layer tests for real installer scripts with PATH stubs.
-# Tests: install/linux/claude-code.sh, install/linux/codex.sh, install/win/claude-code.ps1, install/win/codex.ps1
+# Tests: install/linux/claude-code.sh, install/linux/codex.sh
 # Tags: installer, wait-cc-exit, pwsh-required, scope:issue-specific
 # TL2 — real script execution with mocked process/update stubs.
 # TL3 gap: real fnm/node/npm/network operations; see wait-helper.sh TL3 gap.
-# Sourced by the dispatcher outside any case span: runner helpers only (F1-F4 run in its spans).
+# Sourced by the dispatcher outside any case span: runner helpers only (F1-F2 run in its spans).
 set -u
 
 # ---------------------------------------------------------------------------
@@ -109,72 +109,5 @@ _run_exec_group_sh() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Group F (PS): PowerShell installer execution (claude-code.ps1 / codex.ps1)
-# The pwsh availability check lives in each dispatcher span that calls these.
-# ---------------------------------------------------------------------------
-
-_setup_ps_stubs() {
-    local label="$1" cli="$2" cli_exit="${3:-0}" wait_exit="${4:-0}"
-    local stub_bin="$TMP_DIR/stubs-ps-$label"
-    local mock_root="$TMP_DIR/agents-root-ps-$label"
-    rm -rf "$stub_bin" "$mock_root"
-    mkdir -p "$stub_bin" "$mock_root/install/lib"
-    local call_log="$TMP_DIR/call-log-ps-$label.txt"
-
-    printf '#!/bin/bash\necho "$@" >> "%s"\nexit %s\n' "$call_log" "$cli_exit" \
-        > "$stub_bin/$cli"
-    chmod +x "$stub_bin/$cli"
-
-    cat > "$mock_root/install/lib/wait-cc-exit.ps1" << WAIT_PS_EOF
-exit $wait_exit
-WAIT_PS_EOF
-
-    printf '%s %s %s' "$stub_bin" "$mock_root" "$call_log"
-}
-
-_run_installer_ps() {
-    local stub_bin="$1" mock_root="$2" installer="$3"
-    local rc=0
-    env PATH="$stub_bin:$PATH" \
-        AGENTS_ROOT="$mock_root" \
-        pwsh -NoProfile -File "$installer" \
-        > "$TMP_DIR/ps-installer-stdout" 2> "$TMP_DIR/ps-installer-stderr" || rc=$?
-    echo "$rc"
-}
-
-_run_exec_group_ps() {
-    local label="$1" file="$2" cli="$3"
-    if [ ! -f "$file" ]; then
-        fail "$label-a: $(basename "$file") does not exist (write_code pending)"
-        fail "$label-b: $(basename "$file") does not exist"
-        fail "$label-c: $(basename "$file") does not exist"
-        return
-    fi
-
-    read -r _bin_a _root_a _log_a < <(_setup_ps_stubs "${label}a" "$cli" 0 0)
-    _rc_a="$(_run_installer_ps "$_bin_a" "$_root_a" "$file")"
-    if [ -f "$_log_a" ] && grep -q "^update" "$_log_a" 2>/dev/null; then
-        pass "$label-a: $(basename "$file") — guard passes → \`$cli update\` invoked"
-    else
-        fail "$label-a: $(basename "$file") — guard passes but update not called (rc=$_rc_a)"
-    fi
-
-    read -r _bin_b _root_b _log_b < <(_setup_ps_stubs "${label}b" "$cli" 0 1)
-    _rc_b="$(_run_installer_ps "$_bin_b" "$_root_b" "$file")"
-    _upd_b=0
-    [ -f "$_log_b" ] && grep -q "^update" "$_log_b" 2>/dev/null && _upd_b=1
-    if [ "$_upd_b" = "0" ] && [ "$_rc_b" = "0" ]; then
-        pass "$label-b: $(basename "$file") — guard timeout → update skipped, exits 0"
-    else
-        fail "$label-b: $(basename "$file") — timeout case wrong (upd=$_upd_b, rc=$_rc_b)"
-    fi
-
-    read -r _bin_c _root_c _log_c < <(_setup_ps_stubs "${label}c" "$cli" 1 0)
-    _rc_c="$(_run_installer_ps "$_bin_c" "$_root_c" "$file")"
-    if [ "$_rc_c" = "0" ]; then
-        pass "$label-c: $(basename "$file") — update failure soft-failed (exits 0)"
-    else
-        fail "$label-c: $(basename "$file") — update failure aborted PS installer (rc=$_rc_c)"
-    fi
-}
+# Group F (PS) — claude-code.ps1 / codex.ps1 execution (F3/F4) lives in
+# tests/install/feature-2284-install-cc-claude-codex-cli.Tests.ps1.
