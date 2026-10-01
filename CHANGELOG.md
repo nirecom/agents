@@ -619,3 +619,7 @@ Changes: Fixed: after write_code reopens review_tests, `WORKFLOW_REVIEW_TESTS_WA
 ### FEATURE: PR #2484 (2026-10-01)
 Background: fix(#2475): stop PROMPT/TMP env collisions breaking codex launch; ass...
 Changes: Fixed codex reviews and supervisor runs failing to start on Windows with a misleading "codex not found" error; an exit 127 now reports whether the CLI is missing or the child environment is broken.;The EM Supervisor now sends Codex a condensed, rule-assembled view of the session instead of the raw transcript, and reviews only what happened since its last successful run.;Every codex launch now rejects an over-limit input (1,048,576 characters) with an explicit reason instead of failing inside codex.
+
+### FEATURE: PR #2487 (2026-10-01)
+Background: fix(#2479): read chunked hook stdin via a shared EOF-safe reader
+Changes: Fixed: the run_tests hook no longer silently skips recording the test outcome when Claude Code delivers its payload in several chunks, which previously left the run_tests step blocked; stdin reading now goes through a shared EOF-safe reader and logs a one-line diagnostic on failure.
