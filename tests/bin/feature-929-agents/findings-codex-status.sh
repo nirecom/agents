@@ -17,7 +17,7 @@ _fcs_run() {
     echo "--- findings-codex-status (R3-C4) ---"
 
     local tf="$TMPDIR_BASE/transcript-fcs.jsonl"
-    printf '{"type":"user","text":"hello"}\n' > "$tf"
+    printf '%s\n' '{"type":"user","origin":{"kind":"human"},"message":{"role":"user","content":"hello"},"uuid":"u1","timestamp":"2026-01-01T00:00:00Z"}' > "$tf"
     local sid="sid-fcs-$RANDOM$RANDOM"
 
     # alert, codex absent -> STATUS: SKIPPED, first line, no OUTFILE.
@@ -51,6 +51,32 @@ _fcs_run() {
     out_unavail="$(_fcs_run_absent "$tf" --mode audit --sid "$sid" --wsid UNAVAILABLE --transcript "$tf")"
     line1_unavail="${out_unavail%%$'\n'*}"
     assert_eq "fcs: --wsid UNAVAILABLE codex-absent -> SKIPPED (artifact ref skipped)" "STATUS: SKIPPED" "$line1_unavail"
+
+    # #2475: codex present + nonexistent --transcript -> input assembly fails
+    # before codex runs: STATUS: FAILED first, a reason: line, no OUTFILE.
+    # Local shim: _asp_present_path is defined by a fragment sourced AFTER this one.
+    local shim="$TMPDIR_BASE/fcs-codex-present-shim"
+    rm -rf "$shim"; mkdir -p "$shim"
+    printf '#!/bin/bash\ncat >/dev/null\n: > "${FCS_MOCK_CALLED:-/dev/null}"\nexit 0\n' > "$shim/codex"
+    chmod +x "$shim/codex"
+    local shim_posix="$shim"
+    if command -v cygpath >/dev/null 2>&1; then shim_posix="$(cygpath -u "$shim")"; fi
+    local called="$TMPDIR_BASE/fcs-mock-called"
+    rm -f "$called"
+    local out_asm line1_asm
+    out_asm="$(FCS_MOCK_CALLED="$called" PATH="$shim_posix:$PATH" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+        WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR" \
+        run_with_timeout 60 bash "$FINDINGS_CLI" --mode alert --sid "$sid" --wsid "$sid" \
+        --transcript "$TMPDIR_BASE/no-such-transcript.jsonl" 2>/dev/null)"
+    line1_asm="${out_asm%%$'\n'*}"
+    assert_eq "fcs: missing transcript -> STATUS: FAILED first line (#2475)" "STATUS: FAILED" "$line1_asm"
+    assert_contains "fcs: missing transcript -> reason: input assembly failed (#2475)" "$out_asm" "reason: input assembly failed"
+    assert_not_contains "fcs: missing transcript emits no OUTFILE (#2475)" "$out_asm" "OUTFILE:"
+    if [ -e "$called" ]; then
+        fail "fcs: missing transcript must not invoke codex (#2475)"
+    else
+        pass "fcs: missing transcript does not invoke codex (#2475)"
+    fi
 }
 
 _fcs_run

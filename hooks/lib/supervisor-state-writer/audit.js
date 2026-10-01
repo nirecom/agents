@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const { withStateLock } = require("./lock");
-const { validateFinding, validate, AUDIT_PHASE_VALUES, AUDIT_VERDICT_VALUES, AUDIT_RETRY_THRESHOLD } = require("../supervisor-state-schema");
+const { validateFinding, validate, validateTranscriptCursor, AUDIT_PHASE_VALUES, AUDIT_VERDICT_VALUES, AUDIT_RETRY_THRESHOLD } = require("../supervisor-state-schema");
 const {
   SESSION_ID_RE,
   getStatePath,
@@ -20,7 +20,7 @@ const AUDIT_PATCH_KEYS = new Set([
   "audit_phase", "audit_verdict", "audit_last_run_at", "audit_armed_at", "audit_cause",
   "audit_retry_count", "findings",
   "audit_verdict_summary", "audit_dispatched_at", "audit_run_id", "run_seq",
-  "last_terminal_run_id", "declared_files", "uv_attempt_seq",
+  "last_terminal_run_id", "declared_files", "uv_attempt_seq", "transcript_cursor",
 ]);
 
 function writeAuditStateCore(sessionId, patch) {
@@ -45,6 +45,7 @@ function writeAuditStateCore(sessionId, patch) {
   if ("uv_attempt_seq" in patch && (!Number.isInteger(patch.uv_attempt_seq) || patch.uv_attempt_seq < 0)) return false;
   if ("declared_files" in patch && patch.declared_files !== null &&
       (typeof patch.declared_files !== "object" || Array.isArray(patch.declared_files))) return false;
+  if ("transcript_cursor" in patch && !validateTranscriptCursor(patch.transcript_cursor).ok) return false;
   if ("findings" in patch) {
     if (!Array.isArray(patch.findings)) return false;
     for (const f of patch.findings) {

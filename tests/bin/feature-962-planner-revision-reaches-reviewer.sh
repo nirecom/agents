@@ -63,6 +63,9 @@ EOF
     if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" ]]; then
       cp "$AGENTS_WORKTREE/bin/lib/codex-timeout.sh" "$agents_dir/bin/lib/codex-timeout.sh"
     fi
+    if [[ -f "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" ]]; then
+      cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$agents_dir/bin/lib/cli-exec-guard.sh"
+    fi
     cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
     cp "$AGENTS_WORKTREE/bin/concern-ledger" "$agents_dir/bin/concern-ledger"
     chmod +x "$agents_dir/bin/concern-ledger"

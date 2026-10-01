@@ -28,7 +28,7 @@ _asp_run() {
     echo "--- audit-subcheck-prompt (R3-C1) ---"
 
     local tf="$TMPDIR_BASE/transcript-asp.jsonl"
-    printf '{"type":"user","text":"stage boundary reached"}\n' > "$tf"
+    printf '%s\n' '{"type":"user","origin":{"kind":"human"},"message":{"role":"user","content":"stage boundary reached"},"uuid":"u1","timestamp":"2026-01-01T00:00:00Z"}' > "$tf"
     local snap="$TMPDIR_BASE/asp-snapshot.json"
     printf '{"prior_findings":["prior-finding-sentinel-zeta"],"armed_run_id":"run-0001"}\n' > "$snap"
     local sid="sid-asp-$RANDOM$RANDOM"
@@ -46,6 +46,10 @@ _asp_run() {
         assert_contains "asp: PROMPT embeds first armed sub-check id" "$c1" "sc-alpha-01"
         assert_contains "asp: PROMPT embeds second armed sub-check id" "$c1" "sc-beta-02"
         assert_contains "asp: PROMPT embeds snapshot prior-finding sentinel" "$c1" "prior-finding-sentinel-zeta"
+        # #2475: the snapshot is rendered inside the assembled SUPERVISOR STATE block.
+        local state_block
+        state_block="$(printf '%s\n' "$c1" | awk '/^\[SUPERVISOR STATE START\]$/{f=1;next} /^\[SUPERVISOR STATE END\]$/{f=0} f')"
+        assert_contains "asp: snapshot sentinel sits inside [SUPERVISOR STATE] block (#2475)" "$state_block" "prior-finding-sentinel-zeta"
     else
         fail "asp: audit PROMPT not captured with subcheck+snapshot (RED until findings-codex exists)"
     fi

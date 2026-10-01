@@ -24,6 +24,7 @@ d2099rp_mock() {
     chmod +x "$root/bin/review-plan-codex"
     cp "$AGENTS_DIR/bin/lib/codex-core.sh" "$root/bin/lib/codex-core.sh"
     cp "$AGENTS_DIR/bin/lib/codex-timeout.sh" "$root/bin/lib/codex-timeout.sh"
+    if [ -f "$AGENTS_DIR/bin/lib/cli-exec-guard.sh" ]; then cp "$AGENTS_DIR/bin/lib/cli-exec-guard.sh" "$root/bin/lib/cli-exec-guard.sh"; fi
     printf '#!/usr/bin/env bash\nc=$(grep -c "PLANLINE-")\necho "PLANLINE-count-is-${c:-0}"\nexit 0\n' > "$root/stub/codex"
     chmod +x "$root/stub/codex"
     if [ -n "$gcv" ]; then

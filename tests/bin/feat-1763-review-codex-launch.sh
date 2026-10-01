@@ -1,27 +1,13 @@
 #!/usr/bin/env bash
 # tests/bin/feat-1763-review-codex-launch.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh
-# Tags: issue-create, verdict, review, codex, web-search, toggle-removal, prompt-contract, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - A real `codex exec` accepting `-c tools.web_search=true` and actually reaching the
-#   network; here codex is a mock that only records its argv and stdin.
-# - Whether the search queries a real reviewer composes honour the leak-prevention
-#   instruction — only the instruction's presence in the prompt is checkable offline.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-#
-# Two launch-side changes land together in this PR:
-#   1. The reviewer CAN be launched with web search (`-c tools.web_search=true`), so it
-#      can check whether an upstream fix or a known issue already exists — but only when
-#      ISSUE_VERDICT_WEB_SEARCH is turned on. The default is off, because a query is an
-#      outbound channel the prompt can only ask codex not to misuse.
-#   2. When search IS enabled the prompt becomes that outbound channel: the candidate
-#      bodies and the proposal are private-repo prose, and a query is sent to a third
-#      party. The prompt must therefore forbid putting repository identifiers into
-#      queries — and, symmetrically, must not advertise search when it is off, or the
-#      reviewer would be told to use a tool it was never given.
-# And one removal: the ISSUE_VERDICT_REVIEW switch is gone, so setting it must have no
-# effect at all — a leftover read would leave a way to silently disable the review.
+# Tags: issue-create, verdict, review, codex, web-search, toggle-removal, prompt-contract, scope:issue-specific, pwsh-not-required, TL2, input-size-guard, exit-127
+# TL3 gap: real `codex exec` + `-c tools.web_search=true` reaching the network (codex is a
+#   recording mock); whether real search queries obey the leak-prevention instruction.
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
+#   bin/check-verification-gate.sh category: skill-orchestration.
+# W1/W2 web search opt-in (default off; when on, no repo identifiers in queries); W3/W4
+#   removed ISSUE_VERDICT_REVIEW switch + CODEX_TIMEOUT_SECS; G1-G3 #2475 codex guard.
 
 set -u
 
@@ -200,6 +186,69 @@ SLOW
         fail "W4-old-timeout-name-gone" "the retired ISSUE_VERDICT_REVIEW_TIMEOUT_SECS name is still read by the script"
     else
         pass "W4-old-timeout-name-gone"
+    fi
+fi
+
+echo ""
+echo "=== G1-G3 (#2475): the shared codex input-size guard and exit-127 diagnosis ==="
+# Every codex launch path must refuse an over-limit prompt BEFORE spawning codex and must
+# name the cause of an exit 127 instead of a bare code; both still fold to `invalid`.
+# W4 left a slow mock in place; restore the recording mock (argv file = "codex was run").
+cat > "$MOCKDIR/codex" <<'MOCK'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "${CODEX_ARGV_LOG:-/dev/null}"
+cat > "${CODEX_PROMPT_LOG:-/dev/null}"
+if [ -n "${CODEX_MOCK_OUT:-}" ] && [ -f "$CODEX_MOCK_OUT" ]; then cat "$CODEX_MOCK_OUT"; fi
+exit "${CODEX_MOCK_RC:-0}"
+MOCK
+chmod +x "$MOCKDIR/codex"
+
+node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+# review_field <final.json> <review-key> — one field of the final artifact's review{}.
+review_field() {
+    node -e 'try { const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).review || {};
+      process.stdout.write(String(r[process.argv[2]])); } catch (e) { process.stdout.write("UNREADABLE"); }' \
+      "$(node_path "$1")" "$2" 2>/dev/null
+}
+
+if [ "$RS_PRESENT" != "yes" ]; then
+    red "G1-oversized-codex-not-launched"; red "G1-oversized-folds-invalid"; red "G1-detail-names-input-too-large"
+    red "G2-exit127-detail-diagnosed"; red "G3-sources-cli-exec-guard"
+else
+    # G1: proposal.background reaches the prompt unsliced, so 1.1M chars there puts the
+    # prompt over the 1048576-char codex input limit.
+    ART_SMALL="$ART"; ART="$WORK/survey-big.json"
+    node -e 'const fs = require("fs"); const a = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      a.proposal.background = "x".repeat(1100000); fs.writeFileSync(process.argv[2], JSON.stringify(a));' \
+      "$(node_path "$ART_SMALL")" "$(node_path "$ART")"
+    run_review g1
+    ART="$ART_SMALL"
+    [ ! -e "$ARGV" ] && pass "G1-oversized-codex-not-launched" \
+        || fail "G1-oversized-codex-not-launched" "codex was spawned with an over-limit prompt (argv: $(tr '\n' ' ' < "$ARGV" 2>/dev/null))"
+    G1_STATUS="$(review_field "$FINAL" status)"
+    [ "$LAST" = "review_result: invalid" ] && [ "$G1_STATUS" = "invalid" ] \
+        && pass "G1-oversized-folds-invalid" \
+        || fail "G1-oversized-folds-invalid" "want review_result invalid + review.status invalid (got: '${LAST:-<none>}', status=$G1_STATUS)"
+    G1_DETAIL="$(review_field "$FINAL" detail)"
+    case "$G1_DETAIL" in
+        *"input too large"*) pass "G1-detail-names-input-too-large" ;;
+        *) fail "G1-detail-names-input-too-large" "review.detail must carry the guard message (got: '$G1_DETAIL')" ;;
+    esac
+
+    # G2: "codex exited 127" says nothing about why; the guard's diagnosis line does.
+    run_review g2 CODEX_MOCK_RC=127
+    G2_DETAIL="$(review_field "$FINAL" detail)"
+    case "$G2_DETAIL" in
+        *"exit 127:"*) pass "G2-exit127-detail-diagnosed" ;;
+        *) fail "G2-exit127-detail-diagnosed" "review.detail must carry the cli_exec_guard_diagnose_127 line (got: '$G2_DETAIL')" ;;
+    esac
+
+    # G3: static pin — removing the guard wiring must fail a test, not degrade quietly.
+    if grep -qF 'cli-exec-guard.sh' "$RS" && grep -qF 'cli_exec_guard_input_size' "$RS" \
+        && grep -qF 'cli_exec_guard_diagnose_127' "$RS"; then
+        pass "G3-sources-cli-exec-guard"
+    else
+        fail "G3-sources-cli-exec-guard" "the script must source bin/lib/cli-exec-guard.sh and call both guard functions"
     fi
 fi
 

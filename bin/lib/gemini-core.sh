@@ -8,6 +8,8 @@ export SYSTEM_OPS_APPROVED=1
 #
 # NOTE: gemini_core_extract_svg was removed (diagram-specific).
 #       Keep this file for future reviewer LLM use of gemini CLI.
+# shellcheck source=cli-exec-guard.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/cli-exec-guard.sh"
 
 # gemini_core_init <label>
 # Sets: GEMINI_LABEL, LOG_DIR, START_TS, START_EPOCH, SESSION_ID, BRANCH
@@ -81,6 +83,7 @@ gemini_core_run() {
     *)
       local stderr_tail
       stderr_tail=$(tail -3 "$GEMINI_STDERR" | tr '\n' ' ')
+      [[ "$gemini_exit" -eq 127 ]] && stderr_tail="$(cli_exec_guard_diagnose_127 gemini) ${stderr_tail}"
       echo "## ${GEMINI_LABEL}: FAILED — gemini exit code ${gemini_exit}: ${stderr_tail}"
       gemini_core_log failed "exit code ${gemini_exit}" "$_input_lines"
       exit 0

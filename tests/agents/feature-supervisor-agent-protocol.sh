@@ -131,6 +131,25 @@ run_c9g() {
     fi
 }
 
+# --- C9h: both prompts name the input-assembly module (#2475) ---
+# The Inputs line tells the agent that on STATUS: SUCCESS the engine already
+# assembled the transcript via this module (fallback paths still read it directly).
+run_c9h() {
+    local ok=1 f label
+    for f in "$SUPERVISOR_MD" "$AUDIT_MD"; do
+        label="$(basename "$f")"
+        [ -f "$f" ] || { ok=0; echo "  $label: missing"; continue; }
+        if ! grep -qF "hooks/lib/supervisor-codex-input.js" "$f"; then
+            ok=0; echo "  $label: does not reference hooks/lib/supervisor-codex-input.js"
+        fi
+    done
+    if [ "$ok" -eq 1 ]; then
+        pass "C9h: both prompts reference hooks/lib/supervisor-codex-input.js (#2475)"
+    else
+        fail "C9h: a prompt does not reference hooks/lib/supervisor-codex-input.js (#2475)"
+    fi
+}
+
 run_c9a
 run_c9b
 run_c9c
@@ -138,6 +157,7 @@ run_c9d
 run_c9e
 run_c9f
 run_c9g
+run_c9h
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

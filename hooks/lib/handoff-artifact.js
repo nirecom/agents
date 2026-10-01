@@ -339,6 +339,7 @@ module.exports = {
   MAX_ENTRY_LINES,
   MAX_BYTES,
   getHandoffPath,
+  readDocumentFile,
   appendHandoffEntry,
   readHandoff,
   renderHandoffForResume,

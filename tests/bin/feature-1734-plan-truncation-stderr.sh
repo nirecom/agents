@@ -96,6 +96,7 @@ cp "$REVIEWER" "$B_CFG/bin/review-plan-codex"
 chmod +x "$B_CFG/bin/review-plan-codex"
 cp "$CODEX_CORE" "$B_CFG/bin/lib/codex-core.sh"
 cp "$AGENTS_ROOT/bin/lib/codex-timeout.sh" "$B_CFG/bin/lib/codex-timeout.sh"
+if [ -f "$AGENTS_ROOT/bin/lib/cli-exec-guard.sh" ]; then cp "$AGENTS_ROOT/bin/lib/cli-exec-guard.sh" "$B_CFG/bin/lib/cli-exec-guard.sh"; fi
 cp "$VERDICT_BIN" "$B_CFG/bin/review-loop-verdict"
 chmod +x "$B_CFG/bin/review-loop-verdict"
 

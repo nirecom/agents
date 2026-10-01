@@ -47,6 +47,12 @@ When adding a new script (`.sh` or shebang-based extensionless file) under `bin/
 
 This records mode 100755 in the git index regardless of `core.fileMode` setting, ensuring the execute bit is preserved on all platforms (macOS, Linux, WSL).
 
+## Shell Variable Names
+
+- Never name a script variable after an identifier the OS or shell exports by default; the SSOT list is `RESERVED` in `tests/bin/feature-shell-reserved-identifiers.sh`.
+- Use a tool-specific prefix instead (`CODEX_PROMPT`, not `PROMPT`; `TMP_OUT`, not `TMP`).
+- Sole exception: appending or prepending to the existing `PATH` (`PATH="$PATH:..."`).
+
 ## File Naming Conventions
 
 - **Backup files:** Use `.bak` extension. Overwrite previous `.bak` (do not accumulate). Timestamped variants (`.bak.YYYYMMDD_HHMMSS`) are acceptable when history preservation is needed.

@@ -118,7 +118,7 @@ Alert mode generates findings through the shared engine `bin/supervisor-findings
 2. **SUCCESS** — read the `OUTFILE` line and ingest the validated JSONL via `bin/supervisor-write-alert --ingest-generated-jsonl <OUTFILE>`; Claude adds no findings independently.
 3. **Finalize** — single call: `bin/supervisor-write-alert --last-run-at <iso> --cumulative-severity <verdict> --clear-alert-armed-at --set-alert-phase done`. `--set-alert-phase done` is mandatory (#961).
 
-Helper module: `hooks/lib/supervisor-codex-parse.js` (STATUS-channel parser shared by alert and audit modes). The prior three-phase draft/adversarial/adjudicate protocol and its `bin/supervisor-review-codex` critic are retired.
+Helper modules (shared by alert and audit): `hooks/lib/supervisor-codex-input.js` assembles the Codex input (utterances, actions since the per-mode transcript cursor, handoff, plan artifacts, state — see [claude-code/supervisor-codex-input.md](claude-code/supervisor-codex-input.md)); `hooks/lib/supervisor-codex-parse.js` parses the STATUS channel. The prior three-phase draft/adversarial/adjudicate protocol and its `bin/supervisor-review-codex` critic are retired.
 
 **Trigger collector:** `hooks/supervisor-guard/collect-audit-triggers.js` — scans workflow-state step-completion transitions (not the transcript) and returns the armed triggers, reading the table in `hooks/lib/audit-triggers.js`. Uses `AUDIT_SEVERITY_THRESHOLD` constant for TR6.
 

@@ -57,7 +57,7 @@ function createEmptyState(sessionId) {
     created_at: now,
     last_updated: now,
     layer1: { findings: [] },
-    alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_cause: null, alert_retry_count: 0, findings_surfaced_at: null, alert_eligible_phase: null },
+    alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_cause: null, alert_retry_count: 0, findings_surfaced_at: null, alert_eligible_phase: null, transcript_cursor: null },
     audit: {
       audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null,
       audit_cause: null, audit_retry_count: 0, findings: [],
@@ -69,6 +69,7 @@ function createEmptyState(sessionId) {
       run_seq: 0, audit_verdict_summary: null,
       ledger: [], consumed_transitions: [], last_terminal_run_id: null,
       declared_files: null, uv_attempt_seq: 0, block_overrides: [],
+      transcript_cursor: null,
     },
   };
 }
@@ -175,6 +176,23 @@ function validateAuditLedgerFields(au, errors) {
   }
 }
 
+// #2475 per-mode transcript cursor (hooks/lib/supervisor-codex-input/cursor.js owns the semantics).
+function validateTranscriptCursor(c) {
+  if (c === null) return { ok: true, errors: [] };
+  if (!c || typeof c !== "object" || Array.isArray(c)) return { ok: false, errors: ["transcript_cursor must be null or an object"] };
+  const errors = [];
+  if (typeof c.transcript_path !== "string" || c.transcript_path === "") errors.push("transcript_cursor.transcript_path must be a non-empty string");
+  if (!Number.isInteger(c.line) || c.line < 0) errors.push("transcript_cursor.line must be a non-negative integer");
+  if (c.last_uuid !== null && typeof c.last_uuid !== "string") errors.push("transcript_cursor.last_uuid must be null or a string");
+  if (typeof c.updated_at !== "string" || c.updated_at === "") errors.push("transcript_cursor.updated_at must be a non-empty string");
+  return { ok: errors.length === 0, errors };
+}
+
+function pushCursorErrors(section, errors) {
+  if (!("transcript_cursor" in section)) return;
+  for (const e of validateTranscriptCursor(section.transcript_cursor).errors) errors.push(e);
+}
+
 function validate(obj) {
   const errors = [];
   if (!obj || typeof obj !== "object") return { ok: false, errors: ["state must be an object"] };
@@ -228,6 +246,7 @@ function validate(obj) {
     if ("alert_eligible_phase" in al && !ALERT_ELIGIBLE_PHASE_VALUES.includes(al.alert_eligible_phase)) {
       errors.push(`alert.alert_eligible_phase must be null or "post_final_report_window"`);
     }
+    pushCursorErrors(al, errors);
   }
   if (typeof obj.audit !== "object" || obj.audit === null || Array.isArray(obj.audit)) {
     errors.push("audit must be an object");
@@ -241,6 +260,7 @@ function validate(obj) {
     if ("audit_retry_count" in au && (!Number.isInteger(au.audit_retry_count) || au.audit_retry_count < 0)) errors.push("audit.audit_retry_count must be a non-negative integer");
     if ("findings" in au && !Array.isArray(au.findings)) errors.push("audit.findings must be an array");
     validateAuditLedgerFields(au, errors);
+    pushCursorErrors(au, errors);
   }
   return { ok: errors.length === 0, errors };
 }
@@ -263,4 +283,5 @@ module.exports = {
   createEmptyState,
   validate,
   validateFinding,
+  validateTranscriptCursor,
 };

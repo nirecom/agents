@@ -47,4 +47,4 @@ Class vocabulary, the entry grammar, the active period, and the size caps: `docs
 
 The flush never changes a verdict, a gate outcome, or a workflow step status — a lost breadcrumb must cost nothing but the breadcrumb.
 
-`/resume-session` reads the artifact back; nothing else consumes it.
+Two readers consume the artifact read-only: `/resume-session` and the supervisor codex engine (`hooks/lib/supervisor-codex-input.js`).

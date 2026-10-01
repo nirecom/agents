@@ -2,7 +2,7 @@
 
 The workflow state file records **which step a session reached**. It cannot record what the session *learned* on the way there — the workaround that finally got a command through, the gate that blocked twice for different reasons, the check that was skipped and why. That knowledge lives only in the conversation, so a compaction or a session boundary destroys it.
 
-The handoff artifact is the durable home for that micro-state: an append-only, human-readable document per session, written by every producer through one function, read back by `/resume-session` when work crosses a session boundary.
+The handoff artifact is the durable home for that micro-state: an append-only, human-readable document per session, written by every producer through one function, read back by `/resume-session` when work crosses a session boundary, and read (never written) by the supervisor codex engine as review input ([supervisor-codex-input.md](supervisor-codex-input.md)).
 
 ## Location and shape
 
@@ -53,7 +53,7 @@ The in/out vocabulary is deliberately asymmetric: a caller passes `cls` (the wri
 
 The **workflow active period** (`hooks/lib/workflow-active-period.js`, total and never-throw) holds when all of these are true: the state file is readable, `workflow_init` is complete, no `TERMINAL_STEPS` member is complete, no `WORKFLOW_OFF` marker is set, and no unexpired `NEXT_STEP_PAUSE` covers the current step. Any error reads as inactive.
 
-Why every origin is gated: the artifact's only reader is `/resume-session`, and outside the active period there is no workflow to resume — a breadcrumb written under `WORKFLOW_OFF` or after `final_report` is noise. A `/commit-push --wip` outcome under `WORKFLOW_OFF`, for example, is already owned by git history.
+Why every origin is gated: the artifact's readers are `/resume-session` and the supervisor codex engine, and outside the active period there is no workflow to resume or supervise — a breadcrumb written under `WORKFLOW_OFF` or after `final_report` is noise to both. A `/commit-push --wip` outcome under `WORKFLOW_OFF`, for example, is already owned by git history.
 
 **The one named exception is `gate-block`.** `recordGateBlock` keeps calling `appendHandoffEntry` directly, because #2430 left the gate-block route unchanged: it is a single hook-written line per block, not a model-driven write. The exception is confined to that one function and pinned by `tests/hooks/feat-2430-handoff-gate-uniform.sh`; whether to fold it into the gate is a follow-up.
 

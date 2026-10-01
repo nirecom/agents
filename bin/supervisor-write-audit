@@ -18,6 +18,7 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--audit-cause",
   "--set-audit-verdict-summary",
   "--run-id",
+  "--set-transcript-cursor",
 ]);
 const KNOWN_BOOL_FLAGS = new Set(["--clear-audit-armed-at", "--clear-audit-phase", "--increment-audit-retry-count"]);
 
@@ -30,7 +31,7 @@ function usage(msg) {
     " [--set-audit-phase <pending|in_progress|done|frozen>] [--clear-audit-phase]" +
     " [--set-audit-verdict <CONTINUE|WARN|BLOCK>] [--set-audit-verdict-summary <text>]" +
     " [--audit-cause <text>]" +
-    " [--increment-audit-retry-count]"
+    " [--increment-audit-retry-count] [--set-transcript-cursor <json>]"
   );
   process.exit(1);
 }
@@ -100,6 +101,12 @@ const FLAG_SPECS = {
   // #2256 S1: the human-readable summary is its own field — audit_cause stays
   // the arm-time label and must not be overwritten with verdict prose.
   "set-audit-verdict-summary": { kind: "value", patch: (v) => ({ audit_verdict_summary: v }) },
+  "set-transcript-cursor": {
+    kind: "value",
+    patch(v) {
+      try { return { transcript_cursor: JSON.parse(v) }; } catch (_) { return usage("--set-transcript-cursor must be JSON"); }
+    },
+  },
 };
 
 // #1052: Identity-agnostic dual-store mirror-write.

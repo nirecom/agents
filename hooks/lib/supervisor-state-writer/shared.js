@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 
-const ALERT_PATCH_KEYS = new Set(["alert_armed_at", "last_run_at", "cumulative_severity", "findings", "alert_phase", "alert_cause", "alert_retry_count", "findings_surfaced_at", "alert_eligible_phase"]);
+const ALERT_PATCH_KEYS = new Set(["alert_armed_at", "last_run_at", "cumulative_severity", "findings", "alert_phase", "alert_cause", "alert_retry_count", "findings_surfaced_at", "alert_eligible_phase", "transcript_cursor"]);
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 

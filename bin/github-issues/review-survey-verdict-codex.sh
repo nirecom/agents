@@ -1,31 +1,13 @@
 #!/usr/bin/env bash
-# bin/github-issues/review-survey-verdict-codex.sh — second opinion on the survey verdict.
-#
-#   review-survey-verdict-codex.sh --artifact <survey.json> --out <final.json> [--no-log]
-#     stdout line 1   "## Issue Verdict Review: PERFORMED — …" | "SKIPPED — …" | "FAILED — …"
-#     stdout last ln  "review_result: replaced|upheld|invalid|skipped"
-#     exit            always 0
-#
-# The survey worker and this reviewer are two independent graders of the same evidence.
-# When they agree the verdict is upheld; when the reviewer's verdict passes the
-# structural check it REPLACES the survey's, in either direction — an escalation
-# (none → reopen) and a de-escalation (reopen → none) are the same operation.
-#
-# Every failure kind folds to one of two observable outcomes (CPR-SC separates the kinds,
-# the fold keeps the caller's contract flat):
-#     codex CLI absent                        → skipped
-#     everything else that fails              → invalid
-# and in BOTH the survey verdict is held verbatim. No failure may ever promote a verdict
-# the survey did not reach; `invalid` and `skipped` both force the confirm gate (G4).
-#
-# The review runs on every candidate — there is no on/off toggle, and codex being absent
-# from PATH is the only condition that skips it.
-#
-# This script never calls `gh`: it reads a survey artifact and writes a final artifact.
-# Web search is opt-in (ISSUE_VERDICT_WEB_SEARCH, default off): when enabled, codex may
-# issue queries derived from the proposal, and the prompt forbids identifying tokens in
-# those queries — but that constraint is prose, not a mechanical enforcement, so the
-# default keeps the outbound-query channel closed.
+# review-survey-verdict-codex.sh — second opinion on the survey verdict (never calls `gh`).
+#   --artifact <survey.json> --out <final.json> [--no-log]; exit always 0.
+#   stdout line 1 "## Issue Verdict Review: PERFORMED|SKIPPED|FAILED — …";
+#   last line "review_result: replaced|upheld|invalid|skipped".
+# A structurally valid reviewer verdict REPLACES the survey's in either direction; agreement upholds it.
+# Failure fold: codex absent → skipped; every other failure → invalid; both hold the survey
+# verdict verbatim and force the confirm gate (G4). No failure may promote a verdict.
+# No on/off toggle; web search is opt-in (ISSUE_VERDICT_WEB_SEARCH, default off) — rationale:
+# docs/architecture/claude-code/settings/hooks.md "Outbound content and the verdict review".
 
 set -uo pipefail
 
@@ -36,6 +18,8 @@ VALIDATOR="$SCRIPT_DIR/lib/validate-review-verdict.js"
 CASCADE_SSOT="$AGENTS_DIR/skills/_shared/issue-verdict-cascade.md"
 # shellcheck source=../lib/codex-timeout.sh
 source "$AGENTS_DIR/bin/lib/codex-timeout.sh"
+# shellcheck source=../lib/cli-exec-guard.sh
+source "$AGENTS_DIR/bin/lib/cli-exec-guard.sh"
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
@@ -355,6 +339,13 @@ TIMEOUT_SECS="$(codex_timeout_resolve)"
 CODEX_EXEC_ARGS=(exec --skip-git-repo-check)
 [[ "$WEB_SEARCH_ENABLED" == "1" ]] && CODEX_EXEC_ARGS+=(-c tools.web_search=true)
 
+# PROMPT_FILE is exactly what codex reads on stdin, so the checked bytes are the sent bytes.
+if ! GUARD_REASON="$(cli_exec_guard_input_size "$PROMPT_FILE" "$CODEX_INPUT_CHAR_LIMIT")"; then
+    log "$GUARD_REASON"
+    write_final "invalid" "$GUARD_REASON" ""
+    finish_written "## Issue Verdict Review: FAILED — $GUARD_REASON" "invalid"
+fi
+
 "$RWT" "$TIMEOUT_SECS" "$CODEX_BIN" "${CODEX_EXEC_ARGS[@]}" - \
     < "$PROMPT_FILE" > "$REVIEW_RAW_FILE" 2>"$CODEX_ERR_FILE"
 CODEX_RC=$?
@@ -364,6 +355,8 @@ CODEX_RC=$?
 if [[ $CODEX_RC -ne 0 ]]; then
     if [[ $CODEX_RC -eq 124 || $CODEX_RC -eq 142 ]]; then
         DETAIL="codex timed out after ${TIMEOUT_SECS}s"
+    elif [[ $CODEX_RC -eq 127 ]]; then
+        DETAIL="codex $(cli_exec_guard_diagnose_127 codex)"
     else
         DETAIL="codex exited $CODEX_RC"
     fi

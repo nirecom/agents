@@ -57,31 +57,31 @@ fi
 OUT_DIR="$(_sp_dirname "$OUTPUT")"
 mkdir -p "$OUT_DIR"
 
-TMP="$(sp_mktemp_beside "$OUTPUT")" || { echo "build-codex-context: cannot create a temporary file beside $OUTPUT" >&2; exit 1; }
-trap 'rm -f "$TMP"' EXIT
+TMP_OUT="$(sp_mktemp_beside "$OUTPUT")" || { echo "build-codex-context: cannot create a temporary file beside $OUTPUT" >&2; exit 1; }
+trap 'rm -f "$TMP_OUT"' EXIT
 
 inject_trailing_newline_if_missing() {
     local file="$1"
     if [[ "$(tail -c1 "$file" | wc -c)" -gt 0 ]] && [[ "$(tail -c1 "$file" | wc -l)" -eq 0 ]]; then
-        printf '\n' >> "$TMP"
+        printf '\n' >> "$TMP_OUT"
     fi
 }
 
 if [[ "$INTENT_PRESENT" -eq 1 ]]; then
-    printf '<!-- Source: %s -->\n' "$INTENT" >> "$TMP"
-    printf '## Section 1: Intent (User Requirements)\n' >> "$TMP"
-    cat "$INTENT" >> "$TMP"
+    printf '<!-- Source: %s -->\n' "$INTENT" >> "$TMP_OUT"
+    printf '## Section 1: Intent (User Requirements)\n' >> "$TMP_OUT"
+    cat "$INTENT" >> "$TMP_OUT"
     inject_trailing_newline_if_missing "$INTENT"
 fi
 
 if [[ "$INTENT_PRESENT" -eq 1 && "$OUTLINE_PRESENT" -eq 1 ]]; then
-    printf '\n---\n\n' >> "$TMP"
+    printf '\n---\n\n' >> "$TMP_OUT"
 fi
 
 if [[ "$OUTLINE_PRESENT" -eq 1 ]]; then
-    printf '<!-- Source: %s -->\n' "$OUTLINE" >> "$TMP"
-    printf '## Section 2: Outline (Design Proposal)\n' >> "$TMP"
-    cat "$OUTLINE" >> "$TMP"
+    printf '<!-- Source: %s -->\n' "$OUTLINE" >> "$TMP_OUT"
+    printf '## Section 2: Outline (Design Proposal)\n' >> "$TMP_OUT"
+    cat "$OUTLINE" >> "$TMP_OUT"
     inject_trailing_newline_if_missing "$OUTLINE"
 fi
 
@@ -89,7 +89,7 @@ fi
 # moves the context inside and returns 0, and the loop then marks the context
 # built. sp_publish_file decides on the post-rename condition instead, and the
 # failure is announced rather than left to `set -e` (#2025 C6).
-sp_publish_file "$TMP" "$OUTPUT" || { echo "build-codex-context: could not publish the context to $OUTPUT" >&2; exit 1; }
+sp_publish_file "$TMP_OUT" "$OUTPUT" || { echo "build-codex-context: could not publish the context to $OUTPUT" >&2; exit 1; }
 trap - EXIT
 
 exit 0

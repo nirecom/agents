@@ -90,6 +90,27 @@ expect "O3: a pre-rename handoff (step-end, flush compaction) reads and renders 
 expect "O3: appending a new entry keeps every legacy line" "$(nj legacy.js append)" "OK"
 case_end
 
+# #2475: the supervisor codex input assembler reads handoff files through the
+# same reader (CPR-SSOT), so readDocumentFile is exported unchanged.
+cat > "$TMP/readdoc.js" <<'JS'
+const H = require(process.env.AGENTS + '/hooks/lib/handoff-artifact.js');
+const bad = [];
+if (typeof H.readDocumentFile !== 'function') {
+  bad.push('not-exported:' + typeof H.readDocumentFile);
+} else {
+  const p = H.getHandoffPath('legacy-sid');
+  const txt = H.readDocumentFile(p);
+  if (typeof txt !== 'string' || txt.indexOf('pushed the red tests') === -1) bad.push('read:' + JSON.stringify(txt));
+  const missing = H.readDocumentFile(H.getHandoffPath('no-such-sid'));
+  if (missing !== null) bad.push('missing-not-null:' + JSON.stringify(missing));
+}
+process.stdout.write(bad.length ? 'BAD:' + bad.join(' | ') : 'OK');
+JS
+
+case_begin "read-document-file-is-exported" "hooks/lib/handoff-artifact.js"
+expect "O4: readDocumentFile is exported, reads an existing handoff, returns null for a missing one" "$(nj readdoc.js)" "OK"
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -gt 0 ] && exit 1
