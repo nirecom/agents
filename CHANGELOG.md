@@ -615,3 +615,7 @@ Changes: Agents' own scripts no longer trigger a permission prompt when run from
 ### FEATURE: PR #2485 (2026-10-01)
 Background: fix(#2482): let WARNINGS_ACCEPTED restore a review_tests step reopened by write_code
 Changes: Fixed: after write_code reopens review_tests, `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` restores the step to complete instead of leaving the session stuck; the warning message now lists the characters the accept reason must not contain.
+
+### FEATURE: PR #2484 (2026-10-01)
+Background: fix(#2475): stop PROMPT/TMP env collisions breaking codex launch; ass...
+Changes: Fixed codex reviews and supervisor runs failing to start on Windows with a misleading "codex not found" error; an exit 127 now reports whether the CLI is missing or the child environment is broken.;The EM Supervisor now sends Codex a condensed, rule-assembled view of the session instead of the raw transcript, and reviews only what happened since its last successful run.;Every codex launch now rejects an over-limit input (1,048,576 characters) with an explicit reason instead of failing inside codex.
