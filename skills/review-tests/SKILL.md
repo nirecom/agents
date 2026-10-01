@@ -88,7 +88,9 @@ Emit exactly one sentinel per run: COMPLETE on pass, WARNINGS on any gap or warn
 On exit 4 or exit 7, emit neither sentinel and HALT.
 Invariant: RT-5 emits exactly one of COMPLETE/WARNINGS; never both, never zero (except exit 4 and exit 7).
 Scan scope is limited to files changed in the current PR diff (soft scope). Pre-existing gaps outside the PR diff are excluded.
-To accept documented gaps and unblock /write-code, emit `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"`.
+To accept documented gaps and unblock /write-code, or to stop after a write_code reopen (review_tests pending), emit the sentinel below.
+`echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"`
+`{reason}` must not contain `( ) ; | & >` or a backtick.
 Only critical and high tier gaps block COMPLETE. Medium and low are advisory.
 Session-id resolution is delegated to `bin/resolve-session-id` and its value passed on as `--session`; worktree resolution is delegated to `bin/resolve-worktree-path` (SSOT: `hooks/workflow-state/resolve-worktree-path.js`); staged file selection is delegated to `scripts/select-staged-files.sh` — do not re-implement inside the skill.
 Review-scope selection (full vs delta, REVIEW/DELETED/INVENTORY/SOURCE) is delegated to `bin/select-review-scope.js` — do not re-derive it.

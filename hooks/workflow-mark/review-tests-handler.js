@@ -23,6 +23,7 @@ const {
   markStep,
   readState,
 } = require("../workflow-state");
+const { CLEAR_OUTCOME } = require("../workflow-state/state-io/review-tests");
 const { hasCompletionEvidence } = require("../workflow-state/evidence-resolver");
 const {
   computeReviewScopeManifest,
@@ -44,6 +45,16 @@ function computeHandlerManifest(sessionId, repoCwd) {
     const { resolveSessionWorktreePath } = require("../workflow-state/resolve-worktree-path");
     dir = resolveSessionWorktreePath(sessionId);
   }
+  if (!dir) return { ok: false, error: "no worktree resolved" };
+  const { toWindowsPath } = require("../lib/branch-diff");
+  return computeReviewScopeManifest(toWindowsPath(dir));
+}
+
+// ACCEPTED resolves the repo like the write_code reopen side, so a main-worktree cwd
+// never records an unrelated manifest.
+function computeAcceptedManifest(sessionId, repoCwd) {
+  const { resolveReopenRepoDir } = require("../workflow-state/review-tests-reopen");
+  const dir = resolveReopenRepoDir(sessionId, repoCwd || null);
   if (!dir) return { ok: false, error: "no worktree resolved" };
   const { toWindowsPath } = require("../lib/branch-diff");
   return computeReviewScopeManifest(toWindowsPath(dir));
@@ -72,6 +83,23 @@ function verifyFingerprint(label, payload, ctx) {
     return null;
   }
   return manifest.files;
+}
+
+const NOTHING_TO_ACCEPT_MSG =
+  "nothing to accept — review_tests has no warnings and is not in a recoverable reopened (pending) state; state unchanged.";
+
+function acceptedMessage(outcome, manifest) {
+  switch (outcome) {
+    case CLEAR_OUTCOME.RECOVERED:
+      return "reopen accepted — review_tests restored to complete (current review scope recorded).";
+    case CLEAR_OUTCOME.WARNINGS_CLEARED:
+      return "warnings cleared — /write-code unblocked.";
+    case CLEAR_OUTCOME.MANIFEST_UNAVAILABLE:
+      return `review_tests stays reopened — review-scope manifest unavailable (${manifest.error}); ` +
+        "re-issue this sentinel from a cwd that resolves the session worktree.";
+    default:
+      return NOTHING_TO_ACCEPT_MSG;
+  }
 }
 
 function backfillWriteTests(sessionId, repoCwd, pushMessage) {
@@ -132,6 +160,7 @@ function handle(ctx) {
   // --- WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED handler ---
   // Clears warnings_summary and re-records the current review-scope manifest (#2287)
   // so the gate unblocks /write-code.
+  // A write_code-reopened (pending) review_tests is restored to complete (#2482).
   const acceptedMatch = cmd.match(REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ);
   if (acceptedMatch) {
     const reason = acceptedMatch[1];
@@ -149,13 +178,11 @@ function handle(ctx) {
       return true;
     }
     try {
-      const manifest = computeHandlerManifest(sessionId, repoCwd);
-      clearReviewTestsWarnings(sessionId, reason, manifest.ok ? manifest : null);
+      const manifest = computeAcceptedManifest(sessionId, repoCwd);
+      const outcome = clearReviewTestsWarnings(sessionId, reason, manifest.ok ? manifest : null);
       // #1361: accepting the gap ends this review — drop the re-invoke guard marker.
       clearReviewTestsTerminalMarker(sessionId);
-      pushMessage(
-        "[workflow] REVIEW_TESTS_WARNINGS_ACCEPTED: warnings cleared — /write-code unblocked."
-      );
+      pushMessage(`[workflow] REVIEW_TESTS_WARNINGS_ACCEPTED: ${acceptedMessage(outcome, manifest)}`);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. warnings NOT cleared.`
@@ -168,7 +195,8 @@ function handle(ctx) {
   if (REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE.test(cmd)) {
     pushMessage(
       "workflow-mark: malformed WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED — " +
-        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>\""
+        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>\" " +
+        "{reason} must not contain ( ) ; | & > or a backtick."
     );
     return true;
   }

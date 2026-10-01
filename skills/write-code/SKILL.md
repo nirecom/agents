@@ -92,3 +92,5 @@ Each is best-effort: if the tool or config is absent, skip AND emit `<tool> not 
 
 Emit `echo "<<WORKFLOW_MARK_STEP_write_code_complete>>"` via Bash after WCD-7 exits 0; skip it when the subagent failed or the WCD-6 review was rejected — fix the work and re-run WCD-4 first.
 Then run `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --session "$SESSION_ID"` and follow its ACTION — it routes to /review-tests when write_code changed the review scope.
+When /review-tests is reopened and the user decides to stop, emit WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED (procedure: skills/review-tests/SKILL.md).
+Never emit WORKFLOW_REVIEW_TESTS_COMPLETE manually.
