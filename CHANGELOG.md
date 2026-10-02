@@ -627,3 +627,7 @@ Changes: Fixed: the run_tests hook no longer silently skips recording the test o
 ### FEATURE: PR #2477 (2026-10-01)
 Background: feat(#2476): wait for Claude Code once per install, skip Claude Deskt...
 Changes: Installer: no longer waits on the Claude Desktop app, waits for Claude Code at most once per install and shows the PID and path of each process it waits on; on timeout only the settings.json write and the claude/codex updates are skipped.;Installer: the GitLab auth step is skipped within 3 s when GITLAB_HOSTNAME:443 cannot be reached (previously a DNS-only check let `glab auth login` hang), and the GitLab token is no longer passed on the command line.
+
+### FEATURE: PR #2493 (2026-10-02)
+Background: feat(#2455): host-wide test load control for find-tests and run-all
+Changes: Parallel sessions no longer saturate the host when running tests: find-tests-for-source.sh and tests/run-all.sh share a host-wide lane budget, find-tests caches the parsed test corpus, and bin/test-lanes-status.sh shows who holds the lanes
