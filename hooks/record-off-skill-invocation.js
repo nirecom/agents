@@ -17,20 +17,9 @@ const { getWorkflowDir } = require("./workflow-state");
 const { EMERGENCY_PROVENANCE_MARKER_KIND } = require("./lib/protected-basenames");
 const { buildProvenanceMarker, promptInvokesOffSkill } = require("./lib/off-emergency-provenance");
 
-const SID_RE = /^[A-Za-z0-9_-]+$/;
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(Buffer.from(buf.subarray(0, n)));
-    }
-  } catch (_e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const SID_RE = /^[A-Za-z0-9_-]+$/;
 
 function markerPathFor(sessionId) {
   return path.join(getWorkflowDir(), `${sessionId}.${EMERGENCY_PROVENANCE_MARKER_KIND}`);
@@ -57,8 +46,11 @@ function clearProvenanceMarker(sessionId) {
 }
 
 if (require.main === module) {
-  let input = null;
-  try { input = JSON.parse(readStdin()); } catch (_e) { input = null; }
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try { fs.writeSync(2, readFailOpenDiagnostic("record-off-skill-invocation", r, "session id from env fallback") + "\n"); } catch (_) {}
+  }
+  const input = r.kind === "ok" ? r.input : null;
 
   let sessionId = input && typeof input.session_id === "string" ? input.session_id : null;
   if (!sessionId) {

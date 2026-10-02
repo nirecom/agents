@@ -5,30 +5,12 @@
 // Fires only when findings_surfaced_at is null and alert mode has completed (or is
 // in the #961 stale-pending state). Emits additionalContext only — never blocks.
 
-const fs = require("fs");
-
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput } = require("./lib/read-stdin");
 
 if (require.main === module) {
-  let input = {};
-  try {
-    const raw = readStdin();
-    if (!raw) process.exit(0);
-    input = JSON.parse(raw);
-  } catch (_) {
-    process.exit(0);
-  }
+  const r = readHookInput();
+  if (r.kind !== "ok") process.exit(0);
+  const input = r.input;
 
   if (input.stop_hook_active === true) process.exit(0);
 

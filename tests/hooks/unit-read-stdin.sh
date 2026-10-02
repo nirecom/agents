@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # tests/hooks/unit-read-stdin.sh
 # Tests: hooks/lib/read-stdin.js, hooks/lib/pretool-lang-gate.js
-# Tags: TL1, TL2, hook, stdin, scope:common
+# Tags: TL1, TL2, hook, stdin, scope:common, lint, static-check, read-stdin, bin, ssot, pwsh-not-required
 # Shared EOF-safe hook stdin reader (#2479): real fd 0 (file redirect + pipe) at
 # sizes around the 4096 / 65536 buffer edges, injected readSyncImpl for the
-# EAGAIN / EINTR / EOF / alias paths, the fail-open diagnostic format, and the
-# unchanged readStdinJson contract of pretool-lang-gate after it delegates.
+# EAGAIN / EINTR / EOF / alias paths, the fail-open diagnostic format, the
+# unchanged readStdinJson contract of pretool-lang-gate after it delegates, and
+# the #1810 static lint that no hook / bin file reads stdin privately.
 
 set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -175,6 +176,37 @@ if (group === "inject") {
     { d: Buffer.concat([a.subarray(2), Buffer.from("y")]) }, { z: 1 }]);
   r = m.readAll(0, s.impl, {});
   ok("multibyte-split-across-reads", isOk(r, "xあy"), show(r));
+
+  // The budget is consecutive unreadable time: 5 stalls of ~40 ms each exceed a
+  // 100 ms total but never 100 ms in a row, so a successful read resets it.
+  let last = process.hrtime.bigint(), rounds = 0;
+  const bursty = (fd, buf, off) => {
+    if (rounds >= 5) return 0;
+    if (Number(process.hrtime.bigint() - last) / 1e6 < 40) throw errOf("EAGAIN");
+    rounds++; last = process.hrtime.bigint();
+    buf[off] = 0x61; return 1;
+  };
+  const tb = process.hrtime.bigint();
+  r = m.readAll(0, bursty, { eagainBudgetMs: 100 });
+  const tot = Number(process.hrtime.bigint() - tb) / 1e6;
+  ok("eagain-budget-resets-after-successful-read", isOk(r, "aaaaa") && tot > 100, show(r) + " total=" + tot.toFixed(1) + "ms");
+}
+
+if (group === "defaults") {
+  const s = scripted([{ d: "abc" }, { t: "EAGAIN" }, { d: "def" }, { z: 1 }]);
+  const r = m.readAll(0, s.impl);
+  ok("opts-omitted-ok", isOk(r, "abcdef"), show(r));
+  const t0 = process.hrtime.bigint();
+  let calls = 0;
+  const stuck = () => {
+    calls++;
+    if (Number(process.hrtime.bigint() - t0) / 1e6 > 1500) throw errOf("GUARD-BUDGET-ZERO-IGNORED");
+    throw errOf("EAGAIN");
+  };
+  const r0 = m.readAll(0, stuck, { eagainBudgetMs: 0 });
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  ok("budget-zero-read-error-EAGAIN", isErr(r0, "EAGAIN"), show(r0) + " calls=" + calls);
+  ok("budget-zero-not-replaced-by-default", ms < 1000, "elapsed=" + ms.toFixed(1) + "ms calls=" + calls);
 }
 
 if (group === "diag") {
@@ -293,6 +325,99 @@ check "RJ3/broken-json-returns-null" "NULL" "$(printf '{"a":' | _gr plain)"
 check "RJ4/valid-json-returned" 'JSON:{"tool_name":"Write"}' "$(printf '{"tool_name":"Write"}' | _gr plain)"
 check "RJ5/shared-reader-error-is-thrown" "THROW:EAGAIN" "$(printf '{"tool_name":"Write"}' | _gr stub-eagain)"
 check "RJ6/text-comes-from-shared-reader" 'JSON:{"stub":true}' "$(printf '{"tool_name":"Write"}' | _gr stub-ok)"
+case_end
+
+# ============================================================================
+case_begin "readhookinput-fd0-read-error-diagnostic" "hooks/lib/read-stdin.js"
+# ============================================================================
+check "fd0-read-error/diagnostic-exact" "[hookx] stdin read-error (EBADF): eff (fail-open)" "$(_dg 0>"$TMPD/wo-fd0.txt")"
+case_end
+
+# ============================================================================
+case_begin "readall-default-and-zero-budget" "hooks/lib/read-stdin.js"
+# ============================================================================
+relay "defaults" "$(run_with_timeout 60 node "$TMPD/unit-runner.js" "$READ_STDIN_JS" defaults "$TMPW" 2>&1 || echo "FAIL:runner-crashed")"
+case_end
+
+# --- #1810 S9 static lint: every hooks/**/*.js and every bin file (any
+# extension) reads stdin via hooks/lib/read-stdin, never a private fd-0 read.
+# Comments are scanned too. Detector + fixtures: tests/hooks/lint-shared-stdin-reader/.
+LINT_DIR="$AGENTS_WIN/tests/hooks/lint-shared-stdin-reader"
+LINT_SCAN="$LINT_DIR/scan.js"
+LINT_FIX="$LINT_DIR/fixtures"
+# Out of scope for #1810 (outline "Out of scope"): bin stdin readers that are
+# not hook-input readers. Reason for every row: out-of-scope stdin read.
+BIN_EXCLUDED=(
+    bin/is-docs-only
+    bin/lib/cli-exec-guard.sh
+    bin/lib/last-json-object.js
+    bin/lib/prompt-extraction/cli.js
+    bin/sweep-branches/summary.sh
+    bin/sweep-worktrees/summary.sh
+    bin/sweep-plans.sh
+    bin/sweep-issues.sh
+    bin/worktree-copy-include.js
+    bin/sweep-issues/scan-stale-paths.js
+    bin/sweep-issues/meta-parent-scan.sh
+    bin/sweep-issues/list-band.sh
+)
+# S8 fallback only: "<path>|<reason>" per row. Empty by design.
+HOOKS_EXCEPTED=()
+
+# ============================================================================
+case_begin "lint-detector-self-check" "hooks/lib/read-stdin.js"
+# ============================================================================
+# The detector really detects; otherwise a green tree scan is vacuous.
+for _lf in violation-extensionless violation-comment-only.js violation-dev-stdin.js violation-readsync-fd0.js violation-readfilesync-stdin-fd.js; do
+    check "lint-self-check/detects-$_lf" "$LINT_FIX/$_lf" "$(run_with_timeout 30 node "$LINT_SCAN" files "$LINT_FIX/$_lf" 2>&1)"
+done
+check "lint-self-check/file-fd-read-not-flagged" "" "$(run_with_timeout 30 node "$LINT_SCAN" files "$LINT_FIX/clean-file-fd.js" 2>&1)"
+check "lint-self-check/near-miss-fd-not-flagged" "" "$(run_with_timeout 30 node "$LINT_SCAN" files "$LINT_FIX/clean-near-miss-fd.js" 2>&1)"
+case_end
+
+# ============================================================================
+case_begin "lint-no-private-stdin-reader" "hooks/lib/read-stdin.js"
+# ============================================================================
+_lint_hits="$(run_with_timeout 60 node "$LINT_SCAN" tree "$AGENTS_WIN" 2>"$TMPD/scan-err.txt")"
+_lint_rc=$?
+[ "$_lint_rc" -eq 0 ] || fail "lint-tree-scan/runs" "rc=$_lint_rc err=$(cat "$TMPD/scan-err.txt")"
+_lint_excused() {
+    local p="$1" row
+    for row in "${BIN_EXCLUDED[@]}"; do [[ "$p" == "$row" ]] && return 0; done
+    for row in "${HOOKS_EXCEPTED[@]+"${HOOKS_EXCEPTED[@]}"}"; do [[ "$p" == "${row%%|*}" ]] && return 0; done
+    return 1
+}
+_lint_viol=0
+while IFS= read -r _lp; do
+    [[ -z "$_lp" ]] && continue
+    _lint_excused "$_lp" && continue
+    _lint_viol=$((_lint_viol + 1))
+    fail "no-private-stdin-reader/$_lp" "reads stdin outside hooks/lib/read-stdin"
+done <<< "$_lint_hits"
+if [[ "$_lint_viol" -eq 0 && "$_lint_rc" -eq 0 ]]; then
+    pass "no-private-stdin-reader/all-in-scope-files"
+fi
+# The shared reader itself is the one sanctioned site; it must stay out of scope.
+if grep -qx "hooks/lib/read-stdin.js" <<< "$_lint_hits"; then
+    fail "lint-shared-reader-excluded-from-scope" "hooks/lib/read-stdin.js was reported"
+else
+    pass "lint-shared-reader-excluded-from-scope"
+fi
+case_end
+
+# ============================================================================
+case_begin "lint-bin-exclusion-rows-live" "hooks/lib/read-stdin.js"
+# ============================================================================
+# A row that stops matching (or whose file is gone) is a stale exception -> red.
+for _row in "${BIN_EXCLUDED[@]}"; do
+    if [[ ! -f "$AGENTS_DIR/$_row" ]]; then
+        fail "bin-exclusion-live/$_row" "file no longer exists; drop the row"
+    elif grep -qx "$_row" <<< "$_lint_hits"; then
+        pass "bin-exclusion-live/$_row"
+    else
+        fail "bin-exclusion-live/$_row" "no longer matches a forbidden pattern; drop the row"
+    fi
+done
 case_end
 
 echo ""

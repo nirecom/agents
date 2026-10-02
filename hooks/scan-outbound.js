@@ -12,23 +12,9 @@ const { parse } = require("./lib/command-ir");
 const { resolveGitArgvForSegment } = require("./lib/bash-write-patterns/git-write-ir");
 const { resolveCommitRepoDir, extractInlineBashWriteContent } = require("./lib/commit-target");
 const { extractStagedFilesRelative } = require("./lib/bash-write-targets/staged");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-// Read stdin (cross-platform: fs.readSync for Windows compatibility)
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  let bytesRead;
-  try {
-    while (true) {
-      bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {
-    // EOF or error
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
+const HOOK_NAME = "scan-outbound";
 
 function approve() {
   console.log(JSON.stringify({ decision: "approve" }));
@@ -68,8 +54,13 @@ const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
 
 // Main async logic wrapped in an IIFE to allow await on Promise-returning stubs
 (async function main() {
-  // Parse stdin
-  const input = JSON.parse(readStdin());
+  const r = readHookInput();
+  if (r.kind === "read-error") block(readFailureReason(HOOK_NAME, r.error));
+  if (r.kind === "json-invalid") {
+    try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
+    approve();
+  }
+  const input = r.input;
 
   const toolName = input.tool_name;
   const toolInput = input.tool_input || {};

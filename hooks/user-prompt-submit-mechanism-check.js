@@ -37,18 +37,7 @@ function isKnownStep(step) {
   }
 }
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 // `state-absent` is normal (no /workflow-init yet), not a failure — reporting it would burn the
 // once-per-session ledger slot and suppress the session's first genuine stall (reintroducing #1979).
@@ -108,8 +97,13 @@ function isFindingExemptFromPromptNotify(sid, finding) {
 }
 
 function main() {
-  let input = null;
-  try { input = JSON.parse(readStdin()); } catch (_e) { input = null; }
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try {
+      fs.writeSync(2, readFailOpenDiagnostic("user-prompt-submit-mechanism-check", r, "session id from env fallback") + "\n");
+    } catch (_e) {}
+  }
+  const input = r.kind === "ok" ? r.input : null;
 
   let sid = input && typeof input.session_id === "string" ? input.session_id : null;
   if (!sid) {

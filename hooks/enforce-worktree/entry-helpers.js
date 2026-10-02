@@ -3,17 +3,8 @@
 // Entry-point helpers for hooks/enforce-worktree.js (file-split per
 // rules/coding/file-split.md Pattern A). Pure structural move — no behavior change.
 
-const fs = require("fs");
 const os = require("os");
 const path = require("path");
-
-function readStdin() {
-  try {
-    return fs.readFileSync(0, "utf8");
-  } catch (e) {
-    return "";
-  }
-}
 
 // Resolve WORKTREE_BASE_DIR with ~ expansion and a default of ~/git/worktrees.
 // Per rules/worktree.md, this is the parent directory all linked worktrees live under.
@@ -26,4 +17,4 @@ function getWorktreeBaseDirResolved() {
   return path.resolve(expanded);
 }
 
-module.exports = { readStdin, getWorktreeBaseDirResolved };
+module.exports = { getWorktreeBaseDirResolved };

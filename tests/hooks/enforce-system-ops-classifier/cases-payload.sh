@@ -39,6 +39,8 @@ payload-runcmds-clean      | ALLOW | {"tool_name":"runCommands","tool_input":{"c
 payload-runcmds-blocked    | BLOCK | {"tool_name":"runCommands","tool_input":{"commands":["ls","winget install jq"]}}
 payload-runcmds-null-elem  | BLOCK | {"tool_name":"runCommands","tool_input":{"commands":[null,"winget install jq"]}}
 payload-runcmds-nonarray   | BLOCK | {"tool_name":"runCommands","tool_input":{"commands":"winget install jq"}}
+payload-runcmds-scalar-cmd | BLOCK | {"tool_name":"runCommands","tool_input":{"command":"winget install jq"}}
+payload-runcmds-arr-scalar | BLOCK | {"tool_name":"runCommands","tool_input":{"commands":["ls"],"command":"winget install jq"}}
 payload-runinterminal      | BLOCK | {"tool_name":"runInTerminal","tool_input":{"command":"apt install jq"}}
 payload-command-array      | BLOCK | {"tool_name":"Bash","tool_input":{"command":["winget install jq"]}}
 TABLE

@@ -6,31 +6,17 @@
 //
 // Fail-open: any error → emit {} and exit 0.
 
-const fs = require("fs");
 const { computePressureSignal } = require("./lib/handoff-pressure");
 const { isWorkflowActivePeriod } = require("./lib/workflow-active-period");
-
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    for (;;) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) { /* fail-open */ }
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput } = require("./lib/read-stdin");
 
 function main() {
-  let input = null;
-  try {
-    input = JSON.parse(readStdin());
-  } catch (e) {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
     console.log("{}");
     return;
   }
+  const input = r.input;
   if (!input || typeof input !== "object" || !isWorkflowActivePeriod(input.session_id)) {
     console.log("{}");
     return;

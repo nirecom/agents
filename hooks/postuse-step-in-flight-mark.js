@@ -11,18 +11,7 @@
 
 const fs = require("fs");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 // A dispatch made from INSIDE a subagent must not mark the parent's step: the
 // C4 guard runs on the main conversation only. Any non-empty agent_id, of any
@@ -34,14 +23,14 @@ function isSubagentTurn(input) {
 }
 
 function main() {
-  let input;
-  try {
-    const raw = readStdin();
-    if (!raw || !raw.trim()) return;
-    input = JSON.parse(raw);
-  } catch (_) {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try {
+      fs.writeSync(2, readFailOpenDiagnostic("postuse-step-in-flight-mark", r, "step-in-flight not recorded") + "\n");
+    } catch (_) {}
     return;
   }
+  const input = r.input;
   if (!input || typeof input !== "object" || Array.isArray(input)) return;
   if (typeof input.session_id !== "string" || !input.session_id) return;
   if (isSubagentTurn(input)) return;

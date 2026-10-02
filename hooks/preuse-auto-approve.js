@@ -14,26 +14,12 @@ const fs = require("fs");
 const path = require("path");
 const { isCommandTool, commandListOf } = require("./lib/tool-command-text");
 const { isAllowedScratchpadInvocation } = require("./preuse-auto-approve/scratchpad-script");
+const { readHookInput } = require("./lib/read-stdin");
 
 try {
   require("./lib/load-env").loadDefaultEnv();
 } catch (_e) {
   /* fail-open: proceed with whatever process.env already has */
-}
-
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_e) {
-    /* fail-open: treat as empty stdin */
-  }
-  return Buffer.concat(chunks).toString("utf8");
 }
 
 function passThrough() {
@@ -84,14 +70,9 @@ function isInsideBase(candidatePath, baseDir) {
 }
 
 function main() {
-  let input;
-  try {
-    const raw = readStdin();
-    if (!raw) passThrough();
-    input = JSON.parse(raw);
-  } catch (_e) {
-    passThrough();
-  }
+  const r = readHookInput();
+  if (r.kind !== "ok") passThrough();
+  const input = r.input;
 
   if (!input || typeof input !== "object") passThrough();
 

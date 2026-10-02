@@ -8,7 +8,7 @@
 // failure path prints `{}` and exits 0 — a CodeGraph problem must never cost
 // a prompt. Design: docs/architecture/claude-code.md, docs/ops/codegraph.md.
 
-const fs = require("fs");
+const { readHookInput } = require("./lib/read-stdin");
 const {
   codegraphEnabled,
   spawnCodegraph,
@@ -18,19 +18,6 @@ const {
 
 const SPAWN_TIMEOUT_MS = 4000;
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
-
 function nothing() {
   console.log("{}");
   process.exit(0);
@@ -39,13 +26,10 @@ function nothing() {
 function main() {
   if (!codegraphEnabled()) nothing();
 
-  const raw = readStdin();
-  let input = null;
-  try {
-    input = JSON.parse(raw);
-  } catch (_) {
-    nothing();
-  }
+  const r = readHookInput();
+  if (r.kind !== "ok") nothing();
+  const raw = r.text;
+  const input = r.input;
   if (!input || typeof input !== "object") nothing();
 
   // The gate and the child must judge the same root: re-serialize only when
