@@ -4,8 +4,8 @@
 # Tags: bin, env, config, tests, scope:common
 # Usage: tests/run-all.sh [-j N|auto] [--deadline SECS] [--print-plan] [--all | <glob-or-file> ...]
 # Env:   FEATURE_644_PHASE, RUN_ALL_JOBS, RUN_ALL_DEADLINE, RUN_ALL_PROGRESS, RUN_ALL_REAP
-# Exit:  0 pass / 1 fail / 2 argument error / 3 deadline abort / 130 interrupted
-# See docs/architecture/tests/run-all-parallelism.md for the full contract.
+# Exit:  0 pass / 1 fail / 2 argument error / 3 deadline abort / 4 no test lane / 130 interrupted
+# See docs/architecture/claude-code/test-runner-parallelism.md for the full contract.
 
 set -uo pipefail
 
@@ -147,6 +147,7 @@ cleanup_all() {
     for pid in $pids; do signal_tree KILL "$pid"; done
   fi
   [ -n "${WORKDIR:-}" ] && rm -rf "$WORKDIR" 2>/dev/null
+  [ "${LANES_LIB_OK:-0}" -eq 1 ] && thl_release_all
   return 0
 }
 trap 'cleanup_all; exit 130' INT TERM
@@ -185,9 +186,9 @@ detect_serial
 
 # --- duration ledger -------------------------------------------------------
 # Submission order is Longest-Processing-Time-first over historical durations (rationale:
-# docs/architecture/tests/run-all-parallelism.md).
+# docs/architecture/claude-code/test-runner-parallelism.md).
 PARALLELISM_LIB_OK=0
-DUR_LIB_OK=0
+DUR_LIB_OK=0; LANES_LIB_OK=0
 LEDGER_INITED=0
 UNMEASURED=99
 
@@ -198,6 +199,9 @@ load_run_all_libs() {
   [ -f "$plib" ] && . "$plib" 2>/dev/null &&
     command -v run_all_cache_dir >/dev/null 2>&1 && PARALLELISM_LIB_OK=1
   [ "$PARALLELISM_LIB_OK" -eq 1 ] || return 0
+  local llib="${RUN_ALL_LANES_LIB:-$AGENTS_DIR/bin/lib/test-host-lanes.sh}"
+  # shellcheck source=/dev/null
+  [ -f "$llib" ] && . "$llib" 2>/dev/null && command -v thl_run_all_lease >/dev/null 2>&1 && LANES_LIB_OK=1
   # shellcheck source=/dev/null
   [ -f "$dlib" ] && . "$dlib" 2>/dev/null &&
     command -v run_all_dur_lookup >/dev/null 2>&1 && DUR_LIB_OK=1
@@ -293,20 +297,11 @@ ledger_record() {
 # --- width -----------------------------------------------------------------
 RESOLVED_J=4
 resolve_jobs() {
-  local lib="${RUN_ALL_PARALLELISM_LIB:-$AGENTS_DIR/bin/lib/run-all-parallelism.sh}" reason=missing
   if [ "$JOBS_MODE" = "fixed" ]; then RESOLVED_J="$JOBS_FIXED"; return 0; fi
-  # Read-only: never writes, repairs, or invokes the calibrator.
-  # shellcheck source=/dev/null
-  if [ -f "$lib" ] && . "$lib" 2>/dev/null && command -v run_all_cache_read >/dev/null 2>&1; then
-    RESOLVED_J="${RUN_ALL_FALLBACK_JOBS:-4}"
-    if run_all_cache_read "$(run_all_cache_file)" 2>/dev/null; then
-      RESOLVED_J="$RUN_ALL_CACHE_JOBS"
-      say "parallelism: -j $RESOLVED_J (calibrated $RUN_ALL_CACHE_MEASURED_AT)"
-      return 0
-    fi
-    reason="${RUN_ALL_CACHE_REASON:-missing}"
+  if [ "$PARALLELISM_LIB_OK" -eq 1 ] && command -v run_all_resolve_auto_jobs >/dev/null 2>&1; then
+    run_all_resolve_auto_jobs; RESOLVED_J="$RUN_ALL_RESOLVED_J"; say "$RUN_ALL_RESOLVE_NOTE"; return 0
   fi
-  say "parallelism cache $reason; using -j $RESOLVED_J (conservative default). Calibrate with: ${RUN_ALL_CALIBRATOR_HINT:-bin/calibrate-test-parallelism.sh}"
+  say "parallelism cache missing; using -j $RESOLVED_J (conservative default). Calibrate with: bin/calibrate-test-parallelism.sh"
   return 0
 }
 resolve_jobs
@@ -349,6 +344,12 @@ PASS=0; FAIL=0; SKIP=0
 NEXT=0; REPORTED=0; HARVESTED=0
 SERIAL_INFLIGHT=0; BARRIER_ANNOUNCED=0; DEADLINE_HIT=0; IDLE_SPINS=0
 START_TS=$SECONDS
+# Host-wide lanes (#2455): the lease can only narrow EFFECTIVE_J, never widen it.
+if [ "$LANES_LIB_OK" -eq 1 ] && [ "$TOTAL" -gt 0 ]; then
+  thl_init_dir; thl_run_all_lease "$EFFECTIVE_J" "$DEADLINE" || { cleanup_all
+    echo "[run-all] no test lane freed within ${THL_WAIT_CAP_USED}s; inspect holders with: bash bin/test-lanes-status.sh" >&2; exit 4; }
+  EFFECTIVE_J="$THL_GRANTED"; [ -n "$THL_NOTE" ] && say "lanes: $THL_NOTE"
+fi
 
 # Only a line-initial RUN_CONTRACT marker is disarmed, by prefixing.
 # Shell builtins only — a fork per line would outcost the run on MSYS.

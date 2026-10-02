@@ -4,6 +4,9 @@
 # Exit codes: 0 ok | 1 unstable/nothing to print | 2 usage/validation error | 77 not requested.
 
 set -u
+# The calibrator measures raw width, so its own run-all passes must not be
+# narrowed by (or wait on) the host test lanes (#2455).
+export TEST_LANES=off
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_DIR="$(cd "$SELF_DIR/.." && pwd)"

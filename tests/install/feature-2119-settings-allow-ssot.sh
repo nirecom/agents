@@ -83,7 +83,7 @@ ROWS=0
 # EXECUTED-ROW BUDGET. Every table-driven loop in the part files increments ROWS; T10 asserts
 # the exact total. An empty table, a drifted heredoc delimiter or an early return in front of
 # a loop otherwise leaves a file that counts only its failures reporting green.
-ROWS_EXPECTED=230 # ssot-structure 40 (T3a 4 + T3b 26 + T46 10) + write-and-drift 4 (T6 3 + T7 1)
+ROWS_EXPECTED=231 # ssot-structure 41 (T3a 4 + T3b 27 + T46 10) + write-and-drift 4 (T6 3 + T7 1)
                    # + settings-preservation 7 + merger-contract 14 + input-validation 15
                    # + provider-purity 14 + assembler-failclosed 18 (T29 12 + T36 6)
                    # + deploy-preconditions 17 (T40 8 + T41 9) + deploy-symlink-policy 29

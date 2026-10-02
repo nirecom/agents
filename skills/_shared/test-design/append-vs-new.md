@@ -23,4 +23,6 @@
 ## How the decision is made
 
 - Run `bin/find-tests-for-source.sh` — write-tests (WT-5) and review-tests (RT-1a) call the same helper, so both read the same verdict.
+- Pass every query of one step to a single invocation, repeating `--test-file` or `--sources`.
+- Cap one invocation at 50 queries; beyond that, split into independent commands of up to 50 each.
 - Do not decide by eye and do not grep headers here: the helper owns the corpus scan, the ranking and the limit comparison.

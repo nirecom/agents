@@ -233,3 +233,23 @@ run_all_cache_read() {
     RUN_ALL_CACHE_MEASURED_AT="$v_measured_at"
     return 0
 }
+
+# --- auto width -------------------------------------------------------------
+
+# run_all_resolve_auto_jobs — `-j auto` for tests/run-all.sh: the calibrated
+# width, else the conservative fallback. Read-only (never writes, repairs, or
+# runs the calibrator). Sets RUN_ALL_RESOLVED_J and the RUN_ALL_RESOLVE_NOTE
+# progress line; always returns 0.
+RUN_ALL_RESOLVED_J=""
+RUN_ALL_RESOLVE_NOTE=""
+run_all_resolve_auto_jobs() {
+    RUN_ALL_RESOLVED_J="$RUN_ALL_FALLBACK_JOBS"
+    if run_all_cache_read "$(run_all_cache_file)" 2>/dev/null; then
+        RUN_ALL_RESOLVED_J="$RUN_ALL_CACHE_JOBS"
+        RUN_ALL_RESOLVE_NOTE="parallelism: -j $RUN_ALL_RESOLVED_J (calibrated $RUN_ALL_CACHE_MEASURED_AT)"
+        return 0
+    fi
+    # shellcheck disable=SC2034  # read by tests/run-all.sh's resolve_jobs
+    RUN_ALL_RESOLVE_NOTE="parallelism cache ${RUN_ALL_CACHE_REASON:-missing}; using -j $RUN_ALL_RESOLVED_J (conservative default). Calibrate with: $RUN_ALL_CALIBRATOR_HINT"
+    return 0
+}

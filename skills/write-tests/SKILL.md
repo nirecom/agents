@@ -29,7 +29,7 @@ WT-3. **Enumerate call paths**: For each source file from WT-2, trace all integr
 WT-4. List all planned test cases by category (include call-path error cases from WT-3).
 WT-5. Decide the destination of each planned case — append to an existing test file, or create a new one.
    - For each planned case, state its complete source set S (the `# Tests:` tokens the case protects).
-   - Run `bash "$AGENTS_CONFIG_DIR/bin/find-tests-for-source.sh" --sources <comma-joined S>` once per distinct S (Bash, one standalone command each; read-only, so `hooks/block-tests-direct.js` does not apply).
+   - Run `bash "$AGENTS_CONFIG_DIR/bin/find-tests-for-source.sh" --sources <comma-joined S>` with every distinct S in one call, repeating `--sources` (Bash, standalone command with timeout 600000; split rule in `skills/_shared/test-design/append-vs-new.md`; rows come back in query order; read-only, so `hooks/block-tests-direct.js` does not apply). On exit 4 or a tool timeout, HALT and surface the stderr.
    - Record each row's verdict/reason/target as the case group's destination. `append` is mandatory; the sole permitted new file when a target exists is the `size-hard-limit` case, per `skills/_shared/test-design/append-vs-new.md` — do not decide by eye.
    - If `GATE_CONFIRM_TESTS` is `ON` or `ERROR`, present the planned cases together with their destinations and wait for user confirmation before WT-6.
 WT-6. **Determine the subagent's model**:

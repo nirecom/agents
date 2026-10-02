@@ -116,7 +116,7 @@ fi
 # A5: tests/lib/ is NOT in corpus (lib/ is shared infra, not a category).
 # A6: non-canonical split dir (fix-1532-node-guard) is NOT in corpus.
 if ! declare -F tdg_scan_corpus >/dev/null 2>&1; then
-    for _akid in A1 A2 A3 A4 A5 A6; do
+    for _akid in A1 A2 A3 A4 A5 A6 A7 A8; do
         case_ran "$_akid"
         fail "$_akid tdg_scan_corpus is not defined — corpus-glob cases cannot run"
     done
@@ -206,6 +206,50 @@ else
         pass "A6 canonical sibling tests/bin/bar.sh IS in corpus"
     else
         fail "A6 tests/bin/bar.sh not found — canonical category should still be scanned"
+    fi
+
+    # ── A7 (EQ6) / A8 the awk batch and the per-file fallback emit one expectation
+    A7R="$(make_repo)"
+    add_test_file "$A7R" "hooks/b.sh" "z.js" "scope:common" 5
+    add_test_file "$A7R" "bin/a.sh" "x.js,y.js" "scope:common" 5
+    add_test_file "$A7R" "bin/we,ird.sh" "q.js" "scope:common" 5
+    add_broken_test_file "$A7R" "skills/c.sh" duplicate_header
+    add_broken_test_file "$A7R" "agents/e.sh" no_tests_header
+    add_broken_test_file "$A7R" "install/d.sh" late_header
+    add_broken_test_file "$A7R" "install/m.sh" malformed_header
+    add_test_file "$A7R" "tests/t.sh" "p.js" "scope:common" 5
+    A7_WANT="$(printf '%s\n' \
+        $'full\tz.js\ttests/hooks/b.sh' $'token\tz.js\ttests/hooks/b.sh' \
+        $'full\tx.js,y.js\ttests/bin/a.sh' $'token\tx.js\ttests/bin/a.sh' \
+        $'full\tq.js\ttests/bin/we\\,ird.sh' $'token\tq.js\ttests/bin/we\\,ird.sh' \
+        $'skip\tduplicate_header\ttests/skills/c.sh' $'skip\tno_tests_header\ttests/agents/e.sh' \
+        $'skip\tlate_header\ttests/install/d.sh' $'skip\tmalformed_header\ttests/install/m.sh' \
+        $'full\tp.js\ttests/tests/t.sh' $'token\tp.js\ttests/tests/t.sh')"
+    case_ran A7
+    assert_eq "A7 the awk-batch scan emits the fixture's expected rows" "$A7_WANT" "$(tdg_scan_corpus "$A7R")"
+
+    case_ran A8
+    if ! declare -F tfm_tests_line_matches >/dev/null 2>&1 || ! declare -F _tdg_batch_matches >/dev/null 2>&1; then
+        fail "A8 tfm_tests_line_matches / _tdg_batch_matches are not defined — the fallback path cannot be checked"
+    else
+        declare -a A8FILES=()
+        for _a8 in hooks/b.sh bin/a.sh skills/c.sh install/d.sh; do A8FILES+=("$A7R/tests/$_a8"); done
+        _tdg_batch_matches "${A8FILES[@]}"
+        assert_eq "A8 the batch fills one TDG_MATCHES slot per file" "${#A8FILES[@]}" "${#TDG_MATCHES[@]}"
+        for _a8i in "${!A8FILES[@]}"; do
+            assert_eq "A8 batch matches equal the per-file matches for ${A8FILES[_a8i]#"$A7R"/}" \
+                "$(tfm_tests_line_matches "${A8FILES[_a8i]}")" "${TDG_MATCHES[_a8i]-}"
+        done
+        A8R="$(make_repo)"
+        if mkdir -p "$A8R/tests/bin" 2>/dev/null && : > "$A8R/tests/bin/n"$'\n'"l.sh" 2>/dev/null; then
+            rm -f "$A8R/tests/bin/n"$'\n'"l.sh"
+            cp -R "$A7R/tests/." "$A8R/tests/"
+            add_test_file "$A8R" "bin/n"$'\n'"l.sh" "nl.js" "scope:common" 5
+            A8_OUT="$(tdg_scan_corpus "$A8R" | grep -v 'nl\.js')"
+            assert_eq "A8 the LF-path fallback emits the same rows for every other file" "$A7_WANT" "$A8_OUT"
+        else
+            skip "A8 this filesystem cannot hold an LF in a file name — the fallback scan is checked through _tdg_batch_matches only"
+        fi
     fi
 fi
 
