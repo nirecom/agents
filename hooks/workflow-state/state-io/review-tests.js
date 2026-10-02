@@ -34,7 +34,9 @@ function markReviewTestsComplete(sessionId, files, extraFields = {}) {
   try { wsid = resolveWorkflowSessionId() || null; } catch (_) {}
   // The resolved workflow session id is a FALLBACK: an explicitly supplied
   // extraFields.wsid is the caller's own evidence and must win over the ambient probe.
-  markStep(sessionId, "review_tests", "complete", { ...buildReviewScopeAnnotation(map), wsid, ...extraFields });
+  // A clean COMPLETE drops a past round's warning and acceptance reason; the WARNINGS path overrides
+  // via extraFields. Recorded as observed by markStep (cleared by the handler), not declared.
+  markStep(sessionId, "review_tests", "complete", { ...buildReviewScopeAnnotation(map), ...warningsTombstoneFields(), wsid, ...extraFields });
 }
 
 const CLEAR_OUTCOME = Object.freeze({
@@ -70,9 +72,14 @@ function buildRecoveryEvents(origin, files, reason, ann) {
   return out;
 }
 
-// #2434 swap point: the only place that knows where the acceptance reason is recorded.
+// #2434 swap point: warningsAcceptedReasonEvents (record) and warningsTombstoneFields (clear)
+// are the only places that know where the acceptance reason is recorded.
 function warningsAcceptedReasonEvents(reason, ann) {
   return [ann("warnings_accepted_reason", reason || null, "declared")];
+}
+
+function warningsTombstoneFields() {
+  return { warnings_summary: null, warnings_accepted_reason: null };
 }
 
 // WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED. The "anything to clear?" decision is taken
