@@ -635,3 +635,7 @@ Changes: Parallel sessions no longer saturate the host when running tests: find-
 ### FEATURE: PR #2492 (2026-10-02)
 Background: fix(#2491): allow WARNINGS_ACCEPTED to recover in_progress review_tests after terminal exit
 Changes: fix: allow WARNINGS_ACCEPTED to recover review_tests that ended in_progress after a terminal exit (rc 2/6) (#2491)
+
+### FEATURE: PR #2496 (2026-10-02)
+Background: feat(#1810): share an EOF-safe hook stdin reader; fold in #2206 runCommands array and #1861 interpreter inline-body scanning
+Changes: Fixed: hooks no longer misread chunked or oversized stdin payloads, security guards block when stdin cannot be read, every runCommands entry is scanned by the guards, and commands hidden inside interpreter inline bodies (bash -c, eval and similar) are now checked.
