@@ -639,3 +639,7 @@ Changes: fix: allow WARNINGS_ACCEPTED to recover review_tests that ended in_prog
 ### FEATURE: PR #2496 (2026-10-02)
 Background: feat(#1810): share an EOF-safe hook stdin reader; fold in #2206 runCommands array and #1861 interpreter inline-body scanning
 Changes: Fixed: hooks no longer misread chunked or oversized stdin payloads, security guards block when stdin cannot be read, every runCommands entry is scanned by the guards, and commands hidden inside interpreter inline bodies (bash -c, eval and similar) are now checked.
+
+### FEATURE: PR #2504 (2026-10-02)
+Background: fix(#2495): clear stale review_tests warnings on a clean COMPLETE
+Changes: Fixed: the commit gate no longer blocks with `warnings-pending` after a later review_tests round finishes clean; stale warnings and their accepted reason are cleared on completion.
