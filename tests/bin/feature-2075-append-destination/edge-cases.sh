@@ -278,6 +278,40 @@ else
     fail "I1 both runs produced empty output — the idempotency comparison was vacuous"
 fi
 
+# ── E7 (EQ2) / E8 (EQ3) one batched call == the concatenation of K single calls
+# e78_check <id> <flag> <query...> — the batch must not reorder, merge or drop rows.
+e78_check() {
+    local id="$1" flag="$2" q concat="" batch_rc
+    shift 2
+    local -a args=()
+    for q in "$@"; do args+=("$flag" "$q"); done
+    run_helper --root "$R" "${args[@]}"
+    local batch="$OUT"
+    batch_rc="$RC"
+    for q in "$@"; do
+        run_helper --root "$R" "$flag" "$q"
+        concat="${concat:+$concat$'\n'}$OUT"
+    done
+    assert_eq "$id the batched call exits 0" "0" "$batch_rc"
+    assert_eq "$id the batch has one row per query" "$#" "$(nrows "$batch")"
+    assert_eq "$id the batch equals the concatenated single calls" "$concat" "$batch"
+}
+R="$(make_repo)"
+add_test_file "$R" "bin/a.sh" "src/x.js,src/y.js" "scope:common" 20
+add_test_file "$R" "bin/b.sh" "src/x.js" "scope:common" 30
+add_test_file "$R" "hooks/we,ird.sh" "src/z.js" "scope:common" 40
+add_broken_test_file "$R" "bin/dup.sh" duplicate_header
+add_broken_test_file "$R" "bin/late.sh" late_header
+add_broken_test_file "$R" "bin/malformed.sh" malformed_header
+add_broken_test_file "$R" "bin/nohdr.sh" no_tests_header
+add_test_file "$R" "_archive/old.sh" "src/x.js" "scope:common" 10
+case_ran E7
+e78_check E7 --test-file "tests/bin/a.sh" "tests/_archive/old.sh" "tests/bin/dup.sh" \
+    "tests/bin/late.sh" "tests/bin/malformed.sh" "tests/bin/nohdr.sh" \
+    "tests/bin/missing.sh" "tests/hooks/we,ird.sh" "tests/bin/b.sh"
+case_ran E8
+e78_check E8 --sources "src/x.js" "src/q.js" "src/x.js,src/y.js" "src/z.js" "./src/x.js"
+
 case_end
 
 case_begin "edge-route-destination-coverage" "bin/lib/test-route-destination.sh"

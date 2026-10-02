@@ -2,7 +2,7 @@
 # Tests: bin/lib/test-route-destination.sh
 # Tags: scope:issue-specific
 # Part of tests/bin/feature-2075-append-destination.sh (rules/coding/file-split.md).
-# Cases F1-F8 (TL1): direct calls into the source-only routing library, for the
+# Cases F1-F10 (TL1): direct calls into the source-only routing library, for the
 # boundaries the CLI's TSV cannot express — rejection statuses, key equality and
 # the rank/viable predicates as standalone functions.
 # F6/F7 deliberately assert only encoding-agnostic properties (permutation,
@@ -18,7 +18,7 @@ fi
 f2075_join() { local IFS=","; printf '%s' "$*"; }
 
 if [[ ! -f "$ROUTE_LIB" ]]; then
-    for _fid in F1 F2 F3 F4 F5 F6 F7 F8; do
+    for _fid in F1 F2 F3 F4 F5 F6 F7 F8 F9 F10; do
         case_ran "$_fid"
         fail "$_fid bin/lib/test-route-destination.sh is missing — function-level cases cannot run"
     done
@@ -50,19 +50,28 @@ else
         assert_eq "F2 reject $_f2tok" "1" "$(f2075_rc trd_normalize_token "$_f2tok")"
     done
 
-    # ── F3 trd_is_top_level_test decides by canonical category allowlist ─────
-    # tests/bin/bar.sh (canonical category bin) → exit 0 after the fix (#2396).
+    # ── F3 trd_is_in_corpus decides by canonical category allowlist (#2412) ──
+    # tests/bin/bar.sh (canonical category bin) → exit 0 (#2396).
     # tests/_archive/foo.sh, tests/lib/foo.sh → exit 1 (not canonical).
     # tests/fix-1532-node-guard/foo.sh → exit 1 (non-canonical split dir).
     case_ran F3
-    for _pair in "tests/a.sh:1" "tests/bin/bar.sh:0" "tests/hooks/x.sh:0" "tests/skills/y.sh:0" "tests/_archive/foo.sh:1" "tests/lib/foo.sh:1" "tests/fix-1532-node-guard/foo.sh:1" "bin/a.sh:1" "tests/a.txt:1" "tests:1" "a.sh:1"; do
-        _p="${_pair%%:*}"
-        _want="${_pair#*:}"
-        trd_is_top_level_test "$_p"
-        _got=$?
-        [[ "$_got" -ne 0 ]] && _got=1
-        assert_eq "F3 trd_is_top_level_test $_p" "$_want" "$_got"
-    done
+    if ! declare -F trd_is_in_corpus >/dev/null 2>&1; then
+        fail "F3 trd_is_in_corpus is not defined by bin/lib/test-route-destination.sh (#2412 rename not implemented)"
+    else
+        for _pair in "tests/a.sh:1" "tests/bin/bar.sh:0" "tests/hooks/x.sh:0" "tests/skills/y.sh:0" "tests/_archive/foo.sh:1" "tests/lib/foo.sh:1" "tests/fix-1532-node-guard/foo.sh:1" "bin/a.sh:1" "tests/a.txt:1" "tests:1" "a.sh:1"; do
+            _p="${_pair%%:*}"
+            _want="${_pair#*:}"
+            trd_is_in_corpus "$_p"
+            _got=$?
+            [[ "$_got" -ne 0 ]] && _got=1
+            assert_eq "F3 trd_is_in_corpus $_p" "$_want" "$_got"
+        done
+    fi
+    if declare -F trd_is_top_level_test >/dev/null 2>&1; then
+        fail "F3 the legacy name trd_is_top_level_test is still defined (#2412)"
+    else
+        pass "F3 the legacy name trd_is_top_level_test is gone"
+    fi
 
     # ── F4 trd_set_key is order- and spelling-independent ───────────────────
     case_ran F4
@@ -81,6 +90,56 @@ else
     assert_eq "F5 line count of a known fixture" "37" "$(trd_file_lines "$F5REPO/tests/bin/a.sh")"
     assert_eq "F5 unreadable file is a non-zero status" "1" \
         "$(f2075_rc trd_file_lines "$F5REPO/tests/does-not-exist.sh")"
+    TRD_FILE_LINES=""
+    trd_file_lines "$F5REPO/tests/bin/a.sh" >/dev/null
+    assert_eq "F5 a bare call also sets the TRD_FILE_LINES global" "37" "${TRD_FILE_LINES-}"
+
+    # ── F9 (EQ4) trd_file_lines agrees with wc -l on every line-ending shape ─
+    case_ran F9
+    F9DIR="$(mktemp -d -p "$TMPDIR_BASE")"
+    printf 'a\nb' > "$F9DIR/no-final-newline"
+    : > "$F9DIR/empty"
+    printf '\n\n\n' > "$F9DIR/only-newlines"
+    printf 'a\r\nb\r\nc\r\n' > "$F9DIR/crlf"
+    printf '%*s\nshort\n' 70000 'x' > "$F9DIR/long-line"
+    printf 'x' > "$F9DIR/single-char"
+    for _f9 in no-final-newline empty only-newlines crlf long-line single-char; do
+        _f9want="$(wc -l < "$F9DIR/$_f9")"
+        _f9want="${_f9want//[[:space:]]/}"
+        assert_eq "F9 $_f9 printed count equals wc -l" "$_f9want" "$(trd_file_lines "$F9DIR/$_f9")"
+        TRD_FILE_LINES=""
+        trd_file_lines "$F9DIR/$_f9" >/dev/null
+        assert_eq "F9 $_f9 TRD_FILE_LINES equals wc -l" "$_f9want" "${TRD_FILE_LINES-}"
+    done
+
+    # ── F10 (EQ5) trd_rank orders exactly like the sort pipeline it replaces ─
+    case_ran F10
+    f10_check() {
+        local name="$1" want
+        shift
+        declare -a F10ARR=("$@")
+        want="$(printf '%s\n' "$@" | LC_ALL=C sort -t$'\t' -k1,1n -k2,2n -k3,3)"
+        trd_rank F10ARR
+        assert_eq "F10 $name" "$want" "$(printf '%s\n' "${F10ARR[@]}")"
+    }
+    f10_check "ties on both numeric keys fall back to the path" \
+        $'0\t10\ttests/bin/b.sh' $'0\t10\ttests/bin/a.sh' $'0\t10\ttests/bin/c.sh'
+    f10_check "upper case sorts before lower case under C collation" \
+        $'1\t5\ttests/bin/b.sh' $'1\t5\ttests/bin/B.sh' $'1\t5\ttests/bin/a.sh' $'1\t5\ttests/bin/A.sh'
+    f10_check "punctuation - _ . order by byte value" \
+        $'0\t3\ttests/bin/a_b.sh' $'0\t3\ttests/bin/a-b.sh' $'0\t3\ttests/bin/a.b.sh' $'0\t3\ttests/bin/ab.sh'
+    f10_check "numbers of different digit counts compare numerically" \
+        $'10\t2\ttests/bin/x.sh' $'9\t2\ttests/bin/y.sh' $'100\t1\ttests/bin/z.sh' $'0\t1000\ttests/bin/w.sh' $'0\t99\ttests/bin/v.sh'
+    f10_check "a single element is unchanged" $'3\t7\ttests/bin/only.sh'
+    declare -a F10EMPTY=()
+    trd_rank F10EMPTY; _f10rc=$?
+    assert_eq "F10 an empty array: trd_rank exits 0" "0" "$_f10rc"
+    assert_eq "F10 an empty array stays empty" "0" "${#F10EMPTY[@]}"
+    declare -a F10BIG=()
+    for ((_i = 0; _i < 300; _i++)); do
+        F10BIG+=("$(( (_i * 7) % 5 ))"$'\t'"$(( (_i * 13) % 17 ))"$'\t'"tests/bin/f$(( (_i * 31) % 300 ))_${_i}.sh")
+    done
+    f10_check "a 300-element set" "${F10BIG[@]}"
 
     # ── F6/F7 rank and viable, fed by the real producer ─────────────────────
     F6REPO="$(make_repo)"

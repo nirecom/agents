@@ -57,6 +57,9 @@ merely unlikely, and the byte-for-byte equality with `-j 1` follows.
 
 The scheduler makes no busy-wait and starts no resident background process — no
 progress ticker, no background deadline watcher. Every wait is a blocking `wait`.
+The one exception is the host-lane heartbeat (`test-host-lanes.md`): it runs only
+while this run holds lanes, keeps no fd open to the parent, and is stopped by
+`cleanup_all` on every exit path.
 
 **Reaping and cleanup.** `set -m` is enabled just before the scheduler so each job
 becomes its own process-group leader, which lets an abort kill a job's whole
@@ -127,6 +130,8 @@ When in doubt, the call goes to the serial side.
 | `RUN_ALL_PROGRESS` | `off` | Suppresses the stderr progress lines. |
 | `RUN_ALL_REAP` | `auto` (default), `waitn`, `fifo` | Selects the slot-reaping mechanism. |
 | `--print-plan` | — | Prints the plan and exits 0 without running anything. |
+
+The host-wide lane lease that can narrow the resolved `-j`, and its `TEST_LANES*` knobs, are in `test-host-lanes.md`.
 
 Precedence is **CLI > environment > default**. There is deliberately no `.env` or
 `bin/get-config-var` layer for these (CPR-SSOT): one more place a parallelism value
@@ -305,6 +310,9 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
 - **Exit 2 and exit 3 are new.** Both are safe downstream: any non-zero exit demotes
   `run_tests` to `pending`, and via the worker both surface as `status: fail` with a
   null contract.
+- **Exit 4 — no host test lane freed within the wait cap.** Same downstream shape as
+  exit 3: one stderr line, no `Results:` and no `RUN_CONTRACT:` line
+  (`test-host-lanes.md`).
 
 ## 9. Where things live
 
@@ -315,6 +323,8 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
 | `bin/lib/run-all-durations.sh` | SSOT for the per-test duration ledger schema, key/tier computation, and the append-only segment reader/writer; sourced, never executed |
 | `bin/lib/run-all-launch.sh` | Per-file launch dispatch (`.sh` → bash, `.Tests.ps1` → pwsh/Pester, `test_*.py` → uv/pytest; SKIP 77 when the runtime is absent); sourced, never executed |
 | `bin/calibrate-test-parallelism.sh` | The measurement tool; unreachable from a normal run |
+| `bin/lib/test-host-lanes.sh` | Host-wide lane lease shared with `bin/find-tests-for-source.sh`; sourced, never executed |
+| `bin/test-lanes-status.sh` | Read-only listing of who holds which lane |
 | `bin/worker-dispatch/workers/test-runner.js` | Prepends `--deadline` and `-j` when building the runner argv |
 | `tests/tests/feature-1832-run-all-parallel/` | The suite covering every invariant above |
 | `skills/_shared/test-design.md` | Author-facing `# Serial:` rules |

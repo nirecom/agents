@@ -92,7 +92,7 @@ fx_cleanup() {
 # fx_init snapshots and drops ambient control vars (e.g. inherited RUN_ALL_JOBS) so a case's
 # own intent isn't silently overridden; anything set AFTER fx_init is caller intent and reaches the child untouched.
 
-FX_CONTROL_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP RUN_ALL_WAITN_PROBE FEATURE_644_PHASE RUN_ALL_DURATIONS_LIB"
+FX_CONTROL_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP RUN_ALL_WAITN_PROBE FEATURE_644_PHASE RUN_ALL_DURATIONS_LIB TEST_LANES TEST_LANES_BUDGET TEST_LANES_HELD TEST_LANES_TTL TEST_LANES_HEARTBEAT TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP RUN_ALL_LANES_LIB FIND_TESTS_CORPUS_CACHE"
 FX_DROPPED_CONTROLS=""
 
 # Ledger tuning and output variables. These are NOT pinnable intent: the ledger cases source
@@ -202,6 +202,10 @@ fx_new_root() {
     # Omitting this silently disables the ledger in EVERY fixture, which would turn
     # the ledger cases green without any of the behaviour under test being present.
     cp "$FX_REPO_ROOT/bin/lib/run-all-durations.sh" "$root/bin/lib/run-all-durations.sh" 2>/dev/null || true
+    # Lanes are opt-in (#2455) so every pre-existing fixture keeps its unleased -j.
+    if [ "${FX_WITH_LANES:-0}" = "1" ]; then
+        cp "$FX_REPO_ROOT/bin/lib/test-host-lanes.sh" "$root/bin/lib/test-host-lanes.sh" 2>/dev/null || true
+    fi
     echo "$root"
 }
 

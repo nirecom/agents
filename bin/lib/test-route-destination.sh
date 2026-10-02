@@ -3,8 +3,8 @@
 # whether a planned test case appends to an existing categorized
 # tests/<category>/<name>.sh file or needs a new one. The same-token-set rule lives in
 # skills/_shared/test-design/append-vs-new.md. Corpus scanning is delegated to
-# tdg_scan_corpus, structural validation to tdg_classify and token extraction to
-# tfm_parse_tests_line (CPR-SSOT). The 500-line HARD default is owned by
+# tdg_scan_corpus, structural validation to tdg_classify_parsed and token
+# extraction to tfm_parse_tests_matches (CPR-SSOT). The 500-line HARD default is owned by
 # skills/_shared/test-design.md "Size Limits" — bin/review-code-size hardcodes
 # the same number and no shared constant exists to reference instead.
 
@@ -24,6 +24,7 @@ TRD_TARGET_LINES="-"
 declare -a TRD_CORPUS_FILES=()
 declare -a TRD_CORPUS_TOKENS=()
 declare -a TRD_CORPUS_NTOK=()
+declare -a TRD_CORPUS_LINES=()
 declare -a TRD_CANDIDATES=()
 declare -a TRD_VIABLE=()
 declare -a TRD_EXCLUDED=()
@@ -104,14 +105,13 @@ trd_set_key() {
   printf '%s' "$out"
 }
 
-# trd_is_top_level_test <root-relative path> — is the path inside the corpus
-# range contract: tests/<canonical-category>/<name>.sh (3 components only).
+# trd_is_in_corpus <root-relative path> — is the path inside the corpus range
+# contract: tests/<canonical-category>/<name>.sh (3 components only).
 # Uses _TDG_CANONICAL_CATEGORIES (CPR-SSOT) — available because this file
 # sources test-dup-group.sh above. Non-canonical directories (split-test
 # fragments, _archive, lib) are rejected. Flat tests/<name>.sh (2 components)
 # are NOT in the corpus range.
-# "top_level" is a legacy name from the flat-structure era; it means "in corpus".
-trd_is_top_level_test() {
+trd_is_in_corpus() {
   local p="${1-}"
   [[ -n "$p" ]] || return 1
   local -a parts=()
@@ -130,28 +130,35 @@ trd_is_top_level_test() {
   return 0
 }
 
-# trd_validate_test_file <file> — structural validation goes through
-# tdg_classify, never through tfm_parse_tests_line alone: the parser accepts the
+# trd_validate_test_matches <grep -n rows> — structural validation of one
+# file's `# Tests:` matches (_tdg_batch_matches output) through
+# tdg_classify_parsed, never through the parser alone: the parser accepts the
 # first header it finds and would pass duplicate, late and malformed ones.
-trd_validate_test_file() {
-  local file="${1:?trd_validate_test_file: file required}"
+# Sets TRD_CLASSIFY_VERDICT; on ok, TFM_TOKENS holds the parsed set.
+trd_validate_test_matches() {
   TRD_CLASSIFY_VERDICT=""
-  tdg_classify "$file" >/dev/null
+  tfm_parse_tests_matches "${1-}"
+  tdg_classify_parsed
   # shellcheck disable=SC2153  # TDG_VERDICT is set by the sourced test-dup-group.sh
   TRD_CLASSIFY_VERDICT="$TDG_VERDICT"
-  [[ "$TRD_CLASSIFY_VERDICT" == "ok" ]] || return 1
-  tfm_parse_tests_line "$file"
-  return 0
+  [[ "$TRD_CLASSIFY_VERDICT" == "ok" ]]
+}
+
+# _trd_corpus_reset <repo-root> — the one place the parallel corpus arrays are
+# emptied, shared by the scan and the corpus-cache loader.
+_trd_corpus_reset() {
+  TRD_ROOT="${1-}"
+  TRD_CORPUS_FILES=()
+  TRD_CORPUS_TOKENS=()
+  TRD_CORPUS_NTOK=()
+  TRD_CORPUS_LINES=()
 }
 
 # trd_load_corpus <repo-root> — one tdg_scan_corpus pass, `full` rows only.
 # Files tdg_classify rejected never reach this list (skip semantics inherited).
 trd_load_corpus() {
   local root="${1:?trd_load_corpus: repo root required}"
-  TRD_ROOT="$root"
-  TRD_CORPUS_FILES=()
-  TRD_CORPUS_TOKENS=()
-  TRD_CORPUS_NTOK=()
+  _trd_corpus_reset "$root"
   local axis key esc_file file joined t
   local -a _trd_raw=() _trd_can=()
   while IFS=$'\t' read -r axis key esc_file; do
@@ -173,15 +180,29 @@ trd_load_corpus() {
   return 0
 }
 
-# trd_file_lines <file> — the line count, or a non-zero status when unreadable.
+# mapfile is bash 4+; the only bash-3.2 branch of trd_file_lines keys on this.
+_TRD_HAS_MAPFILE=0
+[[ "${BASH_VERSINFO[0]:-0}" -ge 4 ]] && _TRD_HAS_MAPFILE=1
+
+# trd_file_lines <file> — the `wc -l` line count (a final line without LF is
+# not counted), or a non-zero status when unreadable. Also sets TRD_FILE_LINES
+# so hot loops can skip the command substitution (#2455).
 trd_file_lines() {
   local f="${1:?trd_file_lines: file required}"
   if [[ "$f" != /* && ! -e "$f" && -n "$TRD_ROOT" ]]; then f="$TRD_ROOT/$f"; fi
   [[ -f "$f" && -r "$f" ]] || return 1
   local n
-  n="$(wc -l < "$f" 2>/dev/null)" || return 1
-  n="${n//[[:space:]]/}"
-  [[ -n "$n" ]] || return 1
+  if [[ "$_TRD_HAS_MAPFILE" -eq 1 ]]; then
+    local -a _trd_fl=()
+    mapfile _trd_fl < "$f" 2>/dev/null || return 1
+    n="${#_trd_fl[@]}"
+    [[ "$n" -gt 0 && "${_trd_fl[n - 1]}" != *$'\n' ]] && n=$((n - 1))
+  else
+    n="$(wc -l < "$f" 2>/dev/null)" || return 1
+    n="${n//[[:space:]]/}"
+    [[ -n "$n" ]] || return 1
+  fi
+  TRD_FILE_LINES="$n"
   printf '%s' "$n"
 }
 
@@ -212,7 +233,12 @@ trd_candidates() {
       if [[ $'\n'"$ctoks"$'\n' != *$'\n'"$q"$'\n'* ]]; then ok=0; break; fi
     done
     [[ "$ok" -eq 1 ]] || continue
-    lines="$(trd_file_lines "$file")" || continue
+    if [[ -z "${TRD_CORPUS_LINES[i]-}" ]]; then
+      TRD_CORPUS_LINES[i]="-"
+      trd_file_lines "$file" >/dev/null && TRD_CORPUS_LINES[i]="$TRD_FILE_LINES"
+    fi
+    lines="${TRD_CORPUS_LINES[i]}"
+    [[ "$lines" != "-" ]] || continue
     extra=$((TRD_CORPUS_NTOK[i] - qn))
     tdg_escape_field "$file" >/dev/null
     entry="$extra"$'\t'"$lines"$'\t'"$TDG_ESCAPED"
@@ -226,18 +252,46 @@ trd_candidates() {
 # (namerefs are Bash-4.3+ and crash on macOS stock bash, #1486's class of
 # bug). The array-name argument is always a literal identifier at every call
 # site in this repo, never external input, so eval is safe here.
+# A fork-free bottom-up merge sort (#2455): candidates can number in the
+# hundreds, so insertion sort's O(n^2) would cost seconds in bash.
 trd_rank() {
   local _trd_arr_name="${1:?trd_rank: array name required}"
-  local -a _trd_cur=()
-  eval "_trd_cur=(\"\${${_trd_arr_name}[@]}\")"
-  [[ "${#_trd_cur[@]}" -gt 0 ]] || return 0
-  local -a _trd_sorted=()
-  local line
-  while IFS= read -r line; do
-    [[ -n "$line" ]] && _trd_sorted+=("$line")
-  done < <(printf '%s\n' "${_trd_cur[@]}" | LC_ALL=C sort -t$'\t' -k1,1n -k2,2n -k3,3)
-  eval "$_trd_arr_name=(\"\${_trd_sorted[@]}\")"
+  local -a _trd_a=() _trd_b=()
+  eval "_trd_a=(\"\${${_trd_arr_name}[@]}\")"
+  local n="${#_trd_a[@]}" w lo mid hi i j k
+  [[ "$n" -gt 1 ]] || return 0
+  for ((w = 1; w < n; w *= 2)); do
+    _trd_b=()
+    for ((lo = 0; lo < n; lo += 2 * w)); do
+      mid=$((lo + w < n ? lo + w : n))
+      hi=$((lo + 2 * w < n ? lo + 2 * w : n))
+      i="$lo"; j="$mid"; k="$lo"
+      while [[ "$i" -lt "$mid" && "$j" -lt "$hi" ]]; do
+        if _trd_rank_before "${_trd_a[j]}" "${_trd_a[i]}"; then
+          _trd_b[k]="${_trd_a[j]}"; j=$((j + 1))
+        else
+          _trd_b[k]="${_trd_a[i]}"; i=$((i + 1))
+        fi
+        k=$((k + 1))
+      done
+      for ((; i < mid; i++, k++)); do _trd_b[k]="${_trd_a[i]}"; done
+      for ((; j < hi; j++, k++)); do _trd_b[k]="${_trd_a[j]}"; done
+    done
+    _trd_a=("${_trd_b[@]}")
+  done
+  eval "$_trd_arr_name=(\"\${_trd_a[@]}\")"
   return 0
+}
+
+# _trd_rank_before <a> <b> — true when entry a sorts strictly before b under
+# `LC_ALL=C sort -t<TAB> -k1,1n -k2,2n -k3,3` (paths are unique, so no tie).
+_trd_rank_before() {
+  local LC_ALL=C
+  local ar="${1#*$'\t'}" br="${2#*$'\t'}"
+  local a1="${1%%$'\t'*}" b1="${2%%$'\t'*}" a2="${ar%%$'\t'*}" b2="${br%%$'\t'*}"
+  if [[ $((10#$a1)) -ne $((10#$b1)) ]]; then [[ $((10#$a1)) -lt $((10#$b1)) ]]; return; fi
+  if [[ $((10#$a2)) -ne $((10#$b2)) ]]; then [[ $((10#$a2)) -lt $((10#$b2)) ]]; return; fi
+  [[ "${ar#*$'\t'}" < "${br#*$'\t'}" ]]
 }
 
 # trd_viable_candidates <out-array> <ranked-array> <hard-max> — the SOLE
@@ -317,25 +371,31 @@ trd_list_column() {
   local _trd_lc_name="${1:?trd_list_column: array name required}"
   local -a _trd_lc=()
   eval "_trd_lc=(\"\${${_trd_lc_name}[@]}\")"
-  local out="" e extra lines path inner
+  local out="" e extra lines path
   for e in "${_trd_lc[@]+"${_trd_lc[@]}"}"; do
     extra="${e%%$'\t'*}"
     lines="${e#*$'\t'}"
     lines="${lines%%$'\t'*}"
     path="${e##*$'\t'}"
-    inner="$path,$lines,$extra"
-    out="${out:+$out,}$(tdg_escape_field "$inner")"
+    tdg_escape_field "$path,$lines,$extra" >/dev/null
+    out="${out:+$out,}$TDG_ESCAPED"
   done
-  if [[ -z "$out" ]]; then printf '%s' '-'; else printf '%s' "$out"; fi
+  [[ -n "$out" ]] || out='-'
+  TRD_LIST_COLUMN="$out"
+  printf '%s' "$out"
 }
 
 # trd_row <escaped-query> — the 8-column TSV line for the last trd_decide.
 trd_row() {
-  local query="${1-}" target="-"
-  [[ "$TRD_TARGET" == "-" ]] || target="$(tdg_escape_field "$TRD_TARGET")"
+  local query="${1-}" target="-" cands viable excluded
+  if [[ "$TRD_TARGET" != "-" ]]; then
+    tdg_escape_field "$TRD_TARGET" >/dev/null
+    target="$TDG_ESCAPED"
+  fi
+  trd_list_column TRD_CANDIDATES >/dev/null; cands="$TRD_LIST_COLUMN"
+  trd_list_column TRD_VIABLE >/dev/null; viable="$TRD_LIST_COLUMN"
+  trd_list_column TRD_EXCLUDED >/dev/null; excluded="$TRD_LIST_COLUMN"
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$query" "$TRD_VERDICT" "$TRD_REASON" "$target" "$TRD_TARGET_LINES" \
-    "$(trd_list_column TRD_CANDIDATES)" \
-    "$(trd_list_column TRD_VIABLE)" \
-    "$(trd_list_column TRD_EXCLUDED)"
+    "$cands" "$viable" "$excluded"
 }

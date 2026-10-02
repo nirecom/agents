@@ -263,6 +263,29 @@ else
     fail "S20 bin/lib/test-frontmatter-fix.sh is missing — the Tier 2 token axis cannot be checked"
 fi
 
+# ── S21/S22 RT-1a and WT-5 batch every query into one bounded call (#2455) ──
+case_ran S21
+assert_match "S21 RT-1a repeats --test-file in one call" '(one|single) (call|invocation)' "$RT1A_BLOCK"
+assert_match "S21 RT-1a still limits the batch to tests/" 'under `?tests/' "$RT1A_BLOCK"
+assert_match "S21 RT-1a runs with timeout 600000" '600000' "$RT1A_BLOCK"
+assert_match "S21 RT-1a stops on exit 4" 'exit 4' "$RT1A_BLOCK"
+assert_no_match "S21 the per-file invocation wording is gone" 'one standalone command per file' "$RT1A_BLOCK"
+case_ran S22
+assert_match "S22 WT-5 repeats --sources in one call" '(one|single) (call|invocation)' "$WT5_BLOCK"
+assert_match "S22 WT-5 names --sources" '\-\-sources' "$WT5_BLOCK"
+assert_match "S22 WT-5 runs with timeout 600000" '600000' "$WT5_BLOCK"
+assert_match "S22 WT-5 stops on exit 4" 'exit 4' "$WT5_BLOCK"
+assert_no_match "S22 the per-source invocation wording is gone" 'once per distinct S' "$WT5_BLOCK"
+
+# ── S23 the split size 50 lives once, in append-vs-new.md (CPR-SSOT) ───────
+case_ran S23
+S23_COUNT="$(grep -cwE '50' "$TD_APPEND" 2>/dev/null || true)"
+assert_eq "S23 append-vs-new.md states the split size 50 on exactly one line" "1" "${S23_COUNT:-0}"
+assert_match "S23 RT-1a points at append-vs-new.md for the split rule" 'append-vs-new\.md' "$RT1A_BLOCK"
+assert_match "S23 WT-5 points at append-vs-new.md for the split rule" 'append-vs-new\.md' "$WT5_BLOCK"
+assert_no_match "S23 RT-1a does not copy the number 50" '(^|[^0-9])50([^0-9]|$)' "$RT1A_BLOCK"
+assert_no_match "S23 WT-5 does not copy the number 50" '(^|[^0-9])50([^0-9]|$)' "$WT5_BLOCK"
+
 case_end
 
 case_begin "skill-static-review-tests-coverage" "skills/review-tests/SKILL.md"
