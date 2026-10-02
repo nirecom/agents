@@ -86,16 +86,18 @@ function verifyFingerprint(label, payload, ctx) {
 }
 
 const NOTHING_TO_ACCEPT_MSG =
-  "nothing to accept — review_tests has no warnings and is not in a recoverable reopened (pending) state; state unchanged.";
+  "nothing to accept — review_tests has no warnings and is not in a recoverable reopened (pending) or terminal-reviewed (in_progress) state; state unchanged.";
 
 function acceptedMessage(outcome, manifest) {
   switch (outcome) {
     case CLEAR_OUTCOME.RECOVERED:
       return "reopen accepted — review_tests restored to complete (current review scope recorded).";
+    case CLEAR_OUTCOME.RECOVERED_TERMINAL:
+      return "terminal review accepted — review_tests restored to complete (current review scope recorded).";
     case CLEAR_OUTCOME.WARNINGS_CLEARED:
       return "warnings cleared — /write-code unblocked.";
     case CLEAR_OUTCOME.MANIFEST_UNAVAILABLE:
-      return `review_tests stays reopened — review-scope manifest unavailable (${manifest.error}); ` +
+      return `review_tests state unchanged — review-scope manifest unavailable (${manifest.error}); ` +
         "re-issue this sentinel from a cwd that resolves the session worktree.";
     default:
       return NOTHING_TO_ACCEPT_MSG;
@@ -161,6 +163,7 @@ function handle(ctx) {
   // Clears warnings_summary and re-records the current review-scope manifest (#2287)
   // so the gate unblocks /write-code.
   // A write_code-reopened (pending) review_tests is restored to complete (#2482).
+  // in_progress with a terminal record (#2491) is also restored to complete.
   const acceptedMatch = cmd.match(REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ);
   if (acceptedMatch) {
     const reason = acceptedMatch[1];
@@ -181,7 +184,8 @@ function handle(ctx) {
       const manifest = computeAcceptedManifest(sessionId, repoCwd);
       const outcome = clearReviewTestsWarnings(sessionId, reason, manifest.ok ? manifest : null);
       // #1361: accepting the gap ends this review — drop the re-invoke guard marker.
-      clearReviewTestsTerminalMarker(sessionId);
+      // must stay AFTER clearReviewTestsWarnings: the recovery branch reads the marker
+      if (outcome !== CLEAR_OUTCOME.MANIFEST_UNAVAILABLE) clearReviewTestsTerminalMarker(sessionId);
       pushMessage(`[workflow] REVIEW_TESTS_WARNINGS_ACCEPTED: ${acceptedMessage(outcome, manifest)}`);
     } catch (e) {
       pushMessage(

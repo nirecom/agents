@@ -1,6 +1,7 @@
 "use strict";
 // review_tests step lifecycle: review-scope manifest record, warning clearance,
-// terminal-marker cleanup, write_code completion reopen. Entrypoint-private to state-io.js.
+// terminal-marker cleanup, write_code completion reopen, in_progress recovery after a
+// terminal review exit (rc 2/6). Entrypoint-private to state-io.js.
 
 const fs = require("fs");
 const path = require("path");
@@ -38,11 +39,36 @@ function markReviewTestsComplete(sessionId, files, extraFields = {}) {
 
 const CLEAR_OUTCOME = Object.freeze({
   RECOVERED: "recovered",
+  RECOVERED_TERMINAL: "recovered-terminal",
   WARNINGS_CLEARED: "warnings-cleared",
   NOTHING_TO_CLEAR: "nothing-to-clear",
   MANIFEST_UNAVAILABLE: "manifest-unavailable",
   NO_STATE: "no-state",
 });
+
+function terminalMarkerPath(sessionId) {
+  // Trust boundary: single-user local filesystem (NFR); forgeability risk accepted.
+  assertValidSessionId(sessionId);
+  const { getWorkflowPlansDir } = require("../../lib/workflow-plans-dir");
+  return path.join(getWorkflowPlansDir(), `${sessionId}-test-review-terminal.txt`);
+}
+
+function hasReviewTerminalRecord(sessionId) {
+  try {
+    const line = fs.readFileSync(terminalMarkerPath(sessionId), "utf8").split("\n")[0].trim();
+    return line === "2" || line === "6";
+  } catch (e) {
+    return false;
+  }
+}
+
+function buildRecoveryEvents(origin, files, reason, ann) {
+  const rann = (key, value, provenance) => ann(key, value, provenance, origin);
+  const out = [{ kind: "step_status", step: "review_tests", status: "complete", provenance: "declared", origin }];
+  for (const [key, value] of Object.entries(buildReviewScopeAnnotation(files))) out.push(rann(key, value, "observed"));
+  out.push(rann("warnings_summary", null, "observed"), ...warningsAcceptedReasonEvents(reason, rann));
+  return out;
+}
 
 // #2434 swap point: the only place that knows where the acceptance reason is recorded.
 function warningsAcceptedReasonEvents(reason, ann) {
@@ -69,12 +95,17 @@ function clearReviewTestsWarnings(sessionId, reason, manifest) {
         outcome = CLEAR_OUTCOME.MANIFEST_UNAVAILABLE;
         return [];
       }
-      const ro = "accept-reopened-review-tests";
-      const rann = (key, value, provenance) => ann(key, value, provenance, ro);
-      const out = [{ kind: "step_status", step: "review_tests", status: "complete", provenance: "declared", origin: ro }];
-      for (const [key, value] of Object.entries(buildReviewScopeAnnotation(files))) out.push(rann(key, value, "observed"));
-      out.push(rann("warnings_summary", null, "observed"), ...warningsAcceptedReasonEvents(reason, rann));
+      const out = buildRecoveryEvents("accept-reopened-review-tests", files, reason, ann);
       outcome = CLEAR_OUTCOME.RECOVERED;
+      return out;
+    }
+    if (existing.status === "in_progress" && hasReviewTerminalRecord(sessionId)) {
+      if (!files) {
+        outcome = CLEAR_OUTCOME.MANIFEST_UNAVAILABLE;
+        return [];
+      }
+      const out = buildRecoveryEvents("accept-terminal-review-tests", files, reason, ann);
+      outcome = CLEAR_OUTCOME.RECOVERED_TERMINAL;
       return out;
     }
     if (!existing.warnings_summary) return []; // nothing to clear
@@ -94,12 +125,7 @@ function clearReviewTestsWarnings(sessionId, reason, manifest) {
 function clearReviewTestsTerminalMarker(sessionId) {
   try {
     assertValidSessionId(sessionId);
-    const { getWorkflowPlansDir } = require("../../lib/workflow-plans-dir");
-    const markerPath = path.join(
-      getWorkflowPlansDir(),
-      `${sessionId}-test-review-terminal.txt`
-    );
-    fs.unlinkSync(markerPath);
+    fs.unlinkSync(terminalMarkerPath(sessionId));
   } catch (e) {
     // ENOENT (no marker) and any other failure are non-fatal.
   }

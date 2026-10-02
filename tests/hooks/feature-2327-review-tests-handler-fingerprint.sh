@@ -31,6 +31,11 @@ case_begin "accept-reopened-review-tests" "hooks/workflow-state/state-io/review-
 . "$SCRIPT_DIR/p2-accept-reopened.sh"
 case_end
 
+case_begin "accept-terminal-in-progress-review-tests" "hooks/workflow-state/state-io/review-tests.js"
+# shellcheck source=./feature-2327-review-tests-handler-fingerprint/p3-accept-terminal-in-progress.sh
+. "$SCRIPT_DIR/p3-accept-terminal-in-progress.sh"
+case_end
+
 echo ""
 TOTAL=$((PASS + FAIL))
 echo "Results: $PASS passed, $FAIL failed, $TOTAL total"
