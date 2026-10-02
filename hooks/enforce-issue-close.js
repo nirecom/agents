@@ -10,37 +10,21 @@
 
 const fs = require("fs");
 const { hasCommandHead } = require("./lib/command-head");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (e) {
-    // EOF or no stdin attached
-  }
-  return Buffer.concat(chunks).toString("utf8");
+const HOOK_NAME = "enforce-issue-close";
+
+const r = readHookInput();
+if (r.kind === "read-error") {
+  process.stderr.write(readFailureReason(HOOK_NAME, r.error) + "\n");
+  process.exit(2);
 }
-
-const input = readStdin();
-if (!input || !input.trim()) {
-  // No input — nothing to evaluate. Approve.
+if (r.kind === "json-invalid") {
+  try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
   process.exit(0);
 }
 
-let parsed;
-try {
-  parsed = JSON.parse(input);
-} catch (e) {
-  // Non-JSON / malformed — fail-open. The other PreToolUse hooks will catch
-  // legitimately malformed payloads; we don't want to escalate here.
-  process.exit(0);
-}
-
+const parsed = r.input;
 if (!parsed || parsed.tool_name !== "Bash") {
   process.exit(0);
 }

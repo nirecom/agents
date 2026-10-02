@@ -4,7 +4,8 @@
 // Every chunk is copied out of the reused read buffer: a slice aliases it, so a
 // later read overwrote earlier chunks and corrupted multi-chunk payloads.
 // The EAGAIN budget is wall-clock (hrtime), not a retry count, because Windows
-// timer granularity (~15 ms) makes the 1 ms wait length unpredictable.
+// timer granularity (~15 ms) makes the 1 ms wait length unpredictable; it measures
+// consecutive unreadable time and restarts after every successful read.
 
 const fs = require("fs");
 
@@ -47,6 +48,7 @@ function readAll(fd, readSyncImpl = fs.readSync, opts = {}) {
       return { kind: "read-error", error: e };
     }
     if (n === 0) break;
+    eagainStart = null;
     chunks.push(Buffer.from(buf.subarray(0, n)));
   }
   return { kind: "ok", text: Buffer.concat(chunks).toString("utf8") };

@@ -15,21 +15,7 @@ const { isCommandTool, commandListOf } = require("./lib/tool-command-text");
 const { parseWithSubstitutionSpans } = require("./block-clearance-token-write/bash-scan/scan");
 const { detectCaptureEcho } = require("./block-capture-echo/shape");
 const { buildRemedy } = require("./block-capture-echo/remedy");
-
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    for (;;) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(Buffer.from(buf.slice(0, n)));
-    }
-  } catch (_e) {
-    /* EOF on a pipe surfaces as an exception on some platforms */
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 function passThrough() {
   console.log("{}");
@@ -59,14 +45,12 @@ function block(reason) {
 // separators, so joining two genuinely separate shell executions would fabricate a
 // single assignment→echo unit and reject a shape that never existed.
 function main() {
-  let input;
-  try {
-    const raw = readStdin();
-    if (!raw) passThrough();
-    input = JSON.parse(raw);
-  } catch (_e) {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try { fs.writeSync(2, readFailOpenDiagnostic("block-capture-echo", r, "check skipped") + "\n"); } catch (_) {}
     passThrough();
   }
+  const input = r.input;
   if (!input || typeof input !== "object") passThrough();
   if (!isCommandTool(input.tool_name)) passThrough();
 

@@ -14,6 +14,7 @@ const {
 const { isUnderPath } = require("./lib/path-match");
 const { recordGuardReject } = require("./lib/rtk-guard-audit");
 const { isUnderNativeIsolation } = require("./lib/native-isolation");
+const { readHookInput } = require("./lib/read-stdin");
 
 const DELEGATE_TIMEOUT_MS = 3000;
 
@@ -395,28 +396,13 @@ function decide(input, opts = {}) {
   }
 }
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    for (;;) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_e) { /* closed/unreadable stdin reads as empty */ }
-  return Buffer.concat(chunks).toString("utf8");
-}
-
 function main() {
-  let input;
-  try {
-    input = JSON.parse(readStdin());
-  } catch (_e) {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
     process.stdout.write(JSON.stringify(passthrough()));
     process.exit(0);
   }
-  process.stdout.write(JSON.stringify(decide(input)));
+  process.stdout.write(JSON.stringify(decide(r.input)));
   process.exit(0);
 }
 

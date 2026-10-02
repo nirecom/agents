@@ -62,6 +62,7 @@ function stripDoubleQuotedContent(cmd) {
 }
 const { isStrictSentinel } = require("../sentinel-patterns");
 const { parse } = require("../command-ir");
+const { isInlineBodyFlag, attachedBodyOf, skipShellOptions } = require("../interpreter-inline-body");
 const { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, isKnownDispatchPath, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGitWriteIR } = require("./patterns");
 const { isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isExoticExecWriteIR, isEncodedCommandWriteIR, isExtendedFileOpWriteIR } = require("../bash-write-targets");
 
@@ -360,12 +361,13 @@ function isReadOnlyInterpreterC(cmd) {
           const base = irFb.cmd0.toLowerCase().replace(/\.exe$/i, "");
           if (/^(?:bash|sh|zsh|dash|fish|pwsh|powershell)$/.test(base)) {
             for (let i = 0; i < irFb.argv.length; i++) {
-              const a = irFb.argv[i]; const al = a.toLowerCase();
-              const isPwsh = base === "pwsh" || base === "powershell";
-              const isCFlag = isPwsh
-                ? (al === "-c" || al === "-command")
-                : (al === "-c" || (a.startsWith("-") && !a.startsWith("--") && a.slice(1).includes("c")));
-              if (isCFlag && i + 1 < irFb.argv.length) { body = irFb.argv[i + 1]; break; }
+              if (!isInlineBodyFlag(irFb.argv[i], base)) continue;
+              // Allow side stays fail-closed: an attached `--command=` body or any
+              // option skipped between the flag and the body leaves body null.
+              if (attachedBodyOf(irFb.argv[i]) !== null) break;
+              const k = /^(?:pwsh|powershell)$/.test(base) ? i + 1 : skipShellOptions(irFb.argv, i + 1);
+              if (k === i + 1 && k < irFb.argv.length) body = irFb.argv[k];
+              break;
             }
           }
         }
