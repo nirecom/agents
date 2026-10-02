@@ -631,3 +631,7 @@ Changes: Installer: no longer waits on the Claude Desktop app, waits for Claude 
 ### FEATURE: PR #2493 (2026-10-02)
 Background: feat(#2455): host-wide test load control for find-tests and run-all
 Changes: Parallel sessions no longer saturate the host when running tests: find-tests-for-source.sh and tests/run-all.sh share a host-wide lane budget, find-tests caches the parsed test corpus, and bin/test-lanes-status.sh shows who holds the lanes
+
+### FEATURE: PR #2492 (2026-10-02)
+Background: fix(#2491): allow WARNINGS_ACCEPTED to recover in_progress review_tests after terminal exit
+Changes: fix: allow WARNINGS_ACCEPTED to recover review_tests that ended in_progress after a terminal exit (rc 2/6) (#2491)
