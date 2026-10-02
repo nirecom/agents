@@ -2,45 +2,24 @@
 // Stop hook (#1610): warn when a session used the EnterWorktree native tool but
 // never called ExitWorktree before session stop, leaving the extension-host
 // worktree binding unreleased.
-//
-// Advisory-only by design: this hook MUST NEVER block. A Stop-time block is an
-// unrecoverable deadlock (the session cannot proceed to release the binding), so
-// every branch fails open and this hook never emits a `decision` key.
-//
-// Positive-evidence only: it warns solely on positive entry evidence
-// (EnterWorktree in the transcript or worktree_entered_at in state) and never on
-// the mere absence of exit evidence. Consequently, if the upstream native tool
-// name ever changes, `EnterWorktree` yields zero hits and this hook goes SILENT
-// BY DESIGN — fail-open, no false-warning noise.
+// Advisory-only: a Stop-time block is an unrecoverable deadlock, so every branch
+// fails open and this hook never emits a `decision` key.
+// Positive-evidence only: it warns on entry evidence (EnterWorktree in the
+// transcript or worktree_entered_at in state), never on missing exit evidence, so
+// a renamed upstream tool makes this hook go SILENT BY DESIGN.
 "use strict";
 
 const fs = require("fs");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput } = require("./lib/read-stdin");
 
 const ADVISORY =
   "[Workflow] EnterWorktree was used in this session but ExitWorktree was never called before session stop. Call the ExitWorktree tool to release the extension-host worktree binding — see skills/_shared/worktree-transition.md.";
 
 if (require.main === module) {
-  let input = {};
-  try {
-    const raw = readStdin();
-    if (!raw) process.exit(0);
-    input = JSON.parse(raw);
-  } catch (_) {
-    process.exit(0);
-  }
+  const r = readHookInput();
+  if (r.kind !== "ok") process.exit(0);
+  const input = r.input;
 
   // TRANSCRIPT EVIDENCE — always attempted; a missing or unreadable transcript
   // is treated as "no evidence" and never throws.

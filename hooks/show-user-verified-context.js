@@ -6,7 +6,6 @@
 // Fail-open on all error paths — must never block the workflow.
 "use strict";
 
-const fs = require("fs");
 const { spawnSync } = require("child_process");
 
 // #2256 S5-a2: Bash/runInTerminal/runCommands normalization (SSOT: hooks/lib/tool-command-text.js).
@@ -18,18 +17,7 @@ const { resolveInputCwd } = require("./lib/resolve-cwd");
 // Match the reason-bearing form only — the bare form was removed from the contract (#404).
 const USER_VERIFIED_RE = /<<WORKFLOW_USER_VERIFIED: [^>]+>>/;
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput } = require("./lib/read-stdin");
 
 function noopExit() { process.stdout.write(""); process.exit(0); }
 
@@ -61,8 +49,9 @@ function getPrUrl(cwd) {
 }
 
 if (require.main === module) {
-  let input = {};
-  try { input = JSON.parse(readStdin()); } catch { noopExit(); }
+  const hookInput = readHookInput();
+  if (hookInput.kind !== "ok") noopExit();
+  const input = hookInput.input;
 
   if (!isCommandTool(input.tool_name)) noopExit();
 

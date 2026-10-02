@@ -7,81 +7,84 @@
 // Bypass: set SYSTEM_OPS_APPROVED=1 in the environment BEFORE launching Claude Code.
 // Inline prefix (SYSTEM_OPS_APPROVED=1 cmd) does NOT reach this hook's process.env.
 // lib/load-env.js is intentionally NOT loaded (would allow .env-based bypass).
-// Scope: Bash, runInTerminal, runCommands.
+// Scope: Bash, runInTerminal, runCommands. Unreadable stdin blocks (exit 2).
 
 "use strict";
 
 const fs = require("fs");
 const { stripQuotedArgs } = require("./lib/strip-quoted-args");
 const { getBlockCategory } = require("./lib/system-ops-categories");
+const { inlineBodiesOf } = require("./lib/interpreter-inline-body");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (e) {
-    // EOF or no stdin
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
+const HOOK_NAME = "enforce-system-ops";
 
-// Tool set + payload-shape normalization are shared with
-// hooks/block-clearance-token-write/dispatch.js and
-// hooks/supervisor-off-proposal-shim.js (CPR-SSOT). This file modeled the
-// runCommands array shape correctly first; the helper preserves that
-// contract verbatim (join with "\n").
-const { COMMAND_TOOL_NAMES, commandTextOf } = require("./lib/tool-command-text");
+// Tool set + payload shape are shared (CPR-SSOT); the deny-side list also keeps a
+// runCommands scalar `.command`, joined with "\n" as separate statements.
+const { COMMAND_TOOL_NAMES } = require("./lib/tool-command-text");
+const { scannableCommandListOf } = require("./lib/scannable-command-list");
 
 const ALLOWED_TOOLS = new Set(COMMAND_TOOL_NAMES);
-
-const input = readStdin();
-if (!input || !input.trim()) process.exit(0);
-
-let parsed;
-try {
-  parsed = JSON.parse(input);
-} catch (e) {
-  process.exit(0);
-}
-
-if (!parsed || !ALLOWED_TOOLS.has(parsed.tool_name)) process.exit(0);
-
-const rawCmd = commandTextOf(parsed.tool_name, parsed.tool_input);
-
-if (!rawCmd) process.exit(0);
 
 // Bypass: inherited env only. Inline VAR=1 prefix does not propagate to this process.
 if (process.env.SYSTEM_OPS_APPROVED === "1") process.exit(0);
 
-// Extract inner command body from interpreter -c '...' invocations BEFORE stripping,
-// so `bash -c 'winget install jq'` is caught even though the outer stripped form is `bash -c ''`.
-function getInnerBodies(raw) {
+const r = readHookInput();
+if (r.kind === "read-error") {
+  process.stderr.write(readFailureReason(HOOK_NAME, r.error) + "\n");
+  process.exit(2);
+}
+if (r.kind === "json-invalid") {
+  try {
+    fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n");
+  } catch (_) {}
+  process.exit(0);
+}
+
+const parsed = r.input;
+if (!parsed || !ALLOWED_TOOLS.has(parsed.tool_name)) process.exit(0);
+
+const rawCmd = scannableCommandListOf(parsed.tool_name, parsed.tool_input).join("\n");
+
+if (!rawCmd) process.exit(0);
+
+function failClosed(why) {
+  process.stderr.write(`enforce-system-ops: blocked (fail-closed): ${why}. Split the command into simpler calls.\n`);
+  process.exit(2);
+}
+
+// Pre-IR regex extraction, kept for lines the IR rejects (`bash -c '…' # it's`):
+// quote-stripping alone would hide the wrapped body there.
+const LEGACY_BODY_RE = /(?:^|[\s;|&])(?:bash|sh|zsh|dash|fish|ksh|ksh93|mksh|ash|pwsh|powershell)(?:\.exe)?\b[^|;&\n]*?-\w*c\w*\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")/gi;
+
+function legacyBodiesOf(line) {
   const bodies = [];
-  const re = /(?:^|[\s;|&])(?:bash|sh|zsh|pwsh|powershell(?:\.exe)?)\b[^|;&\n]*-c\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")/gi;
-  let m;
-  while ((m = re.exec(raw)) !== null) {
+  for (const m of line.matchAll(LEGACY_BODY_RE)) {
     const body = m[1] !== undefined ? m[1] : m[2];
     if (body) bodies.push(body);
   }
   return bodies;
 }
 
-const innerBodies = getInnerBodies(rawCmd);
-const stripped = stripQuotedArgs(rawCmd);
-const candidates = [stripped, ...innerBodies];
-
+// unparsedLines is the fail-safe for lines the IR rejects; judged quote-stripped so
+// an example inside quotes does not block merely because its line failed to parse.
 let blockedCategory = null;
-for (const candidate of candidates) {
-  const cat = getBlockCategory(candidate);
-  if (cat) {
-    blockedCategory = cat;
-    break;
+try {
+  const { bodies, unparsedLines, overflow } = inlineBodiesOf(rawCmd);
+  if (overflow) failClosed("inline interpreter bodies exceed the scan limit");
+  const legacy = unparsedLines.flatMap(legacyBodiesOf);
+  const legacyNested = inlineBodiesOf(legacy.join("\n"));
+  if (legacyNested.overflow) failClosed("inline interpreter bodies exceed the scan limit");
+  const candidates = [stripQuotedArgs(rawCmd), ...bodies, ...unparsedLines.map(stripQuotedArgs), ...legacy, ...legacyNested.bodies];
+  for (const candidate of candidates) {
+    const cat = getBlockCategory(candidate);
+    if (cat) {
+      blockedCategory = cat;
+      break;
+    }
   }
+} catch (e) {
+  failClosed(`classification error (${(e && e.name) || "unknown"})`);
 }
 
 if (!blockedCategory) process.exit(0);

@@ -12,28 +12,17 @@
 
 const fs = require("fs");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 if (require.main === module) {
-  let input = {};
-  try {
-    const raw = readStdin();
-    if (!raw) process.exit(0);
-    input = JSON.parse(raw);
-  } catch (_) {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try {
+      fs.writeSync(2, readFailOpenDiagnostic("postuse-native-worktree-record", r, "worktree event not recorded") + "\n");
+    } catch (_) {}
     process.exit(0);
   }
+  const input = r.input;
 
   const tool = input.tool_name;
   if (tool !== "EnterWorktree" && tool !== "ExitWorktree") process.exit(0);

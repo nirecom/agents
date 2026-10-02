@@ -13,6 +13,7 @@ const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { readPre, applyEdits, resolveTargetPath, groupEditTargets } = require("./lib/post-edit-content");
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 const EDIT_TOOLS = new Set(["Write", "Edit", "MultiEdit"]);
 const CHECKER = path.resolve(__dirname, "..", "bin", "check-case-markers.sh");
@@ -35,21 +36,6 @@ function buildReason(violations) {
   }
   lines.push(`Wrap each case in column-0 case_begin/case_end at depth 0 — see ${RULE_DOC}.`);
   return lines.join("\n");
-}
-
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    for (;;) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(Buffer.from(buf.slice(0, n)));
-    }
-  } catch (e) {
-    // EOF on a pipe surfaces as an exception on some platforms.
-  }
-  return Buffer.concat(chunks).toString("utf8");
 }
 
 function approve() {
@@ -147,13 +133,13 @@ function collectCandidates(input, toolName, toolInput) {
 }
 
 function main() {
-  let input;
-  try {
-    input = JSON.parse(readStdin());
-  } catch (e) {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try { fs.writeSync(2, readFailOpenDiagnostic("block-case-markers", r, "check skipped") + "\n"); } catch (_) {}
     approve();
     return;
   }
+  const input = r.input;
   if (!input || typeof input !== "object") approve();
   const toolName = input.tool_name;
   if (!EDIT_TOOLS.has(toolName)) approve();

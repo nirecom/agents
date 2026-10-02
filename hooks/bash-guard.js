@@ -6,10 +6,13 @@
 //
 // The matcher is the bare "Bash" on purpose: runInTerminal / runCommands can drive pwsh,
 // where a backtick is a line continuation — reading that with a bash parser would produce
-// confident false denials. Fail-open reaches the process boundary: stdin this hook cannot
-// parse produces NO envelope at all rather than a verdict invented from nothing.
+// confident false denials. Unreadable stdin denies (fail-close); malformed JSON produces
+// NO envelope (one stderr diagnostic) rather than a verdict invented from nothing.
 const fs = require("fs");
 const { judgeBashCommand } = require("./bash-guard/judge");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
+
+const HOOK_NAME = "bash-guard";
 
 module.exports = { judgeBashCommand };
 
@@ -34,26 +37,17 @@ const ENVELOPES = Object.freeze({
   passThrough: () => ({ decision: "approve" }),
 });
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    for (;;) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_e) { /* a closed or unreadable stdin reads as empty */ }
-  return Buffer.concat(chunks).toString("utf8");
-}
-
 function main() {
-  let input;
-  try {
-    input = JSON.parse(readStdin());
-  } catch (_e) {
-    process.exit(0); // unparseable payload: say nothing, decide nothing
+  const r = readHookInput();
+  if (r.kind === "read-error") {
+    console.log(JSON.stringify(ENVELOPES.deny({ message: readFailureReason(HOOK_NAME, r.error) })));
+    process.exit(0);
   }
+  if (r.kind === "json-invalid") {
+    try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
+    process.exit(0);
+  }
+  const input = r.input;
   let verdict;
   try {
     verdict = judgeBashCommand(input);

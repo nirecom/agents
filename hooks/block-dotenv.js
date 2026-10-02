@@ -14,22 +14,11 @@ const {
   checkGlobPattern,
   checkExploreQuery,
 } = require("./lib/dotenv-check");
+const { isCommandTool } = require("./lib/tool-command-text");
+const { scannableCommandListOf } = require("./lib/scannable-command-list");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-// Read stdin (cross-platform: fs.readSync for Windows compatibility)
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {
-    // EOF or error
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
+const HOOK_NAME = "block-dotenv";
 
 function approve() {
   console.log(JSON.stringify({ decision: "approve" }));
@@ -41,14 +30,15 @@ function block(reason) {
   process.exit(0);
 }
 
-// Parse stdin
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (e) {
-  // Invalid JSON — approve (fail-open for non-matching input)
+const r = readHookInput();
+if (r.kind === "read-error") block(readFailureReason(HOOK_NAME, r.error));
+if (r.kind === "json-invalid") {
+  try {
+    fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n");
+  } catch (_) {}
   approve();
 }
+const input = r.input;
 
 // Session-scoped WORKFLOW override: bypass all .env checks for this session.
 const { isWorkflowOff } = require("./lib/session-markers");
@@ -57,18 +47,18 @@ if (isWorkflowOff(input.session_id)) approve();
 const toolName = input.tool_name;
 const toolInput = input.tool_input || {};
 
-switch (toolName) {
-  case "Bash":
-  case "runInTerminal":
-  case "runCommands":
-    if (checkBashCommand(toolInput.command)) {
+if (isCommandTool(toolName)) {
+  for (const cmd of scannableCommandListOf(toolName, toolInput)) {
+    if (checkBashCommand(cmd)) {
       block("Access to .env files is blocked. Use .env.example for documentation.");
     }
-    if (checkAllowDumpCommand(toolInput.command)) {
+    if (checkAllowDumpCommand(cmd)) {
       block("env-effective-kv --allow-dump is blocked from direct invocation — it can dump every secret in the global .env. Use bin/show-local-env-overrides for key-name-only inspection.");
     }
-    break;
+  }
+}
 
+switch (toolName) {
   case "Read":
     if (isDotenvPath(toolInput.file_path)) {
       block("Reading .env files is blocked. Use .env.example for documentation.");

@@ -3,11 +3,12 @@
 // three command-executing tools. Both doors are reserved for the orchestrator
 // (main conversation): the sentinel echo and the advance-class CLI (#2102).
 // Main-conversation calls and non-door commands pass through.
-// Fail-open: any error path approves.
+// Unreadable stdin blocks; other error paths approve.
 
 "use strict";
 
 const fs = require("fs");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
 const { isSubagentCall } = require("./lib/subagent-detect");
 const { isCommandTool, commandListOf } = require("./lib/tool-command-text");
 const { isWorkflowStateDriverCommand } = require("./lib/workflow-driver-commands");
@@ -25,18 +26,7 @@ const DRIVER_BLOCK_MESSAGE =
 
 module.exports = { BLOCK_MESSAGE, DRIVER_BLOCK_MESSAGE };
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const HOOK_NAME = "block-subagent-sentinels";
 
 function approve() {
   console.log(JSON.stringify({ decision: "approve" }));
@@ -57,12 +47,13 @@ function isSentinelEmission(command) {
 }
 
 if (require.main === module) {
-  let input = {};
-  try {
-    input = JSON.parse(readStdin());
-  } catch (e) {
-    approve(); // fail-open on malformed stdin
+  const r = readHookInput();
+  if (r.kind === "read-error") block(readFailureReason(HOOK_NAME, r.error));
+  if (r.kind === "json-invalid") {
+    try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
+    approve();
   }
+  const input = r.input;
 
   // Step 1: only intercept the three command-executing tools
   if (!isCommandTool(input.tool_name)) approve();

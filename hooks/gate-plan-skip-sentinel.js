@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-const fs = require("fs");
+const { readHookInput } = require("./lib/read-stdin");
 try { require("./lib/load-env").loadDefaultEnv(); } catch (_e) { /* fail-open */ }
 const { OUTLINE_NOT_NEEDED_RE_DQ, DETAIL_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_RE_DQ } =
   require("./lib/sentinel-patterns");
@@ -26,19 +26,6 @@ try {
     require("./workflow-state/plan-skip-allowance"));
 } catch (_e) { /* fail-open */ }
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
-
 function passThrough() { console.log("{}"); process.exit(0); }
 
 function allow(reason) {
@@ -62,8 +49,9 @@ function isOff(step) {
     && isConfirmOffForStepSentinel(step) === true;
 }
 
-let input;
-try { input = JSON.parse(readStdin()); } catch (_e) { passThrough(); }
+const r = readHookInput();
+if (r.kind !== "ok") passThrough();
+const input = r.input;
 if (!input || !isCommandTool(input.tool_name)) passThrough();
 // Per-element view: the anchored NOT_NEEDED regexes must be tested against each
 // command on its own. anyElement(re) is true when any single element matches.

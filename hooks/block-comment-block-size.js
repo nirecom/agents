@@ -12,6 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 const { readDefaultEnvFile } = require("./lib/load-env");
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 // Post-edit reconstruction is shared with block-case-markers.js (#2388).
 const { MAX_BYTES, resolveTargetPath, buildPostContent } = require("./lib/post-edit-content");
 const {
@@ -30,22 +31,6 @@ const RULE_DOC = "rules/coding/file-split.md";
 
 const WRITE_TOOL = "Write";
 const EDIT_TOOLS = ["Edit", "MultiEdit"];
-
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    for (;;) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(Buffer.from(buf.slice(0, n)));
-    }
-  } catch (e) {
-    // EOF on a pipe surfaces as an exception on some platforms; whatever was
-    // read so far is still the payload.
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
 
 function approve() {
   process.stdout.write(JSON.stringify({ decision: "approve" }) + "\n");
@@ -87,13 +72,13 @@ function buildReason(fileName, runs, threshold) {
 }
 
 function main() {
-  let input;
-  try {
-    input = JSON.parse(readStdin());
-  } catch (e) {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try { fs.writeSync(2, readFailOpenDiagnostic("block-comment-block-size", r, "check skipped") + "\n"); } catch (_) {}
     approve();
     return;
   }
+  const input = r.input;
   if (!input || typeof input !== "object") approve();
 
   const toolName = input.tool_name;

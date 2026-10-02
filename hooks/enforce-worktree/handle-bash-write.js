@@ -22,7 +22,7 @@ const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessi
 const { isGitWriteIR } = require("../lib/bash-write-patterns/patterns");
 const { checkUniversalTargetAllow } = require("./universal-target-allow");
 const { buildExtras } = require("./report-extras");
-const { commandTextOf } = require("../lib/write-tools");
+const { scannableCommandListOf } = require("../lib/scannable-command-list");
 const { hasGhIssueCreate, resolveCrossRepoIssueCreateRoot } = require("./gh-repo-target");
 
 // #838: from a linked worktree, `git -C <main> worktree remove/prune` is allowed when
@@ -57,9 +57,9 @@ function handleBashWrite(ctx) {
   let writeDetector = null;
 
   // runInTerminal/runCommands reach this handler too; runCommands carries an
-  // ARRAY under `commands`, not `.command` — commandTextOf() normalizes both
-  // so `if (!cmd) done()` can't approve a runCommands write via an empty read.
-  const cmd = commandTextOf(toolName, toolInput);
+  // ARRAY under `commands` (plus any scalar `.command`) — scannableCommandListOf
+  // covers both so `if (!cmd) done()` can't approve a runCommands write via an empty read.
+  const cmd = scannableCommandListOf(toolName, toolInput).join("\n");
   if (!cmd) done();
   const ir = parse(cmd);
   writeDetector = detectWritePredicate(ir);

@@ -66,14 +66,40 @@ probe_mutation "B-shutdown"  'shutdown(?:\.exe)?\s+[/-][rshHP]'       'shutdown 
 probe_mutation "C-systemctl" 'systemctl\s+(?:stop|disable|mask)'      'systemctl stop nginx' 'Stop-Service Spooler'
 probe_mutation "F-mkfs"      'mkfs(?:\.[a-z0-9]+)?\s'                 'mkfs.ext4 /dev/sdb1' 'diskpart'
 
-# The interpreter-body extractor is the other single point of failure: neutering
-# it must let a wrapped blocked command through while the unwrapped form still
-# blocks. That distinguishes "the W table works" from "the W table is redundant
-# with the C table".
-probe_mutation "getInnerBodies" \
-    '(?:^|[\s;|&])(?:bash|sh|zsh|pwsh|powershell(?:\.exe)?)\b[^|;&\n]*-c\s+' \
-    "bash -c 'winget install jq'" \
-    'winget install jq'
+# The interpreter-body extractor is the other single point of failure: stubbing
+# inlineBodiesOf to return nothing must let a wrapped blocked command through
+# while the unwrapped form still blocks. That distinguishes "the W table works"
+# from "the W table is redundant with the C table".
+probe_inline_body_stub
+}
+
+probe_inline_body_stub() {
+    local dest="$TMP/mutant-ib.js" stub="$TMP/stub-ib.js" got_killed got_survivor saved
+    cp "$HOOK" "$dest"
+    node -e '
+const fs = require("fs");
+const [dest, stub, hooksDir] = process.argv.slice(1);
+fs.writeFileSync(stub, "module.exports = Object.assign({}, require(" +
+  JSON.stringify(hooksDir + "/lib/interpreter-inline-body") +
+  "), { inlineBodiesOf: () => ({ bodies: [], unparsedLines: [] }) });\n");
+let src = fs.readFileSync(dest, "utf8");
+src = src.replace(/["\x27]\.\/lib\/interpreter-inline-body(?:\.js)?["\x27]/g, JSON.stringify(stub));
+src = src.split("\"./lib/").join("\"" + hooksDir + "/lib/");
+fs.writeFileSync(dest, src);
+' "$(topath "$dest")" "$(topath "$stub")" "$(topath "$AGENTS_DIR/hooks")" 2>"$TMP/mut-err.txt" || {
+        fail "M inlineBodiesOf — could not build mutant: $(cat "$TMP/mut-err.txt" 2>/dev/null)"
+        return
+    }
+    saved="$HOOK"
+    HOOK="$dest"
+    got_killed="$(run_cmd "bash -c 'winget install jq'")"
+    got_survivor="$(run_cmd 'winget install jq')"
+    HOOK="$saved"
+    if [ "$got_killed" = "ALLOW" ] && [ "$got_survivor" = "BLOCK" ]; then
+        pass "M inlineBodiesOf — stubbing the extractor flips only the wrapped row (killed=$got_killed sibling=$got_survivor)"
+    else
+        fail "M inlineBodiesOf — want killed=ALLOW sibling=BLOCK, got killed=$got_killed sibling=$got_survivor"
+    fi
 }
 
 # ===========================================================================

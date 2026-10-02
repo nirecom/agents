@@ -7,14 +7,7 @@
 // Fail-open on parse errors.
 
 const fs = require("fs");
-
-function readStdin() {
-  try {
-    return fs.readFileSync(0).toString("utf8");
-  } catch (e) {
-    return "";
-  }
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 function done(output) {
   console.log(JSON.stringify(output));
@@ -68,12 +61,14 @@ function scan(text) {
   return { action: "pass" };
 }
 
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (e) {
+const r = readHookInput();
+if (r.kind !== "ok") {
+  try {
+    fs.writeSync(2, readFailOpenDiagnostic("scan-inbound", r, "check skipped") + "\n");
+  } catch (_) { /* diagnostic is best-effort */ }
   done({});
 }
+const input = r.input;
 
 if (!input || input.tool_name !== "WebFetch") done({});
 

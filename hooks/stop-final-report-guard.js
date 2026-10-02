@@ -3,40 +3,18 @@
 // with all 13 canonical section headings present and no unsubstituted
 // `<PLACEHOLDER>` tokens remaining.
 //
-// Triggers (#1611 — two independent lanes, CPR-SC):
-// - Lane A: <plans-dir>/<sid>-final-report-env.json exists (written by
-//   worktree-end Step WE-9..WE-11 or session-close SC-2A/SC-2B/SC-2C) → validate
-//   the Final Report shape (the whole validation section below is lane A only).
-// - Lane B: that env file is ABSENT and `bin/workflow/next-step --session <sid>`
-//   reports ACTION=invoke with REASON='pre_final_report_gate' → the close
-//   procedure was never started. Block unconditionally WITHOUT scanning the
-//   transcript, so a hand-written Final Report is rejected too. Lane B is a
-//   "close procedure not executed" detector, not a shape validator.
-// On any other turn the hook exits 0 silently.
-//
-// Contract (post-#830 fix):
-// - Parse transcript JSONL; backward-scan for the latest type:"assistant" entry
-//   containing `## Final Report — <sid>`; extract finalReportBody (heading to
-//   next \n## or turn end). Check headings + token regex on finalReportBody only.
-// - Fail-open on uncertainty (missing/malformed env-file, no transcript, no FR).
+// Lane A (#1611): <plans-dir>/<sid>-final-report-env.json exists → validate the
+// latest `## Final Report — <sid>` body in the transcript (#830 contract).
+// Lane B: env file absent and next-step reports REASON='pre_final_report_gate' →
+// block without scanning the transcript. Otherwise exit 0. Fail-open on
+// uncertainty. Full contract: docs/architecture/claude-code/settings/hooks.md.
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
 const schema = require("./lib/final-report-schema");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 // Lane B (#1611): the env file is absent, so /session-close never reached
 // SC-2A/SC-2B/SC-2C. Consult the workflow state via `bin/workflow/next-step`:
@@ -113,14 +91,14 @@ function runCloseProcedureLane(sid, plansDir) {
 }
 
 if (require.main === module) {
-  let input = {};
-  try {
-    const raw = readStdin();
-    if (!raw) process.exit(0);
-    input = JSON.parse(raw);
-  } catch (_) {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try {
+      fs.writeSync(2, readFailOpenDiagnostic("stop-final-report-guard", r, "final-report check skipped") + "\n");
+    } catch (_) {}
     process.exit(0);
   }
+  const input = r.input;
 
   if (input.stop_hook_active === true) process.exit(0);
 

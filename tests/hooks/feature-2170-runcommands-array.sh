@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Tests: hooks/block-credentials.js, hooks/block-dotenv.js, hooks/block-history-direct.js, hooks/block-memory-direct.js, hooks/lib/tool-command-text.js, hooks/block-capture-echo.js
-# Tags: runcommands-array, tool-command-text, security, known-gap, characterization, scope:issue-specific, pwsh-not-required
+# Tests: hooks/block-credentials.js, hooks/block-dotenv.js, hooks/block-history-direct.js, hooks/block-memory-direct.js, hooks/lib/tool-command-text.js, hooks/block-capture-echo.js, hooks/block-shell-config.js, hooks/lib/scannable-command-list.js, hooks/workflow-gate.js
+# Tags: runcommands-array, tool-command-text, security, scope:issue-specific, pwsh-not-required
 # Serial: no
 
-# Round 13, C6 — `runCommands` carries its payload in `tool_input.commands[]`, but the
-# four extracted guards read `tool_input.command`, which is undefined for that tool.
-# CHARACTERIZATION: rows named KNOWN-GAP pin today's (bypassing) behaviour so a source
-# fix flips a named row; each is paired with a `.command` control proving the very same
-# operation IS caught, and with a block-capture-echo.js control proving the array event
-# is well-formed and reachable. Fixing the guards is out of scope for a tests-only round.
+# `runCommands` carries its payload in `tool_input.commands[]`. The five guards
+# (credentials, dotenv, history, memory, shell-config) route every command tool
+# through commandListOf() and test each element on its own (#2206), so a protected
+# operation is denied whether it is the scalar `.command`, the sole array element,
+# or hidden behind a benign first element. block-capture-echo.js rows prove the
+# array event is well-formed and reachable.
 # TL3 gap: hooks run as subprocesses here; no live session dispatches runCommands.
 
 set -uo pipefail
@@ -42,10 +42,11 @@ trap 'rm -rf "$TMPD"' EXIT
 EV="$TMPD/event.json"
 OUT="$TMPD/out.json"
 
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
 export CLAUDE_WORKFLOW_DIR="$TMPD/workflow"
 export WORKFLOW_PLANS_DIR="$TMPD/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+cd "$TMPD" || exit 1
 
 # verdict <hook> <tool> <cmd...> -> block|deny-partial|allow|passthrough|other:...
 verdict() {
@@ -55,6 +56,15 @@ verdict() {
     node "$AGENTS_DIR/hooks/$hook" <"$EV" >"$OUT" 2>/dev/null
     node "$SUITE/hook-out.js" "$OUT"
 }
+
+# verdict_rc_scalar <hook> <cmd> -> same tokens, for runCommands carrying a scalar
+# `.command` (the shape hooks/lib/scannable-command-list.js keeps scanning).
+verdict_rc_scalar() {
+    node -e 'process.stdout.write(JSON.stringify({session_id:"test-2170",hook_event_name:"PreToolUse",tool_name:"runCommands",tool_input:{command:process.argv[1]}}))' "$2" >"$EV"
+    node "$AGENTS_DIR/hooks/$1" <"$EV" >"$OUT" 2>/dev/null
+    node "$SUITE/hook-out.js" "$OUT"
+}
+APPROVE='other:{"decision":"approve"}'
 
 # The memory guard's protected root is derived from the real homedir, so ask the
 # module rather than hard-coding a path that would differ per host (CPR-UNV).
@@ -73,27 +83,38 @@ while IFS='|' read -r id hook trigger; do
     assert_eq "$id-a-control-scalar-command-is-denied" \
         "deny-partial" "$(verdict "$hook" Bash "$trigger")"
 
-    # KNOWN GAP: same operation as the ONLY element of a runCommands array.
-    assert_eq "$id-b-KNOWN-GAP-array-sole-element-bypasses" \
-        "other:{\"decision\":\"approve\"}" "$(verdict "$hook" runCommands "$trigger")"
+    # Same operation as the ONLY element of a runCommands array.
+    assert_eq "$id-b-array-sole-element-is-denied" \
+        "deny-partial" "$(verdict "$hook" runCommands "$trigger")"
 
-    # KNOWN GAP: same operation hidden behind a benign first element.
-    assert_eq "$id-c-KNOWN-GAP-array-later-element-bypasses" \
-        "other:{\"decision\":\"approve\"}" "$(verdict "$hook" runCommands 'ls' "$trigger")"
+    # Same operation hidden behind a benign first element (per-element check).
+    assert_eq "$id-c-array-later-element-is-denied" \
+        "deny-partial" "$(verdict "$hook" runCommands 'ls' "$trigger")"
 
-    # Control: runInTerminal shares the scalar field, so it must still be caught —
-    # this isolates the defect to the array shape, not to the non-Bash tool name.
+    # runInTerminal shares the scalar field; it must stay caught after the switch
+    # cases moved into the isCommandTool() branch.
     assert_eq "$id-d-control-runInTerminal-scalar-is-denied" \
         "deny-partial" "$(verdict "$hook" runInTerminal "$trigger")"
+
+    # runCommands with a scalar `.command` instead of commands[] stays scanned.
+    assert_eq "$id-e-runCommands-scalar-command-is-denied" \
+        "deny-partial" "$(verdict_rc_scalar "$hook" "$trigger")"
+
+    # Allow side (C9): benign elements / benign scalar must not over-block.
+    assert_eq "$id-f-array-of-benign-elements-approves" \
+        "$APPROVE" "$(verdict "$hook" runCommands 'ls' 'git status')"
+    assert_eq "$id-g-runCommands-benign-scalar-approves" \
+        "$APPROVE" "$(verdict_rc_scalar "$hook" 'git status')"
 done <<TABLE
 RC-1|block-credentials.js|cat ~/.aws/credentials
 RC-2|block-dotenv.js|cat /repo/.env
 RC-3|block-history-direct.js|echo x >> docs/history.md
 RC-4|block-memory-direct.js|echo x > @MEMDIR@/MEMORY.md
+RC-7|block-shell-config.js|echo x >> ~/.bashrc
 TABLE
 
 # --- RC-5: the array event IS reachable — block-capture-echo.js reads commands[] ---
-# Without this row every KNOWN-GAP above could be explained by a malformed fixture.
+# Without this row a b/c failure above could be explained by a malformed fixture.
 CAPTURE='X=$(git rev-parse HEAD); echo "$X"'
 assert_eq "RC-5a-capture-echo-sees-array-sole-element" \
     "block" "$(verdict block-capture-echo.js runCommands "$CAPTURE")"
@@ -102,9 +123,18 @@ assert_eq "RC-5b-capture-echo-sees-array-later-element" \
 assert_eq "RC-5c-capture-echo-array-of-benign-passes" \
     "passthrough" "$(verdict block-capture-echo.js runCommands 'ls' 'git status')"
 
-# --- RC-6: the SSOT helper already exposes the array; only the guards ignore it ----
+# --- RC-6: the SSOT helper the guards iterate exposes every array element ---------
 listed="$(node -p "JSON.stringify(require('$NODE_AGENTS_DIR/hooks/lib/tool-command-text.js').commandListOf('runCommands',{commands:['a','b']}))" 2>/dev/null)"
 assert_eq "RC-6-commandListOf-returns-every-array-element" '["a","b"]' "$listed"
+
+# --- RC-8: workflow-gate judges a runCommands scalar `.command` like the Bash one --
+# (commit gate reached; before the fix the scalar read as "" and was approved).
+assert_eq "RC-8a-workflow-gate-bash-commit-control" \
+    "deny-partial" "$(verdict workflow-gate.js Bash 'git commit -m x')"
+assert_eq "RC-8b-workflow-gate-runCommands-scalar-commit-gated" \
+    "deny-partial" "$(verdict_rc_scalar workflow-gate.js 'git commit -m x')"
+assert_eq "RC-8c-workflow-gate-runCommands-benign-scalar-approves" \
+    "$APPROVE" "$(verdict_rc_scalar workflow-gate.js 'git status')"
 
 echo ""
 echo "runcommands-array: PASS=$PASS FAIL=$FAIL"

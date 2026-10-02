@@ -7,9 +7,9 @@
 // verdict — never return it here, or a bash caller reads it as "scanner failed".
 "use strict";
 
-const fs = require("fs");
 const path = require("path");
 const { scanText } = require(path.join(__dirname, "..", "..", "hooks", "lib", "comment-block-scan.js"));
+const { readStdinText } = require(path.join(__dirname, "..", "..", "hooks", "lib", "read-stdin.js"));
 
 function usage(msg) {
   process.stderr.write("scan-cli: " + msg + "\n");
@@ -30,21 +30,9 @@ function parseArgs(argv) {
 }
 
 function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  while (true) {
-    let n = 0;
-    try {
-      n = fs.readSync(0, buf, 0, buf.length);
-    } catch (e) {
-      if (e && (e.code === "EAGAIN" || e.code === "EINTR")) continue;
-      if (e && e.code === "EOF") break;
-      throw e;
-    }
-    if (n === 0) break;
-    chunks.push(Buffer.from(buf.slice(0, n)));
-  }
-  return Buffer.concat(chunks).toString("utf8");
+  const r = readStdinText();
+  if (r.kind !== "ok") throw r.error;
+  return r.text;
 }
 
 function main(argv) {

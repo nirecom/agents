@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const { resolveAgentsRoot } = require("./lib/filter-kinds");
+const { readStdinText } = require("../../hooks/lib/read-stdin");
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -29,9 +30,10 @@ if (keywordsArg !== "-") {
 // Read keyword list from stdin
 // ---------------------------------------------------------------------------
 function readStdin() {
-  // fs.readFileSync(0) reads the whole stdin into a fresh buffer in one call,
-  // avoiding the buffer-reuse pitfall of looping readSync into a shared Buffer.
-  return fs.readFileSync(0, "utf8").replace(/\r\n/g, "\n");
+  // Reads stdin via the shared EOF-safe reader in hooks/lib/read-stdin.
+  const r = readStdinText();
+  if (r.kind !== "ok") throw r.error;
+  return r.text.replace(/\r\n/g, "\n");
 }
 
 let keywordsDoc;

@@ -5,7 +5,7 @@
 // edit-write and command classes) from the main git checkout, and from any
 // protected branch even inside a linked worktree; writes are allowed only from a
 // linked worktree on a non-protected branch. This file holds the dispatch block
-// plus readStdin / done / getWorktreeBaseDirResolved; the rest lives in sibling
+// plus done / getEffectiveCwd; the rest lives in sibling
 // modules under hooks/enforce-worktree/. Bash write detection is pattern-based
 // (a UX guard, not a security boundary) — ENFORCE_WORKTREE=off bypasses it.
 
@@ -40,11 +40,13 @@ const { handleEditWrite } = require("./enforce-worktree/handle-edit-write");
 // runInTerminal/runCommands are command siblings; each bypassed main-worktree
 // and protected-branch enforcement entirely. hooks/lib/write-tools.js is the
 // SSOT for both classes and the settings.json matcher string.
-const { isEditWriteTool, isCommandTool, collectEditWritePaths, commandTextOf } = require("./lib/write-tools");
+const { isEditWriteTool, isCommandTool, collectEditWritePaths } = require("./lib/write-tools");
+const { scannableCommandListOf } = require("./lib/scannable-command-list");
 
-// readStdin / getWorktreeBaseDirResolved moved to enforce-worktree/entry-helpers.js
-// (file-split, rules/coding/file-split.md). getWorktreeBaseDirResolved stays re-exported below.
-const { readStdin, getWorktreeBaseDirResolved } = require("./enforce-worktree/entry-helpers");
+// Hook input comes from the shared reader hooks/lib/read-stdin.js; getWorktreeBaseDirResolved
+// lives in enforce-worktree/entry-helpers.js (file-split) and stays re-exported below.
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
+const { getWorktreeBaseDirResolved } = require("./enforce-worktree/entry-helpers");
 
 // Captured at hook-input parse time so the `done()` helper can self-report on block.
 let _reportContext = { sessionId: undefined, command: undefined, toolName: undefined, extras: undefined };
@@ -89,18 +91,25 @@ function getEffectiveCwd(toolCwd, sessionId, readStateFn) {
 
 if (require.main === module) {
 
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (e) {
-  done(); // fail-open on malformed stdin
+let _read = readHookInput();
+// Valid JSON that is not an object (`null`, `5`) shares the json-invalid verdict.
+if (_read.kind === "ok" && (!_read.input || typeof _read.input !== "object")) {
+  _read = { kind: "json-invalid", text: _read.text, error: new TypeError("non-object hook input") };
 }
+if (_read.kind === "json-invalid") {
+  try {
+    fs.writeSync(2, readFailOpenDiagnostic("enforce-worktree", _read, "worktree check skipped") + "\n");
+  } catch (_) { /* diagnostic is best-effort */ }
+  done();
+}
+// read-error: input stays null so the off switch and session markers still apply before blocking.
+const input = _read.kind === "ok" ? _read.input : null;
 
 if (!isEnforceWorktreeOn()) done();
 
 // ENFORCE_WORKTREE_EXCLUDE: if the target repo is explicitly excluded (path-coverage),
 // skip enforcement for this write without disabling enforcement globally.
-if (isCommandRepoExcluded(input, process.cwd())) done();
+if (input && isCommandRepoExcluded(input, process.cwd())) done();
 
 // Session-scoped WORKFLOW override (broader than WORKTREE; bypasses everything
 // except enforce-system-ops). Placed BEFORE the worktree-off check because
@@ -131,6 +140,10 @@ try {
   );
 }
 
+if (_read.kind === "read-error") {
+  done({ block: true, reason: readFailureReason("enforce-worktree", _read.error) });
+}
+
 // Defence-in-depth: if process.cwd() is unresolvable (e.g. after
 // git worktree remove from inside the removed worktree), fail-open.
 // Root cause fix: skills/worktree-end/SKILL.md Step WE-13 (cd <main> before remove).
@@ -159,8 +172,9 @@ const toolInput = input.tool_input || {};
 
 // Populate supervisor-emit context for done() block self-report.
 // The command text is derived through the shared normalizer so a runCommands
-// call self-reports what it was actually about to run, not `undefined`.
-const _cmdText = isCommandTool(toolName) ? commandTextOf(toolName, toolInput) : "";
+// call self-reports what it was actually about to run, not `undefined`; it must
+// equal the text handleBashWrite judges so allow predicates see the same command.
+const _cmdText = isCommandTool(toolName) ? scannableCommandListOf(toolName, toolInput).join("\n") : "";
 
 _reportContext = {
   sessionId: (input && input.session_id) || undefined,

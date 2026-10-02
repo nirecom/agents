@@ -10,17 +10,10 @@ const fs = require("fs");
 const path = require("path");
 const { classifyPolicy } = require("./lib/lang-config");
 const { safeIsPrivateRepo } = require("./lib/is-private-repo");
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 const TARGET_TOOLS = new Set(["Write", "Edit", "MultiEdit", "editFiles"]);
 const TARGET_BASENAME = "WORKTREE_NOTES.md";
-
-function readStdin() {
-  try {
-    return fs.readFileSync(0, "utf8");
-  } catch (e) {
-    return "";
-  }
-}
 
 function done(output) {
   console.log(JSON.stringify(output));
@@ -69,12 +62,14 @@ function formatMessage(violations) {
   return `${header}\n${body}\n${footer}`;
 }
 
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (e) {
+const r = readHookInput();
+if (r.kind !== "ok") {
+  try {
+    fs.writeSync(2, readFailOpenDiagnostic("check-worktree-notes-lang", r, "check skipped") + "\n");
+  } catch (_) { /* diagnostic is best-effort */ }
   approve();
 }
+const input = r.input;
 
 if (!input || !TARGET_TOOLS.has(input.tool_name)) approve();
 

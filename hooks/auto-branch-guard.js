@@ -1,19 +1,9 @@
 #!/usr/bin/env node
-// Claude Code PreToolUse hook: enforce AGENT_AUTO_BRANCH policy.
-//
-// Purpose: Block Edit/Write/MultiEdit when AGENT_AUTO_BRANCH is on (default)
-// AND the target file is inside a git repo whose current branch is the
-// repo's default branch (e.g. main/master).
-//
-// This makes "feature branch by default" structurally enforced for agent
-// workflows, eliminating race-on-default-branch by construction.
-//
-// Allowed cases (no block):
-// - AGENT_AUTO_BRANCH=off|0|false|no|disabled (explicit opt-out)
-// - File outside any git repo
-// - HEAD is unborn (no commits yet — branching is meaningless)
-// - HEAD is detached (not on a named branch)
-// - Current branch is not the default branch (any feature branch)
+// Claude Code PreToolUse hook: enforce AGENT_AUTO_BRANCH policy — block
+// Edit/Write/MultiEdit when AGENT_AUTO_BRANCH is on (default) and the target file's
+// repo is on its default branch (main/master), so feature branches are structural.
+// Allowed: AGENT_AUTO_BRANCH=off|0|false|no|disabled, file outside any git repo,
+// unborn or detached HEAD, any non-default branch. Unreadable stdin blocks.
 
 const fs = require("fs");
 const { spawnSync } = require("child_process");
@@ -23,19 +13,9 @@ const path = require("path");
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
 const { normalizeCwd } = require("./lib/path-normalize");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const HOOK_NAME = "auto-branch-guard";
 
 function isAutoBranchOn() {
   const v = (process.env.AGENT_AUTO_BRANCH || "").toLowerCase().trim();
@@ -151,12 +131,13 @@ function done(decision) {
 }
 
 // Main
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (e) {
+const r = readHookInput();
+if (r.kind === "read-error") done({ block: true, reason: readFailureReason(HOOK_NAME, r.error) });
+if (r.kind === "json-invalid") {
+  try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
   done(); // fail-open on malformed stdin
 }
+const input = r.input;
 
 if (!isAutoBranchOn()) done();
 

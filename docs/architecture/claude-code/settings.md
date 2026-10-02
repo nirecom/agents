@@ -113,7 +113,7 @@ allowed by a positive argv judge instead of a spelling.
 - VSCode's "Ask before edits" mode covers Edit/Write only — Bash commands do not trigger
   the ask dialog.
 - Hot-reloading of settings.json hook changes is unreliable. Restart Claude Code after changes.
-- `bash-guard.js`'s matcher is `Bash` only (see [settings/hooks.md](settings/hooks.md)) — a compound command issued through
+- `bash-guard.js`'s matcher is `Bash` only (see [settings/bash-guard.md](settings/bash-guard.md)) — a compound command issued through
   `runInTerminal` / `runCommands` (VS Code-integrated terminal tools) never reaches it and
   is not otherwise denied. Parsing pwsh with a bash-syntax parser is worse than not parsing
   it at all (backtick = continuation not command-substitution, `{ }` = script block not

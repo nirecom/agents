@@ -2,7 +2,7 @@
 // PreToolUse hook: block direct writes to the append-only document family
 // (see hooks/lib/history-path-check.js for the protected set) through the
 // tool-write path and the shell path. These files must be modified via the
-// `doc-append` CLI. Fail-open: any error path approves rather than blocking.
+// `doc-append` CLI. Unreadable stdin blocks; other error paths approve.
 // Registration contract: settings.json must register this hook in BOTH
 // "Edit|Write|MultiEdit|editFiles" and "Bash|runInTerminal|runCommands"
 // PreToolUse matcher groups (pinned by
@@ -11,19 +11,11 @@
 const fs = require("fs");
 // Detection lives in hooks/lib/history-path-check.js.
 const { isProtectedPath, bashHitsProtected } = require("./lib/history-path-check");
+const { isCommandTool } = require("./lib/tool-command-text");
+const { scannableCommandListOf } = require("./lib/scannable-command-list");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const HOOK_NAME = "block-history-direct";
 
 function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
@@ -55,17 +47,22 @@ const BLOCK_MSG =
   "docs/changelog/) are blocked. Use the `doc-append` CLI to add entries, or " +
   "`uv run bin/doc-rotate.py` to archive them. See rules/docs/history.md for usage.";
 
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (_e) {
+const r = readHookInput();
+if (r.kind === "read-error") block(readFailureReason(HOOK_NAME, r.error));
+if (r.kind === "json-invalid") {
+  try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
   approve();
 }
+const input = r.input;
 if (!input || typeof input !== "object") approve();
 
 const toolName = input.tool_name;
 const toolInput = input.tool_input || {};
 const sid = input.session_id;
+
+if (isCommandTool(toolName)) {
+  if (scannableCommandListOf(toolName, toolInput).some((cmd) => bashHitsProtected(cmd))) blockOrBypass(sid);
+}
 
 switch (toolName) {
   case "Edit":
@@ -73,11 +70,6 @@ switch (toolName) {
   case "MultiEdit":
   case "editFiles":
     if (isProtectedPath(toolInput.file_path)) blockOrBypass(sid);
-    break;
-  case "Bash":
-  case "runInTerminal":
-  case "runCommands":
-    if (bashHitsProtected(toolInput.command)) blockOrBypass(sid);
     break;
   default:
     break;

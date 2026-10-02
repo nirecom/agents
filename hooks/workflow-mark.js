@@ -36,18 +36,7 @@ const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const resetHandler = require("./workflow-mark/reset-handler");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 function done(additionalContext) {
   const out = additionalContext ? { additionalContext } : {};
@@ -57,12 +46,14 @@ function done(additionalContext) {
 
 if (require.main === module) {
 
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (e) {
-  done(); // fail-open on malformed stdin
+const hookInput = readHookInput();
+if (hookInput.kind !== "ok") {
+  try {
+    fs.writeSync(2, readFailOpenDiagnostic("workflow-mark", hookInput, "step mark not recorded") + "\n");
+  } catch (e) {}
+  done();
 }
+const input = hookInput.input;
 
 // Only handle command tools (Bash / runInTerminal / runCommands).
 if (!isCommandTool(input.tool_name)) done();

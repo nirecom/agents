@@ -6,23 +6,19 @@ const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
 const { hasCommandHead } = require("./lib/command-head");
 const { hasCJK } = require("./lib/detect-cjk");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
 
-const input = JSON.parse(readStdin());
+const hookInput = readHookInput();
+if (hookInput.kind !== "ok") {
+  try {
+    fs.writeSync(2, readFailOpenDiagnostic("check-japanese-in-docs", hookInput, "check skipped") + "\n");
+  } catch (e) {}
+  approve();
+}
+const input = hookInput.input;
 if (input.tool_name !== "Bash") approve();
 
 const command = input.tool_input?.command || "";

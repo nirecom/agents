@@ -12,18 +12,7 @@
 
 const fs = require("fs");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 function noopExit() {
   process.stdout.write("");
@@ -41,8 +30,15 @@ const WORKTREE_PATH_RE = /is already used by worktree at '([^']+)'/;
 const TERMINAL_TOOL_NAMES = new Set(["Bash", "runInTerminal", "runCommands"]);
 
 function main() {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try {
+      fs.writeSync(2, readFailOpenDiagnostic("detect-worktree-conflict", r, "conflict check skipped") + "\n");
+    } catch (_) {}
+    noopExit();
+  }
   try {
-    const input = JSON.parse(readStdin());
+    const input = r.input;
     if (!input || !TERMINAL_TOOL_NAMES.has(input.tool_name)) noopExit();
 
     const toolResponse = input.tool_response || {};

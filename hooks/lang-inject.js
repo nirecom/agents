@@ -7,25 +7,12 @@
 //
 // Fail-open: any error → emit {} and exit 0.
 
-const fs = require("fs");
 const { getConvLangInjection } = require("./lib/conv-lang");
 const { getPlanLangInjection } = require("./lib/lang-config");
 const { resolveSessionId, readState } = require("./workflow-state");
+const { readHookInput } = require("./lib/read-stdin");
 
 const PLAN_STEPS = ["clarify_intent", "outline", "detail"];
-
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
 
 // Planning context = any planning step still pending/in_progress (not
 // complete and not skipped). Fail-open to false on state-read failure.
@@ -46,7 +33,9 @@ function isPlanning(sessionId) {
 function main() {
   let sessionId;
   try {
-    const parsed = JSON.parse(readStdin());
+    const r = readHookInput();
+    if (r.kind !== "ok") throw r.error || new Error(r.kind);
+    const parsed = r.input;
     sessionId = (parsed && parsed.session_id) || resolveSessionId();
   } catch (e) {
     try { sessionId = resolveSessionId(); } catch (_e) { sessionId = undefined; }

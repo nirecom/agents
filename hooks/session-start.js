@@ -13,17 +13,13 @@ const { SESSION_ID_ANNOUNCE_PREFIX } = require("./lib/session-announce");
 const settingsDrift = require("./lib/settings-drift");
 const { getConvLangInjection } = require("./lib/conv-lang");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
+
+const hookInput = readHookInput();
+if (hookInput.kind !== "ok") {
   try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
+    fs.writeSync(2, readFailOpenDiagnostic("session-start", hookInput, "session id not recorded") + "\n");
   } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
 }
 
 let sessionId;
@@ -35,7 +31,7 @@ let sessionSource = null;
 let transcriptPath = null;
 let agentId = null;
 try {
-  const input = JSON.parse(readStdin());
+  const input = hookInput.input;
   sessionId = input.session_id;
   // Layer① of model identification — kept as a bare value, not the whole input,
   // so nothing else in this hook can start depending on the payload shape.

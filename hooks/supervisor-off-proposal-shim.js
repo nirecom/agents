@@ -19,7 +19,8 @@ process.stdin.on("end", () => {
     const toolName = parsed.tool_name || "";
     // runCommands carries an ARRAY under `commands`, not `.command` — normalization
     // shared with enforce-system-ops.js / block-clearance-token-write (CPR-SSOT).
-    const { isCommandTool, commandTextOf, commandListOf } = require(path.join(__dirname, "./lib/tool-command-text.js"));
+    const { isCommandTool, commandListOf } = require(path.join(__dirname, "./lib/tool-command-text.js"));
+    const { scannableCommandListOf } = require(path.join(__dirname, "./lib/scannable-command-list.js"));
     if (!isCommandTool(toolName)) process.exit(0);
 
     const patterns = require(path.join(__dirname, "./lib/sentinel-patterns.js"));
@@ -92,7 +93,7 @@ process.stdin.on("end", () => {
     const command =
       activatingUnits[0] ||
       units.find((u) => matchesAny(NORMAL_OFF_LOOKSLIKE_RES, u)) ||
-      commandTextOf(toolName, parsed.tool_input);
+      scannableCommandListOf(toolName, parsed.tool_input).join("\n");
 
     // Step 1a: exclude the EMERGENCY sentinels. Only the dedicated *_EMERGENCY_*
     // regexes match them — the normal OFF regexes below never do — so this branch

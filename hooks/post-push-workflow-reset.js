@@ -6,10 +6,8 @@
 // On the next user prompt, this hook checks whether HEAD still equals
 // last_pushed_sha. If so, the user is likely starting a new task — reset the
 // workflow to `branching_complete` (force fresh branch/worktree creation).
-//
-// This is the "push milestone" detector. It does NOT participate in
-// sibling-session detection (that responsibility was removed in favor of
-// AGENT_AUTO_BRANCH enforcement via auto-branch-guard.js).
+// This is the "push milestone" detector only; sibling-session detection belongs
+// to AGENT_AUTO_BRANCH enforcement via auto-branch-guard.js.
 
 const fs = require("fs");
 const { execSync } = require("child_process");
@@ -24,23 +22,18 @@ const { resolveRepoCwd } = require("./lib/path-normalize");
 // Load $AGENTS_CONFIG_DIR/.env into process.env (existing env wins)
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 let sessionId;
 let parsedInput = null;
+const hookInput = readHookInput();
+if (hookInput.kind !== "ok") {
+  try {
+    fs.writeSync(2, readFailOpenDiagnostic("post-push-workflow-reset", hookInput, "session id from env fallback") + "\n");
+  } catch (e) {}
+}
 try {
-  parsedInput = JSON.parse(readStdin());
+  if (hookInput.kind === "ok") parsedInput = hookInput.input;
   sessionId = parsedInput.session_id || resolveSessionId();
 } catch (e) {
   sessionId = resolveSessionId();

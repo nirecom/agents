@@ -11,24 +11,19 @@
 const fs = require("fs");
 const { openInBrowser } = require("./lib/open-external");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 function noopExit() { process.stdout.write(""); process.exit(0); }
 
 if (require.main === module) {
-  let input = {};
-  try { input = JSON.parse(readStdin()); } catch { noopExit(); }
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try {
+      fs.writeSync(2, readFailOpenDiagnostic("pr-created-open", r, "pr-created not recorded") + "\n");
+    } catch (_) {}
+    noopExit();
+  }
+  const input = r.input;
 
   if (input.tool_name !== "Bash") noopExit();
 

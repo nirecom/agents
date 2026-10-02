@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+// Fixture: an extensionless bin-style script with a private stdin reader.
+const fs = require("fs");
+const text = fs.readFileSync(0, "utf8");
+process.stdout.write(text);
