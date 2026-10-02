@@ -78,10 +78,15 @@ _is_root_like_token() {
 # TFM_HEADER_COUNT (`^# Tests:` line count) and TFM_HEADER_LINENO (first match,
 # 0 when absent). The last three are structural metadata read only by --dup-groups.
 tfm_parse_tests_line() {
-  local file="$1"
   local matches
-  matches="$(grep -n -E '^# Tests:' "$file" 2>/dev/null || true)"
+  matches="$(tfm_tests_line_matches "$1")"
   tfm_parse_tests_matches "$matches"
+}
+
+# tfm_tests_line_matches <file> — prints the `lineno:line` rows of every
+# `# Tests:` header line; the single owner of that match rule.
+tfm_tests_line_matches() {
+  grep -n -E '^# Tests:' "$1" 2>/dev/null || true
 }
 
 # _tfm_trim <string> — sets _TFM_TRIMMED; the fork-free twin of

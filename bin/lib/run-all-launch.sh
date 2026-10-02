@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # run_all_exec <script> <out> <err> — per-extension test dispatch for tests/run-all.sh
 # (*.Tests.ps1 → pwsh/Pester, test_*.py → uv/pytest, else bash); returns the child rc,
-# 77 (SKIP) when pwsh/uv is absent. Contract: docs/architecture/tests/run-all-parallelism.md.
+# 77 (SKIP) when pwsh/uv is absent. Contract: docs/architecture/claude-code/test-runner-parallelism.md.
 
 case "${BASH_SOURCE[0]}" in
   */*) RUN_ALL_LAUNCH_DIR="${BASH_SOURCE[0]%/*}" ;;

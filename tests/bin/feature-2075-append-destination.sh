@@ -53,6 +53,11 @@ export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+# #2455: an inherited lane marker or TEST_LANES=off would bypass the lease path, and
+# the corpus cache / slots must never land in the developer's ~/.claude/run-all.
+export RUN_ALL_CACHE_DIR="$TMPDIR_BASE/run-all-cache"
+unset TEST_LANES_HELD TEST_LANES FIND_TESTS_CORPUS_CACHE TEST_LANES_TTL TEST_LANES_HEARTBEAT \
+    TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP TEST_LANES_BUDGET RUN_ALL_LANES_LIB
 
 # Neutral CWD: every helper run happens here, so a forgotten --root can never
 # silently resolve the live agents repo and read the live tests/ corpus.
@@ -325,9 +330,9 @@ fi
 # CASE1 — the planned case ledger: every id in the plan's H/S/F tables must have
 # reported at least one assertion, so a deleted case block cannot pass silently.
 CASE_EXPECTED="H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H11b H11c H11d H11e H12 H13 H13b H13c H13d H13e H13f H13g \
-H14a H14b H14c H14d H15 H16 H17 H18a H18b H19 F1 F2 F3 F4 F5 F6 F7 F8 \
-K1 K2 K3 K4 K5 A1 A2 A3 A4 A5 A6 B1 B2 B3 B4 B5 B6 B7 G1 G2 V1 V2 E1 E2 E3 E4 E5 E6 I1 W1 W2 \
-S1 S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 S12 S13 S14 S15 S16 S17 S18 S19 S20"
+H14a H14b H14c H14d H15 H16 H17 H18a H18b H19 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 \
+K1 K2 K3 K4 K5 A1 A2 A3 A4 A5 A6 A7 A8 B1 B2 B3 B4 B5 B6 B7 G1 G2 V1 V2 E1 E2 E3 E4 E5 E6 E7 E8 I1 W1 W2 \
+S1 S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 S12 S13 S14 S15 S16 S17 S18 S19 S20 S21 S22 S23"
 CASE_MISSING=""
 for _c in $CASE_EXPECTED; do
     case " $CASE_RAN " in
