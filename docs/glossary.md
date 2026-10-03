@@ -249,6 +249,12 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Definition**: Third-party CLI that compresses Bash command output to reduce LLM input token usage.
 - **Related**: [docs/architecture/rtk.md](architecture/rtk.md), [bin/rtk-cmd](../bin/rtk-cmd) (opt-in wrapper: `exec rtk <cmd>` when RTK=on and the binary is available, else passthrough)
 
+### test lane
+
+- **Full name**: Host test lane
+- **Definition**: One unit of the host-wide load budget N shared by `bin/find-tests-for-source.sh` (1 lane) and `tests/run-all.sh` (1 to N−1 lanes); an atomic `mkdir` slot holding an owner record. A caller that finds every lane busy waits, then exits 4 at the cap.
+- **Related**: [architecture/claude-code/test-host-lanes.md](architecture/claude-code/test-host-lanes.md), [bin/test-lanes-status.sh](../bin/test-lanes-status.sh)
+
 ## Test retirement
 
 ### case marker

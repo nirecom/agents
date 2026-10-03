@@ -16,23 +16,7 @@ const { loadSessionGhEnv, saveSessionGhEnv, removeState } = require("./gh-env-st
 const { loadDirty, saveDirty } = require("./auth-context");
 const { evaluateLine, addCode, addTarget, GITHUB, ENV_BLOCKING_ASSIGN_RE } = require("./evaluate");
 const { DYNAMIC_TEXT_RE } = require("./segment-shape");
-
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    for (;;) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      // Buffer.from COPIES: buf is reused by the next read, and a view onto it
-      // would be overwritten, silently truncating any payload past 4096 bytes.
-      chunks.push(Buffer.from(buf.subarray(0, n)));
-    }
-  } catch (_e) {
-    // EOF or no stdin attached
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("../lib/read-stdin");
 
 // DECIDED unwinds to the single exit point instead of calling process.exit, so
 // the decision is written exactly once and the process still ends normally. An
@@ -112,10 +96,12 @@ function clearLoginProof(state, sid) {
 }
 
 function main() {
-  const raw = readStdin();
-  if (!raw || !raw.trim()) passThrough();
-  let input = null;
-  try { input = JSON.parse(raw); } catch (_e) { passThrough(); }
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try { fs.writeSync(2, readFailOpenDiagnostic("confirm-forge-target-ownership", r, "check skipped") + "\n"); } catch (_) {}
+    passThrough();
+  }
+  const input = r.input;
   if (!input || typeof input !== "object") passThrough();
   if (!isCommandTool(input.tool_name)) passThrough();
   const commands = commandListOf(input.tool_name, input.tool_input);

@@ -3,25 +3,17 @@
 // config files under $HOME, plus Bash write-redirect / tee / PowerShell-cmdlet /
 // cp / mv targets that resolve to those files. These are user-owned environment
 // settings and must not be modified by the agent without explicit approval.
-// Fail-open: any error path approves rather than blocking.
+// Unreadable stdin blocks; other error paths approve.
 "use strict";
 const fs = require("fs");
 const { isUnderAnyRoot } = require("./lib/path-match");
 const { parse } = require("./lib/command-ir");
 const { collectWriteTargetsFromSegments, SHELL_CONFIG_VERB_SET } = require("./lib/bash-write-targets");
+const { isCommandTool } = require("./lib/tool-command-text");
+const { scannableCommandListOf } = require("./lib/scannable-command-list");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const HOOK_NAME = "block-shell-config";
 
 function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
@@ -52,16 +44,21 @@ const BLOCK_MSG =
   "~/.bash_profile, ~/.profile_common) are blocked. These are user-owned " +
   "environment settings — request explicit approval before modifying.";
 
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (_e) {
+const r = readHookInput();
+if (r.kind === "read-error") block(readFailureReason(HOOK_NAME, r.error));
+if (r.kind === "json-invalid") {
+  try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
   approve();
 }
+const input = r.input;
 if (!input || typeof input !== "object") approve();
 
 const toolName = input.tool_name;
 const toolInput = input.tool_input || {};
+
+if (isCommandTool(toolName)) {
+  if (scannableCommandListOf(toolName, toolInput).some((cmd) => bashHitsProtected(cmd))) block(BLOCK_MSG);
+}
 
 switch (toolName) {
   case "Edit":
@@ -69,11 +66,6 @@ switch (toolName) {
   case "MultiEdit":
   case "editFiles":
     if (isProtectedPath(toolInput.file_path)) block(BLOCK_MSG);
-    break;
-  case "Bash":
-  case "runInTerminal":
-  case "runCommands":
-    if (bashHitsProtected(toolInput.command)) block(BLOCK_MSG);
     break;
   default:
     break;

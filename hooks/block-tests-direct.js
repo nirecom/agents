@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // PreToolUse hook: block direct writes to tests/ from the main conversation.
 // Subagents (agent_id present) and settled write_tests states pass through.
-// Fail-open: any error path approves rather than blocking.
+// Unreadable stdin blocks; other error paths approve.
 
 const fs = require("fs");
 const { resolveSessionId, readState } = require("./workflow-state");
 const { getPathSegments } = require("./lib/path-match");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
+
+const HOOK_NAME = "block-tests-direct";
 
 const DENY_MESSAGE =
   "write_tests step is still pending. Run /write-tests first — it spawns a subagent that writes tests/ autonomously. " +
@@ -14,26 +17,13 @@ const DENY_MESSAGE =
 
 module.exports = { DENY_MESSAGE };
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
-
 function approve() {
   console.log(JSON.stringify({ decision: "approve" }));
   process.exit(0);
 }
 
-function block() {
-  console.log(JSON.stringify({ decision: "block", reason: DENY_MESSAGE }));
+function block(reason = DENY_MESSAGE) {
+  console.log(JSON.stringify({ decision: "block", reason }));
   process.exit(0);
 }
 
@@ -57,12 +47,13 @@ function isUnderTestsDir(filePath) {
 // --- Main logic ---
 
 if (require.main === module) {
-  let input = {};
-  try {
-    input = JSON.parse(readStdin());
-  } catch (e) {
+  const r = readHookInput();
+  if (r.kind === "read-error") block(readFailureReason(HOOK_NAME, r.error));
+  if (r.kind === "json-invalid") {
+    try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
     approve(); // B14: malformed stdin
   }
+  const input = r.input;
 
   // Step 1: only intercept Write / Edit / MultiEdit
   const WATCHED = new Set(["Write", "Edit", "MultiEdit"]);

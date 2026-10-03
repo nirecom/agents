@@ -2,23 +2,11 @@
 # tests/hooks/feature-1733-state-event-stream/worktree-event.sh
 # Tests: hooks/postuse-native-worktree-record.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/events.js
 # Tags: workflow-state, event-stream, worktree, path-source, provenance, fail-open, scope:issue-specific, pwsh-not-required, TL2
-#
-# The worktree recorder used to stamp two top-level timestamps, so entering the same
-# worktree twice was indistinguishable from entering two different ones, and the path
-# was never recorded at all. Under #1733 each transition is its own event carrying
-# worktree_path plus `path_source` — the field that says HOW the path was determined.
-# path_source is the part most likely to be silently wrong (a fallback that looks like a
-# real reading), so every one of its four values is asserted, not just the happy one.
-#
-# FIXTURE REQUIREMENT: the happy path is resolved by `git -C <path> rev-parse`, so the
-# fixtures are REAL git repositories on known branches (mk_git_repo), and the hook
-# process runs in a DIFFERENT repo on a different branch. A mkdir'd directory would make
-# every case take the fallback branch while still "passing" the assertions that matter.
-#
+# Each worktree transition is its own event with worktree_path and path_source (#1733);
+# all four path_source values are asserted, since a fallback can look like a real reading.
+# Fixtures are REAL git repos (mk_git_repo) so `git rev-parse` resolves, not the fallback.
 # TL3 gap (what this test does NOT catch):
 # - the real PostToolUse registration for EnterWorktree / ExitWorktree in settings.json.
-#   The hook is fed JSON on stdin here, which proves the hook body but not that Claude
-#   Code ever calls it.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
@@ -177,17 +165,9 @@ echo "== W-c5: a POSIX drive-form path (/c/...) is normalized, not rejected =="
 if run_case "W-c5/posix-drive-form-normalized"; then
     next_sid
     nodejs "$SID" "$INIT_JS"
-    # Platform-specific INPUT, identical EXPECTATION (CPR-UNV): on win32 the MSYS/Git-Bash
-    # form `/c/...` must be normalized by normalizeCwd before the isAbsolute/stat checks;
-    # on POSIX the same string IS the native form. Either way the entered repo resolves.
-    # This is the shape a Git-Bash-launched session actually hands the hook.
-    #
-    # `pwd` inside WT_REPO is NOT used to derive this: `mktemp -d` (common.sh TMPROOT)
-    # does not reliably land under a drive-letter-rooted path on every host — on MSYS it
-    # can resolve under MSYS's own internal /tmp mount instead, where `pwd` never
-    # produces the /c/... form at all. Converting the native (drive-letter) path
-    # deterministically exercises the POSIX-drive-form branch regardless of where the
-    # host happens to have mounted /tmp.
+    # Platform-specific INPUT, identical EXPECTATION (CPR-UNV): on win32 the Git-Bash form
+    # `/c/...` must be normalized before the isAbsolute/stat checks; on POSIX it IS native.
+    # Derived from the native path, not `pwd`: MSYS may mount mktemp's /tmp off any drive.
     case "$(uname -s)" in
         MINGW*|MSYS*|CYGWIN*)
             WIN_PATH="$(native_path "$WT_REPO")"                          # C:/Users/.../repo-wt
@@ -338,7 +318,9 @@ BAD_OUT="$(cd "$AGENTS_DIR" && printf 'not-json' | env \
     HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
     "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node hooks/postuse-native-worktree-record.js 2>&1)" || RC_BADJSON=$?
 FILE_CREATED="no"; [ -f "$WF/$NOSTATE_SID.json" ] && FILE_CREATED="yes"
-assert_eq "W-g/fail-open" "0 0 0 no " \
+# Bad stdin yields exactly one stderr diagnostic line (#1810 S2a) and nothing else.
+BAD_DIAG="[postuse-native-worktree-record] stdin json-invalid (8 bytes, SyntaxError): worktree event not recorded (fail-open)"
+assert_eq "W-g/fail-open" "0 0 0 no $BAD_DIAG" \
     "$RC_NOSTATE $RC_OTHERTOOL $RC_BADJSON $FILE_CREATED $BAD_OUT"
 
 finish "worktree-event"

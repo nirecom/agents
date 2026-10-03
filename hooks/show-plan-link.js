@@ -5,34 +5,18 @@
 // path surface for orchestrators. When CONFIRM_<STEP>=on AND VS Code is detected,
 // additionally spawns a single `code --folder-uri <uri> <filePath>` invocation (raises
 // window and opens file atomically; avoids two-spawn timing race #546 Gap 3).
-//
-// Triggers on Write (direct file write) and on Bash invocations of
-// skills/_shared/assemble-mandatory.sh — the latter is how SKILL.md authors
-// assemble the final plan artifact from a draft + planner output.
-//
-// Output protocol: emits { "systemMessage": "..." } only.
-// Sibling PostToolUse hooks emit `additionalContext` — different field, no collision.
+// Triggers on Write and on Bash invocations of skills/_shared/assemble-mandatory.sh
+// (how SKILL.md authors assemble the final plan artifact from a draft + planner output).
+// Emits { "systemMessage": "..." } only; sibling hooks use `additionalContext`.
 "use strict";
 
-const fs = require("fs");
 const path = require("path");
 const { normalizeSlashes } = require("./lib/path-match");
 const { getSuffix, isConfirmOff } = require("./lib/plan-confirm-flag");
 const { extractAssembleDest } = require("./lib/assemble-cmd-parse");
 const { isVsCode, shouldOpenInVsCode, toVsCodeFileUri, workspaceFolderUriFrom, resolveWorkspaceFolderUri, openInVsCode } = require("./lib/vscode-open");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput } = require("./lib/read-stdin");
 
 function noopExit() {
   process.stdout.write("");
@@ -83,8 +67,9 @@ function emitForArtifact(filePath, input) {
 }
 
 if (require.main === module) {
-  let input = {};
-  try { input = JSON.parse(readStdin()); } catch { noopExit(); }
+  const hookInput = readHookInput();
+  if (hookInput.kind !== "ok") noopExit();
+  const input = hookInput.input;
 
   const resp = input.tool_response || {};
   const exitCode = resp.exit_code ?? resp.exitCode ?? (resp.success === false ? 1 : 0);

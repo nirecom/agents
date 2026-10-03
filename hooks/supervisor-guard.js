@@ -14,28 +14,17 @@ const path = require("path");
 const { detectSentinelHang, detectAskUserQuestionTurn } = require('./supervisor-guard/detect');
 const { TERMINAL_ALERT_PHASES } = require('./lib/supervisor-state-schema');
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 if (require.main === module) {
-  let input = {};
-  try {
-    const raw = readStdin();
-    if (!raw) process.exit(0);
-    input = JSON.parse(raw);
-  } catch (_) {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try {
+      fs.writeSync(2, readFailOpenDiagnostic("supervisor-guard", r, "supervisor guard skipped") + "\n");
+    } catch (_) {}
     process.exit(0);
   }
+  const input = r.input;
 
   // (1)
   if (input.stop_hook_active === true) process.exit(0);

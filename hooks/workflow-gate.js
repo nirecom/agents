@@ -2,8 +2,8 @@
 // Claude Code PreToolUse hook: enforce workflow step completion before git commit
 // Replaces check-tests-updated.js and check-docs-updated.js
 
-const fs = require("fs");
 const path = require("path");
+const { readHookInput, readFailureReason } = require("./lib/read-stdin");
 const {
   VALID_STEPS,
   SKIPPABLE_STEPS,
@@ -17,7 +17,8 @@ const { isCommitCommand, extractCommitSegmentText } = require("./lib/commit-dete
 const { parse } = require("./lib/command-ir");
 // #2256 S5-a1: command-tool normalization + sentinel decomposition shared with
 // workflow-mark.js (SSOT: hooks/lib/tool-command-text.js, sentinel-command.js).
-const { isCommandTool, commandTextOf, commandListOf } = require("./lib/tool-command-text");
+const { isCommandTool, commandListOf } = require("./lib/tool-command-text");
+const { scannableCommandListOf } = require("./lib/scannable-command-list");
 const { analyzeSentinelCommand } = require("./lib/sentinel-command");
 const { isBaselineEvidenceRecordCommand } = require("./lib/workflow-driver-commands");
 
@@ -49,14 +50,6 @@ const {
   resolveRepoDir,
   isAgentsSessionRepo,
 } = require("./workflow-gate/repo-resolution");
-
-function readStdin() {
-  try {
-    return fs.readFileSync(0, "utf8");
-  } catch (e) {
-    return "";
-  }
-}
 
 function approve() {
   console.log(JSON.stringify({ decision: "approve" }));
@@ -119,10 +112,10 @@ const { checkUserVerifiedAudit } = require("./workflow-gate/user-verified-audit"
 const { runEarlyGate } = require("./workflow-gate/early-gate");
 
 if (require.main === module) {
-  let input;
-  try {
-    input = JSON.parse(readStdin());
-  } catch (e) {
+  const r = readHookInput();
+  if (r.kind === "read-error") block(readFailureReason("workflow-gate", r.error));
+  const input = r.input;
+  if (r.kind === "json-invalid" || !input || typeof input !== "object") {
     block("workflow-gate: failed to parse hook input — commit blocked (fail-safe).");
   }
 
@@ -150,7 +143,7 @@ if (require.main === module) {
 
   // Joined blob for merge/commit detection and repoDir resolution; per-element
   // sentinel decomposition uses analyzeSentinelCommand (SSOT: sentinel-command.js).
-  const command = commandTextOf(toolName, toolInput);
+  const command = scannableCommandListOf(toolName, toolInput).join("\n");
   if (!command) approve();
 
   // Internal-only door (#2431): owner and rationale in lib/workflow-driver-commands.js.

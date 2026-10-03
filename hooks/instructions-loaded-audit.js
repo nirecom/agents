@@ -20,9 +20,11 @@ const path = require("path");
 // acquired defensively and main() fails open when either is missing.
 let receipt = null;
 let policyReader = null;
+let stdinReader = null;
 try {
   receipt = require("./lib/instructions-loaded-receipt");
   policyReader = require("./lib/rules-policy-reader");
+  stdinReader = require("./lib/read-stdin");
 } catch (_) {
   // fail-open: main() returns early while the bindings are unavailable
 }
@@ -43,14 +45,6 @@ function loadPolicy() {
     ? path.resolve(override)
     : path.join(__dirname, "lib", "rules-injection-policy.js");
   return policyReader.loadPolicyAsData(policyPath);
-}
-
-function readStdin() {
-  try {
-    return fs.readFileSync(0, "utf8");
-  } catch (_) {
-    return "";
-  }
 }
 
 function stripBom(text) {
@@ -164,13 +158,15 @@ function emitSupervisor(verdict, filePath, prior) {
 }
 
 function main() {
-  if (!receipt || !policyReader) return;
-  let payload;
-  try {
-    payload = JSON.parse(readStdin());
-  } catch (_) {
+  if (!receipt || !policyReader || !stdinReader) return;
+  const r = stdinReader.readHookInput();
+  if (r.kind !== "ok") {
+    try {
+      fs.writeSync(2, stdinReader.readFailOpenDiagnostic("instructions-loaded-audit", r, "load receipt not recorded") + "\n");
+    } catch (_) { /* diagnostic is best-effort */ }
     return;
   }
+  const payload = r.input;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
 
   const rawPath = typeof payload.file_path === "string" ? payload.file_path : "";

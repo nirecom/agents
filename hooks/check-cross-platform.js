@@ -13,20 +13,7 @@ const fs = require("fs");
 const path = require("path");
 const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {
-    // EOF or error
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 function approve() {
   console.log(JSON.stringify({ decision: "approve" }));
@@ -102,13 +89,14 @@ function hasValidMarker(repoDir) {
   }
 }
 
-// Parse stdin
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (e) {
+const hookInput = readHookInput();
+if (hookInput.kind !== "ok") {
+  try {
+    fs.writeSync(2, readFailOpenDiagnostic("check-cross-platform", hookInput, "check skipped") + "\n");
+  } catch (e) {}
   approve();
 }
+const input = hookInput.input;
 
 const toolName = input.tool_name;
 const toolInput = input.tool_input || {};

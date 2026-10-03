@@ -100,15 +100,13 @@ foreign-wrapper-tag|<command-message>/enforce-workflow-off</command-message>
 doubled-wrapper-tag|<command-name><command-name>/enforce-workflow-off</command-name>
 P1_NEAR_MISSES
 
-# The recorder reads stdin into ONE reused 4096-byte buffer, so a prompt longer
-# than a single read is reassembled - or silently truncated. The command is placed
-# to STRADDLE the first boundary: its head lands in chunk 1 and its tail in chunk
-# 2, which is what a lost slice or a reused-buffer aliasing bug mangles.
-# KNOWN-RED (#2157): readStdin() collects `buf.slice(0, n)`, a VIEW over the same
-# memory, so read 2 overwrites read 1's bytes. Every payload over 4096 bytes then
-# fails JSON.parse and the hook does NOTHING - no marker, and no CLEARING of a
-# stale one - while still exiting 0 with `{}`. These cases assert the CORRECT
-# behaviour instead of freezing the defect; they go green once readStdin() copies.
+# A prompt longer than one 4096-byte read must be reassembled intact. The command
+# is placed to STRADDLE that boundary: its head lands in chunk 1 and its tail in
+# chunk 2, which is what a lost slice or a reused-buffer aliasing bug mangles.
+# Fixed (#2157, #1810): the recorder reads stdin via hooks/lib/read-stdin, which
+# copies every chunk out of the reused buffer, so a payload over 4096 bytes still
+# parses and the marker is written (or a stale one cleared). These cases guard
+# against a regression to an aliasing reader.
 BUF_BYTES=4096
 sid=pv1buf
 _pfx=$(printf '{"session_id":"%s","prompt":"' "$sid")

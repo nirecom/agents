@@ -5,7 +5,7 @@
 # 77 (SKIP) when pwsh/uv is absent.
 # run_all_pin_state_dirs <root> — exports CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR as fresh
 # subdirectories of <root>; non-zero when they cannot be created.
-# Contract: docs/architecture/tests/run-all-parallelism.md.
+# Contract: docs/architecture/claude-code/test-runner-parallelism.md.
 
 case "${BASH_SOURCE[0]}" in
   */*) RUN_ALL_LAUNCH_DIR="${BASH_SOURCE[0]%/*}" ;;

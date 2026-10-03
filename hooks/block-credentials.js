@@ -11,19 +11,11 @@ const {
   checkExploreQuery,
   commandTouchesCredentials,
 } = require("./lib/credential-check");
+const { isCommandTool } = require("./lib/tool-command-text");
+const { scannableCommandListOf } = require("./lib/scannable-command-list");
+const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const HOOK_NAME = "block-credentials";
 
 function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
@@ -37,18 +29,21 @@ const BLOCK_MSG =
   "WORKFLOW_OFF does not bypass this hook. If this is a false-positive (e.g. the path " +
   "appears only inside a text-flag value or a quoted message), file an issue.";
 
-const raw = readStdin();
-let input;
-try { input = JSON.parse(raw); } catch { approve(); }
+const r = readHookInput();
+if (r.kind === "read-error") block(readFailureReason(HOOK_NAME, r.error));
+if (r.kind === "json-invalid") {
+  try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
+  approve();
+}
+const input = r.input;
 const toolName = input.tool_name;
 const toolInput = input.tool_input || {};
 
+if (isCommandTool(toolName)) {
+  if (scannableCommandListOf(toolName, toolInput).some((cmd) => commandTouchesCredentials(cmd))) block(BLOCK_MSG);
+}
+
 switch (toolName) {
-  case "Bash":
-  case "runInTerminal":
-  case "runCommands":
-    if (commandTouchesCredentials(toolInput.command || "")) block(BLOCK_MSG);
-    break;
   case "Read":
     if (isCredentialPath(toolInput.file_path)) block(BLOCK_MSG);
     break;

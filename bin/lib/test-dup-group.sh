@@ -61,6 +61,7 @@ tdg_unescape_field() {
     fi
     i=$((i + 2))
   done
+  # shellcheck disable=SC2034  # result global read by sourcing callers
   TDG_UNESCAPED="$out"
   printf '%s' "$out"
 }
@@ -141,49 +142,50 @@ tdg_classify_parsed() {
 # tests/{hooks,bin,skills,agents,install,tests}/*.sh. Non-canonical directories
 # (split-test fragments, _archive, lib, fixtures) are excluded by allowlist.
 # That range is a contract, not an accident.
-# Every file's `^# Tests:` matches are collected by ONE awk process (#2455):
-# per-file grep/sed forks made a ~2400-file scan take minutes on MSYS. A path
-# holding a LF cannot travel through awk's line-oriented list, so any such
-# corpus falls back to the per-file tfm_parse_tests_line path for every file.
 _TDG_CANONICAL_CATEGORIES=(hooks bin skills agents install tests)
 tdg_scan_corpus() {
   local root="${1:?tdg_scan_corpus: repo root required}"
-  local f cat line matches="" cur=-1 batch=1
+  local f cat i
   local -a files=()
   for cat in "${_TDG_CANONICAL_CATEGORIES[@]}"; do
     for f in "$root"/tests/"$cat"/*.sh; do
-      [[ -f "$f" ]] || continue
-      [[ "$f" == *$'\n'* ]] && batch=0
-      files+=("$f")
+      [[ -f "$f" ]] && files+=("$f")
     done
   done
   [[ "${#files[@]}" -gt 0 ]] || return 0
-  if [[ "$batch" -eq 0 ]]; then
-    for f in "${files[@]}"; do
-      tfm_parse_tests_line "$f"
-      _tdg_scan_emit "$root" "$f"
+  _tdg_batch_matches "${files[@]}"
+  for ((i = 0; i < ${#files[@]}; i++)); do
+    tfm_parse_tests_matches "${TDG_MATCHES[i]-}"
+    _tdg_scan_emit "$root" "${files[i]}"
+  done
+}
+
+# _tdg_batch_matches <file>... — fills TDG_MATCHES[i] with the `lineno:line`
+# `^# Tests:` rows of the i-th file. ONE awk process serves every file (#2455):
+# per-file grep forks made a ~2400-file scan take minutes on MSYS. A path
+# holding a LF cannot travel through awk's line-oriented list, so any such
+# batch falls back to tfm_tests_line_matches per file.
+_tdg_batch_matches() {
+  local f g line cur=-1
+  TDG_MATCHES=()
+  for f in "$@"; do
+    [[ "$f" == *$'\n'* ]] || continue
+    for g in "$@"; do
+      TDG_MATCHES+=("$(tfm_tests_line_matches "$g")")
     done
     return 0
-  fi
+  done
   while IFS= read -r line; do
     if [[ "$line" == "F" ]]; then
-      if [[ "$cur" -ge 0 ]]; then
-        tfm_parse_tests_matches "$matches"
-        _tdg_scan_emit "$root" "${files[cur]}"
-      fi
       cur=$((cur + 1))
-      matches=""
+      TDG_MATCHES[cur]=""
     else
-      matches="${matches:+$matches$'\n'}$line"
+      TDG_MATCHES[cur]="${TDG_MATCHES[cur]:+${TDG_MATCHES[cur]}$'\n'}$line"
     fi
-  done < <(printf '%s\n' "${files[@]}" | LC_ALL=C awk '
+  done < <(printf '%s\n' "$@" | LC_ALL=C awk '
     { f = $0; print "F"; n = 0
       while ((getline l < f) > 0) { n++; if (l ~ /^# Tests:/) print n ":" l }
       close(f) }')
-  if [[ "$cur" -ge 0 ]]; then
-    tfm_parse_tests_matches "$matches"
-    _tdg_scan_emit "$root" "${files[cur]}"
-  fi
 }
 
 # _tdg_scan_emit <repo-root> <file> — the rows for one file whose TFM_* globals

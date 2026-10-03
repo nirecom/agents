@@ -11,6 +11,7 @@
 7. [Rules Injection Scope](claude-code/rules-injection.md) — unconditional / conditional / on-demand injection scopes, the reserved never-match notation, the tree-wide invariant checker, and the `InstructionsLoaded` audit hook
 8. [Test Runner Parallelism](claude-code/test-runner-parallelism.md) — `tests/run-all.sh` slot scheduler, the `# Serial:` lane, `-j` / `--deadline` / `RUN_ALL_*` surfaces, calibration cache, contract-line neutralization
 9. [Project-Local Env Overrides](claude-code/local-env-overrides.md) — the global `.env` / project `.env.local` two-layer resolver, its trust model, why the local layer is gated by a blocklist alone, and `bin/show-local-env-overrides`
+10. [Test Host Lanes and the Corpus Cache](claude-code/test-host-lanes.md) — host-wide lane budget shared by find-tests and run-all, exit 4 on the wait cap, `bin/test-lanes-status.sh`, the git-keyed corpus parse cache
 
 ## 5. EM Supervisor (alert/audit two-mode design)
 

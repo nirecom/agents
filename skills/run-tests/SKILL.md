@@ -78,7 +78,7 @@ RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tai
 - Do not reimplement the merge-base resolution chain inside this skill (SSOT: bin/resolve-merge-base.sh).
 - Recover a pre-existing failure only through `bin/run-tests-baseline`, which alone may complete run_tests for it. Never substitute a session-wide OFF sentinel.
 - Fall back to sequential execution with `"jobs": 1` in the payload; `test_args` cannot carry `-j 1` (its `rel-path-arg[]` type rejects a leading `-`).
-- The worker derives `--deadline max(30, timeout_seconds − 5)`, so the suite folds itself up before the dispatcher's budget expires; a deadline abort prints no `RUN_CONTRACT:` line and surfaces as `status: fail`.
+- The worker derives `--deadline max(30, timeout_seconds − 5)`, so the suite folds itself up before the dispatcher's budget expires; a deadline abort, like a lane wait-cap abort (exit 4), prints no `RUN_CONTRACT:` line and surfaces as `status: fail`.
 - Never modify source code or test files.
 - Never retry on failure (Phase 1 only).
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

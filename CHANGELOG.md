@@ -627,3 +627,19 @@ Changes: Fixed: the run_tests hook no longer silently skips recording the test o
 ### FEATURE: PR #2477 (2026-10-01)
 Background: feat(#2476): wait for Claude Code once per install, skip Claude Deskt...
 Changes: Installer: no longer waits on the Claude Desktop app, waits for Claude Code at most once per install and shows the PID and path of each process it waits on; on timeout only the settings.json write and the claude/codex updates are skipped.;Installer: the GitLab auth step is skipped within 3 s when GITLAB_HOSTNAME:443 cannot be reached (previously a DNS-only check let `glab auth login` hang), and the GitLab token is no longer passed on the command line.
+
+### FEATURE: PR #2493 (2026-10-02)
+Background: feat(#2455): host-wide test load control for find-tests and run-all
+Changes: Parallel sessions no longer saturate the host when running tests: find-tests-for-source.sh and tests/run-all.sh share a host-wide lane budget, find-tests caches the parsed test corpus, and bin/test-lanes-status.sh shows who holds the lanes
+
+### FEATURE: PR #2492 (2026-10-02)
+Background: fix(#2491): allow WARNINGS_ACCEPTED to recover in_progress review_tests after terminal exit
+Changes: fix: allow WARNINGS_ACCEPTED to recover review_tests that ended in_progress after a terminal exit (rc 2/6) (#2491)
+
+### FEATURE: PR #2496 (2026-10-02)
+Background: feat(#1810): share an EOF-safe hook stdin reader; fold in #2206 runCommands array and #1861 interpreter inline-body scanning
+Changes: Fixed: hooks no longer misread chunked or oversized stdin payloads, security guards block when stdin cannot be read, every runCommands entry is scanned by the guards, and commands hidden inside interpreter inline bodies (bash -c, eval and similar) are now checked.
+
+### FEATURE: PR #2504 (2026-10-02)
+Background: fix(#2495): clear stale review_tests warnings on a clean COMPLETE
+Changes: Fixed: the commit gate no longer blocks with `warnings-pending` after a later review_tests round finishes clean; stale warnings and their accepted reason are cleared on completion.

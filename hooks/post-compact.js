@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // Claude Code PostCompact hook: re-inject session ID into conversation context
 
-const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { getConvLangInjection } = require("./lib/conv-lang");
@@ -22,24 +21,15 @@ const WORKFLOW_STEPS = [
   "cleanup",
 ];
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
+const { readHookInput } = require("./lib/read-stdin");
 
 let sessionId = null;
-try {
-  const input = JSON.parse(readStdin());
-  sessionId = input.session_id || null;
-} catch (e) {}
+const hookInput = readHookInput();
+if (hookInput.kind === "ok") {
+  try {
+    sessionId = hookInput.input.session_id || null;
+  } catch (e) {}
+}
 
 if (!sessionId) {
   console.log("{}");

@@ -4,12 +4,14 @@
 //   on the latest assistant entry holding `## Final Report — <sid>` (post-#830 contract).
 // Lane B: env file absent and next-step reports REASON='pre_final_report_gate' → the close
 //   procedure never ran; block without scanning the transcript.
-// Fail-open on uncertainty (missing/malformed env-file, no transcript, no FR).
+// Fail-open on uncertainty. Full contract: docs/architecture/claude-code/settings/hooks.md.
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
 const schema = require("./lib/final-report-schema");
+
+const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 function controlFile(sid, name) {
   return require("./workflow-state/state-io/control-dir").controlPath(sid, name);
@@ -19,19 +21,6 @@ function diagnoseControlFile(e) {
   try {
     require("./workflow-state/state-io/control-dir").diagnoseControlMigration(e, "stop-final-report-guard");
   } catch (_) { /* fail-open */ }
-}
-
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(65536);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch (_) {}
-  return Buffer.concat(chunks).toString("utf8");
 }
 
 // Lane B (#1611): the env file is absent, so /session-close never reached
@@ -109,14 +98,14 @@ function runCloseProcedureLane(sid) {
 }
 
 if (require.main === module) {
-  let input = {};
-  try {
-    const raw = readStdin();
-    if (!raw) process.exit(0);
-    input = JSON.parse(raw);
-  } catch (_) {
+  const r = readHookInput();
+  if (r.kind !== "ok") {
+    try {
+      fs.writeSync(2, readFailOpenDiagnostic("stop-final-report-guard", r, "final-report check skipped") + "\n");
+    } catch (_) {}
     process.exit(0);
   }
+  const input = r.input;
 
   if (input.stop_hook_active === true) process.exit(0);
 

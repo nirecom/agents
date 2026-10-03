@@ -51,6 +51,8 @@ again") saves individual rules for a given pattern.
 - Hook allow does not override `permissions.deny` or `permissions.ask` rules. Claude Code evaluates those rules regardless of what a PreToolUse hook returns.
 - `install/settings-allow-commands.txt` entries must be plain repo-relative paths — no `..`, leading slash, drive letter, backslash, glob, or shell metacharacter.
 - Prompt assets that invoke an SSOT-listed command keep `bash` or `node` in execution position with the entry path in argument position (`bash "$AGENTS_CONFIG_DIR/bin/foo"`); a citation that only names where the file lives uses the bare repo-relative form (`bin/foo`). The prefix distinguishes invocation from citation without requiring a vocabulary of surrounding prose labels.
+- `bin/test-lanes-status.sh` is admitted because it is read-only: it lists lane holders and never reclaims a lane or creates `slots/` ([test-host-lanes.md](test-host-lanes.md)).
+- `bin/find-tests-for-source.sh` stays admitted although it now writes state: its writes are confined to the run-all cache directory (corpus cache entries and lane leases), never the repository, and no argument widens that scope ([test-host-lanes.md](test-host-lanes.md) §3 "Write scope").
 - Not admitted to `install/settings-allow-commands.txt` (deliberate exclusions): `run-with-timeout` wrappers are not repo scripts and are excluded; gh writes are excluded; git state-changing commands are excluded; hook bodies are excluded (not issued through the permission engine); worker dispatchers are excluded (state-changing work hides behind arguments).
 - `install/assemble-settings.js` is the only writer of the deployed `settings.json`; treat a second writer as a bug.
 
@@ -111,7 +113,7 @@ allowed by a positive argv judge instead of a spelling.
 - VSCode's "Ask before edits" mode covers Edit/Write only — Bash commands do not trigger
   the ask dialog.
 - Hot-reloading of settings.json hook changes is unreliable. Restart Claude Code after changes.
-- `bash-guard.js`'s matcher is `Bash` only (see [settings/hooks.md](settings/hooks.md)) — a compound command issued through
+- `bash-guard.js`'s matcher is `Bash` only (see [settings/bash-guard.md](settings/bash-guard.md)) — a compound command issued through
   `runInTerminal` / `runCommands` (VS Code-integrated terminal tools) never reaches it and
   is not otherwise denied. Parsing pwsh with a bash-syntax parser is worse than not parsing
   it at all (backtick = continuation not command-substitution, `{ }` = script block not

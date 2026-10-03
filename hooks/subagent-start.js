@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Claude Code SubagentStart hook: inject conversation language directive into subagent context
 
-const fs = require("fs");
+const { readStdinText } = require("./lib/read-stdin");
 const { getConvLangInjection } = require("./lib/conv-lang");
 const { getPlanLangInjection } = require("./lib/lang-config");
 const { codegraphEnabled } = require("./lib/codegraph-boundary");
@@ -11,22 +11,9 @@ const { codegraphEnabled } = require("./lib/codegraph-boundary");
 const CODEGRAPH_NUDGE =
   "Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md";
 
-function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
-}
-
 // Drain stdin so the parent never sees a closed pipe; the payload itself is
 // not consulted — every injection below is payload-independent.
-try { readStdin(); } catch (e) { /* fail-open */ }
+readStdinText();
 
 const lines = [];
 try {

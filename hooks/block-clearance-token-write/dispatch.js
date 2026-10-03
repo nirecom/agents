@@ -4,8 +4,9 @@
 "use strict";
 
 const { classifyProtectedPath } = require("../lib/protected-basenames");
-const { isEditWriteTool, isCommandTool, collectEditWritePaths, commandTextOf } = require("../lib/write-tools");
+const { isEditWriteTool, isCommandTool, collectEditWritePaths } = require("../lib/write-tools");
 const { isPowerShellTool } = require("../lib/tool-command-text");
+const { scannableCommandListOf } = require("../lib/scannable-command-list");
 const { bashHitsProtected } = require("./bash-scan");
 const { OFF_CLEARANCE_INVOCATION } = require("../lib/off-clearance-invocation");
 const { PLACEMENT_MESSAGES, classifyPlacement, classifyBashPlacement } = require("./placement-guard");
@@ -113,11 +114,10 @@ function evaluateProtectedWrite(toolName, toolInput, sessionCtx) {
     return null;
   }
   // runCommands delivers an ARRAY under `commands`, not a string under
-  // `command` — reading `.command` here would silently bypass this hook.
-  // commandTextOf joins with "\n" so a write in commands[1] is scanned as
-  // its own statement rather than glued onto the tail of commands[0].
+  // `command` (a scalar `.command` is still scanned). Joining with "\n" scans a
+  // write in commands[1] as its own statement, not glued onto commands[0].
   if (isCommandTool(toolName) || isPowerShellTool(toolName)) {
-    const text = commandTextOf(toolName, toolInput);
+    const text = scannableCommandListOf(toolName, toolInput).join("\n");
     const kind = bashHitsProtected(text, { cwd: toolInput.cwd, sessionCtx })
       || classifyBashPlacement(text, { cwd: toolInput.cwd, sessionCtx, ...placementCtx(sessionCtx) });
     return kind ? { kind, reason: blockMessageFor(kind) } : null;
