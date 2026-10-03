@@ -148,8 +148,8 @@ sentinel is allowed.
 |---|---|---|
 | BLOCK | match | **hold** (deny). Resolve only by (1) moving the input to get a non-BLOCK run on the new key, or (2) recording a rejection via `bin/supervisor-record-block-override`. |
 | BLOCK | mismatch | arm a run against the new key (deny + dispatch). Non-BLOCK → stage 2; BLOCK again → hold again. |
-| key uncomputable — code-side null (`input_version` null, e.g. no merge base / shallow clone) | — | **approve** when the last terminal run is non-BLOCK and no later BLOCK exists (`selfRecovering`); arm a full re-audit otherwise. `recurrence-patterns` is excluded from the arm set because its `input_key` is always null here (infinite-arm guard, #2323). |
-| key uncomputable — artifact-side null (`input_version` non-null, plan artifact missing) | — | **approve** when `selfRecovering` AND `trigger_input_keys.TR5` of the last terminal run matches the current `input_version`; arm a full re-audit (excluding `recurrence-patterns`) otherwise. Fail-closed: absent, null, or non-string stored key arms a re-audit (#2360). |
+| key uncomputable — code-side null (`input_version` null, e.g. no merge base / shallow clone) | — | **approve** when the shared null-freshness predicate (`hooks/lib/null-freshness.js`) certifies the last TR5 terminal run: verdict in the CONTINUE-only allow-list, no later BLOCK, and every per-artifact hash (`artifact_keys`, absence compared as a value) unchanged since that run; arm a full re-audit otherwise. A run without a per-artifact breakdown is fail-closed. `recurrence-patterns` is excluded from the arm set (infinite-arm guard, #2323). |
+| key uncomputable — artifact-side null (`input_version` non-null, plan artifact missing) | — | Same predicate, plus `trigger_input_keys.TR5` of that run must equal the current `input_version` (absent / null / non-string stored key is fail-closed, #2360). Hashing the artifacts closes the hole where a post-TR5 intent/detail edit passed on a code-only match (#2400). |
 
 **Stage 2 — diff-driven re-audit (including plan-artifact freshness).** Judged on
 two axes: (α) does code-side `input_version` match the last terminal run, and (β)
@@ -190,6 +190,14 @@ launched. The former Path (i-b) BLOCK check stays as a double-check for the
 abnormal case where TR5 did not fire, recording a finding when reached.
 Consolidating the arm source onto the Stop hook (TR1–TR6) structurally removes the
 race where the gate and the Stop hook armed at the same time.
+
+When the composite key is null, the backstop applies the same null-freshness
+predicate as the TR5 hold after checking that a TR5 run exists and no later BLOCK
+postdates it; it approves only when the predicate certifies the run and otherwise
+denies naming the null kind and what moved. A block override never releases a null
+key (it pins a non-null `freshness_key`), and WARN is denied on this path because
+the allow-list is CONTINUE-only. Sharing one predicate keeps the sentinel gate and
+the merge gate from disagreeing (#2400).
 
 ## State writer locking
 

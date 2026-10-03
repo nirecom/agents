@@ -81,9 +81,9 @@ assert_nomatch "21: the WE-7 deny is not the pre-merge backstop" \
     "$(reason_of "$we7")" 'freshness-backstop'
 
 # --- 22-24: a later TR6 BLOCK postdating a fresh non-BLOCK TR5 still holds ---
-# Guards user-verified-audit.js:174/176 (laterBlockExists in the Stage 1 gate).
+# Guards checkUserVerifiedAudit's laterBlockExists (Stage 1 gate condition).
 # A fresh CONTINUE TR5 alone passes (cases 7-8); adding a later terminal TR6 BLOCK
-# must flip that to a hold. Deleting `|| laterBlockExists` at line 176 lets Stage 2
+# must flip that to a hold. Deleting `|| laterBlockExists` from the Stage 1 test lets Stage 2
 # re-approve the fresh CONTINUE (the case-7 path) — this case fails then.
 FK1="$(fresh_key)"
 seed_state "$(two_terminal_runs CONTINUE "$FK1" BLOCK)" >/dev/null
