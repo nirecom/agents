@@ -66,9 +66,16 @@ mkdir -p "$PLANS_DIR"
 : > "$PLANS_DIR/$SID-outline.md"
 : > "$PLANS_DIR/$SID-detail-plan.md"
 
-MARKER_TR="$PLANS_DIR/$SID-codex-context.test-review.built"
-MARKER_DP="$PLANS_DIR/$SID-codex-context.detail-plan.built"
-CONTEXT_OUT="$PLANS_DIR/$SID-codex-context.md"
+# #2434: the built markers and codex-context.md are control files under
+# $CLAUDE_WORKFLOW_DIR/<sid>.control/ (the <sid>- prefix dropped); pin both roots.
+export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_PLANS_DIR="$PLANS_DIR"
+CONTROL_DIR="$CLAUDE_WORKFLOW_DIR/$SID.control"
+mkdir -p "$CONTROL_DIR"
+
+MARKER_TR="$CONTROL_DIR/codex-context.test-review.built"
+MARKER_DP="$CONTROL_DIR/codex-context.detail-plan.built"
+CONTEXT_OUT="$CONTROL_DIR/codex-context.md"
 
 # Stub out build-codex-context: create a temporary bin/ that intercepts the call.
 STUB_BIN="$TMPDIR_BASE/stubbin"
@@ -115,7 +122,13 @@ for f in run-with-timeout.sh review-loop-verdict; do
 done
 mkdir -p "$FAKE_AGENTS/bin/lib/codex-review-loop"
 cp "$AGENTS_DIR/bin/lib/codex-review-loop/"*.sh "$FAKE_AGENTS/bin/lib/codex-review-loop/" 2>/dev/null || true
-cp "$AGENTS_DIR/bin/lib/safe-plans-path.sh" "$FAKE_AGENTS/bin/lib/safe-plans-path.sh" 2>/dev/null || true
+# The loop sources bin/lib/safe-state-path.sh (#2434 rename of safe-plans-path.sh);
+# name its absence instead of leaving cases 9-12 to fail without a reason.
+if [[ -f "$AGENTS_DIR/bin/lib/safe-state-path.sh" ]]; then
+    cp "$AGENTS_DIR/bin/lib/safe-state-path.sh" "$FAKE_AGENTS/bin/lib/safe-state-path.sh"
+else
+    fail "implementation missing: bin/lib/safe-state-path.sh (cases 9-12 cannot reach the marker logic until it exists)"
+fi
 cp "$AGENTS_DIR/bin/concern-ledger" "$FAKE_AGENTS/bin/concern-ledger" 2>/dev/null || true
 chmod +x "$FAKE_AGENTS/bin/concern-ledger" 2>/dev/null || true
 cp "$AGENTS_DIR/bin/lib/concern-ledger.sh" "$FAKE_AGENTS/bin/lib/concern-ledger.sh" 2>/dev/null || true

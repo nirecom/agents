@@ -27,6 +27,10 @@ fi
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
 : "${PLANS_DIR:?PLANS_DIR must be set}"
+if ! CONTROL_DIR="$(node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session "$SESSION_ID" --for-write)"; then
+  printf "ERROR: session control directory unresolved for '%s'\n" "$SESSION_ID" >&2
+  exit 1
+fi
 
 LIB_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -104,7 +108,7 @@ if [[ "$BOOTSTRAP_MODE" == "1" ]]; then
         fi
     fi
 
-    ENV_FILE="$PLANS_DIR/${SESSION_ID}-final-report-env.json"
+    ENV_FILE="$CONTROL_DIR/final-report-env.json"
 
     SIBLING_REPOS_JSON="[]"
 
@@ -264,7 +268,7 @@ if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
 fi
 
 # Phase 6: Persist env JSON (BRANCH_DELETED intentionally omitted).
-ENV_FILE="$PLANS_DIR/${SESSION_ID}-final-report-env.json"
+ENV_FILE="$CONTROL_DIR/final-report-env.json"
 
 PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" \
 BRANCH="$BRANCH" WORKTREE_PATH="$WORKTREE_PATH" CREATED_DATE="$CREATED_DATE" \

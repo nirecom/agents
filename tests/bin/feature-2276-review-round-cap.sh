@@ -147,8 +147,11 @@ new_loop_env() {
     printf 'draft\n' > "$LP/draft.md"
     printf 'none\n' > "$LP/tradeoffs.md"
     SID="capsess$CN"
-    : > "$LP/$SID-codex-context.test-review.built"
-    RCOUNTER="$LP/$SID-test-review-round-number.txt"
+    # #2434: loop control files live in <CLAUDE_WORKFLOW_DIR>/<sid>.control/ (no sid prefix).
+    CTL="$CLAUDE_WORKFLOW_DIR/$SID.control"
+    mkdir -p "$CTL"
+    : > "$CTL/codex-context.test-review.built"
+    RCOUNTER="$CTL/test-review-round-number.txt"
 }
 loop_run() {
     local approved="${1:-no}" header="${2:-## Codex Review: PERFORMED}" extused="${3:-0}" risk="${4:-}"

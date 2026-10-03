@@ -242,7 +242,7 @@ SENT_RC=0
 bash "$CLI" stage --plans-dir "$SENT_PLANS" --session-id sent1 --format "$FORMAT" \
     --round 1 --producer review-code-codex --from-report "$SENTINEL_REPORT" \
     >/dev/null 2>&1 || SENT_RC=$?
-SENT_DELTA="$SENT_PLANS/sent1-$FORMAT-round-1-delta-review-code-codex.txt"
+SENT_DELTA="$CLAUDE_WORKFLOW_DIR/sent1.control/$FORMAT-round-1-delta-review-code-codex.txt"
 
 assert_eq "5: a report that states nothing is open is accepted" "0" "$SENT_RC"
 assert_eq "5: and the round it staged is on disk like any other" \

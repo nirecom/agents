@@ -9,6 +9,7 @@
 # that is where the prior has to arrive for the reviewer to see it, and asserting
 # there keeps the real bin/review-code-codex inside the tested chain.
 
+case_begin "prior-producers" "bin/run-codex-review-loop"
 echo ""
 echo "--- N: prior injection, producer join, naming, ABSENT reports ---"
 
@@ -100,7 +101,7 @@ stage_scanner() {
     assert_eq "N2: the codex entry records its own origin" \
         "review-code-codex" "$(entry_field "$LEDGER" "$ID_C" $F_ORIGIN)"
     assert_eq "N2: exactly one ledger file serves both producers" \
-        "1" "$(ls "$PLANS" 2>/dev/null | grep -c 'concern-ledger\.txt$' || true)"
+        "1" "$(ctl_count '*concern-ledger.txt')"
 
     # Round 2: only the reviewer reports. The scanner's concern is absent from
     # this round's delta, but absence under a producer that never ran cannot
@@ -130,15 +131,15 @@ stage_scanner() {
 
     assert_eq "N3: the shared token is used and no security-plan artifact appears" \
         "shared=present security-plan=0" \
-        "shared=$(file_state "$(ledger_file "$PLANS" "$SID")") security-plan=$(ls "$PLANS" 2>/dev/null | grep -c 'security-plan' || true)"
+        "shared=$(file_state "$(ledger_file "$PLANS" "$SID")") security-plan=$(ls "$PLANS" "$(ctl_dir "$SID")" 2>/dev/null | grep -c 'security-plan' || true)"
     assert_eq "N3: the round counter is filed under the loop format" \
         "present" "$(file_state "$(round_file "$PLANS" "$SID")")"
     assert_eq "N3: and not under the ledger format" \
-        "missing" "$(file_state "$PLANS/$SID-$LEDGER_FORMAT-round-number.txt")"
+        "missing" "$(file_state "$(ctl_dir "$SID")/$LEDGER_FORMAT-round-number.txt")"
     assert_eq "N3: the staging file uses the ledger token and the producer name" \
         "present" "$(file_state "$(delta_file "$PLANS" "$SID" 1 review-code-codex)")"
     assert_eq "N3: exactly one round-number file exists for the review" \
-        "1" "$(ls "$PLANS" 2>/dev/null | grep -c 'round-number\.txt$' || true)"
+        "1" "$(ls "$CLAUDE_WORKFLOW_DIR/$SID.control/" 2>/dev/null | grep -c 'round-number\.txt$' || true)"
 }
 
 # ---------------------------------------------------------------------------
@@ -171,3 +172,4 @@ stage_scanner() {
     assert_eq "N4: the blocked entry is flagged stale" \
         "has" "$(flag_state "$LEDGER" "$ID_C" stale)"
 }
+case_end

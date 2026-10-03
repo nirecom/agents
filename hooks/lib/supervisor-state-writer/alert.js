@@ -11,7 +11,6 @@ const {
   writeAtomic,
   validateAlertPhaseTransition,
 } = require("./shared");
-const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 
 function writeAlertStateCore(sessionId, patch) {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) return false;
@@ -40,9 +39,7 @@ function writeAlertStateCore(sessionId, patch) {
     }
   }
 
-  const plansDir = getWorkflowPlansDir();
-  fs.mkdirSync(plansDir, { recursive: true });
-  const filePath = getStatePath(sessionId);
+  const filePath = getStatePath(sessionId, { forWrite: true });
 
   const state = readStateOrInit(sessionId);
 
@@ -132,7 +129,7 @@ function writeAlertStateCore(sessionId, patch) {
 // Locked wrappers (#2256 S2-c): the lock spans read-modify-write, so the
 // increment's second read can no longer drop a concurrent writer's update.
 function writeAlertState(sessionId, patch) {
-  return withStateLock(getStatePath(sessionId), () => writeAlertStateCore(sessionId, patch)) === true;
+  return withStateLock(getStatePath(sessionId, { forWrite: true }), () => writeAlertStateCore(sessionId, patch)) === true;
 }
 
 function incrementAlertRetryCountCore(sessionId) {
@@ -154,12 +151,12 @@ function incrementAlertRetryCountCore(sessionId) {
 }
 
 function incrementAlertRetryCount(sessionId) {
-  const r = withStateLock(getStatePath(sessionId), () => incrementAlertRetryCountCore(sessionId));
+  const r = withStateLock(getStatePath(sessionId, { forWrite: true }), () => incrementAlertRetryCountCore(sessionId));
   return r === undefined ? { count: 0, frozen: false } : r;
 }
 
 function mutateAlertState(sid, mutator) {
-  const fp = getStatePath(sid);
+  const fp = getStatePath(sid, { forWrite: true });
   return withStateLock(fp, () => {
     const state = readStateOrInit(sid); mutator(state);
     state.last_updated = new Date().toISOString();

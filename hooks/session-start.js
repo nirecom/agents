@@ -159,7 +159,12 @@ if (sessionId) {
     writeSetIssue(sessionId, process.cwd(), plansDir);
   } catch (e) { /* fail-open */ }
 }
-
+// --- BEGIN temporary: plans-dir control files -> workflow control dir migration added 2026-09-28 ---
+// deletion-condition: remove after 2026-12-28 (release + 3 months) together with hooks/lib/temporary-migrations/control-dir-split/, bin/migrate-control-dir and the legacy-argument shims; keep guard (c) until then
+try {
+  require("./lib/temporary-migrations/control-dir-split").migrateAll({ budgetMs: 2000 });
+} catch (e) { /* best-effort */ }
+// --- END temporary: plans-dir control files -> workflow control dir migration ---
 
 // Clean up zombie state files (older than 7 days)
 try {

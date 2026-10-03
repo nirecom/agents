@@ -1,6 +1,6 @@
 # Companion-Issue Batch Presentation Procedure
 
-Read the `precheck-companions.sh --output-file <snap>` snapshot before presenting.
+Before presenting, read the snapshot at the path printed by `node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session "<session-id>" --file companion-precheck.json`.
 
 ## Main-conversation display (before AskUserQuestion)
 

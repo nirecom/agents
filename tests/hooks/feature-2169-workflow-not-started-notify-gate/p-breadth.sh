@@ -255,7 +255,7 @@ run_P13() {
     [ -n "$ledger_content" ] ||
         problems="$problems [reportMechanismFailureOnce wrote no .stall-reported ledger for p13 — fixture/pipeline setup failed, the sink checks below would be vacuous]"
 
-    alert_path="$tmp/p13-supervisor-state.json"
+    alert_path="$tmp/p13.control/supervisor-state.json"
     alert_content="$(cat "$alert_path" 2>/dev/null)"
     [ -n "$alert_content" ] ||
         problems="$problems [no supervisor alert state file was written at $alert_path — fixture/pipeline setup failed, the sink checks below would be vacuous]"

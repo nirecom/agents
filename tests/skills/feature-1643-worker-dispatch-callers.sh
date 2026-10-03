@@ -17,6 +17,7 @@ REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
 SHARED_REL="skills/_shared/worker-dispatch.md"
 SHARED_MD="$AGENTS_DIR/$SHARED_REL"
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -321,18 +322,22 @@ group_shared_payload_location() {
         fail "D3: $SHARED_REL missing"
         return
     fi
-    local writes_under refuses_outside
-    writes_under=0; refuses_outside=0
-    grep -qE 'PLANS_DIR>?/<session-id>-worker-' "$SHARED_MD" && writes_under=1
-    grep -qE 'Never place the payload outside PLANS_DIR' "$SHARED_MD" && refuses_outside=1
-    if [ "$writes_under" -eq 1 ] && [ "$refuses_outside" -eq 1 ]; then
-        pass "D3: $SHARED_REL requires the payload to live under PLANS_DIR"
+    local uses_cli refuses_direct
+    uses_cli=0; refuses_direct=0
+    grep -qE 'bin/worker-dispatch-payload' "$SHARED_MD" && uses_cli=1
+    grep -qE 'Never write the payload directly' "$SHARED_MD" && refuses_direct=1
+    if [ "$uses_cli" -eq 1 ] && [ "$refuses_direct" -eq 1 ]; then
+        pass "D3: $SHARED_REL routes payload writes through bin/worker-dispatch-payload"
     else
-        fail "D3: payload-location rule incomplete" "write-rule=$writes_under never-outside=$refuses_outside"
+        fail "D3: payload-location rule incomplete" "cli-rule=$uses_cli never-direct=$refuses_direct"
     fi
 }
 
+case_begin "registry-coverage" "hooks/lib/worker-dispatch-registry.js"
 group_table_covers_registry
+case_end
+
+case_begin "caller-dispatch-protocol" "skills/_shared/worker-dispatch.md"
 group_caller_rows
 group_no_legacy_agent_files
 group_explicit_six_deleted
@@ -343,6 +348,7 @@ group_negative_detector_probe
 group_shared_command_purity
 group_shared_exit_codes
 group_shared_payload_location
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

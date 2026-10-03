@@ -32,15 +32,17 @@ require_source() {
     return 0
 }
 
+# #2434: supervisor state lives at <CLAUDE_WORKFLOW_DIR>/<sid>.control/, so the
+# seed and every hook call pin CLAUDE_WORKFLOW_DIR="$tmp" (forWrite creates the dir).
 seed_state() {
     local tmp="$1" sid="$2" alert_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert = $alert_json;
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 

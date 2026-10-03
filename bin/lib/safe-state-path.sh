@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# bin/lib/safe-plans-path.sh
-# Deriving, creating, publishing and deleting files inside the plans dir (#2025
-# C6/C8/C9). Dependency-free and side-effect-free at source time: five callers
-# source it and only one loads the ledger library, so a fix written against that
-# library instead of this one would land in one caller out of five.
+# bin/lib/safe-state-path.sh (renamed from safe-plans-path.sh in #2434)
+# Deriving, creating, publishing and deleting files inside the plans dir or the
+# per-session control dir (#2025 C6/C8/C9). Dependency-free and side-effect-free
+# at source time: five callers source it and only one loads the ledger library,
+# so a fix written against that library would land in one caller out of five.
 
 # --- token validation -------------------------------------------------------
 
 # sp_valid_token <value> — true for a value that may be pasted into a derived
 # path inside the plans dir. Rejects separators (/ and \), '..', a leading '-'
-# (read as an option downstream), the empty string, a bare '.' (it names a
-# directory), and every character outside [A-Za-z0-9._-].
+# (read as an option downstream), the empty string, a leading '.' (a hidden
+# entry; an interior dot stays legal, #2025 C9), and chars outside [A-Za-z0-9._-].
 sp_valid_token() {
     case "${1-}" in
-        ''|.|-*) return 1 ;;
+        ''|.*|-*) return 1 ;;
         *..*|*/*|*\\*) return 1 ;;
         *[!A-Za-z0-9._-]*) return 1 ;;
     esac
@@ -191,7 +191,7 @@ sp_publish_stdin() {
 # when the directory cannot be entered: a path we cannot resolve is not a path
 # we may judge contained. The redirection sits on the subshell rather than on
 # `cd` so the single resolution reads as one expression — the shape pinned by
-# tests/fix-2025-safe-plans-path.sh.
+# tests/fix-2025-safe-state-path.sh.
 sp_real_dir() {
     [ -n "${1-}" ] || return 1
     ( cd -P -- "$1" && pwd -P ) 2>/dev/null || return 1
@@ -396,6 +396,80 @@ sp_contained_publish_copy() {
         sp_within_dir "$real" "$3" || return 2
     fi
     sp_contained_publish_stdin "$2" "$3" < "$1"
+}
+
+# --- per-session control dir (#2434) ----------------------------------------
+
+_SP_OWN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || _SP_OWN_ROOT=""
+
+_sp_has_resolver() {
+    [ -n "${1-}" ] && [ -f "$1/bin/workflow-control-dir" ] \
+        && [ -f "$1/hooks/workflow-state/state-io/control-dir.js" ]
+}
+
+_sp_has_plans_entry() {
+    local e
+    for e in "${WORKFLOW_PLANS_DIR:-${HOME}/.workflow-plans}/$1-"*; do [ -e "$e" ] || [ -h "$e" ] && return 0; done
+    return 1
+}
+
+# _sp_nothing_to_migrate <sid> <file> <legacy> — file form: no legacy copy of <file>;
+# dir form: no <sid>-* plans entry at all.
+_sp_nothing_to_migrate() {
+    if [ -n "$2" ]; then [ ! -e "$3" ]; else ! _sp_has_plans_entry "$1"; fi
+}
+
+# sp_control_dir <sid> [<file>] — print <CLAUDE_WORKFLOW_DIR>/<sid>.control (or a
+# file in it), created, as a bash path, after migrating legacy copies (the dir form: all
+# of <sid>'s). bin/workflow-control-dir (this file's own tree first, so a stub
+# AGENTS_CONFIG_DIR cannot skip the migration) is authoritative and its non-zero exit
+# is returned as-is (3 = migration failed). Fast path, no node spawn: both dirs pinned
+# in env, the dir real, and nothing left to migrate (no legacy <file>; for the dir form
+# no <sid>-* plans entry at all). Named exception (CPR-UNV): a stripped install without
+# that CLI resolves the same path in bash, refuses a symlinked or non-directory entry,
+# and fails closed (3) on a legacy copy (dir form: any <sid>-* entry, unclassifiable here).
+sp_control_dir() {
+    local sid="${1-}" file="${2-}" root="" d rc bd legacy
+    sp_valid_token "$sid" || return 2
+    [ -z "$file" ] || sp_valid_token "$file" || return 2
+    bd="${CLAUDE_WORKFLOW_DIR:-${HOME:?HOME not set}/.claude/projects/workflow}/$sid.control"
+    legacy="${WORKFLOW_PLANS_DIR:-${HOME}/.workflow-plans}/$sid-$file"
+    if [ -n "${CLAUDE_WORKFLOW_DIR:-}" ] && [ -n "${WORKFLOW_PLANS_DIR:-}" ] \
+        && [[ -z "$file" || "$file" =~ ^[A-Za-z0-9] ]]; then
+        if [ ! -e "$bd" ] && [ ! -h "$bd" ] && ! _sp_has_plans_entry "$sid"; then
+            mkdir -p -- "$bd" 2>/dev/null || true
+        fi
+        if [ -d "$bd" ] && [ ! -h "$bd" ] && _sp_nothing_to_migrate "$sid" "$file" "$legacy"; then
+            printf '%s\n' "$bd${file:+/$file}"
+            return 0
+        fi
+    fi
+    if _sp_has_resolver "$_SP_OWN_ROOT"; then root="$_SP_OWN_ROOT"
+    elif _sp_has_resolver "${AGENTS_CONFIG_DIR:-}"; then root="$AGENTS_CONFIG_DIR"
+    fi
+    if [ -n "$root" ]; then
+        if [ -n "$file" ]; then
+            d="$(node "$root/bin/workflow-control-dir" --session "$sid" --file "$file" --for-write)" || { rc=$?; return "$rc"; }
+        else
+            d="$(node "$root/bin/workflow-control-dir" --session "$sid" --for-write)" || { rc=$?; return "$rc"; }
+        fi
+        [ -n "$d" ] || return 1
+        bd="$bd${file:+/$file}"
+        # Same path: answer in the caller's spelling, since msys maps a Temp root to /tmp
+        # and the lexical containment gate would read a same-dir path as outside it.
+        if command -v cygpath >/dev/null 2>&1; then
+            if [ "$(cygpath -m "$bd")" = "$d" ]; then d="$bd"; else d="$(cygpath -u "$d")" || return 1; fi
+        fi
+        printf '%s\n' "$d"
+        return 0
+    fi
+    _sp_nothing_to_migrate "$sid" "$file" "$legacy" || return 3
+    d="$bd"
+    [ -h "$d" ] && return 1
+    [ -e "$d" ] && [ ! -d "$d" ] && return 1
+    mkdir -p -- "$d" 2>/dev/null || return 1
+    if [ -h "$d" ] || [ ! -d "$d" ]; then return 1; fi
+    if [ -n "$file" ]; then printf '%s/%s\n' "$d" "$file"; else printf '%s\n' "$d"; fi
 }
 
 :  # load-success rc for callers that source this with an explicit rc check

@@ -2,18 +2,10 @@
 # tests/bin/feature-1340-issue-setup/issue-create-phase0a.sh
 # Tests: bin/github-issues/issue-create.sh, bin/github-issues/issue-create-preflight.sh, bin/github-issues/sync-labels.sh
 # Tags: issue-setup, issue-create, github-issues, scope:issue-specific
-#
-# Tests for issue-create.sh Phase 0a label auto-repair (step 6 of #1340).
-# L2: preflight --check-labels rc=1 + sync-labels success → gh issue create proceeds;
-#     sync-labels failure → issue-create.sh exits 1;
-#     --check-labels rc=0 → sync-labels NOT called;
-#     AGENTS_CONFIG_DIR unset → Phase 0a skipped with warn, issue-create continues.
-#
-# L3 gap (what this test does NOT catch):
-# - Whether Phase 0a correctly integrates with a live GitHub API call chain
-#   (real network, real label 422 errors).
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# issue-create.sh Phase 0a label auto-repair (#1340 step 6). L2: --check-labels rc=1 + sync ok → create proceeds;
+# sync failure → exit 1; --check-labels rc=0 → sync NOT called; AGENTS_CONFIG_DIR unset → skip with warn, continue.
+# L3 gap: live GitHub API call chain (real network, real label 422 errors).
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -136,6 +128,7 @@ REMOTE_EOF
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
+    export CLAUDE_WORKFLOW_DIR="$TMP/workflow"
     # AGENTS_CONFIG_DIR points to TMP — mock scripts live under bin/github-issues/
     export AGENTS_CONFIG_DIR="$TMP/agents-config"
     mkdir -p "$AGENTS_CONFIG_DIR/bin/github-issues" "$AGENTS_CONFIG_DIR/.github"
@@ -164,7 +157,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR \
+    unset MOCK_LOG WORKFLOW_PLANS_DIR CLAUDE_WORKFLOW_DIR AGENTS_CONFIG_DIR \
           GH_MOCK_LABELS_HAVE_TASK GH_MOCK_SYNC_LABELS_FAIL \
           GH_MOCK_CREATE_ISSUE_FAIL GH_MOCK_OWNER_REPO \
           GH_MOCK_PREFLIGHT_HARD_FAIL \

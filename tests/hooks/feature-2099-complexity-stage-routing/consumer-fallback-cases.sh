@@ -353,8 +353,9 @@ EOF
 # producer side pins the same rule at PO-INJ-4/5 (CPR-ORTH); the rule is
 # stage-independent, so one representative consumer stage carries it here.
 d2099cf_signals_flag_arity() {
-    local f out rc
-    f="$(d2099_plans_dir)/cf-arity-signals.txt"
+    local f out rc sid="cf-arity"
+    # #2434: derive accepts --signals-file only as the legacy <plans>/<sid>-<stage>-signals.txt.
+    f="$WORKFLOW_PLANS_DIR/$sid-detail-signals.txt"
     printf 'S1-multi-file' > "$f"
 
     rc=0
@@ -375,7 +376,7 @@ d2099cf_signals_flag_arity() {
     # Teeth: the SAME file passed alone is accepted and routes. Without this row
     # CF-11/CF-11c would equally pass on a CLI that rejects --signals-file outright.
     rc=0
-    out=$(run_with_timeout node "$BIN_DERIVE" --stage detail --signals-file "$f" 2>&1) || rc=$?
+    out=$(run_with_timeout node "$BIN_DERIVE" --stage detail --session "$sid" --signals-file "$f" 2>&1) || rc=$?
     assert_eq "CF-11f ... while that same file passed ALONE is accepted and derives detail's level" \
         "0 level=low" "$rc $(printf '%s\n' "$out" | head -1)"
 }

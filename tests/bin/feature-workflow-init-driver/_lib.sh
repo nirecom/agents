@@ -35,6 +35,13 @@ require_sut() {
 ROOT_TMP="$(to_native "$(mktemp -d)")"
 trap 'rm -rf "$ROOT_TMP"' EXIT
 ORIG_PATH="$PATH"
+# #2434: the checkpoint and other control files live under CLAUDE_WORKFLOW_DIR, so an
+# unpinned value resolves the developer's real ~/.claude/projects/workflow. Pin the
+# pair suite-wide (setup_case narrows it per case) and keep the transcript chain empty.
+export CLAUDE_WORKFLOW_DIR="$ROOT_TMP/wf-suite"
+export WORKFLOW_PLANS_DIR="$ROOT_TMP/plans-suite"
+export CLAUDE_TRANSCRIPT_BASE_DIR="$ROOT_TMP/transcripts"
+mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 _CASE_N=0
 
 # --- per-case environment ---------------------------------------------------
@@ -43,18 +50,20 @@ setup_case() {  # <session-id>
     _CASE_N=$((_CASE_N + 1))
     CASE_DIR="$ROOT_TMP/case-$_CASE_N"
     PLANS="$CASE_DIR/plans"
+    WF="$CASE_DIR/wf"
     CFG="$CASE_DIR/agents-config"
     MOCKBIN="$CASE_DIR/mock-bin"
     RESP="$CASE_DIR/gh-responses"
     WIPD="$CASE_DIR/wip"
     GH_LOG="$CASE_DIR/gh-calls.log"
-    mkdir -p "$PLANS" "$MOCKBIN" "$RESP" "$WIPD" \
+    mkdir -p "$PLANS" "$WF" "$MOCKBIN" "$RESP" "$WIPD" \
         "$CFG/bin/github-issues" "$CFG/hooks/lib" "$CFG/skills/workflow-init/scripts"
     _init_case_repo
     _write_gh_mock
     _write_wip_mock
     _write_cfg_prims
     export WORKFLOW_PLANS_DIR="$PLANS"
+    export CLAUDE_WORKFLOW_DIR="$WF"
     export AGENTS_CONFIG_DIR="$CFG"
     export CLAUDE_SESSION_ID="$SID"
     # CLAUDE_CODE_SESSION_ID is exported by the developer's live session and the
@@ -65,8 +74,14 @@ setup_case() {  # <session-id>
 
 teardown_case() {
     export PATH="$ORIG_PATH"
-    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID NON_GITHUB 2>/dev/null || true
+    unset AGENTS_CONFIG_DIR CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID NON_GITHUB 2>/dev/null || true
+    # Back to the suite pins, never unset: an unset pair resolves the real home dirs.
+    export CLAUDE_WORKFLOW_DIR="$ROOT_TMP/wf-suite"
+    export WORKFLOW_PLANS_DIR="$ROOT_TMP/plans-suite"
 }
+
+# Control-file path the driver writes for the current case (#2434).
+ctrl_file() { printf '%s' "$WF/$SID.control/$1"; }
 
 # --- git fixture (#1899) -----------------------------------------------------
 # Repo identity is derived from the checkout's ORIGIN remote, not `gh repo view`,

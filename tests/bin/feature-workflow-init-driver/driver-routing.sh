@@ -266,10 +266,10 @@ for R5F_SURFACE in "stdout:$DRIVER_OUT" "stderr:$DRIVER_ERR" "next_hint:$R5F_HIN
         *) pass "R5f: no raw credential in driver ${R5F_SURFACE%%:*}" ;;
     esac
 done
-# On-disk artifacts: everything the driver writes under WORKFLOW_PLANS_DIR
-# (checkpoint JSON, context.md, any state file). $CASE_DIR itself is NOT scanned —
+# On-disk artifacts: everything the driver writes under WORKFLOW_PLANS_DIR (context.md)
+# and CLAUDE_WORKFLOW_DIR (checkpoint JSON, #2434). $CASE_DIR itself is NOT scanned —
 # .git/config legitimately holds the fixture's own remote URL.
-if grep -rqF -- "$R5F_TOKEN" "$PLANS" 2>/dev/null; then
+if grep -rqF -- "$R5F_TOKEN" "$PLANS" "$WF" 2>/dev/null; then
     fail "R5f: raw credential written into a driver artifact under $PLANS"
 else
     pass "R5f: no raw credential in any driver artifact under WORKFLOW_PLANS_DIR"

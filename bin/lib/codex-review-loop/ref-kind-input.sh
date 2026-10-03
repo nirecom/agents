@@ -5,7 +5,7 @@
 # the anchored round delta; the scanner fallback re-enters via --prestaged-report.
 # Caller globals: TMP_OUT DELTA_SRC ROUND CONTEXT_OUT CORE_PRINCIPLES EXTRA_CTX
 # REPO_ROOT_ARG AGENTS_CONFIG_DIR PRESTAGED_REPORT VERDICT ARGS BASE_STATE_ARG.
-SAFE_PATH_LIB="${AGENTS_CONFIG_DIR:-}/bin/lib/safe-plans-path.sh"
+SAFE_PATH_LIB="${AGENTS_CONFIG_DIR:-}/bin/lib/safe-state-path.sh"
 [[ -f "$SAFE_PATH_LIB" ]] || die "the safe-path library is missing: $SAFE_PATH_LIB"
 source "$SAFE_PATH_LIB" || die "the safe-path library failed to load: $SAFE_PATH_LIB"
 

@@ -47,7 +47,7 @@ else {
   if (e.step !== step) bad.push('step:' + e.step);
   if (e.origin !== 'auto-record') bad.push('origin:' + e.origin);
   if (String(e.summary).indexOf(prefix) !== 0) bad.push('summary:' + e.summary);
-  if (pointer !== '-' && !String(e.pointer).endsWith(pointer)) bad.push('pointer:' + e.pointer);
+  if (pointer !== '-' && !String(e.pointer).replace(/\\/g, '/').endsWith(pointer)) bad.push('pointer:' + e.pointer);
   if (pointer === '-' && e.pointer !== '-' && e.pointer !== '') bad.push('pointer:' + e.pointer);
 }
 process.stdout.write(bad.length ? 'BAD:' + bad.join(' | ') : 'OK');
@@ -69,7 +69,9 @@ const { armAuditRun } = require(process.env.AGENTS + '/hooks/lib/supervisor-stat
 const sid = process.argv[2];
 const st = s.createEmptyState(sid);
 st.audit = Object.assign(st.audit || {}, { audit_phase: null });
-fs.writeFileSync(w.getStatePath(sid), JSON.stringify(st));
+const p = w.getStatePath(sid);
+fs.mkdirSync(require('path').dirname(p), { recursive: true });
+fs.writeFileSync(p, JSON.stringify(st));
 const r = armAuditRun(sid, { tr_ids: ['TR4'], cause: 'step-complete:write_code', transitions: ['write_code#1'] });
 process.stdout.write(String((r && (r.audit_run_id || r.run_id)) || 'ARMFAIL'));
 JS
@@ -80,7 +82,7 @@ entry() { nj entry.js "$@"; }
 verdict_cli() { run_with_timeout 60 node "$AGENTS_DIR/bin/supervisor-write-audit-verdict" "$@" 2>/dev/null; }
 audit_cli() { run_with_timeout 60 node "$AGENTS_DIR/bin/supervisor-write-audit" "$@" 2>/dev/null; }
 compact() { printf '{"session_id":"%s"}' "$1" | run_with_timeout 60 node "$AGENTS_DIR/hooks/post-compact.js" 2>/dev/null; }
-verdict_ptr() { printf '%s' "$1-supervisor-state.json"; }
+verdict_ptr() { printf '%s' "$1.control/supervisor-state.json"; }
 
 # expect <name> <got> <want> — one verdict line.
 expect() {
@@ -234,7 +236,7 @@ case_end
 
 case_begin "verdict-write-failure-keeps-output" "bin/supervisor-write-audit-verdict"
 seed vd-unwritable active
-mkdir -p "$TMP/wf/vd-unwritable-handoff.md"
+mkdir -p "$TMP/wf/vd-unwritable.control/handoff.md"
 OUT="$(verdict_cli --session-id vd-unwritable --verdict WARN --verdict-summary 'drift found')"; RC=$?
 expect "V5: an unwritable handoff keeps exit 0" "$RC" "0"
 expect "V5: an unwritable handoff keeps stdout" "$OUT" '{"accepted":true,"audit_run_id":null}'

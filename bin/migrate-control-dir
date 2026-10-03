@@ -1,0 +1,33 @@
+#!/usr/bin/env node
+// --- BEGIN temporary: plans-dir control files -> workflow control dir migration added 2026-09-28 ---
+// deletion-condition: remove after 2026-12-28 (release + 3 months) together with hooks/lib/temporary-migrations/control-dir-split/, bin/migrate-control-dir and the legacy-argument shims; keep guard (c) until then
+// bin/migrate-control-dir --session <sid> | --all
+// Manual face of the control-dir migration. Exit 1 when any file failed to
+// migrate; conflicts are reported on stderr and logged but keep exit 0.
+"use strict";
+const path = require("path");
+
+const M = require(path.join(__dirname, "..", "hooks", "lib", "temporary-migrations", "control-dir-split", "index.js"));
+
+function usage() {
+  process.stderr.write("usage: migrate-control-dir --session <sid> | --all\n");
+  process.exit(2);
+}
+
+async function main(argv) {
+  if (argv[0] === "--all" && argv.length === 1) {
+    const c = await M.migrateAll({ budgetMs: Number.MAX_SAFE_INTEGER });
+    process.stdout.write(`complete=${c.complete} failed=${c.failed || 0}\n`);
+    return c.failed > 0 ? 1 : 0;
+  }
+  if (argv[0] !== "--session" || argv.length !== 2) usage();
+  const rows = await M.migrateSession(argv[1]);
+  for (const r of rows) process.stdout.write(`${r.name}=${r.outcome}${r.error ? ` (${r.error})` : ""}\n`);
+  return rows.some((r) => r.outcome === "failed") ? 1 : 0;
+}
+
+main(process.argv.slice(2)).then((code) => process.exit(code), (e) => {
+  process.stderr.write(`migrate-control-dir: ${(e && e.message) || e}\n`);
+  process.exit(1);
+});
+// --- END temporary: plans-dir control files -> workflow control dir migration ---

@@ -1,23 +1,27 @@
 "use strict";
 const fs = require("fs");
-const path = require("path");
-const { getWorkflowPlansDir } = require("./workflow-plans-dir");
+const { getSessionControlDir, controlPath, diagnoseControlMigration } = require("../workflow-state/state-io/control-dir");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
+const NAME = "wt-cleanup-active";
 
+// Read-mode resolve (migrates a legacy marker); a refused control dir degrades to the pure path.
+// A failed migration yields null: the unmigrated legacy marker must not be shadowed by the new path.
 function markerPathFor(sid) {
   if (!sid || !SID_RE.test(sid)) return null;
-  const plansDir = getWorkflowPlansDir();
-  return path.join(plansDir, sid + "-wt-cleanup-active");
+  try { return controlPath(sid, NAME); } catch (e) {
+    if (diagnoseControlMigration(e, "worktree-cleanup-marker")) return null;
+    return require("path").join(getSessionControlDir(sid), NAME);
+  }
 }
 
 function createMarker(sid) {
-  const p = markerPathFor(sid);
-  if (!p) return false;
+  if (!sid || !SID_RE.test(sid)) return false;
   try {
-    fs.closeSync(fs.openSync(p, "a"));
+    fs.closeSync(fs.openSync(controlPath(sid, NAME, { forWrite: true }), "a"));
     return true;
-  } catch (_) {
+  } catch (e) {
+    diagnoseControlMigration(e, "worktree-cleanup-marker");
     return false;
   }
 }
@@ -47,7 +51,9 @@ if (require.main === module) {
 
   const p = markerPathFor(resolvedSid);
   if (!p) {
-    process.stderr.write("cleanup-marker: invalid sid chars: " + resolvedSid + "\n");
+    if (!SID_RE.test(resolvedSid)) process.stderr.write("cleanup-marker: invalid sid chars: " + resolvedSid + "\n");
+    // A failed migration was already diagnosed; create still resolves forWrite so the migration log records it.
+    else if (command === "create") createMarker(resolvedSid);
     process.exit(0);
   }
 

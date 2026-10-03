@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+// bin/record-risk-signal --session <sid> --planner <outline|detail> --reason <one-line>
+// The one writer of <CONTROL_DIR>/<planner>-risk-signal.txt, read by the
+// make-{outline,detail}-plan wrappers to turn a capped HIGH into ESCALATE.
+// Written once (wx); a second call reports "already raised". There is no way to withdraw it.
+// Exit: 0 recorded or already raised; 2 usage / invalid input; 3 migration error; 1 other.
+"use strict";
+const fs = require("fs");
+const path = require("path");
+
+const CD = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "control-dir.js"));
+const { assertValidSessionId } = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "core.js"));
+
+const PLANNERS = new Set(["outline", "detail"]);
+const MAX_REASON = 300;
+
+function die(code, msg) {
+  process.stderr.write(`record-risk-signal: ${msg}\n`);
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a !== "--session" && a !== "--planner" && a !== "--reason") die(2, `unknown argument: ${a}`);
+    if (i + 1 >= argv.length) die(2, `${a} needs a value`);
+    out[a.slice(2)] = argv[++i];
+  }
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+if (args.session === undefined || args.planner === undefined || args.reason === undefined) {
+  die(2, "usage: record-risk-signal --session <sid> --planner <outline|detail> --reason <one-line>");
+}
+if (!PLANNERS.has(args.planner)) die(2, `--planner must be outline or detail (got ${JSON.stringify(args.planner)})`);
+const reason = args.reason;
+if (!reason.trim() || /[\r\n]/.test(reason) || reason.length > MAX_REASON) {
+  die(2, `--reason must be one non-empty line of at most ${MAX_REASON} characters`);
+}
+try { assertValidSessionId(args.session); } catch (e) { die(2, e.message); }
+
+let file;
+try {
+  file = CD.controlPath(args.session, `${args.planner}-risk-signal.txt`, { forWrite: true });
+} catch (e) {
+  if (e instanceof CD.ControlMigrationError) die(3, e.message);
+  die(1, e.message);
+}
+try {
+  fs.writeFileSync(file, `${reason}\n`, { flag: "wx" });
+} catch (e) {
+  if (e.code === "EEXIST") {
+    process.stdout.write(`already raised: ${args.planner} risk signal is kept unchanged (${file})\n`);
+    process.exit(0);
+  }
+  die(1, `cannot write ${file}: ${e.message}`);
+}
+process.stdout.write(`recorded: ${args.planner} risk signal (${file})\n`);

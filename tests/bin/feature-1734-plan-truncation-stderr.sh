@@ -17,6 +17,10 @@ VERDICT_BIN="$AGENTS_ROOT/bin/review-loop-verdict"
 TIMEOUT_SH="$AGENTS_ROOT/bin/run-with-timeout.sh"
 ERRORS=0
 
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_ROOT/tests/lib/harness.sh"
+
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
 
@@ -47,6 +51,7 @@ exit 0
 MOCK_EOF
 chmod +x "$MOCK_BIN/codex"
 
+case_begin "case-a-direct-reviewer" "bin/review-plan-codex"
 # ---------------------------------------------------------------------------
 # Case A: direct bin/review-plan-codex invocation
 # ---------------------------------------------------------------------------
@@ -83,7 +88,9 @@ if [[ "$FIRST_STDOUT_LINE_A" == "## Codex Review: PERFORMED" ]]; then
 else
   fail "Case A: first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_A'"
 fi
+case_end
 
+case_begin "case-b-review-loop-pipeline" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # Case B: full pipeline via bin/run-codex-review-loop
 # ---------------------------------------------------------------------------
@@ -100,9 +107,18 @@ if [ -f "$AGENTS_ROOT/bin/lib/cli-exec-guard.sh" ]; then cp "$AGENTS_ROOT/bin/li
 cp "$VERDICT_BIN" "$B_CFG/bin/review-loop-verdict"
 chmod +x "$B_CFG/bin/review-loop-verdict"
 
-# safe-plans-path.sh + concern-ledger CLI/library bundle (mandatory
+# safe-state-path.sh + concern-ledger CLI/library bundle (mandatory
 # dependencies of run-codex-review-loop's preflight; see #2088/#2025)
-cp "$AGENTS_ROOT/bin/lib/safe-plans-path.sh" "$B_CFG/bin/lib/safe-plans-path.sh"
+if [[ ! -f "$AGENTS_ROOT/bin/lib/safe-state-path.sh" ]]; then
+  fail "implementation missing: bin/lib/safe-state-path.sh"
+else
+  cp "$AGENTS_ROOT/bin/lib/safe-state-path.sh" "$B_CFG/bin/lib/safe-state-path.sh"
+fi
+# #2434: the loop's control files live under $CLAUDE_WORKFLOW_DIR/<sid>.control/;
+# pin both state roots so an inherited value cannot point at the real store.
+export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans-dir"
+mkdir -p "$CLAUDE_WORKFLOW_DIR"
 cp "$AGENTS_ROOT/bin/concern-ledger" "$B_CFG/bin/concern-ledger"
 chmod +x "$B_CFG/bin/concern-ledger"
 cp "$AGENTS_ROOT/bin/lib/concern-ledger.sh" "$B_CFG/bin/lib/concern-ledger.sh"
@@ -154,7 +170,9 @@ if grep -q "unrecognized status header" "$B_OUT"; then
 else
   pass "Case B: no 'unrecognized status header' message"
 fi
+case_end
 
+case_begin "case-c-truncation-boundary" "bin/review-plan-codex"
 # ---------------------------------------------------------------------------
 # Case C: exact-boundary — 20000 lines (cap, no truncation) vs 20001 lines (one
 # over, truncation triggers): `if (( INPUT_LINES > MAX_PLAN_LINES ))`.
@@ -248,6 +266,7 @@ if [[ "$FIRST_STDOUT_LINE_C2" == "## Codex Review: PERFORMED" ]]; then
 else
   fail "Case C2 (20001 lines): first non-blank stdout line is NOT the status header. Got: '$FIRST_STDOUT_LINE_C2'"
 fi
+case_end
 
 # Test design self-check: normal = Case A (direct) + Case B (pipeline); edge
 # = Case C's 20000/20001 boundary. Other categories N/A — single-bug regression

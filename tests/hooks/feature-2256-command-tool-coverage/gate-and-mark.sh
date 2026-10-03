@@ -40,8 +40,8 @@ st.audit.ledger = [{
 }];
 st.audit.last_terminal_run_id = 'run-0007';
 st.audit.audit_verdict_summary = process.env.VERDICT;
-fs.writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(st));
-" 2>&1
+fs.writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(st));
+" 2>&1 || fail "seed_audit($1): supervisor-state seed write failed" >&2
 }
 
 # gate_decision <shape> <command> — the workflow-gate decision for that shape.

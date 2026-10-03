@@ -1,21 +1,10 @@
 "use strict";
-// bin/worker-dispatch/anchor.js
-//
-// Trust anchor derivation + the path canonicalization primitives every other
-// dispatcher module shares.
-//
-// Four anchors, in derivation order:
-//   ACD        this checkout of the agents repo, resolved from THIS module's own
-//              realpath. The AGENTS_CONFIG_DIR env candidate is dropped on
-//              purpose: env is attacker-reachable, a module path is not.
-//   MAIN_ROOT  argv[3], accepted only if it is a *main* worktree (its
-//              --git-common-dir parent is itself). Linked worktrees are rejected.
-//   FAMILY     MAIN_ROOT plus every worktree git itself has registered for it.
-//   PLANS_DIR  the workflow plans directory.
-//
-// This module never reads the process working directory and never asks git for a
-// toplevel — the caller's location must not be able to influence any anchor.
-// tests/bin/feature-1643-worker-dispatch-anchor.sh asserts both by source scan.
+// bin/worker-dispatch/anchor.js — trust anchors + shared path canonicalization.
+// Anchors: ACD (from THIS module's realpath, never the env), MAIN_ROOT (argv[3],
+// main worktree only), FAMILY (git-registered worktrees of MAIN_ROOT), PLANS_DIR
+// (artifacts) and WORKFLOW_DIR (holds <sid>.control/, docs/architecture/claude-code/state-dirs.md).
+// Never reads the process cwd or asks git for a toplevel; the caller's location
+// must not influence any anchor (tests/bin/feature-1643-worker-dispatch-anchor.sh).
 
 const fs = require("fs");
 const path = require("path");
@@ -24,6 +13,7 @@ const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../../hooks/lib/path-normalize");
 const { configDirCandidates, _resolveFromCandidates } = require("../../hooks/lib/agents-config-dir");
 const { getWorkflowPlansDir } = require("../../hooks/lib/workflow-plans-dir");
+const { getWorkflowDir } = require("../../hooks/workflow-state/state-io/core");
 
 const GIT_TIMEOUT_MS = 20000;
 const REALPATH_MAX_DEPTH = 64;
@@ -178,7 +168,7 @@ function resolveFamily(mainRoot) {
 // Never throws: callers (including the anchor probe in the test suite) rely on
 // getting a structured result back rather than an exception.
 function resolveAnchors(mainRootArg) {
-  const out = { acd: null, mainRoot: null, family: [], plansDir: null, error: null };
+  const out = { acd: null, mainRoot: null, family: [], plansDir: null, workflowDir: null, error: null };
 
   out.acd = resolveAcd();
   if (out.acd === null) {
@@ -211,6 +201,7 @@ function resolveAnchors(mainRootArg) {
     return out;
   }
   out.plansDir = plans;
+  out.workflowDir = realAbs(getWorkflowDir());
 
   return out;
 }

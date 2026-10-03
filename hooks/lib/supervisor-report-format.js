@@ -34,7 +34,7 @@ function aggregateCategories(findings) {
 function recipeBlock(stateSessionId, stateFilePath) {
   return [
     "Fallback (if the supervisor subagent invocation fails with an API error):",
-    `  Run: bin/supervisor-write-alert --clear-l2-armed-at --set-l2-phase paused --session-id ${stateSessionId}`,
+    `  Run: $AGENTS_CONFIG_DIR/bin/supervisor-write-alert --clear-l2-armed-at --set-l2-phase paused --session-id ${stateSessionId}`,
     "  This freezes the alert review for this session so the loop terminates. alert_phase=paused freezes the retry loop for this session.",
     `  State file: ${stateFilePath}`,
   ];
@@ -53,7 +53,7 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
     lines.push(`Session ID: ${sessionId}`);
     lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
     lines.push(`Effective state session ID: ${sk}`);
-    lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
+    lines.push(`Action: pass --session-id ${sk} to every $AGENTS_CONFIG_DIR/bin/supervisor-write-alert call.`);
     for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
     lines.push(`Recommended action: follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`);
     lines.push(formatAgentModelLine("alert"));
@@ -81,7 +81,7 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
   lines.push(`Effective state session ID: ${sk}`);
-  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
+  lines.push(`Action: pass --session-id ${sk} to every $AGENTS_CONFIG_DIR/bin/supervisor-write-alert call.`);
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
   lines.push(`Recommended action: follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`);
   lines.push(formatAgentModelLine("alert"));
@@ -124,7 +124,7 @@ function formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
   lines.push(`Effective state session ID: ${sk}`);
-  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
+  lines.push(`Action: pass --session-id ${sk} to every $AGENTS_CONFIG_DIR/bin/supervisor-write-alert call.`);
   return lines.join("\n");
 }
 
@@ -140,7 +140,7 @@ function formatWorktreeOffProposalReason(sessionId, workflowSessionId, superviso
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
   lines.push(`Effective state session ID: ${sk}`);
-  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
+  lines.push(`Action: pass --session-id ${sk} to every $AGENTS_CONFIG_DIR/bin/supervisor-write-alert call.`);
   return lines.join("\n");
 }
 

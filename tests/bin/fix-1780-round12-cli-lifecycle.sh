@@ -338,8 +338,8 @@ run_C_allow_surface() {
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     REQ_SID="c3sid"
     run_req "$tn" "$(allow_stub 'audited allow')" --target workflow --category workflow-bug --detail "bug"
-    if [ -f "$tmp/c3sid-supervisor-state.json" ] && grep -q "off_examination" "$tmp/c3sid-supervisor-state.json" \
-       && grep -q "verdict=ALLOW" "$tmp/c3sid-supervisor-state.json"; then
+    if [ -f "$tmp/c3sid.control/supervisor-state.json" ] && grep -q "off_examination" "$tmp/c3sid.control/supervisor-state.json" \
+       && grep -q "verdict=ALLOW" "$tmp/c3sid.control/supervisor-state.json"; then
         pass "C3 ALLOW appends an off_examination finding under the SAME sid as the token"
     else
         fail "C3 audit entry missing/misfiled; files=$(ls "$tmp" 2>/dev/null | tr '\n' ' ')"
@@ -371,7 +371,7 @@ run_D_refusal_matrix() {
     echo "$OUT" | grep -q "No clearance token minted" || ok=0
     echo "$OUT" | grep -q "use /sweep-worktrees instead" || ok=0
     ! echo "$OUT$ERR" | grep -q "EMERGENCY" || ok=0
-    grep -q "verdict=REJECT" "$tmp/d1sid-supervisor-state.json" 2>/dev/null || ok=0
+    grep -q "verdict=REJECT" "$tmp/d1sid.control/supervisor-state.json" 2>/dev/null || ok=0
     if [ "$ok" = "1" ]; then
         pass "D1 authentic REJECT -> non-zero, examiner's reason on stdout, audited, NO emergency hint, NO token"
     else
@@ -395,7 +395,7 @@ exit $code
         [ "$(token_count "$tmp")" -eq 0 ] || ok=0
         echo "$ERR" | grep -q "Examiner unavailable (reason: timeout)" || ok=0
         echo "$OUT" | grep -q "WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY" || ok=0
-        grep -q "examiner=timeout" "$tmp/d-$code-supervisor-state.json" 2>/dev/null || ok=0
+        grep -q "examiner=timeout" "$tmp/d-$code.control/supervisor-state.json" 2>/dev/null || ok=0
         if [ "$ok" = "1" ]; then
             pass "D2 examiner exit $code -> timeout fallback, UNAVAILABLE audited, emergency escalation offered, NO token"
         else
@@ -420,7 +420,7 @@ exit 7
     echo "$ERR" | grep -q -- "--- examiner stderr ---" || ok=0
     echo "$ERR" | grep -q "model overloaded" || ok=0
     ! echo "$OUT" | grep -q "model overloaded" || ok=0
-    grep -q "UNAVAILABLE" "$tmp/d4sid-supervisor-state.json" 2>/dev/null || ok=0
+    grep -q "UNAVAILABLE" "$tmp/d4sid.control/supervisor-state.json" 2>/dev/null || ok=0
     if [ "$ok" = "1" ]; then
         pass "D4 examiner exit 7 -> UNAVAILABLE, its stderr relayed on STDERR only, audited, NO token"
     else
@@ -437,7 +437,7 @@ exit 7
     [ "$(token_count "$tmp")" -eq 0 ] || ok=0
     echo "$ERR" | grep -q "Examiner unavailable (reason: not-found)" || ok=0
     echo "$OUT" | grep -q "WORKFLOW_ENFORCE_WORKTREE_OFF_EMERGENCY" || ok=0
-    grep -q "examiner=not-found" "$tmp/d5sid-supervisor-state.json" 2>/dev/null || ok=0
+    grep -q "examiner=not-found" "$tmp/d5sid.control/supervisor-state.json" 2>/dev/null || ok=0
     if [ "$ok" = "1" ]; then
         pass "D5 codex absent from PATH -> UNAVAILABLE, audited, WORKTREE emergency escalation offered, NO token"
     else

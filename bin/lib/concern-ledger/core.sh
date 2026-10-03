@@ -5,12 +5,12 @@
 # is the one place an external split is unavoidable: _sp_dirname is defined by
 # the very file this line locates, and ${BASH_SOURCE[0]} is bash's own answer
 # for where this script lives — not caller input (round 10 C2 exception 2).
-_CL_SAFE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/safe-plans-path.sh"
+_CL_SAFE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/safe-state-path.sh"
 if [ ! -f "$_CL_SAFE_LIB" ]; then
     printf 'concern-ledger: required library not found at %s — incomplete installation\n' "$_CL_SAFE_LIB" >&2
     return 1 2>/dev/null || exit 1
 fi
-# shellcheck source=../safe-plans-path.sh
+# shellcheck source=../safe-state-path.sh
 if ! source "$_CL_SAFE_LIB"; then
     printf 'concern-ledger: failed to load %s\n' "$_CL_SAFE_LIB" >&2
     return 1 2>/dev/null || exit 1

@@ -98,18 +98,49 @@ function checkAxis3(blocks, filePath, mode, warnings) {
   }
 }
 
-function checkAxis4(blocks, filePath, warnings) {
+const STALE_DAYS = 90;
+
+function staleBlocks(blocks) {
   const today = new Date();
+  const out = [];
   for (const b of blocks) {
     if (!b.addedDate) continue;
-    const added = new Date(b.addedDate);
-    const diffDays = (today - added) / (1000 * 60 * 60 * 24);
-    if (diffDays > 90) {
-      warnings.push(
-        `${filePath}:${b.beginLine}: warning: migration block is ${Math.floor(diffDays)} days old (added ${b.addedDate}); consider removing`
-      );
-    }
+    const diffDays = (today - new Date(b.addedDate)) / (1000 * 60 * 60 * 24);
+    if (diffDays > STALE_DAYS) out.push({ block: b, diffDays });
   }
+  return out;
+}
+
+function checkAxis4(blocks, filePath, warnings) {
+  for (const { block: b, diffDays } of staleBlocks(blocks)) {
+    warnings.push(
+      `${filePath}:${b.beginLine}: warning: migration block is ${Math.floor(diffDays)} days old (added ${b.addedDate}); consider removing`
+    );
+  }
+}
+
+// --stale-report: one `path:line:added` line per block older than STALE_DAYS; exit 0,
+// exit 2 when the root cannot be scanned (the sweep job must see that as a failure).
+function staleReport(rootArg) {
+  const root = rootArg ? path.resolve(rootArg) : getGitRoot();
+  try {
+    if (!fs.statSync(root).isDirectory()) throw new Error("not a directory");
+  } catch (e) {
+    process.stderr.write(`check-migration-blocks.js: cannot scan '${root}': ${e.message}\n`);
+    process.exit(2);
+  }
+  const lines = [];
+  walkTree(root, (absPath) => {
+    const rel = path.relative(root, absPath).replace(/\\/g, "/");
+    if (EXCLUDE_RE.some((excl) => excl.test(rel))) return;
+    let content;
+    try { content = fs.readFileSync(absPath, "utf8"); } catch (e) { return; }
+    for (const { block: b } of staleBlocks(parseBlocks(content, rel).blocks)) {
+      lines.push(`${rel}:${b.beginLine}:${b.addedDate}`);
+    }
+  });
+  lines.forEach((l) => process.stdout.write(l + "\n"));
+  process.exit(0);
 }
 
 function getGitRoot() {
@@ -125,6 +156,7 @@ function main() {
   if (args.length === 0) {
     process.stderr.write("usage: check-migration-blocks.js --staged [<file>...]\n");
     process.stderr.write("       check-migration-blocks.js --all [<root>]\n");
+    process.stderr.write("       check-migration-blocks.js --stale-report [<root>]\n");
     process.exit(2);
   }
 
@@ -178,10 +210,14 @@ function main() {
     }
     process.exit(0);
 
+  } else if (mode === "--stale-report") {
+    staleReport(args[1]);
+
   } else {
     process.stderr.write(`check-migration-blocks.js: unknown mode '${mode}'\n`);
     process.stderr.write("usage: check-migration-blocks.js --staged [<file>...]\n");
     process.stderr.write("       check-migration-blocks.js --all [<root>]\n");
+    process.stderr.write("       check-migration-blocks.js --stale-report [<root>]\n");
     process.exit(2);
   }
 }

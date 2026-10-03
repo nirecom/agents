@@ -2,7 +2,7 @@
 # Tests: bin/workflow/read-session-facts, bin/workflow/lib/session-facts/keys.js, bin/workflow/lib/session-facts/collect.js, bin/workflow/lib/session-facts/gate-facts.js
 # Tags: tl2, workflow, session-facts, contract, keys, budget, scope:issue-specific, pwsh-not-required
 
-# The v2 output contract: same ten keys, same order, every time, whatever the session
+# The v3 output contract: same eleven keys, same order, every time, whatever the session
 # looks like. A consumer SKILL.md parses positionally-stable KEY=VALUE lines, so a key
 # that silently appears, vanishes or moves is a breaking change that must cost a
 # FACTS_VERSION bump. This file is the machine that charges that cost.
@@ -85,17 +85,17 @@ strict_keys_of() {
 }
 check_shape() {
   local id="$1" f="$2"
-  check "$id: exactly 10 lines" 10 "$(wc -l < "$f" | tr -d ' ')"
+  check "$id: exactly 11 lines" 11 "$(wc -l < "$f" | tr -d ' ')"
   check "$id: the last byte is a newline (nothing truncated)" 1 "$(tail -c 1 "$f" | wc -l | tr -d ' ')"
   check "$id: every line is KEY=VALUE, in the expected order" "$EXPECTED_KEYS" \
     "$(strict_keys_of "$(cat "$f" 2>/dev/null || echo "")")"
 }
 
-# The v2 key list, retyped here on purpose. This is the ONE deliberate CPR-SSOT
+# The v3 key list (#2434 added CONTROL_DIR after PLANS_DIR), retyped here on purpose. This is the ONE deliberate CPR-SSOT
 # exception in the suite: keys.js and this literal are two independent witnesses to the
 # same external contract, so changing either side alone must go red. Deriving the
 # expectation from keys.js would make the test agree with any edit, including a wrong one.
-EXPECTED_KEYS="FACTS_VERSION SESSION_ID PLANS_DIR GATE_CONFIRM_TESTS GATE_CONFIRM_CODE COMPLEXITY_LEVEL_write_tests COMPLEXITY_LEVEL_write_code COMPLEXITY_MODEL_write_tests COMPLEXITY_MODEL_write_code COMPLEXITY_SIGNALS "
+EXPECTED_KEYS="FACTS_VERSION SESSION_ID PLANS_DIR CONTROL_DIR GATE_CONFIRM_TESTS GATE_CONFIRM_CODE COMPLEXITY_LEVEL_write_tests COMPLEXITY_LEVEL_write_code COMPLEXITY_MODEL_write_tests COMPLEXITY_MODEL_write_code COMPLEXITY_SIGNALS "
 
 # One node: the C1 keys probe plus every state fixture (C2, C2u, C3c; one file per
 # session id, so none can see another). Prints "KEYS=<list>" for C1.
@@ -120,7 +120,7 @@ KEYS_JS="$(printf '%s\n' "$FIX_OUT" | sed -n 's/^KEYS=//p')"
 case_begin "C1-keys-witness" "bin/workflow/lib/session-facts/keys.js"
 echo "=== C1: keys.js is the implementation-side witness of the same list ==="
 check "C1a: FACTS_KEYS matches the independently retyped list, in order" "$EXPECTED_KEYS" "$KEYS_JS"
-check "C1b: the list is exactly ten keys" 10 "$(printf '%s' "$EXPECTED_KEYS" | wc -w | tr -d ' ')"
+check "C1b: the list is exactly eleven keys" 11 "$(printf '%s' "$EXPECTED_KEYS" | wc -w | tr -d ' ')"
 case_end
 
 echo ""
@@ -132,12 +132,12 @@ echo "=== C2: a typical session -- full key set, in order, FACTS_VERSION first =
 run_facts "$CFG_FULL" --session c2
 check "C2a: exits 0" 0 "$RC"
 check "C2b: the emitted keys match the expected list, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
-check "C2c: line 1 is the version line" "FACTS_VERSION=2" "$(printf '%s\n' "$OUT" | head -n 1)"
+check "C2c: line 1 is the version line" "FACTS_VERSION=3" "$(printf '%s\n' "$OUT" | head -n 1)"
 check "C2d: the session id is echoed back" "SESSION_ID=c2" "$(printf '%s\n' "$OUT" | sed -n '2p')"
 check_not_contains "C2e: no ACTION line (this CLI reports, it does not decide)" "ACTION=" "$OUT"
 check_not_contains "C2f: no NEXT_SKILL line" "NEXT_SKILL=" "$OUT"
 check_not_contains "C2g: no NEXT_HINT line" "NEXT_HINT=" "$OUT"
-check "C2h: no line is emitted twice" 10 "$(printf '%s\n' "$OUT" | sed -n 's/=.*//p' | sort -u | wc -l | tr -d ' ')"
+check "C2h: no line is emitted twice" 11 "$(printf '%s\n' "$OUT" | sed -n 's/=.*//p' | sort -u | wc -l | tr -d ' ')"
 check_shape "C2i" "$OUTF"
 # Non-vacuity for check_shape: the strict reader must actually flag a non-conforming line
 # rather than skip it the way keys_of does.
@@ -167,15 +167,15 @@ echo "=== C3: the key set never shrinks -- three degraded fixtures ==="
 # output by key must never have to branch on a key's absence.
 run_facts "$CFG_FULL" --session c3nostate
 check "C3a: no state file -- exits 0" 0 "$RC"
-check "C3a2: no state file -- all ten keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
+check "C3a2: no state file -- all eleven keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3a3: no state file" "$OUTF"
 run_facts "$CFG_BARE" --session c3noenv
 check "C3b: no .env and no get-config-var -- exits 0" 0 "$RC"
-check "C3b2: no .env -- all ten keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
+check "C3b2: no .env -- all eleven keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3b3: no .env" "$OUTF"
 run_facts "$CFG_FULL" --session c3nocx
 check "C3c: state file without a complexity record -- exits 0" 0 "$RC"
-check "C3c2: no complexity record -- all ten keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
+check "C3c2: no complexity record -- all eleven keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3c3: no complexity record" "$OUTF"
 case_end
 
@@ -206,7 +206,7 @@ AGENTS_CONFIG_DIR="$(nrm "$CFG_FULL")" run_with_timeout node --require "$STUB" "
   --session c2 >"$OUTF" 2>"$ERRF" || RC=$?
 OUT="$(cat "$OUTF" 2>/dev/null || echo "")"
 check "C4b: under the stub the key set is unchanged" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
-check "C4c: under the stub the key count is still ten" 10 "$(printf '%s\n' "$OUT" | grep -c '=' || true)"
+check "C4c: under the stub the key count is still eleven" 11 "$(printf '%s\n' "$OUT" | grep -c '=' || true)"
 case_end
 
 echo ""
@@ -356,7 +356,7 @@ case_begin "C8-no-env-secret-leak" "bin/workflow/lib/session-facts/collect.js"
 echo "=== C8: the snapshot carries the two gate verdicts, never the .env behind them ==="
 # The reader opens the config dir's .env to answer two boolean questions, and its output
 # is pasted into a transcript. Anything else living in that file -- API keys, tokens --
-# must not ride along (OWASP ASVS V8). The ten-key contract implies this, but a
+# must not ride along (OWASP ASVS V8). The eleven-key contract implies this, but a
 # key-name assertion cannot see a secret smuggled into a VALUE, so it is witnessed here
 # on the raw bytes of both streams.
 CFG_SEC="$TMPDIR_BASE/cfg-sec"; mk_cfg "$CFG_SEC"
@@ -376,7 +376,7 @@ case_end
 
 echo ""
 case_begin "C9-exit3-keeps-shape" "bin/workflow/lib/session-facts/collect.js"
-echo "=== C9: exit 3 degrades a VALUE -- the ten-line shape is unchanged ==="
+echo "=== C9: exit 3 degrades a VALUE -- the eleven-line shape is unchanged ==="
 # The fail-closed PLANS_DIR path is the one place the CLI exits nonzero while still
 # reporting. A build that abandoned the contract there -- dropping keys, or appending a
 # diagnostic to stdout -- would leave the caller parsing a shape it never expects.
@@ -435,6 +435,23 @@ if [ "$(dir_fp "$FP_TARGETS")" = "$FP_BEFORE" ]; then
   fail "C10f: control -- the fingerprint did not notice an added file"
 else pass "C10f: control -- the fingerprint notices an added file"; fi
 rm -f "$WORKFLOW_DIR/fp-control.txt"
+case_end
+
+echo ""
+case_begin "C11-control-dir-key" "bin/workflow/lib/session-facts/collect.js"
+echo "=== C11: CONTROL_DIR is <CLAUDE_WORKFLOW_DIR>/<sid>.control, and reading it creates nothing (#2434) ==="
+# Separator style is not part of the contract (win32 path.join emits backslashes), so
+# both sides are compared with '/' separators.
+slashes() { printf '%s' "$1" | tr '\\' '/'; }
+run_facts "$CFG_FULL" --session c11ctl
+check "C11a: exits 0" 0 "$RC"
+check "C11b: CONTROL_DIR is the session's control dir" \
+  "CONTROL_DIR=$(slashes "$CLAUDE_WORKFLOW_DIR")/c11ctl.control" \
+  "$(slashes "$(printf '%s\n' "$OUT" | grep '^CONTROL_DIR=' || true)")"
+check "C11c: the reader did not mkdir the control dir (read-only resolution)" "absent" \
+  "$([ -e "$WORKFLOW_DIR/c11ctl.control" ] && echo present || echo absent)"
+UUID_CTL="$(printf '%s\n' "$OUT" | sed -n '4p')"
+check "C11d: CONTROL_DIR is line 4, right after PLANS_DIR" "CONTROL_DIR" "${UUID_CTL%%=*}"
 case_end
 
 echo ""

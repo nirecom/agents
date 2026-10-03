@@ -18,6 +18,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$AGENTS_DIR/tests/lib/harness.sh"
 
 REAL_PLANS_DIR="${WORKFLOW_PLANS_DIR:-${HOME:?}/.workflow-plans}"
+REAL_WF_DIR="${CLAUDE_WORKFLOW_DIR:-${HOME:?}/.claude/projects/workflow}"
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
 mkdir -p "$TMP/wf" "$TMP/home" "$TMP/transcripts"
@@ -52,7 +53,7 @@ cat > "$TMP/mark.js" <<'JS'
 // node mark.js <sid> — the flush mark's bytes: a number, "null", or ABSENT.
 const fs = require('fs');
 try {
-  const m = JSON.parse(fs.readFileSync(process.env.WORKFLOW_PLANS_DIR + '/' + process.argv[2] + '-handoff-flush-mark.json', 'utf8'));
+  const m = JSON.parse(fs.readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/' + process.argv[2] + '.control/handoff-flush-mark.json', 'utf8'));
   process.stdout.write(String(m.bytes));
 } catch (e) { process.stdout.write('ABSENT'); }
 JS
@@ -155,7 +156,7 @@ OUT="$(flush "$SID_F5")"; RC=$?
 expect "F5: with no transcript the flush still prints WRITTEN=1 and exits 0" "$RC:${OUT%% *}" "0:WRITTEN=1"
 expect "F5: with no transcript the mark bytes are null" "$(mark_bytes "$SID_F5")" "null"
 nudge "$SID_F5" "$(np "$TMP/transcripts/nowhere/$SID_F5.jsonl")" >/dev/null
-rm -f "$TMP/wf/$SID_F5-handoff-flush-mark.json"
+rm -f "$TMP/wf/$SID_F5.control/handoff-flush-mark.json"
 flush "$SID_F5" 2 >/dev/null
 expect "F5: a recorded path with no transcript anywhere also yields null" "$(mark_bytes "$SID_F5")" "null"
 case_end
@@ -183,15 +184,16 @@ case_end
 
 case_begin "fixture-writes-stay-isolated" "hooks/handoff-pressure-nudge.js"
 expect "F6: every seeded sid is registered for the leak scan (non-vacuity: 7 sids)" "${#ALL_SIDS[@]}" "7"
-expect "F6: the fixture plans dir received the F1 pressure sidecar (non-vacuity)" \
-    "$([[ -f "$TMP/wf/$SID_F1-handoff-pressure.json" ]] && echo yes || echo no)" "yes"
+expect "F6: the fixture control dir received the F1 pressure sidecar (non-vacuity)" \
+    "$([[ -f "$TMP/wf/$SID_F1.control/handoff-pressure.json" ]] && echo yes || echo no)" "yes"
 leaked=""
 for s in "${ALL_SIDS[@]}"; do
     for f in "$s-handoff-pressure.json" "$s-handoff-flush-mark.json" "$s-handoff.md" "$s.json"; do
         [[ -e "$REAL_PLANS_DIR/$f" ]] && leaked="$leaked $f"
     done
+    [[ -e "$REAL_WF_DIR/$s.control" ]] && leaked="$leaked $s.control"
 done
-expect "F6: no fixture sid left a file in the real plans dir" "${leaked:-none}" "none"
+expect "F6: no fixture sid left a file in the real plans dir or a control dir in the real workflow dir" "${leaked:-none}" "none"
 case_end
 
 echo ""

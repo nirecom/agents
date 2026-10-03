@@ -4,6 +4,14 @@
 # Variables PASS, FAIL, SKIP, pass(), fail(), skip(), HOOK_JS, TMPDIR_BASE,
 # run_with_timeout(), node_path() are all defined in the parent file.
 
+# #2434: the env-file is a control file — <workflow dir>/<sid>.control/final-report-env.json.
+# $1 = sid, $2 = workflow dir (default: the runner's exported CLAUDE_WORKFLOW_DIR). Creates the dir.
+envfile_for() {
+    local dir="${2:-$CLAUDE_WORKFLOW_DIR}/$1.control"
+    mkdir -p "$dir"
+    printf '%s/final-report-env.json' "$dir"
+}
+
 # Write a minimal env-file (all not_required) to $1.
 write_default_env_file() {
     local path="$1"

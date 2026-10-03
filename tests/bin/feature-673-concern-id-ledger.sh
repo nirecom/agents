@@ -7,6 +7,8 @@ set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 WRAPPER_SRC="$AGENTS_WORKTREE/bin/run-codex-review-loop"
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+. "$AGENTS_WORKTREE/tests/lib/harness.sh"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -31,6 +33,14 @@ if ! grep -q -- "--round" "$WRAPPER_SRC" || ! grep -q -- "--ledger" "$WRAPPER_SR
     echo "FAIL: $WRAPPER_SRC does not support --round / --ledger (implementation missing)"
     exit 1
 fi
+
+# #2434: control files (counter, last-round, terminal) live under
+# $CLAUDE_WORKFLOW_DIR/<sid>.control/, so pin both state roots to a fixture.
+STATE_ROOT=$(mktemp -d)
+trap 'rm -rf "$STATE_ROOT"' EXIT
+export CLAUDE_WORKFLOW_DIR="$STATE_ROOT/workflow-state"
+export WORKFLOW_PLANS_DIR="$STATE_ROOT/plans"
+mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
 
 # ---------------------------------------------------------------------------
 # Test scaffolding — sets up an isolated AGENTS_CONFIG_DIR with mocked
@@ -72,7 +82,7 @@ EOF
     if [[ -f "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" ]]; then
       cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$agents_dir/bin/lib/cli-exec-guard.sh"
     fi
-    cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
+    cp "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" "$agents_dir/bin/lib/safe-state-path.sh"
     cp "$AGENTS_WORKTREE/bin/concern-ledger" "$agents_dir/bin/concern-ledger"
     chmod +x "$agents_dir/bin/concern-ledger"
     cp "$AGENTS_WORKTREE/bin/lib/concern-ledger.sh" "$agents_dir/bin/lib/concern-ledger.sh"
@@ -120,6 +130,18 @@ invoke() {
 # has no round-counter file, so a bare --round 2 is rejected (exit 4). Round
 # sequencing itself is covered by tests/bin/feature-673-round-counter.sh.
 
+case_begin "safe-state-path-preflight" "bin/run-codex-review-loop"
+# The shared loop sources bin/lib/safe-state-path.sh (#2434 rename of
+# safe-plans-path.sh). Name its absence once instead of letting every case
+# below cascade into an unexplained exit 4.
+if [[ -f "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" ]]; then
+  pass "preflight: bin/lib/safe-state-path.sh present"
+else
+  fail "implementation missing: bin/lib/safe-state-path.sh (the cases below exit 4 until it exists)"
+fi
+case_end
+
+case_begin "round1-id-assignment" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 1. Round 1 with Cn-prefix concerns already → ledger written, IDs preserved
 # ---------------------------------------------------------------------------
@@ -163,7 +185,9 @@ C2. [MEDIUM] beta concern"
     fail "2: auto-assign failed. Ledger: $(cat "$LEDGER" 2>/dev/null)"
   fi
 }
+case_end
 
+case_begin "round2-strips-unknown-ids" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 3. Round 2 with new ID (C99 not in ledger) → strip + warn to stderr
 # ---------------------------------------------------------------------------
@@ -194,7 +218,9 @@ C99: unresolved — new injected"
   fi
   [[ $ok -eq 1 ]] && pass "3: round 2 new ID C99 stripped + warned"
 }
+case_end
 
+case_begin "round2-verdict-after-stripping" "bin/review-loop-verdict"
 # ---------------------------------------------------------------------------
 # 4. Round 2 all resolved (retained=0) → APPROVED + ledger cleared/deleted
 # ---------------------------------------------------------------------------
@@ -240,7 +266,9 @@ C51: unresolved — also new"
     fail "5: round 2 all new IDs → expected exit 0, got $rc"
   fi
 }
+case_end
 
+case_begin "exit4-refusals-ledger-and-format" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 6. Round 1 ledger write failure (write to read-only dir) → exit 4
 # ---------------------------------------------------------------------------
@@ -317,7 +345,9 @@ C1. [HIGH] alpha"
     fail "8: severity format violation → expected exit 4, got $rc"
   fi
 }
+case_end
 
+case_begin "missing-round-defaults-to-counter" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 9. Missing --round flag → defaults to the recorded counter + 1 (here: round 1)
 #    Not an error: absent counter file → ROUND_PREV 0 → enters at round 1.
@@ -333,15 +363,17 @@ C1. [HIGH] alpha"
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
   # Composite: exit 0 alone would not show *which* round it ran; the settled
-  # last-round file names it.
-  SETTLED=$(cat "$PLANS/sid9-detail-plan-last-round.txt" 2>/dev/null)
+  # last-round file names it (#2434: a control file under <sid>.control/).
+  SETTLED=$(cat "$CLAUDE_WORKFLOW_DIR/sid9.control/detail-plan-last-round.txt" 2>/dev/null)
   if [[ $rc -eq 0 && "$SETTLED" == "1" ]]; then
     pass "9: missing --round → defaults to round 1, exit 0"
   else
     fail "9: missing --round → expected exit 0 at round 1, got exit $rc at round '$SETTLED'"
   fi
 }
+case_end
 
+case_begin "ledger-preserves-pipe-text" "bin/lib/concern-ledger/core.sh"
 # ---------------------------------------------------------------------------
 # 10. Pipe character in concern text → full text preserved, correct split
 # ---------------------------------------------------------------------------
@@ -361,7 +393,9 @@ C1. [HIGH] alpha"
     fail "10: pipes not preserved. Ledger: $(cat "$LEDGER" 2>/dev/null)"
   fi
 }
+case_end
 
+case_begin "multiple-discarded-ids-warned" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 11. Multiple discarded IDs → comma-separated (or multi-mention) warning
 # ---------------------------------------------------------------------------
@@ -387,7 +421,9 @@ C52: unresolved — new3"
   done
   [[ $ok -eq 1 ]] && pass "11: multiple discarded IDs mentioned in stderr warning"
 }
+case_end
 
+case_begin "ledger-preserves-full-text" "bin/lib/concern-ledger/core.sh"
 # ---------------------------------------------------------------------------
 # 12. Full text preserved across rounds (no truncation)
 # ---------------------------------------------------------------------------
@@ -408,7 +444,9 @@ C52: unresolved — new3"
     fail "12: text truncated. Ledger: $(cat "$LEDGER" 2>/dev/null)"
   fi
 }
+case_end
 
+case_begin "outline-format-ledger-path" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 13. --format outline-plan: ledger file at correct path
 # ---------------------------------------------------------------------------
@@ -428,7 +466,9 @@ C52: unresolved — new3"
     fail "13: outline-plan ledger not created at $LEDGER"
   fi
 }
+case_end
 
+case_begin "v2-ledger-schema" "bin/lib/concern-ledger/core.sh"
 # ---------------------------------------------------------------------------
 # 14-17. v2 ledger schema, v1→v2 write-back, closed round-2 admission, and the
 # cycle boundary at round 1 (#1992). Split out to keep this file under the
@@ -436,6 +476,7 @@ C52: unresolved — new3"
 # ---------------------------------------------------------------------------
 # shellcheck source=tests/bin/feature-673-concern-id-ledger/v2-ledger.sh
 . "$AGENTS_WORKTREE/tests/bin/feature-673-concern-id-ledger/v2-ledger.sh"
+case_end
 
 # ---------------------------------------------------------------------------
 # Summary

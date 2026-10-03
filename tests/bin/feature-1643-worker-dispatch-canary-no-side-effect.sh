@@ -2,27 +2,8 @@
 # tests/bin/feature-1643-worker-dispatch-canary-no-side-effect.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch/registry.js, bin/worker-dispatch/workers/test-runner.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, canary, side-effect, fsguard, write-scope, containment, security, TL2, scope:issue-specific
-#
-# Issue #1643 Stage 1 canary condition, made measurable.
-#
-# test-runner is declared side-effect-free: registry writeScopes = {} (empty),
-# so fsguard.js must refuse EVERY write. This test dispatches it against a
-# throwaway repo and proves that, before and after:
-#   (a) `git status --porcelain` is unchanged in the target repo
-#   (b) `git rev-parse HEAD` is unchanged in the target repo
-#   (c) no file appears under PLANS_DIR other than the payload written by the caller
-#   (d) an ADJACENT repository is byte-for-byte unchanged (the C2 cross-repo case)
-#
-# The whole-tree fingerprint (path + size + sha256, sorted) is what makes (a)/(b)
-# non-vacuous: status/HEAD alone would miss an ignored or untracked file drop.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - Writes performed by the *tests being run* (tests/run-all.sh is stubbed here).
-#     Real suite side effects are outside the dispatcher's containment boundary by
-#     design; TL3-worker-dispatch-run-tests.sh runs the real suite subset instead.
-#   - Writes to paths outside both fixture repos (e.g. a real $HOME dotfile).
-# Closest-to-action mitigation: bin/check-verification-gate.sh category
-# hook-registration fires at WORKFLOW_USER_VERIFIED preflight.
+# #1643 canary: test-runner (writeScopes={}) leaves target/adjacent repos (status, HEAD, whole-tree fingerprint) and PLANS_DIR untouched.
+# TL3 gap: writes by the real suite (run-all.sh is stubbed; see TL3-worker-dispatch-run-tests.sh) and outside both fixtures; mitigated at WORKFLOW_USER_VERIFIED via bin/check-verification-gate.sh (hook-registration).
 
 set -u
 
@@ -120,7 +101,10 @@ TARGET="$(nodepath "$TARGET_RAW")"
 ADJ="$(nodepath "$ADJ_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
 
-PAYLOAD_FILE="$PLANS_RAW/canary-worker-test-runner.json"
+# #2434: payloads are published into the session control dir, not PLANS_DIR.
+WF_RAW="$TMPD/workflow";    mkdir -p "$WF_RAW/canary.control"
+WF="$(nodepath "$WF_RAW")"
+PAYLOAD_FILE="$WF_RAW/canary.control/worker-test-runner.json"
 printf '{"test_args":[],"cwd":"%s","timeout_seconds":60}' "$TARGET" > "$PAYLOAD_FILE"
 
 plans_listing() { (cd "$PLANS_RAW" && find . -type f | LC_ALL=C sort); }
@@ -171,7 +155,7 @@ group_canary_dispatch() {
         return
     fi
     local out rc=0
-    out="$(cd "$TMPD" && run_with_timeout 120 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    out="$(cd "$TMPD" && run_with_timeout 120 env "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF" \
         node "$(nodepath "$DISPATCH_JS")" test-runner "$TARGET" "$(nodepath "$PAYLOAD_FILE")" 2>&1)" || rc=$?
     if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '^status:'; then
         pass "canary/dispatch-runs"

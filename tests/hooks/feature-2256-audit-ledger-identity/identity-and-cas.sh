@@ -72,9 +72,9 @@ seed() {
         printf '%s\n' "const st = schema.createEmptyState('$sid');"
         printf '%s\n' "st.audit = st.audit || {};"
         printf '%s\n' "st.audit.audit_phase = '$phase' === 'null' ? null : '$phase';"
-        printf '%s\n' "fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));"
+        printf '%s\n' "fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));"
     } > "$js"
-    nodejs "$js" >/dev/null
+    nodejs "$js" >/dev/null || fail "seed($sid): supervisor-state seed write failed"
 }
 
 # --- 1: armAuditRun numbers runs monotonically as run-NNNN ---

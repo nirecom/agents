@@ -2,15 +2,8 @@
 # tests/hooks/feature-1067-supervisor-alert-audit-dispatch.sh
 # Tests: hooks/supervisor-guard.js, hooks/lib/final-report-schema.js, bin/supervisor-write-alert, bin/supervisor-write-audit, bin/supervisor-write-audit-verdict
 # Tags: supervisor, em-supervisor, dispatch, c3, alert, audit, final-report, scope:issue-specific
-# Tests for issue #1067 — guard audit dispatch references supervisor-audit.md;
-# final-report-schema renders alert/audit placeholders;
-# CLI binaries accept new flags.
-#
-# RED: Fails until source changes land.
-#
-# L3 gap (what this test does NOT catch):
-# - real Claude Code Stop event integration for C3 detection
-# - live agent invocation via supervisor-audit.md
+# Tests for issue #1067 — guard audit dispatch references supervisor-audit.md; final-report-schema renders alert/audit placeholders; CLIs accept new flags.
+# L3 gap: real Claude Code Stop event integration for C3 detection; live agent invocation via supervisor-audit.md.
 # Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
 
 set -u
@@ -144,14 +137,14 @@ run_di8() {
     local tmp out rc
     tmp="$(mktemp -d)"
     # seed a state file first
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('di8-sid');
-fs.writeFileSync(w.getStatePath('di8-sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('di8-sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$AGENTS_DIR/bin/supervisor-write-alert" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$AGENTS_DIR/bin/supervisor-write-alert" \
         --session-id "di8-sid" --set-alert-phase "pending" 2>&1)
     rc=$?
     rm -rf "$tmp"
@@ -170,14 +163,14 @@ run_di9() {
     fi
     local tmp out rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('di9-sid');
-fs.writeFileSync(w.getStatePath('di9-sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('di9-sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$AGENTS_DIR/bin/supervisor-write-audit" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$AGENTS_DIR/bin/supervisor-write-audit" \
         --session-id "di9-sid" --set-audit-phase "pending" 2>&1)
     rc=$?
     rm -rf "$tmp"

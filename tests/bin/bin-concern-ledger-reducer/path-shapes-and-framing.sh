@@ -1,8 +1,9 @@
 # tests/bin/bin-concern-ledger-reducer/path-shapes-and-framing.sh
-# Tests: bin/lib/concern-ledger/core.sh, bin/lib/safe-plans-path.sh
+# Tests: bin/lib/concern-ledger/core.sh, bin/lib/safe-state-path.sh
 # Tags: concern-ledger, pattern-discovery, windows-path, nul-framing, table-driven, scope:common, pwsh-not-required
 # Sourced by tests/bin/bin-concern-ledger-reducer.sh, after pattern-discovery.sh whose helpers it reuses.
 
+case_begin "path-shapes-pd4-both-path-shapes" "bin/lib/concern-ledger/core.sh"
 echo ""
 echo "--- reducer pd-4: both path shapes, on every host ---"
 
@@ -51,6 +52,9 @@ TABLE
         "sp=$(printf '%s\n' "$HELPER_BODY" | grep -c -E '_sp_(dir|base)name "\$pat"' | tr -d ' ') shell=$(printf '%s\n' "$HELPER_BODY" | grep -c -E '\$\((dir|base)name ' | tr -d ' ')"
 }
 
+case_end
+
+case_begin "path-shapes-pd5-nul-framing" "bin/lib/safe-state-path.sh"
 echo ""
 echo "--- reducer pd-5: a file name the NUL framing exists for ---"
 
@@ -86,3 +90,4 @@ pd_names0() {
         echo "NOTE: pd-5: SKIPPED — this filesystem refuses a newline in a file name"
     fi
 }
+case_end

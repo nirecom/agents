@@ -1,7 +1,7 @@
 #!/bin/bash
 # render-tests.sh: bin/render-final-report.js existence + rendering behavior
 # Tests: bin/render-final-report.js, hooks/lib/final-report-schema.js
-# Tags: scope:issue-specific
+# Tags: scope:issue-specific, feature-2434, control-dir
 #
 # Sourced helpers: feature-1463-session-close-scriptify/helpers.sh
 
@@ -125,7 +125,9 @@ test_T7_missing_env_exit1() {
         return
     fi
     local code
-    FRE_ENV_JSON="${TMPDIR_BASE}/does-not-exist-env.json" render_report "$SID" >/dev/null 2>&1
+    seed_sid_fixture f1463-noenv
+    rm -f "$(ctl_path f1463-noenv final-report-env.json)"
+    render_report f1463-noenv >/dev/null 2>&1
     code=$?
     if [ "$code" = "1" ]; then
         pass "T7_missing_env_exit1: missing env JSON exits 1"
@@ -157,7 +159,7 @@ test_T9_missing_supervisor_ok() {
         return
     fi
     local out code toks
-    out="$(FRE_SUPERVISOR_STATE="${TMPDIR_BASE}/absent-supervisor-state.json" render_report "$SID" 2>/dev/null)"
+    out="$(FRE_SUPERVISOR_STATE="$(ctl_path "$SID" supervisor-state.json)" render_report "$SID" 2>/dev/null)"
     code=$?
     if [ "$code" != "0" ]; then
         fail "T9_missing_supervisor_ok: expected exit 0 with absent supervisor-state, got $code"
@@ -174,26 +176,31 @@ $toks"
 
 test_T7b_T7c_missing_required_files() {
     if [ ! -f "$RENDER_JS" ]; then skip "T7b+T7c (bin/render-final-report.js missing)"; return; fi
-    FRE_OUTCOME_JSON="$(node_path "${TMPDIR_BASE}/no-outcome.json")" render_report "$SID" >/dev/null 2>&1 && fail "T7b: expected exit 1" || pass "T7b: missing outcome JSON -> exit 1"
-    FRE_INTENT_MD="$(node_path "${TMPDIR_BASE}/no-intent.md")" render_report "$SID" >/dev/null 2>&1 && fail "T7c: expected exit 1" || pass "T7c: missing intent MD -> exit 1"
+    seed_sid_fixture f1463-noout; rm -f "$(ctl_path f1463-noout issue-close-outcome.json)"
+    seed_sid_fixture f1463-noint; rm -f "${PLANS_DIR}/f1463-noint-intent.md"
+    render_report f1463-noout >/dev/null 2>&1 && fail "T7b: expected exit 1" || pass "T7b: missing outcome JSON -> exit 1"
+    render_report f1463-noint >/dev/null 2>&1 && fail "T7c: expected exit 1" || pass "T7c: missing intent MD -> exit 1"
 }
 
 test_T19_render_supervisor_populated() {
     if [ ! -f "$RENDER_JS" ]; then skip "T19 (bin/render-final-report.js missing)"; return; fi
-    printf '{"alert":{"cumulative_severity":"warning","findings":[{"categories":["code"],"severity":"warning","detail":"x"}],"findings_surfaced_at":null},"layer1":{"findings":[]},"audit":{"audit_verdict":"CONTINUE"}}\n' > "${TMPDIR_BASE}/t19-sup.json"
-    FRE_SUPERVISOR_STATE="$(node_path "${TMPDIR_BASE}/t19-sup.json")" render_report "$SID" 2>/dev/null | grep -qE '<[A-Z_]+>' && fail "T19: TOKEN unresolved" || pass "T19: supervisor state rendered, no TOKEN"
+    seed_sid_fixture f1463-t19
+    printf '{"alert":{"cumulative_severity":"warning","findings":[{"categories":["code"],"severity":"warning","detail":"x"}],"findings_surfaced_at":null},"layer1":{"findings":[]},"audit":{"audit_verdict":"CONTINUE"}}\n' > "$(ctl_path f1463-t19 supervisor-state.json)"
+    FRE_SUPERVISOR_STATE="$(ctl_path f1463-t19 supervisor-state.json)" render_report f1463-t19 2>/dev/null | grep -qE '<[A-Z_]+>' && fail "T19: TOKEN unresolved" || pass "T19: supervisor state rendered, no TOKEN"
 }
 
 test_T20_postmerge_flag_required() {
     if [ ! -f "$RENDER_JS" ]; then skip "T20 (bin/render-final-report.js missing)"; return; fi
     printf '{"PR_NUMBER":"1","PR_TITLE":"T","PR_URL":"","PR_STATE":"MERGED","BRANCH":"b","WORKTREE_PATH":"","CREATED_DATE":"","BACKUP_MANIFEST_PATH":"","NOTES_BACKUP_PATH":"","BRANCH_DELETED":"","CLAUDE_CODE_RESTART_REQUIRED":"","CC_RESTART_REQUIRED":"required","CC_RESTART_REASON":"test-reason","VSCODE_RELOAD_REQUIRED":"","VSCODE_RELOAD_REASON":"","INSTALLER_RERUN_REQUIRED":"","INSTALLER_RERUN_REASON":"","OS_REBOOT_REQUIRED":"","OS_REBOOT_REASON":""}\n' > "${TMPDIR_BASE}/env-t20.json"
-    FRE_ENV_JSON="$(node_path "${TMPDIR_BASE}/env-t20.json")" render_report "$SID" 2>/dev/null | grep -qE '<[A-Z_]+>' && fail "T20: TOKEN unresolved" || pass "T20: CC_RESTART_REQUIRED=required rendered, no TOKEN"
+    seed_sid_fixture f1463-t20; cp "${TMPDIR_BASE}/env-t20.json" "$(ctl_path f1463-t20 final-report-env.json)"
+    render_report f1463-t20 2>/dev/null | grep -qE '<[A-Z_]+>' && fail "T20: TOKEN unresolved" || pass "T20: CC_RESTART_REQUIRED=required rendered, no TOKEN"
 }
 
 test_T21_nonempty_outcome_issues() {
     if [ ! -f "$RENDER_JS" ]; then skip "T21 (bin/render-final-report.js missing)"; return; fi
     printf '{"issues":[{"issueNumber":1463,"title":"scriptify","state":"CLOSED","historyEntry":"feature","issueClosed":true,"sentinelsPosted":true,"wipCleared":true}]}\n' > "${TMPDIR_BASE}/outcome-t21.json"
-    local out; out="$(FRE_OUTCOME_JSON="$(node_path "${TMPDIR_BASE}/outcome-t21.json")" render_report "$SID" 2>/dev/null)"
+    seed_sid_fixture f1463-t21; cp "${TMPDIR_BASE}/outcome-t21.json" "$(ctl_path f1463-t21 issue-close-outcome.json)"
+    local out; out="$(render_report f1463-t21 2>/dev/null)"
     # Scope the assertion to the "### Closed Issue Outcomes" section only —
     # grepping the whole report would also match the unrelated "### Closed
     # Issues" list section, which can independently contain "1463" (e.g. via

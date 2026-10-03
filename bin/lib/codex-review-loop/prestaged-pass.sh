@@ -42,7 +42,7 @@ run_prestaged_pass() {
     # history more than stopping (#2256 C16 archive-or-halt).
     if (( ROUND == 1 && ROUND_FILE_EXISTED == 0 )) && [[ -f "${LEDGER:-}" ]]; then
       local _arch
-      if ! _arch="$(mktemp "${PLANS_DIR}/.prev-XXXXXX" 2>/dev/null)"; then
+      if ! _arch="$(mktemp "${CONTROL_DIR}/.prev-XXXXXX" 2>/dev/null)"; then
         echo "run-codex-review-loop: cannot create archive temp; halting to avoid reducing into stale terminal ledger" >&2
         exit 4
       fi

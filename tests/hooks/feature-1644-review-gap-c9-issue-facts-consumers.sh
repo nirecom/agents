@@ -1,24 +1,12 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1644-review-gap-c9-issue-facts-consumers.sh
 # Tests: hooks/workflow-state/session-facts.js, bin/parse-closes-issues, bin/render-final-report.js, bin/issue-close-write-outcome.js, hooks/lib/final-report-schema.js
-# Tags: tl2, workflow, session-facts, closes-issues, cross-module, final-report, issue-close, scope:issue-specific, pwsh-not-required
-#
-# #1644 review gap C9 (HIGH) — cross-module consistency of the issue facts.
-# Three consumers were migrated onto getClosesIssues() in stage 4:
-#   bin/parse-closes-issues --session <sid> [--plans-dir <dir>]
-#   bin/render-final-report.js <sid> <env-json> <outcome-json> <intent-md>
-#   bin/issue-close-write-outcome.js --fallback <intent-md> <outcome-file>
-# Driven against ONE seeded cache state, every consumer must report the same
-# issue NUMBERS. This file exercises both shapes that can legitimately sit in
-# state.closes_issues: the OBJECT shape written by parseClosesIssues today, and
-# the LEGACY numeric-only shape ([1644, 1655]) that older state files carry.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether /worktree-end and /issue-close-finalize actually invoke these CLIs
-#   with the argv this test uses (arg drift in a SKILL.md is invisible here).
-# - The real ~/.workflow-plans layout and a real merged PR's outcome JSON.
-# Closest-to-action mitigation: the CLIs are spawned as real subprocesses with
-# real files, so only the skill-side argv wiring is left to a TL3 run.
+# Tags: tl2, workflow, session-facts, closes-issues, cross-module, final-report, issue-close, scope:issue-specific, pwsh-not-required, feature-2434, control-dir
+# #1644 C9: parse-closes-issues, render-final-report and issue-close-write-outcome
+# must report the same issue numbers for one seeded cache (object + legacy shapes).
+# #2434 C9-6: render-final-report derives its control files from --session under
+# $CLAUDE_WORKFLOW_DIR/<sid>.control/; legacy positionals only via the shim.
+# TL3 gap: the real ~/.workflow-plans layout and a merged PR's outcome JSON.
 
 set -uo pipefail
 
@@ -30,6 +18,7 @@ AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
 PARSE_CLI_N="$AGENTS_DIR_N/bin/parse-closes-issues"
 RENDER_CLI_N="$AGENTS_DIR_N/bin/render-final-report.js"
 OUTCOME_CLI_N="$AGENTS_DIR_N/bin/issue-close-write-outcome.js"
+SKILL_MD="$AGENTS_DIR/skills/session-close/SKILL.md"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -57,7 +46,10 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 PLANS_DIR_N="$(nrm "$PLANS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+WORKFLOW_DIR_N="$(nrm "$WORKFLOW_DIR")"
+unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+export HOME="$TMPDIR_BASE/home"; mkdir -p "$HOME" "$TMPDIR_BASE/tx"
+export CLAUDE_TRANSCRIPT_BASE_DIR="$(nrm "$TMPDIR_BASE/tx")"
 
 # issue-close-write-outcome.js resolves session-facts.js under AGENTS_CONFIG_DIR,
 # so it must point at the worktree under test (an isolated empty dir would make
@@ -92,10 +84,18 @@ write_intent() {
   { echo "## Issues"; for tok in "$@"; do echo "- $tok"; done; } > "$PLANS_DIR/${sid}-intent.md"
 }
 
-ENV_JSON="$TMPDIR_BASE/env.json"
-printf '%s' '{"PR_NUMBER":"1900","BRANCH":"feature/roundtrip-reduction"}' > "$ENV_JSON"
-EMPTY_OUTCOME="$TMPDIR_BASE/empty-outcome.json"
-printf '%s' '{"issues":[]}' > "$EMPTY_OUTCOME"
+ENV_BODY='{"PR_NUMBER":"1900","BRANCH":"feature/roundtrip-reduction"}'
+
+# ctl <sid> <name> -> the derived control path (#2434), Node-normalized.
+ctl() { printf '%s' "$WORKFLOW_DIR_N/$1.control/$2"; }
+
+# seed_control <sid> [env-json]: env + empty outcome at the derived control paths.
+seed_control() {
+  local sid="$1" body="${2:-$ENV_BODY}"
+  mkdir -p "$WORKFLOW_DIR/$sid.control"
+  printf '%s' "$body" > "$WORKFLOW_DIR/$sid.control/final-report-env.json"
+  printf '%s' '{"issues":[]}' > "$WORKFLOW_DIR/$sid.control/issue-close-outcome.json"
+}
 
 # --- consumer drivers --------------------------------------------------------
 consumer_parse() {  # <sid> -> JSON array as printed by the CLI
@@ -105,8 +105,9 @@ consumer_parse() {  # <sid> -> JSON array as printed by the CLI
 # Numbers as rendered into the Final Report's <CLOSED_ISSUES_LIST> section.
 consumer_render_numbers() {  # <sid>
   local sid="$1" out
-  out="$(run_with_timeout node "$RENDER_CLI_N" "$sid" "$(nrm "$ENV_JSON")" \
-    "$(nrm "$EMPTY_OUTCOME")" "$PLANS_DIR_N/${sid}-intent.md" 2>/dev/null)" || true
+  seed_control "$sid"
+  out="$(run_with_timeout node "$RENDER_CLI_N" "$sid" "$(ctl "$sid" final-report-env.json)" \
+    "$(ctl "$sid" issue-close-outcome.json)" "$PLANS_DIR_N/${sid}-intent.md" 2>/dev/null)" || true
   printf '%s' "$out" | grep -oE '^- #[^ ]+$' | sed 's/^- #//' | tr '\n' ',' | sed 's/,$//'
 }
 
@@ -143,17 +144,11 @@ check_not_contains "C9-1d: no consumer leaked the contradicting intent.md issue 
 
 echo ""
 echo "=== C9-2: LEGACY numeric-only cache — consumer-by-consumer behavior ==="
-# FINDING (pinned CURRENT behavior): state.closes_issues written by an older
-# release is a bare number array. getClosesIssues() returns it VERBATIM (it only
-# checks Array.isArray + length), so each consumer meets raw numbers:
-#   - bin/parse-closes-issues   : passes them through unchanged (numbers out).
-#   - issue-close-write-outcome : handles `typeof entry === "number"` explicitly
-#                                 -> correct issue numbers.
-#   - render-final-report.js    : does `.map((e) => e.number)` with NO numeric
-#                                 branch -> undefined per entry, and the Final
-#                                 Report renders "- #undefined".
-# That asymmetry is the C9 finding: the numeric shape is handled in two of the
-# three consumers. Asserted as-is (source untouched).
+# FINDING (pinned CURRENT behavior): getClosesIssues() returns a legacy bare
+# number array verbatim. parse-closes-issues passes numbers through and
+# issue-close-write-outcome handles `typeof entry === "number"`, but
+# render-final-report maps `e.number` with no numeric branch and renders
+# "- #undefined" -- the C9 asymmetry, asserted as-is (source untouched).
 SID_LEG="c9leg"
 seed_state "$SID_LEG" '[1644,1655]'
 write_intent "$SID_LEG" "#9999"
@@ -196,8 +191,9 @@ seed_state "$SID_E" '[]'
 write_intent "$SID_E"     # heading present, zero entries
 check "C9-4a: parse-closes-issues returns []" '[]' "$(consumer_parse "$SID_E")"
 check "C9-4b: outcome writer records no entries" "" "$(consumer_outcome_numbers "$SID_E")"
-RENDER_FULL="$(run_with_timeout node "$RENDER_CLI_N" "$SID_E" "$(nrm "$ENV_JSON")" \
-  "$(nrm "$EMPTY_OUTCOME")" "$PLANS_DIR_N/${SID_E}-intent.md" 2>&1)" || true
+seed_control "$SID_E"
+RENDER_FULL="$(run_with_timeout node "$RENDER_CLI_N" "$SID_E" "$(ctl "$SID_E" final-report-env.json)" \
+  "$(ctl "$SID_E" issue-close-outcome.json)" "$PLANS_DIR_N/${SID_E}-intent.md" 2>&1)" || true
 check_contains "C9-4c: render-final-report renders the (none) placeholder" \
   "- (none)" "$RENDER_FULL"
 check_not_contains "C9-4d: render-final-report does not emit '#undefined' on an empty set" \
@@ -221,6 +217,95 @@ if [ "$OBJ_R" = "$NUM_R" ]; then
 else
   pass "C9-5b: render DISAGREES across shapes (obj=[$OBJ_R] num=[$NUM_R]) -- the pinned C9 bug"
 fi
+
+echo ""
+echo "=== C9-6: #2434 render-final-report derives control files from --session ==="
+R6_ENV='{"PR_NUMBER":"2434","PR_TITLE":"Derived title","BRANCH":"feature/x"}'
+R6_RC=0; R6_OUT=""
+render6() {  # argv... -> sets R6_RC / R6_OUT
+  R6_RC=0
+  R6_OUT="$(run_with_timeout node "$RENDER_CLI_N" "$@" 2>/dev/null)" || R6_RC=$?
+}
+
+# --session reads env/outcome from <sid>.control and intent from PLANS.
+S6A="c96sess"; seed_control "$S6A" "$R6_ENV"; write_intent "$S6A" "#1644"
+render6 --session "$S6A"
+check "C9-6a: --session exits 0" "0" "$R6_RC"
+check_contains "C9-6a: --session renders the derived env PR line" "- PR #2434: Derived title" "$R6_OUT"
+check_contains "C9-6a: --session renders the PLANS intent issue" "- #1644" "$R6_OUT"
+
+# Only the legacy <plans>/<sid>-final-report-env.json exists: migrated, then read.
+S6B="c96mig"; write_intent "$S6B" "#1655"
+printf '%s' "$R6_ENV" > "$PLANS_DIR/${S6B}-final-report-env.json"
+render6 --session "$S6B"
+check "C9-6b: --session with a legacy PLANS env exits 0" "0" "$R6_RC"
+check_contains "C9-6b: legacy PLANS env content is rendered" "- PR #2434: Derived title" "$R6_OUT"
+if [ -f "$WORKFLOW_DIR/$S6B.control/final-report-env.json" ]; then
+  pass "C9-6b: legacy PLANS env migrated to the derived control path"
+else
+  fail "C9-6b: legacy PLANS env migrated to the derived control path -- derived file absent"
+fi
+
+# --session with no env anywhere fails (no silent empty report).
+S6C="c96noenv"; write_intent "$S6C" "#1644"
+render6 --session "$S6C"
+if [ "$R6_RC" -ne 0 ]; then pass "C9-6c: --session with a missing env exits non-zero"
+else fail "C9-6c: --session with a missing env exits non-zero -- got 0"; fi
+
+# Legacy positional equal to the derived path: accepted (shim).
+S6D="c96legd"; seed_control "$S6D" "$R6_ENV"; write_intent "$S6D" "#1644"
+render6 "$S6D" "$(ctl "$S6D" final-report-env.json)" "$(ctl "$S6D" issue-close-outcome.json)" \
+  "$PLANS_DIR_N/${S6D}-intent.md"
+check "C9-6d: legacy derived positional exits 0" "0" "$R6_RC"
+check_contains "C9-6d: legacy derived positional renders the env" "- PR #2434: Derived title" "$R6_OUT"
+
+# Legacy positional with the <sid>-final-report-env.json basename: accepted, read via derived.
+S6E="c96legb"; write_intent "$S6E" "#1644"
+printf '%s' "$R6_ENV" > "$PLANS_DIR/${S6E}-final-report-env.json"
+render6 "$S6E" "$PLANS_DIR_N/${S6E}-final-report-env.json"
+check "C9-6e: legacy PLANS-basename positional exits 0" "0" "$R6_RC"
+check_contains "C9-6e: legacy PLANS-basename positional renders the env" "- PR #2434" "$R6_OUT"
+if [ -f "$WORKFLOW_DIR/$S6E.control/final-report-env.json" ]; then
+  pass "C9-6e: legacy PLANS-basename positional lands at the derived control path"
+else
+  fail "C9-6e: legacy PLANS-basename positional lands at the derived control path -- derived file absent"
+fi
+
+# Legacy positionals that match neither rule: rejected, nothing rendered.
+S6F="c96rej"; S6O="c96other"; write_intent "$S6F" "#1644"
+seed_control "$S6O" "$R6_ENV"
+printf '%s' "$R6_ENV" > "$TMPDIR_BASE/env.json"
+printf '%s' "$R6_ENV" > "$PLANS_DIR/${S6O}-final-report-env.json"
+while IFS='|' read -r label envarg; do
+  [ -n "$label" ] || continue
+  render6 "$S6F" "$envarg"
+  if [ "$R6_RC" -ne 0 ]; then pass "C9-6f: rejected legacy env ($label)"
+  else fail "C9-6f: rejected legacy env ($label) -- accepted with exit 0"; fi
+  check_not_contains "C9-6f: nothing rendered for $label" "- PR #2434" "$R6_OUT"
+done <<EOF
+other-sid-control|$(ctl "$S6O" final-report-env.json)
+other-sid-plans|$PLANS_DIR_N/${S6O}-final-report-env.json
+arbitrary-path|$(nrm "$TMPDIR_BASE/env.json")
+EOF
+
+# Invalid or missing sid is rejected on the --session form.
+while IFS='|' read -r label sid; do
+  [ -n "$label" ] || continue
+  if [ "$sid" = "@MISSING@" ]; then render6 --session; else render6 --session "$sid"; fi
+  if [ "$R6_RC" -ne 0 ]; then pass "C9-6g: invalid sid rejected ($label)"
+  else fail "C9-6g: invalid sid rejected ($label) -- exit 0"; fi
+  check "C9-6g: invalid sid renders nothing ($label)" "" "$R6_OUT"
+done <<'EOF'
+traversal|../c96sess
+space|a b
+empty|
+missing|@MISSING@
+EOF
+
+# SKILL.md wiring: the render call passes --session and no control paths.
+R6_LINE="$(grep -F 'render-final-report.js' "$SKILL_MD" | head -1)"
+check_contains "C9-6h: SKILL render-final-report call passes --session" "--session" "$R6_LINE"
+check_not_contains "C9-6h: SKILL render-final-report call passes no control path" "<CONTROL_DIR>/" "$R6_LINE"
 
 echo ""
 echo "=== Results ==="

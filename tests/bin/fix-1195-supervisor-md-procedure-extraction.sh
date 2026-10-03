@@ -2,18 +2,8 @@
 # tests/bin/fix-1195-supervisor-md-procedure-extraction.sh
 # Tests: bin/supervisor-check-session-active, bin/supervisor-finalize-verify, bin/supervisor-parse-codex, agents/supervisor.md
 # Tags: supervisor, scope:issue-specific
-#
-# L3 gap (what this test does NOT catch):
-#   These are L2 integration tests. L3 would require a real `claude -p` session
-#   to verify the full Stop-hook → supervisor-guard → supervisor agent flow:
-#   specifically that supervisor.md's bin/ references actually invoke correctly
-#   in a live session, and that supervisor-finalize-verify is called at the
-#   right point in the Phase 3 post-condition check flow.
-#   Closest-to-action mitigation: skill-orchestration category in
-#   bin/check-verification-gate.sh.
-#
-# RED: All tests fail until write_code creates the source scripts and updates
-# agents/supervisor.md. That is expected — this is TDD.
+# L3 gap: a live Stop-hook -> supervisor-guard -> supervisor agent flow (supervisor.md bin/ refs, finalize-verify timing in Phase 3).
+# Closest-to-action mitigation: skill-orchestration category in bin/check-verification-gate.sh.
 
 set -u
 
@@ -79,7 +69,7 @@ FAKEGH
     chmod +x "$fake_bin/gh"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$CHECK_SESSION" "test-wsid-a1" > /dev/null 2>&1
     rc=$?
@@ -115,7 +105,7 @@ FAKEGH
     chmod +x "$fake_bin/gh"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$CHECK_SESSION" "test-wsid-a2" > /dev/null 2>&1
     rc=$?
@@ -151,7 +141,7 @@ FAKEGH
     chmod +x "$fake_bin/gh"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$CHECK_SESSION" "test-wsid-a3" > /dev/null 2>&1
     rc=$?
@@ -198,7 +188,7 @@ FAKEGH
     chmod +x "$fake_bin/gh"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$CHECK_SESSION" "test-wsid-a4" > /dev/null 2>&1
     rc=$?
@@ -228,7 +218,7 @@ FAKEGH
     chmod +x "$fake_bin/gh"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$CHECK_SESSION" "test-wsid-a5-missing" > /dev/null 2>&1
     rc=$?
@@ -261,7 +251,8 @@ run_a6() {
 # Helper: seed a minimal supervisor-state.json in a temp dir
 seed_state_json() {
     local tmp="$1" sid="$2" alert_phase="$3" alert_armed_at="$4"
-    local state_file="$tmp/${sid}-supervisor-state.json"
+    local state_file="$tmp/${sid}.control/supervisor-state.json"  # #2434 control file
+    mkdir -p "$tmp/${sid}.control"
     local armed_value
     if [ "$alert_armed_at" = "null" ]; then
         armed_value="null"
@@ -303,7 +294,7 @@ FAKEWA
     chmod +x "$fake_bin/supervisor-write-alert"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$FINALIZE_VERIFY" "$sid" > /dev/null 2>&1
     rc=$?
@@ -339,7 +330,7 @@ FAKEWA
     chmod +x "$fake_bin/supervisor-write-alert"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$FINALIZE_VERIFY" "$sid" > /dev/null 2>&1
     rc=$?
@@ -375,7 +366,7 @@ FAKEWA
     chmod +x "$fake_bin/supervisor-write-alert"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$FINALIZE_VERIFY" "$sid" > /dev/null 2>&1
     rc=$?

@@ -1,0 +1,205 @@
+# Workflow state directories: artifacts vs control files
+
+Two directories hold per-session workflow files. Which one a file belongs in is
+a policy, not a convention: the placement guard, the RC-4 lint and the one-time
+migration all enforce it from the same registry,
+`hooks/lib/plans-artifact-registry.js` (SSOT for every kind name below).
+
+| Directory | Holds | Who may write |
+|---|---|---|
+| `WORKFLOW_PLANS_DIR` (default `~/.workflow-plans/`) | **Artifacts** — prose a human reads (`<sid>-detail.md`, surveys, raw review rounds, logs) | The model (Write), workers, wrappers |
+| `<CLAUDE_WORKFLOW_DIR>/<sid>.control/` | **Control files** — JSON and numbers a machine reads to drive a gate (round counters, terminal markers, ledgers, payloads, outcomes) | Only the owning CLI or hook, never the model while `WORKFLOW=on` |
+
+## Why the split
+
+A control file decides what a gate does next: a round number caps the review
+loop, a terminal file ends it, an exit6 marker accepts residual HIGH findings.
+When those files sat beside the prose in PLANS_DIR, the model could write them
+with the same Write call it uses for plans — and so could skip a gate by
+touching a file (#2434, #1814). Moving them under `CLAUDE_WORKFLOW_DIR` lets the
+guard refuse every model write there without touching the artifact workflow.
+
+## Classification rule
+
+- A prose file a human reads is an artifact. A JSON or number file a machine
+  reads, or a file whose mere existence changes a gate, is control.
+- Extension is not a signal: `concern-carrier.md`, `handoff.md` and
+  `workflow-init-aborted-*.md` are control files.
+- Names are parsed kind-first (`parsePlansEntry`): the basename is split at
+  every `-`, the prefix must match the one session-id grammar
+  (`SESSION_ID_VALID_RE` in `hooks/workflow-state/state-io/core.js`), and the
+  remainder must fully match one registered kind. More than one reading is
+  `ambiguous` — treated as control, never migrated, a lint error.
+- One tie-break is fixed: when the shortest-sid reading is a single control
+  kind and every longer-sid reading is an artifact, the control reading wins.
+  `<uuid>-codex-context.md` is the control file `codex-context.md`, not the
+  artifact `context.md` of a session named `<uuid>-codex`. Two control readings
+  stay ambiguous.
+- A name that matches no kind is `unregistered` when some `-`-prefix is a live
+  session (its `-context.md`, `-intent.md` or `<wf>/<prefix>.json` exists) and
+  `no-sid` otherwise (worker `stamp()` logs).
+
+## Inventory
+
+`<fmt>` is one of the registry's `FORMAT_TOKENS`: `outline-plan`,
+`detail-plan`, `test-review`, `security-code`, `security-plan`,
+`review-security-shared`.
+
+### Artifacts (stay in PLANS_DIR)
+
+| Kind (after `<sid>-`) | Writer | Main readers |
+|---|---|---|
+| `intent.md`, `outline.md`, `detail.md`, `context.md` | Model | Skills and hooks (confirm-checkpoint, completion-approval, diff-fingerprint, branch-diff) |
+| `survey-<name>.md` | Model | Plan skills |
+| `issue-prefill.md`, `test-review.md` | Model | Issue skills, review-tests |
+| `[<stage>-]concerns-log.md`, `[<stage>-]codex-round-<N>-raw.md`, `<stage>-debug.log` | Orchestrator, wrapper | Planner, human |
+| `{complexity,outline,detail,write-tests,write-code}-judge-raw.txt` | Model | `normalize-judge-signals` (the normalized signals drive the gate) |
+| `<fmt>-finalize-diagnostic.txt` | `concern-ledger finalize` (on failure) | Human |
+| `worker-<name>[-<seq>].draft.json` | Model (WD-2) | `bin/worker-dispatch-payload` only; deleted on publish |
+| `finalize-worker-<stamp>.log`, `session-close-worker.log` | Workers | Human |
+| `notes-backup/` | `capture-env.sh` | worktree-end |
+| `issue-create-dispatch.txt`, `issue-create-survey.json`, `sweep-issues-{survivors,decisions}.tsv`, `refactor-prompts-scan.json` | Model, subagents, scratchpad scripts | Owning skill |
+| `note-<topic>.{md,txt,json,tsv}` | Model scratch notes | Human |
+
+### Control files (in `<sid>.control/`, stored without the `<sid>-` prefix)
+
+| Kind | Canonical writer | Readers |
+|---|---|---|
+| `<fmt>-round-number.txt`, `-last-round.txt`, `-terminal.txt`, `-unresolved-concerns.json` | `run-codex-review-loop` via the wrappers | Wrappers, evidence-resolver, `state-io/review-tests.js` |
+| `<fmt>-concern-ledger[-cycle<N>\|-cap-snapshot].txt`, `-concern-carrier.md`, `-round-<N>-delta-<producer>.txt` | `bin/concern-ledger`, `bin/lib/concern-ledger/` | concern-ledger, evidence-resolver |
+| `{security-code,review-plan-security,review-tests}-exit6-accepted.txt` | `bin/accept-exit6-residual` | The three security/test wrappers |
+| `{outline,detail}-risk-signal.txt` | `bin/record-risk-signal` | make-{outline,detail}-plan wrappers |
+| `worker-<name>[-<seq>].json`, `.dispatched` | `bin/worker-dispatch-payload`; the dispatcher writes `.dispatched` | worker-dispatch |
+| `codex-context.md`, `codex-context.<fmt>.built`, `plan.jsonl`, `changed-files.txt` | `build-codex-context`, `run-codex-review-loop`, `review-plan-codex` | Wrappers, show-diff |
+| `{complexity,outline,detail,write-tests,write-code}-signals.txt` | `normalize-judge-signals` | `derive-complexity-level`, handoff-record |
+| `finalize-state-<N>.json`, `finalize-binding-<N>.json`, `issue-close-outcome.json`, `session-close-gate.json`, `final-report-env.json` | Workers, `issue-close-write-outcome.js`, `capture-env.sh` | Close-family skills, stop-final-report-guard, session-close-build-env |
+| `supervisor-state.json` | `hooks/lib/supervisor-state-writer/` | Supervisor agents, `bin/supervisor-*`, sweep-supervisor-state |
+| `wi-checkpoint.json`, `handoff.md`, `wt-cleanup-active`, `workflow-init-aborted-*.md` | checkpoint.js, handoff-artifact.js, worktree-cleanup-marker.js, path-a-label-and-board.sh | The same modules, workflow-init |
+| `handoff-{risk,pressure,flush-mark}.json` | handoff-sidecar.js (one writer each: `recordRiskSignal`, the nudge hook, `handoff-append`) | handoff-pressure.js, handoff-risk-signal.js |
+| `companion-precheck.json`, `intent-scan-block.txt`, `guard-attempt.tmp` | precheck-companions.sh, clarify-commit-scope.sh, clarify-guard-loop.sh | clarify-intent |
+
+Named exceptions:
+
+- The sid-less `cache/` lives at `<CLAUDE_WORKFLOW_DIR>/cache/`.
+- Never moved: `*.lock`, `*.tmp`, `*.migrating.*.tmp`, `.sg-*`, `.prev-*`.
+  `guard-attempt.tmp` is a short-lived marker that expires in place
+  (`MIGRATABLE_KINDS` excludes it).
+
+## Resolving a control path
+
+Every reader and writer goes through one entry point:
+
+- JS: `controlPath(sid, name, {forWrite})` in
+  `hooks/workflow-state/state-io/control-dir.js`. A read never creates the
+  directory; `forWrite` creates `<sid>.control/` but not the file. A symlinked
+  or non-directory `<sid>.control` is refused.
+- Shell and prompts: `bin/workflow-control-dir --session <sid> [--file <name>] [--for-write]`.
+  Exit 2 is a bad sid or name, 3 a legacy file that could not be migrated
+  (`ControlMigrationError`), 1 any other refusal. Review-loop wrappers turn any
+  nonzero exit into the public exit 4 (`skills/_shared/codex-review-loop/exit-codes.md`).
+- The session-facts block exposes the directory as `CONTROL_DIR`.
+
+Readers that bypass the entry point are caught by the import allowlist test and
+by the RC-4 lint below.
+
+## Canonical writer CLIs
+
+| Need | CLI |
+|---|---|
+| Accept residual HIGH after exit 6 | `bin/accept-exit6-residual --session <sid> --format <security-code\|security-plan\|test-review> --reason <text>` |
+| Raise a planner risk signal | `bin/record-risk-signal --session <sid> --planner <outline\|detail> --reason <one line>` (write-once) |
+| Publish a worker payload | `bin/worker-dispatch-payload --session <sid> --worker <name> [--seq <n>] --draft <path>` (write-once) |
+| Record an empty issue-close outcome | `bin/issue-close-write-outcome.js --session <sid> --empty` |
+
+## Guard classes
+
+The Write/Edit/Bash guard (`hooks/block-clearance-token-write/`) sorts a write
+target into three classes:
+
+| Class | Target | `WORKFLOW=off` |
+|---|---|---|
+| (a) | Protected tokens and OFF markers (`.off-clearance`, sentinels) | Still blocked |
+| (b) `control-dir` | Anything under `CLAUDE_WORKFLOW_DIR` (lexically, so a symlinked `<x>.control/` is covered): control dirs, any session's `<sid>.json` and other sessions' files (#1814) | Allowed |
+| (c) `plans-unregistered` | A PLANS_DIR entry that parses as control, ambiguous or unregistered | Allowed |
+
+Reads are never judged. An unresolved sid is treated as `WORKFLOW=on`.
+Detection expands `~`, `$HOME`, `$CLAUDE_WORKFLOW_DIR`, `$WORKFLOW_PLANS_DIR`
+and their `${X:-default}` forms (`hooks/lib/bash-write-targets/detection-expand.js`);
+any other operator on a known alias fails closed.
+
+Known limits: a PLANS_DIR write whose basename is fully dynamic is not blocked,
+and an arbitrary variable that is unset at hook time is not expanded (#2233).
+
+Accepted residual: the guard blocks writes under `CLAUDE_WORKFLOW_DIR`, but deleting the directory root itself (e.g. `rm -rf` on it) is not detected — accepted because the NFR is a single-user PC and recovery rebuilds the state.
+
+Division of labor: enforce-worktree decides *which worktree* a write may land
+in; this guard decides *which state directory* a file may land in. Neither
+relaxes the other.
+
+## Migration (temporary)
+
+Existing sessions keep control files under PLANS_DIR until they migrate. The
+code lives in `hooks/lib/temporary-migrations/control-dir-split/` with the
+manual face `bin/migrate-control-dir --session <sid> | --all`.
+
+- **Gate**: only names that parse as a `MIGRATABLE_KINDS` control kind for the
+  owning sid move; unregistered, ambiguous, artifact, lock and tmp files stay.
+- **Triggers**: SessionStart runs `migrateAll` with a 2 s budget; a directory
+  scan cursor (`<wf>/.control-migration-cursor.json`) skips unchanged
+  directories. `controlPath` migrates the requested file of its own session
+  on demand. Other sessions wait out a 10-minute quiet period so a running
+  flow is never moved under its feet.
+- **Atomic per session**: every file is staged as `<name>.migrating.*.tmp`,
+  then published exclusively (hard link, or `wx` open where links are not
+  supported). Any fault unwinds the whole batch: no destination file remains
+  and the sources stay byte-identical. Path strings inside JSON files are
+  rewritten to the control directory.
+- **Conflict**: an existing destination with different bytes wins; the legacy
+  file stays and one line goes to `<wf>/control-migration.log`.
+- **Fail closed**: a file that cannot be migrated raises
+  `ControlMigrationError` on read (evidence resolvers answer "no evidence") and
+  exit 3 / exit 4 on the CLI and wrappers. It never falls back to the legacy
+  path. A reader that degrades this way prints one stderr line per file per
+  process, so "no evidence" is never silent.
+- **Legacy-argument shims**: `--out`, `--signals-file`, `--output-file`,
+  `concern-ledger --plans-dir` and payload path fields are still accepted when
+  the value equals the expected legacy basename; the real I/O always uses the
+  derived path.
+- **Isolation**: never run an in-development worktree's bins or hooks against
+  the live `CLAUDE_WORKFLOW_DIR` / `WORKFLOW_PLANS_DIR` — isolate both (and
+  `HOME`) to temp dirs; agents invoked from a worktree use
+  `$AGENTS_CONFIG_DIR/bin`. A worktree's migration would otherwise move live
+  sessions while main's hooks still write the legacy paths.
+
+Dependency: guard (c) must not be weakened while the migration code remains,
+because it is what stops a stale prompt from recreating a legacy control file
+the migration would then move.
+
+Deletion: every piece is wrapped in
+`BEGIN/END temporary: plans-dir control files -> workflow control dir migration`
+blocks with the deletion condition "remove after 2026-12-28". The daily
+sweep (`sweep.yml` job `stale-migration-issue`) opens a "Stale temporary migration blocks (>90 days)" issue when a block
+outlives it (`bin/open-stale-migration-issue.sh`); that job fails loudly
+rather than `|| true`.
+
+## RC-4 lint
+
+`bin/check-plans-artifacts` runs in CI (`migration-blocks-audit.yml`) and in the
+pre-commit gate.
+
+- `--source` scans `skills agents bin hooks rules docs` for a PLANS-dir token
+  joined with a sid token and a literal remainder. Control, ambiguous and
+  unregistered remainders are errors; only artifacts pass. Exceptions live in
+  the registry's `SOURCE_LINT_EXCEPTIONS`, each with a mandatory reason; an
+  unused exception is an error.
+- `--dir <path>` classifies a real directory for investigation: control and
+  ambiguous entries are errors, unregistered ones warnings. CI never runs it.
+
+## Cleanup
+
+- `zombie-cleanup` removes `<wf>/<sid>.control/` when `<sid>.json` is gone and
+  the newest file inside is older than 30 days (migration preserves mtimes, so
+  this never shortens the PLANS_DIR retention), and any `*.tmp` inside it
+  (including `*.migrating.*.tmp`) after 24 hours.
+- `sweep-plans.sh` keeps handling PLANS_DIR artifacts only. `sweep-worktrees`
+  and session-close never delete a control directory.

@@ -40,7 +40,7 @@ cat > "$SFR_REPO/.claude/settings.json" <<SETTINGS_EOF
 SETTINGS_EOF
 
 # Fixture arms the guard: env file present → this Stop turn is a Final Report turn.
-write_final_report_env "$SFR_PLANS_DIR" "$SFR_SID"
+write_final_report_env "$SFR_WORKFLOW_DIR" "$SFR_SID"
 
 # Prompt omits the Final Report heading entirely → hook fires decision:block, exit 2.
 # stop_hook_active re-entry: hook exits 0 on re-entry (prevents infinite loop).

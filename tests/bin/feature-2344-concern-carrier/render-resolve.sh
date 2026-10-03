@@ -11,7 +11,7 @@
 echo "--- D1: open+reopened in carrier; defang; resolved absent from open section ---"
 D1P="$TMPDIR_BASE/d1/plans"; mkdir -p "$D1P"
 D1S="sess-d1"; D1F="review-security-shared"
-D1L="$D1P/${D1S}-${D1F}-concern-ledger.txt"
+D1L="$(ledger_path_for "$D1P" "$D1S" "$D1F")"
 
 D1_T_O="memory leak in allocator code"
 D1_T_R="null pointer dereference on error path"
@@ -84,7 +84,7 @@ fi
 echo "--- D2: resolved concern produces no tombstone ---"
 D2P="$TMPDIR_BASE/d2/plans"; mkdir -p "$D2P"
 D2S="sess-d2"; D2F="review-security-shared"
-D2L="$D2P/${D2S}-${D2F}-concern-ledger.txt"
+D2L="$(ledger_path_for "$D2P" "$D2S" "$D2F")"
 
 D2_T_O="heap use after free in write path"
 D2_T_R="off by one error in loop bounds"
@@ -114,7 +114,7 @@ fi
 echo "--- D3: begin-cycle clears ID space; new C1 in carrier; old C1 absent ---"
 D3P="$TMPDIR_BASE/d3/plans"; mkdir -p "$D3P"
 D3S="sess-d3"; D3F="review-code-codex"
-D3L="$D3P/${D3S}-${D3F}-concern-ledger.txt"
+D3L="$(ledger_path_for "$D3P" "$D3S" "$D3F")"
 
 D3_T_OLD="old open concern from cycle one session"
 D3_T_NEW="new open concern in cycle two session"
@@ -151,7 +151,7 @@ fi
 echo "--- D9: render→resolve→re-render; empty carrier when nothing remains ---"
 D9P="$TMPDIR_BASE/d9/plans"; mkdir -p "$D9P"
 D9S="sess-d9"; D9F="review-security-shared"
-D9L="$D9P/${D9S}-${D9F}-concern-ledger.txt"
+D9L="$(ledger_path_for "$D9P" "$D9S" "$D9F")"
 
 D9_T="dangling file descriptor left open on early return path"
 D9_D="$(discrim_of "$D9_T")"

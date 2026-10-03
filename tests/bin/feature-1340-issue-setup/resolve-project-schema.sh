@@ -3,18 +3,10 @@
 # Tests: bin/github-issues/lib/resolve-project.sh
 # Tags: issue-setup, resolve-project, github-issues, scope:issue-specific
 # N/A: secret-leakage — cached field IDs are project-structure identifiers, not secrets; gh owns token handling.
-#
-# Tests for resolve-project.sh 10-column TSV schema guard (step 3 of #1340).
-# L2: table-driven parser/schema-guard cases (5/9/3-col, empty file, blank lines,
-#     trailing-blank hit, duplicate-row hit, empty-middle-field hit,
-#     empty-required-field miss, col7 retention); 10-col full hit (5 exact IDs);
-#     cold fetch → 5 new vars = EXACT known mock IDs; cache write → 10 cols with
-#     cols 6-10 = exact field/option IDs.
-#
-# L3 gap (what this test does NOT catch):
-# - Whether GraphQL field-ID queries return correct IDs from a live GitHub Projects API.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# resolve-project.sh 10-col TSV schema guard (#1340 step 3): table-driven parser cases, 10-col full hit,
+# cold fetch → exact mock IDs, cache write → 10 cols with exact field/option IDs.
+# L3 gap: live GitHub Projects API field-ID correctness.
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -119,6 +111,8 @@ MOCK_EOF
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
+    # #2434: the resolve cache lives under CLAUDE_WORKFLOW_DIR; pin it per case so rows never carry over.
+    export CLAUDE_WORKFLOW_DIR="$TMP/workflow"
 }
 
 teardown_mock() {
@@ -126,7 +120,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR \
+    unset MOCK_LOG WORKFLOW_PLANS_DIR CLAUDE_WORKFLOW_DIR \
           GH_MOCK_OWNER_REPO GH_MOCK_PROJECTS_NODE_COUNT GH_MOCK_PROJECT_OWNER \
           GH_MOCK_PROJECT_NUM GH_MOCK_PROJECT_ID GH_MOCK_CONTENT_DATE_FIELD_ID \
           GH_MOCK_STATUS_FIELD_ID GH_MOCK_TODO_OPTION_ID \
@@ -161,33 +155,11 @@ run_resolver() {
 
 # get_field / pass / fail / AGENTS_DIR provided by _lib.sh.
 
-# ===========================================================================
-# TSV parser / schema-guard table (C7: table-driven per test-design.md).
-# Each row: name | setup_kind | expect
-#   setup_kind writes a cache row/file for key "nirecom/agents":
-#     5col | 9col | 3col | empty-file | blank-lines | 10col-trailingblank |
-#     10col-dup | 10col-emptystatus | 10col-emptyid
-#   expect:
-#     miss            → resolver must re-fetch (api graphql called)
-#     hit:<ID>        → cache hit, no graphql, RESOLVED_PROJECT_ID == <ID>
-#     hit-emptystatus:<ID> → hit, no graphql, RESOLVED_PROJECT_ID == <ID>,
-#                            RESOLVED_STATUS_FIELD_ID empty
-# Contract observed in resolve-project.sh: lookup is
-# `awk -F'\t' '$1==key {print; exit}'` (first match wins, blank lines never
-# match a non-empty key); post-#1340 guard requires exactly 10 fields AND
-# non-empty cols 2/3/4. Empty cols 5-10 are tolerated.
-#
-# Two variants are asserted PER THE ACTUAL GUARD, not a fabricated stricter
-# contract: the guard's required-field check is `[ -n "$col" ]` — non-emptiness
-# ONLY, with NO numeric validation and NO whitespace trimming/validation.
-# Therefore:
-#   - 10col-nonnumeric-num: col3 = "abc" (non-numeric) → non-empty → HIT is correct.
-#   - 10col-wsonly-owner: col2 = " " (whitespace-only) → `[ -n " " ]` is TRUE in
-#     bash → non-empty → HIT is correct.
-# Asserting a MISS here would encode a contract the source will never implement
-# (a forever-RED test). An EMPTY required field, by contrast, IS a miss — see
-# emptyid-required-miss.
-# ===========================================================================
+# TSV parser / schema-guard table (C7, table-driven). Row: name | setup_kind (cache row for "nirecom/agents") | expect.
+# expect: miss → graphql called; hit:<ID> → no graphql, PROJECT_ID==<ID>; hit-emptystatus:<ID> → also STATUS empty.
+# Contract: lookup is awk '$1==key {print; exit}' (first match wins); guard = exactly 10 fields AND non-empty
+# cols 2/3/4 via `[ -n ]` only — no numeric/whitespace validation, so nonnumeric-num and wsonly-owner are HITs
+# (asserting MISS would be a forever-RED fabricated contract). An EMPTY required field IS a miss (emptyid-required-miss).
 write_cache_case() {
     # $1=setup_kind ; writes $CACHE_FILE
     local kind="$1"
@@ -231,7 +203,7 @@ while IFS='|' read -r name setup_kind expect; do
     [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
     name="${name//[[:space:]]/}"; setup_kind="${setup_kind//[[:space:]]/}"; expect="${expect//[[:space:]]/}"
     setup_mock
-    CACHE_FILE="$WORKFLOW_PLANS_DIR/cache/project-resolve.tsv"
+    CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
     write_cache_case "$setup_kind"
     STDERR_FILE="$TMP/tst-$name.log"
     OUT=$(bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
@@ -286,7 +258,7 @@ TABLE
 # TS-4: 10-column cache row → hit; all 5 new RESOLVED_* set; NO graphql call
 # ===========================================================================
 setup_mock
-CACHE_DIR="$WORKFLOW_PLANS_DIR/cache"
+CACHE_DIR="$CLAUDE_WORKFLOW_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
 # Exactly 10 columns
@@ -368,7 +340,7 @@ export GH_MOCK_TODO_OPTION_ID="opt_w_todo"
 export GH_MOCK_IN_PROGRESS_OPTION_ID="opt_w_inprog"
 export GH_MOCK_DONE_OPTION_ID="opt_w_done"
 export GH_MOCK_FINGERPRINT_FIELD_ID="PVTF_w_finger"
-CACHE_FILE="$WORKFLOW_PLANS_DIR/cache/project-resolve.tsv"
+CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
 STDERR_FILE="$TMP/ts6-stderr.log"
 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'" >/dev/null
 if [ -f "$CACHE_FILE" ]; then
@@ -401,7 +373,7 @@ teardown_mock
 # the table's col7-retention-hit row, which only checks PROJECT_ID).
 # ===========================================================================
 setup_mock
-CACHE_FILE="$WORKFLOW_PLANS_DIR/cache/project-resolve.tsv"
+CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
 mkdir -p "$(dirname "$CACHE_FILE")"
 printf 'nirecom/agents\towner\t1\tPVT_id\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tfinger_f\n' > "$CACHE_FILE"
 STDERR_FILE="$TMP/ts7-stderr.log"

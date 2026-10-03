@@ -18,6 +18,7 @@ SWEEP="$AGENTS_DIR/bin/sweep-supervisor-state.sh"
 SCHEMA_NODE="$(node_path "$AGENTS_DIR")/hooks/lib/supervisor-state-schema.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -54,7 +55,9 @@ const state = {
     audit_cause: null, audit_retry_count: 0, findings: [],
   }, spec.audit || {}),
 };
-fs.writeFileSync(path.join(outdir, sid + "-supervisor-state.json"), JSON.stringify(state, null, 2));
+const ctrlDir = path.join(outdir, sid + ".control");
+fs.mkdirSync(ctrlDir, {recursive: true});
+fs.writeFileSync(path.join(ctrlDir, "supervisor-state.json"), JSON.stringify(state, null, 2));
 MKSTATE_JS
 
 # finfo.js — "<md5> <mtimeMs>" for byte-identity + mtime assertions.
@@ -106,7 +109,7 @@ run_sweep() {
     local dir="$1"; shift
     local out
     out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
@@ -121,7 +124,7 @@ run_sweep_as_session() {
     local dir="$1" sid="$2"; shift 2
     local out
     out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_CODE_SESSION_ID=$sid" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" "CLAUDE_CODE_SESSION_ID=$sid" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
@@ -146,7 +149,7 @@ run_sweep_stubbed() {
     fi
     local out
     out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$bin/sweep-supervisor-state.sh" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
@@ -205,7 +208,7 @@ S1_legitimate_only_untouched() {
         $(legit_sentinel 'installer smoke run needs .env access for a single verification step'),
         $(legit_block 'git commit -m wip')
     ]}"
-    f="$dir/s1sess-supervisor-state.json"
+    f="$dir/s1sess.control/supervisor-state.json"
     before="$(finfo "$f")"
     run_sweep "$dir" --apply --ci-mode >/dev/null
     after="$(finfo "$f")"
@@ -231,7 +234,7 @@ S2_mixed_file_partial_removal() {
         $(contaminated 'SEC1 traversal' 'WORKTREE_OFF'),
         $(legit_sentinel 'keep me third — yet another genuine one-off human reason')
     ]}"
-    f="$dir/s2sess-supervisor-state.json"
+    f="$dir/s2sess.control/supervisor-state.json"
     out="$(run_sweep "$dir" --apply --ci-mode)"
     got="$(reasons_of "$f")"
     want="keep me first — a genuine one-off human reason
@@ -266,7 +269,7 @@ S3_excluded_reasons_survive() {
         $(contaminated 'test reason'),
         $(contaminated 'smoke')
     ]}"
-    f="$dir/s3sess-supervisor-state.json"
+    f="$dir/s3sess.control/supervisor-state.json"
     before="$(finfo "$f")"
     run_sweep "$dir" --apply --ci-mode >/dev/null
     after="$(finfo "$f")"
@@ -290,7 +293,7 @@ S4_old_format_removed() {
         $(old_format 'C1 round trip'),
         $(legit_sentinel 'a genuine long human reason that must survive the sweep')
     ]}"
-    f="$dir/s4sess-supervisor-state.json"
+    f="$dir/s4sess.control/supervisor-state.json"
     run_sweep "$dir" --apply --ci-mode >/dev/null
     left="$(reasons_of "$f")"
 
@@ -314,7 +317,7 @@ S5_default_is_dry_run() {
         $(contaminated 'A6 chain test'),
         $(legit_sentinel 'a genuine long human reason that must survive the sweep')
     ]}"
-    f="$dir/s5sess-supervisor-state.json"
+    f="$dir/s5sess.control/supervisor-state.json"
     before="$(finfo "$f")"
     out="$(run_sweep "$dir" --ci-mode)"
     after="$(finfo "$f")"
@@ -353,7 +356,7 @@ S6_backup_and_manifest() {
         $(contaminated 'A7 idempotent write'),
         $(legit_sentinel 'a genuine long human reason that must survive the sweep')
     ]}"
-    f="$dir/s6sess-supervisor-state.json"
+    f="$dir/s6sess.control/supervisor-state.json"
     pre_hash="$(node -e "
 const fs=require('fs'),c=require('crypto');
 process.stdout.write(c.createHash('md5').update(fs.readFileSync(process.argv[1])).digest('hex'));
@@ -379,7 +382,7 @@ process.stdout.write(c.createHash('md5').update(fs.readFileSync(process.argv[1])
     copy_hash="$(node -e "
 const fs=require('fs'),c=require('crypto');
 try { process.stdout.write(c.createHash('md5').update(fs.readFileSync(process.argv[1])).digest('hex')); } catch(e) { process.stdout.write('MISSING'); }
-" "$(node_path "$b1/s6sess-supervisor-state.json")")"
+" "$(node_path "$b1/s6sess.control/supervisor-state.json")")"
     if [ "$copy_hash" = "$pre_hash" ]; then
         pass "S6c backup copy is the exact pre-modification file"
     else
@@ -414,7 +417,7 @@ process.stdout.write(full ? 'OK' : 'PARTIAL');
     recheck="$(node -e "
 const fs=require('fs'),c=require('crypto');
 try { process.stdout.write(c.createHash('md5').update(fs.readFileSync(process.argv[1])).digest('hex')); } catch(e) { process.stdout.write('MISSING'); }
-" "$(node_path "$b1/s6sess-supervisor-state.json")")"
+" "$(node_path "$b1/s6sess.control/supervisor-state.json")")"
     if [ "$n" -ge 2 ] 2>/dev/null && [ "$recheck" = "$pre_hash" ]; then
         pass "S6e second --apply used a separate backup dir; first backup untouched"
     else
@@ -434,7 +437,7 @@ S7_scrubbed_file_validates() {
         $(contaminated 'A4 env-file fallback'),
         $(legit_sentinel 'a genuine long human reason that must survive the sweep')
     ]}"
-    f="$dir/s7sess-supervisor-state.json"
+    f="$dir/s7sess.control/supervisor-state.json"
     run_sweep "$dir" --apply --ci-mode >/dev/null
     out="$("$RWT" 20 node -e "
 const fs=require('fs');
@@ -474,7 +477,7 @@ S8_alert_audit_untouched() {
             \"findings\":[{\"categories\":[\"workflow\"],\"severity\":\"warning\",\"detail\":\"escape-hatch sentinel: WORKTREE_OFF (A6 chain test)\",\"reporter\":\"enforce-override-handlers\"}]
         }
     }"
-    f="$dir/s8sess-supervisor-state.json"
+    f="$dir/s8sess.control/supervisor-state.json"
     local before_side
     before_side="$("$RWT" 20 node -e "
 const fs=require('fs');
@@ -530,13 +533,13 @@ S9_scope_guard_skips_live() {
     local -a guarded=(s9alertpending s9auditpending s9auditinprog s9recent s9cursession)
     local -a before=()
     local sid
-    for sid in "${guarded[@]}"; do before+=("$(finfo "$dir/$sid-supervisor-state.json")"); done
+    for sid in "${guarded[@]}"; do before+=("$(finfo "$dir/$sid.control/supervisor-state.json")"); done
 
     out="$(run_sweep_as_session "$dir" "s9cursession" --apply --ci-mode)"
 
     local i=0 all_same=1 offenders=""
     for sid in "${guarded[@]}"; do
-        if [ "$(finfo "$dir/$sid-supervisor-state.json")" != "${before[$i]}" ]; then
+        if [ "$(finfo "$dir/$sid.control/supervisor-state.json")" != "${before[$i]}" ]; then
             all_same=0; offenders="$offenders $sid"
         fi
         i=$((i + 1))
@@ -550,10 +553,10 @@ S9_scope_guard_skips_live() {
 
     # The run must still have done its job on the one genuinely finished file — otherwise
     # S9a would pass vacuously on a tool that does nothing at all.
-    if [ "$(reasons_of "$dir/s9finished-supervisor-state.json")" = "" ]; then
+    if [ "$(reasons_of "$dir/s9finished.control/supervisor-state.json")" = "" ]; then
         pass "S9b the one finished session WAS scrubbed (guard is selective, not global)"
     else
-        fail "S9b finished session not scrubbed: $(reasons_of "$dir/s9finished-supervisor-state.json")"
+        fail "S9b finished session not scrubbed: $(reasons_of "$dir/s9finished.control/supervisor-state.json")"
     fi
 
     local live recent
@@ -574,7 +577,7 @@ S10_no_live_override() {
     local dir f before after out rc
     dir="$(new_plans_dir s10)"
     mk_state "$dir" "s10live" "{\"findings\":[$(contaminated 'A1 marker test')],\"alert\":{\"alert_phase\":\"pending\"}}"
-    f="$dir/s10live-supervisor-state.json"
+    f="$dir/s10live.control/supervisor-state.json"
     before="$(finfo "$f")"
 
     out="$(run_sweep "$dir" --apply --ci-mode --session s10live)"; rc=$?
@@ -596,7 +599,7 @@ S10_no_live_override() {
     # subshell — the update does not propagate to the caller's shell).
     local incl_out incl_rc
     incl_out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" --apply --include-live 2>&1)"
     incl_rc=$?
     if [ "$incl_rc" -ne 0 ]; then
@@ -619,9 +622,9 @@ S11_cooccurrence_rule() {
         $(contaminated 'maintenance recovery'),
         $(legit_sentinel 'a genuine long human reason that must survive the sweep')
     ]}"
-    before="$(finfo "$dir_alone/s11alone-supervisor-state.json")"
+    before="$(finfo "$dir_alone/s11alone.control/supervisor-state.json")"
     run_sweep "$dir_alone" --apply --ci-mode >/dev/null
-    after="$(finfo "$dir_alone/s11alone-supervisor-state.json")"
+    after="$(finfo "$dir_alone/s11alone.control/supervisor-state.json")"
     if [ "$before" = "$after" ]; then
         pass "S11a 'maintenance recovery' alone (no sibling case label) survives"
     else
@@ -636,7 +639,7 @@ S11_cooccurrence_rule() {
         $(legit_sentinel 'a genuine long human reason that must survive the sweep')
     ]}"
     run_sweep "$dir_sib" --apply --ci-mode >/dev/null
-    left="$(reasons_of "$dir_sib/s11sib-supervisor-state.json")"
+    left="$(reasons_of "$dir_sib/s11sib.control/supervisor-state.json")"
     if [ "$left" = "a genuine long human reason that must survive the sweep" ]; then
         pass "S11b same reasons removed when a case-label sibling shares the file"
     else
@@ -652,7 +655,7 @@ S12_emptied_file_kept() {
     local dir f out n
     dir="$(new_plans_dir s12)"
     mk_state "$dir" "s12sess" "{\"findings\":[$(contaminated 'A1 marker test'), $(contaminated 'A6 chain test')]}"
-    f="$dir/s12sess-supervisor-state.json"
+    f="$dir/s12sess.control/supervisor-state.json"
     out="$(run_sweep "$dir" --apply --ci-mode)"
 
     if [ -f "$f" ]; then
@@ -676,7 +679,8 @@ S13_unparsable_skipped() {
     require_tool "S13 unparsable JSON skipped and counted" || return
     local dir bad before after out n
     dir="$(new_plans_dir s13)"
-    bad="$dir/s13broken-supervisor-state.json"
+    mkdir -p "$dir/s13broken.control"
+    bad="$dir/s13broken.control/supervisor-state.json"
     printf '{ "layer1": { "findings": [ this is not json' > "$bad"
     mk_state "$dir" "s13ok" "{\"findings\":[$(contaminated 'A1 marker test')]}"
     before="$(finfo "$bad")"
@@ -720,7 +724,7 @@ S14_ci_mode_and_list_signatures() {
 
     local sig rc n
     sig="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "$RWT" 30 bash "$SWEEP" --list-signatures 2>&1)"
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" "$RWT" 30 bash "$SWEEP" --list-signatures 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ]; then
         pass "S14b --list-signatures exits 0"
@@ -771,7 +775,7 @@ S15_resolver_fault_refuses_to_sweep() {
     for stub_rc in 3 127; do
         dir="$(new_plans_dir "s15rc$stub_rc")"
         mk_state "$dir" "s15target" "{\"findings\":[$(contaminated 'A1 marker test')]}"
-        f="$dir/s15target-supervisor-state.json"
+        f="$dir/s15target.control/supervisor-state.json"
         before="$(finfo "$f")"
 
         out="$(run_sweep_stubbed "$dir" "$stub_rc" --apply --ci-mode)"; rc=$?
@@ -796,6 +800,7 @@ S15_resolver_fault_refuses_to_sweep() {
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+case_begin "core-scrub" "bin/sweep-supervisor-state.sh"
 S1_legitimate_only_untouched
 S2_mixed_file_partial_removal
 S3_excluded_reasons_survive
@@ -804,13 +809,23 @@ S5_default_is_dry_run
 S6_backup_and_manifest
 S7_scrubbed_file_validates
 S8_alert_audit_untouched
+case_end
+
+case_begin "scope-guard" "bin/sweep-supervisor-state/scrub.js"
 S9_scope_guard_skips_live
 S10_no_live_override
 S11_cooccurrence_rule
 S12_emptied_file_kept
 S13_unparsable_skipped
+case_end
+
+case_begin "signatures" "bin/sweep-supervisor-state/signatures.js"
 S14_ci_mode_and_list_signatures
+case_end
+
+case_begin "fault-handling" "bin/sweep-supervisor-state.sh"
 S15_resolver_fault_refuses_to_sweep
+case_end
 
 echo ""
 echo "─────────────────────────────────────────"

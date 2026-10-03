@@ -25,6 +25,7 @@ WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 COLLECT_L3_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
 COLLECT_L3_FILE="$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js"
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -56,6 +57,7 @@ read_field() {
     local tmp="$1" sid="$2" path="$3"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
@@ -82,6 +84,7 @@ invoke_l2() {
     local tmp="$1"; shift
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI_L2" "$@" >/dev/null 2>&1
     )
 }
@@ -89,6 +92,7 @@ invoke_l3() {
     local tmp="$1"; shift
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI_L3" "$@" >/dev/null 2>&1
     )
 }
@@ -171,6 +175,7 @@ run_f4() {
     tmp="$(mktemp -d)"; sid="f4sid"
     out=$(
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const fs = require('fs'); const path = require('path');
 const w = require('$WRITER_NODE');
@@ -178,7 +183,9 @@ const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('$sid');
 if (!st.audit || typeof st.audit !== 'object') st.audit = {};
 st.audit.audit_phase = 'frozen';
-fs.writeFileSync(path.join(process.env.WORKFLOW_PLANS_DIR, '$sid' + '-supervisor-state.json'), JSON.stringify(st, null, 2));
+const ctrlDir = path.join(process.env.CLAUDE_WORKFLOW_DIR, '$sid' + '.control');
+fs.mkdirSync(ctrlDir, {recursive: true});
+fs.writeFileSync(path.join(ctrlDir, 'supervisor-state.json'), JSON.stringify(st, null, 2));
 const ok = w.appendFinding('$sid', { categories: ['code'], severity: 'warning', detail: 'd', reporter: 'test' });
 const after = w.readState('$sid');
 console.log(after.alert && after.alert.alert_armed_at ? 'ARMED' : 'NOT_ARMED');
@@ -214,7 +221,16 @@ console.log('OK');
     fi
 }
 
-run_f1; run_f2; run_f3; run_f4; run_f5
+case_begin "l2-alert-freeze" "bin/supervisor-write-alert"
+run_f1
+case_end
+
+case_begin "l3-audit-freeze" "bin/supervisor-write-audit"
+run_f2
+run_f3
+run_f4
+run_f5
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

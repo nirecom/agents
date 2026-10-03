@@ -1,21 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-feat-928-supervisor-report-format/_lib.sh
-# Shared helpers and fixtures for feature-feat-928-supervisor-report-format test groups.
-#
-# Sourced by:
-#   - tests/hooks/feature-feat-928-supervisor-report-format/formatter-unit.sh
-#   - tests/hooks/feature-feat-928-supervisor-report-format/guard-integration.sh
-#
-# Each group script sources this file so it can run standalone, e.g.:
-#   bash tests/hooks/feature-feat-928-supervisor-report-format/formatter-unit.sh
-#
-# This library:
-#   - sets `set -u`
-#   - resolves AGENTS_DIR / path variables
-#   - initializes PASS / FAIL / SKIP counters
-#   - defines pass / fail / skip / run_with_timeout / require_source /
-#     seed_state / format_cumsev_error / format_l2_armed helpers
-#   - defines FINDINGS_* constants
+# Shared helpers, counters and FINDINGS_* fixtures for the formatter-unit.sh and
+# guard-integration.sh groups (each sources this so it can run standalone).
 
 set -u
 
@@ -51,15 +37,17 @@ require_source() {
     return 0
 }
 
+# #2434: state lives at <CLAUDE_WORKFLOW_DIR>/<sid>.control/; the seed and every
+# hook call pin CLAUDE_WORKFLOW_DIR="$tmp/workflow" (forWrite creates the dir).
 seed_state() {
     local tmp="$1" sid="$2" layer2_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.layer2 = $layer2_json;
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 

@@ -33,13 +33,13 @@ Serial by dependency (SC-S): the `initial` → `loop_step` → `finalize_termina
 Worker executes triage (`issue-close-finalize-triage.sh`); sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`.
 Then when `J` is in NEXT_STEPS (any position: `J,*`, `*,J,*`, or `*,J`) AND `ACTION != admin_close_path`: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N"` (sets `PR_NUMBER`, `MERGE_COMMIT`). When the `closes_issues` entry has a `repo` field (`issue_repo`), pass `--repo "$issue_repo"` to `find-pr-by-marker.sh`; `issue_repo` flows through the delegation JSON to the worker. Non-zero → stop with error. `admin_close_path` skips ICF-B (no PR exists); ICF-I posts ICF-I-2 sentinel only.
 
-Resolve `DISPATCH` / `MAIN_ROOT` / `PLANS_DIR` per WD-1 of `skills/_shared/worker-dispatch.md`, and `STATE_FILE="$PLANS_DIR/<session-id>-finalize-state-<N>.json"`.
+Resolve `DISPATCH` / `MAIN_ROOT` / `PLANS_DIR` per WD-1 of `skills/_shared/worker-dispatch.md`, and `STATE_FILE` from `node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session <session-id> --file finalize-state-<N>.json`.
 
 Dispatch ICF-A, ICF-B, ICF-C, ICF-D, ICF-E to the `issue-close-finalize` worker per `skills/_shared/worker-dispatch.md`. This skill dispatches the same worker once per pass, so every payload takes a WD-2 `-<seq>` suffix (`-1` here, then `-2`, `-3`, … in the loop below); a payload file is never rewritten in place.
 
-Payload keys (`-1`): `phase: "initial"`, `issue_number` (= N), `root_issue_number` (= N), `owner_repo`, `state_file_path` (= `STATE_FILE`), `main_worktree_path` (= `MAIN_ROOT`), `session_id`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`), `issue_repo` (omit for current-repo issues).
+Payload keys (`-1`): `phase: "initial"`, `issue_number` (= N), `root_issue_number` (= N), `owner_repo`, `main_worktree_path` (= `MAIN_ROOT`), `session_id`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`), `issue_repo` (omit for current-repo issues).
 
-`root_issue_number`, `owner_repo` and `state_file_path` are required in EVERY pass's payload — they are what the worker rebinds the durable state file to the session with.
+`root_issue_number` and `owner_repo` are required in EVERY pass's payload; omit `state_file_path` / `outcome_file_path` — the dispatcher derives both in the session control directory.
 
 On `init_done` status: continue to the loop. On `failed` status: surface summary + artifact_path and stop.
 
@@ -57,18 +57,18 @@ Loop while `state.phase != terminal`.
 
 On user yes: dispatch `phase=loop_step, g5_decision=accept`.
 
-Every `loop_step` payload (WD-2 seq `-2`, `-3`, …) carries: `phase: "loop_step"`, `root_issue_number` (= N), `owner_repo`, `state_file_path` (= `STATE_FILE`), `g5_decision`, `session_id`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`). One dispatch advances exactly one pass; the worker never loops and never asks.
+Every `loop_step` payload (WD-2 seq `-2`, `-3`, …) carries: `phase: "loop_step"`, `root_issue_number` (= N), `owner_repo`, `g5_decision`, `session_id`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`). One dispatch advances exactly one pass; the worker never loops and never asks.
 
 Status mapping: `init_done` → continue the loop; `awaiting_recursion` → recurse (below); `terminal` → leave the loop; `failed` → surface summary + artifact_path and stop.
 
-Worker returns `status=awaiting_recursion`. Main runs `/issue-close-finalize $PROPOSAL_PARENT`. After recursion: write `state.g5_history[-1].recursion_completed = true` to STATE_FILE. Delegate `phase=loop_step, g5_decision=recurse_done` → continue loop.
+Worker returns `status=awaiting_recursion`. Main runs `/issue-close-finalize $PROPOSAL_PARENT`. After recursion: delegate `phase=loop_step, g5_decision=recurse_done` (the worker records `recursion_completed`; never write STATE_FILE) → continue loop.
 
 ## Finalize terminal (ICF-H, ICF-I, ICF-J, ICF-K)
 
 <!-- ICF-K: write outcome JSON (always; final in-skill step before End report) — executed by worker -->
 Dispatch ICF-H, ICF-I, ICF-J, ICF-K to the `issue-close-finalize` worker per `skills/_shared/worker-dispatch.md`, with the next WD-2 `-<seq>` payload.
 
-Payload keys: `phase: "finalize_terminal"`, `root_issue_number` (= N), `owner_repo`, `state_file_path` (= `STATE_FILE`), `session_id`, `outcome_file_path` (= `$PLANS_DIR/<session-id>-issue-close-outcome.json`), `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`).
+Payload keys: `phase: "finalize_terminal"`, `root_issue_number` (= N), `owner_repo`, `session_id`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`).
 
 On `complete` status: continue to the End report. On `failed`: surface summary + artifact_path and stop.
 ICF-I: posts the `resolved-by` + appended sentinels (admin_close_path: appended sentinel only).

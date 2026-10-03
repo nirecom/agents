@@ -11,6 +11,7 @@ const cursorLib = require("./cursor");
 const { getHandoffPath, readDocumentFile } = require("../handoff-artifact");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 const { getStatePath } = require("../supervisor-state-writer");
+const { diagnoseControlMigration } = require("../../workflow-state/state-io/control-dir");
 
 // JS twin of bin/review-plan-codex neutralize_delimiters plus the embed_file comment rewrite.
 function defang(text) {
@@ -74,7 +75,7 @@ function handoffLines(transcriptPath, wsid) {
   const out = [];
   for (const sid of candidates) {
     let p;
-    try { p = getHandoffPath(sid); } catch (_) { continue; }
+    try { p = getHandoffPath(sid); } catch (e) { diagnoseControlMigration(e, "supervisor-codex-input"); continue; }
     const text = readDocumentFile(p);
     if (text !== null) out.push(`--- ${path.basename(p)} ---`, text.replace(/\n$/, ""));
   }
@@ -103,7 +104,7 @@ function planLines(wsid, planScope, artifact) {
 function stateLines(sid, snapshot) {
   let text = snapshot ? readOptional(snapshot) : null;
   if (text === null) {
-    try { text = readOptional(getStatePath(sid)); } catch (_) { text = null; }
+    try { text = readOptional(getStatePath(sid)); } catch (e) { diagnoseControlMigration(e, "supervisor-codex-input"); text = null; }
   }
   return text === null ? [] : [text.replace(/\n$/, "")];
 }
@@ -112,7 +113,8 @@ function readCursor(sid, mode) {
   try {
     const st = JSON.parse(fs.readFileSync(getStatePath(sid), "utf8"));
     return (st && st[mode] && st[mode].transcript_cursor) || null;
-  } catch (_) {
+  } catch (e) {
+    diagnoseControlMigration(e, "supervisor-codex-input");
     return null;
   }
 }

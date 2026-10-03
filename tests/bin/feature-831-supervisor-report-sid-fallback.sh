@@ -2,23 +2,8 @@
 # tests/bin/feature-831-supervisor-report-sid-fallback.sh
 # Tests: bin/supervisor-report
 # Tags: supervisor, em-supervisor, cli, session-id, fallback, scope:issue-specific
-# Tests for issue #831 — supervisor-report session-id auto-resolve.
-#
-# Fallback priority order:
-#   p1: --session-id CLI flag (explicit) → adopted; bypasses all fallbacks.
-#   p2: $CLAUDE_SESSION_ID env → adopted when flag absent.
-#   p3: CWD/WORKTREE_NOTES.md "Session-ID: <sid>" line → adopted via awk.
-#   p4: git common-dir + WORKTREE_NOTES.md → adopted from main worktree notes.
-#   p5: no source → usage error, non-zero exit.
-#   Edge: invalid chars (spaces, slashes) in --session-id → rejected.
-#
-# RED until bin/supervisor-report grows the fallback chain (p1 already exists
-# via existing CLI; p2/p3/p4 are new — those cases SKIP if the underlying
-# auto-resolve has not been implemented yet, detected by feature-probe).
-#
-# L3 gap (what this L2 test does NOT catch):
-# - Real $CLAUDE_SESSION_ID propagation in a live claude -p session (Anthropic bug #27987 prevents subprocess env inheritance)
-# - P2 fallback via env var is only verifiable in a real Claude Code session where the runtime sets CLAUDE_SESSION_ID
+# Issue #831: supervisor-report session-id auto-resolve (p1=CLI flag, p2=env, p3=CWD notes, p4=git common-dir).
+# L3 gap: real CLAUDE_SESSION_ID propagation in a live claude -p session.
 
 set -u
 
@@ -65,11 +50,11 @@ probe_autoresolve() {
     (
         cd "$workdir" && \
         unset CLAUDE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "probe" \
             --reporter "probe" >/dev/null 2>&1
     )
-    if [ -f "$tmp/probe-sid-supervisor-state.json" ]; then ret=0; else ret=1; fi
+    if [ -f "$tmp/probe-sid.control/supervisor-state.json" ]; then ret=0; else ret=1; fi
     rm -rf "$tmp"
     return $ret
 }
@@ -87,13 +72,13 @@ run_s1() {
     (
         cd "$workdir" && \
         CLAUDE_SESSION_ID="env-sid" \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" --session-id "explicit-sid" >/dev/null 2>&1
     )
-    if [ -f "$tmp/explicit-sid-supervisor-state.json" ] \
-       && [ ! -f "$tmp/env-sid-supervisor-state.json" ] \
-       && [ ! -f "$tmp/fallback-sid-supervisor-state.json" ]; then
+    if [ -f "$tmp/explicit-sid.control/supervisor-state.json" ] \
+       && [ ! -f "$tmp/env-sid.control/supervisor-state.json" ] \
+       && [ ! -f "$tmp/fallback-sid.control/supervisor-state.json" ]; then
         pass "S1: --session-id CLI flag is adopted (bypasses fallbacks)"
     else
         fail "S1: --session-id CLI flag is adopted (bypasses fallbacks)"
@@ -112,11 +97,11 @@ run_s2() {
     (
         cd "$workdir" && \
         CLAUDE_SESSION_ID="env-sid-s2" \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
-    if [ -f "$tmp/env-sid-s2-supervisor-state.json" ]; then
+    if [ -f "$tmp/env-sid-s2.control/supervisor-state.json" ]; then
         pass "S2: CLAUDE_SESSION_ID env is adopted when flag absent"
     else
         fail "S2: CLAUDE_SESSION_ID env is adopted when flag absent"
@@ -138,11 +123,11 @@ run_s3() {
     (
         cd "$workdir" && \
         unset CLAUDE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
-    if [ -f "$tmp/cwd-sid-s3-supervisor-state.json" ]; then
+    if [ -f "$tmp/cwd-sid-s3.control/supervisor-state.json" ]; then
         pass "S3: WORKTREE_NOTES.md Session-ID in CWD adopted"
     else
         fail "S3: WORKTREE_NOTES.md Session-ID in CWD adopted"
@@ -186,11 +171,11 @@ run_s4() {
     (
         cd "$wtdir" && \
         unset CLAUDE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
-    if [ -f "$tmp/common-dir-sid-s4-supervisor-state.json" ]; then
+    if [ -f "$tmp/common-dir-sid-s4.control/supervisor-state.json" ]; then
         pass "S4: git common-dir WORKTREE_NOTES.md Session-ID adopted"
     else
         fail "S4: git common-dir WORKTREE_NOTES.md Session-ID adopted"
@@ -206,8 +191,8 @@ run_s5() {
     # Ensure CWD has no WORKTREE_NOTES.md and is not a git repo.
     (
         cd "$workdir" && \
-        unset CLAUDE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -224,7 +209,7 @@ run_s5() {
 run_s6() {
     require_source "$CLI" "S6: invalid chars in --session-id rejected" || return
     local tmp; tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --categories workflow --severity warning --detail "d" \
         --reporter "r" --session-id "bad sid/with stuff" >/dev/null 2>&1
     local rc=$?

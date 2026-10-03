@@ -2,16 +2,8 @@
 # tests/skills/feature-worktree-end-no-inline-js.sh
 # Tests: skills/worktree-end/SKILL.md, skills/worktree-end/scripts, skills/worktree-end/scripts/
 # Tags: worktree, end, cleanup, skill, bin, scope:issue-specific
-#
-# Verifies the worktree-end SKILL.md shrink (#611):
-#   - All inline `node -e` invocations are extracted to skills/worktree-end/scripts/*.
-#   - SKILL.md is <= 200 lines.
-#   - New helper scripts behave per contract (extract-pr-fields, read-notes-path,
-#     write-env-json, capture-env).
-#
-# Test-first: the helper scripts and the shrunk SKILL.md do not exist yet.
-# Tests are expected to FAIL prior to implementation; they must not produce
-# bash syntax errors.
+# Verifies the worktree-end SKILL.md shrink (#611): no inline `node -e`, SKILL.md <= 200 lines,
+# helper scripts (extract-pr-fields, read-notes-path, write-env-json, capture-env) behave per contract.
 
 set -u
 
@@ -268,10 +260,11 @@ STUB
         git -c user.email=t@e -c user.name=t commit --allow-empty -q -m init 2>/dev/null) || true
 
     local env_json
-    env_json="$plans_dir/testsession-final-report-env.json"
+    env_json="$plans_dir/testsession.control/final-report-env.json"  # #2434 control file
 
     local out rc
     out=$(PATH="$stub_dir:$PATH" PLANS_DIR="$plans_dir" \
+          WORKFLOW_PLANS_DIR="$plans_dir" CLAUDE_WORKFLOW_DIR="$plans_dir" \
           run_with_timeout 60 bash "$CAPTURE_ENV" \
               "$tmp_wt" owner/repo "$tmp_backup" testsession 2>&1)
     rc=$?

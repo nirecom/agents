@@ -55,7 +55,7 @@ fi
 # Return the alert.findings length for a session, or "null" if state absent.
 alert_findings_len() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st || !st.alert || !Array.isArray(st.alert.findings)) { process.stdout.write('null'); }
@@ -78,7 +78,7 @@ run_alert_status_skipped() {
     sid="cg-alert-$$"
 
     # Force codex-unavailable via a PATH that has no 'codex'.
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" PATH="/usr/bin:/bin" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" PATH="/usr/bin:/bin" \
         run_with_timeout 20 bash "$FINDINGS_CODEX" --mode alert --sid "$sid" --wsid UNAVAILABLE 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -117,7 +117,7 @@ run_audit_status_skipped() {
     tmp=$(make_tmp); tmp_node="$(to_node_path "$tmp")"
     sid="cg-audit-$$"
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" PATH="/usr/bin:/bin" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" PATH="/usr/bin:/bin" \
         run_with_timeout 20 bash "$FINDINGS_CODEX" --mode audit --sid "$sid" --wsid UNAVAILABLE 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -158,24 +158,24 @@ run_integration_no_outfile_no_ingest() {
     tmp=$(make_tmp); tmp_node="$(to_node_path "$tmp")"
     sid="cg-int-$$"
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert.findings = [{ categories:['workflow'], severity:'notice', detail:'pre-existing', reporter:'test', timestamp:new Date().toISOString() }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 
     before=$(alert_findings_len "$tmp_node" "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" PATH="/usr/bin:/bin" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" PATH="/usr/bin:/bin" \
         run_with_timeout 20 bash "$FINDINGS_CODEX" --mode alert --sid "$sid" --wsid UNAVAILABLE 2>/dev/null)
 
     # Orchestrator linkage: ingest ONLY when an OUTFILE line was printed.
     outfile=$(printf '%s\n' "$out" | grep '^OUTFILE:' | head -n 1 | sed 's/^OUTFILE:[[:space:]]*//')
     if [ -n "$outfile" ]; then
-        WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node "$WRITE_ALERT" \
+        WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node "$WRITE_ALERT" \
             --ingest-generated-jsonl "$outfile" --session-id "$sid" >/dev/null 2>&1
     fi
 
@@ -184,6 +184,10 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 
     if [ -n "$outfile" ]; then
         fail "integration-no-outfile: SKIPPED status must not print an OUTFILE (got: $outfile)"
+        return
+    fi
+    if [ "$before" = "null" ] || [ "$after" = "null" ]; then
+        fail "integration-no-outfile: state unreadable (before=$before after=$after)"
         return
     fi
     if [ "$after" != "$before" ]; then
@@ -206,11 +210,11 @@ run_ingest_happy() {
     tmp=$(make_tmp); tmp_node="$(to_node_path "$tmp")"
     sid="cg-ing-$$"
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
 const fs = require('fs');
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(s.createEmptyState('$sid')));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(s.createEmptyState('$sid')));
 " >/dev/null 2>&1
 
     before=$(alert_findings_len "$tmp_node" "$sid")
@@ -224,13 +228,13 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(s.createEmptyState('$sid
     } > "$jsonl"
     local jsonl_node; jsonl_node="$(to_node_path "$jsonl")"
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node "$WRITE_ALERT" \
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node "$WRITE_ALERT" \
         --ingest-generated-jsonl "$jsonl_node" --session-id "$sid" >/dev/null 2>&1
     rc=$?
 
     after=$(alert_findings_len "$tmp_node" "$sid")
 
-    rt=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    rt=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 const fs = (st && st.alert && st.alert.findings) || [];
@@ -272,13 +276,13 @@ run_ingest_zero_record() {
     tmp=$(make_tmp); tmp_node="$(to_node_path "$tmp")"
     sid="cg-zero-$$"
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert.findings = [{ categories:['workflow'], severity:'notice', detail:'pre-existing', reporter:'test', timestamp:new Date().toISOString() }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 
     before=$(alert_findings_len "$tmp_node" "$sid")
@@ -287,7 +291,7 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
     : > "$jsonl"
     local jsonl_node; jsonl_node="$(to_node_path "$jsonl")"
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node "$WRITE_ALERT" \
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node "$WRITE_ALERT" \
         --ingest-generated-jsonl "$jsonl_node" --session-id "$sid" >/dev/null 2>&1
     rc=$?
 
@@ -296,6 +300,10 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 
     if [ "$rc" -ne 0 ]; then
         fail "ingest-zero: empty file must be no-op exit 0, got $rc"
+        return
+    fi
+    if [ "$before" = "null" ] || [ "$after" = "null" ]; then
+        fail "ingest-zero: state unreadable (before=$before after=$after)"
         return
     fi
     if [ "$after" != "$before" ]; then
@@ -318,11 +326,11 @@ run_ingest_malformed() {
     tmp=$(make_tmp); tmp_node="$(to_node_path "$tmp")"
     sid="cg-mal-$$"
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
 const fs = require('fs');
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(s.createEmptyState('$sid')));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(s.createEmptyState('$sid')));
 " >/dev/null 2>&1
 
     before=$(alert_findings_len "$tmp_node" "$sid")
@@ -334,7 +342,7 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(s.createEmptyState('$sid
     } > "$jsonl"
     local jsonl_node; jsonl_node="$(to_node_path "$jsonl")"
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node "$WRITE_ALERT" \
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node "$WRITE_ALERT" \
         --ingest-generated-jsonl "$jsonl_node" --session-id "$sid" >/dev/null 2>&1
     rc=$?
 
@@ -370,13 +378,13 @@ run_ingest_mutual_exclusion() {
     tmp=$(make_tmp); tmp_node="$(to_node_path "$tmp")"
     sid="cg-mutex-$$"
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert.findings = [{ categories:['workflow'], severity:'warning', detail:'pre', reporter:'test', status:'draft', idx:0, timestamp:new Date().toISOString() }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 
     before=$(alert_findings_len "$tmp_node" "$sid")
@@ -385,7 +393,7 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
     printf '{"categories":["code"],"severity":"error","detail":"should-not-append","reporter":"supervisor"}\n' > "$jsonl"
     local jsonl_node; jsonl_node="$(to_node_path "$jsonl")"
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node "$WRITE_ALERT" \
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node "$WRITE_ALERT" \
         --ingest-generated-jsonl "$jsonl_node" --drop-finding-ids 0 --session-id "$sid" >/dev/null 2>&1
     rc=$?
 
@@ -394,6 +402,10 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 
     if [ "$rc" -eq 0 ]; then
         fail "ingest-mutex: combining --ingest-generated-jsonl with --drop-finding-ids must be rejected (non-zero)"
+        return
+    fi
+    if [ "$before" = "null" ] || [ "$after" = "null" ]; then
+        fail "ingest-mutex: state unreadable (before=$before after=$after)"
         return
     fi
     if [ "$after" != "$before" ]; then

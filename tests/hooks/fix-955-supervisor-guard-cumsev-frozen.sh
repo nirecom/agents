@@ -1,25 +1,9 @@
 #!/usr/bin/env bash
 # Tests: hooks/supervisor-guard.js
 # Tags: supervisor, em-supervisor, layer2, hook, stop, fix-955, scope:issue-specific
-# RED for issue #955.
-#
-# Validates: supervisor-guard.js branch (2) (cumulative_severity=error) must
-# NOT block when alert_phase is "paused" or "done" — those are terminal states and
-# the session would otherwise be permanently stuck. Adds the
-# `&& l2Phase !== "done" && l2Phase !== "paused"` guard symmetric with
-# branch (3) already at line 311.
-#
-# Out of scope (triage: NA per class members):
-# - Branch (C3) WORKTREE_OFF proposal detection (line 289): already correctly handled by
-#   tryIncrementFrozen() returning frozen:true for alert_phase=paused (return field name
-#   unchanged per #1166). alert_phase=done is a separate orthogonality concern not in this fix's scope.
-#
-# L3 gap (what this test does NOT catch):
-# - hook registration in settings.json Stop hooks — if supervisor-guard.js is
-#   not wired, blocking and unblocking behavior are both unobservable
-# - real Claude Code transcript format differences
-# Closest-to-action mitigation: hook-registration category in
-#   bin/check-verification-gate.sh fires at WORKFLOW_USER_VERIFIED preflight.
+# #955: branch (2) cumSev=error vs alert_phase (paused/done hand off to L3, #1044);
+# C3 (WORKTREE_OFF) is out of scope. L3 gap: Stop-hook registration and real
+# transcript format (mitigated by bin/check-verification-gate.sh hook-registration).
 
 set -u
 
@@ -55,7 +39,7 @@ require_source() {
 # phase_literal: pass "null" for null, or 'pending' / 'paused' / 'closed' / 'done' (with single quotes for strings).
 seed_state_phase() {
     local tmp="$1" sid="$2" phase_literal="$3" cum_sev_literal="$4"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -69,7 +53,7 @@ st.alert = {
   alert_cause: null,
   alert_retry_count: 0
 };
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
@@ -77,7 +61,7 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 run_guard() {
     local tmp="$1" sid="$2"
     echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null
 }
 
 # F1: alert_phase=null, cumulative_severity=error -> SHOULD block (normal case)
@@ -104,7 +88,7 @@ run_f2() {
     seed_state_phase "$tmp" "f2-sid" "'paused'" "'error'"
     out=$(run_guard "$tmp" "f2-sid")
     rc=$?
-    audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('f2-sid');
 if (!st || !st.audit) { process.stdout.write('MISSING'); process.exit(0); }
@@ -126,7 +110,7 @@ run_f3() {
     seed_state_phase "$tmp" "f3-sid" "'done'" "'error'"
     out=$(run_guard "$tmp" "f3-sid")
     rc=$?
-    audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('f3-sid');
 if (!st || !st.audit) { process.stdout.write('MISSING'); process.exit(0); }
@@ -161,7 +145,7 @@ run_f5() {
     require_source "$HOOK" "F5: malformed stdin -> fail-open, exit 0" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    echo "not-json" | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    echo "not-json" | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then

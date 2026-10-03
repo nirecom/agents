@@ -1,0 +1,180 @@
+#!/usr/bin/env node
+// bin/check-plans-artifacts --source [<root>] | --dir <path>
+// Lint for what may live in WORKFLOW_PLANS_DIR (#2434). The registry
+// (hooks/lib/plans-artifact-registry.js) decides; policy: docs/architecture/claude-code/state-dirs.md.
+//   --source: scans skills agents bin hooks rules docs under <root> (default: cwd) for a
+//     PLANS-dir token + sid token + name assembly. Only an artifact name passes; control,
+//     ambiguous, unregistered and statically undecidable names are errors (exit 1), unless
+//     listed in SOURCE_LINT_EXCEPTIONS with a reason. An empty reason, or an exception whose
+//     file is scanned but no longer matches, is itself an error.
+//   --dir: classifies the direct entries of a real plans dir (investigation mode, not CI).
+//     control / ambiguous -> error (exit 1); unregistered -> warning (exit 0, counted).
+// Exit: 0 clean; 1 violations; 2 usage or scan error.
+"use strict";
+const fs = require("fs");
+const path = require("path");
+
+const REG = require(path.join(__dirname, "..", "hooks", "lib", "plans-artifact-registry.js"));
+const { getWorkflowDir } = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "core.js"));
+
+const SCAN_ROOTS = ["skills", "agents", "bin", "hooks", "rules", "docs"];
+const SKIP_DIRS = new Set([".git", "node_modules"]);
+const MAX_BYTES = 1024 * 1024;
+
+const PLANS_NAMES = "WORKFLOW_PLANS_DIR|PLANS_DIR|plans_dir|artifact_dir|EFF_LOG_DIR|LOG_DIR|plansDir|artifactDir";
+const P = String.raw`(?:\$\{(?:${PLANS_NAMES})(?::?[-=][^}]*)?\}|\$(?:${PLANS_NAMES})\b|<PLANS_DIR>|<plans-dir>|getWorkflowPlansDir\(\)|\b(?:${PLANS_NAMES})\b)`;
+const SEP = String.raw`["'\x60]?\s*(?:[/\\]|,\s*)\s*["'\x60]?`;
+const SID_WORD = "(?:sid|Sid|SID|session|Session|SESSION)";
+const S = String.raw`(?:\$\{[A-Za-z_.]*${SID_WORD}[A-Za-z_.]*\}|\$[A-Za-z_]*${SID_WORD}[A-Za-z_]*|<[a-z-]*(?:sid|session-id)>|\b[A-Za-z_.]*${SID_WORD}[A-Za-z_]*\s*\+\s*["'\x60])`;
+const JS_VAR = String.raw`["']\s*\+\s*[A-Za-z_][A-Za-z0-9_]*(?:\s*\+\s*["'])?`;
+const BRACE = String.raw`\{[A-Za-z0-9._-]+(?:(?:,|\\?\|)[A-Za-z0-9._-]+)+\}`;
+const OPTIONAL = String.raw`\[(?:[A-Za-z0-9._-]|<[A-Za-z_-]+>)+\]`;
+const REM = String.raw`((?:[A-Za-z0-9._-]|<[A-Za-z_-]+>|\$\{[A-Za-z_][A-Za-z0-9_]*\}|\$[A-Za-z_][A-Za-z0-9_]*|${BRACE}|${OPTIONAL}|${JS_VAR}|\*)*)`;
+const ASSEMBLY_RE = new RegExp(`${P}${SEP}${S}["']?-${REM}`, "g");
+const PART_RE = new RegExp(String.raw`<[A-Za-z_-]+>|\$\{[A-Za-z_][A-Za-z0-9_]*\}|\$[A-Za-z_][A-Za-z0-9_]*|${BRACE}|${OPTIONAL}|${JS_VAR}|\*|[A-Za-z0-9._-]+`, "g");
+
+const SAMPLES = [
+  [/^(?:n|round|rootn|seq|num|round_?number|root_?n)$/i, "1"],
+  [/format|fmt/i, "detail-plan"],
+  [/stage|^step$|^suffix$|^sfx$/i, "detail"],
+  [/producer/i, "codex"],
+  [/^(?:topic|name|worker|worker-name)$/i, "x"],
+  [/^ext$/i, "md"],
+];
+
+function sampleFor(varName) {
+  for (const [re, v] of SAMPLES) if (re.test(varName)) return v;
+  return null;
+}
+
+// Returns every concrete name a remainder stands for ({a,b} expands); null marks a non-static name.
+function concreteNames(rem) {
+  let outs = [""];
+  for (const p of rem.match(PART_RE) || []) {
+    if (p === "*") return [null];
+    let alts;
+    if (p[0] === "{") alts = p.slice(1, -1).split(/,|\\?\|/);
+    else if (p[0] === "[") alts = ["", ...concreteNames(p.slice(1, -1))];
+    else if (p[0] === '"' || p[0] === "'") alts = [sampleFor(p.replace(/^["']\s*\+\s*|\s*\+\s*["']$/g, ""))];
+    else if (p[0] === "<" || p[0] === "$") alts = [sampleFor(p.replace(/^[<$]\{?|[>}]$/g, ""))];
+    else alts = [p];
+    if (alts.includes(null)) return [null];
+    outs = outs.flatMap((o) => alts.map((a) => o + a));
+  }
+  return outs.map((o) => o.replace(/\.+$/, "")).map((o) => (o.length > 0 ? o : null));
+}
+
+function classifyName(name) {
+  if (name === null) return "unregistered";
+  const test = (list) => list.some((e) => (e instanceof RegExp ? e : e.re).test(name));
+  const control = test(REG.CONTROL_KINDS);
+  const artifact = test(REG.ARTIFACT_KINDS);
+  if (control && artifact) return "ambiguous";
+  if (control) return "control";
+  return artifact ? "artifact" : "unregistered";
+}
+
+function classifyRemainder(rem) {
+  const verdicts = concreteNames(rem).map(classifyName);
+  return verdicts.find((v) => v !== "artifact") || "artifact";
+}
+
+function isExcluded(rel) {
+  const r = rel.replace(/\\/g, "/");
+  return /^docs\/history(?:\.md$|\/)/.test(r) || /changelog/i.test(r);
+}
+
+function walk(root, rel, out) {
+  let entries;
+  try { entries = fs.readdirSync(path.join(root, rel), { withFileTypes: true }); } catch (e) {
+    if (e.code === "ENOENT") return;
+    throw e;
+  }
+  for (const ent of entries) {
+    const childRel = rel ? `${rel}/${ent.name}` : ent.name;
+    if (ent.isDirectory()) {
+      if (!SKIP_DIRS.has(ent.name)) walk(root, childRel, out);
+    } else if (ent.isFile() && !isExcluded(childRel)) out.push(childRel);
+  }
+}
+
+function exceptionMatches(exc, rel, text) {
+  if (exc.file !== rel) return false;
+  return exc.pattern instanceof RegExp ? exc.pattern.test(text) : text.includes(String(exc.pattern));
+}
+
+function scanSource(root, exceptions) {
+  const files = [];
+  for (const top of SCAN_ROOTS) walk(root, top, files);
+  const findings = [];
+  const used = new Set();
+  for (const rel of files) {
+    const abs = path.join(root, rel);
+    const st = fs.statSync(abs);
+    if (st.size > MAX_BYTES) continue;
+    const buf = fs.readFileSync(abs);
+    if (buf.includes(0)) continue;
+    const lines = buf.toString("utf8").split(/\r?\n/);
+    lines.forEach((line, i) => {
+      ASSEMBLY_RE.lastIndex = 0;
+      let m;
+      while ((m = ASSEMBLY_RE.exec(line)) !== null) {
+        const verdict = classifyRemainder(m[1]);
+        if (verdict === "artifact") continue;
+        const idx = exceptions.findIndex((x) => exceptionMatches(x, rel, m[0]));
+        if (idx >= 0) { used.add(idx); continue; }
+        findings.push(`${rel}:${i + 1}: ${verdict}: ${m[0]}`);
+      }
+    });
+  }
+  exceptions.forEach((x, i) => {
+    if (!x || typeof x.reason !== "string" || x.reason.trim() === "") {
+      findings.push(`SOURCE_LINT_EXCEPTIONS[${i}] (${x && x.file}): empty reason`);
+    } else if (!used.has(i) && files.includes(x.file)) {
+      findings.push(`SOURCE_LINT_EXCEPTIONS[${i}] (${x.file}): unused exception — remove it`);
+    }
+  });
+  return findings;
+}
+
+function scanDir(dir) {
+  const errors = [];
+  const warnings = [];
+  const ctx = { plansDir: dir, workflowDir: getWorkflowDir() };
+  for (const name of fs.readdirSync(dir).sort()) {
+    const verdict = REG.classifyPlansEntry(name, ctx);
+    if (verdict === "control" || verdict === "ambiguous") errors.push(`${path.join(dir, name)}: ${verdict}`);
+    else if (verdict === "unregistered") warnings.push(`${path.join(dir, name)}: unregistered (warning)`);
+  }
+  return { errors, warnings };
+}
+
+function main(argv) {
+  const mode = argv[0];
+  if (mode === "--source" && argv.length <= 2) {
+    const root = path.resolve(argv[1] || process.cwd());
+    const findings = scanSource(root, [...REG.SOURCE_LINT_EXCEPTIONS]);
+    for (const f of findings) process.stdout.write(`${f}\n`);
+    if (findings.length > 0) {
+      process.stdout.write(`check-plans-artifacts: ${findings.length} violation(s); register the name or move the file to the session control dir (docs/architecture/claude-code/state-dirs.md)\n`);
+      return 1;
+    }
+    return 0;
+  }
+  if (mode === "--dir" && argv.length === 2) {
+    const { errors, warnings } = scanDir(path.resolve(argv[1]));
+    for (const e of errors) process.stdout.write(`${e}\n`);
+    for (const w of warnings) process.stdout.write(`${w}\n`);
+    process.stdout.write(`check-plans-artifacts: control/ambiguous: ${errors.length}, unregistered: ${warnings.length}\n`);
+    return errors.length > 0 ? 1 : 0;
+  }
+  process.stderr.write("usage: check-plans-artifacts --source [<root>] | --dir <path>\n");
+  return 2;
+}
+
+try {
+  process.exitCode = main(process.argv.slice(2));
+} catch (e) {
+  process.stderr.write(`check-plans-artifacts: ${e && e.message ? e.message : e}\n`);
+  process.exitCode = 2;
+}

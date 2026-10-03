@@ -199,22 +199,24 @@ run_driver
 assert_kv "S4: traversal sid still completes → ACTION=done" ACTION done
 S4_ESCAPED=""
 for F in "$ROOT_TMP/evil-wi-checkpoint.json" "$ROOT_TMP/evil-context.md" \
-         "$CASE_DIR/evil-wi-checkpoint.json" "$CASE_DIR/evil-context.md"; do
+         "$CASE_DIR/evil-wi-checkpoint.json" "$CASE_DIR/evil-context.md" \
+         "$ROOT_TMP/evil.control" "$CASE_DIR/evil.control"; do
     [ -e "$F" ] && S4_ESCAPED="$F"
 done
 if [ -z "$S4_ESCAPED" ]; then
     pass "S4: no checkpoint/context written outside WORKFLOW_PLANS_DIR"
 else
     fail "S4: path-traversal artifact found at $S4_ESCAPED"
-    rm -f "$S4_ESCAPED"
+    rm -rf "$S4_ESCAPED"
 fi
-S4_CKPT="$(find "$PLANS" -maxdepth 1 -name '*-wi-checkpoint.json' 2>/dev/null | head -1)"
+# #2434: the checkpoint lives at <CLAUDE_WORKFLOW_DIR>/<sid>.control/wi-checkpoint.json.
+S4_CKPT="$(find "$WF" -mindepth 2 -maxdepth 2 -path '*.control/wi-checkpoint.json' 2>/dev/null | head -1)"
 S4_SID=""
-if [ -n "$S4_CKPT" ]; then S4_SID="$(basename "$S4_CKPT")"; S4_SID="${S4_SID%-wi-checkpoint.json}"; fi
+if [ -n "$S4_CKPT" ]; then S4_SID="$(basename "$(dirname "$S4_CKPT")")"; S4_SID="${S4_SID%.control}"; fi
 if [ -n "$S4_SID" ] && printf '%s' "$S4_SID" | grep -Eq '^[A-Za-z0-9_-]+$'; then
-    pass "S4: checkpoint created under PLANS_DIR with validated sid '$S4_SID'"
+    pass "S4: checkpoint created under the workflow dir with validated sid '$S4_SID'"
 else
-    fail "S4: no validated-sid checkpoint under PLANS_DIR (found: '$S4_CKPT')"
+    fail "S4: no validated-sid checkpoint under the workflow dir (found: '$S4_CKPT')"
 fi
 teardown_case
 

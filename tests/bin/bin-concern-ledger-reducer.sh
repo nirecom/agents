@@ -19,6 +19,12 @@ AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LIB="$AGENTS_ROOT/bin/lib/concern-ledger.sh"
 CLI="$AGENTS_ROOT/bin/concern-ledger"
 
+# Shared harness first for the case markers the sub-files use; the counters and
+# reporters below are reset/redefined afterwards, so this narrow harness wins.
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_ROOT/tests/lib/harness.sh"
+
 PASS=0
 FAIL=0
 
@@ -314,28 +320,57 @@ done
 clg_assert_harness_intact "pre-cases"
 clg_assert_library_intact "pre-cases"
 
+case_begin "reducer-slot-discrim" "bin/lib/concern-ledger/reduce.sh"
 # shellcheck source=./bin-concern-ledger-reducer/slot-discrim.sh
 . "$SUITE_DIR/slot-discrim.sh"
+case_end
+
+case_begin "reducer-bind" "bin/lib/concern-ledger/reduce.sh"
 # shellcheck source=./bin-concern-ledger-reducer/bind.sh
 . "$SUITE_DIR/bind.sh"
+case_end
+
+case_begin "reducer-merge" "bin/lib/concern-ledger/reduce.sh"
 # shellcheck source=./bin-concern-ledger-reducer/merge.sh
 . "$SUITE_DIR/merge.sh"
+case_end
+
+case_begin "reducer-transitions" "bin/lib/concern-ledger/reduce.sh"
 # shellcheck source=./bin-concern-ledger-reducer/transitions.sh
 . "$SUITE_DIR/transitions.sh"
+case_end
+
+case_begin "reducer-completeness" "bin/lib/concern-ledger/reduce.sh"
 # shellcheck source=./bin-concern-ledger-reducer/completeness.sh
 . "$SUITE_DIR/completeness.sh"
+case_end
+
+case_begin "reducer-cycle-migration-static" "bin/lib/concern-ledger/core.sh"
 # shellcheck source=./bin-concern-ledger-reducer/cycle-migration-static.sh
 . "$SUITE_DIR/cycle-migration-static.sh"
+case_end
+
+case_begin "reducer-pattern-discovery" "bin/lib/concern-ledger/parse.sh"
 # shellcheck source=./bin-concern-ledger-reducer/pattern-discovery.sh
 . "$SUITE_DIR/pattern-discovery.sh"
+case_end
+
+case_begin "reducer-path-shapes-and-framing" "bin/concern-ledger"
 # shellcheck source=./bin-concern-ledger-reducer/path-shapes-and-framing.sh
 . "$SUITE_DIR/path-shapes-and-framing.sh"
+case_end
+
+case_begin "reducer-backslash-reduce" "bin/lib/concern-ledger/reduce.sh"
 # shellcheck source=./bin-concern-ledger-reducer/backslash-reduce.sh
 . "$SUITE_DIR/backslash-reduce.sh"
+case_end
+
 # Must stay after the file-scope load and the cl() definition above: it asserts
 # the #2111 contract by calling cl() itself.
+case_begin "reducer-load-once-isolation" "bin/lib/concern-ledger.sh"
 # shellcheck source=./bin-concern-ledger-reducer/load-once-isolation.sh
 . "$SUITE_DIR/load-once-isolation.sh"
+case_end
 
 # The two counters advanced by design while the ten case files ran, so they are
 # re-pinned here; the six identity scalars stay pinned to their load-time values.

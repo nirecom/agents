@@ -1,30 +1,12 @@
 // hooks/lib/tool-command-text.js
 // SSOT (CPR-SSOT) for "what shell text is this tool call about to execute?".
-//
-// Claude Code ships THREE command-executing tools and they do NOT agree on the
-// payload shape:
-//
-//   Bash           -> tool_input.command   (string)
-//   runInTerminal  -> tool_input.command   (string)
-//   runCommands    -> tool_input.commands  (ARRAY of strings)
-//
-// Every PreToolUse hook that scans a command therefore has to normalize, and
-// before #1780 each one open-coded it — hooks/enforce-system-ops.js handled the
-// array while hooks/block-clearance-token-write/dispatch.js and
-// hooks/supervisor-off-proposal-shim.js read `.command` only, so a runCommands
-// call sailed past them with `undefined`. That is a silent full bypass, not a
-// degraded check.
-//
-// The joiner is "\n" because every consumer feeds the result to a shell-command
-// scanner: newline is a statement separator in both POSIX sh and PowerShell, so
-// commands[1] is scanned as its own statement rather than being glued onto the
-// tail of commands[0]. Joining with "; " would also work for sh but would
-// corrupt PowerShell here-strings/comments; "\n" is the only separator that is
-// a separator in both.
-//
-// Never returns null/undefined — callers branch on emptiness, and a non-string
-// payload must degrade to "" rather than to the literal "undefined" (which
-// contains no protected name and would read as "scanned and clean").
+// Payload shapes: Bash / runInTerminal / PowerShell -> tool_input.command (string);
+// runCommands -> tool_input.commands (ARRAY). Before #1780 hooks open-coded `.command`,
+// so a runCommands call sailed past them with `undefined` — a silent full bypass.
+// The joiner is "\n": a statement separator in both POSIX sh and PowerShell ("; " would
+// corrupt PowerShell here-strings/comments), so commands[1] is scanned as its own statement.
+// Never returns null/undefined — a non-string payload degrades to "", never to the literal
+// "undefined" (which would read as "scanned and clean").
 "use strict";
 
 // Tools whose payload this module knows how to read. Exported so hooks can gate
@@ -33,6 +15,14 @@ const COMMAND_TOOL_NAMES = ["Bash", "runInTerminal", "runCommands"];
 
 function isCommandTool(toolName) {
   return COMMAND_TOOL_NAMES.indexOf(toolName) !== -1;
+}
+
+// Kept out of COMMAND_TOOL_NAMES (the settings.json matcher contract in write-tools.js);
+// a hook that scans PowerShell script text opts in explicitly.
+const POWERSHELL_TOOL_NAMES = ["PowerShell"];
+
+function isPowerShellTool(toolName) {
+  return POWERSHELL_TOOL_NAMES.indexOf(toolName) !== -1;
 }
 
 // commandTextOf(toolName, toolInput) -> string
@@ -51,16 +41,11 @@ function commandTextOf(toolName, toolInput) {
 }
 
 // commandListOf(toolName, toolInput) -> string[]
-// The same payload, kept SEPARATE instead of joined (CPR-SC). Two different
-// questions are being asked of a tool call and they need different shapes:
-//
-//   "does any protected path appear anywhere in what will run?"  -> commandTextOf
-//   "is THIS command an exact sentinel emission?"                -> commandListOf
-//
-// hooks/lib/sentinel-patterns.js anchors every pattern with ^...$ and no `m`
-// flag, so a sentinel sitting in commands[1] can never match the joined text —
-// it must be matched against its own element. Empty elements are dropped so
-// callers can treat an empty list as "nothing to adjudicate".
+// The same payload kept SEPARATE instead of joined (CPR-SC): commandTextOf answers "does a
+// protected path appear anywhere?", this answers "is THIS command an exact sentinel emission?".
+// hooks/lib/sentinel-patterns.js anchors every pattern with ^...$ and no `m` flag, so a
+// sentinel in commands[1] must be matched against its own element. Empty elements are
+// dropped so an empty list means "nothing to adjudicate".
 function commandListOf(toolName, toolInput) {
   const input = toolInput && typeof toolInput === "object" ? toolInput : {};
   if (toolName === "runCommands" && Array.isArray(input.commands)) {
@@ -70,4 +55,11 @@ function commandListOf(toolName, toolInput) {
   return text ? [text] : [];
 }
 
-module.exports = { COMMAND_TOOL_NAMES, isCommandTool, commandTextOf, commandListOf };
+module.exports = {
+  COMMAND_TOOL_NAMES,
+  POWERSHELL_TOOL_NAMES,
+  isCommandTool,
+  isPowerShellTool,
+  commandTextOf,
+  commandListOf,
+};

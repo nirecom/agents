@@ -1,32 +1,57 @@
 #!/usr/bin/env node
-// CLI wrapper for renderFinalReport: reads input files, renders the Final
-// Report by substituting all placeholders, and writes the result to stdout.
-//
-// Usage: node render-final-report.js <session-id> <env-json-path> <outcome-json-path> <intent-md-path> [<supervisor-state-json-path>]
-//
-// Exit 0 on success; exit 1 on usage error, missing/invalid env JSON, or any
-// error thrown by renderFinalReport.
+// CLI wrapper for renderFinalReport: renders the Final Report to stdout.
+// Usage: node render-final-report.js --session <session-id>
+//   env / outcome / supervisor-state come from <CLAUDE_WORKFLOW_DIR>/<sid>.control/;
+//   intent.md (an artifact) from <PLANS_DIR>/<sid>-intent.md.
+// Legacy: <session-id> <env-json> <outcome-json> <intent-md> [<supervisor-state-json>] —
+//   each control path is accepted only as the derived path or its <sid>-<name> basename.
+// Exit 0 on success; 1 on usage error, rejected path, missing/invalid env JSON, or render error.
 
 "use strict";
 const fs = require("fs");
 const path = require("path");
 
+const { resolveControlFile } = require(path.join(__dirname, "lib", "session-control-file"));
+
 const USAGE =
-  "Usage: render-final-report.js <session-id> <env-json-path> <outcome-json-path> <intent-md-path> [<supervisor-state-json-path>]\n";
+  "Usage: render-final-report.js --session <session-id>\n" +
+  "       render-final-report.js <session-id> <env-json-path> <outcome-json-path> <intent-md-path> [<supervisor-state-json-path>]\n";
 
 function fail(msg) {
   process.stderr.write(msg);
   process.exit(1);
 }
 
-const sessionId = process.argv[2];
+function controlFile(sid, legacy, name) {
+  try {
+    return resolveControlFile({ sid, legacy, name, forWrite: false });
+  } catch (err) {
+    return fail(`render-final-report: ${err.message}\n`);
+  }
+}
+
+function readJson(p) {
+  try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) { return null; }
+}
+
+function parseInvocation(argv) {
+  if (argv[0] === "--session") {
+    if (argv.length !== 2) fail(USAGE);
+    const { getWorkflowPlansDir } = require(path.resolve(__dirname, "../hooks/lib/workflow-plans-dir"));
+    return { sessionId: argv[1], sessionForm: true, plansDir: getWorkflowPlansDir() };
+  }
+  const [sessionId, envArg, outcomeArg, intentArg, supervisorArg] = argv;
+  if (!envArg) fail(USAGE);
+  return { sessionId, envArg, outcomeArg, intentArg, supervisorArg, sessionForm: false };
+}
+
+const inv = parseInvocation(process.argv.slice(2));
+const sessionId = inv.sessionId;
 if (!sessionId || !/^[A-Za-z0-9_-]+$/.test(sessionId)) {
   fail(USAGE);
 }
 
-const envPath = process.argv[3];
-if (!envPath) fail(USAGE);
-
+const envPath = controlFile(sessionId, inv.envArg, "final-report-env.json");
 let env;
 try {
   env = JSON.parse(fs.readFileSync(envPath, "utf8"));
@@ -35,29 +60,29 @@ try {
 }
 
 let outcome = { issues: [] };
-const outcomePath = process.argv[4];
-if (outcomePath) {
-  if (!fs.existsSync(outcomePath)) {
+if (inv.sessionForm || inv.outcomeArg) {
+  const outcomePath = controlFile(sessionId, inv.outcomeArg, "issue-close-outcome.json");
+  if (fs.existsSync(outcomePath)) {
+    outcome = readJson(outcomePath) || { issues: [] };
+  } else if (!inv.sessionForm) {
     fail(`render-final-report: outcome JSON not found: ${outcomePath}\n`);
-  }
-  try {
-    outcome = JSON.parse(fs.readFileSync(outcomePath, "utf8"));
-  } catch (_) {
-    outcome = { issues: [] };
   }
 }
 
+// #1644 stage 4: route through the write-once session cache instead of
+// re-parsing intent.md on every render — a session that already recorded
+// closes_issues returns it as-is.
 let closesIssues = [];
-const intentPath = process.argv[5];
-if (intentPath) {
-  if (!fs.existsSync(intentPath)) {
-    fail(`render-final-report: intent.md not found: ${intentPath}\n`);
+let intentPlansDir = inv.sessionForm ? inv.plansDir : null;
+if (inv.intentArg) {
+  if (!fs.existsSync(inv.intentArg)) {
+    fail(`render-final-report: intent.md not found: ${inv.intentArg}\n`);
   }
-  // #1644 stage 4: route through the write-once session cache instead of
-  // re-parsing intent.md on every render — a session that already recorded
-  // closes_issues returns it as-is.
+  intentPlansDir = path.dirname(inv.intentArg);
+}
+if (intentPlansDir !== null) {
   const { getClosesIssues } = require(path.resolve(__dirname, "../hooks/workflow-state/session-facts.js"));
-  closesIssues = getClosesIssues(sessionId, { plansDir: path.dirname(intentPath) }).map((e) => e.number);
+  closesIssues = getClosesIssues(sessionId, { plansDir: intentPlansDir }).map((e) => e.number);
 }
 
 // Fail-open: an unreadable or absent notes backup yields the "(none)" triple
@@ -76,13 +101,9 @@ if (notesBackupPath && fs.existsSync(notesBackupPath)) {
 }
 
 let supervisorState = null;
-const supervisorPath = process.argv[6];
-if (supervisorPath && fs.existsSync(supervisorPath)) {
-  try {
-    supervisorState = JSON.parse(fs.readFileSync(supervisorPath, "utf8"));
-  } catch (_) {
-    supervisorState = null;
-  }
+if (inv.sessionForm || inv.supervisorArg) {
+  const supervisorPath = controlFile(sessionId, inv.supervisorArg, "supervisor-state.json");
+  if (fs.existsSync(supervisorPath)) supervisorState = readJson(supervisorPath);
 }
 
 try {

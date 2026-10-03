@@ -53,7 +53,8 @@ each entry there. Two criteria put a key on it:
 
 1. **One machine, one policy.** Settings whose per-repository divergence breaks
    a contract this repository owns — the workflow-state root
-   (`CLAUDE_WORKFLOW_DIR`, `WORKFLOW_PLANS_DIR`), the config directory this very
+   (`CLAUDE_WORKFLOW_DIR`, `WORKFLOW_PLANS_DIR`; what each holds:
+   [state-dirs.md](state-dirs.md)), the config directory this very
    layer resolves the global `.env` from (`AGENTS_CONFIG_DIR`), the worktree
    enforcement switches.
 2. **Half-applied.** Keys whose consumers do not all read the same layer.

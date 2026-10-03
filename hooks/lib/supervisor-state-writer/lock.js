@@ -8,7 +8,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { readStateOrInit, writeAtomic } = require("./shared");
+const { readStateOrInit, writeAtomic, sessionIdFromStatePath } = require("./shared");
 
 const RETRY_INTERVAL_MS = 50;
 const RETRY_LIMIT = 40;
@@ -74,11 +74,6 @@ function acquire(lockDir) {
   return null;
 }
 
-function sessionIdFromStatePath(filePath) {
-  const m = path.basename(String(filePath)).match(/^(.+)-supervisor-state\.json$/);
-  return m ? m[1] : null;
-}
-
 // Lock-free by design: the lock we would take is exactly the one we just lost.
 function recordOwnershipMismatch(filePath, expected, found) {
   const sessionId = sessionIdFromStatePath(filePath);
@@ -134,6 +129,7 @@ function withStateLock(filePath, fn) {
     }
   }
 
+  try { fs.mkdirSync(path.dirname(filePath), { recursive: true }); } catch (_) { /* acquire reports it */ }
   const token = acquire(lockDir);
   if (token === null) {
     console.error(`[supervisor-state-lock] could not acquire ${lockDir} — write skipped (fail-closed)`);

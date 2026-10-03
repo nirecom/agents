@@ -80,6 +80,8 @@ DREOF
 
     # REAL write-env-json.js — copy from source so we can assert output JSON.
     cp "$AGENTS_DIR/skills/worktree-end/scripts/write-env-json.js" "$envdir/scripts/write-env-json.js"
+    # REAL sibling-repos-json.js — capture-env.sh invokes it via LIB_DIR.
+    cp "$AGENTS_DIR/skills/worktree-end/scripts/sibling-repos-json.js" "$envdir/scripts/sibling-repos-json.js"
 
     # Fake extract-pr-fields.js — parses JSON and emits key=value lines.
     cat > "$envdir/scripts/extract-pr-fields.js" << 'EPFEOF'
@@ -121,7 +123,9 @@ run_capture_env_real_dir() {
 
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans-$suffix"
-    mkdir -p "$PLANS_DIR"
+    export WORKFLOW_PLANS_DIR="$PLANS_DIR"
+    export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-$suffix"
+    mkdir -p "$PLANS_DIR" "$CLAUDE_WORKFLOW_DIR"
     mkdir -p "$backup_dir"
 
     PATH="$envdir/bin:$PATH" \
@@ -149,7 +153,9 @@ run_capture_env_raw() {
 
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans-$suffix"
-    mkdir -p "$PLANS_DIR"
+    export WORKFLOW_PLANS_DIR="$PLANS_DIR"
+    export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-$suffix"
+    mkdir -p "$PLANS_DIR" "$CLAUDE_WORKFLOW_DIR"
 
     PATH="$envdir/bin:$PATH" \
     run_with_timeout 30 bash "$script_copy" "$worktree" "$repo" "$backup_dir" "$session_id_arg" 2>&1
@@ -193,7 +199,7 @@ test_G1_none_literal_falls_back() {
     local code=$?
 
     local plans_dir="$TMPDIR_BASE/plans-sess-g1"
-    local env_json="$plans_dir/sess-g1-final-report-env.json"
+    local env_json="$TMPDIR_BASE/workflow-sess-g1/sess-g1.control/final-report-env.json"
     local expected_notes
     expected_notes="$(normalize_path "$plans_dir/sess-g1-notes-backup/WORKTREE_NOTES.md")"
 
@@ -248,7 +254,7 @@ test_G2_none_literal_no_notes() {
     local code=$?
 
     local plans_dir="$TMPDIR_BASE/plans-sess-g2"
-    local env_json="$plans_dir/sess-g2-final-report-env.json"
+    local env_json="$TMPDIR_BASE/workflow-sess-g2/sess-g2.control/final-report-env.json"
     local fallback_dir="$plans_dir/sess-g2-notes-backup"
 
     if [ "$code" != "0" ]; then
@@ -293,7 +299,7 @@ test_G3_real_backup_dir_still_works() {
     local code=$?
 
     local plans_dir="$TMPDIR_BASE/plans-sess-g3"
-    local env_json="$plans_dir/sess-g3-final-report-env.json"
+    local env_json="$TMPDIR_BASE/workflow-sess-g3/sess-g3.control/final-report-env.json"
 
     if [ "$code" != "0" ]; then
         fail "G3: expected exit 0, got code=$code (output=$output)"
@@ -345,7 +351,7 @@ test_G4_missing_dir_falls_back() {
     local code=$?
 
     local plans_dir="$TMPDIR_BASE/plans-sess-g4"
-    local env_json="$plans_dir/sess-g4-final-report-env.json"
+    local env_json="$TMPDIR_BASE/workflow-sess-g4/sess-g4.control/final-report-env.json"
     local expected_notes
     expected_notes="$(normalize_path "$plans_dir/sess-g4-notes-backup/WORKTREE_NOTES.md")"
 

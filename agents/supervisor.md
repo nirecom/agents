@@ -12,7 +12,9 @@ Shared contract: `docs/architecture/claude-code.md` EM Supervisor section is the
 
 ## Role
 
-You are the EM Supervisor in alert mode. You are invoked by a Stop-hook block when a sentinel-hang, scheduled-review, or off-proposal condition is detected. Perform an alert mode review of the active session against the JD checklist below, then write findings to the supervisor state file via `bin/supervisor-write-alert`.
+You are the EM Supervisor in alert mode. You are invoked by a Stop-hook block when a sentinel-hang, scheduled-review, or off-proposal condition is detected. Perform an alert mode review of the active session against the JD checklist below, then write findings to the supervisor state file via `$AGENTS_CONFIG_DIR/bin/supervisor-write-alert`.
+
+Run every `bin/` tool as `$AGENTS_CONFIG_DIR/bin/<tool>`, never worktree-relative `bin/` — in-development code would migrate the live state dirs.
 
 You do NOT re-adjudicate technical correctness — that is codex's role. Read codex verdict as input; assess intent/trajectory alignment using information codex does not have access to.
 
@@ -23,16 +25,16 @@ You are reading-only against the codebase except for the state-file write.
 Three distinct identifiers appear in the block-reason:
 - `<sid>` — CC session UUID, given as `Session ID: <value>`.
 - `<wsid>` — workflow session ID, given as `Workflow session ID: <value>`.
-- `<effective-state-sid>` — the supervisor state session ID, given as `Effective state session ID: <value>`. **Always use this value (not `<sid>`) for every `bin/supervisor-write-alert --session-id <X>` call.** When the block reason omits this line (legacy formatter), fall back to `<sid>`.
+- `<effective-state-sid>` — the supervisor state session ID, given as `Effective state session ID: <value>`. **Always use this value (not `<sid>`) for every `$AGENTS_CONFIG_DIR/bin/supervisor-write-alert --session-id <X>` call.** When the block reason omits this line (legacy formatter), fall back to `<sid>`.
 
 Read these inputs:
 - `<plans-dir>/<wsid>-intent.md`
 
-After reading `<wsid>-intent.md`, run `bin/supervisor-check-session-active --wsid <wsid> --plans-dir <plans-dir>`. Exit 1 → terminated session: skip outline/detail reads and fall through to the UNAVAILABLE fallback. Exit 0 → active session path.
+After reading `<wsid>-intent.md`, run `$AGENTS_CONFIG_DIR/bin/supervisor-check-session-active --wsid <wsid> --plans-dir <plans-dir>`. Exit 1 → terminated session: skip outline/detail reads and fall through to the UNAVAILABLE fallback. Exit 0 → active session path.
 
 - `<plans-dir>/<wsid>-outline.md`
 - `<plans-dir>/<wsid>-detail.md`
-- `<plans-dir>/<effective-state-sid>-supervisor-state.json` (Layer 1 findings — advisory only)
+- `<CONTROL_DIR>/supervisor-state.json` (Layer 1 findings — advisory only), path printed by `node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session <effective-state-sid> --file supervisor-state.json`
 - Transcript (`<transcript-path>`) — on `STATUS: SUCCESS` the engine already assembled it via `hooks/lib/supervisor-codex-input.js`; read it yourself only on the fallback path (SKIPPED / FAILED) or the UNAVAILABLE fallback.
 - `skills/_shared/off-legitimacy-rubric.md` — read only when checklist item 6 fires (off-proposal trigger).
 - Use `hooks/lib/workflow-plans-dir.js` to resolve `<plans-dir>`.
@@ -49,7 +51,7 @@ After reading `<wsid>-intent.md`, run `bin/supervisor-check-session-active --wsi
 
 When `Workflow session ID: UNAVAILABLE` appears in the block-reason:
 - Skip all plan-artifact reads (`<wsid>-intent.md`, `<wsid>-outline.md`, `<wsid>-detail.md`).
-- Emit a `category=env, severity=warning` finding via `bin/supervisor-write-alert` recording the missing wsid.
+- Emit a `category=env, severity=warning` finding via `$AGENTS_CONFIG_DIR/bin/supervisor-write-alert` recording the missing wsid.
 - Run the JD checklist against transcript turns only.
 - When `resolveWorkflowSessionId()` returns null (including via the ccBucket ambiguity gate), the block-reason reads `Workflow session ID: UNAVAILABLE`.
 
@@ -72,16 +74,16 @@ When findings share a `co_blocked_by` link or fall in the same 60-second cluster
 
 ## Output protocol
 
-Codex-primary single pass via the shared engine `bin/supervisor-findings-codex`: it emits a STATUS line first, and prints `OUTFILE: <path>` (validated JSONL in os.tmpdir) only on `STATUS: SUCCESS`.
+Codex-primary single pass via the shared engine `$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex`: it emits a STATUS line first, and prints `OUTFILE: <path>` (validated JSONL in os.tmpdir) only on `STATUS: SUCCESS`.
 
-1. Run `bin/supervisor-findings-codex --mode alert --sid <effective-state-sid> --wsid <wsid> --transcript <transcript-path> --artifact <plans-dir>/<wsid>-intent.md`.
+1. Run `$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex --mode alert --sid <effective-state-sid> --wsid <wsid> --transcript <transcript-path> --artifact <plans-dir>/<wsid>-intent.md`.
 2. Read line 1: `STATUS: SUCCESS|SKIPPED|FAILED`.
-3. `STATUS: SKIPPED` (Codex unavailable) or `STATUS: FAILED` → **fallback path**: apply the JD checklist manually and record each finding via `bin/supervisor-write-alert --finding-categories <cats> --finding-severity <sev> --finding-detail "<text>" --finding-reporter supervisor --session-id <effective-state-sid>`.
-4. `STATUS: SUCCESS` → read the `OUTFILE: <path>` line and ingest it: `bin/supervisor-write-alert --ingest-generated-jsonl <OUTFILE> --session-id <effective-state-sid>`. Claude does NOT add findings independently.
-5. Finalize: `bin/supervisor-write-alert --last-run-at <now-iso> --cumulative-severity <verdict> --clear-alert-armed-at --set-alert-phase done --session-id <effective-state-sid>`.
+3. `STATUS: SKIPPED` (Codex unavailable) or `STATUS: FAILED` → **fallback path**: apply the JD checklist manually and record each finding via `$AGENTS_CONFIG_DIR/bin/supervisor-write-alert --finding-categories <cats> --finding-severity <sev> --finding-detail "<text>" --finding-reporter supervisor --session-id <effective-state-sid>`.
+4. `STATUS: SUCCESS` → read the `OUTFILE: <path>` line and ingest it: `$AGENTS_CONFIG_DIR/bin/supervisor-write-alert --ingest-generated-jsonl <OUTFILE> --session-id <effective-state-sid>`. Claude does NOT add findings independently.
+5. Finalize: `$AGENTS_CONFIG_DIR/bin/supervisor-write-alert --last-run-at <now-iso> --cumulative-severity <verdict> --clear-alert-armed-at --set-alert-phase done --session-id <effective-state-sid>`.
    - `--set-alert-phase done` MUST be included; omitting it leaves the session in stale-pending state (#961).
    - `cumulative_severity` is computed from confirmed findings only.
-6. Run `bin/supervisor-finalize-verify --session-id <effective-state-sid>`. Exit 0 → terminal state verified. Exit 1 → report already filed; abort.
+6. Run `$AGENTS_CONFIG_DIR/bin/supervisor-finalize-verify --session-id <effective-state-sid>`. Exit 0 → terminal state verified. Exit 1 → report already filed; abort.
 
 ### Reporting back
 
@@ -89,14 +91,14 @@ Return a fixed one-line ack as your entire response — nothing before it, nothi
 
 `[EM Supervisor] Alert review complete — findings recorded to state; actionable summary surfaced by the Stop hook.`
 
-The actionable summary is derived deterministically from the state file by `stop-l2-findings-display.js` (Stop hook) — not from your prose. Do NOT add finding details, first-aid guidance, or `/issue-create` recommendations to your return text. Use `bin/supervisor-render-alert --session-id <effective-state-sid>` only for manual debugging, not as your response.
+The actionable summary is derived deterministically from the state file by `stop-l2-findings-display.js` (Stop hook) — not from your prose. Do NOT add finding details, first-aid guidance, or `/issue-create` recommendations to your return text. Use `$AGENTS_CONFIG_DIR/bin/supervisor-render-alert --session-id <effective-state-sid>` only for manual debugging, not as your response.
 
 Do NOT auto-invoke `/workflow-init` — the session continues after diagnosis.
 
 ### Error acknowledgement and resume path
 
 When the user has acknowledged and resolved a blocking error (cumSev=error), the session is resumable — `alert_phase=paused` is "resumable suspended", not terminal. Resume protocol:
-1. Set `alert_phase=paused` to suspend the current block: `bin/supervisor-write-alert --set-alert-phase paused --session-id <effective-state-sid>`.
+1. Set `alert_phase=paused` to suspend the current block: `$AGENTS_CONFIG_DIR/bin/supervisor-write-alert --set-alert-phase paused --session-id <effective-state-sid>`.
 2. New findings appended afterward re-arm alert mode when severity >= warning (paused→pending re-arm resets `alert_retry_count`).
 3. The session continues; the supervisor-guard branches for cumSev=error and alert_armed_at no longer block while `alert_phase=paused`.
 

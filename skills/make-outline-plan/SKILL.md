@@ -37,7 +37,7 @@ MOP-1. Locate the intent file:
    d. Evaluate the skip-outline 2-condition checklist. First run a separate Bash call to check 0-signal: `SESSION_ID="$SESSION_ID" bash "$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/check-outline-skip.sh"`. If `auto`, no judgment needed — proceed to record. Otherwise evaluate via LLM judgment (so_c1/so_c2 — criteria: `skills/_shared/judge-plan-skip.md`). Record via a SEPARATE Bash call: `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 <true|false> --c2 <true|false>` (no `--next` — settles `outline` as skipped in the same call when both conditions are true; skip to Completion in that case).
 
 MOP-2. **Select the planner model, then delegate.** Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage outline'`. If line 1 is not `NONE`, use its `model=<alias>` and `signals=<csv-or-none>` lines directly.
-   If `NONE`: dispatch `subagent_type: complexity-judge` with the `intent.md` path + task context (rubric: `skills/_shared/judge-task-complexity.md`). Write the raw output to `<PLANS_DIR>/<session-id>-outline-judge-raw.txt` (Write tool — untrusted text via file only). Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-outline-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-outline-signals.txt"`. Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage outline --signals-file "<PLANS_DIR>/<session-id>-outline-signals.txt"` and use its `model=<alias>` line — never judge the level inline.
+   If `NONE`: dispatch `subagent_type: complexity-judge` with the `intent.md` path + task context (rubric: `skills/_shared/judge-task-complexity.md`). Write the raw output to `<PLANS_DIR>/<session-id>-outline-judge-raw.txt` (Write tool — untrusted text via file only). Run `node "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-outline-judge-raw.txt" --session "<session-id>" --stage outline`. Run `node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage outline --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
    Emit (Claude text, not Bash): `Model selected: **<model= alias>** (signals: [ids from the `signals=` line, or "none"])`.
    Delegate to **outline-planner** (Agent tool, `subagent_type: outline-planner`, `model: <model= from MOP-2>`). Pass full contents of `<session-id>-intent.md` and task context.
    Every outline-planner launch — here, the MOP-3 revise re-run, the MOP-4 re-prompt, the MOP-4a re-prompt, the MOP-5 CONTINUE re-delegate, and the MOP-8 revise re-run — passes the same `model: <model= from MOP-2>`.
@@ -90,9 +90,9 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    **Exit 4 must NOT trigger `outline-reviewer` fallback** — halt and surface
    stderr to the user. Only exit 3 falls back silently.
 
-   **exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-outline-plan-round-number.txt`); re-delegate to planner and loop back to MOP-5.
+   **exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md` (`<N>` from `<CONTROL_DIR>/outline-plan-round-number.txt`, `<CONTROL_DIR>` = `node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session <session-id>`); re-delegate to planner and loop back to MOP-5.
 
-   **Exit 7 (FINALIZE_FAILED)** — `<PLANS_DIR>/<session-id>-outline-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan` before the sentinel.
+   **Exit 7 (FINALIZE_FAILED)** — `<CONTROL_DIR>/outline-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan` before the sentinel.
 
 MOP-6. **Cap outcome dispatch.**
 
@@ -100,11 +100,11 @@ MOP-6. **Cap outcome dispatch.**
 
    **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MOP-5 (no user confirmation). `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
 
-   **exit 2 (ESCALATE):** Run `"$AGENTS_CONFIG_DIR/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <PLANS_DIR>/<session-id>-outline-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Then stop the loop and re-run `/clarify-intent` (outline-specific override: `adjust` path means scope needs revision).
+   **exit 2 (ESCALATE):** Run `"$AGENTS_CONFIG_DIR/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Then stop the loop and re-run `/clarify-intent` (outline-specific override: `adjust` path means scope needs revision).
 
-   **exit 6 (HIGH_UNRESOLVED):** run `review-loop-summarize-concerns --budget-remaining 0 --ledger <PLANS_DIR>/<session-id>-outline-plan-concern-ledger.txt --raw <RAW_FILE> --label outline-plan`; confirm artifact via `concern-ledger check-finalized`; stop loop, then re-run `/clarify-intent`.
+   **exit 6 (HIGH_UNRESOLVED):** run `review-loop-summarize-concerns --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger.txt --raw <RAW_FILE> --label outline-plan`; confirm artifact via `concern-ledger check-finalized`; stop loop, then re-run `/clarify-intent`.
 
-   `<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`; `<N>` = value from `<PLANS_DIR>/<session-id>-outline-plan-last-round.txt`.
+   `<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`; `<N>` = value from `<CONTROL_DIR>/outline-plan-last-round.txt`. Exit 8: AskUserQuestion per exit-codes.md "Escalation by format".
 
 MOP-7. On `APPROVED`:
    Retrieve `<CONV_LANG>` from the stdout of the standalone call `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG`.

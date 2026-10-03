@@ -1,9 +1,8 @@
 "use strict";
 
 const fs = require("fs");
-const path = require("path");
 const { withStateLock } = require("./lock");
-const { getWorkflowPlansDir } = require("../workflow-plans-dir");
+const { controlPath, diagnoseControlMigration } = require("../../workflow-state/state-io/control-dir");
 const { validateFinding, validate, SEVERITY_RANK, AUDIT_SEVERITY_THRESHOLD } = require("../supervisor-state-schema");
 const { recordRiskSignal } = require("../handoff-risk-signal");
 const {
@@ -26,17 +25,16 @@ function ensureAlertScheduled(state, sessionId, finding = null) {
   if (phase === "done" || phase === "closed") return;
 
   if (phase !== "paused") {
-    const plansDir = getWorkflowPlansDir();
     const candidates = new Set();
     if (sessionId && SESSION_ID_RE.test(sessionId)) candidates.add(sessionId);
 
     for (const sid of candidates) {
       try {
-        if (fs.existsSync(path.join(plansDir, `${sid}-final-report-env.json`))) {
+        if (fs.existsSync(controlPath(sid, "final-report-env.json"))) {
           // Anchor present: skip normal-run arm UNLESS late-phase eligibility is set (#997)
           if (state.alert.alert_eligible_phase !== "post_final_report_window") return;
         }
-      } catch (_) {}
+      } catch (e) { diagnoseControlMigration(e, "supervisor-state-writer"); }
     }
   }
 
@@ -54,9 +52,7 @@ function appendFindingCore(sessionId, finding) {
   const vr = validateFinding(finding);
   if (!vr.ok) return false;
 
-  const plansDir = getWorkflowPlansDir();
-  fs.mkdirSync(plansDir, { recursive: true });
-  const filePath = getStatePath(sessionId);
+  const filePath = getStatePath(sessionId, { forWrite: true });
 
   const state = readStateOrInit(sessionId);
 
@@ -172,7 +168,7 @@ function appendFindingCore(sessionId, finding) {
 // collapse, class dedup, and normal append — stays inside one lock scope, so a
 // concurrent audit/alert writer cannot lose this finding.
 function appendFinding(sessionId, finding) {
-  const ok = withStateLock(getStatePath(sessionId), () => appendFindingCore(sessionId, finding)) === true;
+  const ok = withStateLock(getStatePath(sessionId, { forWrite: true }), () => appendFindingCore(sessionId, finding)) === true;
   // #2430: an accepted finding at or above the audit threshold is a handoff
   // risk. Stamped outside the lock; a lost stamp never changes the result.
   if (ok) {
@@ -187,11 +183,13 @@ SEVERITY_RANK[sev] >= SEVERITY_RANK[AUDIT_SEVERITY_THRESHOLD]) {
   return ok;
 }
 
+// An unmigratable legacy file (ControlMigrationError) also yields null: callers treat it as "no state", never a legacy-path read.
 function readState(sessionId) {
   try {
     const raw = fs.readFileSync(getStatePath(sessionId), "utf8");
     return JSON.parse(raw);
-  } catch (_) {
+  } catch (e) {
+    diagnoseControlMigration(e, "supervisor-state-writer");
     return null;
   }
 }

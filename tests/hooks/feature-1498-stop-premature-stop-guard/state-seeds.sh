@@ -127,8 +127,9 @@ fs.writeFileSync(filePath, JSON.stringify(state));
 seed_supervisor_state() {
     local tmp="$1" sid="$2" armed_at="$3"
     local plans_dir="$tmp/plans"
-    mkdir -p "$plans_dir"
-    WORKFLOW_PLANS_DIR="$plans_dir" SID="$sid" ARMED_AT="$armed_at" run_with_timeout 10 node -e "
+    mkdir -p "$plans_dir" "$tmp/workflow"
+    # #2434: supervisor state is a control file under the workflow dir the hook runs with.
+    CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$plans_dir" SID="$sid" ARMED_AT="$armed_at" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -139,7 +140,7 @@ if (armedAt) {
   st.alert.alert_armed_at = armedAt;
   st.alert.alert_phase = 'pending';
 }
-const stPath = w.getStatePath(sid);
+const stPath = w.getStatePath(sid, { forWrite: true });
 fs.writeFileSync(stPath, JSON.stringify(st));
 " >/dev/null 2>&1
 }

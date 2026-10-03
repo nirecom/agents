@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-// Write or update a per-issue entry in <session-id>-issue-close-outcome.json.
-//
+// Write or update a per-issue entry in <CONTROL_DIR>/issue-close-outcome.json.
 // Usage:
 //   node issue-close-write-outcome.js <N> <state> <historyEntry> <issueClosed> <sentinelsPosted> <wipCleared>
-//   node issue-close-write-outcome.js --non-github <issues-json-array> <outcome-file>
+//   node issue-close-write-outcome.js --session <sid> --empty
+//   node issue-close-write-outcome.js --non-github|--wf-meta <issues-json-array> <outcome-file>
 //   node issue-close-write-outcome.js --fallback <intent-md> <outcome-file>
-// Normal mode resolves PLANS_DIR internally and SESSION_ID via the canonical
-// workflow-state resolver (#1251); --non-github writes skipped-non-github entries for
-// every issue in the array, --fallback failed entries for those parsed from intent.md.
+// Normal mode and --empty resolve the outcome file through the control-dir resolver.
 // Exit 0 on success or skip (session-id unresolvable); 1 on error (stderr).
 
 "use strict";
@@ -15,17 +13,15 @@ const fs = require("fs");
 const path = require("path");
 
 const AGENTS_CONFIG_DIR = process.env.AGENTS_CONFIG_DIR;
+const OUTCOME_NAME = "issue-close-outcome.json";
 
-function resolvePlansDir() {
-  try {
-    const { execSync } = require("child_process");
-    return execSync(`bash "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir"`, {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch (_) {
-    return process.env.WORKFLOW_PLANS_DIR || path.join(require("os").homedir(), ".workflow-plans");
-  }
+function outcomePathFor(sessionId) {
+  const { controlPath } = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "control-dir"));
+  return controlPath(sessionId, OUTCOME_NAME, { forWrite: true });
+}
+
+function plansDirOrEmpty() {
+  try { return require(path.join(__dirname, "..", "hooks", "lib", "workflow-plans-dir")).getWorkflowPlansDir(); } catch (_) { return ""; }
 }
 
 function resolveSessionId() {
@@ -53,6 +49,22 @@ function upsertEntry(bag, entry) {
 }
 
 const args = process.argv.slice(2);
+
+// --session <sid> --empty: seed an empty bag (replaces the prompt's direct printf).
+if (args[0] === "--session" && args[2] === "--empty") {
+  const sid = args[1] || "";
+  if (!/^[A-Za-z0-9_-]+$/.test(sid)) {
+    process.stderr.write("issue-close-write-outcome: --session must match [A-Za-z0-9_-]+\n");
+    process.exit(1);
+  }
+  try {
+    fs.writeFileSync(outcomePathFor(sid), JSON.stringify({ issues: [] }, null, 2) + "\n");
+  } catch (e) {
+    process.stderr.write("issue-close-write-outcome: --empty write failed: " + e.message + "\n");
+    process.exit(1);
+  }
+  process.exit(0);
+}
 
 // --non-github <issues-json-array> <outcome-file>
 if (args[0] === "--non-github") {
@@ -181,10 +193,9 @@ if (args[0] === "--session-id") {
   // an entry, marked "subsumed". A session may cover multiple issues; without
   // this, only the primary N gets written and siblings go missing.
   try {
-    const plansDir = resolvePlansDir();
     // #1644 stage 4: route through the write-once session cache.
     const { getClosesIssues } = require(path.join(AGENTS_CONFIG_DIR, "hooks/workflow-state/session-facts.js"));
-    const siblings = getClosesIssues(sessionId, { plansDir }) || [];
+    const siblings = getClosesIssues(sessionId, { plansDir: plansDirOrEmpty() }) || [];
     for (const entry of siblings) {
       const siblingNumber = typeof entry === "number" ? entry : entry.number;
       if (siblingNumber === issueNumber2) continue;
@@ -217,17 +228,16 @@ if (isNaN(issueNumber)) {
   process.exit(1);
 }
 
-const plansDir = resolvePlansDir();
 const sessionId = resolveSessionId();
 if (!sessionId) {
   process.stderr.write("[issue-close-write-outcome] WARN: session id unresolved — outcome JSON not written\n");
   process.exit(0);
 }
 
-const outFile = path.join(plansDir, sessionId + "-issue-close-outcome.json");
-const bag = readBag(outFile);
-upsertEntry(bag, { issueNumber, state, historyEntry, issueClosed, sentinelsPosted, wipCleared });
 try {
+  const outFile = outcomePathFor(sessionId);
+  const bag = readBag(outFile);
+  upsertEntry(bag, { issueNumber, state, historyEntry, issueClosed, sentinelsPosted, wipCleared });
   fs.writeFileSync(outFile, JSON.stringify(bag, null, 2));
 } catch (e) {
   process.stderr.write("[issue-close-finalize] WARN: outcome JSON write failed: " + e.message + "\n");

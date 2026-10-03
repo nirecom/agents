@@ -78,11 +78,11 @@ process.stdout.write(p.ENFORCE_WORKFLOW_OFF_RE_DQ.test(process.argv[1])?'CONFUSE
 run_E4() {
     local tmp tn rc out
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    WORKFLOW_PLANS_DIR="$tn" "$RWT" 10 node -e "
+    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 10 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('emsid');
 st.layer1.findings=[{categories:['code'],severity:'error',detail:'blocking',reporter:'workflow-gate',timestamp:new Date().toISOString()}];
-fs.writeFileSync(w.getStatePath('emsid'),JSON.stringify(st));" >/dev/null 2>&1
+fs.writeFileSync(w.getStatePath('emsid',{forWrite:true}),JSON.stringify(st));" >/dev/null 2>&1 || fail "E4 seed: supervisor-state seed write failed"
     local hook_input
     hook_input=$("$RWT" 8 node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'emsid',tool_input:{command:process.argv[1]}}))" "$EMERG_WF")
     out=$(WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" AGENTS_CONFIG_DIR="$tn" "$RWT" 12 node "$SHIM" <<< "$hook_input" 2>/dev/null)
@@ -108,7 +108,7 @@ h.handle({cmd:process.argv[1],sessionId:'emsid',pushMessage:()=>{},signalFatal:(
     else
         fail "E5a: RED-EXPECTED (handler lacks emergency branch): marker not created"
     fi
-    if grep -rq 'emergency' "$tmp"/*-supervisor-state.json 2>/dev/null; then
+    if grep -rq 'emergency' "$tmp"/*.control/supervisor-state.json 2>/dev/null; then
         pass "E5b: emergency activation records an emergency audit finding"
     else
         fail "E5b: RED-EXPECTED: emergency audit finding not recorded"

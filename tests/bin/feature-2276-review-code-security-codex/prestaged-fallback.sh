@@ -173,4 +173,4 @@ OUT_OTHER="$(cd "$RL_REPO" && PATH="$RL_PATH" bash "$LOOP_BIN" --format detail-p
 RC_OTHER=$?
 assert_eq "P9: --prestaged-report on a path-kind format is a usage error" "4" "$RC_OTHER"
 assert_not_contains "P9: the rejected run stages nothing for the other format" \
-    "security-scanner" "$(cat "$PLANS/$SID-detail-plan-concern-ledger.txt" 2>/dev/null || true)"
+    "security-scanner" "$(cat "$(ctl_file detail-plan-concern-ledger.txt)" 2>/dev/null || true)"

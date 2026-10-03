@@ -27,7 +27,7 @@
 # overrides (_ISSUE_CREATE_INTERNAL_STATUS_FIELD_ID, _TODO_OPTION_ID,
 # _IN_PROGRESS_OPTION_ID, _DONE_OPTION_ID, _FINGERPRINT_FIELD_ID) are used when set.
 #
-# Cache: ${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/cache/project-resolve.tsv
+# Cache: ${CLAUDE_WORKFLOW_DIR:-$HOME/.claude/projects/workflow}/cache/project-resolve.tsv
 # TSV (10 cols): owner/repo \t project_owner \t project_num \t project_id \t
 #   content_date_field_id \t status_field_id \t todo_option_id \t
 #   in_progress_option_id \t done_option_id \t fingerprint_field_id
@@ -96,9 +96,8 @@ resolve_project_for_repo() {
     fi
 
     # ---- Cache lookup (fixed-string match on $1) ----
-    local plans_dir cache_dir cache_file cache_row
-    plans_dir="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
-    cache_dir="$plans_dir/cache"
+    local cache_dir cache_file cache_row
+    cache_dir="${CLAUDE_WORKFLOW_DIR:-$HOME/.claude/projects/workflow}/cache"
     cache_file="$cache_dir/project-resolve.tsv"
     if [ -f "$cache_file" ]; then
         cache_row=$(awk -F'\t' -v key="$owner_repo" '$1==key {print; exit}' "$cache_file" 2>/dev/null || true)

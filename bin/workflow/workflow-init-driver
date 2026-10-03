@@ -463,7 +463,13 @@ function main() {
   const { sid: sessionId, reliable: sidReliable } = resolveSessionId();
   // wipSid: the session ID to pass to wip-state.sh; null when not reliably resolved.
   const wipSid = sidReliable ? sessionId : null;
-  const ckptFile = checkpointPath(plansDir, sessionId);
+  let ckptFile;
+  try {
+    ckptFile = checkpointPath(sessionId);
+  } catch (e) {
+    emitBlocked("<pre-session>", "control_dir_unavailable", String(e && e.message ? e.message : e));
+    return;
+  }
 
   // NON_GITHUB=1 → immediate done/Path C (also writes context.md)
   if (nonGithub) {

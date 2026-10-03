@@ -2,48 +2,13 @@
 # tests/hooks/fix-1780-round4-command-tool-payload.sh
 # Tests: hooks/lib/tool-command-text.js, hooks/block-clearance-token-write.js, hooks/supervisor-off-proposal-shim.js, hooks/lib/sentinel-patterns.js
 # Tags: off-clearance, runcommands, runinterminal, tool-payload, pretooluse, classifier, security, scope:issue-specific, pwsh-not-required, TL1, TL2, hook-registration
-# TL3 gap (what this test does NOT catch):
-# - That Claude Code's real runCommands / runInTerminal tools deliver the payload
-#   shapes assumed here ({commands:[...]} and {command:"..."}). Both hooks are node
-#   subprocesses fed synthetic PreToolUse JSON, so a change to the HOST's payload
-#   contract would go unnoticed until a real session runs.
-# - settings.json actually registering both hooks for runCommands / runInTerminal
-#   (asserted statically by tests/hooks/feature-1610-settings-worktree-entries.sh and by
-#   the R-block of tests/hooks/fix-1780-round4-write-tool-parity.sh, never dynamically).
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration.
-#
-# ---------------------------------------------------------------------------
-# WHAT THIS FILE DEFENDS (#1780 round-4 H-1)
-#
-# Claude Code ships THREE command-executing tools that do not agree on a payload:
-# Bash and runInTerminal put a string under `command`, runCommands puts an ARRAY
-# under `commands`. Every guard that scans command text used to read `.command`
-# only, so a runCommands call handed the scanner `undefined` — not a degraded
-# check, a silent FULL BYPASS of both the protected-write block and the OFF
-# clearance gate.
-#
-# The fix has two halves and this file pins both:
-#
-#   (a) NORMALIZATION (Section C). hooks/lib/tool-command-text.js is the single
-#       place that knows the three shapes.
-#   (b) PER-ELEMENT ADJUDICATION (Sections C2 / E). Every pattern in
-#       hooks/lib/sentinel-patterns.js is `^`-anchored WITHOUT the `m` flag, so a
-#       "\n"-joined array can NEVER match a sentinel sitting in commands[N>0].
-#       Joining is right for "does any protected path appear anywhere?" and wrong
-#       for "is THIS command a sentinel emission?" — two questions, two shapes.
-#
-# Every case that targets commands[N] deliberately uses N > 0. An index-0 hit is
-# indistinguishable from the pre-fix behaviour once the array is joined, so a
-# suite that only ever probed commands[0] would stay green against the bug.
-#
-# CLASSIFIER SYMMETRY (test-design.md): every block case is paired with a benign
-# call through the SAME tool, so a hook that blocked everything could not pass.
-#
-# HERMETICITY: CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR point at throwaway temp
-# dirs and every session id is a throwaway ("rc4sid" etc). No real token, marker
-# or audit file is created, read or removed.
-# ---------------------------------------------------------------------------
+# TL3 gap: the host's real runCommands/runInTerminal payload shapes and settings.json registration
+# (static: feature-1610-settings-worktree-entries.sh, fix-1780-round4-write-tool-parity.sh R-block);
+# mitigated at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh category: hook-registration).
+# Defends #1780 round-4 H-1: runCommands puts an ARRAY under `commands`; reading `.command` only was a
+# full bypass. Pins (a) normalization in hooks/lib/tool-command-text.js (Section C) and (b) per-element
+# adjudication (C2 / E) — sentinel regexes are `^`-anchored without `m`, so commands[N>0] cases use N>0.
+# Every block case pairs with a benign call through the SAME tool; all dirs and sids are throwaway.
 
 set -u
 
@@ -236,6 +201,9 @@ DDRV_EOF
     MARKER="$TND/rc4sid.workflow-off"
     BENIGN1="git status"
     BENIGN2="npm test"
+    # #2434: the placement guard blocks ANY write under the workflow dir ($TND), so the
+    # benign write target sits in a sibling temp dir outside it.
+    TMPO=$(make_tmp); TNO=$(node_path "$TMPO")
 
     # D1/D2 - the load-bearing cases: the protected write sits at commands[2] and
     # commands[1]. Pre-fix, `.command` was undefined for runCommands and NOTHING
@@ -259,28 +227,30 @@ DDRV_EOF
     # hook that blocked every runCommands / runInTerminal call outright, which is
     # its own outage (every multi-command tool call dead).
     assert_verdict "D7 runCommands with only benign commands is approved" approve \
-        "$(run_block_hook "$TND" "$(mk_cmd_input runCommands "$TND" "$BENIGN1" "$BENIGN2" "echo done > $TND/notes.txt")")"
+        "$(run_block_hook "$TND" "$(mk_cmd_input runCommands "$TND" "$BENIGN1" "$BENIGN2" "echo done > $TNO/notes.txt")")"
     assert_verdict "D8 runInTerminal benign command is approved" approve \
-        "$(run_block_hook "$TND" "$(mk_cmd_input runInTerminal "$TND" "echo done > $TND/notes.txt")")"
+        "$(run_block_hook "$TND" "$(mk_cmd_input runInTerminal "$TND" "echo done > $TNO/notes.txt")")"
     assert_verdict "D9 Bash benign command is approved (symmetry control)" approve \
-        "$(run_block_hook "$TND" "$(mk_cmd_input Bash "$TND" "echo done > $TND/notes.txt")")"
+        "$(run_block_hook "$TND" "$(mk_cmd_input Bash "$TND" "echo done > $TNO/notes.txt")")"
     # D10 - an empty runCommands payload must not crash the hook into a verdict.
     assert_verdict "D10 runCommands with an empty commands[] is approved" approve \
         "$(run_block_hook "$TND" '{"tool_name":"runCommands","session_id":"rc4sid","tool_input":{"commands":[]}}')"
+    # D11 - placement guard deny control (#2434): the D7 write aimed INSIDE the workflow
+    # dir, at runCommands commands[2], is blocked with the control-dir placement reason.
+    d11_raw="$(run_block_hook "$TND" "$(mk_cmd_input runCommands "$TND" "$BENIGN1" "$BENIGN2" "echo done > $TND/notes.txt")")"
+    assert_verdict "D11 runCommands write under the workflow dir at commands[2] is blocked" block "$d11_raw"
+    case "$d11_raw" in
+        *"Direct write under the workflow dir"*) pass "D11b block reason is the control-dir placement message" ;;
+        *) fail "D11b block reason is the control-dir placement message [raw=$(printf '%.200s' "$d11_raw")]" ;;
+    esac
     cleanup_tmp "$TMPD"
+    cleanup_tmp "$TMPO"
 fi
 
 # ===========================================================================
-# Section E (TL2) - hooks/supervisor-off-proposal-shim.js.
-#
-# The shim decides whether an OFF sentinel emit may reach the human approval
-# prompt. It exits 2 with a block payload when no clearance token backs the
-# proposal, and exits 0 otherwise. rc is asserted alongside the payload so a
-# crash (rc other than 0/2) can never be read as "allowed".
-#
-# The sentinel strings are ASSEMBLED, never written literally: a well-formed
-# sentinel sitting in a source file is indistinguishable from an emission to any
-# tool that scans command text. E0 proves the assembly matches the real regexes.
+# Section E (TL2) - hooks/supervisor-off-proposal-shim.js: an OFF sentinel emit with
+# no clearance token exits 2 + block; otherwise exit 0 (rc asserted, so a crash is
+# never "allowed"). Sentinels are ASSEMBLED, never literal (E0 proves the assembly).
 # ===========================================================================
 _S_EMERG="${_S_OPEN}WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY: examiner is broken>>"
 EMERG_CMD="echo \"${_S_EMERG}\""

@@ -61,7 +61,7 @@ cat > "$TMP/mark.js" <<'JS'
 const fs = require('fs');
 const [sid, want, since] = process.argv.slice(2);
 let raw;
-try { raw = fs.readFileSync(process.env.WORKFLOW_PLANS_DIR + '/' + sid + '-handoff-flush-mark.json', 'utf8'); }
+try { raw = fs.readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/' + sid + '.control/handoff-flush-mark.json', 'utf8'); }
 catch (e) { process.stdout.write('NONE'); process.exit(0); }
 const bad = [];
 let j = {};
@@ -112,7 +112,7 @@ for mode in $MODES; do
     sid="gu-$mode"
     report "$sid"; rc=$?
     expect "G2[$mode]: supervisor-report still exits 0" "$rc" "0"
-    expect "G2[$mode]: supervisor-report still writes the finding" "$([ -f "$TMP/wf/$sid-supervisor-state.json" ] && echo yes || echo no)" "yes"
+    expect "G2[$mode]: supervisor-report still writes the finding" "$([ -f "$TMP/wf/$sid.control/supervisor-state.json" ] && echo yes || echo no)" "yes"
     expect "G2[$mode]: supervisor-report records no handoff entry" "$(count "$sid" supervisor-reported)" "COUNT:0"
 done
 case_end
@@ -178,8 +178,8 @@ const P = require(process.env.AGENTS + '/hooks/lib/handoff-pressure.js');
 const bad = [];
 if (typeof P.recordFlushMark !== 'function') bad.push('recordFlushMark-not-exported');
 else for (const sid of ['../escape', '', null]) { try { P.recordFlushMark(sid, null, new Date().toISOString()); } catch (e) { bad.push('threw:' + e.message); } }
-const W = process.env.WORKFLOW_PLANS_DIR;
-if ([W, W + '/..'].some((d) => fs.readdirSync(d).some((f) => f.indexOf('escape') !== -1 || f === '-handoff-flush-mark.json'))) bad.push('invalid-sid-written');
+const W = process.env.CLAUDE_WORKFLOW_DIR;
+if ([W, W + '/..'].some((d) => fs.readdirSync(d).some((f) => f.indexOf('escape') !== -1 || f === '-handoff-flush-mark.json' || f === '.control'))) bad.push('invalid-sid-written');
 process.stdout.write(bad.length ? 'BAD:' + bad.join(' | ') : 'OK');
 JS
 expect "G6: recordFlushMark with an invalid sid writes nothing and never throws" "$(nj badmark.js)" "OK"
@@ -197,7 +197,9 @@ process.stdout.write((m.for_step === step ? 'scoped' : 'for=' + m.for_step) + ':
 JS
 cat > "$TMP/stale.js" <<'JS'
 // node stale.js <sid> — a baseline two hours old at 0 bytes, so any transcript fires "elapsed".
-require('fs').writeFileSync(process.env.WORKFLOW_PLANS_DIR + '/' + process.argv[2] + '-handoff-pressure.json',
+const ctlDir = process.env.CLAUDE_WORKFLOW_DIR + '/' + process.argv[2] + '.control';
+require('fs').mkdirSync(ctlDir, { recursive: true });
+require('fs').writeFileSync(ctlDir + '/handoff-pressure.json',
   JSON.stringify({ baseline_bytes: 0, baseline_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString() }));
 JS
 # nudge <sid> — the UserPromptSubmit payload Claude Code sends; prints the hook's stdout.

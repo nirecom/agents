@@ -2,25 +2,26 @@
 "use strict";
 
 // Directory walker + scope guard + backup writer for sweep-supervisor-state.sh.
-// Emits a single-line JSON summary on stdout. The shell wrapper owns argv
-// grammar, usage errors, and human-readable rendering.
+// Scans <workflow-dir>/<sid>.control/supervisor-state.json and emits a single-line
+// JSON summary on stdout. The shell wrapper owns argv grammar and rendering.
 //
-// Usage: engine.js --plans-dir <dir> [--apply] [--session <SID>]
+// Usage: engine.js --workflow-dir <dir> [--apply] [--session <SID>]
 //                  [--current-session <SID>]
 
 const fs = require("fs");
 const path = require("path");
 const { scrub } = require("./scrub");
 
-const STATE_SUFFIX = "-supervisor-state.json";
+const CONTROL_SUFFIX = ".control";
+const STATE_NAME = "supervisor-state.json";
 const BACKUP_ROOT_NAME = ".sweep-supervisor-state-backup";
 const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function parseArgs(argv) {
-  const opts = { plansDir: null, apply: false, session: null, currentSession: null };
+  const opts = { workflowDir: null, apply: false, session: null, currentSession: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--plans-dir") opts.plansDir = argv[++i];
+    if (a === "--workflow-dir") opts.workflowDir = argv[++i];
     else if (a === "--apply") opts.apply = true;
     else if (a === "--session") opts.session = argv[++i];
     else if (a === "--current-session") opts.currentSession = argv[++i];
@@ -32,11 +33,11 @@ function utcStamp(d) {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
-function sessionIdOf(state, file) {
+function sessionIdOf(state, controlDirName) {
   if (state && typeof state.session_id === "string" && state.session_id.length > 0) {
     return state.session_id;
   }
-  return path.basename(file, STATE_SUFFIX);
+  return controlDirName.slice(0, -CONTROL_SUFFIX.length);
 }
 
 // isLive reports whether the session is still in flight and therefore off
@@ -58,6 +59,16 @@ function isRecent(state, now) {
   return now - t < RECENT_WINDOW_MS;
 }
 
+// Symlinked control dirs are skipped: the sweep never follows a link out of the store.
+function listControlDirs(workflowDir) {
+  return fs
+    .readdirSync(workflowDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !d.isSymbolicLink() && d.name.endsWith(CONTROL_SUFFIX))
+    .map((d) => d.name)
+    .filter((n) => fs.existsSync(path.join(workflowDir, n, STATE_NAME)))
+    .sort();
+}
+
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   const summary = {
@@ -75,21 +86,22 @@ function main() {
     apply: opts.apply,
   };
 
-  const plansDir = opts.plansDir;
-  let entries = [];
+  const workflowDir = opts.workflowDir;
+  let dirs = [];
   try {
-    entries = fs.readdirSync(plansDir).filter((n) => n.endsWith(STATE_SUFFIX)).sort();
+    dirs = listControlDirs(workflowDir);
   } catch (e) {
-    summary.errors.push("plans dir unreadable: " + (e && e.code ? e.code : "unknown"));
+    summary.errors.push("workflow dir unreadable: " + (e && e.code ? e.code : "unknown"));
     process.stdout.write(JSON.stringify(summary) + "\n");
     return;
   }
 
   const now = Date.now();
-  const pending = []; // { file, cleaned, removed, raw }
+  const pending = [];
 
-  for (const name of entries) {
-    const file = path.join(plansDir, name);
+  for (const dirName of dirs) {
+    const name = dirName + "/" + STATE_NAME;
+    const file = path.join(workflowDir, dirName, STATE_NAME);
     summary.scanned++;
 
     let raw;
@@ -103,7 +115,7 @@ function main() {
       continue;
     }
 
-    const sid = sessionIdOf(state, name);
+    const sid = sessionIdOf(state, dirName);
     if (opts.session && sid !== opts.session) {
       summary.details.push({ file: name, status: "out_of_scope" });
       continue;
@@ -130,7 +142,7 @@ function main() {
       status: opts.apply ? "modified" : "candidate",
       records_removed: removed.length,
     });
-    pending.push({ file, name, cleaned, removed, raw });
+    pending.push({ file, dirName, name, cleaned, removed, raw });
   }
 
   if (!opts.apply || pending.length === 0) {
@@ -139,7 +151,7 @@ function main() {
   }
 
   // Backup is created lazily — only when something is actually about to change.
-  const backupRoot = path.join(plansDir, BACKUP_ROOT_NAME);
+  const backupRoot = path.join(workflowDir, BACKUP_ROOT_NAME);
   let backupDir = path.join(backupRoot, utcStamp(new Date()));
   let attempt = 1;
   while (fs.existsSync(backupDir)) {
@@ -158,7 +170,8 @@ function main() {
   const manifestFiles = [];
   for (const item of pending) {
     try {
-      fs.writeFileSync(path.join(backupDir, item.name), item.raw);
+      fs.mkdirSync(path.join(backupDir, item.dirName), { recursive: true });
+      fs.writeFileSync(path.join(backupDir, item.dirName, STATE_NAME), item.raw);
       fs.writeFileSync(item.file, JSON.stringify(item.cleaned, null, 2));
     } catch (e) {
       summary.errors.push(item.name + ": " + (e && e.code ? e.code : "write failed"));
@@ -178,7 +191,7 @@ function main() {
     fs.writeFileSync(
       path.join(backupDir, "manifest.json"),
       JSON.stringify(
-        { generated_at: new Date().toISOString(), plans_dir: plansDir, files: manifestFiles },
+        { generated_at: new Date().toISOString(), workflow_dir: workflowDir, files: manifestFiles },
         null,
         2
       )

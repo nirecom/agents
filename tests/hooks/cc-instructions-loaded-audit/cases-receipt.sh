@@ -103,8 +103,9 @@ fi
 I3_SID="idemsuper"
 I3_CWD="$BASE/i3-cwd"
 I3_PLANS="$BASE/i3-plans"
+I3_WF="$BASE/i3-wf"   # #2434: supervisor state is a control file under CLAUDE_WORKFLOW_DIR
 I3_WSID="20260101-000000"
-mkdir -p "$I3_CWD" "$I3_PLANS"
+mkdir -p "$I3_CWD" "$I3_PLANS" "$I3_WF"
 printf 'Session-ID: %s\n' "$I3_WSID" > "$I3_CWD/WORKTREE_NOTES.md"
 printf '# intent\n' > "$I3_PLANS/$I3_WSID-intent.md"
 printf '# repeated probe with a resolvable session\n' > "$REPO/rules/idem3.md"
@@ -112,17 +113,17 @@ I3_FP="$(node_path "$REPO/rules/idem3.md")"
 I3_PAYLOAD="$(node -e 'console.log(JSON.stringify({session_id:process.argv[1],file_path:process.argv[2],hook_event_name:"InstructionsLoaded"}))' "$I3_SID" "$I3_FP")"
 for _ in $(seq 1 10); do
     printf '%s' "$I3_PAYLOAD" \
-        | (cd "$I3_CWD" && WORKFLOW_PLANS_DIR="$(node_path "$I3_PLANS")" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || true
+        | (cd "$I3_CWD" && WORKFLOW_PLANS_DIR="$(node_path "$I3_PLANS")" CLAUDE_WORKFLOW_DIR="$(node_path "$I3_WF")" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || true
 done
 
-I3_STATES="$(find "$I3_PLANS" -name '*-supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
+I3_STATES="$(find "$I3_WF" -path '*.control/supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
 I3_FINDINGS="$(node -e "
 const fs=require('fs'),path=require('path');
 let n=0;
 for (const f of fs.readdirSync(process.argv[1])) {
-  if (!f.endsWith('-supervisor-state.json')) continue;
+  if (!f.endsWith('.control')) continue;
   try {
-    const j=JSON.parse(fs.readFileSync(path.join(process.argv[1],f),'utf8'));
+    const j=JSON.parse(fs.readFileSync(path.join(process.argv[1],f,'supervisor-state.json'),'utf8'));
     // the writer nests findings under layer1/alert/audit; older shapes wrap them in
     // a 'state' envelope. Count matches wherever they live so the assertion measures
     // the number of findings, never the shape of the file.
@@ -141,7 +142,7 @@ for (const f of fs.readdirSync(process.argv[1])) {
   } catch (_) {}
 }
 console.log(String(n));
-" "$(node_path "$I3_PLANS")" 2>/dev/null || echo "ERR")"
+" "$(node_path "$I3_WF")" 2>/dev/null || echo "ERR")"
 
 if [ "$I3_STATES" = "0" ]; then
     fail "I3: no supervisor state file under the resolvable-session fixture — the workflow session never resolved, so a findings count here proves nothing about dedup"
@@ -220,7 +221,7 @@ E7_SID="e7wsidnull"
 E7_FP="$(node_path "$REPO/rules/missing.md")"
 fire "$E7_SID" "$E7_FP" OMIT >/dev/null
 e7_verdict="$(read_field "$E7_SID" "$E7_FP" verdict)"
-e7_states="$(find "$PLANS" -name '*-supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
+e7_states="$(find "$PLANS" "$WFDIR" -name '*supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$e7_verdict" = "S-MISSING" ] && [ "$e7_states" = "0" ]; then
     pass "E7: wsid null -> receipt written, supervisor emit skipped"
 else

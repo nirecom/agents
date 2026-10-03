@@ -2,31 +2,9 @@
 # tests/skills/fix-1780-enforce-workflow-off-emergency.sh
 # Tests: skills/enforce-workflow-off/SKILL.md, hooks/lib/sentinel-patterns.js, hooks/supervisor-off-proposal-shim.js, hooks/workflow-mark/enforce-override-handlers/off-clearance.js
 # Tags: off-clearance, workflow-off, sentinel, skill-prompt, emergency, scope:issue-specific, pwsh-not-required, TL1, TL2
-# TL3 gap (what this test does NOT catch):
-# - The shim / workflow-mark firing as REAL hooks inside a live claude -p session
-#   (here both are node subprocesses fed a synthetic PreToolUse payload), and the
-#   settings.json `ask` permission that makes the EMERGENCY sentinel human-gated.
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration.
-#
-# #1780 (S-7): /enforce-workflow-off is the *user-invoked, deliberate* escape hatch.
-# The standard `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>` sentinel is now gated by the
-# OFF-clearance pipeline (Phase-1 examiner + minted token + shim), so a skill that emits it
-# unconditionally cannot succeed - it is intercepted by supervisor-off-proposal-shim.js and
-# the user is left with a dead slash-command. The emergency sentinel
-# `<<WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY: {reason}>>` already exists in the pattern layer
-# (hooks/lib/sentinel-patterns.js) and already carries "ask" permission + audit, so the fix is
-# a SKILL.md prompt change only - no hook and no settings change.
-#
-# Section 1 (S1-S4) is TL1: it reads the skill prompt as data and re-validates the extracted
-# line against the REAL parser regex (no mock copy of the pattern), so a typo in the SKILL.md
-# instruction cannot pass. These are the fail-before-fix (RED) cases for S-7.
-#
-# Section 2 (E0-E5) is TL2 and is deliberately NOT a fail-before-fix section: it exercises the
-# ALREADY-SHIPPED emergency runtime path that S-7 is about to start depending on. A prompt-only
-# fix is only safe if the runtime it points at actually works, so these must be GREEN against
-# current code. If one of them goes red, the S-7 premise ("the emergency path already exists
-# and already carries ask + audit") is false and the fix must be re-planned, not the test.
+# TL3 gap: live shim/workflow-mark hooks + settings `ask` gate — checked at USER_VERIFIED via bin/check-verification-gate.sh (hook-registration).
+# #1780 S-7: S1-S4 (TL1) pin the SKILL.md EMERGENCY sentinel line against the real parser regex (RED before fix).
+# E0-E5 (TL2) must stay GREEN: they prove the shipped emergency runtime (ask + audit) S-7 depends on.
 
 set -u
 
@@ -194,7 +172,7 @@ process.stdout.write(String(require(process.argv[1]).handle({cmd:process.argv[2]
         "true|yes|yes" "$handled|$marker|$eflag"
 
     audited=no
-    grep -q 'escape_hatch_event' "$TMP4/e4sid-supervisor-state.json" 2>/dev/null && audited=yes
+    grep -q 'escape_hatch_event' "$TMP4/e4sid.control/supervisor-state.json" 2>/dev/null && audited=yes
     assert_eq "E5 emergency activation emits an escape_hatch_event audit entry" "yes" "$audited"
     cleanup_tmp "$TMP4"
 fi

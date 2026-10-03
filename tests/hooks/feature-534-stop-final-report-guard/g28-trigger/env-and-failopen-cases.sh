@@ -1,18 +1,7 @@
 # tests/hooks/feature-534-stop-final-report-guard/g28-trigger/env-and-failopen-cases.sh
 # Tests: hooks/stop-final-report-guard.js, hooks/stop-premature-stop-guard.js, settings.json
 # Tags: hook, settings, config, stop-guard, workflow-state, scope:issue-specific, TL2
-#
-# Sourced by ../g28-trigger.sh — no shebang, no runner. Owns the 系統A side and
-# the fail-open contract: G41..G44 (env file present → Final Report shape
-# validation, malformed env does NOT fall through to 系統B, stop_hook_active),
-# G45/G46 (premature-stop guard delegation), G47 (settings.json Stop timeout)
-# and G48..G50 (corrupt state, state without steps, unusable workflow dir → the
-# guard fails OPEN rather than blocking on infrastructure trouble).
-#
-# Depends on ../g28-trigger.sh for: PREMATURE_HOOK_JS, b_mk_state, b_run,
-# b_stdin, b_is_block, b_reason_has, B_OUT, B_CODE — and on the grandparent for
-# TMPDIR_BASE, HOOK_JS, node_path, require_hook, run_with_timeout, pass, fail,
-# skip and the transcript-writing helpers.
+# Sourced by ../g28-trigger.sh: 系統A side + fail-open contract (G41..G50); helpers from ../g28-trigger.sh and ../helpers.sh.
 
 # ---------------------------------------------------------------------------
 # G41 (系統A preserved): env file present + complete 13-heading report → exit 0
@@ -22,7 +11,7 @@ test_G41_env_present_full_report_exit0() {
     local sid="g41-sid"
     local plans_dir="$TMPDIR_BASE/g41-plans" wf_dir="$TMPDIR_BASE/g41-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    write_default_env_file "$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$(envfile_for "$sid" "$wf_dir")"
     b_mk_state "$wf_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g41-transcript.jsonl"
@@ -46,7 +35,7 @@ test_G42_env_present_missing_heading_blocks() {
     local sid="g42-sid"
     local plans_dir="$TMPDIR_BASE/g42-plans" wf_dir="$TMPDIR_BASE/g42-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    write_default_env_file "$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$(envfile_for "$sid" "$wf_dir")"
     b_mk_state "$wf_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g42-transcript.jsonl"
@@ -73,7 +62,7 @@ test_G43_env_malformed_does_not_fall_through_to_B() {
     local sid="g43-sid"
     local plans_dir="$TMPDIR_BASE/g43-plans" wf_dir="$TMPDIR_BASE/g43-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    printf '{ this is not json' > "$plans_dir/${sid}-final-report-env.json"
+    printf '{ this is not json' > "$(envfile_for "$sid" "$wf_dir")"
     b_mk_state "$wf_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g43-transcript.jsonl"

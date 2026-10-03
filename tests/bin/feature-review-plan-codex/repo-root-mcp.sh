@@ -2,6 +2,7 @@
 # Tags: outline, planning, detail, codex, review, scope:common
 # Issue #723/#746: --repo-root forwarding, CODEX_MCP_FS kill-switch, MCP addendum, sandbox/approval_policy overrides (A1-A8)
 
+case_begin "repo-root-mcp-a-forwarding-policy" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # A1–A6: --repo-root forwarding + MCP filesystem server integration (#723, #746)
 
@@ -170,7 +171,7 @@ fi
 
 # #2276 extracted the loop's per-format table and verdict handling into
 # bin/lib/codex-review-loop/*.sh (format-params, round-counter, ledger-verdict,
-# path-parse, ref-kind-input, verdict-dispatch) plus bin/lib/safe-plans-path.sh,
+# path-parse, ref-kind-input, verdict-dispatch) plus bin/lib/safe-state-path.sh,
 # and run-codex-review-loop now resolves the concern-ledger CLI (bin/concern-ledger
 # + bin/lib/concern-ledger.sh + bin/lib/concern-ledger/) unconditionally at
 # startup. The copied loop resolves all of these under AGENTS_CONFIG_DIR, so the
@@ -334,3 +335,4 @@ fi
 rm -rf "$A_TMP"
 
 fi  # end A_SKIP guard
+case_end

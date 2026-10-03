@@ -37,8 +37,8 @@ WT-6. **Determine the subagent's model**:
    - If `NONE` (fail-open for sessions without persisted evaluation):
      - Dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` + source files from WT-2–WT-3 + planned test cases from WT-4 (+ `detail.md` if present), so S1/S1b and stage-specific signals can be judged (rubric: `skills/_shared/judge-task-complexity.md`).
      - Write the raw subagent output to `<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt` (Write tool — untrusted text via file only).
-     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-write-tests-signals.txt"`.
-     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_tests --signals-file "<PLANS_DIR>/<session-id>-write-tests-signals.txt"` and use its `model=<alias>` line — never judge the level inline.
+     - Run `node "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt" --session "<session-id>" --stage write-tests`.
+     - Run `node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_tests --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
    - Emit in Claude text output (NOT Bash echo):
      > Model selected: **<model alias>** (signals: [comma-separated triggered signal IDs, or "none"])
 

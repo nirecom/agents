@@ -2,24 +2,10 @@
 # tests/hooks/feature-1673-finalize-worker-schema.sh
 # Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, issue-close-finalize, registry, capability, payload-spec, phase-required, TL1, scope:issue-specific
-#
-# Issue #1673 — the issue-close-finalize registry entry and its phase-specific
-# required-field table.
-#
-# The payloadSpec is flat (capability.js has no notion of "required only when
-# phase=X"), so the phase differences live in the worker module's checkRequired.
-# Both halves are asserted here: the flat declaration against the SSOT registry,
-# and the per-phase refusal against the real dispatcher with the process seam
-# canned. A refusal must happen BEFORE any child starts — the spawn counter is
-# what makes that observable rather than assumed.
-#
-# TL3 gap (what this TL1 test does NOT catch):
-#   - Whether skills/issue-close-finalize/SKILL.md actually writes payloads
-#     carrying these fields for each of its three call sites.
-#   - Real PLANS_DIR / ACD anchor resolution on the operator's machine
-#     (this test pins WORKFLOW_PLANS_DIR and uses a temp main-root).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1673 — issue-close-finalize registry entry + per-phase required fields (checkRequired);
+# a refusal must happen BEFORE any child starts (spawn counter makes it observable).
+# TL3 gap: SKILL.md payload shape per call site and real PLANS_DIR/ACD resolution; mitigated at
+# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh category: skill-orchestration).
 
 set -u
 
@@ -85,6 +71,7 @@ group_registry() {
                        "outcome_file_path","agents_config_dir","finalize_scripts_dir","artifact_dir"]) {
         o("type_" + k, t(k));
       }
+      for (const k of ["state_file_path", "outcome_file_path"]) o("control_" + k, s[k] ? s[k].control : "(absent)");
       o("unknown_fields", Object.keys(s).filter((k) => ![
         "phase","issue_number","root_issue_number","owner_repo","state_file_path","main_worktree_path",
         "issue_repo","g5_decision","session_id","outcome_file_path","agents_config_dir",
@@ -107,18 +94,21 @@ group_registry() {
     assert_eq "registry/type-issue-number" "int" "$(ev type_issue_number)"
     assert_eq "registry/type-root-issue-number" "int" "$(ev type_root_issue_number)"
     assert_eq "registry/type-owner-repo" "owner-repo" "$(ev type_owner_repo)"
-    assert_eq "registry/type-state-file-path" "state-file-for-session" "$(ev type_state_file_path)"
+    # #2434: state/outcome files are control files derived from the session id.
+    assert_eq "registry/type-state-file-path" "derived-control-file" "$(ev type_state_file_path)"
+    assert_eq "registry/control-state-file-path" "finalize-state-{root}.json" "$(ev control_state_file_path)"
+    assert_eq "registry/control-outcome-file-path" "issue-close-outcome.json" "$(ev control_outcome_file_path)"
     assert_eq "registry/type-main-worktree-path" "anchor-main-root" "$(ev type_main_worktree_path)"
     assert_eq "registry/type-issue-repo" "repo-ref" "$(ev type_issue_repo)"
     assert_eq "registry/type-g5-decision" "enum:accept|decline|llm_declined|recurse_done" "$(ev type_g5_decision)"
     assert_eq "registry/type-session-id" "session-id" "$(ev type_session_id)"
-    assert_eq "registry/type-outcome-file-path" "path-under-plansdir" "$(ev type_outcome_file_path)"
+    assert_eq "registry/type-outcome-file-path" "derived-control-file" "$(ev type_outcome_file_path)"
     assert_eq "registry/type-agents-config-dir" "anchor-acd" "$(ev type_agents_config_dir)"
     assert_eq "registry/type-finalize-scripts-dir" "derived-finalize-scripts-dir" "$(ev type_finalize_scripts_dir)"
     assert_eq "registry/type-artifact-dir" "path-under-plansdir" "$(ev type_artifact_dir)"
     assert_eq "registry/no-invented-fields" "" "$(ev unknown_fields)"
     assert_eq "registry/renderer" "status-triple-quoted" "$(ev renderer)"
-    assert_eq "registry/write-scopes" "plans-dir" "$(ev write_scopes)"
+    assert_eq "registry/write-scopes" "control-dir,plans-dir" "$(ev write_scopes)"
     assert_eq "registry/external-binaries" "bash,gh,node" "$(ev external)"
     assert_eq "registry/script-keys" "runInitial,runLoopStep,runTerminal" "$(ev scripts)"
     assert_eq "registry/script-anchor-is-acd" "acd" "$(ev script_anchors)"
@@ -197,6 +187,8 @@ git -C "$MAIN_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
 MAIN="$(nodepath "$MAIN_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
+WF_RAW="$TMPD/workflow"; mkdir -p "$WF_RAW"
+WF="$(nodepath "$WF_RAW")"
 SID="f1673schema"
 STATE="$PLANS/$SID-finalize-state-1673.json"
 CANNED="$TMPD/canned.json"
@@ -214,7 +206,7 @@ dispatch_icf() {
     printf '%s' '[{"stdout":"STATUS=init_done\nOWNER_REPO=nirecom/agents\nTRIAGE_ACTION=resume_e\nNEXT_STEPS=G\nSUMMARY=ok\n"}]' > "$CANNED"
     : > "$CALLLOG"
     DRC=0
-    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
@@ -243,18 +235,45 @@ group_required() {
     done <<TABLE
 initial-missing-issue-number     | {"phase":"initial","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","main_worktree_path":"$MAIN","session_id":"$SID"}                                    | issue_number
 initial-missing-main-worktree    | {"phase":"initial","issue_number":1673,"root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","session_id":"$SID"}                                            | main_worktree_path
-initial-missing-state-file       | {"phase":"initial","issue_number":1673,"root_issue_number":1673,"owner_repo":"nirecom/agents","main_worktree_path":"$MAIN","session_id":"$SID"}                                             | state_file_path
 loop-missing-g5-decision         | {"phase":"loop_step","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","session_id":"$SID"}                                                                     | g5_decision
 loop-missing-owner-repo          | {"phase":"loop_step","root_issue_number":1673,"state_file_path":"$STATE","g5_decision":"accept","session_id":"$SID"}                                                                      | owner_repo
 loop-missing-root-issue-number   | {"phase":"loop_step","owner_repo":"nirecom/agents","state_file_path":"$STATE","g5_decision":"accept","session_id":"$SID"}                                                                 | root_issue_number
-terminal-missing-session-id      | {"phase":"finalize_terminal","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","outcome_file_path":"$PLANS/oc.json"}                                       | session_id
-terminal-missing-outcome-file    | {"phase":"finalize_terminal","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","session_id":"$SID"}                                                        | outcome_file_path
+terminal-missing-session-id      | {"phase":"finalize_terminal","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","outcome_file_path":"$PLANS/oc.json"}                                       | without a well-formed session id
 phase-unknown-value              | {"phase":"cleanup","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","session_id":"$SID"}                                                                  | phase
 g5-decision-unknown-value        | {"phase":"loop_step","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","g5_decision":"maybe","session_id":"$SID"}                                          | g5_decision
 state-file-other-session         | {"phase":"loop_step","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$PLANS/othersession-finalize-state-1673.json","g5_decision":"accept","session_id":"$SID"}   | state_file_path
 state-file-other-root            | {"phase":"loop_step","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$PLANS/$SID-finalize-state-99.json","g5_decision":"accept","session_id":"$SID"}             | state_file_path
 scripts-dir-mismatch             | {"phase":"initial","issue_number":1673,"root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","main_worktree_path":"$MAIN","session_id":"$SID","finalize_scripts_dir":"$MAIN/skills/issue-close-finalize/scripts"} | finalize_scripts_dir
 TABLE
+}
+
+# #2434: an omitted state/outcome path is DERIVED as <wf>/<sid>.control/<name>, not refused.
+# The spawned child must receive exactly the derived path (caller cannot choose it).
+call_has_arg_suffix() {
+    node -e '
+      const fs = require("fs");
+      const want = "/" + process.argv[2];
+      const lines = fs.readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean);
+      const hit = lines.some((l) => (JSON.parse(l).args || []).some((a) => String(a).replace(/\\/g, "/").endsWith(want)));
+      process.stdout.write(hit ? "1" : "0");
+    ' "$(nodepath "$CALLLOG")" "$1" 2>/dev/null || printf '0'
+}
+group_derived() {
+    local p
+    p="$(write_payload "drv-initial" "{\"phase\":\"initial\",\"issue_number\":1673,\"root_issue_number\":1673,\"owner_repo\":\"nirecom/agents\",\"main_worktree_path\":\"$MAIN\",\"session_id\":\"$SID\"}")"
+    dispatch_icf "$p"
+    assert_eq "derived/initial-omitted-state-file/child-spawned" "1" "$(call_count)"
+    assert_eq "derived/initial-omitted-state-file/status" "init_done" "$(field_of status)"
+    assert_eq "derived/initial-omitted-state-file/written-at-control-path" "1" \
+        "$([ -f "$WF_RAW/$SID.control/finalize-state-1673.json" ] && echo 1 || echo 0)"
+    assert_eq "derived/initial-omitted-state-file/not-in-plans" "0" \
+        "$([ -f "$PLANS_RAW/$SID-finalize-state-1673.json" ] && echo 1 || echo 0)"
+    assert_eq "derived/initial-omitted-state-file/exit0" "0" "$DRC"
+    p="$(write_payload "drv-terminal" "{\"phase\":\"finalize_terminal\",\"root_issue_number\":1673,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"session_id\":\"$SID\"}")"
+    dispatch_icf "$p"
+    assert_eq "derived/terminal-omitted-outcome-file/child-spawned" "1" "$(call_count)"
+    assert_eq "derived/terminal-omitted-outcome-file/arg" "1" "$(call_has_arg_suffix "$SID.control/issue-close-outcome.json")"
+    assert_eq "derived/terminal-omitted-outcome-file/exit0" "0" "$DRC"
 }
 
 # ===========================================================================
@@ -299,6 +318,7 @@ group_caller() {
 group_registry
 group_source
 group_required
+group_derived
 group_caller
 
 echo ""

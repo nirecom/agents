@@ -60,7 +60,7 @@ Regulatory invariants, now structural rather than advisory:
 
 ## State file
 
-Path: `<PLANS_DIR>/<session-id>-finalize-state-<rootN>.json`, written
+Path: `<CLAUDE_WORKFLOW_DIR>/<session-id>.control/finalize-state-<rootN>.json`, written
 tmp → rename so a reader never observes a half-written file.
 
 ```json
@@ -151,7 +151,7 @@ for this session; it does not prove the file was produced by it.
 
 So `phase=initial` also writes a binding record beside the state file:
 
-    <PLANS_DIR>/<session-id>-finalize-binding-<rootN>.json
+    <CLAUDE_WORKFLOW_DIR>/<session-id>.control/finalize-binding-<rootN>.json
 
 with exactly five load-bearing fields — `session_id`, `root_issue_number`,
 `owner_repo`, `main_worktree_path`, `state_file_path` (plus a `created_at`

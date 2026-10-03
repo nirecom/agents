@@ -1,22 +1,10 @@
 #!/bin/bash
 # tests/bin/feature-resolve-project/_lib.sh — shared scaffolding
-#
-# Sourced by each split file (via a BASH_SOURCE-relative path) so they can also
-# run standalone. Provides the scaffolding common to all split files:
-#   - AGENTS_DIR + TARGET constants
-#   - PASS / FAIL counters and pass / fail helpers
-#   - run_with_timeout wrapper
-#   - get_field (extract KEY=value from a RESOLVED_* round-trip block)
-#   - setup_mock / teardown_mock / run_resolver helpers (verbatim from original)
-#   - finish() — prints "Results: N passed, M failed" and exits
-#
+# Sourced by each split file (BASH_SOURCE-relative) so they also run standalone. Provides AGENTS_DIR/TARGET,
+# PASS/FAIL + pass/fail, run_with_timeout, get_field, setup_mock/teardown_mock/run_resolver, finish().
 # Tests: bin/github-issues/lib/resolve-project.sh
 # Tags: workflow, github, issues, plans, bin, scope:issue-specific
-#
-# NOT a test file: no # Tests:/# Tags: frontmatter; excluded from the
-# dispatcher's SPLIT_GROUPS.
-#
-# Idempotent — guarded so multiple sources do not redefine state.
+# NOT a test file: excluded from the dispatcher's SPLIT_GROUPS. Idempotent — guarded against re-source.
 
 if [ -n "${_RESOLVE_PROJECT_LIB_SOURCED:-}" ]; then
     return 0
@@ -156,6 +144,7 @@ MV_EOF
     fi
 
     export WORKFLOW_PLANS_DIR="$TMP/plans"
+    export CLAUDE_WORKFLOW_DIR="$TMP/workflow"
     _init_repo_fixture
 }
 
@@ -165,7 +154,7 @@ teardown_mock() {
     fi
     TMP=""
     unset REPO_FIXTURE FIXTURE_ORIGIN_URL FIXTURE_UPSTREAM_URL 2>/dev/null || true
-    unset MOCK_LOG WORKFLOW_PLANS_DIR \
+    unset MOCK_LOG WORKFLOW_PLANS_DIR CLAUDE_WORKFLOW_DIR \
           GH_MOCK_OWNER_REPO GH_MOCK_REPO_VIEW_FAIL \
           GH_MOCK_PROJECTS_NODE_COUNT GH_MOCK_PROJECT_OWNER \
           GH_MOCK_PROJECT_NUM GH_MOCK_PROJECT_ID \

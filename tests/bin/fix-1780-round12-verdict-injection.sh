@@ -2,41 +2,12 @@
 # tests/bin/fix-1780-round12-verdict-injection.sh
 # Tests: bin/request-off-clearance
 # Tags: off-clearance, verdict-nonce, prompt-injection, parser, json, fail-closed, secrets, shell-metacharacters, security, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - A REAL codex examiner being talked into echoing injected text. Every examiner
-#   here is a PATH stub reproducing the worst case by construction; what is
-#   asserted is the SCRIPT's authentication of whatever comes back, never a
-#   model's compliance.
-# - A real 0600-protected token on a real POSIX filesystem. The secrets cases
-#   assert that --detail never reaches stdout/stderr/the audit trail; the token
-#   file's own permissions are asserted in tests/bin/fix-1780-round4-mint-schema.sh.
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration.
-#
-# ---------------------------------------------------------------------------
-# WHAT THIS FILE DEFENDS (#1780 round-10 MEDIUM-2, adversarial layer)
-#
-# tests/bin/fix-1780-round10-verdict-nonce.sh pins the FOUR headline properties of
-# the nonce (absent / correct / wrong / prompt-echo). This file attacks the
-# PARSER those properties rest on, because the nonce check is only as strong as
-# the JSON scanner that decides WHICH object it is applied to.
-#
-# The scanner in bin/request-off-clearance is hand-written (a brace-depth walk
-# with its own string/escape state machine) rather than a JSON library, so the
-# ways an attacker can smuggle a verdict past it are parser bugs, not policy
-# bugs: an object nested inside another, a verdict-shaped object hidden inside a
-# STRING VALUE, a `nonce` that is a number or an array rather than a string, a
-# non-string `verdict`, malformed JSON positioned to desynchronise the walk.
-#
-# Every case therefore asserts the SAME fail-closed invariant, and asserts it
-# on the filesystem rather than on the message: NO TOKEN FILE EXISTS. A
-# rejection message with a token on disk is a full compromise; a token file is
-# the only thing hooks/supervisor-off-proposal-shim.js actually reads.
-#
-# The mint-direction cases (J2b, J5, J7, J8) exist so the file cannot be
-# satisfied by a script that never mints at all — the classic way a security
-# suite goes vacuous.
-# ---------------------------------------------------------------------------
+# TL3 gap: a REAL codex examiner echoing injected text (examiners are PATH stubs); real 0600 token perms (tests/bin/fix-1780-round4-mint-schema.sh).
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
+# Defends #1780 round-10 MEDIUM-2 (adversarial layer): attacks the hand-written JSON scanner in bin/request-off-clearance
+# that the nonce check (round10-verdict-nonce.sh) rests on — nested objects, verdict-in-string, non-string nonce/verdict, desync.
+# Invariant, asserted on the filesystem: NO TOKEN FILE EXISTS (the only thing hooks/supervisor-off-proposal-shim.js reads).
+# Mint-direction cases J2b/J5/J7/J8 keep the suite from going vacuous against a script that never mints.
 
 set -u
 
@@ -319,7 +290,7 @@ exit 0
         fi
         echo "$OUT" | grep -qF "$secret" && ok=0
         echo "$ERR" | grep -qF "$secret" && ok=0
-        grep -qF "$secret" "$tmp/j8c-$kind-supervisor-state.json" 2>/dev/null && ok=0
+        grep -qF "$secret" "$tmp/j8c-$kind.control/supervisor-state.json" 2>/dev/null && ok=0
         if [ "$kind" = "allow" ]; then
             grep -qF "$secret" "$tmp/j8c-allow.off-clearance" 2>/dev/null || ok=0
         fi

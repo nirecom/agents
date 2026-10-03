@@ -1,7 +1,7 @@
-# tests/bin/fix-2025-safe-plans-path/publish.sh
-# Tests: bin/lib/safe-plans-path.sh
-# Tags: safe-plans-path, atomic-publish, symlink, table-driven, security, scope:issue-specific, pwsh-not-required
-# Sourced by tests/bin/fix-2025-safe-plans-path.sh.
+# tests/bin/fix-2025-safe-state-path/publish.sh
+# Tests: bin/lib/safe-state-path.sh
+# Tags: safe-state-path, atomic-publish, symlink, table-driven, security, scope:issue-specific, pwsh-not-required
+# Sourced by tests/bin/fix-2025-safe-state-path.sh.
 
 echo ""
 echo "--- sp 5: publishing beside the destination ---"

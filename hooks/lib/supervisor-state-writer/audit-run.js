@@ -34,7 +34,7 @@ function commit(sessionId, state) {
     console.error(`[supervisor-state-writer] audit-run validate failed: ${vr.errors.join("; ")}`);
     return false;
   }
-  writeAtomic(getStatePath(sessionId), state);
+  writeAtomic(getStatePath(sessionId, { forWrite: true }), state);
   return true;
 }
 
@@ -217,7 +217,7 @@ function armCore(sessionId, opts) {
 // slot — a separate numbering read would hand two Stops the same id.
 function armAuditRun(sessionId, opts = {}) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return { ok: false, audit_run_id: null, run_id: null };
-  const result = withStateLock(getStatePath(sessionId), () => armCore(sessionId, opts));
+  const result = withStateLock(getStatePath(sessionId, { forWrite: true }),() => armCore(sessionId, opts));
   return result === undefined ? { ok: false, audit_run_id: null, run_id: null } : result;
 }
 
@@ -293,7 +293,7 @@ function finalizeCore(sessionId, opts) {
 // Compare-and-set: only the identity currently armed may write a verdict.
 function finalizeAuditRun(sessionId, opts = {}) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return { accepted: false, reason: "invalid-session" };
-  const result = withStateLock(getStatePath(sessionId), () => finalizeCore(sessionId, opts));
+  const result = withStateLock(getStatePath(sessionId, { forWrite: true }),() => finalizeCore(sessionId, opts));
   return result === undefined ? { accepted: false, reason: "lock-unavailable" } : result;
 }
 
@@ -305,7 +305,7 @@ function finalizeAuditRun(sessionId, opts = {}) {
 function consumeTransitions(sessionId, transitions) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return false;
   if (!Array.isArray(transitions) || transitions.length === 0) return true;
-  const result = withStateLock(getStatePath(sessionId), () => {
+  const result = withStateLock(getStatePath(sessionId, { forWrite: true }),() => {
     const state = readStateOrInit(sessionId);
     const audit = auditOf(state);
     ledger.extendConsumedTransitions(audit, transitions);
@@ -316,7 +316,7 @@ function consumeTransitions(sessionId, transitions) {
 
 function recordBlockOverride(sessionId, opts = {}) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return false;
-  const result = withStateLock(getStatePath(sessionId), () => {
+  const result = withStateLock(getStatePath(sessionId, { forWrite: true }),() => {
     const state = readStateOrInit(sessionId);
     const audit = auditOf(state);
     const nowIso = new Date().toISOString();

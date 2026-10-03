@@ -22,13 +22,13 @@ Write the raw judge output to `<PLANS_DIR>/<SESSION_ID>-complexity-judge-raw.txt
 
 ## COS-2 — Normalize signals
 
-Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<SESSION_ID>-complexity-judge-raw.txt" --out "<PLANS_DIR>/<SESSION_ID>-complexity-signals.txt"`.
+Run `node "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<SESSION_ID>-complexity-judge-raw.txt" --session "<SESSION_ID>" --stage complexity`; its stdout is `<SIGNALS_FILE>`.
 
 ## COS-3 — Record and dispatch
 
 Issue exactly this one standalone Bash call:
 
-`bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "<SESSION_ID>" --signals-file "<PLANS_DIR>/<SESSION_ID>-complexity-signals.txt" --target outline --dispatch-only --so-c1 <true|false> --so-c2 <true|false>`
+`bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "<SESSION_ID>" --signals-file "<SIGNALS_FILE>" --target outline --dispatch-only --so-c1 <true|false> --so-c2 <true|false>`
 
 `--dispatch-only` puts everything else on stderr, so stdout is the single line
 `SKIP_DISPATCH=<value>`. Read `<value>` from it — no pipe, no capture.

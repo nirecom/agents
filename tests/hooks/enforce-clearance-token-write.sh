@@ -27,6 +27,9 @@ RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 
 TMP=$(make_tmp); TN=$(node_path "$TMP")
 TOKEN="$TN/wsid.off-clearance"
+# #2434 strict placement guard: every write under the workflow dir ($TN) is blocked,
+# so "unrelated file" controls live in a separate dir outside both state dirs.
+OUTTMP=$(make_tmp); OUT=$(node_path "$OUTTMP")
 
 echo "=== .off-clearance is the one reserved clearance token ==="
 # --- block: Bash redirect / tee / cp to token path ---
@@ -48,11 +51,19 @@ assert_block "B8 rm -rf token"            "$(run_hook "$TN" "$(mk_bash_input "rm
 assert_block "B9 mv token away"           "$(run_hook "$TN" "$(mk_bash_input "mv $TOKEN $TN/stash.bak")")"
 
 # --- approve: sanctioned unrelated paths (CPR-ORTH counterparts) ---
-assert_approve "A1 redirect > unrelated file"  "$(run_hook "$TN" "$(mk_bash_input "echo x > $TN/notes.txt")")"
-assert_approve "A2 Write unrelated file_path"  "$(run_hook "$TN" "$(mk_file_input Write "$TN/other.json")")"
+assert_approve "A1 redirect > unrelated file"  "$(run_hook "$TN" "$(mk_bash_input "echo x > $OUT/notes.txt")")"
+assert_approve "A2 Write unrelated file_path"  "$(run_hook "$TN" "$(mk_file_input Write "$OUT/other.json")")"
 assert_approve "A3 harmless node -e (no token)" "$(run_hook "$TN" "$(mk_bash_input "node -e \"console.log(1+1)\"")")"
-assert_approve "A4 rm unrelated file"          "$(run_hook "$TN" "$(mk_bash_input "rm -f $TN/scratch.txt")")"
-assert_approve "A5 Write session state json"   "$(run_hook "$TN" "$(mk_file_input Write "$TN/wsid.json")")"
+assert_approve "A4 rm unrelated file"          "$(run_hook "$TN" "$(mk_bash_input "rm -f $OUT/scratch.txt")")"
+# A5 flipped by #2434: <sid>.json sits under the workflow dir, so the strict guard blocks it.
+assert_block "A5 Write session state json (strict control-dir)" "$(run_hook "$TN" "$(mk_file_input Write "$TN/wsid.json")")"
+A5_RAW="$(run_hook "$TN" "$(mk_file_input Write "$TN/wsid.json")")"
+case "$A5_RAW" in
+    *'Direct write under the workflow dir'*) pass "A5b the block is the placement guard's, not a token verdict" ;;
+    *) fail "A5b wsid.json block did not carry the placement message [raw=$(printf '%.160s' "$A5_RAW")]" ;;
+esac
+assert_block "A7 redirect > unrelated file under the workflow dir (strict)" \
+    "$(run_hook "$TN" "$(mk_bash_input "echo x > $TN/notes.txt")")"
 assert_approve "A6 harmless python -c"         "$(run_hook "$TN" "$(mk_bash_input "python -c \"print(2)\"")")"
 
 echo ""
@@ -60,15 +71,16 @@ echo "=== R: the provenance-era suffixes are no longer reserved (#1763 removal) 
 # The mechanism these names belonged to is gone. Blocking them now would be a reserved
 # name protecting a token that can never be minted — pure over-blocking, and a false
 # signal to anyone reading the guard that provenance is still enforced somewhere.
+# Rows target $OUT: under the workflow dir the #2434 placement guard blocks any name.
 for SUF in .issue-provenance .issue-provenance.tmp .issue-provenance-consumed .session-transcript; do
-    P="$TN/wsid$SUF"
+    P="$OUT/wsid$SUF"
     assert_approve "R-write($SUF) Write file_path" "$(run_hook "$TN" "$(mk_file_input Write "$P")")"
     assert_approve "R-write($SUF) redirect >"      "$(run_hook "$TN" "$(mk_bash_input "echo plain > $P")")"
     assert_approve "R-del($SUF) rm"                "$(run_hook "$TN" "$(mk_bash_input "rm -f $P")")"
 done
-V2A="node -e \"require('fs').writeFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/wsid.issue-provenance','x')\""
+V2A="node -e \"require('fs').writeFileSync('$OUT/wsid.issue-provenance','x')\""
 assert_approve "R-v2 node -e writes .issue-provenance" "$(run_hook "$TN" "$(mk_bash_input "$V2A")")"
-V2B="python -c \"import os; os.remove(os.environ['CLAUDE_WORKFLOW_DIR'] + '/wsid.issue-provenance-consumed')\""
+V2B="python -c \"import os; os.remove('$OUT/wsid.issue-provenance-consumed')\""
 assert_approve "R-v2 python -c unlinks the old record"  "$(run_hook "$TN" "$(mk_bash_input "$V2B")")"
 
 echo ""
@@ -227,7 +239,7 @@ assert_block "B-off1a redirect into the live token"  "$(run_hook "$TN" "$(mk_bas
 assert_block "B-off1b node -e writeFileSync literal token" \
     "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$TOKEN','forged')\"")")"
 
-rm -rf "$TMP" 2>/dev/null || true
+rm -rf "$TMP" "$OUTTMP" 2>/dev/null || true
 
 # --- CI wiring (#1821 cycle-2 C3): tests/run-all.sh globs tests/*.sh (TOP LEVEL only),
 # so every file under tests/enforce-clearance-token-write/ is dead code in CI until it

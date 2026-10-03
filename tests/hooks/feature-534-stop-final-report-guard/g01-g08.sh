@@ -42,7 +42,7 @@ test_G2_all_headings_present_passes() {
     local plans_dir="$TMPDIR_BASE/g2-plans"
     mkdir -p "$plans_dir"
     local sid="g2-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     # Build a transcript containing the full 13-heading report in assistant text.
@@ -78,7 +78,7 @@ test_G3_empty_env_object_no_header() {
     local plans_dir="$TMPDIR_BASE/g3-plans"
     mkdir -p "$plans_dir"
     local sid="g3-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     printf '{}' > "$envfile"
     printf '{"gate_action":"yield"}' > "$plans_dir/${sid}-session-close-gate.json"
 
@@ -110,7 +110,7 @@ test_G4_stop_hook_active() {
     local plans_dir="$TMPDIR_BASE/g4-plans"
     mkdir -p "$plans_dir"
     local sid="g4-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local transcript="$TMPDIR_BASE/g4-transcript.jsonl"
@@ -141,7 +141,7 @@ test_G6_envfile_malformed_json() {
     local plans_dir="$TMPDIR_BASE/g6-plans"
     mkdir -p "$plans_dir"
     local sid="g6-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     printf 'THIS IS NOT JSON {{{' > "$envfile"
 
     local transcript="$TMPDIR_BASE/g6-transcript.jsonl"
@@ -172,7 +172,7 @@ test_G7_header_present_subheading_missing() {
     local plans_dir="$TMPDIR_BASE/g7-plans"
     mkdir -p "$plans_dir"
     local sid="g7-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     # Build report with `### Next Tasks` omitted (12 of 13 headings present).
@@ -241,7 +241,7 @@ test_G8_legacy_key_yes() {
     local plans_dir="$TMPDIR_BASE/g8-plans"
     mkdir -p "$plans_dir"
     local sid="g8-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     cat > "$envfile" <<'EOF'
 {
   "CLAUDE_CODE_RESTART_REQUIRED": "yes",

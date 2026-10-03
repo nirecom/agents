@@ -2,23 +2,11 @@
 # Tests: bin/supervisor-report, hooks/lib/supervisor-state-writer.js, skills/supervisor-report/SKILL.md
 # Tags: rules-injection, supervisor-report, shell-injection, argv-safety, canary, table-driven, security, TL2, scope:issue-specific
 
-# WHY (CPR-WPH): `--detail` is the one supervisor-report field whose value is free text the
-# model composes from whatever it just observed — a hook's stderr, a failing command line, a
-# path. Those routinely contain `$(`, backticks, `;`, `&&` and newlines. If any layer between
-# the model and the audit trail hands that text to a shell, an observation about a bad
-# command becomes the execution of one, with the developer's own privileges.
-
-# Two properties are asserted per payload. FIRST, nothing executes: every row plants a
-# canary path inside its payload and the canary directory must stay empty. SECOND, the
-# observation survives INTACT — a CLI that defends itself by silently stripping the
-# dangerous-looking characters files a detail that no longer describes what happened, which
-# is a quieter version of the same loss. Round-trip equality is therefore compared against
-# the exact bytes passed in, via JSON so a newline or a control character stays one line.
-
-# The severity/categories fields are read back alongside, because a payload carrying an
-# embedded newline and a well-formed `--severity error` line is the argv-splitting attack:
-# if anything re-tokenized the detail, the persisted severity would be the injected one and
-# not the one the caller passed. Assumes AGENTS_DIR, TMPDIR_BASE, SR_CLI, WORKFLOW_PLANS_DIR,
+# WHY: `--detail` is model-composed free text (stderr, command lines) full of `$(`, `;`,
+# newlines; if any layer shells it, reporting a bad command executes it. Per payload:
+# nothing executes (canary dir stays empty) AND the detail round-trips byte for byte with
+# severity/categories untouched (argv-splitting via an embedded `--severity error`).
+# Assumes AGENTS_DIR, TMPDIR_BASE, SR_CLI, WORKFLOW_PLANS_DIR,
 # fresh_workflow_dir(), run_with_timeout(), pass(), fail() from the entry file.
 
 echo ""
@@ -36,7 +24,7 @@ else
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const file = path.join(process.argv[2], `${process.argv[3]}-supervisor-state.json`);
+const file = path.join(process.argv[2], `${process.argv[3]}.control`, "supervisor-state.json");
 let f = [];
 try { f = JSON.parse(fs.readFileSync(file, "utf8")).layer1.findings || []; } catch (_) { f = []; }
 if (f.length !== 1) { process.stdout.write("N=" + f.length); process.exit(0); }
@@ -77,7 +65,7 @@ DI_READ_EOF
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
             node "$SR_CLI" --categories other --severity notice \
                 --detail "$payload" --reporter di-probe --session-id "$sid" 2>&1)" || rc=$?
-        got="$(node "$TMPDIR_BASE/di-readback.js" "$WORKFLOW_PLANS_DIR" "$sid" 2>/dev/null || echo "N=ERR")"
+        got="$(node "$TMPDIR_BASE/di-readback.js" "$wf" "$sid" 2>/dev/null || echo "N=ERR")"
         if [ "$rc" != "$wantrc" ]; then
             fail "S11 [$variant]: exit $rc, want $wantrc — $desc; output: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)"
             return
@@ -124,7 +112,7 @@ DI_READ_EOF
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$SR_CLI" --categories other --severity notice \
             --reporter di-probe --session-id "$DI_SID_MISSING" 2>&1)" || DI_MISS_RC=$?
-    DI_MISS_GOT="$(node "$TMPDIR_BASE/di-readback.js" "$WORKFLOW_PLANS_DIR" "$DI_SID_MISSING" 2>/dev/null || echo "N=ERR")"
+    DI_MISS_GOT="$(node "$TMPDIR_BASE/di-readback.js" "$DI_MISS_WF" "$DI_SID_MISSING" 2>/dev/null || echo "N=ERR")"
     if [ "$DI_MISS_RC" != "0" ] && [ "$DI_MISS_GOT" = "N=0" ]; then
         pass "S11 [no-detail]: omitting --detail entirely exits $DI_MISS_RC and stores nothing — the rows above measure the payload, not a CLI that says yes to everything"
     else

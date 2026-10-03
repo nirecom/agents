@@ -97,10 +97,10 @@ MARKER="$WFDIR/$SID.$MARKER_KIND"
 MARKER2="$WFDIR/$SID2.$MARKER_KIND"
 MARKER3="$WFDIR/$SID3.$MARKER_KIND"
 # The CONSUMER-side artifacts: off-clearance.js writes the override marker into the
-# workflow dir and appends the audit record via supervisor-state-writer, which
-# resolves WORKFLOW_PLANS_DIR - a different directory, hence both are pinned.
+# workflow dir and appends the audit record via supervisor-state-writer into the
+# session control dir under the same workflow dir (#2434); both dirs stay pinned.
 OVERRIDE_MARKER3="$WFDIR/$SID3.workflow-off"
-AUDIT3="$PLANSDIR/$SID3-supervisor-state.json"
+AUDIT3="$WFDIR/$SID3.control/supervisor-state.json"
 
 PARTS_DIR="$AGENTS_DIR/tests/hooks/TL3-hook-record-off-skill-invocation"
 # The capture wrapper, the Bash guard, the project settings.json that registers

@@ -15,6 +15,11 @@ AGENTS_DIR="$AGENTS_ROOT"
 # shellcheck source=tests/lib/harness.sh
 . "$AGENTS_DIR/tests/lib/harness.sh"
 
+# Shared harness for the case markers the sub-files use; the local reporters below override it.
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_ROOT/tests/lib/harness.sh"
+
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
 

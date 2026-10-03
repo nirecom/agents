@@ -83,8 +83,9 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 
 count_entries() {
     local tmp="$1" sid="$2" n
-    if [ ! -f "$tmp/wf/$sid-handoff.md" ]; then printf '0'; return 0; fi
-    n=$(grep -c 'compaction' "$tmp/wf/$sid-handoff.md" 2>/dev/null)
+    # #2434: handoff.md is a control file — <wf>/<sid>.control/handoff.md.
+    if [ ! -f "$tmp/wf/$sid.control/handoff.md" ]; then printf '0'; return 0; fi
+    n=$(grep -c 'compaction' "$tmp/wf/$sid.control/handoff.md" 2>/dev/null)
     printf '%s' "${n:-0}"
 }
 
@@ -192,7 +193,7 @@ run_P4() {
     require_module "$ARTIFACT" || return 0
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
-    mkdir -p "$tmp/wf/unwritable-sid-p4-handoff.md"
+    mkdir -p "$tmp/wf/unwritable-sid-p4.control/handoff.md"
     seed_active "$tmp" "unwritable-sid-p4"
     out="$(run_hook "$tmp" "unwritable-sid-p4")"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit-changed-by-a-failed-artifact-write:$rc"
@@ -219,7 +220,7 @@ run_P5() {
     rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit:$rc"
     [ "$out" = "{}" ] || problems="$problems sessionless-output:'${out:0:120}'"
-    files="$(ls "$tmp/wf" 2>/dev/null | grep -c 'handoff.md' || true)"
+    files="$(find "$tmp/wf" -name '*handoff.md' 2>/dev/null | grep -c '' || true)"
     [ "$files" -eq 0 ] || problems="$problems sessionless-compaction-created-an-artifact"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then

@@ -3,7 +3,7 @@
 // unrecorded working knowledge is most likely to be lost. A stamp newer than the
 // nudge baseline restarts its timer and halves its limits (hooks/lib/handoff-pressure.js).
 //
-// <PLANS_DIR>/<sid>-handoff-risk.json = { last_risk_at, source }. Concurrent
+// <CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff-risk.json = { last_risk_at, source }. Concurrent
 // producers are last-writer-wins: only "a risk happened recently" matters.
 
 const { readSidecar, writeSidecar, toMillis } = require("./handoff-sidecar");

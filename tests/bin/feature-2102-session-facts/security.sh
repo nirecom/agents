@@ -150,7 +150,7 @@ INJ_SIGNAL='S1-multi-file'
 run_sid inj
 check_reader_ran "S2"
 check "S2a: exits 0 -- a hostile value degrades, it does not crash the reader" 0 "$RC"
-check "S2b: stdout is still exactly 10 lines" 10 "$(wc -l < "$OUTF" | tr -d ' ')"
+check "S2b: stdout is still exactly 11 lines" 11 "$(wc -l < "$OUTF" | tr -d ' ')"
 check "S2c: no forged ACTION line" 0 "$(grep -c '^ACTION=' "$OUTF" || true)"
 check "S2d: no forged NEXT_SKILL line" 0 "$(grep -c '^NEXT_SKILL=' "$OUTF" || true)"
 check "S2e: exactly one FACTS_VERSION line" 1 "$(grep -c '^FACTS_VERSION=' "$OUTF" || true)"
@@ -171,7 +171,7 @@ case_end
 case_begin "S2m-single-line-hostile-value" "bin/workflow/lib/session-facts/keys.js"
 # S2m-s: a single-line hostile value (no embedded newline). The record-forgery vector
 # above does not apply here -- there is no newline to break the KEY=VALUE line structure
-# -- so the property worth pinning is narrower: the fixed ten-key shape must survive
+# -- so the property worth pinning is narrower: the fixed eleven-key shape must survive
 # undisturbed, and the phrase itself must not ride through verbatim unless it happens to
 # match the allowlisted signal-id shape observed elsewhere in this suite (`S<n>-<slug>`,
 # e.g. S1-multi-file, S5-breaking). None of the three variants below matches that shape,
@@ -186,11 +186,11 @@ check "S2n: the fixture state file really carries the PI payload (non-vacuity)" 
 run_sid pi
 check_reader_ran "S2o"
 check "S2o: exits 0 -- a hostile single-line value degrades, it does not crash the reader" 0 "$RC"
-check "S2p: stdout is still exactly 10 lines" 10 "$(wc -l < "$OUTF" | tr -d ' ')"
+check "S2p: stdout is still exactly 11 lines" 11 "$(wc -l < "$OUTF" | tr -d ' ')"
 check "S2q: no forged ACTION line" 0 "$(grep -c '^ACTION=' "$OUTF" || true)"
 check "S2r: no forged NEXT_SKILL line" 0 "$(grep -c '^NEXT_SKILL=' "$OUTF" || true)"
 check "S2s: FACTS_VERSION is still line 1 (the fixed key set is not corrupted)" \
-  "FACTS_VERSION=2" "$(printf '%s\n' "$OUT" | head -n 1)"
+  "FACTS_VERSION=3" "$(printf '%s\n' "$OUT" | head -n 1)"
 case "$(line_of COMPLEXITY_SIGNALS)" in
   *"S1-multi-file"*) pass "S2t: the legitimate signal still survives alongside the hostile ones" ;;
   *) fail "S2t: the legitimate signal survives -- got [$(line_of COMPLEXITY_SIGNALS)]" ;;
@@ -270,7 +270,7 @@ WORKFLOW_PLANS_DIR="$HOSTILE_PD" AGENTS_CONFIG_DIR="$(nrm "$CFG")" \
   run_with_timeout node "$RSF" --session pdinj >"$OUTF" 2>"$ERRF" || RC=$?
 OUT="$(cat "$OUTF" 2>/dev/null || echo "")"; ERR="$(cat "$ERRF" 2>/dev/null || echo "")"
 check_reader_ran "S4b"
-check "S4c: stdout is still exactly 10 lines" 10 "$(wc -l < "$OUTF" | tr -d ' ')"
+check "S4c: stdout is still exactly 11 lines" 11 "$(wc -l < "$OUTF" | tr -d ' ')"
 check "S4d: no forged ACTION line" 0 "$(grep -c '^ACTION=' "$OUTF" || true)"
 check "S4e: no forged NEXT_SKILL line" 0 "$(grep -c '^NEXT_SKILL=' "$OUTF" || true)"
 check "S4f: exactly one PLANS_DIR line" 1 "$(grep -c '^PLANS_DIR=' "$OUTF" || true)"

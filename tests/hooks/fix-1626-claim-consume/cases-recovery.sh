@@ -19,14 +19,14 @@ require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'c7sid',pushMessa
         "$HANDLER_NODE" "$WF_BOUND" >/dev/null 2>&1
 
     [ -f "$tmp/c7sid.off-clearance.claimed" ] && ok=0
-    grep -q "off_clearance_consumed" "$tmp/c7sid-supervisor-state.json" 2>/dev/null || ok=0
+    grep -q "off_clearance_consumed" "$tmp/c7sid.control/supervisor-state.json" 2>/dev/null || ok=0
 
     # second activation → idempotent no-op (no crash, no additional consumed entry)
-    states_before=$(grep -o "off_clearance_consumed" "$tmp/c7sid-supervisor-state.json" 2>/dev/null | wc -l | tr -d ' ')
+    states_before=$(grep -o "off_clearance_consumed" "$tmp/c7sid.control/supervisor-state.json" 2>/dev/null | wc -l | tr -d ' ')
     WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 12 node -e "
 require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'c7sid',pushMessage:()=>{},signalFatal:()=>{}});" \
         "$HANDLER_NODE" "$WF_BOUND" >/dev/null 2>&1
-    local states_after; states_after=$(grep -o "off_clearance_consumed" "$tmp/c7sid-supervisor-state.json" 2>/dev/null | wc -l | tr -d ' ')
+    local states_after; states_after=$(grep -o "off_clearance_consumed" "$tmp/c7sid.control/supervisor-state.json" 2>/dev/null | wc -l | tr -d ' ')
     [ "$states_before" = "$states_after" ] || ok=0
 
     rm -rf "$tmp" 2>/dev/null || true
@@ -134,15 +134,15 @@ run_C9() {
 # ============================================================================
 # C10 - audit-write failure must NOT block the primary state transition.
 # appendAudit() is non-blocking: audit loss must never block an approved override,
-# but a dropped entry must be announced on stderr. Injection: pre-create
-# <sid>-supervisor-state.json.tmp as a DIRECTORY to force EISDIR on writeAtomic().
-# Asserted: .claimed consumed, OFF marker written, exit 0, WARNING on stderr.
+# but a dropped entry must be announced on stderr. Injection: pre-create the
+# control-dir supervisor-state.json path (#2434) as a DIRECTORY so the audit write
+# throws. Asserted: .claimed consumed, OFF marker written, exit 0, WARNING on stderr.
 # ============================================================================
 run_C10() {
     local tmp tn ok=1 rc err detail=""
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     write_claimed "$tn" "c10sid"
-    mkdir -p "$tmp/c10sid-supervisor-state.json.tmp"    # force every audit write to throw
+    mkdir -p "$tmp/c10sid.control/supervisor-state.json"    # force every audit write to throw
 
     err=$(WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 12 node -e "
 require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'c10sid',pushMessage:()=>{},signalFatal:()=>{}});" \

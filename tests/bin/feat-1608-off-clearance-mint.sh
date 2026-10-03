@@ -21,6 +21,7 @@ RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 # shellcheck source=./lib/examiner-stub.sh
 . "$AGENTS_DIR/tests/lib/examiner-stub.sh"
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -84,7 +85,7 @@ run_req() {
     printf '%s|%s' "$rc" "$out"
 }
 token_count() { ls "$1"/*.off-clearance 2>/dev/null | wc -l | tr -d ' '; }
-state_has() { grep -rq "$2" "$1"/*-supervisor-state.json 2>/dev/null; }
+state_has() { grep -rq "$2" "$1"/*.control/supervisor-state.json 2>/dev/null; }
 
 # ===== C: codex ALLOW → token minted (target/category/expires_at) + reason-binding guidance =====
 run_C() {
@@ -223,7 +224,7 @@ run_CO1() {
         "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co1sid');" >/dev/null 2>&1
     local ok=1
     [ -f "$tmp/co1sid.off-clearance.claimed" ] && ok=0
-    grep -q "off_clearance_consumed" "$tmp/co1sid-supervisor-state.json" 2>/dev/null || ok=0
+    grep -q "off_clearance_consumed" "$tmp/co1sid.control/supervisor-state.json" 2>/dev/null || ok=0
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$ok" = "1" ]; then
         pass "CO-1: consumeOffClearance(direct sid) unlinks token + appends off_clearance_consumed under that sid"
@@ -243,8 +244,8 @@ run_CO2() {
         "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co2sid');" >/dev/null 2>&1 )
     local ok=1
     [ -f "$tmp/20260101-000000.off-clearance.claimed" ] && ok=0               # fallback claimed token consumed
-    grep -q "off_clearance_consumed" "$tmp/20260101-000000-supervisor-state.json" 2>/dev/null || ok=0  # audit under WSID
-    [ -f "$tmp/co2sid-supervisor-state.json" ] && ok=0               # NOT under the direct sid
+    grep -q "off_clearance_consumed" "$tmp/20260101-000000.control/supervisor-state.json" 2>/dev/null || ok=0  # audit under WSID
+    [ -f "$tmp/co2sid.control/supervisor-state.json" ] && ok=0               # NOT under the direct sid
     rm -rf "$tmp" "$cwdd" 2>/dev/null || true
     if [ "$ok" = "1" ]; then
         pass "CO-2: consumeOffClearance falls back to resolved WSID token, unlinks it + audits under the WSID"
@@ -262,7 +263,7 @@ run_CO3() {
     rc=$?
     local ok=1
     [ "$rc" -ne 0 ] && ok=0                                    # fail-open: absent token must not throw
-    ls "$tmp"/*-supervisor-state.json >/dev/null 2>&1 && ok=0  # no audit finding written for a no-op
+    ls "$tmp"/*.control/supervisor-state.json >/dev/null 2>&1 && ok=0  # no audit finding written for a no-op
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$ok" = "1" ]; then
         pass "CO-3: consumeOffClearance with no token present is a fail-open no-op (no crash, no audit entry)"
@@ -283,7 +284,7 @@ run_CO4() {
     WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
         "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co4sid');" >/dev/null 2>&1
     [ -f "$tmp/co4sid.off-clearance" ] || ok=0                        # bare must survive
-    ls "$tmp"/*-supervisor-state.json >/dev/null 2>&1 && ok=0         # treated `absent` → no audit entry
+    ls "$tmp"/*.control/supervisor-state.json >/dev/null 2>&1 && ok=0         # treated `absent` → no audit entry
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$ok" = "1" ]; then
         pass "CO-4: bare (unclaimed) token is NOT consumable — treated absent, left in place, no audit entry"
@@ -346,23 +347,37 @@ PARTS_DIR="$AGENTS_DIR/tests/bin/feat-1608-off-clearance-mint"
 # shellcheck source=./feat-1608-off-clearance-mint/cases-examiner.sh
 . "$PARTS_DIR/cases-examiner.sh"
 
+case_begin "schema-record-types" "hooks/lib/supervisor-state-schema.js"
 run_A
+case_end
+
+case_begin "writer-persist" "hooks/lib/supervisor-state-writer.js"
 run_B
+case_end
+
+case_begin "clearance-mint" "bin/request-off-clearance"
 run_C
 run_D
 run_E
+run_MD1
+run_MD2
+case_end
+
+case_begin "clearance-consume" "hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
 run_F
 run_CO1
 run_CO2
 run_CO3
 run_CO4
-run_MD1
-run_MD2
+case_end
+
+case_begin "override-handlers-examiner" "hooks/workflow-mark/enforce-override-handlers.js"
 run_EX1
 run_EX2
 run_EX3
 run_EX4
 run_EX5
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

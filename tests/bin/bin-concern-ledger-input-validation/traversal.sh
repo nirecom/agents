@@ -172,8 +172,9 @@ TABLE
     # single-primary+fallback: it declares no mandatory producer, so one COMPLETE
     # producer completes the round — "who has not staged" is no longer named, and
     # discovery is proven instead by the accept-vs-missing split.
+    mkdir -p "$WF/sess3b.control"
     printf '#producer|review-code-codex|COMPLETE|COMPLETE|-|anchored|1\n' \
-        > "$PLANS/sess3b-review-security-shared-round-1-delta-review-code-codex.txt"
+        > "$WF/sess3b.control/review-security-shared-round-1-delta-review-code-codex.txt"
     assert_eq "3b: an accepted address still reduces into the ledger --ledger named" \
         "rc=0" "rc=$(glob_sub reduce sess3b review-security-shared)"
     assert_eq "3b: and the reduction really reached that ledger" \

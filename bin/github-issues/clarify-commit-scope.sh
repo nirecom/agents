@@ -10,7 +10,7 @@
 #   then per-N: gh issue edit --add-label → wip-set-single.sh → ensure-board-card.sh.
 # Path C (empty --issues): title/body from <sid>-intent.md → outbound scan guard →
 #   gh issue create --label intent:clarified → CREATED:<N>. A scan block prints
-#   SCAN_BLOCKED, writes the reason to <plans-dir>/<sid>-intent-scan-block.txt
+#   SCAN_BLOCKED, writes the reason to <session control dir>/intent-scan-block.txt
 #   (the caller discards stderr), and exits 2.
 # --non-github: skip all gh calls, exit 0.
 # --repo-map IDX:owner/repo: per-issue repo routing for Path B (repeatable).
@@ -95,7 +95,11 @@ if [[ "$ISSUES_SET" -eq 1 && -z "$ISSUES_CSV" ]]; then
     # GH_OUTBOUND_GUARD_MESSAGE survives for the sidecar write below.
     SCAN_TMP=$(mktemp)
     printf '%s\n\n%s\n' "$TITLE_LINE" "$BODY_TEXT" > "$SCAN_TMP"
-    SIDECAR="$REAL_PLANS_DIR/$SESSION_ID-intent-scan-block.txt"
+    SIDECAR="$(node "$SCRIPT_DIR/../workflow-control-dir" --session "$SESSION_ID" --file intent-scan-block.txt --for-write)" || {
+        echo "[clarify-commit-scope] cannot resolve the session control dir" >&2
+        rm -f "$SCAN_TMP"
+        exit 1
+    }
     # Fixed literal label, never the local intent.md path: the content scanned is
     # composed issue title/body text, not that file's own content, so a
     # caller-local path must never coincidentally match an unrelated allowlist glob.

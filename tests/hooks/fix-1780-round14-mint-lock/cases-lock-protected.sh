@@ -90,11 +90,12 @@ console.log("P3_derives=" + (B.OFF_CLEARANCE_TOKEN_SUFFIXES.some(function (s) { 
     assert_eq "P5b bash rm of the lock (the DELETE direction) is blocked" "block" \
         "$(_p_run_hook "$tn" "$(_p_bash_input "rm -f $lockpath")")"
 
-    # P6 — BOUNDARY. A `.mint.lock.tmp` that is NOT a clearance-token lock is
-    # ordinary scratch state; blocking it would be a false positive on unrelated
-    # work and would mean the guard keys on the wrong part of the name.
+    # P6 — BOUNDARY: an unrelated `.mint.lock.tmp` is ordinary scratch state (the guard
+    # keys on the name). #2434: it sits OUTSIDE the workflow dir, which the placement
+    # guard now blocks wholesale for a different reason (D7b).
+    local scratch; scratch=$(make_tmp)
     assert_eq "P6 boundary: an unrelated .mint.lock.tmp stays writable" "approve" \
-        "$(_p_run_hook "$tn" "$(_p_bash_input "printf x > $tn/build-cache.mint.lock.tmp")")"
+        "$(_p_run_hook "$tn" "$(_p_bash_input "printf x > $(node_path "$scratch")/build-cache.mint.lock.tmp")")"
 
-    rm -rf "$tmp"
+    rm -rf "$tmp" "$scratch"
 }

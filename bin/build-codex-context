@@ -31,7 +31,7 @@ done
 # C9). --output is not checked — it is a complete path the caller chose, not a
 # token. The checks are explicit rather than left to `set -e`, so the user gets
 # a reason. This same library also provides the publish primitive used below.
-SAFE_TOKEN_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/safe-plans-path.sh"
+SAFE_TOKEN_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/safe-state-path.sh"
 [[ -f "$SAFE_TOKEN_LIB" ]] || { echo "build-codex-context: required library missing: $SAFE_TOKEN_LIB" >&2; exit 1; }
 # shellcheck source=/dev/null
 source "$SAFE_TOKEN_LIB" || { echo "build-codex-context: required library failed to load: $SAFE_TOKEN_LIB" >&2; exit 1; }

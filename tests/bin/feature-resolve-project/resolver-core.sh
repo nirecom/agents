@@ -2,15 +2,10 @@
 # tests/bin/feature-resolve-project/resolver-core.sh
 # Tests: bin/github-issues/lib/resolve-project.sh
 # Tags: workflow, github, issues, plans, bin, scope:issue-specific
-#
-# Core resolver tests: single-project resolution, 0-project, multi-project,
-# no Content Date field, short-circuit via _ISSUE_CREATE_INTERNAL_*, pagination,
-# cross-org owner, SSH remote, and missing remote.
-#
-# L3 gap: whether resolve_project_for_repo works against a live GitHub GraphQL
-# API with real tokens and real Projects v2 data.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# Core resolver tests: single/0/multi project, no Content Date, _ISSUE_CREATE_INTERNAL_* short-circuit,
+# pagination, cross-org owner, SSH remote, missing remote.
+# L3 gap: live GitHub GraphQL API with real tokens and Projects v2 data.
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -uo pipefail
 
@@ -177,7 +172,7 @@ export FIXTURE_ORIGIN_URL="git@github.com:ssh-org/ssh-repo.git"
 STDERR_FILE="$TMP/t-ssh-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
-CACHE_FILE="$WORKFLOW_PLANS_DIR/cache/project-resolve.tsv"
+CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
 HAS_KEY=0
 [ -f "$CACHE_FILE" ] && grep -q "^ssh-org/ssh-repo" "$CACHE_FILE" 2>/dev/null && HAS_KEY=1
 if [ "$RC" = "0" ] && [ "$HAS_KEY" = "1" ]; then
@@ -197,7 +192,7 @@ export FIXTURE_UPSTREAM_URL="https://github.com/upstream-org/upstream-repo.git"
 STDERR_FILE="$TMP/t-origin-upstream-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
-CACHE_FILE="$WORKFLOW_PLANS_DIR/cache/project-resolve.tsv"
+CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
 CACHE_TXT="$(cat "$CACHE_FILE" 2>/dev/null)"
 if [ "$RC" = "0" ] && printf '%s' "$CACHE_TXT" | grep -q "^fork-org/fork-repo"; then
     pass "T-origin-vs-upstream: cache keyed on origin, not upstream"

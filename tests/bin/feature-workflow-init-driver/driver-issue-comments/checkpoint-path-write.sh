@@ -22,8 +22,8 @@ CKPT_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/checkpoint.js"
 # writeCheckpoint's mkdirSync of the parent still succeeds and its writeFileSync
 # raises EISDIR — a path the process may traverse but not write, which is the real
 # shape of the failure rather than a stubbed throw. Mirrors what checkpointPath()
-# computes, without importing it.
-break_checkpoint_write() { mkdir -p "$PLANS/$SID-wi-checkpoint.json"; }
+# computes (<CLAUDE_WORKFLOW_DIR>/<sid>.control/wi-checkpoint.json, #2434), without importing it.
+break_checkpoint_write() { mkdir -p "$(ctrl_file wi-checkpoint.json)"; }
 
 # --- K1: the rewrite is applied on win32 and withheld on POSIX ----------------------
 # One assertion, two contracts, because they are the two arms of ONE branch
@@ -32,13 +32,19 @@ break_checkpoint_write() { mkdir -p "$PLANS/$SID-wi-checkpoint.json"; }
 # win32 rewrite be deleted. The probe picks the arm from path.sep — the predicate the
 # source itself branches on — and reports a verdict either way.
 K1_OUT="$(node -e '
+const os = require("os");
+const fs = require("fs");
 const path = require("path");
-const { checkpointPath } = require(process.argv[1]);
 // Segments separated by BACKSLASHES on both platforms: win32 path.join normalizes
-// them to separators, POSIX keeps them as ordinary name bytes.
-const plansDir = path.sep === "\\" ? "C:\\plans\\wi\\dir" : "/plans\\wi\\dir";
-const out = checkpointPath(plansDir, "sid-k1");
-const joined = path.join(plansDir, "sid-k1-wi-checkpoint.json");
+// them to separators, POSIX keeps them as ordinary name bytes. The workflow dir is a
+// fresh temp root, so the forWrite mkdir never lands outside the fixture.
+const root = fs.mkdtempSync(path.join(os.tmpdir(), "wid-k1-"));
+const wfDir = root + "\\wi\\dir";
+process.env.CLAUDE_WORKFLOW_DIR = wfDir;
+process.env.WORKFLOW_PLANS_DIR = path.join(root, "plans");
+const { checkpointPath } = require(process.argv[1]);
+const out = checkpointPath("sid-k1");
+const joined = path.join(wfDir, "sid-k1.control", "wi-checkpoint.json");
 const win32 = path.sep === "\\";
 const verdict = win32
   ? (out.indexOf("\\") === -1 ? "ok" : "backslash-leaked")
@@ -59,7 +65,7 @@ fi
 # every segment the caller supplied survives, joined by forward slashes.
 if [ "$K1_PLATFORM" = "win32" ]; then
     case "$K1_PATH" in
-        */plans/wi/dir/sid-k1-wi-checkpoint.json) pass "K2: every backslash segment survives as a forward-slash segment" ;;
+        */wi/dir/sid-k1.control/wi-checkpoint.json) pass "K2: every backslash segment survives as a forward-slash segment" ;;
         *) fail "K2: segments lost or mis-joined: '$K1_PATH'" ;;
     esac
 else
@@ -75,11 +81,13 @@ K3_OUT="$(node -e '
 const os = require("os");
 const fs = require("fs");
 const path = require("path");
-const { checkpointPath, writeCheckpoint, readCheckpoint } = require(process.argv[1]);
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "wid-k3-"));
-// Nested + not-yet-existing: writeCheckpoint must mkdir the parents of the value it
-// was handed, the operation a broken separator would break first.
-const p = checkpointPath(path.join(root, "nested", "deeper"), "sid-k3");
+// Nested + not-yet-existing workflow dir: the resolver must mkdir the parents of the
+// value it hands back, the operation a broken separator would break first.
+process.env.CLAUDE_WORKFLOW_DIR = path.join(root, "nested", "deeper");
+process.env.WORKFLOW_PLANS_DIR = path.join(root, "plans");
+const { checkpointPath, writeCheckpoint, readCheckpoint } = require(process.argv[1]);
+const p = checkpointPath("sid-k3");
 try {
   writeCheckpoint(p, "sid-k3", "write-context", null, { issues: [4200] });
 } catch (e) {

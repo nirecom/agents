@@ -8,10 +8,12 @@
 # D6: _cl_merge_concerns_log — carrier-only non-reject discarded, reject retained,
 # DISCRIM byte-sort deterministic, open+rejected→rejected wins (plan §206-212).
 # ---------------------------------------------------------------------------
+case_begin "merge-and-exit-d6-merge-semantics" "bin/lib/concern-ledger/core.sh"
 echo "--- D6: _cl_merge_concerns_log merge semantics ---"
 D6P="$TMPDIR_BASE/d6/plans"; mkdir -p "$D6P"
 D6S="sess-d6"; D6F="review-security-shared"
-D6L="$D6P/${D6S}-${D6F}-concern-ledger.txt"
+mkdir -p "$CLAUDE_WORKFLOW_DIR/${D6S}.control"
+D6L="$CLAUDE_WORKFLOW_DIR/${D6S}.control/${D6F}-concern-ledger.txt"
 
 D6_T_OPEN="race condition in event handler loop"
 D6_T_STALE="stale concern no longer in the ledger at all"
@@ -66,19 +68,21 @@ D6B_T1="alpha vulnerability in authentication layer"
 D6B_T2="beta vulnerability in session management layer"
 D6B_D1="$(discrim_of "$D6B_T1")"; D6B_D2="$(discrim_of "$D6B_T2")"
 
-L6B1="$D6BP1/sess-d6b-review-security-shared-concern-ledger.txt"
-mk_ledger "$L6B1" "review-security-shared" "sess-d6b" "1"
+mkdir -p "$CLAUDE_WORKFLOW_DIR/sess-d6b1.control"
+L6B1="$CLAUDE_WORKFLOW_DIR/sess-d6b1.control/review-security-shared-concern-ledger.txt"
+mk_ledger "$L6B1" "review-security-shared" "sess-d6b1" "1"
 add_entry "$L6B1" "C1" "HIGH"   "open" "1" "1" "$(slot_of "$D6B_T1")" "$D6B_D1" "t" "s" "-" "$D6B_T1"
 add_entry "$L6B1" "C2" "MEDIUM" "open" "1" "1" "$(slot_of "$D6B_T2")" "$D6B_D2" "t" "s" "-" "$D6B_T2"
 
-L6B2="$D6BP2/sess-d6b-review-security-shared-concern-ledger.txt"
-mk_ledger "$L6B2" "review-security-shared" "sess-d6b" "1"
+mkdir -p "$CLAUDE_WORKFLOW_DIR/sess-d6b2.control"
+L6B2="$CLAUDE_WORKFLOW_DIR/sess-d6b2.control/review-security-shared-concern-ledger.txt"
+mk_ledger "$L6B2" "review-security-shared" "sess-d6b2" "1"
 add_entry "$L6B2" "C1" "MEDIUM" "open" "1" "1" "$(slot_of "$D6B_T2")" "$D6B_D2" "t" "s" "-" "$D6B_T2"
 add_entry "$L6B2" "C2" "HIGH"   "open" "1" "1" "$(slot_of "$D6B_T1")" "$D6B_D1" "t" "s" "-" "$D6B_T1"
 
 D6B_O1=""; D6B_O2=""
-D6B_O1="$(run_cli render-concerns-log --plans-dir "$D6BP1" --session-id "sess-d6b" --format "review-security-shared" 2>/dev/null)" || true
-D6B_O2="$(run_cli render-concerns-log --plans-dir "$D6BP2" --session-id "sess-d6b" --format "review-security-shared" 2>/dev/null)" || true
+D6B_O1="$(run_cli render-concerns-log --plans-dir "$D6BP1" --session-id "sess-d6b1" --format "review-security-shared" 2>/dev/null)" || true
+D6B_O2="$(run_cli render-concerns-log --plans-dir "$D6BP2" --session-id "sess-d6b2" --format "review-security-shared" 2>/dev/null)" || true
 
 if [[ -n "$D6B_O1" && -f "$D6B_O1" && -n "$D6B_O2" && -f "$D6B_O2" ]]; then
     assert_eq_nz       "D6b: D1 DISCRIM computed"     "$D6B_D1" "$D6B_D1"
@@ -91,9 +95,12 @@ else
     fail "D6b: one or both renders did not produce carrier"
 fi
 
+case_end
+
 # ---------------------------------------------------------------------------
 # D7: Exit code coverage
 # ---------------------------------------------------------------------------
+case_begin "merge-and-exit-d7-exit-codes" "bin/concern-ledger"
 echo "--- D7: exit code coverage ---"
 
 # D7a: no ledger, no carrier → exit 3, stdout empty
@@ -106,7 +113,8 @@ assert_eq "D7a: exit 3 → stdout empty"          ""  "$D7A_OUT"
 # D7b: open concern → exit 0, stdout is carrier path
 D7BP="$TMPDIR_BASE/d7b/plans"; mkdir -p "$D7BP"
 D7BS="sess-d7b"; D7BF="review-security-shared"
-D7BL="$D7BP/${D7BS}-${D7BF}-concern-ledger.txt"
+mkdir -p "$CLAUDE_WORKFLOW_DIR/${D7BS}.control"
+D7BL="$CLAUDE_WORKFLOW_DIR/${D7BS}.control/${D7BF}-concern-ledger.txt"
 D7B_T="format string vulnerability in logging subsystem"
 D7B_D="$(discrim_of "$D7B_T")"
 mk_ledger "$D7BL" "$D7BF" "$D7BS" "1"
@@ -125,7 +133,8 @@ assert_eq "D7b: stdout is carrier path" "$D7B_EXP" "$D7B_OUT"
 # alternative also hides the ledger, yielding exit 3 not exit 5.
 D7CP="$TMPDIR_BASE/d7c/plans"; mkdir -p "$D7CP"
 D7CS="sess-d7c"; D7CF="review-security-shared"
-D7CL="$D7CP/${D7CS}-${D7CF}-concern-ledger.txt"
+mkdir -p "$CLAUDE_WORKFLOW_DIR/${D7CS}.control"
+D7CL="$CLAUDE_WORKFLOW_DIR/${D7CS}.control/${D7CF}-concern-ledger.txt"
 D7C_T="stack overflow in recursive descent parser"
 D7C_D="$(discrim_of "$D7C_T")"
 mk_ledger "$D7CL" "$D7CF" "$D7CS" "1"
@@ -144,7 +153,8 @@ fi
 # D7d: no ledger but carrier has reject row → exit 0, stdout is carrier path
 D7DP="$TMPDIR_BASE/d7d/plans"; mkdir -p "$D7DP"
 D7DS="sess-d7d"; D7DF="review-security-shared"
-D7DL="$D7DP/${D7DS}-${D7DF}-concern-ledger.txt"
+mkdir -p "$CLAUDE_WORKFLOW_DIR/${D7DS}.control"
+D7DL="$CLAUDE_WORKFLOW_DIR/${D7DS}.control/${D7DF}-concern-ledger.txt"
 D7D_T="path traversal in file upload handler code"
 D7D_D="$(discrim_of "$D7D_T")"
 
@@ -161,3 +171,4 @@ assert_eq "D7d: no ledger + carrier has reject → exit 0" "0" "$D7D_RC"
 D7D_EXP="$(carrier_path_for "$D7DP" "$D7DS" "$D7DF")"
 assert_eq "D7d: stdout is carrier path"   "$D7D_EXP" "$D7D_OUT"
 [[ -n "$D7D_OUT" && -f "$D7D_OUT" ]] && pass "D7d: carrier file exists" || fail "D7d: carrier file missing (rc=$D7D_RC)"
+case_end

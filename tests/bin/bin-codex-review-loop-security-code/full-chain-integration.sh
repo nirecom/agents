@@ -13,7 +13,7 @@ FCH_CODEX="the retry path swallows the error it was meant to surface"
 FCH_SCAN="the token is written to the log in cleartext"
 
 fch_ledgers() {
-    find "$PLANS" -maxdepth 1 -name '*concern-ledger.txt' -type f 2>/dev/null | wc -l | tr -d ' '
+    ctl_count '*concern-ledger.txt'
 }
 fch_check() {
     bash "$CLI" check-finalized --plans-dir "$PLANS" --session-id "$SID" \
@@ -110,7 +110,7 @@ X_JSONF="$(json_file "$PLANS" "$SID")"
     assert_contains "X2: and the scanner's alongside it" "C2" "$X2_PROMPT"
     assert_contains "X2: the round the loop staged into is round 2" \
         "$LEDGER_FORMAT-round-2-delta-review-code-codex" \
-        "$(find "$PLANS" -maxdepth 1 -name '*round-2-delta-*' 2>/dev/null | tr '\n' ' ')"
+        "$(find "$(ctl_dir "$SID")" -maxdepth 1 -name '*round-2-delta-*' 2>/dev/null | tr '\n' ' ')"
     assert_eq "X2: the re-raised concern keeps its original id" \
         "C1" "$(id_for_text "$X_LED" "$FCH_CODEX")"
     assert_eq "X2: still one ledger for the whole review" "1" "$(fch_ledgers)"

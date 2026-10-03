@@ -64,11 +64,11 @@ run_C1() {
 run_C2() {
     local tmp tn r rc out
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    WORKFLOW_PLANS_DIR="$tn" "$RWT" 10 node -e "
+    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 10 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('c2sid');
 st.layer1.findings=[{categories:['code'],severity:'error',detail:'x',reporter:'workflow-gate',timestamp:new Date().toISOString()}];
-fs.writeFileSync(w.getStatePath('c2sid'),JSON.stringify(st));" >/dev/null 2>&1
+fs.writeFileSync(w.getStatePath('c2sid',{forWrite:true}),JSON.stringify(st));" >/dev/null 2>&1 || fail "C2 seed: supervisor-state seed write failed"
     r=$(run_shim "$tn" "c2sid"); rc="${r%%|*}"; out="${r#*|}"
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$rc" != "2" ]; then

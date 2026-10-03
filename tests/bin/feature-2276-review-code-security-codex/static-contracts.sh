@@ -42,12 +42,16 @@ for _newlib in "$FMT_PARAMS" "$REF_KIND"; do
 done
 
 # --- the ledger-format / round-format split (S8-a) --------------------------
+# #2434 moved the loop's control-file names into control-paths.sh (no sid prefix).
+CTL_PATHS="$AGENTS_ROOT/bin/lib/codex-review-loop/control-paths.sh"
 assert_eq "S: the ledger file name is built from LEDGER_FORMAT" \
-    "1" "$(grep -c 'SID-\$LEDGER_FORMAT-concern-ledger.txt' "$LOOP_BIN" 2>/dev/null || true)"
+    "1" "$(grep -c 'cp_resolve "\$LEDGER_FORMAT-concern-ledger.txt"' "$CTL_PATHS" 2>/dev/null || true)"
 assert_eq "S: the round-number file name stays on the loop FORMAT" \
-    "1" "$(grep -c 'SID-\$FORMAT-round-number.txt' "$LOOP_BIN" 2>/dev/null || true)"
+    "1" "$(grep -c 'cp_resolve "\$FORMAT-round-number.txt"' "$CTL_PATHS" 2>/dev/null || true)"
 assert_eq "S: the last-round file name stays on the loop FORMAT" \
-    "1" "$(grep -c 'SID-\$FORMAT-last-round.txt' "$LOOP_BIN" 2>/dev/null || true)"
+    "1" "$(grep -c 'cp_resolve "\$FORMAT-last-round.txt"' "$CTL_PATHS" 2>/dev/null || true)"
+assert_eq "S: the loop sources the control-path table" \
+    "1" "$(grep -c 'control-paths.sh"' "$LOOP_BIN" 2>/dev/null || true)"
 assert_eq "S: ledger_cli addresses the CLI with LEDGER_FORMAT" \
     "1" "$(grep -c -- '--format "\$LEDGER_FORMAT"' "$LEDGER_VERDICT" 2>/dev/null || true)"
 assert_eq "S: ledger_cli no longer passes the loop FORMAT to the CLI" \

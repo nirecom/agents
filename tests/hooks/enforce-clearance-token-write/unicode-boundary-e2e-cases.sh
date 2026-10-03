@@ -20,6 +20,9 @@ RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 . "$AGENTS_DIR/tests/lib/clearance-hook-harness.sh"
 
 TMP=$(make_tmp); TN=$(node_path "$TMP")
+# Approve rows write to $OUT: #2434's strict placement guard blocks any write under $TN
+# (the workflow dir), and the token classifier is basename-based, so the gate is unchanged.
+OUTTMP=$(make_tmp); OUT=$(node_path "$OUTTMP")
 
 # A canonical session-id stem, so SID_CANONICAL_*_RE recognises it on shape alone and the
 # classifier's verdict does not depend on whether active session ids are observable here.
@@ -57,21 +60,21 @@ fi
 
 # ---- GREEN: routes whose end-to-end verdict already matches that contract -----------
 assert_approve "UB-redir-acute redirect into a precomposed-accent continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "echo x > $TN/$B_ACUTE")")"
+    "$(run_hook "$TN" "$(mk_bash_input "echo x > $OUT/$B_ACUTE")")"
 assert_approve "UB-redir-comb redirect into a combining-mark continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "echo x > $TN/$B_COMB")")"
+    "$(run_hook "$TN" "$(mk_bash_input "echo x > $OUT/$B_COMB")")"
 assert_approve "UB-redir-cjk redirect into a CJK continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "echo x > $TN/$B_CJK")")"
+    "$(run_hook "$TN" "$(mk_bash_input "echo x > $OUT/$B_CJK")")"
 assert_approve "UB-redir-fw redirect into a fullwidth-digit continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "echo x > $TN/$B_FW1")")"
+    "$(run_hook "$TN" "$(mk_bash_input "echo x > $OUT/$B_FW1")")"
 assert_approve "UB-redir-unrelated redirect into an unrelated non-ASCII filename" \
-    "$(run_hook "$TN" "$(mk_bash_input "echo x > $TN/$B_UNREL")")"
+    "$(run_hook "$TN" "$(mk_bash_input "echo x > $OUT/$B_UNREL")")"
 assert_approve "UB-touch-cjk touch on a CJK continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "touch $TN/$B_CJK")")"
+    "$(run_hook "$TN" "$(mk_bash_input "touch $OUT/$B_CJK")")"
 assert_approve "UB-write-tool-acute Write tool targeting a precomposed-accent continuation" \
-    "$(run_hook "$TN" "$(mk_file_input Write "$TN/$B_ACUTE")")"
+    "$(run_hook "$TN" "$(mk_file_input Write "$OUT/$B_ACUTE")")"
 assert_approve "UB-write-tool-cjk Write tool targeting a CJK continuation" \
-    "$(run_hook "$TN" "$(mk_file_input Write "$TN/$B_CJK")")"
+    "$(run_hook "$TN" "$(mk_file_input Write "$OUT/$B_CJK")")"
 
 # Positive controls: the real token must still block on the very routes just approved,
 # otherwise every approval above would be indistinguishable from a disarmed hook.
@@ -85,13 +88,13 @@ assert_block "UB-ctrl-interp node -e writing the real token still blocks" \
 # The ASCII siblings on the interpreter route. #1821 fixed exactly these (both block on
 # main @HEAD), which is what makes the Unicode rows below a residual rather than a design.
 assert_approve "UB-ascii-word node -e writing an ASCII word continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$TN/$B_WORD','x')\"")")"
+    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$OUT/$B_WORD','x')\"")")"
 assert_approve "UB-ascii-hyph node -e writing an ASCII hyphen continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$TN/$B_HYPH','x')\"")")"
+    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$OUT/$B_HYPH','x')\"")")"
 # Non-ASCII alone is not what arms the gate - this filename carries no protected stem at
 # all and approves on the same route, isolating the boundary as the single variable.
 assert_approve "UB-interp-unrelated node -e writing an unrelated non-ASCII filename" \
-    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$TN/$B_UNREL','x')\"")")"
+    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$OUT/$B_UNREL','x')\"")")"
 
 # ---- The #1821 over-block on the interpreter route, now closed ----------------------
 # These four measured `block` on main @HEAD while UB-ascii-word / UB-ascii-hyph - the same
@@ -100,13 +103,13 @@ assert_approve "UB-interp-unrelated node -e writing an unrelated non-ASCII filen
 # The strict boundary in this PR is what makes them approve; they are the regression
 # fence for it, so they must never be relaxed back to `block`.
 assert_approve "UB-interp-acute node -e writing a precomposed-accent continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$TN/$B_ACUTE','x')\"")")"
+    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$OUT/$B_ACUTE','x')\"")")"
 assert_approve "UB-interp-comb node -e writing a combining-mark continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$TN/$B_COMB','x')\"")")"
+    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$OUT/$B_COMB','x')\"")")"
 assert_approve "UB-interp-cjk node -e writing a CJK continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$TN/$B_CJK','x')\"")")"
+    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$OUT/$B_CJK','x')\"")")"
 assert_approve "UB-interp-fw node -e writing a fullwidth-digit continuation" \
-    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$TN/$B_FW1','x')\"")")"
+    "$(run_hook "$TN" "$(mk_bash_input "node -e \"require('fs').writeFileSync('$OUT/$B_FW1','x')\"")")"
 
 # ---- UBZ: bodyDerefsProtectedViaAssignment(), both directions -----------------------
 # Every row above puts the path LITERALLY in the interpreter body. The strict-boundary
@@ -114,8 +117,8 @@ assert_approve "UB-interp-fw node -e writing a fullwidth-digit continuation" \
 # INDIRECT shape - path in a preceding assignment, stdin-delivered body dereferencing
 # process.env - so without these rows that branch keeps no both-direction coverage
 # (Pattern 4, skills/_shared/test-design/protection-fix-tests.md).
-Z_CLEAN="$TN/zzz.off-clearance"
-Z_CONT="$TN/zzz.off-clearance$(printf '\xe6\x97\xa5')"   # same shape, CJK continuation
+Z_CLEAN="$OUT/zzz.off-clearance"
+Z_CONT="$OUT/zzz.off-clearance$(printf '\xe6\x97\xa5')"   # same shape, CJK continuation
 Z_DEREF="require('fs').writeFileSync(process.env.P,'x')"
 Z_RONLY="require('fs').readFileSync(process.env.P)"
 
@@ -148,7 +151,7 @@ assert_approve "UBZ-readonly the same exact-suffix assignment with a read-only b
 assert_approve "UBZ-direct the plain redirect onto the same value approves (stem is classify-no)" \
     "$(run_hook "$TN" "$(mk_bash_input "echo x > $Z_CLEAN")")"
 
-rm -r -f "$TMP" 2>/dev/null || true
+rm -r -f "$TMP" "$OUTTMP" 2>/dev/null || true
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

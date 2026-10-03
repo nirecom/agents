@@ -1,5 +1,5 @@
 "use strict";
-// The handoff artifact: <PLANS_DIR>/<sid>-handoff.md.
+// The handoff artifact: <CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff.md.
 //
 // One canonical writer (appendHandoffEntry) for every producer — skill
 // procedure points, blocked gates, mechanical auto-records, main-session
@@ -12,7 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { getWorkflowPlansDir } = require("./workflow-plans-dir");
+const { controlPath, diagnoseControlMigration } = require("../workflow-state/state-io/control-dir");
 const { SESSION_ID_VALID_RE, VALID_STEPS } = require("../workflow-state/state-io/core");
 const { collapseControl, redactSecrets, sanitizeLine } = require("./output-sanitize");
 
@@ -41,9 +41,9 @@ function isValidSid(sid) {
   return typeof sid === "string" && SESSION_ID_VALID_RE.test(sid);
 }
 
-function getHandoffPath(sid) {
+function getHandoffPath(sid, opts) {
   if (!isValidSid(sid)) throw new Error(`Invalid sessionId: ${JSON.stringify(sid)}`);
-  return path.join(getWorkflowPlansDir(), sid + "-handoff.md");
+  return controlPath(sid, "handoff.md", opts);
 }
 
 function esc(value) {
@@ -198,7 +198,7 @@ function countEntryLines(doc) {
 function appendHandoffEntry(sid, entry) {
   try {
     if (!isValidSid(sid) || !validateEntry(entry)) return { written: false, reason: "invalid" };
-    const handoffPath = getHandoffPath(sid);
+    const handoffPath = getHandoffPath(sid, { forWrite: true });
     const raw = readDocumentFile(handoffPath);
     const doc = raw === null ? { schemaVersion: HANDOFF_SCHEMA_VERSION, sections: {}, overflow: false } : parseDocument(raw);
     if (doc.schemaVersion !== null && doc.schemaVersion !== HANDOFF_SCHEMA_VERSION) {
@@ -246,6 +246,7 @@ function appendHandoffEntry(sid, entry) {
     if (!writeDocumentFile(handoffPath, text)) return { written: false, reason: "io" };
     return { written: true, reason: "ok" };
   } catch (e) {
+    diagnoseControlMigration(e, "handoff-artifact");
     return { written: false, reason: "io" };
   }
 }
@@ -259,6 +260,7 @@ function readHandoff(sid) {
   try {
     handoffPath = getHandoffPath(sid);
   } catch (e) {
+    diagnoseControlMigration(e, "handoff-artifact");
     return absent;
   }
   const raw = readDocumentFile(handoffPath);

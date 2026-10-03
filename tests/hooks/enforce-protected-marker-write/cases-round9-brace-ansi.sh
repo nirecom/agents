@@ -1,65 +1,13 @@
 #!/usr/bin/env bash
 # Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
-# Round-9 HIGH-2: SPELLINGS THAT *CREATE* THE PROTECTED BASENAME.
-#
-# The candidate-basename normalizer modelled globs, NTFS streams and Windows
-# trailing-dot stripping, but not the two bash constructs that BUILD a name:
-#
-#     brace expansion  echo x > <wf>/<sid>.workflow-of{f..f}   -> …workflow-off
-#                      tee     <wf>/<sid>.workflow-{off,off}   -> …workflow-off
-#     ANSI-C quoting   echo x > $'<wf>/<sid>.workflow-of\x66'  -> …workflow-off
-#
-# The difference from a glob is the whole point and must not be blurred: a glob
-# can only ever match a file that ALREADY EXISTS, while these two CREATE the
-# exact protected basename — and hooks/lib/session-markers.js authorizes on a
-# marker's EXISTENCE alone, so each of the rows below is a one-command forge of
-# full session clearance.
-#
-# The ANSI-C half was worse than a miss. unquoteBashWord() had no `$'…'` mode, so
-# `\x66` fell through to the PLAIN-context escape rule (`\` + next char -> next
-# char) and the normalizer MANUFACTURED `…workflow-ofx66` — a basename the shell
-# never creates — while the shell created `…workflow-off`. A normalizer consumed
-# in the DETECTION direction may widen; it may never rewrite.
-#
-# TWO DIFFERENT REASONS FOR A BLOCK — do not conflate them:
-#
-#   * CORRECT BLOCKS, nothing here is available to relax (19-a..19-g): each row
-#     is a spelling bash expands ONTO the protected basename. Verified by
-#     construction: every one is the real marker/token name with its last
-#     character (or one interior character) re-spelled.
-#   * PRE-EXISTING GLOB VERDICT, not a round-9 row (19-x1/19-x2): `…-of[f]` and
-#     `…-of*` were BLOCK before this fix and are asserted here only so the new
-#     candidate enumeration cannot silently change them. They are correct: a
-#     glob that commits literal characters into the protected suffix can expand
-#     onto the real file.
-#   * ACCEPTED OVER-BLOCK — deliberately fail closed (19-o1, and the over-cap
-#     assertion in the unit probe): `$'…\X66'` uses an UPPERCASE `\X`, which
-#     bash does NOT decode (it yields the literal `\X66`), while the shared
-#     decoder does. That is widening in the detection direction, so it stands;
-#     do not "fix" it by narrowing the decoder. Likewise a brace pattern whose
-#     expansion exceeds MAX_CANDIDATE_SPELLINGS answers "hit" rather than
-#     finishing, which costs a legitimate `touch f{1..5000}.txt` a block.
-#
-# THE BOUNDARY IS PINNED BY THE ALLOW ROWS (CPR-ORTH). The normalizer runs on every
-# write target in every command, so a widener that widens too far is a different
-# and equally real defect:
-#   19-nr1  bash fidelity — a single brace element with no comma and no `..` is
-#           NOT a brace expansion in bash (`{x}` stays literal), so `<mk>{x}` is
-#           NOT the marker and must not be treated as it
-#   19-nr2  a `$'…'` with no escape sequences at all
-#   19-nr3  an uppercase spelling of an ordinary name
-#   19-nr4  a `~/…` form   19-nr5  a backslash-bearing path
-#   19-nr6/19-nr7  ordinary brace and ANSI-C writes outside the workflow dir
-#
-# Table format and placeholders: see ./cases-round6-stdin.sh. This file adds
-# three more, because the payloads must SPLIT the protected basename apart:
-#   @SID@   -> the sandbox session id
-#   @MK1@   -> the marker basename MINUS its last character
-#   @TOK1@  -> the token basename MINUS its last character
-
-# _run_r9_table <section>: ./cases-round6-stdin.sh's runner plus the three
-# placeholders above. Process substitution (not a pipe) keeps the runner in THIS
-# shell, so its PASS/FAIL increments survive.
+# Round-9 HIGH-2: brace expansion (`…-of{f..f}`, `…-{off,off}`) and ANSI-C (`$'…\x66'`)
+# CREATE the protected basename — a one-command forge, since session-markers.js trusts
+# existence. 19-a..g are correct blocks; 19-x1/x2 the pre-existing glob verdict; 19-o1
+# (uppercase `\X`) and the over-cap probe are accepted fail-closed over-blocks. The
+# 19-nr* allow rows pin the boundary (CPR-ORTH); since #2434 they target @ODIR@, as the
+# strict placement guard blocks every write under @DIR@. Placeholders beyond round-6's:
+# @SID@ session id, @MK1@/@TOK1@ marker/token basename minus its last character.
+# _run_r9_table uses process substitution so PASS/FAIL increments stay in this shell.
 _r9_expand() {
     local t="$1"
     t="${t//@MK1@/$SID.workflow-of}"
@@ -95,9 +43,9 @@ run_R9_brace_ansi_boundary() {
 19-x1 pre-existing glob class [f]|block|echo x > @DIR@/@MK1@[f]
 19-x2 pre-existing glob star|block|echo x > @DIR@/@MK1@*
 19-o1 over-block: uppercase \X is not bash|block|echo x > $'@DIR@/@MK1@\X66'
-19-nr1 bash fidelity: {x} is literal|approve|echo x > @DIR@/@MK@{x}
-19-nr2 ANSI-C with no escapes|approve|echo x > $'@DIR@/plain.txt'
-19-nr3 uppercase ordinary name|approve|echo x > @DIR@/PLAIN.TXT
+19-nr1 bash fidelity: {x} is literal|approve|echo x > @ODIR@/@MK@{x}
+19-nr2 ANSI-C with no escapes|approve|echo x > $'@ODIR@/plain.txt'
+19-nr3 uppercase ordinary name|approve|echo x > @ODIR@/PLAIN.TXT
 19-nr4 tilde form, ordinary name|approve|echo x > ~/protmark-plain.txt
 19-nr5 backslash-bearing path|approve|echo x > /tmp/a\b.txt
 19-nr6 ordinary brace outside wf|approve|echo x > /tmp/{a,b}

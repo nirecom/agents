@@ -62,13 +62,13 @@ if (!ok) {
 try {
   const path = require("path");
   const { appendHandoffEntryIfActive } = require("../hooks/lib/handoff-gated-append");
-  const { getWorkflowPlansDir } = require("../hooks/lib/workflow-plans-dir");
+  const { getSessionControlDir } = require("../hooks/workflow-state/state-io/control-dir");
   appendHandoffEntryIfActive(rawSid, {
     cls: "E",
     step: "-",
     key: "supervisor-reported",
     summary: `supervisor report filed by ${reporter}: ${categories.join(",")} / ${severity}`,
-    pointer: path.join(getWorkflowPlansDir(), `${rawSid}-supervisor-state.json`),
+    pointer: path.join(getSessionControlDir(rawSid), "supervisor-state.json"),
     origin: "procedure-point",
   });
 } catch (_e) { /* fail-open: a lost breadcrumb is not a failed report */ }

@@ -18,9 +18,7 @@ const {
 } = require("../../lib/protected-basenames");
 const { hasGlobMetachar } = require("../../lib/basename-glob-normalize");
 const { resolvesUnder } = require("../../lib/path-containment");
-// The SAME static expander marker-gate.js and scope-checks.js already use for
-// $HOME / ~ (CPR-SSOT) — one spelling of "what does this directory resolve to".
-const { expandStaticShellTokens } = require("../../lib/bash-write-targets/helpers");
+const { expandForDetection } = require("../../lib/bash-write-targets/detection-expand");
 const { substituteAssignments, EXPANSION_CHAR_RE } = require("./substitute");
 
 // A `NAME=value` prefix on an argv token is an OPERAND, not a path component
@@ -53,49 +51,36 @@ function pathSpellings(rawText) {
   return unquoted === folded ? [unquoted] : [unquoted, folded];
 }
 
-// resolveDirSpelling(dir, workflowDir): the directory a target's dirname
-// actually names, with `~`, `$HOME`/`${HOME}` and `$CLAUDE_WORKFLOW_DIR`
-// resolved. Returns the input unchanged when nothing could be resolved.
-//
-// DIRECTION DISCIPLINE: this runs in the DETECTION direction — its only consumer
-// asks "does this directory land inside the workflow dir?", where resolving one
-// more spelling can only ADD a block. Bailing on the first `$`/`~` used to let
-// every natural spelling of the workflow dir bypass a rule the literal spelling
-// enforced; bailing is now reserved for spellings that survive expansion.
-const ENV_REF_RE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
-const WORKFLOW_DIR_ENV_NAME = "CLAUDE_WORKFLOW_DIR";
-
-function resolveDirSpelling(dir, workflowDir) {
+// resolveDirSpelling(dir): the directory a target's dirname actually names, resolved in the
+// DETECTION direction by the one alias expander (detection-expand.js, CPR-SSOT). A spelling
+// it cannot fully place comes back unchanged, so the caller's UNRESOLVABLE_DIR_RE check sees it.
+function resolveDirSpelling(dir) {
   if (typeof dir !== "string" || dir === "") return dir;
-  let out = dir;
-  if (out[0] === "~" || out.includes("$")) {
-    try {
-      const expanded = expandStaticShellTokens(out, { fromQuotedContext: "unquoted" });
-      if (typeof expanded === "string" && expanded !== "") out = expanded;
-    } catch (_e) { /* fail-soft: keep the literal spelling and let the caller decide */ }
+  if (dir[0] !== "~" && !dir.includes("$")) return dir;
+  try {
+    const d = expandForDetection(dir);
+    if (!d.aliasUnresolved && !d.dynamicTail && typeof d.path === "string" && d.path !== "") return d.path;
+  } catch (_e) { /* fail-soft: keep the literal spelling and let the caller decide */ }
+  return dir;
+}
+
+// dirSpellingFailsClosed(dir): true when the directory is spelled through a known alias
+// (HOME / workflow dir / plans dir) with an operator that cannot be placed (`:+`, `#`, ...).
+// Such a directory may be the workflow dir, so the containment predicates treat it as inside.
+function dirSpellingFailsClosed(dir) {
+  if (typeof dir !== "string" || !dir.includes("$")) return false;
+  try {
+    return expandForDetection(dir).aliasUnresolved === true;
+  } catch (_e) {
+    return true;
   }
-  // expandStaticShellTokens is scoped to $HOME / ~ / the plans dir, so the one
-  // env var that NAMES this very directory is resolved here — from the resolved
-  // workflow dir itself (CPR-SSOT: getWorkflowDir is the SSOT), falling back to the
-  // process environment for any other variable whose value is a plain path.
-  if (out.includes("$")) {
-    out = out.replace(ENV_REF_RE, (m, braced, bare) => {
-      const name = braced || bare;
-      const value = name === WORKFLOW_DIR_ENV_NAME
-        ? (workflowDir || resolveWorkflowDir() || process.env[name])
-        : process.env[name];
-      if (typeof value !== "string" || value === "" || UNRESOLVABLE_DIR_RE.test(value)) return m;
-      return value;
-    });
-  }
-  return out;
 }
 
 // resolveAgainstCwd(p, ctx): `p` as an absolute path, or null when it cannot be
 // made absolute (still dynamic, or relative with no known cwd). One spelling of
 // the resolution step both qualifiers below need (CPR-SSOT).
-function resolveAgainstCwd(p, ctx, wfDir) {
-  let out = resolveDirSpelling(p, wfDir);                // ~ / $HOME / $CLAUDE_WORKFLOW_DIR
+function resolveAgainstCwd(p, ctx) {
+  let out = resolveDirSpelling(p);                       // ~ / $HOME / workflow-dir / plans-dir aliases
   if (UNRESOLVABLE_DIR_RE.test(out)) return null;        // STILL dynamic or itself a glob
   if (!path.isAbsolute(out) && !WIN_ABS_RE.test(out)) {
     if (!ctx || !ctx.cwd) return null;                   // unresolvable → prior behavior
@@ -123,7 +108,9 @@ function targetBaseInsideWorkflowDir(rawText, ctx, baseIsSuspect) {
     const cut = Math.max(stripped.lastIndexOf("/"), stripped.lastIndexOf("\\"));
     const base = cut === -1 ? stripped : stripped.slice(cut + 1);
     if (!baseIsSuspect(base)) continue;
-    const dir = resolveAgainstCwd(cut === -1 ? "." : (stripped.slice(0, cut) || "/"), ctx, wfDir);
+    const dirText = cut === -1 ? "." : (stripped.slice(0, cut) || "/");
+    if (dirSpellingFailsClosed(dirText)) return true;
+    const dir = resolveAgainstCwd(dirText, ctx);
     if (dir === null) continue;
     // allowEqual: true — a target whose directory IS the workflow dir
     // (`<wf>/s1*`, `<wf>/s1.workflow$(…)`) is exactly the case this exists for.
@@ -164,7 +151,7 @@ function textNamesPathInsideWorkflowDir(text, ctx) {
   for (const fragment of fragments) {
     const stripped = fragment.replace(OPERAND_PREFIX_RE, "");
     if (stripped === "" || stripped === "/" || stripped === "\\") continue;
-    const resolved = resolveAgainstCwd(stripped, ctx, wfDir);
+    const resolved = resolveAgainstCwd(stripped, ctx);
     if (resolved === null) continue;
     // onUnknown: true — same detection-direction reasoning as above.
     if (resolvesUnder(resolved, wfDir, { allowEqual: true, onUnknown: true })) return true;
@@ -234,6 +221,7 @@ function classifyBashWriteTarget(raw, assignText, ctx) {
 module.exports = {
   resolveWorkflowDir,
   resolveDirSpelling,
+  dirSpellingFailsClosed,
   WIN_ABS_RE,
   globTargetInsideWorkflowDir,
   dynamicTargetInsideWorkflowDir,

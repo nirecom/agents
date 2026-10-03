@@ -1,7 +1,7 @@
-# tests/bin/fix-2025-safe-plans-path/containment.sh
-# Tests: bin/lib/safe-plans-path.sh
-# Tags: safe-plans-path, path-traversal, containment, symlink, security, scope:issue-specific, pwsh-not-required
-# Sourced by tests/bin/fix-2025-safe-plans-path.sh.
+# tests/bin/fix-2025-safe-state-path/containment.sh
+# Tests: bin/lib/safe-state-path.sh
+# Tags: safe-state-path, path-traversal, containment, symlink, security, scope:issue-specific, pwsh-not-required
+# Sourced by tests/bin/fix-2025-safe-state-path.sh.
 
 echo ""
 echo "--- sp 4: sp_within_dir — containment after resolution ---"
@@ -42,6 +42,13 @@ echo "--- sp 4b: the caller that owns a destructive step — finalize --ledger -
 #     --ledger names that file with no address validation of its own, so an
 #     out-of-bounds override is a delete outside the plans dir (#2025 C3/C6/C8).
 #     Both verdicts are asserted: refused outside, performed inside.
+#     #2434: the ledger, its snapshot and unresolved-concerns.json are control
+#     files, so "inside" is now the session's control dir
+#     ($CLAUDE_WORKFLOW_DIR/<sid>.control/); --plans-dir keeps only the
+#     concerns-log artifacts.
+
+# ctl <sid> — the control dir finalize derives from --session-id.
+ctl() { printf '%s/%s.control' "$CLAUDE_WORKFLOW_DIR" "$1"; }
 
 # fin <plans> <ledger> <mode> <sid> — the real CLI, one finalize. Echoes its rc.
 fin() {
@@ -86,7 +93,7 @@ state() {
         "ledger=kept bytes=$BYTES snapshot=none" "$(state "$OUT_LED")"
     assert_eq "4b: and finalize still produced its artifact, so this is a refusal not a crash" \
         "rc=0 artifact=1" \
-        "rc=$RC_ESC artifact=$(find "$F/plans" -name 'sid4bA-*-unresolved-concerns.json' | wc -l | tr -d ' ')"
+        "rc=$RC_ESC artifact=$(find "$(ctl sid4bA)" -name '*-unresolved-concerns.json' 2>/dev/null | wc -l | tr -d ' ')"
 
     # Direction 2 — the same override under the non-destructive mode. terminal
     # never snapshots or deletes, so it must leave the file alone for a second
@@ -111,13 +118,14 @@ state() {
     fi
 
     # Direction 4 — the sanctioned case. The same command over a ledger that is
-    # really inside the plans dir must snapshot it and then delete it.
-    IN_LED="$F/plans/sid4bD-review-security-shared-concern-ledger.txt"
+    # really inside the session's control dir must snapshot it and then delete it.
+    mkdir -p "$(ctl sid4bD)"
+    IN_LED="$(ctl sid4bD)/review-security-shared-concern-ledger.txt"
     mk_led "$IN_LED"
     RC_IN="$(fin "$F/plans" "$IN_LED" escalate sid4bD)"
-    assert_eq "4b: an in-plans --ledger is snapshotted and then deleted" \
+    assert_eq "4b: an in-control-dir --ledger is snapshotted and then deleted" \
         "rc=0 ledger=deleted bytes=0 snapshot=created" \
         "rc=$RC_IN $(state "$IN_LED")"
     assert_eq_nz "4b: and the snapshot carries the entries the ledger held" \
-        "2" "$(grep -c '^C[0-9]' "$F/plans/sid4bD-review-security-shared-concern-ledger-cap-snapshot.txt" 2>/dev/null | tr -d ' ')"
+        "2" "$(grep -c '^C[0-9]' "$(ctl sid4bD)/review-security-shared-concern-ledger-cap-snapshot.txt" 2>/dev/null | tr -d ' ')"
 }

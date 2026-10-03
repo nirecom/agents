@@ -13,6 +13,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { hasShellMetachar } = require("../../hooks/lib/worktree-notes.js");
+const { controlPath, diagnoseControlMigration } = require("../../hooks/workflow-state/state-io/control-dir");
 
 // SSOT for the callsites allowed to drive the promotion protocol.
 const CALLERS = ["worktree-end", "session-close", "issue-close-finalize"];
@@ -99,14 +100,15 @@ function viaWorktree(opts) {
   return notesIn(opts.worktree);
 }
 
-// --- branch 2: <plans>/<sid>-final-report-env.json -------------------------
-function viaEnvJson(opts, plansDir) {
+// --- branch 2: <session control dir>/final-report-env.json -----------------
+function viaEnvJson(opts) {
   if (!isSafeSessionId(opts.sessionId)) return null;
-  const envFile = path.join(plansDir, `${opts.sessionId}-final-report-env.json`);
   let parsed;
   try {
+    const envFile = controlPath(opts.sessionId, "final-report-env.json");
     parsed = JSON.parse(fs.readFileSync(envFile, "utf8"));
   } catch (e) {
+    diagnoseControlMigration(e, "worktree-notes-triage");
     return null;
   }
   const raw = parsed && parsed.NOTES_BACKUP_PATH;
@@ -196,7 +198,7 @@ function decide(opts) {
   const plansDir = resolvePlansDir(opts);
   const chain = [
     ["worktree", () => viaWorktree(opts)],
-    ["env-json", () => viaEnvJson(opts, plansDir)],
+    ["env-json", () => viaEnvJson(opts)],
     ["notes-backup-dir", () => viaNotesBackupDir(opts, plansDir)],
     ["backup-branch-dir", () => viaBackupBranchDir(opts)],
     ["intent-scan", () => viaIntentScan(opts, plansDir)],

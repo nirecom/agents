@@ -4,6 +4,7 @@
 # Sourced by tests/bin/feature-603-run-codex-review-loop.sh.
 # Cases 12-15: required-argument and draft-file validation, context-build marker idempotency, and stdout passthrough.
 
+case_begin "arg-validation-and-context-build" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 12. Missing required arg --format → exit 4
 # ---------------------------------------------------------------------------
@@ -57,8 +58,12 @@ exit 0
 COUNTER_EOF
   chmod +x "$MOCK/bin/build-codex-context"
 
-  # Pre-create the marker file (#866: flat under PLANS_DIR, renamed -codex-context.*)
-  touch "$PLANS/sid14-codex-context.detail-plan.built"
+  # Pre-create the marker file (#2434: control dir, no sid prefix). setup_plans_dir runs
+  # in a command substitution, so its CLAUDE_WORKFLOW_DIR export never reaches this shell;
+  # name the fixture's state dir explicitly and hand it to the wrapper below.
+  WF14="$TMP/workflow-state"
+  mkdir -p "$WF14/sid14.control"
+  touch "$WF14/sid14.control/codex-context.detail-plan.built"
 
   make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
 ## Codex Review: PERFORMED
@@ -68,7 +73,7 @@ APPROVED
 <!-- end-codex-output -->
 OUT
 )"
-  invoke_wrapper "$MOCK" --format detail-plan --session-id sid14 --plans-dir "$PLANS" \
+  CLAUDE_WORKFLOW_DIR="$WF14" invoke_wrapper "$MOCK" --format detail-plan --session-id sid14 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
@@ -105,3 +110,4 @@ OUT
     fail "15: stdout passthrough missing begin-codex-output (exit=$rc)"
   fi
 }
+case_end

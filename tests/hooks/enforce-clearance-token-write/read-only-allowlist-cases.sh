@@ -184,8 +184,9 @@ CL-allow2 node -e bare readFileSync(claim) is a read     | approve | node -e "re
 # TL3 gap: Phase 2 human review is the final line of defense.
 # MARKER_MENTION_RE has had this gap from the start, and this row pins that the token side has
 # now become symmetric with the marker side (CPR-ORTH). If Tier-2 ever gains the ability to
-# de-obfuscate concatenation, flip this expected value to block.
-CL-concat node -e writeFileSync('/wf/wsid.' + 'off-clearance') | approve | node -e "require('fs').writeFileSync('@DIR@/wsid.' + 'off-clearance','x')"
+# de-obfuscate concatenation, flip this expected value to block. The prefix sits outside the
+# workflow dir: under it, the #2434 placement guard blocks any write regardless of the name.
+CL-concat node -e writeFileSync('/wf/wsid.' + 'off-clearance') | approve | node -e "require('fs').writeFileSync('/tmp/elsewhere/wsid.' + 'off-clearance','x')"
 # --- READONLY_BODY_SHAPES alternation, the members RD-ro1/RD-ro2 leave untouched. The ---
 # --- bare node shape accepts readFileSync|existsSync|readdirSync|statSync and the bare ---
 # --- python shape makes .read() optional; a member dropped from either alternation ---

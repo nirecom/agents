@@ -3,14 +3,8 @@
 # Tests: bin/github-issues/clarify-commit-scope.sh
 # Tags: clarify-intent, github, issues, scan-outbound, security, scope:issue-specific, layer:TL2
 #
-# Issue #1591 — clarify-commit-scope Path C composes the intent Title+Body into a
-# temp file, runs gh_outbound_guard "$INTENT_PATH" < tmp, and on block writes the
-# reason to a sidecar <PLANS_DIR>/<sid>-intent-scan-block.txt (the caller discards
-# stderr), prints SCAN_BLOCKED, exits 2. On success it calls gh issue create with
-# --title = Title line and --body = Background+Scope only.
-#
-# RED until /write-code creates gh-outbound-guard.sh + intent-to-issue.sh and
-# rewrites Path C.
+# #1591 Path C: outbound-scan block -> sidecar <control dir>/intent-scan-block.txt (#2434),
+# SCAN_BLOCKED, exit 2; success -> gh issue create with Title and Background+Scope only.
 
 set -u
 
@@ -36,6 +30,7 @@ run_with_timeout() {
 
 TMP=""
 SID="sid-test-1591"
+unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
 
 setup() {
     TMP="$(mktemp -d)"
@@ -56,14 +51,23 @@ esac
 exit 0
 MOCKGH
     chmod +x "$TMP/mock-bin/gh"
-    export PATH="$TMP/mock-bin:$PATH"
+    # msys-form PATH entry: a C:/ TMPDIR splits at ':' and drops the mock, reaching real gh.
+    local mock_bin="$TMP/mock-bin"
+    command -v cygpath >/dev/null 2>&1 && mock_bin="$(cygpath -u "$mock_bin")"
+    export PATH="$mock_bin:$PATH"
+    if ! [ "$(command -v gh 2>/dev/null)" -ef "$mock_bin/gh" ]; then
+        echo "FATAL: gh does not resolve to the mock ($(command -v gh 2>/dev/null)); aborting before any real gh call"
+        exit 1
+    fi
     export AGENTS_CONFIG_DIR="$TMP/acd"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
+    export CLAUDE_WORKFLOW_DIR="$TMP/wf"
+    mkdir -p "$CLAUDE_WORKFLOW_DIR"
 }
 
 teardown() {
     [ -n "${TMP:-}" ] && [ -d "$TMP" ] && rm -rf "$TMP" 2>/dev/null || true
-    unset MOCK_LOG_DIR WORKFLOW_PLANS_DIR 2>/dev/null || true
+    unset MOCK_LOG_DIR WORKFLOW_PLANS_DIR CLAUDE_WORKFLOW_DIR 2>/dev/null || true
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
@@ -123,7 +127,7 @@ OUT=$(run_with_timeout 20 bash "$CCS" \
     --session-id "$SID" --plans-dir "$TMP/plans" --issues "" 2>/dev/null)
 RC=$?
 GH=$(cat "$TMP/gh-calls.log" 2>/dev/null || true)
-SIDECAR="$TMP/plans/${SID}-intent-scan-block.txt"
+SIDECAR="$CLAUDE_WORKFLOW_DIR/${SID}.control/intent-scan-block.txt"
 if [ "$RC" -eq 2 ] \
     && echo "$OUT" | grep -q "SCAN_BLOCKED" \
     && [ -s "$SIDECAR" ] \

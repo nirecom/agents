@@ -5,9 +5,17 @@
 
 const { classifyProtectedPath } = require("../lib/protected-basenames");
 const { isEditWriteTool, isCommandTool, collectEditWritePaths } = require("../lib/write-tools");
+const { isPowerShellTool } = require("../lib/tool-command-text");
 const { scannableCommandListOf } = require("../lib/scannable-command-list");
 const { bashHitsProtected } = require("./bash-scan");
 const { OFF_CLEARANCE_INVOCATION } = require("../lib/off-clearance-invocation");
+const { PLACEMENT_MESSAGES, classifyPlacement, classifyBashPlacement } = require("./placement-guard");
+const { isWorkflowOff } = require("../lib/session-markers");
+
+function placementCtx(sessionCtx) {
+  const sid = sessionCtx && typeof sessionCtx.sessionId === "string" ? sessionCtx.sessionId : undefined;
+  return { sid, workflowOff: sid !== undefined && isWorkflowOff(sid) };
+}
 
 // The invitation, spelled once (CPR-SSOT): three block messages below quote it,
 // and #1821 is exactly the bug where one copy drifts into a spelling the mention
@@ -76,6 +84,7 @@ const UNPARSED_PREFIX = [
 ].join("\n");
 
 function blockMessageFor(kind) {
+  if (Object.prototype.hasOwnProperty.call(PLACEMENT_MESSAGES, kind)) return PLACEMENT_MESSAGES[kind];
   if (kind === "unparsed-marker") return UNPARSED_PREFIX + MARKER_BLOCK_MSG;
   if (kind === "unparsed-token") return UNPARSED_PREFIX + TOKEN_BLOCK_MSG;
   if (kind === "marker") return MARKER_BLOCK_MSG;
@@ -97,8 +106,9 @@ function evaluateProtectedWrite(toolName, toolInput, sessionCtx) {
     // spelling:"clean" — an Edit/Write file_path never passed through a shell, so
     // the stem is exactly as written and an EXACT sid match is the right test
     // (#2108). The Bash branch below keeps the broader tail match.
+    const pctx = placementCtx(sessionCtx);
     for (const p of collectEditWritePaths(toolInput)) {
-      const kind = classifyProtectedPath(p, { sessionCtx, spelling: "clean" });
+      const kind = classifyProtectedPath(p, { sessionCtx, spelling: "clean" }) || classifyPlacement(p, pctx);
       if (kind) return { kind, reason: blockMessageFor(kind) };
     }
     return null;
@@ -106,9 +116,10 @@ function evaluateProtectedWrite(toolName, toolInput, sessionCtx) {
   // runCommands delivers an ARRAY under `commands`, not a string under
   // `command` (a scalar `.command` is still scanned). Joining with "\n" scans a
   // write in commands[1] as its own statement, not glued onto commands[0].
-  if (isCommandTool(toolName)) {
+  if (isCommandTool(toolName) || isPowerShellTool(toolName)) {
     const text = scannableCommandListOf(toolName, toolInput).join("\n");
-    const kind = bashHitsProtected(text, { cwd: toolInput.cwd, sessionCtx });
+    const kind = bashHitsProtected(text, { cwd: toolInput.cwd, sessionCtx })
+      || classifyBashPlacement(text, { cwd: toolInput.cwd, sessionCtx, ...placementCtx(sessionCtx) });
     return kind ? { kind, reason: blockMessageFor(kind) } : null;
   }
   return null;

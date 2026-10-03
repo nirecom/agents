@@ -6,7 +6,7 @@
 # implements the anchor-vs-eligibility split.
 #
 # # L3 gap
-# L2 here exercises the writer module with a real tmpdir-backed WORKFLOW_PLANS_DIR.
+# L2 here exercises the writer module with a real tmpdir-backed CLAUDE_WORKFLOW_DIR.
 # Real Stop-hook firing under a live `claude -p` session is covered separately
 # (feature-1027-stop-l2-findings-display.sh, RUN_TL3-gated).
 
@@ -41,12 +41,21 @@ require_source() {
     return 0
 }
 
+# The final-report-env.json anchor lives in the session control dir (#2434).
+seed_anchor() {
+    local tmp="$1" sid="$2"
+    CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
+const cd = require('$_AGENTS_DIR_NODE/hooks/workflow-state/state-io/control-dir.js');
+require('fs').writeFileSync(cd.controlPath('$sid', 'final-report-env.json', { forWrite: true }), '');
+" >/dev/null 2>&1
+}
+
 # --- W1: writeAlertState accepts findings_surfaced_at + alert_eligible_phase ---
 run_w1() {
     require_source "$WRITER_SRC" "W1: writeAlertState accepts new keys" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.writeAlertState('w1-sid', { findings_surfaced_at: '2026-06-21T02:00:00Z', alert_eligible_phase: 'post_final_report_window' });
 if (!ok) { console.error('write returned false'); process.exit(2); }
@@ -69,15 +78,14 @@ run_w2() {
     require_source "$WRITER_SRC" "W2: anchor + null eligibility -> arm skipped" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    # create anchor file
-    : > "$tmp/w2-sid-final-report-env.json"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    seed_anchor "$tmp" "w2-sid"
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('w2-sid');
 st.alert.alert_eligible_phase = null;
-fs.writeFileSync(w.getStatePath('w2-sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('w2-sid', { forWrite: true }), JSON.stringify(st));
 w.ensureAlertScheduled(st, 'w2-sid');
 if (st.alert.alert_armed_at !== null) { console.error('arm fired despite anchor'); process.exit(2); }
 " >/dev/null 2>&1
@@ -95,14 +103,14 @@ run_w3() {
     require_source "$WRITER_SRC" "W3: anchor + post_final_report_window eligibility -> arm fires" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    : > "$tmp/w3-sid-final-report-env.json"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    seed_anchor "$tmp" "w3-sid"
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('w3-sid');
 st.alert.alert_eligible_phase = 'post_final_report_window';
-fs.writeFileSync(w.getStatePath('w3-sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('w3-sid', { forWrite: true }), JSON.stringify(st));
 w.ensureAlertScheduled(st, 'w3-sid');
 if (st.alert.alert_armed_at === null) { console.error('arm did not fire under eligibility'); process.exit(2); }
 if (st.alert.alert_phase !== 'pending') { console.error('phase not set to pending'); process.exit(3); }
@@ -121,12 +129,12 @@ run_w4() {
     require_source "$WRITER_SRC" "W4: anchor absent + null eligibility -> arm proceeds (baseline)" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('w4-sid');
-fs.writeFileSync(w.getStatePath('w4-sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('w4-sid', { forWrite: true }), JSON.stringify(st));
 w.ensureAlertScheduled(st, 'w4-sid');
 if (st.alert.alert_armed_at === null) { console.error('arm did not fire baseline'); process.exit(2); }
 " >/dev/null 2>&1
@@ -144,14 +152,14 @@ run_w5() {
     require_source "$WRITER_SRC" "W5: alert_phase=done overrides eligibility" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('w5-sid');
 st.alert.alert_phase = 'done';
 st.alert.alert_eligible_phase = 'post_final_report_window';
-fs.writeFileSync(w.getStatePath('w5-sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('w5-sid', { forWrite: true }), JSON.stringify(st));
 w.ensureAlertScheduled(st, 'w5-sid');
 if (st.alert.alert_armed_at !== null) { console.error('arm fired despite done'); process.exit(2); }
 " >/dev/null 2>&1
@@ -169,7 +177,7 @@ run_w6() {
     require_source "$WRITER_SRC" "W6: legacy state without new fields validates" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -183,7 +191,7 @@ const st = {
   alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_cause: null, alert_retry_count: 0 },
   audit: {},
 };
-fs.writeFileSync(w.getStatePath('w6-sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('w6-sid', { forWrite: true }), JSON.stringify(st));
 const r = s.validate(st);
 if (!r.ok) { console.error('legacy state failed validate: ' + r.errors.join(';')); process.exit(2); }
 const ok = w.writeAlertState('w6-sid', { alert_eligible_phase: 'post_final_report_window' });
@@ -206,13 +214,13 @@ run_w7() {
     local tmp rc
     tmp="$(mktemp -d)"
     # No anchor file created.
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('w7-sid');
 st.alert.alert_eligible_phase = 'post_final_report_window';
-fs.writeFileSync(w.getStatePath('w7-sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('w7-sid', { forWrite: true }), JSON.stringify(st));
 w.ensureAlertScheduled(st, 'w7-sid');
 if (st.alert.alert_armed_at === null) { console.error('arm did not fire (anchor absent + eligibility)'); process.exit(2); }
 if (st.alert.alert_phase !== 'pending') { console.error('phase not set to pending'); process.exit(3); }

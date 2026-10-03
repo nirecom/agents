@@ -6,17 +6,17 @@ Implementation: `bin/lib/concern-ledger.sh`, reached through `bin/concern-ledger
 
 ## Files
 
-All paths derive from (`<PLANS_DIR>`, `<session-id>`, `<format>`) — no caller passes one in.
+All paths derive from (`<session-id>`, `<format>`) — no caller passes one in. `<CTL>` is the session control dir `<CLAUDE_WORKFLOW_DIR>/<session-id>.control/`; only the prose diagnostic stays in `<PLANS_DIR>`.
 
 | File | Purpose |
 |---|---|
-| `<session-id>-<format>-concern-ledger.txt` | The ledger itself |
-| `<session-id>-<format>-round-number.txt` | Round counter, one decimal integer |
-| `<session-id>-<format>-round-<N>-delta-<producer>.txt` | One producer's staged round output |
-| `<session-id>-<format>-concern-ledger-cap-snapshot.txt` | Ledger as it stood when the cap was reached |
-| `<session-id>-<format>-unresolved-concerns.json` | Finalize artifact, schema `unresolved-concerns/v1` |
-| `<session-id>-<format>-finalize-diagnostic.txt` | Why a finalize failed |
-| `<session-id>-<format>-concern-carrier.md` | DISCRIM-keyed carrier: open re-derived + rejected preserved, for `CTX_CONCERNS_LOG` |
+| `<CTL>/<format>-concern-ledger.txt` | The ledger itself |
+| `<CTL>/<format>-round-number.txt` | Round counter, one decimal integer |
+| `<CTL>/<format>-round-<N>-delta-<producer>.txt` | One producer's staged round output |
+| `<CTL>/<format>-concern-ledger-cap-snapshot.txt` | Ledger as it stood when the cap was reached |
+| `<CTL>/<format>-unresolved-concerns.json` | Finalize artifact, schema `unresolved-concerns/v1` |
+| `<PLANS_DIR>/<session-id>-<format>-finalize-diagnostic.txt` | Why a finalize failed |
+| `<CTL>/<format>-concern-carrier.md` | DISCRIM-keyed carrier: open re-derived + rejected preserved, for `CTX_CONCERNS_LOG` |
 
 Formats in use: `outline-plan`, `detail-plan`, `security-plan`, `test-review`, `review-security-shared`.
 
@@ -60,7 +60,7 @@ Resolution is by absence, and absence only counts when the round was complete �
 The rejection verdict lives in two places with different jobs, and the split is deliberate (CPR-SSOT).
 
 - The ledger's `rejected` STATE is a machine-readable flag for **within-cycle binding recognition only**. The rejection reason is NOT stored on the ledger row — the row stays 11 fields.
-- The `<session-id>-<format>-concern-carrier.md` carrier (append-only) is the durable transport for concerns **across rounds, cycles, and cleanup**, and the sole persistence point for rejection reasons. It qualifies as CPR-SSOT's excluded append-only stream record, not a second copy of ledger state.
+- The `<CTL>/<format>-concern-carrier.md` carrier (append-only) is the durable transport for concerns **across rounds, cycles, and cleanup**, and the sole persistence point for rejection reasons. It qualifies as CPR-SSOT's excluded append-only stream record, not a second copy of ledger state.
 - The carrier's entry key is the **DISCRIM** (field 7), never the `C<N>` ID. DISCRIM is recomputed deterministically from the concern text, so it survives `cleanup_ledger` deleting the ledger and `cl_begin_cycle` archive-and-clear renumbering IDs from C1 — the cross-cycle collision that caused the false re-open (#2185) is structurally gone.
 - STABILITY has two tiers. **Within-cycle** (ledger present): `rejected` STATE + B2 binding mechanically block a re-mint. **Cross-cleanup** (ledger deleted or archive-cleared): the carrier's rejected lines plus `CTX_CONCERNS_LOG` are passed to the reviewer as reference — this depends on the LLM honoring the prompt, not on a mechanical block. The carrier key carries transport, not recognition; recognition stays with B1/B2.
 - `cl_begin_cycle`'s archive-and-clear model is unchanged by this. The carrier's open section is a derived view re-generated each round from the ledger; the only durable record it preserves is the rejected lines.
@@ -141,7 +141,7 @@ A review that silently drops findings because a scanner crashed is the failure t
 
 ## Finalize
 
-When a review ends without converging, `concern-ledger finalize` writes the still-open concerns to `<session-id>-<format>-unresolved-concerns.json` (schema `unresolved-concerns/v1`, terminated by an `"eof"` marker) and snapshots the ledger.
+When a review ends without converging, `concern-ledger finalize` writes the still-open concerns to `<CTL>/<format>-unresolved-concerns.json` (schema `unresolved-concerns/v1`, terminated by an `"eof"` marker) and snapshots the ledger.
 
 `concern-ledger check-finalized` re-reads that artifact and verifies four things: it exists and is non-empty, its round matches, its schema string is present, and its terminator is intact. Exit 1 means the artifact cannot be trusted.
 

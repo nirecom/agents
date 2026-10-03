@@ -10,7 +10,8 @@
 
 const path = require("path");
 const { execSync, execFileSync } = require("child_process");
-const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
+const { getPlansArtifactPath } = require("../lib/plans-artifact-registry");
+const { controlPath, diagnoseControlMigration } = require("./state-io/control-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
 const { hasStagedDocChanges, hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
 const { hasWorktreeNotesDocEvidence } = require("../workflow-gate/worktree-context");
@@ -44,10 +45,12 @@ function hasCommittedTestChanges(repoDir) {
 // "the loop reached a terminal verdict" — draft existence alone is not proof
 // of approval, since outline.md/detail.md is the same file the planner
 // overwrites on every revision round.
-function hasUnresolvedReviewCycle(plansDir, sessionId, format) {
+// A legacy file that cannot be migrated throws ControlMigrationError, which the
+// caller's fail-open catch diagnoses on stderr and turns into "no evidence" (never a legacy-path read).
+function hasUnresolvedReviewCycle(sessionId, format) {
   const fs = require("fs");
-  const roundFile = path.join(plansDir, sessionId + "-" + format + "-round-number.txt");
-  const ledgerFile = path.join(plansDir, sessionId + "-" + format + "-concern-ledger.txt");
+  const roundFile = controlPath(sessionId, format + "-round-number.txt");
+  const ledgerFile = controlPath(sessionId, format + "-concern-ledger.txt");
   return fs.existsSync(roundFile) || fs.existsSync(ledgerFile);
 }
 
@@ -72,7 +75,7 @@ function hasPlanArtifact(step, sessionId) {
   if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
   try {
     const fs = require("fs");
-    return fs.existsSync(path.join(getWorkflowPlansDir(), sessionId + "-" + suffix + ".md"));
+    return fs.existsSync(getPlansArtifactPath(sessionId, suffix));
   } catch (e) {
     return false;
   }
@@ -129,11 +132,11 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
     }
     if (step === "outline") {
       if (!hasPlanArtifact("outline", sessionId)) return false;
-      return !hasUnresolvedReviewCycle(getWorkflowPlansDir(), sessionId, "outline-plan");
+      return !hasUnresolvedReviewCycle(sessionId, "outline-plan");
     }
     if (step === "detail") {
       if (!hasPlanArtifact("detail", sessionId)) return false;
-      return !hasUnresolvedReviewCycle(getWorkflowPlansDir(), sessionId, "detail-plan");
+      return !hasUnresolvedReviewCycle(sessionId, "detail-plan");
     }
     if (step === "write_tests") {
       const repoDir = resolveRepoDir(opts);
@@ -146,6 +149,7 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
     // or the run_tests sentinel — never by staged-test evidence.
     return false;
   } catch (e) {
+    diagnoseControlMigration(e, "evidence-resolver");
     return false;
   }
 }

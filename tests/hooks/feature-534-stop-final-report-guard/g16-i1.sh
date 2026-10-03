@@ -11,7 +11,7 @@ test_G16_only_header_no_subheadings() {
     local plans_dir="$TMPDIR_BASE/g16-plans"
     mkdir -p "$plans_dir"
     local sid="g16-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local transcript="$TMPDIR_BASE/g16-transcript.jsonl"
@@ -52,7 +52,7 @@ test_G17_nine_of_ten_headings() {
     local plans_dir="$TMPDIR_BASE/g17-plans"
     mkdir -p "$plans_dir"
     local sid="g17-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local transcript="$TMPDIR_BASE/g17-transcript.jsonl"
@@ -119,7 +119,7 @@ test_G18_all_ten_reordered() {
     local plans_dir="$TMPDIR_BASE/g18-plans"
     mkdir -p "$plans_dir"
     local sid="g18-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local transcript="$TMPDIR_BASE/g18-transcript.jsonl"
@@ -182,7 +182,7 @@ test_G19_residual_tokens() {
     local plans_dir="$TMPDIR_BASE/g19-plans"
     mkdir -p "$plans_dir"
     local sid="g19-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local transcript="$TMPDIR_BASE/g19-transcript.jsonl"
@@ -257,7 +257,7 @@ test_G20_header_absent_no_block() {
     local plans_dir="$TMPDIR_BASE/g20-plans"
     mkdir -p "$plans_dir"
     local sid="g20-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
     printf '{"gate_action":"yield"}' > "$plans_dir/${sid}-session-close-gate.json"
 

@@ -174,7 +174,10 @@ check_c21m() {  # <id> <issue> <container-json-or-__DELETE__> <what> <answer>
     setup_case "wid-c2063-c21m$id"
     mock_issue "$n" CLOSED "type:task"
     set_wip "$n" same
-    ck="$PLANS/wid-c2063-c21m$id-wi-checkpoint.json"
+    # Staged where the driver keeps it (#2434): a legacy plans-dir copy is migrated
+    # away on the first control-dir write, so byte-identity could not be observed there.
+    ck="$(ctrl_file wi-checkpoint.json)"
+    mkdir -p "${ck%/*}"
     node -e '
 const fs = require("fs");
 const [p, n, sid, raw, ver] = process.argv.slice(1);
@@ -348,7 +351,7 @@ else
     else
         pass "C23: no credential from gh's stderr reaches stdout or stderr"
     fi
-    C23_LEAK="$(grep -rlF -- "$C23_SECRET" "$PLANS" 2>/dev/null | tr '\n' ' ')"
+    C23_LEAK="$(grep -rlF -- "$C23_SECRET" "$PLANS" "$WF" 2>/dev/null | tr '\n' ' ')"
     if [ -n "$C23_LEAK" ]; then
         fail "C23: gh's failure text leaked a credential into workflow artifacts: $C23_LEAK"
     else

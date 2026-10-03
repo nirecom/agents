@@ -10,7 +10,7 @@
 echo "--- D8: reject CLI — exit codes, ledger immutability, render integration ---"
 D8P="$TMPDIR_BASE/d8/plans"; mkdir -p "$D8P"
 D8S="sess-d8"; D8F="review-security-shared"
-D8L="$D8P/${D8S}-${D8F}-concern-ledger.txt"
+D8L="$(ledger_path_for "$D8P" "$D8S" "$D8F")"
 
 D8_T_R="sql injection in query builder module"
 D8_T_O="cross site scripting in template renderer"

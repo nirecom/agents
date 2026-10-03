@@ -12,6 +12,10 @@ set -uo pipefail
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 ERRORS=0
 
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_WORKTREE/tests/lib/harness.sh"
+
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
 
@@ -69,9 +73,9 @@ EOF
     cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$agents_dir/bin/lib/cli-exec-guard.sh"
   fi
 
-  # Copy safe-plans-path.sh + the concern-ledger CLI/library bundle (mandatory
+  # Copy safe-state-path.sh + the concern-ledger CLI/library bundle (mandatory
   # dependencies of run-codex-review-loop's preflight; see #2088/#2025)
-  cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
+  [[ -f "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" ]] && cp "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" "$agents_dir/bin/lib/safe-state-path.sh"
   cp "$AGENTS_WORKTREE/bin/concern-ledger" "$agents_dir/bin/concern-ledger"
   chmod +x "$agents_dir/bin/concern-ledger"
   cp "$AGENTS_WORKTREE/bin/lib/concern-ledger.sh" "$agents_dir/bin/lib/concern-ledger.sh"
@@ -218,20 +222,58 @@ TEST_REVIEWER_AGENT="$AGENTS_WORKTREE/agents/test-reviewer.md"
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(dirname "$0")/feature-1308-codex-review-allowlist"
 
+# #2434: control files live under $CLAUDE_WORKFLOW_DIR/<sid>.control/, so pin
+# both state roots to a fixture before any group drives the loop.
+STATE_ROOT=$(mktemp -d)
+trap 'rm -rf "$STATE_ROOT"' EXIT
+export CLAUDE_WORKFLOW_DIR="$STATE_ROOT/workflow-state"
+export WORKFLOW_PLANS_DIR="$STATE_ROOT/plans"
+mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+
+case_begin "safe-state-path-preflight" "bin/run-codex-review-loop"
+# The loop sources bin/lib/safe-state-path.sh (#2434 rename of safe-plans-path.sh);
+# name its absence once instead of leaving the groups below to cascade on exit 4.
+if [[ -f "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" ]]; then
+  pass "preflight: bin/lib/safe-state-path.sh present"
+else
+  fail "implementation missing: bin/lib/safe-state-path.sh (loop-driving cases below exit 4 until it exists)"
+fi
+case_end
+
+case_begin "group-a-allowlist" "bin/run-codex-review-loop"
 # shellcheck source=./feature-1308-codex-review-allowlist/group-a-allowlist.sh
 . "$SCRIPT_DIR/group-a-allowlist.sh"
+case_end
+
+case_begin "group-b-format-validation" "bin/review-plan-codex"
 # shellcheck source=./feature-1308-codex-review-allowlist/group-b-format-validation.sh
 . "$SCRIPT_DIR/group-b-format-validation.sh"
+case_end
+
+case_begin "group-c-static-defaults" "bin/run-codex-review-loop"
 # shellcheck source=./feature-1308-codex-review-allowlist/group-c-static-defaults.sh
 . "$SCRIPT_DIR/group-c-static-defaults.sh"
+case_end
+
+case_begin "group-d-wrappers" "skills/review-plan-security/scripts/run-codex-review-loop.sh"
 # shellcheck source=./feature-1308-codex-review-allowlist/group-d-wrappers.sh
 . "$SCRIPT_DIR/group-d-wrappers.sh"
+case_end
+
+case_begin "group-e-agents" "agents/plan-security-reviewer.md"
 # shellcheck source=./feature-1308-codex-review-allowlist/group-e-agents.sh
 . "$SCRIPT_DIR/group-e-agents.sh"
+case_end
+
+case_begin "group-f-injection" "bin/run-codex-review-loop"
 # shellcheck source=./feature-1308-codex-review-allowlist/group-f-injection.sh
 . "$SCRIPT_DIR/group-f-injection.sh"
+case_end
+
+case_begin "group-g-prompt-bodies" "bin/review-plan-codex"
 # shellcheck source=./feature-1308-codex-review-allowlist/group-g-prompt-bodies.sh
 . "$SCRIPT_DIR/group-g-prompt-bodies.sh"
+case_end
 
 # ---------------------------------------------------------------------------
 # Summary

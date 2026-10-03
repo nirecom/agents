@@ -2,12 +2,8 @@
 # tests/hooks/feature-supervisor-posttooluse-no-warning-advisory.sh
 # Tests: hooks/supervisor-trigger.js
 # Tags: supervisor, em-supervisor, posttooluse, advisory, scope:issue-specific, pwsh-not-required, hook-registration
-# L3 gap (what this test does NOT catch):
-# - supervisor-trigger.js firing as a real PostToolUse hook in a live session
-#   (settings.json PostToolUse registration — verified only via live claude -p run)
-# - Real Claude Code JSONL transcript format differences
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# L3 gap: live PostToolUse registration and real transcript format (mitigated by
+# bin/check-verification-gate.sh category hook-registration).
 
 # T2: state with cumulative_severity="warning" → invoke supervisor-trigger.js via stdin
 # → assert stdout contains NO `additionalContext` field (Change 1: warning/notice
@@ -57,7 +53,7 @@ run_t2a() {
         local tmp_node="$tmp"
     fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -70,13 +66,13 @@ st.alert.findings = [{
     reporter: 'test',
     timestamp: new Date().toISOString()
 }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
 " >/dev/null 2>&1
 
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo hello"},"tool_response":{"output":"hello"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -101,7 +97,7 @@ run_t2b() {
         local tmp_node="$tmp"
     fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -114,13 +110,13 @@ st.alert.findings = [{
     reporter: 'test',
     timestamp: new Date().toISOString()
 }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
 " >/dev/null 2>&1
 
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo hello"},"tool_response":{"output":"hello"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -144,7 +140,7 @@ run_t2c() {
         local tmp_node="$tmp"
     fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -157,13 +153,13 @@ st.alert.findings = [{
     reporter: 'test',
     timestamp: new Date().toISOString()
 }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
 " >/dev/null 2>&1
 
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo hello"},"tool_response":{"output":"hello"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -193,7 +189,7 @@ run_t2d() {
     fi
 
     # Seed: layer1 blocking finding (severity=warning) + alert_armed_at=null (default)
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -205,17 +201,17 @@ st.layer1.findings = [{
     reporter: 'workflow-gate',
     timestamp: new Date().toISOString()
 }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
 " >/dev/null 2>&1
 
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo \\"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>\\""},"tool_response":{"output":""}}' "$sid")
 
     # Snapshot state before hook invocation (C3: no-mutation baseline)
-    state_path="$tmp/${sid}-supervisor-state.json"
+    state_path="$(CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" node "$AGENTS_DIR/bin/workflow-control-dir" --session "$sid" --file supervisor-state.json)"
     state_before=$(cat "$state_path" 2>/dev/null || echo "{}")
 
-    WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" >/dev/null 2>&1
 
     state_after=$(cat "$state_path" 2>/dev/null || echo "{}")

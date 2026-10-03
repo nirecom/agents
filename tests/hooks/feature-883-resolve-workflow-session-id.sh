@@ -3,16 +3,8 @@
 # Tests: hooks/lib/resolve-workflow-session-id.js, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, session-id, workflow-state, layer2, scope:issue-specific
 # RED for issue #883.
-# L3 gap (what this test does NOT catch):
-# - tests invoke resolveWorkflowSessionId() directly via node -e rather than
-#   exercising the full Stop hook (supervisor-guard.js); end-to-end wiring of the
-#   resolver into the block-reason injection path is covered by G20/G21 in
-#   feature-719-supervisor-guard-hook.sh, not here.
-# - real ~/.workflow-plans/ directory layout differences — tests use temp dirs,
-#   so OS-specific quirks (e.g. SMB share mtime resolution) are not exercised.
-# Closest-to-action mitigation: hook-registration / skill-orchestration categories
-#   in bin/check-verification-gate.sh fire at WORKFLOW_USER_VERIFIED preflight
-#   when supervisor-guard.js / workflow-state.js changes are staged.
+# L3 gap: the full Stop hook wiring (covered by G20/G21 in feature-719-supervisor-guard-hook.sh); real-dir mtime quirks (temp dirs only).
+# Closest-to-action mitigation: hook-registration / skill-orchestration categories in bin/check-verification-gate.sh.
 
 set -u
 
@@ -356,7 +348,8 @@ run_r11() {
     # depth=0 stub session, newer mtime
     : > "$tmp/${TODAY}-stub-r11-context.md"
     # active session has a final-report-env.json -> L2 must NOT be armed
-    echo '{}' > "$tmp/${TODAY}-active-r11-final-report-env.json"
+    mkdir -p "$tmp/${TODAY}-active-r11.control"  # #2434 control file
+    echo '{}' > "$tmp/${TODAY}-active-r11.control/final-report-env.json"
     set_mtimes \
         "$tmp/${TODAY}-active-r11-context.md" -10 \
         "$tmp/${TODAY}-active-r11-intent.md" -10 \
@@ -367,7 +360,7 @@ run_r11() {
     # resolver falls through Priority 1 -> Priority 3 depth-scan). The stub cc
     # sid validates against SESSION_ID_RE but has no final-report-env.json;
     # only the resolver-found active sid carries the final-report-env marker.
-    armed_at_out=$(cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
+    armed_at_out=$(cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
 const m = require('$SUPERVISOR_STATE_WRITER_NODE');
 const state = { layer2: { alert_armed_at: null, alert_phase: null } };
 m.ensureAlertScheduled(state, '${TODAY}-stub-r11cc');

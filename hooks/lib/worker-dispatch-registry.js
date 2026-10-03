@@ -85,7 +85,7 @@ const CHILD_ENV_ALLOWLIST = [
 ];
 
 // Write-scope tokens understood by bin/worker-dispatch/fsguard.js.
-const WRITE_SCOPES = ["plans-dir", "family-worktree", "backup-dir", "main-root-docs"];
+const WRITE_SCOPES = ["plans-dir", "control-dir", "family-worktree", "backup-dir", "main-root-docs"];
 
 // Script-anchor tokens understood by bin/worker-dispatch/spawn.js. `acd` and
 // `main-root` resolve into reviewed, merged code. `family-worktree` resolves into
@@ -252,7 +252,7 @@ const workers = {
     payloadSpec: {
       session_id: { type: "session-id", required: true },
       plans_dir: { type: "path-under-plansdir", required: false },
-      outcome_json_path: { type: "path-under-plansdir", required: false },
+      outcome_json_path: { type: "derived-control-file", control: "issue-close-outcome.json", required: false },
       artifact_dir: { type: "path-under-plansdir", required: false },
     },
     binaries: {
@@ -264,7 +264,7 @@ const workers = {
       },
     },
     envPassthrough: [],
-    writeScopes: ["plans-dir"],
+    writeScopes: ["control-dir", "plans-dir"],
     renderer: "status-triple",
   },
 
@@ -409,9 +409,7 @@ const workers = {
       issue_number: { type: "int", required: false, min: 1 },
       root_issue_number: { type: "int", required: false, min: 1 },
       owner_repo: { type: "owner-repo", required: false },
-      // Field-validation order matters for this type — see the note on
-      // `state-file-for-session` in bin/worker-dispatch/capability.js.
-      state_file_path: { type: "state-file-for-session", required: false },
+      state_file_path: { type: "derived-control-file", control: "finalize-state-{root}.json", required: false },
       main_worktree_path: { type: "anchor-main-root", required: false },
       issue_repo: { type: "repo-ref", required: false },
       g5_decision: {
@@ -419,7 +417,7 @@ const workers = {
         required: false,
       },
       session_id: { type: "session-id", required: false },
-      outcome_file_path: { type: "path-under-plansdir", required: false },
+      outcome_file_path: { type: "derived-control-file", control: "issue-close-outcome.json", required: false },
       agents_config_dir: { type: "anchor-acd", required: false },
       finalize_scripts_dir: { type: "derived-finalize-scripts-dir", required: false },
       artifact_dir: { type: "path-under-plansdir", required: false },
@@ -438,7 +436,7 @@ const workers = {
     // Both non-token names are derived from anchors and set explicitly via
     // extraEnv; declaring them here only makes that assignment legal.
     envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN", "FINALIZE_SCRIPTS_DIR", "MAIN_WORKTREE_PATH"],
-    writeScopes: ["plans-dir"],
+    writeScopes: ["control-dir", "plans-dir"],
     renderer: "status-triple-quoted",
   },
 };

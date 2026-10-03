@@ -258,7 +258,7 @@ else
 fi
 # A writer that fell back to a temp name, or to a neighbouring path, leaves the same
 # third-party text on disk under a different name — the leak this arm exists to catch.
-C18A_STRAY="$(grep -rlF -- 'a remark that must never be half-written' "$PLANS" 2>/dev/null | tr '\n' ' ')"
+C18A_STRAY="$(grep -rlF -- 'a remark that must never be half-written' "$PLANS" "$WF" 2>/dev/null | tr '\n' ' ')"
 if [ -z "$C18A_STRAY" ]; then
     pass "C18a: no fallback or temp file carries the comment text"
 else

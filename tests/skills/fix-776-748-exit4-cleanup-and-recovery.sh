@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/make-detail-plan/scripts/run-codex-review-loop.sh, skills/make-outline-plan/scripts/run-codex-review-loop.sh, bin/run-codex-review-loop
-# Tags: fix, round-counter, ledger, recovery, exit4, 776, 748, scope:issue-specific
+# Tags: fix, round-counter, ledger, recovery, exit4, 776, 748, feature-2434, control-dir, legacy-migration, scope:issue-specific
 # Tests for #776 (exit-4 counter cleanup in per-stage wrappers) and
 # #748 (round-2 ledger-absent early recovery in bin/run-codex-review-loop).
 set -uo pipefail
@@ -10,6 +10,8 @@ DETAIL_WRAPPER="$AGENTS_WORKTREE/skills/make-detail-plan/scripts/run-codex-revie
 OUTLINE_WRAPPER="$AGENTS_WORKTREE/skills/make-outline-plan/scripts/run-codex-review-loop.sh"
 BIN_WRAPPER="$AGENTS_WORKTREE/bin/run-codex-review-loop"
 REVIEW_LOOP_VERDICT="$AGENTS_WORKTREE/bin/review-loop-verdict"
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+. "$AGENTS_DIR/tests/lib/harness.sh"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -23,6 +25,16 @@ run_with_timeout() {
     fi
 }
 
+case_begin "safe-state-path-preflight" "bin/run-codex-review-loop"
+# The loop sources bin/lib/safe-state-path.sh (#2434 rename of safe-plans-path.sh);
+# name its absence once instead of leaving T1-T6 to cascade on exit 4.
+if [[ -f "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" ]]; then
+    pass "preflight: bin/lib/safe-state-path.sh present"
+else
+    fail "implementation missing: bin/lib/safe-state-path.sh (T1-T6 exit 4 until it exists)"
+fi
+case_end
+
 # ---------------------------------------------------------------------------
 # Helpers for T1/T2/T3. The counter is the shared loop's now (#2068), so the
 # stub goes one level deeper — at the codex-facing reviewer — under the real
@@ -34,7 +46,9 @@ setup_wrapper_env() {
     # $1 = tmp dir, $2 = reviewer body file contents source ("continue"|"none")
     local test_tmp="$1" mode="$2"
     local agents_dir="$test_tmp/agents"
-    mkdir -p "$agents_dir/bin/lib" "$agents_dir/rules" "$test_tmp/plans"
+    mkdir -p "$agents_dir/bin/lib" "$agents_dir/rules" "$test_tmp/plans" "$test_tmp/workflow-state"
+    export CLAUDE_WORKFLOW_DIR="$test_tmp/workflow-state"
+    export WORKFLOW_PLANS_DIR="$test_tmp/plans"
     echo "# core principles stub" > "$agents_dir/rules/core-principles.md"
 
     cat > "$agents_dir/bin/build-codex-context" << 'EOF'
@@ -70,7 +84,7 @@ EOF
         cp "$AGENTS_WORKTREE/bin/$f" "$agents_dir/bin/$f"
         chmod +x "$agents_dir/bin/$f"
     done
-    for f in codex-core.sh codex-timeout.sh cli-exec-guard.sh concern-ledger.sh safe-plans-path.sh; do
+    for f in codex-core.sh codex-timeout.sh cli-exec-guard.sh concern-ledger.sh safe-state-path.sh; do
         [[ -f "$AGENTS_WORKTREE/bin/lib/$f" ]] && cp "$AGENTS_WORKTREE/bin/lib/$f" "$agents_dir/bin/lib/$f"
     done
     [[ -d "$AGENTS_WORKTREE/bin/lib/concern-ledger" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$agents_dir/bin/lib/"
@@ -83,6 +97,7 @@ EOF
 #     restored to the value it had before the refused call, so the retry runs
 #     round 2 again rather than round 3 or a restarted round 1.
 # ---------------------------------------------------------------------------
+case_begin "t1-t3-stage-wrappers" "skills/make-detail-plan/scripts/run-codex-review-loop.sh"
 if [[ ! -f "$DETAIL_WRAPPER" ]]; then
     echo "SKIP: T1: $DETAIL_WRAPPER missing"
 else
@@ -94,12 +109,12 @@ else
     AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
       run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || true
-    rm -f "$TMP/plans/sid1-detail-plan-concern-ledger.txt"
+    rm -f "$TMP/workflow-state/sid1.control/detail-plan-concern-ledger.txt"
     RC=0
     AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
       run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || RC=$?
-    CFILE="$TMP/plans/sid1-detail-plan-round-number.txt"
+    CFILE="$TMP/workflow-state/sid1.control/detail-plan-round-number.txt"
     CVAL="$(tr -d '[:space:]' < "$CFILE" 2>/dev/null || echo absent)"
     if [[ "$RC" == "4" && "$CVAL" == "1" ]]; then
       pass "T1: exit 4 rolls the counter back to its pre-call value (detail wrapper)"
@@ -126,7 +141,7 @@ else
     AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid2" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
       run_with_timeout bash "$OUTLINE_WRAPPER" >/dev/null 2>&1 || RC=$?
-    CFILE="$TMP/plans/sid2-outline-plan-round-number.txt"
+    CFILE="$TMP/workflow-state/sid2.control/outline-plan-round-number.txt"
     if [[ "$RC" == "4" && ! -f "$CFILE" ]]; then
       pass "T2: exit 4 leaves no counter where there was none (outline wrapper)"
     else
@@ -151,7 +166,7 @@ else
     AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid3" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
       run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || RC=$?
-    CFILE="$TMP/plans/sid3-detail-plan-round-number.txt"
+    CFILE="$TMP/workflow-state/sid3.control/detail-plan-round-number.txt"
     if [[ "$RC" == "1" ]] && [[ "$(tr -d '[:space:]' < "$CFILE" 2>/dev/null)" == "1" ]]; then
       pass "T3: CONTINUE (exit 1) preserves counter file at value 1"
     else
@@ -160,6 +175,7 @@ else
     rm -rf "$TMP"
     trap - EXIT
 fi
+case_end
 
 # ---------------------------------------------------------------------------
 # Helpers for T4/T5/T6 (bin/run-codex-review-loop with full mock chain)
@@ -171,7 +187,9 @@ setup_bin_env() {
     # recording shim for review-plan-codex separately.
     local test_tmp="$1"
     local agents_dir="$test_tmp/agents"
-    mkdir -p "$agents_dir/bin" "$agents_dir/rules"
+    mkdir -p "$agents_dir/bin" "$agents_dir/rules" "$test_tmp/workflow-state"
+    export CLAUDE_WORKFLOW_DIR="$test_tmp/workflow-state"
+    export WORKFLOW_PLANS_DIR="$test_tmp/plans"
     echo "# core principles stub" > "$agents_dir/rules/core-principles.md"
 
     cat > "$agents_dir/bin/build-codex-context" << 'EOF'
@@ -195,8 +213,8 @@ EOF
     fi
 
     mkdir -p "$agents_dir/bin/lib"
-    [[ -f "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" ]] && \
-      cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
+    [[ -f "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" ]] && \
+      cp "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" "$agents_dir/bin/lib/safe-state-path.sh"
 
     if [[ -d "$AGENTS_WORKTREE/bin/lib/codex-review-loop" ]]; then
       mkdir -p "$agents_dir/bin/lib/codex-review-loop"
@@ -302,6 +320,7 @@ check_refusal() {
     return 0
 }
 
+case_begin "t4-t6-bin-wrapper" "bin/run-codex-review-loop"
 if [[ ! -f "$BIN_WRAPPER" ]]; then
     echo "SKIP: T4/T5: $BIN_WRAPPER missing"
 else
@@ -312,9 +331,10 @@ else
     mkdir -p "$TMP/plans"
     echo "# outline (accepted tradeoffs)" > "$TMP/plans/sid4-outline.md"
     echo "# detail draft" > "$TMP/plans/sid4-detail-draft.md"
-    echo "1" > "$TMP/plans/sid4-detail-plan-round-number.txt"
+    mkdir -p "$TMP/workflow-state/sid4.control"
+    echo "1" > "$TMP/workflow-state/sid4.control/detail-plan-round-number.txt"
     run_bin_round2 sid4 detail-plan "$TMP/plans/sid4-detail-draft.md" "$TMP/plans/sid4-outline.md"
-    check_refusal "T4 (detail-plan)" "$TMP/plans/sid4-detail-plan-concern-ledger.txt"
+    check_refusal "T4 (detail-plan)" "$TMP/workflow-state/sid4.control/detail-plan-concern-ledger.txt"
     rm -rf "$TMP"
     trap - EXIT
 
@@ -325,9 +345,10 @@ else
     mkdir -p "$TMP/plans"
     echo "# intent (accepted tradeoffs)" > "$TMP/plans/sid5-intent.md"
     echo "# outline draft" > "$TMP/plans/sid5-outline-draft.md"
-    echo "1" > "$TMP/plans/sid5-outline-plan-round-number.txt"
+    mkdir -p "$TMP/workflow-state/sid5.control"
+    echo "1" > "$TMP/workflow-state/sid5.control/outline-plan-round-number.txt"
     run_bin_round2 sid5 outline-plan "$TMP/plans/sid5-outline-draft.md" "$TMP/plans/sid5-intent.md"
-    check_refusal "T5 (outline-plan)" "$TMP/plans/sid5-outline-plan-concern-ledger.txt"
+    check_refusal "T5 (outline-plan)" "$TMP/workflow-state/sid5.control/outline-plan-concern-ledger.txt"
 
     rm -f "$TMP/rpc-argv.txt"
     run_bin_round2 sid5 outline-plan "$TMP/plans/sid5-outline-draft.md" "$TMP/plans/sid5-intent.md" \
@@ -350,9 +371,10 @@ else
     mkdir -p "$TMP/plans"
     echo "# outline (accepted tradeoffs)" > "$TMP/plans/sid6-outline.md"
     echo "# detail draft" > "$TMP/plans/sid6-detail-draft.md"
-    LEDGER_FILE="$TMP/plans/sid6-detail-plan-concern-ledger.txt"
+    mkdir -p "$TMP/workflow-state/sid6.control"
+    LEDGER_FILE="$TMP/workflow-state/sid6.control/detail-plan-concern-ledger.txt"
     printf 'C1|HIGH|prior concern\n' > "$LEDGER_FILE"
-    echo "1" > "$TMP/plans/sid6-detail-plan-round-number.txt"
+    echo "1" > "$TMP/workflow-state/sid6.control/detail-plan-round-number.txt"
 
     STDERR_FILE="$TMP/stderr.txt"
     AGENTS_CONFIG_DIR="$TMP/agents" \
@@ -391,6 +413,55 @@ else
     rm -rf "$TMP"
     trap - EXIT
 fi
+case_end
+
+# ---------------------------------------------------------------------------
+# #2434 Step 5-9 (merged from tests/bin/feature-2434-review-loop-legacy-state.sh):
+# a session that started before the upgrade keeps its state — a legacy round
+# counter of 2 is continued at 3 rather than restarted. Runs in a subshell on the
+# shared feature-2434 fixture (its own TMP / trap / PASS / FAIL).
+# ---------------------------------------------------------------------------
+# to_legacy <sid> — put a session's control files back at their pre-#2434 PLANS names.
+to_legacy() {
+    local f
+    for f in "$(ctl "$1")"/*; do
+        [ -f "$f" ] || continue
+        case "${f##*/}" in plan.jsonl) rm -f "$f"; continue ;; esac
+        mv "$f" "$P/$1-${f##*/}"
+    done
+}
+
+case_begin "legacy-round-number-continues" "bin/run-codex-review-loop"
+if (
+    # The fixture runs the worktree's wrappers, whatever AGENTS_DIR was inherited.
+    AGENTS_DIR="$AGENTS_WORKTREE"
+    . "$AGENTS_WORKTREE/tests/bin/feature-2434-review-loop/fixture.sh"
+    [ -f "$AGENTS_WORKTREE/hooks/workflow-state/state-io/control-dir.js" ] || \
+        fail "implementation missing: hooks/workflow-state/state-io/control-dir.js"
+    SID="lr-detail"
+    seed_sid "$SID"
+    wrap make-detail-plan "$SID" 0
+    assert_eq "legacy: round 1 continues" "1" "$W_RC"
+    wrap make-detail-plan "$SID" 0
+    assert_eq "legacy: round 2 auto-extends (rc 5)" "5" "$W_RC"
+    to_legacy "$SID"
+    assert_eq "legacy: precondition: legacy round counter reads 2" "2" "$(clf_read "$P/$SID-detail-plan-round-number.txt")"
+    export CLF_ROUND_LOG="$TMP/lr-rounds.txt"
+    : > "$CLF_ROUND_LOG"
+    wrap make-detail-plan "$SID" 1
+    assert_eq "legacy: the reviewer was handed round 3" "3" "$(tr -d '\r\n' < "$CLF_ROUND_LOG")"
+    assert_eq "legacy: round 3 at cap with no budget -> exit 6" "6" "$W_RC"
+    assert_eq "legacy: round counter left PLANS_DIR" "absent" "$(state "$P/$SID-detail-plan-round-number.txt")"
+    assert_eq "legacy: ledger left PLANS_DIR" "absent" "$(state "$P/$SID-detail-plan-concern-ledger.txt")"
+    assert_eq "legacy: last-round recorded in the control dir" "3" "$(clf_read "$(ctl "$SID")/detail-plan-last-round.txt")"
+    assert_eq "legacy: PLANS_DIR keeps artifacts only" "" "$(plans_leftovers "$SID")"
+    [ "$FAIL" -eq 0 ]
+); then
+    pass "legacy-round-number-continues: a pre-#2434 round counter is continued, not restarted"
+else
+    fail "legacy-round-number-continues: see the legacy: FAIL lines above"
+fi
+case_end
 
 # ---------------------------------------------------------------------------
 # Summary

@@ -190,7 +190,12 @@ if [[ "$EXTENSIONS_USED" -gt "$MAX_EXTENSIONS" ]]; then
 fi
 
 # Round log path and label
-ROUND_LOG="${EFF_LOG_DIR}/${EFF_SESSION_ID}-plan.jsonl"
+# Inside the session's own control dir (#2434) the name carries no sid prefix.
+if [[ "${EFF_LOG_DIR##*/}" == "${EFF_SESSION_ID}.control" ]]; then
+  ROUND_LOG="${EFF_LOG_DIR}/plan.jsonl"
+else
+  ROUND_LOG="${EFF_LOG_DIR}/${EFF_SESSION_ID}-plan.jsonl"
+fi
 LOOP_LABEL="$FORMAT"
 
 # Neutralize forged delimiter tokens in untrusted prompt material (#2338): a

@@ -10,7 +10,7 @@
 echo "--- D4: rejected DISCRIM persists in carrier after archive-clear ---"
 D4P="$TMPDIR_BASE/d4/plans"; mkdir -p "$D4P"
 D4S="sess-d4"; D4F="review-code-codex"
-D4L="$D4P/${D4S}-${D4F}-concern-ledger.txt"
+D4L="$(ledger_path_for "$D4P" "$D4S" "$D4F")"
 
 D4_T="use after free in cleanup handler code"
 D4_D="$(discrim_of "$D4_T")"
@@ -63,7 +63,7 @@ fi
 echo "--- D5: ledger deleted; exit 3 when no reject; exit 0 when carrier has reject ---"
 D5P="$TMPDIR_BASE/d5/plans"; mkdir -p "$D5P"
 D5S="sess-d5"; D5F="review-code-codex"
-D5L="$D5P/${D5S}-${D5F}-concern-ledger.txt"
+D5L="$(ledger_path_for "$D5P" "$D5S" "$D5F")"
 
 D5_T="integer overflow in size computation path"
 D5_D="$(discrim_of "$D5_T")"

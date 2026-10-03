@@ -6,10 +6,9 @@
 // This module is the only owner of origin "auto-record" (CPR-SSOT). Every
 // auto-record is also a risk signal for the omission-check nudge.
 
-const path = require("path");
 const { appendHandoffEntryIfActive } = require("./handoff-gated-append");
 const { recordRiskSignal } = require("./handoff-risk-signal");
-const { getWorkflowPlansDir } = require("./workflow-plans-dir");
+const { controlPath, diagnoseControlMigration } = require("../workflow-state/state-io/control-dir");
 
 const AUTO_RECORD_ORIGIN = "auto-record";
 
@@ -35,12 +34,18 @@ function recordVerdictBreadcrumb(sid, verdict, summary) {
   try {
     if (verdict !== "WARN" && verdict !== "BLOCK") return { written: false, reason: "not-applicable" };
     const text = typeof summary === "string" && summary.trim() ? `supervisor audit ${verdict}: ${summary}` : `supervisor audit ${verdict}`;
+    let pointer = "-";
+    try {
+      pointer = controlPath(sid, "supervisor-state.json");
+    } catch (e) {
+      diagnoseControlMigration(e, "handoff-auto-record"); // a lost pointer costs nothing but the pointer
+    }
     return appendAutoRecord(sid, {
       cls: "E",
       step: "-",
       key: "supervisor-audit:verdict",
       summary: text,
-      pointer: path.join(getWorkflowPlansDir(), `${sid}-supervisor-state.json`),
+      pointer,
     }, "supervisor-verdict");
   } catch (_e) {
     return { written: false, reason: "io" };

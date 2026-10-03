@@ -2,29 +2,10 @@
 # tests/hooks/feature-1255-supervisor-block-severity.sh
 # Tests: hooks/lib/supervisor-emit.js
 # Tags: supervisor, em-supervisor, layer1, reportBlock, severity, class-dedup, feature-1255, scope:issue-specific
-# Tests for issue #1255 — reportBlock severity notice (打ち手1) + session-wide
-# class dedup for block findings (打ち手2).
-#
-# 打ち手1: reportBlock() severity changes "error" → "notice" so a hook block
-#          alone does NOT arm alert mode (notice short-circuit at
-#          ensureAlertScheduled line 116).
-# 打ち手2: appendFinding() gains session-wide class dedup for block findings:
-#          same command across different reporters collapses to one finding
-#          carrying class_dedup_count.
-#
-# NOTE: These assert FUTURE behavior. Some cases FAIL against current source
-# (reportBlock still "error"; no class dedup yet) — that is expected and
-# correct; they are regression tests for the upcoming source changes.
-#
-# L3 gap: These are L2 tests — they call reportBlock/reportFallback directly
-# via Node.js require without spawning a real hook subprocess. A full L3 test
-# would additionally catch: (1) enforce-worktree.js actually calling reportBlock
-# as a child process and the resulting IPC/env propagation working end-to-end;
-# (2) the real WORKFLOW_PLANS_DIR env var being resolved inside the hook's own
-# process rather than the test's injected env; (3) timing-dependent consecutive
-# dedup under concurrent hook firings in a real claude -p session.
-# Risk category: hook-registration (L3 required for full confidence).
-# Tracked in #1255 scope.
+# #1255: reportBlock severity is "notice" (a block alone never arms alert mode), and
+# appendFinding class-dedups block findings of the same command (class_dedup_count).
+# L3 gap: direct require, no real hook subprocess / env propagation / concurrent
+# firings (risk category hook-registration).
 
 set -u
 
@@ -83,7 +64,7 @@ run_node() {
     else
         tmpdir_node="$tmpdir"
     fi
-    out=$(WORKFLOW_PLANS_DIR="$tmpdir_node" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmpdir_node" CLAUDE_WORKFLOW_DIR="$tmpdir_node/workflow" run_with_timeout 10 node -e "
 process.env.WORKFLOW_PLANS_DIR = '$tmpdir_node';
 const emit = require('$EMIT_NODE');
 const w = require('$WRITER_NODE');
@@ -91,7 +72,7 @@ const collect = require('$COLLECT_NODE');
 const fs = require('fs');
 const path = require('path');
 function loadState(sid) {
-  const p = path.join('$tmpdir_node', sid + '-supervisor-state.json');
+  const p = w.getStatePath(sid);
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 $body

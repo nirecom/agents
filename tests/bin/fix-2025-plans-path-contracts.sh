@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/fix-2025-plans-path-contracts.sh
-# Tests: bin/concern-ledger, bin/run-codex-review-loop, bin/build-codex-context, bin/lib/codex-review-loop/format-params.sh, bin/lib/safe-plans-path.sh
-# Tags: safe-plans-path, path-traversal, missing-library, exit-codes, wrapper-contract, security, scope:issue-specific, pwsh-not-required
+# Tests: bin/concern-ledger, bin/run-codex-review-loop, bin/build-codex-context, bin/lib/codex-review-loop/format-params.sh, bin/lib/safe-state-path.sh
+# Tags: safe-state-path, path-traversal, missing-library, exit-codes, wrapper-contract, security, scope:issue-specific, pwsh-not-required
 #
 # #2025 at the process boundary. The shared path primitive is a dependency of
 # every plans-dir entrypoint, so each has a way to fail the library missing.
@@ -23,6 +23,7 @@ AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PASS=0
 FAIL=0
 
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 
 assert_eq() {
@@ -60,6 +61,7 @@ TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_ENV_FILE 2>/dev/null || true
 unset SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
@@ -84,7 +86,7 @@ ROOT_OK="$TMPDIR_BASE/root-ok"
 mk_root "$ROOT_OK"
 ROOT="$TMPDIR_BASE/root"
 mk_root "$ROOT"
-rm -f "$ROOT/bin/lib/safe-plans-path.sh"
+rm -f "$ROOT/bin/lib/safe-state-path.sh"
 
 # The loop resolves its reviewer from AGENTS_CONFIG_DIR, so a copied root can
 # replace it. Stubbed in both roots with an APPROVED verdict: a test must never
@@ -110,6 +112,15 @@ REPORT="$TMPDIR_BASE/report.txt"
     printf -- '- [HIGH] - | a/b.sh#fn | correctness | an ordinary concern\n'
 } > "$REPORT"
 
+# ctl_dir <sid> — that session's control dir (#2434), created: the loop's round
+# files, the ledger and every staged delta live there, sid-unprefixed. Cases
+# take distinct session ids so no control dir is shared between them.
+ctl_dir() {
+    local d="$CLAUDE_WORKFLOW_DIR/$1.control"
+    mkdir -p "$d"
+    printf '%s' "$d"
+}
+
 # rc_of <command...> — the exit status, run with the crippled tree as the root.
 rc_of() {
     (
@@ -131,18 +142,21 @@ rc_ok() {
     printf '%s' "$?"
 }
 
+case_begin "contracts-0-roots-differ" "bin/lib/safe-state-path.sh"
 echo ""
 echo "--- contracts 0: the two roots differ in the library and nothing else ---"
 
 {
     assert_eq "0: the intact root carries what every entrypoint reads first" \
         "core=yes lib=yes" \
-        "core=$([ -f "$ROOT_OK/rules/core-principles.md" ] && printf yes || printf no) lib=$([ -f "$ROOT_OK/bin/lib/safe-plans-path.sh" ] && printf yes || printf no)"
+        "core=$([ -f "$ROOT_OK/rules/core-principles.md" ] && printf yes || printf no) lib=$([ -f "$ROOT_OK/bin/lib/safe-state-path.sh" ] && printf yes || printf no)"
     assert_eq "0: and the crippled root differs from it in the library alone" \
         "core=yes lib=no" \
-        "core=$([ -f "$ROOT/rules/core-principles.md" ] && printf yes || printf no) lib=$([ -f "$ROOT/bin/lib/safe-plans-path.sh" ] && printf yes || printf no)"
+        "core=$([ -f "$ROOT/rules/core-principles.md" ] && printf yes || printf no) lib=$([ -f "$ROOT/bin/lib/safe-state-path.sh" ] && printf yes || printf no)"
 }
+case_end
 
+case_begin "contracts-1-gate-fails-closed" "bin/concern-ledger"
 echo ""
 echo "--- contracts 1: the gate fails closed when its library is missing ---"
 
@@ -157,8 +171,8 @@ echo "--- contracts 1: the gate fails closed when its library is missing ---"
     assert_eq_nz "1: check-staged reports the same failure, not a passing gate" \
         "5" "$(rc_of bash "$ROOT/bin/concern-ledger" check-staged --plans-dir "$PLANS" \
             --session-id "$SID" --format "$FORMAT" --round 1)"
-    assert_eq_nz "1: and nothing was written into the plans dir on the way out" \
-        "0" "$(find "$PLANS" -type f 2>/dev/null | wc -l | tr -d ' ')"
+    assert_eq_nz "1: and nothing was written into the plans or control dir on the way out" \
+        "0" "$(find "$PLANS" "$CLAUDE_WORKFLOW_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
 }
 
 {
@@ -175,7 +189,7 @@ echo "--- contracts 1: the gate fails closed when its library is missing ---"
     assert_eq_nz "1: the review loop stops instead of running an unrecordable round" \
         "4" "$(rc_of bash "$ROOT/bin/run-codex-review-loop" "${L_ARGS[@]}")"
     assert_contains "1: naming the dependency it could not load" \
-        "safe-plans-path.sh" "$L_ERR"
+        "safe-state-path.sh" "$L_ERR"
     assert_eq "1: and not dying over its arguments or its context instead" \
         "clean" \
         "$(printf '%s' "$L_ERR" | grep -Eq 'is required|unknown argument|core-principles' \
@@ -203,12 +217,14 @@ echo "--- contracts 1: the gate fails closed when its library is missing ---"
         "$([ "$(rc_of bash "$ROOT/bin/build-codex-context" --plans-dir "$PLANS" \
             --session-id "$SID" --output "$B_OUT")" -ne 0 ] && printf nonzero || printf zero)"
     assert_contains "1: naming the same dependency the loop named" \
-        "safe-plans-path.sh" "$B_ERR"
+        "safe-state-path.sh" "$B_ERR"
     assert_eq "1: leaving no half-built context file behind" \
         "absent" "$([ -e "$B_OUT" ] && printf present || printf absent)"
     rm -f "$PLANS/$SID-intent.md"
 }
+case_end
 
+case_begin "contracts-2-security-code-loop" "bin/run-codex-review-loop"
 # Reviewer and merge-base stubs for the security-code path, in both roots: the
 # loop resolves both out of AGENTS_CONFIG_DIR, a test must never reach the real
 # codex CLI, and the crippled-root run has to die on its library rather than on
@@ -241,21 +257,23 @@ echo "--- contracts 2: the security-code loop fails closed on the same library -
 # must refuse (CPR-ORTH — every loop format gets the contracts-1 treatment).
 {
     W_PLANS="$TMPDIR_BASE/plans-w"
+    W_SID="c2025-w"
     mkdir -p "$W_PLANS"
     W_ERR="$( (export AGENTS_CONFIG_DIR="$ROOT"; \
         bash "$ROOT/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
-            --session-id "$SID" --plans-dir "$W_PLANS" 2>&1 >/dev/null) )"
+            --session-id "$W_SID" --plans-dir "$W_PLANS" 2>&1 >/dev/null) )"
     assert_eq_nz "2: the security-code loop stops with the loop's config-failure code" \
         "4" "$(rc_of bash "$ROOT/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
-            --session-id "$SID" --plans-dir "$W_PLANS")"
+            --session-id "$W_SID" --plans-dir "$W_PLANS")"
     assert_contains "2: naming the dependency it could not load" \
-        "safe-plans-path.sh" "$W_ERR"
+        "safe-state-path.sh" "$W_ERR"
     assert_eq "2: rather than claiming an unrecorded round the way the old wrapper did" \
         "clean" \
         "$(printf '%s' "$W_ERR" | grep -Fq 'NOT-STAGED' && printf 'notice-instead-of-refusal' \
             || printf clean)"
-    assert_eq "2: and nothing was written into the plans dir on the way out" \
-        "0" "$(find "$W_PLANS" -type f 2>/dev/null | wc -l | tr -d ' ')"
+    assert_eq "2: and nothing was written into the plans or control dir on the way out" \
+        "0" "$(find "$W_PLANS" "$CLAUDE_WORKFLOW_DIR/$W_SID.control" -type f 2>/dev/null \
+            | wc -l | tr -d ' ')"
 }
 
 {
@@ -263,20 +281,23 @@ echo "--- contracts 2: the security-code loop fails closed on the same library -
     # proves nothing, so the same call on the complete tree has to reach the
     # reviewer and record the round the crippled one refused to invent.
     WOK_PLANS="$TMPDIR_BASE/plans-w-ok"
+    WOK_SID="c2025-w-ok"
     mkdir -p "$WOK_PLANS"
     WOK_ERR="$( (export AGENTS_CONFIG_DIR="$ROOT_OK"; \
         bash "$ROOT_OK/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
-            --session-id "$SID" --plans-dir "$WOK_PLANS" 2>&1 >/dev/null) )"
+            --session-id "$WOK_SID" --plans-dir "$WOK_PLANS" 2>&1 >/dev/null) )"
     assert_eq "2: (precondition) the complete tree gets past the library check" \
         "clean" \
-        "$(printf '%s' "$WOK_ERR" | grep -Fq 'safe-plans-path.sh' && printf 'halted-on-load' \
+        "$(printf '%s' "$WOK_ERR" | grep -Fq 'safe-state-path.sh' && printf 'halted-on-load' \
             || printf clean)"
     assert_eq "2: and records the round the crippled run refused to invent" \
-        "1" "$(tr -dc '0-9' < "$WOK_PLANS/$SID-$LOOP_FORMAT-last-round.txt" 2>/dev/null)"
+        "1" "$(tr -dc '0-9' < "$(ctl_dir "$WOK_SID")/$LOOP_FORMAT-last-round.txt" 2>/dev/null)"
     assert_eq "2: under the ledger name the shared code-review format owns" \
         "yes" "$(grep -qF 'FP_LEDGER_FORMAT="review-security-shared"' "$AGENTS_ROOT/bin/lib/codex-review-loop/format-params.sh" 2>/dev/null && printf yes || printf no)"
 }
+case_end
 
+case_begin "contracts-3-traversing-session-id" "bin/concern-ledger"
 echo ""
 echo "--- contracts 3: a traversing session id never reaches the filesystem ---"
 
@@ -313,7 +334,9 @@ echo "--- contracts 3: a traversing session id never reaches the filesystem ---"
     assert_eq_nz "3: and the parent of the nominated directory is untouched by all three" \
         "$T_BEFORE" "$(find "$TMPDIR_BASE/plans-t" | LC_ALL=C sort)"
 }
+case_end
 
+case_begin "contracts-4-round-number-in-plans-dir" "bin/run-codex-review-loop"
 echo ""
 echo "--- contracts 4: the round-number file is written inside the plans dir ---"
 
@@ -328,26 +351,30 @@ link_at() {
     [ -h "$1" ] && printf yes || printf no
 }
 
+# run_secloop_ok <plans> <sid>
 run_secloop_ok() {
     (
         export AGENTS_CONFIG_DIR="$ROOT_OK"
         bash "$ROOT_OK/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
-            --session-id "$SID" --plans-dir "$1" >/dev/null 2>&1
+            --session-id "$2" --plans-dir "$1" >/dev/null 2>&1
     )
 }
 
+# The round file lives in the control dir since #2434, so that is where the
+# pre-placed link has to stand for the defence to be the thing under test.
 S_PLANS="$TMPDIR_BASE/plans-s"
+S_SID="c2025-s"
 mkdir -p "$S_PLANS"
 S_OUTSIDE="$TMPDIR_BASE/round-victim.txt"
 printf 'untouched\n' > "$S_OUTSIDE"
-S_LINKED="$(link_at "$S_PLANS/$SID-$LOOP_FORMAT-round-number.txt" "$S_OUTSIDE")"
+S_LINKED="$(link_at "$(ctl_dir "$S_SID")/$LOOP_FORMAT-round-number.txt" "$S_OUTSIDE")"
 
 if [ "$S_LINKED" != "yes" ]; then
     echo "SKIP: 4: this host does not create real symlinks — the round-file cases cannot run here"
 else
     # A non-empty decoy first: the loop must not overwrite a file outside the
-    # plans dir even when the link is the only thing standing at the name.
-    run_secloop_ok "$S_PLANS"
+    # control dir even when the link is the only thing standing at the name.
+    run_secloop_ok "$S_PLANS" "$S_SID"
     assert_eq_nz "4: the loop does not write the round through a pre-placed symlink" \
         "untouched" "$(cat "$S_OUTSIDE" 2>/dev/null)"
 
@@ -355,28 +382,32 @@ else
     # before the round write, which would satisfy the assertion without the
     # defence ever running. This control establishes that the run reaches it.
     S2_CTRL="$TMPDIR_BASE/plans-s2-control"
+    S2C_SID="c2025-s2-control"
     mkdir -p "$S2_CTRL"
-    run_secloop_ok "$S2_CTRL"
+    run_secloop_ok "$S2_CTRL" "$S2C_SID"
     assert_eq "4: (precondition) with an ordinary name, the round write is reached" \
-        "1" "$([ -s "$S2_CTRL/$SID-$LOOP_FORMAT-round-number.txt" ] && printf 1 || printf 0)"
+        "1" "$([ -s "$(ctl_dir "$S2C_SID")/$LOOP_FORMAT-round-number.txt" ] && printf 1 || printf 0)"
 
     # Same run, with a symlink standing at that name. The decoy is empty here:
     # the round file is only written when the existing one holds no number, so
     # a non-empty decoy would spare the write for the wrong reason.
     S2_PLANS="$TMPDIR_BASE/plans-s2"
+    S2_SID="c2025-s2"
+    S2_ROUND="$(ctl_dir "$S2_SID")/$LOOP_FORMAT-round-number.txt"
     mkdir -p "$S2_PLANS"
     S2_OUTSIDE="$TMPDIR_BASE/round-victim-2.txt"
     : > "$S2_OUTSIDE"
-    link_at "$S2_PLANS/$SID-$LOOP_FORMAT-round-number.txt" "$S2_OUTSIDE" >/dev/null
-    run_secloop_ok "$S2_PLANS"
+    link_at "$S2_ROUND" "$S2_OUTSIDE" >/dev/null
+    run_secloop_ok "$S2_PLANS" "$S2_SID"
     assert_eq "4: and an empty decoy is not filled in either (same write)" \
         "empty" "$([ -s "$S2_OUTSIDE" ] && cat "$S2_OUTSIDE" || printf empty)"
-    assert_eq "4: the name it refused no longer points out of the plans dir" \
+    assert_eq "4: the name it refused no longer points out of the control dir" \
         "not-symlink" \
-        "$([ -h "$S2_PLANS/$SID-$LOOP_FORMAT-round-number.txt" ] && printf still-symlink \
-            || printf not-symlink)"
+        "$([ -h "$S2_ROUND" ] && printf still-symlink || printf not-symlink)"
 fi
+case_end
 
+case_begin "contracts-5-dotdot-in-dirname" "bin/concern-ledger"
 echo ""
 echo "--- contracts 5: a legal '..' inside a directory name still works ---"
 
@@ -386,60 +417,78 @@ echo "--- contracts 5: a legal '..' inside a directory name still works ---"
 # the crippled root would fail closed on the library check before the
 # '..'-in-a-name behaviour is ever reached.
 {
+    # The delta lands in the control dir since #2434, so the '..' name is put
+    # on the workflow dir as well as the plans dir.
     U_PLANS="$TMPDIR_BASE/user..name/.workflow-plans"
-    mkdir -p "$U_PLANS"
+    U_WF="$TMPDIR_BASE/user..name/workflow-state"
+    U_SID="c2025-u"
+    mkdir -p "$U_PLANS" "$U_WF"
 
-    U_STAGE="$(rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage --plans-dir "$U_PLANS" \
-        --session-id "$SID" --format "$FORMAT" --round 1 \
+    U_STAGE="$(CLAUDE_WORKFLOW_DIR="$U_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" \
+        stage --plans-dir "$U_PLANS" \
+        --session-id "$U_SID" --format "$FORMAT" --round 1 \
         --producer review-code-codex --from-report "$REPORT")"
     assert_eq "5: staging into a directory whose name contains '..' succeeds" \
         "0" "$U_STAGE"
     assert_eq_nz "5: and the delta really landed there, not somewhere up the tree" \
-        "1" "$(find "$U_PLANS" -maxdepth 1 -name "$SID-$FORMAT-round-1-delta-*.txt" \
+        "1" "$(find "$U_WF/$U_SID.control" -maxdepth 1 -name "$FORMAT-round-1-delta-*.txt" \
             2>/dev/null | wc -l | tr -d ' ')"
 }
+case_end
 
+case_begin "contracts-6-backslash-plans-dir" "bin/concern-ledger"
 echo ""
 echo "--- contracts 6: #2088 at the process boundary ---"
 
 # Same defect (#2088) seen the way the user saw it — a plans dir spelled with
 # backslashes, the delta on disk, `reduce` producing an empty ledger, which is
 # the exit 4 the issue reports. rc_ok, not rc_of: normal path (library
-# present) — the crippled root would fail closed on safe-plans-path.sh,
+# present) — the crippled root would fail closed on safe-state-path.sh,
 # misreporting #2088 as the unrelated #2025 gate.
 {
+    # Discovery reads the control dir since #2434, so the workflow dir is the
+    # one spelled with backslashes; the plans dir keeps its spelling too.
+    B_SID="c2025-bs"
+    B_WF_POSIX="$TMPDIR_BASE/wf-bs"
     if command -v cygpath >/dev/null 2>&1; then
         B_PLANS="$(cygpath -w "$TMPDIR_BASE")\\plans-bs"
+        B_WF="$(cygpath -w "$TMPDIR_BASE")\\wf-bs"
     else
         B_PLANS="$TMPDIR_BASE/plans\\evil"
+        B_WF_POSIX="$TMPDIR_BASE/wf\\evil"
+        B_WF="$B_WF_POSIX"
     fi
-    mkdir -p "$B_PLANS" 2>/dev/null || true
+    mkdir -p "$B_PLANS" "$B_WF" 2>/dev/null || true
+    B_CTL="$B_WF_POSIX/$B_SID.control"
 
-    assert_eq "6: the plans dir really is spelled with a backslash (precondition)" \
-        "backslash" "$(case "$B_PLANS" in *\\*) printf backslash ;; *) printf plain ;; esac)"
+    assert_eq "6: the plans and workflow dirs really are spelled with a backslash (precondition)" \
+        "backslash backslash " \
+        "$(for _d in "$B_PLANS" "$B_WF"; do case "$_d" in *\\*) printf 'backslash ' ;; *) printf 'plain ' ;; esac; done)"
 
-    rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage --plans-dir "$B_PLANS" \
-        --session-id "$SID" --format "$FORMAT" --round 1 \
+    CLAUDE_WORKFLOW_DIR="$B_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage \
+        --plans-dir "$B_PLANS" --session-id "$B_SID" --format "$FORMAT" --round 1 \
         --producer review-code-codex --from-report "$REPORT" >/dev/null
-    rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage --plans-dir "$B_PLANS" \
-        --session-id "$SID" --format "$FORMAT" --round 1 \
+    CLAUDE_WORKFLOW_DIR="$B_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage \
+        --plans-dir "$B_PLANS" --session-id "$B_SID" --format "$FORMAT" --round 1 \
         --producer security-scanner --from-report "$REPORT" >/dev/null
     assert_eq_nz "6: both deltas were written into that directory (precondition)" \
-        "2" "$(find "$B_PLANS" -maxdepth 1 -name "*-round-1-delta-*.txt" 2>/dev/null \
+        "2" "$(find "$B_CTL" -maxdepth 1 -name "*-round-1-delta-*.txt" 2>/dev/null \
             | wc -l | tr -d ' ')"
 
     assert_eq_nz "6: reduce exits cleanly on a backslash-spelled plans dir" \
-        "0" "$(rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" reduce --plans-dir "$B_PLANS" \
-            --session-id "$SID" --format "$FORMAT" --round 1)"
+        "0" "$(CLAUDE_WORKFLOW_DIR="$B_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" \
+            reduce --plans-dir "$B_PLANS" \
+            --session-id "$B_SID" --format "$FORMAT" --round 1)"
     # A v2 ledger row is `C<n>|SEV|state|...|TEXT`, not the `- ` bullet the
     # renderer emits: matching the bullet here would report a header-only ledger
     # as full once the fix lands.
-    B_LED="$B_PLANS/$SID-$FORMAT-concern-ledger.txt"
+    B_LED="$B_CTL/$FORMAT-concern-ledger.txt"
     assert_eq_nz "6: and the concern it staged is in the ledger, not a header-only file" \
         "1" "$(grep -c -E '^C[0-9]+\|' "$B_LED" 2>/dev/null | tr -d ' ')"
     assert_contains "6: carrying the text of the concern that was staged" \
         "an ordinary concern" "$(cat "$B_LED" 2>/dev/null)"
 }
+case_end
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

@@ -24,6 +24,7 @@ FAIL=0
 # increment on an XPASS. See tests/lib/xfail.sh for the contract.
 # shellcheck source=./lib/xfail.sh
 . "$AGENTS_ROOT/tests/lib/xfail.sh"
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -114,18 +115,22 @@ new_env() {
     ENV_SEQ=$((ENV_SEQ + 1))
     SID="clfin$ENV_SEQ"
     PLANS="$TMPDIR_BASE/plans-$ENV_SEQ"
-    mkdir -p "$PLANS"
+    WORKFLOW_STATE="$TMPDIR_BASE/workflow-$ENV_SEQ"
+    mkdir -p "$PLANS" "$WORKFLOW_STATE"
+    export CLAUDE_WORKFLOW_DIR="$WORKFLOW_STATE"
+    export WORKFLOW_PLANS_DIR="$PLANS"
 }
 
 # --- artifact paths ---------------------------------------------------------
-# All take <plans> <sid> <format>.
-ledger_file()   { printf '%s/%s-%s-concern-ledger.txt' "$1" "$2" "$3"; }
-snapshot_file() { printf '%s/%s-%s-concern-ledger-cap-snapshot.txt' "$1" "$2" "$3"; }
-json_file()     { printf '%s/%s-%s-unresolved-concerns.json' "$1" "$2" "$3"; }
+# Control-file helpers: $1 (plans) is ignored; path derived from CLAUDE_WORKFLOW_DIR.
+# $2=sid, $3=format (ledger/round/snapshot/json/delta); $4=cycle or round as needed.
+ledger_file()   { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-concern-ledger.txt' "$d" "$3"; }
+snapshot_file() { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-concern-ledger-cap-snapshot.txt' "$d" "$3"; }
+json_file()     { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-unresolved-concerns.json' "$d" "$3"; }
 diag_file()     { printf '%s/%s-%s-finalize-diagnostic.txt' "$1" "$2" "$3"; }
-round_file()    { printf '%s/%s-%s-round-number.txt' "$1" "$2" "$3"; }
-cycle_file()    { printf '%s/%s-%s-concern-ledger-cycle%s.txt' "$1" "$2" "$3" "$4"; }
-delta_file()    { printf '%s/%s-%s-round-%s-delta-%s.txt' "$1" "$2" "$3" "$4" "$5"; }
+round_file()    { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-round-number.txt' "$d" "$3"; }
+cycle_file()    { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-concern-ledger-cycle%s.txt' "$d" "$3" "$4"; }
+delta_file()    { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-round-%s-delta-%s.txt' "$d" "$3" "$4" "$5"; }
 
 # --- ledger fixtures --------------------------------------------------------
 # row <id> <sev> <state> <first> <last> <slot> <discrim> <origin> <producers> <flags> <text>
@@ -288,20 +293,40 @@ done
 # ---------------------------------------------------------------------------
 SUITE_DIR="$AGENTS_ROOT/tests/bin/bin-concern-ledger-finalize"
 
+case_begin "finalize-modes-schema" "bin/lib/concern-ledger/finalize.sh"
 # shellcheck source=./bin-concern-ledger-finalize/modes-schema.sh
 . "$SUITE_DIR/modes-schema.sh"
+case_end
+
+case_begin "finalize-atomic-failclosed" "bin/lib/concern-ledger/finalize.sh"
 # shellcheck source=./bin-concern-ledger-finalize/atomic-failclosed.sh
 . "$SUITE_DIR/atomic-failclosed.sh"
+case_end
+
+case_begin "finalize-static-contracts" "bin/concern-ledger"
 # shellcheck source=./bin-concern-ledger-finalize/static-contracts.sh
 . "$SUITE_DIR/static-contracts.sh"
+case_end
+
+case_begin "finalize-loop-integration" "bin/run-codex-review-loop"
 # shellcheck source=./bin-concern-ledger-finalize/loop-integration.sh
 . "$SUITE_DIR/loop-integration.sh"
+case_end
+
+case_begin "finalize-cap-outline-detail" "bin/lib/concern-ledger/finalize.sh"
 # shellcheck source=./bin-concern-ledger-finalize/cap-outline-detail.sh
 . "$SUITE_DIR/cap-outline-detail.sh"
+case_end
+
+case_begin "finalize-convergence-after-nonconverged" "bin/lib/concern-ledger/finalize.sh"
 # shellcheck source=./bin-concern-ledger-finalize/convergence-after-nonconverged.sh
 . "$SUITE_DIR/convergence-after-nonconverged.sh"
+case_end
+
+case_begin "finalize-corrupted-json" "bin/lib/concern-ledger/finalize.sh"
 # shellcheck source=./bin-concern-ledger-finalize/corrupted-json.sh
 . "$SUITE_DIR/corrupted-json.sh"
+case_end
 
 xfail_summary
 echo ""

@@ -10,6 +10,8 @@
 const { parse } = require("../../lib/command-ir");
 const { extractSubstitutionContents } = require("../../lib/command-parser");
 const { collectWriteTargetsFromSegments, SHELL_CONFIG_VERB_SET } = require("../../lib/bash-write-targets");
+const { extractRenameSources } = require("../../lib/bash-write-targets/cp-mv");
+const pwshRename = require("../../lib/bash-write-targets/pwsh");
 const {
   classifyProtectedPath,
   mentionsProtectedName,
@@ -39,6 +41,24 @@ function unparsedVerdict(cmd) {
     return TOKEN_MENTION_RE.test(cmd) ? "unparsed-token" : "unparsed-marker";
   }
   return hitsProtectedViaInterpreter(cmd) ? "interpreter" : null;
+}
+
+// A rename deletes its source from the source directory, so each mv / Move-Item / Rename-Item
+// source is judged as a write target. An unreadable rename segment fails closed.
+function renameSourcesHitProtected(segments, idx, ctx) {
+  const seg = segments[idx];
+  for (const sources of [extractRenameSources(seg), pwshRename.extractRenameSources(seg)]) {
+    if (sources === null) {
+      const verdict = unparsedVerdict(seg.rawText || "");
+      if (verdict) return verdict;
+      continue;
+    }
+    for (const src of sources) {
+      const kind = classifyBashWriteTarget(src, priorAssignmentsText(segments, idx), ctx);
+      if (kind) return kind;
+    }
+  }
+  return null;
 }
 
 // Recursion cap for command text nested inside command text (eval bodies,
@@ -165,6 +185,8 @@ function bashHitsProtected(cmd, opts, _depth) {
       const ctx = { workflowDir, cwd: commandCwd(segments, idx, toolCwd), sessionCtx };
       const kind = segmentArgvHitsProtectedArg(segments[idx], priorAssignmentsText(segments, idx), ctx);
       if (kind) return kind;
+      const renameKind = renameSourcesHitProtected(segments, idx, ctx);
+      if (renameKind) return renameKind;
       // HIGH-3 / MEDIUM-5: `eval <text>` and `<reader> <<< <text>` hand a
       // string back to the shell as a command line. Re-run the WHOLE scan on
       // it rather than enumerating readers or adding one more interpreter

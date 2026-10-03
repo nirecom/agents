@@ -1,0 +1,51 @@
+#!/usr/bin/env node
+":" //; exec node "$0" "$@"
+// bin/workflow-control-dir --session <sid> [--file <name>] [--for-write]
+// Prints <CLAUDE_WORKFLOW_DIR>/<sid>.control[/<name>] — the shell and prompt face
+// of hooks/workflow-state/state-io/control-dir.js. Runs under bash or node.
+// Exit: 0 path printed; 2 usage / invalid sid or name; 3 legacy control file could
+// not be migrated (ControlMigrationError); 1 any other refusal (e.g. symlinked dir).
+const path = require("path");
+
+const CD = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "control-dir.js"));
+
+function die(code, msg) {
+  process.stderr.write(`workflow-control-dir: ${msg}\n`);
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const out = { forWrite: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--for-write") out.forWrite = true;
+    else if (a === "--session" || a === "--file") {
+      if (i + 1 >= argv.length) die(2, `${a} needs a value`);
+      out[a.slice(2)] = argv[++i];
+    } else die(2, `unknown argument: ${a}`);
+  }
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+if (args.session === undefined) die(2, "usage: workflow-control-dir --session <sid> [--file <name>] [--for-write]");
+try {
+  CD.assertValidControlSid(args.session);
+  if (args.file !== undefined) CD.assertControlName(args.file);
+} catch (e) {
+  die(2, e.message);
+}
+
+let result;
+try {
+  result = args.file === undefined
+    ? CD.sessionControlDir(args.session, { forWrite: args.forWrite })
+    : CD.controlPath(args.session, args.file, { forWrite: args.forWrite });
+} catch (e) {
+  if (e instanceof CD.ControlMigrationError) {
+    if (!args.forWrite) e.log();
+    die(3, `${e.message}\nlegacy path: ${e.legacyPath}`);
+  }
+  die(1, e.message);
+}
+process.stdout.write(`${process.platform === "win32" ? result.replace(/\\/g, "/") : result}\n`);

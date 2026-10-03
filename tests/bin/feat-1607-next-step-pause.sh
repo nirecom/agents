@@ -41,7 +41,7 @@ for(let i=0;i+2<a.length;i+=3){const [k,tn,sid]=a.slice(i,i+3);
    st.alert.findings=[{categories:['code'],severity:'error',detail:'blocking',reporter:'workflow-gate',status:'confirmed',timestamp:now()}];}
   else{st.alert.alert_phase='done';st.alert.last_run_at=now();st.alert.findings_surfaced_at=null;st.alert.cumulative_severity='warning';
    st.alert.findings=[{categories:['workflow'],severity:'warning',detail:'scope drift observed',reporter:'supervisor',status:'confirmed',timestamp:now()}];}
-  fs.writeFileSync(w.getStatePath(sid),JSON.stringify(st));
+  fs.writeFileSync(w.getStatePath(sid,{forWrite:true}),JSON.stringify(st));
  }catch(e){process.stderr.write('seed '+k+' '+sid+': '+e.message+'\n');}}" "$@" >/dev/null 2>&1
 }
 touch_marker() { : > "$1/$2"; }   # <tmp> <filename>
@@ -241,7 +241,7 @@ run_P11() {
         "$RWT" 15 node "$AGENTS_DIR/hooks/stop-l2-findings-display.js" <<< '{"session_id":"n11sid","transcript_path":""}' 2>/dev/null)
     if ! echo "$outp" | grep -q 'additionalContext'; then pass "P11a: stop-l2-findings-display does not re-surface findings during pause"
     else fail "P11a: RED-EXPECTED: findings still surfaced during pause; out=$outp"; fi
-    surfaced=$(grep -o '"findings_surfaced_at":[^,}]*' "$tmp"/n11sid-supervisor-state.json 2>/dev/null | head -1)
+    surfaced=$(grep -o '"findings_surfaced_at":[^,}]*' "$tmp"/n11sid.control/supervisor-state.json 2>/dev/null | head -1)
     if echo "$surfaced" | grep -q 'null'; then pass "P11b: findings_surfaced_at left null during pause (findings not consumed)"
     else fail "P11b: RED-EXPECTED: findings_surfaced_at written during pause (findings wrongly consumed); got $surfaced"; fi
     rm -rf "$tmp" 2>/dev/null || true

@@ -467,7 +467,7 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit|editFiles|NotebookEdit|Bash|runInTerminal|runCommands",
+        "matcher": "Edit|Write|MultiEdit|editFiles|NotebookEdit|Bash|runInTerminal|runCommands|PowerShell",
         "hooks": [
           {
             "type": "command",

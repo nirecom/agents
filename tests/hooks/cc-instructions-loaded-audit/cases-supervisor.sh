@@ -2,15 +2,11 @@
 # Tests: hooks/instructions-loaded-audit.js, hooks/lib/supervisor-emit.js
 # Tags: rules-injection, instructions-loaded, supervisor, secret-leakage, canary, redaction, TL2, scope:common
 
-# Secret containment on the SUPERVISOR path, under a RESOLVABLE workflow session. Why separately:
-# resolveWorkflowSessionId() returns null in the main fixture (no WORKTREE_NOTES.md Session-ID, empty
-# plans dir), so the hook skips supervisor emission entirely — every leakage canary asserted there
-# is satisfied by a code path that never runs, the strongest false green ("did not leak" really means
-# "nothing was written"). A leakage test must run where the write happens. So this file builds a session
-# that resolves (WORKTREE_NOTES.md Session-ID in CWD = priority 1, plus a matching plan artifact), fires a
-# VIOLATING payload whose rule body and load_reason are stuffed with canaries, and asserts both halves: the
-# emission happened (state file + actionable finding), and no canary reached any receipt, supervisor state,
-# artifact filename, or stderr — asserting only the second half would pass on a hook that emits nothing.
+# Secret containment on the SUPERVISOR path under a RESOLVABLE workflow session (the main
+# fixture resolves no session, so emission never runs there — a false green). Fires a
+# canary-stuffed VIOLATING payload and asserts both halves: the emission happened (state
+# file + actionable finding) AND no canary reached any receipt, state, filename, or stderr.
+# #2434: supervisor state is a control file, <CLAUDE_WORKFLOW_DIR>/<wsid>.control/.
 
 echo ""
 echo "=== supervisor emission under a resolvable session (containment + actionability) ==="
@@ -64,7 +60,7 @@ printf '%s' "$SUP_PAYLOAD" | (cd "$SUP_CWD" && WORKFLOW_PLANS_DIR="$(node_path "
 
 # --- U0: the emission path must actually have run. This is the gate that makes every
 # assertion below meaningful; without it they are all vacuously true. ---
-SUP_STATES="$(find "$SUP_PLANS" -name '*-supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
+SUP_STATES="$(find "$WFDIR/$SUP_WSID.control" -name 'supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$SUP_RC" != "0" ]; then
     fail "U0: the hook exited $SUP_RC — it must always fail open"
 elif [ "$SUP_STATES" = "0" ]; then
@@ -82,8 +78,8 @@ const dir = process.argv[1];
 const strings = [];
 let findings = 0, named = 0, verdicted = 0;
 for (const f of fs.readdirSync(dir)) {
-  if (!f.endsWith("-supervisor-state.json")) continue;
-  let j; try { j = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")); } catch (_) { continue; }
+  if (!f.endsWith(".control")) continue;
+  let j; try { j = JSON.parse(fs.readFileSync(path.join(dir, f, "supervisor-state.json"), "utf8")); } catch (_) { continue; }
   const root = (j && j.state && typeof j.state === "object") ? j.state : j;
   for (const g of ["layer1", "alert", "audit"]) {
     for (const x of (((root || {})[g] || {}).findings || [])) {
@@ -102,7 +98,7 @@ const ctrl = strings.filter((s) => /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.te
 const sentinelish = strings.filter((s) => s.includes("<<WORKFLOW_")).length;
 console.log(["FINDINGS=" + findings, "NAMED=" + named, "VERDICTED=" + verdicted,
              "CTRL=" + ctrl, "SENTINELISH=" + sentinelish].join(" "));
-' "$(node_path "$SUP_PLANS")" 2>&1)"
+' "$(node_path "$WFDIR")" 2>&1)"
 supf() { printf '%s' "$SUP_REPORT" | tr ' ' '\n' | grep "^$1=" | head -1 | cut -d= -f2-; }
 
 if [ "$(supf FINDINGS)" = "0" ] || [ -z "$(supf FINDINGS)" ]; then

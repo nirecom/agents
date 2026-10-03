@@ -105,7 +105,7 @@ DETAIL
 # Seed workflow-gate state with user_verification=complete
 seed_wf_state() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const wf = require('$WFSTATE_NODE');
 wf.markStep('$sid', 'user_verification', 'complete');
 " >/dev/null 2>&1
@@ -114,19 +114,19 @@ wf.markStep('$sid', 'user_verification', 'complete');
 # Seed supervisor state (empty findings, no cumSev — scope-drift is unconditional)
 seed_supervisor_state() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 // No findings, no cumSev — scope-drift check is unconditional
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
 read_audit_state() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 process.stdout.write(JSON.stringify((st && st.audit) || null));
@@ -149,7 +149,7 @@ process.stdout.write(String((r && r.freshness_key) || 'null'));
 # the read-only freshness backstop approves (when fresh + non-BLOCK).
 seed_tr5_terminal_run() {
     local tmp_node="$1" sid="$2" verdict="$3" fk="$4"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const st = w.readState('$sid') || {};
@@ -161,7 +161,7 @@ st.audit.ledger = [{
 }];
 st.audit.last_terminal_run_id = 'run-0011';
 st.audit.audit_verdict_summary = '$verdict';
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
@@ -191,7 +191,7 @@ run_premerge_hook() {
         cd "$tmp_node" || exit 1
         unset CLAUDE_ENV_FILE CLAUDE_SESSION_ID
         CLAUDE_CODE_SESSION_ID="$wsid" \
-        WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
             run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null
     )
 }
@@ -469,7 +469,7 @@ run_c2() {
     seed_wf_state "$tmp_node" "$sid"
 
     # Seed supervisor state: warning finding + audit_phase=complete + audit_verdict=BLOCK
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$sid');
 st.alert.cumulative_severity='warning';
@@ -478,7 +478,7 @@ st.audit.audit_phase='complete';
 st.audit.audit_verdict='BLOCK';
 st.audit.audit_cause='scope-drift:pre-merge';
 st.audit.audit_last_run_at=new Date().toISOString();
-fs.writeFileSync(w.getStatePath('$sid'),JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
 " >/dev/null 2>&1
 
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash","cwd":"%s"}}' "$sid" "$repodir_node")
