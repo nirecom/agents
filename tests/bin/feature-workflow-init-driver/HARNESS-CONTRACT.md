@@ -12,8 +12,9 @@ carries a one-line pointer here; this file is the SSOT.
 - `wip-state.sh` is resolved as `$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh`
   when `AGENTS_CONFIG_DIR` is set (repo-root-relative fallback only when unset).
   The harness points `AGENTS_CONFIG_DIR` at a per-case mock config root.
-- The checkpoint JSON (`<sid>-wi-checkpoint.json`) and `context.md` are written
-  under the directory given by the `WORKFLOW_PLANS_DIR` env var when set.
+- `context.md` is written under `WORKFLOW_PLANS_DIR`; the checkpoint JSON is written
+  at `$CLAUDE_WORKFLOW_DIR/<sid>.control/wi-checkpoint.json` (#2434). The harness pins
+  both per case (`$PLANS`, `$WF`) and never leaves either unset.
 - `CLAUDE_SESSION_ID` provides the session id deterministically; the mock config
   root also ships `bin/resolve-session-id` echoing `$CLAUDE_SESSION_ID` in case the
   driver unconditionally spawns that primitive.

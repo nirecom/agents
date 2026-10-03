@@ -7,6 +7,8 @@ set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 WRAPPER_SRC="$AGENTS_WORKTREE/bin/run-codex-review-loop"
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+. "$AGENTS_WORKTREE/tests/lib/harness.sh"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -30,6 +32,14 @@ if ! grep -q -- "--round" "$WRAPPER_SRC" || ! grep -q -- "--ledger" "$WRAPPER_SR
     echo "FAIL: $WRAPPER_SRC does not support --round / --ledger (implementation missing)"
     exit 1
 fi
+
+# #2434: control files (counter, ledger default, risk signal) live under
+# $CLAUDE_WORKFLOW_DIR/<sid>.control/, so pin both state roots to a fixture.
+STATE_ROOT=$(mktemp -d)
+trap 'rm -rf "$STATE_ROOT"' EXIT
+export CLAUDE_WORKFLOW_DIR="$STATE_ROOT/workflow-state"
+export WORKFLOW_PLANS_DIR="$STATE_ROOT/plans"
+mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
 
 setup_mock_env() {
     local test_tmp="$1"
@@ -72,7 +82,7 @@ EOF
          "$agents_dir/bin/lib/codex-review-loop/ledger-verdict.sh"
     fi
     cp "$AGENTS_WORKTREE"/bin/lib/codex-review-loop/*.sh "$agents_dir/bin/lib/codex-review-loop/"
-    cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
+    [[ -f "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" ]] && cp "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" "$agents_dir/bin/lib/safe-state-path.sh"
     cp "$AGENTS_WORKTREE/bin/concern-ledger" "$agents_dir/bin/concern-ledger"
     chmod +x "$agents_dir/bin/concern-ledger"
     cp "$AGENTS_WORKTREE/bin/lib/concern-ledger.sh" "$agents_dir/bin/lib/concern-ledger.sh"
@@ -112,343 +122,23 @@ invoke() {
     AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
 }
 
-# ---------------------------------------------------------------------------
-# 1. Round 1, all LOW concerns → APPROVED (end-to-end happy path)
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-1. [LOW] nit one
-2. [LOW] nit two"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i1 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 0 ]]; then
-    pass "1: round 1 all LOW → APPROVED (exit 0)"
-  else
-    fail "1: round 1 all LOW → expected exit 0, got $rc"
-  fi
-}
+SCRIPT_DIR="$(dirname "$0")/feature-673-run-loop-verdict-integration"
 
-# ---------------------------------------------------------------------------
-# 2. Round 1, HIGH concern present → CONTINUE, ledger written
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-1. [HIGH] big issue
-2. [LOW] minor"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i2 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 1 ]] && [[ -f "$LEDGER" ]] && grep -q "^C1|HIGH|" "$LEDGER"; then
-    pass "2: round 1 HIGH → CONTINUE (exit 1) + ledger written"
-  else
-    fail "2: round 1 HIGH → expected exit 1 + ledger, got exit $rc, ledger: $(cat "$LEDGER" 2>/dev/null)"
-  fi
-}
+case_begin "safe-state-path-preflight" "bin/run-codex-review-loop"
+# The shared loop sources bin/lib/safe-state-path.sh (#2434 rename of
+# safe-plans-path.sh). Name its absence once instead of letting every case
+# below cascade into an unexplained exit 4.
+if [[ -f "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" ]]; then
+  pass "preflight: bin/lib/safe-state-path.sh present"
+else
+  fail "implementation missing: bin/lib/safe-state-path.sh (the cases below exit 4 until it exists)"
+fi
+case_end
 
-# ---------------------------------------------------------------------------
-# 3. Round 2, HIGH persists with budget=2 remaining → AUTO_EXTEND (exit 5)
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  printf 'C1|HIGH|big issue\n' > "$LEDGER"
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C1: unresolved — still big"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i3 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 5 ]]; then
-    pass "3: round 2 HIGH with budget=2 remaining → AUTO_EXTEND (exit 5)"
-  else
-    fail "3: round 2 HIGH with budget=2 → expected AUTO_EXTEND (exit 5), got $rc"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 3b. Round 2, HIGH persists, budget=0, no --risk-signal → HIGH_UNRESOLVED
-#     (exit 6). Used to be exit 0, reporting an unresolved HIGH as approved
-#     (#2068). Ledger and artifact must outlive the refusal for the caller.
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  printf 'C1|HIGH|big issue\n' > "$LEDGER"
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C1: unresolved — still big"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i3b --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 1 --extensions-used 1 \
-    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 6 ]]; then
-    pass "3b: round 2 HIGH budget=0 no risk → HIGH_UNRESOLVED (exit 6)"
-  else
-    fail "3b: round 2 HIGH budget=0 no risk → expected HIGH_UNRESOLVED (exit 6), got $rc"
-  fi
-  if [[ -f "$LEDGER" ]]; then
-    pass "3b: the ledger survives the refusal, so the concern keeps its identity"
-  else
-    fail "3b: the ledger was dropped, losing the HIGH the exit is about"
-  fi
-  if [[ -f "$PLANS/i3b-detail-plan-unresolved-concerns.json" ]]; then
-    pass "3b: and the unresolved concern is written out for the caller to read"
-  else
-    fail "3b: no unresolved-concerns artifact was written for the refused round"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 3c. Round 2, HIGH persists, budget=0, WITH --risk-signal → ESCALATE (exit 2)
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  printf 'C1|HIGH|big issue\n' > "$LEDGER"
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C1: unresolved — still big"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i3c --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 1 --extensions-used 1 \
-    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" \
-    --risk-signal "intent-unachievable" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 2 ]]; then
-    pass "3c: round 2 HIGH budget=0 risk-signal → ESCALATE (exit 2)"
-  else
-    fail "3c: round 2 HIGH budget=0 risk-signal → expected ESCALATE (exit 2), got $rc"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 3d. --risk-signal accepted by run-codex-review-loop arg parser (no exit 4)
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-1. [LOW] nit one
-2. [LOW] nit two"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i3d --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" \
-    --risk-signal "x" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 0 ]] && [[ $rc -ne 4 ]]; then
-    pass "3d: --risk-signal accepted by arg parser (no exit 4)"
-  else
-    fail "3d: --risk-signal accepted by arg parser → expected exit 0, got $rc (exit 4 means flag not yet supported)"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 4. Round 3, HIGH persists with budget=2 remaining → AUTO_EXTEND (exit 5)
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  printf 'C1|HIGH|big issue\n' > "$LEDGER"
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C1: unresolved — still big"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i4 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --force-round 3 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 5 ]]; then
-    pass "4: round 3 HIGH with budget=2 remaining → AUTO_EXTEND (exit 5)"
-  else
-    fail "4: round 3 HIGH with budget=2 → expected AUTO_EXTEND (exit 5), got $rc"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 5. Round 2, new concern C99 injected → stripped; remaining resolved → APPROVED
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  printf 'C1|HIGH|big issue\n' > "$LEDGER"
-  # Codex returns only a new (not in ledger) concern — after stripping, nothing remains
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C99: unresolved — injected new"
-  rc=0
-  STDERR_OUT=$(invoke "$MOCK" --format detail-plan --session-id i5 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" 2>&1 >/dev/null) || rc=$?
-  if [[ $rc -eq 0 ]] && echo "$STDERR_OUT" | grep -q "C99"; then
-    pass "5: round 2 injected C99 stripped → APPROVED + warning in stderr"
-  else
-    fail "5: expected exit 0 + C99 warning. Got exit $rc, stderr: $STDERR_OUT"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 6. Round 1 MEDIUM only → CONTINUE; Round 2 MEDIUM persists → APPROVED
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-
-  # Round 1: MEDIUM only → CONTINUE
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-1. [MEDIUM] medium one"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i6 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 1 ]]; then
-    pass "6a: round 1 MEDIUM only → CONTINUE"
-  else
-    fail "6a: round 1 MEDIUM only → expected exit 1, got $rc"
-  fi
-
-  # Round 2: same MEDIUM concern persists → APPROVED (MEDIUM-only round>=2)
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C1: unresolved — medium one still"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i6 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 0 ]]; then
-    pass "6b: round 2 MEDIUM persists → APPROVED"
-  else
-    fail "6b: round 2 MEDIUM persists → expected exit 0, got $rc"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 7. Round 2 missing ledger file → exit 4
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/no-such-ledger.txt"
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C1. [HIGH] foo"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i7 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --force-round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 4 ]]; then
-    pass "7: round 2 missing ledger → exit 4"
-  else
-    fail "7: expected exit 4, got $rc"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 8. --round flag absent → the wrapper numbers the round itself (#2068). The
-#    counter is the wrapper's own, so a caller that names no round is not a
-#    caller error any more: round 1 runs and the verdict is the reviewer's.
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  make_review_codex_mock "$MOCK" "APPROVED"
-  rc=0
-  invoke "$MOCK" --format detail-plan --session-id i8 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --ledger "$TMP/ledger.txt" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 0 ]]; then
-    pass "8: --round flag absent → round 1 is allocated and the round is judged"
-  else
-    fail "8: --round absent → expected the auto-numbered round to run (exit 0), got $rc"
-  fi
-  if [[ "$(cat "$PLANS/i8-detail-plan-round-number.txt" 2>/dev/null)" == "" ]]; then
-    pass "8: and the terminal retires the counter it allocated"
-  else
-    fail "8: the counter outlived the terminal round"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 9. outline-plan format: Round-1 MISSING_ALTERNATIVE: body parsed for severity
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  make_review_codex_mock "$MOCK" "MISSING_ALTERNATIVE: 1. [HIGH] need async option
-2. [MEDIUM] consider sync fallback"
-  rc=0
-  invoke "$MOCK" --format outline-plan --session-id i9 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 1 ]]; then
-    pass "9: outline-plan MISSING_ALTERNATIVE round 1 → CONTINUE (exit 1)"
-  else
-    fail "9: outline-plan MISSING_ALTERNATIVE → expected exit 1, got $rc"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 10. outline-plan format: concern IDs assigned in ledger
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  make_review_codex_mock "$MOCK" "MISSING_ALTERNATIVE:
-1. [HIGH] need async option"
-  invoke "$MOCK" --format outline-plan --session-id i10 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" >/dev/null 2>&1 || true
-  if [[ -f "$LEDGER" ]] && grep -q "^C1|HIGH|" "$LEDGER"; then
-    pass "10: outline-plan assigns C1 in ledger"
-  else
-    fail "10: outline-plan ledger missing C1. Contents: $(cat "$LEDGER" 2>/dev/null)"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 11. Full concern text recovered exactly from ledger in round 2
-# ---------------------------------------------------------------------------
-{
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
-  MOCK=$(setup_mock_env "$TMP")
-  PLANS=$(setup_plans_dir "$TMP")
-  LEDGER="$TMP/ledger.txt"
-  EXACT="this exact text must round-trip through pipes | and survive"
-  # Round 1: write ledger
-  make_review_codex_mock "$MOCK" "NEEDS_REVISION
-1. [HIGH] $EXACT"
-  invoke "$MOCK" --format detail-plan --session-id i11 --plans-dir "$PLANS" \
-    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" >/dev/null 2>&1 || true
-
-  if [[ -f "$LEDGER" ]] && grep -q "$EXACT" "$LEDGER"; then
-    pass "11: full concern text (with pipes) preserved in ledger"
-  else
-    fail "11: text not preserved exactly. Ledger: $(cat "$LEDGER" 2>/dev/null)"
-  fi
-}
+# shellcheck source=./feature-673-run-loop-verdict-integration/verdict-cases.sh
+. "$SCRIPT_DIR/verdict-cases.sh"
+# shellcheck source=./feature-673-run-loop-verdict-integration/loop-cases.sh
+. "$SCRIPT_DIR/loop-cases.sh"
 
 # ---------------------------------------------------------------------------
 # Summary

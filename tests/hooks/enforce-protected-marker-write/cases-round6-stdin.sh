@@ -1,46 +1,11 @@
 #!/usr/bin/env bash
 # Part of tests/hooks/enforce-protected-marker-write.sh (rules/coding/file-split.md).
-# Round-6: PROGRAM TEXT DELIVERED ON AN INTERPRETER'S STDIN.
-#
-# Round-5 closed here-string bodies by routing them to the SHELL scanner, which
-# is the right grammar only when the reader IS a shell. Every language
-# interpreter that also executes a program read from stdin stayed open, so the
-# byte-identical body that blocked via `-e` sailed through via `<<<`:
-#
-#     node -e  "require('fs').unlinkSync('<marker>')"   -> BLOCK   (round 5)
-#     node <<< "require('fs').unlinkSync('<marker>')"   -> APPROVE (round 5 hole)
-#
-# The fix keys routing on the RECEIVING COMMAND'S INTERPRETER IDENTITY rather
-# than on the delivery syntax (CPR-E2C: fix the class, not the member), so the
-# cases below are organised by ROUTE, and each route is asserted for BOTH
-# interpreter kinds and for both protected families (marker + token, CPR-ORTH):
-#
-#   R6-8  here-string  -> body known    -> judged in the interpreter's language
-#   R6-9  heredoc      -> body known    -> same, incl. quoted delimiter and the
-#                                          unterminated form (no body extractable
-#                                          -> fail closed, as HIGH-2 does)
-#   R6-10 pipe         -> body OPAQUE   -> fail closed on a protected MENTION
-#   R6-11 `<(...)`     -> body OPAQUE   -> same
-#         `< FILE`     -> the file is EXECUTED -> judged as a path
-#
-# DELIBERATE ASYMMETRY (do not "fix" these into symmetry):
-#   * an opaque route is judged by MENTION, not parsed, so `printf '<read-only
-#     body>' | node` BLOCKS while the same body via `-e` is APPROVED. Over-block
-#     is the sanctioned direction for "cannot analyse" (CPR-ORTH with HIGH-2).
-#   * a heredoc feeding a SHELL or a non-interpreter is NOT shell-recursed:
-#     recursing all heredocs as shell text would fail-close on ordinary prose,
-#     which 9-nr3/9-nr4 pin as ALLOW.
-#
-# #1709 READ symmetry is the non-negotiable counterweight and is asserted on all
-# three body routes (`-e`, `<<<`, heredoc): a guard that blocks reading a marker
-# breaks the workflow it is meant to protect.
-#
-# TABLE FORMAT: name|want|payload (payload LAST, so it may contain `|`).
-# @DIR@ -> sandbox workflow dir, @MK@ -> marker basename, @TOK@ -> token
-# basename, @NL@ -> a real newline (heredocs need multi-line command text).
-
-# _r6_json_esc: json_esc plus newline escaping - a raw newline inside a JSON
-# string is invalid JSON, and every heredoc case below carries one.
+# Round-6: program text on an interpreter's STDIN. Routing keys on the receiving
+# command's interpreter identity, not delivery syntax (CPR-E2C): R6-8 here-string and
+# R6-9 heredoc judge the body in its language; R6-10 pipe / R6-11 `<(...)` are opaque
+# and fail closed on a protected MENTION (deliberate over-block); `< FILE` is a path.
+# Heredocs into a shell are not recursed (9-nr3/9-nr4). #1709 READ symmetry holds on
+# every body route. TABLE: name|want|payload (payload last; may contain `|`).
 _r6_json_esc() {
     local s="$1"
     s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; s="${s//$'\n'/\\n}"
@@ -55,8 +20,12 @@ _r6_mk_input() {
 # _r6_expand <text> - the SSOT for what @DIR@/@MK@/@TOK@/@NL@ mean. Later rounds
 # add placeholders of their own and then delegate here (see ./cases-round9-brace-ansi.sh
 # and ./cases-round10-brace-span.sh), so a spelling is defined in exactly one place.
+# @DIR@ workflow dir, @MK@ marker, @TOK@ token, @NL@ newline. @ODIR@ is a dir outside
+# both state dirs: #2434's strict placement guard blocks every write under @DIR@, so a
+# row asserting "an ordinary name stays writable" must target @ODIR@.
 _r6_expand() {
     local t="$1"
+    t="${t//@ODIR@/$OUTDIR}"
     t="${t//@DIR@/$WFDIR}"
     t="${t//@MK@/$SID.workflow-off}"
     t="${t//@TOK@/$SID.off-clearance}"

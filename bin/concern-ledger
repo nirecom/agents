@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # bin/concern-ledger — CLI front end for bin/lib/concern-ledger.sh (#1992/#1996).
 #
-# Every subcommand addresses the ledger by (plans-dir, session-id, format); the
-# on-disk paths are derived, never passed in, so no caller can drift from the
-# layout the loops and the summarizer agree on.
+# Every subcommand addresses the ledger by (session-id, format); the on-disk paths
+# are derived into <CLAUDE_WORKFLOW_DIR>/<sid>.control (#2434), never passed in.
+# --plans-dir now only places the finalize diagnostic; elsewhere it is a legacy no-op.
 #
 # Exit codes: 0 ok, 1 verdict "not satisfied", 2 usage/invalid argument,
 # 3 check-staged could not read the round at all (distinct from 1 — #2025 C6),
@@ -80,7 +80,7 @@ done
 need() { [ -n "$1" ] || { printf 'concern-ledger: %s is required\n' "$2" >&2; usage; }; }
 
 # need_addr — require the 3-part address unless --ledger was given directly.
-need_addr() { [ -n "$LEDGER_ARG" ] && return 0; need "$PLANS" --plans-dir; need "$SID" --session-id; need "$FORMAT" --format; }
+need_addr() { [ -n "$LEDGER_ARG" ] && return 0; need "$SID" --session-id; need "$FORMAT" --format; }
 
 # validate_round — domain-check --round when supplied. exit 2 on bad value.
 validate_round() {
@@ -126,7 +126,7 @@ validate_args() {
         reduce)   need_addr; need "$ROUND" --round; validate_glob_tokens reduce ;;
         stage)    need_addr; need "$ROUND" --round; need "$PRODUCER" --producer; need "$REPORT" --from-report ;;
         check-staged) need_addr; need "$ROUND" --round; validate_glob_tokens check-staged ;;
-        finalize) need_addr; need "$ROUND" --round ;;
+        finalize) need_addr; need "$ROUND" --round; [ -n "$PLANS" ] || PLANS="${WORKFLOW_PLANS_DIR:-}"; need "$PLANS" --plans-dir ;;
         *) printf 'concern-ledger: unknown subcommand: %s\n' "$1" >&2; usage ;;
     esac
     validate_round
@@ -161,6 +161,24 @@ bad_path() {
 }
 
 validate_args "$SUB"
+
+# Control-dir resolution (#2434): rc 2 is a rejected token, anything else a refusal
+# (symlinked/non-dir <sid>.control or a failed legacy migration) and exits 5.
+CTL=""
+case "$SUB" in
+    slot|bind) ;;
+    *)
+        if [ -n "$SID" ]; then
+            CTL="$(sp_control_dir "$SID")"; CTL_RC=$?
+            if [ "$CTL_RC" -ne 0 ] || [ -z "$CTL" ]; then
+                printf 'concern-ledger: the session control dir could not be resolved (rc %s)\n' "$CTL_RC" >&2
+                [ "$CTL_RC" -eq 2 ] && exit 2
+                exit 5
+            fi
+            export CL_CONTROL_DIR="$CTL"
+        fi
+        ;;
+esac
 
 case "$SUB" in
     slot)
@@ -218,7 +236,8 @@ case "$SUB" in
             [ -z "$EXEC" ] && EXEC="PERFORMED"
         fi
         STAGE_RC=0
-        CL_STAGE_PREFIX="${SID}-" cl_stage "$PLANS" "$FORMAT" "$ROUND" "$PRODUCER" \
+        if [ -n "$CTL" ]; then STAGE_DIR="$CTL"; STAGE_PFX=""; else STAGE_DIR="$PLANS"; STAGE_PFX="${SID}-"; fi
+        CL_STAGE_PREFIX="$STAGE_PFX" cl_stage "$STAGE_DIR" "$FORMAT" "$ROUND" "$PRODUCER" \
             "$EXEC" "$PARSE" "$NORM" >/dev/null || STAGE_RC=$?
         rm -rf "$TMPD"
         # cl_stage's rc 2 is a rejected argument, not a failed publish, and the
@@ -233,7 +252,8 @@ case "$SUB" in
     reduce)
         LED="$(resolve_ledger)"
         [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
-        cl_reduce "$LED" "$PLANS/${SID}-${FORMAT}-round-${ROUND}-delta-*.txt" "$ROUND" "$FORMAT" "$LED"
+        if [ -n "$CTL" ]; then DPAT="$CTL/${FORMAT}-round-${ROUND}-delta-*.txt"; else DPAT="$PLANS/${SID}-${FORMAT}-round-${ROUND}-delta-*.txt"; fi
+        cl_reduce "$LED" "$DPAT" "$ROUND" "$FORMAT" "$LED"
         ;;
     tally)
         LED="$(resolve_ledger)"
@@ -321,7 +341,7 @@ case "$SUB" in
                 else
                     _fallback_msg="(no format):incomplete:$_comp"
                 fi
-            done < <(_cl_list_pattern_files "$PLANS/$SID-$FORMAT-round-$ROUND-delta-*.txt")
+            done < <(_cl_list_pattern_files "$CTL/$FORMAT-round-$ROUND-delta-*.txt")
             if _cl_discovery_failed; then
                 _cl_discovery_disarm
                 printf '(no format):discovery-failed\n'

@@ -149,8 +149,8 @@ st.audit.ledger = [{
 }];
 st.audit.last_terminal_run_id = 'run-0011';
 st.audit.audit_verdict_summary = 'CONTINUE';
-fs.writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(st));
-" 2>&1
+fs.writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(st));
+" 2>&1 || fail "seed_continue: supervisor-state seed write failed" >&2
 }
 
 seed_settled() {
@@ -160,8 +160,8 @@ const schema = require(process.env.SC);
 const fs = require('fs');
 const st = schema.createEmptyState(process.env.SESS);
 Object.assign(st.audit, JSON.parse(process.env.PATCHJSON));
-fs.writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(st));
-" 2>&1
+fs.writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(st));
+" 2>&1 || fail "seed_settled: supervisor-state seed write failed" >&2
 }
 
 state_field() {

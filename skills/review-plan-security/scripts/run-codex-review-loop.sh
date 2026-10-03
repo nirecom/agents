@@ -8,13 +8,13 @@ set -euo pipefail
 # #2276 CPR-ORTH with review-code-security/review-tests: after a terminal exit
 # (2/6) the round counter is deleted; a bare re-run would restart at round 1 and
 # hand the same unchanged plan a fresh 2+1 budget, bypassing the shared cap.
-TERMINAL_FILE="${PLANS_DIR}/${SESSION_ID}-security-plan-terminal.txt"
-# Accept marker for residual HIGH after an exit 6 terminal: its presence authorizes the
-# fingerprint-mismatch branch to clear the guard even when the prior terminal was exit 6.
-EXIT6_ACCEPT_FILE="${PLANS_DIR}/${SESSION_ID}-review-plan-security-exit6-accepted.txt"
-EXIT_REINVOKE_AFTER_TERMINAL=8
-# exit 6 termination occurred, plan changed, but residual HIGH not accepted → re-run blocked.
-EXIT_EXIT6_UNACCEPTED=9
+# The terminal and the exit-6 accept marker live in <sid>.control/ (#2434).
+# shellcheck source=bin/lib/codex-review-loop/review-wrapper-control.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-review-loop/review-wrapper-control.sh" || exit 4
+# The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
+# so a containment refusal is never read as ESCALATE or as codex-unavailable.
+ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" outline intent)" || exit 4
+rwc_resolve security-plan review-plan-security
 
 DRAFT_FILE="${PLANS_DIR}/${SESSION_ID}-detail.md"
 
@@ -28,25 +28,10 @@ compute_draft_fingerprint() {
   printf '%s' "$fp"
 }
 
-if [[ -f "$TERMINAL_FILE" ]]; then
-  PREV_RC="$(sed -n '1p' "$TERMINAL_FILE" 2>/dev/null || true)"
-  PREV_FP="$(sed -n '2p' "$TERMINAL_FILE" 2>/dev/null || true)"
-  CUR_FP=""
-  CUR_FP="$(compute_draft_fingerprint "$DRAFT_FILE")" || CUR_FP=""
-  if [[ -z "$CUR_FP" || -z "$PREV_FP" ]]; then
-    echo "[review-plan-security] ERROR: previous security review ended with a terminal exit (code=${PREV_RC:-?}) and the reviewed-plan fingerprint could not be compared. Keeping the guard armed; edit and re-stage the plan before re-running." >&2
-    exit "$EXIT_REINVOKE_AFTER_TERMINAL"
-  fi
-  if [[ "$CUR_FP" == "$PREV_FP" ]]; then
-    echo "[review-plan-security] ERROR: previous security review ended with a terminal exit (code=${PREV_RC:-?}) and the reviewed plan is unchanged. Re-looping now would defeat the 2+1 round cap. Address the concerns and change the plan, or accept the residual risk." >&2
-    exit "$EXIT_REINVOKE_AFTER_TERMINAL"
-  fi
-  if [ "${PREV_RC:-}" = "6" ] && [ ! -f "$EXIT6_ACCEPT_FILE" ]; then
-    printf '[review-plan-security] Plan changed after an exit 6 terminal, but residual HIGH findings are not accepted.\n  Accept marker: %s\n  Create it: touch "%s"\n  Or: explicitly accept the residual HIGH via AskUserQuestion, then re-run.\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
-    exit "$EXIT_EXIT6_UNACCEPTED"
-  fi
-  rm -f "$TERMINAL_FILE"
-fi
+CUR_FP="$(compute_draft_fingerprint "$DRAFT_FILE")" || CUR_FP=""
+TG_RC=0
+rwc_check_terminal review-plan-security "$CUR_FP" review-plan-security-exit6-accepted.txt security-plan || TG_RC=$?
+(( TG_RC == 0 )) || exit "$TG_RC"
 
 arm_terminal_guard() {
   local rc=$1 fp
@@ -55,20 +40,12 @@ arm_terminal_guard() {
     # rollback path (REDUCE_COMMITTED=true -> _srn_terminate) exactly like exits 2
     # and 6; arm it so re-invocation on unchanged code is blocked (#2256 C4).
     2|6|7)
-      fp=""
       fp="$(compute_draft_fingerprint "$DRAFT_FILE")" || fp=""
-      local _tmp
-      _tmp="$(mktemp "${PLANS_DIR}/.sg-XXXXXX" 2>/dev/null)" || break
-      printf '%s\n%s\n' "$rc" "$fp" > "$_tmp" || { rm -f "$_tmp"; break; }
-      mv -f "$_tmp" "$TERMINAL_FILE" || rm -f "$_tmp"
+      rwc_arm_terminal "$rc" "$fp"
       ;;
   esac
   return "$rc"
 }
-
-# The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
-# so a containment refusal is never read as ESCALATE or as codex-unavailable.
-ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" outline intent)" || exit 4
 
 args=(
   --format security-plan
@@ -98,10 +75,8 @@ for v in CTX_SURVEY_CODE CTX_SURVEY_HISTORY CTX_CONCERNS_LOG; do
   p="${!v:-}"
   if [[ -n "$p" && -s "$p" ]]; then args+=(--context "$p"); fi
 done
-RISK_FILE="$PLANS_DIR/$SESSION_ID-security-plan-risk-signal.txt"
-if [[ -s "$RISK_FILE" ]]; then
-  args+=(--risk-signal "$(head -n1 "$RISK_FILE")")
-fi
+# No risk signal: security-plan has no writer for one, and reading one would let
+# a model-written file turn HIGH_UNRESOLVED into ESCALATE past the exit-6 accept (#2434).
 RC=0
 "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" || RC=$?
 arm_terminal_guard "$RC" || true

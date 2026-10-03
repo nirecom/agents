@@ -42,10 +42,13 @@ tmp_node_for() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
 }
 
+# #2434: marker + env-json are control files — <tmp>/wf/<sid>.control/<name> (call_anchor pins CLAUDE_WORKFLOW_DIR=<tmp>/wf).
+ctl() { mkdir -p "$1/wf/$2.control"; printf '%s' "$1/wf/$2.control/$3"; }
+
 # Invoke isWorktreeEndEnv with a given plans-dir + sessionId; echoes "true"/"false".
 call_anchor() {
     local plansdir="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$plansdir" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$plansdir" CLAUDE_WORKFLOW_DIR="$plansdir/wf" run_with_timeout 10 node -e "
 const { isWorktreeEndEnv } = require('$ANCHOR_NODE');
 console.log(isWorktreeEndEnv('$sid') ? 'true' : 'false');
 " 2>/dev/null
@@ -56,7 +59,7 @@ run_t1() {
     local tmp tmp_node sid out rc
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="anchor1-sid-$$"
-    touch "$tmp/${sid}-wt-cleanup-active"
+    touch "$(ctl "$tmp" "$sid" wt-cleanup-active)"
     out=$(call_anchor "$tmp_node" "$sid"); rc=$?
     rm -rf "$tmp"
     if [ $rc -ne 0 ]; then fail "T-anchor-1: node must exit 0, got rc=$rc"; return; fi
@@ -82,7 +85,7 @@ run_t3() {
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="anchor3-sid-$$"
     # Write old-style env json but NOT the new marker file
-    printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$tmp/${sid}-final-report-env.json"
+    printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$(ctl "$tmp" "$sid" final-report-env.json)"
     out=$(call_anchor "$tmp_node" "$sid")
     rm -rf "$tmp"
     if [ "$out" != "false" ]; then fail "T-anchor-3: env-json only (no marker) must return false, got '$out'"; return; fi
@@ -117,7 +120,7 @@ run_t6() {
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="anchor6-sid-$$"
     # Write valid env-json (old detection method) but NO marker file
-    printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$tmp/${sid}-final-report-env.json"
+    printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$(ctl "$tmp" "$sid" final-report-env.json)"
     out=$(call_anchor "$tmp_node" "$sid")
     rm -rf "$tmp"
     if [ "$out" != "false" ]; then

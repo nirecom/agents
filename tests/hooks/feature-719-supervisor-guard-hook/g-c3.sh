@@ -2,29 +2,16 @@
 # tests/hooks/feature-719-supervisor-guard-hook/g-c3.sh
 # Tests: hooks/supervisor-guard.js (C3 OFF-proposal detection + done-guard)
 # Tags: supervisor, em-supervisor, hook, layer2, stop, scope:issue-specific
-# G-C3a/b/c: detectOffProposal -> arm L2 with C3 cause (#903)
-# G-C3d: alert_phase=done done-guard skips C3 block (#1163)
-# G-C3-text-neg: text-only bypass keyword must NOT trigger C3 (#1162)
-# _lib.sh must be sourced by the caller before sourcing this file.
-#
-# L3 gap (what this L2 test does NOT catch):
-# - hook registration in settings.json Stop hooks (covered by the parent
-#   entrypoint's L3 gap note); these cases invoke the hook script directly.
-#
-# ---------------------------------------------------------------------------
-# G-C3a/b/c: detectOffProposal -> arm L2 with C3 cause (#903)
-# Asserts the state file has alert.alert_cause / alert.alert_phase set after the
-# hook runs over a transcript whose last assistant Bash tool_use command contains
-# the escape sentinel. Post #1162, OFF proposals are detected from Bash tool_use
-# commands only (assistant TEXT content is no longer scanned).
-# ---------------------------------------------------------------------------
+# G-C3a/b/c: a Bash tool_use OFF sentinel arms the alert with a C3 cause (#903, #1162);
+# G-C3d: alert_phase=done skips C3 (#1163); G-C3-text-neg: text alone never triggers C3.
+# _lib.sh must be sourced first. L3 gap: Stop-hook registration (see the entrypoint).
 
 read_alert_cause() {
     # args: tmp sid
     local tmp="$1" sid="$2"
     run_with_timeout 5 node -e "
 const fs = require('fs');
-const p = process.env.WORKFLOW_PLANS_DIR + '/' + '$sid' + '-supervisor-state.json';
+const p = require('$WRITER_NODE').getStatePath('$sid');
 try {
   const s = JSON.parse(fs.readFileSync(p, 'utf8'));
   process.stdout.write(String((s.alert || {}).alert_cause || ''));
@@ -38,7 +25,7 @@ read_alert_phase() {
     local tmp="$1" sid="$2"
     run_with_timeout 5 node -e "
 const fs = require('fs');
-const p = process.env.WORKFLOW_PLANS_DIR + '/' + '$sid' + '-supervisor-state.json';
+const p = require('$WRITER_NODE').getStatePath('$sid');
 try {
   const s = JSON.parse(fs.readFileSync(p, 'utf8'));
   process.stdout.write(String((s.alert || {}).alert_phase || ''));
@@ -58,8 +45,8 @@ run_g_c3a() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g-c3a-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     printf '{"stop_hook_active":false,"session_id":"g-c3a-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
-    cause=$(WORKFLOW_PLANS_DIR="$tmp" read_alert_cause "$tmp" "g-c3a-sid")
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    cause=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" read_alert_cause "$tmp" "g-c3a-sid")
     rm -rf "$tmp"
     if [ "$cause" = "C3 worktree-off proposal" ]; then
         pass "G-C3a: WORKTREE_OFF sentinel in Bash tool_use -> alert_cause = 'C3 worktree-off proposal'"
@@ -78,8 +65,8 @@ run_g_c3b() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g-c3b-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     printf '{"stop_hook_active":false,"session_id":"g-c3b-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
-    cause=$(WORKFLOW_PLANS_DIR="$tmp" read_alert_cause "$tmp" "g-c3b-sid")
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    cause=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" read_alert_cause "$tmp" "g-c3b-sid")
     rm -rf "$tmp"
     if [ "$cause" = "C3 workflow-off proposal" ]; then
         pass "G-C3b: WORKFLOW_OFF sentinel in Bash tool_use -> alert_cause = 'C3 workflow-off proposal'"
@@ -98,8 +85,8 @@ run_g_c3c() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g-c3c-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     printf '{"stop_hook_active":false,"session_id":"g-c3c-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
-    phase=$(WORKFLOW_PLANS_DIR="$tmp" read_alert_phase "$tmp" "g-c3c-sid")
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    phase=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" read_alert_phase "$tmp" "g-c3c-sid")
     rm -rf "$tmp"
     if [ "$phase" = "pending" ]; then
         pass "G-C3c: WORKTREE_OFF sentinel in Bash tool_use -> alert_phase = 'pending'"
@@ -124,7 +111,7 @@ run_g_c3d() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g-c3d-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g-c3d-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -q '"decision":"block"' ); then
@@ -148,7 +135,7 @@ run_g_c3_text_neg() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g-c3-text-neg-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g-c3-text-neg-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -q '"decision":"block"' ); then

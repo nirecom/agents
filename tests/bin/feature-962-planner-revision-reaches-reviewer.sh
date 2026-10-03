@@ -14,6 +14,7 @@ AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 WRAPPER_SRC="$AGENTS_WORKTREE/bin/run-codex-review-loop"
 ERRORS=0
 
+. "$AGENTS_WORKTREE/tests/lib/harness.sh"
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
 
@@ -29,6 +30,24 @@ if [[ ! -f "$WRAPPER_SRC" ]]; then
     echo "SKIP: $WRAPPER_SRC does not exist"
     exit 0
 fi
+
+# #2434: control files live under $CLAUDE_WORKFLOW_DIR/<sid>.control/, so pin
+# both state roots to a fixture before the loop can resolve the real ones.
+STATE_ROOT=$(mktemp -d)
+trap 'rm -rf "$STATE_ROOT"' EXIT
+export CLAUDE_WORKFLOW_DIR="$STATE_ROOT/workflow-state"
+export WORKFLOW_PLANS_DIR="$STATE_ROOT/plans"
+mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+
+case_begin "safe-state-path-preflight" "bin/run-codex-review-loop"
+# The loop sources bin/lib/safe-state-path.sh (#2434 rename of safe-plans-path.sh);
+# name its absence once instead of leaving the cases below to cascade on exit 4.
+if [[ -f "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" ]]; then
+    pass "preflight: bin/lib/safe-state-path.sh present"
+else
+    fail "implementation missing: bin/lib/safe-state-path.sh (the cases below exit 4 until it exists)"
+fi
+case_end
 
 setup_mock_env() {
     local test_tmp="$1"
@@ -66,7 +85,7 @@ EOF
     if [[ -f "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" ]]; then
       cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$agents_dir/bin/lib/cli-exec-guard.sh"
     fi
-    cp "$AGENTS_WORKTREE/bin/lib/safe-plans-path.sh" "$agents_dir/bin/lib/safe-plans-path.sh"
+    cp "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" "$agents_dir/bin/lib/safe-state-path.sh"
     cp "$AGENTS_WORKTREE/bin/concern-ledger" "$agents_dir/bin/concern-ledger"
     chmod +x "$agents_dir/bin/concern-ledger"
     cp "$AGENTS_WORKTREE/bin/lib/concern-ledger.sh" "$agents_dir/bin/lib/concern-ledger.sh"
@@ -139,6 +158,7 @@ invoke() {
 #    HIGH residual + budget remaining is AUTO_EXTEND (exit 5). #962 pins that
 #    a verdict is reached, not which one.
 # ---------------------------------------------------------------------------
+case_begin "case-1-outline-plan-cap1-round2" "bin/run-codex-review-loop"
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
@@ -164,12 +184,14 @@ C1: unresolved"
     fail "1: expected exit 5 (AUTO_EXTEND), got $rc"
   fi
 }
+case_end
 
 # ---------------------------------------------------------------------------
 # 2. Symmetric fix: detail-plan CAP=2, round 2, 2 pre-existing rows.
 #    OLD: old_limit=2, count=2 >= 2 → blocked.
 #    NEW: reviewer runs; same verdict path as case 1 → AUTO_EXTEND (exit 5).
 # ---------------------------------------------------------------------------
+case_begin "case-2-detail-plan-cap2-round2" "bin/run-codex-review-loop"
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
@@ -197,11 +219,13 @@ C1: unresolved"
     fail "2: expected exit 5 (AUTO_EXTEND), got $rc"
   fi
 }
+case_end
 
 # ---------------------------------------------------------------------------
 # 3. CONTINUE under cap: no pre-existing rows, mock appends 1 row.
 #    NEW limit=1+1+0=2 → count=1 < 2 → CONTINUE → exit 1.
 # ---------------------------------------------------------------------------
+case_begin "case-3-continue-under-cap" "bin/run-codex-review-loop"
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
@@ -223,6 +247,7 @@ C1: unresolved"
     fail "3: expected exit 1, got $rc"
   fi
 }
+case_end
 
 # ---------------------------------------------------------------------------
 # 4. The plan.jsonl row count does not steer the cap gate. Same fixture as case 3
@@ -231,6 +256,7 @@ C1: unresolved"
 #    sole cap authority is the round number: round 1 < limit 2 → CONTINUE, exit 1,
 #    identical to case 3.
 # ---------------------------------------------------------------------------
+case_begin "case-4-jsonl-row-count-no-gate-authority" "bin/run-codex-review-loop"
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
@@ -254,6 +280,7 @@ C1: unresolved"
     fail "4: expected exit 1 (round number, not log rows, is the cap authority), got $rc"
   fi
 }
+case_end
 
 # ---------------------------------------------------------------------------
 # Summary

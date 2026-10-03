@@ -369,6 +369,7 @@ LAUNCH_LIB="${RUN_ALL_LAUNCH_LIB:-$AGENTS_DIR/bin/lib/run-all-launch.sh}"
 # shellcheck source=/dev/null
 [ -f "$LAUNCH_LIB" ] && . "$LAUNCH_LIB"
 command -v run_all_exec >/dev/null 2>&1 || run_all_exec() { bash "$1" >"$2" 2>"$3" </dev/null; }
+if command -v run_all_pin_state_dirs >/dev/null 2>&1; then run_all_pin_state_dirs "$WORKDIR" || usage_error "cannot pin the per-run state directories"; fi
 
 launch() {
   local i="$1" script="${WORK[$1]}"

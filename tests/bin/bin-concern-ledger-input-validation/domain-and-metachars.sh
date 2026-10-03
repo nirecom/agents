@@ -5,8 +5,8 @@
 # lang-check: ignore -- table below deliberately includes a non-ASCII session ID fixture
 # ---------------------------------------------------------------------------
 # 1. A session ID reaches a derived file name, so #2025 C9 made the allowlist
-#    fail-closed ([A-Za-z0-9._-]): anything outside it is refused before a byte
-#    is written.
+#    fail-closed: anything outside it is refused before a byte is written. An
+#    interior dot stays legal; a leading dot, '..' and separators do not.
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- input 1: session IDs inside and outside the allowlist ---"
@@ -23,8 +23,8 @@ while IFS='~' read -r label sid want; do
     # session-id validation runs, so use an in-set producer to reach the ID check.
     RC="$(stage_with "$sid" review-security-shared review-code-codex)"
     if [ "$want" = "accepted" ]; then
-        assert_eq "1: $label stages into the plans dir" \
-            "rc=0 landed=in-plans concern=yes" \
+        assert_eq "1: $label stages into its control dir" \
+            "rc=0 landed=in-control-dir concern=yes" \
             "rc=$RC landed=$(landed) concern=$(holds_concern)"
     else
         # Fail-closed is refused *and* inert: a non-zero rc that still left a
@@ -39,7 +39,11 @@ a session ID with dashes             ~ 2026-08-15-sess                      ~ ac
 a session ID with underscores        ~ sess_001_b                           ~ accepted
 a UUID-shaped session ID             ~ 3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d ~ accepted
 a session ID holding a dot           ~ sess.001                             ~ accepted
-a session ID holding a space         ~ sp ace                               ~ rejected
+a session ID with a leading dot      ~ .sess001                             ~ rejected
+a bare '..' session ID               ~ ..                                   ~ rejected
+a session ID holding a backslash     ~ sess\001                             ~ rejected
+an empty session ID                  ~                                      ~ rejected
+a session ID holding a space        ~ sp ace                               ~ rejected
 a non-ASCII session ID               ~ セッション                            ~ rejected
 TABLE
 
@@ -59,12 +63,12 @@ TABLE
     assert_eq "1: an overlong session ID either stages completely or writes nothing at all" \
         "consistent" \
         "$(case "$LONG_OUT" in
-            "rc=zero landed=in-plans concern=yes") printf consistent ;;
+            "rc=zero landed=in-control-dir concern=yes") printf consistent ;;
             "rc=nonzero landed=nowhere concern=no") printf consistent ;;
             *) printf '%s' "$LONG_OUT" ;;
            esac)"
     assert_eq "1: and leaves no publication temporary behind either way" \
-        "0" "$(find "$PLANS" -maxdepth 1 -name '.sp-tmp.*' 2>/dev/null | wc -l | tr -d ' ')"
+        "0" "$(find "$PLANS" "$WF" -maxdepth 2 -name '.sp-tmp.*' 2>/dev/null | wc -l | tr -d ' ')"
 }
 
 # ---------------------------------------------------------------------------
@@ -98,10 +102,12 @@ TABLE
 # A glob in the session ID must not make the CLI address a file it did not name.
 {
     new_box
-    printf 'decoy\n' > "$PLANS/decoy-review-security-shared-round-1-delta-review-code-codex.txt"
+    DECOY="$WF/decoy.control/review-security-shared-round-1-delta-review-code-codex.txt"
+    mkdir -p "${DECOY%/*}"
+    printf 'decoy\n' > "$DECOY"
     stage_with '*' review-security-shared review-code-codex >/dev/null
     assert_eq "2: a '*' session ID does not overwrite an unrelated staged file" \
-        "decoy" "$(cat "$PLANS/decoy-review-security-shared-round-1-delta-review-code-codex.txt" 2>/dev/null || true)"
+        "decoy" "$(cat "$DECOY" 2>/dev/null || true)"
 }
 
 # ---------------------------------------------------------------------------

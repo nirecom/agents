@@ -57,8 +57,9 @@ markStep('$sid', 'workflow_init', 'complete');
 
 count_entries() {
     local tmp="$1" sid="$2" n
-    if [ ! -f "$tmp/wf/$sid-handoff.md" ]; then printf '0'; return 0; fi
-    n=$(grep -c 'gate:block' "$tmp/wf/$sid-handoff.md" 2>/dev/null)
+    # #2434: handoff.md is a control file — <wf>/<sid>.control/handoff.md.
+    if [ ! -f "$tmp/wf/$sid.control/handoff.md" ]; then printf '0'; return 0; fi
+    n=$(grep -c 'gate:block' "$tmp/wf/$sid.control/handoff.md" 2>/dev/null)
     printf '%s' "${n:-0}"
 }
 
@@ -158,7 +159,7 @@ run_C4() {
     local tmp out problems
     tmp="$(make_tmp)"; problems=""
     seed_state "$tmp" "unwritable-sid"
-    mkdir -p "$tmp/wf/unwritable-sid-handoff.md"
+    mkdir -p "$tmp/wf/unwritable-sid.control/handoff.md"
     out="$(run_gate "$tmp" "unwritable-sid" "gh pr merge 99 --squash")"
     case "$out" in
         *'"decision":"block"'*) : ;;
@@ -187,7 +188,7 @@ run_C5() {
     rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit:$rc"
     case "$out" in *'"decision":"block"'*) : ;; *) problems="$problems parse-failure-not-blocked:'${out:0:160}'" ;; esac
-    files="$(ls "$tmp/wf" 2>/dev/null | grep -c 'handoff.md' || true)"
+    files="$(find "$tmp/wf" -name '*handoff.md' 2>/dev/null | grep -c '' || true)"
     [ "$files" -eq 0 ] || problems="$problems sessionless-block-created-an-artifact"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then

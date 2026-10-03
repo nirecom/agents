@@ -3,7 +3,7 @@
 # Tests: hooks/lib/handoff-risk-signal.js, hooks/post-compact.js, hooks/workflow-gate/handoff-record.js, hooks/workflow-mark/reset-handler.js, bin/supervisor-write-audit-verdict, bin/supervisor-write-audit, hooks/lib/supervisor-state-writer/append.js, hooks/workflow-run-tests.js
 # Tags: handoff, risk-signal, nudge-trigger, post-compact, gate-block, reset-from, supervisor-verdict, supervisor-finding, run-tests, fail-open, regression-2430, scope:issue-specific, pwsh-not-required, TL2
 
-# Issue #2430 — a "risk" is an event after which unrecorded working knowledge is most likely to be lost, so the omission-check nudge restarts its timer and halves its limits. Six producers stamp <PLANS_DIR>/<sid>-handoff-risk.json; everything else must leave it alone, or the halved limits become the permanent default. A test failure while tests are expected to be red (write_tests / review_tests / write_code) is the named exception.
+# Issue #2430 — a "risk" is an event after which unrecorded working knowledge is most likely to be lost, so the omission-check nudge restarts its timer and halves its limits. Six producers stamp <CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff-risk.json; everything else must leave it alone, or the halved limits become the permanent default. A test failure while tests are expected to be red (write_tests / review_tests / write_code) is the named exception.
 
 # TL3 gap: the real dispatch of each producer (PostCompact, a live workflow-gate block, the PostToolUse run-tests hook after a real suite run) is not driven; each is fed the envelope or call it receives in production. Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hooks.
 
@@ -45,7 +45,7 @@ cat > "$TMP/risk.js" <<'JS'
 const fs = require('fs');
 const [sid, since] = process.argv.slice(2);
 let raw;
-try { raw = fs.readFileSync(process.env.WORKFLOW_PLANS_DIR + '/' + sid + '-handoff-risk.json', 'utf8'); }
+try { raw = fs.readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/' + sid + '.control/handoff-risk.json', 'utf8'); }
 catch (e) { process.stdout.write('NONE'); process.exit(0); }
 let j;
 try { j = JSON.parse(raw); } catch (e) { process.stdout.write('UNPARSEABLE'); process.exit(0); }
@@ -96,7 +96,7 @@ RESET_OK='echo "<<WORKFLOW_RESET_FROM_clarify_intent: redo the intent check>>"'
 case_begin "risk-module-contract" "hooks/lib/handoff-risk-signal.js"
 cat > "$TMP/unit.js" <<'JS'
 const fs = require('fs');
-const W = process.env.WORKFLOW_PLANS_DIR;
+const W = process.env.CLAUDE_WORKFLOW_DIR;
 const R = require(process.env.AGENTS + '/hooks/lib/handoff-risk-signal.js');
 const bad = [];
 const want = ['compaction', 'gate-block', 'reset-from', 'supervisor-verdict', 'supervisor-finding', 'test-failure'];
@@ -106,9 +106,10 @@ R.recordRiskSignal('u-ok', 'gate-block');
 const at = R.readLastRiskAt('u-ok');
 if (typeof at !== 'number' || Math.abs(at - Date.now()) > 5000) bad.push('readLastRiskAt:' + String(at));
 R.recordRiskSignal('u-bad-source', 'not-a-source');
-if (fs.existsSync(W + '/u-bad-source-handoff-risk.json')) bad.push('unknown-source-written');
+if (!fs.existsSync(W + '/u-ok.control/handoff-risk.json')) bad.push('valid-stamp-not-at-control-path');
+if (fs.existsSync(W + '/u-bad-source.control/handoff-risk.json')) bad.push('unknown-source-written');
 for (const sid of ['../escape', '', null]) { try { R.recordRiskSignal(sid, 'gate-block'); } catch (e) { bad.push('threw:' + e.message); } }
-if (fs.readdirSync(W).some((f) => f.indexOf('escape') !== -1)) bad.push('invalid-sid-written');
+if ([W, W + '/..'].some((d) => fs.readdirSync(d).some((f) => f.indexOf('escape') !== -1))) bad.push('invalid-sid-written');
 for (const sid of ['../escape', '', null]) { try { if (R.readLastRiskAt(sid) !== null) bad.push('invalid-sid-read-not-null'); } catch (e) { bad.push('read-threw:' + e.message); } }
 process.stdout.write(bad.length ? 'BAD:' + bad.join(' | ') : 'OK');
 JS
@@ -183,7 +184,7 @@ case_end
 # An unwritable risk file (a directory at its path) must cost nothing but the
 # stamp: every producer's own output and exit code stay what they were.
 case_begin "risk_write_failure_changes_no_producer" "bin/supervisor-write-audit-verdict"
-for sid in rk-io-compact rk-io-gate rk-io-reset rk-io-verdict rk-io-finding; do seed "$sid"; mkdir -p "$TMP/wf/$sid-handoff-risk.json"; done
+for sid in rk-io-compact rk-io-gate rk-io-reset rk-io-verdict rk-io-finding; do seed "$sid"; mkdir -p "$TMP/wf/$sid.control/handoff-risk.json"; done
 expect "I1: PostCompact still re-injects" "$(injected "$(compact rk-io-compact)")" "yes"
 expect "I1: recordGateBlock still writes its entry" "$(nj call.js gate rk-io-gate)" '{"written":true,"reason":"ok"}'
 expect "I1: the reset is still applied" "$(nj call.js reset rk-io-reset "$RESET_OK")" ""
@@ -191,7 +192,7 @@ OUT="$(verdict_cli rk-io-verdict WARN)"; RC=$?
 expect "I1: the verdict CLI keeps exit 0" "$RC" "0"
 expect "I1: the verdict CLI keeps its stdout" "$OUT" '{"accepted":true,"audit_run_id":null}'
 expect "I1: appendFinding still returns true" "$(nj call.js finding rk-io-finding warning)" "true"
-seed rk-io-tests run_tests; mkdir -p "$TMP/wf/rk-io-tests-handoff-risk.json"
+seed rk-io-tests run_tests; mkdir -p "$TMP/wf/rk-io-tests.control/handoff-risk.json"
 run_tests_hook rk-io-tests 1; RC=$?
 expect "I1: the run-tests hook keeps exit 0" "$RC" "0"
 expect "I1: the run-tests hook still records the failed run" "$(nj observed.js rk-io-tests)" "yes"

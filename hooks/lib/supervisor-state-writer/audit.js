@@ -9,7 +9,6 @@ const {
   readStateOrInit,
   writeAtomic,
 } = require("./shared");
-const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 const { capDeclaredFiles } = require("../audit-ledger");
 const { armAuditRun, finalizeAuditRun, recordBlockOverride } = require("./audit-run");
 
@@ -54,9 +53,7 @@ function writeAuditStateCore(sessionId, patch) {
     }
   }
 
-  const plansDir = getWorkflowPlansDir();
-  fs.mkdirSync(plansDir, { recursive: true });
-  const filePath = getStatePath(sessionId);
+  const filePath = getStatePath(sessionId, { forWrite: true });
 
   const state = readStateOrInit(sessionId);
   if (!state.audit || typeof state.audit !== "object" || Array.isArray(state.audit)) {
@@ -93,7 +90,7 @@ function writeAuditStateCore(sessionId, patch) {
 // around the final writeAtomic.
 function writeAuditState(sessionId, patch) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return false;
-  return withStateLock(getStatePath(sessionId), () => writeAuditStateCore(sessionId, patch)) === true;
+  return withStateLock(getStatePath(sessionId, { forWrite: true }), () => writeAuditStateCore(sessionId, patch)) === true;
 }
 
 // CAS clear: applies patch only when the current audit_phase matches expectedPhase.
@@ -101,7 +98,7 @@ function writeAuditState(sessionId, patch) {
 // the pre-lock "done" snapshot was read (#2256 stale-clear race).
 function writeAuditStateCas(sessionId, expectedPhase, patch) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return false;
-  return withStateLock(getStatePath(sessionId), () => {
+  return withStateLock(getStatePath(sessionId, { forWrite: true }), () => {
     const fresh = readStateOrInit(sessionId);
     const currentPhase = (fresh.audit && fresh.audit.audit_phase != null)
       ? fresh.audit.audit_phase : null;
@@ -129,7 +126,7 @@ function incrementAuditRetryCountCore(sessionId) {
 
 function incrementAuditRetryCount(sessionId) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return { count: 0, frozen: false };
-  const r = withStateLock(getStatePath(sessionId), () => incrementAuditRetryCountCore(sessionId));
+  const r = withStateLock(getStatePath(sessionId, { forWrite: true }), () => incrementAuditRetryCountCore(sessionId));
   return r === undefined ? { count: 0, frozen: false } : r;
 }
 

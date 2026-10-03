@@ -3,7 +3,6 @@
 // terminal-marker cleanup, write_code completion reopen. Entrypoint-private to state-io.js.
 
 const fs = require("fs");
-const path = require("path");
 const { assertValidSessionId, readState, markStep } = require("./core");
 // Called as events.appendEvents at call time (never destructured) so a wrapper
 // installed on the module is honoured.
@@ -94,14 +93,11 @@ function clearReviewTestsWarnings(sessionId, reason, manifest) {
 function clearReviewTestsTerminalMarker(sessionId) {
   try {
     assertValidSessionId(sessionId);
-    const { getWorkflowPlansDir } = require("../../lib/workflow-plans-dir");
-    const markerPath = path.join(
-      getWorkflowPlansDir(),
-      `${sessionId}-test-review-terminal.txt`
-    );
-    fs.unlinkSync(markerPath);
+    const { controlPath } = require("./control-dir");
+    fs.unlinkSync(controlPath(sessionId, "test-review-terminal.txt"));
   } catch (e) {
     // ENOENT (no marker) and any other failure are non-fatal.
+    try { require("./control-dir").diagnoseControlMigration(e, "review-tests"); } catch (_) { /* fail-open */ }
   }
 }
 

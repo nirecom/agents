@@ -1,21 +1,15 @@
 "use strict";
-// bin/worker-dispatch/capability.js
-//
-// Capability validation — the second wall.
-//
-// The payload is untrusted input. The main-worktree guard already rejected
-// obviously dangerous argv, but the guard sees one sanctioned identifier and a
-// file path; it cannot know what the file says. So every field is typed by
-// *what it can cause*, and every path-shaped type is cross-validated against a
-// derived anchor (ACD / MAIN_ROOT / FAMILY / PLANS_DIR).
-//
-// There is deliberately NO generic `abs-path` type. "It is an absolute path" is
-// not a capability — `C:\Windows\System32` is an absolute path too. A field that
-// cannot be tied back to an anchor does not get to be a path.
+// bin/worker-dispatch/capability.js — capability validation, the second wall.
+// The payload is untrusted: the main-worktree guard sees one identifier and a file
+// path, never what the file says. Every field is typed by *what it can cause*, and
+// every path-shaped type is cross-validated against a derived anchor
+// (ACD / MAIN_ROOT / FAMILY / PLANS_DIR / WORKFLOW_DIR). There is deliberately NO
+// generic `abs-path` type: a field that cannot be tied to an anchor is not a path.
 
 const path = require("path");
 
 const { realAbs, isUnder, samePath, sameString, stripTrailingSep } = require("./anchor");
+const controlFile = require("./control-file");
 
 const RE_BRANCH = /^[A-Za-z0-9._/+-]+$/;
 const RE_ABS_PREFIX = /^(?:[A-Za-z]:|[\\/])/;
@@ -201,17 +195,10 @@ function checkDerivedFinalizeScriptsDir(value, anchors) {
   return { value: derived };
 }
 
-// One entry of a `closes_issues` list, in the shape hooks/lib/parse-closes-issues.js
-// returns: { number } for a local issue, { number, repo } for a cross-repo one.
-//
-// The record shape, not a bare integer, is what the canonical parser produces and
-// therefore what the dispatcher must accept (CPR-SSOT). Projecting it down to numbers
-// at the boundary would discard the repo half of each issue's identity, and two
-// issues numbered 42 in two repositories would collapse into one `Closes #42` — a
-// closing keyword GitHub then applies to whichever repo the PR happens to live in.
-//
-// `repo` reuses the repo-ref check, so the `..` segment rejection that protects
-// `gh --repo` arguments applies here too.
+// One `closes_issues` entry in the shape hooks/lib/parse-closes-issues.js returns:
+// { number } or { number, repo }. The record, not a bare integer, is accepted (CPR-SSOT):
+// projecting to numbers would collapse #42 of two repos into one `Closes #42`.
+// `repo` reuses the repo-ref check, so its `..` segment rejection applies here too.
 function checkIssueRef(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return { error: "must be an object of the form { number, repo? }" };
@@ -232,19 +219,10 @@ function checkIssueRef(value) {
   return { value: out };
 }
 
-// The multi-pass finalize state file. Every `path-under-plansdir` constraint
-// applies, PLUS the basename must name THIS session and THIS root issue —
-// residency in the plans dir alone would let one session's payload drive another
-// session's chain, and the file is what carries the chain's authority between
-// passes.
-//
-// CALLER CONTRACT: when checkField is driven directly rather than through
-// validate(), call it in the order
-//     session_id -> root_issue_number -> state_file_path
-// so the two fields this derivation reads have already been rejected on their
-// own terms if malformed. The two reads below re-validate the raw values anyway
-// (they come from the untrusted payload, not from the accepted-value map), so
-// the order affects WHICH error a caller sees, never whether a bad value passes.
+// A plans-dir file whose basename must name THIS session and THIS root issue, so one
+// session's payload cannot drive another session's chain. Direct checkField callers
+// should check session_id and root_issue_number first; both are re-validated raw here,
+// so the order only changes which error is reported, never whether a bad value passes.
 function checkStateFileForSession(value, anchors, payload) {
   const sid = payload ? payload.session_id : null;
   const root = payload ? payload.root_issue_number : null;
@@ -309,6 +287,8 @@ function checkField(value, field, anchors, payload) {
       return checkDerivedBackupDir(value, anchors, payload);
     case "derived-finalize-scripts-dir":
       return checkDerivedFinalizeScriptsDir(value, anchors);
+    case "derived-control-file":
+      return controlFile.checkDerivedControlFile(value, field, anchors, payload);
     default:
       return { error: `has an unknown capability type '${type}'` };
   }
@@ -318,7 +298,7 @@ function checkField(value, field, anchors, payload) {
 // from the caller. They are computed even when the field is absent, so a worker
 // never has to re-derive what this module already knows how to derive — and so
 // the derived value is available to fsguard as a write scope.
-const DERIVED_TYPES = new Set(["derived-backup-dir", "derived-finalize-scripts-dir"]);
+const DERIVED_TYPES = new Set(["derived-backup-dir", "derived-finalize-scripts-dir", "derived-control-file"]);
 
 // Returns { ok, errors, value }. `value` is the accepted payload with defaults
 // applied and every path-shaped field replaced by its canonical form, so a
@@ -337,7 +317,7 @@ function validate(payload, entry, anchors) {
       if (DERIVED_TYPES.has(field.type)) {
         const derived = checkField(undefined, field, anchors, payload);
         if (derived.error) errors.push(`field '${key}' ${derived.error}`);
-        else value[key] = derived.value;
+        else if (derived.value !== undefined) value[key] = derived.value;
         continue;
       }
       if (field.required === true) {
@@ -366,4 +346,10 @@ function validate(payload, entry, anchors) {
   return { ok: errors.length === 0, errors, value };
 }
 
-module.exports = { validate, checkField, BACKUP_DIR_NAME };
+module.exports = {
+  validate,
+  checkField,
+  BACKUP_DIR_NAME,
+  controlNameFor: controlFile.controlNameFor,
+  legacyControlValueOk: controlFile.legacyValueOk,
+};

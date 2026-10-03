@@ -38,12 +38,13 @@ console.log(dir);
     echo "$d"
 }
 
-# write_final_report_env <plans-dir> <sid>
-# Writes <sid>-final-report-env.json with all 4 required categories set to
-# not_required plus their _REASON counterparts — the fixture that arms the guard.
+# write_final_report_env <workflow-dir> <sid>
+# Writes the <workflow-dir>/<sid>.control/final-report-env.json control file (#2434) with all 4
+# required categories set to not_required plus their _REASON counterparts — the fixture that arms the guard.
 write_final_report_env() {
-    local plans="$1" sid="$2"
-    cat > "$plans/$sid-final-report-env.json" <<ENV_EOF
+    local wf="$1" sid="$2"
+    mkdir -p "$wf/$sid.control"
+    cat > "$wf/$sid.control/final-report-env.json" <<ENV_EOF
 {
   "CC_RESTART_REQUIRED": "not_required",
   "CC_RESTART_REASON": "",

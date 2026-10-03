@@ -75,6 +75,12 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_ENV_FILE    2>/dev/null || true
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
+# ledger_path_for <sid> <format> — the ledger the CLI reads under the #2434
+# control-dir layout; creates <sid>.control so the fixture can seed it directly.
+ledger_path_for() {
+    mkdir -p "$CLAUDE_WORKFLOW_DIR/$1.control"
+    printf '%s/%s.control/%s-concern-ledger.txt' "$CLAUDE_WORKFLOW_DIR" "$1" "$2"
+}
 
 # ---------------------------------------------------------------------------
 # Library driver — every library call runs in its own subshell (pattern #2111).
@@ -384,7 +390,7 @@ echo "--- C7: finalize all-rejected → excluded from concerns, counted as rejec
 
 C7_W="$TMPDIR_BASE/c7"; C7_P="$C7_W/plans"; mkdir -p "$C7_P"
 C7_SID="rej-final-all"; C7_FMT="$TFMT_MAIN"
-C7_LED="$C7_P/${C7_SID}-${C7_FMT}-concern-ledger.txt"
+C7_LED="$(ledger_path_for "$C7_SID" "$C7_FMT")"
 mk_ledger "$C7_LED" "$C7_FMT" "$C7_SID" 1
 add_entry "$C7_LED" C1 HIGH rejected 1 1 "$SLOT_REJ" "$DISC_REJ" "$TPROD" "$TPROD" rejected "$TEXT_REJ"
 
@@ -413,7 +419,7 @@ echo "--- C8: finalize mixed rejected/open → open carried, rejected excluded+c
 
 C8_W="$TMPDIR_BASE/c8"; C8_P="$C8_W/plans"; mkdir -p "$C8_P"
 C8_SID="rej-final-mix"; C8_FMT="$TFMT_MAIN"
-C8_LED="$C8_P/${C8_SID}-${C8_FMT}-concern-ledger.txt"
+C8_LED="$(ledger_path_for "$C8_SID" "$C8_FMT")"
 mk_ledger "$C8_LED" "$C8_FMT" "$C8_SID" 1
 add_entry "$C8_LED" C1 HIGH   rejected 1 1 "$SLOT_REJ"  "$DISC_REJ"  "$TPROD" "$TPROD" rejected "$TEXT_REJ"
 add_entry "$C8_LED" C2 MEDIUM open     1 1 "$SLOT_OPEN" "$DISC_OPEN" "$TPROD" "$TPROD" -        "$TEXT_OPEN"
@@ -443,7 +449,7 @@ fi
 echo "--- C9: B2 DISCRIM binding: re-raised same-text concern stays rejected ---"
 C9_P="$TMPDIR_BASE/c9/plans"; mkdir -p "$C9_P"
 C9_S="sess-c9"; C9_F="detail-plan"
-C9_L="$C9_P/${C9_S}-${C9_F}-concern-ledger.txt"
+C9_L="$(ledger_path_for "$C9_S" "$C9_F")"
 C9_T="off-by-one error in index bounds check"
 C9_D="$(discrim_of "$C9_T")"
 

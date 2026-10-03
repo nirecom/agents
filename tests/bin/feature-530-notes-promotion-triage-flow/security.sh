@@ -2,17 +2,9 @@
 # tests/bin/feature-530-notes-promotion-triage-flow/security.sh
 # Tests: bin/worktree-notes-triage.js, bin/worktree-notes-triage/resolve.js
 # Tags: notes-promotion, worktree-notes, triage, security, path-traversal, TL2, scope:issue-specific
-#
-# S — attacker-controlled resolve flags must not escape their anchors, and
-#     attacker-shaped notes paths must not be followed out of the worktree.
-#     (The prompt-injection cases that used to live here moved to injection.sh
-#     when this file crossed the 500-line HARD limit; see rules/coding/file-split.md.)
-#
-# Threat model: --session-id and --pr-branch are interpolated into paths under
-# the plans dir and <main-root>/.worktree-backup/. A caller that can influence a
-# branch name (anyone who can open a PR) could otherwise steer `resolve` at an
-# arbitrary WORKTREE_NOTES.md, whose contents are then read aloud and filed into
-# public GitHub issues. Escape here is an exfiltration primitive, not a crash.
+# S — attacker-controlled resolve flags must not escape their anchors; notes paths must not be followed out of the worktree (injection cases: injection.sh).
+# Threat model: --session-id / --pr-branch reach paths under the plans dir, the session control dir and <main-root>/.worktree-backup/;
+# an escape steers `resolve` at an arbitrary WORKTREE_NOTES.md that is then filed into public issues — an exfiltration primitive.
 
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
@@ -44,21 +36,25 @@ OUTSIDE_NOTES="$OUTSIDE_DIR/WORKTREE_NOTES.md"
 OUTSIDE_MD5="$(file_md5 "$OUTSIDE_NOTES")"
 
 # --------------------------------------------------------------------------
-# Bait placement: every attack string below must LAND on a file that really
-# exists, otherwise the case passes because the target was absent rather than
-# because the guard fired. Each bait sits exactly where the corresponding
-# escaped path resolves to, and carries the same LEAK_TOKEN.
-#
-#   --session-id '../outside'  → <plans>/../outside-notes-backup/         (branch 3)
-#                              → <plans>/../outside-final-report-env.json (branch 2)
-#   --pr-branch  '../../outside' → <main-root>/.worktree-backup/../../outside/ (branch 4)
-#                                 == $TMPD/outside, i.e. OUTSIDE_DIR itself
+# Bait placement: every attack string below must LAND on a real file carrying LEAK_TOKEN,
+# else a case passes because the target was absent rather than because the guard fired.
+#   --session-id '../outside'   → <plans>/../outside-notes-backup/                      (branch 3)
+#                               → <workflow>/../outside.control/final-report-env.json   (branch 2, #2434)
+#   --pr-branch '../../outside' → <main-root>/.worktree-backup/../../outside/ == OUTSIDE_DIR (branch 4)
+# The legacy <plans>/../outside-final-report-env.json bait stays so a regression to the old path is caught too;
+# S1c reaches the in-anchor twin <workflow>/outside.control/final-report-env.json with an honest sid.
 # --------------------------------------------------------------------------
 mkdir -p "$TMPD/outside-notes-backup"
 cp "$OUTSIDE_NOTES" "$TMPD/outside-notes-backup/WORKTREE_NOTES.md"
 BAIT_BACKUP="$TMPD/outside-notes-backup/WORKTREE_NOTES.md"
-node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({NOTES_BACKUP_PATH: process.argv[2]}), "utf8");' \
-    -- "$TMPD/outside-final-report-env.json" "$(nodepath "$OUTSIDE_NOTES")"
+BAIT_WF_DIR="$TMPD/workflow"  # == CLAUDE_WORKFLOW_DIR pinned by helpers.sh
+mkdir -p "$TMPD/outside.control" "$BAIT_WF_DIR/outside.control"
+for bait_env in "$TMPD/outside-final-report-env.json" \
+                "$TMPD/outside.control/final-report-env.json" \
+                "$BAIT_WF_DIR/outside.control/final-report-env.json"; do
+    node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({NOTES_BACKUP_PATH: process.argv[2]}), "utf8");' \
+        -- "$bait_env" "$(nodepath "$OUTSIDE_NOTES")"
+done
 
 # assert_contained <label> <detail-prefix>
 # Shared oracle for every S case: whatever `resolve` decided, it must not have
@@ -271,23 +267,15 @@ s4_symlink_escape() {
     fi
 }
 
-# KNOWN GAP (source-side, not testable from tests/): bin/worktree-notes-triage.js
-# validates the RAW argument (traversal, absolute, basename) and then calls
-# fs.readFileSync / fs.renameSync, neither of which refuses a symlink. On a host
-# with real symlinks, `list` on a symlinked WORKTREE_NOTES.md follows the link
-# and prints the target's entries, and `annotate` aimed at a genuine entry line
-# rewrites the target. Asserting the refusal contract here would be a permanently
-# red test: closing it needs an fs.lstatSync/realpath containment check in the
-# CLI. S4a/S4b pin the containment that today's code does provide.
+# KNOWN GAP (source-side): bin/worktree-notes-triage.js validates the RAW argument, then fs.readFileSync/renameSync
+# follow symlinks, so list/annotate on a symlinked WORKTREE_NOTES.md reach the target; closing it needs an
+# lstat/realpath containment check in the CLI. S4a/S4b pin the containment today's code does provide.
 
 # ===========================================================================
 # S5 — relative traversal into list/annotate
 # ===========================================================================
-# `path.normalize` collapses `..` inside an ABSOLUTE path, so an absolute
-# traversal string is indistinguishable from its target and the guard cannot
-# fire. A RELATIVE path keeps its leading `..`, which is what the traversal
-# check actually sees. Both forms are exercised: the relative one must be
-# rejected, and neither may modify the protected file.
+# `path.normalize` collapses `..` in an ABSOLUTE path, so only a RELATIVE path keeps the `..` the guard sees;
+# the relative form must be rejected, and neither form may modify the protected file.
 s5_relative_traversal() {
     local wt="$TMPD/s5-wt" rel out rc missing=""
     write_notes "$wt" "sess-s5" >/dev/null

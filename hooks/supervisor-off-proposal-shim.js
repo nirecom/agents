@@ -349,6 +349,9 @@ process.stdin.on("end", () => {
         if (wsid && wsid !== sessionId && tryRead(wsid)) stateFileFound = true;
       }
     } catch (e) {
+      try {
+        require(path.join(__dirname, "workflow-state/state-io/control-dir")).diagnoseControlMigration(e, "supervisor-off-proposal-shim");
+      } catch (_) { /* fail-open */ }
       stateReadFailed = true; // message falls back to the generic honest text
     }
 

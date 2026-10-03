@@ -8,12 +8,21 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 
+set -u
+
 # SKIPPED: Operational fail-open edge cases for scope-drift (C5)
 # Because: missing detail plan / malformed ## Files to modify / non-git-repo require
 #   fixture manipulation that conflicts with the existing T7 git-based setup; deferred
 #   to implementation-time expansion
 # L3 gap: integration test that calls checkSupervisorPreMerge with a real git repo
 #   whose detail.md has a malformed Files-to-modify section
+
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then
+    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+else
+    _AGENTS_DIR_NODE="$AGENTS_DIR"
+fi
 
 # T7: Corrupt/invalid JSON (and zero-byte) supervisor state file.
 #
@@ -24,15 +33,6 @@
 #   - never change the verdict: no token → block; valid reason-bound token → pass through.
 # T7a/T7c cover the no-token (block) side; T7a-token/T7c-token cover the token (pass) side.
 # workflow-gate.js (T7b) keeps its own fail-open invariant on corrupt state.
-
-set -u
-
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
-else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
-fi
 
 SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
 HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
@@ -54,25 +54,25 @@ make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'supvsr7'; }
 
 write_corrupt_state() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
-const p = w.getStatePath('$sid');
+const p = w.getStatePath('$sid', { forWrite: true });
 fs.mkdirSync(require('path').dirname(p), { recursive: true });
 // Write corrupted JSON — truncated, invalid syntax
 fs.writeFileSync(p, '{\"version\":1,\"session_id\":\"$sid\",corrupt');
-" >/dev/null 2>&1
+" >/dev/null 2>&1 || fail "write_corrupt_state($sid): supervisor-state seed write failed"
 }
 
 write_empty_state() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
-const p = w.getStatePath('$sid');
+const p = w.getStatePath('$sid', { forWrite: true });
 fs.mkdirSync(require('path').dirname(p), { recursive: true });
 fs.writeFileSync(p, '');  // zero-byte
-" >/dev/null 2>&1
+" >/dev/null 2>&1 || fail "write_empty_state($sid): supervisor-state seed write failed"
 }
 
 # Mint a valid reason-bound clearance token (#1608) at <CLAUDE_WORKFLOW_DIR>/<sid>.off-clearance.
@@ -123,7 +123,7 @@ process.stdout.write(JSON.stringify({
 
 seed_wf_state_complete() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
 const wf = require('$WFSTATE_NODE');
 wf.markStep('$sid', 'user_verification', 'complete');
 " >/dev/null 2>&1
@@ -216,7 +216,7 @@ run_t7b() {
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
         run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 

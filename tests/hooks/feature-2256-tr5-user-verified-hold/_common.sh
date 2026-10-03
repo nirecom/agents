@@ -103,8 +103,8 @@ const schema = require(process.env.SC);
 const fs = require('fs');
 const st = schema.createEmptyState(process.env.SESS);
 Object.assign(st.audit, JSON.parse(process.env.PATCHJSON));
-fs.writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(st));
-" 2>&1
+fs.writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(st));
+" 2>&1 || fail "seed_state: supervisor-state seed write failed" >&2
 }
 
 state_field() {

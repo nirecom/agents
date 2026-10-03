@@ -102,8 +102,8 @@ if (process.env.VERDICT !== 'NONE') {
   st.audit.last_terminal_run_id = 'run-0011';
   st.audit.audit_verdict_summary = process.env.VERDICT;
 }
-fs.writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(st));
-" 2>&1
+fs.writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(st));
+" 2>&1 || fail "seed_state($1): supervisor-state seed write failed" >&2
 }
 
 # seed_two_run <tr5-verdict> <fkey> <tr6-verdict> — a terminal TR5 run then a
@@ -125,8 +125,8 @@ st.audit.ledger = [
 ];
 st.audit.last_terminal_run_id = 'run-0012';
 st.audit.audit_verdict_summary = process.env.V6;
-fs.writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(st));
-" 2>&1
+fs.writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(st));
+" 2>&1 || fail "seed_two_run($1/$3): supervisor-state seed write failed" >&2
 }
 
 read_state_field() {

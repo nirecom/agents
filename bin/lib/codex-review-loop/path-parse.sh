@@ -133,7 +133,7 @@ parse_round2_cnref() {
 # path_build_args — populate the global ARGS array for review-plan-codex: the
 # draft (--input), the loop budget flags, the ledger from round 2 on, and every
 # context file. The ref-kind sibling is rk_build_args. Caller globals: ARGS
-# DRAFT FORMAT SID PLANS_DIR CAP MAX_EXT EXT_USED TRADEOFFS ROUND LEDGER
+# DRAFT FORMAT SID CONTROL_DIR CAP MAX_EXT EXT_USED TRADEOFFS ROUND LEDGER
 # CONTEXT_OUT EXTRA_CTX CORE_PRINCIPLES REPO_ROOT_ARG CODEX_MCP_FS CLASS_MEMBERS.
 path_build_args() {
   local ctx
@@ -141,7 +141,7 @@ path_build_args() {
     --input "$DRAFT"
     --format "$FORMAT"
     --session-id "$SID"
-    --log-dir "$PLANS_DIR"
+    --log-dir "$CONTROL_DIR"
     --cap "$CAP"
     --max-extensions "$MAX_EXT"
     --extensions-used "$EXT_USED"

@@ -10,6 +10,8 @@ set -uo pipefail
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 DETAIL_WRAPPER="$AGENTS_WORKTREE/skills/make-detail-plan/scripts/run-codex-review-loop.sh"
 OUTLINE_WRAPPER="$AGENTS_WORKTREE/skills/make-outline-plan/scripts/run-codex-review-loop.sh"
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+. "$AGENTS_WORKTREE/tests/lib/harness.sh"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -36,14 +38,12 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 #    checked together: a counter left in one of them is the same dual-management
 #    bug as leaving it in all four (CPR-ORTH).
 # ---------------------------------------------------------------------------
-while IFS='|' read -r SKILL_NAME; do
-    SKILL_NAME="${SKILL_NAME// /}"
-    [[ -z "$SKILL_NAME" ]] && continue
-    case "$SKILL_NAME" in \#*) continue ;; esac
-    W="$AGENTS_WORKTREE/skills/$SKILL_NAME/scripts/run-codex-review-loop.sh"
+check_wrapper_mints_no_round() {
+    local SKILL_NAME="$1"
+    local W="$AGENTS_WORKTREE/skills/$SKILL_NAME/scripts/run-codex-review-loop.sh"
     if [[ ! -f "$W" ]]; then
         fail "A: $SKILL_NAME wrapper missing at $W"
-        continue
+        return 0
     fi
     if grep -q -- "round-number" "$W"; then
         fail "A: $SKILL_NAME still owns a round-number file — two writers again"
@@ -55,18 +55,38 @@ while IFS='|' read -r SKILL_NAME; do
     else
         pass "A: $SKILL_NAME does not dictate --round"
     fi
-done <<'WRAPPERS'
-make-detail-plan
-make-outline-plan
-review-plan-security
-review-tests
-WRAPPERS
+}
 
+case_begin "a-detail-wrapper-mints-no-round" "skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+check_wrapper_mints_no_round make-detail-plan
+case_end
+
+case_begin "a-outline-wrapper-mints-no-round" "skills/make-outline-plan/scripts/run-codex-review-loop.sh"
+check_wrapper_mints_no_round make-outline-plan
+case_end
+
+case_begin "a-security-plan-wrapper-mints-no-round" "skills/review-plan-security/scripts/run-codex-review-loop.sh"
+check_wrapper_mints_no_round review-plan-security
+case_end
+
+case_begin "a-review-tests-wrapper-mints-no-round" "skills/review-tests/scripts/run-codex-review-loop.sh"
+check_wrapper_mints_no_round review-tests
+case_end
+
+case_begin "a-shared-loop-owns-counter" "bin/run-codex-review-loop"
 if grep -q -- "round-number" "$AGENTS_WORKTREE/bin/run-codex-review-loop"; then
     pass "A: the shared loop is where the counter now lives"
 else
     fail "A: nobody owns the round counter — the shared loop does not name round-number"
 fi
+# The loop sources bin/lib/safe-state-path.sh (#2434 rename of safe-plans-path.sh);
+# name its absence once instead of leaving the fixture cases to cascade on exit 4.
+if [[ -f "$AGENTS_WORKTREE/bin/lib/safe-state-path.sh" ]]; then
+    pass "A: bin/lib/safe-state-path.sh present for the loop to source"
+else
+    fail "implementation missing: bin/lib/safe-state-path.sh (fixture cases below exit 4 until it exists)"
+fi
+case_end
 
 # ---------------------------------------------------------------------------
 # Fixture: a mock AGENTS_CONFIG_DIR holding the REAL shared loop and its libs,
@@ -81,7 +101,10 @@ mk_env() {
     ARGV_FILE="$TMPDIR_BASE/env$ENV_SEQ/run-loop-argv.txt"
     BODY_FILE="$TMPDIR_BASE/env$ENV_SEQ/reviewer-body.txt"
     RV_FILE="$TMPDIR_BASE/env$ENV_SEQ/reviewer-rc.txt"
-    mkdir -p "$MOCK/bin/lib" "$MOCK/rules" "$PLANS"
+    WORKFLOW_STATE="$TMPDIR_BASE/env$ENV_SEQ/workflow-state"
+    mkdir -p "$MOCK/bin/lib" "$MOCK/rules" "$PLANS" "$WORKFLOW_STATE"
+    export CLAUDE_WORKFLOW_DIR="$WORKFLOW_STATE"
+    export WORKFLOW_PLANS_DIR="$PLANS"
     printf '# core principles stub\n' > "$MOCK/rules/core-principles.md"
     printf '0\n' > "$RV_FILE"
 
@@ -113,7 +136,7 @@ STUB
         cp "$AGENTS_WORKTREE/bin/$f" "$MOCK/bin/$f"
         chmod +x "$MOCK/bin/$f"
     done
-    for f in codex-core.sh codex-timeout.sh cli-exec-guard.sh concern-ledger.sh safe-plans-path.sh; do
+    for f in codex-core.sh codex-timeout.sh cli-exec-guard.sh concern-ledger.sh safe-state-path.sh; do
         [[ -f "$AGENTS_WORKTREE/bin/lib/$f" ]] && cp "$AGENTS_WORKTREE/bin/lib/$f" "$MOCK/bin/lib/$f"
     done
     [[ -d "$AGENTS_WORKTREE/bin/lib/concern-ledger" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$MOCK/bin/lib/"
@@ -149,10 +172,11 @@ invoke_detail() {
     echo "$rc"
 }
 
-counter_file() { echo "$PLANS/$1-$2-round-number.txt"; }
+counter_file() { echo "$CLAUDE_WORKFLOW_DIR/$1.control/$2-round-number.txt"; }
 argv_has_round() { grep -q -- "--round $1" "$ARGV_FILE" 2>/dev/null; }
 counter_value() { tr -d '[:space:]' < "$1" 2>/dev/null; }
 
+case_begin "numbering-from-owned-counter" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 1-3. The loop numbers each round from the counter it owns: absent means 1,
 #      each continuing round one higher. Round 2 onward re-raises the same
@@ -183,7 +207,9 @@ counter_value() { tr -d '[:space:]' < "$1" 2>/dev/null; }
         fail "3: expected --round 3. Got: $(cat "$ARGV_FILE" 2>/dev/null)"
     fi
 }
+case_end
 
+case_begin "terminal-verdicts-retire-counter" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 4. APPROVED ends the loop, so the counter is retired: the next session-format
 #    pair must start from 1 again rather than inheriting a stale number.
@@ -209,7 +235,8 @@ counter_value() { tr -d '[:space:]' < "$1" 2>/dev/null; }
     mk_env; seed_drafts sid5
     set_body sid5 "NEEDS_REVISION" "1. [HIGH] $CONCERN"
     invoke_detail sid5 0 >/dev/null
-    printf 'hook-registration\n' > "$PLANS/sid5-detail-risk-signal.txt"
+    mkdir -p "$CLAUDE_WORKFLOW_DIR/sid5.control"
+    printf 'hook-registration\n' > "$CLAUDE_WORKFLOW_DIR/sid5.control/detail-risk-signal.txt"
     set_body sid5 "NEEDS_REVISION" "C1: $CONCERN"
     RC=$(invoke_detail sid5 1)
     CFILE=$(counter_file sid5 detail-plan)
@@ -234,7 +261,9 @@ counter_value() { tr -d '[:space:]' < "$1" 2>/dev/null; }
         fail "6: rc=$RC, counter=$(counter_value "$CFILE" || echo absent) (want 1)"
     fi
 }
+case_end
 
+case_begin "exit3-rolls-counter-back" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 7. exit 3 means codex never reviewed anything, so no round was spent. The
 #    counter rolls back to its pre-call value (#776): a retry re-runs the
@@ -264,7 +293,9 @@ counter_value() { tr -d '[:space:]' < "$1" 2>/dev/null; }
         fail "7b: rc=$RC (want 3), counter=$(counter_value "$CFILE" || echo absent) (want 1)"
     fi
 }
+case_end
 
+case_begin "extensions-budget-and-counter-address" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 8. EXTENSIONS_USED is the caller's budget, not the round number. Raising it
 #    must not reset or skip the count.
@@ -290,18 +321,18 @@ counter_value() { tr -d '[:space:]' < "$1" 2>/dev/null; }
     mk_env; seed_drafts mysid
     set_body mysid "NEEDS_REVISION" "1. [HIGH] $CONCERN"
     invoke_detail mysid 0 >/dev/null
-    EXPECTED="$PLANS/mysid-detail-plan-round-number.txt"
+    EXPECTED="$CLAUDE_WORKFLOW_DIR/mysid.control/detail-plan-round-number.txt"
     if [[ -f "$EXPECTED" ]]; then
-        pass "9: counter at <plans>/<sid>-detail-plan-round-number.txt"
+        pass "9: counter at <workflow-dir>/<sid>.control/detail-plan-round-number.txt"
     else
-        fail "9: counter not at $EXPECTED. Listing: $(ls "$PLANS/" 2>/dev/null)"
+        fail "9: counter not at $EXPECTED. Listing: $(ls "$CLAUDE_WORKFLOW_DIR/mysid.control/" 2>/dev/null)"
     fi
 
     if [[ -f "$OUTLINE_WRAPPER" ]]; then
         set_body mysid "MISSING_ALTERNATIVE: a third approach was never considered" "1. [HIGH] $CONCERN"
         AGENTS_CONFIG_DIR="$MOCK" SESSION_ID="mysid" PLANS_DIR="$PLANS" EXTENSIONS_USED="0" \
             run_with_timeout bash "$OUTLINE_WRAPPER" >/dev/null 2>&1 || true
-        OEXPECTED="$PLANS/mysid-outline-plan-round-number.txt"
+        OEXPECTED="$CLAUDE_WORKFLOW_DIR/mysid.control/outline-plan-round-number.txt"
         DVAL="$(counter_value "$EXPECTED")"
         if [[ -f "$OEXPECTED" || "$DVAL" == "1" ]]; then
             pass "9b: outline-plan counts on its own address, leaving detail-plan's at $DVAL"
@@ -312,6 +343,7 @@ counter_value() { tr -d '[:space:]' < "$1" 2>/dev/null; }
         echo "SKIP-9b: outline wrapper not present"
     fi
 }
+case_end
 
 echo ""
 if [[ $ERRORS -eq 0 ]]; then

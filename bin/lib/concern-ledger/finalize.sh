@@ -62,7 +62,7 @@ _cl_json_spec() {
                 "$(printf '%s' "$hdr" | cut -d'|' -f3)" \
                 "$(printf '%s' "$hdr" | cut -d'|' -f5)" \
                 "$(printf '%s' "$hdr" | cut -d'|' -f6)")"
-        done < <(_cl_list_pattern_files "$plans/$sid-$fmt-round-$round-delta-*.txt")
+        done < <(if [ -n "${CL_CONTROL_DIR:-}" ]; then _cl_list_pattern_files "$CL_CONTROL_DIR/$fmt-round-$round-delta-*.txt"; else _cl_list_pattern_files "$plans/$sid-$fmt-round-$round-delta-*.txt"; fi)
         for pname in "${pord[@]:-}"; do
             [ -n "$pname" ] || continue
             printf '%s\n' "${prec[$pname]}"
@@ -274,7 +274,7 @@ cl_artifact_ok() {
 cl_finalize() {
     local plans="$1" sid="$2" fmt="$3" mode="$4" reason="$5" round="$6"
     local cap="$7" maxext="$8" used="$9"
-    local led snap json spec tmpd
+    local led snap json spec tmpd home="${CL_CONTROL_DIR:-$1}"
     led="${CL_LEDGER_OVERRIDE:-$(cl_ledger_path "$plans" "$sid" "$fmt")}"
     snap="$(cl_snapshot_beside "$led")"
     json="$(cl_json_path "$plans" "$sid" "$fmt")"
@@ -346,7 +346,7 @@ cl_finalize() {
         # create the temp — and then the full ledger text — out there before any
         # question was asked (#2025 C6/C8, review round 7). An undecidable case
         # falls to rc 2: a missed delete is recoverable, a wrong one is not.
-        sp_contained_publish_copy "$led" "$snap" "$plans"
+        sp_contained_publish_copy "$led" "$snap" "$home"
         case $? in
             0)
                 # Deleting is the irreversible half, so it is judged physically,
@@ -354,7 +354,7 @@ cl_finalize() {
                 # resolving for the verdict and resolving again for the delete
                 # would let a swapped symlink separate the two. The final
                 # component is not resolved — rm unlinks the symlink itself.
-                if ! sp_contained_rm "$led" "$plans"; then
+                if ! sp_contained_rm "$led" "$home"; then
                     printf 'concern-ledger: the override ledger is not physically inside the plans dir (%s); snapshotted but not deleted\n' "$led" >&2
                 fi
                 ;;

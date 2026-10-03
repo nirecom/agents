@@ -2,17 +2,8 @@
 # tests/skills/feature-capture-env.sh
 # Tests: skills/worktree-end/scripts/capture-env.sh, skills/worktree-end/scripts/write-env-json.js
 # Tags: worktree, end, cleanup, skill, bin, scope:common
-#
-# Multi-repo worktree feature: SiblingWorktrees section parsing in capture-env.sh
-# and SIBLING_REPOS_JSON field passthrough in write-env-json.js.
-#
-# Tests the contract of:
-#   - skills/worktree-end/scripts/write-env-json.js  (SIBLING_REPOS_JSON field)
-#   - skills/worktree-end/scripts/capture-env.sh     (## SiblingWorktrees awk parsing)
-#
-# Test-first: source file changes are not yet implemented. New tests (CE4, CE1)
-# will FAIL until implementation lands. CE-parse1 and CE-parse2 test inline awk
-# logic and should PASS now (they do not depend on the scripts themselves).
+# Multi-repo worktree: ## SiblingWorktrees awk parsing in capture-env.sh and the
+# SIBLING_REPOS_JSON passthrough in write-env-json.js (CE4, CE1, CE-parse*).
 
 set -u
 
@@ -187,18 +178,27 @@ DREOF
         "$CAPTURE_ENV_SH" > "$script_copy"
     chmod +x "$script_copy"
 
-    local env_json="$plans_dir/test-session-123-final-report-env.json"
+    # #2434: the env JSON is a control file — <CLAUDE_WORKFLOW_DIR>/<sid>.control/final-report-env.json.
+    local wf_dir="$TMPDIR_BASE/ce1-workflow"
+    mkdir -p "$wf_dir"
+    local env_json="$wf_dir/test-session-123.control/final-report-env.json"
 
     BOOTSTRAP_MODE=1 \
     BOOTSTRAP_COMMIT_SHA=abc1234567890def \
     AGENTS_CONFIG_DIR="$AGENTS_DIR" \
     PLANS_DIR="$plans_dir" \
+    WORKFLOW_PLANS_DIR="$plans_dir" \
+    CLAUDE_WORKFLOW_DIR="$wf_dir" \
     PATH="$mock_bin:$PATH" \
         run_with_timeout 30 bash "$script_copy" "$wt" "owner/repo" "(none)" "" >/dev/null 2>&1
     local code=$?
 
     if [ ! -f "$env_json" ]; then
         fail "CE1: capture-env.sh exit $code but $env_json not created (SIBLING_REPOS_JSON field test blocked)"
+        return
+    fi
+    if [ -e "$plans_dir/test-session-123-final-report-env.json" ]; then
+        fail "CE1: legacy plans-dir env JSON was written (control file must live only in the control dir)"
         return
     fi
 

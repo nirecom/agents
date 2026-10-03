@@ -3,6 +3,10 @@
 # Tests: hooks/supervisor-trigger.js
 # Tags: supervisor, em-supervisor, hook, layer2, scope:issue-specific
 # RED for issue #719.
+
+set -u
+unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+
 # L3 gap (what this test does NOT catch):
 # - hook registration in settings.json PostToolUse hooks — if supervisor-trigger.js is not
 #   wired, C2 escape-hatch detection never fires but these tests still pass because they
@@ -11,8 +15,6 @@
 #   live hook receives actual tool_input fields from Claude Code
 # Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
 #   fires at WORKFLOW_USER_VERIFIED preflight when settings.json changes are staged
-
-set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
@@ -49,34 +51,34 @@ require_source() {
 
 seed_state() {
     local tmp="$1" sid="$2" layer2_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert = $layer2_json;
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
-" >/dev/null 2>&1
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
+" >/dev/null 2>&1 || fail "seed_state($sid): supervisor-state seed write failed"
 }
 
 # Like seed_state but also injects a warning-severity layer1 finding.
 # Required for escape-hatch arm tests after fix #975 (hasBlockingFinding gate).
 seed_state_with_l1_finding() {
     local tmp="$1" sid="$2" layer2_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert = $layer2_json;
 st.layer1.findings = [{ categories: ['workflow'], severity: 'warning', detail: 'blocking-finding', reporter: 'test', timestamp: new Date().toISOString() }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
-" >/dev/null 2>&1
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
+" >/dev/null 2>&1 || fail "seed_state_with_l1_finding($sid): supervisor-state seed write failed"
 }
 
 read_field() {
     local tmp="$1" sid="$2" path="$3"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 const parts = '$path'.split('.');
@@ -91,7 +93,7 @@ run_t1() {
     local tmp val rc
     tmp="$(mktemp -d)"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo hi"},"session_id":"t1-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t1-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -110,7 +112,7 @@ run_t2() {
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
     seed_state "$tmp" "t2-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t2-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     val=$(read_field "$tmp" "t2-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -129,7 +131,7 @@ run_t3() {
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-600000).toISOString())")
     seed_state "$tmp" "t3-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo hi"},"session_id":"t3-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t3-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -146,7 +148,7 @@ run_t4() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "t4-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t4-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t4-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -163,7 +165,7 @@ run_t5() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "t5-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'warning', findings: [] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t5-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     # accept "warning" OR "Layer 2" OR the warning marker in output
@@ -180,7 +182,7 @@ run_t6() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "t6-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t6-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( echo "$out" | grep -qiE "(error|alert mode|blocking)" ); then
@@ -211,7 +213,7 @@ run_t8() {
     require_source "$HOOK" "T8: malformed stdin -> exit 0 {}" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(echo 'not-json' | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    out=$(echo 'not-json' | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -225,7 +227,7 @@ run_t9() {
     require_source "$HOOK" "T9: unresolvable session id -> exit 0 {}" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(echo '{}' | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    out=$(echo '{}' | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -240,7 +242,7 @@ run_t10() {
     local tmp out rc
     tmp="$(mktemp -d)"
     out=$(echo '{"tool_name":"Read","tool_input":{"file_path":"x"},"session_id":"t10-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     # accept any exit 0; output may be empty, {}, or JSON with additionalContext
@@ -263,7 +265,7 @@ run_t11() {
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
     seed_state_with_l1_finding "$tmp" "t11-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: testing>>\""},"session_id":"t11-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t11-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -281,7 +283,7 @@ run_t12() {
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
     seed_state "$tmp" "t12-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: done>>\""},"session_id":"t12-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t12-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -299,7 +301,7 @@ run_t13() {
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
     seed_state_with_l1_finding "$tmp" "t13-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: testing>>\""},"session_id":"t13-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t13-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -315,7 +317,7 @@ run_t14() {
     local tmp out rc
     tmp="$(mktemp -d)"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"echo hi"},"session_id":"../evil"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -332,7 +334,7 @@ run_t15() {
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
     seed_state_with_l1_finding "$tmp" "t15-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF>>\""},"session_id":"t15-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t15-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -350,7 +352,7 @@ run_t16() {
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
     seed_state_with_l1_finding "$tmp" "t16-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF>>\""},"session_id":"t16-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t16-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -367,7 +369,7 @@ run_t17() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "t17-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: test>>\""},"session_id":"t17-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t17-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -385,7 +387,7 @@ run_t18() {
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
     seed_state "$tmp" "t18-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: done>>\""},"session_id":"t18-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t18-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -402,7 +404,7 @@ run_t19() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "t19-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'notice', findings: [] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t19-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( echo "$out" | grep -qiE "(notice|layer 2)" ); then
@@ -432,7 +434,7 @@ run_t20() {
     tmp="$(mktemp -d)"
     seed_state_with_l1_finding "$tmp" "t20-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: testing>>\""},"session_id":"t20-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t20-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -448,7 +450,7 @@ run_t21() {
     local tmp out rc
     tmp="$(mktemp -d)"
     out=$(echo '{"tool_name":"Bash","session_id":"t21-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -465,7 +467,7 @@ run_t22() {
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
     seed_state_with_l1_finding "$tmp" "t22-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: 'warning', findings: [{\"categories\":[\"workflow\"],\"severity\":\"warning\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: testing>>\""},"session_id":"t22-sid"}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     val=$(read_field "$tmp" "t22-sid" "alert.alert_armed_at")
     rm -rf "$tmp"

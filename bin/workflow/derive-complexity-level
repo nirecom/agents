@@ -6,13 +6,13 @@
 //
 // Usage:
 //   derive-complexity-level --stage <outline|detail|write_tests|write_code> --signals <csv>
-//   derive-complexity-level --stage <outline|detail|write_tests|write_code> --signals-file <path>
+//   derive-complexity-level --stage <outline|detail|write_tests|write_code> --session <sid>
 //   derive-complexity-level --print-markdown-table
 //   derive-complexity-level --print-signal-ids
 //
-// --signals-file reads via fs.readFileSync, never a shell, so file content
-// never reaches command-argument position (#2099 CF-8a); both forms share the
-// same parse, so an unrecognized token routes to the undecidable level either way.
+// --session reads the DERIVED <session control dir>/<stage>-signals.txt (stage with
+// `_` as `-`) via fs.readFileSync, never a shell (#2099 CF-8a); both forms share
+// the same parse, so an unrecognized token routes to the undecidable level.
 //
 // Fails open: unusable routing table -> stderr DERIVATION_UNAVAILABLE, level=high
 // (with the producer-high model), exit 0.
@@ -21,12 +21,15 @@ const fs = require("fs");
 const path = require("path");
 const routing = require(path.join(__dirname, "..", "..", "hooks", "workflow-state"));
 const { modelForLevel } = require(path.join(__dirname, "..", "..", "hooks", "lib", "role-model.js"));
+const controlDir = require(
+  path.join(__dirname, "..", "..", "hooks", "workflow-state", "state-io", "control-dir.js")
+);
 
 function usage(msg) {
   if (msg) process.stderr.write("derive-complexity-level: " + msg + "\n");
   process.stderr.write(
     "usage: derive-complexity-level --stage <" + Object.keys(routing.STAGE_ROUTING).join("|") +
-      "> (--signals <csv> | --signals-file <path>)\n" +
+      "> (--signals <csv> | --session <sid>)\n" +
       "       derive-complexity-level --print-markdown-table\n" +
       "       derive-complexity-level --print-signal-ids\n"
   );
@@ -34,36 +37,67 @@ function usage(msg) {
 }
 
 // `signals` stays undefined until seen — `--signals ""` is valid (zero signals).
-// A flag with no following value (last token, or followed by another `--` flag)
-// is a usage error, not an empty value.
+// A flag with no following value is a usage error, not an empty value.
 function requireValue(argv, i, flagName) {
   const v = argv[i + 1];
   if (v === undefined || v.startsWith("--")) usage(flagName + " requires a value");
   return v;
 }
 
+const VALUE_FLAGS = { "--stage": "stage", "--signals": "signals", "--signals-file": "signalsFile", "--session": "session" };
+const BOOL_FLAGS = { "--print-markdown-table": "printTable", "--print-signal-ids": "printIds" };
+
 function parseArgs(argv) {
-  const out = { stage: null, signals: undefined, signalsFile: undefined, printTable: false, printIds: false };
+  const out = { stage: null, printTable: false, printIds: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--stage") {
-      out.stage = requireValue(argv, i, "--stage");
+    if (VALUE_FLAGS[a]) {
+      out[VALUE_FLAGS[a]] = requireValue(argv, i, a);
       i++;
-    } else if (a === "--signals") {
-      out.signals = requireValue(argv, i, "--signals");
-      i++;
-    } else if (a === "--signals-file") {
-      out.signalsFile = requireValue(argv, i, "--signals-file");
-      i++;
-    } else if (a === "--print-markdown-table") {
-      out.printTable = true;
-    } else if (a === "--print-signal-ids") {
-      out.printIds = true;
+    } else if (BOOL_FLAGS[a]) {
+      out[BOOL_FLAGS[a]] = true;
     } else {
       usage("unknown argument: " + a);
     }
   }
   return out;
+}
+
+function signalsName(stage) {
+  return stage.replace(/_/g, "-") + "-signals.txt";
+}
+
+// --- BEGIN temporary: plans-dir control files -> workflow control dir migration added 2026-09-28 ---
+// deletion-condition: remove after 2026-12-28 (release + 3 months) together with hooks/lib/temporary-migrations/control-dir-split/, bin/migrate-control-dir and the legacy-argument shims; keep guard (c) until then
+function legacySignalsSid(args) {
+  const { legacyArgName, legacySessionId } = require(
+    path.join(__dirname, "..", "..", "hooks", "lib", "temporary-migrations", "control-dir-split", "legacy-arg.js")
+  );
+  const sid = legacySessionId(args.session);
+  if (legacyArgName(args.signalsFile, sid, [signalsName(args.stage)]) === null) {
+    usage("--signals-file is accepted only as the legacy session-prefixed <stage>-signals.txt path in the plans dir");
+  }
+  return sid;
+}
+// --- END temporary: plans-dir control files -> workflow control dir migration ---
+
+function readSignals(args) {
+  const fromControl = args.session !== undefined || args.signalsFile !== undefined;
+  if (args.signals !== undefined && fromControl) usage("--signals and --session are mutually exclusive — pass exactly one");
+  if (args.signals !== undefined) return args.signals;
+  if (!fromControl) usage('--signals or --session is required (pass --signals "" for zero signals)');
+  const sid = args.signalsFile !== undefined ? legacySignalsSid(args) : args.session;
+  let file;
+  try {
+    file = controlDir.controlPath(sid, signalsName(args.stage));
+  } catch (e) {
+    usage("session control dir unresolved: " + (e && e.message ? e.message : String(e)));
+  }
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch (e) {
+    usage("signals could not be read: " + file + " (" + e.code + ")");
+  }
 }
 
 function main() {
@@ -81,24 +115,7 @@ function main() {
   if (!args.stage || !Object.prototype.hasOwnProperty.call(routing.STAGE_ROUTING, args.stage)) {
     usage("--stage must be one of " + Object.keys(routing.STAGE_ROUTING).join(", "));
   }
-  if (args.signals !== undefined && args.signalsFile !== undefined) {
-    usage("--signals and --signals-file are mutually exclusive — pass exactly one");
-  }
-  if (args.signals === undefined && args.signalsFile === undefined) {
-    usage('--signals or --signals-file is required (pass --signals "" for zero signals)');
-  }
-
-  // fs.readFileSync only — never shell/eval/child_process — so content can't
-  // be interpreted as command syntax.
-  let signalsText = args.signals;
-  if (args.signalsFile !== undefined) {
-    if (!args.signalsFile.length) usage("--signals-file requires a path");
-    try {
-      signalsText = fs.readFileSync(args.signalsFile, "utf8");
-    } catch (e) {
-      usage("--signals-file could not be read: " + args.signalsFile + " (" + e.code + ")");
-    }
-  }
+  const signalsText = readSignals(args);
 
   const signals = signalsText.trim().length
     ? signalsText.split(",").map((s) => s.trim()).filter((s) => s.length)

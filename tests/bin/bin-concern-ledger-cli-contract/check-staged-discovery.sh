@@ -41,11 +41,11 @@ cs_shape() {
     rm -f "$bf"
 }
 
-# The pre-#2088 spelling, restored from git history: the NUL-delimited read
-# becomes a quoted-prefix glob and the helper call goes away. Runnable, so the
-# runtime comparison below is between two live programs.
+# The pre-#2088 spelling, restored from git history and re-rooted at the #2434
+# control dir: the NUL-delimited read becomes a quoted-prefix glob and the helper
+# call goes away. Runnable, so the runtime comparison below is between two live programs.
 REVERT="$MUT/concern-ledger-reverted"
-sed -e "s|while IFS= read -r -d '' _f; do|for _f in \"\$PLANS/\$SID-\$FORMAT-round-\$ROUND-delta-\"*.txt; do|" \
+sed -e "s|while IFS= read -r -d '' _f; do|for _f in \"\$CTL/\$FORMAT-round-\$ROUND-delta-\"*.txt; do|" \
     -e 's|done < <(_cl_list_pattern_files .*)$|done|' \
     "$CLI" > "$REVERT"
 

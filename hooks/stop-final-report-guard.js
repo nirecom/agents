@@ -1,29 +1,25 @@
 #!/usr/bin/env node
-// Stop hook: validate that the Final Report was emitted into assistant text
-// with all 13 canonical section headings present and no unsubstituted
-// `<PLACEHOLDER>` tokens remaining.
-//
-// Triggers (#1611 — two independent lanes, CPR-SC):
-// - Lane A: <plans-dir>/<sid>-final-report-env.json exists (written by
-//   worktree-end Step WE-9..WE-11 or session-close SC-2A/SC-2B/SC-2C) → validate
-//   the Final Report shape (the whole validation section below is lane A only).
-// - Lane B: that env file is ABSENT and `bin/workflow/next-step --session <sid>`
-//   reports ACTION=invoke with REASON='pre_final_report_gate' → the close
-//   procedure was never started. Block unconditionally WITHOUT scanning the
-//   transcript, so a hand-written Final Report is rejected too. Lane B is a
-//   "close procedure not executed" detector, not a shape validator.
-// On any other turn the hook exits 0 silently.
-//
-// Contract (post-#830 fix):
-// - Parse transcript JSONL; backward-scan for the latest type:"assistant" entry
-//   containing `## Final Report — <sid>`; extract finalReportBody (heading to
-//   next \n## or turn end). Check headings + token regex on finalReportBody only.
-// - Fail-open on uncertainty (missing/malformed env-file, no transcript, no FR).
+// Stop hook: the Final Report must carry all 13 canonical headings and no `<PLACEHOLDER>`.
+// Lane A (#1611): <CONTROL_DIR>/final-report-env.json exists → validate the report shape
+//   on the latest assistant entry holding `## Final Report — <sid>` (post-#830 contract).
+// Lane B: env file absent and next-step reports REASON='pre_final_report_gate' → the close
+//   procedure never ran; block without scanning the transcript.
+// Fail-open on uncertainty (missing/malformed env-file, no transcript, no FR).
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
 const schema = require("./lib/final-report-schema");
+
+function controlFile(sid, name) {
+  return require("./workflow-state/state-io/control-dir").controlPath(sid, name);
+}
+
+function diagnoseControlFile(e) {
+  try {
+    require("./workflow-state/state-io/control-dir").diagnoseControlMigration(e, "stop-final-report-guard");
+  } catch (_) { /* fail-open */ }
+}
 
 function readStdin() {
   const chunks = [];
@@ -47,7 +43,7 @@ function readStdin() {
 // the gate marked complete (which makes next-step stop returning invoke).
 // Fail-open on every error path: the function simply returns and the caller
 // exits 0.
-function runCloseProcedureLane(sid, plansDir) {
+function runCloseProcedureLane(sid) {
   try {
     // Escape hatch (b): session-scoped workflow-off marker.
     try {
@@ -60,10 +56,10 @@ function runCloseProcedureLane(sid, plansDir) {
     // Escape hatch (a): the session-close gate yielded to the supervisor.
     try {
       const gate = JSON.parse(
-        fs.readFileSync(path.join(plansDir, `${sid}-session-close-gate.json`), "utf8")
+        fs.readFileSync(controlFile(sid, "session-close-gate.json"), "utf8")
       );
       if (gate && gate.gate_action === "yield") return;
-    } catch (_) { /* absent or malformed = no gate = keep evaluating */ }
+    } catch (e) { diagnoseControlFile(e); /* absent or malformed = no gate = keep evaluating */ }
 
     const agentsDir = process.env.AGENTS_CONFIG_DIR
       ? process.env.AGENTS_CONFIG_DIR
@@ -131,21 +127,19 @@ if (require.main === module) {
   });
   if (!sid) process.exit(0);
 
-  const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-  let plansDir;
+  let envFilePath;
   try {
-    plansDir = getWorkflowPlansDir();
-  } catch (_) {
+    envFilePath = controlFile(sid, "final-report-env.json");
+  } catch (e) {
+    diagnoseControlFile(e);
     process.exit(0);
   }
-
-  const envFilePath = path.join(plansDir, `${sid}-final-report-env.json`);
   let envRaw;
   try {
     envRaw = fs.readFileSync(envFilePath, "utf8");
   } catch (_) {
     // No env-file → lane B: the close procedure never wrote its artifacts.
-    runCloseProcedureLane(sid, plansDir);
+    runCloseProcedureLane(sid);
     process.exit(0);
   }
 
@@ -194,13 +188,12 @@ if (require.main === module) {
     process.exit(0);
   }
   if (!headingFound) {
-    const gateFilePath = path.join(plansDir, `${sid}-session-close-gate.json`);
     let gateYielded = false;
     try {
-      const gateRaw = fs.readFileSync(gateFilePath, "utf8");
+      const gateRaw = fs.readFileSync(controlFile(sid, "session-close-gate.json"), "utf8");
       const gate = JSON.parse(gateRaw);
       if (gate && gate.gate_action === "yield") gateYielded = true;
-    } catch (_) { /* absent or malformed = no gate = proceed to block */ }
+    } catch (e) { diagnoseControlFile(e); /* absent or malformed = no gate = proceed to block */ }
     if (gateYielded) process.exit(0);
     const { getConvLangInjection } = require("./lib/conv-lang");
     let reason =
