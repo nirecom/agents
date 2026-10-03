@@ -1,8 +1,8 @@
 #!/bin/bash
 # Sourced by hooks/pre-commit. Runs the agents-repo-only commit gates: the
 # on-demand rules-injection notation gate (#2270 companion), the session-id SSOT
-# gate (#2270), and the migration-blocks gate (#1987). All three are skipped
-# unless the repo under commit IS the agents repo (git common-dir match).
+# gate (#2270), the migration-blocks gate (#1987) and the plans-dir artifact-name
+# gate (#2434). All are skipped unless the repo under commit IS the agents repo.
 
 # _precommit_agents_repo_gates — reads $_cfg_dir (ambient). Exits the hook with 1
 # on a violation; returns 0 otherwise. No-op in a non-agents repo.
@@ -10,7 +10,7 @@ _precommit_agents_repo_gates() {
     local _od_repo_top _od_cfg_dir _od_is_agents_repo _od_agents_common _od_repo_common
     local _od_agents_abs _od_repo_abs _od_f _od_checker _od_rc _od_out
     local _si_checker _si_rc _si_out _mb_f _mb_checker _mb_rc _mb_out
-    local _od_staged _mb_staged
+    local _od_staged _mb_staged _pa_checker _pa_rc _pa_out
 
     _od_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
     [ -n "$_od_repo_top" ] || return 0
@@ -26,6 +26,11 @@ _precommit_agents_repo_gates() {
     if [ -n "$_od_agents_common" ] && [ -n "$_od_repo_common" ]; then
         _od_agents_abs="$(cd "$_od_cfg_dir" 2>/dev/null && cd "$_od_agents_common" 2>/dev/null && pwd -P || printf '%s' "$_od_agents_common")"
         _od_repo_abs="$(cd "$_od_repo_top" 2>/dev/null && cd "$_od_repo_common" 2>/dev/null && pwd -P || printf '%s' "$_od_repo_common")"
+        # msys answers pwd -P in the spelling it was entered by (a Temp dir as /tmp or /c/...).
+        if command -v cygpath >/dev/null 2>&1; then
+            _od_agents_abs="$(cygpath -m "$_od_agents_abs" 2>/dev/null || printf '%s' "$_od_agents_abs")"
+            _od_repo_abs="$(cygpath -m "$_od_repo_abs" 2>/dev/null || printf '%s' "$_od_repo_abs")"
+        fi
         [ "$_od_agents_abs" = "$_od_repo_abs" ] && _od_is_agents_repo=1
     fi
 
@@ -125,6 +130,29 @@ _precommit_agents_repo_gates() {
                 ;;
             *)
                 echo "pre-commit: check-migration-blocks.sh rc=$_mb_rc — migration blocks gate skipped" >&2
+                ;;
+        esac
+    fi
+
+    # ---------- plans-dir artifact-name gate (issue #2434) ----------
+    # Whole-tree scan: a name assembled under the plans dir must be a registered artifact.
+    _pa_checker="$_od_cfg_dir/bin/check-plans-artifacts"
+    if [ ! -f "$_pa_checker" ] || ! command -v node >/dev/null 2>&1; then
+        echo "pre-commit: check-plans-artifacts or node missing at $_pa_checker — plans-dir artifact gate skipped" >&2
+    else
+        _pa_rc=0
+        _pa_out="$(cd "$_od_repo_top" && node "$_od_cfg_dir"/bin/check-plans-artifacts --source 2>&1)" || _pa_rc=$?
+        case "$_pa_rc" in
+            0) : ;;
+            1|2)
+                printf '%s\n' "$_pa_out"
+                echo ""
+                echo "Commit blocked: plans-dir names that are not registered artifacts (checker rc=$_pa_rc)."
+                echo "See docs/architecture/claude-code/state-dirs.md."
+                exit 1
+                ;;
+            *)
+                echo "pre-commit: check-plans-artifacts rc=$_pa_rc — plans-dir artifact gate skipped" >&2
                 ;;
         esac
     fi

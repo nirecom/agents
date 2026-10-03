@@ -96,9 +96,9 @@ seed_js="$WORK/indep.js"
     printf '%s\n' "const st = schema.createEmptyState('$sid');"
     printf '%s\n' "st.audit.ledger = [{ id: 'run-0001', outcome: 'terminal', verdict: 'CONTINUE', tr_ids: ['TR1'], sub_checks: ['intent-internal'], input_key: { 'intent-internal': '$k_intent' } }];"
     printf '%s\n' "st.audit.last_terminal_run_id = 'run-0001';"
-    printf '%s\n' "fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));"
+    printf '%s\n' "fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));"
 } > "$seed_js"
-bash "$RWT" 30 node "$seed_js" >/dev/null 2>&1
+bash "$RWT" 30 node "$seed_js" >/dev/null 2>&1 || fail "14-18 seed: supervisor-state seed write failed"
 
 printf '# outline\nO1\n' > "$WORK/plans/$SID2-outline.md"
 k_io="$(fp computeArtifactKey "$PLANS" ", '$SID2', ['intent', 'outline']")"

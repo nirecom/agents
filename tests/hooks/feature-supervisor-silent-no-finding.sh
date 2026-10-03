@@ -2,10 +2,7 @@
 # tests/hooks/feature-supervisor-silent-no-finding.sh
 # Tests: hooks/supervisor-guard.js
 # Tags: supervisor, em-supervisor, stop, silent, scope:issue-specific, pwsh-not-required, hook-registration
-# L3 gap (what this test does NOT catch):
-# - hooks/supervisor-guard.js firing as a real Claude Code Stop hook in a live session
-#   (settings.json Stop hook registration — verified only via live claude -p run)
-# - Real transcript JSONL format differences from the minimal crafted input used here
+# L3 gap: supervisor-guard.js firing as a real Stop hook (settings.json registration, live claude -p only); real transcript JSONL shape.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 
@@ -57,19 +54,19 @@ run_t1a() {
         local tmp_node="$tmp"
     fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 // No findings, no cumSev — bare empty state
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -99,7 +96,7 @@ run_t1b() {
         local tmp_node="$tmp"
     fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -112,13 +109,13 @@ st.alert.findings = [{
     reporter: 'test',
     timestamp: new Date().toISOString()
 }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -159,12 +156,12 @@ run_t1c() {
     transcript_file="$tmp_node/transcript-t1c.jsonl"
 
     # Seed empty state
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 
     # Create JSONL transcript: assistant Bash tool_use with WORKTREE_OFF sentinel
@@ -186,7 +183,7 @@ fs.writeFileSync('$transcript_file', line + '\n');
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$transcript_file")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -221,7 +218,7 @@ run_additional2_ask_user_question_gate() {
     transcript_file="$tmp_node/transcript-add2.jsonl"
 
     # Seed state: alert_armed_at set (would normally trigger branch 3 block)
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -235,7 +232,7 @@ st.alert.findings = [{
     reporter: 'test',
     timestamp: new Date().toISOString()
 }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 
     # Create transcript: last assistant turn ends with AskUserQuestion tool_use
@@ -255,7 +252,7 @@ fs.writeFileSync('$transcript_file', line + '\n');
 
     hook_input=$(printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$transcript_file")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 

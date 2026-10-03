@@ -50,7 +50,7 @@ require_flag_supported() {
 # Helper: writes a draft finding via CLI; emits sid and tmp via stdout.
 seed_finding() {
     local tmp="$1" sid="$2" status="$3" detail="$4"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --finding-categories workflow \
         --finding-severity warning \
         --finding-detail "$detail" \
@@ -61,7 +61,7 @@ seed_finding() {
 
 read_finding_field() {
     local tmp="$1" sid="$2" idx="$3" field="$4"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 const f = st && st.alert && st.alert.findings && st.alert.findings[$idx];
@@ -71,7 +71,7 @@ process.stdout.write(f ? JSON.stringify(f.$field) : 'MISSING');
 
 read_findings_len() {
     local tmp="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 process.stdout.write(String((st && st.alert && st.alert.findings && st.alert.findings.length) || 0));
@@ -111,7 +111,7 @@ run_wl3() {
     if [ ! -f "$CLI" ]; then skip "WL3: omit --finding-status default (source not implemented)"; return; fi
     local tmp sid rc len
     tmp="$(mktemp -d)"; sid="wl3-sid"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --finding-categories workflow \
         --finding-severity warning \
         --finding-detail "d3" \
@@ -132,7 +132,7 @@ run_wl4() {
     local tmp sid rc status0
     tmp="$(mktemp -d)"; sid="wl4-sid"
     seed_finding "$tmp" "$sid" "draft" "d0"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --confirm-finding-ids 0 --session-id "$sid" >/dev/null 2>&1
     rc=$?
     status0=$(read_finding_field "$tmp" "$sid" 0 "status")
@@ -151,7 +151,7 @@ run_wl5() {
     seed_finding "$tmp" "$sid" "draft" "d0"
     seed_finding "$tmp" "$sid" "draft" "d1"
     seed_finding "$tmp" "$sid" "draft" "d2"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --confirm-finding-ids 0,2 --session-id "$sid" >/dev/null 2>&1
     rc=$?
     s0=$(read_finding_field "$tmp" "$sid" 0 "status")
@@ -172,7 +172,7 @@ run_wl6() {
     seed_finding "$tmp" "$sid" "draft" "alpha"
     seed_finding "$tmp" "$sid" "draft" "beta"
     seed_finding "$tmp" "$sid" "draft" "gamma"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --drop-finding-ids 1 --session-id "$sid" >/dev/null 2>&1
     rc=$?
     len=$(read_findings_len "$tmp" "$sid")
@@ -193,7 +193,7 @@ run_wl7() {
     seed_finding "$tmp" "$sid" "draft" "alpha"
     seed_finding "$tmp" "$sid" "draft" "beta"
     seed_finding "$tmp" "$sid" "draft" "gamma"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --drop-finding-ids 2,0 --session-id "$sid" >/dev/null 2>&1
     rc=$?
     len=$(read_findings_len "$tmp" "$sid")
@@ -213,7 +213,7 @@ run_wl8() {
     tmp="$(mktemp -d)"; sid="wl8-sid"
     seed_finding "$tmp" "$sid" "draft" "alpha"
     seed_finding "$tmp" "$sid" "draft" "beta"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --confirm-finding-ids 0 \
         --drop-finding-ids 1 \
         --set-alert-phase done \
@@ -221,7 +221,7 @@ run_wl8() {
     rc=$?
     len=$(read_findings_len "$tmp" "$sid")
     s0=$(read_finding_field "$tmp" "$sid" 0 "status")
-    phase=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    phase=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 process.stdout.write(JSON.stringify(st && st.alert && st.alert.alert_phase));
@@ -239,7 +239,7 @@ run_wl9() {
     local tmp sid rc
     tmp="$(mktemp -d)"; sid="wl9-sid"
     seed_finding "$tmp" "$sid" "draft" "alpha"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --confirm-finding-ids 99 --session-id "$sid" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
@@ -259,7 +259,7 @@ run_wl10() {
     tmp="$(mktemp -d)"; sid="wl10-sid"
     seed_finding "$tmp" "$sid" "draft" "alpha"
     seed_finding "$tmp" "$sid" "draft" "beta"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --drop-finding-ids 0 --session-id "$sid" >/dev/null 2>&1
     len=$(read_findings_len "$tmp" "$sid")
     rm -rf "$tmp"

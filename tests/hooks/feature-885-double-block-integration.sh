@@ -70,15 +70,15 @@ CMD="gh issue close 999"
 
 # Step 1: feed to enforce-worktree (from main worktree CWD — blocked).
 JSON_EW='{"tool_name":"Bash","tool_input":{"command":"'"$CMD"'","cwd":"'"$MAIN_WT_NODE"'"},"session_id":"'"$SID"'"}'
-WORKFLOW_PLANS_DIR="$TMP_NODE" ENFORCE_WORKTREE=on \
+WORKFLOW_PLANS_DIR="$TMP_NODE" CLAUDE_WORKFLOW_DIR="$TMP_NODE" ENFORCE_WORKTREE=on \
     run_with_timeout 15 bash -c "echo '$JSON_EW' | node '$HOOK_EW'" >/dev/null 2>&1 || true
 
 # Step 2: feed the same command to enforce-issue-close (also blocked).
 JSON_IC='{"tool_name":"Bash","tool_input":{"command":"'"$CMD"'"},"session_id":"'"$SID"'"}'
-WORKFLOW_PLANS_DIR="$TMP_NODE" \
+WORKFLOW_PLANS_DIR="$TMP_NODE" CLAUDE_WORKFLOW_DIR="$TMP_NODE" \
     run_with_timeout 15 bash -c "echo '$JSON_IC' | node '$HOOK_IC'" >/dev/null 2>&1 || true
 
-STATE_FILE="$TMP/${SID}-supervisor-state.json"
+STATE_FILE="$TMP/${SID}.control/supervisor-state.json"  # #2434 control file
 if [ ! -f "$STATE_FILE" ]; then
     skip "I1: no state file written (no hook blocked; integration scenario requires enforce-worktree to block gh issue close from main worktree)"
     rm -rf "$TMP"

@@ -1,20 +1,8 @@
 # i-inherited-adoption.sh
 # Tests: hooks/workflow-state/lifecycle.js, hooks/session-start.js, hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, bin/workflow/lib/next-step/verdict.js
 # Tags: stop-hook, supervisor-guard, session-inherit, provenance, regression-1794, scope:issue-specific, pwsh-not-required, TL1, TL2
-#
-# I1-I9 — #1794 regression: isWorkflowStarted() must judge ADOPTION (did THIS
-# session record a step settlement of its own?), not the projected view. A heir
-# created by session-start inherits every step_status as provenance:"backfilled"
-# / origin:"session-inherit", yet projectState folds only status + updated_at +
-# updated_seq (none of which carries provenance), so
-# the derived view is indistinguishable from a genuine complete and C4/C2 fire on
-# a session that never ran /workflow-init.
-#
-# The shared drivers (inh_wf / inh_guard / inh_probe / inh_anchor) live in
-# helpers/inheritance.sh — i-guard-robustness.sh uses them too. The TL1 predicate
-# truth tables live in i-adoption-predicate.sh.
-#
-# Sourced by tests/hooks/feature-1794-stop-guard-exemptions.sh.
+# I1-I9 (#1794): isWorkflowStarted() judges ADOPTION, not the projected view — a session-inherit heir (all steps backfilled) must not fire C4/C2.
+# Drivers: helpers/inheritance.sh; TL1 truth tables: i-adoption-predicate.sh. Sourced by ../feature-1794-stop-guard-exemptions.sh.
 
 # ---------------------------------------------------------------------------
 # I1: an inherited-only heir projects workflow_init=complete while EVERY
@@ -79,7 +67,7 @@ run_I3() {
     anchor=$(inh_anchor "$tmp" "i3-heir")
     [ "$anchor" = "ANCHOR_OK" ] || problems="$problems [anchor:${anchor:-<err>}]"
     seed_sup_armed "$(inh_wf "$tmp")" "i3-heir"
-    grep -q '"alert_armed_at":"' "$tmp/wf/i3-heir-supervisor-state.json" 2>/dev/null \
+    grep -q '"alert_armed_at":"' "$tmp/wf/i3-heir.control/supervisor-state.json" 2>/dev/null \
         || problems="$problems [trigger-not-armed]"
     inh_guard c2 "$tmp" "i3-heir"
     rm -rf "$tmp" 2>/dev/null || true

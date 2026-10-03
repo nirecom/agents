@@ -91,7 +91,7 @@ fi
 pass "P0 provenance marker kind derived from the SSOT: .$MARKER_KIND"
 
 marker_of() { printf '%s/%s.%s' "$TMP" "$1" "$MARKER_KIND"; }
-audit_of()  { printf '%s/%s-supervisor-state.json' "$TMP" "$1"; }
+audit_of()  { printf '%s/%s.control/supervisor-state.json' "$TMP" "$1"; }  # #2434 control file
 
 # The recorder's own stdout/stderr and exit status, kept OUT of the marker
 # directory so a capture file can never be mistaken for a marker.

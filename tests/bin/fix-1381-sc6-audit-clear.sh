@@ -42,7 +42,7 @@ fi
 # Seed a supervisor state with audit_phase=pending + audit_armed_at set (non-null).
 seed_audit_pending() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -50,14 +50,14 @@ const st = s.createEmptyState('$sid');
 st.audit.audit_phase = 'pending';
 st.audit.audit_armed_at = new Date().toISOString();
 st.audit.audit_cause = 'step-complete:detail';
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
 # Read audit_phase and audit_armed_at as a "phase|armed" string ("null"|"null" when both null).
 read_audit() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 const au = (st && st.audit) || {};
@@ -80,7 +80,7 @@ run_t1_clear_phase_single() {
 
     seed_audit_pending "$tmp_node" "$sid"
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node "$CLI" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node "$CLI" \
         --session-id "$sid" --clear-audit-armed-at --clear-audit-phase 2>&1)
     rc=$?
 
@@ -113,7 +113,7 @@ run_t2_clear_phase_dual() {
     seed_audit_pending "$tmp_node" "$sid"
     seed_audit_pending "$tmp_node" "$wsid"
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node "$CLI" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node "$CLI" \
         --session-id "$sid" --mirror-session-id "$wsid" \
         --clear-audit-armed-at --clear-audit-phase 2>&1)
     rc=$?

@@ -34,13 +34,15 @@ run_sid_probe() {
     run_driver
 }
 
-# The checkpoint is named <sid>-wi-checkpoint.json, so its basename IS the id the
-# driver resolved (bin/workflow/lib/workflow-init/checkpoint.js checkpointPath).
+# The checkpoint lives at <wf>/<sid>.control/wi-checkpoint.json (#2434), so its parent
+# directory name IS the id the driver resolved (checkpoint.js checkpointPath).
 sid_from_checkpoint() {
     local p
     p="$(get_kv CHECKPOINT)" || true
-    p="${p##*/}"
-    printf '%s' "${p%-wi-checkpoint.json}"
+    case "$p" in
+        */wi-checkpoint.json) p="${p%/wi-checkpoint.json}"; p="${p##*/}"; printf '%s' "${p%.control}" ;;
+        *) printf '<unexpected:%s>' "$p" ;;
+    esac
 }
 
 assert_sid() {  # <label> <want>

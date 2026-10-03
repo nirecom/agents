@@ -1,36 +1,14 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1643-worker-dispatch-guard.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-dispatch-overlay.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/lib/worker-dispatch-registry.js, hooks/enforce-worktree.js
-# Tags: worker-dispatch, enforce-worktree, hook, guard, overlay, security, lock1, lock2, lock3, TL2, scope:issue-specific
+# Tags: worker-dispatch, enforce-worktree, hook, guard, overlay, security, lock1, lock2, lock3, control-dir, TL2, scope:issue-specific
 #
-# Issue #1643 — guard-side overlay for the single worker-dispatch entry point.
-# Canonical form (the ONLY allowed shape):
-#     node "<ACD>/bin/worker-dispatch.js" <worker-name> <main-root> <payload-json>
-#
-# Locks under test (detail plan S1):
-#   Lock 1 — script path root must equal the marker-validated AGENTS_CONFIG_DIR
-#   Lock 2 — argv <main-root> must equal the repo the guard is currently judging
-#   Lock 3 — argv <main-root> must be a MAIN worktree inside getSessionRepoRoots()
-#
-# Drive surface: the overlay predicate itself (matchWorkerDispatchOverlay), invoked
-# with the same (cmd, acd, repoRoot) triple worker-script.js passes it, from a
-# process whose cwd is the fixture main worktree so getSessionRepoRoots() anchors
-# there. Group W additionally drives the FULL hook exactly like
-# tests/hooks/fix-1600-finalize-worker-overlay.sh does, to prove the wiring is live.
-#
-# Deliberate layering note: enforce-worktree.js short-circuits on
-# detectWritePredicate() before any main-worktree-allow runs, and a bare
-# `node "<path>" a b c` is not classified as a write, so the full hook cannot
-# express the BLOCK rows. Asserting them at the hook level would be a false-green
-# (they "pass" for the wrong reason). The matrix therefore runs at the predicate
-# layer, where a wrong verdict is observable.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - A real Claude Code PreToolUse invocation where tool_input.cwd differs from the
-#     hook process cwd, and the real session's ENFORCE_WORKTREE_ADDITIONAL_REPOS set.
-#   - A real ~/.claude symlinked agents checkout driving resolveAgentsConfigDir().
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
+# Issue #1643 overlay guard + #2434 control-dir extension. Canonical WD-3 form:
+#   node "<ACD>/bin/worker-dispatch.js" <worker> <main-root> <payload-json>
+# Locks 1-3 (ACD root, main-root match, MAIN worktree in getSessionRepoRoots).
+# Drive surface: matchWorkerDispatchOverlay predicate (not the full hook — see
+# file comment history for why the BLOCK rows stay at predicate level).
+# TL3 gap: real PreToolUse with cwd != hook-cwd; symlinked ~/.claude checkout.
 
 set -u
 
@@ -48,6 +26,7 @@ OVERLAY_JS="$AGENTS_DIR/hooks/enforce-worktree/main-worktree-allows/worker-dispa
 WORKER_SCRIPT_JS="$AGENTS_DIR/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
 REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 
@@ -344,6 +323,43 @@ group_wiring() {
 }
 
 # ===========================================================================
+# Group 2434-C — #2434 control-dir payload ALLOW; legacy PLANS still ALLOW
+# ===========================================================================
+CTRL_RAW_2434="$TMPD/wdir-2434"; mkdir -p "$CTRL_RAW_2434"
+CTRL_2434="$(nodepath "$CTRL_RAW_2434")"
+SID_2434="test2434guard"
+mkdir -p "$CTRL_RAW_2434/$SID_2434.control"
+CTRL_PAYLOAD_2434="$CTRL_2434/$SID_2434.control/worker-test-runner-1.json"
+printf '{}' > "$CTRL_RAW_2434/$SID_2434.control/worker-test-runner-1.json"
+
+# Like overlay_verdict but also exports CLAUDE_WORKFLOW_DIR for control-dir check.
+overlay_verdict_ctrl() {
+    local cmd="$1" repo_root="$2"
+    (cd "$MAIN_RAW" && run_with_timeout 30 env \
+        "WORKFLOW_PLANS_DIR=$PLANS" \
+        "CLAUDE_WORKFLOW_DIR=$CTRL_2434" \
+        node "$PROBE_JS" "$(nodepath "$OVERLAY_JS")" "$cmd" "$ACD" "$repo_root" 2>&1)
+}
+
+group_control_dir_allow() {
+    if [ ! -f "$OVERLAY_JS" ]; then
+        fail "2434-ctrl/control-dir-payload-allowed — overlay absent"
+        fail "2434-ctrl/legacy-plans-still-allowed — overlay absent"
+        return
+    fi
+    # WD-3 form with payload in <sid>.control/ → ALLOW after fix.
+    # Before fix: overlay checks only PLANS residency → BLOCK → FAIL.
+    local ctrl_cmd
+    ctrl_cmd="$(printf 'node "%s/bin/worker-dispatch.js" test-runner "%s" "%s"' \
+        "$ACD" "$MAIN" "$CTRL_PAYLOAD_2434")"
+    assert_eq "2434-ctrl/control-dir-payload-allowed" "ALLOW" \
+        "$(overlay_verdict_ctrl "$ctrl_cmd" "$MAIN")"
+    # Legacy PLANS payload must remain ALLOW (existing-behaviour contract; passes today).
+    assert_eq "2434-ctrl/legacy-plans-still-allowed" "ALLOW" \
+        "$(overlay_verdict "$(expand "$CANONICAL")" "$MAIN")"
+}
+
+# ===========================================================================
 # Group R — registry presence (the overlay's worker-name enum SSOT)
 # ===========================================================================
 group_registry() {
@@ -361,12 +377,24 @@ if command -v timeout >/dev/null 2>&1; then
     fi
 fi
 
+case_begin "registry" "hooks/lib/worker-dispatch-registry.js"
 group_registry
+case_end
+
+case_begin "overlay-allow-block" "hooks/enforce-worktree/main-worktree-allows/worker-dispatch-overlay.js"
 group_allow
 group_block
 group_sanctioned_count
 group_fail_closed
+case_end
+
+case_begin "wiring" "hooks/enforce-worktree/main-worktree-allows/worker-script.js"
 group_wiring
+case_end
+
+case_begin "control-dir" "hooks/enforce-worktree.js"
+group_control_dir_allow
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

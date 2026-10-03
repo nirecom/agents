@@ -60,9 +60,9 @@ drive() {
 seed() {
     drive "seed-$1" "
 const st = schema.createEmptyState('$1');
-fs.writeFileSync(writer.getStatePath('$1'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$1', { forWrite: true }), JSON.stringify(st));
 out('');
-" >/dev/null
+" >/dev/null || fail "seed($1): supervisor-state seed write failed"
 }
 
 # Worker: N iterations of one named writer operation against one session.

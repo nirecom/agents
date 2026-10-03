@@ -27,6 +27,31 @@ function lastActivityMs(parsed) {
   return timestamps.length > 0 ? Math.max(...timestamps) : 0;
 }
 
+const CONTROL_DIR_SUFFIX = ".control";
+const CONTROL_RETENTION_DAYS = 30;
+
+// <sid>.control/ (#2434): stale .tmp inside goes on the 24h rule; the directory itself
+// only once <sid>.json is gone and nothing in it changed for CONTROL_RETENTION_DAYS.
+function sweepControlDir(workflowDir, file, tmpCutoff) {
+  const dir = path.join(workflowDir, file);
+  const st = fs.lstatSync(dir);
+  if (!st.isDirectory()) return;
+  let newest = st.mtimeMs;
+  for (const name of fs.readdirSync(dir)) {
+    const p = path.join(dir, name);
+    try {
+      const est = fs.lstatSync(p);
+      if (name.endsWith(".tmp") && est.mtimeMs < tmpCutoff) { fs.unlinkSync(p); continue; }
+      newest = Math.max(newest, est.mtimeMs);
+    } catch (e) {}
+  }
+  const sid = file.slice(0, -CONTROL_DIR_SUFFIX.length);
+  if (fs.existsSync(path.join(workflowDir, `${sid}.json`))) return;
+  if (newest < Date.now() - CONTROL_RETENTION_DAYS * 24 * 60 * 60 * 1000) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 function cleanupZombies(maxAgeDays = 7) {
   const workflowDir = getWorkflowDir();
   let files;
@@ -70,6 +95,11 @@ function cleanupZombies(maxAgeDays = 7) {
           fs.rmSync(filePath, { recursive: true, force: true });
         }
       } catch (e) {}
+      continue;
+    }
+
+    if (file.endsWith(CONTROL_DIR_SUFFIX)) {
+      try { sweepControlDir(workflowDir, file, tmpCutoff); } catch (e) {}
       continue;
     }
 

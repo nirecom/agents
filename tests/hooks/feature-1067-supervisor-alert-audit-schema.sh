@@ -5,12 +5,7 @@
 # Tests for issue #1067 — alert/audit two-mode schema contract.
 # Cases: createEmptyState alert/audit structure; no legacy layer2/layer3 keys;
 #        AUDIT_SEVERITY_THRESHOLD; ensureAlertScheduled arming thresholds.
-#
-# RED: All cases FAIL/SKIP until source changes land (schema still has layer2/layer3).
-
-# L3 gap (what this test does NOT catch):
-# - migrateLegacyState interaction with concurrent writes (race between read and atomic rename)
-# - validate() rejection surfacing to real Stop-hook callers in a live session
+# L3 gap: migrateLegacyState vs concurrent writes (read/rename race); validate() rejection reaching real Stop-hook callers.
 # Closest-to-action mitigation: no supervisor risk category; manual review at WORKFLOW_USER_VERIFIED.
 
 set -u
@@ -130,7 +125,7 @@ run_sa4() {
     require_source "$WRITER_MODULE" "SA4: readStateOrInit migrates legacy layer2/layer3 to alert/audit" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa4-legacy';
@@ -141,7 +136,7 @@ const legacyState = {
   layer2: { l2_armed_at: '2026-01-01T00:00:00Z', last_run_at: null, cumulative_severity: 'warning', findings: [{categories:['code'],severity:'warning',detail:'test',timestamp:'2026-01-01T00:00:00.000Z'}], l2_phase: 'pending', l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
   layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
 };
-fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+fs.writeFileSync(w.getStatePath(sid, { forWrite: true }), JSON.stringify(legacyState));
 const migrated = w.readStateOrInit(sid);
 const errs = [];
 if (!migrated.alert || typeof migrated.alert !== 'object') errs.push('alert missing');
@@ -169,7 +164,7 @@ run_sa4b() {
     require_source "$WRITER_MODULE" "SA4b: readStateOrInit is idempotent on already-migrated state" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa4b-already';
@@ -178,7 +173,7 @@ const legacyState = {
   layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
   layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
 };
-fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+fs.writeFileSync(w.getStatePath(sid, { forWrite: true }), JSON.stringify(legacyState));
 w.readStateOrInit(sid);
 const second = w.readStateOrInit(sid);
 const errs = [];
@@ -203,7 +198,7 @@ run_sa4c() {
     require_source "$WRITER_MODULE" "SA4c: readStateOrInit migrates layer2-only legacy state" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa4c-l2only';
@@ -211,7 +206,7 @@ const legacyState = {
   version: 1, session_id: sid, layer1: { findings: [] },
   layer2: { l2_armed_at: '2026-02-01T00:00:00Z', last_run_at: null, cumulative_severity: 'error', findings: [], l2_phase: 'done', l2_cause: 'test', l2_retry_count: 1, findings_surfaced_at: null, l2_eligible_phase: null },
 };
-fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+fs.writeFileSync(w.getStatePath(sid, { forWrite: true }), JSON.stringify(legacyState));
 const migrated = w.readStateOrInit(sid);
 const errs = [];
 if (!migrated.alert || typeof migrated.alert !== 'object') errs.push('alert missing');
@@ -237,7 +232,7 @@ run_sa4d() {
     require_source "$WRITER_MODULE" "SA4d: readStateOrInit migrates layer3-only legacy state" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa4d-l3only';
@@ -245,7 +240,7 @@ const legacyState = {
   version: 1, session_id: sid, layer1: { findings: [] },
   layer3: { l3_phase: 'done', l3_verdict: 'WARN', l3_last_run_at: '2026-03-01T00:00:00Z', l3_armed_at: '2026-03-01T00:00:00Z', l3_cause: 'drift', l3_retry_count: 2, findings: [] },
 };
-fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+fs.writeFileSync(w.getStatePath(sid, { forWrite: true }), JSON.stringify(legacyState));
 const migrated = w.readStateOrInit(sid);
 const errs = [];
 if (!migrated.audit || typeof migrated.audit !== 'object') errs.push('audit missing');
@@ -271,7 +266,7 @@ run_sa4e() {
     require_source "$WRITER_MODULE" "SA4e: migrated state passes validate()" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const s = require('$SCHEMA_MODULE_NODE');
 const fs = require('fs');
@@ -281,7 +276,7 @@ const legacyState = {
   layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
   layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
 };
-fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+fs.writeFileSync(w.getStatePath(sid, { forWrite: true }), JSON.stringify(legacyState));
 const migrated = w.readStateOrInit(sid);
 const vr = s.validate(migrated);
 if (!vr.ok) { console.error('validate failed: ' + vr.errors.join('; ')); process.exit(2); }
@@ -301,7 +296,7 @@ run_sa4f() {
     require_source "$WRITER_MODULE" "SA4f: appendFinding() succeeds on legacy state file" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa4f-e2e';
@@ -310,7 +305,7 @@ const legacyState = {
   layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
   layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
 };
-fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+fs.writeFileSync(w.getStatePath(sid, { forWrite: true }), JSON.stringify(legacyState));
 const ok = w.appendFinding(sid, { categories: ['code'], severity: 'warning', detail: 'migration e2e test', reporter: 'sa4f' });
 if (!ok) { console.error('appendFinding returned false'); process.exit(2); }
 const written = JSON.parse(fs.readFileSync(w.getStatePath(sid), 'utf8'));
@@ -343,7 +338,7 @@ run_sa5() {
     require_source "$WRITER_MODULE" "SA5: readStateOrInit returns createEmptyState when no file exists" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const state = w.readStateOrInit('sa5-fresh');
 const errs = [];
@@ -366,11 +361,11 @@ run_sa7() {
     require_source "$WRITER_MODULE" "SA7: readStateOrInit falls back to createEmptyState on corrupt file" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa7-corrupt';
-fs.writeFileSync(w.getStatePath(sid), '{corrupt json');
+fs.writeFileSync(w.getStatePath(sid, { forWrite: true }), '{corrupt json');
 const state = w.readStateOrInit(sid);
 const errs = [];
 if (!state.alert || typeof state.alert !== 'object') errs.push('alert missing or not object');
@@ -392,7 +387,7 @@ run_sa8() {
     require_source "$WRITER_MODULE" "SA8: migrateLegacyState backfills created_at and last_updated when absent" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa8-timestamps';
@@ -403,7 +398,7 @@ const legacyState = {
   layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
   layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
 };
-fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+fs.writeFileSync(w.getStatePath(sid, { forWrite: true }), JSON.stringify(legacyState));
 const migrated = w.readStateOrInit(sid);
 const errs = [];
 if (typeof migrated.created_at !== 'string' || !migrated.created_at) errs.push('created_at missing or not string');

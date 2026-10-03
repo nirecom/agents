@@ -60,7 +60,7 @@ $2
 field() {
     node -e "
 const fs = require('fs'), path = require('path');
-const p = path.join(process.argv[1], process.argv[2] + '-supervisor-state.json');
+const p = require(path.join(process.argv[1], 'hooks/lib/supervisor-state-writer.js')).getStatePath(process.argv[2]);
 if (!fs.existsSync(p)) { console.log('NO_STATE_FILE'); process.exit(0); }
 const s = JSON.parse(fs.readFileSync(p, 'utf8'));
 const findings = (s.layer1 && Array.isArray(s.layer1.findings)) ? s.layer1.findings
@@ -69,7 +69,7 @@ const f = findings[Number(process.argv[3])];
 if (!f) { console.log('NO_FINDING'); process.exit(0); }
 const v = eval('f.' + process.argv[4]);
 console.log(v === undefined ? 'ABSENT' : (Array.isArray(v) ? JSON.stringify(v) : String(v)));
-" "$(node_path "$PLANS")" "$1" "$2" "$3" 2>&1
+" "$(node_path "$AGENTS_DIR")" "$1" "$2" "$3" 2>&1
 }
 
 # --- R1/R2: severity is carried through, not hardcoded (table-driven over verdicts) ---
@@ -142,7 +142,7 @@ R8_OUT="$(emit "unused" "
 const r = m.reportRulesInjection('S-LEAK', 'rules/test.md', null);
 console.log(r === undefined ? 'UNDEFINED_OK' : 'RETURNED:' + String(r));
 ")"
-R8_LEAKED="$(find "$PLANS" -name 'null-supervisor-state.json' -o -name 'undefined-supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
+R8_LEAKED="$(find "$PLANS" "$WFDIR" -name 'null-supervisor-state.json' -o -name 'undefined-supervisor-state.json' -o -name 'null.control' -o -name 'undefined.control' 2>/dev/null | wc -l | tr -d ' ')"
 if printf '%s' "$R8_OUT" | grep -q 'UNDEFINED_OK' && [ "$R8_LEAKED" = "0" ]; then
     pass "R8: reportRulesInjection with a null sessionId is fail-open and writes nothing"
 else

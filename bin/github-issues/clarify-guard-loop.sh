@@ -5,7 +5,7 @@
 # exit: 0 on success, 2 on bad plans-dir or missing required arg
 #
 # Wraps check-closes-issues-nonempty.sh (SSOT for closes_issues parsing).
-# Manages GUARD_ATTEMPT counter file: <plans-dir>/<sid>-guard-attempt.tmp
+# Manages GUARD_ATTEMPT counter file: <session control dir>/guard-attempt.tmp
 set -uo pipefail
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
@@ -51,7 +51,11 @@ case "$REAL_PLANS_DIR" in
         ;;
 esac
 
-COUNTER_FILE="${REAL_PLANS_DIR}/${SESSION_ID}-guard-attempt.tmp"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COUNTER_FILE="$(node "$SCRIPT_DIR/../workflow-control-dir" --session "$SESSION_ID" --file guard-attempt.tmp --for-write)" || {
+    echo "[clarify-guard-loop] cannot resolve the session control dir" >&2
+    exit 2
+}
 GUARD_ATTEMPT=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0)
 
 GUARD_FLAG=""

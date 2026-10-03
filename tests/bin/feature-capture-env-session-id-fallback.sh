@@ -107,6 +107,8 @@ process.stdin.on("end", () => {
     }
 });
 EPFEOF
+    # REAL sibling-repos-json.js — capture-env.sh invokes it via LIB_DIR.
+    cp "$AGENTS_DIR/skills/worktree-end/scripts/sibling-repos-json.js" "$envdir/scripts/sibling-repos-json.js"
 }
 
 # Run capture-env.sh with a mock environment
@@ -127,7 +129,9 @@ run_capture_env() {
 
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans"
-    mkdir -p "$PLANS_DIR"
+    export WORKFLOW_PLANS_DIR="$PLANS_DIR"
+    export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
+    mkdir -p "$PLANS_DIR" "$CLAUDE_WORKFLOW_DIR"
     mkdir -p "$backup_dir"
 
     PATH="$envdir/bin:$PATH" \
@@ -153,7 +157,7 @@ test_F1_fallback_reads_session_id_from_notes() {
     output="$(run_capture_env "$wt" "testowner/testrepo" "$backup" "")"
     local code=$?
 
-    local env_json="$TMPDIR_BASE/plans/sess-xyz-final-report-env.json"
+    local env_json="$TMPDIR_BASE/workflow/sess-xyz.control/final-report-env.json"
     if [ "$code" = "0" ] && [ -f "$env_json" ]; then
         pass "F1: fallback reads Session-ID from WORKTREE_NOTES.md → sess-xyz-final-report-env.json created"
     else
@@ -241,8 +245,8 @@ test_F3_arg_takes_precedence() {
     output="$(run_capture_env "$wt" "testowner/testrepo" "$backup" "arg-sid")"
     local code=$?
 
-    local env_json_arg="$TMPDIR_BASE/plans/arg-sid-final-report-env.json"
-    local env_json_notes="$TMPDIR_BASE/plans/notes-sid-final-report-env.json"
+    local env_json_arg="$TMPDIR_BASE/workflow/arg-sid.control/final-report-env.json"
+    local env_json_notes="$TMPDIR_BASE/workflow/notes-sid.control/final-report-env.json"
     if [ "$code" = "0" ] && [ -f "$env_json_arg" ] && [ ! -f "$env_json_notes" ]; then
         pass "F3: arg4 'arg-sid' takes precedence over notes 'notes-sid' → arg-sid JSON created, notes-sid JSON absent"
     else

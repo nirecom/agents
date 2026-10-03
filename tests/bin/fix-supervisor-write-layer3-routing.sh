@@ -53,12 +53,12 @@ require_wsid_routing() {
 
 count_state_files() {
     local tmp="$1"
-    ls "$tmp"/*-supervisor-state.json 2>/dev/null | wc -l | tr -d ' '
+    ls "$tmp"/*.control/supervisor-state.json 2>/dev/null | wc -l | tr -d ' '  # #2434 control file
 }
 
 read_phase() {
     local tmp="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st || !st.layer3) { process.stdout.write('MISSING'); process.exit(0); }
@@ -74,12 +74,12 @@ run_r1() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --session-id sid-a --set-audit-phase done >/dev/null 2>&1
     rc=$?
     count=$(count_state_files "$tmp")
     local exists=0
-    [ -f "$tmp/sid-a-supervisor-state.json" ] && exists=1
+    [ -f "$tmp/sid-a.control/supervisor-state.json" ] && exists=1
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$count" = "1" ] && [ $exists -eq 1 ]; then
         pass "$label"
@@ -96,7 +96,7 @@ run_r2() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --set-audit-phase done 2>&1)
     rc=$?
     rm -rf "$tmp"
@@ -115,11 +115,11 @@ run_r3() {
     tmp="$(mktemp -d)"
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_SESSION_ID=wsid-r3test \
-        WORKFLOW_PLANS_DIR="$tmp" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" \
         run_with_timeout 5 node "$CLI_NODE" --set-audit-phase done >/dev/null 2>&1
     rc=$?
     exists=0
-    [ -f "$tmp/wsid-r3test-supervisor-state.json" ] && exists=1
+    [ -f "$tmp/wsid-r3test.control/supervisor-state.json" ] && exists=1
     unset WORKFLOW_SESSION_ID || true
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ $exists -eq 1 ]; then
@@ -140,7 +140,7 @@ run_r4() {
     unset CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_SESSION_ID=wsid-r4 \
         CLAUDE_SESSION_ID=ccu-r4 \
-        WORKFLOW_PLANS_DIR="$tmp" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" \
         run_with_timeout 5 node "$CLI_NODE" --set-audit-phase done >/dev/null 2>&1
     rc=$?
     wsid_phase=$(read_phase "$tmp" "wsid-r4")
@@ -163,7 +163,7 @@ run_r5() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --session-id sid-x --mirror-session-id sid-y --set-audit-phase done >/dev/null 2>&1
     rc=$?
     x_phase=$(read_phase "$tmp" "sid-x")
@@ -183,13 +183,13 @@ run_r6() {
     local tmp out rc count exists_wsid
     tmp="$(mktemp -d)"
     out=$(WORKFLOW_SESSION_ID=wsid-r6 \
-        WORKFLOW_PLANS_DIR="$tmp" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" \
         run_with_timeout 5 node "$CLI_NODE" \
             --session-id sid-r6 --increment-audit-retry-count 2>&1)
     rc=$?
     count=$(count_state_files "$tmp")
     exists_wsid=0
-    [ -f "$tmp/wsid-r6-supervisor-state.json" ] && exists_wsid=1
+    [ -f "$tmp/wsid-r6.control/supervisor-state.json" ] && exists_wsid=1
     unset WORKFLOW_SESSION_ID || true
     rm -rf "$tmp"
     if [ $rc -eq 0 ] \

@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
 # precheck-companions.sh — companion pre-check phase for clarify-intent CI-2b (#1237)
-# Args: --seed <N> --exclude <csv> [--output-file <path>]
+# Args: --seed <N> --exclude <csv> [--session <sid>]
 # stdout: 7-column TSV per candidate:
 #   N\ttitle\treason\tstate\tpurity-flag\tdecomp-verdict\tcompanion-driven-signals
-# exit: 0 candidates exist, 1 no candidates
+# exit: 0 candidates exist, 1 no candidates, 2 usage / unresolved control dir
 # Phases: 1 companion-search.sh → candidate TSV; 2 ident-only candidates → purity-flag=low-purity (kept);
 #   3-5 decomposition trials — baseline (seed only), full set, per candidate (placeholders);
-#   6 --output-file: JSON snapshot of baseline + per-candidate verdicts.
+#   6 --session: JSON snapshot of baseline + per-candidate verdicts at <session control dir>/companion-precheck.json.
 set -uo pipefail
 
 SEED=""
 EXCLUDE_CSV=""
+SESSION=""
+LEGACY_OUTPUT=""
 OUTPUT_FILE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --seed)        SEED="${2:-}"; shift 2 ;;
         --exclude)     EXCLUDE_CSV="${2:-}"; shift 2 ;;
-        --output-file) OUTPUT_FILE="${2:-}"; shift 2 ;;
+        --session)     SESSION="${2:-}"; shift 2 ;;
+        --output-file) LEGACY_OUTPUT="${2:-}"; shift 2 ;;
         *) echo "[precheck-companions] unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -29,6 +32,24 @@ fi
 if [[ ! "$SEED" =~ ^[0-9]+$ ]]; then
     echo "[precheck-companions] --seed must be a positive integer" >&2
     exit 2
+fi
+
+# --- BEGIN temporary: plans-dir control files -> workflow control dir migration added 2026-09-28 ---
+# deletion-condition: remove after 2026-12-28 (release + 3 months) together with hooks/lib/temporary-migrations/control-dir-split/, bin/migrate-control-dir and the legacy-argument shims; keep guard (c) until then
+if [[ -n "$LEGACY_OUTPUT" ]]; then
+    if ! LEGACY_HIT="$(node "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}/hooks/lib/temporary-migrations/control-dir-split/legacy-arg.js" "$LEGACY_OUTPUT" "$SESSION" companion-precheck.json)"; then
+        echo "[precheck-companions] --output-file is accepted only as the legacy session-prefixed companion-precheck.json path in the plans dir" >&2
+        exit 2
+    fi
+    SESSION="${LEGACY_HIT%%$'\t'*}"
+fi
+# --- END temporary: plans-dir control files -> workflow control dir migration ---
+
+if [[ -n "$SESSION" ]]; then
+    if ! OUTPUT_FILE="$(node "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}/bin/workflow-control-dir" --session "$SESSION" --file companion-precheck.json --for-write)"; then
+        echo "[precheck-companions] session control directory unresolved for '$SESSION'" >&2
+        exit 2
+    fi
 fi
 
 # Locate companion-search.sh: prefer sibling, then PATH
@@ -74,7 +95,7 @@ for row in "${OUTPUT_ROWS[@]}"; do
     printf '%s\n' "$row"
 done
 
-# Phase 6: write JSON snapshot if --output-file specified
+# Phase 6: write the JSON snapshot when a session was given
 if [[ -n "$OUTPUT_FILE" ]]; then
     CANDS_JSON=$(printf '%s,' "${JSON_CANDS[@]}")
     CANDS_JSON="[${CANDS_JSON%,}]"

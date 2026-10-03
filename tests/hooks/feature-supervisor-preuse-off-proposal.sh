@@ -8,20 +8,19 @@
 # - Real sentinel command forms + real clearance-token mint via bin/request-off-clearance.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
-#
+
+set -u
+
 # #1608 token-first rewrite: the shim gate now decides on a reason-bound clearance
 # TOKEN (<workflowDir>/<sid>.off-clearance), INDEPENDENT of supervisor findings/severity.
 #   - valid + reason-bound token → exit 0 (allow → human ask). Findings are irrelevant
 #     (deadlock root fix: error findings + valid token still allow).
 #   - reason/target-mismatch token → block (reason-binding, C2a).
-#   - token absent (genuine emit) → block. The old enforce-worktree fast-allow (T4b) and
-#     escape_hatch_event pass-through (T4d) are REMOVED: no token → block even when all
-#     findings are from enforce-worktree.
+#   - token absent (genuine emit) → block, even when all findings are from enforce-worktree:
+#     the old enforce-worktree fast-allow (T4b) and escape_hatch_event pass-through (T4d) are REMOVED.
 #   - token read/parse failure (corrupt) → block (fail-CLOSED).
 #   - expired token → block.
 #   - look-alike (non-genuine) → exit 0 (real OFF never activates).
-
-set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
@@ -49,24 +48,24 @@ fi
 
 # --- fixture writers (run inside a per-case tmp dir) ---
 seed_state_empty() {  # <tmp_node> <sid>
-    WORKFLOW_PLANS_DIR="$1" "$RWT" 10 node -e "
+    WORKFLOW_PLANS_DIR="$1" CLAUDE_WORKFLOW_DIR="$1" "$RWT" 10 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$2');
-fs.writeFileSync(w.getStatePath('$2'), JSON.stringify(st));" >/dev/null 2>&1
+fs.writeFileSync(w.getStatePath('$2', { forWrite: true }), JSON.stringify(st));" >/dev/null 2>&1 || fail "seed($2): supervisor-state seed write failed"
 }
 seed_state_error() {  # <tmp_node> <sid>
-    WORKFLOW_PLANS_DIR="$1" "$RWT" 10 node -e "
+    WORKFLOW_PLANS_DIR="$1" CLAUDE_WORKFLOW_DIR="$1" "$RWT" 10 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$2');
 st.layer1.findings=[{categories:['code'],severity:'error',detail:'blocking',reporter:'workflow-gate',timestamp:new Date().toISOString()}];
-fs.writeFileSync(w.getStatePath('$2'), JSON.stringify(st));" >/dev/null 2>&1
+fs.writeFileSync(w.getStatePath('$2', { forWrite: true }), JSON.stringify(st));" >/dev/null 2>&1 || fail "seed($2): supervisor-state seed write failed"
 }
 seed_state_worktree() {  # <tmp_node> <sid>
-    WORKFLOW_PLANS_DIR="$1" "$RWT" 10 node -e "
+    WORKFLOW_PLANS_DIR="$1" CLAUDE_WORKFLOW_DIR="$1" "$RWT" 10 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$2');
 st.layer1.findings=[{categories:['workflow'],severity:'warning',detail:'enforce-worktree false block',reporter:'enforce-worktree',timestamp:new Date().toISOString()}];
-fs.writeFileSync(w.getStatePath('$2'), JSON.stringify(st));" >/dev/null 2>&1
+fs.writeFileSync(w.getStatePath('$2', { forWrite: true }), JSON.stringify(st));" >/dev/null 2>&1 || fail "seed($2): supervisor-state seed write failed"
 }
 # write_token <tmp_node> <sid> <target> <category> <kind: valid|expired|corrupt>
 write_token() {

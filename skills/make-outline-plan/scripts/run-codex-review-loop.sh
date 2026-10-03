@@ -5,15 +5,23 @@ set -euo pipefail
 : "${PLANS_DIR:?PLANS_DIR not set}"
 : "${EXTENSIONS_USED:?EXTENSIONS_USED not set}"
 
+# shellcheck source=bin/lib/codex-review-loop/review-wrapper-control.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-review-loop/review-wrapper-control.sh" || exit 4
 # The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
 # so a containment refusal is never read as ESCALATE or as codex-unavailable.
 ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" intent)" || exit 4
+rwc_resolve outline-plan make-outline-plan
+DRAFT_FILE="$PLANS_DIR/$SESSION_ID-outline.md"
+CUR_FP="$(git hash-object -- "$DRAFT_FILE" 2>/dev/null || true)"
+TG_RC=0
+rwc_check_terminal make-outline-plan "$CUR_FP" || TG_RC=$?
+(( TG_RC == 0 )) || exit "$TG_RC"
 
 args=(
   --format outline-plan
   --session-id "$SESSION_ID"
   --plans-dir "$PLANS_DIR"
-  --draft-file "$PLANS_DIR/$SESSION_ID-outline.md"
+  --draft-file "$DRAFT_FILE"
   --cap 2 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
   --class-members "$PLANS_DIR/$SESSION_ID-intent.md"
@@ -37,7 +45,7 @@ for v in CTX_SURVEY_CODE CTX_SURVEY_HISTORY CTX_CONCERNS_LOG; do
   p="${!v:-}"
   if [[ -n "$p" && -s "$p" ]]; then args+=(--context "$p"); fi
 done
-RISK_FILE="$PLANS_DIR/$SESSION_ID-outline-risk-signal.txt"
+RISK_FILE="$(sp_control_dir "$SESSION_ID" outline-risk-signal.txt)" || exit 4
 if [[ -s "$RISK_FILE" ]]; then
   args+=(--risk-signal "$(head -n1 "$RISK_FILE")")
 fi

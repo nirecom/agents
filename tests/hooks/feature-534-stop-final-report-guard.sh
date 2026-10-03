@@ -2,36 +2,9 @@
 # tests/hooks/feature-534-stop-final-report-guard.sh
 # Tests: hooks/stop-final-report-guard.js, hooks/lib/final-report-schema.js, skills/session-close/SKILL.md, hooks/stop-premature-stop-guard.js, bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: settings, config, hook, tests, scope:issue-specific, TL2
-#
-# Issue #534 / #626 / #771 — Stop hook: stop-final-report-guard.js
-#
-# Contract after #771 (renderer abolition), updated for #1114 (13 headings):
-# all 13 headings from getSectionHeadings(sid) required after last
-# `## Final Report — <sid>` in transcript; residual <TOKEN> check;
-# no env-file `reported` flag check.
-#
-# 1. env file absent → 系統B trigger (#1611): consult `bin/workflow/next-step`.
-#    ACTION=invoke + REASON='pre_final_report_gate' means the close procedure was
-#    never started → exit 2 + decision:block unconditionally (the transcript is
-#    NOT scanned, so a hand-written Final Report is rejected too). Escape hatches:
-#    session-close gate `yield`, `<sid>.workflow-off`, gate marked complete.
-#    Any other next-step verdict → exit 0 (no-op, as before).
-# 2. env file malformed JSON → exit 0 (fail-open; no 系統B fall-through)
-# 3. stop_hook_active:true → exit 0
-# 4. last `## Final Report — <sid>` absent in transcript → exit 0
-# 5. any of the 12 `###` headings missing AFTER that position → exit 2 + decision:block
-# 6. residual `<[A-Z][A-Z_]+>` token in post-header region → exit 2 + decision:block
-# 7. otherwise → exit 0
-#
-# G1, G4, G6, I1 unchanged from pre-#771 contract.
-# G2, G7, G8 rewritten for new contract; G16–G20 added.
-# Old `reported` flag tests (G3 G5 G10 G11 G12 G13 G14 G15 G16-old) deleted.
-#
-# Layer: L2 (broad integration — real node subprocess, real JSONL fixtures, real hook file)
-# L3 gap: does not verify the hook fires in a real Claude Code Stop event. L3 would require
-#         a live `claude -p` session with the hook registered; see rules/test/claude-e2e.md.
-# Known gap: resolveSessionId fallback (SID derived from transcript filename when session_id
-#            absent from stdin) tests hooks/workflow-state.js — out of scope for this file.
+# #534/#626/#771/#1114/#1611: Stop hook contract (env-file absent → 系統B next-step trigger; present → 13-heading
+# + residual-token validation; malformed/stop_hook_active → fail-open). Contract owner: hooks/stop-final-report-guard.js.
+# Layer: L2 (real node subprocess + JSONL fixtures). L3 gap: real Claude Code Stop event (rules/test/claude-e2e.md).
 
 set -u
 
@@ -61,6 +34,10 @@ console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# #2434: env-file control files live under the pinned workflow dir; per-call WORKFLOW_PLANS_DIR overrides remain.
+export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
+export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
 
 run_with_timeout() {
     local secs="$1"; shift

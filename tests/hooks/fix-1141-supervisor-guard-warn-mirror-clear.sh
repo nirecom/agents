@@ -1,29 +1,9 @@
 #!/usr/bin/env bash
 # Tests: hooks/supervisor-guard.js
 # Tags: supervisor, em-supervisor, layer2, hook, stop, dual-store, fix-1141, scope:issue-specific
-# RED for issue #1141.
-#
-# Validates that supervisor-guard.js Phase B WARN path clears alert_armed_at on both
-# the effective-state store and its mirror store when audit_verdict=WARN is surfaced.
-#
-# The fix adds, inside `if (arbitration.decision === "warn")` after setting
-# pendingAuditWarnContext:
-#   writeAlertState(effectiveSupervisorStateSessionId, { alert_armed_at: null })
-#   + mirror clear to the other identity's store.
-#
-# Setup for effective-state-sid = wsid:
-#   - CC UUID state: exists but unarmed (alert_armed_at=null)
-#   - wsid state: armed (alert_armed_at set), audit_phase=done, audit_verdict=WARN
-#   → dual-store fallback selects wsid as effectiveSupervisorStateSessionId
-#   → Phase B reads audit_phase=done, audit_verdict=WARN → arbitration.decision="warn"
-#   → fix clears alert_armed_at on wsid (effective) and mirrors clear to CC UUID
-#
-# L3 gap (what this test does NOT catch):
-# - hook registration in settings.json Stop hooks — if supervisor-guard.js is
-#   not wired, the Phase B WARN path is entirely unobservable.
-# - real Claude Code transcript format differences and WORKFLOW_SESSION_ID env propagation
-# Closest-to-action mitigation: hook-registration category in
-#   bin/check-verification-gate.sh fires at WORKFLOW_USER_VERIFIED preflight.
+# #1141: the Phase B WARN path clears alert_armed_at on the effective store (wsid)
+# and mirrors the clear to the CC-UUID store. L3 gap: Stop-hook registration and
+# WORKFLOW_SESSION_ID propagation (mitigated by bin/check-verification-gate.sh).
 
 set -u
 
@@ -56,9 +36,11 @@ require_source() {
 }
 
 # Read alert_armed_at from a state file via node.
+# #2434: state lives at <CLAUDE_WORKFLOW_DIR>/<sid>.control/, so every seed,
+# read and hook call pins CLAUDE_WORKFLOW_DIR="$tmp/workflow".
 read_alert_armed_at() {
     local tmp="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st || !st.alert) { process.stdout.write('MISSING'); process.exit(0); }
@@ -66,17 +48,8 @@ process.stdout.write(st.alert.alert_armed_at === null ? 'null' : String(st.alert
 " 2>/dev/null
 }
 
-# L2: Phase B WARN path — guard exits 0, effective store (wsid) alert_armed_at is null,
-# mirror store (CC UUID) alert_armed_at is also null after the fix.
-#
-# Setup:
-#   CC UUID (sessionId) state: exists, alert_armed_at=null (unarmed)
-#   wsid state: alert_armed_at=<timestamp> (armed), audit_phase=done, audit_verdict=WARN
-#   → effectiveSupervisorStateSessionId = wsid (dual-store fallback picks wsid because
-#     CC UUID is unarmed but wsid is armed)
-#   Guard reads wsid state: audit_phase=done → Phase B fires → arbitration.decision=warn
-#   → pendingAuditWarnContext set → guard emits additionalContext → exit 0
-#   → fix: writeAlertState(wsid, {alert_armed_at:null}) + mirror clear to CC UUID
+# L2: CC-UUID store unarmed, wsid store armed with audit done+WARN -> the guard picks
+# wsid, surfaces additionalContext (exit 0) and clears alert_armed_at in both stores.
 run_l2() {
     require_source "$HOOK" "L2: Phase B WARN path clears alert_armed_at on effective store (wsid) and mirror (CC UUID)" || return
     require_source "$WRITER_NODE" "L2: supervisor-state-writer.js exists" || return
@@ -87,18 +60,18 @@ run_l2() {
     wsid="wsid-warn-l2"
 
     # Seed CC UUID state: exists but unarmed
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$cc_uuid');
 st.alert.alert_armed_at = null;
 st.alert.alert_phase = null;
-fs.writeFileSync(w.getStatePath('$cc_uuid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$cc_uuid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 
     # Seed wsid state: armed + audit_phase=done, audit_verdict=WARN
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -108,14 +81,14 @@ st.alert.alert_phase = null;
 st.audit.audit_phase = 'done';
 st.audit.audit_verdict = 'WARN';
 st.audit.audit_cause = 'test audit warn';
-fs.writeFileSync(w.getStatePath('$wsid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$wsid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 
     # Run guard: session_id=CC UUID, WORKFLOW_SESSION_ID=wsid (propagated via env)
     # The guard resolves workflowSessionId from WORKFLOW_SESSION_ID env var (line 261-262).
     # session_hash is not used for state resolution — omit it (or pass CC UUID).
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$cc_uuid\",\"transcript_path\":\"\",\"session_hash\":\"$cc_uuid\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_SESSION_ID="$wsid" \
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_SESSION_ID="$wsid" \
           run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
 

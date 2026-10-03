@@ -1,49 +1,20 @@
 "use strict";
-// bin/worker-dispatch/workers/issue-close-finalize/state.js
-//
-// D3: the durable state file is UNTRUSTED INPUT, exactly like the payload.
-//
-// issue-close-finalize is the only multi-pass worker in the family. Between two
-// passes the whole conversation state lives in a JSON file under the plans
-// directory, and the dispatcher is a fresh process each time. So everything the
-// payload validator does for `payload` this module must do for the state file's
-// CONTENT — same capability types, same fail-closed posture, same rejection of
-// unknown keys. A state file that grew a field, changed owner_repo, or came from
-// another session is refused before any child process starts.
-//
-// Three separate jobs, deliberately kept apart (CPR-SC):
-//
-//   1. validateState()   — type/constraint table over the state object itself.
-//                          Every field goes through capability.checkField, the
-//                          same function payload validation uses, so the two can
-//                          never drift. Unknown top-level keys AND unknown
-//                          g5_history[] element keys are rejected: an attacker
-//                          who can add a key can otherwise stage data for a
-//                          future reader of this file.
-//   2. readBinding()     — the session rebinding record. A 3-way match between
-//                          payload, state file and binding record. Without it a
-//                          state_file_path that merely LOOKS right for this
-//                          session (the basename check in capability.js) could
-//                          have been produced by a different session against a
-//                          different repo.
-//   3. writeInitial()    — the only writer. State file and binding record are
-//                          both written tmp -> rename via fsguard.renameWithin,
-//                          so a reader never observes a half-written file.
-//
-// The `state_file_path` BASENAME contract (<sid>-finalize-state-<root>.json) is
-// already enforced at payload-validation time by the `state-file-for-session`
-// capability type. This module deliberately does not re-implement it; it owns
-// content and binding, not naming.
-//
-// Path comparison uses anchor.samePath, never `===`. Callers legitimately hand
-// us `/c/git/...` (MSYS), `C:/git/...` and `C:\git\...` forms for the same file;
-// a string compare would reject the honest case while still being no stronger
-// against the dishonest one. samePath resolves + case-normalizes.
+// bin/worker-dispatch/workers/issue-close-finalize/state.js — D3: the durable state file is
+// UNTRUSTED INPUT, exactly like the payload. It lives in <sid>.control/ between passes, so
+// everything the payload validator does for `payload` this module does for its CONTENT.
+// Three jobs, kept apart (CPR-SC):
+//   1. validateState() — type table over the state object via capability.checkField, rejecting
+//      unknown top-level and g5_history[] element keys (no staging data for a future reader).
+//   2. checkBinding()  — 3-way match of payload, state file and binding record (paths.js).
+//   3. writeInitial()  — the only writer; tmp -> rename via fsguard.renameWithin.
+// Naming is owned by capability.js (derived-control-file), not here. Paths compare with
+// anchor.samePath, never `===`: MSYS, forward-slash and backslash forms name one file.
 
 const fs = require("fs");
 const crypto = require("crypto");
 const { checkField } = require("../../capability");
 const { samePath, realAbs } = require("../../anchor");
+const paths = require("./paths");
 
 const SCHEMA_VERSION = 3;
 
@@ -214,13 +185,6 @@ function validateState(state, anchors) {
   return null;
 }
 
-function bindingPath(ctx, sessionId, rootIssueNumber) {
-  return ctx.path.join(
-    ctx.anchors.plansDir,
-    `${sessionId}-finalize-binding-${rootIssueNumber}.json`,
-  );
-}
-
 function readJson(file) {
   let raw = null;
   try {
@@ -238,13 +202,9 @@ function readJson(file) {
 }
 
 // --- compare-and-swap ------------------------------------------------------
-//
-// The state file carries no version counter to swap on: schema_version is fixed
-// at 3 and g5_loop_iteration advances on one branch only, so neither identifies
-// a write. The token is therefore a digest of the exact bytes that passed
-// validateState and checkBinding — any write by anyone changes them, whether or
-// not it changed a counter, and the digest keeps the token small enough to hand
-// to a child process on argv.
+// The state file has no version counter to swap on (schema_version is fixed and
+// g5_loop_iteration advances on one branch only), so the token is the sha256 of the
+// exact bytes that passed validateState and checkBinding: any write changes it.
 function tokenOf(raw) {
   return crypto.createHash("sha256").update(String(raw === null || raw === undefined ? "" : raw)).digest("hex");
 }
@@ -274,7 +234,12 @@ function checkBinding(payload, state, ctx) {
   if (typeof sessionId !== "string" || sessionId === "") {
     return "session_id is required to verify the finalize session binding";
   }
-  const file = bindingPath(ctx, sessionId, payload.root_issue_number);
+  let file = null;
+  try {
+    file = paths.bindingPath(sessionId, payload.root_issue_number);
+  } catch (e) {
+    return `finalize session binding record is unreachable: ${e && e.message ? e.message : "control dir unusable"}`;
+  }
   const read = readJson(file);
   if (read.error) return `finalize session binding record ${read.error}`;
   const rec = read.value;
@@ -301,7 +266,7 @@ function checkBinding(payload, state, ctx) {
   if (!samePath(rec.main_worktree_path, state.main_worktree_path)) {
     return "finalize session binding record main_worktree_path does not match the state file";
   }
-  if (!samePath(rec.state_file_path, payload.state_file_path)) {
+  if (!paths.bindingStateMatches(rec.state_file_path, payload.state_file_path, sessionId, payload.root_issue_number)) {
     return "finalize session binding record points at a different state file";
   }
   if (Number(state.root_issue_number) !== Number(payload.root_issue_number)) {
@@ -328,15 +293,10 @@ function loadValidated(payload, ctx) {
   return { state: read.value, token: tokenOf(read.raw) };
 }
 
-// tmp -> rename, both ends inside the plans directory, so fsguard can prove
-// containment for each and a torn write is never observable.
-//
-// The temp name is UNIQUE PER WRITER. A fixed `<target>.tmp` is shared mutable
-// state between every process writing this file: two concurrent passes each open
-// it, interleave their bytes, and the loser's rename publishes a document neither
-// of them composed — defeating the whole point of the tmp -> rename dance. pid
-// plus random bytes makes the intermediate name private to one writer, so the
-// only contended operation left is the rename itself, which is atomic.
+// tmp -> rename inside the control dir, so fsguard proves containment for each end and
+// a torn write is never observable. The temp name is UNIQUE PER WRITER (pid + random):
+// a shared `<target>.tmp` lets two passes interleave bytes and publish a document
+// neither composed; with private names only the atomic rename is contended.
 function tmpNameFor(target) {
   return `${target}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`;
 }
@@ -348,21 +308,11 @@ function writeAtomic(ctx, target, data) {
 }
 
 // --- create lock -----------------------------------------------------------
-//
-// FIRST WRITE WINS below is an existence CHECK followed by an ACT, and two
-// first-time passes running at once can both find nothing and both write — the
-// second one's g5_history[0].g5_3a_completed:false landing on top of a chain that
-// has already posted its proposal comment. The exclusive lock file closes that
-// window: `wx` creation fails when the file exists, so exactly one pass at a time
-// holds the check-through-create interval. Same technique and same
-// `<target>.lock` naming as run-loop-step.js's lock over the loop passes (CPR-ORTH).
-//
-// The lock is created with plain fs because fsguard has no exclusive-create mode,
-// so its path is put through fsguard's own containment check first — a lock file
-// is still a write, and it must be provably inside a declared write scope.
-//
-// A pass that crashes leaves its lock behind forever; a lock older than one
-// pass's budget therefore has no live owner and is reclaimed exactly once.
+// FIRST WRITE WINS is a check followed by an act; two first-time passes could both
+// find nothing and both write. A `wx` lock file (`<target>.lock`, the same technique
+// as run-loop-step.js, CPR-ORTH) serializes the check-through-create interval. It is
+// created with plain fs (fsguard has no exclusive mode) after fsguard's containment
+// check. A lock older than one pass's budget has no live owner and is reclaimed once.
 const LOCK_STALE_MS = 30000;
 
 function tryAcquire(lockPath) {
@@ -420,30 +370,21 @@ const ALREADY_INITIALIZED =
   "a finalize state file already exists for this session and root issue — the chain is already initialized; refusing to overwrite it (delete it deliberately to restart)";
 
 // The existence half of FIRST WRITE WINS, exposed so runInitial() can fail before
-// spawning run-initial.sh. That script performs EXTERNAL, IRREVERSIBLE mutations
-// (parent-body updates, the G.5 prepare step) and used to run to completion before
-// this module got a chance to refuse. The check stays inside writeInitial() too:
-// this one is a fast-fail for the common case, that one — under the lock above —
-// is what makes it correct when two passes race.
+// spawning run-initial.sh, whose parent-body updates and G.5 prepare step are
+// irreversible. writeInitial() re-checks under the lock, which is what makes it
+// correct when two passes race.
 function alreadyInitialized(payload) {
   const statePath = payload.state_file_path;
   if (typeof statePath !== "string" || statePath === "") return false;
   return fs.existsSync(realAbs(statePath) || statePath);
 }
 
-// Written only by phase=initial, and only after the state object it describes
-// has itself passed validateState. Order matters: the state file lands first,
-// so a binding record never points at a file that does not exist.
-//
-// FIRST WRITE WINS. The initial pass is a CREATE, not an upsert: if a state file
-// already exists at this path the chain for this session+root is already under
-// way, and overwriting it would reset g5_history[0].g5_3a_completed to false —
-// re-arming a proposal comment that has already been posted and cannot be
-// un-posted. That is the same irreversible action the compare-and-swap protects
-// on the loop_step and finalize_terminal passes; the initial pass gets the
-// equivalent treatment here, expressed as existence rather than as a token
-// because a create has no prior bytes to swap on. A caller that genuinely wants
-// to restart deletes the state file deliberately.
+// Written only by phase=initial, after the state object passed validateState. The
+// state file lands first, so a binding record never points at a missing file.
+// FIRST WRITE WINS: the initial pass is a CREATE, not an upsert. Overwriting would
+// reset g5_history[0].g5_3a_completed and re-arm a proposal comment already posted —
+// the same irreversible action the compare-and-swap protects on the later passes.
+// A caller that genuinely wants to restart deletes the state file deliberately.
 function writeInitial(payload, ctx, state) {
   const stateErr = validateState(state, ctx.anchors);
   if (stateErr) return { error: `refusing to write an invalid state file: ${stateErr}` };
@@ -463,7 +404,7 @@ function writeInitial(payload, ctx, state) {
       state_file_path: statePath,
       created_at: new Date().toISOString(),
     };
-    const recordPath = bindingPath(ctx, payload.session_id, payload.root_issue_number);
+    const recordPath = paths.bindingPath(payload.session_id, payload.root_issue_number, { forWrite: true });
     writeAtomic(ctx, recordPath, `${JSON.stringify(record, null, 2)}\n`);
 
     return { statePath, recordPath };
@@ -485,5 +426,5 @@ module.exports = {
   tokenOf,
   checkToken,
   writeInitial,
-  bindingPath,
+  bindingPath: paths.bindingPath,
 };

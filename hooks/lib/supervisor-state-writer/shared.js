@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { getWorkflowPlansDir } = require("../workflow-plans-dir");
+const { controlPath, diagnoseControlMigration } = require("../../workflow-state/state-io/control-dir");
 
 const ALERT_PATCH_KEYS = new Set(["alert_armed_at", "last_run_at", "cumulative_severity", "findings", "alert_phase", "alert_cause", "alert_retry_count", "findings_surfaced_at", "alert_eligible_phase", "transcript_cursor"]);
 
@@ -41,9 +41,19 @@ function unionStableDedup(existing, additions) {
   return out;
 }
 
-function getStatePath(sessionId) {
+function getStatePath(sessionId, opts) {
   if (!SESSION_ID_RE.test(sessionId)) throw new Error(`invalid sessionId: ${sessionId}`);
-  return path.join(getWorkflowPlansDir(), `${sessionId}-supervisor-state.json`);
+  if (!(opts && opts.forWrite)) return controlPath(sessionId, "supervisor-state.json", opts);
+  // Writers resolve forWrite (migration log line) and report the refused write once on stderr.
+  try { return controlPath(sessionId, "supervisor-state.json", opts); } catch (e) {
+    diagnoseControlMigration(e, "supervisor-state-writer");
+    throw e;
+  }
+}
+
+function sessionIdFromStatePath(filePath) {
+  const m = path.basename(path.dirname(String(filePath))).match(/^(.+)\.control$/);
+  return m && path.basename(String(filePath)) === "supervisor-state.json" ? m[1] : null;
 }
 
 // Migrate pre-#1092 layer2/layer3 schema to alert/audit in-place.
@@ -101,6 +111,7 @@ function writeAtomic(filePath, state) {
   // pid-qualified tmp: two processes writing the same state must not collide
   // on one shared scratch name (#2256 S2-c).
   const tmpPath = `${filePath}.${process.pid}.tmp`;
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2), "utf8");
   fs.renameSync(tmpPath, filePath);
 }
@@ -122,6 +133,7 @@ module.exports = {
   extractCoBlockKey,
   unionStableDedup,
   getStatePath,
+  sessionIdFromStatePath,
   readStateOrInit,
   writeAtomic,
   validateAlertPhaseTransition,

@@ -4,6 +4,7 @@
 # Sourced by tests/bin/feature-603-run-codex-review-loop.sh.
 # Cases 23-25: CONTINUE-branch cap reach, the extension budget ceiling, and the under-limit path.
 
+case_begin "cap-and-extension-branches" "bin/run-codex-review-loop"
 # ---------------------------------------------------------------------------
 # 23. CAP=1 at round==CAP+MAX_EXT: ROUND ceiling collapses AUTO_EXTEND->HIGH_UNRESOLVED, exit 6 (#2276 S9-c; rationale in verdict-dispatch.sh). #2068: --force-round replaces seeding.
 # ---------------------------------------------------------------------------
@@ -11,7 +12,8 @@
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  printf 'C1|HIGH|OPEN|1|needs async approach\n' > "$PLANS/sid23-outline-plan-concern-ledger.txt"
+  mkdir -p "$CLAUDE_WORKFLOW_DIR/sid23.control"
+  printf 'C1|HIGH|OPEN|1|needs async approach\n' > "$CLAUDE_WORKFLOW_DIR/sid23.control/outline-plan-concern-ledger.txt"
   make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
 ## Codex Review: PERFORMED
 
@@ -36,7 +38,8 @@ OUT
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  printf 'C1|HIGH|OPEN|1|still need async approach\n' > "$PLANS/sid24-outline-plan-concern-ledger.txt"
+  mkdir -p "$CLAUDE_WORKFLOW_DIR/sid24.control"
+  printf 'C1|HIGH|OPEN|1|still need async approach\n' > "$CLAUDE_WORKFLOW_DIR/sid24.control/outline-plan-concern-ledger.txt"
   make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
 ## Codex Review: PERFORMED
 
@@ -77,3 +80,4 @@ OUT
   rc=$?
   [[ $rc -eq 1 ]] && pass "25: CONTINUE under limit → exit 1" || fail "25: CONTINUE under limit → expected exit 1, got $rc"
 }
+case_end

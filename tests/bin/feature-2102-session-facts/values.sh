@@ -2,7 +2,7 @@
 # Tests: bin/workflow/read-session-facts, bin/workflow/lib/session-facts/collect.js, bin/workflow/lib/session-facts/gate-facts.js, bin/workflow/lib/session-facts/keys.js, skills/write-tests/SKILL.md, skills/write-code/SKILL.md
 # Tags: tl2, workflow, session-facts, values, gates, plans-dir, complexity, scope:issue-specific, pwsh-not-required
 
-# contract.sh proves the ten keys are always THERE; this file proves they are RIGHT.
+# contract.sh proves the eleven keys are always THERE; this file proves they are RIGHT.
 # A wrong GATE_* value silently skips a user confirmation and a wrong COMPLEXITY_LEVEL_*
 # picks the wrong model, so every family is checked differentially against the
 # single-purpose reader it composes -- the reader must compose, never re-implement.

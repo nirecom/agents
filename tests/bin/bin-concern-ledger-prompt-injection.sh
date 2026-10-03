@@ -33,6 +33,7 @@ FAIL=0
 # increment on an XPASS. See tests/lib/xfail.sh for the contract.
 # shellcheck source=./lib/xfail.sh
 . "$AGENTS_ROOT/tests/lib/xfail.sh"
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 
@@ -139,12 +140,13 @@ mk_plans() {
     shift
     SID="pi$n"
     PLANS="$TMPDIR_BASE/plans-$n"
-    mkdir -p "$PLANS/workflow-state"
+    mkdir -p "$PLANS" "$CLAUDE_WORKFLOW_DIR/$SID.control"
+    export WORKFLOW_PLANS_DIR="$PLANS"
     {
         printf '#concern-ledger-v2|%s|%s|cycle=1\n' "$FORMAT" "$SID"
         for r in "$@"; do printf '%s\n' "$r"; done
-    } > "$PLANS/$SID-$FORMAT-concern-ledger.txt"
-    printf '1\n' > "$PLANS/$SID-$FORMAT-round-number.txt"
+    } > "$CLAUDE_WORKFLOW_DIR/$SID.control/$FORMAT-concern-ledger.txt"
+    printf '1\n' > "$CLAUDE_WORKFLOW_DIR/$SID.control/$FORMAT-round-number.txt"
 }
 
 # render_prior — the rendered prior text for the current fixture, via the CLI.
@@ -199,12 +201,20 @@ alone() {
 # ---------------------------------------------------------------------------
 SUITE_DIR="$AGENTS_ROOT/tests/bin/bin-concern-ledger-prompt-injection"
 
+case_begin "prompt-injection-render-and-consume" "bin/lib/concern-ledger/render.sh"
 # shellcheck source=./bin-concern-ledger-prompt-injection/render-and-consume.sh
 . "$SUITE_DIR/render-and-consume.sh"
+case_end
+
+case_begin "prompt-injection-both-producers" "bin/concern-ledger"
 # shellcheck source=./bin-concern-ledger-prompt-injection/both-producers.sh
 . "$SUITE_DIR/both-producers.sh"
+case_end
+
+case_begin "prompt-injection-field-separator" "bin/lib/codex-review-loop/ref-kind-input.sh"
 # shellcheck source=./bin-concern-ledger-prompt-injection/field-separator.sh
 . "$SUITE_DIR/field-separator.sh"
+case_end
 
 xfail_summary
 echo ""

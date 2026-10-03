@@ -1,6 +1,7 @@
 "use strict";
 
 const { expandStaticShellTokens } = require("../../lib/bash-write-targets/helpers");
+const { expandForDetection } = require("../../lib/bash-write-targets/detection-expand");
 const {
   PROTECTED_MARKER_BASENAME_RE,
   hitsProtectedMarkerBasename,
@@ -102,8 +103,10 @@ function bashTargetsHitProtectedMarker(targets, opts) {
     if (hitsAnyProtectedBasename(nodePath.basename(raw), { sessionCtx })) return true;
     let resolved = raw;
     if (raw.includes("$") || raw.includes("~")) {
-      const expanded = expandStaticShellTokens(raw, { fromQuotedContext: "unquoted" });
-      if (expanded !== null) resolved = expanded;
+      // #2417: a known alias we cannot place fails closed; a resolved one is judged exactly.
+      const d = expandForDetection(raw);
+      if (d.aliasUnresolved) return true;
+      if (!d.dynamicTail) resolved = d.path;
     }
     if (hitsAnyProtectedBasename(nodePath.basename(resolved), { sessionCtx })) return true;
     try {
@@ -138,9 +141,10 @@ function targetsHitOtherSessionWorkflowState(targets, sessionCtx) {
     if (t.malformed === true) return false; // cannot place it; other gates own malformed targets
     let resolved = String(t.path).replace(/^["']|["']$/g, "");
     if (resolved.includes("$") || resolved.includes("~")) {
-      const expanded = expandStaticShellTokens(resolved, { fromQuotedContext: "unquoted" });
-      if (expanded === null) return false;
-      resolved = expanded;
+      const d = expandForDetection(resolved);
+      if (d.aliasUnresolved) return true;
+      if (d.dynamicTail) return false;
+      resolved = d.path;
     }
     let n;
     try { n = realResolve(resolved); } catch (_) { return false; }

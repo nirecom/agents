@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
 # tests/hooks/cc-instructions-loaded-cleanup.sh
 # Tests: hooks/workflow-state/state-io/zombie-cleanup.js, hooks/lib/instructions-loaded-receipt.js
-# Tags: rules-injection, instructions-loaded, receipts, cleanup, retention, idempotency, TL2, scope:common
+# Tags: rules-injection, instructions-loaded, receipts, cleanup, retention, idempotency, TL2, scope:common, feature-2434, zombie-cleanup, control-dir
 
-# Receipts accumulate one directory per session, one JSON file per reported rule; nothing else deletes them,
-# so the workflow dir grows unbounded and invisibly (a dot-suffixed dir nobody lists). The detail plan folds
-# `<sid>.instructions-loaded/` into the existing 7-day cleanupZombies sweep, alongside session-scoped marker files. A
-# retention sweep has two damaging failure directions: too eager destroys evidence an in-flight off-switch gate needs
-# (the gate concludes from ABSENCE, so a deleted receipt reads as a false-green clean pass); too lax is the unbounded
-# growth it exists to stop. This file pins both edges, the boundary, and unparseable-entry behaviour. Layer: TL2
-# (real cleanupZombies, fully pinned fixture dir). TL3 gap: whether the sweep is reached on a real session's cleanup
-# path and whether host mtime granularity matches this boundary — mitigated at WORKFLOW_USER_VERIFIED preflight
-# (bin/check-verification-gate.sh category: hook-registration).
+# The 7-day cleanupZombies sweep owns `<sid>.instructions-loaded/` receipts and (#2434) `<sid>.control/` dirs.
+# Too eager destroys evidence an in-flight gate reads from ABSENCE (false-green); too lax is unbounded growth.
+# Pins both edges, the boundary, and unparseable entries. TL2: real cleanupZombies, pinned fixture dir.
+# TL3 gap: real session cleanup path and host mtime granularity — mitigated by bin/check-verification-gate.sh
+# (category: hook-registration).
 
 set -u
 
@@ -20,6 +16,8 @@ CLEANUP_LIB="$AGENTS_DIR/hooks/workflow-state/state-io/zombie-cleanup.js"
 RECEIPT_LIB="$AGENTS_DIR/hooks/lib/instructions-loaded-receipt.js"
 
 PASS=0; FAIL=0
+# shellcheck source=tests/lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"   # provides the per-case marker helpers
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
@@ -221,6 +219,65 @@ if [ -z "$Z8_BAD" ]; then
 else
     fail "Z8: the sweep matched more than the receipt directories —$Z8_BAD"
 fi
+
+# --- Z9-Z13 (#2434, merged from tests/hooks/feature-2434-zombie-cleanup-control-dir.sh):
+# `<sid>.control/` dirs join the same sweep. Stale and orphaned -> removed; an
+# active session's or a recent one -> kept; a stale migrating tmp inside -> reclaimed.
+CTL_DRIVER="$BASE/ctl-driver.js"
+cat > "$CTL_DRIVER" <<'JS'
+const { cleanupZombies } = require(process.argv[2]);
+const fs = require("fs"), path = require("path");
+const WF = process.env.CLAUDE_WORKFLOW_DIR, DAY = 24 * 60 * 60 * 1000;
+const P = (n) => path.join(WF, n);
+const age = (p, days) => { const t = (Date.now() - days * DAY) / 1000; fs.utimesSync(p, t, t); };
+const mkCtl = (n, days) => { fs.mkdirSync(P(n), { recursive: true }); age(P(n), days); };
+const gone = (n) => String(!fs.existsSync(P(n)));
+const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
+switch (process.argv[3]) {
+  case "z9": mkCtl("z9ctrl.control", 31); cleanupZombies(7); console.log("ctrl_removed=" + gone("z9ctrl.control")); break;
+  case "z10":
+    mkCtl("z10ctrl.control", 31);
+    fs.writeFileSync(P("z10ctrl.json"), JSON.stringify({ version: 2, session_id: "z10ctrl", created_at: ago(31),
+      events: [{ seq: 1, at: ago(0.1), kind: "step_status", step: "run_tests", status: "in_progress",
+        provenance: "observed", origin: "mark-step" }], current: { steps: {} } }));
+    cleanupZombies(7); console.log("ctrl_removed=" + gone("z10ctrl.control")); break;
+  case "z11": mkCtl("z11ctrl.control", 0.5); cleanupZombies(7); console.log("ctrl_removed=" + gone("z11ctrl.control")); break;
+  case "z12": {
+    const tmp = "z12ctrl.control/session-migrating-1701000000000.tmp";
+    fs.mkdirSync(P("z12ctrl.control"), { recursive: true });
+    fs.writeFileSync(P(tmp), "migrating state"); age(P(tmp), 2); age(P("z12ctrl.control"), 0.3);
+    cleanupZombies(7); console.log("tmp_removed=" + gone(tmp)); break;
+  }
+  case "z13": mkCtl("non-uuid-z13.control", 31); cleanupZombies(7); console.log("ctrl_removed=" + gone("non-uuid-z13.control")); break;
+  default: console.log("bad-scenario");
+}
+JS
+
+# ctl_case <id> <label> <want-line> — one scenario through the real cleanupZombies.
+ctl_case() {
+    local out rc=0
+    out="$(cd "$BASE" && node "$(node_path "$CTL_DRIVER")" "$(node_path "$CLEANUP_LIB")" "$1" 2>&1)" || rc=$?
+    out="$(printf '%s' "$out" | tr -d '\r')"
+    if [ "$rc" = "0" ] && [ "$out" = "$3" ]; then
+        pass "$2"
+    else
+        fail "$2 — want $3; got rc=$rc: $out"
+    fi
+}
+
+case_begin "control-dir-stale-orphan-removed" "hooks/workflow-state/state-io/zombie-cleanup.js"
+ctl_case z9 "Z9: a 31-day-old <sid>.control/ with no state json is removed" "ctrl_removed=true"
+ctl_case z13 "Z13: a non-UUID 31-day-old .control/ with no state json is also removed" "ctrl_removed=true"
+case_end
+
+case_begin "control-dir-active-or-recent-kept" "hooks/workflow-state/state-io/zombie-cleanup.js"
+ctl_case z10 "Z10: a 31-day-old .control/ whose session json is active is kept" "ctrl_removed=false"
+ctl_case z11 "Z11: a 12-hour-old .control/ is too recent to remove" "ctrl_removed=false"
+case_end
+
+case_begin "control-dir-stale-migrating-tmp-reclaimed" "hooks/workflow-state/state-io/zombie-cleanup.js"
+ctl_case z12 "Z12: a 2-day-old migrating tmp inside a recent .control/ is reclaimed" "tmp_removed=true"
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

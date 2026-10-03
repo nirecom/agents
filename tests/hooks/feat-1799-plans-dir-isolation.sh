@@ -41,8 +41,12 @@ new_sandbox() {  # <tag> → echoes "<pinned>|<decoyhome>|<cfgdir>"
     printf '%s|%s|%s' "$root/pinned" "$root/home" "$root/cfg"
 }
 
-# Count *-supervisor-state.json files under a dir.
-count_states() { find "$1" -name '*-supervisor-state.json' 2>/dev/null | wc -l | tr -d ' '; }
+# Count supervisor-state files under a dir: legacy <sid>-supervisor-state.json and the
+# #2434 control file <sid>.control/supervisor-state.json.
+count_states() { find "$1" -name '*supervisor-state.json' 2>/dev/null | wc -l | tr -d ' '; }
+# #2434: the state is a control file; with CLAUDE_WORKFLOW_DIR unset it resolves to the
+# default workflow dir under the (decoy) home.
+home_state() { printf '%s/.claude/projects/workflow/%s.control/supervisor-state.json' "$1" "$SID"; }
 
 # emit_call <js-body> — the snippet run inside the emit process.
 EMIT_SENTINEL="const em=require('$EMIT_NODE'); em.reportSentinel('WORKFLOW_OFF','G-case reason','$SID');"
@@ -69,12 +73,12 @@ G1_both_pinned_writes_to_pinned_dir() {
     pn="$(node_path "$pinned")"
     err="$(run_emit "$pn" "$pn" "$home" "$cfg" "$EMIT_SENTINEL")"
 
-    if [ -f "$pinned/$SID-supervisor-state.json" ]; then
+    if [ -f "$pinned/$SID.control/supervisor-state.json" ]; then
         pass "G1a both pinned → finding written to the pinned plans dir"
     else
         fail "G1a both pinned → no state file in pinned dir (stderr=$err)"
     fi
-    if [ "$(count_states "$home/.workflow-plans")" = "0" ]; then
+    if [ "$(count_states "$home")" = "0" ]; then
         pass "G1b both pinned → decoy real plans dir untouched (isolation proven)"
     else
         fail "G1b both pinned → decoy real plans dir was written to: $(ls "$home/.workflow-plans")"
@@ -90,10 +94,10 @@ G2_wfdir_only_refuses() {
     pn="$(node_path "$pinned")"
     err="$(run_emit "UNSET" "$pn" "$home" "$cfg" "$EMIT_SENTINEL")"
 
-    if [ "$(count_states "$pinned")" = "0" ] && [ "$(count_states "$home/.workflow-plans")" = "0" ]; then
+    if [ "$(count_states "$pinned")" = "0" ] && [ "$(count_states "$home")" = "0" ]; then
         pass "G2a CLAUDE_WORKFLOW_DIR-only → nothing written anywhere"
     else
-        fail "G2a CLAUDE_WORKFLOW_DIR-only wrote a state file (pinned=$(count_states "$pinned") home=$(count_states "$home/.workflow-plans"))"
+        fail "G2a CLAUDE_WORKFLOW_DIR-only wrote a state file (pinned=$(count_states "$pinned") home=$(count_states "$home"))"
     fi
     if echo "$err" | grep -q 'WORKFLOW_PLANS_DIR unset'; then
         pass "G2b refusal diagnostic names WORKFLOW_PLANS_DIR as the unset half"
@@ -118,7 +122,7 @@ G3_plansdir_only_refuses() {
     pn="$(node_path "$pinned")"
     err="$(run_emit "$pn" "UNSET" "$home" "$cfg" "$EMIT_SENTINEL")"
 
-    if [ "$(count_states "$pinned")" = "0" ] && [ "$(count_states "$home/.workflow-plans")" = "0" ]; then
+    if [ "$(count_states "$pinned")" = "0" ] && [ "$(count_states "$home")" = "0" ]; then
         pass "G3a WORKFLOW_PLANS_DIR-only → nothing written anywhere"
     else
         fail "G3a WORKFLOW_PLANS_DIR-only wrote a state file (pinned=$(count_states "$pinned"))"
@@ -138,7 +142,7 @@ G4_neither_pinned_writes() {
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g4)"
     err="$(run_emit "UNSET" "UNSET" "$home" "$cfg" "$EMIT_SENTINEL")"
 
-    if [ -f "$home/.workflow-plans/$SID-supervisor-state.json" ]; then
+    if [ -f "$(home_state "$home")" ]; then
         pass "G4a neither pinned → write succeeds (fail-open preserved)"
     else
         fail "G4a neither pinned → write was suppressed; guard must not fire (stderr=$err)"
@@ -159,7 +163,7 @@ G5_empty_string_is_unset() {
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g5a)"
     # (a) CLAUDE_WORKFLOW_DIR="" + WORKFLOW_PLANS_DIR unset → BOTH unset → write.
     err="$(run_emit "UNSET" "" "$home" "$cfg" "$EMIT_SENTINEL")"
-    if [ -f "$home/.workflow-plans/$SID-supervisor-state.json" ]; then
+    if [ -f "$(home_state "$home")" ]; then
         pass "G5a CLAUDE_WORKFLOW_DIR=\"\" counts as unset → both-unset → write succeeds"
     else
         fail "G5a empty CLAUDE_WORKFLOW_DIR was counted as set → false refusal (stderr=$err)"
@@ -178,7 +182,7 @@ G5_empty_string_is_unset() {
     # (c) WORKFLOW_PLANS_DIR="" + CLAUDE_WORKFLOW_DIR unset → BOTH unset → write (CPR-ORTH symmetric).
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g5c)"
     err="$(run_emit "" "UNSET" "$home" "$cfg" "$EMIT_SENTINEL")"
-    if [ -f "$home/.workflow-plans/$SID-supervisor-state.json" ]; then
+    if [ -f "$(home_state "$home")" ]; then
         pass "G5c WORKFLOW_PLANS_DIR=\"\" counts as unset → both-unset → write succeeds (CPR-ORTH)"
     else
         fail "G5c empty WORKFLOW_PLANS_DIR was counted as set → false refusal (stderr=$err)"
@@ -212,7 +216,7 @@ G6_env_injection_uses_pristine_snapshot() {
 
     err="$(run_emit "UNSET" "UNSET" "$home" "$cfg" "$EMIT_SENTINEL")"
 
-    if [ -f "$envplans/$SID-supervisor-state.json" ]; then
+    if [ -f "$(home_state "$home")" ]; then  # #2434: a control file, not placed by the plans dir
         pass "G6a .env-injected WORKFLOW_PLANS_DIR does not trip the guard (pristine snapshot read)"
     else
         fail "G6a write suppressed or misrouted: guard appears to read post-injection process.env (stderr=$err)"
@@ -301,7 +305,7 @@ G8_all_entrypoints_guarded() {
         IFS='|' read -r pinned home cfg <<< "$(new_sandbox "g8-$name")"
         pn="$(node_path "$pinned")"
         err="$(run_emit "UNSET" "$pn" "$home" "$cfg" "const em=require('$EMIT_NODE'); $call")"
-        if [ "$(count_states "$pinned")" = "0" ] && [ "$(count_states "$home/.workflow-plans")" = "0" ] \
+        if [ "$(count_states "$pinned")" = "0" ] && [ "$(count_states "$home")" = "0" ] \
            && echo "$err" | grep -qi 'isolation contradiction'; then
             pass "G8 $name: XOR state refused, no write"
         else

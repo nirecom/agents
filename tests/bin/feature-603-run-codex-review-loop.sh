@@ -9,6 +9,8 @@ set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 # The wrapper is installed in AGENTS_CONFIG_DIR/bin — mocked per-test
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+. "$AGENTS_WORKTREE/tests/lib/harness.sh"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -79,10 +81,13 @@ EOF
 setup_plans_dir() {
   local test_tmp="$1"
   local plans_dir="$test_tmp/plans"
+  local workflow_dir="$test_tmp/workflow-state"
   # #866: intermediate files live under PLANS_DIR root (no drafts/ subdir).
-  mkdir -p "$plans_dir"
+  mkdir -p "$plans_dir" "$workflow_dir"
   echo "# Draft plan" > "$plans_dir/draft.md"
   echo "# Outline" > "$plans_dir/outline.md"
+  export CLAUDE_WORKFLOW_DIR="$workflow_dir"
+  export WORKFLOW_PLANS_DIR="$plans_dir"
   echo "$plans_dir"
 }
 
@@ -100,8 +105,8 @@ while [[ $# -gt 0 ]]; do
     *) shift ;;
   esac
 done
-if [[ -n "$SID" && -n "$LOG_DIR" ]]; then
-  _ROUND_LOG="$LOG_DIR/$SID-plan.jsonl"
+if [[ -n "$LOG_DIR" ]]; then
+  _ROUND_LOG="$LOG_DIR/plan.jsonl"
   source "$(dirname "$0")/../lib/codex-core.sh" >/dev/null 2>&1 || true
   CODEX_LABEL="Codex Review"
   codex_core_round_log_append "$_ROUND_LOG" "$SID" "$FORMAT" "MOCK_VERDICT" "" >/dev/null 2>&1 || true
@@ -124,6 +129,7 @@ invoke_wrapper() {
 # ---------------------------------------------------------------------------
 # Cases — sourced in the original block order so the output stays byte-identical.
 # ---------------------------------------------------------------------------
+case_begin "run-codex-review-loop-suite" "bin/run-codex-review-loop"
 SUITE_DIR="$AGENTS_WORKTREE/tests/bin/feature-603-run-codex-review-loop"
 
 # shellcheck source=./feature-603-run-codex-review-loop/verdict-exit-codes.sh
@@ -138,6 +144,7 @@ SUITE_DIR="$AGENTS_WORKTREE/tests/bin/feature-603-run-codex-review-loop"
 . "$SUITE_DIR/cap-and-extension-branches.sh"
 # shellcheck source=./feature-603-run-codex-review-loop/round-counter-ownership.sh
 . "$SUITE_DIR/round-counter-ownership.sh"
+case_end
 
 # ---------------------------------------------------------------------------
 # Summary

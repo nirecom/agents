@@ -73,29 +73,32 @@ echo "--- discovery 7: a failed round leaves no half-written artifact behind ---
 # sp_publish_*, whose temp files are named .sp-tmp.* beside the destination,
 # so a remnant is detectable and unambiguous.
 
-# leftovers <dir> — publication temporaries still present.
+# leftovers <dir>... — publication temporaries still present. The ledger and
+# the JSON artifact publish into the control dir (#2434), so both are scanned.
 leftovers() {
-    find -- "$1" -maxdepth 1 -mindepth 1 -name '.sp-tmp.*' 2>/dev/null | wc -l | tr -d ' '
+    find "$@" -maxdepth 1 -mindepth 1 -name '.sp-tmp.*' 2>/dev/null | wc -l | tr -d ' '
 }
 
 {
+    SID="sess-c6-fail-leftovers"
     P7="$(mk_round fail-leftovers)"
+    C7="$(ctl_of)"
     PATH="$STUB:$PATH" bash "$CLI" reduce --plans-dir "$P7" --session-id "$SID" \
         --format "$FMT" --round 2 >/dev/null 2>&1
     assert_eq_nz "7: a reduction with discovery broken leaves no publication temporary" \
-        "0" "$(leftovers "$P7")"
+        "0" "$(leftovers "$P7" "$C7")"
 
     PATH="$STUB:$PATH" bash "$CLI" finalize --plans-dir "$P7" --session-id "$SID" \
         --format "$FMT" --round 2 --cap 2 --mode terminal --reason 'leftover check' \
         >/dev/null 2>&1
     assert_eq_nz "7: nor does a finalize that could not build its producer list" \
-        "0" "$(leftovers "$P7")"
+        "0" "$(leftovers "$P7" "$C7")"
 
     # The detector has to be able to see one, or the two rows above are vacuous.
-    : > "$P7/.sp-tmp.detectorcheck"
+    : > "$C7/.sp-tmp.detectorcheck"
     assert_eq_nz "7: and a remnant would have been seen if there were one" \
-        "1" "$(leftovers "$P7")"
-    rm -f "$P7/.sp-tmp.detectorcheck"
+        "1" "$(leftovers "$P7" "$C7")"
+    rm -f "$C7/.sp-tmp.detectorcheck"
 }
 
 echo ""

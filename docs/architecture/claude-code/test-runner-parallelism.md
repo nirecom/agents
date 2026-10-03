@@ -49,6 +49,10 @@ truth for "this job finished". Liveness probing (`kill -0`) is deliberately not
 used: an exited-but-unreaped child is a zombie that `kill -0` still succeeds on, so
 it is simply the wrong predicate.
 
+Every launched test inherits `CLAUDE_WORKFLOW_DIR` and `WORKFLOW_PLANS_DIR` pinned to fresh
+subdirectories of that work directory, overriding any caller value, so a test that pins neither or
+only one cannot write live state; `bin/run-tests-baseline` does the equivalent for base re-runs.
+
 Output is replayed through a **submission-order cursor**: the parent advances
 `next_print` and flushes job *i*'s captured streams only when job *i* has completed,
 then prints the `PASS:` / `SKIP:` / `FAIL:` summary line. Because only the parent
@@ -321,7 +325,7 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
 | `tests/run-all.sh` | Scheduler, argument surface, serial barrier, progress, `--print-plan`, `--deadline`, `neutralize_stream`, process-group reaping, bounded abort, cache read, LPT sort, duration measurement |
 | `bin/lib/run-all-parallelism.sh` | SSOT for the cache schema and its non-evaluating parser; sourced, never executed |
 | `bin/lib/run-all-durations.sh` | SSOT for the per-test duration ledger schema, key/tier computation, and the append-only segment reader/writer; sourced, never executed |
-| `bin/lib/run-all-launch.sh` | Per-file launch dispatch (`.sh` → bash, `.Tests.ps1` → pwsh/Pester, `test_*.py` → uv/pytest; SKIP 77 when the runtime is absent); sourced, never executed |
+| `bin/lib/run-all-launch.sh` | Per-file launch dispatch (`.sh` → bash, `.Tests.ps1` → pwsh/Pester, `test_*.py` → uv/pytest; SKIP 77 when the runtime is absent) and the per-run state-dir pin; sourced, never executed |
 | `bin/calibrate-test-parallelism.sh` | The measurement tool; unreachable from a normal run |
 | `bin/lib/test-host-lanes.sh` | Host-wide lane lease shared with `bin/find-tests-for-source.sh`; sourced, never executed |
 | `bin/test-lanes-status.sh` | Read-only listing of who holds which lane |

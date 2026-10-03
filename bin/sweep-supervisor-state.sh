@@ -63,17 +63,17 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
-PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
-if [ ! -d "$PLANS_DIR" ]; then
+WORKFLOW_DIR="${CLAUDE_WORKFLOW_DIR:-$HOME/.claude/projects/workflow}"
+if [ ! -d "$WORKFLOW_DIR" ]; then
     if [ "$CI_MODE" = "1" ]; then
-        printf '{"scanned":0,"skipped_live":0,"skipped_recent":0,"files_contaminated":0,"files_modified":0,"records_removed":0,"files_emptied":0,"files_skipped_unparsable":0,"backup_dir":"","errors":["plans dir not found"]}\n'
+        printf '{"scanned":0,"skipped_live":0,"skipped_recent":0,"files_contaminated":0,"files_modified":0,"records_removed":0,"files_emptied":0,"files_skipped_unparsable":0,"backup_dir":"","errors":["workflow dir not found"]}\n'
     else
-        printf 'sweep-supervisor-state: plans dir not found: %s\n' "$PLANS_DIR"
+        printf 'sweep-supervisor-state: workflow dir not found: %s\n' "$WORKFLOW_DIR"
     fi
     exit 0
 fi
 
-ENGINE_ARGS=(--plans-dir "$(node_path "$PLANS_DIR")")
+ENGINE_ARGS=(--workflow-dir "$(node_path "$WORKFLOW_DIR")")
 [ "${APPLY:-0}" = "1" ] && ENGINE_ARGS+=(--apply)
 [ -n "$SESSION" ] && ENGINE_ARGS+=(--session "$SESSION")
 

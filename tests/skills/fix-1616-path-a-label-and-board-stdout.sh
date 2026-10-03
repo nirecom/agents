@@ -2,39 +2,11 @@
 # tests/skills/fix-1616-path-a-label-and-board-stdout.sh
 # Tests: skills/workflow-init/scripts/path-a-label-and-board.sh
 # Tags: workflow-init, github, issues, stdout-contract, gh-cli, scope:common, pwsh-not-required
-#
-# Issue #1616 scopes the stdout-leak fix to `gh` CLI call sites only. In
-# path-a-label-and-board.sh that is exactly one site:
-#   site1: `if ! gh issue edit "$N" ... --add-label ...; then`   (fail-CLOSED)
-# The `if !` guard consumes the exit code but leaves stdout untouched, so on
-# success the real `gh` prints each edited issue's URL into the script's
-# stdout. The script is a pure side-effect step invoked by /workflow-init; its
-# stdout must stay empty so the caller can treat any output as a signal.
-#
-# Fixed state asserted here: site1 is `>/dev/null 2>&1`, while its fail-closed
-# semantics are unchanged (abort marker + stderr message + exit 1). Silencing
-# must not swallow the failure path.
-#
-# The second side-effect call site — `bash .../ensure-board-card.sh` — is
-# explicitly OUT OF SCOPE for #1616 and carries no redirection in the source.
-# The ensure-board-card.sh mock below is therefore deliberately stdout-SILENT:
-# asserting an empty script stdout must not depend on a redirection that this
-# issue does not introduce, otherwise the test would be RED against the
-# intended final state of the source.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the REAL `gh issue edit --add-label` prints the URL on stdout in the
-#   installed gh version, or emits additional banners/notices.
-# - Whether the real GitHub API rejects the label edit (missing label, perms)
-#   in a way the mock's exit code cannot reproduce.
-# - Whether the real ensure-board-card.sh is stdout-silent in production is NOT
-#   guaranteed by this test — a silent mock stands in for it.
-# - Consequently T3-1's `[ -z "$OUT" ]` assertion is VACUOUS with respect to the
-#   board call: with a silent mock it can only catch a regression in the `gh`
-#   labeling call's redirect. The unsuppressed board call site is tracked
-#   separately as #1589.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# #1616: the one gh call site (site1 `gh issue edit --add-label`) is `>/dev/null 2>&1` so stdout
+# stays empty, with fail-closed semantics intact (abort marker + stderr + exit 1). The board call
+# (ensure-board-card.sh) is out of scope (#1589); its mock is stdout-SILENT, so T3-1 speaks to site1 only.
+# TL3 gap: real gh stdout/banners, real API rejections, real board-card stdout; mitigated at
+# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh category: skill-orchestration).
 
 set -u
 
@@ -107,6 +79,16 @@ exit "${MOCK_BOARD_RC:-0}"
 MOCKBOARD
     chmod +x "$FAKE_ACD/bin/github-issues/ensure-board-card.sh"
 
+    # #2434: the abort marker is a control file resolved via $AGENTS_CONFIG_DIR/bin/workflow-control-dir;
+    # the fake ACD delegates to the real CLI (which resolves hooks/ from its own __dirname).
+    local real_cli="$AGENTS_DIR/bin/workflow-control-dir"
+    command -v cygpath >/dev/null 2>&1 && real_cli="$(cygpath -m "$real_cli")"
+    printf 'require(%s);\n' "$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$real_cli")" \
+        > "$FAKE_ACD/bin/workflow-control-dir"
+    mkdir -p "$TMP/workflow"
+    export CLAUDE_WORKFLOW_DIR="$TMP/workflow"
+    export WORKFLOW_PLANS_DIR="$TMP/plans"
+
     export MOCK_GH_LOG="$TMP/gh-calls.log"
     : > "$MOCK_GH_LOG"
     export PATH="$TMP/mock-bin:$PATH"
@@ -121,7 +103,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     unset MOCK_GH_LOG MOCK_GH_LABEL_RC MOCK_BOARD_RC \
-          PLANS_DIR SESSION_ID 2>/dev/null || true
+          PLANS_DIR SESSION_ID CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR 2>/dev/null || true
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
@@ -150,7 +132,7 @@ teardown_mock
 # ---------------------------------------------------------------------------
 setup_mock
 export MOCK_GH_LABEL_RC=1
-MARKER="$PLANS_DIR/$SESSION_ID-workflow-init-aborted-pathA-multiN-label-failure.md"
+MARKER="$CLAUDE_WORKFLOW_DIR/$SESSION_ID.control/workflow-init-aborted-pathA-multiN-label-failure.md"
 ERR_FILE="$TMP/stderr.txt"
 OUT=$(run_with_timeout 15 bash "$SCRIPT" 101 102 2>"$ERR_FILE")
 RC=$?

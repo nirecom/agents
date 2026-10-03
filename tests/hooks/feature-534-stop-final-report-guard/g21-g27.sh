@@ -13,7 +13,7 @@ test_G21_tool_result_sentinel_after_report() {
     local plans_dir="$TMPDIR_BASE/g21-plans"
     mkdir -p "$plans_dir"
     local sid="g21-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local transcript="$TMPDIR_BASE/g21-transcript.jsonl"
@@ -55,7 +55,7 @@ test_G22_token_outside_final_report_section() {
     local plans_dir="$TMPDIR_BASE/g22-plans"
     mkdir -p "$plans_dir"
     local sid="g22-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local body; body="$(full_canonical_report_text "$sid")
@@ -92,7 +92,7 @@ test_G23_fr_in_prior_turn_latest_has_no_fr_exit0() {
     local plans_dir="$TMPDIR_BASE/g23-plans"
     mkdir -p "$plans_dir"
     local sid="g23-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local transcript="$TMPDIR_BASE/g23-transcript.jsonl"
@@ -134,7 +134,7 @@ test_G23b_no_fr_anywhere_exit0() {
     local plans_dir="$TMPDIR_BASE/g23b-plans"
     mkdir -p "$plans_dir"
     local sid="g23b-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
     printf '{"gate_action":"yield"}' > "$plans_dir/${sid}-session-close-gate.json"
 
@@ -170,7 +170,7 @@ test_G24_token_before_fr_heading_exit0() {
     local plans_dir="$TMPDIR_BASE/g24-plans"
     mkdir -p "$plans_dir"
     local sid="g24-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local body; body="<BEFORE_TOKEN> mentioned earlier.
@@ -205,7 +205,7 @@ test_G25_transcript_missing_exit0() {
     local plans_dir="$TMPDIR_BASE/g25-plans"
     mkdir -p "$plans_dir"
     local sid="g25-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local nonexistent; nonexistent="$(node_path "$TMPDIR_BASE/g25-nonexistent.jsonl")"
@@ -238,7 +238,7 @@ test_G26_latest_turn_incomplete_fr_blocks() {
     local plans_dir="$TMPDIR_BASE/g26-plans"
     mkdir -p "$plans_dir"
     local sid="g26-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local transcript="$TMPDIR_BASE/g26-transcript.jsonl"
@@ -325,7 +325,7 @@ test_G27_heading_found_empty_body_blocks() {
     local plans_dir="$TMPDIR_BASE/g27-plans"
     mkdir -p "$plans_dir"
     local sid="g27-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     # FR heading immediately followed by another ## section (no body between).
@@ -393,7 +393,7 @@ test_G29_transcript_path_absent_exit0() {
     local plans_dir="$TMPDIR_BASE/g29-plans"
     mkdir -p "$plans_dir"
     local sid="g29-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
 
     local stdin_json
@@ -419,7 +419,7 @@ test_G30_envfile_no_gate_no_header_blocks() {
     local plans_dir="$TMPDIR_BASE/g30-plans"
     mkdir -p "$plans_dir"
     local sid="g30-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
     # No gate file — fail-close path should trigger
 
@@ -462,7 +462,7 @@ test_G31_envfile_gate_yield_no_header_exit0() {
     local plans_dir="$TMPDIR_BASE/g31-plans"
     mkdir -p "$plans_dir"
     local sid="g31-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
     printf '{"gate_action":"yield"}' > "$plans_dir/${sid}-session-close-gate.json"
 
@@ -494,7 +494,7 @@ test_G32_envfile_gate_proceed_no_header_blocks() {
     local plans_dir="$TMPDIR_BASE/g32-plans"
     mkdir -p "$plans_dir"
     local sid="g32-sid"
-    local envfile="$plans_dir/${sid}-final-report-env.json"
+    local envfile="$(envfile_for "$sid")"
     write_default_env_file "$envfile"
     printf '{"gate_action":"proceed"}' > "$plans_dir/${sid}-session-close-gate.json"
 

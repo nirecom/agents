@@ -270,10 +270,9 @@ else
 fi
 
 # A guard that "protects" by diverting the payload to <name>.new has protected nothing.
-# `<sid>-supervisor-state.json` is excluded: WORKFLOW_PLANS_DIR is also the supervisor
-# emitter's own output dir, so a state file there is this fixture's own infrastructure
-# writing where it is configured to, not a diverted payload.
-EXTRA=$(find "$PLANSDIR" -maxdepth 1 -type f ! -name "issue-2108-survey.md" ! -name "issue-2108-subagent-note.md" ! -name "*-supervisor-state.json" 2>/dev/null | tr '\n' ' ')
+# No supervisor-state exclusion: since #2434 that file lives in $WFDIR/<sid>.control/,
+# so one appearing in the plans dir is itself an unexpected file.
+EXTRA=$(find "$PLANSDIR" -maxdepth 1 -type f ! -name "issue-2108-survey.md" ! -name "issue-2108-subagent-note.md" 2>/dev/null | tr '\n' ' ')
 if [ -z "$EXTRA" ]; then pass "no-sidecar-files-in-plans"
 else fail "no-sidecar-files-in-plans" "unexpected files appeared in the plans dir: $EXTRA"; fi
 

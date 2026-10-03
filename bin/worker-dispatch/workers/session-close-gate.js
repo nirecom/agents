@@ -1,24 +1,16 @@
 "use strict";
-// bin/worker-dispatch/workers/session-close-gate.js
-//
-// Stage 2 worker: replaces agents/session-close-worker.md.
-//
-// Decides one thing — may the caller run SC-6, or must it halt? The answer is a
-// pure function of the supervisor state file plus wall-clock time, which is why
-// this worker is a good scriptification target: the agent it replaces was
-// re-deriving a fixed decision table on every run.
-//
-// SC-4 changes character here. The agent was told to "scan for any unreported
-// observations", which an LLM answers by judgment and therefore answers
-// differently each time. A script cannot judge, so the scan is redefined as what
-// it was actually approximating: every issue entry in the outcome JSON whose
-// per-step field records a failure or a skip is one observation, reported at a
-// severity fixed by the field value. Same audit trail, reproducible.
+// bin/worker-dispatch/workers/session-close-gate.js — stage 2 worker replacing agents/session-close-worker.md.
+// Decides one thing: may the caller run SC-6, or must it halt? The answer is a pure
+// function of the supervisor state file plus wall-clock time. SC-4's "scan for
+// unreported observations" is redefined reproducibly: every outcome-JSON issue field
+// that records a failure or a skip is one observation, at a severity fixed by the value.
+// Control files (supervisor state, gate JSON) live in <sid>.control/; the log is an artifact.
 
 const fs = require("fs");
 const path = require("path");
 
 const { run: spawnRun } = require("../spawn");
+const { controlPath } = require("../../../hooks/workflow-state/state-io/control-dir");
 
 const REPORT_TIMEOUT_MS = 30000;
 const PHASE_TIMEOUT_MS = 600000;
@@ -205,10 +197,21 @@ function applyRepair(ctx, sessionId, which) {
   }
 }
 
+// An unusable control dir (symlink, failed migration) cannot prove the state is
+// absent, so it reads as corrupt and the gate fails closed.
+function readSupervisorState(sessionId) {
+  let statePath;
+  try {
+    statePath = controlPath(sessionId, "supervisor-state.json");
+  } catch (e) {
+    return { statePath: `(control dir unusable: ${e && e.message ? e.message : "unknown"})`, read: { kind: "corrupt", value: null } };
+  }
+  return { statePath, read: readJsonTri(statePath) };
+}
+
 function run(payload, ctx) {
   const { anchors, fsguard } = ctx;
   const sessionId = payload.session_id;
-  const plansDir = payload.plans_dir || anchors.plansDir;
   const artifactDir = payload.artifact_dir || anchors.plansDir;
   const nowMs = Date.now();
 
@@ -226,8 +229,7 @@ function run(payload, ctx) {
   }
 
   // SC-5 / SC-5b — phase evaluation.
-  const statePath = path.join(plansDir, `${sessionId}-supervisor-state.json`);
-  const stateRead = readJsonTri(statePath);
+  const { statePath, read: stateRead } = readSupervisorState(sessionId);
   const state = stateRead.value;
 
   let gateAction = "proceed";
@@ -256,9 +258,9 @@ function run(payload, ctx) {
 
   for (const finding of findings) reportFinding(ctx, sessionId, finding);
 
-  const gatePath = path.join(artifactDir, `${sessionId}-session-close-gate.json`);
   let written = null;
   try {
+    const gatePath = controlPath(sessionId, "session-close-gate.json", { forWrite: true });
     written = fsguard.writeFile(gatePath, `${JSON.stringify({ gate_action: gateAction }, null, 2)}\n`);
   } catch (e) {
     return {

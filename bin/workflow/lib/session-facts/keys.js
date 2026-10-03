@@ -14,6 +14,7 @@ const FACTS_KEYS = [
   "FACTS_VERSION",
   "SESSION_ID",
   "PLANS_DIR",
+  "CONTROL_DIR",
   "GATE_CONFIRM_TESTS",
   "GATE_CONFIRM_CODE",
   "COMPLEXITY_LEVEL_write_tests",
@@ -23,7 +24,7 @@ const FACTS_KEYS = [
   "COMPLEXITY_SIGNALS",
 ];
 
-const FACTS_VERSION = 2;
+const FACTS_VERSION = 3;
 
 // The `<default>` argument each gate is probed with. SSOT for the bundled reader
 // AND for the post-action probe still written out in the consuming SKILL.md.

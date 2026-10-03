@@ -1,12 +1,27 @@
 #!/usr/bin/env bash
-# run_all_exec <script> <out> <err> — per-extension test dispatch for tests/run-all.sh
+# Launch helpers for tests/run-all.sh; sourced, never executed.
+# run_all_exec <script> <out> <err> — per-extension test dispatch
 # (*.Tests.ps1 → pwsh/Pester, test_*.py → uv/pytest, else bash); returns the child rc,
-# 77 (SKIP) when pwsh/uv is absent. Contract: docs/architecture/claude-code/test-runner-parallelism.md.
+# 77 (SKIP) when pwsh/uv is absent.
+# run_all_pin_state_dirs <root> — exports CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR as fresh
+# subdirectories of <root>; non-zero when they cannot be created.
+# Contract: docs/architecture/claude-code/test-runner-parallelism.md.
 
 case "${BASH_SOURCE[0]}" in
   */*) RUN_ALL_LAUNCH_DIR="${BASH_SOURCE[0]%/*}" ;;
   *)   RUN_ALL_LAUNCH_DIR="." ;;
 esac
+
+# Always overrides the inherited pair: a test that pins neither or only one of them must
+# never reach the developer's live ~/.claude/projects/workflow or ~/.workflow-plans.
+run_all_pin_state_dirs() {
+  local root="${1:-}"
+  [[ -n "$root" ]] || return 1
+  # Mixed form so Node on Windows receives a usable path.
+  if command -v cygpath >/dev/null 2>&1; then root="$(cygpath -m "$root")"; fi
+  mkdir -p "$root/workflow" "$root/plans" 2>/dev/null || return 1
+  export CLAUDE_WORKFLOW_DIR="$root/workflow" WORKFLOW_PLANS_DIR="$root/plans"
+}
 
 run_all_exec() {
   local script="$1" out="$2" err="$3" native rto

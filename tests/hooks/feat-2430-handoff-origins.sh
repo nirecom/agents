@@ -63,7 +63,7 @@ run_with_timeout 60 node "$AGENTS_DIR/bin/workflow/handoff-append" --session cli
 RC=$?
 expect "O2: --origin step-end exits 2" "$RC" "2"
 expect "O2: the usage names procedure-point as a valid origin" "$(grep -q 'procedure-point' "$TMP/cli.err" && echo yes || echo no)" "yes"
-expect "O2: nothing is written" "$([ -e "$TMP/wf/cli-sid-handoff.md" ] && echo written || echo none)" "none"
+expect "O2: nothing is written" "$([ -e "$TMP/wf/cli-sid.control/handoff.md" ] || [ -e "$TMP/wf/cli-sid-handoff.md" ] && echo written || echo none)" "none"
 case_end
 
 cat > "$TMP/legacy.js" <<'JS'

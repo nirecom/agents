@@ -3,25 +3,10 @@
 # Tests: bin/worker-dispatch/workers/session-close-gate.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, session-close-gate, decision-table, table-driven, TL1, TL2, scope:issue-specific
 #
-# Issue #1643 — session-close-gate answers one question: may the caller run SC-6,
-# or must it halt? Wrong in the yield direction wedges a session; wrong in the
-# proceed direction closes a session while a supervisor review is still owed. The
-# output-contract suite only proves the three lines are shaped right, so this file
-# pins the DECISION: every row of the SC-5 / SC-5b table, the SC-4 observation
-# derivation, and the gate JSON artifact the caller actually reads.
-#
-# The decision tables run as pure functions (TL1) because wall-clock timeout
-# branches cannot be reached by waiting; the end-to-end rows go through the real
-# dispatcher (TL2) with the supervisor CLIs canned via
-# tests/feature-1643-worker-dispatch-lib/spawn-stub.js.
-#
-# TL3 gap (what this TL1+TL2 test does NOT catch):
-#   - The real bin/supervisor-write-alert / -write-audit CLIs rejecting the argv
-#     this worker builds, or not actually clearing the phase. Only a run against
-#     the real CLIs shows that.
-#   - A real supervisor-state.json whose schema has drifted from these fixtures.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1643 — session-close-gate: may the caller run SC-6, or must it halt?
+# Gate JSON written to $CLAUDE_WORKFLOW_DIR/<sid>.control/. TL1 drives SC-5/SC-5b
+# rows as pure functions; TL2 goes through the real dispatcher with spawn-stub.js.
+# TL3 gap: real supervisor-write-alert/audit CLIs; live supervisor-state.json schema.
 
 set -u
 
@@ -36,6 +21,7 @@ WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/session-close-gate.js"
 PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
@@ -79,8 +65,10 @@ git -C "$MAIN_RAW" add README.md >/dev/null 2>&1
 git -C "$MAIN_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
 
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_RAW="$TMPD/wf"; mkdir -p "$WF_RAW"
 MAIN="$(nodepath "$MAIN_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
+WF="$(nodepath "$WF_RAW")"
 WORKER_M="$(nodepath "$WORKER_JS")"
 CANNED="$TMPD/canned.json"
 CALLLOG="$TMPD/calls.jsonl"
@@ -185,15 +173,17 @@ calls_for() { grep -c "\"script\":\"$1\"" "$CALLLOG" 2>/dev/null | tr -d ' '; }
 dispatch_gate() {
     local sid="$1" state="$2" outcome="${3:-}"
     local payload="{\"session_id\":\"$sid\",\"plans_dir\":\"$PLANS\",\"artifact_dir\":\"$PLANS\""
-    if [ -n "$state" ]; then printf '%s' "$state" > "$PLANS_RAW/$sid-supervisor-state.json"; fi
+    mkdir -p "$WF_RAW/$sid.control"
+    if [ -n "$state" ]; then printf '%s' "$state" > "$WF_RAW/$sid.control/supervisor-state.json"; fi
     if [ -n "$outcome" ]; then
-        printf '%s' "$outcome" > "$PLANS_RAW/$sid-outcome.json"
-        payload="$payload,\"outcome_json_path\":\"$PLANS/$sid-outcome.json\""
+        printf '%s' "$outcome" > "$WF_RAW/$sid.control/issue-close-outcome.json"
+        payload="$payload,\"outcome_json_path\":\"$WF/$sid.control/issue-close-outcome.json\""
     fi
     printf '%s}' "$payload" > "$PLANS_RAW/$sid-payload.json"
     : > "$CALLLOG"
     DRC=0
     DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+        "CLAUDE_WORKFLOW_DIR=$WF" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
@@ -208,10 +198,10 @@ group_no_state() {
     assert_has "nostate/summary-proceeds" "gate_action=proceed" "$(field_of summary)"
     assert_has "nostate/summary-marks-alert-absent" "SC-5 alert_phase: (absent)" "$(field_of summary)"
     assert_has "nostate/summary-marks-audit-absent" "SC-5b audit_phase: (absent)" "$(field_of summary)"
-    assert_eq "nostate/artifact-is-the-gate-json" "sess-none-session-close-gate.json" \
+    assert_eq "nostate/artifact-is-the-gate-json" "session-close-gate.json" \
         "$(basename "$(field_of artifact_path)")"
     assert_eq "nostate/gate-json-says-proceed" "proceed" \
-        "$(gate_action_of "$PLANS_RAW/sess-none-session-close-gate.json")"
+        "$(gate_action_of "$WF_RAW/sess-none.control/session-close-gate.json")"
     assert_eq "nostate/nothing-reported" "0" "$(calls_for report)"
 }
 
@@ -220,7 +210,7 @@ group_yield_alert() {
     assert_eq "yieldalert/exit0" "0" "$DRC"
     assert_has "yieldalert/summary-yields" "gate_action=yield" "$(field_of summary)"
     assert_eq "yieldalert/gate-json-says-yield" "yield" \
-        "$(gate_action_of "$PLANS_RAW/sess-ya-session-close-gate.json")"
+        "$(gate_action_of "$WF_RAW/sess-ya.control/session-close-gate.json")"
     assert_eq "yieldalert/no-repair-attempted" "0" "$(calls_for writeAlert)"
 }
 
@@ -231,7 +221,7 @@ group_yield_audit_over_alert() {
     assert_has "yieldaudit/summary-yields" "gate_action=yield" "$(field_of summary)"
     assert_has "yieldaudit/alert-phase-reported-as-done" "SC-5 alert_phase: done" "$(field_of summary)"
     assert_eq "yieldaudit/gate-json-says-yield" "yield" \
-        "$(gate_action_of "$PLANS_RAW/sess-yb-session-close-gate.json")"
+        "$(gate_action_of "$WF_RAW/sess-yb.control/session-close-gate.json")"
 }
 
 group_repair() {
@@ -240,7 +230,7 @@ group_repair() {
     dispatch_gate sess-rep "{\"alert\":{\"alert_phase\":\"pending\",\"alert_armed_at\":\"$ts\",\"last_run_at\":\"$ts\"}}"
     assert_has "repair/proceeds-instead-of-wedging" "gate_action=proceed" "$(field_of summary)"
     assert_eq "repair/gate-json-says-proceed" "proceed" \
-        "$(gate_action_of "$PLANS_RAW/sess-rep-session-close-gate.json")"
+        "$(gate_action_of "$WF_RAW/sess-rep.control/session-close-gate.json")"
     assert_eq "repair/write-alert-called-once" "1" "$(calls_for writeAlert)"
     assert_eq "repair/audit-side-untouched" "0" "$(calls_for writeAudit)"
     assert_eq "repair/argv-clears-the-stale-phase" "--session-id sess-rep --set-alert-phase done --clear-alert-armed-at" \
@@ -262,18 +252,15 @@ group_sc4_reporting() {
     assert_has "sc4/findings-do-not-change-the-gate" "gate_action=proceed" "$(field_of summary)"
 }
 
-# A malformed outcome file must not take the gate down — the SC-5/SC-5b decision
-# does not read it. But it must not be silently equated with a clean one either:
-# zero observations scanned out of a file that never parsed is a different fact
-# from zero observations in a file that parsed and was clean, and only the first
-# means the audit trail has a hole in it.
+# A malformed outcome file must not take the gate down (SC-5/SC-5b does not read
+# it), but zero observations from an unparsed file is not the same as zero from a
+# clean one — the audit trail has a hole.
 group_malformed_outcome() {
     dispatch_gate sess-bado "" '{"issues": [ this is not json'
     assert_eq "badoutcome/exit0" "0" "$DRC"
     assert_eq "badoutcome/status" "complete" "$(field_of status)"
-    # Exactly one finding, and it is the one naming the unreadable file — which
-    # is also how "zero ISSUE-derived observations" is pinned: had the scan
-    # invented an entry from an unparsed file, the count would be 2.
+    # Exactly one finding naming the unreadable file; count=2 would mean scan
+    # invented an entry from an unparsed file.
     assert_has "badoutcome/one-finding-for-the-unreadable-file" "SC-4 findings: 1" "$(field_of summary)"
     assert_eq "badoutcome/one-report-per-finding" "1" "$(calls_for report)"
     assert_has "badoutcome/finding-names-the-unreadable-outcome" \
@@ -285,20 +272,12 @@ group_malformed_outcome() {
     # SC-4 is an audit trail, not a gate input — the verdict is untouched.
     assert_has "badoutcome/gate-unaffected" "gate_action=proceed" "$(field_of summary)"
     assert_eq "badoutcome/gate-json-says-proceed" "proceed" \
-        "$(gate_action_of "$PLANS_RAW/sess-bado-session-close-gate.json")"
+        "$(gate_action_of "$WF_RAW/sess-bado.control/session-close-gate.json")"
 }
 
-# A corrupt supervisor state file is NOT an absent one, and the gate treats them
-# as opposite verdicts. The gate exists to withhold the Final Report while a
-# supervisor review is still owed; a file it cannot read cannot prove there is
-# none, so it fails CLOSED. Yielding costs a re-run, proceeding loses the review.
-#
-# Every way a state file can be unreadable is driven separately, because they
-# arrive through different code paths: a truncated file throws in JSON.parse,
-# while `null` / a number / a bare string all parse cleanly and only fail the
-# "is it an object with phase fields" test afterwards. The absent control at the
-# end is the other half of the pin — without it a regression that yielded
-# unconditionally would still look green.
+# A corrupt supervisor state file is NOT an absent one; gate fails CLOSED (yield).
+# Each unreadable form is driven separately because they arrive via different code
+# paths. The absent-control row at the end pins the opposite verdict.
 group_corrupt_state() {
     local desc raw sid
     while IFS='@' read -r desc raw; do
@@ -311,11 +290,11 @@ group_corrupt_state() {
         assert_eq "badstate/$desc/status" "complete" "$(field_of status)"
         assert_has "badstate/$desc/summary-yields" "gate_action=yield" "$(field_of summary)"
         assert_eq "badstate/$desc/gate-json-says-yield" "yield" \
-            "$(gate_action_of "$PLANS_RAW/$sid-session-close-gate.json")"
+            "$(gate_action_of "$WF_RAW/$sid.control/session-close-gate.json")"
         assert_has "badstate/$desc/warning-names-the-unreadable-state" \
             "supervisor state file unreadable or malformed" "$(cat "$CALLLOG")"
         assert_has "badstate/$desc/warning-names-the-state-path" \
-            "$sid-supervisor-state.json" "$(cat "$CALLLOG")"
+            "supervisor-state.json" "$(cat "$CALLLOG")"
         assert_has "badstate/$desc/warning-says-fail-closed" "fail-closed" "$(cat "$CALLLOG")"
         assert_has "badstate/$desc/warning-severity" '"--severity","warning"' "$(cat "$CALLLOG")"
         # The log has to record WHICH fact it saw, or an operator reading it
@@ -334,15 +313,27 @@ TABLE
     dispatch_gate sess-badstate-absent-control ""
     assert_has "badstate/absent-control/summary-proceeds" "gate_action=proceed" "$(field_of summary)"
     assert_eq "badstate/absent-control/gate-json-says-proceed" "proceed" \
-        "$(gate_action_of "$PLANS_RAW/sess-badstate-absent-control-session-close-gate.json")"
+        "$(gate_action_of "$WF_RAW/sess-badstate-absent-control.control/session-close-gate.json")"
     assert_has "badstate/absent-control/log-records-absent" "state file: (absent)" \
         "$(cat "$PLANS_RAW/sess-badstate-absent-control-session-close-worker.log" 2>/dev/null)"
     assert_eq "badstate/absent-control/nothing-reported" "0" "$(calls_for report)"
 }
 
-for _g in group_severity group_scan_outcome group_phase_tables group_no_state group_yield_alert     group_yield_audit_over_alert group_repair group_sc4_reporting group_malformed_outcome group_corrupt_state; do
-    "$_g"
-done
+case_begin "tl1-gate-pure-functions" "bin/worker-dispatch/workers/session-close-gate.js"
+group_severity
+group_scan_outcome
+group_phase_tables
+case_end
+
+case_begin "tl2-dispatch-gate" "bin/worker-dispatch.js"
+group_no_state
+group_yield_alert
+group_yield_audit_over_alert
+group_repair
+group_sc4_reporting
+group_malformed_outcome
+group_corrupt_state
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

@@ -2,19 +2,10 @@
 # tests/hooks/feature-supervisor-stop-l2-display.sh
 # Tests: hooks/stop-l2-findings-display.js, hooks/lib/supervisor-findings-render.js
 # Tags: supervisor, stop-hook, scope:issue-specific, pwsh-not-required, hook-registration
-# L3 gap (what this test does NOT catch):
-# - hooks/stop-l2-findings-display.js firing as a real Claude Code Stop hook
-#   (settings.json Stop hook registration — verified only via live claude -p run)
-# - Real transcript JSONL format differences from the minimal crafted input used here
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-
-# Covers the Stop-hook that surfaces alert-mode findings after session completion:
-#  T1 normal (findings surfaced + findings_surfaced_at marked)
-#  T2 idempotency (already surfaced → silent)
-#  T3 Gate 2 (alert not completed → silent)
-#  T4 Gate 3 (no findings → silent)
-#  T5 fail-open (invalid JSON input → exit 0, empty stdout)
+# L3 gap: stop-l2-findings-display.js firing as a real Stop hook (settings.json registration, live claude -p only); real transcript JSONL shape.
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh category: hook-registration.
+# Cases: T1 findings surfaced + marked; T2 already surfaced → silent; T3 alert not completed → silent;
+#  T4 no findings → silent; T5 invalid JSON → exit 0, empty stdout.
 
 set -u
 
@@ -61,7 +52,7 @@ node_dir() {
 # Seed alert state via writeAlertState. Args: tmp_node sid phase surfaced_at last_run_at findings_json
 seed_alert() {
     local tmp_node="$1" sid="$2" phase="$3" surfaced="$4" last_run="$5" findings="$6"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const patch = { findings: $findings };
 if ('$last_run' !== 'null') patch.last_run_at = '$last_run';
@@ -74,7 +65,7 @@ if (!ok) { console.error('seed writeAlertState failed'); process.exit(3); }
 
 read_surfaced() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 process.stdout.write(String((st && st.alert && st.alert.findings_surfaced_at) || 'null'));
@@ -94,7 +85,7 @@ run_t1_normal() {
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     local rc=$?
 
@@ -127,7 +118,7 @@ run_t2_idempotency() {
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     local rc=$?
     rm -rf "$tmp"
@@ -152,7 +143,7 @@ run_t3_not_completed() {
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     local rc=$?
     rm -rf "$tmp"
@@ -178,7 +169,7 @@ run_t4_no_findings() {
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     local rc=$?
     rm -rf "$tmp"
@@ -198,7 +189,7 @@ run_t5_invalid_json() {
     tmp=$(make_tmp)
     tmp_node="$(node_dir "$tmp")"
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "not json" 2>/dev/null)
     local rc=$?
     rm -rf "$tmp"
@@ -241,7 +232,7 @@ run_t6_actionable_only_hook() {
         local hook_input
         hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
             run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
@@ -279,7 +270,7 @@ run_t6_actionable_only_hook() {
         local hook_input
         hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
             run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
@@ -308,7 +299,7 @@ run_t6_actionable_only_hook() {
         local hook_input
         hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
             run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"

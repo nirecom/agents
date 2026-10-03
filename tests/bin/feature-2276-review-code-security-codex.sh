@@ -20,6 +20,8 @@ CL_CLI="$AGENTS_ROOT/bin/concern-ledger"
 CL_LIB="$AGENTS_ROOT/bin/lib/concern-ledger.sh"
 CODEX_BIN="$AGENTS_ROOT/bin/review-code-codex"
 
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -145,7 +147,10 @@ new_env() {
     N=$((N + 1))
     SID="scsess$N"
     PLANS="$TMPDIR_BASE/plans-$N"
-    mkdir -p "$PLANS"
+    WORKFLOW_STATE="$TMPDIR_BASE/workflow-$N"
+    mkdir -p "$PLANS" "$WORKFLOW_STATE"
+    export CLAUDE_WORKFLOW_DIR="$WORKFLOW_STATE"
+    export WORKFLOW_PLANS_DIR="$PLANS"
     printf 'none\n' > "$PLANS/tradeoffs.md"
     RL_REPO="$REPO"
     RL_PATH="$FULL_PATH"
@@ -154,9 +159,11 @@ new_env() {
     RL_EXT_USED=0
     RL_EXTRA=()
 }
-ledger_file()  { printf '%s/%s-%s-concern-ledger.txt' "$PLANS" "$SID" "$LEDGER_FORMAT"; }
-round_file()   { printf '%s/%s-%s-round-number.txt' "$PLANS" "$SID" "$LOOP_FORMAT"; }
-delta_file()   { printf '%s/%s-%s-round-%s-delta-%s.txt' "$PLANS" "$SID" "$LEDGER_FORMAT" "$1" "$2"; }
+ledger_file()  { printf '%s/%s.control/%s-concern-ledger.txt' "$CLAUDE_WORKFLOW_DIR" "$SID" "$LEDGER_FORMAT"; }
+round_file()   { printf '%s/%s.control/%s-round-number.txt' "$CLAUDE_WORKFLOW_DIR" "$SID" "$LOOP_FORMAT"; }
+delta_file()   { printf '%s/%s.control/%s-round-%s-delta-%s.txt' "$CLAUDE_WORKFLOW_DIR" "$SID" "$LEDGER_FORMAT" "$1" "$2"; }
+# ctl_file <name> — <CLAUDE_WORKFLOW_DIR>/<sid>.control/<name> (#2434), dir created for seeding.
+ctl_file()     { mkdir -p "$CLAUDE_WORKFLOW_DIR/$SID.control"; printf '%s/%s.control/%s' "$CLAUDE_WORKFLOW_DIR" "$SID" "$1"; }
 staging_field() { grep -m1 '^#producer|' "$1" 2>/dev/null | cut -d'|' -f"$2"; }
 file_state()   { if [ -f "$1" ]; then printf 'present'; else printf 'missing'; fi; }
 counter_state() { if [ -f "$(round_file)" ]; then trim "$(cat "$(round_file)" 2>/dev/null || true)"; else printf 'deleted'; fi; }
@@ -183,6 +190,7 @@ for _f in "$LOOP_BIN" "$FMT_PARAMS" "$REF_KIND" "$CL_CLI" "$CL_LIB" "$CODEX_BIN"
     fi
 done
 
+case_begin "feature-2276-review-code-security-codex-suite" "bin/run-codex-review-loop"
 for _sec in static-contracts.sh ref-input-chain.sh prestaged-fallback.sh; do
     if [ -f "$SECTION_DIR/$_sec" ]; then
         # shellcheck source=/dev/null
@@ -191,6 +199,7 @@ for _sec in static-contracts.sh ref-input-chain.sh prestaged-fallback.sh; do
         fail "section file missing: feature-2276-review-code-security-codex/$_sec"
     fi
 done
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
