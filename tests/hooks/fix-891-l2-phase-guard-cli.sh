@@ -89,7 +89,7 @@ require('$STATEIO_NODE').markStep('$sid', 'workflow_init', 'complete');" >/dev/n
 run_guard() {
     local tmp="$1" sid="$2" tp="${3:-}"
     GUARD_OUT=$(printf '{"stop_hook_active":false,"session_id":"%s","transcript_path":"%s"}' "$sid" "$tp" \
-        | ( unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+        | ( unset CLAUDE_CODE_SESSION_ID
             CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" \
               run_with_timeout 5 node "$HOOK" 2>/dev/null ))
     GUARD_RC=$?

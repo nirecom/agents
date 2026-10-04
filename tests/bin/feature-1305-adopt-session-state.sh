@@ -49,7 +49,6 @@ export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 
 # Never resolve the live session: each case passes its own heir sid explicitly.
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 # AD-9/AD-10 own these; neutralise whatever the host runner set.
 unset CI 2>/dev/null || true

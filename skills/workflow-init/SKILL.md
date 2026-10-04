@@ -41,7 +41,7 @@ Read all `KEY=VALUE` output lines. Dispatch on `ACTION=`:
 
 - `ASK_ID=wip_conflict`: Issue(s) #<CONFLICTED> are in progress in another session. Driver answers: Continue (recommended) / Abort. On Continue: for each N in `ISSUES`, driver runs `wip-state set <N>` (override for `other`; claim for `none`; idempotent for `same`). On Abort: `ACTION=blocked REASON=user_aborted`.
 - `ASK_ID=wip_rc2`: wip-state set rc=2 for #N. Driver answers: Continue (acknowledge risk — driver treats as none, proceeds) / Abort.
-- `ASK_ID=wip_error`: wip-state check failed (transient auth / session-id resolution failure — check `$CLAUDE_ENV_FILE` or `$CLAUDE_SESSION_ID`, rc=non-zero). Driver answers: Continue (treat as none, proceed) / Abort. Advisory: driver logs `[wip-state check failed for #N — proceeding as 'none']`.
+- `ASK_ID=wip_error`: wip-state check failed (transient auth / session-id resolution failure — check `$CLAUDE_CODE_SESSION_ID`, rc=non-zero). Driver answers: Continue (treat as none, proceed) / Abort. Advisory: driver logs `[wip-state check failed for #N — proceeding as 'none']`.
 - `ASK_ID=closed_reopen_<N>`: Issue #N is CLOSED. Driver answers: `reopen` / `remove` / `abort`. Remove is only offered when `len(closes_issues) >= 2`.
 - `ASK_ID=meta_select`: meta issue has open sub-issues. Driver answers: `#<M>` (select sub-issue) / `abort`.
 - `ASK_ID=fetch_failed_path_c`: `gh issue view` fetch failed. Driver answers: `continue` (Path C) / `abort`.

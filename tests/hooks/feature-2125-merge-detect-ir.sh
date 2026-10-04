@@ -24,7 +24,7 @@ CIR="$AN/hooks/lib/command-ir.js"
 # Fixture isolation (rules/test/fixture-isolation.md): the parent session's ids
 # must never reach the child node processes, and DEFAULT_BRANCHES drives
 # getProtectedBranches() — pin it so an ambient value cannot flip every verdict.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 export DEFAULT_BRANCHES="main,master"
 
 PASS=0; FAIL=0; ROWS=0

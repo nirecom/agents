@@ -71,7 +71,7 @@ run_R4b() {
     fi
     # #2316: the recorded worktree is gone from disk (a completed /worktree-end).
     rm -rf "$wt" 2>/dev/null || true
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
+    out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
@@ -122,7 +122,7 @@ run_R4c() {
     a="$tmp/repo-a"; b="$tmp/repo-b"
     init_repo "$a"
     init_repo "$b"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
+    out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
@@ -168,7 +168,7 @@ run_R7_cli() {
         return 0
     fi
     sid="del-sid-r7"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -180,7 +180,7 @@ markStep('$sid', 'workflow_init', 'complete');
 " >/dev/null 2>&1
     # /worktree-end has removed the linked worktree from disk.
     rm -rf "$wt" 2>/dev/null || true
-    out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$sid" \
+    out=$(env CLAUDE_CODE_SESSION_ID="$sid" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_PROJECT_DIR="$main" HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" 2>&1)
@@ -230,7 +230,7 @@ run_R7b_cli() {
         return 0
     fi
     sid="del-sid-r7b"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -248,7 +248,7 @@ for (const s of steps) { markStep('$sid', s, 'complete', {}, gated.has(s) ? { sa
 " >/dev/null 2>&1
     # /worktree-end has removed the linked worktree from disk.
     rm -rf "$wt" 2>/dev/null || true
-    out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$sid" \
+    out=$(env CLAUDE_CODE_SESSION_ID="$sid" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_PROJECT_DIR="$main" HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" 2>&1)

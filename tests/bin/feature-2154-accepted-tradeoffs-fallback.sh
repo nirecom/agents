@@ -40,7 +40,7 @@ TMPROOT="$(norm "$TMPROOT")"
 export CLAUDE_WORKFLOW_DIR="$TMPROOT/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPROOT/workflow-plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 export HOME="$TMPROOT/home"
 mkdir -p "$HOME"
 cd "$TMPROOT" || exit 1

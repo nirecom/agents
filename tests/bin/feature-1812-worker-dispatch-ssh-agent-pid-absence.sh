@@ -115,7 +115,7 @@ pass "0/divergence-forced"
 : > "$CANARY_LOG"
 POUT=""
 POUT="$(run_with_timeout 240 env \
-    -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u GH_TOKEN -u GITHUB_TOKEN \
+     -u CLAUDE_CODE_SESSION_ID -u GH_TOKEN -u GITHUB_TOKEN \
     "SSH_AUTH_SOCK=$FAKE_SSH_SOCK" "SSH_AGENT_PID=$FAKE_AGENT_PID" \
     "WORKFLOW_PLANS_DIR=$(nodepath "$PLANS_RAW")" \
     "CLAUDE_WORKFLOW_DIR=$(nodepath "$WFDIR_RAW")" \

@@ -26,15 +26,15 @@ make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'sid1319'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 # Evaluate SESSION_ID_VALID_RE + resolveSessionId for one candidate sid.
-# Env is scrubbed of every other resolution source (env sid, env file, project
-# dir, transcript base) and CWD is a throwaway dir, so the only input that can
+# Env is scrubbed of every other resolution source (env sid, project dir,
+# transcript base) and CWD is a throwaway dir, so the only input that can
 # influence the answer is sessionIdFromInput itself.
 # $1=candidate  -> prints "<re-result> <resolve-result>"
 probe_sid() {
     local cand="$1" tmp out
     tmp="$(make_tmp)"
-    out=$(cd "$tmp" && CAND="$cand" env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID \
-        -u CLAUDE_ENV_FILE -u CLAUDE_PROJECT_DIR \
+    out=$(cd "$tmp" && CAND="$cand" env -u CLAUDE_CODE_SESSION_ID \
+        -u CLAUDE_PROJECT_DIR \
         CLAUDE_TRANSCRIPT_BASE_DIR="$(node_path "$tmp")/no-transcripts" \
         "$RWT" 15 node -e "
 const { SESSION_ID_VALID_RE } = require('$CORE_NODE');
@@ -137,14 +137,14 @@ run_I2() { run_consumer_case "I2" "hooks/stop-l2-findings-display.js"; }
 run_I3() { run_consumer_case "I3" "hooks/stop-premature-stop-guard.js"; }
 run_I4() { run_consumer_case "I4" "hooks/supervisor-guard.js"; }
 
-# U5: the 4-tier SUPPLY-only chain's success paths (#2270 dropped the former
-# CLAUDE_ENV_FILE / WORKTREE_NOTES.md inferred tiers) — without these rows a
-# resolveSessionId that always returned null would pass the whole file.
+# U5: the 3-tier SUPPLY-only chain's success paths (#2270 dropped the inferred
+# tiers, #1091 the relay tier) — without these rows a resolveSessionId that
+# always returned null would pass the whole file.
 run_U5() {
     local tmp tnode out
     tmp="$(make_tmp)"; tnode="$(node_path "$tmp")"
-    out=$(cd "$tmp" && TMPD="$tnode" env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID \
-        -u CLAUDE_ENV_FILE -u CLAUDE_PROJECT_DIR \
+    out=$(cd "$tmp" && TMPD="$tnode" env -u CLAUDE_CODE_SESSION_ID \
+        -u CLAUDE_PROJECT_DIR \
         CLAUDE_TRANSCRIPT_BASE_DIR="$tnode/no-transcripts" \
         "$RWT" 20 node -e "
 const path = require('path');
@@ -153,8 +153,6 @@ const dir = process.env.TMPD;
 const problems = [];
 const clear = () => {
   delete process.env.CLAUDE_CODE_SESSION_ID;
-  delete process.env.CLAUDE_SESSION_ID;
-  delete process.env.CLAUDE_ENV_FILE;
 };
 const check = (label, want, fn) => {
   clear();
@@ -174,25 +172,18 @@ check('p2-trims', 'code-sid-2', () => {
   process.env.CLAUDE_CODE_SESSION_ID = '  code-sid-2  ';
   return resolveSessionId({});
 });
-// P3 CLAUDE_SESSION_ID
-check('p3-session-env', 'legacy-sid-4', () => {
-  process.env.CLAUDE_SESSION_ID = 'legacy-sid-4';
-  return resolveSessionId({});
-});
-// P4 transcript basename
-check('p4-transcript', 'transcript-sid-5', () =>
+// P3 transcript basename
+check('p3-transcript', 'transcript-sid-5', () =>
   resolveSessionId({ transcriptPath: path.join(dir, 'transcript-sid-5.jsonl') }));
 // precedence: a valid higher source wins over a valid lower one
 check('prec-input-over-env', 'input-sid-1', () => {
   process.env.CLAUDE_CODE_SESSION_ID = 'code-sid-2';
-  process.env.CLAUDE_SESSION_ID = 'legacy-sid-4';
   return resolveSessionId({ sessionIdFromInput: 'input-sid-1' });
 });
 // an INVALID value in a fallback source is skipped, and resolution continues
-check('skip-bad-code-env', 'legacy-sid-4', () => {
+check('skip-bad-code-env', 'transcript-sid-5', () => {
   process.env.CLAUDE_CODE_SESSION_ID = '../../escape';
-  process.env.CLAUDE_SESSION_ID = 'legacy-sid-4';
-  return resolveSessionId({});
+  return resolveSessionId({ transcriptPath: path.join(dir, 'transcript-sid-5.jsonl') });
 });
 check('skip-bad-transcript', null, () =>
   resolveSessionId({ transcriptPath: '/tmp/bad name.jsonl' }));

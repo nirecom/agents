@@ -1,26 +1,12 @@
 #!/bin/bash
 # Tests: skills/workflow-init/SKILL.md, bin/workflow/workflow-init-driver
 # Tags: workflow-init, wip-state, all-none, label-check, related-issues, scope:issue-specific
-# Tests for issue #589/#798 — workflow-init WI-5 ALL_NONE / FORCE_PATH_B fallback.
-#
-# WI-5 ALL_NONE previously only checked whether the *primary* issue had the
-# `intent:clarified` label; related issues without the label were silently
-# routed to Path A (resume) instead of Path B (re-clarify), causing
-# clarify-intent to be skipped for issues whose intent was never captured.
-#
-# The fix (now absorbed into the driver):
-#   - ALL_NONE evaluates all N's labels (not just the first).
-#   - force_path_b=true is set when WIP is freshly claimed (ALL_NONE case).
-#   - WI-8/route-decision enforces FORCE_PATH_B fallback.
-#   - wip_error branch routes to ask_user (no silent warn-and-continue).
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the real GitHub label API returns intent:clarified state consistent
-#   with what wip-check/route-decision observe when checked on a live issue.
-# - Whether a genuine multi-issue `gh issue view` batch call preserves the same
-#   per-issue label ordering these mocks assume.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #589/#798 — WI-5 ALL_NONE evaluates every N's `intent:clarified` label (not just
+# the primary), sets force_path_b on a fresh WIP claim, WI-8/route-decision enforces the
+# FORCE_PATH_B fallback, and wip_error routes to ask_user (fix now lives in the driver).
+# TL3 gap (what this test does NOT catch): live GitHub label API state vs wip-check /
+# route-decision, and real multi-issue `gh issue view` label ordering. Mitigation:
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh (skill-orchestration).
 
 set -u
 
@@ -165,7 +151,7 @@ case "$V" in
 esac
 WIPEOF2
     chmod +x "$CFG/bin/github-issues/wip-state.sh"
-    printf '#!/bin/bash\necho "${CLAUDE_SESSION_ID:-mock}"\n' > "$CFG/bin/resolve-session-id"
+    printf '#!/bin/bash\necho "${CLAUDE_CODE_SESSION_ID:-mock}"\n' > "$CFG/bin/resolve-session-id"
     cp "$AGENTS_DIR/bin/parse-issue-tokens" "$CFG/bin/parse-issue-tokens"
     cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$CFG/hooks/lib/parse-closes-issues.js"
     cat > "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
@@ -177,14 +163,14 @@ exit 0
 FEOF
     chmod +x "$CFG/bin/resolve-session-id" "$CFG/bin/parse-issue-tokens" \
         "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
-    export WORKFLOW_PLANS_DIR="$PLANS" AGENTS_CONFIG_DIR="$CFG" CLAUDE_SESSION_ID="$sid"
-    unset NON_GITHUB CLAUDE_ENV_FILE 2>/dev/null || true
+    export WORKFLOW_PLANS_DIR="$PLANS" AGENTS_CONFIG_DIR="$CFG" CLAUDE_CODE_SESSION_ID="$sid"
+    unset NON_GITHUB 2>/dev/null || true
     export PATH="$MOCKBIN:$ORIG_PATH"
 }
 
 teardown_drv() {
     export PATH="$ORIG_PATH"
-    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR CLAUDE_SESSION_ID 2>/dev/null || true
+    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR 2>/dev/null || true
 }
 
 mock_issue() {

@@ -68,7 +68,7 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # append to the developer's real ~/.workflow-plans.
 export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
 export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"

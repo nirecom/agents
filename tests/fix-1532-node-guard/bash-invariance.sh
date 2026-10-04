@@ -1,32 +1,13 @@
 # Part of tests/fix-1532-node-guard-*.sh (sourced, not standalone).
 # Tests: bin/get-config-var, bin/confirm-off, bin/resolve-session-id, bin/resolve-worktree-path, bin/is-github-dotcom-remote
 # Tags: bin, polyglot-guard, invariance, stripped-twin, scope:issue-specific, pwsh-not-required, TL2
-
-# B: the acceptance condition #1532 must not violate. Roughly 65 sanctioned
-# `bash bin/<name>` call sites exist across hooks and skills; every one of them has
-# to see the same stdout bytes, the same stderr bytes and the same exit code after
-# the envelope as before it.
-
-# The comparison is against a STRIPPED TWIN rather than a recorded golden file: a
-# golden file freezes today's behaviour of the body too, so an unrelated body change
-# would fail here for the wrong reason and get "fixed" by editing the golden. The
-# twin is the same body with only the envelope mechanically removed, so the only
-# difference the rows can ever see is the envelope itself.
-
-# ACCEPTED LIMIT (review round 2 C1; round 3 C3 restates it, accepted on the same
-# grounds). The twin is derived from the live file, so a body broken and stripped
-# identically compares equal: this section proves the envelope is inert, not that the
-# body is correct. Body correctness is absolute-contract.sh's job, which pins each
-# target's stdout and exit code against independent expected values (including
-# get-config-var's inner `node -e` route). Not adopted: diffing `git show
-# HEAD:bin/<name>` becomes a tautology one run after this PR merges; freezing stderr
-# bytes there is not portable, since they carry absolute paths and locale-dependent
-# text. Reproducible stderr bytes ARE pinned where they exist -- node-diagnostic.sh
-# N8 compares two runs of the same misinvocation (round 3, C7).
-
-# Both copies live in ONE fixture directory so $0/BASH_SOURCE-derived SCRIPT_DIR
-# resolves identically for them, and $T/hooks points at the real hooks/ tree so the
-# comparison exercises real load-env.js and real workflow-state rather than stubs.
+# B: every sanctioned `bash bin/<name>` call site (~65 in hooks and skills) must see the
+#   same stdout, stderr and exit code with the #1532 envelope as without it.
+# Compared against a STRIPPED TWIN (same body, envelope removed), not a golden file, so
+#   only the envelope can differ. Accepted limit (review rounds 2-3): this proves the
+#   envelope inert, not the body correct -- absolute-contract.sh pins body behaviour and
+#   node-diagnostic.sh N8 pins reproducible stderr bytes.
+# Both copies share ONE fixture dir (SCRIPT_DIR resolves identically); $T/hooks is the real tree.
 
 echo "=== B: bash-side byte invariance for $GUARD_TARGET ==="
 
@@ -152,9 +133,9 @@ b_cases_confirm_off() {
 b_cases_resolve_session_id() {
   both_env "L1 no session id in the environment"
   export SESSION_ID=fix-1532-absent-session
-  export CLAUDE_SESSION_ID=fix-1532-absent-session
+  export CLAUDE_CODE_SESSION_ID=fix-1532-absent-session
   both_env "L2 a session id that has no state file"
-  unset SESSION_ID CLAUDE_SESSION_ID
+  unset SESSION_ID CLAUDE_CODE_SESSION_ID
 }
 
 b_cases_resolve_worktree_path() {
@@ -162,9 +143,9 @@ b_cases_resolve_worktree_path() {
   export SESSION_ID=fix-1532-absent-session
   both_env "L2 an unresolvable session id via SESSION_ID (NOSTATE path)"
   unset SESSION_ID
-  export CLAUDE_SESSION_ID=fix-1532-absent-session
-  both_env "L3 an unresolvable session id via CLAUDE_SESSION_ID (NOSTATE path)"
-  unset CLAUDE_SESSION_ID
+  export CLAUDE_CODE_SESSION_ID=fix-1532-absent-session
+  both_env "L3 an unresolvable session id via CLAUDE_CODE_SESSION_ID (NOSTATE path)"
+  unset CLAUDE_CODE_SESSION_ID
 }
 
 b_cases_is_github_dotcom_remote() {

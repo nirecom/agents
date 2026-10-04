@@ -90,9 +90,7 @@ EMPTY_TRANSCRIPT_DIR="$TMPDIR_BASE/transcripts-empty"
 mkdir -p "$EMPTY_TRANSCRIPT_DIR"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$EMPTY_TRANSCRIPT_DIR"
 
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-unset CLAUDE_ENV_FILE 2>/dev/null || true
 
 # Deterministic codex-absence PATH (portable: Git Bash + Linux CI).
 # codex-core.sh detects the CLI with `command -v codex`; to force absence WITHOUT

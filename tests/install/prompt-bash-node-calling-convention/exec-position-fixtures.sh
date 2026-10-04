@@ -129,7 +129,7 @@ fx_ok_assets() { # <fixture-root>
         'Run `node "$AGENTS_CONFIG_DIR/bin/fx-node-tool.js"` the same way.' \
         > "$1/rules/fx-ok-control.md"
     printf '%s\n' '# fx edge' '' \
-        'Env prefix: `CLAUDE_SESSION_ID=abc bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' \
+        'Env prefix: `CLAUDE_CODE_SESSION_ID=abc bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' \
         'Chained: `cd /tmp && bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' '' \
         '```bash' \
         'bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"' \

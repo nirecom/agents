@@ -39,7 +39,7 @@ inh_node() {
     wfn="$(node_path "$tmp/wf")"; homn="$(node_path "$tmp/home")"
     if [ "$js" = "--hook" ]; then
         INH_OUT=$(cd "$tmp/repo" && printf '{"session_id":"%s"}' "$sid" | env \
-            -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+             -u CLAUDE_CODE_SESSION_ID \
             CLAUDE_WORKFLOW_DIR="$wfn" WORKFLOW_PLANS_DIR="$wfn" \
             CLAUDE_TRANSCRIPT_BASE_DIR="$(node_path "$tmp/tr")" \
             CLAUDE_PROJECT_DIR="$(node_path "$tmp/repo")" \
@@ -49,7 +49,7 @@ inh_node() {
         return $?
     fi
     INH_OUT=$(cd "$tmp/repo" && env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+         -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$wfn" WORKFLOW_PLANS_DIR="$wfn" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$(node_path "$tmp/tr")" \
         CLAUDE_PROJECT_DIR="$(node_path "$tmp/repo")" \

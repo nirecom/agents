@@ -2,23 +2,12 @@
 # filename: tests/bin/fix-1681-veto-derivation.sh
 # Tests: bin/workflow/next-step, hooks/workflow-gate.js, hooks/session-start.js, hooks/workflow-state/effective-state.js, hooks/lib/workflow-state/state-io.js, bin/workflow/lib/next-step/
 # Tags: workflow, skip-verdict, veto, derivation, next-step, workflow-gate, session-start, TL2, scope:common
-#
-# #1681: a recorded outline skip_verdict=veto never de-skips the step, so
-# make-detail-plan stays reachable and the workflow can never be corrected.
-# Per the #1352 reset contract, a vetoed step must read back as effective-pending
-# AND every later step must become effective-pending too — WITHOUT rewriting
-# state.json (read-time derivation only; state.json stays the raw record).
-#
-# RED: the veto cases fail against the unmodified sources (no derivation layer).
-# V6 and V9 are regression guards for existing behavior and pass both before
-# and after the fix.
-#
-# TL3 gap (what this test does NOT catch):
-# - Real CLAUDE_SESSION_ID propagation from a live `claude -p` session into the
-#   next-step / hook invocations.
-# - Real SessionStart hook registration actually firing in the Claude Code host.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# #1681: a vetoed outline skip must read back effective-pending, every later step too,
+#   via read-time derivation only (#1352 reset contract; state.json never rewritten).
+#   V6 and V9 are regression guards that pass both before and after the fix.
+# TL3 gap: real CLAUDE_CODE_SESSION_ID propagation from a live `claude -p` session and
+#   real SessionStart hook firing in the CC host. Mitigation: WORKFLOW_USER_VERIFIED
+#   preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
@@ -239,7 +228,6 @@ V7_REPO="$(setup_repo)"
 write_state "$V7_SID" "{$PRE_OUTLINE,$VETOED_OUTLINE,\"detail\":{\"status\":\"pending\"}}"
 V7_OUT=$(echo "{\"session_id\":\"$V7_SID\"}" | \
     CLAUDE_PROJECT_DIR="$V7_REPO" \
-    CLAUDE_ENV_FILE="$TMPDIR_BASE/env-v7.env" \
     run_with_timeout 60 node "$SESSION_START" 2>/dev/null || true)
 check_contains "V7: workflow status shows 'pending (recorded: skipped)' for the vetoed step" \
     "pending (recorded: skipped)" "$V7_OUT"

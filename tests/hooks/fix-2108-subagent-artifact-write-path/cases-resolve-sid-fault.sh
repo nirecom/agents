@@ -86,7 +86,7 @@ _rs_probe() {
     local mode="$1"; shift
     (
         cd "$RS_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export CLAUDE_WORKFLOW_DIR="$RS_WF" WORKFLOW_PLANS_DIR="$RS_WF"
         export RS_MODULE="$RS_SIDMOD_NODE" RS_FAULT_MODE="$mode" RS_GHOST_ID="$RS_GHOST"
         run_probe -r "$RS_PRELOAD_SH" "$@"
@@ -98,7 +98,7 @@ _rs_hook() {
     local mode="$1" input="$2"
     (
         cd "$RS_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export AGENTS_CONFIG_DIR="$RS_CFG"
         export CLAUDE_WORKFLOW_DIR="$RS_WF" WORKFLOW_PLANS_DIR="$RS_WF"
         export RS_MODULE="$RS_SIDMOD_NODE" RS_FAULT_MODE="$mode" RS_GHOST_ID="$RS_GHOST"

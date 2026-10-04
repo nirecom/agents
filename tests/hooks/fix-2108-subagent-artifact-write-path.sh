@@ -86,7 +86,7 @@ assert_ge() {
 # Fixture isolation (rules/test/fixture-isolation.md): session-id env is UNSET at file
 # scope and re-set explicitly per case — every section branches on the effective sid,
 # so an ambient value would silently flip the verdict under test.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE SCRATCHPAD 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID SCRATCHPAD 2>/dev/null || true
 
 TMPBASE="$(node -e "var o=require('os'),p=require('path'),f=require('fs');var d=p.join(o.tmpdir(),'test-2108-'+process.pid);f.mkdirSync(d,{recursive:true});process.stdout.write(d);" 2>/dev/null)"
 [ -z "$TMPBASE" ] && { echo "FAIL: could not create temp base"; exit 1; }
@@ -193,7 +193,7 @@ run_gate() {
     local input="$1" sp="${2:--}"
     (
         cd "$NEUTRAL_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_CODE_SESSION_ID
         if [ "$sp" = "-" ]; then unset SCRATCHPAD; else export SCRATCHPAD="$sp"; fi
         run_hook_capture "$input" "$RWT" 20 node "$GATE_HOOK"
     )

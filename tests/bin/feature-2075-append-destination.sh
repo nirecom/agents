@@ -52,7 +52,7 @@ export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 # #2455: an inherited lane marker or TEST_LANES=off would bypass the lease path, and
 # the corpus cache / slots must never land in the developer's ~/.claude/run-all.
 export RUN_ALL_CACHE_DIR="$TMPDIR_BASE/run-all-cache"

@@ -152,12 +152,12 @@ HOOK_SRC_NODE="$(p3_node_path "$HOOK_SRC")"
 STATEIO_NODE="$(p3_node_path "$AGENTS_DIR/hooks/workflow-state/state-io.js")"
 
 # Fixture isolation (rules/test/fixture-isolation.md): the two dirs are pinned as
-# a pair, the inherited session ids AND the CLAUDE_ENV_FILE relay are cleared,
+# a pair, the inherited CLAUDE_CODE_SESSION_ID is cleared,
 # and CLAUDE_TRANSCRIPT_BASE_DIR points at an empty dir — the captured payload
 # carries the real session's transcript_path, and no resolution stage may be
 # allowed to follow it back to a live session.
 p3_env() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$P3_WF" WORKFLOW_PLANS_DIR="$P3_WF" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$P3_TRANSCRIPTS" \
         AGENTS_CONFIG_DIR="$(p3_node_path "$AGENTS_DIR")" \
@@ -293,7 +293,7 @@ if (hit) process.stdout.write(hit[0] + NL + hit[1] + NL);" 2>/dev/null
 # pinned (rules/test/fixture-isolation.md): both plans-dir variables, cleared
 # session ids, and AGENTS_CONFIG_DIR pointing at this worktree.
 r4_env() {
-    ( cd "$R4_REPO" && env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    ( cd "$R4_REPO" && env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
         AGENTS_CONFIG_DIR="$AGENTS_NODE" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node -e "$1" ) 2>/dev/null
@@ -382,7 +382,7 @@ run_R4() {
     fi
 
     # The live host. Only the launch itself may SKIP.
-    if ! ( cd "$R4_REPO" && env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    if ! ( cd "$R4_REPO" && env -u CLAUDE_CODE_SESSION_ID \
             CLAUDE_WORKFLOW_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
             AGENTS_CONFIG_DIR="$AGENTS_NODE" TL3_RECORD_FILE="$R4_RECORD" \
             "$AGENTS_DIR/bin/run-with-timeout.sh" 180 claude -p \
@@ -414,9 +414,9 @@ run_R4() {
 
     # (c) the adoption /resume-session --from was invoked FOR still lands, driven
     #     through the real CLI (the S1-S10 assertion, on the live-host path).
-    ok=$( ( cd "$R4_REPO" && env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    ok=$( ( cd "$R4_REPO" && env \
         CLAUDE_WORKFLOW_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
-        AGENTS_CONFIG_DIR="$AGENTS_NODE" CLAUDE_SESSION_ID="$R4_HEIR" \
+        AGENTS_CONFIG_DIR="$AGENTS_NODE" CLAUDE_CODE_SESSION_ID="$R4_HEIR" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node "$AGENTS_DIR/bin/resume-session-detect" --from "$R4_DONOR" ) 2>/dev/null \
         | jq -r '.inherit_result.ok // empty' 2>/dev/null )
     [ "$ok" = "true" ] ||

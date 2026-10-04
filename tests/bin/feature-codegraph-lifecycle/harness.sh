@@ -133,7 +133,7 @@ run_cli() {
     [ "${CG_ENV_OVERRIDE:-__unset__}" = "__unset__" ] || flag_env=("CODEGRAPH=$CG_ENV_OVERRIDE")
     NODE_OPTIONS="--require \"$RECORDER_N\"" AGENTS_CONFIG_DIR="$CONFIG_N" \
         bash "$RUN_TIMEOUT" "$CASE_TIMEOUT" \
-        env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID "${flag_env[@]}" \
+        env -u CLAUDE_CODE_SESSION_ID "${flag_env[@]}" \
         CG_RECORD_LOGIC_N="$RECORD_LOGIC_N" PATHEXT="$PINNED_PATHEXT" \
         PATH="$child_path" HOME="$HOME_N" USERPROFILE="$HOME_N" \
         "$NODE_EXE" "$LIFECYCLE_N" "$verb" --path "$root" "$@" > "$OUT_FILE" 2> "$ERR_FILE"

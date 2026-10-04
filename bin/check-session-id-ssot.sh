@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# check-session-id-ssot.sh — static gate against session-id env reads that bypass the SSOT
-# resolver (#2270). Scope is deliberately ONE construct: a Node `process.env` access to
-# SESSION_ID / CLAUDE_SESSION_ID / CLAUDE_CODE_SESSION_ID, spelled dotted or bracket+literal.
-# Bash `$VAR` expansion, computed `process.env[name]`, and WORKFLOW_SESSION_ID (a different
-# namespace, read as a sanctioned override) are OUT of scope: none is statically separable
-# from legitimate use, so flagging them would make the gate unusable. Completeness is NOT
-# claimed — this stops new direct reads, it does not prove the tree has none.
+# check-session-id-ssot.sh — two static checks. (1) SSOT read gate (#2270): a Node `process.env`
+# access to SESSION_ID / CLAUDE_CODE_SESSION_ID (dotted or bracket+literal) bypasses the resolver.
+# Bash `$VAR`, computed `process.env[name]` and WORKFLOW_SESSION_ID are out of scope (not
+# statically separable from legitimate use); completeness is NOT claimed.
+# (2) Retired-relay tombstone (#1091): the retired relay names may not appear anywhere in the
+# tracked tree outside append-only records, the test archive and TOMBSTONE_EXEMPT; no waivers.
 # Usage: check-session-id-ssot.sh [--staged] [file ...]   Exit: 0 clean | 1 violations | 2 usage.
 # Contract and rationale: docs/architecture/claude-code/session-id-resolution.md
 
@@ -21,11 +20,26 @@ ALLOWLIST=(
   "bin/resolve-worktree-path"
 )
 
-NAMES="SESSION_ID|CLAUDE_SESSION_ID|CLAUDE_CODE_SESSION_ID"
+NAMES="SESSION_ID|CLAUDE_CODE_SESSION_ID"
 READ_RE="process\\.env\\.($NAMES)([^A-Za-z0-9_]|\$)|process\\.env\\[[[:space:]]*[\"']($NAMES)[\"'][[:space:]]*\\]"
 # A waiver needs a role AND a non-empty reason after the em dash; a bare marker is the
 # rubber stamp this gate exists to prevent.
 WAIVER_RE="session-id-ssot: waived \\([^)]*\\)[[:space:]]*—[[:space:]]*[^[:space:]]"
+
+# Tombstone: the names are retired, so no use is legitimate and no waiver applies. The exempt
+# files must still spell them: this guard, its test, the one-shot purge migration and its test,
+# the doc that records the retirement, and the two test-isolation points that unset the retired
+# names so a leftover CLAUDE_ENV_FILE cannot reach the purge and rewrite a real env file.
+TOMBSTONE_RE='(^|[^A-Za-z0-9_])(CLAUDE_SESSION_ID|CLAUDE_ENV_FILE)([^A-Za-z0-9_]|$)'
+TOMBSTONE_EXEMPT=(
+  "bin/check-session-id-ssot.sh"
+  "tests/bin/bin-check-session-id-ssot.sh"
+  "hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js"
+  "tests/hooks/legacy-session-id-relay-purge.sh"
+  "docs/architecture/claude-code/session-id-resolution.md"
+  "tests/lib/harness.sh"
+  "bin/lib/run-tests-baseline-exec.sh"
+)
 
 usage() {
     echo "usage: check-session-id-ssot.sh [--staged] [file ...]" >&2
@@ -63,14 +77,56 @@ in_scope() {
     return 0
 }
 
+# Tombstone scope is wider than in_scope: tests and Markdown are included, because a retired
+# name in a fixture or a skill re-teaches the relay. Only append-only records and the archive
+# are excluded.
+tombstone_in_scope() {
+    case "$1" in
+        docs/history/*|docs/history.md|changelog/*|CHANGELOG.md|tests/_archive/*|.git/*) return 1 ;;
+    esac
+    [ -f "$1" ] || return 1
+    for e in "${TOMBSTONE_EXEMPT[@]}"; do
+        [ "$1" = "$e" ] && return 1
+    done
+    return 0
+}
+
 SCAN=()
+TSCAN=()
 for f in "${FILES[@]}"; do
     in_scope "$f" && SCAN+=("$f")
+    tombstone_in_scope "$f" && TSCAN+=("$f")
 done
-[ "${#SCAN[@]}" -eq 0 ] && exit 0
+
+# grep exits 1 for "no match" (clean) but >1 for an error; an error must not read as a clean scan.
+scan_grep() {
+    local re="$1" rc=0
+    shift
+    SCAN_OUT="$(grep -I -n -H -E -- "$re" "$@" 2>/dev/null)" || rc=$?
+    if [ "$rc" -gt 1 ]; then
+        echo "check-session-id-ssot: grep failed (exit $rc)" >&2
+        exit 2
+    fi
+}
+
+TOMBSTONES=0
+if [ "${#TSCAN[@]}" -gt 0 ]; then
+    scan_grep "$TOMBSTONE_RE" "${TSCAN[@]}"
+    while IFS= read -r hit; do
+        [ -n "$hit" ] || continue
+        echo "$hit"
+        TOMBSTONES=$((TOMBSTONES + 1))
+    done <<< "$SCAN_OUT"
+fi
+if [ "$TOMBSTONES" -gt 0 ]; then
+    echo ""
+    echo "Retired session-id relay names reintroduced ($TOMBSTONES). Use CLAUDE_CODE_SESSION_ID; see docs/architecture/claude-code/session-id-resolution.md#retired-relay."
+fi
 
 VIOLATIONS=0
-while IFS= read -r hit; do
+SCAN_OUT=""
+[ "${#SCAN[@]}" -gt 0 ] && scan_grep "$READ_RE" "${SCAN[@]}"
+[ "${#SCAN[@]}" -gt 0 ] && while IFS= read -r hit; do
     [ -n "$hit" ] || continue
     file="${hit%%:*}"
     rest="${hit#*:}"
@@ -83,7 +139,7 @@ while IFS= read -r hit; do
     fi
     echo "$file:$line: ${text#"${text%%[![:space:]]*}"}"
     VIOLATIONS=$((VIOLATIONS + 1))
-done < <(grep -I -n -H -E -- "$READ_RE" "${SCAN[@]}" 2>/dev/null || true)
+done <<< "$SCAN_OUT"
 
 if [ "$VIOLATIONS" -gt 0 ]; then
     echo ""
@@ -91,6 +147,6 @@ if [ "$VIOLATIONS" -gt 0 ]; then
     echo "Call resolveSessionId() instead, or add an inline waiver:"
     echo "  // session-id-ssot: waived (<role>) — <why the resolver cannot be used here>"
     echo "See docs/architecture/claude-code/session-id-resolution.md."
-    exit 1
 fi
+[ $((VIOLATIONS + TOMBSTONES)) -gt 0 ] && exit 1
 exit 0

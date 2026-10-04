@@ -28,12 +28,13 @@ run_with_timeout() {
 }
 
 # ---------------------------------------------------------------------------
-# Temp dir / env file setup
+# Temp dir setup
 # ---------------------------------------------------------------------------
 # Fixture isolation (rules/test/fixture-isolation.md): the parent Claude Code
-# session exports CLAUDE_SESSION_ID, so a hook spawned here would resolve the
-# LIVE session and read its real state instead of the fixture below.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+# session exports CLAUDE_CODE_SESSION_ID, so a hook spawned here would resolve the
+# LIVE session and read its real state instead of the fixture below. The hook
+# resolves its id from that env var only, so run_hook re-supplies it per case.
+unset CLAUDE_CODE_SESSION_ID
 
 # Two spellings of the same temp dir: the shell writes fixtures through the
 # POSIX path, node resolves the drive-letter form.
@@ -41,9 +42,7 @@ TMPDIR_ROOT="$(mktemp -d 2>/dev/null || mktemp -d -t btest)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 TMPDIR_ROOT_N="$(node_path "$TMPDIR_ROOT")"
 CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
-CLAUDE_ENV_FILE="$TMPDIR_ROOT/claude_env"
 WF_DIR_N="$TMPDIR_ROOT_N/workflow"
-ENV_FILE_N="$TMPDIR_ROOT_N/claude_env"
 # Dual-pin (#1799): without WORKFLOW_PLANS_DIR the supervisor emitter still
 # resolves the developer's real ~/.workflow-plans/ and appends there.
 PLANS_DIR_N="$TMPDIR_ROOT_N/plans"
@@ -73,12 +72,12 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Helper: write env file with session id
-# make_env_file <session_id>
+# Helper: select the session id run_hook supplies via CLAUDE_CODE_SESSION_ID
+# set_session_id <session_id>
 # ---------------------------------------------------------------------------
-make_env_file() {
-    local session_id="$1"
-    printf 'CLAUDE_SESSION_ID=%s\n' "$session_id" > "$CLAUDE_ENV_FILE"
+CUR_SID=""
+set_session_id() {
+    CUR_SID="$1"
 }
 
 # run_hook <json> [KEY=VAL ...]. Sets HOOK_RC (real exit status) and HOOK_OUT
@@ -100,7 +99,7 @@ run_hook() {
     HOOK_OUT=$(
         (
             unset CLAUDE_BLOCK_TESTS_DIR_NAMES
-            export CLAUDE_ENV_FILE="$ENV_FILE_N"
+            export CLAUDE_CODE_SESSION_ID="$CUR_SID"
             export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
             export WORKFLOW_PLANS_DIR="$PLANS_DIR_N"
             for kv in "${extra_env[@]+"${extra_env[@]}"}"; do export "$kv"; done
@@ -154,13 +153,13 @@ assert_approve() { _assert_decision approve "$@"; }
 assert_block() { _assert_decision block "$@"; }
 
 # ---------------------------------------------------------------------------
-# Session setup shortcut: set env file + state file together
+# Session setup shortcut: set session id + state file together
 # setup_session <session_id> <write_tests_status>
 # ---------------------------------------------------------------------------
 setup_session() {
     local session_id="$1"
     local status="$2"
-    make_env_file "$session_id"
+    set_session_id "$session_id"
     make_state "$session_id" "$status"
 }
 
@@ -224,13 +223,13 @@ assert_approve "A9" "Write + tests/foo.sh + pending + agent_id=sub-xxx → appro
 echo ""
 echo "=== Section B — Error / fail-open ==="
 
-# B10: no CLAUDE_ENV_FILE env var set → approve (fail-open)
+# B10: no session id (CLAUDE_CODE_SESSION_ID unset) → approve (fail-open)
 b10_input='{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-b10","agent_id":""}'
 b10_input_file="$(mktemp "$TMPDIR_ROOT/b10_input.XXXXXX")"
 printf '%s' "$b10_input" > "$b10_input_file"
 b10_result=$(
     (
-        unset CLAUDE_ENV_FILE CLAUDE_BLOCK_TESTS_DIR_NAMES
+        unset CLAUDE_BLOCK_TESTS_DIR_NAMES
         export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
         export WORKFLOW_PLANS_DIR="$PLANS_DIR_N"
         run_with_timeout node "$HOOK" < "$b10_input_file" 2>/dev/null
@@ -243,19 +242,19 @@ b10_problems=""
 [ "$b10_decision" = "approve" ] || b10_problems="$b10_problems [decision='${b10_decision:-<none>}', expected approve]"
 [ "$b10_rc" -eq 0 ] || b10_problems="$b10_problems [hook exited ${b10_rc}, expected 0]"
 if [ -z "$b10_problems" ]; then
-    pass "B10. no CLAUDE_ENV_FILE → approve (fail-open), hook exits 0"
+    pass "B10. no session id → approve (fail-open), hook exits 0"
 else
-    fail "B10. no CLAUDE_ENV_FILE →${b10_problems} raw: ${b10_result}"
+    fail "B10. no session id →${b10_problems} raw: ${b10_result}"
 fi
 
-# B11: CLAUDE_ENV_FILE set with session_id but no state file → approve (fail-open)
-make_env_file "sess-b11"
+# B11: session id supplied but no state file → approve (fail-open)
+set_session_id "sess-b11"
 rm -f "$CLAUDE_WORKFLOW_DIR/sess-b11.json"
 assert_approve "B11" "state file missing → approve (fail-open)" \
     '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-b11","agent_id":""}'
 
 # B12: state file JSON corrupt → approve (fail-open)
-make_env_file "sess-b12"
+set_session_id "sess-b12"
 printf 'NOT VALID JSON {{{{' > "$CLAUDE_WORKFLOW_DIR/sess-b12.json"
 assert_approve "B12" "state file JSON corrupt → approve (fail-open)" \
     '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-b12","agent_id":""}'
@@ -265,7 +264,7 @@ assert_approve "B12" "state file JSON corrupt → approve (fail-open)" \
 # fail-open branch is unreachable through readState and the unsettled verdict
 # stands. The case pins that reality rather than the branch the hook still
 # carries; see the note filed with this suite.
-make_env_file "sess-b13"
+set_session_id "sess-b13"
 cat > "$CLAUDE_WORKFLOW_DIR/sess-b13.json" <<'EOF'
 {
   "version": 1,
@@ -277,14 +276,14 @@ assert_block "B13" "empty steps map → block (projection materialises write_tes
     '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-b13","agent_id":""}'
 
 # B14: stdin malformed JSON → approve (fail-open)
-make_env_file "sess-b14"
+set_session_id "sess-b14"
 make_state "sess-b14" "pending"
 b14_input_file="$(mktemp "$TMPDIR_ROOT/b14_input.XXXXXX")"
 printf '%s' 'NOT VALID JSON' > "$b14_input_file"
 b14_result=$(
     (
         unset CLAUDE_BLOCK_TESTS_DIR_NAMES
-        export CLAUDE_ENV_FILE="$ENV_FILE_N"
+        export CLAUDE_CODE_SESSION_ID="$CUR_SID"
         export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
         export WORKFLOW_PLANS_DIR="$PLANS_DIR_N"
         run_with_timeout node "$HOOK" < "$b14_input_file" 2>/dev/null

@@ -34,7 +34,6 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
 # ---- fixture isolation (rules/test/fixture-isolation.md) --------------------
 unset AGENTS_CONFIG_DIR
-unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 
 TMPD="$(mktemp -d)"

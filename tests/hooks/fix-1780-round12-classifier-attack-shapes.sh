@@ -80,7 +80,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 
 # rules/test/fixture-isolation.md: never let the hook resolve the live session,
 # and never let anything downstream append to the developer's real plans dir.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # H0 - harness self-check: without the hook every verdict below is vacuous.
 if [ -f "$HOOK" ]; then pass "H0 hook file present"

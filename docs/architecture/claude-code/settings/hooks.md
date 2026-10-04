@@ -150,8 +150,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   success detection uses the shared 3-field contract (`exit_code ?? exitCode ?? success`).
   Deliberately limited to exactly one pattern + one message (#1443) — generalizing git-error
   guidance into a table is #1447's scope
-- `session-start.js` (SessionStart) — appends `CLAUDE_SESSION_ID=<sid>` to `CLAUDE_ENV_FILE`;
-  inherits prior session's workflow steps if cwd+branch match found in transcript (see
+- `session-start.js` (SessionStart) — inherits prior session's workflow steps if cwd+branch match found in transcript (see
   [workflow.md — Session ID flow](../workflow.md)); otherwise creates fresh state; outputs
   `additionalContext` containing session_id, every step status, and a `NEXT ACTION:` line
   from next-step (`bin/workflow/next-step`); runs zombie cleanup

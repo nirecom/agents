@@ -118,7 +118,7 @@ t39_probe() { # <absent|finding> -> "<retired>/<control>" | sentinel
     out="$( ( cd "$d" || exit 127
               # CODE_LANG is unset with the rest: its gate sits between the arming block and the
               # control, so an inherited value would decide the verdict from outside the fixture.
-              unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID AGENTS_CONFIG_DIR CODE_LANG
+              unset CLAUDE_CODE_SESSION_ID AGENTS_CONFIG_DIR CODE_LANG
               ENFORCE_WORKTREE=off; export ENFORCE_WORKTREE
               run_with_timeout 60 bash hooks/pre-commit ) 2>&1 )" || rc=$?
     if printf '%s\n' "$out" | grep -q 'review-settings-allow'; then retired="RETIRED-GATE-FIRED"; else retired="silent"; fi

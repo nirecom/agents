@@ -9,7 +9,7 @@
 set -uo pipefail
 
 # TL1 — real CLIs against the shared fixture's temp dirs. The session comes from
-# CLAUDE_SESSION_ID, as it does for a flow that only knows the old arguments.
+# CLAUDE_CODE_SESSION_ID, as it does for a flow that only knows the old arguments.
 # Worker payload fields are pinned in feature-2434-worker-payload-cli.sh.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -21,11 +21,11 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 NJS="$AGENTS_DIR/bin/workflow/normalize-judge-signals"
 DCL="$AGENTS_DIR/bin/workflow/derive-complexity-level"
 
-# cli <sid> <cmd...> — one call under CLAUDE_SESSION_ID=<sid>. Sets C_RC / C_OUT.
+# cli <sid> <cmd...> — one call under CLAUDE_CODE_SESSION_ID=<sid>. Sets C_RC / C_OUT.
 cli() {
     local sid="$1"; shift
     C_RC=0
-    CLAUDE_SESSION_ID="$sid" "$@" >"$TMP/cli.out" 2>/dev/null || C_RC=$?
+    CLAUDE_CODE_SESSION_ID="$sid" "$@" >"$TMP/cli.out" 2>/dev/null || C_RC=$?
     C_OUT="$(tr -d '\r' < "$TMP/cli.out")"
 }
 
@@ -34,7 +34,7 @@ SID="sh-norm"
 for ST in complexity detail write-tests write-code; do
     printf 'not a signals line\n' > "$P/$SID-$ST-judge-raw.txt"
     C_RC=0
-    CLAUDE_SESSION_ID="$SID" node "$NJS" --raw-file "$P/$SID-$ST-judge-raw.txt" \
+    CLAUDE_CODE_SESSION_ID="$SID" node "$NJS" --raw-file "$P/$SID-$ST-judge-raw.txt" \
         --out "$P/$SID-$ST-signals.txt" >/dev/null 2>&1 || C_RC=$?
     assert_eq "$ST: legacy --out is accepted" "0" "$C_RC"
     assert_eq "$ST: written to <sid>.control/$ST-signals.txt" "S0-undecidable" "$(clf_read "$(ctl "$SID")/$ST-signals.txt")"
@@ -47,7 +47,7 @@ SID="sh-norm-bad"
 printf 'not a signals line\n' > "$P/$SID-detail-judge-raw.txt"
 for OUT in "$TMP/elsewhere-signals.txt" "$P/$SID-bogus-signals.txt" "$P/$SID-detail-signals.json"; do
     C_RC=0
-    CLAUDE_SESSION_ID="$SID" node "$NJS" --raw-file "$P/$SID-detail-judge-raw.txt" \
+    CLAUDE_CODE_SESSION_ID="$SID" node "$NJS" --raw-file "$P/$SID-detail-judge-raw.txt" \
         --out "$OUT" >/dev/null 2>&1 || C_RC=$?
     assert_ne "--out ${OUT##*/} is refused" "0" "$C_RC"
     assert_eq "--out ${OUT##*/} was not written" "absent" "$(state "$OUT")"
@@ -81,7 +81,7 @@ printf '#!/usr/bin/env bash\nprintf "201\\tSome title\\tident:x\\tOPEN\\n"\nexit
 chmod +x "$SC/companion-search.sh"
 pre() {
     C_RC=0
-    CLAUDE_SESSION_ID="$1" AGENTS_CONFIG_DIR="$ROOT" bash "$SC/precheck-companions.sh" \
+    CLAUDE_CODE_SESSION_ID="$1" AGENTS_CONFIG_DIR="$ROOT" bash "$SC/precheck-companions.sh" \
         --seed 100 --exclude 100 --output-file "$2" >/dev/null 2>&1 || C_RC=$?
 }
 SID="sh-pre"
@@ -134,7 +134,7 @@ UP="$(dirname "$TMP")"
 case_begin "normalize-session-missing-writes-nothing" "bin/workflow/normalize-judge-signals"
 BEFORE="$(snap)"
 run2 node "$NJS" --raw-file "$RAW" --stage detail
-assert_eq "no --session (and no CLAUDE_SESSION_ID) exits 2" "2" "$R_RC"
+assert_eq "no --session (and no CLAUDE_CODE_SESSION_ID) exits 2" "2" "$R_RC"
 assert_contains "the usage error names --session" "--session is required" "$R_ERR"
 assert_eq "nothing written under the fixture" "$BEFORE" "$(snap)"
 case_end

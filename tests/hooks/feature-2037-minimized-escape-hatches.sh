@@ -37,7 +37,6 @@ trap 'rm -rf "$BASE"' EXIT
 # Fixture isolation: this file spawns a plain node harness rather than a hook, so it pins
 # neither half of the workflow-dir pair (pinning one alone is the contamination bug). It
 # does drop the inherited session ids and run the harness from a neutral CWD.
-unset CLAUDE_SESSION_ID || true
 unset CLAUDE_CODE_SESSION_ID || true
 
 # --- the declaration, read as TEXT. The policy file is contributor-editable data and is

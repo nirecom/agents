@@ -40,7 +40,7 @@ to_node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; el
 # Control files (supervisor state, workflow state) live under CLAUDE_WORKFLOW_DIR (#2434).
 wf_of() { printf '%s' "${1%/plans}/workflow"; }
 
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 if ! command -v node >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
     skip "all: node/git not available"
@@ -132,7 +132,7 @@ process.stdout.write(String($expr));
 # Fixture isolation (rules/test/fixture-isolation.md). resolveWorkflowSessionId()
 # never reads WORKFLOW_SESSION_ID; its wsid priority is (1) WORKTREE_NOTES.md at CWD /
 # git-common-dir parent, (2) CLAUDE_CODE_SESSION_ID guarded on a `<value>-*.md` artifact,
-# (3) CLAUDE_ENV_FILE→CLAUDE_SESSION_ID (already unset at top). Running node from the real
+# (3)/(4) plans-dir scans. Running node from the real
 # worktree leaked the developer's live wsid via priority 1, collapsing computeFreshnessKey
 # to null (fail-closed block). Run node from the isolated plans dir (no WORKTREE_NOTES.md,
 # git-root probes miss) and pin the test's session id via priority 2 (CLAUDE_CODE_SESSION_ID

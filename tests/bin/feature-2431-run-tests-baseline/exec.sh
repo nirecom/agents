@@ -78,8 +78,7 @@ run_exec_cases() {
 # leaked session vars in the caller; prints "RET=<n> SEQ=<n> RC=<v>" (RET = rtb_exec_one's status).
 exec_isolation_probe() {
   mkdir -p "$2"
-  (cd "$1" && export CLAUDE_SESSION_ID=leak-sid CLAUDE_CODE_SESSION_ID=leak-csid \
-    CLAUDE_ENV_FILE=/leak/env && run_with_timeout 60 bash -c \
+  (cd "$1" && export CLAUDE_CODE_SESSION_ID=leak-csid && run_with_timeout 60 bash -c \
     '. "$1" || exit 98; RTB_EXEC_SEQ=41; rtb_exec_one "$2" tests/bin/test-broken.sh 10 "$3"; printf "RET=%s SEQ=%s RC=%s\n" "$?" "$RTB_EXEC_SEQ" "${RTB_EXEC_RC:-unset}"' \
     _ "$EXEC_LIB" "$1" "$2" 2>/dev/null | grep '^RET=' | tail -1)
 }
@@ -104,17 +103,17 @@ run_exec_isolation_cases() {
   wt="$TMPROOT/repo-exec-e9"; mk_fixture_repo "$wt" >/dev/null; mkdir -p "$wt/bin/lib"
   cat > "$wt/bin/lib/run-all-launch.sh" << 'EOF'
 run_all_exec() {
-  printf 'SID=%s\nCSID=%s\nENVF=%s\nWF=%s\nPL=%s\nTR=%s\nHOME=%s\n' \
-    "${CLAUDE_SESSION_ID-<unset>}" "${CLAUDE_CODE_SESSION_ID-<unset>}" "${CLAUDE_ENV_FILE-<unset>}" \
+  printf 'CSID=%s\nWF=%s\nPL=%s\nTR=%s\nHOME=%s\n' \
+    "${CLAUDE_CODE_SESSION_ID-<unset>}" \
     "${CLAUDE_WORKFLOW_DIR-}" "${WORKFLOW_PLANS_DIR-}" "${CLAUDE_TRANSCRIPT_BASE_DIR-}" "$HOME" > "$2"
   return 0
 }
 EOF
   r="$(exec_isolation_probe "$wt" "$logs/e9")"
   local dump="$logs/e9/42.out" v iso
-  v="$(grep -E '^(SID|CSID|ENVF)=' "$dump" 2>/dev/null | tr '\n' ' ')"
-  [ "$r" = "RET=0 SEQ=42 RC=0" ] && [ "$v" = "SID=<unset> CSID=<unset> ENVF=<unset> " ] \
-    && pass "E9-session: CLAUDE_SESSION_ID / CLAUDE_CODE_SESSION_ID / CLAUDE_ENV_FILE unset in the base test" \
+  v="$(grep -E '^CSID=' "$dump" 2>/dev/null | tr '\n' ' ')"
+  [ "$r" = "RET=0 SEQ=42 RC=0" ] && [ "$v" = "CSID=<unset> " ] \
+    && pass "E9-session: CLAUDE_CODE_SESSION_ID unset in the base test" \
     || fail "E9-session: probe=${r:-none} session vars=${v:-none}"
   iso="$(sed -n 's/^WF=\(.*\)\/workflow$/\1/p' "$dump" 2>/dev/null)"
   if [ -n "$iso" ] && grep -qxF "PL=$iso/plans" "$dump" && grep -qxF "TR=$iso/transcripts" "$dump" \

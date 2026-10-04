@@ -5,7 +5,7 @@
 # RED for issue #719.
 
 set -u
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 
 # L3 gap (what this test does NOT catch):
 # - hook registration in settings.json PostToolUse hooks — if supervisor-trigger.js is not

@@ -280,7 +280,6 @@ json_payload() {
 hook_verdict() {
     local cmd="$1" out rc=0
     out="$(printf '%s' "$(json_payload "$cmd")" | (cd "$MAIN_RAW" && run_with_timeout 30 env \
-        -u CLAUDE_ENV_FILE \
         "ENFORCE_WORKTREE=on" \
         "AGENTS_CONFIG_DIR=$ACD" \
         "WORKFLOW_PLANS_DIR=$PLANS" \

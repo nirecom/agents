@@ -75,7 +75,7 @@ t7_real_repo_in_sync() {
         return
     fi
     mkdir -p "$home/.claude"
-    out="$( (cd "$AGENTS_DIR" && unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+    out="$( (cd "$AGENTS_DIR" && unset CLAUDE_CODE_SESSION_ID && \
         HOME="$home" USERPROFILE="$(node_path "$home")" CLAUDE_CONFIG_DIR="$home/.claude" \
         run_with_timeout 60 node "$ASSEMBLE_REL") 2>&1 )" || rc=$?
     if [ "$rc" -ne 0 ]; then

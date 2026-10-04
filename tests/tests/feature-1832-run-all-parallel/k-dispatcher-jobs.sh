@@ -55,7 +55,7 @@ nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else e
 export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 FIX_HOME="$TMPD/home"; mkdir -p "$FIX_HOME/.claude"

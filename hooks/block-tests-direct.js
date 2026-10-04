@@ -70,7 +70,7 @@ if (require.main === module) {
   } catch (e) {
     approve();
   }
-  if (!sessionId) approve(); // B10: no CLAUDE_ENV_FILE
+  if (!sessionId) approve(); // B10: session id unresolvable
 
   // Step 4: read workflow state — fail-open on any error
   let state;

@@ -28,7 +28,7 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 # Fixture isolation: the parent session exports the ids these hooks resolve for
 # WORKFLOW_OFF, and the plans dir must be pinned in the same breath as the workflow
 # dir or the supervisor emitter appends to the developer's real ~/.workflow-plans.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 TMP_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMP_BASE"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMP_BASE/wf" WORKFLOW_PLANS_DIR="$TMP_BASE/plans"

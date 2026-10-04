@@ -50,13 +50,10 @@ function _listJsonlByMtime(transcriptDir) {
 
 /**
  * Resolve the current session ID from SUPPLIED sources only, by priority:
- *   1. ctx.sessionIdFromInput   2. CLAUDE_CODE_SESSION_ID (CC-native; the only one
- *      reliably present in the Bash-tool subprocess — #1082, Anthropic bug #27987)
- *   3. CLAUDE_SESSION_ID   4. ctx.transcriptPath basename
- * No source infers an id from filesystem traces — see
- * docs/architecture/claude-code/session-id-resolution.md for why the former
- * inferred tier (CLAUDE_ENV_FILE / WORKTREE_NOTES.md / JSONL mtime scan) was
- * removed.
+ *   1. ctx.sessionIdFromInput   2. CLAUDE_CODE_SESSION_ID (CC-native)
+ *   3. ctx.transcriptPath basename
+ * The former relay tier and inferred tiers are both retired — see
+ * docs/architecture/claude-code/session-id-resolution.md.
  */
 function resolveSessionId(ctx = {}) {
   if (
@@ -65,14 +62,9 @@ function resolveSessionId(ctx = {}) {
   ) {
     return ctx.sessionIdFromInput;
   }
-  // CC-native session id, set directly in tool and hook subprocesses. Reliably
-  // present where the manufactured CLAUDE_SESSION_ID relay (read below) is not —
-  // the Bash-tool path. Without this, resolution falls through to priority 3,
-  // which is a manufactured relay rather than the CC-native value (#1082).
+  // CC-native session id, set directly in hook and tool subprocesses by the CC binary.
   const codeSid = process.env.CLAUDE_CODE_SESSION_ID;
   if (codeSid && SESSION_ID_VALID_RE.test(codeSid.trim())) return codeSid.trim();
-  const envSid = process.env.CLAUDE_SESSION_ID;
-  if (envSid && SESSION_ID_VALID_RE.test(envSid.trim())) return envSid.trim();
   if (typeof ctx.transcriptPath === "string" && ctx.transcriptPath.length > 0) {
     const base = path.basename(ctx.transcriptPath, ".jsonl");
     if (SESSION_ID_VALID_RE.test(base)) return base;

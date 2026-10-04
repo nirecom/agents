@@ -208,7 +208,7 @@ _c18_input() {
 _c18_run() {
     (
         cd "$NEUTRAL_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_CODE_SESSION_ID
         # CONFIG-DEPENDENT BRANCH ISOLATION (review C4). resolveSessionId() does not stop
         # at the transcript_path basename: if nothing earlier answers, it scans a
         # transcript BASE DIRECTORY, defaulting to ~/.claude/projects and keyed on

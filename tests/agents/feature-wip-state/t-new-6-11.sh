@@ -5,52 +5,38 @@
 # Tags: issue-create, github, workflow, issues, plans, scope:issue-specific
 
 # ===========================================================================
-# T-new-6: set <N> with CLAUDE_ENV_FILE absent + CLAUDE_SESSION_ID env → exit 0
-# Regression for #440: VS Code Claude Code does not propagate CLAUDE_ENV_FILE
-# to Bash subprocesses, but CLAUDE_SESSION_ID is exported directly.
-# NOTE: setup_mock sets CLAUDE_ENV_FILE; we unset it here and restore it after
-# the assertion. teardown_mock wipes $TMP so the restore path ($TMP/claude-env)
-# will not exist, but the next setup_mock always overwrites CLAUDE_ENV_FILE
-# with a fresh path — the restore is belt-and-suspenders only.
+# T-new-6: set <N> adopts the CLAUDE_CODE_SESSION_ID env id → exit 0
+# Regression for #440: the session id reaches Bash subprocesses via the env.
 # ===========================================================================
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
-SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
-unset CLAUDE_ENV_FILE
-export CLAUDE_SESSION_ID="env-sid-fixture"
+export CLAUDE_CODE_SESSION_ID="env-sid-fixture"
 run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
 RC=$?
 EXPECTED_FP=$(printf '%s:%s' "env-sid-fixture" "42" | sha256sum | cut -c1-8)
 if [ "$RC" -eq 0 ] && grep -q -- "--text $EXPECTED_FP" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
-    pass "T-new-6: set <N> with CLAUDE_ENV_FILE absent + CLAUDE_SESSION_ID env → exit 0"
+    pass "T-new-6: set <N> with CLAUDE_CODE_SESSION_ID env → exit 0"
 else
     fail "T-new-6: rc=$RC expected_fp=$EXPECTED_FP log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
 fi
-unset CLAUDE_SESSION_ID
-[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
 teardown_mock
 
 # ===========================================================================
-# T-new-7: check <N> with CLAUDE_ENV_FILE absent + CLAUDE_SESSION_ID env → 'same'
-# Same isolation note as T-new-6: CLAUDE_ENV_FILE temporarily unset, restored after assertion.
+# T-new-7: check <N> with CLAUDE_CODE_SESSION_ID env → 'same'
 # ===========================================================================
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export GH_MOCK_STATUS="In Progress"
-SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
-unset CLAUDE_ENV_FILE
-export CLAUDE_SESSION_ID="env-sid-fixture"
+export CLAUDE_CODE_SESSION_ID="env-sid-fixture"
 EXPECTED_FP=$(printf '%s:%s' "env-sid-fixture" "42" | sha256sum | cut -c1-8)
 export GH_MOCK_FINGERPRINT="$EXPECTED_FP"
 OUT=$(run_with_timeout 60 bash "$TARGET" check 42 2>/dev/null)
 RC=$?
 if [ "$RC" -eq 0 ] && [ "$OUT" = "same" ]; then
-    pass "T-new-7: check <N> with CLAUDE_ENV_FILE absent + CLAUDE_SESSION_ID env → 'same'"
+    pass "T-new-7: check <N> with CLAUDE_CODE_SESSION_ID env → 'same'"
 else
     fail "T-new-7: rc=$RC out='$OUT'"
 fi
-unset CLAUDE_SESSION_ID
-[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
 teardown_mock
 
 # ===========================================================================
@@ -228,15 +214,11 @@ teardown_mock
 
 # ===========================================================================
 # T-new-9: set <N> with JSONL transcript scan fallback (3rd resolution path).
-# When CLAUDE_ENV_FILE / CLAUDE_SESSION_ID / CLAUDE_PROJECT_DIR are all unset,
-# the helper scans $CLAUDE_TRANSCRIPT_BASE_DIR/<pwd-encoded>/*.jsonl and uses
+# When CLAUDE_CODE_SESSION_ID is unset, the helper scans $CLAUDE_TRANSCRIPT_BASE_DIR/<pwd-encoded>/*.jsonl and uses
 # the basename (sans .jsonl) of the mtime-newest entry as the session-id.
 # ===========================================================================
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
-SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
-unset CLAUDE_ENV_FILE
-unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts"
 # Encode via CLAUDE_PROJECT_DIR (Priority-7 primary candidate) instead of the
@@ -266,7 +248,6 @@ else
     fail "T-new-9: rc=$RC expected_fp=$EXPECTED_FP log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
 fi
 unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR
-[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
 teardown_mock
 
 # ===========================================================================
@@ -274,9 +255,6 @@ teardown_mock
 # When all 3 resolution paths fail, helper must exit 2 (session-id unresolvable).
 # ===========================================================================
 setup_mock
-SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
-unset CLAUDE_ENV_FILE
-unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 unset CLAUDE_PROJECT_DIR
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts-empty"
@@ -292,7 +270,6 @@ else
     fail "T-new-10: expected exit 2, got rc=$RC"
 fi
 unset CLAUDE_TRANSCRIPT_BASE_DIR
-[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
 teardown_mock
 
 # ===========================================================================
@@ -301,9 +278,6 @@ teardown_mock
 # for the JSONL scan — pwd-encoded dir is only tried as a fallback.
 # ===========================================================================
 setup_mock
-SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
-unset CLAUDE_ENV_FILE
-unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts-projdir"
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
@@ -328,5 +302,4 @@ else
     fail "T-new-11: rc=$RC expected_fp=$EXPECTED_FP log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
 fi
 unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR
-[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
 teardown_mock

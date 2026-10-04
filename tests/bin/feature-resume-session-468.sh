@@ -9,10 +9,10 @@ AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 CLI="$AGENTS_DIR/bin/resume-session-detect"
 
 # Fixture isolation (rules/test/fixture-isolation.md): the parent Claude Code
-# session exports these, and resolveSessionId() prefers them over the fixture's
-# CLAUDE_ENV_FILE — every case below would then read the developer's live
-# session out of an empty fixture store and see only {"type":"none"}.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+# session exports this, and resolveSessionId() would then resolve the developer's
+# live session — every case below would read it out of an empty fixture store
+# and see only {"type":"none"}.
+unset CLAUDE_CODE_SESSION_ID
 
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_DIR/tests/lib/harness.sh"
@@ -71,35 +71,23 @@ build_state_json() {
     " -- "$sid" "$target"
 }
 
-write_env_file() {
-    local path="$1" sid="$2"
-    printf 'CLAUDE_SESSION_ID=%s\n' "$sid" > "$path"
-}
-
 run_cli() {
     local subdir="$1" sid="$2" state_json="$3" marker="$4" extra="${5:-}"
     local root="$TMPDIR_BASE/$subdir"
     mkdir -p "$root/state" "$root/plans/worktree-end"
-    local env_file=""
-    if [ -n "$sid" ]; then
-        env_file="$root/env"
-        write_env_file "$env_file" "$sid"
-        if [ -n "$state_json" ]; then
-            printf '%s' "$state_json" > "$root/state/${sid}.json"
-        fi
+    if [ -n "$sid" ] && [ -n "$state_json" ]; then
+        printf '%s' "$state_json" > "$root/state/${sid}.json"
     fi
     if [ -n "$marker" ]; then
         : > "$root/plans/worktree-end/$marker"
     fi
     local out_file="$root/stdout" err_file="$root/stderr"
-    if [ -n "$env_file" ]; then
-        # CLAUDE_SESSION_ID is the supported carrier: the CLAUDE_ENV_FILE tier was
-        # removed from resolveSessionId() (docs/architecture/claude-code/
-        # session-id-resolution.md), so the env file alone resolves nothing. It is
-        # still written, because T2 asserts the CLI ignores a file without an id.
-        ( cd "$AGENTS_DIR" && CLAUDE_ENV_FILE="$env_file" CLAUDE_SESSION_ID="$sid" CLAUDE_WORKFLOW_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
+    if [ -n "$sid" ]; then
+        # CLAUDE_CODE_SESSION_ID is the supported env carrier
+        # (docs/architecture/claude-code/session-id-resolution.md).
+        ( cd "$AGENTS_DIR" && CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_WORKFLOW_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
     else
-        ( cd "$AGENTS_DIR" && unset CLAUDE_ENV_FILE && CLAUDE_WORKFLOW_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
+        ( cd "$AGENTS_DIR" && CLAUDE_WORKFLOW_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
     fi
     LAST_OUT=$(cat "$out_file" 2>/dev/null || true)
     LAST_ERR=$(cat "$err_file" 2>/dev/null || true)

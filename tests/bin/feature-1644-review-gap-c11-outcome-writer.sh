@@ -49,7 +49,7 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # DUAL-PIN (#1799).
 export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 # The CLI requires session-facts.js under AGENTS_CONFIG_DIR (only reached by
 # --fallback / --session-id, but resolved from this var in all modes).
 export AGENTS_CONFIG_DIR="$AGENTS_DIR_N"

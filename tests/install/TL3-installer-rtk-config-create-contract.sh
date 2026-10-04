@@ -32,7 +32,7 @@ fi
 command -v rtk >/dev/null 2>&1 || { echo "SKIP: rtk CLI not found on PATH" >&2; exit 77; }
 
 # --- Fixture isolation (rules/test/fixture-isolation.md) --------------------
-# harness.sh already unset CLAUDE_SESSION_ID/CLAUDE_CODE_SESSION_ID/CLAUDE_ENV_FILE.
+# harness.sh already unset CLAUDE_CODE_SESSION_ID.
 unset CLAUDE_WORKFLOW_DIR
 unset WORKFLOW_PLANS_DIR
 

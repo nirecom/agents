@@ -2,7 +2,7 @@
 
 What this file owns: the boundary between the two identifier families, why the resolver is
 supplied-only, the `bin/resolve-session-id` bridge's rc contract, and the contract of the static
-guard. The chain's 4-tier shape is described in
+guard. The chain's 3-tier shape is described in
 [workflow-runtime.md](workflow-runtime.md#bashcli-side-resolution) and is not repeated here.
 
 ## Two identifier families that share one variable name
@@ -22,26 +22,25 @@ rather than a fixed failure. The families stay separate and are stated, not unif
 
 ## Supplied-only: no filesystem inference
 
-`resolveSessionId()` is a strict 4-tier SUPPLY-only chain, tried in order and returning the
+`resolveSessionId()` is a strict 3-tier SUPPLY-only chain, tried in order and returning the
 first match:
 
 1. `ctx.sessionIdFromInput`
-2. `CLAUDE_CODE_SESSION_ID` — CC-native, reliably present in the Bash-tool subprocess where the
-   manufactured relay below is not (#1082, Anthropic bug #27987)
-3. `CLAUDE_SESSION_ID`
-4. `ctx.transcriptPath` basename
+2. `CLAUDE_CODE_SESSION_ID` — CC-native, set by the Claude Code binary in every hook and
+   tool subprocess (see [Entrypoint coverage](#entrypoint-coverage))
+3. `ctx.transcriptPath` basename
 
-All four come from the calling process's own context, so none of them can name a different
+All three come from the calling process's own context, so none of them can name a different
 session. When none match, it returns `null` — never a guess.
 
-An earlier chain additionally inferred an id from filesystem traces — `CLAUDE_ENV_FILE`,
-`WORKTREE_NOTES.md` scanning in the caller's own worktree, and a JSONL mtime scan across
-transcript directories — as lower-priority tiers, gated by an `allowFilesystemInference` flag
-that fail-closed callers set to `false`. That inference was removed entirely (this diff, #2270):
-in a concurrent environment it could return the session that was last active rather than the
-caller's own (#1082), and every caller that needs a session id either has one of the four
-supplied sources or should fail rather than guess. There is no flag to opt back into inference;
-the chain has only the one shape now.
+An earlier chain additionally inferred an id from filesystem traces — `WORKTREE_NOTES.md`
+scanning in the caller's own worktree and a JSONL mtime scan across transcript directories —
+as lower-priority tiers, gated by an `allowFilesystemInference` flag that fail-closed callers
+set to `false`. That inference was removed entirely (#2270): in a concurrent environment it
+could return the session that was last active rather than the caller's own (#1082), and every
+caller that needs a session id either has one of the supplied sources or should fail rather
+than guess. There is no flag to opt back into inference; the chain has only the one shape now.
+The repo-manufactured relay tier was removed later (#1091, see [Retired relay](#retired-relay)).
 
 The same reasoning explains why several sites read the env directly instead of calling the
 resolver at all: a scratchpad allow root, a session-scoped marker file, and an audit
@@ -49,9 +48,50 @@ attribution id each get *worse* if an inference fills the gap. Those sites carry
 waiver naming the role (below).
 
 Note: `hooks/lib/resolve-workflow-session-id.js` — the *workflow*-session-id resolver, a
-different family (see the table above) — is untouched by this change and still reads
-`WORKTREE_NOTES.md` and does a JSONL mtime scan for its own namespace. Nothing here bears on
-that resolver's behavior.
+different family (see the table above) — keeps its own chain for its own namespace:
+1. `WORKTREE_NOTES.md` (CWD, then git common-dir), 2. `CLAUDE_CODE_SESSION_ID` when a
+`<value>-*.md` plan artifact exists, 3. sibling-worktree scan, 4. a depth-scored scan of recent
+`*-context.md` files, where a candidate whose context.md contains `CLAUDE_CODE_SESSION_ID` wins
+and several candidates with no such winner resolve to `null`.
+
+## Entrypoint coverage
+
+The relay retirement (#1091) rests on `CLAUDE_CODE_SESSION_ID` reaching every process that
+used to read the relay. Observed before removal (P0, 2026-10):
+
+| Entrypoint | Hook processes | Bash tool |
+|---|---|---|
+| Interactive (VS Code) main / subagent | set by the CC binary | `CLAUDE_CODE_SESSION_ID` = the session id; the relay's env file was not set |
+| Headless (`claude -p`) main / subagent | set by the CC binary | inherits from CC |
+| git hook (grandchild of the Bash tool) | — | inherits from the Bash tool |
+| CI (`.github/workflows/`) | — | out of scope: no workflow invokes `claude` or consumes a session id |
+
+Decision: **branch A** — no gap, so no explicit hook-side `session_id` plumbing was added.
+`tests/hooks/TL3-hook-session-id-entrypoint-coverage.sh` (gated on `RUN_TL3`) re-verifies the
+headless main (E1), headless subagent (E2), and git-hook (E3) rows against a real `claude -p`.
+
+## Retired relay
+
+Until #1091, `hooks/session-start.js` appended `CLAUDE_SESSION_ID=<sid>` to the file named by
+`CLAUDE_ENV_FILE` on every SessionStart (startup/resume/clear/compact), with no dedup. That
+relay never reached the Bash-tool subprocess (Anthropic bug #27987), was redundant once
+`CLAUDE_CODE_SESSION_ID` became Priority 2 (#1093), and its unbounded growth eventually broke
+Bash tool calls in long sessions.
+
+- **Removal.** The append, the relay tier in both resolvers, and every peripheral fallback read
+  are gone. The workflow resolver's former Priority 3 (env file value plus `<sid>-intent.md`)
+  was strictly subsumed by Priority 2 wherever both values were present and equal, which P0
+  confirmed for every entrypoint.
+- **Tie-break input.** The depth-score tie-break now takes its CC UUID from
+  `CLAUDE_CODE_SESSION_ID` instead of re-reading the env file. Processes that see only the
+  native id now resolve a single candidate whose context.md carries their UUID, where the old
+  input produced `null`; no case that used to resolve now returns `null`.
+- **Purge.** A temporary migration
+  (`hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js`, called from
+  `session-start.js`) removes already-accumulated `CLAUDE_SESSION_ID=<id>` lines from the
+  current session's env file, touching no other line and never creating the file.
+- **Tombstone.** `bin/check-session-id-ssot.sh` forbids both names anywhere in the tree (see
+  [The static guard](#the-static-guard)).
 
 ## The bridge rc contract
 
@@ -78,8 +118,8 @@ authoritative rather than restating the contract themselves.
 `hooks/pre-commit` in the agents repo and blocks on rc 1 (violations) and rc 2 (usage error — a
 mistyped flag must not read as a pass).
 
-**In scope:** Node `process.env` access to `SESSION_ID`, `CLAUDE_SESSION_ID`, or
-`CLAUDE_CODE_SESSION_ID`, written either dotted or as a bracket with a string literal. Detection
+**In scope:** Node `process.env` access to `SESSION_ID` or `CLAUDE_CODE_SESSION_ID`, written
+either dotted or as a bracket with a string literal. Detection
 is by construct, not by file extension, so a `node -e` program embedded in a bash script is
 scanned like any other Node source.
 
@@ -102,6 +142,12 @@ kinds exist: whole-file allowlist entries, reserved for the canonical resolvers 
 per-line inline waivers spelled `session-id-ssot: waived (<role>) — <reason>` on the read's own
 line or the line above. A waiver with an empty reason is treated as a violation, since a marker
 with nothing behind it is the rubber stamp the guard exists to prevent.
+
+**Retired-relay tombstone (#1091).** A second check forbids the two retired relay names
+anywhere in the tracked tree — code, tests, skills, rules, and Markdown alike — matched on word
+boundaries. Append-only records (history, changelog) and the test archive are out of scope, and
+the guard's own exempt list names the few files that must still spell the names. No inline
+waiver excuses a match: the names are retired, so no legitimate use exists to waive.
 
 ## Known limitations and follow-up candidates
 

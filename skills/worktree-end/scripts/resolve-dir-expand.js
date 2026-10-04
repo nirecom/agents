@@ -2,8 +2,7 @@
 // skills/worktree-end/scripts/resolve-dir-expand.js
 //
 // Resolves whether dir_expand should be true for the current session.
-// Self-resolves session id (never relies on CLAUDE_SESSION_ID alone —
-// that env var is absent in WE-9 Bash subprocess contexts; #1082).
+// Self-resolves session id via the SSOT resolver (#1082).
 // Exits 0; prints "true" or "false" to stdout.
 
 const { resolveSessionId } = require("../../../hooks/workflow-state/session-id");

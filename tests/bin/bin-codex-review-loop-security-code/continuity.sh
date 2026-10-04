@@ -66,7 +66,7 @@ k_env() {
         "2" "$(entry_field "$LEDGER" "$ID1" $F_LAST)"
 
     # K8. Another session, sharing only the file, can render the ledger.
-    SUMMARY="$(cd "$TMPDIR_BASE" && env -u PLANS_DIR -u SESSION_ID -u CLAUDE_SESSION_ID \
+    SUMMARY="$(cd "$TMPDIR_BASE" && env -u PLANS_DIR -u SESSION_ID \
         -u CLAUDE_CODE_SESSION_ID -u CONCERN_LEDGER_ROUND HOME="$TMPDIR_BASE" \
         bash "$SUMMARIZE" --ledger "$LEDGER" --budget-remaining 0 2>/dev/null || true)"
     assert_contains "K8: a fresh session renders the persisted ledger" "$ID1" "$SUMMARY"

@@ -112,7 +112,7 @@ mkdir -p "$TMP/wf/plans" "$TMP/proj" 2>/dev/null || true
 TN=$(node_path "$TMP/proj"); WFN=$(node_path "$TMP/wf")
 export CLAUDE_WORKFLOW_DIR="$WFN"
 export WORKFLOW_PLANS_DIR="$WFN/plans"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 echo ""
 echo "=== S1b: EVERY block message dispatch.js can emit ==="

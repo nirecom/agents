@@ -1,18 +1,13 @@
 #!/bin/bash
-# reopen-with-update.sh <ISSUE_NUMBER> [NOTE]
-#
-# Idempotent 3-point reopen flow for /issue-create reopen verdict:
-#   1. gh issue reopen (fatal if fails)
-#   2. body banner refresh  (WARN+continue on fail)
-#   3. reopen-log comment PATCH or create  (WARN+continue on fail)
-#   4. status:regressed label  (WARN+continue on fail)
-#
+# reopen-with-update.sh <ISSUE_NUMBER> [NOTE] — idempotent reopen flow for the
+# /issue-create reopen verdict: 1. gh issue reopen (fatal on fail); 2. body banner
+# refresh; 3. reopen-log comment PATCH or create; 4. status:regressed label
+# (2-4 WARN+continue on fail).
 # NOTE (optional, #1761) records WHY the reopen happened when the verdict came from
-# the codex verdict review rather than the survey alone. It is externally authored
-# free text, so it is treated exactly like the issue body already is (CPR-ORTH): reduced
-# to one sanitized line and scanned by gh_outbound_guard before it can ride out on a
-# comment. A blocked note is DROPPED, never fatal — the reopen itself was already
-# decided, and losing the explanation must not leave the issue closed.
+# the codex verdict review. It is external free text, so like the issue body
+# (CPR-ORTH) it is reduced to one sanitized line and scanned by gh_outbound_guard
+# before riding out on a comment. A blocked note is DROPPED, never fatal — losing
+# the explanation must not leave the issue closed.
 
 set -euo pipefail
 
@@ -84,11 +79,11 @@ if ! printf '%s' "$REPO_SLUG" | grep -qE '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'; th
     exit 1
 fi
 
-# H1: session hash — never write raw CLAUDE_SESSION_ID to issue body
+# H1: session hash — never write raw CLAUDE_CODE_SESSION_ID to issue body
 if command -v sha256sum >/dev/null 2>&1; then
-    SESSION_HASH=$(printf '%s' "${CLAUDE_SESSION_ID:-unknown}" | sha256sum | cut -c1-8)
+    SESSION_HASH=$(printf '%s' "${CLAUDE_CODE_SESSION_ID:-unknown}" | sha256sum | cut -c1-8)
 else
-    SESSION_HASH=$(printf '%s' "${CLAUDE_SESSION_ID:-unknown}" | shasum -a 256 | cut -c1-8)
+    SESSION_HASH=$(printf '%s' "${CLAUDE_CODE_SESSION_ID:-unknown}" | shasum -a 256 | cut -c1-8)
 fi
 # fallback if still empty (e.g., both commands absent)
 SESSION_HASH="${SESSION_HASH:-unknown}"

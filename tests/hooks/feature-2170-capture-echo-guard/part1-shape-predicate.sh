@@ -68,7 +68,7 @@ TN-7|X=$(a); echo hello|allow
 TN-8|SKIP_DISPATCH=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --signals-file "<PLANS_DIR>/$SESSION_ID-complexity-signals.txt" --target outline --advance --so-c1 <true<PIPE>false> --so-c2 <true<PIPE>false> <PIPE> tail -1 <PIPE> cut -d= -f2-)|allow
 TN-9|SKIP_DISPATCH=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --signals-file "<PLANS_DIR>/$SESSION_ID-complexity-signals.txt" --target outline --advance --so-c1 true --so-c2 false <PIPE> tail -1 <PIPE> cut -d= -f2-)|allow
 TN-10|PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"|allow
-TN-11|PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \<NL>              <PIPE><PIPE> printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")<NL>SESSION_ID="${CLAUDE_SESSION_ID:-}"<NL>INTENT_MD="$PLANS_DIR/${SESSION_ID}-intent.md"|allow
+TN-11|PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \<NL>              <PIPE><PIPE> printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")<NL>SESSION_ID="${CLAUDE_CODE_SESSION_ID:-}"<NL>INTENT_MD="$PLANS_DIR/${SESSION_ID}-intent.md"|allow
 TN-12|X=$(a); echo "$X" > /tmp/f|allow
 TN-13|X=$(a) <PIPE> echo "$X"|allow
 TN-14|echo "$(cmd)"|allow

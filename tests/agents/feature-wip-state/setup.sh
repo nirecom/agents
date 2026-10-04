@@ -1,21 +1,13 @@
 
 # ---------------------------------------------------------------------------
-# Inline gh mock factory — written per test so each test gets its own log
-# and env vars. Mock supports:
-#   - project item-edit (records args; can fail per GH_MOCK_FAIL value)
-#   - project item-add (returns GH_MOCK_ITEM_ADD_ID or fails)
-#   - issue view --json url (URL resolve)
-#   - api graphql (returns mock fieldValues / item id / setup metadata)
-#
-# Env knobs:
-#   GH_MOCK_PROJECT_ITEM_ID    item id returned by resolve_item_id graphql query
-#   GH_MOCK_ITEM_ADD_ID        item id returned by item-add (default: PVTI_added)
-#   GH_MOCK_STATUS             status name returned by check graphql (e.g. "In Progress")
-#   GH_MOCK_FINGERPRINT        fingerprint text returned by check graphql
-#   GH_MOCK_FAIL               one of: item-edit-status|item-edit-fp|graphql|item-add|issue-view
-#   GH_MOCK_ISSUE_URL          URL returned by `gh issue view --json url`
-#   GH_MOCK_PAGINATED_PAGES    if "1", check returns two graphql JSON pages (status on p1, fp on p2)
-#   GH_MOCK_ARGS_LOG           append-only call log (one line per gh invocation)
+# Inline gh mock factory (per test: own log + env). Mocks project item-edit/item-add,
+# issue view --json url, and api graphql. Env knobs:
+#   GH_MOCK_PROJECT_ITEM_ID / GH_MOCK_ITEM_ADD_ID (default PVTI_added)  item ids
+#   GH_MOCK_STATUS / GH_MOCK_FINGERPRINT   values returned by check graphql
+#   GH_MOCK_FAIL   one of: item-edit-status|item-edit-fp|graphql|item-add|issue-view
+#   GH_MOCK_ISSUE_URL   URL returned by `gh issue view --json url`
+#   GH_MOCK_PAGINATED_PAGES   "1" = check returns two graphql pages (status p1, fp p2)
+#   GH_MOCK_ARGS_LOG   append-only call log (one line per gh invocation)
 # ---------------------------------------------------------------------------
 
 TMP=""
@@ -206,21 +198,21 @@ MOCK_EOF
     # directly (NOT via the workflow-plans-dir bin), so we must export it here.
     export WORKFLOW_PLANS_DIR="$TMP/wf-plans"
     mkdir -p "$WORKFLOW_PLANS_DIR/cache"
+    # resolve-project.sh's project-resolve.tsv cache lives under CLAUDE_WORKFLOW_DIR
+    # (default: the real ~/.claude/projects/workflow); dual-pin it to the fixture.
+    export CLAUDE_WORKFLOW_DIR="$TMP/wf-state"
+    mkdir -p "$CLAUDE_WORKFLOW_DIR/cache"
     cat > "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" <<EOF
 #!/bin/bash
 echo "$PLANS_DIR"
 EOF
     chmod +x "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
 
-    # CLAUDE_ENV_FILE with a deterministic session id.
-    # Unset the higher-precedence ambient session-id env vars (Priority 2 in the
-    # resolver chain) so the fixture's CLAUDE_ENV_FILE value (Priority 3) wins.
-    # Without this, a runner that has CLAUDE_CODE_SESSION_ID exported (e.g. inside
-    # a live Claude Code session) leaks its own sid into the helper, breaking any
-    # test that expects the "test-sid-fixture" fingerprint.
-    unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID 2>/dev/null || true
-    export CLAUDE_ENV_FILE="$TMP/claude-env"
-    echo "CLAUDE_SESSION_ID=test-sid-fixture" > "$CLAUDE_ENV_FILE"
+    # Deterministic session id via the CLAUDE_CODE_SESSION_ID env tier.
+    # Overriding it also stops a runner inside a live Claude Code session from
+    # leaking its own sid into the helper, which would break any test that
+    # expects the "test-sid-fixture" fingerprint.
+    export CLAUDE_CODE_SESSION_ID="test-sid-fixture"
 
     # WIP_STATE_* env vars (preflight-required).
     export WIP_STATE_STATUS_FIELD_ID="PVTSSF_status"
@@ -249,7 +241,7 @@ teardown_mock() {
           GH_MOCK_LINKED_COUNT GH_MOCK_RESOLVED_PROJECT_ID \
           GH_MOCK_RESOLVED_PROJECT_NUM GH_MOCK_RESOLVED_OWNER \
           GH_MOCK_RESOLVED_CONTENT_DATE_ID GH_MOCK_OWNER_REPO 2>/dev/null || true
-    unset AGENTS_CONFIG_DIR CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID PLANS_DIR WORKFLOW_PLANS_DIR \
+    unset AGENTS_CONFIG_DIR CLAUDE_CODE_SESSION_ID PLANS_DIR WORKFLOW_PLANS_DIR \
           WIP_STATE_STATUS_FIELD_ID WIP_STATE_IN_PROGRESS_OPTION_ID \
           WIP_STATE_DONE_OPTION_ID WIP_STATE_TODO_OPTION_ID \
           WIP_STATE_FINGERPRINT_FIELD_ID \

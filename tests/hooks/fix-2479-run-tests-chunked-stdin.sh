@@ -18,7 +18,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 TMPD="$(make_tmp)"
 trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 mkdir -p "$TMPD/transcripts"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPD/transcripts"
 

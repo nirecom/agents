@@ -147,7 +147,7 @@ cat > "$REPO/.claude/settings.json" <<SETTINGS_EOF
 }
 SETTINGS_EOF
 
-unset CLAUDECODE CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDECODE CLAUDE_CODE_SESSION_ID
 # Normalized, not the raw mktemp spelling: Node on Windows reads an MSYS
 # `/c/...` path as relative to the current drive root, so the hook would write
 # its marker into a directory this test never looks at and the run would fail

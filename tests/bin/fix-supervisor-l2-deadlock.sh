@@ -85,7 +85,7 @@ run_c1() {
     printf 'Session-ID: %s\n' "$wsid" > "$workdir/WORKTREE_NOTES.md"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="$ccuuid" \
+        CLAUDE_CODE_SESSION_ID="$ccuuid" \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
@@ -112,7 +112,7 @@ run_c2() {
     printf 'intent\n' > "$tmp/${wsid}-intent.md"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="$ccuuid" \
+        CLAUDE_CODE_SESSION_ID="$ccuuid" \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
@@ -135,7 +135,7 @@ run_c3() {
     # NO WORKTREE_NOTES.md, NO context.md in plans-dir.
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="$ccuuid" \
+        CLAUDE_CODE_SESSION_ID="$ccuuid" \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
@@ -159,7 +159,7 @@ run_c4() {
     printf 'Session-ID: %s\n' "$wsid" > "$workdir/WORKTREE_NOTES.md"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="$ccuuid" \
+        CLAUDE_CODE_SESSION_ID="$ccuuid" \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
@@ -179,15 +179,10 @@ run_c4() {
 # Helper: invoke resolveWorkflowSessionId from CWD with WORKFLOW_PLANS_DIR set,
 # returning the resolved sid (or empty string on null).
 call_resolve_wsid() {
-    local tmp="$1" cwd="$2" env_file="${3:-}"
-    local extra=""
-    if [ -n "$env_file" ]; then
-        extra="CLAUDE_ENV_FILE='$env_file'"
-    fi
+    local tmp="$1" cwd="$2"
     (
         cd "$cwd" && \
-        unset CLAUDE_SESSION_ID && \
-        if [ -n "$env_file" ]; then export CLAUDE_ENV_FILE="$env_file"; else unset CLAUDE_ENV_FILE; fi && \
+        unset CLAUDE_CODE_SESSION_ID && \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
@@ -254,11 +249,10 @@ run_c7() {
 }
 
 # Case 8: multiple sessions in 2-day window → CC UUID bucket-sort selects correct one.
-# When CLAUDE_ENV_FILE points to today's wsid, that one wins over yesterday's.
 # (The bucket-sort means same-day entries beat older-day entries on tie-break.)
 run_c8() {
     require_source "$RESOLVE_WSID" "C8: multiple sessions → bucket-sort selects today" || return
-    local tmp workdir TODAY YESTERDAY today_wsid yest_wsid env_file out
+    local tmp workdir TODAY YESTERDAY today_wsid yest_wsid out
     tmp="$(mktemp -d)"
     workdir="$tmp/work"; mkdir -p "$workdir"
     TODAY="$(today_str)"
@@ -294,9 +288,9 @@ for (const f of ['${yest_wsid}-context.md','${yest_wsid}-intent.md','${yest_wsid
     rm -rf "$tmp"
 }
 
-# Case 9: CLAUDE_ENV_FILE absent → mtime fallback works (today picked)
+# Case 9: no env session id → mtime fallback works (today picked)
 run_c9() {
-    require_source "$RESOLVE_WSID" "C9: CLAUDE_ENV_FILE absent → mtime fallback" || return
+    require_source "$RESOLVE_WSID" "C9: no env session id → mtime fallback" || return
     local tmp workdir TODAY YESTERDAY today_wsid yest_wsid out
     tmp="$(mktemp -d)"
     workdir="$tmp/work"; mkdir -p "$workdir"
@@ -313,9 +307,9 @@ run_c9() {
     # Today should win over yesterday (either via bucket sort or by mtime —
     # today is newer because it's written last in script execution).
     if [ "$out" = "$today_wsid" ]; then
-        pass "C9: CLAUDE_ENV_FILE absent → mtime fallback"
+        pass "C9: no env session id → mtime fallback"
     else
-        fail "C9: CLAUDE_ENV_FILE absent → mtime fallback (got: '$out', expected: '$today_wsid')"
+        fail "C9: no env session id → mtime fallback (got: '$out', expected: '$today_wsid')"
     fi
     rm -rf "$tmp"
 }
@@ -466,7 +460,7 @@ run_c15() {
     workdir="$tmp/work"; mkdir -p "$workdir"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="c15-ccuuid" \
+        CLAUDE_CODE_SESSION_ID="c15-ccuuid" \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity bogus --detail "d" \
             --reporter "r" >/dev/null 2>&1
@@ -490,7 +484,7 @@ run_c16() {
     workdir="$tmp/work"; mkdir -p "$workdir"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="c16-ccuuid" \
+        CLAUDE_CODE_SESSION_ID="c16-ccuuid" \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
@@ -540,7 +534,7 @@ run_c18() {
     # the CLI should NOT create any state file matching the injected literal.
     out=$(
         cd "$workdir" && \
-        unset CLAUDE_SESSION_ID && \
+        unset CLAUDE_CODE_SESSION_ID && \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" --session-id "$injected" 2>&1

@@ -23,8 +23,7 @@ reflects every terminal action.
 Run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` once as one bare command — never assigned to a variable and echoed back. Canonical: `skills/_shared/resolve-plans-dir.md`.
 
 Substitute the absolute path it prints for `<PLANS_DIR>` in every subsequent step.
-Resolve `<session-id>` from `$CLAUDE_ENV_FILE` (`CLAUDE_SESSION_ID`) with the
-fallback chain used by `--from-session`. If unresolvable, abort:
+Resolve `<session-id>` from `$CLAUDE_CODE_SESSION_ID` with the fallback chain used by `--from-session`. If unresolvable, abort:
 `session id unresolved — cannot render Final Report`. `<CONTROL_DIR>` is the stdout of `node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session <session-id> --for-write` (non-zero → abort).
 
 `<PLANS_DIR>`, `<CONTROL_DIR>` and `<session-id>` are **LLM-substituted literals** — shell variables
@@ -133,7 +132,7 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
 ## SC-4+SC-5 — Retrospective scan + Pre-Final-Report gate
 
 Dispatch the `session-close-gate` worker per `skills/_shared/worker-dispatch.md`. Payload:
-- `session_id`: current session ID (resolved from `$CLAUDE_ENV_FILE` / fallback chain per SC-0)
+- `session_id`: current session ID (resolved per SC-0)
 - `plans_dir`: the `PLANS_DIR` from WD-1 — do NOT reuse the `<PLANS_DIR>` literal from SC-0, which was resolved with a fallback
 - `artifact_dir`: same value as `plans_dir`
 - omit `outcome_json_path` — the dispatcher derives it in the session control directory

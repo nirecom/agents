@@ -23,7 +23,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Reuse across steps.
 
 MOP-0. **Surface premise contradictions** from Research artifacts.
-   MOP-0a. Determine session-id from `CLAUDE_SESSION_ID` env (MOP-1 has not run yet — this lookup precedes intent-file resolution).
+   MOP-0a. Determine session-id from `CLAUDE_CODE_SESSION_ID` env (MOP-1 has not run yet — this lookup precedes intent-file resolution).
        - `state.steps.research.status === "skipped"` → skip to MOP-0d.
        - One/both `<session-id>-survey-{code,history}.md` missing AND research not skipped → warn once in chat ("Research artifacts incomplete — proceeding without full premise verification") and continue to MOP-0d. Do not block.
    MOP-0b. Read `## Verified Claims` from each existing artifact; collect items with `verdict: contradicted`.

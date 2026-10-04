@@ -58,7 +58,7 @@ CFG_ON_N="$(to_node_path "$CFG_ON")"
 # stub directory and a real installed codegraph answers instead (M19b says the same).
 BIN="$TMPDIR_BASE/bin"; mkdir -p "$BIN"
 
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 # The hook's config gate mirrors bin/codegraph-lifecycle.js's codegraphEnabled():
 # a real environment variable outranks the .env file. Without this unset, an
 # ambient CODEGRAPH already set in the invoking shell would leak into every
@@ -182,7 +182,7 @@ run_hook() {
     local payload="$1" dir="$2"; shift 2
     (
         cd "$dir" || exit 99
-        printf '%s' "$payload" | run_with_timeout 15 env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        printf '%s' "$payload" | run_with_timeout 15 env -u CLAUDE_CODE_SESSION_ID \
             "$@" \
             AGENTS_CONFIG_DIR="$CFG_ON_N" \
             PATH="$BIN:$PATH" \

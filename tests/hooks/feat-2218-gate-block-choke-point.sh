@@ -37,7 +37,7 @@ require_module() {
 run_gate() {
     local tmp="$1" sid="$2" cmd="$3"
     printf '{"session_id":"%s","tool_name":"Bash","tool_input":{"command":"%s","cwd":"%s"}}' "$sid" "$cmd" "$(node_path "$tmp")" \
-        | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=off \
+        | env -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=off \
             CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 60 node "$GATE" 2>/dev/null
@@ -45,7 +45,7 @@ run_gate() {
 
 seed_state() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -106,7 +106,7 @@ run_C2() {
     run_gate "$tmp" "two-sid" "gh pr merge 77 --squash" >/dev/null
     n="$(count_entries "$tmp" "two-sid")"
     [ "$n" -eq 2 ] || problems="$problems want-2-entries-got:$n"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -181,7 +181,7 @@ run_C5() {
     local tmp out rc problems files
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
-    out=$(printf 'this is not json' | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=off \
+    out=$(printf 'this is not json' | env -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=off \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$GATE" 2>/dev/null)

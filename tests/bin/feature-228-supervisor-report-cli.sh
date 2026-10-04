@@ -192,7 +192,7 @@ run_r8() {
     # isolated_workdir has no WORKTREE_NOTES.md — prevents wsid Priority 1 resolution
     (
         cd "$isolated_workdir" && \
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+        unset CLAUDE_CODE_SESSION_ID && \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
             --categories workflow --severity warning --detail "d" --reporter "r" >/dev/null 2>&1
     )

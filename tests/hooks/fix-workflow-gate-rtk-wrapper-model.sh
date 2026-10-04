@@ -131,7 +131,7 @@ wg_run() {
     local payload out rc=0
     payload="$(node -e "process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:'Bash',tool_input:{command:process.argv[2],cwd:process.argv[3]}}))" "$WG_SID" "$1" "$WG_REPO")"
     out="$(cd "$WG_REPO" && printf '%s' "$payload" | run_with_timeout 30 env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE -u WORKFLOW_OFF \
+         -u CLAUDE_CODE_SESSION_ID -u WORKFLOW_OFF \
         "AGENTS_CONFIG_DIR=$WG_REPO" "CLAUDE_PROJECT_DIR=$WG_REPO" \
         node "$GATE_HOOK" 2>/dev/null)" || rc=$?
     out="$(printf '%s' "$out" | tr -d '\r\n')"

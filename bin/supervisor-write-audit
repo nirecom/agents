@@ -58,7 +58,7 @@ const SID_SOURCES = [
   { source: "explicit", get: () => args["session-id"] },
   { source: "wsid",     get: () => process.env.WORKFLOW_SESSION_ID },
   // session-id-ssot: waived (audit id chain) — scan-free by design, see the NOTE above
-  { source: "ccuuid",   get: () => process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID },
+  { source: "ccuuid",   get: () => process.env.CLAUDE_CODE_SESSION_ID },
 ];
 let rawSid, rawSidSource;
 for (const src of SID_SOURCES) {
@@ -116,7 +116,7 @@ const MIRROR_RESOLVERS = {
   explicit: () => null,
   wsid: () => {
     // session-id-ssot: waived (mirror resolver) — env checked before the resolver below
-    const envCc = process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID;
+    const envCc = process.env.CLAUDE_CODE_SESSION_ID;
     if (envCc && envCc !== rawSid && SESSION_ID_RE.test(envCc)) return envCc;
     try {
       const ccId = resolveSessionId({ sessionIdFromInput: null, transcriptPath: null });

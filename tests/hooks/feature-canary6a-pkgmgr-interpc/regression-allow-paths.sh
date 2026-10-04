@@ -2,20 +2,11 @@
 # tests/hooks/feature-canary6a-pkgmgr-interpc/regression-allow-paths.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/main-worktree-allows/new-item.js, hooks/enforce-worktree/main-worktree-allows/worktree-command.js, hooks/lib/claude-scratchpad-base.js
 # Tags: scope:issue-specific, pkg-mgr, interpreter-c, canary-6a, enforce-worktree, regression, hook-registration, pwsh-not-required
-#
-# PR #1459 regression guard for the #1411 pkg-mgr / interpreter-c IR migration.
-# PR #1459 restored three sanctioned main-worktree allow paths that a prior IR
-# migration (#1420) had regressed: scratchpad redirects, New-Item -ItemType
-# Directory (external dir), and git worktree remove/prune. This part asserts those
-# allow paths STILL work after the pkg-mgr / interpreter-c retire — i.e. adding the
-# new predicates to the fast-allow gate must not re-block them. If a case goes RED,
-# the pkg-mgr/interpreter-c wiring over-blocks a sanctioned command.
-#
+# PR #1459 guard (#1411): sanctioned main-worktree allow paths (scratchpad redirect, New-Item dir, git worktree remove/prune) STILL allow after the pkg-mgr / interpreter-c retire; RED = over-block.
 # L3 gap (what this test does NOT catch):
 # - Real enforce-worktree hook invocation via the live Claude Code PreToolUse chain (these L2 cases drive node enforce-worktree.js via stdin JSON)
 # - Session-scoped worktree path comparison in a real Claude session
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -51,11 +42,11 @@ _make_payload() { run_with_timeout 30 node -e "var o={tool_name:'Bash',tool_inpu
 run_hook() {
   local cmd="$1"; shift; local p; p="$(_make_payload "$cmd")"
   ( cd "$MAIN_REPO" || exit 1; for _kv in "$@"; do export "$_kv"; done
-    ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" CLAUDE_SESSION_ID=canary6a MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )
+    ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )
 }
 run_nongit() {
   local cmd="$1"; local p; p="$(_make_payload "$cmd")"
-  ( cd "$NONGIT_CWD" && ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$NONGIT_CWD" CLAUDE_SESSION_ID=canary6a MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )
+  ( cd "$NONGIT_CWD" && ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$NONGIT_CWD" MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )
 }
 is_allow() { [ "$1" = "{}" ]; }
 

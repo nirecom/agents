@@ -17,7 +17,7 @@ AGENTS_DIR="$(cd "$DIR/../../.." && pwd)"
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
 # Fixture isolation (rules/test/fixture-isolation.md): don't pass the parent session id to the child node.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 npath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 IR_JS="$(npath "$AGENTS_DIR/hooks/lib/command-ir.js")"

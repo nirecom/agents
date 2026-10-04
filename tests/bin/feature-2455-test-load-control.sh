@@ -50,7 +50,7 @@ export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 # Slots and the corpus cache must never reach the developer's ~/.claude/run-all, and
 # an inherited lane control would silently change which path a case exercises.
 export RUN_ALL_CACHE_DIR="$TMPDIR_BASE/run-all-cache"

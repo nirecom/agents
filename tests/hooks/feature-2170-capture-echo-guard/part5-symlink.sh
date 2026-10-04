@@ -73,13 +73,13 @@ mk_link() {
     node "$HERE/mk-symlink.js" "$1" "$2" file
 }
 
-inv_path() { env -u CLAUDE_SESSION_ID SCRATCHPAD="$SP" node "$DRIVER" --invoke "$1" 2>&1; }
-inv_sess() { env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESS" node "$DRIVER" --invoke "$1" 2>&1; }
+inv_path() { env SCRATCHPAD="$SP" node "$DRIVER" --invoke "$1" 2>&1; }
+inv_sess() { env -u SCRATCHPAD CLAUDE_CODE_SESSION_ID="$SESS" node "$DRIVER" --invoke "$1" 2>&1; }
 lexical()  { node "$DRIVER" --lexical-under "$SP" "$1" 2>&1; }
 # --invoke-exec ACTS ON an allow verdict: $2 is really run. Every marker assertion below
 # uses these, so "absent" means the predicate denied, not merely that nothing ever ran.
-xinv_path() { env -u CLAUDE_SESSION_ID SCRATCHPAD="$SP" node "$DRIVER" --invoke-exec "$1" "$2" 2>&1; }
-xinv_sess() { env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESS" node "$DRIVER" --invoke-exec "$1" "$2" 2>&1; }
+xinv_path() { env SCRATCHPAD="$SP" node "$DRIVER" --invoke-exec "$1" "$2" 2>&1; }
+xinv_sess() { env -u SCRATCHPAD CLAUDE_CODE_SESSION_ID="$SESS" node "$DRIVER" --invoke-exec "$1" "$2" 2>&1; }
 
 # --- SP-21: the executor itself works (control for every marker assertion) ----
 # Without this row an "absent" marker could equally mean a broken driver. A genuinely
@@ -108,7 +108,7 @@ else
     SKIP=$((SKIP + 3))
 fi
 
-# --- SP-23: same escape via the CLAUDE_SESSION_ID (session) branch -----------
+# --- SP-23: same escape via the CLAUDE_CODE_SESSION_ID (session) branch ------
 # Pins the realpath fix on BOTH branches (CPR-ORTH), not just the path branch.
 LINK2="$SP/evilink2.sh"
 if mk_link "$EXT/evil.sh" "$LINK2"; then
@@ -169,12 +169,12 @@ mkdir -p "$OUTROOT" "$BASE/$SLUG/$SESS3" "$REALSP"
 printf 'echo hi\nmkdir -p %s\n' "$MARK_ROOT" >"$OUTROOT/probe.sh"
 printf 'echo hi\n' >"$REALSP/probe.sh"
 LINKROOT="$BASE/$SLUG/$SESS3/scratchpad"
-inv_path_root() { env -u CLAUDE_SESSION_ID SCRATCHPAD="$2" node "$DRIVER" --invoke "$1" 2>&1; }
-inv_sess_root() { env -u SCRATCHPAD CLAUDE_SESSION_ID="$2" node "$DRIVER" --invoke "$1" 2>&1; }
+inv_path_root() { env SCRATCHPAD="$2" node "$DRIVER" --invoke "$1" 2>&1; }
+inv_sess_root() { env -u SCRATCHPAD CLAUDE_CODE_SESSION_ID="$2" node "$DRIVER" --invoke "$1" 2>&1; }
 # Executing variants, for the same reason as xinv_path/xinv_sess: $3 is the script an
 # allow verdict would really run.
-xinv_path_root() { env -u CLAUDE_SESSION_ID SCRATCHPAD="$2" node "$DRIVER" --invoke-exec "$1" "$3" 2>&1; }
-xinv_sess_root() { env -u SCRATCHPAD CLAUDE_SESSION_ID="$2" node "$DRIVER" --invoke-exec "$1" "$3" 2>&1; }
+xinv_path_root() { env SCRATCHPAD="$2" node "$DRIVER" --invoke-exec "$1" "$3" 2>&1; }
+xinv_sess_root() { env -u SCRATCHPAD CLAUDE_CODE_SESSION_ID="$2" node "$DRIVER" --invoke-exec "$1" "$3" 2>&1; }
 if node "$HERE/mk-symlink.js" "$OUTROOT" "$LINKROOT" dir; then
     # DANGEROUS direction, now correctly denied: the root resolver in
     # hooks/lib/claude-scratchpad-base.js realpaths SCRATCHPAD before applying
@@ -229,7 +229,7 @@ if mk_link "$SPB/other.sh" "$LINK5"; then
     # unlinked script in session A's own root is allowed too (SP-21a already, repeated
     # here on the session branch so both branches carry an allow).
     assert_eq "SP-27e-allow-same-file-from-owning-session" "allow" \
-        "$(env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESSB" node "$DRIVER" --invoke "bash $SPB/other.sh" 2>&1)"
+        "$(env -u SCRATCHPAD CLAUDE_CODE_SESSION_ID="$SESSB" node "$DRIVER" --invoke "bash $SPB/other.sh" 2>&1)"
     assert_eq "SP-27f-allow-own-session-script" "allow" "$(inv_sess "bash $SP/sub/real.sh")"
 else
     # SKIPPED: SP-27 (6 cases) — same platform condition as SP-22.

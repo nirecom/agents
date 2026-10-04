@@ -24,7 +24,7 @@ sb_run_guard() {
     local payload="$1" wfdir="$2" repo_scope="$3"
     SB_RC=0
     SB_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo_scope" \

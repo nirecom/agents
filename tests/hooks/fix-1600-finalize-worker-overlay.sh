@@ -94,7 +94,7 @@ run_guard() {
     # Remaining args are extra env vars (KEY=VAL form).
     GUARD_RC=0
     GUARD_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env \
         -C "$main_wt" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
@@ -116,7 +116,7 @@ if ! env -C "$TMPDIR_BASE" true 2>/dev/null; then
         local main_wt="$1"; shift
         GUARD_RC=0
         GUARD_OUT="$(cd "$main_wt" && printf '%s' "$payload" | run_with_timeout 30 \
-            env -u CLAUDE_ENV_FILE \
+            env \
             "ENFORCE_WORKTREE=on" \
             "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
             "$@" \

@@ -42,7 +42,7 @@ if (require.main === module) {
   const rawSid = process.argv[3] || "";
   const resolvedSid = rawSid.trim().length > 0 ? rawSid
     // session-id-ssot: waived (session-scoped marker file) — a misresolved id deletes another session's marker
-    : (process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID || "");
+    : (process.env.CLAUDE_CODE_SESSION_ID || "");
 
   if (!resolvedSid) {
     process.stderr.write("cleanup-marker: sid unresolved: pass positional arg or set CLAUDE_CODE_SESSION_ID\n");

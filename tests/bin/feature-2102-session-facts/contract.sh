@@ -29,7 +29,7 @@ WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"; export CLAUDE_WORKFLOW_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 AGENTS_DIR="$REPO_ROOT"
 # shellcheck source=../../lib/harness.sh
@@ -148,10 +148,10 @@ case_end
 
 echo ""
 case_begin "C2u-uuid-session-accepted" "bin/workflow/read-session-facts"
-echo "=== C2u: a UUID-shaped --session id (the real CLAUDE_SESSION_ID shape) is accepted ==="
+echo "=== C2u: a UUID-shaped --session id (the real CLAUDE_CODE_SESSION_ID shape) is accepted ==="
 # Every other fixture in this file is pure alphanumeric ("c2", "c3nostate", ...); a
 # regression narrowing SESSION_ID_RE to reject hyphens would leave all of them green
-# while rejecting 100% of real sessions -- CLAUDE_SESSION_ID is always a UUID. This is
+# while rejecting 100% of real sessions -- CLAUDE_CODE_SESSION_ID is always a UUID. This is
 # the accept-side counterpart of security.sh S1's reject table (CPR-ORTH).
 # (UUID_SID and its state fixture are set up by the batched fixture node above C1)
 run_facts "$CFG_FULL" --session "$UUID_SID"

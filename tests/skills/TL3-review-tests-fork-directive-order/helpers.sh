@@ -48,7 +48,6 @@ rfdo_run_claude() {
     (
         cd "$repo" || exit 90
         unset CLAUDECODE
-        unset CLAUDE_SESSION_ID
         unset CLAUDE_CODE_SESSION_ID
         run_with_timeout 180 claude -p "$prompt" \
             --session-id "$sid" \

@@ -47,7 +47,7 @@ trap 'rm -rf "$WORK"' EXIT
 export CLAUDE_WORKFLOW_DIR="$WORK/workflow"
 export WORKFLOW_PLANS_DIR="$WORK/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 MOCKDIR="$WORK/bin"; mkdir -p "$MOCKDIR"
 cat > "$MOCKDIR/codex" <<'MOCK'

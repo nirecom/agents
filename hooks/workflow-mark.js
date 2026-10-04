@@ -4,7 +4,7 @@
 // with ` && ` (each part evaluated independently). Families: MARK_STEP, RESET_FROM,
 // USER_VERIFIED, {RESEARCH,OUTLINE,DETAIL,WRITE_TESTS}_NOT_NEEDED, and
 // ENFORCE_{WORKTREE,WORKFLOW}_{OFF,ON} (session-scoped bypass; reasons mandatory;
-// works around CLAUDE_ENV_FILE propagation bug #27987). Dispatch is split across
+// reads session_id from hook stdin, not from the Bash env). Dispatch is split across
 // hooks/workflow-mark/ sibling modules; this file holds the CLI bootstrap (stdin
 // parse, merge-class push detection, sentinel decomposition) + the dispatch loop.
 

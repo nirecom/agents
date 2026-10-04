@@ -11,7 +11,7 @@ NONGIT_CWD="$TMP/b23-nongit"
 mkdir -p "$NONGIT_CWD"
 B23_ERR="$TMP/b23.err"
 STDOUT_OUT=$(bash -c "
-    unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
+    unset CLAUDE_CODE_SESSION_ID
     export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
     export AGENTS_CONFIG_DIR='$AGENTS_DIR'
     cd '$NONGIT_CWD'
@@ -44,7 +44,7 @@ printf 'module.exports = { resolveSessionId() { throw new Error("boom"); } };\n'
     > "$B23B/hooks/workflow-state/index.js"
 B23B_ERR="$TMP/b23b.err"
 B23B_OUT=$(bash -c "
-    unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
+    unset CLAUDE_CODE_SESSION_ID
     export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
     export AGENTS_CONFIG_DIR='$AGENTS_DIR'
     bash '$B23B/bin/resolve-session-id'
@@ -71,7 +71,7 @@ if [ ! -f "$CODEX_CORE" ]; then
     fail "B-24a: $CODEX_CORE not found"
 else
     OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
+        unset CLAUDE_CODE_SESSION_ID
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
         export AGENTS_CONFIG_DIR='$AGENTS_DIR'
         export NO_LOG=true
@@ -91,7 +91,7 @@ if [ ! -f "$GEMINI_CORE" ]; then
     fail "B-24b: $GEMINI_CORE not found"
 else
     OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
+        unset CLAUDE_CODE_SESSION_ID
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
         export AGENTS_CONFIG_DIR='$AGENTS_DIR'
         export NO_LOG=true
@@ -110,7 +110,7 @@ teardown
 
 # ===========================================================================
 # B-25: driver wip-check phase graceful degradation when SID is UNRESOLVABLE.
-# When all SID sources are absent (no P2/P3/P4 env, empty transcript base,
+# When all SID sources are absent (no CLAUDE_CODE_SESSION_ID env, empty transcript base,
 # non-git CWD), resolve-session-id returns rc=2 → driver falls back to
 # spawning resolve-session-id but must not abort. The driver should proceed
 # without --session-id in the wip-state.sh call.
@@ -188,7 +188,7 @@ FEOF
     ORIG_PATH_B25="$PATH"
     export PATH="$B25_MOCKBIN:$PATH"
     B25_OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+        unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
         export WORKFLOW_PLANS_DIR='$B25_PLANS'
         export AGENTS_CONFIG_DIR='$B25_CFG'
         export CLAUDE_TRANSCRIPT_BASE_DIR='$B25_TMP/transcripts'
@@ -209,24 +209,10 @@ FEOF
 fi
 
 # ===========================================================================
-# B-32: P3 — CLAUDE_SESSION_ID env var when P1 and P2 are unset.
-# ===========================================================================
-setup
-NONGIT_CWD="$TMP/b32-nongit"
-mkdir -p "$NONGIT_CWD"
-run_bridge "$NONGIT_CWD" "CLAUDE_SESSION_ID=envvar-sid-b32"
-if [ "$BRIDGE_RC" -eq 0 ] && [ "$BRIDGE_OUT" = "envvar-sid-b32" ]; then
-    pass "B-32: bridge P3 falls back to CLAUDE_SESSION_ID env var"
-else
-    fail "B-32: rc=$BRIDGE_RC out='$BRIDGE_OUT' expected='envvar-sid-b32'"
-fi
-teardown
-
-# ===========================================================================
-# B-34: invalid CLAUDE_CODE_SESSION_ID falls through to P3 (table-driven).
-# P2 gate: value must be non-empty and match ^[A-Za-z0-9_-]+$ after trim.
+# B-34: invalid CLAUDE_CODE_SESSION_ID is never returned (table-driven).
+# Env gate: value must be non-empty and match ^[A-Za-z0-9_-]+$ after trim.
 # Empty / whitespace-only / charset-invalid values must NOT be returned —
-# the chain falls to CLAUDE_SESSION_ID (P3) which holds a valid fallback.
+# with no other supplied tier the bridge reports unresolvable (rc=2, empty stdout).
 # ===========================================================================
 setup
 NONGIT_CWD="$TMP/b34-nongit"
@@ -237,11 +223,11 @@ while IFS='|' read -r row_name p2_val; do
     p2_val="${p2_val# }"
     # <spaces> placeholder — literal trailing whitespace in a heredoc is fragile.
     [ "$p2_val" = "<spaces>" ] && p2_val="   "
-    run_bridge "$NONGIT_CWD" "CLAUDE_CODE_SESSION_ID=$p2_val" "CLAUDE_SESSION_ID=fallback-sid-b34"
-    if [ "$BRIDGE_RC" -eq 0 ] && [ "$BRIDGE_OUT" = "fallback-sid-b34" ]; then
-        pass "B-34/$row_name: invalid P2 value falls through to P3 (fallback-sid-b34)"
+    run_bridge "$NONGIT_CWD" "CLAUDE_CODE_SESSION_ID=$p2_val"
+    if [ "$BRIDGE_RC" -eq 2 ] && [ -z "$BRIDGE_OUT" ]; then
+        pass "B-34/$row_name: invalid CLAUDE_CODE_SESSION_ID is rejected (rc=2, no output)"
     else
-        fail "B-34/$row_name: rc=$BRIDGE_RC out='$BRIDGE_OUT' expected='fallback-sid-b34' (P2 value must not leak)"
+        fail "B-34/$row_name: rc=$BRIDGE_RC out='$BRIDGE_OUT' expected rc=2 and empty output (invalid value must not leak)"
     fi
 done <<'TABLE'
 empty           |

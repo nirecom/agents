@@ -121,9 +121,7 @@ run_select() {
     (
         cd "$S10REPO" || exit 1
         SESSION_ID="" \
-        CLAUDE_SESSION_ID="" \
         CLAUDE_CODE_SESSION_ID="feature-2075-nostate-sid" \
-        CLAUDE_ENV_FILE="" \
         AGENTS_CONFIG_DIR="$AGENTS_ROOT" \
             bash "$RUN_TIMEOUT" 60 bash "$SELECT_SH" "$@"
     ) >"$outf" 2>"$errf"

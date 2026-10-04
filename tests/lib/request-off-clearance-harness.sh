@@ -116,7 +116,7 @@ run_req() {
     # back in to exactly the ones it is testing.
     # AGENTS_CONFIG_DIR is unset first as well: it is exported by the developer's
     # live session, so "do not pass it" is not the same as "it is not there".
-    envargs=(-u SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u WORKTREE_PATH
+    envargs=(-u SESSION_ID -u CLAUDE_CODE_SESSION_ID -u WORKTREE_PATH
              -u AGENTS_CONFIG_DIR
              "PATH=$stubbin:$OFFCLR_CLEAN_PATH"
              "WORKFLOW_PLANS_DIR=$tn" "CLAUDE_WORKFLOW_DIR=$tn")

@@ -21,7 +21,7 @@ than blocks.
 |---|---|
 | tool_name not in {Write, Edit, MultiEdit} | approve |
 | file_path has no `tests/` directory component | approve |
-| session_id unresolvable (no CLAUDE_ENV_FILE) | approve (fail-open) |
+| session_id unresolvable | approve (fail-open) |
 | workflow state missing or unreadable | approve (fail-open) |
 | `steps.write_tests` key absent | approve (fail-open) |
 | `write_tests.status` != "pending" (in_progress / complete / skipped) | approve |

@@ -1,18 +1,12 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, wf-meta, scope:common
-#
 # L2 test of the workflow next-step's state-transition resolver and --list renderer.
-# Source under test does NOT yet exist (TDD phase A — RED state expected).
-#
-# Dispatcher: shared helpers/fixtures live in bin-workflow-next-step/common.sh;
-# case groups live in transitions.sh, list-render.sh, wf-meta-evidence.sh.
-#
-# L3 gap (what this test does NOT catch):
-# - Real CLAUDE_SESSION_ID environment propagation from a live claude -p session
-# - Actual workflow-mark.js sentinel dispatch triggering next-step consumption
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
+# Dispatcher: helpers in bin-workflow-next-step/common.sh; cases in transitions.sh,
+# list-render.sh, wf-meta-evidence.sh.
+# L3 gap: real CLAUDE_CODE_SESSION_ID propagation from a live claude -p session, and
+# workflow-mark.js sentinel dispatch triggering next-step consumption. Mitigation:
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh (skill-orchestration).
 
 set -euo pipefail
 

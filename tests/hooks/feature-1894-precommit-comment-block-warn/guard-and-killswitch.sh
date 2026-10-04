@@ -159,7 +159,7 @@ p05_ambient_cannot_disable() {
     _pc_env "$repo" 0 "COMMENT_BLOCK_ENFORCE=on"
     RC=0
     OUT="$( (cd "$repo" \
-        && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID \
+        && unset CLAUDE_CODE_SESSION_ID \
         && run_with_timeout 60 env "${PC_ENVS[@]}" "COMMENT_BLOCK_ENFORCE=off" \
             bash "$repo/hooks/pre-commit") 2>&1 )" || RC=$?
     assert_eq "P05/ambient-off-is-ignored" "1" "$RC"
@@ -170,7 +170,7 @@ p05_ambient_cannot_disable() {
     _pc_env "$repo" 0 "COMMENT_BLOCK_ENFORCE=off"
     RC=0
     OUT="$( (cd "$repo" \
-        && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID \
+        && unset CLAUDE_CODE_SESSION_ID \
         && run_with_timeout 60 env "${PC_ENVS[@]}" "COMMENT_BLOCK_ENFORCE=on" \
             bash "$repo/hooks/pre-commit") 2>&1 )" || RC=$?
     assert_eq "P05/ambient-on-cannot-re-enable" "0" "$RC"

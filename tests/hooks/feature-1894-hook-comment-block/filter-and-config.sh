@@ -192,7 +192,7 @@ _hk_exec() {
     local errfile="$TMPDIR_BASE/hook.err"
     HK_RC=0
     HK_OUT="$( (cd "$NEUTRAL_CWD" \
-        && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID \
+        && unset CLAUDE_CODE_SESSION_ID \
         && run_with_timeout 30 env "${HK_ENVS[@]}" \
             node "$(mpath "$HOOK")" < "$PAYLOAD_FILE") 2>"$errfile" )" || HK_RC=$?
     HK_ERR="$(cat "$errfile" 2>/dev/null || true)"

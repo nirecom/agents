@@ -33,7 +33,7 @@ TMPD="$(make_tmp)"
 trap 'rm -rf "$TMPD"' EXIT
 
 harness_isolate "$TMPD"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPD/transcripts"
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
 

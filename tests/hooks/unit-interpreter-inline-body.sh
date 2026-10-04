@@ -18,7 +18,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 TMPD="$(make_tmp)"
 trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE SYSTEM_OPS_APPROVED 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID SYSTEM_OPS_APPROVED 2>/dev/null || true
 cd "$TMPD" || exit 1
 
 LIB_JS="$(np "$AGENTS_DIR")/hooks/lib/interpreter-inline-body.js"

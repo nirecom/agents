@@ -12,7 +12,7 @@ Bash calls.
 
 ## WE-14b — Create cleanup-active marker
 `node "$AGENTS_CONFIG_DIR/hooks/lib/worktree-cleanup-marker.js" create <sid>`
-Run immediately before WE-15 — marks the WE-15..WE-22 window active so the supervisor OFF-block message adapts to real cleanup. Non-fatal on failure (fail-open: no marker → generic message). `<sid>` is the WE-12-resolved session id; empty falls back to CLAUDE_SESSION_ID.
+Run immediately before WE-15 — marks the WE-15..WE-22 window active so the supervisor OFF-block message adapts to real cleanup. Non-fatal on failure (fail-open: no marker → generic message). `<sid>` is the WE-12-resolved session id; empty falls back to CLAUDE_CODE_SESSION_ID.
 
 ## WE-14c — Release the CodeGraph index lock
 `node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" stop --path <path>`

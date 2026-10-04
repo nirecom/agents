@@ -63,7 +63,7 @@ dispatch_worker() {
     local worker="$1" payload="$2"
     DOUT=""
     DOUT="$(run_with_timeout 240 env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+         -u CLAUDE_CODE_SESSION_ID \
         "PATH=$STUB_BIN:$PATH" \
         "GH_TOKEN=$FAKE_GH_TOKEN" "GITHUB_TOKEN=$FAKE_GITHUB_TOKEN" \
         "SSH_AUTH_SOCK=$FAKE_SSH_SOCK" "ENFORCE_WORKTREE=off" \

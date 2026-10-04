@@ -11,9 +11,6 @@
 # ===========================================================================
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
-SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
-unset CLAUDE_ENV_FILE
-unset CLAUDE_SESSION_ID
 export CLAUDE_CODE_SESSION_ID="own-sid-1082"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts-1082"
 # #1899: repo identity resolves from the origin remote, so the run CWD must be
@@ -35,7 +32,6 @@ else
     fail "T-1082-1: rc=$RC expected_fp=$EXPECTED_FP log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
 fi
 unset CLAUDE_CODE_SESSION_ID CLAUDE_TRANSCRIPT_BASE_DIR
-[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
 teardown_mock
 
 # ===========================================================================
@@ -45,9 +41,6 @@ teardown_mock
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export GH_MOCK_STATUS="In Progress"
-SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
-unset CLAUDE_ENV_FILE
-unset CLAUDE_SESSION_ID
 export CLAUDE_CODE_SESSION_ID="own-sid-1082-check"
 # The stored fingerprint matches own-sid-1082-check, not any foreign sid.
 EXPECTED_FP=$(printf '%s:%s' "own-sid-1082-check" "42" | sha256sum | cut -c1-8)
@@ -68,5 +61,4 @@ else
     fail "T-1082-2: rc=$RC out='$OUT' expected='same'"
 fi
 unset CLAUDE_CODE_SESSION_ID CLAUDE_TRANSCRIPT_BASE_DIR
-[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
 teardown_mock

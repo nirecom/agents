@@ -82,11 +82,11 @@ t37_mutate() { # <dir> <settings|ssot|cmdfile|unrelated|failure>
 t37_run_hook() { # <dir> <merge|checkout> <sha-prev> <sha-new> -> hook output on stdout+stderr
     local d="$1"
     if [ "$2" = "merge" ]; then
-        ( cd "$d" && unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+        ( cd "$d" && unset CLAUDE_CODE_SESSION_ID && \
             HOME="$d/home" USERPROFILE="$(node_path "$d/home")" CLAUDE_CONFIG_DIR="$d/home/.claude" \
             run_with_timeout 60 bash hooks/post-merge ) 2>&1
     else
-        ( cd "$d" && unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+        ( cd "$d" && unset CLAUDE_CODE_SESSION_ID && \
             HOME="$d/home" USERPROFILE="$(node_path "$d/home")" CLAUDE_CONFIG_DIR="$d/home/.claude" \
             run_with_timeout 60 bash hooks/post-checkout "$3" "$4" 1 ) 2>&1
     fi
@@ -227,7 +227,7 @@ t38_have() { # <no-node|with-node> -> ok | sentinel
 
 t38_run() { # <dir> <merge|checkout> <shimdir> <sha-prev> <sha-new> -> hook output
     ( cd "$1" || exit 127
-      unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+      unset CLAUDE_CODE_SESSION_ID
       HOME="$1/home"; USERPROFILE="$(node_path "$1/home")"; CLAUDE_CONFIG_DIR="$1/home/.claude"
       export HOME USERPROFILE CLAUDE_CONFIG_DIR
       PATH="$3"; export PATH

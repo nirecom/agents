@@ -21,7 +21,7 @@ trap 'rm -rf "$TMPDIR_FX"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_FX/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_FX/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 # Keep fixture runs out of the real duration ledger and progress stream.
 export RUN_ALL_DURATIONS_LIB=/nonexistent RUN_ALL_PROGRESS=off
 

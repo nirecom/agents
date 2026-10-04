@@ -37,7 +37,7 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # the developer's real ~/.workflow-plans/.
 export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"
 mkdir -p "$CONFIG_EMPTY"
@@ -217,7 +217,6 @@ check "D6 docs-only: hasCompletionEvidence(run_tests) stays false" "false" "$EV_
 # --- WCD-7: docs evidence excludes write_code-staged files (#2327 C1) -------
 # The D-cases pin CLAUDE_PROJECT_DIR; WCD-7 passes repoDir explicitly instead.
 unset CLAUDE_PROJECT_DIR
-unset CLAUDE_ENV_FILE
 
 case_begin "evidence-resolver" "hooks/workflow-state/evidence-resolver.js"
 

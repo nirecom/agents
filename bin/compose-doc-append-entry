@@ -301,7 +301,11 @@ fetch_to_staging() {
 
 # --- Background derivation and staging paths ---
 BG="$(derive_background)"
-SESSION_ID="${CLAUDE_SESSION_ID:-$(date +%s)-$$}"
+SESSION_ID="${CLAUDE_CODE_SESSION_ID:-}"
+# The id is embedded in a staging file path: accept only a path-safe token.
+if [[ ! "$SESSION_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    SESSION_ID="$(date +%s)-$$"
+fi
 # SHORT_SHA is used by both WANT_HISTORY and WANT_CHANGELOG blocks; initialize early.
 SHORT_SHA="${MERGE_COMMIT:0:7}"
 if [[ "$BOOTSTRAP" -eq 1 ]]; then

@@ -31,7 +31,7 @@ GOLDEN_COUNT="13"
 # signal here is the missing 4th parameter / the missing describe export.
 require_granularity() {
     local out
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID "$RWT" 30 node -e "
+    out=$(env -u CLAUDE_CODE_SESSION_ID "$RWT" 30 node -e "
 const apply = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/apply');
 const missing = [];
 if (typeof apply.applyInheritance !== 'function' || apply.applyInheritance.length < 4) missing.push('applyInheritance(sessionId,createdAt,donor,opts)');
@@ -48,7 +48,7 @@ process.stdout.write(missing.join(','));
 project_stream() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
@@ -130,7 +130,7 @@ run_E3() {
     require_granularity || return 0
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
@@ -165,7 +165,7 @@ run_E4() {
     require_granularity || return 0
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "

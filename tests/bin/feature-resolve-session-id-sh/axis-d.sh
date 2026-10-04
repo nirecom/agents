@@ -5,5 +5,5 @@
 #
 # B-26/B-27/B-28 exercised CLAUDE_PROJECT_DIR path-encoding variants feeding
 # the P7 JSONL-mtime-scan tier. #2270 removed the P7 tier entirely — the
-# resolver is now a 4-tier SUPPLY-only chain with no filesystem inference —
+# resolver is now a 3-tier SUPPLY-only chain with no filesystem inference —
 # so none of these cases' premises still exist. Deleted rather than rewritten.

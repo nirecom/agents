@@ -48,7 +48,7 @@ if command -v cygpath >/dev/null 2>&1; then
     WFDIR="$(cygpath -m "$WFDIR")"
 fi
 
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 export CLAUDE_WORKFLOW_DIR="$WFDIR"
 export WORKFLOW_PLANS_DIR="$TMPDIR_G/plans"
 
@@ -59,11 +59,11 @@ OUT="$TMPDIR_G/out.json"
 # run_hook <command-text> — spawns the real hook with the fixture sid in env.
 run_hook() {
     node "$HERE/mk-event.js" Bash "$1" >"$EV"
-    env CLAUDE_SESSION_ID="$SID" node "$HOOK" <"$EV" >"$OUT" 2>/dev/null
+    env CLAUDE_CODE_SESSION_ID="$SID" node "$HOOK" <"$EV" >"$OUT" 2>/dev/null
     node "$HERE/hook-out.js" "$OUT"
 }
 
-probe() { env CLAUDE_SESSION_ID="$SID" node "$HERE/marker-probe.js" "$SID"; }
+probe() { env CLAUDE_CODE_SESSION_ID="$SID" node "$HERE/marker-probe.js" "$SID"; }
 
 CAPTURE='X=$(git rev-parse --short HEAD); echo "$X"'
 BENIGN='git rev-parse --short HEAD'

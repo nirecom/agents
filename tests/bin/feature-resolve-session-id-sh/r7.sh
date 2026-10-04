@@ -16,7 +16,6 @@ mkdir -p "$NONGIT_CWD"
 OUTCOME_FILE="$WF_DIR/own-sid-b29.control/issue-close-outcome.json"
 
 bash -c "
-    unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
     export CLAUDE_CODE_SESSION_ID='own-sid-b29'
     export WORKFLOW_PLANS_DIR='$PLANS_DIR'
     export CLAUDE_WORKFLOW_DIR='$WF_DIR'

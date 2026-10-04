@@ -7,13 +7,13 @@
 #
 # L3 gap (what this test does NOT catch):
 # - The marker CLI being invoked at the correct WE steps inside a live claude -p session.
-# - Real CLAUDE_SESSION_ID propagation from the worktree-end skill environment.
+# - Real CLAUDE_CODE_SESSION_ID propagation from the worktree-end skill environment.
 # Closest-to-action mitigation: hook-registration category checked at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-# harness.sh also unsets CLAUDE_SESSION_ID / CLAUDE_CODE_SESSION_ID / CLAUDE_ENV_FILE;
+# harness.sh also unsets CLAUDE_CODE_SESSION_ID;
 # cases that need an env sid set it explicitly.
 source "$AGENTS_DIR/tests/lib/harness.sh"
 if command -v cygpath >/dev/null 2>&1; then
@@ -161,36 +161,14 @@ run_t6() {
     pass "T-marker-6: unknown command 'bogus' → non-zero exit (rc=$rc)"
 }
 
-# --- T-marker-7: SID via CLAUDE_SESSION_ID env (no positional arg) → creates file named by env SID ---
-run_t7() {
-    local tmp env_sid rc exists
-    tmp=$(make_fixture)
-    env_sid="marker7-env-sid-$$"
-    (
-        unset CLAUDE_CODE_SESSION_ID
-        CLAUDE_SESSION_ID="$env_sid" marker_cli "$tmp" create >/dev/null 2>&1
-    )
-    rc=$?
-    exists=0
-    [ -f "$(marker_at "$tmp" "$env_sid")" ] && exists=1
-    rm -rf "$tmp"
-    if [ $rc -ne 0 ]; then fail "T-marker-7: create via CLAUDE_SESSION_ID must exit 0, got rc=$rc"; return; fi
-    if [ $exists -ne 1 ]; then
-        fail "T-marker-7: marker file must exist named by CLAUDE_SESSION_ID when no positional arg given"; return; fi
-    pass "T-marker-7: SID from CLAUDE_SESSION_ID env (no positional arg) → marker created by env SID"
-}
-
-# --- T-marker-8 (#2270): SID via CLAUDE_CODE_SESSION_ID env only ---
-# A non-native-LLM tool exports only CLAUDE_CODE_SESSION_ID. The marker is the
-# worktree-cleanup safety latch, so failing to name it by that SID leaves the
-# latch open for exactly the callers that cannot set CLAUDE_SESSION_ID.
-# RED until the CLAUDE_CODE_SESSION_ID fallback lands in worktree-cleanup-marker.js.
+# --- T-marker-8 (#2270, #1091): SID via CLAUDE_CODE_SESSION_ID env (no positional arg) ---
+# The env fallback is the only one left. The marker is the worktree-cleanup safety
+# latch, so failing to name it by that SID leaves the latch open.
 run_t8() {
     local tmp env_sid rc exists
     tmp=$(make_fixture)
     env_sid="marker8-env-sid-$$"
     (
-        unset CLAUDE_SESSION_ID
         CLAUDE_CODE_SESSION_ID="$env_sid" marker_cli "$tmp" create >/dev/null 2>&1
     )
     rc=$?
@@ -201,31 +179,6 @@ run_t8() {
     if [ $exists -ne 1 ]; then
         fail "T-marker-8: marker file must exist named by CLAUDE_CODE_SESSION_ID when no positional arg given"; return; fi
     pass "T-marker-8: SID from CLAUDE_CODE_SESSION_ID env (no positional arg) → marker created by env SID"
-}
-
-# --- T-marker-9 (#2270): BOTH env vars set to different ids → which one names the
-# marker. The SSOT resolver ranks CLAUDE_CODE_SESSION_ID (Priority 2) above
-# CLAUDE_SESSION_ID (Priority 4); the marker must agree, or a session whose two
-# variables disagree latches cleanup under an id nobody deletes.
-run_t9() {
-    local tmp cc_sid legacy_sid rc cc_exists legacy_exists
-    tmp=$(make_fixture)
-    cc_sid="marker9-cc-sid-$$"
-    legacy_sid="marker9-legacy-sid-$$"
-    (
-        CLAUDE_SESSION_ID="$legacy_sid" \
-        CLAUDE_CODE_SESSION_ID="$cc_sid" \
-            marker_cli "$tmp" create >/dev/null 2>&1
-    )
-    rc=$?
-    cc_exists=0; legacy_exists=0
-    [ -f "$(marker_at "$tmp" "$cc_sid")" ] && cc_exists=1
-    [ -f "$(marker_at "$tmp" "$legacy_sid")" ] && legacy_exists=1
-    rm -rf "$tmp"
-    if [ $rc -ne 0 ]; then fail "T-marker-9: create with both env vars must exit 0, got rc=$rc"; return; fi
-    if [ $cc_exists -ne 1 ] || [ $legacy_exists -ne 0 ]; then
-        fail "T-marker-9: CLAUDE_CODE_SESSION_ID must win (cc_exists=$cc_exists legacy_exists=$legacy_exists)"; return; fi
-    pass "T-marker-9: both env vars set → CLAUDE_CODE_SESSION_ID names the marker"
 }
 
 case_begin "T-marker-1" "hooks/lib/worktree-cleanup-marker.js"
@@ -246,14 +199,8 @@ case_end
 case_begin "T-marker-6" "hooks/lib/worktree-cleanup-marker.js"
 run_t6
 case_end
-case_begin "T-marker-7" "hooks/lib/worktree-cleanup-marker.js"
-run_t7
-case_end
 case_begin "T-marker-8" "hooks/lib/worktree-cleanup-marker.js"
 run_t8
-case_end
-case_begin "T-marker-9" "hooks/lib/worktree-cleanup-marker.js"
-run_t9
 case_end
 
 echo ""

@@ -24,7 +24,7 @@ PASS=0; FAIL=0; SKIP=0
 # Fixture isolation (rules/test/fixture-isolation.md): no inherited session id, a
 # throwaway HOME and dual-pinned state dirs, and a neutral CWD. Each case below
 # re-pins both dirs to its own root, so markers never leak between cases.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 ISO_ROOT="$(make_tmp)"
 trap 'rm -rf "$ISO_ROOT" 2>/dev/null || true' EXIT
 mkdir -p "$ISO_ROOT/home"
@@ -98,7 +98,7 @@ mk_root() {
 # pinned <root> <env-assignments…> <cmd…> — run with the root's dirs pinned.
 pinned() {
     local r="$1"; shift
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$(np "$r/wf")" WORKFLOW_PLANS_DIR="$(np "$r/plans")" \
         HOME="$r/home" USERPROFILE="$r/home" "$@"
 }
@@ -125,7 +125,7 @@ run_loop() {
     local root="$1" fake="$2" repo="$3" rc="$4" ec
     ( cd "$repo" && pinned "$root" AGENTS_CONFIG_DIR="$fake" SESSION_ID="sid1361" \
         PLANS_DIR="$(np "$root/plans")" \
-        CLAUDE_CODE_SESSION_ID="sid1361" CLAUDE_SESSION_ID="sid1361" \
+        CLAUDE_CODE_SESSION_ID="sid1361" \
         EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$SCRIPT" >/dev/null 2>&1 )
     ec=$?
     printf '%s' "$ec"

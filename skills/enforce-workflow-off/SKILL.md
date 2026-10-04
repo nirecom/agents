@@ -36,7 +36,7 @@ Prefer WORKFLOW_OFF alone when both are wanted: it subsumes WORKTREE_OFF, so emi
 ## Restoring enforcement
 
 Always restore enforcement when the work ends: emit the matching `_ON` command even if the work failed, and even if you are about to stop. It is auto-approved, and the marker is session-scoped, so a session that skips it runs unguarded until it ends. `/enforce-workflow-on` does this for the WORKFLOW pair.
-A repeated restore is a silent no-op: deleting a marker that is already gone changes nothing. Enforcement also returns by itself in the next session, since every marker is keyed to the current session id (the hook layer resolves it — Anthropic bug #27987 keeps `$CLAUDE_SESSION_ID` out of Bash subprocesses).
+A repeated restore is a silent no-op: deleting a marker that is already gone changes nothing. Enforcement also returns by itself in the next session, since every marker is keyed to the current session id (the hook layer resolves it from the hook payload).
 
 ## Scope
 

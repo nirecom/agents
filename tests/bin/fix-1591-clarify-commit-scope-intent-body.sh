@@ -30,7 +30,7 @@ run_with_timeout() {
 
 TMP=""
 SID="sid-test-1591"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 
 setup() {
     TMP="$(mktemp -d)"

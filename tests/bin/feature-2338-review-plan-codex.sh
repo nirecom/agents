@@ -27,7 +27,7 @@ command -v jq   >/dev/null 2>&1 || { echo "SKIP: jq not available (review-plan-c
 TMPD="$(make_tmp)"
 trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR 2>/dev/null || true
 cd "$TMPD" || exit 1
 
 FAKE_BIN="$TMPD/fakebin"

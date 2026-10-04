@@ -73,11 +73,11 @@ echo ""
 echo "=== Section B — resolveWorkflowSessionId sibling scan ==="
 
 # call_wsid <plans_dir> <cwd> [extra env KEY=VAL ...]
-# Env-cleared baseline: no CLAUDE_CODE_SESSION_ID, no CLAUDE_ENV_FILE, no CLAUDE_SESSION_ID.
+# Env-cleared baseline: no CLAUDE_CODE_SESSION_ID.
 call_wsid() {
     local plans="$1" cwd="$2"; shift 2
     ( cd "$cwd" && WORKFLOW_PLANS_DIR="$plans" "$@" \
-        run_with_timeout 10 env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID node -e "
+        run_with_timeout 10 env -u CLAUDE_CODE_SESSION_ID node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
 process.stdout.write(r == null ? 'NULL' : r);
@@ -112,7 +112,7 @@ b3_main="$(build_fixture "test-wsid-b3-sibling")"
 b3_plans="$(mktemp -d)"
 : > "$b3_plans/env-sid-b3-intent.md"
 b3_out="$( cd "$b3_main" && WORKFLOW_PLANS_DIR="$b3_plans" CLAUDE_CODE_SESSION_ID="env-sid-b3" \
-    run_with_timeout 10 env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID node -e "
+    run_with_timeout 10 node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
 process.stdout.write(r == null ? 'NULL' : r);
@@ -193,9 +193,9 @@ fi
 rm -rf "$b8_main" "$b8_plans"
 
 # ===========================================================================
-# Section C — resolveSessionId() is SUPPLY-only after #2270: sessionIdFromInput ->
-# CLAUDE_CODE_SESSION_ID -> CLAUDE_SESSION_ID -> ctx.transcriptPath basename. Every
-# inference tier (sibling scan, CLAUDE_ENV_FILE, WORKTREE_NOTES.md, JSONL mtime) is
+# Section C — resolveSessionId() is SUPPLY-only after #2270/#1091: sessionIdFromInput
+# -> CLAUDE_CODE_SESSION_ID -> ctx.transcriptPath basename. Every inference tier
+# (sibling scan, env-file read, WORKTREE_NOTES.md, JSONL mtime) is
 # gone, so each worktree topology below must answer NULL instead of guessing; the
 # own-vs-sibling precedence rows live on in Section B, where that behaviour remains.
 # C2 is the non-vacuity control: the same harness DOES return a value when supplied.
@@ -208,7 +208,7 @@ echo "=== Section C — resolveSessionId is supply-only (no filesystem inference
 call_sid() {
     local cwd="$1" tbase="$2"; shift 2
     ( cd "$cwd" && CLAUDE_TRANSCRIPT_BASE_DIR="$tbase" CLAUDE_PROJECT_DIR="$cwd" "$@" \
-        run_with_timeout 10 env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID node -e "
+        run_with_timeout 10 env -u CLAUDE_CODE_SESSION_ID node -e "
 const m = require('$SESSION_ID_NODE');
 const r = m.resolveSessionId({});
 process.stdout.write(r == null ? 'NULL' : r);
@@ -230,7 +230,7 @@ rm -rf "$c1_main" "$c1_tbase"
 c2_main="$(build_fixture "test-sid-c2-sibling")"
 c2_tbase="$(mktemp -d)"
 c2_out="$( cd "$c2_main" && CLAUDE_TRANSCRIPT_BASE_DIR="$c2_tbase" CLAUDE_PROJECT_DIR="$c2_main" CLAUDE_CODE_SESSION_ID="env-sid-c2" \
-    run_with_timeout 10 env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID node -e "
+    run_with_timeout 10 node -e "
 const m = require('$SESSION_ID_NODE');
 const r = m.resolveSessionId({});
 process.stdout.write(r == null ? 'NULL' : r);
@@ -292,22 +292,22 @@ fi
 rm -rf "$c6_main" "$c6_tbase"
 
 # C7: retargeted into the MUTATION CONTROL for C1/C4/C5/C6. Same topology that used to
-# infer 'sid-own-c7' (subdir CWD in worktree A, sibling B), but CLAUDE_SESSION_ID — the
-# chain's third SUPPLIED tier — is set: the supplied value wins and the notes files are
+# infer 'sid-own-c7' (subdir CWD in worktree A, sibling B), but ctx.transcriptPath — the
+# chain's third SUPPLIED tier — is given: the supplied value wins and the notes files are
 # never consulted, so the NULL rows above are the missing tier, not a dead harness.
 c7_main="$(build_fixture "sid-own-c7" "sid-other-c7")"
 c7_tbase="$(mktemp -d)"
 mkdir -p "$c7_main/wt1/sub/dir"
-c7_out="$( cd "$c7_main/wt1/sub/dir" && CLAUDE_TRANSCRIPT_BASE_DIR="$c7_tbase" CLAUDE_PROJECT_DIR="$c7_main" CLAUDE_SESSION_ID="env-sid-c7" \
-    run_with_timeout 10 env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE node -e "
+c7_out="$( cd "$c7_main/wt1/sub/dir" && CLAUDE_TRANSCRIPT_BASE_DIR="$c7_tbase" CLAUDE_PROJECT_DIR="$c7_main" \
+    run_with_timeout 10 env -u CLAUDE_CODE_SESSION_ID node -e "
 const m = require('$SESSION_ID_NODE');
-const r = m.resolveSessionId({});
+const r = m.resolveSessionId({ transcriptPath: 'x/transcript-sid-c7.jsonl' });
 process.stdout.write(r == null ? 'NULL' : r);
 " 2>/dev/null )"
-if [ "$c7_out" = "env-sid-c7" ]; then
-    pass "C7. supplied CLAUDE_SESSION_ID resolves in the same topology (non-vacuity control)"
+if [ "$c7_out" = "transcript-sid-c7" ]; then
+    pass "C7. supplied transcriptPath resolves in the same topology (non-vacuity control)"
 else
-    fail "C7. supplied tier 3 must win over every notes file — want 'env-sid-c7' got '$c7_out'"
+    fail "C7. supplied tier 3 must win over every notes file — want 'transcript-sid-c7' got '$c7_out'"
 fi
 rm -rf "$c7_main" "$c7_tbase"
 

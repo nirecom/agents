@@ -99,7 +99,7 @@ _c4_run() {
     local hook="$1" input="$2"
     (
         cd "$FIX_REPO" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_CODE_SESSION_ID
         unset ENFORCE_WORKTREE_EXCLUDE ENFORCE_WORKTREE_EXCLUDE_REPOS
         unset ENFORCE_WORKTREE_ADDITIONAL_REPOS ENFORCE_WORKTREE_EXTRA_REPOS
         export ENFORCE_WORKTREE=on
@@ -236,7 +236,7 @@ run_D_f1_regression() {
 
     out="$(
         cd "$NEUTRAL_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_CODE_SESSION_ID
         export TMPDIR="$FIX_REPO_NODE/fake-tmp" TEMP="$FIX_REPO_NODE/fake-tmp" TMP="$FIX_REPO_NODE/fake-tmp"
         export SCRATCHPAD="$poisoned_fwd"
         printf '%s' "$(mk_edit_input Write "$SID_T1" "$poisoned_fwd/steal.md")" | MSYS_NO_PATHCONV=1 "$RWT" 20 node "$GATE_HOOK" 2>/dev/null

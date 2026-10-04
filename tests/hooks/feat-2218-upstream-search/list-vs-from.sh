@@ -4,7 +4,7 @@
 # Tags: session-upstream, upstream-search, resume-session, adoptability, granularity, cross-check, prompt-injection, regression-2279, scope:issue-specific, pwsh-not-required, TL2
 
 _u14_run() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$TMP/u14/wf" WORKFLOW_PLANS_DIR="$TMP/u14/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u14/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
@@ -97,7 +97,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # happily. Detail plan S-9(e) step 7 / S-6a. One fixture, both paths.
 
 _u15_run() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$TMP/u15/wf" WORKFLOW_PLANS_DIR="$TMP/u15/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u15/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
@@ -197,7 +197,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 _U16_CLI="$AGENTS_DIR/bin/resume-session-detect"
 
 _u16_run() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$TMP/u16/wf" WORKFLOW_PLANS_DIR="$TMP/u16/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u16/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
@@ -205,14 +205,11 @@ _u16_run() {
 }
 
 # The CLI resolves its own heir id, so it is named through the environment
-# rather than an argument. CLAUDE_ENV_FILE stays unset: the resolver reads the
-# session id out of that file, so leaving it set resolves the developer's live
-# session (rules/test/fixture-isolation.md).
+# (CLAUDE_CODE_SESSION_ID) rather than an argument.
 _u16_cli() {
     local sid="$1"
     shift
-    env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
-        CLAUDE_SESSION_ID="$sid" \
+    env CLAUDE_CODE_SESSION_ID="$sid" \
         CLAUDE_WORKFLOW_DIR="$TMP/u16/wf" WORKFLOW_PLANS_DIR="$TMP/u16/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u16/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
@@ -306,7 +303,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 _U19_CLI="$AGENTS_DIR/bin/resume-session-detect"
 
 _u19_run() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$TMP/u19/wf" WORKFLOW_PLANS_DIR="$TMP/u19/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u19/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
@@ -314,8 +311,7 @@ _u19_run() {
 }
 
 _u19_cli() {
-    env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
-        CLAUDE_SESSION_ID="$1" \
+    env CLAUDE_CODE_SESSION_ID="$1" \
         CLAUDE_WORKFLOW_DIR="$TMP/u19/wf" WORKFLOW_PLANS_DIR="$TMP/u19/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u19/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \

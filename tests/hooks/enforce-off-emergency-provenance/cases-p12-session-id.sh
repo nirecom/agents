@@ -154,7 +154,7 @@ rm -f "$(marker_of "$sid")"
 # payload - the recorder resolves the session from the environment exactly as
 # hooks/workflow-state/session-id.js documents, and provenance must survive that
 # route, or every such turn would silently under-attribute.
-for var in CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID; do
+for var in CLAUDE_CODE_SESSION_ID; do
     sid="pv12env"
     rm -f "$(marker_of "$sid")"
     submit_prompt_sidless "$var" "$sid" "/enforce-workflow-off resolved from the environment"

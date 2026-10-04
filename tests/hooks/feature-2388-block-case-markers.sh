@@ -76,7 +76,7 @@ mkpayload() {
 
 # Hook runner. HK_ENV_RESET scrubs every name the hook could pick up from the
 # developer's session; extra VAR=VAL args become child variables.
-HK_ENV_RESET=(-u CLAUDE_PROJECT_DIR -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID)
+HK_ENV_RESET=(-u CLAUDE_PROJECT_DIR -u CLAUDE_CODE_SESSION_ID)
 HK_HOOK="$HOOK"
 HK_OUT=""
 HK_ERR=""

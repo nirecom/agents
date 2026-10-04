@@ -90,7 +90,6 @@ trap 'rm -rf "$TMPROOT"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMPROOT/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 
 # make_fixture_tests <dir> — 4 top-level fixture tests (2 pass / 1 fail / 1

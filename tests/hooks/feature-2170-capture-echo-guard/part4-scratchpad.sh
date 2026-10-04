@@ -5,7 +5,7 @@
 # Fixture isolation per rules/test/fixture-isolation.md: TMPDIR/TEMP/TMP point at an
 # isolated temp root so os.tmpdir()-derived claude base never touches the real one.
 # Config-dependent branches are pinned explicitly per case: SCRATCHPAD set (D-1),
-# only CLAUDE_SESSION_ID set (D-2), neither set (D-3). Nothing is inherited ambiently.
+# only CLAUDE_CODE_SESSION_ID set (D-2), neither set (D-3). Nothing is inherited ambiently.
 # D-5 (symlink traversal) lives in part5-symlink.sh.
 
 # lang-check: ignore — SP-44..SP-46 assert non-ASCII scratchpad paths, so the
@@ -87,9 +87,9 @@ RSP="$RBASE/$SLUG/$SESS/scratchpad"
 mkdir -p "$RSP"
 printf 'echo hi\n' >"$RSP/probe.sh"
 
-inv_path()  { env -u CLAUDE_SESSION_ID SCRATCHPAD="$SP" node "$DRIVER" --invoke "$1" 2>&1; }
-inv_sess()  { env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESS" node "$DRIVER" --invoke "$1" 2>&1; }
-inv_none()  { env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --invoke "$1" 2>&1; }
+inv_path() { env SCRATCHPAD="$SP" node "$DRIVER" --invoke "$1" 2>&1; }
+inv_sess()  { env -u SCRATCHPAD CLAUDE_CODE_SESSION_ID="$SESS" node "$DRIVER" --invoke "$1" 2>&1; }
+inv_none() { env -u SCRATCHPAD node "$DRIVER" --invoke "$1" 2>&1; }
 
 # --- D-1: SCRATCHPAD set (existing H2 session-scoping path) -----------------
 case_begin "D1-scratchpad-env-containment" "hooks/preuse-auto-approve/scratchpad-script.js"
@@ -121,10 +121,10 @@ assert_eq "SP-8c-deny-sibling-prefix-dir" "deny"  "$(inv_path "bash $BASE/$SLUG/
 
 # SP-9 (F1): SCRATCHPAD legitimately under a poisoned TEMP that lands in a git repo.
 assert_eq "SP-9-deny-repo-polluted-temp" "deny" \
-    "$(env -u CLAUDE_SESSION_ID TMPDIR="$REPOROOT" TEMP="$REPOROOT" TMP="$REPOROOT" SCRATCHPAD="$RSP" node "$DRIVER" --invoke "bash $RSP/probe.sh" 2>&1)"
+    "$(env TMPDIR="$REPOROOT" TEMP="$REPOROOT" TMP="$REPOROOT" SCRATCHPAD="$RSP" node "$DRIVER" --invoke "bash $RSP/probe.sh" 2>&1)"
 case_end
 
-# --- D-2: no SCRATCHPAD, CLAUDE_SESSION_ID set (structural session match) ----
+# --- D-2: no SCRATCHPAD, CLAUDE_CODE_SESSION_ID set (structural session match) ----
 case_begin "D2-session-id-containment" "hooks/lib/claude-scratchpad-base.js"
 assert_eq "SP-11-allow-session-structural" "allow" "$(inv_sess "bash $SP/probe.sh")"
 assert_eq "SP-12-deny-different-session"   "deny"  "$(inv_sess "bash $BASE/$SLUG/$OTHER/scratchpad/x.sh")"
@@ -134,29 +134,21 @@ assert_eq "SP-15-deny-extra-depth"         "deny"  "$(inv_sess "bash $BASE/$SLUG
 assert_eq "SP-16-deny-wrong-leaf-dir"      "deny"  "$(inv_sess "bash $BASE/$SLUG/$SESS/notscratchpad/probe.sh")"
 assert_eq "SP-17-allow-subdirectory"       "allow" "$(inv_sess "bash $SP/sub/probe.sh")"
 assert_eq "SP-18-deny-repo-polluted-temp"  "deny" \
-    "$(env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESS" TMPDIR="$REPOROOT" TEMP="$REPOROOT" TMP="$REPOROOT" node "$DRIVER" --invoke "bash $RSP/probe.sh" 2>&1)"
+    "$(env -u SCRATCHPAD CLAUDE_CODE_SESSION_ID="$SESS" TMPDIR="$REPOROOT" TEMP="$REPOROOT" TMP="$REPOROOT" node "$DRIVER" --invoke "bash $RSP/probe.sh" 2>&1)"
 case_end
 
 # --- D-3: neither set -> fail-to-ask, never a base-wide fallback -------------
 case_begin "D3-no-session-context" "hooks/lib/claude-scratchpad-base.js"
 assert_eq "SP-19-deny-no-session-context" "deny" "$(inv_none "bash $SP/probe.sh")"
-assert_eq "SP-20-root-is-null"            "null" "$(env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --root 2>&1)"
+assert_eq "SP-20-root-is-null" "null" "$(env -u SCRATCHPAD node "$DRIVER" --root 2>&1)"
 # Config-dependent branch coverage for the other two states of the same resolver.
-assert_eq "SP-20b-root-kind-session"      "session:$SESS" "$(env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESS" node "$DRIVER" --root 2>&1)"
+# SP-20b also pins #2270: CLAUDE_CODE_SESSION_ID alone resolves the session root.
+assert_eq "SP-20b-root-kind-session"      "session:$SESS" "$(env -u SCRATCHPAD CLAUDE_CODE_SESSION_ID="$SESS" node "$DRIVER" --root 2>&1)"
 root_kind() { case "$1" in path:*) printf 'path' ;; *) printf '%s' "$1" ;; esac; }
-assert_eq "SP-20c-root-kind-path"         "path" "$(root_kind "$(env -u CLAUDE_SESSION_ID SCRATCHPAD="$SP" node "$DRIVER" --root 2>&1)")"
+assert_eq "SP-20c-root-kind-path" "path" "$(root_kind "$(env SCRATCHPAD="$SP" node "$DRIVER" --root 2>&1)")"
 # SCRATCHPAD pointing outside the claude base must NOT become {kind:"path"}.
 assert_eq "SP-20d-root-rejects-outside-scratchpad" "session:$SESS" \
-    "$(env SCRATCHPAD="$TMPROOT/not-claude" CLAUDE_SESSION_ID="$SESS" node "$DRIVER" --root 2>&1)"
-# SP-20e (#2270): a non-native-LLM caller exports only CLAUDE_CODE_SESSION_ID.
-# Without it the scratchpad root is null and every scratchpad write is denied for
-# those callers. RED until claude-scratchpad-base.js reads it too.
-assert_eq "SP-20e-root-from-claude-code-session-id" "session:$SESS" \
-    "$(env -u SCRATCHPAD -u CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID="$SESS" node "$DRIVER" --root 2>&1)"
-# SP-20f: per the SSOT resolver priority (P2 CLAUDE_CODE_SESSION_ID > P4
-# CLAUDE_SESSION_ID), CLAUDE_CODE_SESSION_ID wins when both are set.
-assert_eq "SP-20f-claude-code-session-id-outranks-claude-session-id" "session:$OTHER" \
-    "$(env -u SCRATCHPAD CLAUDE_SESSION_ID="$SESS" CLAUDE_CODE_SESSION_ID="$OTHER" node "$DRIVER" --root 2>&1)"
+    "$(env SCRATCHPAD="$TMPROOT/not-claude" CLAUDE_CODE_SESSION_ID="$SESS" node "$DRIVER" --root 2>&1)"
 case_end
 
 # --- D-4: existing write-path semantics unchanged by this work ---------------
@@ -164,9 +156,9 @@ case_begin "D4-legacy-write-path" "hooks/preuse-auto-approve/scratchpad-script.j
 # isAllowedScratchpadTarget is the EXISTING function; with no SCRATCHPAD it still
 # falls back to the whole claude base for WRITES. This must PASS today and after.
 assert_eq "SP-21-legacy-write-path-invariance" "true" \
-    "$(env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --legacy-target "$BASE/$SLUG/$OTHER/scratchpad/f.txt" 2>&1)"
+    "$(env -u SCRATCHPAD node "$DRIVER" --legacy-target "$BASE/$SLUG/$OTHER/scratchpad/f.txt" 2>&1)"
 assert_eq "SP-21b-legacy-still-rejects-outside-base" "false" \
-    "$(env -u SCRATCHPAD -u CLAUDE_SESSION_ID node "$DRIVER" --legacy-target "$TMPROOT/evil.sh" 2>&1)"
+    "$(env -u SCRATCHPAD node "$DRIVER" --legacy-target "$TMPROOT/evil.sh" 2>&1)"
 case_end
 
 # EV/OUT/HOOK defined outside all spans so no single span deletion leaves them orphaned.
@@ -178,7 +170,7 @@ HOOK="$AGENTS_DIR/hooks/preuse-auto-approve.js"
 case_begin "SP10-kill-switch" "hooks/preuse-auto-approve.js"
 node "$HERE/mk-event.js" Bash "bash $SP/probe.sh" >"$EV"
 run_auto() {
-    env -u CLAUDE_SESSION_ID SCRATCHPAD="$SP" AUTO_APPROVE_TOOLS="$1" node "$HOOK" <"$EV" >"$OUT" 2>/dev/null
+    env SCRATCHPAD="$SP" AUTO_APPROVE_TOOLS="$1" node "$HOOK" <"$EV" >"$OUT" 2>/dev/null
     node "$HERE/hook-out.js" "$OUT"
 }
 assert_eq "SP-10-kill-switch-off-not-allowed" "passthrough" "$(run_auto off)"
@@ -240,7 +232,7 @@ case_end
 # deleted without leaving the definition orphaned or the other span broken.
 run_auto_tool() {
     node "$HERE/mk-event.js" "$@" >"$EV"
-    env -u CLAUDE_SESSION_ID SCRATCHPAD="$SP" AUTO_APPROVE_TOOLS=on node "$HOOK" <"$EV" >"$OUT" 2>/dev/null
+    env SCRATCHPAD="$SP" AUTO_APPROVE_TOOLS=on node "$HOOK" <"$EV" >"$OUT" 2>/dev/null
     node "$HERE/hook-out.js" "$OUT"
 }
 
@@ -256,7 +248,7 @@ assert_eq "SP-52-runcommands-multi-passthrough" "passthrough" "$(run_auto_tool r
 # or the auto-approve would silently never fire on a machine that never exports it.
 node "$HERE/mk-event.js" Bash "bash $SP/probe.sh" >"$EV"
 assert_eq "SP-54-kill-switch-unset-allows" "allow" \
-    "$(env -u CLAUDE_SESSION_ID -u AUTO_APPROVE_TOOLS SCRATCHPAD="$SP" node "$HOOK" <"$EV" >"$OUT" 2>/dev/null; node "$HERE/hook-out.js" "$OUT")"
+    "$(env -u AUTO_APPROVE_TOOLS SCRATCHPAD="$SP" node "$HOOK" <"$EV" >"$OUT" 2>/dev/null; node "$HERE/hook-out.js" "$OUT")"
 # C12 at the process boundary: the quoted space path must survive JSON transport too.
 assert_eq "SP-55-space-path-quoted-hook-allow" "allow" \
     "$(run_auto_tool Bash "bash \"$SP/with space/probe.sh\"")"

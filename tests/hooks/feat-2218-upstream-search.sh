@@ -41,7 +41,7 @@ trap cleanup EXIT
 # is observable. alpha carries a `**Title:**` line, beta deliberately does not
 # (only 108 of 667 real intent.md files have one — M4).
 build_fixture() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$TMP/wf" WORKFLOW_PLANS_DIR="$TMP/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
@@ -83,7 +83,7 @@ fs.writeFileSync(path.join(tdir, 'heir-sess-99.jsonl'), rows.join(String.fromCha
 }
 
 run_case() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$TMP/wf" WORKFLOW_PLANS_DIR="$TMP/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \

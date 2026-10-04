@@ -33,7 +33,7 @@ to_node_path() {
 }
 TMP="$(to_node_path "$TMP_RAW")"
 export TMPDIR="$TMP" TEMP="$TMP"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 MARK="Capture-then-display rejected"
 w() { printf '%s\n' "$2" >> "$TMP_RAW/$1"; }

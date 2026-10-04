@@ -2,47 +2,12 @@
 # tests/hooks/fix-1679-finalize-overlay-arg-contract.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree.js
 # Tags: enforce-worktree, allowlist, security, TL2, pwsh-not-required, scope:issue-specific
-#
-# Issue #1679 widened the argument/path contract for finalize-worker invocations
-# that reach PreToolUse from a main worktree: a `$AGENTS_CONFIG_DIR` literal
-# prefix that arrives unexpanded, and the benign trailing segments `|| exit 0`
-# and `2>&1`. It pinned that contract on matchFinalizeWorkerOverlay.
-#
-# #1673 deleted finalize-worker-overlay.js together with the Bash-tool `eval`
-# path for the three finalize scripts, and desanctioned run-initial.sh. The
-# suite split in two along that line:
-#
-#   LIVE — the widenings themselves did NOT go away. They live in
-#          worker-script.js's `eval "$(bash "<path>")"` identity branch, which
-#          still admits the literal-prefix normalization and both trailing
-#          segments for the scripts that are still SANCTIONED. The LIVE1679-*
-#          rows exercise them through skills/issue-close-finalize/scripts/
-#          pre-flight.sh, the surviving member of that family. They are the
-#          non-vacuous half: each must ALLOW, so a hook that simply blocks
-#          everything from a main worktree cannot satisfy this file.
-#   RETIRED — the AC1679-* rows asserted ALLOW for run-initial.sh evals carrying
-#          positional arguments. No such command is permitted from a main
-#          worktree any more (run-initial.sh is not SANCTIONED, and the eval
-#          identity branch admits no argument tail at all), so they are
-#          polarity-flipped to BLOCK and kept as retired-capability pins. Their
-#          names and command shapes are unchanged on purpose: they are the
-#          provenance of what #1679 once opened, and the record that reopening
-#          any of those shapes is a regression, not a feature.
-#   BK1679-* — the security boundary. BLOCK before #1679, BLOCK after it, and
-#          BLOCK after #1673. Untouched.
-#
-# Drive surface: the real enforce-worktree.js hook process over a Bash payload,
-# from a throwaway git main worktree. #1679 drove the matcher function directly;
-# with the matcher gone, the hook boundary is the closest surviving seam and is
-# strictly more faithful — it also covers the worker-script.js delegation that
-# #1679 listed as its own TL3 gap.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-# - whether the PreToolUse registration in settings.json routes a real Bash tool
-#   call into this hook at all
-# - a real symlinked checkout (~/.claude/* -> agents repo) where the module path
-#   and the realpath candidate genuinely differ
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
+# #1679 widened the finalize-worker arg contract (unexpanded $AGENTS_CONFIG_DIR prefix, `|| exit 0`, `2>&1`).
+# LIVE1679-* must ALLOW via worker-script.js eval identity branch (pre-flight.sh); AC1679-* are
+# retired run-initial.sh shapes flipped to BLOCK (#1673); BK1679-* are the security boundary (BLOCK).
+# Drives the real enforce-worktree.js hook from a throwaway main worktree.
+# TL3 gap: settings.json registration and real symlinked checkouts.
+# Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration.
 
 set -uo pipefail
 
@@ -122,7 +87,7 @@ guard_verdict() {
   # are assembled first — appending them after the assignments makes env treat
   # "-u" as a command name.
   local -a envargs
-  envargs=(env -u CLAUDE_ENV_FILE)
+  envargs=(env)
   [ "$mode" = "unset" ] && envargs+=(-u AGENTS_CONFIG_DIR)
   envargs+=("ENFORCE_WORKTREE=on" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$REPO")
   case "$mode" in

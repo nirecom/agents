@@ -2,20 +2,10 @@
 # filename: tests/hooks/feature-772-session-start-cleanup-inherit.sh
 # Tests: hooks/session-start.js
 # Tags: session-start, cleanup, inheritance, regression, scope:issue-specific
-#
-# TL3 gap: real SessionStart hook firing in a live Claude Code host (tool-use
-# event context) and CONV_LANG/settings-drift injection branches are not
-# asserted here. C6 (additionalContext TL2 case) is the day-to-day runner;
-# the live host firing is tracked in docs/architecture/claude-code/e2e-testing.md.
-#
-# Regression tests for issue #772:
-#   When a new session inherits workflow state from a prior session,
-#   the `cleanup` step must NOT carry over verbatim. Instead, the new
-#   session marks cleanup=skipped with skip_reason="inherited-from-prior-session"
-#   because the cleanup belonged to the prior session's worktree/PR.
-#
-# RED: these tests fail against the unmodified session-start.js (which
-# performs a verbatim deep-copy of steps including cleanup).
+# TL3 gap: live-host SessionStart firing and CONV_LANG/settings-drift injection are not
+# asserted here; C6 is the TL2 runner (live firing: docs/architecture/claude-code/e2e-testing.md).
+# #772 regression: an inheriting session must not copy `cleanup` verbatim; it marks
+# cleanup=skipped with skip_reason="inherited-from-prior-session".
 
 set -u
 
@@ -165,7 +155,6 @@ write_forked_line() {
 # the new session's state file should exist.
 run_session_start_new() {
     local repo="$1" new_sid="$2" fake_home="$3"
-    local env_file="$TMPDIR_BASE/env-${new_sid}.env"
     # Since #1305 the donor is reached through the heir's own transcript, so the
     # payload must carry the two fields that make lineage resolvable at all:
     # `source` (only a continuation may inherit) and `transcript_path`.
@@ -175,7 +164,6 @@ run_session_start_new() {
     echo "{\"session_id\":\"$new_sid\",\"source\":\"resume\",\"transcript_path\":\"$heir_tp\"}" | \
         HOME="$fake_home" \
         CLAUDE_PROJECT_DIR="$repo" \
-        CLAUDE_ENV_FILE="$env_file" \
         CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$(to_node_path "$fake_home/.claude/projects")" \
         run_with_timeout 30 node "$SESSION_START" >/dev/null 2>&1 || true
@@ -270,7 +258,6 @@ mkdir -p "$C6_HOME/.claude/projects"
 C6_OUT=$(echo "{\"session_id\":\"$C6_SID\"}" | \
     HOME="$C6_HOME" \
     CLAUDE_PROJECT_DIR="$C6_REPO" \
-    CLAUDE_ENV_FILE="$TMPDIR_BASE/env-${C6_SID}.env" \
     CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$(to_node_path "$C6_HOME/.claude/projects")" \
     run_with_timeout 30 node "$SESSION_START" 2>/dev/null || true)

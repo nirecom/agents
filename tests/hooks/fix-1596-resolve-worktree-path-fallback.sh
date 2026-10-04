@@ -84,7 +84,7 @@ run_rswp_checked() {
   local outf="$TMPDIR_BASE/rswp.out" errf="$TMPDIR_BASE/rswp.err"
   (
     cd "$TMPDIR_BASE" || exit 1
-    env -u SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    env -u SESSION_ID -u CLAUDE_CODE_SESSION_ID \
       CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
       WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
