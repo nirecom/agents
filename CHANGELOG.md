@@ -651,3 +651,7 @@ Changes: Fixed: a session can no longer rewrite its own review-loop control file
 ### FEATURE: PR #2524 (2026-10-04)
 Background: refactor(#1091): remove repo-manufactured CLAUDE_SESSION_ID / CLAUDE_ENV_FILE relay
 Changes: Session id is now read from CLAUDE_CODE_SESSION_ID only; the CLAUDE_SESSION_ID / CLAUDE_ENV_FILE relay was removed (#1091)
+
+### FEATURE: PR #2526 (2026-10-04)
+Background: feat(#2500): one test-language registry for discovery, headers and launch
+Changes: Test tooling now reads one test language registry for which files are tests, how their headers are read and how they are launched, so every tool agrees on the supported languages (bash, Pester, pytest).;Test files the registry recognizes but cannot run yet (such as the Node tests under `tests/hooks/`) are listed as `UNSUPPORTED:` by the test runner instead of being silently skipped, and never fail a run or block a commit.;When the registry cannot be read, test selection, the runner and the audits stop with an error instead of reporting that there are no tests.
