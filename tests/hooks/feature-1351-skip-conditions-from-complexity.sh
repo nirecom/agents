@@ -23,7 +23,6 @@ fi
 # Clear inherited Claude Code session vars so resolveSessionId does not leak the
 # outer session into --session-less probes.
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 
 echo "=== skip-conditions-from-complexity: required API = $REQUIRED_API_REPORT ==="
 

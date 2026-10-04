@@ -34,7 +34,7 @@ LIFECYCLE="$N/hooks/workflow-state/lifecycle.js"
 CLI="$AGENTS_DIR/bin/resume-session-detect"
 AUTOMARK="$AGENTS_DIR/hooks/postuse-step-in-flight-mark.js"
 
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 export CLAUDE_TRANSCRIPT_BASE_DIR=""
 
 PASS=0; FAIL=0; SKIP=0
@@ -104,7 +104,7 @@ process.stdout.write(JSON.stringify({ tool_name: 'Skill', session_id: process.en
 # run_from <donor> — the user-facing command, exactly as /resume-session runs it.
 run_from() {
     FROM_OUT=$( ( cd "$REPO" && CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
-        CLAUDE_SESSION_ID="$HEIR" "$RWT" 30 node "$CLI" --from "$1" ) 2>/dev/null )
+        CLAUDE_CODE_SESSION_ID="$HEIR" "$RWT" 30 node "$CLI" --from "$1" ) 2>/dev/null )
     FROM_RC=$?
 }
 
@@ -207,7 +207,7 @@ case "$ADOPTED" in
 esac
 
 FROM_LIST=$( ( cd "$REPO" && CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
-    CLAUDE_SESSION_ID="$HEIR" "$RWT" 30 node "$CLI" --list ) 2>/dev/null )
+    CLAUDE_CODE_SESSION_ID="$HEIR" "$RWT" 30 node "$CLI" --list ) 2>/dev/null )
 case "$FROM_LIST" in
     *"$DONOR"*)
         pass "S8: --list still offers the donor to a session that has dispatched the resume skill" ;;

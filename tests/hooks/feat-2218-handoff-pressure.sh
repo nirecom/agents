@@ -21,7 +21,7 @@ make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 
 LIB="hooks/lib/handoff-pressure.js"
 HOOK="hooks/handoff-pressure-nudge.js"

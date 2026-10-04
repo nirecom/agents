@@ -76,7 +76,6 @@ export PRODUCER_LOW_MODEL=sonnet
 
 # Do not inherit the outer Claude Code session into resolveSessionId().
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 
 # --- module / CLI paths -----------------------------------------------------
 CR_MOD_N="$(to_node_path "$AGENTS_DIR/hooks/workflow-state/complexity-routing.js")"

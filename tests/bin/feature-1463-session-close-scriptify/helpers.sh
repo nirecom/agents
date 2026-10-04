@@ -61,7 +61,7 @@ export HOME="${TMPDIR_BASE}/home"
 export CLAUDE_WORKFLOW_DIR="$WF_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 export CLAUDE_TRANSCRIPT_BASE_DIR="${TMPDIR_BASE}/tx"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 
 # ctl_path <sid> <name>: the derived control path for a session.
 ctl_path() { printf '%s' "${WF_DIR}/$1.control/$2"; }

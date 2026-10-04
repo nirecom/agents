@@ -65,16 +65,16 @@ setup_case() {  # <session-id>
     export WORKFLOW_PLANS_DIR="$PLANS"
     export CLAUDE_WORKFLOW_DIR="$WF"
     export AGENTS_CONFIG_DIR="$CFG"
-    export CLAUDE_SESSION_ID="$SID"
-    # CLAUDE_CODE_SESSION_ID is exported by the developer's live session and the
-    # driver reads it (#2270), so an inherited value would decide the case.
-    unset NON_GITHUB CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+    # Overwrites the value the developer's live session exports, so an inherited
+    # id never decides the case (#2270).
+    export CLAUDE_CODE_SESSION_ID="$SID"
+    unset NON_GITHUB 2>/dev/null || true
     export PATH="$MOCKBIN:$ORIG_PATH"
 }
 
 teardown_case() {
     export PATH="$ORIG_PATH"
-    unset AGENTS_CONFIG_DIR CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID NON_GITHUB 2>/dev/null || true
+    unset AGENTS_CONFIG_DIR CLAUDE_CODE_SESSION_ID NON_GITHUB 2>/dev/null || true
     # Back to the suite pins, never unset: an unset pair resolves the real home dirs.
     export CLAUDE_WORKFLOW_DIR="$ROOT_TMP/wf-suite"
     export WORKFLOW_PLANS_DIR="$ROOT_TMP/plans-suite"
@@ -238,7 +238,7 @@ MOCKWIP2
 }
 
 _write_cfg_prims() {
-    printf '#!/bin/bash\necho "${CLAUDE_SESSION_ID:-mock-sid}"\n' > "$CFG/bin/resolve-session-id"
+    printf '#!/bin/bash\necho "${CLAUDE_CODE_SESSION_ID:-mock-sid}"\n' > "$CFG/bin/resolve-session-id"
     cp "$AGENTS_DIR/bin/parse-issue-tokens" "$CFG/bin/parse-issue-tokens"
     cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$CFG/hooks/lib/parse-closes-issues.js"
     cat > "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FILT'

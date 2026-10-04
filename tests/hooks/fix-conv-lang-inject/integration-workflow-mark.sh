@@ -1,27 +1,15 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/conv-lang.js, hooks/post-compact.js, hooks/workflow-mark.js
 # Tags: scope:issue-specific
-# integration-workflow-mark.sh — T-WM1, T-WM2, T-WM3:
-# Integration tests for workflow-mark.js post-merge reset_reason field (#1161).
-#
-# These tests verify that after #1161 is implemented, workflow-mark.js:
-#   - T-WM1: gh pr merge success → state has reset_reason="post-merge"
-#   - T-WM2: git push to protected branch → user_verification reset has NO reset_reason
-#   - T-WM3: gh pr merge exit_code=1 → user_verification NOT reset
-#
-# Tests will FAIL until the source change is implemented.
-#
-# L3 gap (what this test does NOT catch):
-# - real claude -p session verifying the injected context actually changes assistant behavior
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-#
-# Invocation pattern follows tests/hooks/feature-workflow-mark-subagent-backstop.sh.
+# integration-workflow-mark.sh — T-WM1..T-WM4: workflow-mark.js post-merge
+# reset_reason field (#1161); the session id arrives via the hook payload.
+# L3 gap: a real claude -p session verifying the injected context changes
+# assistant behavior — checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: hook-registration.
 # Sourced after helpers.sh; inherits TMPDIR_BASE, AGENTS_DIR, pass/fail functions.
 
 WORKFLOW_MARK="$AGENTS_DIR/hooks/workflow-mark.js"
 WM_WORKFLOW_DIR="$TMPDIR_BASE/workflow-wm"
-WM_ENV_FILE="$TMPDIR_BASE/wm-claude_env"
 mkdir -p "$WM_WORKFLOW_DIR"
 
 # read_wm_field <sid> <step> <field>
@@ -70,11 +58,6 @@ process.stdout.write('ok');
 " "$sid" "$WM_WORKFLOW_DIR" "$uv_status" "$now" 2>/dev/null
 }
 
-# write_wm_env_file <sid>
-_write_wm_env_file() {
-    printf 'CLAUDE_SESSION_ID=%s\n' "$1" > "$WM_ENV_FILE"
-}
-
 # run_wm_hook <json>
 # Pipes a PostToolUse payload to workflow-mark.js; suppresses all output.
 _run_wm_hook() {
@@ -87,7 +70,6 @@ fs.writeFileSync(f,process.argv[1],'utf8');
 process.stdout.write(f);
 " "$json" 2>/dev/null)
     CLAUDE_WORKFLOW_DIR="$WM_WORKFLOW_DIR" \
-    CLAUDE_ENV_FILE="$WM_ENV_FILE" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
     run_with_timeout 30 node "$WORKFLOW_MARK" < "$tmpf" >/dev/null 2>&1 || true
     node -e "require('fs').unlinkSync(process.argv[1])" "$tmpf" 2>/dev/null || true
@@ -102,7 +84,6 @@ else
 # After #1161, markStep is called with { reset_reason: "post-merge" } extraField.
 # ===========================================================================
 T_WM1_SID="wm1-$RANDOM"
-_write_wm_env_file "$T_WM1_SID"
 _write_wm_state "$T_WM1_SID" "complete"
 _run_wm_hook "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"gh pr merge --squash\"},\"tool_response\":{\"exit_code\":0,\"stdout\":\"Merged!\",\"stderr\":\"\"},\"session_id\":\"$T_WM1_SID\"}"
 WM1_STATUS=$(_wm_read_status "$T_WM1_SID" "user_verification")
@@ -122,7 +103,6 @@ fi
 # The git-push-protected path resets without adding reset_reason (only pr merge adds it).
 # ===========================================================================
 T_WM2_SID="wm2-$RANDOM"
-_write_wm_env_file "$T_WM2_SID"
 _write_wm_state "$T_WM2_SID" "complete"
 _run_wm_hook "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git push origin main\"},\"tool_response\":{\"exit_code\":0,\"stdout\":\"\",\"stderr\":\"\"},\"session_id\":\"$T_WM2_SID\"}"
 WM2_STATUS=$(_wm_read_status "$T_WM2_SID" "user_verification")
@@ -142,7 +122,6 @@ fi
 # workflow-mark.js exits early on non-zero exit_code for merge commands.
 # ===========================================================================
 T_WM3_SID="wm3-$RANDOM"
-_write_wm_env_file "$T_WM3_SID"
 _write_wm_state "$T_WM3_SID" "complete"
 _run_wm_hook "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"gh pr merge --squash\"},\"tool_response\":{\"exit_code\":1,\"stdout\":\"\",\"stderr\":\"error: merge failed\"},\"session_id\":\"$T_WM3_SID\"}"
 WM3_STATUS=$(_wm_read_status "$T_WM3_SID" "user_verification")
@@ -159,7 +138,6 @@ fi
 # no-op on the already-reset state.
 # ===========================================================================
 T_WM4_SID="wm4-$RANDOM"
-_write_wm_env_file "$T_WM4_SID"
 _write_wm_state "$T_WM4_SID" "complete"
 MERGE_PAYLOAD="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"gh pr merge --squash\"},\"tool_response\":{\"exit_code\":0,\"stdout\":\"Merged!\",\"stderr\":\"\"},\"session_id\":\"$T_WM4_SID\"}"
 # Fire merge sentinel first time

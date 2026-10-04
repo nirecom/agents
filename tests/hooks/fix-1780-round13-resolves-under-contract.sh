@@ -224,7 +224,7 @@ process.stdout.write(out.join("\n") + "\n");
 PROBE_EOF
 
 # Neutral CWD: run from the temp tree, never the repo (rules/test/fixture-isolation.md).
-OUT=$(cd "$TMP" && env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+OUT=$(cd "$TMP" && env -u CLAUDE_CODE_SESSION_ID \
     "$RWT" 30 node "$(node_path "$PROBE")" \
         "$_AGENTS_DIR_NODE" \
         "$(node_path "$PARENT")" \

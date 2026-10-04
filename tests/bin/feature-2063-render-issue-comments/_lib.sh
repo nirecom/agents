@@ -19,7 +19,7 @@ mkdir -p "$WORK/plans" "$WORK/state"
 # Fixture isolation (rules/test/fixture-isolation.md): dual-pin, drop live ids.
 export CLAUDE_WORKFLOW_DIR="$WORK/state"
 export WORKFLOW_PLANS_DIR="$WORK/plans"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # --- CLI invocation -----------------------------------------------------------
 # A missing binary is reported as its own outcome, never as node's MODULE_NOT_FOUND

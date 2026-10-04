@@ -1,20 +1,13 @@
 #!/bin/bash
 # Tests: bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/wip-check.js
 # Tags: workflow-init, wip-check, driver, early-claim, clarify-intent, scope:issue-specific
-#
-# Feature 1117 — WIP check behavior in the workflow-init driver.
-#
-# The retired wip-set-resume.sh early-claim behavior (NEEDS_CLARIFY) has been
-# absorbed into the driver's wip-check phase. The driver uses wip-state.sh
-# directly (not wip-set-single.sh) and processes labels in route-decision (not
-# wip-check). Tests here verify the driver's directive output for the key WIP
-# scenarios that the old script covered.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the real Projects v2 API accepts the WIP claim
-# - Whether wip-state.sh actually flips Status=In Progress in live GitHub
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# Feature 1117 — WIP check in the workflow-init driver. The retired wip-set-resume.sh
+# early claim (NEEDS_CLARIFY) now lives in the driver's wip-check phase (wip-state.sh
+# directly; labels handled in route-decision). Verifies the driver's directive output
+# for the WIP scenarios the old script covered.
+# TL3 gap: the real Projects v2 API accepting the claim / flipping Status=In Progress.
+# Mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh
+# category: skill-orchestration.
 
 set -u
 
@@ -67,14 +60,14 @@ setup_case() {
     _write_cfg_prims
     export WORKFLOW_PLANS_DIR="$PLANS"
     export AGENTS_CONFIG_DIR="$CFG"
-    export CLAUDE_SESSION_ID="$SID"
-    unset NON_GITHUB CLAUDE_ENV_FILE 2>/dev/null || true
+    export CLAUDE_CODE_SESSION_ID="$SID"
+    unset NON_GITHUB 2>/dev/null || true
     export PATH="$MOCKBIN:$ORIG_PATH"
 }
 
 teardown_case() {
     export PATH="$ORIG_PATH"
-    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR CLAUDE_SESSION_ID NON_GITHUB 2>/dev/null || true
+    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR NON_GITHUB 2>/dev/null || true
 }
 
 _write_gh_mock() {
@@ -152,7 +145,7 @@ MOCKWIP2
 }
 
 _write_cfg_prims() {
-    printf '#!/bin/bash\necho "${CLAUDE_SESSION_ID:-mock-sid}"\n' > "$CFG/bin/resolve-session-id"
+    printf '#!/bin/bash\necho "${CLAUDE_CODE_SESSION_ID:-mock-sid}"\n' > "$CFG/bin/resolve-session-id"
     cp "$AGENTS_DIR/bin/parse-issue-tokens" "$CFG/bin/parse-issue-tokens"
     cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$CFG/hooks/lib/parse-closes-issues.js"
     cat > "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FILT'

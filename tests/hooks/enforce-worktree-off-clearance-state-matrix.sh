@@ -2,61 +2,12 @@
 # tests/hooks/enforce-worktree-off-clearance-state-matrix.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/handle-bash-write.js, hooks/enforce-worktree/handle-edit-write.js, hooks/enforce-worktree/bash-write-scope.js, hooks/lib/write-tools.js
 # Tags: enforce-worktree, off-clearance, workflow-state-dir, clearance-validation, tool-parity, runinterminal, runcommands, notebookedit, editfiles, pretooluse, enforce-worktree-off, protected-branch, main-worktree, security, scope:issue-specific, pwsh-not-required, TL2, hook-registration
-#
-# LAYER NOTE: the reviewer filed this gap as "TL3". Per rules/test.md the TL3
-# prefix is reserved for real-environment seams gated on RUN_TL3 (a live
-# `claude -p`); this file drives the hook as a real PreToolUse SUBPROCESS with
-# piped stdin — the same substrate as its two style references
-# (tests/hooks/fix-1709-workflow-dir-write-allow.sh, tests/hooks/fix-1780-round4-write-tool-parity.sh),
-# both tagged TL2. It is therefore filed as TL2 and named without the TL3
-# prefix, so `ls tests/TL3-*` keeps meaning "gated, expensive, real host".
-#
-# TL3 gap (what this test does NOT catch):
-# - Claude Code actually dispatching PreToolUse for these 8 tool names inside a
-#   live session, and the OFF-clearance pipeline's real read/write of
-#   <workflowDir>/<sid>.off-clearance flowing through the registered hook.
-#   Registration itself is asserted statically in
-#   tests/hooks/fix-1780-round4-write-tool-parity.sh section R.
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration.
-#
-# ---------------------------------------------------------------------------
-# WHAT THIS FILE DEFENDS
-#
-# #1709: enforce-worktree.js is a worktree-LOCATION guard, but the OFF-clearance
-# pipeline lives in the workflow STATE dir (<CLAUDE_WORKFLOW_DIR>, canonically
-# $HOME/.claude/projects/workflow) — outside any repo, and it must stay reachable
-# from wherever the session happens to be standing, including the MAIN checkout
-# and a PROTECTED branch. If the guard blocks the pipeline's own reads or its
-# bookkeeping writes, clearance validation cannot run at all and the OFF path
-# fails shut in a way no unit test of the helper functions can see.
-#
-# Existing coverage and why it is not enough:
-#   - fix-1709-workflow-dir-write-allow.sh  : Bash ONLY, non-git CWD ONLY,
-#     ENFORCE_WORKTREE=on ONLY, WRITES only. It never reads, never stands in a
-#     repo, and never exercises runInTerminal/runCommands.
-#   - fix-1780-round4-write-tool-parity.sh  : all 8 tool names, but only
-#     in-REPO targets and only ENFORCE_WORKTREE=on. Nothing about the workflow
-#     state dir and nothing about the off switch.
-# This file is the cross-product of the two axes neither covers:
-#   {read, state-write, marker-write} x {main, linked-feature, protected}
-#   x {Bash, runInTerminal, runCommands} x {ENFORCE_WORKTREE on, off}
-# plus the edit-write class writing into the state dir (CPR-ORTH: the clearance
-# staging path must behave the same for every write-capable tool class).
-#
-# ASSERTION CONTRACT (strict, inherited from fix-1709): enforce-worktree.js
-# always exits 0 and prints either `{}` (allow) or a `"decision":"block"` object.
-# A crash, a timeout, or empty output is its OWN verdict token — never folded
-# into "allow" — so a hook that dies scores as a failure, not a false green.
-#
-# HERMETICITY (rules/test/fixture-isolation.md): throwaway git repos under a
-# temp dir with core.hooksPath disabled, a throwaway session id, and
-# CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR BOTH pinned (dual-pin) at DISTINCT
-# temp dirs — distinct so that an allow for the state dir cannot be scored by
-# the plans-dir fast-path instead. CLAUDE_SESSION_ID / CLAUDE_CODE_SESSION_ID /
-# SCRATCHPAD / DEFAULT_BRANCHES are unset per invocation so no inherited session
-# marker, scratchpad allow, or branch override can decide an assertion.
-# ---------------------------------------------------------------------------
+# LAYER: TL2, not TL3 — the hook runs as a real PreToolUse SUBPROCESS with piped stdin, the substrate of fix-1709-workflow-dir-write-allow.sh / fix-1780-round4-write-tool-parity.sh; TL3 is reserved for RUN_TL3-gated live `claude -p`.
+# TL3 gap: live dispatch of these 8 tool names and the registered hook's real read/write of <workflowDir>/<sid>.off-clearance (registration is asserted statically in fix-1780-round4-write-tool-parity.sh section R). Mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
+# DEFENDS #1709: the OFF-clearance pipeline lives in the workflow STATE dir (outside any repo) and its reads + bookkeeping writes must stay reachable from the MAIN checkout and a PROTECTED branch, or clearance validation fails shut.
+# MATRIX: {read, state-write, marker-write} x {main, linked-feature, protected} x {Bash, runInTerminal, runCommands} x {ENFORCE_WORKTREE on, off}, plus the edit-write class into the state dir (CPR-ORTH) — the cross-product fix-1709 (Bash, non-git, on, writes only) and fix-1780 round4 (in-repo, on only) leave open.
+# ASSERTION CONTRACT (from fix-1709): the guard prints `{}` (allow) or a block object; a crash, timeout, or empty output is its OWN verdict token, never folded into "allow".
+# HERMETICITY (rules/test/fixture-isolation.md): throwaway repos with core.hooksPath disabled; CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR dual-pinned at DISTINCT dirs (so a state-dir allow cannot come from the plans-dir fast-path); CLAUDE_CODE_SESSION_ID / SCRATCHPAD / DEFAULT_BRANCHES unset per invocation.
 
 set -u
 
@@ -146,7 +97,7 @@ run_guard() {
     local tool="$1" target="$2" dir="$3" shape="$4" mode="$5" payload out rc
     payload=$("$RWT" 10 node "$DRV" "$tool" "$target" "$(node_path "$dir")" "$shape" "$SID" 2>/dev/null)
     out=$(cd "$dir" && printf '%s' "$payload" | \
-        env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
+        env -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
         ENFORCE_WORKTREE="$mode" CLAUDE_WORKFLOW_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
@@ -172,18 +123,11 @@ SCENARIOS="main|$MAIN linked|$WT protected|$WTP"
 
 # ===========================================================================
 # Section R - READS of the workflow STATE dir must be ALLOWED from EVERYWHERE.
-#
-# This is the #1709 regression shape. OFF-clearance validation reads
-# <workflowDir>/<sid>.off-clearance; the read happens wherever the session is
-# standing, which very often IS the main checkout (that is the whole reason a
-# WORKFLOW_OFF is being requested). A guard that blocks it does not degrade the
-# clearance check - it removes it.
-#
-# Both a bare read and a SEQUENCED read (`test -f ... && cat ...`, the shape the
-# validation actually uses) are covered: sequencing is what routes a command past
-# the fast-path allows in the write branch, so a future change that starts
-# treating a sequenced command as a write would break clearance validation here
-# first.
+# The #1709 regression shape: validation reads <workflowDir>/<sid>.off-clearance
+# wherever the session stands — very often the main checkout — and a guard that
+# blocks it removes the clearance check. The SEQUENCED read (`test -f ... && cat
+# ...`, the shape validation uses) is covered too: sequencing routes a command
+# past the write-branch fast-path allows, so treating it as a write fails here.
 # ===========================================================================
 for sc in $SCENARIOS; do
     lbl="${sc%%|*}"; dir="${sc#*|}"
@@ -198,13 +142,9 @@ done
 # ===========================================================================
 # Section W - the pipeline's own BOOKKEEPING WRITES into the workflow state dir
 # must be allowed from every location, for every command-class tool.
-#
-# fix-1709-workflow-dir-write-allow.sh pins this for Bash from a NON-GIT cwd
-# only. Standing inside a repo takes a different route through
-# handle-bash-write.js (repoRoot is non-null, so the non-git fail-closed branch
-# is never reached), and runInTerminal/runCommands were not covered at all -
-# runCommands in particular carries its command in an ARRAY, the exact shape
-# that used to read as "" and be waved through / mis-handled (#1780 round-4 H-2).
+# fix-1709-workflow-dir-write-allow.sh pins only Bash from a NON-GIT cwd; inside a
+# repo handle-bash-write.js takes a different route, and runCommands carries its
+# command in an ARRAY, the shape once read as "" (#1780 round-4 H-2).
 # ===========================================================================
 for sc in $SCENARIOS; do
     lbl="${sc%%|*}"; dir="${sc#*|}"
@@ -230,18 +170,12 @@ done
 
 # ===========================================================================
 # Section K - protected clearance-MARKER basenames (.workflow-off etc.) inside
-# the state dir. The assertion is PARITY across the command class first: a
-# marker forge that one tool name blocks and its sibling allows is a bypass, not
-# a partial guard (CPR-ORTH).
-#
-# Behaviour lock on the absolute verdicts, per the module header of
-# hooks/block-clearance-token-write.js: enforce-worktree.js is a LOCATION guard,
-# so its marker gate blocks from the main checkout and from a protected branch
-# but is INERT inside a linked feature worktree - which is exactly why
-# block-clearance-token-write.js exists as the primary, location-independent gate
-# (marker-gate.js is defence in depth). Locking `linked -> allow` here documents
-# that division of labour; it is NOT a statement that forging a marker from a
-# worktree is permitted overall.
+# the state dir. PARITY across the command class first: a marker forge one tool
+# blocks and a sibling allows is a bypass (CPR-ORTH). The absolute verdicts lock
+# the division of labour in hooks/block-clearance-token-write.js's header: this
+# LOCATION guard blocks from main/protected but is INERT in a linked worktree,
+# where block-clearance-token-write.js is the primary gate — `linked -> allow`
+# here does NOT mean forging a marker from a worktree is permitted overall.
 # ===========================================================================
 for sc in $SCENARIOS; do
     lbl="${sc%%|*}"; dir="${sc#*|}"

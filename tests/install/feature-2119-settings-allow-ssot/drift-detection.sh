@@ -228,7 +228,7 @@ t30_session_setup() {
     printf '%s\n' '{ "permissions": { "allow": ["Bash(ext-hand-written *)"] } }' > "$d/settings-extension.json"
     printf '%s\n' '{ "permissions": { "allow": ["Bash(base-hand-written *)", "Bash(ext-hand-written *)"] } }' \
         > "$d/home/.claude/settings.json"
-    T30_SESSION="$( (unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+    T30_SESSION="$( (unset CLAUDE_CODE_SESSION_ID && \
         printf '%s' '{"session_id":"test-2119-t30"}' | \
         HOME="$d/home" USERPROFILE="$(node_path "$d/home")" CLAUDE_CONFIG_DIR="$d/home/.claude" \
         run_with_timeout 30 node "$(node_path "$d/$SESSION_START_REL")") 2>&1 )"

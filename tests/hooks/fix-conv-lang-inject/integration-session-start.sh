@@ -59,7 +59,6 @@ EOF
     T14_OUT=$(printf '{"session_id":"t14-sid"}' | \
         CONV_LANG="japanese" \
         CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
-        CLAUDE_ENV_FILE="$ENV_FILE.t14" \
         CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-t14" \
         HOME="$TMPDIR_BASE/home-t14" \
         AGENTS_CONFIG_DIR="$EMPTY_CFG" \
@@ -118,12 +117,11 @@ fi
 # valid JSON additionalContext with exit 0.
 # ===========================================================================
 # T26 [Edge] session-start with valid-JSON {} (no session_id) → exit 0, valid additionalContext
-# Symmetric with T20 (post-compact no-session_id). session-start skips env-file/state
+# Symmetric with T20 (post-compact no-session_id). session-start skips state
 # writes but still emits workflow status in additionalContext.
 T26_RAW=$(printf '{}' | \
     CONV_LANG="japanese" \
     CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
-    CLAUDE_ENV_FILE="$ENV_FILE.t26" \
     CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-t26" \
     HOME="$TMPDIR_BASE/home-t26" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
@@ -150,7 +148,6 @@ fi
 T21_RAW=$(printf 'not-json' | \
     CONV_LANG="japanese" \
     CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
-    CLAUDE_ENV_FILE="$ENV_FILE.t21" \
     CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-t21" \
     HOME="$TMPDIR_BASE/home-t21" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \

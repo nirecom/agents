@@ -99,7 +99,7 @@ _gs_in() {
     local dir="$1"; shift
     (
         cd "$dir" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export CLAUDE_WORKFLOW_DIR="$GS_WF"
         export WORKFLOW_PLANS_DIR="$GS_WF"
         run_probe "$@"
@@ -111,7 +111,7 @@ _gs_hook() {
     local dir="$1" input="$2"
     (
         cd "$dir" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export AGENTS_CONFIG_DIR="$GS_CFG"
         export CLAUDE_WORKFLOW_DIR="$GS_WF"
         export WORKFLOW_PLANS_DIR="$GS_WF"
@@ -126,7 +126,7 @@ _gs_in_faulty() {
     local dir="$1" mode="$2"; shift 2
     (
         cd "$dir" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export CLAUDE_WORKFLOW_DIR="$GS_WF"
         export WORKFLOW_PLANS_DIR="$GS_WF"
         export GS_NOTES_MODULE="$WT_NOTES_NODE"
@@ -139,7 +139,7 @@ _gs_hook_faulty() {
     local dir="$1" mode="$2" input="$3"
     (
         cd "$dir" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export AGENTS_CONFIG_DIR="$GS_CFG"
         export CLAUDE_WORKFLOW_DIR="$GS_WF"
         export WORKFLOW_PLANS_DIR="$GS_WF"

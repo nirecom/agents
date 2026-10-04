@@ -29,7 +29,7 @@ _r_run() {
     errfile=$(mktemp 2>/dev/null || mktemp -t offclrerr)
     runpath="$PATH"
     [ -n "$stubdir" ] && runpath="$stubdir:$PATH"
-    _R_OUT=$(PATH="$runpath" SESSION_ID="$SID" CLAUDE_SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
+    _R_OUT=$(PATH="$runpath" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
         CLAUDE_WORKFLOW_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" AGENTS_CONFIG_DIR="$acd" \
         "$RWT" 90 bash "$REQ" --target "$target" --category workflow-bug \
         --detail "next-step is wedged and blocks all progress" 2>"$errfile")

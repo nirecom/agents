@@ -13,7 +13,7 @@ _cv_node() {
     local cwd="$1" script="$2"; shift 2
     local errf out rc
     errf="$(mktemp)"
-    out=$(cd "$cwd" && env -u CLAUDE_PROJECT_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE "$@" \
+    out=$(cd "$cwd" && env -u CLAUDE_PROJECT_DIR -u CLAUDE_CODE_SESSION_ID "$@" \
         bash "$RWT_CV" 5 node -e "$script" 2>"$errf")
     rc=$?
     _CV_ERR="$(cat "$errf")"

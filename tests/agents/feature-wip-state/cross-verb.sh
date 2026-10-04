@@ -116,17 +116,17 @@ fi
 teardown_mock
 
 # ===========================================================================
-# Test 29: clear/setup without CLAUDE_ENV_FILE — both exit 0 (no session-id dep).
+# Test 29: clear/setup without a session id — both exit 0 (no session-id dep).
 # ===========================================================================
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
-unset CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 run_with_timeout 60 bash "$TARGET" clear 42 >/dev/null 2>&1
 RC_CLEAR=$?
 run_with_timeout 60 bash "$TARGET" setup >/dev/null 2>&1
 RC_SETUP=$?
 if [ "$RC_CLEAR" -eq 0 ] && [ "$RC_SETUP" -eq 0 ]; then
-    pass "T29: clear & setup without CLAUDE_ENV_FILE → exit 0"
+    pass "T29: clear & setup without session id → exit 0"
 else
     fail "T29: rc_clear=$RC_CLEAR rc_setup=$RC_SETUP"
 fi
