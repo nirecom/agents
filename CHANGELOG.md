@@ -659,3 +659,7 @@ Changes: Test tooling now reads one test language registry for which files are t
 ### FEATURE: PR #2518 (2026-10-04)
 Background: fix(#2400): share null-freshness predicate between user_verification gate and pre-merge backstop
 Changes: Sessions that skip the outline step can now merge through `gh pr merge` once the user-verification audit has passed; edits to plan documents after that audit still block the merge.;The merge stays blocked while a newer supervisor audit has not returned a verdict, and a plan document that exists but cannot be read now blocks the merge instead of being treated as missing.
+
+### FEATURE: PR #2531 (2026-10-04)
+Background: feat(#2490): show CONFIRM_* gate values in next-step and unify the confirm procedure
+Changes: The workflow now shows each step's confirmation-gate setting in its next-action output and decides whether to ask you from a single check, so the intent, outline, detail, tests, code, docs and worktree gates behave the same way. A scope change between outline and detail is always shown to you, even when the detail confirmation is turned off.
