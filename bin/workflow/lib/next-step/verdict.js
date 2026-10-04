@@ -41,8 +41,9 @@ const { STEP_TO_SKILL, STEP_HINT, REVIEW_TESTS_REOPEN_HINT, isTerminalStep } = r
 const { REVIEW_TESTS_REOPEN_REASONS } = require("../../../../hooks/workflow-state/state-io/review-tests");
 const { resolveRepoDir } = require("./repo-dir");
 const { ENTRYPOINT_PATH } = require("./entrypoint-path");
+const { resolveGateLine } = require("./gate-line");
 
-function emit(action, skill, hint, reason, skipHint) {
+function emit(action, skill, hint, reason, skipHint, gateLine) {
   let out =
     "ACTION=" + action + "\n" +
     "NEXT_SKILL=" + (skill || "") + "\n" +
@@ -54,6 +55,7 @@ function emit(action, skill, hint, reason, skipHint) {
   if (skipHint) {
     out += "SKIP_HINT=" + skipHint + "\n";
   }
+  if (gateLine) out += gateLine + "\n";
   process.stdout.write(out);
   process.exit(0);
 }
@@ -466,7 +468,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
     } catch (e) { /* fail-open: no hint */ }
   }
 
-  emit("invoke", skill, hint, currentStep, skipHint);
+  emit("invoke", skill, hint, currentStep, skipHint, resolveGateLine(currentStep));
 }
 
 module.exports = { emit, computeVerdict };

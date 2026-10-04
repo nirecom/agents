@@ -94,6 +94,22 @@ definition, and related links.
   per turn (`UserPromptSubmit`, `Stop`) count in turns, not in steps.
 - **Related**: [architecture/claude-code/settings/hooks.md](architecture/claude-code/settings/hooks.md)
 
+### confirm gate
+
+- **Full name**: Confirm gate (`CONFIRM_*`)
+- **Definition**: The per-step user-confirmation point controlled by a `CONFIRM_*`
+  flag (seven gates: intent, outline, detail, tests, code, docs, worktree). The
+  step→gate map lives in `hooks/lib/confirm-gate/step-gate-map.js`.
+- **Related**: [skills/_shared/confirm-plan.md](../skills/_shared/confirm-plan.md) CPA-3
+
+### GATE_ACTION
+
+- **Full name**: Confirm-gate action
+- **Definition**: The closed-vocabulary verdict `next-step --gate` prints for the
+  current confirm gate: `proceed`, `ask`, `present-and-stop`, or `none`. Skills
+  follow it verbatim and never branch on the display-only `GATE_CONFIRM_<X>` line.
+- **Related**: [architecture/claude-code/workflow-runtime.md](architecture/claude-code/workflow-runtime.md)
+
 ## Workflow steps
 
 ### intent

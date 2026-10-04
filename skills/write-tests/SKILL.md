@@ -70,12 +70,12 @@ WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model alias
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
    - (Optional) Follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and use it as a test constraint when relevant.
 
-While the subagent runs, the orchestrator MAY run the WT-8 `CONFIRM_TESTS` gate probe (`bin/confirm-off`) — never read the test files the subagent is still writing (SC-W — `skills/_shared/subagent-concurrency.md`).
+While the subagent runs, the orchestrator MAY run the WT-8 `CONFIRM_TESTS` gate check (`next-step --gate`) — never read the test files the subagent is still writing (SC-W — `skills/_shared/subagent-concurrency.md`).
 
 WT-8. Present the final test file content to the user for review — gated by **CONFIRM_TESTS gate (post-action review)**:
-   `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_TESTS on'`
-   - stdout `OFF`: skip WT-8; proceed directly to Completion (no user wait).
-   - stdout `ON` or `ERROR`: present the test file content.
+   Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
+   - `GATE_ACTION=proceed`: skip WT-8; proceed directly to Completion (no user wait).
+   - `GATE_ACTION=ask`: present the test file content.
 
 ## Completion
 

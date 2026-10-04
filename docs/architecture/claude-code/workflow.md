@@ -327,6 +327,7 @@ verdict per stage so each step routes on its own evidence:
   print the resolved alias; skills pass it as the Agent tool's `model` parameter, which wins over
   agent frontmatter. The routed agents keep a frontmatter `model:` equal to their `ROLE_TABLE`
   default only as a fallback for a dropped parameter (anthropics/claude-code#83920).
+- **Step → confirm gate (#2490).** The SSOT of which workflow step owns which `CONFIRM_*` gate (and its default) is `hooks/lib/confirm-gate/step-gate-map.js`; `read-session-facts` gate keys and `next-step --gate` both derive from it.
 
 ## Steps and owners
 

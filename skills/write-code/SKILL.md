@@ -48,9 +48,9 @@ WCD-5a. Run `skills/write-code/scripts/self-check-siblings.sh "<what changed>" "
 WCD-5b. Run `skills/write-code/scripts/detect-contract-pins.sh <edited-files>` — flag edited files with no matching test; fold into WCD-6.
 
 WCD-6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user — gated by **CONFIRM_CODE gate (post-action review)**:
-   `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
-   - stdout `OFF`: skip WCD-6; proceed (no user wait).
-   - stdout `ON` or `ERROR`: present the file list and notes; record each per `skills/_shared/handoff-record.md` (`--step write_code`; `--class E --key write-code:checks-skipped` / `--class D --key write-code:scope-expansion`).
+   Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
+   - `GATE_ACTION=proceed`: skip WCD-6; proceed (no user wait).
+   - `GATE_ACTION=ask`: present the file list and notes; record each per `skills/_shared/handoff-record.md` (`--step write_code`; `--class E --key write-code:checks-skipped` / `--class D --key write-code:scope-expansion`).
 
 WCD-7. Stage the implementation files so the write_code snapshot sees them: `node "$AGENTS_CONFIG_DIR/bin/stage-review-scope-files.js" --worktree "<cwd>" -- <WCD-5 edited files>`
    - Exit non-zero: stop — do not emit the completion sentinel; report via /supervisor-report.

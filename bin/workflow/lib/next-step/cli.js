@@ -13,12 +13,14 @@ const {
 
 function printUsage() {
   process.stdout.write(
-    "Usage: next-step [--session <sid>] [--list]\n" +
+    "Usage: next-step [--session <sid>] [--list | --gate [--scope-change-approved]]\n" +
     "\n" +
     "Deterministic workflow next-step advisor. Reads session state and emits the next\n" +
     "workflow step as four KEY=value lines on stdout (ACTION, NEXT_SKILL,\n" +
     "NEXT_HINT, REASON), plus an optional advisory SKIP_HINT line at the\n" +
-    "outline/detail steps. Always exits 0 in next-step mode; --reset exits nonzero on invalid input.\n" +
+    "outline/detail steps, and an optional display-only GATE_CONFIRM_<X>=<ON|OFF|ERROR>\n" +
+    "line (last) when the invoked step has a CONFIRM_* gate. Never branch on it; use --gate.\n" +
+    "Always exits 0 in next-step mode; --reset exits nonzero on invalid input.\n" +
     "\n" +
     "Options:\n" +
     "  --session <sid>   Use the given session id instead of resolving one.\n" +
@@ -34,6 +36,13 @@ function printUsage() {
     "                    Exclusive with --list / --reset / --mark.\n" +
     "  --next            With --advance: also emit the ACTION block, but only when\n" +
     "                    the settled step was the session's current step.\n" +
+    "  --gate            Read-only confirm-gate check for the recorded current step.\n" +
+    "                    Prints GATE_ACTION=<proceed|ask|present-and-stop|none>, the\n" +
+    "                    GATE_CONFIRM_<X> value line (not for none), GATE_HINT and REASON.\n" +
+    "                    Exclusive with --list / --reset / --mark / --advance (exit 64).\n" +
+    "  --scope-change-approved\n" +
+    "                    With --gate only (else exit 64): the user approved the detail\n" +
+    "                    scope change, so an OFF detail gate resolves to proceed.\n" +
     "  -h, --help        Show this help.\n" +
     "\n" +
     "Deprecated but accepted: --status <status>, --mark <step> complete.\n"
@@ -43,7 +52,7 @@ function printUsage() {
 function parseArgs(argv) {
   const out = {
     list: false, session: undefined, reset: undefined, mark: undefined,
-    advance: false, next: false,
+    advance: false, next: false, gate: false, scopeChangeApproved: false,
     advanceStep: undefined, advanceStatus: undefined, skipReason: undefined,
     // Diagnostic only: the literal token the caller typed for the status, so a
     // refusal can name the spelling in front of them.
@@ -121,6 +130,10 @@ function parseArgs(argv) {
       } else {
         i += 1;
       }
+    } else if (a === "--gate") {
+      out.gate = true;
+    } else if (a === "--scope-change-approved") {
+      out.scopeChangeApproved = true;
     } else if (a === "--advance") {
       out.advance = true;
     } else if (a === "--next") {
@@ -159,8 +172,20 @@ function parseArgs(argv) {
     process.stderr.write("next-step: invalid --session value — must match [A-Za-z0-9_-]+\n");
     process.exit(1);
   }
+  validateGateArgs(out);
   validateAdvanceArgs(out);
   return out;
+}
+
+function validateGateArgs(out) {
+  const usageError = (msg) => {
+    process.stderr.write("next-step: " + msg + "\n");
+    process.exit(64);
+  };
+  if (out.scopeChangeApproved && !out.gate) usageError("--scope-change-approved is only meaningful with --gate");
+  if (out.gate && (out.list || out.reset !== undefined || out.mark !== undefined || out.advance)) {
+    usageError("--gate cannot be combined with --list / --reset / --mark / --advance");
+  }
 }
 
 // All --advance validation, kept out of the parse loop so the frozen
