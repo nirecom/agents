@@ -28,7 +28,7 @@ offclr_require_script
 # codex call and already interpolated unvalidated input into a prompt.
 # ===========================================================================
 run_A_argument_validation() {
-    # The harness pins CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR together for
+    # The harness pins WORKFLOW_STATE_DIR and WORKFLOW_PLANS_DIR together for
     # every run_req below, so nothing reaches the real ~/.workflow-plans (#1799).
     local tmp tn probe rows row args want_rc want_err label invoked
     # rows: <label>|<want_rc>|<stderr regex>|<args...>
@@ -298,7 +298,7 @@ offclr_shadow_resolver() {
 # getWorkflowDir() the shim reads, not by a bash-side re-implementation. So the
 # assertion is not "a token exists somewhere" but "the token is at the exact path
 # the script announced, inside the sandbox the harness pins via the
-# CLAUDE_WORKFLOW_DIR + WORKFLOW_PLANS_DIR pair (#1799), and nowhere else" — plus
+# WORKFLOW_STATE_DIR + WORKFLOW_PLANS_DIR pair (#1799), and nowhere else" — plus
 # the operator-facing surface (exit code, clean stderr, the category-binding
 # instruction, and the correctly UPPERCASED sentinel name for each target).
 # ===========================================================================
@@ -326,7 +326,7 @@ run_C_allow_surface() {
         [ "$(offclr_json "$tmp/c-$target.off-clearance" 't.target')" = "$target" ] || ok=0
         [ "$(offclr_json "$tmp/c-$target.off-clearance" 't.urgency')" = "urgent" ] || ok=0
         if [ "$ok" = "1" ]; then
-            pass "C [$target] ALLOW -> exit 0, empty stderr, token at the ANNOUNCED path under CLAUDE_WORKFLOW_DIR, ${upper}_OFF guidance"
+            pass "C [$target] ALLOW -> exit 0, empty stderr, token at the ANNOUNCED path under WORKFLOW_STATE_DIR, ${upper}_OFF guidance"
         else
             fail "C [$target] ALLOW surface wrong; rc=$RC tokens=$(token_count "$tmp") announced=$(printf '%q' "$announced") err=$(printf '%q' "$ERR") out=$(printf '%q' "$OUT")"
         fi

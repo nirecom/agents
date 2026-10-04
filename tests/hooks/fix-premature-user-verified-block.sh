@@ -41,7 +41,7 @@ SESSION_BASE="$WORK_DIR/workflow-dir"
 mkdir -p "$SESSION_BASE"
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$WORK_DIR/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -64,7 +64,7 @@ run_hook_decision() {
   out=$(echo "$json" | \
         ENFORCE_WORKTREE="$enforce_worktree" \
         PATH="$path_entry:$PATH" \
-        CLAUDE_WORKFLOW_DIR="$SESSION_BASE" \
+        WORKFLOW_STATE_DIR="$SESSION_BASE" \
         run_with_timeout node "$HOOK" 2>/dev/null)
   echo "$out" | run_with_timeout node -e "
     let d; try { d=JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e){process.stdout.write('parse-error:'+require('fs').readFileSync(0,'utf8')); process.exit(0);}

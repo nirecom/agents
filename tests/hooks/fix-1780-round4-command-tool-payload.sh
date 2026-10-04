@@ -169,7 +169,7 @@ classify() {
 run_block_hook() { # <tmp_node> <input-json> -> "<rc>|<stdout>"
     local tn="$1" input="$2" out rc
     [ -f "$BLOCK_HOOK" ] || { printf 'absent|'; return; }
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    out=$(WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 15 node "$BLOCK_HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
@@ -278,7 +278,7 @@ EDRV_EOF
     run_shim() { # <tool> <sid> <cmd...> -> "<rc>|<blocked yes/no>"
         local hi out rc
         hi=$("$RWT" 10 node "$EDRV" "$@" 2>/dev/null)
-        out=$(WORKFLOW_PLANS_DIR="$TNE" CLAUDE_WORKFLOW_DIR="$TNE" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        out=$(WORKFLOW_PLANS_DIR="$TNE" WORKFLOW_STATE_DIR="$TNE" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
             "$RWT" 15 node "$SHIM" <<< "$hi" 2>/dev/null)
         rc=$?
         if printf '%s' "$out" | grep -q '"decision":"block"'; then printf '%s|yes' "$rc"; else printf '%s|no' "$rc"; fi

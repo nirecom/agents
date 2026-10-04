@@ -5,7 +5,7 @@
 # B-29: issue-close-write-outcome.js normal mode — writes outcome JSON with only CLAUDE_CODE_SESSION_ID set.
 # RED pre-fix: the old private resolveSessionId() never read CLAUDE_CODE_SESSION_ID → no file written.
 # GREEN post-fix: it delegates to hooks/workflow-state resolveSessionId() (CLAUDE_CODE_SESSION_ID first, P2).
-# #2434: the outcome file is a control file — <CLAUDE_WORKFLOW_DIR>/<sid>.control/issue-close-outcome.json.
+# #2434: the outcome file is a control file — <WORKFLOW_STATE_DIR>/<sid>.control/issue-close-outcome.json.
 # ===========================================================================
 setup
 PLANS_DIR="$TMP/b29-plans"
@@ -19,7 +19,7 @@ bash -c "
     unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
     export CLAUDE_CODE_SESSION_ID='own-sid-b29'
     export WORKFLOW_PLANS_DIR='$PLANS_DIR'
-    export CLAUDE_WORKFLOW_DIR='$WF_DIR'
+    export WORKFLOW_STATE_DIR='$WF_DIR'
     export AGENTS_CONFIG_DIR='$AGENTS_DIR'
     cd '$NONGIT_CWD'
     node '$AGENTS_DIR/bin/issue-close-write-outcome.js' 999 completed appended closed posted cleared

@@ -39,7 +39,7 @@ NEUTRAL_CWD=""
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE" "$NEUTRAL_CWD"' EXIT
 
 # --- Fixture isolation (see rules/test/fixture-isolation.md) ---------------
-# WORKFLOW_PLANS_DIR is pinned everywhere CLAUDE_WORKFLOW_DIR is pinned, so
+# WORKFLOW_PLANS_DIR is pinned everywhere WORKFLOW_STATE_DIR is pinned, so
 # supervisor-emit never resolves the developer's real ~/.workflow-plans/.
 FIXTURE_PLANS_DIR="$TMPDIR_BASE/fixture-plans"
 FIXTURE_PROJECT_DIR="$TMPDIR_BASE/fixture-project"
@@ -135,7 +135,7 @@ run_workflow_mark() {
         env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "$@" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     return $rc
@@ -164,7 +164,7 @@ run_enforce_worktree() {
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo_scope" \
         "$@" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$GUARD_JS" 2>&1)" || GUARD_RC=$?
     if [ "$GUARD_RC" -ne 0 ]; then
@@ -311,7 +311,7 @@ test_A4_env_file_fallback() {
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile" \
         node "$MARK_JS" 2>&1)" || true
@@ -331,7 +331,7 @@ test_A5_no_session_id_hard_blocks() {
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     # No marker should be written.
@@ -543,7 +543,7 @@ test_A14_transcript_path_fallback() {
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then
@@ -567,7 +567,7 @@ test_A15_transcript_path_invalid_chars() {
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     if [ "$rc" -ne 2 ]; then
@@ -679,7 +679,7 @@ test_B5_input_session_id_wins_over_env_file() {
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile" \
         node "$GUARD_JS" 2>&1)" || true
@@ -843,7 +843,7 @@ test_SEC3_env_file_traversal_blocked() {
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile" \
         node "$GUARD_JS" 2>&1)" || rc=$?

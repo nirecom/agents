@@ -18,7 +18,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 TMPD="$(make_tmp)"
 trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
-export CLAUDE_WORKFLOW_DIR="$(np "$CLAUDE_WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(np "$WORKFLOW_STATE_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR 2>/dev/null || true
 cd "$TMPD" || exit 1
@@ -71,7 +71,7 @@ try {
   RT.clearReviewTestsWarnings(sid, "c11-accepted", manifest);
   counting = false;
 
-  const st = JSON.parse(fs.readFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json"), "utf8"));
+  const st = JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json"), "utf8"));
   const rt = (st.current && st.current.steps && st.current.steps.review_tests) || {};
   const evs = st.events || [];
   const w1 = evs.find((e) => e.origin === "c11-writer-early");

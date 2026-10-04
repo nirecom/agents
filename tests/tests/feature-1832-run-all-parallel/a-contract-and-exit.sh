@@ -12,7 +12,7 @@ set -uo pipefail
 fx_init "a-contract-and-exit"
 # Explicit per-case pins (fx_init sets the same values; kept visible per case).
 export RUN_ALL_CACHE_DIR="$FX_CACHE_DIR"
-export CLAUDE_WORKFLOW_DIR="$FX_TMP_ROOT/workflow"
+export WORKFLOW_STATE_DIR="$FX_TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$FX_TMP_ROOT/plans"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 

@@ -20,7 +20,7 @@ UUID="aabbccdd-1111-2222-3333-444455556666"
 run_migrate() {
   local sid="$1" wf="$2" plans="$3"
   node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$wf';
+process.env.WORKFLOW_STATE_DIR='$wf';
 process.env.WORKFLOW_PLANS_DIR='$plans';
 try {
   var m=require('$IDX_MOD');
@@ -152,7 +152,7 @@ printf 'terminal\n' > "$T/plans/${SID2}-detail-plan-terminal.txt"
 WF_NP="$(np "$T/workflow-state")"
 PLANS_NP="$(np "$T/plans")"
 RESULT=$(node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$WF_NP';
+process.env.WORKFLOW_STATE_DIR='$WF_NP';
 process.env.WORKFLOW_PLANS_DIR='$PLANS_NP';
 try {
   var m=require('$IDX_MOD');
@@ -187,7 +187,7 @@ age_files 700 "$T/plans/${SID}-detail-plan-terminal.txt"
 WF_NP="$(np "$T/workflow-state")"
 PLANS_NP="$(np "$T/plans")"
 RESULT=$(node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$WF_NP';
+process.env.WORKFLOW_STATE_DIR='$WF_NP';
 process.env.WORKFLOW_PLANS_DIR='$PLANS_NP';
 try {
   var m=require('$IDX_MOD');
@@ -219,7 +219,7 @@ harness_isolate "$T"
 WF_NP="$(np "$T/workflow-state")"
 PLANS_NP="$(np "$T/plans")"
 node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$WF_NP';
+process.env.WORKFLOW_STATE_DIR='$WF_NP';
 process.env.WORKFLOW_PLANS_DIR='$PLANS_NP';
 try {
   var m=require('$IDX_MOD');
@@ -227,7 +227,7 @@ try {
 } catch(e){}
 " 2>/dev/null
 TRACE=$(CONTROL_MIGRATION_TRACE=1 node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$WF_NP';
+process.env.WORKFLOW_STATE_DIR='$WF_NP';
 process.env.WORKFLOW_PLANS_DIR='$PLANS_NP';
 process.env.CONTROL_MIGRATION_TRACE='1';
 try {

@@ -24,7 +24,7 @@
 # WHAT THIS FILE DEFENDS
 #
 # #1709: enforce-worktree.js is a worktree-LOCATION guard, but the OFF-clearance
-# pipeline lives in the workflow STATE dir (<CLAUDE_WORKFLOW_DIR>, canonically
+# pipeline lives in the workflow STATE dir (<WORKFLOW_STATE_DIR>, canonically
 # $HOME/.claude/projects/workflow) — outside any repo, and it must stay reachable
 # from wherever the session happens to be standing, including the MAIN checkout
 # and a PROTECTED branch. If the guard blocks the pipeline's own reads or its
@@ -51,7 +51,7 @@
 #
 # HERMETICITY (rules/test/fixture-isolation.md): throwaway git repos under a
 # temp dir with core.hooksPath disabled, a throwaway session id, and
-# CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR BOTH pinned (dual-pin) at DISTINCT
+# WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR BOTH pinned (dual-pin) at DISTINCT
 # temp dirs — distinct so that an allow for the state dir cannot be scored by
 # the plans-dir fast-path instead. CLAUDE_SESSION_ID / CLAUDE_CODE_SESSION_ID /
 # SCRATCHPAD / DEFAULT_BRANCHES are unset per invocation so no inherited session
@@ -147,7 +147,7 @@ run_guard() {
     payload=$("$RWT" 10 node "$DRV" "$tool" "$target" "$(node_path "$dir")" "$shape" "$SID" 2>/dev/null)
     out=$(cd "$dir" && printf '%s' "$payload" | \
         env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
-        ENFORCE_WORKTREE="$mode" CLAUDE_WORKFLOW_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
+        ENFORCE_WORKTREE="$mode" WORKFLOW_STATE_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
     rc=$?

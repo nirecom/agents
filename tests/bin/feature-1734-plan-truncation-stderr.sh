@@ -114,11 +114,11 @@ if [[ ! -f "$AGENTS_ROOT/bin/lib/safe-state-path.sh" ]]; then
 else
   cp "$AGENTS_ROOT/bin/lib/safe-state-path.sh" "$B_CFG/bin/lib/safe-state-path.sh"
 fi
-# #2434: the loop's control files live under $CLAUDE_WORKFLOW_DIR/<sid>.control/;
+# #2434: the loop's control files live under $WORKFLOW_STATE_DIR/<sid>.control/;
 # pin both state roots so an inherited value cannot point at the real store.
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans-dir"
-mkdir -p "$CLAUDE_WORKFLOW_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR"
 cp "$AGENTS_ROOT/bin/concern-ledger" "$B_CFG/bin/concern-ledger"
 chmod +x "$B_CFG/bin/concern-ledger"
 cp "$AGENTS_ROOT/bin/lib/concern-ledger.sh" "$B_CFG/bin/lib/concern-ledger.sh"

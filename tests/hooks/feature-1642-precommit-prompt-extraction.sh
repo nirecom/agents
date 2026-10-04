@@ -40,7 +40,7 @@ TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -244,7 +244,7 @@ assert_marker_skips_backstop() {
     run_precommit "$repo" \
         "AGENTS_CONFIG_DIR=$repo" \
         "ENFORCE_WORKTREE=off" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile"
     if [ "$RC" -eq 0 ]; then
@@ -275,7 +275,7 @@ t03c_no_marker_still_blocks() {
     run_precommit "$repo" \
         "AGENTS_CONFIG_DIR=$repo" \
         "ENFORCE_WORKTREE=off" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_ENV_FILE=$envfile"
     if [ "$RC" -eq 1 ]; then

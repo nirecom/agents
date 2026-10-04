@@ -241,7 +241,7 @@ r9_render() {
         run_with_timeout 10 env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL \
             -u PRODUCER_LOW_MODEL -u CLAUDE_PROJECT_DIR -u CLAUDE_SESSION_ID \
             -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE AGENTS_CONFIG_DIR="$cfg" \
-            CLAUDE_WORKFLOW_DIR="$R9_WORK/wf" WORKFLOW_PLANS_DIR="$R9_WORK/plans" node -e "
+            WORKFLOW_STATE_DIR="$R9_WORK/wf" WORKFLOW_PLANS_DIR="$R9_WORK/plans" node -e "
 const r = require('$RENDER_NODE');
 const findings = [
   { categories:['code'], severity:'error', detail:'r9-detail', reporter:'r9' },

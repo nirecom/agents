@@ -27,7 +27,7 @@ run_from_arg() {
     local root="$1" sid_arg="$2"
     mkdir -p "$root/state" "$root/plans" "$root/transcripts"
     write_env_file "$root/env" "heir-boundary"
-    ( cd "$AGENTS_DIR" && CLAUDE_ENV_FILE="$root/env" CLAUDE_WORKFLOW_DIR="$root/state" \
+    ( cd "$AGENTS_DIR" && CLAUDE_ENV_FILE="$root/env" WORKFLOW_STATE_DIR="$root/state" \
         WORKFLOW_PLANS_DIR="$root/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$root/transcripts" \
         run_with_timeout node "$CLI" --from "$sid_arg" >"$root/stdout" 2>"$root/stderr" ) \
         && LAST_EXIT=0 || LAST_EXIT=$?

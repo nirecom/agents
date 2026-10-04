@@ -51,7 +51,7 @@ run_L9() {
 $(_m_table)
 EOF
 
-    problems=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" ROWS="$rows" "$RWT" 60 node -e "
+    problems=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" ROWS="$rows" "$RWT" 60 node -e "
 const io = require('$SIO');
 const { isEffectivelyPendingStep } = require('$LIFECYCLE');
 const { isAllPending } = require('$ADOPT');
@@ -133,7 +133,7 @@ run_L10() {
 $(_m_composite_table)
 EOF
 
-    problems=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" ROWS="$rows" "$RWT" 60 node -e "
+    problems=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" ROWS="$rows" "$RWT" 60 node -e "
 const io = require('$SIO');
 const { isEffectivelyPendingStep } = require('$LIFECYCLE');
 const { isAllPending } = require('$ADOPT');

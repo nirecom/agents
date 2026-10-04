@@ -6,7 +6,7 @@
 # L3 gap: real Stop-event wsid reads, SC-5 elapsed-time fallback and fail-loud branch
 # in a live claude -p session — checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
-# #2434: state is <CLAUDE_WORKFLOW_DIR>/<sid>.control/supervisor-state.json (dual-pinned).
+# #2434: state is <WORKFLOW_STATE_DIR>/<sid>.control/supervisor-state.json (dual-pinned).
 
 set -u
 
@@ -50,7 +50,7 @@ require_source() {
 # Seed a supervisor-state.json directly via writer module.
 seed_state() {
     local tmp="$1" sid="$2" layer2_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -86,7 +86,7 @@ run_c1() {
     (
         cd "$workdir" && \
         CLAUDE_SESSION_ID="$ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -113,7 +113,7 @@ run_c2() {
     (
         cd "$workdir" && \
         CLAUDE_SESSION_ID="$ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -136,7 +136,7 @@ run_c3() {
     (
         cd "$workdir" && \
         CLAUDE_SESSION_ID="$ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -160,7 +160,7 @@ run_c4() {
     (
         cd "$workdir" && \
         CLAUDE_SESSION_ID="$ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -188,7 +188,7 @@ call_resolve_wsid() {
         cd "$cwd" && \
         unset CLAUDE_SESSION_ID && \
         if [ -n "$env_file" ]; then export CLAUDE_ENV_FILE="$env_file"; else unset CLAUDE_ENV_FILE; fi && \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
 process.stdout.write(r == null ? '' : r);
@@ -343,7 +343,7 @@ run_c10() {
     # Seed wsid state with alert_armed_at set — guard should branch (3) via fallback.
     seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     out=$(cd "$workdir" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     # After fix: the guard should block (exit 2) because wsid state has alert_armed_at,
     # and the retry counter on the wsid file should increment.
@@ -371,7 +371,7 @@ run_c11() {
     seed_state "$tmp" "$ccuuid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     out=$(cd "$workdir" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     ccuuid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${ccuuid}.control/supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
     wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}.control/supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
@@ -398,7 +398,7 @@ run_c12() {
     # NO CC UUID state file. Only wsid file with alert_armed_at.
     seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     out=$(cd "$workdir" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}.control/supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
     rm -rf "$tmp"
@@ -467,7 +467,7 @@ run_c15() {
     (
         cd "$workdir" && \
         CLAUDE_SESSION_ID="c15-ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity bogus --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -491,7 +491,7 @@ run_c16() {
     (
         cd "$workdir" && \
         CLAUDE_SESSION_ID="c16-ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -541,7 +541,7 @@ run_c18() {
     out=$(
         cd "$workdir" && \
         unset CLAUDE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" --session-id "$injected" 2>&1
     )

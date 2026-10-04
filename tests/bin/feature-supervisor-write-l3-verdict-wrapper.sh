@@ -33,7 +33,7 @@ run_with_timeout() {
 
 read_field() {
     local tmp="$1" sid="$2" field="$3"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st || !st.audit) { process.stdout.write('MISSING'); process.exit(0); }
@@ -63,7 +63,7 @@ run_v1() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         CONTINUE "all checks passed" --session-id sid-v1 >/dev/null 2>&1
     rc=$?
     audit_phase=$(read_field "$tmp" "sid-v1" "audit_phase")
@@ -85,7 +85,7 @@ run_v2() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         WARN "minor concern detected" --session-id sid-v2 >/dev/null 2>&1
     rc=$?
     audit_verdict=$(read_field "$tmp" "sid-v2" "audit_verdict")
@@ -104,7 +104,7 @@ run_v3() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         BLOCK "critical security issue" --session-id sid-v3 >/dev/null 2>&1
     rc=$?
     audit_verdict=$(read_field "$tmp" "sid-v3" "audit_verdict")
@@ -123,7 +123,7 @@ run_v4() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         MAYBE "some cause" --session-id sid-v4 2>&1)
     rc=$?
     rm -rf "$tmp"
@@ -141,7 +141,7 @@ run_v5() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         CONTINUE --session-id sid-v5 2>&1)
     rc=$?
     rm -rf "$tmp"
@@ -159,7 +159,7 @@ run_v6() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         CONTINUE "pass-through test" --session-id sid-v6 >/dev/null 2>&1
     rc=$?
     exists_named=0; exists_wsid=0; exists_cc=0

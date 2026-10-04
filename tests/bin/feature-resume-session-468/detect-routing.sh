@@ -18,7 +18,7 @@ echo "=== T2: none_when_envfile_lacks_sid ==="
 T2_ROOT="$TMPDIR_BASE/t2"
 mkdir -p "$T2_ROOT/state" "$T2_ROOT/plans/worktree-end"
 printf 'SOMETHING_ELSE=foo\n' > "$T2_ROOT/env"
-( cd "$AGENTS_DIR" && CLAUDE_ENV_FILE="$T2_ROOT/env" CLAUDE_WORKFLOW_DIR="$T2_ROOT/state" WORKFLOW_PLANS_DIR="$T2_ROOT/plans" run_with_timeout node "$CLI" >"$T2_ROOT/stdout" 2>"$T2_ROOT/stderr" ) || true
+( cd "$AGENTS_DIR" && CLAUDE_ENV_FILE="$T2_ROOT/env" WORKFLOW_STATE_DIR="$T2_ROOT/state" WORKFLOW_PLANS_DIR="$T2_ROOT/plans" run_with_timeout node "$CLI" >"$T2_ROOT/stdout" 2>"$T2_ROOT/stderr" ) || true
 LAST_EXIT=$?
 LAST_OUT=$(cat "$T2_ROOT/stdout" 2>/dev/null || true)
 LAST_ERR=$(cat "$T2_ROOT/stderr" 2>/dev/null || true)

@@ -47,7 +47,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # DUAL-PIN (#1799).
-export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 # The CLI requires session-facts.js under AGENTS_CONFIG_DIR (only reached by

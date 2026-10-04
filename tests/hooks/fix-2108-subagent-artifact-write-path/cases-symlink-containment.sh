@@ -224,7 +224,7 @@ _sy_characterize_lexical_residuals() {
 # --- A22-6 / A22-7 — THE SECOND PROTECTED DESTINATION ---------------------------------
 # A21 and A22-1..A22-5 reason about one destination class: files under version control.
 # early-gate.js:33 names TWO — "outside the repo AND outside workflow state". The second,
-# hooks/workflow-state's store (CLAUDE_WORKFLOW_DIR, else ~/.claude/projects/workflow), holds
+# hooks/workflow-state's store (WORKFLOW_STATE_DIR, else ~/.claude/projects/workflow), holds
 # the records this gate reads to decide: step progress, clearance tokens, markers. It sits
 # outside every repo BY CONSTRUCTION, which is exactly why A22-1's clause misses it —
 # findRepoRoot() is the allowlist's only non-lexical test and it answers null here. A22-6

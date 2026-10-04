@@ -35,7 +35,7 @@ PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Dual-pin (#1799): pinning only one of the pair lets supervisor-emit append to
 # the developer's real ~/.workflow-plans/.
-export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 
@@ -244,7 +244,7 @@ for (const s of ['run_tests','review_security','docs','review_docs',
     'user_verification','cleanup','pre_final_report_gate','final_report']) {
   steps[s] = {status:'pending'};
 }
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, 'wcd7.json'),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, 'wcd7.json'),
   JSON.stringify({steps,closes_issues:[2327]}));
 " 2>/dev/null
 
@@ -277,7 +277,7 @@ for (const s of ['run_tests','review_security','docs','review_docs',
     'user_verification','cleanup','pre_final_report_gate','final_report']) {
   steps[s] = {status:'pending'};
 }
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, 'wcd7b.json'),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, 'wcd7b.json'),
   JSON.stringify({steps,closes_issues:[2327]}));
 " 2>/dev/null
 
@@ -309,7 +309,7 @@ for (const s of ['run_tests','review_security','docs','review_docs',
     'user_verification','cleanup','pre_final_report_gate','final_report']) {
   steps[s] = {status:'pending'};
 }
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, 'wcd7c.json'),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, 'wcd7c.json'),
   JSON.stringify({steps,closes_issues:[2327]}));
 " 2>/dev/null
 
@@ -341,7 +341,7 @@ for (const s of ['run_tests','review_security','docs','review_docs',
     'user_verification','cleanup','pre_final_report_gate','final_report']) {
   steps[s] = {status:'pending'};
 }
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, 'wcd7e.json'),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, 'wcd7e.json'),
   JSON.stringify({steps,closes_issues:[2327]}));
 " 2>/dev/null
 
@@ -366,7 +366,7 @@ for (const s of ['run_tests','review_security','docs','review_docs',
     'user_verification','cleanup','pre_final_report_gate','final_report']) {
   steps[s] = {status:'pending'};
 }
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, 'wcd7f.json'),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, 'wcd7f.json'),
   JSON.stringify({steps,closes_issues:[2327]}));
 " 2>/dev/null
 

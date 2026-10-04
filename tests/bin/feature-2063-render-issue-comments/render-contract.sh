@@ -66,7 +66,7 @@ else
     assert_rc "P2: the CLI renders the driver's own checkpoint" 0
     assert_eq "P2: CLI stdout is byte-identical to context.md's comments section" "$P2_SECTION" "$CLI_OUT"
     teardown_case
-    export CLAUDE_WORKFLOW_DIR="$WORK/state"
+    export WORKFLOW_STATE_DIR="$WORK/state"
     export WORKFLOW_PLANS_DIR="$WORK/plans"
 fi
 

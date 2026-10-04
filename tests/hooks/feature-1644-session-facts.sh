@@ -55,9 +55,9 @@ TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
-# Pinned as a PAIR (#1799): a lone CLAUDE_WORKFLOW_DIR would still let
+# Pinned as a PAIR (#1799): a lone WORKFLOW_STATE_DIR would still let
 # supervisor-emit append to the developer's real ~/.workflow-plans.
-export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 PLANS_DIR_N="$(nrm "$PLANS_DIR")"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID

@@ -92,7 +92,7 @@ gate learns to say later.
 The six workflow env vars (`GATE_ENV_SCOPE` in `gate.js`) are resolved to
 concrete values and passed EXPLICITLY through `extraEnv` — never read from
 `process.env`. They are also in the entry's `envPassthrough`, which permits
-silent inheritance, and an inherited `CLAUDE_WORKFLOW_DIR` points the gate
+silent inheritance, and an inherited `WORKFLOW_STATE_DIR` points the gate
 child at a different session's state, where every step reads "missing" and the
 gate approves everything. That is the quiet failure this resolution exists to
 prevent (Risk 3).
@@ -115,7 +115,7 @@ module's own realpath (`anchor.js` `resolveAcd` drops the env candidate for the
 same reason), so neither value is forgeable by an inline `VAR=x node bin/...`
 prefix or by a poisoned parent env. Both are decisions a gate depends on:
 
-- `CLAUDE_WORKFLOW_DIR` names the state root the gate reads step statuses from —
+- `WORKFLOW_STATE_DIR` names the state root the gate reads step statuses from —
   a planted directory holding a fabricated state file makes it approve.
 - `DEFAULT_BRANCHES` is the protected-branch set arming both
   `isProtectedBranch()` and `merge-detect.js`'s own `getProtectedBranches()` in

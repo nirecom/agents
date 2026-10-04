@@ -37,7 +37,7 @@ report() {
     local tmp="$1" envsid="$2"
     shift 2
     env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$envsid" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$CLI" --categories 'workflow' --severity 'warning' \
         --detail 'gate blocked a sanctioned command' --reporter 'write-tests' "$@" 2>&1
@@ -49,7 +49,7 @@ report() {
 seed_active() {
     local tmp="$1" sid="$2"
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -61,7 +61,7 @@ markStep('$sid', 'workflow_init', 'complete');
 inspect() {
     local tmp="$1" sid="$2"
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID SID="$sid" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { readHandoff } = require('$AGENTS_DIR_NODE/$ARTIFACT');
@@ -178,7 +178,7 @@ run_S5() {
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
     env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="usage-sid-s5" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$CLI" --severity 'warning' >/dev/null 2>&1
     rc=$?

@@ -51,7 +51,7 @@ try {
 } catch (_e) { /* fail-open */ }
 
 try {
-  const stateDir = process.env.CLAUDE_WORKFLOW_DIR ||
+  const stateDir = process.env.WORKFLOW_STATE_DIR ||
     path.join(os.homedir(), ".claude", "projects", "workflow");
   const lines = [
     // Lineage evidence for #1305 — the compacted transcript carries this

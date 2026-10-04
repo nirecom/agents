@@ -154,6 +154,6 @@ TABLE
 
 # SKIPPED: areAllWriteSegmentsUnderWorkflowDir positive path (returns true)
 # Because: it needs a write target physically under the resolved workflow dir,
-#   i.e. pinned CLAUDE_WORKFLOW_DIR + WORKFLOW_PLANS_DIR fixtures that this
+#   i.e. pinned WORKFLOW_STATE_DIR + WORKFLOW_PLANS_DIR fixtures that this
 #   pure-predicate suite otherwise has no need for (rules/test/fixture-isolation.md).
 # TL3 gap: only a real session proves the marker-gate allow actually fires.

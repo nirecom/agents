@@ -3,7 +3,7 @@
 # run_all_exec <script> <out> <err> — per-extension test dispatch
 # (*.Tests.ps1 → pwsh/Pester, test_*.py → uv/pytest, else bash); returns the child rc,
 # 77 (SKIP) when pwsh/uv is absent.
-# run_all_pin_state_dirs <root> — exports CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR as fresh
+# run_all_pin_state_dirs <root> — exports WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR as fresh
 # subdirectories of <root>; non-zero when they cannot be created.
 # Contract: docs/architecture/claude-code/test-runner-parallelism.md.
 
@@ -20,7 +20,7 @@ run_all_pin_state_dirs() {
   # Mixed form so Node on Windows receives a usable path.
   if command -v cygpath >/dev/null 2>&1; then root="$(cygpath -m "$root")"; fi
   mkdir -p "$root/workflow" "$root/plans" 2>/dev/null || return 1
-  export CLAUDE_WORKFLOW_DIR="$root/workflow" WORKFLOW_PLANS_DIR="$root/plans"
+  export WORKFLOW_STATE_DIR="$root/workflow" WORKFLOW_PLANS_DIR="$root/plans"
 }
 
 run_all_exec() {

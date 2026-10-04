@@ -27,7 +27,7 @@ TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
-CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"; export CLAUDE_WORKFLOW_DIR
+WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"; export WORKFLOW_STATE_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 
@@ -101,7 +101,7 @@ EXPECTED_KEYS="FACTS_VERSION SESSION_ID PLANS_DIR CONTROL_DIR GATE_CONFIRM_TESTS
 # session id, so none can see another). Prints "KEYS=<list>" for C1.
 UUID_SID="b923a2da-5f5d-494b-bfb3-568dce3bf8e9"
 FIX_OUT="$(UUID_SID_LIT="$UUID_SID" run_with_timeout node -e '
-  const fs = require("fs"), path = require("path"), wf = process.env.CLAUDE_WORKFLOW_DIR;
+  const fs = require("fs"), path = require("path"), wf = process.env.WORKFLOW_STATE_DIR;
   let keys;
   try { keys = (require(process.env.KEYS_MOD).FACTS_KEYS || []).join(" ") + " "; }
   catch (e) { keys = "MODULE_LOAD_FAILED"; }
@@ -418,7 +418,7 @@ dir_fp() {
     for (const d of process.env.FP_DIRS.split(":::")) { out.push("== " + d); walk(d, ""); }
     process.stdout.write(out.join("\n"));' 2>/dev/null || echo "FP_FAILED"
 }
-FP_TARGETS="$CLAUDE_WORKFLOW_DIR:::$WORKFLOW_PLANS_DIR:::$(nrm "$CFG_FULL")"
+FP_TARGETS="$WORKFLOW_STATE_DIR:::$WORKFLOW_PLANS_DIR:::$(nrm "$CFG_FULL")"
 FP_BEFORE="$(dir_fp "$FP_TARGETS")"
 run_facts "$CFG_FULL" --session c2
 OUT1="$OUT"; ERR1="$ERR"; RC1="$RC"
@@ -439,14 +439,14 @@ case_end
 
 echo ""
 case_begin "C11-control-dir-key" "bin/workflow/lib/session-facts/collect.js"
-echo "=== C11: CONTROL_DIR is <CLAUDE_WORKFLOW_DIR>/<sid>.control, and reading it creates nothing (#2434) ==="
+echo "=== C11: CONTROL_DIR is <WORKFLOW_STATE_DIR>/<sid>.control, and reading it creates nothing (#2434) ==="
 # Separator style is not part of the contract (win32 path.join emits backslashes), so
 # both sides are compared with '/' separators.
 slashes() { printf '%s' "$1" | tr '\\' '/'; }
 run_facts "$CFG_FULL" --session c11ctl
 check "C11a: exits 0" 0 "$RC"
 check "C11b: CONTROL_DIR is the session's control dir" \
-  "CONTROL_DIR=$(slashes "$CLAUDE_WORKFLOW_DIR")/c11ctl.control" \
+  "CONTROL_DIR=$(slashes "$WORKFLOW_STATE_DIR")/c11ctl.control" \
   "$(slashes "$(printf '%s\n' "$OUT" | grep '^CONTROL_DIR=' || true)")"
 check "C11c: the reader did not mkdir the control dir (read-only resolution)" "absent" \
   "$([ -e "$WORKFLOW_DIR/c11ctl.control" ] && echo present || echo absent)"

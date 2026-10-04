@@ -65,9 +65,9 @@ trap 'rm -rf "$TMPROOT"' EXIT
 # breath as anything workflow-shaped, and inherited session ids are dropped so a hook reached
 # through a child process can never resolve the developer's live session.
 WORKFLOW_PLANS_DIR="$TMPROOT/plans"
-CLAUDE_WORKFLOW_DIR="$TMPROOT/workflow"
-mkdir -p "$WORKFLOW_PLANS_DIR" "$CLAUDE_WORKFLOW_DIR"
-export WORKFLOW_PLANS_DIR CLAUDE_WORKFLOW_DIR
+WORKFLOW_STATE_DIR="$TMPROOT/workflow"
+mkdir -p "$WORKFLOW_PLANS_DIR" "$WORKFLOW_STATE_DIR"
+export WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 
 run_with_timeout() {

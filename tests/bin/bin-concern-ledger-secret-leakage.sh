@@ -41,9 +41,9 @@ TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
 
@@ -111,9 +111,9 @@ run_round() {
 }
 
 # The five persisted-or-emitted surfaces, each read back from where it lives.
-sl_delta()  { cat "$CLAUDE_WORKFLOW_DIR/$SID.control/$FMT-round-1-delta-review-code-codex.txt" 2>/dev/null; }
-sl_ledger() { cat "$CLAUDE_WORKFLOW_DIR/$SID.control/$FMT-concern-ledger.txt" 2>/dev/null; }
-sl_json()   { cat "$CLAUDE_WORKFLOW_DIR/$SID.control/$FMT-unresolved-concerns.json" 2>/dev/null; }
+sl_delta()  { cat "$WORKFLOW_STATE_DIR/$SID.control/$FMT-round-1-delta-review-code-codex.txt" 2>/dev/null; }
+sl_ledger() { cat "$WORKFLOW_STATE_DIR/$SID.control/$FMT-concern-ledger.txt" 2>/dev/null; }
+sl_json()   { cat "$WORKFLOW_STATE_DIR/$SID.control/$FMT-unresolved-concerns.json" 2>/dev/null; }
 sl_prior()  {
     bash "$CLI" render-prior --plans-dir "$PLANS" --session-id "$SID" \
         --format "$FMT" 2>/dev/null

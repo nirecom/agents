@@ -193,7 +193,7 @@ if run_case "V10/field-backfill-then-v2"; then
     # must happen BEFORE the event conversion, or the events carry retired step names.
     nodejs "$SID" '
 const fs = require("fs"), path = require("path");
-const p = path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.SID + ".json");
+const p = path.join(process.env.WORKFLOW_STATE_DIR, process.env.SID + ".json");
 fs.writeFileSync(p, JSON.stringify({
   version: 1, session_id: process.env.SID, created_at: "2026-06-20T09:00:00.000Z",
   workflow_type: "wf-plan",
@@ -329,7 +329,7 @@ if run_case "V16/tiebreak-deterministic-and-idempotent"; then
     seed_v1 "$SID_B16" "tiebreak"
     nodejs_env "SID_A=$SID_A16 SID_B=$SID_B16" "$SID_A16" "$PRE"'
 const a = process.env.SID_A, b = process.env.SID_B;
-const load = (s) => { S.readState(s); S.persistMigratedState(s); return fs.readFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, s + ".json"), "utf8"); };
+const load = (s) => { S.readState(s); S.persistMigratedState(s); return fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, s + ".json"), "utf8"); };
 const ra = load(a), rb = load(b);
 // Compare the event streams only: session_id differs by construction.
 const strip = (t) => JSON.stringify(JSON.parse(t).events);

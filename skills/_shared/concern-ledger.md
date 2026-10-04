@@ -6,7 +6,7 @@ Implementation: `bin/lib/concern-ledger.sh`, reached through `bin/concern-ledger
 
 ## Files
 
-All paths derive from (`<session-id>`, `<format>`) — no caller passes one in. `<CTL>` is the session control dir `<CLAUDE_WORKFLOW_DIR>/<session-id>.control/`; only the prose diagnostic stays in `<PLANS_DIR>`.
+All paths derive from (`<session-id>`, `<format>`) — no caller passes one in. `<CTL>` is the session control dir `<WORKFLOW_STATE_DIR>/<session-id>.control/`; only the prose diagnostic stays in `<PLANS_DIR>`.
 
 | File | Purpose |
 |---|---|

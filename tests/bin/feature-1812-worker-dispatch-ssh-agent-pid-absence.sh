@@ -118,7 +118,7 @@ POUT="$(run_with_timeout 240 env \
     -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u GH_TOKEN -u GITHUB_TOKEN \
     "SSH_AUTH_SOCK=$FAKE_SSH_SOCK" "SSH_AGENT_PID=$FAKE_AGENT_PID" \
     "WORKFLOW_PLANS_DIR=$(nodepath "$PLANS_RAW")" \
-    "CLAUDE_WORKFLOW_DIR=$(nodepath "$WFDIR_RAW")" \
+    "WORKFLOW_STATE_DIR=$(nodepath "$WFDIR_RAW")" \
     node "$(nodepath "$PROBE_JS")" "$(nodepath "$AGENTS_DIR")" \
     "$(nodepath "$MAIN_RAW")" "$(nodepath "$WT_RAW")" "$BRANCH" 2>&1)" || true
 pv() { printf '%s\n' "$POUT" | sed -n "s|^$1=||p" | head -1; }

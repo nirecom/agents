@@ -263,7 +263,7 @@ function buildWorkflowStatus(sessionId) {
 // SessionStart hooks must output valid JSON
 const lines = [];
 if (sessionId) {
-  const stateDir = process.env.CLAUDE_WORKFLOW_DIR ||
+  const stateDir = process.env.WORKFLOW_STATE_DIR ||
     path.join(os.homedir(), ".claude", "projects", "workflow");
   // This line is itself lineage evidence: a compacted / forked transcript copies
   // the attachment forward, which is how readLineageAncestors recovers the

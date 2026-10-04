@@ -84,7 +84,7 @@ fi
 NONEXISTENT_NODE="$TMPDIR_BASE/does-not-exist"
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 WORKFLOW_PLANS_DIR="$(cygpath -m "$WORKFLOW_PLANS_DIR" 2>/dev/null || echo "$WORKFLOW_PLANS_DIR")"
@@ -138,7 +138,7 @@ run_hook() {
   local err_file="$TMPDIR_BASE/err-$$.txt"
   local rc=0
   ( \
-    CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
+    WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     AGENTS_CONFIG_DIR="$AGENTS_NODE" \
       bash "$RUN_TIMEOUT" 30 node "$HOOK_JS" <<< "$payload" \
       > "$out_file" 2> "$err_file"

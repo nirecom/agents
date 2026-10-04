@@ -42,7 +42,7 @@ assert_block "B4 Write token file_path"   "$(run_hook "$TN" "$(mk_file_input Wri
 assert_block "B5 Edit token file_path"    "$(run_hook "$TN" "$(mk_file_input Edit "$TOKEN")")"
 
 # --- block: vector2 interpreter-body heuristic (node -e writing into token dir) ---
-V2CMD="node -e \"require('fs').writeFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/wsid.off-clearance','forged')\""
+V2CMD="node -e \"require('fs').writeFileSync(process.env.WORKFLOW_STATE_DIR + '/wsid.off-clearance','forged')\""
 assert_block "B6 vector2 node -e .off-clearance" "$(run_hook "$TN" "$(mk_bash_input "$V2CMD")")"
 
 # --- block: DELETE re-arms an already-used clearance, so it is as dangerous as write ---
@@ -141,10 +141,10 @@ echo "=== KNOWN-BYPASS routes: pinned as unblocked-but-harmless, not silently ig
 KB_BEFORE=$(sha_of "$F")
 KB_CRASH=0
 for CMD in \
-    'S=".off-clear"; T="ance"; rm -f "$CLAUDE_WORKFLOW_DIR/wsid$S$T"' \
-    'rm -f "$CLAUDE_WORKFLOW_DIR"/wsid.off-clear*' \
+    'S=".off-clear"; T="ance"; rm -f "$WORKFLOW_STATE_DIR/wsid$S$T"' \
+    'rm -f "$WORKFLOW_STATE_DIR"/wsid.off-clear*' \
     'eval "$(printf %s cm0gLWYgY29ucw== | base64 -d)"' \
-    'perl -e "unlink glob qq{$ENV{CLAUDE_WORKFLOW_DIR}/wsid.off-clear*}"' \
+    'perl -e "unlink glob qq{$ENV{WORKFLOW_STATE_DIR}/wsid.off-clear*}"' \
     ; do
     KB_V=$(classify "$(run_hook "$FIXN" "$(mk_bash_input "$CMD")")")
     # "Answered at all" is the property here — block and approve are both acceptable
@@ -226,7 +226,7 @@ assert_approve 'A-off5 absolute-path workaround' \
 # All four exported messages are covered in the derived S1b matrix of the sibling
 # spelling-ssot-static.sh; this row keeps the parent suite's own regression anchor.
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
-A_OFF6="$(CLAUDE_WORKFLOW_DIR="$TN" WORKFLOW_PLANS_DIR="$TN/plans" "$RWT" 12 node -e "const d=require(process.argv[1]+'/hooks/block-clearance-token-write/dispatch.js');const {bashHitsProtected}=require(process.argv[1]+'/hooks/block-clearance-token-write/bash-scan.js');process.stdout.write(String(bashHitsProtected(d.TOKEN_BLOCK_MSG,{})))" "$_AGENTS_DIR_NODE" 2>/dev/null)"
+A_OFF6="$(WORKFLOW_STATE_DIR="$TN" WORKFLOW_PLANS_DIR="$TN/plans" "$RWT" 12 node -e "const d=require(process.argv[1]+'/hooks/block-clearance-token-write/dispatch.js');const {bashHitsProtected}=require(process.argv[1]+'/hooks/block-clearance-token-write/bash-scan.js');process.stdout.write(String(bashHitsProtected(d.TOKEN_BLOCK_MSG,{})))" "$_AGENTS_DIR_NODE" 2>/dev/null)"
 if [ "$A_OFF6" = "null" ]; then
     pass "A-off6 TOKEN_BLOCK_MSG is not itself blocked (got null)"
 else

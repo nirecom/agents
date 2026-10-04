@@ -125,7 +125,7 @@ dispatch() {
     : > "$CALLLOG"
     DRC=0
     DOUT="$(run_with_timeout 120 env \
-        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "GH_TOKEN=$FAKE_GH_TOKEN" "GITHUB_TOKEN=$FAKE_GITHUB_TOKEN" \
         "SSH_AUTH_SOCK=$FAKE_SSH_SOCK" \
         "WD_SPAWN_MODULE=$(nodepath "$SPAWN_JS")" \

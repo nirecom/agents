@@ -52,7 +52,7 @@ run_C3_marker_gate() {
     cat > "$PROBE_DIR/mg-probe.js" <<'PROBE_EOF'
 "use strict";
 const g = require(process.argv[2]);
-const wf = process.env.CLAUDE_WORKFLOW_DIR;
+const wf = process.env.WORKFLOW_STATE_DIR;
 const path = require("path");
 const ctx = { sessionCtx: { sessionId: "wsid" } };
 const inWf = (n) => path.join(wf, n);
@@ -106,7 +106,7 @@ _c4_run() {
         export DEFAULT_BRANCHES=main
         export AGENTS_CONFIG_DIR="$C4_CONFIG"
         export CLAUDE_PROJECT_DIR="$FIX_REPO_NODE"
-        export CLAUDE_WORKFLOW_DIR="$C4_WFDIR"
+        export WORKFLOW_STATE_DIR="$C4_WFDIR"
         # run_hook_capture carries the subprocess EXIT STATUS out as a token, so a crash
         # or a 20s timeout classifies as crash/timeout instead of collapsing into the
         # empty-stdout allow that every _c4_route "approve" leg would accept (review C1).

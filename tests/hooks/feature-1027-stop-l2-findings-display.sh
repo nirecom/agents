@@ -43,7 +43,7 @@ require_source() {
 
 seed_state() {
     local tmp="$1" sid="$2" alert_json="$3"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -55,7 +55,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 
 read_alert_field() {
     local tmp="$1" sid="$2" field="$3"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st) { process.exit(2); }
@@ -70,7 +70,7 @@ run_d1() {
     local tmp out rc
     tmp="$(mktemp -d)"
     out=$(echo '{"stop_hook_active":false,"session_id":"d1-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -87,7 +87,7 @@ run_d2() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "d2-sid" "{ alert_phase: 'done', last_run_at: '2026-06-21T01:00:00Z', findings_surfaced_at: '2026-06-21T02:00:00Z', findings: [{ categories:['code'], severity:'warning', detail:'x', reporter:'r', timestamp:'2026-06-21T01:00:00Z' }] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"d2-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] || ! ( echo "$out" | grep -qi "additionalContext" ) ); then
@@ -104,7 +104,7 @@ run_d3() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "d3-sid" "{ alert_phase: 'pending', last_run_at: null, findings_surfaced_at: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"d3-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi "additionalContext" ); then
@@ -121,7 +121,7 @@ run_d4() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "d4-sid" "{ alert_phase: 'done', last_run_at: '2026-06-21T01:00:00Z', findings_surfaced_at: null, findings: [{ categories:['code'], severity:'warning', detail:'warn1', reporter:'rep1', timestamp:'2026-06-21T01:00:00Z' }] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"d4-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     surfaced="$(read_alert_field "$tmp" "d4-sid" "findings_surfaced_at")"
     rm -rf "$tmp"
@@ -139,7 +139,7 @@ run_d5() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "d5-sid" "{ alert_phase: 'pending', last_run_at: '2026-06-21T01:00:00Z', findings_surfaced_at: null, findings: [{ categories:['code'], severity:'warning', detail:'warnB', reporter:'rep', timestamp:'2026-06-21T01:00:00Z' }] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"d5-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     surfaced="$(read_alert_field "$tmp" "d5-sid" "findings_surfaced_at")"
     rm -rf "$tmp"
@@ -160,7 +160,7 @@ run_d6() {
     # Invoke with a different session_id, but provide WORKFLOW_SESSION_ID env so
     # the hook can resolve the wsid path.
     out=$(echo '{"stop_hook_active":false,"session_id":"d6-sid-different","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_SESSION_ID="d6-wsid" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_SESSION_ID="d6-wsid" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && echo "$out" | grep -qi "additionalContext"; then
@@ -177,10 +177,10 @@ run_d7() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "d7-sid" "{ alert_phase: 'done', last_run_at: '2026-06-21T01:00:00Z', findings_surfaced_at: null, findings: [{ categories:['code'], severity:'warning', detail:'w7', reporter:'r', timestamp:'2026-06-21T01:00:00Z' }] }"
     out1=$(echo '{"stop_hook_active":false,"session_id":"d7-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc1=$?
     out2=$(echo '{"stop_hook_active":false,"session_id":"d7-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc2=$?
     rm -rf "$tmp"
     if [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && \
@@ -199,7 +199,7 @@ run_d8() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "d8-sid" "{ alert_phase: 'done', last_run_at: '2026-06-21T01:00:00Z', findings_surfaced_at: null, findings: [{ categories:['code'], severity:'warning', detail:'w8', reporter:'r', timestamp:'2026-06-21T01:00:00Z' }] }"
     out=$(echo '{"stop_hook_active":true,"session_id":"d8-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! echo "$out" | grep -qi "additionalContext"; then
@@ -217,11 +217,11 @@ run_d9() {
     seed_state "$tmp" "d9-sid" "{ alert_phase: 'done', last_run_at: '2026-06-21T01:00:00Z', findings_surfaced_at: null, findings: [{ categories:['code'], severity:'error', detail:'errD9', reporter:'r', timestamp:'2026-06-21T01:00:00Z' }] }"
     # Fire path
     out_all=$(echo '{"stop_hook_active":false,"session_id":"d9-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     # Gate path (already surfaced)
     out_all="${out_all}|$(echo '{"stop_hook_active":false,"session_id":"d9-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)"
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)"
     rm -rf "$tmp"
     if ! echo "$out_all" | grep -q '"decision"'; then
         pass "D9: hook never emits 'decision' key"
@@ -237,7 +237,7 @@ run_d10() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "d10-sid" "{ alert_phase: 'paused', last_run_at: '2026-06-21T01:00:00Z', findings_surfaced_at: null, findings: [{ categories:['code'], severity:'warning', detail:'warn-paused', reporter:'rep', timestamp:'2026-06-21T01:00:00Z' }] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"d10-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     surfaced="$(read_alert_field "$tmp" "d10-sid" "findings_surfaced_at")"
     rm -rf "$tmp"
@@ -255,7 +255,7 @@ run_d11() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "d11-sid" "{ alert_phase: 'done', last_run_at: '2026-06-21T01:00:00Z', findings_surfaced_at: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"d11-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] || ! echo "$out" | grep -qi "additionalContext" ); then

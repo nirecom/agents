@@ -67,7 +67,7 @@ dispatch_worker() {
         "PATH=$STUB_BIN:$PATH" \
         "GH_TOKEN=$FAKE_GH_TOKEN" "GITHUB_TOKEN=$FAKE_GITHUB_TOKEN" \
         "SSH_AUTH_SOCK=$FAKE_SSH_SOCK" "ENFORCE_WORKTREE=off" \
-        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         node "$(nodepath "$AGENTS_DIR/bin/worker-dispatch.js")" \
         "$worker" "$(nodepath "$MAIN_RAW")" "$(nodepath "$payload")" 2>&1)" || true
 }

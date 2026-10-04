@@ -84,7 +84,7 @@ echo ""
 SID="mark-wi-complete"
 write_state "$SID" "$(state_wi_ci "$SID" "pending" "pending")"
 MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"' "$SID")
-MARK_OUTPUT=$(echo "$MARK_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
+MARK_OUTPUT=$(echo "$MARK_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
 
 actual_after=$( (cd "$AGENTS_DIR" && node -e "
 const { readState } = require('./hooks/workflow-state.js');

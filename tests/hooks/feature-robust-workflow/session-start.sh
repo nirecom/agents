@@ -9,7 +9,7 @@ echo "=== session-start: Normal cases ==="
 REPO=$(setup_repo)
 ENV_FILE="$TMPDIR_BASE/claude-env-$RANDOM.txt"
 touch "$ENV_FILE"
-echo '{"session_id":"abc123"}' | CLAUDE_PROJECT_DIR="$REPO" CLAUDE_ENV_FILE="$ENV_FILE" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true
+echo '{"session_id":"abc123"}' | CLAUDE_PROJECT_DIR="$REPO" CLAUDE_ENV_FILE="$ENV_FILE" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true
 if grep -qx "CLAUDE_SESSION_ID=abc123" "$ENV_FILE" 2>/dev/null; then
     pass "35. CLAUDE_ENV_FILE → file contains KEY=VALUE line (no export prefix)"
 else
@@ -18,7 +18,7 @@ fi
 
 # Test 36: stdout is valid JSON (may include additionalContext)
 REPO=$(setup_repo)
-STDOUT=$(echo '{"session_id":"abc123"}' | CLAUDE_PROJECT_DIR="$REPO" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true)
+STDOUT=$(echo '{"session_id":"abc123"}' | CLAUDE_PROJECT_DIR="$REPO" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true)
 if [[ "$STDOUT" == "{"* ]] || [[ "$STDOUT" == "" ]]; then
     pass "36. session-start stdout is valid JSON"
 else
@@ -50,7 +50,7 @@ cat > "$ZOMBIE_FILE" <<EOF
   }
 }
 EOF
-echo '{"session_id":"new-session"}' | CLAUDE_PROJECT_DIR="$REPO" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true
+echo '{"session_id":"new-session"}' | CLAUDE_PROJECT_DIR="$REPO" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true
 if [ ! -f "$ZOMBIE_FILE" ]; then
     pass "37. Zombie cleanup: 8-day-old state file deleted"
 else
@@ -81,7 +81,7 @@ cat > "$RECENT_FILE" <<EOF
   }
 }
 EOF
-echo '{"session_id":"new-session"}' | CLAUDE_PROJECT_DIR="$REPO" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true
+echo '{"session_id":"new-session"}' | CLAUDE_PROJECT_DIR="$REPO" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true
 if [ -f "$RECENT_FILE" ]; then
     pass "38. Recent state file (3 days) NOT deleted by zombie cleanup"
 else
@@ -97,7 +97,7 @@ echo "=== session-start: Edge cases ==="
 
 # Test 39: CLAUDE_ENV_FILE not set → exits 0, no error
 REPO=$(setup_repo)
-if echo '{"session_id":"abc123"}' | CLAUDE_PROJECT_DIR="$REPO" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null; then
+if echo '{"session_id":"abc123"}' | CLAUDE_PROJECT_DIR="$REPO" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null; then
     pass "39. CLAUDE_ENV_FILE not set → exits 0"
 else
     fail "39. CLAUDE_ENV_FILE not set → expected exit 0, got non-zero"
@@ -106,7 +106,7 @@ fi
 # Test 40: .git/workflow/ directory doesn't exist → cleanup runs without error
 REPO=$(setup_repo)
 # Do NOT create the workflow directory — verify no crash
-if echo '{"session_id":"abc123"}' | CLAUDE_PROJECT_DIR="$REPO" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null; then
+if echo '{"session_id":"abc123"}' | CLAUDE_PROJECT_DIR="$REPO" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null; then
     pass "40. Missing workflow dir → cleanup runs without error"
 else
     fail "40. Missing workflow dir → session-start crashed (exit non-zero)"
@@ -114,7 +114,7 @@ fi
 
 # Test 41: stdin is invalid JSON → exits 0 (fail-open for SessionStart)
 REPO=$(setup_repo)
-if echo 'NOT VALID JSON' | CLAUDE_PROJECT_DIR="$REPO" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null; then
+if echo 'NOT VALID JSON' | CLAUDE_PROJECT_DIR="$REPO" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null; then
     pass "41. Invalid JSON stdin → exits 0 (fail-open)"
 else
     fail "41. Invalid JSON stdin → expected exit 0 (fail-open), got non-zero"

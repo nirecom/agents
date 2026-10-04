@@ -100,7 +100,7 @@ _gs_in() {
     (
         cd "$dir" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
-        export CLAUDE_WORKFLOW_DIR="$GS_WF"
+        export WORKFLOW_STATE_DIR="$GS_WF"
         export WORKFLOW_PLANS_DIR="$GS_WF"
         run_probe "$@"
     )
@@ -113,7 +113,7 @@ _gs_hook() {
         cd "$dir" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
         export AGENTS_CONFIG_DIR="$GS_CFG"
-        export CLAUDE_WORKFLOW_DIR="$GS_WF"
+        export WORKFLOW_STATE_DIR="$GS_WF"
         export WORKFLOW_PLANS_DIR="$GS_WF"
         run_hook_capture "$input" "$RWT" 20 node "$BCTW_HOOK"
     )
@@ -127,7 +127,7 @@ _gs_in_faulty() {
     (
         cd "$dir" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
-        export CLAUDE_WORKFLOW_DIR="$GS_WF"
+        export WORKFLOW_STATE_DIR="$GS_WF"
         export WORKFLOW_PLANS_DIR="$GS_WF"
         export GS_NOTES_MODULE="$WT_NOTES_NODE"
         export GS_NOTES_FAULT_MODE="$mode"
@@ -141,7 +141,7 @@ _gs_hook_faulty() {
         cd "$dir" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
         export AGENTS_CONFIG_DIR="$GS_CFG"
-        export CLAUDE_WORKFLOW_DIR="$GS_WF"
+        export WORKFLOW_STATE_DIR="$GS_WF"
         export WORKFLOW_PLANS_DIR="$GS_WF"
         export GS_NOTES_MODULE="$WT_NOTES_NODE"
         export GS_NOTES_FAULT_MODE="$mode"
@@ -259,10 +259,10 @@ run_C12_ghost_observation() {
     # narrowing may be applied, and the pre-#2108 suffix-only breadth returns.
     printf 'not a directory' > "$base/wf-file"
     wf_file="$(node_path "$base/wf-file")"
-    out="$(cd "$GS_NOTES" && CLAUDE_WORKFLOW_DIR="$wf_file" WORKFLOW_PLANS_DIR="$wf_file" run_probe "$PROBE_DIR/gs-observe-probe.js" "$ACTIVE_SIDS_NODE" '{"sessionId":"wsid"}')"
+    out="$(cd "$GS_NOTES" && WORKFLOW_STATE_DIR="$wf_file" WORKFLOW_PLANS_DIR="$wf_file" run_probe "$PROBE_DIR/gs-observe-probe.js" "$ACTIVE_SIDS_NODE" '{"sessionId":"wsid"}')"
     assert_contains "C12-4 a store fault reports complete:false even with notes present" "false|" "$out"
     assert_eq "C12-4 complete:false makes every stem clearance-bearing (clean)" "true" \
-        "$(cd "$GS_NOTES" && CLAUDE_WORKFLOW_DIR="$wf_file" WORKFLOW_PLANS_DIR="$wf_file" run_probe "$PROBE_DIR/gs-stem-probe.js" "$PB_NODE" "issue-2108-survey" clean wsid)"
+        "$(cd "$GS_NOTES" && WORKFLOW_STATE_DIR="$wf_file" WORKFLOW_PLANS_DIR="$wf_file" run_probe "$PROBE_DIR/gs-stem-probe.js" "$PB_NODE" "issue-2108-survey" clean wsid)"
 
     # C12-4b — the fault one layer BELOW C12-4: not the state store, but the
     # notes-enumeration DEPENDENCY itself, swapped in the require cache (`node -r`)

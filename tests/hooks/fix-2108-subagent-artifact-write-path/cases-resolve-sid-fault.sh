@@ -87,7 +87,7 @@ _rs_probe() {
     (
         cd "$RS_CWD" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
-        export CLAUDE_WORKFLOW_DIR="$RS_WF" WORKFLOW_PLANS_DIR="$RS_WF"
+        export WORKFLOW_STATE_DIR="$RS_WF" WORKFLOW_PLANS_DIR="$RS_WF"
         export RS_MODULE="$RS_SIDMOD_NODE" RS_FAULT_MODE="$mode" RS_GHOST_ID="$RS_GHOST"
         run_probe -r "$RS_PRELOAD_SH" "$@"
     )
@@ -100,7 +100,7 @@ _rs_hook() {
         cd "$RS_CWD" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
         export AGENTS_CONFIG_DIR="$RS_CFG"
-        export CLAUDE_WORKFLOW_DIR="$RS_WF" WORKFLOW_PLANS_DIR="$RS_WF"
+        export WORKFLOW_STATE_DIR="$RS_WF" WORKFLOW_PLANS_DIR="$RS_WF"
         export RS_MODULE="$RS_SIDMOD_NODE" RS_FAULT_MODE="$mode" RS_GHOST_ID="$RS_GHOST"
         # NATIVE preload path: run_hook_capture sets MSYS_NO_PATHCONV=1.
         run_hook_capture "$input" "$RWT" 20 node -r "$RS_PRELOAD_NODE" "$BCTW_HOOK"

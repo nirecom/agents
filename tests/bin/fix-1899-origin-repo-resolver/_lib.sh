@@ -43,13 +43,13 @@ run_with_timeout() {
 
 TMP="$(mktemp -d)"
 # Fixture isolation (rules/test/fixture-isolation.md): nothing here may reach the
-# developer's real HOME, workflow state, or plans dir. CLAUDE_WORKFLOW_DIR and
+# developer's real HOME, workflow state, or plans dir. WORKFLOW_STATE_DIR and
 # WORKFLOW_PLANS_DIR are pinned as a PAIR — pinning one alone is the
 # supervisor-contamination bug.
 export HOME="$TMP/home"
-export CLAUDE_WORKFLOW_DIR="$TMP/workflow"
+export WORKFLOW_STATE_DIR="$TMP/workflow"
 export WORKFLOW_PLANS_DIR="$TMP/plans"
-mkdir -p "$HOME" "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$HOME" "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 _fix1899_origin_cleanup() { cd "$TMP/.." 2>/dev/null || true; rm -rf "$TMP"; }
 trap _fix1899_origin_cleanup EXIT

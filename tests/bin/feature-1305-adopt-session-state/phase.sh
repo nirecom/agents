@@ -87,7 +87,7 @@ if [ -z "$NOTICE_CMD" ]; then
     fail "AD-10d. the emitted NOTICE command could not be extracted (nothing to run)"
 else
     set +e
-    NOTICE_RUN="$( (cd "$AGENTS_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_NODE" \
+    NOTICE_RUN="$( (cd "$AGENTS_DIR" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" \
         WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" CLAUDE_TRANSCRIPT_BASE_DIR="$TBASE_NODE" \
         CLAUDE_PROJECT_DIR="$REPO" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout bash -c "$NOTICE_CMD" 2>&1) )"

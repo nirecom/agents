@@ -1,6 +1,6 @@
 "use strict";
 // Temporary (#2434): deleted with this folder per the deletion-condition in control-dir.js.
-// Moves legacy PLANS_DIR control files into <CLAUDE_WORKFLOW_DIR>/<sid>.control/.
+// Moves legacy PLANS_DIR control files into <WORKFLOW_STATE_DIR>/<sid>.control/.
 // migrateSession: one sid, immediately. migrateAll: every sid past the quiet
 // period, best-effort, never throws. ensureMigrated: the controlPath hook;
 // ensureSessionMigrated: the sessionControlDir hook.
@@ -120,7 +120,7 @@ function migrateAllSync(opts) {
   const budgetMs = typeof o.budgetMs === "number" ? o.budgetMs : 2000;
   const start = Date.now();
   // Half-pinned env (a test fixture) would sweep the real plans dir into a throwaway dir.
-  if (!process.env.CLAUDE_WORKFLOW_DIR !== !process.env.WORKFLOW_PLANS_DIR) return { complete: false, failed: 0, skipped: "half-pinned" };
+  if (!process.env.WORKFLOW_STATE_DIR !== !process.env.WORKFLOW_PLANS_DIR) return { complete: false, failed: 0, skipped: "half-pinned" };
   const wf = getWorkflowDir();
   const plansDir = getWorkflowPlansDir();
   let st;

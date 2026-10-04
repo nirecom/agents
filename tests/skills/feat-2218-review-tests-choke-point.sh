@@ -64,7 +64,7 @@ run_loop() {
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
         AGENTS_CONFIG_DIR="$CFG" SESSION_ID="$sid" PLANS_DIR="$tmp/wf" EXTENSIONS_USED="0" \
         REVIEW_TESTS_FULL_SCAN=1 FORCE_RC="$rc_forced" FORCE_TARGET="$target" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 bash "$LOOP" >/dev/null 2>&1
@@ -80,7 +80,7 @@ run_loop_at() {
       env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
           AGENTS_CONFIG_DIR="$CFG" SESSION_ID="$sid" PLANS_DIR="$tmp/wf" EXTENSIONS_USED="0" \
           REVIEW_TESTS_FULL_SCAN=1 FORCE_RC="$rc_forced" FORCE_TARGET="$target" \
-          CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+          WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
           CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
           HOME="$tmp/home" USERPROFILE="$tmp/home" \
           "$RWT" 60 bash "$LOOP" >/dev/null 2>&1 )
@@ -91,7 +91,7 @@ run_loop_at() {
 seed_active() {
     local tmp="$1" sid="$2"
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const S = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -106,7 +106,7 @@ inspect() {
     local tmp="$1" sid="$2" want_code="$3" want_path="$4"
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         SID="$sid" WANT_CODE="$want_code" WANT_PATH="$want_path" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { readHandoff } = require('$AGENTS_DIR_NODE/$ARTIFACT');
@@ -133,7 +133,7 @@ inspect_code_only() {
     local tmp="$1" sid="$2" want_code="$3"
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         SID="$sid" WANT_CODE="$want_code" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { readHandoff } = require('$AGENTS_DIR_NODE/$ARTIFACT');

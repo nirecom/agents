@@ -109,7 +109,7 @@ run_sweep() {
     local dir="$1"; shift
     local out
     out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
@@ -124,7 +124,7 @@ run_sweep_as_session() {
     local dir="$1" sid="$2"; shift 2
     local out
     out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" "CLAUDE_CODE_SESSION_ID=$sid" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" "CLAUDE_CODE_SESSION_ID=$sid" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
@@ -149,7 +149,7 @@ run_sweep_stubbed() {
     fi
     local out
     out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$bin/sweep-supervisor-state.sh" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
@@ -599,7 +599,7 @@ S10_no_live_override() {
     # subshell — the update does not propagate to the caller's shell).
     local incl_out incl_rc
     incl_out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" --apply --include-live 2>&1)"
     incl_rc=$?
     if [ "$incl_rc" -ne 0 ]; then
@@ -724,7 +724,7 @@ S14_ci_mode_and_list_signatures() {
 
     local sig rc n
     sig="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" "$RWT" 30 bash "$SWEEP" --list-signatures 2>&1)"
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" "$RWT" 30 bash "$SWEEP" --list-signatures 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ]; then
         pass "S14b --list-signatures exits 0"

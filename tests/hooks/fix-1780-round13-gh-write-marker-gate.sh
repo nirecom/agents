@@ -63,7 +63,7 @@
 # that simply stopped allowing gh writes cannot pass both sections.
 #
 # HERMETICITY (rules/test/fixture-isolation.md): throwaway git repos under a
-# temp dir with core.hooksPath disabled; CLAUDE_WORKFLOW_DIR and
+# temp dir with core.hooksPath disabled; WORKFLOW_STATE_DIR and
 # WORKFLOW_PLANS_DIR BOTH pinned (dual-pin) at DISTINCT temp dirs; process CWD is
 # always a fixture dir, never this repo; CLAUDE_SESSION_ID /
 # CLAUDE_CODE_SESSION_ID / SCRATCHPAD / DEFAULT_BRANCHES /
@@ -225,7 +225,7 @@ run_guard() {
     out=$(cd "$dir" && printf '%s' "$payload" | \
         env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
             -u ENFORCE_WORKTREE_ADDITIONAL_REPOS -u ENFORCE_WORKTREE_EXTRA_REPOS \
-        ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
+        ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
     rc=$?

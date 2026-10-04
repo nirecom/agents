@@ -35,7 +35,7 @@ E10_run_with_timeout() {
 }
 
 # Fixture isolation (rules/test/fixture-isolation.md): both halves of the pair are pinned.
-# Pinning CLAUDE_WORKFLOW_DIR alone lets the supervisor emitter resolve the developer's
+# Pinning WORKFLOW_STATE_DIR alone lets the supervisor emitter resolve the developer's
 # real ~/.workflow-plans and append there.
 E10_WF="$BASE/e10-wf"
 E10_PLANS="$BASE/e10-plans"
@@ -50,7 +50,7 @@ e10_emit() {
     local sid="$1" cmd="$2"
     E10_run_with_timeout 30 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$(node_path "$E10_WF")" \
+        "WORKFLOW_STATE_DIR=$(node_path "$E10_WF")" \
         "WORKFLOW_PLANS_DIR=$(node_path "$E10_PLANS")" \
         node -e '
 "use strict";
@@ -216,7 +216,7 @@ e11_write_blocked() {
     out="$( cd "$E11_REPO" && printf '%s' "$payload" | E10_run_with_timeout 30 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
-        "CLAUDE_WORKFLOW_DIR=$(node_path "$E10_WF")" \
+        "WORKFLOW_STATE_DIR=$(node_path "$E10_WF")" \
         "WORKFLOW_PLANS_DIR=$(node_path "$E10_PLANS")" \
         node "$E11_HOOK" 2>&1 )"
     case "$out" in

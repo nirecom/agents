@@ -106,7 +106,7 @@ run_exec_isolation_cases() {
 run_all_exec() {
   printf 'SID=%s\nCSID=%s\nENVF=%s\nWF=%s\nPL=%s\nTR=%s\nHOME=%s\n' \
     "${CLAUDE_SESSION_ID-<unset>}" "${CLAUDE_CODE_SESSION_ID-<unset>}" "${CLAUDE_ENV_FILE-<unset>}" \
-    "${CLAUDE_WORKFLOW_DIR-}" "${WORKFLOW_PLANS_DIR-}" "${CLAUDE_TRANSCRIPT_BASE_DIR-}" "$HOME" > "$2"
+    "${WORKFLOW_STATE_DIR-}" "${WORKFLOW_PLANS_DIR-}" "${CLAUDE_TRANSCRIPT_BASE_DIR-}" "$HOME" > "$2"
   return 0
 }
 EOF

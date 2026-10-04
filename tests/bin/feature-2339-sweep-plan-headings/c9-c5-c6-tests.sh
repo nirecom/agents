@@ -8,7 +8,7 @@
 C9_MISSING_RC=0
 node "$SWEEP_NODE" --all >/dev/null 2>&1 \
     WORKFLOW_PLANS_DIR="$TMPDIR_BASE/does-not-exist-c9" \
-    CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/does-not-exist-c9-wf" || C9_MISSING_RC=$?
+    WORKFLOW_STATE_DIR="$TMPDIR_BASE/does-not-exist-c9-wf" || C9_MISSING_RC=$?
 # The env-var prefix form is not available here (forbidden literal in Bash commands);
 # use a node -e wrapper instead so the vars are injected cleanly.
 _c9missing="$(node -e "
@@ -18,7 +18,7 @@ try {
     encoding: 'utf8',
     env: Object.assign({}, process.env, {
       WORKFLOW_PLANS_DIR: '$TMP_NODE/does-not-exist-c9',
-      CLAUDE_WORKFLOW_DIR: '$TMP_NODE/does-not-exist-c9-wf',
+      WORKFLOW_STATE_DIR: '$TMP_NODE/does-not-exist-c9-wf',
     }),
   });
   process.stderr.write('expected non-zero exit but tool exited 0\n');
@@ -89,7 +89,7 @@ const body = '# Detail Plan\n\n## Steps\n\n- step\n\n## Background\n\nbg\n';
 fs.writeFileSync(dir + '/' + name, body);
 const out = cp.execFileSync(process.execPath, ['$SWEEP_NODE', '--fix', '--all'], {
   encoding: 'utf8',
-  env: Object.assign({}, process.env, { WORKFLOW_PLANS_DIR: dir, CLAUDE_WORKFLOW_DIR: wf }),
+  env: Object.assign({}, process.env, { WORKFLOW_PLANS_DIR: dir, WORKFLOW_STATE_DIR: wf }),
 });
 // (a) file must appear in the stdout report
 if (out.indexOf(name) === -1) {
@@ -121,7 +121,7 @@ const body = '# Intent\n\n## Motivation\n\nbody\n\n## Class members\n\n- M1\n';
 fs.writeFileSync(dir + '/' + name, body);
 const out = cp.execFileSync(process.execPath, ['$SWEEP_NODE', '--fix', '--all'], {
   encoding: 'utf8',
-  env: Object.assign({}, process.env, { WORKFLOW_PLANS_DIR: dir, CLAUDE_WORKFLOW_DIR: wf }),
+  env: Object.assign({}, process.env, { WORKFLOW_PLANS_DIR: dir, WORKFLOW_STATE_DIR: wf }),
 });
 // file must appear in the report
 if (out.indexOf(name) === -1) {

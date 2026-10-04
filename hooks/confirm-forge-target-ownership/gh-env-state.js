@@ -19,11 +19,11 @@ const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const ENV_TTL_MS = 4 * 60 * 60 * 1000;
 
 // The state dir is READ from the environment, never invented. An empty
-// CLAUDE_WORKFLOW_DIR means "no state directory for this run", not "fall back to
+// WORKFLOW_STATE_DIR means "no state directory for this run", not "fall back to
 // the developer's home" — a guard that writes into $HOME because a test or a
 // sandbox blanked the variable has escaped the boundary it was given.
 function stateDir() {
-  const raw = process.env.CLAUDE_WORKFLOW_DIR;
+  const raw = process.env.WORKFLOW_STATE_DIR;
   if (raw === undefined) {
     try { return normalizeCwd(getWorkflowDir()); } catch (_e) { return null; }
   }

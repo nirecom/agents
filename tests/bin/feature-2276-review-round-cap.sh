@@ -37,10 +37,10 @@ trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_ENV_FILE 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 cd "$TMPDIR_BASE" || exit 1
 
 for _f in "$VERDICT_BIN" "$LOOP_BIN" "$DISPATCH_LIB" "$SHARED_MD"; do
@@ -147,8 +147,8 @@ new_loop_env() {
     printf 'draft\n' > "$LP/draft.md"
     printf 'none\n' > "$LP/tradeoffs.md"
     SID="capsess$CN"
-    # #2434: loop control files live in <CLAUDE_WORKFLOW_DIR>/<sid>.control/ (no sid prefix).
-    CTL="$CLAUDE_WORKFLOW_DIR/$SID.control"
+    # #2434: loop control files live in <WORKFLOW_STATE_DIR>/<sid>.control/ (no sid prefix).
+    CTL="$WORKFLOW_STATE_DIR/$SID.control"
     mkdir -p "$CTL"
     : > "$CTL/codex-context.test-review.built"
     RCOUNTER="$CTL/test-review-round-number.txt"

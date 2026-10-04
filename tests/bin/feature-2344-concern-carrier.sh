@@ -49,9 +49,9 @@ assert_not_contains() {
 # Fixture isolation: dual-pinned plans dir, no inherited session id.
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_ENV_FILE 2>/dev/null || true
@@ -96,14 +96,14 @@ slot_of() {
 }
 
 # carrier_path_for <plans-dir> <session-id> <format>
-# Mirrors _cl_carrier_from_ledger: <CLAUDE_WORKFLOW_DIR>/<sid>.control/<fmt>-concern-carrier.md
+# Mirrors _cl_carrier_from_ledger: <WORKFLOW_STATE_DIR>/<sid>.control/<fmt>-concern-carrier.md
 # $1 (plans-dir) is ignored; control files live in the workflow dir (#2434).
-carrier_path_for() { printf '%s/%s.control/%s-concern-carrier.md' "$CLAUDE_WORKFLOW_DIR" "$2" "$3"; }
+carrier_path_for() { printf '%s/%s.control/%s-concern-carrier.md' "$WORKFLOW_STATE_DIR" "$2" "$3"; }
 # ledger_path_for <plans-dir> <session-id> <format> — the ledger the CLI reads (#2434
 # control-dir layout); creates <sid>.control so the fixture can seed it directly.
 ledger_path_for() {
-    mkdir -p "$CLAUDE_WORKFLOW_DIR/$2.control"
-    printf '%s/%s.control/%s-concern-ledger.txt' "$CLAUDE_WORKFLOW_DIR" "$2" "$3"
+    mkdir -p "$WORKFLOW_STATE_DIR/$2.control"
+    printf '%s/%s.control/%s-concern-ledger.txt' "$WORKFLOW_STATE_DIR" "$2" "$3"
 }
 
 # ---------------------------------------------------------------------------

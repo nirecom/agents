@@ -133,7 +133,7 @@ run_with_timeout() { bash "$RWT" "$@"; }
 harness_isolate() {
   local d="${1:-$(make_tmp)}"
   mkdir -p "$d/workflow-state" "$d/plans"
-  export CLAUDE_WORKFLOW_DIR="$d/workflow-state"
+  export WORKFLOW_STATE_DIR="$d/workflow-state"
   export WORKFLOW_PLANS_DIR="$d/plans"
 }
 

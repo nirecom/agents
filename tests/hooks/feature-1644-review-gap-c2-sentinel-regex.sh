@@ -31,7 +31,7 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Dual-pin (#1799): pinning only one of the pair lets supervisor-emit append to
 # the developer's real ~/.workflow-plans/. sentinel-patterns.js is pure, but the
 # pin is unconditional so a future require() cannot silently start emitting.
-export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 

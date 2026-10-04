@@ -48,13 +48,13 @@ seed_state() {
     local sid="$1"
     local extra
     if [ -n "${2:-}" ]; then extra="$2"; else extra='{}'; fi
-    run_with_timeout 30 env CLAUDE_WORKFLOW_DIR="$WFDIR_N" node -e '
+    run_with_timeout 30 env WORKFLOW_STATE_DIR="$WFDIR_N" node -e '
 const fs = require("fs"), path = require("path");
 const sid = process.argv[1];
 const extra = JSON.parse(process.argv[2]);
 const state = Object.assign({ version: 1, session_id: sid,
   created_at: new Date().toISOString(), steps: {} }, extra);
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json"),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json"),
   JSON.stringify(state, null, 2));
 ' "$sid" "$extra" </dev/null >/dev/null 2>&1
 }
@@ -65,7 +65,7 @@ resolve() {
     local envkv="$1"; shift
     run_with_timeout 60 env \
         -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
-        CLAUDE_WORKFLOW_DIR="$WFDIR_N" WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
+        WORKFLOW_STATE_DIR="$WFDIR_N" WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
         $envkv node "$SCRIPT_N" "$@" </dev/null 2>/dev/null
 }
 
@@ -112,7 +112,7 @@ case_end
 # isVerbosePromptSession — the read-only boolean the resolver delegates to.
 case_begin "VP-is-verbose-prompt-session" "hooks/lib/verbose-prompt.js"
 vp_call() {
-    run_with_timeout 30 env CLAUDE_WORKFLOW_DIR="$WFDIR_N" WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
+    run_with_timeout 30 env WORKFLOW_STATE_DIR="$WFDIR_N" WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
         node -e '
 const m = require(process.argv[1]);
 if (typeof m.isVerbosePromptSession !== "function") { process.stdout.write("(no-fn)"); process.exit(0); }

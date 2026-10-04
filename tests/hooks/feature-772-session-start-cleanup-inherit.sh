@@ -53,11 +53,11 @@ else
 fi
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -176,7 +176,7 @@ run_session_start_new() {
         HOME="$fake_home" \
         CLAUDE_PROJECT_DIR="$repo" \
         CLAUDE_ENV_FILE="$env_file" \
-        CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+        WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$(to_node_path "$fake_home/.claude/projects")" \
         run_with_timeout 30 node "$SESSION_START" >/dev/null 2>&1 || true
 }
@@ -271,7 +271,7 @@ C6_OUT=$(echo "{\"session_id\":\"$C6_SID\"}" | \
     HOME="$C6_HOME" \
     CLAUDE_PROJECT_DIR="$C6_REPO" \
     CLAUDE_ENV_FILE="$TMPDIR_BASE/env-${C6_SID}.env" \
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$(to_node_path "$C6_HOME/.claude/projects")" \
     run_with_timeout 30 node "$SESSION_START" 2>/dev/null || true)
 C6_CTX=$(printf '%s' "$C6_OUT" | node -e "
@@ -322,7 +322,7 @@ EOF
 )
 write_state_file "$C5_SID" "$C5_STATE"
 C5_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $C5_REPO commit -m test\"},\"session_id\":\"$C5_SID\"}"
-C5_RESULT=$(echo "$C5_JSON" | CLAUDE_PROJECT_DIR="$C5_REPO" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+C5_RESULT=$(echo "$C5_JSON" | CLAUDE_PROJECT_DIR="$C5_REPO" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
     run_with_timeout 30 node "$GATE_HOOK" 2>/dev/null || true)
 # It should not block; either approve or empty (pass-through) is acceptable.
 if echo "$C5_RESULT" | grep -q '"block"'; then

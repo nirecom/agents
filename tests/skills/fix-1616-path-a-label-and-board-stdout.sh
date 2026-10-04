@@ -86,7 +86,7 @@ MOCKBOARD
     printf 'require(%s);\n' "$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$real_cli")" \
         > "$FAKE_ACD/bin/workflow-control-dir"
     mkdir -p "$TMP/workflow"
-    export CLAUDE_WORKFLOW_DIR="$TMP/workflow"
+    export WORKFLOW_STATE_DIR="$TMP/workflow"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
 
     export MOCK_GH_LOG="$TMP/gh-calls.log"
@@ -103,7 +103,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     unset MOCK_GH_LOG MOCK_GH_LABEL_RC MOCK_BOARD_RC \
-          PLANS_DIR SESSION_ID CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR 2>/dev/null || true
+          PLANS_DIR SESSION_ID WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR 2>/dev/null || true
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
@@ -132,7 +132,7 @@ teardown_mock
 # ---------------------------------------------------------------------------
 setup_mock
 export MOCK_GH_LABEL_RC=1
-MARKER="$CLAUDE_WORKFLOW_DIR/$SESSION_ID.control/workflow-init-aborted-pathA-multiN-label-failure.md"
+MARKER="$WORKFLOW_STATE_DIR/$SESSION_ID.control/workflow-init-aborted-pathA-multiN-label-failure.md"
 ERR_FILE="$TMP/stderr.txt"
 OUT=$(run_with_timeout 15 bash "$SCRIPT" 101 102 2>"$ERR_FILE")
 RC=$?

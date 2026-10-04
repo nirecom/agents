@@ -40,12 +40,12 @@ run_1904a() {
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
 
     out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
 const fs = require('fs');
 const path = require('path');
-const wfDir = process.env.CLAUDE_WORKFLOW_DIR;
+const wfDir = process.env.WORKFLOW_STATE_DIR;
 fs.mkdirSync(wfDir, { recursive: true });
 
 const { readState, writeState, createInitialState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -126,7 +126,7 @@ run_1904b() {
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
 
     out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
 const { readState, writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');

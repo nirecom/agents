@@ -30,7 +30,7 @@ run_hook() {
     payload="$(printf '{"session_id":"%s","tool_name":"%s","tool_input":%s}' "$sid" "$tool" "$ti")"
     HOOK_RC=0
     HOOK_OUT="$(cd "${HOOK_CWD:-$AGENTS_DIR}" && printf '%s' "$payload" | env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node \
@@ -314,7 +314,7 @@ run_hook "$NOSTATE_SID" "Bash" '{"command":"ls"}'
 RC_OTHERTOOL="$HOOK_RC"
 RC_BADJSON=0
 BAD_OUT="$(cd "$AGENTS_DIR" && printf 'not-json' | env \
-    CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+    WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
     HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
     "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node hooks/postuse-native-worktree-record.js 2>&1)" || RC_BADJSON=$?
 FILE_CREATED="no"; [ -f "$WF/$NOSTATE_SID.json" ] && FILE_CREATED="yes"

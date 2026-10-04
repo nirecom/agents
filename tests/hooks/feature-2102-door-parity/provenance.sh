@@ -32,7 +32,7 @@ TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"; NEUTRAL="$TMPDIR_BASE/neutral"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR" "$NEUTRAL"
-CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"; export CLAUDE_WORKFLOW_DIR
+WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"; export WORKFLOW_STATE_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 CONFIG_EMPTY="$TMPDIR_BASE/cfg"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
@@ -89,7 +89,7 @@ last_event() {
 ev_field() {
   PROBE_SID="$1" PROBE_STEP="$2" FIELD="$3" run_with_timeout node -e '
     const fs = require("fs"), path = require("path");
-    const p = path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.PROBE_SID + ".json");
+    const p = path.join(process.env.WORKFLOW_STATE_DIR, process.env.PROBE_SID + ".json");
     const raw = JSON.parse(fs.readFileSync(p, "utf8"));
     const evs = (raw.events || []).filter(
       (e) => e.kind === "step_status" && e.step === process.env.PROBE_STEP);

@@ -37,7 +37,7 @@ run_with_timeout() {
 
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'supvsr5'; }
 to_node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-# Control files (supervisor state, workflow state) live under CLAUDE_WORKFLOW_DIR (#2434).
+# Control files (supervisor state, workflow state) live under WORKFLOW_STATE_DIR (#2434).
 wf_of() { printf '%s' "${1%/plans}/workflow"; }
 
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
@@ -70,7 +70,7 @@ seed_plans() {
 
 current_freshness_key() {
     local repo_node="$1" plans_node="$2" sid="$3"
-    WORKFLOW_PLANS_DIR="$plans_node" CLAUDE_WORKFLOW_DIR="$(wf_of "$plans_node")" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$plans_node" WORKFLOW_STATE_DIR="$(wf_of "$plans_node")" run_with_timeout 10 node -e "
 const fp = require('$FINGERPRINT_NODE');
 const r = fp.computeFreshnessKey('$repo_node', '$plans_node', '$sid');
 process.stdout.write(String((r && r.freshness_key) || ''));
@@ -81,7 +81,7 @@ process.stdout.write(String((r && r.freshness_key) || ''));
 # $4 = verdict, $5 = freshness_key on the entry ('' = no TR5 entry at all)
 seed_state() {
     local plans_node="$1" sid="$2" cumsev="$3" verdict="$4" fkey="$5"
-    WORKFLOW_PLANS_DIR="$plans_node" CLAUDE_WORKFLOW_DIR="$(wf_of "$plans_node")" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$plans_node" WORKFLOW_STATE_DIR="$(wf_of "$plans_node")" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -113,7 +113,7 @@ if ('$fkey') {
 }
 fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
-    WORKFLOW_PLANS_DIR="$plans_node" CLAUDE_WORKFLOW_DIR="$(wf_of "$plans_node")" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$plans_node" WORKFLOW_STATE_DIR="$(wf_of "$plans_node")" run_with_timeout 10 node -e "
 const wf = require('$WFSTATE_NODE');
 wf.markStep('$sid', 'user_verification', 'complete');
 " >/dev/null 2>&1
@@ -121,7 +121,7 @@ wf.markStep('$sid', 'user_verification', 'complete');
 
 read_audit_field() {
     local plans_node="$1" sid="$2" expr="$3"
-    WORKFLOW_PLANS_DIR="$plans_node" CLAUDE_WORKFLOW_DIR="$(wf_of "$plans_node")" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$plans_node" WORKFLOW_STATE_DIR="$(wf_of "$plans_node")" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid') || {};
 const a = st.audit || {};
@@ -144,7 +144,7 @@ drive_merge() {
     (
         cd "$plans_node" || exit 1
         CLAUDE_CODE_SESSION_ID="$sid" \
-        WORKFLOW_PLANS_DIR="$plans_node" CLAUDE_WORKFLOW_DIR="$(wf_of "$plans_node")" AGENTS_CONFIG_DIR="$plans_node" \
+        WORKFLOW_PLANS_DIR="$plans_node" WORKFLOW_STATE_DIR="$(wf_of "$plans_node")" AGENTS_CONFIG_DIR="$plans_node" \
             run_with_timeout 20 node "$HOOK" <<< "$hook_input" 2>/dev/null
     )
 }
@@ -259,7 +259,7 @@ run_t4_block_reaches_backstop() {
     seed_state "$plans_node" "$sid" "warning" "BLOCK" "${fkey:-seed}"
 
     out=$(drive_merge "$plans_node" "$sid" "$repo_node")
-    errors=$(WORKFLOW_PLANS_DIR="$plans_node" CLAUDE_WORKFLOW_DIR="$(wf_of "$plans_node")" run_with_timeout 10 node -e "
+    errors=$(WORKFLOW_PLANS_DIR="$plans_node" WORKFLOW_STATE_DIR="$(wf_of "$plans_node")" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid') || {};
 const all = [].concat((st.alert && st.alert.findings) || [], (st.layer1 && st.layer1.findings) || []);

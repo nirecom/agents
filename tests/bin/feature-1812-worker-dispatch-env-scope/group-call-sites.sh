@@ -61,7 +61,7 @@ q() { node "$(nodepath "$LOGQ")" "$(nodepath "$CALLLOG")" "$@"; }
 CWD_NATIVE="$(node -e 'const fs=require("fs"),p=require("path");process.stdout.write(p.resolve(fs.realpathSync(process.argv[1])));' "$CWD")"
 
 GH_SCOPE="GH_TOKEN,GITHUB_TOKEN"
-GATE_SCOPE="CLAUDE_PROJECT_DIR,CLAUDE_WORKFLOW_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID"
+GATE_SCOPE="CLAUDE_PROJECT_DIR,WORKFLOW_STATE_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID"
 
 CP_GATE='{"match":"workflowGate","stdout":"{\"decision\":\"approve\"}"}'
 CP_HEAD='{"match":"rev-parse --abbrev-ref HEAD","status":0,"stdout":"feature/1812-probe\n"}'

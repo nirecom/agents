@@ -56,7 +56,7 @@ run_state_inheritance_tests() {
     for _i in 1 2; do
         echo "{\"session_id\":\"$SID_1C\"}" | \
             CLAUDE_PROJECT_DIR="$REPO_1C" CLAUDE_ENV_FILE="$ENV_FILE_1C" \
-            CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true
+            WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true
     done
     expect_state_step "L1-c. session-start 2 runs → research remains complete (idempotent)" \
         "$SID_1C" "research" "complete"

@@ -33,7 +33,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 
 PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$PLANS_DIR"
@@ -139,7 +139,7 @@ read_state_status() {
 
 # Run next-step for verdict output (always exits 0; KEY=value lines on stdout).
 run_next_step() {
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     run_with_timeout node "$NEXT_STEP" "$@" 2>/dev/null || true
 }
 
@@ -148,7 +148,7 @@ run_next_step() {
 run_next_step_rc() {
   local err_file="$TMPDIR_BASE/stderr.$RANDOM"
   set +e
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     run_with_timeout node "$NEXT_STEP" "$@" >/dev/null 2>"$err_file"
   RC=$?
   set -e
@@ -161,7 +161,7 @@ run_next_step_rc() {
 run_reconcile() {
   local out_file="$TMPDIR_BASE/reconcile.$RANDOM"
   set +e
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     run_with_timeout node "$RECONCILE" "$@" >"$out_file" 2>&1
   RECONCILE_RC=$?
   set -e

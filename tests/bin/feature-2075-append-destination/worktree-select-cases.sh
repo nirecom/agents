@@ -76,7 +76,7 @@ else
             CLAUDE_CODE_SESSION_ID="$W_SID" \
             CLAUDE_ENV_FILE="" \
             CLAUDE_TRANSCRIPT_BASE_DIR="$(w_node "$W_TRANSCRIPTS")" \
-            CLAUDE_WORKFLOW_DIR="$(w_node "$W_WF")" \
+            WORKFLOW_STATE_DIR="$(w_node "$W_WF")" \
             WORKFLOW_PLANS_DIR="$(w_node "$W_PLANS")" \
             AGENTS_CONFIG_DIR="$(w_node "$AGENTS_ROOT")" \
                 bash "$RUN_TIMEOUT" 60 bash "$SELECT_SH" "$@"

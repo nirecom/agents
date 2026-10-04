@@ -52,7 +52,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # <ms-ago> milliseconds. `steps` is a projection recomputed from the event
 # stream, so the age is moved on write_tests' own events.
 seed_stall_fixture() {
-    CLAUDE_WORKFLOW_DIR="$2" WORKFLOW_PLANS_DIR="$2" SID="$3" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$2" WORKFLOW_PLANS_DIR="$2" SID="$3" "$RWT" 15 node -e "
 const wf = require('$STATEIO_NODE');
 const CA = require('$COMPLETION_APPROVAL_NODE');
 for (const s of ['workflow_init','clarify_intent','research','outline','detail','branching_complete']) {
@@ -76,7 +76,7 @@ run_ups() {
     UPS_OUT=$(SID="$2" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 25 node "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
 }
@@ -91,11 +91,11 @@ run_R1() {
     local tmp tn out problems=""
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     seed_stall_fixture "$tmp" "$tn" r1 $((TTL_MS - 60000))
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 const L = require('$LIFECYCLE_NODE');
 process.stdout.write(String(L.isStepInFlight('r1', 'write_tests')));" 2>/dev/null)
     [ "$out" = "true" ] || problems="$problems [isStepInFlight=${out:-<err>}, expected true inside the TTL]"
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 const { detectStalledSteps } = require('$MF_NODE');
 process.stdout.write(String((detectStalledSteps('r1') || []).length));" 2>/dev/null)
     [ "$out" = "0" ] || problems="$problems [detectStalledSteps reported ${out:-<err>} finding(s) on a healthy session]"
@@ -117,11 +117,11 @@ run_R2() {
     local tmp tn out problems=""
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     seed_stall_fixture "$tmp" "$tn" r2 $((TTL_MS + 60000))
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 const L = require('$LIFECYCLE_NODE');
 process.stdout.write(String(L.isStepInFlight('r2', 'write_tests')));" 2>/dev/null)
     [ "$out" = "false" ] || problems="$problems [isStepInFlight=${out:-<err>}, expected false past the TTL]"
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 const { detectStalledSteps } = require('$MF_NODE');
 const f = detectStalledSteps('r2') || [];
 process.stdout.write(f.map((x) => x.step + ':' + x.kind).join(','));" 2>/dev/null)
@@ -187,7 +187,7 @@ EOF
     UPS_OUT=$(SID=r3ab "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$cfgdir_n" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$cfgdir_n" \
           "$RWT" 25 node "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
     [ "$UPS_RC" -eq 0 ] || problems="$problems [1st call: hook exited $UPS_RC]"
@@ -202,7 +202,7 @@ process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_pa
     UPS_OUT2=$(SID=r3ab "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'still there?', hook_event_name: 'UserPromptSubmit' }));" \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$cfgdir_n" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$cfgdir_n" \
           "$RWT" 25 node "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC2=$?
     [ "$UPS_RC2" -eq 0 ] || problems="$problems [2nd call: hook exited $UPS_RC2]"

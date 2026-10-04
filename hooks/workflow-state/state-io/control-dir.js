@@ -1,6 +1,6 @@
 "use strict";
 // hooks/workflow-state/state-io/control-dir.js
-// The one resolver for per-session control files: <CLAUDE_WORKFLOW_DIR>/<sid>.control/<name>.
+// The one resolver for per-session control files: <WORKFLOW_STATE_DIR>/<sid>.control/<name>.
 // Policy and inventory: docs/architecture/claude-code/state-dirs.md.
 const fs = require("fs");
 const path = require("path");

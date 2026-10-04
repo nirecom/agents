@@ -45,7 +45,7 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-# Plans-dir isolation (#1799): supervisor-emit must never write into the developer's real ~/.workflow-plans/ — pinned alongside CLAUDE_WORKFLOW_DIR.
+# Plans-dir isolation (#1799): supervisor-emit must never write into the developer's real ~/.workflow-plans/ — pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -171,7 +171,7 @@ run_hook() {
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 60 \
         env -u CLAUDE_ENV_FILE -u CODE_FILE_EXTENSIONS \
         "AGENTS_CONFIG_DIR=$cfg" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "$@" \
         node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
 }

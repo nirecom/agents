@@ -14,7 +14,7 @@
 # Windows/Git-Bash, so permission stripping is never used. Both injections are
 # structural, behave identically on every platform, and are each proven to
 # actually fail (a control assertion on the same call without the injection):
-#   I1  CLAUDE_WORKFLOW_DIR points at an existing REGULAR FILE (and at a
+#   I1  WORKFLOW_STATE_DIR points at an existing REGULAR FILE (and at a
 #       nonexistent deep path underneath it) -> every mkdir/open fails ENOTDIR.
 #   I2  the session's state file contains unparseable JSON -> every locked
 #       read-modify-write fails CorruptStateFileError.
@@ -48,7 +48,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Pinned as a PAIR (#1799) so supervisor-emit never appends to the real ~/.workflow-plans.
-export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 
@@ -116,7 +116,7 @@ run_cli node "$NS" --session c60ctl --advance --step outline --status skipped \
 check "C6-0a: control (no injection) exits 0" 0 "$RC"
 
 at_outline c60i1
-run_cli env CLAUDE_WORKFLOW_DIR="$BLOCK_N" node "$NS" --session c60i1 --advance \
+run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$NS" --session c60i1 --advance \
   --step outline --status skipped --skip-reason "the approach is already fixed by the issue body"
 check "C6-0b: injection I1 (regular file as workflow dir) does fail" 2 "$RC"
 check_contains "C6-0b: the diagnostic names a write failure" "failed to write state" "$ERR"
@@ -132,7 +132,7 @@ echo "=== C6-1: I1 — no ACTION, no ADVANCED, no half-applied state (all 4 CLIs
 # next-step. --next is passed everywhere: the whole point is that a failed record
 # withholds the ACTION block the caller asked for.
 DIR_BEFORE="$(dir_listing)"
-run_cli env CLAUDE_WORKFLOW_DIR="$BLOCK_N" node "$NS" --session c61ns --advance \
+run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$NS" --session c61ns --advance \
   --step research --status complete --next
 check "C6-1a: next-step exits 2" 2 "$RC"
 check "C6-1a: zero ACTION lines" 0 "$(action_lines)"
@@ -141,27 +141,27 @@ check_not_contains "C6-1a: no NEXT_SKILL line" "NEXT_SKILL=" "$OUT"
 
 # record-skip-judgment normalizes its write-verification failure to 2 on the
 # --advance path (it is 1 without --advance — asserted below as the control).
-run_cli env CLAUDE_WORKFLOW_DIR="$BLOCK_N" node "$RSJ" --session c61rsj \
+run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$RSJ" --session c61rsj \
   --target outline --c1 true --c2 true --advance --next
 check "C6-1b: record-skip-judgment exits 2" 2 "$RC"
 check "C6-1b: zero ACTION lines" 0 "$(action_lines)"
 check "C6-1b: zero ADVANCED lines" 0 "$(advanced_lines)"
-run_cli env CLAUDE_WORKFLOW_DIR="$BLOCK_N" node "$RSJ" --session c61rsj \
+run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$RSJ" --session c61rsj \
   --target outline --c1 true --c2 true
 check "C6-1b: WITHOUT --advance the same failure keeps the frozen exit 1" 1 "$RC"
 
 # set-workflow-type fails in its own workflow_type transaction, BEFORE runAdvance.
-run_cli env CLAUDE_WORKFLOW_DIR="$BLOCK_N" node "$SWT" --session c61swt \
+run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$SWT" --session c61swt \
   --type wf-meta --advance --step workflow_init --status complete --next
 check "C6-1c: set-workflow-type exits 2" 2 "$RC"
 check "C6-1c: zero ACTION lines" 0 "$(action_lines)"
 check "C6-1c: zero ADVANCED lines" 0 "$(advanced_lines)"
 check_not_contains "C6-1c: not even the WORKFLOW_TYPE prefix line is emitted" "WORKFLOW_TYPE=" "$OUT"
-run_cli env CLAUDE_WORKFLOW_DIR="$BLOCK_N" node "$SWT" --session c61swt --type wf-meta
+run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$SWT" --session c61swt --type wf-meta
 check "C6-1c: WITHOUT --advance the same failure keeps the frozen exit 1" 1 "$RC"
 
 # record-complexity-and-skip normalizes EVERY advance-path child failure to 3.
-run_cli env CLAUDE_WORKFLOW_DIR="$BLOCK_N" AGENTS_CONFIG_DIR="$AGENTS_DIR_N" \
+run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" AGENTS_CONFIG_DIR="$AGENTS_DIR_N" \
   bash "$RCAS" --session c61rcas --signals "" --target outline --advance
 check "C6-1d: record-complexity-and-skip exits 3" 3 "$RC"
 check "C6-1d: zero ACTION lines" 0 "$(action_lines)"
@@ -176,17 +176,17 @@ echo ""
 echo "=== C6-2: I1 with a nonexistent DEEP path under the regular file ==="
 # One level further out: the lock directory itself cannot be created — a
 # different call site (mkdir, not open) from C6-1.
-run_cli env CLAUDE_WORKFLOW_DIR="$DEEP_N" node "$NS" --session c62ns --advance \
+run_cli env WORKFLOW_STATE_DIR="$DEEP_N" node "$NS" --session c62ns --advance \
   --step research --status complete --next
 check "C6-2a: next-step exits 2" 2 "$RC"
 check "C6-2a: zero ACTION lines" 0 "$(action_lines)"
 check "C6-2a: zero ADVANCED lines" 0 "$(advanced_lines)"
 check_contains "C6-2a: the diagnostic names the directory error" "ENOTDIR" "$ERR"
-run_cli env CLAUDE_WORKFLOW_DIR="$DEEP_N" node "$SWT" --session c62swt \
+run_cli env WORKFLOW_STATE_DIR="$DEEP_N" node "$SWT" --session c62swt \
   --type wf-meta --advance --step workflow_init --status complete --next
 check "C6-2b: set-workflow-type exits 2" 2 "$RC"
 check "C6-2b: zero ADVANCED lines" 0 "$(advanced_lines)"
-run_cli env CLAUDE_WORKFLOW_DIR="$DEEP_N" AGENTS_CONFIG_DIR="$AGENTS_DIR_N" \
+run_cli env WORKFLOW_STATE_DIR="$DEEP_N" AGENTS_CONFIG_DIR="$AGENTS_DIR_N" \
   bash "$RCAS" --session c62rcas --signals "" --target outline --advance
 check "C6-2c: record-complexity-and-skip exits 3" 3 "$RC"
 check "C6-2c: zero ADVANCED lines" 0 "$(advanced_lines)"

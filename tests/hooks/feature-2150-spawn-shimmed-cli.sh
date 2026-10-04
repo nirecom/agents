@@ -40,7 +40,7 @@ trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[
 # inherited session ids so nothing here can resolve live state.
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 SANDBOX="$(mktemp -d)"
-export CLAUDE_WORKFLOW_DIR="$SANDBOX/wf" WORKFLOW_PLANS_DIR="$SANDBOX/plans"
+export WORKFLOW_STATE_DIR="$SANDBOX/wf" WORKFLOW_PLANS_DIR="$SANDBOX/plans"
 trap 'chmod -R u+rwX "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
 ROOT_N="$(node_path "$AGENTS_DIR")"
 PROBE_N="$(node_path "$PROBE")"

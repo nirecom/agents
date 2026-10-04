@@ -190,7 +190,7 @@ run_probe() {
     PROBE_OUT="$(run_with_timeout 60 env \
         -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID "${STRIP_CREDS[@]}" "$@" \
         "GH_HOST=$TARGET_HOST" \
-        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$mode" "$MAIN" "$TARGET_HOST" "$kind" 2>&1)" || return 1
     return 0
 }

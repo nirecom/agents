@@ -30,7 +30,7 @@ const CANONICAL_ROUTES = [
 ];
 const PLACEMENT_MESSAGES = Object.freeze({
   "control-dir": [
-    "Direct write under the workflow dir (<CLAUDE_WORKFLOW_DIR>: <sid>.control/, <sid>.json, any session's files) blocked.",
+    "Direct write under the workflow dir (<WORKFLOW_STATE_DIR>: <sid>.control/, <sid>.json, any session's files) blocked.",
     `Control files are written only by the owning CLIs and hooks; see ${STATE_DIRS_DOC}.`,
     ...CANONICAL_ROUTES,
   ].join("\n"),
@@ -40,7 +40,7 @@ const PLACEMENT_MESSAGES = Object.freeze({
     ...CANONICAL_ROUTES,
   ].join("\n"),
   "alias-unresolved": [
-    "Write through an unresolvable CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR / HOME expansion blocked.",
+    "Write through an unresolvable WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR / HOME expansion blocked.",
     `The target cannot be placed, so it may land in the control dir or the plans dir (${STATE_DIRS_DOC}).`,
     "Spell the path with a plain $VAR, ${VAR} or ${VAR:-default}, or write it literally.",
     ...CANONICAL_ROUTES,

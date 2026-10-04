@@ -24,11 +24,11 @@ pass() { echo "PASS: $1"; }
 TMPDIR_BASE=$(mktemp -d)
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -96,12 +96,12 @@ expect_state_step() {
 
 run_mark() {
     local json="$1"
-    echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null || true
+    echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null || true
 }
 
 run_gate() {
     local json="$1"
-    echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null || true
+    echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null || true
 }
 
 build_mark_json() {
@@ -223,7 +223,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   }
 }
 EOF
-M1_RESULT=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+M1_RESULT=$(cd "$DOTFILES_DIR" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 const wf = require('./hooks/workflow-state.js');
 const s = wf.readState('$SID');
 console.log(s && s.steps && s.steps.clarify_intent ? s.steps.clarify_intent.status : 'MISSING');
@@ -254,7 +254,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   }
 }
 EOF
-M2_RESULT=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+M2_RESULT=$(cd "$DOTFILES_DIR" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 const wf = require('./hooks/workflow-state.js');
 const s = wf.readState('$SID');
 console.log(s && s.steps && s.steps.branching_complete ? s.steps.branching_complete.status : 'MISSING');
@@ -267,10 +267,10 @@ fi
 
 # M2-compat: Old state JSON with branching_decision key (legacy) → migrated to branching_complete
 SID_M2C="test-m2-compat-$$"
-M2C_RESULT=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+M2C_RESULT=$(cd "$DOTFILES_DIR" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 const {readState} = require('./hooks/workflow-state.js');
 const sid = '$SID_M2C';
-const dir = process.env.CLAUDE_WORKFLOW_DIR;
+const dir = process.env.WORKFLOW_STATE_DIR;
 require('fs').writeFileSync(dir + '/' + sid + '.json',
   JSON.stringify({version:1,session_id:sid,steps:{branching_decision:{status:'complete',updated_at:null,decision:'worktree: /tmp/wt'}}}));
 const s = readState(sid);
@@ -304,12 +304,12 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   }
 }
 EOF
-M3_CI=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+M3_CI=$(cd "$DOTFILES_DIR" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 const wf = require('./hooks/workflow-state.js');
 const s = wf.readState('$SID');
 console.log(s && s.steps && s.steps.clarify_intent ? s.steps.clarify_intent.status : 'MISSING');
 " 2>/dev/null || echo "ERROR")
-M3_BD=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+M3_BD=$(cd "$DOTFILES_DIR" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 const wf = require('./hooks/workflow-state.js');
 const s = wf.readState('$SID');
 console.log(s && s.steps && s.steps.branching_complete ? s.steps.branching_complete.status : 'MISSING');
@@ -375,7 +375,7 @@ expect_state_step "C1. CLARIFY_INTENT_COMPLETE → clarify_intent=complete" "$SI
 # C2: No session_id → error message emitted, state not written
 C2_CMD='echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"'
 C2_JSON=$(build_mark_json_no_sid "$C2_CMD")
-C2_OUT=$(echo "$C2_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" node "$MARK_HOOK" 2>/dev/null || true)
+C2_OUT=$(echo "$C2_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" node "$MARK_HOOK" 2>/dev/null || true)
 if echo "$C2_OUT" | grep -qiE "could not resolve session_id|session_id"; then
     pass "C2a. CLARIFY_INTENT_COMPLETE with no session_id → error in additionalContext"
 else
@@ -499,7 +499,7 @@ fi
 # B6: No session_id → error message, state not written (backward compat: old sentinel)
 B6_CMD='echo "<<WORKFLOW_BRANCHING_DECIDED: main direct work>>"'
 B6_JSON=$(build_mark_json_no_sid "$B6_CMD")
-B6_OUT=$(echo "$B6_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" node "$MARK_HOOK" 2>/dev/null || true)
+B6_OUT=$(echo "$B6_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" node "$MARK_HOOK" 2>/dev/null || true)
 if echo "$B6_OUT" | grep -qiE "could not resolve session_id|session_id"; then
     pass "B6a. BRANCHING_DECIDED with no session_id → error in additionalContext"
 else

@@ -83,7 +83,7 @@ fs.writeFileSync(path.join(ctrlDir, "supervisor-state.json"), JSON.stringify(sta
     local f="$plans/d1sess.control/supervisor-state.json"
     local before after
     before="$(md5sum "$f" 2>/dev/null | awk '{print $1}')"
-    env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID "WORKFLOW_PLANS_DIR=$plans_node" "CLAUDE_WORKFLOW_DIR=$plans_node" \
+    env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID "WORKFLOW_PLANS_DIR=$plans_node" "WORKFLOW_STATE_DIR=$plans_node" \
         run_with_timeout bash "$sweep" >/dev/null 2>&1
     after="$(md5sum "$f" 2>/dev/null | awk '{print $1}')"
 

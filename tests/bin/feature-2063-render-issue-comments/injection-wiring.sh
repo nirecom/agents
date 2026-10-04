@@ -122,7 +122,7 @@ else
     assert_eq "P19: Path B output is unchanged without gh" "$P19_FIRST" "$B1_OUT"
     assert_eq "P19: no gh invocation of any kind was made by Path B" 1 "$(count_gh_calls '.')"
     teardown_case
-    export CLAUDE_WORKFLOW_DIR="$WORK/state"
+    export WORKFLOW_STATE_DIR="$WORK/state"
     export WORKFLOW_PLANS_DIR="$WORK/plans"
 fi
 
@@ -191,7 +191,7 @@ if [ "$MUT_OK" = "1" ] && [ -f "$MUT_DRIVER" ] && [ -f "$MUT_CLI" ]; then
         *) fail "P20(b): mutating issue-comments.js did NOT change the CLI output — Path B renders from its own copy" ;;
     esac
     teardown_case
-    export CLAUDE_WORKFLOW_DIR="$WORK/state"
+    export WORKFLOW_STATE_DIR="$WORK/state"
     export WORKFLOW_PLANS_DIR="$WORK/plans"
 else
     fail "P20(b): the mutation could not be exercised (sandbox driver or CLI absent)"

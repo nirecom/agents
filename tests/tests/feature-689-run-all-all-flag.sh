@@ -87,9 +87,9 @@ trap 'rm -rf "$TMPROOT"' EXIT
 
 # Fixture isolation (rules/test/fixture-isolation.md): pin the workflow dir and
 # the plans dir as a pair, and drop inherited session ids.
-export CLAUDE_WORKFLOW_DIR="$TMPROOT/workflow"
+export WORKFLOW_STATE_DIR="$TMPROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMPROOT/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 

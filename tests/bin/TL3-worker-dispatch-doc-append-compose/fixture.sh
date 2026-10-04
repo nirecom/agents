@@ -52,7 +52,7 @@ run_worker() {
         run_with_timeout 300 env \
             -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
             "GH_CONFIG_DIR=$EMPTY_GH_CONFIG" \
-            "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+            "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
             node "$(nodepath "$AGENTS_DIR/bin/worker-dispatch.js")" \
             doc-append "$MAIN" "$(nodepath "$p")" 2>&1
     )"

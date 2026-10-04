@@ -20,7 +20,7 @@ tn="$(node_path "$tmp")"
 # Same fixture donor/heir pair and OMIT-opts call as project_stream('OMIT')
 # in ../feat-2218-inheritance-equivalence.sh — keep the two in sync.
 out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-    CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+    WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
     HOME="$tn/home" USERPROFILE="$tn/home" \
     "$RWT" 60 node -e "
 const crypto = require('crypto');

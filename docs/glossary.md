@@ -127,7 +127,7 @@ Terms for the session breadcrumb system (`docs/architecture/claude-code/handoff-
 ### handoff artifact
 
 - **Full name**: Handoff artifact
-- **Definition**: An append-only, per-session Markdown file (`<CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff.md`) that records micro-state a fresh session cannot recover from plan files alone — user decisions, workarounds, rejected approaches, and open questions. Written through a single function; read back by `/resume-session` and, read-only, by the supervisor codex engine (`hooks/lib/supervisor-codex-input.js`).
+- **Definition**: An append-only, per-session Markdown file (`<WORKFLOW_STATE_DIR>/<sid>.control/handoff.md`) that records micro-state a fresh session cannot recover from plan files alone — user decisions, workarounds, rejected approaches, and open questions. Written through a single function; read back by `/resume-session` and, read-only, by the supervisor codex engine (`hooks/lib/supervisor-codex-input.js`).
 - **Related**: [architecture/claude-code/handoff-artifact.md](architecture/claude-code/handoff-artifact.md)
 
 ### workflow active period
@@ -145,13 +145,13 @@ Terms for the session breadcrumb system (`docs/architecture/claude-code/handoff-
 ### flush mark
 
 - **Full name**: Flush mark
-- **Definition**: Sidecar file `<CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff-flush-mark.json` written by `bin/workflow/handoff-append` after a successful `--origin flush`. Sized from the measured transcript at flush time; a mark newer than the pressure baseline advances the baseline, so post-flush growth counts afresh.
+- **Definition**: Sidecar file `<WORKFLOW_STATE_DIR>/<sid>.control/handoff-flush-mark.json` written by `bin/workflow/handoff-append` after a successful `--origin flush`. Sized from the measured transcript at flush time; a mark newer than the pressure baseline advances the baseline, so post-flush growth counts afresh.
 - **Related**: [architecture/claude-code/handoff-artifact.md — Baseline, flush mark, and timer](architecture/claude-code/handoff-artifact.md#baseline-flush-mark-and-timer)
 
 ### pressure baseline
 
 - **Full name**: Pressure baseline
-- **Definition**: Sidecar file `<CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff-pressure.json` written by the nudge hook only, holding `{baseline_bytes, baseline_at, transcript_path}`. Growth and elapsed time are measured from this baseline; a nudge or flush advances it.
+- **Definition**: Sidecar file `<WORKFLOW_STATE_DIR>/<sid>.control/handoff-pressure.json` written by the nudge hook only, holding `{baseline_bytes, baseline_at, transcript_path}`. Growth and elapsed time are measured from this baseline; a nudge or flush advances it.
 - **Related**: [architecture/claude-code/handoff-artifact.md — Baseline, flush mark, and timer](architecture/claude-code/handoff-artifact.md#baseline-flush-mark-and-timer)
 
 ## Supervisor audit

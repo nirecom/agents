@@ -6,7 +6,7 @@
 # where the env file is ABSENT: G33 (gate reached, no report → block), G34
 # (hand-written full report still blocks), G35..G39 (mid-workflow, no state,
 # gate yield, workflow-off marker, gate already complete → exit 0) and G40
-# (non-default CLAUDE_WORKFLOW_DIR still reaches the spawned next-step).
+# (non-default WORKFLOW_STATE_DIR still reaches the spawned next-step).
 #
 # Depends on ../g28-trigger.sh for: b_mk_state, b_run, b_stdin, b_is_block,
 # b_reason_has, B_OUT, B_CODE — and on the grandparent for TMPDIR_BASE,
@@ -179,7 +179,7 @@ test_G39_no_env_gate_complete_exit0() {
 }
 
 # ---------------------------------------------------------------------------
-# G40 (regression): the spawned next-step must inherit CLAUDE_WORKFLOW_DIR.
+# G40 (regression): the spawned next-step must inherit WORKFLOW_STATE_DIR.
 # The state lives ONLY in a non-default nested temp dir; if the hook spawns
 # next-step with a scrubbed env, the state is invisible and the hook exits 0.
 # ---------------------------------------------------------------------------
@@ -198,7 +198,7 @@ test_G40_nondefault_workflow_dir_env_inheritance() {
         "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
 
     if [ "$B_CODE" = "2" ] && b_is_block; then
-        pass "G40: non-default CLAUDE_WORKFLOW_DIR still reaches 系統B → exit 2 (env inherited by next-step)"
+        pass "G40: non-default WORKFLOW_STATE_DIR still reaches 系統B → exit 2 (env inherited by next-step)"
     else
         fail "G40: expected exit 2 + block (env inheritance regression), got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
     fi

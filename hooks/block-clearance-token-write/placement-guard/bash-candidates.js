@@ -30,7 +30,7 @@ function foldText(text) {
 // absolute path, its MSYS `/c/...` form, and the env-var name itself.
 function workflowDirSpellings(foldedWf) {
   if (!foldedWf) return [];
-  const out = [foldedWf, "claude_workflow_dir"];
+  const out = [foldedWf, "workflow_state_dir"];
   const m = /^([a-z]):\/(.*)$/i.exec(foldedWf);
   if (m) out.push(`/${m[1].toLowerCase()}/${m[2]}`);
   return out;
@@ -40,7 +40,7 @@ function mentionsWorkflowDir(text, foldedWf) {
   const t = foldText(text);
   const upper = String(text || "");
   return workflowDirSpellings(foldedWf).some((s) =>
-    s === "claude_workflow_dir" ? /CLAUDE_WORKFLOW_DIR/.test(upper) : t.includes(s)
+    s === "workflow_state_dir" ? /WORKFLOW_STATE_DIR/.test(upper) : t.includes(s)
   );
 }
 

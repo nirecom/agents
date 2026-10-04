@@ -30,7 +30,7 @@ mk_fixture_repo() {
 }
 
 # inh_node <tmp> <js|--hook> [sid] — one node launch under the full isolation
-# contract (dual-pinned CLAUDE_WORKFLOW_DIR + WORKFLOW_PLANS_DIR, temp HOME,
+# contract (dual-pinned WORKFLOW_STATE_DIR + WORKFLOW_PLANS_DIR, temp HOME,
 # fixture AGENTS_CONFIG_DIR / CLAUDE_PROJECT_DIR / CLAUDE_TRANSCRIPT_BASE_DIR,
 # inherited session ids unset), run from the fixture repo. `--hook` form pipes a
 # SessionStart payload for <sid> into the real hooks/session-start.js. Sets INH_OUT.
@@ -40,7 +40,7 @@ inh_node() {
     if [ "$js" = "--hook" ]; then
         INH_OUT=$(cd "$tmp/repo" && printf '{"session_id":"%s"}' "$sid" | env \
             -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-            CLAUDE_WORKFLOW_DIR="$wfn" WORKFLOW_PLANS_DIR="$wfn" \
+            WORKFLOW_STATE_DIR="$wfn" WORKFLOW_PLANS_DIR="$wfn" \
             CLAUDE_TRANSCRIPT_BASE_DIR="$(node_path "$tmp/tr")" \
             CLAUDE_PROJECT_DIR="$(node_path "$tmp/repo")" \
             AGENTS_CONFIG_DIR="$(node_path "$tmp/cfg")" \
@@ -50,7 +50,7 @@ inh_node() {
     fi
     INH_OUT=$(cd "$tmp/repo" && env \
         -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$wfn" WORKFLOW_PLANS_DIR="$wfn" \
+        WORKFLOW_STATE_DIR="$wfn" WORKFLOW_PLANS_DIR="$wfn" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$(node_path "$tmp/tr")" \
         CLAUDE_PROJECT_DIR="$(node_path "$tmp/repo")" \
         AGENTS_CONFIG_DIR="$(node_path "$tmp/cfg")" \
@@ -139,7 +139,7 @@ inh_probe() {
 const L = require('$_AGENTS_DIR_NODE/hooks/workflow-state/lifecycle.js');
 const fs = require('fs'), path = require('path');
 const sid = '$2';
-const st = JSON.parse(fs.readFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + '.json'), 'utf8'));
+const st = JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + '.json'), 'utf8'));
 const started = () => { try { return String(L.isWorkflowStarted(sid)); } catch (e) { return 'THREW:' + e.message; } };
 $3"
     printf '%s' "$INH_OUT"
@@ -181,7 +181,7 @@ write_hang_transcript() {
 seed_recording_only() {
     local tmp="$1" sid="$2"
     mkdir -p "$tmp/wf" "$tmp/home"
-    CLAUDE_WORKFLOW_DIR="$(node_path "$tmp/wf")" WORKFLOW_PLANS_DIR="$(node_path "$tmp/wf")" \
+    WORKFLOW_STATE_DIR="$(node_path "$tmp/wf")" WORKFLOW_PLANS_DIR="$(node_path "$tmp/wf")" \
     HOME="$tmp/home" USERPROFILE="$(node_path "$tmp/home")" "$RWT" 20 node -e "
 const S = require('$STATEIO_NODE');
 S.writeState('$sid', S.createInitialState('$sid', { cwd: process.cwd(), git_branch: null }));

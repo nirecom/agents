@@ -66,7 +66,7 @@ announce_donor() {
 adopt() {
     local heir="$1" cwd="$2"; shift 2
     set +e
-    ADOPT_OUT="$( (cd "$TMPDIR_BASE" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_NODE" \
+    ADOPT_OUT="$( (cd "$TMPDIR_BASE" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" \
         WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" CLAUDE_TRANSCRIPT_BASE_DIR="$TBASE_NODE" \
         CLAUDE_PROJECT_DIR="$cwd" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout node "$ADOPT_CLI" --session "$heir" "$@" 2>&1) )"
@@ -87,7 +87,7 @@ run_driver() {
     local heir="$1" cwd="$2"; shift 2
     set +e
     DRIVER_OUT="$( (cd "$TMPDIR_BASE" && CLAUDE_SESSION_ID="$heir" \
-        CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_NODE" WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
+        WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TBASE_NODE" CLAUDE_PROJECT_DIR="$cwd" \
         AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout node "$DRIVER" "$@" 2>&1) )"
@@ -115,7 +115,7 @@ get_kv() {
 
 # step_status <sid> <step> — read through the canonical projection API
 step_status() {
-    (cd "$AGENTS_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_NODE" WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
+    (cd "$AGENTS_DIR" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
         run_with_timeout node -e '
           try {
             const s = require("./hooks/workflow-state").readState(process.argv[1]);

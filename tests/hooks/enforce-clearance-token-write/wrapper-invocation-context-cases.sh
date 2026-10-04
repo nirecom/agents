@@ -130,7 +130,7 @@ broken_probe() {
     outf="$cfg/.stdout"; errf="$cfg/.stderr"
     ( cd "$cfg" && env -u SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         -u WORKTREE_PATH -u AGENTS_CONFIG_DIR "PATH=$OFFCLR_CLEAN_PATH" \
-        "WORKFLOW_PLANS_DIR=$cfg/plans" "CLAUDE_WORKFLOW_DIR=$cfg/plans" \
+        "WORKFLOW_PLANS_DIR=$cfg/plans" "WORKFLOW_STATE_DIR=$cfg/plans" \
         "AGENTS_CONFIG_DIR=$cfg" "SESSION_ID=brokensid" \
         "$OFFCLR_RWT" 30 bash "$cfg/bin/request-off-mode-clearance" \
             --target workflow --category trivial-change --detail "broken delegation probe" \

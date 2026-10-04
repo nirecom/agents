@@ -8,7 +8,7 @@ migration all enforce it from the same registry,
 | Directory | Holds | Who may write |
 |---|---|---|
 | `WORKFLOW_PLANS_DIR` (default `~/.workflow-plans/`) | **Artifacts** — prose a human reads (`<sid>-detail.md`, surveys, raw review rounds, logs) | The model (Write), workers, wrappers |
-| `<CLAUDE_WORKFLOW_DIR>/<sid>.control/` | **Control files** — JSON and numbers a machine reads to drive a gate (round counters, terminal markers, ledgers, payloads, outcomes) | Only the owning CLI or hook, never the model while `WORKFLOW=on` |
+| `<WORKFLOW_STATE_DIR>/<sid>.control/` | **Control files** — JSON and numbers a machine reads to drive a gate (round counters, terminal markers, ledgers, payloads, outcomes) | Only the owning CLI or hook, never the model while `WORKFLOW=on` |
 
 ## Why the split
 
@@ -16,7 +16,7 @@ A control file decides what a gate does next: a round number caps the review
 loop, a terminal file ends it, an exit6 marker accepts residual HIGH findings.
 When those files sat beside the prose in PLANS_DIR, the model could write them
 with the same Write call it uses for plans — and so could skip a gate by
-touching a file (#2434, #1814). Moving them under `CLAUDE_WORKFLOW_DIR` lets the
+touching a file (#2434, #1814). Moving them under `WORKFLOW_STATE_DIR` lets the
 guard refuse every model write there without touching the artifact workflow.
 
 ## Classification rule
@@ -80,7 +80,7 @@ guard refuse every model write there without touching the artifact workflow.
 
 Named exceptions:
 
-- The sid-less `cache/` lives at `<CLAUDE_WORKFLOW_DIR>/cache/`.
+- The sid-less `cache/` lives at `<WORKFLOW_STATE_DIR>/cache/`.
 - Never moved: `*.lock`, `*.tmp`, `*.migrating.*.tmp`, `.sg-*`, `.prev-*`.
   `guard-attempt.tmp` is a short-lived marker that expires in place
   (`MIGRATABLE_KINDS` excludes it).
@@ -119,18 +119,18 @@ target into three classes:
 | Class | Target | `WORKFLOW=off` |
 |---|---|---|
 | (a) | Protected tokens and OFF markers (`.off-clearance`, sentinels) | Still blocked |
-| (b) `control-dir` | Anything under `CLAUDE_WORKFLOW_DIR` (lexically, so a symlinked `<x>.control/` is covered): control dirs, any session's `<sid>.json` and other sessions' files (#1814) | Allowed |
+| (b) `control-dir` | Anything under `WORKFLOW_STATE_DIR` (lexically, so a symlinked `<x>.control/` is covered): control dirs, any session's `<sid>.json` and other sessions' files (#1814) | Allowed |
 | (c) `plans-unregistered` | A PLANS_DIR entry that parses as control, ambiguous or unregistered | Allowed |
 
 Reads are never judged. An unresolved sid is treated as `WORKFLOW=on`.
-Detection expands `~`, `$HOME`, `$CLAUDE_WORKFLOW_DIR`, `$WORKFLOW_PLANS_DIR`
+Detection expands `~`, `$HOME`, `$WORKFLOW_STATE_DIR`, `$WORKFLOW_PLANS_DIR`
 and their `${X:-default}` forms (`hooks/lib/bash-write-targets/detection-expand.js`);
 any other operator on a known alias fails closed.
 
 Known limits: a PLANS_DIR write whose basename is fully dynamic is not blocked,
 and an arbitrary variable that is unset at hook time is not expanded (#2233).
 
-Accepted residual: the guard blocks writes under `CLAUDE_WORKFLOW_DIR`, but deleting the directory root itself (e.g. `rm -rf` on it) is not detected — accepted because the NFR is a single-user PC and recovery rebuilds the state.
+Accepted residual: the guard blocks writes under `WORKFLOW_STATE_DIR`, but deleting the directory root itself (e.g. `rm -rf` on it) is not detected — accepted because the NFR is a single-user PC and recovery rebuilds the state.
 
 Division of labor: enforce-worktree decides *which worktree* a write may land
 in; this guard decides *which state directory* a file may land in. Neither
@@ -166,7 +166,7 @@ manual face `bin/migrate-control-dir --session <sid> | --all`.
   the value equals the expected legacy basename; the real I/O always uses the
   derived path.
 - **Isolation**: never run an in-development worktree's bins or hooks against
-  the live `CLAUDE_WORKFLOW_DIR` / `WORKFLOW_PLANS_DIR` — isolate both (and
+  the live `WORKFLOW_STATE_DIR` / `WORKFLOW_PLANS_DIR` — isolate both (and
   `HOME`) to temp dirs; agents invoked from a worktree use
   `$AGENTS_CONFIG_DIR/bin`. A worktree's migration would otherwise move live
   sessions while main's hooks still write the legacy paths.

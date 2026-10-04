@@ -94,7 +94,7 @@ assert_eq() {
 # the pins are dual and unconditional so no future side effect can escape.
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 SANDBOX=$(make_tmp); WF=$(node_path "$SANDBOX")
-export CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF"
+export WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF"
 cleanup() { [ -n "${SANDBOX:-}" ] && [ -d "$SANDBOX" ] && rm -r -f "$SANDBOX" 2>/dev/null; return 0; }
 trap cleanup EXIT
 

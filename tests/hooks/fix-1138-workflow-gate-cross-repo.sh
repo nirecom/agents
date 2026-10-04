@@ -52,7 +52,7 @@ mkdir -p "$TEST_ROOT"
 trap 'rm -rf "$TEST_ROOT" 2>/dev/null || true' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TEST_ROOT/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -118,7 +118,7 @@ JSON
 # $1=workflow_dir $2=project_dir $3=agents_config_dir $4=hook_input_json
 run_gate_win() {
     local wfdir="$1" projdir="$2" agentsdir="$3" json="$4"
-    echo "$json" | CLAUDE_PROJECT_DIR="$projdir" CLAUDE_WORKFLOW_DIR="$wfdir" \
+    echo "$json" | CLAUDE_PROJECT_DIR="$projdir" WORKFLOW_STATE_DIR="$wfdir" \
         AGENTS_CONFIG_DIR="$agentsdir" run_with_timeout node "$GATE_HOOK" 2>/dev/null || true
 }
 

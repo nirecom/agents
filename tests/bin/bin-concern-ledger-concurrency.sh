@@ -34,9 +34,9 @@ TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
 
@@ -84,8 +84,8 @@ for ITER in 1 2 3 4 5; do
     done
     wait
 
-    # #2434: control files live in <CLAUDE_WORKFLOW_DIR>/<sid>.control, unprefixed.
-    CTL="$CLAUDE_WORKFLOW_DIR/$SID.control"
+    # #2434: control files live in <WORKFLOW_STATE_DIR>/<sid>.control, unprefixed.
+    CTL="$WORKFLOW_STATE_DIR/$SID.control"
     for P in $PRODUCERS; do
         D="$CTL/$FORMAT-round-1-delta-$P.txt"
         if ! grep -Fq -- "a concern from $P in iteration $ITER" "$D" 2>/dev/null; then
@@ -133,7 +133,7 @@ for _ in 1 2 3; do
 done
 wait
 
-FCTL="$CLAUDE_WORKFLOW_DIR/$FSID.control"
+FCTL="$WORKFLOW_STATE_DIR/$FSID.control"
 FJSON="$FCTL/$FORMAT-unresolved-concerns.json"
 assert_eq "2: the racing finalizers left exactly one artifact" \
     "1" "$(find "$FCTL" -maxdepth 1 -name "$FORMAT-unresolved-concerns.json" 2>/dev/null | wc -l | tr -d ' ')"
@@ -161,7 +161,7 @@ assert_eq "2: and check-finalized accepts the round the race finished" "0" \
 echo ""
 echo "--- concurrency 3: no scratch files survive the race ---"
 
-STRAY="$(find "$FPLANS" "$TMPDIR_BASE/race-1" "$FCTL" "$CLAUDE_WORKFLOW_DIR/race1.control" -maxdepth 1 \
+STRAY="$(find "$FPLANS" "$TMPDIR_BASE/race-1" "$FCTL" "$WORKFLOW_STATE_DIR/race1.control" -maxdepth 1 \
     \( -name '*.tmp' -o -name '*.tmp.*' -o -name '.*.swp' -o -name '*~' -o -name '*.partial' \) \
     2>/dev/null | wc -l | tr -d ' ')"
 assert_eq "3: the racing writers left no scratch files in the plans dirs" "0" "$STRAY"

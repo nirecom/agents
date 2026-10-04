@@ -18,9 +18,9 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
 TMPDIR_FX="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_FX"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_FX/workflow"
+export WORKFLOW_STATE_DIR="$TMPDIR_FX/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_FX/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
 # Keep fixture runs out of the real duration ledger and progress stream.
 export RUN_ALL_DURATIONS_LIB=/nonexistent RUN_ALL_PROGRESS=off
@@ -149,16 +149,16 @@ else
     fail "B6: .sh did not run without the launch library — rc=$RC out=$(echo "$OUT" | tail -3)"
 fi
 
-# B7 (#2434): every launched test gets a fresh per-run CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR
+# B7 (#2434): every launched test gets a fresh per-run WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR
 # that overrides the caller's pair and is removed with the work dir.
 mkdir -p "$TMPDIR_FX/b7/caller-wf" "$TMPDIR_FX/b7/caller-plans"
 cat >"$TMPDIR_FX/b7/print-dirs.sh" <<'B7_EOF'
 #!/usr/bin/env bash
-: >"$CLAUDE_WORKFLOW_DIR/b7-marker" || exit 1
+: >"$WORKFLOW_STATE_DIR/b7-marker" || exit 1
 : >"$WORKFLOW_PLANS_DIR/b7-marker" || exit 1
-printf 'B7_WF=%s\nB7_PL=%s\n' "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+printf 'B7_WF=%s\nB7_PL=%s\n' "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 B7_EOF
-OUT="$(CLAUDE_WORKFLOW_DIR="$TMPDIR_FX/b7/caller-wf" WORKFLOW_PLANS_DIR="$TMPDIR_FX/b7/caller-plans" \
+OUT="$(WORKFLOW_STATE_DIR="$TMPDIR_FX/b7/caller-wf" WORKFLOW_PLANS_DIR="$TMPDIR_FX/b7/caller-plans" \
     bash "$RUN_ALL" "$TMPDIR_FX/b7/print-dirs.sh" 2>&1)"; RC=$?
 b7_wf="$(printf '%s\n' "$OUT" | sed -n 's/^B7_WF=//p')"
 b7_pl="$(printf '%s\n' "$OUT" | sed -n 's/^B7_PL=//p')"

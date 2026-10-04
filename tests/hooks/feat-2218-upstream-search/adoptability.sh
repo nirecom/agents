@@ -162,7 +162,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # move U5/U6's leading record.
 _u13_run() {
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$TMP/u13/wf" WORKFLOW_PLANS_DIR="$TMP/u13/wf" \
+        WORKFLOW_STATE_DIR="$TMP/u13/wf" WORKFLOW_PLANS_DIR="$TMP/u13/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u13/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node -e "$1" 2>&1
@@ -227,7 +227,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # paths are made to agree, they must agree.
 _u17_run() {
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
-        CLAUDE_WORKFLOW_DIR="$TMP/u17/wf" WORKFLOW_PLANS_DIR="$TMP/u17/wf" \
+        WORKFLOW_STATE_DIR="$TMP/u17/wf" WORKFLOW_PLANS_DIR="$TMP/u17/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u17/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node -e "$1" 2>&1
@@ -320,7 +320,7 @@ _U18_CLI="$AGENTS_DIR/bin/resume-session-detect"
 
 _u18_run() {
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
-        CLAUDE_WORKFLOW_DIR="$TMP/u18/wf" WORKFLOW_PLANS_DIR="$TMP/u18/wf" \
+        WORKFLOW_STATE_DIR="$TMP/u18/wf" WORKFLOW_PLANS_DIR="$TMP/u18/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u18/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node -e "$1" 2>&1
@@ -331,7 +331,7 @@ _u18_cli() {
     shift
     env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
         CLAUDE_SESSION_ID="$sid" \
-        CLAUDE_WORKFLOW_DIR="$TMP/u18/wf" WORKFLOW_PLANS_DIR="$TMP/u18/wf" \
+        WORKFLOW_STATE_DIR="$TMP/u18/wf" WORKFLOW_PLANS_DIR="$TMP/u18/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u18/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node "$_U18_CLI" "$@" 2>/dev/null

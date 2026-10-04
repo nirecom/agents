@@ -15,7 +15,7 @@ supervisor audit trail and the workflow state store.
 
 ## Dual-pin the plans dir
 
-Pin `WORKFLOW_PLANS_DIR` in every place `CLAUDE_WORKFLOW_DIR` is pinned.
+Pin `WORKFLOW_PLANS_DIR` in every place `WORKFLOW_STATE_DIR` is pinned.
 Pinning only one of the pair is the contamination bug: hooks resolve the
 workflow state from the fixture but the supervisor emitter still resolves
 `~/.workflow-plans/` and appends there.
@@ -24,7 +24,7 @@ workflow state from the fixture but the supervisor emitter still resolves
 (pristine module-load snapshot; one-line stderr diagnostic; fail-open).
 
 Audit the repo with `bin/check-plans-dir-isolation.sh` — a `W-candidate:` line
-means a test pins `CLAUDE_WORKFLOW_DIR`, omits `WORKFLOW_PLANS_DIR`, and
+means a test pins `WORKFLOW_STATE_DIR`, omits `WORKFLOW_PLANS_DIR`, and
 reaches a supervisor-emitting code path. Zero W-candidates is the contract.
 
 Export both once near the top of the test so child `node` processes inherit

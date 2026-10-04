@@ -128,7 +128,7 @@ DRIVE_EOF
 
     S2_OUT="$(run_with_timeout 60 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$S2_WF" \
+        "WORKFLOW_STATE_DIR=$S2_WF" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$TMPDIR_BASE/drive.js" "$HANDLERS_JS" "$S2_SID" "$S2_WF" "$ICV_ON_CMD" "$ICV_END_CMD" 2>&1)"
     S2_ON="$(printf '%s\n' "$S2_OUT" | grep '^AFTER_ON=' | head -1 | cut -d= -f2-)"
@@ -281,7 +281,7 @@ IDEM_EOF
 
     S7_OUT="$(run_with_timeout 60 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$S7_WF" \
+        "WORKFLOW_STATE_DIR=$S7_WF" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$TMPDIR_BASE/drive-idem.js" "$HANDLERS_JS" "$S7_SID" "$S7_WF" "$ICV_ON_CMD" "$ICV_END_CMD" 2>&1)"
     s7f() { printf '%s\n' "$S7_OUT" | grep "^$1=" | head -1 | cut -d= -f2-; }

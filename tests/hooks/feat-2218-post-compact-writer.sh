@@ -36,7 +36,7 @@ run_hook() {
     local tmp="$1" sid="$2"
     printf '{"session_id":"%s"}' "$sid" \
         | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-            CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+            WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 60 node "$HOOK" 2>/dev/null
 }
@@ -46,7 +46,7 @@ run_hook() {
 seed_active() {
     local tmp="$1" sid="$2"
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -60,7 +60,7 @@ markStep('$sid', 'workflow_init', 'complete');
 inspect() {
     local tmp="$1" sid="$2"
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID SID="$sid" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { readHandoff } = require('$AGENTS_DIR_NODE/$ARTIFACT');
@@ -124,7 +124,7 @@ run_P2() {
     run_hook "$tmp" "twice-sid-p2" >/dev/null
     run_hook "$tmp" "twice-sid-p2" >/dev/null
     out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { readHandoff, renderHandoffForResume } = require('$AGENTS_DIR_NODE/$ARTIFACT');
@@ -162,7 +162,7 @@ run_P3() {
     seed_active "$tmp" "dedup-sid-p3"
     run_hook "$tmp" "dedup-sid-p3" >/dev/null
     out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { readHandoff, appendHandoffEntry } = require('$AGENTS_DIR_NODE/$ARTIFACT');
@@ -214,7 +214,7 @@ run_P5() {
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
     out=$(printf '{}' | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$HOOK" 2>/dev/null)
     rc=$?

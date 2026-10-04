@@ -63,7 +63,7 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
-WORKFLOW_DIR="${CLAUDE_WORKFLOW_DIR:-$HOME/.claude/projects/workflow}"
+WORKFLOW_DIR="${WORKFLOW_STATE_DIR:-$HOME/.claude/projects/workflow}"
 if [ ! -d "$WORKFLOW_DIR" ]; then
     if [ "$CI_MODE" = "1" ]; then
         printf '{"scanned":0,"skipped_live":0,"skipped_recent":0,"files_contaminated":0,"files_modified":0,"records_removed":0,"files_emptied":0,"files_skipped_unparsable":0,"backup_dir":"","errors":["workflow dir not found"]}\n'

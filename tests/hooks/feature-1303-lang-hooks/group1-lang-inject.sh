@@ -26,7 +26,7 @@ else
     _raw1=$(printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         CONV_LANG=japanese PLAN_LANG=english \
         AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WF_PLANNING_NODE" \
+        WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)
     _ctx1=$(extract_additional_context "$_raw1")
     _ok1=1
@@ -43,7 +43,7 @@ else
     _raw2=$(printf "{\"session_id\":\"$SID_DONE\"}" | \
         CONV_LANG=japanese PLAN_LANG=english \
         AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WF_DONE_NODE" \
+        WORKFLOW_STATE_DIR="$WF_DONE_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)
     _ctx2=$(extract_additional_context "$_raw2")
     _ok2=1
@@ -59,7 +59,7 @@ else
     _raw3=$(printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         PLAN_LANG=japanese \
         AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WF_PLANNING_NODE" \
+        WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node -e "
 delete process.env.CONV_LANG;
 const { execFileSync } = require('child_process');
@@ -68,7 +68,7 @@ const { execFileSync } = require('child_process');
         (unset CONV_LANG; printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         PLAN_LANG=japanese \
         AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WF_PLANNING_NODE" \
+        WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null))
     _ctx3=$(extract_additional_context "$_raw3")
     _ok3=1
@@ -83,7 +83,7 @@ const { execFileSync } = require('child_process');
     # G1-T4: both unset → output is {} (no injection)
     _raw4=$( (unset CONV_LANG; unset PLAN_LANG; printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WF_PLANNING_NODE" \
+        WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null) )
     if [ "$_raw4" = "{}" ]; then
         pass "G1-T4: both unset → output is {}"
@@ -100,7 +100,7 @@ const { execFileSync } = require('child_process');
     _raw5=$(printf '{}' | \
         CONV_LANG=japanese \
         AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WF_PLANNING_NODE" \
+        WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)
     _rc5=$?
     _valid5=$(is_valid_hook_output "$_raw5")
@@ -114,7 +114,7 @@ const { execFileSync } = require('child_process');
     _raw6=$(printf 'not-json' | \
         CONV_LANG=japanese \
         AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WF_PLANNING_NODE" \
+        WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)
     _rc6=$?
     _valid6=$(is_valid_hook_output "$_raw6")
@@ -128,7 +128,7 @@ const { execFileSync } = require('child_process');
     _raw7=$(printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         CONV_LANG=japanese \
         AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WF_PLANNING_NODE" \
+        WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)
     _event7=$(node -e "
 try {
@@ -154,12 +154,12 @@ try {
     _idem_ctx_a=$(extract_additional_context "$(printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         CONV_LANG=japanese \
         AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WF_PLANNING_NODE" \
+        WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)")
     _idem_ctx_b=$(extract_additional_context "$(printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         CONV_LANG=japanese \
         AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WF_PLANNING_NODE" \
+        WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)")
     _idem_ok=1
     [ "$_idem_ctx_a" = "$_idem_ctx_b" ] || _idem_ok=0

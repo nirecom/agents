@@ -12,7 +12,7 @@
 # _p_run_hook <stdin-json> → "block" | "approve" | "other:<raw>"
 _p_run_hook() {
     local out rc
-    out=$(CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    out=$(WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 15 node "$BLOCK_HOOK" <<< "$2" 2>/dev/null)
     rc=$?
     out=$(printf '%s' "$out" | tr -d '\r\n')
@@ -51,7 +51,7 @@ run_P_lock_protected() {
     # Dir pinned here too (#2108): without it this probe resolves the REAL workflow
     # dir, where `mintlocksid` is not an observed sid, and the stem rule then makes
     # the lock name classify as null — the registration above would be invisible.
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e '
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e '
 "use strict";
 const path = require("path");
 const { lockPathFor } = require(process.argv[1]);

@@ -49,7 +49,7 @@ run_reset_from_tests() {
     L3D_ESC=${L3D_CMD//\"/\\\"}
     L3D_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"","stderr":""}}' "$L3D_ESC")
     L3D_EXIT=0
-    L3D_OUT=$(echo "$L3D_JSON" | CLAUDE_PROJECT_DIR="$REPO_3" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    L3D_OUT=$(echo "$L3D_JSON" | CLAUDE_PROJECT_DIR="$REPO_3" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         env -u CLAUDE_ENV_FILE node "$MARK_HOOK" 2>/dev/null) || L3D_EXIT=$?
     if [ "$L3D_EXIT" = "0" ]; then
         pass "L3-d(exit). session_id missing + RESET_FROM → exit 0"

@@ -13,7 +13,7 @@
 # Required env: AGENTS_CONFIG_DIR
 # Session id: resolved through bin/resolve-session-id (SSOT) — rc 2 is "no session"
 # and fails closed here; any other non-zero rc is a bridge fault and also fails closed.
-# Optional env: CLAUDE_WORKFLOW_DIR, WORKFLOW_PLANS_DIR
+# Optional env: WORKFLOW_STATE_DIR, WORKFLOW_PLANS_DIR
 #
 # Split under the file-split HARD limit (rules/coding/file-split.md): the verdict-parsing
 # and token-minting logic live in ./request-off-clearance.d/{parse-verdict,mint-token}.js

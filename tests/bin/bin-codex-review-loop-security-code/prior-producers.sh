@@ -139,7 +139,7 @@ stage_scanner() {
     assert_eq "N3: the staging file uses the ledger token and the producer name" \
         "present" "$(file_state "$(delta_file "$PLANS" "$SID" 1 review-code-codex)")"
     assert_eq "N3: exactly one round-number file exists for the review" \
-        "1" "$(ls "$CLAUDE_WORKFLOW_DIR/$SID.control/" 2>/dev/null | grep -c 'round-number\.txt$' || true)"
+        "1" "$(ls "$WORKFLOW_STATE_DIR/$SID.control/" 2>/dev/null | grep -c 'round-number\.txt$' || true)"
 }
 
 # ---------------------------------------------------------------------------

@@ -147,7 +147,7 @@ run_next_step() {
     local sid="$1"; shift
     NS_RC=0
     NS_OUT="$(cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node "$AGENTS_DIR/bin/workflow/next-step" \
@@ -257,7 +257,7 @@ fi
 run_gate() { # <payload-file>
     GATE_RC=0
     GATE_OUT="$(cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         ENFORCE_WORKTREE=off \

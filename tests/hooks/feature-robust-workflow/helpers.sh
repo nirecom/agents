@@ -5,7 +5,7 @@
 TMPDIR_BASE=$(mktemp -d)
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 setup_repo() {
@@ -90,7 +90,7 @@ run_gate() {
     # AGENTS_CONFIG_DIR="$repo" so isAgentsSessionRepo() (issue #1138) treats the
     # commit target as the agents session repo — i.e. the gate enforces workflow
     # state, matching the historical single-repo behavior these tests assume.
-    echo "$json" | CLAUDE_PROJECT_DIR="$repo" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" AGENTS_CONFIG_DIR="$repo" node "$GATE_HOOK" 2>/dev/null || true
+    echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" AGENTS_CONFIG_DIR="$repo" node "$GATE_HOOK" 2>/dev/null || true
 }
 
 # Cross-repo variant (issue #1138): the agents session lives in $agents_repo but
@@ -100,7 +100,7 @@ run_gate() {
 # points at the foreign repo.
 run_gate_cross_repo() {
     local agents_repo="$1" target_repo="$2" json="$3"
-    echo "$json" | CLAUDE_PROJECT_DIR="$target_repo" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" AGENTS_CONFIG_DIR="$agents_repo" node "$GATE_HOOK" 2>/dev/null || true
+    echo "$json" | CLAUDE_PROJECT_DIR="$target_repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" AGENTS_CONFIG_DIR="$agents_repo" node "$GATE_HOOK" 2>/dev/null || true
 }
 
 expect_approve_gate() {
@@ -136,7 +136,7 @@ expect_block_gate_contains() {
 
 run_mark_hook() {
     local repo="$1" json="$2"
-    echo "$json" | CLAUDE_PROJECT_DIR="$repo" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null || true
+    echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null || true
 }
 
 # Read the state file and extract steps.<step>.status using node.

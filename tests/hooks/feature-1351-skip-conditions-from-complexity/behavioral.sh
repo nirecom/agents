@@ -106,7 +106,7 @@ echo ""
 echo "=== SC-10: detail return keys match CONDITION_SCHEMAS.detail exactly ==="
   SID="sc10-$$"
   node_record "$SID" '[]' >/dev/null
-  SC10_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  SC10_OUT="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
   const r = require('$RESOLVER_N');
   const v = r.resolveSkipConditionsFromComplexity('$SID', 'detail');
   const expected = r.CONDITION_SCHEMAS.detail.slice().sort();
@@ -123,7 +123,7 @@ echo ""
 echo "=== SC-11: outline values strictly === true ==="
   SID="sc11-$$"
   node_record "$SID" '[]' >/dev/null
-  SC11_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  SC11_OUT="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
   const r = require('$RESOLVER_N');
   const v = r.resolveSkipConditionsFromComplexity('$SID', 'outline');
   const allStrictTrue = Object.values(v).every((x) => x === true);
@@ -241,7 +241,7 @@ echo ""
 echo "=== SC-21: outline return keys match CONDITION_SCHEMAS.outline exactly ==="
   SID="sc21-$$"
   node_record "$SID" '[]' >/dev/null
-  SC21_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  SC21_OUT="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
   const r = require('$RESOLVER_N');
   const v = r.resolveSkipConditionsFromComplexity('$SID', 'outline');
   const expected = r.CONDITION_SCHEMAS.outline.slice().sort();

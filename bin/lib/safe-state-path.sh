@@ -419,7 +419,7 @@ _sp_nothing_to_migrate() {
     if [ -n "$2" ]; then [ ! -e "$3" ]; else ! _sp_has_plans_entry "$1"; fi
 }
 
-# sp_control_dir <sid> [<file>] — print <CLAUDE_WORKFLOW_DIR>/<sid>.control (or a
+# sp_control_dir <sid> [<file>] — print <WORKFLOW_STATE_DIR>/<sid>.control (or a
 # file in it), created, as a bash path, after migrating legacy copies (the dir form: all
 # of <sid>'s). bin/workflow-control-dir (this file's own tree first, so a stub
 # AGENTS_CONFIG_DIR cannot skip the migration) is authoritative and its non-zero exit
@@ -432,9 +432,9 @@ sp_control_dir() {
     local sid="${1-}" file="${2-}" root="" d rc bd legacy
     sp_valid_token "$sid" || return 2
     [ -z "$file" ] || sp_valid_token "$file" || return 2
-    bd="${CLAUDE_WORKFLOW_DIR:-${HOME:?HOME not set}/.claude/projects/workflow}/$sid.control"
+    bd="${WORKFLOW_STATE_DIR:-${HOME:?HOME not set}/.claude/projects/workflow}/$sid.control"
     legacy="${WORKFLOW_PLANS_DIR:-${HOME}/.workflow-plans}/$sid-$file"
-    if [ -n "${CLAUDE_WORKFLOW_DIR:-}" ] && [ -n "${WORKFLOW_PLANS_DIR:-}" ] \
+    if [ -n "${WORKFLOW_STATE_DIR:-}" ] && [ -n "${WORKFLOW_PLANS_DIR:-}" ] \
         && [[ -z "$file" || "$file" =~ ^[A-Za-z0-9] ]]; then
         if [ ! -e "$bd" ] && [ ! -h "$bd" ] && ! _sp_has_plans_entry "$sid"; then
             mkdir -p -- "$bd" 2>/dev/null || true

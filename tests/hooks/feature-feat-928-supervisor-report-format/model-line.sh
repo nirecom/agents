@@ -60,7 +60,7 @@ ml_render() {
             -u CLAUDE_CODE_SUBAGENT_MODEL -u CLAUDE_PROJECT_DIR \
             -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
             AGENTS_CONFIG_DIR="$(_to_node_path "$ML_WORK/cfg")" \
-            CLAUDE_WORKFLOW_DIR="$ML_WORK/wf" WORKFLOW_PLANS_DIR="$ML_WORK/plans" \
+            WORKFLOW_STATE_DIR="$ML_WORK/wf" WORKFLOW_PLANS_DIR="$ML_WORK/plans" \
             ML_FORMATTER="$FORMATTER_NODE" ML_OUTDIR="$(_to_node_path "$ML_WORK/out/$tag")" \
             ML_FINDINGS="$FINDINGS_ONE" \
             node -e "$ML_JS"

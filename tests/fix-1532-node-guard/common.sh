@@ -107,7 +107,7 @@ body_text() { # <file>
 }
 
 # ---- fixture isolation (rules/test/fixture-isolation.md) --------------------
-# CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR are pinned as a PAIR: pinning only
+# WORKFLOW_STATE_DIR and WORKFLOW_PLANS_DIR are pinned as a PAIR: pinning only
 # the first is the known contamination bug, where hooks read the fixture but the
 # supervisor emitter still appends to the developer's real ~/.workflow-plans.
 # resolve-session-id / resolve-worktree-path both reach workflow state, so the
@@ -117,9 +117,9 @@ TESTTMP="$(mktemp -d "${TMPDIR:-/tmp}/fix-1532-node-guard.XXXXXX")" || {
   exit 2
 }
 trap 'cd / 2>/dev/null; rm -rf "$TESTTMP"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TESTTMP/workflow"
+export WORKFLOW_STATE_DIR="$TESTTMP/workflow"
 export WORKFLOW_PLANS_DIR="$TESTTMP/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID SESSION_ID
 
 # Everything else the targets branch on, unset explicitly rather than assumed

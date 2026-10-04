@@ -86,10 +86,10 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Fixture isolation (rules/test/fixture-isolation.md): dual-pin both dirs and
 # drop any inherited session id so the hook cannot touch real session state.
-CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-export CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 

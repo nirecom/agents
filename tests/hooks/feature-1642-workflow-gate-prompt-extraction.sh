@@ -179,7 +179,7 @@ run_hook() {
         env -u CLAUDE_ENV_FILE \
         "AGENTS_CONFIG_DIR=$cfg" \
         "$@" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
 }

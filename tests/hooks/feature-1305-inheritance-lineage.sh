@@ -44,7 +44,7 @@ run_with_timeout() {
 }
 
 # --- fixture isolation (rules/test/fixture-isolation.md) -------------------
-# Neutral CWD, throwaway repos, and a DUAL PIN of CLAUDE_WORKFLOW_DIR +
+# Neutral CWD, throwaway repos, and a DUAL PIN of WORKFLOW_STATE_DIR +
 # WORKFLOW_PLANS_DIR so nothing here can reach the developer's real
 # ~/.claude/workflow-state or ~/.workflow-plans.
 TMPDIR_BASE="$(mktemp -d)"
@@ -54,7 +54,7 @@ WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 PLANS_DIR="$TMPDIR_BASE/plans"
 TBASE="$TMPDIR_BASE/transcripts"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR" "$TBASE"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 
 # The outer Claude Code session exports these; a hook that inherits them would

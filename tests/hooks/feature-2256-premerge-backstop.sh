@@ -43,7 +43,7 @@ trap 'rm -rf "$WORK"' EXIT
 WORK_NODE="$(nrm "$WORK")"
 mkdir -p "$WORK/plans" "$WORK/wf" "$WORK/transcripts" "$WORK/cfg"
 : > "$WORK/cfg/.env"
-export CLAUDE_WORKFLOW_DIR="$WORK_NODE/wf"
+export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$WORK_NODE/cfg"

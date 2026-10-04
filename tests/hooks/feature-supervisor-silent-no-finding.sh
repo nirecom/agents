@@ -54,7 +54,7 @@ run_t1a() {
         local tmp_node="$tmp"
     fi
 
-    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -66,7 +66,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -96,7 +96,7 @@ run_t1b() {
         local tmp_node="$tmp"
     fi
 
-    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -115,7 +115,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -156,7 +156,7 @@ run_t1c() {
     transcript_file="$tmp_node/transcript-t1c.jsonl"
 
     # Seed empty state
-    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -183,7 +183,7 @@ fs.writeFileSync('$transcript_file', line + '\n');
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$transcript_file")
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -218,7 +218,7 @@ run_additional2_ask_user_question_gate() {
     transcript_file="$tmp_node/transcript-add2.jsonl"
 
     # Seed state: alert_armed_at set (would normally trigger branch 3 block)
-    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -252,7 +252,7 @@ fs.writeFileSync('$transcript_file', line + '\n');
 
     hook_input=$(printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$transcript_file")
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 

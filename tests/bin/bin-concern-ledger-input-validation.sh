@@ -57,9 +57,9 @@ TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 
 # A neutral CWD that is also the canary directory: anything a metacharacter
@@ -82,7 +82,7 @@ CONCERN_TEXT="the concern that must not be lost"
 # Sandbox. Each probe gets its own root so a traversal from one case cannot be
 # mistaken for a file another case wrote.
 #   <root>/plans   — the --plans-dir handed to the CLI
-#   <root>/wf      — CLAUDE_WORKFLOW_DIR; control files land in <sid>.control (#2434)
+#   <root>/wf      — WORKFLOW_STATE_DIR; control files land in <sid>.control (#2434)
 #   <root>/        — where a single '..' lands
 # ---------------------------------------------------------------------------
 BOX_SEQ=0
@@ -94,7 +94,7 @@ new_box() {
     BOX="$TMPDIR_BASE/box-$BOX_SEQ"
     PLANS="$BOX/plans"
     WF="$BOX/wf"
-    export CLAUDE_WORKFLOW_DIR="$WF"
+    export WORKFLOW_STATE_DIR="$WF"
     mkdir -p "$PLANS" "$WF"
 }
 

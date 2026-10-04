@@ -95,9 +95,9 @@ TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
 
@@ -117,20 +117,20 @@ new_env() {
     PLANS="$TMPDIR_BASE/plans-$ENV_SEQ"
     WORKFLOW_STATE="$TMPDIR_BASE/workflow-$ENV_SEQ"
     mkdir -p "$PLANS" "$WORKFLOW_STATE"
-    export CLAUDE_WORKFLOW_DIR="$WORKFLOW_STATE"
+    export WORKFLOW_STATE_DIR="$WORKFLOW_STATE"
     export WORKFLOW_PLANS_DIR="$PLANS"
 }
 
 # --- artifact paths ---------------------------------------------------------
-# Control-file helpers: $1 (plans) is ignored; path derived from CLAUDE_WORKFLOW_DIR.
+# Control-file helpers: $1 (plans) is ignored; path derived from WORKFLOW_STATE_DIR.
 # $2=sid, $3=format (ledger/round/snapshot/json/delta); $4=cycle or round as needed.
-ledger_file()   { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-concern-ledger.txt' "$d" "$3"; }
-snapshot_file() { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-concern-ledger-cap-snapshot.txt' "$d" "$3"; }
-json_file()     { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-unresolved-concerns.json' "$d" "$3"; }
+ledger_file()   { local d="$WORKFLOW_STATE_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-concern-ledger.txt' "$d" "$3"; }
+snapshot_file() { local d="$WORKFLOW_STATE_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-concern-ledger-cap-snapshot.txt' "$d" "$3"; }
+json_file()     { local d="$WORKFLOW_STATE_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-unresolved-concerns.json' "$d" "$3"; }
 diag_file()     { printf '%s/%s-%s-finalize-diagnostic.txt' "$1" "$2" "$3"; }
-round_file()    { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-round-number.txt' "$d" "$3"; }
-cycle_file()    { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-concern-ledger-cycle%s.txt' "$d" "$3" "$4"; }
-delta_file()    { local d="$CLAUDE_WORKFLOW_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-round-%s-delta-%s.txt' "$d" "$3" "$4" "$5"; }
+round_file()    { local d="$WORKFLOW_STATE_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-round-number.txt' "$d" "$3"; }
+cycle_file()    { local d="$WORKFLOW_STATE_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-concern-ledger-cycle%s.txt' "$d" "$3" "$4"; }
+delta_file()    { local d="$WORKFLOW_STATE_DIR/$2.control"; mkdir -p "$d"; printf '%s/%s-round-%s-delta-%s.txt' "$d" "$3" "$4" "$5"; }
 
 # --- ledger fixtures --------------------------------------------------------
 # row <id> <sev> <state> <first> <last> <slot> <discrim> <origin> <producers> <flags> <text>

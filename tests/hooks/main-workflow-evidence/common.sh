@@ -124,12 +124,12 @@ to_node_path() {
 
 run_gate() {
     local json="$1"
-    echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null
+    echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null
 }
 
 run_mark() {
     local json="$1"
-    echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null || true
+    echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null || true
 }
 
 build_mark_json() {

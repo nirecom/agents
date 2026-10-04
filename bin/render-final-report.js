@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // CLI wrapper for renderFinalReport: renders the Final Report to stdout.
 // Usage: node render-final-report.js --session <session-id>
-//   env / outcome / supervisor-state come from <CLAUDE_WORKFLOW_DIR>/<sid>.control/;
+//   env / outcome / supervisor-state come from <WORKFLOW_STATE_DIR>/<sid>.control/;
 //   intent.md (an artifact) from <PLANS_DIR>/<sid>-intent.md.
 // Legacy: <session-id> <env-json> <outcome-json> <intent-md> [<supervisor-state-json>] —
 //   each control path is accepted only as the derived path or its <sid>-<name> basename.

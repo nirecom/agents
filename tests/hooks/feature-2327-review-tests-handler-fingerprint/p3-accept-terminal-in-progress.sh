@@ -14,14 +14,14 @@
 
 write_terminal_marker() {
   # The #1361 terminal marker lives in <sid>.control/ since #2434; marker_exists also checks the legacy name.
-  mkdir -p "$CLAUDE_WORKFLOW_DIR/${1}.control"
+  mkdir -p "$WORKFLOW_STATE_DIR/${1}.control"
   if [ -n "${3:-}" ]; then
-    printf '%s\n%s\n' "$2" "$3" > "$CLAUDE_WORKFLOW_DIR/${1}.control/test-review-terminal.txt"
+    printf '%s\n%s\n' "$2" "$3" > "$WORKFLOW_STATE_DIR/${1}.control/test-review-terminal.txt"
   else
-    printf '%s\n' "$2" > "$CLAUDE_WORKFLOW_DIR/${1}.control/test-review-terminal.txt"
+    printf '%s\n' "$2" > "$WORKFLOW_STATE_DIR/${1}.control/test-review-terminal.txt"
   fi
 }
-marker_exists() { [ -f "$CLAUDE_WORKFLOW_DIR/${1}.control/test-review-terminal.txt" ] || [ -f "$WORKFLOW_PLANS_DIR/${1}-test-review-terminal.txt" ]; }
+marker_exists() { [ -f "$WORKFLOW_STATE_DIR/${1}.control/test-review-terminal.txt" ] || [ -f "$WORKFLOW_PLANS_DIR/${1}-test-review-terminal.txt" ]; }
 marker_state() { if marker_exists "$1"; then printf 'present'; else printf 'deleted'; fi; }
 
 STALE_RT='{"status":"in_progress","reopen_reason":"write-code-stale","warnings_summary":"warnings=2"}'

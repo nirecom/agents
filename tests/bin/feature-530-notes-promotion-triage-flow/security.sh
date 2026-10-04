@@ -47,7 +47,7 @@ OUTSIDE_MD5="$(file_md5 "$OUTSIDE_NOTES")"
 mkdir -p "$TMPD/outside-notes-backup"
 cp "$OUTSIDE_NOTES" "$TMPD/outside-notes-backup/WORKTREE_NOTES.md"
 BAIT_BACKUP="$TMPD/outside-notes-backup/WORKTREE_NOTES.md"
-BAIT_WF_DIR="$TMPD/workflow"  # == CLAUDE_WORKFLOW_DIR pinned by helpers.sh
+BAIT_WF_DIR="$TMPD/workflow"  # == WORKFLOW_STATE_DIR pinned by helpers.sh
 mkdir -p "$TMPD/outside.control" "$BAIT_WF_DIR/outside.control"
 for bait_env in "$TMPD/outside-final-report-env.json" \
                 "$TMPD/outside.control/final-report-env.json" \

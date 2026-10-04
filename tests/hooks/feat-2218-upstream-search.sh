@@ -42,7 +42,7 @@ trap cleanup EXIT
 # (only 108 of 667 real intent.md files have one — M4).
 build_fixture() {
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$TMP/wf" WORKFLOW_PLANS_DIR="$TMP/wf" \
+        WORKFLOW_STATE_DIR="$TMP/wf" WORKFLOW_PLANS_DIR="$TMP/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node -e "
@@ -84,7 +84,7 @@ fs.writeFileSync(path.join(tdir, 'heir-sess-99.jsonl'), rows.join(String.fromCha
 
 run_case() {
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$TMP/wf" WORKFLOW_PLANS_DIR="$TMP/wf" \
+        WORKFLOW_STATE_DIR="$TMP/wf" WORKFLOW_PLANS_DIR="$TMP/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node -e "$1" 2>&1

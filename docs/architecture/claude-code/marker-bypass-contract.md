@@ -7,7 +7,7 @@ semantics for the pre-commit inline Node snippet.
 
 ## Markers
 
-Two marker files live under `getWorkflowDir()` (resolved as `$CLAUDE_WORKFLOW_DIR` if set,
+Two marker files live under `getWorkflowDir()` (resolved as `$WORKFLOW_STATE_DIR` if set,
 otherwise `~/.claude/projects/workflow/`):
 
 | Marker file | Created by | Scope |

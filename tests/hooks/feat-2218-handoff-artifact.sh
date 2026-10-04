@@ -32,12 +32,12 @@ require_module() {
 }
 
 # Every node case runs against a private PLANS_DIR. WORKFLOW_PLANS_DIR and
-# CLAUDE_WORKFLOW_DIR are dual-pinned per rules/test/fixture-isolation.md.
+# WORKFLOW_STATE_DIR are dual-pinned per rules/test/fixture-isolation.md.
 run_node() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "$1" 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
@@ -48,7 +48,7 @@ run_node() {
 # active-period gate, so a CLI case that expects a write seeds workflow_init.
 seed_active() {
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$1/wf" WORKFLOW_PLANS_DIR="$1/wf" HOME="$1/home" USERPROFILE="$1/home" \
+        WORKFLOW_STATE_DIR="$1/wf" WORKFLOW_PLANS_DIR="$1/wf" HOME="$1/home" USERPROFILE="$1/home" \
         "$RWT" 30 node -e "
 const S = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
 S.writeState('$2', S.createInitialState('$2', { cwd: '/work/fixture', git_branch: 'feature/h' }));
@@ -56,7 +56,7 @@ S.markStep('$2', 'workflow_init', 'complete');
 " >/dev/null 2>&1
 }
 
-# H1 — getHandoffPath: <CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff.md (#2434), and an
+# H1 — getHandoffPath: <WORKFLOW_STATE_DIR>/<sid>.control/handoff.md (#2434), and an
 # sid that would escape the workflow dir is rejected (path-traversal guard).
 run_H1() {
     require_module "$TARGET" || return 0
@@ -393,7 +393,7 @@ run_H9() {
     printf '# decoy\n' > "$tmp/wf/wsid-decoy-intent.md"
     seed_active "$tn" "cli-sid-h9"
     out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="cli-sid-h9" \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node "$AGENTS_DIR/$CLI" --class E --step write_tests --key write-tests:not-needed --summary "no test surface" --pointer - --origin procedure-point 2>&1)
     rc=$?
@@ -419,7 +419,7 @@ run_H10() {
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     mkdir -p "$tmp/wf" "$tmp/home"
     out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="cli-sid-h10" \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node "$AGENTS_DIR/$CLI" --class E --step write_tests --key k --summary s --pointer - --origin bogus-origin 2>&1)
     rc=$?
@@ -443,7 +443,7 @@ run_H11() {
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     mkdir -p "$tmp/wf" "$tmp/home"
     out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="unused-h11" \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node "$AGENTS_DIR/$CLI" --session "../../evil" --class E --step write_tests --key k --summary s --pointer - --origin procedure-point 2>&1)
     rc=$?

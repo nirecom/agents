@@ -17,7 +17,7 @@
 # Prints the value, or "absent". (#1733 made annotations events, not step fields.)
 get_step_annotation() {
     local sid="$1" step="$2" key="$3"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 try {
   const s = require('$DOTFILES_WIN/hooks/workflow-state').readState(process.argv[1]);
   const ev = (s && Array.isArray(s.events) ? s.events : [])

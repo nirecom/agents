@@ -53,7 +53,7 @@ run_t2a() {
         local tmp_node="$tmp"
     fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -72,7 +72,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo hello"},"tool_response":{"output":"hello"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -97,7 +97,7 @@ run_t2b() {
         local tmp_node="$tmp"
     fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -116,7 +116,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo hello"},"tool_response":{"output":"hello"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -140,7 +140,7 @@ run_t2c() {
         local tmp_node="$tmp"
     fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -159,7 +159,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo hello"},"tool_response":{"output":"hello"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -189,7 +189,7 @@ run_t2d() {
     fi
 
     # Seed: layer1 blocking finding (severity=warning) + alert_armed_at=null (default)
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -208,10 +208,10 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo \\"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>\\""},"tool_response":{"output":""}}' "$sid")
 
     # Snapshot state before hook invocation (C3: no-mutation baseline)
-    state_path="$(CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" node "$AGENTS_DIR/bin/workflow-control-dir" --session "$sid" --file supervisor-state.json)"
+    state_path="$(WORKFLOW_STATE_DIR="$tmp_node/workflow" node "$AGENTS_DIR/bin/workflow-control-dir" --session "$sid" --file supervisor-state.json)"
     state_before=$(cat "$state_path" 2>/dev/null || echo "{}")
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" >/dev/null 2>&1
 
     state_after=$(cat "$state_path" 2>/dev/null || echo "{}")

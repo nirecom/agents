@@ -38,7 +38,7 @@ console.log("B2.annotation_gone=" + (cleared.steps.docs.skip_reason === undefine
 // Site 3 — applyLegacyV1ReadDefaults, which fabricates entries for steps the
 // v1 file never mentioned.
 const sid = "seq1665-b3";
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json"), JSON.stringify({
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json"), JSON.stringify({
   session_id: sid,
   created_at: at,
   workflow_type: "wf-code",

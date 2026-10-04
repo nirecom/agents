@@ -31,9 +31,9 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 TMP_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMP_BASE"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TMP_BASE/wf" WORKFLOW_PLANS_DIR="$TMP_BASE/plans"
+export WORKFLOW_STATE_DIR="$TMP_BASE/wf" WORKFLOW_PLANS_DIR="$TMP_BASE/plans"
 export HOME="$TMP_BASE/home"
-mkdir -p "$HOME" "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$HOME" "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 for h in "$DOTENV_HOOK" "$CREDS_HOOK"; do
     [ -f "$h" ] || fail "IMPLEMENTATION MISSING: ${h#"$AGENTS_DIR"/}"

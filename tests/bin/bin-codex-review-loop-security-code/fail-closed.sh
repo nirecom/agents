@@ -47,10 +47,10 @@ FCLED=""; FC_BEFORE=""
 fc_env() {
     SID="fc$1"
     PLANS="$TMPDIR_BASE/fc-plans-$1"
-    export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/fc-workflow-$1"
+    export WORKFLOW_STATE_DIR="$TMPDIR_BASE/fc-workflow-$1"
     export WORKFLOW_PLANS_DIR="$PLANS"
-    rm -rf "$PLANS" "$CLAUDE_WORKFLOW_DIR"
-    mkdir -p "$PLANS/workflow-state" "$CLAUDE_WORKFLOW_DIR"
+    rm -rf "$PLANS" "$WORKFLOW_STATE_DIR"
+    mkdir -p "$PLANS/workflow-state" "$WORKFLOW_STATE_DIR"
     printf 'none\n' > "$PLANS/tradeoffs.md"
     FCLED="$(ledger_file "$PLANS" "$SID")"
     {

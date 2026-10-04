@@ -21,7 +21,7 @@ seed_lookahead_research() {
     local root="$TMPDIR_BASE/$1" sid="$2"
     shift 2
     mkdir -p "$root/state" "$root/plans/worktree-end"
-    CLAUDE_WORKFLOW_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" \
+    WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" \
         SID="$sid" SETTLED="$*" run_with_timeout node -e "
 const io = require('$SIO_NODE');
 for (const s of String(process.env.SETTLED).split(' ').filter(Boolean)) {
@@ -34,7 +34,7 @@ io.markStep(process.env.SID, 'research', 'in_progress', {}, { provenance: 'obser
 # "<origin>/<isLookaheadOnlyInFlight>" — the attribution detect() consults.
 lookahead_attribution() {
     local root="$TMPDIR_BASE/$1"
-    CLAUDE_WORKFLOW_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" SID="$2" \
+    WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" SID="$2" \
         run_with_timeout node -e "
 const L = require('$LIFECYCLE_NODE');
 const { readState } = require('$SIO_NODE');

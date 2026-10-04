@@ -15,7 +15,7 @@ _c5_run() {
         cd "$NEUTRAL_CWD" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
         export AGENTS_CONFIG_DIR="$C5_CONFIG"
-        export CLAUDE_WORKFLOW_DIR="$C5_WFDIR"
+        export WORKFLOW_STATE_DIR="$C5_WFDIR"
         export WORKFLOW_PLANS_DIR="$C5_WFDIR"
         # Exit status is carried out as a <<HOOK_EXIT_n>> token (review C1): without it a
         # crashed hook prints nothing and every "approve" assertion below false-greens.
@@ -23,7 +23,7 @@ _c5_run() {
     )
 }
 
-# Targets live in a plain temp dir, deliberately NOT under CLAUDE_WORKFLOW_DIR: a write
+# Targets live in a plain temp dir, deliberately NOT under WORKFLOW_STATE_DIR: a write
 # into the workflow dir can block on directory containment (workflow-glob /
 # workflow-dynamic), which would answer a question this section is not asking.
 # AGENTS_CONFIG_DIR points at an EMPTY dir so the developer's real .env cannot reach
@@ -116,7 +116,7 @@ _c17_run() {
         unset ENFORCE_WORKTREE_EXCLUDE ENFORCE_WORKTREE_EXCLUDE_REPOS
         export ENFORCE_WORKTREE=on
         export AGENTS_CONFIG_DIR="$C17_CONFIG"
-        export CLAUDE_WORKFLOW_DIR="$C17_WFDIR"
+        export WORKFLOW_STATE_DIR="$C17_WFDIR"
         export WORKFLOW_PLANS_DIR="$C17_WFDIR"
         run_hook_capture "$1" "$RWT" 20 node "$2"
     )
@@ -398,7 +398,7 @@ _c9_run() {
         cd "$NEUTRAL_CWD" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
         export AGENTS_CONFIG_DIR="$C9_CONFIG"
-        export CLAUDE_WORKFLOW_DIR="$C9_WFDIR"
+        export WORKFLOW_STATE_DIR="$C9_WFDIR"
         export WORKFLOW_PLANS_DIR="$C9_WFDIR"
         run_hook_capture "$1" "$RWT" 20 node "$BCTW_HOOK"
     )

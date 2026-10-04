@@ -131,7 +131,7 @@ ril_run_claude() {
         unset CLAUDE_SESSION_ID
         unset CLAUDE_CODE_SESSION_ID
         # Dual-pin the isolation pair (rules/test/fixture-isolation.md).
-        export CLAUDE_WORKFLOW_DIR="$(node_path "$wf")"
+        export WORKFLOW_STATE_DIR="$(node_path "$wf")"
         export WORKFLOW_PLANS_DIR="$(node_path "$plans")"
         [ -n "$RIL_ENV_KIND" ] && export "$RIL_ENV_KIND=$RIL_ENV_VALUE"
         run_with_timeout 180 claude -p \

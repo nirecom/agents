@@ -143,7 +143,7 @@ write_state "test-session" "$(ALL_PENDING_JSON test-session)"
 E5_CMD='echo "<<WORKFLOW_MARK_STEP_research_complete>>"'
 E5_ESC=${E5_CMD//\"/\\\"}
 E5_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"%s\\n","stderr":""}}' "$E5_ESC" "$E5_ESC")
-E5_OUT=$(echo "$E5_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" env -u CLAUDE_ENV_FILE node "$MARK_HOOK" 2>/dev/null || true)
+E5_OUT=$(echo "$E5_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" env -u CLAUDE_ENV_FILE node "$MARK_HOOK" 2>/dev/null || true)
 E5_EXIT=$?
 expect_no_state_change "E5a. no session_id → research unchanged" "test-session" "research" "pending"
 if echo "$E5_OUT" | grep -q "additionalContext"; then
@@ -300,7 +300,7 @@ write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
 RE2_CMD='echo "<<WORKFLOW_RESET_FROM_write_tests: test reason>>"'
 RE2_ESC=${RE2_CMD//\"/\\\"}
 RE2_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"%s\\n","stderr":""}}' "$RE2_ESC" "$RE2_ESC")
-RE2_OUT=$(echo "$RE2_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" env -u CLAUDE_ENV_FILE node "$MARK_HOOK" 2>/dev/null || true)
+RE2_OUT=$(echo "$RE2_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" env -u CLAUDE_ENV_FILE node "$MARK_HOOK" 2>/dev/null || true)
 RE2_EXIT=$?
 expect_no_state_change "RE2a. no session_id → write_tests unchanged (complete)" "test-session" "write_tests" "complete"
 if echo "$RE2_OUT" | grep -q "additionalContext"; then

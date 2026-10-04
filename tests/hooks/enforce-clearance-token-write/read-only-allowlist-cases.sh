@@ -54,7 +54,7 @@ while IFS='|' read -r name want payload; do
     assert_verdict "$name" "$want" "$(run_hook "$TN" "$(mk_bash_input "$payload")")"
 done <<'TABLE'
 # --- APPROVE: read-only shapes the allowlist must recognise ---
-RD1 node -e readFileSync(process.env.X + '/...off-clearance')      | approve | node -e "console.log(require('fs').readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/wsid.off-clearance','utf8'))"
+RD1 node -e readFileSync(process.env.X + '/...off-clearance')      | approve | node -e "console.log(require('fs').readFileSync(process.env.WORKFLOW_STATE_DIR + '/wsid.off-clearance','utf8'))"
 RD2 python3 -c open(<token>).read()                        | approve | uv run python -c "print(open('@TOK@').read())"
 RD3 pwsh Get-Content -Raw '<token>' (single-quoted arg)    | approve | pwsh -Command "Get-Content -Raw '@TOK@'"
 RD4 pwsh Get-Content -Raw $env:OFF_TOKEN (bare env form)   | approve | pwsh -Command 'Get-Content -Raw $env:OFF_TOKEN'
@@ -72,7 +72,7 @@ WR15b clean node -e && unrelated --detail NAMES token, no separator -> approve |
 # --- INTERPOLATION_RE runs BEFORE shape matching, so a read-looking shell never ---
 # --- gets to vouch for its own argument.                                        ---
 IP1 pwsh Get-Content "$( Remove-Item <token> )"            | block   | pwsh -Command "Get-Content \"$( Remove-Item '@TOK@' )\""
-IP2 pwsh double-quoted $env: arg (unconditionally refused) | block   | pwsh -Command "Get-Content \"$env:CLAUDE_WORKFLOW_DIR/wsid.off-clearance\""
+IP2 pwsh double-quoted $env: arg (unconditionally refused) | block   | pwsh -Command "Get-Content \"$env:WORKFLOW_STATE_DIR/wsid.off-clearance\""
 IP3 powershell array subexpression @( Remove-Item <token> )| block   | powershell -Command "Get-Content @(Remove-Item '@TOK@')"
 IP4 node template literal (backtick + ${ }) -> prefilter   | block   | node -e "console.log(require('fs').readFileSync(`${process.env.X}/x.off-clearance`))"
 IP5 python f-string executing popen('rm <token>') in path  | block   | uv run python -c "print(open(f'{__import__(\"os\").popen(\"rm @TOK@\").read()}').read())"
@@ -142,7 +142,7 @@ WR-ro-adj4 python3 -c bare open(token,'w') vs RD-ro2     | block   | python3 -c 
 # --- session reads its own token through the environment, so the bare-read allowlist ---
 # --- has to hold when the path is BUILT from process.env / os.environ — a shape that ---
 # --- also has to clear INTERPOLATION_RE. Same 1:1 read/write pairing (CPR-ORTH). ---
-RD-ro3 node -e bare readFileSync(env + '/...'), no log   | approve | node -e "require('fs').readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/wsid.off-clearance','utf8')"
+RD-ro3 node -e bare readFileSync(env + '/...'), no log   | approve | node -e "require('fs').readFileSync(process.env.WORKFLOW_STATE_DIR + '/wsid.off-clearance','utf8')"
 # SKIPPED: approving a Python bare read whose path is sourced from an environment variable.
 # Because: READONLY_BODY_SHAPES anchors on the start of the body, and Python syntactically
 #   requires an `import os;` prefix to read an env-derived path — unlike node, which can inline
@@ -151,9 +151,9 @@ RD-ro3 node -e bare readFileSync(env + '/...'), no log   | approve | node -e "re
 #   plan's scope and belongs to a separate issue.
 # node's symmetric case RD-ro3 stays green (approve): the contrast showing this asymmetry is a
 # deliberate residual (today's block is fail-closed, not a protection gap).
-RD-ro4 python3 -c env-derived bare read still blocks (needs import os prefix) | block   | python3 -c "import os; open(os.environ['CLAUDE_WORKFLOW_DIR'] + '/wsid.off-clearance').read()"
-WR-ro-adj5 node -e writeFileSync(env + '/...') blocks    | block   | node -e "require('fs').writeFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/wsid.off-clearance','x')"
-WR-ro-adj6 python3 -c open(environ + '/...','w') blocks  | block   | python3 -c "import os; open(os.environ['CLAUDE_WORKFLOW_DIR'] + '/wsid.off-clearance','w').write('x')"
+RD-ro4 python3 -c env-derived bare read still blocks (needs import os prefix) | block   | python3 -c "import os; open(os.environ['WORKFLOW_STATE_DIR'] + '/wsid.off-clearance').read()"
+WR-ro-adj5 node -e writeFileSync(env + '/...') blocks    | block   | node -e "require('fs').writeFileSync(process.env.WORKFLOW_STATE_DIR + '/wsid.off-clearance','x')"
+WR-ro-adj6 python3 -c open(environ + '/...','w') blocks  | block   | python3 -c "import os; open(os.environ['WORKFLOW_STATE_DIR'] + '/wsid.off-clearance','w').write('x')"
 # --- #1817 word-split reading: the token is a MIDDLE word of one argv token, so the ---
 # --- naive "last path component" basename never sees it (argv-scan.js 145-155). ---
 WR-1817a logger note, token mid-string, no slash at all  | block   | logger "session note: @BASE@ captured for audit"

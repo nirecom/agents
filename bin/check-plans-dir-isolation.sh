@@ -3,7 +3,7 @@
 #
 # Static audit classifier for the plans-dir dual-pin contract (#1799).
 #
-# A test that pins CLAUDE_WORKFLOW_DIR but NOT WORKFLOW_PLANS_DIR leaves
+# A test that pins WORKFLOW_STATE_DIR but NOT WORKFLOW_PLANS_DIR leaves
 # supervisor-emit.js writing into the developer's real ~/.workflow-plans/ tree.
 # This script classifies such half-pinned test files:
 #
@@ -33,7 +33,7 @@ classify_file() {
     local file="$1"
     [ -f "$file" ] || return 0
 
-    grep -q 'CLAUDE_WORKFLOW_DIR' "$file" 2>/dev/null || return 0
+    grep -q 'WORKFLOW_STATE_DIR' "$file" 2>/dev/null || return 0
     # Both pinned → already isolated.
     if grep -q 'WORKFLOW_PLANS_DIR' "$file" 2>/dev/null; then
         return 0

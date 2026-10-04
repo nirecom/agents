@@ -6,7 +6,7 @@
 # implements the anchor-vs-eligibility split.
 #
 # # L3 gap
-# L2 here exercises the writer module with a real tmpdir-backed CLAUDE_WORKFLOW_DIR.
+# L2 here exercises the writer module with a real tmpdir-backed WORKFLOW_STATE_DIR.
 # Real Stop-hook firing under a live `claude -p` session is covered separately
 # (feature-1027-stop-l2-findings-display.sh, RUN_TL3-gated).
 
@@ -44,7 +44,7 @@ require_source() {
 # The final-report-env.json anchor lives in the session control dir (#2434).
 seed_anchor() {
     local tmp="$1" sid="$2"
-    CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
+    WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const cd = require('$_AGENTS_DIR_NODE/hooks/workflow-state/state-io/control-dir.js');
 require('fs').writeFileSync(cd.controlPath('$sid', 'final-report-env.json', { forWrite: true }), '');
 " >/dev/null 2>&1
@@ -55,7 +55,7 @@ run_w1() {
     require_source "$WRITER_SRC" "W1: writeAlertState accepts new keys" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.writeAlertState('w1-sid', { findings_surfaced_at: '2026-06-21T02:00:00Z', alert_eligible_phase: 'post_final_report_window' });
 if (!ok) { console.error('write returned false'); process.exit(2); }
@@ -79,7 +79,7 @@ run_w2() {
     local tmp rc
     tmp="$(mktemp -d)"
     seed_anchor "$tmp" "w2-sid"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -104,7 +104,7 @@ run_w3() {
     local tmp rc
     tmp="$(mktemp -d)"
     seed_anchor "$tmp" "w3-sid"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -129,7 +129,7 @@ run_w4() {
     require_source "$WRITER_SRC" "W4: anchor absent + null eligibility -> arm proceeds (baseline)" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -152,7 +152,7 @@ run_w5() {
     require_source "$WRITER_SRC" "W5: alert_phase=done overrides eligibility" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -177,7 +177,7 @@ run_w6() {
     require_source "$WRITER_SRC" "W6: legacy state without new fields validates" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -214,7 +214,7 @@ run_w7() {
     local tmp rc
     tmp="$(mktemp -d)"
     # No anchor file created.
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');

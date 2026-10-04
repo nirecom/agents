@@ -97,9 +97,9 @@ run_cli() {
         # removed from resolveSessionId() (docs/architecture/claude-code/
         # session-id-resolution.md), so the env file alone resolves nothing. It is
         # still written, because T2 asserts the CLI ignores a file without an id.
-        ( cd "$AGENTS_DIR" && CLAUDE_ENV_FILE="$env_file" CLAUDE_SESSION_ID="$sid" CLAUDE_WORKFLOW_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
+        ( cd "$AGENTS_DIR" && CLAUDE_ENV_FILE="$env_file" CLAUDE_SESSION_ID="$sid" WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
     else
-        ( cd "$AGENTS_DIR" && unset CLAUDE_ENV_FILE && CLAUDE_WORKFLOW_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
+        ( cd "$AGENTS_DIR" && unset CLAUDE_ENV_FILE && WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
     fi
     LAST_OUT=$(cat "$out_file" 2>/dev/null || true)
     LAST_ERR=$(cat "$err_file" 2>/dev/null || true)

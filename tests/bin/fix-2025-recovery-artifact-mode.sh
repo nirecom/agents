@@ -58,9 +58,9 @@ TMPDIR_BASE="$(mktemp -d)"
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans-root"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 cd "$TMPDIR_BASE" || exit 1
 
 # The recovery store is $TMPDIR, so it is pinned inside the sandbox: a case that
@@ -72,11 +72,11 @@ mkdir -p "$TMPDIR"
 [ -f "$CLI" ] || fail "implementation missing: bin/concern-ledger"
 
 # #2434: the ledger and unresolved-concerns.json are control files, derived
-# from --session-id into $CLAUDE_WORKFLOW_DIR/<sid>.control/. The control dir
+# from --session-id into $WORKFLOW_STATE_DIR/<sid>.control/. The control dir
 # is per session, so every case owns its own sid (SID is reassigned per case).
 SID="sess-c8"
 FMT="review-security-shared"
-ctl() { printf '%s/%s.control' "$CLAUDE_WORKFLOW_DIR" "$SID"; }
+ctl() { printf '%s/%s.control' "$WORKFLOW_STATE_DIR" "$SID"; }
 FINDING="the finding that must survive a failed publish"
 
 file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; }
@@ -247,7 +247,7 @@ case_end
 echo ""
 echo "--- recovery 5: the control dir is the new boundary (#2434) ---"
 
-# 5. The destination moved from the plans dir into $CLAUDE_WORKFLOW_DIR/<sid>.control/,
+# 5. The destination moved from the plans dir into $WORKFLOW_STATE_DIR/<sid>.control/,
 #    so the same pre-placement attacks now aim there. The sid is the only input
 #    that names that directory, so it is where a traversal would enter.
 case_begin "control-dir-boundary" "bin/lib/safe-state-path.sh"

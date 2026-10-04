@@ -35,9 +35,9 @@ run_with_timeout() {
 # Temp dir / env file setup (mirrors feature-block-tests-direct.sh)
 # ---------------------------------------------------------------------------
 TMPDIR_ROOT="$(node -e "const os=require('os'),path=require('path'),fs=require('fs'),crypto=require('crypto');const d=path.join(os.tmpdir(),'pgtest-'+crypto.randomBytes(6).toString('hex'));fs.mkdirSync(d,{recursive:true});process.stdout.write(d);")"
-CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
+WORKFLOW_STATE_DIR="$TMPDIR_ROOT/workflow"
 CLAUDE_ENV_FILE="$TMPDIR_ROOT/claude_env"
-mkdir -p "$CLAUDE_WORKFLOW_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR"
 
 cleanup() {
     rm -rf "$TMPDIR_ROOT"
@@ -45,7 +45,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_ROOT/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -109,7 +109,7 @@ run_hook() {
     result=$(
         (
             export CLAUDE_ENV_FILE="$CLAUDE_ENV_FILE"
-            export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
+            export WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR"
             run_with_timeout node "$HOOK" < "$input_file" 2>/dev/null
         )
     ) || true
@@ -263,7 +263,7 @@ echo "=== Section D — workflow-mark.js no-crash check ==="
 # the premise_contradiction state field, normal sentinels must still process
 # cleanly without crashing the hook.
 make_env_file "sess-pg-null"
-cat > "$CLAUDE_WORKFLOW_DIR/sess-pg-null.json" <<'EOF'
+cat > "$WORKFLOW_STATE_DIR/sess-pg-null.json" <<'EOF'
 {"version":1,"session_id":"sess-pg-null","steps":{"workflow_init":{"status":"complete"}}}
 EOF
 pg_null_json='{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\""},"session_id":"sess-pg-null","agent_id":"","tool_response":{"exit_code":0}}'
@@ -283,7 +283,7 @@ fi
 # PG-IGNORED: PREMISE_FAIL sentinel is no longer recognized — hook silently ignores
 # it (allAreSentinels check fails → done() with no state change, valid JSON output).
 make_env_file "sess-pg-ignored"
-cat > "$CLAUDE_WORKFLOW_DIR/sess-pg-ignored.json" <<'EOF'
+cat > "$WORKFLOW_STATE_DIR/sess-pg-ignored.json" <<'EOF'
 {"version":1,"session_id":"sess-pg-ignored","steps":{"workflow_init":{"status":"complete"}}}
 EOF
 pg_ignored_json='{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_PREMISE_FAIL: test reason>>\""},"session_id":"sess-pg-ignored","agent_id":"","tool_response":{"exit_code":0}}'

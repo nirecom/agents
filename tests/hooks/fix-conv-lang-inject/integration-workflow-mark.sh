@@ -86,7 +86,7 @@ const f=path.join(os.tmpdir(),'wm-in-'+crypto.randomBytes(4).toString('hex')+'.j
 fs.writeFileSync(f,process.argv[1],'utf8');
 process.stdout.write(f);
 " "$json" 2>/dev/null)
-    CLAUDE_WORKFLOW_DIR="$WM_WORKFLOW_DIR" \
+    WORKFLOW_STATE_DIR="$WM_WORKFLOW_DIR" \
     CLAUDE_ENV_FILE="$WM_ENV_FILE" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
     run_with_timeout 30 node "$WORKFLOW_MARK" < "$tmpf" >/dev/null 2>&1 || true

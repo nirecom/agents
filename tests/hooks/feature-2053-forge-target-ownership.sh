@@ -49,10 +49,10 @@ trap 'rm -rf "$BASE"' EXIT
 # Fixture isolation (rules/test/fixture-isolation.md): both dirs are pinned into
 # the temp tree and the inherited session ids are dropped, so nothing the hook
 # writes can reach the developer's real workflow state.
-export CLAUDE_WORKFLOW_DIR="$BASE/workflow"
+export WORKFLOW_STATE_DIR="$BASE/workflow"
 export WORKFLOW_PLANS_DIR="$BASE/plans"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 # C4 (config-dependent branches, skills/_shared/test-design.md): every variable
 # the guard branches on is a variable the DEVELOPER's shell may already export.

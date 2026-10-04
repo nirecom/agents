@@ -24,9 +24,9 @@ const d=path.join(os.tmpdir(),'1147-def-'+crypto.randomBytes(6).toString('hex'))
 fs.mkdirSync(d,{recursive:true});
 process.stdout.write(d);
 ")"
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
+export WORKFLOW_STATE_DIR="$TMPDIR_ROOT/workflow"
 export CLAUDE_ENV_FILE="$TMPDIR_ROOT/claude_env"
-mkdir -p "$CLAUDE_WORKFLOW_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR"
 cleanup() { rm -rf "$TMPDIR_ROOT"; }
 trap cleanup EXIT
 

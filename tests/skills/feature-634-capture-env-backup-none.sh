@@ -124,8 +124,8 @@ run_capture_env_real_dir() {
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans-$suffix"
     export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-    export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-$suffix"
-    mkdir -p "$PLANS_DIR" "$CLAUDE_WORKFLOW_DIR"
+    export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-$suffix"
+    mkdir -p "$PLANS_DIR" "$WORKFLOW_STATE_DIR"
     mkdir -p "$backup_dir"
 
     PATH="$envdir/bin:$PATH" \
@@ -154,8 +154,8 @@ run_capture_env_raw() {
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans-$suffix"
     export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-    export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-$suffix"
-    mkdir -p "$PLANS_DIR" "$CLAUDE_WORKFLOW_DIR"
+    export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-$suffix"
+    mkdir -p "$PLANS_DIR" "$WORKFLOW_STATE_DIR"
 
     PATH="$envdir/bin:$PATH" \
     run_with_timeout 30 bash "$script_copy" "$worktree" "$repo" "$backup_dir" "$session_id_arg" 2>&1

@@ -34,7 +34,7 @@ run_record_cli() { # [args...]
   o="$(mktemp "$TMPROOT/a-out.XXXXXX")"
   e="$(mktemp "$TMPROOT/a-err.XXXXXX")"
   A_RC=0
-  env "CLAUDE_WORKFLOW_DIR=$WFDIR" node "$RECORD_CLI" "$@" >"$o" 2>"$e" || A_RC=$?
+  env "WORKFLOW_STATE_DIR=$WFDIR" node "$RECORD_CLI" "$@" >"$o" 2>"$e" || A_RC=$?
   A_OUT="$(cat "$o")"
   A_ERR="$(cat "$e")"
   rm -f "$o" "$e"
@@ -49,12 +49,12 @@ setup_approval_fixture() {
   A_REPO="$(repo_with_main)"
   node_state init "$A_SID" "$A_REPO" work >/dev/null
   node_state record "$A_SID" "$A_REPO" >/dev/null
-  A_STORED="$(env "AGENTS_DIR=$AGENTS_DIR" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+  A_STORED="$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" \
     node "$STATE_JS" field "$A_SID" base 2>/dev/null)"
 }
 
 stored_base() {
-  env "AGENTS_DIR=$AGENTS_DIR" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+  env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" \
     node "$STATE_JS" field "$A_SID" base 2>/dev/null
 }
 
@@ -147,7 +147,7 @@ a10_malicious_reason() {
   fi
   if [ "$A_RC" = "0" ]; then
     check "A10-verbatim: an accepted reason is stored exactly as given" "$reason" \
-      "$(env "AGENTS_DIR=$AGENTS_DIR" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+      "$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" \
         node "$STATE_JS" field "$A_SID" approved_reason 2>/dev/null)"
     A_STORED="$(stored_base)"
   else
@@ -234,7 +234,7 @@ p_recovery_end_to_end() {
   rc=0
   (
     cd "$repo" || exit 1
-    export CLAUDE_WORKFLOW_DIR="$WFDIR" AGENTS_CONFIG_DIR="$P_TREE"
+    export WORKFLOW_STATE_DIR="$WFDIR" AGENTS_CONFIG_DIR="$P_TREE"
     bash "$AGENTS_DIR/bin/run-with-timeout.sh" 60 bash "$P_TREE/bin/select-tests.sh" --auto
   ) >"$o" 2>"$e" || rc=$?
   local sel serr

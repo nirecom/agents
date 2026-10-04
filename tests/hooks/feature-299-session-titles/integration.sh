@@ -51,7 +51,7 @@ run_t18a() {
   (
     unset CLAUDE_CODE_CHILD_SESSION CLAUDE_ENV_FILE CLAUDE_SESSION_ID CLAUDE_PROJECT_DIR
     printf '%s' "{\"session_id\":\"$sid\",\"transcript_path\":\"$jsonl_node\"}" | \
-      CLAUDE_WORKFLOW_DIR="$workflow_node" WORKFLOW_PLANS_DIR="$plans_node" \
+      WORKFLOW_STATE_DIR="$workflow_node" WORKFLOW_PLANS_DIR="$plans_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 20 node "$SESSION_START_HOOK" >/dev/null 2>&1 || true
   )
@@ -107,7 +107,7 @@ run_t18b() {
   (
     unset CLAUDE_CODE_CHILD_SESSION CLAUDE_ENV_FILE CLAUDE_SESSION_ID CLAUDE_PROJECT_DIR
     printf '%s' "{\"session_id\":\"$sid\",\"transcript_path\":\"$jsonl_node\"}" | \
-      CLAUDE_WORKFLOW_DIR="$workflow_node" WORKFLOW_PLANS_DIR="$plans_node" \
+      WORKFLOW_STATE_DIR="$workflow_node" WORKFLOW_PLANS_DIR="$plans_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 20 node "$SESSION_START_HOOK" >/dev/null 2>&1 || true
   )

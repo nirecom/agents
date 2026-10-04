@@ -200,7 +200,7 @@ else
             unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
             export AGENTS_CONFIG_DIR="$C1_CFG_NODE"
             export WORKFLOW_PLANS_DIR="$C1_PLANS_NODE"
-            export CLAUDE_WORKFLOW_DIR="$C1_WF_NODE"
+            export WORKFLOW_STATE_DIR="$C1_WF_NODE"
             c1_run_with_timeout node "$1" < "$2" > "$C1_HOOK_OUT" 2>/dev/null
         )
         C1_HOOK_RC=$?

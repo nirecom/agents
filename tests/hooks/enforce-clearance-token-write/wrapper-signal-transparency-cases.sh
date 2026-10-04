@@ -47,7 +47,7 @@ run_signalled() {
     ( cd "$stubbin" && env -u SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         -u WORKTREE_PATH -u AGENTS_CONFIG_DIR \
         "PATH=$stubbin:$OFFCLR_CLEAN_PATH" \
-        "WORKFLOW_PLANS_DIR=$tn" "CLAUDE_WORKFLOW_DIR=$tn" \
+        "WORKFLOW_PLANS_DIR=$tn" "WORKFLOW_STATE_DIR=$tn" \
         "AGENTS_CONFIG_DIR=$OFFCLR_AGENTS_NODE" "SESSION_ID=sigsid" \
         bash "$bin" --target workflow --category trivial-change --detail "signal transparency probe" \
     ) >"$stubbin/.stdout" 2>"$stubbin/.stderr" &

@@ -1,6 +1,6 @@
 "use strict";
 // Prints the recorded status of one workflow step from the fixture state
-// store (CLAUDE_WORKFLOW_DIR), or "none" when nothing was recorded.
+// store (WORKFLOW_STATE_DIR), or "none" when nothing was recorded.
 // Usage: node step-status.js <agentsDir> <sessionId> <step>
 const path = require("path");
 

@@ -8,7 +8,7 @@
 # `null`, `object`, or `THREW:<msg>`. A throw must never be read as `null` —
 # the two have opposite consequences for a consumer wrapped in a try/catch.
 read_marker() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" "$RWT" 20 node -e "
 const m = require('$PAUSE_NODE');
 let r;
 try { r = m.readPauseMarker(process.env.SID); } catch (e) { process.stdout.write('THREW:' + e.message); process.exit(0); }

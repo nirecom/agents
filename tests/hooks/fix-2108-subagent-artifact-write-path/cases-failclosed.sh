@@ -13,7 +13,7 @@ _fc_write_probe() {
     cat > "$PROBE_DIR/fc-probe.js" <<'PROBE_EOF'
 "use strict";
 // argv: <protected-basenames.js> <basename> <spelling> <sid|->
-// Prints the classifier verdict for ONE basename under whatever CLAUDE_WORKFLOW_DIR
+// Prints the classifier verdict for ONE basename under whatever WORKFLOW_STATE_DIR
 // and session env the caller established, so fail-closed behaviour is observable.
 const p = require(process.argv[2]);
 const sid = process.argv[5];
@@ -29,7 +29,7 @@ _fc_classify() {
     (
         cd "$NEUTRAL_CWD" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
-        if [ "$wf" = "-" ]; then unset CLAUDE_WORKFLOW_DIR; else export CLAUDE_WORKFLOW_DIR="$wf"; fi
+        if [ "$wf" = "-" ]; then unset WORKFLOW_STATE_DIR; else export WORKFLOW_STATE_DIR="$wf"; fi
         run_probe "$PROBE_DIR/fc-probe.js" "$PB_NODE" "$base" "$spell" "$sid"
     )
 }
@@ -64,7 +64,7 @@ run_C1c_fail_closed() {
     assert_eq "C1c-i unobservable sid set -> token suffix still blocks" "token" \
         "$(_fc_classify "$missing_node" - "issue-2108-survey.off-clearance" clean)"
     assert_eq "C1c-i incomplete observation is reported as complete:false" "false" \
-        "$(cd "$NEUTRAL_CWD" && CLAUDE_WORKFLOW_DIR="$missing_node" run_probe -e "const m=require(process.argv[1]);process.stdout.write(String(m.observeActiveSessionIds({}).complete))" "$ACTIVE_SIDS_NODE")"
+        "$(cd "$NEUTRAL_CWD" && WORKFLOW_STATE_DIR="$missing_node" run_probe -e "const m=require(process.argv[1]);process.stdout.write(String(m.observeActiveSessionIds({}).complete))" "$ACTIVE_SIDS_NODE")"
 
     # C1c-i-control — the SAME basename with a readable workflow dir and a known sid
     # is allowed. Without this counterweight C1c-i would also pass on a classifier
@@ -78,13 +78,13 @@ run_C1c_fail_closed() {
     denied="$TMPBASE_SH/denied-workflow-dir"
     mkdir -p "$denied" 2>/dev/null || true
     chmod 000 "$denied" 2>/dev/null || true
-    probe="$(cd "$NEUTRAL_CWD" && CLAUDE_WORKFLOW_DIR="$(node_path "$denied")" run_probe -e "try{require('fs').readdirSync(process.env.CLAUDE_WORKFLOW_DIR);process.stdout.write('readable')}catch(e){process.stdout.write('denied')}")"
+    probe="$(cd "$NEUTRAL_CWD" && WORKFLOW_STATE_DIR="$(node_path "$denied")" run_probe -e "try{require('fs').readdirSync(process.env.WORKFLOW_STATE_DIR);process.stdout.write('readable')}catch(e){process.stdout.write('denied')}")"
     if [ "$probe" = "denied" ]; then
         denied_node="$(node_path "$denied")"
         assert_eq "C1c-ii readdir denied -> kebab stem still blocks" "marker" \
             "$(_fc_classify "$denied_node" - "issue-2108-survey.gh-env" clean)"
         assert_eq "C1c-ii readdir denied -> complete:false" "false" \
-            "$(cd "$NEUTRAL_CWD" && CLAUDE_WORKFLOW_DIR="$denied_node" run_probe -e "const m=require(process.argv[1]);process.stdout.write(String(m.observeActiveSessionIds({}).complete))" "$ACTIVE_SIDS_NODE")"
+            "$(cd "$NEUTRAL_CWD" && WORKFLOW_STATE_DIR="$denied_node" run_probe -e "const m=require(process.argv[1]);process.stdout.write(String(m.observeActiveSessionIds({}).complete))" "$ACTIVE_SIDS_NODE")"
     else
         skip "C1c-ii readdir-permission fault not injectable here (chmod 000 stayed readable) - covered on POSIX CI only"
     fi
@@ -96,7 +96,7 @@ _c7_complete() {
     (
         cd "$NEUTRAL_CWD" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
-        export CLAUDE_WORKFLOW_DIR="$1"
+        export WORKFLOW_STATE_DIR="$1"
         run_probe -e "const m=require(process.argv[1]);process.stdout.write(String(m.observeActiveSessionIds({sessionId:'wsid'}).complete))" "$ACTIVE_SIDS_NODE"
     )
 }
@@ -172,7 +172,7 @@ run_C7_state_faults() {
         cd "$NEUTRAL_CWD" || exit 1
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
         export CLAUDE_ENV_FILE="$(node_path "$envfile")"
-        export CLAUDE_WORKFLOW_DIR="$bad_node"
+        export WORKFLOW_STATE_DIR="$bad_node"
         run_probe "$PROBE_DIR/fc-probe.js" "$PB_NODE" "wsid.workflow-off" clean wsid
     )"
     assert_eq "C7-5 unreadable CLAUDE_ENV_FILE: real marker still blocks" "marker" "$v"

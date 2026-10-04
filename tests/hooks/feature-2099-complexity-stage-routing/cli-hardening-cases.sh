@@ -98,7 +98,7 @@ d2099h_unusable_workflow_dir() {
     bad="$(to_node_path "$blocker")/inside"
 
     rc=0
-    out=$(CLAUDE_WORKFLOW_DIR="$bad" \
+    out=$(WORKFLOW_STATE_DIR="$bad" \
         run_with_timeout node "$BIN_RECORD" --session "h-env-1" --signals "S1-multi-file" 2>&1) || rc=$?
     if [ "$rc" -ne 0 ]; then
         pass "H-ENV-1 record against an uncreatable workflow dir exits non-zero ($rc)"
@@ -118,7 +118,7 @@ d2099h_unusable_workflow_dir() {
     fi
 
     rc=0
-    out=$(CLAUDE_WORKFLOW_DIR="$bad" \
+    out=$(WORKFLOW_STATE_DIR="$bad" \
         run_with_timeout node "$BIN_READ" --session "h-env-1" --stage detail 2>/dev/null) || rc=$?
     assert_eq "H-ENV-5 read stays fail-open on an unusable workflow dir (exit 0)" "0" "$rc"
     assert_eq "H-ENV-6 ... answering NONE rather than inventing a level" "NONE" "$(printf '%s\n' "$out" | head -1)"

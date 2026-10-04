@@ -43,7 +43,7 @@
 # property under test is tool-name recognition, not cwd resolution.
 #
 # HERMETICITY: throwaway git repos under a temp dir, a throwaway session id, and
-# CLAUDE_WORKFLOW_DIR pointed at a temp dir so no real session-override marker can
+# WORKFLOW_STATE_DIR pointed at a temp dir so no real session-override marker can
 # switch enforcement off underneath the assertions. CLAUDE_SESSION_ID /
 # CLAUDE_CODE_SESSION_ID are unset per invocation for the same reason.
 # ---------------------------------------------------------------------------
@@ -134,7 +134,7 @@ run_guard() {
     local tool="$1" target="$2" dir="$3" shape="$4" payload out rc
     payload=$("$RWT" 10 node "$DRV" "$tool" "$target" "$(node_path "$dir")" "$shape" 2>/dev/null)
     out=$(cd "$dir" && printf '%s' "$payload" | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
     rc=$?
     case "$rc" in

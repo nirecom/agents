@@ -19,7 +19,7 @@ require_phase_b_arbitrate() {
 # Seed BOTH alert and audit of the state file.
 seed_audit_state() {
     local tmp="$1" sid="$2" layer2_json="$3" layer3_json="$4"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -35,7 +35,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 # Prints raw value (null becomes the literal string 'null').
 read_audit_field() {
     local tmp="$1" sid="$2" field="$3"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st || !st.audit) { process.stdout.write('MISSING'); process.exit(0); }
@@ -46,7 +46,7 @@ process.stdout.write(v === null ? 'null' : (v === undefined ? 'undefined' : Stri
 
 read_l2_field() {
     local tmp="$1" sid="$2" field="$3"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st || !st.alert) { process.stdout.write('MISSING'); process.exit(0); }
@@ -66,7 +66,7 @@ run_g_b1() {
         "{ alert_phase: 'done', alert_armed_at: null, cumulative_severity: null, findings: [] }" \
         "{ audit_phase: 'done', audit_verdict: 'WARN', audit_cause: 'cross-stage drift', audit_retry_count: 0, audit_last_run_at: null, audit_armed_at: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g-b1-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     audit_phase_after=$(read_audit_field "$tmp" "g-b1-sid" "audit_phase")
     rm -rf "$tmp"
@@ -88,7 +88,7 @@ run_g_b2() {
         "{ alert_phase: 'done', alert_armed_at: null, cumulative_severity: null, findings: [] }" \
         "{ audit_phase: 'done', audit_verdict: 'BLOCK', audit_cause: 'strategic block', audit_retry_count: 0, audit_last_run_at: null, audit_armed_at: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g-b2-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -q '"decision":"block"' ); then
@@ -109,7 +109,7 @@ run_g_b3() {
         "{ alert_phase: 'done', alert_armed_at: null, cumulative_severity: null, findings: [] }" \
         "{ audit_phase: 'done', audit_verdict: 'CONTINUE', audit_cause: 'no concern', audit_retry_count: 0, audit_last_run_at: null, audit_armed_at: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g-b3-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     audit_phase_after=$(read_audit_field "$tmp" "g-b3-sid" "audit_phase")
     rm -rf "$tmp"
@@ -133,7 +133,7 @@ run_g_b4() {
         "{ alert_phase: 'pending', alert_armed_at: null, cumulative_severity: 'error', findings: [], alert_retry_count: 0 }" \
         "{ audit_phase: 'done', audit_verdict: 'BLOCK', audit_cause: 'strategic block', audit_retry_count: 0, audit_last_run_at: null, audit_armed_at: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g-b4-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     alert_retry_after=$(read_l2_field "$tmp" "g-b4-sid" "alert_retry_count")
     rm -rf "$tmp"
@@ -161,7 +161,7 @@ run_g_b6() {
         "{ alert_phase: null, alert_armed_at: null, cumulative_severity: null, findings: [] }" \
         "{ audit_phase: 'done', audit_verdict: 'WARN', audit_cause: 'cross-stage drift', audit_retry_count: 0, audit_last_run_at: null, audit_armed_at: null, findings: [] }"
     out=$(WORKFLOW_SESSION_ID=wsid-g-b6 \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" \
         run_with_timeout 5 node "$HOOK" \
         <<< '{"stop_hook_active":false,"session_id":"cc-g-b6","transcript_path":""}' 2>/dev/null)
     rc=$?
@@ -198,7 +198,7 @@ run_g_b5() {
         "{ alert_phase: 'done', alert_armed_at: null, cumulative_severity: null, findings: [] }" \
         "{ audit_phase: 'done', audit_verdict: 'WARN', audit_cause: 'cross-stage drift', audit_retry_count: 0, audit_last_run_at: null, audit_armed_at: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g-b5-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     audit_phase_after=$(read_audit_field "$tmp" "g-b5-sid" "audit_phase")
     rm -rf "$tmp"

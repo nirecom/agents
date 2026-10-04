@@ -26,24 +26,24 @@ b1_markers_do_not_suspend_the_block() {
     mkpayload Write "$REPO_M" "$f" "content=@$REPO/b1.js"
 
     # Baseline: no markers.
-    rm -f "$CLAUDE_WORKFLOW_DIR/$HK_SID".*
+    rm -f "$WORKFLOW_STATE_DIR/$HK_SID".*
     hk_run "CLAUDE_SESSION_ID=$HK_SID" "CLAUDE_CODE_SESSION_ID=$HK_SID"
     assert_decision "B1/premise-blocked-without-markers" "block"
 
     local m
     for m in workflow-off worktree-off; do
-        rm -f "$CLAUDE_WORKFLOW_DIR/$HK_SID".*
-        printf '{"reason":"fixture"}\n' > "$CLAUDE_WORKFLOW_DIR/$HK_SID.$m"
+        rm -f "$WORKFLOW_STATE_DIR/$HK_SID".*
+        printf '{"reason":"fixture"}\n' > "$WORKFLOW_STATE_DIR/$HK_SID.$m"
         hk_run "CLAUDE_SESSION_ID=$HK_SID" "CLAUDE_CODE_SESSION_ID=$HK_SID"
         assert_decision "B1/$m-marker-does-not-suspend" "block"
     done
 
     # Both at once, which is what a session that has given up would actually do.
-    printf '{"reason":"fixture"}\n' > "$CLAUDE_WORKFLOW_DIR/$HK_SID.workflow-off"
-    printf '{"reason":"fixture"}\n' > "$CLAUDE_WORKFLOW_DIR/$HK_SID.worktree-off"
+    printf '{"reason":"fixture"}\n' > "$WORKFLOW_STATE_DIR/$HK_SID.workflow-off"
+    printf '{"reason":"fixture"}\n' > "$WORKFLOW_STATE_DIR/$HK_SID.worktree-off"
     hk_run "CLAUDE_SESSION_ID=$HK_SID" "CLAUDE_CODE_SESSION_ID=$HK_SID"
     assert_decision "B1/both-markers-do-not-suspend" "block"
-    rm -f "$CLAUDE_WORKFLOW_DIR/$HK_SID".*
+    rm -f "$WORKFLOW_STATE_DIR/$HK_SID".*
 }
 
 # ============================================================================

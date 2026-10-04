@@ -222,13 +222,13 @@ TEST_REVIEWER_AGENT="$AGENTS_WORKTREE/agents/test-reviewer.md"
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(dirname "$0")/feature-1308-codex-review-allowlist"
 
-# #2434: control files live under $CLAUDE_WORKFLOW_DIR/<sid>.control/, so pin
+# #2434: control files live under $WORKFLOW_STATE_DIR/<sid>.control/, so pin
 # both state roots to a fixture before any group drives the loop.
 STATE_ROOT=$(mktemp -d)
 trap 'rm -rf "$STATE_ROOT"' EXIT
-export CLAUDE_WORKFLOW_DIR="$STATE_ROOT/workflow-state"
+export WORKFLOW_STATE_DIR="$STATE_ROOT/workflow-state"
 export WORKFLOW_PLANS_DIR="$STATE_ROOT/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 case_begin "safe-state-path-preflight" "bin/run-codex-review-loop"
 # The loop sources bin/lib/safe-state-path.sh (#2434 rename of safe-plans-path.sh);

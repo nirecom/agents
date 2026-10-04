@@ -79,7 +79,7 @@ run_turn() {
     ( cd "$REPO" && \
       unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID CLAUDE_ENV_FILE; \
       PATH="$MOCKBIN:$PATH" \
-      CLAUDE_WORKFLOW_DIR="$WFDIR" WORKFLOW_PLANS_DIR="$PLANSDIR" \
+      WORKFLOW_STATE_DIR="$WFDIR" WORKFLOW_PLANS_DIR="$PLANSDIR" \
       AGENTS_CONFIG_DIR="$AGENTS_M" \
       run_with_timeout 180 claude -p "$2" \
         --session-id "$1" \

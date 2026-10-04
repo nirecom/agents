@@ -7,7 +7,7 @@
 # Pre-implementation tests for #1286 (recorded-verdict skip judgment).
 # All state-file reads use the robust bash-reads-file-then-pipes-to-node pattern
 # (read_state_field / read_skip_judgment_raw) — never the fragile inline
-# process.env.CLAUDE_WORKFLOW_DIR node snippet.
+# process.env.WORKFLOW_STATE_DIR node snippet.
 
 set -uo pipefail
 
@@ -36,9 +36,9 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-# Windows-native path so Node.js can read/write via CLAUDE_WORKFLOW_DIR.
+# Windows-native path so Node.js can read/write via WORKFLOW_STATE_DIR.
 WORKFLOW_DIR_N="$(cygpath -m "$WORKFLOW_DIR" 2>/dev/null || echo "$WORKFLOW_DIR")"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N"
 
 # Plans dir for hasValidSkipJudgment artifact lookups (stale-guard requires this).
 PLANS_GLOBAL_DIR="$TMPDIR_BASE/plans-global"

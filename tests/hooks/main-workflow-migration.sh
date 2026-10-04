@@ -44,8 +44,8 @@ write_state_file() {
 # Returns empty string on error.
 call_read_state() {
     local sid="$1"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" node -e "
-process.env.CLAUDE_WORKFLOW_DIR = process.argv[1];
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" node -e "
+process.env.WORKFLOW_STATE_DIR = process.argv[1];
 const { readState } = require(process.argv[2]);
 const state = readState(process.argv[3]);
 console.log(JSON.stringify(state));

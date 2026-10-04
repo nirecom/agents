@@ -29,7 +29,7 @@ run_with_timeout() {
 
 seed_state() {
     local tmp="$1" sid="$2" layer2_json="$3"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -41,7 +41,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 
 read_field() {
     local tmp="$1" sid="$2" path="$3"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 const parts = '$path'.split('.');
@@ -55,7 +55,7 @@ process.stdout.write(JSON.stringify(cur));
 run_A1() {
     local tmp val rc
     tmp="$(mktemp -d)"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const result = w.appendFinding('a1-sid', {categories:['workflow'],severity:'warning',detail:'test finding',reporter:'test'});
 process.exit(result === true ? 0 : 1);
@@ -77,7 +77,7 @@ run_A2() {
     tmp="$(mktemp -d)"
     local fixed_ts="2026-01-01T00:00:00.000Z"
     seed_state "$tmp" "a2-sid" "{ alert_armed_at: '$fixed_ts', last_run_at: null, cumulative_severity: null, findings: [] }"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const result = w.appendFinding('a2-sid', {categories:['workflow'],severity:'warning',detail:'second finding',reporter:'test'});
 process.exit(result === true ? 0 : 1);
@@ -110,12 +110,12 @@ run_A3() {
     # Pre-seed a finding that matches what we will call appendFinding with
     seed_state "$tmp" "a3-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     # First call: add the finding
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('a3-sid', {categories:['workflow'],severity:'warning',detail:'dedup-finding',reporter:'test'});
 " >/dev/null 2>&1
     # Reset alert_armed_at to null to simulate pre-fix state where first call didn't set it
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const st = w.readState('a3-sid');
@@ -123,7 +123,7 @@ st.alert.alert_armed_at = null;
 fs.writeFileSync(w.getStatePath('a3-sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
     # Second call with same finding (dedup path — returns true without pushing)
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const result = w.appendFinding('a3-sid', {categories:['workflow'],severity:'warning',detail:'dedup-finding',reporter:'test'});
 process.exit(result === true ? 0 : 1);
@@ -147,12 +147,12 @@ run_A3b() {
     # Seed with alert: {} — no alert_armed_at key at all
     seed_state "$tmp" "a3b-sid" "{}"
     # First call: add the finding
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('a3b-sid', {categories:['workflow'],severity:'warning',detail:'partial-layer2-finding',reporter:'test'});
 " >/dev/null 2>&1
     # Force layer2 back to {} to simulate partial (S-1-era) state
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const st = w.readState('a3b-sid');
@@ -160,7 +160,7 @@ st.alert = {};
 fs.writeFileSync(w.getStatePath('a3b-sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
     # Call appendFinding with same finding (dedup path with layer2:{})
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const result = w.appendFinding('a3b-sid', {categories:['workflow'],severity:'warning',detail:'partial-layer2-finding',reporter:'test'});
 process.exit(result === true ? 0 : 1);
@@ -185,7 +185,7 @@ run_A4() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "a4-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     before_val=$(read_field "$tmp" "a4-sid" "alert.alert_armed_at")
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 // Invalid: missing severity field
 const result = w.appendFinding('a4-sid', {categories:['workflow'],detail:'x',reporter:'r'});

@@ -2,7 +2,7 @@
 # tests/hooks/feat-1799-plans-dir-isolation.sh
 # Tests: hooks/lib/load-env.js, hooks/lib/supervisor-emit.js, bin/check-plans-dir-isolation.sh
 # Tags: supervisor-emit, isolation, plans-dir, xor-guard, scope:issue-specific, pwsh-not-required, TL2
-# #1799: a suite pinning CLAUDE_WORKFLOW_DIR but NOT WORKFLOW_PLANS_DIR drives the real hooks,
+# #1799: a suite pinning WORKFLOW_STATE_DIR but NOT WORKFLOW_PLANS_DIR drives the real hooks,
 # and supervisor-emit.js appends escape_hatch_event findings into the developer's LIVE
 # ~/.workflow-plans state. The fix is an XOR guard at supervisor-emit.js#safeAppend: both
 # pinned (isolated test) or neither (production) → write; exactly one → refuse, no write.
@@ -44,7 +44,7 @@ new_sandbox() {  # <tag> → echoes "<pinned>|<decoyhome>|<cfgdir>"
 # Count supervisor-state files under a dir: legacy <sid>-supervisor-state.json and the
 # #2434 control file <sid>.control/supervisor-state.json.
 count_states() { find "$1" -name '*supervisor-state.json' 2>/dev/null | wc -l | tr -d ' '; }
-# #2434: the state is a control file; with CLAUDE_WORKFLOW_DIR unset it resolves to the
+# #2434: the state is a control file; with WORKFLOW_STATE_DIR unset it resolves to the
 # default workflow dir under the (decoy) home.
 home_state() { printf '%s/.claude/projects/workflow/%s.control/supervisor-state.json' "$1" "$SID"; }
 
@@ -60,7 +60,7 @@ run_emit() {
     local -a unsets=() assigns=()
     assigns+=("HOME=$home" "USERPROFILE=$home" "AGENTS_CONFIG_DIR=$cfg")
     if [ "$plansval" = "UNSET" ]; then unsets+=("-u" "WORKFLOW_PLANS_DIR"); else assigns+=("WORKFLOW_PLANS_DIR=$plansval"); fi
-    if [ "$wfval" = "UNSET" ]; then unsets+=("-u" "CLAUDE_WORKFLOW_DIR"); else assigns+=("CLAUDE_WORKFLOW_DIR=$wfval"); fi
+    if [ "$wfval" = "UNSET" ]; then unsets+=("-u" "WORKFLOW_STATE_DIR"); else assigns+=("WORKFLOW_STATE_DIR=$wfval"); fi
     env ${unsets[@]+"${unsets[@]}"} "${assigns[@]}" "$RWT" 15 node -e "$js" 2>&1 >/dev/null
 }
 
@@ -86,7 +86,7 @@ G1_both_pinned_writes_to_pinned_dir() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# G2 — CLAUDE_WORKFLOW_DIR only: refuse, name the MISSING var, write nothing.
+# G2 — WORKFLOW_STATE_DIR only: refuse, name the MISSING var, write nothing.
 # ─────────────────────────────────────────────────────────────────────────────
 G2_wfdir_only_refuses() {
     local pinned home cfg pn err
@@ -95,9 +95,9 @@ G2_wfdir_only_refuses() {
     err="$(run_emit "UNSET" "$pn" "$home" "$cfg" "$EMIT_SENTINEL")"
 
     if [ "$(count_states "$pinned")" = "0" ] && [ "$(count_states "$home")" = "0" ]; then
-        pass "G2a CLAUDE_WORKFLOW_DIR-only → nothing written anywhere"
+        pass "G2a WORKFLOW_STATE_DIR-only → nothing written anywhere"
     else
-        fail "G2a CLAUDE_WORKFLOW_DIR-only wrote a state file (pinned=$(count_states "$pinned") home=$(count_states "$home"))"
+        fail "G2a WORKFLOW_STATE_DIR-only wrote a state file (pinned=$(count_states "$pinned") home=$(count_states "$home"))"
     fi
     if echo "$err" | grep -q 'WORKFLOW_PLANS_DIR unset'; then
         pass "G2b refusal diagnostic names WORKFLOW_PLANS_DIR as the unset half"
@@ -127,10 +127,10 @@ G3_plansdir_only_refuses() {
     else
         fail "G3a WORKFLOW_PLANS_DIR-only wrote a state file (pinned=$(count_states "$pinned"))"
     fi
-    if echo "$err" | grep -q 'CLAUDE_WORKFLOW_DIR unset'; then
-        pass "G3b symmetric refusal names CLAUDE_WORKFLOW_DIR as the unset half"
+    if echo "$err" | grep -q 'WORKFLOW_STATE_DIR unset'; then
+        pass "G3b symmetric refusal names WORKFLOW_STATE_DIR as the unset half"
     else
-        fail "G3b symmetric refusal missing/does not name CLAUDE_WORKFLOW_DIR as unset: '$err'"
+        fail "G3b symmetric refusal missing/does not name WORKFLOW_STATE_DIR as unset: '$err'"
     fi
 }
 
@@ -161,25 +161,25 @@ G4_neither_pinned_writes() {
 G5_empty_string_is_unset() {
     local pinned home cfg pn err
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g5a)"
-    # (a) CLAUDE_WORKFLOW_DIR="" + WORKFLOW_PLANS_DIR unset → BOTH unset → write.
+    # (a) WORKFLOW_STATE_DIR="" + WORKFLOW_PLANS_DIR unset → BOTH unset → write.
     err="$(run_emit "UNSET" "" "$home" "$cfg" "$EMIT_SENTINEL")"
     if [ -f "$(home_state "$home")" ]; then
-        pass "G5a CLAUDE_WORKFLOW_DIR=\"\" counts as unset → both-unset → write succeeds"
+        pass "G5a WORKFLOW_STATE_DIR=\"\" counts as unset → both-unset → write succeeds"
     else
-        fail "G5a empty CLAUDE_WORKFLOW_DIR was counted as set → false refusal (stderr=$err)"
+        fail "G5a empty WORKFLOW_STATE_DIR was counted as set → false refusal (stderr=$err)"
     fi
 
-    # (b) CLAUDE_WORKFLOW_DIR="" + WORKFLOW_PLANS_DIR pinned → still XOR → refuse.
+    # (b) WORKFLOW_STATE_DIR="" + WORKFLOW_PLANS_DIR pinned → still XOR → refuse.
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g5b)"
     pn="$(node_path "$pinned")"
     err="$(run_emit "$pn" "" "$home" "$cfg" "$EMIT_SENTINEL")"
-    if [ "$(count_states "$pinned")" = "0" ] && echo "$err" | grep -q 'CLAUDE_WORKFLOW_DIR unset'; then
-        pass "G5b CLAUDE_WORKFLOW_DIR=\"\" + pinned plans dir → still a contradiction → refused"
+    if [ "$(count_states "$pinned")" = "0" ] && echo "$err" | grep -q 'WORKFLOW_STATE_DIR unset'; then
+        pass "G5b WORKFLOW_STATE_DIR=\"\" + pinned plans dir → still a contradiction → refused"
     else
         fail "G5b empty-string half must still count as unset (files=$(count_states "$pinned") stderr='$err')"
     fi
 
-    # (c) WORKFLOW_PLANS_DIR="" + CLAUDE_WORKFLOW_DIR unset → BOTH unset → write (CPR-ORTH symmetric).
+    # (c) WORKFLOW_PLANS_DIR="" + WORKFLOW_STATE_DIR unset → BOTH unset → write (CPR-ORTH symmetric).
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g5c)"
     err="$(run_emit "" "UNSET" "$home" "$cfg" "$EMIT_SENTINEL")"
     if [ -f "$(home_state "$home")" ]; then
@@ -188,7 +188,7 @@ G5_empty_string_is_unset() {
         fail "G5c empty WORKFLOW_PLANS_DIR was counted as set → false refusal (stderr=$err)"
     fi
 
-    # (d) WORKFLOW_PLANS_DIR="" + CLAUDE_WORKFLOW_DIR pinned → still XOR → refuse (CPR-ORTH symmetric).
+    # (d) WORKFLOW_PLANS_DIR="" + WORKFLOW_STATE_DIR pinned → still XOR → refuse (CPR-ORTH symmetric).
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g5d)"
     pn="$(node_path "$pinned")"
     err="$(run_emit "" "$pn" "$home" "$cfg" "$EMIT_SENTINEL")"
@@ -234,32 +234,32 @@ G6_env_injection_uses_pristine_snapshot() {
 G6c_pristine_api_shape() {
     local root cfg out
     root="$TMPDIR_BASE/g6c"; cfg="$root/cfg"; mkdir -p "$cfg"
-    # CLAUDE_WORKFLOW_DIR="   " (whitespace-only) — must normalize to null.
-    out="$(env -u WORKFLOW_PLANS_DIR "AGENTS_CONFIG_DIR=$cfg" "CLAUDE_WORKFLOW_DIR=   " \
+    # WORKFLOW_STATE_DIR="   " (whitespace-only) — must normalize to null.
+    out="$(env -u WORKFLOW_PLANS_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_STATE_DIR=   " \
         "$RWT" 15 node -e "
 const m = require('$LOADENV_NODE');
 if (typeof m.getPristineIsolationEnv !== 'function') { process.stdout.write('NOFN'); process.exit(0); }
 const a = m.getPristineIsolationEnv();
 const frozen = Object.isFrozen(a);
-const ws = a.CLAUDE_WORKFLOW_DIR === null;
+const ws = a.WORKFLOW_STATE_DIR === null;
 const unset = a.WORKFLOW_PLANS_DIR === null;
 process.stdout.write((frozen?'F':'f') + (ws?'W':'w') + (unset?'U':'u'));
 " 2>/dev/null)"
     if [ "$out" = "FWU" ]; then
-        pass "G6c(wf) getPristineIsolationEnv() exported, frozen, normalizes blank CLAUDE_WORKFLOW_DIR → null"
+        pass "G6c(wf) getPristineIsolationEnv() exported, frozen, normalizes blank WORKFLOW_STATE_DIR → null"
     else
         fail "G6c(wf) getPristineIsolationEnv() shape wrong (want FWU), got '${out:-<err>}'"
     fi
 
     # WORKFLOW_PLANS_DIR="   " (whitespace-only) — must normalize to null (CPR-ORTH symmetric).
     root="$TMPDIR_BASE/g6c2"; cfg="$root/cfg"; mkdir -p "$cfg"
-    out="$(env -u CLAUDE_WORKFLOW_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_PLANS_DIR=   " \
+    out="$(env -u WORKFLOW_STATE_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_PLANS_DIR=   " \
         "$RWT" 15 node -e "
 const m = require('$LOADENV_NODE');
 if (typeof m.getPristineIsolationEnv !== 'function') { process.stdout.write('NOFN'); process.exit(0); }
 const a = m.getPristineIsolationEnv();
 const frozen = Object.isFrozen(a);
-const unset_wf = a.CLAUDE_WORKFLOW_DIR === null;
+const unset_wf = a.WORKFLOW_STATE_DIR === null;
 const ws = a.WORKFLOW_PLANS_DIR === null;
 process.stdout.write((frozen?'F':'f') + (unset_wf?'U':'u') + (ws?'W':'w'));
 " 2>/dev/null)"
@@ -328,7 +328,7 @@ G8e_guard_never_throws() {
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g8e)"
     pn="$(node_path "$pinned")"
     out="$(env -u WORKFLOW_PLANS_DIR "HOME=$home" "USERPROFILE=$home" "AGENTS_CONFIG_DIR=$cfg" \
-        "CLAUDE_WORKFLOW_DIR=$pn" \
+        "WORKFLOW_STATE_DIR=$pn" \
         "$RWT" 15 node -e "
 const em=require('$EMIT_NODE');
 try { em.reportSentinel('WORKFLOW_OFF','g8e','$SID'); process.stdout.write('NOTHROW'); }
@@ -353,10 +353,10 @@ G8f_isolation_contradiction_exported() {
 if (typeof em.isolationContradiction !== 'function') { process.stdout.write('NOFN'); process.exit(0); }
 process.stdout.write(String(em.isolationContradiction()));"
 
-    both="$(env "AGENTS_CONFIG_DIR=$cfg" "CLAUDE_WORKFLOW_DIR=$pn" "WORKFLOW_PLANS_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
-    neither="$(env -u CLAUDE_WORKFLOW_DIR -u WORKFLOW_PLANS_DIR "AGENTS_CONFIG_DIR=$cfg" "$RWT" 15 node -e "$probe" 2>/dev/null)"
-    xor1="$(env -u WORKFLOW_PLANS_DIR "AGENTS_CONFIG_DIR=$cfg" "CLAUDE_WORKFLOW_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
-    xor2="$(env -u CLAUDE_WORKFLOW_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_PLANS_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
+    both="$(env "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_STATE_DIR=$pn" "WORKFLOW_PLANS_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
+    neither="$(env -u WORKFLOW_STATE_DIR -u WORKFLOW_PLANS_DIR "AGENTS_CONFIG_DIR=$cfg" "$RWT" 15 node -e "$probe" 2>/dev/null)"
+    xor1="$(env -u WORKFLOW_PLANS_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_STATE_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
+    xor2="$(env -u WORKFLOW_STATE_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_PLANS_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
 
     if [ "$both:$neither:$xor1:$xor2" = "false:false:true:true" ]; then
         pass "G8f isolationContradiction() truth table: both=false neither=false xor=true"
@@ -383,13 +383,13 @@ G9_classifier_verdicts() {
 
     # G9a/G9c use a FIXTURE N-candidate for the same reason G9b uses one: this fix
     # dual-pinned every live repo test, so no production file is a candidate any more.
-    # The fixture pins CLAUDE_WORKFLOW_DIR, omits WORKFLOW_PLANS_DIR, and reaches only a
+    # The fixture pins WORKFLOW_STATE_DIR, omits WORKFLOW_PLANS_DIR, and reaches only a
     # read-only hook — exactly the shape the classifier must call N rather than W.
     local n_fixture_dir n_fixture
     n_fixture_dir="$TMPDIR_BASE/g9c-fixture"
     n_fixture="$n_fixture_dir/feature-readonly-halfpinned-suite.sh"
     mkdir -p "$n_fixture_dir"
-    printf '#!/usr/bin/env bash\n# Tests: hooks/block-history-direct.js\nCLAUDE_WORKFLOW_DIR=/tmp/pin node hooks/block-history-direct.js\n' > "$n_fixture"
+    printf '#!/usr/bin/env bash\n# Tests: hooks/block-history-direct.js\nWORKFLOW_STATE_DIR=/tmp/pin node hooks/block-history-direct.js\n' > "$n_fixture"
 
     # G9a — classifier exits 0 even while reporting a candidate (report tool, not a gate).
     out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$n_fixture" 2>&1)"
@@ -402,17 +402,17 @@ G9_classifier_verdicts() {
 
     # G9b — classifier recognises a W-candidate from a FIXTURE file (not a live repo file,
     # because all live tests have been dual-pinned as part of this fix making them not W).
-    # The fixture simulates an unfixed test that pins CLAUDE_WORKFLOW_DIR, references
+    # The fixture simulates an unfixed test that pins WORKFLOW_STATE_DIR, references
     # workflow-gate.js, but has no WORKFLOW_PLANS_DIR pin.
     local fixture_dir fixture_file
     fixture_dir="$TMPDIR_BASE/g9b-fixture"
     fixture_file="$fixture_dir/feature-unfixed-suite.sh"
     mkdir -p "$fixture_dir"
-    printf '#!/usr/bin/env bash\n# Tests: hooks/workflow-gate.js\nCLAUDE_WORKFLOW_DIR=/tmp/pin node hooks/workflow-gate.js\n' > "$fixture_file"
+    printf '#!/usr/bin/env bash\n# Tests: hooks/workflow-gate.js\nWORKFLOW_STATE_DIR=/tmp/pin node hooks/workflow-gate.js\n' > "$fixture_file"
     local fixture_rel; fixture_rel="$(cd "$AGENTS_DIR" && realpath --relative-to=. "$fixture_file" 2>/dev/null || echo "$fixture_file")"
     out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$fixture_file" 2>&1)"
     if echo "$out" | grep -q 'W-candidate'; then
-        pass "G9b classifier correctly identifies a fixture unfixed suite as W-candidate (CLAUDE_WORKFLOW_DIR pinned, no WORKFLOW_PLANS_DIR, calls workflow-gate.js)"
+        pass "G9b classifier correctly identifies a fixture unfixed suite as W-candidate (WORKFLOW_STATE_DIR pinned, no WORKFLOW_PLANS_DIR, calls workflow-gate.js)"
     else
         fail "G9b fixture unfixed suite must be W-candidate: $out"
     fi
@@ -435,7 +435,7 @@ G9_classifier_verdicts() {
     if [ "$wcount" = "0" ]; then
         pass "G9d repo-wide sweep complete: zero W-candidate files remain unpinned"
     else
-        fail "G9d $wcount file(s) reach supervisor-emit with CLAUDE_WORKFLOW_DIR pinned but WORKFLOW_PLANS_DIR unpinned:"$'\n'"$(echo "$full" | grep 'W-candidate')"
+        fail "G9d $wcount file(s) reach supervisor-emit with WORKFLOW_STATE_DIR pinned but WORKFLOW_PLANS_DIR unpinned:"$'\n'"$(echo "$full" | grep 'W-candidate')"
     fi
 }
 

@@ -45,14 +45,14 @@ run_c1() {
     require_source "$CLI" "C1: --mark-findings-surfaced writes ISO timestamp" || return
     local tmp rc out
     tmp="$(mktemp -d)"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c1-sid --mark-findings-surfaced >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c1-sid --mark-findings-surfaced >/dev/null 2>&1
     rc=$?
     if [ "$rc" != "0" ]; then
         rm -rf "$tmp"
         fail "C1: CLI returned non-zero (rc=$rc) for --mark-findings-surfaced"
         return
     fi
-    out="$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out="$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('c1-sid');
 if (!st) { process.exit(2); }
@@ -73,14 +73,14 @@ run_c2() {
     require_source "$CLI" "C2: --set-alert-eligible-phase post_final_report_window" || return
     local tmp rc out
     tmp="$(mktemp -d)"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c2-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c2-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
     rc=$?
     if [ "$rc" != "0" ]; then
         rm -rf "$tmp"
         fail "C2: CLI returned non-zero (rc=$rc)"
         return
     fi
-    out="$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out="$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('c2-sid');
 if (!st) { process.exit(2); }
@@ -100,15 +100,15 @@ run_c3() {
     require_source "$CLI" "C3: --set-alert-eligible-phase null clears the field" || return
     local tmp rc out
     tmp="$(mktemp -d)"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c3-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c3-sid --set-alert-eligible-phase null >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c3-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c3-sid --set-alert-eligible-phase null >/dev/null 2>&1
     rc=$?
     if [ "$rc" != "0" ]; then
         rm -rf "$tmp"
         fail "C3: second CLI call returned non-zero (rc=$rc)"
         return
     fi
-    out="$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out="$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('c3-sid');
 if (!st) { process.exit(2); }
@@ -128,7 +128,7 @@ run_c4() {
     require_source "$CLI" "C4: --set-alert-eligible-phase invalid -> exit 1 + usage" || return
     local tmp rc err
     tmp="$(mktemp -d)"
-    err="$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c4-sid --set-alert-eligible-phase normal_run 2>&1 >/dev/null)"
+    err="$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c4-sid --set-alert-eligible-phase normal_run 2>&1 >/dev/null)"
     rc=$?
     rm -rf "$tmp"
     if [ "$rc" != "0" ] && echo "$err" | grep -qi "usage\|set-l2-eligible-phase\|invalid\|must be"; then
@@ -143,14 +143,14 @@ run_c5() {
     require_source "$CLI" "C5: --mark-findings-surfaced + --set-alert-phase done both succeed" || return
     local tmp rc out
     tmp="$(mktemp -d)"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c5-sid --mark-findings-surfaced --set-alert-phase done >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c5-sid --mark-findings-surfaced --set-alert-phase done >/dev/null 2>&1
     rc=$?
     if [ "$rc" != "0" ]; then
         rm -rf "$tmp"
         fail "C5: combined invocation returned non-zero (rc=$rc)"
         return
     fi
-    out="$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out="$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('c5-sid');
 if (!st) { process.exit(2); }
@@ -171,7 +171,7 @@ run_c6() {
     require_source "$CLI" "C6: missing --session-id -> exit non-zero + usage" || return
     local tmp rc err
     tmp="$(mktemp -d)"
-    err="$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --mark-findings-surfaced 2>&1 >/dev/null)"
+    err="$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --mark-findings-surfaced 2>&1 >/dev/null)"
     rc=$?
     rm -rf "$tmp"
     if [ "$rc" != "0" ] && echo "$err" | grep -qi "session-id\|usage"; then

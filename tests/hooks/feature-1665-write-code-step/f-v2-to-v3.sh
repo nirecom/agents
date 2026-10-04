@@ -32,7 +32,7 @@ const CORE = require(process.env.CORE_N);
 const PROJ = require(process.env.PROJ_N);
 const fs = require("fs"), path = require("path");
 const sid = process.env.V3_SID;
-const sp = () => path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json");
+const sp = () => path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json");
 const raw = () => fs.readFileSync(sp(), "utf8");
 const rd = () => JSON.parse(raw());
 const norm = () => CORE.normalizeStateVersion(S.readRawState(sid));
@@ -75,7 +75,7 @@ const out = {
   workflow_type: "wf-code",
   events,
 };
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.V3_SID + ".json"),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, process.env.V3_SID + ".json"),
                  JSON.stringify(out, null, 2));
 ' 2>&1
 }

@@ -41,9 +41,9 @@ TMPD="$(mktemp -d)"
 trap 'rm -rf "$TMPD"' EXIT
 TMPD_NODE="$(node_path "$TMPD")"
 
-# Dual-pin: pinning only CLAUDE_WORKFLOW_DIR would let a supervisor emit land in
+# Dual-pin: pinning only WORKFLOW_STATE_DIR would let a supervisor emit land in
 # the developer's real ~/.workflow-plans.
-export CLAUDE_WORKFLOW_DIR="${TMPD_NODE}/workflow-state"
+export WORKFLOW_STATE_DIR="${TMPD_NODE}/workflow-state"
 export WORKFLOW_PLANS_DIR="${TMPD_NODE}/plans"
 mkdir -p "${TMPD}/workflow-state" "${TMPD}/plans" "${TMPD}/proj" "${TMPD}/neutral"
 git -C "${TMPD}/proj" init -q 2>/dev/null

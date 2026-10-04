@@ -119,7 +119,7 @@ run_normal_and_guard_tests() {
     else
         fail "G5. write_tests=pending + exit=1 → expected run_tests=pending, got: $STATUS"
     fi
-    G5_FAILED=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+    G5_FAILED=$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 try {
   const s = require('$DOTFILES_WIN/hooks/workflow-state').readState(process.argv[1]);
   const rt = s && s.steps && s.steps.run_tests;

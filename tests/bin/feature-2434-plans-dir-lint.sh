@@ -65,7 +65,7 @@ REGSCRIPT
 REG_JS="$AGENTS_DIR/hooks/lib/plans-artifact-registry.js"
 REG_N="$(np "$REG_JS")"
 PLANS_N="$(np "$WORKFLOW_PLANS_DIR")"
-WF_N="$(np "$CLAUDE_WORKFLOW_DIR")"
+WF_N="$(np "$WORKFLOW_STATE_DIR")"
 export REG_N PLANS_N WF_N
 
 DRIVER="$T/driver.js"
@@ -390,7 +390,7 @@ case_begin "unregistered-and-no-sid" "hooks/lib/plans-artifact-registry.js"
 : > "$WORKFLOW_PLANS_DIR/$SID_UUID-context.md"
 check "an unknown name under a sid with a context.md is unregistered" \
     "unregistered" "$(reg classify "$SID_UUID-foo.md")"
-: > "$CLAUDE_WORKFLOW_DIR/$SID_DATE.json"
+: > "$WORKFLOW_STATE_DIR/$SID_DATE.json"
 check "an unknown name under a sid with a workflow state json is unregistered" \
     "unregistered" "$(reg classify "$SID_DATE-scratch.txt")"
 check "a worker stamp log with no session behind any prefix is no-sid" \

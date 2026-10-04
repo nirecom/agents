@@ -49,7 +49,7 @@ json_escape() {
 }
 
 # Isolated workflow dir: the guard consults <workflowDir>/<sid>.workflow-off for the
-# session override (#1725). Pinning CLAUDE_WORKFLOW_DIR to an empty temp dir and
+# session override (#1725). Pinning WORKFLOW_STATE_DIR to an empty temp dir and
 # stripping the ambient session-identifying env vars keeps these block-expectations
 # environment-independent — a real WORKFLOW_OFF marker in the developer's live session
 # can never flip a verdict asserted here.
@@ -65,7 +65,7 @@ run_hook() {
     local out
     out="$(printf '%s' "$1" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_ENV_FILE \
-        "CLAUDE_WORKFLOW_DIR=$ISOLATED_WORKFLOW_DIR" \
+        "WORKFLOW_STATE_DIR=$ISOLATED_WORKFLOW_DIR" \
     "WORKFLOW_PLANS_DIR=$ISOLATED_PLANS_DIR" \
         node "$HOOK" 2>/dev/null)"
     case "$out" in
@@ -167,7 +167,7 @@ echo "=== T1-P/c: fail-open ==="
 
 got="$(printf '%s' 'not json at all {{{' | run_with_timeout 30 \
     env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_ENV_FILE \
-    "CLAUDE_WORKFLOW_DIR=$ISOLATED_WORKFLOW_DIR" \
+    "WORKFLOW_STATE_DIR=$ISOLATED_WORKFLOW_DIR" \
     "WORKFLOW_PLANS_DIR=$ISOLATED_PLANS_DIR" \
     node "$HOOK" 2>/dev/null | grep -c '"decision":"approve"' || true)"
 assert_eq "P19-invalid-json-approves" "1" "$got"

@@ -26,7 +26,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 
 PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$PLANS_DIR"
@@ -99,7 +99,7 @@ read_state_status() {
   if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
   # #1733: state is an append-only event stream on disk (no top-level .steps);
   # read through readState() so v1 fixtures migrate and the event log projects.
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
     try {
       const S = require(process.argv[2]);
       const s = S.readState(process.argv[1]);
@@ -111,7 +111,7 @@ read_state_status() {
 
 # Run next-step for verdict output (always exits 0; KEY=value lines on stdout).
 run_next_step() {
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     run_with_timeout node "$NEXT_STEP" "$@" 2>/dev/null || true
 }
 
@@ -120,7 +120,7 @@ run_next_step() {
 run_next_step_rc() {
   local err_file="$TMPDIR_BASE/stderr.$RANDOM"
   set +e
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     run_with_timeout node "$NEXT_STEP" "$@" >/dev/null 2>"$err_file"
   RC=$?
   set -e

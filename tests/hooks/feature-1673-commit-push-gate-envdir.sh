@@ -4,9 +4,9 @@
 # Tags: worker-dispatch, commit-push, workflow-gate, env-propagation, state-dir, fail-quiet, TL2, scope:issue-specific
 #
 # Issue #1673 Risk 3 — the quiet failure. getWorkflowDir() reads exactly one
-# variable, CLAUDE_WORKFLOW_DIR, falling back to <HOME>/.claude/projects/workflow;
+# variable, WORKFLOW_STATE_DIR, falling back to <HOME>/.claude/projects/workflow;
 # spawn.js's buildEnv hands a child only CHILD_ENV_ALLOWLIST plus the entry's
-# envPassthrough, and CLAUDE_WORKFLOW_DIR is in neither by default. A worker that
+# envPassthrough, and WORKFLOW_STATE_DIR is in neither by default. A worker that
 # forgets it does not crash: the gate child looks in the wrong directory, finds no
 # state, and answers whatever an absent state implies — reported as a gate verdict.
 
@@ -112,7 +112,7 @@ group_declaration() {
       const anchors = anchorMod.resolveAnchors(process.argv[4]);
       if (anchors.error) { p("anchors", anchors.error); process.exit(0); }
       const D1 = {
-        CLAUDE_WORKFLOW_DIR: process.argv[5],
+        WORKFLOW_STATE_DIR: process.argv[5],
         WORKFLOW_PLANS_DIR: process.argv[6],
         WORKFLOW_SESSION_ID: "sid-probe",
         CLAUDE_PROJECT_DIR: process.argv[4],
@@ -176,11 +176,11 @@ gate_decision() {
     ' "$REPO" "$SID")"
     if [ "$propagate" = "1" ]; then
         out="$(printf '%s' "$payload" | run_with_timeout 60 env \
-            "CLAUDE_WORKFLOW_DIR=$(nodepath "$sdir")" "WORKFLOW_PLANS_DIR=$(nodepath "$pdir")" \
+            "WORKFLOW_STATE_DIR=$(nodepath "$sdir")" "WORKFLOW_PLANS_DIR=$(nodepath "$pdir")" \
             "DEFAULT_BRANCHES=main,master" \
             node "$(nodepath "$GATE_JS")" 2>/dev/null)" || rc=$?
     else
-        out="$(printf '%s' "$payload" | run_with_timeout 60 env -u CLAUDE_WORKFLOW_DIR \
+        out="$(printf '%s' "$payload" | run_with_timeout 60 env -u WORKFLOW_STATE_DIR \
             "WORKFLOW_PLANS_DIR=$(nodepath "$pdir")" "DEFAULT_BRANCHES=main,master" \
             node "$(nodepath "$GATE_JS")" 2>/dev/null)" || rc=$?
     fi
@@ -198,7 +198,7 @@ group_real_gate() {
 
     # Negative: identical bytes on stdin, identical state file on disk, only the
     # variable removed. A verdict equal to the propagated one would mean the gate
-    # never consulted CLAUDE_WORKFLOW_DIR and this file proves nothing.
+    # never consulted WORKFLOW_STATE_DIR and this file proves nothing.
     assert_ne "real-gate/verdict-depends-on-the-variable" "approve" "$(gate_decision unpropagated complete 0)"
 }
 
@@ -216,10 +216,10 @@ group_worker_source() {
         return
     fi
     blob="$(cat "$WORKER_JS" "$WORKER_GATE_JS")"
-    if printf '%s\n' "$blob" | grep -qF 'CLAUDE_WORKFLOW_DIR'; then
+    if printf '%s\n' "$blob" | grep -qF 'WORKFLOW_STATE_DIR'; then
         pass "worker/sets-claude-workflow-dir"
     else
-        fail "worker/sets-claude-workflow-dir" "the worker never names CLAUDE_WORKFLOW_DIR"
+        fail "worker/sets-claude-workflow-dir" "the worker never names WORKFLOW_STATE_DIR"
     fi
     # envPassthrough also permits inheritance; the plan requires the worker to
     # compute the documented default when the parent env has nothing.

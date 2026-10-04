@@ -17,7 +17,7 @@ AGENTS_DIR="$(cd "$DIR/../../.." && pwd)"
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
 # Fixture isolation (rules/test/fixture-isolation.md): these are pure function calls only, so
-# pinning CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR is unnecessary, but the parent session's id
+# pinning WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR is unnecessary, but the parent session's id
 # must always be dropped -- the child node inheriting it could touch real session state.
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 

@@ -88,7 +88,7 @@ build_repo() {
     printf '%s' "$repo"
 }
 
-# mk_root — one case's isolated root: wf/ (CLAUDE_WORKFLOW_DIR), plans/ (PLANS_DIR
+# mk_root — one case's isolated root: wf/ (WORKFLOW_STATE_DIR), plans/ (PLANS_DIR
 # and WORKFLOW_PLANS_DIR), home/.
 mk_root() {
     local r; r="$(make_tmp)"
@@ -99,7 +99,7 @@ mk_root() {
 pinned() {
     local r="$1"; shift
     env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
-        CLAUDE_WORKFLOW_DIR="$(np "$r/wf")" WORKFLOW_PLANS_DIR="$(np "$r/plans")" \
+        WORKFLOW_STATE_DIR="$(np "$r/wf")" WORKFLOW_PLANS_DIR="$(np "$r/plans")" \
         HOME="$r/home" USERPROFILE="$r/home" "$@"
 }
 

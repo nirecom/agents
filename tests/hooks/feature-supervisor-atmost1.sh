@@ -51,7 +51,7 @@ run_t8a() {
         local tmp_node="$tmp"
     fi
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -109,7 +109,7 @@ run_t8b() {
         local tmp_node="$tmp"
     fi
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
 const { collectAuditCandidates } = require('$COLLECT_NODE');
 const s = require('$SCHEMA_NODE');
 
@@ -152,7 +152,7 @@ run_t8c() {
         local tmp_node="$tmp"
     fi
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -210,7 +210,7 @@ run_t8d() {
         local tmp_node="$tmp"
     fi
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
 const { collectAuditCandidates } = require('$COLLECT_NODE');
 const s = require('$SCHEMA_NODE');
 
@@ -382,7 +382,7 @@ run_t8f_coalescing() {
     sid="t8f-sid-$$"
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 15 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 15 node -e "
 const audit = require('$AUDIT_NODE');
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');

@@ -31,7 +31,7 @@ printf '{"granted_at":1750000000}' > "$WD/wsid.off-clearance"
 # feed <raw-stdin> → sets HRC / HOUT / HERR
 feed() {
     if [ "$HOOK_PRESENT" != "yes" ]; then HRC=127; HOUT=""; HERR=""; return; fi
-    HOUT=$(printf '%s' "$1" | CLAUDE_WORKFLOW_DIR="$WDN" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    HOUT=$(printf '%s' "$1" | WORKFLOW_STATE_DIR="$WDN" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
             "$RWT" 12 node "$HOOK" 2>"$WORK/stderr.txt")
     HRC=$?
     HERR=$(cat "$WORK/stderr.txt" 2>/dev/null)

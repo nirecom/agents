@@ -35,7 +35,7 @@ if command -v cygpath >/dev/null 2>&1; then WORK_NODE="$(cygpath -m "$WORK")"; e
 
 mkdir -p "$WORK/plans" "$WORK/wf" "$WORK/transcripts"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
-export CLAUDE_WORKFLOW_DIR="$WORK_NODE/wf"
+export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$AGENTS_NODE"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE

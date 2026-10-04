@@ -153,7 +153,7 @@ call_is_planning() {
     # Dual-pin (#1799): keep supervisor-emit out of the real ~/.workflow-plans tree.
     mkdir -p "$wf_dir/plans"
     local plans_dir_node; plans_dir_node="$(to_node_path "$wf_dir/plans")"
-    CLAUDE_WORKFLOW_DIR="$wf_dir_node" \
+    WORKFLOW_STATE_DIR="$wf_dir_node" \
     WORKFLOW_PLANS_DIR="$plans_dir_node" \
         run_with_timeout 10 node -e "
 const { readState } = require('$state_io_node');

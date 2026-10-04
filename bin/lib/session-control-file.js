@@ -1,6 +1,6 @@
 "use strict";
 // bin/lib/session-control-file.js — resolves a session-close control file from --session as
-// <CLAUDE_WORKFLOW_DIR>/<sid>.control/<name> through the one control-dir resolver.
+// <WORKFLOW_STATE_DIR>/<sid>.control/<name> through the one control-dir resolver.
 // Shared by session-close-build-env.js, render-final-report.js and session-close-render-sc7.js.
 const path = require("path");
 

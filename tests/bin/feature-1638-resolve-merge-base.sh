@@ -146,7 +146,7 @@ try {
 const cmd = process.argv[2];
 const sid = process.argv[3];
 function statePath() {
-  return path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json");
+  return path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json");
 }
 try {
   if (cmd === "init") {
@@ -185,7 +185,7 @@ NODEEOF
 NODE_RC=0
 node_state() { # <subcommand> <sid> [args...] ; prints stdout, sets NODE_RC
   NODE_RC=0
-  env "AGENTS_DIR=$AGENTS_DIR" "CLAUDE_WORKFLOW_DIR=$WFDIR" "WORKFLOW_PLANS_DIR=$PLANSDIR" \
+  env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" "WORKFLOW_PLANS_DIR=$PLANSDIR" \
     node "$STATE_JS" "$@" 2>/dev/null || NODE_RC=$?
 }
 
@@ -216,7 +216,7 @@ run_helper() { # <repo> <sid|-> [extra helper args...]
   # env(1) is last-wins: the isolation pins follow HELPER_ENV so a caller-supplied
   # row can never unpin the fixture workflow/plans dirs.
   env ${HELPER_ENV[@]+"${HELPER_ENV[@]}"} \
-    "CLAUDE_WORKFLOW_DIR=$WFDIR" "WORKFLOW_PLANS_DIR=$PLANSDIR" \
+    "WORKFLOW_STATE_DIR=$WFDIR" "WORKFLOW_PLANS_DIR=$PLANSDIR" \
     bash "$HELPER" "${args[@]}" >"$o" 2>"$e" || HB_RC=$?
   HB_OUT="$(cat "$o")"
   HB_ERR="$(cat "$e")"

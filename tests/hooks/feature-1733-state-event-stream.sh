@@ -9,7 +9,7 @@
 # projection contract, concurrency/locking, v1->v2 migration, and the per-consumer
 # behaviours (reset, worktree, inheritance, intervals, provenance, final_report).
 #
-# Each sub-script is self-contained: its own temp CLAUDE_WORKFLOW_DIR, its own fixture
+# Each sub-script is self-contained: its own temp WORKFLOW_STATE_DIR, its own fixture
 # AGENTS_CONFIG_DIR, and its own temp WORKFLOW_PLANS_DIR / HOME.
 #
 # NO SKIP PATH: this suite is written test-first, so until the #1733 implementation

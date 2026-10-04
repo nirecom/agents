@@ -24,9 +24,9 @@ LOAD_ENV_NODE="$AGENTS_DIR_NODE/hooks/lib/load-env.js"
 # session ids so no child node touches live workflow state.
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TMP_ROOT/workflow"
+export WORKFLOW_STATE_DIR="$TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMP_ROOT/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 

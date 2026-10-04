@@ -42,7 +42,7 @@ read_field() {
     local tmp="$1" sid="$2" path="$3"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
@@ -58,7 +58,7 @@ invoke_cli() {
     local tmp="$1"; shift
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI" "$@" >/dev/null 2>&1
     )
 }
@@ -145,7 +145,7 @@ run_c6() {
     tmp="$(mktemp -d)"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI" --not-a-real-flag value --session-id c6sid >/dev/null 2>&1
     )
     rc=$?
@@ -163,7 +163,7 @@ run_c7() {
     tmp="$(mktemp -d)"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         # No id may reach the CLI from ANY source, or the parent Claude Code
         # session's own id leaks in and this case silently stops testing.
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID WORKFLOW_SESSION_ID
@@ -188,7 +188,7 @@ run_c9() {
     tmp="$(mktemp -d)"; sid="c9ccsid"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_SESSION_ID WORKFLOW_SESSION_ID
         export CLAUDE_CODE_SESSION_ID="$sid"
         run_with_timeout 5 node "$CLI" --set-audit-phase done >/dev/null 2>&1
@@ -213,7 +213,7 @@ run_c10() {
     tmp="$(mktemp -d)"; cc_sid="c10ccsid"; legacy_sid="c10legacysid"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         unset WORKFLOW_SESSION_ID
         export CLAUDE_SESSION_ID="$legacy_sid"
         export CLAUDE_CODE_SESSION_ID="$cc_sid"
@@ -240,7 +240,7 @@ run_c11() {
     tmp="$(mktemp -d)"; wsid="c11wsid"; cc_sid="c11ccsid"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_SESSION_ID
         export WORKFLOW_SESSION_ID="$wsid"
         export CLAUDE_CODE_SESSION_ID="$cc_sid"
@@ -264,7 +264,7 @@ run_c8() {
     # Bump retry count first via CLI (if --increment supported), else write via writer module.
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 // Seed retry count > 0 directly via writeAuditState if exported; otherwise
@@ -274,7 +274,7 @@ if (typeof w.writeAuditState === 'function') {
 } else {
   const fs = require('fs'); const path = require('path');
   const { createEmptyState } = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
-  const ctrlDir = path.join(process.env.CLAUDE_WORKFLOW_DIR, '$sid' + '.control');
+  const ctrlDir = path.join(process.env.WORKFLOW_STATE_DIR, '$sid' + '.control');
   require('fs').mkdirSync(ctrlDir, {recursive: true});
   const fp = path.join(ctrlDir, 'supervisor-state.json');
   const st = createEmptyState('$sid');

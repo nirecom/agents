@@ -52,7 +52,7 @@ build_repo_sec() {
     printf '%s' "$repo"
 }
 
-# #2434: terminal/accept markers are control files under <CLAUDE_WORKFLOW_DIR>/<sid>.control/;
+# #2434: terminal/accept markers are control files under <WORKFLOW_STATE_DIR>/<sid>.control/;
 # the fixture dir doubles as the workflow dir (dual-pinned with WORKFLOW_PLANS_DIR).
 TERMINAL_SUFFIX_SEC=".control/security-code-terminal.txt"
 ACCEPT_SUFFIX_SEC=".control/security-code-exit6-accepted.txt"
@@ -61,7 +61,7 @@ ACCEPT_SUFFIX_SEC=".control/security-code-exit6-accepted.txt"
 run_loop_sec() {
     local plans="$1" fake="$2" repo="$3" rc="$4" ec
     ( cd "$repo" && AGENTS_CONFIG_DIR="$fake" SESSION_ID="sid1361" PLANS_DIR="$plans" \
-        CLAUDE_WORKFLOW_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" \
+        WORKFLOW_STATE_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" \
         EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$SCRIPT_SEC" >/dev/null 2>&1 )
     ec=$?
     printf '%s' "$ec"
@@ -200,7 +200,7 @@ run_case_sec_c2() {
 run_loop_sec_prestaged() {
     local plans="$1" fake="$2" repo="$3" rc="$4" ec
     ( cd "$repo" && AGENTS_CONFIG_DIR="$fake" SESSION_ID="sid1361" PLANS_DIR="$plans" \
-        CLAUDE_WORKFLOW_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" \
+        WORKFLOW_STATE_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" \
         EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$SCRIPT_SEC" --prestaged-report >/dev/null 2>&1 )
     ec=$?
     printf '%s' "$ec"

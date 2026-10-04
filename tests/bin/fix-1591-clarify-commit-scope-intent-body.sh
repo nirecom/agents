@@ -61,13 +61,13 @@ MOCKGH
     fi
     export AGENTS_CONFIG_DIR="$TMP/acd"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
-    export CLAUDE_WORKFLOW_DIR="$TMP/wf"
-    mkdir -p "$CLAUDE_WORKFLOW_DIR"
+    export WORKFLOW_STATE_DIR="$TMP/wf"
+    mkdir -p "$WORKFLOW_STATE_DIR"
 }
 
 teardown() {
     [ -n "${TMP:-}" ] && [ -d "$TMP" ] && rm -rf "$TMP" 2>/dev/null || true
-    unset MOCK_LOG_DIR WORKFLOW_PLANS_DIR CLAUDE_WORKFLOW_DIR 2>/dev/null || true
+    unset MOCK_LOG_DIR WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR 2>/dev/null || true
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
@@ -127,7 +127,7 @@ OUT=$(run_with_timeout 20 bash "$CCS" \
     --session-id "$SID" --plans-dir "$TMP/plans" --issues "" 2>/dev/null)
 RC=$?
 GH=$(cat "$TMP/gh-calls.log" 2>/dev/null || true)
-SIDECAR="$CLAUDE_WORKFLOW_DIR/${SID}.control/intent-scan-block.txt"
+SIDECAR="$WORKFLOW_STATE_DIR/${SID}.control/intent-scan-block.txt"
 if [ "$RC" -eq 2 ] \
     && echo "$OUT" | grep -q "SCAN_BLOCKED" \
     && [ -s "$SIDECAR" ] \

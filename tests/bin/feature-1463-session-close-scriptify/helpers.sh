@@ -52,13 +52,13 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-# #2434: control files live at $CLAUDE_WORKFLOW_DIR/<sid>.control/<name>; the
+# #2434: control files live at $WORKFLOW_STATE_DIR/<sid>.control/<name>; the
 # intent stays in PLANS as <sid>-intent.md. Pin every root the CLIs resolve.
 WF_DIR="$(node_path "${TMPDIR_BASE}/wf")"
 PLANS_DIR="$(node_path "${TMPDIR_BASE}/plans")"
 mkdir -p "$WF_DIR" "$PLANS_DIR" "${TMPDIR_BASE}/home" "${TMPDIR_BASE}/tx"
 export HOME="${TMPDIR_BASE}/home"
-export CLAUDE_WORKFLOW_DIR="$WF_DIR"
+export WORKFLOW_STATE_DIR="$WF_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 export CLAUDE_TRANSCRIPT_BASE_DIR="${TMPDIR_BASE}/tx"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE

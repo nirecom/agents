@@ -83,7 +83,7 @@ mkdir -p "$WORKFLOW_DIR"
 WORKFLOW_DIR_N="$(cygpath -m "$WORKFLOW_DIR" 2>/dev/null || echo "$WORKFLOW_DIR")"
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 WORKFLOW_PLANS_DIR="$(cygpath -m "$WORKFLOW_PLANS_DIR" 2>/dev/null || echo "$WORKFLOW_PLANS_DIR")"
@@ -122,8 +122,8 @@ GATE_READY="$API_READY"
 
 # ---- shared state helpers ---------------------------------------------------
 node_call() {
-  # Run a node snippet with CLAUDE_WORKFLOW_DIR set; $1 = snippet.
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "$1" 2>&1
+  # Run a node snippet with WORKFLOW_STATE_DIR set; $1 = snippet.
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "$1" 2>&1
 }
 
 # Write a state file where a single step carries the given raw JSON object.
@@ -145,7 +145,7 @@ write_gate_state() {
   # skip_verdict / etc. round-trip as step_annotation events), and
   # recordPlanApproval() for the non-target approval-gated steps so the
   # completion-boundary invariant does not fire on the blanket-complete loop.
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
     const approval = require('$COMPLETION_APPROVAL_N');
     io.writeState('$sid', io.createInitialState('$sid'));

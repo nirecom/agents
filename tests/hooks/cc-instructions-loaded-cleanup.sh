@@ -43,7 +43,7 @@ trap 'rm -rf "$BASE"' EXIT
 WF="$BASE/wf"
 PLANS="$BASE/plans"
 mkdir -p "$WF" "$PLANS"
-export CLAUDE_WORKFLOW_DIR="$(node_path "$WF")"
+export WORKFLOW_STATE_DIR="$(node_path "$WF")"
 export WORKFLOW_PLANS_DIR="$(node_path "$PLANS")"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 
@@ -197,7 +197,7 @@ printf '{"verdict":"ok"}\n' > "$OUTSIDE/victim-sid.instructions-loaded/e.json"
 touch_age "$OUTSIDE/victim-sid.instructions-loaded" "$((99 * DAY))"
 run_sweep 7 >/dev/null
 if [ -e "$OUTSIDE/victim-sid.instructions-loaded/e.json" ]; then
-    pass "Z7: a receipt directory outside CLAUDE_WORKFLOW_DIR is untouched"
+    pass "Z7: a receipt directory outside WORKFLOW_STATE_DIR is untouched"
 else
     fail "Z7: the sweep deleted a receipt directory OUTSIDE the pinned workflow dir"
 fi
@@ -227,7 +227,7 @@ CTL_DRIVER="$BASE/ctl-driver.js"
 cat > "$CTL_DRIVER" <<'JS'
 const { cleanupZombies } = require(process.argv[2]);
 const fs = require("fs"), path = require("path");
-const WF = process.env.CLAUDE_WORKFLOW_DIR, DAY = 24 * 60 * 60 * 1000;
+const WF = process.env.WORKFLOW_STATE_DIR, DAY = 24 * 60 * 60 * 1000;
 const P = (n) => path.join(WF, n);
 const age = (p, days) => { const t = (Date.now() - days * DAY) / 1000; fs.utimesSync(p, t, t); };
 const mkCtl = (n, days) => { fs.mkdirSync(P(n), { recursive: true }); age(P(n), days); };

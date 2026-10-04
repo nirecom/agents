@@ -13,7 +13,7 @@ carries a one-line pointer here; this file is the SSOT.
   when `AGENTS_CONFIG_DIR` is set (repo-root-relative fallback only when unset).
   The harness points `AGENTS_CONFIG_DIR` at a per-case mock config root.
 - `context.md` is written under `WORKFLOW_PLANS_DIR`; the checkpoint JSON is written
-  at `$CLAUDE_WORKFLOW_DIR/<sid>.control/wi-checkpoint.json` (#2434). The harness pins
+  at `$WORKFLOW_STATE_DIR/<sid>.control/wi-checkpoint.json` (#2434). The harness pins
   both per case (`$PLANS`, `$WF`) and never leaves either unset.
 - `CLAUDE_SESSION_ID` provides the session id deterministically; the mock config
   root also ships `bin/resolve-session-id` echoing `$CLAUDE_SESSION_ID` in case the

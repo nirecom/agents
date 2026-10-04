@@ -48,7 +48,7 @@ set +e
 SFR_OUTPUT=$(
     cd "$SFR_REPO" &&
     unset CLAUDECODE &&
-    CLAUDE_WORKFLOW_DIR="$SFR_WORKFLOW_DIR" \
+    WORKFLOW_STATE_DIR="$SFR_WORKFLOW_DIR" \
     WORKFLOW_PLANS_DIR="$SFR_PLANS_DIR" \
     run_with_timeout 180 claude -p \
         'Output the exact text: DONE' \

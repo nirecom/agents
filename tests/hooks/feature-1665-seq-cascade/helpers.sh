@@ -7,7 +7,7 @@
 # cascade). SOURCED by each case file; never run standalone.
 
 # Isolation contract — rules/test/fixture-isolation.md:
-#   - CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR are BOTH pinned (dual-pin).
+#   - WORKFLOW_STATE_DIR and WORKFLOW_PLANS_DIR are BOTH pinned (dual-pin).
 #   - CLAUDE_SESSION_ID / CLAUDE_CODE_SESSION_ID are unset before any node spawn.
 #   - CWD is a neutral temp dir, never the worktree.
 #   - Fixture repos get `git config core.hooksPath /dev/null`.
@@ -35,7 +35,7 @@ trap 'cd /; rm -rf "$TMPROOT" >/dev/null 2>&1 || true' EXIT
 mkdir -p "$TMPROOT/wf" "$TMPROOT/plans" "$TMPROOT/cfg" "$TMPROOT/home"
 : > "$TMPROOT/cfg/.env"
 
-CLAUDE_WORKFLOW_DIR="$(nrm "$TMPROOT/wf")"; export CLAUDE_WORKFLOW_DIR
+WORKFLOW_STATE_DIR="$(nrm "$TMPROOT/wf")"; export WORKFLOW_STATE_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$TMPROOT/plans")"; export WORKFLOW_PLANS_DIR
 AGENTS_CONFIG_DIR="$(nrm "$TMPROOT/cfg")"; export AGENTS_CONFIG_DIR
 HOME="$TMPROOT/home"; export HOME

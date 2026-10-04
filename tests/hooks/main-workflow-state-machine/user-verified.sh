@@ -26,7 +26,7 @@ run_user_verified_tests() {
     L4B_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"","stderr":""},"session_id":"%s"}' \
         "$L4B_ESC" "$SID_4B")
     L4B_EXIT=0
-    L4B_OUT=$(echo "$L4B_JSON" | CLAUDE_PROJECT_DIR="$REPO_4" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    L4B_OUT=$(echo "$L4B_JSON" | CLAUDE_PROJECT_DIR="$REPO_4" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$MARK_HOOK" 2>/dev/null) || L4B_EXIT=$?
     if [ "$L4B_EXIT" = "0" ]; then
         pass "L4-b(exit). MARK_STEP_user_verification → exit 0"
@@ -48,7 +48,7 @@ run_user_verified_tests() {
     L4C_ESC=${L4C_CMD//\"/\\\"}
     L4C_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"","stderr":""}}' "$L4C_ESC")
     L4C_EXIT=0
-    echo "$L4C_JSON" | CLAUDE_PROJECT_DIR="$REPO_4" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    echo "$L4C_JSON" | CLAUDE_PROJECT_DIR="$REPO_4" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         env -u CLAUDE_ENV_FILE node "$MARK_HOOK" 2>/dev/null || L4C_EXIT=$?
     if [ "$L4C_EXIT" = "0" ]; then
         pass "L4-c(exit). no session_id + USER_VERIFIED → exit 0"

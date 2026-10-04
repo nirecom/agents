@@ -178,7 +178,7 @@ DREOF
         "$CAPTURE_ENV_SH" > "$script_copy"
     chmod +x "$script_copy"
 
-    # #2434: the env JSON is a control file — <CLAUDE_WORKFLOW_DIR>/<sid>.control/final-report-env.json.
+    # #2434: the env JSON is a control file — <WORKFLOW_STATE_DIR>/<sid>.control/final-report-env.json.
     local wf_dir="$TMPDIR_BASE/ce1-workflow"
     mkdir -p "$wf_dir"
     local env_json="$wf_dir/test-session-123.control/final-report-env.json"
@@ -188,7 +188,7 @@ DREOF
     AGENTS_CONFIG_DIR="$AGENTS_DIR" \
     PLANS_DIR="$plans_dir" \
     WORKFLOW_PLANS_DIR="$plans_dir" \
-    CLAUDE_WORKFLOW_DIR="$wf_dir" \
+    WORKFLOW_STATE_DIR="$wf_dir" \
     PATH="$mock_bin:$PATH" \
         run_with_timeout 30 bash "$script_copy" "$wt" "owner/repo" "(none)" "" >/dev/null 2>&1
     local code=$?

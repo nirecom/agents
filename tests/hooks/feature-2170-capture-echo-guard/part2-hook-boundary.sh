@@ -33,9 +33,9 @@ OUT="$TMPDIR_B/out.json"
 # Fixture isolation (rules/test/fixture-isolation.md): a hook spawned from here must
 # never resolve the live session or the developer's real plans dir.
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_B/workflow"
+export WORKFLOW_STATE_DIR="$TMPDIR_B/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_B/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 # Sets globals VERDICT and LAST_RC. Deliberately NOT called via $(...) — a command
 # substitution subshell would discard the exit code this section asserts on.

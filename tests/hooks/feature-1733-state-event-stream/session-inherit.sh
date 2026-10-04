@@ -79,7 +79,7 @@ start_session() {
     HOOK_RC=0
     HOOK_OUT="$(cd "$AGENTS_DIR" && printf '{"session_id":"%s","source":"%s","transcript_path":"%s"}' \
         "$sid" "$src" "$TRANSCRIPTS_BASE_NATIVE/$ENCODED_CWD/$sid.jsonl" | env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_BASE_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node hooks/session-start.js 2>&1)" || HOOK_RC=$?
@@ -129,7 +129,7 @@ if run_case "SI1/fresh-stream"; then
     seed_pair
     nodejs_env "DONOR=$DONOR" "$HEIR" "$PRE$GENUINE_JS"'
 const heir = rd();
-const donorEvents = JSON.parse(fs.readFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.DONOR + ".json"), "utf8")).events;
+const donorEvents = JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, process.env.DONOR + ".json"), "utf8")).events;
 const donorSeqs = new Set(donorEvents.map((e) => e.at + "|" + e.kind + "|" + e.step));
 const copied = heir.events.filter((e) => donorSeqs.has(e.at + "|" + e.kind + "|" + e.step));
 const created = heir.created_at;
@@ -331,11 +331,11 @@ if run_case "SI11/no-donor-plain-init"; then
     # ancestor to name, which is what "no donor in range" means after #1305.
     (cd "$AGENTS_DIR" && printf '{"session_id":"%s","source":"resume","transcript_path":"%s"}' \
         "$SID" "$TRANSCRIPTS_BASE_NATIVE/$ENCODED_CWD/$SID.jsonl" | env \
-        CLAUDE_WORKFLOW_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node hooks/session-start.js >/dev/null 2>&1) || true
     NODE_OUT="$(cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node -e "$PRE"'
 const st = S.readState(sid);

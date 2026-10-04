@@ -34,7 +34,7 @@ if [ -z "$BR_MAIN_WT" ] || [ ! -d "$BR_MAIN_WT" ]; then
 else
     BR_MAIN_WT_J="$(to_node_path "$BR_MAIN_WT")"
     BR_JSON='{"tool_name":"Bash","tool_input":{"command":"echo x > '"$BR_MAIN_WT_J"'/touched.txt","cwd":"'"$BR_MAIN_WT_J"'"},"session_id":"'"$BR_SID_W1"'"}'
-    run_guard_payload "$BR_JSON" "" WORKFLOW_PLANS_DIR="$BR_TMP_W1_NODE" CLAUDE_WORKFLOW_DIR="$BR_TMP_W1_NODE" \
+    run_guard_payload "$BR_JSON" "" WORKFLOW_PLANS_DIR="$BR_TMP_W1_NODE" WORKFLOW_STATE_DIR="$BR_TMP_W1_NODE" \
         >/dev/null 2>&1 || true
     br_findings=$(br_read_findings "$BR_TMP_W1" "$BR_SID_W1")
     br_out=$(node -e "
@@ -70,7 +70,7 @@ BR_NONGIT=$(br_make_tmp)
 BR_TMP_W2_NODE="$(to_node_path "$BR_TMP_W2")"
 BR_NONGIT_NODE="$(to_node_path "$BR_NONGIT")"
 BR_JSON='{"tool_name":"Bash","tool_input":{"command":"echo x > '"$BR_NONGIT_NODE"'/touched.txt","cwd":"'"$BR_NONGIT_NODE"'"},"session_id":"'"$BR_SID_W2"'"}'
-run_guard_payload "$BR_JSON" "" WORKFLOW_PLANS_DIR="$BR_TMP_W2_NODE" CLAUDE_WORKFLOW_DIR="$BR_TMP_W2_NODE" \
+run_guard_payload "$BR_JSON" "" WORKFLOW_PLANS_DIR="$BR_TMP_W2_NODE" WORKFLOW_STATE_DIR="$BR_TMP_W2_NODE" \
     >/dev/null 2>&1 || true
 br_findings=$(br_read_findings "$BR_TMP_W2" "$BR_SID_W2")
 br_out=$(node -e "
@@ -115,7 +115,7 @@ grd.isMainCheckout = function() { return null; };
 console.log('SKIP_STUB');
 EOF
 br_out=$(BR_GRD_PATH="$AGENTS_DIR_NODE/hooks/enforce-worktree/git-repo-detection.js" \
-    WORKFLOW_PLANS_DIR="$BR_TMP_W3_NODE" CLAUDE_WORKFLOW_DIR="$BR_TMP_W3_NODE" ENFORCE_WORKTREE=on \
+    WORKFLOW_PLANS_DIR="$BR_TMP_W3_NODE" WORKFLOW_STATE_DIR="$BR_TMP_W3_NODE" ENFORCE_WORKTREE=on \
     run_with_timeout 8 node "$BR_SHIM_DIR/runner.js" 2>&1)
 if echo "$br_out" | grep -q SKIP_STUB; then
     skip "W3: isMainCheckout=null stub requires in-process injection (see test note)"

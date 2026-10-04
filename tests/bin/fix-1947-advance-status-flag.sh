@@ -36,7 +36,7 @@ WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 
 # Pinned as a PAIR (#1799) so supervisor-emit never appends to the real ~/.workflow-plans.
-export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 # The parent session exports these; leaving them set resolves the LIVE session.
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID

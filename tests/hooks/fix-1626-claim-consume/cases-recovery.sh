@@ -14,7 +14,7 @@ run_C7() {
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     write_claimed "$tn" "c7sid"
 
-    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 12 node -e "
+    WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" "$RWT" 12 node -e "
 require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'c7sid',pushMessage:()=>{},signalFatal:()=>{}});" \
         "$HANDLER_NODE" "$WF_BOUND" >/dev/null 2>&1
 
@@ -23,7 +23,7 @@ require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'c7sid',pushMessa
 
     # second activation → idempotent no-op (no crash, no additional consumed entry)
     states_before=$(grep -o "off_clearance_consumed" "$tmp/c7sid.control/supervisor-state.json" 2>/dev/null | wc -l | tr -d ' ')
-    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 12 node -e "
+    WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" "$RWT" 12 node -e "
 require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'c7sid',pushMessage:()=>{},signalFatal:()=>{}});" \
         "$HANDLER_NODE" "$WF_BOUND" >/dev/null 2>&1
     local states_after; states_after=$(grep -o "off_clearance_consumed" "$tmp/c7sid.control/supervisor-state.json" 2>/dev/null | wc -l | tr -d ' ')
@@ -54,7 +54,7 @@ run_C8() {
     write_claimed "$tn" "c8fresh"
     backdate_node "$tmp/c8stale.off-clearance.claimed" 14
 
-    CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 12 node -e "
+    WORKFLOW_STATE_DIR="$tn" "$RWT" 12 node -e "
 require(process.argv[1]).cleanupZombies(7);" "$STATE_IO_NODE" >/dev/null 2>&1
 
     [ -f "$tmp/c8stale.off-clearance.claimed" ] && ok=0     # must be reaped
@@ -109,7 +109,7 @@ run_C9() {
     stubbin=$(make_tmp)
     write_examiner_stub "$stubbin/codex" ALLOW "legit workflow bug"
     PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
-        CLAUDE_WORKFLOW_DIR="$tn" SESSION_ID="c9sid" CLAUDE_CODE_SESSION_ID="c9sid" \
+        WORKFLOW_STATE_DIR="$tn" SESSION_ID="c9sid" CLAUDE_CODE_SESSION_ID="c9sid" \
         "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" >/dev/null 2>&1
     rm -r -f "$stubbin" 2>/dev/null || true
     [ -f "$tmp/c9sid.off-clearance.claimed" ] && { ok=0; detail="$detail remint-left-stale-claim"; }
@@ -144,7 +144,7 @@ run_C10() {
     write_claimed "$tn" "c10sid"
     mkdir -p "$tmp/c10sid.control/supervisor-state.json"    # force every audit write to throw
 
-    err=$(WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 12 node -e "
+    err=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" "$RWT" 12 node -e "
 require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'c10sid',pushMessage:()=>{},signalFatal:()=>{}});" \
         "$HANDLER_NODE" "$WF_BOUND" 2>&1 >/dev/null)
     rc=$?
@@ -177,7 +177,7 @@ run_C11() {
     backdate_node "$tmp/c11old.off-clearance.claimed" 7.05
     backdate_node "$tmp/c11new.off-clearance.claimed" 6.95
 
-    CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 12 node -e "
+    WORKFLOW_STATE_DIR="$tn" "$RWT" 12 node -e "
 require(process.argv[1]).cleanupZombies(7);" "$STATE_IO_NODE" >/dev/null 2>&1
     rc1=$?
 
@@ -186,7 +186,7 @@ require(process.argv[1]).cleanupZombies(7);" "$STATE_IO_NODE" >/dev/null 2>&1
     [ -f "$tmp/c11new.off-clearance.claimed" ] || { ok=0; detail="$detail 6.95d-over-reaped"; }
 
     # (a) second sweep: idempotent - same outcome, no error, nothing new removed.
-    CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 12 node -e "
+    WORKFLOW_STATE_DIR="$tn" "$RWT" 12 node -e "
 require(process.argv[1]).cleanupZombies(7);" "$STATE_IO_NODE" >/dev/null 2>&1
     rc2=$?
     [ "$rc2" = "0" ] || { ok=0; detail="$detail second-sweep-rc=$rc2"; }

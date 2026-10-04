@@ -35,13 +35,13 @@ require_sut() {
 ROOT_TMP="$(to_native "$(mktemp -d)")"
 trap 'rm -rf "$ROOT_TMP"' EXIT
 ORIG_PATH="$PATH"
-# #2434: the checkpoint and other control files live under CLAUDE_WORKFLOW_DIR, so an
+# #2434: the checkpoint and other control files live under WORKFLOW_STATE_DIR, so an
 # unpinned value resolves the developer's real ~/.claude/projects/workflow. Pin the
 # pair suite-wide (setup_case narrows it per case) and keep the transcript chain empty.
-export CLAUDE_WORKFLOW_DIR="$ROOT_TMP/wf-suite"
+export WORKFLOW_STATE_DIR="$ROOT_TMP/wf-suite"
 export WORKFLOW_PLANS_DIR="$ROOT_TMP/plans-suite"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$ROOT_TMP/transcripts"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 _CASE_N=0
 
 # --- per-case environment ---------------------------------------------------
@@ -63,7 +63,7 @@ setup_case() {  # <session-id>
     _write_wip_mock
     _write_cfg_prims
     export WORKFLOW_PLANS_DIR="$PLANS"
-    export CLAUDE_WORKFLOW_DIR="$WF"
+    export WORKFLOW_STATE_DIR="$WF"
     export AGENTS_CONFIG_DIR="$CFG"
     export CLAUDE_SESSION_ID="$SID"
     # CLAUDE_CODE_SESSION_ID is exported by the developer's live session and the
@@ -76,7 +76,7 @@ teardown_case() {
     export PATH="$ORIG_PATH"
     unset AGENTS_CONFIG_DIR CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID NON_GITHUB 2>/dev/null || true
     # Back to the suite pins, never unset: an unset pair resolves the real home dirs.
-    export CLAUDE_WORKFLOW_DIR="$ROOT_TMP/wf-suite"
+    export WORKFLOW_STATE_DIR="$ROOT_TMP/wf-suite"
     export WORKFLOW_PLANS_DIR="$ROOT_TMP/plans-suite"
 }
 

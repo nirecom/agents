@@ -360,7 +360,7 @@ run_r11() {
     # resolver falls through Priority 1 -> Priority 3 depth-scan). The stub cc
     # sid validates against SESSION_ID_RE but has no final-report-env.json;
     # only the resolver-found active sid carries the final-report-env marker.
-    armed_at_out=$(cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
+    armed_at_out=$(cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
 const m = require('$SUPERVISOR_STATE_WRITER_NODE');
 const state = { layer2: { alert_armed_at: null, alert_phase: null } };
 m.ensureAlertScheduled(state, '${TODAY}-stub-r11cc');

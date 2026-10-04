@@ -172,7 +172,7 @@ run_probe() {
     PROBE_OUT="$(run_with_timeout 90 env \
         -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         -u SSH_AUTH_SOCK -u SSH_AGENT_PID -u SOME_UNRELATED_SECRET "$@" \
-        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "PROBE_FAKE_SECRET=$FAKE_SECRET" \
         node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$mode" "$MAIN" "$entry" "$CHILD_SCRIPT" 2>&1)" || return 1
     return 0

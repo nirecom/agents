@@ -393,7 +393,7 @@ run_case() {
         CG_STUB_LOG="$(node_path "$dir/codegraph.log")"; export CG_STUB_LOG
         CLAUDE_STUB_LOG="$(node_path "$dir/claude.log")"; export CLAUDE_STUB_LOG
         # Dual-pinned so no child resolves the live workflow state store.
-        export CLAUDE_WORKFLOW_DIR="$dir/wf" WORKFLOW_PLANS_DIR="$dir/plans"
+        export WORKFLOW_STATE_DIR="$dir/wf" WORKFLOW_PLANS_DIR="$dir/plans"
         case "$entry" in
             sh)     bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" bash "$CODEGRAPH_SH" ;;
             noverb) bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" node "$mcp_js" ;;

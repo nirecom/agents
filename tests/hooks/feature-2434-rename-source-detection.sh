@@ -29,7 +29,7 @@ trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
 mkdir -p "$TMP/home" "$TMP/wf" "$TMP/plans" "$TMP/tx" "$TMP/out"
 export HOME="$TMP/home"
 if command -v cygpath >/dev/null 2>&1; then export USERPROFILE; USERPROFILE="$(cygpath -w "$TMP/home")"; fi
-export CLAUDE_WORKFLOW_DIR; CLAUDE_WORKFLOW_DIR="$(np "$TMP/wf")"
+export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
 export WORKFLOW_PLANS_DIR; WORKFLOW_PLANS_DIR="$(np "$TMP/plans")"
 export CLAUDE_TRANSCRIPT_BASE_DIR; CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/tx")"
 export AGENTS_CONFIG_DIR="$AGENTS_N"
@@ -37,7 +37,7 @@ unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDECODE 2>/dev
 cd "$TMP"
 
 SID="wsid"
-WF="$CLAUDE_WORKFLOW_DIR"
+WF="$WORKFLOW_STATE_DIR"
 OUT="$(np "$TMP/out")"
 OFF_MARKER="$TMP/wf/$SID.workflow-off"
 
@@ -290,21 +290,21 @@ while IFS='|' read -r name cmd want; do
     done
     rm -f "$OFF_MARKER"
 done <<'TABLE'
-mv-braced-alias        | mv ${CLAUDE_WORKFLOW_DIR}/__SID__.off-clearance __OUT__/x                    | token
-mv-bare-alias          | mv $CLAUDE_WORKFLOW_DIR/__SID__.off-clearance __OUT__/x                      | token
-mv-dq-alias            | mv "$CLAUDE_WORKFLOW_DIR/__SID__.off-clearance" __OUT__/x                    | token
+mv-braced-alias        | mv ${WORKFLOW_STATE_DIR}/__SID__.off-clearance __OUT__/x                    | token
+mv-bare-alias          | mv $WORKFLOW_STATE_DIR/__SID__.off-clearance __OUT__/x                      | token
+mv-dq-alias            | mv "$WORKFLOW_STATE_DIR/__SID__.off-clearance" __OUT__/x                    | token
 mv-home-default-wf     | mv $HOME/.claude/projects/workflow/__SID__.off-clearance __OUT__/x           | token
 mv-tilde-default-wf    | mv ~/.claude/projects/workflow/__SID__.off-clearance __OUT__/x               | token
-mv-default-op-alias    | mv ${CLAUDE_WORKFLOW_DIR:-x}/__SID__.off-clearance __OUT__/x                 | token
-mv-alias-off-marker    | mv ${CLAUDE_WORKFLOW_DIR}/__SID__.workflow-off __OUT__/x                     | marker
-move-item-braced-alias | Move-Item -Path ${CLAUDE_WORKFLOW_DIR}/__SID__.off-clearance -Destination __OUT__/x | token
-move-item-bare-alias   | Move-Item $CLAUDE_WORKFLOW_DIR/__SID__.off-clearance __OUT__/x               | token
+mv-default-op-alias    | mv ${WORKFLOW_STATE_DIR:-x}/__SID__.off-clearance __OUT__/x                 | token
+mv-alias-off-marker    | mv ${WORKFLOW_STATE_DIR}/__SID__.workflow-off __OUT__/x                     | marker
+move-item-braced-alias | Move-Item -Path ${WORKFLOW_STATE_DIR}/__SID__.off-clearance -Destination __OUT__/x | token
+move-item-bare-alias   | Move-Item $WORKFLOW_STATE_DIR/__SID__.off-clearance __OUT__/x               | token
 move-item-home-alias   | Move-Item -Path $HOME/.claude/projects/workflow/__SID__.off-clearance -Destination __OUT__/x | token
-move-item-default-op   | Move-Item -LiteralPath ${CLAUDE_WORKFLOW_DIR:-x}/__SID__.off-clearance __OUT__/x | token
-rename-item-braced     | Rename-Item -Path ${CLAUDE_WORKFLOW_DIR}/__SID__.off-clearance -NewName y    | token
-rename-item-bare       | Rename-Item $CLAUDE_WORKFLOW_DIR/__SID__.off-clearance y                     | token
+move-item-default-op   | Move-Item -LiteralPath ${WORKFLOW_STATE_DIR:-x}/__SID__.off-clearance __OUT__/x | token
+rename-item-braced     | Rename-Item -Path ${WORKFLOW_STATE_DIR}/__SID__.off-clearance -NewName y    | token
+rename-item-bare       | Rename-Item $WORKFLOW_STATE_DIR/__SID__.off-clearance y                     | token
 rename-item-home-alias | Rename-Item -LiteralPath $HOME/.claude/projects/workflow/__SID__.off-clearance -NewName y | token
-rename-item-default-op | rni ${CLAUDE_WORKFLOW_DIR:-x}/__SID__.off-clearance y                        | token
+rename-item-default-op | rni ${WORKFLOW_STATE_DIR:-x}/__SID__.off-clearance y                        | token
 TABLE
 case_end
 

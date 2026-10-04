@@ -64,7 +64,7 @@ run_node() {
     else
         tmpdir_node="$tmpdir"
     fi
-    out=$(WORKFLOW_PLANS_DIR="$tmpdir_node" CLAUDE_WORKFLOW_DIR="$tmpdir_node/workflow" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmpdir_node" WORKFLOW_STATE_DIR="$tmpdir_node/workflow" run_with_timeout 10 node -e "
 process.env.WORKFLOW_PLANS_DIR = '$tmpdir_node';
 const emit = require('$EMIT_NODE');
 const w = require('$WRITER_NODE');

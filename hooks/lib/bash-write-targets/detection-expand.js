@@ -20,7 +20,7 @@ function homeValue() {
 
 const KNOWN_ALIASES = {
   HOME: homeValue,
-  CLAUDE_WORKFLOW_DIR: () => require("../../workflow-state/state-io/core").getWorkflowDir(),
+  WORKFLOW_STATE_DIR: () => require("../../workflow-state/state-io/core").getWorkflowDir(),
   WORKFLOW_PLANS_DIR: () => require("../workflow-plans-dir").getWorkflowPlansDir(),
 };
 

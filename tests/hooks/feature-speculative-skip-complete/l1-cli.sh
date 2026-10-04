@@ -5,7 +5,7 @@ echo ""
 echo "=== L1 CLI: record-skip-verdict ==="
 
 run_cli() {
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI" "$@" 2>&1
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI" "$@" 2>&1
 }
 
 if [ "$CLI_READY" = "true" ]; then

@@ -18,12 +18,12 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$AGENTS_DIR/tests/lib/harness.sh"
 
 REAL_PLANS_DIR="${WORKFLOW_PLANS_DIR:-${HOME:?}/.workflow-plans}"
-REAL_WF_DIR="${CLAUDE_WORKFLOW_DIR:-${HOME:?}/.claude/projects/workflow}"
+REAL_WF_DIR="${WORKFLOW_STATE_DIR:-${HOME:?}/.claude/projects/workflow}"
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
 mkdir -p "$TMP/wf" "$TMP/home" "$TMP/transcripts"
-export CLAUDE_WORKFLOW_DIR="$(np "$TMP/wf")"
-export WORKFLOW_PLANS_DIR="$CLAUDE_WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
+export WORKFLOW_PLANS_DIR="$WORKFLOW_STATE_DIR"
 export HOME="$(np "$TMP/home")" USERPROFILE="$(np "$TMP/home")"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/transcripts")"
 export AGENTS="$(np "$AGENTS_DIR")"
@@ -53,7 +53,7 @@ cat > "$TMP/mark.js" <<'JS'
 // node mark.js <sid> — the flush mark's bytes: a number, "null", or ABSENT.
 const fs = require('fs');
 try {
-  const m = JSON.parse(fs.readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/' + process.argv[2] + '.control/handoff-flush-mark.json', 'utf8'));
+  const m = JSON.parse(fs.readFileSync(process.env.WORKFLOW_STATE_DIR + '/' + process.argv[2] + '.control/handoff-flush-mark.json', 'utf8'));
   process.stdout.write(String(m.bytes));
 } catch (e) { process.stdout.write('ABSENT'); }
 JS

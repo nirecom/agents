@@ -19,7 +19,7 @@ require_t5_guard_removed() {
 # self-contained (and works whether or not g-audit-phase-b.sh has been sourced).
 seed_audit_state_t5() {
     local tmp="$1" sid="$2" layer2_json="$3" layer3_json="$4"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -32,7 +32,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 
 read_audit_field_t5() {
     local tmp="$1" sid="$2" field="$3"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st || !st.audit) { process.stdout.write('MISSING'); process.exit(0); }
@@ -52,7 +52,7 @@ run_g_t5_1() {
         "{ alert_phase: 'done', alert_armed_at: null, cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], alert_retry_count: 0 }" \
         "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g-t5-1-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     audit_phase=$(read_audit_field_t5 "$tmp" "g-t5-1-sid" "audit_phase")
     audit_armed_at=$(read_audit_field_t5 "$tmp" "g-t5-1-sid" "audit_armed_at")
@@ -83,7 +83,7 @@ run_g_t5_2() {
         "{ alert_phase: 'done', alert_armed_at: null, cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], alert_retry_count: 0 }" \
         "{ audit_phase: null, audit_verdict: null, audit_last_run_at: '2026-06-22T10:00:00Z', audit_armed_at: null, audit_cause: 'severity-threshold:error', audit_retry_count: 0, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g-t5-2-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     audit_phase=$(read_audit_field_t5 "$tmp" "g-t5-2-sid" "audit_phase")
     rm -rf "$tmp"
@@ -110,7 +110,7 @@ run_g_t5_4() {
         "{ alert_phase: 'closed', alert_armed_at: null, cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], alert_retry_count: 0 }" \
         "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g-t5-4-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     audit_phase=$(read_audit_field_t5 "$tmp" "g-t5-4-sid" "audit_phase")
     rm -rf "$tmp"

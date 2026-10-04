@@ -64,7 +64,7 @@ run_r1() {
     require_source "$WRITER_MODULE" "R1: basic report writes finding to state file" || return
     local tmp tmp_node rc out
     tmp="$(mktemp -d)"; tmp_node="$(to_node_path "$tmp")"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
         --categories workflow --severity warning --detail "test detail" \
         --reporter "test-skill" --session-id "test-r1" >/dev/null 2>&1
     rc=$?
@@ -91,7 +91,7 @@ run_r2() {
     require_source "$CLI" "R2: multi-category finding written correctly" || return
     local tmp tmp_node rc out
     tmp="$(mktemp -d)"; tmp_node="$(to_node_path "$tmp")"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
         --categories "intent,security" --severity error --detail "non-goal touched" \
         --reporter "write-code" --session-id "test-r2" >/dev/null 2>&1
     out=$(read_state "$tmp_node" "test-r2" | run_with_timeout 5 node -e "
@@ -114,9 +114,9 @@ run_r3() {
     require_source "$CLI" "R3: duplicate consecutive finding is deduped" || return
     local tmp tmp_node rc out
     tmp="$(mktemp -d)"; tmp_node="$(to_node_path "$tmp")"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
         --categories workflow --severity warning --detail "same" --reporter "skill-a" --session-id "test-r3" >/dev/null 2>&1
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
         --categories workflow --severity warning --detail "same" --reporter "skill-a" --session-id "test-r3" >/dev/null 2>&1
     out=$(read_state "$tmp_node" "test-r3" | run_with_timeout 5 node -e "
 let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
@@ -144,7 +144,7 @@ run_r4() {
 run_r5() {
     require_source "$CLI" "R5: invalid category exits non-zero" || return
     local tmp; tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
         --categories "not_real" --severity warning --detail "d" --reporter "r" --session-id "test-r5" >/dev/null 2>&1
     [ $? -ne 0 ] && pass "R5: invalid category exits non-zero" \
         || fail "R5: invalid category exits non-zero"
@@ -155,7 +155,7 @@ run_r5() {
 run_r6() {
     require_source "$CLI" "R6: invalid severity exits non-zero" || return
     local tmp; tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
         --categories workflow --severity "critical" --detail "d" --reporter "r" --session-id "test-r6" >/dev/null 2>&1
     [ $? -ne 0 ] && pass "R6: invalid severity exits non-zero" \
         || fail "R6: invalid severity exits non-zero"
@@ -167,7 +167,7 @@ run_r7() {
     require_source "$CLI" "R7: reporter field present in written finding" || return
     local tmp tmp_node rc out
     tmp="$(mktemp -d)"; tmp_node="$(to_node_path "$tmp")"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
         --categories test --severity notice --detail "flaky" --reporter "run-tests" --session-id "test-r7" >/dev/null 2>&1
     out=$(read_state "$tmp_node" "test-r7" | run_with_timeout 5 node -e "
 let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
@@ -193,7 +193,7 @@ run_r8() {
     (
         cd "$isolated_workdir" && \
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
             --categories workflow --severity warning --detail "d" --reporter "r" >/dev/null 2>&1
     )
     rc=$?

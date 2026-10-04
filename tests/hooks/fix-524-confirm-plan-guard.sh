@@ -3,7 +3,7 @@
 # Tags: plan, vscode, hook, workflow, plans, scope:common
 # #524 confirm-plan guard: stop-confirm-plan-guard.js (Stop hook), turn-marker.js
 # (marker helpers), show-plan-link.js (marker write integration).
-# Marker files: <CLAUDE_WORKFLOW_DIR>/<sid>.confirm-plan-turn-<rand>.json — written
+# Marker files: <WORKFLOW_STATE_DIR>/<sid>.confirm-plan-turn-<rand>.json — written
 # when show-plan-link.js fires a breadcrumb; on Stop the guard reads them, scans the
 # last assistant turn of the JSONL transcript and blocks when a PLANS_DIR path
 # appears in a text block (Layer 1). Layer 2 (#2278) cases: fix-524-confirm-plan-guard/layer2-cases.sh.
@@ -37,7 +37,7 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR" "$ISOLATED_CFG_DIR" "$TRANSCRIPT_DIR"
 
 trap 'rm -rf "$WORKFLOW_DIR" "$PLANS_DIR" "$ISOLATED_CFG_DIR" "$TRANSCRIPT_DIR"' EXIT
 
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
 

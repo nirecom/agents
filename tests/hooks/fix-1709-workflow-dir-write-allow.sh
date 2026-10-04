@@ -12,7 +12,7 @@
 # cannot be determined AND target extraction cannot use one of the narrow allow
 # helpers (plans-dir / scratchpad), a Bash write is blocked. That correctly denies
 # arbitrary external writes, but it also denies the off-clearance pipeline's own
-# writes into the workflow STATE dir (<CLAUDE_WORKFLOW_DIR>, canonically
+# writes into the workflow STATE dir (<WORKFLOW_STATE_DIR>, canonically
 # $HOME/.claude/projects/workflow), which is exactly where token/marker bookkeeping
 # lives. The fix adds areAllBashTargetsUnderWorkflowDir() to bash-write-scope.js and
 # wires it into the same non-git-CWD branch as the plans-dir/scratchpad helpers.
@@ -64,7 +64,7 @@ process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'wf1709sid',too
 run_hook() {
     local cmd="$1" hi out rc
     hi=$(mk_input "$cmd")
-    out=$( cd "$NONGIT" && printf '%s' "$hi" | CLAUDE_WORKFLOW_DIR="$WFDIR_N" WORKFLOW_PLANS_DIR="$WFDIR_N" \
+    out=$( cd "$NONGIT" && printf '%s' "$hi" | WORKFLOW_STATE_DIR="$WFDIR_N" WORKFLOW_PLANS_DIR="$WFDIR_N" \
         ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 15 node "$HOOK" 2>/dev/null )
     rc=$?
@@ -72,7 +72,7 @@ run_hook() {
 }
 
 # run_hook_default_home <home-dir> <command> -> "<rc>|<stdout>"
-# CLAUDE_WORKFLOW_DIR is UNSET here (env -u), so the hook must fall back to
+# WORKFLOW_STATE_DIR is UNSET here (env -u), so the hook must fall back to
 # getWorkflowDir()'s canonical default, $HOME/.claude/projects/workflow.
 # HOME and USERPROFILE are both redirected because os.homedir() prefers
 # USERPROFILE on win32 and HOME elsewhere.
@@ -80,7 +80,7 @@ run_hook_default_home() {
     local hm="$1" cmd="$2" hi out rc hm_n
     hm_n=$(node_path "$hm")
     hi=$(mk_input "$cmd")
-    out=$( cd "$NONGIT" && printf '%s' "$hi" | env -u CLAUDE_WORKFLOW_DIR -u WORKFLOW_PLANS_DIR \
+    out=$( cd "$NONGIT" && printf '%s' "$hi" | env -u WORKFLOW_STATE_DIR -u WORKFLOW_PLANS_DIR \
         HOME="$hm_n" USERPROFILE="$hm_n" \
         ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 15 node "$HOOK" 2>/dev/null )
@@ -183,9 +183,9 @@ assert_allow "F2 sequenced write into a nested subdir, all targets under workflo
     "$(run_hook "mkdir -p \"$WFDIR_N/sub\" && echo x > \"$WFDIR_N/sub/f\"")"
 
 # ---------------------------------------------------------------------------
-# (d) DEFAULT workflow dir - CLAUDE_WORKFLOW_DIR UNSET.
+# (d) DEFAULT workflow dir - WORKFLOW_STATE_DIR UNSET.
 #
-# Cases A1/A2/B1/B2 all set CLAUDE_WORKFLOW_DIR explicitly, so they only ever
+# Cases A1/A2/B1/B2 all set WORKFLOW_STATE_DIR explicitly, so they only ever
 # exercise the env-var arm of getWorkflowDir(). The arm that real sessions
 # actually use is the fallback, path.join(os.homedir(), '.claude','projects',
 # 'workflow'). If the new helper is written against the env var alone (or
@@ -201,7 +201,7 @@ FH_OTHER="$FAKEHOME/.claude/projects/other"
 mkdir -p "$FH_WF" "$FH_OTHER"
 FH_WF_N=$(node_path "$FH_WF"); FH_OTHER_N=$(node_path "$FH_OTHER")
 
-assert_verdict "D1 default workflow dir (CLAUDE_WORKFLOW_DIR unset): sequenced write under \$HOME/.claude/projects/workflow" \
+assert_verdict "D1 default workflow dir (WORKFLOW_STATE_DIR unset): sequenced write under \$HOME/.claude/projects/workflow" \
     allow "$(run_hook_default_home "$FAKEHOME" "mkdir -p $FH_WF_N && echo x > $FH_WF_N/wf1709sid.json")"
 assert_verdict "D2 default workflow dir: sequenced write to SIBLING \$HOME/.claude/projects/other still blocked" \
     block "$(run_hook_default_home "$FAKEHOME" "mkdir -p $FH_WF_N && echo x > $FH_OTHER_N/leak.json")"

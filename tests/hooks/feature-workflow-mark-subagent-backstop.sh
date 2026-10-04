@@ -33,16 +33,16 @@ run_with_timeout() {
 
 # Windows-compatible tmpdir
 TMPDIR_ROOT="$(node -e "const os=require('os'),path=require('path'),fs=require('fs'),crypto=require('crypto');const d=path.join(os.tmpdir(),'wmback-'+crypto.randomBytes(6).toString('hex'));fs.mkdirSync(d,{recursive:true});process.stdout.write(d);")"
-CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
+WORKFLOW_STATE_DIR="$TMPDIR_ROOT/workflow"
 CLAUDE_ENV_FILE="$TMPDIR_ROOT/claude_env"
-mkdir -p "$CLAUDE_WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR
+mkdir -p "$WORKFLOW_STATE_DIR"
+export WORKFLOW_STATE_DIR
 export CLAUDE_ENV_FILE
 cleanup() { rm -rf "$TMPDIR_ROOT"; }
 trap cleanup EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_ROOT/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -58,7 +58,7 @@ pass() { echo "PASS: $1"; PASS_COUNT=$((PASS_COUNT + 1)); }
 # ---------------------------------------------------------------------------
 write_state() {
     local sid="$1" run_tests_status="$2" uv_status="$3"
-    cat > "$CLAUDE_WORKFLOW_DIR/${sid}.json" <<EOF
+    cat > "$WORKFLOW_STATE_DIR/${sid}.json" <<EOF
 {"version":1,"session_id":"$sid","created_at":"$NOW_ISO","cwd":"/tmp","git_branch":"main","steps":{"clarify_intent":{"status":"complete","updated_at":"$NOW_ISO"},"research":{"status":"pending","updated_at":null},"outline":{"status":"pending","updated_at":null},"detail":{"status":"pending","updated_at":null},"branching_complete":{"status":"pending","updated_at":null},"write_tests":{"status":"pending","updated_at":null},"review_tests":{"status":"pending","updated_at":null},"run_tests":{"status":"$run_tests_status","updated_at":null},"review_security":{"status":"pending","updated_at":null},"docs":{"status":"pending","updated_at":null},"user_verification":{"status":"$uv_status","updated_at":null},"cleanup":{"status":"pending","updated_at":null}}}
 EOF
 }
@@ -89,7 +89,7 @@ read_last_pushed_sha() {
             const s=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
             process.stdout.write(s.last_pushed_sha||'');
         } catch(e){ process.stdout.write('ERR'); }
-    " -- "$CLAUDE_WORKFLOW_DIR/${sid}.json" 2>/dev/null || true
+    " -- "$WORKFLOW_STATE_DIR/${sid}.json" 2>/dev/null || true
 }
 
 # run_hook <json> — pipe PostToolUse payload to workflow-mark.js

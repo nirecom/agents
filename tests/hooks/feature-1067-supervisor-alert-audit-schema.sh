@@ -125,7 +125,7 @@ run_sa4() {
     require_source "$WRITER_MODULE" "SA4: readStateOrInit migrates legacy layer2/layer3 to alert/audit" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa4-legacy';
@@ -164,7 +164,7 @@ run_sa4b() {
     require_source "$WRITER_MODULE" "SA4b: readStateOrInit is idempotent on already-migrated state" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa4b-already';
@@ -198,7 +198,7 @@ run_sa4c() {
     require_source "$WRITER_MODULE" "SA4c: readStateOrInit migrates layer2-only legacy state" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa4c-l2only';
@@ -232,7 +232,7 @@ run_sa4d() {
     require_source "$WRITER_MODULE" "SA4d: readStateOrInit migrates layer3-only legacy state" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa4d-l3only';
@@ -266,7 +266,7 @@ run_sa4e() {
     require_source "$WRITER_MODULE" "SA4e: migrated state passes validate()" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const s = require('$SCHEMA_MODULE_NODE');
 const fs = require('fs');
@@ -296,7 +296,7 @@ run_sa4f() {
     require_source "$WRITER_MODULE" "SA4f: appendFinding() succeeds on legacy state file" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa4f-e2e';
@@ -338,7 +338,7 @@ run_sa5() {
     require_source "$WRITER_MODULE" "SA5: readStateOrInit returns createEmptyState when no file exists" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const state = w.readStateOrInit('sa5-fresh');
 const errs = [];
@@ -361,7 +361,7 @@ run_sa7() {
     require_source "$WRITER_MODULE" "SA7: readStateOrInit falls back to createEmptyState on corrupt file" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa7-corrupt';
@@ -387,7 +387,7 @@ run_sa8() {
     require_source "$WRITER_MODULE" "SA8: migrateLegacyState backfills created_at and last_updated when absent" || return
     local out rc tmp
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const fs = require('fs');
 const sid = 'sa8-timestamps';

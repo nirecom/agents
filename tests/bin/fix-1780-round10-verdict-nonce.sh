@@ -74,7 +74,7 @@ ask() {
     printf '%s' "$body" > "$stubbin/codex"
     chmod +x "$stubbin/codex"
     out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
-        CLAUDE_WORKFLOW_DIR="$tn" SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
+        WORKFLOW_STATE_DIR="$tn" SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
         "$RWT" 40 bash "$REQ" "$@" 2>&1)
     rc=$?
     rm -r -f "$stubbin" 2>/dev/null || true

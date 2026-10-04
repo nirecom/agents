@@ -120,7 +120,7 @@ run_consumer_case() {
     if [ ! -f "$hook" ]; then skip "$id: $rel not present"; return; fi
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     out=$(echo '{"stop_hook_active":false,"session_id":"../../etc/passwd","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 20 node "$(node_path "$hook")" 2>&1)
     rc=$?
     rm -rf "$tmp" 2>/dev/null || true
@@ -218,7 +218,7 @@ run_U6() {
     mkdir -p "$tmp/wf"
     printf '{}' > "$tmp/outside.workflow-off"
     printf '{}' > "$tmp/outside.next-step-paused"
-    out=$(TMPD="$tnode" CLAUDE_WORKFLOW_DIR="$tnode/wf" WORKFLOW_PLANS_DIR="$tnode/wf" "$RWT" 20 node -e "
+    out=$(TMPD="$tnode" WORKFLOW_STATE_DIR="$tnode/wf" WORKFLOW_PLANS_DIR="$tnode/wf" "$RWT" 20 node -e "
 const fs = require('fs'), path = require('path');
 const sm = require('$_AGENTS_DIR_NODE/hooks/lib/session-markers.js');
 const dir = process.env.TMPD;

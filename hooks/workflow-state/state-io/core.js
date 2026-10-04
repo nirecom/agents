@@ -61,7 +61,7 @@ function isSettledStatus(status) {
 }
 
 function getWorkflowDir() {
-  if (process.env.CLAUDE_WORKFLOW_DIR) return process.env.CLAUDE_WORKFLOW_DIR;
+  if (process.env.WORKFLOW_STATE_DIR) return process.env.WORKFLOW_STATE_DIR;
   return path.join(os.homedir(), ".claude", "projects", "workflow");
 }
 

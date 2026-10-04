@@ -88,7 +88,7 @@ corrupt_at() { # env: SEED_SID, CORRUPT_MODE = drop|number
     "$RWT" 120 node -e '
 const fs = require("fs");
 const path = require("path");
-const p = path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.SEED_SID + ".json");
+const p = path.join(process.env.WORKFLOW_STATE_DIR, process.env.SEED_SID + ".json");
 const st = JSON.parse(fs.readFileSync(p, "utf8"));
 for (const e of st.events) {
   if (e.kind === "step_status" && e.step === "write_code") {

@@ -15,8 +15,8 @@ MOD="hooks/lib/workflow-active-period.js"
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
 mkdir -p "$TMP/wf" "$TMP/home"
-export CLAUDE_WORKFLOW_DIR="$(np "$TMP/wf")"
-export WORKFLOW_PLANS_DIR="$CLAUDE_WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
+export WORKFLOW_PLANS_DIR="$WORKFLOW_STATE_DIR"
 export HOME="$(np "$TMP/home")" USERPROFILE="$(np "$TMP/home")"
 export AGENTS="$(np "$AGENTS_DIR")"
 cd "$TMP" || exit 1
@@ -32,7 +32,7 @@ fi
 cat > "$TMP/t1.js" <<'JS'
 const fs = require('fs');
 const path = require('path');
-const A = process.env.AGENTS, W = process.env.CLAUDE_WORKFLOW_DIR;
+const A = process.env.AGENTS, W = process.env.WORKFLOW_STATE_DIR;
 const S = require(A + '/hooks/workflow-state/state-io');
 const { resolveCurrentEffectiveStep } = require(A + '/hooks/workflow-state/current-step');
 const out = [];

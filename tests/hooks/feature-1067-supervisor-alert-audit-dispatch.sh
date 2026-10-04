@@ -137,14 +137,14 @@ run_di8() {
     local tmp out rc
     tmp="$(mktemp -d)"
     # seed a state file first
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('di8-sid');
 fs.writeFileSync(w.getStatePath('di8-sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$AGENTS_DIR/bin/supervisor-write-alert" \
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$AGENTS_DIR/bin/supervisor-write-alert" \
         --session-id "di8-sid" --set-alert-phase "pending" 2>&1)
     rc=$?
     rm -rf "$tmp"
@@ -163,14 +163,14 @@ run_di9() {
     fi
     local tmp out rc
     tmp="$(mktemp -d)"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('di9-sid');
 fs.writeFileSync(w.getStatePath('di9-sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$AGENTS_DIR/bin/supervisor-write-audit" \
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$AGENTS_DIR/bin/supervisor-write-audit" \
         --session-id "di9-sid" --set-audit-phase "pending" 2>&1)
     rc=$?
     rm -rf "$tmp"

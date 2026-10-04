@@ -36,7 +36,7 @@ fc_plan_env() {
     FC_WS="$TMPDIR_BASE/fcp-workflow-$1"
     rm -rf "$FC_PP" "$FC_WS"
     mkdir -p "$FC_PP" "$FC_WS/$FC_PSID.control"
-    export CLAUDE_WORKFLOW_DIR="$FC_WS"
+    export WORKFLOW_STATE_DIR="$FC_WS"
     export WORKFLOW_PLANS_DIR="$FC_PP"
     printf '# Draft\n' > "$FC_PP/draft.md"
     printf '# Tradeoffs\n' > "$FC_PP/tradeoffs.md"
@@ -48,7 +48,7 @@ fc_plan_env() {
     } > "$FC_PLED"
     printf '1\n' > "$FC_WS/$FC_PSID.control/detail-plan-round-number.txt"
 }
-fc_plan_json() { printf '%s/%s.control/detail-plan-unresolved-concerns.json' "$CLAUDE_WORKFLOW_DIR" "$FC_PSID"; }
+fc_plan_json() { printf '%s/%s.control/detail-plan-unresolved-concerns.json' "$WORKFLOW_STATE_DIR" "$FC_PSID"; }
 fc_plan_run() {
     FC_PRC=0
     FC_PERR="$TMPDIR_BASE/fcp-err-$FC_PSID.txt"

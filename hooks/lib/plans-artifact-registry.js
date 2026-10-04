@@ -1,7 +1,7 @@
 "use strict";
 // hooks/lib/plans-artifact-registry.js
 // The one registry of what may live in WORKFLOW_PLANS_DIR (artifacts) and what
-// belongs in <CLAUDE_WORKFLOW_DIR>/<sid>.control/ (control files). Shared by the
+// belongs in <WORKFLOW_STATE_DIR>/<sid>.control/ (control files). Shared by the
 // placement guard, bin/check-plans-artifacts and the control-dir migration.
 // Policy: docs/architecture/claude-code/state-dirs.md.
 const fs = require("fs");

@@ -54,7 +54,7 @@ printf 'reviewed\n' > "$REPO/reviewed.txt"
 printf '#!/usr/bin/env bash\n' > "$REPO/tests/t.sh"
 git -C "$REPO" add reviewed.txt tests/t.sh
 
-ctl() { printf '%s/%s.control' "$CLAUDE_WORKFLOW_DIR" "$1"; }
+ctl() { printf '%s/%s.control' "$WORKFLOW_STATE_DIR" "$1"; }
 # run_bin <file> [args...] — run a new bin CLI by its shebang; the plan does not
 # fix whether bin/accept-exit6-residual etc. are node or bash.
 run_bin() {

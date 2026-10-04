@@ -194,7 +194,7 @@ group_a_harness_isolate() {
   local tmpdir
   tmpdir="$(make_tmp)"
   harness_isolate "$tmpdir" >/dev/null 2>&1 || true
-  t_eq "A4 harness_isolate CLAUDE_WORKFLOW_DIR" "$CLAUDE_WORKFLOW_DIR" "$tmpdir/workflow-state"
+  t_eq "A4 harness_isolate WORKFLOW_STATE_DIR" "$WORKFLOW_STATE_DIR" "$tmpdir/workflow-state"
   t_eq "A4 harness_isolate WORKFLOW_PLANS_DIR" "$WORKFLOW_PLANS_DIR" "$tmpdir/plans"
   if [ -d "$tmpdir/workflow-state" ]; then
     t_ok "A4 harness_isolate creates workflow-state dir"
@@ -219,24 +219,24 @@ group_a_harness_isolate() {
   else
     t_bad "A4 harness source did not truly unset session vars (got='$sv' want='||')"
   fi
-  # C4: child-process export — harness_isolate must export CLAUDE_WORKFLOW_DIR
+  # C4: child-process export — harness_isolate must export WORKFLOW_STATE_DIR
   # and WORKFLOW_PLANS_DIR so child node processes inherit them.
   local export_check
   export_check="$(bash -euo pipefail -c "
     source '$HARNESS'
     d=\"\$(make_tmp)\"
     harness_isolate \"\$d\" >/dev/null 2>&1
-    bash -c 'echo \"\${CLAUDE_WORKFLOW_DIR:-MISSING}|\${WORKFLOW_PLANS_DIR:-MISSING}\"'
+    bash -c 'echo \"\${WORKFLOW_STATE_DIR:-MISSING}|\${WORKFLOW_PLANS_DIR:-MISSING}\"'
   " 2>/dev/null || true)"
   if [ -n "$export_check" ] && ! printf '%s' "$export_check" | grep -q 'MISSING'; then
-    t_ok "A4 harness_isolate exports CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR to child processes"
+    t_ok "A4 harness_isolate exports WORKFLOW_STATE_DIR and WORKFLOW_PLANS_DIR to child processes"
   else
     t_bad "A4 harness_isolate did not export dirs to child processes (got='$export_check')"
   fi
   # C4: repeat safety — a second harness_isolate on the same dir must not error
   # and must yield the same exported values.
   harness_isolate "$tmpdir" >/dev/null 2>&1 || true
-  t_eq "A4 harness_isolate idempotent CLAUDE_WORKFLOW_DIR" "$CLAUDE_WORKFLOW_DIR" "$tmpdir/workflow-state"
+  t_eq "A4 harness_isolate idempotent WORKFLOW_STATE_DIR" "$WORKFLOW_STATE_DIR" "$tmpdir/workflow-state"
   t_eq "A4 harness_isolate idempotent WORKFLOW_PLANS_DIR" "$WORKFLOW_PLANS_DIR" "$tmpdir/plans"
   # C4: make_tmp returns a distinct directory on each call.
   local d1 d2

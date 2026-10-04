@@ -110,7 +110,7 @@ consume_kv() {
 TMP=$(make_tmp)
 mkdir -p "$TMP/wf/plans" "$TMP/proj" 2>/dev/null || true
 TN=$(node_path "$TMP/proj"); WFN=$(node_path "$TMP/wf")
-export CLAUDE_WORKFLOW_DIR="$WFN"
+export WORKFLOW_STATE_DIR="$WFN"
 export WORKFLOW_PLANS_DIR="$WFN/plans"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 
@@ -162,7 +162,7 @@ echo "=== S2b: the block message supervisor-off-proposal-shim.js actually emits 
 SHIM_TMP=$(make_tmp); SHIM_TN=$(node_path "$SHIM_TMP")
 OFF_CMD='echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: [workflow-bug] cannot proceed>>"'
 SHIM_IN="$("$RWT" 8 node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'s2bsid',tool_input:{command:process.argv[1]}}))" "$OFF_CMD")"
-SHIM_OUT="$(WORKFLOW_PLANS_DIR="$SHIM_TN" CLAUDE_WORKFLOW_DIR="$SHIM_TN" AGENTS_CONFIG_DIR="$SHIM_TN" "$RWT" 15 node "$SHIM" <<< "$SHIM_IN" 2>/dev/null)"
+SHIM_OUT="$(WORKFLOW_PLANS_DIR="$SHIM_TN" WORKFLOW_STATE_DIR="$SHIM_TN" AGENTS_CONFIG_DIR="$SHIM_TN" "$RWT" 15 node "$SHIM" <<< "$SHIM_IN" 2>/dev/null)"
 SHIM_RC=$?
 SHIM_REASON="$("$RWT" 8 node -e "let o={};try{o=JSON.parse(process.argv[1]);}catch(e){}process.stdout.write(String(o.reason||''))" "$SHIM_OUT" 2>/dev/null)"
 if [ "$SHIM_RC" != "2" ] || [ -z "$SHIM_REASON" ]; then

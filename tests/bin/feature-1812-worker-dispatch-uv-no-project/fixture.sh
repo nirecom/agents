@@ -198,7 +198,7 @@ run_compose() {
         "PATH=$STUB_BIN:$PATH" \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_PLANS_DIR=$STAGING" \
-        "CLAUDE_WORKFLOW_DIR=$ARM_DIR/workflow" \
+        "WORKFLOW_STATE_DIR=$ARM_DIR/workflow" \
         "CLAUDE_SESSION_ID=uvnp-arm$ARM_N" \
         "CANARY_OUT=$CANARY" \
         "GH_CALL_LOG=$CALLLOG" \

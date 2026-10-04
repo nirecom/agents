@@ -87,7 +87,7 @@ if [ "$RIL_ABORT" -eq 1 ] && [ -n "$RIL_STRATEGY" ] && [ -d "$(ril_receipt_dir "
     f1_out="$(
         cd "$RIL_REPO" || exit 90
         unset CLAUDECODE; unset CLAUDE_SESSION_ID; unset CLAUDE_CODE_SESSION_ID
-        export CLAUDE_WORKFLOW_DIR="$(node_path "$RIL_WF")"
+        export WORKFLOW_STATE_DIR="$(node_path "$RIL_WF")"
         export WORKFLOW_PLANS_DIR="$(node_path "$RIL_PLANS")"
         [ -n "$RIL_ENV_KIND" ] && export "$RIL_ENV_KIND=$RIL_ENV_VALUE"
         run_with_timeout 180 claude -p \

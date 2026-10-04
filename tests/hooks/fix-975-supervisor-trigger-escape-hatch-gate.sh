@@ -39,7 +39,7 @@ require_source() {
 # Seed state with layer1.findings supplied as a JS literal (e.g. "[]" or full array).
 seed_state_l1_findings() {
     local tmp="$1" sid="$2" findings_literal="$3"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -56,8 +56,8 @@ run_trigger_and_get_armed_at() {
     local tmp="$1" sid="$2"
     local payload
     payload="{\"tool_name\":\"Bash\",\"session_id\":\"$sid\",\"tool_input\":{\"command\":\"echo \\\"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: test>>\\\"\"},\"tool_response\":\"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: test>>\"}"
-    echo "$payload" | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    echo "$payload" | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 process.stdout.write(st && st.alert ? JSON.stringify(st.alert.alert_armed_at) : 'no-state');
@@ -69,8 +69,8 @@ run_trigger_worktreeoff_get_armed_at() {
     local tmp="$1" sid="$2"
     local payload
     payload="{\"tool_name\":\"Bash\",\"session_id\":\"$sid\",\"tool_input\":{\"command\":\"echo \\\"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test>>\\\"\"},\"tool_response\":\"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test>>\"}"
-    echo "$payload" | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    echo "$payload" | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 process.stdout.write(st && st.alert ? JSON.stringify(st.alert.alert_armed_at) : 'no-state');
@@ -82,8 +82,8 @@ run_trigger_nonescape_get_armed_at() {
     local tmp="$1" sid="$2"
     local payload
     payload="{\"tool_name\":\"Bash\",\"session_id\":\"$sid\",\"tool_input\":{\"command\":\"echo hello\"},\"tool_response\":\"hello\"}"
-    echo "$payload" | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    echo "$payload" | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 process.stdout.write(st && st.alert ? JSON.stringify(st.alert.alert_armed_at) : 'no-state');
@@ -227,7 +227,7 @@ run_t9() {
     seed_state_l1_findings "$tmp" "t9-sid" \
         '[{"categories":["workflow"],"severity":"warning","detail":"sus","reporter":"t","timestamp":"2026-06-06T12:00:00.000Z"}]'
     # Pre-set alert_armed_at so !l2ArmedAt is false in the hook
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.writeAlertState('t9-sid', { alert_armed_at: '$before' });
 " >/dev/null 2>&1
@@ -263,7 +263,7 @@ run_t11() {
     local tmp out
     tmp="$(mktemp -d)"
     # Seed state with layer1 deleted to test defensive read
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
