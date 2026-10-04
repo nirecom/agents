@@ -115,9 +115,10 @@ MOP-7. On `APPROVED`:
 
    Do NOT write this prose to outline.md. MOP-8 handles the file write.
 
-MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + breadcrumb). Then branch on the bypass condition:
-   - **Bypass (CONFIRM_OUTLINE=off only):** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
-   - **Sentinel** (ON path): apply confirm-plan CPA-3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
+MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + breadcrumb).
+   Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
+   - **`GATE_ACTION=proceed`:** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
+   - **`GATE_ACTION=ask`:** apply confirm-plan CPA-3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
 
 ## Output Schema (`<session-id>-outline.md`)
 

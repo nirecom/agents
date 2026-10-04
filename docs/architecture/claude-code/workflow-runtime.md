@@ -188,7 +188,7 @@ A session can inherit from an upstream session it has no transcript lineage to, 
 
 ## next-step-driven sequencing
 
-Step ordering is owned by `bin/workflow/next-step`. That file is a dispatcher only — the implementation lives in `bin/workflow/lib/next-step/` (`cli.js`, `steps.js`, `repo-dir.js`, `entrypoint-path.js`, `list.js`, `state-ops.js`, `verdict.js`). After each skill completes, the model queries next-step with:
+Step ordering is owned by `bin/workflow/next-step`. That file is a dispatcher only — the implementation lives in `bin/workflow/lib/next-step/` (`cli.js`, `steps.js`, `repo-dir.js`, `entrypoint-path.js`, `list.js`, `state-ops.js`, `verdict.js`, `gate-line.js`, `gate-mode.js`). After each skill completes, the model queries next-step with:
 
 ```
 node bin/workflow/next-step --session $CLAUDE_SESSION_ID
@@ -200,9 +200,21 @@ At the `outline` and `detail` steps only, next-step first checks for an authorit
 
 Absent a recorded verdict, next-step appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). This is a weak supplementary hint (demoted from sole gate by #1286) — advisory only, which the model may act on by emitting the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by the same resolver's `isTrivial`, which fails closed to "not trivial" on any uncertainty.
 
+When the invoked step has a `CONFIRM_*` gate (step→gate map: `hooks/lib/confirm-gate/step-gate-map.js`), next-step appends one more optional line last, after `SKIP_HINT`: `GATE_CONFIRM_<X>=<ON|OFF|ERROR>`. It probes `bin/confirm-off` with a 1500 ms budget; `ERROR` means the probe timed out or could not run. The line is emitted only on the final `ACTION=invoke` path and is display-only — never branch on it.
+
 `--list` mode renders the full step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
 
 `session-start.js` also calls next-step on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
+
+### `--gate` (confirm-gate check, #2490)
+
+`next-step --gate` is the single branching source for the seven confirm gates (`skills/_shared/confirm-plan.md` CPA-3). It is read-only and prints `GATE_ACTION`, the `GATE_CONFIRM_<X>` value line (omitted for `none`), `GATE_HINT`, and `REASON`.
+
+- `GATE_ACTION` is a closed vocabulary: `proceed` (gate OFF), `ask` (gate ON or ERROR), `present-and-stop`, `none` (unresolved session, or the recorded step has no gate).
+- At `detail` it also runs `bin/detect-scope-change.sh` on outline.md vs detail.md: a detected scope change turns `proceed` into `present-and-stop` (the scope change is shown even when `CONFIRM_DETAIL=off`); a failed check adds `scope-change-check-failed` to `REASON`, appends a warn-the-user sentence to `GATE_HINT`, and is otherwise treated as no change.
+- `--scope-change-approved` (only with `--gate`, else exit 64) is a stateless flag the skill passes once after the user approves the scope change, so an OFF detail gate resolves to `proceed`. Combining `--gate` with `--list` / `--reset` / `--mark` / `--advance` exits 64.
+
+Step-source divergence: the value line uses the evidence-resolved snapshot step (the same step as `NEXT_SKILL`), while `--gate` uses the recorded current step (`resolveCurrentEffectiveStep`, no evidence resolution). They differ when the recorded step is still open but evidence already advances the snapshot — at CI-5 after intent.md is written, and at MOP-8 / MDP-7 with the gate OFF — so the value line shows the next step's gate while `--gate` judges the current one. This is safe because only `GATE_ACTION` drives branching.
 
 ## Reset and emergency resume
 

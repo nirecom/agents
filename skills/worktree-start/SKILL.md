@@ -55,15 +55,15 @@ WS-6. Create the worktree (isolated command — same chaining caveat as WS-5):
 
 WS-7. Dispatch the `worktree-copy` worker per `skills/_shared/worker-dispatch.md`. Payload: `worktree_path` (WS-3 path), `branch` (`<BRANCH_TYPE>/<TASK_NAME>`), `session_id` (omit when unknown), `artifact_dir` (the `PLANS_DIR` from WD-1).
 
-   Check `CONFIRM_WORKTREE` via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_WORKTREE on'`
-   `--headless` at WS-2 signals either no workflow session or a subagent/fork context where `AskUserQuestion` is unreachable — treat `CONFIRM_WORKTREE` as OFF in both cases.
+   `--headless` (WS-2): skip the gate check and treat it as `proceed` (`CONFIRM_WORKTREE` pinned OFF) — no workflow session, or a subagent/fork context where `AskUserQuestion` is unreachable.
+   Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
 
-   Response handling when `CONFIRM_WORKTREE=OFF`:
+   Response handling when `GATE_ACTION=proceed`:
    - `status: complete` → surface summary, proceed.
    - `status: partial` → surface warning, proceed (non-blocking).
    - `status: failed` → surface error and stop.
 
-   Response handling when `CONFIRM_WORKTREE=ON` (default):
+   Response handling when `GATE_ACTION=ask`:
    - `status: complete` → call `AskUserQuestion` to confirm copy results before proceeding.
    - `status: partial` → call `AskUserQuestion` in main (surface denied/errors via artifact log path); user must confirm or abort.
    - `status: failed` → surface error and stop.

@@ -1,24 +1,8 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, bin/workflow/record-skip-verdict, bin/workflow/next-step, agents/skip-verifier.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/scripts/check-outline-skip.sh, skills/make-outline-plan/scripts/check-detail-skip.sh, settings.json, bin/workflow/lib/next-step/
 # Tags: L1, L2, workflow, speculative-skip, scope:issue-specific
-#
-# Issues #1392, #1352, #544, #1353 — speculative-skip engine: outline/detail
-# skips are recorded as speculative "pending" verdicts, verified by a
-# skip-verifier subagent (confirm/veto), and gated at the write_tests step by
-# next-step which reads the recorded verdict.
-#
-# Pre-implementation model: static cases (S1-S7) FAIL until write-code lands (expected).
-# Behavioral cases guard on API_READY/CLI_READY and SKIP (not FAIL) when impl absent.
-#
-# #1733 note: every case in this suite reads step state through io.readState(), which
-# still exposes `steps` / `skip_verdict` at the top level (the projection is pasted onto
-# the returned object). No fixture reads the state FILE raw, so the append-only migration
-# needs no change here. The event-level contract for skip_verdict annotations lives in
-# tests/hooks/feature-1733-state-event-stream/annotation-fold.sh.
-#
-# This is a dispatcher (file-split rule: >500 lines). Static cases live here;
-# behavioral suites live in the sibling feature-speculative-skip-complete/ folder.
-#
+# #1392/#1352/#544/#1353 speculative-skip engine: pending outline/detail skip verdicts, skip-verifier confirm/veto, next-step write_tests gate.
+# Dispatcher (static cases here, behavioral suites in feature-speculative-skip-complete/, SKIP when impl absent); state via io.readState() (#1733 contract: tests/hooks/feature-1733-state-event-stream/annotation-fold.sh).
 # L3 gap (what this test does NOT catch):
 # - Real orchestrator skip path (real claude -p session speculative-skipping outline/detail)
 # - skip-verifier agent actually launching in parallel and writing verdict to disk
@@ -290,7 +274,7 @@ else
 fi
 
 # S10: A-5 detect-scope-change.sh exists (C5 gap)
-DETECT_SCOPE="$AGENTS_DIR/skills/make-detail-plan/scripts/detect-scope-change.sh"
+DETECT_SCOPE="$AGENTS_DIR/bin/detect-scope-change.sh"
 if [ -f "$DETECT_SCOPE" ]; then
   pass "S10. detect-scope-change.sh exists (A-5)"
 else

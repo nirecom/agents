@@ -67,7 +67,8 @@ CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS
 
 CI-4a. **Record `closes_issues` into session state** (the only point where Path C's `closes_issues` gets populated): `node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" --session "$SESSION_ID"` (separate Bash call; routes through the write-once cache in `hooks/workflow-state/session-facts.js`).
 
-CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"`, also include the next tool_use — the Completion side-effect Bash call, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol CPA-1.
+CI-5. Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
+Apply the rest of the `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On `GATE_ACTION=ask`: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"`, also include the next tool_use — the Completion side-effect Bash call, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol CPA-1.
 
 CI-5a. When `closes_issues` is non-empty and a Revise loop substantively changed intent.md, run per issue N: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-body-append.sh" --issue <N> [--repo <slug>] --note "<one-paragraph summary of what changed this round>"`. Skip when `closes_issues` is empty (Path C).
 
