@@ -14,6 +14,7 @@ const path = require("path");
 const { FACTS_VERSION, FACTS_KEYS } = require("./keys");
 const { modelForLevel } = require("../../../../hooks/lib/role-model");
 const { readGateFacts } = require("./gate-facts");
+const { resolveConfigDir } = require("../../../../hooks/lib/confirm-gate/probe");
 const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
 const { readComplexityEvaluation } = require("../../../../hooks/workflow-state");
 const { normalizeCwd } = require("../../../../hooks/lib/path-normalize");
@@ -94,12 +95,6 @@ function readComplexityFacts(sessionId) {
     COMPLEXITY_MODEL_write_code: modelOf(codeLevel),
     COMPLEXITY_SIGNALS: signals.length ? signals.join(",") : "none",
   };
-}
-
-function resolveConfigDir() {
-  const fromEnv = normalizeCwd(process.env.AGENTS_CONFIG_DIR);
-  if (fromEnv) return fromEnv;
-  return path.resolve(__dirname, "..", "..", "..", "..");
 }
 
 async function collectSessionFacts(sessionId) {
