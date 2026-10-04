@@ -126,8 +126,8 @@ input:
 - `computeArtifactKey(plansDir, sessionId, names)` — hashes the named plan
   artifacts' full bytes. Plan artifacts live under `PLANS_DIR`, outside the repo
   working tree, so they never appear in the diff. Null when an artifact is absent
-  (ENOENT / ENOTDIR) or unreadable (any other stat or read failure, or not a
-  regular file).
+  (nothing at the path) or unreadable (any other stat or read failure, not a
+  regular file, or a dangling symlink).
 - `computeFreshnessKey(cwd, plansDir, sessionId)` — combines `input_version` and
   the three `artifact_keys` into one composite key. Any null component makes the
   whole key null (fail-closed). It tells the two apart: an absent artifact is a

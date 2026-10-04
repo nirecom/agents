@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2256-input-version-full-hash/artifact-and-freshness.sh
 # Tests: hooks/lib/diff-fingerprint.js, hooks/lib/audit-ledger.js
-# Tags: supervisor, artifact-key, freshness-key, sub-check-independence, TL2, scope:issue-specific, unreadable-artifact
+# Tags: supervisor, artifact-key, freshness-key, sub-check-independence, TL2, scope:issue-specific, unreadable-artifact, dangling-symlink
 # #2256 C1 + S6-b: the freshness key composes code and plan artifacts, and a settled TR1
 # must never no-op TR2/TR3. Parent: tests/hooks/feature-2256-input-version-full-hash.sh
 
@@ -171,18 +171,19 @@ chmod 755 "$NOX"
 rm -rf "$NOX"
 case_end
 
-# --- 28-31: stubbed fs errors run on every platform; the stub hits only <SID>-detail.md ---
+# --- 28-34: stubbed fs errors run on every platform; the stub hits only <SID>-detail.md ---
+# argv: <code> <stat|open> [<lstat code>|real] — lstatSync passes through unless a code is given.
 stub_js="$WORK/stub-fs.js"
 {
     printf '%s\n' "const fs = require('fs');"
-    printf '%s\n' "const [code, mode] = process.argv.slice(2);"
+    printf '%s\n' "const [code, mode, lstat = 'real'] = process.argv.slice(2);"
     printf '%s\n' "const hit = (p) => require('path').basename(String(p)) === '$SID-detail.md';"
-    printf '%s\n' "const name = mode === 'stat' ? 'statSync' : 'openSync';"
-    printf '%s\n' "const orig = fs[name];"
-    printf '%s\n' "fs[name] = function (p, ...rest) { if (hit(p)) { const e = new Error(code + ': stub'); e.code = code; throw e; } return orig.call(this, p, ...rest); };"
+    printf '%s\n' "const stub = (name, c) => { const orig = fs[name]; fs[name] = function (p, ...rest) { if (hit(p)) { const e = new Error(c + ': stub'); e.code = c; throw e; } return orig.call(this, p, ...rest); }; };"
+    printf '%s\n' "stub(mode === 'stat' ? 'statSync' : 'openSync', code);"
+    printf '%s\n' "if (lstat !== 'real') stub('lstatSync', lstat);"
     printf '%s\n' "process.stdout.write(JSON.stringify(require('$FP_NODE').computeFreshnessKey('$repo', '$PLANS', '$SID')));"
 } > "$stub_js"
-stubbed() { bash "$RWT" 60 node "$stub_js" "$1" "$2" 2>&1; }
+stubbed() { bash "$RWT" 60 node "$stub_js" "$@" 2>&1; }
 
 case_begin "stat-error-codes-are-unreadable" "hooks/lib/diff-fingerprint.js"
 for code in EACCES EPERM ELOOP; do
@@ -201,16 +202,77 @@ case_end
 
 case_begin "enotdir-is-absent" "hooks/lib/diff-fingerprint.js"
 for code in ENOENT ENOTDIR; do
-    j="$(stubbed "$code" stat)"
+    j="$(stubbed "$code" stat "$code")"
     assert_eq "31: a stat $code lists nothing as unreadable" "$(field "$j" unreadable_artifacts)" "undefined"
     assert_eq "31b: a stat $code is an absent (null) detail key" "$(field "$j" artifact_keys.detail)" "null"
     assert_match "31c: a stat $code leaves the outline key computed" "$(field "$j" artifact_keys.outline)" '^[0-9a-f]{64}$'
 done
+assert_eq "31d: a stat ENOENT with an lstat ENOTDIR is still absent" "$(field "$(stubbed ENOENT stat ENOTDIR)" unreadable_artifacts)" "undefined"
 printf 'not a dir\n' > "$WORK/plans-file"
 j="$(fp computeFreshnessKey "$repo" ", '$WORK_NODE/plans-file', '$SID'")"
 assert_eq "32: a regular file as the parent component is absent, not unreadable" "$(field "$j" unreadable_artifacts)" "undefined"
 assert_eq "32b: it yields artifact_keys.detail = null" "$(field "$j" artifact_keys.detail)" "null"
 rm -f "$WORK/plans-file"
+case_end
+
+# --- 33-34 (#2400 S21): stat ENOENT is absent only when lstat agrees nothing is there ---
+case_begin "dangling-symlink-is-unreadable" "hooks/lib/diff-fingerprint.js"
+mv "$DETAIL" "$WORK/plans/$SID-detail.bak"
+MSYS=winsymlinks:nativestrict ln -s "$WORK/plans/no-such-target.md" "$DETAIL" 2>/dev/null
+node_link="$(node -e "const fs = require('fs'); const p = process.argv[1]; try { process.stdout.write(String(fs.lstatSync(p).isSymbolicLink() && !fs.existsSync(p))); } catch (e) { process.stdout.write('false'); }" "$WORK_NODE/plans/$SID-detail.md" 2>&1)"
+if [[ ! -L "$DETAIL" || -e "$DETAIL" || "$node_link" != "true" ]]; then
+    skip "33: no real dangling symlink here (ln -s needs Developer Mode/symlink privilege; stubbed by 34)"
+else
+    j="$(freshness)"
+    assert_eq "33: a dangling-symlink detail.md lists detail in unreadable_artifacts" "$(field "$j" unreadable_artifacts)" "detail"
+    assert_eq "33b: it collapses artifact_keys to null" "$(field "$j" artifact_keys)" "null"
+    assert_eq "33c: it collapses freshness_key to null" "$(field "$j" freshness_key)" "null"
+    assert_eq "33d: computeArtifactKey returns null for it" "$(fp computeArtifactKey "$PLANS" ", '$SID', ['detail']")" "null"
+fi
+rm -f "$DETAIL"
+case_end
+
+case_begin "absent-stays-absent-after-lstat" "hooks/lib/diff-fingerprint.js"
+j="$(freshness)"
+assert_eq "33e: a truly absent detail.md (no link) lists nothing as unreadable" "$(field "$j" unreadable_artifacts)" "undefined"
+assert_eq "33f: it is still a null value in artifact_keys" "$(field "$j" artifact_keys.detail)" "null"
+mv "$WORK/plans/$SID-detail.bak" "$DETAIL"
+case_end
+
+case_begin "stat-enoent-lstat-present-is-unreadable" "hooks/lib/diff-fingerprint.js"
+for code in ENOENT ENOTDIR; do
+    j="$(stubbed "$code" stat real)"
+    assert_eq "34: a stat $code with a present lstat lists detail as unreadable" "$(field "$j" unreadable_artifacts)" "detail"
+    assert_eq "34b: it collapses artifact_keys to null" "$(field "$j" artifact_keys)" "null"
+    assert_eq "34c: it collapses freshness_key to null" "$(field "$j" freshness_key)" "null"
+done
+case_end
+
+case_begin "stat-enoent-lstat-error-is-unreadable" "hooks/lib/diff-fingerprint.js"
+j="$(stubbed ENOENT stat EACCES)"
+assert_eq "34d: a stat ENOENT with an lstat EACCES lists detail as unreadable" "$(field "$j" unreadable_artifacts)" "detail"
+assert_eq "34e: it collapses freshness_key to null" "$(field "$j" freshness_key)" "null"
+case_end
+
+# --- 35 (#2400 C1): an absent artifact never hides an unreadable one, in either order ---
+case_begin "absent-outline-plus-unreadable-detail" "hooks/lib/diff-fingerprint.js"
+OUTLINE="$WORK/plans/$SID-outline.md"
+mv "$OUTLINE" "$WORK/plans/$SID-outline.bak"
+mv "$DETAIL" "$WORK/plans/$SID-detail.bak"
+mkdir "$DETAIL"
+j="$(freshness)"
+assert_eq "35: absent outline + unreadable detail lists only detail as unreadable" "$(field "$j" unreadable_artifacts)" "detail"
+assert_eq "35b: unreadable wins over absent: artifact_keys collapses to null" "$(field "$j" artifact_keys)" "null"
+assert_eq "35c: it collapses freshness_key to null" "$(field "$j" freshness_key)" "null"
+rmdir "$DETAIL"
+mkdir "$OUTLINE"
+j="$(freshness)"
+assert_eq "35d: unreadable outline + absent detail lists only outline as unreadable" "$(field "$j" unreadable_artifacts)" "outline"
+assert_eq "35e: it collapses artifact_keys to null" "$(field "$j" artifact_keys)" "null"
+assert_eq "35f: it collapses freshness_key to null" "$(field "$j" freshness_key)" "null"
+rmdir "$OUTLINE"
+mv "$WORK/plans/$SID-outline.bak" "$OUTLINE"
+mv "$WORK/plans/$SID-detail.bak" "$DETAIL"
 case_end
 
 echo ""

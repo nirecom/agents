@@ -121,7 +121,15 @@ function artifactPresence(abs) {
     st = fs.statSync(abs);
   } catch (err) {
     const code = err && err.code;
-    return code === "ENOENT" || code === "ENOTDIR" ? "absent" : "unreadable";
+    if (code !== "ENOENT" && code !== "ENOTDIR") return "unreadable";
+    // A stat ENOENT with something still at the path (a dangling symlink) is unreadable, not absent.
+    try {
+      fs.lstatSync(abs);
+    } catch (lerr) {
+      const lcode = lerr && lerr.code;
+      return lcode === "ENOENT" || lcode === "ENOTDIR" ? "absent" : "unreadable";
+    }
+    return "unreadable";
   }
   return st.isFile() ? "present" : "unreadable";
 }
