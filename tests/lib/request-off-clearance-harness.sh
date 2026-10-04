@@ -35,7 +35,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 token_count() { ls "$1"/*.off-clearance 2>/dev/null | wc -l | tr -d ' '; }
 claim_count() { ls "$1"/*.off-clearance.claimed 2>/dev/null | wc -l | tr -d ' '; }
 tmpres_count() { ls "$1"/*.mint.tmp "$1"/*.consuming-*.tmp 2>/dev/null | wc -l | tr -d ' '; }
-state_has() { grep -rq "$2" "$1"/*-supervisor-state.json 2>/dev/null; }
+state_has() { grep -rq "$2" "$1"/*.control/supervisor-state.json 2>/dev/null; }  # #2434 control file
 
 # offclr_json <file> <js-expr over `t`> — read one field out of a JSON file.
 offclr_json() {
@@ -116,7 +116,7 @@ run_req() {
     # back in to exactly the ones it is testing.
     # AGENTS_CONFIG_DIR is unset first as well: it is exported by the developer's
     # live session, so "do not pass it" is not the same as "it is not there".
-    envargs=(-u SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u WORKTREE_PATH
+    envargs=(-u SESSION_ID -u CLAUDE_CODE_SESSION_ID -u WORKTREE_PATH
              -u AGENTS_CONFIG_DIR
              "PATH=$stubbin:$OFFCLR_CLEAN_PATH"
              "WORKFLOW_PLANS_DIR=$tn" "CLAUDE_WORKFLOW_DIR=$tn")

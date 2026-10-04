@@ -29,7 +29,7 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 PLANS_DIR_N="$(nrm "$PLANS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 # The library's subagent guard keys on this; the parent Claude Code session may
 # already export it. Unset here, set explicitly in the guard cases.
 unset CLAUDE_CODE_CHILD_SESSION

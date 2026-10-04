@@ -77,7 +77,7 @@ assert_eq "I4/off: earlyWriteGateStatus(active=false) matches early-gate letting
     "0" "$(i4_early "$BG_SID_OFF")"
 case_end
 
-# I5: no session state at all -- CLAUDE_SESSION_ID absent (or set but the state file was never
+# I5: no session state at all -- CLAUDE_CODE_SESSION_ID absent (or set but the state file was never
 # written). The gate cannot be active for a session it has no record of, and the reason must say
 # WHY (no-state), not just report inactive the same way I3's completed-workflow case does --
 # a reader that collapses the two would make a genuinely absent session look like "done".

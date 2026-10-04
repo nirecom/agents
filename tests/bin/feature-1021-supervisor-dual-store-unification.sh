@@ -55,7 +55,7 @@ require_mirror() {
 count_findings() {
     local tmp="$1" sid="$2"
     (
-        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
@@ -71,7 +71,7 @@ run_b1() {
     local tmp sid n
     tmp="$(mktemp -d)"; sid="b1sid"
     (
-        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI" \
             --session-id "$sid" \
             --categories code \
@@ -97,7 +97,7 @@ run_b2() {
     ccuuid="12345678-1234-1234-1234-123456789abc"
     # Seed both stores so both are "resolvable" (existence-based heuristic).
     (
-        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.writeAlertState('$wsid', { alert_armed_at: null });
@@ -129,7 +129,7 @@ run_b3() {
     wsid="wsid-b3"
     ccuuid="abcdef01-2345-6789-abcd-ef0123456789"
     (
-        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.writeAlertState('$wsid', { alert_armed_at: null });
@@ -161,7 +161,7 @@ run_b4() {
     wsid="wsid-b4"
     ccuuid="11111111-2222-3333-4444-555555555555"
     (
-        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.writeAlertState('$wsid', { alert_armed_at: null });

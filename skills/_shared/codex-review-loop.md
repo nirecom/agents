@@ -67,13 +67,13 @@ Two distinct tokens, resolved per `FORMAT` in `bin/lib/codex-review-loop/format-
 
 ROUND_NUMBER is NEVER `EXTENSIONS_USED + 1` — that derivation would mis-tag the second review of the detail stage as "round 1" and break the ESCALATE policy.
 
-`bin/run-codex-review-loop` owns the counter at `<PLANS_DIR>/<session-id>-<format>-round-number.txt`; stage wrappers do not touch it. `--round` is optional (auto-incremented from ROUND_FILE when omitted). The file is deleted on terminal verdicts (exit 0/2/6 for all formats) and `<PLANS_DIR>/<session-id>-<format>-last-round.txt` is written with the final round value. It persists on CONTINUE (exit 1 for every format, review-only included — #2276 S9-c) and AUTO_EXTEND (exit 5). On infrastructure failure (exit 3/4/7) the counter is rolled back to its pre-call value.
+`bin/run-codex-review-loop` owns the counter at `<CONTROL_DIR>/<format>-round-number.txt` (`<CONTROL_DIR>` = output of `bin/workflow-control-dir --session <session-id>`); stage wrappers do not touch it. `--round` is optional (auto-incremented from ROUND_FILE when omitted). The file is deleted on terminal verdicts (exit 0/2/6 for all formats) and `<CONTROL_DIR>/<format>-last-round.txt` is written with the final round value. It persists on CONTINUE (exit 1 for every format, review-only included — #2276 S9-c) and AUTO_EXTEND (exit 5). On infrastructure failure (exit 3/4/7) the counter is rolled back to its pre-call value.
 
 `--force-round <N>` overrides the recorded counter for recovery and test use only — it announces itself on stderr and bypasses the sequence check. No shipped skill caller uses it; the flag is reserved for manual recovery from a corrupt counter and for test harnesses that need to start at an arbitrary round.
 
 ## Concern-ID Ledger
 
-`bin/run-codex-review-loop` maintains a per-session ledger at `<PLANS_DIR>/<session-id>-<ledger_format>-concern-ledger.txt` (LEDGER_FORMAT, resolved per FORMAT — see "FORMAT vs LEDGER_FORMAT"). The wrapper accepts a REQUIRED `--round N` argument (no default); the per-stage wrapper script always supplies it.
+`bin/run-codex-review-loop` maintains a per-session ledger at `<CONTROL_DIR>/<ledger_format>-concern-ledger.txt` (LEDGER_FORMAT, resolved per FORMAT — see "FORMAT vs LEDGER_FORMAT"). The wrapper accepts a REQUIRED `--round N` argument (no default); the per-stage wrapper script always supplies it.
 
 Schema, lifecycle states, binding tiers, and the category vocabulary: `skills/_shared/concern-ledger.md` (SSOT). Full concern text is stored verbatim (no truncation).
 
@@ -85,7 +85,7 @@ The Round 2+ codex prompt in `bin/review-plan-codex` is switched to Cn-reference
 
 The ledger is deleted on APPROVED (exit 0) and ESCALATE (exit 2), and persists across CONTINUE (exit 1). HIGH_UNRESOLVED (exit 6) does not delete the ledger — it is finalized with mode=terminal and remains on disk.
 
-Before the ledger is dropped on an ending that never converged (ESCALATE, or CONTINUE at the cap), the wrapper finalizes it into `<PLANS_DIR>/<session-id>-<format>-unresolved-concerns.json`. That write is fail-CLOSED: when it does not succeed the wrapper returns exit 7 instead of the would-be verdict, so no caller emits its completion sentinel over concerns nobody can read.
+Before the ledger is dropped on an ending that never converged (ESCALATE, or CONTINUE at the cap), the wrapper finalizes it into `<CONTROL_DIR>/<format>-unresolved-concerns.json`. That write is fail-CLOSED: when it does not succeed the wrapper returns exit 7 instead of the would-be verdict, so no caller emits its completion sentinel over concerns nobody can read.
 
 Within the wrapper, `bin/review-loop-verdict <round> <high> <medium> <low> [--cap N] [--budget-remaining N] [--risk-signal <value>]` is invoked on every non-APPROVED reviewer verdict; the wrapper passes its own CAP through so the decision point (`round < CAP` → CONTINUE) tracks the unified cap. Its decision overrides the raw reviewer verdict for exit-code selection (internal contract): APPROVED→0, CONTINUE→1, ESCALATE→2, HIGH_UNRESOLVED→6, arg error→4, AUTO_EXTEND→5. The wrapper then converts internal exit codes to public exit codes before returning to the caller (see Contract B below).
 
@@ -113,8 +113,8 @@ Each script reads from the environment:
 Exit codes pass through to the caller unchanged.
 
 The wrapper internally:
-1. Builds (per-stage, marker-gated at `<PLANS_DIR>/<session-id>-codex-context.<FORMAT>.built`)
-   the unified context at `<PLANS_DIR>/<session-id>-codex-context.md` (renamed from
+1. Builds (per-stage, marker-gated at `<CONTROL_DIR>/codex-context.<FORMAT>.built`)
+   the unified context at `<CONTROL_DIR>/codex-context.md` (renamed from
    `-context.md` to avoid WI-9 collision) via
    `bin/build-codex-context`. Section headers: `## Section 1: Intent (User Requirements)`
    and `## Section 2: Outline (Design Proposal)`, prefixed by
@@ -148,13 +148,13 @@ Quick reference (public exit codes — Contract B):
 |---|---|---|
 | 0 | APPROVED | Write/confirm phase. |
 | 1 | CONTINUE | Capture RAW → append round log → re-invoke planner with `model: PLANNER_MODEL`. |
-| 2 | ESCALATE | Present concern summary → stop loop. |
+| 2 | ESCALATE | Present concern summary → stop loop; per-format follow-up: exit-codes.md "Escalation by format". |
 | 3 | codex CLI unusable | Silently launch `REVIEWER_AGENT` fallback with the `resolve-role-model --role reviewer` model. |
 | 4 | HALT | Surface stderr verbatim; do not fall back. |
 | 5 | AUTO_EXTEND | `EXTENSIONS_USED += 1` → re-enter loop. |
 | 6 | HIGH_UNRESOLVED | Present HIGH concern summary → stop loop; do not proceed to write/confirm. |
 | 7 | FINALIZE_FAILED | HALT; surface `## Concern Ledger: FINALIZE-FAILED` line; do not emit sentinel. |
-| 8 | re-invoked after terminal (all three wrappers) | HALT; no reviewed-content change detected since last terminal exit. |
-| 9 | exit 6 termination, content changed but residual HIGH not accepted (all three wrappers) | HALT; accept residual HIGH (marker file, or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` for review-tests) then re-run. |
+| 8 | re-invoked after terminal (all three wrappers) | HALT; unchanged since last terminal exit — AskUserQuestion per "Escalation by format". |
+| 9 | exit 6 termination, content changed but residual HIGH not accepted (all three wrappers) | HALT; accept via `bin/accept-exit6-residual` (or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` for review-tests) then re-run. |
 
 Full tables (Contract A, Contract B), RAW persistence rules, RAW naming, per-round log protocol, Outcomes, and Rationale: [`skills/_shared/codex-review-loop/exit-codes.md`](codex-review-loop/exit-codes.md).

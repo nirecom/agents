@@ -1,22 +1,11 @@
 #!/usr/bin/env bash
 # Tests: skills/session-close/SKILL.md
 # Tags: supervisor, em-supervisor, session-close, sc6, wsid, fix-1166, scope:issue-specific
-# RED for issue #1166.
-#
-# Validates that SC-6 in skills/session-close/SKILL.md includes a wsid mirror-clear step:
-# 1. [Structural] The SC-6 section resolves Session-ID from WORKTREE_NOTES.md via awk.
-# 2. [Structural] The SC-6 section calls supervisor-write-alert with --session-id "$WSID"
-#    and --set-alert-phase closed and --clear-alert-armed-at.
-# 3. [L2 integration] Running the awk extraction + supervisor-write-alert mirror-clear
-#    command sequence against a synthetic WORKTREE_NOTES.md + wsid state file leaves
-#    the wsid store's alert_armed_at as null (i.e., the armed flag is cleared).
-#
-# L3 gap (what this test does NOT catch):
-# - Whether session-close/SKILL.md's SC-6 orchestration step actually fires the awk
-#   command in a real claude -p session (only an E2E test can verify that).
-# - Whether the wsid != CC UUID guard works correctly when both are the same value.
-# Closest-to-action mitigation: skill-orchestration category in
-#   bin/check-verification-gate.sh fires at WORKFLOW_USER_VERIFIED preflight.
+# RED for issue #1166 — SC-6 in skills/session-close/SKILL.md must mirror-clear the wsid store:
+# (1) Session-ID resolved from WORKTREE_NOTES.md via awk; (2) supervisor-write-alert --session-id "$WSID" --set-alert-phase closed --clear-alert-armed-at;
+# (3) L2: the awk + mirror-clear sequence on a synthetic notes file + wsid state leaves the wsid alert_armed_at null.
+# L3 gap: whether SC-6 fires the awk command in a real claude -p session; the wsid != CC UUID guard when both are equal.
+# Closest-to-action mitigation: skill-orchestration category in bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
@@ -89,19 +78,19 @@ run_l2() {
 
     # Seed wsid state with alert_armed_at set (armed state) and alert_phase=null
     # so that --set-alert-phase closed + --clear-alert-armed-at is a valid transition.
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$wsid');
 st.alert.alert_armed_at = new Date().toISOString();
 st.alert.alert_phase = null;
-fs.writeFileSync(w.getStatePath('$wsid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$wsid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 
     # Verify that alert_armed_at was actually seeded (sanity check)
     local seeded
-    seeded=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    seeded=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$wsid');
 process.stdout.write(st && st.alert && st.alert.alert_armed_at ? 'armed' : 'not-armed');
@@ -124,7 +113,7 @@ process.stdout.write(st && st.alert && st.alert.alert_armed_at ? 'armed' : 'not-
 
     # Run the mirror-clear: --set-alert-phase closed clears alert_armed_at at the writer level
     # (terminal state enforced by writeAlertState). Also pass --clear-alert-armed-at explicitly.
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$WRITE_ALERT" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$WRITE_ALERT" \
         --session-id "$extracted_wsid" \
         --set-alert-phase closed \
         --clear-alert-armed-at \
@@ -132,7 +121,7 @@ process.stdout.write(st && st.alert && st.alert.alert_armed_at ? 'armed' : 'not-
     local write_rc=$?
 
     # Read back the wsid state and check alert_armed_at is null
-    armed_after=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    armed_after=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$wsid');
 if (!st || !st.alert) { process.stdout.write('MISSING'); process.exit(0); }

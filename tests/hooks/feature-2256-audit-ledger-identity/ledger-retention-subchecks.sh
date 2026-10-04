@@ -38,7 +38,7 @@ export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_WORKFLOW_DIR="$WORK_NODE/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$AGENTS_NODE"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
@@ -64,7 +64,7 @@ K64B="$(printf 'a%.0s' $(seq 1 64) | tr 'a' '2')"
 sid="led-fifo-$$"
 out=$(drive fifo "
 const st = schema.createEmptyState('$sid');
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 const first = audit.armAuditRun('$sid', { tr_ids: ['TR4'], cause: 'step-complete:write_code', transitions: ['write_code#0'] });
 const rid = first.audit_run_id || first.run_id;
 audit.finalizeAuditRun('$sid', { audit_run_id: rid, verdict: 'CONTINUE', verdict_summary: 'keep me' });
@@ -93,7 +93,7 @@ fi
 sid="led-ct-$$"
 out=$(drive ct "
 const st = schema.createEmptyState('$sid');
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 for (let i = 0; i < 260; i++) {
   const r = audit.armAuditRun('$sid', { tr_ids: ['TR4'], cause: 'step-complete:write_code', transitions: ['write_code#' + i] });
   audit.finalizeAuditRun('$sid', { audit_run_id: r.audit_run_id || r.run_id, verdict: 'CONTINUE', verdict_summary: 's' + i });
@@ -108,7 +108,7 @@ assert_match "4: consumed_transitions is capped at 200, newest kept, oldest drop
 sid="led-bo-$$"
 out=$(drive bo "
 const st = schema.createEmptyState('$sid');
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 for (let i = 0; i < 30; i++) {
   audit.recordBlockOverride('$sid', { audit_run_id: 'run-0001', freshness_key: '$K64A', reason: 'override reason number ' + i, actor: 'user' });
 }
@@ -120,7 +120,7 @@ assert_eq "5: block_overrides is capped at 20 entries" "$out" "20"
 sid="led-df-$$"
 out=$(drive df "
 const st = schema.createEmptyState('$sid');
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 const files = [];
 for (let i = 0; i < 640; i++) files.push('src/f' + i + '.js');
 audit.writeAuditState('$sid', { declared_files: { detail_key: '$K64A', files: files } });
@@ -136,7 +136,7 @@ out=$(drive sc "
 const st = schema.createEmptyState('$sid');
 st.audit.ledger = [{ id: 'run-0001', outcome: 'terminal', verdict: 'CONTINUE', sub_checks: ['outline-detail'], input_key: { 'outline-detail': '$K64A' } }];
 st.audit.last_terminal_run_id = 'run-0001';
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 const a = writer.readState('$sid').audit;
 out([
   ledger.isSubCheckSettled(a, 'outline-detail', '$K64A'),
@@ -158,7 +158,7 @@ st.audit.ledger = [
   { id: 'run-0003', outcome: 'armed', verdict: null, freshness_key: '$K64B' },
 ];
 st.audit.last_terminal_run_id = 'run-0001';
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 const a = writer.readState('$sid').audit;
 const lt = ledger.lastTerminalRun(a);
 out([
@@ -190,7 +190,7 @@ st.audit.ledger = [{
   trigger_input_keys: { TR1: '$K64A', TR2: '$K64A', TR3: '$K64A', TR4: '$K64A', TR5: '$K64A' },
 }];
 st.audit.last_terminal_run_id = 'run-0007';
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 const a = writer.readState('$sid').audit;
 const e = a.ledger[0];
 const trKeyed = Object.keys(e.input_key).filter((k) => /^TR[0-9]+\$/.test(k));
@@ -219,7 +219,7 @@ try {
   const res = schema.validate(st);
   rejected = res === false || (res && res.valid === false) || (Array.isArray(res && res.errors) && res.errors.length > 0);
 } catch (e) { rejected = true; }
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 const a = writer.readState('$sid').audit;
 out(String(rejected) + '|' + String(ledger.isSubCheckSettled(a, 'TR2', '$K64A')));
 ")
@@ -238,7 +238,7 @@ out=$(drive trguard "
 const st = schema.createEmptyState('$sid');
 st.audit.ledger = [{ id: 'run-0001', outcome: 'terminal', verdict: 'CONTINUE', sub_checks: ['TR2'], input_key: { TR2: '$K64A' } }];
 st.audit.last_terminal_run_id = 'run-0001';
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 const a = writer.readState('$sid').audit;
 out(String(ledger.isSubCheckSettled(a, 'TR2', '$K64A')));
 ")

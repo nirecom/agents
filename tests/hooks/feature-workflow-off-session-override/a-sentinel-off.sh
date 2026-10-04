@@ -64,20 +64,18 @@ test_A4_env_file_fallback() {
     require_mark_js "A4" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="xyz"
-    local envfile; envfile="$(setup_fake_env_file "$sid")"
-    local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: A4 env-file fallback>>"' 0)"
-    # Note: run_workflow_mark unsets CLAUDE_ENV_FILE; pass it explicitly here.
+    local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: A4 env fallback>>"' 0)"
+    # Payload carries no session_id; the CLAUDE_CODE_SESSION_ID env tier supplies it.
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env "CLAUDE_CODE_SESSION_ID=$sid" \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile" \
         node "$MARK_JS" 2>&1)" || true
     if [ -f "$wfdir/$sid.workflow-off" ]; then
-        pass "A4: env-file fallback resolves session ID"
+        pass "A4: CLAUDE_CODE_SESSION_ID env fallback resolves session ID"
     else
-        fail "A4: env-file fallback did not create marker (out: $MARK_OUT)"
+        fail "A4: CLAUDE_CODE_SESSION_ID env fallback did not create marker (out: $MARK_OUT)"
     fi
 }
 
@@ -86,9 +84,9 @@ test_A5_no_session_id_hard_blocks() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: A5 no session id>>"' 0)"
     local rc=0
-    # No CLAUDE_ENV_FILE → no session ID resolvable. Must hard-block (rc=2).
+    # No payload session_id and no CLAUDE_CODE_SESSION_ID → no session ID resolvable. Must hard-block (rc=2).
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
@@ -195,7 +193,7 @@ test_A9_on_sentinel_no_marker_idempotent() {
 
 test_A10_on_sentinel_no_session_id() {
     require_mark_js "A10" || return
-    # No session_id, no CLAUDE_ENV_FILE → must hard-block (rc=2), preserve any
+    # No session_id, no CLAUDE_CODE_SESSION_ID → must hard-block (rc=2), preserve any
     # pre-existing unrelated marker (cross-session isolation), and emit a
     # diagnostic mentioning session resolution failure.
     local wfdir; wfdir="$(fresh_workflow_dir)"
@@ -284,7 +282,7 @@ test_A13_bare_on_malformed() {
 
 # ----------------------------------------------------------------------------
 # A14-A15: transcript_path fallback (#461)
-# When session_id is absent from input AND CLAUDE_ENV_FILE is unset,
+# When session_id is absent from input AND CLAUDE_CODE_SESSION_ID is unset,
 # workflow-mark.js must fall back to deriving the session ID from
 # transcript_path (basename without .jsonl). Path must be validated.
 # ----------------------------------------------------------------------------
@@ -299,7 +297,7 @@ test_A14_transcript_path_fallback() {
     local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: A14 transcript fallback>>"' 0 "$tp")"
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
@@ -323,7 +321,7 @@ test_A15_transcript_path_invalid_chars() {
     local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: A15 invalid chars>>"' 0 "$tp")"
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \

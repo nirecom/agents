@@ -13,7 +13,7 @@ const { unquoteBashWord } = require("../../lib/protected-basenames");
 // "which segments really precede this one" — see the block comment above
 // sourceOrderView() in ../../lib/substitution-spans.js.
 const { sourceOrderView } = require("../../lib/substitution-spans");
-const { resolveDirSpelling, WIN_ABS_RE } = require("./classify");
+const { resolveDirSpelling, dirSpellingFailsClosed, resolveWorkflowDir, WIN_ABS_RE } = require("./classify");
 
 // Statically resolve a `cd <dir>` prefix so a relative target later on the
 // same command line still resolves (`cd <wf> && echo x > s1*`). Only
@@ -25,6 +25,9 @@ function staticPathArg(rawArg) {
   if (typeof rawArg !== "string" || rawArg === "" || rawArg[0] === "-") return null;
   const t = unquoteBashWord(rawArg);
   if (t === "") return null;
+  // A known alias with an unplaceable operator (`cd ${CLAUDE_WORKFLOW_DIR:+x}`) may land in
+  // the workflow dir, so the cd is modelled as landing there (fail closed, detection direction).
+  if (dirSpellingFailsClosed(t)) return resolveWorkflowDir();
   const resolved = resolveDirSpelling(t);
   if (/[$`]/.test(resolved)) return null;
   return resolved;

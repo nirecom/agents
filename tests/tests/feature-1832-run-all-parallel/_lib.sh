@@ -142,7 +142,6 @@ fx_init() {
     export CLAUDE_WORKFLOW_DIR="$FX_TMP_ROOT/workflow"
     export WORKFLOW_PLANS_DIR="$FX_TMP_ROOT/plans"
     export RUN_ALL_REGISTRY_LIB="$FX_REPO_ROOT/bin/lib/test-language-registry.sh"
-    unset CLAUDE_SESSION_ID 2>/dev/null || true
     unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
     fx_drop_ambient_controls
     trap fx_cleanup EXIT

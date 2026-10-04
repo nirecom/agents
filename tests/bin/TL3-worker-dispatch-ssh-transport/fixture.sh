@@ -146,7 +146,7 @@ run_worker() {
  "enforce_worktree":"off","artifact_dir":"$PLANS"}
 PAYEOF
     WORKER_OUT="$(run_with_timeout 240 env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u GH_TOKEN -u GITHUB_TOKEN \
+         -u CLAUDE_CODE_SESSION_ID -u GH_TOKEN -u GITHUB_TOKEN \
         "SSH_AUTH_SOCK=$AGENT_SOCK" "SSH_AGENT_PID=$AGENT_PID" "ENFORCE_WORKTREE=off" \
         "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
         node "$(nodepath "$AGENTS_DIR/bin/worker-dispatch.js")" \

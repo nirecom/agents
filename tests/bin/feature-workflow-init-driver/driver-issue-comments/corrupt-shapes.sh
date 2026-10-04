@@ -223,7 +223,7 @@ case "$C15_CACHED" in
         fail "C15: the migrated cache entry has no comments: '$(printf '%s' "$C15_CACHED" | head -c 200)'" ;;
 esac
 assert_ctx_has "C15: the refetched comment reaches context.md" 'comment the v2 checkpoint could never hold'
-C15_LEAK="$(grep -rlF -- 'STALE-V2-BODY-940' "$PLANS" 2>/dev/null | tr '\n' ' ')"
+C15_LEAK="$(grep -rlF -- 'STALE-V2-BODY-940' "$PLANS" "$WF" 2>/dev/null | tr '\n' ' ')"
 if [ -n "$C15_LEAK" ]; then
     fail "C15: version-2 content survived the migration: $C15_LEAK"
 else
@@ -357,7 +357,7 @@ case "$C16_DECODED" in
     *"$C16_MARK"*) fail "C16: the secret rode along in a directive value (decoded): '$(printf '%s' "$C16_DECODED" | head -c 200)'" ;;
     *) pass "C16: no directive value carries the secret, encoded or decoded" ;;
 esac
-C16_LEAK="$(grep -rlF -- "$C16_MARK" "$PLANS" 2>/dev/null | tr '\n' ' ')"
+C16_LEAK="$(grep -rlF -- "$C16_MARK" "$PLANS" "$WF" 2>/dev/null | tr '\n' ' ')"
 if [ -n "$C16_LEAK" ]; then
     fail "C16: the secret was written into a workflow artifact: $C16_LEAK"
 else

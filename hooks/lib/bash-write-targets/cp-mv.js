@@ -1,7 +1,7 @@
 "use strict";
 
 const { parse } = require("../command-ir");
-const { resolveEffectiveCommand } = require("../bash-write-patterns/segment-utils");
+const { resolveEffectiveCommand, resolveEffectiveArgv } = require("../bash-write-patterns/segment-utils");
 const { expandRawToken, isUnresolvableToken, tryResolveEnvUnderPlansDir } = require("./helpers");
 
 const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -124,4 +124,43 @@ function extractCpMvDestination(seg) {
   return positionals[positionals.length - 1];
 }
 
-module.exports = { extractCpMvDestination };
+// Operands of a cp/mv/ln argument list: the -t / --target-directory value and the positionals.
+// The -S / --suffix value (backup suffix) is an option argument, never an operand.
+function cpMvOperands(args) {
+  let targetDir = null;
+  const positionals = [];
+  let options = true;
+  for (let i = 0; i < args.length; i++) {
+    const t = args[i];
+    if (options && t === "--") { options = false; continue; }
+    if (options && (/^-[A-Za-z]*t$/.test(t) || t === "--target-directory")) {
+      if (i + 1 < args.length) targetDir = args[++i];
+      continue;
+    }
+    if (options && (/^-[A-Za-z]*S$/.test(t) || t === "--suffix")) { i++; continue; }
+    if (options && t.startsWith("--target-directory=")) { targetDir = t.slice("--target-directory=".length); continue; }
+    if (options && /^-t./.test(t)) { targetDir = t.slice(2); continue; }
+    if (options && t.startsWith("-") && t !== "-") continue;
+    positionals.push(t);
+  }
+  return { targetDir, positionals };
+}
+
+function segmentRenameSources(seg) {
+  if (!seg || resolveEffectiveCommand(seg) !== "mv") return [];
+  const { targetDir, positionals } = cpMvOperands(resolveEffectiveArgv(seg));
+  if (targetDir !== null) return positionals;
+  return positionals.length >= 2 ? positionals.slice(0, positionals.length - 1) : [];
+}
+
+// The single implementation of "which files does a mv rename away" (a rename deletes each source
+// from its directory). A SegmentIR yields its own sources; a command string yields the sources of
+// every mv segment. [] when there is no mv, null on parse failure.
+function extractRenameSources(seg) {
+  if (typeof seg !== "string") return segmentRenameSources(seg);
+  const ir = parse(seg);
+  if (!ir || ir.parseFailure) return null;
+  return (ir.segments || []).flatMap(segmentRenameSources);
+}
+
+module.exports = { extractCpMvDestination, extractRenameSources, cpMvOperands };

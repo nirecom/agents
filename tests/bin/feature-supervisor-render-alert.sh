@@ -2,26 +2,8 @@
 # tests/bin/feature-supervisor-render-alert.sh
 # Tests: bin/supervisor-render-alert, hooks/lib/supervisor-findings-render.js
 # Tags: supervisor, em-supervisor, render-alert, cli, scope:issue-specific, pwsh-not-required, hook-registration
-# L3 gap (what this test does NOT catch):
-# - bin/supervisor-render-alert being invoked from a real supervisor subagent context / real Claude Code Stop chain
-# - Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-#   via bin/check-verification-gate.sh category: hook-registration
-
-# Covers bin/supervisor-render-alert (new CLI):
-#  TA1 missing state file → fallback line, exit 0
-#  TA2 notice-only findings → fallback line, exit 0
-#  TA3 code/warning finding → formatted line, no /issue-create signal, exit 0
-#  TA4 mixed severities → error/warning appear, notice absent, workflow finding gets /issue-create signal, exit 0
-#  TA5 session-id as positional arg → same output as TA3
-#  TA6 no session-id → exit 2, stderr contains "session-id required"
-#  TA7 malformed JSON state file → fallback line, exit 0 (fail-open)
-#  TA8 idempotency: invoke CLI twice, output identical, state file unchanged
-#  TA9 security: shell-metachar payload in session-id does not execute
-#
-# Prompt-contract guards (agents/supervisor.md "Reporting back" section):
-#  TS1 section does NOT contain "Provide first-aid guidance" (RED-EXPECTED now)
-#  TS2 section mentions one-line ack contract (token: "one-line ack") (RED-EXPECTED now)
-#  TS3 section mentions stop-l2-findings-display or Stop hook (RED-EXPECTED now)
+# TA1-TA9: supervisor-render-alert CLI (state, JSON, idempotency, security); TS1-TS3: prompt-contract guards.
+# L3 gap: invocation from real supervisor subagent / Stop chain; mitigated by bin/check-verification-gate.sh.
 
 set -u
 
@@ -36,6 +18,7 @@ CLI="$AGENTS_DIR/bin/supervisor-render-alert"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 SUPERVISOR_MD="$AGENTS_DIR/agents/supervisor.md"
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -65,7 +48,7 @@ FALLBACK_LINE="[EM Supervisor] Review complete — no actionable findings."
 # Seed alert state via writeAlertState. Args: tmp_node sid findings_json
 seed_state() {
     local tmp_node="$1" sid="$2" findings="$3"
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const patch = { findings: $findings, alert_phase: 'done' };
 const ok = w.writeAlertState('$sid', patch);
@@ -88,7 +71,7 @@ run_ta_cli_group() {
         tmp=$(make_tmp); tmp_node="$(node_dir "$tmp")"
         local sid="ta1-sid-$$"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -109,7 +92,7 @@ run_ta_cli_group() {
 
         seed_state "$tmp_node" "$sid" "[{\"categories\":[\"other\"],\"severity\":\"notice\",\"detail\":\"audit trail\",\"reporter\":\"test\"}]"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -130,7 +113,7 @@ run_ta_cli_group() {
 
         seed_state "$tmp_node" "$sid" "[{\"categories\":[\"code\"],\"severity\":\"warning\",\"detail\":\"Fix missing check\",\"reporter\":\"supervisor\"}]"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -154,7 +137,7 @@ run_ta_cli_group() {
 
         seed_state "$tmp_node" "$sid" "[{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"err-detail-x\",\"reporter\":\"t\"},{\"categories\":[\"workflow\"],\"severity\":\"warning\",\"detail\":\"warn-detail-y\",\"reporter\":\"t\"},{\"categories\":[\"other\"],\"severity\":\"notice\",\"detail\":\"NOTICE-SHOULD-NOT-APPEAR\",\"reporter\":\"t\"}]"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -184,7 +167,7 @@ run_ta_cli_group() {
 
         seed_state "$tmp_node" "$sid" "[{\"categories\":[\"code\"],\"severity\":\"warning\",\"detail\":\"Fix missing check\",\"reporter\":\"supervisor\"}]"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -202,7 +185,7 @@ run_ta_cli_group() {
         local tmp tmp_node out_err
         tmp=$(make_tmp); tmp_node="$(node_dir "$tmp")"
 
-        out_err=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" 2>&1 >/dev/null)
+        out_err=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" 2>&1 >/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -222,9 +205,10 @@ run_ta_cli_group() {
         local sid="ta7-sid-$$"
 
         # Write invalid JSON directly to state file location
-        echo '{ not valid json' > "$tmp/${sid}-supervisor-state.json"
+        mkdir -p "$tmp/${sid}.control"
+        echo '{ not valid json' > "$tmp/${sid}.control/supervisor-state.json"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -245,11 +229,11 @@ run_ta_cli_group() {
 
         seed_state "$tmp_node" "$sid" "[{\"categories\":[\"code\"],\"severity\":\"warning\",\"detail\":\"Fix missing check\",\"reporter\":\"supervisor\"}]"
 
-        local state_file="$tmp/${sid}-supervisor-state.json"
+        local state_file="$tmp/${sid}.control/supervisor-state.json"
         before=$(cat "$state_file" 2>/dev/null || echo "")
 
-        out1=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
-        out2=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out1=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out2=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         after=$(cat "$state_file" 2>/dev/null || echo "")
         rm -rf "$tmp"
 
@@ -270,7 +254,7 @@ run_ta_cli_group() {
         local payload='x; touch INJECTED'
         local inject_target="$tmp/INJECTED"
 
-        WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$payload" >/dev/null 2>&1 || true
+        WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$payload" >/dev/null 2>&1 || true
         local had_injection=0
         # Check both the tmp dir and cwd
         [ -f "$inject_target" ] && had_injection=1
@@ -295,7 +279,9 @@ run_ta_cli_group() {
     run_ta9_security
 }
 
+case_begin "render-alert-cli" "bin/supervisor-render-alert"
 run_ta_cli_group
+case_end
 
 # ============================================================
 # Prompt-contract guards for agents/supervisor.md
@@ -332,7 +318,9 @@ run_ts_prompt_guards() {
     fi
 }
 
+case_begin "findings-render" "hooks/lib/supervisor-findings-render.js"
 run_ts_prompt_guards
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

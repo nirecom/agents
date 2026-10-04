@@ -59,24 +59,24 @@ seed_corrupt_state() { printf '{ this is not json' > "$1/$2.json"; }
 
 # seed_sup_armed <tn> <sid> — C2 scheduled-review trigger (alert_armed_at set).
 seed_sup_armed() {
-    WORKFLOW_PLANS_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_PLANS_DIR="$1" CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
 const w = require('$WRITER_NODE'), s = require('$SCHEMA_NODE'), fs = require('fs');
 const st = s.createEmptyState('$2');
 st.alert.alert_armed_at = new Date().toISOString();
 st.alert.alert_phase = 'pending';
-fs.writeFileSync(w.getStatePath('$2'), JSON.stringify(st));" >/dev/null 2>&1
+fs.writeFileSync(w.getStatePath('$2', { forWrite: true }), JSON.stringify(st));" >/dev/null 2>&1 || fail "seed_sup_armed($2): supervisor-state seed write failed"
 }
 
 # seed_sup_error <tn> <sid> — C2 severity-escalation trigger (cumSev=error).
 seed_sup_error() {
-    WORKFLOW_PLANS_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_PLANS_DIR="$1" CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
 const w = require('$WRITER_NODE'), s = require('$SCHEMA_NODE'), fs = require('fs');
 const st = s.createEmptyState('$2');
 st.alert.cumulative_severity = 'error';
 st.alert.alert_phase = 'pending';
 st.alert.findings = [{ categories: ['code'], severity: 'error', detail: 'blocking',
   reporter: 'workflow-gate', status: 'confirmed', timestamp: new Date().toISOString() }];
-fs.writeFileSync(w.getStatePath('$2'), JSON.stringify(st));" >/dev/null 2>&1
+fs.writeFileSync(w.getStatePath('$2', { forWrite: true }), JSON.stringify(st));" >/dev/null 2>&1 || fail "seed_sup_error($2): supervisor-state seed write failed"
 }
 
 # seed_write_code_in_flight <tn> <sid> — #1665 commit 4 replaced the
@@ -243,7 +243,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');" 2
 # no_new_finding <tmp> <sid> — true when C4 recorded nothing for this session:
 # either no supervisor state file at all, or an empty findings array.
 no_new_finding() {
-    local f="$1/$2-supervisor-state.json"
+    local f="$1/$2.control/supervisor-state.json"  # #2434 control file
     [ ! -f "$f" ] && return 0
     ! grep -q '"detail"' "$f" 2>/dev/null
 }

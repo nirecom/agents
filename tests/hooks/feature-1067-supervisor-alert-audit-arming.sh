@@ -4,13 +4,7 @@
 # Tags: supervisor, em-supervisor, alert, arming, scope:issue-specific
 # Tests for issue #1067 — ensureAlertScheduled arming threshold contract.
 # Cases: warning finding -> arms; notice finding -> does NOT arm; null -> arms.
-#
-# RED: All cases FAIL/SKIP until source changes land (ensureAlertScheduled not renamed,
-# arming threshold logic not added).
-#
-# L3 gap (what this test does NOT catch):
-# - real Claude Code Stop event integration — tests call writer directly
-# - arming effect propagating through the full hook dispatch chain
+# L3 gap: real Claude Code Stop event integration (tests call the writer directly); arming through the full hook dispatch chain.
 # Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
 
 set -u
@@ -63,7 +57,7 @@ run_arm1() {
     require_ensure_alert_scheduled "ARM1: ensureAlertScheduled with warning finding -> arms" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const s = require('$SCHEMA_MODULE_NODE');
 const fs = require('fs');
@@ -89,7 +83,7 @@ run_arm2() {
     require_ensure_alert_scheduled "ARM2: ensureAlertScheduled with notice finding -> does NOT arm" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const s = require('$SCHEMA_MODULE_NODE');
 const fs = require('fs');
@@ -115,7 +109,7 @@ run_arm3() {
     require_ensure_alert_scheduled "ARM3: ensureAlertScheduled with null finding -> arms (backward-compat)" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('arm3-sid');
@@ -139,7 +133,7 @@ run_arm4() {
     require_ensure_alert_scheduled "ARM4: ensureAlertScheduled with error finding -> arms" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('arm4-sid');

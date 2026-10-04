@@ -57,7 +57,6 @@ run_with_timeout() {
 # --- fixture isolation (rules/test/fixture-isolation.md) --------------------
 TMP="$(mktemp -d)"
 trap 'cd / 2>/dev/null; rm -rf "$TMP"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMP/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMP/plans-root"
@@ -184,7 +183,7 @@ echo "--- resolve 1: the trusted roots are the only candidates ---"
     assert_contains "1: and telling them what to point it at" \
         "set AGENTS_CONFIG_DIR to your agents checkout" "$OUT1"
     assert_eq "1: no ledger was written from the round it refused to judge" \
-        "0" "$(find "$P1" -name '*concern-ledger*' 2>/dev/null | wc -l | tr -d ' ')"
+        "0" "$(find "$P1" "$CLAUDE_WORKFLOW_DIR/sid-hostile.control" -name '*concern-ledger*' 2>/dev/null | wc -l | tr -d ' ')"
 }
 
 echo ""
@@ -204,10 +203,12 @@ echo "--- resolve 2: the positive control, with the twin still planted ---"
         "untouched" "$(canary)"
     assert_eq "2: the round is judged, so NEEDS_REVISION reaches its own exit code" \
         "rc=1" "$RC2"
-    assert_eq "2: and the round's concern landed in a real ledger under the plans dir" \
-        "1" "$(find "$P2" -name 'sid-trusted-detail-plan-concern-ledger.txt' 2>/dev/null | wc -l | tr -d ' ')"
+    # #2434: the ledger is a control file, so it lives in <sid>.control, not the plans dir.
+    C2="$CLAUDE_WORKFLOW_DIR/sid-trusted.control"
+    assert_eq "2: and the round's concern landed in a real ledger in the session control dir" \
+        "1" "$(find "$C2" -name 'detail-plan-concern-ledger.txt' 2>/dev/null | wc -l | tr -d ' ')"
     assert_contains "2: which carries the concern the reviewer raised" \
-        "the loader is fail-open" "$(cat "$P2/sid-trusted-detail-plan-concern-ledger.txt" 2>/dev/null)"
+        "the loader is fail-open" "$(cat "$C2/detail-plan-concern-ledger.txt" 2>/dev/null)"
 }
 
 echo ""

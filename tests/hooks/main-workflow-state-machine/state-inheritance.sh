@@ -51,11 +51,10 @@ run_state_inheritance_tests() {
     # L1-c: session-start called twice on same session ID → state not overwritten (idempotency)
     REPO_1C=$(setup_repo)
     SID_1C="l1c-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    ENV_FILE_1C="$TMPDIR_BASE/1c.env"
     write_state "$SID_1C" "$(INHERIT_STATE_JSON "$SID_1C" "main")"
     for _i in 1 2; do
         echo "{\"session_id\":\"$SID_1C\"}" | \
-            CLAUDE_PROJECT_DIR="$REPO_1C" CLAUDE_ENV_FILE="$ENV_FILE_1C" \
+            CLAUDE_PROJECT_DIR="$REPO_1C" \
             CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true
     done
     expect_state_step "L1-c. session-start 2 runs → research remains complete (idempotent)" \
@@ -105,16 +104,10 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# #1305 / #1681: read-time derivation of the RESUMABILITY verdict.
-#
-# Why the boundary moved (#1305): staleness used to be the only thing standing
-# between an unrelated session and someone else's steps, so it was drawn early
-# and defensively at the verification tier (review_security). Lineage now does
-# that job — a donor is only ever the heir's own ancestor — so the verification
-# tier is no longer a boundary at all (S2 removed). What survives is the set of
-# states that are genuinely unusable to their OWN continuation: a finished
-# session (S1, user_verification complete), a fresh one with nothing to give
-# (S0), and one whose recorded intent has no intent.md behind it (S3).
+# #1305 / #1681: read-time derivation of the RESUMABILITY verdict. Lineage (a
+# donor is only the heir's own ancestor) replaced the verification-tier boundary
+# (S2 removed); what survives are states unusable to their OWN continuation:
+# finished (S1), fresh with nothing to give (S0), intent without intent.md (S3).
 # ---------------------------------------------------------------------------
 
 # Fixture builder: one step-status map, everything else pending.

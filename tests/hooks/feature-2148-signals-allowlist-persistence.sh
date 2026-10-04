@@ -55,7 +55,7 @@ trap 'rm -rf "$tmp"' EXIT
 export CLAUDE_WORKFLOW_DIR="$tmp/workflow-state"; mkdir -p "$CLAUDE_WORKFLOW_DIR"
 export WORKFLOW_PLANS_DIR="$tmp/plans"; mkdir -p "$WORKFLOW_PLANS_DIR"
 # Never inherit the outer Claude Code session into resolveSessionId().
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # --- module / barrel node paths --------------------------------------------
 CR_MOD_N="$(to_node_path "$AGENTS_DIR/hooks/workflow-state/complexity-routing.js")"
@@ -242,21 +242,22 @@ case_ssot_vocabulary() {
         fail "SSOT-0 could not read SIGNAL_IDS from complexity-routing.js"
         return
     fi
+    # #2434: the out file is derived as <CLAUDE_WORKFLOW_DIR>/<sid>.control/detail-signals.txt.
     for id in $ids; do
         raw="$tmp/raw-ssot-$id.txt"
-        outf="$tmp/out-ssot-$id.txt"
+        outf="$CLAUDE_WORKFLOW_DIR/ssot-$id.control/detail-signals.txt"
         printf 'SIGNALS: %s\n' "$id" > "$raw"
         rm -f "$outf"
-        run_to node "$NORMALIZE_CLI" --raw-file "$raw" --out "$outf" >/dev/null 2>&1 || true
+        run_to node "$NORMALIZE_CLI" --raw-file "$raw" --session "ssot-$id" --stage detail >/dev/null 2>&1 || true
         got=$(trim_tail "$(cat "$outf" 2>/dev/null)")
         assert_eq "SSOT-$id normalize accepts the valid signal (not S0-undecidable)" "$id" "$got"
     done
 
     raw="$tmp/raw-ssot-unknown.txt"
-    outf="$tmp/out-ssot-unknown.txt"
+    outf="$CLAUDE_WORKFLOW_DIR/ssot-unknown.control/detail-signals.txt"
     printf 'SIGNALS: S99-bogus\n' > "$raw"
     rm -f "$outf"
-    run_to node "$NORMALIZE_CLI" --raw-file "$raw" --out "$outf" >/dev/null 2>&1 || true
+    run_to node "$NORMALIZE_CLI" --raw-file "$raw" --session ssot-unknown --stage detail >/dev/null 2>&1 || true
     got=$(trim_tail "$(cat "$outf" 2>/dev/null)")
     assert_eq "SSOT-unknown an unknown id normalizes to S0-undecidable" "S0-undecidable" "$got"
 }

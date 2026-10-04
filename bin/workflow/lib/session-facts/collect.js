@@ -18,6 +18,7 @@ const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-di
 const { readComplexityEvaluation } = require("../../../../hooks/workflow-state");
 const { normalizeCwd } = require("../../../../hooks/lib/path-normalize");
 const { SIGNAL_IDS } = require("../../../../hooks/workflow-state/complexity-routing");
+const { getSessionControlDir } = require("../../../../hooks/workflow-state/state-io/control-dir");
 
 const NONE = "NONE";
 const LEVELS = ["high", "low"];
@@ -43,6 +44,16 @@ function resolvePlansDir() {
     };
   }
   return { value: normalized, error: null };
+}
+
+// Path only: reading the facts never creates <sid>.control (writers go through controlPath).
+function resolveControlDir(sessionId) {
+  try {
+    const dir = getSessionControlDir(sessionId);
+    return /[\r\n]/.test(dir) ? NONE : dir;
+  } catch (_) {
+    return NONE;
+  }
 }
 
 function levelOf(levels, stage) {
@@ -99,6 +110,7 @@ async function collectSessionFacts(sessionId) {
       FACTS_VERSION: String(FACTS_VERSION),
       SESSION_ID: sessionId,
       PLANS_DIR: plans.value,
+      CONTROL_DIR: resolveControlDir(sessionId),
     },
     gates,
     readComplexityFacts(sessionId)

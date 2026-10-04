@@ -16,7 +16,7 @@ set -u
 # and the recorder falls back to them whenever a payload carries no usable
 # session_id (P12) - inherited values would make those cases resolve the REAL
 # session instead of the one the case names.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
@@ -91,7 +91,7 @@ fi
 pass "P0 provenance marker kind derived from the SSOT: .$MARKER_KIND"
 
 marker_of() { printf '%s/%s.%s' "$TMP" "$1" "$MARKER_KIND"; }
-audit_of()  { printf '%s/%s-supervisor-state.json' "$TMP" "$1"; }
+audit_of()  { printf '%s/%s.control/supervisor-state.json' "$TMP" "$1"; }  # #2434 control file
 
 # The recorder's own stdout/stderr and exit status, kept OUT of the marker
 # directory so a capture file can never be mistaken for a marker.

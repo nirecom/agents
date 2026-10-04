@@ -84,8 +84,7 @@ case "$STEP" in
             echo "Error: ensure_project_ready failed for $REPO" >&2
             exit 1
         fi
-        plans_dir="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
-        cache_dir="$plans_dir/cache"
+        cache_dir="${CLAUDE_WORKFLOW_DIR:-$HOME/.claude/projects/workflow}/cache"
         cache_file="$cache_dir/project-resolve.tsv"
         _resolve_project_write_cache "$cache_dir" "$cache_file" "$REPO" \
             "${EPR_PROJECT_OWNER:-}" "${EPR_PROJECT_NUM:-}" "${EPR_PROJECT_ID:-}" \

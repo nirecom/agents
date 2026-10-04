@@ -3,32 +3,15 @@
 # Tests: bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/render.sh, bin/lib/concern-ledger.sh, bin/concern-ledger
 # Tags: concern-ledger, parser, allowlist, severity, category, table-driven, mutation-probe, scope:common, pwsh-not-required
 #
-# The anchored delta line is the only wire format between a reviewer and the
-# ledger, and SLOT, the tally and the verdict are all functions of its two
-# enumerated columns. A parser that repairs a malformed severity, or snaps a
-# mistyped category onto the nearest valid one, files the finding under someone
-# else's address — the accident the ledger exists to prevent.
-
-# Exhaustive on the accepted side (every SEVERITY x CATEGORY the vocabulary
-# declares); mutation-probing on the rejected side, per
-# skills/_shared/test-design/parser-regex-tests.md. Every near-miss must land as
-# '#unparsed' with a PARTIAL round label, never coerced into a valid value.
-
-# TL2. The per-line matrix runs the real parse adapters inside ONE sourced shell
-# (bin/lib/concern-ledger.sh) because ~70 CLI spawns cost minutes on Windows;
-# the subprocess boundary is still covered — cases 2, 4 and 6 drive the real
-# bin/concern-ledger over real report files and read the real staging files.
-
-# TL3 gap (mitigation category: skill-orchestration). Not covered here, and
-# covered nowhere below TL3: a real reviewer's wording (the bodies here follow
-# the documented bullet grammar, so a model that drifts off it entirely is
-# invisible), and the prompt that teaches that grammar living in
-# bin/review-code-codex and the SKILL.md files (a prompt edit renaming a
-# category still passes every case below).
-
-# Mitigation: the day-to-day runner is a manual /review-code-security run; the
-# vocabulary constant and the prompt's category list are pinned by case 5.
+# The anchored delta line is the only reviewer->ledger wire format: exhaustive on
+# the accepted SEVERITY x CATEGORY side, mutation-probing on the rejected side
+# (skills/_shared/test-design/parser-regex-tests.md); a near-miss lands as #unparsed.
+# TL2: the matrix runs in one sourced shell; cases 2, 4 and 6 drive the real CLI.
 set -uo pipefail
+
+# TL3 gap (mitigation category: skill-orchestration): a real reviewer's wording and
+# the prompt teaching the grammar are not exercised. Mitigation: a manual
+# /review-code-security run; the vocabulary and prompt category list are pinned by case 5.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CLI="$AGENTS_ROOT/bin/concern-ledger"
@@ -90,7 +73,6 @@ strip() {
 # ---------------------------------------------------------------------------
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
@@ -174,7 +156,8 @@ new_env() {
     mkdir -p "$PLANS"
 }
 
-delta_file() { printf '%s/%s-%s-round-%s-delta-%s.txt' "$1" "$2" "$FORMAT" "$3" "$4"; }
+# <plans> is kept for call-site symmetry; #2434 stages into <CLAUDE_WORKFLOW_DIR>/<sid>.control.
+delta_file() { printf '%s/%s.control/%s-round-%s-delta-%s.txt' "$CLAUDE_WORKFLOW_DIR" "$2" "$FORMAT" "$3" "$4"; }
 
 mk_report() {
     local f="$1" l

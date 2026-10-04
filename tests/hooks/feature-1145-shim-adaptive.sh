@@ -2,20 +2,8 @@
 # tests/hooks/feature-1145-shim-adaptive.sh
 # Tests: hooks/supervisor-off-proposal-shim.js, hooks/lib/worktree-end-env-anchor.js
 # Tags: supervisor, em-supervisor, pretooluse, off-proposal, shim, we15, adaptive-message, scope:issue-specific, pwsh-not-required, hook-registration
-# L2 integration tests for the adaptive OFF-block message.
-# When computeIsWtEnd() (via isWorktreeEndEnv) returns true — now based on the
-# <sid>-wt-cleanup-active marker file — the block reason switches to the WE-15/WE-16
-# adaptive text (mentions /sweep-worktrees and WE-20); otherwise the fixed
-# "Active supervisor findings exist" text is kept.
-# T4j (NEW): proves that old final-report-env.json alone does NOT trigger adaptive text
-# (the false-positive scenario that motivated this fix).
-#
-# L3 gap (what this test does NOT catch):
-# - The shim firing as a real PreToolUse hook inside a live claude -p session
-#   (settings.json PreToolUse registration — only verified via live session).
-# - Real sentinel command forms and real wsid resolution from an actual worktree-end run.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# L2: wt-cleanup-active control-file marker switches the OFF-block reason to adaptive WE-15/16 text; T4j = env-json alone must not.
+# L3 gap: live PreToolUse registration + real wsid resolution — checked at USER_VERIFIED via bin/check-verification-gate.sh (hook-registration).
 
 set -u
 
@@ -48,6 +36,9 @@ tmp_node_for() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
 }
 
+# #2434: marker + env-json are control files — <tmp>/wf/<sid>.control/<name> (every node call pins CLAUDE_WORKFLOW_DIR=<tmp>/wf).
+ctl() { mkdir -p "$1/wf/$2.control"; printf '%s' "$1/wf/$2.control/$3"; }
+
 if [ ! -f "$SHIM" ] || [ ! -f "$ANCHOR" ]; then
     fail "T4e-j: shim or worktree-end-env-anchor.js not present"
     echo ""
@@ -60,7 +51,7 @@ WORKTREE_OFF_CMD='echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>"'
 # Seed a blocking L1 finding (severity=warning, reporter=workflow-gate) under $1=sid, plans-dir $2.
 seed_blocking_finding() {
     local sid="$1" plansdir="$2"
-    WORKFLOW_PLANS_DIR="$plansdir" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$plansdir" CLAUDE_WORKFLOW_DIR="$plansdir/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -72,7 +63,7 @@ st.layer1.findings = [{
     reporter: 'workflow-gate',
     timestamp: new Date().toISOString()
 }];
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
@@ -94,10 +85,10 @@ run_t4e() {
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="t4e-sid-$$"
     seed_blocking_finding "$sid" "$tmp_node"
-    touch "$tmp/${sid}-wt-cleanup-active"
+    touch "$(ctl "$tmp" "$sid" wt-cleanup-active)"
     hook_input=$(build_hook_input "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -121,7 +112,7 @@ run_t4f() {
     # no marker file — simulates post-WE-22 scenario where marker has been deleted
     hook_input=$(build_hook_input "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -141,11 +132,11 @@ run_t4g() {
     sid="t4g-sid-$$"
     seed_blocking_finding "$sid" "$tmp_node"
     # Create the marker then delete it (simulates WE-22 cleanup having run)
-    touch "$tmp/${sid}-wt-cleanup-active"
-    rm "$tmp/${sid}-wt-cleanup-active"
+    touch "$(ctl "$tmp" "$sid" wt-cleanup-active)"
+    rm "$(ctl "$tmp" "$sid" wt-cleanup-active)"
     hook_input=$(build_hook_input "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -164,10 +155,10 @@ run_t4h() {
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="t4h-sid-$$"
     # NO state file seeded → ENOENT block path. Marker present (genuine WORKTREE_OFF emit).
-    touch "$tmp/${sid}-wt-cleanup-active"
+    touch "$(ctl "$tmp" "$sid" wt-cleanup-active)"
     hook_input=$(build_hook_input "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -193,7 +184,7 @@ run_t4i() {
     seed_blocking_finding "$ccSid" "$tmp_node"
 
     # Marker is named by the WORKFLOW session id (wsid), NOT the CC session id.
-    touch "$tmp/${wsid}-wt-cleanup-active"
+    touch "$(ctl "$tmp" "$wsid" wt-cleanup-active)"
 
     # Priority 2 wsid resolution: CLAUDE_CODE_SESSION_ID=wsid + <wsid>-context.md artifact.
     printf '%s' 'context' > "$tmp/${wsid}-context.md"
@@ -201,7 +192,7 @@ run_t4i() {
     hook_input=$(build_hook_input "$ccSid")
 
     # Run from a non-git-repo dir so Priority 1 (WORKTREE_NOTES.md) does not interfere.
-    out=$( cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$( cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
         CLAUDE_CODE_SESSION_ID="$wsid" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null )
     rc=$?
@@ -227,10 +218,10 @@ run_t4j() {
     seed_blocking_finding "$sid" "$tmp_node"
     # Write valid old-style env-json (as the old implementation would leave behind)
     # but NO cleanup marker (simulates post-WE-22 state where marker was deleted)
-    printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$tmp/${sid}-final-report-env.json"
+    printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$(ctl "$tmp" "$sid" final-report-env.json)"
     hook_input=$(build_hook_input "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"

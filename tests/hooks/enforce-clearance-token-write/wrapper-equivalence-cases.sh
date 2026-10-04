@@ -166,7 +166,7 @@ run_verbatim() {
     stubbin=$(make_tmp)
     printf '%s' "$body" > "$stubbin/codex"; chmod +x "$stubbin/codex"
     outf="$stubbin/.stdout"; errf="$stubbin/.stderr"
-    envargs=(-u SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u WORKTREE_PATH
+    envargs=(-u SESSION_ID -u CLAUDE_CODE_SESSION_ID -u WORKTREE_PATH
              -u AGENTS_CONFIG_DIR
              "PATH=$stubbin:$OFFCLR_CLEAN_PATH"
              "WORKFLOW_PLANS_DIR=$tn" "CLAUDE_WORKFLOW_DIR=$tn" "SESSION_ID=verbsid")
@@ -228,7 +228,7 @@ argv_probe() {  # <config-dir> -> sets RC / OUT
         'for a in "$@"; do printf "ARG<%s>\n" "$a"; done' > "$cfg/bin/request-off-clearance"
     chmod +x "$cfg/bin/request-off-mode-clearance" "$cfg/bin/request-off-clearance"
     outf="$cfg/.out"
-    ( cd "$cfg" && env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u SESSION_ID \
+    ( cd "$cfg" && env -u CLAUDE_CODE_SESSION_ID -u SESSION_ID \
         -u WORKTREE_PATH -u AGENTS_CONFIG_DIR "PATH=$OFFCLR_CLEAN_PATH" \
         "WORKFLOW_PLANS_DIR=$cfg/plans" "CLAUDE_WORKFLOW_DIR=$cfg/plans" \
         "AGENTS_CONFIG_DIR=$cfg" \

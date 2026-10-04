@@ -82,7 +82,6 @@ trap 'rm -rf "$TMPROOT"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMPROOT/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
 # shellcheck source=../lib/test-language-registry-fixture.sh

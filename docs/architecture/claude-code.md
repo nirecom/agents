@@ -77,7 +77,7 @@ See `rules/supervisor-reporting.md` for when to report, and `skills/supervisor-r
 | `reporter` | string | skill or agent name |
 | `timestamp` | string | ISO 8601 |
 
-**State file:** `<PLANS_DIR>/<session-id>-supervisor-state.json` (per-session, never global).
+**State file:** `<CLAUDE_WORKFLOW_DIR>/<session-id>.control/supervisor-state.json` (per-session, never global; path via `bin/workflow-control-dir`).
 Defines the full structure: `layer1.findings[]`, `alert: { … }`, `audit: {}`.
 The file is directly inspectable for debugging.
 

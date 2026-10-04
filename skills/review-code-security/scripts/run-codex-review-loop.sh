@@ -10,16 +10,16 @@ set -euo pipefail
 # #2276 S9-c re-invoke guard: after a terminal escalation the loop drops the round
 # counter, so a bare re-run would restart at round 1 and hand the same unchanged diff a
 # fresh 2+1 budget — a 4th review round through the back door. Line 1 = terminal rc,
-# line 2 = the reviewed-diff fingerprint at that moment.
-TERMINAL_FILE="${PLANS_DIR}/${SESSION_ID}-security-code-terminal.txt"
-# Accept marker for residual HIGH after an exit 6 terminal: its presence authorizes the
-# fingerprint-mismatch branch to clear the guard even when the prior terminal was exit 6.
-EXIT6_ACCEPT_FILE="${PLANS_DIR}/${SESSION_ID}-security-code-exit6-accepted.txt"
-# Dedicated code for "re-invoked after a terminal exit with the diff unchanged"; does not
-# collide with bin/run-codex-review-loop's 0-7.
-EXIT_REINVOKE_AFTER_TERMINAL=8
-# exit 6 termination occurred, content changed, but residual HIGH not accepted → re-run blocked.
-EXIT_EXIT6_UNACCEPTED=9
+# line 2 = the reviewed-diff fingerprint at that moment. Terminal and exit-6 accept
+# marker live in <sid>.control/ (#2434); exit 8/9 are the wrapper's own codes.
+# shellcheck source=bin/lib/codex-review-loop/review-wrapper-control.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-review-loop/review-wrapper-control.sh" || exit 4
+# The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
+# so a containment refusal is never read as ESCALATE or as codex-unavailable. The precedence
+# detail outline intent mirrors review-tests (CPR-ORTH): the reviewed code is downstream of
+# all three settled decisions.
+ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
+rwc_resolve security-code review-code-security
 
 # Fingerprint of exactly what review-code-codex reviews: the committed tip plus every
 # uncommitted change, including untracked file CONTENTS. Any real edit to the reviewed
@@ -50,25 +50,11 @@ for a in "$@"; do
 done
 
 if [[ "$PRESTAGED_RERUN" -eq 0 && -f "$TERMINAL_FILE" ]]; then
-  PREV_RC="$(sed -n '1p' "$TERMINAL_FILE" 2>/dev/null || true)"
-  PREV_FP="$(sed -n '2p' "$TERMINAL_FILE" 2>/dev/null || true)"
-  CUR_FP=""
-  compute_diff_fingerprint "$REPO_ROOT_VAL" >/dev/null 2>&1 && CUR_FP="$(compute_diff_fingerprint "$REPO_ROOT_VAL")" || CUR_FP=""
-  if [[ -z "$CUR_FP" || -z "$PREV_FP" ]]; then
-    # fail-CLOSED: an uncomparable fingerprint is not evidence the diff changed.
-    echo "[review-code-security] ERROR: previous security review ended with a terminal exit (code=${PREV_RC:-?}) and the reviewed-diff fingerprint could not be compared. Keeping the guard armed; edit and re-stage the code before re-running." >&2
-    exit "$EXIT_REINVOKE_AFTER_TERMINAL"
-  fi
-  if [[ "$CUR_FP" == "$PREV_FP" ]]; then
-    echo "[review-code-security] ERROR: previous security review ended with a terminal exit (code=${PREV_RC:-?}) and the reviewed code is unchanged. Re-looping now would defeat the 2+1 round cap. Address the concerns and change the code, or accept the residual risk." >&2
-    exit "$EXIT_REINVOKE_AFTER_TERMINAL"
-  fi
-  if [ "${PREV_RC:-}" = "6" ] && [ ! -f "$EXIT6_ACCEPT_FILE" ]; then
-    printf '[review-code-security] Code changed after an exit 6 terminal, but residual HIGH findings are not accepted.\n  Accept marker: %s\n  Create it: touch "%s"\n  Or: explicitly accept the residual HIGH via AskUserQuestion, then re-run.\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
-    exit "$EXIT_EXIT6_UNACCEPTED"
-  fi
-  # Fingerprint mismatch = code was re-edited = a legitimate new review → auto-clear.
-  rm -f "$TERMINAL_FILE"
+  # fail-CLOSED: an uncomparable fingerprint is not evidence the diff changed.
+  CUR_FP="$(compute_diff_fingerprint "$REPO_ROOT_VAL" 2>/dev/null)" || CUR_FP=""
+  TG_RC=0
+  rwc_check_terminal review-code-security "$CUR_FP" security-code-exit6-accepted.txt security-code || TG_RC=$?
+  (( TG_RC == 0 )) || exit "$TG_RC"
 fi
 
 arm_terminal_guard() {
@@ -82,22 +68,12 @@ arm_terminal_guard() {
     # the counter on all three; without a guard, re-invocation opens a fresh 2+1 budget
     # on unchanged code (#2256 C4).
     2|6|7)
-      fp=""
       fp="$(compute_diff_fingerprint "$REPO_ROOT_VAL")" || fp=""
-      local _tmp
-      _tmp="$(mktemp "${PLANS_DIR}/.sg-XXXXXX" 2>/dev/null)" || break
-      printf '%s\n%s\n' "$rc" "$fp" > "$_tmp" || { rm -f "$_tmp"; break; }
-      mv -f "$_tmp" "$TERMINAL_FILE" || rm -f "$_tmp"
+      rwc_arm_terminal "$rc" "$fp"
       ;;
   esac
   return "$rc"
 }
-
-# The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
-# so a containment refusal is never read as ESCALATE or as codex-unavailable. The precedence
-# detail outline intent mirrors review-tests (CPR-ORTH): the reviewed code is downstream of
-# all three settled decisions.
-ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
 
 # security-code is a ref-kind (diff-based) format: the loop reads the working-tree diff, so no
 # draft path is passed. --repo-root is the diff root and the MCP filesystem sandbox.

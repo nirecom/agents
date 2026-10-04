@@ -2,14 +2,8 @@
 # Tests: skills/supervisor-report/SKILL.md, bin/supervisor-report
 # Tags: rules-injection, progressive-disclosure, supervisor-report, executable-doc, enum-validation, TL2, scope:issue-specific
 
-# The supervisor-report half of #2037: rules/supervisor-reporting.md keeps its "When to
-# Report" section unconditional and moves the CLI mechanics into a skill. These cases grade
-# that skill against its real consumer, bin/supervisor-report.
-
-# Split out of the entry file on the target-skill axis (rules/coding/file-split.md Pattern
-# A): everything here is about supervisor-report, everything left there is about
-# issue-close-verified.
-
+# The supervisor-report half of #2037: grades skills/supervisor-report against its real
+# consumer, bin/supervisor-report (split from the entry file per file-split.md Pattern A).
 # Assumes AGENTS_DIR, TMPDIR_BASE, SR_SKILL, SR_CLI, WORKFLOW_PLANS_DIR,
 # fresh_workflow_dir(), run_with_timeout(), pass(), fail() from the entry file.
 echo ""
@@ -85,7 +79,7 @@ else
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const file = path.join(process.argv[2], `${process.argv[3]}-supervisor-state.json`);
+const file = path.join(process.argv[2], `${process.argv[3]}.control`, "supervisor-state.json");
 let f = [];
 try { f = JSON.parse(fs.readFileSync(file, "utf8")).layer1.findings || []; } catch (_) { f = []; }
 if (f.length !== 1) { process.stdout.write(`${f.length}|`); process.exit(0); }
@@ -114,7 +108,7 @@ FIND_EOF
                 --detail "$SR_DETAIL" \
                 --reporter "$SR_REPORTER" \
                 --session-id "$sid" 2>&1)" || rc=$?
-        got="$(node "$TMPDIR_BASE/findings.js" "$WORKFLOW_PLANS_DIR" "$sid" 2>/dev/null || echo "ERR|")"
+        got="$(node "$TMPDIR_BASE/findings.js" "$wf" "$sid" 2>/dev/null || echo "ERR|")"
         if [ "$want" = "want-rc0" ]; then
             wantrec="1|$(printf '%s' "$cat" | tr -d ' ')|$sev|$SR_DETAIL|$SR_REPORTER"
             if [ "$rc" != "0" ]; then
@@ -273,7 +267,7 @@ ARGV_EOF
             "CLAUDE_WORKFLOW_DIR=$S10_WF" \
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
             xargs -0 node "$SR_CLI" <"$S10_ARGV_FILE" 2>&1)" || S10_RC=$?
-        S10_GOT="$(node "$TMPDIR_BASE/findings.js" "$WORKFLOW_PLANS_DIR" "$S10_SID" 2>/dev/null || echo "ERR|")"
+        S10_GOT="$(node "$TMPDIR_BASE/findings.js" "$S10_WF" "$S10_SID" 2>/dev/null || echo "ERR|")"
         # The record the skill's own line, as written, should have produced.
         S10_WANT="$(node -e '
 const e = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).expected;

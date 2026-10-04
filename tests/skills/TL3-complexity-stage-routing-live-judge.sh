@@ -74,7 +74,12 @@ else
     CJ_INTENT="$CJ_TMP/intent.md"
     printf '# Intent\n\nAdd a single log line to one existing function.\n' > "$CJ_INTENT"
     CJ_RAW="$CJ_TMP/judge-raw.txt"
-    CJ_SIGNALS="$CJ_TMP/signals.txt"
+    # #2434: normalize writes, and derive reads, the derived <CLAUDE_WORKFLOW_DIR>/<sid>.control/
+    # detail-signals.txt; both dirs are pinned (dual-pin) for those two calls only.
+    CJ_SID="tl3-live-cj-$$"
+    CJ_WF="$CJ_TMP/workflow-state"; CJ_PLANS="$CJ_TMP/plans"
+    mkdir -p "$CJ_WF" "$CJ_PLANS"
+    CJ_SIGNALS="$CJ_WF/$CJ_SID.control/detail-signals.txt"
     CJ_PROMPT="Judge the complexity signals for the intent in $CJ_INTENT. Emit only the single SIGNALS: line."
     cj_rc=0
     if [ -x "$RUN_TO" ]; then
@@ -85,14 +90,17 @@ else
     if [ "$cj_rc" -ne 0 ] || [ ! -s "$CJ_RAW" ]; then
         fail "T-LIVE-CJ-1 — complexity-judge spawn produced no output (rc=$cj_rc)"
     else
-        node "$NORMALIZE_CLI" --raw-file "$CJ_RAW" --out "$CJ_SIGNALS" >/dev/null 2>&1 || true
+        CLAUDE_WORKFLOW_DIR="$CJ_WF" WORKFLOW_PLANS_DIR="$CJ_PLANS" \
+            node "$NORMALIZE_CLI" --raw-file "$CJ_RAW" --session "$CJ_SID" --stage detail >/dev/null 2>&1 || true
         # C3: a single-log-line, one-file intent has no complexity signals, so the
         # judge must emit `SIGNALS: none` -> empty CSV -> level exactly `low`. A
         # `medium`/`high` here means either the judge over-fired or the pipeline
         # fell through to the S0-undecidable fail-open — both are real regressions,
         # so accepting them (the old low|medium|high match) would be too permissive.
         cj_signals="$(tr -d '[:space:]' < "$CJ_SIGNALS" 2>/dev/null)"
-        cj_level="$(node "$DERIVE_CLI" --stage detail --signals-file "$CJ_SIGNALS" 2>/dev/null | tr -d '[:space:]')"
+        cj_level="$(CLAUDE_WORKFLOW_DIR="$CJ_WF" WORKFLOW_PLANS_DIR="$CJ_PLANS" \
+            node "$DERIVE_CLI" --stage detail --session "$CJ_SID" 2>/dev/null | head -n 1 | tr -d '[:space:]')"
+        cj_level="${cj_level#level=}"
         if [ -z "$cj_signals" ] && [ "$cj_level" = "low" ]; then
             pass "T-LIVE-CJ-1 — trivial intent yielded empty signals and level=low"
         else

@@ -1,0 +1,120 @@
+#!/usr/bin/env node
+// bin/worker-dispatch-payload --session <sid> --worker <name> [--seq <n>] --draft <path>
+// The one writer of worker payloads: validates the model's PLANS_DIR draft
+// (<sid>-worker-<name>[-<seq>].draft.json), publishes it once into
+// <CONTROL_DIR>/worker-<name>[-<seq>].json and prints PAYLOAD=<abs>.
+// Anchor-bound checks stay in the dispatcher (bin/worker-dispatch/capability.js).
+// Exit: 0 published; 1 validation failure; 2 usage / invalid argument; 3 migration error.
+"use strict";
+const fs = require("fs");
+const path = require("path");
+
+const CD = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "control-dir.js"));
+const { assertValidSessionId } = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "core.js"));
+const { getWorkflowPlansDir } = require(path.join(__dirname, "..", "hooks", "lib", "workflow-plans-dir.js"));
+const registry = require(path.join(__dirname, "worker-dispatch", "registry.js"));
+const { samePath, absPath } = require(path.join(__dirname, "worker-dispatch", "anchor.js"));
+const { validateStructure, MAX_PAYLOAD_BYTES } = require(path.join(__dirname, "worker-dispatch", "payload.js"));
+const { checkField, controlNameFor, legacyControlValueOk } = require(path.join(__dirname, "worker-dispatch", "capability.js"));
+
+const SEQ_RE = /^(0|[1-9][0-9]{0,15})$/;
+const STATIC_TYPES = new Set([
+  "text", "text[]", "rel-path-arg[]", "int", "int[]", "issue-ref[]", "bool", "branch",
+  "owner-repo", "repo-ref", "session-id", "iso-date",
+]);
+
+function die(code, msg) {
+  process.stderr.write(`worker-dispatch-payload: ${msg}\n`);
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!["--session", "--worker", "--seq", "--draft"].includes(a)) die(2, `unknown argument: ${a}`);
+    if (i + 1 >= argv.length) die(2, `${a} needs a value`);
+    out[a.slice(2)] = argv[++i];
+  }
+  return out;
+}
+
+function readDraft(draftArg, sid, worker, seq) {
+  const abs = absPath(draftArg);
+  if (abs === null) die(1, "--draft must be an absolute path");
+  const expected = `${sid}-worker-${worker}${seq === undefined ? "" : `-${seq}`}.draft.json`;
+  if (path.basename(abs) !== expected) die(1, `draft must be named ${expected}`);
+  let st;
+  try {
+    st = fs.lstatSync(abs);
+  } catch (_e) {
+    die(1, "draft does not exist");
+  }
+  if (st.isSymbolicLink() || !st.isFile()) die(1, "draft must be a regular file (not a symlink)");
+  if (!samePath(path.dirname(abs), getWorkflowPlansDir())) die(1, "draft must live directly in the workflow plans directory");
+  if (st.size > MAX_PAYLOAD_BYTES) die(1, "draft is too large");
+  return { abs, raw: fs.readFileSync(abs) };
+}
+
+// Static typing of present fields; a legacy control-path field is checked by the shim and stripped.
+function checkFields(obj, entry, sid) {
+  let stripped = false;
+  for (const [key, field] of Object.entries(entry.payloadSpec || {})) {
+    if (!Object.prototype.hasOwnProperty.call(obj, key) || obj[key] === null || obj[key] === undefined) continue;
+    const type = field.type;
+    if (type === "derived-control-file") {
+      const named = controlNameFor(field, obj);
+      if (named.error || !legacyControlValueOk(obj[key], sid, named.name, null)) {
+        die(1, `field '${key}' must be omitted (it is derived in the session control directory)`);
+      }
+      delete obj[key];
+      stripped = true;
+      continue;
+    }
+    if (!type.startsWith("enum:") && !STATIC_TYPES.has(type)) continue;
+    const res = checkField(obj[key], field, {}, obj);
+    if (res.error) die(1, `field '${key}' ${res.error}`);
+  }
+  return stripped;
+}
+
+const args = parseArgs(process.argv.slice(2));
+if (!args.session || !args.worker || !args.draft) {
+  die(2, "usage: worker-dispatch-payload --session <sid> --worker <name> [--seq <n>] --draft <path>");
+}
+try { assertValidSessionId(args.session); } catch (e) { die(2, e.message); }
+if (args.seq !== undefined && !SEQ_RE.test(args.seq)) die(2, "--seq must be a non-negative integer of at most 16 digits");
+const entry = registry.get(args.worker);
+if (entry === null) die(1, `unknown worker ${JSON.stringify(args.worker)}`);
+
+const sid = args.session;
+const stem = `worker-${args.worker}${args.seq === undefined ? "" : `-${args.seq}`}`;
+const draft = readDraft(args.draft, sid, args.worker, args.seq);
+let obj;
+try {
+  obj = JSON.parse(draft.raw.toString("utf8"));
+} catch (_e) {
+  die(1, "draft is not valid JSON");
+}
+const structure = validateStructure(obj, entry);
+if (!structure.ok) die(1, structure.errors.join("; "));
+const stripped = checkFields(obj, entry, sid);
+if (obj.session_id !== undefined && obj.session_id !== sid) die(1, "payload session_id does not match --session");
+
+let target;
+try {
+  if (fs.existsSync(CD.controlPath(sid, `${stem}.dispatched`))) die(1, `${stem} was already dispatched; use a new --seq`);
+  target = CD.controlPath(sid, `${stem}.json`, { forWrite: true });
+} catch (e) {
+  if (e instanceof CD.ControlMigrationError) die(3, e.message);
+  die(1, e.message);
+}
+const bytes = stripped ? `${JSON.stringify(obj, null, 2)}\n` : draft.raw;
+try {
+  fs.writeFileSync(target, bytes, { flag: "wx" });
+} catch (e) {
+  if (e.code === "EEXIST") die(1, `${stem}.json is already published; use a new --seq to dispatch again`);
+  die(1, `cannot write ${target}: ${e.message}`);
+}
+fs.unlinkSync(draft.abs);
+process.stdout.write(`PAYLOAD=${target.replace(/\\/g, "/")}\n`);

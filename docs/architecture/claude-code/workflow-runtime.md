@@ -9,7 +9,6 @@ exemptions. The persisted state data model and the step catalog live in
 
 ```
 Session start → session-start.js (SessionStart hook)
-  appends CLAUDE_SESSION_ID=<sid> to CLAUDE_ENV_FILE
   if state file does not exist:
     resolveInheritanceDonor({sessionId, source, transcriptPath, ctx, agentId}) (#1305):
       Gate A (subagent exclusion): agentId present → no auto-inherit
@@ -53,7 +52,7 @@ Compaction → post-compact.js (PostCompact hook)
 Skill runs (/clarify-intent, /make-outline-plan, /make-detail-plan, /write-tests, etc.)
   → Completion section emits: echo "<<WORKFLOW_MARK_STEP_<step>_complete>>"
   → workflow-mark.js (PostToolUse hook) intercepts command
-     reads session_id from hook stdin JSON (not CLAUDE_ENV_FILE)
+     reads session_id from hook stdin JSON (not the Bash env)
      calls markStep(session_id, step, status)
 
 Edit/Write/MultiEdit/editFiles/NotebookEdit attempt → workflow-gate.js (PreToolUse hook, early gate)
@@ -133,11 +132,11 @@ itself evidence.
 
 Hooks receive `session_id` via hook stdin JSON, but bash scripts and standalone Node CLIs have
 no such channel. They all resolve through one canonical implementation:
-`hooks/workflow-state/session-id.js` (`resolveSessionId()`) — a strict 4-tier SUPPLY-only chain:
-`ctx.sessionIdFromInput` → `CLAUDE_CODE_SESSION_ID` → `CLAUDE_SESSION_ID` →
-`ctx.transcriptPath` basename. Every tier comes from the calling process's own context; no tier
-infers an id from filesystem traces (the former `CLAUDE_ENV_FILE` / `WORKTREE_NOTES.md` /
-JSONL-mtime-scan inference tiers were removed — #2270). Bash callers reach it via the
+`hooks/workflow-state/session-id.js` (`resolveSessionId()`) — a strict 3-tier SUPPLY-only chain:
+`ctx.sessionIdFromInput` → `CLAUDE_CODE_SESSION_ID` → `ctx.transcriptPath` basename. Every tier
+comes from the calling process's own context; no tier infers an id from filesystem traces (the
+former env-file / `WORKTREE_NOTES.md` / JSONL-mtime-scan inference tiers were removed — #2270,
+and the repo-manufactured relay tier — #1091). Bash callers reach it via the
 `bin/resolve-session-id` bridge (stdout = sid on rc 0; rc 2 = unresolvable, the only "no
 session" code; rc 3 = the resolver itself faulted, a distinct condition callers must not
 conflate with "no session" — full rc table: [session-id-resolution.md](session-id-resolution.md#the-bridge-rc-contract));
@@ -191,7 +190,7 @@ A session can inherit from an upstream session it has no transcript lineage to, 
 Step ordering is owned by `bin/workflow/next-step`. That file is a dispatcher only — the implementation lives in `bin/workflow/lib/next-step/` (`cli.js`, `steps.js`, `repo-dir.js`, `entrypoint-path.js`, `list.js`, `state-ops.js`, `verdict.js`). After each skill completes, the model queries next-step with:
 
 ```
-node bin/workflow/next-step --session $CLAUDE_SESSION_ID
+node bin/workflow/next-step --session $CLAUDE_CODE_SESSION_ID
 ```
 
 Output is four `KEY=value` lines: `ACTION` (`invoke|done|blocked|abort`), `NEXT_SKILL`, `NEXT_HINT`, `REASON`. The `NEXT_SKILL` field maps directly to a skill name; non-skill steps (e.g. `branching_complete`, `user_verification`) have an empty `NEXT_SKILL` and a prose `NEXT_HINT` instead.
@@ -220,9 +219,9 @@ Example: `echo "<<WORKFLOW_RESET_FROM_write_tests: user requested re-plan>>"`
 
 Priority order for recovery:
 1. **Session resume**: `session-start.js` re-injects next-step verdict automatically — no action needed.
-2. **Orientation check**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID` for an in-session verdict.
+2. **Orientation check**: `node bin/workflow/next-step --session $CLAUDE_CODE_SESSION_ID` for an in-session verdict.
 3. **Auto-repair**: next-step calls `hasCompletionEvidence()` for evidence-backed steps and self-corrects — no action needed.
-4. **`--mark <step>`**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step>` marks one step complete without touching others (session-global; run from any directory). Use when next-step's scoped hint names a specific step to mark.
+4. **`--mark <step>`**: `node bin/workflow/next-step --session $CLAUDE_CODE_SESSION_ID --mark <step>` marks one step complete without touching others (session-global; run from any directory). Use when next-step's scoped hint names a specific step to mark.
 5. **RESET_FROM**: when the session needs to redo a phase or state became inconsistent.
 6. **Direct JSON edit** (`~/.claude/projects/workflow/<sid>.json`): last resort for surgical per-step changes (e.g. setting one step to `skipped` without affecting others).
 

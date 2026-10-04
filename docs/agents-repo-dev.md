@@ -46,6 +46,10 @@ set means adding the new target to `TARGETS` in
 `tests/fix-1532-node-guard/common.sh` and adding one more dispatcher at
 `tests/bin/fix-1532-node-guard-<name>.sh` (coverage check G6 fails otherwise).
 
+## Where session state files live
+
+Control files (JSON, counters, markers) go to `<CLAUDE_WORKFLOW_DIR>/<sid>.control/`, prose artifacts to `WORKFLOW_PLANS_DIR`; register every new name in `hooks/lib/plans-artifact-registry.js`. Policy: `docs/architecture/claude-code/state-dirs.md`.
+
 ## Consolidated test suites: one dispatcher, sourced fragments
 
 Background: a hook that accumulates cases over many issues ends up with one test

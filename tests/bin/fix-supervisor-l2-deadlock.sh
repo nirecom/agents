@@ -2,16 +2,11 @@
 # tests/bin/fix-supervisor-l2-deadlock.sh
 # Tests: bin/supervisor-report, hooks/lib/resolve-workflow-session-id.js, hooks/supervisor-guard.js, hooks/lib/supervisor-report-format.js
 # Tags: supervisor, session-id-routing, scope:issue-specific
-# L3 gap (what this test does NOT catch):
-# - real Stop-event firing when supervisor-guard reads the wsid state file after fix
-# - SC-5 elapsed-time fallback in a live claude -p session
-# - actual SC-5 fail-loud anomalous-state branch in live session
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
-#
-# L2 integration tests for supervisor L2 deadlock fix.
-# Covers four source files; tests written in TDD order — they FAIL on current
-# source and PASS after the fix is applied.
+# L2 integration tests for the supervisor L2 deadlock fix (wsid state routing).
+# L3 gap: real Stop-event wsid reads, SC-5 elapsed-time fallback and fail-loud branch
+# in a live claude -p session — checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: skill-orchestration.
+# #2434: state is <CLAUDE_WORKFLOW_DIR>/<sid>.control/supervisor-state.json (dual-pinned).
 
 set -u
 
@@ -55,13 +50,13 @@ require_source() {
 # Seed a supervisor-state.json directly via writer module.
 seed_state() {
     local tmp="$1" sid="$2" layer2_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert = $layer2_json;
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
@@ -90,15 +85,15 @@ run_c1() {
     printf 'Session-ID: %s\n' "$wsid" > "$workdir/WORKTREE_NOTES.md"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="$ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        CLAUDE_CODE_SESSION_ID="$ccuuid" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
-    if [ -f "$tmp_node/${wsid}-supervisor-state.json" ]; then
+    if [ -f "$tmp_node/${wsid}.control/supervisor-state.json" ]; then
         pass "C1: wsid from WORKTREE_NOTES.md → wsid state file"
     else
-        fail "C1: wsid from WORKTREE_NOTES.md → wsid state file (expected ${wsid}-supervisor-state.json)"
+        fail "C1: wsid from WORKTREE_NOTES.md → wsid state file (expected ${wsid}.control/supervisor-state.json)"
     fi
     rm -rf "$tmp"
 }
@@ -117,15 +112,15 @@ run_c2() {
     printf 'intent\n' > "$tmp/${wsid}-intent.md"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="$ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        CLAUDE_CODE_SESSION_ID="$ccuuid" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
-    if [ -f "$tmp_node/${wsid}-supervisor-state.json" ]; then
+    if [ -f "$tmp_node/${wsid}.control/supervisor-state.json" ]; then
         pass "C2: wsid from plans-dir context.md → wsid state file"
     else
-        fail "C2: wsid from plans-dir context.md → wsid state file (expected ${wsid}-supervisor-state.json)"
+        fail "C2: wsid from plans-dir context.md → wsid state file (expected ${wsid}.control/supervisor-state.json)"
     fi
     rm -rf "$tmp"
 }
@@ -140,15 +135,15 @@ run_c3() {
     # NO WORKTREE_NOTES.md, NO context.md in plans-dir.
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="$ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        CLAUDE_CODE_SESSION_ID="$ccuuid" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
-    if [ -f "$tmp_node/${ccuuid}-supervisor-state.json" ]; then
+    if [ -f "$tmp_node/${ccuuid}.control/supervisor-state.json" ]; then
         pass "C3: wsid unresolvable → CC UUID fallback"
     else
-        fail "C3: wsid unresolvable → CC UUID fallback (expected ${ccuuid}-supervisor-state.json)"
+        fail "C3: wsid unresolvable → CC UUID fallback (expected ${ccuuid}.control/supervisor-state.json)"
     fi
     rm -rf "$tmp"
 }
@@ -164,12 +159,12 @@ run_c4() {
     printf 'Session-ID: %s\n' "$wsid" > "$workdir/WORKTREE_NOTES.md"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="$ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        CLAUDE_CODE_SESSION_ID="$ccuuid" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
-    if [ ! -f "$tmp_node/${ccuuid}-supervisor-state.json" ]; then
+    if [ ! -f "$tmp_node/${ccuuid}.control/supervisor-state.json" ]; then
         pass "C4: regression — CC UUID file not written when wsid present"
     else
         fail "C4: regression — CC UUID file not written when wsid present (CC UUID file should NOT exist)"
@@ -184,16 +179,11 @@ run_c4() {
 # Helper: invoke resolveWorkflowSessionId from CWD with WORKFLOW_PLANS_DIR set,
 # returning the resolved sid (or empty string on null).
 call_resolve_wsid() {
-    local tmp="$1" cwd="$2" env_file="${3:-}"
-    local extra=""
-    if [ -n "$env_file" ]; then
-        extra="CLAUDE_ENV_FILE='$env_file'"
-    fi
+    local tmp="$1" cwd="$2"
     (
         cd "$cwd" && \
-        unset CLAUDE_SESSION_ID && \
-        if [ -n "$env_file" ]; then export CLAUDE_ENV_FILE="$env_file"; else unset CLAUDE_ENV_FILE; fi && \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+        unset CLAUDE_CODE_SESSION_ID && \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
 process.stdout.write(r == null ? '' : r);
@@ -259,11 +249,10 @@ run_c7() {
 }
 
 # Case 8: multiple sessions in 2-day window → CC UUID bucket-sort selects correct one.
-# When CLAUDE_ENV_FILE points to today's wsid, that one wins over yesterday's.
 # (The bucket-sort means same-day entries beat older-day entries on tie-break.)
 run_c8() {
     require_source "$RESOLVE_WSID" "C8: multiple sessions → bucket-sort selects today" || return
-    local tmp workdir TODAY YESTERDAY today_wsid yest_wsid env_file out
+    local tmp workdir TODAY YESTERDAY today_wsid yest_wsid out
     tmp="$(mktemp -d)"
     workdir="$tmp/work"; mkdir -p "$workdir"
     TODAY="$(today_str)"
@@ -299,9 +288,9 @@ for (const f of ['${yest_wsid}-context.md','${yest_wsid}-intent.md','${yest_wsid
     rm -rf "$tmp"
 }
 
-# Case 9: CLAUDE_ENV_FILE absent → mtime fallback works (today picked)
+# Case 9: no env session id → mtime fallback works (today picked)
 run_c9() {
-    require_source "$RESOLVE_WSID" "C9: CLAUDE_ENV_FILE absent → mtime fallback" || return
+    require_source "$RESOLVE_WSID" "C9: no env session id → mtime fallback" || return
     local tmp workdir TODAY YESTERDAY today_wsid yest_wsid out
     tmp="$(mktemp -d)"
     workdir="$tmp/work"; mkdir -p "$workdir"
@@ -318,9 +307,9 @@ run_c9() {
     # Today should win over yesterday (either via bucket sort or by mtime —
     # today is newer because it's written last in script execution).
     if [ "$out" = "$today_wsid" ]; then
-        pass "C9: CLAUDE_ENV_FILE absent → mtime fallback"
+        pass "C9: no env session id → mtime fallback"
     else
-        fail "C9: CLAUDE_ENV_FILE absent → mtime fallback (got: '$out', expected: '$today_wsid')"
+        fail "C9: no env session id → mtime fallback (got: '$out', expected: '$today_wsid')"
     fi
     rm -rf "$tmp"
 }
@@ -348,11 +337,11 @@ run_c10() {
     # Seed wsid state with alert_armed_at set — guard should branch (3) via fallback.
     seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     out=$(cd "$workdir" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     # After fix: the guard should block (exit 2) because wsid state has alert_armed_at,
     # and the retry counter on the wsid file should increment.
-    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}-supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
+    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}.control/supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
     rm -rf "$tmp"
     if [ "$rc" = "2" ] && [ "$wsid_retry" != "0" ] && [ "$wsid_retry" != "err" ]; then
         pass "C10: primaryState zero-state → wsid fallback"
@@ -376,10 +365,10 @@ run_c11() {
     seed_state "$tmp" "$ccuuid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     out=$(cd "$workdir" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
-    ccuuid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${ccuuid}-supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
-    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}-supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
+    ccuuid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${ccuuid}.control/supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
+    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}.control/supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
     rm -rf "$tmp"
     # When primaryState has alert_armed_at, that path is used — CC UUID retry should
     # be incremented and wsid retry should remain at 0.
@@ -403,9 +392,9 @@ run_c12() {
     # NO CC UUID state file. Only wsid file with alert_armed_at.
     seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     out=$(cd "$workdir" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
-    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}-supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
+    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}.control/supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
     rm -rf "$tmp"
     if [ "$rc" = "2" ] && [ "$wsid_retry" != "0" ] && [ "$wsid_retry" != "err" ]; then
         pass "C12: primaryState null → wsid fallback (existing)"
@@ -471,8 +460,8 @@ run_c15() {
     workdir="$tmp/work"; mkdir -p "$workdir"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="c15-ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        CLAUDE_CODE_SESSION_ID="c15-ccuuid" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity bogus --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -495,8 +484,8 @@ run_c16() {
     workdir="$tmp/work"; mkdir -p "$workdir"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="c16-ccuuid" \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        CLAUDE_CODE_SESSION_ID="c16-ccuuid" \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -545,8 +534,8 @@ run_c18() {
     # the CLI should NOT create any state file matching the injected literal.
     out=$(
         cd "$workdir" && \
-        unset CLAUDE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        unset CLAUDE_CODE_SESSION_ID && \
+        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" --session-id "$injected" 2>&1
     )

@@ -28,7 +28,7 @@ CI-2. Check via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_
 
 CI-2a. Aggregate candidate class members per `reference/aggregate-class-members.md`.
 
-CI-2b. **Companion-issue pre-check + batch presentation.** Skip when `closes_issues` is empty (Path C). Run `bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/precheck-companions.sh" --seed "${closes_issues[0]}" --exclude "<closes_issues joined with commas>" --output-file "<PLANS_DIR>/<session-id>-companion-precheck.json"`. The precheck wraps `companion-search.sh --seed <N> --exclude <csv>` (SSOT), carries each candidate's `reason` column, and evaluates decomposition impact. Exit 1 → no candidates → skip. Exit 0 → follow `reference/companion-batch-presentation.md`: display the per-candidate decomposition annotations and `Reason:` field in the main conversation, then present all candidates in a single batch multiSelect. Selected `#M` appended to `closes_issues` before CI-4 writes intent.md. No WIP claim or side effects here — reconciliation happens in Completion after CI-5.
+CI-2b. **Companion-issue pre-check + batch presentation.** Skip when `closes_issues` is empty (Path C). Run `bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/precheck-companions.sh" --seed "${closes_issues[0]}" --exclude "<closes_issues joined with commas>" --session "<session-id>"`; it writes the snapshot to the session control dir. The precheck wraps `companion-search.sh --seed <N> --exclude <csv>` (SSOT), carries each candidate's `reason` column, and evaluates decomposition impact. Exit 1 → no candidates → skip. Exit 0 → follow `reference/companion-batch-presentation.md`: display the per-candidate decomposition annotations and `Reason:` field in the main conversation, then present all candidates in a single batch multiSelect. Selected `#M` appended to `closes_issues` before CI-4 writes intent.md. No WIP claim or side effects here — reconciliation happens in Completion after CI-5.
 - Emit companion analysis (issue comparison, scope clarification, trade-off summary) as turn-final assistant text or AskUserQuestion preview/description — not as mid-turn text between tool calls (invisible in VS Code).
 
 CI-3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
@@ -40,7 +40,7 @@ CI-3a. **Decomposition impact** — computed non-interactively by `precheck-comp
    - The precheck snapshot records `VERDICT: wf-meta | <signal IDs>` or `VERDICT: wf-code | none` per trial, with `(companion-driven)` annotations.
    - **wf-code**: proceed silently to CI-4 (no user prompt).
    - **wf-meta** (≥2 signals): the sub-deliverable list is displayed in the MAIN CONVERSATION per `reference/companion-batch-presentation.md` (#1096 — never inside AskUserQuestion). Ask at most ONE wf-meta confirmation AskUserQuestion (pre-announced): "Proceed in WF-META mode (planning only, no implementation this session)?" — options "Yes, WF-META (planning only)" / "No, WF-CODE (implement this session)".
-     - **WF-META**: read `$CLAUDE_ENV_FILE` to resolve `SESSION_ID`; run `bin/workflow/set-workflow-type "$SESSION_ID" "wf-meta"` (separate Bash call); proceed to CI-4. After CI-5, route to `make-outline-plan`; next-step auto-skips the non-applicable WF-CODE steps.
+     - **WF-META**: use `$CLAUDE_CODE_SESSION_ID` as `SESSION_ID`; run `bin/workflow/set-workflow-type "$SESSION_ID" "wf-meta"` (separate Bash call); proceed to CI-4. After CI-5, route to `make-outline-plan`; next-step auto-skips the non-applicable WF-CODE steps.
      - **WF-CODE**: proceed silently to CI-4. Never auto-switch to wf-meta without this confirmation.
 
 CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
@@ -63,7 +63,7 @@ CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
 
    After all probes: CI-4 writes a `## worktrees` section with the collected results.
 
-CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS_DIR>` resolves to `~/.workflow-plans/` unless `WORKFLOW_PLANS_DIR` overrides it (`$HOME/.workflow-plans/` on POSIX). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Section order, per-section schemas, and language rules: `reference/intent-md-schema.md`. `## Issues` is the single SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
+CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS_DIR>` resolves to `~/.workflow-plans/` unless `WORKFLOW_PLANS_DIR` overrides it (`$HOME/.workflow-plans/` on POSIX). Use `$CLAUDE_CODE_SESSION_ID` as `<session-id>`; fallback `YYYYMMDD-HHMMSS`. Section order, per-section schemas, and language rules: `reference/intent-md-schema.md`. `## Issues` is the single SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
 
 CI-4a. **Record `closes_issues` into session state** (the only point where Path C's `closes_issues` gets populated): `node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" --session "$SESSION_ID"` (separate Bash call; routes through the write-once cache in `hooks/workflow-state/session-facts.js`).
 
@@ -92,8 +92,8 @@ CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on it
 - `CLOSED:<N>` → `AskUserQuestion` "Issue #<N> is CLOSED. How to proceed?" — "Reopen and continue" / "Remove from closes_issues and continue" (when `len(closes_issues) >= 2` only) / "Abort session" → re-run run-completion.sh.
   - Remove-and-continue branch: after removing the issue from closes_issues, also remove the corresponding `- #N: title` line from the `## Issues` section of the in-progress `intent.md` (and from `outline.md` if it already exists).
   - This keeps plan artifacts in sync with closes_issues — stale `- #N:` entries cause confusion in downstream steps.
-- `SCAN_BLOCKED` (Path C) → read `<PLANS_DIR>/<session-id>-intent-scan-block.txt`; `AskUserQuestion` "Outbound scan blocked the tracking-issue body. How to proceed?" — "Fix intent.md and retry" (then re-run `run-completion.sh`) / "Abort session".
-- `RC2` → `AskUserQuestion` "WIP set rc=2 for #<N>. How to proceed?" → "Skip and continue" / "Abort session". A rc=2 caused by session-id resolution failure is recoverable by re-running with `CLAUDE_SESSION_ID` passed explicitly (it does not propagate to child processes).
+- `SCAN_BLOCKED` (Path C) → read the path printed by `node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session "<session-id>" --file intent-scan-block.txt`; `AskUserQuestion` "Outbound scan blocked the tracking-issue body. How to proceed?" — "Fix intent.md and retry" (then re-run `run-completion.sh`) / "Abort session".
+- `RC2` → `AskUserQuestion` "WIP set rc=2 for #<N>. How to proceed?" → "Skip and continue" / "Abort session". A rc=2 caused by session-id resolution failure is recoverable by re-running with `--session-id "$CLAUDE_CODE_SESSION_ID"`.
 - `NEED_ISSUE` → invoke `/issue-create` → backfill `## Issues` → re-run guard-loop only.
 - `RETRY_EXHAUSTED` → `AskUserQuestion` "Tracking-issue guard failed twice. `closes_issues` is still empty. How should we recover?" — "Retry `/issue-create`" / "Manual recovery" / "Abort workflow" → emit `<<WORKFLOW_RESET_FROM_clarify_intent: tracking-issue guard exhausted>>`.
 - `CLOSED_ENTRY` → `AskUserQuestion` "Tracking-issue guard detected a CLOSED entry. How should we recover?" — "Reopen the closed entry and retry" / "Abort session" → `<<WORKFLOW_RESET_FROM_clarify_intent: closed tracking entry>>`.

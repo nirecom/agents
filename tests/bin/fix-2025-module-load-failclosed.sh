@@ -23,6 +23,7 @@ AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 PASS=0
 FAIL=0
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 
 assert_eq() {
@@ -57,7 +58,6 @@ run_with_timeout() {
 # --- fixture isolation (rules/test/fixture-isolation.md) --------------------
 TMPDIR_BASE="$(mktemp -d)"
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans-root"
@@ -107,6 +107,7 @@ ledger_cli() {
 }
 errsays() { printf '%s' "$SERR" | grep -q -F -e "$1" && printf yes || printf no; }
 
+case_begin "load-1-control-complete-tree" "bin/concern-ledger"
 echo "--- load 1: the control, on a tree with nothing removed ---"
 
 # 1. The classifier has to be seen saying yes: without a working tree, "it
@@ -120,7 +121,9 @@ echo "--- load 1: the control, on a tree with nothing removed ---"
     assert_eq "1: with nothing on stderr" \
         "quiet" "$([ -z "$SERR" ] && printf quiet || printf "noisy:$SERR")"
 }
+case_end
 
+case_begin "load-2-module-removed" "bin/lib/concern-ledger.sh"
 echo ""
 echo "--- load 2: one module removed at a time ---"
 
@@ -155,11 +158,13 @@ reduce.sh                ~ bin/lib/concern-ledger/reduce.sh     ~ concern-ledger
 render.sh                ~ bin/lib/concern-ledger/render.sh     ~ concern-ledger/render.sh — refusing
 finalize.sh              ~ bin/lib/concern-ledger/finalize.sh   ~ concern-ledger/finalize.sh — refusing
 the whole module dir     ~ bin/lib/concern-ledger              ~ library modules not found at
-safe-plans-path.sh       ~ bin/lib/safe-plans-path.sh           ~ required library not found at
+safe-state-path.sh       ~ bin/lib/safe-state-path.sh           ~ required library not found at
 TABLE
     assert_eq_nz "2: every module in the table was removed and tried" "7" "${ROWS2:-0}"
 }
+case_end
 
+case_begin "load-3-module-cannot-parse" "bin/lib/concern-ledger.sh"
 echo ""
 echo "--- load 3: a module that is present but will not parse ---"
 
@@ -179,17 +184,19 @@ echo "--- load 3: a module that is present but will not parse ---"
     assert_eq "3: and nothing reached stdout" \
         "empty" "$([ -z "$SOUT" ] && printf empty || printf "printed:$SOUT")"
 }
+case_end
 
+case_begin "load-4-sibling-entrypoints" "bin/build-codex-context"
 echo ""
 echo "--- load 4: the sibling entrypoints that source the same library ---"
 
-# 4. Five scripts source safe-plans-path.sh, and they do not share one contract:
+# 4. Five scripts source safe-state-path.sh, and they do not share one contract:
 #    two wrappers must halt, and the review-side scripts must degrade to a
 #    visible NOT-STAGED and still exit 0. Checked together so a fix applied to
 #    one is not mistaken for a fix applied to the class (CPR-ORTH).
 {
     D4="$(mktree siblings)"
-    mv "$D4/bin/lib/safe-plans-path.sh" "$D4/bin/lib/safe-plans-path.sh.hidden"
+    mv "$D4/bin/lib/safe-state-path.sh" "$D4/bin/lib/safe-state-path.sh.hidden"
 
     P4B="$(mkplans plans-builder)"
     echo "# Intent" > "$P4B/$SID-intent.md"
@@ -212,7 +219,7 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
     assert_eq "4: saying which library it needed" \
         "yes" "$(printf '%s' "$O4L" | grep -q -F -e 'required library missing' && printf yes || printf no)"
     assert_eq "4: and allocating no round number for a round that never ran" \
-        "no-round" "$([ -e "$P4L/$SID-$FMT-round-number.txt" ] && printf 'allocated-one' || printf no-round)"
+        "no-round" "$([ -e "$CLAUDE_WORKFLOW_DIR/$SID.control/$FMT-round-number.txt" ] && printf 'allocated-one' || printf no-round)"
 
     P4S="$(mkplans plans-secloop)"
     rc=0
@@ -224,7 +231,7 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
     assert_eq "4: saying which library it needed" \
         "yes" "$(printf '%s' "$O4S" | grep -q -F -e 'required library missing' && printf yes || printf no)"
     assert_eq "4: and allocating no round number for a round that never ran" \
-        "no-round" "$([ -e "$P4S/$SID-security-code-round-number.txt" ] && printf 'allocated-one' || printf no-round)"
+        "no-round" "$([ -e "$CLAUDE_WORKFLOW_DIR/$SID.control/security-code-round-number.txt" ] && printf 'allocated-one' || printf no-round)"
 }
 
 # 4b. The intact counterpart of the row above. #2276 moved round numbering for the
@@ -250,11 +257,13 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
     assert_eq "4b: a complete tree reaches a verdict rather than the load guard" \
         "reached" "$(printf '%s' "$O4B2" | grep -q -F -e 'required library missing' && printf 'halted-on-load' || printf reached)"
     assert_eq "4b: and the loop numbers the first security-code round 1" \
-        "1" "$(tr -dc '0-9' < "$P4B2/$SID-security-code-last-round.txt" 2>/dev/null)"
+        "1" "$(tr -dc '0-9' < "$CLAUDE_WORKFLOW_DIR/$SID.control/security-code-last-round.txt" 2>/dev/null)"
     assert_eq "4b: the ledger file is keyed by the ledger format, not the loop label" \
         "yes" "$(grep -qF 'FP_LEDGER_FORMAT="review-security-shared"' "$AGENTS_ROOT/bin/lib/codex-review-loop/format-params.sh" 2>/dev/null && printf yes || printf no)"
 }
+case_end
 
+case_begin "load-5-guards-themselves" "bin/lib/codex-review-loop/ref-kind-input.sh"
 echo ""
 echo "--- load 5: the guards themselves ---"
 
@@ -274,6 +283,7 @@ echo "--- load 5: the guards themselves ---"
     assert_eq_nz "5: and the CLI checks the entrypoint's own" \
         "1" "$(grep -c -F 'if ! . "$SELF_DIR/lib/concern-ledger.sh"' "$AGENTS_ROOT/bin/concern-ledger" | tr -d ' ')"
 }
+case_end
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

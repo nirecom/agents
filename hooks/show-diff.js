@@ -82,22 +82,8 @@ const INTERMEDIATE_PATTERNS = [
   /-outline-concerns-log\.md$/,
   // debug logs
   /-debug\.log$/,
-  // round counters
-  /-(outline|detail)-plan-round-number\.txt$/,
-  // concern ledgers (including cap snapshots)
-  /-(outline|detail)-plan-concern-ledger(-cap-snapshot)?\.txt$/,
-  // codex-built context (renamed from -context.md to avoid WI-9 collision)
-  /-codex-context\.md$/,
-  // codex-built context build markers
-  /-codex-context\.(outline|detail)-plan\.built$/,
-  // review-plan-codex round log
-  /-plan\.jsonl$/,
   // workflow-init Path B prefill
   /-issue-prefill\.md$/,
-  // workflow-init abort marker
-  /-workflow-init-aborted-pathA-multiN-label-failure\.md$/,
-  // clarify-intent CI-C0 guard counter
-  /-guard-attempt\.tmp$/,
 ];
 
 function isPlanFile(filePath) {

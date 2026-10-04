@@ -57,7 +57,7 @@ printf 'echo hi\n' >"$SP/probe.sh"
 # /c/... env value or argument to C:/..., and every POSIX-form case would pass vacuously.
 drv() {
     local sp="$1"; shift
-    run_with_timeout 30 env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u SESSION_ID \
+    run_with_timeout 30 env -u CLAUDE_CODE_SESSION_ID -u SESSION_ID \
         MSYS_NO_PATHCONV=1 AGENTS_DIR="$AGENTS_NODE" SCRATCHPAD="$sp" \
         node "$DRIVER" "$@" 2>&1
 }

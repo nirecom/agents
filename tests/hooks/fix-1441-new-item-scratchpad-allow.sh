@@ -71,28 +71,28 @@ _make_payload() {
 }
 run_hook() {
     local p; p="$(_make_payload "$1")"
-    ( cd "$MAIN_REPO" && ENFORCE_WORKTREE=on WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" CLAUDE_SESSION_ID=test-1441 MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
+    ( cd "$MAIN_REPO" && ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
 }
 run_nongit() {
     local p; p="$(_make_payload "$1")"
-    ( cd "$NONGIT_CWD" && ENFORCE_WORKTREE=on WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$NONGIT_CWD" CLAUDE_SESSION_ID=test-1441 MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
+    ( cd "$NONGIT_CWD" && ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$NONGIT_CWD" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
 }
 run_hook_env() {
     local cmd="$1"; shift; local p; p="$(_make_payload "$cmd")"
     ( cd "$MAIN_REPO" || exit 1; for _kv in "$@"; do export "$_kv"; done
-      ENFORCE_WORKTREE=on WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" CLAUDE_SESSION_ID=test-1441 MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
+      ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
 }
 # run_hook_unset: like run_hook but explicitly UNSETs the named env vars first
 run_hook_unset() {
     local cmd="$1"; shift; local p; p="$(_make_payload "$cmd")"
     ( cd "$MAIN_REPO" || exit 1; for _v in "$@"; do unset "$_v"; done
-      ENFORCE_WORKTREE=on WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" CLAUDE_SESSION_ID=test-1441 MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
+      ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
 }
 # run_nongit_env: run_nongit + extra KEY=VAL env vars (mirror of run_hook_env)
 run_nongit_env() {
     local cmd="$1"; shift; local p; p="$(_make_payload "$cmd")"
     ( cd "$NONGIT_CWD" || exit 1; for _kv in "$@"; do export "$_kv"; done
-      ENFORCE_WORKTREE=on WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$NONGIT_CWD" CLAUDE_SESSION_ID=test-1441 MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
+      ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$NONGIT_CWD" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
 }
 is_allow() { [ "$1" = "{}" ]; }
 is_block() { echo "$1" | grep -q '"decision":"block"'; }

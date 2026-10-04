@@ -643,3 +643,11 @@ Changes: Fixed: hooks no longer misread chunked or oversized stdin payloads, sec
 ### FEATURE: PR #2504 (2026-10-02)
 Background: fix(#2495): clear stale review_tests warnings on a clean COMPLETE
 Changes: Fixed: the commit gate no longer blocks with `warnings-pending` after a later review_tests round finishes clean; stale warnings and their accepted reason are cleared on completion.
+
+### FEATURE: PR #2510 (2026-10-03)
+Background: feat(#2434): move session control files into a guarded per-session control dir
+Changes: Fixed: a session can no longer rewrite its own review-loop control files to bypass an exit guard; control files live in a guarded per-session directory and paths spelled with variables, `~` or `$HOME` are caught.
+
+### FEATURE: PR #2524 (2026-10-04)
+Background: refactor(#1091): remove repo-manufactured CLAUDE_SESSION_ID / CLAUDE_ENV_FILE relay
+Changes: Session id is now read from CLAUDE_CODE_SESSION_ID only; the CLAUDE_SESSION_ID / CLAUDE_ENV_FILE relay was removed (#1091)

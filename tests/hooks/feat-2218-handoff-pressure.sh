@@ -21,7 +21,7 @@ make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 
 LIB="hooks/lib/handoff-pressure.js"
 HOOK="hooks/handoff-pressure-nudge.js"
@@ -63,17 +63,18 @@ run_P1() {
 const fs = require('fs');
 const { computePressureSignal } = require(process.env.AGENTS + '/hooks/lib/handoff-pressure.js');
 const D = process.env.TMPD, W = D + '/wf', MiB = 1024 * 1024, t0 = Date.parse('2026-01-01T00:00:00Z');
+const ctl = (sid, name) => { fs.mkdirSync(W + '/' + sid + '.control', { recursive: true }); return W + '/' + sid + '.control/' + name; };
 const problems = [];
 const cases = [['under', 2 * MiB - 1, false], ['edge', 2 * MiB, true], ['over', 3 * MiB, true]];
 for (const [sid, size, want] of cases) {
-  fs.writeFileSync(W + '/' + sid + '-handoff-pressure.json', JSON.stringify({ baseline_bytes: 0, baseline_at: t0 }));
+  fs.writeFileSync(ctl(sid, 'handoff-pressure.json'), JSON.stringify({ baseline_bytes: 0, baseline_at: t0 }));
   fs.writeFileSync(D + '/' + sid + '.jsonl', Buffer.alloc(size, 120));
   const sig = computePressureSignal({ sid, transcriptPath: D + '/' + sid + '.jsonl', now: t0 + 60000 });
   if (!sig || sig.shouldNudge !== want) problems.push(sid + ':want=' + want + ':' + JSON.stringify(sig));
   else if (want && sig.trigger !== 'bytes') problems.push(sid + ':trigger=' + String(sig.trigger));
   else if (sig.bytesSince !== size) problems.push(sid + ':bytesSince=' + String(sig.bytesSince));
 }
-fs.writeFileSync(W + '/absent-handoff-pressure.json', JSON.stringify({ baseline_bytes: 0, baseline_at: t0 }));
+fs.writeFileSync(ctl('absent', 'handoff-pressure.json'), JSON.stringify({ baseline_bytes: 0, baseline_at: t0 }));
 const missing = computePressureSignal({ sid: 'absent', transcriptPath: D + '/absent.jsonl', now: t0 + 60000 });
 if (!missing || missing.shouldNudge !== false) problems.push('absent-transcript:' + JSON.stringify(missing));
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
@@ -100,7 +101,8 @@ const { computePressureSignal } = require(process.env.AGENTS + '/hooks/lib/hando
 const { appendHandoffEntry } = require(process.env.AGENTS + '/hooks/lib/handoff-artifact.js');
 const D = process.env.TMPD, W = D + '/wf', MiB = 1024 * 1024, t0 = Date.parse('2026-01-01T00:00:00Z');
 const ms = (v) => new Date(v).getTime();
-const readSide = (sid) => { try { return JSON.parse(fs.readFileSync(W + '/' + sid + '-handoff-pressure.json', 'utf8')); } catch (e) { return null; } };
+const ctl = (sid, name) => { fs.mkdirSync(W + '/' + sid + '.control', { recursive: true }); return W + '/' + sid + '.control/' + name; };
+const readSide = (sid) => { try { return JSON.parse(fs.readFileSync(ctl(sid, 'handoff-pressure.json'), 'utf8')); } catch (e) { return null; } };
 const problems = [];
 // (a) first sight: initialise, never nudge.
 let t = D + '/a.jsonl';
@@ -121,7 +123,7 @@ s = computePressureSignal({ sid: 'a', transcriptPath: t, now: t0 + 120000 });
 if (!s || s.shouldNudge !== false) problems.push('re-fired-next-turn:' + JSON.stringify(s));
 // (d) auto-record / gate-block / procedure-point entries after the baseline do not move it.
 t = D + '/d.jsonl';
-fs.writeFileSync(W + '/d-handoff-pressure.json', JSON.stringify({ baseline_bytes: 0, baseline_at: t0 }));
+fs.writeFileSync(ctl('d', 'handoff-pressure.json'), JSON.stringify({ baseline_bytes: 0, baseline_at: t0 }));
 for (const origin of ['auto-record', 'gate-block', 'procedure-point']) {
   appendHandoffEntry('d', { cls: 'C', step: '-', key: 'k-' + origin, summary: 's', pointer: '-', origin });
 }
@@ -130,7 +132,7 @@ s = computePressureSignal({ sid: 'd', transcriptPath: t, now: t0 + 60000 });
 if (!s || s.shouldNudge !== true) problems.push('hook-writes-silenced-the-check:' + JSON.stringify(s));
 // (e) a shrunken transcript re-anchors baseline_bytes only.
 t = D + '/e.jsonl';
-fs.writeFileSync(W + '/e-handoff-pressure.json', JSON.stringify({ baseline_bytes: 5 * MiB, baseline_at: t0 }));
+fs.writeFileSync(ctl('e', 'handoff-pressure.json'), JSON.stringify({ baseline_bytes: 5 * MiB, baseline_at: t0 }));
 fs.writeFileSync(t, Buffer.alloc(1 * MiB, 120));
 s = computePressureSignal({ sid: 'e', transcriptPath: t, now: t0 + 60000 });
 if (!s || s.shouldNudge !== false) problems.push('shrink-nudged:' + JSON.stringify(s));
@@ -138,7 +140,7 @@ side = readSide('e');
 if (!side || side.baseline_bytes !== 1 * MiB || ms(side.baseline_at) !== t0) problems.push('shrink-sidecar:' + JSON.stringify(side));
 // (f) an unwritable sidecar never nudges — firing without advancing is the every-turn loop.
 t = D + '/f.jsonl';
-fs.mkdirSync(W + '/f-handoff-pressure.json');
+fs.mkdirSync(ctl('f', 'handoff-pressure.json'));
 fs.writeFileSync(t, Buffer.alloc(3 * MiB, 120));
 for (const dt of [60000, 120000]) {
   s = computePressureSignal({ sid: 'f', transcriptPath: t, now: t0 + dt });
@@ -164,7 +166,8 @@ const fs = require('fs');
 const D = process.env.TMPD;
 fs.writeFileSync(D + '/transcript.jsonl', Buffer.alloc(3 * 1024 * 1024, 120));
 for (const sid of ['sid-p3', 'sid-p6']) {
-  fs.writeFileSync(D + '/wf/' + sid + '-handoff-pressure.json', JSON.stringify({ baseline_bytes: 0, baseline_at: Date.now() - 60000 }));
+  fs.mkdirSync(D + '/wf/' + sid + '.control', { recursive: true });
+  fs.writeFileSync(D + '/wf/' + sid + '.control/handoff-pressure.json', JSON.stringify({ baseline_bytes: 0, baseline_at: Date.now() - 60000 }));
 }
 if (process.env.ACTIVE_SID) {
   const S = require(process.env.AGENTS + '/hooks/workflow-state/state-io');
@@ -313,13 +316,14 @@ const P = require(process.env.AGENTS + '/hooks/lib/handoff-pressure.js');
 const D = process.env.TMPD, W = D + '/wf';
 const KiB = 1024, MiB = 1024 * KiB, MIN = 60000, t0 = Date.parse('2026-01-01T00:00:00Z'), B0 = 1 * MiB;
 const ms = (v) => new Date(v).getTime();
-const put = (name, obj) => fs.writeFileSync(W + '/' + name, typeof obj === 'string' ? obj : JSON.stringify(obj));
-const side = (sid) => { try { return JSON.parse(fs.readFileSync(W + '/' + sid + '-handoff-pressure.json', 'utf8')); } catch (e) { return null; } };
+const ctl = (sid, name) => { fs.mkdirSync(W + '/' + sid + '.control', { recursive: true }); return W + '/' + sid + '.control/' + name; };
+const put = (sid, name, obj) => fs.writeFileSync(ctl(sid, name), typeof obj === 'string' ? obj : JSON.stringify(obj));
+const side = (sid) => { try { return JSON.parse(fs.readFileSync(ctl(sid, 'handoff-pressure.json'), 'utf8')); } catch (e) { return null; } };
 // ev(sid, {size, now, base, risk, mark}) — plant the fixture and evaluate once.
 const ev = (sid, o) => {
-  if (o.base) put(sid + '-handoff-pressure.json', { baseline_bytes: o.base[0], baseline_at: o.base[1] });
-  if (o.risk !== undefined) put(sid + '-handoff-risk.json', typeof o.risk === 'string' ? o.risk : { last_risk_at: o.risk, source: 'gate-block' });
-  if (o.mark) put(sid + '-handoff-flush-mark.json', { bytes: o.mark[0], at: o.mark[1] });
+  if (o.base) put(sid, 'handoff-pressure.json', { baseline_bytes: o.base[0], baseline_at: o.base[1] });
+  if (o.risk !== undefined) put(sid, 'handoff-risk.json', typeof o.risk === 'string' ? o.risk : { last_risk_at: o.risk, source: 'gate-block' });
+  if (o.mark) put(sid, 'handoff-flush-mark.json', { bytes: o.mark[0], at: o.mark[1] });
   const t = D + '/' + sid + '.jsonl';
   if (o.size !== undefined) fs.writeFileSync(t, Buffer.alloc(o.size, 120));
   return P.computePressureSignal({ sid, transcriptPath: t, now: o.now });
@@ -386,7 +390,7 @@ check('corrupt-risk-reads-as-none', (bad) => {
   const s = ev('c1', { base: [B0, t0], risk: '{ not json', size: B0 + MiB, now: t0 + 2 * MIN });
   want(bad, 'garbage', s, false);
   if (s && s.riskActive !== false) bad.push('riskActive:' + String(s.riskActive));
-  fs.mkdirSync(W + '/c2-handoff-risk.json');
+  fs.mkdirSync(ctl('c2', 'handoff-risk.json'));
   want(bad, 'directory', ev('c2', { base: [B0, t0], size: B0 + MiB, now: t0 + 2 * MIN }), false);
 });
 check('trigger-table-is-ored', (bad) => {

@@ -30,15 +30,19 @@ require_source() {
     return 0
 }
 
+# #2434: the supervisor state lives at <CLAUDE_WORKFLOW_DIR>/<sid>.control/,
+# so every seed and every hook call pins CLAUDE_WORKFLOW_DIR="$tmp/workflow"
+# (the same dir seed_workflow_init_complete writes), and seeds resolve the
+# path with {forWrite:true} so the <sid>.control/ dir is created.
 seed_state() {
     local tmp="$1" sid="$2" alert_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert = $alert_json;
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
@@ -46,13 +50,13 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 # Used for testing the legacy advisory backward-compat path (branch 4 in supervisor-guard.js).
 seed_layer2_state() {
     local tmp="$1" sid="$2" layer2_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.layer2 = $layer2_json;
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 

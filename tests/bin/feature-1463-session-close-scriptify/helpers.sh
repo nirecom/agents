@@ -2,7 +2,7 @@
 # Shared helpers for feature-1463-session-close-scriptify tests.
 # Sourced by render-tests.sh / detect-sc7-tests.sh / structural-tests.sh — not a standalone runner.
 # Tests: tests/bin/feature-1463-session-close-scriptify.sh
-# Tags: scope:issue-specific
+# Tags: scope:issue-specific, feature-2434, control-dir
 
 set -u
 
@@ -52,10 +52,25 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# #2434: control files live at $CLAUDE_WORKFLOW_DIR/<sid>.control/<name>; the
+# intent stays in PLANS as <sid>-intent.md. Pin every root the CLIs resolve.
+WF_DIR="$(node_path "${TMPDIR_BASE}/wf")"
+PLANS_DIR="$(node_path "${TMPDIR_BASE}/plans")"
+mkdir -p "$WF_DIR" "$PLANS_DIR" "${TMPDIR_BASE}/home" "${TMPDIR_BASE}/tx"
+export HOME="${TMPDIR_BASE}/home"
+export CLAUDE_WORKFLOW_DIR="$WF_DIR"
+export WORKFLOW_PLANS_DIR="$PLANS_DIR"
+export CLAUDE_TRANSCRIPT_BASE_DIR="${TMPDIR_BASE}/tx"
+unset CLAUDE_CODE_SESSION_ID
+
+# ctl_path <sid> <name>: the derived control path for a session.
+ctl_path() { printf '%s' "${WF_DIR}/$1.control/$2"; }
+
 SID="f1463-session"
-ENV_JSON="${TMPDIR_BASE}/${SID}-final-report-env.json"
-OUTCOME_JSON="${TMPDIR_BASE}/${SID}-issue-close-outcome.json"
-INTENT_MD="${TMPDIR_BASE}/${SID}-intent.md"
+mkdir -p "${WF_DIR}/${SID}.control"
+ENV_JSON="$(ctl_path "$SID" final-report-env.json)"
+OUTCOME_JSON="$(ctl_path "$SID" issue-close-outcome.json)"
+INTENT_MD="${PLANS_DIR}/${SID}-intent.md"
 
 # Known sentinel values used for substitution assertions (T6).
 FIXTURE_PR_TITLE="Fixture PR Title 1463"
@@ -102,20 +117,25 @@ ENV_JSON_NODE="$(node_path "$ENV_JSON")"
 OUTCOME_JSON_NODE="$(node_path "$OUTCOME_JSON")"
 INTENT_MD_NODE="$(node_path "$INTENT_MD")"
 
-# render-final-report.js CLI contract is not yet frozen; drive it via the two
-# argument styles the SKILL.md notes describe (positional paths + env vars).
-# The test passes both so it survives either final signature.
+# seed_sid_fixture <sid>: copy the base env/outcome/intent to <sid>'s own
+# derived control paths so a case can mutate one file without touching $SID.
+seed_sid_fixture() {
+    mkdir -p "${WF_DIR}/$1.control"
+    cp "$ENV_JSON" "$(ctl_path "$1" final-report-env.json)"
+    cp "$OUTCOME_JSON" "$(ctl_path "$1" issue-close-outcome.json)"
+    cp "$INTENT_MD" "${PLANS_DIR}/$1-intent.md"
+}
+
+# Legacy positional form (#2434 shim): each path defaults to the derived path
+# of the session in $1; the optional 5th arg is omitted when empty.
 render_report() {
-    # $1 = session-id ; env overrides applied by caller
-    run_with_timeout 120 env \
-        FINAL_REPORT_ENV_JSON="${FRE_ENV_JSON:-$ENV_JSON_NODE}" \
-        OUTCOME_JSON="${FRE_OUTCOME_JSON:-$OUTCOME_JSON_NODE}" \
-        INTENT_MD="${FRE_INTENT_MD:-$INTENT_MD_NODE}" \
-        SUPERVISOR_STATE_JSON="${FRE_SUPERVISOR_STATE:-}" \
-        node "$RENDER_JS" \
-        "$1" \
-        "${FRE_ENV_JSON:-$ENV_JSON_NODE}" \
-        "${FRE_OUTCOME_JSON:-$OUTCOME_JSON_NODE}" \
-        "${FRE_INTENT_MD:-$INTENT_MD_NODE}" \
-        "${FRE_SUPERVISOR_STATE:-}"
+    local sid="$1"
+    local -a args=(
+        "$sid"
+        "${FRE_ENV_JSON:-$(ctl_path "$sid" final-report-env.json)}"
+        "${FRE_OUTCOME_JSON:-$(ctl_path "$sid" issue-close-outcome.json)}"
+        "${FRE_INTENT_MD:-${PLANS_DIR}/${sid}-intent.md}"
+    )
+    [ -n "${FRE_SUPERVISOR_STATE:-}" ] && args+=("$FRE_SUPERVISOR_STATE")
+    run_with_timeout 120 node "$RENDER_JS" "${args[@]}"
 }

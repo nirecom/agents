@@ -110,8 +110,8 @@ while [[ $# -gt 0 ]]; do
     *) shift ;;
   esac
 done
-if [[ -n "$CLF_LOGDIR" && -n "$CLF_SID" ]]; then
-  printf '{"round":"%s","format":"%s"}\n' "$CLF_R" "$CLF_FMT" >> "$CLF_LOGDIR/$CLF_SID-plan.jsonl"
+if [[ -n "$CLF_LOGDIR" ]]; then
+  printf '{"round":"%s","format":"%s"}\n' "$CLF_R" "$CLF_FMT" >> "$CLF_LOGDIR/plan.jsonl"
 fi
 [[ -n "${CLF_ROUND_LOG:-}" ]] && printf '%s\n' "$CLF_R" >> "$CLF_ROUND_LOG"
 [[ -n "${CLF_ARGV_LOG:-}" ]] && printf '%s\n' "$CLF_ARGV" >> "$CLF_ARGV_LOG"
@@ -141,13 +141,15 @@ clf_plans() {
     printf '# Tradeoffs\n' > "$1/tradeoffs.md"
 }
 
-# The artifact names the wrapper and the ledger CLI agree on, written once so
-# that no case can drift from them (CPR-SSOT).
-clf_ledger_path()     { printf '%s/%s-%s-concern-ledger.txt' "$1" "$2" "$3"; }
-clf_round_path()      { printf '%s/%s-%s-round-number.txt' "$1" "$2" "$3"; }
-clf_last_round_path() { printf '%s/%s-%s-last-round.txt' "$1" "$2" "$3"; }
-clf_artifact_path()   { printf '%s/%s-%s-unresolved-concerns.json' "$1" "$2" "$3"; }
-clf_delta_path()      { printf '%s/%s-%s-round-%s-delta-review-plan-codex.txt' "$1" "$2" "$3" "$4"; }
+# Control-dir paths: control files moved from PLANS_DIR to CLAUDE_WORKFLOW_DIR/<sid>.control/
+# (#2434). First arg ($1, formerly plans-dir) is ignored so callers need no change.
+# clf_control_dir <sid> — the per-session control directory.
+clf_control_dir()     { printf '%s/%s.control' "${CLAUDE_WORKFLOW_DIR:?CLAUDE_WORKFLOW_DIR not set}" "$1"; }
+clf_ledger_path()     { local d; d="$(clf_control_dir "$2")"; mkdir -p "$d"; printf '%s/%s-concern-ledger.txt' "$d" "$3"; }
+clf_round_path()      { local d; d="$(clf_control_dir "$2")"; mkdir -p "$d"; printf '%s/%s-round-number.txt' "$d" "$3"; }
+clf_last_round_path() { local d; d="$(clf_control_dir "$2")"; mkdir -p "$d"; printf '%s/%s-last-round.txt' "$d" "$3"; }
+clf_artifact_path()   { local d; d="$(clf_control_dir "$2")"; mkdir -p "$d"; printf '%s/%s-unresolved-concerns.json' "$d" "$3"; }
+clf_delta_path()      { local d; d="$(clf_control_dir "$2")"; mkdir -p "$d"; printf '%s/%s-round-%s-delta-review-plan-codex.txt' "$d" "$3" "$4"; }
 
 # clf_run <root> <plans> <sid> <format> [extra wrapper args...] — the REAL
 # shared wrapper. Sets CLF_RC / CLF_OUT / CLF_ERR.

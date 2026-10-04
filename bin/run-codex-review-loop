@@ -201,11 +201,9 @@ else
   [[ -z "$DRAFT" ]] || die "--draft-file is not accepted for ref-kind format: $FORMAT"
 fi
 
-# Validated here, not at the ledger CLI: this wrapper builds and *creates*
-# $PLANS_DIR/$SID-... itself — the context file, the built-marker, the round
-# counter, the last-round file and the round lock — long before any concern-
-# ledger code runs, so guarding only the CLI leaves this prefix open (#2025 C9).
-SAFE_TOKEN_LIB="$AGENTS_CONFIG_DIR/bin/lib/safe-plans-path.sh"
+# Validated here, not at the ledger CLI: this wrapper creates the session's control
+# files itself long before any concern-ledger code runs (#2025 C9).
+SAFE_TOKEN_LIB="$AGENTS_CONFIG_DIR/bin/lib/safe-state-path.sh"
 [[ -f "$SAFE_TOKEN_LIB" ]] || die "required library missing: $SAFE_TOKEN_LIB"
 # shellcheck source=/dev/null
 source "$SAFE_TOKEN_LIB" || die "required library failed to load: $SAFE_TOKEN_LIB"
@@ -229,27 +227,10 @@ REVIEWER="$AGENTS_CONFIG_DIR/bin/$REVIEWER_BIN"
 [[ -f "$BUILDER" ]]  || die "build-codex-context not found: $BUILDER"
 [[ -f "$REVIEWER" ]] || die "reviewer not found: $REVIEWER"
 
-mkdir -p "$PLANS_DIR" || die "cannot create PLANS_DIR: $PLANS_DIR"
-
-CONTEXT_OUT="$PLANS_DIR/$SID-codex-context.md"
-MARKER="$PLANS_DIR/$SID-codex-context.$FORMAT.built"
-# The ledger is addressed by the shared ledger token, the round counter by the
-# loop format: security-code and the security-plan review share one ledger while
-# keeping separate round counters (#2276 S8-a).
-if [[ -n "$LEDGER_OVERRIDE" ]]; then
-  LEDGER="$LEDGER_OVERRIDE"
-else
-  LEDGER="$PLANS_DIR/$SID-$LEDGER_FORMAT-concern-ledger.txt"
-fi
-
-# --- Round counter management: SSOT for ROUND allocation (P2-2b/c) ---
-ROUND_FILE="$PLANS_DIR/$SID-$FORMAT-round-number.txt"
-LAST_ROUND_FILE="$PLANS_DIR/$SID-$FORMAT-last-round.txt"
-ROUND_LOCK="$ROUND_FILE.lock"
-ROUND_LOCK_HELD=0
-
 # --- Sourced helper modules (rules/coding/file-split.md Pattern A) ---
 CRL_LIB="$AGENTS_CONFIG_DIR/bin/lib/codex-review-loop"
+# shellcheck source=bin/lib/codex-review-loop/control-paths.sh
+source "$CRL_LIB/control-paths.sh"  || die "required library failed to load: control-paths.sh"
 # shellcheck source=bin/lib/codex-review-loop/round-counter.sh
 source "$CRL_LIB/round-counter.sh"  || die "required library failed to load: round-counter.sh"
 # shellcheck source=bin/lib/codex-review-loop/ledger-verdict.sh
@@ -285,7 +266,7 @@ if (( PRESTAGED_MODE == 1 )); then
 fi
 
 # ===========================================================================
-# REVIEWER pass — allocate the round, run the reviewer, fold its findings.
+# REVIEWER pass — allocate the round (<fmt>-round-number.txt), run the reviewer, fold findings.
 # ===========================================================================
 acquire_round_lock
 

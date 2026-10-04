@@ -3,29 +3,15 @@
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/parse.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, input-validation, path-traversal, injection, quoting, table-driven, scope:common, pwsh-not-required
 #
-# Every file the ledger touches is a name built by interpolation: the plans dir,
-# the session ID, the format and the producer are pasted together into a path.
-# Three of those four come from outside — a session ID resolved from workflow
-# state, a format chosen by a skill, a producer named by a reviewer — so the
-# path builders are an injection surface, and what they do with a separator, a
-# '..' or a shell metacharacter is a security property, not a formatting detail.
-
-# The two things a path builder can get wrong are opposite failures and are
-# separated deliberately below (CPR-SC): writing somewhere it should not
-# (traversal), and silently writing nowhere at all (a lost round). A round whose
-# findings vanish while the CLI reports success is the worse of the two.
-
-# TL2. The real bin/concern-ledger is driven over real report files in a
-# throwaway sandbox, so where a byte lands is observed on the filesystem.
-
-# TL3 gap (mitigation category: skill-orchestration)
-#   Not covered here, and covered nowhere below TL3: the values the skills
-#   actually pass. Every case here supplies a hostile session ID directly,
-#   whereas in a real run it comes from the workflow state file and the format
-#   from a literal in a SKILL.md. A skill that starts deriving a producer name
-#   from reviewer output would open this surface without failing anything here.
-#   Mitigation: the producer names are a closed set pinned by case 6.
+# Session ID, format and producer are interpolated into ledger paths, so the path
+# builders are an injection surface. Two opposite failures, separated (CPR-SC):
+# traversal (writing somewhere it should not) and a lost round (writing nowhere
+# while reporting success). TL2: the real CLI over a throwaway sandbox.
 set -uo pipefail
+
+# TL3 gap (mitigation category: skill-orchestration): the values real skills pass
+# (session ID from state, format from a SKILL.md literal) are not exercised here.
+# Mitigation: the producer names are a closed set pinned by case 6.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CLI="$AGENTS_ROOT/bin/concern-ledger"
@@ -69,7 +55,6 @@ assert_eq_nz() {
 # ---------------------------------------------------------------------------
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
@@ -96,16 +81,20 @@ CONCERN_TEXT="the concern that must not be lost"
 # Sandbox. Each probe gets its own root so a traversal from one case cannot be
 # mistaken for a file another case wrote.
 #   <root>/plans   — the --plans-dir handed to the CLI
+#   <root>/wf      — CLAUDE_WORKFLOW_DIR; control files land in <sid>.control (#2434)
 #   <root>/        — where a single '..' lands
 # ---------------------------------------------------------------------------
 BOX_SEQ=0
 BOX=""
 PLANS=""
+WF=""
 new_box() {
     BOX_SEQ=$((BOX_SEQ + 1))
     BOX="$TMPDIR_BASE/box-$BOX_SEQ"
     PLANS="$BOX/plans"
-    mkdir -p "$PLANS"
+    WF="$BOX/wf"
+    export CLAUDE_WORKFLOW_DIR="$WF"
+    mkdir -p "$PLANS" "$WF"
 }
 
 # stage_with <session-id> <format> <producer> — run the real CLI, echo its rc.
@@ -116,15 +105,15 @@ stage_with() {
     printf '%s' "$rc"
 }
 
-# landed <dir> — where the round's bytes ended up, described rather than named:
-# 'in-plans', 'outside-plans', or 'nowhere'. A count, not a path, so a case
+# landed — where the round's bytes ended up, described rather than named:
+# 'in-control-dir', 'outside', or 'nowhere'. A count, not a path, so a case
 # cannot pass by matching a filename it also constructed.
 landed() {
     local n_in n_out
-    n_in="$(find "$PLANS" -type f -name '*delta*' 2>/dev/null | wc -l | tr -d ' ')"
-    n_out="$(find "$BOX" -type f -name '*delta*' -not -path "$PLANS/*" 2>/dev/null | wc -l | tr -d ' ')"
-    if [ "$n_out" -gt 0 ]; then printf 'outside-plans'; return; fi
-    if [ "$n_in" -gt 0 ]; then printf 'in-plans'; return; fi
+    n_in="$(find "$WF" -mindepth 2 -type f -path "$WF/*.control/*" -name '*delta*' 2>/dev/null | wc -l | tr -d ' ')"
+    n_out="$(find "$BOX" -type f -name '*delta*' -not -path "$WF/*.control/*" 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "$n_out" -gt 0 ]; then printf 'outside'; return; fi
+    if [ "$n_in" -gt 0 ]; then printf 'in-control-dir'; return; fi
     printf 'nowhere'
 }
 

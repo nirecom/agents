@@ -179,7 +179,7 @@ e2e_run() {
     _hk_env 0
     E2E_RC=0
     (cd "$NEUTRAL_CWD" \
-        && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID \
+        && unset CLAUDE_CODE_SESSION_ID \
         && run_with_timeout "${E2E_TIMEOUT:-10}" env "${HK_ENVS[@]}" \
             bash -c "$E2E_CMD" < "$PAYLOAD_FILE") > "$outfile" 2>"$errfile" || E2E_RC=$?
     E2E_OUT="$(cat "$outfile" 2>/dev/null || true)"

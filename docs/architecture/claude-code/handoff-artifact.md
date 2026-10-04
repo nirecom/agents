@@ -6,7 +6,7 @@ The handoff artifact is the durable home for that micro-state: an append-only, h
 
 ## Location and shape
 
-`<PLANS_DIR>/<sid>-handoff.md`, alongside the session's `-intent.md` / `-outline.md` / `-detail.md`. `PLANS_DIR` resolves via `hooks/lib/workflow-plans-dir.js` (`WORKFLOW_PLANS_DIR`, default `~/.workflow-plans`).
+`<CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff.md` — a control file, kept apart from the prose artifacts in `PLANS_DIR` so that it is guarded while `WORKFLOW=on`. The path resolves via `controlPath` in `hooks/workflow-state/state-io/control-dir.js`, which also migrates the legacy session-prefixed `handoff.md` left in `PLANS_DIR`.
 
 The document opens with a title line and `handoff_schema_version: 1`, then one `## <class>` section per class that has entries, in A–G order. Each entry is exactly one line:
 
@@ -72,7 +72,7 @@ Why every origin is gated: the artifact's readers are `/resume-session` and the 
 
 **Legacy origins.** Documents written before #2430 carry `step-end` (now `procedure-point`) and record compaction as `flush`. The writer and the CLI accept only the four values above, but the reader never validates `origin`, so an old document reads back unchanged.
 
-The writer returns `{written, reason}` and **never throws**. Every caller is a side-effect writer whose primary job — deciding a gate verdict, emitting a sentinel, exiting a CLI — must survive a lost breadcrumb, so callers also wrap the call in try/catch and ignore the result. A read-only `PLANS_DIR` changes no existing behavior.
+The writer returns `{written, reason}` and **never throws**. Every caller is a side-effect writer whose primary job — deciding a gate verdict, emitting a sentinel, exiting a CLI — must survive a lost breadcrumb, so callers also wrap the call in try/catch and ignore the result. A read-only control dir, or a control-dir migration failure, changes no existing behavior.
 
 `reason` values: `ok`, `invalid` (bad sid or malformed entry), `noop-identical`, `overflow`, `schema-unknown`, `io`, and — from the active-period gate only — `inactive`.
 
@@ -80,7 +80,7 @@ The writer returns `{written, reason}` and **never throws**. Every caller is a s
 
 ### Session id validation
 
-`sid` is validated against `SESSION_ID_VALID_RE` from `hooks/workflow-state/state-io/core.js` before it reaches `path.join`. A hostile sid returns `{written: false, reason: "invalid"}` and the CLI exits non-zero writing nothing — the path is never constructed, so no traversal outside `PLANS_DIR` is reachable (CWE-22).
+`sid` is validated against `SESSION_ID_VALID_RE` from `hooks/workflow-state/state-io/core.js` before it reaches `path.join`. A hostile sid returns `{written: false, reason: "invalid"}` and the CLI exits non-zero writing nothing — the path is never constructed, so no traversal outside the control dir is reachable (CWE-22).
 
 ## Dedup — latest wins
 
@@ -140,13 +140,13 @@ A user's Revise and a tool-permission refusal would also qualify, but have no me
 
 ### Files
 
-All under `PLANS_DIR`, one writer each:
+All control files under `<CLAUDE_WORKFLOW_DIR>/<sid>.control/`, one writer each:
 
 | File | Content | Writer |
 |---|---|---|
-| `<sid>-handoff-pressure.json` | `{baseline_bytes, baseline_at, transcript_path}` | The nudge hook only |
-| `<sid>-handoff-flush-mark.json` | `{bytes, at}` (`bytes` may be null) | `bin/workflow/handoff-append` only |
-| `<sid>-handoff-risk.json` | `{last_risk_at, source}` (last writer wins) | `recordRiskSignal` only |
+| `handoff-pressure.json` | `{baseline_bytes, baseline_at, transcript_path}` | The nudge hook only |
+| `handoff-flush-mark.json` | `{bytes, at}` (`bytes` may be null) | `bin/workflow/handoff-append` only |
+| `handoff-risk.json` | `{last_risk_at, source}` (last writer wins) | `recordRiskSignal` only |
 
 None of them is a handoff write, so none passes the active-period gate; the flush mark exists only after a gated flush succeeded. A failed write never changes a primary outcome: an unwritable baseline suppresses the nudge, an unreadable risk stamp reads as "no risk".
 
@@ -162,4 +162,4 @@ All three are constants. After rollout, measure nudge count, flush count, and th
 
 ## Lifecycle
 
-The artifact is a plan-directory file, so it follows `PLANS_DIR` conventions: no automatic TTL, `bin/sweep-plans.sh` removes it with the rest of its session group after `SWEEP_AGE_DAYS` (default 30, user-initiated), and `bin/session-sync.sh` copies it between machines. State files expire on their own 7-day zombie cleanup, so an artifact routinely outlives the state file it accompanied — `/resume-session --from` treats that as the `artifacts-only` rung of its availability ladder, not as a failure.
+The artifact is a control file (`<CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff.md`), so it follows the control-directory lifecycle in [state-dirs.md](state-dirs.md) "Cleanup": `bin/sweep-plans.sh` never touches it, and `bin/session-sync.sh` — which copies `PLANS_DIR` files only — does not carry it between machines. State files expire on their own 7-day zombie cleanup while the control directory is kept until its newest file is 30 days old, so an artifact routinely outlives the state file it accompanied — `/resume-session --from` treats that as the `artifacts-only` rung of its availability ladder, not as a failure.

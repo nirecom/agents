@@ -1,15 +1,29 @@
 #!/usr/bin/env bash
+# Launch helpers for tests/run-all.sh; sourced, never executed.
 # run_all_exec <script> <out> <err> — launch one test the way its test-language registry entry
 # says (launch.unit / requires / prepare / command / timeoutSeconds), reading the table that sits
 # beside this file. Returns the child rc; 77 (SKIP) when launch.requires is not on PATH; 78 when
 # not launched (no supported entry matches, or a suite has no root); 2 when no table is readable.
 # Sets RUN_ALL_EXEC_LAUNCHED to 1 when a process was started, else 0.
+# run_all_pin_state_dirs <root> — exports CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR as fresh
+# subdirectories of <root>; non-zero when they cannot be created.
 # Contract: docs/architecture/claude-code/test-runner-parallelism.md.
 
 case "${BASH_SOURCE[0]}" in
   */*) RUN_ALL_LAUNCH_DIR="${BASH_SOURCE[0]%/*}" ;;
   *)   RUN_ALL_LAUNCH_DIR="." ;;
 esac
+
+# Always overrides the inherited pair: a test that pins neither or only one of them must
+# never reach the developer's live ~/.claude/projects/workflow or ~/.workflow-plans.
+run_all_pin_state_dirs() {
+  local root="${1:-}"
+  [[ -n "$root" ]] || return 1
+  # Mixed form so Node on Windows receives a usable path.
+  if command -v cygpath >/dev/null 2>&1; then root="$(cygpath -m "$root")"; fi
+  mkdir -p "$root/workflow" "$root/plans" 2>/dev/null || return 1
+  export CLAUDE_WORKFLOW_DIR="$root/workflow" WORKFLOW_PLANS_DIR="$root/plans"
+}
 
 # The loader keys its cache by its own CLI path, so sourcing this checkout's loader makes
 # tlr_load re-read this checkout's table even when the caller loaded another checkout's.

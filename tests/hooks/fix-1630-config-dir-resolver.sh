@@ -119,7 +119,7 @@ run_guard() {
     local payload rc=0
     payload="$(json_payload "$cmd")"
     GUARD_OUT="$(cd "$REPO_RAW" && printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u AGENTS_CONFIG_DIR \
+        env -u AGENTS_CONFIG_DIR \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$REPO" \
         "WORKFLOW_PLANS_DIR=$PLANS" \

@@ -15,7 +15,7 @@ process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'c6-test-$$',to
         fail "C6/build-json: failed for cmd=${cmd:0:40}"
         rm -rf "$tmp"; echo "error"; return
     fi
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -57,25 +57,28 @@ run_t6_mutation() {
     sid="c6-mut-$$"
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    # #2434: supervisor state is the control file <CLAUDE_WORKFLOW_DIR>/<sid>.control/supervisor-state.json.
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$sid');
 st.alert.cumulative_severity='warning';
 st.alert.findings=[{categories:['code'],severity:'warning',detail:'test',reporter:'test',timestamp:new Date().toISOString()}];
-fs.writeFileSync(w.getStatePath('$sid'),JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid',{forWrite:true}),JSON.stringify(st));
 " >/dev/null 2>&1
 
-    state_before=$(cat "$tmp/${sid}-supervisor-state.json" 2>/dev/null || echo "{}")
+    state_before=$(cat "$tmp/${sid}.control/supervisor-state.json" 2>/dev/null || echo "{}")
 
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'$sid',tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>\"'}}))" 2>/dev/null)
 
-    WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" >/dev/null 2>&1
 
-    state_after=$(cat "$tmp/${sid}-supervisor-state.json" 2>/dev/null || echo "{}")
+    state_after=$(cat "$tmp/${sid}.control/supervisor-state.json" 2>/dev/null || echo "{}")
     rm -rf "$tmp"
 
-    if [ "$state_before" = "$state_after" ]; then
+    if [ "$state_before" = "{}" ]; then
+        fail "T6-mutation: seeding wrote no supervisor state — the comparison below would be vacuous"
+    elif [ "$state_before" = "$state_after" ]; then
         pass "T6-mutation: blocked OFF proposal left supervisor state unchanged"
     else
         fail "T6-mutation: supervisor state was mutated by blocked OFF proposal (unexpected)"

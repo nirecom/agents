@@ -50,11 +50,11 @@ assert_not_contains "R2: no draft-file path leaks into the security-code prompt"
 assert_eq "R3: the ledger lands under the shared ledger format" \
     "present" "$(file_state "$(ledger_file)")"
 assert_eq "R3: no ledger is written under the loop format name" \
-    "missing" "$(file_state "$PLANS/$SID-$LOOP_FORMAT-concern-ledger.txt")"
+    "missing" "$(file_state "$(ctl_file "$LOOP_FORMAT-concern-ledger.txt")")"
 assert_eq "R3: the round counter lands under the loop format" \
     "1" "$(counter_state)"
 assert_eq "R3: no round counter is written under the ledger format name" \
-    "missing" "$(file_state "$PLANS/$SID-$LEDGER_FORMAT-round-number.txt")"
+    "missing" "$(file_state "$(ctl_file "$LEDGER_FORMAT-round-number.txt")")"
 
 # --- R4: what a round-1 HIGH produces ---------------------------------------
 assert_eq "R4: a HIGH concern at round 1 asks for a revision" "1" "$LAST_RC"
@@ -242,7 +242,7 @@ assert_eq "A3: no ledger after clean first round" "missing" "$(file_state "$(led
 new_env
 A4_SLOT="$(run_cli slot --path 'reviewed.txt' --anchor 3 \
     --category 'unvalidated input' 2>/dev/null | tr -d '\r\n')"
-A4_LEDGER="$(ledger_file)"
+A4_LEDGER="$(ctl_file "$LEDGER_FORMAT-concern-ledger.txt")"
 {
     printf '#concern-ledger-v2|review-security-shared|%s|cycle=1\n' "$SID"
     printf 'C1|HIGH|resolved|1|1|%s|discrim-a4|review-code-codex|review-code-codex|-|validate-a4-prior text\n' \
@@ -290,7 +290,7 @@ run_wrapper_sc() {
         bash "$WRAPPER" "$@" 2>&1)"
     WRAP_RC=$?
 }
-term_file() { printf '%s/%s-security-code-terminal.txt' "$PLANS" "$SID"; }
+term_file() { ctl_file security-code-terminal.txt; }
 
 # --- C1: never-armed wrapper runs the loop (positive control, invariant) -----
 new_env
@@ -323,6 +323,8 @@ assert_eq "C2: a blocked re-invoke leaves the guard file armed" "present" \
 new_env
 printf 'none\n' > "$PLANS/$SID-detail.md"
 printf '6\nstale-fingerprint-never-matches-live-tree\n' > "$(term_file)"
+# The exit-6 residual is accepted, so the mismatch clears the guard instead of exit 9.
+: > "$(ctl_file security-code-exit6-accepted.txt)"
 
 C3_SLOT="$(run_cli slot --path 'reviewed.txt' --anchor 3 \
     --category 'unvalidated input' 2>/dev/null | tr -d '\r\n')"
@@ -330,7 +332,7 @@ C3_SLOT="$(run_cli slot --path 'reviewed.txt' --anchor 3 \
     printf '#concern-ledger-v2|%s|%s|cycle=1\n' "$LEDGER_FORMAT" "$SID"
     printf 'C1|HIGH|open|1|1|%s|discrim-c3|review-code-codex|review-code-codex|-|validate-c3-prior text\n' \
         "${C3_SLOT:-placeholder-slot}"
-} > "$(ledger_file)"
+} > "$(ctl_file "$LEDGER_FORMAT-concern-ledger.txt")"
 
 RL_CODEX_BODY="$PLANS/body-c3.txt"; mk_clean_body "$RL_CODEX_BODY"
 run_wrapper_sc

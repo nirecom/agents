@@ -2,7 +2,7 @@
 # Shared helpers for feature-1147-bugfix-write-tests-gate/ sub-scripts.
 # Sourced by test-ssot-module.sh and test-defenses.sh.
 # Callers must set: AGENTS_DIR, WIN_AGENTS_DIR, TMPDIR_ROOT,
-#   CLAUDE_WORKFLOW_DIR, CLAUDE_ENV_FILE, HOOK_MARK, HOOK_GATE, NOW_ISO.
+#   CLAUDE_WORKFLOW_DIR, HOOK_MARK, HOOK_GATE, NOW_ISO.
 # Callers must define: fail(), pass() (with their own ERRORS / PASS_COUNT counters).
 
 run_with_timeout() {
@@ -84,10 +84,6 @@ write_state_with_steps() {
   "workflow_type": "wf-code"
 }
 EOF
-}
-
-write_env_file() {
-    printf 'CLAUDE_SESSION_ID=%s\n' "$1" > "$CLAUDE_ENV_FILE"
 }
 
 # #1733: state on disk is an append-only event stream (no top-level .steps);

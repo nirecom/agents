@@ -38,7 +38,7 @@ export CLAUDE_WORKFLOW_DIR="$WORK_NODE/wf"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$WORK_NODE/cfg"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
 SID="tr5hold"
@@ -103,8 +103,8 @@ const schema = require(process.env.SC);
 const fs = require('fs');
 const st = schema.createEmptyState(process.env.SESS);
 Object.assign(st.audit, JSON.parse(process.env.PATCHJSON));
-fs.writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(st));
-" 2>&1
+fs.writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(st));
+" 2>&1 || fail "seed_state: supervisor-state seed write failed" >&2
 }
 
 state_field() {

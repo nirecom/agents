@@ -1,24 +1,12 @@
 #!/bin/bash
 # tests/bin/feature-1257-session-close-wf-meta.sh
 # Tests: bin/session-close-build-env.js, bin/issue-close-write-outcome.js, skills/session-close/SKILL.md
-# Tags: session-close, wf-meta, env-json, outcome, scope:issue-specific
-#
-# Issue #1257 — /session-close WF-META path: planning sessions with no PR/worktree.
-# --wf-meta flag in session-close-build-env.js writes env JSON with all PR fields empty.
-# --wf-meta flag in issue-close-write-outcome.js writes skipped_wf_meta entries.
-# SKILL.md documents the WF-META detection path.
-#
-# T-series (T1-T6): exercise --wf-meta flags → expected FAIL until implementation.
-# T7: regression guard for normal mode (no --wf-meta) → expected PASS.
-# S-series (S1-S5): static SKILL.md structure assertions → expected FAIL until implementation.
-#
-# L3 gap:
-#   A real /session-close invocation against a WF-META session would additionally verify:
-#   - SC-1 detects WF-META before ENFORCE_WORKTREE check (live orchestration path)
-#   - The Final Report renders correctly with all PR fields as "(none)"
-#   - No gh CLI call is made (no PR attempted)
-#   - The session-close-worker skips /issue-close-finalize entirely
-#   These require a full claude -p E2E session and are gated on RUN_TL3.
+# Tags: session-close, wf-meta, env-json, outcome, scope:issue-specific, feature-2434, control-dir
+# Issue #1257 — /session-close WF-META path (no PR/worktree): --wf-meta in build-env writes empty
+# PR fields, in issue-close-write-outcome writes skipped_wf_meta; S1-S5 pin the SKILL.md path.
+# #2434 (N-series): build-env derives its env file under <CLAUDE_WORKFLOW_DIR>/<sid>.control/.
+# L3 gap: a real /session-close on a WF-META session (SC-1 ordering, "(none)" PR fields, no gh
+# call, finalize skipped) needs a claude -p E2E gated on RUN_TL3.
 
 set -u
 
@@ -50,6 +38,19 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# #2434: the env file is a control file, so both state dirs are pinned to the fixture.
+WF_DIR="${TMPDIR_BASE}/wf"
+PLANS_DIR="${TMPDIR_BASE}/plans"
+mkdir -p "$WF_DIR" "$PLANS_DIR" "${TMPDIR_BASE}/home" "${TMPDIR_BASE}/tx" "${TMPDIR_BASE}/cwd"
+export HOME="${TMPDIR_BASE}/home"
+export CLAUDE_WORKFLOW_DIR="$WF_DIR"
+export WORKFLOW_PLANS_DIR="$PLANS_DIR"
+export CLAUDE_TRANSCRIPT_BASE_DIR="${TMPDIR_BASE}/tx"
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+SC_SID="f1257-sid"
+SC_OTHER_SID="f1257-other"
+SC_DERIVED_ENV="${WF_DIR}/${SC_SID}.control/final-report-env.json"
+
 run_with_timeout() {
     local secs="$1"; shift
     if command -v timeout >/dev/null 2>&1; then
@@ -64,7 +65,8 @@ run_with_timeout() {
 # ============ T1: --wf-meta <outfile> → exit 0, valid JSON, PR fields empty, stdout ENV_FILE= ============
 
 test_T1_build_env_wf_meta_exit0_and_json() {
-    local outfile="${TMPDIR_BASE}/t1-env.json"
+    # #2434: the legacy argument must name the derived control path (legacy shim).
+    local outfile="$SC_DERIVED_ENV"
     local node_outfile
     if command -v cygpath >/dev/null 2>&1; then
         node_outfile="$(cygpath -m "$outfile")"
@@ -236,7 +238,9 @@ test_T5_write_outcome_wf_meta_empty() {
 # ============ T6: env JSON from --wf-meta has BRANCH/PR_NUMBER/PR_TITLE/PR_URL/PR_STATE all empty string ============
 
 test_T6_build_env_wf_meta_pr_fields_empty() {
-    local outfile="${TMPDIR_BASE}/t6-env.json"
+    # #2434: the legacy argument must name the derived control path (legacy shim).
+    local outfile="$SC_DERIVED_ENV"
+    rm -f "$outfile"
     local node_outfile
     if command -v cygpath >/dev/null 2>&1; then
         node_outfile="$(cygpath -m "$outfile")"
@@ -277,7 +281,8 @@ test_T6_build_env_wf_meta_pr_fields_empty() {
 # and the script doesn't crash with an unhandled exception trace.
 
 test_T7_build_env_normal_mode_regression() {
-    local outfile="${TMPDIR_BASE}/t7-env.json"
+    # #2434: the legacy argument must name the derived control path (legacy shim).
+    local outfile="$SC_DERIVED_ENV"
     local node_outfile
     if command -v cygpath >/dev/null 2>&1; then
         node_outfile="$(cygpath -m "$outfile")"
@@ -417,6 +422,139 @@ test_S5_skill_md_rules_mention_wf_meta_and_finalize() {
     fi
 }
 
+# ============ N-series (#2434): --session derives the env file under <wf>/<sid>.control/ ============
+
+# sc_build_env <args...> — run build-env from a neutral cwd; sets SC_RC and SC_OUT.
+sc_build_env() {
+    SC_OUT="$(cd "${TMPDIR_BASE}/cwd" && run_with_timeout 30 node "$BUILD_ENV_JS" "$@" 2>/dev/null)"
+    SC_RC=$?
+}
+sc_reset() { rm -rf "$WF_DIR" "$PLANS_DIR" "${TMPDIR_BASE}/cwd" "${TMPDIR_BASE}/outside"; mkdir -p "$WF_DIR" "$PLANS_DIR" "${TMPDIR_BASE}/cwd"; }
+sc_plans_has_control() { ls -A "$PLANS_DIR" 2>/dev/null | grep -q "final-report-env"; }
+sc_cwd_is_empty() { [ -z "$(ls -A "${TMPDIR_BASE}/cwd" 2>/dev/null)" ]; }
+sc_pr_fields_empty() {
+    run_with_timeout 30 node -e "
+        const d = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+        for (const k of ['BRANCH','PR_NUMBER','PR_TITLE','PR_URL','PR_STATE']) {
+            if (d[k] !== '') { process.stdout.write('field '+k+'='+JSON.stringify(d[k])); process.exit(1); }
+        }
+        process.stdout.write('ok');
+    " "$1" 2>/dev/null
+}
+
+test_N1_build_env_wf_meta_session_derives_control_path() {
+    sc_reset
+    sc_build_env --wf-meta --session "$SC_SID"
+    if [ "$SC_RC" != "0" ]; then fail "N1_wf_meta_session: expected exit 0, got $SC_RC"; return; fi
+    if [ ! -f "$SC_DERIVED_ENV" ]; then fail "N1_wf_meta_session: env file not at derived path $SC_DERIVED_ENV"; return; fi
+    local fields; fields="$(sc_pr_fields_empty "$SC_DERIVED_ENV")"
+    if [ "$fields" != "ok" ]; then fail "N1_wf_meta_session: PR fields not empty: $fields"; return; fi
+    if ! printf '%s\n' "$SC_OUT" | grep -q "^ENV_FILE=.*${SC_SID}\.control.final-report-env\.json"; then
+        fail "N1_wf_meta_session: stdout ENV_FILE= does not name the derived path (got: $SC_OUT)"; return
+    fi
+    if sc_plans_has_control; then fail "N1_wf_meta_session: a final-report-env file appeared in PLANS_DIR"; return; fi
+    if ! sc_cwd_is_empty; then fail "N1_wf_meta_session: stray file written into the cwd: $(ls -A "${TMPDIR_BASE}/cwd")"; return; fi
+    pass "N1_wf_meta_session: --wf-meta --session writes <wf>/<sid>.control/final-report-env.json only"
+}
+
+test_N2_build_env_legacy_derived_path_accepted() {
+    sc_reset
+    sc_build_env --wf-meta "$SC_DERIVED_ENV"
+    if [ "$SC_RC" = "0" ] && [ -f "$SC_DERIVED_ENV" ] && ! sc_plans_has_control; then
+        pass "N2_legacy_derived_path: the derived control path is accepted as a legacy argument"
+    else
+        fail "N2_legacy_derived_path: rc=$SC_RC derived_exists=$([ -f "$SC_DERIVED_ENV" ] && echo y || echo n)"
+    fi
+}
+
+test_N3_build_env_legacy_plans_basename_redirected() {
+    sc_reset
+    local legacy="${PLANS_DIR}/${SC_SID}-final-report-env.json"
+    sc_build_env --wf-meta "$legacy"
+    if [ "$SC_RC" != "0" ]; then fail "N3_legacy_plans_basename: expected exit 0, got $SC_RC"; return; fi
+    if [ -e "$legacy" ]; then fail "N3_legacy_plans_basename: the control file was written into PLANS_DIR ($legacy)"; return; fi
+    if [ ! -f "$SC_DERIVED_ENV" ]; then fail "N3_legacy_plans_basename: result did not land at the derived path"; return; fi
+    pass "N3_legacy_plans_basename: <plans>/<sid>-final-report-env.json is redirected to the derived path"
+}
+
+# name | legacy argument (relative names are made absolute below) — every row must be refused.
+test_N4_build_env_rejects_foreign_paths() {
+    local name arg
+    while IFS='|' read -r name arg; do
+        name="$(printf '%s' "$name" | tr -d ' ')"; arg="$(printf '%s' "$arg" | tr -d ' ')"
+        [ -z "$name" ] && continue
+        arg="${arg//__PLANS__/$PLANS_DIR}"; arg="${arg//__WF__/$WF_DIR}"; arg="${arg//__OUT__/${TMPDIR_BASE}/outside}"
+        sc_reset
+        sc_build_env --wf-meta "$arg"
+        if [ "$SC_RC" = "0" ]; then fail "N4_reject[$name]: expected non-zero exit for $arg"; continue; fi
+        if [ -e "$arg" ]; then fail "N4_reject[$name]: the rejected path was written anyway"; continue; fi
+        if [ -f "$SC_DERIVED_ENV" ]; then fail "N4_reject[$name]: a derived file was written for a rejected argument"; continue; fi
+        pass "N4_reject[$name]: refused with rc=$SC_RC and nothing written"
+    done <<'TABLE'
+plans-other-name   | __PLANS__/other.json
+plans-wrong-name   | __PLANS__/f1257-sid-final-report.json
+outside-dir        | __OUT__/final-report-env.json
+wf-top-level       | __WF__/final-report-env.json
+TABLE
+}
+
+test_N5_build_env_session_with_other_sid_path_rejected() {
+    local row arg
+    for row in control plans; do
+        sc_reset
+        if [ "$row" = "control" ]; then arg="${WF_DIR}/${SC_OTHER_SID}.control/final-report-env.json"
+        else arg="${PLANS_DIR}/${SC_OTHER_SID}-final-report-env.json"; fi
+        sc_build_env --wf-meta --session "$SC_SID" "$arg"
+        if [ "$SC_RC" = "0" ]; then fail "N5_other_sid[$row]: --session $SC_SID with $SC_OTHER_SID's path must be refused"; continue; fi
+        if [ -e "$arg" ] || [ -f "$SC_DERIVED_ENV" ] || [ -e "${WF_DIR}/${SC_OTHER_SID}.control/final-report-env.json" ]; then
+            fail "N5_other_sid[$row]: something was written despite the refusal"; continue
+        fi
+        if ! sc_cwd_is_empty; then fail "N5_other_sid[$row]: stray file in cwd"; continue; fi
+        pass "N5_other_sid[$row]: another session's path is refused and nothing written"
+    done
+}
+
+test_N6_build_env_invalid_or_missing_sid_rejected() {
+    local label
+    for label in traversal space empty missing; do
+        sc_reset
+        case "$label" in
+            traversal) sc_build_env --wf-meta --session "../x" ;;
+            space)     sc_build_env --wf-meta --session "bad id" ;;
+            empty)     sc_build_env --wf-meta --session "" ;;
+            missing)   sc_build_env --wf-meta --session ;;
+        esac
+        if [ "$SC_RC" = "0" ]; then fail "N6_bad_sid[$label]: expected non-zero exit"; continue; fi
+        if [ -n "$(ls -A "$WF_DIR" 2>/dev/null)" ] || [ -e "${TMPDIR_BASE}/x.control" ] || ! sc_cwd_is_empty || sc_plans_has_control; then
+            fail "N6_bad_sid[$label]: a file was written despite the refusal"; continue
+        fi
+        pass "N6_bad_sid[$label]: refused with rc=$SC_RC and nothing written"
+    done
+}
+
+test_N7_build_env_normal_mode_session_no_stray_file() {
+    sc_reset
+    sc_build_env --session "$SC_SID"
+    if [ "$SC_RC" != "0" ] && [ "$SC_RC" != "1" ]; then fail "N7_normal_session: unexpected exit $SC_RC"; return; fi
+    if ! sc_cwd_is_empty; then fail "N7_normal_session: '--session' was treated as an output path ($(ls -A "${TMPDIR_BASE}/cwd"))"; return; fi
+    if sc_plans_has_control; then fail "N7_normal_session: a control file appeared in PLANS_DIR"; return; fi
+    if [ "$SC_RC" = "0" ] && [ ! -f "$SC_DERIVED_ENV" ]; then fail "N7_normal_session: exit 0 without the derived env file"; return; fi
+    pass "N7_normal_session: --session in normal mode writes only the derived path (rc=$SC_RC)"
+}
+
+test_S6_skill_md_build_env_calls_pass_session_only() {
+    if [ ! -f "$SKILL_MD" ]; then skip "S6_skill_md_build_env_session (SKILL.md missing)"; return; fi
+    local lines bad
+    lines="$(grep -F "session-close-build-env.js" "$SKILL_MD")"
+    if [ -z "$lines" ]; then fail "S6_skill_md_build_env_session: no build-env invocation in SKILL.md"; return; fi
+    bad="$(printf '%s\n' "$lines" | grep -vF -- "--session" || true)"
+    if [ -n "$bad" ]; then fail "S6_skill_md_build_env_session: invocation without --session: $bad"; return; fi
+    if printf '%s\n' "$lines" | grep -qF "final-report-env.json"; then
+        fail "S6_skill_md_build_env_session: an invocation still passes the control-file path"; return
+    fi
+    pass "S6_skill_md_build_env_session: every build-env invocation passes --session and no control path"
+}
+
 # ============ Run all tests ============
 
 test_T1_build_env_wf_meta_exit0_and_json
@@ -431,6 +569,14 @@ test_S2_skill_md_contains_build_env_wf_meta_call
 test_S3_write_outcome_wf_meta_before_issue_close_finalize
 test_S4_skill_md_has_skipped_wf_meta_and_kept_open
 test_S5_skill_md_rules_mention_wf_meta_and_finalize
+test_N1_build_env_wf_meta_session_derives_control_path
+test_N2_build_env_legacy_derived_path_accepted
+test_N3_build_env_legacy_plans_basename_redirected
+test_N4_build_env_rejects_foreign_paths
+test_N5_build_env_session_with_other_sid_path_rejected
+test_N6_build_env_invalid_or_missing_sid_rejected
+test_N7_build_env_normal_mode_session_no_stray_file
+test_S6_skill_md_build_env_calls_pass_session_only
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

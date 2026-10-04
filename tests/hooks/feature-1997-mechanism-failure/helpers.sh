@@ -98,8 +98,8 @@ if (!list) { process.stdout.write('<no-findings-array>'); process.exit(0); }
 process.stdout.write(list.map((f) => String(f.step) + ':' + String(f.kind)).sort().join(','));" 2>/dev/null
 }
 
-# sup_state_path <plans-tmp> <sid> — the supervisor state file for a session.
-sup_state_path() { printf '%s/%s-supervisor-state.json' "$1" "$2"; }
+# sup_state_path <workflow-tmp> <sid> — the supervisor state file for a session (#2434 control file).
+sup_state_path() { printf '%s/%s.control/supervisor-state.json' "$1" "$2"; }
 
 # run_c4 <tn> <sid> — the REAL C4 Stop guard as a child process, the fail-fast
 # consumer that has to surface a mechanism failure rather than nudge past it.

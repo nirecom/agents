@@ -63,14 +63,14 @@ require_stanza_runtime() {
 
 seed_audit_state_arm() {
     local tmp="$1" sid="$2" layer2_json="$3" layer3_json="$4"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert = Object.assign({}, st.alert, $layer2_json);
 st.audit = Object.assign({}, st.audit, $layer3_json);
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
@@ -104,9 +104,8 @@ run_t1() {
     seed_audit_state_arm "$tmp" "cc-uuid-aaaa" \
         "{ alert_phase: null, alert_armed_at: null, cumulative_severity: null, findings: [], alert_retry_count: 0 }" \
         "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
-    out=$(CLAUDE_SESSION_ID=cc-uuid-aaaa \
-        WORKFLOW_SESSION_ID=wsid-bbbb \
-        WORKFLOW_PLANS_DIR="$tmp" \
+    out=$(WORKFLOW_SESSION_ID=wsid-bbbb \
+        CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" \
         run_with_timeout 5 node "$HOOK" \
         <<< '{"stop_hook_active":false,"session_id":"cc-uuid-aaaa","transcript_path":""}' 2>/dev/null)
     rc=$?
@@ -114,7 +113,6 @@ run_t1() {
     cc_id=$(printf '%s' "$reason" | grep -E '^Session ID:' | head -1 | sed 's/^Session ID:[[:space:]]*//')
     wsid_id=$(printf '%s' "$reason" | grep -E '^Workflow session ID:' | head -1 | sed 's/^Workflow session ID:[[:space:]]*//')
     effective_id=$(printf '%s' "$reason" | grep -E '^Effective state session ID:' | head -1 | sed 's/^Effective state session ID:[[:space:]]*//')
-    unset CLAUDE_SESSION_ID || true
     unset WORKFLOW_SESSION_ID || true
     rm -rf "$tmp"
     if [ $rc -eq 2 ] \
@@ -137,8 +135,7 @@ run_t2() {
         "{ alert_phase: 'done', alert_armed_at: '2026-06-22T10:00:00Z', cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], alert_retry_count: 0 }" \
         "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
     unset WORKFLOW_SESSION_ID || true
-    out=$(cd "$tmp" && CLAUDE_SESSION_ID=cc-uuid-aaaa \
-        WORKFLOW_PLANS_DIR="$tmp" \
+    out=$(cd "$tmp" && CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" \
         run_with_timeout 5 node "$HOOK" \
         <<< '{"stop_hook_active":false,"session_id":"cc-uuid-aaaa","transcript_path":""}' 2>/dev/null)
     rc=$?
@@ -146,7 +143,6 @@ run_t2() {
     cc_id=$(printf '%s' "$reason" | grep -E '^Session ID:' | head -1 | sed 's/^Session ID:[[:space:]]*//')
     wsid_id=$(printf '%s' "$reason" | grep -E '^Workflow session ID:' | head -1 | sed 's/^Workflow session ID:[[:space:]]*//')
     effective_id=$(printf '%s' "$reason" | grep -E '^Effective state session ID:' | head -1 | sed 's/^Effective state session ID:[[:space:]]*//')
-    unset CLAUDE_SESSION_ID || true
     rm -rf "$tmp"
     if [ $rc -eq 2 ] \
         && [ "$cc_id" = "cc-uuid-aaaa" ] \

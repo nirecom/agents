@@ -58,7 +58,8 @@ assert_kv "C8: a closed issue raises the reopen gate" ASK_ID closed_reopen_907
 C8_CKPT="$(get_kv CHECKPOINT)" || true
 # The seed must be provably PRESENT before the reopen, or the leak hunt below is a
 # probe for something that was never there and passes no matter what the driver does.
-if [ -n "$(grep -rlF -- 'STALE-PRE-REOPEN-REMARK-907' "$PLANS" 2>/dev/null)" ]; then
+# Artifacts span the plans dir and the control dir that holds the checkpoint (#2434).
+if [ -n "$(grep -rlF -- 'STALE-PRE-REOPEN-REMARK-907' "$PLANS" "$WF" 2>/dev/null)" ]; then
     pass "C8: the pre-reopen comment is in the artifacts before the reopen (the leak probe is live)"
 else
     fail "C8: the pre-reopen comment never reached any artifact — the leak assertion below cannot fail"
@@ -83,11 +84,11 @@ if [ -n "$C8_CKPT2" ]; then
 else
     fail "C8: the failed resume emitted no CHECKPOINT — the cache-state assertion is unfalsifiable"
 fi
-C8_LEAK="$(grep -rlF -- 'STALE-PRE-REOPEN-REMARK-907' "$PLANS" 2>/dev/null | tr '\n' ' ')"
+C8_LEAK="$(grep -rlF -- 'STALE-PRE-REOPEN-REMARK-907' "$PLANS" "$WF" 2>/dev/null | tr '\n' ' ')"
 if [ -n "$C8_LEAK" ]; then
     fail "C8: the pre-reopen comment leaked into workflow artifacts: $C8_LEAK"
 else
-    pass "C8: no pre-reopen comment text survives anywhere under the plans dir"
+    pass "C8: no pre-reopen comment text survives under the plans dir or the control dir"
 fi
 teardown_case
 
@@ -220,7 +221,7 @@ assert_ckpt "C9c: the emptied entry still reads OPEN" "$C9C_CKPT2" state.issue_j
 C9C_SECTION='## Issue comments
 (none)'
 assert_section_eq "C9c: context.md's section is exactly the heading and (none)" "$C9C_SECTION"
-C9C_LEAK="$(grep -rlF -- 'STALE-BEFORE-EMPTYING-915' "$PLANS" 2>/dev/null | tr '\n' ' ')"
+C9C_LEAK="$(grep -rlF -- 'STALE-BEFORE-EMPTYING-915' "$PLANS" "$WF" 2>/dev/null | tr '\n' ' ')"
 if [ -n "$C9C_LEAK" ]; then
     fail "C9c: the pre-reopen comment survived the emptying refetch: $C9C_LEAK"
 else

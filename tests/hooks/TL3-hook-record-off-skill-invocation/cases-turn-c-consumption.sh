@@ -105,7 +105,7 @@ fi
 # The audit record is the durable half of the claim; the override marker alone is
 # session state that disappears with the session.
 if [ ! -f "$AUDIT3" ]; then
-    fail "audit-record-written" "no $SID3-supervisor-state.json in $PLANSDIR - the activation left no audit trail"
+    fail "audit-record-written" "no audit record at $AUDIT3 - the activation left no audit trail"
 else
     pass "audit-record-written"
     AUDIT_BODY="$(cat "$AUDIT3" 2>/dev/null)"

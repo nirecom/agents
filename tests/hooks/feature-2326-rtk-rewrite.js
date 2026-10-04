@@ -14,9 +14,7 @@ const assert = require("assert");
 
 // isAgentsEmit needs AGENTS_CONFIG_DIR; pin it to this worktree's agents root.
 process.env.AGENTS_CONFIG_DIR = path.join(__dirname, "..", "..");
-delete process.env.CLAUDE_SESSION_ID;
 delete process.env.CLAUDE_CODE_SESSION_ID;
-delete process.env.CLAUDE_ENV_FILE;
 
 const HOOK = path.join(__dirname, "..", "..", "hooks", "rtk-rewrite.js");
 // substituteRtkHead / quoteBin are new exports (undefined until implemented).

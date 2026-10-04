@@ -51,7 +51,7 @@ run_t8a() {
         local tmp_node="$tmp"
     fi
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -62,7 +62,7 @@ const armed_at_before = '2026-01-01T00:00:00.000Z';
 st.alert.alert_armed_at = armed_at_before;
 st.alert.alert_phase = 'pending';
 st.alert.cumulative_severity = 'warning';
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
 
 // appendFinding with a new finding
 const ok = w.appendFinding('$sid', {
@@ -109,7 +109,7 @@ run_t8b() {
         local tmp_node="$tmp"
     fi
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
 const { collectAuditCandidates } = require('$COLLECT_NODE');
 const s = require('$SCHEMA_NODE');
 
@@ -152,7 +152,7 @@ run_t8c() {
         local tmp_node="$tmp"
     fi
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -163,7 +163,7 @@ st.audit.audit_phase = 'done';
 st.audit.audit_verdict = 'BLOCK';
 st.audit.audit_last_run_at = new Date().toISOString();
 st.audit.audit_cause = 'step-complete:detail';
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
 
 // Simulate Stop hook clearing audit_phase (what supervisor-guard.js Phase B does)
 w.writeAuditState('$sid', { audit_phase: null });
@@ -210,7 +210,7 @@ run_t8d() {
         local tmp_node="$tmp"
     fi
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 10 node -e "
 const { collectAuditCandidates } = require('$COLLECT_NODE');
 const s = require('$SCHEMA_NODE');
 
@@ -382,12 +382,12 @@ run_t8f_coalescing() {
     sid="t8f-sid-$$"
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 15 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node/workflow" run_with_timeout 15 node -e "
 const audit = require('$AUDIT_NODE');
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(s.createEmptyState('$sid')));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(s.createEmptyState('$sid')));
 audit.armAuditRun('$sid', {
     tr_ids: ['TR1', 'TR2', 'TR3'],
     cause: 'step-complete:clarify_intent+step-complete:outline+step-complete:detail',

@@ -94,7 +94,7 @@ run_hook() {
     HOOK_RC=0
     local errfile="$TMPDIR_BASE/.err.$$"
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u ISSUE_CLOSE_SKILL \
+        env -u ISSUE_CLOSE_SKILL \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \

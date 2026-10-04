@@ -29,7 +29,7 @@ if [ ! -d "$CL_LIB_DIR" ]; then
     return 1 2>/dev/null || exit 1
 fi
 # Every module's return value is checked. A module that refuses to load (core.sh
-# cannot find safe-plans-path.sh, say) stops the entrypoint here: half-loading is
+# cannot find safe-state-path.sh, say) stops the entrypoint here: half-loading is
 # the silent findings loss this subsystem exists to stop. Five explicit blocks
 # rather than a loop, because shellcheck source= needs a literal path.
 # shellcheck source=./concern-ledger/core.sh
@@ -66,12 +66,15 @@ fi
 # that dir (session id, format, round, producer): those are the ones an attacker
 # can steer into `../` or a separator (#2025 C9). A rejected token prints
 # nothing and returns 2, so a caller that only reads stdout still fails closed.
-cl_ledger_path()   { _cl_reject_bad_tokens cl_ledger_path   "$2" "$3" || return 2; printf '%s/%s-%s-concern-ledger.txt' "$1" "$2" "$3"; }
-cl_snapshot_path() { _cl_reject_bad_tokens cl_snapshot_path "$2" "$3" || return 2; printf '%s/%s-%s-concern-ledger-cap-snapshot.txt' "$1" "$2" "$3"; }
-cl_json_path()     { _cl_reject_bad_tokens cl_json_path     "$2" "$3" || return 2; printf '%s/%s-%s-unresolved-concerns.json' "$1" "$2" "$3"; }
+# CL_CONTROL_DIR set (#2434): control files live there without the sid prefix;
+# the finalize diagnostic is prose and stays in the plans dir.
+_cl_ctl_name() { if [ -n "${CL_CONTROL_DIR:-}" ]; then printf '%s/%s%s' "$CL_CONTROL_DIR" "$3" "$4"; else printf '%s/%s-%s%s' "$1" "$2" "$3" "$4"; fi; }
+cl_ledger_path()   { _cl_reject_bad_tokens cl_ledger_path   "$2" "$3" || return 2; _cl_ctl_name "$1" "$2" "$3" -concern-ledger.txt; }
+cl_snapshot_path() { _cl_reject_bad_tokens cl_snapshot_path "$2" "$3" || return 2; _cl_ctl_name "$1" "$2" "$3" -concern-ledger-cap-snapshot.txt; }
+cl_json_path()     { _cl_reject_bad_tokens cl_json_path     "$2" "$3" || return 2; _cl_ctl_name "$1" "$2" "$3" -unresolved-concerns.json; }
 cl_diag_path()     { _cl_reject_bad_tokens cl_diag_path     "$2" "$3" || return 2; printf '%s/%s-%s-finalize-diagnostic.txt' "$1" "$2" "$3"; }
-cl_round_path()    { _cl_reject_bad_tokens cl_round_path    "$2" "$3" || return 2; printf '%s/%s-%s-round-number.txt' "$1" "$2" "$3"; }
-cl_delta_path()    { _cl_reject_bad_tokens cl_delta_path    "$2" "$3" "$4" "$5" || return 2; printf '%s/%s-%s-round-%s-delta-%s.txt' "$1" "$2" "$3" "$4" "$5"; }
+cl_round_path()    { _cl_reject_bad_tokens cl_round_path    "$2" "$3" || return 2; _cl_ctl_name "$1" "$2" "$3" -round-number.txt; }
+cl_delta_path()    { _cl_reject_bad_tokens cl_delta_path    "$2" "$3" "$4" "$5" || return 2; _cl_ctl_name "$1" "$2" "$3" "-round-$4-delta-$5.txt"; }
 
 # cl_snapshot_beside <ledger-path> — the snapshot for an already-resolved ledger
 # path, so a CL_LEDGER_OVERRIDE is snapshotted beside itself rather than beside

@@ -10,6 +10,14 @@
 echo ""
 echo "--- finalize 6e/10/11: wrapper exit 7, trigger symmetry, re-entry ---"
 
+case_begin "loop-integration-10-trigger-symmetry" "bin/run-codex-review-loop"
+
+# The loop sources bin/lib/safe-state-path.sh (#2434 rename of safe-plans-path.sh);
+# name its absence once instead of leaving the loop cases to cascade on exit 4.
+if [ ! -f "$AGENTS_ROOT/bin/lib/safe-state-path.sh" ]; then
+    fail "implementation missing: bin/lib/safe-state-path.sh (loop cases below exit 4 until it exists)"
+fi
+
 MOCK_SEQ=0
 
 # mk_loop_env — a mock AGENTS_CONFIG_DIR plus a plans dir. Sets MOCKD / LPLANS.
@@ -40,7 +48,7 @@ STUB
         cp "$AGENTS_ROOT/bin/$f" "$MOCKD/bin/$f"
         chmod +x "$MOCKD/bin/$f"
     done
-    for f in codex-core.sh codex-timeout.sh cli-exec-guard.sh concern-ledger.sh safe-plans-path.sh; do
+    for f in codex-core.sh codex-timeout.sh cli-exec-guard.sh concern-ledger.sh safe-state-path.sh; do
         [ -f "$AGENTS_ROOT/bin/lib/$f" ] && cp "$AGENTS_ROOT/bin/lib/$f" "$MOCKD/bin/lib/$f"
     done
     # concern-ledger.sh is a dispatcher that sources its sibling module dir.
@@ -131,10 +139,13 @@ assert_eq "10: the terminal finalize fires at the cap round and only there" \
         "$L_TEXT" "$(json_of "$(json_file "$LPLANS" "$SIDL" security-plan)")"
 }
 
+case_end
+
 # ---------------------------------------------------------------------------
 # 6(e). When the finalize cannot write, the wrapper must not return a verdict
 #       code. It returns 7 and reports the verdict it would have returned.
 # ---------------------------------------------------------------------------
+case_begin "loop-integration-6e-finalize-failure" "bin/run-codex-review-loop"
 {
     mk_loop_env
     mk_reviewer "$(needs_revision "$L_TEXT")"
@@ -154,7 +165,9 @@ assert_eq "10: the terminal finalize fires at the cap round and only there" \
         "1" "$(rc_of check-finalized --plans-dir "$LPLANS" --session-id "$SIDL" \
                 --format security-plan --round 1)"
 }
+case_end
 
+case_begin "loop-integration-11-reentry" "bin/lib/concern-ledger/finalize.sh"
 # ---------------------------------------------------------------------------
 # 11. Re-entry after a terminal finalize: fix the draft, drop the round counter,
 #     and run round 1 again. The previous cycle is archived, not overwritten,
@@ -197,3 +210,4 @@ assert_eq "10: the terminal finalize fires at the cap round and only there" \
     assert_contains "11: the second cycle's artifact names the new concern" \
         "$NEW_TEXT" "$(json_of "$(json_file "$LPLANS" "$SIDL" "$FMT")")"
 }
+case_end

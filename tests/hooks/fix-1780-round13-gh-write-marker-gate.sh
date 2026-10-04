@@ -2,79 +2,12 @@
 # tests/hooks/fix-1780-round13-gh-write-marker-gate.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/handle-bash-write.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/bash-write-scope/marker-gate.js, hooks/enforce-worktree/bash-write-scope/exclude-checks.js, hooks/lib/protected-basenames.js
 # Tags: enforce-worktree, gh-write, session-marker, protected-basename, off-clearance, sequenced-command, parse-failure, marker-gate, pretooluse, classifier, security, scope:common, pwsh-not-required, TL2, hook-registration
-#
-# LAYER NOTE: same reasoning as tests/hooks/enforce-worktree-off-clearance-state-matrix.sh —
-# this drives hooks/enforce-worktree.js as a real PreToolUse SUBPROCESS with piped
-# stdin. Per rules/test.md the TL3 prefix is reserved for RUN_TL3-gated real
-# `claude -p` seams, so this is filed TL2 and named without the prefix.
-#
-# TL3 gap (what this test does NOT catch):
-# - Claude Code actually dispatching PreToolUse to this hook inside a live
-#   session (registration itself is asserted statically in
-#   tests/hooks/fix-1780-round4-write-tool-parity.sh section R).
-# - A real `gh` binary being present: the hook classifies the command TEXT and
-#   never spawns gh, so gh's own behaviour is out of scope here by construction.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
-#
-# ---------------------------------------------------------------------------
-# WHAT THIS FILE DEFENDS (#1780, codex security scanner "G")
-#
-# hooks/enforce-worktree/handle-bash-write.js has a Group B gh-write branch whose
-# tail is an UNCONDITIONAL `done()` — an allow. gh writes are GitHub operations,
-# not local file writes, so session scope was considered sufficient for them.
-#
-# The classifier that routes into that branch, isGhWriteIR()
-# (hooks/lib/bash-write-patterns/patterns.js), declares the WHOLE command a gh
-# write as soon as ANY segment matches. So a SEQUENCED command:
-#
-#     gh pr merge 1 && rm <workflowDir>/<sid>.workflow-off
-#
-# entered the gh branch on the strength of its first segment and reached that
-# unconditional allow, while its SECOND segment forged/destroyed a protected
-# session-marker file. `bashTargetsHitProtectedMarker()` — the centralized gate
-# that every OTHER allow path already defers to — was computed AFTER the branch
-# and never consulted on this route.
-#
-# hooks/lib/session-markers.js authorizes purely on a marker file's EXISTENCE, so
-# one such write grants the session full WORKFLOW_OFF / WORKTREE_OFF clearance;
-# a deletion is the symmetric half (clearing a marker mid-session is state
-# tampering on the same file class).
-#
-# THE FIX asserted here: `_markerHit` (marker hit OR parse failure) is computed
-# BEFORE the branch and gates entry to it — `if (!_markerHit && isGhWriteCommand(ir))`
-# — so a marker hit falls through to the same fail-closed enforcement every other
-# allow path already defers to.
-#
-# ATTACK-SCENARIO STRUCTURE (Pattern 2). Preconditions: a real main checkout, a
-# real session marker file on disk in a pinned workflow dir, the repo in session
-# scope (so the gh branch's own session-scope check would NOT have blocked and
-# the pre-fix verdict really is ALLOW). Action: the sequenced tool call. Assert:
-# BLOCKED, and — Pattern 1 — the marker file is still on disk afterwards,
-# verified by actually EXECUTING the command whenever the hook allowed it
-# (section X), so the assertion is about the protected resource and not merely
-# about an exit code.
-#
-# BOTH DIRECTIONS (Pattern 4). Section A pins the sanctioned allow path: a plain
-# gh write, and a sequenced gh write whose second segment writes an ORDINARY
-# basename in the very same workflow dir. A4 is the mechanism control — identical
-# command shape, only the basename differs — so a block in section B can only
-# have come from the protected-basename gate, and an over-blocking regression
-# that simply stopped allowing gh writes cannot pass both sections.
-#
-# HERMETICITY (rules/test/fixture-isolation.md): throwaway git repos under a
-# temp dir with core.hooksPath disabled; CLAUDE_WORKFLOW_DIR and
-# WORKFLOW_PLANS_DIR BOTH pinned (dual-pin) at DISTINCT temp dirs; process CWD is
-# always a fixture dir, never this repo; CLAUDE_SESSION_ID /
-# CLAUDE_CODE_SESSION_ID / SCRATCHPAD / DEFAULT_BRANCHES /
-# ENFORCE_WORKTREE_ADDITIONAL_REPOS unset per invocation so no inherited marker,
-# scratchpad allow, branch override or scope widening can decide an assertion.
-#
-# ASSERTION CONTRACT (inherited from tests/hooks/enforce-worktree-off-clearance-state-matrix.sh):
-# enforce-worktree.js always exits 0 and prints either `{}` (allow) or a
-# `"decision":"block"` object. A crash, timeout or empty output is its OWN
-# verdict token — never folded into "allow".
-# ---------------------------------------------------------------------------
+# TL2: real enforce-worktree.js subprocess. TL3 gap: live PreToolUse dispatch; gh is never spawned.
+# Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration.
+# #1780 "G": `gh pr merge 1 && rm <wf>/<sid>.workflow-off` reached the gh branch's unconditional
+# allow; the fix makes _markerHit gate gh-branch entry. B = attacks BLOCK, A = sanctioned gh ALLOW
+# (A4/A5 ordinary-basename controls), P = parse failure, X = execute-on-allow resource check.
+# Hermetic (rules/test/fixture-isolation.md); crash/timeout/empty are their own verdict tokens.
 
 set -u
 
@@ -167,18 +100,10 @@ fi
 pass "H2 main checkout + linked feature worktree fixtures created"
 
 # --- the gh WRITE vocabulary, verified against the classifier ----------------
-# isGhWriteIR() (hooks/lib/bash-write-patterns/patterns.js) is the SSOT for
-# "Group B gh write", and its set is deliberately NARROW: pr merge, issue
-# delete/create, repo delete, release create|delete|edit|upload, and gh api with
-# a mutating method. Read-ish commands such as `gh issue comment` are NOT in it,
-# so a test built on them would never enter the branch under test and would
-# assert nothing about this fix. H3 below pins that premise: every command word
-# used in sections B/A/X must classify as a gh write, and a non-gh control must
-# not — otherwise the sections are declared vacuous rather than silently passing.
-#
-# `gh issue create` is excluded on purpose: it carries its own #713
-# skill-context gate that blocks from a main checkout before the session-scope
-# check, which would mask the verdict this file measures.
+# isGhWriteIR() (hooks/lib/bash-write-patterns/patterns.js) is the SSOT and is deliberately
+# NARROW; H3 pins that every command word below classifies as a gh write (a non-gh control
+# must not), else sections B/A/X are vacuous. `gh issue create` is excluded: its own #713
+# skill-context gate blocks from a main checkout first and would mask the measured verdict.
 GHW="gh pr merge 1"
 GHW_REL="gh release create v1 --notes hi"
 GHW_DEL="gh issue delete 1 --yes"
@@ -223,7 +148,7 @@ run_guard() {
     local cmd="$1" dir="$2" payload out rc
     payload=$("$RWT" 10 node "$DRV" "$cmd" "$(node_path "$dir")" "$SID" 2>/dev/null)
     out=$(cd "$dir" && printf '%s' "$payload" | \
-        env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
+        env -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
             -u ENFORCE_WORKTREE_ADDITIONAL_REPOS -u ENFORCE_WORKTREE_EXTRA_REPOS \
         ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
@@ -259,19 +184,11 @@ assert_guard() {
 }
 
 # ===========================================================================
-# Section B - a protected-marker write RIDING ALONG inside a gh write must NOT
-# reach the gh branch's unconditional allow.
-#
-# Every row here is a sequenced command whose gh segment is entirely legitimate
-# and whose sibling segment targets a protected basename in the workflow dir.
-# The run dir is the MAIN checkout: that is where the fall-through lands on a
-# real block (from a linked feature worktree enforce-worktree.js is a LOCATION
-# guard whose tail allows — see the section-K comment in
-# tests/hooks/enforce-worktree-off-clearance-state-matrix.sh — which is exactly why
-# hooks/block-clearance-token-write.js exists as the location-independent gate,
-# covered by tests/hooks/enforce-protected-marker-write.sh).
-#
-# Pre-fix, every row below measured ALLOW.
+# Section B - a protected-marker write riding inside a gh write must NOT reach the gh
+# branch's unconditional allow (pre-fix every row measured ALLOW). Run from the MAIN
+# checkout: from a linked worktree enforce-worktree.js is a location guard whose tail
+# allows; hooks/block-clearance-token-write.js is the location-independent gate
+# (tests/hooks/enforce-protected-marker-write.sh).
 # ===========================================================================
 assert_guard "B1 gh pr merge && rm marker" \
     block "$GHW && rm $MARKER_N" "$MAIN"
@@ -315,19 +232,10 @@ assert_guard "A6 gh release create whose --notes merely MENTIONS a marker-shaped
     allow "gh release create v1 --notes 'see $VSID.$MARKER_KIND for context'" "$MAIN"
 
 # ===========================================================================
-# Section P - PARSE FAILURE is the other half of `_markerHit`.
-#
-# hooks/lib/command-ir.js parse() sets parseFailure on an unclosed quote span,
-# and `_markerHit = parseFailure || bashTargetsHitProtectedMarker(targets)`.
-# SCOPE NOTE, stated rather than glossed: isGhWriteIR() itself already returns
-# false when `ir.parseFailure === true`, so the parse-failure disjunct cannot be
-# what keeps an unparseable command out of the gh branch — it is the round-5
-# `!_markerHit` guard on the LATER allow fast-paths (universal target allow /
-# Bug1 / Bug2) that these rows pin. They are kept here because they cover the
-# same `_markerHit` expression this fix hoisted, and because an unparseable
-# command is exactly the state in which nothing can be vouched for. P2 is the
-# non-vacuity control: the SAME text with the quote closed parses fine, and the
-# block then comes from the marker gate instead.
+# Section P - PARSE FAILURE, the other half of `_markerHit = parseFailure || markerHit`.
+# isGhWriteIR() already rejects parseFailure IRs, so these rows pin the round-5 `!_markerHit`
+# guard on the later allow fast-paths, not gh-branch entry. P2 (quote closed) is the
+# non-vacuity control: it still blocks, via the marker gate instead.
 # ===========================================================================
 assert_guard "P1 unclosed quote hiding a marker write is fail-closed" \
     block "$GHW_REL --notes \"hi && rm $MARKER_N" "$MAIN"
@@ -337,18 +245,9 @@ assert_guard "P3 unclosed quote with no marker anywhere is still fail-closed" \
     block "$GHW_REL --notes \"hi && echo x > $ORDINARY_N" "$MAIN"
 
 # ===========================================================================
-# Section X - Pattern 1 in its strong form: the protected resource itself.
-#
-# The hook is a PreToolUse gate, so a verdict alone proves nothing about the
-# file. Here the command is EXECUTED whenever (and only when) the hook allowed
-# it — the same thing Claude Code would do with that verdict — and the marker is
-# then checked on disk. A `;` separator is used so the marker-deleting segment
-# runs even though the fixture host has no real `gh` binary; nothing outside
-# $TMP is ever named.
-#
-# X2 is the counterweight: the identical mechanism applied to an ORDINARY file
-# proves the harness really does execute on an allow, so X1's surviving marker
-# cannot be explained by the harness silently doing nothing.
+# Section X - Pattern 1 strong form: the command is EXECUTED only when the hook allowed it,
+# then the protected file is checked on disk (`;` lets the marker segment run without a real
+# gh; nothing outside $TMP is named). X2 proves the harness really executes on an allow.
 # ===========================================================================
 exec_if_allowed() {
     local cmd="$1" dir="$2" verdict

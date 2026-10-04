@@ -77,11 +77,9 @@ run_review_loop() {
   (
     cd "$TMPDIR_BASE" || exit 1
     SESSION_ID="$BRC_WSID" \
-    CLAUDE_SESSION_ID="" \
     CLAUDE_CODE_SESSION_ID="$2" \
     PLANS_DIR="$PLANS_DIR_NODE" \
     EXTENSIONS_USED="0" \
-    CLAUDE_ENV_FILE="" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
@@ -94,7 +92,16 @@ run_review_loop() {
 
 run_cases_2270_bridge_rc() {
 
-BRC_TERMINAL="$PLANS_DIR/$BRC_WSID-test-review-terminal.txt"
+# The wrapper keys the marker on SESSION_ID (the wsid): <sid>.control/ since #2434,
+# PLANS_DIR before it. A "no marker" assertion must hold at both.
+BRC_TERMINAL="$WF_DIR/$BRC_WSID.control/test-review-terminal.txt"
+BRC_TERMINAL_LEGACY="$PLANS_DIR/$BRC_WSID-test-review-terminal.txt"
+brc_no_terminal() { [[ ! -f "$BRC_TERMINAL" && ! -f "$BRC_TERMINAL_LEGACY" ]]; }
+brc_terminal_state() {
+  printf 'control=%s legacy=%s' \
+    "$([[ -f "$BRC_TERMINAL" ]] && echo present || echo absent)" \
+    "$([[ -f "$BRC_TERMINAL_LEGACY" ]] && echo present || echo absent)"
+}
 
 # ---------------------------------------------------------------------------
 # Case BR-A [RED, #2270 S5-4 (a)]: select-staged-files.sh with a bridge that
@@ -131,13 +138,13 @@ fi
 # unwritten — arming the re-invoke guard on a resolver fault would block the
 # next legitimate review too (#1361).
 # ---------------------------------------------------------------------------
-rm -f "$WF_DIR"/*.json "$BRC_TERMINAL"
+rm -f "$WF_DIR"/*.json "$BRC_TERMINAL" "$BRC_TERMINAL_LEGACY"
 write_state_for "$BRC_SID" "$WTA_NODE"
 run_review_loop "$BRC_ROOT127" "$BRC_SID"
-if [[ "$RCRL_RC" -eq 4 && "$RCRL_ERR" == *"failed (rc 127)"* && ! -f "$BRC_TERMINAL" ]]; then
+if [[ "$RCRL_RC" -eq 4 && "$RCRL_ERR" == *"failed (rc 127)"* ]] && brc_no_terminal; then
   pass "Case BR-C (review loop, bridge rc 127 -> exit 4, no terminal marker): rc=$RCRL_RC"
 else
-  fail "Case BR-C (review loop, bridge rc 127 -> exit 4, no terminal marker): rc=$RCRL_RC err='$RCRL_ERR' marker=$([[ -f "$BRC_TERMINAL" ]] && echo present || echo absent)"
+  fail "Case BR-C (review loop, bridge rc 127 -> exit 4, no terminal marker): rc=$RCRL_RC err='$RCRL_ERR' $(brc_terminal_state)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -146,7 +153,7 @@ fi
 # bridge legitimately reports "unresolvable" and the script keeps its historic
 # exit 3. The genuine bridge runs here; only codex itself is stubbed.
 # ---------------------------------------------------------------------------
-rm -f "$WF_DIR"/*.json "$BRC_TERMINAL"
+rm -f "$WF_DIR"/*.json "$BRC_TERMINAL" "$BRC_TERMINAL_LEGACY"
 BRC_ROOTREAL="$(brc_shadow_root real)"
 run_review_loop "$BRC_ROOTREAL" ""
 if [[ "$RCRL_RC" -eq 3 ]]; then
@@ -186,7 +193,7 @@ fi
 # staged file — so a run that stayed on env's sid would find no state (rc 3),
 # while one that follows the bridge resolves WTB and proceeds past rc 3.
 # ---------------------------------------------------------------------------
-rm -f "$WF_DIR"/*.json "$BRC_TERMINAL"
+rm -f "$WF_DIR"/*.json "$BRC_TERMINAL" "$BRC_TERMINAL_LEGACY"
 write_state_for "$BRC_SIDB" "$WTB_NODE"
 run_review_loop "$BRC_ROOTSIDB" "$BRC_SIDA"
 if [[ "$RCRL_RC" -ne 3 ]]; then

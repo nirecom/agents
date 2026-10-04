@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# tests/bin/fix-2025-safe-plans-path.sh
-# Tests: bin/lib/safe-plans-path.sh, bin/lib/concern-ledger.sh, bin/concern-ledger
-# Tags: safe-plans-path, path-traversal, containment, symlink, atomic-publish, table-driven, security, scope:issue-specific, pwsh-not-required
+# tests/bin/fix-2025-safe-state-path.sh
+# Tests: bin/lib/safe-state-path.sh, bin/lib/concern-ledger.sh, bin/concern-ledger
+# Tags: safe-state-path, path-traversal, containment, symlink, atomic-publish, table-driven, security, scope:issue-specific, pwsh-not-required
 #
 # #2025: every writer under the plans dir spelled its own destination, each
 # owning a separate copy of "is this still inside the directory the caller
@@ -22,7 +22,15 @@ set -uo pipefail
 # covers every form on every host.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-SPLIB="$AGENTS_ROOT/bin/lib/safe-plans-path.sh"
+# #2434 renamed the library (it now contains the control dir as well as the
+# plans dir); the old name must not linger as a second entry point.
+SPLIB="$AGENTS_ROOT/bin/lib/safe-state-path.sh"
+
+# harness.sh supplies the case markers only; this suite keeps its own
+# name-first reporters, defined after the source so they take precedence.
+AGENTS_DIR="$AGENTS_ROOT"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 
 PASS=0
 FAIL=0
@@ -55,7 +63,6 @@ assert_eq_nz() {
 # Fixture isolation (rules/test/fixture-isolation.md).
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
@@ -64,8 +71,8 @@ export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
 
 if [ ! -f "$SPLIB" ]; then
-    echo "SKIP-BLOCKED: bin/lib/safe-plans-path.sh not implemented yet"
-    fail "implementation missing: bin/lib/safe-plans-path.sh (every case below fails for this reason)"
+    echo "SKIP-BLOCKED: bin/lib/safe-state-path.sh not implemented yet"
+    fail "implementation missing: bin/lib/safe-state-path.sh (every case below fails for this reason)"
 fi
 
 # sp <fn> <args...> — one library call in its own subshell, so a sourced
@@ -88,6 +95,17 @@ verdict() {
 
 trim_f() { printf '%s' "$1" | sed 's/^ *//; s/ *$//'; }
 
+case_begin "old-library-name-is-gone" "bin/lib/safe-state-path.sh"
+echo ""
+echo "--- sp 0: the rename left no second entry point (#2434, CPR-SSOT) ---"
+if [ -e "$AGENTS_ROOT/bin/lib/safe-plans-path.sh" ]; then
+    fail "0: the pre-#2434 name bin/lib/safe-plans-path.sh still exists (rename, not copy)"
+else
+    pass "0: the pre-#2434 name bin/lib/safe-plans-path.sh is gone"
+fi
+case_end
+
+case_begin "token-allowlist-names-a-file" "bin/lib/safe-state-path.sh"
 echo ""
 echo "--- sp 1: sp_valid_token — the allowlist that names a file ---"
 
@@ -127,7 +145,9 @@ assert_eq "1: a token that is exactly a dash" "rejected" "$(verdict sp_valid_tok
 
 # No overlong-token row: the allowlist is a character class with no length
 # term, so length is an OS path-limit question, not this function's contract.
+case_end
 
+case_begin "separator-set-per-path" "bin/lib/safe-state-path.sh"
 echo ""
 echo "--- sp 2: which separator set applies to which path ---"
 
@@ -166,7 +186,9 @@ assert_eq_nz "2: a bare name has the current directory as its directory" \
     'dir=. base=c.txt' "$(sp_split 'c.txt')"
 assert_eq_nz "2: a trailing separator does not produce an empty basename" \
     'dir=/xx base=y' "$(sp_split '/xx/y/')"
+case_end
 
+case_begin "parent-reference-detection" "bin/lib/safe-state-path.sh"
 echo ""
 echo "--- sp 3: '..' detection, and the gate over it ---"
 
@@ -191,6 +213,7 @@ backslashes on a Windows path    | x\..\y    | 1 | accepted
 mixed separators on Windows      | x/..\y    | 1 | accepted
 no parent reference at all       | x/y/z     | 0 | rejected
 TABLE
+case_end
 
 # A host that cannot create real symlinks turns every symlink assertion below
 # into a vacuous pass, so the capability is probed once and named in the output
@@ -201,33 +224,39 @@ ln -s "$TMPDIR_BASE" "$TMPDIR_BASE/.symlink-probe" 2>/dev/null || true
 [ "$SYMLINKS_OK" = "yes" ] \
     || echo "NOTE: this host does not create real symlinks — symlink cases are skipped"
 
-# The same treatment for POSIX modes (CPR-ORTH). safe-plans-path.sh pins the
+# The same treatment for POSIX modes (CPR-ORTH). safe-state-path.sh pins the
 # temp file's mode at 0600 and documents the no-op filesystem as a named
 # CPR-UNV exception; on NTFS under Git Bash chmod succeeds and changes nothing,
 # so the assertion cannot be made to pass there without asserting a falsehood.
 # Probed rather than assumed, so the mode really is checked wherever it exists.
 MODES_OK=no
-{
-    MODE_PROBE="$TMPDIR_BASE/.mode-probe"
-    : > "$MODE_PROBE"
-    chmod 600 "$MODE_PROBE" 2>/dev/null || true
-    [ "$({ stat -c '%a' "$MODE_PROBE" 2>/dev/null || stat -f '%Lp' "$MODE_PROBE" 2>/dev/null; })" = "600" ] \
-        && MODES_OK=yes
-}
+MODE_PROBE="$TMPDIR_BASE/.mode-probe"
+: > "$MODE_PROBE"
+chmod 600 "$MODE_PROBE" 2>/dev/null || true
+MODE_SEEN="$(stat -c '%a' "$MODE_PROBE" 2>/dev/null || stat -f '%Lp' "$MODE_PROBE" 2>/dev/null)"
+[ "$MODE_SEEN" = "600" ] && MODES_OK=yes
 [ "$MODES_OK" = "yes" ] \
     || echo "NOTE: this host does not honour POSIX modes — mode cases are skipped"
 
 # ---------------------------------------------------------------------------
-# Cases split into tests/bin/fix-2025-safe-plans-path/ per rules/coding/file-split.md.
+# Cases split into tests/bin/fix-2025-safe-state-path/ per rules/coding/file-split.md.
 # ---------------------------------------------------------------------------
-SUITE_DIR="$AGENTS_ROOT/tests/bin/fix-2025-safe-plans-path"
+SUITE_DIR="$AGENTS_ROOT/tests/bin/fix-2025-safe-state-path"
 
-# shellcheck source=./fix-2025-safe-plans-path/containment.sh
+case_begin "containment-and-finalize-ledger" "bin/concern-ledger"
+# shellcheck source=./fix-2025-safe-state-path/containment.sh
 . "$SUITE_DIR/containment.sh"
-# shellcheck source=./fix-2025-safe-plans-path/publish.sh
+case_end
+
+case_begin "atomic-publish" "bin/lib/safe-state-path.sh"
+# shellcheck source=./fix-2025-safe-state-path/publish.sh
 . "$SUITE_DIR/publish.sh"
-# shellcheck source=./fix-2025-safe-plans-path/contained-ops.sh
+case_end
+
+case_begin "contained-file-operations" "bin/lib/safe-state-path.sh"
+# shellcheck source=./fix-2025-safe-state-path/contained-ops.sh
 . "$SUITE_DIR/contained-ops.sh"
+case_end
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

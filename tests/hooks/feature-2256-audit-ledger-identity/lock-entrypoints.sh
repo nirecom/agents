@@ -40,7 +40,7 @@ export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_WORKFLOW_DIR="$WORK_NODE/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$AGENTS_NODE"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
@@ -60,9 +60,9 @@ drive() {
 seed() {
     drive "seed-$1" "
 const st = schema.createEmptyState('$1');
-fs.writeFileSync(writer.getStatePath('$1'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$1', { forWrite: true }), JSON.stringify(st));
 out('');
-" >/dev/null
+" >/dev/null || fail "seed($1): supervisor-state seed write failed"
 }
 
 # Worker: N iterations of one named writer operation against one session.

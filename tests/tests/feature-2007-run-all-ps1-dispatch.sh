@@ -20,7 +20,7 @@ trap 'rm -rf "$TMPDIR_FX"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_FX/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_FX/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 # Keep fixture runs out of the real duration ledger and progress stream.
 export RUN_ALL_DURATIONS_LIB=/nonexistent RUN_ALL_PROGRESS=off
 
@@ -162,6 +162,28 @@ if [ "$RC" = "0" ] && echo "$OUT" | grep -q 'fallback-ran' && echo "$OUT" | grep
     pass "B6: RUN_ALL_LAUNCH_LIB=/nonexistent still runs .sh via the bash fallback"
 else
     fail "B6: .sh did not run without the launch library — rc=$RC out=$(echo "$OUT" | tail -3)"
+fi
+
+# B7 (#2434): every launched test gets a fresh per-run CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR
+# that overrides the caller's pair and is removed with the work dir.
+mkdir -p "$TMPDIR_FX/b7/caller-wf" "$TMPDIR_FX/b7/caller-plans"
+cat >"$TMPDIR_FX/b7/print-dirs.sh" <<'B7_EOF'
+#!/usr/bin/env bash
+: >"$CLAUDE_WORKFLOW_DIR/b7-marker" || exit 1
+: >"$WORKFLOW_PLANS_DIR/b7-marker" || exit 1
+printf 'B7_WF=%s\nB7_PL=%s\n' "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+B7_EOF
+OUT="$(CLAUDE_WORKFLOW_DIR="$TMPDIR_FX/b7/caller-wf" WORKFLOW_PLANS_DIR="$TMPDIR_FX/b7/caller-plans" \
+    bash "$RUN_ALL" "$TMPDIR_FX/b7/print-dirs.sh" 2>&1)"; RC=$?
+b7_wf="$(printf '%s\n' "$OUT" | sed -n 's/^B7_WF=//p')"
+b7_pl="$(printf '%s\n' "$OUT" | sed -n 's/^B7_PL=//p')"
+b7_leak="$(ls -A "$TMPDIR_FX/b7/caller-wf" "$TMPDIR_FX/b7/caller-plans" 2>/dev/null | grep -c 'b7-marker')"
+if [ "$RC" = "0" ] && [ -n "$b7_wf" ] && [ -n "$b7_pl" ] && [ "$b7_wf" != "$b7_pl" ] \
+    && [ "$b7_wf" != "$TMPDIR_FX/b7/caller-wf" ] && [ "$b7_pl" != "$TMPDIR_FX/b7/caller-plans" ] \
+    && [ ! -e "$b7_wf" ] && [ ! -e "$b7_pl" ] && [ "$b7_leak" = "0" ]; then
+    pass "B7: run-all pins both state dirs per run, overrides the caller's pair, and removes them"
+else
+    fail "B7: state dirs not pinned per run — rc=$RC wf=<<$b7_wf>> plans=<<$b7_pl>> leak=$b7_leak out=$(echo "$OUT" | tail -3)"
 fi
 
 case_end

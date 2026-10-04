@@ -323,7 +323,7 @@ verdict per stage so each step routes on its own evidence:
   `PRODUCER_HIGH_MODEL` and `low` to `PRODUCER_LOW_MODEL` (`.env`; allowed aliases and defaults in
   its `ROLE_TABLE`), and reviewer/supervisor launches resolve `REVIEWER_MODEL` / `ALERT_MODEL` the
   same way. `read-complexity-evaluation --stage`, `derive-complexity-level`, and
-  `read-session-facts` (contract v2: `COMPLEXITY_MODEL_write_tests` / `COMPLEXITY_MODEL_write_code`)
+  `read-session-facts` (contract v2 added `COMPLEXITY_MODEL_write_tests` / `COMPLEXITY_MODEL_write_code`; v3 adds `CONTROL_DIR`, #2434)
   print the resolved alias; skills pass it as the Agent tool's `model` parameter, which wins over
   agent frontmatter. The routed agents keep a frontmatter `model:` equal to their `ROLE_TABLE`
   default only as a fallback for a dropped parameter (anthropics/claude-code#83920).
@@ -406,7 +406,7 @@ Each skill's `## Completion` section runs `echo "<<WORKFLOW_MARK_STEP_<step>_com
 the sole Bash command (no pipes, no `&&`, no redirection). The PostToolUse hook
 (`workflow-mark.js`) intercepts this via strict anchored regex on `tool_input.command` and
 calls `markStep()` directly using `session_id` from the hook's stdin JSON. This bypasses the
-`CLAUDE_ENV_FILE` propagation issue in Bash tool subprocesses (Anthropic bug #27987).
+Bash-env session-id propagation gap (see [session-id-resolution.md](session-id-resolution.md)).
 
 Note: marker format uses `_` as separator (not `:`). Claude Code's permission glob parser
 treats `:` as a named-parameter separator inside `Bash(...)` rules, causing silent match

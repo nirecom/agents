@@ -35,7 +35,7 @@ require_module() {
 run_hook() {
     local tmp="$1" sid="$2"
     printf '{"session_id":"%s"}' "$sid" \
-        | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        | env -u CLAUDE_CODE_SESSION_ID \
             CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 60 node "$HOOK" 2>/dev/null
@@ -45,7 +45,7 @@ run_hook() {
 # period, so a case that expects an entry seeds workflow_init complete first.
 seed_active() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -59,7 +59,7 @@ markStep('$sid', 'workflow_init', 'complete');
 # grepping the file — the grammar is the writer's business, not this file's.
 inspect() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID SID="$sid" \
+    env -u CLAUDE_CODE_SESSION_ID SID="$sid" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -83,8 +83,9 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 
 count_entries() {
     local tmp="$1" sid="$2" n
-    if [ ! -f "$tmp/wf/$sid-handoff.md" ]; then printf '0'; return 0; fi
-    n=$(grep -c 'compaction' "$tmp/wf/$sid-handoff.md" 2>/dev/null)
+    # #2434: handoff.md is a control file — <wf>/<sid>.control/handoff.md.
+    if [ ! -f "$tmp/wf/$sid.control/handoff.md" ]; then printf '0'; return 0; fi
+    n=$(grep -c 'compaction' "$tmp/wf/$sid.control/handoff.md" 2>/dev/null)
     printf '%s' "${n:-0}"
 }
 
@@ -122,7 +123,7 @@ run_P2() {
     seed_active "$tmp" "twice-sid-p2"
     run_hook "$tmp" "twice-sid-p2" >/dev/null
     run_hook "$tmp" "twice-sid-p2" >/dev/null
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -160,7 +161,7 @@ run_P3() {
     mkdir -p "$tmp/wf"
     seed_active "$tmp" "dedup-sid-p3"
     run_hook "$tmp" "dedup-sid-p3" >/dev/null
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -192,7 +193,7 @@ run_P4() {
     require_module "$ARTIFACT" || return 0
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
-    mkdir -p "$tmp/wf/unwritable-sid-p4-handoff.md"
+    mkdir -p "$tmp/wf/unwritable-sid-p4.control/handoff.md"
     seed_active "$tmp" "unwritable-sid-p4"
     out="$(run_hook "$tmp" "unwritable-sid-p4")"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit-changed-by-a-failed-artifact-write:$rc"
@@ -212,14 +213,14 @@ run_P5() {
     local tmp out rc problems files
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
-    out=$(printf '{}' | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(printf '{}' | env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$HOOK" 2>/dev/null)
     rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit:$rc"
     [ "$out" = "{}" ] || problems="$problems sessionless-output:'${out:0:120}'"
-    files="$(ls "$tmp/wf" 2>/dev/null | grep -c 'handoff.md' || true)"
+    files="$(find "$tmp/wf" -name '*handoff.md' 2>/dev/null | grep -c '' || true)"
     [ "$files" -eq 0 ] || problems="$problems sessionless-compaction-created-an-artifact"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then

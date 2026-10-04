@@ -38,7 +38,7 @@ require_source() {
 
 seed_state_raw() {
     local tmp="$1" sid="$2" alert_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const now = new Date().toISOString();
@@ -51,13 +51,13 @@ const st = {
   alert: $alert_json,
   audit: {},
 };
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
 read_alert_armed_at() {
     local tmp="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 try {
@@ -73,7 +73,7 @@ try {
 
 read_alert_phase() {
     local tmp="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 try {
@@ -245,7 +245,7 @@ run_g28() {
     local tmp out
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g28-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.appendFinding('g28-sid', { categories: ['workflow'], severity: 'notice', detail: 'd', reporter: 'r' });
 process.stdout.write(ok ? 'ok' : 'fail');
@@ -265,7 +265,7 @@ run_g29() {
     local tmp out
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g29-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.writeAlertState('g29-sid', { alert_phase: 'done' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
@@ -283,7 +283,7 @@ run_g30() {
     local tmp out
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g30-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.writeAlertState('g30-sid', { alert_phase: 'pending' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
@@ -303,7 +303,7 @@ run_g31() {
     local tmp out phase
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g31-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending' }"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.writeAlertState('g31-sid', { alert_phase: 'closed' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
@@ -322,7 +322,7 @@ run_g32() {
     local tmp out phase
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g32-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.writeAlertState('g32-sid', { alert_phase: 'paused' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
@@ -341,7 +341,7 @@ run_g33() {
     local tmp out
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g33-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null }"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.writeAlertState('g33-sid', { alert_phase: 'paused', alert_armed_at: '2026-06-06T12:00:00Z' });
 process.stdout.write(ok ? 'accepted' : 'rejected');

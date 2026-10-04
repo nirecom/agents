@@ -45,7 +45,7 @@ d2099sf_invoke() {
     D2099SF_RC=0
     case "$bin" in
         "$BIN_DERIVE")
-            D2099SF_TEXT=$(run_with_timeout "$runner" "$bin" --stage detail --signals-file "$p" 2>&1) || D2099SF_RC=$? ;;
+            D2099SF_TEXT=$(run_with_timeout "$runner" "$bin" --stage detail --session "$sid" --signals-file "$p" 2>&1) || D2099SF_RC=$? ;;
         "$BIN_RECORD_SKIP")
             D2099SF_TEXT=$(run_with_timeout "$runner" "$bin" --session "$sid" \
                 --signals-file "$p" --target outline 2>&1) || D2099SF_RC=$? ;;
@@ -57,11 +57,16 @@ d2099sf_invoke() {
 # Attribution guard (test-design.md classifier/guard): a CLI that refuses EVERY
 # --signals-file refuses the hostile ones for free. Identical call path, ordinary
 # in-scope file — so a green reject corpus means validation, not a dead runner.
+# #2434: derive accepts --signals-file only as the legacy <plans>/<sid>-detail-signals.txt,
+# so its in-scope control is that path (any other path is refused by the shim).
+d2099sf_derive_file() { printf '%s/%s-detail-signals.txt' "$WORKFLOW_PLANS_DIR" "$1"; }
+
 d2099sf_control() {
     local bin="$1" sid f
-    f="$WORKFLOW_PLANS_DIR/sf-control-signals.txt"
-    printf 'S2-architecture' > "$f"
     sid=$(new_session sfctl)
+    f="$WORKFLOW_PLANS_DIR/sf-control-signals.txt"
+    [ "$bin" = "$BIN_DERIVE" ] && f=$(d2099sf_derive_file "$sid")
+    printf 'S2-architecture' > "$f"
     d2099sf_invoke "$bin" "$sid" "$f"
     if [ "$D2099SF_RC" -eq 0 ]; then echo "yes"; else echo "no rc=$D2099SF_RC out=[$D2099SF_TEXT]"; fi
 }
@@ -190,9 +195,13 @@ d2099sf_sanctioned_paths() {
     lvl=$(run_with_timeout node "$BIN_READ" --session "$sid" --stage detail 2>/dev/null | head -1)
     assert_eq "SF-14 ... which reads back at the level that signal implies" "level=high" "$lvl"
 
+    # #2434: derive's --signals-file is pinned to the legacy plans-dir name, so the
+    # awkward path cannot reach it; the same content goes through that path instead.
+    sid=$(new_session sfokd)
+    cp "$f" "$(d2099sf_derive_file "$sid")"
     rc=0
-    out=$(run_with_timeout node "$BIN_DERIVE" --stage detail --signals-file "$f" 2>&1) || rc=$?
-    assert_eq "SF-15 derive-complexity-level answers from the same awkward in-scope path (exit 0)" "0" "$rc"
+    out=$(run_with_timeout node "$BIN_DERIVE" --stage detail --session "$sid" --signals-file "$(d2099sf_derive_file "$sid")" 2>&1) || rc=$?
+    assert_eq "SF-15 derive-complexity-level answers for the same content via its legacy-legal path (exit 0)" "0" "$rc"
     assert_eq "SF-16 ... in the documented level= protocol" "level=high" "$(printf '%s\n' "$out" | head -1)"
 
     sid=$(new_session sfokw)
@@ -253,9 +262,11 @@ d2099sf_empty_file() {
         "RECORDED_COMPLEXITY level=low signals=" "$out"
     assert_eq "SF-35 ... having appended exactly one evaluation" "ce=1 skip=0" "$(d2099_side_effects "$sid")"
 
+    sid=$(new_session sfemptyd)
+    : > "$(d2099sf_derive_file "$sid")"
     rc=0
-    out=$(run_with_timeout node "$BIN_DERIVE" --stage detail --signals-file "$f" 2>&1) || rc=$?
-    assert_eq "SF-36 derive-complexity-level reads the same empty file without erroring (exit 0)" "0" "$rc"
+    out=$(run_with_timeout node "$BIN_DERIVE" --stage detail --session "$sid" --signals-file "$(d2099sf_derive_file "$sid")" 2>&1) || rc=$?
+    assert_eq "SF-36 derive-complexity-level reads an empty legacy-legal signals file without erroring (exit 0)" "0" "$rc"
     assert_eq "SF-37 ... routing zero signals to the low level, not escalating on absence" \
         "level=low" "$(printf '%s\n' "$out" | head -1)"
 }
@@ -299,8 +310,10 @@ d2099sf_secret_containment() {
         "$D2099SF_SECRET" "$out"
     assert_eq "SF-27 ... still answering in the documented level= protocol" "level=high" "$(printf '%s\n' "$out" | head -1)"
 
+    sid=$(new_session sfsecretd)
+    cp "$f" "$(d2099sf_derive_file "$sid")"
     rc=0
-    out=$(run_with_timeout node "$BIN_DERIVE" --stage detail --signals-file "$f" 2>&1) || rc=$?
+    out=$(run_with_timeout node "$BIN_DERIVE" --stage detail --session "$sid" --signals-file "$(d2099sf_derive_file "$sid")" 2>&1) || rc=$?
     assert_not_contains "SF-28 ... and none either when the same token arrives by --signals-file (rc=$rc)" \
         "$D2099SF_SECRET" "$out"
 

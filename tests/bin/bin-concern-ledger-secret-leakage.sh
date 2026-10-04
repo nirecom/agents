@@ -39,7 +39,6 @@ assert_eq() {
 # ---------------------------------------------------------------------------
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
@@ -111,9 +110,9 @@ run_round() {
 }
 
 # The five persisted-or-emitted surfaces, each read back from where it lives.
-sl_delta()  { cat "$PLANS/$SID-$FMT-round-1-delta-review-code-codex.txt" 2>/dev/null; }
-sl_ledger() { cat "$PLANS/$SID-$FMT-concern-ledger.txt" 2>/dev/null; }
-sl_json()   { cat "$PLANS/$SID-$FMT-unresolved-concerns.json" 2>/dev/null; }
+sl_delta()  { cat "$CLAUDE_WORKFLOW_DIR/$SID.control/$FMT-round-1-delta-review-code-codex.txt" 2>/dev/null; }
+sl_ledger() { cat "$CLAUDE_WORKFLOW_DIR/$SID.control/$FMT-concern-ledger.txt" 2>/dev/null; }
+sl_json()   { cat "$CLAUDE_WORKFLOW_DIR/$SID.control/$FMT-unresolved-concerns.json" 2>/dev/null; }
 sl_prior()  {
     bash "$CLI" render-prior --plans-dir "$PLANS" --session-id "$SID" \
         --format "$FMT" 2>/dev/null
@@ -218,11 +217,18 @@ else
     run_round "$SEC_GITHUB"
     LEAKED="$TMPDIR_BASE/leaked-ledger.txt"
     sl_ledger > "$LEAKED"
+    # The private block/allow lists are gitignored and absent from a linked
+    # worktree (scanner exit 4). The families under test are built-in patterns,
+    # so anchor the scanner on a fixture holding empty lists.
+    SCAN_ANCHOR="$TMPDIR_BASE/scan-anchor"
+    mkdir -p "$SCAN_ANCHOR"
+    : > "$SCAN_ANCHOR/.private-info-blocklist"
+    : > "$SCAN_ANCHOR/.private-info-allowlist"
     SCAN_RC=0
-    SCAN_OUT="$(bash "$SCANNER" "$LEAKED" 2>&1)" || SCAN_RC=$?
+    SCAN_OUT="$(AGENTS_CONFIG_DIR="$SCAN_ANCHOR" bash "$SCANNER" "$LEAKED" 2>&1)" || SCAN_RC=$?
 
     assert_eq "4: the scanner rejects the ledger the CLI just wrote" \
-        "flagged" "$([ "$SCAN_RC" -ne 0 ] && printf flagged || printf clean)"
+        "flagged" "$([ "$SCAN_RC" -eq 1 ] && printf flagged || printf "rc=$SCAN_RC")"
     assert_eq "4: naming the credential family it found there" \
         "present" "$(has 'github-token' "$SCAN_OUT")"
 fi

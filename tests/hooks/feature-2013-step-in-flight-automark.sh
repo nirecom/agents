@@ -35,7 +35,7 @@ CASE_DIR="$AGENTS_DIR/tests/hooks/feature-2013-step-in-flight-automark"
 
 # Fixture isolation (rules/test/fixture-isolation.md): never let a spawned node
 # resolve the developer's live session or the real ~/.workflow-plans.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

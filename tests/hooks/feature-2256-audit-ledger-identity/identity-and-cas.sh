@@ -40,7 +40,7 @@ export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_WORKFLOW_DIR="$WORK_NODE/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$AGENTS_NODE"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
@@ -72,9 +72,9 @@ seed() {
         printf '%s\n' "const st = schema.createEmptyState('$sid');"
         printf '%s\n' "st.audit = st.audit || {};"
         printf '%s\n' "st.audit.audit_phase = '$phase' === 'null' ? null : '$phase';"
-        printf '%s\n' "fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));"
+        printf '%s\n' "fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));"
     } > "$js"
-    nodejs "$js" >/dev/null
+    nodejs "$js" >/dev/null || fail "seed($sid): supervisor-state seed write failed"
 }
 
 # --- 1: armAuditRun numbers runs monotonically as run-NNNN ---

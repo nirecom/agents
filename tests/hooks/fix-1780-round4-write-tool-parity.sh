@@ -2,51 +2,13 @@
 # tests/hooks/fix-1780-round4-write-tool-parity.sh
 # Tests: hooks/enforce-worktree.js, hooks/lib/write-tools.js, hooks/enforce-worktree/handle-edit-write.js, hooks/enforce-worktree/handle-bash-write.js, settings.json
 # Tags: worktree, enforce-worktree, write-tools, tool-parity, notebookedit, editfiles, runcommands, runinterminal, pretooluse, security, scope:issue-specific, pwsh-not-required, TL2, hook-registration
-# TL3 gap (what this test does NOT catch):
-# - That Claude Code actually dispatches PreToolUse for editFiles / NotebookEdit /
-#   runInTerminal / runCommands and delivers the payload shapes assumed here. The
-#   hook is a node subprocess fed synthetic JSON; section R asserts the settings.json
-#   registration STATICALLY only, so a matcher the host parses differently would
-#   still pass here.
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration.
-#
-# ---------------------------------------------------------------------------
-# WHAT THIS FILE DEFENDS (#1780 round-4 H-2)
-#
-# enforce-worktree.js was written against FOUR tool names (Bash/Edit/Write/
-# MultiEdit) and settings.json registered it on the same four. But the write
-# surface is two CLASSES, enumerated in hooks/lib/write-tools.js:
-#
-#   edit-write : Edit, Write, MultiEdit, editFiles, NotebookEdit
-#   command    : Bash, runInTerminal, runCommands
-#
-# editFiles, NotebookEdit, runInTerminal and runCommands therefore bypassed
-# main-worktree and protected-branch enforcement OUTRIGHT — not a weaker check, no
-# check at all. A guard that covers one member of a class and not its siblings is
-# a bypass, not a partial guard (CPR-ORTH).
-#
-# THE ASSERTION IS PARITY, NOT "BLOCK". Each case runs the SAME payload semantics
-# through a sibling and through the already-covered reference member (Edit for
-# edit-write, Bash for command), and asserts the two verdicts are EQUAL as well as
-# equal to the expected one. A hook that started blocking everything would fail
-# the allow half; a hook that stopped blocking would fail the block half.
-#
-# Two payload shapes are covered per edit-write sibling, because both reach the
-# hook in the wild: the single top-level target (file_path / notebook_path) and
-# the BATCHED `edits[]` form that editFiles and NotebookEdit also use.
-#
-# NOTE (verified, pre-existing, do NOT "fix"): for the command class the hook
-# reads the working directory from tool_input.cwd, not from the top-level `cwd` —
-# identical for Bash and its siblings. Fixtures here set tool_input.cwd, and the
-# hook process is additionally started IN the repo so process.cwd() agrees; the
-# property under test is tool-name recognition, not cwd resolution.
-#
-# HERMETICITY: throwaway git repos under a temp dir, a throwaway session id, and
-# CLAUDE_WORKFLOW_DIR pointed at a temp dir so no real session-override marker can
-# switch enforcement off underneath the assertions. CLAUDE_SESSION_ID /
-# CLAUDE_CODE_SESSION_ID are unset per invocation for the same reason.
-# ---------------------------------------------------------------------------
+# TL3 gap: real PreToolUse dispatch for editFiles/NotebookEdit/runInTerminal/runCommands (section R is static).
+# Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration.
+
+# #1780 round-4 H-2: every write-tool class member (hooks/lib/write-tools.js) gets the same
+# enforcement verdict as its reference member (Edit / Bash) — parity AND the expected verdict,
+# for both single-target and batched edits[] payloads. Command class reads tool_input.cwd.
+# Hermetic: temp repos, temp CLAUDE_WORKFLOW_DIR, CLAUDE_CODE_SESSION_ID unset per invocation.
 
 set -u
 
@@ -133,7 +95,7 @@ DRV_EOF
 run_guard() {
     local tool="$1" target="$2" dir="$3" shape="$4" payload out rc
     payload=$("$RWT" 10 node "$DRV" "$tool" "$target" "$(node_path "$dir")" "$shape" 2>/dev/null)
-    out=$(cd "$dir" && printf '%s' "$payload" | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(cd "$dir" && printf '%s' "$payload" | env -u CLAUDE_CODE_SESSION_ID \
         ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
     rc=$?
