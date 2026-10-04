@@ -55,13 +55,7 @@ tests/<category>/<branch-type>-<branch-name>.<ext>
 - Multiple files per feature: add a suffix (e.g., `feature-claude-rules-global.sh`)
 - `tests/lib/`, `tests/fixtures/`, `tests/_archive/` and `tests/run-all.sh` are top-level shared test infrastructure — not categories, not subject to the `tests/<category>/` placement rule. `tests/lib/` follows the same adjacent-`lib/` naming as `hooks/lib/` and `bin/lib/`; `tests/run-all.sh` is the test runner entry point whose path is a provenance-identity contract.
 
-Python (pytest) requires a `test_` prefix for auto-discovery:
-
-| Language | Extension |
-|---|---|
-| Python (pytest) | `test_<branch-type>-<branch-name>.py` |
-| bash | `.sh` |
-| PowerShell (Pester) | `.Tests.ps1` |
+- File name per language: match a `supported` entry's `patterns` in `hooks/lib/test-language-registry.json` (`docs/architecture/claude-code/test-language-registry.md`).
 
 ## Test Layer Selection
 
@@ -135,7 +129,7 @@ Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` cont
 - `dup-group-keep:<reason>` — this file shares a `# Tests:` group reported by `bin/audit-tests.sh --dup-groups` and stays separate on purpose. Reasons: `cross-hook`, `distinct-layer`, `size-hard-limit`.
 
 - `# Serial: <reason>` — optional third header, single line, placed immediately after `# Tags:`, with a non-empty reason. It declares that `tests/run-all.sh` must run this file alone rather than in a parallel lane (writes into the real repo tree, mutates global git config, depends on execution order, timing-sensitive measurement). It is the SSOT for that decision — the runner never guesses.
-- Write it within the first 10 lines; the runner accepts it within the first 20 (write conservatively, accept liberally). A `# Serial:` line at line 21 or later is never read, and the test runs in the parallel lane.
+- Write it within the first 10 lines (the registry's `headerMaxLines`). A `# Serial:` line at line 11 or later is never read, and the test runs in the parallel lane.
 
 ## Scope Classification
 

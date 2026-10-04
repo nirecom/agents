@@ -220,6 +220,49 @@ else
 fi
 rm -rf "$root"
 
+# TC8 (#2500) registry-unreadable-fails-closed: a broken or missing registry table makes
+# --apply fail closed (exit 2, ERROR line last) and delete nothing; a valid table is the
+# control. The fixture checkout runs its own copy, because the loader reads its own table.
+# shellcheck source=test-language-registry/slash-header-fixture.sh
+. "$REPO_ROOT/tests/bin/test-language-registry/slash-header-fixture.sh"
+for tc8_mode in valid invalid-json missing; do
+  root="$(mktemp -d)"
+  slash_fx_checkout "$root" "$REPO_ROOT" bin/audit-tests-common.sh bin/run-with-timeout.sh
+  install_test_language_registry "$root" "$REPO_ROOT"
+  slash_write "$root/tests/bin/check-orphan.sh" '#!/usr/bin/env bash' '# Tests: bin/gone.sh' \
+    '# Tags: TL2, scope:common' 'echo hi'
+  git -C "$root" add -A >/dev/null 2>&1
+  GIT_AUTHOR_DATE="2020-01-01T00:00:00" GIT_COMMITTER_DATE="2020-01-01T00:00:00" \
+    git -C "$root" commit -q --no-verify -m init >/dev/null 2>&1
+  case "$tc8_mode" in
+    invalid-json) printf '%s\n' '{ "schema": 1, "entries": [' >"$root/hooks/lib/test-language-registry.json" ;;
+    missing) rm -f "$root/hooks/lib/test-language-registry.json" ;;
+  esac
+  outf="$(mktemp)"; errf="$(mktemp)"
+  set +e
+  ( cd "$root" && bash "$root/bin/audit-tests-common.sh" --apply --offline ) >"$outf" 2>"$errf"
+  RC=$?
+  set -e
+  OUT="$(cat "$outf")"; ERR="$(cat "$errf")"
+  rm -f "$outf" "$errf"
+  exists=no; [[ -f "$root/tests/bin/check-orphan.sh" ]] && exists=yes
+  staged="$(git -C "$root" diff --cached --name-only 2>/dev/null || true)"
+  if [[ "$tc8_mode" == valid ]]; then
+    if [[ "$exists" == no && "$OUT$ERR" == *"DELETED: tests/bin/check-orphan.sh"* ]]; then
+      pass "TC8 control: valid fixture table => --apply deletes the common orphan"
+    else
+      fail "TC8 control: valid fixture table => --apply deletes the common orphan" "rc=$RC exists=$exists out=<<$OUT>> err=<<$ERR>>"
+    fi
+  elif [[ "$RC" -eq 2 && "${ERR##*$'\n'}" == "ERROR: test language registry not readable" \
+        && "$ERR" == *"cannot load the registry table"* && -z "$OUT" \
+        && "$exists" == yes && -z "$staged" ]]; then
+    pass "TC8 $tc8_mode table => exit 2, ERROR line last, no report, nothing deleted or staged"
+  else
+    fail "TC8 $tc8_mode table => exit 2, ERROR line last, no report, nothing deleted or staged" "rc=$RC exists=$exists staged=<<$staged>> out=<<$OUT>> err=<<$ERR>>"
+  fi
+  rm -rf "$root"
+done
+
 # --- Summary ---------------------------------------------------------------
 echo "1..$((PASS+FAIL))"
 echo "# PASS=$PASS FAIL=$FAIL"

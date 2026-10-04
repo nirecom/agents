@@ -24,7 +24,9 @@ Flags:
 Exit codes: 0=success, 1=errors found
 """
 
+import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -143,16 +145,58 @@ def normalize(path: Path, dry_run: bool, add_harness: bool = False) -> str:
     return 'modified'
 
 
-def find_multi_path_files(repo_root: Path) -> list[Path]:
-    """Return test files with 2+ comma-separated paths in # Tests:"""
+class RegistryUnreadable(Exception):
+    pass
+
+
+def load_registry(repo_root: Path) -> dict:
+    """The validated test-language registry, via `node bin/test-language-registry --format json`."""
+    cli = repo_root / 'bin' / 'test-language-registry'
+    try:
+        proc = subprocess.run(['node', str(cli), '--format', 'json'],
+                              capture_output=True, text=True, check=False)
+    except OSError as e:
+        raise RegistryUnreadable(f"node not runnable: {e}") from e
+    if proc.returncode != 0:
+        raise RegistryUnreadable(proc.stderr.strip() or f"{cli} exited {proc.returncode}")
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as e:
+        raise RegistryUnreadable(f"invalid JSON from {cli}: {e}") from e
+
+
+def tests_marker(registry: dict, entry: dict) -> str:
+    """`<header.commentPrefix> Tests:` for the entry; tableDrivenFallbackEntry's prefix when it has no header."""
+    header = entry.get('header') or next(
+        (e.get('header') for e in registry['entries'] if e['id'] == registry.get('tableDrivenFallbackEntry')),
+        None,
+    ) or {}
+    return f"{header.get('commentPrefix', '')} Tests:"
+
+
+def find_multi_path_files(repo_root: Path, registry: dict) -> list[Path]:
+    """Return helper-library test files with 2+ comma-separated paths in their Tests: header"""
     results = []
     tests_dir = repo_root / 'tests'
-    for f in sorted(tests_dir.rglob('*.sh')):
+    header_max = int(registry['headerMaxLines'])
+    # Only languages that source the harness helper library are candidates; the first
+    # entry (table order) whose glob takes a file owns its header marker.
+    marker_of: dict[Path, str] = {}
+    for e in registry['entries']:
+        if e.get('status') != 'supported' or not e.get('helperLibrary'):
+            continue
+        marker = tests_marker(registry, e)
+        for g in e['globs']:
+            for f in tests_dir.rglob(g):
+                if f.is_file():
+                    marker_of.setdefault(f, marker)
+    for f in sorted(marker_of):
         if '_archive' in f.parts:
             continue
-        for ln in f.read_text(encoding='utf-8', errors='replace').splitlines()[:10]:
-            if ln.startswith('# Tests:'):
-                paths = [p.strip() for p in ln[len('# Tests:'):].split(',')]
+        marker = marker_of[f]
+        for ln in f.read_text(encoding='utf-8', errors='replace').splitlines()[:header_max]:
+            if ln.startswith(marker):
+                paths = [p.strip() for p in ln[len(marker):].split(',')]
                 if len(paths) >= 2:
                     results.append(f)
                 break
@@ -172,7 +216,12 @@ def main() -> int:
 
     if all_multi:
         repo_root = Path(__file__).resolve().parent.parent
-        targets = find_multi_path_files(repo_root)
+        try:
+            registry = load_registry(repo_root)
+        except RegistryUnreadable as e:
+            print(f"ERROR: test language registry not readable: {e}", file=sys.stderr)
+            return 1
+        targets = find_multi_path_files(repo_root, registry)
         print(f"Found {len(targets)} multi-path test files")
     else:
         targets = [Path(f) for f in files_arg]

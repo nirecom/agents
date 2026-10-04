@@ -255,6 +255,12 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Definition**: One unit of the host-wide load budget N shared by `bin/find-tests-for-source.sh` (1 lane) and `tests/run-all.sh` (1 to N−1 lanes); an atomic `mkdir` slot holding an owner record. A caller that finds every lane busy waits, then exits 4 at the cap.
 - **Related**: [architecture/claude-code/test-host-lanes.md](architecture/claude-code/test-host-lanes.md), [bin/test-lanes-status.sh](../bin/test-lanes-status.sh)
 
+### test language registry
+
+- **Full name**: Test language registry
+- **Definition**: The one table that decides, for every test language, which files are tests, how their headers are read and how they are launched. Test tools consult it instead of checking file extensions themselves.
+- **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md)
+
 ## Test retirement
 
 ### case marker

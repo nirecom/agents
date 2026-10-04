@@ -83,10 +83,10 @@ which ones: a test **declares** it.
 The declaration is written immediately after the `# Tags:` line, inside the first 10
 lines. That position is not cosmetic — `bin/check-table-driven.sh` and
 `tests/skills/feature-689-frontmatter-convention.sh` both search only `head -10`, so the
-line must not push `# Tests:` or `# Tags:` out of that window. The runner, by
-contrast, scans the first **20** lines. Write narrow, read wide: a *missed*
-declaration is the one fatal failure mode, so reception is deliberately more lenient
-than emission. The narrow writer rule is enforced by
+line must not push `# Tests:` or `# Tags:` out of that window. The runner reads the
+same window: the first `headerMaxLines` (10) lines of the test language registry
+(`test-language-registry.md`), so writer and reader share one number. The writer rule
+is enforced by
 `tests/tests/feature-1832-run-all-parallel/h-serial-header-convention.sh`.
 
 When the cursor reaches a declared file the runner raises a **serial barrier**: it
@@ -317,6 +317,41 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
 - **Exit 4 — no host test lane freed within the wait cap.** Same downstream shape as
   exit 3: one stderr line, no `Results:` and no `RUN_CONTRACT:` line
   (`test-host-lanes.md`).
+- **Exit 5 — the test language registry is unreadable.** The runner cannot tell which
+  files are tests, so it stops before scheduling with one stderr line naming the loader
+  (`RUN_ALL_REGISTRY_LIB` overrides its path); same downstream shape as exit 3.
+
+## 8a. Files the runner recognizes but does not run
+
+Which files are unsupported, and what other tools do with them, is owned by
+`test-language-registry.md` ("Unsupported files"). Such a file never enters the work list. After the last
+test's result line and before the blank line and `Results:`, the runner prints one stdout
+line per such file:
+
+    UNSUPPORTED: <path> (language: <id>; not run)
+
+`<id>` is `unknown` when no entry matches. The line is not printed under `--print-plan`.
+It matches none of the downstream parsers (`RUN_ALL_FAIL_RE`, the `RUN_CONTRACT:` readers,
+`RESULTS_LINE_RE`), and the file counts toward none of PASS / FAIL / SKIP / EXECUTED, so
+the contract line and the exit code are what they would be without the file. When every
+named file is unsupported the run prints `RUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0`
+and exits 0; `isContractTrusted` rejects an EXECUTED=0 contract, so the hook does not
+complete `run_tests` — the same outcome as a pattern that matched nothing.
+
+`run_all_exec <script> <out> <err>` (`bin/lib/run-all-launch.sh`) returns:
+
+| rc | Meaning | `RUN_ALL_EXEC_LAUNCHED` |
+|---|---|---|
+| child rc | the entry's command ran (0 pass, 77 skip, other fail — read as before) | 1 |
+| 77 | `launch.requires` is not on PATH; `SKIP:` line written to `<out>` | 0 |
+| 78 | not launched: no supported entry matches, or a suite file has no suite root; `UNSUPPORTED:` line written to `<out>` | 0 |
+| 2 | no registry readable beside the library | 0 |
+
+`RUN_ALL_EXEC_LAUNCHED` tells a caller whether a 77 or other rc came from a started
+process. run-all sorts unsupported files out before launching, but a suite file whose
+suite root is missing still reaches the launcher: run-all counts that not-launched 78 as
+`UNSUPPORTED` (neither pass, fail nor skip). A 78 with `RUN_ALL_EXEC_LAUNCHED=1` came from
+the test itself and is a FAIL.
 
 ## 9. Where things live
 
@@ -325,7 +360,7 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
 | `tests/run-all.sh` | Scheduler, argument surface, serial barrier, progress, `--print-plan`, `--deadline`, `neutralize_stream`, process-group reaping, bounded abort, cache read, LPT sort, duration measurement |
 | `bin/lib/run-all-parallelism.sh` | SSOT for the cache schema and its non-evaluating parser; sourced, never executed |
 | `bin/lib/run-all-durations.sh` | SSOT for the per-test duration ledger schema, key/tier computation, and the append-only segment reader/writer; sourced, never executed |
-| `bin/lib/run-all-launch.sh` | Per-file launch dispatch (`.sh` → bash, `.Tests.ps1` → pwsh/Pester, `test_*.py` → uv/pytest; SKIP 77 when the runtime is absent) and the per-run state-dir pin; sourced, never executed |
+| `bin/lib/run-all-launch.sh` | Per-file launch as the matched test language registry entry's `launch` says (`test-language-registry.md`); SKIP 77 when `launch.requires` is absent, 78 when not launched; and the per-run state-dir pin; sourced, never executed |
 | `bin/calibrate-test-parallelism.sh` | The measurement tool; unreachable from a normal run |
 | `bin/lib/test-host-lanes.sh` | Host-wide lane lease shared with `bin/find-tests-for-source.sh`; sourced, never executed |
 | `bin/test-lanes-status.sh` | Read-only listing of who holds which lane |

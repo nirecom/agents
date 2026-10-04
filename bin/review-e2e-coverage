@@ -18,7 +18,8 @@ set -uo pipefail
 # Self-contamination guard: exclude files that test review-e2e-coverage itself.
 # Those files contain claude -p / RUN_TL3 / hook names as fixtures — they must
 # not be treated as E2E coverage for the hooks they mention.
-SELF_TEST_FRONTMATTER_PATTERN='^# Tests:.*review-e2e-coverage'
+# Matched after the candidate's own `<header.commentPrefix> Tests:` (fixed string).
+SELF_TEST_FRONTMATTER_TARGET='review-e2e-coverage'
 
 # ---------------------------------------------------------------------------
 # Argument parsing (matches bin/review-step-numbers pattern)
@@ -48,6 +49,11 @@ fi
 # ---------------------------------------------------------------------------
 REPO_ROOT="$(git -C "${PWD}" rev-parse --show-toplevel 2>/dev/null || pwd)"
 HOOK_AUDIT_PATH="$REPO_ROOT/rules/test/claude-e2e.md"
+# E2E candidates are the files the test-language registry's supported entries match.
+# shellcheck source=bin/lib/test-language-registry.sh
+if ! { [[ -f "$REPO_ROOT/bin/lib/test-language-registry.sh" ]] && . "$REPO_ROOT/bin/lib/test-language-registry.sh" && tlr_load; }; then
+  echo "## E2E-Coverage Review: SKIPPED — test language registry not readable (bin/lib/test-language-registry.sh)"; exit 0
+fi
 
 # ---------------------------------------------------------------------------
 # parse_hook_audit_table — emit "hooks/foo.js<TAB>P1" lines to stdout.
@@ -115,8 +121,12 @@ find_e2e_for_hook() {
   while IFS= read -r candidate; do
     [[ -f "$candidate" ]] || continue
 
+    [[ "$candidate" == */_archived/* || "$candidate" == */node_modules/* || "$candidate" == */.git/* ]] && continue
+
     # Self-contamination guard
-    if head -10 "$candidate" 2>/dev/null | grep -q "$SELF_TEST_FRONTMATTER_PATTERN"; then
+    tlr_comment_prefix "$candidate" >/dev/null
+    if head -n "$TLR_HEADER_MAX_LINES" "$candidate" 2>/dev/null | awk -v p="$TLR_COMMENT_PREFIX Tests:" -v t="$SELF_TEST_FRONTMATTER_TARGET" \
+        'index($0, p) == 1 && index(substr($0, length(p) + 1), t) { f = 1 } END { exit !f }'; then
       continue
     fi
 
@@ -128,11 +138,7 @@ find_e2e_for_hook() {
 
     echo "$candidate"
     found=1
-  done < <(find tests/ -type f -name '*.sh' \
-              -not -path '*/_archived/*' \
-              -not -path '*/node_modules/*' \
-              -not -path '*/.git/*' \
-              2>/dev/null | sort -u || true)
+  done < <(tlr_find tests supported | sort -u || true)
 
   return $((found == 0 ? 1 : 0))
 }
