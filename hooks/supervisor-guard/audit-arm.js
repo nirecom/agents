@@ -18,6 +18,7 @@ const {
 const { isSubCheckSettled } = require("../lib/audit-ledger");
 const { SUB_CHECKS, ALL_SUB_CHECK_IDS } = require("../lib/audit-triggers");
 const { filterNullKeySubChecks } = require("../lib/null-freshness");
+const { UNSETTLED_AUDIT_PHASES } = require("../lib/supervisor-state-schema");
 const { formatAgentModelLine } = require("../lib/role-model");
 let getWorkflowPlansDir = null;
 try { ({ getWorkflowPlansDir } = require("../lib/workflow-plans-dir")); } catch (_) { /* optional */ }
@@ -175,7 +176,7 @@ function evaluatePhaseA(sessionId, state, ctx) {
   // the caller from state), so they handle state=null correctly (#2256 C1).
   if (ctx && ctx.askUserQuestionTurn) return null;
   const auditPhase = (ctx && ctx.auditPhase) || null;
-  if (auditPhase === "pending" || auditPhase === "in_progress" || auditPhase === "frozen") return null;
+  if (UNSETTLED_AUDIT_PHASES.includes(auditPhase)) return null;
   if (ctx && ctx.alertPhase === "closed") return null;
 
   // Always drive the projection (array) form: candidatesFromProjection appends the

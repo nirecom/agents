@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2256-tr5-user-verified-hold/null-freshness-artifact-match.sh
 # Tests: hooks/workflow-gate/supervisor-check.js, hooks/workflow-gate/user-verified-audit.js, hooks/lib/null-freshness.js, hooks/workflow-gate.js
-# Tags: supervisor, tr5, premerge, null-freshness, artifact-side, code-side, TL2, scope:issue-specific
+# Tags: supervisor, tr5, premerge, null-freshness, artifact-side, code-side, TL2, scope:issue-specific, unreadable-artifact
 # #2400 — both gates certify a null freshness_key only through the shared predicate:
 # CONTINUE, no later BLOCK, and every per-artifact hash unchanged since the TR5 run
 # (plus the trigger key on the artifact side). M1/M12 FAIL before the fix (the merge
@@ -260,6 +260,32 @@ write_plans
 seed_state "$(null_run CONTINUE __NONE__ no)" >/dev/null
 assert_eq "U5: code-side null + legacy run is not approved" "$(decision_of "$(gate_at "$SENTINEL_UV" "$REPO_NULL")")" "block"
 assert_eq "U5b: the refusal arms a re-audit" "$(state_field audit.audit_phase)" "pending"
+write_plans
+case_end
+
+# ===== #2400 run-0003 D3: an unreadable artifact is not an absent one =====
+DETAIL_PATH="$WORK/plans/$SID-detail.md"
+absent_detail_run() { artifact_side; rm -f "$DETAIL_PATH"; seed_state "$(null_run CONTINUE "$IV" yes)" >/dev/null; }
+case_begin "unreadable-detail-blocks-both-gates" "hooks/workflow-gate/supervisor-check.js"
+absent_detail_run
+mkdir "$DETAIL_PATH"
+out="$(merge_out)"
+assert_eq "X1: a directory in place of detail.md — the merge is denied" "$(decision_of "$out")" "block"
+assert_match "X1b: the deny says detail could not be read" "$(reason_of "$out")" 'detail.*could not be read'
+out="$(gate "$SENTINEL_UV")"
+assert_eq "X2: the sentinel is held over an unreadable artifact" "$(decision_of "$out")" "block"
+assert_match "X2b: the hold says the artifact could not be read" "$(reason_of "$out")" 'could not be read'
+assert_eq "X2c: the hold arms nothing" "$(state_field audit.audit_phase)" "null"
+rmdir "$DETAIL_PATH"
+case_end
+
+case_begin "absent-detail-keeps-artifact-match" "hooks/workflow-gate/supervisor-check.js"
+absent_detail_run
+assert_eq "X3a: absent at TR5 and absent now — the merge is approved" "$(decision_of "$(merge_out)")" "approve"
+printf '%s' "$DETAIL_BODY" > "$DETAIL_PATH"
+out="$(merge_out)"
+assert_eq "X3b: detail.md re-created after TR5 — the merge is denied" "$(decision_of "$out")" "block"
+assert_match "X3c: the deny names the moved detail" "$(reason_of "$out")" 'a plan artifact is missing.*changed: .*detail'
 write_plans
 case_end
 

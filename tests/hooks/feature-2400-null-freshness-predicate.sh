@@ -2,7 +2,7 @@
 # tests/hooks/feature-2400-null-freshness-predicate.sh
 # Tests: hooks/lib/null-freshness.js, hooks/workflow-gate/user-verified-audit.js, hooks/supervisor-guard/audit-arm.js, hooks/workflow-gate/supervisor-check.js
 # Tags: supervisor, null-freshness, predicate, TL1, scope:issue-specific
-# #2400 — decision table of the shared null-freshness predicate (rows 1-9), its
+# #2400 — decision table of the shared null-freshness predicate (rows 1-9 and 5a), its
 # refusal wording, the moved filterNullKeySubChecks, and an SSOT guard that both
 # gates import the lib instead of keeping private copies. Each case satisfies every
 # row above the one it targets, so a refusal can only come from the targeted row.
@@ -30,7 +30,7 @@ SUPC="$AGENTS_DIR/hooks/workflow-gate/supervisor-check.js"
 
 # pred.js <mode> — PIN (env) is a case spec over a fully-passing baseline:
 # kind artifact|code, freshness (verbatim override), fSet/fDel, runNull, runSet/runDel
-# (dotted paths), later. Prints one flat line so a case asserts the whole verdict.
+# (dotted paths), later, unsettled (key omitted when absent). Prints one flat line.
 cat > "$TMPD/pred.js" << 'JSEOF'
 "use strict";
 let lib;
@@ -52,10 +52,13 @@ function build() {
   for (const [p, v] of Object.entries(spec.runSet || {})) setPath(run, p, v);
   for (const p of spec.runDel || []) delPath(run, p);
   if (spec.runNull) run = null;
-  return { freshness, tr5Run: run, laterBlockExists: spec.later === true };
+  const args = { freshness, tr5Run: run, laterBlockExists: spec.later === true };
+  if (spec.unsettled !== undefined) args.unsettledRun = spec.unsettled;
+  return args;
 }
 const mode = process.argv[2];
 let out;
+try {
 if (mode === "eval") {
   const r = lib.evaluateNullFreshnessRecovery(build());
   out = `approve=${r.approve};kind=${r.kind};refusal=${r.refusal};moved=${(r.moved || []).join(",")}`;
@@ -70,7 +73,16 @@ if (mode === "eval") {
   out = String(lib.inputVersionMatches(b.tr5Run, b.freshness.input_version));
 } else if (mode === "frozen") {
   out = `${Object.isFrozen(lib.NULL_KIND)},${Object.isFrozen(lib.REFUSAL)}`;
+} else if (mode === "evalu") {
+  const r = lib.evaluateNullFreshnessRecovery(build());
+  out = `refusal=${r.refusal};unreadable=${JSON.stringify(r.unreadable)}`;
+} else if (mode === "unsettled") {
+  const r = lib.unsettledAuditRun(spec.audit);
+  out = r === null ? "null" : `${r.id}/${r.phase}`;
+} else if (mode === "unreadable") {
+  out = (spec.freshness === "__UNDEF__" ? lib.unreadableArtifacts() : lib.unreadableArtifacts(spec.freshness)).join(",");
 }
+} catch (e) { out = "error=" + String(e && e.message).split("\n")[0]; }
 process.stdout.write(String(out));
 JSEOF
 
@@ -79,6 +91,7 @@ check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1" "want=$2 got=$3"; f
 check_match() { if printf '%s' "$3" | grep -Eq "$2"; then pass "$1"; else fail "$1" "/$2/ not in: $3"; fi; }
 REQ_LIB_RE="require\\([\"']\\.\\./lib/null-freshness[\"']\\)"
 file_has() { if grep -Eq "$2" "$3"; then pass "$1"; else fail "$1" "/$2/ not in $3"; fi; }
+file_lacks() { if [ -f "$3" ] && ! grep -Eq "$2" "$3"; then pass "$1"; else fail "$1" "/$2/ found in (or missing) $3"; fi; }
 
 # Premise guard: the driver's error channel is distinguishable from a verdict.
 case_begin "module-loads" "hooks/lib/null-freshness.js"
@@ -205,27 +218,78 @@ check "P15c: a null freshness object returns the input unchanged" "recurrence-pa
     "$(pred filter '{"ids":["recurrence-patterns","detail-code"],"freshness":null}')"
 case_end
 
+case_begin "row5a-newer-audit-unsettled" "hooks/lib/null-freshness.js"
+NU="approve=false;kind=artifact-side;refusal=newer-audit-unsettled;moved="
+for ph in pending in_progress frozen; do
+    check "P17: artifact side — an unsettled $ph run refuses" "$NU" "$(pred eval "{\"unsettled\":{\"id\":\"run-0012\",\"phase\":\"$ph\"}}")"
+done
+check "P17d: code side — an unsettled pending run refuses too" \
+    "approve=false;kind=code-side;refusal=newer-audit-unsettled;moved=" \
+    "$(pred eval '{"kind":"code","unsettled":{"id":"run-0012","phase":"pending"}}')"
+check "P17e: a later BLOCK is reported before an unsettled run (row 5 precedes 5a)" \
+    "approve=false;kind=artifact-side;refusal=later-block;moved=" \
+    "$(pred eval '{"later":true,"unsettled":{"id":"run-0012","phase":"pending"}}')"
+check "P17f: an unsettled run is reported before a moved artifact (5a precedes 6-8)" "$NU" \
+    "$(pred eval '{"unsettled":{"id":"run-0012","phase":"pending"},"fSet":{"artifact_keys.detail":"h-detail-2"}}')"
+check "P17g: an omitted unsettledRun key defaults to none (baseline still approves)" \
+    "approve=true;kind=artifact-side;refusal=null;moved=" "$(pred eval '{}')"
+case_end
+
+case_begin "unsettled-audit-run-helper" "hooks/lib/null-freshness.js"
+for ph in pending in_progress frozen; do
+    check "P18: unsettledAuditRun — $ph slot yields the run" "run-0012/$ph" \
+        "$(pred unsettled "{\"audit\":{\"audit_phase\":\"$ph\",\"audit_run_id\":\"run-0012\"}}")"
+done
+check "P18d: a done slot is settled" "null" "$(pred unsettled '{"audit":{"audit_phase":"done","audit_run_id":"run-0012"}}')"
+check "P18e: a null phase is settled" "null" "$(pred unsettled '{"audit":{"audit_phase":null,"audit_run_id":"run-0012"}}')"
+check "P18f: an undefined audit is settled" "null" "$(pred unsettled '{}')"
+check "P18g: a pending slot without an id still refuses (id null)" "null/pending" "$(pred unsettled '{"audit":{"audit_phase":"pending"}}')"
+case_end
+
+case_begin "unsettled-refusal-wording" "hooks/lib/null-freshness.js"
+d_pend="$(pred describe '{"unsettled":{"id":"run-0012","phase":"pending"}}')"
+check_match "P19a: pending names the run, phase, and missing verdict" 'newer audit run \(run-0012, pending\) has no verdict yet' "$d_pend"
+check_match "P19a2: pending points at the audit agent for that run" 'Run agents/supervisor-audit\.md for run-0012, then retry\.' "$d_pend"
+if printf '%s' "$d_pend" | grep -q 'USER_VERIFIED'; then fail "P19a3: pending does not suggest the sentinel" "$d_pend"; else pass "P19a3: pending does not suggest the sentinel"; fi
+d_frz="$(pred describe '{"unsettled":{"id":"run-0012","phase":"frozen"}}')"
+check_match "P19b: frozen points at re-issuing the USER_VERIFIED sentinel" 'USER_VERIFIED' "$d_frz"
+if printf '%s' "$d_frz" | grep -q 'supervisor-audit\.md'; then fail "P19b2: frozen does not suggest the audit agent" "$d_frz"; else pass "P19b2: frozen does not suggest the audit agent"; fi
+case_end
+
+case_begin "unreadable-artifacts" "hooks/lib/null-freshness.js"
+UNR='{"freshness":{"freshness_key":null,"input_version":"iv","artifact_keys":null,"unreadable_artifacts":["detail"]}}'
+UNAVAIL_TXT="the freshness key could not be computed for this working tree (fail-closed)."
+check "P20a: an unreadable artifact classifies as unavailable" "unavailable" "$(pred classify "$UNR")"
+d_unr="$(pred describe "$UNR")"
+check_match "P20b: the refusal names the unreadable artifact" 'detail.*could not be read' "$d_unr"
+if [ "$d_unr" != "$UNAVAIL_TXT" ]; then pass "P20b2: the unreadable wording differs from the generic one"; else fail "P20b2: the unreadable wording differs from the generic one" "$d_unr"; fi
+check "P20c: no unreadable_artifacts field yields none" "" "$(pred unreadable '{"freshness":{"freshness_key":null}}')"
+check "P20c2: only string entries are kept" "detail" "$(pred unreadable '{"freshness":{"unreadable_artifacts":["detail",42]}}')"
+check "P20d: a null freshness yields none" "" "$(pred unreadable '{"freshness":null}')"
+check "P20d2: an undefined freshness yields none" "" "$(pred unreadable '{"freshness":"__UNDEF__"}')"
+check "P20d3: a null freshness evaluates unavailable with an empty unreadable list" \
+    "refusal=freshness-unavailable;unreadable=[]" "$(pred evalu '{"freshness":null}')"
+check "P20d4: a null freshness keeps the generic wording" "$UNAVAIL_TXT" "$(pred describe '{"freshness":null}')"
+case_end
+
 # P16 SSOT guard: no gate keeps a private copy of the policy.
 case_begin "ssot-user-verified-audit" "hooks/workflow-gate/user-verified-audit.js"
-if [ ! -f "$UVA" ] || grep -Eq '^[[:space:]]*function (filterNullKeySubChecks|inputVersionMatches)\b' "$UVA"; then
-    fail "P16a: user-verified-audit.js defines no private filterNullKeySubChecks / inputVersionMatches"
-else
-    pass "P16a: user-verified-audit.js defines no private filterNullKeySubChecks / inputVersionMatches"
-fi
+file_lacks "P16a: user-verified-audit.js defines no private filterNullKeySubChecks / inputVersionMatches" '^[[:space:]]*function (filterNullKeySubChecks|inputVersionMatches)\b' "$UVA"
 file_has "P16b: user-verified-audit.js requires the shared lib" "$REQ_LIB_RE" "$UVA"
+file_has "P16f: user-verified-audit.js passes the unsettled audit run to the predicate" 'unsettledAuditRun\(' "$UVA"
+file_has "P16g: user-verified-audit.js holds on unreadable artifacts" 'unreadableArtifacts\(' "$UVA"
 case_end
 
 case_begin "ssot-audit-arm" "hooks/supervisor-guard/audit-arm.js"
-if [ ! -f "$ARM" ] || grep -Eq '^[[:space:]]*function filterNullKeySubChecks\b' "$ARM"; then
-    fail "P16c: audit-arm.js defines no private filterNullKeySubChecks"
-else
-    pass "P16c: audit-arm.js defines no private filterNullKeySubChecks"
-fi
+file_lacks "P16c: audit-arm.js defines no private filterNullKeySubChecks" '^[[:space:]]*function filterNullKeySubChecks\b' "$ARM"
 file_has "P16d: audit-arm.js requires the shared lib" "$REQ_LIB_RE" "$ARM"
+file_has "P16h: audit-arm.js reads the unsettled phase set from the schema" 'UNSETTLED_AUDIT_PHASES' "$ARM"
+file_lacks "P16i: audit-arm.js keeps no literal unsettled-phase enumeration" '"frozen"\) return null' "$ARM"
 case_end
 
 case_begin "ssot-supervisor-check" "hooks/workflow-gate/supervisor-check.js"
 file_has "P16e: supervisor-check.js requires the shared lib" "$REQ_LIB_RE" "$SUPC"
+file_has "P16j: supervisor-check.js passes the unsettled audit run to the predicate" 'unsettledAuditRun\(' "$SUPC"
 case_end
 
 echo ""

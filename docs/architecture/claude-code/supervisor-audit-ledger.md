@@ -125,10 +125,16 @@ input:
   git is unavailable, treated by callers as unknown = fail-closed.
 - `computeArtifactKey(plansDir, sessionId, names)` — hashes the named plan
   artifacts' full bytes. Plan artifacts live under `PLANS_DIR`, outside the repo
-  working tree, so they never appear in the diff.
+  working tree, so they never appear in the diff. Null when an artifact is absent
+  (ENOENT / ENOTDIR) or unreadable (any other stat or read failure, or not a
+  regular file).
 - `computeFreshnessKey(cwd, plansDir, sessionId)` — combines `input_version` and
   the three `artifact_keys` into one composite key. Any null component makes the
-  whole key null (fail-closed).
+  whole key null (fail-closed). It tells the two apart: an absent artifact is a
+  null value inside `artifact_keys` (compared as a value), while an unreadable one
+  collapses `artifact_keys` itself to null and is listed in
+  `unreadable_artifacts`. A run armed in that state records no breakdown, so it
+  can never certify a null key later.
 
 The composite key is what makes plan-artifact edits visible. `input_version` alone
 never moves when detail.md is edited after TR3 — the artifact is outside the diff
@@ -148,8 +154,11 @@ sentinel is allowed.
 |---|---|---|
 | BLOCK | match | **hold** (deny). Resolve only by (1) moving the input to get a non-BLOCK run on the new key, or (2) recording a rejection via `bin/supervisor-record-block-override`. |
 | BLOCK | mismatch | arm a run against the new key (deny + dispatch). Non-BLOCK → stage 2; BLOCK again → hold again. |
-| key uncomputable — code-side null (`input_version` null, e.g. no merge base / shallow clone) | — | **approve** when the shared null-freshness predicate (`hooks/lib/null-freshness.js`) certifies the last TR5 terminal run: verdict in the CONTINUE-only allow-list, no later BLOCK, and every per-artifact hash (`artifact_keys`, absence compared as a value) unchanged since that run; arm a full re-audit otherwise. A run without a per-artifact breakdown is fail-closed. `recurrence-patterns` is excluded from the arm set (infinite-arm guard, #2323). |
+| key uncomputable — code-side null (`input_version` null, e.g. no merge base / shallow clone) | — | **approve** when the shared null-freshness predicate (`hooks/lib/null-freshness.js`) certifies the last TR5 terminal run: verdict in the CONTINUE-only allow-list, no later BLOCK, no newer audit run unsettled (`audit_phase` pending / in_progress / frozen), and every per-artifact hash (`artifact_keys`, absence compared as a value) unchanged since that run; arm a full re-audit otherwise. A run without a per-artifact breakdown is fail-closed. `recurrence-patterns` is excluded from the arm set (infinite-arm guard, #2323). |
 | key uncomputable — artifact-side null (`input_version` non-null, plan artifact missing) | — | Same predicate, plus `trigger_input_keys.TR5` of that run must equal the current `input_version` (absent / null / non-string stored key is fail-closed, #2360). Hashing the artifacts closes the hole where a post-TR5 intent/detail edit passed on a code-only match (#2400). |
+
+An unreadable plan artifact holds the sentinel without arming, on either null
+kind — no audit can judge it.
 
 **Stage 2 — diff-driven re-audit (including plan-artifact freshness).** Judged on
 two axes: (α) does code-side `input_version` match the last terminal run, and (β)
@@ -194,7 +203,11 @@ race where the gate and the Stop hook armed at the same time.
 When the composite key is null, the backstop applies the same null-freshness
 predicate as the TR5 hold after checking that a TR5 run exists and no later BLOCK
 postdates it; it approves only when the predicate certifies the run and otherwise
-denies naming the null kind and what moved. A block override never releases a null
+denies naming the null kind and what moved. It also denies while a newer audit
+run has no verdict (armed, in progress, or frozen): with a code-side null key,
+code moved after TR5 is invisible, and a pending later run could still return
+BLOCK. An unreadable plan artifact is denied by name rather than compared as
+absent. A block override never releases a null
 key (it pins a non-null `freshness_key`), and WARN is denied on this path because
 the allow-list is CONTINUE-only. Sharing one predicate keeps the sentinel gate and
 the merge gate from disagreeing (#2400).

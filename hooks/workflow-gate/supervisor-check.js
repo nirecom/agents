@@ -19,7 +19,11 @@ const { parseDetailFilesToModify } = require("../lib/branch-diff");
 const { formatFreshnessBackstopReason } = require("../lib/supervisor-report-format");
 const { FRESHNESS_BACKSTOP_CAUSE } = require("../lib/audit-triggers");
 const { resolveRepoDir } = require("./repo-resolution");
-const { evaluateNullFreshnessRecovery, describeNullFreshnessRefusal } = require("../lib/null-freshness");
+const {
+  evaluateNullFreshnessRecovery,
+  describeNullFreshnessRefusal,
+  unsettledAuditRun,
+} = require("../lib/null-freshness");
 
 // Resolve supervisor state with wsid fallback.
 // wsid is always resolved independently (even when state is found under the primary
@@ -162,8 +166,11 @@ function checkSupervisorPreMerge(sessionId, mergeKind, hookCwd, opts = {}) {
 
     // A null key is certified only by the shared predicate; override and the fk
     // comparison below need a key, so they stay on the non-null path (#2400).
+    // A newer unsettled run (armed / in_progress / frozen) blocks certification (#2400 run-0003).
     if (!currentFk) {
-      const recovery = evaluateNullFreshnessRecovery({ freshness: current, tr5Run, laterBlockExists });
+      const recovery = evaluateNullFreshnessRecovery({
+        freshness: current, tr5Run, laterBlockExists, unsettledRun: unsettledAuditRun(audit),
+      });
       if (recovery.approve) return { authoritative: true };
       deny(describeNullFreshnessRefusal(recovery));
       return { authoritative: true };

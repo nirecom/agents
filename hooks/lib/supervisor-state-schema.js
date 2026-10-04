@@ -36,6 +36,9 @@ const ALERT_RETRY_THRESHOLD = 2;
 
 // Audit (#720) — audit mode strategic review.
 const AUDIT_PHASE_VALUES = [null, "pending", "in_progress", "done", "frozen"];
+// Phases in which the armed run has no verdict yet (frozen keeps outcome "armed"):
+// the Stop hook does not arm over them and a null freshness key cannot be certified.
+const UNSETTLED_AUDIT_PHASES = ["pending", "in_progress", "frozen"];
 const AUDIT_VERDICT_VALUES = ["CONTINUE", "WARN", "BLOCK"];
 const AUDIT_RETRY_THRESHOLD = 2;
 // Cumulative severity threshold (using SEVERITY_RANK comparison) that triggers audit arming.
@@ -276,6 +279,7 @@ module.exports = {
   SEVERITY_RANK,
   ALERT_RETRY_THRESHOLD,
   AUDIT_PHASE_VALUES,
+  UNSETTLED_AUDIT_PHASES,
   AUDIT_VERDICT_VALUES,
   NON_BLOCK_TERMINAL_VERDICTS,
   AUDIT_RETRY_THRESHOLD,

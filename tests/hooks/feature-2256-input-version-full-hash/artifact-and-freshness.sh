@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2256-input-version-full-hash/artifact-and-freshness.sh
 # Tests: hooks/lib/diff-fingerprint.js, hooks/lib/audit-ledger.js
-# Tags: supervisor, artifact-key, freshness-key, sub-check-independence, TL2, scope:issue-specific
+# Tags: supervisor, artifact-key, freshness-key, sub-check-independence, TL2, scope:issue-specific, unreadable-artifact
 # #2256 C1 + S6-b: the freshness key composes code and plan artifacts, and a settled TR1
 # must never no-op TR2/TR3. Parent: tests/hooks/feature-2256-input-version-full-hash.sh
 
 set -uo pipefail
+# Harness first (per-case markers only); _common.sh then overrides its reporters.
+# shellcheck source=../../lib/harness.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" && pwd)/harness.sh"
 # shellcheck source=./_common.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"
 
@@ -124,7 +127,93 @@ k_io2="$(fp computeArtifactKey "$PLANS" ", '$SID2', ['intent', 'outline']")"
 assert_ne "19: a detail.md edit moves the outline-detail key" "$k_od1" "$k_od2"
 assert_eq "20: a detail.md edit leaves the intent-outline key untouched" "$k_io2" "$k_io"
 
+# --- 21-27 (#2400 D3): an unreadable artifact is not an absent one ---
+DETAIL="$WORK/plans/$SID-detail.md"
+NOX="$WORK/plans-nox"
+trap 'chmod 755 "$NOX" 2>/dev/null; chmod 644 "$DETAIL" 2>/dev/null; rm -rf "$WORK"' EXIT
+case_begin "directory-artifact-is-unreadable" "hooks/lib/diff-fingerprint.js"
+mv "$DETAIL" "$WORK/plans/$SID-detail.bak"
+mkdir "$DETAIL"
+j="$(freshness)"
+assert_eq "21: a directory in place of detail.md collapses artifact_keys to null" "$(field "$j" artifact_keys)" "null"
+assert_eq "22: it collapses freshness_key to null" "$(field "$j" freshness_key)" "null"
+assert_eq "23: it lists detail in unreadable_artifacts" "$(field "$j" unreadable_artifacts)" "detail"
+assert_eq "24: computeArtifactKey keeps its single-key null contract" "$(fp computeArtifactKey "$PLANS" ", '$SID', ['detail']")" "null"
+rmdir "$DETAIL"
+j="$(freshness)"
+assert_eq "25: an absent detail.md lists nothing as unreadable" "$(field "$j" unreadable_artifacts)" "undefined"
+assert_eq "25b: an absent detail.md is still a null value in artifact_keys" "$(field "$j" artifact_keys.detail)" "null"
+mv "$WORK/plans/$SID-detail.bak" "$DETAIL"
+case_end
+
+case_begin "permission-denied-read-is-unreadable" "hooks/lib/diff-fingerprint.js"
+chmod 000 "$DETAIL"
+if [[ -r "$DETAIL" ]]; then
+    skip "26: chmod 000 does not revoke read here (stubbed by 29-30)"
+else
+    assert_eq "26: a read-denied detail.md is listed as unreadable" "$(field "$(freshness)" unreadable_artifacts)" "detail"
+fi
+chmod 644 "$DETAIL"
+case_end
+
+case_begin "parent-dir-stat-denied-is-unreadable" "hooks/lib/diff-fingerprint.js"
+mkdir -p "$NOX"
+cp "$WORK/plans/$SID-intent.md" "$WORK/plans/$SID-outline.md" "$DETAIL" "$NOX/"
+chmod a-x "$NOX"
+if [[ -e "$NOX/$SID-detail.md" ]]; then
+    skip "27: parent-dir search permission not enforced here (stubbed by 28)"
+else
+    j="$(fp computeFreshnessKey "$repo" ", '$WORK_NODE/plans-nox', '$SID'")"
+    assert_eq "27: a stat EACCES lists every artifact as unreadable" "$(field "$j" unreadable_artifacts)" "intent,outline,detail"
+    assert_eq "27b: a stat EACCES collapses artifact_keys to null" "$(field "$j" artifact_keys)" "null"
+fi
+chmod 755 "$NOX"
+rm -rf "$NOX"
+case_end
+
+# --- 28-31: stubbed fs errors run on every platform; the stub hits only <SID>-detail.md ---
+stub_js="$WORK/stub-fs.js"
+{
+    printf '%s\n' "const fs = require('fs');"
+    printf '%s\n' "const [code, mode] = process.argv.slice(2);"
+    printf '%s\n' "const hit = (p) => require('path').basename(String(p)) === '$SID-detail.md';"
+    printf '%s\n' "const name = mode === 'stat' ? 'statSync' : 'openSync';"
+    printf '%s\n' "const orig = fs[name];"
+    printf '%s\n' "fs[name] = function (p, ...rest) { if (hit(p)) { const e = new Error(code + ': stub'); e.code = code; throw e; } return orig.call(this, p, ...rest); };"
+    printf '%s\n' "process.stdout.write(JSON.stringify(require('$FP_NODE').computeFreshnessKey('$repo', '$PLANS', '$SID')));"
+} > "$stub_js"
+stubbed() { bash "$RWT" 60 node "$stub_js" "$1" "$2" 2>&1; }
+
+case_begin "stat-error-codes-are-unreadable" "hooks/lib/diff-fingerprint.js"
+for code in EACCES EPERM ELOOP; do
+    j="$(stubbed "$code" stat)"
+    assert_eq "28: a stat $code lists detail in unreadable_artifacts" "$(field "$j" unreadable_artifacts)" "detail"
+    assert_eq "28b: a stat $code collapses artifact_keys to null" "$(field "$j" artifact_keys)" "null"
+    assert_eq "28c: a stat $code collapses freshness_key to null" "$(field "$j" freshness_key)" "null"
+done
+case_end
+
+case_begin "read-failure-after-stat-is-unreadable" "hooks/lib/diff-fingerprint.js"
+j="$(stubbed EACCES open)"
+assert_eq "29: an open EACCES after a good stat lists detail as unreadable" "$(field "$j" unreadable_artifacts)" "detail"
+assert_eq "30: an open EACCES collapses artifact_keys to null" "$(field "$j" artifact_keys)" "null"
+case_end
+
+case_begin "enotdir-is-absent" "hooks/lib/diff-fingerprint.js"
+for code in ENOENT ENOTDIR; do
+    j="$(stubbed "$code" stat)"
+    assert_eq "31: a stat $code lists nothing as unreadable" "$(field "$j" unreadable_artifacts)" "undefined"
+    assert_eq "31b: a stat $code is an absent (null) detail key" "$(field "$j" artifact_keys.detail)" "null"
+    assert_match "31c: a stat $code leaves the outline key computed" "$(field "$j" artifact_keys.outline)" '^[0-9a-f]{64}$'
+done
+printf 'not a dir\n' > "$WORK/plans-file"
+j="$(fp computeFreshnessKey "$repo" ", '$WORK_NODE/plans-file', '$SID'")"
+assert_eq "32: a regular file as the parent component is absent, not unreadable" "$(field "$j" unreadable_artifacts)" "undefined"
+assert_eq "32b: it yields artifact_keys.detail = null" "$(field "$j" artifact_keys.detail)" "null"
+rm -f "$WORK/plans-file"
+case_end
+
 echo ""
-echo "Results: $PASS passed, $FAIL failed"
+echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -eq 0 ] || exit 1
 exit 0

@@ -114,34 +114,70 @@ function computeInputVersion(cwd) {
   }
 }
 
-// Digest over the named plan artifacts, in the order the caller listed them.
-// null when any named artifact is missing — a partial digest would let a
-// half-written plan set look reviewed.
-function computeArtifactKey(plansDir, sessionId, artifactNames) {
+// statSync, not existsSync: existsSync folds EACCES and friends into "absent".
+function artifactPresence(abs) {
+  let st;
   try {
-    if (!sessionId || !Array.isArray(artifactNames) || artifactNames.length === 0) return null;
+    st = fs.statSync(abs);
+  } catch (err) {
+    const code = err && err.code;
+    return code === "ENOENT" || code === "ENOTDIR" ? "absent" : "unreadable";
+  }
+  return st.isFile() ? "present" : "unreadable";
+}
+
+function digestArtifacts(plansDir, sessionId, artifactNames) {
+  if (!sessionId || !Array.isArray(artifactNames) || artifactNames.length === 0) {
+    return { key: null, unreadable: [] };
+  }
+  const unreadable = [];
+  try {
     const dir = toWindowsPath(plansDir || getWorkflowPlansDir());
     const hash = crypto.createHash('sha256');
     for (const name of artifactNames) {
       const abs = path.join(dir, `${sessionId}-${name}.md`);
-      if (!fs.existsSync(abs)) return null;
+      const presence = artifactPresence(abs);
+      if (presence === "absent") return { key: null, unreadable };
+      if (presence === "unreadable") {
+        unreadable.push(name);
+        continue;
+      }
       hash.update(name);
       hash.update("\0");
-      streamFileInto(hash, abs);
+      try {
+        streamFileInto(hash, abs);
+      } catch (_) {
+        unreadable.push(name);
+        continue;
+      }
       hash.update("\0");
     }
-    return hash.digest("hex");
+    return { key: unreadable.length > 0 ? null : hash.digest("hex"), unreadable };
   } catch (_) {
-    return null;
+    return { key: null, unreadable: artifactNames.slice() };
   }
+}
+
+// Digest over the named plan artifacts, in the order the caller listed them.
+// null when any named artifact is missing or unreadable. computeFreshnessKey tells
+// the two apart; single-key callers already treat null as unsettled.
+function computeArtifactKey(plansDir, sessionId, artifactNames) {
+  return digestArtifacts(plansDir, sessionId, artifactNames).key;
 }
 
 // Code side + plan side in one key. Any null component collapses the whole key.
 function computeFreshnessKey(cwd, plansDir, sessionId) {
   const inputVersion = computeInputVersion(cwd);
   const artifactKeys = {};
+  const unreadable = [];
   for (const name of ARTIFACT_NAMES) {
-    artifactKeys[name] = computeArtifactKey(plansDir, sessionId, [name]);
+    const d = digestArtifacts(plansDir, sessionId, [name]);
+    artifactKeys[name] = d.key;
+    unreadable.push(...d.unreadable);
+  }
+  // An unreadable artifact is not an absent one: never let null === null certify it.
+  if (unreadable.length > 0) {
+    return { input_version: inputVersion, artifact_keys: null, freshness_key: null, unreadable_artifacts: unreadable };
   }
   const parts = [inputVersion].concat(ARTIFACT_NAMES.map((n) => artifactKeys[n]));
   if (parts.some((p) => typeof p !== "string" || p.length === 0)) {

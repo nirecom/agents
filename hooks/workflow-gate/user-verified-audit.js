@@ -21,7 +21,13 @@ const {
   triggerById,
   stepCompleteCause,
 } = require("../lib/audit-triggers");
-const { evaluateNullFreshnessRecovery, filterNullKeySubChecks } = require("../lib/null-freshness");
+const {
+  evaluateNullFreshnessRecovery,
+  filterNullKeySubChecks,
+  unsettledAuditRun,
+  unreadableArtifacts,
+  describeUnreadableArtifacts,
+} = require("../lib/null-freshness");
 const { formatAgentModelLine } = require("../lib/role-model");
 
 const TR_RANK = { TR1: 1, TR2: 2, TR3: 3, TR4: 4, TR5: 5, TR6: 6 };
@@ -187,11 +193,20 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
     const tr5Idx = tr5Run ? tr5AuditLedger.indexOf(tr5Run) : -1;
     const laterBlockExists = tr5Run && tr5Idx >= 0 && hasLaterTerminalBlock(state.audit, tr5Idx);
 
+    // An unreadable plan artifact cannot be judged by any audit; arming would only
+    // re-arm on every sentinel, so hold without arming until the file is readable.
+    const unreadable = unreadableArtifacts(freshness);
+    if (unreadable.length > 0) {
+      blockFn(`[EM Supervisor] user_verification (TR5) audit gate: ${describeUnreadableArtifacts(unreadable)}`);
+      return { authoritative: true };
+    }
+
     // #2323/#2400: a null freshness_key self-recovers only through the shared predicate
-    // (allow-listed verdict, no later BLOCK, code side and per-artifact hashes unchanged
-    // since the TR5 run) — the same rule the pre-merge backstop applies.
-    const selfRecovering = !currentFk &&
-      evaluateNullFreshnessRecovery({ freshness, tr5Run, laterBlockExists: Boolean(laterBlockExists) }).approve;
+    // (allow-listed verdict, no later BLOCK, no newer audit run unsettled, code side and
+    // per-artifact hashes unchanged since the TR5 run) — the rule the pre-merge backstop applies.
+    const selfRecovering = !currentFk && evaluateNullFreshnessRecovery({
+      freshness, tr5Run, laterBlockExists: Boolean(laterBlockExists), unsettledRun: unsettledAuditRun(audit),
+    }).approve;
 
     if (tr5Run && (tr5Run.verdict === "BLOCK" || laterBlockExists)) {
       // An override can only release a BLOCK carried by the TR5 run itself,
