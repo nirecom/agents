@@ -16,6 +16,8 @@ TEST_DESIGN="$AGENTS_ROOT/skills/_shared/test-design.md"
 REVIEW_SIZE="$AGENTS_ROOT/bin/review-code-size"
 AUDIT_TESTS="$AGENTS_ROOT/bin/audit-tests.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)/feature-test-cleanup-944"
+# shellcheck source=../lib/test-language-registry-fixture.sh
+. "$AGENTS_ROOT/tests/lib/test-language-registry-fixture.sh"
 
 ERRORS=0
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -110,6 +112,9 @@ install_audit_libs() {
         [[ -d "$_sub" ]] || continue
         cp -R "${_sub%/}" "$dest/lib/"
     done
+    # lib/test-language-registry.sh resolves its root two levels above itself
+    # (<dest>/..) and reads the table through <root>/bin/test-language-registry.
+    install_test_language_registry "$(dirname "$dest")" "$AGENTS_ROOT"
 }
 
 setup_audit_repo() {

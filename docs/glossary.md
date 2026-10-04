@@ -255,6 +255,36 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Definition**: One unit of the host-wide load budget N shared by `bin/find-tests-for-source.sh` (1 lane) and `tests/run-all.sh` (1 to N−1 lanes); an atomic `mkdir` slot holding an owner record. A caller that finds every lane busy waits, then exits 4 at the cap.
 - **Related**: [architecture/claude-code/test-host-lanes.md](architecture/claude-code/test-host-lanes.md), [bin/test-lanes-status.sh](../bin/test-lanes-status.sh)
 
+### test language registry
+
+- **Full name**: Test language registry
+- **Definition**: The single declarative table (`hooks/lib/test-language-registry.json`) of every test language's rules: which file names are tests, how the header is read, how a test is launched, and which language parts (case-marker reader, table-driven detector) handle it. Every tool asks the table instead of matching extensions itself.
+- **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md), #2500
+
+### unsupported test (UNSUPPORTED verdict)
+
+- **Full name**: Unsupported (recognized-only) test file
+- **Definition**: A file the registry recognizes as a test but cannot run or check (status `recognized-only`, or a named file no supported entry matches). The runner and the pre-commit gate print one `UNSUPPORTED:` line for it and never count it as PASS, FAIL or SKIP; it never blocks a run or a commit.
+- **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md), [architecture/claude-code/test-runner-parallelism.md](architecture/claude-code/test-runner-parallelism.md) §8a
+
+### unsupported-at-base
+
+- **Full name**: Unsupported-at-base baseline reason
+- **Definition**: The `bin/run-tests-baseline` reason for a test the base checkout's launcher did not launch; the test is classified `undetermined` and no base result is recorded.
+- **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md)
+
+### language part
+
+- **Full name**: Test language part (part file)
+- **Definition**: A per-language bash function the registry names by `{file, function}` (case-marker reader, table-driven detector), kept in `bin/lib/test-language-parts/<lang>.sh` or an existing library. Shared code calls the part the table names instead of branching on the language.
+- **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md)
+
+### residue check
+
+- **Full name**: Test language registry residue check
+- **Definition**: `tests/tests/test-language-registry-residue.sh`, which fails when shared code outside the registry and its parts matches test file extensions or compares language ids itself; legitimate exceptions live in its allowlist with a reason.
+- **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md)
+
 ## Test retirement
 
 ### case marker

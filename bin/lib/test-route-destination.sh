@@ -10,7 +10,7 @@
 
 _TRD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=test-dup-group.sh
-source "$_TRD_DIR/test-dup-group.sh"
+source "$_TRD_DIR/test-dup-group.sh" || return 1
 
 TRD_HARD_MAX_DEFAULT=500
 
@@ -123,7 +123,8 @@ trd_is_in_corpus() {
       [[ "${parts[1]}" == "$_cat" ]] && { _found=1; break; }
     done
     [[ "$_found" -eq 1 ]] || return 1
-    [[ "${parts[2]}" == *.sh && "${parts[2]}" != ".sh" ]] || return 1
+    # A supported test language whose cases the registry can read.
+    tlr_match "${parts[2]}" && [[ "$TLR_STATUS" == supported ]] && _tlr_get "$TLR_ID" caseMarkerReader.file || return 1
   else
     return 1
   fi

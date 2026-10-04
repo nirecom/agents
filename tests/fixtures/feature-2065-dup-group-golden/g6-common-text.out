@@ -1,5 +1,5 @@
 # audit-tests-common.sh report — <DATE>
-# Scope: tests/<cat>/*.sh (six categories) + top-level tests/*.Tests.ps1,test_*.py excluding feature-<N>-*
+# Scope: tests/<cat>/*.sh, tests/<cat>/*.Tests.ps1, tests/<cat>/test_*.py (six categories) excluding feature-<N>-*
 # Criteria: every '# Tests:' target is missing — the filename's issue reference gates deletion only
 # Cutoff: <DATE> (stale-months: 3)
 # Mode: OFFLINE (orphans are still reported; deletion of issue-referencing files is held)

@@ -91,15 +91,22 @@ run_all_count_bucket() {
     printf '%s\n' "$b"
 }
 
-# run_all_corpus_count <dir> — top-level *.sh files only, never recursive, so a
-# fixture or archive subdirectory cannot inflate the bucket.
+RUN_ALL_PARALLELISM_DIR="${BASH_SOURCE[0]}"
+case "$RUN_ALL_PARALLELISM_DIR" in */*) RUN_ALL_PARALLELISM_DIR="${RUN_ALL_PARALLELISM_DIR%/*}" ;; *) RUN_ALL_PARALLELISM_DIR=. ;; esac
+RUN_ALL_PARALLELISM_DIR="$(cd "$RUN_ALL_PARALLELISM_DIR" && pwd)"
+
+# run_all_corpus_count <dir> — top-level files of a supported test language only, never
+# recursive, so a fixture or archive subdirectory cannot inflate the bucket. Uses the
+# caller's loaded test language registry, else the sibling loader; neither → 0, rc 1.
 run_all_corpus_count() {
-    local dir="${1:-}" f n=0
+    local dir="${1:-}"
     if [ -z "$dir" ] || [ ! -d "$dir" ]; then printf '0\n'; return 1; fi
-    for f in "$dir"/*.sh; do
-        [ -f "$f" ] && n=$((n + 1))
-    done
-    printf '%s\n' "$n"
+    if ! declare -F tlr_list_dir_into >/dev/null; then
+        # shellcheck source=test-language-registry.sh
+        { [ -f "$RUN_ALL_PARALLELISM_DIR/test-language-registry.sh" ] && . "$RUN_ALL_PARALLELISM_DIR/test-language-registry.sh"; } || { printf '0\n'; return 1; }
+    fi
+    tlr_load && tlr_list_dir_into "$dir" supported || { printf '0\n'; return 1; }
+    printf '%s\n' "${#TLR_LIST[@]}"
 }
 
 run_all_corpus_bucket() {

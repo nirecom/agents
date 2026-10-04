@@ -243,15 +243,19 @@ trp_enumerate_cases() {
   TRP_UNIT_MODE="file"; TRP_GC=0; _TRP_MARKER_MALFORMED=0
   _TRP_MARKER_MALFORMED_LINE=""; _TRP_MARKER_MALFORMED_REASON=""; _TRP_MARKER_UNCERTAIN=0
 
-  # C10 extension guard: bash grammar grep is meaningless for .ps1/.py, so the
-  # file-level fallback (TRP_HAS_MARKERS=0) is a structural invariant, not luck.
-  if [[ "$file" != *.sh ]]; then return 0; fi
+  # C10 guard: only a supported registry entry with a caseMarkerReader has case markers;
+  # every other file stays file-level (TRP_HAS_MARKERS=0) by structure, not luck.
+  tlr_load || { _TRP_MARKER_MALFORMED=1; _TRP_MARKER_MALFORMED_REASON=reader; return 0; }
+  tlr_match "$file" && [[ "$TLR_STATUS" == supported ]] && _tlr_get "$TLR_ID" caseMarkerReader.file || return 0
 
   local abs="$file"
   [[ "$abs" != /* ]] && abs="$repo_root/$file" || true
   [[ -f "$abs" ]] || return 0
 
-  trp_parse_case_markers "$abs"
+  # An unreachable reader (rc 70) is "cannot check", never a silent "no markers".
+  if ! tlr_call_part "$TLR_ID" caseMarkerReader "$abs"; then
+    _TRP_MARKER_MALFORMED=1; _TRP_MARKER_MALFORMED_REASON=reader; return 0
+  fi
   [[ "$_TRP_MARKER_MALFORMED" -eq 0 && "$TRP_HAS_MARKERS" -eq 1 ]] || return 0
 
   # Survival: resolve each target against the repo root (rename-tracked, ORTH).
