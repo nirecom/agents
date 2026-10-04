@@ -655,3 +655,7 @@ Changes: Session id is now read from CLAUDE_CODE_SESSION_ID only; the CLAUDE_SES
 ### FEATURE: PR #2526 (2026-10-04)
 Background: feat(#2500): one test-language registry for discovery, headers and launch
 Changes: Test tooling now reads one test language registry for which files are tests, how their headers are read and how they are launched, so every tool agrees on the supported languages (bash, Pester, pytest).;Test files the registry recognizes but cannot run yet (such as the Node tests under `tests/hooks/`) are listed as `UNSUPPORTED:` by the test runner instead of being silently skipped, and never fail a run or block a commit.;When the registry cannot be read, test selection, the runner and the audits stop with an error instead of reporting that there are no tests.
+
+### FEATURE: PR #2518 (2026-10-04)
+Background: fix(#2400): share null-freshness predicate between user_verification gate and pre-merge backstop
+Changes: Sessions that skip the outline step can now merge through `gh pr merge` once the user-verification audit has passed; edits to plan documents after that audit still block the merge.;The merge stays blocked while a newer supervisor audit has not returned a verdict, and a plan document that exists but cannot be read now blocks the merge instead of being treated as missing.
