@@ -40,6 +40,9 @@ SESSION_SYNC_REMOTE_URL=git@github.com:YOUR_USERNAME/agent-sessions.git
 config-read failure, node missing) falls back to `off` — fail-safe OFF, the opposite
 direction from `RUN_TL3`'s fail-safe-ON convention.
 
+Sibling mechanism: [plan-sync](plan-sync.md) publishes final plan files to its own
+private remote (`PLAN_SYNC_REMOTE_URL`, same URL format) at write time.
+
 Priority at init time: `--remote-url` CLI arg > `.env` > built-in default.
 Changing `.env` after init requires re-running `session-sync-init.sh` / `session-sync-init.ps1`.
 

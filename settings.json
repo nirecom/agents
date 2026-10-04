@@ -724,7 +724,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-plan-link.js\"",
-            "timeout": 5
+            "timeout": 30
           },
           {
             "type": "command",
@@ -754,7 +754,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-plan-link.js\"",
-            "timeout": 5
+            "timeout": 30
           }
         ]
       },

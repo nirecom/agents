@@ -22,7 +22,9 @@ const LOCAL_ENV_BASENAME = ".env.local";
 // value at all — their readers bypass process.env. Per-repo ENFORCE_WORKTREE
 // belongs in the global .env's ENFORCE_WORKTREE_EXCLUDE instead.
 const ENV_ENTRY_BLOCKLIST_EXACT = new Set([
-  "SHOW_PLAN_LINK_NO_AUTO_OPEN",
+  // PLAN_SYNC_REMOTE_URL names the one remote every plan is pushed to; a project
+  // pointing it elsewhere would publish plans to a repo the user never chose.
+  "PLAN_SYNC_REMOTE_URL",
   // CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR are one class — load-env.js names
   // them together as ISOLATION_ENV_KEYS — and a local value for either relocates
   // the workflow-state root holding gate state and off-clearance tokens.

@@ -12,6 +12,7 @@
 8. [Test Runner Parallelism](claude-code/test-runner-parallelism.md) — `tests/run-all.sh` slot scheduler, the `# Serial:` lane, `-j` / `--deadline` / `RUN_ALL_*` surfaces, calibration cache, contract-line neutralization
 9. [Project-Local Env Overrides](claude-code/local-env-overrides.md) — the global `.env` / project `.env.local` two-layer resolver, its trust model, why the local layer is gated by a blocklist alone, and `bin/show-local-env-overrides`
 10. [Test Host Lanes and the Corpus Cache](claude-code/test-host-lanes.md) — host-wide lane budget shared by find-tests and run-all, exit 4 on the wait cap, `bin/test-lanes-status.sh`, the git-keyed corpus parse cache
+11. [Plan Sync](claude-code/plan-sync.md) — final plan files pushed to a private remote so the breadcrumb shows a URL readable from mobile apps or a browser; provisioning, allowlist, visibility policy, risks
 
 ## 5. EM Supervisor (alert/audit two-mode design)
 

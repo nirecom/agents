@@ -26,6 +26,8 @@ function encodePath(p) {
   return String(p).split("/").map(encodeURIComponent).join("%2F");
 }
 
+const VISIBILITY_VALUES = new Set(["public", "private", "internal"]);
+
 // GitLab codehost descriptor (#2308). Same four methods, same signatures as
 // codehostGithub (CPR-ORTH). isPrivateRepo fail-safe returns true (private),
 // intentionally stricter than codehostStub's false, so repo names are never
@@ -50,6 +52,22 @@ const codehostGitlab = {
       return true; // fail-safe
     }
   },
+  repoVisibility(remoteUrl) {
+    const { spawnSync } = require("child_process");
+    try {
+      const { resolveForgeTarget } = require("../parse-remote-url");
+      const { readGitlabHostConfig } = require("../forge-router");
+      const { type, project } = resolveForgeTarget(remoteUrl, { gitlabHost: readGitlabHostConfig() });
+      if (type !== "gitlab" || !project) return null;
+      const r = spawnSync("glab", ["api", "projects/" + encodePath(project), "--jq", ".visibility"],
+        { encoding: "utf8", timeout: 15000, shell: WIN32, windowsHide: true });
+      if (r.error || r.status !== 0) return null;
+      const v = (r.stdout || "").trim().toLowerCase();
+      return VISIBILITY_VALUES.has(v) ? v : null;
+    } catch (e) {
+      return null;
+    }
+  },
   shouldScanAsPublicTarget(projectId) {
     const { spawnSync } = require("child_process");
     try {
@@ -62,18 +80,23 @@ const codehostGitlab = {
       return true;
     }
   },
+  // Union of private and internal projects; each query fails independently to [].
   listPrivateRepoNames() {
     const { spawnSync } = require("child_process");
-    try {
-      const r = spawnSync("glab",
-        ["api", "projects?membership=true&visibility=private&per_page=100", "--paginate",
-          "--jq", ".[].path_with_namespace"],
-        { encoding: "utf8", timeout: 10000, shell: WIN32 });
-      if (r.error || r.status !== 0) return [];
-      return (r.stdout || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    } catch (e) {
-      return [];
-    }
+    const list = (visibility) => {
+      // cmd.exe (shell on Windows) splits an unquoted `&`, so the query is quoted there.
+      const query = "projects?membership=true&visibility=" + visibility + "&per_page=100";
+      try {
+        const r = spawnSync("glab",
+          ["api", WIN32 ? '"' + query + '"' : query, "--paginate", "--jq", ".[].path_with_namespace"],
+          { encoding: "utf8", timeout: 10000, shell: WIN32 });
+        if (r.error || r.status !== 0) return [];
+        return (r.stdout || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      } catch (e) {
+        return [];
+      }
+    };
+    return [...new Set([...list("private"), ...list("internal")])];
   },
   hasOpenPrForBranch(repoDir) {
     const { spawnSync } = require("child_process");

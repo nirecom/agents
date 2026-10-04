@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2307-forge-router.sh
 # Tests: hooks/lib/forge-router.js, hooks/lib/parse-remote-url.js, hooks/lib/forge/github.js, hooks/lib/forge/stub.js
-# Tags: forge, forge-router, codehost, tracker, gitlab, jira, security, scope:issue-specific, TL1
+# Tags: forge, forge-router, codehost, tracker, gitlab, jira, security, scope:issue-specific, TL1, visibility, gh-stub, private-repo-list
 # #2307 forge router, test-first. forge-router.js and detectForgeType() do NOT
 # exist yet, so EVERY case FAILS today (probe -> THREW:MODULE-MISSING). Intended
 # red; do NOT weaken to pass. NOTE: green only after forge-router.js +
@@ -19,6 +19,8 @@ fi
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 LIB_M="$(nodepath "$AGENTS_DIR/hooks/lib")"
+# harness.sh supplies case_begin/case_end; the local pass/fail below still win.
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 PASS=0
 FAIL=0
@@ -144,6 +146,155 @@ expr_table "A" <<'TABLE'
 A16 github vs gitlab isPrivateRepo are distinct functions (github is not the stub)|true|(function(){var g=r.resolveCodehostDescriptor("https://github.com/o/r.git").isPrivateRepo;var s=r.resolveCodehostDescriptor("https://gitlab.com/o/r.git").isPrivateRepo;return typeof g==="function" && typeof s==="function" && g!==s;})()
 A17 gitlab stub isPrivateRepo returns a boolean no-op immediately|"boolean"|typeof r.resolveCodehostDescriptor("https://gitlab.com/o/r.git").isPrivateRepo("/tmp/repo")
 TABLE
+
+# V1-V12 contract (#2513): codehost.repoVisibility(remoteUrl) -> "public" | "private" |
+#   "internal" | null. github runs `gh api repos/<owner>/<repo> --jq .visibility` (owner/repo
+#   from parseOriginOwnerRepo, 15s timeout); a failure, a timeout, an unknown value or an
+#   unparsable URL is null and an unparsable URL never reaches gh. The stub codehost is
+#   always null. gh is a PATH stub (tests/lib/cli-stub.sh); the real gh is never reached.
+echo ""
+echo "=== V1-V12: codehost repoVisibility (github + stub) ==="
+. "$AGENTS_DIR/tests/lib/cli-stub.sh"
+VIS_LOG="$TMPBASE/gh-stub.log"
+VIS_EXPR='(function(){var u=process.env.VIS_URL;return r.resolveCodehostDescriptor(u).repoVisibility(u);})()'
+VIS_GH="https://github.com/test-owner/test-repo.git"
+vis_timeout() { local s="$1"; shift; if command -v timeout >/dev/null 2>&1; then timeout "$s" "$@"; else perl -e 'alarm shift; exec @ARGV' "$s" "$@"; fi; }
+# vis_run <stdout> <rc> <sleep-ms> <url> <secs> [expr] — evaluates expr (default VIS_EXPR) under the gh stub.
+vis_run() {
+    : > "$VIS_LOG"
+    CLI_STUB_OUT="$1" CLI_STUB_RC="$2" CLI_STUB_SLEEP_MS="$3" CLI_STUB_LOG="$VIS_LOG" VIS_URL="$4" \
+        cli_stub_run vis_timeout "$5" node "$PROBE" "$LIB_M" "${6:-$VIS_EXPR}" 2>/dev/null
+}
+# vis_case <name> <want> <stdout> <rc> <sleep-ms> <url> [secs]
+vis_case() {
+    local got
+    if [ -z "${VIS_STUB_OK:-}" ]; then fail "$1 (gh stub unreachable; not run so the real gh stays untouched)"; return; fi
+    got="$(vis_run "$3" "$4" "$5" "$6" "${7:-20}")"
+    if [ "$got" = "$2" ]; then pass "$1"; else fail "$1 (want=$2 got=$got)"; fi
+}
+
+case_begin "repo-visibility-stub-precondition" "hooks/lib/forge/github.js"
+VIS_STUB_OK=""
+if cli_stub_make "$TMPBASE/gh-stub" gh; then
+    PRE="$(vis_run STUBOK 0 0 "$VIS_GH" 20 '(function(){var cp=process.getBuiltinModule("child_process");var o={encoding:"utf8",windowsHide:true};var a=cp.spawnSync("gh",["api","x"],o);var b=cp.spawnSync("gh",["api","x"],Object.assign({shell:process.platform==="win32"},o));return a.stdout+"|"+b.stdout;})()')"
+    if [ "$PRE" = '"STUBOK|STUBOK"' ]; then VIS_STUB_OK=1; pass "V0 gh stub reached with and without a shell"
+    else fail "V0 gh stub reached with and without a shell (got=$PRE)"; fi
+else
+    fail "V0 gh stub could not be created"
+fi
+case_end
+
+case_begin "repo-visibility-github-answers" "hooks/lib/forge/github.js"
+vis_case "V1 gh says public -> \"public\"" '"public"' $'public\n' 0 0 "$VIS_GH"
+GH_LOGGED="$(cat "$VIS_LOG" 2>/dev/null)"
+if [ "$GH_LOGGED" = "gh api repos/test-owner/test-repo --jq .visibility" ]; then pass "V2 gh argv is api repos/test-owner/test-repo --jq .visibility"
+else fail "V2 gh argv is api repos/test-owner/test-repo --jq .visibility (log=$GH_LOGGED)"; fi
+vis_case "V3 gh says private -> \"private\"" '"private"' $'private\n' 0 0 "$VIS_GH"
+vis_case "V4 gh says internal -> \"internal\"" '"internal"' $'internal\n' 0 0 "$VIS_GH"
+vis_case "V5 scp-form origin, gh says private -> \"private\"" '"private"' $'private\n' 0 0 "git@github.com:test-owner/test-repo.git"
+case_end
+
+case_begin "repo-visibility-github-failures-null" "hooks/lib/forge/github.js"
+vis_case "V6 gh exits nonzero (stdout public) -> null" 'null' $'public\n' 1 0 "$VIS_GH"
+vis_case "V7 gh prints an unknown value -> null" 'null' $'secret\n' 0 0 "$VIS_GH"
+vis_case "V8 gh prints nothing -> null" 'null' '' 0 0 "$VIS_GH"
+# The stub answers "public" only after 17s, past the 15s descriptor timeout.
+vis_case "V9 gh exceeds the timeout -> null (late public ignored)" 'null' $'public\n' 0 17000 "$VIS_GH" 45
+case_end
+
+case_begin "repo-visibility-unparsable-and-stub" "hooks/lib/forge/stub.js"
+vis_case "V10 unparsable owner (test_owner) -> null" 'null' $'public\n' 0 0 "https://github.com/test_owner/test-repo.git"
+if [ ! -s "$VIS_LOG" ]; then pass "V10 unparsable owner never reaches gh"; else fail "V10 unparsable owner never reaches gh (log=$(cat "$VIS_LOG"))"; fi
+vis_case "V11 stub codehost (unknown host) -> null" 'null' $'public\n' 0 0 "https://bitbucket.org/test-owner/test-repo.git"
+if [ ! -s "$VIS_LOG" ]; then pass "V11 stub codehost never runs gh"; else fail "V11 stub codehost never runs gh (log=$(cat "$VIS_LOG"))"; fi
+case_end
+
+case_begin "is-private-repo-unchanged" "hooks/lib/forge/github.js"
+if [ -n "$VIS_STUB_OK" ]; then
+    GOT="$(vis_run $'true\n' 0 0 "$VIS_GH" 20 'r.resolveCodehostDescriptor(process.env.VIS_URL).isPrivateRepo(process.env.VIS_URL)')"
+    if [ "$GOT" = "true" ] && [ "$(cat "$VIS_LOG")" = "gh api repos/test-owner/test-repo --jq .private" ]; then
+        pass "V12 isPrivateRepo still asks --jq .private and returns true"
+    else fail "V12 isPrivateRepo still asks --jq .private and returns true (got=$GOT log=$(cat "$VIS_LOG"))"; fi
+else fail "V12 isPrivateRepo unchanged (gh stub unreachable; not run)"; fi
+case_end
+
+# L1-L7 contract (#2513): codehostGithub.listPrivateRepoNames() is the union of
+#   `gh repo list ... --visibility private` and the same with `--visibility internal`,
+#   deduped, private names first. One failing call keeps the other's names; both fail -> [].
+#   The gh stub answers per visibility: LPN_PRIV_OUT/RC and LPN_INT_OUT/RC.
+echo ""
+echo "=== L1-L7: codehostGithub listPrivateRepoNames (private + internal union) ==="
+LPN_LOG="$TMPBASE/gh-lpn.log"
+LPN_EXPR='r.resolveCodehostDescriptor("https://github.com/test-owner/test-repo.git").listPrivateRepoNames()'
+LPN_PRIV_ARGV="gh repo list --limit 1000 --visibility private --json nameWithOwner --jq .[].nameWithOwner"
+LPN_INT_ARGV="gh repo list --limit 1000 --visibility internal --json nameWithOwner --jq .[].nameWithOwner"
+LPN_STUB_OK=""
+if cli_stub_make "$TMPBASE/gh-lpn" gh; then
+    cat > "$TMPBASE/gh-lpn/lpn-preload.js" <<'PRELOAD_EOF'
+const path = require("path"); const fs = require("fs");
+const base = (p) => path.basename(String(p || "")).replace(/\.exe$/i, "").toLowerCase();
+if ([base(process.execPath), base(process.argv0)].includes("gh")) {
+  const a = process.argv.slice(1); if (a.length) a[0] = path.basename(a[0]);
+  const line = ["gh"].concat(a).join(" ");
+  if (process.env.CLI_STUB_LOG) fs.appendFileSync(process.env.CLI_STUB_LOG, line + "\n");
+  const k = /--visibility[ =]internal\b/.test(line) ? "INT" : /--visibility[ =]private\b/.test(line) ? "PRIV" : "";
+  fs.writeSync(1, k ? (process.env["LPN_" + k + "_OUT"] || "") : "");
+  process.exit(k ? Number(process.env["LPN_" + k + "_RC"] || 0) : 3);
+}
+PRELOAD_EOF
+    CLI_STUB_PRELOAD="$(nodepath "$TMPBASE/gh-lpn/lpn-preload.js")"
+    LPN_STUB_OK=1
+fi
+# lpn_run <priv-out> <priv-rc> <int-out> <int-rc> [expr] — evaluates expr (default LPN_EXPR).
+lpn_run() {
+    : > "$LPN_LOG"
+    LPN_PRIV_OUT="$1" LPN_PRIV_RC="$2" LPN_INT_OUT="$3" LPN_INT_RC="$4" CLI_STUB_LOG="$LPN_LOG" \
+        cli_stub_run run_with_timeout node "$PROBE" "$LIB_M" "${5:-$LPN_EXPR}" 2>/dev/null
+}
+# lpn_case <name> <want> <priv-out> <priv-rc> <int-out> <int-rc>
+lpn_case() {
+    local got
+    if [ -z "$LPN_STUB_OK" ]; then fail "$1 (gh stub unreachable; not run so the real gh stays untouched)"; return; fi
+    got="$(lpn_run "$3" "$4" "$5" "$6")"
+    if [ "$got" = "$2" ]; then pass "$1"; else fail "$1 (want=$2 got=$got log=$(tr '\n' ';' < "$LPN_LOG"))"; fi
+}
+
+case_begin "list-private-repo-names-stub-precondition" "hooks/lib/forge/github.js"
+if [ -n "$LPN_STUB_OK" ]; then
+    PRE="$(lpn_run STUBOK 0 '' 0 '(function(){var cp=process.getBuiltinModule("child_process");var o={encoding:"utf8",windowsHide:true,shell:process.platform==="win32"};return cp.spawnSync("gh",["repo","list","--visibility","private"],o).stdout;})()')"
+    if [ "$PRE" = '"STUBOK"' ]; then pass "L0 per-visibility gh stub answers through the shell"
+    else LPN_STUB_OK=""; fail "L0 per-visibility gh stub answers through the shell (got=$PRE)"; fi
+else
+    fail "L0 per-visibility gh stub could not be created"
+fi
+case_end
+
+case_begin "list-private-repo-names-union" "hooks/lib/forge/github.js"
+lpn_case "L1 private + internal -> union, private first" \
+    '["test-owner/priv-a","test-owner/priv-b","test-org/int-c"]' \
+    $'test-owner/priv-a\ntest-owner/priv-b\n' 0 $'test-org/int-c\n' 0
+LPN_SEEN="$(cat "$LPN_LOG" 2>/dev/null)"
+if printf '%s\n' "$LPN_SEEN" | grep -qxF "$LPN_PRIV_ARGV"; then pass "L2 gh asked for --visibility private (argv unchanged)"
+else fail "L2 gh asked for --visibility private (argv unchanged) (log=$LPN_SEEN)"; fi
+if printf '%s\n' "$LPN_SEEN" | grep -qxF "$LPN_INT_ARGV"; then pass "L3 gh asked for --visibility internal (same argv shape)"
+else fail "L3 gh asked for --visibility internal (same argv shape) (log=$LPN_SEEN)"; fi
+lpn_case "L4 a name in both lists appears once" '["test-owner/a","test-owner/b","test-org/c"]' \
+    $'test-owner/a\ntest-owner/b\n' 0 $'test-owner/b\ntest-org/c\n' 0
+case_end
+
+case_begin "list-private-repo-names-partial-failure" "hooks/lib/forge/github.js"
+lpn_case "L5 internal call fails -> private names still returned" '["test-owner/priv-a"]' \
+    $'test-owner/priv-a\n' 0 $'test-org/int-c\n' 1
+lpn_case "L6 private call fails -> internal names still returned" '["test-org/int-c"]' \
+    $'test-owner/priv-a\n' 1 $'test-org/int-c\n' 0
+lpn_case "L7 both calls fail -> []" '[]' $'test-owner/priv-a\n' 1 $'test-org/int-c\n' 1
+case_end
+
+case_begin "list-private-repo-names-edge-output" "hooks/lib/forge/github.js"
+lpn_case "L8 both calls succeed with empty output -> []" '[]' '' 0 '' 0
+lpn_case "L9 CRLF, blank lines and padding dropped in both lists" '["test-owner/a","test-org/c"]' \
+    $'test-owner/a\r\n\r\n' 0 $'  test-org/c  \r\n\n' 0
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
