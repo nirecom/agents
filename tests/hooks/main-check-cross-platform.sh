@@ -4,6 +4,11 @@
 # Test suite for check-cross-platform.js PreToolUse hook
 set -euo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 HOOK="$DOTFILES_DIR/claude-global/hooks/check-cross-platform.js"
 ERRORS=0

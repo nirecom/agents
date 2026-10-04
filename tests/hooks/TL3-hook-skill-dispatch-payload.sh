@@ -10,6 +10,11 @@
 # real `claude -p` and records the real PostToolUse payload for a Skill call.
 set -uo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 # TL3 gap: this file IS the gap-closer for the day-to-day TL2 runner
 # tests/hooks/feature-2013-step-in-flight-automark/d-skill-dispatch.sh. It is
 # RUN_TL3-gated and Anthropic-billable, so CI normally skips it; R1 below

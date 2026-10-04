@@ -13,6 +13,8 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 
 # Layer: TL2 (real checker + real git fixtures + the real module, not the claude -p host).
 # TL3 gap (what this test does NOT catch):

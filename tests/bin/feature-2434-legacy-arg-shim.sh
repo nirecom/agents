@@ -15,6 +15,9 @@ set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # shellcheck source=tests/bin/feature-2434-review-loop/fixture.sh
 . "$AGENTS_DIR/tests/bin/feature-2434-review-loop/fixture.sh"
 

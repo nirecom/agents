@@ -211,15 +211,15 @@ group_worker_source() {
         [ -f "$src" ] || missing="$missing $src"
     done
     if [ -n "$missing" ]; then
-        fail "worker/sets-claude-workflow-dir" "implementation missing:$missing"
+        fail "worker/sets-workflow-state-dir" "implementation missing:$missing"
         fail "worker/computes-default-state-dir" "implementation missing:$missing"
         return
     fi
     blob="$(cat "$WORKER_JS" "$WORKER_GATE_JS")"
     if printf '%s\n' "$blob" | grep -qF 'WORKFLOW_STATE_DIR'; then
-        pass "worker/sets-claude-workflow-dir"
+        pass "worker/sets-workflow-state-dir"
     else
-        fail "worker/sets-claude-workflow-dir" "the worker never names WORKFLOW_STATE_DIR"
+        fail "worker/sets-workflow-state-dir" "the worker never names WORKFLOW_STATE_DIR"
     fi
     # envPassthrough also permits inheritance; the plan requires the worker to
     # compute the documented default when the parent env has nothing.

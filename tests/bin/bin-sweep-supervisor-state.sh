@@ -19,6 +19,8 @@ SCHEMA_NODE="$(node_path "$AGENTS_DIR")/hooks/lib/supervisor-state-schema.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

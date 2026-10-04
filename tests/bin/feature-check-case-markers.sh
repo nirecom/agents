@@ -4,6 +4,8 @@
 
 AGENTS_DIR="${AGENTS_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 source "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 
 SCRIPT="$AGENTS_DIR/bin/check-case-markers.sh"
 

@@ -11,6 +11,11 @@
 # subprocess call captures the real status and asserts 0.
 set -uo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 HOOK="$DOTFILES_DIR/hooks/block-tests-direct.js"
 ERRORS=0

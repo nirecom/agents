@@ -214,7 +214,7 @@ PART_REFUSED="$(section_keys "$CLI_OUT" "refused by blocklist")"
 
 assert_eq "T2223S-partition-applied-keys" "$(printf 'PROJECT_NFR\nPROJECT_TAGLINE')" "$PART_APPLIED"
 assert_eq "T2223S-partition-refused-keys" \
-  "$(printf 'AGENTS_CONFIG_DIR\nWORKFLOW_STATE_DIR\nCODEX_NFR_MAX_LINES')" "$PART_REFUSED"
+  "$(printf 'AGENTS_CONFIG_DIR\nCODEX_NFR_MAX_LINES\nWORKFLOW_STATE_DIR')" "$PART_REFUSED"
 assert_eq "T2223S-partition-applied-count" "2" "$(section_count "$CLI_OUT" applied)"
 assert_eq "T2223S-partition-refused-count" "3" "$(section_count "$CLI_OUT" "refused by blocklist")"
 # G18: the second new blocklist entry, refused at the reporter level (CPR-ORTH).

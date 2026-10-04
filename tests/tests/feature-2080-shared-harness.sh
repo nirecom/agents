@@ -39,6 +39,9 @@ t_eq()   { # $1=label $2=actual $3=expected
 # A2 re-source case, which the checker never inspects.
 # shellcheck source=/dev/null
 source "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 # ===========================================================================
 # Group A — tests/lib/harness.sh function coverage

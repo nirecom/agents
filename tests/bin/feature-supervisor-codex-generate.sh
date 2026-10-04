@@ -8,6 +8,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # supervisor-review-codex --generate is retired; the shared alert/audit engine
 # bin/supervisor-findings-codex emits a STATUS line first (SKIPPED/SUCCESS/FAILED) and
 # prints OUTFILE (validated JSONL, os.tmpdir) ONLY on STATUS: SUCCESS. write-alert

@@ -29,7 +29,7 @@ blocked-enforce-worktree        | ENFORCE_WORKTREE            | on            | 
 blocked-enforce-worktree-excl   | ENFORCE_WORKTREE_EXCLUDE    | repoA         | evil
 blocked-auto-approve-tools      | AUTO_APPROVE_TOOLS          | off           | on
 blocked-workflow-plans-dir      | WORKFLOW_PLANS_DIR          | /global-plans | /tmp/evil
-blocked-claude-workflow-dir     | WORKFLOW_STATE_DIR         | /global-wf    | /tmp/evil
+blocked-workflow-state-dir     | WORKFLOW_STATE_DIR         | /global-wf    | /tmp/evil
 blocked-agents-config-dir       | AGENTS_CONFIG_DIR           | /global-cfg   | /tmp/evil
 blocked-worktree-base-dir       | WORKTREE_BASE_DIR           | /global-wt    | /tmp/evil
 blocked-default-branches        | DEFAULT_BRANCHES            | main          | evil
@@ -77,12 +77,12 @@ DENY_PREFIXES="$(probe blocklist-keys prefixes)"
 
 # Full membership, not a count: a silently dropped entry is the regression here.
 WANT_EXACT="$(printf '%s\n' AGENTS_CONFIG_DIR AUTO_APPROVE_TOOLS \
-    CLAUDE_CODE_AUTO_COMPACT_WINDOW WORKFLOW_STATE_DIR \
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW \
     CODE_FILE_EXTENSIONS CODE_LANG_EXCLUDE DEFAULT_BRANCHES ENFORCE_WORKTREE \
     ENFORCE_WORKTREE_ADDITIONAL_REPOS ENFORCE_WORKTREE_EXCLUDE ISSUE_VERDICT_WEB_SEARCH \
     MCP_FS_DEBUG MERGE_BASE_MAX_DIFF_FILES MERGE_BASE_MAX_DIFF_LINES \
     SHOW_PLAN_LINK_NO_AUTO_OPEN SWEEP_AGE_DAYS VERBOSE_PROMPT_MODELS \
-    WORKFLOW_PLANS_DIR WORKTREE_BASE_DIR)"
+    WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR WORKTREE_BASE_DIR)"
 WANT_PREFIXES="$(printf '%s\n' CODEX_ COMMENT_BLOCK_ PROPAGATE_ SESSION_)"
 assert_eq "T2223N2-exact-set-membership" "$WANT_EXACT" "$(printf '%s' "$DENY_EXACT" | sed '/^$/d')"
 assert_eq "T2223N2-prefix-list-membership" "$WANT_PREFIXES" "$(printf '%s' "$DENY_PREFIXES" | sed '/^$/d')"
@@ -115,8 +115,8 @@ done
 # The isolation pair: a local WORKFLOW_STATE_DIR or AGENTS_CONFIG_DIR would
 # relocate the workflow-state root, or the directory this layer reads the global
 # .env from — named here so a removal from the exact set fails by name.
-assert_eq "T2223N2-isBlocklisted-claude-workflow-dir" "true" "$(probe is-blocklisted WORKFLOW_STATE_DIR)"
-assert_eq "T2223N2-isBlocklisted-claude-workflow-dir-lower" "true" "$(probe is-blocklisted workflow_state_dir)"
+assert_eq "T2223N2-isBlocklisted-workflow-state-dir" "true" "$(probe is-blocklisted WORKFLOW_STATE_DIR)"
+assert_eq "T2223N2-isBlocklisted-workflow-state-dir-lower" "true" "$(probe is-blocklisted workflow_state_dir)"
 assert_eq "T2223N2-isBlocklisted-agents-config-dir" "true" "$(probe is-blocklisted AGENTS_CONFIG_DIR)"
 assert_eq "T2223N2-isBlocklisted-agents-config-dir-lower" "true" "$(probe is-blocklisted agents_config_dir)"
 
@@ -218,7 +218,7 @@ session-bare               | SESSION                   | false
 propagate-bare             | PROPAGATE                 | false
 comment-block-bare         | COMMENT_BLOCK             | false
 agents-config-dir-suffixed | AGENTS_CONFIG_DIR_OLD     | false
-claude-workflow-dir-longer | CLAUDE_WORKFLOW_DIRECTORY | false
+workflow-state-dir-longer  | WORKFLOW_STATE_DIRECTORY  | false
 auto-approve-tools-extra   | AUTO_APPROVE_TOOLS_EXTRA  | false
 enforce-bare               | ENFORCE                   | false
 codex-prefix-itself        | CODEX_                    | true

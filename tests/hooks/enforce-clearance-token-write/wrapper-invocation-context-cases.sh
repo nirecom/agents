@@ -8,6 +8,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # #1821: the invitation names the RE-SPELLED wrapper, so everything the minter reads out of its
 # INVOCATION CONTEXT — not out of its arguments — must survive the extra hop. The sibling
 # wrapper-equivalence-cases.sh pins arguments and verdicts with a session id supplied by the

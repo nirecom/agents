@@ -14,6 +14,11 @@
 
 set -euo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 # Unset CLAUDE_CODE_CHILD_SESSION so the library's subagent guard does not fire
 # when tests call node subprocesses. T11 re-sets it explicitly to test the guard.
 unset CLAUDE_CODE_CHILD_SESSION 2>/dev/null || true

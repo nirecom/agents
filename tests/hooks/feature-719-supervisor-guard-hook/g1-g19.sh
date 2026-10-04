@@ -3,6 +3,12 @@
 # Test functions G1-G19 for supervisor-guard hook.
 # _lib.sh must be sourced by the caller before sourcing this file.
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 run_g1() {
     require_source "$HOOK" "G1: l2_armed_at non-null (no transcript) -> decision=block, exit 2" || return
     local tmp out rc

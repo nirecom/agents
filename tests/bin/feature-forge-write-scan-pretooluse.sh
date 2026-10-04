@@ -11,6 +11,11 @@
 # FAIL by design. glab cases (16-17) are intended RED until #2307 adds glab scan.
 set -euo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 SCANNER_SRC="$DOTFILES_DIR/bin/scan-outbound.sh"
 HOOK_SRC="$DOTFILES_DIR/hooks/scan-outbound.js"

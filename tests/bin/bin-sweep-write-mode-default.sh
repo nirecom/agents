@@ -25,6 +25,8 @@ WRITE_MODE_LIB="$AGENTS_DIR/bin/lib/sweep-write-mode.sh"
 SWEEP_YML="$AGENTS_DIR/.github/workflows/sweep.yml"
 
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 PASS=0
 FAIL=0
 

@@ -27,6 +27,8 @@ WORKER_SCRIPT_JS="$AGENTS_DIR/hooks/enforce-worktree/main-worktree-allows/worker
 REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
 
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 PASS=0
 FAIL=0
 

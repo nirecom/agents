@@ -16,6 +16,8 @@ unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 
 # Overrides the harness run_with_timeout: callers here pass no seconds argument.
 run_with_timeout() {
