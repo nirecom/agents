@@ -5,7 +5,7 @@
 // level trigger. Two call shapes: (projection, state) -> array (canonical, coalescing needs all
 // candidates); (transcript, state) -> { shouldArm, cause } for the stage-sentinel Stop path.
 
-const { AUDIT_SEVERITY_THRESHOLD, SEVERITY_RANK } = require("../lib/supervisor-state-schema");
+const { AUDIT_SEVERITY_THRESHOLD, SEVERITY_RANK, UNSETTLED_AUDIT_PHASES } = require("../lib/supervisor-state-schema");
 const triggers = require("../lib/audit-triggers");
 
 const CONFIRM_RE = /<<WORKFLOW_CONFIRM_(INTENT|OUTLINE|DETAIL):/;
@@ -34,10 +34,10 @@ function extractAssistantText(transcript) {
   return parts.join("\n");
 }
 
-// Terminal / in-flight audit states never (re)arm.
+// In-flight (UNSETTLED_AUDIT_PHASES) and done audit states never (re)arm.
 function isQuiescent(audit) {
   const phase = audit.audit_phase;
-  return phase !== "frozen" && phase !== "pending" && phase !== "in_progress" && phase !== "done";
+  return !UNSETTLED_AUDIT_PHASES.includes(phase) && phase !== "done";
 }
 
 function severityCandidate(state) {

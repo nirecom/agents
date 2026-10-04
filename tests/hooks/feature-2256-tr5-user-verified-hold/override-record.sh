@@ -100,7 +100,7 @@ assert_match "23: the plan edit re-arms an audit run" \
 write_plans
 
 # --- 24-26: a valid TR5 override does NOT release a later TR6 BLOCK ---
-# Guards user-verified-audit.js:181 (`!laterBlockExists` in the override branch).
+# Guards checkUserVerifiedAudit's Stage 1 override branch (`!laterBlockExists` guard).
 # Case 9 proved a TR5-scoped override releases the hold when the TR5 run is the
 # only terminal entry. A later, independent TR6 BLOCK is a run the TR5 override
 # never speaks to: releasing over it would bypass that BLOCK. Record the override

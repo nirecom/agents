@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2256-tr5-user-verified-hold/null-freshness-short-circuit.sh
-# Tests: hooks/workflow-gate/user-verified-audit.js, hooks/lib/supervisor-state-schema.js, hooks/workflow-gate/supervisor-check.js, hooks/supervisor-guard/audit-arm.js
+# Tests: hooks/workflow-gate/user-verified-audit.js, hooks/lib/supervisor-state-schema.js, hooks/workflow-gate/supervisor-check.js, hooks/supervisor-guard/audit-arm.js, hooks/lib/null-freshness.js
 # Tags: supervisor, tr5, freshness, null-arm, self-recovering, infinite-loop, artifact-side, TL2, scope:issue-specific
 # #2323 — a null freshness_key (code side uncomputable: no merge base) must not re-arm
 # the WE-8 sentinel forever. selfRecovering short-circuit approves a prior CONTINUE
@@ -62,12 +62,13 @@ process.stdout.write(String(fp.computeInputVersion(process.env.RCWD) || 'null'))
 # terminal_null <verdict|__MISSING__> — one terminal TR5 run recorded under stale
 # conditions (freshness_key:null, input_key null). __MISSING__ omits verdict entirely,
 # modeling a malformed ledger entry the schema does not validate. Direct ledger write
-# is the sanctioned finalizeAuditRun-equivalent for seeding a terminal run.
+# is the sanctioned finalizeAuditRun-equivalent for seeding a terminal run. Every
+# fixture records the current artifact_keys, as armCore does for a real run (#2400).
 terminal_null() {
-    VERD="$1" node -e "
+    VERD="$1" AK="$(artifact_keys_json)" node -e "
 const e = {
   id: 'run-0011', outcome: 'terminal', cause: 'step-complete:user_verification',
-  tr_ids: ['TR5'], freshness_key: null,
+  tr_ids: ['TR5'], freshness_key: null, artifact_keys: JSON.parse(process.env.AK),
   sub_checks: ['recurrence-patterns'], input_key: { 'recurrence-patterns': null },
 };
 if (process.env.VERD !== '__MISSING__') e.verdict = process.env.VERD;
@@ -78,10 +79,10 @@ process.stdout.write(JSON.stringify({ ledger: [e], last_terminal_run_id: 'run-00
 # terminal_null_artifact <verdict> <trigger_iv> — artifact-side null: freshness_key=null,
 # input_version non-null, trigger_input_keys.TR5=<trigger_iv>.
 terminal_null_artifact() {
-    VERD="$1" TIV="$2" node -e "
+    VERD="$1" TIV="$2" AK="$(artifact_keys_json)" node -e "
 const e = {
   id: 'run-0011', outcome: 'terminal', cause: 'step-complete:user_verification',
-  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD,
+  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD, artifact_keys: JSON.parse(process.env.AK),
   sub_checks: ['recurrence-patterns'], input_key: { 'recurrence-patterns': null },
   trigger_input_keys: { TR5: process.env.TIV },
 };
@@ -91,10 +92,10 @@ process.stdout.write(JSON.stringify({ ledger: [e], last_terminal_run_id: 'run-00
 
 # terminal_null_artifact_null_tiv <verdict> — artifact-side null with TR5: null (explicit JS null).
 terminal_null_artifact_null_tiv() {
-    VERD="$1" node -e "
+    VERD="$1" AK="$(artifact_keys_json)" node -e "
 const e = {
   id: 'run-0011', outcome: 'terminal', cause: 'step-complete:user_verification',
-  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD,
+  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD, artifact_keys: JSON.parse(process.env.AK),
   sub_checks: ['recurrence-patterns'], input_key: { 'recurrence-patterns': null },
   trigger_input_keys: { TR5: null },
 };
@@ -104,10 +105,10 @@ process.stdout.write(JSON.stringify({ ledger: [e], last_terminal_run_id: 'run-00
 
 # terminal_null_artifact_num_tiv <verdict> — artifact-side null with TR5: 42 (non-string number).
 terminal_null_artifact_num_tiv() {
-    VERD="$1" node -e "
+    VERD="$1" AK="$(artifact_keys_json)" node -e "
 const e = {
   id: 'run-0011', outcome: 'terminal', cause: 'step-complete:user_verification',
-  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD,
+  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD, artifact_keys: JSON.parse(process.env.AK),
   sub_checks: ['recurrence-patterns'], input_key: { 'recurrence-patterns': null },
   trigger_input_keys: { TR5: 42 },
 };
@@ -118,10 +119,10 @@ process.stdout.write(JSON.stringify({ ledger: [e], last_terminal_run_id: 'run-00
 # terminal_null_artifact_input_ver <verdict> <iv> — artifact-side null with run.input_version
 # present but no trigger_input_keys (tests no-fallback behavior in inputVersionMatches).
 terminal_null_artifact_input_ver() {
-    VERD="$1" IV="$2" node -e "
+    VERD="$1" IV="$2" AK="$(artifact_keys_json)" node -e "
 const e = {
   id: 'run-0011', outcome: 'terminal', cause: 'step-complete:user_verification',
-  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD,
+  tr_ids: ['TR5'], freshness_key: null, verdict: process.env.VERD, artifact_keys: JSON.parse(process.env.AK),
   sub_checks: ['recurrence-patterns'], input_key: { 'recurrence-patterns': null },
   input_version: process.env.IV,
 };
@@ -287,7 +288,7 @@ printf 'seed\n' > "$REPO/seed.txt"
 
 # --- 14-19: C1 end-to-end recovery. A stale (no merge base) repo is synced by giving
 # HEAD a protected-branch ancestor; the merge gate must still DENY until a fresh TR5
-# terminal run is recorded, then PERMIT. supervisor-check.js is unchanged. ---
+# terminal run is recorded, then PERMIT. The merge gate applies the same null-freshness predicate. ---
 REPO3="$(mk_null_repo "$WORK/repo3")"
 # (i) loop stop: CONTINUE + null code side approves the sentinel and terminalizes nothing.
 seed_state "$(terminal_null CONTINUE)" >/dev/null
@@ -296,9 +297,9 @@ assert_eq "14: (i) the WE-8 loop stops — CONTINUE + null code side approves" \
     "$(decision_of "$out")" "approve"
 assert_eq "15: (i) checkUserVerifiedAudit arms nothing — the ledger's terminal run is unchanged" \
     "$(state_field audit.last_terminal_run_id)" "run-0011"
-# (i-supplementary) while still stale, the merge gate denies on an uncomputable key.
-assert_eq "16: (ii) while still stale, the merge gate denies (freshness uncomputable)" \
-    "$(decision_of "$(gate_at "$MERGE_CMD" "$REPO3")")" "block"
+# (i-supplementary) #2400 symmetry: the merge gate certifies the same run via the shared predicate.
+assert_eq "16: (ii) CONTINUE + code-side null + unchanged artifacts — the merge gate approves too" \
+    "$(decision_of "$(gate_at "$MERGE_CMD" "$REPO3")")" "approve"
 # (ii) sync: give HEAD a main ancestor so the merge base resolves (input_version non-null).
 git -C "$WORK/repo3" branch main HEAD
 assert_ne "17: (ii) after sync the code side is computable (non-null)" \
@@ -319,8 +320,15 @@ assert_eq "19: (v) after a fresh TR5 terminal run is recorded, the merge is perm
 # became stale: merge base gone) → selfRecovering=true → approveFn, no arm, no loop.
 # FAIL-BEFORE-FIX: Stage 2 (!currentFk) arms on a stale-now-null code side even though
 # the terminal was settled against a valid key in a prior healthy state.
+# terminal_run_with_artifacts: terminal_run plus the artifact_keys armCore always records.
+terminal_run_with_artifacts() {
+    AK="$(artifact_keys_json)" BASE="$(terminal_run "$1" "$2")" node -e "
+const o = JSON.parse(process.env.BASE); o.ledger[0].artifact_keys = JSON.parse(process.env.AK);
+process.stdout.write(JSON.stringify(o));
+"
+}
 PRIOR_FK="abc123def456abc1abc123def456abc1abc123def456abc1abc123def456abc1"
-seed_state "$(terminal_run CONTINUE "$PRIOR_FK")" >/dev/null
+seed_state "$(terminal_run_with_artifacts CONTINUE "$PRIOR_FK")" >/dev/null
 out20="$(gate_at "$SENTINEL_UV" "$REPO_NULL")"
 assert_eq "20: prior CONTINUE (non-null stored key) + null code side (stale AGENTS_CONFIG_DIR) is approved" \
     "$(decision_of "$out20")" "approve"

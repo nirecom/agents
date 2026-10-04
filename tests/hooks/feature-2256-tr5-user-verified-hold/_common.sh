@@ -6,6 +6,11 @@
 
 # Sourced by each section, never run as one: the parent lists sections explicitly.
 
+# The shared harness supplies the per-case marker functions; it is sourced first
+# so the reporters, counters, AGENTS_DIR and RWT defined below override its own.
+# shellcheck source=../../lib/harness.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" && pwd)/harness.sh"
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
 AGENTS_NODE="$(nrm "$AGENTS_DIR")"
@@ -42,6 +47,9 @@ unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
 SID="tr5hold"
+# user-verified-audit.js selects plan artifacts by WORKFLOW_SESSION_ID before any
+# resolver fallback, so an inherited value would point the sentinel gate elsewhere.
+export WORKFLOW_SESSION_ID="$SID"
 REPO="$WORK/repo"
 mkdir -p "$REPO"
 git -C "$REPO" init -q -b main
@@ -85,6 +93,15 @@ artifact_key() {
 const fp = require(process.env.FP);
 const v = fp.computeArtifactKey(process.env.PLANS, process.env.SESS, process.env.NAMES.split(','));
 process.stdout.write(String(v === null || v === undefined ? 'null' : v));
+" 2>/dev/null
+}
+
+# artifact_keys_json — the per-artifact hash map a real armCore run records (cwd-independent).
+artifact_keys_json() {
+    FP="$FP_NODE" RCWD="$REPO_NODE" PLANS="$WORK_NODE/plans" SESS="$SID" node -e "
+const fp = require(process.env.FP);
+const r = fp.computeFreshnessKey(process.env.RCWD, process.env.PLANS, process.env.SESS);
+process.stdout.write(JSON.stringify(r.artifact_keys));
 " 2>/dev/null
 }
 

@@ -102,21 +102,21 @@ console.log('OK');
     fi
 }
 
-# SA3: AUDIT_SEVERITY_THRESHOLD exported and equals "error"
+# SA3: AUDIT_SEVERITY_THRESHOLD exported and equals "warning"
 run_sa3() {
-    require_source "$SCHEMA_MODULE" "SA3: AUDIT_SEVERITY_THRESHOLD === 'error'" || return
+    require_source "$SCHEMA_MODULE" "SA3: AUDIT_SEVERITY_THRESHOLD === 'warning'" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
 if (typeof s.AUDIT_SEVERITY_THRESHOLD === 'undefined') { console.error('not exported'); process.exit(2); }
-if (s.AUDIT_SEVERITY_THRESHOLD !== 'error') { console.error('got: '+s.AUDIT_SEVERITY_THRESHOLD); process.exit(3); }
+if (s.AUDIT_SEVERITY_THRESHOLD !== 'warning') { console.error('got: '+s.AUDIT_SEVERITY_THRESHOLD); process.exit(3); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "SA3: AUDIT_SEVERITY_THRESHOLD === 'error'"
+        pass "SA3: AUDIT_SEVERITY_THRESHOLD === 'warning'"
     else
-        fail "SA3: AUDIT_SEVERITY_THRESHOLD === 'error' (rc=$rc, out=$out)"
+        fail "SA3: AUDIT_SEVERITY_THRESHOLD === 'warning' (rc=$rc, out=$out)"
     fi
 }
 

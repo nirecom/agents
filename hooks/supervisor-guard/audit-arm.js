@@ -17,6 +17,8 @@ const {
 } = require("../lib/supervisor-state-writer/audit-run");
 const { isSubCheckSettled } = require("../lib/audit-ledger");
 const { SUB_CHECKS, ALL_SUB_CHECK_IDS } = require("../lib/audit-triggers");
+const { filterNullKeySubChecks } = require("../lib/null-freshness");
+const { UNSETTLED_AUDIT_PHASES } = require("../lib/supervisor-state-schema");
 const { formatAgentModelLine } = require("../lib/role-model");
 let getWorkflowPlansDir = null;
 try { ({ getWorkflowPlansDir } = require("../lib/workflow-plans-dir")); } catch (_) { /* optional */ }
@@ -54,16 +56,6 @@ function coalesce(candidates) {
   }
 
   return { trIds, transitions, causes, ownAlways, maxEdgeRank, levelPresent };
-}
-
-// Exclude recurrence-patterns when freshness_key is null (artifact-side or code-
-// side): its inputKeyForSubCheck returns null, isSubCheckSettled is always false
-// (fail-closed), and including it creates an infinite re-arm loop (#2360).
-function filterNullKeySubChecks(ids, freshness) {
-  if (freshness && freshness.freshness_key == null) {
-    return ids.filter((id) => id !== "recurrence-patterns");
-  }
-  return ids;
 }
 
 // The coalesced judgment set: every edge trigger's own sub_checks (always), plus
@@ -184,7 +176,7 @@ function evaluatePhaseA(sessionId, state, ctx) {
   // the caller from state), so they handle state=null correctly (#2256 C1).
   if (ctx && ctx.askUserQuestionTurn) return null;
   const auditPhase = (ctx && ctx.auditPhase) || null;
-  if (auditPhase === "pending" || auditPhase === "in_progress" || auditPhase === "frozen") return null;
+  if (UNSETTLED_AUDIT_PHASES.includes(auditPhase)) return null;
   if (ctx && ctx.alertPhase === "closed") return null;
 
   // Always drive the projection (array) form: candidatesFromProjection appends the

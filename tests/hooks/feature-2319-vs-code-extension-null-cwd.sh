@@ -304,7 +304,7 @@ s5_reason() {
 const { checkUserVerifiedAudit } = require(process.env.UVA);
 const writer = require(process.env.WR);
 const schema = require(process.env.SC);
-require('fs').writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(schema.createEmptyState(process.env.SESS)));
+require('fs').writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(schema.createEmptyState(process.env.SESS)));
 let reason = null;
 checkUserVerifiedAudit(process.env.SESS, process.env.RCWD, {
   approveFn: () => { reason = 'APPROVED'; },
