@@ -118,7 +118,7 @@ run_assemble() { # <fixture> <arg>...
         ASM_RC=127; ASM_OUT="$(missing_assemble)"; return
     fi
     ASM_RC=0
-    ASM_OUT="$( (cd "$fx" && unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+    ASM_OUT="$( (cd "$fx" && unset CLAUDE_CODE_SESSION_ID && \
         HOME="$fx/home" USERPROFILE="$(node_path "$fx/home")" \
         CLAUDE_CONFIG_DIR="$fx/home/.claude" \
         run_with_timeout 60 node install/assemble-settings.js "$@") 2>&1 )" || ASM_RC=$?

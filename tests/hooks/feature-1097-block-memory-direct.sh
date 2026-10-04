@@ -285,8 +285,6 @@ printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEM
 b12_result=$(
     (
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
         export WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
         run_with_timeout 120 node "$HOOK" < "$b12_input_file" 2>/dev/null

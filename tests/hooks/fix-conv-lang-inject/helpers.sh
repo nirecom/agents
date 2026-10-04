@@ -1,7 +1,7 @@
 # helpers.sh — Shared setup and helper functions for fix-conv-lang-inject tests.
 # Sourced by the dispatch entrypoint; not executable directly.
 # Sets: AGENTS_DIR, CONV_LANG_LIB, SESSION_START, POST_COMPACT,
-#       TMPDIR_BASE, EMPTY_CFG, ENV_FILE, NODE_LIB_PATH,
+#       TMPDIR_BASE, EMPTY_CFG, NODE_LIB_PATH,
 #       NODE_SESSION_START, NODE_POST_COMPACT, EXPECTED_JA,
 #       PASS, FAIL, SKIP counters, pass/fail/skip functions,
 #       run_with_timeout, to_node_path, call_helper,
@@ -56,9 +56,6 @@ EMPTY_CFG="$TMPDIR_BASE/empty-cfg"
 mkdir -p "$EMPTY_CFG"
 export AGENTS_CONFIG_DIR="$EMPTY_CFG"
 
-# A throwaway env file location for session-start (it appends CLAUDE_SESSION_ID).
-ENV_FILE="$TMPDIR_BASE/session.env"
-
 # Helper: invoke the conv-lang helper with a given CONV_LANG value (or unset).
 # Prints the JSON-encoded return value (string or null) to stdout.
 # Args: <mode: set|unset> [value]
@@ -92,7 +89,6 @@ call_session_start() {
         raw=$(printf '%s' "$payload" | \
             CONV_LANG="$value" \
             CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
-            CLAUDE_ENV_FILE="$ENV_FILE" \
             CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow" \
             HOME="$TMPDIR_BASE/home" \
             run_with_timeout 30 node "$SESSION_START" 2>/dev/null)
@@ -100,7 +96,6 @@ call_session_start() {
         raw=$(printf '%s' "$payload" | (
             unset CONV_LANG
             CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
-            CLAUDE_ENV_FILE="$ENV_FILE" \
             CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow" \
             HOME="$TMPDIR_BASE/home" \
             run_with_timeout 30 node "$SESSION_START" 2>/dev/null

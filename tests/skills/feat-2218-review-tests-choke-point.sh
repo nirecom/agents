@@ -61,7 +61,7 @@ build_cfg() {
 run_loop() {
     local tmp="$1" sid="$2" rc_forced="$3" target="$4"
     mkdir -p "$tmp/transcripts"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    env -u CLAUDE_CODE_SESSION_ID \
         AGENTS_CONFIG_DIR="$CFG" SESSION_ID="$sid" PLANS_DIR="$tmp/wf" EXTENSIONS_USED="0" \
         REVIEW_TESTS_FULL_SCAN=1 FORCE_RC="$rc_forced" FORCE_TARGET="$target" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
@@ -77,7 +77,7 @@ run_loop_at() {
     local dir="$1" tmp="$2" sid="$3" rc_forced="$4" target="$5"
     mkdir -p "$tmp/transcripts"
     ( cd "$dir" 2>/dev/null || exit 90
-      env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+      env -u CLAUDE_CODE_SESSION_ID \
           AGENTS_CONFIG_DIR="$CFG" SESSION_ID="$sid" PLANS_DIR="$tmp/wf" EXTENSIONS_USED="0" \
           REVIEW_TESTS_FULL_SCAN=1 FORCE_RC="$rc_forced" FORCE_TARGET="$target" \
           CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
@@ -90,7 +90,7 @@ run_loop_at() {
 # that expects a codex-exit entry seeds workflow_init complete for its sid.
 seed_active() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -104,7 +104,7 @@ S.markStep('$sid', 'workflow_init', 'complete');
 # the writer, this file only claims what the record must say.
 inspect() {
     local tmp="$1" sid="$2" want_code="$3" want_path="$4"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         SID="$sid" WANT_CODE="$want_code" WANT_PATH="$want_path" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
@@ -131,7 +131,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # one exit code but the wording of "which path was taken" is not pinned here.
 inspect_code_only() {
     local tmp="$1" sid="$2" want_code="$3"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         SID="$sid" WANT_CODE="$want_code" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \

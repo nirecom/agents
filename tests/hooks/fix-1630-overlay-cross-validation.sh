@@ -102,7 +102,7 @@ run_guard() {
     local main_wt="$1"; shift
     GUARD_RC=0
     GUARD_OUT="$(cd "$main_wt" && printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
         "$@" \

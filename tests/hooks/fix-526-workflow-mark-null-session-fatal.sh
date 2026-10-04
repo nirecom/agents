@@ -33,14 +33,12 @@ run_with_timeout() {
 NODE_BIN="$(command -v node)"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Null-session isolation setup: block all 6 fallback paths in resolveSessionId:
+# Null-session isolation setup: block all 3 tiers of resolveSessionId:
 #   (1) input.session_id: not present in payload
-#   (2) CLAUDE_ENV_FILE: not set in env
+#   (2) CLAUDE_CODE_SESSION_ID: not set in env
 #   (3) input.transcript_path: not present in payload
-#   (4) JSONL scan via CLAUDE_TRANSCRIPT_BASE_DIR: set to empty tmpdir
-#   (5) CLAUDE_PROJECT_DIR: not set in env
-#   (6) process.cwd(): WORK_DIR is a non-git tmpdir (resolveSessionId may
-#       derive an ID from cwd, so we ensure it can't produce a valid state file)
+# Defense in depth: CLAUDE_TRANSCRIPT_BASE_DIR is an empty tmpdir,
+# CLAUDE_PROJECT_DIR is unset and WORK_DIR is a non-git tmpdir.
 # ─────────────────────────────────────────────────────────────────────────────
 
 EMPTY_TRANSCRIPT="$(mktemp -d "$TMPDIR_BASE/transcripts-XXXXXX")"

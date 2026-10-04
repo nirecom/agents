@@ -188,7 +188,7 @@ pv() { printf '%s\n' "$PROBE_OUT" | sed -n "s/^$1=//p" | head -1; }
 run_probe() {
     local mode="$1" kind="$2"; shift 2
     PROBE_OUT="$(run_with_timeout 60 env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID "${STRIP_CREDS[@]}" "$@" \
+         -u CLAUDE_CODE_SESSION_ID "${STRIP_CREDS[@]}" "$@" \
         "GH_HOST=$TARGET_HOST" \
         "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
         node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$mode" "$MAIN" "$TARGET_HOST" "$kind" 2>&1)" || return 1

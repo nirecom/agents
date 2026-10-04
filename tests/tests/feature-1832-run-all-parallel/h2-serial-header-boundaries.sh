@@ -3,26 +3,15 @@
 # Tests: tests/run-all.sh, bin/lib/run-all-parallelism.sh
 # Tags: tests, bin, parallel, frontmatter, convention, boundary, table-driven, TL2, scope:issue-specific
 # Serial: observes real lane concurrency, so it must not share the host with another test
-
-# WHY (CPR-WPH): `# Serial: <reason>` uses TWO windows — WRITER accepts the
-# header only in the first 10 lines, RUNNER scans the first 20 (Postel: accept
-# a slightly late author). This file walks the boundary (1/9/10/11/20/21) plus
-# malformed shapes, asserting the lane the runner ACTUALLY used at runtime.
-
-# HOW: each row's fixture has two FILLER tests marking an in-flight file while
-# they sleep, plus a SUBJECT that counts in-flight markers it can see — parallel
-# sees peers, serial (runs alone) sees zero. `absent-control` is the fence: a
-# header-less file seeing zero peers means nothing ran concurrently at all.
-
-# RED-FIRST: `--print-plan` and the serial lane don't exist yet — plan/runtime
-# columns are red for every `parallel`-expecting row; `serial` rows are green
-# today only because nothing runs concurrently (the control row proves it).
-
-# TL3 gap (what this TL2 test does NOT catch): whether the 20-line reader window
-# fits real corpus frontmatter shapes, and lane behavior under a loaded CI host.
-# Mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
-
 set -u
+
+# WHY: writer and runner share ONE window for `# Serial: <reason>` — the registry
+# headerMaxLines (10). Walks the boundary (1/9/10/11/20/21) plus malformed shapes,
+# asserting the lane the runner ACTUALLY used at runtime.
+# HOW: two FILLER tests mark an in-flight file while sleeping; the SUBJECT counts
+# the markers it sees (parallel sees peers, serial sees zero). `absent-control`
+# fences the table: zero peers there means nothing ran concurrently at all.
+# TL3 gap: lane behavior under a loaded CI host (bin/check-verification-gate.sh).
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 REAL_RUNNER="$AGENTS_DIR/tests/run-all.sh"
@@ -46,7 +35,8 @@ trap 'rm -rf "$TMPD"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
+export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
@@ -98,10 +88,11 @@ case_ambient_sanitized() {
 # ===========================================================================
 
 # mk_row_root <root> <header-line-no> <header-text>
-#   0 as the line number means "no header at all".
+#   0 as the line number means "no header at all". The tests sit in a category
+#   dir (tests/bin/): the runner never discovers files directly under tests/.
 mk_row_root() {
     local root="$1" pos="$2" hdr="$3" i
-    mkdir -p "$root/bin" "$root/tests" "$root/inflight"
+    mkdir -p "$root/bin" "$root/tests/bin" "$root/inflight"
     cp "$REAL_RUNNER" "$root/bin/run-all.sh"
     for i in 1 2; do
         {
@@ -110,7 +101,7 @@ mk_row_root() {
             printf 'sleep 0.6\n'
             printf 'rm -f "%s/f%s"\n' "$root/inflight" "$i"
             printf 'exit 0\n'
-        } > "$root/tests/a-fill$i.sh"
+        } > "$root/tests/bin/a-fill$i.sh"
     done
     {
         if [ "$pos" = "1" ]; then
@@ -124,7 +115,7 @@ mk_row_root() {
         printf 'sleep 0.25\n'
         printf 'find "%s" -type f 2>/dev/null | grep -c . > "%s"\n' "$root/inflight" "$root/obs"
         printf 'exit 0\n'
-    } > "$root/tests/z-subject.sh"
+    } > "$root/tests/bin/z-subject.sh"
 }
 
 # ===========================================================================
@@ -153,14 +144,16 @@ plan_lane_of() {
 
 PEERS_SEEN=""
 RUNTIME_LANE=""
+RUN_CONTRACT_SEEN=""
 # runtime_lane_of <root> — lane the runner ACTUALLY used, from the subject's own
-# peer count. Writes to globals RUNTIME_LANE/PEERS_SEEN (not stdout) since a
-# command substitution would run this in a subshell and discard them.
+# peer count. Writes to globals RUNTIME_LANE/PEERS_SEEN/RUN_CONTRACT_SEEN (not
+# stdout) since a command substitution would discard them in a subshell.
 runtime_lane_of() {
     local root="$1" peers
     rm -f "$root/obs"
     run_pinned 45 "TESTS_DIR=$root/tests" "RUN_ALL_JOBS=4" \
-        -- bash "$root/bin/run-all.sh" --all >/dev/null 2>&1
+        -- bash "$root/bin/run-all.sh" --all >"$root/run.out" 2>/dev/null
+    RUN_CONTRACT_SEEN="$(sed -n 's/^RUN_CONTRACT: //p' "$root/run.out" | head -1)"
     if [ ! -f "$root/obs" ]; then
         PEERS_SEEN="(none)"; RUNTIME_LANE="(subject-never-ran)"; return
     fi
@@ -196,7 +189,7 @@ case_boundary_table() {
         root="$TMPD/row$i"
         mk_row_root "$root" "$pos" "$hdr"
 
-        assert_eq "h2/writer/$name" "$writer" "$(writer_verdict "$root/tests/z-subject.sh")"
+        assert_eq "h2/writer/$name" "$writer" "$(writer_verdict "$root/tests/bin/z-subject.sh")"
 
         plan_out="$(run_pinned 45 "TESTS_DIR=$root/tests" "RUN_ALL_JOBS=4" \
             -- bash "$root/bin/run-all.sh" --print-plan --all 2>/dev/null)"
@@ -204,14 +197,16 @@ case_boundary_table() {
 
         runtime_lane_of "$root"
         assert_eq "h2/runtime-lane/$name" "$lane" "$RUNTIME_LANE"
+        # Both fillers and the subject ran: a row that executed nothing cannot pass.
+        assert_eq "h2/executed-all-3/$name" "PASS=3 FAIL=0 SKIP=0 EXECUTED=3" "$RUN_CONTRACT_SEEN"
         [ "$name" = "absent-control" ] && CONTROL_PEERS="$PEERS_SEEN"
     done <<'TABLE'
 first-line          | 1  | # Serial: boundary row at the very first line | serial   | ok
 writer-window-inner | 9  | # Serial: comfortably inside both windows     | serial   | ok
 writer-window-last  | 10 | # Serial: last line the writer rule accepts   | serial   | ok
-reader-only-first   | 11 | # Serial: first line only the reader accepts  | serial   | out-of-window
-reader-window-last  | 20 | # Serial: last line the reader rule accepts   | serial   | out-of-window
-past-both-windows   | 21 | # Serial: one line past the reader window     | parallel | out-of-window
+first-past-window   | 11 | # Serial: first line past the shared window   | parallel | out-of-window
+old-reader-last     | 20 | # Serial: last line of the retired 20 window  | parallel | out-of-window
+past-both-windows   | 21 | # Serial: one line past the retired window    | parallel | out-of-window
 absent-control      | 0  | {NONE}                                       | parallel | no-header
 mal-no-colon        | 5  | # Serial no colon at all                      | parallel | malformed
 mal-empty-reason    | 5  | # Serial:                                     | parallel | malformed

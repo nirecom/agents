@@ -1,7 +1,7 @@
 "use strict";
 // hooks/workflow-gate/supervisor-check.js
-// #2256 S5-e — read-only pre-merge FRESHNESS BACKSTOP: arms nothing; at merge
-// time only re-verifies a terminal TR5 run exists, is fresh, and is non-BLOCK.
+// #2256 S5-e — read-only pre-merge FRESHNESS BACKSTOP: arms nothing; at merge time re-verifies a
+// terminal TR5 run exists, is non-BLOCK, and is fresh — or, for a null key, passes hooks/lib/null-freshness.js.
 // Its sole write is a layer1 anomaly finding when a fresh BLOCK verdict is being
 // bypassed (Path i-b). `blockFn` is injected so this stays free of the hook's
 // stdout protocol. TR5 arming lives in hooks/supervisor-guard +
@@ -19,6 +19,11 @@ const { parseDetailFilesToModify } = require("../lib/branch-diff");
 const { formatFreshnessBackstopReason } = require("../lib/supervisor-report-format");
 const { FRESHNESS_BACKSTOP_CAUSE } = require("../lib/audit-triggers");
 const { resolveRepoDir } = require("./repo-resolution");
+const {
+  evaluateNullFreshnessRecovery,
+  describeNullFreshnessRefusal,
+  unsettledAuditRun,
+} = require("../lib/null-freshness");
 
 // Resolve supervisor state with wsid fallback.
 // wsid is always resolved independently (even when state is found under the primary
@@ -143,12 +148,6 @@ function checkSupervisorPreMerge(sessionId, mergeKind, hookCwd, opts = {}) {
       blockFn(formatFreshnessBackstopReason(FRESHNESS_BACKSTOP_CAUSE, detailLine, sessionId, wsid, effectiveSid));
     };
 
-    // Fail-closed: an uncomputable freshness key can never certify freshness.
-    if (!currentFk) {
-      deny("the freshness key could not be computed for this working tree (fail-closed).");
-      return { authoritative: true };
-    }
-
     const tr5Run = lastTr5TerminalRun(audit);
     if (!tr5Run) {
       deny("no terminal user_verification (TR5) audit run exists.");
@@ -159,8 +158,21 @@ function checkSupervisorPreMerge(sessionId, mergeKind, hookCwd, opts = {}) {
     // silently bypassed when the TR5 run itself was non-BLOCK (#2256).
     const ledger = audit && Array.isArray(audit.ledger) ? audit.ledger : [];
     const tr5Idx = ledger.indexOf(tr5Run);
-    if (tr5Idx >= 0 && hasLaterTerminalBlock(audit, tr5Idx)) {
+    const laterBlockExists = tr5Idx >= 0 && hasLaterTerminalBlock(audit, tr5Idx);
+    if (laterBlockExists) {
       deny("a later audit BLOCK verdict (post-TR5) is unresolved.");
+      return { authoritative: true };
+    }
+
+    // A null key is certified only by the shared predicate; override and the fk
+    // comparison below need a key, so they stay on the non-null path (#2400).
+    // A newer unsettled run (armed / in_progress / frozen) blocks certification (#2400 run-0003).
+    if (!currentFk) {
+      const recovery = evaluateNullFreshnessRecovery({
+        freshness: current, tr5Run, laterBlockExists, unsettledRun: unsettledAuditRun(audit),
+      });
+      if (recovery.approve) return { authoritative: true };
+      deny(describeNullFreshnessRefusal(recovery));
       return { authoritative: true };
     }
 

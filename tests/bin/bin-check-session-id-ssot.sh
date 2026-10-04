@@ -152,7 +152,7 @@ run_guard
 expect_rc "G7 (WORKFLOW_SESSION_ID not in scope)" 0
 
 make_fixture g8
-add_file "bin/tool.sh" '#!/usr/bin/env bash' 'echo "$CLAUDE_SESSION_ID ${SESSION_ID}"'
+add_file "bin/tool.sh" '#!/usr/bin/env bash' 'echo "$CLAUDE_CODE_SESSION_ID ${SESSION_ID}"'
 run_guard
 expect_rc "G8 (bash \$VAR expansion not in scope)" 0
 
@@ -166,7 +166,7 @@ expect_rc "G9 (dynamic process.env[name] not in scope)" 0
 # prose that merely quotes the expression is not a code path.
 # ---------------------------------------------------------------------------
 make_fixture g10
-add_file "tests/some-test.sh" "node -e 'console.log(process.env.CLAUDE_SESSION_ID)'"
+add_file "tests/some-test.sh" "node -e 'console.log(process.env.CLAUDE_CODE_SESSION_ID)'"
 run_guard
 expect_rc "G10 (tests/** excluded)" 0
 
@@ -293,6 +293,123 @@ add_file "hooks/bad.js" "const sid = process.env.SESSION_ID;"
 add_file "hooks/ok.js" "const x = process.env.HOME;"
 run_guard "$FIXTURE" hooks/ok.js
 expect_rc "G20b (positional file arg limits the scan to that file)" 0
+
+# ---------------------------------------------------------------------------
+# T1-T10 (#1091): tombstone guard. CLAUDE_SESSION_ID and CLAUDE_ENV_FILE are
+# retired names: any whole-word mention in a tracked, non-excluded, non-exempt
+# file fails, in every file type, and no inline waiver can excuse it.
+# ---------------------------------------------------------------------------
+TOMBSTONE_EXEMPT=(
+  "bin/check-session-id-ssot.sh"
+  "tests/bin/bin-check-session-id-ssot.sh"
+  "hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js"
+  "tests/hooks/legacy-session-id-relay-purge.sh"
+  "docs/architecture/claude-code/session-id-resolution.md"
+)
+
+# $1 label — the report must say the name is retired, not merely exit 1.
+expect_retired_msg() {
+  if echo "$GUARD_OUT" | grep -qi "retired"; then
+    pass "$1: report says retired"
+  else
+    fail "$1: report lacks 'retired' (out: $(echo "$GUARD_OUT" | head -3 | tr '\n' ' '))"
+  fi
+}
+
+# T1-T4 (table-driven): TOMBSTONE_RE fires on retired names in every file type
+_t14_idx=0
+while IFS='|' read -r _t14_name _t14_path _t14_content; do
+  [[ -z "$_t14_name" || "$_t14_name" =~ ^[[:space:]]*# ]] && continue
+  _t14_name="${_t14_name//[[:space:]]/}"
+  _t14_path="${_t14_path//[[:space:]]/}"
+  _t14_idx=$((_t14_idx + 1))
+  make_fixture "t14_${_t14_idx}"
+  add_file "$_t14_path" "${_t14_content# }"
+  run_guard
+  expect_rc "T1-4/$_t14_name (rc)" 1
+  expect_retired_msg "T1-4/$_t14_name"
+done <<'TABLE'
+# retired name in every tracked file type — must exit 1 and report "retired"
+js-file        | lib/a.js          | const sid = process.env.CLAUDE_SESSION_ID;
+md-file        | skills/x/SKILL.md | Run `echo $CLAUDE_SESSION_ID` first.
+tests-sh-file  | tests/foo.sh      | unset CLAUDE_SESSION_ID
+env-file-var   | bin/x.sh          | cat "$CLAUDE_ENV_FILE"
+TABLE
+
+make_fixture t5
+add_file "skills/x/SKILL.md" 'Read $CLAUDE_CODE_SESSION_ID.' 'Ignore MY_CLAUDE_SESSION_ID_X and CLAUDE_ENV_FILE_OLD.'
+run_guard
+expect_rc "T5 (word boundary: look-alike names are not tombstoned)" 0
+
+make_fixture t6
+add_file "docs/history/2026.md" "- dropped CLAUDE_SESSION_ID relay"
+add_file "docs/history.md" "- dropped CLAUDE_ENV_FILE read"
+add_file "changelog/2026.md" "- dropped CLAUDE_SESSION_ID relay"
+add_file "CHANGELOG.md" "- dropped CLAUDE_ENV_FILE read"
+add_file "tests/_archive/a.sh" "unset CLAUDE_SESSION_ID"
+run_guard
+expect_rc "T6 (history, changelog and archive paths excluded)" 0
+
+make_fixture t7
+for p in "${TOMBSTONE_EXEMPT[@]}"; do
+  add_file "$p" "# mentions CLAUDE_SESSION_ID and CLAUDE_ENV_FILE as retired names"
+done
+run_guard
+expect_rc "T7 (TOMBSTONE_EXEMPT paths exempt)" 0
+
+make_fixture t7b
+add_file "hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js.txt" "CLAUDE_SESSION_ID"
+run_guard
+expect_rc "T7b (prefix sibling of an exempt path is NOT exempt)" 1
+
+make_fixture t8
+add_file "hooks/w.js" \
+  "const sid = process.env.CLAUDE_SESSION_ID; // session-id-ssot: waived (bootstrap) — runs before the resolver is loadable"
+run_guard
+expect_rc "T8 (tombstone ignores the inline waiver)" 1
+expect_retired_msg "T8"
+
+make_fixture t10
+add_file "skills/y/SKILL.md" "Export CLAUDE_ENV_FILE before running."
+run_guard "$FIXTURE" --staged
+expect_rc "T10 (--staged pre-commit form also tombstones)" 1
+
+# T12: tombstone guard with positional file arguments. The pre-commit hook may
+# also pass an explicit file list; the tombstone must honour it (same as READ_RE
+# positional tests G20a/G20b above, but exercising the tombstone branch).
+make_fixture t12a
+add_file "hooks/bad.js" "const sid = process.env.CLAUDE_SESSION_ID;"
+add_file "hooks/ok.js"  "const x = process.env.HOME;"
+run_guard "$FIXTURE" hooks/bad.js
+expect_rc "T12a (tombstone positional file: retired name in targeted file)" 1
+expect_retired_msg "T12a"
+
+make_fixture t12b
+add_file "hooks/bad.js" "const sid = process.env.CLAUDE_SESSION_ID;"
+add_file "hooks/ok.js"  "const x = process.env.HOME;"
+run_guard "$FIXTURE" hooks/ok.js
+expect_rc "T12b (tombstone positional file: limits scan to clean file, bad file not scanned)" 0
+
+# T9: the real tree carries no retired name outside the exempt set. RED until
+# the #1091 cleanup commits land, like G18.
+run_guard "$AGENTS_DIR"
+if echo "$GUARD_OUT" | grep -qi "retired"; then
+  fail "T9 (real repo has no retired names): $(echo "$GUARD_OUT" | grep -i "retired" | head -5 | tr '\n' ' ')"
+else
+  pass "T9 (real repo has no retired names)"
+fi
+
+# T11: the exempt list above is the guard's list — a stale entry here would let
+# T7 pass while the guard flags the real file.
+t11_bad=""
+for p in "${TOMBSTONE_EXEMPT[@]}"; do
+  [[ -f "$GUARD" ]] && ! grep -qF "\"$p\"" "$GUARD" && t11_bad="$t11_bad $p"
+done
+if [[ -z "$t11_bad" ]]; then
+  pass "T11 (TOMBSTONE_EXEMPT mirrors the guard source)"
+else
+  fail "T11 (TOMBSTONE_EXEMPT mirrors the guard source): missing in guard:$t11_bad"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

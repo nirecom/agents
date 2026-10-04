@@ -32,6 +32,8 @@ SUBDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2431-run-tests-bas
 . "$SUBDIR/exec.sh"
 # shellcheck source=./feature-2431-run-tests-baseline/cli.sh
 . "$SUBDIR/cli.sh"
+# shellcheck source=./feature-2431-run-tests-baseline/cli-unsupported.sh
+. "$SUBDIR/cli-unsupported.sh"
 
 case_begin "baseline-ledger" "bin/lib/run-tests-baseline-ledger.sh"
 run_ledger_cases
@@ -87,6 +89,10 @@ case_end
 
 case_begin "baseline-cli-exec-setup-failed" "bin/run-tests-baseline"
 run_cli_exec_setup_failed_cases
+case_end
+
+case_begin "baseline-cli-unsupported-at-base" "bin/run-tests-baseline"
+run_cli_unsupported_at_base_cases
 case_end
 
 case_begin "baseline-cli-same-base-pass-cached" "bin/run-tests-baseline"

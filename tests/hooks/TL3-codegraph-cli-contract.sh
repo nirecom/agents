@@ -29,7 +29,6 @@ fi
 
 # Unset inherited session/workflow env so this run cannot resolve real state
 # (rules/test/fixture-isolation.md).
-unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 unset CLAUDE_WORKFLOW_DIR
 unset WORKFLOW_PLANS_DIR

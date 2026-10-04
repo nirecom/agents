@@ -78,19 +78,14 @@ fi
 teardown_mock
 
 # ===========================================================================
-# Test 5: set <N> with missing/unextractable CLAUDE_SESSION_ID exits 2
-# #1251: resolution goes through the script-relative bridge, which also tries
-# CLAUDE_CODE_SESSION_ID (P2), WORKTREE_NOTES.md (P6 — the worktree root HAS
-# one), and the JSONL scan (P7). Fully isolate all SID sources: unset env SIDs,
-# empty transcript base, and run from a throwaway temp CWD that carries NO
-# WORKTREE_NOTES.md.
-# #1899: the CWD must nevertheless be a git repo with a github.com origin —
-# repo identity now comes from the origin remote, so a bare non-git dir would
-# fail during repo resolution before the session-id check is ever reached.
+# Test 5: set <N> with missing/unresolvable session id exits 2
+# #1251: isolate every SID source the bin/resolve-session-id bridge reads —
+# unset CLAUDE_CODE_SESSION_ID, empty transcript base, throwaway temp CWD.
+# #1899: that CWD is still a git repo with a github.com origin, so repo
+# resolution succeeds and the session-id check is actually reached.
 # ===========================================================================
 setup_mock
-echo "" > "$CLAUDE_ENV_FILE"  # no CLAUDE_SESSION_ID
-unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/empty-transcripts"
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
 make_origin_fixture "$TMP/nongit-cwd"
@@ -98,7 +93,7 @@ make_origin_fixture "$TMP/nongit-cwd"
 RC=$?
 unset CLAUDE_TRANSCRIPT_BASE_DIR 2>/dev/null || true
 if [ "$RC" -eq 2 ]; then
-    pass "T5: set <N> with missing CLAUDE_SESSION_ID → exit 2"
+    pass "T5: set <N> with missing session id → exit 2"
 else
     fail "T5: expected exit 2, got rc=$RC"
 fi

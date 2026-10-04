@@ -71,20 +71,24 @@ Research/malformed-retry cap escalation: see `bash "$AGENTS_CONFIG_DIR/skills/ma
 
 ### MDP-7 — Assemble + confirm
 
-Before composing the summary or confirm-plan prose, issue the standalone call `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG` and read `<CONV_LANG>` from its stdout. If `<CONV_LANG>` is non-empty, produce the one-paragraph summary (OFF path) and the one-line summary inside `<<WORKFLOW_CONFIRM_DETAIL: ...>>` (ON path) in that language.
-
 On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source. `## Class members` is NOT carried into detail.md — its SSOT is intent.md (#2228).
 
 Run `bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 2 mandatory sections — helper strips planner-authored copies (including any `## Class members` residue). Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt.
 
-After assemble-mandatory.sh succeeds, run `bash "$AGENTS_CONFIG_DIR/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the CONFIRM_DETAIL check — blocks even on the OFF (auto-approval) path.
+After assemble-mandatory.sh succeeds, run `bash "$AGENTS_CONFIG_DIR/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the gate check — blocks even on the `proceed` (auto-approval) path.
 
-Scope-change notification gate (before the CONFIRM_DETAIL check): run `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/detect-scope-change.sh" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit 0 → scope change detected: present the one-line description to the user and show the relevant detail plan section even when CONFIRM_DETAIL=off. Exit 1 → no scope change → proceed normally. Exit 2 (usage error) → warn and continue.
+Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
+At detail, `--gate` also folds in the outline→detail scope change, so it runs after the assembly above.
 
-Apply confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
+Issue the standalone call `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG`; when its stdout `<CONV_LANG>` is non-empty, write both the `proceed` one-paragraph summary and the `ask` one-line `<<WORKFLOW_CONFIRM_DETAIL: ...>>` summary in that language.
+
+Apply the rest of the confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
-- `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3). DO NOT present any local path — `show-plan-link.js`'s `Plan file:` line is the sole breadcrumb (protocol CPA-2).
-- `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation. Do NOT end the response on the CONFIRM echo.
+- Re-entering MDP-7 from a Revise loop: rerun the gate check from the trigger line, without `--scope-change-approved`.
+- `GATE_ACTION=proceed`: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3). DO NOT present any local path — `show-plan-link.js`'s `Plan file:` line is the sole breadcrumb (protocol CPA-2).
+- `GATE_ACTION=present-and-stop`: present the scope change line from `GATE_HINT` and the relevant detail plan section, then end the turn.
+- After `present-and-stop`, on approval run the standalone `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --gate --scope-change-approved` and follow its `GATE_ACTION` (normally `proceed`); on a change request, loop to MDP-5.
+- `GATE_ACTION=ask`: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation. Do NOT end the response on the CONFIRM echo.
 
 ## Research Escalation
 

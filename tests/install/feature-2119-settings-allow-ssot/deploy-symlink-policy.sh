@@ -84,7 +84,7 @@ t43_run() { # <asm> <fixture>
     local fx="$2"
     T43_ERR="$fx/stderr.txt"
     T43_RC=0
-    ( cd "$fx" && unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+    ( cd "$fx" && unset CLAUDE_CODE_SESSION_ID && \
       HOME="$fx/home" USERPROFILE="$(node_path "$fx/home")" \
       CLAUDE_CONFIG_DIR="$fx/home/.claude" \
       run_with_timeout 60 node install/assemble-settings.js ) \

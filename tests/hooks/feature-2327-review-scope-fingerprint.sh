@@ -23,7 +23,7 @@ CLI_N="$(np "$CLI")"
 TMPDIR_BASE="$(make_tmp)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 harness_isolate "$TMPDIR_BASE"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # Setup a minimal git repo with one initial commit, returns repo path.
 setup_repo() {

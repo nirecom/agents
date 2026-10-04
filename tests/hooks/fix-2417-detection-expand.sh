@@ -18,7 +18,7 @@ harness_isolate "$TMP"
 TRANS_TMP="$(make_tmp)"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TRANS_TMP"
 
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
 DETECT_JS="$AGENTS_DIR/hooks/lib/bash-write-targets/detection-expand.js"

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Dispatch only. All logic lives in ./lib/next-step/*.
-// The four requires are deliberately top-level (not lazy): list.js and verdict.js
+// The requires are deliberately top-level (not lazy): list.js and verdict.js
 // pull in ./lib/next-step/steps.js, whose import-time invariant assertions must
 // run on EVERY subcommand path, --help included.
 
@@ -10,9 +10,11 @@ const { runList } = require("./lib/next-step/list");
 const { runReset, runMark } = require("./lib/next-step/state-ops");
 const { runAdvanceCli } = require("./lib/next-step/advance");
 const { computeVerdict } = require("./lib/next-step/verdict");
+const { runGate } = require("./lib/next-step/gate-mode");
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.gate) return runGate(args.session, { scopeChangeApproved: args.scopeChangeApproved });
   if (args.advance) return runAdvanceCli(args);
   if (args.list) return runList(args.session);
   if (args.reset !== undefined) return runReset(args.session, args.reset);

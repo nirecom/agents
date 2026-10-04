@@ -4,19 +4,11 @@
 # Tags: tests, bin, parallel, worker-dispatch, capability, security, TL1, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY: the run-tests worker owns a deadline, so it needs to tune the dispatched
-# suite's parallelism. Adds int-typed, range-bounded `jobs` payload field ->
-# `-j <n>` (or `-j auto` when absent); capability.js walls it off from free text.
-
-# RED-FIRST: `jobs` isn't in the registry yet, so rejection rows are green now
-# (regression fence); the behavioural rows (serialisation, overlap, argv) are the
-# intended failures.
-
+# WHY: the run-tests worker tunes the dispatched suite's parallelism through an
+# int-typed, range-bounded `jobs` payload field -> `-j <n>` (or `-j auto`).
 # ISOLATION: throwaway git family (temp main + linked worktree). HOME is pinned
-# because RUN_ALL_CACHE_DIR isn't in the dispatcher's child env allowlist.
-
-# TL3 gap: real wall-clock speedup and deadline reachability on a CI host —
-# tests/bin/TL3-worker-dispatch-run-tests.sh is the gated tier.
+# and runner deps are copied in: the dispatcher's child env is allowlisted.
+# TL3 gap: real wall-clock speedup on a CI host (tests/bin/TL3-worker-dispatch-run-tests.sh).
 
 set -u
 
@@ -55,7 +47,7 @@ nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else e
 export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 FIX_HOME="$TMPD/home"; mkdir -p "$FIX_HOME/.claude"
@@ -91,6 +83,9 @@ RUN_LOG="$TMPD/run.log"
 mkdir -p "$LINKED_RAW/tests" "$LINKED_RAW/bin/lib"
 cp "$REAL_RUNNER" "$LINKED_RAW/tests/.real-run-all.sh"
 [ -f "$REAL_LIB" ] && cp "$REAL_LIB" "$LINKED_RAW/bin/lib/run-all-parallelism.sh"
+# shellcheck source=../../lib/test-language-registry-fixture.sh
+. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
+install_test_language_registry "$LINKED_RAW" "$AGENTS_DIR"
 {
     printf '#!/usr/bin/env bash\n'
     printf 'printf "%%s\\n" "$*" >> %s\n' "\"$ARGV_LOG\""

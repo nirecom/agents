@@ -2,36 +2,11 @@
 # tests/hooks/fix-1109-heredoc-plans-dir.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/universal-target-allow.js, hooks/enforce-worktree/shared-cmd-utils.js, hooks/lib/bash-write-targets/cp-mv.js, hooks/lib/bash-write-targets/redirect.js
 # Tags: worktree, enforce, hook, heredoc, plans-dir, shell-expansion, fix-1109, fix-983, fix-1025, fix-1040, scope:issue-specific
-#
-# Unit + integration tests for issue #1109 (+ #983/#1025/#1040): enforce-worktree
-# must ALLOW heredoc writes whose redirect/mv targets all resolve under
-# WORKFLOW_PLANS_DIR, even when the heredoc BODY contains ; / && / || sequencing.
-#
-# Two source fixes are under test:
-#   Gap 2 (resolver): areAllBashTargetsUnderPlansDir's isUnder closure must run
-#     expandStaticShellTokens; extractCpMvDestination must resolve $VAR via
-#     process.env constrained to plans-dir (tryResolveEnvUnderPlansDir).
-#   Gap 1 (heredoc parallel allow): a new hasCommandSequencingOutsideHeredoc()
-#     helper + a parallel plans-dir allow path in bash-write-scope.js /
-#     universal-target-allow.js fire only when sequencing lives ONLY inside the
-#     heredoc body AND every target is under plans-dir.
-#
-# RED before the fix, GREEN after. Cases that pin existing behavior (regression
-# guards) are GREEN both before and after.
-#
-# IMPORTANT — heredoc form. stripHeredocBody (hooks/lib/strip-quoted-args.js)
-# only strips bodies for the `cat <<TAG ... > target` shape (redirect AFTER the
-# opener). The `cat > target <<TAG` shape is NOT stripped, so its body-internal
-# `;` would still trip sequencing. The fix therefore allows the canonical
-# `cat <<'EOF' > "$WORKFLOW_PLANS_DIR/x"` form; all heredoc cases below use it.
-#
-# L3 gap (what this test does NOT catch):
-# - Hook registration: these tests call enforce-worktree.js directly as a Node.js process,
-#   not via the real Claude Code PreToolUse hook chain. L3 would verify the hook actually
-#   fires and returns the correct verdict when claude -p executes a Bash command from the
-#   main worktree.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# #1109 (+#983/#1025/#1040): enforce-worktree ALLOWs heredoc writes whose targets all resolve
+# under WORKFLOW_PLANS_DIR even when the BODY has ;/&&/|| (Gap 2 resolver, Gap 1 heredoc allow).
+# Heredoc cases use `cat <<'EOF' > target` — the only shape stripHeredocBody strips.
+# L3 gap: hook registration (direct node invocation, not the PreToolUse chain).
+# Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
@@ -147,7 +122,7 @@ run_hook() {
     printf '%s' "$payload" | (
         cd "$cwd" || exit 1
         MSYS_NO_PATHCONV=1 ENFORCE_WORKTREE=on WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" \
-            CLAUDE_SESSION_ID=test-1109 run_with_timeout 30 node "$HOOK" 2>/dev/null
+            run_with_timeout 30 node "$HOOK" 2>/dev/null
     )
 }
 

@@ -8,7 +8,7 @@ Invoked by Claude Code itself when a trigger in `rules/supervisor-reporting.md` 
 
 ## Procedure
 
-SR-1. Resolve `$SID`: read the `Session-ID:` field of the worktree's `WORKTREE_NOTES.md`. Only if that file or field is absent, fall back to `$CLAUDE_SESSION_ID` — Anthropic bug #27987 makes its propagation into Bash unreliable, so it is the fallback, not the source. If neither resolves, still report: state in your turn output what you observed and that no session id could be resolved.
+SR-1. Resolve `$SID`: read the `Session-ID:` field of the worktree's `WORKTREE_NOTES.md`. Only if that file or field is absent, fall back to `$CLAUDE_CODE_SESSION_ID`. If neither resolves, still report: state in your turn output what you observed and that no session id could be resolved.
 
 SR-2. Choose `categories` (comma-separated, multi-select), `severity`, `detail` (what was observed, free text), and `reporter` (the skill or agent name) from the tables below.
 

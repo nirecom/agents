@@ -63,10 +63,11 @@ sources fragments from `tests/<cat>/<name>/`. `tests/hooks/main-enforce-worktree
 is the reference implementation.
 
 **Fragments are deliberately not runnable on their own.** `tests/run-all.sh`
-enumerates `tests/<cat>/*.sh`, `tests/<cat>/*.Tests.ps1` (Pester via pwsh) and
-`tests/<cat>/test_*.py` (pytest via uv) for the six canonical categories (hooks,
-bin, skills, agents, install, tests) — a missing pwsh or uv makes that file
-SKIP (exit 77) rather than FAIL — and `*` does not cross `/`, so a fragment
+enumerates the files directly in the six canonical categories (hooks, bin,
+skills, agents, install, tests) whose names match a supported entry of the
+test language registry (`docs/architecture/claude-code/test-language-registry.md`)
+— a missing launch tool (pwsh, uv) makes that file SKIP (exit 77) rather than
+FAIL — and the match never crosses `/`, so a fragment
 nested under `tests/<cat>/<name>/` is invisible to the runner while the
 dispatcher at `tests/<cat>/<name>.sh` is not. That is the mechanism that keeps
 each case counted exactly once. A fragment has no harness of its own and fails

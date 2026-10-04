@@ -29,7 +29,7 @@ jp_command() { # <key> -> the command literal
         check-issues-class-coverage)
             printf '%s' 'bash "$AGENTS_CONFIG_DIR/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"' ;;
         detect-scope-change)
-            printf '%s' 'bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/detect-scope-change.sh" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md"' ;;
+            printf '%s' 'bash "$AGENTS_CONFIG_DIR/bin/detect-scope-change.sh" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md"' ;;
         resolve-worktree-path)
             printf '%s' 'bash "$AGENTS_CONFIG_DIR/bin/resolve-worktree-path"' ;;
         select-staged-files)

@@ -1,26 +1,9 @@
 #!/bin/bash
-# bin/check-plans-dir-isolation.sh
-#
-# Static audit classifier for the plans-dir dual-pin contract (#1799).
-#
-# A test that pins CLAUDE_WORKFLOW_DIR but NOT WORKFLOW_PLANS_DIR leaves
-# supervisor-emit.js writing into the developer's real ~/.workflow-plans/ tree.
-# This script classifies such half-pinned test files:
-#
-#   W-candidate — half-pinned AND statically reaches a supervisor-emit writer
-#                 (workflow-gate.js / workflow-mark.js / supervisor-emit.js /
-#                  report* facade). These MUST be dual-pinned.
-#   N-candidate — half-pinned but only exercises read-only paths. Harmless
-#                 today; dual-pin opportunistically.
-#
-# Files pinning BOTH vars are already isolated (skipped). Files pinning
-# neither var are out of scope (skipped).
-#
-# Report tool, not a gate: always exits 0.
-#
-# Usage:
-#   bin/check-plans-dir-isolation.sh [file ...]
-#   bin/check-plans-dir-isolation.sh          # scans tests/*.sh
+# bin/check-plans-dir-isolation.sh — static audit of the plans-dir dual-pin contract (#1799).
+# W-candidate: pins CLAUDE_WORKFLOW_DIR without WORKFLOW_PLANS_DIR and reaches a supervisor-emit
+# writer (must be dual-pinned). N-candidate: half-pinned, read-only paths only. Contract:
+# rules/test/fixture-isolation.md. Report tool, not a gate: always exits 0.
+# Usage: bin/check-plans-dir-isolation.sh [file ...]   (no args: tests/ top-level supported tests)
 
 set -u
 
@@ -52,7 +35,13 @@ main() {
             classify_file "$f"
         done
     else
-        for f in "$REPO_ROOT"/tests/*.sh; do
+        # shellcheck source=lib/test-language-registry.sh
+        if ! { . "$REPO_ROOT/bin/lib/test-language-registry.sh" && tlr_load; }; then
+            echo "ERROR: test language registry not readable; nothing scanned" >&2
+            return 0
+        fi
+        tlr_list_dir_into "$REPO_ROOT/tests" supported || return 0
+        for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do
             classify_file "$f"
         done
     fi
