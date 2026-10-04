@@ -130,15 +130,20 @@ WIDTHS=("${DEDUPED[@]}")
 TESTS_DIR="${TESTS_DIR:-$AGENTS_DIR/tests}"
 [ -d "$TESTS_DIR" ] || die "test directory not found: $TESTS_DIR"
 
+# shellcheck source=bin/lib/test-language-registry.sh
+{ [ -f "$SELF_DIR/lib/test-language-registry.sh" ] && . "$SELF_DIR/lib/test-language-registry.sh" && tlr_load; } ||
+    die "test language registry not readable: $SELF_DIR/lib/test-language-registry.sh"
+
 CANDIDATES=()
-for _f in "$TESTS_DIR"/*.sh; do
-    [ -f "$_f" ] || continue
+tlr_list_dir_into "$TESTS_DIR" supported || TLR_LIST=()
+for _f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do
     # run-all.sh itself is never a test: measuring it here would recursively
     # launch a full suite run during calibration (the exact hazard #1836 fixes).
     [ "${_f##*/}" = "run-all.sh" ] && continue
-    # `# Serial:` tests are excluded: they cannot overlap, so they measure the
+    # `Serial:` header tests are excluded: they cannot overlap, so they measure the
     # same wall time at every width and only flatten the curve.
-    if head -n 20 "$_f" 2>/dev/null | grep -q '^# Serial:'; then continue; fi
+    tlr_comment_prefix "$_f" >/dev/null
+    if head -n "$TLR_HEADER_MAX_LINES" "$_f" 2>/dev/null | awk -v p="$TLR_COMMENT_PREFIX Serial:" 'index($0, p) == 1 { f = 1 } END { exit !f }'; then continue; fi
     CANDIDATES+=("$_f")
 done
 CORPUS_COUNT="$(run_all_corpus_count "$TESTS_DIR")"

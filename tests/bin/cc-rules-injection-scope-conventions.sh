@@ -55,19 +55,17 @@ console.log(out.join('\n'));
 " "$(node_path "$1")" 2>&1
 }
 
-WANT_GLOBS='tests/**
-**/*.sh
-**/*.Tests.ps1
-test_*.py
-**/*.spec.*'
+# Placement only: which file names are tests is the test language registry's fact
+# (hooks/lib/test-language-registry.json), never restated as globs here.
+WANT_GLOBS='tests/**'
 
 GOT_GLOBS="$(paths_of "$FIXTURE_RULE")"
 
-# --- C1: the glob set is EXACTLY the five entries, in the sibling's order.
+# --- C1: the glob set is EXACTLY the placement glob, nothing else.
 # An exact comparison, not a containment check: an extra glob widens the trigger
-# surface back out and a missing one drops a file type from coverage. ---
+# surface back out (a name glob would restate the registry). ---
 if [ "$GOT_GLOBS" = "$WANT_GLOBS" ]; then
-    pass "C1: fixture-isolation.md paths: is exactly the five test-file globs"
+    pass "C1: fixture-isolation.md paths: is exactly the placement glob tests/**"
 else
     fail "C1: paths: mismatch — want [$(printf '%s' "$WANT_GLOBS" | tr '\n' ' ')] got [$(printf '%s' "$GOT_GLOBS" | tr '\n' ' ')]"
 fi

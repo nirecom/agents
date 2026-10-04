@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "headerMaxLines": 10,
+  "tableDrivenFallbackEntry": "bash",
+  "entries": [
+    {
+      "id": "bash",
+      "status": "supported",
+      "patterns": ["*.sh"],
+      "launch": { "requires": null, "command": ["bash", "{path}"] },
+      "caseMarkerReader": { "file": "bin/lib/test-retire-predicate/case-parser.sh", "function": "trp_parse_case_markers" },
+      "tableDrivenDetector": { "file": "bin/lib/test-language-parts/bash.sh", "function": "has_table_driven_sh" }
+    },
+    { "id": "pester", "status": "supported", "patterns": ["*.Tests.ps1"], "launch": { "requires": "pwsh", "command": ["pwsh", "-Command", "Invoke-Pester"] }, "caseMarkerReader": null, "tableDrivenDetector": null },
+    { "id": "pytest", "status": "supported", "patterns": ["test_*.py"], "launch": { "requires": "uv", "command": ["uv", "run", "pytest"] }, "caseMarkerReader": null, "tableDrivenDetector": null },
+    {
+      "id": "js",
+      "status": "recognized-only",
+      "patterns": ["*.js"],
+      "caseMarkerReader": null,
+      "tableDrivenDetector": { "file": "bin/lib/test-language-parts/js.sh", "function": "has_table_driven_js" }
+    },
+    {
+      "id": "test-naming-convention",
+      "status": "recognized-only",
+      "patterns": ["*.test.*", "*.spec.*", "*_test.*", "test_*"],
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null
+    }
+  ],
+  "note": "residue-check fixture: only id, patterns, launch heads and part references matter to scan.js"
+}

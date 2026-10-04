@@ -11,7 +11,7 @@
 
 _TDG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=test-frontmatter-fix.sh
-source "$_TDG_DIR/test-frontmatter-fix.sh"
+source "$_TDG_DIR/test-frontmatter-fix.sh" || return 1
 
 # Output globals (set by tdg_classify; readable after a non-subshell call).
 TDG_VERDICT=""
@@ -139,18 +139,17 @@ tdg_classify_parsed() {
 
 # tdg_scan_corpus <repo-root> — emits `axis<TAB>key<TAB>escaped-file` per
 # membership. The scan range is the six canonical test categories (#1834):
-# tests/{hooks,bin,skills,agents,install,tests}/*.sh. Non-canonical directories
-# (split-test fragments, _archive, lib, fixtures) are excluded by allowlist.
-# That range is a contract, not an accident.
+# direct files of tests/{hooks,bin,skills,agents,install,tests} in a case-marker language
+# of the test language registry. Non-canonical directories (split-test fragments,
+# _archive, lib, fixtures) are excluded by allowlist. That range is a contract.
 _TDG_CANONICAL_CATEGORIES=(hooks bin skills agents install tests)
 tdg_scan_corpus() {
   local root="${1:?tdg_scan_corpus: repo root required}"
   local f cat i
   local -a files=()
   for cat in "${_TDG_CANONICAL_CATEGORIES[@]}"; do
-    for f in "$root"/tests/"$cat"/*.sh; do
-      [[ -f "$f" ]] && files+=("$f")
-    done
+    tlr_list_dir_into "$root/tests/$cat" case-marker || continue
+    for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do files+=("$f"); done
   done
   [[ "${#files[@]}" -gt 0 ]] || return 0
   _tdg_batch_matches "${files[@]}"
@@ -161,12 +160,14 @@ tdg_scan_corpus() {
 }
 
 # _tdg_batch_matches <file>... — fills TDG_MATCHES[i] with the `lineno:line`
-# `^# Tests:` rows of the i-th file. ONE awk process serves every file (#2455):
-# per-file grep forks made a ~2400-file scan take minutes on MSYS. A path
-# holding a LF cannot travel through awk's line-oriented list, so any such
-# batch falls back to tfm_tests_line_matches per file.
+# `<prefix> Tests:` rows of the i-th file, <prefix> being its registry
+# header.commentPrefix. ONE awk process serves every file (#2455): per-file
+# grep forks made a ~2400-file scan take minutes on MSYS. A path holding a LF
+# cannot travel through awk's line-oriented `prefix<TAB>path` list, so any
+# such batch falls back to tfm_tests_line_matches per file.
 _tdg_batch_matches() {
   local f g line cur=-1
+  local -a recs=()
   TDG_MATCHES=()
   for f in "$@"; do
     [[ "$f" == *$'\n'* ]] || continue
@@ -175,6 +176,10 @@ _tdg_batch_matches() {
     done
     return 0
   done
+  for f in "$@"; do
+    tlr_comment_prefix "$f" >/dev/null
+    recs+=("$TLR_COMMENT_PREFIX"$'\t'"$f")
+  done
   while IFS= read -r line; do
     if [[ "$line" == "F" ]]; then
       cur=$((cur + 1))
@@ -182,9 +187,10 @@ _tdg_batch_matches() {
     else
       TDG_MATCHES[cur]="${TDG_MATCHES[cur]:+${TDG_MATCHES[cur]}$'\n'}$line"
     fi
-  done < <(printf '%s\n' "$@" | LC_ALL=C awk '
-    { f = $0; print "F"; n = 0
-      while ((getline l < f) > 0) { n++; if (l ~ /^# Tests:/) print n ":" l }
+  done < <(printf '%s\n' "${recs[@]}" | LC_ALL=C awk '
+    { t = index($0, "\t"); p = substr($0, 1, t - 1) " Tests:"; f = substr($0, t + 1)
+      print "F"; n = 0
+      while ((getline l < f) > 0) { n++; if (index(l, p) == 1) print n ":" l }
       close(f) }')
 }
 

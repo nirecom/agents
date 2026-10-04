@@ -10,7 +10,7 @@ TCC_KEEP=16
 TCC_DIGEST=""
 TCC_STAMP=""
 TCC_HIT_FILE=""
-TCC_LOGIC_LIBS="test-route-destination.sh test-dup-group.sh test-frontmatter-fix.sh test-frontmatter-constants.sh test-corpus-cache.sh"
+TCC_LOGIC_LIBS="test-route-destination.sh test-dup-group.sh test-frontmatter-fix.sh test-frontmatter-constants.sh test-corpus-cache.sh test-language-registry.sh"
 
 # _tcc_bad_chars <string> — 0 when the string holds LF, TAB or CR (not storable).
 _tcc_bad_chars() {
@@ -22,13 +22,16 @@ _tcc_bad_chars() {
 
 # tcc_key_into <root> — TCC_DIGEST from (a) HEAD:tests, (b) the corpus-path
 # status records plus the content hash of each dirty file, (c) the parser libs,
-# (d) TCC_SCHEMA. At most 4 git calls; 1 = not cacheable.
+# (d) the registry table and reader, (e) TCC_SCHEMA. At most 4 git calls; 1 = not cacheable.
 tcc_key_into() {
-    local root="$1" r p k tree=none has_head=1 rc="" rec="" list="" hashes="" logic line n=0 c
+    local root="$1" r p k tree=none has_head=1 rc="" rec="" list="" hashes="" logic line n=0 c g globs reg
     local -a specs=() dirty=()
     TCC_DIGEST=""
     [ -e "$root/.git" ] || return 1
-    for c in "${_TDG_CANONICAL_CATEGORIES[@]}"; do specs+=(":(glob)tests/$c/*.sh"); done
+    globs="$(tlr_globs case-marker)" && [ -n "$globs" ] || return 1
+    for c in "${_TDG_CANONICAL_CATEGORIES[@]}"; do
+        while IFS= read -r g; do specs+=(":(glob)tests/$c/$g"); done <<< "$globs"
+    done
     while IFS= read -r -d '' r; do
         case "$r" in
             '#tcc-rc='*) rc="${r#'#tcc-rc='}"; continue ;;
@@ -60,7 +63,9 @@ tcc_key_into() {
         [ "$n" -eq "${#dirty[@]}" ] || return 1
     fi
     # shellcheck disable=SC2086  # TCC_LOGIC_LIBS is a fixed list of plain basenames
-    logic="$(git -C "${TCC_LOGIC_DIR:-$_TRD_DIR}" hash-object --no-filters -- $TCC_LOGIC_LIBS 2>/dev/null)" || return 1
+    reg="${TCC_REGISTRY_DIR:-$TLR_REGISTRY_DIR}"
+    logic="$(git -C "${TCC_LOGIC_DIR:-$_TRD_DIR}" hash-object --no-filters -- $TCC_LOGIC_LIBS \
+        "$reg/test-language-registry.json" "$reg/test-language-registry.js" 2>/dev/null)" || return 1
     TCC_DIGEST="$(run_all_id_digest "schema=$TCC_SCHEMA|tree=$tree|status=$rec|dirty=$hashes|logic=$logic")"
     [ -n "$TCC_DIGEST" ] && [ "$TCC_DIGEST" != nodigest ]
 }

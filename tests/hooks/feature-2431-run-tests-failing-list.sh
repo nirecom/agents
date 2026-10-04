@@ -22,7 +22,6 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 AGENTS_WIN="$(np "$AGENTS_DIR")"
 RUN_TESTS_HOOK="$AGENTS_DIR/hooks/workflow-run-tests.js"
 FAILING_LIST_JS="$AGENTS_WIN/hooks/workflow-run-tests/failing-list.js"
-RUN_ALL_LAUNCH="$AGENTS_DIR/bin/lib/run-all-launch.sh"
 
 # Fixture repo for run-all.sh provenance checks (TL2 cases).
 FIXTURE_REPO="$TMPD/repo"
@@ -189,21 +188,31 @@ while IFS= read -r _ln; do
     esac
 done <<< "$_fl_out"
 
-# Static cross-check: classifyTestKind must correspond to run-all-launch.sh's
-# 3 case branches.  A mismatch would silently mis-classify baseline runs.
-if [ -f "$RUN_ALL_LAUNCH" ]; then
-    if grep -q '\.Tests\.ps1' "$RUN_ALL_LAUNCH" 2>/dev/null; then
-        pass "static/run-all-launch-Tests-ps1-branch"
-    else
-        fail "static/run-all-launch-Tests-ps1-branch" "branch not found in $RUN_ALL_LAUNCH"
-    fi
-    if grep -q 'test_\*\.py' "$RUN_ALL_LAUNCH" 2>/dev/null; then
-        pass "static/run-all-launch-test-py-branch"
-    else
-        fail "static/run-all-launch-test-py-branch"
-    fi
+# Parity: classifyTestKind must equal bash tlr_match (supported id, else null) so
+# baseline runs classify exactly what run-all launches; every supported id is hit.
+TLR_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
+_ctk_names="tests/a.sh tests/b.Tests.ps1 tests/test_c.py tests/x.ps1 tests/tc.py tests/x.txt tests/.sh tests/a.js tests/a.test.js tests/test_a.sh"
+_ctk_got=$(run_with_timeout 30 node -e '
+var m=require(process.argv[1]);process.argv.slice(2).forEach(function(n){
+process.stdout.write(n+"="+String(m.classifyTestKind(n))+"\n");});' "$FAILING_LIST_JS" $_ctk_names 2>/dev/null || echo "ERR")
+if [ -f "$TLR_LIB" ] && (. "$TLR_LIB" && tlr_load) >/dev/null 2>&1; then
+    # shellcheck source=/dev/null
+    . "$TLR_LIB"
+    tlr_load
+    _ctk_want="" _ctk_hit=" "
+    for _n in $_ctk_names; do
+        if tlr_match "${_n##*/}" && [ "$TLR_STATUS" = "supported" ]; then
+            _ctk_want+="$_n=$TLR_ID"$'\n'; _ctk_hit+="$TLR_ID "
+        else _ctk_want+="$_n=null"$'\n'; fi
+    done
+    assert_eq "$_ctk_got" "${_ctk_want%$'\n'}" "parity/classifyTestKind-equals-tlr_match"
+    _ctk_missing=""
+    for _id in $(node "$AGENTS_DIR/bin/test-language-registry" --format shell | awk -F'\t' '$1=="entry" && $3=="supported" {print $2}'); do
+        case "$_ctk_hit" in *" $_id "*) ;; *) _ctk_missing+=" $_id" ;; esac
+    done
+    assert_eq "${_ctk_missing:-none}" "none" "parity/every-supported-id-exercised"
 else
-    fail "static/run-all-launch-exists" "not found: $RUN_ALL_LAUNCH"
+    fail "parity/registry-loader-available" "cannot load $TLR_LIB"
 fi
 
 case_end

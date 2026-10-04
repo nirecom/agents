@@ -1,10 +1,6 @@
 ---
 paths:
   - "tests/**"
-  - "**/*.sh"
-  - "**/*.Tests.ps1"
-  - "test_*.py"
-  - "**/*.spec.*"
 ---
 
 # Test Fixture Isolation

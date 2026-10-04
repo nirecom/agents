@@ -11,6 +11,8 @@ case_begin "run-all-lease" "tests/run-all.sh"
 FX_TMP_ROOT="$TMPDIR_BASE/fx"
 FX_CACHE_DIR="$FX_TMP_ROOT/run-all-cache"
 fx_drop_ambient_controls
+# fx_init would export this too: the copied runner reads the live tree's registry through it.
+export RUN_ALL_REGISTRY_LIB="$FX_REPO_ROOT/bin/lib/test-language-registry.sh"
 mkdir -p "$FX_CACHE_DIR"
 R_LANE_VARS="TEST_LANES TEST_LANES_BUDGET TEST_LANES_HELD TEST_LANES_TTL TEST_LANES_HEARTBEAT TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP"
 

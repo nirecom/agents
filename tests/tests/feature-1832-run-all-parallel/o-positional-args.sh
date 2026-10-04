@@ -3,20 +3,11 @@
 # Tests: tests/run-all.sh
 # Tags: tests, bin, parallel, positional-args, globbing, injection, TL2, scope:issue-specific
 
-# WHY: the positional branch (`for pattern in "$@"` / `for f in $pattern`) is the
-# surface every skill/hook uses to run a subset of the suite; this file pins it
-# before the parallelism rewrite touches it.
-
-# Adversarial reason: `for f in $pattern` is UNQUOTED, so args are word-split and
-# glob-expanded before `[ -f ]` — a path with a space breaks, and an
-# attacker-shaped filename could be re-interpreted. Both covered below.
-
-# FIXTURE SHAPE: runner copy lives at <root>/bin/run-all.sh, tests at
-# <root>/tests — one directory up so it can't glob-match and re-exec itself.
-
-# TL3 gap: real suite's 780+ files under load, and native-Windows shell argument
-# splitting. Closest-to-action mitigation: bin/check-verification-gate.sh at
-# WORKFLOW_USER_VERIFIED preflight.
+# WHY: pins the positional branch every skill/hook uses to run a suite subset,
+# including spaced paths and attacker-shaped names (word-split / glob hazards).
+# FIXTURE SHAPE: runner copy at <root>/bin/run-all.sh, tests at <root>/tests.
+# TL3 gap: the real suite under load and native-Windows argv splitting;
+# mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
@@ -44,6 +35,7 @@ export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
+export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 

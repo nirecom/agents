@@ -15,6 +15,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 AUDIT="${AUDIT_TESTS_BIN:-$REPO_ROOT/bin/audit-tests.sh}"
 AUDIT_COMMON="${AUDIT_TESTS_COMMON_BIN:-$REPO_ROOT/bin/audit-tests-common.sh}"
+# shellcheck source=../lib/harness.sh
+source "$REPO_ROOT/tests/lib/harness.sh"   # for the case markers; the reporters below replace its own
 
 PASS=0
 FAIL=0
@@ -214,6 +216,46 @@ else
   fi
   rm -rf "$R5"
 fi
+
+# TC6 (#2500): the registry table is broken or missing => --apply fails closed (exit 2,
+# one ERROR line) and deletes nothing. The fixture checkout carries its own audit-tests.sh,
+# because the loader reads the table of the checkout it lives in; a valid table is the control.
+# shellcheck source=test-language-registry/slash-header-fixture.sh
+. "$REPO_ROOT/tests/bin/test-language-registry/slash-header-fixture.sh"
+case_begin "registry-unreadable-fails-closed" "bin/audit-tests.sh"
+for tc6_mode in valid invalid-json missing; do
+  R6="$(mktemp -d)"
+  slash_fx_checkout "$R6" "$REPO_ROOT" bin/audit-tests.sh bin/run-with-timeout.sh
+  install_test_language_registry "$R6" "$REPO_ROOT"
+  slash_write "$R6/tests/bin/feature-1576-target.sh" '#!/usr/bin/env bash' '# Tests: bin/gone.sh' \
+    '# Tags: TL2, scope:issue-specific' 'echo hi'
+  git -C "$R6" add -A >/dev/null 2>&1
+  GIT_AUTHOR_DATE="2020-01-01T00:00:00" GIT_COMMITTER_DATE="2020-01-01T00:00:00" \
+    git -C "$R6" commit -q --no-verify -m init >/dev/null 2>&1
+  case "$tc6_mode" in
+    invalid-json) printf '%s\n' '{ "schema": 1, "entries": [' >"$R6/hooks/lib/test-language-registry.json" ;;
+    missing) rm -f "$R6/hooks/lib/test-language-registry.json" ;;
+  esac
+  run_apply "$R6" closed "$OLD_CLOSED_AT" "$R6/bin/audit-tests.sh" --apply
+  exists=no; [[ -f "$R6/tests/bin/feature-1576-target.sh" ]] && exists=yes
+  staged="$(git -C "$R6" diff --cached --name-only 2>/dev/null || true)"
+  if [[ "$tc6_mode" == valid ]]; then
+    if [[ "$exists" == no && "$OUT$ERR" == *"DELETED: tests/bin/feature-1576-target.sh"* ]]; then
+      pass "TC6 control: valid fixture table => --apply deletes the all-C candidate"
+    else
+      fail "TC6 control: valid fixture table => --apply deletes the all-C candidate" "rc=$RC exists=$exists out=<<$OUT>> err=<<$ERR>>"
+    fi
+  # stderr: the loader's own diagnostic, then audit-tests' ERROR line last.
+  elif [[ "$RC" -eq 2 && "${ERR##*$'\n'}" == "ERROR: test language registry not readable" \
+        && "$ERR" == *"cannot load the registry table"* && -z "$OUT" \
+        && "$exists" == yes && -z "$staged" ]]; then
+    pass "TC6 $tc6_mode table => exit 2, ERROR line last, no report, nothing deleted or staged"
+  else
+    fail "TC6 $tc6_mode table => exit 2, ERROR line last, no report, nothing deleted or staged" "rc=$RC exists=$exists staged=<<$staged>> out=<<$OUT>> err=<<$ERR>>"
+  fi
+  rm -rf "$R6"
+done
+case_end
 
 # --- Summary ---------------------------------------------------------------
 echo "1..$((PASS+FAIL))"

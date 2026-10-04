@@ -14,6 +14,8 @@ set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SELECT_SH="${AGENTS_DIR}/bin/select-tests.sh"
+# shellcheck source=../lib/test-language-registry-fixture.sh
+. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -170,17 +172,50 @@ test_C6_docs_only_empty() {
     fi
 }
 
-# C7 (#2392): tests/<category>/<stem>.Tests.ps1 and test_<stem>.py are stem-matched like .sh;
-# a sub-folder file stays out (maxdepth 1). A fake tree is needed because the selector reads
-# the tests/ dir next to its OWN location; only select-tests.sh is copied, so the TL3 append
-# (bin/get-config-var) is absent and cannot add noise.
-test_C7_nonsh_stem_match() {
-    local fake="$TMPDIR_BASE/c7-agents" repo="$TMPDIR_BASE/c7-repo" out miss=""
-    mkdir -p "$fake/bin" "$fake/tests/bin/sub" "$repo/bin"
+# make_fake_selector <dir> — the selector plus the test-language registry it reads (#2500); the
+# registry lib resolves its CLI and table from its own location. bin/get-config-var is not
+# copied, so the TL3 append is absent and cannot add noise.
+make_fake_selector() {
+    local fake="$1"
+    mkdir -p "$fake/bin/lib" "$fake/hooks/lib" "$fake/tests/bin"
     cp "$SELECT_SH" "$fake/bin/select-tests.sh"
-    : > "$fake/tests/bin/widget-probe.Tests.ps1"
-    : > "$fake/tests/bin/test_widget-probe.py"
-    : > "$fake/tests/bin/sub/test_widget-probe.py"
+    install_test_language_registry "$fake" "$AGENTS_DIR"
+}
+
+# has_suffix_line <text> <suffix> — rc 0 when some line of <text> ends with <suffix> (literal).
+has_suffix_line() {
+    local l
+    while IFS= read -r l; do
+        case "$l" in *"$2") return 0 ;; esac
+    done <<< "$1"
+    return 1
+}
+
+native_path() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi
+}
+
+# supported_names <table.json> <stem> — one test filename per supported-entry pattern.
+supported_names() {
+    node -e 'const t=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
+      for (const e of t.entries) if (e.status === "supported")
+        for (const p of e.patterns) console.log(p.split("*").join(process.argv[2]));' \
+        "$(native_path "$1")" "$2"
+}
+
+# C7 (#2392, #2500): every supported registry pattern is stem-matched — the expected names come
+# from the registry, not a literal extension list; a sub-folder file stays out (maxdepth 1).
+# A fake tree is needed because the selector reads the tests/ dir next to its OWN location.
+test_C7_nonsh_stem_match() {
+    local fake="$TMPDIR_BASE/c7-agents" repo="$TMPDIR_BASE/c7-repo" out miss="" names n
+    make_fake_selector "$fake"
+    mkdir -p "$fake/tests/bin/sub" "$repo/bin"
+    names="$(supported_names "$fake/hooks/lib/test-language-registry.json" widget-probe)"
+    if [ -z "$names" ]; then fail "C7_nonsh_stem_match: registry yielded no supported patterns"; return; fi
+    while IFS= read -r n; do
+        : > "$fake/tests/bin/$n"
+        : > "$fake/tests/bin/sub/$n"
+    done <<< "$names"
     git -C "$repo" init -q
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name  "Test"
@@ -192,11 +227,12 @@ test_C7_nonsh_stem_match() {
     git -C "$repo" add -A
     git -C "$repo" -c core.hooksPath= commit -q -m "head"
     out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
-    echo "$out" | grep -q "tests/bin/widget-probe\.Tests\.ps1$" || miss="$miss .Tests.ps1"
-    echo "$out" | grep -q "tests/bin/test_widget-probe\.py$" || miss="$miss test_*.py"
+    while IFS= read -r n; do
+        has_suffix_line "$out" "/tests/bin/$n" || miss="$miss $n"
+    done <<< "$names"
     echo "$out" | grep -q "tests/bin/sub/" && miss="$miss sub-folder-leaked"
     if [ -z "$miss" ]; then
-        pass "C7_nonsh_stem_match: tests/bin/<stem>.Tests.ps1 and test_<stem>.py selected, sub/ excluded"
+        pass "C7_nonsh_stem_match: tests/bin/<stem> for every supported pattern selected ($(echo $names)), sub/ excluded"
     else
         fail "C7_nonsh_stem_match: problems:$miss
 --- output ---
@@ -208,8 +244,8 @@ $out"
 # Changed path has stem "foo"; test tree has "bar.*" — those files must not appear.
 test_C8_nonsh_stem_no_match() {
     local fake="$TMPDIR_BASE/c8-agents" repo="$TMPDIR_BASE/c8-repo" out extra=""
-    mkdir -p "$fake/bin" "$fake/tests/bin" "$repo/bin"
-    cp "$SELECT_SH" "$fake/bin/select-tests.sh"
+    make_fake_selector "$fake"
+    mkdir -p "$repo/bin"
     : > "$fake/tests/bin/bar.Tests.ps1"
     : > "$fake/tests/bin/test_bar.py"
     git -C "$repo" init -q
@@ -239,8 +275,8 @@ $out"
 # match test_*.py — neither must appear in output even when the changed stem matches.
 test_C9_non_entrypoint_ignored() {
     local fake="$TMPDIR_BASE/c9-agents" repo="$TMPDIR_BASE/c9-repo" out extra=""
-    mkdir -p "$fake/bin" "$fake/tests/bin" "$repo/bin"
-    cp "$SELECT_SH" "$fake/bin/select-tests.sh"
+    make_fake_selector "$fake"
+    mkdir -p "$repo/bin"
     : > "$fake/tests/bin/helper.ps1"
     : > "$fake/tests/bin/helper.py"
     git -C "$repo" init -q
@@ -265,6 +301,79 @@ $out"
     fi
 }
 
+# C10 (#2500): the selector's test patterns come from the registry. The fake tree's pester entry
+# is re-patterned to *.Pester.ps1: <stem>.Pester.ps1 is then selected, <stem>.Tests.ps1 is not.
+test_C10_registry_patterns_drive_selection() {
+    local fake="$TMPDIR_BASE/c10-agents" repo="$TMPDIR_BASE/c10-repo" out problems="" tbl
+    make_fake_selector "$fake"
+    mkdir -p "$repo/bin"
+    tbl="$fake/hooks/lib/test-language-registry.json"
+    node -e 'const f=require("fs");const t=JSON.parse(f.readFileSync(process.argv[1],"utf8"));
+      const e=t.entries.find((x)=>x.patterns.includes("*.Tests.ps1"));
+      e.patterns=["*.Pester.ps1"];e.nameStrip.suffix=".Pester.ps1";
+      if(e.diagnostics&&e.diagnostics.nameLabel)e.diagnostics.nameLabel=".Pester.ps1";
+      f.writeFileSync(process.argv[1],JSON.stringify(t,null,2));' "$(native_path "$tbl")"
+    if ! node "$(native_path "$fake/bin/test-language-registry")" --format shell >/dev/null 2>&1; then
+        fail "C10_registry_patterns_drive_selection: re-patterned fixture registry does not validate"
+        return
+    fi
+    : > "$fake/tests/bin/widget-probe.Pester.ps1"
+    : > "$fake/tests/bin/widget-probe.Tests.ps1"
+    git -C "$repo" init -q
+    git -C "$repo" config user.email "test@example.com"
+    git -C "$repo" config user.name  "Test"
+    : > "$repo/README.md"
+    git -C "$repo" add -A
+    git -C "$repo" -c core.hooksPath= commit -q -m "base"
+    git -C "$repo" branch -f base HEAD
+    echo "change" > "$repo/bin/widget-probe.sh"
+    git -C "$repo" add -A
+    git -C "$repo" -c core.hooksPath= commit -q -m "head"
+    out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
+    has_suffix_line "$out" "/tests/bin/widget-probe.Pester.ps1" || problems="$problems registry-pattern-not-selected"
+    has_suffix_line "$out" "/tests/bin/widget-probe.Tests.ps1" && problems="$problems literal-pattern-still-selected"
+    if [ -z "$problems" ]; then
+        pass "C10_registry_patterns_drive_selection: a re-patterned registry entry changes what is selected"
+    else
+        fail "C10_registry_patterns_drive_selection:$problems
+--- output ---
+$out"
+    fi
+}
+
+# C11 (#2500): recognized-only test files (registry status recognized-only, e.g. *.js and
+# *.test.*) are never selected; the same-stem supported widget-probe.sh is, so the run is not vacuous.
+test_C11_recognized_only_not_selected() {
+    local fake="$TMPDIR_BASE/c11-agents" repo="$TMPDIR_BASE/c11-repo" out problems="" n
+    make_fake_selector "$fake"
+    mkdir -p "$repo/bin"
+    : > "$fake/tests/bin/widget-probe.sh"
+    : > "$fake/tests/bin/widget-probe.js"
+    : > "$fake/tests/bin/widget-probe.test.js"
+    git -C "$repo" init -q
+    git -C "$repo" config user.email "test@example.com"
+    git -C "$repo" config user.name  "Test"
+    : > "$repo/README.md"
+    git -C "$repo" add -A
+    git -C "$repo" -c core.hooksPath= commit -q -m "base"
+    git -C "$repo" branch -f base HEAD
+    echo "change" > "$repo/bin/widget-probe.sh"
+    git -C "$repo" add -A
+    git -C "$repo" -c core.hooksPath= commit -q -m "head"
+    out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
+    has_suffix_line "$out" "/tests/bin/widget-probe.sh" || problems="$problems supported-control-not-selected"
+    for n in widget-probe.js widget-probe.test.js; do
+        has_suffix_line "$out" "/tests/bin/$n" && problems="$problems $n-selected"
+    done
+    if [ -z "$problems" ]; then
+        pass "C11_recognized_only_not_selected: widget-probe.js / widget-probe.test.js not selected, widget-probe.sh is"
+    else
+        fail "C11_recognized_only_not_selected:$problems
+--- output ---
+$out"
+    fi
+}
+
 # shellcheck source=./feature-689-select-tests/auto-merge-base.sh
 . "$AGENTS_DIR/tests/bin/feature-689-select-tests/auto-merge-base.sh"
 # shellcheck source=./feature-689-select-tests/docs-only-table.sh
@@ -279,6 +388,8 @@ $out"
 . "$AGENTS_DIR/tests/bin/feature-689-select-tests/zero-commit-trust-and-faults.sh"
 # shellcheck source=./feature-689-select-tests/zero-commit-hostile-paths.sh
 . "$AGENTS_DIR/tests/bin/feature-689-select-tests/zero-commit-hostile-paths.sh"
+# shellcheck source=./feature-689-select-tests/registry-unreadable.sh
+. "$AGENTS_DIR/tests/bin/feature-689-select-tests/registry-unreadable.sh"
 
 
 test_C1_stem_match_skill_md
@@ -290,6 +401,9 @@ test_C6_docs_only_empty
 test_C7_nonsh_stem_match
 test_C8_nonsh_stem_no_match
 test_C9_non_entrypoint_ignored
+test_C10_registry_patterns_drive_selection
+test_C11_recognized_only_not_selected
+test_C12_registry_unreadable_aborts
 
 make_fake_agents
 test_S1_positional_form_unchanged

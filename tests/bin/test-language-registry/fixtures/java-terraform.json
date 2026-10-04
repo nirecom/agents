@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "headerMaxLines": 10,
+  "tableDrivenFallbackEntry": "bash",
+  "entries": [
+    {
+      "id": "bash",
+      "status": "supported",
+      "patterns": ["*.sh"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".sh" },
+      "siblingSuiteDir": true,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": { "file": "bin/lib/test-retire-predicate/case-parser.sh", "function": "trp_parse_case_markers" },
+      "tableDrivenDetector": { "file": "bin/lib/test-language-parts/bash.sh", "function": "has_table_driven_sh" },
+      "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "tests/lib/harness\\.sh" },
+      "diagnostics": { "nameLabel": ".sh", "flatRejectCode": "FLAT_TEST_SH_REJECTED" },
+      "note": "fixture copy of the bash entry"
+    },
+    {
+      "id": "java-junit",
+      "status": "supported",
+      "patterns": ["*Test.java"],
+      "selfIdentifying": true,
+      "nameStrip": { "prefix": "", "suffix": ".java" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "//" },
+      "launch": {
+        "unit": "suite",
+        "requires": "gradle",
+        "prepare": ["gradle", "testClasses"],
+        "command": ["gradle", "test"],
+        "timeoutSeconds": 600,
+        "suiteRootMarker": "build.gradle"
+      },
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": { "nameLabel": "*Test.java" },
+      "note": "paper check only: never launched by any test"
+    },
+    {
+      "id": "terraform-test",
+      "status": "supported",
+      "patterns": ["*.tftest.hcl"],
+      "selfIdentifying": true,
+      "nameStrip": { "prefix": "", "suffix": ".tftest.hcl" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "#" },
+      "launch": {
+        "unit": "suite",
+        "requires": "terraform",
+        "prepare": ["terraform", "init", "-input=false"],
+        "command": ["terraform", "test"],
+        "timeoutSeconds": 600,
+        "suiteRootMarker": ".terraform.lock.hcl"
+      },
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": { "nameLabel": "*.tftest.hcl" },
+      "note": "paper check only: never launched by any test"
+    }
+  ]
+}

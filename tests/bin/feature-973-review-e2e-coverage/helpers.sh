@@ -1,6 +1,8 @@
 # Fixture helpers for tests/bin/feature-973-review-e2e-coverage.sh.
 # Sourced by the dispatcher; reads AGENTS_ROOT / SCRIPT / TMPDIR_BASE /
 # EMPTY_HOOKS_DIR / EMPTY_EXCLUDES / fail / pass / run_with_timeout from scope.
+# shellcheck source=../../lib/test-language-registry-fixture.sh
+. "$AGENTS_ROOT/tests/lib/test-language-registry-fixture.sh"
 
 # Canonical Hook Audit table fixture. Mirrors the shape of rules/test/claude-e2e.md
 # closely enough for the parser.
@@ -91,6 +93,8 @@ make_repo() {
     mkdir -p "$repo/bin" "$repo/hooks" "$repo/tests" "$repo/rules/test"
     cp "$SCRIPT" "$repo/bin/review-e2e-coverage"
     chmod +x "$repo/bin/review-e2e-coverage" || true
+    # The test-language registry the script reads its test-file patterns from (#2500).
+    install_test_language_registry "$repo" "$AGENTS_ROOT"
     write_hook_audit_md "$repo/rules/test/claude-e2e.md"
     git -C "$repo" add .
     git -C "$repo" commit -q -m "initial"

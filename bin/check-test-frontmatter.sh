@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Validates the frontmatter of test entrypoints (*.sh / *.Tests.ps1 / test_*.py
-# under tests/): the `# Tests:` header (present,
+# Validates the frontmatter of test entrypoints (files under tests/ whose name matches a
+# supported test-language registry entry): the `# Tests:` header (present,
 # non-empty, each comma-separated token matching FRONTMATTER_TOKEN_VALID_RE) and
 # the `# Tags:` scope tag (scope:issue-specific or scope:common).
 # Usage:
 #   bin/check-test-frontmatter.sh --staged <file1> [<file2>...]
 #   bin/check-test-frontmatter.sh --all [<root>]
 # Exit:  0 = all OK, 1 = validation failure on one or more files, 2 = usage error
+#        or the registry is unreadable
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/test-frontmatter-constants.sh
-source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh"
+source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
 
 # _trim <var-name> — trims leading/trailing whitespace in place (no subprocess).
 _trim() {
@@ -22,38 +23,38 @@ _trim() {
   printf -v "$1" '%s' "$__v"
 }
 
-# _is_test_entrypoint <rel> — true for a test entrypoint path: flat tests/<file>.sh
-# or 2-level tests/<category>/<file>.sh (canonical category, no deeper nesting).
+# _is_supported_test <path> — the name matches a supported registry entry (sets TLR_ID).
+_is_supported_test() {
+  tlr_match "$1" && [[ "$TLR_STATUS" == supported ]]
+}
+
+# _is_test_entrypoint <rel> — true for a test entrypoint whose entry has a helperLibrary:
+# flat tests/<file> or 2-level tests/<category>/<file> (canonical category, no deeper
+# nesting). Sets HL_PATH / HL_RE from that entry.
 _is_test_entrypoint() {
   local rel="$1" base cat rest
   base="${rel#tests/}"
   [[ "$base" == "$rel" ]] && return 1
-  [[ "$base" != */* ]] && return 0
-  cat="${base%%/*}"; rest="${base#*/}"
-  [[ "$cat" =~ ^(hooks|bin|skills|agents|install|tests)$ && "$rest" == *.sh && "$rest" != */* ]]
+  if [[ "$base" == */* ]]; then
+    cat="${base%%/*}"; rest="${base#*/}"
+    [[ "$cat" =~ ^(hooks|bin|skills|agents|install|tests)$ && "$rest" != */* ]] || return 1
+  fi
+  _is_supported_test "$base" && _tlr_get "$TLR_ID" helperLibrary.path || return 1
+  HL_PATH="$_TLR_V"
+  _tlr_get "$TLR_ID" helperLibrary.sourceRegex || return 1
+  HL_RE="$_TLR_V"
 }
 
-# _is_flat_test_sh <rel> — true for a flat tests/<file>.sh (depth-1, no category
-# subdir), excluding the run-all.sh infra runner. New flat .sh tests are rejected
-# (#1834): a .sh test entrypoint must live under tests/<category>/.
-_is_flat_test_sh() {
+# _is_flat_test <rel> — true for a flat tests/<file> (depth-1, no category subdir) of a
+# supported entry, excluding the run-all.sh infra runner. New flat tests are rejected
+# (#1834, #2392): a test entrypoint must live under tests/<category>/.
+_is_flat_test() {
   local rel="$1" base
   base="${rel#tests/}"
   [[ "$base" == "$rel" ]] && return 1      # not under tests/
   [[ "$base" == */* ]] && return 1          # has a subdir → 2-level, not flat
-  [[ "$base" == *.sh ]] || return 1         # only .sh entrypoints
   [[ "$base" == "run-all.sh" ]] && return 1 # infra runner exempt
-  return 0
-}
-
-# _is_flat_test_nonsh <rel> — sibling of _is_flat_test_sh for a flat tests/*.Tests.ps1
-# or tests/test_*.py; new ones are rejected (#2392) under FLAT_TEST_REJECTED.
-_is_flat_test_nonsh() {
-  local rel="$1" base
-  base="${rel#tests/}"
-  [[ "$base" == "$rel" ]] && return 1
-  [[ "$base" == */* ]] && return 1
-  [[ "$base" == *.Tests.ps1 || "$base" == test_*.py ]]
+  _is_supported_test "$base"
 }
 
 # check_content <label> <tests-line> <tags-line>
@@ -69,7 +70,7 @@ check_content() {
     echo "MISSING_TESTS_HEADER: ${f}" >&2
     rc=1
   else
-    local csv="${tests_line#\# Tests:}"
+    local csv="${tests_line#*Tests:}"
     _trim csv
     if [[ -z "$csv" ]]; then
       echo "MISSING_TESTS_HEADER: ${f}" >&2
@@ -104,19 +105,22 @@ check_content() {
   return "$rc"
 }
 
-# extract_headers <content> — sets EXT_TESTS / EXT_TAGS from a content string.
+# extract_headers <content> <path> — sets EXT_TESTS / EXT_TAGS from a content
+# string; <path> picks the registry header.commentPrefix, matched as a fixed string.
 extract_headers() {
   local content="$1"
-  EXT_TESTS="$(printf '%s\n' "$content" | grep -m1 -E '^# Tests:' || true)"
-  EXT_TAGS="$(printf '%s\n' "$content" | grep -m1 -E '^# Tags:' || true)"
+  tlr_comment_prefix "$2" >/dev/null
+  EXT_TESTS="$(printf '%s\n' "$content" | awk -v p="$TLR_COMMENT_PREFIX Tests:" 'index($0, p) == 1 { print; exit }' || true)"
+  EXT_TAGS="$(printf '%s\n' "$content" | awk -v p="$TLR_COMMENT_PREFIX Tags:" 'index($0, p) == 1 { print; exit }' || true)"
 }
 
 # extract_headers_file <file> — sets EXT_TESTS / EXT_TAGS by reading a file
-# directly (fewer subprocesses than cat|grep — matters for the --all repo scan).
+# directly (fewer subprocesses than cat|awk — matters for the --all repo scan).
 extract_headers_file() {
   local file="$1"
-  EXT_TESTS="$(grep -m1 -E '^# Tests:' "$file" 2>/dev/null || true)"
-  EXT_TAGS="$(grep -m1 -E '^# Tags:' "$file" 2>/dev/null || true)"
+  tlr_comment_prefix "$file" >/dev/null
+  EXT_TESTS="$(awk -v p="$TLR_COMMENT_PREFIX Tests:" 'index($0, p) == 1 { print; exit }' "$file" 2>/dev/null || true)"
+  EXT_TAGS="$(awk -v p="$TLR_COMMENT_PREFIX Tags:" 'index($0, p) == 1 { print; exit }' "$file" 2>/dev/null || true)"
 }
 
 # staged_content <file> — prints the content to validate in --staged mode.
@@ -144,13 +148,12 @@ staged_content() {
   return 1
 }
 
-# check_harness_source <label> <content>
-# Returns 0 when the staged blob contains an actual source/. line that loads
-# tests/lib/harness.sh. Comments, echo, and # Tests: headers are NOT counted.
+# check_harness_source <label> <content> <regex>
+# Returns 0 when the staged blob has a line matching the entry's helperLibrary.sourceRegex
+# (an actual load of the helper library; comments and headers do not match).
 check_harness_source() {
   local f="$1" content="$2"
-  if printf '%s\n' "$content" \
-       | grep -Eq '^[[:space:]]*(source|\.)[[:space:]]+([^#]*/)?tests/lib/harness\.sh'; then
+  if printf '%s\n' "$content" | grep -Eq -- "$3"; then
     return 0
   fi
   echo "MISSING_HARNESS_SOURCE: ${f}" >&2
@@ -174,8 +177,7 @@ case "$mode" in
       # _archive/ files are excluded regardless of path form.
       case "$f" in
         */tests/_archive/*|tests/_archive/*) continue ;;
-        */tests/*.sh|tests/*.sh) ;;
-        */tests/*.Tests.ps1|tests/*.Tests.ps1|*/tests/test_*.py|tests/test_*.py|*/tests/*/test_*.py|tests/*/test_*.py) ;;
+        */tests/*|tests/*) _is_supported_test "$f" || continue ;;
         *) continue ;;
       esac
       # Compute the repo-relative path once; reused by both the flat-layout
@@ -185,31 +187,26 @@ case "$mode" in
       if [[ "$f" == /* && -n "$repo_root_hs" && "$f" == "$repo_root_hs/"* ]]; then
         rel="${f#"$repo_root_hs"/}"
       fi
-      # 2-level enforcement (#1834): a NEWLY-ADDED flat tests/<name>.sh is rejected —
-      # .sh test entrypoints must live under tests/<category>/. Existing flat files
-      # are grandfathered (swept by #2372); run-all.sh is the infra runner (exempted
-      # by _is_flat_test_sh). _is_flat_test_nonsh applies the same rule to
-      # .Tests.ps1 / test_*.py (#2392).
-      if _is_flat_test_sh "$rel" && ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
-        echo "FLAT_TEST_SH_REJECTED: ${f} (new .sh tests must live under tests/<category>/; categories: hooks bin skills agents install tests)" >&2
-        FAIL=1
-        continue
-      fi
-      if _is_flat_test_nonsh "$rel" && ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
-        echo "FLAT_TEST_REJECTED: ${f} (new .Tests.ps1 / test_*.py tests must live under tests/<category>/; categories: hooks bin skills agents install tests)" >&2
+      # 2-level enforcement (#1834, #2392): a NEWLY-ADDED flat test is rejected with its
+      # entry's flatRejectCode and nameLabel. Existing flat files are grandfathered
+      # (swept by #2372); run-all.sh is the infra runner (exempted by _is_flat_test).
+      if _is_flat_test "$rel" && ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
+        _tlr_get "$TLR_ID" diagnostics.flatRejectCode || true
+        code="$_TLR_V"
+        _tlr_get "$TLR_ID" diagnostics.nameLabel || true
+        echo "${code}: ${f} (new ${_TLR_V} tests must live under tests/<category>/; categories: hooks bin skills agents install tests)" >&2
         FAIL=1
         continue
       fi
       content="$(staged_content "$f")" || continue
-      extract_headers "$content"
+      extract_headers "$content" "$f"
       check_content "$f" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1
-      # Harness source check: new top-level tests/*.sh files must source harness.sh.
-      # Only applies when the repo ships tests/lib/harness.sh (gradual adoption).
-      # Only applies to newly-added files (not to edits of existing files).
+      # Helper-library check: a new entrypoint of an entry with a helperLibrary must load
+      # it, once the repo ships that library (gradual adoption). Edits are exempt.
       if _is_test_entrypoint "$rel" \
-         && [[ -n "$repo_root_hs" && -f "$repo_root_hs/tests/lib/harness.sh" ]]; then
+         && [[ -n "$repo_root_hs" && -f "$repo_root_hs/$HL_PATH" ]]; then
         if ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
-          check_harness_source "$f" "$content" || FAIL=1
+          check_harness_source "$f" "$content" "$HL_RE" || FAIL=1
         fi
       fi
     done
@@ -228,13 +225,13 @@ case "$mode" in
         exit 2
       }
     fi
-    shopt -s nullglob
     FAIL=0
-    # 2-level layout: scan tests/<category>/{*.sh,*.Tests.ps1,test_*.py} for the six
-    # canonical categories. Globs do not cross '/', so split dispatchers' <name>/
-    # sub-files are excluded; tests/_archive/ and tests/lib/ are not scanned.
+    # 2-level layout: the supported tests directly in tests/<category>/ for the six
+    # canonical categories. Split dispatchers' <name>/ sub-files are excluded;
+    # tests/_archive/ and tests/lib/ are not scanned.
     for cat in hooks bin skills agents install tests; do
-      for f in "$root/tests/$cat/"*.sh "$root/tests/$cat/"*.Tests.ps1 "$root/tests/$cat/"test_*.py; do
+      tlr_list_dir_into "$root/tests/$cat" supported || continue
+      for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do
         rel="${f#"$root"/}"
         extract_headers_file "$f"
         check_content "$rel" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1

@@ -6,19 +6,20 @@
 
 const path = require("path");
 const { normalizeCwd } = require("../lib/path-normalize");
+const { tryLoadRegistry, matchBasename } = require("../lib/test-language-registry");
 
 const RUN_ALL_FAIL_RE = /^FAIL: (.+) \(exit -?\d+\)$/;
 const LOG_TAIL_RE = /^log_tail:[ \t]*\|/;
 const WORKER_ITEM_RE = /^ {2}- '((?:[^']|'')*)'\s*$/;
 
-// Mirrors bin/lib/run-all-launch.sh run_all_exec's three dispatch branches.
+// The supported registry entry run_all_exec would launch the file with; null when none
+// (or the table is unreadable, which withholds the whole list).
 function classifyTestKind(p) {
   if (typeof p !== "string") return null;
-  const base = p.replace(/\\/g, "/").split("/").pop();
-  if (/^.+\.Tests\.ps1$/.test(base)) return "pester";
-  if (/^test_.+\.py$/.test(base)) return "pytest";
-  if (/^.+\.sh$/.test(base)) return "bash";
-  return null;
+  const reg = tryLoadRegistry();
+  if (!reg) return null;
+  const hit = matchBasename(p.replace(/\\/g, "/").split("/").pop(), reg);
+  return hit && hit.status === "supported" ? hit.id : null;
 }
 
 function slashed(p) {

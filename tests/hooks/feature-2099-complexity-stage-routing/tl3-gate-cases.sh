@@ -30,11 +30,11 @@ d2099g_lane_is_selected() {
     local found selector
     found=$(find "$AGENTS_DIR/tests" -maxdepth 1 -name "TL3-*.sh" | grep -c "TL3-complexity-stage-routing-live-judge.sh")
     assert_eq "GATE-3 the lane matches the TL3 tier's own selection expression" "1" "$found"
-    selector=$(grep -c 'TL3-\*\.sh' "$AGENTS_DIR/bin/select-tests.sh" 2>/dev/null || echo 0)
+    selector=$(grep -c 'TL3-' "$AGENTS_DIR/bin/select-tests.sh" 2>/dev/null || echo 0)
     if [ "$selector" -ge 1 ]; then
-        pass "GATE-4 bin/select-tests.sh still selects the tier by that expression"
+        pass "GATE-4 bin/select-tests.sh still selects the tier by the TL3- name prefix"
     else
-        fail "GATE-4 bin/select-tests.sh no longer selects by the 'TL3-*.sh' glob — the lane's wiring assumption is stale"
+        fail "GATE-4 bin/select-tests.sh no longer selects by the 'TL3-' name prefix — the lane's wiring assumption is stale"
     fi
 }
 

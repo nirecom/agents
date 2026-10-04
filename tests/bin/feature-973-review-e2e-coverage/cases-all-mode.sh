@@ -66,3 +66,8 @@ if echo "$OUTPUT" | grep -qE "SKIPPED.*(mutually exclusive|exclusive)"; then
 else
     fail "Case 17: expected SKIPPED mutually-exclusive message. Output: $OUTPUT"
 fi
+
+# shellcheck source=./cases-registry.sh
+. "$SCRIPT_DIR/cases-registry.sh"
+# shellcheck source=./cases-comment-prefix.sh
+. "$SCRIPT_DIR/cases-comment-prefix.sh"

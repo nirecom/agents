@@ -14,15 +14,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/test-frontmatter-constants.sh
-source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh"
+source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
 # shellcheck source=lib/test-frontmatter-fix.sh
-source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh"
+source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
 # shellcheck source=lib/test-retire-predicate.sh
-source "$SCRIPT_DIR/lib/test-retire-predicate.sh"
+source "$SCRIPT_DIR/lib/test-retire-predicate.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
 # shellcheck source=lib/sweep-write-mode.sh
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
 # shellcheck source=lib/test-dup-group.sh
-source "$SCRIPT_DIR/lib/test-dup-group.sh"
+source "$SCRIPT_DIR/lib/test-dup-group.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
 
 STALE_MONTHS=3
 OFFLINE=0
@@ -102,9 +102,18 @@ trp_compute_cutoff "$STALE_MONTHS" >/dev/null
 CUTOFF_DATE="$TRP_CUTOFF_DATE"
 TRP_GH_TIMEOUT="${GH_TIMEOUT:-30}"
 
+# Issue-specific dispatchers: top-level files of a supported test language per category.
+DISPATCHERS=()
+for _cat in hooks bin skills agents install tests; do
+  tlr_list_dir_into "tests/$_cat" supported || continue
+  for _f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do
+    [[ "${_f##*/}" == feature-[0-9]*-* ]] && DISPATCHERS+=("$_f")
+  done
+done
+
 # ── header-repair mode is a separate job, not part of the retire pass ────────
 if [[ "$FIX_HEADERS" -eq 1 ]]; then
-  for dispatcher in tests/hooks/feature-[0-9]*-*.sh tests/bin/feature-[0-9]*-*.sh tests/skills/feature-[0-9]*-*.sh tests/agents/feature-[0-9]*-*.sh tests/install/feature-[0-9]*-*.sh tests/tests/feature-[0-9]*-*.sh; do
+  for dispatcher in ${DISPATCHERS[@]+"${DISPATCHERS[@]}"}; do
     [[ -e "$dispatcher" ]] || continue
     _fix_headers_report "$dispatcher"
     if [[ "$APPLY" -eq 1 && "$FIX_APPLY" -eq 1 ]]; then
@@ -135,7 +144,7 @@ if [[ "$FORMAT" == "text" ]]; then
   echo ""
 fi
 
-for dispatcher in tests/hooks/feature-[0-9]*-*.sh tests/bin/feature-[0-9]*-*.sh tests/skills/feature-[0-9]*-*.sh tests/agents/feature-[0-9]*-*.sh tests/install/feature-[0-9]*-*.sh tests/tests/feature-[0-9]*-*.sh tests/hooks/feature-[0-9]*-*.Tests.ps1 tests/bin/feature-[0-9]*-*.Tests.ps1 tests/skills/feature-[0-9]*-*.Tests.ps1 tests/agents/feature-[0-9]*-*.Tests.ps1 tests/install/feature-[0-9]*-*.Tests.ps1 tests/tests/feature-[0-9]*-*.Tests.ps1; do
+for dispatcher in ${DISPATCHERS[@]+"${DISPATCHERS[@]}"}; do
   [[ -e "$dispatcher" ]] || continue
   base="$(basename "$dispatcher")"
   [[ "$base" =~ ^feature-([0-9]+)- ]] || continue

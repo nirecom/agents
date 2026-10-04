@@ -1,7 +1,7 @@
 ---
 paths:
   - "install/**"
-  - "**/*.Tests.ps1"
+  - "tests/install/**"
 ---
 
 # Installer Testing

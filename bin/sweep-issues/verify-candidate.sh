@@ -1,37 +1,13 @@
 #!/usr/bin/env bash
-#
-# bin/sweep-issues/verify-candidate.sh — SI-4 field verification for ONE
-# tier-2 survivor (a candidate that already passed the SI-3 human gate).
-#
-# Usage: verify-candidate.sh --issue N --tokens <csv> [--repo-root <dir>]
-#                            [--timeout-seconds N] [--dry-run] [--apply]
-#
-# EVIDENCE ONLY — this script never emits a verdict. Judging is the SI-5 human
-# gate's job. The issue body's own claims are deliberately NOT used as input:
-# the whole point of the sweep is that stale issues describe a world that no
-# longer exists.
-#
-# Three evidence channels, and no others:
-#   (a) EVIDENCE-GREP   — `git grep -n -F` for each token's basename and for the
-#                         identifier derived from it.
-#   (b) EVIDENCE-RUN    — for an existing tests/*.sh token only, a real run via
-#                         bin/run-with-timeout.sh. There is no un-wrapped path.
-#                         --dry-run suppresses the run and reports what it would
-#                         have executed, because executing a repository script is
-#                         an effect and --dry-run promises none.
-#   (c) EVIDENCE-ASSERT — PASS/FAIL counts PLUS every OBSERVED / `not ok` / SKIP
-#                         line verbatim, so a green PASS count cannot be read as
-#                         "all good" when assertions were skipped.
-#
-# SECURITY — two independent gates guard channel (b), because --tokens is
-# free-form CSV that ultimately derives from attacker-authored issue text:
-#   1. Grammar: every token is re-validated through
-#      `scan-stale-paths.js --check-tokens` (the repository SSOT for the token
-#      grammar and the no-`..` rule). Rejected tokens are reported and skipped.
-#   2. Containment: the token's directory is resolved with `pwd -P` (symlinks
-#      followed) and must land inside the resolved --repo-root before anything
-#      is executed. Both gates must pass; neither is inferred from the other.
-#
+# bin/sweep-issues/verify-candidate.sh — SI-4 field verification for ONE tier-2 survivor.
+# Usage: verify-candidate.sh --issue N --tokens <csv> [--repo-root <dir>] [--timeout-seconds N] [--dry-run] [--apply]
+# EVIDENCE ONLY, never a verdict (SI-5 judges); the issue body's claims are never input.
+# Channels: (a) EVIDENCE-GREP — git grep -F of each token's basename and derived identifier;
+# (b) EVIDENCE-RUN — a tests/ token the registry reads cases from, run only via
+# bin/run-with-timeout.sh (--dry-run reports instead of running); (c) EVIDENCE-ASSERT — PASS/FAIL
+# counts plus every OBSERVED / `not ok` / SKIP line verbatim.
+# SECURITY: --tokens derives from attacker-authored text, so (b) needs BOTH gates: the grammar
+# (scan-stale-paths.js --check-tokens) and containment (`pwd -P` inside --repo-root).
 # Always exits 0: a failing verification is evidence, not an error.
 
 set -euo pipefail
@@ -114,6 +90,13 @@ resolve_within_repo_root() {
   printf '%s' "$cand_real"
 }
 
+# Channel (b) runs only tests the registry reads cases from; unreadable → nothing runs.
+TLR_OK=0
+# shellcheck source=../lib/test-language-registry.sh
+if . "$BIN_DIR/lib/test-language-registry.sh" && tlr_load; then TLR_OK=1; else
+  printf 'EVIDENCE-NOTE: issue=%s test language registry not readable; no test is run\n' "$ISSUE"
+fi
+
 for token in "${safe_tokens[@]}"; do
   if [[ -e "$REPO_ROOT/$token" ]]; then
     printf 'EVIDENCE-PATH: issue=%s token=%s state=exists\n' "$ISSUE" "$token"
@@ -136,8 +119,10 @@ for token in "${safe_tokens[@]}"; do
     fi
   done
 
-  # (b) real run, tests/*.sh only, always through the timeout wrapper.
-  [[ "$token" == tests/*.sh ]] || continue
+  # (b) real run, always through the timeout wrapper: a tests/ file of a supported language
+  # with a case-marker reader (the run below stays `bash`; #2502 owns per-language launch).
+  [[ "$TLR_OK" == 1 && "$token" == tests/* ]] || continue
+  tlr_match "$token" && [[ "$TLR_STATUS" == supported ]] && _tlr_get "$TLR_ID" caseMarkerReader.file || continue
   [[ -f "$REPO_ROOT/$token" ]] || continue
 
   resolved=""

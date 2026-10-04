@@ -1,20 +1,17 @@
 #!/usr/bin/env bash
-# bin/check-table-driven.sh
-# T1-D enforcement: checks that test files for parser/regex/allowlist source files
-# have a table-driven pattern.
-#
-# Usage: check-table-driven.sh [--staged] [file ...]
-#   --staged: read staged files from git diff --cached --name-only
-#   file ...: explicit file list (test files or source files)
-#
-# Exit codes:
-#   0 = all compliant (or no parser targets found)
-#   1 = test file(s) missing table-driven structure
-#   2 = usage error
+# bin/check-table-driven.sh — T1-D: tests of parser/regex/allowlist sources must be table-driven.
+# Usage: check-table-driven.sh [--staged] [file ...]  (--staged reads git diff --cached)
+# Exit: 0 compliant (or no parser target), 1 a test lacks the table-driven structure,
+#       2 usage error, unreadable registry, or an unreachable detector part.
+# The detector is the matched test-language registry entry's tableDrivenDetector, else
+# the tableDrivenFallbackEntry's (docs/architecture/claude-code/test-language-registry.md).
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/test-language-registry.sh
+. "$REPO_ROOT/bin/lib/test-language-registry.sh"
+tlr_load || { echo "ERROR: test language registry not readable" >&2; exit 2; }
 
 # Parser/regex/allowlist target files (repo-relative paths or basenames)
 PARSER_TARGETS=(
@@ -81,23 +78,19 @@ is_parser_target() {
     return 1
 }
 
-# Check whether a test file (.sh) has the bash table-driven pattern
-has_table_driven_sh() {
-    local file="$1"
-    grep -qE "while[[:space:]]+IFS='\|'[[:space:]]+read[[:space:]]+-r" "$file" 2>/dev/null
-}
-
-# Check whether a test file (.js) has the JS table-driven pattern
-has_table_driven_js() {
-    local file="$1"
-    grep -qE "cases\.forEach\(|for \(const " "$file" 2>/dev/null
-}
-
-# Read the # Tests: header from a test file; print each source file listed
+# Read the Tests: header (the entry's comment prefix, within headerMaxLines) from a test
+# file; print each source file listed
 read_tests_header() {
-    local file="$1"
-    # Read first 10 lines, find # Tests: line
-    head -10 "$file" 2>/dev/null | grep -E '^#[[:space:]]*Tests:' | sed 's/^#[[:space:]]*Tests:[[:space:]]*//' | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+    local file="$1" prefix
+    prefix="$(tlr_comment_prefix "$file")"
+    head -n "$TLR_HEADER_MAX_LINES" "$file" 2>/dev/null \
+        | awk -v p="$prefix" 'index($0, p) == 1 { r = substr($0, length(p) + 1); if (r ~ /^[[:space:]]*Tests:/) { sub(/^[[:space:]]*Tests:[[:space:]]*/, "", r); print r } }' \
+        | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+# has_detector <path> — the file's entry has a tableDrivenDetector (sets TLR_ID).
+has_detector() {
+    tlr_match "$1" && _tlr_get "$TLR_ID" tableDrivenDetector.file
 }
 
 # Check a test file directly: read its # Tests: header and verify table-driven if needed
@@ -117,20 +110,15 @@ check_test_file() {
         return 0
     fi
 
-    local compliant=0
-    case "$test_file" in
-        *.sh)
-            has_table_driven_sh "$test_file" && compliant=1
-            ;;
-        *.js)
-            has_table_driven_js "$test_file" && compliant=1
-            ;;
-        *)
-            has_table_driven_sh "$test_file" && compliant=1
-            ;;
-    esac
+    local id="$TLR_TABLE_DRIVEN_FALLBACK" rc=0
+    if has_detector "$test_file"; then id="$TLR_ID"; fi
+    tlr_call_part "$id" tableDrivenDetector "$test_file" || rc=$?
+    if [[ $rc -eq 70 ]]; then
+        echo "ERROR: cannot check $test_file: the $id table-driven detector is unavailable" >&2
+        exit 2
+    fi
 
-    if [[ $compliant -eq 0 ]]; then
+    if [[ $rc -ne 0 ]]; then
         echo "MISSING table-driven in $test_file (required: # Tests: points to parser target)"
         VIOLATIONS=$((VIOLATIONS + 1))
     fi
@@ -150,7 +138,7 @@ find_and_check_tests() {
             found=1
             check_test_file "$test_file"
         fi
-    done < <(find "$REPO_ROOT/tests" -name "*.sh" -o -name "*.js" 2>/dev/null | grep -v '_archive' || true)
+    done < <(tlr_find "$REPO_ROOT/tests" table-driven | grep -v '_archive' || true)
 
     # If no test file found for a parser target, that's not a violation of this check
     # (audit-tests.sh handles missing test coverage separately)
@@ -174,16 +162,16 @@ for file in "${FILES[@]}"; do
         fi
     fi
 
-    # Determine if this is a test file or source file.
-    # A file is treated as a test file if:
-    #   1. It lives under tests/, OR
-    #   2. It has a # Tests: header (test file at arbitrary path, e.g. mktemp in tests)
+    # A file is treated as a test file if it lives under tests/ (repo-relative, or any
+    # tests/ dir when its entry has a detector), or it has a # Tests: header.
     has_tests_header=0
     if read_tests_header "$abs_file" | grep -q .; then
         has_tests_header=1
     fi
+    in_tests=0
+    if [[ "$abs_file" == */tests/* ]] && has_detector "$abs_file"; then in_tests=1; fi
 
-    if [[ "$rel_file" == tests/* ]] || [[ "$abs_file" == */tests/*.sh ]] || [[ "$abs_file" == */tests/*.js ]] || [[ $has_tests_header -eq 1 ]]; then
+    if [[ "$rel_file" == tests/* ]] || [[ $in_tests -eq 1 ]] || [[ $has_tests_header -eq 1 ]]; then
         check_test_file "$abs_file"
     else
         if is_parser_target "$rel_file"; then

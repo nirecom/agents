@@ -1,0 +1,16 @@
+# path<TAB>text the line contains<TAB>reason — read by scan.js; a row without a reason, or one
+# that no longer matches a flagged line, fails tests/tests/test-language-registry-residue.sh.
+# Rows cover only what scan.js's own rules cannot tell apart from test discovery.
+hooks/pre-commit	-- '*.sh')	executable-bit check over staged shell scripts; not test discovery
+hooks/workflow-run-tests/exec-model.js	"pytest", "jest", "vitest"	test-runner command words that classify ad-hoc Bash commands; not a launch per language
+hooks/workflow-gate/incomplete-steps-message.js	Ad-hoc test commands	guidance text naming example commands for the user; not dispatch
+hooks/workflow-run-tests/exec-model.js	PESTER_FILE_RE = /\.Tests\.ps1$/i	classifies a path typed in an ad-hoc command line, which the registry loader does not see; not repo test discovery
+bin/audit-tests.sh	# Scope: tests/<cat>/feature-<N>-*.sh	report Scope heading byte-pinned by the feature-2065 golden output
+bin/audit-tests-common.sh	# Scope: tests/<cat>/*.sh	report Scope heading byte-pinned by the feature-2065 golden output
+hooks/lib/precommit-tests-frontmatter.sh	e.g. tests/hooks/<name>.sh	user-facing block message whose wording must not change; example path, not discovery
+bin/review-e2e-coverage	hook_stem="${hook_basename%.js}"	strips a hook source filename to its stem; the file globs hooks, not tests
+bin/review-bare-python	git ls-files '*.sh'	lint target is every tracked shell script, not test discovery
+bin/review-bare-python	grep -E '\.sh$'	lint target is every changed shell script, not test discovery
+bin/mutation-probe.sh	bname_noext	maps a tests/lib helper to its node unit test tests/lib/test-<name>.js; a fixed helper convention, not a language registry entry
+bin/sweep-issues.sh	referenced tests/*.sh paths	--help prose describing tier 2; not discovery
+tests/lib/test-command-ir.js	for f in tests/*.sh; do head	test data: a sample command string for the parser under test

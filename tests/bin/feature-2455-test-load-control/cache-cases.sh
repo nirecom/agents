@@ -114,7 +114,7 @@ case_ran C2
 # ── C3 the parser libs are part of the key ──────────────────────────────────
 C3L="$TMPDIR_BASE/c3-logic"
 mkdir -p "$C3L"
-for _b in test-route-destination.sh test-dup-group.sh test-frontmatter-fix.sh test-frontmatter-constants.sh test-corpus-cache.sh; do
+for _b in test-route-destination.sh test-dup-group.sh test-frontmatter-fix.sh test-frontmatter-constants.sh test-corpus-cache.sh test-language-registry.sh; do
     cp "$AGENTS_ROOT/bin/lib/$_b" "$C3L/$_b" 2>/dev/null || true
 done
 C3C="$TMPDIR_BASE/c3-cache"
@@ -129,6 +129,44 @@ else
     fail "C3 lib change did not re-key the cache — digests before=$_d1 after=$_d2 (want 1 then 2)"
 fi
 case_ran C3
+
+# ── C3b the registry table and its reader are part of the key ──────────────
+C3G="$TMPDIR_BASE/c3-registry"
+mkdir -p "$C3G"
+for _b in test-language-registry.json test-language-registry.js; do
+    cp "$AGENTS_ROOT/hooks/lib/$_b" "$C3G/$_b" 2>/dev/null || true
+done
+C3GC="$TMPDIR_BASE/c3g-cache"
+run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3GC" TEST_LANES_BUDGET=4 "TCC_REGISTRY_DIR=$C3G" -- --root "$CC_R" "${QS[@]}"
+_g1="$(cc_ndigests "$C3GC")"; _go1="$OUT"
+printf ' ' >> "$C3G/test-language-registry.json"
+run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3GC" TEST_LANES_BUDGET=4 "TCC_REGISTRY_DIR=$C3G" -- --root "$CC_R" "${QS[@]}"
+_g2="$(cc_ndigests "$C3GC")"
+if [ -f "$C3G/test-language-registry.json" ] && [ "$_g1" = "1" ] && [ "$_g2" = "2" ]; then
+    pass "C3b a one-byte change to the TCC_REGISTRY_DIR table changes the digest"
+else
+    fail "C3b registry change did not re-key the cache — digests before=$_g1 after=$_g2 (want 1 then 2)"
+fi
+# Only the reader changes now (the table stays as the previous run left it).
+printf '\n' >> "$C3G/test-language-registry.js"
+run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3GC" TEST_LANES_BUDGET=4 "TCC_REGISTRY_DIR=$C3G" -- --root "$CC_R" "${QS[@]}"
+_g3="$(cc_ndigests "$C3GC")"
+if [ -f "$C3G/test-language-registry.js" ] && [ "$_g2" = "2" ] && [ "$_g3" = "3" ]; then
+    pass "C3b a one-byte change to the TCC_REGISTRY_DIR reader alone changes the digest"
+else
+    fail "C3b reader change did not re-key the cache — digests before=$_g2 after=$_g3 (want 2 then 3)"
+fi
+# The same reader again: a cache hit (no awk launched, no new digest) with the very same selection.
+_go3="$OUT"
+fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3GC" TEST_LANES_BUDGET=4 "TCC_REGISTRY_DIR=$C3G" -- --root "$CC_R" "${QS[@]}"
+assert_eq "C3b the repeat run is a hit (awk 0)" "0" "$(fc_count awk)"
+_g4="$(cc_ndigests "$C3GC")"
+if [ "$RC" -eq 0 ] && [ "$_g3" = "3" ] && [ "$_g4" = "3" ] && [ -n "$OUT" ] && [ "$OUT" = "$_go3" ] && [ "$OUT" = "$_go1" ]; then
+    pass "C3b a repeat run with the same reader hits the cache and selects byte-identically"
+else
+    fail "C3b repeat run with the same reader — rc=$RC digests=$_g3 then $_g4 (want 3 then 3) same-as-reader-run=$([ "$OUT" = "$_go3" ] && echo yes || echo no) same-as-first-run=$([ "$OUT" = "$_go1" ] && echo yes || echo no) empty=$([ -z "$OUT" ] && echo yes || echo no)"
+fi
+case_ran C3b
 
 # ── C4 an LF in a corpus path disables the write, never the answer ──────────
 C4R="$(cc_repo)"

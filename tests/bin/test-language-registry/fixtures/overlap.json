@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "headerMaxLines": 10,
+  "tableDrivenFallbackEntry": "bash",
+  "entries": [
+    {
+      "id": "bash",
+      "status": "supported",
+      "patterns": ["*.sh"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".sh" },
+      "siblingSuiteDir": true,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": { "file": "bin/lib/test-retire-predicate/case-parser.sh", "function": "trp_parse_case_markers" },
+      "tableDrivenDetector": { "file": "bin/lib/test-language-parts/bash.sh", "function": "has_table_driven_sh" },
+      "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "tests/lib/harness\\.sh" },
+      "diagnostics": { "nameLabel": ".sh", "flatRejectCode": "FLAT_TEST_SH_REJECTED" },
+      "note": "fixture copy of the bash entry"
+    },
+    {
+      "id": "rec-a",
+      "status": "recognized-only",
+      "patterns": ["*.ov"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".ov" },
+      "siblingSuiteDir": false,
+      "header": null,
+      "launch": null,
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": {},
+      "note": "earlier in the table than sup-b/sup-c but recognized-only: must lose to them"
+    },
+    {
+      "id": "sup-b",
+      "status": "supported",
+      "patterns": ["x*.ov"],
+      "selfIdentifying": true,
+      "nameStrip": { "prefix": "", "suffix": ".ov" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": { "nameLabel": "x*.ov" },
+      "note": "overlaps sup-c; earlier in table order"
+    },
+    {
+      "id": "sup-c",
+      "status": "supported",
+      "patterns": ["*.ov", "*-c-*"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".ov" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": { "nameLabel": "*.ov" },
+      "note": "overlaps rec-a and sup-b"
+    },
+    {
+      "id": "rec-d",
+      "status": "recognized-only",
+      "patterns": ["y*"],
+      "selfIdentifying": true,
+      "nameStrip": { "prefix": "y", "suffix": "" },
+      "siblingSuiteDir": false,
+      "header": null,
+      "launch": null,
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": {},
+      "note": "prefix-only pattern; overlaps sup-c for y*.ov"
+    }
+  ]
+}

@@ -54,8 +54,9 @@ WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model alias
    - `planned_cases`: list of planned test cases from WT-4 — each entry states the source set it protects
    - `test_destinations`: one entry per case group, keyed by that group's complete source set — `append <path>` or `new`.
      Each source set's `new` verdict generates its own independent new file — one new file per source set.
-     A `new` `.sh` test file's path MUST be `tests/<category>/<name>.sh` (category = first path segment of the source it protects; valid categories: hooks bin skills agents install tests) — never a flat `tests/<name>.sh`; the commit gate rejects a newly-added flat `.sh` test (#1834). New `.Tests.ps1` / `test_*.py` files follow the same `tests/<category>/` subdirectory rule (#2392); harness and case-marker equivalents are tracked in #2411.
-     A new `.sh` test file MUST source `tests/lib/harness.sh` — `bin/check-test-frontmatter.sh` rejects new files without it.
+     A `new` test file's path MUST be `tests/<category>/<file>` (category = first path segment of the source it protects; valid categories: hooks bin skills agents install tests) — never a flat `tests/<file>`; the commit gate rejects a newly-added flat test (#1834, #2392).
+     Name a `new` file by a `supported` entry's `patterns` in `hooks/lib/test-language-registry.json`.
+     A new test file MUST source its language's registry `helperLibrary` when one is named (bash: `tests/lib/harness.sh`) — `bin/check-test-frontmatter.sh` rejects new files without it.
      If `# Tests:` lists 2 or more paths, every case MUST be wrapped in `case_begin`/`case_end` markers (see `tests/lib/harness.sh`); `bin/check-case-markers.sh` flags multi-path files without markers as HIGH.
      On `append`: never rewrite the target's `# Tests:` line; `# Tags:` may only be added to.
      `append` is mandatory when the verdict is `append`; `skills/_shared/test-design/append-vs-new.md` is the SSOT for when a new file is warranted instead.

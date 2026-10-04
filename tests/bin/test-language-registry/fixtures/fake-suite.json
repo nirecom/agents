@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "headerMaxLines": 10,
+  "tableDrivenFallbackEntry": "bash",
+  "entries": [
+    {
+      "id": "bash",
+      "status": "supported",
+      "patterns": ["*.sh"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".sh" },
+      "siblingSuiteDir": true,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": { "file": "bin/lib/test-retire-predicate/case-parser.sh", "function": "trp_parse_case_markers" },
+      "tableDrivenDetector": { "file": "bin/lib/test-language-parts/bash.sh", "function": "has_table_driven_sh" },
+      "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "tests/lib/harness\\.sh" },
+      "diagnostics": { "nameLabel": ".sh", "flatRejectCode": "FLAT_TEST_SH_REJECTED" },
+      "note": "fixture copy of the bash entry"
+    },
+    {
+      "id": "fake-suite",
+      "status": "supported",
+      "patterns": ["*.fakesuite"],
+      "selfIdentifying": true,
+      "nameStrip": { "prefix": "", "suffix": ".fakesuite" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "#" },
+      "launch": {
+        "unit": "suite",
+        "requires": "bash",
+        "prepare": ["bash", "-c", "echo prep >> prep.log"],
+        "command": ["bash", "-c", "if [ -f prep.log ]; then echo run-after-prep >> run.log; else echo run-before-prep >> run.log; fi"],
+        "timeoutSeconds": 60,
+        "suiteRootMarker": "fake.root"
+      },
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": { "nameLabel": ".fakesuite" },
+      "note": "fixture-only suite-unit language: prepare and command append to logs in the suite root"
+    }
+  ]
+}

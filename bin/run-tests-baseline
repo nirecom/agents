@@ -81,14 +81,18 @@ run_all_dur_host_token >/dev/null
 # 3. Checkouts a crashed earlier run left behind.
 rtb_wt_sweep_stale "$ROOT"
 
-# Entry point minus its kind extension: the test's own data directory.
+# This checkout's test language registry; used only to normalize names (the base side's own
+# table launches the base side's tests).
+# shellcheck source=bin/lib/test-language-registry.sh
+{ . "$RTB_AGENTS_DIR/bin/lib/test-language-registry.sh" && tlr_load; } || die 2 "test language registry not readable"
+
+# Entry point minus its language's nameStrip: the test's own data directory.
 test_dir_of() {
-  local t="$1"
+  local t="$1" s
+  s="$(tlr_stem "${t##*/}")"
   case "$t" in
-    *.Tests.ps1) printf '%s' "${t%.Tests.ps1}" ;;
-    *.sh) printf '%s' "${t%.sh}" ;;
-    *.py) printf '%s' "${t%.py}" ;;
-    *) printf '%s' "$t" ;;
+    */*) printf '%s' "${t%/*}/$s" ;;
+    *) printf '%s' "$s" ;;
   esac
 }
 
@@ -144,6 +148,8 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
     fi
     if [ "$RTB_EXEC_TIMEDOUT" = "1" ]; then
       CLS[i]="undetermined"; DET[i]="timeout-at-base"
+    elif [ "$RTB_EXEC_UNSUPPORTED" = "1" ]; then
+      CLS[i]="undetermined"; DET[i]="unsupported-at-base"
     else
       case "$RTB_EXEC_RC" in
         77) CLS[i]="undetermined"; DET[i]="skip-at-base" ;;

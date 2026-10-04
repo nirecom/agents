@@ -23,6 +23,15 @@ CM_BROKEN_CFG="$TMPBASE/cm-cfg-broken"
 mkdir -p "$CM_BROKEN_CFG/bin"
 printf '#!/usr/bin/env bash\necho "stub infra failure" >&2\nexit 2\n' > "$CM_BROKEN_CFG/bin/check-case-markers.sh"
 
+# Both config dirs carry the test language registry (CLI, reader, table, loader):
+# the gate resolves the entrypoint predicate through it, so only the checker differs.
+# shellcheck source=../../lib/test-language-registry-fixture.sh
+. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
+for _cm_dir in "$CM_CFG" "$CM_BROKEN_CFG"; do
+    install_test_language_registry "$_cm_dir" "$AGENTS_DIR"
+done
+unset _cm_dir
+
 CM_BODIES="$TMPBASE/cm-bodies"
 mkdir -p "$CM_BODIES"
 
@@ -305,16 +314,17 @@ assert_eq "$next_line" "_precommit_check_tests_case_markers || exit 1"
 case_end
 
 case_begin "entrypoint-helper-classification" "hooks/lib/precommit-tests-frontmatter.sh"
-# rel|expected (0 = .sh test entrypoint, 1 = not)
+# rel|expected (0 = case-marker target: a placed entrypoint whose registry entry has a
+# caseMarkerReader; 1 = not). A bare ".sh" names no entry (the registry's * is 1+ chars).
 CM_ROWS=(
     "tests/hooks/x.sh|0" "tests/bin/x.sh|0" "tests/skills/x.sh|0"
     "tests/agents/x.sh|0" "tests/install/x.sh|0" "tests/tests/x.sh|0"
     "tests/flat.sh|0" "tests/run-all.sh|1" "tests/_archive/x.sh|1"
     "tests/lib/harness.sh|1" "tests/hooks/suite/x.sh|1" "tests/unknown/x.sh|1"
-    "tests/hooks/x.Tests.ps1|1" "tests/hooks/test_x.py|1"
+    "tests/hooks/x.Tests.ps1|1" "tests/hooks/test_x.py|1" "tests/hooks/.sh|1"
 )
 cm_fn_ok=0
-declare -F _precommit_is_sh_test_entrypoint >/dev/null 2>&1 && cm_fn_ok=1
+declare -F _precommit_is_case_marker_target >/dev/null 2>&1 && cm_fn_ok=1
 assert_eq "$cm_fn_ok" "1"
 for _row in "${CM_ROWS[@]}"; do
     _rel="${_row%|*}"
@@ -322,7 +332,7 @@ for _row in "${CM_ROWS[@]}"; do
     _got=127
     if [ "$cm_fn_ok" -eq 1 ]; then
         _got=0
-        _precommit_is_sh_test_entrypoint "$_rel" || _got=$?
+        _precommit_is_case_marker_target "$_rel" || _got=$?
         [ "$_got" -ne 0 ] && _got=1
     fi
     [ "$_got" = "$_want" ] && pass "entrypoint-helper: $_rel -> $_want" \

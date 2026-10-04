@@ -8,7 +8,7 @@ model: sonnet
 Sweeps the open-issue backlog.
 
 - tier 1 — meta parents whose sub-issues are all closed. Closed on every run.
-- tier 2 — issues whose referenced `tests/*.sh` paths no longer exist. Listed on every run; closed only under `--deep`, one at a time with the user's approval.
+- tier 2 — issues whose referenced repository paths all no longer exist. Listed on every run; closed only under `--deep`, one at a time with the user's approval.
 
 The user types at most `--deep` and `--dry-run`. Passes 2 and 3 are this skill's own calls (SI-5, SI-7) — the user never supplies a TSV path.
 
