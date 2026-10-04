@@ -124,7 +124,7 @@ function stateSegments(stateDir, sid) {
     lastAt = Math.max(lastAt, at);
     if (e.kind === "reset") {
       // A reset also marks every earlier step complete in the same batch; that batch is bookkeeping.
-      segs.push({ label: (open || "?") + " → reset(from " + e.from_step + ")", s: start, e: Math.max(at, start) });
+      segs.push({ label: (open || "?") + " -> reset(from " + e.from_step + ")", s: start, e: Math.max(at, start) });
       start = Math.max(at, start);
       resetAt = e.at;
       open = e.from_step;
@@ -136,7 +136,7 @@ function stateSegments(stateDir, sid) {
     segs.push({ label: e.step + (e.status === "skipped" ? " (skip)" : ""), s: start, e: Math.max(at, start) });
     start = Math.max(at, start);
   }
-  if (lastAt > start) segs.push({ label: "(進行中: " + (open || "?") + ")", s: start, e: lastAt });
+  if (lastAt > start) segs.push({ label: "(in progress: " + (open || "?") + ")", s: start, e: lastAt });
   return collapseInstant(segs);
 }
 
@@ -145,7 +145,7 @@ function transcriptSegments(t) {
   // Rewound / resumed branches append older timestamps later in the file.
   const skills = t.skills.slice().sort((a, b) => a.at - b.at);
   const segs = [];
-  if (skills[0].at > t.first) segs.push({ label: "(最初の skill まで)", s: t.first, e: skills[0].at });
+  if (skills[0].at > t.first) segs.push({ label: "(before first skill)", s: t.first, e: skills[0].at });
   for (let i = 0; i < skills.length; i++) {
     const e = i + 1 < skills.length ? skills[i + 1].at : t.last;
     segs.push({ label: skills[i].label, s: skills[i].at, e });

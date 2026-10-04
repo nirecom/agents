@@ -67,7 +67,7 @@ case_end
 
 case_begin "transcript-only-session-skill-labels" "bin/step-durations/sources.js"
 out="$(node "$SD" --session bbbbbbbb --format csv)"
-assert_eq "$(printf '%s\n' "$out" | tr -d '\r' | awk -F, '$1=="segment"{print $4":"$5}' | paste -sd' ' -)" "transcript:(最初の skill まで) transcript:outline transcript:write_code"
+assert_eq "$(printf '%s\n' "$out" | tr -d '\r' | awk -F, '$1=="segment"{print $4":"$5}' | paste -sd' ' -)" "transcript:(before first skill) transcript:outline transcript:write_code"
 case_end
 
 case_begin "transcript-user-wait-excluded" "bin/step-durations/sources.js"

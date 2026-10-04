@@ -14,11 +14,11 @@ const mdCell = (s) => String(s || "-").replace(/\|/g, "/").replace(/[\r\n]+/g, "
 
 function renderMarkdown(rows) {
   const lines = [
-    "# Workflow step 所要時間", "",
-    "時刻はローカル時刻。（ ）内はユーザー回答待ちで、実働から除外。出典 transcript は workflow skill の起動時刻を区間の境目とした推測。", "",
-    "## まとめ", "",
-    "総実行時間 = session の最初から最後まで（transcript の最初〜最後の記録）。区間計 = workflow 区間の合計（その内訳が待ち / 実働）。", "",
-    "| 開始 | session | title | 出典 | 総実行時間 h | 区間計 h | (待ち h) | 実働 h |",
+    "# Workflow step durations", "",
+    "Times are local. Values in ( ) are user-wait time, excluded from net. Source transcript means segments are estimated from workflow skill launch times.", "",
+    "## Summary", "",
+    "Wall = first to last transcript record of the session. Span = sum of workflow segments (split into wait / net).", "",
+    "| Start | session | title | source | wall h | span h | (wait h) | net h |",
     "|---|---|---|---|---|---|---|---|",
   ];
   for (const r of rows) {
@@ -26,8 +26,8 @@ function renderMarkdown(rows) {
   }
   for (const r of rows) {
     lines.push("", `## ${r.sid.slice(0, 8)} ${r.title ? mdCell(r.title) : ""}`.trimEnd(), "");
-    lines.push(`出典: ${r.source} / 総実行時間 ${fmtH(r.wall)} h / 区間計 ${fmtH(r.gross)} h (待ち ${fmtH(r.wait)} h) → 実働 ${fmtH(r.gross - r.wait)} h`, "");
-    lines.push("| 区間 | 開始 | 分 | (待ち分) | 実働分 |", "|---|---|---|---|---|");
+    lines.push(`source: ${r.source} / wall ${fmtH(r.wall)} h / span ${fmtH(r.gross)} h (wait ${fmtH(r.wait)} h) -> net ${fmtH(r.gross - r.wait)} h`, "");
+    lines.push("| Segment | Start | min | (wait min) | net min |", "|---|---|---|---|---|");
     for (const g of r.segs) {
       lines.push(`| ${mdCell(g.label)} | ${fmtTs(g.s)} | ${fmtMin(g.e - g.s)} | (${fmtMin(g.w)}) | ${fmtMin(g.e - g.s - g.w)} |`);
     }
