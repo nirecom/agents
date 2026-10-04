@@ -4,25 +4,21 @@
 # Tags: tests, bin, parallel, frontmatter, convention, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY (CPR-WPH): `# Serial: <reason>` is the SSOT for "must not share the host."
-# WRITER side: static rule, header in the first 10 lines, after `# Tags:`, non-empty
-# reason. READER side: the runner scans a more lenient 20 lines — a missed
-# declaration is the only fatal failure mode.
-
-# Cross-check: the runner's `--print-plan` serial set must equal an independent awk
-# scan (a silently dropped declaration would pass either check alone). Boundary
-# positions (1/9/10/11/20/21) and malformed shapes are covered by the sibling
-# h2-serial-header-boundaries.sh.
-
-# RED-FIRST: `--print-plan`, the runner-side scan, the doc paragraph, and the S2-4
-# inventory don't exist yet — those rows are the intended failures.
-
 # TL3 gap (what this TL2 test does NOT catch): whether a test lacking `# Serial:`
 # is actually safe in parallel — only S2-4's empirical layers can answer that.
 # Mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
+# WHY (CPR-WPH): `# Serial: <reason>` is the SSOT for "must not share the host."
+# WRITER side: static rule, header in the first 10 lines, after `# Tags:`, non-empty
+# reason. READER side: the runner scans a more lenient 20 lines — a missed
+# declaration is the only fatal failure mode.
+# Cross-check: the runner's `--print-plan` serial set must equal an independent awk
+# scan (a silently dropped declaration would pass either check alone). Boundary
+# positions (1/9/10/11/20/21) and malformed shapes live in h2-serial-header-boundaries.sh.
+# RED-FIRST: `--print-plan`, the runner-side scan, the doc paragraph, and the S2-4
+# inventory don't exist yet — those rows are the intended failures.
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 RUNNER="$AGENTS_DIR/tests/run-all.sh"
 REAL_TESTS="$AGENTS_DIR/tests"
@@ -40,18 +36,18 @@ assert_eq() {
 
 # --- ambient sanitization (M-ambient), self-contained ------------------------
 
-# WHY: RUN_ALL_JOBS/DEADLINE/PROGRESS/REAP and FEATURE_644_PHASE change runner
-# behavior; inherited values would rewrite verdicts. senv() sits OUTERMOST since
+# WHY: TEST_MAX_JOBS_PER_RUN, RUN_ALL_DEADLINE/PROGRESS/REAP and FEATURE_644_PHASE change
+# runner behavior; inherited values would rewrite verdicts. senv() sits OUTERMOST since
 # bin/run-with-timeout.sh execs its argv directly (a shell function inside would die 127).
 
 # CAVEAT: GNU `env` stops parsing options at the first NAME=VALUE, so `-u NAME`
 # flags must precede pass-through assignments — senv owns that order.
 senv() {
-    env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
-        -u FEATURE_644_PHASE "$@"
+    env -u TEST_MAX_JOBS_PER_RUN -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
+        -u FEATURE_644_PHASE -u TEST_MAX_JOBS_PER_HOST RUN_ALL_CONFIG_VAR_CMD=/nonexistent/get-config-var "$@"
 }
-AMBIENT_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
-unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
+unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 run_with_timeout() { local s="$1"; shift; senv bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
 
 TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/ra-serial-$$")"
@@ -107,20 +103,11 @@ case_static_convention() {
 # ===========================================================================
 # 1b. The initial static audit: every hazardous test must CARRY the header.
 # ===========================================================================
-
-# WHY (CPR-WPH): case 1 only checks headers that already exist; this case checks
-# that every hazardous test HAS one, using criteria pinned here (not borrowed)
-# so the audit can't be silently widened or narrowed elsewhere.
-
-# Classification: *declaration + static detection* — the header is the SSOT, the
-# detector decides who owes one. Comment lines are skipped (documentation, not code).
-
-#   H1 fixed shared temp path — first token a write verb, arg a literal /tmp/<name>
-#      with no $$/mktemp/$RANDOM (two tests would collide on one /tmp namespace).
-
-#   H2 real-tree write — write verb/redirect targeting $AGENTS_DIR. REPO_ROOT is
-#      excluded: some tests bind it to an already-isolated fixture dir.
-
+# WHY (CPR-WPH): case 1 only checks existing headers; this checks every hazardous test
+# HAS one, with criteria pinned here (header = SSOT; comment lines are skipped).
+#   H1 fixed shared temp path — write verb on a literal /tmp/<name>, no $$/mktemp/$RANDOM.
+#   H2 real-tree write — write verb/redirect targeting $AGENTS_DIR (REPO_ROOT excluded:
+#      some tests bind it to an already-isolated fixture dir).
 #   H3 global state mutation — an executed `git config --global`/`--system`
 #      (an exported GIT_CONFIG_GLOBAL is a pin, not a mutation, and never matches).
 HAZARD_PROG='
@@ -263,12 +250,12 @@ case_ambient_sanitized() {
     } > "$probe"
     want=""
     for v in $AMBIENT_VARS; do want="$want$v=<unset> "; done
-    got="$(RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
+    got="$(TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
         RUN_ALL_REAP=hostile FEATURE_644_PHASE=9 senv bash "$probe" 2>/dev/null)"
     assert_eq "h-serial/ambient/senv-strips-every-hostile-value" "$want" "$got"
     # run_with_timeout is the funnel every child goes through; prove the funnel
     # carries the sanitization rather than only the bare helper.
-    got="$(RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
+    got="$(TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
         RUN_ALL_REAP=hostile FEATURE_644_PHASE=9 run_with_timeout 30 bash "$probe" 2>/dev/null)"
     assert_eq "h-serial/ambient/timeout-funnel-is-sanitized-too" "$want" "$got"
 }

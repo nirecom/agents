@@ -2,24 +2,13 @@
 # tests/tests/feature-689-run-all-all-flag.sh
 # Tests: tests/run-all.sh
 # Tags: bin, tests, scope:issue-specific
-#
 # Issue #689 — tests/run-all.sh dispatch: `--all`, the default sweep (which
 # excludes tests/_archive/), and bare positional file arguments.
 # Issue #1836 — every case runs against a throwaway fixture suite under
 # mktemp; no case may ever sweep the repository's own tests/ tree.
-
-# RECURSION CONTRACT (#1836): no case in this file may launch the repository's
-# own tests/run-all.sh with TESTS_DIR unset or empty AND no positional
-# argument. That re-runs the whole suite from inside the suite — and the
-# runner's own file is matched by its "$TESTS_DIR"/*.sh glob, so the recursion
-# never terminates. Every launch line below pins a non-empty TESTS_DIR= or
-# names a positional file; C6(a) enforces that mechanically.
-
-# TL3 gap (what this test does NOT catch):
-# - runner behaviour under a non-bash /bin/sh or a shell without `local`
-# - real-CI glob/locale differences in "$TESTS_DIR"/*.sh expansion
-# Closest-to-action mitigation: the runner is bash-pinned by its shebang, so
-# the residual gap is limited to CI shell-image drift.
+# TL3 gap (what this test does NOT catch): runner behaviour under a non-bash /bin/sh,
+# and real-CI glob/locale differences in "$TESTS_DIR"/*.sh expansion.
+# Mitigation: the runner is bash-pinned by its shebang (residual: CI shell-image drift).
 
 set -u
 
@@ -27,6 +16,11 @@ SELF="${BASH_SOURCE[0]}"
 AGENTS_DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
 RUN_ALL="$AGENTS_DIR/tests/run-all.sh"
 
+# RECURSION CONTRACT (#1836): no case in this file may launch the repository's
+# own tests/run-all.sh with TESTS_DIR unset or empty AND no positional
+# argument — the runner's own file matches its "$TESTS_DIR"/*.sh glob, so the
+# recursion never terminates. Every launch pins a non-empty TESTS_DIR= or names
+# a positional file; C6(a) enforces that mechanically.
 # Belt-and-braces for the recursion contract: if the suite ever re-enters this
 # file, stop instead of forking another level.
 if [ -n "${FEATURE_689_REENTRY_GUARD:-}" ]; then
@@ -57,11 +51,11 @@ skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 # sanitizing. GNU `env` stops parsing options at the first NAME=VALUE, so every
 # `-u` flag must come before any pass-through assignment.
 senv() {
-    env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
-        -u FEATURE_644_PHASE "$@"
+    env -u TEST_MAX_JOBS_PER_RUN -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
+        -u FEATURE_644_PHASE -u TEST_MAX_JOBS_PER_HOST RUN_ALL_CONFIG_VAR_CMD=/nonexistent/get-config-var "$@"
 }
-AMBIENT_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
-unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
+unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 
 # Canonical portable timeout wrapper (2-tier: timeout -> perl alarm), and the
 # single funnel every child launch goes through — so sanitizing it here covers
@@ -367,17 +361,17 @@ test_C7_ambient_sanitized() {
         printf 'for v in %s; do printf "%%s=%%s " "$v" "${!v-<unset>}"; done\n' "$AMBIENT_VARS"
     } > "$probe"
     want=""; for v in $AMBIENT_VARS; do want="$want$v=<unset> "; done
-    got="$(RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
+    got="$(TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
         RUN_ALL_REAP=hostile FEATURE_644_PHASE=9 senv bash "$probe" 2>/dev/null)"
     [ "$got" = "$want" ] || ok=0
     # Behavioural half: the fixture sweep's verdict must not move under a
     # hostile ambient environment. Pinned to the literal EXECUTED=4 / rc=1, so a
     # launch that silently ran nothing cannot satisfy it either.
-    export RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile
+    export TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile
     export RUN_ALL_REAP=hostile FEATURE_644_PHASE=9
     hostile_out="$(run_with_timeout 60 bash "$FIXTURE_RUNNER" --all 2>&1)"
     local hostile_rc=$?
-    unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+    unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
     has_line 'EXECUTED=4$' "$hostile_out" || ok=0
     has_line 'MARKER_T1' "$hostile_out" || ok=0
     [ "$hostile_rc" = "1" ] || ok=0

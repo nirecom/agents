@@ -128,19 +128,32 @@ When in doubt, the call goes to the serial side.
 
 | Surface | Accepted forms | Purpose |
 |---|---|---|
-| `-j` | `-j <N>`, `-j auto`, `--jobs <N>`, `--jobs=<N>` | Parallelism. `-j 1` is the retreat to the previous sequential behaviour. |
-| `RUN_ALL_JOBS` | Same grammar as `-j` | Same setting from the environment. |
+| `-j` | `-j <N>`, `-j auto`, `--jobs <N>`, `--jobs=<N>` | Max jobs per run. `-j 1` is the retreat to the previous sequential behaviour; `-j auto` defers to the next layer. |
+| `TEST_MAX_JOBS_PER_RUN` | Integer 1-1024 or `auto`, in the environment or `.env` | Same limit without a flag. |
+| `TEST_MAX_JOBS_PER_HOST` | Integer 1-1024, in the environment or `.env` | Limit shared by every run on the host (`test-host-lanes.md`). |
 | `--deadline` | `--deadline <secs>`, `--deadline=<secs>`, `RUN_ALL_DEADLINE` | Whole-run wall-clock ceiling. |
 | `RUN_ALL_PROGRESS` | `off` | Suppresses the stderr progress lines. |
 | `RUN_ALL_REAP` | `auto` (default), `waitn`, `fifo` | Selects the slot-reaping mechanism. |
 | `--print-plan` | — | Prints the plan and exits 0 without running anything. |
 
-The host-wide lane lease that can narrow the resolved `-j`, and its `TEST_LANES*` knobs, are in `test-host-lanes.md`.
+**Two limits bound the width.** The **max jobs per run** is what one invocation asks
+for: `-j` > environment > `.env` > default 4. `-j auto` or the value `auto` passes to
+the next layer, and an empty environment value counts as unset. The **max jobs per
+host** caps all runs on the machine together through the host lane lease:
+environment > `.env` > measured record (Section 5) > default 4. A run gets
+`min(max jobs per run, max jobs per host − 1)`; that rule, the lease, and the
+`TEST_LANES*` knobs are in `test-host-lanes.md`.
 
-Precedence is **CLI > environment > default**. There is deliberately no `.env` or
-`bin/get-config-var` layer for these (CPR-SSOT): one more place a parallelism value
-could come from is one more place to look when a run behaves unexpectedly. Invalid
-values produce one stderr line and **exit 2**, and never a contract line.
+**Why both limits have a persistent `.env` layer.** The right width is a property of
+the machine — its disk, its scanner, how many sessions it hosts — so it belongs in a
+per-host setting rather than retyped on every call. The layer is read through
+`bin/get-config-var`, the resolver every other knob uses (CPR-SSOT), never by a
+private parser. The order stays fixed and visible: a run without `-j <N>` prints
+`max jobs per run: N (.env|default)`, and the lanes line names the host limit's
+source, so "where did this width come from" is answered on stderr. An invalid
+per-run value from any layer produces one stderr line and **exit 2**, never a
+contract line; an invalid host value only skips its layer with one fixed notice
+that never echoes the value.
 
 **Why the runner defaults to `-j auto` rather than requiring a flag.** The official
 path into the suite is `/run-tests` → worker dispatch, and
@@ -148,9 +161,11 @@ path into the suite is `/run-tests` → worker dispatch, and
 `CHILD_ENV_ALLOWLIST` that contains no `RUN_ALL_*` entries. Any design where the
 speedup depended on passing a new env var or a new payload field would therefore be
 unreachable from the path that actually matters. Resolution is instead entirely
-internal to `tests/run-all.sh`, and the only external input it needs — the
-calibration cache — lives under `$HOME/.claude/run-all`, reachable because `HOME`
-and `USERPROFILE` *are* on the allowlist.
+internal to `tests/run-all.sh`, and its only external inputs — the repository's
+`.env` and the measured record under `$HOME/.claude/run-all` — are reachable from
+the worker: `bin/get-config-var` locates `.env` from the repository itself, and `HOME` and
+`USERPROFILE` *are* on the allowlist. A per-host `.env` value therefore takes effect
+on the official path without a flag or a payload field.
 
 **`--deadline` and why it exists.** `spawnSync` in the dispatcher passes a timeout
 but no `detached` and no `killSignal`. On win32, libuv maps the default SIGTERM to
@@ -182,7 +197,10 @@ with real-time scanning enabled the knee of the throughput curve sits nowhere ne
 variable.
 
 Instead the knee is **measured once, deliberately, by a separate tool** —
-`bin/calibrate-test-parallelism.sh` — and the result is cached.
+`bin/calibrate-test-parallelism.sh` — and recorded as the `measured` layer of the
+max jobs per host (Section 4). Only the host limit reads the record; the per-run
+width never does, so a stale or missing record can change how many lanes the host
+offers, never what a run asks for.
 
 The hard rule is that a **normal run never falls through into measurement**
 (invariant 4). The runner holds the calibrator's name only as a hint string in a
@@ -190,37 +208,95 @@ message; there is no code path from `run-all.sh` to the calibrator. A test run t
 silently turned into a two-hour benchmark would be a far worse failure than a
 slightly suboptimal `-j`.
 
-The calibrator samples a deterministic, evenly-spaced subset of non-serial tests,
-runs a warmup pass whose numbers are discarded (so filesystem and scanner warm-up
-lands outside the measured region), repeats each `-j` value three times with
-alternating ascending/descending order to cancel ordering bias, and aggregates by
-**median** wall time rather than mean. The chosen `-j` is the smallest one reaching
-95% of peak throughput. A stability gate refuses to write the cache — stderr reason,
-exit 1 — when the spread across repeats exceeds 1.5×, or when the FAIL count moved
-between trials. An unstable measurement is worse than no measurement, because it
-would be trusted.
+**The sample.** The calibrator measures only with `RUN_CALIBRATION=1` (exit 77
+otherwise) and sets `TEST_LANES=off` so its own runs are not narrowed. The population
+is the parallel-lane rows of `--print-plan -j 1 --all`. Tests are picked by their
+recorded duration (Section 6), not by position: `n = 3 × the widest width` tests
+whose duration lies inside `--band` (default 5:10 seconds), taken by an even stride
+over the candidates, plus a reserve of `ceil(n/4)` for replacements. Equal-length tests make the width, not one long test,
+decide the wall time. When the ledger has too few candidates, a **probe** times up to
+8× the shortfall of unrecorded tests, chosen by an even stride, in runs of the
+narrowest width with a deadline of the band's upper end + 2 s, and stops as soon as
+enough land in the band; probe results are never saved. A sample is accepted only if
+its total is at least `longest × widest width` — otherwise the widest width could
+not be filled and would measure the longest test, not throughput (`infeasible-sample`).
 
-**The cache is untrusted input.** It is the one thing `-j auto` reads from outside
+**The ladder.** Widths default to `4 6 8 12 16` (`--jobs-list`). Each width's wall time is predicted
+as `P(W) = max(ceil(sum/W), longest)`, and every child run gets the deadline
+`D = 2·P(narrowest) + 30` seconds. A discarded warmup pass (so filesystem and scanner
+warm-up lands outside the measured region) precedes three repeats in crossing order —
+odd ascending, even descending — so drift cancels instead of accruing to one end.
+Before every child the calibrator checks `elapsed + D` against `--time-limit`
+(default 90 minutes) and stops with `time-limit` rather than overrunning it. After
+each measured run it parses the runner's stderr `start` lines (never the verdict
+lines): when `j=` differs from the requested width or the in-flight peak never
+reaches it, that width was not really measured (`width-not-honoured`). Runner exits
+0, 1 and 3 are accepted; anything else is `run-failed`.
+
+**Overruns.** A test that alone outweighs its share — `secs × widest > sample total`
+in a completed run, or launched but never recorded in a run that hit the deadline
+(exit 3) — would make the widest width measure that one test. It is swapped for the
+head of the reserve and the ladder restarts from warmup. Three revisions are allowed
+(`revisions-exhausted`); an empty reserve ends with `reserve-exhausted`.
+
+**Two areas.** Every child run gets its own throwaway `RUN_ALL_CACHE_DIR`, so a
+measurement neither reads nor writes the real ledger, lanes, or record. The real
+area is used for three things only: refusing to start while another lane holder is
+alive or foreign (`lanes-busy`), reading the ledger for the sample, and the publish.
+
+**Selection and publish.** Each width is aggregated by **median** wall time; the
+chosen value is the smallest width reaching 95% of peak throughput. A stability gate
+refuses to write — stderr reason, exit 1 — when max/min across repeats exceeds 1.5×.
+An unstable measurement is worse than no measurement, because it would be trusted.
+A structural failure prints `calibrate: inconclusive: <token>` and exits 5 with
+nothing written; the tokens are `plan-unavailable`, `too-few-candidates`,
+`infeasible-sample`, `lanes-busy`, `width-not-honoured`, `run-failed`,
+`reserve-exhausted`, `revisions-exhausted`, `time-limit`. The record is staged,
+verified through the reader, and only then moved into place; `--no-write` stops
+after the verification. A knee at the widest width adds a hint to widen the ladder.
+`--print` shows `max_jobs_per_host`, `os` and `measured_at`, plus the OS advice below.
+
+**The record is untrusted input.** It is the one parallelism input read from outside
 the repository, so `bin/lib/run-all-parallelism.sh` parses it without `source`,
 without `eval`, and without `.` — a `read -r` loop plus `case` glob matching that
 never expands a value and never does arithmetic on an unvalidated token. Exactly
-seven keys are allowed (`schema`, `host_id`, `count_bucket`, `jobs`, `measured_at`,
-`sample_size`, `repeat`); an unknown key, a duplicate key, a missing key, or an
-out-of-class value invalidates the whole file. Injection payloads are rejected as
-data.
+seven keys are allowed (`schema`, `host_id`, `os`, `max_jobs_per_host`,
+`measured_at`, `sample_size`, `repeat`); an unknown key, a duplicate key, a missing
+key, or an out-of-class value invalidates the whole file. Injection payloads are
+rejected as data.
 
 Failure is reported as exactly one **fixed enum token** (`missing`, `unreadable`,
 `malformed`, `unknown-key`, `duplicate-key`, `schema-mismatch`, `host-mismatch`,
-`bucket-mismatch`, `bad-jobs`) and the run continues at the conservative fixed
-`RUN_ALL_FALLBACK_JOBS=4`. Fixed tokens matter for two reasons: they keep untrusted
-file content out of the runner's own output, and they keep that output structurally
-incapable of resembling a contract line.
+`bad-os`, `bad-max-jobs-per-host`) and the host limit falls to the default 4. A
+record from before schema 2 is `schema-mismatch`. Fixed tokens matter for two
+reasons: they keep untrusted file content out of the runner's own output, and they
+keep that output structurally incapable of resembling a contract line.
 
-`host_id` is `<os>|<arch>|<digest-of-hostname>` and is **compared, never displayed** —
-the hostname is digested so that no machine name, user name, or filesystem path can
-reach a file in a public repo. `count_bucket` is `floor(log2(corpus size))`, coarse
-on purpose: adding a handful of tests should not invalidate a measurement, while a
-change of an order of magnitude should.
+**Why the corpus-size bucket was dropped.** The previous record also had to match
+`floor(log2(corpus size))`. That keyed a host property to a repository property: the
+knee is set by disk, scanner and process-spawn cost, which do not move when tests
+are added, yet a valid measurement was thrown away each time the corpus crossed a
+power of two. The record now describes the host only, and `jobs=` in
+`--print-plan` is the width after the host rule — what a lease would ask for — with
+a stderr `plan:` note ending "a live lease may grant fewer", because a plan cannot
+know what other sessions hold.
+
+**OS version drift advises, never invalidates.** `os` is `<family>/<version>` (on
+Windows the version and build from `uname -s`; elsewhere `uname -r`). When it
+differs from the current host the value is still used, and the lanes line, the plan
+note and the status line add `measured on X, now Y; re-run
+bin/calibrate-test-parallelism.sh`. An update rarely moves the knee far; falling to
+the default would be a larger error than a slightly stale measurement. `os` is the
+only record value ever displayed, and only after its shape check.
+
+**Host identity.** `host_id` is `<family>|<arch>|<digest-of-hostname>` and is
+**compared, never displayed** — the hostname is digested so that no machine name,
+user name, or filesystem path can reach a file in a public repo. The family is
+`Windows` for every `*_NT-*` kernel name: MINGW64, MSYS and other launch paths of one
+machine report different `uname -s` strings with the version embedded, so keying on
+the raw string split one host into several and re-keyed it on every update. Other
+systems use the raw `uname -s`. `run_all_host_id_compose` is the one owner of the
+format, and the duration ledger's host token is a digest of the same id.
 
 ## 6. Historical duration ledger and LPT ordering
 
@@ -239,14 +315,33 @@ the on-disk record format (`|`, TAB, CR) rejects the key outright rather than
 mangling it. Segments are namespaced by a 16-character host token and a
 16-character repo id, both digests — never the hostname or the repo path — so
 records from a different machine or a different checkout of a same-named repo
-can never be misread as this one's history, mirroring the parallelism cache's
+can never be misread as this one's history, mirroring the measured record's
 own host-digest discipline (Section 5).
+
+Segments are named `dur.2.<host-token>.<stamp>-<pid>.log`; the schema in the name
+lets a reader pass over other formats unread. Schema 2 replaced 1 when the Windows
+host identity changed (Section 5). The first line of a segment is an attribute line,
+`#os <family>/<version>`, written at creation; readers skip `#` lines, so it records
+which OS version produced the durations without splitting history by version.
+
+**Time-limited carry-over.** `bin/lib/run-all-ledger-migrate.sh` exists only so
+records written before #2079 are not orphaned, and is deleted in a follow-up once no
+host holds them; without it, old files simply go unread. It is a thin layer over
+consolidation (below): it only hands legacy files to the round as extra input — on
+Windows every `dur.1.*` token (any launch path, any version), elsewhere only the
+current token's, as a pure format change. A Windows token this build would have
+produced carries the current attribute, any other `<family>/unknown-migrated`.
+Legacy files touched within the last 60 minutes are left to a pre-#2079 writer that
+may still be appending; each taken file is renamed to `.migrating` and re-checked by
+`cksum` before deletion, so a crash loses nothing. The baseline ledger is carried
+into `v2.` segments the same way, under the same `.ledger.lock`. The calibrator
+never migrates.
 
 **Read path (before the sort).** For every test in the plan, `init_tiers`
 looks up its key's most recent duration across the newest
 `RUN_ALL_DUR_MAX_SEGMENTS_READ` segment files and buckets it into a tier —
-`floor(log2(seconds))`, coarse for the same reason `count_bucket` is coarse in
-the parallelism cache: small timing noise should not reshuffle the plan. A key
+`floor(log2(seconds))`, coarse on purpose: small timing noise should not
+reshuffle the plan. A key
 with no history gets the sentinel `UNMEASURED` tier. `sort_work_lpt` then
 bucket-sorts the parallel-lane slots unmeasured-first, then longest-tier-first,
 stable within a tier — so a ledger with no history yet reproduces the original
@@ -262,9 +357,20 @@ harvest, `ledger_record` lazily creates this process's own segment file on the
 first completed test (a run that executes nothing leaves no ledger behind) and
 appends one `<repo_id>|<seconds>|<key>` line. Segments are one-per-writer-process
 and append-only — never rewritten in place — so concurrent `run-all` invocations
-(nested suites, parallel sessions) cannot corrupt each other's history; a
-retention sweep trims each host/schema class to the newest
-`RUN_ALL_DUR_KEEP_SEGMENTS` segments whenever a new one is created.
+(nested suites, parallel sessions) cannot corrupt each other's history.
+
+**Retention.** Each writer start runs one consolidation round. Its inputs are closed
+segments (renamed `.closed.log` by `cleanup_all` on exit), abandoned ones (no mark and
+untouched for 6 hours, longer than any observed run), and the existing base segments.
+They fold into one base segment per OS attribute, keeping the record with the newest
+provenance per (repo, key), so a long run that closes late cannot overwrite newer
+results. A record not measured in 30 days (`RUN_ALL_DUR_RETENTION_DAYS`, counted from
+its provenance stamp, carried on `#run` lines; schema stays 2) expires. A `mkdir` lock
+`.ledger.lock` (stale after 10 minutes; a round takes seconds) admits one round, and a
+loser does nothing. A round publishes new bases before deleting any input and deletes
+only inputs still byte-identical to what it read, so an interrupted round converges on
+the next one. `RUN_ALL_DUR_MAX_SEGMENTS_READ` (64) must exceed open + abandoned + base
+segments, so the read window never misses a live record.
 
 **Why this is safe to bolt onto an already-deterministic scheduler.** The
 byte-identical-stdout invariant (Section 1) constrains *output*, not
@@ -322,12 +428,13 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
 
 | Path | Role |
 |---|---|
-| `tests/run-all.sh` | Scheduler, argument surface, serial barrier, progress, `--print-plan`, `--deadline`, `neutralize_stream`, process-group reaping, bounded abort, cache read, LPT sort, duration measurement |
-| `bin/lib/run-all-parallelism.sh` | SSOT for the cache schema and its non-evaluating parser; sourced, never executed |
+| `tests/run-all.sh` | Scheduler, argument surface, serial barrier, progress, `--print-plan`, `--deadline`, `neutralize_stream`, process-group reaping, bounded abort, max-jobs-per-run resolution, LPT sort, duration measurement |
+| `bin/lib/run-all-parallelism.sh` | SSOT for the measured record's schema and non-evaluating parser, host identity, OS attribute, and both limits' `.env` lookup; sourced, never executed |
 | `bin/lib/run-all-durations.sh` | SSOT for the per-test duration ledger schema, key/tier computation, and the append-only segment reader/writer; sourced, never executed |
 | `bin/lib/run-all-launch.sh` | Per-file launch dispatch (`.sh` → bash, `.Tests.ps1` → pwsh/Pester, `test_*.py` → uv/pytest; SKIP 77 when the runtime is absent) and the per-run state-dir pin; sourced, never executed |
-| `bin/calibrate-test-parallelism.sh` | The measurement tool; unreachable from a normal run |
-| `bin/lib/test-host-lanes.sh` | Host-wide lane lease shared with `bin/find-tests-for-source.sh`; sourced, never executed |
+| `bin/lib/run-all-ledger-migrate.sh` | Time-limited carry-over of pre-#2079 duration and baseline segments; sourced, never executed |
+| `bin/calibrate-test-parallelism.sh` | The measurement tool (modules in `bin/calibrate-test-parallelism/`); unreachable from a normal run |
+| `bin/lib/test-host-lanes.sh` | Max jobs per host, the host width rule, and the lane lease shared with `bin/find-tests-for-source.sh`; sourced, never executed |
 | `bin/test-lanes-status.sh` | Read-only listing of who holds which lane |
 | `bin/worker-dispatch/workers/test-runner.js` | Prepends `--deadline` and `-j` when building the runner argv |
 | `tests/tests/feature-1832-run-all-parallel/` | The suite covering every invariant above |

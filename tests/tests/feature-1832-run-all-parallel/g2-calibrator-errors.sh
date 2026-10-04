@@ -3,141 +3,80 @@
 # Tests: bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh
 # Tags: tests, bin, parallel, calibrator, error-matrix, injection, idempotency, TL2, scope:issue-specific
 # Serial: drives the calibrator, which the sibling g-calibrator.sh also drives
-
-# WHY (CPR-WPH): the calibrator is the SOLE cache writer, so every rejection row
-# asserts 4 invariants: rejects cleanly (not skip/timeout), no RUN_CONTRACT: shape
-# leaks, no injection side effect, and the pre-existing cache survives byte-for-byte.
-
-# RED-FIRST: bin/calibrate-test-parallelism.sh doesn't exist yet; every row
-# reports `implementation missing: <path>`.
-
-# ISOLATION: RUN_ALL_CACHE_DIR/TESTS_DIR/measurement seam pinned to temp fixtures —
-# the real ~/.claude/run-all is never reachable.
-
+# WHY (CPR-WPH): the calibrator is the SOLE record writer, so every rejection row asserts 4
+# invariants: rejects cleanly (not skip/timeout), no RUN_CONTRACT: shape leaks, no injection
+# side effect, and the pre-existing record survives byte-for-byte. An empty or missing suite
+# is now "inconclusive" (exit 5 + a fixed token, #2079 S4), not a die.
 # TL3 gap: a real filesystem crash mid-write (power loss, ENOSPC) is not covered here.
 
-set -u
-
+set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-CAL_REL="bin/calibrate-test-parallelism.sh"
-CAL="$AGENTS_DIR/$CAL_REL"
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
-assert_eq() {
-    local name="$1" want="$2" got="$3"
-    if [ "$want" = "$got" ]; then pass "$name"
-    else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
-}
-run_with_timeout() { local s="$1"; shift; bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
-trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
-
-TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/ra-cal2-$$")"
-mkdir -p "$TMPD"
-trap 'rm -rf "$TMPD"' EXIT
-
-export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
-export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
-
-CACHE_DIR="$TMPD/cache"; mkdir -p "$CACHE_DIR"
-CACHE_FILE="$CACHE_DIR/parallelism.conf"
-GOLDEN="$TMPD/golden.conf"
-SENTINEL="$TMPD/INJECTED"
-
+. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/_cal-fixture.sh"
 REAL_RUN_ALL="${HOME:-/nonexistent}/.claude/run-all"
 REAL_PRE=0; [ -e "$REAL_RUN_ALL" ] && REAL_PRE=1
+cf_init
 
-# A destination whose parent is a regular file — portable "unwritable" without
-# relying on chmod semantics, which differ on Windows filesystems.
-BLOCKED="$TMPD/blocked"; printf 'not a directory\n' > "$BLOCKED"
+CAL_TGT="bin/calibrate-test-parallelism.sh"
+SENTINEL="$CF_T/INJECTED"
+GOLDEN="$CF_T/golden.conf"
+# A destination whose parent is a regular file — portable "unwritable" without chmod.
+BLOCKED="$CF_T/blocked"; printf 'not a directory\n' > "$BLOCKED"
 
-FXS="$TMPD/fx"; mkdir -p "$FXS"
-for i in 1 2 3 4; do printf '#!/usr/bin/env bash\nexit 0\n' > "$FXS/s$i.sh"; done
-FXEMPTY="$TMPD/fx-empty"; mkdir -p "$FXEMPTY"
-
-# --- measurement seam stubs -------------------------------------------------
-
-# SEAM: RUN_ALL_CALIBRATION_MEASURE_CMD — see the sibling g-calibrator.sh header
-# for the full contract. Here it only has to be deterministic and instant, so a
-# rejection row can never be confused with a slow real measurement.
-GOOD_STUB="$TMPD/measure-ok.sh"
-cat > "$GOOD_STUB" <<'STUB'
-#!/usr/bin/env bash
-case "${1:-}" in
-    1) printf '1000\n' ;;
-    2) printf '500\n' ;;
-    *) printf '400\n' ;;
-esac
-STUB
-
-FAIL_STUB="$TMPD/measure-fail.sh"
-cat > "$FAIL_STUB" <<'STUB'
-#!/usr/bin/env bash
-echo "sample failed" >&2
-exit 3
-STUB
-chmod +x "$GOOD_STUB" "$FAIL_STUB" 2>/dev/null || true
+# 8 in-band ledger candidates in a 2-level corpus: "1 2" with --sample 4 never probes.
+SX="$(cf_new_suite)"; RX="$(cf_new_real)"
+cf_populate "$SX" "$RX" bin/a 4 6
+cf_populate "$SX" "$RX" hooks/b 4 6
+SEMPTY="$(cf_new_suite)"
+FAIL_STUB="$CF_T/measure-fail"; mkdir -p "$FAIL_STUB"
+printf '#!/usr/bin/env bash\necho "sample failed" >&2\nexit 3\n' > "$FAIL_STUB/measure.sh"
 
 write_golden() {
-    cat > "$CACHE_FILE" <<'CONF'
-schema=1
-host_id=fixture-host
-count_bucket=2
-jobs=7
-measured_at=2024-01-01T00:00:00Z
-sample_size=4
-repeat=3
-CONF
-    cp "$CACHE_FILE" "$GOLDEN"
+    printf '%s\n' schema=2 host_id=fixture-host os=Linux/6.8.0 max_jobs_per_host=7 \
+        measured_at=2024-01-01T00:00:00Z sample_size=4 repeat=3 > "$RX/parallelism.conf"
+    cp "$RX/parallelism.conf" "$GOLDEN"
 }
-
-C_OUT=""; C_ERR=""; C_RC=0
 contract_count() {
     printf '%s\n' "$1" | grep -cE '^[[:space:]]*RUN_CONTRACT: PASS=[0-9]+ FAIL=[0-9]+ SKIP=[0-9]+ EXECUTED=[0-9]+' || true
 }
-cache_value() { sed -n "s/^$1=//p" "$CACHE_FILE" 2>/dev/null | head -1; }
-cache_keys() { sed -n 's/^\([a-z_]*\)=.*/\1/p' "$CACHE_FILE" 2>/dev/null | LC_ALL=C sort | tr '\n' ' '; }
+conf_value() { sed -n "s/^$1=//p" "$RX/parallelism.conf" 2>/dev/null | head -n 1; }
+conf_keys() { sed -n 's/^\([a-z_]*\)=.*/\1/p' "$RX/parallelism.conf" 2>/dev/null | LC_ALL=C sort | tr '\n' ' '; }
 verdict() { case "$1" in 0|77|124) printf 'rc=%s' "$1" ;; *) printf 'reject' ;; esac; }
+trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
+cal_missing() { [ -f "$CF_CAL" ] && return 1; fail "$1" "implementation missing: $CAL_TGT"; return 0; }
+# inconclusive_token — the last `calibrate: inconclusive: <token>` token on stderr.
+inconclusive_token() { printf '%s\n' "$CF_ERR" | sed -n 's/^calibrate: inconclusive: \([a-z-]*\).*/\1/p' | tail -n 1; }
 
 S_DEF=4; J_DEF="1 2"; R_DEF=3; W_DEF=0
 
-# ===========================================================================
 # 1. Rejection matrix — one row, four invariants
-# ===========================================================================
 case_rejections() {
-    local have=1; [ -f "$CAL" ] || have=0
-    local name field value skip s j r w suite cachedir measure
-    local args env_v inv
+    local name field value skip s j r w suite real stub args inv tok
     while IFS='|' read -r name field value; do
         name="$(trim "$name")"
         [ -z "$name" ] && continue
         case "$name" in \#*) continue ;; esac
         field="$(trim "$field")"; value="$(trim "$value")"
-        if [ "$have" -eq 0 ]; then
-            for inv in exit-is-rejection no-contract-line no-injection-side-effect prior-cache-preserved; do
-                fail "g2-cal/reject/$name/$inv" "implementation missing: $CAL_REL"
+        if [ ! -f "$CF_CAL" ]; then
+            for inv in exit-is-rejection no-contract-line no-injection-side-effect prior-record-preserved; do
+                fail "g2-cal/reject/$name/$inv" "implementation missing: $CAL_TGT"
             done
             continue
         fi
         value="${value//%SENT%/$SENTINEL}"
         value="${value//%NL%/$'\n'}"
         [ "$value" = "<EMPTY>" ] && value=""
-
         s="$S_DEF"; j="$J_DEF"; r="$R_DEF"; w="$W_DEF"
-        suite="$FXS"; cachedir="$CACHE_DIR"; measure="$GOOD_STUB"
+        suite="$SX"; real="$RX"; stub="$(cf_stub "1:1000 2:500")"; : > "$stub/noseg"
         skip=""; [ "$value" = "<NONE>" ] && skip="$field"
         case "$field" in
             sample)    [ -n "$skip" ] || s="$value" ;;
             jobs-list) [ -n "$skip" ] || j="$value" ;;
             repeat)    [ -n "$skip" ] || r="$value" ;;
             warmup)    [ -n "$skip" ] || w="$value" ;;
-            suite)     case "$value" in empty) suite="$FXEMPTY" ;; *) suite="$TMPD/no-such-suite" ;; esac ;;
-            measure)   measure="$FAIL_STUB" ;;
-            cache)     cachedir="$BLOCKED/cache" ;;
+            suite)     case "$value" in empty) suite="$SEMPTY" ;; *) suite="$CF_T/no-such-suite" ;; esac ;;
+            measure)   stub="$FAIL_STUB" ;;
+            cache)     real="$BLOCKED/cache" ;;
         esac
         args=()
         [ "$skip" = "sample" ]    || args+=(--sample "$s")
@@ -145,23 +84,22 @@ case_rejections() {
         [ "$skip" = "repeat" ]    || args+=(--repeat "$r")
         [ "$skip" = "warmup" ]    || args+=(--warmup "$w")
         [ -n "$skip" ] && args+=("--$skip")
-
         rm -f "$SENTINEL"
         write_golden
-        env_v=("RUN_ALL_CACHE_DIR=$cachedir" "TESTS_DIR=$suite" "RUN_CALIBRATION=1"
-               "RUN_ALL_CALIBRATION_MEASURE_CMD=$measure")
-        C_RC=0
-        : > "$TMPD/err.txt"
-        C_OUT="$(run_with_timeout 60 env "${env_v[@]}" bash "$CAL" "${args[@]}" 2>"$TMPD/err.txt")" || C_RC=$?
-        C_ERR="$(cat "$TMPD/err.txt")"
-
-        assert_eq "g2-cal/reject/$name/exit-is-rejection" "reject" "$(verdict "$C_RC")"
-        assert_eq "g2-cal/reject/$name/no-contract-line" "0" "$(contract_count "$C_OUT$C_ERR")"
-        if [ -e "$SENTINEL" ]; then
-            fail "g2-cal/reject/$name/no-injection-side-effect" "argument value was evaluated by a shell"
+        CF_TIMEOUT=60 cf_run "$suite" "$real" "$stub" "${args[@]}"
+        ck "g2-cal/reject/$name/exit-is-rejection" "reject" "$(verdict "$CF_RC")"
+        ck "g2-cal/reject/$name/no-contract-line" "0" "$(contract_count "$CF_OUT$CF_ERR")"
+        if [ -e "$SENTINEL" ]; then fail "g2-cal/reject/$name/no-injection-side-effect" "argument value was evaluated by a shell"
         else pass "g2-cal/reject/$name/no-injection-side-effect"; fi
-        if cmp -s "$GOLDEN" "$CACHE_FILE"; then pass "g2-cal/reject/$name/prior-cache-preserved"
-        else fail "g2-cal/reject/$name/prior-cache-preserved" "a rejected run mutated the existing cache"; fi
+        if cmp -s "$GOLDEN" "$RX/parallelism.conf"; then pass "g2-cal/reject/$name/prior-record-preserved"
+        else fail "g2-cal/reject/$name/prior-record-preserved" "a rejected run mutated the existing record"; fi
+        case "$field" in
+            # S2: an empty suite has a plan with no parallel rows, so nothing reaches n
+            # (too-few-candidates); a missing suite cannot produce the plan at all.
+            suite)
+                case "$value" in empty) tok=too-few-candidates ;; *) tok=plan-unavailable ;; esac
+                ck "g2-cal/reject/$name/inconclusive-with-fixed-token" "5:$tok" "$CF_RC:$(inconclusive_token)" ;;
+        esac
     done <<'TABLE'
 # name                      | field     | value
 sample-zero                 | sample    | 0
@@ -193,56 +131,56 @@ inject-jobs-newline         | jobs-list | 1 2%NL%touch %SENT%
 TABLE
 }
 
-# ===========================================================================
-# 2. Recalibration over an existing cache — atomic replace, then idempotent
-# ===========================================================================
-EXPECTED_KEYS="count_bucket host_id jobs measured_at repeat sample_size schema "
+# 2. Recalibration over an existing record — atomic replace, then idempotent
 run_ok() {
-    C_RC=0
-    : > "$TMPD/err.txt"
-    C_OUT="$(run_with_timeout 60 env "RUN_ALL_CACHE_DIR=$CACHE_DIR" "TESTS_DIR=$FXS" \
-        "RUN_CALIBRATION=1" "RUN_ALL_CALIBRATION_MEASURE_CMD=$GOOD_STUB" \
-        bash "$CAL" --sample 4 --jobs-list "1 2" --repeat 3 --warmup 0 2>"$TMPD/err.txt")" || C_RC=$?
-    C_ERR="$(cat "$TMPD/err.txt")"
+    local st
+    st="$(cf_stub "1:1000 2:500")"; : > "$st/noseg"
+    CF_TIMEOUT=60 cf_run "$SX" "$RX" "$st" --sample 4 --jobs-list "1 2" --repeat 3 --warmup 0
 }
-
 case_recalibration() {
-    local first entries
-    if [ ! -f "$CAL" ]; then
-        for n in replace-exit-zero replaced-jobs-is-the-knee replaced-cache-has-seven-keys \
-                 no-temp-file-left-behind rerun-exit-zero rerun-selects-the-same-jobs \
-                 rerun-keeps-the-same-key-set; do
-            fail "g2-cal/recalibrate/$n" "implementation missing: $CAL_REL"
-        done
-        return
-    fi
+    local first
+    cal_missing "g2-cal/recalibrate/replace-exit-zero" && return
     write_golden
     run_ok
-    assert_eq "g2-cal/recalibrate/replace-exit-zero" "0" "$C_RC"
-    # Stub curve: width 1 = 1000ms, width 2 = 500ms. Max throughput is at width 2
-    # and width 1 is far below the 95% band, so the knee is 2 — never the stale 7.
-    assert_eq "g2-cal/recalibrate/replaced-jobs-is-the-knee" "2" "$(cache_value jobs)"
-    assert_eq "g2-cal/recalibrate/replaced-cache-has-seven-keys" "$EXPECTED_KEYS" "$(cache_keys)"
-    entries="$(ls -A "$CACHE_DIR" 2>/dev/null | tr '\n' ' ')"
-    assert_eq "g2-cal/recalibrate/no-temp-file-left-behind" "parallelism.conf " "$entries"
-
-    first="$(cache_value jobs)"
+    ck "g2-cal/recalibrate/replace-exit-zero" "0" "$CF_RC"
+    # width 1 = 1000 ms, width 2 = 500 ms: the knee is 2 — never the stale 7.
+    ck "g2-cal/recalibrate/selected-is-the-knee" "2" "$(cf_selected)"
+    if cmp -s "$GOLDEN" "$RX/parallelism.conf"; then fail "g2-cal/recalibrate/record-replaced" "the stale record survived"
+    else pass "g2-cal/recalibrate/record-replaced"; fi
+    ck "g2-cal/recalibrate/no-temp-file-left-behind" "0:durations parallelism.conf " "$CF_RC:$(ls -A "$RX" 2>/dev/null | tr '\n' ' ')"
+    first="$(cf_selected)"
     run_ok
-    assert_eq "g2-cal/recalibrate/rerun-exit-zero" "0" "$C_RC"
-    assert_eq "g2-cal/recalibrate/rerun-selects-the-same-jobs" "$first" "$(cache_value jobs)"
-    assert_eq "g2-cal/recalibrate/rerun-keeps-the-same-key-set" "$EXPECTED_KEYS" "$(cache_keys)"
+    ck "g2-cal/recalibrate/rerun-exit-zero" "0" "$CF_RC"
+    ck "g2-cal/recalibrate/rerun-selects-the-same-value" "$first" "$(cf_selected)"
+    ck "g2-cal/recalibrate/rerun-no-temp-file-left-behind" "0:durations parallelism.conf " "$CF_RC:$(ls -A "$RX" 2>/dev/null | tr '\n' ' ')"
 }
 
-# ===========================================================================
-# 3. The developer's real cache dir was never touched
-# ===========================================================================
+# 3. record_*: v2 key set; a v1 record is replaced by v2 (#2079 S11)
+V2_KEYS="host_id max_jobs_per_host measured_at os repeat sample_size schema "
+record_v2_replaces_v1() {
+    cal_missing "g2-cal/record/v1-replaced-exit-zero" && return
+    printf '%s\n' schema=1 host_id=fixture-host count_bucket=2 jobs=7 \
+        measured_at=2024-01-01T00:00:00Z sample_size=4 repeat=3 > "$RX/parallelism.conf"
+    run_ok
+    ck "g2-cal/record/v1-replaced-exit-zero" "0" "$CF_RC"
+    ck "g2-cal/record/v1-replaced-by-v2-keys" "$V2_KEYS" "$(conf_keys)"
+    ck "g2-cal/record/v1-replaced-schema-2" "2" "$(conf_value schema)"
+    ck "g2-cal/record/v1-replaced-max-jobs-per-host" "2" "$(conf_value max_jobs_per_host)"
+    write_golden
+    run_ok
+    ck "g2-cal/record/v2-rerun-keeps-the-key-set" "$V2_KEYS" "$(conf_keys)"
+    ck "g2-cal/record/v2-rerun-same-value" "2" "$(conf_value max_jobs_per_host)"
+}
+
+# 4. The developer's real cache dir was never touched
 case_real_home_untouched() {
     local now=0; [ -e "$REAL_RUN_ALL" ] && now=1
-    assert_eq "g2-cal/isolation/real-home-run-all-untouched" "$REAL_PRE" "$now"
+    ck "g2-cal/isolation/real-home-run-all-untouched" "$REAL_PRE" "$now"
 }
 
 case_rejections
 case_recalibration
+record_v2_replaces_v1
 case_real_home_untouched
 
 echo ""

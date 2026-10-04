@@ -4,26 +4,21 @@
 # Tags: tests, bin, parallel, frontmatter, convention, boundary, table-driven, TL2, scope:issue-specific
 # Serial: observes real lane concurrency, so it must not share the host with another test
 
-# WHY (CPR-WPH): `# Serial: <reason>` uses TWO windows — WRITER accepts the
-# header only in the first 10 lines, RUNNER scans the first 20 (Postel: accept
-# a slightly late author). This file walks the boundary (1/9/10/11/20/21) plus
-# malformed shapes, asserting the lane the runner ACTUALLY used at runtime.
-
-# HOW: each row's fixture has two FILLER tests marking an in-flight file while
-# they sleep, plus a SUBJECT that counts in-flight markers it can see — parallel
-# sees peers, serial (runs alone) sees zero. `absent-control` is the fence: a
-# header-less file seeing zero peers means nothing ran concurrently at all.
-
-# RED-FIRST: `--print-plan` and the serial lane don't exist yet — plan/runtime
-# columns are red for every `parallel`-expecting row; `serial` rows are green
-# today only because nothing runs concurrently (the control row proves it).
-
 # TL3 gap (what this TL2 test does NOT catch): whether the 20-line reader window
 # fits real corpus frontmatter shapes, and lane behavior under a loaded CI host.
 # Mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
+# WHY (CPR-WPH): `# Serial: <reason>` uses TWO windows — WRITER accepts the header only
+# in the first 10 lines, RUNNER scans the first 20 (Postel). This file walks the boundary
+# (1/9/10/11/20/21) plus malformed shapes, asserting the lane the runner ACTUALLY used.
+# HOW: two FILLER tests mark an in-flight file while they sleep; a SUBJECT counts the
+# markers it sees — parallel sees peers, serial sees zero. `absent-control` is the fence:
+# a header-less file seeing zero peers means nothing ran concurrently at all.
+# RED-FIRST: `--print-plan` and the serial lane don't exist yet — plan/runtime columns
+# are red for every `parallel`-expecting row; `serial` rows are green only because
+# nothing runs concurrently today (the control row proves it).
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 REAL_RUNNER="$AGENTS_DIR/tests/run-all.sh"
 
@@ -52,14 +47,14 @@ mkdir -p "$RUN_ALL_CACHE_DIR"
 
 # --- ambient sanitization (M-ambient), self-contained ------------------------
 
-# WHY: RUN_ALL_JOBS/DEADLINE/PROGRESS/REAP and FEATURE_644_PHASE change runner
+# WHY: TEST_MAX_JOBS_PER_RUN/DEADLINE/PROGRESS/REAP and FEATURE_644_PHASE change runner
 # behavior; inherited values would rewrite verdicts, so every child goes through senv().
 
 # CAVEAT: GNU `env` stops parsing options at the first NAME=VALUE, so `-u NAME`
 # flags must precede pass-through assignments — senv() owns that ordering.
 senv() {
-    env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
-        -u FEATURE_644_PHASE "$@"
+    env -u TEST_MAX_JOBS_PER_RUN -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
+        -u FEATURE_644_PHASE -u TEST_MAX_JOBS_PER_HOST RUN_ALL_CONFIG_VAR_CMD=/nonexistent/get-config-var "$@"
 }
 
 # run_pinned <secs> <NAME=VALUE>... -- <cmd> <args>...
@@ -73,8 +68,8 @@ run_pinned() {
     [ $# -gt 0 ] && shift
     senv ${pins[@]+"${pins[@]}"} bash "$RWT" "$secs" "$@"
 }
-AMBIENT_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
-unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
+unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 
 case_ambient_sanitized() {
     local probe="$TMPD/ambient-probe.sh" got want v
@@ -84,12 +79,12 @@ case_ambient_sanitized() {
     } > "$probe"
     want=""
     for v in $AMBIENT_VARS; do want="$want$v=<unset> "; done
-    got="$(RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
+    got="$(TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
         RUN_ALL_REAP=hostile FEATURE_644_PHASE=9 senv bash "$probe" 2>/dev/null)"
     assert_eq "h2/ambient/senv-strips-every-hostile-value" "$want" "$got"
     # And the pass-through half: a deliberate pin must survive the same call.
-    got="$(RUN_ALL_JOBS=hostile senv "RUN_ALL_JOBS=4" bash "$probe" 2>/dev/null \
-        | sed -n 's/^RUN_ALL_JOBS=\([^ ]*\).*/\1/p')"
+    got="$(TEST_MAX_JOBS_PER_RUN=hostile senv "TEST_MAX_JOBS_PER_RUN=4" bash "$probe" 2>/dev/null \
+        | sed -n 's/^TEST_MAX_JOBS_PER_RUN=\([^ ]*\).*/\1/p')"
     assert_eq "h2/ambient/senv-still-honours-a-deliberate-pin" "4" "$got"
 }
 
@@ -159,7 +154,7 @@ RUNTIME_LANE=""
 runtime_lane_of() {
     local root="$1" peers
     rm -f "$root/obs"
-    run_pinned 45 "TESTS_DIR=$root/tests" "RUN_ALL_JOBS=4" \
+    run_pinned 45 "TESTS_DIR=$root/tests" "TEST_MAX_JOBS_PER_RUN=4" \
         -- bash "$root/bin/run-all.sh" --all >/dev/null 2>&1
     if [ ! -f "$root/obs" ]; then
         PEERS_SEEN="(none)"; RUNTIME_LANE="(subject-never-ran)"; return
@@ -198,7 +193,7 @@ case_boundary_table() {
 
         assert_eq "h2/writer/$name" "$writer" "$(writer_verdict "$root/tests/z-subject.sh")"
 
-        plan_out="$(run_pinned 45 "TESTS_DIR=$root/tests" "RUN_ALL_JOBS=4" \
+        plan_out="$(run_pinned 45 "TESTS_DIR=$root/tests" "TEST_MAX_JOBS_PER_RUN=4" \
             -- bash "$root/bin/run-all.sh" --print-plan --all 2>/dev/null)"
         assert_eq "h2/plan-lane/$name" "$lane" "$(plan_lane_of "$plan_out" z-subject.sh)"
 

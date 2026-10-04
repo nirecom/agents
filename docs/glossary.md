@@ -252,8 +252,26 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 ### test lane
 
 - **Full name**: Host test lane
-- **Definition**: One unit of the host-wide load budget N shared by `bin/find-tests-for-source.sh` (1 lane) and `tests/run-all.sh` (1 to N−1 lanes); an atomic `mkdir` slot holding an owner record. A caller that finds every lane busy waits, then exits 4 at the cap.
+- **Definition**: One of the max jobs per host H (`TEST_MAX_JOBS_PER_HOST`: environment > `.env` > measured record > default 4) shared by `bin/find-tests-for-source.sh` (1 lane) and `tests/run-all.sh` (1 to min(max jobs per run, H−1) lanes); an atomic `mkdir` slot holding an owner record. A caller that finds every lane busy waits, then exits 4 at the cap.
 - **Related**: [architecture/claude-code/test-host-lanes.md](architecture/claude-code/test-host-lanes.md), [bin/test-lanes-status.sh](../bin/test-lanes-status.sh)
+
+### base segment
+
+- **Full name**: Duration-ledger base segment
+- **Definition**: A duration-ledger (`bin/lib/run-all-durations.sh`) term: the one segment per OS attribute, `dur.2.<tok>.<S>-0<k>.log`, that consolidation writes, holding each key's latest duration and the run that measured it (`#run` lines).
+- **Related**: [architecture/claude-code/test-runner-parallelism.md](architecture/claude-code/test-runner-parallelism.md)
+
+### abandoned segment
+
+- **Full name**: Duration-ledger abandoned segment
+- **Definition**: A duration-ledger (`bin/lib/run-all-durations.sh`) term: a segment without the closed mark whose last write is older than 6 hours (`RUN_ALL_DUR_ABANDON_MIN`); consolidation takes it in as if its run had closed.
+- **Related**: [architecture/claude-code/test-runner-parallelism.md](architecture/claude-code/test-runner-parallelism.md)
+
+### expired record
+
+- **Full name**: Duration-ledger expired record
+- **Definition**: A duration-ledger (`bin/lib/run-all-durations.sh`) term: a key whose latest duration comes from a run started more than 30 days ago (`RUN_ALL_DUR_RETENTION_DAYS`); consolidation does not write it. Distinct from the baseline ledger's 30-day cleanup, which goes by file modification time.
+- **Related**: [architecture/claude-code/test-runner-parallelism.md](architecture/claude-code/test-runner-parallelism.md)
 
 ## Test retirement
 

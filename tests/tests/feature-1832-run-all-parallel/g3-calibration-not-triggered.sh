@@ -6,7 +6,7 @@
 # WHY (CPR-WPH): g-calibrator.sh only greps the calibrator's literal filename, which passes for
 # any indirect invocation; four layered sentinels (L1 measure-cmd seam, L2 BASH_ENV script-path
 # log, L3 PATH shim, L4 cache byte-diff) prove it behaviourally instead, over absent/corrupt/
-# host-stale/bucket-stale caches and forced RUN_CALIBRATION=1. Temp fixtures isolate the cache
+# host-stale/v1/os-version-stale records and forced RUN_CALIBRATION=1. Temp fixtures isolate the cache
 # dir and TESTS_DIR; the closing case re-checks the real ~/.claude/run-all. TL3 gap: a real CI
 # wrapper outside tests/run-all.sh, mitigated by bin/check-verification-gate.sh.
 
@@ -95,16 +95,23 @@ run_runner() {
     [ "$mode" = "forced" ] && envs+=("RUN_CALIBRATION=1")
     R_RC=0
     : > "$TMPD/stderr.txt"
-    R_OUT="$(run_with_timeout 90 env "${envs[@]}" bash "$RUNNER" -j auto "$FX/t1.sh" \
+    envs+=("RUN_ALL_CONFIG_VAR_CMD=$TMPD/absent-get-config-var")
+    R_OUT="$(run_with_timeout 90 env -u TEST_LANES -u TEST_LANES_HELD -u TEST_MAX_JOBS_PER_RUN \
+        -u TEST_MAX_JOBS_PER_HOST "${envs[@]}" bash "$RUNNER" -j auto "$FX/t1.sh" \
         2>"$TMPD/stderr.txt")" || R_RC=$?
     R_ERR="$(cat "$TMPD/stderr.txt")"
 }
 
+# #2079: the runner no longer reads the record; the rejection token rides the `lanes:` line.
+lanes_line() { printf '%s\n' "$R_ERR" | grep -E '^\[run-all\] lanes: ' | head -1; }
 reason_token() {
-    local t
-    t="$(printf '%s\n' "$R_ERR" | sed -n 's/^\[run-all\] parallelism cache \([a-z][a-z-]*\);.*/\1/p' | head -1)"
-    [ -z "$t" ] && t="(no-notice)"
-    printf '%s' "$t"
+    local line t
+    line="$(lanes_line)"
+    for t in missing malformed host-mismatch schema-mismatch bad-os bad-max-jobs-per-host \
+             unknown-key duplicate-key; do
+        case " $line " in *[!a-z-]"$t"[!a-z-]*) printf '%s' "$t"; return 0 ;; esac
+    done
+    printf '(no-notice)'
 }
 
 contract_count() {
@@ -121,21 +128,29 @@ calibrator_traces() {
 
 arm_sentinels() { : > "$CAL_LOG"; : > "$SCRIPT_LOG"; }
 
+# gen_cache <host_id> <os> — a v2 record (#2079) with max_jobs_per_host=6.
 gen_cache() {
-    printf 'schema=1\nhost_id=%s\ncount_bucket=%s\njobs=6\nmeasured_at=%s\nsample_size=24\nrepeat=3\n' \
+    printf 'schema=2\nhost_id=%s\nos=%s\nmax_jobs_per_host=6\nmeasured_at=%s\nsample_size=24\nrepeat=3\n' \
         "$1" "$2" "$MEASURED_AT"
 }
+# gen_cache_v1 <host_id> — the stage-1 schema, which the v2 reader must reject.
+gen_cache_v1() {
+    printf 'schema=1\nhost_id=%s\ncount_bucket=1\njobs=6\nmeasured_at=%s\nsample_size=24\nrepeat=3\n' \
+        "$1" "$MEASURED_AT"
+}
 
-REAL_HOST=""; REAL_BUCKET=""
+REAL_HOST=""; REAL_OS=""; OTHER_OS=""
 lib_eval() {
     [ -f "$LIB" ] || return 1
     run_with_timeout 30 bash -c \
         'set -u; . "$0" >/dev/null 2>&1 || exit 1; eval "$1"' "$LIB" "$1" 2>/dev/null
 }
+# resolve_host — this host's id and OS attribute, plus a same-family attr with another version.
 resolve_host() {
     REAL_HOST="$(lib_eval 'run_all_host_id')" || return 1
-    REAL_BUCKET="$(lib_eval 'run_all_count_bucket 5')" || return 1
-    case "$REAL_BUCKET" in ''|*[!0-9]*) return 1 ;; esac
+    REAL_OS="$(lib_eval 'run_all_os_attr')" || return 1
+    case "$REAL_OS" in */*) ;; *) return 1 ;; esac
+    OTHER_OS="${REAL_OS%%/*}/0.0.1-g3"
     [ -n "$REAL_HOST" ]
 }
 
@@ -167,17 +182,17 @@ case_no_auto_calibration() {
             case "$state" in
                 absent)  : ;;
                 corrupt) printf 'this is not a key value file\nstill not one\n' > "$CACHE_FILE" ;;
-                host)    gen_cache "$BOGUS_HOST" 2 > "$CACHE_FILE" ;;
-                bucket)
-                    if resolve_host; then
-                        gen_cache "$REAL_HOST" "$((REAL_BUCKET + 5))" > "$CACHE_FILE"
-                    else
-                        for inv in sentinel-never-fired reason fallback-jobs-4 run-exit-zero \
+                host)    gen_cache "$BOGUS_HOST" "Windows/10.0.26300" > "$CACHE_FILE" ;;
+                v1|osdiff)
+                    if ! resolve_host; then
+                        for inv in sentinel-never-fired reason source run-exit-zero \
                                    one-contract cache-not-self-healed; do
-                            fail "$row/$inv" "implementation missing: $LIB_REL"
+                            fail "$row/$inv" "implementation missing: run_all_host_id/run_all_os_attr in $LIB_REL"
                         done
                         continue
-                    fi ;;
+                    fi
+                    if [ "$state" = v1 ]; then gen_cache_v1 "$REAL_HOST" > "$CACHE_FILE"
+                    else gen_cache "$REAL_HOST" "$OTHER_OS" > "$CACHE_FILE"; fi ;;
                 *) fail "$row/sentinel-never-fired" "unknown fixture state: $state"; continue ;;
             esac
             had=0
@@ -187,11 +202,23 @@ case_no_auto_calibration() {
             run_runner "$mode"
 
             assert_eq "$row/sentinel-never-fired" "0" "$(calibrator_traces)"
-            assert_eq "$row/reason" "$want" "$(reason_token)"
-            case "$R_ERR" in
-                *"using -j 4 (conservative default)"*) pass "$row/fallback-jobs-4" ;;
-                *) fail "$row/fallback-jobs-4" "the run must announce the conservative -j 4 fallback" ;;
-            esac
+            if [ "$want" = "advice" ]; then
+                # A same-family record from another OS version is still used, and only advises.
+                case "$(lanes_line)" in
+                    *"measured on $OTHER_OS, now $REAL_OS; re-run $CAL_REL"*) pass "$row/reason" ;;
+                    *) fail "$row/reason" "want the re-calibration advice on the lanes: line, got [$(lanes_line)]" ;;
+                esac
+                case "$(lanes_line)" in
+                    *"max jobs per host 6, source measured"*) pass "$row/source" ;;
+                    *) fail "$row/source" "want 'max jobs per host 6, source measured' on the lanes: line" ;;
+                esac
+            else
+                assert_eq "$row/reason" "$want" "$(reason_token)"
+                case "$(lanes_line)" in
+                    *"max jobs per host 4, source default"*) pass "$row/source" ;;
+                    *) fail "$row/source" "want the lanes: line to fall back to 'max jobs per host 4, source default'" ;;
+                esac
+            fi
             assert_eq "$row/run-exit-zero" "0" "$R_RC"
             assert_eq "$row/one-contract" "1" "$(contract_count "$R_OUT")"
 
@@ -207,7 +234,8 @@ case_no_auto_calibration() {
 no-cache     | absent                   | missing
 corrupt-cache| corrupt                  | malformed
 stale-host   | host                     | host-mismatch
-stale-bucket | bucket                   | bucket-mismatch
+v1-schema    | v1                       | schema-mismatch
+os-version   | osdiff                   | advice
 TABLE
 }
 

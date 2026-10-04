@@ -57,7 +57,7 @@ unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
 # the corpus cache / slots must never land in the developer's ~/.claude/run-all.
 export RUN_ALL_CACHE_DIR="$TMPDIR_BASE/run-all-cache"
 unset TEST_LANES_HELD TEST_LANES FIND_TESTS_CORPUS_CACHE TEST_LANES_TTL TEST_LANES_HEARTBEAT \
-    TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP TEST_LANES_BUDGET RUN_ALL_LANES_LIB
+    TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP TEST_MAX_JOBS_PER_HOST RUN_ALL_LANES_LIB
 
 # Neutral CWD: every helper run happens here, so a forgotten --root can never
 # silently resolve the live agents repo and read the live tests/ corpus.
