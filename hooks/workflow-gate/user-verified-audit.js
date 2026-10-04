@@ -21,7 +21,13 @@ const {
   triggerById,
   stepCompleteCause,
 } = require("../lib/audit-triggers");
-const { NON_BLOCK_TERMINAL_VERDICTS } = require("../lib/supervisor-state-schema");
+const {
+  evaluateNullFreshnessRecovery,
+  filterNullKeySubChecks,
+  unsettledAuditRun,
+  unreadableArtifacts,
+  describeUnreadableArtifacts,
+} = require("../lib/null-freshness");
 const { formatAgentModelLine } = require("../lib/role-model");
 
 const TR_RANK = { TR1: 1, TR2: 2, TR3: 3, TR4: 4, TR5: 5, TR6: 6 };
@@ -56,29 +62,6 @@ function snapshotStale(audit, plansDir, planSessionId) {
     narrowed = snap.files.some((f) => !current.includes(f));
   }
   return { truncated, narrowed };
-}
-
-// Exclude recurrence-patterns from an arm set when freshness_key is null (both
-// code-side and artifact-side null). recurrence-patterns has input:"diff" and
-// earliest_tr:"TR5"; its inputKeyForSubCheck returns null when freshness_key is
-// null, so isSubCheckSettled is always false (fail-closed) — including it in the
-// arm set causes an infinite re-arm loop (#2360).
-function filterNullKeySubChecks(ids, freshness) {
-  if (freshness && freshness.freshness_key == null) {
-    return ids.filter((id) => id !== "recurrence-patterns");
-  }
-  return ids;
-}
-
-// Approve an artifact-side null session when the last TR5 run recorded a
-// trigger_input_keys.TR5 that matches the current input_version. Fail-closed:
-// absent, null, or non-string stored key returns false — no fallback to
-// run.input_version (#2360).
-function inputVersionMatches(tr5Run, currentInputVersion) {
-  if (!tr5Run || !tr5Run.trigger_input_keys || typeof tr5Run.trigger_input_keys !== "object") return false;
-  const stored = tr5Run.trigger_input_keys.TR5;
-  if (stored == null || typeof stored !== "string") return false;
-  return stored === currentInputVersion;
 }
 
 // The judgment set an arm must cover: TR5's own sub-checks, plus every sub-check
@@ -210,17 +193,20 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
     const tr5Idx = tr5Run ? tr5AuditLedger.indexOf(tr5Run) : -1;
     const laterBlockExists = tr5Run && tr5Idx >= 0 && hasLaterTerminalBlock(state.audit, tr5Idx);
 
-    // #2323 self-recovering short-circuit: when the code-side freshness_key cannot be
-    // computed (input_version === null, e.g. no merge-base / detached HEAD / shallow
-    // clone), re-arming on every emission creates an infinite loop. Approve the sentinel
-    // instead when the last TR5 terminal run is in the explicit allow-list (CONTINUE only),
-    // no later standing BLOCK exists, and the null is specifically a code-side null
-    // (input_version null — not an artifact-side null, which stays fail-closed).
-    const nonBlockTerminal = tr5Run && NON_BLOCK_TERMINAL_VERDICTS.includes(tr5Run.verdict);
-    const codeSideUncomputable = freshness && freshness.freshness_key == null && freshness.input_version == null;
-    const artifactSideNull = freshness && freshness.freshness_key == null && freshness.input_version != null;
-    const artifactSideApprove = artifactSideNull && inputVersionMatches(tr5Run, freshness.input_version);
-    const selfRecovering = nonBlockTerminal && !laterBlockExists && (codeSideUncomputable || artifactSideApprove);
+    // An unreadable plan artifact cannot be judged by any audit; arming would only
+    // re-arm on every sentinel, so hold without arming until the file is readable.
+    const unreadable = unreadableArtifacts(freshness);
+    if (unreadable.length > 0) {
+      blockFn(`[EM Supervisor] user_verification (TR5) audit gate: ${describeUnreadableArtifacts(unreadable)}`);
+      return { authoritative: true };
+    }
+
+    // #2323/#2400: a null freshness_key self-recovers only through the shared predicate
+    // (allow-listed verdict, no later BLOCK, no newer audit run unsettled, code side and
+    // per-artifact hashes unchanged since the TR5 run) — the rule the pre-merge backstop applies.
+    const selfRecovering = !currentFk && evaluateNullFreshnessRecovery({
+      freshness, tr5Run, laterBlockExists: Boolean(laterBlockExists), unsettledRun: unsettledAuditRun(audit),
+    }).approve;
 
     if (tr5Run && (tr5Run.verdict === "BLOCK" || laterBlockExists)) {
       // An override can only release a BLOCK carried by the TR5 run itself,
@@ -231,8 +217,8 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
         approveFn();
         return { authoritative: true };
       }
-      // selfRecovering is structurally always false here (BLOCK verdict or laterBlockExists
-      // guarantees nonBlockTerminal=false or !laterBlockExists=false), so this check never
+      // selfRecovering is structurally always false here (the shared null-freshness
+      // predicate refuses a BLOCK verdict and a later BLOCK), so this check never
       // fires; it is present for CPR-ORTH symmetry with Stage 2 so both null-arm sites
       // share identical guards and future restructuring cannot leave one unprotected.
       if (!currentFk) {
@@ -249,9 +235,9 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
     // Stage 2 — diff-based re-audit for a missing/non-BLOCK terminal run.
     if (!tr5Run) return arm(ALL_SUB_CHECK_IDS.slice(), false);
     if (!currentFk) {
-      // Primary fix for #2323: a null code-side freshness_key would otherwise re-arm
-      // the WE-8 sentinel on every emission, looping forever. When selfRecovering is
-      // true (CONTINUE terminal + no later BLOCK + input_version null), approve instead.
+      // Primary fix for #2323: a null freshness_key would otherwise re-arm the WE-8
+      // sentinel on every emission, looping forever. When the shared null-freshness
+      // predicate certifies the last TR5 run (selfRecovering), approve instead.
       if (selfRecovering) { approveFn(); return { authoritative: true }; }
       return arm(filterNullKeySubChecks(ALL_SUB_CHECK_IDS.slice(), freshness), false);
     }

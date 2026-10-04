@@ -36,15 +36,18 @@ const ALERT_RETRY_THRESHOLD = 2;
 
 // Audit (#720) — audit mode strategic review.
 const AUDIT_PHASE_VALUES = [null, "pending", "in_progress", "done", "frozen"];
+// Phases in which the armed run has no verdict yet (frozen keeps outcome "armed"):
+// the Stop hook does not arm over them and a null freshness key cannot be certified.
+const UNSETTLED_AUDIT_PHASES = ["pending", "in_progress", "frozen"];
 const AUDIT_VERDICT_VALUES = ["CONTINUE", "WARN", "BLOCK"];
 const AUDIT_RETRY_THRESHOLD = 2;
 // Cumulative severity threshold (using SEVERITY_RANK comparison) that triggers audit arming.
 const AUDIT_SEVERITY_THRESHOLD = "warning";
 
-// Self-recovering short-circuit (#2323): the explicit allow-list of terminal verdicts
-// for which a null code-side freshness_key (input_version unresolvable) approves the
-// WE-8 sentinel instead of re-arming forever. Only CONTINUE is approved — WARN,
-// BLOCK, missing/malformed verdicts remain fail-closed (arm). To widen this set,
+// Self-recovering short-circuit (#2323/#2400): terminal verdicts for which a null freshness_key
+// (code-side or artifact-side) may be certified by the last TR5 run — at the WE-8 sentinel and the
+// pre-merge backstop alike (hooks/lib/null-freshness.js owns the predicate). Only CONTINUE —
+// WARN, BLOCK, missing/malformed verdicts remain fail-closed. To widen this set,
 // define the justification and add the verdict explicitly; never derive by filtering
 // AUDIT_VERDICT_VALUES (that would admit WARN and future values fail-open).
 const NON_BLOCK_TERMINAL_VERDICTS = ["CONTINUE"];
@@ -276,6 +279,7 @@ module.exports = {
   SEVERITY_RANK,
   ALERT_RETRY_THRESHOLD,
   AUDIT_PHASE_VALUES,
+  UNSETTLED_AUDIT_PHASES,
   AUDIT_VERDICT_VALUES,
   NON_BLOCK_TERMINAL_VERDICTS,
   AUDIT_RETRY_THRESHOLD,
