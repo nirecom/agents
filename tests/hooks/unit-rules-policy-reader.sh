@@ -52,7 +52,6 @@ trap 'rm -rf "$BASE"' EXIT
 # one without the other is the contamination bug. What it does do is drop the inherited
 # session ids and run every harness from a neutral CWD, so nothing here can resolve the
 # live session or the real repo by accident.
-unset CLAUDE_SESSION_ID || true
 unset CLAUDE_CODE_SESSION_ID || true
 
 READER_NODE="$(node_path "$READER")"

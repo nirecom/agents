@@ -17,7 +17,7 @@ command -v git  >/dev/null 2>&1 || { echo "SKIP: git not found";  exit 77; }
 TMPD="$(make_tmp)"
 trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 AGENTS_WIN="$(np "$AGENTS_DIR")"
 MARKER_JS="$AGENTS_DIR/hooks/lib/baseline-checkout-marker.js"

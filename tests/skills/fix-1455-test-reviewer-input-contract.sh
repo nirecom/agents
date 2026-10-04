@@ -244,7 +244,7 @@ _run_loop_1455() {
   local plans="$1" fake="$2" repo="$3" ec=0
   # Capture the loop's exit code; `|| true` here would always yield 0.
   ( cd "$repo" && AGENTS_CONFIG_DIR="$fake" SESSION_ID="sid1455" PLANS_DIR="$plans" \
-      CLAUDE_CODE_SESSION_ID="sid1455" CLAUDE_SESSION_ID="sid1455" \
+      CLAUDE_CODE_SESSION_ID="sid1455" \
       EXTENSIONS_USED=0 "$RWT" 40 bash "$LOOP_SH" >/dev/null 2>&1 ) || ec=$?
   printf '%s' "$ec"
 }
@@ -277,7 +277,7 @@ FAKE_RL2="$(_build_fake_input_error)"
 REPO_RL2="$(_build_git_repo_1455)"
 STDERR_RL2="$_TMPROOT/stderr_rl2.txt"
 ( cd "$REPO_RL2" && AGENTS_CONFIG_DIR="$FAKE_RL2" SESSION_ID="sid1455" PLANS_DIR="$PLANS_RL2" \
-    CLAUDE_CODE_SESSION_ID="sid1455" CLAUDE_SESSION_ID="sid1455" \
+    CLAUDE_CODE_SESSION_ID="sid1455" \
     EXTENSIONS_USED=0 "$RWT" 40 bash "$LOOP_SH" >/dev/null 2>"$STDERR_RL2" ) || true
 if [ -f "$STDERR_RL2" ] && grep -qiE "INPUT_ERROR|/some/path" "$STDERR_RL2"; then
   pass "RL-2 INPUT_ERROR path appears on stderr"

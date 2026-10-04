@@ -45,7 +45,7 @@ PLANS="$BASE/plans"
 mkdir -p "$WF" "$PLANS"
 export CLAUDE_WORKFLOW_DIR="$(node_path "$WF")"
 export WORKFLOW_PLANS_DIR="$(node_path "$PLANS")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 DAY=86400
 NOW="$(date +%s)"

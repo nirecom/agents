@@ -51,8 +51,7 @@ fs.writeFileSync(path.join(tdir, 'injdonor-t23.jsonl'), [
 ].join(NL) + NL);
 " >/dev/null 2>&1
 
-write_env_file "$T23_ROOT/env" "injheir-t23"
-( cd "$AGENTS_DIR" && CLAUDE_ENV_FILE="$T23_ROOT/env" CLAUDE_WORKFLOW_DIR="$T23_ROOT/state" \
+( cd "$AGENTS_DIR" && CLAUDE_CODE_SESSION_ID="injheir-t23" CLAUDE_WORKFLOW_DIR="$T23_ROOT/state" \
     WORKFLOW_PLANS_DIR="$T23_ROOT/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$T23_ROOT/transcripts" \
     run_with_timeout node "$CLI" --from injdonor-t23 >"$T23_ROOT/stdout" 2>"$T23_ROOT/stderr" ) \
     && LAST_EXIT=0 || LAST_EXIT=$?

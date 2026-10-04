@@ -2,20 +2,12 @@
 # filename: tests/bin/fix-1756-next-step-split-contract.sh
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, file-split, entrypoint-path, module-wiring, TL1, TL2, scope:common
-
-# #1756 (SD-2): bin/workflow/next-step is split into bin/workflow/lib/next-step/*.js.
-# Contract H-1: recovery commands must name the ENTRYPOINT (bin/workflow/next-step),
-# not an internal lib module whose bare __filename resolves to a non-executable path.
-# Contract Wiring: every require() in the moved code must still resolve -- most lazy
-# requires sit inside try/catch fail-open blocks, so a broken path dies silently and
-# only a static check catches it.
-
-# RED: C1-C8, C13, C14 fail against the unsplit sources. C9-C12 are behavior
-# contracts that must hold both before and after the split.
-
-# TL3 gap: real CLAUDE_SESSION_ID propagation and a user pasting the recovery
-# command into their own shell are not checked here -- see WORKFLOW_USER_VERIFIED
-# preflight (skill-orchestration category).
+# #1756 (SD-2): next-step split into bin/workflow/lib/next-step/*.js. Contract H-1: recovery
+#   commands name the ENTRYPOINT (bin/workflow/next-step), not a lib module; Wiring: every
+#   moved require() still resolves (lazy requires fail open, so only a static check catches it).
+# RED: C1-C8, C13, C14 fail against the unsplit sources; C9-C12 hold before and after.
+# TL3 gap: real CLAUDE_CODE_SESSION_ID propagation and a user pasting the recovery command
+#   into their own shell -- see WORKFLOW_USER_VERIFIED preflight (skill-orchestration).
 
 set -u
 

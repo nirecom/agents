@@ -37,7 +37,6 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
-unset CLAUDE_SESSION_ID || true
 unset CLAUDE_CODE_SESSION_ID || true
 
 run_with_timeout() {

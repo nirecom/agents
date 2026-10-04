@@ -3,7 +3,7 @@
 # Tests: bin/supervisor-report
 # Tags: supervisor, em-supervisor, cli, session-id, fallback, scope:issue-specific
 # Issue #831: supervisor-report session-id auto-resolve (p1=CLI flag, p2=env, p3=CWD notes, p4=git common-dir).
-# L3 gap: real CLAUDE_SESSION_ID propagation in a live claude -p session.
+# L3 gap: real CLAUDE_CODE_SESSION_ID propagation in a live claude -p session.
 
 set -u
 
@@ -39,7 +39,7 @@ to_node_path() {
 }
 
 # Probe whether the auto-resolve feature is present: run the CLI with no
-# --session-id and no CLAUDE_SESSION_ID, but with a CWD WORKTREE_NOTES.md
+# --session-id and no CLAUDE_CODE_SESSION_ID, but with a CWD WORKTREE_NOTES.md
 # containing a Session-ID. If a state file is written → feature is present.
 probe_autoresolve() {
     local tmp tmp_node ret
@@ -49,7 +49,7 @@ probe_autoresolve() {
     printf 'Session-ID: probe-sid\n' > "$workdir/WORKTREE_NOTES.md"
     (
         cd "$workdir" && \
-        unset CLAUDE_SESSION_ID && \
+        unset CLAUDE_CODE_SESSION_ID && \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "probe" \
             --reporter "probe" >/dev/null 2>&1
@@ -71,7 +71,7 @@ run_s1() {
     printf 'Session-ID: fallback-sid\n' > "$workdir/WORKTREE_NOTES.md"
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="env-sid" \
+        CLAUDE_CODE_SESSION_ID="env-sid" \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" --session-id "explicit-sid" >/dev/null 2>&1
@@ -86,9 +86,9 @@ run_s1() {
     rm -rf "$tmp"
 }
 
-# --- S2: CLAUDE_SESSION_ID env is adopted when flag absent ---
+# --- S2: CLAUDE_CODE_SESSION_ID env is adopted when flag absent ---
 run_s2() {
-    require_source "$CLI" "S2: CLAUDE_SESSION_ID env is adopted when flag absent" || return
+    require_source "$CLI" "S2: CLAUDE_CODE_SESSION_ID env is adopted when flag absent" || return
     local tmp tmp_node
     tmp="$(mktemp -d)"; tmp_node="$(to_node_path "$tmp")"
     local workdir="$tmp/work"
@@ -96,15 +96,15 @@ run_s2() {
     # workdir has no WORKTREE_NOTES.md — prevents wsid Priority 1 resolution
     (
         cd "$workdir" && \
-        CLAUDE_SESSION_ID="env-sid-s2" \
+        CLAUDE_CODE_SESSION_ID="env-sid-s2" \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
     if [ -f "$tmp/env-sid-s2.control/supervisor-state.json" ]; then
-        pass "S2: CLAUDE_SESSION_ID env is adopted when flag absent"
+        pass "S2: CLAUDE_CODE_SESSION_ID env is adopted when flag absent"
     else
-        fail "S2: CLAUDE_SESSION_ID env is adopted when flag absent"
+        fail "S2: CLAUDE_CODE_SESSION_ID env is adopted when flag absent"
     fi
     rm -rf "$tmp"
 }
@@ -122,7 +122,7 @@ run_s3() {
     printf 'Some header\nSession-ID: cwd-sid-s3\nMore lines\n' > "$workdir/WORKTREE_NOTES.md"
     (
         cd "$workdir" && \
-        unset CLAUDE_SESSION_ID && \
+        unset CLAUDE_CODE_SESSION_ID && \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
@@ -170,7 +170,7 @@ run_s4() {
     rm -f "$wtdir/WORKTREE_NOTES.md"
     (
         cd "$wtdir" && \
-        unset CLAUDE_SESSION_ID && \
+        unset CLAUDE_CODE_SESSION_ID && \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
@@ -191,7 +191,7 @@ run_s5() {
     # Ensure CWD has no WORKTREE_NOTES.md and is not a git repo.
     (
         cd "$workdir" && \
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+        unset CLAUDE_CODE_SESSION_ID && \
         WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1

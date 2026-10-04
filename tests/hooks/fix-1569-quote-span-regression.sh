@@ -142,7 +142,7 @@ run_guard() {
     local payload rc=0
     payload="$(json_payload "$cmd")"
     GUARD_OUT="$(cd "$MAIN_WT_RAW" && printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN_WT" \
         "AGENTS_CONFIG_DIR=$ACD" \

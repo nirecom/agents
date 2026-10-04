@@ -21,7 +21,7 @@ trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
 export CLAUDE_WORKFLOW_DIR="$(np "$CLAUDE_WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR 2>/dev/null || true
 cd "$TMPD" || exit 1
 
 AGENTS_N="$(np "$AGENTS_DIR")"

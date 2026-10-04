@@ -32,7 +32,7 @@ case "$V" in
     ''|'<missing>'|'<unreadable>'|*[!0-9]*) fail "C1: version field not numeric: '$V'" ;;
     *) pass "C1: checkpoint carries numeric version ($V)" ;;
 esac
-assert_ckpt "C1: checkpoint session_id matches CLAUDE_SESSION_ID" "$CKPT" session_id wid-c1
+assert_ckpt "C1: checkpoint session_id matches CLAUDE_CODE_SESSION_ID" "$CKPT" session_id wid-c1
 PH="$(ckpt_get "$CKPT" phase)"
 case "$PH" in
     detect-issues|fetch-issues|label-extract|meta-classify|wip-check|closed-detection|route-decision|write-context)

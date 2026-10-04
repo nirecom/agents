@@ -114,7 +114,7 @@ rt0_fixture() { # <case> <out-file>
         omit-arguments)        args='' ;;
         contradict-arguments)  args='  Pass the worktree path to it as a positional argument.' ;;
         omit-env-prefix)       envp='' ;;
-        contradict-env-prefix) envp='  Set `CLAUDE_SESSION_ID=abc` as a prefix on the invocation.' ;;
+        contradict-env-prefix) envp='  Set `CLAUDE_CODE_SESSION_ID=abc` as a prefix on the invocation.' ;;
         omit-chaining)         chain='' ;;
         contradict-chaining)   chain='  Chain the exit-code check onto it with `&&`.' ;;
         omit-exit)             exitc='' ;;

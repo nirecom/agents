@@ -103,7 +103,6 @@ run_n1() {
         export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_CODE_SESSION_ID="$uuid"
         unset WORKFLOW_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories code \
             --severity warning \
@@ -134,7 +133,6 @@ run_n2() {
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_CODE_SESSION_ID="$uuid"
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories workflow \
             --severity notice \
@@ -164,7 +162,6 @@ run_n3() {
         export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
         unset WORKFLOW_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         run_with_timeout 5 node "$CLI" \
             --session-id "$sid" \
             --categories code \
@@ -195,7 +192,6 @@ run_r1() {
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_CODE_SESSION_ID="$uuid"
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories intent \
             --severity notice \
@@ -227,8 +223,6 @@ run_w1() {
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories code \
             --severity warning \
@@ -307,8 +301,6 @@ run_e1() {
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         unset WORKFLOW_SESSION_ID 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories code \

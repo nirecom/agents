@@ -84,7 +84,7 @@ a_resolve_worktree_path() {
   if command -v cygpath >/dev/null 2>&1; then wt="$(cygpath -m "$REPO_ROOT")"; else wt="$REPO_ROOT"; fi
   printf '{"session_id":"%s","cwd":"%s"}' "$A_SID" "$wt" > "$CLAUDE_WORKFLOW_DIR/$A_SID.json"
   # #2270: bare SESSION_ID is no longer an input channel -- the bridge only reads
-  # CLAUDE_CODE_SESSION_ID / CLAUDE_SESSION_ID.
+  # CLAUDE_CODE_SESSION_ID.
   export CLAUDE_CODE_SESSION_ID="$A_SID"
   a_run "resolve-worktree-path/resolved" 0 "$wt" bash "$t"
   export CLAUDE_CODE_SESSION_ID="${A_SID}nostate"

@@ -25,9 +25,7 @@ run_resolver_argv() {
   (
     cd "$TMPDIR_BASE" || exit 1
     SESSION_ID="" \
-    CLAUDE_SESSION_ID="" \
     CLAUDE_CODE_SESSION_ID="$ccsid" \
-    CLAUDE_ENV_FILE="" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \

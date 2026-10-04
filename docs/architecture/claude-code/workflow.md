@@ -406,7 +406,7 @@ Each skill's `## Completion` section runs `echo "<<WORKFLOW_MARK_STEP_<step>_com
 the sole Bash command (no pipes, no `&&`, no redirection). The PostToolUse hook
 (`workflow-mark.js`) intercepts this via strict anchored regex on `tool_input.command` and
 calls `markStep()` directly using `session_id` from the hook's stdin JSON. This bypasses the
-`CLAUDE_ENV_FILE` propagation issue in Bash tool subprocesses (Anthropic bug #27987).
+Bash-env session-id propagation gap (see [session-id-resolution.md](session-id-resolution.md)).
 
 Note: marker format uses `_` as separator (not `:`). Claude Code's permission glob parser
 treats `:` as a named-parameter separator inside `Bash(...)` rules, causing silent match

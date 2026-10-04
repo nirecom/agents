@@ -76,7 +76,7 @@ Resolve the path with `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" re
 `## History Notes` / `## Changelog Notes` are excluded from the pass. Continue to WE-12 in every outcome.
 
 ### WE-12 — Env collection + JSON persist
-Resolve `SID`: `awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' "$WORKTREE_PATH/WORKTREE_NOTES.md"` → fallback `$CLAUDE_SESSION_ID`.
+Resolve `SID`: `awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' "$WORKTREE_PATH/WORKTREE_NOTES.md"` → fallback `$CLAUDE_CODE_SESSION_ID`.
 Run as **one Bash call**: `bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/capture-env.sh" "<worktree>" "<owner>/<repo>" "<backup-dir>" "$SID"` → output: `<CONTROL_DIR>/final-report-env.json` (its last stdout line names the path).
 Run: `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "$SID" --set-alert-eligible-phase post_final_report_window`.
 

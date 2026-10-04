@@ -31,7 +31,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/workflow-plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)/main-workflow-run-tests"
 

@@ -19,7 +19,7 @@ C6_WFDIR=""
 _c6_run() {
     (
         cd "$NEUTRAL_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_CODE_SESSION_ID
         export AGENTS_CONFIG_DIR="$C6_CONFIG"
         export CLAUDE_WORKFLOW_DIR="$C6_WFDIR"
         export WORKFLOW_PLANS_DIR="$C6_WFDIR"

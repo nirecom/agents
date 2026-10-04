@@ -77,7 +77,7 @@ declare -A TURN_RC=()
 run_turn() {
     local rc=0
     ( cd "$REPO" && \
-      unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID CLAUDE_ENV_FILE; \
+      unset CLAUDE_CODE_SESSION_ID; \
       PATH="$MOCKBIN:$PATH" \
       CLAUDE_WORKFLOW_DIR="$WFDIR" WORKFLOW_PLANS_DIR="$PLANSDIR" \
       AGENTS_CONFIG_DIR="$AGENTS_M" \

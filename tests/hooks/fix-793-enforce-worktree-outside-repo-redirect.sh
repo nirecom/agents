@@ -3,14 +3,9 @@
 # Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-targets/redirect.js, hooks/lib/bash-write-targets/tee.js, hooks/lib/bash-write-targets/helpers.js
 # Tags: worktree, enforce, hook, redirect, shell-expansion, fix-983, fix-878, scope:issue-specific
 #
-# Unit + integration tests for issue #793: extractRedirectTargets must
-# expand a safe, static subset of shell tokens ($HOME, ${HOME}, ~,
-# $WORKFLOW_PLANS_DIR) so that out-of-repo redirect writes can be
-# allowed by enforce-worktree.js. All other variable expansions remain
-# fail-closed (null).
-#
-# RED before expandStaticShellTokens is implemented in
-# hooks/lib/bash-write-targets.js; GREEN after.
+# #793: extractRedirectTargets expands a safe static token subset ($HOME, ${HOME}, ~,
+# $WORKFLOW_PLANS_DIR) so out-of-repo redirect writes can be allowed by
+# enforce-worktree.js; every other expansion stays fail-closed (null).
 
 set -u
 
@@ -190,15 +185,8 @@ test_midpath_home_no_expansion() {
 # ─────────────────────────────────────────────────────────────────────────────
 # Integration — enforce-worktree.js end-to-end
 # ─────────────────────────────────────────────────────────────────────────────
-#
-# Pipe a Bash PreToolUse payload whose command writes to
-# "$HOME/.workflow-plans/test.json" (outside the repo). When the hook is run
-# from the MAIN worktree CWD, behavior depends on extractRedirectTargets:
-#   • Before implementation: target extraction returns null → fail-closed →
-#     block ("main worktree" reason).
-#   • After implementation: $HOME is expanded → target is outside repo →
-#     areAllBashTargetsOutsideSessionScope short-circuits to done() → {}.
-#
+# A redirect to "$HOME/.workflow-plans/test.json" from the MAIN worktree CWD: $HOME
+# expands to an out-of-repo target, so areAllBashTargetsOutsideSessionScope allows ({}).
 # Skipped silently if the main worktree path cannot be determined (CI/clone).
 
 test_integration_outside_repo_redirect_allowed() {
@@ -210,7 +198,7 @@ test_integration_outside_repo_redirect_allowed() {
     stdin_json='{"tool_name":"Bash","tool_input":{"command":"printf x > \"$HOME/.workflow-plans/test.json\""},"session_id":"test-session-793"}'
     got="$(printf '%s' "$stdin_json" | (
         cd "$MAIN_WT" || exit 1
-        ENFORCE_WORKTREE=on CLAUDE_SESSION_ID=test-session-793 \
+        ENFORCE_WORKTREE=on \
             run_with_timeout 30 node "$HOOK" 2>/dev/null
     ))"
     # After implementation, the hook should allow ({}).

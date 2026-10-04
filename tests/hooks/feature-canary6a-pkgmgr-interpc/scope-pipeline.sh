@@ -2,24 +2,12 @@
 # tests/hooks/feature-canary6a-pkgmgr-interpc/scope-pipeline.sh
 # Tests: hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree.js, hooks/lib/bash-write-targets/pkg-mgr.js, hooks/lib/bash-write-targets.js
 # Tags: scope:issue-specific, pkg-mgr, interpreter-c, canary-6a, enforce-worktree, scope-pipeline, hook-registration, pwsh-not-required
-#
-# Full scope pipeline (#1411): after the pkg-mgr / interpreter-c WRITE_PATTERNS
-# entries are retired, isPkgMgrWriteIR / isInterpreterCWriteIR must reach the
-# enforce-worktree fast-allow gate so an in-session pkg-mgr / interpreter-c write
-# is BLOCKED from the main worktree, and an out-of-session write is ALLOWED. The
-# collect→scope wiring (collectBashWriteTargets, isEverySegmentExcluded) must treat
-# a pkg-mgr / interpreter-c write segment as a write.
-#
-# RED-pending: when pkg-mgr.js / isInterpreterCWriteIR are absent, the collector /
-# segment-exclusion rows below FAIL cleanly (predicate ERROR:* ≠ expected). The
-# module-present gate SKIPs the pkg-mgr-only rows when pkg-mgr.js is entirely absent
-# so the dispatcher stays green pre-impl.
-#
+# #1411 scope pipeline: isPkgMgrWriteIR / isInterpreterCWriteIR reach the fast-allow gate (in-session write BLOCKED from main, out-of-session ALLOWED) and the collect→scope wiring treats such segments as writes.
+# RED-pending: absent predicates FAIL cleanly (ERROR:* ≠ expected); the module-present gate SKIPs pkg-mgr-only rows pre-impl.
 # L3 gap (what this test does NOT catch):
 # - Real enforce-worktree hook invocation with an actual command going through the full PreToolUse pipeline (these L2 cases drive node enforce-worktree.js via stdin JSON)
 # - Session-scoped worktree path comparison in a real Claude session
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -48,7 +36,7 @@ hook_decision() {
   local cmd="$1" cwd="$2"
   local p out
   p="$(_make_payload "$cmd")"
-  out="$( cd "$cwd" && ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" CLAUDE_SESSION_ID=canary6a MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )"
+  out="$( cd "$cwd" && ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )"
   echo "$out" | grep -q '"decision":"block"' && { echo block; return; }
   echo allow
 }

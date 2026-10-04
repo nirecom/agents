@@ -38,7 +38,7 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # append to the developer's real ~/.workflow-plans.
 export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 # The ambient CONFIRM_TESTS must never decide any case here — every case pins the
 # value in its OWN fixture .env, and the env var is cleared so a leaked export
 # from the developer's shell cannot flip a verdict (test-design.md

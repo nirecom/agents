@@ -2,34 +2,13 @@
 # filename: tests/bin/fix-1756-next-step-fail-open-settled.sh
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/, hooks/workflow-state/state-io/core.js
 # Tags: workflow, next-step, fail-open, settled-status, TL2, scope:common
-#
-# #1756: the fail-open terminal branch in bin/workflow/next-step re-invokes
-# /write-tests whenever an approval-gated step (outline / detail) is recorded
-# `skipped`, and only bails out when write_tests is literally `"skipped"`.
-# `write_tests: "complete"` — the normal path (tests written, reviewed, passed) —
-# is not recognised as settled, so the session can never reach ACTION=done and
-# the workflow nags forever after session-close.
-#
-# RED: F1 / F2 / F3 / F5 and every S1 / S2 assertion fail against the unmodified
-# sources (the F cases return ACTION=invoke / NEXT_SKILL=write-tests instead of
-# ACTION=done; the S cases have no helper to call yet). F4 / F6 / X1-X3 / L1-L4 /
-# CHAR-1 are guards and baselines: they pass before AND after the fix.
-#
-# DISPATCHER. This file owns every shared helper, fixture fragment and counter;
-# the cases live in tests/bin/fix-1756-next-step-fail-open-settled/ and are sourced
-# (not executed) so they share this file's helpers and PASS/FAIL counters.
-# Split per rules/coding/file-split.md (Pattern A HARD limit).
-#
-# TL3 gap (what this test does NOT catch):
-# - Real CLAUDE_SESSION_ID propagation from a live `claude -p` session into the
-#   next-step invocation (here the session id is always passed explicitly).
-# - The next-step verdict actually being consumed by the Claude Code host after
-#   a real skill completes.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
-
-# NOTE: `set -u` only, deliberately NOT `set -euo pipefail` — X3 captures nonzero
-# exit codes on purpose, and the RED cases must all run to completion.
+# #1756: next-step's fail-open branch re-invoked /write-tests unless write_tests was
+#   literally "skipped", so `complete` never settled and ACTION=done was unreachable.
+# RED: F1/F2/F3/F5 and all S1/S2 fail on unmodified sources; F4/F6/X1-X3/L1-L4/CHAR-1 are guards.
+# DISPATCHER: owns shared helpers/counters; cases in fix-1756-next-step-fail-open-settled/ are sourced.
+# TL3 gap: real CLAUDE_CODE_SESSION_ID propagation from a live `claude -p` session and the host
+#   consuming the verdict. Mitigation: WORKFLOW_USER_VERIFIED preflight (skill-orchestration).
+# `set -u` only (not -euo pipefail): X3 captures nonzero exits and RED cases must run to completion.
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
