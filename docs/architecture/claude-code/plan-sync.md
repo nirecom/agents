@@ -26,7 +26,10 @@ demand; plan-sync pushes one plan file at the moment it is written.
    PLAN_SYNC_REMOTE_URL=git@github.com:YOUR_USERNAME/agent-plans.git
    ```
 
-   Empty (the default) turns plan sync off; the breadcrumb keeps the local path.
+   SSH (`git@github.com:…`) or HTTPS (`https://github.com/…`) both work. HTTPS needs
+   credentials that never prompt (Git Credential Manager, `gh auth setup-git`); never put
+   a token inside the URL. Empty (the default) turns plan sync off; the breadcrumb keeps
+   the local path.
 3. Provision once with `bin/plan-sync-init` (Windows wrapper
    `install/win/plan-sync-init.ps1`; `install.sh` / `install.ps1` call it too). It is
    idempotent and safe to re-run, and must be re-run after changing the URL.
