@@ -218,82 +218,109 @@ if [ -n "$VIS_STUB_OK" ]; then
 else fail "V12 isPrivateRepo unchanged (gh stub unreachable; not run)"; fi
 case_end
 
-# L1-L7 contract (#2513): codehostGithub.listPrivateRepoNames() is the union of
-#   `gh repo list ... --visibility private` and the same with `--visibility internal`,
-#   deduped, private names first. One failing call keeps the other's names; both fail -> [].
-#   The gh stub answers per visibility: LPN_PRIV_OUT/RC and LPN_INT_OUT/RC.
+# L1-L9 contract (#2513): codehostGithub.listPrivateRepoNames() makes exactly ONE
+#   `gh repo list --limit 1000 --json nameWithOwner,visibility --jq <tsv>` call (no
+#   --visibility filter). Each line is `<VISIBILITY>\t<nameWithOwner>`; private/internal
+#   rows are kept (case-insensitive) in first-seen order, deduped; public, unknown and
+#   malformed rows are dropped; a failing call -> []. The gh stub answers every call alike.
 echo ""
-echo "=== L1-L7: codehostGithub listPrivateRepoNames (private + internal union) ==="
+echo "=== L1-L9: codehostGithub listPrivateRepoNames (one visibility-tagged listing) ==="
 LPN_LOG="$TMPBASE/gh-lpn.log"
 LPN_EXPR='r.resolveCodehostDescriptor("https://github.com/test-owner/test-repo.git").listPrivateRepoNames()'
-LPN_PRIV_ARGV="gh repo list --limit 1000 --visibility private --json nameWithOwner --jq .[].nameWithOwner"
-LPN_INT_ARGV="gh repo list --limit 1000 --visibility internal --json nameWithOwner --jq .[].nameWithOwner"
 LPN_STUB_OK=""
-if cli_stub_make "$TMPBASE/gh-lpn" gh; then
-    cat > "$TMPBASE/gh-lpn/lpn-preload.js" <<'PRELOAD_EOF'
-const path = require("path"); const fs = require("fs");
-const base = (p) => path.basename(String(p || "")).replace(/\.exe$/i, "").toLowerCase();
-if ([base(process.execPath), base(process.argv0)].includes("gh")) {
-  const a = process.argv.slice(1); if (a.length) a[0] = path.basename(a[0]);
-  const line = ["gh"].concat(a).join(" ");
-  if (process.env.CLI_STUB_LOG) fs.appendFileSync(process.env.CLI_STUB_LOG, line + "\n");
-  const k = /--visibility[ =]internal\b/.test(line) ? "INT" : /--visibility[ =]private\b/.test(line) ? "PRIV" : "";
-  fs.writeSync(1, k ? (process.env["LPN_" + k + "_OUT"] || "") : "");
-  process.exit(k ? Number(process.env["LPN_" + k + "_RC"] || 0) : 3);
-}
-PRELOAD_EOF
-    CLI_STUB_PRELOAD="$(nodepath "$TMPBASE/gh-lpn/lpn-preload.js")"
-    LPN_STUB_OK=1
-fi
-# lpn_run <priv-out> <priv-rc> <int-out> <int-rc> [expr] — evaluates expr (default LPN_EXPR).
+if cli_stub_make "$TMPBASE/gh-lpn" gh; then LPN_STUB_OK=1; fi
+# lpn_run <stdout> <rc> [expr] — evaluates expr (default LPN_EXPR) under the gh stub.
 lpn_run() {
     : > "$LPN_LOG"
-    LPN_PRIV_OUT="$1" LPN_PRIV_RC="$2" LPN_INT_OUT="$3" LPN_INT_RC="$4" CLI_STUB_LOG="$LPN_LOG" \
-        cli_stub_run run_with_timeout node "$PROBE" "$LIB_M" "${5:-$LPN_EXPR}" 2>/dev/null
+    CLI_STUB_OUT="$1" CLI_STUB_RC="$2" CLI_STUB_SLEEP_MS=0 CLI_STUB_LOG="$LPN_LOG" \
+        cli_stub_run run_with_timeout node "$PROBE" "$LIB_M" "${3:-$LPN_EXPR}" 2>/dev/null
 }
-# lpn_case <name> <want> <priv-out> <priv-rc> <int-out> <int-rc>
+# lpn_case <name> <want> <stdout> <rc>
 lpn_case() {
     local got
     if [ -z "$LPN_STUB_OK" ]; then fail "$1 (gh stub unreachable; not run so the real gh stays untouched)"; return; fi
-    got="$(lpn_run "$3" "$4" "$5" "$6")"
+    got="$(lpn_run "$3" "$4")"
     if [ "$got" = "$2" ]; then pass "$1"; else fail "$1 (want=$2 got=$got log=$(tr '\n' ';' < "$LPN_LOG"))"; fi
 }
 
 case_begin "list-private-repo-names-stub-precondition" "hooks/lib/forge/github.js"
 if [ -n "$LPN_STUB_OK" ]; then
-    PRE="$(lpn_run STUBOK 0 '' 0 '(function(){var cp=process.getBuiltinModule("child_process");var o={encoding:"utf8",windowsHide:true,shell:process.platform==="win32"};return cp.spawnSync("gh",["repo","list","--visibility","private"],o).stdout;})()')"
-    if [ "$PRE" = '"STUBOK"' ]; then pass "L0 per-visibility gh stub answers through the shell"
-    else LPN_STUB_OK=""; fail "L0 per-visibility gh stub answers through the shell (got=$PRE)"; fi
+    PRE="$(lpn_run STUBOK 0 '(function(){var cp=process.getBuiltinModule("child_process");var o={encoding:"utf8",windowsHide:true,shell:process.platform==="win32"};return cp.spawnSync("gh",["repo","list"],o).stdout;})()')"
+    LPN_PRE_LOG="$(cat "$LPN_LOG")"
+    if [ "$PRE" = '"STUBOK"' ] && [ "$LPN_PRE_LOG" = "gh repo list" ]; then pass "L0 gh stub answers through the shell and logs its argv"
+    else LPN_STUB_OK=""; fail "L0 gh stub answers through the shell and logs its argv (got=$PRE log=$LPN_PRE_LOG)"; fi
 else
-    fail "L0 per-visibility gh stub could not be created"
+    fail "L0 gh stub could not be created"
 fi
 case_end
 
-case_begin "list-private-repo-names-union" "hooks/lib/forge/github.js"
-lpn_case "L1 private + internal -> union, private first" \
-    '["test-owner/priv-a","test-owner/priv-b","test-org/int-c"]' \
-    $'test-owner/priv-a\ntest-owner/priv-b\n' 0 $'test-org/int-c\n' 0
+case_begin "list-private-repo-names-single-listing" "hooks/lib/forge/github.js"
+lpn_case "L1 mixed PRIVATE/INTERNAL/PUBLIC rows -> private + internal in order, public excluded" \
+    '["test-owner/priv-a","test-org/int-c","test-owner/priv-b"]' \
+    $'PRIVATE\ttest-owner/priv-a\nPUBLIC\ttest-owner/pub-x\nINTERNAL\ttest-org/int-c\nPRIVATE\ttest-owner/priv-b\n' 0
 LPN_SEEN="$(cat "$LPN_LOG" 2>/dev/null)"
-if printf '%s\n' "$LPN_SEEN" | grep -qxF "$LPN_PRIV_ARGV"; then pass "L2 gh asked for --visibility private (argv unchanged)"
-else fail "L2 gh asked for --visibility private (argv unchanged) (log=$LPN_SEEN)"; fi
-if printf '%s\n' "$LPN_SEEN" | grep -qxF "$LPN_INT_ARGV"; then pass "L3 gh asked for --visibility internal (same argv shape)"
-else fail "L3 gh asked for --visibility internal (same argv shape) (log=$LPN_SEEN)"; fi
-lpn_case "L4 a name in both lists appears once" '["test-owner/a","test-owner/b","test-org/c"]' \
-    $'test-owner/a\ntest-owner/b\n' 0 $'test-owner/b\ntest-org/c\n' 0
+LPN_N="$(grep -c '^gh ' "$LPN_LOG" 2>/dev/null)"
+if [ "$LPN_N" = "1" ]; then pass "L2 exactly one gh spawn per listPrivateRepoNames()"
+else fail "L2 exactly one gh spawn per listPrivateRepoNames() (spawns=$LPN_N log=$LPN_SEEN)"; fi
+# cmd.exe (shell:true on Windows) may deliver the |-bearing jq arg still wrapped in double quotes.
+LPN_ARGV="$(printf '%s' "$LPN_SEEN" | head -n 1 | tr -d '"')"
+LPN_JQ="${LPN_ARGV#*--jq }"
+if [[ "$LPN_ARGV" == "gh repo list "* ]] && [[ "$LPN_ARGV" != *--visibility* ]] \
+    && [[ "$LPN_ARGV" == *" --json nameWithOwner,visibility "* ]] && [[ "$LPN_ARGV" == *" --jq "* ]] \
+    && [[ "$LPN_JQ" == *.visibility*.nameWithOwner*@tsv* ]]; then
+    pass "L3 argv: no --visibility flag, --json nameWithOwner,visibility, jq emits visibility+nameWithOwner as tsv"
+else fail "L3 argv: no --visibility flag, --json nameWithOwner,visibility, jq emits visibility+nameWithOwner as tsv (argv=$LPN_ARGV)"; fi
+lpn_case "L4 a duplicated name appears once (first-seen order)" '["test-owner/a","test-owner/b"]' \
+    $'PRIVATE\ttest-owner/a\nINTERNAL\ttest-owner/a\nPRIVATE\ttest-owner/b\n' 0
 case_end
 
-case_begin "list-private-repo-names-partial-failure" "hooks/lib/forge/github.js"
-lpn_case "L5 internal call fails -> private names still returned" '["test-owner/priv-a"]' \
-    $'test-owner/priv-a\n' 0 $'test-org/int-c\n' 1
-lpn_case "L6 private call fails -> internal names still returned" '["test-org/int-c"]' \
-    $'test-owner/priv-a\n' 1 $'test-org/int-c\n' 0
-lpn_case "L7 both calls fail -> []" '[]' $'test-owner/priv-a\n' 1 $'test-org/int-c\n' 1
+case_begin "list-private-repo-names-failure" "hooks/lib/forge/github.js"
+lpn_case "L5 gh exits non-zero (valid stdout) -> []" '[]' $'PRIVATE\ttest-owner/priv-a\n' 1
+lpn_case "L6 empty output -> []" '[]' '' 0
 case_end
 
 case_begin "list-private-repo-names-edge-output" "hooks/lib/forge/github.js"
-lpn_case "L8 both calls succeed with empty output -> []" '[]' '' 0 '' 0
-lpn_case "L9 CRLF, blank lines and padding dropped in both lists" '["test-owner/a","test-org/c"]' \
-    $'test-owner/a\r\n\r\n' 0 $'  test-org/c  \r\n\n' 0
+lpn_case "L7 CRLF, blank lines and padding tolerated" '["test-owner/a","test-org/c"]' \
+    $'PRIVATE\ttest-owner/a\r\n\r\n  INTERNAL\ttest-org/c  \r\n\n' 0
+lpn_case "L8 malformed rows dropped (no tab, unknown SECRET, empty name)" '["test-owner/ok"]' \
+    $'test-owner/notab\nSECRET\ttest-owner/s\nPRIVATE\t\nPRIVATE\ttest-owner/ok\n' 0
+lpn_case "L9 lowercase / mixed-case visibility accepted, public dropped" '["test-owner/a","test-org/b"]' \
+    $'private\ttest-owner/a\nInternal\ttest-org/b\npublic\ttest-owner/c\n' 0
+case_end
+
+# L10: a row is exactly "<visibility>\t<name>"; any other shape is malformed and dropped.
+case_begin "list-private-repo-names-malformed-table" "hooks/lib/forge/github.js"
+while IFS='|' read -r name input want; do
+    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+    lpn_case "L10 $name" "$want" "$(printf '%b' "$input")" 0
+done <<'TABLE'
+extra-tab-three-fields|private\tgroup/a\textra\n|[]
+empty-visibility|\tgroup/name\n|[]
+empty-name|private\t\n|[]
+uppercase-kept|PRIVATE\tok/repo\n|["ok/repo"]
+whitespace-only-line|   \t  \n|[]
+crlf-line-endings|private\tacme/x\r\ninternal\tacme/y\r\n|["acme/x","acme/y"]
+TABLE
+case_end
+
+# L11: gh carries the --limit 1000 cap; the parser adds no client-side cap of its own.
+case_begin "list-private-repo-names-listing-cap" "hooks/lib/forge/github.js"
+LPN_BIG=""
+for i in $(seq 1 1000); do LPN_BIG+=$'public\tp/'"$i"$'\n'; done
+LPN_BIG+=$'private\tlate/row1001\n'
+lpn_case "L11 a private row at position 1001 is still returned" '["late/row1001"]' "$LPN_BIG" 0
+if [[ "$(tr -d '"' < "$LPN_LOG")" == *" --limit 1000 "* ]]; then pass "L11 gh argv carries --limit 1000"
+else fail "L11 gh argv carries --limit 1000 (log=$(tr '\n' ';' < "$LPN_LOG"))"; fi
+case_end
+
+# L12: the listing spawn timeout (4000 ms) stays under the 5 s scan-outbound hook budget.
+case_begin "list-private-repo-names-spawn-timeout" "hooks/lib/forge/github.js"
+LPN_TO="$(run_with_timeout node -e 'const cp = require("child_process"); const seen = [];
+cp.spawnSync = (c, a, o) => { seen.push(String(c) + ":" + (o && o.timeout)); return { status: 0, stdout: "", stderr: "", error: null }; };
+require(process.argv[1]).codehostGithub.listPrivateRepoNames(); process.stdout.write(seen.join(","));' \
+    "$LIB_M/forge/github.js" 2>&1)"
+if [ "$LPN_TO" = "gh:4000" ]; then pass "L12 listPrivateRepoNames spawns gh with timeout 4000"
+else fail "L12 listPrivateRepoNames spawns gh with timeout 4000 (got=$LPN_TO)"; fi
 case_end
 
 echo ""

@@ -60,11 +60,16 @@ function readVerifiedRegularFile(absPath) {
 // allowlist-filtered local-only entries — local main's own tree is never pushed as-is, so
 // nothing it tracks beyond the allowlist can leave the machine. Nothing is deleted and the
 // local side wins. CAS from L, then push; a non-fast-forward fetches and rebuilds.
+// A no-op (overlay == R) is trusted only when R was fetched in that attempt: against an
+// unfetched, possibly stale R it fetches and rebuilds instead (that one local-only pass
+// gets an extra attempt, so the post-fetch retry budget stays MAX_ATTEMPTS - 1).
 function publishOnRemoteTip(plansDir, target, deadline) {
   let last = { status: 1, stderr: "cas-conflict", timedOut: false };
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  let maxAttempts = MAX_ATTEMPTS;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     let R = G.revParse(plansDir, G.ORIGIN_MAIN_REF, { deadline });
-    if (attempt > 0 || !R) {
+    const fetched = attempt > 0 || !R;
+    if (fetched) {
       const f = G.fetchMain(plansDir, { deadline });
       if (f.status !== 0) return { push: f, commit: null };
       R = G.revParse(plansDir, G.ORIGIN_MAIN_REF, { deadline });
@@ -78,7 +83,11 @@ function publishOnRemoteTip(plansDir, target, deadline) {
       last = { status: 1, stderr: "cas-conflict", timedOut: false };
       continue;
     }
-    if (c.commit === R) return { push: { status: 0, stderr: "", timedOut: false }, commit: R };
+    if (c.commit === R) {
+      if (fetched) return { push: { status: 0, stderr: "", timedOut: false }, commit: R };
+      maxAttempts = MAX_ATTEMPTS + 1;
+      continue;
+    }
     last = G.pushMain(plansDir, { deadline });
     if (last.status === 0) return { push: last, commit: c.commit };
     if (last.timedOut || !G.isNonFastForward(last)) return { push: last, commit: null };

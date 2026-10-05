@@ -27,6 +27,8 @@ function encodePath(p) {
 }
 
 const VISIBILITY_VALUES = new Set(["public", "private", "internal"]);
+// Defense-in-depth: the host reaches spawnSync with shell:true on Windows, where cmd.exe metacharacters would execute.
+const GLAB_HOSTNAME_SHAPE = /^[a-z0-9.-]+$/;
 
 // GitLab codehost descriptor (#2308). Same four methods, same signatures as
 // codehostGithub (CPR-ORTH). isPrivateRepo fail-safe returns true (private),
@@ -57,9 +59,11 @@ const codehostGitlab = {
     try {
       const { resolveForgeTarget } = require("../parse-remote-url");
       const { readGitlabHostConfig } = require("../forge-router");
-      const { type, project } = resolveForgeTarget(remoteUrl, { gitlabHost: readGitlabHostConfig() });
-      if (type !== "gitlab" || !project) return null;
-      const r = spawnSync("glab", ["api", "projects/" + encodePath(project), "--jq", ".visibility"],
+      const { type, project, host } = resolveForgeTarget(remoteUrl, { gitlabHost: readGitlabHostConfig() });
+      if (type !== "gitlab" || !project || !host) return null;
+      if (!GLAB_HOSTNAME_SHAPE.test(host)) return null;
+      // Without --hostname glab queries its default host, wrong for a self-hosted plan remote.
+      const r = spawnSync("glab", ["api", "--hostname", host, "projects/" + encodePath(project), "--jq", ".visibility"],
         { encoding: "utf8", timeout: 15000, shell: WIN32, windowsHide: true });
       if (r.error || r.status !== 0) return null;
       const v = (r.stdout || "").trim().toLowerCase();
@@ -80,23 +84,11 @@ const codehostGitlab = {
       return true;
     }
   },
-  // Union of private and internal projects; each query fails independently to [].
+  // One visibility-tagged membership listing; filtering and fail-to-[] live in ./private-repo-list.
   listPrivateRepoNames() {
-    const { spawnSync } = require("child_process");
-    const list = (visibility) => {
-      // cmd.exe (shell on Windows) splits an unquoted `&`, so the query is quoted there.
-      const query = "projects?membership=true&visibility=" + visibility + "&per_page=100";
-      try {
-        const r = spawnSync("glab",
-          ["api", WIN32 ? '"' + query + '"' : query, "--paginate", "--jq", ".[].path_with_namespace"],
-          { encoding: "utf8", timeout: 10000, shell: WIN32 });
-        if (r.error || r.status !== 0) return [];
-        return (r.stdout || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-      } catch (e) {
-        return [];
-      }
-    };
-    return [...new Set([...list("private"), ...list("internal")])];
+    const { listVisibilityTagged, shellArg } = require("./private-repo-list");
+    return listVisibilityTagged("glab", ["api", shellArg("projects?membership=true&per_page=100"), "--paginate",
+      "--jq", shellArg(".[]|[.visibility,.path_with_namespace]|@tsv")]);
   },
   hasOpenPrForBranch(repoDir) {
     const { spawnSync } = require("child_process");

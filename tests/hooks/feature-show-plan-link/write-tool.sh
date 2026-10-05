@@ -48,10 +48,18 @@ echo "=== T8: /tmp/random/abc-detail.md ==="
 expect_empty "T8 unrelated path excluded" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"/tmp/random/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
 
-# ── T9: Edit tool on matching path ─────────────────────────────────────────
-echo "=== T9: Edit tool ==="
-expect_empty "T9 Edit tool is noop (non-Write)" \
-  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+# ── T9: Edit tool on a non-plan file in PLANS_DIR ──────────────────────────
+# Edit-class tools are handled like Write (#2513), but the final-artifact
+# suffix filter still applies: a non-plan file is a noop for Edit too.
+echo "=== T9: Edit tool on non-plan file ==="
+expect_empty "T9 Edit of non-plan file (abc-notes.md) is noop" \
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-notes.md\"},\"tool_response\":{\"success\":true}}"
+
+# ── T9b: Edit tool on a final plan file ────────────────────────────────────
+echo "=== T9b: Edit tool on abc-detail.md ==="
+expect_message "T9b Edit of final plan file emits systemMessage (same as Write)" \
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}" \
+  "$OFF_LINE"
 
 # ── T10: Bash tool ─────────────────────────────────────────────────────────
 echo "=== T10: Bash tool ==="

@@ -749,7 +749,7 @@
         ]
       },
       {
-        "matcher": "Write",
+        "matcher": "Edit|Write|MultiEdit|editFiles|NotebookEdit",
         "hooks": [
           {
             "type": "command",

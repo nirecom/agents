@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-plan-sync-lib.sh
 # Tests: hooks/lib/plan-sync.js, hooks/lib/plans-artifact-registry.js
-# Tags: plan-sync, plans, git, lib, registry, TL2, scope:issue-specific, flow, provision, non-ff, visibility, gh-stub, symlink, security, hardlink, toctou
+# Tags: plan-sync, plans, git, lib, registry, TL2, scope:issue-specific, flow, provision, non-ff, visibility, gh-stub, symlink, security, hardlink, toctou, stale-tip
 # #2513 plan-sync lib unit tests (detail.md S1-6): URL helpers, allowlist, .gitignore,
 # registry contract, checkProvisioned verdicts, syncPlanFile non-push statuses.
 set -uo pipefail
@@ -294,6 +294,9 @@ case_begin "flow-non-regular-targets" "hooks/lib/plan-sync.js"
 case_end
 case_begin "flow-open-time-swap" "hooks/lib/plan-sync.js"
 . "$LIB_DIR/toctou.sh"
+case_end
+case_begin "flow-stale-origin-main-no-op" "hooks/lib/plan-sync.js"
+. "$LIB_DIR/stale-tip.sh"
 case_end
 
 echo ""

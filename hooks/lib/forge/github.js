@@ -68,23 +68,11 @@ const codehostGithub = {
       return true;
     }
   },
-  // Union of private and internal repos; each query fails independently to [].
+  // One visibility-tagged listing; filtering and fail-to-[] live in ./private-repo-list.
   listPrivateRepoNames() {
-    const { spawnSync } = require("child_process");
-    const list = (visibility) => {
-      try {
-        const result = spawnSync(
-          "gh",
-          ["repo", "list", "--limit", "1000", "--visibility", visibility, "--json", "nameWithOwner", "--jq", ".[].nameWithOwner"],
-          { encoding: "utf8", timeout: 10000, shell: WIN32 }
-        );
-        if (result.error || result.status !== 0) return [];
-        return (result.stdout || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-      } catch (e) {
-        return [];
-      }
-    };
-    return [...new Set([...list("private"), ...list("internal")])];
+    const { listVisibilityTagged, shellArg } = require("./private-repo-list");
+    return listVisibilityTagged("gh", ["repo", "list", "--limit", "1000", "--json", "nameWithOwner,visibility",
+      "--jq", shellArg(".[]|[.visibility,.nameWithOwner]|@tsv")]);
   },
   hasOpenPrForBranch(repoDir) {
     // Lazy require breaks the cycle: gh-detect requires forge-router at top level,

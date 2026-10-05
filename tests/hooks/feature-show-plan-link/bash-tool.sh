@@ -1,4 +1,4 @@
-# Bash tool tests (T-BASH-1~9).
+# Bash tool tests (T-BASH-1~9) and command-tool siblings runInTerminal/runCommands (A7).
 # Sourced by ../feature-show-plan-link.sh — inherits all vars and functions.
 #
 # Bash branch — show-plan-link.js handling for Bash tool invocations of
@@ -156,3 +156,28 @@ T_BASH_9_JSON=$(run_with_timeout node -e "
 " "$PLANS_DIR")
 expect_message "T-BASH-9 new SKILL.md _shared direct form — systemMessage with session-ID path" \
   "$T_BASH_9_JSON" "20260617-002151-outline.md"
+
+# ── A7: runInTerminal / runCommands assemble — same path as Bash ──────────
+# Payload shapes per hooks/lib/tool-command-text.js commandTextOf: runInTerminal
+# reads tool_input.command (string); runCommands reads tool_input.commands (array).
+# a7_json <tool_name> <commands-field: command|commands> <dest> [exit_code]
+a7_json() {
+  run_with_timeout node -e "
+    const [tool, field, dest, rc] = process.argv.slice(1);
+    const cmd = 'bash \"\$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh\" --source-kind intent /a/intent.md ' + dest + ' ' + dest;
+    const input = field === 'commands' ? { commands: ['echo prelude', cmd] } : { command: cmd };
+    process.stdout.write(JSON.stringify({ tool_name: tool, tool_input: input,
+      tool_response: { exit_code: Number(rc || 0) }, session_id: 'test-sid-a7' }));
+  " "$1" "$2" "$3" "${4:-0}"
+}
+echo "=== A7: runInTerminal / runCommands invoking assemble-mandatory.sh ==="
+expect_message "A7a runInTerminal assemble -> breadcrumb with destination" \
+  "$(a7_json runInTerminal command "$PLANS_DIR/a7rit-outline.md")" "a7rit-outline.md"
+expect_message "A7b runInTerminal assemble -> sync path entered" \
+  "$(a7_json runInTerminal command "$PLANS_DIR/a7rit-outline.md")" "$OFF_LINE"
+expect_message "A7c runCommands (assemble in commands[1]) -> breadcrumb with destination" \
+  "$(a7_json runCommands commands "$PLANS_DIR/a7rc-detail.md")" "a7rc-detail.md"
+expect_message "A7d runCommands assemble -> sync path entered" \
+  "$(a7_json runCommands commands "$PLANS_DIR/a7rc-detail.md")" "$OFF_LINE"
+expect_empty "A7e runCommands assemble with exit_code=1 — noop" \
+  "$(a7_json runCommands commands "$PLANS_DIR/a7rc-detail.md" 1)"

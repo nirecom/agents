@@ -47,7 +47,11 @@ allowlist `.gitignore` written, and the local plans converged with the remote. T
 version is recorded in local git config. Visibility is checked here (see below).
 
 **Sync (every plan write).** `hooks/show-plan-link.js` (PostToolUse) calls
-`syncPlanFile` synchronously after a final plan artifact is written. It proceeds only
+`syncPlanFile` synchronously after a final plan artifact is written — by any edit-write
+tool (Write, Edit, MultiEdit, editFiles, NotebookEdit; class SSOT
+`hooks/lib/write-tools.js`) or by an `assemble-mandatory.sh` command. All plan files
+written by one tool call share a single 20-second budget inside the 30-second hook
+timeout. It proceeds only
 when `checkProvisioned` passes: a network-free check that the repo exists, the recorded
 init version matches, `origin` equals the configured URL and passes the URL allowlist,
 no `insteadOf` / `pushurl` rewrite applies, and the `.gitignore` is byte-identical to
@@ -62,7 +66,9 @@ reason, with a hint to run `bin/plan-sync-init`.
   local-only entries, `refs/heads/main` is advanced with a compare-and-swap, and the
   result is pushed with `--no-verify` under a fixed identity (`plan-sync@localhost`).
   Local `main` is never pushed as-is. A non-fast-forward fetches the tip and rebuilds, up
-  to a small retry cap, inside a wall-clock budget. Remote content is only ever added or
+  to a small retry cap, inside a wall-clock budget. A "nothing to publish" result is
+  trusted only after that attempt fetched the tip, so a stale `origin/main` cannot hide a
+  revision that never reached the remote. Remote content is only ever added or
   overwritten, never deleted.
 - **Breadcrumb.** On success against a GitHub remote the hook emits
   `Plan file: <blob URL>`, produced only when `origin/main` holds byte-identical content
@@ -86,15 +92,20 @@ codehost descriptor's `repoVisibility` is queried (`gh` / `glab`):
 |---|---|
 | `public` | Provision refused; nothing is written |
 | `private`, `internal` | Accepted |
-| unknown (tool missing, auth failure, stub forge) | Warning; provisioning continues, the user confirms privacy |
+| unknown (tool missing, auth failure, stub forge, malformed GitLab host) | Warning; provisioning continues, the user confirms privacy |
+
+For a GitLab remote the query passes `glab --hostname <host>`, so a self-hosted instance is
+asked about its own project. The host must match `^[a-z0-9.-]+$` before `glab` is spawned;
+anything else is treated as unknown.
 
 A non-GitHub remote is accepted but cannot produce a blob URL, so breadcrumbs fall back
 to the local path.
 
 Init also prints a `.private-info-blocklist` note unless the remote's owner/repo appears
 in the forge's `listPrivateRepoNames`. That list now returns private **and internal**
-repos, so `scan-outbound` also blocks public-destination outbound that names an internal
-repo ([../../scan-outbound.md](../../scan-outbound.md)).
+repos from one visibility-tagged listing (`hooks/lib/forge/private-repo-list.js`, 4-second
+timeout), so `scan-outbound` also blocks public-destination outbound that names an
+internal repo ([../../scan-outbound.md](../../scan-outbound.md)).
 
 ## Retention
 
