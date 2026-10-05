@@ -35,13 +35,13 @@ process.stdout.write(out.indexOf('supervisor-write-layer2') >= 0 ? 'yes' : 'no')
 
 seed_state_with_retry() {
     local tmp="$1" sid="$2" layer2_json="$3" retry_count="$4"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert = Object.assign({}, $layer2_json, { alert_retry_count: $retry_count });
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
@@ -54,7 +54,7 @@ run_g20() {
     tmp="$(mktemp -d)"
     seed_state_with_retry "$tmp" "g20-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }" 2
     out=$(echo '{"stop_hook_active":false,"session_id":"g20-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi "\"decision\":\"block\"" ); then
@@ -72,7 +72,7 @@ run_g21() {
     tmp="$(mktemp -d)"
     seed_state_with_retry "$tmp" "g21-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }" 2
     out=$(echo '{"stop_hook_active":false,"session_id":"g21-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi "\"decision\":\"block\"" ); then
@@ -116,7 +116,7 @@ run_g23() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g23-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g23-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi "\"decision\":\"block\"" ); then
@@ -137,7 +137,7 @@ run_g24() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g24-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g24-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
@@ -160,7 +160,7 @@ run_g25() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g25-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g25-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     # #2256: detectOffProposal is not wired into supervisor-guard.js; C3 arming happens
@@ -184,7 +184,7 @@ run_g26() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state_with_retry "$tmp" "g26-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }" 2
     out=$(printf '{"stop_hook_active":false,"session_id":"g26-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi "\"decision\":\"block\"" ); then
@@ -205,7 +205,7 @@ run_g27() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g27-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g27-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi "\"decision\":\"block\"" ); then
@@ -223,16 +223,16 @@ run_g28() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g28-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"workflow\"],\"severity\":\"error\",\"detail\":\"d\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     # Resolve what stateFilePath value the guard should be using
-    state_path=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    state_path=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 process.stdout.write(w.getStatePath('g28-sid'));
 " 2>/dev/null)
     out=$(echo '{"stop_hook_active":false,"session_id":"g28-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    # Check for presence of g28-sid-supervisor-state.json fragment in output
-    if [ $rc -eq 2 ] && ( echo "$out" | grep -q "g28-sid-supervisor-state.json" ); then
+    # Check for presence of the #2434 control-dir state path fragment in output
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -q "g28-sid.control/supervisor-state.json" ); then
         pass "G28: branch(2) block reason includes stateFilePath"
     else
         fail "G28: branch(2) block reason includes stateFilePath (rc=$rc, expected_path=$state_path, out=$out)"
@@ -249,7 +249,7 @@ run_g29() {
     printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo hello"}}]}}' > "$tmp/t.jsonl"
     seed_state "$tmp" "g29-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_retry_count: 0 }"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"g29-sid\",\"transcript_path\":\"$tp\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi "\"decision\":\"block\"" ); then
@@ -272,7 +272,7 @@ run_g30() {
         > "$tmp/t.jsonl"
     seed_state "$tmp" "g30-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_retry_count: 0 }"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"g30-sid\",\"transcript_path\":\"$tp\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi "\"decision\":\"block\"" ); then

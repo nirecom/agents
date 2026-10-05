@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "headerMaxLines": 10,
+  "tableDrivenFallbackEntry": "bash",
+  "entries": [
+    {
+      "id": "bash",
+      "status": "supported",
+      "patterns": ["*.sh"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".sh" },
+      "siblingSuiteDir": true,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": { "file": "bin/lib/test-retire-predicate/case-parser.sh", "function": "trp_parse_case_markers" },
+      "tableDrivenDetector": { "file": "bin/lib/test-language-parts/bash.sh", "function": "has_table_driven_sh" },
+      "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "tests/lib/harness\\.sh" },
+      "diagnostics": { "nameLabel": ".sh", "flatRejectCode": "FLAT_TEST_SH_REJECTED" },
+      "note": "fixture copy of the bash entry"
+    },
+    {
+      "id": "slash-lang",
+      "status": "supported",
+      "patterns": ["*.slt"],
+      "selfIdentifying": true,
+      "nameStrip": { "prefix": "", "suffix": ".slt" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "//" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": { "file": "bin/lib/test-retire-predicate/case-parser.sh", "function": "trp_parse_case_markers" },
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": { "nameLabel": ".slt" },
+      "note": "fixture-only language whose header comment prefix is // (a # line is a decoy for it); bash runs the file, so a // line is just a failing command"
+    }
+  ]
+}

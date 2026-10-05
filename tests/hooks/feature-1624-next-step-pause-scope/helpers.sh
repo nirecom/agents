@@ -112,6 +112,6 @@ ns_action() {
 # sup_findings_text <tmp> <sid> — the supervisor state file's raw text, or
 # `<absent>`. The audit trail assertion reads this rather than the marker.
 sup_findings_text() {
-    local f="$1/$2-supervisor-state.json"
+    local f="$1/$2.control/supervisor-state.json"  # #2434 control file
     if [ -f "$f" ]; then cat "$f"; else printf '<absent>'; fi
 }

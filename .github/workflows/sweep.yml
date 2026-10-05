@@ -31,3 +31,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENTS_CONFIG_DIR: ${{ github.workspace }}
         run: bash bin/audit-tests-common.sh --dry-run --format text || true
+
+  # Opens one issue for temporary migration blocks older than 90 days. Deliberately
+  # without a failure mask: a scan or gh failure must fail the job (rules/coding.md "Migration Code Blocks").
+  stale-migration-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open stale migration-block issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+        run: bash bin/open-stale-migration-issue.sh

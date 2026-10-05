@@ -94,6 +94,22 @@ definition, and related links.
   per turn (`UserPromptSubmit`, `Stop`) count in turns, not in steps.
 - **Related**: [architecture/claude-code/settings/hooks.md](architecture/claude-code/settings/hooks.md)
 
+### confirm gate
+
+- **Full name**: Confirm gate (`CONFIRM_*`)
+- **Definition**: The per-step user-confirmation point controlled by a `CONFIRM_*`
+  flag (seven gates: intent, outline, detail, tests, code, docs, worktree). The
+  step→gate map lives in `hooks/lib/confirm-gate/step-gate-map.js`.
+- **Related**: [skills/_shared/confirm-plan.md](../skills/_shared/confirm-plan.md) CPA-3
+
+### GATE_ACTION
+
+- **Full name**: Confirm-gate action
+- **Definition**: The closed-vocabulary verdict `next-step --gate` prints for the
+  current confirm gate: `proceed`, `ask`, `present-and-stop`, or `none`. Skills
+  follow it verbatim and never branch on the display-only `GATE_CONFIRM_<X>` line.
+- **Related**: [architecture/claude-code/workflow-runtime.md](architecture/claude-code/workflow-runtime.md)
+
 ## Workflow steps
 
 ### intent
@@ -127,7 +143,7 @@ Terms for the session breadcrumb system (`docs/architecture/claude-code/handoff-
 ### handoff artifact
 
 - **Full name**: Handoff artifact
-- **Definition**: An append-only, per-session Markdown file (`<PLANS_DIR>/<sid>-handoff.md`) that records micro-state a fresh session cannot recover from plan files alone — user decisions, workarounds, rejected approaches, and open questions. Written through a single function; read back by `/resume-session` and, read-only, by the supervisor codex engine (`hooks/lib/supervisor-codex-input.js`).
+- **Definition**: An append-only, per-session Markdown file (`<CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff.md`) that records micro-state a fresh session cannot recover from plan files alone — user decisions, workarounds, rejected approaches, and open questions. Written through a single function; read back by `/resume-session` and, read-only, by the supervisor codex engine (`hooks/lib/supervisor-codex-input.js`).
 - **Related**: [architecture/claude-code/handoff-artifact.md](architecture/claude-code/handoff-artifact.md)
 
 ### workflow active period
@@ -145,13 +161,13 @@ Terms for the session breadcrumb system (`docs/architecture/claude-code/handoff-
 ### flush mark
 
 - **Full name**: Flush mark
-- **Definition**: Sidecar file `<sid>-handoff-flush-mark.json` written by `bin/workflow/handoff-append` after a successful `--origin flush`. Sized from the measured transcript at flush time; a mark newer than the pressure baseline advances the baseline, so post-flush growth counts afresh.
+- **Definition**: Sidecar file `<CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff-flush-mark.json` written by `bin/workflow/handoff-append` after a successful `--origin flush`. Sized from the measured transcript at flush time; a mark newer than the pressure baseline advances the baseline, so post-flush growth counts afresh.
 - **Related**: [architecture/claude-code/handoff-artifact.md — Baseline, flush mark, and timer](architecture/claude-code/handoff-artifact.md#baseline-flush-mark-and-timer)
 
 ### pressure baseline
 
 - **Full name**: Pressure baseline
-- **Definition**: Sidecar file `<sid>-handoff-pressure.json` written by the nudge hook only, holding `{baseline_bytes, baseline_at, transcript_path}`. Growth and elapsed time are measured from this baseline; a nudge or flush advances it.
+- **Definition**: Sidecar file `<CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff-pressure.json` written by the nudge hook only, holding `{baseline_bytes, baseline_at, transcript_path}`. Growth and elapsed time are measured from this baseline; a nudge or flush advances it.
 - **Related**: [architecture/claude-code/handoff-artifact.md — Baseline, flush mark, and timer](architecture/claude-code/handoff-artifact.md#baseline-flush-mark-and-timer)
 
 ## Supervisor audit
@@ -169,6 +185,7 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 | **audit run identity** | The `run-NNNN` identifier that names one audit run uniquely from arm to verdict. Minted at arm time; it binds `audit_phase`, the background dispatch, verdict finalization, and the ledger entry into one unit. A verdict is accepted only while its own identity is in-flight; a mismatched verdict is discarded as stale. New in #2256. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
 | **sub-check** | One individually-settled audit concern the ledger tracks (e.g. `intent-internal`, `outline-detail`, `scope-drift`, `recurrence-patterns`), each keyed by its own input version so a later trigger re-judges only what has changed. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
 | **freshness backstop** | The read-only check the `gh pr merge` gate is reduced to: it reconciles the ledger's last terminal run against the current freshness key and never launches an agent. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
+| **null-freshness predicate** | The single policy (`hooks/lib/null-freshness.js`) deciding whether the last TR5 terminal run may certify a null freshness key (code-side or artifact-side); shared by the TR5 sentinel gate and the freshness backstop. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
 | **audit checklist** | The three items supervisor-audit judges — cross-stage coherence, recurrence patterns, systemic risk. They are a checklist, not mutually exclusive axes, so they are never called "three axes" (the unrelated security-review "three axes" is a different concept). | [agents/supervisor-audit.md](../agents/supervisor-audit.md) |
 | **review round / CAP / MAX_EXTENSIONS** | Existing shared codex-review-loop parameters. A round is one reviewer run; CAP is the normal ceiling; MAX_EXTENSIONS is the extra rounds allowed only while HIGH concerns remain. "2+1" means CAP=2 / MAX_EXTENSIONS=1. The review side coins no alias for these. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
 | **prestaged report** | A reviewer output produced outside the loop and handed to `run-codex-review-loop --prestaged-report`, letting the opus fallback rejoin the shared loop through the same stage / reduce / finalize code path as the codex round. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
@@ -266,6 +283,12 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Full name**: Host test lane
 - **Definition**: One unit of the host-wide load budget N shared by `bin/find-tests-for-source.sh` (1 lane) and `tests/run-all.sh` (1 to N−1 lanes); an atomic `mkdir` slot holding an owner record. A caller that finds every lane busy waits, then exits 4 at the cap.
 - **Related**: [architecture/claude-code/test-host-lanes.md](architecture/claude-code/test-host-lanes.md), [bin/test-lanes-status.sh](../bin/test-lanes-status.sh)
+
+### test language registry
+
+- **Full name**: Test language registry
+- **Definition**: The one table that decides, for every test language, which files are tests, how their headers are read and how they are launched. Test tools consult it instead of checking file extensions themselves.
+- **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md)
 
 ## Test retirement
 

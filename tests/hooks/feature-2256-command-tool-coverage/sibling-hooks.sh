@@ -70,8 +70,8 @@ st.layer1 = st.layer1 || { findings: [] };
 st.layer1.findings = [{
   severity: 'error', categories: ['workflow'], detail: 'blocking concern fixture',
 }];
-fs.writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(st));
-" 2>&1
+fs.writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(st));
+" 2>&1 || fail "16-19 seed: supervisor-state seed write failed"
 for s in $SHAPES; do
     p="$(payload "$s" "$SENTINEL_UV" "$repo" "$TSID")"
     assert_match "16-19 ($s): the EM Supervisor advisory reaches the transcript" \

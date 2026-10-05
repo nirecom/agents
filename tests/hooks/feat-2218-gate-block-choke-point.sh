@@ -37,7 +37,7 @@ require_module() {
 run_gate() {
     local tmp="$1" sid="$2" cmd="$3"
     printf '{"session_id":"%s","tool_name":"Bash","tool_input":{"command":"%s","cwd":"%s"}}' "$sid" "$cmd" "$(node_path "$tmp")" \
-        | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=off \
+        | env -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=off \
             CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 60 node "$GATE" 2>/dev/null
@@ -45,7 +45,7 @@ run_gate() {
 
 seed_state() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -57,8 +57,9 @@ markStep('$sid', 'workflow_init', 'complete');
 
 count_entries() {
     local tmp="$1" sid="$2" n
-    if [ ! -f "$tmp/wf/$sid-handoff.md" ]; then printf '0'; return 0; fi
-    n=$(grep -c 'gate:block' "$tmp/wf/$sid-handoff.md" 2>/dev/null)
+    # #2434: handoff.md is a control file — <wf>/<sid>.control/handoff.md.
+    if [ ! -f "$tmp/wf/$sid.control/handoff.md" ]; then printf '0'; return 0; fi
+    n=$(grep -c 'gate:block' "$tmp/wf/$sid.control/handoff.md" 2>/dev/null)
     printf '%s' "${n:-0}"
 }
 
@@ -105,7 +106,7 @@ run_C2() {
     run_gate "$tmp" "two-sid" "gh pr merge 77 --squash" >/dev/null
     n="$(count_entries "$tmp" "two-sid")"
     [ "$n" -eq 2 ] || problems="$problems want-2-entries-got:$n"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -158,7 +159,7 @@ run_C4() {
     local tmp out problems
     tmp="$(make_tmp)"; problems=""
     seed_state "$tmp" "unwritable-sid"
-    mkdir -p "$tmp/wf/unwritable-sid-handoff.md"
+    mkdir -p "$tmp/wf/unwritable-sid.control/handoff.md"
     out="$(run_gate "$tmp" "unwritable-sid" "gh pr merge 99 --squash")"
     case "$out" in
         *'"decision":"block"'*) : ;;
@@ -180,14 +181,14 @@ run_C5() {
     local tmp out rc problems files
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
-    out=$(printf 'this is not json' | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=off \
+    out=$(printf 'this is not json' | env -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=off \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$GATE" 2>/dev/null)
     rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit:$rc"
     case "$out" in *'"decision":"block"'*) : ;; *) problems="$problems parse-failure-not-blocked:'${out:0:160}'" ;; esac
-    files="$(ls "$tmp/wf" 2>/dev/null | grep -c 'handoff.md' || true)"
+    files="$(find "$tmp/wf" -name '*handoff.md' 2>/dev/null | grep -c '' || true)"
     [ "$files" -eq 0 ] || problems="$problems sessionless-block-created-an-artifact"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then

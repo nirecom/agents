@@ -6,6 +6,11 @@
 
 # Sourced by each section, never run as one: the parent lists sections explicitly.
 
+# The shared harness supplies the per-case marker functions; it is sourced first
+# so the reporters, counters, AGENTS_DIR and RWT defined below override its own.
+# shellcheck source=../../lib/harness.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" && pwd)/harness.sh"
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
 AGENTS_NODE="$(nrm "$AGENTS_DIR")"
@@ -38,10 +43,13 @@ export CLAUDE_WORKFLOW_DIR="$WORK_NODE/wf"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$WORK_NODE/cfg"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
 SID="tr5hold"
+# user-verified-audit.js selects plan artifacts by WORKFLOW_SESSION_ID before any
+# resolver fallback, so an inherited value would point the sentinel gate elsewhere.
+export WORKFLOW_SESSION_ID="$SID"
 REPO="$WORK/repo"
 mkdir -p "$REPO"
 git -C "$REPO" init -q -b main
@@ -88,6 +96,15 @@ process.stdout.write(String(v === null || v === undefined ? 'null' : v));
 " 2>/dev/null
 }
 
+# artifact_keys_json — the per-artifact hash map a real armCore run records (cwd-independent).
+artifact_keys_json() {
+    FP="$FP_NODE" RCWD="$REPO_NODE" PLANS="$WORK_NODE/plans" SESS="$SID" node -e "
+const fp = require(process.env.FP);
+const r = fp.computeFreshnessKey(process.env.RCWD, process.env.PLANS, process.env.SESS);
+process.stdout.write(JSON.stringify(r.artifact_keys));
+" 2>/dev/null
+}
+
 input_version() {
     FP="$FP_NODE" RCWD="$REPO_NODE" node -e "
 const fp = require(process.env.FP);
@@ -103,8 +120,8 @@ const schema = require(process.env.SC);
 const fs = require('fs');
 const st = schema.createEmptyState(process.env.SESS);
 Object.assign(st.audit, JSON.parse(process.env.PATCHJSON));
-fs.writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(st));
-" 2>&1
+fs.writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(st));
+" 2>&1 || fail "seed_state: supervisor-state seed write failed" >&2
 }
 
 state_field() {

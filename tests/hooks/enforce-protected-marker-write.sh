@@ -74,7 +74,7 @@ mk_edits_input() {
 run_hook_cwd() {
     local cwd="$1" tn="$2" input="$3" out rc
     [ -f "$HOOK" ] || { printf 'absent|'; return; }
-    out=$(cd "$cwd" 2>/dev/null && CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
+    out=$(cd "$cwd" 2>/dev/null && CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$PLANSDIR" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
@@ -131,6 +131,8 @@ fi
 # and WORKFLOW_PLANS_DIR are sandboxed anyway so that no future side effect can
 # escape into real session state.
 SANDBOX=$(make_tmp); WFDIR=$(node_path "$SANDBOX")
+OUTSANDBOX=$(make_tmp); OUTDIR=$(node_path "$OUTSANDBOX")  # @ODIR@, outside both state dirs
+mkdir -p "$OUTSANDBOX/plans"; PLANSDIR="$OUTDIR/plans"      # WF == PLANS is unsupported (#2434)
 SID="protmarksid"
 # stem realigned to effective sid — a stem must equal the active session-id to carry clearance (#2108)
 # The block-expecting cases below name markers after $SID and `s1` while the stdin
@@ -145,7 +147,7 @@ printf '{"session_id":"s1"}\n' > "$SANDBOX/s1.json"
 # observed sid there, and every stem-dependent case degrades to "unprotected".
 # classify() on line 77 still overrides both per-invocation for its own sandbox.
 export CLAUDE_WORKFLOW_DIR="$WFDIR"
-export WORKFLOW_PLANS_DIR="$WFDIR"
+export WORKFLOW_PLANS_DIR="$PLANSDIR"
 
 # --- SSOT introspection: the protected sets are DERIVED, never hardcoded ----
 # A hardcoded copy here would silently stop covering a marker kind added later to
@@ -292,6 +294,7 @@ run_O_forge_ownership_state # 2053: the three gh-ownership state files join the 
 run_O8_forge_state_side_effects # 2053 round-2 C5: Pattern 1 — the write is prevented, not just judged
 
 cleanup_tmp "$SANDBOX"
+cleanup_tmp "$OUTSANDBOX"
 if [ -n "$FIXTURE" ] && [ -d "$FIXTURE" ]; then
     git -C "$MAIN_WT" worktree remove --force "$LINKED_WT" >/dev/null 2>&1 || true
     cleanup_tmp "$FIXTURE"

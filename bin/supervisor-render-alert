@@ -3,13 +3,13 @@
 #
 # Usage: bin/supervisor-render-alert [--session-id] <sid> [--plans-dir <dir>]
 #        bin/supervisor-render-alert --session-id <sid> [--plans-dir <dir>]
+# Reads <session control dir>/supervisor-state.json; --plans-dir is accepted and ignored.
 #
 # Always exits 0 — never gates the session on its own errors.
 
 set -euo pipefail
 
 SESSION_ID=""
-PLANS_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -18,7 +18,6 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --plans-dir)
-      PLANS_DIR="${2:?--plans-dir requires a value}"
       shift 2
       ;;
     --)
@@ -51,16 +50,6 @@ if ! [[ "$SESSION_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
   exit 2
 fi
 
-if [[ -z "$PLANS_DIR" ]]; then
-  if [[ -n "${AGENTS_CONFIG_DIR:-}" ]] && [[ -x "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir" ]]; then
-    PLANS_DIR="$(bash "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir")"
-  else
-    PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
-  fi
-fi
-
-STATE_FILE="${PLANS_DIR}/${SESSION_ID}-supervisor-state.json"
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
   NODE_DIR="$(cygpath -m "$SCRIPT_DIR")"
@@ -70,7 +59,9 @@ fi
 
 FALLBACK_LINE="[EM Supervisor] Review complete — no actionable findings."
 
-if [[ ! -f "$STATE_FILE" ]]; then
+STATE_FILE="$(node "$SCRIPT_DIR/workflow-control-dir" --session "$SESSION_ID" --file supervisor-state.json 2>/dev/null)" || STATE_FILE=""
+
+if [[ -z "$STATE_FILE" || ! -f "$STATE_FILE" ]]; then
   echo "$FALLBACK_LINE"
   exit 0
 fi

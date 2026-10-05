@@ -36,7 +36,7 @@ else
 fi
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

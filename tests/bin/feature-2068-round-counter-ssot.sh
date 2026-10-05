@@ -11,6 +11,8 @@
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 # shellcheck source=./lib/codex-loop-fixture.sh
@@ -19,7 +21,6 @@ FAIL=0
 # Fixture isolation (rules/test/fixture-isolation.md).
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
@@ -83,8 +84,9 @@ rcs_rounds_seen() { tr -d '\r' < "$RCS_LOG" | tr '\n' ' ' | sed 's/ *$//'; }
 
 # rcs_delta_rounds — which round-numbered deltas exist, ascending. The names are
 # the audit trail: one per round, never reused.
+# After #2434 control files live in $CLAUDE_WORKFLOW_DIR/<sid>.control/ without the <sid>- prefix.
 rcs_delta_rounds() {
-    ls "$RCS_P" 2>/dev/null | sed -n "s/^$RCS_SID-$FORMAT-round-\([0-9]*\)-delta-.*/\1/p" \
+    ls "$CLAUDE_WORKFLOW_DIR/$RCS_SID.control/" 2>/dev/null | sed -n "s/^$FORMAT-round-\([0-9]*\)-delta-.*/\1/p" \
         | sort -n | tr '\n' ' ' | sed 's/ *$//'
 }
 
@@ -95,9 +97,11 @@ rcs_seed() { printf '%s\n' "$1" > "$(rcs_counter)"; }
 # rcs_seed_delta <round> — a delta from a round that already happened.
 rcs_seed_delta() { printf 'seeded round %s delta\n' "$1" > "$(rcs_delta "$1")"; }
 
+case_begin "round-counter-ssot-suite" "bin/run-codex-review-loop"
 . "$AGENTS_ROOT/tests/bin/feature-2068-round-counter-ssot/counter-ownership.sh"
 . "$AGENTS_ROOT/tests/bin/feature-2068-round-counter-ssot/round-argument-guards.sh"
 . "$AGENTS_ROOT/tests/bin/feature-2068-round-counter-ssot/fail-close-and-concurrency.sh"
+case_end
 
 # --- #2357 exit-9 gate for review-plan-security ---
 # The #2276 fingerprint auto-clear lets a caller edit the plan to clear an exit-6
@@ -138,7 +142,8 @@ if command -v git >/dev/null 2>&1; then
     # (plan-a) exit 6 arm → plan change (fingerprint change) → exit 9, marker retained.
     {
         _p="$(rps_plans)"; _f="$(rps_fake)"
-        _term="$_p/sid1361-security-plan-terminal.txt"
+        mkdir -p "$CLAUDE_WORKFLOW_DIR/sid1361.control"
+        _term="$CLAUDE_WORKFLOW_DIR/sid1361.control/security-plan-terminal.txt"
         run_loop_plan "$_p" "$_f" 6 >/dev/null            # arm exit-6 marker
         printf '# Detail plan v2 (edited)\n' > "$_p/sid1361-detail.md"   # flip fingerprint
         _rc="$(run_loop_plan "$_p" "$_f" 1)"
@@ -152,11 +157,12 @@ if command -v git >/dev/null 2>&1; then
     # (plan-b) exit 6 arm + accept marker → plan change → NOT exit 9 (sanctioned).
     {
         _p="$(rps_plans)"; _f="$(rps_fake)"
-        _accept="$_p/sid1361-review-plan-security-exit6-accepted.txt"
+        mkdir -p "$CLAUDE_WORKFLOW_DIR/sid1361.control"
+        _accept="$CLAUDE_WORKFLOW_DIR/sid1361.control/review-plan-security-exit6-accepted.txt"
         run_loop_plan "$_p" "$_f" 6 >/dev/null            # arm exit-6 marker
         printf 'accepted\n' > "$_accept"                  # sanction the residual HIGH
         printf '# Detail plan v2 (edited)\n' > "$_p/sid1361-detail.md"
-        _term="$_p/sid1361-security-plan-terminal.txt"
+        _term="$CLAUDE_WORKFLOW_DIR/sid1361.control/security-plan-terminal.txt"
         _rc="$(run_loop_plan "$_p" "$_f" 1)"
         if [ "$_rc" = "1" ] && [ ! -f "$_term" ]; then
             pass "(plan-b) exit-6 marker + accept file → rc=$_rc, marker deleted (guard stood down, accept path cleared marker)"
@@ -171,7 +177,8 @@ if command -v git >/dev/null 2>&1; then
     # Arm via real exit-2 run (arm_terminal_guard fires on 2|6|7), then change fingerprint.
     {
         _p="$(rps_plans)"; _f="$(rps_fake)"
-        _term="$_p/sid1361-security-plan-terminal.txt"
+        mkdir -p "$CLAUDE_WORKFLOW_DIR/sid1361.control"
+        _term="$CLAUDE_WORKFLOW_DIR/sid1361.control/security-plan-terminal.txt"
         run_loop_plan "$_p" "$_f" 2 >/dev/null             # arm exit-2 marker
         if [ ! -f "$_term" ]; then
             fail "(plan-c-arm) exit-2 did not write terminal marker — setup failed"
@@ -192,7 +199,8 @@ if command -v git >/dev/null 2>&1; then
     # (plan-c2) PREV_RC=7 + plan change → NOT exit 9, marker auto-cleared.
     {
         _p="$(rps_plans)"; _f="$(rps_fake)"
-        _term="$_p/sid1361-security-plan-terminal.txt"
+        mkdir -p "$CLAUDE_WORKFLOW_DIR/sid1361.control"
+        _term="$CLAUDE_WORKFLOW_DIR/sid1361.control/security-plan-terminal.txt"
         run_loop_plan "$_p" "$_f" 7 >/dev/null             # arm exit-7 marker
         if [ ! -f "$_term" ]; then
             fail "(plan-c2-arm) exit-7 did not write terminal marker — setup failed"

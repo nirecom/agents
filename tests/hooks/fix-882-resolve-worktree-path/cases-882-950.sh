@@ -36,14 +36,12 @@ EOF
 # Every session-identity variable the developer's live session exports is pinned
 # here, not only the two id names: once H1's disagreement check lands, an
 # inherited CLAUDE_CODE_SESSION_ID would fail-close these cases (false RED) and an
-# inherited CLAUDE_ENV_FILE / CLAUDE_TRANSCRIPT_BASE_DIR would resolve the real
+# inherited CLAUDE_TRANSCRIPT_BASE_DIR would resolve the real
 # session (false GREEN) — rules/test/fixture-isolation.md.
 run_resolver_js() {
   local sid="$1"
   SESSION_ID="$sid" \
-  CLAUDE_SESSION_ID="" \
   CLAUDE_CODE_SESSION_ID="" \
-  CLAUDE_ENV_FILE="" \
   CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
   CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
   WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
@@ -82,8 +80,8 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case C: no session id reaches the CLI from ANY of the three env vars
-# (SESSION_ID, CLAUDE_SESSION_ID, CLAUDE_CODE_SESSION_ID) -> empty stdout.
+# Case C: no session id reaches the CLI from EITHER env var
+# (SESSION_ID, CLAUDE_CODE_SESSION_ID) -> empty stdout.
 # Must stay green after C1: widening the read to CLAUDE_CODE_SESSION_ID adds a
 # supply source, it must not turn "nothing supplied" into a filesystem guess.
 # ---------------------------------------------------------------------------
@@ -149,9 +147,7 @@ fi
 # false-greens two cases at once (rules/test/fixture-isolation.md).
 # ---------------------------------------------------------------------------
 caseH_got="$(SESSION_ID="" \
-  CLAUDE_SESSION_ID="" \
   CLAUDE_CODE_SESSION_ID="" \
-  CLAUDE_ENV_FILE="" \
   CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
   CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
   WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \

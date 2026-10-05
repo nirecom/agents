@@ -35,7 +35,7 @@ SOURCES=("$LIB_TIMEOUT" "$LIB_CORE" "$SRC_PLAN" "$SRC_SURVEY")
 
 # Fixture isolation (rules/test/fixture-isolation.md): never resolve the live
 # session, and never let a child read the developer's real config .env.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CODEX_TIMEOUT_SECS
+unset CLAUDE_CODE_SESSION_ID CODEX_TIMEOUT_SECS
 
 ROOT="$(mktemp -d 2>/dev/null || mktemp -d -t 'codextmo')"
 trap 'cd / 2>/dev/null || true; rm -rf "$ROOT" 2>/dev/null || true' EXIT

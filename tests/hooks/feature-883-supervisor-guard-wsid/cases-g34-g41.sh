@@ -9,7 +9,7 @@ run_g34() {
     # No state seeded, no WORKTREE_NOTES.md, empty transcript_path. session_id passes
     # the charset gate; all detection paths return null/false; falls through to (5).
     out=$(cd "$tmp" && echo '{"stop_hook_active":false,"session_id":"g34-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -27,7 +27,7 @@ run_g35() {
     # alert_phase=done causes branch (3) condition l2Phase !== "done" to short-circuit.
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'done', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -45,7 +45,7 @@ run_g36() {
     # G33 reaches paused-on-threshold via retry count; G36 sets alert_phase=paused directly.
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'paused', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -63,7 +63,7 @@ run_g36b() {
     # #1166: closed is a permanent terminal alert phase; branch (3) must not fire even when armed.
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'closed', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -95,7 +95,7 @@ require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
 ' "$transcript_path_native" 2>/dev/null
     # No state seeded; hangDetected=false, l2ArmedAt=null -> branch (3) condition false -> exit 0.
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"$transcript_path_native\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -126,7 +126,7 @@ const b = {type:"assistant",message:{content:[{type:"tool_use",name:"Bash",input
 require("fs").writeFileSync(process.argv[1], JSON.stringify(a)+"\n"+JSON.stringify(b)+"\n");
 ' "$transcript_path_native" 2>/dev/null
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"$transcript_path_native\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -159,7 +159,7 @@ const obj = {type:"assistant",message:{content:[
 require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
 ' "$transcript_path_native" 2>/dev/null
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"$transcript_path_native\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -177,7 +177,7 @@ run_g40() {
     # Two findings sharing category "code". Dedup should output "code" once, not twice.
     seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"finding1\",\"timestamp\":\"2026-01-01T12:00:00.000Z\"},{\"categories\":[\"code\",\"security\"],\"severity\":\"error\",\"detail\":\"finding2\",\"timestamp\":\"2026-01-01T12:00:00.000Z\"}] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "code" && ! echo "$out" | grep -q "code, code"; then
@@ -194,12 +194,12 @@ run_g41() {
     sid="g41-sid"
     # Write an EMPTY file at the expected state path; readState() throws on JSON.parse("")
     # and the catch block in guard sets state=null. Branch (5) fires -> exit 0.
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-require('fs').writeFileSync(w.getStatePath('$sid'), '');
+require('fs').writeFileSync(w.getStatePath('$sid', { forWrite: true }), '');
 " >/dev/null 2>&1
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -217,7 +217,7 @@ run_g42() {
     # cumulative_severity=notice hits the same advisory branch (4) as warning -> exit 0.
     seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'notice', findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -241,7 +241,7 @@ run_g43() {
     # wsid state is empty (cumSev=null) — if resolver wrongly fell back, cumSev=null -> rc=0 (regression).
     seed_state "$tmp" "$wsid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$cc_uuid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "cc-uuid-finding"; then
@@ -255,7 +255,9 @@ run_g44() {
     require_source "$HOOK" "G44: isWorkflowOff active — guard exits 0 (early exit)" || return
     local tmp out rc sid wf_dir
     tmp="$(mktemp -d)"
-    wf_dir="$(mktemp -d)"
+    # #2434: marker and seeded state share one workflow dir, so only the marker
+    # can explain the early exit.
+    wf_dir="$tmp"
     sid="g44-sid"
     # Seed state with alert_armed_at so branch (3) would normally fire (rc=2).
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
@@ -264,7 +266,7 @@ run_g44() {
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$wf_dir" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
-    rm -rf "$tmp" "$wf_dir"
+    rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
         pass "G44: isWorkflowOff active — guard exits 0 (early exit)"
     else
@@ -289,7 +291,7 @@ const obj = {type:"assistant",message:{content:[{type:"tool_use",name:"Bash",inp
 require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
 ' "$transcript_path_native" 2>/dev/null
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"$transcript_path_native\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "C3: OFF proposal pre-detected" && echo "$out" | grep -q "Action:"; then
@@ -306,7 +308,7 @@ run_g46() {
     sid="g46-sid"
     seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"first-finding\",\"timestamp\":\"2026-06-01T00:00:00.000Z\"},{\"categories\":[\"test\"],\"severity\":\"warning\",\"detail\":\"second-finding\",\"timestamp\":\"2026-06-01T00:00:01.000Z\"}] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "\[1\]" && echo "$out" | grep -q "\[2\]"; then
@@ -338,29 +340,27 @@ run_g47() {
 }
 
 run_g48() {
-    require_source "$HOOK" "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_ENV_FILE → CLAUDE_SESSION_ID" || return
-    require_wsid "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_ENV_FILE → CLAUDE_SESSION_ID" || return
-    local tmp env_file out rc sid wsid
+    require_source "$HOOK" "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_CODE_SESSION_ID + <sid>-*.md" || return
+    require_wsid "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_CODE_SESSION_ID + <sid>-*.md" || return
+    local tmp out rc sid wsid
     tmp="$(mktemp -d)"
-    env_file="$(mktemp)"
     sid="g48-cc-uuid"
     wsid="g48-wsid-from-env"
-    printf "CLAUDE_SESSION_ID=%s\n" "$wsid" > "$env_file"
     touch "$tmp/${wsid}-intent.md"
     seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     # #1794: branch (3) also requires isWorkflowStarted(sessionId). resolveSessionId
     # Priority 1 (ctx.sessionIdFromInput) resolves to $sid here since input.session_id
     # is present and valid, so isWorkflowStarted is evaluated against $sid — seed it there.
     seed_workflow_started "$tmp" "$sid"
-    # No WORKTREE_NOTES.md — Priority 1 skips; Priority 2 picks wsid via CLAUDE_ENV_FILE.
+    # No WORKTREE_NOTES.md — Priority 1 skips; Priority 2 picks wsid via CLAUDE_CODE_SESSION_ID.
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" CLAUDE_ENV_FILE="$env_file" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" CLAUDE_CODE_SESSION_ID="$wsid" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
-    rm -rf "$tmp"; rm -f "$env_file"
+    rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Workflow session ID: $wsid"; then
-        pass "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_ENV_FILE → CLAUDE_SESSION_ID"
+        pass "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_CODE_SESSION_ID + <sid>-*.md"
     else
-        fail "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_ENV_FILE → CLAUDE_SESSION_ID (rc=$rc, out=$out)"
+        fail "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_CODE_SESSION_ID + <sid>-*.md (rc=$rc, out=$out)"
     fi
 }
 
@@ -373,13 +373,13 @@ run_g49() {
     TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toString()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'));" 2>/dev/null)
     wsid_low="${TODAY}-100000-g49low"
     wsid_high="${TODAY}-090000-g49high"
-    # Two same-day candidates, no CLAUDE_ENV_FILE -> all ccBucket=1 -> ambiguity gate fires -> resolver null.
+    # Two same-day candidates, no CLAUDE_CODE_SESSION_ID -> all ccBucket=1 -> ambiguity gate fires -> resolver null.
     touch "$tmp/${wsid_low}-context.md" "$tmp/${wsid_low}-intent.md"
     touch "$tmp/${wsid_high}-context.md" "$tmp/${wsid_high}-intent.md" "$tmp/${wsid_high}-detail.md"
     # State under wsid_high only; resolver returns null -> guard uses CC UUID (g49-cc-uuid) -> no state -> rc=0.
     seed_state "$tmp" "$wsid_high" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -406,7 +406,7 @@ const obj = {type:"assistant",message:{content:[{type:"tool_use",name:"Bash",inp
 require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
 ' "$transcript_path_native" 2>/dev/null
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"$transcript_path_native\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Claude Code SessionStart hook: set CLAUDE_SESSION_ID env and clean up zombie state files
+// Claude Code SessionStart hook: create/inherit workflow state and clean up zombie state files
 
 const fs = require("fs");
 const path = require("path");
@@ -45,18 +45,12 @@ try {
   // Fail-open: malformed input — continue without setting session ID
 }
 
-// Write CLAUDE_SESSION_ID to env file if available (KEY=VALUE format, no export prefix)
-if (sessionId && process.env.CLAUDE_ENV_FILE) {
-  try {
-    fs.appendFileSync(
-      process.env.CLAUDE_ENV_FILE,
-      `CLAUDE_SESSION_ID=${sessionId}\n`,
-      "utf8"
-    );
-  } catch (e) {
-    // Fail-open
-  }
-}
+// --- BEGIN temporary: legacy session-id relay lines -> purged migration added 2026-10-03 ---
+// deletion-condition: remove after 2027-01-01 together with hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js, tests/hooks/legacy-session-id-relay-purge.sh and their two entries in bin/check-session-id-ssot.sh TOMBSTONE_EXEMPT
+try {
+  require("./lib/temporary-migrations/legacy-session-id-relay-purge").purgeLegacyRelayLines();
+} catch (e) { /* fail-open */ }
+// --- END temporary: legacy session-id relay lines -> purged migration ---
 
 // Create initial state file if session_id is available (with inheritance logic)
 let inheritedFromSessionId = null;
@@ -159,7 +153,12 @@ if (sessionId) {
     writeSetIssue(sessionId, process.cwd(), plansDir);
   } catch (e) { /* fail-open */ }
 }
-
+// --- BEGIN temporary: plans-dir control files -> workflow control dir migration added 2026-09-28 ---
+// deletion-condition: remove after 2026-12-28 (release + 3 months) together with hooks/lib/temporary-migrations/control-dir-split/, bin/migrate-control-dir and the legacy-argument shims; keep guard (c) until then
+try {
+  require("./lib/temporary-migrations/control-dir-split").migrateAll({ budgetMs: 2000 });
+} catch (e) { /* best-effort */ }
+// --- END temporary: plans-dir control files -> workflow control dir migration ---
 
 // Clean up zombie state files (older than 7 days)
 try {

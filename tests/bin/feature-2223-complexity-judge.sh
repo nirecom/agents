@@ -21,6 +21,16 @@ ROUTING_JS="hooks/workflow-state/complexity-routing.js"
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
+# #2434: normalize writes the DERIVED <CLAUDE_WORKFLOW_DIR>/<sid>.control/<stage>-signals.txt;
+# dual-pin both dirs (rules/test/fixture-isolation.md) so no write leaves the fixture.
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+mkdir -p "$TMP_ROOT/workflow-state" "$TMP_ROOT/plans" "$TMP_ROOT/empty-transcripts"
+export CLAUDE_WORKFLOW_DIR="$TMP_ROOT/workflow-state"
+export WORKFLOW_PLANS_DIR="$TMP_ROOT/plans"
+export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP_ROOT/empty-transcripts"
+NORMALIZE_STAGE="detail"
+signals_path() { printf '%s/%s.control/%s-signals.txt' "$CLAUDE_WORKFLOW_DIR" "$1" "$NORMALIZE_STAGE"; }
+
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -122,15 +132,19 @@ assert_cooccur "T2223CJ-11-write-tests-judge-and-normalize" "$WTESTS_DOC" "compl
 
 # ---------------------------------------------------------------------------
 # Part C — normalize-judge-signals strict contract (table-driven).
-# Each case writes a raw file, runs the real node CLI, and compares the produced
-# signals file (trimmed) against the expected content.
+# Each case writes a raw file, runs the real node CLI under its own session id,
+# and compares the signals file at the path the CLI printed (trimmed) against the
+# expected content. The printed path must be the derived control path.
 # ---------------------------------------------------------------------------
 assert_normalize() {
-    local name="$1" raw="$2" want="$3" out got
-    out="$TMP_ROOT/out-$name.txt"
+    local name="$1" raw="$2" want="$3" sid="cj-$1" out printed got
+    out="$(signals_path "$sid")"
     rm -f "$out"
-    run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$raw" --out "$out" >/dev/null 2>&1 || true
-    if [[ -f "$out" ]]; then got="$(trim_tail "$(cat "$out")")"; else got="__NOFILE__"; fi
+    printed="$(run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$raw" --session "$sid" --stage "$NORMALIZE_STAGE" 2>/dev/null | tr -d '\r')" || true
+    if [[ "$printed" != *"/$sid.control/$NORMALIZE_STAGE-signals.txt" ]]; then
+        fail "$name — CLI did not print the derived control path (got $(printf '%q' "$printed"))"; return
+    fi
+    if [[ -f "$printed" ]]; then got="$(trim_tail "$(cat "$printed")")"; else got="__NOFILE__"; fi
     if [[ "$got" == "$want" ]]; then pass "$name"
     else fail "$name — want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
@@ -203,12 +217,18 @@ assert_normalize "T2223CJ-N14-invalid-shell-metachar" "$TMP_ROOT/raw-N14.txt" "S
 assert_normalize "T2223CJ-N20-missing-input-file" "$TMP_ROOT/does-not-exist.txt" "S0-undecidable"
 
 # C8(b): writing to a path that is a directory cannot succeed; the CLI must exit
-# non-zero rather than crash. Gated on the CLI existing so it stays a
-# source-attributable RED before scope 4 lands (not a trivial pass on absence).
+# non-zero rather than crash. The derived out path is pre-created as a directory,
+# and the stderr must name the write failure so the exit is attributable to the
+# write, not to argument rejection. Gated on the CLI existing (RED on absence).
 if [[ -f "$NORMALIZE_CLI" ]]; then
     printf 'SIGNALS: S1-multi-file\n' > "$TMP_ROOT/raw-N21.txt"
-    if run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$TMP_ROOT/raw-N21.txt" --out "$TMP_ROOT" >/dev/null 2>&1; then
+    mkdir -p "$(signals_path cj-N21)"
+    n21_rc=0
+    run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$TMP_ROOT/raw-N21.txt" --session cj-N21 --stage "$NORMALIZE_STAGE" >/dev/null 2>"$TMP_ROOT/n21.err" || n21_rc=$?
+    if [[ "$n21_rc" -eq 0 ]]; then
         fail "T2223CJ-N21-unwritable-out-nonzero — CLI reported success writing over a directory path"
+    elif ! grep -qF "could not write out file" "$TMP_ROOT/n21.err"; then
+        fail "T2223CJ-N21-unwritable-out-nonzero — rc=$n21_rc but not a write failure: $(head -n 1 "$TMP_ROOT/n21.err")"
     else
         pass "T2223CJ-N21-unwritable-out-nonzero"
     fi
@@ -216,12 +236,16 @@ else
     fail "T2223CJ-N21-unwritable-out-nonzero — normalize CLI absent (RED until scope 4 lands)"
 fi
 
-# C8(c): re-running with identical input must reproduce byte-identical valid output.
+# C8(c): re-running with identical input into the same derived path must
+# reproduce byte-identical valid output (run 1 is moved aside before run 2).
 printf 'SIGNALS: S1-multi-file, S3-security\n' > "$TMP_ROOT/raw-N22.txt"
+idem_out="$(signals_path cj-N22)"
 idem1="$TMP_ROOT/idem-1.txt"; idem2="$TMP_ROOT/idem-2.txt"
-rm -f "$idem1" "$idem2"
-run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$TMP_ROOT/raw-N22.txt" --out "$idem1" >/dev/null 2>&1 || true
-run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$TMP_ROOT/raw-N22.txt" --out "$idem2" >/dev/null 2>&1 || true
+rm -f "$idem1" "$idem2" "$idem_out"
+run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$TMP_ROOT/raw-N22.txt" --session cj-N22 --stage "$NORMALIZE_STAGE" >/dev/null 2>&1 || true
+[[ -f "$idem_out" ]] && mv "$idem_out" "$idem1"
+run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$TMP_ROOT/raw-N22.txt" --session cj-N22 --stage "$NORMALIZE_STAGE" >/dev/null 2>&1 || true
+[[ -f "$idem_out" ]] && cp "$idem_out" "$idem2"
 if [[ -f "$idem1" && -f "$idem2" ]] \
     && [[ "$(trim_tail "$(cat "$idem1")")" == "S1-multi-file,S3-security" ]] \
     && cmp -s "$idem1" "$idem2"; then

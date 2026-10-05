@@ -40,23 +40,27 @@ function showAndExit(header, diffText) {
 
 // ── test-file detection ───────────────────────────────────────────────────────
 
-function isTestFile(filePath) {
-  if (!filePath) return false;
-  const p = filePath.replace(/\\/g, "/");
-  const parts = p.split("/").filter(Boolean);
-
-  // Any directory component named test, tests, spec, specs, __tests__
+// Any directory component named test, tests, spec, specs, __tests__.
+function isUnderTestDirectory(parts) {
   for (let i = 0; i < parts.length - 1; i++) {
     if (/^tests?$|^specs?$|^__tests?__$/.test(parts[i])) return true;
   }
+  return false;
+}
 
-  // Filename patterns: foo_test.py, foo.test.ts, foo.spec.ts, test_foo.py, foo.Tests.ps1
+// A name the test language registry calls a test by itself (selfIdentifying); when the
+// registry is unreadable only the directory rule applies.
+function isTestFile(filePath) {
+  if (!filePath) return false;
+  const parts = filePath.replace(/\\/g, "/").split("/").filter(Boolean);
+  if (isUnderTestDirectory(parts)) return true;
   const base = parts[parts.length - 1] || "";
-  return (
-    /(_test|\.test|\.spec)\.[^.]+$/.test(base) ||
-    /^test_/.test(base) ||
-    /\.Tests\.ps1$/.test(base)
-  );
+  try {
+    return require("./lib/test-language-registry").matchesSelfIdentifying(base);
+  } catch (e) {
+    try { fs.writeSync(2, `[show-diff] test language registry not readable; directory rule only: ${String(e.message).split("\n")[0]}\n`); } catch (_) {}
+    return false;
+  }
 }
 
 // ── plan-file detection ──────────────────────────────────────────────────────
@@ -78,22 +82,8 @@ const INTERMEDIATE_PATTERNS = [
   /-outline-concerns-log\.md$/,
   // debug logs
   /-debug\.log$/,
-  // round counters
-  /-(outline|detail)-plan-round-number\.txt$/,
-  // concern ledgers (including cap snapshots)
-  /-(outline|detail)-plan-concern-ledger(-cap-snapshot)?\.txt$/,
-  // codex-built context (renamed from -context.md to avoid WI-9 collision)
-  /-codex-context\.md$/,
-  // codex-built context build markers
-  /-codex-context\.(outline|detail)-plan\.built$/,
-  // review-plan-codex round log
-  /-plan\.jsonl$/,
   // workflow-init Path B prefill
   /-issue-prefill\.md$/,
-  // workflow-init abort marker
-  /-workflow-init-aborted-pathA-multiN-label-failure\.md$/,
-  // clarify-intent CI-C0 guard counter
-  /-guard-attempt\.tmp$/,
 ];
 
 function isPlanFile(filePath) {

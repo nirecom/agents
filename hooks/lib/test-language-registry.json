@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "headerMaxLines": 10,
+  "tableDrivenFallbackEntry": "bash",
+  "entries": [
+    {
+      "id": "bash",
+      "status": "supported",
+      "patterns": ["*.sh"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".sh" },
+      "siblingSuiteDir": true,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": { "file": "bin/lib/test-retire-predicate/case-parser.sh", "function": "trp_parse_case_markers" },
+      "tableDrivenDetector": { "file": "bin/lib/test-language-parts/bash.sh", "function": "has_table_driven_sh" },
+      "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "^[[:space:]]*(source|\\.)[[:space:]]+([^#]*/)?tests/lib/harness\\.sh" },
+      "diagnostics": { "nameLabel": ".sh", "flatRejectCode": "FLAT_TEST_SH_REJECTED" },
+      "note": "Only entry with a case-marker reader and a helper library, so the case-marker gate, dup groups and the harness check stay bash-only. A same-name sibling directory holds a split test's sub-files and retires with it. bash's own exit 77 is a test result, so the launcher runs it unwrapped."
+    },
+    {
+      "id": "pester",
+      "status": "supported",
+      "patterns": ["*.Tests.ps1"],
+      "selfIdentifying": true,
+      "nameStrip": { "prefix": "", "suffix": ".Tests.ps1" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": "pwsh", "prepare": null, "command": ["pwsh", "-NoProfile", "-Command", "Invoke-Pester -Path '{nativePathSq}' -CI"], "timeoutSeconds": 180, "suiteRootMarker": null },
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": { "nameLabel": ".Tests.ps1" },
+      "note": "The path goes inside a single-quoted PowerShell string, so {nativePathSq} doubles each quote and nothing in the name is evaluated."
+    },
+    {
+      "id": "pytest",
+      "status": "supported",
+      "patterns": ["test_*.py"],
+      "selfIdentifying": true,
+      "nameStrip": { "prefix": "", "suffix": ".py" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": "uv", "prepare": null, "command": ["uv", "run", "--no-project", "--with", "pytest", "pytest", "-q", "{nativePath}"], "timeoutSeconds": 180, "suiteRootMarker": null },
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": { "nameLabel": "test_*.py" },
+      "note": "uv supplies pytest per run, so no project environment is needed."
+    },
+    {
+      "id": "js",
+      "status": "recognized-only",
+      "patterns": ["*.js"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".js" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "//" },
+      "launch": null,
+      "caseMarkerReader": null,
+      "tableDrivenDetector": { "file": "bin/lib/test-language-parts/js.sh", "function": "has_table_driven_js" },
+      "helperLibrary": null,
+      "diagnostics": {},
+      "note": "Not selfIdentifying: a .js file is a test only directly under a tests/<category>/ directory (three files today), where run-all reports it UNSUPPORTED instead of running it."
+    },
+    {
+      "id": "test-naming-convention",
+      "status": "recognized-only",
+      "patterns": ["*.test.*", "*.spec.*", "*_test.*", "test_*"],
+      "selfIdentifying": true,
+      "nameStrip": { "prefix": "", "suffix": "" },
+      "siblingSuiteDir": false,
+      "header": null,
+      "launch": null,
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": {},
+      "note": "Naming conventions that mark a file as a test by name alone in any language (show-diff skips previews for them). Never launched."
+    }
+  ]
+}

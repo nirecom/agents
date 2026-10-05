@@ -88,9 +88,15 @@ fi
 # original function and log a marker before delegating. Behaviour is unchanged;
 # only the observation is added. The real bin/ tree is never touched.
 
-K_BIN_COPY="$TMPDIR_BASE/k-bin"
+# The copy sits at <root>/bin with the test-language registry at <root>/hooks/lib:
+# bin/lib/test-language-registry.sh resolves the table two levels above itself.
+K_ROOT_COPY="$TMPDIR_BASE/k-root"
+K_BIN_COPY="$K_ROOT_COPY/bin"
 mkdir -p "$K_BIN_COPY"
 cp -R "$AGENTS_ROOT/bin/." "$K_BIN_COPY/" 2>/dev/null || true
+# shellcheck source=../../lib/test-language-registry-fixture.sh
+. "$AGENTS_ROOT/tests/lib/test-language-registry-fixture.sh"
+install_test_language_registry "$K_ROOT_COPY" "$AGENTS_ROOT"
 
 K_CALL_LOG="$TMPDIR_BASE/k-calls.log"
 : > "$K_CALL_LOG"

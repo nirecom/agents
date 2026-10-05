@@ -44,7 +44,7 @@ require_source() {
 
 seed_state_raw() {
     local tmp="$1" sid="$2" alert_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const now = new Date().toISOString();
@@ -57,8 +57,8 @@ const st = {
   alert: $alert_json,
   audit: {},
 };
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
-" >/dev/null 2>&1
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
+" >/dev/null 2>&1 || fail "seed_state_raw($sid): supervisor-state seed write failed"
 }
 
 make_fixture() {
@@ -89,7 +89,7 @@ require('$STATEIO_NODE').markStep('$sid', 'workflow_init', 'complete');" >/dev/n
 run_guard() {
     local tmp="$1" sid="$2" tp="${3:-}"
     GUARD_OUT=$(printf '{"stop_hook_active":false,"session_id":"%s","transcript_path":"%s"}' "$sid" "$tp" \
-        | ( unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+        | ( unset CLAUDE_CODE_SESSION_ID
             CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" \
               run_with_timeout 5 node "$HOOK" 2>/dev/null ))
     GUARD_RC=$?
@@ -97,7 +97,7 @@ run_guard() {
 
 read_alert_phase() {
     local tmp="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 try {
@@ -118,7 +118,7 @@ run_g34() {
     local tmp rc phase
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g34-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null }"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g34-sid --set-alert-phase done >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g34-sid --set-alert-phase done >/dev/null 2>&1
     rc=$?
     phase=$(read_alert_phase "$tmp" "g34-sid")
     rm -rf "$tmp"
@@ -133,7 +133,7 @@ run_g35() {
     require_source "$CLI" "G35: CLI --set-alert-phase invalid -> exit 1" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g35-sid --set-alert-phase bogus >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g35-sid --set-alert-phase bogus >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 1 ]; then
@@ -147,7 +147,7 @@ run_g36() {
     require_source "$CLI" "G36: CLI --set-alert-phase alone -> succeeds" || return
     local tmp rc phase
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g36-sid --set-alert-phase pending >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g36-sid --set-alert-phase pending >/dev/null 2>&1
     rc=$?
     phase=$(read_alert_phase "$tmp" "g36-sid")
     rm -rf "$tmp"
@@ -162,7 +162,7 @@ run_g37() {
     require_source "$CLI" "G37: CLI --set-alert-phase paused + --l2-armed-at -> exit 1" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g37-sid --set-alert-phase paused --l2-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g37-sid --set-alert-phase paused --l2-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 1 ]; then
@@ -180,7 +180,7 @@ run_g38() {
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g38-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g38-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -206,7 +206,7 @@ run_g39() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state_raw "$tmp" "g39-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g39-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -226,7 +226,7 @@ run_g40() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state_raw "$tmp" "g40-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g40-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -242,7 +242,7 @@ run_g41() {
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g41-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g41-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -262,7 +262,7 @@ run_g42() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state_raw "$tmp" "g42-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g42-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then

@@ -1,23 +1,11 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, layer2, writer, fix-967, paused, scope:issue-specific
-# RED for issue #967 (updated for #1166 frozen->paused rename).
-#
-# Validates:
-# - ensureAlertScheduled() must re-arm when phase is "paused" (only "done"/"closed"
-#   short-circuits). Re-arm resets alert_phase=pending, sets alert_armed_at=<now>,
-#   and resets alert_retry_count=0 so the freeze-on-retry counter starts fresh.
-# - The final-report-env.json marker must be IGNORED when phase is "paused"
-#   (the marker only suppresses re-arm for non-paused pre-final-report sessions).
-# - validateAlertPhaseTransition must allow paused->pending (re-arm),
-#   reject paused->done, and reject done->pending.
-#
-# L3 gap (what this test does NOT catch):
-# - hook registration — supervisor-state-writer.js is called by other hooks (trigger,
-#   guard) which must be wired in settings.json; direct invocations here bypass that
-# - real appendFinding call chain from supervisor-report CLI in a live session
-# Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
-#   fires at WORKFLOW_USER_VERIFIED preflight when hooks/*.js changes are staged
+# #967/#1166: ensureAlertScheduled re-arms from "paused" (pending, fresh armed_at, retry 0);
+# only done/closed short-circuit. The control-dir final-report-env.json marker is ignored
+# while paused. validateAlertPhaseTransition: paused->pending ok; paused->done, done->pending no.
+# L3 gap: hook registration and the live supervisor-report call chain
+# (mitigated by bin/check-verification-gate.sh hook-registration).
 
 set -u
 
@@ -68,7 +56,7 @@ process.stdout.write(typeof w.validateAlertPhaseTransition === 'function' ? 'yes
 # (use "null" or "'pending'", etc.). retry_count is a numeric literal.
 seed_state_layer2() {
     local tmp="$1" sid="$2" phase="$3" armed_at="$4" retry_count="$5"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -82,7 +70,15 @@ st.alert = {
   alert_cause: null,
   alert_retry_count: $retry_count
 };
-fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
+" >/dev/null 2>&1
+}
+
+seed_marker() {
+    local tmp="$1" sid="$2"
+    CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+const cd = require('$_AGENTS_DIR_NODE/hooks/workflow-state/state-io/control-dir.js');
+require('fs').writeFileSync(cd.controlPath('$sid', 'final-report-env.json', { forWrite: true }), '');
 " >/dev/null 2>&1
 }
 
@@ -92,7 +88,7 @@ run_r1() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r1-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const r = w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'new finding after pause', reporter: 'test' });
 if (r !== true) { console.error('appendFinding returned: '+r); process.exit(2); }
@@ -115,7 +111,7 @@ run_r2() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r2-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -137,7 +133,7 @@ run_r3() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r3-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -159,7 +155,7 @@ run_r4() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r4-sid"
     seed_state_layer2 "$tmp" "$sid" "'done'" "null" "0"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -182,9 +178,8 @@ run_r5() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r5-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    # Marker file uses sessionId-final-report-env.json (see ensureAlertScheduled line ~83).
-    touch "$tmp/${sid}-final-report-env.json"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    seed_marker "$tmp" "$sid"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -209,8 +204,8 @@ run_r5b() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r5b-sid"
     seed_state_layer2 "$tmp" "$sid" "null" "null" "0"
-    touch "$tmp/${sid}-final-report-env.json"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    seed_marker "$tmp" "$sid"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -233,7 +228,7 @@ run_r5c() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r5c-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const w = require('$WRITER_NODE');
 // Re-arm from paused
@@ -363,7 +358,7 @@ run_r7() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r7-sid"
     seed_state_layer2 "$tmp" "$sid" "'pending'" "'2026-06-06T11:00:00.000Z'" "0"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -386,7 +381,7 @@ run_r8() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r8-sid"
     seed_state_layer2 "$tmp" "$sid" "null" "null" "0"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -410,7 +405,7 @@ run_r9() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r9-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const now = new Date().toISOString();
 const result = w.writeAlertState('$sid', { alert_phase: 'pending', alert_armed_at: now, alert_retry_count: 0 });

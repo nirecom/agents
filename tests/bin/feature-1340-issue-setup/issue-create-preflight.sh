@@ -4,17 +4,10 @@
 # Tags: issue-setup, issue-create-preflight, github-issues, scope:issue-specific
 # N/A: secret-leakage — checks read public label/project structure, not secrets; gh owns tokens.
 # N/A (C5): --repo=VALUE GNU-equals form + flexible flag ordering — the script uses space-separated flags; equals-form is not a supported surface.
-#
-# Tests for issue-create-preflight.sh (new file, step 6 of #1340).
-# L2: --check-labels with type:task present → rc=0; absent → rc=1;
-#     --check-project resolver rc=0 → rc=0; resolver rc=1 → rc=1;
-#     label result independent of project result; --repo injection matrix.
-# L1: --repo accepted by both flags.
-#
-# L3 gap (what this test does NOT catch):
-# - Whether preflight correctly calls live GitHub API for label/project checks.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# issue-create-preflight.sh (#1340 step 6). L2: --check-labels type:task present/absent → rc 0/1; --check-project
+# follows resolver rc; label result independent of project; --repo injection matrix. L1: --repo accepted by both flags.
+# L3 gap: live GitHub API label/project checks.
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -98,6 +91,7 @@ MOCK_EOF
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
+    export CLAUDE_WORKFLOW_DIR="$TMP/workflow"
     export AGENTS_CONFIG_DIR="$TMP/agents-config"
     mkdir -p "$AGENTS_CONFIG_DIR"
 }
@@ -107,7 +101,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR \
+    unset MOCK_LOG WORKFLOW_PLANS_DIR CLAUDE_WORKFLOW_DIR AGENTS_CONFIG_DIR \
           GH_MOCK_LABELS_HAVE_TASK GH_MOCK_RESOLVER_FAIL \
           GH_MOCK_LABEL_LIST_FAIL GH_MOCK_OWNER_REPO 2>/dev/null || true
 }

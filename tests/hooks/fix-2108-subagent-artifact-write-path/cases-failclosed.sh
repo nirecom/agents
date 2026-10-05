@@ -28,7 +28,7 @@ _fc_classify() {
     local wf="$1" sid="$2" base="$3" spell="$4"
     (
         cd "$NEUTRAL_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_CODE_SESSION_ID
         if [ "$wf" = "-" ]; then unset CLAUDE_WORKFLOW_DIR; else export CLAUDE_WORKFLOW_DIR="$wf"; fi
         run_probe "$PROBE_DIR/fc-probe.js" "$PB_NODE" "$base" "$spell" "$sid"
     )
@@ -95,7 +95,7 @@ run_C1c_fail_closed() {
 _c7_complete() {
     (
         cd "$NEUTRAL_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_CODE_SESSION_ID
         export CLAUDE_WORKFLOW_DIR="$1"
         run_probe -e "const m=require(process.argv[1]);process.stdout.write(String(m.observeActiveSessionIds({sessionId:'wsid'}).complete))" "$ACTIVE_SIDS_NODE"
     )
@@ -106,7 +106,7 @@ _c7_complete() {
 # branch had no deterministic case at all. Every fault here is a real on-disk fixture
 # driven through the real classifier — no mocks, no monkey-patched fs.
 run_C7_state_faults() {
-    local notdir notdir_node bad bad_node envfile
+    local notdir notdir_node bad bad_node
 
     _fc_write_probe
 
@@ -160,22 +160,6 @@ run_C7_state_faults() {
         "$(_fc_classify "$bad_node" wsid "issue-2108-survey.gh-env" clean)"
     assert_eq "C7-4 control: sid-shaped stems in the store are unaffected" "marker" \
         "$(_fc_classify "$bad_node" wsid "wsid.gh-env" clean)"
-
-    # C7-5 — readFileSync fault on the sid-resolution side: CLAUDE_ENV_FILE points at a
-    # DIRECTORY, so the SSOT resolver's read throws (EISDIR). Whether that is caught
-    # inside resolveSessionId or surfaces as complete:false, the classifier must still
-    # answer and must still block a real marker — never crash into an empty verdict.
-    envfile="$TMPBASE_SH/c7-env-is-a-dir"
-    mkdir -p "$envfile" 2>/dev/null || true
-    local v
-    v="$(
-        cd "$NEUTRAL_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
-        export CLAUDE_ENV_FILE="$(node_path "$envfile")"
-        export CLAUDE_WORKFLOW_DIR="$bad_node"
-        run_probe "$PROBE_DIR/fc-probe.js" "$PB_NODE" "wsid.workflow-off" clean wsid
-    )"
-    assert_eq "C7-5 unreadable CLAUDE_ENV_FILE: real marker still blocks" "marker" "$v"
 
     # SKIPPED: a state file that becomes unreadable BETWEEN the readdir and the read.
     # Because: the observer never opens the files (the filename is the sid), so there is

@@ -1,18 +1,12 @@
 #!/usr/bin/env bash
-# tests/bin/feat-1761-reopen-note-guard.sh
 # Tests: bin/github-issues/reopen-with-update.sh, bin/github-issues/issue-create-dispatch.sh, bin/lib/gh-outbound-guard.sh
 # Tags: issue-create, reopen, outbound-guard, note, security, gh-mock, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - The real scan-outbound.sh ruleset matching real private-info patterns (mocked here).
-# - Real GitHub comment PATCH/create semantics.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-#
-# S13: reopen-with-update.sh gains an optional 2nd argument (note) carrying
-# review-stage provenance derived from codex free text. Because externally authored
-# text now rides on the comment body, the comment body must pass gh_outbound_guard
-# exactly like the issue body already does (CPR-ORTH). Guard failure drops the note and
-# continues with the fixed text — it never aborts the reopen.
+# TL3 gap: the real scan-outbound.sh ruleset (mocked here) and real GitHub comment
+# PATCH/create semantics. Mitigation: WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: skill-orchestration.
+# S13: reopen-with-update.sh's optional 2nd argument (note) carries codex-derived
+# review provenance, so the comment body must pass gh_outbound_guard exactly like the
+# issue body (CPR-ORTH). Guard failure drops the note and continues — never aborts.
 
 set -u
 
@@ -33,17 +27,12 @@ MOCKDIR="$WORK/bin"; mkdir -p "$MOCKDIR"
 FAKE_CFG="$WORK/cfg"; mkdir -p "$FAKE_CFG/bin"
 cat > "$FAKE_CFG/bin/scan-outbound.sh" <<'SCAN'
 #!/usr/bin/env bash
-# Mock scanner. Records the label it was called with; blocks when $GUARD_MOCK_RC is
-# set (fail tier) AND the label matches $GUARD_MOCK_LABEL (glob, default '*' = every
-# call).
-#
-# The label filter is not a convenience — reopen-with-update.sh runs the guard twice
-# with different failure contracts: 'reopen-comment:#N' (the note) is advisory, WARN
-# and drop; 'reopen:#N' (the composed issue body) is fatal by the #1591 outbound-scan
-# contract that tests/fix-1591-forge-write-scan.sh pins at exactly rc=1. A scanner
-# that blocks unconditionally makes the two indistinguishable, so a case meaning to
-# exercise the advisory path is aborted by the fatal one and its assertion becomes
-# unsatisfiable rather than false.
+# Mock scanner. Records its label; blocks when $GUARD_MOCK_RC is set AND the label
+# matches $GUARD_MOCK_LABEL (glob, default '*' = every call). The filter matters:
+# reopen-with-update.sh guards twice — 'reopen-comment:#N' (the note) is advisory
+# (WARN and drop), 'reopen:#N' (the issue body) is fatal per the #1591 contract
+# (tests/fix-1591-forge-write-scan.sh, rc=1). An unconditional block would let the
+# fatal path abort a case meant to exercise the advisory one.
 LABEL="${2:-stdin}"
 printf '%s\n' "$LABEL" >> "${GUARD_LABEL_LOG:-/dev/null}"
 cat > /dev/null
@@ -103,7 +92,7 @@ run_reopen() {
     COMMENT_CAPTURE="$COMMENT_FILE" \
     GH_ARGS_LOG="$GH_ARGS_LOG" \
     AGENTS_CONFIG_DIR="$FAKE_CFG" \
-    CLAUDE_SESSION_ID="test-session" \
+    CLAUDE_CODE_SESSION_ID="test-session" \
     PATH="$MOCKDIR:$PATH" \
         "$RWT" 30 bash "$RWU" "$num" "$note" >"$d/stdout.txt" 2>"$d/stderr.txt"
     RC=$?
@@ -239,7 +228,7 @@ echo ""
 echo "=== N10: no-note invocation is unchanged (regression guard) ==="
 d="$WORK/n10"; mkdir -p "$d"
 GUARD_LABEL_LOG="$d/labels.txt" COMMENT_CAPTURE="$d/comment.txt" GH_ARGS_LOG="$d/gh-args.log" \
-AGENTS_CONFIG_DIR="$FAKE_CFG" CLAUDE_SESSION_ID="test-session" PATH="$MOCKDIR:$PATH" \
+AGENTS_CONFIG_DIR="$FAKE_CFG" CLAUDE_CODE_SESSION_ID="test-session" PATH="$MOCKDIR:$PATH" \
     "$RWT" 30 bash "$RWU" 4242 >"$d/stdout.txt" 2>"$d/stderr.txt"
 if [ $? -eq 0 ] && grep -q 'issue reopen' "$d/gh-args.log"; then
     pass "N10-single-arg-invocation-still-works"

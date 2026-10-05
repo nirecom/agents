@@ -49,7 +49,7 @@ Phase 1 runs unconditionally regardless of gate outcome.
 IC-1. Resolve session intent:
    Resolve `<PLANS_DIR>` with one standalone Bash call —
    `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` — and read `<SESSION_ID>`
-   from `$CLAUDE_SESSION_ID`. `<INTENT_MD>` is `<PLANS_DIR>/<SESSION_ID>-intent.md`.
+   from `$CLAUDE_CODE_SESSION_ID`. `<INTENT_MD>` is `<PLANS_DIR>/<SESSION_ID>-intent.md`.
    Skip the gate silently when `<SESSION_ID>` is empty or `<INTENT_MD>` does not exist.
 
 IC-1a. Read `rules/mid-workflow-findings.md` — on-demand-only, never auto-injected; it owns the capture paths the IC-3 notice points the user at.
@@ -102,7 +102,7 @@ If invoked with `--skip-survey` (caller already ran a bulk dedupe pass and suppl
 
 Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote) — write the artifact with `make-empty-verdict.sh <out> none` and proceed to Phase 3 with `verdict: none`.
 
-2a. Pre-resolve in main: `session_id` (from `$CLAUDE_SESSION_ID` or env), `agents_config_dir` (absolute), `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from IC-1).
+2a. Pre-resolve in main: `session_id` (from `$CLAUDE_CODE_SESSION_ID`), `agents_config_dir` (absolute), `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from IC-1).
 2b. Invoke the `issue-create-survey-worker` subagent via the Agent tool (`subagent_type`) with `title`, `background`, `changes` from Phase 1 input.
 2c. `status: failed` → stop and report error.
 2d. `status: no_candidates` → write the artifact with `make-empty-verdict.sh <out> none` and proceed to Phase 3 with `verdict: none`.
@@ -187,7 +187,7 @@ Failure is non-fatal — the script logs a stderr warning and continues.
 
 ## Behavioral notes
 
-- **Projects v2**: the linked Projects v2 (owner, number, node id) is auto-resolved from the git remote via `bin/github-issues/lib/resolve-project.sh` (#641). No hardcoded defaults — repos without a linked Projects v2 skip the attach step with a warning. Result is cached per `owner/repo` at `${WORKFLOW_PLANS_DIR}/cache/project-resolve.tsv`. Attach failure is non-fatal — warnings on stderr; re-run `gh project item-add` manually to recover.
+- **Projects v2**: the linked Projects v2 (owner, number, node id) is auto-resolved from the git remote via `bin/github-issues/lib/resolve-project.sh` (#641). No hardcoded defaults — repos without a linked Projects v2 skip the attach step with a warning. Result is cached per `owner/repo` at `${CLAUDE_WORKFLOW_DIR}/cache/project-resolve.tsv`. Attach failure is non-fatal — warnings on stderr; re-run `gh project item-add` manually to recover.
 - **Content Date field**: when the resolved project has a field named "Content Date" of type `DATE`, the script sets it to the issue's creation date (`YYYY-MM-DD`). The field id is discovered alongside the project node — no env var override needed. Projects without a Content Date field skip the step silently.
 - **Sub-issue API**: dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` with `sub_issue_id` = child's integer databaseId (fetched via `gh api graphql -f query='{ repository(owner: "OWNER", name: "REPO") { issue(number: N) { databaseId } } }' --jq '.data.repository.issue.databaseId'`), passed via `-F` (integer type).
 - **make-parent partial failure**: if a child attach fails mid-loop, both the parent and the proposal are already created — their URLs are still emitted, and `make-parent` exits non-zero with retry instructions on stderr. No atomic semantics (GitHub has no transactions).

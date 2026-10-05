@@ -17,7 +17,7 @@ source "$AGENTS_DIR/tests/lib/harness.sh"
 TMPDIR_BASE="$(make_tmp)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 harness_isolate "$TMPDIR_BASE"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 SCRIPT_DIR="$AGENTS_DIR/tests/hooks/feature-2327-review-tests-handler-fingerprint"
 
@@ -34,6 +34,11 @@ case_end
 case_begin "accept-terminal-in-progress-review-tests" "hooks/workflow-state/state-io/review-tests.js"
 # shellcheck source=./feature-2327-review-tests-handler-fingerprint/p3-accept-terminal-in-progress.sh
 . "$SCRIPT_DIR/p3-accept-terminal-in-progress.sh"
+case_end
+
+case_begin "clean-complete-clears-warnings" "hooks/workflow-state/state-io/review-tests.js"
+# shellcheck source=./feature-2327-review-tests-handler-fingerprint/p4-clean-complete-clears-warnings.sh
+. "$SCRIPT_DIR/p4-clean-complete-clears-warnings.sh"
 case_end
 
 echo ""

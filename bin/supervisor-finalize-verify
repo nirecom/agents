@@ -19,7 +19,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PATH="${PATH}:${SCRIPT_DIR}"
 
 SESSION_ID=""
-PLANS_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -28,7 +27,6 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --plans-dir)
-      PLANS_DIR="${2:?--plans-dir requires a value}"
       shift 2
       ;;
     --)
@@ -56,15 +54,10 @@ if [[ -z "$SESSION_ID" ]]; then
   exit 1
 fi
 
-if [[ -z "$PLANS_DIR" ]]; then
-  if [[ -n "${AGENTS_CONFIG_DIR:-}" ]] && [[ -x "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir" ]]; then
-    PLANS_DIR="$(bash "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir")"
-  else
-    PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
-  fi
+if ! STATE_FILE="$(node "$SCRIPT_DIR/workflow-control-dir" --session "$SESSION_ID" --file supervisor-state.json)"; then
+  echo "ERROR: cannot resolve the session control dir for $SESSION_ID" >&2
+  exit 1
 fi
-
-STATE_FILE="${PLANS_DIR}/${SESSION_ID}-supervisor-state.json"
 
 # If state file does not exist → no state to verify, treat as no-op
 if [[ ! -f "$STATE_FILE" ]]; then

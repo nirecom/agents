@@ -4,13 +4,8 @@
 # Tags: supervisor, em-supervisor, writer, schema, layer2, alert_retry_count, unit, scope:912, scope:common
 # Unit tests for the #912 alert_retry_count field, incrementAlertRetryCount function,
 # and the CLI's --increment-alert-retry-count flag with auto-freeze semantics.
-#
-# L3 gap (what this test does NOT catch):
-# - the guard hook actually invoking incrementAlertRetryCount end-to-end (covered by feature-719-supervisor-guard-hook.sh G20-G28)
-# - settings.json registration of any new Stop hooks (hook-registration risk category)
-# - real Claude Code transcript JSONL field shape — tests use unit-level direct module calls
-# Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
-#   fires at WORKFLOW_USER_VERIFIED preflight when settings.json changes are staged.
+# L3 gap: guard hook calling incrementAlertRetryCount end-to-end (feature-719-supervisor-guard-hook.sh G20-G28); new Stop hook registration; real transcript JSONL shape.
+# Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
@@ -127,7 +122,7 @@ run_w3() {
     require_increment_fn "W3: incrementAlertRetryCount first call returns {count:1, frozen:false}" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const r = w.incrementAlertRetryCount('w3-sid');
 if (!r || typeof r !== 'object') { console.error('not obj: '+JSON.stringify(r)); process.exit(2); }
@@ -152,7 +147,7 @@ run_w4() {
     require_increment_fn "W4: at threshold returns {count:T, frozen:true}, alert_phase=paused, alert_armed_at=null" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" ALERT_RETRY_THRESHOLD="$ALERT_RETRY_THRESHOLD" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" ALERT_RETRY_THRESHOLD="$ALERT_RETRY_THRESHOLD" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const T = parseInt(process.env.ALERT_RETRY_THRESHOLD, 10);
 let last = null;
@@ -180,7 +175,7 @@ run_w5() {
     require_increment_fn "W5: after auto-freeze, subsequent calls idempotent (count unchanged, frozen:true)" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" ALERT_RETRY_THRESHOLD="$ALERT_RETRY_THRESHOLD" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" ALERT_RETRY_THRESHOLD="$ALERT_RETRY_THRESHOLD" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const T = parseInt(process.env.ALERT_RETRY_THRESHOLD, 10);
 let last = null;
@@ -208,9 +203,9 @@ run_w6() {
     require_increment_cli_flag "W6: CLI --increment-alert-retry-count exits 0 and increments on disk" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --increment-alert-retry-count --session-id "w6-sid" >/dev/null 2>&1
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --increment-alert-retry-count --session-id "w6-sid" >/dev/null 2>&1
     rc=$?
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('w6-sid');
 process.stdout.write(String(st && st.alert && st.alert.alert_retry_count));
@@ -243,7 +238,7 @@ process.stdout.write(r === true && st && st.alert && st.alert.alert_retry_count 
     fi
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const r = w.writeAlertState('w6b-sid', { alert_retry_count: 5 });
 if (r !== true) { console.error('write returned: '+r); process.exit(2); }
@@ -266,7 +261,7 @@ run_w6c() {
     require_increment_cli_flag "$label" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --increment-alert-retry-count --set-alert-phase paused --session-id "w6c-sid" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
@@ -286,11 +281,11 @@ run_w6d() {
     local tmp probe rc out
     tmp="$(mktemp -d)"
     # Seed: retry_count=1
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --increment-alert-retry-count --session-id "w6d-sid" >/dev/null 2>&1
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --increment-alert-retry-count --session-id "w6d-sid" >/dev/null 2>&1
     # Now run reset
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --clear-alert-armed-at --set-alert-phase done --session-id "w6d-sid" >/dev/null 2>&1
+    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --clear-alert-armed-at --set-alert-phase done --session-id "w6d-sid" >/dev/null 2>&1
     rc=$?
-    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('w6d-sid');
 process.stdout.write(String(st && st.alert && st.alert.alert_retry_count));

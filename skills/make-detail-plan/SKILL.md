@@ -24,7 +24,7 @@ Run `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/surface-delivery-p
 ### MDP-3 — Choose planner model
 
 Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage detail'`. If line 1 is not `NONE`, use its `model=<alias>` and `signals=<csv-or-none>` lines directly.
-If `NONE` (fail-open for sessions without persisted evaluation): dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` paths + task context (rubric: `skills/_shared/judge-task-complexity.md`). Write the raw output to `<PLANS_DIR>/<session-id>-detail-judge-raw.txt` (Write tool — untrusted text via file only). Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-detail-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-detail-signals.txt"`. Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage detail --signals-file "<PLANS_DIR>/<session-id>-detail-signals.txt"` and use its `model=<alias>` line — never judge the level inline.
+If `NONE` (fail-open for sessions without persisted evaluation): dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` paths + task context (rubric: `skills/_shared/judge-task-complexity.md`). Write the raw output to `<PLANS_DIR>/<session-id>-detail-judge-raw.txt` (Write tool — untrusted text via file only). Run `node "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-detail-judge-raw.txt" --session "<session-id>" --stage detail`. Run `node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage detail --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
 Emit (Claude text, not Bash): `Model selected: **<model= alias>** (signals: [ids from the `signals=` line, or "none"])`.
 
 ### MDP-4 — Initial draft
@@ -51,9 +51,9 @@ Detail-stage caller paths:
 
 Exit code → action: SSOT table in `skills/_shared/codex-review-loop.md`. **Exit 4 must NOT trigger `detail-reviewer` fallback** — halt + surface stderr. Only exit 3 falls back silently.
 
-**exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md` (`<N>` from `<PLANS_DIR>/<session-id>-detail-plan-round-number.txt`); re-delegate to planner and loop back to MDP-5.
+**exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md` (`<N>` from `<CONTROL_DIR>/detail-plan-round-number.txt`, `<CONTROL_DIR>` = `node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session <session-id>`); re-delegate to planner and loop back to MDP-5.
 
-**Exit 7 (FINALIZE_FAILED)** — `<PLANS_DIR>/<session-id>-detail-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format detail-plan` before the sentinel.
+**Exit 7 (FINALIZE_FAILED)** — `<CONTROL_DIR>/detail-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format detail-plan` before the sentinel.
 
 ### MDP-6 — Cap outcome dispatch
 
@@ -61,30 +61,34 @@ Apply only when the per-stage wrapper script (MDP-5) returns a non-zero non-one 
 
 **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MDP-5 (no user confirmation). This is the budget-available path — `bin/review-loop-verdict` already verified budget > 0. `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
 
-**exit 2 (ESCALATE):** Run `"$AGENTS_CONFIG_DIR/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <PLANS_DIR>/<session-id>-detail-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Stop the loop. This is the risk-signal-present ceiling path — a blocking concern requires human attention.
+**exit 2 (ESCALATE):** Run `"$AGENTS_CONFIG_DIR/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/detail-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Stop the loop. This is the risk-signal-present ceiling path — a blocking concern requires human attention.
 
-**exit 6 (HIGH_UNRESOLVED):** run `review-loop-summarize-concerns --budget-remaining 0 --ledger <PLANS_DIR>/<session-id>-detail-plan-concern-ledger.txt --raw <RAW_FILE> --label detail-plan`; confirm artifact via `concern-ledger check-finalized`; stop loop, do not proceed to MDP-7.
+**exit 6 (HIGH_UNRESOLVED):** run `review-loop-summarize-concerns --budget-remaining 0 --ledger <CONTROL_DIR>/detail-plan-concern-ledger.txt --raw <RAW_FILE> --label detail-plan`; confirm artifact via `concern-ledger check-finalized`; stop loop, do not proceed to MDP-7.
 
-`<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md`; `<N>` = value from `<PLANS_DIR>/<session-id>-detail-plan-last-round.txt`.
+`<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md`; `<N>` = value from `<CONTROL_DIR>/detail-plan-last-round.txt`. Exit 8: AskUserQuestion per exit-codes.md "Escalation by format".
 
 Research/malformed-retry cap escalation: see `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/cap-escalation-message.sh"` for message order.
 
 ### MDP-7 — Assemble + confirm
 
-Before composing the summary or confirm-plan prose, issue the standalone call `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG` and read `<CONV_LANG>` from its stdout. If `<CONV_LANG>` is non-empty, produce the one-paragraph summary (OFF path) and the one-line summary inside `<<WORKFLOW_CONFIRM_DETAIL: ...>>` (ON path) in that language.
-
 On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source. `## Class members` is NOT carried into detail.md — its SSOT is intent.md (#2228).
 
 Run `bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 2 mandatory sections — helper strips planner-authored copies (including any `## Class members` residue). Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt.
 
-After assemble-mandatory.sh succeeds, run `bash "$AGENTS_CONFIG_DIR/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the CONFIRM_DETAIL check — blocks even on the OFF (auto-approval) path.
+After assemble-mandatory.sh succeeds, run `bash "$AGENTS_CONFIG_DIR/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the gate check — blocks even on the `proceed` (auto-approval) path.
 
-Scope-change notification gate (before the CONFIRM_DETAIL check): run `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/detect-scope-change.sh" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit 0 → scope change detected: present the one-line description to the user and show the relevant detail plan section even when CONFIRM_DETAIL=off. Exit 1 → no scope change → proceed normally. Exit 2 (usage error) → warn and continue.
+Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
+At detail, `--gate` also folds in the outline→detail scope change, so it runs after the assembly above.
 
-Apply confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
+Issue the standalone call `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG`; when its stdout `<CONV_LANG>` is non-empty, write both the `proceed` one-paragraph summary and the `ask` one-line `<<WORKFLOW_CONFIRM_DETAIL: ...>>` summary in that language.
+
+Apply the rest of the confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
-- `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3). DO NOT present any path — `show-plan-link.js`'s `Plan file written:` line is the sole breadcrumb (protocol CPA-2).
-- `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation. Do NOT end the response on the CONFIRM echo.
+- Re-entering MDP-7 from a Revise loop: rerun the gate check from the trigger line, without `--scope-change-approved`.
+- `GATE_ACTION=proceed`: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3). DO NOT present any path — `show-plan-link.js`'s `Plan file written:` line is the sole breadcrumb (protocol CPA-2).
+- `GATE_ACTION=present-and-stop`: present the scope change line from `GATE_HINT` and the relevant detail plan section, then end the turn.
+- After `present-and-stop`, on approval run the standalone `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --gate --scope-change-approved` and follow its `GATE_ACTION` (normally `proceed`); on a change request, loop to MDP-5.
+- `GATE_ACTION=ask`: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation. Do NOT end the response on the CONFIRM echo.
 
 ## Research Escalation
 

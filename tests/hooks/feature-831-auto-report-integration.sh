@@ -2,15 +2,8 @@
 # tests/hooks/feature-831-auto-report-integration.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-issue-close.js, hooks/workflow-gate.js, hooks/workflow-mark/enforce-override-handlers.js
 # Tags: supervisor, em-supervisor, layer1, hook, integration, auto-report, scope:issue-specific
-# Tests for issue #831 — hook auto-report integration.
-#
-# Pipes synthetic JSON payloads to each hook and asserts a finding was written
-# to PLANS_DIR/<sid>-supervisor-state.json with the correct taxonomy. Negative
-# cases (WORKFLOW_ON sentinel) assert NO finding is written.
-#
-# RED until the hooks adopt hooks/lib/supervisor-emit.js. Cases SKIP when a
-# feature-probe shows the integration is not yet wired up — they are not
-# expected to pass pre-implementation.
+# #831: synthetic payloads to each hook must write a finding to <wf>/<sid>.control/supervisor-state.json
+# (#2434 control file) with the right taxonomy; WORKFLOW_ON writes none. SKIP when supervisor-emit.js is absent.
 
 set -u
 
@@ -53,7 +46,7 @@ finding_count() {
     local tmp_node="$1" sid="$2"
     run_with_timeout 5 node -e "
 const fs=require('fs');
-const p=require('path').join(process.argv[1], process.argv[2]+'-supervisor-state.json');
+const p=require('path').join(process.argv[1], process.argv[2]+'.control', 'supervisor-state.json');
 try { const st=JSON.parse(fs.readFileSync(p,'utf8')); console.log((st.layer1&&st.layer1.findings||[]).length); }
 catch(e){ console.log(0); }
 " -- "$tmp_node" "$sid" 2>/dev/null
@@ -64,7 +57,7 @@ finding_first() {
     local tmp_node="$1" sid="$2"
     run_with_timeout 5 node -e "
 const fs=require('fs');
-const p=require('path').join(process.argv[1], process.argv[2]+'-supervisor-state.json');
+const p=require('path').join(process.argv[1], process.argv[2]+'.control', 'supervisor-state.json');
 try {
   const st=JSON.parse(fs.readFileSync(p,'utf8'));
   const f=(st.layer1&&st.layer1.findings||[])[0];

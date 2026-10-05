@@ -18,6 +18,8 @@ CODEX_BIN="$AGENTS_ROOT/bin/review-code-codex"
 SUMMARIZE="$AGENTS_ROOT/bin/review-loop-summarize-concerns"
 WRAPPER="$AGENTS_ROOT/skills/review-code-security/scripts/run-codex-review-loop.sh"
 
+AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -69,9 +71,7 @@ assert_contains_block() {
 
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-unset CLAUDE_ENV_FILE 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
@@ -186,7 +186,10 @@ new_env() {
     ENV_SEQ=$((ENV_SEQ + 1))
     SID="sc$ENV_SEQ"
     PLANS="$TMPDIR_BASE/plans-$ENV_SEQ"
-    mkdir -p "$PLANS/workflow-state"
+    WORKFLOW_STATE="$TMPDIR_BASE/workflow-$ENV_SEQ"
+    mkdir -p "$PLANS" "$WORKFLOW_STATE"
+    export CLAUDE_WORKFLOW_DIR="$WORKFLOW_STATE"
+    export WORKFLOW_PLANS_DIR="$PLANS"
     printf 'none\n' > "$PLANS/tradeoffs.md"
     RL_REPO="$REPO"
     RL_PATH="$FULL_PATH"
@@ -237,10 +240,14 @@ run_cli() { bash "$CLI" "$@"; }
 cl() { ( set +u; . "$LIB" >/dev/null 2>&1 || exit 127; "$@" ); }
 
 # --- artifact readers -------------------------------------------------------
-ledger_file()  { printf '%s/%s-%s-concern-ledger.txt' "$1" "$2" "$LEDGER_FORMAT"; }
-round_file()   { printf '%s/%s-%s-round-number.txt' "$1" "$2" "$LOOP_FORMAT"; }
-delta_file()   { printf '%s/%s-%s-round-%s-delta-%s.txt' "$1" "$2" "$LEDGER_FORMAT" "$3" "$4"; }
-json_file()    { printf '%s/%s-%s-unresolved-concerns.json' "$1" "$2" "$LEDGER_FORMAT"; }
+# Control files live in <CLAUDE_WORKFLOW_DIR>/<sid>.control/ (#2434); ctl_dir
+# creates it so a case can seed a file there before the loop first runs.
+ctl_dir()      { mkdir -p "$CLAUDE_WORKFLOW_DIR/$1.control"; printf '%s/%s.control' "$CLAUDE_WORKFLOW_DIR" "$1"; }
+ctl_count()    { find "$CLAUDE_WORKFLOW_DIR" -path "*.control/*" -name "$1" -type f 2>/dev/null | wc -l | tr -d ' '; }
+ledger_file()  { printf '%s/%s-concern-ledger.txt' "$(ctl_dir "$2")" "$LEDGER_FORMAT"; }
+round_file()   { printf '%s/%s-round-number.txt' "$(ctl_dir "$2")" "$LOOP_FORMAT"; }
+delta_file()   { printf '%s/%s-round-%s-delta-%s.txt' "$(ctl_dir "$2")" "$LEDGER_FORMAT" "$3" "$4"; }
+json_file()    { printf '%s/%s-unresolved-concerns.json' "$(ctl_dir "$2")" "$LEDGER_FORMAT"; }
 staging_field() { grep -m1 '^#producer|' "$1" 2>/dev/null | cut -d'|' -f"$2"; }
 
 F_SEV=2; F_STATE=3; F_FIRST=4; F_LAST=5; F_SLOT=6; F_DISCRIM=7
@@ -300,6 +307,7 @@ for _f in "$LOOP_BIN" "$CLI" "$LIB" "$CODEX_BIN" "$WRAPPER" \
     fi
 done
 
+case_begin "bin-codex-review-loop-security-code-suite" "bin/run-codex-review-loop"
 for _sec in exec-labels-stdout.sh prior-producers.sh prompt-contract-wiring.sh \
             continuity.sh full-chain-integration.sh fail-closed.sh chain-failure-branches.sh \
             concerns-log-wiring.sh; do
@@ -310,6 +318,7 @@ for _sec in exec-labels-stdout.sh prior-producers.sh prompt-contract-wiring.sh \
         fail "case file missing: bin-codex-review-loop-security-code/$_sec"
     fi
 done
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

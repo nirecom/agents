@@ -17,14 +17,13 @@ const CONTEXT_READ_CAP_BYTES = 16384;
 /**
  * Resolve the workflow session ID (wsid) — the timestamped prefix plan artifacts in
  * WORKFLOW_PLANS_DIR use; distinct from resolveSessionId()'s CC UUID. Priority:
- * 1. WORKTREE_NOTES.md `Session-ID:` (CWD, git common-dir parent, then sibling
- * worktrees — /worktree-start's gold source). 2. CLAUDE_CODE_SESSION_ID, guarded on a
- * `<value>-*.md` artifact existing (#1082). 3. CLAUDE_ENV_FILE -> CLAUDE_SESSION_ID,
- * guarded on `<value>-intent.md`. 4. Depth-score scan of `*-context.md` in plans-dir
- * (depth 2 = detail.md, 1 = intent.md, 0 = stub; depth desc, mtime desc, sid asc).
- * Returns null on any failure (no throw).
+ * 1. WORKTREE_NOTES.md `Session-ID:` (CWD, then git common-dir parent).
+ * 2. CLAUDE_CODE_SESSION_ID, guarded on a `<value>-*.md` artifact existing (#1082).
+ * 3. Sibling-worktree scan. 4. Depth-score scan of recent `*-context.md`; a candidate
+ * whose context.md contains CLAUDE_CODE_SESSION_ID wins, else several → null.
+ * Returns null on any failure (no throw). See session-id-resolution.md.
  */
-function resolveWorkflowSessionId(_ctx = {}) {
+function resolveWorkflowSessionId(ctx = {}) {
   const { getWorkflowPlansDir } = require("./workflow-plans-dir");
   let plansDir;
   try {
@@ -52,14 +51,17 @@ function resolveWorkflowSessionId(_ctx = {}) {
     }
   } catch (_) {}
 
-  // Priority 2: native CLAUDE_CODE_SESSION_ID (existence-guarded). CC-native,
-  // per-session-distinct, present in the Bash-tool path where CLAUDE_ENV_FILE is
-  // not propagated (#1082). Guard against selecting a session with no plan
-  // artifacts yet (early-session false resolve) — accept only when any
-  // `<value>-*.md` artifact exists in plans-dir.
-  const codeSid = process.env.CLAUDE_CODE_SESSION_ID;
-  if (codeSid && /^[A-Za-z0-9_-]+$/.test(codeSid.trim())) {
-    const v = codeSid.trim();
+  // CC-native id, read once: Priority 2 and the Priority 4 tie-break both use it.
+  const nativeSid = (() => {
+    const v = (process.env.CLAUDE_CODE_SESSION_ID || "").trim();
+    return /^[A-Za-z0-9_-]+$/.test(v) ? v : "";
+  })();
+
+  // Priority 2: native CLAUDE_CODE_SESSION_ID (existence-guarded). Guard against
+  // selecting a session with no plan artifacts yet (early-session false resolve) —
+  // accept only when any `<value>-*.md` artifact exists in plans-dir.
+  if (nativeSid) {
+    const v = nativeSid;
     let hasArtifact = false;
     try {
       hasArtifact = fs
@@ -69,28 +71,7 @@ function resolveWorkflowSessionId(_ctx = {}) {
     if (hasArtifact) return v;
   }
 
-  // Priority 3: CLAUDE_ENV_FILE → CLAUDE_SESSION_ID + intent.md existence check.
-  // Already guards against stub selection: falls through to Priority 3 only when intent.md is absent.
-  const envFile = process.env.CLAUDE_ENV_FILE;
-  if (envFile) {
-    try {
-      const content = fs.readFileSync(envFile, "utf8");
-      const match = content.match(/^CLAUDE_SESSION_ID=(.+)$/m);
-      if (match) {
-        const value = match[1].trim();
-        if (
-          /^[A-Za-z0-9_-]+$/.test(value) &&
-          fs.existsSync(path.join(plansDir, value + "-intent.md"))
-        ) {
-          return value;
-        }
-      }
-    } catch (_) {
-      // fall through
-    }
-  }
-
-  // Priority 1d: sibling worktree scan. Reached only after Priority 1–3
+  // Priority 1d: sibling worktree scan. Reached only after Priority 1–2
   // (env-var-based) all fail. Own-worktree-first: identify the worktree root that
   // is CWD itself or an ancestor of CWD (so a CWD in a linked-worktree SUBDIR still
   // resolves to that worktree, not a sibling). If own's WORKTREE_NOTES.md yields a
@@ -136,22 +117,8 @@ function resolveWorkflowSessionId(_ctx = {}) {
     );
   }
 
-  // Read CC UUID from CLAUDE_ENV_FILE (re-read for Priority 4 bucket-sort tie-break).
-  let ccUuid = "";
-  if (envFile) {
-    try {
-      const content = fs.readFileSync(envFile, "utf8");
-      // Use the LAST match — session-start.js appends on every new session,
-      // so earlier entries are stale CC UUIDs from previous sessions.
-      const all = content.match(/^CLAUDE_SESSION_ID=(.+)$/gm) || [];
-      if (all.length > 0) {
-        const value = all[all.length - 1].replace(/^CLAUDE_SESSION_ID=/, "").trim();
-        if (/^[A-Za-z0-9_-]+$/.test(value)) ccUuid = value;
-      }
-    } catch (_) {
-      ccUuid = "";
-    }
-  }
+  // CC UUID tie-break input is the native id (the same value Priority 2 checked).
+  const ccUuid = nativeSid;
 
   function readContextSnippet(prefix) {
     try {

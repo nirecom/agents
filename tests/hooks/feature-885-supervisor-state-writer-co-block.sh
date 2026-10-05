@@ -53,13 +53,13 @@ run_node() {
         tmpdir_node="$tmpdir"
     fi
     local out rc
-    out=$(WORKFLOW_PLANS_DIR="$tmpdir_node" run_with_timeout 8 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmpdir_node" CLAUDE_WORKFLOW_DIR="$tmpdir_node/workflow" run_with_timeout 8 node -e "
 process.env.WORKFLOW_PLANS_DIR = '$tmpdir_node';
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const path = require('path');
 function loadState(sid) {
-  return JSON.parse(fs.readFileSync(path.join('$tmpdir_node', sid+'-supervisor-state.json'), 'utf8'));
+  return JSON.parse(fs.readFileSync(w.getStatePath(sid), 'utf8'));
 }
 $body
 " 2>&1)

@@ -3,27 +3,10 @@
 # Tests: bin/worker-dispatch/workers/issue-close-finalize/state.js, bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, issue-close-finalize, state-file, untrusted-input, session-rebinding, security, TL2, scope:issue-specific
 #
-# Issue #1673 / D3 — the durable state file is a plain JSON file in PLANS_DIR and
-# is therefore attacker-reachable, exactly like the payload. The LLM worker it
-# replaces checked only `schema_version` and then fed `owner_repo`,
-# `current_issue_number`, `triage_action` and `proposal_parent` straight into
-# `gh`. A swapped state file was a swapped forge target.
-#
-# The property under test is not "an error is reported" — it is that NO CHILD
-# PROCESS EVER STARTS for a non-conforming state. Reporting a failure after
-# `gh issue close` ran against the wrong repo is worthless, so every row asserts
-# the spawn counter is 0 as well as the status.
-#
-# Row (ok) is the non-vacuity control: with an untampered state and a matching
-# binding record the same harness DOES reach the child. Without it, every reject
-# row would also hold for a worker that never runs anything at all.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - A real `gh` mutation being avoided: the process seam is canned, so this
-#     proves the child is not started, not that the forge is untouched.
-#   - Concurrent sessions racing on one PLANS_DIR.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1673/D3 — state file in $CLAUDE_WORKFLOW_DIR/<sid>.control/ is attacker-
+# reachable; a swapped file is a swapped forge target. Tests that NO CHILD PROCESS
+# starts for non-conforming state (spawn counter = 0). Row (ok) is the non-vacuity
+# control. TL3 gap: real gh mutation avoidance; concurrent PLANS_DIR races.
 
 set -u
 
@@ -36,6 +19,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
 PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -71,14 +55,17 @@ echo init > "$MAIN_RAW/README.md"
 git -C "$MAIN_RAW" add README.md >/dev/null 2>&1
 git -C "$MAIN_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_RAW="$TMPD/wf"; mkdir -p "$WF_RAW"
 
 MAIN="$(nodepath "$MAIN_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
+WF="$(nodepath "$WF_RAW")"
 ACD="$(nodepath "$AGENTS_DIR")"
 SID="f1673state"
 ROOT=1673
-STATE_RAW="$PLANS_RAW/$SID-finalize-state-$ROOT.json"
-BIND_RAW="$PLANS_RAW/$SID-finalize-binding-$ROOT.json"
+mkdir -p "$WF_RAW/$SID.control"
+STATE_RAW="$WF_RAW/$SID.control/finalize-state-$ROOT.json"
+BIND_RAW="$WF_RAW/$SID.control/finalize-binding-$ROOT.json"
 STATE="$(nodepath "$STATE_RAW")"
 CANNED="$TMPD/canned.json"
 CALLLOG="$TMPD/calls.jsonl"
@@ -147,6 +134,7 @@ dispatch_loop_step() {
     : > "$CALLLOG"
     DRC=0
     DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+        "CLAUDE_WORKFLOW_DIR=$WF" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
@@ -241,8 +229,13 @@ group_history_element() {
     assert_eq "malformed-json/no-child-spawned" "0" "$(call_count)"
 }
 
+case_begin "state-validation-table" "bin/worker-dispatch/workers/issue-close-finalize/state.js"
 run_table
+case_end
+
+case_begin "state-history-element" "bin/worker-dispatch/workers/issue-close-finalize.js"
 group_history_element
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

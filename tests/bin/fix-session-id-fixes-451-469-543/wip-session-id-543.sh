@@ -63,8 +63,7 @@ EOF
     export ISSUE_CREATE_PROJECT_NUM="1"
     export ISSUE_CREATE_OWNER="nirecom"
 
-    export CLAUDE_SESSION_ID="default-sid-fixture"
-    unset CLAUDE_ENV_FILE 2>/dev/null || true
+    export CLAUDE_CODE_SESSION_ID="default-sid-fixture"
 }
 
 teardown_wip_mock() {
@@ -79,7 +78,7 @@ teardown_wip_mock() {
           WIP_STATE_DONE_OPTION_ID WIP_STATE_TODO_OPTION_ID \
           WIP_STATE_FINGERPRINT_FIELD_ID \
           ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM ISSUE_CREATE_OWNER \
-          CLAUDE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+          CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 }
 
 expected_fp() {

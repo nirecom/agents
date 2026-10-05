@@ -2,7 +2,7 @@
 # bin/lib/codex-review-loop/round-counter.sh — round-counter SSOT for
 # bin/run-codex-review-loop (P2-2b/c). Sourced by the loop; caller-scope globals:
 # ROUND_FILE LAST_ROUND_FILE ROUND_LOCK ROUND_LOCK_HELD ROUND ROUND_PREV
-# ROUND_FILE_EXISTED REDUCE_COMMITTED LEDGER PLANS_DIR PRESTAGED_MODE.
+# ROUND_FILE_EXISTED REDUCE_COMMITTED LEDGER CONTROL_DIR PRESTAGED_MODE.
 # Depends on die(), sp_publish_stdin, sp_contained_rm (loaded before first call).
 
 acquire_round_lock() {
@@ -29,11 +29,11 @@ acquire_round_lock_besteffort() {
 # A converged review has no further use for its ledger, but $LEDGER can be
 # $LEDGER_OVERRIDE — an arbitrary --ledger path with no containment check of
 # its own. Deleting it unconditionally would let an out-of-bounds override
-# unlink a file outside $PLANS_DIR, the same destructive-operation class
+# unlink a file outside $CONTROL_DIR, the same destructive-operation class
 # cl_finalize already guards with sp_contained_rm (#2025 C6/C8). An override
-# that resolves outside $PLANS_DIR is left in place rather than deleted.
+# that resolves outside $CONTROL_DIR is left in place rather than deleted.
 cleanup_ledger() {
-  sp_contained_rm "$LEDGER" "$PLANS_DIR" 2>/dev/null || true
+  sp_contained_rm "$LEDGER" "$CONTROL_DIR" 2>/dev/null || true
 }
 
 read_round_file() {

@@ -14,7 +14,7 @@ reflects every terminal action.
 
 - `AGENTS_CONFIG_DIR` must be set.
 - Caller context (under `ENFORCE_WORKTREE=on`): `/worktree-end` WE-1..WE-22 have
-  already completed (worktree merged and removed; `<PLANS_DIR>/<session-id>-final-report-env.json` exists).
+  already completed (worktree merged and removed; `<CONTROL_DIR>/final-report-env.json` exists).
 - Caller context (under `ENFORCE_WORKTREE=off`): the PR is merged. No worktree-end
   ran; the env file does not yet exist.
 
@@ -23,11 +23,10 @@ reflects every terminal action.
 Run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` once as one bare command — never assigned to a variable and echoed back. Canonical: `skills/_shared/resolve-plans-dir.md`.
 
 Substitute the absolute path it prints for `<PLANS_DIR>` in every subsequent step.
-Resolve `<session-id>` from `$CLAUDE_ENV_FILE` (`CLAUDE_SESSION_ID`) with the
-fallback chain used by `--from-session`. If unresolvable, abort:
-`session id unresolved — cannot render Final Report`.
+Resolve `<session-id>` from `$CLAUDE_CODE_SESSION_ID` with the fallback chain used by `--from-session`. If unresolvable, abort:
+`session id unresolved — cannot render Final Report`. `<CONTROL_DIR>` is the stdout of `node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session <session-id> --for-write` (non-zero → abort).
 
-`<PLANS_DIR>` and `<session-id>` are **LLM-substituted literals** — shell variables
+`<PLANS_DIR>`, `<CONTROL_DIR>` and `<session-id>` are **LLM-substituted literals** — shell variables
 do not persist between Bash tool calls.
 
 ## SC-1a — Detect WF-META session
@@ -49,7 +48,7 @@ Check via Bash:
 ## SC-2A — Worktree path: reuse existing env JSON
 
 ```bash
-test -f "<PLANS_DIR>/<session-id>-final-report-env.json" \
+test -f "<CONTROL_DIR>/final-report-env.json" \
   || { echo "ERROR: env JSON missing — /worktree-end must run first" >&2; exit 1; }
 ```
 
@@ -60,7 +59,7 @@ Proceed to SC-3.
 ## SC-2B — Branch/main path: build minimal env JSON
 
 ```bash
-node "$AGENTS_CONFIG_DIR/bin/session-close-build-env.js" "<PLANS_DIR>/<session-id>-final-report-env.json"
+node "$AGENTS_CONFIG_DIR/bin/session-close-build-env.js" --session "<session-id>"
 ```
 
 Exit 0 → write the late-finding alert eligibility flag (#997):
@@ -69,7 +68,7 @@ Then proceed to SC-3. Non-zero → abort (PR unresolvable).
 
 ## SC-2C — WF-META path: write PR-less env JSON
 
-  node "$AGENTS_CONFIG_DIR"/bin/session-close-build-env.js --wf-meta "<PLANS_DIR>/<session-id>-final-report-env.json"
+  node "$AGENTS_CONFIG_DIR"/bin/session-close-build-env.js --wf-meta --session "<session-id>"
 
 Exit 0 → write the late-finding alert eligibility flag:
   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
@@ -83,7 +82,7 @@ Retain `IS_WF_META=yes` and proceed to SC-3.
 
 If `IS_WF_META=yes` (set in SC-2C): write `skipped_wf_meta` outcomes directly:
 
-  node "$AGENTS_CONFIG_DIR"/bin/issue-close-write-outcome.js --wf-meta '<ISSUES_JSON_ARRAY>' "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
+  node "$AGENTS_CONFIG_DIR"/bin/issue-close-write-outcome.js --wf-meta '<ISSUES_JSON_ARRAY>' "<CONTROL_DIR>/issue-close-outcome.json"
 
 `<ISSUES_JSON_ARRAY>` is the JSON number array the LLM parses from intent.md via `hooks/lib/parse-closes-issues.js`, inlined as a literal. When intent.md is absent, use `'[]'`.
 
@@ -101,7 +100,7 @@ bash "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; echo "NON_GITHUB_RC=$?"
 ```bash
 node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
   --non-github '<ISSUES_JSON_ARRAY>' \
-  "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
+  "<CONTROL_DIR>/issue-close-outcome.json"
 ```
 
 `<ISSUES_JSON_ARRAY>` is the JSON number array the LLM parses from intent.md
@@ -112,7 +111,7 @@ via `hooks/lib/parse-closes-issues.js`, inlined as a literal at substitution tim
   - `[]` → write empty outcome, skip to SC-6:
 
 ```bash
-printf '{"issues":[]}\n' > "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
+node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" --session "<session-id>" --empty
 ```
 
   - non-empty → SC-3a.
@@ -120,23 +119,23 @@ printf '{"issues":[]}\n' > "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
 ## SC-3a — Invoke /issue-close-finalize via the Skill tool
 
 Invoke `/issue-close-finalize --from-session`. The sub-skill writes
-`<PLANS_DIR>/<session-id>-issue-close-outcome.json` in its ICF-K.
+`<CONTROL_DIR>/issue-close-outcome.json` in its ICF-K.
 
 If it terminates without writing that file, write a synthetic fallback:
 
 ```bash
 node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
   --fallback "<PLANS_DIR>/<session-id>-intent.md" \
-  "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
+  "<CONTROL_DIR>/issue-close-outcome.json"
 ```
 
 ## SC-4+SC-5 — Retrospective scan + Pre-Final-Report gate
 
 Dispatch the `session-close-gate` worker per `skills/_shared/worker-dispatch.md`. Payload:
-- `session_id`: current session ID (resolved from `$CLAUDE_ENV_FILE` / fallback chain per SC-0)
+- `session_id`: current session ID (resolved per SC-0)
 - `plans_dir`: the `PLANS_DIR` from WD-1 — do NOT reuse the `<PLANS_DIR>` literal from SC-0, which was resolved with a fallback
 - `artifact_dir`: same value as `plans_dir`
-- `outcome_json_path`: absolute path to `<PLANS_DIR>/<session-id>-issue-close-outcome.json`
+- omit `outcome_json_path` — the dispatcher derives it in the session control directory
 
 On `status: failed`: emit `supervisor-report` warning and **STOP**. Do NOT proceed to SC-6. User must manually re-run `/session-close`. This path is fail-closed — SC-6 never runs on worker failure.
 
@@ -148,7 +147,7 @@ On `status: complete`:
 
 ## SC-6 — Emit Final Report directly into assistant text
 
-Run: node "$AGENTS_CONFIG_DIR/bin/render-final-report.js" "<session-id>" "<PLANS_DIR>/<session-id>-final-report-env.json" "<PLANS_DIR>/<session-id>-issue-close-outcome.json" "<PLANS_DIR>/<session-id>-intent.md" "<PLANS_DIR>/<session-id>-supervisor-state.json"
+Run: node "$AGENTS_CONFIG_DIR/bin/render-final-report.js" --session "<session-id>"
 Emit the stdout per `skills/_shared/final-report-emission.md` — verbatim scope and CONV_LANG scope are defined there.
 
 SC-6a. Mark session title complete: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" mark-complete`. Fail-open — the CLI defaults `<cwd>` to its own working directory.
@@ -161,10 +160,10 @@ After emitting, mark completion with two separate Bash calls:
 
 ## SC-7 — Surface alert findings (post-Final-Report)
 
-Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool). If absent, or `alert.findings` is empty, or `alert.findings_surfaced_at` is already set, skip to the sentinel and return.
+Read `<CONTROL_DIR>/supervisor-state.json` (Read tool). If absent, or `alert.findings` is empty, or `alert.findings_surfaced_at` is already set, skip to the sentinel and return.
 
 Run:
-  node "$AGENTS_CONFIG_DIR/bin/session-close-render-sc7.js" "<PLANS_DIR>/<session-id>-supervisor-state.json" "<session-id>"
+  node "$AGENTS_CONFIG_DIR/bin/session-close-render-sc7.js" --session "<session-id>"
 
 When the render is non-empty: emit the text verbatim into the assistant reply (no preamble, no wrapping).
 

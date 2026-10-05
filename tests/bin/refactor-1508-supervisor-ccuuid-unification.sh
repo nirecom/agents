@@ -2,17 +2,8 @@
 # tests/bin/refactor-1508-supervisor-ccuuid-unification.sh
 # Tests: bin/supervisor-report, hooks/supervisor-guard.js, hooks/stop-l2-findings-display.js, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, session-id, cc-uuid, refactor, scope:issue-specific
-# L3 gap (what this test does NOT catch):
-# - Real Stop hook invocation with actual Claude Code session
-# - CLAUDE_CODE_SESSION_ID env var propagation from real hook environment
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-#
-# NOTE: Cases N1, N2, R1 test the FUTURE behavior after #1508 is implemented.
-# They SKIP until implementation lands (probe: absence of rawSidSource="wsid").
-# E1 and N3 test behavior preserved across the refactor.
-# W1 tests the current (pre-#1508) wsid-primary auto-resolve happy path.
-# V1 and V2 test argument validation (preserved across the refactor).
+# Issue #1508: CLAUDE_CODE_SESSION_ID as primary session-id for supervisor-report/guard/display.
+# L3 gap: real Stop hook invocation and CLAUDE_CODE_SESSION_ID propagation in a live claude -p session.
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -27,6 +18,7 @@ fi
 CLI="$AGENTS_DIR/bin/supervisor-report"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -77,6 +69,7 @@ count_findings() {
     local tmp="$1" sid="$2"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
@@ -89,12 +82,12 @@ process.stdout.write(String(st.layer1.findings.length));
 
 state_file_count() {
     local tmp="$1"
-    ls "$tmp"/*-supervisor-state.json 2>/dev/null | wc -l | tr -d ' '
+    ls "$tmp"/*.control/supervisor-state.json 2>/dev/null | wc -l | tr -d ' '
 }
 
 state_file_exists() {
     local tmp="$1" sid="$2"
-    [ -f "$tmp/${sid}-supervisor-state.json" ] && echo "1" || echo "0"
+    [ -f "$tmp/${sid}.control/supervisor-state.json" ] && echo "1" || echo "0"
 }
 
 # N1: CLAUDE_CODE_SESSION_ID=<uuid> set -> supervisor-report writes to
@@ -107,9 +100,9 @@ run_n1() {
     uuid="aaaabbbb-cccc-dddd-eeee-ffffffffffff"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_CODE_SESSION_ID="$uuid"
         unset WORKFLOW_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories code \
             --severity warning \
@@ -138,8 +131,8 @@ run_n2() {
     printf "Session-ID: %s\n" "$wsid_like" > "$tmp/WORKTREE_NOTES.md"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_CODE_SESSION_ID="$uuid"
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories workflow \
             --severity notice \
@@ -166,9 +159,9 @@ run_n3() {
     sid="n3-explicit-sid"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
         unset WORKFLOW_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         run_with_timeout 5 node "$CLI" \
             --session-id "$sid" \
             --categories code \
@@ -197,8 +190,8 @@ run_r1() {
     printf "Session-ID: %s\n" "$wsid_like" > "$tmp/WORKTREE_NOTES.md"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_CODE_SESSION_ID="$uuid"
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories intent \
             --severity notice \
@@ -228,9 +221,8 @@ run_w1() {
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories code \
             --severity warning \
@@ -254,6 +246,7 @@ run_v1() {
     tmp="$(mktemp -d)"
     combined=$(
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI" \
             --session-id "explicit-sid-v1" \
             --categories code \
@@ -279,6 +272,7 @@ run_v2() {
     tmp="$(mktemp -d)"
     combined=$(
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI" \
             --session-id "bad/sid/with/slashes" \
             --categories code \
@@ -305,9 +299,8 @@ run_e1() {
     tmp="$(mktemp -d)"
     combined=$(
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_SESSION_ID 2>/dev/null || true
-        unset CLAUDE_ENV_FILE 2>/dev/null || true
         unset WORKFLOW_SESSION_ID 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories code \
@@ -332,14 +325,22 @@ echo "W1: current wsid-primary behavior -- SKIP after #1508 removes wsid path."
 echo "E1/N3/V1/V2: preserved behavior (passes before and after #1508)."
 echo ""
 
-run_n3
-run_e1
-run_w1
-run_v1
-run_v2
+case_begin "ccuuid-auto-resolve" "bin/supervisor-report"
 run_n1
 run_n2
 run_r1
+case_end
+
+case_begin "state-reader" "hooks/lib/supervisor-state-writer.js"
+run_w1
+run_n3
+case_end
+
+case_begin "validation-and-error" "hooks/supervisor-guard.js"
+run_v1
+run_v2
+run_e1
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

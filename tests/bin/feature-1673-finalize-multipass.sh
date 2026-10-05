@@ -2,8 +2,9 @@
 # tests/bin/feature-1673-finalize-multipass.sh
 # Tests: bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/workers/issue-close-finalize/state.js, skills/issue-close-finalize/SKILL.md
 # Tags: worker-dispatch, issue-close-finalize, multi-pass, state-machine, payload-seq, atomic-write, TL2, scope:issue-specific
-# Issue #1673 — one dispatch advances exactly one pass; the durable state file is the only link
-# between passes. Groups 1-4 stub the process seam (spawn-stub.js) to record each pass's argv;
+# Issue #1673 — one dispatch advances exactly one pass; the durable state file
+# (in $CLAUDE_WORKFLOW_DIR/<sid>.control/) is the only link between passes.
+# Groups 1-4 stub the process seam (spawn-stub.js) to record each pass's argv;
 # Group 5 runs the REAL run-loop-step.js on the `decline` branch (the one child-free transition).
 # TL3 gap: the real run-initial.sh / run-finalize-terminal.sh against live `gh`
 # (tests/bin/TL3-worker-dispatch-issue-close-finalize.sh) and real-session payload emission;
@@ -20,6 +21,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
 PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -59,16 +61,19 @@ echo init > "$MAIN_RAW/README.md"
 git -C "$MAIN_RAW" add README.md >/dev/null 2>&1
 git -C "$MAIN_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_RAW="$TMPD/wf"; mkdir -p "$WF_RAW"
 
 MAIN="$(nodepath "$MAIN_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
+WF="$(nodepath "$WF_RAW")"
 ACD="$(nodepath "$AGENTS_DIR")"
 SID="f1673mp"
 ROOT=1673
-STATE_RAW="$PLANS_RAW/$SID-finalize-state-$ROOT.json"
-BIND_RAW="$PLANS_RAW/$SID-finalize-binding-$ROOT.json"
+mkdir -p "$WF_RAW/$SID.control"
+STATE_RAW="$WF_RAW/$SID.control/finalize-state-$ROOT.json"
+BIND_RAW="$WF_RAW/$SID.control/finalize-binding-$ROOT.json"
 STATE="$(nodepath "$STATE_RAW")"
-OUTCOME="$PLANS/$SID-outcome.json"
+OUTCOME="$WF/$SID.control/issue-close-outcome.json"
 CANNED="$TMPD/canned.json"
 CALLLOG="$TMPD/calls.jsonl"
 
@@ -86,7 +91,7 @@ json_field() { node -e 'try{const s=JSON.parse(require("fs").readFileSync(proces
 
 # write_payload <seq> <json> → absolute payload path (never overwritten: WD-2 -<seq>)
 write_payload() {
-    local f="$PLANS_RAW/$SID-worker-issue-close-finalize-$1.json"
+    local f="$WF_RAW/$SID.control/worker-issue-close-finalize-$1.json"
     printf '%s' "$2" > "$f"
     nodepath "$f"
 }
@@ -98,9 +103,11 @@ dispatch() {
     DRC=0
     if [ "${3:-on}" = "off" ]; then
         DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+            "CLAUDE_WORKFLOW_DIR=$WF" \
             node "$(nodepath "$DISPATCH_JS")" issue-close-finalize "$MAIN" "$1" 2>/dev/null)" || DRC=$?
     else
         DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+            "CLAUDE_WORKFLOW_DIR=$WF" \
             "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
             "WD_CANNED=$(nodepath "$CANNED")" \
             "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
@@ -118,7 +125,8 @@ INITIAL_PAYLOAD="{\"phase\":\"initial\",\"issue_number\":$ROOT,\"root_issue_numb
 group_initial() {
     rm -f "$STATE_RAW" "$BIND_RAW"
     local p
-    p="$(write_payload 1 "$INITIAL_PAYLOAD")"
+    # Control-dir payloads are one-shot (.dispatched marker), so every group uses its own seq.
+    p="$(write_payload 1a "$INITIAL_PAYLOAD")"
     dispatch "$p" "[{\"stdout\":\"$INIT_KV\"}]"
     assert_eq "initial/exit0" "0" "$DRC"
     assert_eq "initial/status" "init_done" "$(field_of status)"
@@ -183,7 +191,7 @@ group_sequence() {
     p1="$(write_payload 1 "$INITIAL_PAYLOAD")"
     dispatch "$p1" "[{\"stdout\":\"$INIT_KV\"}]"
     assert_eq "seq/1-initial-status" "init_done" "$(field_of status)"
-    s1="$(sha_of "$PLANS_RAW/$SID-worker-issue-close-finalize-1.json")"
+    s1="$(sha_of "$WF_RAW/$SID.control/worker-issue-close-finalize-1.json")"
     h_before="$(json_field "$STATE_RAW" 's.g5_history.length')"
 
     p2="$(write_payload 2 "{\"phase\":\"loop_step\",\"root_issue_number\":$ROOT,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"g5_decision\":\"accept\",\"session_id\":\"$SID\",\"artifact_dir\":\"$PLANS\"}")"
@@ -192,7 +200,7 @@ group_sequence() {
     assert_has "seq/2-child-is-run-loop-step" "runLoopStep" "$(call_args)"
     assert_has "seq/2-child-argv-decision" "accept" "$(call_args)"
     assert_eq "seq/2-one-child-only" "1" "$(call_count)"
-    s2="$(sha_of "$PLANS_RAW/$SID-worker-issue-close-finalize-2.json")"
+    s2="$(sha_of "$WF_RAW/$SID.control/worker-issue-close-finalize-2.json")"
 
     # The real run-loop-step.js grows g5_history on recurse_done; the seam is
     # canned here, so the growth is applied to the fixture the same way before
@@ -216,7 +224,7 @@ group_sequence() {
     p3="$(write_payload 3 "{\"phase\":\"loop_step\",\"root_issue_number\":$ROOT,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"g5_decision\":\"recurse_done\",\"session_id\":\"$SID\",\"artifact_dir\":\"$PLANS\"}")"
     dispatch "$p3" '[{"stdout":"STATUS=init_done\nSUMMARY=recurse_done: advanced to #1600\n"}]'
     assert_eq "seq/3-loop-status" "init_done" "$(field_of status)"
-    s3="$(sha_of "$PLANS_RAW/$SID-worker-issue-close-finalize-3.json")"
+    s3="$(sha_of "$WF_RAW/$SID.control/worker-issue-close-finalize-3.json")"
 
     p4="$(write_payload 4 "{\"phase\":\"finalize_terminal\",\"root_issue_number\":$ROOT,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"session_id\":\"$SID\",\"outcome_file_path\":\"$OUTCOME\",\"artifact_dir\":\"$PLANS\"}")"
     dispatch "$p4" '[{"stdout":"STATUS=terminal\nSUMMARY=ICF-H..ICF-K complete for #1600\n"}]'
@@ -227,11 +235,11 @@ group_sequence() {
     assert_eq "seq/4-one-child-only" "1" "$(call_count)"
 
     # WD-2: each pass gets its own payload file; none is rewritten in place.
-    assert_eq "seq/payload-1-unmodified" "$s1" "$(sha_of "$PLANS_RAW/$SID-worker-issue-close-finalize-1.json")"
-    assert_eq "seq/payload-2-unmodified" "$s2" "$(sha_of "$PLANS_RAW/$SID-worker-issue-close-finalize-2.json")"
-    assert_eq "seq/payload-3-unmodified" "$s3" "$(sha_of "$PLANS_RAW/$SID-worker-issue-close-finalize-3.json")"
+    assert_eq "seq/payload-1-unmodified" "$s1" "$(sha_of "$WF_RAW/$SID.control/worker-issue-close-finalize-1.json")"
+    assert_eq "seq/payload-2-unmodified" "$s2" "$(sha_of "$WF_RAW/$SID.control/worker-issue-close-finalize-2.json")"
+    assert_eq "seq/payload-3-unmodified" "$s3" "$(sha_of "$WF_RAW/$SID.control/worker-issue-close-finalize-3.json")"
     assert_eq "seq/payloads-are-distinct-files" "4" \
-        "$(ls "$PLANS_RAW" | grep -c "^$SID-worker-issue-close-finalize-[1-4]\.json$")"
+        "$(ls "$WF_RAW/$SID.control" | grep -c "^worker-issue-close-finalize-[1-4]\.json$")"
 }
 
 # ===========================================================================
@@ -242,7 +250,7 @@ group_sequence() {
 group_real_decline() {
     rm -f "$STATE_RAW" "$BIND_RAW"
     local p
-    p="$(write_payload 1 "$INITIAL_PAYLOAD")"
+    p="$(write_payload 5a "$INITIAL_PAYLOAD")"
     dispatch "$p" "[{\"stdout\":\"$INIT_KV\"}]"
     if [ ! -f "$STATE_RAW" ] || [ ! -f "$BIND_RAW" ]; then
         fail "real-decline/prereq" "initial pass did not produce state+binding"
@@ -256,11 +264,16 @@ group_real_decline() {
     assert_eq "real-decline/no-tmp-left-behind" "0" "$([ -e "$STATE_RAW.tmp" ] && echo 1 || echo 0)"
 }
 
+case_begin "finalize-multipass-dispatch" "bin/worker-dispatch/workers/issue-close-finalize.js"
 group_initial
 group_owner_mismatch
 group_meta_pending
 group_sequence
+case_end
+
+case_begin "finalize-real-state-seam" "bin/worker-dispatch/workers/issue-close-finalize/state.js"
 group_real_decline
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

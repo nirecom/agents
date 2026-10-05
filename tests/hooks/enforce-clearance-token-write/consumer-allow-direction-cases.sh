@@ -25,11 +25,12 @@ TOKEN="$TN/wsid.off-clearance"
 # A REAL directory whose name contains a space, holding a REAL token file. #1817 is about
 # argv words that carry whitespace, and only an on-disk target makes the "nothing moved"
 # assertion at the end of this file meaningful.
-SPDIR_FS="$TMP/wf notes"
+OUTTMP=$(make_tmp)  # #2434: outside the workflow dir, which the strict placement guard owns
+SPDIR_FS="$OUTTMP/wf notes"
 mkdir -p "$SPDIR_FS"
 printf '%s' '{"cleared":true}' > "$SPDIR_FS/wsid.off-clearance"
 printf '%s' 'plain' > "$SPDIR_FS/notes.txt"
-SPDIR="$TN/wf notes"
+SPDIR="$(node_path "$OUTTMP")/wf notes"
 
 if [ "$HOOK_PRESENT" = "yes" ]; then pass "H0 hook file present"; else fail "H0 hook file MISSING at $HOOK - all cases below are vacuous"; fi
 
@@ -89,7 +90,7 @@ PR-block1 redirect into \$WF/wsid.off-clearance          | block   | echo forged
 PR-block2 same target, prefix resolved by an assignment | block   | WF="@DIR@"; echo forged > "\$WF/wsid.off-clearance"
 PR-block3 unresolved prefix, mint intermediate basename | block   | echo forged > "\$WF/wsid.off-clearance.mint.tmp"
 PR-allow1 unresolved prefix, log named after the minter | approve | echo plain > "\$WF/request-off-clearance.log"
-PR-allow2 resolved prefix, issue-numbered note file     | approve | WF="@DIR@"; echo plain > "\$WF/off-clearance-1780.md"
+PR-allow2 resolved prefix (outside wf dir), issue note  | approve | WF="@SPDIR@"; echo plain > "\$WF/off-clearance-1780.md"
 PR-allow3 unresolved prefix, wrong extension after dot  | approve | echo plain > "\$WF/x.off-clearance.txt"
 PR-allow4 unresolved prefix, unreserved #1763 suffix    | approve | echo plain > "\$WF/wsid.session-transcript"
 # --- C4: #1817 whitespace-in-path, against the REAL files created above. Each block ---
@@ -120,7 +121,7 @@ else
     pass "WS-NEG2 approving a command does not execute it"
 fi
 
-rm -r -f "$TMP" 2>/dev/null || true
+rm -r -f "$TMP" "$OUTTMP" 2>/dev/null || true
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

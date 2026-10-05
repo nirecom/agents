@@ -9,7 +9,6 @@ exemptions. The persisted state data model and the step catalog live in
 
 ```
 Session start → session-start.js (SessionStart hook)
-  appends CLAUDE_SESSION_ID=<sid> to CLAUDE_ENV_FILE
   if state file does not exist:
     resolveInheritanceDonor({sessionId, source, transcriptPath, ctx, agentId}) (#1305):
       Gate A (subagent exclusion): agentId present → no auto-inherit
@@ -53,7 +52,7 @@ Compaction → post-compact.js (PostCompact hook)
 Skill runs (/clarify-intent, /make-outline-plan, /make-detail-plan, /write-tests, etc.)
   → Completion section emits: echo "<<WORKFLOW_MARK_STEP_<step>_complete>>"
   → workflow-mark.js (PostToolUse hook) intercepts command
-     reads session_id from hook stdin JSON (not CLAUDE_ENV_FILE)
+     reads session_id from hook stdin JSON (not the Bash env)
      calls markStep(session_id, step, status)
 
 Edit/Write/MultiEdit/editFiles/NotebookEdit attempt → workflow-gate.js (PreToolUse hook, early gate)
@@ -133,11 +132,11 @@ itself evidence.
 
 Hooks receive `session_id` via hook stdin JSON, but bash scripts and standalone Node CLIs have
 no such channel. They all resolve through one canonical implementation:
-`hooks/workflow-state/session-id.js` (`resolveSessionId()`) — a strict 4-tier SUPPLY-only chain:
-`ctx.sessionIdFromInput` → `CLAUDE_CODE_SESSION_ID` → `CLAUDE_SESSION_ID` →
-`ctx.transcriptPath` basename. Every tier comes from the calling process's own context; no tier
-infers an id from filesystem traces (the former `CLAUDE_ENV_FILE` / `WORKTREE_NOTES.md` /
-JSONL-mtime-scan inference tiers were removed — #2270). Bash callers reach it via the
+`hooks/workflow-state/session-id.js` (`resolveSessionId()`) — a strict 3-tier SUPPLY-only chain:
+`ctx.sessionIdFromInput` → `CLAUDE_CODE_SESSION_ID` → `ctx.transcriptPath` basename. Every tier
+comes from the calling process's own context; no tier infers an id from filesystem traces (the
+former env-file / `WORKTREE_NOTES.md` / JSONL-mtime-scan inference tiers were removed — #2270,
+and the repo-manufactured relay tier — #1091). Bash callers reach it via the
 `bin/resolve-session-id` bridge (stdout = sid on rc 0; rc 2 = unresolvable, the only "no
 session" code; rc 3 = the resolver itself faulted, a distinct condition callers must not
 conflate with "no session" — full rc table: [session-id-resolution.md](session-id-resolution.md#the-bridge-rc-contract));
@@ -188,10 +187,10 @@ A session can inherit from an upstream session it has no transcript lineage to, 
 
 ## next-step-driven sequencing
 
-Step ordering is owned by `bin/workflow/next-step`. That file is a dispatcher only — the implementation lives in `bin/workflow/lib/next-step/` (`cli.js`, `steps.js`, `repo-dir.js`, `entrypoint-path.js`, `list.js`, `state-ops.js`, `verdict.js`). After each skill completes, the model queries next-step with:
+Step ordering is owned by `bin/workflow/next-step`. That file is a dispatcher only — the implementation lives in `bin/workflow/lib/next-step/` (`cli.js`, `steps.js`, `repo-dir.js`, `entrypoint-path.js`, `list.js`, `state-ops.js`, `verdict.js`, `gate-line.js`, `gate-mode.js`). After each skill completes, the model queries next-step with:
 
 ```
-node bin/workflow/next-step --session $CLAUDE_SESSION_ID
+node bin/workflow/next-step --session $CLAUDE_CODE_SESSION_ID
 ```
 
 Output is four `KEY=value` lines: `ACTION` (`invoke|done|blocked|abort`), `NEXT_SKILL`, `NEXT_HINT`, `REASON`. The `NEXT_SKILL` field maps directly to a skill name; non-skill steps (e.g. `branching_complete`, `user_verification`) have an empty `NEXT_SKILL` and a prose `NEXT_HINT` instead.
@@ -200,9 +199,21 @@ At the `outline` and `detail` steps only, next-step first checks for an authorit
 
 Absent a recorded verdict, next-step appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). This is a weak supplementary hint (demoted from sole gate by #1286) — advisory only, which the model may act on by emitting the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by the same resolver's `isTrivial`, which fails closed to "not trivial" on any uncertainty.
 
+When the invoked step has a `CONFIRM_*` gate (step→gate map: `hooks/lib/confirm-gate/step-gate-map.js`), next-step appends one more optional line last, after `SKIP_HINT`: `GATE_CONFIRM_<X>=<ON|OFF|ERROR>`. It probes `bin/confirm-off` with a 1500 ms budget; `ERROR` means the probe timed out or could not run. The line is emitted only on the final `ACTION=invoke` path and is display-only — never branch on it.
+
 `--list` mode renders the full step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
 
 `session-start.js` also calls next-step on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
+
+### `--gate` (confirm-gate check, #2490)
+
+`next-step --gate` is the single branching source for the seven confirm gates (`skills/_shared/confirm-plan.md` CPA-3). It is read-only and prints `GATE_ACTION`, the `GATE_CONFIRM_<X>` value line (omitted for `none`), `GATE_HINT`, and `REASON`.
+
+- `GATE_ACTION` is a closed vocabulary: `proceed` (gate OFF), `ask` (gate ON or ERROR), `present-and-stop`, `none` (unresolved session, or the recorded step has no gate).
+- At `detail` it also runs `bin/detect-scope-change.sh` on outline.md vs detail.md: a detected scope change turns `proceed` into `present-and-stop` (the scope change is shown even when `CONFIRM_DETAIL=off`); a failed check adds `scope-change-check-failed` to `REASON`, appends a warn-the-user sentence to `GATE_HINT`, and is otherwise treated as no change.
+- `--scope-change-approved` (only with `--gate`, else exit 64) is a stateless flag the skill passes once after the user approves the scope change, so an OFF detail gate resolves to `proceed`. Combining `--gate` with `--list` / `--reset` / `--mark` / `--advance` exits 64.
+
+Step-source divergence: the value line uses the evidence-resolved snapshot step (the same step as `NEXT_SKILL`), while `--gate` uses the recorded current step (`resolveCurrentEffectiveStep`, no evidence resolution). They differ when the recorded step is still open but evidence already advances the snapshot — at CI-5 after intent.md is written, and at MOP-8 / MDP-7 with the gate OFF — so the value line shows the next step's gate while `--gate` judges the current one. This is safe because only `GATE_ACTION` drives branching.
 
 ## Reset and emergency resume
 
@@ -220,9 +231,9 @@ Example: `echo "<<WORKFLOW_RESET_FROM_write_tests: user requested re-plan>>"`
 
 Priority order for recovery:
 1. **Session resume**: `session-start.js` re-injects next-step verdict automatically — no action needed.
-2. **Orientation check**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID` for an in-session verdict.
+2. **Orientation check**: `node bin/workflow/next-step --session $CLAUDE_CODE_SESSION_ID` for an in-session verdict.
 3. **Auto-repair**: next-step calls `hasCompletionEvidence()` for evidence-backed steps and self-corrects — no action needed.
-4. **`--mark <step>`**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step>` marks one step complete without touching others (session-global; run from any directory). Use when next-step's scoped hint names a specific step to mark.
+4. **`--mark <step>`**: `node bin/workflow/next-step --session $CLAUDE_CODE_SESSION_ID --mark <step>` marks one step complete without touching others (session-global; run from any directory). Use when next-step's scoped hint names a specific step to mark.
 5. **RESET_FROM**: when the session needs to redo a phase or state became inconsistent.
 6. **Direct JSON edit** (`~/.claude/projects/workflow/<sid>.json`): last resort for surgical per-step changes (e.g. setting one step to `skipped` without affecting others).
 

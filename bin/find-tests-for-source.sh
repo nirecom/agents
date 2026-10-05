@@ -14,7 +14,7 @@ set -uo pipefail
 
 _FTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/test-route-destination.sh
-source "$_FTS_DIR/lib/test-route-destination.sh"
+source "$_FTS_DIR/lib/test-route-destination.sh" || { printf 'ERROR: test language registry not readable\n' >&2; exit 3; }
 # shellcheck source=lib/run-all-parallelism.sh
 source "$_FTS_DIR/lib/run-all-parallelism.sh"
 # shellcheck source=lib/test-corpus-cache.sh

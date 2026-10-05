@@ -111,11 +111,6 @@ function resolveSessionId() {
   if (codeSid) {
     return { sid: codeSid, reliable: true };
   }
-  // session-id-ssot: waived (fast path) — legacy id, consulted only when the canonical var is unset.
-  const envSid = validSid(process.env.CLAUDE_SESSION_ID);
-  if (envSid) {
-    return { sid: envSid, reliable: true };
-  }
   const resolveScript = path.join(agentsConfigDir, "bin", "resolve-session-id");
   // resolve-session-id is a bash script — spawn via bash
   const { buildBashScriptSpawn } = require("./lib/workflow-init/spawn-env");
@@ -463,7 +458,13 @@ function main() {
   const { sid: sessionId, reliable: sidReliable } = resolveSessionId();
   // wipSid: the session ID to pass to wip-state.sh; null when not reliably resolved.
   const wipSid = sidReliable ? sessionId : null;
-  const ckptFile = checkpointPath(plansDir, sessionId);
+  let ckptFile;
+  try {
+    ckptFile = checkpointPath(sessionId);
+  } catch (e) {
+    emitBlocked("<pre-session>", "control_dir_unavailable", String(e && e.message ? e.message : e));
+    return;
+  }
 
   // NON_GITHUB=1 → immediate done/Path C (also writes context.md)
   if (nonGithub) {

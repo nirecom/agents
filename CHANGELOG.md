@@ -639,3 +639,27 @@ Changes: fix: allow WARNINGS_ACCEPTED to recover review_tests that ended in_prog
 ### FEATURE: PR #2496 (2026-10-02)
 Background: feat(#1810): share an EOF-safe hook stdin reader; fold in #2206 runCommands array and #1861 interpreter inline-body scanning
 Changes: Fixed: hooks no longer misread chunked or oversized stdin payloads, security guards block when stdin cannot be read, every runCommands entry is scanned by the guards, and commands hidden inside interpreter inline bodies (bash -c, eval and similar) are now checked.
+
+### FEATURE: PR #2504 (2026-10-02)
+Background: fix(#2495): clear stale review_tests warnings on a clean COMPLETE
+Changes: Fixed: the commit gate no longer blocks with `warnings-pending` after a later review_tests round finishes clean; stale warnings and their accepted reason are cleared on completion.
+
+### FEATURE: PR #2510 (2026-10-03)
+Background: feat(#2434): move session control files into a guarded per-session control dir
+Changes: Fixed: a session can no longer rewrite its own review-loop control files to bypass an exit guard; control files live in a guarded per-session directory and paths spelled with variables, `~` or `$HOME` are caught.
+
+### FEATURE: PR #2524 (2026-10-04)
+Background: refactor(#1091): remove repo-manufactured CLAUDE_SESSION_ID / CLAUDE_ENV_FILE relay
+Changes: Session id is now read from CLAUDE_CODE_SESSION_ID only; the CLAUDE_SESSION_ID / CLAUDE_ENV_FILE relay was removed (#1091)
+
+### FEATURE: PR #2526 (2026-10-04)
+Background: feat(#2500): one test-language registry for discovery, headers and launch
+Changes: Test tooling now reads one test language registry for which files are tests, how their headers are read and how they are launched, so every tool agrees on the supported languages (bash, Pester, pytest).;Test files the registry recognizes but cannot run yet (such as the Node tests under `tests/hooks/`) are listed as `UNSUPPORTED:` by the test runner instead of being silently skipped, and never fail a run or block a commit.;When the registry cannot be read, test selection, the runner and the audits stop with an error instead of reporting that there are no tests.
+
+### FEATURE: PR #2518 (2026-10-04)
+Background: fix(#2400): share null-freshness predicate between user_verification gate and pre-merge backstop
+Changes: Sessions that skip the outline step can now merge through `gh pr merge` once the user-verification audit has passed; edits to plan documents after that audit still block the merge.;The merge stays blocked while a newer supervisor audit has not returned a verdict, and a plan document that exists but cannot be read now blocks the merge instead of being treated as missing.
+
+### FEATURE: PR #2531 (2026-10-04)
+Background: feat(#2490): show CONFIRM_* gate values in next-step and unify the confirm procedure
+Changes: The workflow now shows each step's confirmation-gate setting in its next-action output and decides whether to ask you from a single check, so the intent, outline, detail, tests, code, docs and worktree gates behave the same way. A scope change between outline and detail is always shown to you, even when the detail confirmation is turned off.

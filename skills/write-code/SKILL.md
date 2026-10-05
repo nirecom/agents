@@ -24,8 +24,8 @@ WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: pat
 WCD-3. If `COMPLEXITY_LEVEL_write_code` from WCD-0 is not `NONE`, use `COMPLEXITY_MODEL_write_code` as the model and `COMPLEXITY_SIGNALS` directly; skip the fallback below.
    - If `NONE` (fail-open):
      - Dispatch `subagent_type: complexity-judge` (pass intent/outline/detail + WCD-2 file list; rubric: `skills/_shared/judge-task-complexity.md`); write raw output to `<PLANS_DIR>/<session-id>-write-code-judge-raw.txt` (Write tool — untrusted text via file only).
-     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-code-judge-raw.txt" --out "<PLANS_DIR>/<session-id>-write-code-signals.txt"`.
-     - Run `bash "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_code --signals-file "<PLANS_DIR>/<session-id>-write-code-signals.txt"` and use its `model=<alias>` line — never judge the level inline.
+     - Run `node "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-code-judge-raw.txt" --session "<session-id>" --stage write-code`.
+     - Run `node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_code --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
    Emit in Claude text output (NOT Bash echo): `> Model selected: **<model alias>** (signals: [comma-separated triggered signal IDs, or "none"])`
 WCD-3a. Emit `echo "<<WORKFLOW_MARK_STEP_write_code_in_progress>>"` via Bash immediately before the WCD-4 subagent launch.
 
@@ -48,9 +48,9 @@ WCD-5a. Run `skills/write-code/scripts/self-check-siblings.sh "<what changed>" "
 WCD-5b. Run `skills/write-code/scripts/detect-contract-pins.sh <edited-files>` — flag edited files with no matching test; fold into WCD-6.
 
 WCD-6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user — gated by **CONFIRM_CODE gate (post-action review)**:
-   `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
-   - stdout `OFF`: skip WCD-6; proceed (no user wait).
-   - stdout `ON` or `ERROR`: present the file list and notes; record each per `skills/_shared/handoff-record.md` (`--step write_code`; `--class E --key write-code:checks-skipped` / `--class D --key write-code:scope-expansion`).
+   Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
+   - `GATE_ACTION=proceed`: skip WCD-6; proceed (no user wait).
+   - `GATE_ACTION=ask`: present the file list and notes; record each per `skills/_shared/handoff-record.md` (`--step write_code`; `--class E --key write-code:checks-skipped` / `--class D --key write-code:scope-expansion`).
 
 WCD-7. Stage the implementation files so the write_code snapshot sees them: `node "$AGENTS_CONFIG_DIR/bin/stage-review-scope-files.js" --worktree "<cwd>" -- <WCD-5 edited files>`
    - Exit non-zero: stop — do not emit the completion sentinel; report via /supervisor-report.

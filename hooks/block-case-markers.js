@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// PreToolUse hook: refuse a Write/Edit/MultiEdit that leaves a NEW .sh test
-// entrypoint (absent from HEAD, in a repo carrying tests/lib/harness.sh) with
+// PreToolUse hook: refuse a Write/Edit/MultiEdit that leaves a NEW case-marker test
+// entrypoint (absent from HEAD, in a repo carrying its helperLibrary) with
 // missing or malformed case_begin/case_end markers (#2388). The verdict is
 // bin/check-case-markers.sh run on a temp copy of the rebuilt post-edit content;
 // the target file is never touched. pre-commit is the backstop for what this
@@ -20,13 +20,25 @@ const CHECKER = path.resolve(__dirname, "..", "bin", "check-case-markers.sh");
 const RULE_DOC = "skills/_shared/test-design/case-markers.md";
 const CHECK_TIMEOUT_MS = 8000;
 
-// isCaseMarkerTarget — .sh test entrypoint by repo-relative `/` path. Mirrors
-// _precommit_is_sh_test_entrypoint (hooks/lib/precommit-tests-frontmatter.sh);
-// the parity test pins the two together.
-function isCaseMarkerTarget(rel) {
-  if (typeof rel !== "string") return false;
-  if (rel === "tests/run-all.sh") return false;
-  return /^tests\/(hooks|bin|skills|agents|install|tests)\/[^/]+\.sh$/.test(rel) || /^tests\/[^/]+\.sh$/.test(rel);
+// caseMarkerEntry — the registry entry of a placed case-marker entrypoint (repo-relative
+// `/` path: a category root or flat tests/<name>, supported with a caseMarkerReader), or
+// null. Mirrors _precommit_is_case_marker_target (hooks/lib/precommit-tests-frontmatter.sh);
+// the parity test pins the two together. Throws when the registry is unreadable.
+function caseMarkerEntry(rel, reg) {
+  if (typeof rel !== "string") return null;
+  if (/^tests\/(_archive|lib)\//.test(rel) || rel === "tests/run-all.sh") return null;
+  if (!/^tests\/((hooks|bin|skills|agents|install|tests)\/)?[^/]+$/.test(rel)) return null;
+  const m = registry().matchBasename(rel.slice(rel.lastIndexOf("/") + 1), reg);
+  return m && m.status === "supported" && m.entry.caseMarkerReader ? m.entry : null;
+}
+
+function isCaseMarkerTarget(rel, reg) {
+  return caseMarkerEntry(rel, reg) !== null;
+}
+
+// The reader loads only once a target under tests/ is seen.
+function registry() {
+  return require("./lib/test-language-registry");
 }
 
 function buildReason(violations) {
@@ -116,14 +128,27 @@ function checkOne(tmpFile, rel, cwd) {
   return high.length > 0 ? high : null;
 }
 
+// collectCandidates — the new case-marker entrypoints this call writes, or null when the
+// registry is unreadable (the caller then fails open).
 function collectCandidates(input, toolName, toolInput) {
   const out = [];
+  let reg;
   for (const group of groupEditTargets(toolName, toolInput, input)) {
     const absPath = resolveTargetPath(input, group.rawPath);
     if (!absPath) continue;
     const loc = repoRelOf(absPath);
-    if (!loc || !isCaseMarkerTarget(loc.rel)) continue;
-    if (!fs.existsSync(path.join(loc.top, "tests", "lib", "harness.sh"))) continue;
+    if (!loc || !loc.rel.startsWith("tests/")) continue;
+    if (reg === undefined) {
+      try {
+        reg = registry().loadRegistry();
+      } catch (e) {
+        try { fs.writeSync(2, `[block-case-markers] test language registry not readable — check skipped: ${String(e.message).split("\n")[0]}\n`); } catch (_) {}
+        return null;
+      }
+    }
+    const entry = caseMarkerEntry(loc.rel, reg);
+    if (!entry || !entry.helperLibrary) continue;
+    if (!fs.existsSync(path.join(loc.top, ...entry.helperLibrary.path.split("/")))) continue;
     if (isInHead(loc.top, loc.rel)) continue;
     const post = postContentOf(group, absPath);
     if (typeof post !== "string") continue;
@@ -149,7 +174,7 @@ function main() {
   if (!fs.existsSync(CHECKER)) approve();
 
   const candidates = collectCandidates(input, toolName, toolInput);
-  if (candidates.length === 0) approve();
+  if (!candidates || candidates.length === 0) approve();
 
   const violations = [];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "case-markers-"));

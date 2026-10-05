@@ -2,7 +2,7 @@
 # Tests: bin/workflow/read-session-facts, bin/workflow/lib/session-facts/collect.js, bin/workflow/lib/session-facts/gate-facts.js, bin/workflow/lib/session-facts/keys.js, skills/write-tests/SKILL.md, skills/write-code/SKILL.md
 # Tags: tl2, workflow, session-facts, values, gates, plans-dir, complexity, scope:issue-specific, pwsh-not-required
 
-# contract.sh proves the ten keys are always THERE; this file proves they are RIGHT.
+# contract.sh proves the eleven keys are always THERE; this file proves they are RIGHT.
 # A wrong GATE_* value silently skips a user confirmation and a wrong COMPLEXITY_LEVEL_*
 # picks the wrong model, so every family is checked differentially against the
 # single-purpose reader it composes -- the reader must compose, never re-implement.
@@ -31,7 +31,7 @@ WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"; export CLAUDE_WORKFLOW_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CONFIRM_TESTS CONFIRM_CODE
+unset CLAUDE_CODE_SESSION_ID CONFIRM_TESTS CONFIRM_CODE
 
 AGENTS_DIR="$REPO_ROOT"
 # shellcheck source=../../lib/harness.sh
@@ -110,7 +110,6 @@ VFIX_OUT="$(run_with_timeout node -e '
 HOME_PD="$(printf '%s\n' "$VFIX_OUT" | sed -n 's/^HOME_PD=//p')"
 GDEF="$(printf '%s\n' "$VFIX_OUT" | sed -n 's/^GDEF=//p')"
 [ -n "$GDEF" ] || GDEF="MODULE_LOAD_FAILED"
-DEF_T="${GDEF%% *}"
 
 # (e) adoption and (f) round-trip checks, run once per consumer SKILL.md.
 check_adoption() {
@@ -125,6 +124,8 @@ check_adoption() {
 }
 count_lit() { grep -oF -- "$2" "$1" 2>/dev/null | wc -l | tr -d ' '; }
 CONFIRM_CALL='"$AGENTS_CONFIG_DIR/bin/confirm-off"'
+# #2490: the post-action probe is now the shared gate trigger (next-step --gate), not confirm-off.
+GATE_TRIGGER='Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.'
 check_round_trips() {
   local f="$1" n
   n="$(basename "$(dirname "$f")")"
@@ -132,7 +133,7 @@ check_round_trips() {
   check "(f) $n no longer resolves the plans dir on its own" 0 "$(count_lit "$f" "resolve-plans-dir")"
   check "(f) $n no longer reads the complexity record on its own" 0 \
     "$(count_lit "$f" "read-complexity-evaluation")"
-  check "(f) $n keeps exactly one confirm-off call -- the post-action probe" 1 \
+  check "(f) $n issues no confirm-off call -- the post-action probe moved to next-step --gate" 0 \
     "$(count_lit "$f" "$CONFIRM_CALL")"
   # Non-vacuity: an unrelated CLI the migration must NOT touch is still invoked, so a
   # `grep` that silently matched nothing cannot make the three zeros above green.
@@ -141,7 +142,7 @@ check_round_trips() {
   else fail "(f) $n control -- derive-complexity-level literal not found"; fi
   # Ordering: the bundled read is the up-front call, the surviving probe comes after it.
   FACTS_LN="$(grep -nF -- "bin/workflow/read-session-facts" "$f" 2>/dev/null | head -n 1 | cut -d: -f1)"
-  PROBE_LN="$(grep -nF -- "$CONFIRM_CALL" "$f" 2>/dev/null | head -n 1 | cut -d: -f1)"
+  PROBE_LN="$(grep -nF -- "$GATE_TRIGGER" "$f" 2>/dev/null | head -n 1 | cut -d: -f1)"
   if [ -n "$FACTS_LN" ] && [ -n "$PROBE_LN" ] && [ "$FACTS_LN" -lt "$PROBE_LN" ]; then
     pass "(f) $n reads the bundle before the post-action probe"
   else fail "(f) $n reads the bundle before the post-action probe -- facts@$FACTS_LN probe@$PROBE_LN"; fi
@@ -333,12 +334,12 @@ case_begin "d-gate-defaults-table" "bin/workflow/lib/session-facts/keys.js"
 check "(d) keys.js owns the gate defaults table" "on on" "$GDEF"
 case_end
 case_begin "d-write-tests-wt8-probe" "skills/write-tests/SKILL.md"
-check "(d) write-tests keeps exactly one WT-8 probe, at the keys.js default" 1 \
-  "$(grep -cF -- "confirm-off\" CONFIRM_TESTS $DEF_T" "$WT_SKILL" 2>/dev/null || true)"
+check "(d) write-tests keeps exactly one WT-8 live probe (the #2490 gate trigger)" 1 \
+  "$(grep -cF -- "$GATE_TRIGGER" "$WT_SKILL" 2>/dev/null || true)"
 case_end
 case_begin "d-write-code-wcd6-probe" "skills/write-code/SKILL.md"
-check "(d) write-code keeps exactly one WCD-6 probe, at the keys.js default" 1 \
-  "$(grep -cF -- "confirm-off\" CONFIRM_CODE $DEF_T" "$WC_SKILL" 2>/dev/null || true)"
+check "(d) write-code keeps exactly one WCD-6 live probe (the #2490 gate trigger)" 1 \
+  "$(grep -cF -- "$GATE_TRIGGER" "$WC_SKILL" 2>/dev/null || true)"
 case_end
 
 echo ""
@@ -357,8 +358,8 @@ echo "=== (f) the round trips are actually GONE from the primary path ==="
 # The point of #2102 is fewer Bash calls per skill invocation, and nothing above measures
 # that: (e) only proves the bundled reader was ADOPTED, which a skill could do while
 # keeping all three legacy calls. So count the call sites. Exactly one bundled read, zero
-# of each superseded lookup, and exactly one surviving confirm-off -- the deliberate
-# post-action gate probe (d) requires, counted separately and never folded in.
+# of each superseded lookup, and zero confirm-off -- the post-action gate probe (d) requires
+# is the next-step --gate trigger line since #2490, counted separately and never folded in.
 case_begin "f-write-tests-round-trips" "skills/write-tests/SKILL.md"
 check_round_trips "$WT_SKILL"
 case_end

@@ -19,7 +19,6 @@ else
     # Make foreign file newer so JSONL scan would return it without P2 guard.
     touch -t 202701010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-sid-b15.jsonl"
     OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
         export CLAUDE_CODE_SESSION_ID='own-sid-b15'
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
         export AGENTS_CONFIG_DIR='$AGENTS_DIR'
@@ -49,7 +48,6 @@ else
     mk_jsonl "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED" "foreign-codex-b17"
     touch -t 202701010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-codex-b17.jsonl"
     OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
         export CLAUDE_CODE_SESSION_ID='own-codex-b17'
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
         export AGENTS_CONFIG_DIR='$AGENTS_DIR'
@@ -80,7 +78,6 @@ else
     mk_jsonl "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED" "foreign-gemini-b18"
     touch -t 202701010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-gemini-b18.jsonl"
     OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
         export CLAUDE_CODE_SESSION_ID='own-gemini-b18'
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
         export AGENTS_CONFIG_DIR='$AGENTS_DIR'
@@ -110,7 +107,6 @@ ENCODED=$(enc "$FAKE_CWD")
 mk_jsonl "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED" "foreign-b19"
 touch -t 202701010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-b19.jsonl"
 OUT1=$(bash -c "
-    unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
     export CLAUDE_CODE_SESSION_ID='own-sid-b19'
     export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
     export AGENTS_CONFIG_DIR='$AGENTS_DIR'
@@ -119,7 +115,6 @@ OUT1=$(bash -c "
 " 2>/dev/null)
 RC1=$?
 OUT2=$(bash -c "
-    unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
     export CLAUDE_CODE_SESSION_ID='own-sid-b19'
     export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
     export AGENTS_CONFIG_DIR='$AGENTS_DIR'
@@ -136,7 +131,7 @@ teardown
 
 # ===========================================================================
 # B-21: driver wip-check phase SID injection.
-# The driver resolves session-id from CLAUDE_SESSION_ID env (primary) or
+# The driver resolves session-id from CLAUDE_CODE_SESSION_ID env (primary) or
 # by spawning resolve-session-id. The fake AGENTS_CONFIG_DIR tree intercepts
 # the wip-state.sh dispatch (env-based by design). A full driver fixture is
 # needed (gh mock + issue fixture + filter-init-candidates.sh passthrough).
@@ -193,7 +188,7 @@ esac
 WIPEOF
     chmod +x "$B21_CFG/bin/github-issues/wip-state.sh"
     # resolve-session-id: echo env var
-    printf '#!/bin/bash\necho "${CLAUDE_SESSION_ID:-}"\n' > "$B21_CFG/bin/resolve-session-id"
+    printf '#!/bin/bash\necho "${CLAUDE_CODE_SESSION_ID:-}"\n' > "$B21_CFG/bin/resolve-session-id"
     chmod +x "$B21_CFG/bin/resolve-session-id"
     # parse-issue-tokens
     cp "$AGENTS_DIR/bin/parse-issue-tokens" "$B21_CFG/bin/parse-issue-tokens"
@@ -213,16 +208,15 @@ FEOF
     ORIG_PATH_B21="$PATH"
     export PATH="$B21_MOCKBIN:$PATH"
     B21_OUT=$(bash -c "
-        export CLAUDE_SESSION_ID='own-sid-b21'
+        export CLAUDE_CODE_SESSION_ID='own-sid-b21'
         export WORKFLOW_PLANS_DIR='$B21_PLANS'
         export AGENTS_CONFIG_DIR='$B21_CFG'
-        unset CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
         node '$DRIVER' '#42'
     " 2>/dev/null)
     export PATH="$ORIG_PATH_B21"
     # wip-state.sh receives --session-id own-sid-b21 from the driver
     if grep -q "\-\-session-id own-sid-b21" "$CAPTURE_FILE_CHECK" 2>/dev/null; then
-        pass "B-21a: driver wip-check phase passes --session-id via CLAUDE_SESSION_ID (own-sid-b21)"
+        pass "B-21a: driver wip-check phase passes --session-id via CLAUDE_CODE_SESSION_ID (own-sid-b21)"
     else
         fail "B-21a: driver did not pass --session-id own-sid-b21; capture='$(cat "$CAPTURE_FILE_CHECK" 2>/dev/null)' out='$B21_OUT'"
     fi

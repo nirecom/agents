@@ -2,30 +2,23 @@
 # Sourced by feature-resolve-session-id-sh.sh; inherits all globals and helpers.
 
 # ===========================================================================
-# B-29: issue-close-write-outcome.js normal mode — writes outcome JSON.
-# CLAUDE_CODE_SESSION_ID=own-sid-b29; WORKFLOW_PLANS_DIR=absolute temp dir.
-#
-# RED pre-fix: the current private resolveSessionId() JSON.parses the CLAUDE_ENV_FILE
-# (always throws because the file is KEY=VALUE, not JSON) and then falls back to
-# CLAUDE_SESSION_ID env var only — never reads CLAUDE_CODE_SESSION_ID. So with
-# only CLAUDE_CODE_SESSION_ID set, resolveSessionId() returns "" and no file is
-# written (exits 0, outcome JSON absent).
-#
-# GREEN post-fix: private resolveSessionId() delegates to
-# require(hooks/workflow-state).resolveSessionId() which checks
-# CLAUDE_CODE_SESSION_ID first (P2) and the file is written.
+# B-29: issue-close-write-outcome.js normal mode — writes outcome JSON with only CLAUDE_CODE_SESSION_ID set.
+# RED pre-fix: the old private resolveSessionId() never read CLAUDE_CODE_SESSION_ID → no file written.
+# GREEN post-fix: it delegates to hooks/workflow-state resolveSessionId() (CLAUDE_CODE_SESSION_ID first, P2).
+# #2434: the outcome file is a control file — <CLAUDE_WORKFLOW_DIR>/<sid>.control/issue-close-outcome.json.
 # ===========================================================================
 setup
 PLANS_DIR="$TMP/b29-plans"
-mkdir -p "$PLANS_DIR"
+WF_DIR="$TMP/b29-workflow"
+mkdir -p "$PLANS_DIR" "$WF_DIR"
 NONGIT_CWD="$TMP/b29-nongit"
 mkdir -p "$NONGIT_CWD"
-OUTCOME_FILE="$PLANS_DIR/own-sid-b29-issue-close-outcome.json"
+OUTCOME_FILE="$WF_DIR/own-sid-b29.control/issue-close-outcome.json"
 
 bash -c "
-    unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
     export CLAUDE_CODE_SESSION_ID='own-sid-b29'
     export WORKFLOW_PLANS_DIR='$PLANS_DIR'
+    export CLAUDE_WORKFLOW_DIR='$WF_DIR'
     export AGENTS_CONFIG_DIR='$AGENTS_DIR'
     cd '$NONGIT_CWD'
     node '$AGENTS_DIR/bin/issue-close-write-outcome.js' 999 completed appended closed posted cleared

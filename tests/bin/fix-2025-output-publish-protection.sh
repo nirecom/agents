@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/fix-2025-output-publish-protection.sh
-# Tests: bin/build-codex-context, bin/run-codex-review-loop, bin/lib/safe-plans-path.sh
+# Tests: bin/build-codex-context, bin/run-codex-review-loop, bin/lib/safe-state-path.sh
 # Tags: codex, review-loop, publish, atomic-write, session-id, security, scope:issue-specific, pwsh-not-required
 #
 # The two wrapper scripts create files in the plans dir under predictable
@@ -11,7 +11,7 @@ set -uo pipefail
 
 # TL2. Real bin/build-codex-context and real bin/run-codex-review-loop run in a
 # fixture AGENTS_CONFIG_DIR carrying real bin/lib, so a regression in
-# safe-plans-path.sh surfaces here too.
+# safe-state-path.sh surfaces here too.
 
 # TL3 gap (environment-specific): a symlink pre-placed at a destination,
 # pointing outside the plans dir, isn't covered everywhere — Git Bash on
@@ -23,6 +23,7 @@ AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 PASS=0
 FAIL=0
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 
 assert_eq() {
@@ -57,7 +58,6 @@ run_with_timeout() {
 # --- fixture isolation (rules/test/fixture-isolation.md) --------------------
 TMPDIR_BASE="$(mktemp -d)"
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans-root"
@@ -122,7 +122,11 @@ loop() {
 says() { printf '%s' "$OUT" | grep -q -F -e "$1" && printf yes || printf no; }
 inside() { find "$1" -mindepth 1 2>/dev/null | wc -l | tr -d ' '; }
 temps() { find "$1" -maxdepth 1 -name '.sp-tmp.*' -o -maxdepth 1 -name '.build-codex-context.*' | wc -l | tr -d ' '; }
+# ctl_of <sid> — the loop's control dir (#2434): its context, built-marker and
+# round counter are published there under sid-unprefixed names.
+ctl_of() { printf '%s/%s.control' "$CLAUDE_WORKFLOW_DIR" "$1"; }
 
+case_begin "publish-1-controls" "bin/build-codex-context"
 echo "--- publish 1: the controls, where both scripts get a clear destination ---"
 
 # 1. Without these, "it refused" below would also be true of a build that always
@@ -141,9 +145,11 @@ echo "--- publish 1: the controls, where both scripts get a clear destination --
     assert_eq "1: a review round whose destinations are free converges" "0" "$RC"
     assert_eq "1: having really built the context and the marker" \
         "ctx=yes marker=yes" \
-        "ctx=$([ -f "$P1L/sid1-codex-context.md" ] && printf yes || printf no) marker=$([ -f "$P1L/sid1-codex-context.$FMT.built" ] && printf yes || printf no)"
+        "ctx=$([ -f "$(ctl_of sid1)/codex-context.md" ] && printf yes || printf no) marker=$([ -f "$(ctl_of sid1)/codex-context.$FMT.built" ] && printf yes || printf no)"
 }
+case_end
 
+case_begin "publish-2-directory-pre-placed" "bin/build-codex-context"
 echo ""
 echo "--- publish 2: a directory pre-placed at the context's destination ---"
 
@@ -163,7 +169,9 @@ echo "--- publish 2: a directory pre-placed at the context's destination ---"
         "dir" "$([ -d "$P2/ctx.md" ] && printf dir || printf 'replaced')"
     assert_eq "2: and no temporary was abandoned in the plans dir" "0" "$(temps "$P2")"
 }
+case_end
 
+case_begin "publish-3-through-review-loop" "bin/run-codex-review-loop"
 echo ""
 echo "--- publish 3: the same destinations, reached through the review loop ---"
 
@@ -171,29 +179,33 @@ echo "--- publish 3: the same destinations, reached through the review loop ---"
 #    must halt with its own configuration-fault status (4) rather than run a
 #    round whose bookkeeping silently went into a directory.
 {
-    while IFS='~' read -r label sid suffix want_says; do
+    while IFS='~' read -r label sid name want_says; do
         case "$label" in ''|'#'*) continue ;; esac
-        for v in label sid suffix want_says; do
+        for v in label sid name want_says; do
             eval "t=\$$v"; t="${t#"${t%%[![:space:]]*}"}"; t="${t%"${t##*[![:space:]]}"}"; eval "$v=\$t"
         done
         P3="$(mk_plans "blocked-$sid" "$sid")"
-        mkdir -p "$P3/$sid$suffix"
+        C3="$(ctl_of "$sid")"
+        mkdir -p "$C3/$name"
         loop "$P3" "$sid"
         assert_eq "3: $label — the round halts instead of proceeding" "4" "$RC"
         assert_eq "3: $label — saying which publish it could not make" "yes" "$(says "$want_says")"
         assert_eq "3: $label — with nothing parked inside the pre-placed directory" \
-            "0" "$(inside "$P3/$sid$suffix")"
-        assert_eq "3: $label — and no temporary abandoned beside it" "0" "$(temps "$P3")"
+            "0" "$(inside "$C3/$name")"
+        assert_eq "3: $label — and no temporary abandoned beside it" \
+            "0" "$(( $(temps "$P3") + $(temps "$C3") ))"
         ROWS3=$((${ROWS3:-0} + 1))
     done <<TABLE
-# label                    ~ sid  ~ suffix                          ~ want_says
-the built-marker           ~ sid3a ~ -codex-context.$FMT.built      ~ cannot create marker
-the round counter          ~ sid3b ~ -$FMT-round-number.txt         ~ cannot publish round counter
-the context file           ~ sid3c ~ -codex-context.md              ~ build-codex-context failed
+# label                    ~ sid   ~ name (in the control dir)     ~ want_says
+the built-marker           ~ sid3a ~ codex-context.$FMT.built      ~ cannot create marker
+the round counter          ~ sid3b ~ $FMT-round-number.txt         ~ cannot publish round counter
+the context file           ~ sid3c ~ codex-context.md              ~ build-codex-context failed
 TABLE
     assert_eq_nz "3: every blocked destination in the table was exercised" "3" "${ROWS3:-0}"
 }
+case_end
 
+case_begin "publish-4-bad-session-id" "bin/build-codex-context"
 echo ""
 echo "--- publish 4: a session id that is not a path token ---"
 
@@ -239,7 +251,9 @@ TABLE
     assert_eq "4: having created nothing outside the plans dir it was given" \
         "0" "$(find "$TMPDIR_BASE" -maxdepth 1 -name 'escape*' 2>/dev/null | wc -l | tr -d ' ')"
 }
+case_end
 
+case_begin "publish-5-symlink-pre-placed" "bin/lib/safe-state-path.sh"
 echo ""
 echo "--- publish 5: a symlink pre-placed at the destination ---"
 
@@ -262,7 +276,9 @@ echo "--- publish 5: a symlink pre-placed at the destination ---"
         echo "SKIP: 5: and the destination is no longer a link to it (no symlinks here)"
     fi
 }
+case_end
 
+case_begin "publish-6-source-properties" "bin/lib/safe-state-path.sh"
 echo ""
 echo "--- publish 6: the source properties the cases above rest on ---"
 
@@ -270,7 +286,7 @@ echo "--- publish 6: the source properties the cases above rest on ---"
 #    here), and one — mktemp's exclusive create — is not observable from outside
 #    at all, so all three are pinned where they are written.
 {
-    SP6="$AGENTS_ROOT/bin/lib/safe-plans-path.sh"
+    SP6="$AGENTS_ROOT/bin/lib/safe-state-path.sh"
     assert_eq_nz "6: the publish renames rather than writing through the destination" \
         "1" "$(grep -c -F 'mv -f -- "$tmp" "$dest"' "$SP6" | tr -d ' ')"
     assert_eq_nz "6: and refuses what is still a link, or no longer a file, afterwards" \
@@ -285,6 +301,7 @@ echo "--- publish 6: the source properties the cases above rest on ---"
     assert_eq_nz "6: and so does the review loop, which derives five names from it" \
         "1" "$(grep -c -F 'sp_valid_token "$SID"' "$AGENTS_ROOT/bin/run-codex-review-loop" | tr -d ' ')"
 }
+case_end
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

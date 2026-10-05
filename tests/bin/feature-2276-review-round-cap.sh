@@ -34,9 +34,7 @@ trim() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:spa
 
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-unset CLAUDE_ENV_FILE 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
@@ -147,8 +145,11 @@ new_loop_env() {
     printf 'draft\n' > "$LP/draft.md"
     printf 'none\n' > "$LP/tradeoffs.md"
     SID="capsess$CN"
-    : > "$LP/$SID-codex-context.test-review.built"
-    RCOUNTER="$LP/$SID-test-review-round-number.txt"
+    # #2434: loop control files live in <CLAUDE_WORKFLOW_DIR>/<sid>.control/ (no sid prefix).
+    CTL="$CLAUDE_WORKFLOW_DIR/$SID.control"
+    mkdir -p "$CTL"
+    : > "$CTL/codex-context.test-review.built"
+    RCOUNTER="$CTL/test-review-round-number.txt"
 }
 loop_run() {
     local approved="${1:-no}" header="${2:-## Codex Review: PERFORMED}" extused="${3:-0}" risk="${4:-}"

@@ -46,6 +46,10 @@ set means adding the new target to `TARGETS` in
 `tests/fix-1532-node-guard/common.sh` and adding one more dispatcher at
 `tests/bin/fix-1532-node-guard-<name>.sh` (coverage check G6 fails otherwise).
 
+## Where session state files live
+
+Control files (JSON, counters, markers) go to `<CLAUDE_WORKFLOW_DIR>/<sid>.control/`, prose artifacts to `WORKFLOW_PLANS_DIR`; register every new name in `hooks/lib/plans-artifact-registry.js`. Policy: `docs/architecture/claude-code/state-dirs.md`.
+
 ## Consolidated test suites: one dispatcher, sourced fragments
 
 Background: a hook that accumulates cases over many issues ends up with one test
@@ -59,10 +63,11 @@ sources fragments from `tests/<cat>/<name>/`. `tests/hooks/main-enforce-worktree
 is the reference implementation.
 
 **Fragments are deliberately not runnable on their own.** `tests/run-all.sh`
-enumerates `tests/<cat>/*.sh`, `tests/<cat>/*.Tests.ps1` (Pester via pwsh) and
-`tests/<cat>/test_*.py` (pytest via uv) for the six canonical categories (hooks,
-bin, skills, agents, install, tests) — a missing pwsh or uv makes that file
-SKIP (exit 77) rather than FAIL — and `*` does not cross `/`, so a fragment
+enumerates the files directly in the six canonical categories (hooks, bin,
+skills, agents, install, tests) whose names match a supported entry of the
+test language registry (`docs/architecture/claude-code/test-language-registry.md`)
+— a missing launch tool (pwsh, uv) makes that file SKIP (exit 77) rather than
+FAIL — and the match never crosses `/`, so a fragment
 nested under `tests/<cat>/<name>/` is invisible to the runner while the
 dispatcher at `tests/<cat>/<name>.sh` is not. That is the mechanism that keeps
 each case counted exactly once. A fragment has no harness of its own and fails

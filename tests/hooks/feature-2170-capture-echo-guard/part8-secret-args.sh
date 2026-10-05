@@ -47,7 +47,7 @@ OUT="$TMPDIR_F/out.json"
 ERR="$TMPDIR_F/err.txt"
 
 # Fixture isolation: never let a real session/plan dir leak in.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_F/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_F/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"

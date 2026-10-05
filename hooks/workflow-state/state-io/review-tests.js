@@ -4,7 +4,6 @@
 // terminal review exit (rc 2/6). Entrypoint-private to state-io.js.
 
 const fs = require("fs");
-const path = require("path");
 const { assertValidSessionId, readState, markStep } = require("./core");
 // Called as events.appendEvents at call time (never destructured) so a wrapper
 // installed on the module is honoured.
@@ -34,7 +33,9 @@ function markReviewTestsComplete(sessionId, files, extraFields = {}) {
   try { wsid = resolveWorkflowSessionId() || null; } catch (_) {}
   // The resolved workflow session id is a FALLBACK: an explicitly supplied
   // extraFields.wsid is the caller's own evidence and must win over the ambient probe.
-  markStep(sessionId, "review_tests", "complete", { ...buildReviewScopeAnnotation(map), wsid, ...extraFields });
+  // A clean COMPLETE drops a past round's warning and acceptance reason; the WARNINGS path overrides
+  // via extraFields. Recorded as observed by markStep (cleared by the handler), not declared.
+  markStep(sessionId, "review_tests", "complete", { ...buildReviewScopeAnnotation(map), ...warningsTombstoneFields(), wsid, ...extraFields });
 }
 
 const CLEAR_OUTCOME = Object.freeze({
@@ -49,8 +50,8 @@ const CLEAR_OUTCOME = Object.freeze({
 function terminalMarkerPath(sessionId) {
   // Trust boundary: single-user local filesystem (NFR); forgeability risk accepted.
   assertValidSessionId(sessionId);
-  const { getWorkflowPlansDir } = require("../../lib/workflow-plans-dir");
-  return path.join(getWorkflowPlansDir(), `${sessionId}-test-review-terminal.txt`);
+  const { controlPath } = require("./control-dir");
+  return controlPath(sessionId, "test-review-terminal.txt");
 }
 
 function hasReviewTerminalRecord(sessionId) {
@@ -70,9 +71,14 @@ function buildRecoveryEvents(origin, files, reason, ann) {
   return out;
 }
 
-// #2434 swap point: the only place that knows where the acceptance reason is recorded.
+// #2434 swap point: warningsAcceptedReasonEvents (record) and warningsTombstoneFields (clear)
+// are the only places that know where the acceptance reason is recorded.
 function warningsAcceptedReasonEvents(reason, ann) {
   return [ann("warnings_accepted_reason", reason || null, "declared")];
+}
+
+function warningsTombstoneFields() {
+  return { warnings_summary: null, warnings_accepted_reason: null };
 }
 
 // WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED. The "anything to clear?" decision is taken
@@ -128,6 +134,7 @@ function clearReviewTestsTerminalMarker(sessionId) {
     fs.unlinkSync(terminalMarkerPath(sessionId));
   } catch (e) {
     // ENOENT (no marker) and any other failure are non-fatal.
+    try { require("./control-dir").diagnoseControlMigration(e, "review-tests"); } catch (_) { /* fail-open */ }
   }
 }
 

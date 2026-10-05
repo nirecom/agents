@@ -3,29 +3,14 @@
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/finalize.sh
 # Tags: concern-ledger, concurrency, atomic-write, shared-ledger, lost-update, scope:common, pwsh-not-required
 #
-# The ledger has two writers by design. review-code-codex and the security
-# scanner review the same round and both stage into the same plans dir, and in a
-# real /review-code-security run they are dispatched together rather than in
-# sequence. So "two producers write at once" is the normal case, not an exotic
-# one, and the failure it invites is the quiet one: a delta that was written and
-# then overwritten, leaving a round that looks complete and is missing a finding.
-
-# Three properties, separated because they fail independently (CPR-SC):
-#   - no lost delta      — every concurrent producer's staging survives
-#   - no torn artifact   — a reader never sees a half-written ledger or JSON
-#   - no leftover temp   — an interrupted write leaves no partial file behind
-
-# TL2. Real bin/concern-ledger subprocesses, backgrounded and joined, over a
-# real plans dir. No mocks — the interleaving is what is under test.
-
-# TL3 gap (mitigation category: environment)
-#   Not covered here: the true adversarial interleaving. Backgrounded shell jobs
-#   overlap, but the scheduler decides by how much, so this file proves the
-#   writers do not clobber each other under ordinary overlap rather than under a
-#   worst case. A lost-update window narrower than process startup stays
-#   invisible. Mitigation: the repeat loop in case 1 runs the race repeatedly so
-#   a wide window fails reliably rather than once in a while.
+# Two producers (review-code-codex, security-scanner) stage the same round at once
+# by design; properties: no lost delta, no torn artifact, no leftover temp (CPR-SC).
+# TL2: real CLI subprocesses, backgrounded and joined — no mocks.
 set -uo pipefail
+
+# TL3 gap (mitigation category: environment): the scheduler decides how much the
+# background jobs overlap, so a lost-update window narrower than process startup
+# stays invisible. Mitigation: case 1 repeats the race so a wide window fails reliably.
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CLI="$AGENTS_ROOT/bin/concern-ledger"
@@ -47,7 +32,6 @@ assert_eq() {
 # Fixture isolation (rules/test/fixture-isolation.md).
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
@@ -99,8 +83,10 @@ for ITER in 1 2 3 4 5; do
     done
     wait
 
+    # #2434: control files live in <CLAUDE_WORKFLOW_DIR>/<sid>.control, unprefixed.
+    CTL="$CLAUDE_WORKFLOW_DIR/$SID.control"
     for P in $PRODUCERS; do
-        D="$PLANS/$SID-$FORMAT-round-1-delta-$P.txt"
+        D="$CTL/$FORMAT-round-1-delta-$P.txt"
         if ! grep -Fq -- "a concern from $P in iteration $ITER" "$D" 2>/dev/null; then
             LOST=$((LOST + 1))
         fi
@@ -110,7 +96,7 @@ for ITER in 1 2 3 4 5; do
     # write shows up as a row that no longer has its 11 fields.
     bash "$CLI" reduce --plans-dir "$PLANS" --session-id "$SID" --format "$FORMAT" \
         --round 1 >/dev/null 2>&1
-    LED="$PLANS/$SID-$FORMAT-concern-ledger.txt"
+    LED="$CTL/$FORMAT-concern-ledger.txt"
     BAD="$(awk -F'|' '/^#/ { next } NF > 0 && NF != 11 { n++ } END { printf "%d", n + 0 }' \
         "$LED" 2>/dev/null)"
     [ "$BAD" = "0" ] || TORN=$((TORN + 1))
@@ -146,9 +132,10 @@ for _ in 1 2 3; do
 done
 wait
 
-FJSON="$FPLANS/$FSID-$FORMAT-unresolved-concerns.json"
+FCTL="$CLAUDE_WORKFLOW_DIR/$FSID.control"
+FJSON="$FCTL/$FORMAT-unresolved-concerns.json"
 assert_eq "2: the racing finalizers left exactly one artifact" \
-    "1" "$(find "$FPLANS" -maxdepth 1 -name "$FSID-$FORMAT-unresolved-concerns.json" 2>/dev/null | wc -l | tr -d ' ')"
+    "1" "$(find "$FCTL" -maxdepth 1 -name "$FORMAT-unresolved-concerns.json" 2>/dev/null | wc -l | tr -d ' ')"
 
 # The artifact a real parser accepts is the only definition of "not torn".
 if command -v node >/dev/null 2>&1; then
@@ -173,7 +160,7 @@ assert_eq "2: and check-finalized accepts the round the race finished" "0" \
 echo ""
 echo "--- concurrency 3: no scratch files survive the race ---"
 
-STRAY="$(find "$FPLANS" "$TMPDIR_BASE/race-1" -maxdepth 1 \
+STRAY="$(find "$FPLANS" "$TMPDIR_BASE/race-1" "$FCTL" "$CLAUDE_WORKFLOW_DIR/race1.control" -maxdepth 1 \
     \( -name '*.tmp' -o -name '*.tmp.*' -o -name '.*.swp' -o -name '*~' -o -name '*.partial' \) \
     2>/dev/null | wc -l | tr -d ' ')"
 assert_eq "3: the racing writers left no scratch files in the plans dirs" "0" "$STRAY"

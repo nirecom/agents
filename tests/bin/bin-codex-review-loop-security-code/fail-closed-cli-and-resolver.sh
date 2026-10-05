@@ -6,6 +6,7 @@
 # session resolver that faults while the loop is deciding which session to file
 # the round under. Split out of fail-closed.sh for size (Pattern A).
 
+case_begin "fail-closed-cli-and-resolver" "bin/run-codex-review-loop"
 echo ""
 echo "--- F6-F10: the sibling format, the CLI layer, the session resolver ---"
 
@@ -32,19 +33,22 @@ FC_PLED=""; FC_PP=""; FC_PSID=""
 fc_plan_env() {
     FC_PSID="fcp$1"
     FC_PP="$TMPDIR_BASE/fcp-plans-$1"
-    rm -rf "$FC_PP"
-    mkdir -p "$FC_PP/workflow-state"
+    FC_WS="$TMPDIR_BASE/fcp-workflow-$1"
+    rm -rf "$FC_PP" "$FC_WS"
+    mkdir -p "$FC_PP" "$FC_WS/$FC_PSID.control"
+    export CLAUDE_WORKFLOW_DIR="$FC_WS"
+    export WORKFLOW_PLANS_DIR="$FC_PP"
     printf '# Draft\n' > "$FC_PP/draft.md"
     printf '# Tradeoffs\n' > "$FC_PP/tradeoffs.md"
-    FC_PLED="$FC_PP/$FC_PSID-detail-plan-concern-ledger.txt"
+    FC_PLED="$FC_WS/$FC_PSID.control/detail-plan-concern-ledger.txt"
     {
         printf '#concern-ledger-v2|detail-plan|%s|cycle=1\n' "$FC_PSID"
         printf 'C1|HIGH|open|1|1|plan#s1:correctness|d15c11|review-plan-codex|review-plan-codex|-|%s\n' \
             "$FC_TEXT"
     } > "$FC_PLED"
-    printf '1\n' > "$FC_PP/$FC_PSID-detail-plan-round-number.txt"
+    printf '1\n' > "$FC_WS/$FC_PSID.control/detail-plan-round-number.txt"
 }
-fc_plan_json() { printf '%s/%s-detail-plan-unresolved-concerns.json' "$FC_PP" "$FC_PSID"; }
+fc_plan_json() { printf '%s/%s.control/detail-plan-unresolved-concerns.json' "$CLAUDE_WORKFLOW_DIR" "$FC_PSID"; }
 fc_plan_run() {
     FC_PRC=0
     FC_PERR="$TMPDIR_BASE/fcp-err-$FC_PSID.txt"
@@ -115,7 +119,7 @@ fc_plan_run() {
     assert_eq "F8: nothing was written, so the round has no delta to fold" \
         "0" "$(find "$FC_BLOCKED" -type f 2>/dev/null | wc -l | tr -d ' ')"
     assert_eq "F8: and no partial or temporary delta is left beside the destination" \
-        "0" "$(find "$PLANS" -maxdepth 1 -type f -name "*$SID*round-2*" 2>/dev/null | wc -l | tr -d ' ')"
+        "0" "$(find "$(ctl_dir "$SID")" -maxdepth 1 -type f -name "*round-2*" 2>/dev/null | wc -l | tr -d ' ')"
 
     rmdir "$FC_BLOCKED" 2>/dev/null
     FC_RC8B=0
@@ -159,7 +163,7 @@ fc_no_sid_run() {
         export PATH="$FULL_PATH" HOME="$TMPDIR_BASE" AGENTS_CONFIG_DIR="$1"
         export CODEX_MOCK_PROMPT="$TMPDIR_BASE/fc-nosid-prompt.txt" \
                CODEX_MOCK_BODY="$NONE_BODY" CODEX_MOCK_EXIT=0
-        env -u SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u SESSION_ID -u CLAUDE_CODE_SESSION_ID \
             bash "$1/bin/run-codex-review-loop" --format "$LOOP_FORMAT" \
             --plans-dir "$PLANS" --cap 2 --max-extensions 0 --extensions-used 0 \
             --accepted-tradeoffs "$PLANS/tradeoffs.md" --repo-root "$REPO" 2>"$errf"
@@ -181,7 +185,7 @@ fc_no_sid_run() {
     assert_eq "F9: the previous round's ledger is left exactly as it was" \
         "unchanged" "$(fc_ledger_state)"
     assert_eq "F9: no ledger is opened under a guessed session id" \
-        "1" "$(find "$PLANS" -maxdepth 1 -name '*concern-ledger.txt' -type f 2>/dev/null | wc -l | tr -d ' ')"
+        "1" "$(ctl_count '*concern-ledger.txt')"
     assert_eq "F9: and no artifact is written for the round it refused to start" \
         "missing" "$(file_state "$(json_file "$PLANS" "$SID")")"
 }
@@ -195,9 +199,10 @@ fc_no_sid_run() {
     assert_eq "F10: rc 2 means 'no session', which is still not a reason to invent one" \
         "nonzero" "$(nonzero_word "$FC_NRC")"
     assert_eq "F10: nothing is staged under a session nobody named" \
-        "0" "$(find "$PLANS" -maxdepth 1 -name '*round-1-delta-*' -type f 2>/dev/null | wc -l | tr -d ' ')"
+        "0" "$(ctl_count '*round-1-delta-*')"
     assert_eq "F10: the seeded ledger is untouched by the refusal" \
         "unchanged" "$(fc_ledger_state)"
     assert_eq "F10: the two resolver faults are refused the same way (CPR-ORTH)" \
         "both-nonzero" "$(if [ "$FC_NRC" -ne 0 ]; then printf 'both-nonzero'; else printf 'diverged'; fi)"
 }
+case_end

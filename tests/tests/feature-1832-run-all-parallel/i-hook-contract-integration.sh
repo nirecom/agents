@@ -3,29 +3,15 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, hook, contract, security, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
-
-# WHY (CPR-WPH): hooks/workflow-run-tests.js requires EXACTLY ONE RUN_CONTRACT
-# line in all of stdout (stdoutAttributed, #1273 round 5). A parallel runner
-# replays child output verbatim, so any child printing a contract-shaped line
-# now lands in the parent's stdout and destroys completion.
-
-# Fix under test: neutralize_stream rewrites any child line matching the
-# contract shape before replay, on BOTH stdout and stderr. Verified against the
-# real hook process, fenced by two counter-proofs that must NOT complete.
-
-# RED-FIRST: the parallel surface doesn't exist yet, so the positive row reports
-# a demotion instead of `complete`. The counter-proof rows are green today and
-# stay green after the fix — regression fences, not evidence of the bug.
-
-# ISOLATION: workflow dirs dual-pinned, session ids and TESTS_DIR are fixtures.
-# Captured runner output is never echoed to this script's own stdout — a
-# replayed contract line would corrupt the parent suite.
-
-# TL3 gap (what this TL2 test does NOT catch): whether a real Claude Code Bash
-# tool call delivers stdout unmodified to the hook — tests/bin/TL3-worker-dispatch-run-tests.sh
-# covers that. Mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
-
 set -u
+
+# WHY: hooks/workflow-run-tests.js requires EXACTLY ONE RUN_CONTRACT line in all
+# of stdout; a parallel runner replays child output, so neutralize_stream must
+# rewrite contract-shaped child lines on stdout and stderr. Verified against the
+# real hook, fenced by two counter-proofs that must NOT complete.
+# ISOLATION: dual-pinned workflow dirs, fixture session ids and TESTS_DIR;
+# captured runner output is never echoed raw.
+# TL3 gap: real Bash tool stdout delivery (tests/bin/TL3-worker-dispatch-run-tests.sh).
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
@@ -60,7 +46,7 @@ trap 'rm -rf "$TMPD"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
@@ -191,6 +177,7 @@ case_neutralization_disabled() {
     rc=0
     run_with_timeout 120 env "TESTS_DIR=$FX" "RUN_ALL_CACHE_DIR=$RUN_ALL_CACHE_DIR" \
         "RUN_ALL_PARALLELISM_LIB=$AGENTS_DIR/bin/lib/run-all-parallelism.sh" \
+        "RUN_ALL_REGISTRY_LIB=$AGENTS_DIR/bin/lib/test-language-registry.sh" \
         bash "$doctored" -j 4 "$FX/t1.sh" "$FX/t2.sh" "$FX/t3.sh" "$FX/t4.sh" \
         > "$f" 2>"$TMPD/noneut-stderr.txt" || rc=$?
     out="$(cat "$f")"

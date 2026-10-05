@@ -45,7 +45,7 @@ run_gate() {
         unset PLAN_LANG DOCS_LANG_PUBLIC DOCS_LANG_PRIVATE
         unset DOCS_LANG_HISTORY_PUBLIC DOCS_LANG_HISTORY_PRIVATE
         unset DOCS_LANG_CHANGELOG_PUBLIC DOCS_LANG_CHANGELOG_PRIVATE
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export AGENTS_CONFIG_DIR="$cfg"
         printf '%s' "$payload" | run_with_timeout 20 node "$hook" 2>"$errf"
     )"

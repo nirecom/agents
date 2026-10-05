@@ -3,6 +3,8 @@
 // The output contract (version FACTS_VERSION) of bin/workflow/read-session-facts:
 // which keys are printed, and in which order.
 
+const { CONFIRM_GATE_DEFAULTS } = require("../../../../hooks/lib/confirm-gate/step-gate-map");
+
 // Adding, removing, renaming, or reordering a key here is a breaking change —
 // bump FACTS_VERSION and update docs/architecture/claude-code/workflow.md and
 // every consuming SKILL.md in the same diff. Note also: adding a GATE_-derived
@@ -14,6 +16,7 @@ const FACTS_KEYS = [
   "FACTS_VERSION",
   "SESSION_ID",
   "PLANS_DIR",
+  "CONTROL_DIR",
   "GATE_CONFIRM_TESTS",
   "GATE_CONFIRM_CODE",
   "COMPLEXITY_LEVEL_write_tests",
@@ -23,13 +26,13 @@ const FACTS_KEYS = [
   "COMPLEXITY_SIGNALS",
 ];
 
-const FACTS_VERSION = 2;
+const FACTS_VERSION = 3;
 
-// The `<default>` argument each gate is probed with. SSOT for the bundled reader
-// AND for the post-action probe still written out in the consuming SKILL.md.
+// The gates the bundled reader probes, in output order. Their `<default>` values
+// come from the confirm-gate SSOT (hooks/lib/confirm-gate/step-gate-map.js).
 const GATE_DEFAULTS = {
-  CONFIRM_TESTS: "on",
-  CONFIRM_CODE: "on",
+  CONFIRM_TESTS: CONFIRM_GATE_DEFAULTS.CONFIRM_TESTS,
+  CONFIRM_CODE: CONFIRM_GATE_DEFAULTS.CONFIRM_CODE,
 };
 
 module.exports = { FACTS_KEYS, FACTS_VERSION, GATE_DEFAULTS };

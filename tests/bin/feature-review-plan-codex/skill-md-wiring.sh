@@ -130,8 +130,8 @@ if grep -qF '| Exit | Meaning |' "$OUTLINE_SKILL"; then
   ERRS29=$((ERRS29 + 1))
 fi
 
-if ! grep -qF '<PLANS_DIR>/<session-id>-codex-context.md' "$SHARED_LOOP"; then
-  fail "shared loop: missing <session-id>-codex-context.md reference (flat path, renamed per #866)"
+if ! grep -qF '<CONTROL_DIR>/codex-context.md' "$SHARED_LOOP"; then
+  fail "shared loop: missing <CONTROL_DIR>/codex-context.md reference (control dir per #2434; renamed per #866)"
   ERRS29=$((ERRS29 + 1))
 fi
 

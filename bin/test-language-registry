@@ -1,0 +1,49 @@
+#!/usr/bin/env node
+"use strict";
+// bin/test-language-registry — print the validated test-language registry for non-Node callers.
+//
+// Bash, PowerShell and Python cannot require() the reader, so they call `node <this> ...`
+// (never the shebang: Windows shells and subprocess cannot launch it). --format shell is the
+// tab-separated form bin/lib/test-language-registry.sh reads without eval; --format json adds
+// each entry's converted globs. Exit: 0 ok, 1 unreadable or invalid table, 2 bad arguments.
+
+const path = require("path");
+const reg = require(path.join(__dirname, "..", "hooks", "lib", "test-language-registry.js"));
+
+const USAGE = "usage: test-language-registry [--format shell|json] [--file <table.json>]";
+
+function parseArgs(argv) {
+  const opts = { format: "shell", file: undefined };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--format" || a === "--file") {
+      const v = argv[i + 1];
+      if (v === undefined || v === "") return null;
+      if (a === "--format") opts.format = v;
+      else opts.file = v;
+      i++;
+    } else {
+      return null;
+    }
+  }
+  return opts.format === "shell" || opts.format === "json" ? opts : null;
+}
+
+function main(argv) {
+  const opts = parseArgs(argv);
+  if (!opts) {
+    process.stderr.write(USAGE + "\n");
+    return 2;
+  }
+  let table;
+  try {
+    table = reg.loadRegistry(opts.file);
+  } catch (e) {
+    process.stderr.write(`${String(e.message).replace(/\s*\n\s*/g, " ")}\n`);
+    return 1;
+  }
+  process.stdout.write(opts.format === "json" ? reg.toJson(table) : reg.toShellDump(table));
+  return 0;
+}
+
+process.exitCode = main(process.argv.slice(2));

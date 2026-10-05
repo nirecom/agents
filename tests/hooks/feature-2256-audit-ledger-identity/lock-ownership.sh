@@ -37,7 +37,7 @@ export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_WORKFLOW_DIR="$WORK_NODE/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$AGENTS_NODE"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
@@ -79,9 +79,9 @@ sid="lk-conc-$$"
 drive seed "
 const st = schema.createEmptyState('$sid');
 st.audit.counter_a = 0; st.audit.counter_b = 0;
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 out('');
-" >/dev/null
+" >/dev/null || fail "4 seed: supervisor-state seed write failed"
 cat > "$WORK/bump.js" <<'BUMPJS'
 const lock = require(process.env.LOCK_NODE);
 const writer = require(process.env.WRITER_NODE);
@@ -128,9 +128,9 @@ assert_match "6: release removes the reclaimed lock dir and its token" "$out" '\
 sid="lk-own-$$"
 drive seedown "
 const st = schema.createEmptyState('$sid');
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 out('');
-" >/dev/null
+" >/dev/null || fail "7-9 seed: supervisor-state seed write failed"
 out=$(drive ownercheck "
 const p = writer.getStatePath('$sid');
 const dir = p + '.lock';
@@ -172,9 +172,9 @@ sid="lk-failclosed-$$"
 drive seedfc "
 const st = schema.createEmptyState('$sid');
 st.audit.audit_phase = 'pending';
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 out('');
-" >/dev/null
+" >/dev/null || fail "12-15 seed: supervisor-state seed write failed"
 out=$(drive failclosed "
 const p = writer.getStatePath('$sid');
 const dir = p + '.lock';

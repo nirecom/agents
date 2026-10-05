@@ -1,37 +1,13 @@
 #!/usr/bin/env bash
 # Part of tests/hooks/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
-# A WORKFLOW_DIR RESOLUTION FAILURE IS AUDITED, NOT SILENT — round-14 MEDIUM.
-#
-# bin/request-off-clearance runs under `set -euo pipefail` and used to define
-# append_audit / emergency_hint AFTER resolving the workflow directory. So the
-# ONE failure that is most likely when the environment is broken — node missing,
-# the state-io module failing to load, getWorkflowDir() throwing — killed the
-# script before either helper existed. The operator got an empty exit status and
-# nothing else: no UNAVAILABLE record in the audit trail (which is half of this
-# feature's trust model, the token being explicitly NOT a security primitive),
-# and no pointer to the EMERGENCY sentinel that is the sanctioned way out.
-#
-# That is worse here than in any other command, because request-off-clearance IS
-# the documented recovery path when enforcement is in trouble. A silent failure
-# of the recovery path is a dead end.
-#
-# HOW THE FAILURE IS INDUCED: a synthetic AGENTS_CONFIG_DIR that provides
-# hooks/lib/supervisor-state-writer (so the audit path is intact and can be
-# observed) but OMITS hooks/workflow-state/state-io/core.js (so the resolution
-# node -e cannot load its module). That isolates the resolution step precisely —
-# no other step is perturbed — which a broad "break node itself" fixture could
-# not do, since it would break the audit write too.
-#
-# R3 covers the opposite corner: the audit write ITSELF failing. It must stay
-# NON-blocking (announced on stderr, script continues to the same exit path),
-# because an unwritable audit trail must not also deny the operator the
-# emergency guidance.
+# Round-14 MEDIUM: a WORKFLOW_DIR resolution failure in bin/request-off-clearance must
+# be AUDITED (UNAVAILABLE) and point at the EMERGENCY sentinel, never die silently under
+# set -e. Induced by a synthetic AGENTS_CONFIG_DIR that keeps supervisor-state-writer but
+# OMITS state-io/core.js. R3: the audit write itself failing stays NON-blocking.
+# #2434: the audit trail is the control file <CLAUDE_WORKFLOW_DIR>/<sid>.control/supervisor-state.json.
 
-# _r_fake_acd <dir> <with_core> — build a synthetic AGENTS_CONFIG_DIR.
-#   with_core=yes → include a working state-io/core.js re-export
-#   with_writer=$3 (yes|no) → include the supervisor-state-writer re-export
-# Re-exports point at the REAL modules by absolute path, so their own relative
-# requires still resolve; only the PRESENCE of each module is what varies.
+# _r_fake_acd <dir> <with_core yes|no> <with_writer yes|no> — synthetic AGENTS_CONFIG_DIR
+# whose re-exports point at the REAL modules; only each module's PRESENCE varies.
 _r_fake_acd() {
     local root="$1" with_core="$2" with_writer="$3"
     mkdir -p "$root/hooks/lib" "$root/hooks/workflow-state/state-io"
@@ -53,7 +29,7 @@ _r_run() {
     errfile=$(mktemp 2>/dev/null || mktemp -t offclrerr)
     runpath="$PATH"
     [ -n "$stubdir" ] && runpath="$stubdir:$PATH"
-    _R_OUT=$(PATH="$runpath" SESSION_ID="$SID" CLAUDE_SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
+    _R_OUT=$(PATH="$runpath" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
         CLAUDE_WORKFLOW_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" AGENTS_CONFIG_DIR="$acd" \
         "$RWT" 90 bash "$REQ" --target "$target" --category workflow-bug \
         --detail "next-step is wedged and blocks all progress" 2>"$errfile")
@@ -64,7 +40,7 @@ _r_run() {
 
 # _r_audit_text <plans_dir> — the supervisor state file's raw text, or ABSENT
 _r_audit_text() {
-    local f="$1/$SID-supervisor-state.json"
+    local f="$1/$SID.control/supervisor-state.json"
     [ -f "$f" ] || { printf 'ABSENT'; return; }
     tr -d '\r\n' < "$f"
 }

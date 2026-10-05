@@ -103,8 +103,9 @@ fi
 I3_SID="idemsuper"
 I3_CWD="$BASE/i3-cwd"
 I3_PLANS="$BASE/i3-plans"
+I3_WF="$BASE/i3-wf"   # #2434: supervisor state is a control file under CLAUDE_WORKFLOW_DIR
 I3_WSID="20260101-000000"
-mkdir -p "$I3_CWD" "$I3_PLANS"
+mkdir -p "$I3_CWD" "$I3_PLANS" "$I3_WF"
 printf 'Session-ID: %s\n' "$I3_WSID" > "$I3_CWD/WORKTREE_NOTES.md"
 printf '# intent\n' > "$I3_PLANS/$I3_WSID-intent.md"
 printf '# repeated probe with a resolvable session\n' > "$REPO/rules/idem3.md"
@@ -112,17 +113,17 @@ I3_FP="$(node_path "$REPO/rules/idem3.md")"
 I3_PAYLOAD="$(node -e 'console.log(JSON.stringify({session_id:process.argv[1],file_path:process.argv[2],hook_event_name:"InstructionsLoaded"}))' "$I3_SID" "$I3_FP")"
 for _ in $(seq 1 10); do
     printf '%s' "$I3_PAYLOAD" \
-        | (cd "$I3_CWD" && WORKFLOW_PLANS_DIR="$(node_path "$I3_PLANS")" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || true
+        | (cd "$I3_CWD" && WORKFLOW_PLANS_DIR="$(node_path "$I3_PLANS")" CLAUDE_WORKFLOW_DIR="$(node_path "$I3_WF")" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || true
 done
 
-I3_STATES="$(find "$I3_PLANS" -name '*-supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
+I3_STATES="$(find "$I3_WF" -path '*.control/supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
 I3_FINDINGS="$(node -e "
 const fs=require('fs'),path=require('path');
 let n=0;
 for (const f of fs.readdirSync(process.argv[1])) {
-  if (!f.endsWith('-supervisor-state.json')) continue;
+  if (!f.endsWith('.control')) continue;
   try {
-    const j=JSON.parse(fs.readFileSync(path.join(process.argv[1],f),'utf8'));
+    const j=JSON.parse(fs.readFileSync(path.join(process.argv[1],f,'supervisor-state.json'),'utf8'));
     // the writer nests findings under layer1/alert/audit; older shapes wrap them in
     // a 'state' envelope. Count matches wherever they live so the assertion measures
     // the number of findings, never the shape of the file.
@@ -141,7 +142,7 @@ for (const f of fs.readdirSync(process.argv[1])) {
   } catch (_) {}
 }
 console.log(String(n));
-" "$(node_path "$I3_PLANS")" 2>/dev/null || echo "ERR")"
+" "$(node_path "$I3_WF")" 2>/dev/null || echo "ERR")"
 
 if [ "$I3_STATES" = "0" ]; then
     fail "I3: no supervisor state file under the resolvable-session fixture — the workflow session never resolved, so a findings count here proves nothing about dedup"
@@ -181,36 +182,19 @@ else
     fail "E6b: want a receipt at $E6B_SID.instructions-loaded/$E6B_KEY.json (hook rc=$E6B_RC)"
 fi
 
-# --- E6c: both env vars set to different ids. The attribution order must be the
-# SSOT resolver's (CLAUDE_CODE_SESSION_ID first), or a receipt is filed under an
-# identity the session does not answer to. ---
-E6C_CC="e6cccsid"
-E6C_LEGACY="e6clegacysid"
-E6C_FP="$(node_path "$REPO/rules/ok-conditional.md")"
-E6C_RC=0
-printf '%s' "$(node -e 'console.log(JSON.stringify({file_path:process.argv[1],hook_event_name:"InstructionsLoaded"}))' "$E6C_FP")" \
-    | (cd "$BASE" && CLAUDE_SESSION_ID="$E6C_LEGACY" CLAUDE_CODE_SESSION_ID="$E6C_CC" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || E6C_RC=$?
-E6C_KEY="$(sha1_of "$E6C_FP")"
-if [ "$E6C_RC" = "0" ] && [ -f "$WFDIR/$E6C_CC.instructions-loaded/$E6C_KEY.json" ] \
-   && [ ! -f "$WFDIR/$E6C_LEGACY.instructions-loaded/$E6C_KEY.json" ]; then
-    pass "E6c: both env ids present -> CLAUDE_CODE_SESSION_ID wins the attribution"
-else
-    fail "E6c: want the receipt under $E6C_CC only (hook rc=$E6C_RC)"
-fi
-
-# --- E6d: an explicit payload session_id outranks BOTH env vars — the env is a
+# --- E6c: an explicit payload session_id outranks the env var — the env is a
 # fallback for callers that supply nothing, never an override of the event. ---
-E6D_SID="e6dpayloadsid"
-E6D_FP="$(node_path "$REPO/docs/not-a-rule.md")"
-E6D_RC=0
-printf '%s' "$(node -e 'console.log(JSON.stringify({session_id:process.argv[1],file_path:process.argv[2],hook_event_name:"InstructionsLoaded"}))' "$E6D_SID" "$E6D_FP")" \
-    | (cd "$BASE" && CLAUDE_CODE_SESSION_ID="e6dccsid" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || E6D_RC=$?
-E6D_KEY="$(sha1_of "$E6D_FP")"
-if [ "$E6D_RC" = "0" ] && [ -f "$WFDIR/$E6D_SID.instructions-loaded/$E6D_KEY.json" ] \
-   && [ ! -f "$WFDIR/e6dccsid.instructions-loaded/$E6D_KEY.json" ]; then
-    pass "E6d: payload session_id outranks the CLAUDE_CODE_SESSION_ID fallback"
+E6C_SID="e6cpayloadsid"
+E6C_FP="$(node_path "$REPO/docs/not-a-rule.md")"
+E6C_RC=0
+printf '%s' "$(node -e 'console.log(JSON.stringify({session_id:process.argv[1],file_path:process.argv[2],hook_event_name:"InstructionsLoaded"}))' "$E6C_SID" "$E6C_FP")" \
+    | (cd "$BASE" && CLAUDE_CODE_SESSION_ID="e6cccsid" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || E6C_RC=$?
+E6C_KEY="$(sha1_of "$E6C_FP")"
+if [ "$E6C_RC" = "0" ] && [ -f "$WFDIR/$E6C_SID.instructions-loaded/$E6C_KEY.json" ] \
+   && [ ! -f "$WFDIR/e6cccsid.instructions-loaded/$E6C_KEY.json" ]; then
+    pass "E6c: payload session_id outranks the CLAUDE_CODE_SESSION_ID fallback"
 else
-    fail "E6d: want the receipt under $E6D_SID only (hook rc=$E6D_RC)"
+    fail "E6c: want the receipt under $E6C_SID only (hook rc=$E6C_RC)"
 fi
 
 # --- E7: wsid null skips ONLY the supervisor emit; the receipt still exists.
@@ -220,7 +204,7 @@ E7_SID="e7wsidnull"
 E7_FP="$(node_path "$REPO/rules/missing.md")"
 fire "$E7_SID" "$E7_FP" OMIT >/dev/null
 e7_verdict="$(read_field "$E7_SID" "$E7_FP" verdict)"
-e7_states="$(find "$PLANS" -name '*-supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
+e7_states="$(find "$PLANS" "$WFDIR" -name '*supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$e7_verdict" = "S-MISSING" ] && [ "$e7_states" = "0" ]; then
     pass "E7: wsid null -> receipt written, supervisor emit skipped"
 else

@@ -2,26 +2,11 @@
 # tests/hooks/enforce-clearance-token-write/parser-cases.sh
 # Tests: hooks/block-clearance-token-write.js
 # Tags: anti-cheat, clearance-token, pretooluse, classifier, parser-regex-tests, table-driven, scope:issue-specific, pwsh-not-required, TL2, hook-registration
-# TL3 gap (what this test does NOT catch):
-# - The hook firing on a real host. Covered by tests/hooks/TL3-hook-clearance-token-write.sh.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
-#
-# Split out of tests/hooks/enforce-clearance-token-write.sh (rules/coding/file-split.md
-# Pattern A). That file asserts the SECURITY behaviour — which commands are blocked
-# and which files stay unchanged. This file asserts the PARSER underneath it: given
-# an arbitrary PreToolUse payload, does the classifier reach a decision at all?
-#
-# Why the two are separated (CPR-SC): a security assertion presumes the parser produced
-# a verdict. When the payload is empty, truncated, or shaped for a tool the hook was
-# never written for, there is no verdict to assert on — the interesting question is
-# whether the hook answers cleanly (exit 0, parseable stdout, no stack trace) or dies.
-# A PreToolUse hook that throws is not "failing safe": Claude Code surfaces the crash
-# and the user learns nothing about why their command was refused.
-#
-# Table-driven per the parser-regex-tests pattern: each row is one payload and the
-# decision class it must land in — block, approve, or answer (a defined non-crash
-# response, where either verdict is contractually acceptable).
+# TL3 gap: the hook on a real host — TL3-hook-clearance-token-write.sh (hook-registration).
+# Split from enforce-clearance-token-write.sh (file-split Pattern A). That file asserts
+# the SECURITY behaviour; this one the PARSER under it (CPR-SC): for an empty, truncated
+# or foreign-tool payload, does the hook answer cleanly (exit 0, parseable stdout)?
+# Table-driven: each row is one payload and its class — block, approve, or answer.
 
 set -u
 
@@ -97,7 +82,9 @@ p_file()  { node -e "process.stdout.write(JSON.stringify({tool_name:process.argv
 p_raw()   { printf '%s' "$1"; }
 
 TOKEN="$WDN/wsid.off-clearance"
-SAFE="$WDN/notes.md"
+# Outside the workflow dir: #2434's strict placement guard blocks every write under it.
+mkdir -p "$WORK/out"
+SAFE="$(node_path "$WORK/out")/notes.md"
 
 echo "=== P: malformed and unexpected PreToolUse payloads ==="
 # Every row here is something the hook can genuinely receive: a harness change, a new

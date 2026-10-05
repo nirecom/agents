@@ -42,19 +42,6 @@ fresh_workflow_dir() {
     fi
 }
 
-# Write an env-file for CLAUDE_ENV_FILE-based session resolution.
-# Usage: setup_fake_env_file <session-id>  → echoes the path of the env file.
-setup_fake_env_file() {
-    local sid="$1"
-    local f="$TMPDIR_BASE/envfile-$RANDOM-$$"
-    printf 'CLAUDE_SESSION_ID=%s\n' "$sid" > "$f"
-    if command -v cygpath >/dev/null 2>&1; then
-        cygpath -m "$f"
-    else
-        echo "$f"
-    fi
-}
-
 MARK_OUT=""
 # run_workflow_mark <stdin-json> <workflow-dir> [extra env var ...]
 # Returns workflow-mark.js exit code; captures stdout+stderr into MARK_OUT.
@@ -63,7 +50,7 @@ run_workflow_mark() {
     local wfdir="$1"; shift
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
@@ -76,23 +63,16 @@ run_workflow_mark() {
 # Same contract as run_workflow_mark, but used where the test needs to prove
 # that NO fallback tier in resolveSessionId() can resolve a usable session id
 # (see rules/test/fixture-isolation.md "Unset inherited session IDs" / "Neutral
-# CWD"). Plain run_workflow_mark only unsets CLAUDE_ENV_FILE and runs from the
-# repo's own working directory — inside a live Claude Code session (or any
-# worktree carrying a WORKTREE_NOTES.md `Session-ID:` line) that leaves THREE
-# fallback tiers live: the CLAUDE_CODE_SESSION_ID / CLAUDE_SESSION_ID env vars
-# (tiers 2 and 4 in hooks/workflow-state/session-id.js resolveSessionId()) and
-# the own-worktree WORKTREE_NOTES.md scan (tier 6), any of which can resolve
-# the REAL ambient session id and mask the "no session id resolvable" case
-# under test. This variant additionally unsets both session-id env vars and
-# runs node from a neutral temp directory outside any git worktree, so tiers
-# 2, 4, 6, 6b, 6c and 7 (JSONL transcript mtime scan) all fail to resolve —
-# only tier 1 (the session_id supplied in the payload itself) remains live.
+# CWD"). It unsets the CLAUDE_CODE_SESSION_ID env tier of the 3-tier chain in
+# hooks/workflow-state/session-id.js resolveSessionId() and runs node from a
+# neutral temp directory outside any git worktree, so only the session_id
+# supplied in the payload itself can resolve.
 run_workflow_mark_isolated() {
     local payload="$1"; shift
     local wfdir="$1"; shift
     local rc=0
     MARK_OUT="$(cd "$TMPDIR_BASE" && printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
@@ -117,7 +97,7 @@ build_mark_payload() {
         "$q_sid" "$q_cmd" "$rc"
 }
 
-# Same but with session_id omitted entirely (env-file fallback test).
+# Same but with session_id omitted entirely (env fallback / no-id tests).
 build_mark_payload_no_sid() {
     local cmd="$1" rc="$2"
     local q_cmd
@@ -160,7 +140,7 @@ run_is_workflow_off() {
     local out rc=0
     if [ -n "$wfdir" ]; then
         out="$(run_with_timeout 30 \
-            env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+            env -u CLAUDE_CODE_SESSION_ID \
             "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "CLAUDE_WORKFLOW_DIR=$wfdir" \
             "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
@@ -169,7 +149,7 @@ run_is_workflow_off() {
         # No CLAUDE_WORKFLOW_DIR → getWorkflowDir() resolves a default which
         # may not be writable in CI; the test ensures fail-closed (no throw).
         out="$(run_with_timeout 30 \
-            env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+            env -u CLAUDE_CODE_SESSION_ID \
             -u CLAUDE_WORKFLOW_DIR -u WORKFLOW_PLANS_DIR -u HOME -u USERPROFILE \
             "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             node -e "const sm=require('$SESSION_MARKERS_JS'); try { console.log(sm.isWorkflowOff($sid_js)); } catch(e) { console.log('THREW:'+e.message); }" 2>&1)" || rc=$?
@@ -183,7 +163,7 @@ run_notice_text() {
     local wfdir="$1" hook_js="$2" sid_js="$3"
     local out rc=0
     out="$(run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \

@@ -36,7 +36,7 @@ require_module() {
 report() {
     local tmp="$1" envsid="$2"
     shift 2
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$envsid" \
+    env CLAUDE_CODE_SESSION_ID="$envsid" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$CLI" --categories 'workflow' --severity 'warning' \
@@ -48,7 +48,7 @@ report() {
 # (workflow_init complete, final_report pending).
 seed_active() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -60,7 +60,7 @@ markStep('$sid', 'workflow_init', 'complete');
 
 inspect() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID SID="$sid" \
+    env -u CLAUDE_CODE_SESSION_ID SID="$sid" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -72,7 +72,7 @@ const e = ((doc.entriesByClass || {}).E || []).filter((x) => x.key === 'supervis
 if (e.length !== 1) problems.push('class-E-supervisor-reported-entries:' + e.length);
 else {
   const entry = e[0];
-  if (String(entry.pointer).indexOf(sid + '-supervisor-state.json') === -1) problems.push('pointer:' + String(entry.pointer));
+  if (String(entry.pointer).replace(/\\\\/g, '/').indexOf(sid + '.control/supervisor-state.json') === -1) problems.push('pointer:' + String(entry.pointer));
   if (entry.origin !== 'procedure-point') problems.push('origin:' + String(entry.origin));
   const s = String(entry.summary);
   if (!/(^|[^a-zA-Z0-9-])workflow($|[^a-zA-Z0-9-])/.test(s)) problems.push('summary-omits-category:' + s);
@@ -96,10 +96,10 @@ run_S1() {
     seed_active "$tmp" "env-sid-s1"
     out="$(report "$tmp" "env-sid-s1" --session-id "explicit-sid-s1")"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit:$rc out:'${out:0:160}'"
-    [ -f "$tmp/wf/explicit-sid-s1-supervisor-state.json" ] || problems="$problems supervisor-state-not-written"
+    [ -f "$tmp/wf/explicit-sid-s1.control/supervisor-state.json" ] || problems="$problems supervisor-state-not-written"
     out="$(inspect "$tmp" "explicit-sid-s1")"
     [ "$out" = "OK" ] || problems="$problems entry:'$out'"
-    [ -f "$tmp/wf/env-sid-s1-handoff.md" ] && problems="$problems recorded-under-the-ambient-sid-instead"
+    [ -e "$tmp/wf/env-sid-s1.control/handoff.md" ] && problems="$problems recorded-under-the-ambient-sid-instead"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
         pass "S1: --session-id records one class E supervisor-reported entry pointing at that sid's supervisor state file"
@@ -135,11 +135,11 @@ run_S3() {
     require_module "$ARTIFACT" || return 0
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
-    mkdir -p "$tmp/wf/unwritable-sid-s3-handoff.md"
+    mkdir -p "$tmp/wf/unwritable-sid-s3.control/handoff.md"
     seed_active "$tmp" "unwritable-sid-s3"
     out="$(report "$tmp" "env-sid-s3" --session-id "unwritable-sid-s3")"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit-changed-by-a-failed-artifact-write:$rc out:'${out:0:160}'"
-    [ -f "$tmp/wf/unwritable-sid-s3-supervisor-state.json" ] || problems="$problems report-lost-with-the-breadcrumb"
+    [ -f "$tmp/wf/unwritable-sid-s3.control/supervisor-state.json" ] || problems="$problems report-lost-with-the-breadcrumb"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
         pass "S3: a failing handoff write leaves the report written and the exit code at 0"
@@ -155,12 +155,12 @@ run_S4() {
     require_module "$ARTIFACT" || return 0
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
-    mkdir -p "$tmp/wf/failing-sid-s4-supervisor-state.json"
+    mkdir -p "$tmp/wf/failing-sid-s4.control/supervisor-state.json"
     seed_active "$tmp" "failing-sid-s4"
     out="$(report "$tmp" "env-sid-s4" --session-id "failing-sid-s4")"; rc=$?
     [ "$rc" -eq 1 ] || problems="$problems want-exit-1-got:$rc out:'${out:0:160}'"
-    if [ -f "$tmp/wf/failing-sid-s4-handoff.md" ]; then
-        grep -q 'supervisor-reported' "$tmp/wf/failing-sid-s4-handoff.md" && problems="$problems recorded-a-report-that-never-landed"
+    if [ -f "$tmp/wf/failing-sid-s4.control/handoff.md" ]; then
+        grep -q 'supervisor-reported' "$tmp/wf/failing-sid-s4.control/handoff.md" && problems="$problems recorded-a-report-that-never-landed"
     fi
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
@@ -177,13 +177,13 @@ run_S5() {
     local tmp rc problems files
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="usage-sid-s5" \
+    env CLAUDE_CODE_SESSION_ID="usage-sid-s5" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$CLI" --severity 'warning' >/dev/null 2>&1
     rc=$?
     [ "$rc" -eq 1 ] || problems="$problems usage-exit:$rc"
-    files="$(ls "$tmp/wf" 2>/dev/null | grep -c 'handoff.md' || true)"
+    files="$(find "$tmp/wf" -name 'handoff.md' 2>/dev/null | grep -c . || true)"
     [ "$files" -eq 0 ] || problems="$problems usage-error-wrote-an-artifact"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then

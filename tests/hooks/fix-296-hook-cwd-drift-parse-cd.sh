@@ -227,7 +227,7 @@ if [ -f "$AGENTS_DIR/hooks/workflow-gate/repo-resolution.js" ]; then
     TIER4_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t wf296t)"
     TIER4_NODE="$(if command -v cygpath >/dev/null 2>&1; then cygpath -m "$TIER4_DIR"; else printf '%s' "$TIER4_DIR"; fi)"
     r="$(
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+        unset CLAUDE_CODE_SESSION_ID
         export CLAUDE_PROJECT_DIR="$TIER4_NODE"
         run_with_timeout 30 node -e "
       try {

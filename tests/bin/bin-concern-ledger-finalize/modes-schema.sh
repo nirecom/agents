@@ -48,7 +48,7 @@ seed_ledger() {
     assert_eq "1: escalate finalize succeeds" "0" "$LAST_RC"
     assert_eq "1: the cap snapshot is written" "present" "$(file_state "$SNAP")"
     assert_eq "1: the snapshot path is the one make-detail-plan documents" \
-        "$PLANS/$SID-detail-plan-concern-ledger-cap-snapshot.txt" "$SNAP"
+        "$CLAUDE_WORKFLOW_DIR/$SID.control/detail-plan-concern-ledger-cap-snapshot.txt" "$SNAP"
     assert_eq_nz "1: the snapshot is a byte copy of the live ledger" \
         "$BEFORE" "$(fingerprint "$SNAP")"
     assert_eq "1: escalate removes the live ledger" "missing" "$(file_state "$LED")"
@@ -58,10 +58,10 @@ seed_ledger() {
     # The literal in the consuming skill is the SSOT for this path — if it is
     # reworded, the assertion above stops describing reality.
     assert_contains "1: make-detail-plan still documents the same literal path" \
-        "-detail-plan-concern-ledger-cap-snapshot.txt" \
+        "<CONTROL_DIR>/detail-plan-concern-ledger-cap-snapshot.txt" \
         "$(cat "$AGENTS_ROOT/skills/make-detail-plan/SKILL.md" 2>/dev/null || true)"
     assert_contains "1: make-outline-plan still documents the same literal path" \
-        "-outline-plan-concern-ledger-cap-snapshot.txt" \
+        "<CONTROL_DIR>/outline-plan-concern-ledger-cap-snapshot.txt" \
         "$(cat "$AGENTS_ROOT/skills/make-outline-plan/SKILL.md" 2>/dev/null || true)"
 }
 

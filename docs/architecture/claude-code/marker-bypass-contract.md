@@ -128,23 +128,10 @@ not by this module.
 All hooks resolve the session ID via `hooks/workflow-state.js#resolveSessionId()`.
 See that module for the full priority chain. The git hook context is notable:
 
-- `CLAUDE_ENV_FILE` is propagated by Claude Code to its own process but may or may not
-  reach the shell that runs `git commit`. When present, `resolveSessionId()` reads it and
-  returns the session ID without JSONL scanning.
-- When absent, `resolveSessionId()` falls back to a JSONL scan of
-  `~/.claude/projects/<encoded-cwd>/` by modification time.
-- That scan now skips any candidate directory (`CLAUDE_PROJECT_DIR`, cwd, realpath) whose
-  git common-dir differs from the agents config repo's, so a foreign-repo working directory
-  cannot surface another session's transcript id (#1099). The check fails open when git is
-  unavailable, preserving headless/CI behavior.
-
-## Multi-session heuristic
-
-When `CLAUDE_ENV_FILE` is absent and multiple Claude Code sessions are concurrently open
-on the same project directory, the JSONL scan returns the most recently modified
-transcript, which may not match the session that issued `git commit`. This is a known
-best-effort limitation. See the Accepted Tradeoffs in the issue #550 intent document for
-the rationale for accepting it.
+- The git hook runs as a descendant of the Bash tool, so it inherits
+  `CLAUDE_CODE_SESSION_ID` from Claude Code and `resolveSessionId()` returns it.
+- When that variable is absent, `resolveSessionId()` returns null — it never infers an id
+  from filesystem traces (see [session-id-resolution.md](session-id-resolution.md)).
 
 ## Exit-code contract (pre-commit inline Node)
 

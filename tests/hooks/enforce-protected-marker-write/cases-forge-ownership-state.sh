@@ -256,10 +256,11 @@ run_O8_forge_state_side_effects() {
         done
     done
 
-    # CPR-ORTH counterweight: an ordinary file under the same directory must
-    # still be writable, or the protection has simply frozen the state dir and
-    # every row above would pass for the wrong reason.
-    local ordinary="$WFDIR/$SID.notes.txt"
+    # CPR-ORTH counterweight: an ordinary file with the same session-id stem must
+    # still be writable, or the protection is not name-based at all. Since #2434 the
+    # strict placement guard owns every write under $WFDIR, so the ordinary file
+    # lives in $OUTDIR (outside both state dirs).
+    local ordinary="$OUTDIR/$SID.notes.txt"
     printf 'CANARY' > "$ordinary"
     local raw verdict
     raw="$(run_hook_cwd "$LINKED_WT" "$WFDIR" "$(_o8_payload Bash "$ordinary" write)")"
@@ -268,9 +269,9 @@ run_O8_forge_state_side_effects() {
         ( eval "$(_o8_shell "$ordinary" write)" ) >/dev/null 2>&1 || true
     fi
     if [ "$(cat "$ordinary" 2>/dev/null)" = "FORGED" ]; then
-        pass "O8-9 an ordinary file in the same directory is still writable"
+        pass "O8-9 an ordinary file with the same session stem is still writable"
     else
-        fail "O8-9 an ordinary file in the same directory is still writable - verdict=$verdict, the guard over-blocks"
+        fail "O8-9 an ordinary file with the same session stem is still writable - verdict=$verdict, the guard over-blocks"
     fi
     rm -f "$ordinary" 2>/dev/null || true
 }

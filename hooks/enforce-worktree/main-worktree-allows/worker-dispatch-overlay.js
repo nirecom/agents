@@ -1,30 +1,13 @@
 "use strict";
-// hooks/enforce-worktree/main-worktree-allows/worker-dispatch-overlay.js
-//
-// Sole HARD gate for the single worker-dispatch entry point (#1643).
-// Canonical form — the ONLY shape this overlay ever matches:
-//
+// hooks/enforce-worktree/main-worktree-allows/worker-dispatch-overlay.js — sole HARD gate for
+// the single worker-dispatch entry point (#1643). The ONLY shape this overlay matches:
 //     node "<AGENTS_CONFIG_DIR>/bin/worker-dispatch.js" <worker> <main-root> <payload-json>
-//
-// Trust split (CPR-SC): this overlay validates the Bash COMMAND STRING only.
-// Payload FILE CONTENTS are validated by bin/worker-dispatch/capability.js on the
-// dispatcher side — the file lives in the git-unmanaged plans dir and is untrusted
-// here by construction.
-//
-// Three locks, each independently load-bearing:
-//   Lock 1  the invoked script path must live at <acd>/bin/worker-dispatch.js,
-//           where <acd> is the marker-validated config dir the caller resolved.
-//   Lock 2  argv <main-root> must be the very repo the guard is judging.
-//   Lock 3  argv <main-root> must be the MAIN worktree of a repo in this
-//           session's trusted anchor set (getSessionRepoRoots()).
-//
-// Lock 2 alone is not enough: repoRoot is derived from the tool's caller-supplied
-// cwd, so a command that moves cwd to another checkout would otherwise authorize
-// worker operations against that repository. Lock 3 anchors the decision to the
-// session instead of to the command (codex concern C2).
-//
-// Fail-closed everywhere: any parse failure, missing SSOT module, spawn error or
-// unresolvable anchor returns null (= no allow), never a partial match.
+// It validates the COMMAND STRING only; payload CONTENTS are the dispatcher's job
+// (bin/worker-dispatch/capability.js). Three independently load-bearing locks:
+//   Lock 1  the script path is <acd>/bin/worker-dispatch.js for the caller's validated acd.
+//   Lock 2  argv <main-root> is the very repo the guard is judging.
+//   Lock 3  argv <main-root> is the MAIN worktree of a session-anchored repo (codex C2),
+//           since repoRoot follows the caller's cwd. Fail-closed: any failure returns null.
 
 const path = require("path");
 const { spawnSync } = require("child_process");
@@ -34,6 +17,7 @@ const { getSessionRepoRoots } = require("../session-scope");
 const {
   stripRelSuffix, isUnderPlansDir, hasControlChar, UNSAFE_ARG_VALUE_RE,
 } = require("../arg-value-guard");
+const { getWorkflowDir } = require("../../workflow-state/state-io/core");
 
 // Worker-name enum SSOT. Loaded defensively: a partial revert that removes the
 // registry must degrade this overlay to BLOCK, not crash the whole hook.
@@ -48,20 +32,17 @@ try {
 const DISPATCH_REL = "bin/worker-dispatch.js";
 
 const GIT_TIMEOUT_MS = 2000;
+const CONTROL_SEG_RE = /^[a-z0-9_-]+\.control$/i;
+const PAYLOAD_NAME_RE = /^worker-[a-z0-9]+(?:-[a-z0-9]+)*\.json$/i;
 
 function normLower(p) {
   return path.resolve(normalizeCwd(p) || p).toLowerCase();
 }
 
 /**
- * Split a single-line command into shell words, accepting only two token shapes:
- * a fully double-quoted word, or a bare word containing no quote character.
- * Anything else (mixed quoting like `a"b"c`, an unterminated quote, an env
- * assignment carrying a quoted value) returns null — the caller then blocks.
- *
- * Deliberately NOT a general shell tokenizer: every metacharacter is refused
- * downstream by UNSAFE_ARG_VALUE_RE, so the only strings that reach a verdict
- * are ones whose word split is unambiguous under any shell.
+ * Split a single-line command into shell words, accepting only a fully double-quoted
+ * word or a bare word with no quote character; anything else returns null (block).
+ * Not a general tokenizer: UNSAFE_ARG_VALUE_RE refuses every metacharacter downstream.
  */
 function tokenizeSimple(cmd) {
   const toks = [];
@@ -91,20 +72,34 @@ function tokenizeSimple(cmd) {
 }
 
 // Every token value must survive a second round of shell parsing unchanged.
-// Whitespace is included in the reject set (it is part of UNSAFE_ARG_VALUE_RE),
-// so a config dir / plans dir containing a space is refused here exactly as it
-// already is by the finalize-worker overlay (CPR-ORTH) — the sanctioned layout has
-// no such path.
+// Whitespace is in the reject set, so a config / plans dir containing a space is
+// refused exactly as the finalize-worker overlay refuses it (CPR-ORTH).
 function isSafeValue(v) {
   if (typeof v !== "string" || v === "") return false;
   if (hasControlChar(v)) return false;
   return !UNSAFE_ARG_VALUE_RE.test(v);
 }
 
+// True when `token` is <workflowDir>/<sid>.control/worker-*.json — exactly two segments
+// below the workflow dir after resolution, so `..` escapes and nesting are refused.
+function isControlDirPayload(token) {
+  try {
+    if (!isSafeValue(token)) return false;
+    const wf = getWorkflowDir();
+    if (!wf) return false;
+    const normWf = normalizeForCompare(normalizeCwd(wf) || wf);
+    const normTok = normalizeForCompare(normalizeCwd(token) || token);
+    if (!normWf || !normTok || !normTok.startsWith(normWf + path.sep)) return false;
+    const segs = normTok.slice(normWf.length + 1).split(/[\\/]/);
+    return segs.length === 2 && CONTROL_SEG_RE.test(segs[0]) && PAYLOAD_NAME_RE.test(segs[1]);
+  } catch (_e) {
+    return false;
+  }
+}
+
 /**
  * The MAIN worktree of `root`, normalized for comparison. `git worktree list`
- * lists the main worktree first by definition, so the first record is the answer
- * regardless of which worktree `root` itself is.
+ * lists the main worktree first by definition, whichever worktree `root` is.
  */
 function mainWorktreeOf(root) {
   try {
@@ -219,12 +214,18 @@ function matchWorkerDispatchOverlay(cmd, acd, repoRoot) {
   if (trusted.size === 0) return null;
   if (!trusted.has(argRoot)) return null;
 
-  // (12) Payload path must live under the workflow plans dir (separator-boundary
-  // containment, so sibling-prefix and ..-escape lookalikes are refused).
+  // (12) Payload path: a control-dir worker payload. A read argument, not a write target.
   const payload = toks[4].value;
-  if (!isUnderPlansDir(payload)) return null;
+  if (!isControlDirPayload(payload) && !isLegacyPlansPayload(payload)) return null;
 
   return { worker, mainRoot: argRoot, payloadPath: payload, scriptPath: normScript };
 }
+
+// --- BEGIN temporary: plans-dir control files -> workflow control dir migration added 2026-09-28 ---
+// deletion-condition: remove after 2026-12-28 (release + 3 months) together with hooks/lib/temporary-migrations/control-dir-split/, bin/migrate-control-dir and the legacy-argument shims; keep guard (c) until then
+function isLegacyPlansPayload(token) {
+  return isUnderPlansDir(token);
+}
+// --- END temporary: plans-dir control files -> workflow control dir migration ---
 
 module.exports = { matchWorkerDispatchOverlay, DISPATCH_REL };

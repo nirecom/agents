@@ -1,8 +1,6 @@
 ---
 paths:
   - "tests/**"
-  - "**/*.sh"
-  - "**/*.Tests.ps1"
 ---
 
 ## Test Execution Timeout — Portable Wrapper

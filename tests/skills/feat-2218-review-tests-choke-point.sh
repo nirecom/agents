@@ -15,6 +15,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 LOOP="$AGENTS_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"
 
+. "$AGENTS_DIR/tests/lib/harness.sh"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -22,6 +23,12 @@ make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+
+# The #1361 terminal marker lives in <sid>.control/ since #2434; the legacy
+# PLANS_DIR name must never reappear. $1: tmp root, $2: sid.
+control_marker() { printf '%s' "$1/wf/$2.control/test-review-terminal.txt"; }
+legacy_marker() { printf '%s' "$1/wf/$2-test-review-terminal.txt"; }
+any_terminal_marker() { [ -f "$(control_marker "$1" "$2")" ] || [ -f "$(legacy_marker "$1" "$2")" ]; }
 
 ARTIFACT="hooks/lib/handoff-artifact.js"
 
@@ -53,10 +60,12 @@ build_cfg() {
 # the exit paths under test are reached before any diff would matter.
 run_loop() {
     local tmp="$1" sid="$2" rc_forced="$3" target="$4"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    mkdir -p "$tmp/transcripts"
+    env -u CLAUDE_CODE_SESSION_ID \
         AGENTS_CONFIG_DIR="$CFG" SESSION_ID="$sid" PLANS_DIR="$tmp/wf" EXTENSIONS_USED="0" \
         REVIEW_TESTS_FULL_SCAN=1 FORCE_RC="$rc_forced" FORCE_TARGET="$target" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 bash "$LOOP" >/dev/null 2>&1
 }
@@ -66,11 +75,13 @@ run_loop() {
 # discovering this worktree's real repo.
 run_loop_at() {
     local dir="$1" tmp="$2" sid="$3" rc_forced="$4" target="$5"
+    mkdir -p "$tmp/transcripts"
     ( cd "$dir" 2>/dev/null || exit 90
-      env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+      env -u CLAUDE_CODE_SESSION_ID \
           AGENTS_CONFIG_DIR="$CFG" SESSION_ID="$sid" PLANS_DIR="$tmp/wf" EXTENSIONS_USED="0" \
           REVIEW_TESTS_FULL_SCAN=1 FORCE_RC="$rc_forced" FORCE_TARGET="$target" \
           CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+          CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
           HOME="$tmp/home" USERPROFILE="$tmp/home" \
           "$RWT" 60 bash "$LOOP" >/dev/null 2>&1 )
 }
@@ -79,7 +90,7 @@ run_loop_at() {
 # that expects a codex-exit entry seeds workflow_init complete for its sid.
 seed_active() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -93,7 +104,7 @@ S.markStep('$sid', 'workflow_init', 'complete');
 # the writer, this file only claims what the record must say.
 inspect() {
     local tmp="$1" sid="$2" want_code="$3" want_path="$4"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         SID="$sid" WANT_CODE="$want_code" WANT_PATH="$want_path" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
@@ -120,7 +131,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # one exit code but the wording of "which path was taken" is not pinned here.
 inspect_code_only() {
     local tmp="$1" sid="$2" want_code="$3"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         SID="$sid" WANT_CODE="$want_code" \
         CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
@@ -158,7 +169,8 @@ run_R1() {
         if [ "$code" = "8" ]; then
             # Armed guard + no git repo under the target: the fingerprint
             # calculation returns ok:false, which is a HALT (exit 4), not exit 8.
-            printf '2\nprev-fingerprint\n' > "$tmp/wf/$sid-test-review-terminal.txt"
+            mkdir -p "$tmp/wf/$sid.control"
+            printf '2\nprev-fingerprint\n' > "$tmp/wf/$sid.control/test-review-terminal.txt"
             run_loop "$tmp" "$sid" 0 "$tmp/target"; rc=$?
             want_rc=4
         else
@@ -187,8 +199,8 @@ run_R2() {
     mkdir -p "$tmp/wf"
     run_loop "$tmp" "clean-sid-r2" 0 "$tmp/target"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit:$rc"
-    if [ -f "$tmp/wf/clean-sid-r2-handoff.md" ]; then
-        grep -q 'review-tests:codex-exit' "$tmp/wf/clean-sid-r2-handoff.md" && problems="$problems recorded-a-sentinel-reaching-run"
+    if [ -f "$tmp/wf/clean-sid-r2.control/handoff.md" ]; then
+        grep -q 'review-tests:codex-exit' "$tmp/wf/clean-sid-r2.control/handoff.md" && problems="$problems recorded-a-sentinel-reaching-run"
     fi
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
@@ -209,10 +221,10 @@ run_R3() {
     run_loop "$tmp" "repeat-sid-r3" 4 "$tmp/target"
     run_loop "$tmp" "repeat-sid-r3" 4 "$tmp/target"
     run_loop "$tmp" "repeat-sid-r3" 4 "$tmp/target"
-    if [ ! -f "$tmp/wf/repeat-sid-r3-handoff.md" ]; then
+    if [ ! -f "$tmp/wf/repeat-sid-r3.control/handoff.md" ]; then
         problems="$problems nothing-recorded"
     else
-        n=$(grep -c 'review-tests:codex-exit' "$tmp/wf/repeat-sid-r3-handoff.md" 2>/dev/null || true)
+        n=$(grep -c 'review-tests:codex-exit' "$tmp/wf/repeat-sid-r3.control/handoff.md" 2>/dev/null || true)
         [ "${n:-0}" -eq 1 ] || problems="$problems repeated-identical-exit-wrote:${n:-0}"
     fi
     rm -rf "$tmp" 2>/dev/null || true
@@ -229,7 +241,7 @@ run_R4() {
     require_module "$ARTIFACT" || return 0
     local tmp rc problems
     tmp="$(make_tmp)"; problems=""
-    mkdir -p "$tmp/wf/unwritable-sid-r4-handoff.md"
+    mkdir -p "$tmp/wf/unwritable-sid-r4.control/handoff.md"
     seed_active "$tmp" "unwritable-sid-r4"
     run_loop "$tmp" "unwritable-sid-r4" 4 "$tmp/target"; rc=$?
     [ "$rc" -eq 4 ] || problems="$problems exit-changed-by-a-failed-artifact-write:$rc"
@@ -254,9 +266,9 @@ run_R5() {
     sid="codex-exit-6-nonrecording"
     run_loop "$tmp" "$sid" 6 "$tmp/target"; rc=$?
     [ "$rc" -eq 6 ] || problems="$problems exit-code:$rc"
-    [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] || problems="$problems guard-not-armed"
-    if [ -f "$tmp/wf/$sid-handoff.md" ]; then
-        grep -q 'review-tests:codex-exit' "$tmp/wf/$sid-handoff.md" && problems="$problems recorded-a-non-choke-point-exit"
+    [ -f "$tmp/wf/$sid.control/test-review-terminal.txt" ] || problems="$problems guard-not-armed"
+    if [ -f "$tmp/wf/$sid.control/handoff.md" ]; then
+        grep -q 'review-tests:codex-exit' "$tmp/wf/$sid.control/handoff.md" && problems="$problems recorded-a-non-choke-point-exit"
     fi
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
@@ -277,10 +289,11 @@ run_R6() {
     mkdir -p "$tmp/wf"
     sid="codex-exit-8-nostate-nongit"
     seed_active "$tmp" "$sid"
-    printf '2\nprev-fingerprint\n' > "$tmp/wf/$sid-test-review-terminal.txt"
+    mkdir -p "$tmp/wf/$sid.control"
+    printf '2\nprev-fingerprint\n' > "$tmp/wf/$sid.control/test-review-terminal.txt"
     run_loop_at "$tmp" "$tmp" "$sid" 0 "NOSTATE"; rc=$?
     [ "$rc" -eq 8 ] || problems="$problems exit-code:$rc"
-    [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] || problems="$problems terminal-marker-removed"
+    [ -f "$tmp/wf/$sid.control/test-review-terminal.txt" ] || problems="$problems terminal-marker-removed"
     out="$(inspect_code_only "$tmp" "$sid" "8")"
     [ "$out" = "OK" ] || problems="$problems entry:'$out'"
     rm -rf "$tmp" 2>/dev/null || true
@@ -304,10 +317,11 @@ run_R7() {
     mkdir -p "$tmp/wf"
     sid="codex-exit-8-emptytarget"
     seed_active "$tmp" "$sid"
-    printf '2\nprev-fingerprint\n' > "$tmp/wf/$sid-test-review-terminal.txt"
+    mkdir -p "$tmp/wf/$sid.control"
+    printf '2\nprev-fingerprint\n' > "$tmp/wf/$sid.control/test-review-terminal.txt"
     run_loop_at "$tmp" "$tmp" "$sid" 0 ""; rc=$?
     [ "$rc" -eq 8 ] || problems="$problems exit-code:$rc"
-    [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] || problems="$problems terminal-marker-removed"
+    [ -f "$tmp/wf/$sid.control/test-review-terminal.txt" ] || problems="$problems terminal-marker-removed"
     out="$(inspect_code_only "$tmp" "$sid" "8")"
     [ "$out" = "OK" ] || problems="$problems entry:'$out'"
     rm -rf "$tmp" 2>/dev/null || true
@@ -331,9 +345,9 @@ run_R8() {
     sid="codex-exit-3-nonrecording"
     run_loop "$tmp" "$sid" 3 "$tmp/target"; rc=$?
     [ "$rc" -eq 3 ] || problems="$problems exit-code:$rc"
-    [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] || problems="$problems guard-not-armed"
-    if [ -f "$tmp/wf/$sid-handoff.md" ]; then
-        grep -q 'review-tests:codex-exit' "$tmp/wf/$sid-handoff.md" && problems="$problems recorded-a-non-choke-point-exit"
+    [ -f "$tmp/wf/$sid.control/test-review-terminal.txt" ] || problems="$problems guard-not-armed"
+    if [ -f "$tmp/wf/$sid.control/handoff.md" ]; then
+        grep -q 'review-tests:codex-exit' "$tmp/wf/$sid.control/handoff.md" && problems="$problems recorded-a-non-choke-point-exit"
     fi
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
@@ -344,7 +358,7 @@ run_R8() {
 }
 
 # R9 — the wrapper's OWN direct `exit 3` at the NOSTATE/non-git-CWD site
-# (line ~50), reached BEFORE arm_terminal_guard is ever called. Unlike R6
+# (line 71), reached BEFORE arm_terminal_guard is ever called. Unlike R6
 # (which pre-arms a terminal marker to reach the fail-CLOSED exit-8 branch
 # just above it), this drives the plain "no state, no git" fallback with
 # nothing pre-armed, so it must exit 3 and must never itself write a
@@ -357,33 +371,33 @@ run_R9() {
     sid="codex-exit-3-nostate-nongit-direct"
     run_loop_at "$tmp" "$tmp" "$sid" 0 "NOSTATE"; rc=$?
     [ "$rc" -eq 3 ] || problems="$problems exit-code:$rc"
-    [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] && problems="$problems terminal-marker-unexpectedly-created"
+    any_terminal_marker "$tmp" "$sid" && problems="$problems terminal-marker-unexpectedly-created"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
-        pass "R9: direct exit-3 at the NOSTATE/non-git-CWD site (line ~50) writes no terminal marker (arm_terminal_guard never reached)"
+        pass "R9: direct exit-3 at the NOSTATE/non-git-CWD site (line 71) writes no terminal marker (arm_terminal_guard never reached)"
     else
         fail "R9: —$problems"
     fi
 }
 
 # R10 — the classifier's negative side beyond R2's incidental rc=0 check:
-# rc values NOT in arm_terminal_guard's `2|3|6` case pattern must never arm
+# rc values NOT in arm_terminal_guard's `2|3|6|7` case pattern must never arm
 # the #1361 re-invoke guard. Guards against a future overly-broad pattern
 # (e.g. an accidental `*)`) going undetected.
 run_R10() {
     require_module "$ARTIFACT" || return 0
     local tmp sid rc code problems
     problems=""
-    for code in 4 5 7; do
+    for code in 4 5; do
         tmp="$(make_tmp)"
         mkdir -p "$tmp/wf"
         sid="codex-exit-$code-not-armed"
         run_loop "$tmp" "$sid" "$code" "$tmp/target"; rc=$?
-        [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] && problems="$problems [$code]guard-wrongly-armed"
+        any_terminal_marker "$tmp" "$sid" && problems="$problems [$code]guard-wrongly-armed"
         rm -rf "$tmp" 2>/dev/null || true
     done
     if [ -z "$problems" ]; then
-        pass "R10: rc values outside 2|3|6 (4, 5, 7) never arm the #1361 re-invoke guard"
+        pass "R10: rc values outside 2|3|6|7 (4, 5) never arm the #1361 re-invoke guard"
     else
         fail "R10: —$problems"
     fi
@@ -394,7 +408,8 @@ run_R10() {
 # 3/6 do. rc=1 (NON_APPROVED / CONTINUE) is NO LONGER terminal — test-review is
 # now round-continuing under the 2+1 cap — so it must leave the guard DISARMED,
 # or the round-2 restart would be wrongly blocked as a stale re-invoke. This pins
-# both the positive (rc=2 arms) and the new negative (rc=1 does not) edge.
+# both the positive (rc=2 arms) and the new negative (rc=1 does not) edge, plus
+# rc=7 (FINALIZE_FAILED, #2313) — the other terminal arm — at the control path.
 run_R11() {
     require_module "$ARTIFACT" || return 0
     local tmp sid rc problems
@@ -406,7 +421,18 @@ run_R11() {
     sid="codex-exit-2-arming"
     run_loop "$tmp" "$sid" 2 "$tmp/target"; rc=$?
     [ "$rc" -eq 2 ] || problems="$problems [2]exit-code:$rc"
-    [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] || problems="$problems [2]guard-not-armed"
+    [ -f "$(control_marker "$tmp" "$sid")" ] || problems="$problems [2]guard-not-armed"
+    [ -f "$(legacy_marker "$tmp" "$sid")" ] && problems="$problems [2]legacy-marker-written"
+    rm -rf "$tmp" 2>/dev/null || true
+
+    # rc=7 → FINALIZE_FAILED terminal → guard armed at the control path only.
+    tmp="$(make_tmp)"
+    mkdir -p "$tmp/wf"
+    sid="codex-exit-7-arming"
+    run_loop "$tmp" "$sid" 7 "$tmp/target"; rc=$?
+    [ "$rc" -eq 7 ] || problems="$problems [7]exit-code:$rc"
+    [ -f "$(control_marker "$tmp" "$sid")" ] || problems="$problems [7]guard-not-armed"
+    [ -f "$(legacy_marker "$tmp" "$sid")" ] && problems="$problems [7]legacy-marker-written"
     rm -rf "$tmp" 2>/dev/null || true
 
     # rc=1 → round-continuing, NOT a case-pattern member → guard stays disarmed.
@@ -415,26 +441,39 @@ run_R11() {
     sid="codex-exit-1-nonarming"
     run_loop "$tmp" "$sid" 1 "$tmp/target"; rc=$?
     [ "$rc" -eq 1 ] || problems="$problems [1]exit-code:$rc"
-    [ -f "$tmp/wf/$sid-test-review-terminal.txt" ] && problems="$problems [1]guard-wrongly-armed"
+    any_terminal_marker "$tmp" "$sid" && problems="$problems [1]guard-wrongly-armed"
     rm -rf "$tmp" 2>/dev/null || true
 
     if [ -z "$problems" ]; then
-        pass "R11: rc=2 arms the #1361 re-invoke guard; rc=1 (round-continuing) leaves it disarmed"
+        pass "R11: rc=2 and rc=7 arm the #1361 re-invoke guard at the control path; rc=1 (round-continuing) leaves it disarmed"
     else
         fail "R11: —$problems"
     fi
 }
 
+# Shared setup for both cases below. Copying the config fixture is only worth its
+# cost once the recorder exists; until then every R stops at its own require_module guard.
+if [ -f "$LOOP" ] && [ -f "$AGENTS_DIR/$ARTIFACT" ]; then build_cfg; fi
+
+# What the recorder leaves in the handoff artifact: one class D entry per
+# choke-point exit (R1), deduplicated on repeat (R3), and never at the cost of
+# the exit code when the write itself fails (R4).
+case_begin "handoff-artifact-recorder" "hooks/lib/handoff-artifact.js"
 if [ ! -f "$LOOP" ]; then
     fail "SCRIPT NOT FOUND: skills/review-tests/scripts/run-codex-review-loop.sh"
 else
-    # Copying the config fixture is only worth its cost once the recorder exists;
-    # until then every case stops at its own require_module guard.
-    if [ -f "$AGENTS_DIR/$ARTIFACT" ]; then build_cfg; fi
     run_R1
-    run_R2
     run_R3
     run_R4
+fi
+case_end
+
+# The wrapper's exit codes and #1361 guard arming, plus the non-recording rows.
+case_begin "review-loop-choke-point-exits" "skills/review-tests/scripts/run-codex-review-loop.sh"
+if [ ! -f "$LOOP" ]; then
+    fail "SCRIPT NOT FOUND: skills/review-tests/scripts/run-codex-review-loop.sh"
+else
+    run_R2
     run_R5
     run_R6
     run_R7
@@ -442,8 +481,10 @@ else
     run_R9
     run_R10
     run_R11
-    [ -n "$CFG" ] && rm -rf "$CFG" 2>/dev/null
 fi
+case_end
+
+[ -n "$CFG" ] && rm -rf "$CFG" 2>/dev/null
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

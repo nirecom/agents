@@ -62,7 +62,6 @@ assert_contains() {
 # --- fixture isolation (rules/test/fixture-isolation.md) --------------------
 TMPDIR_BASE="$(mktemp -d)"
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans-root"
@@ -90,9 +89,18 @@ exit 1
 EOF
 chmod +x "$STUB/find"
 
-# mk_round <name> — a plans dir carrying a two-concern ledger and both declared
-# producers' deltas for round 2, staged by the real CLI so the header the
-# readers parse is the one the writer really emits.
+# ctl_of — the current $SID's control dir (#2434): ledger, deltas and the JSON
+# artifact live there, sid-unprefixed. One dir per session, so each case below
+# takes its own SID rather than sharing one control dir across plans dirs.
+ctl_of() {
+    local d="$CLAUDE_WORKFLOW_DIR/$SID.control"
+    mkdir -p "$d"
+    printf '%s' "$d"
+}
+
+# mk_round <name> — a plans dir for a round whose two-concern ledger and both
+# declared producers' round-2 deltas sit in $SID's control dir, staged by the
+# real CLI so the header the readers parse is the one the writer really emits.
 mk_round() {
     local p="$TMPDIR_BASE/$1" prod
     mkdir -p "$p"
@@ -100,7 +108,7 @@ mk_round() {
         printf '#concern-ledger-v2|%s|%s|cycle=1\n' "$FMT" "$SID"
         printf 'C1|HIGH|open|1|1|bin/x#fn:security|dc601|review-code-codex|review-code-codex|-|first concern\n'
         printf 'C2|LOW|open|1|1|bin/y#fn:security|dc602|security-scanner|security-scanner|-|second concern\n'
-    } > "$p/$SID-$FMT-concern-ledger.txt"
+    } > "$(ctl_of)/$FMT-concern-ledger.txt"
     for prod in review-code-codex security-scanner; do
         bash "$CLI" stage --plans-dir "$p" --session-id "$SID" --format "$FMT" \
             --round 2 --producer "$prod" --from-report "$REPORT" \
@@ -109,13 +117,16 @@ mk_round() {
     printf '%s' "$p"
 }
 
-led_of() { printf '%s/%s-%s-concern-ledger.txt' "$1" "$SID" "$FMT"; }
+led_of() { printf '%s/%s-concern-ledger.txt' "$(ctl_of)" "$FMT"; }
 
-# state <plans> — what the ledger says, as one line: how many concerns it holds,
+# deltas_of — round-2 staging files present in $SID's control dir.
+deltas_of() { find "$(ctl_of)" -name "$FMT-round-2-delta-*.txt" | wc -l | tr -d ' '; }
+
+# state — what the ledger says, as one line: how many concerns it holds,
 # how many the round resolved, and how many it wrongly wrote off as stale.
 state() {
     local f
-    f="$(led_of "$1")"
+    f="$(led_of)"
     printf 'entries=%s resolved=%s stale=%s' \
         "$(grep -c '^C[0-9]' "$f" 2>/dev/null | tr -d ' ')" \
         "$(grep -c '^C[0-9][^|]*|[^|]*|resolved|' "$f" 2>/dev/null | tr -d ' ')" \
@@ -128,24 +139,25 @@ echo "--- discovery 1: the control, so the injection is not mistaken for a no-op
 #    cases 2-4 is a departure from this line, so without it "the ledger changed"
 #    would carry no information about which direction it changed in.
 {
+    SID="sess-c6-ctl"
     P1="$(mk_round ctl)"
     assert_eq_nz "1: both producers staged their round-2 delta (precondition)" \
-        "2" "$(find "$P1" -name "$SID-$FMT-round-2-delta-*.txt" | wc -l | tr -d ' ')"
+        "2" "$(deltas_of)"
 
     RC1=0
     T1="$(bash "$CLI" reduce --plans-dir "$P1" --session-id "$SID" \
         --format "$FMT" --round 2 2>/dev/null)" || RC1=$?
     assert_eq "1: the reduction succeeds and reports the round it read" \
-        "rc=0 tally=open_high=1 open_medium=0 open_low=0 reopened=0 resolved=2" \
+        "rc=0 tally=open_high=1 open_medium=0 open_low=0 reopened=0 resolved=2 rejected=0" \
         "rc=$RC1 tally=$(printf '%s' "$T1" | tr -d '\r\n')"
     assert_eq "1: the two prior concerns are resolved and the new one recorded" \
-        "entries=3 resolved=2 stale=0" "$(state "$P1")"
+        "entries=3 resolved=2 stale=0" "$(state)"
 
     bash "$CLI" finalize --plans-dir "$P1" --session-id "$SID" --format "$FMT" \
         --round 2 --cap 2 --mode terminal --reason 'control' >/dev/null 2>&1
     assert_eq_nz "1: and the artifact names the producers that contributed" \
         "2" "$(grep -c -E '"(review-code-codex|security-scanner)"' \
-            "$P1/$SID-$FMT-unresolved-concerns.json" 2>/dev/null | tr -d ' ')"
+            "$(ctl_of)/$FMT-unresolved-concerns.json" 2>/dev/null | tr -d ' ')"
 }
 
 echo ""
@@ -157,8 +169,9 @@ echo "--- discovery 2: the reducer, with the mechanism failing under it ---"
 #    it did. Silent loss of a whole round is the worst of the failure modes
 #    this subsystem has, so the contract is a refusal.
 {
+    SID="sess-c6-fail-reduce"
     P2="$(mk_round fail-reduce)"
-    BEFORE2="$(cat "$(led_of "$P2")")"
+    BEFORE2="$(cat "$(led_of)")"
     RC2=0
     ERR2="$(PATH="$STUB:$PATH" bash "$CLI" reduce --plans-dir "$P2" \
         --session-id "$SID" --format "$FMT" --round 2 2>&1 >/dev/null)" || RC2=$?
@@ -167,15 +180,15 @@ echo "--- discovery 2: the reducer, with the mechanism failing under it ---"
     # stub broke discovery rather than the fixture failing to stage.
     assert_eq "2: the injection really did break discovery (precondition)" \
         "deltas=2 recorded=no" \
-        "deltas=$(find "$P2" -name "$SID-$FMT-round-2-delta-*.txt" | wc -l | tr -d ' ') recorded=$(grep -q 'the round-two finding' "$(led_of "$P2")" && printf yes || printf no)"
+        "deltas=$(deltas_of) recorded=$(grep -q 'the round-two finding' "$(led_of)" && printf yes || printf no)"
 
     assert_eq "2: a reduction that could not read the round refuses rather than succeeding" \
         "refused" "$([ "$RC2" -ne 0 ] && printf refused || printf accepted)"
     assert_eq "2: and leaves the ledger exactly as it found it" \
         "unchanged" \
-        "$([ "$BEFORE2" = "$(cat "$(led_of "$P2")")" ] && printf unchanged || printf rewritten)"
+        "$([ "$BEFORE2" = "$(cat "$(led_of)")" ] && printf unchanged || printf rewritten)"
     assert_eq "2: rather than writing off every open concern as stale" \
-        "stale=0" "stale=$(state "$P2" | sed 's/.*stale=//')"
+        "stale=0" "stale=$(state | sed 's/.*stale=//')"
     assert_contains "2: and says why, so the round is not lost in silence" \
         "concern-ledger" "$ERR2"
 }
@@ -189,25 +202,33 @@ echo "--- discovery 3: check-staged tells a broken mechanism from an empty dir -
 #    it decides whether to wait or to stop.
 {
     UFMT="custom-format-x"
+    SID3="sess-c6-staged"
+    SID3E="sess-c6-empty"
     P3="$TMPDIR_BASE/fail-staged"
     mkdir -p "$P3"
-    bash "$CLI" stage --plans-dir "$P3" --session-id "$SID" --format "$UFMT" \
+    bash "$CLI" stage --plans-dir "$P3" --session-id "$SID3" --format "$UFMT" \
         --round 2 --producer someprod --from-report "$REPORT" \
         --exec PERFORMED >/dev/null 2>&1
     P3E="$TMPDIR_BASE/empty-staged"
     mkdir -p "$P3E"
 
+    # cs <PATH> <plans> <sid>
     cs() {
         local rc=0 out
         out="$(PATH="$1" bash "$CLI" check-staged --plans-dir "$2" \
-            --session-id "$SID" --format "$UFMT" --round 2 2>&1)" || rc=$?
+            --session-id "$3" --format "$UFMT" --round 2 2>&1)" || rc=$?
         printf 'rc=%s out=%s' "$rc" "$out"
     }
+    # on_disk3 — every entry the staged round has, plans dir and control dir.
+    on_disk3() {
+        find "$P3" "$CLAUDE_WORKFLOW_DIR/$SID3.control" -maxdepth 1 -mindepth 1 \
+            | LC_ALL=C sort | tr '\n' ' '
+    }
 
-    OK3="$(cs "$PATH" "$P3")"
-    BEFORE3="$(find "$P3" -maxdepth 1 -mindepth 1 | LC_ALL=C sort | tr '\n' ' ')"
-    BROKEN3="$(cs "$STUB:$PATH" "$P3")"
-    NOTHING3="$(cs "$PATH" "$P3E")"
+    OK3="$(cs "$PATH" "$P3" "$SID3")"
+    BEFORE3="$(on_disk3)"
+    BROKEN3="$(cs "$STUB:$PATH" "$P3" "$SID3")"
+    NOTHING3="$(cs "$PATH" "$P3E" "$SID3E")"
 
     assert_eq "3: with discovery working, the staged round reads as complete" \
         "rc=0 out=" "$OK3"
@@ -218,7 +239,7 @@ echo "--- discovery 3: check-staged tells a broken mechanism from an empty dir -
     # verdict, what the run left on disk, and whether the failure was said out
     # loud. check-staged writes nothing, so its middle attribute holds today.
     assert_eq_nz "3: a check-staged that could not read the round writes nothing either way" \
-        "$BEFORE3" "$(find "$P3" -maxdepth 1 -mindepth 1 | LC_ALL=C sort | tr '\n' ' ')"
+        "$BEFORE3" "$(on_disk3)"
     assert_eq "3: a broken mechanism does not get reported as an empty round" \
         "distinct" \
         "$([ "$BROKEN3" = "$NOTHING3" ] && printf identical || printf distinct)"
@@ -237,20 +258,22 @@ echo "--- discovery 4: finalize withholds the artifact it could not name produce
 #    empty list is a factual claim that nobody reviewed, so publishing one on a
 #    round two producers did stage is worse than publishing nothing.
 {
+    SID="sess-c6-fail-finalize"
     P4="$(mk_round fail-finalize)"
+    C4="$(ctl_of)"
     RC4=0
     OUT4="$(PATH="$STUB:$PATH" bash "$CLI" finalize --plans-dir "$P4" \
         --session-id "$SID" --format "$FMT" --round 2 --cap 2 \
         --mode terminal --reason 'mechanism check' 2>&1)" || RC4=$?
-    J4="$P4/$SID-$FMT-unresolved-concerns.json"
+    J4="$C4/$FMT-unresolved-concerns.json"
 
-    # Both deltas are on disk and nothing anywhere in the plans dir records a
+    # Both deltas are on disk and nothing in the plans or control dir records a
     # producer: the stub broke finalize's own producer scan rather than the
     # fixture failing to stage. Only a JSON artifact quotes a producer name, so
     # the second half counts artifacts that made a claim about who reviewed.
     assert_eq "4: the injection reached finalize's own producer scan (precondition)" \
         "deltas=2 naming-producers=0" \
-        "deltas=$(find "$P4" -name "$SID-$FMT-round-2-delta-*.txt" | wc -l | tr -d ' ') naming-producers=$(grep -rl -E '"(review-code-codex|security-scanner)"' "$P4" 2>/dev/null | wc -l | tr -d ' ')"
+        "deltas=$(deltas_of) naming-producers=$(grep -rl -E '"(review-code-codex|security-scanner)"' "$P4" "$C4" 2>/dev/null | wc -l | tr -d ' ')"
     assert_eq "4: finalize does not publish an artifact whose producer list it could not build" \
         "withheld" "$([ -s "$J4" ] && printf published || printf withheld)"
     assert_eq "4: and reports the failure rather than a path to that artifact" \

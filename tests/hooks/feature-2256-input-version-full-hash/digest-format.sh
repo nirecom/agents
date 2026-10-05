@@ -87,7 +87,7 @@ const fs = require('fs');
 const st = schema.createEmptyState('$sid');
 st.audit.ledger = [{ id: 'run-0001', outcome: 'terminal', verdict: 'CONTINUE', freshness_key: '$fk' }];
 st.audit.last_terminal_run_id = 'run-0001';
-fs.writeFileSync(writer.getStatePath('$sid'), JSON.stringify(st));
+fs.writeFileSync(writer.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 const a = writer.readState('$sid').audit;
 const e = ledgerMod.lastTerminalRun(a);
 process.stdout.write(String((e && e.freshness_key || '').length) + '|' + String(ledgerMod.isRunFresh(e, '$fk')));

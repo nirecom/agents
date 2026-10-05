@@ -9,7 +9,7 @@ IMPORTANT: Interactive session required. Hard-fail in non-interactive contexts (
 
 ## Purpose
 
-Detects a `workflow-state` `in_progress` step or a `worktree-end` cleanup marker, then dispatches to the matching skill. Session id is read via `CLAUDE_ENV_FILE` — never `CLAUDE_SESSION_ID` directly.
+Detects a `workflow-state` `in_progress` step or a `worktree-end` cleanup marker, then dispatches to the matching skill. Session id: `$CLAUDE_CODE_SESSION_ID`.
 
 ## Procedure
 

@@ -1,0 +1,66 @@
+#!/usr/bin/env node
+// bin/accept-exit6-residual --session <sid> --format <security-code|security-plan|test-review> --reason <text>
+// The one writer of the exit-6 residual-HIGH accept marker (<CONTROL_DIR>/<marker>).
+// Run only after the user accepted the residual via AskUserQuestion; outline/detail
+// have no accept step (skills/_shared/codex-review-loop/exit-codes.md, Escalation by format).
+// Exit: 0 recorded or already recorded; 2 usage / refused format / invalid sid; 3 migration error; 1 other.
+"use strict";
+const fs = require("fs");
+const path = require("path");
+
+const CD = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "control-dir.js"));
+const { assertValidSessionId } = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "core.js"));
+
+const MARKERS = {
+  "security-code": "security-code-exit6-accepted.txt",
+  "security-plan": "review-plan-security-exit6-accepted.txt",
+  "test-review": "review-tests-exit6-accepted.txt",
+};
+const NO_ACCEPT = new Set(["outline-plan", "detail-plan"]);
+
+function die(code, msg) {
+  process.stderr.write(`accept-exit6-residual: ${msg}\n`);
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a !== "--session" && a !== "--format" && a !== "--reason") die(2, `unknown argument: ${a}`);
+    if (i + 1 >= argv.length) die(2, `${a} needs a value`);
+    out[a.slice(2)] = argv[++i];
+  }
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+if (!args.session || !args.format || args.reason === undefined) {
+  die(2, "usage: accept-exit6-residual --session <sid> --format <security-code|security-plan|test-review> --reason <text>");
+}
+if (NO_ACCEPT.has(args.format)) {
+  die(2, `${args.format} has no residual-HIGH accept step; follow the Escalation by format table in skills/_shared/codex-review-loop/exit-codes.md`);
+}
+const marker = MARKERS[args.format];
+if (!marker) die(2, `unknown --format ${JSON.stringify(args.format)} (see skills/_shared/codex-review-loop/exit-codes.md)`);
+const reason = String(args.reason).trim();
+if (!reason || /[\r\n]/.test(reason) || reason.length > 300) die(2, "--reason must be one non-empty line of at most 300 characters");
+try { assertValidSessionId(args.session); } catch (e) { die(2, e.message); }
+
+let file;
+try {
+  file = CD.controlPath(args.session, marker, { forWrite: true });
+} catch (e) {
+  if (e instanceof CD.ControlMigrationError) die(3, e.message);
+  die(1, e.message);
+}
+try {
+  fs.writeFileSync(file, `accepted_at=${new Date().toISOString()}\nreason=${reason}\n`, { flag: "wx" });
+} catch (e) {
+  if (e.code === "EEXIST") {
+    process.stdout.write(`already accepted: ${args.format} (${file})\n`);
+    process.exit(0);
+  }
+  die(1, `cannot write ${file}: ${e.message}`);
+}
+process.stdout.write(`accepted: ${args.format} (${file})\n`);

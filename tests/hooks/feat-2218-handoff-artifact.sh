@@ -36,7 +36,7 @@ require_module() {
 run_node() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "$1" 2>&1)
@@ -47,7 +47,7 @@ run_node() {
 # seed_active <node-dir> <sid> — #2430: the CLI writes through the workflow
 # active-period gate, so a CLI case that expects a write seeds workflow_init.
 seed_active() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         CLAUDE_WORKFLOW_DIR="$1/wf" WORKFLOW_PLANS_DIR="$1/wf" HOME="$1/home" USERPROFILE="$1/home" \
         "$RWT" 30 node -e "
 const S = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -56,18 +56,18 @@ S.markStep('$2', 'workflow_init', 'complete');
 " >/dev/null 2>&1
 }
 
-# H1 — getHandoffPath: <PLANS_DIR>/<sid>-handoff.md, and an sid that would
-# escape PLANS_DIR is rejected by assertValidSessionId (path-traversal guard).
+# H1 — getHandoffPath: <CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff.md (#2434), and an
+# sid that would escape the workflow dir is rejected (path-traversal guard).
 run_H1() {
     require_module "$TARGET" || return 0
     local out
     out="$(run_node "
 const path = require('path');
 const { getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
-const { getWorkflowPlansDir } = require('$AGENTS_DIR_NODE/hooks/lib/workflow-plans-dir');
+const { getWorkflowDir } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io/core');
 const problems = [];
 const got = getHandoffPath('sess-h1');
-const want = path.join(getWorkflowPlansDir(), 'sess-h1-handoff.md');
+const want = path.join(getWorkflowDir(), 'sess-h1.control', 'handoff.md');
 if (got !== want) problems.push('path:want=' + want + ',got=' + String(got));
 for (const bad of ['../escape', 'a/b', '', null]) {
   let threw = false;
@@ -77,7 +77,7 @@ for (const bad of ['../escape', 'a/b', '', null]) {
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
     if [ "$out" = "OK" ]; then
-        pass "H1: getHandoffPath resolves <PLANS_DIR>/<sid>-handoff.md and rejects traversal-shaped sids"
+        pass "H1: getHandoffPath resolves <WORKFLOW_DIR>/<sid>.control/handoff.md and rejects traversal-shaped sids"
     else
         fail "H1: expected 'OK', got '${out:-<err>}'"
     fi
@@ -392,18 +392,18 @@ run_H9() {
     # prefix heuristic it would append here instead of to the CC-native sid.
     printf '# decoy\n' > "$tmp/wf/wsid-decoy-intent.md"
     seed_active "$tn" "cli-sid-h9"
-    out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="cli-sid-h9" \
+    out=$(env CLAUDE_CODE_SESSION_ID="cli-sid-h9" \
         CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node "$AGENTS_DIR/$CLI" --class E --step write_tests --key write-tests:not-needed --summary "no test surface" --pointer - --origin procedure-point 2>&1)
     rc=$?
     if [ "$rc" -ne 0 ]; then
         fail "H9: CLI exited $rc (expected 0). Output: ${out:-<empty>}"
-    elif [ ! -f "$tmp/wf/cli-sid-h9-handoff.md" ]; then
-        fail "H9: expected $tmp/wf/cli-sid-h9-handoff.md (--session default must be resolveSessionId(), not wsid)"
-    elif ! grep -q "no test surface" "$tmp/wf/cli-sid-h9-handoff.md"; then
+    elif [ ! -f "$tmp/wf/cli-sid-h9.control/handoff.md" ]; then
+        fail "H9: expected $tmp/wf/cli-sid-h9.control/handoff.md (--session default must be resolveSessionId(), not wsid)"
+    elif ! grep -q "no test surface" "$tmp/wf/cli-sid-h9.control/handoff.md"; then
         fail "H9: entry not appended to the sid-named artifact"
-    elif [ -f "$tmp/wf/wsid-decoy-handoff.md" ]; then
+    elif [ -e "$tmp/wf/wsid-decoy.control/handoff.md" ] || [ -f "$tmp/wf/wsid-decoy-handoff.md" ]; then
         fail "H9: CLI wrote to a wsid-derived artifact — --session default resolved the wrong session id"
     else
         pass "H9: handoff-append defaults --session to the CC-native sid and appends there"
@@ -418,14 +418,14 @@ run_H10() {
     local tmp tn out rc
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     mkdir -p "$tmp/wf" "$tmp/home"
-    out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="cli-sid-h10" \
+    out=$(env CLAUDE_CODE_SESSION_ID="cli-sid-h10" \
         CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node "$AGENTS_DIR/$CLI" --class E --step write_tests --key k --summary s --pointer - --origin bogus-origin 2>&1)
     rc=$?
     if [ "$rc" -eq 0 ]; then
         fail "H10: CLI accepted --origin bogus-origin (expected non-zero exit). Output: ${out:-<empty>}"
-    elif [ -f "$tmp/wf/cli-sid-h10-handoff.md" ]; then
+    elif [ -n "$(find "$tmp/wf" -name '*handoff.md' 2>/dev/null)" ]; then
         fail "H10: CLI created an artifact despite rejecting the arguments"
     else
         pass "H10: handoff-append rejects an out-of-vocabulary --origin without writing"
@@ -442,7 +442,7 @@ run_H11() {
     local tmp tn out rc
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     mkdir -p "$tmp/wf" "$tmp/home"
-    out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="unused-h11" \
+    out=$(env CLAUDE_CODE_SESSION_ID="unused-h11" \
         CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node "$AGENTS_DIR/$CLI" --session "../../evil" --class E --step write_tests --key k --summary s --pointer - --origin procedure-point 2>&1)

@@ -14,6 +14,7 @@ LIB="$AGENTS_ROOT/bin/lib/concern-ledger.sh"
 CLI="$AGENTS_ROOT/bin/concern-ledger"
 
 PASS=0; FAIL=0
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
@@ -51,9 +52,7 @@ trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-unset CLAUDE_ENV_FILE 2>/dev/null || true
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 mkdir -p "$TMPDIR_BASE/work"
 cd "$TMPDIR_BASE" || exit 1
@@ -70,10 +69,14 @@ add_entry() {
 # Single library load — all helpers available in this shell after this point.
 LIB_LOADED=0
 if [[ -f "$LIB" ]]; then
-    set +u; if source "$LIB" >/dev/null 2>&1; then LIB_LOADED=1; fi; set -u
+    set +u
+    if source "$LIB" >/dev/null 2>&1; then LIB_LOADED=1; fi
+    set -u
 fi
 if [[ "$LIB_LOADED" -eq 1 ]]; then
-    set +u; cl_sha256 "carrier-suite-probe" >/dev/null 2>&1 || true; set -u
+    set +u
+    cl_sha256 "carrier-suite-probe" >/dev/null 2>&1 || true
+    set -u
 fi
 
 # Implementation presence — FAIL (not SKIP) keeps the suite non-zero until /write-code.
@@ -91,8 +94,15 @@ slot_of() {
 }
 
 # carrier_path_for <plans-dir> <session-id> <format>
-# Mirrors _cl_carrier_from_ledger: <plans-dir>/<sid>-<fmt>-concern-carrier.md
-carrier_path_for() { printf '%s/%s-%s-concern-carrier.md' "$1" "$2" "$3"; }
+# Mirrors _cl_carrier_from_ledger: <CLAUDE_WORKFLOW_DIR>/<sid>.control/<fmt>-concern-carrier.md
+# $1 (plans-dir) is ignored; control files live in the workflow dir (#2434).
+carrier_path_for() { printf '%s/%s.control/%s-concern-carrier.md' "$CLAUDE_WORKFLOW_DIR" "$2" "$3"; }
+# ledger_path_for <plans-dir> <session-id> <format> — the ledger the CLI reads (#2434
+# control-dir layout); creates <sid>.control so the fixture can seed it directly.
+ledger_path_for() {
+    mkdir -p "$CLAUDE_WORKFLOW_DIR/$2.control"
+    printf '%s/%s.control/%s-concern-ledger.txt' "$CLAUDE_WORKFLOW_DIR" "$2" "$3"
+}
 
 # ---------------------------------------------------------------------------
 # Cases live in a sibling folder per rules/coding/file-split.md Pattern A; each
@@ -100,14 +110,25 @@ carrier_path_for() { printf '%s/%s-%s-concern-carrier.md' "$1" "$2" "$3"; }
 # ---------------------------------------------------------------------------
 SUITE_DIR="$AGENTS_ROOT/tests/bin/feature-2344-concern-carrier"
 
+case_begin "carrier-render-resolve" "bin/lib/concern-ledger/render.sh"
 # shellcheck source=./feature-2344-concern-carrier/render-resolve.sh
 . "$SUITE_DIR/render-resolve.sh"
+case_end
+
+case_begin "carrier-reject-durability" "bin/concern-ledger"
 # shellcheck source=./feature-2344-concern-carrier/reject-durability.sh
 . "$SUITE_DIR/reject-durability.sh"
+case_end
+
+case_begin "carrier-merge-and-exit" "bin/lib/concern-ledger/core.sh"
 # shellcheck source=./feature-2344-concern-carrier/merge-and-exit.sh
 . "$SUITE_DIR/merge-and-exit.sh"
+case_end
+
+case_begin "carrier-reject-cli" "bin/concern-ledger"
 # shellcheck source=./feature-2344-concern-carrier/reject-cli.sh
 . "$SUITE_DIR/reject-cli.sh"
+case_end
 
 # ---------------------------------------------------------------------------
 # Results

@@ -1,19 +1,9 @@
 #!/usr/bin/env bash
-# workflow-init Path A2 — label all issues + ensure-board-card parity.
-#
-# Usage:
-#   PLANS_DIR=... SESSION_ID=... AGENTS_CONFIG_DIR=... \
-#     bash path-a-label-and-board.sh [--repo-map IDX:owner/repo ...] <first-N> [siblings-N ...]
-#
-# --repo-map IDX:owner/repo  (repeatable) — per-issue repo routing. Index is
-#   0-based across ALL issues (first-N=idx0, siblings[k]=idx k+1).
-#
-# Behavior:
-#   - For each sibling issue (positions 2..N): gh issue edit --add-label intent:clarified.
-#     Label failure for any sibling issue is fail-closed (writes an abort marker, exit 1).
-#     gh issue edit --add-label is idempotent — re-running /workflow-init is safe.
-#   - For every issue (first-N + siblings): ensure-board-card.sh (best-effort; warn-continue).
-#     ensure-board-card.sh is itself idempotent — no-op when the card is already present.
+# workflow-init Path A2 — label all issues + ensure-board-card parity (skills/workflow-init/SKILL.md A2).
+# Usage: SESSION_ID=... AGENTS_CONFIG_DIR=... bash path-a-label-and-board.sh [--repo-map IDX:owner/repo ...] <first-N> [siblings-N ...]
+# --repo-map index is 0-based across ALL issues (first-N=idx0, siblings[k]=idx k+1).
+# Sibling label failure is fail-closed (abort marker in the session control dir, exit 1);
+# ensure-board-card.sh is best-effort. Both steps are idempotent, so re-running is safe.
 
 set -uo pipefail
 
@@ -54,8 +44,7 @@ for k in "${!SIBLINGS[@]}"; do
     N="${SIBLINGS[$k]}"
     i=$((k + 1))
     if ! gh issue edit "$N" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} --add-label "intent:clarified" >/dev/null 2>&1; then
-        if [ -n "${PLANS_DIR:-}" ] && [ -n "${SESSION_ID:-}" ]; then
-            MARKER="$PLANS_DIR/$SESSION_ID-workflow-init-aborted-pathA-multiN-label-failure.md"
+        if [ -n "${SESSION_ID:-}" ] && MARKER="$(node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session "$SESSION_ID" --file workflow-init-aborted-pathA-multiN-label-failure.md --for-write 2>/dev/null)"; then
             printf 'workflow-init Path A2 aborted: gh issue edit --add-label "intent:clarified" failed for #%s\n' "$N" > "$MARKER" 2>/dev/null || true
         fi
         echo "[workflow-init: gh issue edit --add-label intent:clarified failed for #$N — aborting]" >&2

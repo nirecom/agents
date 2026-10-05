@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/fix-2025-recovery-artifact-mode.sh
-# Tests: bin/lib/concern-ledger/finalize.sh, bin/lib/safe-plans-path.sh, bin/concern-ledger
+# Tests: bin/lib/concern-ledger/finalize.sh, bin/lib/safe-state-path.sh, bin/concern-ledger
 # Tags: concern-ledger, finalize, recovery, file-mode, publish-failure, security, scope:issue-specific, pwsh-not-required
 #
 # When the artifact's publish fails, cl_write_json holds the only verified copy
@@ -20,6 +20,12 @@ set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CLI="$AGENTS_ROOT/bin/concern-ledger"
+
+# harness.sh supplies the case markers only; the name-first reporters below
+# are defined after the source so they take precedence.
+AGENTS_DIR="$AGENTS_ROOT"
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 
 PASS=0
 FAIL=0
@@ -50,7 +56,6 @@ assert_eq_nz() {
 # --- fixture isolation (rules/test/fixture-isolation.md) --------------------
 TMPDIR_BASE="$(mktemp -d)"
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans-root"
@@ -65,8 +70,12 @@ mkdir -p "$TMPDIR"
 
 [ -f "$CLI" ] || fail "implementation missing: bin/concern-ledger"
 
+# #2434: the ledger and unresolved-concerns.json are control files, derived
+# from --session-id into $CLAUDE_WORKFLOW_DIR/<sid>.control/. The control dir
+# is per session, so every case owns its own sid (SID is reassigned per case).
 SID="sess-c8"
 FMT="review-security-shared"
+ctl() { printf '%s/%s.control' "$CLAUDE_WORKFLOW_DIR" "$SID"; }
 FINDING="the finding that must survive a failed publish"
 
 file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; }
@@ -81,13 +90,14 @@ chmod 600 "$TMPDIR_BASE/.mode-probe" 2>/dev/null || true
 # a directory is pre-placed at the artifact's destination: rename(2) cannot
 # replace a directory, so the publish fails while the verified bytes still exist.
 mk_plans() {
-    local p="$TMPDIR_BASE/$1"
-    mkdir -p "$p"
+    local p="$TMPDIR_BASE/$1" c
+    c="$(ctl)"
+    mkdir -p "$p" "$c"
     {
         printf '#concern-ledger-v2|%s|%s|cycle=1\n' "$FMT" "$SID"
         printf 'C1|HIGH|open|1|1|bin/x#fn:security|dc801|review-code-codex|review-code-codex|-|%s\n' "$FINDING"
-    } > "$p/$SID-$FMT-concern-ledger.txt"
-    [ "${2:-}" = "block" ] && mkdir -p "$p/$SID-$FMT-unresolved-concerns.json"
+    } > "$c/$FMT-concern-ledger.txt"
+    [ "${2:-}" = "block" ] && mkdir -p "$c/$FMT-unresolved-concerns.json"
     printf '%s' "$p"
 }
 
@@ -108,16 +118,21 @@ echo "--- recovery 1: the control, where the publish succeeds ---"
 # 1. No recovery file may exist after a normal finalize. Without this, "exactly
 #    one appeared" in case 2 would also pass against a build that wrote one on
 #    every run — which would be the leak, not the fix.
+case_begin "publish-succeeds-without-recovery" "bin/concern-ledger"
 {
+    SID="sess-c8-ok"
     P1="$(mk_plans ok)"
     OUT1="$(finalize "$P1")"
     assert_eq "1: a finalize that can publish succeeds" \
         "rc=0" "$(printf '%s' "$OUT1" | head -n 1)"
-    assert_eq_nz "1: the artifact is at its destination, holding the round's finding" \
-        "1" "$(grep -c -F "$FINDING" "$P1/$SID-$FMT-unresolved-concerns.json" 2>/dev/null | tr -d ' ')"
+    assert_eq_nz "1: the artifact is at its control-dir destination, holding the round's finding" \
+        "1" "$(grep -c -F "$FINDING" "$(ctl)/$FMT-unresolved-concerns.json" 2>/dev/null | tr -d ' ')"
+    assert_eq "1: and no control file was published into the plans dir (#2434)" \
+        "0" "$(find "$P1" -name '*unresolved-concerns.json' 2>/dev/null | wc -l | tr -d ' ')"
     assert_eq "1: and nothing was left in the recovery store" \
         "0" "$(count_recovered)"
 }
+case_end
 
 echo ""
 echo "--- recovery 2: the publish blocked, with the bytes already verified ---"
@@ -125,7 +140,9 @@ echo "--- recovery 2: the publish blocked, with the bytes already verified ---"
 # 2. The failure this file is about. The round's findings are not lost, they do
 #    not stay in the plans dir under a predictable name, and nothing is parked
 #    inside the directory the attacker pre-placed.
+case_begin "blocked-publish-writes-recovery" "bin/lib/concern-ledger/finalize.sh"
 {
+    SID="sess-c8-blk"
     P2="$(mk_plans blocked block)"
     OUT2="$(finalize "$P2")"
     REC2="$(recovered)"
@@ -146,22 +163,24 @@ echo "--- recovery 2: the publish blocked, with the bytes already verified ---"
 
     # Where it is NOT is half the property: the plans dir keeps no readable
     # leftover, and the pre-placed directory receives nothing.
-    assert_eq "2: no temporary artifact was left behind in the plans dir" \
-        "0" "$(find "$P2" \( -name '*.tmp.*' -o -name '*XXXXXX*' \) 2>/dev/null | wc -l | tr -d ' ')"
-    assert_eq "2: and nothing was parked inside the directory pre-placed at the destination" \
-        "0" "$(find "$P2/$SID-$FMT-unresolved-concerns.json" -mindepth 1 2>/dev/null | wc -l | tr -d ' ')"
+    assert_eq "2: no temporary artifact was left behind in the plans dir or the control dir" \
+        "0" "$(find "$P2" "$(ctl)" \( -name '*.tmp.*' -o -name '*XXXXXX*' \) 2>/dev/null | wc -l | tr -d ' ')"
+    assert_eq_nz "2: and nothing was parked inside the directory pre-placed at the destination" \
+        "0 dir" "$(find "$(ctl)/$FMT-unresolved-concerns.json" -mindepth 1 2>/dev/null | wc -l | tr -d ' ') $([ -d "$(ctl)/$FMT-unresolved-concerns.json" ] && printf dir || printf gone)"
 
     # The diagnostic is the operator's other way in, so it must agree.
     DIAG2="$P2/$SID-$FMT-finalize-diagnostic.txt"
     assert_eq_nz "2: the diagnostic beside the plans dir names the same recovery path" \
         "1" "$(grep -c -F "$REC2" "$DIAG2" 2>/dev/null | tr -d ' ')"
 }
+case_end
 
 echo ""
 echo "--- recovery 3: the recovery file's shape and mode ---"
 
 # 3. The store is shared with every other process on the host, so where the file
 #    lands and who can read it are the security half of the same step.
+case_begin "recovery-file-shape-and-mode" "bin/lib/concern-ledger/finalize.sh"
 {
     REC3="$REC2"
     RBASE3="${REC3##*/}"
@@ -191,6 +210,7 @@ echo "--- recovery 3: the recovery file's shape and mode ---"
         echo "SKIP: 3: which is narrower than what the umask would have given it (this filesystem does not keep modes)"
     fi
 }
+case_end
 
 echo ""
 echo "--- recovery 4: the ordering the mode depends on ---"
@@ -200,6 +220,7 @@ echo "--- recovery 4: the ordering the mode depends on ---"
 #    behavioural row above. Pinned in the source, since the window is not
 #    observable from outside — and because case 3's mode rows do not run on
 #    every host (Skipped-Because: this filesystem does not keep modes).
+case_begin "chmod-precedes-copy" "bin/lib/concern-ledger/finalize.sh"
 {
     SRC4="$AGENTS_ROOT/bin/lib/concern-ledger/finalize.sh"
     src_lines() { grep -n -F "$1" "$SRC4" | cut -d: -f1 | tr '\n' ' '; }
@@ -220,6 +241,65 @@ echo "--- recovery 4: the ordering the mode depends on ---"
     assert_eq_nz "4: the template is a basename with no separator of its own" \
         "1" "$(grep -c -F 'rbase="concern-ledger-artifact"' "$SRC4" | tr -d ' ')"
 }
+case_end
+
+echo ""
+echo "--- recovery 5: the control dir is the new boundary (#2434) ---"
+
+# 5. The destination moved from the plans dir into $CLAUDE_WORKFLOW_DIR/<sid>.control/,
+#    so the same pre-placement attacks now aim there. The sid is the only input
+#    that names that directory, so it is where a traversal would enter.
+case_begin "control-dir-boundary" "bin/lib/safe-state-path.sh"
+{
+    # 5a. A sid that walks out of the workflow dir is refused before any write.
+    SID="../escape-c8"
+    P5A="$TMPDIR_BASE/p5a"
+    mkdir -p "$P5A"
+    OUT5A="$(finalize "$P5A")"
+    assert_eq "5a: a traversing --session-id is refused" \
+        "refused" "$(case "$(printf '%s' "$OUT5A" | head -n 1)" in rc=0) printf accepted ;; *) printf refused ;; esac)"
+    assert_eq "5a: and no control dir was created beside the workflow dir" \
+        "absent" "$([ -e "$TMPDIR_BASE/escape-c8.control" ] && printf present || printf absent)"
+
+    # 5b. A regular file pre-placed where <sid>.control must be a directory:
+    #     finalize cannot create its home, so it must fail closed — not fall
+    #     back to the plans dir, and not leave the ledger's bytes elsewhere.
+    SID="sess-c8-file"
+    P5B="$TMPDIR_BASE/p5b"
+    mkdir -p "$P5B"
+    printf 'squatter\n' > "$(ctl)"
+    OUT5B="$(finalize "$P5B")"
+    assert_eq "5b: a squatted control dir makes finalize fail rather than succeed" \
+        "failed" "$(case "$(printf '%s' "$OUT5B" | head -n 1)" in rc=0) printf succeeded ;; *) printf failed ;; esac)"
+    assert_eq "5b: the squatting file is left as it was" \
+        "squatter" "$(cat "$(ctl)" 2>/dev/null)"
+    assert_eq "5b: and nothing fell back into the plans dir" \
+        "0" "$(find "$P5B" -name '*unresolved-concerns.json' 2>/dev/null | wc -l | tr -d ' ')"
+
+    # 5c. A symlinked control dir that resolves outside the workflow dir: the
+    #     artifact must not be published through it (containment is physical).
+    SYML_OK=no
+    ln -s "$TMPDIR_BASE" "$TMPDIR_BASE/.symlink-probe" 2>/dev/null || true
+    [ -h "$TMPDIR_BASE/.symlink-probe" ] && SYML_OK=yes
+    if [ "$SYML_OK" = "yes" ]; then
+        SID="sess-c8-link"
+        OUTSIDE5C="$TMPDIR_BASE/outside-5c"
+        mkdir -p "$OUTSIDE5C"
+        ln -s "$OUTSIDE5C" "$(ctl)"
+        {
+            printf '#concern-ledger-v2|%s|%s|cycle=1\n' "$FMT" "$SID"
+            printf 'C1|HIGH|open|1|1|bin/x#fn:security|dc805|review-code-codex|review-code-codex|-|%s\n' "$FINDING"
+        } > "$OUTSIDE5C/$FMT-concern-ledger.txt"
+        P5C="$TMPDIR_BASE/p5c"
+        mkdir -p "$P5C"
+        finalize "$P5C" >/dev/null
+        assert_eq "5c: no artifact was published through a symlinked control dir" \
+            "0" "$(find "$OUTSIDE5C" -name '*unresolved-concerns.json' 2>/dev/null | wc -l | tr -d ' ')"
+    else
+        echo "SKIP: 5c: no artifact was published through a symlinked control dir (no symlinks here)"
+    fi
+}
+case_end
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

@@ -42,6 +42,7 @@ read_field() {
     local tmp="$1" sid="$2" path="$3"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
@@ -57,6 +58,7 @@ invoke_cli() {
     local tmp="$1"; shift
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI" "$@" >/dev/null 2>&1
     )
 }
@@ -143,6 +145,7 @@ run_c6() {
     tmp="$(mktemp -d)"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI" --not-a-real-flag value --session-id c6sid >/dev/null 2>&1
     )
     rc=$?
@@ -160,9 +163,10 @@ run_c7() {
     tmp="$(mktemp -d)"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         # No id may reach the CLI from ANY source, or the parent Claude Code
         # session's own id leaks in and this case silently stops testing.
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID WORKFLOW_SESSION_ID
+        unset CLAUDE_CODE_SESSION_ID WORKFLOW_SESSION_ID
         run_with_timeout 5 node "$CLI" --audit-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
     )
     rc=$?
@@ -184,7 +188,8 @@ run_c9() {
     tmp="$(mktemp -d)"; sid="c9ccsid"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        unset CLAUDE_SESSION_ID WORKFLOW_SESSION_ID
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        unset WORKFLOW_SESSION_ID
         export CLAUDE_CODE_SESSION_ID="$sid"
         run_with_timeout 5 node "$CLI" --set-audit-phase done >/dev/null 2>&1
     )
@@ -198,32 +203,6 @@ run_c9() {
     fi
 }
 
-# C10 (#2270, CPR-ORTH with SP-20f / T-marker-9): BOTH session vars set to
-# different ids. SID_SOURCES.ccuuid must rank CLAUDE_CODE_SESSION_ID first, the
-# same order the SSOT resolver uses — otherwise the audit record lands in the
-# store of an identity the caller is not.
-run_c10() {
-    require_source "$CLI" "C10: CLAUDE_CODE_SESSION_ID outranks CLAUDE_SESSION_ID" || return
-    local tmp cc_sid legacy_sid cc_val legacy_val rc
-    tmp="$(mktemp -d)"; cc_sid="c10ccsid"; legacy_sid="c10legacysid"
-    (
-        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        unset WORKFLOW_SESSION_ID
-        export CLAUDE_SESSION_ID="$legacy_sid"
-        export CLAUDE_CODE_SESSION_ID="$cc_sid"
-        run_with_timeout 5 node "$CLI" --set-audit-phase done >/dev/null 2>&1
-    )
-    rc=$?
-    cc_val=$(read_field "$tmp" "$cc_sid" "audit.audit_phase")
-    legacy_val=$(read_field "$tmp" "$legacy_sid" "audit.audit_phase")
-    rm -rf "$tmp"
-    if [ $rc -eq 0 ] && [ "$cc_val" = "\"done\"" ] && [ "$legacy_val" != "\"done\"" ]; then
-        pass "C10: both vars set -> CLAUDE_CODE_SESSION_ID names the store"
-    else
-        fail "C10: both vars set -> CLAUDE_CODE_SESSION_ID names the store (rc=$rc, cc=$cc_val, legacy=$legacy_val)"
-    fi
-}
-
 # C11 (#2270): the OTHER extension point of the same change — MIRROR_RESOLVERS.wsid.
 # With WORKFLOW_SESSION_ID resolving the primary store, the mirror store is found
 # from the CC-side env; a non-native-LLM caller that exports only
@@ -234,7 +213,7 @@ run_c11() {
     tmp="$(mktemp -d)"; wsid="c11wsid"; cc_sid="c11ccsid"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        unset CLAUDE_SESSION_ID
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         export WORKFLOW_SESSION_ID="$wsid"
         export CLAUDE_CODE_SESSION_ID="$cc_sid"
         run_with_timeout 5 node "$CLI" --set-audit-phase done >/dev/null 2>&1
@@ -257,6 +236,7 @@ run_c8() {
     # Bump retry count first via CLI (if --increment supported), else write via writer module.
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
+        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 // Seed retry count > 0 directly via writeAuditState if exported; otherwise
@@ -266,8 +246,9 @@ if (typeof w.writeAuditState === 'function') {
 } else {
   const fs = require('fs'); const path = require('path');
   const { createEmptyState } = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
-  const plansDir = process.env.WORKFLOW_PLANS_DIR;
-  const fp = path.join(plansDir, '$sid' + '-supervisor-state.json');
+  const ctrlDir = path.join(process.env.CLAUDE_WORKFLOW_DIR, '$sid' + '.control');
+  require('fs').mkdirSync(ctrlDir, {recursive: true});
+  const fp = path.join(ctrlDir, 'supervisor-state.json');
   const st = createEmptyState('$sid');
   if (!st.audit || typeof st.audit !== 'object') st.audit = {};
   st.audit.audit_retry_count = 1;
@@ -287,7 +268,7 @@ if (typeof w.writeAuditState === 'function') {
     fi
 }
 
-run_c1; run_c2; run_c3; run_c4; run_c5; run_c6; run_c7; run_c8; run_c9; run_c10; run_c11
+run_c1; run_c2; run_c3; run_c4; run_c5; run_c6; run_c7; run_c8; run_c9; run_c11
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

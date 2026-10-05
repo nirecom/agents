@@ -10,17 +10,15 @@ set -euo pipefail
 
 # #1361: terminal marker written after a non-success terminal exit. Line 1 = terminal
 # rc, line 2 = review-scope fingerprint at that moment (same computeReviewScopeFingerprint
-# SSOT the gate uses for stale-review detection).
-TERMINAL_FILE="${PLANS_DIR}/${SESSION_ID}-test-review-terminal.txt"
-# Accept marker for residual HIGH after an exit 6 terminal: its presence authorizes the
-# fingerprint-mismatch branch to clear the guard even when the prior terminal was exit 6.
-# Equivalent accept path to the WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED sentinel.
-EXIT6_ACCEPT_FILE="${PLANS_DIR}/${SESSION_ID}-review-tests-exit6-accepted.txt"
-# Dedicated exit code for "re-invoked after a terminal exit with review scope unchanged".
-# Does not collide with bin/run-codex-review-loop's codes (0-7).
+# SSOT the gate uses for stale-review detection). Terminal and exit-6 accept marker
+# live in <sid>.control/ (#2434); exit 8/9 are the wrapper's own codes.
+# shellcheck source=bin/lib/codex-review-loop/review-wrapper-control.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-review-loop/review-wrapper-control.sh" || exit 4
+# The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
+# so a containment refusal is never read as ESCALATE or as codex-unavailable.
+ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
+rwc_resolve test-review review-tests
 EXIT_REINVOKE_AFTER_TERMINAL=8
-# exit 6 termination occurred, content changed, but residual HIGH not accepted → re-run blocked.
-EXIT_EXIT6_UNACCEPTED=9
 
 # Exits 4, 7 and 8 leave this script without reaching the completion sentinel
 # that records every other outcome, so a resumed session would find no trace of
@@ -80,8 +78,8 @@ REPO_ROOT_VAL="$COMMIT_TARGET"
 
 # --- #1361 re-invoke guard ---
 if [[ -f "$TERMINAL_FILE" ]]; then
-  PREV_RC="$(sed -n '1p' "$TERMINAL_FILE" 2>/dev/null || true)"
-  PREV_FP="$(sed -n '2p' "$TERMINAL_FILE" 2>/dev/null || true)"
+  # fail-CLOSED: a compare failure is not evidence that the review scope changed;
+  # only a git error (rc 4) HALTs instead of arming exit 8.
   CUR_FP=""
   FP_RC=0
   CUR_FP="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || FP_RC=$?
@@ -90,23 +88,15 @@ if [[ -f "$TERMINAL_FILE" ]]; then
     record_codex_exit 4 "HALT"
     exit 4
   fi
-  if [[ -z "$CUR_FP" || -z "$PREV_FP" ]]; then
-    # fail-CLOSED: a compare failure is not evidence that the review scope changed.
-    echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and the review-scope fingerprint could not be compared. Keeping the guard armed. Accept the gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-edit and re-stage the review scope (tests or implementation files) before re-running." >&2
-    record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
-    exit "$EXIT_REINVOKE_AFTER_TERMINAL"
-  fi
-  if [[ "$CUR_FP" == "$PREV_FP" ]]; then
-    echo "[review-tests] ERROR: previous test review ended with a terminal exit (code=${PREV_RC:-?}) and the review scope is unchanged. Re-looping now would defeat the 2+1 round cap. Accept the coverage gap with WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED, or re-edit and re-stage the review scope and run again." >&2
-    record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
-    exit "$EXIT_REINVOKE_AFTER_TERMINAL"
-  fi
-  if [ "${PREV_RC:-}" = "6" ] && [ ! -f "$EXIT6_ACCEPT_FILE" ]; then
-    printf '[review-tests] Review scope changed after an exit 6 terminal, but residual HIGH findings are not accepted.\n  Accept marker: %s\n  Create it: touch "%s"\n  Or: emit WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED (both are equivalent accept paths).\n  Accept the residual HIGH by one of the above, then re-run.\n' "$EXIT6_ACCEPT_FILE" "$EXIT6_ACCEPT_FILE" >&2
-    exit "$EXIT_EXIT6_UNACCEPTED"
-  fi
-  # Fingerprint mismatch = the review scope was re-edited = legitimate restart → auto-clear.
-  rm -f "$TERMINAL_FILE"
+  TG_RC=0
+  rwc_check_terminal review-tests "$CUR_FP" review-tests-exit6-accepted.txt test-review || TG_RC=$?
+  case "$TG_RC" in
+    0) ;;
+    8) echo "[review-tests] The WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED sentinel also accepts the coverage gap." >&2
+       record_codex_exit 8 "no-sentinel"; exit 8 ;;
+    *) echo "[review-tests] Equivalent accept path: emit WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED." >&2
+       exit "$TG_RC" ;;
+  esac
 fi
 
 arm_terminal_guard() {
@@ -116,20 +106,12 @@ arm_terminal_guard() {
     # retire the round counter; arm guard so unchanged-input re-invocation is blocked.
     # exit 1 (round-continuing) must NOT arm (#2276 S9-c). exit 4 is config error, no guard.
     2|3|6|7)
-      fp=""
       fp="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || fp=""
-      local _tmp
-      _tmp="$(mktemp "${PLANS_DIR}/.sg-XXXXXX" 2>/dev/null)" || break
-      printf '%s\n%s\n' "$rc" "$fp" > "$_tmp" || { rm -f "$_tmp"; break; }
-      mv -f "$_tmp" "$TERMINAL_FILE" || rm -f "$_tmp"
+      rwc_arm_terminal "$rc" "$fp"
       ;;
   esac
   return "$rc"
 }
-
-# The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
-# so a containment refusal is never read as ESCALATE or as codex-unavailable.
-ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
 
 args=(
   --format test-review
@@ -147,7 +129,7 @@ CHANGED_FILES_CTX=""
 if [[ "${REVIEW_TESTS_FULL_SCAN:-0}" != "1" ]]; then
   MERGE_BASE="$(git -C "$REPO_ROOT_VAL" merge-base HEAD "$(git -C "$REPO_ROOT_VAL" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)" 2>/dev/null || true)"
   if [[ -n "$MERGE_BASE" ]]; then
-    CHANGED_FILES_FILE="${PLANS_DIR}/${SESSION_ID}-changed-files.txt"
+    CHANGED_FILES_FILE="$CONTROL_DIR/changed-files.txt"
     {
       echo "## Changed files in this PR (scan scope)"
       git -C "$REPO_ROOT_VAL" diff --name-only "${MERGE_BASE}...HEAD"
