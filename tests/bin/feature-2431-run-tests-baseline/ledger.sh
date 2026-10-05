@@ -5,11 +5,16 @@
 # Sourced by the dispatcher; never run standalone.
 # Plan contract: rtb_ledger_append <sha> <path> <fail|pass>, rtb_ledger_lookup_same_base
 # <sha> <path>, rtb_ledger_lookup_inheritable <path>, rtb_ledger_sweep; one append-only
-# segment per process at $(run_all_cache_dir)/baseline/<repo_id>/<host>-<epoch>-<pid>.seg,
-# lines `v1\t<B1>\t<host>\t<rel-path>\t<fail|pass>\t<epoch>`.
+# segment per process at $(run_all_cache_dir)/baseline/<repo_id>/v2.<host>-<epoch>-<pid>.seg,
+# lines `v2\t<B1>\t<host>\t<rel-path>\t<fail|pass>\t<epoch>\t<os-attr>` (#2079).
 
 LEDGER_SHA_A="aaaa1111bbbb2222cccc3333dddd4444eeee5555"
 LEDGER_SHA_B="bbbb2222cccc3333dddd4444eeee5555ffff6666"
+LEDGER_ATTR="Windows/10.0.26300"
+LEDGER_ATTR_RE='[A-Za-z0-9._-]{1,32}/[A-Za-z0-9._-]{1,64}'
+
+# ledger_rec <sha> <host> <path> <fail|pass> <epoch> — one synthetic v2 record line.
+ledger_rec() { printf 'v2\t%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" "$LEDGER_ATTR"; }
 
 # ledger_segments <cache> — every segment file under baseline/, excluding worktrees/ and tmp/.
 ledger_segments() {
@@ -27,16 +32,16 @@ run_ledger_cases() {
   local repo="$TMPROOT/repo-ledger" t="tests/bin/test-foo.sh"
   mk_fixture_repo "$repo" >/dev/null
 
-  # ---- L1: append writes one v1 record into a segment under baseline/<repo_id>/ ----
+  # ---- L1: append writes one v2 record into a segment under baseline/<repo_id>/ ----
   local c1="$TMPROOT/cache-l1" seg rec
   mkdir -p "$c1"
   ledger_call "$c1" "$repo" rtb_ledger_append "$LEDGER_SHA_A" "$t" fail >/dev/null 2>&1
   seg="$(ledger_segments "$c1" | head -1)"
   rec="$(head -1 "$seg" 2>/dev/null)"
   if [ -n "$seg" ] && [ "$(basename "$(dirname "$(dirname "$seg")")")" = "baseline" ] \
-    && basename "$seg" | grep -qE '^[A-Za-z0-9]+-[0-9]+-[0-9]+\.seg$' \
-    && printf '%s\n' "$rec" | grep -qE "^v1	$LEDGER_SHA_A	[A-Za-z0-9]+	$t	fail	[0-9]+$"; then
-    pass "L1: append writes v1 record into baseline/<repo_id>/<host>-<epoch>-<pid>.seg"
+    && basename "$seg" | grep -qE '^v2\.[A-Za-z0-9]+-[0-9]+-[0-9]+\.seg$' \
+    && printf '%s\n' "$rec" | grep -qE "^v2	$LEDGER_SHA_A	[A-Za-z0-9]+	$t	fail	[0-9]+	$LEDGER_ATTR_RE$"; then
+    pass "L1: append writes a 7-field v2 record into baseline/<repo_id>/v2.<host>-<epoch>-<pid>.seg"
   else
     fail "L1: segment/record layout wrong (seg=${seg:-none} rec=$rec)"
   fi
@@ -86,8 +91,10 @@ run_ledger_cases() {
   seg="$(ledger_segments "$c6" | head -1)"
   if [ -n "$seg" ]; then
     dir6="$(dirname "$seg")"; host6="$(head -1 "$seg" | cut -f3)"
-    printf 'garbage\nv1\tnot-a-sha\nv9\t%s\t%s\t%s\tpass\t1\n' "$LEDGER_SHA_A" "$host6" "$t" \
-      > "$dir6/$host6-1-1.seg"
+    # A v1 line is now another version: kept in the file, never read as a verdict.
+    printf 'garbage\nv2\tnot-a-sha\nv9\t%s\t%s\t%s\tpass\t1\t%s\nv1\t%s\t%s\t%s\tpass\t1\n' \
+      "$LEDGER_SHA_A" "$host6" "$t" "$LEDGER_ATTR" "$LEDGER_SHA_A" "$host6" "$t" \
+      > "$dir6/v2.$host6-1-1.seg"
     r6="$(ledger_call "$c6" "$repo" rtb_ledger_lookup_same_base "$LEDGER_SHA_A" "$t" 2>/dev/null)"
     [ "$r6" = "fail" ] && pass "L6-corrupt: corrupt/foreign-version lines skipped" \
       || fail "L6-corrupt: expected fail despite corrupt segment, got: $r6"
@@ -225,9 +232,9 @@ run_ledger_prune_cases() {
   host="$(head -1 "$seg" | cut -f3)"
   now="$(date +%s)"
   e31=$((now - 31 * 86400)); e29=$((now - 29 * 86400))
-  seg31="$dir/$host-$e31-31031.seg"; seg29="$dir/$host-$e29-29029.seg"
-  printf 'v1\t%s\t%s\t%s\tfail\t%s\n' "$sha31" "$host" "$t" "$e31" > "$seg31"
-  printf 'v1\t%s\t%s\t%s\tfail\t%s\n' "$sha29" "$host" "$t" "$e29" > "$seg29"
+  seg31="$dir/v2.$host-$e31-31031.seg"; seg29="$dir/v2.$host-$e29-29029.seg"
+  ledger_rec "$sha31" "$host" "$t" fail "$e31" > "$seg31"
+  ledger_rec "$sha29" "$host" "$t" fail "$e29" > "$seg29"
   touch_epoch "$seg31" "$e31"
   touch_epoch "$seg29" "$e29"
 
@@ -276,8 +283,8 @@ run_ledger_boundary_cases() {
   [ -n "$seg" ] || { fail "L8: rtb_ledger_append wrote no segment to seed beside"; return; }
   dir="$(dirname "$seg")"; host="$(head -1 "$seg" | cut -f3)"
   now="$(date +%s)"; e30=$((now - 30 * 86400))
-  printf 'v1\t%s\t%s\t%s\tfail\t%s\nv1\t%s\t%s\t%s\tfail\t%s\n' \
-    "$sha30" "$host" "$t" "$e30" "$sha30p" "$host" "$t" "$((e30 - 1))" > "$dir/$host-$e30-30030.seg"
+  { ledger_rec "$sha30" "$host" "$t" fail "$e30"; ledger_rec "$sha30p" "$host" "$t" fail "$((e30 - 1))"; } \
+    > "$dir/v2.$host-$e30-30030.seg"
 
   lk="$(pinned_inheritable "$cache" "$repo" "$now" "$t")"
   printf '%s\n' "$lk" | grep -qx "$sha30" \
@@ -287,9 +294,9 @@ run_ledger_boundary_cases() {
     && fail "L8-lookup-past-30d: a record 30 days + 1s old was offered for inheritance" \
     || pass "L8-lookup-past-30d: a record 30 days + 1s old is outside the window"
 
-  local seg_edge="$dir/$host-$e30-30031.seg" seg_in="$dir/$host-$((e30 + 60))-29959.seg"
-  printf 'v1\t%s\t%s\t%s\tfail\t%s\n' "$sha30" "$host" "$t" "$e30" > "$seg_edge"
-  printf 'v1\t%s\t%s\t%s\tfail\t%s\n' "$sha30" "$host" "$t" "$((e30 + 60))" > "$seg_in"
+  local seg_edge="$dir/v2.$host-$e30-30031.seg" seg_in="$dir/v2.$host-$((e30 + 60))-29959.seg"
+  ledger_rec "$sha30" "$host" "$t" fail "$e30" > "$seg_edge"
+  ledger_rec "$sha30" "$host" "$t" fail "$((e30 + 60))" > "$seg_in"
   now="$(date +%s)"; e30=$((now - 30 * 86400))
   touch_epoch "$seg_edge" "$e30"
   touch_epoch "$seg_in" "$((e30 + 60))"
@@ -322,11 +329,10 @@ run_ledger_segment_cap_cases() {
   for k in 5 4 3 2 1; do
     e=$((now - k * 100))
     case "$k" in
-      5) printf 'v1\t%s\t%s\t%s\tfail\t%s\nv1\t%s\t%s\t%s\tfail\t%s\n' \
-           "$LEDGER_SHA_A" "$host" "$p" "$e" "$LEDGER_SHA_A" "$host" "$q" "$e" ;;
-      1) printf 'v1\t%s\t%s\t%s\tpass\t%s\n' "$LEDGER_SHA_A" "$host" "$p" "$e" ;;
-      *) printf 'v1\t%s\t%s\ttests/bin/filler.sh\tpass\t%s\n' "$LEDGER_SHA_A" "$host" "$e" ;;
-    esac > "$dir/$host-$e-9$k.seg"
+      5) ledger_rec "$LEDGER_SHA_A" "$host" "$p" fail "$e"; ledger_rec "$LEDGER_SHA_A" "$host" "$q" fail "$e" ;;
+      1) ledger_rec "$LEDGER_SHA_A" "$host" "$p" pass "$e" ;;
+      *) ledger_rec "$LEDGER_SHA_A" "$host" tests/bin/filler.sh pass "$e" ;;
+    esac > "$dir/v2.$host-$e-9$k.seg"
   done
   local r
   r="$(capped_lookup "$cache" "$repo" 3 "$LEDGER_SHA_A" "$p")"

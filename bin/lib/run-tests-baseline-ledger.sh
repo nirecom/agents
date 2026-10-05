@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Baseline result ledger for bin/run-tests-baseline (#2431). Source-only.
 # One append-only segment per process at
-#   $(run_all_cache_dir)/baseline/<repo_id>/<host>-<epoch>-<pid>.seg
-# with lines `v1\t<base-sha>\t<host>\t<rel-path>\t<fail|pass>\t<epoch>`.
+#   $(run_all_cache_dir)/baseline/<repo_id>/v2.<host>-<epoch>-<pid>.seg
+# with lines `v2\t<base-sha>\t<host>\t<rel-path>\t<fail|pass>\t<epoch>\t<os-attr>`.
+# The format sits in the file name so legacy segments are told apart unread (#2079 S7).
+# Time-limited carry-over of legacy segments lives in run-all-ledger-migrate.sh: every old
+# token on Windows, only a same-token format rewrite elsewhere.
 # Identity helpers are reused from the duration ledger; reads are capped and
 # corrupt lines skipped; a write failure only warns (the ledger is a cache).
 
@@ -15,7 +18,7 @@ esac
 # shellcheck source=bin/lib/run-all-durations.sh
 . "$RTB_LEDGER_LIB_DIR/run-all-durations.sh"
 
-RTB_LEDGER_SCHEMA="v1"
+RTB_LEDGER_SCHEMA="v2"
 RTB_LEDGER_RETENTION_DAYS=30
 RTB_LEDGER_MAX_SEGMENTS_READ=256
 RTB_LEDGER_MAX_RECORDS=60000
@@ -59,6 +62,13 @@ rtb_ledger_sweep() {
     return 0
 }
 
+# Time-limited #2079 hook: fold this repo's legacy segments in before any read or write.
+rtb_ledger_migrate() {
+    command -v run_all_ledger_migrate_baseline >/dev/null 2>&1 || return 0
+    run_all_ledger_migrate_baseline "$1"
+    return 0
+}
+
 # Idempotent per process; on failure leaves RTB_LEDGER_WRITE_OK=0 after one warning.
 rtb_ledger_writer_init() {
     local dir seg
@@ -71,7 +81,9 @@ rtb_ledger_writer_init() {
         RTB_LEDGER_SEGMENT="-"
         return 0
     fi
-    seg="$dir/$RUN_ALL_DUR_HOST_TOKEN-$(date +%s)-$$.seg"
+    rtb_ledger_migrate "$dir"
+    [ -n "$RUN_ALL_DUR_OS_ATTR" ] || RUN_ALL_DUR_OS_ATTR="$(run_all_os_attr)"
+    seg="$dir/$RTB_LEDGER_SCHEMA.$RUN_ALL_DUR_HOST_TOKEN-$(date +%s)-$$.seg"
     if ! : >>"$seg" 2>/dev/null; then
         rtb_ledger_warn "cannot write $seg; results not recorded"
         RTB_LEDGER_SEGMENT="-"
@@ -91,8 +103,8 @@ rtb_ledger_append() {
     rtb_ledger_valid_path "$rel" || { rtb_ledger_warn "bad path"; return 0; }
     rtb_ledger_writer_init
     [ "$RTB_LEDGER_WRITE_OK" -eq 1 ] || return 0
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$RTB_LEDGER_SCHEMA" "$sha" "$RUN_ALL_DUR_HOST_TOKEN" \
-        "$rel" "$res" "$(date +%s)" >>"$RTB_LEDGER_SEGMENT" 2>/dev/null \
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$RTB_LEDGER_SCHEMA" "$sha" "$RUN_ALL_DUR_HOST_TOKEN" \
+        "$rel" "$res" "$(date +%s)" "$RUN_ALL_DUR_OS_ATTR" >>"$RTB_LEDGER_SEGMENT" 2>/dev/null \
         || rtb_ledger_warn "append to $RTB_LEDGER_SEGMENT failed"
     return 0
 }
@@ -105,7 +117,8 @@ rtb_ledger_scan() {
     dir="$(rtb_ledger_dir)"
     [ -d "$dir" ] || return 0
     run_all_dur_host_token >/dev/null
-    for f in "$dir"/"$RUN_ALL_DUR_HOST_TOKEN"-*.seg; do
+    rtb_ledger_migrate "$dir"
+    for f in "$dir"/"$RTB_LEDGER_SCHEMA.$RUN_ALL_DUR_HOST_TOKEN"-*.seg; do
         [ -f "$f" ] || continue
         all+=("$f")
     done
@@ -117,11 +130,15 @@ rtb_ledger_scan() {
     [ "${#segs[@]}" -gt 0 ] || return 0
     LC_ALL=C awk -F '\t' -v HOST="$RUN_ALL_DUR_HOST_TOKEN" -v REL="$rel" -v SHA="$want_sha" \
         -v MIN="$min_epoch" -v MAXREC="$RTB_LEDGER_MAX_RECORDS" \
-        -v MAXLEN="$RTB_LEDGER_MAX_LINE_BYTES" -v SCHEMA="$RTB_LEDGER_SCHEMA" '
+        -v MAXLEN="$RTB_LEDGER_MAX_LINE_BYTES" -v SCHEMA="$RTB_LEDGER_SCHEMA" \
+        -v ATTRRE="$RUN_ALL_OS_ATTR_CLASS" '
 {
     if (++n > MAXREC) exit
-    if (length($0) > MAXLEN || NF != 6) next
+    if (length($0) > MAXLEN || NF != 7) next
     if ($1 != SCHEMA || $3 != HOST || $4 != REL) next
+    s = index($7, "/")
+    if (s < 2 || s > 33 || length($7) - s < 1 || length($7) - s > 64) next
+    if ($7 !~ ATTRRE) next
     if ($2 !~ /^[0-9a-f]+$/ || length($2) < 7 || length($2) > 64) next
     if ($5 != "fail" && $5 != "pass") next
     if ($6 !~ /^[0-9]+$/ || ($6 + 0) < (MIN + 0)) next

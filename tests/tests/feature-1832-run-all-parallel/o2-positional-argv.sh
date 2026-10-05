@@ -42,18 +42,18 @@ mkdir -p "$RUN_ALL_CACHE_DIR"
 
 # --- ambient sanitization (M-ambient), self-contained ------------------------
 
-# WHY: RUN_ALL_JOBS / RUN_ALL_DEADLINE / RUN_ALL_PROGRESS / RUN_ALL_REAP and
+# WHY: TEST_MAX_JOBS_PER_RUN / RUN_ALL_DEADLINE / RUN_ALL_PROGRESS / RUN_ALL_REAP and
 # FEATURE_644_PHASE each change what the runner does, so an ambient value in the
 # developer's shell could rewrite these verdicts. Every child goes through senv.
 
 # CAVEAT: GNU `env` stops parsing options at the first NAME=VALUE, so all the
 # `-u NAME` flags MUST precede any pass-through assignment. senv owns that order.
 senv() {
-    env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
-        -u FEATURE_644_PHASE "$@"
+    env -u TEST_MAX_JOBS_PER_RUN -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
+        -u FEATURE_644_PHASE -u TEST_MAX_JOBS_PER_HOST RUN_ALL_CONFIG_VAR_CMD=/nonexistent/get-config-var "$@"
 }
-AMBIENT_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
-unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
+unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 
 ROOT="$TMPD/fx"
 LOG="$TMPD/exec.log"
@@ -143,14 +143,14 @@ case_ambient_sanitized() {
     } > "$probe"
     want=""
     for v in $AMBIENT_VARS; do want="$want$v=<unset> "; done
-    got="$(RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
+    got="$(TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
         RUN_ALL_REAP=hostile FEATURE_644_PHASE=9 senv bash "$probe" 2>/dev/null)"
     assert_eq "o2/ambient/senv-strips-every-hostile-value" "$want" "$got"
 
     # And the verdict itself must not move under a hostile ambient environment.
     local clean hostile
     drive '["tests/multi-a.sh"]'; clean="$(cat "$LOG")"
-    RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 FEATURE_644_PHASE=9 \
+    TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 FEATURE_644_PHASE=9 \
         RUN_ALL_PROGRESS=hostile RUN_ALL_REAP=hostile drive '["tests/multi-a.sh"]'
     hostile="$(cat "$LOG")"
     assert_eq "o2/ambient/verdict-unchanged-under-hostile-ambient" "$clean" "$hostile"

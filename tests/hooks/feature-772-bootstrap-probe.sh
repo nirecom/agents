@@ -70,7 +70,7 @@ setup_mock_git() {
     MOCK_GIT_SH="$MOCK_DIR/git.sh"
     : > "$MOCK_GIT_SH"
     chmod +x "$MOCK_GIT_SH"
-    if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]] || [ -n "${OS:-}" ] && [ "${OS:-}" = "Windows_NT" ]; then
+    if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]] || [[ "${OS:-}" = "Windows_NT" ]]; then
         MOCK_GIT="$MOCK_DIR/git.cmd"
         # Resolve the .sh path to Windows native form (c:\... ) for cmd to pass to bash.
         local sh_win

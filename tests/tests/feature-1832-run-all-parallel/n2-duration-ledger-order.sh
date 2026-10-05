@@ -239,21 +239,24 @@ FX_LEDGER_KEEP=0
 # ===========================================================================
 # N17 — a broken ledger must not cost the cached parallelism
 # ===========================================================================
+# #2079: the record is v2 (os, max_jobs_per_host) and only the lane side reads it, so the
+# measured cap is observed through the plan note (`plan: ... max jobs per host 6, source measured`).
 CONF="$FX_CACHE_DIR/parallelism.conf"
-HOST=""; BUCKET=""
+HOST=""; OS_ATTR=""
 if command -v run_all_host_id >/dev/null 2>&1; then
     HOST="$(run_all_host_id)"
-    BUCKET="$(run_all_corpus_bucket "$(fx_tests_dir "$S")")"
+    OS_ATTR="$(run_all_os_attr 2>/dev/null || true)"
 fi
 {
-    printf 'schema=1\n'
+    printf 'schema=2\n'
     printf 'host_id=%s\n' "$HOST"
-    printf 'count_bucket=%s\n' "$BUCKET"
-    printf 'jobs=6\n'
+    printf 'os=%s\n' "$OS_ATTR"
+    printf 'max_jobs_per_host=6\n'
     printf 'measured_at=2026-01-01T00:00:00Z\n'
     printf 'sample_size=24\n'
     printf 'repeat=3\n'
 } > "$CONF"
+cp "$FX_REPO_ROOT/bin/lib/test-host-lanes.sh" "$S/bin/lib/test-host-lanes.sh" 2>/dev/null || true
 
 export RUN_ALL_DURATIONS_LIB="$FX_TMP_ROOT/no-such-durations-lib.sh"
 fx_exec "$S" 60 "$S_OUT" "$S_ERR" --print-plan --all
@@ -261,16 +264,16 @@ RC=$?
 unset RUN_ALL_DURATIONS_LIB
 
 CACHED=0; DEGRADED=0
-grep -qE '^\[run-all\] parallelism: -j [0-9]+ \(calibrated ' "$S_ERR" && CACHED=1
+grep -qE '^(\[run-all\] )?plan: .*max jobs per host 6, source measured' "$S_ERR" && CACHED=1
 grep -q 'parallelism cache' "$S_ERR" && DEGRADED=1
 if [ -z "$HOST" ]; then
     fx_fail "N17. cannot build a valid parallelism.conf: run_all_host_id unavailable from $PAR_LIB"
 elif [ "$RC" -eq 0 ] && [ "$CACHED" = "1" ] && [ "$DEGRADED" = "0" ]; then
-    fx_pass "N17. a missing ledger library still reports the cached -j, with no cache-missing degradation"
+    fx_pass "N17. a missing ledger library still reports the measured max jobs per host, with no cache degradation"
 else
-    fx_fail "N17. want exit 0 with 'parallelism: -j N (calibrated ...)' and no 'parallelism cache' line, got exit $RC cached=$CACHED degraded=$DEGRADED"
+    fx_fail "N17. want exit 0 with 'plan: ... max jobs per host 6, source measured' and no 'parallelism cache' line, got exit $RC measured=$CACHED degraded=$DEGRADED os='$OS_ATTR'"
     fx_show_tail "$S_ERR" 6
 fi
-rm -f "$CONF" 2>/dev/null || true
+rm -f "$CONF" "$S/bin/lib/test-host-lanes.sh" 2>/dev/null || true
 
 fx_finish
