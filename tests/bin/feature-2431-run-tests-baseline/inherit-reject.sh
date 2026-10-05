@@ -94,7 +94,7 @@ run_ledger_inherit_reject_cases() {
       [ -n "$seg" ] || continue
       dir="$(dirname "$seg")"; base="$(basename "$seg")"
       awk -F '\t' 'BEGIN { OFS = "\t" } { $3 = "otherhost9"; print }' "$seg" \
-        > "$dir/otherhost9-${base#*-}"
+        > "$dir/v2.otherhost9-${base#*-}"
       rm -f "$seg"
       rewritten=$((rewritten + 1))
     done < <(find "$cache/baseline" -path '*/worktrees' -prune -o -type f -name '*.seg' -print 2>/dev/null)

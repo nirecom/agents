@@ -8,8 +8,8 @@
 # at the requested width. Dummies stamp a lock-protected transition log so the
 # EXACT peak is pinned; each row also names its own upper bound.
 
-# RED-FIRST: `-j` / `-j auto` and the parallel dispatcher don't exist yet, so
-# `-j N --all` currently parses/executes/reports nothing.
+# #2079: the per-run width resolves `-j` > TEST_MAX_JOBS_PER_RUN > .env > default 4,
+# and the automatic width never reads the measured record (that is the per-host cap).
 
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -18,7 +18,7 @@ fx_init "m-peak-concurrency"
 
 LIB_REL="bin/lib/run-all-parallelism.sh"
 LIB="$FX_REPO_ROOT/$LIB_REL"
-FALLBACK_JOBS=4
+DEFAULT_MAX_JOBS_PER_RUN=4
 DUMMY_SLEEP=2
 CAL_AT="2026-01-02T03:04:05Z"
 
@@ -44,23 +44,31 @@ build_root() {
     echo "$root"
 }
 
-# write_cache <root> <ndummies> <jobs> — a cache the library would call valid.
-# Returns 1 when the library is absent, so the caller can fence the row.
-write_cache() {
-    local root="$1" n="$2" jobs="$3" host bucket
+# write_record <max-jobs-per-host> — a v2 record the reader would call valid for this host.
+# Returns 1 when the library cannot name this host, so the caller can fence the row.
+write_record() {
+    local cap="$1" host os
     [ -f "$LIB" ] || return 1
     host="$(lib_eval 'run_all_host_id')"
-    bucket="$(TESTS_DIR="$(fx_tests_dir "$root")" lib_eval "run_all_count_bucket $n")"
-    [ -n "$host" ] && [ -n "$bucket" ] || return 1
+    os="$(lib_eval 'run_all_os_attr')"
+    [ -n "$host" ] || return 1
     {
-        printf 'schema=%s\n' "$(lib_eval 'printf "%s" "${RUN_ALL_CACHE_SCHEMA:-1}"')"
+        printf 'schema=2\n'
         printf 'host_id=%s\n' "$host"
-        printf 'count_bucket=%s\n' "$bucket"
-        printf 'jobs=%s\n' "$jobs"
+        printf 'os=%s\n' "$os"
+        printf 'max_jobs_per_host=%s\n' "$cap"
         printf 'measured_at=%s\n' "$CAL_AT"
         printf 'sample_size=24\nrepeat=3\n'
     } > "$FX_CACHE_DIR/parallelism.conf"
     return 0
+}
+
+# dotenv_stub <value> — a RUN_ALL_CONFIG_VAR_CMD that answers TEST_MAX_JOBS_PER_RUN only.
+dotenv_stub() {
+    local f="$FX_TMP_ROOT/config-var-stub-$1.sh"
+    printf '#!/bin/sh\nif [ "${1:-}" = TEST_MAX_JOBS_PER_RUN ]; then printf "%%s\\n" "%s"; fi\nexit 0\n' "$1" > "$f"
+    chmod +x "$f"
+    printf '%s' "$f"
 }
 
 # peak_case <name> <ndummies> <want-peak> <envspec> <args> <setup>
@@ -70,8 +78,9 @@ peak_case() {
     root="$(build_root "$n")"
     rm -f "$FX_CACHE_DIR/parallelism.conf"
 
-    if [ "$setup" = "cache" ] && ! write_cache "$root" "$n" "$want"; then
-        fx_fail "M-$name. cannot build a valid jobs=$want cache: implementation missing: $LIB_REL"
+    # `record2`: a valid measured record of 2 that the automatic width must NOT adopt.
+    if [ "$setup" = "record2" ] && ! write_record 2; then
+        fx_fail "M-$name. cannot build a valid v2 record: run_all_host_id unavailable from $LIB_REL"
         fx_fail "M-$name-bound. upper bound unverifiable for the same reason"
         return 0
     fi
@@ -103,74 +112,73 @@ while IFS='|' read -r name n want envspec args setup; do
     peak_case "$(trim "$name")" "$(trim "$n")" "$(trim "$want")" \
         "$(trim "$envspec")" "$(trim "$args")" "$(trim "$setup")"
 done <<'TABLE'
-j1        | 4 | 1 |                 | -j 1 --all    | none
-j2        | 6 | 2 |                 | -j 2 --all    | none
-j4        | 8 | 4 |                 | -j 4 --all    | none
-env3      | 6 | 3 | RUN_ALL_JOBS=3  | --all         | none
-nolib4    | 8 | 4 |                 | -j auto --all | nolib
-cache2    | 6 | 2 |                 | -j auto --all | cache
-defnolib4 | 8 | 4 |                 | --all         | nolib
+j1        | 4 | 1 |                          | -j 1 --all    | none
+j2        | 6 | 2 |                          | -j 2 --all    | none
+j4        | 8 | 4 |                          | -j 4 --all    | none
+env3      | 6 | 3 | TEST_MAX_JOBS_PER_RUN=3  | --all         | none
+nolib4    | 8 | 4 |                          | -j auto --all | nolib
+record2   | 8 | 4 |                          | -j auto --all | record2
+defnolib4 | 8 | 4 |                          | --all         | nolib
 TABLE
 
-fx_note "the nolib rows pin RUN_ALL_FALLBACK_JOBS=$FALLBACK_JOBS as the width used when $LIB_REL cannot be read"
-fx_note "defnolib4 is the -j-omitted default path with no library: it must resolve a width on its own, not run serially"
+fx_note "the nolib rows pin the built-in max jobs per run ($DEFAULT_MAX_JOBS_PER_RUN) used when $LIB_REL cannot be read"
+fx_note "record2 pins that -j auto ignores a measured record of 2 and runs at the default $DEFAULT_MAX_JOBS_PER_RUN"
 
 # ==========================================================================
-# M-default. The real default path: valid cache, no -j in argv, RUN_ALL_JOBS
-# unset. Two distinct cached widths are measured so no hardcoded constant passes.
+# M-default. The real default path with -j omitted: the env layer and the .env
+# layer each set the width. Two distinct widths are measured so no constant passes.
 # ==========================================================================
 
-# Precondition: the env layer really does remove RUN_ALL_JOBS from the child.
+# Precondition: the env layer really does remove TEST_MAX_JOBS_PER_RUN from the child.
 CTL="$(fx_control_args)"
 case "$CTL" in
-    *"-u RUN_ALL_JOBS"*) case "$CTL" in
-            *"RUN_ALL_JOBS="*) fx_fail "M-default-pre. RUN_ALL_JOBS is still passed through to the child: [$CTL]" ;;
-            *) fx_pass "M-default-pre. the child env layer removes RUN_ALL_JOBS outright (-u), so the default path is genuinely unset" ;;
+    *"-u TEST_MAX_JOBS_PER_RUN"*) case "$CTL" in
+            *"TEST_MAX_JOBS_PER_RUN="*) fx_fail "M-default-pre. TEST_MAX_JOBS_PER_RUN is still passed through to the child: [$CTL]" ;;
+            *) fx_pass "M-default-pre. the child env layer removes TEST_MAX_JOBS_PER_RUN outright (-u), so the default path is genuinely unset" ;;
         esac ;;
-    *) fx_fail "M-default-pre. want '-u RUN_ALL_JOBS' in the child env layer, got [$CTL]" ;;
+    *) fx_fail "M-default-pre. want '-u TEST_MAX_JOBS_PER_RUN' in the child env layer, got [$CTL]" ;;
 esac
 
 DEF_PEAKS=""
 
-# default_case <cached-jobs> <ndummies>
+# default_case <layer:env|dotenv> <width> <ndummies> — a measured record of 5 is always
+# present, so a run that adopted the record instead of the layer cannot pass.
 default_case() {
-    local jobs="$1" n="$2" root out err rc=0 peak starts exec_n
+    local layer="$1" jobs="$2" n="$3" root out err rc=0 peak starts exec_n spec
     root="$(build_root "$n")"
     rm -f "$FX_CACHE_DIR/parallelism.conf"
-    if ! write_cache "$root" "$n" "$jobs"; then
-        fx_fail "M-default$jobs. cannot build a valid jobs=$jobs cache: implementation missing: $LIB_REL"
-        fx_fail "M-default$jobs-notice. the calibrated-width notice is unverifiable for the same reason"
-        DEF_PEAKS="$DEF_PEAKS -"
-        return 0
-    fi
-    out="$FX_TMP_ROOT/default$jobs.out"; err="$FX_TMP_ROOT/default$jobs.err"
-    fx_exec "$root" 120 "$out" "$err" --all || rc=$?
+    write_record 5 || true
+    out="$FX_TMP_ROOT/default-$layer.out"; err="$FX_TMP_ROOT/default-$layer.err"
+    if [ "$layer" = "env" ]; then spec="TEST_MAX_JOBS_PER_RUN=$jobs"
+    else spec="RUN_ALL_CONFIG_VAR_CMD=$(dotenv_stub "$jobs")"; fi
+    eval "$spec fx_exec \"\$root\" 120 \"\$out\" \"\$err\" --all" || rc=$?
     peak="$(fx_peak_of "$(fx_peak_log "$root")")"
     starts="$(fx_peak_starts "$(fx_peak_log "$root")")"
     exec_n="$(fx_contract_field "$out" EXECUTED)"
     DEF_PEAKS="$DEF_PEAKS $peak"
 
     if [ "$exec_n" = "$n" ] && [ "$starts" = "$n" ] && [ "$peak" = "$jobs" ]; then
-        fx_pass "M-default$jobs. no -j, RUN_ALL_JOBS unset, cache says jobs=$jobs: EXECUTED=$n and observed peak is exactly $jobs"
+        fx_pass "M-default-$layer. no -j, the $layer layer says $jobs: EXECUTED=$n and observed peak is exactly $jobs"
     else
-        fx_fail "M-default$jobs. want EXECUTED=$n with all $n dummies entered and peak exactly $jobs from the cache alone, got EXECUTED=${exec_n:-none} entered=$starts peak=$peak (exit $rc)"
+        fx_fail "M-default-$layer. want EXECUTED=$n with all $n dummies entered and peak exactly $jobs from the $layer layer, got EXECUTED=${exec_n:-none} entered=$starts peak=$peak (exit $rc)"
     fi
-
-    if [ "$exec_n" = "$n" ] && grep -qF "[run-all] parallelism: -j $jobs (calibrated $CAL_AT)" "$err"; then
-        fx_pass "M-default$jobs-notice. EXECUTED=$n and stderr states the cached width it adopted"
-    else
-        fx_fail "M-default$jobs-notice. want EXECUTED=$n and stderr '[run-all] parallelism: -j $jobs (calibrated $CAL_AT)', got EXECUTED=${exec_n:-none}"
+    if [ "$layer" = "dotenv" ]; then
+        if [ "$exec_n" = "$n" ] && grep -qF "max jobs per run: $jobs (.env)" "$err"; then
+            fx_pass "M-default-dotenv-notice. EXECUTED=$n and stderr states the .env width it adopted"
+        else
+            fx_fail "M-default-dotenv-notice. want EXECUTED=$n and stderr 'max jobs per run: $jobs (.env)', got EXECUTED=${exec_n:-none}"
+        fi
     fi
 }
 
-default_case 2 6
-default_case 3 6
+default_case dotenv 2 6
+default_case env 3 6
 
 DEF_PEAKS="$(printf '%s' "$DEF_PEAKS" | sed 's/^[[:blank:]]*//')"
 if [ "$DEF_PEAKS" = "2 3" ]; then
-    fx_pass "M-default-varies. the two cached widths produced two different peaks ($DEF_PEAKS) — no constant satisfies both"
+    fx_pass "M-default-varies. the .env and env layers produced two different peaks ($DEF_PEAKS) — no constant satisfies both"
 else
-    fx_fail "M-default-varies. want peaks '2 3' from caches jobs=2 and jobs=3 with -j omitted, got '$DEF_PEAKS'"
+    fx_fail "M-default-varies. want peaks '2 3' from .env=2 and env=3 with -j omitted, got '$DEF_PEAKS'"
 fi
 
 [ "$FX_ERRORS" -eq 0 ] || fx_show_tail "$FX_TMP_ROOT/j4.err" 10

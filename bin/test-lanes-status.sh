@@ -2,7 +2,8 @@
 # bin/test-lanes-status.sh — list the host-wide test lanes (#2455) and who holds them.
 # Read-only: never reclaims, never creates slots/. Design: docs/architecture/claude-code/test-host-lanes.md.
 # Usage: bash bin/test-lanes-status.sh [-h|--help]
-# Output: `budget=<N> source=<override|calibrated|fallback>`, then one
+# Output: `max_jobs_per_host=<N> source=<env|dotenv|measured|default> [record=<reason>]
+#   [measured_on=<os> now=<os>]`, then one
 #   `lane.<i><TAB>kind<TAB>pid<TAB>env<TAB>age_s<TAB>state` row per lane, or `no test lanes held`.
 # state: alive | stale-dead-pid | stale-ttl | foreign | ownerless.
 # Exit: 0 = listed, 2 = usage error.

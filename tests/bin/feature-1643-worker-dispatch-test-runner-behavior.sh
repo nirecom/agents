@@ -54,11 +54,11 @@ run_with_timeout() {
 # `-u NAME` flag must precede every pass-through assignment. The array below is
 # always splatted FIRST for exactly that reason; senv() is the same rule for
 # call sites that do not already build an `env` invocation of their own.
-AMBIENT_ENV_FLAGS=(-u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS
-                   -u RUN_ALL_REAP -u FEATURE_644_PHASE)
-AMBIENT_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
+AMBIENT_ENV_FLAGS=(-u TEST_MAX_JOBS_PER_RUN -u TEST_MAX_JOBS_PER_HOST -u RUN_ALL_DEADLINE
+                   -u RUN_ALL_PROGRESS -u RUN_ALL_REAP -u FEATURE_644_PHASE)
+AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN TEST_MAX_JOBS_PER_HOST RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
 senv() { env "${AMBIENT_ENV_FLAGS[@]}" "$@"; }
-unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+unset TEST_MAX_JOBS_PER_RUN TEST_MAX_JOBS_PER_HOST RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 
 if [ ! -f "$DISPATCH_JS" ] || [ ! -f "$PRELOAD" ]; then
     fail "0: fixture prerequisites missing" "dispatcher=$DISPATCH_JS stub=$PRELOAD"
@@ -375,7 +375,8 @@ group_ambient_sanitized() {
             "$AMBIENT_VARS"
     } > "$probe"
 
-    want="RUN_ALL_JOBS=[<unset>]
+    want="TEST_MAX_JOBS_PER_RUN=[<unset>]
+TEST_MAX_JOBS_PER_HOST=[<unset>]
 RUN_ALL_DEADLINE=[<unset>]
 RUN_ALL_PROGRESS=[<unset>]
 RUN_ALL_REAP=[<unset>]
@@ -383,9 +384,9 @@ FEATURE_644_PHASE=[<unset>]
 WORKFLOW_PLANS_DIR=[$PLANS]"
     # Same funnel dispatch_tr uses, probe substituted for node: every `-u` flag
     # precedes every NAME=VALUE, because GNU env stops parsing options at the
-    # first assignment and would otherwise treat `-u RUN_ALL_JOBS` as a command.
+    # first assignment and would otherwise treat `-u TEST_MAX_JOBS_PER_RUN` as a command.
     out="$(
-        export RUN_ALL_JOBS=99 RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=verbose \
+        export TEST_MAX_JOBS_PER_RUN=99 TEST_MAX_JOBS_PER_HOST=99 RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=verbose \
                RUN_ALL_REAP=off FEATURE_644_PHASE=6
         run_with_timeout 30 env "${AMBIENT_ENV_FLAGS[@]}" "WORKFLOW_PLANS_DIR=$PLANS" \
             bash "$probe" 2>&1
@@ -393,13 +394,13 @@ WORKFLOW_PLANS_DIR=[$PLANS]"
     assert_eq "ambient/hostile-values-never-reach-the-child" "$want" "$out"
 
     # And the verdict itself is indifferent to them.
-    export RUN_ALL_JOBS=99 RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=verbose \
-           RUN_ALL_REAP=off FEATURE_644_PHASE=6
+    export TEST_MAX_JOBS_PER_RUN=99 TEST_MAX_JOBS_PER_HOST=99 RUN_ALL_DEADLINE=1 \
+           RUN_ALL_PROGRESS=verbose RUN_ALL_REAP=off FEATURE_644_PHASE=6
     set_run 0 "Results: PASS=3  FAIL=0  SKIP=1"
     dispatch_tr "$MAIN" "$PAYLOAD"
     assert_eq "ambient/verdict-unchanged-under-hostile-ambient" \
         "pass|PASS=3 FAIL=0 SKIP=1" "$(field_of status)|$(field_of summary)"
-    unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+    unset TEST_MAX_JOBS_PER_RUN TEST_MAX_JOBS_PER_HOST RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 }
 
 # ===========================================================================

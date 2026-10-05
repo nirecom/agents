@@ -20,7 +20,7 @@ cc_repo() {
 # cc_run <repo> <cache> <mode:on|off> <args...> — run_ft from the neutral dir.
 cc_run() {
     local repo="$1" cache="$2" mode="$3"; shift 3
-    local -a extra=("RUN_ALL_CACHE_DIR=$cache" TEST_LANES_BUDGET=4)
+    local -a extra=("RUN_ALL_CACHE_DIR=$cache" TEST_MAX_JOBS_PER_HOST=4)
     [ "$mode" = "off" ] && extra+=(FIND_TESTS_CORPUS_CACHE=off)
     run_ft "$NEUTRAL_DIR" "${extra[@]}" -- --root "$repo" "$@"
 }
@@ -56,7 +56,7 @@ else
     fail "C1 cache file missing or malformed: [$_files]"
 fi
 cc_run "$CC_R" "$TMPDIR_BASE/c1-off" off "${QS[@]}"; C1_OFF="$OUT"
-fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C1C" TEST_LANES_BUDGET=4 -- --root "$CC_R" "${QS[@]}"
+fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C1C" TEST_MAX_JOBS_PER_HOST=4 -- --root "$CC_R" "${QS[@]}"
 assert_eq "C1 the second run is a hit (awk launched 0 times)" "0" "$(fc_count awk)"
 assert_eq "C1 the hit run exits 0" "0" "$RC"
 if [ -n "$C1_OFF" ] && [ "$OUT" = "$C1_OFF" ]; then
@@ -118,10 +118,10 @@ for _b in test-route-destination.sh test-dup-group.sh test-frontmatter-fix.sh te
     cp "$AGENTS_ROOT/bin/lib/$_b" "$C3L/$_b" 2>/dev/null || true
 done
 C3C="$TMPDIR_BASE/c3-cache"
-run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3C" TEST_LANES_BUDGET=4 "TCC_LOGIC_DIR=$C3L" -- --root "$CC_R" "${QS[@]}"
+run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3C" TEST_MAX_JOBS_PER_HOST=4 "TCC_LOGIC_DIR=$C3L" -- --root "$CC_R" "${QS[@]}"
 _d1="$(cc_ndigests "$C3C")"
 printf '#\n' >> "$C3L/test-corpus-cache.sh"
-run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3C" TEST_LANES_BUDGET=4 "TCC_LOGIC_DIR=$C3L" -- --root "$CC_R" "${QS[@]}"
+run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3C" TEST_MAX_JOBS_PER_HOST=4 "TCC_LOGIC_DIR=$C3L" -- --root "$CC_R" "${QS[@]}"
 _d2="$(cc_ndigests "$C3C")"
 if [ "$_d1" = "1" ] && [ "$_d2" = "2" ]; then
     pass "C3 a one-byte change to a TCC_LOGIC_DIR lib changes the digest"
@@ -215,7 +215,7 @@ if [ -n "$C5_NAME" ]; then
         else
             fail "C5 $_kind: no valid cache file after the run [$_last]"
         fi
-        fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C5C" TEST_LANES_BUDGET=4 -- --root "$CC_R" "${QS[@]}"
+        fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C5C" TEST_MAX_JOBS_PER_HOST=4 -- --root "$CC_R" "${QS[@]}"
         assert_eq "C5 $_kind: the next run is a hit (awk 0)" "0" "$(fc_count awk)"
         if [ "$RC" -eq 0 ] && [ "$OUT" = "$C5_OFF" ]; then
             pass "C5 $_kind: the hit run exits 0 with the uncached answer"
@@ -264,7 +264,7 @@ git -C "$C8R" worktree add -q "$TMPDIR_BASE/c8-wt1" -b c8w1 >/dev/null 2>&1
 git -C "$C8R" worktree add -q "$TMPDIR_BASE/c8-wt2" -b c8w2 >/dev/null 2>&1
 C8C="$TMPDIR_BASE/c8-cache"
 cc_run "$TMPDIR_BASE/c8-wt1" "$C8C" on "${QS[@]}"; _o1="$OUT"
-fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C8C" TEST_LANES_BUDGET=4 -- --root "$TMPDIR_BASE/c8-wt2" "${QS[@]}"
+fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C8C" TEST_MAX_JOBS_PER_HOST=4 -- --root "$TMPDIR_BASE/c8-wt2" "${QS[@]}"
 if [ "$RC" -eq 0 ] && [ "$(cc_ndigests "$C8C")" = "1" ] && [ "$(fc_count awk)" = "0" ] && [ "$OUT" = "$_o1" ]; then
     pass "C8 the second worktree reuses the first worktree's digest and hits"
 else
@@ -303,7 +303,7 @@ case_ran C9
 # ── C10 a relative RUN_ALL_CACHE_DIR resolves against the caller's cwd ──────
 C10CWD="$TMPDIR_BASE/c10-cwd"
 mkdir -p "$C10CWD"
-run_ft "$C10CWD" RUN_ALL_CACHE_DIR=rel TEST_LANES_BUDGET=4 -- --root "$CC_R" "${QS[@]}"
+run_ft "$C10CWD" RUN_ALL_CACHE_DIR=rel TEST_MAX_JOBS_PER_HOST=4 -- --root "$CC_R" "${QS[@]}"
 if [ "$RC" -eq 0 ] && [ -d "$C10CWD/rel/corpus" ] && [ -d "$C10CWD/rel/slots" ] && [ ! -e "$CC_R/rel" ]; then
     pass "C10 corpus/ and slots/ land under <caller cwd>/rel, not under --root"
 else

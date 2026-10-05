@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# d-jobs-surface.sh — the -j / --jobs / RUN_ALL_JOBS / --deadline parser surface.
+# d-jobs-surface.sh — the -j / --jobs / TEST_MAX_JOBS_PER_RUN / --deadline parser surface.
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, scope:issue-specific
 
-# WHY (CPR-WPH): every spelling of -j/--jobs/RUN_ALL_JOBS must mean the same thing, CLI beats env,
+# WHY (CPR-WPH): every spelling of -j/--jobs/TEST_MAX_JOBS_PER_RUN must mean the same thing, CLI beats env,
 # and a typo is refused loudly (exit 2, no contract line) — a rejected run that still printed a contract could claim a verdict it never earned.
 
 # Named table of parser cases (skills/_shared/test-design/parser-regex-tests.md): CLI/env spellings, unknown options, empty values, numeric limits.
@@ -29,6 +29,23 @@ OK_EXEC=3
 OK_RC=1
 
 trim() { printf '%s' "$1" | sed 's/^[[:blank:]]*//; s/[[:blank:]]*$//'; }
+
+# dotenv_stub <tag> <value> — a RUN_ALL_CONFIG_VAR_CMD stand-in (#2079) that answers
+# TEST_MAX_JOBS_PER_RUN with <value> and every other name with nothing.
+dotenv_stub() {
+    local f="$FX_TMP_ROOT/config-var-$1.sh"
+    printf '#!/bin/sh\nif [ "${1:-}" = TEST_MAX_JOBS_PER_RUN ]; then printf "%%s\\n" "%s"; fi\nexit 0\n' "$2" > "$f"
+    chmod +x "$f"
+    printf '%s' "$f"
+}
+DOT_2="$(dotenv_stub two 2)"
+DOT_1024="$(dotenv_stub max 1024)"
+DOT_AUTO="$(dotenv_stub auto auto)"
+DOT_EMPTY="$(dotenv_stub empty '')"
+DOT_0="$(dotenv_stub zero 0)"
+DOT_1025="$(dotenv_stub over 1025)"
+DOT_WORD="$(dotenv_stub word abc)"
+DOT_NEG="$(dotenv_stub neg -2)"
 
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -64,9 +81,9 @@ cli-jobs-space      |                    | --jobs 4 --all            | ok
 cli-jobs-equals     |                    | --jobs=4 --all            | ok
 cli-j-one           |                    | -j 1 --all                | ok
 cli-j-auto          |                    | -j auto --all             | ok
-env-jobs-4          | RUN_ALL_JOBS=4     | --all                     | ok
-env-jobs-1          | RUN_ALL_JOBS=1     | --all                     | ok
-env-jobs-auto       | RUN_ALL_JOBS=auto  | --all                     | ok
+env-jobs-4          | TEST_MAX_JOBS_PER_RUN=4     | --all                     | ok
+env-jobs-1          | TEST_MAX_JOBS_PER_RUN=1     | --all                     | ok
+env-jobs-auto       | TEST_MAX_JOBS_PER_RUN=auto  | --all                     | ok
 # --- deadline: accepted spellings, CLI then environment ---
 cli-deadline-space  |                    | --deadline 86400 -j 4 --all  | ok
 cli-deadline-equals |                    | --deadline=86400 -j 4 --all  | ok
@@ -74,8 +91,8 @@ env-deadline        | RUN_ALL_DEADLINE=86400 | -j 4 --all            | ok
 # --- numeric limits, both sides ---
 jobs-1024-accepted  |                    | -j 1024 --all             | ok
 jobs-1025-refused   |                    | -j 1025 --all             | refused
-env-jobs-1024-ok    | RUN_ALL_JOBS=1024  | --all                     | ok
-env-jobs-1025-bad   | RUN_ALL_JOBS=1025  | --all                     | refused
+env-jobs-1024-ok    | TEST_MAX_JOBS_PER_RUN=1024  | --all                     | ok
+env-jobs-1025-bad   | TEST_MAX_JOBS_PER_RUN=1025  | --all                     | refused
 # --- ill-formed jobs values ---
 jobs-zero           |                    | -j 0 --all                | refused
 jobs-negative       |                    | -j -3 --all               | refused
@@ -85,10 +102,21 @@ jobs-float          |                    | -j 2.5 --all              | refused
 jobs-no-value       |                    | -j                        | refused
 jobs-empty          |                    | -j '' --all               | refused
 jobs-equals-empty   |                    | --jobs= --all             | refused
-env-jobs-empty      | RUN_ALL_JOBS=      | --all                     | refused
-env-jobs-zero       | RUN_ALL_JOBS=0     | --all                     | refused
-env-jobs-word       | RUN_ALL_JOBS=abc   | --all                     | refused
-env-jobs-negative   | RUN_ALL_JOBS=-2    | --all                     | refused
+env-jobs-empty-ok   | TEST_MAX_JOBS_PER_RUN=      | --all                     | ok
+env-jobs-zero       | TEST_MAX_JOBS_PER_RUN=0     | --all                     | refused
+env-jobs-word       | TEST_MAX_JOBS_PER_RUN=abc   | --all                     | refused
+env-jobs-negative   | TEST_MAX_JOBS_PER_RUN=-2    | --all                     | refused
+# --- .env layer (#2079): valid / pass-through values accepted, ill-formed values refused ---
+dotenv-2            | RUN_ALL_CONFIG_VAR_CMD=$DOT_2     | --all      | ok
+dotenv-1024         | RUN_ALL_CONFIG_VAR_CMD=$DOT_1024  | --all      | ok
+dotenv-auto         | RUN_ALL_CONFIG_VAR_CMD=$DOT_AUTO  | --all      | ok
+dotenv-empty        | RUN_ALL_CONFIG_VAR_CMD=$DOT_EMPTY | --all      | ok
+dotenv-missing-cmd  | RUN_ALL_CONFIG_VAR_CMD=$FX_TMP_ROOT/absent-get-config-var | --all | ok
+dotenv-zero         | RUN_ALL_CONFIG_VAR_CMD=$DOT_0     | --all      | refused
+dotenv-1025         | RUN_ALL_CONFIG_VAR_CMD=$DOT_1025  | --all      | refused
+dotenv-word         | RUN_ALL_CONFIG_VAR_CMD=$DOT_WORD  | --all      | refused
+dotenv-negative     | RUN_ALL_CONFIG_VAR_CMD=$DOT_NEG   | --all      | refused
+env-auto-dotenv-bad | TEST_MAX_JOBS_PER_RUN=auto RUN_ALL_CONFIG_VAR_CMD=$DOT_WORD | --all | refused
 # --- ill-formed deadline values ---
 deadline-zero       |                    | --deadline 0 --all        | refused
 deadline-word       |                    | --deadline abc --all      | refused
@@ -113,12 +141,12 @@ fx_add_dummy "$SLOW" s2 --sleep 2
 fx_add_dummy "$SLOW" s3 --sleep 2
 fx_add_dummy "$SLOW" s4 --sleep 2
 T0="$(fx_now_ms)"
-RUN_ALL_JOBS=1 fx_exec "$SLOW" 60 "$FX_TMP_ROOT/prec.out" "$FX_TMP_ROOT/prec.err" -j 4 --all
+TEST_MAX_JOBS_PER_RUN=1 fx_exec "$SLOW" 60 "$FX_TMP_ROOT/prec.out" "$FX_TMP_ROOT/prec.err" -j 4 --all
 T1="$(fx_now_ms)"
 PREC_MS=$((T1 - T0))
 PREC_EXEC="$(fx_contract_field "$FX_TMP_ROOT/prec.out" EXECUTED)"
 if [ "$PREC_EXEC" = "4" ] && [ "$PREC_MS" -lt 6000 ]; then
-    fx_pass "D2. CLI -j 4 overrides RUN_ALL_JOBS=1: four 2s tests finished in ${PREC_MS}ms"
+    fx_pass "D2. CLI -j 4 overrides TEST_MAX_JOBS_PER_RUN=1: four 2s tests finished in ${PREC_MS}ms"
 else
     fx_fail "D2. want EXECUTED=4 within 6000ms (CLI beats env), got EXECUTED=$PREC_EXEC in ${PREC_MS}ms"
 fi
@@ -130,7 +158,7 @@ for tag in cli-jobs-space cli-jobs-equals env-jobs-4; do
 done
 BASE_EXEC="$(fx_contract_field "$FX_TMP_ROOT/row-cli-j-space.out" EXECUTED)"
 if [ "$BASE_EXEC" = "$OK_EXEC" ] && [ "$IDENT" -eq 1 ]; then
-    fx_pass "D3. -j 4 / --jobs 4 / --jobs=4 / RUN_ALL_JOBS=4 run the same $OK_EXEC tests with identical stdout"
+    fx_pass "D3. -j 4 / --jobs 4 / --jobs=4 / TEST_MAX_JOBS_PER_RUN=4 run the same $OK_EXEC tests with identical stdout"
 else
     fx_fail "D3. want EXECUTED=$OK_EXEC and byte-identical stdout across the four width-4 spellings, got EXECUTED=$BASE_EXEC identical=$IDENT"
 fi
@@ -223,6 +251,50 @@ if [ "$ON_EXEC" = "3" ] && [ "$ON_ERR_N" = "$P_ERR_N" ] && cmp -s "$PROG_OUT" "$
     fx_pass "D6e. EXECUTED=3: explicit RUN_ALL_PROGRESS=on is the default ($ON_ERR_N progress lines, identical stdout)"
 else
     fx_fail "D6e. want the explicit 'on' spelling to equal the default, got EXECUTED=$ON_EXEC progress=$ON_ERR_N vs default $P_ERR_N"
+fi
+
+# --- D7 (#2079): layer precedence -j > env > .env > default 4 ----------------
+# Observed through the progress line's `(j=<n>`, which caps at the test count, so
+# the fixture holds 6 tests: every width under test (2..5) stays visible.
+WIDE="$(fx_new_root)"
+for i in 1 2 3 4 5 6; do fx_add_dummy "$WIDE" "w$i" --lines 1; done
+DOT_5="$(dotenv_stub five 5)"
+
+# prec_row <name> <envspec> <args> <want-j>
+prec_row() {
+    local name="$1" envspec="$2" args="$3" want="$4" rc=0 j ex
+    local out="$FX_TMP_ROOT/prec-$name.out" err="$FX_TMP_ROOT/prec-$name.err"
+    eval "$envspec fx_exec \"\$WIDE\" 30 \"\$out\" \"\$err\" $args" || rc=$?
+    j="$(grep -oE '\(j=[0-9]+' "$err" | head -n 1 | tr -dc '0-9')"
+    ex="$(fx_contract_field "$out" EXECUTED)"
+    assert_eq "D7/$name" "EXECUTED=6 j=$want" "EXECUTED=$ex j=${j:-none}"
+}
+
+while IFS='|' read -r name envspec args want; do
+    case "$name" in ''|\#*) continue ;; esac
+    prec_row "$(trim "$name")" "$(trim "$envspec")" "$(trim "$args")" "$(trim "$want")"
+done <<'TABLE'
+dotenv-sets-width   | RUN_ALL_CONFIG_VAR_CMD=$DOT_2                          | --all         | 2
+dotenv-5            | RUN_ALL_CONFIG_VAR_CMD=$DOT_5                          | --all         | 5
+cli-beats-env       | TEST_MAX_JOBS_PER_RUN=5 RUN_ALL_CONFIG_VAR_CMD=$DOT_2  | -j 3 --all    | 3
+env-beats-dotenv    | TEST_MAX_JOBS_PER_RUN=3 RUN_ALL_CONFIG_VAR_CMD=$DOT_2  | --all         | 3
+cli-auto-to-env     | TEST_MAX_JOBS_PER_RUN=3 RUN_ALL_CONFIG_VAR_CMD=$DOT_2  | -j auto --all | 3
+env-auto-to-dotenv  | TEST_MAX_JOBS_PER_RUN=auto RUN_ALL_CONFIG_VAR_CMD=$DOT_2 | --all       | 2
+env-empty-to-dotenv | TEST_MAX_JOBS_PER_RUN= RUN_ALL_CONFIG_VAR_CMD=$DOT_2   | --all         | 2
+dotenv-auto-default | RUN_ALL_CONFIG_VAR_CMD=$DOT_AUTO                       | --all         | 4
+no-layer-default    |                                                        | --all         | 4
+TABLE
+
+# The adopted layer is named on stderr; a refused .env value names nothing it did not adopt.
+if grep -qF 'max jobs per run: 2 (.env)' "$FX_TMP_ROOT/prec-dotenv-sets-width.err"; then
+    fx_pass "D7-notice-dotenv. stderr names the .env layer as the source of width 2"
+else
+    fx_fail "D7-notice-dotenv. want stderr 'max jobs per run: 2 (.env)'"
+fi
+if grep -qF 'max jobs per run: 4 (default)' "$FX_TMP_ROOT/prec-dotenv-auto-default.err"; then
+    fx_pass "D7-notice-default. .env=auto falls through to the default 4 and stderr says so"
+else
+    fx_fail "D7-notice-default. want stderr 'max jobs per run: 4 (default)' when .env says auto"
 fi
 
 fx_finish

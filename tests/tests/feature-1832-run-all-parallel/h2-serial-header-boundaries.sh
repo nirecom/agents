@@ -42,14 +42,14 @@ mkdir -p "$RUN_ALL_CACHE_DIR"
 
 # --- ambient sanitization (M-ambient), self-contained ------------------------
 
-# WHY: RUN_ALL_JOBS/DEADLINE/PROGRESS/REAP and FEATURE_644_PHASE change runner
+# WHY: TEST_MAX_JOBS_PER_RUN/DEADLINE/PROGRESS/REAP and FEATURE_644_PHASE change runner
 # behavior; inherited values would rewrite verdicts, so every child goes through senv().
 
 # CAVEAT: GNU `env` stops parsing options at the first NAME=VALUE, so `-u NAME`
 # flags must precede pass-through assignments — senv() owns that ordering.
 senv() {
-    env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
-        -u FEATURE_644_PHASE "$@"
+    env -u TEST_MAX_JOBS_PER_RUN -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
+        -u FEATURE_644_PHASE -u TEST_MAX_JOBS_PER_HOST RUN_ALL_CONFIG_VAR_CMD=/nonexistent/get-config-var "$@"
 }
 
 # run_pinned <secs> <NAME=VALUE>... -- <cmd> <args>...
@@ -63,8 +63,8 @@ run_pinned() {
     [ $# -gt 0 ] && shift
     senv ${pins[@]+"${pins[@]}"} bash "$RWT" "$secs" "$@"
 }
-AMBIENT_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
-unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
+unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 
 case_ambient_sanitized() {
     local probe="$TMPD/ambient-probe.sh" got want v
@@ -74,12 +74,12 @@ case_ambient_sanitized() {
     } > "$probe"
     want=""
     for v in $AMBIENT_VARS; do want="$want$v=<unset> "; done
-    got="$(RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
+    got="$(TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
         RUN_ALL_REAP=hostile FEATURE_644_PHASE=9 senv bash "$probe" 2>/dev/null)"
     assert_eq "h2/ambient/senv-strips-every-hostile-value" "$want" "$got"
     # And the pass-through half: a deliberate pin must survive the same call.
-    got="$(RUN_ALL_JOBS=hostile senv "RUN_ALL_JOBS=4" bash "$probe" 2>/dev/null \
-        | sed -n 's/^RUN_ALL_JOBS=\([^ ]*\).*/\1/p')"
+    got="$(TEST_MAX_JOBS_PER_RUN=hostile senv "TEST_MAX_JOBS_PER_RUN=4" bash "$probe" 2>/dev/null \
+        | sed -n 's/^TEST_MAX_JOBS_PER_RUN=\([^ ]*\).*/\1/p')"
     assert_eq "h2/ambient/senv-still-honours-a-deliberate-pin" "4" "$got"
 }
 
@@ -151,7 +151,7 @@ RUN_CONTRACT_SEEN=""
 runtime_lane_of() {
     local root="$1" peers
     rm -f "$root/obs"
-    run_pinned 45 "TESTS_DIR=$root/tests" "RUN_ALL_JOBS=4" \
+    run_pinned 45 "TESTS_DIR=$root/tests" "TEST_MAX_JOBS_PER_RUN=4" \
         -- bash "$root/bin/run-all.sh" --all >"$root/run.out" 2>/dev/null
     RUN_CONTRACT_SEEN="$(sed -n 's/^RUN_CONTRACT: //p' "$root/run.out" | head -1)"
     if [ ! -f "$root/obs" ]; then
@@ -191,7 +191,7 @@ case_boundary_table() {
 
         assert_eq "h2/writer/$name" "$writer" "$(writer_verdict "$root/tests/bin/z-subject.sh")"
 
-        plan_out="$(run_pinned 45 "TESTS_DIR=$root/tests" "RUN_ALL_JOBS=4" \
+        plan_out="$(run_pinned 45 "TESTS_DIR=$root/tests" "TEST_MAX_JOBS_PER_RUN=4" \
             -- bash "$root/bin/run-all.sh" --print-plan --all 2>/dev/null)"
         assert_eq "h2/plan-lane/$name" "$lane" "$(plan_lane_of "$plan_out" z-subject.sh)"
 
