@@ -259,6 +259,37 @@ native environment before declaring an E2E test green. See
 [`rules/test/claude-e2e.md`](../rules/test/claude-e2e.md) for the full
 precaution list and acceptance criteria.
 
+## Jev shadow mode
+
+Jev is a second-opinion complexity classifier that only logs; the LLM judge's
+answer is always the one used. Default is off.
+
+Enable (after release):
+
+1. In the global agents `.env` (under the agents config dir), set `JEV=on` and `TYPESAFE_API_KEY=<key>`. A project `.env.local` cannot set either key (they are refused there). See `.env.example`.
+2. Verify in a linked worktree first. The main worktree stays off until the rollout decision.
+
+Disable: set `JEV=off` in the same `.env`, or remove the line. The feature is
+fail-open: an outage, missing key, or bad response never blocks the agent call; it only skips the shadow record.
+
+Report (reads local files only, never contacts Jev):
+
+```
+node bin/jev-report
+node bin/jev-report --point complexity-judge --json
+node bin/jev-report --log <path> --no-sweep
+```
+
+Flags: `--log <path>` (default decision log), `--point <name>` (one consumer), `--json`, `--no-sweep` (skip the pending-orphan sweep and 7-day state retention that run by default).
+
+Where things live:
+
+- State: `$AGENTS_STATE_DIR/jev` (default `~/.agents/jev`), one directory per session.
+- Decision log: `jev-decisions.log` (JSONL), rotated by size. Deleting it loses only the evidence collected so far.
+- Retention: session state idle for more than 7 days is removed by a sweep that runs at most once a day.
+
+Details: [architecture/jev.md](architecture/jev.md).
+
 ## Restoring session list order after VS Code restart
 
 After a VS Code restart, the Claude Code extension appends metadata-only lines

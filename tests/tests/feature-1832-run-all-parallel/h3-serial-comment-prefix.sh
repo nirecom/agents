@@ -26,10 +26,10 @@ assert_eq() {
 
 # Same ambient sanitization as h-serial-header-convention.sh (senv outermost).
 senv() {
-    env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
-        -u FEATURE_644_PHASE "$@"
+    env -u TEST_MAX_JOBS_PER_RUN -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
+        -u FEATURE_644_PHASE -u TEST_MAX_JOBS_PER_HOST RUN_ALL_CONFIG_VAR_CMD=/nonexistent/get-config-var "$@"
 }
-unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 run_with_timeout() { local s="$1"; shift; senv bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
 
 TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/ra-serial-prefix-$$")"
@@ -40,14 +40,15 @@ trap 'rm -rf "$TMPD"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
 # shellcheck source=../../bin/test-language-registry/slash-header-fixture.sh
 . "$AGENTS_DIR/tests/bin/test-language-registry/slash-header-fixture.sh"
 CO="$TMPD/co"
-slash_fx_checkout "$CO" "$AGENTS_DIR" bin/calibrate-test-parallelism.sh
+# The calibrator takes its population from the checkout's own run-all plan (#2079).
+slash_fx_checkout "$CO" "$AGENTS_DIR" bin/calibrate-test-parallelism.sh bin/calibrate-test-parallelism tests/run-all.sh
 
 # fx_test <path> <serial-line-or-empty> — a header block in the file's own prefix,
 # plus the given Serial line (which may be in the other prefix: a decoy).
@@ -83,24 +84,26 @@ case_run_all_serial_lane() {
     assert_eq "h3-prefix/plan/decoys-stay-parallel" "b2.sh s2.slt " "$parallel"
 }
 
-# 2. calibrate --dry-run: Serial tests leave the candidate set. Counts are chosen
-# asymmetric so every wrong reading gives a different sample size: per-file prefix keeps
-# the 2 + 3 decoys (5); "always #" would keep 1 + 3 (4); "always //" 2 + 1 (3).
+# 2. calibrate --dry-run: Serial tests leave the population (the run-all plan's parallel
+# lane; empty ledger, so every one is an unrecorded probe target). Counts are asymmetric so
+# every wrong reading differs: per-file prefix keeps the 2 + 3 decoys (5); "always #"
+# would keep 1 + 3 (4); "always //" 2 + 1 (3).
 case_calibrate_candidates() {
-    local FX="$TMPD/fx-cal" out rc sample
-    fx_test "$FX/sa1.slt" '// Serial: real'
-    fx_test "$FX/sb1.slt" '# Serial: decoy'
-    fx_test "$FX/sb2.slt" '# Serial: decoy'
-    fx_test "$FX/hc1.sh" '# Serial: real'
-    fx_test "$FX/hd1.sh" '// Serial: decoy'
-    fx_test "$FX/hd2.sh" '// Serial: decoy'
-    fx_test "$FX/hd3.sh" '// Serial: decoy'
+    local FX="$TMPD/fx-cal" out rc pop
+    # Under a category dir: the plan lists only the categories' direct files.
+    fx_test "$FX/bin/sa1.slt" '// Serial: real'
+    fx_test "$FX/bin/sb1.slt" '# Serial: decoy'
+    fx_test "$FX/bin/sb2.slt" '# Serial: decoy'
+    fx_test "$FX/bin/hc1.sh" '# Serial: real'
+    fx_test "$FX/bin/hd1.sh" '// Serial: decoy'
+    fx_test "$FX/bin/hd2.sh" '// Serial: decoy'
+    fx_test "$FX/bin/hd3.sh" '// Serial: decoy'
     rc=0
     out="$(run_with_timeout 60 env "TESTS_DIR=$FX" "RUN_ALL_CACHE_DIR=$RUN_ALL_CACHE_DIR" \
         bash "$CO/bin/calibrate-test-parallelism.sh" --dry-run --sample 99 --jobs-list 1 2>"$TMPD/cal-err.txt")" || rc=$?
     assert_eq "h3-prefix/calibrate/exit-zero" "0" "$rc"
-    sample="$(printf '%s\n' "$out" | sed -n 's/^plan: widths=.* sample=\([0-9][0-9]*\)$/\1/p' | head -1)"
-    assert_eq "h3-prefix/calibrate/candidates-exclude-own-prefix-serial-only" "5" "${sample:-(absent)}"
+    pop="$(printf '%s\n' "$out" | sed -n 's/^plan: probe up to [0-9][0-9]* of \([0-9][0-9]*\) unrecorded tests.*/\1/p' | head -1)"
+    assert_eq "h3-prefix/calibrate/candidates-exclude-own-prefix-serial-only" "5" "${pop:-(absent)}"
 }
 
 case_begin "serial-lane-comment-prefix" "tests/run-all.sh"

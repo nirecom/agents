@@ -46,11 +46,11 @@ mkdir -p "$RUN_ALL_CACHE_DIR"
 # run-with-timeout.sh execs argv directly). GNU `env` needs all `-u` flags before
 # any pass-through assignment.
 senv() {
-    env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
-        -u FEATURE_644_PHASE "$@"
+    env -u TEST_MAX_JOBS_PER_RUN -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
+        -u FEATURE_644_PHASE -u TEST_MAX_JOBS_PER_HOST RUN_ALL_CONFIG_VAR_CMD=/nonexistent/get-config-var "$@"
 }
-AMBIENT_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
-unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
+unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 
 ROOT="$TMPD/fx"
 RUNNER="$ROOT/bin/run-all.sh"
@@ -249,16 +249,16 @@ case_ambient_sanitized() {
         printf 'for v in %s; do printf "%%s=%%s " "$v" "${!v-<unset>}"; done\n' "$AMBIENT_VARS"
     } > "$probe"
     want=""; for v in $AMBIENT_VARS; do want="$want$v=<unset> "; done
-    got="$(RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
+    got="$(TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
         RUN_ALL_REAP=hostile FEATURE_644_PHASE=9 senv bash "$probe" 2>/dev/null)"
     assert_eq "o-pos/ambient/senv-strips-every-hostile-value" "$want" "$got"
     # The behavioural half: the glob verdict must not move under a hostile
     # ambient environment. Asserted against the literal expectation, so an
     # invocation that silently ran nothing cannot satisfy it.
-    export RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile
+    export TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile
     export RUN_ALL_REAP=hostile FEATURE_644_PHASE=9
     run_all "tests/t*.sh"
-    unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+    unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
     assert_eq "o-pos/ambient/glob-verdict-unchanged-under-hostile-ambient" \
         "3/t1 t2 t3" "$(executed_of)/$(order_of)"
 }

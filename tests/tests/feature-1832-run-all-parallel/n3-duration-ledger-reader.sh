@@ -146,24 +146,22 @@ else
 fi
 
 # ===========================================================================
-# N14 — the tier duplicate must not drift from run_all_count_bucket
+# N14 — the tier is floor(log2(secs)), pinned directly by a table
 # ===========================================================================
-# run_all_dur_tier_into deliberately re-implements run_all_count_bucket to avoid one fork
-# per test. This table is the mechanical proof that the duplicate still classifies alike.
-if lib_missing "N14. run_all_dur_tier agrees with run_all_count_bucket"; then :
-elif ! command -v run_all_count_bucket >/dev/null 2>&1; then
-    fx_fail "N14. run_all_count_bucket is not available from $PAR_LIB"
+# #2079 removes run_all_count_bucket, so the tier is pinned by literal expected values
+# instead of by agreement with it (the formula itself must not drift either).
+if lib_missing "N14. run_all_dur_tier classifies the 12-value table"; then :
 else
     DRIFT=""
-    for SECS in 0 1 2 3 4 7 8 15 16 31 1000 9999; do
+    for PAIR in 0:0 1:0 2:1 3:1 4:2 7:2 8:3 15:3 16:4 31:4 1000:9 9999:13; do
+        SECS="${PAIR%%:*}"; WANT="${PAIR#*:}"
         T="$(run_all_dur_tier "$SECS" 2>/dev/null || true)"
-        B="$(run_all_count_bucket "$SECS" 2>/dev/null || true)"
-        [ "$T" = "$B" ] || DRIFT="$DRIFT $SECS(tier=${T:-absent} bucket=${B:-absent})"
+        [ "$T" = "$WANT" ] || DRIFT="$DRIFT $SECS(want=$WANT got=${T:-absent})"
     done
     if [ -z "$DRIFT" ]; then
-        fx_pass "N14. all 12 table values classify identically under run_all_dur_tier and run_all_count_bucket"
+        fx_pass "N14. all 12 table values classify to floor(log2(secs)) under run_all_dur_tier"
     else
-        fx_fail "N14. the intentional duplicate has drifted at:$DRIFT"
+        fx_fail "N14. run_all_dur_tier drifted from the pinned table at:$DRIFT"
     fi
 fi
 
@@ -209,9 +207,9 @@ fi
 # ===========================================================================
 # N18 — read volume is capped independently of how many segments are on disk
 # ===========================================================================
-# The sweep is bypassed entirely: these files are planted, so this is what a permanently
-# failing sweep looks like to the reader.
-PLANT=$((${RUN_ALL_DUR_KEEP_SEGMENTS:-16} + 200))
+# The lookup alone never consolidates, and young open segments are never consolidated
+# anyway (#2079 S7b), so this many files on disk is a state the reader must bound itself.
+PLANT=216
 if lib_missing "N18a. planted values resolve with $PLANT segments on disk"; then
     fx_fail "N18b. RUN_ALL_DUR_SEGMENTS_READ is exactly $MAX_SEG (implementation missing or unloadable: $DUR_LIB_REL)"
 else

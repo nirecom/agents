@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# n-duration-ledger.sh — the ledger writer: segment naming, record class, sweep, concurrency.
+# n-duration-ledger.sh — the ledger writer: segment naming, record class, consolidation, concurrency.
 # Tests: tests/run-all.sh, bin/lib/run-all-durations.sh, bin/lib/run-all-parallelism.sh
 # Tags: tests, bin, parallel, ledger, TL2, scope:issue-specific
 
@@ -38,7 +38,8 @@ if [ -f "$DUR_LIB" ] && [ -f "$PAR_LIB" ]; then
     [ -n "$HOST_TOK" ] || HOST_TOK="${RUN_ALL_DUR_HOST_TOKEN:-}"
 fi
 
-SEG_RE='^dur\.[0-9]+\.[A-Za-z0-9]{16}\.[0-9]{8}T[0-9]{6}-[0-9]{1,10}\.log$'
+# A finished run's segment carries the closed marker (#2079 S7b); either state is one run's own.
+SEG_RE='^dur\.[0-9]+\.[A-Za-z0-9]{16}\.[0-9]{8}T[0-9]{6}-[0-9]{1,10}(\.closed)?\.log$'
 REC_RE='^[A-Za-z0-9]{16}\|[0-9]{1,4}\|[^|]+$'
 
 seg_names() {
@@ -116,54 +117,61 @@ fi
 rm -f "$CONF" 2>/dev/null || true
 
 # ===========================================================================
-# N7 — the sweep leaves exactly RUN_ALL_DUR_KEEP_SEGMENTS files
+# N7 — closed segments are folded into one base on the next start (#2079 S7b)
 # ===========================================================================
-KEEP="${RUN_ALL_DUR_KEEP_SEGMENTS:-16}"
+# Retention keeps the newest value per key, so no planted record may be lost however
+# many segments there are. Stamps are yesterday's: a fixed calendar stamp would fall past
+# the 30-day expiry and drop out of the base for date reasons alone.
 PREFIX="$(printf '%s\n' "$NAMES" | sed -n 's/^\(dur\.[0-9]*\.[A-Za-z0-9]*\.\).*$/\1/p' | head -n 1)"
-PLANT=$((KEEP + 3))
-WANT_DROP=$((PLANT + 1 - KEEP))
+PLANT=19
+N7_RID="$(fx_ledger_cat | sed -n 's/^\([A-Za-z0-9]\{16\}\)|.*$/\1/p' | head -n 1)"
+N7_ATTR="$(run_all_os_attr 2>/dev/null || true)"
+N7_T=$(( $(date -u +%s) - 86400 ))
+N7_DAY="$(date -u -d "@$N7_T" +%Y%m%d 2>/dev/null || date -u -r "$N7_T" +%Y%m%d)"
 
-old_seg() { printf '%s/%s20200101T0000%02d-1.log' "$(fx_ledger_dir)" "$PREFIX" "$1"; }
+old_seg() { printf '%s/%s%sT0000%02d-1%s.log' "$(fx_ledger_dir)" "$PREFIX" "$N7_DAY" "$1" "${2:-}"; }
 
 plant_old() {
     local i
     fx_ledger_clear
     mkdir -p "$(fx_ledger_dir)"
-    for ((i = 1; i <= $1; i++)); do printf '' > "$(old_seg "$i")"; done
+    for ((i = 1; i <= $1; i++)); do
+        printf '#os %s\n%s|%s|closed/%s.sh\n' "$N7_ATTR" "$N7_RID" "$i" "$i" > "$(old_seg "$i" .closed)"
+    done
     return 0
 }
 
-if dur_missing "N7. the sweep leaves exactly $KEEP segments"; then
-    fx_fail "N7b. the removed segments are the $WANT_DROP oldest by timestamp (implementation missing: $DUR_LIB_REL)"
-elif [ -z "$PREFIX" ]; then
-    fx_fail "N7. cannot derive a segment prefix from '$NAMES'"
+if dur_missing "N7. $PLANT closed segments fold into one base with every key readable"; then
+    fx_fail "N7b. no planted closed segment is left behind (implementation missing: $DUR_LIB_REL)"
+elif [ -z "$PREFIX" ] || [ -z "$N7_RID" ] || [ -z "$N7_ATTR" ]; then
+    fx_fail "N7. cannot build the fixture: prefix='$PREFIX' repo-id='$N7_RID' attr='$N7_ATTR'"
 else
     plant_old "$PLANT"
     fx_exec "$W" 90 "$W_OUT" "$W_ERR" -j 2 --all
-    AFTER="$(fx_ledger_segments)"
-    DROPPED=0
+    BASES=0; LEFT=0
+    for f in "$(fx_ledger_dir)"/dur.*; do
+        [ -f "$f" ] || continue
+        case "${f##*/}" in *-0[0-9].log) BASES=$((BASES + 1)) ;; esac
+    done
     for ((i = 1; i <= PLANT; i++)); do
-        [ -e "$(old_seg "$i")" ] || DROPPED=$((DROPPED + 1))
+        [ -e "$(old_seg "$i" .closed)" ] && LEFT=$((LEFT + 1))
     done
-    if [ "$AFTER" = "$KEEP" ] && [ "$DROPPED" = "$WANT_DROP" ]; then
-        fx_pass "N7. $PLANT planted + 1 new segment swept down to exactly $KEEP ($DROPPED removed)"
+    READABLE="$(fx_ledger_cat | awk -F'|' -v n="$PLANT" 'NF == 3 && $3 ~ /^closed\// { k = $3; sub(/^closed\//, "", k); sub(/\.sh$/, "", k); if (k + 0 >= 1 && k + 0 <= n && $2 == k) seen[k] = 1 } END { c = 0; for (k in seen) c++; print c + 0 }')"
+    if [ "$BASES" = "1" ] && [ "$READABLE" = "$PLANT" ]; then
+        fx_pass "N7. $PLANT closed segments became exactly one base holding all $PLANT keys"
     else
-        fx_fail "N7. want $KEEP surviving segments with $WANT_DROP planted ones removed, got segments=$AFTER dropped=$DROPPED"
+        fx_fail "N7. want exactly 1 base holding all $PLANT planted keys, got bases=$BASES readable-keys=$READABLE"
     fi
-    OLDEST_KEPT=0
-    for ((i = 1; i <= WANT_DROP; i++)); do
-        [ -e "$(old_seg "$i")" ] && OLDEST_KEPT=$((OLDEST_KEPT + 1))
-    done
-    fx_check "$OLDEST_KEPT" "N7b. the removed segments are the $WANT_DROP oldest by timestamp"
+    fx_check "$LEFT" "N7b. no planted closed segment is left behind (left=$LEFT)"
 fi
 
-# An entry the sweep cannot unlink (rm -f refuses a directory) must not stop the run.
+# An entry consolidation cannot take (a directory under a segment name) must not stop the run.
 if dur_missing "N7c. an unremovable segment keeps the run at exit 0 with one contract line"; then :
 elif [ -z "$PREFIX" ]; then
     fx_fail "N7c. cannot derive a segment prefix from '$NAMES'"
 else
     plant_old "$PLANT"
-    mkdir -p "$(fx_ledger_dir)/${PREFIX}20200101T000000-1.log"
+    mkdir -p "$(fx_ledger_dir)/${PREFIX}${N7_DAY}T000000-1.closed.log"
     fx_exec "$W" 90 "$W_OUT" "$W_ERR" -j 2 --all
     RC=$?
     NC="$(fx_count_contract "$W_OUT")"

@@ -20,7 +20,7 @@ WORKFLOW_PLANS_DIR="$(np "$GT_BASE/plans")"; export WORKFLOW_PLANS_DIR
 PLANS="$GT_BASE/plans"
 mkdir -p "$GT_BASE/transcripts" "$GT_BASE/cwd"
 CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$GT_BASE/transcripts")"; export CLAUDE_TRANSCRIPT_BASE_DIR
-unset CLAUDE_PROJECT_DIR CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_PROJECT_DIR CLAUDE_CODE_SESSION_ID
 
 # Reuse the bin-workflow-next-step helpers (write_state / run_next_step / check).
 # Sourced AFTER the harness: it re-zeroes PASS/FAIL (nothing counted yet) and

@@ -3,7 +3,7 @@
 # Tests: tests/run-all.sh
 # Tags: bin, env, config, tests, scope:common
 # Usage: tests/run-all.sh [-j N|auto] [--deadline SECS] [--print-plan] [--all | <glob-or-file> ...]
-# Env:   FEATURE_644_PHASE, RUN_ALL_JOBS, RUN_ALL_DEADLINE, RUN_ALL_PROGRESS, RUN_ALL_REAP
+# Env:   FEATURE_644_PHASE, TEST_MAX_JOBS_PER_RUN, RUN_ALL_DEADLINE, RUN_ALL_PROGRESS, RUN_ALL_REAP
 # Exit:  0 pass / 1 fail / 2 argument error / 3 deadline abort / 4 no test lane / 5 registry unreadable / 130 interrupted
 # See docs/architecture/claude-code/test-runner-parallelism.md for the full contract.
 
@@ -44,17 +44,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ "$JOBS_SET" -eq 0 ] && [ -n "${RUN_ALL_JOBS+x}" ] && { JOBS_SET=1; JOBS_RAW="$RUN_ALL_JOBS"; }
+{ [ "$JOBS_SET" -eq 0 ] || [ "$JOBS_RAW" = auto ]; } && [ -n "${TEST_MAX_JOBS_PER_RUN:-}" ] && { JOBS_SET=1; JOBS_RAW="$TEST_MAX_JOBS_PER_RUN"; }
 [ "$DEADLINE_SET" -eq 0 ] && [ -n "${RUN_ALL_DEADLINE+x}" ] && { DEADLINE_SET=1; DEADLINE_RAW="$RUN_ALL_DEADLINE"; }
 
-JOBS_MODE=auto; JOBS_FIXED=0
+JOBS_MODE=auto; MAX_JOBS_PER_RUN_FIXED=0
 if [ "$JOBS_SET" -eq 1 ]; then
   case "$JOBS_RAW" in
     auto) ;;
     ''|*[!0-9]*) usage_error "invalid jobs value '$JOBS_RAW' (expected auto or an integer 1-1024)" ;;
     *) { [ "$JOBS_RAW" -ge 1 ] && [ "$JOBS_RAW" -le 1024 ]; } 2>/dev/null ||
          usage_error "invalid jobs value '$JOBS_RAW' (expected auto or an integer 1-1024)"
-       JOBS_MODE=fixed; JOBS_FIXED="$JOBS_RAW" ;;
+       JOBS_MODE=fixed; MAX_JOBS_PER_RUN_FIXED="$JOBS_RAW" ;;
   esac
 fi
 
@@ -149,13 +149,13 @@ cleanup_all() {
     sleep 1
     for pid in $pids; do signal_tree KILL "$pid"; done
   fi
+  command -v run_all_dur_close >/dev/null 2>&1 && run_all_dur_close
   [ -n "${WORKDIR:-}" ] && rm -rf "$WORKDIR" 2>/dev/null
   [ "${LANES_LIB_OK:-0}" -eq 1 ] && thl_release_all
   return 0
 }
 trap 'cleanup_all; exit 130' INT TERM
 trap 'cleanup_all' EXIT
-
 # --- serial lane (reader side) ---------------------------------------------
 # Reader window is the registry's headerMaxLines, the same limit authors are held to.
 SERIAL_COUNT=0
@@ -296,24 +296,23 @@ ledger_record() {
 }
 
 # --- width -----------------------------------------------------------------
-RESOLVED_J=4
+RUN_JOBS=4
 resolve_jobs() {
-  if [ "$JOBS_MODE" = "fixed" ]; then RESOLVED_J="$JOBS_FIXED"; return 0; fi
-  if [ "$PARALLELISM_LIB_OK" -eq 1 ] && command -v run_all_resolve_auto_jobs >/dev/null 2>&1; then
-    run_all_resolve_auto_jobs; RESOLVED_J="$RUN_ALL_RESOLVED_J"; say "$RUN_ALL_RESOLVE_NOTE"; return 0
+  if [ "$JOBS_MODE" = "fixed" ]; then RUN_JOBS="$MAX_JOBS_PER_RUN_FIXED"; return 0; fi
+  if [ "$PARALLELISM_LIB_OK" -eq 1 ]; then
+    run_all_resolve_max_jobs_per_run || usage_error "$RUN_ALL_RESOLVE_NOTE"
+    RUN_JOBS="$RUN_ALL_MAX_JOBS_PER_RUN"; say "$RUN_ALL_RESOLVE_NOTE"; return 0
   fi
-  say "parallelism cache missing; using -j $RESOLVED_J (conservative default). Calibrate with: bin/calibrate-test-parallelism.sh"
-  return 0
+  say "parallelism library unavailable; max jobs per run $RUN_JOBS (built-in default)"
 }
 resolve_jobs
-
-EFFECTIVE_J="$RESOLVED_J"
-[ "$TOTAL" -lt "$EFFECTIVE_J" ] && EFFECTIVE_J="$TOTAL"
-[ "$EFFECTIVE_J" -lt 1 ] && EFFECTIVE_J=1
+[ "$TOTAL" -lt "$RUN_JOBS" ] && RUN_JOBS="$TOTAL"
+[ "$RUN_JOBS" -lt 1 ] && RUN_JOBS=1
 
 if [ "$PRINT_PLAN" -eq 1 ]; then
+  [ "$LANES_LIB_OK" -eq 1 ] && { thl_plan "$RUN_JOBS"; RUN_JOBS="$THL_PLAN_JOBS"; say "plan: $THL_NOTE"; }
   printf 'tests_dir=%s\n' "$TESTS_DIR"
-  printf 'jobs=%s\n' "$EFFECTIVE_J"
+  printf 'jobs=%s\n' "$RUN_JOBS"
   printf 'serial_count=%s\n' "$SERIAL_COUNT"
   for ((idx = 0; idx < TOTAL; idx++)); do
     printf 'plan\t%s\t%s\t%s\t%s\n' "$idx" "${LANE[$idx]}" "${WORK[$idx]}" "${TIER[$idx]:-$UNMEASURED}"
@@ -343,11 +342,11 @@ say "reap: $REAP"
 # --- scheduler -------------------------------------------------------------
 PASS=0; FAIL=0; SKIP=0; NEXT=0; REPORTED=0; HARVESTED=0
 SERIAL_INFLIGHT=0; BARRIER_ANNOUNCED=0; DEADLINE_HIT=0; IDLE_SPINS=0; START_TS=$SECONDS
-# Host-wide lanes (#2455): the lease can only narrow EFFECTIVE_J, never widen it.
+# Host-wide lanes (#2455): the lease can only narrow RUN_JOBS, never widen it.
 if [ "$LANES_LIB_OK" -eq 1 ] && [ "$TOTAL" -gt 0 ]; then
-  thl_init_dir; thl_run_all_lease "$EFFECTIVE_J" "$DEADLINE" || { cleanup_all
+  thl_init_dir; thl_run_all_lease "$RUN_JOBS" "$DEADLINE" || { cleanup_all
     echo "[run-all] no test lane freed within ${THL_WAIT_CAP_USED}s; inspect holders with: bash bin/test-lanes-status.sh" >&2; exit 4; }
-  EFFECTIVE_J="$THL_GRANTED"; [ -n "$THL_NOTE" ] && say "lanes: $THL_NOTE"
+  RUN_JOBS="$THL_GRANTED"; [ -n "$THL_NOTE" ] && say "lanes: $THL_NOTE"
 fi
 
 # Only a line-initial RUN_CONTRACT marker is disarmed, by prefixing.
@@ -384,7 +383,7 @@ launch() {
   JOB_START[$i]=$SECONDS
   INFLIGHT+=("$i")
   [ "${LANE[$i]}" = serial ] && SERIAL_INFLIGHT=1
-  say "$((i + 1))/$TOTAL start $script (j=$EFFECTIVE_J inflight=${#INFLIGHT[@]})"
+  say "$((i + 1))/$TOTAL start $script (j=$RUN_JOBS inflight=${#INFLIGHT[@]})"
   NEXT=$((NEXT + 1))
   return 0
 }
@@ -478,7 +477,7 @@ while [ "$REPORTED" -lt "$TOTAL" ]; do
       launch "$NEXT"
       break
     fi
-    [ "${#INFLIGHT[@]}" -lt "$EFFECTIVE_J" ] || break
+    [ "${#INFLIGHT[@]}" -lt "$RUN_JOBS" ] || break
     launch "$NEXT"
   done
   if [ "${#INFLIGHT[@]}" -eq 0 ]; then flush; break; fi
