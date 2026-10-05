@@ -663,3 +663,7 @@ Changes: Sessions that skip the outline step can now merge through `gh pr merge`
 ### FEATURE: PR #2531 (2026-10-04)
 Background: feat(#2490): show CONFIRM_* gate values in next-step and unify the confirm procedure
 Changes: The workflow now shows each step's confirmation-gate setting in its next-action output and decides whether to ask you from a single check, so the intent, outline, detail, tests, code, docs and worktree gates behave the same way. A scope change between outline and detail is always shown to you, even when the detail confirmation is turned off.
+
+### FEATURE: PR #2542 (2026-10-05)
+Background: feat(#2079): split test parallelism host/run limits and consolidate duration ledger
+Changes: Test parallelism now has two limits: `TEST_MAX_JOBS_PER_HOST` (machine-wide, measured by `bin/calibrate-test-parallelism.sh`) and `TEST_MAX_JOBS_PER_RUN` (per run-all invocation). The old names are no longer read.;The run-all duration history is no longer lost after 16 runs: past segments are consolidated per OS, and records not measured for 30 days expire.
