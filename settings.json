@@ -705,6 +705,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/jev-shadow-pre.js\"",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -805,6 +815,16 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/postuse-step-in-flight-mark.js\"",
             "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/jev-shadow-post.js\"",
+            "timeout": 15
           }
         ]
       }

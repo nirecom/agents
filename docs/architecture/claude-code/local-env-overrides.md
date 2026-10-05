@@ -54,7 +54,8 @@ each entry there. Two criteria put a key on it:
 1. **One machine, one policy.** Settings whose per-repository divergence breaks
    a contract this repository owns — the workflow-state root
    (`CLAUDE_WORKFLOW_DIR`, `WORKFLOW_PLANS_DIR`; what each holds:
-   [state-dirs.md](state-dirs.md)), the config directory this very
+   [state-dirs.md](state-dirs.md)), the state and log root
+   (`AGENTS_STATE_DIR`), the config directory this very
    layer resolves the global `.env` from (`AGENTS_CONFIG_DIR`), the worktree
    enforcement switches.
 2. **Half-applied.** Keys whose consumers do not all read the same layer.
@@ -67,6 +68,22 @@ The `CODEX_` prefix is on the list for a reason worth naming: it covers
 `CODEX_NFR_MAX_LINES` and `CODEX_NFR_MAX_BYTES`, the size caps on the very
 `PROJECT_NFR` text the project supplies. A project that could raise its own cap
 would have no cap.
+
+`JEV`, `TYPESAFE_API_KEY`, and the `JEV_` prefix are refused for a third
+reason: `JEV=on` sends plan text to an external service under the operator's
+credential. Whether that happens, and with which key, is the operator's
+decision — never the reviewed repository's (#2460, see [jev.md](../jev.md)).
+
+Four Node runtime variables are refused for a fourth: Node itself reads them,
+in the hook that makes that credentialed call and in every child a hook spawns.
+`NODE_TLS_REJECT_UNAUTHORIZED` switches certificate verification off,
+`NODE_EXTRA_CA_CERTS` adds a trusted CA, `NODE_USE_ENV_PROXY` makes `fetch`
+honour the proxy variables, and `NODE_OPTIONS` preloads code or sets any of the
+above by flag. They are exact entries rather than a `NODE_` prefix because
+`NODE_ENV` is a legitimate per-project value. The proxy variables themselves
+(`HTTPS_PROXY` and its siblings) are not listed: Node's `fetch` ignores them
+unless `NODE_USE_ENV_PROXY` or the equivalent flag enables it, and both doors
+are closed.
 
 Matching is case-folded to upper case. Windows environment variables are
 case-insensitive, so a lower-cased key in the local file names the same slot as
@@ -86,8 +103,9 @@ exported outranks both.
 The blocklist's input domain is the local file's key space, not the global
 `.env`'s. Entries were triaged against the keys `.env.example` documents, but a
 key documented nowhere still reaches `process.env` from the local layer.
-Process-runtime variables (`NODE_OPTIONS`, `BASH_ENV`, `LD_PRELOAD`,
-`GIT_SSH_COMMAND`) and guard-decision tokens sit on that axis. That is a
+Process-runtime variables outside the Node set above (`BASH_ENV`, `LD_PRELOAD`,
+`GIT_SSH_COMMAND`, the proxy variables as other tools read them) and
+guard-decision tokens sit on that axis. That is a
 security question about the layer's input domain rather than the
 "does the agents repo's own contract survive" question this list was selected
 for, and it is tracked separately (CPR-SC) — see issue #2223's discussion.

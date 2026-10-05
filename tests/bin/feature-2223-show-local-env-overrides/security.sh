@@ -38,12 +38,14 @@ else
     else
         pass "T2223S-hostile-env-no-execution"
     fi
-    # The honest current classification of the process-runtime key class: these
-    # keys are reported as applied because the blocklist does not name them.
-    # A follow-up that adds them to the blocklist flips this row deliberately.
+    # Classification of the process-runtime key class: NODE_OPTIONS is refused by
+    # the blocklist; PATH and GIT_SSH_COMMAND are reported as applied because the
+    # blocklist does not name them (the rows above pin that the CLI never uses them).
     assert_eq "T2223S-hostile-env-applied" \
-      "$(printf 'GIT_SSH_COMMAND\nNODE_OPTIONS\nPATH\nPROJECT_NFR')" \
+      "$(printf 'GIT_SSH_COMMAND\nPATH\nPROJECT_NFR')" \
       "$(section_keys "$CLI_OUT" applied)"
+    assert_eq "T2223S-hostile-env-refused" "NODE_OPTIONS" \
+      "$(section_keys "$CLI_OUT" "refused by blocklist")"
     assert_report_lacks "T2223S-hostile-env-no-value-leak-stdout" "$CLI_OUT" "SENT2223-"
     assert_not_contains "T2223S-hostile-env-no-value-leak-stderr" "$CLI_ERR" "SENT2223-"
     assert_not_contains "T2223S-hostile-env-no-path-leak-stderr" "$CLI_ERR" "/nonexistent"

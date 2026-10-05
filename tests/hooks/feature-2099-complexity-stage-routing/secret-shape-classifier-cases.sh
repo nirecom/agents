@@ -19,10 +19,10 @@ d2099ss_export_surface() {
     got=$(run_node '
 const m = require(process.env.SS_MOD_N);
 const keys = Object.keys(m).sort().join(",");
-console.log(keys + " " + typeof m.isSecretShaped);
+console.log(keys + " " + [typeof m.isSecretShaped, typeof m.redactSecretShaped, typeof m.REDACTED_PLACEHOLDER].join(" "));
 ')
-    assert_eq "SS-1 secret-shape.js exports isSecretShaped and nothing else" \
-        "isSecretShaped function" "$got"
+    assert_eq "SS-1 secret-shape.js exports isSecretShaped, redactSecretShaped, REDACTED_PLACEHOLDER and nothing else" \
+        "REDACTED_PLACEHOLDER,isSecretShaped,redactSecretShaped function function string" "$got"
 }
 
 # SS-2: the provider table. One row per shape the module actually implements,
@@ -262,8 +262,225 @@ console.log(out.join("|"));
         "UNRECOGNIZED(4)" "$got"
 }
 
+# SS-7..SS-9: redactSecretShaped (#2460) is what scrubs the dispatch prompt and the plan
+# artifacts before they leave the machine for Jev. Rows print "<name> <JSON of the output>"
+# so a newline is visible, or "<name> unchanged" when the text came back identical. Every
+# fixture is built at runtime: the outbound scan matches these shapes unanchored.
+SS_REDACT_PRELUDE='
+const { redactSecretShaped: red, REDACTED_PLACEHOLDER: PH } = require(process.env.SS_MOD_N);
+const A = (n) => "A".repeat(n);
+const GHP = "gh" + "p_" + A(36);
+const AKIA = "AK" + "IA" + A(16);
+const SK = "s" + "k-" + A(20);
+const pem = (word, kind) => "-----" + word + " " + kind + "PRIVATE KEY-----";
+const show = (CASES) => { for (const c of CASES) {
+  let v;
+  try { v = red(c[1]); v = v === c[1] ? "unchanged" : JSON.stringify(v); } catch (e) { v = "THREW:" + (e && e.name); }
+  console.log(c[0] + " " + v);
+} };
+'
+
+d2099ss_redact_provider_table() {
+    local got
+    got=$(run_node "$SS_REDACT_PRELUDE"'
+console.log("placeholder " + JSON.stringify(PH));
+show([
+  ["two-shapes", "x " + GHP + " y " + AKIA + " z"],
+  ["same-shape-twice", GHP + " and " + GHP],
+  ["anthropic-api", "x s" + "k-ant-api03-" + A(20) + " y"],
+  ["anthropic-sid", "x s" + "k-ant-sid01-" + A(20) + " y"],
+  ["openai-plain", "x " + SK + " y"],
+  ["openai-proj", "x s" + "k-proj-" + A(20) + " y"],
+  ["openai-svcacct", "x s" + "k-svcacct-" + A(20) + " y"],
+  ["aws", "x " + AKIA + " y"],
+  ["github-ghp", "x " + GHP + " y"],
+  ["github-ghs", "x gh" + "s_" + A(36) + " y"],
+  ["slack", "x xo" + "xb-1-2-abc y"],
+  ["google", "x AI" + "za" + A(35) + " y"],
+  ["huggingface", "x h" + "f_" + A(34) + " y"],
+  ["near-miss-openai-19", "x s" + "k-" + A(19) + " y"],
+  ["near-miss-aws-15", "x AK" + "IA" + A(15) + " y"],
+  ["near-miss-github-35", "x gh" + "p_" + A(35) + " y"],
+  ["near-miss-google-34", "x AI" + "za" + A(34) + " y"],
+  ["near-miss-hf-33", "x h" + "f_" + A(33) + " y"],
+  ["pem-block", "pre\n" + pem("BEGIN", "RSA ") + "\nMIIB\nAAAA\n" + pem("END", "RSA ") + "\npost"],
+  ["pem-block-plain-kind", "pre\n" + pem("BEGIN", "") + "\nMIIB\n" + pem("END", "") + "\npost"],
+  ["pem-without-end", "pre\n" + pem("BEGIN", "EC ") + "\nMIIB\nmore"],
+  ["pem-two-blocks", pem("BEGIN", "") + "\nK1\n" + pem("END", "") + "\nmid\n" + pem("BEGIN", "DSA ") + "\nK2\n" + pem("END", "DSA ")],
+  ["pem-public-untouched", "-----BEGIN PUBLIC KEY-----\nabc\n-----END PUBLIC KEY-----"],
+]);
+')
+    assert_block "SS-7 every provider shape is replaced by the placeholder; a PEM key goes as one block" "$got" <<'EOF'
+placeholder "[REDACTED]"
+two-shapes "x [REDACTED] y [REDACTED] z"
+same-shape-twice "[REDACTED] and [REDACTED]"
+anthropic-api "x [REDACTED] y"
+anthropic-sid "x [REDACTED] y"
+openai-plain "x [REDACTED] y"
+openai-proj "x [REDACTED] y"
+openai-svcacct "x [REDACTED] y"
+aws "x [REDACTED] y"
+github-ghp "x [REDACTED] y"
+github-ghs "x [REDACTED] y"
+slack "x [REDACTED] y"
+google "x [REDACTED] y"
+huggingface "x [REDACTED] y"
+near-miss-openai-19 unchanged
+near-miss-aws-15 unchanged
+near-miss-github-35 unchanged
+near-miss-google-34 unchanged
+near-miss-hf-33 unchanged
+pem-block "pre\n[REDACTED]\npost"
+pem-block-plain-kind "pre\n[REDACTED]\npost"
+pem-without-end "pre\n[REDACTED]"
+pem-two-blocks "[REDACTED]\nmid\n[REDACTED]"
+pem-public-untouched unchanged
+EOF
+}
+
+# SS-8: redaction equals the scanner: a generic sk- match is redacted wherever it sits,
+# so prose such as "task-..." / "risk-..." holding a 20+ sk- run is redacted too (accepted
+# over-redaction). SS-10 pins the same for every other shape and every preceding character.
+d2099ss_redact_token_start_rule() {
+    local got
+    got=$(run_node "$SS_REDACT_PRELUDE"'
+show([
+  ["prose-task", "tas" + "k-complexity-signals-file-name"],
+  ["prose-risk", "ris" + "k-assessment-of-the-whole-plan"],
+  ["mid-word-sk", "tas" + "k-" + A(20)],
+  ["after-space", " " + SK],
+  ["after-equals", "KEY=" + SK],
+  ["in-quotes", "\"" + SK + "\""],
+  ["text-start", SK + " tail"],
+  ["after-newline", "a\n" + SK],
+  ["after-hyphen", "head-" + AKIA],
+]);
+')
+    assert_block "SS-8 the generic sk- shape is redacted wherever it sits, prose included" "$got" <<'EOF'
+prose-task "ta[REDACTED]"
+prose-risk "ri[REDACTED]"
+mid-word-sk "ta[REDACTED]"
+after-space " [REDACTED]"
+after-equals "KEY=[REDACTED]"
+in-quotes "\"[REDACTED]\""
+text-start "[REDACTED] tail"
+after-newline "a\n[REDACTED]"
+after-hyphen "head-[REDACTED]"
+EOF
+}
+
+# SS-9: the edges. A non-string never throws and yields "", clean text is returned
+# identical, and a second pass (or a repeated call on the same /g patterns) changes nothing.
+d2099ss_redact_edges() {
+    local got
+    got=$(run_node "$SS_REDACT_PRELUDE"'
+const cr = require(process.env.CR_MOD_N);
+const clean = "Judge the task complexity.\nSignals: " + cr.SIGNAL_IDS.join(",") + " path /home/user/x.json";
+const dirty = "a " + GHP + "\nb " + SK + " c";
+show([["null", null], ["undefined", undefined], ["number", 42], ["object", {}], ["array", [GHP]], ["empty-string", ""]]);
+console.log("clean-identical " + String(red(clean) === clean));
+console.log("second-pass-stable " + String(red(red(dirty)) === red(dirty)));
+console.log("repeat-call-stable " + [red(dirty), red(dirty), red(dirty)].every((s) => s === "a [REDACTED]\nb [REDACTED] c"));
+console.log("placeholder-survives " + JSON.stringify(red(PH + " " + PH)));
+')
+    assert_block "SS-9 non-strings give an empty string, clean text is untouched, redaction is idempotent" "$got" <<'EOF'
+null ""
+undefined ""
+number ""
+object ""
+array ""
+empty-string unchanged
+clean-identical true
+second-pass-stable true
+repeat-call-stable true
+placeholder-survives "[REDACTED] [REDACTED]"
+EOF
+}
+
+# SS-10: the state sent to Jev is JSON-stringified text, so a key often sits right after
+# an escape whose last character is a letter or digit ("\n" as backslash + n, "%3D").
+# No shape has a token-start rule any more: every shape, the generic OpenAI one included,
+# is redacted whatever precedes it. Below, "\\n" in the fixtures is backslash, n.
+d2099ss_redact_after_escape_or_word() {
+    local got
+    got=$(run_node "$SS_REDACT_PRELUDE"'
+const HF = "h" + "f_" + A(34);
+const ANT = "s" + "k-ant-api03-" + A(20);
+show([
+  ["aws-after-json-newline", "a\\n" + AKIA],
+  ["github-after-json-tab", "a\\t" + GHP],
+  ["github-after-percent", "k%3D" + GHP],
+  ["aws-mid-word", "abc" + AKIA],
+  ["hf-mid-word", "x9" + HF],
+  ["anthropic-mid-word", "x" + ANT],
+  ["generic-after-json-newline", "a\\n" + SK],
+  ["generic-after-json-cr", "a\\r" + SK],
+  ["generic-after-json-tab", "a\\t" + SK],
+  ["generic-after-percent-upper", "k%3D" + SK],
+  ["generic-after-percent-lower", "k%3d" + SK],
+  ["generic-text-start", SK],
+  ["generic-after-space", "a " + SK],
+  ["generic-mid-word", "ta" + SK],
+  ["prose-after-json-newline", "a\\ntas" + "k-complexity-signals-file-name"],
+  ["prose-after-percent", "%20tas" + "k-complexity-signals-file-name"],
+  ["generic-after-other-escape", "a\\b" + SK],
+  ["generic-after-upper-escape", "a\\N" + SK],
+  ["generic-after-bare-n", "an" + SK],
+  ["generic-after-percent-one-hex", "k%3" + SK],
+  ["generic-after-percent-non-hex", "k%G0" + SK],
+]);
+')
+    assert_block "SS-10 every shape is redacted whatever precedes it: escape, %XX, word character" "$got" <<'EOF'
+aws-after-json-newline "a\\n[REDACTED]"
+github-after-json-tab "a\\t[REDACTED]"
+github-after-percent "k%3D[REDACTED]"
+aws-mid-word "abc[REDACTED]"
+hf-mid-word "x9[REDACTED]"
+anthropic-mid-word "x[REDACTED]"
+generic-after-json-newline "a\\n[REDACTED]"
+generic-after-json-cr "a\\r[REDACTED]"
+generic-after-json-tab "a\\t[REDACTED]"
+generic-after-percent-upper "k%3D[REDACTED]"
+generic-after-percent-lower "k%3d[REDACTED]"
+generic-text-start "[REDACTED]"
+generic-after-space "a [REDACTED]"
+generic-mid-word "ta[REDACTED]"
+prose-after-json-newline "a\\nta[REDACTED]"
+prose-after-percent "%20ta[REDACTED]"
+generic-after-other-escape "a\\b[REDACTED]"
+generic-after-upper-escape "a\\N[REDACTED]"
+generic-after-bare-n "an[REDACTED]"
+generic-after-percent-one-hex "k%3[REDACTED]"
+generic-after-percent-non-hex "k%G0[REDACTED]"
+EOF
+}
+
+# SS-11: a second pass over text redacted after an escape changes nothing, and the
+# unanchored classifier still flags the mid-word generic shape.
+d2099ss_redact_after_escape_idempotent() {
+    local got
+    got=$(run_node "$SS_REDACT_PRELUDE"'
+const { isSecretShaped } = require(process.env.SS_MOD_N);
+const dirty = "a\\n" + SK + " k%3D" + SK + " b\\t" + GHP + " abc" + AKIA;
+const once = red(dirty);
+console.log("first-pass " + JSON.stringify(once));
+console.log("second-pass-identical " + String(red(once) === once));
+console.log("classifier-mid-word-generic " + String(isSecretShaped("ta" + SK)));
+')
+    assert_block "SS-11 re-redacting redacted text is a no-op; isSecretShaped stays unanchored" "$got" <<'EOF'
+first-pass "a\\n[REDACTED] k%3D[REDACTED] b\\t[REDACTED] abc[REDACTED]"
+second-pass-identical true
+classifier-mid-word-generic true
+EOF
+}
+
 d2099ss_export_surface
 d2099ss_provider_table
 d2099ss_position_independence
 d2099ss_sanctioned_input_is_not_secret
 d2099ss_reaches_persistence_filter
+d2099ss_redact_provider_table
+d2099ss_redact_token_start_rule
+d2099ss_redact_edges
+d2099ss_redact_after_escape_or_word
+d2099ss_redact_after_escape_idempotent
