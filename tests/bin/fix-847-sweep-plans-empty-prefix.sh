@@ -1,30 +1,18 @@
 #!/bin/bash
 # tests/bin/fix-847-sweep-plans-empty-prefix.sh
 # Tests: bin/sweep-plans.sh
-# Tags: sweep, plans, empty-sid, guard, fix, scope:issue-specific, TL2
-#
-# Regression tests for issue #847: the empty-prefix bucket in bin/sweep-plans.sh
-# groups ANY basename starting with '-', so non-workflow hyphen-prefixed files
-# (e.g. "-scratch", "-My Notes.docx") are swept away with real user data.
-#
-# The fix adds a suffix allowlist SSOT constant EMPTY_PREFIX_ALLOW_RE:
-#   ^-[a-z0-9]+([._-][a-z0-9]+)*\.(md|txt|json|jsonl|log|built|tmp|tsv|err|out|status|patch)$
-# Basenames that do not match are never collected into the empty-prefix bucket,
-# are never deleted, and are counted in a new summary counter
-# `files_skipped_unrecognized`.
-#
-# Table-driven (see skills/_shared/test-design/parser-regex-tests.md): each row
-# builds a plans dir from a file spec, runs sweep-plans.sh in one write mode,
-# and asserts a list of CI-JSON / filesystem predicates.
-#
+# Tags: sweep, plans, empty-sid, guard, fix, scope:issue-specific, TL2, plan-sync
+# #847: only empty-prefix basenames matching EMPTY_PREFIX_ALLOW_RE (bin/sweep-plans.sh)
+# are swept; others are kept and counted in files_skipped_unrecognized. Table-driven
+# per skills/_shared/test-design/parser-regex-tests.md. #2513 S6 adds a plan-sync tree case.
+set -uo pipefail
+
 # TL3 gap (what this test does NOT catch):
 # - The real ~/.workflow-plans directory shape on a live machine (artifact kinds
 #   produced by concurrent sessions, and files created between scan and rm).
 # - Deletion behaviour under a real user's filesystem permissions / locked files.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
-
-set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SWEEP="$AGENTS_DIR/bin/sweep-plans.sh"
@@ -72,21 +60,12 @@ ci_field() {
     " -- "$2" 2>/dev/null
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Table driver
-#
-# Columns (IFS='|'):
+# Table driver — columns (IFS='|'):
 #   name   — case label, injected into every assertion message
-#   files  — comma-separated "<basename>@<old|new>" file specs.
-#            '~' in a basename stands for a literal space (the table strips
-#            whitespace so spaces cannot be written directly).
+#   files  — comma-separated "<basename>@<old|new>"; '~' stands for a literal space
 #   mode   — dry-run | apply | default  (default = no write-mode flag at all)
-#   expect — comma-separated predicates:
-#              <json_key>=<int>     exact CI-JSON field value
-#              <json_key>>=<int>    CI-JSON field at least <int>
-#              exists:<basename>    file still present after the run
-#              gone:<basename>      file removed by the run
-# ─────────────────────────────────────────────────────────────────────────────
+#   expect — comma-separated predicates: <json_key>=<int> (exact CI-JSON value),
+#            <json_key>>=<int> (at least), exists:<basename>, gone:<basename>
 
 build_plans_dir() {
     local dir="$1" files="$2" spec base age
@@ -195,6 +174,25 @@ normal-sid-coexists           | 20240101-000000-intent.md@old,-scratch@old,-My~N
 # (5) a FRESH non-allowlisted file no longer shields the bucket (S1-2(b) change)
 fresh-unrecognized-no-shield  | -scratch@new,-issue-close-stage-worker-665.log@old                       | apply   | gone:-issue-close-stage-worker-665.log,exists:-scratch,groups_skipped_revived=0
 TABLE
+
+# #2513 S6: PLANS_DIR may be a plan-sync working tree. sweep must leave .git/ and
+# .gitignore in place and remove only the stale sid group.
+git_dir="$TMPDIR_BASE/case-plan-sync-tree"
+build_plans_dir "$git_dir" "20240101-000000-intent.md@old,20240101-000000-outline.md@old,29990101-000000-intent.md@new"
+GIT_CONFIG_NOSYSTEM=1 git init -q "$git_dir" >/dev/null 2>&1
+git -C "$git_dir" config core.hooksPath /dev/null
+printf '/*\n!/*-intent.md\n' > "$git_dir/.gitignore"
+backdate "$git_dir/.gitignore"
+out="$(WORKFLOW_PLANS_DIR="$git_dir" SWEEP_AGE_DAYS=30 run_with_timeout bash "$SWEEP" --apply --ci-mode 2>&1)"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "plan-sync-tree-survives-sweep — sweep exited $rc, out=$out"
+elif [ ! -f "$git_dir/.git/HEAD" ]; then
+    fail "plan-sync-tree-survives-sweep — .git/ was removed or never created"
+else
+    check_expect "plan-sync-tree-survives-sweep" "$git_dir" "$out" \
+        "exists:.gitignore,exists:29990101-000000-intent.md,gone:20240101-000000-intent.md,gone:20240101-000000-outline.md"
+fi
 
 echo ""
 echo "─────────────────────────────────────────"

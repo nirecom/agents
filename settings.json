@@ -734,7 +734,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-plan-link.js\"",
-            "timeout": 5
+            "timeout": 30
           },
           {
             "type": "command",
@@ -759,12 +759,12 @@
         ]
       },
       {
-        "matcher": "Write",
+        "matcher": "Edit|Write|MultiEdit|editFiles|NotebookEdit",
         "hooks": [
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-plan-link.js\"",
-            "timeout": 5
+            "timeout": 30
           }
         ]
       },

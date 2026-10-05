@@ -18,6 +18,16 @@ const {
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
+// encodedFileUriFrom(dir) — the percent-encoded file:/// URI form of a local dir
+// (drive-letter aware), one of the local path forms Layer 1 blocks.
+function encodedFileUriFrom(dir) {
+  if (typeof dir !== "string" || dir.length === 0) return "";
+  const fwd = dir.replace(/\\/g, "/");
+  const enc = (s) => s.split("/").map(encodeURIComponent).join("/");
+  const m = fwd.match(/^([A-Za-z]:)\/(.*)/);
+  return m ? "file:///" + m[1] + "/" + enc(m[2]) : "file:///" + enc(fwd.replace(/^\//, ""));
+}
+
 if (require.main === module) {
   const r = readHookInput();
   if (r.kind !== "ok") {
@@ -77,7 +87,6 @@ if (require.main === module) {
 
   if (markers.length > 0) {
     const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-    const { workspaceFolderUriFrom } = require("./show-plan-link");
     let plansDir;
     try {
       plansDir = getWorkflowPlansDir();
@@ -89,7 +98,7 @@ if (require.main === module) {
       plansDir,
       plansDir.replace(/\\/g, "/"),
       "~/.workflow-plans",
-      workspaceFolderUriFrom(plansDir),
+      encodedFileUriFrom(plansDir),
     ];
     const seen = new Set();
     const patterns = [];
@@ -104,7 +113,7 @@ if (require.main === module) {
       if (lastAssistantText.includes(pat)) {
         process.stdout.write(JSON.stringify({
           decision: "block",
-          reason: "[confirm-plan] Step 2 violation: orchestrator emitted a `~/.workflow-plans/` path representation. `show-plan-link.js` is the sole authoritative path surface. Re-issue the response without the path. (Hook: stop-confirm-plan-guard.js)",
+          reason: "[confirm-plan] Step 2 violation: orchestrator emitted a local `~/.workflow-plans/` path representation. The `show-plan-link.js` breadcrumb is the sole plan surface; re-stating its GitHub blob URL is fine, a local path is not. Re-issue the response without the path. (Hook: stop-confirm-plan-guard.js)",
         }));
         process.exit(2);
       }

@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-2308-gitlab-forge.sh
 # Tests: hooks/lib/parse-remote-url.js, hooks/lib/forge/gitlab.js, hooks/lib/forge-router.js, hooks/lib/is-private-repo.js, bin/detect-forge-type, bin/worker-dispatch/workers/commit-push/procedure.js
-# Tags: scope:issue-specific, gitlab, forge, security, path-traversal, TL2
+# Tags: scope:issue-specific, gitlab, forge, security, path-traversal, TL2, visibility, glab-stub
 # Dispatch + aggregate entrypoint for the split suite (the flat file hit the
 # 500-line HARD limit; rules/coding/file-split.md). Split groups = the
 # SPLIT_GROUPS array below (SSOT); each also runs standalone. Shared scaffolding
@@ -26,6 +26,7 @@ SPLIT_GROUPS=(
     "gitlab-forge-d.sh"
     "gitlab-forge-f.sh"
     "gitlab-forge-failsafe.sh"
+    "gitlab-forge-visibility.sh"
 )
 
 TOTAL_PASS=0

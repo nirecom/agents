@@ -76,6 +76,15 @@ fi
 # --- END session-sync gate ---
 
 echo ""
+printf -- "${C_BOLD}--- Initializing plan sync ---${C_RESET}\n"
+# An empty PLAN_SYNC_REMOTE_URL is a no-op inside the CLI; a failure never stops install.
+if ! type node >/dev/null 2>&1; then
+    printf "${C_YELLOW}node not found. Plan sync skipped.${C_RESET}\n"
+elif ! node "$AGENTS_ROOT/bin/plan-sync-init"; then
+    printf "${C_YELLOW}Plan sync init failed; re-run bin/plan-sync-init later.${C_RESET}\n"
+fi
+
+echo ""
 printf -- "${C_BOLD}--- Adding profile sourcing ---${C_RESET}\n"
 case "${SHELL##*/}" in
     zsh)  _rc_file="${HOME}/.zshrc" ;;
