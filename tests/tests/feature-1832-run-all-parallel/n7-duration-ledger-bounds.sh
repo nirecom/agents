@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# n7-duration-ledger-bounds.sh — the read caps bite, and the sweep spares a live writer.
+# n7-duration-ledger-bounds.sh — the read caps bite, and another runner spares young open segments.
 # Tests: bin/lib/run-all-durations.sh, tests/run-all.sh, bin/lib/run-all-parallelism.sh
 # Tags: tests, bin, parallel, ledger, TL2, scope:issue-specific
 
 # WHY: n3- only shows that in-range keys resolve, which an unbounded reader would also
 # satisfy. These cases plant a key reachable ONLY past each cap, so an absent cap fails
-# here; the last one is the retention sweep firing while another runner still owns a file.
+# here; the last one is a second runner starting while another still owns an open file.
 
 # TL3 gap (what this test does NOT catch):
-# - more concurrent runners than RUN_ALL_DUR_KEEP_SEGMENTS, an accepted-loss zone by design
+# - concurrency beyond the read-window-64 invariant (more live segments than the reader reads)
 # - a months-old ledger whose segments were grown by real runs rather than planted
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh category pwsh-required.
 
@@ -41,7 +41,6 @@ mkdir -p "$AG"
 SCHEMA="${RUN_ALL_DUR_SCHEMA:-1}"
 MAX_SEG="${RUN_ALL_DUR_MAX_SEGMENTS_READ:-64}"
 MAX_REC="${RUN_ALL_DUR_MAX_RECORDS:-60000}"
-KEEP="${RUN_ALL_DUR_KEEP_SEGMENTS:-16}"
 HOST_TOK=""
 RID=""
 if [ "$LIB_OK" = "1" ]; then
@@ -132,14 +131,14 @@ else
 fi
 
 # ===========================================================================
-# N33 — the sweep fires with another runner still holding its segment open
+# N33 — another runner's start leaves young open segments where they are
 # ===========================================================================
-# N10 only ran two runners against an under-cap ledger, where no sweep happens at all.
-# Here enough old segments already exist that the second runner's sweep MUST delete
-# something; it must delete the oldest, never the live writer's file. Two concurrent
-# runners only: the plan accepts data loss beyond KEEP_SEGMENTS writers, so that zone
-# is deliberately not entered.
-PLANT=$((KEEP + 3))
+# #2079 S7b: retention is consolidation, which takes an open segment only once it has
+# gone 6 hours without a write. Many young open segments (other runners, or this one
+# still writing) must therefore all survive a second runner's start with their records,
+# and the live writer's records end up in its own closed segment. The planted stamps are
+# old on purpose: abandonment keys on the modification time, never on the name.
+PLANT=19
 
 live_segments() {
     local f
@@ -163,7 +162,7 @@ FX_LEDGER_KEEP=1
 fresh_ledger
 i=1
 while [ "$i" -le "$PLANT" ]; do
-    printf '' > "$(fx_ledger_dir)/dur.$SCHEMA.${HOST_TOK:-0000000000000000}.20200101T0000$(printf '%02d' "$i")-1.log"
+    printf '%s|1|young/%s.sh\n' "${RID:-0000000000000000}" "$i" > "$(fx_ledger_dir)/dur.$SCHEMA.${HOST_TOK:-0000000000000000}.20200101T0000$(printf '%02d' "$i")-1.log"
     i=$((i + 1))
 done
 
@@ -187,10 +186,23 @@ wait "$PID_X" 2>/dev/null
 X_EXEC="$(fx_contract_field "$X_OUT" EXECUTED)"
 FX_LEDGER_KEEP=0
 
+# The live writer closes its segment on exit (#2079 S7b), so its records are read from
+# whichever of the open or closed name it ended under.
 A_LINES=0
-[ -n "$A_SEG" ] && [ -f "$(fx_ledger_dir)/$A_SEG" ] && \
-    A_LINES="$(grep -c '' "$(fx_ledger_dir)/$A_SEG" 2>/dev/null || echo 0)"
-AFTER="$(fx_ledger_segments)"
+A_FILE=""
+if [ -n "$A_SEG" ]; then
+    for f in "$(fx_ledger_dir)/$A_SEG" "$(fx_ledger_dir)/${A_SEG%.log}.closed.log"; do
+        [ -f "$f" ] && A_FILE="$f"
+    done
+fi
+[ -n "$A_FILE" ] && A_LINES="$(grep -vc '^#' "$A_FILE" 2>/dev/null || true)"
+KEPT=0
+i=1
+while [ "$i" -le "$PLANT" ]; do
+    p="$(fx_ledger_dir)/dur.$SCHEMA.${HOST_TOK:-0000000000000000}.20200101T0000$(printf '%02d' "$i")-1.log"
+    grep -q "|young/$i\.sh\$" "$p" 2>/dev/null && KEPT=$((KEPT + 1))
+    i=$((i + 1))
+done
 
 if [ "$X_EXEC" = "2" ] && [ "$Y_EXEC" = "1" ]; then
     fx_pass "N33b. the fixture is real: the long runner executed 2 dummies while the short one executed 1"
@@ -200,13 +212,13 @@ else
 fi
 
 if [ ! -f "$DUR_LIB" ]; then
-    fx_fail "N33. a live writer's segment survives a sweep triggered by another runner (implementation missing: $DUR_LIB_REL)"
+    fx_fail "N33. young open segments survive another runner's start (implementation missing: $DUR_LIB_REL)"
 elif [ -z "$A_SEG" ]; then
-    fx_fail "N33. the background runner never created a segment within 30s, so the sweep had no live writer to spare"
-elif [ "$A_LINES" = "2" ] && [ "$AFTER" = "$KEEP" ]; then
-    fx_pass "N33. with $PLANT old segments planted, the sweep cut back to $KEEP and left the live writer's '$A_SEG' holding both of its records"
+    fx_fail "N33. the background runner never created a segment within 30s, so there was no live writer to spare"
+elif [ "$A_LINES" = "2" ] && [ "$KEPT" = "$PLANT" ]; then
+    fx_pass "N33. all $PLANT young open segments kept their records and the live writer's '$A_SEG' holds both of its records"
 else
-    fx_fail "N33. want the live segment '$A_SEG' to hold 2 records with exactly $KEEP segments left, got records=$A_LINES segments=$AFTER"
+    fx_fail "N33. want all $PLANT young open segments kept and the live writer's segment '$A_SEG' holding 2 records, got kept=$KEPT records=$A_LINES (file '${A_FILE:-none}')"
 fi
 fx_ledger_clear
 

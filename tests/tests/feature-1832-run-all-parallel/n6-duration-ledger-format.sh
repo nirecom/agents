@@ -212,4 +212,50 @@ else
     fx_ledger_clear
 fi
 
+# ===========================================================================
+# N48 — #2079 S6: a writer's segment opens with one `#os <family>/<version>` header
+# ===========================================================================
+# The header is for a human reading the ledger; the reader must skip it, and every OTHER
+# line keeps the N26 record grammar. Asserted on the writer's own output, not a planted file.
+OS_RE='^#os [A-Za-z0-9._-]{1,32}/[A-Za-z0-9._-]{1,64}$'
+REC_RE='^[A-Za-z0-9]{16}\|[0-9]{1,4}\|[^|]+$'
+if lib_missing "N48a. the writer's segment starts with the #os attribute header"; then
+    fx_fail "N48b. every non-header line keeps the record grammar (implementation missing or unloadable: $DUR_LIB_REL)"
+    fx_fail "N48c. the reader skips the header line (implementation missing or unloadable: $DUR_LIB_REL)"
+else
+    fresh_ledger
+    N48_SEG="$(
+        RUN_ALL_DUR_SEGMENT=""
+        run_all_dur_writer_init "$AG"
+        run_all_dur_append "hdr/a.sh" 4
+        run_all_dur_append "hdr/b.sh" 11
+        printf '%s' "$RUN_ALL_DUR_SEGMENT"
+    )"
+    N48_NAME="${N48_SEG##*/}"
+    N48_FIRST="$(head -n 1 "$N48_SEG" 2>/dev/null)"
+    if [ "$SCHEMA" = "2" ] && [ "${N48_NAME#dur.2.}" != "$N48_NAME" ] && printf '%s\n' "$N48_FIRST" | grep -qE "$OS_RE"; then
+        fx_pass "N48a. $N48_NAME opens with '$N48_FIRST'"
+    else
+        fx_fail "N48a. want schema 2, a dur.2.* name and an #os first line; got schema=$SCHEMA name=${N48_NAME:-none} first='$N48_FIRST'"
+    fi
+    N48_HDRS="$(grep -c '^#' "$N48_SEG" 2>/dev/null || true)"
+    N48_BAD="$(tail -n +2 "$N48_SEG" 2>/dev/null | grep -cvE "$REC_RE" || true)"
+    N48_RECS="$(tail -n +2 "$N48_SEG" 2>/dev/null | grep -c '' || true)"
+    if [ "$N48_HDRS" = "1" ] && [ "$N48_BAD" = "0" ] && [ "$N48_RECS" = "2" ]; then
+        fx_pass "N48b. exactly one header line, and both records after it match the record grammar"
+    else
+        fx_fail "N48b. headers=$N48_HDRS non-conforming=$N48_BAD records=$N48_RECS (want 1/0/2)"
+    fi
+    fresh_ledger
+    printf '#os Linux/1.0\n%s|4|hdr/a.sh\n%s|11|hdr/b.sh\n' "$RID" "$RID" > "$(seg_path 20260101T000000 4242)"
+    printf 'k1\thdr/a.sh\nk2\thdr/b.sh\n' > "$KEYS"
+    run_all_dur_lookup "$AG" "$KEYS" "$OUT" || true
+    if [ "$(secs_for k1):$(secs_for k2)" = "4:11" ]; then
+        fx_pass "N48c. the reader skipped a planted #os header and resolved both records after it"
+    else
+        fx_fail "N48c. want 4:11 through the planted header, got $(secs_for k1):$(secs_for k2)"
+    fi
+    fx_ledger_clear
+fi
+
 fx_finish
