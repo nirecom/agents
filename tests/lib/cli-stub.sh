@@ -45,3 +45,42 @@ cli_stub_run() { # <cmd...> — stub first on PATH, preload on, CLI_STUB_* vars 
     CLI_STUB_OUT="${CLI_STUB_OUT:-}" CLI_STUB_RC="${CLI_STUB_RC:-0}" \
     CLI_STUB_SLEEP_MS="${CLI_STUB_SLEEP_MS:-0}" CLI_STUB_LOG="${CLI_STUB_LOG:-}" "$@"
 }
+
+# cli_stub_bridge_cmd <dir> <name>... — keeps a test's existing <dir>/<name>.cmd mocks reachable
+# from a shell-less spawnSync on Windows: <name>.exe (a node copy) runs <name>.cmd through cmd.exe
+# with the same argv and exit code, or exits 127 once the .cmd is removed. Exports NODE_OPTIONS
+# (the preload is inert in every other node process); a no-op off Windows, where the extensionless
+# bash mock already runs without a shell. An argv whose first element starts with `-` is read by
+# node itself, so a bridged mock cannot answer e.g. `gh --version`.
+cli_stub_bridge_cmd() {
+  local d="$1" node_bin n preload
+  shift
+  [ "$(node -p 'process.platform' 2>/dev/null)" = "win32" ] || return 0
+  node_bin="$(node -p 'process.execPath')" || return 1
+  # A copy, never a link: MSYS opens <name>.exe for a write to an absent <name>, and a
+  # link would hand that write to the real node binary. Create <name> before bridging it.
+  for n in "$@"; do
+    [ -f "$d/$n" ] || { echo "cli_stub_bridge_cmd: $d/$n must exist before bridging" >&2; return 1; }
+    [ -e "$d/$n.exe" ] || cp "$node_bin" "$d/$n.exe" || return 1
+  done
+  preload="$d/cli-stub-bridge-preload.js"
+  # Only an exe linked into this directory bridges, so repeat calls per <dir> stay additive.
+  printf '%s\n' 'const path = require("path"); const fs = require("fs"); const cp = require("child_process");' \
+    'const same = (x, y) => path.resolve(x).toLowerCase() === path.resolve(y).toLowerCase();' \
+    'const me = path.basename(process.execPath).replace(/\.exe$/i, "").toLowerCase();' \
+    'if (same(path.dirname(process.execPath), __dirname)) {' \
+    '  const cmdFile = path.join(__dirname, me + ".cmd");' \
+    '  if (!fs.existsSync(cmdFile)) process.exit(127);' \
+    '  const a = process.argv.slice(1); if (a.length) a[0] = path.basename(a[0]);' \
+    '  const q = (s) => (/[\s&|<>^()]/.test(s) ? "\"" + s + "\"" : s);' \
+    '  const line = "\"" + cmdFile + "\"" + a.map((s) => " " + q(s)).join("");' \
+    '  const r = cp.spawnSync(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", "\"" + line + "\""],' \
+    '    { stdio: "inherit", windowsVerbatimArguments: true });' \
+    '  process.exit(r.status === null ? 1 : r.status);' \
+    '}' > "$preload" || return 1
+  if command -v cygpath >/dev/null 2>&1; then preload="$(cygpath -m "$preload")"; fi
+  case "${NODE_OPTIONS:-}" in
+    *"\"$preload\""*) ;;
+    *) export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require \"$preload\"" ;;
+  esac
+}

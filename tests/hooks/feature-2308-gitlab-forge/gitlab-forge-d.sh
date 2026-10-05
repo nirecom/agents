@@ -86,6 +86,6 @@ else
 fi
 
 unset GLAB_MOCK_VISIBILITY
-rm -f "$MOCK_BIN/gh" "$MOCK_BIN/gh.cmd"
+remove_mock_gh
 
 finish
