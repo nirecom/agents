@@ -18,7 +18,8 @@ demand; plan-sync pushes one plan file at the moment it is written.
 
 ## Setup
 
-1. Create a **private** (or internal) repository to hold plans.
+1. Create an empty **private** (or internal) repository yourself — no README needed.
+   Init does not create it; it pushes the first commit to the empty repo.
 2. Set it in `agents/.env` (gitignored; template in `.env.example`):
 
    ```
