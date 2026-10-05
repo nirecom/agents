@@ -567,7 +567,7 @@ assert_eq "C3/github remote + gh private -> true" "true" "$(run_ipr "$REPO_GH")"
 setup_mock_gh false
 assert_eq "C3b/github remote + gh public -> false" "false" "$(run_ipr "$REPO_GH")"
 case_end
-rm -f "$MOCK_BIN/gh" "$MOCK_BIN/gh.cmd"
+remove_mock_gh
 case_end
 
 

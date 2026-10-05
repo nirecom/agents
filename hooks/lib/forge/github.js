@@ -1,7 +1,7 @@
 "use strict";
 
-// On Windows, spawnSync without shell:true cannot resolve .cmd wrappers via PATHEXT.
-const WIN32 = process.platform === "win32";
+// gh ships as a native executable, so it is spawned without a shell: each argv
+// element reaches gh intact and nothing passes through cmd.exe (DEP0190).
 
 // GitHub forge descriptors (#2307). The gh scan regexes live here (CPR-SSOT):
 // forge-write-extract.js re-imports GH_API_WRITE_REGEX / GH_REPO_WRITE_REGEX from
@@ -23,7 +23,6 @@ const codehostGithub = {
       const result = spawnSync("gh", ["api", "repos/" + parsed.ownerRepo, "--jq", ".private"], {
         encoding: "utf8",
         timeout: 10000,
-        shell: WIN32,
       });
       if (result.error || result.status !== 0) return false;
       return (result.stdout || "").trim() === "true";
@@ -40,7 +39,6 @@ const codehostGithub = {
       const r = spawnSync("gh", ["api", "repos/" + parsed.ownerRepo, "--jq", ".visibility"], {
         encoding: "utf8",
         timeout: 15000,
-        shell: WIN32,
         windowsHide: true,
       });
       if (r.error || r.status !== 0) return null;
@@ -57,7 +55,6 @@ const codehostGithub = {
       const result = spawnSync("gh", ["api", "repos/" + ownerRepo, "--jq", ".private"], {
         encoding: "utf8",
         timeout: 10000,
-        shell: WIN32,
       });
       if (result.error || result.status !== 0) return true;
       const out = (result.stdout || "").trim();
@@ -70,9 +67,9 @@ const codehostGithub = {
   },
   // One visibility-tagged listing; filtering and fail-to-[] live in ./private-repo-list.
   listPrivateRepoNames() {
-    const { listVisibilityTagged, shellArg } = require("./private-repo-list");
+    const { listVisibilityTagged } = require("./private-repo-list");
     return listVisibilityTagged("gh", ["repo", "list", "--limit", "1000", "--json", "nameWithOwner,visibility",
-      "--jq", shellArg(".[]|[.visibility,.nameWithOwner]|@tsv")]);
+      "--jq", ".[]|[.visibility,.nameWithOwner]|@tsv"]);
   },
   hasOpenPrForBranch(repoDir) {
     // Lazy require breaks the cycle: gh-detect requires forge-router at top level,

@@ -120,6 +120,10 @@ if "%~1"=="api" (
 exit /b 0
 CMD
 EXEC_PATH_PRIV="$STUB_BIN_PRIV:$PATH"
+# The forge descriptors spawn gh without a shell, which cannot run a .cmd: bridge both stubs.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/tests/lib/cli-stub.sh"
+cli_stub_bridge_cmd "$STUB_BIN" gh
+cli_stub_bridge_cmd "$STUB_BIN_PRIV" gh
 
 # is-private-repo.js needs an `origin` remote to even reach `gh api`. Create
 # a real git repo with a github.com origin so the private-repo branch is taken

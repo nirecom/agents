@@ -4,7 +4,6 @@
 // ONE CLI listing whose rows are "<visibility>\t<name>", so the scan-outbound hook pays a
 // single spawn timeout. private/internal rows are kept (any case), deduped first-seen;
 // public, unknown and malformed rows are dropped; any spawn failure -> [].
-const WIN32 = process.platform === "win32";
 const KEEP = new Set(["private", "internal"]);
 
 function parseVisibilityRows(stdout) {
@@ -21,15 +20,11 @@ function parseVisibilityRows(stdout) {
   return names;
 }
 
-// cmd.exe (shell on Windows) splits an unquoted `|` / `&`, so such args are quoted there.
-function shellArg(arg) {
-  return WIN32 ? '"' + arg + '"' : arg;
-}
-
+// No shell: a `|` / `&` inside an argument (the jq program, the query string) reaches the CLI whole.
 function listVisibilityTagged(cmd, args) {
   try {
     // Must finish under the 5 s scan-outbound PreToolUse hook timeout (settings.json).
-    const r = require("child_process").spawnSync(cmd, args, { encoding: "utf8", timeout: 4000, shell: WIN32 });
+    const r = require("child_process").spawnSync(cmd, args, { encoding: "utf8", timeout: 4000 });
     if (r.error || r.status !== 0) return [];
     return parseVisibilityRows(r.stdout);
   } catch (e) {
@@ -37,4 +32,4 @@ function listVisibilityTagged(cmd, args) {
   }
 }
 
-module.exports = { listVisibilityTagged, parseVisibilityRows, shellArg };
+module.exports = { listVisibilityTagged, parseVisibilityRows };
