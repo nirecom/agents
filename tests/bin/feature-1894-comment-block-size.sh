@@ -79,7 +79,6 @@ CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
 export CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # The three variables that can steer a verdict: the kill switch, the threshold

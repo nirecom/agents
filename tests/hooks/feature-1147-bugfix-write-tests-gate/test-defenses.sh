@@ -25,7 +25,6 @@ fs.mkdirSync(d,{recursive:true});
 process.stdout.write(d);
 ")"
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
-export CLAUDE_ENV_FILE="$TMPDIR_ROOT/claude_env"
 mkdir -p "$CLAUDE_WORKFLOW_DIR"
 cleanup() { rm -rf "$TMPDIR_ROOT"; }
 trap cleanup EXIT
@@ -40,7 +39,6 @@ NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u
 echo "=== C7: workflow-mark — WRITE_TESTS_NOT_NEEDED rejected for BUGFIX session ==="
 SID_C7="test-c7-$$"
 write_state "$SID_C7" "true" "fix/my-bug"
-write_env_file "$SID_C7"
 
 SENTINEL_C7='<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: no tests needed>>'
 C7_PAYLOAD='{"tool_name":"Bash","tool_input":{"command":"echo \"'"$SENTINEL_C7"'\""},"tool_response":{"output":"'"$SENTINEL_C7"'","exit_code":0},"session_id":"'"$SID_C7"'"}'
@@ -64,7 +62,6 @@ fi
 echo "=== C8: workflow-mark — WRITE_TESTS_NOT_NEEDED accepted for non-BUGFIX session ==="
 SID_C8="test-c8-$$"
 write_state "$SID_C8" "false" "feature/bar"
-write_env_file "$SID_C8"
 
 SENTINEL_C8='<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: no tests needed for docs-only>>'
 C8_PAYLOAD='{"tool_name":"Bash","tool_input":{"command":"echo \"'"$SENTINEL_C8"'\""},"tool_response":{"output":"'"$SENTINEL_C8"'","exit_code":0},"session_id":"'"$SID_C8"'"}'
@@ -90,7 +87,6 @@ git -C "$REPO_C9" checkout -q -b "fix/my-bug" 2>/dev/null || git -C "$REPO_C9" s
 
 SID_C9="test-c9-$$"
 write_state_with_steps "$SID_C9" "true" "fix/my-bug" "skipped" "skipped"
-write_env_file "$SID_C9"
 
 C9_PAYLOAD="$(REPO_DIR="$REPO_C9" node -e "
 const d=process.env.REPO_DIR;
@@ -126,7 +122,6 @@ git -C "$REPO_C10" checkout -q -b "fix/my-bug-2" 2>/dev/null || git -C "$REPO_C1
 
 SID_C10A="test-c10a-$$"
 write_state_with_steps "$SID_C10A" "true" "fix/my-bug-2" "complete" "skipped"
-write_env_file "$SID_C10A"
 
 C10A_PAYLOAD="$(REPO_DIR="$REPO_C10" node -e "
 const d=process.env.REPO_DIR;
@@ -153,7 +148,6 @@ git -C "$REPO_C10B" checkout -q -b "feature/new-thing" 2>/dev/null || git -C "$R
 
 SID_C10B="test-c10b-$$"
 write_state_with_steps "$SID_C10B" "false" "feature/new-thing" "complete" "skipped" "complete"
-write_env_file "$SID_C10B"
 
 C10B_PAYLOAD="$(REPO_DIR="$REPO_C10B" node -e "
 const d=process.env.REPO_DIR;
@@ -188,7 +182,6 @@ git -C "$REPO_C11" add "tests/dummy-test.sh"
 
 SID_C11="test-c11-$$"
 write_state_with_steps "$SID_C11" "true" "fix/evidence-bypass" "skipped" "skipped"
-write_env_file "$SID_C11"
 
 C11_PAYLOAD="$(REPO_DIR="$REPO_C11" node -e "
 const d=process.env.REPO_DIR;

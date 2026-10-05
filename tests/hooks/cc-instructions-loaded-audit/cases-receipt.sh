@@ -182,36 +182,19 @@ else
     fail "E6b: want a receipt at $E6B_SID.instructions-loaded/$E6B_KEY.json (hook rc=$E6B_RC)"
 fi
 
-# --- E6c: both env vars set to different ids. The attribution order must be the
-# SSOT resolver's (CLAUDE_CODE_SESSION_ID first), or a receipt is filed under an
-# identity the session does not answer to. ---
-E6C_CC="e6cccsid"
-E6C_LEGACY="e6clegacysid"
-E6C_FP="$(node_path "$REPO/rules/ok-conditional.md")"
-E6C_RC=0
-printf '%s' "$(node -e 'console.log(JSON.stringify({file_path:process.argv[1],hook_event_name:"InstructionsLoaded"}))' "$E6C_FP")" \
-    | (cd "$BASE" && CLAUDE_SESSION_ID="$E6C_LEGACY" CLAUDE_CODE_SESSION_ID="$E6C_CC" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || E6C_RC=$?
-E6C_KEY="$(sha1_of "$E6C_FP")"
-if [ "$E6C_RC" = "0" ] && [ -f "$WFDIR/$E6C_CC.instructions-loaded/$E6C_KEY.json" ] \
-   && [ ! -f "$WFDIR/$E6C_LEGACY.instructions-loaded/$E6C_KEY.json" ]; then
-    pass "E6c: both env ids present -> CLAUDE_CODE_SESSION_ID wins the attribution"
-else
-    fail "E6c: want the receipt under $E6C_CC only (hook rc=$E6C_RC)"
-fi
-
-# --- E6d: an explicit payload session_id outranks BOTH env vars — the env is a
+# --- E6c: an explicit payload session_id outranks the env var — the env is a
 # fallback for callers that supply nothing, never an override of the event. ---
-E6D_SID="e6dpayloadsid"
-E6D_FP="$(node_path "$REPO/docs/not-a-rule.md")"
-E6D_RC=0
-printf '%s' "$(node -e 'console.log(JSON.stringify({session_id:process.argv[1],file_path:process.argv[2],hook_event_name:"InstructionsLoaded"}))' "$E6D_SID" "$E6D_FP")" \
-    | (cd "$BASE" && CLAUDE_CODE_SESSION_ID="e6dccsid" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || E6D_RC=$?
-E6D_KEY="$(sha1_of "$E6D_FP")"
-if [ "$E6D_RC" = "0" ] && [ -f "$WFDIR/$E6D_SID.instructions-loaded/$E6D_KEY.json" ] \
-   && [ ! -f "$WFDIR/e6dccsid.instructions-loaded/$E6D_KEY.json" ]; then
-    pass "E6d: payload session_id outranks the CLAUDE_CODE_SESSION_ID fallback"
+E6C_SID="e6cpayloadsid"
+E6C_FP="$(node_path "$REPO/docs/not-a-rule.md")"
+E6C_RC=0
+printf '%s' "$(node -e 'console.log(JSON.stringify({session_id:process.argv[1],file_path:process.argv[2],hook_event_name:"InstructionsLoaded"}))' "$E6C_SID" "$E6C_FP")" \
+    | (cd "$BASE" && CLAUDE_CODE_SESSION_ID="e6cccsid" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || E6C_RC=$?
+E6C_KEY="$(sha1_of "$E6C_FP")"
+if [ "$E6C_RC" = "0" ] && [ -f "$WFDIR/$E6C_SID.instructions-loaded/$E6C_KEY.json" ] \
+   && [ ! -f "$WFDIR/e6cccsid.instructions-loaded/$E6C_KEY.json" ]; then
+    pass "E6c: payload session_id outranks the CLAUDE_CODE_SESSION_ID fallback"
 else
-    fail "E6d: want the receipt under $E6D_SID only (hook rc=$E6D_RC)"
+    fail "E6c: want the receipt under $E6C_SID only (hook rc=$E6C_RC)"
 fi
 
 # --- E7: wsid null skips ONLY the supervisor emit; the receipt still exists.

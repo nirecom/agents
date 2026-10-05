@@ -1,6 +1,6 @@
 # wip-resume-check-543.sh — #543 SID-resolution tests ported to the driver.
-# E1: driver wip-check phase resolves SID from CLAUDE_ENV_FILE and passes --session-id.
-# F1: driver wip-check phase passes --session-id through to wip-state.sh check.
+# F1: driver wip-check phase passes the CLAUDE_CODE_SESSION_ID-resolved --session-id
+# through to wip-state.sh check. (E1, the retired env-file source, was removed in #1091.)
 # Sourced by fix-session-id-fixes-451-469-543.sh; inherits globals and helpers.
 
 # Helper: build a minimal driver fixture under a temp dir.
@@ -78,35 +78,6 @@ teardown_drv_mock() {
     B543_TMP=""
 }
 
-# === E1: driver resolves SID from CLAUDE_ENV_FILE and passes --session-id to wip-state.sh ===
-if [ ! -f "$DRIVER" ]; then
-    fail "E1: $DRIVER missing"
-else
-    setup_drv_mock
-    B543_ENVFILE="$B543_TMP/claude-env"
-    printf 'CLAUDE_SESSION_ID=testSID\n' > "$B543_ENVFILE"
-
-    ORIG_PATH_E1="$PATH"
-    export PATH="$B543_MOCKBIN:$PATH"
-    # driver reads CLAUDE_SESSION_ID directly when set; no CLAUDE_ENV_FILE reading
-    # by the driver. We test via CLAUDE_SESSION_ID env directly.
-    run_with_timeout 30 bash -c "
-        export CLAUDE_SESSION_ID='testSID'
-        unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-        export WORKFLOW_PLANS_DIR='$B543_PLANS'
-        export AGENTS_CONFIG_DIR='$B543_CFG'
-        node '$DRIVER' '#42'
-    " >/dev/null 2>&1
-    RC=$?
-    export PATH="$ORIG_PATH_E1"
-    if grep -q -- "--session-id testSID" "$B543_WIP_LOG" 2>/dev/null; then
-        pass "E1: driver wip-check phase passes --session-id testSID from CLAUDE_SESSION_ID env"
-    else
-        fail "E1: rc=$RC wip_log=$(cat "$B543_WIP_LOG" 2>/dev/null)"
-    fi
-    teardown_drv_mock
-fi
-
 # === F1: driver wip-check phase passes --session-id through to wip-state.sh check ===
 if [ ! -f "$DRIVER" ]; then
     fail "F1: $DRIVER missing"
@@ -116,8 +87,7 @@ else
     ORIG_PATH_F1="$PATH"
     export PATH="$B543_MOCKBIN:$PATH"
     run_with_timeout 30 bash -c "
-        export CLAUDE_SESSION_ID='testSID'
-        unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+        export CLAUDE_CODE_SESSION_ID='testSID'
         export WORKFLOW_PLANS_DIR='$B543_PLANS'
         export AGENTS_CONFIG_DIR='$B543_CFG'
         node '$DRIVER' '#42'

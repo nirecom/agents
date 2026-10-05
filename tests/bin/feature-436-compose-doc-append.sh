@@ -290,7 +290,7 @@ cat > "$_f25_tmp_notes" <<'NOTESEOF'
 NOTESEOF
 _f25_repo="$(setup_test_repo)"
 # Run with a bad --repo to force gh api failure in fetch_to_staging
-CLAUDE_SESSION_ID="$_f25_session" \
+CLAUDE_CODE_SESSION_ID="$_f25_session" \
     WORKFLOW_PLANS_DIR="$_f25_staging_dir" \
     run_cli "$_f25_repo" \
     --notes "$_f25_tmp_notes" \

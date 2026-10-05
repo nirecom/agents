@@ -1,24 +1,26 @@
 #!/bin/bash
 # bin/github-issues/wip-state/session-id.sh — session-id resolution helpers.
 # Sourced by ../wip-state.sh; not executable standalone.
-# Globals consumed: CLAUDE_CODE_SESSION_ID, CLAUDE_ENV_FILE, CLAUDE_SESSION_ID, SID_SET, INJECTED_SID.
+# Globals consumed: SID_SET, INJECTED_SID (resolution itself is delegated to bin/resolve-session-id).
 
 # Resolution is delegated in full to the canonical JS resolver via the
-# bin/resolve-session-id bridge (7-step chain + isSameGitRepo cross-repo guard;
-# issue #1251). The bridge writes the resolved session-id to stdout (no trailing
-# newline) and exits 0 on success, or exits 2 when unresolvable. This wrapper
-# preserves the historical rc=2 contract by propagating the bridge's exit code.
+# bin/resolve-session-id bridge (supply-only chain, see
+# docs/architecture/claude-code/session-id-resolution.md; issue #1251). The bridge
+# writes the resolved session-id to stdout (no trailing newline) and exits 0 on
+# success, or exits 2 when unresolvable. This wrapper preserves the historical
+# rc=2 contract by propagating the bridge's exit code.
 resolve_session_id() {
-    local sid rc _dir bridge
+    local sid rc _dir bridge msg
+    msg="Error: session id not resolvable (bin/resolve-session-id: no supplied id — set CLAUDE_CODE_SESSION_ID or pass --session-id)"
     _dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
     bridge="$_dir/../../resolve-session-id"
     sid=$(bash "$bridge" 2>/dev/null) || {
         rc=$?
-        echo "Error: session id not resolvable (bin/resolve-session-id exhausted the chain: CLAUDE_CODE_SESSION_ID, CLAUDE_ENV_FILE, CLAUDE_SESSION_ID, WORKTREE_NOTES.md, JSONL scan)" >&2
+        echo "$msg" >&2
         return "$rc"
     }
     if [ -z "$sid" ]; then
-        echo "Error: session id not resolvable (bin/resolve-session-id exhausted the chain: CLAUDE_CODE_SESSION_ID, CLAUDE_ENV_FILE, CLAUDE_SESSION_ID, WORKTREE_NOTES.md, JSONL scan)" >&2
+        echo "$msg" >&2
         return 2
     fi
     printf '%s' "$sid"

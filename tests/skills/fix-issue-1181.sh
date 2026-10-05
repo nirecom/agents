@@ -202,7 +202,7 @@ case "\$V" in
 esac
 WIPEOF
         chmod +x "$T_CFG/bin/github-issues/wip-state.sh"
-        printf '#!/bin/bash\necho "${CLAUDE_SESSION_ID:-mock}"\n' > "$T_CFG/bin/resolve-session-id"
+        printf '#!/bin/bash\necho "${CLAUDE_CODE_SESSION_ID:-mock}"\n' > "$T_CFG/bin/resolve-session-id"
         cp "$AGENTS_DIR/bin/parse-issue-tokens" "$T_CFG/bin/parse-issue-tokens"
         cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$T_CFG/hooks/lib/parse-closes-issues.js"
         cat > "$T_CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
@@ -214,14 +214,14 @@ exit 0
 FEOF
         chmod +x "$T_CFG/bin/resolve-session-id" "$T_CFG/bin/parse-issue-tokens" \
             "$T_CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
-        export WORKFLOW_PLANS_DIR="$T_PLANS" AGENTS_CONFIG_DIR="$T_CFG" CLAUDE_SESSION_ID="$sid"
-        unset NON_GITHUB CLAUDE_ENV_FILE 2>/dev/null || true
+        export WORKFLOW_PLANS_DIR="$T_PLANS" AGENTS_CONFIG_DIR="$T_CFG" CLAUDE_CODE_SESSION_ID="$sid"
+        unset NON_GITHUB 2>/dev/null || true
         export PATH="$T_MOCKBIN:$ORIG_PATH1181"
     }
 
     teardown_t() {
         export PATH="$ORIG_PATH1181"
-        unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR CLAUDE_SESSION_ID 2>/dev/null || true
+        unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR 2>/dev/null || true
     }
 
     mock_issue() {

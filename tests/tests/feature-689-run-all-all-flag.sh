@@ -2,25 +2,22 @@
 # tests/tests/feature-689-run-all-all-flag.sh
 # Tests: tests/run-all.sh
 # Tags: bin, tests, scope:issue-specific
-# Issue #689 — tests/run-all.sh dispatch: `--all`, the default sweep (which
-# excludes tests/_archive/), and bare positional file arguments.
-# Issue #1836 — every case runs against a throwaway fixture suite under
-# mktemp; no case may ever sweep the repository's own tests/ tree.
-# TL3 gap (what this test does NOT catch): runner behaviour under a non-bash /bin/sh,
-# and real-CI glob/locale differences in "$TESTS_DIR"/*.sh expansion.
-# Mitigation: the runner is bash-pinned by its shebang (residual: CI shell-image drift).
+# #689 run-all dispatch (--all, default sweep minus _archive/, positional files);
+# #1836 every case runs on a mktemp fixture suite, never the repo's own tests/.
 
 set -u
 
+# RECURSION CONTRACT (#1836): never launch the repo runner with TESTS_DIR unset
+# or empty AND no positional argument — it would re-run the whole suite from
+# inside itself. Every launch pins TESTS_DIR= or names a file; C6(a) enforces it.
+
+# TL3 gap: non-bash /bin/sh and CI glob/locale drift in category discovery.
+# Mitigation: the runner is bash-pinned by its shebang.
+
 SELF="${BASH_SOURCE[0]}"
-AGENTS_DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
+AGENTS_DIR="$(cd "$(dirname "$SELF")/../.." && pwd)"
 RUN_ALL="$AGENTS_DIR/tests/run-all.sh"
 
-# RECURSION CONTRACT (#1836): no case in this file may launch the repository's
-# own tests/run-all.sh with TESTS_DIR unset or empty AND no positional
-# argument — the runner's own file matches its "$TESTS_DIR"/*.sh glob, so the
-# recursion never terminates. Every launch pins a non-empty TESTS_DIR= or names
-# a positional file; C6(a) enforces that mechanically.
 # Belt-and-braces for the recursion contract: if the suite ever re-enters this
 # file, stop instead of forking another level.
 if [ -n "${FEATURE_689_REENTRY_GUARD:-}" ]; then
@@ -37,8 +34,9 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
-[ -f "$RUN_ALL" ] || { echo "SKIP: tests/run-all.sh not present"; exit 77; }
-[ -f "$AGENTS_DIR/bin/run-with-timeout.sh" ] || { echo "SKIP: bin/run-with-timeout.sh not present"; exit 77; }
+# The runner and the wrapper are part of this checkout: a missing one is a broken root, not a skip.
+[ -f "$RUN_ALL" ] || { echo "FAIL: tests/run-all.sh not found at $RUN_ALL"; exit 1; }
+[ -f "$AGENTS_DIR/bin/run-with-timeout.sh" ] || { echo "FAIL: bin/run-with-timeout.sh not found under $AGENTS_DIR"; exit 1; }
 
 # --- helpers ---------------------------------------------------------------
 
@@ -84,11 +82,14 @@ trap 'rm -rf "$TMPROOT"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMPROOT/plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
+export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
+# shellcheck source=../lib/test-language-registry-fixture.sh
+. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
 
-# make_fixture_tests <dir> — 4 top-level fixture tests (2 pass / 1 fail / 1
-# skip) plus an _archive/ sentinel. Never writes inside the repository tree.
+# make_fixture_tests <dir> — 4 fixture tests in the bin/ category (2 pass / 1 fail
+# / 1 skip; the runner discovers category dirs only) plus an _archive/ sentinel.
+# Never writes inside the repository tree.
 make_fixture_tests() {
     local dir="$1"
     case "$dir" in
@@ -96,13 +97,13 @@ make_fixture_tests() {
             echo "FATAL: refusing to build a fixture inside the repository tree: $dir" >&2
             exit 1 ;;
     esac
-    mkdir -p "$dir/tests/_archive"
-    printf '#!/bin/bash\necho MARKER_T1\nexit 0\n'             > "$dir/tests/t1-pass.sh"
-    printf '#!/bin/bash\nexit 0\n'                             > "$dir/tests/t2-pass.sh"
-    printf '#!/bin/bash\nexit 3\n'                             > "$dir/tests/t3-fail.sh"
-    printf '#!/bin/bash\nexit 77\n'                            > "$dir/tests/t4-skip.sh"
+    mkdir -p "$dir/tests/bin" "$dir/tests/_archive"
+    printf '#!/bin/bash\necho MARKER_T1\nexit 0\n'             > "$dir/tests/bin/t1-pass.sh"
+    printf '#!/bin/bash\nexit 0\n'                             > "$dir/tests/bin/t2-pass.sh"
+    printf '#!/bin/bash\nexit 3\n'                             > "$dir/tests/bin/t3-fail.sh"
+    printf '#!/bin/bash\nexit 77\n'                            > "$dir/tests/bin/t4-skip.sh"
     printf '#!/bin/bash\necho MARKER_ARCHIVE_LEAKED\nexit 0\n' > "$dir/tests/_archive/archive-sentinel.sh"
-    chmod +x "$dir/tests"/*.sh "$dir/tests/_archive"/*.sh
+    chmod +x "$dir/tests/bin"/*.sh "$dir/tests/_archive"/*.sh
 }
 
 # make_fixture_repo <dir> — fixture tests plus a copy of the REAL runner placed
@@ -179,7 +180,7 @@ test_C3_default_excludes_archive() {
     out="$(TESTS_DIR="$FX/tests" run_with_timeout 60 bash "$RUN_ALL" 2>&1)"
     rc=$?
     if ! has_line 'MARKER_ARCHIVE_LEAKED' "$out" && has_line 'EXECUTED=4$' "$out"; then
-        pass "C3_default_excludes_archive: default sweep ran the 4 top-level fixture tests and skipped _archive/"
+        pass "C3_default_excludes_archive: default sweep ran the 4 bin/ fixture tests and skipped _archive/"
     else
         fail "C3_default_excludes_archive: archive sentinel leaked or EXECUTED was not 4 (rc=$rc)"
         diag "$out"
@@ -383,6 +384,47 @@ test_C7_ambient_sanitized() {
     fi
 }
 
+# C8 (#2500): a file the launcher declines (rc 78 with RUN_ALL_EXEC_LAUNCHED=0 — here a
+# suite-unit file with no suite root) prints UNSUPPORTED and moves no tally, contract or
+# exit; a launched script that itself exits 78 is an ordinary FAIL. The pre-filter
+# UNSUPPORTED path (recognized-only / unmatched) is U1-U5 in feature-2007-run-all-ps1-dispatch.sh.
+# The runner and launcher load a fixture checkout's table, never the repo's.
+test_C8_not_launched_unsupported_not_counted() {
+    local co="$TMPROOT/co-unsup" lone x78 okt out rc ctl_out ctl_rc ok=1
+    mkdir -p "$co/bin" "$co/hooks/lib" "$co/tests/lone" "$co/tests/bin"
+    cp -R "$AGENTS_DIR/bin/lib" "$co/bin/lib"
+    cp "$AGENTS_DIR/bin/run-with-timeout.sh" "$co/bin/"
+    install_test_language_registry "$co" "$AGENTS_DIR"
+    cp "$AGENTS_DIR/tests/bin/test-language-registry/fixtures/fake-suite.json" "$co/hooks/lib/test-language-registry.json"
+    lone="$co/tests/lone/c.fakesuite"; x78="$co/tests/bin/x78.sh"; okt="$co/tests/bin/ok.sh"
+    printf '# t\n' > "$lone"
+    printf '#!/bin/bash\nexit 78\n' > "$x78"
+    printf '#!/bin/bash\nexit 0\n' > "$okt"
+    out="$(RUN_ALL_REGISTRY_LIB="$co/bin/lib/test-language-registry.sh" RUN_ALL_LAUNCH_LIB="$co/bin/lib/run-all-launch.sh" \
+        run_with_timeout 120 bash "$RUN_ALL" "$lone" "$x78" "$okt" 2>/dev/null)"
+    rc=$?
+    ctl_out="$(RUN_ALL_REGISTRY_LIB="$co/bin/lib/test-language-registry.sh" RUN_ALL_LAUNCH_LIB="$co/bin/lib/run-all-launch.sh" \
+        run_with_timeout 120 bash "$RUN_ALL" "$lone" "$okt" 2>/dev/null)"
+    ctl_rc=$?
+    [ "$(count_lines '^UNSUPPORTED: ' "$out")" = "1" ] || ok=0
+    has_fixed "UNSUPPORTED: $lone (language: fake-suite; no suite root fake.root)" "$out" || ok=0
+    [ "$(count_lines '^(PASS|FAIL|SKIP): .*c\.fakesuite' "$out")" = "0" ] || ok=0
+    has_fixed "FAIL: $x78 (exit 78)" "$out" || ok=0
+    has_fixed "PASS: $okt" "$out" || ok=0
+    has_line '^RUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 EXECUTED=2$' "$out" || ok=0
+    [ "$rc" = "1" ] || ok=0
+    has_fixed "UNSUPPORTED: $lone (language: fake-suite; no suite root fake.root)" "$ctl_out" || ok=0
+    has_line '^RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1$' "$ctl_out" || ok=0
+    [ "$ctl_rc" = "0" ] || ok=0
+    if [ "$ok" = "1" ]; then
+        pass "C8_not_launched_unsupported_not_counted: declined file is UNSUPPORTED and uncounted; launched exit 78 is FAIL (rc=$rc, control rc=$ctl_rc)"
+    else
+        fail "C8_not_launched_unsupported_not_counted: rc=$rc control-rc=$ctl_rc (want UNSUPPORTED line, FAIL (exit 78), PASS=1 FAIL=1 EXECUTED=2 rc=1; control PASS=1 FAIL=0 EXECUTED=1 rc=0)"
+        diag "$out"
+        diag "$ctl_out"
+    fi
+}
+
 test_C1_all_flag_iterates
 test_C2_positional_single_file
 test_C3_default_excludes_archive
@@ -395,6 +437,7 @@ test_C6a_no_unpinned_launch
 test_C6b_captured_output_masked
 test_C6c_mask_contract_strips_marker
 test_C7_ambient_sanitized
+test_C8_not_launched_unsupported_not_counted
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

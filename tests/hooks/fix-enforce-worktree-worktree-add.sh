@@ -30,7 +30,7 @@ BG="$(np "$AGENTS_DIR/hooks/bash-guard.js")"
 bg_run() {
     local out
     out="$(cd "$MAIN" && ew_bash_payload test "$1" | run_with_timeout 30 env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u WORKFLOW_OFF \
+         -u CLAUDE_CODE_SESSION_ID -u WORKFLOW_OFF \
         "AGENTS_CONFIG_DIR=$MAIN" node "$BG" 2>/dev/null)" || true
     out="$(printf '%s' "$out" | tr -d '\r\n')"
     case "$out" in

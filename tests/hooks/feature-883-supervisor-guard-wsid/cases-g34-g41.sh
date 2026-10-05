@@ -340,29 +340,27 @@ run_g47() {
 }
 
 run_g48() {
-    require_source "$HOOK" "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_ENV_FILE → CLAUDE_SESSION_ID" || return
-    require_wsid "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_ENV_FILE → CLAUDE_SESSION_ID" || return
-    local tmp env_file out rc sid wsid
+    require_source "$HOOK" "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_CODE_SESSION_ID + <sid>-*.md" || return
+    require_wsid "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_CODE_SESSION_ID + <sid>-*.md" || return
+    local tmp out rc sid wsid
     tmp="$(mktemp -d)"
-    env_file="$(mktemp)"
     sid="g48-cc-uuid"
     wsid="g48-wsid-from-env"
-    printf "CLAUDE_SESSION_ID=%s\n" "$wsid" > "$env_file"
     touch "$tmp/${wsid}-intent.md"
     seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     # #1794: branch (3) also requires isWorkflowStarted(sessionId). resolveSessionId
     # Priority 1 (ctx.sessionIdFromInput) resolves to $sid here since input.session_id
     # is present and valid, so isWorkflowStarted is evaluated against $sid — seed it there.
     seed_workflow_started "$tmp" "$sid"
-    # No WORKTREE_NOTES.md — Priority 1 skips; Priority 2 picks wsid via CLAUDE_ENV_FILE.
+    # No WORKTREE_NOTES.md — Priority 1 skips; Priority 2 picks wsid via CLAUDE_CODE_SESSION_ID.
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" CLAUDE_ENV_FILE="$env_file" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" CLAUDE_CODE_SESSION_ID="$wsid" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
-    rm -rf "$tmp"; rm -f "$env_file"
+    rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Workflow session ID: $wsid"; then
-        pass "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_ENV_FILE → CLAUDE_SESSION_ID"
+        pass "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_CODE_SESSION_ID + <sid>-*.md"
     else
-        fail "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_ENV_FILE → CLAUDE_SESSION_ID (rc=$rc, out=$out)"
+        fail "G48: resolveWorkflowSessionId Priority 2 — CLAUDE_CODE_SESSION_ID + <sid>-*.md (rc=$rc, out=$out)"
     fi
 }
 
@@ -375,7 +373,7 @@ run_g49() {
     TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toString()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'));" 2>/dev/null)
     wsid_low="${TODAY}-100000-g49low"
     wsid_high="${TODAY}-090000-g49high"
-    # Two same-day candidates, no CLAUDE_ENV_FILE -> all ccBucket=1 -> ambiguity gate fires -> resolver null.
+    # Two same-day candidates, no CLAUDE_CODE_SESSION_ID -> all ccBucket=1 -> ambiguity gate fires -> resolver null.
     touch "$tmp/${wsid_low}-context.md" "$tmp/${wsid_low}-intent.md"
     touch "$tmp/${wsid_high}-context.md" "$tmp/${wsid_high}-intent.md" "$tmp/${wsid_high}-detail.md"
     # State under wsid_high only; resolver returns null -> guard uses CC UUID (g49-cc-uuid) -> no state -> rc=0.

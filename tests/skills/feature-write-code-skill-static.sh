@@ -60,15 +60,16 @@ if require_file "$WRITE_CODE_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
-# c. SKILL.md gates on CONFIRM_CODE via bin/confirm-off (get-config-var
-#    --is-off was retired repo-wide in favor of bin/confirm-off; #1002)
+# c. SKILL.md gates WCD-6 via the shared next-step --gate trigger line
+#    (bin/confirm-off retired from the gate sections by #2490)
 # ---------------------------------------------------------------------------
-echo "=== c. SKILL.md contains bin/confirm-off CONFIRM_CODE gate ==="
+echo "=== c. SKILL.md contains the next-step --gate trigger line ==="
+GATE_TRIGGER='Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.'
 if require_file "$WRITE_CODE_SKILL"; then
-    if has_fixed "bin/confirm-off\" CONFIRM_CODE" "$WRITE_CODE_SKILL"; then
-        pass "SKILL.md contains 'bin/confirm-off\" CONFIRM_CODE'"
+    if has_fixed "$GATE_TRIGGER" "$WRITE_CODE_SKILL"; then
+        pass "SKILL.md contains the next-step --gate trigger line"
     else
-        fail "SKILL.md missing 'bin/confirm-off\" CONFIRM_CODE' gate"
+        fail "SKILL.md missing the next-step --gate trigger line"
     fi
 fi
 

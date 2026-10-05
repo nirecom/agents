@@ -156,14 +156,14 @@ t60_fix_map_table() {
 skills/_shared/non-github-remote-gate.md|bin/detect-non-github.sh|1|the shared gate's one-line call is swept as ok, so the wrapper every consumer copies from carries the converted spelling
 skills/commit-push/SKILL.md|bin/detect-non-github.sh|1|the commit-push pre-flight call is swept as ok in ITS OWN file, not merely somewhere in the repo
 skills/issue-close-stage/SKILL.md|bin/detect-non-github.sh|1|and so is the third caller of the same entry, so all three sites of the one entry are attributed rather than counted together
-skills/make-detail-plan/SKILL.md|bin/concern-ledger,skills/_shared/assemble-mandatory.sh,bin/check-issues-class-coverage,skills/make-detail-plan/scripts/detect-scope-change.sh|4|the four converted calls in the densest file are all ok -- four different entries in one file, the case a per-entry count cannot separate
+skills/make-detail-plan/SKILL.md|bin/concern-ledger,skills/_shared/assemble-mandatory.sh,bin/check-issues-class-coverage|3|the three converted calls in the densest file are all ok -- three different entries in one file, the case a per-entry count cannot separate (#2490 moved the scope-change call into next-step --gate)
 skills/make-outline-plan/SKILL.md|skills/_shared/assemble-mandatory.sh,bin/concern-ledger|3|three converted calls across two entries, one of which appears twice in this file alone
 skills/review-plan-security/SKILL.md|bin/concern-ledger|1|the security-plan skill's ledger call is ok
 skills/review-tests/SKILL.md|bin/resolve-worktree-path,skills/review-tests/scripts/select-staged-files.sh,bin/concern-ledger|3|and the three converted calls in review-tests, the file whose RT-0 prose #2262 also hardened
 T60_CASES
     ROWS=$((ROWS + 1))
-    assert_eq "T60[fix-map-total]: the seven files contribute exactly the fourteen occurrences #2262 converted -- a file that lost one turns its own row AND this one red, and a row dropped from the table above changes the left side" \
-        "14/14" "$total/$(fx_q real pin-ok "$agg")"
+    assert_eq "T60[fix-map-total]: the seven files contribute exactly the thirteen occurrences #2262 converted and #2490 left in prompts -- a file that lost one turns its own row AND this one red, and a row dropped from the table above changes the left side" \
+        "13/13" "$total/$(fx_q real pin-ok "$agg")"
 }
 
 t5x_json_table

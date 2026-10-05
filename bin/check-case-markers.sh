@@ -31,8 +31,8 @@ for file in "$@"; do
     exit 1
   fi
 
-  # Extract the # Tests: line from the header (first 10 lines).
-  tests_line=$(head -n 10 "$file" | grep "^# Tests:" | head -n 1 || true)
+  # Extract the Tests: line from the header (registry headerMaxLines, entry comment prefix).
+  tests_line=$(head -n "$TLR_HEADER_MAX_LINES" "$file" | awk -v p="$(tlr_comment_prefix "$file") Tests:" 'index($0, p) == 1 { print; exit }' || true)
   [[ -z "$tests_line" ]] && continue
 
   # Count comma-separated paths: commas + 1. A single path retires at file

@@ -192,9 +192,9 @@ else
 fi
 teardown_case
 
-# --- S4: traversal CLAUDE_SESSION_ID rejected — no file outside PLANS_DIR (CWE-22)
+# --- S4: traversal CLAUDE_CODE_SESSION_ID rejected — no file outside PLANS_DIR (CWE-22)
 setup_case wid-s4
-export CLAUDE_SESSION_ID='../../evil'   # mock resolve-session-id echoes this too
+export CLAUDE_CODE_SESSION_ID='../../evil'   # mock resolve-session-id echoes this too
 run_driver
 assert_kv "S4: traversal sid still completes → ACTION=done" ACTION done
 S4_ESCAPED=""

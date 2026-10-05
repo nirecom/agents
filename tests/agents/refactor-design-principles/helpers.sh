@@ -84,7 +84,7 @@ run_workflow_mark() {
     local payload="$1" wfdir="$2"
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         node "$MARK_JS" 2>&1)" || rc=$?

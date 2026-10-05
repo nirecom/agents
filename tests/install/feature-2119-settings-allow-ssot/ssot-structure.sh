@@ -179,7 +179,7 @@ bin/workflow/read-step-status
 bin/check-issues-class-coverage
 bin/workflow/record-skip-judgment
 skills/_shared/assemble-mandatory.sh
-skills/make-detail-plan/scripts/detect-scope-change.sh
+bin/detect-scope-change.sh
 skills/review-tests/scripts/select-staged-files.sh
 bin/detect-non-github.sh
 bin/worktree-notes-append.js

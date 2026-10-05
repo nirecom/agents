@@ -39,7 +39,7 @@ ew_run() {
     local cwd="$1" payload="$2"; shift 2
     local out rc=0
     out="$(cd "$cwd" && printf '%s' "$payload" | run_with_timeout 30 env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
+         -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
         -u ENFORCE_WORKTREE_ADDITIONAL_REPOS -u WORKFLOW_OFF \
         ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=${EW_CONFIG_DIR:?EW_CONFIG_DIR unset}" \
         "$@" node "$EW_GUARD" 2>/dev/null)" || rc=$?
@@ -60,7 +60,7 @@ ew_run() {
 ew_raw() {
     local cwd="$1" payload="$2"; shift 2
     (cd "$cwd" && printf '%s' "$payload" | run_with_timeout 30 env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
+         -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
         -u ENFORCE_WORKTREE_ADDITIONAL_REPOS -u WORKFLOW_OFF \
         ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=${EW_CONFIG_DIR:?EW_CONFIG_DIR unset}" \
         "$@" node "$EW_GUARD" 2>/dev/null) || true

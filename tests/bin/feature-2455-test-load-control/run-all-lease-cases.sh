@@ -14,6 +14,8 @@ fx_drop_ambient_controls
 # fx_drop_ambient_controls also dropped the dispatcher's resolver pin; restore it so
 # neither the runner nor run_ft ever reads the developer's real .env.
 export RUN_ALL_CONFIG_VAR_CMD="$NO_CONFIG_VAR_CMD"
+# fx_init would export this too: the copied runner reads the live tree's registry through it.
+export RUN_ALL_REGISTRY_LIB="$FX_REPO_ROOT/bin/lib/test-language-registry.sh"
 mkdir -p "$FX_CACHE_DIR"
 R_LANE_VARS="TEST_LANES TEST_MAX_JOBS_PER_HOST TEST_MAX_JOBS_PER_RUN TEST_LANES_HELD TEST_LANES_TTL TEST_LANES_HEARTBEAT TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP"
 # r_lanes_line — the runner's `lanes:` progress line, prefix stripped (empty if none).

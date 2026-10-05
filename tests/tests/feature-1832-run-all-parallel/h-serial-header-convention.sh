@@ -3,22 +3,14 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, frontmatter, convention, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
-
-# TL3 gap (what this TL2 test does NOT catch): whether a test lacking `# Serial:`
-# is actually safe in parallel — only S2-4's empirical layers can answer that.
-# Mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
-
 set -u
 
-# WHY (CPR-WPH): `# Serial: <reason>` is the SSOT for "must not share the host."
-# WRITER side: static rule, header in the first 10 lines, after `# Tags:`, non-empty
-# reason. READER side: the runner scans a more lenient 20 lines — a missed
-# declaration is the only fatal failure mode.
-# Cross-check: the runner's `--print-plan` serial set must equal an independent awk
-# scan (a silently dropped declaration would pass either check alone). Boundary
-# positions (1/9/10/11/20/21) and malformed shapes live in h2-serial-header-boundaries.sh.
-# RED-FIRST: `--print-plan`, the runner-side scan, the doc paragraph, and the S2-4
-# inventory don't exist yet — those rows are the intended failures.
+# WHY: `# Serial: <reason>` is the SSOT for "must not share the host": header in the
+# first headerMaxLines (registry, 10) lines, after `# Tags:`, non-empty reason; the
+# runner reads the same window. `--print-plan`'s serial set is cross-checked against
+# an independent awk scan; boundaries live in h2-serial-header-boundaries.sh.
+# TL3 gap: whether a test lacking `# Serial:` is actually parallel-safe.
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 RUNNER="$AGENTS_DIR/tests/run-all.sh"
 REAL_TESTS="$AGENTS_DIR/tests"
@@ -35,13 +27,9 @@ assert_eq() {
 }
 
 # --- ambient sanitization (M-ambient), self-contained ------------------------
-
-# WHY: TEST_MAX_JOBS_PER_RUN, RUN_ALL_DEADLINE/PROGRESS/REAP and FEATURE_644_PHASE change
-# runner behavior; inherited values would rewrite verdicts. senv() sits OUTERMOST since
-# bin/run-with-timeout.sh execs its argv directly (a shell function inside would die 127).
-
-# CAVEAT: GNU `env` stops parsing options at the first NAME=VALUE, so `-u NAME`
-# flags must precede pass-through assignments — senv owns that order.
+# TEST_MAX_JOBS_PER_*, RUN_ALL_DEADLINE/PROGRESS/REAP and FEATURE_644_PHASE change runner
+# behavior; senv() sits OUTERMOST (run-with-timeout.sh execs argv directly) and puts every
+# `-u NAME` before any NAME=VALUE (GNU env stops parsing options there).
 senv() {
     env -u TEST_MAX_JOBS_PER_RUN -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
         -u FEATURE_644_PHASE -u TEST_MAX_JOBS_PER_HOST RUN_ALL_CONFIG_VAR_CMD=/nonexistent/get-config-var "$@"
@@ -58,21 +46,16 @@ trap 'rm -rf "$TMPD"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
 mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
-# ===========================================================================
-# 1. Writer-side convention, checked read-only against the REAL tests/*.sh tree
-#    (top-level glob only, mirrors the runner's own corpus rule).
-# ===========================================================================
+# 1. Writer-side convention, read-only against the REAL top-level tests/*.sh.
 case_static_convention() {
     local f rel line_no tags_no reason count hits
     local declared=0
     local bad_window="" bad_order="" bad_reason="" bad_count=""
-    # ONE grep over the whole top-level corpus, then per-file work only for the
-    # files that actually declare the header — the repo carries ~800 test files
-    # and a per-file subprocess fan-out costs minutes on Windows.
+    # ONE grep over the corpus, per-file work only for declaring files (Windows fan-out cost).
     hits="$(grep -nE '^# Serial:' "$REAL_TESTS"/*.sh 2>/dev/null || true)"
     for f in $(printf '%s\n' "$hits" | sed -n 's/^\([^:]*\):.*/\1/p' | LC_ALL=C sort -u); do
         [ -f "$f" ] || continue
@@ -93,23 +76,18 @@ case_static_convention() {
     assert_eq "h-serial/static/positioned-after-tags" "" "$bad_order"
     assert_eq "h-serial/static/non-empty-reason" "" "$bad_reason"
     assert_eq "h-serial/static/at-most-one-per-file" "" "$bad_count"
-    # Without this row the four above pass vacuously on a tree where the S2-4
-    # inventory was never carried out.
+    # Fence: the four rows above pass vacuously on a tree with no declarations.
     if [ "$declared" -gt 0 ]; then pass "h-serial/static/inventory-non-empty"
     else fail "h-serial/static/inventory-non-empty" \
         "no tests/*.sh declares '# Serial:' — the S2-4 serial inventory has not landed"; fi
 }
 
-# ===========================================================================
-# 1b. The initial static audit: every hazardous test must CARRY the header.
-# ===========================================================================
-# WHY (CPR-WPH): case 1 only checks existing headers; this checks every hazardous test
-# HAS one, with criteria pinned here (header = SSOT; comment lines are skipped).
-#   H1 fixed shared temp path — write verb on a literal /tmp/<name>, no $$/mktemp/$RANDOM.
-#   H2 real-tree write — write verb/redirect targeting $AGENTS_DIR (REPO_ROOT excluded:
-#      some tests bind it to an already-isolated fixture dir).
-#   H3 global state mutation — an executed `git config --global`/`--system`
-#      (an exported GIT_CONFIG_GLOBAL is a pin, not a mutation, and never matches).
+# 1b. Static audit: every hazardous test must CARRY the header. Criteria pinned here:
+#   H1 fixed shared temp path — write verb on a literal /tmp/<name> without
+#      $$/mktemp/$RANDOM (two tests would collide on one /tmp namespace).
+#   H2 real-tree write — write verb/redirect targeting $AGENTS_DIR (REPO_ROOT is
+#      excluded: some tests bind it to an already-isolated fixture dir).
+#   H3 global state mutation — an executed `git config --global`/`--system`.
 HAZARD_PROG='
 {
   line = $0
@@ -129,14 +107,12 @@ case_hazard_audit() {
     n_haz="$(printf '%s' "$raw" | grep -c . || true)"
     hazard_files="$(printf '%s\n' "$raw" | cut -f1 | LC_ALL=C sort -u | grep -v '^$' || true)"
 
-    # A detector that matches nothing would make the row below pass on an empty
-    # set. State the floor so the audit cannot go vacuous unnoticed.
+    # Floor: a detector matching nothing would make the next row pass on an empty set.
     if [ "${n_haz:-0}" -gt 0 ]; then pass "h-serial/audit/detector-matched-something"
     else fail "h-serial/audit/detector-matched-something" \
         "the pinned H1-H3 criteria matched 0 lines across tests/*.sh — the detector is broken"; fi
 
-    # Valid = inside the writer's 10-line window with a non-empty reason; the
-    # runner's window is wider (11-20 honoured at runtime, but breaks writer convention).
+    # Valid = inside the shared 10-line window with a non-empty reason.
     valid_headers="$(grep -nE '^# Serial:[[:space:]]*[^[:space:]]' "$REAL_TESTS"/*.sh 2>/dev/null \
         | awk -F: '$2 <= 10 { print $1 }' | LC_ALL=C sort -u || true)"
 
@@ -154,24 +130,23 @@ case_hazard_audit() {
     fi
 }
 
-# ===========================================================================
-# 2. Reader side: the runner scans a wider 20-line window
-# ===========================================================================
+# 2. Reader side: the runner scans the registry's headerMaxLines window, no literal.
 case_runner_scan() {
     local hits
     hits="$(grep -cE '# Serial:|Serial:' "$RUNNER" 2>/dev/null || true)"
     if [ "${hits:-0}" -gt 0 ]; then pass "h-serial/runner/reads-the-header"
     else fail "h-serial/runner/reads-the-header" \
         "tests/run-all.sh has no '# Serial:' scan — serial declarations are ignored"; fi
-    hits="$(grep -cE 'FNR[[:space:]]*<=[[:space:]]*20|head -(n )?20' "$RUNNER" 2>/dev/null || true)"
-    if [ "${hits:-0}" -gt 0 ]; then pass "h-serial/runner/reads-first-20-lines"
-    else fail "h-serial/runner/reads-first-20-lines" \
-        "the reader window must be the lenient 20 lines, not the writer's 10"; fi
+    # Either an inline FNR bound or an awk variable bound from the registry value.
+    hits="$(grep -cE 'FNR[[:space:]]*<=[[:space:]]*"?\$?\{?TLR_HEADER_MAX_LINES|-v[[:space:]]+[A-Za-z_]+="?\$\{?TLR_HEADER_MAX_LINES' "$RUNNER" 2>/dev/null || true)"
+    if [ "${hits:-0}" -gt 0 ]; then pass "h-serial/runner/window-from-registry"
+    else fail "h-serial/runner/window-from-registry" \
+        "the reader window must come from TLR_HEADER_MAX_LINES (registry headerMaxLines)"; fi
+    hits="$(grep -cE 'FNR[[:space:]]*<=[[:space:]]*[0-9]+|n\+\+[[:space:]]*<[[:space:]]*[0-9]+' "$RUNNER" 2>/dev/null || true)"
+    assert_eq "h-serial/runner/no-literal-window" "0" "${hits:-0}"
 }
 
-# ===========================================================================
-# 3. The convention is documented where test authors read it
-# ===========================================================================
+# 3. The convention is documented where test authors read it.
 case_documented() {
     if [ ! -f "$DESIGN_DOC" ]; then
         fail "h-serial/doc/required-frontmatter-mentions-serial" "missing: skills/_shared/test-design.md"
@@ -185,10 +160,7 @@ case_documented() {
     fi
 }
 
-# ===========================================================================
-# 4. Cross-check: --print-plan's `serial` set equals an independent awk scan.
-#    Run against a FIXTURE TESTS_DIR only — the real suite is never launched.
-# ===========================================================================
+# 4. Cross-check: --print-plan's `serial` set equals an independent awk scan (fixture TESTS_DIR only).
 case_print_plan() {
     local FX="$TMPD/fx" ran="$TMPD/fx-ran" out rc plan_serial awk_serial n
     mkdir -p "$FX"
@@ -211,8 +183,6 @@ case_print_plan() {
     out="$(run_with_timeout 60 env "TESTS_DIR=$FX" "RUN_ALL_CACHE_DIR=$RUN_ALL_CACHE_DIR" \
         bash "$RUNNER" --print-plan --all 2>"$TMPD/plan-err.txt")" || rc=$?
 
-    # Pre-impl caveat: today's runner doesn't know `--print-plan`, so it runs
-    # nothing — these two rows are green for the wrong reason until reports-* below go green.
     assert_eq "h-serial/plan/exit-zero" "0" "$rc"
     if [ -e "$ran" ]; then
         fail "h-serial/plan/executes-nothing" "--print-plan executed fixture scripts"
@@ -233,15 +203,13 @@ case_print_plan() {
     plan_serial="$(printf '%s\n' "$out" \
         | awk -F'\t' '$1 == "plan" && $3 == "serial" { n = split($4, a, /[\/\\]/); print a[n] }' \
         | LC_ALL=C sort -u | tr '\n' ' ')"
-    awk_serial="$(awk 'FNR<=20 && /^# Serial:/ {print FILENAME}' "$FX"/*.sh \
+    awk_serial="$(awk 'FNR<=10 && /^# Serial:/ {print FILENAME}' "$FX"/*.sh \
         | LC_ALL=C sort -u | while read -r p; do basename "$p"; done | LC_ALL=C sort -u | tr '\n' ' ')"
     assert_eq "h-serial/plan/serial-set-equals-awk-scan" "$awk_serial" "$plan_serial"
     assert_eq "h-serial/plan/awk-scan-found-both-fixtures" "p2.sh p5.sh " "$awk_serial"
 }
 
-# ===========================================================================
-# 5. The sanitization above is itself asserted, not assumed
-# ===========================================================================
+# 5. The sanitization above is itself asserted, not assumed.
 case_ambient_sanitized() {
     local probe="$TMPD/ambient-probe.sh" got want v
     {
@@ -253,8 +221,7 @@ case_ambient_sanitized() {
     got="$(TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
         RUN_ALL_REAP=hostile FEATURE_644_PHASE=9 senv bash "$probe" 2>/dev/null)"
     assert_eq "h-serial/ambient/senv-strips-every-hostile-value" "$want" "$got"
-    # run_with_timeout is the funnel every child goes through; prove the funnel
-    # carries the sanitization rather than only the bare helper.
+    # The run_with_timeout funnel carries the sanitization too, not only the bare helper.
     got="$(TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
         RUN_ALL_REAP=hostile FEATURE_644_PHASE=9 run_with_timeout 30 bash "$probe" 2>/dev/null)"
     assert_eq "h-serial/ambient/timeout-funnel-is-sanitized-too" "$want" "$got"

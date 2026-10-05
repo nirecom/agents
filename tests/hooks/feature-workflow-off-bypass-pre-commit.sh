@@ -80,14 +80,6 @@ setup_main_repo() {
     echo "$dir"
 }
 
-# Write CLAUDE_ENV_FILE with CLAUDE_SESSION_ID=<sid>
-write_env_file() {
-    local sid="$1"
-    local f="$TMPDIR_BASE/envfile-$RANDOM-$$"
-    printf 'CLAUDE_SESSION_ID=%s\n' "$sid" > "$f"
-    echo "$f"
-}
-
 # Run pre-commit hook from within the repo.
 run_precommit() {
     local repo="$1"; shift
@@ -112,7 +104,6 @@ test_B_workflow_off_marker_bypasses() {
     local repo; repo="$(setup_main_repo "repoB")"
     local sid="testsessB001"
     local wfdir; wfdir="$(fresh_workflow_dir)"
-    local envfile; envfile="$(write_env_file "$sid")"
     printf '{"set_at":"x"}' > "$wfdir/$sid.workflow-off"
     local out rc=0
     out="$(run_precommit "$repo" \
@@ -120,7 +111,7 @@ test_B_workflow_off_marker_bypasses() {
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile")" || rc=$?
+        "CLAUDE_CODE_SESSION_ID=$sid")" || rc=$?
     if [ "$rc" = "0" ]; then
         pass "B: .workflow-off marker → pre-commit bypassed"
     else
@@ -132,7 +123,6 @@ test_C_worktree_off_marker_bypasses() {
     local repo; repo="$(setup_main_repo "repoC")"
     local sid="testsessC001"
     local wfdir; wfdir="$(fresh_workflow_dir)"
-    local envfile; envfile="$(write_env_file "$sid")"
     printf '{"set_at":"x"}' > "$wfdir/$sid.worktree-off"
     local out rc=0
     out="$(run_precommit "$repo" \
@@ -140,7 +130,7 @@ test_C_worktree_off_marker_bypasses() {
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile")" || rc=$?
+        "CLAUDE_CODE_SESSION_ID=$sid")" || rc=$?
     if [ "$rc" = "0" ]; then
         pass "C: .worktree-off marker → pre-commit bypassed"
     else
@@ -154,10 +144,9 @@ test_D_no_markers_no_session_id_blocks_gracefully() {
     local empty_transcript="$TMPDIR_BASE/empty-transcript-$RANDOM"
     mkdir -p "$empty_transcript"
     local out rc=0
-    # Selectively unset CLAUDE_ENV_FILE and CLAUDE_SESSION_ID; keep AGENTS_CONFIG_DIR
+    # Blank CLAUDE_CODE_SESSION_ID so no session id resolves; keep AGENTS_CONFIG_DIR
     out="$(cd "$repo" && run_with_timeout 30 env \
-        -u CLAUDE_ENV_FILE \
-        -u CLAUDE_SESSION_ID \
+        "CLAUDE_CODE_SESSION_ID=" \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
@@ -179,7 +168,6 @@ test_E_no_node_falls_through_to_enforcement() {
     local repo; repo="$(setup_main_repo "repoE")"
     local sid="testsessE001"
     local wfdir; wfdir="$(fresh_workflow_dir)"
-    local envfile; envfile="$(write_env_file "$sid")"
     printf '{"set_at":"x"}' > "$wfdir/$sid.workflow-off"
     local out rc=0
     # Strip PATH so node is not findable; bash builtins still work
@@ -189,7 +177,7 @@ test_E_no_node_falls_through_to_enforcement() {
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile" \
+        "CLAUDE_CODE_SESSION_ID=$sid" \
         bash "$AGENTS_DIR/hooks/pre-commit" 2>&1)" || rc=$?
     # Without node, marker check (which requires node) cannot succeed → falls through to enforcement → exit 1.
     if [ "$rc" -ne 0 ]; then
@@ -203,7 +191,6 @@ test_F_bad_agents_config_dir_falls_through() {
     local repo; repo="$(setup_main_repo "repoF")"
     local sid="testsessF001"
     local wfdir; wfdir="$(fresh_workflow_dir)"
-    local envfile; envfile="$(write_env_file "$sid")"
     printf '{"set_at":"x"}' > "$wfdir/$sid.workflow-off"
     local out rc=0
     # Bad AGENTS_CONFIG_DIR for the marker-check; the script itself still resolves via $0.
@@ -212,7 +199,7 @@ test_F_bad_agents_config_dir_falls_through() {
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile" \
+        "CLAUDE_CODE_SESSION_ID=$sid" \
         bash "$AGENTS_DIR/hooks/pre-commit" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then
         pass "F: bad AGENTS_CONFIG_DIR → graceful fall-through to enforcement"
@@ -226,7 +213,6 @@ test_G_enforce_worktree_notice_regression() {
     local repo; repo="$(setup_main_repo "repoG")"
     local sid="testsessG001"
     local wfdir; wfdir="$(fresh_workflow_dir)"
-    local envfile; envfile="$(write_env_file "$sid")"
     printf '{"set_at":"x"}' > "$wfdir/$sid.worktree-off"
 
     local q_sid q_fp payload
@@ -241,7 +227,6 @@ test_G_enforce_worktree_notice_regression() {
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
         node "$AGENTS_DIR/hooks/enforce-worktree.js" 2>&1)" || rc=$?
 

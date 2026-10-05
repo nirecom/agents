@@ -36,6 +36,7 @@ const DISPLAY_STATUSES = FLAG_DISPLAY_ORDER
 const RESERVED_ARGV_FLAGS = [
   "--help", "-h", "--list", "--reset", "--mark", "--advance", "--next",
   "--step", "--status", "--skip-reason", "--session", "--type",
+  "--gate", "--scope-change-approved",
 ];
 
 // Fail closed at load time: a future VALID_STATUSES entry named like an existing

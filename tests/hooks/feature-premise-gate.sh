@@ -36,7 +36,6 @@ run_with_timeout() {
 # ---------------------------------------------------------------------------
 TMPDIR_ROOT="$(node -e "const os=require('os'),path=require('path'),fs=require('fs'),crypto=require('crypto');const d=path.join(os.tmpdir(),'pgtest-'+crypto.randomBytes(6).toString('hex'));fs.mkdirSync(d,{recursive:true});process.stdout.write(d);")"
 CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
-CLAUDE_ENV_FILE="$TMPDIR_ROOT/claude_env"
 mkdir -p "$CLAUDE_WORKFLOW_DIR"
 
 cleanup() {
@@ -49,11 +48,6 @@ trap cleanup EXIT
 WORKFLOW_PLANS_DIR="$TMPDIR_ROOT/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
-
-make_env_file() {
-    local session_id="$1"
-    printf 'CLAUDE_SESSION_ID=%s\n' "$session_id" > "$CLAUDE_ENV_FILE"
-}
 
 fail() {
     echo "FAIL: $1"
@@ -108,7 +102,6 @@ run_hook() {
     local result
     result=$(
         (
-            export CLAUDE_ENV_FILE="$CLAUDE_ENV_FILE"
             export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
             run_with_timeout node "$HOOK" < "$input_file" 2>/dev/null
         )
@@ -262,7 +255,6 @@ echo "=== Section D — workflow-mark.js no-crash check ==="
 # PG-NULL: state JSON without premise_contradiction field — after removal of
 # the premise_contradiction state field, normal sentinels must still process
 # cleanly without crashing the hook.
-make_env_file "sess-pg-null"
 cat > "$CLAUDE_WORKFLOW_DIR/sess-pg-null.json" <<'EOF'
 {"version":1,"session_id":"sess-pg-null","steps":{"workflow_init":{"status":"complete"}}}
 EOF
@@ -282,7 +274,6 @@ fi
 
 # PG-IGNORED: PREMISE_FAIL sentinel is no longer recognized — hook silently ignores
 # it (allAreSentinels check fails → done() with no state change, valid JSON output).
-make_env_file "sess-pg-ignored"
 cat > "$CLAUDE_WORKFLOW_DIR/sess-pg-ignored.json" <<'EOF'
 {"version":1,"session_id":"sess-pg-ignored","steps":{"workflow_init":{"status":"complete"}}}
 EOF

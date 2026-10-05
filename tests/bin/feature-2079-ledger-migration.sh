@@ -13,7 +13,7 @@ set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_DIR/tests/lib/harness.sh"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE RUN_ALL_CACHE_DIR
+unset CLAUDE_CODE_SESSION_ID RUN_ALL_CACHE_DIR
 . "$AGENTS_DIR/tests/bin/feature-2079-ledger-migration/_lib.sh"
 for part in "$LM_PARTS"/*-cases.sh; do . "$part"; done
 

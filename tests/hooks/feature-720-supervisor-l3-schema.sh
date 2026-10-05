@@ -150,19 +150,19 @@ console.log('OK');
 }
 
 run_s6() {
-    require_source "$SCHEMA" "S6: AUDIT_SEVERITY_THRESHOLD exported = 'error'" || return
-    require_l3 "S6: AUDIT_SEVERITY_THRESHOLD exported = 'error'" || return
+    require_source "$SCHEMA" "S6: AUDIT_SEVERITY_THRESHOLD exported = 'warning'" || return
+    require_l3 "S6: AUDIT_SEVERITY_THRESHOLD exported = 'warning'" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
-if (s.AUDIT_SEVERITY_THRESHOLD !== 'error') { console.error('got '+s.AUDIT_SEVERITY_THRESHOLD); process.exit(2); }
+if (s.AUDIT_SEVERITY_THRESHOLD !== 'warning') { console.error('got '+s.AUDIT_SEVERITY_THRESHOLD); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S6: AUDIT_SEVERITY_THRESHOLD exported = 'error'"
+        pass "S6: AUDIT_SEVERITY_THRESHOLD exported = 'warning'"
     else
-        fail "S6: AUDIT_SEVERITY_THRESHOLD exported = 'error' (rc=$rc, out=$out)"
+        fail "S6: AUDIT_SEVERITY_THRESHOLD exported = 'warning' (rc=$rc, out=$out)"
     fi
 }
 

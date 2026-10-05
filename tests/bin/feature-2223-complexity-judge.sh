@@ -23,7 +23,7 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 
 # #2434: normalize writes the DERIVED <CLAUDE_WORKFLOW_DIR>/<sid>.control/<stage>-signals.txt;
 # dual-pin both dirs (rules/test/fixture-isolation.md) so no write leaves the fixture.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 mkdir -p "$TMP_ROOT/workflow-state" "$TMP_ROOT/plans" "$TMP_ROOT/empty-transcripts"
 export CLAUDE_WORKFLOW_DIR="$TMP_ROOT/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMP_ROOT/plans"

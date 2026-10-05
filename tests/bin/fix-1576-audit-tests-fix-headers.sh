@@ -93,6 +93,11 @@ case_begin "apply-rewrite-extra-globs" "bin/lib/test-frontmatter-fix.sh"
 source "$CASES_DIR/apply-rewrite-and-extra-globs.sh"  # TC18-TC21
 case_end
 
+case_begin "comment-prefix-apply" "bin/lib/test-frontmatter-fix.sh"
+# shellcheck source=fix-1576-audit-tests-fix-headers/comment-prefix-apply.sh
+source "$CASES_DIR/comment-prefix-apply.sh"           # TC27-TC28
+case_end
+
 # --- Summary ---------------------------------------------------------------
 echo "1..$((PASS+FAIL))"
 echo "# PASS=$PASS FAIL=$FAIL"

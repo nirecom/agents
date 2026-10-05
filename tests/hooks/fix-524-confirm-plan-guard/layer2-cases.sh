@@ -39,7 +39,7 @@ set_plan_lang() {
 run_stop_hook_l2() {
   local stdin_json="$1" errf="$TRANSCRIPT_DIR/l2-stderr.txt"
   STOP_STDOUT=$(
-    unset PLAN_LANG DOCS_LANG_PUBLIC DOCS_LANG_PRIVATE CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+    unset PLAN_LANG DOCS_LANG_PUBLIC DOCS_LANG_PRIVATE CLAUDE_CODE_SESSION_ID
     echo "$stdin_json" | run_with_timeout node "$STOP_HOOK" 2>"$errf"
   )
   STOP_RC=$?

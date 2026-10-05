@@ -59,7 +59,6 @@ export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 
 # The outer Claude Code session exports these; a hook that inherits them would
 # resolve the LIVE session and mutate its real state file.
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # shellcheck source=./feature-1305-inheritance-lineage/_lib.sh

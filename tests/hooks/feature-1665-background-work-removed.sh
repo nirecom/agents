@@ -41,7 +41,7 @@ fi
 
 # Fixture isolation (rules/test/fixture-isolation.md): never let a spawned node
 # resolve the developer's live session or the real ~/.workflow-plans.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 FIXTURE_ROOT="$(mktemp -d 2>/dev/null || mktemp -d -t 'bgwork1665')"
 mkdir -p "$FIXTURE_ROOT/wf" "$FIXTURE_ROOT/cwd"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }

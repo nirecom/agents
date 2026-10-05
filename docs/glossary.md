@@ -94,6 +94,22 @@ definition, and related links.
   per turn (`UserPromptSubmit`, `Stop`) count in turns, not in steps.
 - **Related**: [architecture/claude-code/settings/hooks.md](architecture/claude-code/settings/hooks.md)
 
+### confirm gate
+
+- **Full name**: Confirm gate (`CONFIRM_*`)
+- **Definition**: The per-step user-confirmation point controlled by a `CONFIRM_*`
+  flag (seven gates: intent, outline, detail, tests, code, docs, worktree). The
+  step→gate map lives in `hooks/lib/confirm-gate/step-gate-map.js`.
+- **Related**: [skills/_shared/confirm-plan.md](../skills/_shared/confirm-plan.md) CPA-3
+
+### GATE_ACTION
+
+- **Full name**: Confirm-gate action
+- **Definition**: The closed-vocabulary verdict `next-step --gate` prints for the
+  current confirm gate: `proceed`, `ask`, `present-and-stop`, or `none`. Skills
+  follow it verbatim and never branch on the display-only `GATE_CONFIRM_<X>` line.
+- **Related**: [architecture/claude-code/workflow-runtime.md](architecture/claude-code/workflow-runtime.md)
+
 ## Workflow steps
 
 ### intent
@@ -169,6 +185,7 @@ intent, outline, detail, implementation, and docs. Full design detail lives in
 | **audit run identity** | The `run-NNNN` identifier that names one audit run uniquely from arm to verdict. Minted at arm time; it binds `audit_phase`, the background dispatch, verdict finalization, and the ledger entry into one unit. A verdict is accepted only while its own identity is in-flight; a mismatched verdict is discarded as stale. New in #2256. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
 | **sub-check** | One individually-settled audit concern the ledger tracks (e.g. `intent-internal`, `outline-detail`, `scope-drift`, `recurrence-patterns`), each keyed by its own input version so a later trigger re-judges only what has changed. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
 | **freshness backstop** | The read-only check the `gh pr merge` gate is reduced to: it reconciles the ledger's last terminal run against the current freshness key and never launches an agent. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
+| **null-freshness predicate** | The single policy (`hooks/lib/null-freshness.js`) deciding whether the last TR5 terminal run may certify a null freshness key (code-side or artifact-side); shared by the TR5 sentinel gate and the freshness backstop. | [claude-code/supervisor-audit-ledger.md](architecture/claude-code/supervisor-audit-ledger.md) |
 | **audit checklist** | The three items supervisor-audit judges — cross-stage coherence, recurrence patterns, systemic risk. They are a checklist, not mutually exclusive axes, so they are never called "three axes" (the unrelated security-review "three axes" is a different concept). | [agents/supervisor-audit.md](../agents/supervisor-audit.md) |
 | **review round / CAP / MAX_EXTENSIONS** | Existing shared codex-review-loop parameters. A round is one reviewer run; CAP is the normal ceiling; MAX_EXTENSIONS is the extra rounds allowed only while HIGH concerns remain. "2+1" means CAP=2 / MAX_EXTENSIONS=1. The review side coins no alias for these. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
 | **prestaged report** | A reviewer output produced outside the loop and handed to `run-codex-review-loop --prestaged-report`, letting the opus fallback rejoin the shared loop through the same stage / reduce / finalize code path as the codex round. | [skills/_shared/codex-review-loop.md](../skills/_shared/codex-review-loop.md) |
@@ -272,6 +289,12 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Full name**: Duration-ledger expired record
 - **Definition**: A duration-ledger (`bin/lib/run-all-durations.sh`) term: a key whose latest duration comes from a run started more than 30 days ago (`RUN_ALL_DUR_RETENTION_DAYS`); consolidation does not write it. Distinct from the baseline ledger's 30-day cleanup, which goes by file modification time.
 - **Related**: [architecture/claude-code/test-runner-parallelism.md](architecture/claude-code/test-runner-parallelism.md)
+
+### test language registry
+
+- **Full name**: Test language registry
+- **Definition**: The one table that decides, for every test language, which files are tests, how their headers are read and how they are launched. Test tools consult it instead of checking file extensions themselves.
+- **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md)
 
 ## Test retirement
 
