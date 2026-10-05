@@ -9,10 +9,13 @@ const fs = require("fs");
 const path = require("path");
 const remoteUrl = require("./remote-url");
 const { renderGitignore, isSyncTargetName } = require("./allowlist");
+const { readVerifiedRegularFile } = require("./local-file");
 const G = require("./git");
 
 const INIT_VERSION = 1;
 const NETWORK_TIMEOUT_MS = 30000;
+// The first push can carry every existing plan, far more than one hook-time write.
+const TRANSFER_TIMEOUT_MS = 300000;
 
 function resolveRemoteUrl() {
   const { resolveConfigVar } = require("../load-env");
@@ -123,17 +126,39 @@ function ensureOrigin(plansDir, url) {
   return null;
 }
 
+// workingTreeEntries(plansDir, opts) -> {ok, entries, error?} — every plan file already on disk,
+// so init publishes the plans written before sync was set up, not only those written after.
+// Each file is read once through a verified descriptor; its blob is kept only when the id git
+// wrote for the path equals the id of those verified bytes, so a link or a swap is skipped.
+function workingTreeEntries(plansDir, opts) {
+  let names;
+  try { names = fs.readdirSync(plansDir); } catch (e) { return { ok: false, error: String(e && e.message) }; }
+  const files = [];
+  for (const rel of names.filter(isSyncTargetName).sort()) {
+    const bytes = readVerifiedRegularFile(path.join(plansDir, rel));
+    if (bytes) files.push({ rel, id: G.blobIdOf(bytes) });
+  }
+  const shas = G.hashFiles(plansDir, files.map((f) => f.rel), opts);
+  if (!shas) return { ok: false, error: "hash-object failed" };
+  return { ok: true, entries: files.filter((f, i) => shas[i] === f.id).map((f) => ({ rel: f.rel, blob: f.id })) };
+}
+
 // converge(plansDir) -> {ok, commit, push, error?} — the commit to publish, always a fresh
 // root or the remote tip plus allowlist-filtered local entries; a local ref is never pushed as-is.
+// Plan files on disk are added only under names the remote does not hold yet: init never
+// overwrites a plan another machine published.
 function converge(plansDir, opts) {
   const ls = G.runGit(plansDir, ["ls-remote", "--heads", "origin", G.MAIN_REF], opts);
   if (ls.status !== 0) return { ok: false, reason: G.classifyFailure(ls) === "auth" ? "auth" : "remote-unreachable", error: ls.stderr };
   const L = G.revParse(plansDir, G.MAIN_REF);
+  const W = workingTreeEntries(plansDir, opts);
+  if (!W.ok) return { ok: false, reason: "commit-failed", error: W.error };
   if (ls.stdout.trim() === "") {
     const gi = G.hashBytes(plansDir, renderGitignore());
     if (!gi) return { ok: false, reason: "commit-failed", error: "hash-object failed" };
     const carried = L ? G.treeEntries(plansDir, L, isSyncTargetName) : [];
-    const c = G.overlayCommit(plansDir, null, G.mergeEntries([{ rel: ".gitignore", blob: gi }], carried),
+    const c = G.overlayCommit(plansDir, null,
+      G.mergeEntries([{ rel: ".gitignore", blob: gi }], G.mergeEntries(W.entries, carried)),
       Object.assign({ message: "plan-sync: initial" }, opts));
     if (!c.ok) return { ok: false, reason: "commit-failed", error: c.error };
     return { ok: true, commit: c.commit, push: true, local: L };
@@ -142,7 +167,9 @@ function converge(plansDir, opts) {
   if (f.status !== 0) return { ok: false, reason: "fetch-failed", error: f.stderr };
   const R = G.revParse(plansDir, G.ORIGIN_MAIN_REF);
   if (!R) return { ok: false, reason: "fetch-failed", error: "origin/main missing after fetch" };
-  const entries = G.carriedEntries(plansDir, R, L, isSyncTargetName);
+  const onRemote = new Set(G.treeEntries(plansDir, R, () => true).map((e) => e.rel));
+  const absent = W.entries.filter((e) => !onRemote.has(e.rel));
+  const entries = G.mergeEntries(absent, G.carriedEntries(plansDir, R, L, isSyncTargetName));
   const c = G.overlayCommit(plansDir, R, entries, Object.assign({ message: "plan-sync: rebuild onto origin/main" }, opts));
   if (!c.ok) return { ok: false, reason: "commit-failed", error: c.error };
   return { ok: true, commit: c.commit, push: c.commit !== R, local: L };
@@ -182,7 +209,7 @@ function provisionRepo(plansDir, url, deps) {
   }
   if (dotGitKind(plansDir) === "other") return fail("git-not-directory", notes, `${path.join(plansDir, ".git")} is a file or symlink; refusing to touch it`);
 
-  const opts = { timeoutMs: NETWORK_TIMEOUT_MS };
+  const opts = { timeoutMs: NETWORK_TIMEOUT_MS, transferTimeoutMs: TRANSFER_TIMEOUT_MS };
   let err = ensureRepo(plansDir);
   if (err) return fail("init-failed", notes, err);
   writeGitignore(plansDir);

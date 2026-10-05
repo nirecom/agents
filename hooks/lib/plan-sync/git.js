@@ -109,8 +109,11 @@ function overlayCommit(plansDir, base, entries, opts) {
       const rt = run(["read-tree", base]);
       if (rt.status !== 0) return { ok: false, error: rt.stderr || "read-tree failed" };
     }
-    for (const e of entries) {
-      const up = run(["update-index", "--add", "--cacheinfo", `100644,${e.blob},${e.rel}`]);
+    // One update-index for every entry: init can overlay over a thousand plans at once.
+    if (entries.some((e) => /[\t\r\n\0]/.test(e.rel))) return { ok: false, error: "unsafe path in entries" };
+    if (entries.length > 0) {
+      const info = entries.map((e) => `100644 ${e.blob}\t${e.rel}\n`).join("");
+      const up = run(["update-index", "--add", "--index-info"], { input: info });
       if (up.status !== 0) return { ok: false, error: up.stderr || "update-index failed" };
     }
     const wt = run(["write-tree"]);
@@ -143,14 +146,34 @@ function setRef(plansDir, ref, sha, opts) {
 
 const PUSH_TIMEOUT_MS = 15000;
 
+// opts.transferTimeoutMs lifts the per-write cap for init, whose first push carries every plan.
+function transferOpts(opts) {
+  return Object.assign({}, opts, { timeoutMs: (opts && opts.transferTimeoutMs) || PUSH_TIMEOUT_MS });
+}
+
 function pushMain(plansDir, opts) {
-  return runGit(plansDir, ["push", "--no-verify", "origin", `${MAIN_REF}:${MAIN_REF}`],
-    Object.assign({}, opts, { timeoutMs: PUSH_TIMEOUT_MS }));
+  return runGit(plansDir, ["push", "--no-verify", "origin", `${MAIN_REF}:${MAIN_REF}`], transferOpts(opts));
 }
 
 function fetchMain(plansDir, opts) {
   return runGit(plansDir, ["fetch", "--no-tags", "--no-write-fetch-head", "origin", `+${MAIN_REF}:${ORIGIN_MAIN_REF}`],
-    Object.assign({}, opts, { timeoutMs: PUSH_TIMEOUT_MS }));
+    transferOpts(opts));
+}
+
+// blobIdOf(bytes) — the SHA-1 object id git assigns to bytes as a blob.
+function blobIdOf(bytes) {
+  return crypto.createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
+}
+
+// hashFiles(plansDir, rels, opts) -> [sha] | null — writes every file as a blob in one git call.
+function hashFiles(plansDir, rels, opts) {
+  if (rels.length === 0) return [];
+  if (rels.some((r) => /[\r\n\0]/.test(r))) return null;
+  const out = gitOut(plansDir, ["hash-object", "-w", "--no-filters", "--stdin-paths"],
+    Object.assign({}, opts, { input: rels.join("\n") + "\n" }));
+  if (out === null) return null;
+  const shas = out.split(/\r?\n/);
+  return shas.length === rels.length ? shas : null;
 }
 
 function isNonFastForward(r) {
@@ -238,6 +261,8 @@ module.exports = {
   setRef,
   pushMain,
   fetchMain,
+  blobIdOf,
+  hashFiles,
   isNonFastForward,
   classifyFailure,
   localOnlyEntries,

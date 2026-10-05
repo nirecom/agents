@@ -130,6 +130,40 @@ esac
 if [ -f "$M9/s9-terminal.log" ] && [ -f "$M9/notes.md" ] && [ -f "$M9/s9-state.json" ]; then pass "P9 junk files left in the working tree"
 else fail "P9 junk files left in the working tree" "working-tree files were removed"; fi
 
+echo "=== P10: plans already on disk are published by the first init (empty remote) ==="
+BARE10="$PSF_ROOT/bare10.git"; psf_make_bare "$BARE10"
+M10="$PSF_ROOT/m10"; mkdir -p "$M10"
+printf 'i\n' > "$M10/a10-intent.md"; printf 'o\n' > "$M10/a10-outline.md"; printf 'd\n' > "$M10/b10-detail.md"
+printf 'log\n' > "$M10/a10-terminal.log"; printf 'src\n' > "$M10/src10.txt"
+ln "$M10/src10.txt" "$M10/h10-intent.md" 2>/dev/null
+OUT="$(provision "$M10" "$BARE10")"
+expect_eq "P10 provisionRepo ok" "${OUT%%|*}" "ok"
+expect_eq "P10 bare10 holds every on-disk plan, no junk, no hardlink" "$(tree_of "$BARE10")" \
+  ".gitignore a10-intent.md a10-outline.md b10-detail.md "
+expect_eq "P10 content published byte-for-byte" "$(git -C "$BARE10" show refs/heads/main:a10-outline.md)" "o"
+no_index_or_checkout "P10 no .git/index after init" "$M10"
+P10_BEFORE="$(git -C "$BARE10" rev-parse --verify -q refs/heads/main)"
+OUT="$(provision "$M10" "$BARE10")"
+expect_eq "P10 second run ok" "${OUT%%|*}" "ok"
+expect_eq "P10 second run leaves bare10 main unchanged" "$(git -C "$BARE10" rev-parse --verify -q refs/heads/main)" "$P10_BEFORE"
+
+echo "=== P11: re-init on a non-empty remote adds only names it lacks, never overwrites ==="
+BARE11="$PSF_ROOT/bare11.git"; psf_make_bare "$BARE11"
+SEED11="$PSF_ROOT/seed11"
+harness_git_init "$SEED11"
+git -C "$SEED11" symbolic-ref HEAD refs/heads/main
+printf 'remote\n' > "$SEED11/s11-intent.md"
+git -C "$SEED11" add s11-intent.md
+git -C "$SEED11" commit -q -m "remote plan"
+git -C "$SEED11" push -q "$BARE11" HEAD:refs/heads/main 2>/dev/null
+M11="$PSF_ROOT/m11"; mkdir -p "$M11"
+printf 'local\n' > "$M11/s11-intent.md"; printf 'new\n' > "$M11/t11-outline.md"
+OUT="$(provision "$M11" "$BARE11")"
+expect_eq "P11 provisionRepo ok" "${OUT%%|*}" "ok"
+expect_eq "P11 bare11 gains the absent plan" "$(tree_of "$BARE11")" ".gitignore s11-intent.md t11-outline.md "
+expect_eq "P11 remote copy of a shared name is not overwritten" "$(git -C "$BARE11" show refs/heads/main:s11-intent.md)" "remote"
+expect_eq "P11 local file left as written" "$(cat "$M11/s11-intent.md")" "local"
+
 echo "=== BL: .private-info-blocklist note only for a remote absent from listPrivateRepoNames ==="
 # provision_bl <plansDir> <url> <mode> — deps.listPrivateRepoNames per mode; repoVisibility
 # answers "private" so the real gh is never asked. Prints "ok|<notes>" or "ng:<reason>|<notes>".

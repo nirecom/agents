@@ -3,11 +3,11 @@
 // syncPlanFile: publish one plan file to origin/main by plumbing + CAS, always building
 // add/overwrite-only on the remote tip from allowlisted entries. publishedBlobUrl: the
 // network-free "is this exact content on origin/main" check behind the blob URL.
-const fs = require("fs");
 const path = require("path");
 const remoteUrl = require("./remote-url");
 const { isSyncTarget, isSyncTargetName } = require("./allowlist");
 const { resolveRemoteUrl, checkProvisioned } = require("./provision");
+const { isRegularFile, readVerifiedRegularFile } = require("./local-file");
 const G = require("./git");
 
 const DEFAULT_BUDGET_MS = 20000;
@@ -19,41 +19,6 @@ function failed(reason, detail) {
 }
 
 const MAX_ATTEMPTS = 3;
-
-// A symlink or a hard link (nlink > 1) named like a plan could publish another file's content.
-function isSoleRegularFile(st) {
-  return st.isFile() && !st.isSymbolicLink() && st.nlink === 1;
-}
-
-function isRegularFile(absPath) {
-  try {
-    return isSoleRegularFile(fs.lstatSync(path.resolve(absPath)));
-  } catch (_) {
-    return false;
-  }
-}
-
-// readVerifiedRegularFile(absPath) -> Buffer | null — the content read once through an fd that
-// is proven (fstat dev/ino == lstat dev/ino) to be the same sole regular file, so a swap of the
-// path after the check can never substitute another file's bytes.
-function readVerifiedRegularFile(absPath) {
-  const p = path.resolve(absPath);
-  let fd = null;
-  try {
-    const st = fs.lstatSync(p);
-    if (!isSoleRegularFile(st)) return null;
-    fd = fs.openSync(p, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
-    const fst = fs.fstatSync(fd);
-    if (!fst.isFile() || fst.nlink !== 1 || fst.dev !== st.dev || fst.ino !== st.ino) return null;
-    return fs.readFileSync(fd);
-  } catch (_) {
-    return null;
-  } finally {
-    if (fd !== null) {
-      try { fs.closeSync(fd); } catch (_) { /* already closed */ }
-    }
-  }
-}
 
 // publishOnRemoteTip -> {push, commit}: every published commit is built on the remote tip R
 // (origin/main; fetched first on a retry or when absent) from the target plus the
