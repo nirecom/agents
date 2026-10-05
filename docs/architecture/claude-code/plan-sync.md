@@ -14,7 +14,8 @@ every device that can sign in to the forge, so the breadcrumb now carries that U
 
 Plan sync is a sibling of [session-sync](session-sync.md) and uses the same remote-URL
 format, but it is a different mechanism: session-sync moves whole session history on
-demand; plan-sync pushes one plan file at the moment it is written.
+demand; plan-sync publishes the existing plans once at init, then pushes one plan file
+at the moment it is written.
 
 ## Setup
 
@@ -47,7 +48,10 @@ Two phases with different costs.
 **Provision (once, `bin/plan-sync-init`).** Turns the plans directory
 (`PLANS_DIR`, `~/.workflow-plans/` by default) into a git working tree: `git init`,
 `HEAD` pointed at `main`, hooks/fsmonitor/autocrlf neutralised, `origin` set, the
-allowlist `.gitignore` written, and the local plans converged with the remote. The init
+allowlist `.gitignore` written, and the local plans converged with the remote. Every plan
+file already in the plans directory is published in the same commit, so plans written
+before sync was set up reach the remote too. A name the remote already holds is never
+overwritten, and re-running init publishes only the plans the remote lacks. The init
 version is recorded in local git config. Visibility is checked here (see below).
 
 **Sync (every plan write).** `hooks/show-plan-link.js` (PostToolUse) calls
@@ -84,7 +88,7 @@ reason, with a hint to run `bin/plan-sync-init`.
   ([settings/hooks.md](settings/hooks.md)).
 
 Code: `hooks/lib/plan-sync.js` (dispatch) and `hooks/lib/plan-sync/{remote-url,
-allowlist,provision,git,commit-push}.js`. Skill-side wording of the breadcrumb:
+allowlist,provision,git,commit-push,local-file}.js`. Skill-side wording of the breadcrumb:
 `skills/_shared/confirm-plan.md`.
 
 ## Visibility policy
