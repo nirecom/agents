@@ -154,7 +154,7 @@ Ensure `settings.json` has the hooks section (check `~/.claude/settings.json`).
 
 | File | Purpose |
 |:---|:---|
-| `bin/scan-outbound.sh` | Scanner script (detection patterns) |
+| `bin/scan-outbound.sh` | Scanner script (detection patterns); its `HARD_SECRET_PATTERNS` block is the hard-secret SSOT that `hooks/workflow-state/complexity-routing/secret-shape.js` also parses |
 | `bin/lib/gh-outbound-guard.sh` | Sourceable fail-closed guard wrapper scripts call before handing free text to `gh` |
 | `claude-global/hooks/pre-commit` | Git pre-commit hook (staged files) |
 | `claude-global/hooks/commit-msg` | Git commit-msg hook (commit message) |

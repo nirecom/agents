@@ -12,6 +12,7 @@
 // via fs.readFileSync — never a shell. Malformed / out-of-vocabulary input
 // degrades to `S0-undecidable`; a `none` payload degrades to the empty CSV.
 // The out file is always written (fail-open) and its path printed; only a write failure exits non-zero.
+// normalize(raw) is exported for in-process callers (the Jev broker); requiring this file runs no CLI.
 
 const fs = require("fs");
 const path = require("path");
@@ -143,4 +144,6 @@ function main() {
   return writeOutAndExit(outPath, normalize(raw));
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { normalize };

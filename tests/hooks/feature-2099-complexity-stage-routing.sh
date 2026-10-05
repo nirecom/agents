@@ -321,6 +321,12 @@ case_begin "dispatch-case-files" "hooks/workflow-state/complexity-routing.js"
 # through canonicalizeSignalsForPersistence (its only consumer).
 # shellcheck source=./feature-2099-complexity-stage-routing/secret-shape-classifier-cases.sh
 . "$CASE_DIR/secret-shape-classifier-cases.sh"
+# Sourced after it: reuses SS_MOD_N and SS_REDACT_PRELUDE (split at the 500-line HARD limit).
+# shellcheck source=./feature-2099-complexity-stage-routing/secret-shape-midword-key-cases.sh
+. "$CASE_DIR/secret-shape-midword-key-cases.sh"
+# Scanner/secret-shape parity over the HARD_SECRET_PATTERNS SSOT, and fail-closed loading.
+# shellcheck source=./feature-2099-complexity-stage-routing/secret-shape-scanner-parity-cases.sh
+. "$CASE_DIR/secret-shape-scanner-parity-cases.sh"
 # The per-stage output modes of the derive CLI, and the flag combinations the
 # module-level derivation suite above cannot reach.
 # shellcheck source=./feature-2099-complexity-stage-routing/derive-cli-output-mode-cases.sh

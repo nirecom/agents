@@ -1,0 +1,74 @@
+{
+  "session_id": "3c2a9e71-2460-4b6f-9d1e-7a5b3c2d1e0f",
+  "transcript_path": "/fixture/transcript.jsonl",
+  "cwd": "/fixture/proj",
+  "scratchpad_dir": "/fixture/scratchpad",
+  "prompt_id": "3916dd49-66f4-4044-9260-8927925fa560",
+  "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Agent",
+  "tool_input": {
+    "description": "Classify task complexity",
+    "prompt": "classify this task",
+    "subagent_type": "complexity-judge",
+    "run_in_background": false
+  },
+  "tool_response": {
+    "status": "completed",
+    "prompt": "classify this task",
+    "agentId": "a01be8eed49bcf874",
+    "agentType": "complexity-judge",
+    "harnessNoteCount": 0,
+    "harnessTailCount": 0,
+    "harnessSectionHash": "68a27e559f5d64fc",
+    "content": [
+      {
+        "type": "text",
+        "text": "SIGNALS: S1-multi-file"
+      }
+    ],
+    "resolvedModel": "claude-haiku-4-5-20251001",
+    "totalDurationMs": 2299,
+    "totalTokens": 8634,
+    "totalToolUseCount": 0,
+    "usage": {
+      "output_tokens_details": {
+        "thinking_tokens": 127
+      },
+      "input_tokens": 10,
+      "cache_creation_input_tokens": 8482,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 142,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 8482
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 10,
+          "output_tokens": 142,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 8482,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 8482,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard",
+      "fallback_credit": null
+    }
+  },
+  "tool_use_id": "toolu_01DoQTpk1h5bwsvTj7JZrBGH",
+  "duration_ms": 2299
+}

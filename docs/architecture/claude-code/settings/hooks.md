@@ -65,6 +65,11 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   command is wrapped. RTK config is managed by the RTK binary itself (installers
   run `rtk config` / `rtk config --create`, no hardcoded schema); guard logic
   lives in `hooks/rtk-rewrite.js`.
+- `jev-shadow-pre.js` (PreToolUse, matcher: `Agent|Task`) and `jev-shadow-post.js`
+  (PostToolUse, matcher: `Agent|Task`) — when `JEV=on` in `.env`, query the Jev typed
+  classifier alongside a `complexity-judge` dispatch and record both answers for comparison.
+  Shadow mode: the LLM judge's result is always adopted, and both hooks always exit 0.
+  Default OFF (`JEV=off`). Contract and module map: [jev.md](../../jev.md).
 - `workflow-mark.js` (PostToolUse) — intercepts `echo "<<WORKFLOW_MARK_STEP_step_status>>"` and
   `echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing

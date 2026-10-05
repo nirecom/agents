@@ -6,10 +6,56 @@
 #   --stdin: read from stdin (optional label for output)
 #   --manifest: read RS(0x1e)+path+RS+byteLen+LF+bytes frames from stdin
 #   file args: scan named files
-# Exit: 0 = clean, 1 = hard violation, 2 = warn-only (no hard), 3 = usage error, 4 = blocklist resolution error (fail-closed)
+# Exit: 0 = clean, 1 = hard violation, 2 = warn-only (no hard), 3 = usage error,
+#       4 = blocklist resolution or hard-secret pattern load error (fail-closed)
 # NOTE: exit 3 was previously exit 2 (usage error). Bumped to free exit 2 for warn-only.
 
 set -euo pipefail
+
+# Hard secrets: provider API keys and tokens (Gitleaks-derived), the single source
+# of truth also parsed by hooks/workflow-state/complexity-routing/secret-shape.js —
+# so they live in this file rather than a sibling a copied scanner could lose.
+# Entry: '<label> <group> <ERE>' — one per line, single-quoted, no ' in the ERE, and
+# only syntax valid in both bash ERE and JS RegExp. Entries sharing a group (not -)
+# test one work line in order, each match removed before the next: Anthropic is
+# checked before OpenAI because both start sk- and Anthropic is more specific.
+# BEGIN hard-secret-patterns
+HARD_SECRET_PATTERNS=(
+    'anthropic-key sk sk-ant-(api|sid)[0-9]{2}-[A-Za-z0-9_-]{20,}'
+    'openai-key sk sk-(proj-|svcacct-)?[A-Za-z0-9_-]{20,}'
+    'aws-key - AKIA[0-9A-Z]{16}'
+    'private-key - -----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----'
+    'github-token - gh[pousr]_[A-Za-z0-9]{36,}'
+    'slack-token - xox[baprs]-[0-9]+-[0-9]+-[A-Za-z0-9]+'
+    'google-key - AIza[0-9A-Za-z_-]{35}'
+    'huggingface-token - hf_[A-Za-z0-9]{34,}'
+    'groq-key - gsk_[A-Za-z0-9]{20,}'
+    'replicate-token - r8_[A-Za-z0-9]{37}'
+    'cohere-key - co_[A-Za-z0-9]{40}'
+)
+# END hard-secret-patterns
+
+HS_LABELS=()
+HS_GROUPS=()
+HS_RES=()
+for _hs_entry in "${HARD_SECRET_PATTERNS[@]}"; do
+    _hs_label="${_hs_entry%% *}"
+    _hs_rest="${_hs_entry#* }"
+    _hs_group="${_hs_rest%% *}"
+    _hs_re="${_hs_rest#* }"
+    if [[ -z "$_hs_label" || -z "$_hs_group" || -z "$_hs_re" || "$_hs_rest" == "$_hs_entry" || "$_hs_re" == "$_hs_rest" ]]; then
+        printf 'Error: malformed hard-secret pattern entry — cannot scan\n' >&2
+        exit 4
+    fi
+    HS_LABELS+=("$_hs_label")
+    HS_GROUPS+=("$_hs_group")
+    HS_RES+=("$_hs_re")
+done
+if [ "${#HS_RES[@]}" -eq 0 ]; then
+    printf 'Error: no hard-secret patterns loaded — cannot scan\n' >&2
+    exit 4
+fi
+unset _hs_entry _hs_label _hs_rest _hs_group _hs_re
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Anchor: AGENTS_CONFIG_DIR when set (handles linked worktrees where gitignored
@@ -172,102 +218,30 @@ scan_line() {
         fi
     fi
 
-    # Hard secrets: provider API keys and tokens (Gitleaks-derived patterns)
-    # Anthropic checked before OpenAI — both use sk- prefix, Anthropic is more specific
-    local hs_workline="$line"
-
-    local hs_anthropic_re='sk-ant-(api|sid)[0-9]{2}-[A-Za-z0-9_-]{20,}'
-    if [[ "$hs_workline" =~ $hs_anthropic_re ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [anthropic-key] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
+    # Hard secrets (HARD_SECRET_PATTERNS)
+    local hs_i hs_group hs_subject hs_m hs_work_group="" hs_workline=""
+    for hs_i in "${!HS_RES[@]}"; do
+        hs_group="${HS_GROUPS[hs_i]}"
+        if [[ "$hs_group" == "-" ]]; then
+            hs_subject="$line"
+        else
+            if [[ "$hs_group" != "$hs_work_group" ]]; then
+                hs_work_group="$hs_group"
+                hs_workline="$line"
+            fi
+            hs_subject="$hs_workline"
         fi
-        hs_workline="${hs_workline/"$m"/}"
-    fi
-
-    local hs_openai_re='sk-(proj-|svcacct-)?[A-Za-z0-9_-]{20,}'
-    if [[ "$hs_workline" =~ $hs_openai_re ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [openai-key] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
+        if [[ "$hs_subject" =~ ${HS_RES[hs_i]} ]]; then
+            hs_m="${BASH_REMATCH[0]}"
+            if ! is_allowed "$file" "$hs_m"; then
+                echo "$file:$lineno: [${HS_LABELS[hs_i]}] $hs_m"
+                VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+            if [[ "$hs_group" != "-" ]]; then
+                hs_workline="${hs_workline/"$hs_m"/}"
+            fi
         fi
-    fi
-
-    if [[ "$line" =~ AKIA[0-9A-Z]{16} ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [aws-key] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    fi
-
-    local hs_pem_re='-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----'
-    if [[ "$line" =~ $hs_pem_re ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [private-key] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    fi
-
-    if [[ "$line" =~ gh[pousr]_[A-Za-z0-9]{36,} ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [github-token] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    fi
-
-    local hs_slack_re='xox[baprs]-[0-9]+-[0-9]+-[A-Za-z0-9]+'
-    if [[ "$line" =~ $hs_slack_re ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [slack-token] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    fi
-
-    if [[ "$line" =~ AIza[0-9A-Za-z_-]{35} ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [google-key] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    fi
-
-    if [[ "$line" =~ hf_[A-Za-z0-9]{34,} ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [huggingface-token] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    fi
-
-    if [[ "$line" =~ gsk_[A-Za-z0-9]{20,} ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [groq-key] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    fi
-
-    if [[ "$line" =~ r8_[A-Za-z0-9]{37} ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [replicate-token] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    fi
-
-    if [[ "$line" =~ co_[A-Za-z0-9]{40} ]]; then
-        local m="${BASH_REMATCH[0]}"
-        if ! is_allowed "$file" "$m"; then
-            echo "$file:$lineno: [cohere-key] $m"
-            VIOLATIONS=$((VIOLATIONS + 1))
-        fi
-    fi
+    done
 
     # Zero-width / BOM (Trojan Source — homoglyph/invisible identifier trick)
     # U+200B (E2 80 8B), U+200C (8C), U+200D (8D), U+FEFF (EF BB BF)

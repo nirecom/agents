@@ -1,0 +1,59 @@
+#!/usr/bin/env node
+"use strict";
+// bin/jev-report — aggregate the Jev shadow decision log (#2460).
+// Usage: jev-report [--log <path>] [--point <name>] [--json] [--no-sweep]
+// By default it first turns stale pending hand-offs of every session into llm-missing
+// records and runs the 7-day state retention, so the figures include abandoned dispatches;
+// --no-sweep reads the log as it is. Local files only: never talks to Jev.
+
+// Snapshot the JEV_* test overrides before anything can load .env into process.env.
+const { captureTestOverrides } = require("../hooks/lib/jev/test-overrides");
+const OVERRIDES = captureTestOverrides(process.env);
+
+const { loadDefaultEnv } = require("../hooks/lib/load-env");
+const broker = require("../hooks/lib/jev/broker");
+const { registryEntry } = require("../hooks/lib/jev/registry");
+const { decisionLogPath } = require("../hooks/lib/jev/decision-record");
+const { readLog, aggregate, formatText } = require("./lib/jev-report-aggregate");
+
+const DEFAULT_THRESHOLD = 0.75;
+const USAGE = "usage: jev-report [--log <path>] [--point <name>] [--json] [--no-sweep]\n";
+
+function parseArgs(argv) {
+  const opts = { log: null, point: null, json: false, sweep: true };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--json") opts.json = true;
+    else if (a === "--no-sweep") opts.sweep = false;
+    else if ((a === "--log" || a === "--point") && i + 1 < argv.length) opts[a.slice(2)] = argv[++i];
+    else if (a === "-h" || a === "--help") return { help: true };
+    else return { error: `jev-report: unknown or incomplete argument: ${a}` };
+  }
+  return opts;
+}
+
+function thresholdFor(point) {
+  const e = registryEntry(point);
+  return e && typeof e.confidence_threshold === "number" ? e.confidence_threshold : DEFAULT_THRESHOLD;
+}
+
+function main(argv) {
+  const opts = parseArgs(argv);
+  if (opts.help) { process.stdout.write(USAGE); return 0; }
+  if (opts.error) { process.stderr.write(opts.error + "\n" + USAGE); return 2; }
+  try { loadDefaultEnv(); } catch (_e) { /* defaults apply */ }
+  if (opts.sweep) {
+    try { broker.sweepAllSessions(OVERRIDES); } catch (_e) { /* report what is there */ }
+    try { broker.runRetention(); } catch (_e) { /* report what is there */ }
+  }
+  const result = aggregate(readLog(opts.log || decisionLogPath()), { point: opts.point, thresholdFor });
+  if (result.unreadable_generations.length) {
+    process.stderr.write(`jev-report: warning: unreadable log generations skipped: ${result.unreadable_generations.join(" ")}\n`);
+  }
+  process.stdout.write(opts.json ? JSON.stringify(result, null, 2) + "\n" : formatText(result));
+  return 0;
+}
+
+if (require.main === module) process.exit(main(process.argv.slice(2)));
+
+module.exports = { main, parseArgs };

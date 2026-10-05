@@ -67,6 +67,8 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/block-case-markers.js` | PreToolUse | **No** | **No** |
 | `hooks/postuse-step-in-flight-mark.js` | PostToolUse | **No** | **No** |
 | `hooks/user-prompt-submit-mechanism-check.js` | UserPromptSubmit | **No** | **No** |
+| `hooks/jev-shadow-pre.js` | PreToolUse | **No** | **No** |
+| `hooks/jev-shadow-post.js` | PostToolUse | **No** | **No** |
 
 `hooks/pre-commit` honors both markers for **two separate sections**: the worktree-isolation
 gate ("commits from main worktree are blocked" / "commits to protected branch" guard) and
@@ -93,6 +95,10 @@ the next user turn. There is nothing for a session override to suspend, so they 
 **No/No** rather than left out of the table (CPR-ORTH — absence would be indistinguishable
 from an oversight). The `.stall-reported` ledger they write is protected state, not a
 bypass: see `hooks/lib/protected-basenames.js`.
+
+`hooks/jev-shadow-pre.js` and `hooks/jev-shadow-post.js` (#2460) are **No/No** for the same
+reason: they record a shadow comparison and never block, so a session override has nothing
+to suspend. Their only switch is `JEV` — see [jev.md](../jev.md).
 
 `hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info
 scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-ORTH). Users
