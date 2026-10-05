@@ -705,6 +705,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/jev-shadow-pre.js\"",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -724,7 +734,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-plan-link.js\"",
-            "timeout": 5
+            "timeout": 30
           },
           {
             "type": "command",
@@ -749,12 +759,12 @@
         ]
       },
       {
-        "matcher": "Write",
+        "matcher": "Edit|Write|MultiEdit|editFiles|NotebookEdit",
         "hooks": [
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-plan-link.js\"",
-            "timeout": 5
+            "timeout": 30
           }
         ]
       },
@@ -805,6 +815,16 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/postuse-step-in-flight-mark.js\"",
             "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/jev-shadow-post.js\"",
+            "timeout": 15
           }
         ]
       }

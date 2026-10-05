@@ -65,12 +65,17 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   command is wrapped. RTK config is managed by the RTK binary itself (installers
   run `rtk config` / `rtk config --create`, no hardcoded schema); guard logic
   lives in `hooks/rtk-rewrite.js`.
+- `jev-shadow-pre.js` (PreToolUse, matcher: `Agent|Task`) and `jev-shadow-post.js`
+  (PostToolUse, matcher: `Agent|Task`) — when `JEV=on` in `.env`, query the Jev typed
+  classifier alongside a `complexity-judge` dispatch and record both answers for comparison.
+  Shadow mode: the LLM judge's result is always adopted, and both hooks always exit 0.
+  Default OFF (`JEV=off`). Contract and module map: [jev.md](../../jev.md).
 - `workflow-mark.js` (PostToolUse) — intercepts `echo "<<WORKFLOW_MARK_STEP_step_status>>"` and
   `echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing
   is next-step-driven: the model queries `bin/workflow/next-step` after each completion rather than
   receiving a static prose hint
-- `show-plan-link.js` — PostToolUse on Write. Always emits a `Plan file written: <path>` breadcrumb when a final plan artifact (intent/outline/detail.md matching `*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written. When `CONFIRM_<STEP>=on` (default) AND a VS Code session is detected (`TERM_PROGRAM=vscode` or `CLAUDE_CODE_ENTRYPOINT=claude-vscode` (excluded when `VSCODE_CRASH_REPORTER_PROCESS_TYPE=extensionHost`)) AND `SHOW_PLAN_LINK_NO_AUTO_OPEN` is unset, additionally spawns a single `code --folder-uri <uri> <filePath>` invocation (raises window and opens file atomically, eliminating the two-spawn timing race — #546 Gap 3). `normalizeCwd()` is applied at the entry of `workspaceFolderUriFrom` to convert Unix-style Git Bash drive-letter paths (as emitted by MSYS2/Git Bash `pwd`) to native Windows drive-letter form before URI construction, fixing multi-window routing on Windows. URI source ladder: `input.cwd` → `process.cwd()` → bare `code -r` (no folder-uri). Folder URI path segments are percent-encoded via `encodeURIComponent` for spaces / `#` / `%` / non-ASCII / UNC support (#492). Windows uses `cmd.exe /d /s /c code ...` per spawn (CVE-2024-27980 mitigation). VS Code 1.121 regression: when `--folder-uri` and a file path are passed together, the file-open arg is silently dropped; fixed in 1.122+. Users on 1.121 must click the breadcrumb manually — no fallback provided (#546). Fail-open: spawn errors do not abort the hook.
+- `show-plan-link.js` — PostToolUse on Write. Always emits a breadcrumb when a final plan artifact (`*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written, regardless of `CONFIRM_<STEP>`. It first publishes the file through plan-sync: on success against a GitHub remote the breadcrumb is `Plan file: <blob URL>` (readable from mobile apps or a browser); otherwise it is `Plan file: <local path>` plus a `[plan-sync]` status line. Fail-open: a sync failure never aborts the hook or the workflow. The hook no longer spawns VS Code. Design and setup: [../plan-sync.md](../plan-sync.md).
 - `show-diff.js` (PreToolUse, matcher: `Write`) — shows an inline diff in chat for any final
   plan artifact written under `~/.workflow-plans/` (non-draft direct children:
   `*-(intent|outline|detail).md`). When the corresponding `CONFIRM_<STEP>` flag is off, the

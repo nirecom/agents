@@ -2,13 +2,15 @@
 # SSOT for the run-all per-test duration ledger. bin/lib/run-all-parallelism.sh must be
 # sourced FIRST (run_all_cache_dir, run_all_host_id, run_all_id_digest are used here).
 # One segment file per writer process, never rewritten in place, so append atomicity is
-# never relied upon; the read caps are enforced independently of the retention sweep.
+# never relied upon; the read caps hold whether or not consolidation (consolidate-durations) ran.
 # Raw seconds are stored and the tier is a READ-time classification, so re-cutting the tier
 # granularity must NOT bump RUN_ALL_DUR_SCHEMA — only a record structure change does.
 
-RUN_ALL_DUR_SCHEMA=1
+RUN_ALL_DUR_SCHEMA=2
 RUN_ALL_DUR_DIRNAME="durations"
-RUN_ALL_DUR_KEEP_SEGMENTS=16
+# Invariant: parallel runners' open segments + segments closed since the last start +
+# abandoned ones (<= 6h) + consolidating leftovers + bases (one per OS attribute) stay
+# under 64, or the oldest names (the bases first) fall out of the read window.
 RUN_ALL_DUR_MAX_SEGMENTS_READ=64
 RUN_ALL_DUR_MAX_RECORDS=60000
 RUN_ALL_DUR_MAX_LINE_BYTES=512
@@ -16,12 +18,12 @@ RUN_ALL_DUR_MAX_KEY_BYTES=400
 RUN_ALL_DUR_MAX_SECS_DIGITS=4
 RUN_ALL_DUR_TOKEN_WIDTH=16
 RUN_ALL_DUR_TIER_UNMEASURED=99
-RUN_ALL_DUR_SWEEP_MAX=64
 
 # Outputs; declared so a `set -u` caller may read them even after a failed call.
 RUN_ALL_DUR_REASON=""
 RUN_ALL_DUR_REPO_ID=""
 RUN_ALL_DUR_HOST_TOKEN=""
+RUN_ALL_DUR_OS_ATTR=""
 RUN_ALL_DUR_SEGMENT=""
 RUN_ALL_DUR_WRITE_OK=0
 RUN_ALL_DUR_TIER_OUT=""
@@ -42,7 +44,9 @@ run_all_dur_pad16() {
 
 run_all_dur_host_token() {
     if [ -z "$RUN_ALL_DUR_HOST_TOKEN" ]; then
-        RUN_ALL_DUR_HOST_TOKEN="$(run_all_dur_pad16 "$(run_all_id_digest "$(run_all_host_id)")")"
+        _run_all_host_facts
+        RUN_ALL_DUR_HOST_TOKEN="$(run_all_dur_pad16 "$(run_all_id_digest "$_RUN_ALL_HOST_ID")")"
+        [ -n "$RUN_ALL_DUR_OS_ATTR" ] || RUN_ALL_DUR_OS_ATTR="$_RUN_ALL_OS_ATTR"
     fi
     printf '%s' "$RUN_ALL_DUR_HOST_TOKEN"
 }
@@ -108,8 +112,8 @@ run_all_dur_key_into() {
 
 # --- tier -------------------------------------------------------------------
 
-# run_all_dur_tier_into <secs> — floor(log2(secs)) into RUN_ALL_DUR_TIER_OUT. A DELIBERATE
-# fork-free duplicate of run_all_count_bucket; n3-duration-ledger-reader.sh N14 pins the two.
+# run_all_dur_tier_into <secs> — floor(log2(secs)) into RUN_ALL_DUR_TIER_OUT, fork-free;
+# n3-duration-ledger-reader.sh N14 pins its 12 tier values directly.
 run_all_dur_tier_into() {
     local n="${1:-}" b=0
     RUN_ALL_DUR_TIER_OUT="$RUN_ALL_DUR_TIER_UNMEASURED"
@@ -141,7 +145,8 @@ run_all_dur_blank() {
 
 # run_all_dur_segments_into <dir> <host-token> — this host's own segments in RUN_ALL_DUR_SEGMENTS_OUT,
 # newest first, capped at RUN_ALL_DUR_MAX_SEGMENTS_READ (fixed-width stamps make the C-collated glob
-# chronological); empty when <dir> is missing. Always returns 0.
+# chronological) whether or not consolidation (consolidate-durations) ever ran; empty when <dir> is
+# missing. Always returns 0.
 run_all_dur_segments_into() {
     local dir="${1:-}" tok="${2:-}" f i LC_ALL=C LC_CTYPE=C
     local -a segs=()
@@ -209,6 +214,7 @@ NR == FNR {
 {
     if (++nline > MAXREC) exit
     if (FILENAME != pf) { merge(); pf = FILENAME }
+    if (substr($0, 1, 1) == "#") next
     p1 = index($0, "|")
     if (p1 == 0 || substr($0, 1, p1 - 1) != RID) next
     r = substr($0, p1 + 1)
@@ -236,27 +242,6 @@ END {
 
 # --- writer -----------------------------------------------------------------
 
-# Trim this host/schema class to KEEP_SEGMENTS, oldest first; a refused unlink is ignored.
-run_all_dur_sweep() {
-    local LC_ALL=C LC_CTYPE=C
-    local dir f n drop i=0
-    local -a segs=()
-    run_all_dur_host_token >/dev/null
-    dir="$(run_all_dur_dir)"
-    for f in "$dir"/dur."$RUN_ALL_DUR_SCHEMA"."$RUN_ALL_DUR_HOST_TOKEN".*.log; do
-        [ -f "$f" ] && segs+=("$f")
-    done
-    n=${#segs[@]}
-    [ "$n" -gt "$RUN_ALL_DUR_KEEP_SEGMENTS" ] || return 0
-    drop=$((n - RUN_ALL_DUR_KEEP_SEGMENTS))
-    [ "$drop" -gt "$RUN_ALL_DUR_SWEEP_MAX" ] && drop="$RUN_ALL_DUR_SWEEP_MAX"
-    while [ "$i" -lt "$drop" ]; do
-        rm -f "${segs[$i]}" 2>/dev/null || true
-        i=$((i + 1))
-    done
-    return 0
-}
-
 # run_all_dur_writer_init <agents-dir> — idempotent; every failure is silent, leaving
 # RUN_ALL_DUR_WRITE_OK 0. The pid in the name makes the segment this process's own.
 run_all_dur_writer_init() {
@@ -279,11 +264,24 @@ run_all_dur_writer_init() {
         *) return 0 ;;
     esac
     case "$$" in ''|*[!0-9]*) return 0 ;; esac
+    command -v run_all_dur_consolidate >/dev/null 2>&1 && run_all_dur_consolidate "$dir" "$stamp"
+    [ -n "$RUN_ALL_DUR_OS_ATTR" ] || RUN_ALL_DUR_OS_ATTR="$(run_all_os_attr)"
     seg="$dir/dur.$RUN_ALL_DUR_SCHEMA.$tok.$stamp-$$.log"
-    : >"$seg" 2>/dev/null || return 0
+    printf '#os %s\n' "$RUN_ALL_DUR_OS_ATTR" >"$seg" 2>/dev/null || return 0
     RUN_ALL_DUR_SEGMENT="$seg"
-    run_all_dur_sweep
     RUN_ALL_DUR_WRITE_OK=1
+    return 0
+}
+
+# run_all_dur_close — mark this runner's segment closed so the next start consolidates it;
+# a missing segment (never opened, or taken by another round) or a taken name is a no-op.
+run_all_dur_close() {
+    local seg="$RUN_ALL_DUR_SEGMENT" dest
+    RUN_ALL_DUR_WRITE_OK=0
+    [ -n "$seg" ] && [ -f "$seg" ] || return 0
+    dest="${seg%.log}.closed.log"
+    [ -e "$dest" ] && return 0
+    mv "$seg" "$dest" 2>/dev/null
     return 0
 }
 
@@ -298,7 +296,17 @@ run_all_dur_append() {
     case "$key" in *"$(printf '\t')"*|*"$(printf '\r')"*) return 0 ;; esac
     [ "${#key}" -le "$RUN_ALL_DUR_MAX_KEY_BYTES" ] || return 0
     [ "${#RUN_ALL_DUR_REPO_ID}" -eq "$RUN_ALL_DUR_TOKEN_WIDTH" ] || return 0
+    # A consolidation round may have taken an abandoned-looking segment; restart it headed.
+    [ -f "$RUN_ALL_DUR_SEGMENT" ] || printf '#os %s\n' "$RUN_ALL_DUR_OS_ATTR" >"$RUN_ALL_DUR_SEGMENT" 2>/dev/null
     printf '%s|%s|%s\n' "$RUN_ALL_DUR_REPO_ID" "$secs" "$key" \
         >>"$RUN_ALL_DUR_SEGMENT" 2>/dev/null || true
     return 0
 }
+
+# Consolidation (closed/abandoned segments → one base per OS attribute); absent module = no-op.
+# shellcheck source=bin/lib/run-all-durations-consolidate.sh
+if [ -f "${BASH_SOURCE[0]%/*}/run-all-durations-consolidate.sh" ]; then . "${BASH_SOURCE[0]%/*}/run-all-durations-consolidate.sh"; fi
+
+# Time-limited #2079 migration hook; absent module = legacy files simply go unread.
+# shellcheck source=bin/lib/run-all-ledger-migrate.sh
+if [ -f "${BASH_SOURCE[0]%/*}/run-all-ledger-migrate.sh" ]; then . "${BASH_SOURCE[0]%/*}/run-all-ledger-migrate.sh"; fi

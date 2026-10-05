@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Host-wide test lanes (#2455): one budget N of mkdir slots shared by every
+# Host-wide test lanes (#2455): one max jobs per host N of mkdir slots shared by every
 # find-tests and run-all process on this host. Sourced only; requires
 # bin/lib/run-all-parallelism.sh first. Plain globals only (no declare): run-all
 # sources this file inside a function. Design: docs/architecture/claude-code/test-host-lanes.md.
@@ -19,8 +19,13 @@ THL_TOKEN=""
 THL_GRANTED=0
 THL_NOTE=""
 THL_WAIT_CAP_USED=0
-THL_BUDGET=""
-THL_BUDGET_SOURCE=""
+THL_MAX_JOBS_PER_HOST=""
+THL_MAX_JOBS_PER_HOST_SOURCE=""
+THL_RECORD_REASON=""
+THL_RECORD_OS=""
+THL_OS_NOW=""
+THL_RECORD_ADVICE=""
+THL_PLAN_JOBS=0
 THL_STATE=""
 THL_AGE="-"
 THL_NOW=0
@@ -53,17 +58,61 @@ thl_init_dir() {
     return 0
 }
 
-# thl_budget — THL_BUDGET / THL_BUDGET_SOURCE (override|calibrated|fallback).
-# The bucket check is skipped on purpose: the budget is host capacity, so
-# find-tests and run-all (TESTS_DIR exported) must read the same N.
-thl_budget() {
-    if [[ ${TEST_LANES_BUDGET:-} =~ ^[1-9][0-9]{0,3}$ ]]; then
-        THL_BUDGET="$TEST_LANES_BUDGET"; THL_BUDGET_SOURCE=override
-    elif run_all_cache_read "$(run_all_cache_file)" "" 2>/dev/null; then
-        THL_BUDGET="$RUN_ALL_CACHE_JOBS"; THL_BUDGET_SOURCE=calibrated
-    else
-        THL_BUDGET="$RUN_ALL_FALLBACK_JOBS"; THL_BUDGET_SOURCE=fallback
+# thl_max_jobs_per_host — THL_MAX_JOBS_PER_HOST / _SOURCE (env|dotenv|measured|default),
+# first valid layer wins. An invalid value skips its layer with one fixed notice
+# that never echoes it. A valid env value launches no .env resolver.
+thl_max_jobs_per_host() {
+    THL_RECORD_REASON=""; THL_RECORD_OS=""; THL_OS_NOW=""; THL_RECORD_ADVICE=""
+    if [ -n "${TEST_MAX_JOBS_PER_HOST:-}" ]; then
+        if run_all_valid_max_jobs "$TEST_MAX_JOBS_PER_HOST"; then
+            THL_MAX_JOBS_PER_HOST="$((10#$TEST_MAX_JOBS_PER_HOST))"; THL_MAX_JOBS_PER_HOST_SOURCE="env"; return 0
+        fi
+        printf '[lanes] TEST_MAX_JOBS_PER_HOST is not an integer between 1 and 1024; ignored\n' >&2
     fi
+    run_all_dotenv_value TEST_MAX_JOBS_PER_HOST
+    if [ -n "$RUN_ALL_DOTENV_VALUE" ]; then
+        if run_all_valid_max_jobs "$RUN_ALL_DOTENV_VALUE"; then
+            THL_MAX_JOBS_PER_HOST="$((10#$RUN_ALL_DOTENV_VALUE))"; THL_MAX_JOBS_PER_HOST_SOURCE=dotenv; return 0
+        fi
+        printf '[lanes] TEST_MAX_JOBS_PER_HOST in .env is not an integer between 1 and 1024; ignored\n' >&2
+    fi
+    if run_all_cache_read "$(run_all_cache_file)" 2>/dev/null; then
+        THL_MAX_JOBS_PER_HOST="$RUN_ALL_CACHE_MAX_JOBS_PER_HOST"; THL_MAX_JOBS_PER_HOST_SOURCE=measured
+        THL_RECORD_OS="$RUN_ALL_CACHE_OS"
+        THL_OS_NOW="$(run_all_os_attr)"
+        [ "$THL_RECORD_OS" = "$THL_OS_NOW" ] ||
+            THL_RECORD_ADVICE="measured on $THL_RECORD_OS, now $THL_OS_NOW; re-run $RUN_ALL_CALIBRATOR_HINT"
+        return 0
+    fi
+    THL_MAX_JOBS_PER_HOST="$RUN_ALL_DEFAULT_MAX_JOBS_PER_HOST"; THL_MAX_JOBS_PER_HOST_SOURCE=default
+    THL_RECORD_REASON="${RUN_ALL_CACHE_REASON:-missing}"
+}
+
+# _thl_lanes_for <requested> — the one width rule: _THL_TOP = H-1 (1 when H<2),
+# _THL_WANT = min(requested, _THL_TOP), at least 1.
+_thl_lanes_for() {
+    local req="${1:-1}"
+    [[ $req =~ ^[1-9][0-9]{0,4}$ ]] || req=1
+    _THL_TOP=1
+    [ "$THL_MAX_JOBS_PER_HOST" -ge 2 ] && _THL_TOP=$((THL_MAX_JOBS_PER_HOST - 1))
+    _THL_WANT="$req"
+    [ "$_THL_WANT" -gt "$_THL_TOP" ] && _THL_WANT="$_THL_TOP"
+    return 0
+}
+
+# _thl_source_text — `max jobs per host <H>, source <s>[, record <reason>; calibrate with <hint>]`.
+_thl_source_text() {
+    _THL_SRC="max jobs per host $THL_MAX_JOBS_PER_HOST, source $THL_MAX_JOBS_PER_HOST_SOURCE"
+    [ "$THL_MAX_JOBS_PER_HOST_SOURCE" = default ] &&
+        _THL_SRC="$_THL_SRC, record $THL_RECORD_REASON; calibrate with $RUN_ALL_CALIBRATOR_HINT"
+    return 0
+}
+
+# _thl_not_applied_note <requested> — THL_NOTE for a disabled lease (TEST_LANES=off named first).
+_thl_not_applied_note() {
+    local why="nested under a lane holder"
+    [ "${TEST_LANES:-}" = off ] && why="TEST_LANES=off"
+    THL_NOTE="not applied ($why); jobs $1 as requested"
 }
 
 # _thl_read_owner <lane-dir> — non-evaluating owner/hb reader. Sets _THL_O_*;
@@ -270,40 +319,58 @@ _thl_disabled() {
 thl_find_tests_lease() {
     _thl_disabled && return 0
     [ -n "$THL_CACHE_ROOT" ] || thl_init_dir
-    thl_budget
+    thl_max_jobs_per_host
     _thl_int "${TEST_LANES_WAIT_CAP:-}" "$THL_FIND_TESTS_CAP"
-    thl_acquire find-tests 1 1 "$THL_BUDGET" desc "$_THL_INT" || return $?
+    thl_acquire find-tests 1 1 "$THL_MAX_JOBS_PER_HOST" desc "$_THL_INT" || return $?
     TEST_LANES_HELD="$$"; export TEST_LANES_HELD
 }
 
 # thl_run_all_lease <desired-j> <remaining-deadline|0> — at least 1, at most
 # min(desired, N-1) lanes from 1..N-1 (1..1 when N=1). Sets THL_GRANTED/THL_NOTE.
 thl_run_all_lease() {
-    local desired="${1:-1}" deadline="${2:-0}" top=1 want cap
+    local desired="${1:-1}" deadline="${2:-0}" cap
     [[ $desired =~ ^[1-9][0-9]{0,4}$ ]] || desired=1
     THL_GRANTED="$desired"; THL_NOTE=""
-    _thl_disabled && return 0
+    if _thl_disabled; then _thl_not_applied_note "$desired"; return 0; fi
     [ -n "$THL_CACHE_ROOT" ] || thl_init_dir
-    thl_budget
-    [ "$THL_BUDGET" -ge 2 ] && top=$((THL_BUDGET - 1))
-    want="$desired"
-    [ "$want" -gt "$top" ] && want="$top"
+    thl_max_jobs_per_host
+    _thl_lanes_for "$desired"
     _thl_int "${TEST_LANES_WAIT_CAP:-}" "$THL_RUN_ALL_CAP"
     cap="$_THL_INT"
     if [[ $deadline =~ ^[1-9][0-9]{0,8}$ ]] && [ "$deadline" -lt "$cap" ]; then cap="$deadline"; fi
-    thl_acquire run-all "$want" 1 "$top" asc "$cap" || return $?
+    thl_acquire run-all "$_THL_WANT" 1 "$_THL_TOP" asc "$cap" || return $?
     [ -n "$THL_SLOTS" ] && _thl_heartbeat_start
     TEST_LANES_HELD="$$"; export TEST_LANES_HELD
-    # shellcheck disable=SC2034  # read by tests/run-all.sh's `lanes:` progress line
-    THL_NOTE="$THL_GRANTED/$THL_BUDGET lanes (lanes ${THL_SLOTS:-none}; budget $THL_BUDGET_SOURCE)"
+    _thl_source_text
+    THL_NOTE="jobs $THL_GRANTED of requested $desired ($_THL_SRC; lanes ${THL_SLOTS:-none})${THL_RECORD_ADVICE:+; $THL_RECORD_ADVICE}"
+    return 0
+}
+
+# thl_plan <requested> — the width a lease would ask for, without taking one
+# (--print-plan). Sets THL_PLAN_JOBS and THL_NOTE.
+thl_plan() {
+    local req="${1:-1}"
+    [[ $req =~ ^[1-9][0-9]{0,4}$ ]] || req=1
+    THL_PLAN_JOBS="$req"
+    if _thl_disabled; then _thl_not_applied_note "$req"; return 0; fi
+    thl_max_jobs_per_host
+    _thl_lanes_for "$req"
+    THL_PLAN_JOBS="$_THL_WANT"
+    _thl_source_text
+    # shellcheck disable=SC2034  # read by tests/run-all.sh's `plan:` / `lanes:` progress lines
+    THL_NOTE="jobs $THL_PLAN_JOBS of requested $req ($_THL_SRC; a live lease may grant fewer)${THL_RECORD_ADVICE:+; $THL_RECORD_ADVICE}"
     return 0
 }
 
 # thl_status — read-only listing for bin/test-lanes-status.sh; never reclaims.
+# Line 1 never shows host_id or measured_at; `os` is shown only after its shape check.
 thl_status() {
-    local d i n=0
-    thl_budget
-    printf 'budget=%s source=%s\n' "$THL_BUDGET" "$THL_BUDGET_SOURCE"
+    local d i n=0 line
+    thl_max_jobs_per_host
+    line="max_jobs_per_host=$THL_MAX_JOBS_PER_HOST source=$THL_MAX_JOBS_PER_HOST_SOURCE"
+    [ "$THL_MAX_JOBS_PER_HOST_SOURCE" = default ] && line="$line record=$THL_RECORD_REASON"
+    [ -n "$THL_RECORD_ADVICE" ] && line="$line measured_on=$THL_RECORD_OS now=$THL_OS_NOW"
+    printf '%s\n' "$line"
     for d in "$THL_CACHE_ROOT"/slots/lane.*; do
         [ -d "$d" ] || continue
         i="${d##*/lane.}"

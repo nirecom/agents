@@ -22,14 +22,18 @@ const LOCAL_ENV_BASENAME = ".env.local";
 // value at all — their readers bypass process.env. Per-repo ENFORCE_WORKTREE
 // belongs in the global .env's ENFORCE_WORKTREE_EXCLUDE instead.
 const ENV_ENTRY_BLOCKLIST_EXACT = new Set([
-  "SHOW_PLAN_LINK_NO_AUTO_OPEN",
+  // PLAN_SYNC_REMOTE_URL names the one remote every plan is pushed to; a project
+  // pointing it elsewhere would publish plans to a repo the user never chose.
+  "PLAN_SYNC_REMOTE_URL",
   // CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR are one class — load-env.js names
   // them together as ISOLATION_ENV_KEYS — and a local value for either relocates
   // the workflow-state root holding gate state and off-clearance tokens.
+  // AGENTS_STATE_DIR is their sibling: the state/log root retention deletes under.
   // AGENTS_CONFIG_DIR names the very directory this layer resolves the global
   // .env from, so a local value would redirect the layer that reads it.
   "CLAUDE_WORKFLOW_DIR",
   "WORKFLOW_PLANS_DIR",
+  "AGENTS_STATE_DIR",
   "AGENTS_CONFIG_DIR",
   "WORKTREE_BASE_DIR",
   "ENFORCE_WORKTREE",
@@ -46,13 +50,26 @@ const ENV_ENTRY_BLOCKLIST_EXACT = new Set([
   "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
   "DEFAULT_BRANCHES",
   "AUTO_APPROVE_TOOLS",
+  // JEV sends plan artifacts to an external US-hosted service and TYPESAFE_API_KEY
+  // picks who is billed: both are one-per-machine policy, never a repo's choice.
+  "JEV",
+  "TYPESAFE_API_KEY",
+  // Node reads these itself: they switch off TLS verification, add a trusted CA,
+  // route fetch through an env proxy, or preload code — in the hook making the
+  // credentialed Jev call and in every child it spawns. Exact entries, not a
+  // NODE_ prefix: NODE_ENV stays a project's own choice.
+  "NODE_TLS_REJECT_UNAUTHORIZED",
+  "NODE_OPTIONS",
+  "NODE_EXTRA_CA_CERTS",
+  "NODE_USE_ENV_PROXY",
 ]);
 
 // SESSION_ also covers the harness-supplied SESSION_ID; PROPAGATE_ covers the
 // PROPAGATE_LABELS_PAT credential; CODEX_ covers CODEX_NFR_MAX_*, the caps on
 // the very PROJECT_NFR text the project itself supplies; COMMENT_BLOCK_ reaches
-// only a pre-commit reader that deliberately bypasses process.env.
-const ENV_ENTRY_BLOCKLIST_PREFIX = ["SESSION_", "PROPAGATE_", "CODEX_", "COMMENT_BLOCK_"];
+// only a pre-commit reader that deliberately bypasses process.env; JEV_ covers
+// the Jev test overrides and future Jev tuning knobs (defence in depth).
+const ENV_ENTRY_BLOCKLIST_PREFIX = ["SESSION_", "PROPAGATE_", "CODEX_", "COMMENT_BLOCK_", "JEV_"];
 
 // isBlocklisted answers the deny list. Case-folded to upper-case: Windows
 // environment variables are case-insensitive (process.env.enforce_worktree and

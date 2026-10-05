@@ -663,3 +663,15 @@ Changes: Sessions that skip the outline step can now merge through `gh pr merge`
 ### FEATURE: PR #2531 (2026-10-04)
 Background: feat(#2490): show CONFIRM_* gate values in next-step and unify the confirm procedure
 Changes: The workflow now shows each step's confirmation-gate setting in its next-action output and decides whether to ask you from a single check, so the intent, outline, detail, tests, code, docs and worktree gates behave the same way. A scope change between outline and detail is always shown to you, even when the detail confirmation is turned off.
+
+### FEATURE: PR #2542 (2026-10-05)
+Background: feat(#2079): split test parallelism host/run limits and consolidate duration ledger
+Changes: Test parallelism now has two limits: `TEST_MAX_JOBS_PER_HOST` (machine-wide, measured by `bin/calibrate-test-parallelism.sh`) and `TEST_MAX_JOBS_PER_RUN` (per run-all invocation). The old names are no longer read.;The run-all duration history is no longer lost after 16 runs: past segments are consolidated per OS, and records not measured for 30 days expire.
+
+### FEATURE: PR #2543 (2026-10-05)
+Background: feat(#2460): add the Jev foundation with complexity-judge as its firs...
+Changes: Added an opt-in Jev shadow mode: with `JEV=on` and `TYPESAFE_API_KEY` set, each complexity judgment is also sent to the TypeSafe AI typed classifier and both answers are logged for comparison. The LLM judge's result is still the one used, and the feature is off by default.;Added `bin/jev-report` to summarize how often the two judges agree, with latency and estimated cost.;`bin/jev-report` now shows how many comparisons were skipped because a judge answered undecidable.;`bin/jev-report` now warns when a log generation cannot be read, and shows the sample size behind each low-confidence rate.;`bin/jev-report` now shows how many answers from each judge listed S1b without S1.;Jev shadow mode now removes more kinds of credentials (GitHub tokens, URL passwords, Authorization headers, password and token assignments, all private-key blocks) from the text it sends, using the same API-key patterns as the pre-commit scanner.;`bin/jev-report` now counts an answer that lists S1b without S1 as a disagreement.;A project's `.env.local` can no longer set `AGENTS_STATE_DIR`, `JEV`, `TYPESAFE_API_KEY`, any `JEV_` key, or the Node runtime variables `NODE_OPTIONS`, `NODE_TLS_REJECT_UNAUTHORIZED`, `NODE_EXTRA_CA_CERTS` and `NODE_USE_ENV_PROXY`. `NODE_ENV` is still allowed.;Fixed the RTK guard audit log occasionally losing a record on Windows when several sessions wrote at the same moment.
+
+### FEATURE: PR #2537 (2026-10-05)
+Background: feat(#2513): publish plans to a private git remote so they can be rea...
+Changes: Plans (intent / outline / detail) can now be read from the iOS/Android Claude apps or any browser: set `PLAN_SYNC_REMOTE_URL` to a private repository and run `bin/plan-sync-init`; each plan breadcrumb then shows a forge URL instead of a local path. The VS Code auto-open of plan files and its `.env` setting were removed.;scan-outbound now treats internal repositories like private ones when blocking repo names in public-destination outbound.

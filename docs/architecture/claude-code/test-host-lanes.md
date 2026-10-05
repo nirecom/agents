@@ -36,25 +36,34 @@ invalidates exactly and adds nothing.
 Branch headers are excluded from the key and stored paths are root-relative, so
 worktrees at the same content share one entry.
 
-The cache file is untrusted input, read with the same discipline as the parallelism
-cache: a `read` loop that never evaluates a value, a fixed header, a per-row token
+The cache file is untrusted input, read with the same discipline as the measured
+parallelism record: a `read` loop that never evaluates a value, a fixed header, a per-row token
 count, and an `#end` row count. Any mismatch regenerates the entry. Paths holding LF,
 TAB or CR are never stored. Every failure is fail-soft: the result equals an uncached
 scan. `FIND_TESTS_CORPUS_CACHE=off` bypasses the cache.
 
 ## 3. Host lanes
 
-One budget N of "CPU lanes" is shared by every find-tests and run-all process on the
-host. N is the run-all calibrated width, else the fallback of 4; `TEST_LANES_BUDGET`
-overrides it. A lane is an atomic `mkdir` of `slots/lane.<i>` under the run-all cache
-directory, holding an owner record (pid, environment, kind, start, token) and a
-heartbeat epoch.
+One **max jobs per host** H (`TEST_MAX_JOBS_PER_HOST`) of "CPU lanes" is shared by
+every find-tests and run-all process on the host. The first valid layer wins:
+environment > `.env` > the calibrator's measured record > default 4, and the lanes
+line names which one (`source env|dotenv|measured|default`). An invalid value skips
+its layer with one fixed notice; a missing or rejected record shows its reason token
+and the calibrator hint. A lane is an atomic `mkdir` of `slots/lane.<i>` under the
+run-all cache directory, holding an owner record (pid, environment, kind, start,
+token) and a heartbeat epoch.
 
-- find-tests takes 1 lane, searching from N downward.
-- run-all leases between 1 and min(`-j`, N−1) lanes from lane 1 upward, once at
-  start, and never changes its share while running. Lane N is therefore always left
-  for find-tests, and the scheduler's blocking `wait -n` needs no change.
+- find-tests takes 1 lane, searching from H downward.
+- run-all asks for min(max jobs per run, H−1) lanes (1 when H<2) from lane 1 upward,
+  once at start, and never changes its share while running. Lane H is therefore
+  always left for find-tests, and the scheduler's blocking `wait -n` needs no change.
 - A partial grant runs at the narrower width instead of waiting.
+- `--print-plan` applies the same rule without taking a lease, and
+  `bin/test-lanes-status.sh` shows H and its source on its first line.
+
+When the measured record was taken on another OS version than the current one, the
+value is still used and the lanes, plan and status lines add `measured on X, now Y;
+re-run bin/calibrate-test-parallelism.sh` (`test-runner-parallelism.md` Section 5).
 
 Why slots and not CPU measurement: measuring CPU on Windows means launching
 PowerShell each time and is noisy under changing load. Slots are deterministic,
@@ -75,12 +84,15 @@ is stopped on every exit path.
 for find-tests (inside the 600 s Bash tool limit) and 1800 s for run-all, lowered to
 `--deadline` when that is smaller. Exit 4 emits no `Results:` or `RUN_CONTRACT:` line.
 
-**Nesting.** A holder exports `TEST_LANES_HELD`; its children skip the lease, so a
-test run under run-all never waits on its own parent. `TEST_LANES=off` disables the
-lease, and the calibrator sets it so its measurements are not narrowed.
+**Nesting.** A holder exports `TEST_LANES_HELD`; its children skip the lease and run
+at their requested width, so a test run under run-all never waits on its own parent.
+`TEST_LANES=off` disables the lease, and the calibrator sets it so its measurements
+are not narrowed. These two are the only cases where the rule does not apply, and
+each prints `not applied (TEST_LANES=off|nested under a lane holder); jobs N as
+requested`.
 
 **Unwritable cache directory.** When `slots/` cannot be created, the caller prints one
-notice and runs without a lane at its full requested width. Load control is a
+notice and runs without a lane at the width the rule allows. Load control is a
 courtesy between sessions, so a broken cache directory must never block a test run.
 
 **Write scope.** find-tests is auto-approved as a self-script. With the cache and lanes
@@ -93,6 +105,6 @@ the repository.
 | Path | Role |
 |---|---|
 | `bin/lib/test-corpus-cache.sh` | Cache key, non-evaluating loader, atomic writer with retention |
-| `bin/lib/test-host-lanes.sh` | Budget, lease, reclaim, heartbeat, release, status listing |
+| `bin/lib/test-host-lanes.sh` | Max jobs per host, width rule, lease, reclaim, heartbeat, release, status listing |
 | `bin/test-lanes-status.sh` | Read-only listing of lane holders |
 | `tests/bin/feature-2455-test-load-control/` | Cache, lanes, run-all lease and fork-count cases |

@@ -112,6 +112,9 @@ try {
     }
     # --- END session-sync gate ---
 
+    # plan-sync bootstrap: an empty PLAN_SYNC_REMOTE_URL is a no-op inside the CLI.
+    Invoke-InstallStep "Initializing plan sync" "$AgentsRoot\install\win\plan-sync-init.ps1"
+
     Write-Host ""
     Write-Host "--- Adding profile sourcing ---"
     $_needRestart = $false

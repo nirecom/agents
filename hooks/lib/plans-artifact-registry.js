@@ -185,7 +185,17 @@ function getPlansArtifactPath(sid, kind, opts) {
   return path.join(o.plansDir || getWorkflowPlansDir(), legacyBasename(sid, name));
 }
 
+// The plan-artifact kinds plan-sync publishes: every plan-artifact name except
+// context.md, which carries session-local working notes rather than a plan.
+const SYNCED_PLAN_ARTIFACT_KINDS = Object.freeze(["intent", "outline", "detail"]);
+
+function planArtifactNames() {
+  return SYNCED_PLAN_ARTIFACT_KINDS.map((kind) => ARTIFACT_NAMES[kind]());
+}
+
 module.exports = {
+  SYNCED_PLAN_ARTIFACT_KINDS,
+  planArtifactNames,
   FORMAT_TOKENS,
   CONTROL_KINDS,
   MIGRATABLE_KINDS,

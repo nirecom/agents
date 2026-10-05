@@ -9,9 +9,9 @@ FC_R30="$(mk_repo)"; synth_corpus "$FC_R30" 30
 FC_R120="$(mk_repo)"; synth_corpus "$FC_R120" 120
 FC_C30="$TMPDIR_BASE/fc-cache-30"
 FC_C120="$TMPDIR_BASE/fc-cache-120"
-# Budget pinned: reading the parallelism cache would add uname/sha256sum launches
-# that depend on the host, not on the code under test.
-FC_ENV=(TEST_LANES_BUDGET=4)
+# Host limit pinned in the environment: the env layer wins before the .env resolver
+# or the measured record is consulted, so neither adds host-dependent launches.
+FC_ENV=(TEST_MAX_JOBS_PER_HOST=4)
 
 # fc_measure <repo> <cache> <mode:off|miss|hit> <args...> — echo-free; sets FC_TALLY.
 fc_measure() {

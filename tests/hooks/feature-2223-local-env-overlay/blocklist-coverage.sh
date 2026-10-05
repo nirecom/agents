@@ -31,7 +31,8 @@ blocked-auto-approve-tools      | AUTO_APPROVE_TOOLS          | off           | 
 blocked-workflow-plans-dir      | WORKFLOW_PLANS_DIR          | /global-plans | /tmp/evil
 blocked-claude-workflow-dir     | CLAUDE_WORKFLOW_DIR         | /global-wf    | /tmp/evil
 blocked-agents-config-dir       | AGENTS_CONFIG_DIR           | /global-cfg   | /tmp/evil
-blocked-worktree-base-dir       | WORKTREE_BASE_DIR           | /global-wt    | /tmp/evil
+blocked-agents-state-dir        | AGENTS_STATE_DIR            | /global-state | /tmp/evil
+blocked-worktree-base-dir      | WORKTREE_BASE_DIR           | /global-wt    | /tmp/evil
 blocked-default-branches        | DEFAULT_BRANCHES            | main          | evil
 blocked-sweep-age-days          | SWEEP_AGE_DAYS              | 30            | 0
 blocked-mcp-fs-debug            | MCP_FS_DEBUG                | off           | on
@@ -41,6 +42,9 @@ prefix-session-anything         | SESSION_ANYTHING            | off           | 
 prefix-propagate-labels-pat     | PROPAGATE_LABELS_PAT        | globaltoken   | stolen
 prefix-codex-nfr-max-lines      | CODEX_NFR_MAX_LINES         | 200           | 999999
 prefix-comment-block-max-lines  | COMMENT_BLOCK_MAX_LINES     | 10            | 9999
+blocked-jev                     | JEV                         | off           | on
+blocked-typesafe-api-key        | TYPESAFE_API_KEY            | globalkey     | repokey
+prefix-jev-base-url             | JEV_BASE_URL                | https://g.example | http://127.0.0.1:1
 TABLE
 
 # ---------------------------------------------------------------------------
@@ -76,14 +80,15 @@ DENY_EXACT="$(probe blocklist-keys exact)"
 DENY_PREFIXES="$(probe blocklist-keys prefixes)"
 
 # Full membership, not a count: a silently dropped entry is the regression here.
-WANT_EXACT="$(printf '%s\n' AGENTS_CONFIG_DIR AUTO_APPROVE_TOOLS \
+WANT_EXACT="$(printf '%s\n' AGENTS_CONFIG_DIR AGENTS_STATE_DIR AUTO_APPROVE_TOOLS \
     CLAUDE_CODE_AUTO_COMPACT_WINDOW CLAUDE_WORKFLOW_DIR \
     CODE_FILE_EXTENSIONS CODE_LANG_EXCLUDE DEFAULT_BRANCHES ENFORCE_WORKTREE \
     ENFORCE_WORKTREE_ADDITIONAL_REPOS ENFORCE_WORKTREE_EXCLUDE ISSUE_VERDICT_WEB_SEARCH \
-    MCP_FS_DEBUG MERGE_BASE_MAX_DIFF_FILES MERGE_BASE_MAX_DIFF_LINES \
-    SHOW_PLAN_LINK_NO_AUTO_OPEN SWEEP_AGE_DAYS VERBOSE_PROMPT_MODELS \
+    JEV MCP_FS_DEBUG MERGE_BASE_MAX_DIFF_FILES MERGE_BASE_MAX_DIFF_LINES \
+    NODE_EXTRA_CA_CERTS NODE_OPTIONS NODE_TLS_REJECT_UNAUTHORIZED NODE_USE_ENV_PROXY \
+    PLAN_SYNC_REMOTE_URL SWEEP_AGE_DAYS TYPESAFE_API_KEY VERBOSE_PROMPT_MODELS \
     WORKFLOW_PLANS_DIR WORKTREE_BASE_DIR)"
-WANT_PREFIXES="$(printf '%s\n' CODEX_ COMMENT_BLOCK_ PROPAGATE_ SESSION_)"
+WANT_PREFIXES="$(printf '%s\n' CODEX_ COMMENT_BLOCK_ JEV_ PROPAGATE_ SESSION_)"
 assert_eq "T2223N2-exact-set-membership" "$WANT_EXACT" "$(printf '%s' "$DENY_EXACT" | sed '/^$/d')"
 assert_eq "T2223N2-prefix-list-membership" "$WANT_PREFIXES" "$(printf '%s' "$DENY_PREFIXES" | sed '/^$/d')"
 assert_not_contains "T2223N2-stale-decl-key-not-blocklisted" "$DENY_EXACT" 'LOCAL_OVERRIDABLE_KEYS'
@@ -119,6 +124,15 @@ assert_eq "T2223N2-isBlocklisted-claude-workflow-dir" "true" "$(probe is-blockli
 assert_eq "T2223N2-isBlocklisted-claude-workflow-dir-lower" "true" "$(probe is-blocklisted claude_workflow_dir)"
 assert_eq "T2223N2-isBlocklisted-agents-config-dir" "true" "$(probe is-blocklisted AGENTS_CONFIG_DIR)"
 assert_eq "T2223N2-isBlocklisted-agents-config-dir-lower" "true" "$(probe is-blocklisted agents_config_dir)"
+# Their sibling (#2460): the state/log root that Jev retention deletes under.
+assert_eq "T2223N2-isBlocklisted-agents-state-dir" "true" "$(probe is-blocklisted AGENTS_STATE_DIR)"
+assert_eq "T2223N2-isBlocklisted-agents-state-dir-lower" "true" "$(probe is-blocklisted agents_state_dir)"
+# The four names Node itself reads (#2460): TLS verification, a trusted CA, an env proxy
+# and code preload, in the hook that makes the credentialed Jev call.
+for _nk in NODE_TLS_REJECT_UNAUTHORIZED NODE_OPTIONS NODE_EXTRA_CA_CERTS NODE_USE_ENV_PROXY \
+           node_options Node_Tls_Reject_Unauthorized; do
+    assert_eq "T2223N2-isBlocklisted-node-$_nk" "true" "$(probe is-blocklisted "$_nk")"
+done
 
 _i=0
 while IFS= read -r _k; do
@@ -177,6 +191,52 @@ new_case escalate-wf-control 'CODE_LANG=english' 'ORDINARY_WF_KEY=/tmp/ok-2223'
 export CLAUDE_PROJECT_DIR="$CASE_ROOT"
 esc_ok="$( ( unset CLAUDE_WORKFLOW_DIR; probe load-default ORDINARY_WF_KEY ) )"
 assert_eq "T2223N2-escalate-control-ordinary-key-injected" '"/tmp/ok-2223"' "$esc_ok"
+
+# AGENTS_STATE_DIR (#2460) in the same shape: a local value would move the state
+# root that Jev retention deletes under. The ordinary key beside it in the same
+# local file is the control that the file was read and the probe is live.
+new_case escalate-state 'CODE_LANG=english' \
+  'AGENTS_STATE_DIR=/tmp/evil-state-2460@NL@ORDINARY_STATE_KEY=/tmp/ok-state-2460'
+export CLAUDE_PROJECT_DIR="$CASE_ROOT"
+esc_state="$( ( unset AGENTS_STATE_DIR; probe load-default AGENTS_STATE_DIR ) )"
+assert_eq "T2223N2-escalate-state-dir-never-injected" "__ABSENT__" "$esc_state"
+esc_state_ok="$( ( unset AGENTS_STATE_DIR; probe load-default ORDINARY_STATE_KEY ) )"
+assert_eq "T2223N2-escalate-state-control-ordinary-key-injected" '"/tmp/ok-state-2460"' "$esc_state_ok"
+esc_state_json="$(probe effective-json "$CASE_ROOT_NODE")"
+assert_map_lacks "T2223N2-escalate-state-dir-absent-from-map" "$esc_state_json" 'evil-state-2460'
+# overlay() names the refused key in `ignored` (both spellings) and applies the
+# look-alike one character past the boundary.
+esc_state_overlay="$(run_with_timeout 20 node -e '
+  const m = require(require("path").join(process.env.AGENTS_DIR_NODE, "hooks", "lib", "local-env.js"));
+  const r = m.overlay({ AGENTS_STATE_DIR: "global-state-2460" },
+    { AGENTS_STATE_DIR: "evil-2460", agents_state_dir: "evil-2460", AGENTS_STATE_DIRX: "applied-2460" });
+  process.stdout.write(JSON.stringify({ map: r.map, applied: r.applied, ignored: r.ignored }));
+' 2>/dev/null)"
+assert_eq "T2223N2-overlay-reports-state-dir-ignored" \
+  '{"map":{"AGENTS_STATE_DIR":"global-state-2460","AGENTS_STATE_DIRX":"applied-2460"},"applied":["AGENTS_STATE_DIRX"],"ignored":["AGENTS_STATE_DIR","agents_state_dir"]}' \
+  "$esc_state_overlay"
+
+# The Node runtime names (#2460) in the same shape: a repo's local file must not switch
+# off TLS verification or preload code in the loader's own process. NODE_ENV in the same
+# file is the control: read, applied, and proof the entries are exact, not a NODE_ prefix.
+NODE_OPT_VALUE='--title=evil-node-options-2460'
+new_case escalate-node 'CODE_LANG=english' \
+  "NODE_OPTIONS=$NODE_OPT_VALUE@NL@NODE_TLS_REJECT_UNAUTHORIZED=0@NL@node_options=$NODE_OPT_VALUE@NL@NODE_ENV=node-env-2460"
+export CLAUDE_PROJECT_DIR="$CASE_ROOT"
+# node_probe <probe args...>: the probe with every tested NODE_* name absent from its env.
+node_probe() {
+    ( unset NODE_OPTIONS NODE_TLS_REJECT_UNAUTHORIZED NODE_ENV node_options; probe "$@" )
+}
+assert_eq "T2223N2-escalate-node-options-never-injected" "__ABSENT__" "$(node_probe load-default NODE_OPTIONS)"
+assert_eq "T2223N2-escalate-node-tls-never-injected" "__ABSENT__" \
+  "$(node_probe load-default NODE_TLS_REJECT_UNAUTHORIZED)"
+assert_eq "T2223N2-escalate-node-options-value-in-no-env-slot" "false" \
+  "$(node_probe load-default-has-value "$NODE_OPT_VALUE")"
+assert_eq "T2223N2-escalate-node-control-node-env-injected" '"node-env-2460"' "$(node_probe load-default NODE_ENV)"
+esc_node_json="$(probe effective-json "$CASE_ROOT_NODE")"
+assert_map_lacks "T2223N2-escalate-node-options-absent-from-map" "$esc_node_json" 'evil-node-options-2460'
+assert_not_contains "T2223N2-escalate-node-tls-absent-from-map" "$esc_node_json" 'NODE_TLS_REJECT_UNAUTHORIZED'
+assert_contains "T2223N2-escalate-node-env-in-map" "$esc_node_json" '"NODE_ENV":"node-env-2460"'
 unset CLAUDE_PROJECT_DIR
 
 # A decoy config dir the local file tries to point the reader at. Load-bearing on
@@ -218,6 +278,8 @@ session-bare               | SESSION                   | false
 propagate-bare             | PROPAGATE                 | false
 comment-block-bare         | COMMENT_BLOCK             | false
 agents-config-dir-suffixed | AGENTS_CONFIG_DIR_OLD     | false
+agents-state-dir-longer    | AGENTS_STATE_DIRX         | false
+agents-state-dir-shorter   | AGENTS_STATE              | false
 claude-workflow-dir-longer | CLAUDE_WORKFLOW_DIRECTORY | false
 auto-approve-tools-extra   | AUTO_APPROVE_TOOLS_EXTRA  | false
 enforce-bare               | ENFORCE                   | false
@@ -225,6 +287,16 @@ codex-prefix-itself        | CODEX_                    | true
 session-prefix-itself      | SESSION_                  | true
 propagate-prefix-itself    | PROPAGATE_                | true
 comment-block-prefix-itself| COMMENT_BLOCK_            | true
+jev-bare-longer            | JEVX                      | false
+jev-prefix-itself          | JEV_                      | true
+node-env                   | NODE_ENV                  | false
+node-bare                  | NODE                      | false
+node-prefix-only           | NODE_                     | false
+node-options-longer        | NODE_OPTIONSX             | false
+node-path                  | NODE_PATH                 | false
+https-proxy                | HTTPS_PROXY               | false
+http-proxy                 | HTTP_PROXY                | false
+no-proxy                   | NO_PROXY                  | false
 TABLE
 
 # End to end: a boundary key really does reach the effective map.

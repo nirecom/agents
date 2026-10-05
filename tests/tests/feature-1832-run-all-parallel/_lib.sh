@@ -89,17 +89,17 @@ fx_cleanup() {
 # Fixture isolation (rules/test/fixture-isolation.md): cache/workflow/plans dirs live in
 # the temp tree; inherited session ids are dropped so no hook resolves the live session.
 
-# fx_init snapshots and drops ambient control vars (e.g. inherited RUN_ALL_JOBS) so a case's
+# fx_init snapshots and drops ambient control vars (e.g. inherited TEST_MAX_JOBS_PER_RUN) so a case's
 # own intent isn't silently overridden; anything set AFTER fx_init is caller intent and reaches the child untouched.
 
-FX_CONTROL_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP RUN_ALL_WAITN_PROBE FEATURE_644_PHASE RUN_ALL_DURATIONS_LIB TEST_LANES TEST_LANES_BUDGET TEST_LANES_HELD TEST_LANES_TTL TEST_LANES_HEARTBEAT TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP RUN_ALL_LANES_LIB FIND_TESTS_CORPUS_CACHE"
+FX_CONTROL_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_CONFIG_VAR_CMD RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP RUN_ALL_WAITN_PROBE FEATURE_644_PHASE RUN_ALL_DURATIONS_LIB TEST_LANES TEST_MAX_JOBS_PER_HOST TEST_LANES_HELD TEST_LANES_TTL TEST_LANES_HEARTBEAT TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP RUN_ALL_LANES_LIB FIND_TESTS_CORPUS_CACHE"
 FX_DROPPED_CONTROLS=""
 
 # Ledger tuning and output variables. These are NOT pinnable intent: the ledger cases source
 # bin/lib/run-all-durations.sh into THIS process, so they are set here as a side effect, and a
 # leaked RUN_ALL_DUR_REPO_ID or RUN_ALL_DUR_MAX_* would silently retarget or resize the child's
 # ledger. They are therefore always `-u`-scrubbed from the child, never forwarded.
-FX_SCRUBBED_VARS="RUN_ALL_DUR_SCHEMA RUN_ALL_DUR_DIRNAME RUN_ALL_DUR_KEEP_SEGMENTS RUN_ALL_DUR_MAX_SEGMENTS_READ RUN_ALL_DUR_MAX_RECORDS RUN_ALL_DUR_MAX_LINE_BYTES RUN_ALL_DUR_MAX_KEY_BYTES RUN_ALL_DUR_MAX_SECS_DIGITS RUN_ALL_DUR_TOKEN_WIDTH RUN_ALL_DUR_TIER_UNMEASURED RUN_ALL_DUR_SWEEP_MAX RUN_ALL_DUR_REASON RUN_ALL_DUR_REPO_ID RUN_ALL_DUR_HOST_TOKEN RUN_ALL_DUR_SEGMENT RUN_ALL_DUR_WRITE_OK RUN_ALL_DUR_TIER_OUT RUN_ALL_DUR_SEGMENTS_READ"
+FX_SCRUBBED_VARS="RUN_ALL_DUR_SCHEMA RUN_ALL_DUR_DIRNAME RUN_ALL_DUR_MAX_SEGMENTS_READ RUN_ALL_DUR_MAX_RECORDS RUN_ALL_DUR_MAX_LINE_BYTES RUN_ALL_DUR_MAX_KEY_BYTES RUN_ALL_DUR_MAX_SECS_DIGITS RUN_ALL_DUR_TOKEN_WIDTH RUN_ALL_DUR_TIER_UNMEASURED RUN_ALL_DUR_RETENTION_DAYS RUN_ALL_DUR_ABANDON_MIN RUN_ALL_DUR_LOCK_STALE_MIN RUN_ALL_DUR_OS_ATTR RUN_ALL_DUR_REASON RUN_ALL_DUR_REPO_ID RUN_ALL_DUR_HOST_TOKEN RUN_ALL_DUR_SEGMENT RUN_ALL_DUR_WRITE_OK RUN_ALL_DUR_TIER_OUT RUN_ALL_DUR_SEGMENTS_READ"
 
 fx_drop_ambient_controls() {
     local v cur
@@ -181,10 +181,21 @@ fx_ledger_segments() {
     printf '%s\n' "$n"
 }
 
+# Attribute header lines (`#os <family>/<version>`, #2079) are not records: they are
+# excluded so record-counting cases keep their pre-#2079 expectations.
 fx_ledger_cat() {
     local f
     for f in "$(fx_ledger_dir)"/dur.*; do
-        [ -f "$f" ] && cat "$f"
+        [ -f "$f" ] && grep -v '^#' "$f"
+    done 2>/dev/null
+    return 0
+}
+
+# fx_ledger_headers — the attribute header lines only, one per segment that has one.
+fx_ledger_headers() {
+    local f
+    for f in "$(fx_ledger_dir)"/dur.*; do
+        [ -f "$f" ] && grep '^#' "$f"
     done 2>/dev/null
     return 0
 }
@@ -202,6 +213,10 @@ fx_new_root() {
     # Omitting this silently disables the ledger in EVERY fixture, which would turn
     # the ledger cases green without any of the behaviour under test being present.
     cp "$FX_REPO_ROOT/bin/lib/run-all-durations.sh" "$root/bin/lib/run-all-durations.sh" 2>/dev/null || true
+    # Same hazard for the #2079 migration module: without it the fixture silently skips migration.
+    cp "$FX_REPO_ROOT/bin/lib/run-all-ledger-migrate.sh" "$root/bin/lib/run-all-ledger-migrate.sh" 2>/dev/null || true
+    # ... and for #2079 S7b consolidation: without it the fixture silently never consolidates.
+    cp "$FX_REPO_ROOT/bin/lib/run-all-durations-consolidate.sh" "$root/bin/lib/run-all-durations-consolidate.sh" 2>/dev/null || true
     # Lanes are opt-in (#2455) so every pre-existing fixture keeps its unleased -j.
     if [ "${FX_WITH_LANES:-0}" = "1" ]; then
         cp "$FX_REPO_ROOT/bin/lib/test-host-lanes.sh" "$root/bin/lib/test-host-lanes.sh" 2>/dev/null || true

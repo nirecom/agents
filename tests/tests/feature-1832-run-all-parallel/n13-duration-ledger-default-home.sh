@@ -24,7 +24,7 @@ dur_missing() {
     return 0
 }
 
-SEG_RE='^dur\.[0-9]+\.[A-Za-z0-9]{16}\.[0-9]{8}T[0-9]{6}-[0-9]{1,10}\.log$'
+SEG_RE='^dur\.[0-9]+\.[A-Za-z0-9]{16}\.[0-9]{8}T[0-9]{6}-[0-9]{1,10}(\.closed)?\.log$'
 
 REAL_HOME="${HOME:-/nonexistent}"
 REAL_DUR="$REAL_HOME/.claude/run-all/durations"
@@ -65,7 +65,9 @@ for f in "$FAKE_DUR"/*; do
     [ -f "$f" ] || continue
     FAKE_NAMES="$FAKE_NAMES$(basename "$f")
 "
-    FAKE_LINES=$((FAKE_LINES + $(grep -c '' "$f" 2>/dev/null || echo 0)))
+    # Record lines only: a segment opens with its `#os <attr>` header (#2079 S6).
+    n="$(grep -vc '^#' "$f" 2>/dev/null || true)"
+    FAKE_LINES=$((FAKE_LINES + ${n:-0}))
 done
 FAKE_CLASS="$(printf '%s' "$FAKE_NAMES" | grep -cE "$SEG_RE" || true)"
 FIXTURE_DUR=absent
