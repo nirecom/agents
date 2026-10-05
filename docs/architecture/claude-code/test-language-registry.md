@@ -34,7 +34,8 @@ Top level: `schema` (1), `headerMaxLines` (10: how many leading lines carry `# T
 | `siblingSuiteDir` | A same-named directory next to the test holds its sub-files; retire deletes both |
 | `header` | `{commentPrefix}` or null. Header readers match `<commentPrefix> Tests:` / `Tags:` / `Serial:` as a fixed string (bash: `tlr_comment_prefix`, which also sets `TLR_COMMENT_PREFIX`); null takes `tableDrivenFallbackEntry`'s |
 | `launch` | How to run it (below); null for `recognized-only` |
-| `caseMarkerReader` | Part reference that reads `case_begin` / `case_end`, or null |
+| `caseMarkerReader` | Part reference that reads `case_begin` / `case_end`, or null. Tools read it through `crr_read` (`bin/lib/case-record-reader.sh`), never directly |
+| `caseEmbedRules` | Part reference answering the `sweep-tests --embed-cases` questions (below), or null: the language's files are then skipped as `no-embed-rules` |
 | `tableDrivenDetector` | Part reference that detects the table-driven shape, or null |
 | `helperLibrary` | `{path, sourceRegex}`: the harness and the grep -E proof a test sources it, or null |
 | `diagnostics` | `{nameLabel, flatRejectCode}` used in checker messages. `flatRejectCode` defaults to `FLAT_TEST_REJECTED` |
@@ -82,6 +83,20 @@ Shared code separates **capability** (is the field non-null) from **ownership** 
 |---|---|---|
 | `caseMarkerReader` | absolute test path | `TRP_CASE_*` / `TRP_HAS_MARKERS` / `_TRP_MARKER_MALFORMED*` / `_TRP_MARKER_UNCERTAIN` globals (the `trp_parse_case_markers` contract) |
 | `tableDrivenDetector` | test path | rc 0 when table-driven |
+| `caseEmbedRules` | `<op> <absolute test path> [args]` | one op per call (below); an unknown op returns 2 |
+
+`crr_read <abs>` is the one entry to case records: a `FILE\t<state>\t<line>\t<reason>` line, then one `CASE\t<idx>\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<reason>` line per case of a conforming file. `deps` is `?` when the language has no `caseEmbedRules`.
+
+**Same-shell contract.** `crr_read` leaves the `TRP_CASE_*` globals of the file it read, and the `deps` / `leftover-defs` ops read them in that shell instead of re-parsing case ranges, so call them right after `crr_read` on the same file, never in a subshell of their own.
+
+| `caseEmbedRules` op | Output (empty = nothing found) |
+|---|---|
+| `rules-doc` | repo-relative path of the language's embed rules (bash: `skills/sweep-tests/embed-rules/bash.md`) |
+| `deps` | `<case idx>\t<csv of top-level functions the case calls>` per case |
+| `leftover-defs` | `<line>\t<name>` per top-level function no code line calls |
+| `self-impl` | `<line>\t<kind>\t<detail>` per hand-rolled harness piece (bash: `counter-init`, `harness-redef`) |
+| `skip-reason` | one reason word when the file must not be embedded (bash: `narrow-harness`, a sourced `tests/lib/*harness*.sh` that is not the entry's `helperLibrary`) |
+| `result-summary <rc> <stdout-file>` | `<pass\|fail\|skip>\t<passed>\t<failed>`; counts empty when the output has none |
 
 ## Launch
 
