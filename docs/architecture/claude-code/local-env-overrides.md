@@ -57,7 +57,9 @@ each entry there. Two criteria put a key on it:
    [state-dirs.md](state-dirs.md)), the state and log root
    (`AGENTS_STATE_DIR`), the config directory this very
    layer resolves the global `.env` from (`AGENTS_CONFIG_DIR`), the worktree
-   enforcement switches.
+   enforcement switches, and `PLAN_SYNC_REMOTE_URL` (the one remote every plan is
+   pushed to; a project must not publish plans to a repo the operator never chose —
+   [plan-sync.md](plan-sync.md)).
 2. **Half-applied.** Keys whose consumers do not all read the same layer.
    `hooks/pre-commit` reads `ENFORCE_WORKTREE` through `load-env.sh`, which has
    no local overlay, while the Node reader of the same name does — a local

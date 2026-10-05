@@ -36,7 +36,7 @@ Scripts that pass free text (title, body, commit message, file content) to `gh` 
 
 For `gh issue`/`pr` writes, the repo whose visibility governs the scan is the **target** repo — resolved from an explicit `--repo`/`-R owner/name` flag when present, otherwise the current working directory's repo. This prevents a public-target write launched from inside a private working directory from escaping the scan. Target-visibility resolution fails **closed**: if the target repo cannot be determined or its visibility lookup errors, the content is scanned as if the target were public. A `--repo`/`-R` value smuggled inside a quoted `--body`/`--title` argument is ignored for target resolution — only a real flag selects the target.
 
-**Private-repo name leaks (public targets only)**: when the target repo is public, outbound content is additionally scanned for the names of your private repositories (e.g. `owner/private-repo`, or `#N` cross-references to them). The private-repo name list is fetched dynamically via `gh repo list --visibility private`; if that lookup fails, no extra names are added (fail-open). This complements the soft-prompt guidance in `rules/github-issues.md` (## Multi-repo leak prevention).
+**Private-repo name leaks (public targets only)**: when the target repo is public, outbound content is additionally scanned for the names of your private repositories (e.g. `owner/private-repo`, or `#N` cross-references to them). The private-repo name list (private and internal repositories) is fetched dynamically by one visibility-tagged listing (`gh repo list` or `glab api projects?membership=true`, 4-second timeout, `hooks/lib/forge/private-repo-list.js`), from the forge of the working repo's origin (so a repo on a different forge, such as a [plan-sync](architecture/claude-code/plan-sync.md) remote, needs a manual `.private-info-blocklist` entry); if that lookup fails or times out, no extra names are added (fail-open). This complements the soft-prompt guidance in `rules/github-issues.md` (## Multi-repo leak prevention).
 
 ## Detection Patterns
 
@@ -49,7 +49,7 @@ For `gh issue`/`pr` writes, the repo whose visibility governs the scan is the **
 | Hard secrets | AWS/Anthropic/OpenAI/GitHub/Slack/Google/HuggingFace/Groq/Replicate/Cohere API keys, PEM private keys | `AKIA...`, `sk-ant-api03-...`, `ghp_...`, `-----BEGIN RSA PRIVATE KEY-----` |
 | Hidden Unicode (Trojan Source) | Zero-width: U+200B, U+200C, U+200D, U+FEFF. Bidi overrides: U+202D, U+202E, U+2066–2069 | CVE-2021-42574 |
 | Blocklist patterns | User-defined in `.private-info-blocklist` (repo root); prefix `warn:` for soft-block | Hostnames, domain names; `warn:` suspicious combinations |
-| Private-repo name leak (public forge-writes only) | Dynamic: names of your private repos + `owner/repo#N` cross-references to them, in content pushed to a **public** target repo | `owner/private-repo`, `owner/private-repo#42` |
+| Private-repo name leak (public forge-writes only) | Dynamic: names of your private and internal repos + `owner/repo#N` cross-references to them, in content pushed to a **public** target repo | `owner/private-repo`, `owner/private-repo#42` |
 
 ## Setup
 

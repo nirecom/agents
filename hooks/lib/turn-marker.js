@@ -1,8 +1,8 @@
 "use strict";
 // Per-turn marker files for confirm-plan Stop hook coordination.
 //
-// show-plan-link.js (PostToolUse) writes a marker after emitting the
-// breadcrumb when CONFIRM_<STEP>=on. stop-confirm-plan-guard.js (Stop) reads
+// show-plan-link.js (PostToolUse) writes a marker for every final plan
+// artifact, just before emitting the breadcrumb. stop-confirm-plan-guard.js (Stop) reads
 // and deletes any markers for the current session, then scans the last
 // assistant message for forbidden path representations.
 //

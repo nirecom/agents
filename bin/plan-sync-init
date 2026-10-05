@@ -1,0 +1,70 @@
+#!/usr/bin/env node
+// bin/plan-sync-init [--remote-url <url>]
+// Provisions WORKFLOW_PLANS_DIR as the plan-sync repo for PLAN_SYNC_REMOTE_URL
+// (--remote-url overrides the .env value). Re-run it after changing the remote or
+// whenever a breadcrumb names a reason. Thin wrapper over provisionRepo.
+// Hooks read PLAN_SYNC_REMOTE_URL from the environment / .env only, so a successful
+// --remote-url run whose value differs from that prints a stdout warning (exit stays 0).
+// Exit: 0 provisioned, or not configured (empty URL); 1 refused / failed;
+// 2 usage (unknown argument, missing value, --remote-url given more than once).
+"use strict";
+const path = require("path");
+
+const PS = require(path.join(__dirname, "..", "hooks", "lib", "plan-sync.js"));
+const { getWorkflowPlansDir } = require(path.join(__dirname, "..", "hooks", "lib", "workflow-plans-dir.js"));
+
+function die(code, msg) {
+  process.stderr.write(`plan-sync-init: ${msg}\n`);
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a !== "--remote-url") die(2, `unknown argument: ${a}`);
+    // A following flag is a missing value, not a URL (`--remote-url --bogus`).
+    if (i + 1 >= argv.length || argv[i + 1].startsWith("--")) die(2, `${a} needs a value`);
+    if (out.remoteUrl !== undefined) die(2, `${a} given more than once`);
+    out.remoteUrl = argv[++i];
+  }
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+let url = args.remoteUrl;
+let hookUrl;
+if (url === undefined) {
+  const r = PS.resolveRemoteUrl();
+  if (r.loadFailed) die(1, "could not load the agents .env");
+  url = r.value;
+} else {
+  const r = PS.resolveRemoteUrl();
+  hookUrl = r.loadFailed ? "" : r.value || "";
+}
+if (!url) {
+  process.stdout.write("plan-sync: not configured (PLAN_SYNC_REMOTE_URL empty)\n");
+  process.exit(0);
+}
+
+let plansDir;
+try {
+  plansDir = getWorkflowPlansDir();
+} catch (e) {
+  die(1, `cannot resolve WORKFLOW_PLANS_DIR: ${e && e.message}`);
+}
+
+let result;
+try {
+  result = PS.provisionRepo(plansDir, url);
+} catch (e) {
+  die(1, `failed: ${PS.redactText(String(e && e.message))}`);
+}
+for (const note of result.notes || []) process.stdout.write(`plan-sync: ${PS.redactText(note)}\n`);
+if (!result.ok) die(1, `not provisioned (${result.reason}) for ${PS.redactUrl(url)}`);
+process.stdout.write(`plan-sync: provisioned ${plansDir} -> ${PS.redactUrl(url)}\n`);
+if (hookUrl !== undefined && hookUrl !== url) {
+  const shownHook = hookUrl ? PS.redactUrl(hookUrl) : "(empty)";
+  process.stdout.write(`plan-sync: warning: hooks read PLAN_SYNC_REMOTE_URL from .env (or the environment), ` +
+    `which holds ${shownHook}, not ${PS.redactUrl(url)}; sync will not run until .env holds the same value\n`);
+}

@@ -44,6 +44,9 @@ export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
 # Unset CONFIRM_* / VS Code detection so they don't bleed in from the parent shell.
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 unset TERM_PROGRAM CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
+unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+# #2513: plan-sync off so show-plan-link.js (T11/T12) never touches git.
+export PLAN_SYNC_REMOTE_URL=""
 
 # Compute the tilde-form and file:/// URI form of PLANS_DIR as the source modules
 # would. These are produced for the test fixtures via node so they match what the
@@ -315,6 +318,8 @@ rm -f "$WORKFLOW_DIR/${SID_T10}".confirm-plan-turn-*.json 2>/dev/null || true
 # ── T13–T26: Layer 2 (marker-independent follow-up + PLAN_LANG re-lint, #2278) ──
 # shellcheck source=./fix-524-confirm-plan-guard/layer2-cases.sh
 . "$(dirname "$0")/fix-524-confirm-plan-guard/layer2-cases.sh"
+# shellcheck source=./fix-524-confirm-plan-guard/layer1-url-cases.sh
+. "$(dirname "$0")/fix-524-confirm-plan-guard/layer1-url-cases.sh"
 
 # ══════════════════════════════════════════════════════════════════════════
 # Section B: hooks/show-plan-link.js — marker write integration
@@ -327,8 +332,6 @@ SID_T11="sid-t11-$$"
 rm -f "$WORKFLOW_DIR/${SID_T11}".confirm-plan-turn-*.json 2>/dev/null || true
 (
   export CONFIRM_DETAIL=on
-  export SHOW_PLAN_LINK_NO_SPAWN=1
-  export SHOW_PLAN_LINK_NO_AUTO_OPEN=1
   echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true},\"session_id\":\"$SID_T11\"}" \
     | run_with_timeout node "$SHOW_HOOK" >/dev/null 2>&1
 )
@@ -346,8 +349,6 @@ SID_T12="sid-t12-$$"
 rm -f "$WORKFLOW_DIR/${SID_T12}".confirm-plan-turn-*.json 2>/dev/null || true
 (
   export CONFIRM_DETAIL=off
-  export SHOW_PLAN_LINK_NO_SPAWN=1
-  export SHOW_PLAN_LINK_NO_AUTO_OPEN=1
   echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true},\"session_id\":\"$SID_T12\"}" \
     | run_with_timeout node "$SHOW_HOOK" >/dev/null 2>&1
 )

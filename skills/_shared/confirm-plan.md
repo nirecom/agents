@@ -14,25 +14,18 @@ and CPA-3's prompt; CPA-2's breadcrumb is unconditional.
 hook emits the diff as a `systemMessage`. When `CONFIRM_<STEP>=off`, the hook
 suppresses the preview — CPA-3's prose summary substitutes.
 
-**CPA-2 — Breadcrumb.** `show-plan-link.js` PostToolUse emits exactly one line
-after the Write returns:
+**CPA-2 — Breadcrumb.** `show-plan-link.js` PostToolUse syncs the artifact through
+plan-sync and emits the breadcrumb after the Write returns:
 
-    Plan file written: <absolute-path>
+    Plan file: <GitHub blob URL>
 
-This is the **only** path surface. The orchestrator MUST NOT emit any path
-representation — no duplication, translation, paraphrase, markdown link,
-relative/tilde path, `file:///` URI, dual-path, or path appended to a Japanese
-sentence.
-
-Rationale: artifacts under `~/.workflow-plans/` (configurable via
-`WORKFLOW_PLANS_DIR` — see `skills/_shared/resolve-plans-dir.md`) do not render
-as clickable links in VS Code. When `CONFIRM_<STEP>=on`, `show-plan-link.js`
-also routes the artifact to the matching VS Code window (#291); skipped when
-`CONFIRM_<STEP>=off` (preserves #445). Hook internals (detection, URI ladder,
-opt-out env): see `docs/architecture/claude-code/settings.md`.
-
-If the hook line is absent, the orchestrator MAY print the absolute path as
-plain text — same prohibitions still apply.
+On a sync failure it emits the absolute local path plus a `[plan-sync]` status line instead.
+This hook line is the **only** plan surface. The orchestrator MAY re-state the blob URL;
+it MUST NOT emit any local path representation — no duplication, translation, paraphrase,
+markdown link, relative/tilde path, `file:///` URI, or path appended to a Japanese sentence.
+Never copy the blob URL into a PR body, `history.md`, `CHANGELOG.md`, or a public issue —
+the plan repo is private. Leak guard and the `.private-info-blocklist` registration:
+`docs/architecture/claude-code/plan-sync.md`.
 Enforcement: `stop-confirm-plan-guard.js` Stop hook structurally blocks turns where a `WORKFLOW_PLANS_DIR` path appears in the last assistant message (always active, regardless of `CONFIRM_<STEP>`).
 
 **CPA-3 — Gate check (`next-step --gate`).**

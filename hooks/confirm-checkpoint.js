@@ -17,7 +17,6 @@ const { peekTurnMarkers } = require("./lib/turn-marker");
 const { resolveSessionId } = require("./workflow-state");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 const { loadDefaultEnv } = require("./lib/load-env");
-const { isVsCode, shouldOpenInVsCode, toVsCodeFileUri, openInVsCode, resolveWorkspaceFolderUri } = require("./lib/vscode-open");
 
 const { readHookInput } = require("./lib/read-stdin");
 
@@ -71,12 +70,10 @@ function resolveArtifact(stage, sid, plansDir) {
   return null;
 }
 
+// url: the published blob URL (plan-sync), shown in place of the local path when present.
 function renderMessage(stage, absPath, url) {
   if (absPath) {
-    const fileRef = url
-      ? `[${path.basename(absPath)}](${url})`
-      : absPath;
-    return `[${stage}] Plan file: ${fileRef}\nClick Allow to proceed, Deny to abort.`;
+    return `[${stage}] Plan file: ${url || absPath}\nClick Allow to proceed, Deny to abort.`;
   }
   return `[${stage}] Plan ready (file path unavailable)\nClick Allow to proceed, Deny to abort.`;
 }
@@ -95,7 +92,7 @@ if (require.main === module) {
 
   const stage = parsed.stage;
 
-  // Plan-stage branch: resolve artifact, honor CONFIRM_<STAGE>=off, open VS Code, emit message.
+  // Plan-stage branch: resolve artifact, honor CONFIRM_<STAGE>=off, emit message.
   let sid = null;
   try {
     sid = resolveSessionId({
@@ -119,15 +116,13 @@ if (require.main === module) {
     process.exit(0);
   }
 
-  if (absPath) {
+  let url = null;
+  if (absPath && plansDir) {
     try {
-      if (shouldOpenInVsCode()) {
-        openInVsCode(absPath, resolveWorkspaceFolderUri(input.tool_input || {}));
-      }
-    } catch (_) { /* fail-open */ }
+      const { publishedBlobUrl } = require("./lib/plan-sync");
+      url = publishedBlobUrl(plansDir, absPath);
+    } catch (_) { /* fail-open: the local path is shown */ }
   }
-
-  const url = (absPath && isVsCode()) ? toVsCodeFileUri(absPath) : null;
   const msg = renderMessage(stage, absPath, url);
   process.stdout.write(JSON.stringify({ systemMessage: msg }));
   process.exit(0);

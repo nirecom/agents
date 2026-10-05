@@ -107,10 +107,10 @@ cp.spawnSync = function (cmd, args, opts) {
   if (LOG) { try { fs.appendFileSync(LOG, String(cmd) + " " + joined + "\n"); } catch (e) {} }
   if (cmd === "git") return realSpawn(cmd, args, opts); // real origin lookup
   if (cmd === "glab" || /glab/.test(String(cmd))) {
-    return { status: 0, stdout: "gitlab-only/repo\n", stderr: "", error: null };
+    return { status: 0, stdout: "private\tgitlab-only/repo\n", stderr: "", error: null };
   }
   if (cmd === "gh" || /\bgh\b/.test(String(cmd))) {
-    return { status: 0, stdout: "github-only/repo\n", stderr: "", error: null };
+    return { status: 0, stdout: "PRIVATE\tgithub-only/repo\n", stderr: "", error: null };
   }
   return realSpawn(cmd, args, opts);
 };

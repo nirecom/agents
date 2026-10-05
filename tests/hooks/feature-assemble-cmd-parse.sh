@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/assemble-cmd-parse.js, skills/_shared/assemble-mandatory.sh
-# Tags: hook, skill, bin, windows, macos, scope:issue-specific
+# Tags: hook, skill, bin, windows, macos, scope:issue-specific, plan-sync, security, command-position
 # Tests for hooks/lib/assemble-cmd-parse.js — pure function extractAssembleDest(cmd).
 #
 # Contract: given a Bash command string that may invoke assemble-mandatory.sh,
@@ -37,8 +37,10 @@ fi
 
 # Helper: pass the command via env var to avoid all shell escaping issues.
 # Reads CMD from env and prints JSON of the result.
+# MSYS2_ENV_CONV_EXCL=CMD keeps Git Bash from rewriting a leading POSIX path
+# (e.g. /usr/bin/bash) in CMD into a Windows path before node.exe reads it.
 run_extract() {
-  CMD="$1" run_with_timeout node -e "
+  MSYS2_ENV_CONV_EXCL=CMD CMD="$1" run_with_timeout node -e "
     const m = require('$LIB');
     const r = m.extractAssembleDest(process.env.CMD);
     process.stdout.write(JSON.stringify(r));
@@ -119,6 +121,62 @@ expect_result "T11 wrapper env-var-only (no positionals) — returns null (retir
 CMD_T12='SESSION_ID=abc PLANS_DIR=/tmp "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent /a/intent.md /a/draft.md /a/outline.md'
 expect_result "T12 env-var prefix + positionals — returns 3rd positional" \
   "$CMD_T12" '"/a/outline.md"'
+
+# ── CP: command-position gate (#2513 review_security F3) ────────────────────
+# The dest is returned only when the script token executes: first token of a command
+# segment (after optional VAR=value tokens), or right after a bash/sh(.exe) interpreter
+# (with optional -options) that is itself in command position. '~' delimits the columns
+# because inputs contain '|'; want is the JSON result.
+while IFS='~' read -r name input want; do
+  [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+  name="${name//[[:space:]]/}"
+  want="${want//[[:space:]]/}"
+  input="${input#"${input%%[![:space:]]*}"}"
+  input="${input%"${input##*[![:space:]]}"}"
+  expect_result "$name: $input" "$input" "$want"
+done <<'TABLE'
+CP-cat-arg             ~ cat path/assemble-mandatory.sh a b c                                        ~ null
+CP-echo-arg            ~ echo /x/skills/_shared/assemble-mandatory.sh a b c                          ~ null
+CP-grep-arg            ~ grep x /x/assemble-mandatory.sh a b c                                       ~ null
+CP-cat-then-and        ~ cat /x/assemble-mandatory.sh a b c && echo done                             ~ null
+CP-node-interpreter    ~ node /x/assemble-mandatory.sh a b c                                         ~ null
+CP-echo-bash-arg       ~ echo bash /x/assemble-mandatory.sh a b c                                    ~ null
+CP-git-log-pathspec    ~ git log -- /x/assemble-mandatory.sh a b c                                   ~ null
+CP-arg-of-other-script ~ bash /x/other.sh /x/assemble-mandatory.sh a b c                             ~ null
+CP-and-then-cat        ~ cd x && cat /x/assemble-mandatory.sh a b c                                  ~ null
+CP-bash-quoted-var     ~ bash "$X/skills/_shared/assemble-mandatory.sh" --source-kind intent a b c   ~ "c"
+CP-env-prefix-bash     ~ SESSION_ID=1 bash /x/assemble-mandatory.sh a b c                            ~ "c"
+CP-env-prefix-direct   ~ X=1 Y=2 /x/assemble-mandatory.sh a b c                                      ~ "c"
+CP-bash-option         ~ bash -e /x/assemble-mandatory.sh a b c                                      ~ "c"
+CP-bash-two-options    ~ bash -e --norc /x/assemble-mandatory.sh a b c                               ~ "c"
+CP-direct-exec         ~ /x/assemble-mandatory.sh a b c                                              ~ "c"
+CP-after-and           ~ cd x && bash /x/assemble-mandatory.sh a b c                                 ~ "c"
+CP-after-or            ~ false || bash /x/assemble-mandatory.sh a b c                                ~ "c"
+CP-after-semicolon     ~ echo hi; bash /x/assemble-mandatory.sh a b c                                ~ "c"
+CP-after-spaced-semi   ~ echo hi ; bash /x/assemble-mandatory.sh a b c                               ~ "c"
+CP-after-pipe          ~ echo hi | bash /x/assemble-mandatory.sh a b c                               ~ "c"
+CP-direct-after-pipe   ~ cat a.txt | /x/assemble-mandatory.sh a b c                                  ~ "c"
+CP-sh-interpreter      ~ sh /x/assemble-mandatory.sh a b c                                           ~ "c"
+CP-bash-exe            ~ bash.exe /x/assemble-mandatory.sh a b c                                     ~ "c"
+CP-sh-exe              ~ sh.exe /x/assemble-mandatory.sh a b c                                       ~ "c"
+CP-quoted-win-bash-exe ~ "C:/Program Files/Git/bin/bash.exe" /x/assemble-mandatory.sh a b c          ~ "c"
+CP-abs-usr-bin-bash    ~ /usr/bin/bash /x/assemble-mandatory.sh a b c                                ~ "c"
+CP-assign-value-is-script ~ S=/x/assemble-mandatory.sh cat a b c                                     ~ null
+CP-assign-then-direct  ~ X=1 /x/assemble-mandatory.sh a b c                                          ~ "c"
+CP-reject-prefixed-name ~ bash /x/not-assemble-mandatory.sh a b c                                    ~ null
+CP-reject-bak-suffix   ~ bash /x/assemble-mandatory.sh.bak a b c                                     ~ null
+TABLE
+
+# Backslash-continuation forms through the same gate (bash-prefixed SKILL.md form + cat form).
+CMD_CP_BS=$(printf 'bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/cp-intent.md" \\\n  "%s/cp-outline.md" \\\n  "%s/cp-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
+expect_result "CP-bash-backslash-LF — bash-prefixed multi-line form returns the dest" \
+  "$CMD_CP_BS" "\"${NODE_TMPDIR}/cp-outline.md\""
+CMD_CP_BS_CR=$(printf 'bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\r\n  "%s/cp-intent.md" \\\r\n  "%s/cp-outline.md" \\\r\n  "%s/cp-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
+expect_result "CP-bash-backslash-CRLF — bash-prefixed multi-line CRLF form returns the dest" \
+  "$CMD_CP_BS_CR" "\"${NODE_TMPDIR}/cp-outline.md\""
+CMD_CP_CAT_BS=$(printf 'cat "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" \\\n  "%s/cp-intent.md" \\\n  "%s/cp-outline.md" \\\n  "%s/cp-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
+expect_result "CP-cat-backslash-LF — cat of the script across continuation lines returns null" \
+  "$CMD_CP_CAT_BS" 'null'
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""

@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-checkpoint.js, hooks/lib/turn-marker.js
-# Tags: confirm-checkpoint, hook, plan, sentinel, workflow, scope:issue-specific
-# Tests for hooks/confirm-checkpoint.js — PreToolUse hook detecting
-# WORKFLOW_CONFIRM_INTENT / OUTLINE / DETAIL / PR_CREATED sentinels in Bash commands.
-#
-# Source files (hooks/confirm-checkpoint.js, hooks/lib/turn-marker.js::peekTurnMarkers)
-# are created in later steps. When missing, the test SKIPs gracefully.
-#
+# Tags: confirm-checkpoint, hook, plan, sentinel, workflow, scope:issue-specific, plan-sync
+# hooks/confirm-checkpoint.js — PreToolUse hook for WORKFLOW_CONFIRM_* sentinels in Bash.
 # L3 gap (what this test does NOT catch):
-# - confirm-checkpoint.js actually firing in a real Claude Code PreToolUse session
-#   (hook registration wiring — only verifiable via live claude -p run)
-# - CONFIRM_{INTENT,OUTLINE,DETAIL} dialog actually appearing in VS Code when
-#   a real sentinel is echoed in an interactive session
+# - confirm-checkpoint.js firing in a real Claude Code PreToolUse session (hook wiring)
+# - the CONFIRM_{INTENT,OUTLINE,DETAIL} dialog appearing in an interactive session
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 set -uo pipefail
@@ -70,10 +63,20 @@ trap 'rm -rf "$PLANS_DIR" "$WORKFLOW_DIR_TEST" "$ISOLATED_CFG_DIR"' EXIT
 
 # Unset CONFIRM_* by default
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
-# Test mode: don't actually open VS Code / browser
-export SHOW_PLAN_LINK_NO_SPAWN=1
+# Test mode: don't actually open a browser for the user-verified path
 export SHOW_USER_VERIFIED_NO_SPAWN=1
-export TERM_PROGRAM=vscode  # ensures the hook tries to open (so we can verify the no-spawn marker path)
+unset TERM_PROGRAM CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_ENTRYPOINT SHOW_PLAN_LINK_NO_AUTO_OPEN SHOW_PLAN_LINK_NO_SPAWN SHOW_PLAN_LINK_MARKER_FILE 2>/dev/null || true
+# #2513 safety net: a probed `code` stub is first on PATH for the whole file, so no
+# case can launch the real editor (T15 asserts its log stays empty).
+# shellcheck source=../lib/code-stub.sh
+. "$AGENTS_DIR/tests/lib/code-stub.sh"
+setup_code_stub "$WORKFLOW_DIR_TEST/code-stub" || { echo "FAIL: code stub setup"; exit 1; }
+code_stub_probe || { echo "FAIL: code stub is not first on PATH; refusing to run (real editor could launch)"; exit 1; }
+# #2513: plan-sync off by default; T13-T15 (sibling plan-sync.sh) pin their own env.
+export PLAN_SYNC_REMOTE_URL=""
+# shellcheck source=../lib/plan-sync-fixture.sh
+. "$AGENTS_DIR/tests/lib/plan-sync-fixture.sh"
 
 SID="test-ccp-$$"
 
@@ -294,6 +297,10 @@ else
   fail "T12 .env CONFIRM_OUTLINE=off — missing expected skipped message: $T12_MSG"
 fi
 rm -f "$ISOLATED_CFG_DIR/.env"
+
+# ── T13-T15 (#2513): published blob URL, push failure, no editor launch ──────
+# shellcheck source=feature-confirm-checkpoint/plan-sync.sh
+. "$AGENTS_DIR/tests/hooks/feature-confirm-checkpoint/plan-sync.sh"
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""

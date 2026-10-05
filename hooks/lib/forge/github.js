@@ -11,6 +11,7 @@ const GH_ISSUE_PR_WRITE_RE =
 const GH_API_WRITE_REGEX =
   /\bgh\b\s+api\b.*?(?:-X\s+(?:POST|PATCH|PUT|DELETE)|--method(?:\s+|=)(?:POST|PATCH|PUT|DELETE))/i;
 const GH_REPO_WRITE_REGEX = /\bgh\b\s+repo\s+(?:create|edit)\b/;
+const VISIBILITY_VALUES = new Set(["public", "private", "internal"]);
 
 const codehostGithub = {
   isPrivateRepo(remoteUrl) {
@@ -28,6 +29,25 @@ const codehostGithub = {
       return (result.stdout || "").trim() === "true";
     } catch (e) {
       return false;
+    }
+  },
+  repoVisibility(remoteUrl) {
+    const { parseOriginOwnerRepo } = require("../parse-remote-url");
+    const { spawnSync } = require("child_process");
+    try {
+      const parsed = parseOriginOwnerRepo(remoteUrl);
+      if (!parsed.ok) return null;
+      const r = spawnSync("gh", ["api", "repos/" + parsed.ownerRepo, "--jq", ".visibility"], {
+        encoding: "utf8",
+        timeout: 15000,
+        shell: WIN32,
+        windowsHide: true,
+      });
+      if (r.error || r.status !== 0) return null;
+      const v = (r.stdout || "").trim().toLowerCase();
+      return VISIBILITY_VALUES.has(v) ? v : null;
+    } catch (e) {
+      return null;
     }
   },
   shouldScanAsPublicTarget(ownerRepo) {
@@ -48,19 +68,11 @@ const codehostGithub = {
       return true;
     }
   },
+  // One visibility-tagged listing; filtering and fail-to-[] live in ./private-repo-list.
   listPrivateRepoNames() {
-    const { spawnSync } = require("child_process");
-    try {
-      const result = spawnSync(
-        "gh",
-        ["repo", "list", "--limit", "1000", "--visibility", "private", "--json", "nameWithOwner", "--jq", ".[].nameWithOwner"],
-        { encoding: "utf8", timeout: 10000, shell: WIN32 }
-      );
-      if (result.error || result.status !== 0) return [];
-      return (result.stdout || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    } catch (e) {
-      return [];
-    }
+    const { listVisibilityTagged, shellArg } = require("./private-repo-list");
+    return listVisibilityTagged("gh", ["repo", "list", "--limit", "1000", "--json", "nameWithOwner,visibility",
+      "--jq", shellArg(".[]|[.visibility,.nameWithOwner]|@tsv")]);
   },
   hasOpenPrForBranch(repoDir) {
     // Lazy require breaks the cycle: gh-detect requires forge-router at top level,

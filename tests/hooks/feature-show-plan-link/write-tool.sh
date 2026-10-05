@@ -5,19 +5,19 @@
 echo "=== T1: abc-intent.md ==="
 expect_message "T1 intent file emits systemMessage" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-intent.md\"},\"tool_response\":{\"success\":true}}" \
-  "Plan file written:"
+  "$OFF_LINE"
 
 # ── T2: Write abc-outline.md ───────────────────────────────────────────────
 echo "=== T2: abc-outline.md ==="
 expect_message "T2 outline file emits systemMessage" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-outline.md\"},\"tool_response\":{\"success\":true}}" \
-  "Plan file written:"
+  "$OFF_LINE"
 
 # ── T3: Write abc-detail.md ────────────────────────────────────────────────
 echo "=== T3: abc-detail.md ==="
 expect_message "T3 detail file emits systemMessage" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}" \
-  "Plan file written:"
+  "$OFF_LINE"
 
 # ── T4: Write flat intermediate-suffix file (#866) ─────────────────────────
 # After #866 drafts/ is gone; intermediate plan files live under PLANS_DIR
@@ -48,10 +48,18 @@ echo "=== T8: /tmp/random/abc-detail.md ==="
 expect_empty "T8 unrelated path excluded" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"/tmp/random/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
 
-# ── T9: Edit tool on matching path ─────────────────────────────────────────
-echo "=== T9: Edit tool ==="
-expect_empty "T9 Edit tool is noop (non-Write)" \
-  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+# ── T9: Edit tool on a non-plan file in PLANS_DIR ──────────────────────────
+# Edit-class tools are handled like Write (#2513), but the final-artifact
+# suffix filter still applies: a non-plan file is a noop for Edit too.
+echo "=== T9: Edit tool on non-plan file ==="
+expect_empty "T9 Edit of non-plan file (abc-notes.md) is noop" \
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-notes.md\"},\"tool_response\":{\"success\":true}}"
+
+# ── T9b: Edit tool on a final plan file ────────────────────────────────────
+echo "=== T9b: Edit tool on abc-detail.md ==="
+expect_message "T9b Edit of final plan file emits systemMessage (same as Write)" \
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}" \
+  "$OFF_LINE"
 
 # ── T10: Bash tool ─────────────────────────────────────────────────────────
 echo "=== T10: Bash tool ==="
@@ -76,9 +84,9 @@ if [ -n "$result12" ]; then
     let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
     process.stdout.write(d.systemMessage || '');
   " 2>/dev/null)
-  if echo "$msg12" | grep -q "Plan file written:" && echo "$msg12" | grep -qv "\\\\\\\\"; then
+  if echo "$msg12" | grep -qF "$OFF_LINE" && echo "$msg12" | grep -qv "\\\\\\\\"; then
     pass "T12 backslash path normalized to forward slashes in systemMessage"
-  elif echo "$msg12" | grep -q "Plan file written:"; then
+  elif echo "$msg12" | grep -qF "$OFF_LINE"; then
     pass "T12 backslash path produces systemMessage"
   else
     fail "T12 backslash path — unexpected result: $result12"
@@ -112,7 +120,7 @@ T17_MSG=$(echo "$T17_RESULT" | run_with_timeout node -e "
   let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
   process.stdout.write(d.systemMessage || '');
 " 2>/dev/null)
-if echo "$T17_MSG" | grep -q "Plan file written:"; then
+if echo "$T17_MSG" | grep -qF "$OFF_LINE"; then
   pass "T17 custom WORKFLOW_PLANS_DIR honored"
 else
   fail "T17 custom WORKFLOW_PLANS_DIR — no systemMessage: $T17_RESULT"
@@ -146,7 +154,7 @@ T20_MSG=$(echo "$T20_RESULT" | run_with_timeout node -e "
   process.stdout.write(d.systemMessage || '');
 " 2>/dev/null)
 
-if echo "$T20_MSG" | grep -q "Plan file written:"; then
+if echo "$T20_MSG" | grep -qF "$OFF_LINE"; then
   pass "T20 non-VS Code — systemMessage emitted"
 else
   fail "T20 non-VS Code — systemMessage missing: $T20_RESULT"
@@ -166,7 +174,7 @@ T21_MSG=$(echo "$T21_RESULT" | run_with_timeout node -e "
   process.stdout.write(d.systemMessage || '');
 " 2>/dev/null)
 
-if echo "$T21_MSG" | grep -q "Plan file written:"; then
+if echo "$T21_MSG" | grep -qF "$OFF_LINE"; then
   pass "T21 CLAUDE_CODE_ENTRYPOINT=claude-vscode — systemMessage emitted (variable now ignored)"
 else
   fail "T21 CLAUDE_CODE_ENTRYPOINT=claude-vscode — systemMessage missing: $T21_RESULT"
@@ -175,31 +183,31 @@ fi
 # ── T-NEW-1: CONFIRM_DETAIL=off on *-detail.md → systemMessage emitted ─────
 echo "=== T-NEW-1: CONFIRM_DETAIL=off on detail.md — breadcrumb fires ==="
 expect_message_with_env "T-NEW-1 CONFIRM_DETAIL=off — systemMessage emitted regardless" \
-  "$PLANS_DIR/abc-detail.md" "Plan file written:" \
+  "$PLANS_DIR/abc-detail.md" "$OFF_LINE" \
   CONFIRM_DETAIL=off
 
 # ── T-NEW-2: CONFIRM_OUTLINE=off on *-outline.md → systemMessage emitted ───
 echo "=== T-NEW-2: CONFIRM_OUTLINE=off on outline.md — breadcrumb fires ==="
 expect_message_with_env "T-NEW-2 CONFIRM_OUTLINE=off — systemMessage emitted regardless" \
-  "$PLANS_DIR/abc-outline.md" "Plan file written:" \
+  "$PLANS_DIR/abc-outline.md" "$OFF_LINE" \
   CONFIRM_OUTLINE=off
 
 # ── T-NEW-3: CONFIRM_INTENT=off on *-intent.md → systemMessage emitted ─────
 echo "=== T-NEW-3: CONFIRM_INTENT=off on intent.md — breadcrumb fires ==="
 expect_message_with_env "T-NEW-3 CONFIRM_INTENT=off — systemMessage emitted regardless" \
-  "$PLANS_DIR/abc-intent.md" "Plan file written:" \
+  "$PLANS_DIR/abc-intent.md" "$OFF_LINE" \
   CONFIRM_INTENT=off
 
 # ── T-NEW-4: CONFIRM_DETAIL=on on *-detail.md → systemMessage emitted ──────
 echo "=== T-NEW-4: CONFIRM_DETAIL=on on detail.md — breadcrumb fires ==="
 expect_message_with_env "T-NEW-4 CONFIRM_DETAIL=on — systemMessage emitted" \
-  "$PLANS_DIR/abc-detail.md" "Plan file written:" \
+  "$PLANS_DIR/abc-detail.md" "$OFF_LINE" \
   CONFIRM_DETAIL=on
 
 # ── T-NEW-5: Cross-suffix CONFIRM_INTENT=off on *-detail.md ────────────────
 echo "=== T-NEW-5: cross-suffix CONFIRM_INTENT=off on detail.md — breadcrumb fires ==="
 expect_message_with_env "T-NEW-5 cross-suffix CONFIRM_INTENT=off on detail.md — systemMessage emitted" \
-  "$PLANS_DIR/abc-detail.md" "Plan file written:" \
+  "$PLANS_DIR/abc-detail.md" "$OFF_LINE" \
   CONFIRM_INTENT=off
 
 # ── T-IDEM-1: idempotency — two identical invocations both succeed ─────────
@@ -218,11 +226,11 @@ T_IDEM_MSG2=$(echo "$T_IDEM_OUT2" | run_with_timeout node -e "
   let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
   process.stdout.write(d.systemMessage || '');
 " 2>/dev/null)
-if echo "$T_IDEM_MSG1" | grep -qF "Plan file written:" && \
-   echo "$T_IDEM_MSG2" | grep -qF "Plan file written:"; then
+if echo "$T_IDEM_MSG1" | grep -qF "$OFF_LINE" && \
+   echo "$T_IDEM_MSG2" | grep -qF "$OFF_LINE"; then
   pass "T-IDEM-1 two identical invocations both emit systemMessage"
 else
-  fail "T-IDEM-1 expected both calls to emit 'Plan file written:'; got msg1='$T_IDEM_MSG1' msg2='$T_IDEM_MSG2'"
+  fail "T-IDEM-1 expected both calls to emit '$OFF_LINE'; got msg1='$T_IDEM_MSG1' msg2='$T_IDEM_MSG2'"
 fi
 
 # ── T-ABSENT-RESPONSE: tool_response missing success/exit_code fields ──────
@@ -233,4 +241,22 @@ fi
 echo "=== T-ABSENT-RESPONSE: tool_response={} — systemMessage emitted ==="
 expect_message "T-ABSENT-RESPONSE absent success/exit_code → exitCode resolves to 0, breadcrumb fires" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{}}" \
-  "Plan file written:"
+  "$OFF_LINE"
+
+# ── T-NOCODE-1 (#2513): TERM_PROGRAM=vscode — plan display never launches `code` ─
+# The file-wide `code` stub (set up and probed by the dispatcher) records launches;
+# the old auto-open would have fired here, so any recorded launch is a regression.
+echo "=== T-NOCODE-1: TERM_PROGRAM=vscode — no editor launch from plan display ==="
+: > "$CODE_STUB_LOG"
+NOCODE_OUT=$(
+  export TERM_PROGRAM=vscode
+  unset CLAUDE_CODE_ENTRYPOINT SHOW_PLAN_LINK_NO_AUTO_OPEN SHOW_PLAN_LINK_NO_SPAWN SHOW_PLAN_LINK_MARKER_FILE 2>/dev/null || true
+  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}" >/dev/null
+  sleep 1
+  printf 'count=%s' "$(code_stub_count)"
+)
+if [ "$NOCODE_OUT" = "count=0" ]; then
+  pass "T-NOCODE-1 TERM_PROGRAM=vscode — 0 code invocations"
+else
+  fail "T-NOCODE-1 TERM_PROGRAM=vscode — expected count=0, got: $NOCODE_OUT ($(cat "$CODE_STUB_LOG" 2>/dev/null))"
+fi

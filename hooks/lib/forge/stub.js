@@ -8,6 +8,7 @@ const codehostStub = {
   shouldScanAsPublicTarget(_ownerRepo) { return true; },
   listPrivateRepoNames() { return []; },
   hasOpenPrForBranch(_repoDir) { return true; },
+  repoVisibility(_remoteUrl) { return null; },
 };
 
 const trackerStub = {
