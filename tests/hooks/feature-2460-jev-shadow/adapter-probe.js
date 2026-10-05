@@ -6,7 +6,6 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { spawnSync } = require("child_process");
 
 const [repo, plansDir, sid] = process.argv.slice(2);
 const emit = (row, v) => process.stdout.write(row + "\t" + (typeof v === "string" ? v : JSON.stringify(v)) + "\n");
@@ -28,14 +27,10 @@ const { SIGNAL_IDS } = require(path.join(repo, "hooks", "workflow-state", "compl
 const keyOf = (id) => id.toLowerCase().replace(/-/g, "_");
 const safe = (row, fn) => { try { emit(row, fn()); } catch (e) { emit(row, "THREW:" + e.message); } };
 
+// The real parser, in-process: the same normalize() the broker calls (no control dir touched).
+const { normalize } = require(path.join(repo, "bin", "workflow", "normalize-judge-signals"));
 function parse(rawLine) {
-  const dir = fs.mkdtempSync(path.join(require("os").tmpdir(), "jev2460-parse-"));
-  try {
-    fs.writeFileSync(path.join(dir, "raw.txt"), rawLine);
-    spawnSync(process.execPath, [path.join(repo, "bin", "workflow", "normalize-judge-signals"),
-      "--raw-file", path.join(dir, "raw.txt"), "--out", path.join(dir, "out.txt")], { timeout: 20000 });
-    return fs.readFileSync(path.join(dir, "out.txt"), "utf8").trim();
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  return normalize(rawLine);
 }
 function resp(probs, extra) {
   const answers = {};

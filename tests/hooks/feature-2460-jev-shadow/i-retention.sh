@@ -59,33 +59,6 @@ check "marker 1 hour old: the 8-day-old dir survives with its pending" "present|
 check "marker 1 hour old: no record for the old orphan" "0" "$(rq toolu_i_old2 'recs.length')"
 case_end
 
-echo "=== a killed hook's parser temp dir is retention's to remove ==="
-# seed_norm <path-under-jev-state> <age-ms>: a leftover norm-* dir holding raw.txt, aged whole.
-seed_norm() {
-  mkdir -p "$JEVDIR/$1"
-  printf 'SIGNALS: S1-multi-file\n' > "$JEVDIR/$1/raw.txt"
-  hq age "$(np "$JEVDIR/${1%%/*}")" "$2" --recursive
-}
-case_begin "i-sweep-removes-norm-leftovers" "hooks/lib/jev/retention.js"
-fx_new i-norm
-mock_mode '{}'
-seed_norm jev2460-i-normold/norm-AbC123 $((8 * DAY))
-seed_norm jev2460-i-normrecent/norm-AbC123 $((6 * DAY))
-seed_norm norm-Old456 $((8 * DAY))
-seed_norm norm-New789 $((6 * DAY))
-check "fixture: four leftover raw.txt files, two in session dirs and two at the top level" "4|2" \
-  "$(find "$JEVDIR" -name raw.txt -type f 2>/dev/null | wc -l | tr -d ' ')|$(find "$JEVDIR" -mindepth 2 -maxdepth 2 -name raw.txt -type f 2>/dev/null | wc -l | tr -d ' ')"
-sweep_marker $((25 * 3600000))
-LLM_TEXT="SIGNALS: S1-multi-file" pair jev2460-i-normnew toolu_i_normtrigger
-check "post exits 0" "0" "$HOOK_RC"
-check "8 days old: the session dir holding only a norm leftover and the top-level leftover are removed" "absent|absent" \
-  "$(exists "$JEVDIR/jev2460-i-normold")|$(exists "$JEVDIR/norm-Old456")"
-check "6 days old: the session dir and the top-level leftover are kept with their files" "present|present" \
-  "$(exists "$JEVDIR/jev2460-i-normrecent/norm-AbC123/raw.txt")|$(exists "$JEVDIR/norm-New789/raw.txt")"
-check "a leftover is not a dispatch: the log holds only the triggering record" "1|toolu_i_normtrigger" \
-  "$(hq qa "$(np "$LOG")" 'recs.length + "|" + recs.map((x) => x.tool_use_id).join(",")')"
-case_end
-
 echo "=== a dir whose orphan was not logged is kept for the next due sweep ==="
 # RET_JS seed <sid> <tid>         : one pending entry under <sid>.
 # RET_JS sweep <days> <sid=mode>..: one sweepStateDirs at Date.now() + <days>; onOrphan

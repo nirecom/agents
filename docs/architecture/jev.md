@@ -116,10 +116,14 @@ second broker.
 - **Parser failure**: when normalizing Jev's answer through the signal parser
   fails, the Jev side is recorded as `unmappable` with the fallback answer, so
   the report's fallback reasons never count it as a usable Jev answer.
-- **Timeouts**: 2 s for the probe, 6 s for the query, 4 s for normalizing the
-  answer through the signal parser. The worst-case chain is 12 s, inside the
-  15 s the hook itself is registered with — a hook killed at its timeout skips
-  its own cleanup, so the budget is kept below it on purpose.
+- **Timeouts**: 2 s for the probe, 6 s for the query. The worst-case chain is
+  8 s, inside the 15 s the hook itself is registered with — a hook killed at its
+  timeout skips its own cleanup, so the budget is kept below it on purpose.
+- **In-process normalization**: both judges' answers go through the signal
+  parser's exported `normalize()` (`bin/workflow/normalize-judge-signals`),
+  called in the hook process — no child process and no file. The raw judge text
+  is never written to disk, and Jev never writes the production
+  `<stage>-signals.txt` that the parser's CLI derives.
 - **Orphans**: a pending hand-off the post hook never claimed (the dispatch was
   interrupted), or claimed but never logged (the hook was killed before its
   record was written), becomes an `llm-missing` record after one hour, so an
@@ -137,9 +141,8 @@ second broker.
 ## State and log
 
 State lives under `$AGENTS_STATE_DIR/jev` (default `~/.agents/jev`), one
-directory per session: breaker state, the liveness cache, pending hand-offs,
-and the short-lived `norm-*` directory that holds a judge's raw text while the
-signal parser normalizes it. A sweep runs at most once a day and removes
+directory per session: breaker state, the liveness cache, and pending
+hand-offs. A sweep runs at most once a day and removes
 session directories idle for more than seven days, after emitting their
 orphans; one whose orphan could not be logged is kept for the next sweep.
 Removal first renames the directory to a `.tomb-<session>-<digits>` tombstone
@@ -150,9 +153,7 @@ A hand-off write that finds its directory renamed away mid-write recreates it
 and retries once. A tombstone left by a killed sweep is restored or merged back
 the same way when it holds pending entries (a conflicting name keeps the
 tombstone), so the next due sweep handles them; one free of entries is cleaned
-once stale. The temporary directory lives here rather than in the system temp
-directory for that reason: one left behind by a killed hook is removed with its
-session instead of staying forever.
+once stale.
 
 Decisions are appended to `jev-decisions.log` as JSONL (record version 1) and
 rotated by size. This is analysis data, not production state: deleting it loses
@@ -249,8 +250,6 @@ None changes the shadow-mode contract.
 - Process-runtime variables other than Node's own remain settable from a
   project `.env.local` — the general limit described in
   [local-env-overrides.md](claude-code/local-env-overrides.md).
-- A `norm-*` directory left by a killed hook stays until its session directory
-  has been idle for seven days.
 
 ## Rollout
 

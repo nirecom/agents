@@ -23,7 +23,7 @@ lp() {
   shift
   (
     cd "$FX/cwd" || exit 97
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE -u CLAUDECODE \
+    env -u CLAUDE_CODE_SESSION_ID -u CLAUDECODE \
       -u JEV -u JEV_HTTP_TIMEOUT_MS -u JEV_PENDING_TTL_MS \
       "JEV=$jev" "TYPESAFE_API_KEY=$SENTINEL_KEY" "JEV_BASE_URL=$MOCK_URL" \
       bash "$RWT" 60 node "$HPROBE" "$REPO_N" "$@" 2>> "$ERR_ALL" < /dev/null

@@ -287,8 +287,8 @@ check "every record in the log names the registered point; all pending files are
   "$(hq qa "$(np "$LOG")" 'recs.length + "|" + Array.from(new Set(recs.map((x) => String(x.point)))).join(",")')|$(pending_count)"
 case_end
 
-echo "=== the parser's temp dir lives under the Jev state dir and is removed ==="
-case_begin "e-pair-leaves-no-norm-dir" "hooks/jev-shadow-post.js"
+echo "=== normalising both sides leaves no temp file anywhere ==="
+case_begin "e-pair-leaves-no-temp-files" "hooks/jev-shadow-post.js"
 fx_new e-norm
 SID="jev2460-e-norm"
 mock_mode '{}'
@@ -298,12 +298,14 @@ NORM_ENV=("TMPDIR=$OSTMP_N" "TEMP=$OSTMP_N" "TMP=$OSTMP_N")
 check "fixture: a node child given these variables resolves os.tmpdir() to the fixture dir" "true" \
   "$(env "${NORM_ENV[@]}" bash "$RWT" 30 node -e 'const p = require("path"); process.stdout.write(String(p.resolve(require("os").tmpdir()).toLowerCase() === p.resolve(process.argv[1]).toLowerCase()))' "$OSTMP_N" 2>/dev/null)"
 LLM_TEXT="SIGNALS: S1-multi-file, S3-security" pair "$SID" toolu_e_norm "${NORM_ENV[@]}"
-check "both hooks exit 0; the parser ran on both sides (normalised answers recorded)" "0|0|S1-multi-file|S1-multi-file,S3-security" \
+check "both hooks exit 0; both sides were normalised (normalised answers recorded)" "0|0|S1-multi-file|S1-multi-file,S3-security" \
   "$PRE_RC|$HOOK_RC|$(rq toolu_e_norm 'r && [r.jev.answer, r.llm.answer].join("|")')"
 check "the session state dir exists and no norm-* entry is left anywhere under the Jev state dir" "present|0" \
   "$([ -d "$JEVDIR/$SID" ] && echo present || echo absent)|$(find "$JEVDIR" -name 'norm-*' 2>/dev/null | wc -l | tr -d ' ')"
-check "nothing named *norm-* was created under the OS temp dir the hooks were given" "0" \
-  "$(find "$FX/ostmp" -name '*norm-*' 2>/dev/null | wc -l | tr -d ' ')"
+check "the OS temp dir the hooks were given is still empty" "0" \
+  "$(find "$FX/ostmp" -mindepth 1 2>/dev/null | wc -l | tr -d ' ')"
+check "no <stage>-signals.txt was written anywhere in the fixture" "0" \
+  "$(find "$FX" -name '*-signals.txt' 2>/dev/null | wc -l | tr -d ' ')"
 case_end
 
 echo "=== an orphan whose hand-off failed is kept for the next sweep ==="

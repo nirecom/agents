@@ -116,7 +116,7 @@ run_hook() {
   (
     cd "$FX/cwd" || exit 97
     if [[ "${HOOK_STDIN:-}" == wronly ]]; then exec 0> "$payload"; else exec 0< "$payload"; fi
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE -u CLAUDECODE \
+    env -u CLAUDE_CODE_SESSION_ID -u CLAUDECODE \
       -u JEV -u TYPESAFE_API_KEY -u JEV_BASE_URL -u JEV_HTTP_TIMEOUT_MS -u JEV_PENDING_TTL_MS \
       "${sets[@]+"${sets[@]}"}" bash "$RWT" 60 node "$script" > "$OUT" 2> "$ERR"
   )

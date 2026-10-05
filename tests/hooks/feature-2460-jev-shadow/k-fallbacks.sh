@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/jev/pending.js, hooks/lib/jev/broker.js
-# Tags: TL2, hooks, jev, orphan-sweep, corrupt-pending, parser-failure, unmappable, module-stub, sweep-claim-collision, scope:issue-specific, pwsh-not-required, breaker-parser-failure, enoent-retry, parser-exit-status, latency, secret-shape-load-failure
+# Tags: TL2, hooks, jev, orphan-sweep, corrupt-pending, parser-failure, unmappable, module-stub, sweep-claim-collision, scope:issue-specific, pwsh-not-required, breaker-parser-failure, enoent-retry, parser-exit-status, latency, secret-shape-load-failure, normalizer-failure, in-process-normalize
 
 # No dispatch may disappear from the decision log: a pending hand-off that is not valid JSON
 # still becomes one "llm missing" orphan record with safe defaults, and is kept for a retry
 # while the log is unwritable. A parser failure on Jev's answer is logged as unmappable with
 # the registry fallback, never as a usable Jev answer.
 
-# TL3 gap (what this test does NOT catch): a real parser crash inside the host's hook
-# timeout; the parser failure here is a stubbed child_process.spawnSync in a probe process.
+# TL3 gap (what this test does NOT catch): a real normalizer crash inside the host's hook
+# process; the normalizer failure here is a stubbed normalize() export in a probe process.
 
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 mock_start
@@ -18,7 +18,7 @@ HPROBE="$(np "$LIBDIR/hardening-probe.js")"
 kp() {
   (
     cd "$FX/cwd" || exit 97
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE -u CLAUDECODE \
+    env -u CLAUDE_CODE_SESSION_ID -u CLAUDECODE \
       -u JEV_HTTP_TIMEOUT_MS -u JEV_PENDING_TTL_MS \
       JEV=on "TYPESAFE_API_KEY=$SENTINEL_KEY" "JEV_BASE_URL=$MOCK_URL" \
       bash "$RWT" 60 node "$HPROBE" "$REPO_N" "$@" 2>> "$ERR_ALL" < /dev/null
@@ -205,43 +205,45 @@ check "every kept claim name parses back to the tid: the retry sweep recovers bo
   "2|toolu_k_colt,toolu_k_colt|A,B|0" "$(col sweep "$SID" toolu_k_colt $((COL_NOW + 1)) 0 0 ok | cut -d'|' -f1-4)"
 case_end
 
-echo "=== a parser child that did not exit cleanly is a failure even with a valid output file ==="
-# The LLM pipeline treats a non-zero normalize-judge-signals exit as failure; Jev must match it.
+echo "=== a normalizer that throws, returns a non-string or cannot load is a failure ==="
+# Jev's answer goes through the same in-process normalize() as the LLM side; any failure there is unmappable.
 K_CSV="S1-multi-file"
-# k_exit_case <mode> <sid> <tid>: seed breaker 2 failures, run query-parser-exit, then pair the record.
-k_exit_case() {
+# k_norm_case <mode> <sid> <tid>: seed breaker 2 failures, run query-normalizer, then pair the record.
+k_norm_case() {
   mkdir -p "$JEVDIR/$2"
   printf '%s' '{"consecutive_failures":2,"open_until_ms":0,"last_failure_status":"timeout"}' > "$JEVDIR/$2/breaker.json"
   mock_mode '{}'
-  K_OUT="$(kp query-parser-exit "$2" "$3" "$1")"
+  K_OUT="$(kp query-normalizer "$2" "$3" "$1")"
   K_BRK="$(hq json-expr "$(np "$JEVDIR/$2/breaker.json")" 'o && [o.consecutive_failures, o.last_failure_status].join("|")')"
   K_REC="$(kp record "$2" "$3")|$(rq "$3" 'recs.length + "|" + (r && [r.jev.status, r.fallback_reason, r.jev.answer, r.llm.status, r.llm.answer].join("|"))')"
 }
-# k_unclean_checks <mode>: fixture + run + the three unmappable assertions for one unclean exit.
-k_unclean_checks() {
-  fx_new "k-pexit-$1"
-  k_exit_case "$1" "jev2460-k-pexit-$1" "toolu_k_pexit_$1"
-  check "$1: the child wrote a valid output file, yet status unmappable with the fallback answer; the POST completed, so latency is a number (status|answer|latency number|written|calls)" \
-    "unmappable|S0-undecidable|true|$K_CSV|1" "$K_OUT"
+# k_norm_fail_checks <mode>: fixture + run + the three unmappable assertions for one normalizer failure.
+k_norm_fail_checks() {
+  fx_new "k-pnorm-$1"
+  k_norm_case "$1" "jev2460-k-pnorm-$1" "toolu_k_pnorm_$1"
+  check "$1: status unmappable with the fallback answer; the POST completed, so latency is a number; the normalizer was reached once (status|answer|latency number|calls)" \
+    "unmappable|S0-undecidable|true|1" "$K_OUT"
   check "$1: counts as a breaker failure: 2 -> 3, last status bad-response" "3|bad-response" "$K_BRK"
   check "$1: the record logs jev unmappable with the fallback; the LLM answer is adopted" \
     "record|1|unmappable|unmappable|S0-undecidable|ok|S1-multi-file" "$K_REC"
 }
-case_begin "k-parser-exit3-with-output-is-unmappable" "hooks/lib/jev/broker.js"
-k_unclean_checks exit3
+case_begin "k-normalizer-throw-is-unmappable" "hooks/lib/jev/broker.js"
+k_norm_fail_checks throw
 case_end
-case_begin "k-parser-signal-with-output-is-unmappable" "hooks/lib/jev/broker.js"
-k_unclean_checks signal
+case_begin "k-normalizer-nonstring-is-unmappable" "hooks/lib/jev/broker.js"
+k_norm_fail_checks nonstring
+k_norm_fail_checks object
 case_end
-case_begin "k-parser-timeout-with-output-is-unmappable" "hooks/lib/jev/broker.js"
-k_unclean_checks timeout
+case_begin "k-normalizer-missing-is-unmappable" "hooks/lib/jev/broker.js"
+k_norm_fail_checks missing
 case_end
-case_begin "k-parser-clean-exit-is-mapped" "hooks/lib/jev/broker.js"
-fx_new k-pexit-clean
-k_exit_case clean jev2460-k-pexit-clean toolu_k_pexit_clean
-check "clean exit: the written output is the mapped answer (status|answer|latency number|written|calls)" \
-  "ok|$K_CSV|true|$K_CSV|1" "$K_OUT"
-check "clean exit: a success resets the breaker count" "0|timeout" "$K_BRK"
+case_begin "k-normalizer-real-is-mapped" "hooks/lib/jev/broker.js"
+fx_new k-pnorm-real
+k_norm_case real jev2460-k-pnorm-real toolu_k_pnorm_real
+check "real normalizer: the mapped answer is recorded as ok (status|answer|latency number|calls)" \
+  "ok|$K_CSV|true|1" "$K_OUT"
+check "real normalizer: a success resets the breaker count" "0|timeout" "$K_BRK"
+check "real normalizer: the record compares both ok sides" "record|1|ok||$K_CSV|ok|$K_CSV" "$K_REC"
 case_end
 
 echo "=== secret-shape cannot load its hard-secret patterns: no Jev query is sent ==="

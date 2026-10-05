@@ -44,7 +44,7 @@ check "no request, no log, no state dir entry" "0|absent|" \
   "$(mock_total)|$([ -e "$LOG" ] && echo present || echo absent)|$(names "$FX/state")"
 check "control: the registered point returns the record object and logs one record" "record|1|complexity-judge|S1-multi-file" \
   "$(bp record "$POINT")|$(rq toolu_b_record 'recs.length + "|" + (r && r.point) + "|" + (r && r.llm.answer)')"
-check "the control left no norm dir" "0" "$(norm_left)"
+check "the control left no norm dir, signals file or control dir" "0" "$(stray_files)"
 case_end
 
 echo "=== JEV unset or not on: the library itself does nothing ==="
@@ -71,22 +71,20 @@ check "control: JEV=ON (case-insensitive) pairs with that pending" "record|1|ok|
 BP_JEV=on
 case_end
 
-echo "=== the LLM-side parser failing makes the LLM answer a parse-fallback, never compared ==="
-case_begin "b-record-llm-parser-exit-parse-fallback" "hooks/lib/jev/broker.js"
-_i=0
-for _st in 1 3; do
-  _i=$((_i + 1))
-  fx_new "b-pexit-$_i"
+echo "=== the LLM-side normalizer failing makes the LLM answer a parse-fallback, never compared ==="
+case_begin "b-record-llm-normalizer-failure-parse-fallback" "hooks/lib/jev/broker.js"
+for _mode in throw nonstring missing; do
+  fx_new "b-pnorm-$_mode"
   mock_mode '{}'
-  check "exit $_st: fixture: an ok Jev query leaves one pending" "ok|finite|1" "$(bp qt toolu_b_pexit)|$(pending_count)"
-  check "exit $_st: llm parse-fallback with the registry fallback, agreement null, jev ok, one parser spawn" \
-    "parse-fallback|S0-undecidable|null|ok|1" "$(bp rt-parser-exit toolu_b_pexit "$_st")"
-  check "exit $_st: the logged record carries the same, the pending is claimed, no norm dir left" \
+  check "$_mode: fixture: an ok Jev query leaves one pending" "ok|finite|1" "$(bp qt toolu_b_pnorm)|$(pending_count)"
+  check "$_mode: llm parse-fallback with the registry fallback, agreement null, jev ok, no child process" \
+    "parse-fallback|S0-undecidable|null|ok|0" "$(bp rt-normalizer toolu_b_pnorm "$_mode")"
+  check "$_mode: the logged record carries the same, the pending is claimed, no stray file left" \
     "1|parse-fallback|S0-undecidable|null|0|0" \
-    "$(rq toolu_b_pexit 'recs.length + "|" + (r && [r.llm.status, r.llm.answer, String(r.agreement)].join("|"))')|$(pending_count)|$(norm_left)"
+    "$(rq toolu_b_pnorm 'recs.length + "|" + (r && [r.llm.status, r.llm.answer, String(r.agreement)].join("|"))')|$(pending_count)|$(stray_files)"
 done
-fx_new b-pexit-ok
+fx_new b-pnorm-real
 mock_mode '{}'
-check "control: a parser exiting 0 yields an ok, compared LLM answer" "ok|finite|1|ok|S1-multi-file|true|ok|1" \
-  "$(bp qt toolu_b_pexit)|$(pending_count)|$(bp rt-parser-exit toolu_b_pexit 0)"
+check "control: the real normalizer yields an ok, compared LLM answer, no child process" "ok|finite|1|ok|S1-multi-file|true|ok|0" \
+  "$(bp qt toolu_b_pnorm)|$(pending_count)|$(bp rt-normalizer toolu_b_pnorm real)"
 case_end

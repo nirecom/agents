@@ -1,6 +1,7 @@
 "use strict";
 // hooks/lib/jev/registry.js — data only: the judgment points the broker may shadow.
 // Paths resolve from __dirname, so a worktree's hooks load that worktree's adapter.
+// normalizer: a module whose normalize(raw) the broker requires and calls in-process.
 
 const path = require("path");
 

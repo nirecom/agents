@@ -6,8 +6,6 @@
 // the snapshot in as `overrides`.
 
 const fs = require("fs");
-const path = require("path");
-const { spawnSync } = require("child_process");
 const { resolveConfigVar } = require("../load-env");
 const { registryEntry } = require("./registry");
 const provider = require("./provider-core");
@@ -16,13 +14,8 @@ const liveness = require("./liveness");
 const pending = require("./pending");
 const retention = require("./retention");
 const record = require("./decision-record");
-const { isValidId, jevStateDir, sessionDir } = require("./state-paths");
+const { isValidId, jevStateDir } = require("./state-paths");
 const { findPointBySubagentType } = require("./dispatch-gate");
-
-// Probe + query + parser (2 + 6 + 4 s) must end well inside the 15 s hook timeout in
-// settings.json: a forced kill skips the temp-dir cleanup in normalizeViaParser.
-const PARSER_TIMEOUT_MS = 4000;
-const NORM_DIR_PREFIX = "norm-";
 
 // Fail-safe OFF: only a case-insensitive "on" enables; a .env load failure is off.
 function isEnabled() {
@@ -39,32 +32,17 @@ function adapterFor(point) {
   return require(registryEntry(point).adapter);
 }
 
-// Runs the unmodified parser in a child process; returns its CSV or null on failure.
-// A spawn error, signal or non-zero exit is failure even if out.txt was written, matching
-// the LLM-side pipeline's treatment of a failed normalize-judge-signals run.
-// The raw text sits in a temp dir under the session's state dir (the Jev state root when
-// no valid session id is given), so retention removes one a killed hook left behind.
-function normalizeViaParser(point, rawText, sessionId) {
+// Calls the unmodified parser's normalize() in-process; returns its CSV or null on failure.
+// No file is written: the CLI would overwrite the live <stage>-signals.txt, which shadow
+// mode must never touch, and the raw judge text never reaches disk.
+function normalizeViaParser(point, rawText) {
   const entry = registryEntry(point);
   if (!entry) return null;
-  let dir = null;
   try {
-    const base = isValidId(sessionId) ? sessionDir(sessionId) : jevStateDir();
-    fs.mkdirSync(base, { recursive: true });
-    dir = fs.mkdtempSync(path.join(base, NORM_DIR_PREFIX));
-    const rawFile = path.join(dir, "raw.txt");
-    const outFile = path.join(dir, "out.txt");
-    fs.writeFileSync(rawFile, rawText === null || rawText === undefined ? "" : String(rawText));
-    const r = spawnSync(process.execPath, [entry.normalizer, "--raw-file", rawFile, "--out", outFile],
-      { timeout: PARSER_TIMEOUT_MS, stdio: "ignore", windowsHide: true });
-    if (!r || r.error || r.signal || r.status !== 0) return null;
-    return fs.readFileSync(outFile, "utf8").trim();
+    const out = require(entry.normalizer).normalize(rawText === null || rawText === undefined ? "" : String(rawText));
+    return typeof out === "string" ? out : null;
   } catch (_e) {
     return null;
-  } finally {
-    if (dir) {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_e) { /* temp leftover */ }
-    }
   }
 }
 
@@ -108,7 +86,7 @@ async function runJev(point, ctx, sessionId, request) {
     return jevResult(r.status, { http_status: Number.isInteger(r.http_status) ? r.http_status : null });
   }
   const m = adapter.mapAnswers(r.response, entry.confidence_threshold);
-  const parsed = normalizeViaParser(point, m.rawLine, sessionId);
+  const parsed = normalizeViaParser(point, m.rawLine);
   // A malformed answer set or a parser failure counts as an outage for the breaker while the
   // record keeps "unmappable"; a parser failure is never logged as a usable Jev answer.
   if (m.status === "unmappable" || parsed === null) breaker.recordFailure(sessionId, "bad-response");
@@ -235,7 +213,7 @@ function recordShadow({ point, sessionId, toolUseId, llmText, toolInput, step, e
   const now = Number.isFinite(endTs) ? endTs : Date.now();
   const hand = pending.claimPending(sessionId, toolUseId);
   const raw = llmText === undefined ? null : llmText;
-  const parsed = raw === null ? null : normalizeViaParser(point, raw, sessionId);
+  const parsed = raw === null ? null : normalizeViaParser(point, raw);
   let status = adapter.classifyLlm(raw, parsed);
   if (status !== "missing" && parsed === null) status = "parse-fallback";
   const p = hand ? record.observedPending(hand, adapter.stageForStep) : null;
@@ -268,7 +246,6 @@ function recordShadow({ point, sessionId, toolUseId, llmText, toolInput, step, e
 module.exports = {
   isEnabled,
   findPointBySubagentType,
-  PARSER_TIMEOUT_MS,
   normalizeViaParser,
   resolveStep,
   queryShadow,

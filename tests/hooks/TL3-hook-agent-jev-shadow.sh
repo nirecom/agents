@@ -93,7 +93,7 @@ case_end
 [ "$REG_OK" = "ok" ] || { finish; exit; }
 
 unset CLAUDECODE
-( cd "$REPO_FX" && env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+( cd "$REPO_FX" && env -u CLAUDE_CODE_SESSION_ID \
     -u JEV_HTTP_TIMEOUT_MS -u JEV_PENDING_TTL_MS AGENTS_CONFIG_DIR="$REPO_N" JEV=on TYPESAFE_API_KEY="$SENTINEL_KEY" JEV_BASE_URL="$MOCK_URL" \
     TL3_RECORD_FILE="$(np "$RECORD")" \
     "$AGENTS_DIR/bin/run-with-timeout.sh" 180 claude -p \
@@ -121,14 +121,17 @@ if [ -n "${TL3_JEV_CAPTURE_TO:-}" ] && [ -n "$LINE" ]; then cp "$FX/io/payload.j
 case_end
 
 case_begin "T2-extract-then-parse" "bin/workflow/lib/jev-complexity-adapter.js"
-T2_RAW="$FX/io/t2-raw.txt"; T2_OUT="$FX/io/t2-out.txt"
-AD="$ADAPTER_JS" run_with_timeout 30 node -e '
-  const p = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+T2_RAW="$FX/io/t2-raw.txt"
+# The parser runs in-process via its exported normalize(), as the broker calls it; the CLI
+# would write <stage>-signals.txt into a control dir.
+T2_GOT="$(AD="$ADAPTER_JS" NJS="$PARSER" run_with_timeout 30 node -e '
+  const fs = require("fs");
+  const p = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
   const t = require(process.env.AD).extractLlmText(p.tool_response, p);
-  require("fs").writeFileSync(process.argv[2], t === null || t === undefined ? "" : String(t));
-' "$(np "$FX/io/payload.json")" "$(np "$T2_RAW")" 2>/dev/null
-run_with_timeout 30 node "$PARSER" --raw-file "$(np "$T2_RAW")" --out "$(np "$T2_OUT")" >/dev/null 2>&1
-T2_GOT="$(tr -d '\r\n' < "$T2_OUT" 2>/dev/null)"
+  const raw = t === null || t === undefined ? "" : String(t);
+  fs.writeFileSync(process.argv[2], raw);
+  process.stdout.write(String(require(process.env.NJS).normalize(raw)));
+' "$(np "$FX/io/payload.json")" "$(np "$T2_RAW")" 2>/dev/null | tr -d '\r\n')"
 if [ "$T2_GOT" = "S1-multi-file" ]; then pass "T2: extractLlmText -> parser gives S1-multi-file on the real payload"
 else fail "T2: extractLlmText -> parser gave [$T2_GOT]" "extracted tail: $(tail -c 200 "$T2_RAW" 2>/dev/null | tr -d '\r' | tr '\n' ' ')"; fi
 case_end

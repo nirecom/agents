@@ -110,7 +110,7 @@ HPROBE="$(np "$LIBDIR/hardening-probe.js")"
 kp() {
   (
     cd "$FX/cwd" || exit 97
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE -u CLAUDECODE \
+    env -u CLAUDE_CODE_SESSION_ID -u CLAUDECODE \
       bash "$RWT" 60 node "$HPROBE" "$REPO_N" "$@" 2>> "$ERR_ALL" < /dev/null
   )
 }

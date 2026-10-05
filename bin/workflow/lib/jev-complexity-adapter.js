@@ -288,9 +288,9 @@ function extractLlmText(toolResponse, payload) {
   return null;
 }
 
-// The line normalize-judge-signals main() consumes (it exports nothing, so its selection
-// rule is mirrored here): the single trimmed "SIGNALS:" line with no non-blank line after
-// it; preamble before it is allowed. null when the parser would fall back.
+// The line normalize-judge-signals normalize() consumes (it exports only the normalized CSV,
+// so its selection rule is mirrored here): the single trimmed "SIGNALS:" line with no
+// non-blank line after it; preamble before it is allowed. null when the parser would fall back.
 function parserSelectedLine(raw) {
   let selected = null;
   let count = 0;
