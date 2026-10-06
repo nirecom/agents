@@ -15,6 +15,8 @@ RUNNER="$AGENTS_DIR/tests/run-all.sh"
 STATUS="$AGENTS_DIR/bin/test-lanes-status.sh"
 LIB_REL="bin/lib/run-all-parallelism.sh"
 LIB="$AGENTS_DIR/$LIB_REL"
+# shellcheck source=../../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"   # for the case markers; the reporters below replace its own
 
 PASS=0
 FAIL=0
@@ -116,7 +118,8 @@ case_lib_surface() {
     local name got
     if lib_missing "f-cache/lib/exists"; then
         for name in schema-constant default-per-run default-per-host fallback-removed calibrator-hint \
-                    cache-dir-honors-env cache-file-name bucket-helpers-removed host-id-shape os-attr \
+                    calibration-time-limit never-ask-basename never-ask-max-lines never-ask-functions \
+                    never-ask-file-path cache-dir-honors-env cache-file-name bucket-helpers-removed host-id-shape os-attr \
                     no-eval no-source no-dot-source; do
             fail "f-cache/lib/$name" "implementation missing: $LIB_REL"
         done
@@ -129,8 +132,19 @@ case_lib_surface() {
     assert_eq "f-cache/lib/default-per-host" "4" \
         "$(lib_eval 'printf "%s" "${RUN_ALL_DEFAULT_MAX_JOBS_PER_HOST:-(unset)}"')"
     assert_eq "f-cache/lib/fallback-removed" "(unset)" "$(lib_eval 'printf "%s" "${RUN_ALL_FALLBACK_JOBS:-(unset)}"')"
-    assert_eq "f-cache/lib/calibrator-hint" "bin/calibrate-test-parallelism.sh" \
+    # #2079: the hint is a runnable command line — the calibrator's opt-in gate is part of it.
+    assert_eq "f-cache/lib/calibrator-hint" "RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh" \
         "$(lib_eval 'printf "%s" "${RUN_ALL_CALIBRATOR_HINT:-(unset)}"')"
+    assert_eq "f-cache/lib/calibration-time-limit" "90" \
+        "$(lib_eval 'printf "%s" "${RUN_ALL_CALIBRATION_TIME_LIMIT_MIN:-(unset)}"')"
+    assert_eq "f-cache/lib/never-ask-basename" "calibration-never-ask.conf" \
+        "$(lib_eval 'printf "%s" "${RUN_ALL_NEVER_ASK_BASENAME:-(unset)}"')"
+    assert_eq "f-cache/lib/never-ask-max-lines" "8" \
+        "$(lib_eval 'printf "%s" "${RUN_ALL_NEVER_ASK_MAX_LINES:-(unset)}"')"
+    got="$(lib_eval 'n=0; for f in run_all_never_ask_file run_all_never_ask_active run_all_never_ask_write; do declare -F "$f" >/dev/null && n=$((n + 1)); done; printf "%s" "$n"')"
+    assert_eq "f-cache/lib/never-ask-functions" "3" "$got"
+    assert_eq "f-cache/lib/never-ask-file-path" "$RUN_ALL_CACHE_DIR/calibration-never-ask.conf" \
+        "$(lib_eval 'run_all_never_ask_file')"
     assert_eq "f-cache/lib/cache-dir-honors-env" "$RUN_ALL_CACHE_DIR" "$(lib_eval 'run_all_cache_dir')"
     assert_eq "f-cache/lib/cache-file-name" "$CACHE_FILE" "$(lib_eval 'run_all_cache_file')"
     got="$(lib_eval 'for f in run_all_count_bucket run_all_corpus_count run_all_corpus_bucket; do declare -F "$f"; done; printf none')"
@@ -319,11 +333,21 @@ case_missing_lib() {
     else pass "f-cache/nolib/override-created-nothing"; fi
 }
 
+case_begin "parallelism-lib-surface" "bin/lib/run-all-parallelism.sh"
 case_lib_surface
+case_end
+case_begin "measured-record-validation" "bin/lib/run-all-parallelism.sh"
 case_cache_table
+case_end
+case_begin "record-injection-and-secrecy" "bin/lib/run-all-parallelism.sh"
 case_injection
+case_end
+case_begin "host-identity-join" "bin/lib/run-all-parallelism.sh"
 case_host_join
+case_end
+case_begin "runner-without-parallelism-lib" "tests/run-all.sh"
 case_missing_lib
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

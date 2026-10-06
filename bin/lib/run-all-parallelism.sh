@@ -3,14 +3,18 @@
 # bin/calibrate-test-parallelism.sh; defines constants/functions only.
 # Cache values are compared as strings only — never expanded, never used in arithmetic.
 # Sibling bin/lib/run-all-durations.sh (the duration ledger) reuses the helpers below, so it requires this file to be sourced first.
+# The never-ask record (calibration-never-ask.conf) format is owned here; run_all_never_ask_write is its only writer.
 # shellcheck disable=SC2034  # constants and reader outputs are consumed by the sourcing scripts
 
 RUN_ALL_CACHE_SCHEMA=2
 RUN_ALL_DEFAULT_MAX_JOBS_PER_RUN=4
 RUN_ALL_DEFAULT_MAX_JOBS_PER_HOST=4
-RUN_ALL_CALIBRATOR_HINT="bin/calibrate-test-parallelism.sh"
+RUN_ALL_CALIBRATOR_HINT="RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh"
 
 RUN_ALL_CACHE_BASENAME="parallelism.conf"
+RUN_ALL_CALIBRATION_TIME_LIMIT_MIN=90
+RUN_ALL_NEVER_ASK_BASENAME="calibration-never-ask.conf"
+RUN_ALL_NEVER_ASK_MAX_LINES=8
 RUN_ALL_CACHE_MAX_LINES=64
 RUN_ALL_CACHE_MAX_LINE_BYTES=512
 RUN_ALL_CACHE_MIN_JOBS=1
@@ -36,6 +40,45 @@ run_all_cache_dir() {
 
 run_all_cache_file() {
     printf '%s\n' "$(run_all_cache_dir)/$RUN_ALL_CACHE_BASENAME"
+}
+
+run_all_never_ask_file() {
+    printf '%s/%s\n' "$(run_all_cache_dir)" "$RUN_ALL_NEVER_ASK_BASENAME"
+}
+
+# run_all_never_ask_active — 0 when the never-ask record holds exactly one non-empty
+# host_id (<= 200 chars) equal to this host's; schema=, recorded_at= and unknown keys are ignored.
+run_all_never_ask_active() {
+    local file line nlines=0 hits=0 hid=""
+    local LC_ALL=C LC_CTYPE=C
+    file="$(run_all_never_ask_file)"
+    [ -f "$file" ] && [ -r "$file" ] || return 1
+    while IFS= read -r line || [ -n "$line" ]; do
+        nlines=$((nlines + 1))
+        [ "$nlines" -le "$RUN_ALL_NEVER_ASK_MAX_LINES" ] || return 1
+        line="${line%$'\r'}"
+        [ "${#line}" -le "$RUN_ALL_CACHE_MAX_LINE_BYTES" ] || return 1
+        case "$line" in
+            host_id=*) hits=$((hits + 1)); hid="${line#host_id=}" ;;
+        esac
+    done < "$file"
+    [ "$hits" -eq 1 ] && [ -n "$hid" ] && [ "${#hid}" -le 200 ] || return 1
+    [ "$hid" = "$(run_all_host_id)" ]
+}
+
+# run_all_never_ask_write — publish the never-ask record for this host (tmp + mv).
+run_all_never_ask_write() {
+    local dir file tmp
+    dir="$(run_all_cache_dir)"
+    file="$(run_all_never_ask_file)"
+    tmp="$file.$$.tmp"
+    mkdir -p "$dir" 2>/dev/null || return 1
+    if { printf 'schema=1\nhost_id=%s\nrecorded_at=%s\n' "$(run_all_host_id)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$tmp"; } 2>/dev/null &&
+        mv -f "$tmp" "$file" 2>/dev/null; then
+        return 0
+    fi
+    rm -f "$tmp" 2>/dev/null
+    return 1
 }
 
 # --- host identity ----------------------------------------------------------

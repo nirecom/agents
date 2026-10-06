@@ -174,6 +174,8 @@ On the first interactive run the installer invokes `gh auth login` when not alre
 (skipped on headless/CI machines and on already-authenticated re-runs), then `gh auth refresh -s
 project` adds the required `project` scope automatically.
 
+Optional: measure test parallelism once per host (up to 90 min) — see [docs/ops.md "Test parallelism calibration"](docs/ops.md#test-parallelism-calibration).
+
 ### Launch
 
 Sourcing the profile defines the **`codes`** command — the way to start a session. It opens VS Code
