@@ -8,6 +8,7 @@ m5_one() {
   before="$(snap "$LEG")"
   move "$sid" "$fault"
   like "M5 $fault: one RELOCATE_FAILED line" "$MV_OUT" "RELOCATE_FAILED*"
+  [[ "$fault" != reconcile && "$fault" != lstat ]] || like "M5 $fault: stopped by the kept-entry check" "$MV_OUT" "RELOCATE_FAILED sid=$sid reason=reconcile *"
   eq "M5 $fault: exactly one stdout line" "$(lines "$MV_OUT")" "1"
   eq "M5 $fault: stderr is empty" "$MV_ERR" ""
   eq "M5 $fault: exit 0" "$MV_RC" "0"
@@ -20,7 +21,10 @@ m5_one() {
 c_m5_pre_commit_faults() {
   local fault i=0
   new_home m5
-  for fault in copy rewrite json-rename; do
+  # reconcile: only the control dir's re-copy fails while the json reconciles cleanly; that
+  # one kept entry must still stop the commit (neither root split, the session routes legacy).
+  # lstat: a non-ENOENT stat error on the control dir is a kept entry, never a deletion.
+  for fault in copy rewrite reconcile lstat json-rename; do
     i=$((i + 1))
     m5_one "$fault" "$(sid_of "50$i")"
   done
@@ -286,6 +290,77 @@ c_m16_mid_move_writes() {
   eq "M16 the session routes to the new root" "$(route "$sid")" "$NEW"
 }
 
+# #2512 review: the post-commit reconcile must treat a stat it cannot complete as a kept
+# entry, on either side. The driver changes the legacy marker just before the commit
+# rename (as M16) and from then on fails lstat of that marker's <side> path with EPERM.
+# dst: a skipped re-copy would let the legacy delete take the newer content.
+# src: reading the failure as a deletion would drop the new-root copy.
+# dir: readdir of the legacy control dir fails instead; its children must not read as vanished.
+M18_DRIVER='
+const fs = require("fs");
+const path = require("path");
+const [A, sid, leg, nw, side] = process.argv.slice(1);
+const { relocate } = require(A + "/hooks/lib/temporary-migrations/state-dir-relocation/move.js");
+const commit = path.resolve(nw, sid + ".json");
+const target = path.resolve(side === "src" ? leg : nw, sid + ".workflow-off");
+const ctlDir = path.resolve(leg, sid + ".control");
+const realRename = fs.renameSync;
+const realLstat = fs.lstatSync;
+const realReaddir = fs.readdirSync;
+const r = { fired: 0, faulted: 0 };
+fs.renameSync = function (from, to) {
+  if (r.fired === 0 && path.resolve(String(to)) === commit) {
+    r.fired = 1;
+    fs.writeFileSync(path.join(leg, sid + ".workflow-off"), "changed\n");
+  }
+  return realRename.call(this, from, to);
+};
+fs.lstatSync = function (p, o) {
+  if (side !== "dir" && r.fired === 1 && path.resolve(String(p)) === target) {
+    r.faulted = 1;
+    throw Object.assign(new Error("injected EPERM"), { code: "EPERM" });
+  }
+  return realLstat.call(this, p, o);
+};
+fs.readdirSync = function (p, o) {
+  if (side === "dir" && r.fired === 1 && path.resolve(String(p)) === ctlDir) {
+    r.faulted = 1;
+    throw Object.assign(new Error("injected EPERM"), { code: "EPERM" });
+  }
+  return realReaddir.call(this, p, o);
+};
+r.line = relocate(sid);
+process.stdout.write(JSON.stringify(r));
+'
+
+c_m18_post_commit_stat_errors() {
+  local side sid out n=1800
+  for side in dst src; do
+    n=$((n + 1))
+    new_home "m18-$side"
+    sid="$(sid_of "$n")"
+    seed_session "$LEG" "$sid"
+    out="$(cd "$T/cwd" && run_with_timeout 60 "${DENV[@]}" HOME="$H" USERPROFILE="$H" \
+      node -e "$M18_DRIVER" "$A" "$sid" "$LEG" "$NEW" "$side" 2>"$T/m18.err")" || true
+    eq "M18 $side premise: the legacy marker changed just before the commit" "$(m14_field "$out" fired)" "1"
+    eq "M18 $side premise: the post-commit lstat failed" "$(m14_field "$out" faulted)" "1"
+    like "M18 $side: the entry is counted as a leftover" "$(m14_field "$out" line)" "RELOCATED sid=$sid entries=* leftovers=1"
+    eq "M18 $side: the newer legacy content is not deleted" "$(cat "$LEG/$sid.workflow-off" 2>/dev/null || true)" "changed"
+    eq "M18 $side: the new-root copy is not dropped" "$(test -e "$NEW/$sid.workflow-off" && echo present)" "present"
+    eq "M18 $side: the session routes to the new root" "$(route "$sid")" "$NEW"
+  done
+  new_home m18-dir
+  sid="$(sid_of 1803)"
+  seed_session "$LEG" "$sid"
+  out="$(cd "$T/cwd" && run_with_timeout 60 "${DENV[@]}" HOME="$H" USERPROFILE="$H" \
+    node -e "$M18_DRIVER" "$A" "$sid" "$LEG" "$NEW" dir 2>"$T/m18.err")" || true
+  eq "M18 dir premise: the post-commit readdir failed" "$(m14_field "$out" faulted)" "1"
+  like "M18 dir: the control dir is counted as a leftover" "$(m14_field "$out" line)" "RELOCATED sid=$sid entries=* leftovers=1"
+  eq "M18 dir: a child under the unreadable dir is not dropped from the new root" \
+    "$(cat "$NEW/$sid.control/supervisor-state.json" 2>/dev/null || true)" '{"layer1":{"findings":[]}}'
+  eq "M18 dir: the legacy child is not deleted" "$(test -e "$LEG/$sid.control/supervisor-state.json" && echo present)" "present"
+}
+
 # #2512 round 2 #3: after the commit every writer locks new-root paths, so the mover
 # holds the new-root workflow-state and supervisor locks from before the commit through
 # deleteLegacy. The driver (1) unlinks the legacy marker just before the commit rename,
@@ -362,4 +437,8 @@ case_end
 
 case_begin "m16-mid-move-writes-reconciled" "hooks/lib/temporary-migrations/state-dir-relocation/reconcile.js"
 c_m16_mid_move_writes
+case_end
+
+case_begin "m18-post-commit-stat-errors-kept" "hooks/lib/temporary-migrations/state-dir-relocation/reconcile.js"
+c_m18_post_commit_stat_errors
 case_end

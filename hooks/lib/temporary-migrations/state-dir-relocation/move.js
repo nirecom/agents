@@ -7,12 +7,13 @@
 // Both legacy session locks are held, workflow state first, from the sweep through the
 // legacy delete, and their new-root twins from before the commit (moveLocked); only the
 // emptied legacy control dir, which holds the supervisor lock, is removed after release.
-// STATE_RELOCATION_FAULT=copy|rewrite|control-rename|json-rename|rollback|old-delete
+// STATE_RELOCATION_FAULT=copy|rewrite|reconcile|lstat|control-rename|json-rename|rollback|old-delete
 // reproduces each failure; control-rename and rollback crash the process.
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { getStateRoot, assertValidStateSid } = require("../../../workflow-state/state-io/state-root");
+const { SESSION_ID_VALID_RE } = require("../../../workflow-state/state-io/core");
 const stateLock = require("../../../workflow-state/state-io/state-lock");
 const supervisorLock = require("../../supervisor-state-writer/lock");
 const { LEGACY_ROOT, isSidEntry, isEntryShapedSid, isLegacySession } = require("./legacy");
@@ -122,7 +123,12 @@ function moveHeld(sid, r) {
     rmQuiet(work);
     throw asRelocationError(e, "copy");
   }
-  const staged = [...pre.names, ...pre.kept].filter((n) => fs.existsSync(path.join(work, n)));
+  // A kept entry's newer content is still only in legacy; committing would strand it.
+  if (pre.kept.length > 0) {
+    rmQuiet(work);
+    throw new RelocationError("reconcile");
+  }
+  const staged = pre.names.filter((n) => fs.existsSync(path.join(work, n)));
   return publish(sid, staged, work, r, () => {
     const settled = reconcile(sid, staged, r, ctx, r.newRoot);
     deleteLegacy(sid, settled.names, r.legRoot);
@@ -175,6 +181,9 @@ function relocate(sid) {
   if (isEntryShapedSid(sid)) throw new Error(`sid is another session's entry name: ${sid}`);
   const skipped = (reason) => `RELOCATE_SKIPPED sid=${sid} reason=${reason}`;
   if (getStateRoot() !== getStateRoot({ envFallback: false })) return skipped("pinned");
+  // The workflow-state lock path takes the narrower session-id form (no dots); such a
+  // session stays in legacy and `remaining` keeps counting it.
+  if (!SESSION_ID_VALID_RE.test(sid)) return skipped("unlockable-sid");
   const home = os.homedir();
   const r = { home, newRoot: getStateRoot(), legRoot: LEGACY_ROOT(home) };
   if (fs.existsSync(path.join(r.newRoot, `${sid}.json`))) return skipped("already-new");

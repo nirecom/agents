@@ -235,4 +235,13 @@ c_m_invalid_sid() {
   eq "invalid sid: nothing is relocated" "$(case "$MV_OUT" in RELOCATED*) echo moved ;; *) echo refused ;; esac)" "refused"
   eq "invalid sid: the file outside the legacy root is untouched" "$(cat "$up/evil.json" 2>/dev/null || true)" "{}"
   eq "invalid sid: nothing lands in the new root" "$(ls -A "$NEW" 2>/dev/null || true)" ""
+  # A dotted sid passes the path-token check but not the workflow-state lock's form.
+  local dotted="a.b-1" before
+  seed_session "$LEG" "$dotted"
+  before="$(snap "$LEG")"
+  move "$dotted"
+  eq "dotted sid: skipped as unlockable" "$MV_OUT" "RELOCATE_SKIPPED sid=$dotted reason=unlockable-sid"
+  eq "dotted sid: exit 0 with empty stderr" "$MV_RC|$MV_ERR" "0|"
+  eq "dotted sid: the legacy root is byte-identical" "$(snap "$LEG")" "$before"
+  eq "dotted sid: nothing lands in the new root" "$(ls -A "$NEW" 2>/dev/null || true)" ""
 }
