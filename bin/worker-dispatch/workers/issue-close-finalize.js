@@ -1,60 +1,17 @@
 "use strict";
-// bin/worker-dispatch/workers/issue-close-finalize.js
-//
-// Stage 4 worker: replaces agents/issue-close-finalize-worker.md (#1673).
-//
-// ONE DISPATCH ADVANCES EXACTLY ONE PASS. The dispatcher is a fresh process per
-// invocation and holds no memory; `phase` says which pass this is, and the
-// durable state file under the plans directory is the only thing connecting
-// them. That is the whole design, and the regulatory rules the agent prompt used
-// to state in prose are structural consequences of it:
-//
-//   - NO RECURSION. The G.5 loop is owned by the calling main context, which
-//     re-dispatches with the next `g5_decision`. This module never loops and
-//     never re-enters itself. A worker that recursed would make the state file
-//     unobservable between iterations and put an unbounded chain of `gh` calls
-//     behind a single approval.
-//   - NEVER ASK THE USER. AskUserQuestion belongs to the calling skill. A
-//     dispatched process has no such channel, so the decision arrives as the
-//     typed `g5_decision` field instead — accept | decline | llm_declined |
-//     recurse_done, and nothing else.
-//   - NEVER EMIT A WORKFLOW SENTINEL. emit.js is the only writer to stdout and
-//     redacts sentinel-shaped bytes regardless of what a child printed.
-//   - NEVER EVAL AN ISSUE BODY. Child stdout is parsed as KEY=VALUE bytes by
-//     parseKv — split at the FIRST `=`, first key wins. No shell, no eval, no
-//     Function constructor. Issue titles and bodies routinely contain `$(...)`,
-//     backticks and quotes; here they are inert characters.
-//   - G.5-3a IDEMPOTENCY. `g5_history[].g5_3a_completed` is the guard flag that
-//     stops the proposal comment from being posted twice when a pass is retried.
-//     It lives in the state file and is written by run-loop-step.js; this module
-//     validates it but never clears it.
-//
-// ENVIRONMENT IS RESOLVED, NEVER INHERITED. Every child's extra environment is
-// built here from the trust anchors (ACD, MAIN_ROOT) rather than read from
-// process.env. `envPassthrough` in the registry describes what MAY reach a
-// child, not what SHOULD; relying on inheritance would make the child's
-// behaviour depend on the ambient environment of whoever launched the session.
-// spawn.js sets AGENTS_CONFIG_DIR itself from the ACD anchor, so it is
-// deliberately absent from every extraEnv object below.
-//
-// ISSUE_CLOSE_SKILL — the hook-bypass env var that lets `gh issue close`
-// through — is NOT set here, is not in envPassthrough, and must never be added
-// to either. run-finalize-terminal.sh exports it around its own two `gh` calls.
-// Setting it at this level would extend the bypass to every child of every phase
-// instead of to the invocations that opt into it.
-//
-// THE COMPARE-AND-SWAP TOKEN CROSSES EVERY PROCESS BOUNDARY. Both non-initial
-// passes validate the state file here and then hand the resulting token to the
-// child that re-reads the same file — run-loop-step.js on argv 3,
-// run-finalize-terminal.sh on argv 4. Neither child acts on content whose digest
-// disagrees with that token, so this module's validation binds what the child
-// actually reads and not merely what this process happened to see. Validating in
-// one process and consuming in another without the token would leave the whole
-// state-file wall bypassable by a replacement written in between.
+// bin/worker-dispatch/workers/issue-close-finalize.js — Stage 4 worker, replaces agents/issue-close-finalize-worker.md (#1673).
+// One dispatch advances exactly one pass; the state file is the only link between passes. No recursion,
+// no AskUserQuestion, no sentinel on stdout, issue text parsed as KEY=VALUE and never evaluated, child
+// env built from anchors (never inherited), ISSUE_CLOSE_SKILL never set here — the why of each:
+// docs/architecture/claude-code/worker-dispatch/close-family.md.
+// Both non-initial passes hand the validated state file's compare-and-swap token to the child that
+// re-reads it (run-loop-step.js argv 3, run-finalize-terminal.sh argv 4), so validation binds what the
+// child actually reads, not merely what this process saw.
 
 const stateStore = require("./issue-close-finalize/state");
 const { run: spawnRun } = require("../spawn");
 const { samePath } = require("../anchor");
+const { tryWriteLog } = require("../worker-log");
 
 const INITIAL_TIMEOUT_MS = 600000;
 const LOOP_TIMEOUT_MS = 600000;
@@ -92,10 +49,6 @@ const REQUIRED_BY_PHASE = {
   ],
 };
 
-function stamp() {
-  return new Date().toISOString().replace(/[:.]/g, "-").replace(/Z$/, "Z");
-}
-
 // See the header note on eval. Value keeps everything after the first `=`, so a
 // SUMMARY containing `a=b` is not truncated; first key wins, matching a
 // `head -1` reading of the same stream, so a trailing line cannot overwrite an
@@ -128,24 +81,12 @@ function checkRequired(payload, phase) {
   return null;
 }
 
-// Best-effort artifact. The file name is prefixed with the session id so the
-// plans directory stays partitioned by session — TL3 asserts that nothing in it
-// belongs to a session other than the one under test.
 function writeLog(payload, ctx, lines) {
-  const dir = payload.artifact_dir || ctx.anchors.plansDir;
-  const sid = typeof payload.session_id === "string" && payload.session_id !== ""
-    ? payload.session_id
-    : "no-session";
-  const target = ctx.path.join(dir, `${sid}-finalize-worker-${stamp()}.log`);
   const body = lines
     .map((l) => String(l === null || l === undefined ? "" : l))
     .filter((l) => l !== "")
     .join("\n");
-  try {
-    return ctx.fsguard.writeFile(target, `${body}\n`);
-  } catch (_e) {
-    return "(none)";
-  }
+  return tryWriteLog(ctx, "finalize-worker.log", `${body}\n`);
 }
 
 // The finalize chain scripts are found from the ACD anchor, never from an

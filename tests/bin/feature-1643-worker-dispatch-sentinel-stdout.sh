@@ -2,31 +2,22 @@
 # tests/bin/feature-1643-worker-dispatch-sentinel-stdout.sh
 # Tests: bin/worker-dispatch/emit.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch.js, hooks/lib/sentinel-patterns.js
 # Tags: worker-dispatch, emit, sentinel, stdout, security, defense-in-depth, TL1, scope:issue-specific
-#
-# Issue #1643 — emit.js is the ONLY stdout writer and the ONLY remaining barrier
-# against workflow-sentinel leakage into the main context. Moving test-runner out
-# of a subagent removes hooks/block-subagent-sentinels.js (agent_id based) from the
-# path, and tests/*.sh legitimately print sentinel literals as assertion fixtures,
-# so sentinel text reaches log_tail on EVERY normal run.
-#
-# Every row below plants an adversarial sentinel form into a different channel
-# (child stdout / child stderr / summary line / non-zero-exit error path) and
-# asserts, per output line:
-#   1. no match against /<<\s*WORKFLOW/i
-#   2. hooks/lib/sentinel-patterns.js isStrictSentinel() returns false
-#
-# The line checker is self-tested against a known-dirty fixture first, so an empty
-# or absent dispatcher output can never make this file green (false-green fence).
-#
 # TL3 gap (what this TL1 test does NOT catch):
-#   - A real Claude Code turn where the dispatcher's stdout is rendered into the
-#     main transcript and the workflow-mark / workflow-gate hooks observe it.
-#   - Real tests/run-all.sh output volume, where truncation boundaries could split
-#     a sentinel literal in a way this synthetic stub does not reproduce.
+#   - A real Claude Code turn where dispatcher stdout is rendered into the main
+#     transcript and the workflow-mark / workflow-gate hooks observe it.
+#   - Real tests/run-all.sh output volume, where truncation could split a sentinel.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+# Issue #1643 — emit.js is the ONLY stdout writer and the ONLY remaining barrier
+# against workflow-sentinel leakage into the main context: test-runner no longer runs
+# in a subagent (no block-subagent-sentinels.js), and tests/*.sh legitimately print
+# sentinel literals, so sentinel text reaches log_tail on EVERY normal run.
+# Each row plants an adversarial sentinel into a different channel (child stdout /
+# stderr / summary line / non-zero-exit path) and asserts, per output line: no match
+# against /<<\s*WORKFLOW/i, and isStrictSentinel() false. The line checker is
+# self-tested on a dirty fixture first (false-green fence).
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
@@ -130,6 +121,7 @@ git -C "$MAIN_RAW" commit -q --no-verify -m initial 2>/dev/null
 MAIN="$(nodepath "$MAIN_RAW")"
 
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 PLANS="$(nodepath "$PLANS_RAW")"
 printf '%s' "{\"cwd\":\"$MAIN\",\"test_args\":[],\"timeout_seconds\":30}" > "$PLANS_RAW/tr.json"
 PAYLOAD="$(nodepath "$PLANS_RAW/tr.json")"
@@ -209,7 +201,7 @@ group_matrix() {
         write_stub "$name"
         outfile="$TMPD/out-$name.txt"
         rc=0
-        run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+        run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
             node "$DISPATCH_JS" test-runner "$MAIN" "$PAYLOAD" > "$outfile" 2>&1 || rc=$?
         # Non-vacuity: the dispatcher must actually have written something, else
         # "no sentinel on any line" would hold trivially.
@@ -233,18 +225,11 @@ TABLE
 }
 
 # ===========================================================================
-# Group 2 — the taint fallback is still a CONTRACT, not merely safe bytes
-#
-# When the whole-string rescan fires, emit.js DISCARDS the render and writes a
-# fixed literal instead. Group 1 proves those bytes are clean; clean is
-# necessary but not sufficient. The substitute is what the CALLER reads, and
-# /run-tests RNT-9 dispatches on the YAML renderer's status — a fallback status
-# outside the documented vocabulary matches no branch, so one sentinel literal in
-# a child's output would silently strand the workflow step neither complete nor
-# re-run. That is a worse failure than the leak it is protecting against.
-#
-# Membership is what is asserted, not identity: WHICH of the four the fallback
-# picks is emit.js's call and may change; being one of the four is the contract.
+# Group 2 — the taint fallback is still a CONTRACT, not merely safe bytes.
+# When the whole-string rescan fires, emit.js DISCARDS the render for a fixed
+# literal. Clean bytes (Group 1) are necessary but not sufficient: /run-tests RNT-9
+# dispatches on the YAML status, and a fallback status outside the vocabulary would
+# strand the step neither complete nor re-run. Membership is asserted, not identity.
 # ===========================================================================
 group_fallback_status_enum() {
     local outfile hits status rc keys
@@ -274,7 +259,7 @@ group_fallback_status_enum() {
     write_stub newline-split
     outfile="$TMPD/out-fallback.txt"
     rc=0
-    run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
         node "$DISPATCH_JS" test-runner "$MAIN" "$PAYLOAD" > "$outfile" 2>&1 || rc=$?
 
     # Non-vacuity: prove the DISCARD arm actually ran. Without this the status
@@ -327,23 +312,12 @@ group_emit_sole_writer() {
 }
 
 # ===========================================================================
-# Group 4 — the SECOND boundary: artifact files
-#
-# stdout is not the only route by which worker output re-enters a Claude Code
-# transcript. Every one of these workers writes an artifact file, and the
-# calling skill reads it back — /run-tests reads the runner artifact,
-# /issue-reconcile reads the JSONL scan, /worktree-end reads the backup manifest.
-# The bytes in those files are third-party by construction: a GitHub issue title,
-# a PR title, a branch name. A `<<WORKFLOW_...>>` sequence carried in one of
-# them arrives in the calling context as a live sentinel, having bypassed emit.js
-# entirely — the same leak Groups 1-3 close on stdout, through a different door.
-#
-# fsguard.writeFile is where that door is closed, because it is the single
-# function every worker writes through. Two properties are asserted per row:
-#   1. what lands on disk carries no /<<\s*WORKFLOW/i sequence
-#   2. the substitution is emit.redactSentinels' — literally the same function,
-#      so the artifact boundary and the stdout boundary cannot drift apart
-# plus, per row, a non-vacuity check that the INPUT was live in the first place.
+# Group 4 — the SECOND boundary: artifact files. Skills read worker artifacts back
+# (runner artifact, reconcile JSONL, backup manifest) and their bytes are third-party
+# (issue/PR titles, branch names), so a `<<WORKFLOW_...>>` there bypasses emit.js.
+# fsguard.writeFile closes that door. Per row: on-disk bytes carry no
+# /<<\s*WORKFLOW/i, the substitution is literally emit.redactSentinels (no drift),
+# and the INPUT was live in the first place (non-vacuity).
 # ===========================================================================
 FSG_PROBE="$TMPD/fsguard-probe.js"
 cat > "$FSG_PROBE" <<'FSGJS'

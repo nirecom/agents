@@ -48,6 +48,7 @@ TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/wt-1937-$$")"
 mkdir -p "$TMPD"
 trap 'rm -rf "$TMPD"' EXIT
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 PLANS="$(nodepath "$PLANS_RAW")"
 
 # Capability probes — some cases need real symlinks or a FIFO.
@@ -87,7 +88,7 @@ dispatch() {
     local payload="$1"; shift
     printf '%s' "$payload" > "$PLANS_RAW/p.json"
     DRC=0
-    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" "$@" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" "$@" \
         node "$(nodepath "$DISPATCH_JS")" worktree-backup "$MAIN" "$(nodepath "$PLANS_RAW/p.json")" 2>/dev/null)" || DRC=$?
 }
 field_of() {

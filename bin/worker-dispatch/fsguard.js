@@ -22,6 +22,7 @@ const SCOPE_ROOTS = {
   "family-worktree": (ctx) => (Array.isArray(ctx.family) ? ctx.family.slice() : []),
   "backup-dir": (ctx) => (ctx.backupDir ? [ctx.backupDir] : []),
   "main-root-docs": (ctx) => (ctx.mainRoot ? [path.join(ctx.mainRoot, "docs")] : []),
+  "log-dir": (ctx) => (ctx.logDir ? [ctx.logDir] : []),
 };
 
 function scopeRootsFor(workerName, ctx) {
