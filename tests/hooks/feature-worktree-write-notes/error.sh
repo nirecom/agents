@@ -3,6 +3,8 @@
 # Tests: hooks/lib/worktree-notes.js, bin/worktree-write-notes.js
 # Tags: worktree, notes, scope:common
 
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; harness_isolate "$_ISOLATION_TMP_ROOT"
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
 # ---- Err1: appendExclude when .git is a file ----

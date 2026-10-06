@@ -37,6 +37,12 @@ init_repo() {
 
 AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
 
+# isolation (#2512): pin state and plans dirs file-wide; the per-call pins below still override them.
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 require_granularity() {
     local out
     out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID "$RWT" 30 node -e "

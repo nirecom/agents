@@ -2,19 +2,12 @@
 # tests/hooks/feature-1904-inheritance-origin-stamp.sh
 # Tests: hooks/workflow-state/inheritance/apply.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js
 # Tags: session-inherit, provenance, regression-1904, scope:issue-specific, pwsh-not-required, TL1, TL2
-#
-# Regression for #1904: applyInheritance stamps every inherited event with
-# origin:"session-inherit", provenance:"backfilled", inherited_from:<donor sid>
-# and at:<heir created_at> — regardless of whether the donor's OWN events carry
-# a different origin. Case A proves this against a donor whose events were
-# produced by migrateV1ToV2 (origin "migration-v1-to-v2"): if applyInheritance
-# ever started passing a donor event's own `origin` through unstamped, this is
-# the shape that would catch it (a mark-step donor's events already carry
-# origin "mark-step", which is a WEAKER signal since it differs from
-# session-inherit in only one of the two relevant fields; migration-v1-to-v2
-# additionally differs in `provenance` for status events, making it the
-# stronger anchor). Case B is a control group proving the same invariant holds
-# for the ordinary mark-step donor shape.
+
+# Regression for #1904: applyInheritance stamps every inherited event with origin:"session-inherit",
+# provenance:"backfilled", inherited_from:<donor sid> and at:<heir created_at> — regardless of the
+# donor's OWN event origin. Case A uses a donor migrated by migrateV1ToV2 (origin "migration-v1-to-v2",
+# which also differs in `provenance` for status events — the stronger anchor than a mark-step donor);
+# Case B is the control group for the ordinary mark-step donor shape.
 
 set -u
 
@@ -28,6 +21,12 @@ make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf1904'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+
+# isolation (#2512): pin state and plans dirs file-wide; the per-call pins below still override them.
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 # ---------------------------------------------------------------------------
 # run_1904a: v1-shaped donor migrated in-flight via migrateV1ToV2, then

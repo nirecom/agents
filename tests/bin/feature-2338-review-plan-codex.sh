@@ -13,6 +13,11 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 . "$AGENTS_DIR/tests/lib/harness.sh"
 
+# Pinned before the delegate below so no bin/ exec can run before isolation (#2512).
+TMPD="$(make_tmp)"
+trap 'rm -rf "$TMPD"' EXIT
+harness_isolate "$TMPD"
+
 DELEGATE_RC=0
 bash "$AGENTS_DIR/tests/bin/feature-review-plan-codex.sh" || DELEGATE_RC=$?
 if [ "$DELEGATE_RC" -eq 0 ]; then
@@ -24,9 +29,6 @@ fi
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; [ "$FAIL" -eq 0 ] || exit 1; exit 77; }
 command -v jq   >/dev/null 2>&1 || { echo "SKIP: jq not available (review-plan-codex prerequisite)"; [ "$FAIL" -eq 0 ] || exit 1; exit 77; }
 
-TMPD="$(make_tmp)"
-trap 'rm -rf "$TMPD"' EXIT
-harness_isolate "$TMPD"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR 2>/dev/null || true
 cd "$TMPD" || exit 1
 

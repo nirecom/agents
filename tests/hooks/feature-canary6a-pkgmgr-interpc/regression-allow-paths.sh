@@ -2,21 +2,18 @@
 # tests/hooks/feature-canary6a-pkgmgr-interpc/regression-allow-paths.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/main-worktree-allows/new-item.js, hooks/enforce-worktree/main-worktree-allows/worktree-command.js, hooks/lib/claude-scratchpad-base.js
 # Tags: scope:issue-specific, pkg-mgr, interpreter-c, canary-6a, enforce-worktree, regression, hook-registration, pwsh-not-required
-#
-# PR #1459 regression guard for the #1411 pkg-mgr / interpreter-c IR migration.
-# PR #1459 restored three sanctioned main-worktree allow paths that a prior IR
-# migration (#1420) had regressed: scratchpad redirects, New-Item -ItemType
-# Directory (external dir), and git worktree remove/prune. This part asserts those
-# allow paths STILL work after the pkg-mgr / interpreter-c retire — i.e. adding the
-# new predicates to the fast-allow gate must not re-block them. If a case goes RED,
-# the pkg-mgr/interpreter-c wiring over-blocks a sanctioned command.
-#
-# L3 gap (what this test does NOT catch):
-# - Real enforce-worktree hook invocation via the live Claude Code PreToolUse chain (these L2 cases drive node enforce-worktree.js via stdin JSON)
-# - Session-scoped worktree path comparison in a real Claude session
+# PR #1459 regression guard for #1411: scratchpad redirects, New-Item -ItemType Directory
+# (external dir) and git worktree remove/prune stay allowed after the pkg-mgr /
+# interpreter-c retire; a RED case means the new predicates over-block them.
+# L3 gap: live PreToolUse chain (L2 drives enforce-worktree.js via stdin JSON) and
+# session-scoped worktree path comparison.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # ── Fixtures (mirror fix-1441): main repo, non-git CWD, plans-dir, scratchpad ──
@@ -43,7 +40,7 @@ SCRATCH_FWD="${FAKE_SCRATCHPAD_NODE//\\//}"
 EXT_WORKTREE_WIN="${TMPBASE}\\worktrees\\some-task"
 EXT_WORKTREE="${TMPBASE}/worktrees/some-task"
 
-cleanup() { rm -rf "$TMPBASE" "$FAKE_SCRATCHPAD" 2>/dev/null || true; }
+cleanup() { rm -rf "$TMPBASE" "$FAKE_SCRATCHPAD" "$_ISOLATION_TMP_ROOT" 2>/dev/null || true; }
 trap cleanup EXIT
 
 _make_payload() { run_with_timeout 30 node -e "var o={tool_name:'Bash',tool_input:{command:process.argv[1]},session_id:'canary6a'};process.stdout.write(JSON.stringify(o));" -- "$1" 2>/dev/null; }

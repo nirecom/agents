@@ -1,6 +1,7 @@
 # shellcheck shell=bash
 # Tests: skills/issue-close-verified/SKILL.md, hooks/enforce-issue-close.js, hooks/workflow-mark/enforce-override-handlers.js
 # Tags: rules-injection, admin-close, issue-close-verified, sentinel, guard-sequence, executable-doc, TL2, scope:issue-specific
+# isolation: inherits-from ../feature-2037-admin-close-skill.sh
 
 # WHY this is separate from S1-S8 (CPR-WPH): every case there stops at the MARKER — the
 # skill's opening command creates a file, its closing command removes it. That is one half

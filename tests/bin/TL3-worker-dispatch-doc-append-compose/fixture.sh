@@ -6,6 +6,11 @@
 # is what resolves the target. WORKTREE_NOTES.md carries History Notes bullets
 # so compose reaches its authenticated reads instead of exiting early with
 # nothing to write.
+
+# isolation (#2512): pin unconditionally to the sourcing test's TMPD dirs — an
+# inherited value may be the developer's live state dir, so it is never kept.
+export WORKFLOW_STATE_DIR="$WFDIR" WORKFLOW_PLANS_DIR="$PLANS"
+
 build_fixture() {
     MAIN_RAW="$TMPD/mainrepo"
     mkdir -p "$MAIN_RAW"

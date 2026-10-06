@@ -30,13 +30,12 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-# Fixture isolation (rules/test/fixture-isolation.md): the workflow dir is pinned per case
-# and WORKFLOW_PLANS_DIR is pinned alongside it — pinning one alone lets supervisor-emit
-# fall back to the developer's real ~/.workflow-plans/. Inherited session ids are dropped
-# so nothing here can resolve the live session.
-WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$WORKFLOW_PLANS_DIR"
-export WORKFLOW_PLANS_DIR
+# Fixture isolation (rules/test/fixture-isolation.md): both dirs are pinned once here so the
+# part files inherit them; cases may still re-point WORKFLOW_STATE_DIR at a fresh dir inline.
+# Pinning one alone lets supervisor-emit fall back to the developer's real ~/.workflow-plans/.
+# Inherited session ids are dropped so nothing here can resolve the live session.
+mkdir -p "$TMPDIR_BASE/workflow-state" "$TMPDIR_BASE/plans"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state" WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 unset CLAUDE_SESSION_ID || true
 unset CLAUDE_CODE_SESSION_ID || true
 

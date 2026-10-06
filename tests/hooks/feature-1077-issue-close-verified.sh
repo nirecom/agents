@@ -2,25 +2,13 @@
 # tests/hooks/feature-1077-issue-close-verified.sh
 # Tests: hooks/enforce-issue-close.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js
 # Tags: issue-close, enforce, hook, sentinel, scope:issue-specific
-#
+
 # PR: WORKFLOW_ISSUE_CLOSE_VERIFIED sentinel — session-scoped bypass for gh issue close.
-#
-# Contract (existing hook behavior):
-#   - bare `gh issue close N` from Bash → blocked (exit 2 with reason to stderr).
-#   - ISSUE_CLOSE_SKILL=1 inherited env → bypass (exit 0).
-#   - WORKFLOW_OFF marker present + valid sid → bypass (exit 0).
-# New contract (this PR):
-#   - .issue-close-verified marker present + valid sid → bypass (exit 0).
-#   - traversal sid → bypass NOT granted (SID_RE blocks path traversal).
-#   - isSentinel() recognises ISSUE_CLOSE_VERIFIED ON and END forms.
-#   - isSentinel() LOOKSLIKE detects bare form (no reason).
-#
-# L3 gap (what this test does NOT catch):
-# - Real Claude session: workflow-mark.js dispatches VERIFIED ON/END echo to
-#   enforce-override-handlers.js → writes/removes .issue-close-verified marker
-# - End-to-end: user echoes sentinel → next gh issue close is bypassed
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# Contract (existing hook behavior): bare `gh issue close N` from Bash → blocked (exit 2 with reason to stderr); ISSUE_CLOSE_SKILL=1 inherited env → bypass (exit 0); WORKFLOW_OFF marker present + valid sid → bypass (exit 0).
+# New contract (this PR): .issue-close-verified marker present + valid sid → bypass (exit 0); traversal sid → bypass NOT granted (SID_RE blocks path traversal); isSentinel() recognises ISSUE_CLOSE_VERIFIED ON and END forms; isSentinel() LOOKSLIKE detects bare form (no reason).
+
+# L3 gap (what this test does NOT catch): real Claude session — workflow-mark.js dispatches VERIFIED ON/END echo to enforce-override-handlers.js → writes/removes .issue-close-verified marker; end-to-end — user echoes sentinel → next gh issue close is bypassed.
+# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 
 set -u
 
@@ -54,6 +42,9 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_STATE_DIR"
 
 run_with_timeout() {
     local secs="$1"; shift

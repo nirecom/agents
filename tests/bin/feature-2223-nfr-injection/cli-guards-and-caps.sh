@@ -2,6 +2,7 @@
 # tests/bin/feature-2223-nfr-injection/cli-guards-and-caps.sh
 # Tests: bin/lib/codex-core.sh, bin/review-plan-codex, bin/review-code-codex, bin/run-codex-review-loop
 # Tags: scope:issue-specific, TL2, codex, nfr, prompt-injection, security, pwsh-not-required
+# isolation: inherits-from ../feature-2223-nfr-injection.sh
 # Case file for tests/bin/feature-2223-nfr-injection.sh — sourced from it, never run
 # standalone (it uses that file's helpers, fixtures and PASS/FAIL counters).
 # Split off because the parent sits against the 500-line HARD limit; the

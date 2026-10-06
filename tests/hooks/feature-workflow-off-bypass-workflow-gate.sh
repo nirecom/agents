@@ -2,7 +2,7 @@
 # tests/hooks/feature-workflow-off-bypass-workflow-gate.sh
 # Tests: hooks/workflow-gate.js
 # Tags: workflow, gate, hook, bin, git, scope:issue-specific
-#
+
 # PR2: hooks/workflow-gate.js must early-return (approve) when
 # <workflowDir>/<sid>.workflow-off marker exists for the calling session.
 #
@@ -41,6 +41,9 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_STATE_DIR"
 
 run_with_timeout() {
     local secs="$1"; shift

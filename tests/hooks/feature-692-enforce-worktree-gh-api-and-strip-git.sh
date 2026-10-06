@@ -2,15 +2,13 @@
 # tests/hooks/feature-692-enforce-worktree-gh-api-and-strip-git.sh
 # Tests: hooks/enforce-worktree.js, hooks/lib/bash-write-patterns.js
 # Tags: enforce-worktree, classify, gh-api, strip-quoted-args, issue-close, step-6h, scope:issue-specific
-#
+
 # Regression tests for issue #692:
-#   Bug A — `gh api -X PUT repos/o/r/contents/...` from main worktree must be
-#           allowed when cwd is in session scope (required by /worktree-end
-#           Step 6h's COMPOSE_DOC_APPEND_SKILL=1 → bin/compose-doc-append-entry
-#           call which runs `gh api -X PUT` from MAIN_ROOT).
-#   Bug B — kind:"git" classify() patterns must scan the stripped (quote-
-#           removed) command so `grep -n "git push" file` is not misclassified
-#           as a write. Achieved by adding "git" to STRIP_KINDS.
+#   Bug A — `gh api -X PUT repos/o/r/contents/...` from main worktree must be allowed when cwd is in session scope
+#           (required by /worktree-end Step 6h's COMPOSE_DOC_APPEND_SKILL=1 → bin/compose-doc-append-entry call,
+#           which runs `gh api -X PUT` from MAIN_ROOT).
+#   Bug B — kind:"git" classify() patterns must scan the stripped (quote-removed) command so `grep -n "git push" file`
+#           is not misclassified as a write. Achieved by adding "git" to STRIP_KINDS.
 
 set -u
 
@@ -18,6 +16,9 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TMPDIR_BASE="$(mktemp -d)/feature-692-$$"
 mkdir -p "$TMPDIR_BASE"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# isolation (#2512): pin state and plans dirs file-wide under the trap above.
+mkdir -p "$TMPDIR_BASE/isolation/workflow-state" "$TMPDIR_BASE/isolation/plans"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/isolation/workflow-state" WORKFLOW_PLANS_DIR="$TMPDIR_BASE/isolation/plans"
 
 PASS=0
 FAIL=0

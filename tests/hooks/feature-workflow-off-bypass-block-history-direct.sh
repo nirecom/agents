@@ -60,6 +60,9 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_STATE_DIR"
 
 fresh_workflow_dir() {
     local d="$TMPDIR_BASE/wf-$RANDOM-$$-${1:-x}"

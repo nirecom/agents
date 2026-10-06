@@ -10,6 +10,9 @@
 # SSOT for which hooks a .workflow-off marker silences; this pins that the
 # contract SAYS so, while L-1 in cases-r-k-l.sh is its runtime twin.
 
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"  # isolation (#2512): the dispatcher pins first
+harness_assert_isolated
+
 run_block_c12_c14() {
     echo ""
     echo "=== R3-NUL: no guard module carries a raw NUL byte ==="

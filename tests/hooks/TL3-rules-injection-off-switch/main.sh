@@ -16,7 +16,7 @@ RIL_NONCE_A3="RILNONCE-A3-6f23"
 RIL_NONCE_B="RILNONCE-B-6f2b"
 
 RIL_BASE="$(make_tmp_base)"
-trap 'rm -rf "$RIL_BASE"' EXIT
+trap 'rm -rf "$RIL_BASE" "${_ISOLATION_TMP_ROOT:-}"' EXIT  # also the dispatcher's isolation root (#2512)
 RIL_WF="$RIL_BASE/workflow"; RIL_PLANS="$RIL_BASE/plans"
 mkdir -p "$RIL_WF" "$RIL_PLANS"
 

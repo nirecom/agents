@@ -7,6 +7,9 @@
 # prints `BASELINE: <class> <path> [detail]` + `BASELINE_SUMMARY: preexisting=N inherited=N
 # broken=N undetermined=N`; exit 0 all-preexisting, 1 otherwise, 3 no failing list, 4 bad base.
 
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"  # isolation (#2512): helpers.sh pins first
+harness_assert_isolated
+
 # cli_case_cache <label> — a fresh ledger/cache dir per case, so no case reuses another's records.
 cli_case_cache() {
   mkdir -p "$TMPROOT/cache-cli-$1"

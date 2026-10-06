@@ -7,6 +7,9 @@ WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
 export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# isolation (#2512): always pin the plans dir beside the state dir, under the trap above; never keep an inherited value.
+mkdir -p "$TMPDIR_BASE/plans"
+export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 
 setup_repo() {
     local repo="$TMPDIR_BASE/repo-$RANDOM"

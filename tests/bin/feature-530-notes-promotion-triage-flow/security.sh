@@ -7,6 +7,8 @@
 # an escape steers `resolve` at an arbitrary WORKTREE_NOTES.md that is then filed into public issues — an exfiltration primitive.
 
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
+# isolation (#2512): helpers.sh pins both dirs under its trap-removed TMPD; restate that pin file-wide here.
+export WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
 
 # An outside notes file that no invocation is allowed to reach. Its body carries
 # a unique token so a leak is detectable in output, not just by path compare.

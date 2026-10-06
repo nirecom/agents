@@ -2,24 +2,17 @@
 # tests/hooks/feature-canary6a-pkgmgr-interpc/interpc-ir.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-patterns/patterns.js
 # Tags: scope:issue-specific, interpreter-c, canary-6a, ir-migration, fail-closed, security, pwsh-not-required
-#
-# isInterpreterCWriteIR IR predicate (#1411): the interpreter-c WRITE_PATTERNS
-# entry (bash|sh|zsh|dash|pwsh|powershell|cmd -c/-Command <body>) migrated to a
-# fail-closed IR predicate in hooks/lib/bash-write-targets.js. It re-parses the
-# inner body and returns true when the body is a write (rm / redirect / git / npm /
-# pwsh cmdlet …), false when the body is read-only, and fail-closed (true) for
-# unrecognized / dynamic forms.
-#
-# RED-pending: isInterpreterCWriteIR is not exported yet → the bridge emits
-# ERROR:not-exported → every predicate row FAILs cleanly (fail-before-fix). The
-# module (bash-write-targets.js) already exists, so no SKIP path is needed here.
-#
-# L3 gap (what this test does NOT catch):
-# - Real enforce-worktree hook invocation with an actual bash -c command going through the full PreToolUse pipeline
-# - Session-scoped worktree path comparison in a real Claude session
+# isInterpreterCWriteIR (#1411): `<shell> -c/-Command <body>` re-parses the body — write
+# body → true, read-only → false, unrecognized/dynamic → true (fail-closed).
+# RED-pending: not exported yet → ERROR:not-exported → rows FAIL cleanly (no SKIP path).
+# L3 gap: live PreToolUse pipeline and session-scoped worktree path comparison.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 echo "=== IW: interpreter-c WRITE bodies → true ==="

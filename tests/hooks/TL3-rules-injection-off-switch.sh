@@ -30,6 +30,12 @@ fi
 "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 
+# isolation (#2512): harness first, so the pass/fail below and helpers' run_with_timeout override harness's.
+. "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 ERRORS=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }

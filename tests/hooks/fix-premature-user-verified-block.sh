@@ -2,12 +2,12 @@
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate.js.
 # Tags: workflow, gate, hook, worktree, sentinel, scope:issue-specific
 # Tests for premature <<WORKFLOW_USER_VERIFIED>> block in hooks/workflow-gate.js.
-#
+
 # Feature: when ENFORCE_WORKTREE=on AND cwd is a linked worktree AND there is
 # no PR (neither OPEN nor MERGED) for the current branch, emitting
 # `<<WORKFLOW_USER_VERIFIED: reason>>` is premature → block.
 # Otherwise → approve (sentinel passes through).
-#
+
 # TDD: the hook logic is NOT implemented yet, so most positive cases will fail
 # until the implementation lands. Case 1 (the block case) is the new behavior;
 # cases 2-7 are the must-not-regress paths.
@@ -45,6 +45,8 @@ mkdir -p "$SESSION_BASE"
 WORKFLOW_PLANS_DIR="$WORK_DIR/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR="$SESSION_BASE"
 
 # Helper — invoke the hook and capture the decision field.
 # Args: enforce_worktree gh_dir json
@@ -195,20 +197,15 @@ else
 fi
 
 # ── Case 7: gh exits non-zero (fail-open) → approve ─────────────────────────
-# This case overlaps with Case 1 at the surface (gh exits 1) but documents the
-# fail-open contract: if `gh` is unavailable or errors abnormally, the gate
-# must NOT block. However, "gh exits 1" is also legitimately how `gh pr view`
-# reports "no PR exists" — so the implementation distinguishes these only by
-# extra diagnostics. To test fail-open distinctly here, we shadow `gh` with a
-# script that exits non-zero AND prints nothing to stdout (typical "gh not
+# Overlaps Case 1 at the surface (gh exits 1) but documents the fail-open contract: if `gh` is
+# unavailable or errors abnormally, the gate must NOT block. "gh exits 1" is also how `gh pr view`
+# reports "no PR exists", so the implementation distinguishes them only by extra diagnostics; here
+# `gh` is shadowed by a script that exits non-zero AND prints nothing to stdout (typical "gh not
 # authenticated" / "network error" shape). Spec: fail-open → approve.
-#
-# NOTE: with the current spec sketch where "exit 1 + empty stdout" == "no PR",
-# this case would block. The fail-open contract is asserted here so the
-# implementor must choose: either (a) distinguish 'no PR' from 'gh error' via
-# stderr/exit-code parsing, or (b) declare fail-open semantics so that any
-# gh failure short-circuits to approve. This test pins option (b) — the safer
-# choice given how often gh has transient errors in real CLI sessions.
+# NOTE: under the spec sketch where "exit 1 + empty stdout" == "no PR" this case would block, so the
+# implementor must choose: (a) distinguish 'no PR' from 'gh error' via stderr/exit-code parsing, or
+# (b) declare fail-open so any gh failure short-circuits to approve. This test pins option (b) —
+# the safer choice given how often gh has transient errors in real CLI sessions.
 echo "=== Case 7: gh exits non-zero (fail-open) → approve ==="
 make_linked_worktree "c7"
 GH_FAIL="$WORK_DIR/gh-fail"

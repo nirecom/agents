@@ -6,6 +6,11 @@
 # both plantable by a compromised repo with no privilege, both executed by the
 # dispatcher's own children. Each canary records REACHABILITY of the live agent
 # (ssh-add rc: 0 keys, 1 empty, 2 unreachable), not a string compare.
+
+# isolation (#2512): pin unconditionally to the sourcing test's TMPD dirs — an
+# inherited value may be the developer's live state dir, so it is never kept.
+export WORKFLOW_STATE_DIR="$WFDIR" WORKFLOW_PLANS_DIR="$PLANS"
+
 build_canaries() {
     CANARY_LOG="$TMPD/canary.log"
     : > "$CANARY_LOG"

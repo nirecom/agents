@@ -2,38 +2,12 @@
 # tests/hooks/fix-1709-workflow-dir-write-allow.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope.js
 # Tags: enforce-worktree, non-git-cwd, workflow-state-dir, fail-closed, symlink, default-path, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - enforce-worktree.js firing as a real PreToolUse hook inside a live claude -p
-#   session with a real non-git CWD (here the CWD is a temp dir and stdin is piped).
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration.
-#
-# #1709a - enforce-worktree's non-git-CWD path is fail-CLOSED: when the repo root
-# cannot be determined AND target extraction cannot use one of the narrow allow
-# helpers (plans-dir / scratchpad), a Bash write is blocked. That correctly denies
-# arbitrary external writes, but it also denies the off-clearance pipeline's own
-# writes into the workflow STATE dir (<WORKFLOW_STATE_DIR>, canonically
-# $HOME/.claude/projects/workflow), which is exactly where token/marker bookkeeping
-# lives. The fix adds areAllBashTargetsUnderWorkflowDir() to bash-write-scope.js and
-# wires it into the same non-git-CWD branch as the plans-dir/scratchpad helpers.
-#
-# Command shape: every case uses a SEQUENCED command (`mkdir -p ... && echo ... >`).
-# Sequencing is what routes the command past the fast-path allows into the
-# fail-closed block, so it is the shape that actually exercises the branch under
-# test. A non-sequenced single redirect is already allowed today (asserted as W0
-# below so a future change cannot silently make this file vacuous).
-#
-# ---------------------------------------------------------------------------
-# ASSERTION CONTRACT (strict - see classify()).
-#
-# An earlier revision treated "the output does not contain a block decision" as
-# ALLOW. enforce-worktree.js always exits 0 and always prints either
-# JSON.stringify({}) (allow) or {"decision":"block",...}; it prints NOTHING only
-# when it bails out early (e.g. the WORKFLOW_OFF marker branch) or when it
-# crashes. Under the old rule a crash, a run-with-timeout 124, or an early bail
-# all scored as "allow" - a false green on the exact branch under test. Each of
-# those is now its own verdict token, so only an affirmative "{}" is an allow.
-# ---------------------------------------------------------------------------
+# TL3 gap: enforce-worktree.js firing as a real PreToolUse hook inside a live claude -p session with a real non-git CWD (here the CWD is a temp dir and stdin is piped).
+# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
+
+# #1709a - enforce-worktree's non-git-CWD path is fail-CLOSED, which also denied the off-clearance pipeline's own writes into the workflow STATE dir
+# (<WORKFLOW_STATE_DIR>, canonically $HOME/.claude/projects/workflow); the fix wires areAllBashTargetsUnderWorkflowDir() (bash-write-scope.js) into that branch.
+# Every case uses a SEQUENCED command, the shape that reaches the fail-closed block; W0 keeps the already-allowed single redirect asserted so the file cannot go vacuous.
 
 set -u
 
@@ -56,6 +30,11 @@ OTHERDIR="$WFROOT/other"    # sibling project dir - must stay blocked
 mkdir -p "$WFDIR" "$OTHERDIR"
 NONGIT=$(make_tmp)
 WFDIR_N=$(node_path "$WFDIR"); OTHER_N=$(node_path "$OTHERDIR")
+# isolation (#2512): pin state and plans dirs file-wide; per-call pins and the env -u default cases still override them.
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 mk_input() { "$RWT" 10 node -e "
 process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'wf1709sid',tool_input:{command:process.argv[1]}}));" "$1"; }
@@ -88,6 +67,8 @@ run_hook_default_home() {
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
 }
 
+# ASSERTION CONTRACT (strict): enforce-worktree.js prints "{}" (allow) or {"decision":"block",...}; a crash, a run-with-timeout 124
+# or an early bail with no output (e.g. the WORKFLOW_OFF marker branch) each get their own verdict token, so only an affirmative "{}" is an allow.
 # classify "<rc>|<out>" -> allow | block | timeout | crash:<rc> | no-output | unrecognized
 classify() {
     local raw="$1" rc out
@@ -154,25 +135,11 @@ assert_block "C2 deeper '..' traversal segment inside the path" \
 
 # ---------------------------------------------------------------------------
 # (H2) #1780 H-2 - per-segment scope check, not the flat merged target list.
-#
-# Old bug: enforce-worktree.js's hoisted #1709 allow called
-# areAllBashTargetsUnderWorkflowDir(targets) on the FLAT merged target list
-# BEFORE the sequencing guard. A sequenced command mixing one extractable
-# workflow-dir write with a non-extractable/out-of-scope write (e.g. a `bash
-# -c "rm somefile"` segment, which is a genuine write per isInterpreterCWriteIR
-# but contributes NO write target to the flat collector) was wrongly ALLOWED,
-# because the flat list contained only the workflow-dir target. Verified
-# directly against bash-write-scope.js: for this exact command, the OLD flat
-# check areAllBashTargetsUnderWorkflowDir(flatTargets) returns true (single
-# target, under the workflow dir) while the NEW per-segment
-# areAllWriteSegmentsUnderWorkflowDir(ir) returns false, because the `bash -c`
-# segment hits isInterpreterCWriteIR (a targetless-write predicate) and fails
-# closed. A plain `bash ./scripts/build.sh` (no -c body) does NOT reproduce
-# this: it matches no write predicate at all and is transparently skipped as
-# a read segment by both the old and new code, so it is not a useful
-# regression case here.
-# F1 is RED before the H-2 fix (flat check says allow), GREEN after (per-segment
-# check fails closed on the targetless bash -c write).
+# Old bug: the hoisted #1709 allow ran areAllBashTargetsUnderWorkflowDir() on the FLAT merged target list before the sequencing
+# guard, so a workflow-dir write sequenced with a targetless write (`bash -c "rm somefile"`, an isInterpreterCWriteIR hit that adds
+# no target to the flat collector) was ALLOWED; the per-segment areAllWriteSegmentsUnderWorkflowDir(ir) fails closed on it.
+# A plain `bash ./scripts/build.sh` matches no write predicate and is skipped as a read by old and new code alike, so it is no regression case.
+# F1 is RED before the H-2 fix (flat check says allow), GREEN after (per-segment check fails closed on the targetless bash -c write).
 # ---------------------------------------------------------------------------
 assert_block "F1 sequenced: extractable workflow-dir write + non-extractable bash -c write segment (H-2 #1780)" \
     "$(run_hook "echo x > \"$WFDIR_N/probe.txt\" && bash -c \"rm somefile\"")"
@@ -184,15 +151,9 @@ assert_allow "F2 sequenced write into a nested subdir, all targets under workflo
 
 # ---------------------------------------------------------------------------
 # (d) DEFAULT workflow dir - WORKFLOW_STATE_DIR UNSET.
-#
-# Cases A1/A2/B1/B2 all set WORKFLOW_STATE_DIR explicitly, so they only ever
-# exercise the env-var arm of getWorkflowDir(). The arm that real sessions
-# actually use is the fallback, path.join(os.homedir(), '.claude','projects',
-# 'workflow'). If the new helper is written against the env var alone (or
-# resolves the default differently from getWorkflowDir), every case above still
-# passes while the shipped behaviour is broken. HOME/USERPROFILE are redirected
-# to a controlled temp dir so the fallback is exercised without touching the
-# real profile.
+# Cases A1/A2/B1/B2 only exercise the env-var arm of getWorkflowDir(); real sessions use the fallback
+# path.join(os.homedir(), '.claude','projects','workflow'), so a helper written against the env var alone (or resolving the default
+# differently) passes every case above while the shipped behaviour is broken. HOME/USERPROFILE point at a temp dir, never the real profile.
 # D1 is RED until S-2 (same reason as A1/A2); D2 must be green already.
 # ---------------------------------------------------------------------------
 FAKEHOME=$(make_tmp)
@@ -207,28 +168,14 @@ assert_verdict "D2 default workflow dir: sequenced write to SIBLING \$HOME/.clau
     block "$(run_hook_default_home "$FAKEHOME" "mkdir -p $FH_WF_N && echo x > $FH_OTHER_N/leak.json")"
 
 # ---------------------------------------------------------------------------
-# (e) SYMLINK ESCAPE - a path that is LEXICALLY beneath the workflow dir but
-#     actually resolves outside it must be BLOCKED.
-#
-# Why this case exists: the planned areAllBashTargetsUnderWorkflowDir() uses
-# nodePath.resolve() + a prefix comparison, which is purely LEXICAL - it
-# normalises '..' segments (covered by C1/C2) but never consults the filesystem,
-# so a symlinked directory inside the workflow dir is a containment bypass:
-# <workflowDir>/escape -> <arbitrary external dir> is lexically "under" the
-# workflow dir and would be handed a write allow.
-#
-# CURRENT STATUS (read this before trusting a green): today this case passes
-# VACUOUSLY - every sequenced command in a non-git CWD is blocked by the
-# fail-closed branch, so the block has nothing to do with symlink awareness.
-# It becomes a real assertion the moment S-2 lands, and at that point it FAILS
-# unless the helper resolves symlinks (fs.realpathSync.native, with a
-# fail-closed catch for a non-existent path) before the prefix comparison.
-# That is a requirement this test imposes on the S-2 implementation; the
-# detail plan as written specifies lexical resolution only.
+# (e) SYMLINK ESCAPE - a path LEXICALLY beneath the workflow dir that actually resolves outside it must be BLOCKED.
+# nodePath.resolve() + a prefix compare is purely lexical (it normalises '..', covered by C1/C2), so a symlinked dir
+# <workflowDir>/escape -> <external dir> is lexically "under" the workflow dir. CURRENT STATUS: this passes VACUOUSLY today (every
+# sequenced non-git-CWD command is blocked); once S-2 lands it FAILS unless the helper resolves symlinks (fs.realpathSync.native,
+# fail-closed for a non-existent path) before the prefix compare — a requirement this test imposes beyond the lexical-only detail plan.
 # ---------------------------------------------------------------------------
-# try_symlink <target> <linkpath>: plain ln -s first; on Git Bash/MSYS that silently
-# degrades to a directory COPY, which would make E1/E2 assert nothing, so the
-# nativestrict variant is retried and the result is verified with -L.
+# try_symlink <target> <linkpath>: plain ln -s first; on Git Bash/MSYS that silently degrades to a directory COPY (E1/E2 would
+# assert nothing), so the nativestrict variant is retried and the result is verified with -L.
 try_symlink() {
     ln -s "$1" "$2" 2>/dev/null; [ -L "$2" ] && return 0
     rm -r -f "$2" 2>/dev/null
@@ -248,19 +195,11 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# (S) F-3 (security-scanner round 6) - symlink indirection around a PROTECTED
-# marker basename. `ln -s <wf>/<sid>.workflow-off <wf>/lnk` where the marker
-# does NOT exist yet (it is about to be forged BY the write through the link)
-# used to make fs.realpathSync(head) throw ENOENT - Node's realpath requires
-# the FINAL resolved target to exist, and it never does at this pre-write
-# moment. The old catch-branch treated that identically to "not a symlink at
-# all" and fell back to the LEXICAL basename ("lnk"), which never matches
-# PROTECTED_MARKER_BASENAME_RE, so the write sailed through the workflow-dir
-# fast-allow and forged the marker. The fix peeks with lstatSync/readlinkSync
-# in the catch-branch and follows an existing symlink (even to a nonexistent
-# target) via realResolve() again, so the eventual basename check sees
-# "sid.workflow-off", not "lnk", and falls through to normal (blocking)
-# enforcement instead of the fast-allow.
+# (S) F-3 (security-scanner round 6) - symlink indirection around a PROTECTED marker basename.
+# `ln -s <wf>/<sid>.workflow-off <wf>/lnk` before the marker exists made fs.realpathSync(head) throw ENOENT (Node needs the final
+# target to exist); the old catch fell back to the LEXICAL basename "lnk", which never matches PROTECTED_MARKER_BASENAME_RE, so the
+# write took the workflow-dir fast-allow and forged the marker. The fix peeks with lstatSync/readlinkSync and follows an existing
+# symlink via realResolve(), so the basename check sees "sid.workflow-off" and falls through to normal (blocking) enforcement.
 # ---------------------------------------------------------------------------
 SYM2_TARGET="$WFDIR/wf1709sid.workflow-off"   # NOT pre-created - marker doesn't exist yet
 SYM2_LINK="$WFDIR/lnk"

@@ -4,19 +4,12 @@
 # Tags: tests, bin, parallel, worker-dispatch, capability, security, TL1, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 
-# WHY: the run-tests worker owns a deadline, so it needs to tune the dispatched
-# suite's parallelism. Adds int-typed, range-bounded `jobs` payload field ->
-# `-j <n>` (or `-j auto` when absent); capability.js walls it off from free text.
-
-# RED-FIRST: `jobs` isn't in the registry yet, so rejection rows are green now
-# (regression fence); the behavioural rows (serialisation, overlap, argv) are the
-# intended failures.
-
-# ISOLATION: throwaway git family (temp main + linked worktree). HOME is pinned
-# because RUN_ALL_CACHE_DIR isn't in the dispatcher's child env allowlist.
-
-# TL3 gap: real wall-clock speedup and deadline reachability on a CI host —
-# tests/bin/TL3-worker-dispatch-run-tests.sh is the gated tier.
+# WHY: the run-tests worker owns a deadline, so it tunes the suite's parallelism via an int-typed,
+# range-bounded `jobs` payload field -> `-j <n>` (`-j auto` when absent); capability.js walls it off.
+# RED-FIRST: `jobs` isn't in the registry yet, so rejection rows are green now (regression
+# fence); the behavioural rows (serialisation, overlap, argv) are the intended failures.
+# ISOLATION: throwaway git family (temp main + linked worktree); HOME pinned (RUN_ALL_CACHE_DIR isn't in the child env allowlist).
+# TL3 gap: real wall-clock speedup / deadline reachability on CI — tests/bin/TL3-worker-dispatch-run-tests.sh.
 
 set -u
 
@@ -37,7 +30,6 @@ assert_eq() {
     if [ "$want" = "$got" ]; then pass "$name"
     else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
-run_with_timeout() { local s="$1"; shift; bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
 
 if [ ! -f "$DISPATCH_JS" ] || [ ! -f "$REAL_RUNNER" ]; then
     fail "k-jobs/prerequisites" "dispatcher=$DISPATCH_JS runner=$REAL_RUNNER"
@@ -59,6 +51,8 @@ unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 FIX_HOME="$TMPD/home"; mkdir -p "$FIX_HOME/.claude"
+# Defined after the pins above so no bin/ exec can run before isolation (#2512).
+run_with_timeout() { local s="$1"; shift; bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
 
 # --- git family fixture -----------------------------------------------------
 MAIN_RAW="$TMPD/mainrepo"

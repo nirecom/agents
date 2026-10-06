@@ -2,23 +2,13 @@
 # Tests: bin/get-config-var, bin/confirm-off, bin/resolve-session-id, bin/resolve-worktree-path, bin/is-github-dotcom-remote
 # Tags: bin, polyglot-guard, node-misinvocation, invariance, scope:issue-specific, pwsh-not-required, TL2
 
-# Shared setup for the #1532 node-misinvocation guard suite: target list, envelope
-# literals, counters, helpers, and fixture isolation. Sourced first by dispatch.sh.
+# Shared setup for the #1532 guard suite (targets, envelope literals, counters, helpers, isolation); sourced first by dispatch.sh.
 
-# TL3 gap (what this suite does NOT catch):
-# - Whether a diagnostic written with fs.writeSync survives on a platform whose
-#   stderr pipe is asynchronous (macOS/Linux). Every route here runs on the host
-#   that executes the suite, and this host's pipes are synchronous.
-# - Whether ~/.local/bin shims (installed copies, not the bin/ originals) carry
-#   the same envelope after an installer run.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: installer.
+# TL3 gap: fs.writeSync diagnostics on async-stderr hosts (macOS/Linux; this host's pipes are synchronous) and installed
+# ~/.local/bin shims after an installer run. Mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: installer.
 
-# Also deliberately NOT covered (review round 2, C4): repo paths containing spaces,
-# shell metacharacters or newlines. No test group under rules/, skills/ or hooks/
-# carries that coverage either, and such a checkout is not a supported layout today;
-# widening it here alone would be a lone special case rather than a repo-wide rule.
-# Round 3, C4 is the same finding again and is deferred on the same grounds.
+# Not covered (review rounds 2-3, C4): repo paths with spaces, shell metacharacters or newlines — no group under rules/,
+# skills/ or hooks/ covers them and such a checkout is unsupported, so widening it here alone would be a lone special case.
 
 set -u
 
@@ -52,11 +42,6 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 check() { # <desc> <want> <got>
   if [ "$3" = "$2" ]; then pass "$1"; else fail "$1 -- want [$2] got [$3]"; fi
-}
-
-# Portable timeout (macOS has no `timeout`) — rules/test/macos-timeout.md.
-run_with_timeout() { # <seconds> <cmd> [args...]
-  bash "$REPO_ROOT/bin/run-with-timeout.sh" "$@"
 }
 
 HAVE_NODE=0
@@ -121,6 +106,12 @@ export WORKFLOW_STATE_DIR="$TESTTMP/workflow"
 export WORKFLOW_PLANS_DIR="$TESTTMP/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID SESSION_ID
+
+# Portable timeout (macOS has no `timeout`) — rules/test/macos-timeout.md.
+# Defined after the pins above so no bin/ exec can run before isolation (#2512).
+run_with_timeout() { # <seconds> <cmd> [args...]
+  bash "$REPO_ROOT/bin/run-with-timeout.sh" "$@"
+}
 
 # Everything else the targets branch on, unset explicitly rather than assumed
 # absent (review-tests C2). CLAUDE_ENV_FILE is priority 3 of resolveSessionId and

@@ -1,22 +1,17 @@
 #!/usr/bin/env bash
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/main-worktree-allows/new-item.js, hooks/enforce-worktree/main-worktree-allows/worktree-command.js, hooks/lib/claude-scratchpad-base.js
 # Tags: scope:issue-specific, canary-7, ir-migration, enforce-worktree, regression, hook-registration, pwsh-not-required
-#
-# PR #1459 regression guard for the #1402 canary-7 IR migration.
-# Asserts that the allow-paths regressed by #1420 (and restored by #1459) STILL
-# work after the canary-7 retire: scratchpad writes, New-Item -ItemType Directory,
-# and git worktree remove/prune must all be allowed from the main worktree.
-#
-# Also verifies that the new predicates do NOT over-block sanctioned commands:
-# - isExtendedFileOpWriteIR must NOT fire for 'git worktree remove <path>'.
-# - isEncodedCommandWriteIR must NOT fire for 'git worktree prune'.
-#
-# L3 gap (what this test does NOT catch):
-# - Real enforce-worktree hook invocation via the live Claude Code PreToolUse chain
-# - Session-scoped worktree path comparison in a real Claude session
+# PR #1459 regression guard for #1402: scratchpad writes, New-Item -ItemType Directory and
+# git worktree remove/prune stay allowed from the main worktree, and the new predicates
+# (isExtendedFileOpWriteIR, isEncodedCommandWriteIR) do not over-block them.
+# L3 gap: live PreToolUse invocation and session-scoped worktree path comparison.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # ── Fixtures: main repo, non-git CWD, session scratchpad ──
@@ -52,7 +47,7 @@ SCRATCH_FWD="${FAKE_SCRATCHPAD_NODE//\\//}"
 EXT_WORKTREE_WIN="${TMPBASE}\\worktrees\\some-task"
 EXT_WORKTREE="${TMPBASE}/worktrees/some-task"
 
-cleanup() { rm -rf "$TMPBASE" "$FAKE_SCRATCHPAD" 2>/dev/null || true; }
+cleanup() { rm -rf "$TMPBASE" "$FAKE_SCRATCHPAD" "$_ISOLATION_TMP_ROOT" 2>/dev/null || true; }
 trap cleanup EXIT
 
 _make_payload() {

@@ -1,6 +1,7 @@
 # tests/bin/bin-codex-review-loop-security-code/chain-failure-branches.sh
 # Tests: bin/run-codex-review-loop, bin/concern-ledger
 # Tags: concern-ledger, review-code-security, fail-closed, full-chain, TL2, scope:common
+# isolation: inherits-from ../bin-codex-review-loop-security-code.sh
 # Sourced after fail-closed.sh, whose FC_ROOT shimmed tree and fc_shim helper
 # are reused. full-chain-integration.sh proves the chain agrees when nothing
 # goes wrong; this file covers the branch where one ledger call refuses and the

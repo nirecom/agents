@@ -26,6 +26,10 @@ console.log(fs.mkdtempSync(path.join(os.tmpdir(),'ril-')).replace(/\\\\/g,'/'));
     echo "$d"
 }
 
+# isolation (#2512): both sourcing tests pin via harness_isolate before sourcing this file.
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"
+harness_assert_isolated
+
 RIL_TOKEN='.on-demand-only/never-match'
 RIL_MARKER='<!-- injection: on-demand-only - auto-injection disabled; the owning skill Reads it explicitly. -->'
 

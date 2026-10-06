@@ -2,19 +2,18 @@
 # tests/hooks/feature-1102-sibling-worktrees.sh
 # Tests: hooks/lib/worktree-notes.js, bin/worktree-write-notes.js
 # Tags: worktree, sibling, security, scope:issue-specific
-#
-# Dispatcher for multi-repo SiblingWorktrees feature tests.
-# Sub-files: lib-tests.sh (SW1-4, SW-Idm1, SW-Sec1-4), cli-tests.sh (SW-CLI1-3)
-#
-# L3 gap (what this test does NOT catch):
-# - CE2/CE3: non-bootstrap capture-env.sh normal mode with sibling repo PR resolution via gh
-# - Real multi-repo session integration where /worktree-start populates SIBLING_WORKTREES_JSON from intent.md
-# - End-to-end verification that capture-env.sh reads back SiblingWorktrees from WORKTREE_NOTES.md
-# - Real claude -p session verifying ## SiblingWorktrees appears in worktree-copy-worker output
+# Dispatcher for multi-repo SiblingWorktrees tests; sub-files live in feature-1102-sibling-worktrees/.
+# L3 gap (what this test does NOT catch): CE2/CE3 capture-env.sh sibling PR resolution via gh;
+# /worktree-start populating SIBLING_WORKTREES_JSON from intent.md; capture-env.sh reading
+# SiblingWorktrees back from WORKTREE_NOTES.md; a real claude -p worktree-copy-worker run.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$TESTS_DIR/../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 TOTAL_PASS=0
 TOTAL_FAIL=0
 

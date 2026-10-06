@@ -2,22 +2,17 @@
 # tests/hooks/feature-canary6a-pkgmgr-interpc/pkg-mgr-ir.sh
 # Tests: hooks/lib/bash-write-targets/pkg-mgr.js, hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-patterns/classify.js
 # Tags: scope:issue-specific, pkg-mgr, canary-6a, ir-migration, fail-closed, pwsh-not-required
-#
-# isPkgMgrWriteIR IR predicate (#1411): the 7-tool pkg-mgr WRITE_PATTERNS group
-# (npm/pnpm/yarn/pip/uv/cargo/go) migrated to a fail-closed IR predicate. Design
-# mirrors isGitWriteIR: read-allowlist per tool, everything else (unknown / future /
-# bare / path-qualified / env-prefixed subcommand) defaults to WRITE (fail-closed).
-#
-# RED-pending: hooks/lib/bash-write-targets/pkg-mgr.js does NOT exist yet. When the
-# module is entirely absent this part SKIPs (exit 0) so the dispatcher stays green;
-# once the file lands (even partially) the predicate rows run and FAIL until correct.
-#
-# L3 gap (what this test does NOT catch):
-# - Real enforce-worktree hook invocation with an actual pkg-mgr command going through the full PreToolUse pipeline
-# - Session-scoped worktree path comparison in a real Claude session
+# isPkgMgrWriteIR (#1411): npm/pnpm/yarn/pip/uv/cargo/go read-allowlist per tool (mirrors
+# isGitWriteIR); any other subcommand form defaults to WRITE (fail-closed).
+# RED-pending: SKIPs (exit 0) while pkg-mgr.js is absent; rows FAIL until correct after.
+# L3 gap: live PreToolUse pipeline and session-scoped worktree path comparison.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 if ! pkg_mgr_module_present; then

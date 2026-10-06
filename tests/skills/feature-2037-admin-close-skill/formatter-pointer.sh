@@ -1,6 +1,7 @@
 # shellcheck shell=bash
 # Tests: hooks/lib/supervisor-report-format.js, skills/enforce-workflow-off/SKILL.md, rules/workflow-off.md
 # Tags: rules-injection, progressive-disclosure, supervisor-guard, stale-pointer, live-pointer, TL2, scope:issue-specific
+# isolation: inherits-from ../feature-2037-admin-close-skill.sh
 
 # WHY (CPR-WPH): when the off-proposal guard fires, the supervisor's alert must point at
 # where "Sanctioned-command false-block recovery" now lives (skills/enforce-workflow-off/

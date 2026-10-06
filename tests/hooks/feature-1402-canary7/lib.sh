@@ -21,6 +21,10 @@ WORKTREE="${1:-}"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found — skipping tests"; exit 77; }
 
+# isolation (#2512): parts inherit the dispatcher's pin (isolation: inherits-from), so a bare part run fails closed here.
+declare -F harness_assert_isolated >/dev/null || . "$WORKTREE/tests/lib/harness.sh"
+harness_assert_isolated
+
 if command -v cygpath >/dev/null 2>&1; then WT_NODE="$(cygpath -m "$WORKTREE")"; else WT_NODE="$WORKTREE"; fi
 GUARD_JS="${WT_NODE}/hooks/enforce-worktree.js"
 

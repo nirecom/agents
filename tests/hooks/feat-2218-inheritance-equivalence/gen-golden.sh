@@ -16,6 +16,9 @@ AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
 
 tmp="$(mktemp -d 2>/dev/null || mktemp -d -t 'wf2218gen')"
 tn="$(node_path "$tmp")"
+# isolation (#2512): pin state and plans dirs script-wide under $tmp; the per-call pins below still override them.
+mkdir -p "$tmp/isolation/workflow-state" "$tmp/isolation/plans"
+export WORKFLOW_STATE_DIR="$tn/isolation/workflow-state" WORKFLOW_PLANS_DIR="$tn/isolation/plans"
 
 # Same fixture donor/heir pair and OMIT-opts call as project_stream('OMIT')
 # in ../feat-2218-inheritance-equivalence.sh — keep the two in sync.

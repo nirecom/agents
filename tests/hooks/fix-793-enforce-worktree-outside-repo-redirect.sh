@@ -2,13 +2,13 @@
 # tests/hooks/fix-793-enforce-worktree-outside-repo-redirect.sh
 # Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-targets/redirect.js, hooks/lib/bash-write-targets/tee.js, hooks/lib/bash-write-targets/helpers.js
 # Tags: worktree, enforce, hook, redirect, shell-expansion, fix-983, fix-878, scope:issue-specific
-#
+
 # Unit + integration tests for issue #793: extractRedirectTargets must
 # expand a safe, static subset of shell tokens ($HOME, ${HOME}, ~,
 # $WORKFLOW_PLANS_DIR) so that out-of-repo redirect writes can be
 # allowed by enforce-worktree.js. All other variable expansions remain
 # fail-closed (null).
-#
+
 # RED before expandStaticShellTokens is implemented in
 # hooks/lib/bash-write-targets.js; GREEN after.
 
@@ -22,6 +22,12 @@ else
 fi
 MODULE="${_AGENTS_DIR_NODE}/hooks/lib/bash-write-targets.js"
 HOOK="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 # Home directory, normalized to forward slashes (so it matches Node's
 # os.homedir() return value after the same normalization).
@@ -190,15 +196,14 @@ test_midpath_home_no_expansion() {
 # ─────────────────────────────────────────────────────────────────────────────
 # Integration — enforce-worktree.js end-to-end
 # ─────────────────────────────────────────────────────────────────────────────
-#
+
 # Pipe a Bash PreToolUse payload whose command writes to
 # "$HOME/.workflow-plans/test.json" (outside the repo). When the hook is run
 # from the MAIN worktree CWD, behavior depends on extractRedirectTargets:
-#   • Before implementation: target extraction returns null → fail-closed →
-#     block ("main worktree" reason).
+#   • Before implementation: extraction returns null → fail-closed → block ("main worktree").
 #   • After implementation: $HOME is expanded → target is outside repo →
 #     areAllBashTargetsOutsideSessionScope short-circuits to done() → {}.
-#
+
 # Skipped silently if the main worktree path cannot be determined (CI/clone).
 
 test_integration_outside_repo_redirect_allowed() {

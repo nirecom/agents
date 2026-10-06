@@ -35,6 +35,9 @@ TMP="$(make_tmp)"
 TMP_NODE="$(node_path "$TMP")"
 cleanup() { rm -rf "$TMP" 2>/dev/null || true; }
 trap cleanup EXIT
+# isolation (#2512): pin state and plans dirs file-wide under $TMP; the per-call pins below still override them.
+mkdir -p "$TMP/isolation/workflow-state" "$TMP/isolation/plans"
+export WORKFLOW_STATE_DIR="$TMP/isolation/workflow-state" WORKFLOW_PLANS_DIR="$TMP/isolation/plans"
 
 # The fixture PLANS_DIR. Four upstream sessions, each covering one search key,
 # plus 12 filler sessions so the "at most 10" cap on the reachable-only section

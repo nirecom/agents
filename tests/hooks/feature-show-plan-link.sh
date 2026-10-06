@@ -10,6 +10,8 @@ set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 HOOK="$AGENTS_DIR/hooks/show-plan-link.js"
 ERRORS=0
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
@@ -28,10 +30,11 @@ run_with_timeout() {
 # on Windows, MSYS2 converts /tmp/... env vars to C:/Users/.../Temp/... but
 # the JSON stdin value stays POSIX-form; using Node's tmpdir avoids the mismatch.
 NODE_TMPDIR="$(run_with_timeout node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
-PLANS_DIR="${NODE_TMPDIR}/show-plan-link-test-$$"
-mkdir -p "$PLANS_DIR"
-trap 'rm -rf "$PLANS_DIR"' EXIT
-export WORKFLOW_PLANS_DIR="$PLANS_DIR"
+# isolation (#2512): pin state and plans dirs once for this file, rooted in Node's tmpdir form for the reason above.
+_ISOLATION_TMP_ROOT="${NODE_TMPDIR}/show-plan-link-test-$$"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+PLANS_DIR="$WORKFLOW_PLANS_DIR"
 
 # Unset VS Code detection vars by default (restored per-test that needs them).
 unset TERM_PROGRAM 2>/dev/null || true
@@ -123,6 +126,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/feature-show-plan-link/bash-tool.sh"
 # shellcheck source=feature-show-plan-link/vscode-lib.sh
 . "$SCRIPT_DIR/feature-show-plan-link/vscode-lib.sh"
+
+# ── Isolation (#2512): the turn marker lands under the pinned state dir ─────
+ISO_SID="25120000-0000-4000-8000-000000002512"
+echo "{\"session_id\":\"$ISO_SID\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/iso-detail.md\"},\"tool_response\":{\"success\":true}}" \
+  | run_with_timeout node "$HOOK" >/dev/null 2>&1
+if compgen -G "$WORKFLOW_STATE_DIR/$ISO_SID.confirm-plan-turn-*.json" >/dev/null; then
+  pass "turn marker lands under \$WORKFLOW_STATE_DIR"
+else
+  fail "turn marker not found under \$WORKFLOW_STATE_DIR ($WORKFLOW_STATE_DIR)"
+fi
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""

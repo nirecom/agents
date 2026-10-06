@@ -2,6 +2,10 @@
 # Sourced by the dispatcher; reads AGENTS_ROOT / SCRIPT / TMPDIR_BASE /
 # EMPTY_HOOKS_DIR / EMPTY_EXCLUDES / fail / pass / run_with_timeout from scope.
 
+# isolation (#2512): the dispatcher pins via harness_isolate before sourcing this file.
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_ROOT/tests/lib/harness.sh"
+harness_assert_isolated
+
 # Canonical Hook Audit table fixture. Mirrors the shape of rules/test/claude-e2e.md
 # closely enough for the parser.
 write_hook_audit_md() {

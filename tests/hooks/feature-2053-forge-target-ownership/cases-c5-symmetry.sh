@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-forge-target-ownership.js, hooks/confirm-forge-target-ownership/
 # Tags: hook, pre-tool-use, github, gh, ownership, security, scope:issue-specific
+# isolation: inherits-from ../feature-2053-forge-target-ownership.sh
 # Part of tests/hooks/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
 # Block C5 — classifier symmetry across the whole gh issue / gh pr verb family.
 

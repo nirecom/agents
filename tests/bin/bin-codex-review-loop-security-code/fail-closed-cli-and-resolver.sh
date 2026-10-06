@@ -6,6 +6,10 @@
 # session resolver that faults while the loop is deciding which session to file
 # the round under. Split out of fail-closed.sh for size (Pattern A).
 
+# isolation (#2512): the dispatcher pins via its temp tree before sourcing this file.
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_ROOT/tests/lib/harness.sh"
+harness_assert_isolated
+
 case_begin "fail-closed-cli-and-resolver" "bin/run-codex-review-loop"
 echo ""
 echo "--- F6-F10: the sibling format, the CLI layer, the session resolver ---"

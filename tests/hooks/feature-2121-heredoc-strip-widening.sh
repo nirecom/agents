@@ -26,6 +26,12 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then AN="$(cygpath -m "$AGENTS_DIR")"; else AN="$AGENTS_DIR"; fi
 SQA="$AN/hooks/lib/strip-quoted-args.js"
 
+# isolation (#2512): pin state and plans dirs once here so every case file inherits them.
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 SUITE_DIR="$(dirname "${BASH_SOURCE[0]}")/feature-2121-heredoc-strip-widening"
 
 # Entrypoint only (rules/coding/file-split.md Pattern A): frontmatter, the source

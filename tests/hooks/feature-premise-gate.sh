@@ -49,6 +49,8 @@ trap cleanup EXIT
 WORKFLOW_PLANS_DIR="$TMPDIR_ROOT/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR
 
 make_env_file() {
     local session_id="$1"

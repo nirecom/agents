@@ -624,6 +624,53 @@ group_b_all_mode_legacy() {
   fi
 }
 
+# A-assert (#2512): harness_assert_isolated exits 1 on an unset pin or one under a live root
+# of a fake HOME. assert_isolated_rc <home> <state> <plans> ("-" = unset) prints the exit code.
+assert_isolated_rc() {
+  local rc=0
+  HOME="$1" S="$2" P="$3" bash -c 'source "$0"; unset WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR
+    [ "$S" = - ] || export WORKFLOW_STATE_DIR="$S"; [ "$P" = - ] || export WORKFLOW_PLANS_DIR="$P"
+    harness_assert_isolated' "$HARNESS" >/dev/null 2>&1 || rc=$?
+  printf '%s' "$rc"
+}
+group_a_assert_isolated() {
+  local h t hb
+  h="$(make_tmp)"; t="$(make_tmp)"; hb="$h"
+  if command -v cygpath >/dev/null 2>&1; then hb="$(cygpath -m "$h")"; fi
+  hb="${hb//\//\\}"
+  t_eq "A12 both unset -> exit 1" "$(assert_isolated_rc "$h" - -)" "1"
+  t_eq "A12 only STATE set -> exit 1" "$(assert_isolated_rc "$h" "$t/s" -)" "1"
+  t_eq "A12 only PLANS set -> exit 1" "$(assert_isolated_rc "$h" - "$t/p")" "1"
+  t_eq "A12 STATE at live .workflow-state -> exit 1" "$(assert_isolated_rc "$h" "$h/.workflow-state" "$t/p")" "1"
+  t_eq "A12 STATE under live .workflow-state -> exit 1" "$(assert_isolated_rc "$h" "$h/.workflow-state/sub" "$t/p")" "1"
+  t_eq "A12 STATE at live .claude/projects/workflow -> exit 1" "$(assert_isolated_rc "$h" "$h/.claude/projects/workflow" "$t/p")" "1"
+  t_eq "A12 PLANS at live .workflow-plans -> exit 1" "$(assert_isolated_rc "$h" "$t/s" "$h/.workflow-plans")" "1"
+  t_eq "A12 trailing-slash live STATE -> exit 1" "$(assert_isolated_rc "$h" "$h/.workflow-state/" "$t/p")" "1"
+  t_eq "A12 trailing-slash live PLANS -> exit 1" "$(assert_isolated_rc "$h" "$t/s" "$h/.workflow-plans//")" "1"
+  t_eq "A12 backslash live STATE -> exit 1" "$(assert_isolated_rc "$h" "$hb\\.workflow-state" "$t/p")" "1"
+  t_eq "A12 backslash live PLANS -> exit 1" "$(assert_isolated_rc "$h" "$t/s" "$hb\\.workflow-plans\\")" "1"
+  t_eq "A12 both under a mktemp dir -> exit 0" "$(assert_isolated_rc "$h" "$t/s" "$t/p")" "0"
+  # Every live root is refused for either variable, not only its "own" one.
+  t_eq "A12 PLANS at live .workflow-state -> exit 1" "$(assert_isolated_rc "$h" "$t/s" "$h/.workflow-state")" "1"
+  t_eq "A12 PLANS at live .claude/projects/workflow -> exit 1" "$(assert_isolated_rc "$h" "$t/s" "$h/.claude/projects/workflow/x")" "1"
+  t_eq "A12 STATE at live .workflow-plans -> exit 1" "$(assert_isolated_rc "$h" "$h/.workflow-plans" "$t/p")" "1"
+  # A sibling sharing only a name prefix is not under the live root.
+  t_eq "A12 STATE at .workflow-state-foo (prefix only) -> exit 0" "$(assert_isolated_rc "$h" "$h/.workflow-state-foo" "$t/p")" "0"
+  t_eq "A12 PLANS at .workflow-plansX (prefix only) -> exit 0" "$(assert_isolated_rc "$h" "$t/s" "$h/.workflow-plansX")" "0"
+  t_eq "A12 STATE at .claude/projects/workflow2 (prefix only) -> exit 0" "$(assert_isolated_rc "$h" "$h/.claude/projects/workflow2" "$t/p")" "0"
+  # Case folding follows the filesystem: Windows (cygpath/msys) folds, POSIX does not.
+  local fold=0
+  if command -v cygpath >/dev/null 2>&1 || [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then fold=1; fi
+  if [ "$fold" = 1 ]; then
+    t_eq "A12 case-variant live STATE (Windows folds) -> exit 1" "$(assert_isolated_rc "$h" "$h/.WORKFLOW-STATE" "$t/p")" "1"
+    t_eq "A12 case-variant live PLANS (Windows folds) -> exit 1" "$(assert_isolated_rc "$h" "$t/s" "$h/.Workflow-Plans")" "1"
+  else
+    t_eq "A12 case-variant STATE (POSIX case-sensitive) -> exit 0" "$(assert_isolated_rc "$h" "$h/.WORKFLOW-STATE" "$t/p")" "0"
+    t_eq "A12 case-variant PLANS (POSIX case-sensitive) -> exit 0" "$(assert_isolated_rc "$h" "$t/s" "$h/.Workflow-Plans")" "0"
+  fi
+  rm -rf "$h" "$t"
+}
+
 # ===========================================================================
 # Runner
 # ===========================================================================
@@ -643,6 +690,7 @@ group_a5_case_begin_end
 group_a_run_with_timeout
 group_a_rejections
 group_a11_valid_accept
+group_a_assert_isolated
 
 # Group B — the checker extension. Past the exit-77 guard the harness.sh file
 # exists, so the extension MUST exist too: write-code implements both together.
