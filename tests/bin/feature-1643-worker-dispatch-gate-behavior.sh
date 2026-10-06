@@ -168,6 +168,12 @@ field_of() { printf '%s\n' "$DOUT" | sed -n "s/^$1: //p" | head -1; }
 gate_action_of() { node -e 'try{process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).gate_action));}
 catch(e){process.stdout.write("<unreadable>");}' "$(nodepath "$1")"; }
 calls_for() { grep -c "\"script\":\"$1\"" "$CALLLOG" 2>/dev/null | tr -d ' '; }
+# #2558: the worker log is <stamp>-session-close-worker.log in the sid's control dir.
+gate_log_of() {
+    local f
+    f="$(ls -t "$WF_RAW/$1.control/"*-session-close-worker.log 2>/dev/null | head -1)"
+    [ -n "$f" ] && cat "$f"
+}
 
 # dispatch_gate <session-id> <state-json-or-RAW-or-empty> [outcome-json]
 dispatch_gate() {
@@ -300,7 +306,7 @@ group_corrupt_state() {
         # The log has to record WHICH fact it saw, or an operator reading it
         # cannot tell a wedged session from a corrupted one.
         assert_has "badstate/$desc/log-records-corrupt" "state file: (corrupt)" \
-            "$(cat "$PLANS_RAW/$sid-session-close-worker.log" 2>/dev/null)"
+            "$(gate_log_of "$sid")"
     done <<'TABLE'
 truncated-json @ {"alert": {"alert_phase": "pend
 parses-to-null @ null
@@ -315,7 +321,7 @@ TABLE
     assert_eq "badstate/absent-control/gate-json-says-proceed" "proceed" \
         "$(gate_action_of "$WF_RAW/sess-badstate-absent-control.control/session-close-gate.json")"
     assert_has "badstate/absent-control/log-records-absent" "state file: (absent)" \
-        "$(cat "$PLANS_RAW/sess-badstate-absent-control-session-close-worker.log" 2>/dev/null)"
+        "$(gate_log_of sess-badstate-absent-control)"
     assert_eq "badstate/absent-control/nothing-reported" "0" "$(calls_for report)"
 }
 

@@ -1,32 +1,19 @@
 "use strict";
-// bin/worker-dispatch/workers/worktree-copy.js
-//
-// Stage 2 worker: replaces agents/worktree-copy-worker.md.
-//
-// Three CLIs in sequence — enumerate, copy, write notes. Every step the agent
-// performed was already a CLI call; the agent contributed only the classification
-// in its step 2, and that step's output was never read by any later step. It is
-// dropped here rather than reimplemented: the copy allowlist lives in
-// .worktreeinclude and is applied by bin/worktree-copy-include.js, so a second
-// recommended/prohibited judgment upstream of it could only disagree with the
-// mechanism that actually decides. Secret-file protection is unchanged — it was
-// always the include filter's job, never the classification's.
-//
-// main_root and agents_config_dir may appear in the payload for contract parity
-// with the agent, but the resolved anchors win: a caller-supplied checkout path
-// must never be able to redirect which agents repo the child CLIs come from.
+// bin/worker-dispatch/workers/worktree-copy.js — Stage 2 worker, replaces agents/worktree-copy-worker.md.
+// Three CLIs in sequence: enumerate, copy, write notes. The agent's classification step is
+// dropped: .worktreeinclude, applied by bin/worktree-copy-include.js, is the one mechanism
+// that decides what is copied, so secret-file protection stays the include filter's job.
+// main_root and agents_config_dir may appear in the payload for contract parity only; the
+// resolved anchors win, so a caller path never redirects which agents repo the CLIs come from.
 
 const path = require("path");
 
 const { run: spawnRun } = require("../spawn");
+const { tryWriteLog } = require("../worker-log");
 
 const GIT_TIMEOUT_MS = 120000;
 const COPY_TIMEOUT_MS = 300000;
 const NOTES_TIMEOUT_MS = 60000;
-
-function stamp() {
-  return new Date().toISOString().replace(/[:.]/g, "-");
-}
 
 function countNulSeparated(text) {
   return String(text || "")
@@ -147,11 +134,10 @@ function writeNotes(ctx, worktreePath, branch, sessionId, copiedJson, siblingJso
 }
 
 function run(payload, ctx) {
-  const { anchors, fsguard } = ctx;
+  const { anchors } = ctx;
   const worktreePath = payload.worktree_path;
   const branch = payload.branch;
   const sessionId = typeof payload.session_id === "string" ? payload.session_id : "";
-  const artifactDir = payload.artifact_dir || anchors.plansDir;
   const notes = [];
 
   const inv = inventory(ctx);
@@ -185,29 +171,25 @@ function run(payload, ctx) {
 
   // Log write is best-effort: the worktree is already correctly populated, and
   // losing the log must not downgrade a completed copy to a failure.
-  let written = "(none)";
-  try {
-    written = fsguard.writeFile(
-      path.join(artifactDir, `${stamp()}-worktree-copy-worker.log`),
-      [
-        `main-root: ${anchors.mainRoot}`,
-        `worktree: ${worktreePath}`,
-        `branch: ${branch}`,
-        `session-id: ${sessionId === "" ? "(none)" : sessionId}`,
-        `ignored files in main: ${inv.counts.ignored}`,
-        `untracked files in main: ${inv.counts.untracked}`,
-        `copied: ${copied.length}`,
-        `denied: ${denied.length}`,
-        `errors: ${errors.length}`,
-        `sibling worktrees: ${siblingJson}`,
-        ...copied.map((c) => `  copied: ${c}`),
-        ...notes.map((n) => `  ${n}`),
-        "",
-      ].join("\n")
-    );
-  } catch (_e) {
-    written = "(none)";
-  }
+  const written = tryWriteLog(
+    ctx,
+    "worktree-copy-worker.log",
+    [
+      `main-root: ${anchors.mainRoot}`,
+      `worktree: ${worktreePath}`,
+      `branch: ${branch}`,
+      `session-id: ${sessionId === "" ? "(none)" : sessionId}`,
+      `ignored files in main: ${inv.counts.ignored}`,
+      `untracked files in main: ${inv.counts.untracked}`,
+      `copied: ${copied.length}`,
+      `denied: ${denied.length}`,
+      `errors: ${errors.length}`,
+      `sibling worktrees: ${siblingJson}`,
+      ...copied.map((c) => `  copied: ${c}`),
+      ...notes.map((n) => `  ${n}`),
+      "",
+    ].join("\n")
+  );
 
   return { status, summary, artifactPath: written };
 }

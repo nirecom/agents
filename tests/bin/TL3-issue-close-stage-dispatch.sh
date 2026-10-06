@@ -2,28 +2,18 @@
 # tests/bin/TL3-issue-close-stage-dispatch.sh
 # Tests: bin/worker-dispatch/workers/issue-close-stage.js, skills/issue-close-stage/scripts/run-stage-chain.sh, bin/worker-dispatch.js
 # Tags: worker-dispatch, issue-close-stage, real-environment, linked-worktree, dry-run, TL3, scope:issue-specific
-#
-# TL3 — one real seam: a real `git worktree`-created linked worktree, the real
-# dispatcher, the real spawn boundary (no preload stub) and the REAL
-# run-stage-chain.sh with its real Step A/B/D/F/G helper scripts. Only `gh` is
-# replaced, by a dry-run stub on PATH that logs every invocation and mutates
-# nothing.
-#
-# Why it cannot be a TL2: the sibling TL2 cans the child process, so it can never
-# observe (a) whether PATH actually reaches the grandchild `gh` through
-# spawn.js's env allowlist, (b) whether the family-worktree capability check
-# accepts a genuinely git-registered linked worktree, or (c) whether the real
-# chain's KV bytes match what the worker's parser expects. All three are the
-# failure modes that only show up in production.
-#
-# TL3 gap: no real GitHub API is contacted — the sentinel comment is never
-# actually posted, so the live `gh issue comment` URL shape stays unverified
-# here. That shape is owned by tests/bin/TL3-worker-dispatch-gh-contract.sh's sibling
-# contract checks against the real binary.
-#
+# TL3 gap: no real GitHub API is contacted — the live `gh issue comment` URL shape
+# stays unverified here (owned by tests/bin/TL3-worker-dispatch-gh-contract.sh).
 # Gate: RUN_TL3=on plus git/node/bash. Exits 77 (SKIP) otherwise.
 
 set -u
+# TL3 — one real seam: a real linked worktree, the real dispatcher, the real spawn
+# boundary (no preload stub) and the REAL run-stage-chain.sh with its real helper
+# scripts; only `gh` is a dry-run PATH stub that logs and mutates nothing.
+# Not a TL2 because the TL2 cans the child, so it never observes (a) PATH reaching
+# the grandchild `gh` through spawn.js's env allowlist, (b) the family-worktree
+# check accepting a git-registered linked worktree, (c) the real chain's KV bytes
+# matching the worker's parser.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 [ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
@@ -81,6 +71,7 @@ fi
 pass "fixture/linked-worktree"
 
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 MAIN="$(nodepath "$MAIN_RAW")"
 LINKED="$(nodepath "$LINKED_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
@@ -121,9 +112,9 @@ printf '%s' \
   > "$PAYLOAD"
 
 DRC=0
-DOUT="$(run_with_timeout 120 env \
+DOUT="$(run_with_timeout 120 env -u CLAUDE_CODE_SESSION_ID \
     "PATH=$GHBIN:$PATH" \
-    "WORKFLOW_PLANS_DIR=$PLANS" \
+    "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
     node "$(nodepath "$DISPATCH_JS")" issue-close-stage "$MAIN" "$(nodepath "$PAYLOAD")" 2>/dev/null)" || DRC=$?
 
 field_of() { printf '%s\n' "$DOUT" | sed -n "s/^$1: //p" | head -1; }

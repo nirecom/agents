@@ -13,12 +13,9 @@
 const { ensurePullRequest, resolveForgeForWorktree } = require("./pr");
 const { firstLine, isProtectedBranch, resolveGateEnv, runGate, runGit, runScript } = require("./gate");
 const { pushToRemote } = require("./push");
+const { tryWriteLog } = require("../../worker-log");
 
 const MAX_LISTED_FILES = 5;
-
-function stamp() {
-  return new Date().toISOString().replace(/[:.]/g, "-").replace(/Z$/, "Z");
-}
 
 function run(payload, ctx) {
   const log = [];
@@ -181,17 +178,11 @@ function run(payload, ctx) {
 // Step 10. Best-effort: a refused log write must not turn a completed push into a
 // reported failure. fsguard routes the bytes through redactSentinels.
 function writeLog(payload, ctx, log) {
-  const dir = payload.artifact_dir || ctx.anchors.plansDir;
-  const target = ctx.path.join(dir, `${stamp()}-commit-push-worker.log`);
   const body = log
     .map((l) => String(l === null || l === undefined ? "" : l))
     .filter((l) => l !== "")
     .join("\n");
-  try {
-    return ctx.fsguard.writeFile(target, `${body}\n`);
-  } catch (_e) {
-    return "(none)";
-  }
+  return tryWriteLog(ctx, "commit-push-worker.log", `${body}\n`);
 }
 
-module.exports = { run, writeLog, stamp, MAX_LISTED_FILES };
+module.exports = { run, writeLog, MAX_LISTED_FILES };

@@ -2,31 +2,21 @@
 # tests/bin/feature-1643-worker-dispatch-reconcile-classify.sh
 # Tests: bin/worker-dispatch/workers/issue-reconcile.js, bin/worker-dispatch.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, issue-reconcile, classifier, table-driven, mutation-probe, sentinel, history-md, TL1, TL2, scope:issue-specific
-#
-# Issue #1643 — the issue-reconcile worker classifies every CLOSED issue as
-# clean / history-only / needs-reconcile. Before this file the classifier had NO
-# behavioural coverage: the sibling suites cover its capability surface, output
-# shape and argv schema, but never what verdict it actually returns. The sharp
-# bug this file exists to kill is substring matching on issue numbers: `#164`
-# must not satisfy `#1643`'s history entry and vice versa — Group A is a mutation
-# probe over that boundary, driving the exported predicate directly. Group B
-# drives the whole dispatcher with a stub `gh` so the artifact contract
-# (needs-reconcile rows ONLY) and the truncation summary are exercised for real.
-#
 # TL3 gap (what this TL1/TL2 test does NOT catch):
-#   - The real `gh issue list --json number,title,comments` payload shape and its
-#     flag contract; Group B stubs the external-process seam. On Windows a PATH
-#     shim cannot shadow `gh` (spawnSync runs shell:false, so an extensionless
-#     script or a .cmd is never resolved), so the stub is installed at
-#     bin/worker-dispatch/spawn.js's `run` via a `node -r` preload — the whole
-#     dispatcher, anchors, capability wall, fsguard and emit all stay real.
-#     tests/bin/TL3-worker-dispatch-gh-contract.sh (RUN_TL3-gated) fences the flag
-#     contract against the real binary.
+#   - The real `gh issue list --json number,title,comments` shape and flag contract
+#     (Group B stubs the seam; tests/bin/TL3-worker-dispatch-gh-contract.sh fences it).
 #   - A real docs/history.md whose entry headings drifted from the `#<N>:` form.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+# Issue #1643 — the issue-reconcile worker classifies every CLOSED issue as clean /
+# history-only / needs-reconcile. The bug this file kills is substring matching on
+# issue numbers (`#164` must not satisfy `#1643`): Group A mutation-probes the
+# exported predicate. Group B drives the whole dispatcher with a stub `gh` so the
+# artifact contract (needs-reconcile rows ONLY) and truncation summary run for real.
+# A PATH shim cannot shadow `gh` on Windows (spawnSync shell:false), so the stub is
+# installed at bin/worker-dispatch/spawn.js's `run` via a `node -r` preload.
 
 if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_RC_INNER:-}" ]; then
     _WD1643_RC_INNER=1 timeout 420 bash "$0" "$@"
@@ -137,6 +127,7 @@ echo x > "$MAIN_RAW/README.md"
 git -C "$MAIN_RAW" add -A >/dev/null 2>&1
 git -C "$MAIN_RAW" commit -q --no-verify -m init >/dev/null 2>&1
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 MAIN="$(nodepath "$MAIN_RAW")"; PLANS="$(nodepath "$PLANS_RAW")"
 
 PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
@@ -158,8 +149,8 @@ DOUT=""; DRC=0
 dispatch_reconcile() {
     DRC=0
     : > "$CALLLOG"
-    DOUT="$(run_with_timeout 90 env \
-        "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID \
+        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

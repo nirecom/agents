@@ -2,22 +2,11 @@
 # tests/hooks/feature-1673-issue-close-stage-schema.sh
 # Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/capability.js, skills/issue-close-stage/SKILL.md
 # Tags: worker-dispatch, issue-close-stage, registry, capability, payload, status-vocabulary, TL1, scope:issue-specific
-#
-# Issue #1673 — the issue-close-stage LLM subagent (agents/issue-close-stage-worker.md)
-# becomes a plain dispatcher worker. The whole point of the port is that the
-# INPUT CONTRACT is preserved byte for byte: the same six payload field names the
-# agent md declared, and the same three-token status vocabulary
-# (phase1_done | blocked_sub_issue | error) that skills/issue-close-stage/SKILL.md
-# branches on. This file pins both against the pure-data registry, plus the two
-# capability edges the detail plan calls out by name:
-#   - `issue_repo` must accept the bare `<repo>` form (repo-ref), not just owner/repo
-#   - `agents_config_dir` is echo-only: any value other than the resolved ACD is rejected
-#
-# TL3 gap (what this TL1 test does NOT catch):
-#   - A real /issue-close-stage turn writing the payload file and invoking the CLI.
-#     tests/bin/TL3-issue-close-stage-dispatch.sh (RUN_TL3-gated) covers that seam.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# #1673: the issue-close-stage subagent became a dispatcher worker; its six payload
+# fields, its status vocabulary, repo-ref `issue_repo`, and echo-only ACD are pinned.
+# TL3 gap: a real /issue-close-stage turn — tests/bin/TL3-issue-close-stage-dispatch.sh
+# (RUN_TL3-gated). Mitigation: WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
@@ -109,7 +98,8 @@ group_registry() {
     # run-stage-chain.sh exports ISSUE_CLOSE_SKILL=1 itself; the dispatcher must
     # not also hand it to every child of this worker.
     assert_eq "registry/no-issue-close-skill-passthrough" "0" "$(rv has_issue_close_skill)"
-    assert_eq "registry/writescopes-plans-dir-only" "plans-dir" "$(rv writescopes)"
+    # #2558: the only write is the worker's own log, which now lands in the log dir.
+    assert_eq "registry/writescopes-log-dir-only" "log-dir" "$(rv writescopes)"
     assert_eq "registry/renderer" "status-triple-quoted" "$(rv renderer)"
 }
 

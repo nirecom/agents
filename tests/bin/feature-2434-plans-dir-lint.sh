@@ -354,7 +354,6 @@ write-tests-judge-raw.txt                           | artifact
 write-code-judge-raw.txt                            | artifact
 worker-commit-push.draft.json                       | artifact
 worker-x-1.draft.json                               | artifact
-session-close-worker.log                            | artifact
 issue-create-dispatch.txt                           | artifact
 issue-create-survey.json                            | artifact
 sweep-issues-survivors.tsv                          | artifact
@@ -390,6 +389,11 @@ case_begin "unregistered-and-no-sid" "hooks/lib/plans-artifact-registry.js"
 : > "$WORKFLOW_PLANS_DIR/$SID_UUID-context.md"
 check "an unknown name under a sid with a context.md is unregistered" \
     "unregistered" "$(reg classify "$SID_UUID-foo.md")"
+# #2558: worker logs left PLANS_DIR, so the session-close log is no longer a kind.
+check "a sid-prefixed session-close worker log is unregistered (#2558)" \
+    "unregistered" "$(reg classify "$SID_UUID-session-close-worker.log")"
+check "a sid-prefixed stamped finalize worker log is unregistered (#2558)" \
+    "unregistered" "$(reg classify "$SID_UUID-finalize-worker-2026-09-28T01-02-03-456Z.log")"
 : > "$CLAUDE_WORKFLOW_DIR/$SID_DATE.json"
 check "an unknown name under a sid with a workflow state json is unregistered" \
     "unregistered" "$(reg classify "$SID_DATE-scratch.txt")"

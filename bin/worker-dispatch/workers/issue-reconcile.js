@@ -1,37 +1,23 @@
 "use strict";
-// bin/worker-dispatch/workers/issue-reconcile.js
-//
-// Stage 2 worker: replaces agents/issue-reconcile-worker.md.
-//
-// Read-only scan of CLOSED issues, classifying each as clean / history-only /
-// needs-reconcile. The registry entry declares `gh` as the only external binary
-// and `plans-dir` as the only write scope, so this worker cannot mutate an issue
-// or touch the repository even if it tried.
-//
-// Paging: the agent this replaces instructed a per-page flag that gh has never
-// had; the LLM quietly ignored it and the scan silently stopped at one page. A
-// plain script cannot paper over that, so paging is expressed the way gh
-// actually supports it — a single `--limit` bounded scan, with the cap surfaced
-// in the summary when it is reached rather than being passed off as a full scan.
-// tests/bin/TL3-worker-dispatch-gh-contract.sh fences both directions against the
-// real binary, including a source scan for the phantom flag — so do not name it
-// here even in prose.
+// bin/worker-dispatch/workers/issue-reconcile.js — Stage 2 worker, replaces agents/issue-reconcile-worker.md.
+// Read-only scan of CLOSED issues, classified clean / history-only / needs-reconcile. The
+// registry grants only `gh` plus the plans-dir (worklist) and log-dir write scopes, so this
+// worker cannot mutate an issue or touch the repository even if it tried.
+// Paging is one `--limit` bounded scan, the only form gh supports (the replaced agent's per-page
+// flag never existed); reaching the cap is reported in the summary, never passed off as complete.
+// tests/bin/TL3-worker-dispatch-gh-contract.sh fences both directions against the real binary,
+// including a source scan for the phantom flag — so do not name it here even in prose.
 
 const fs = require("fs");
 const path = require("path");
 
 const { run: spawnRun } = require("../spawn");
+const { stamp, tryWriteLog } = require("../worker-log");
 
 const GH_TIMEOUT_MS = 300000;
 const JSON_FIELDS = "number,title,comments";
 const SENTINEL_PREFIX = "<!-- issue-close-sentinel: appended";
 const MAX_HISTORY_FILES = 500;
-
-function stamp() {
-  // Compact UTC stamp; artifact names must sort chronologically and stay
-  // filesystem-safe on Windows (no colons).
-  return new Date().toISOString().replace(/[:.]/g, "-").replace(/Z$/, "Z");
-}
 
 // gh returns comments as an array of objects; older shapes and unexpected values
 // must degrade to "no sentinel found", never throw mid-scan.
@@ -183,10 +169,8 @@ function run(payload, ctx) {
     );
   }
 
-  const base = `${stamp()}-issue-reconcile-worker`;
-  const dir = payload.artifact_dir || anchors.plansDir;
-  const jsonlPath = path.join(dir, `${base}.jsonl`);
-  const logPath = path.join(dir, `${base}.log`);
+  const ts = stamp();
+  const jsonlPath = path.join(payload.artifact_dir || anchors.plansDir, `${ts}-issue-reconcile-worker.jsonl`);
 
   let written = null;
   try {
@@ -207,24 +191,22 @@ function run(payload, ctx) {
 
   // The log is best-effort: losing it must not turn a completed scan into a
   // reported failure, since the JSONL worklist is the actual deliverable.
-  try {
-    fsguard.writeFile(
-      logPath,
-      [
-        `repo: ${payload.owner_repo}`,
-        `limit: ${limit}`,
-        `scanned: ${issues.length}`,
-        `clean: ${counts.clean}`,
-        `history-only: ${counts["history-only"]}`,
-        `needs-reconcile: ${counts["needs-reconcile"]}`,
-        `limit-reached: ${capped ? "yes" : "no"}`,
-        `artifact: ${written}`,
-        "",
-      ].join("\n")
-    );
-  } catch (_e) {
-    // ignore
-  }
+  tryWriteLog(
+    ctx,
+    "issue-reconcile-worker.log",
+    [
+      `repo: ${payload.owner_repo}`,
+      `limit: ${limit}`,
+      `scanned: ${issues.length}`,
+      `clean: ${counts.clean}`,
+      `history-only: ${counts["history-only"]}`,
+      `needs-reconcile: ${counts["needs-reconcile"]}`,
+      `limit-reached: ${capped ? "yes" : "no"}`,
+      `artifact: ${written}`,
+      "",
+    ].join("\n"),
+    { stamp: ts }
+  );
 
   return { status: "complete", summary, artifactPath: written };
 }

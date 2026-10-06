@@ -61,6 +61,7 @@ MAIN_ROOT="$(nodepath "$MAIN_ROOT_RAW")"
 
 PLANS_RAW="$TMPD/plans"
 mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 PLANS="$(nodepath "$PLANS_RAW")"
 
 # write_payload <file-basename> <json-literal>
@@ -76,8 +77,8 @@ DOUT=""
 DRC=0
 run_dispatch() {
     DRC=0
-    DOUT="$(run_with_timeout 60 env \
-        "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID \
+        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
         node "$DISPATCH_JS" "$@" 2>&1)" || DRC=$?
 }
 

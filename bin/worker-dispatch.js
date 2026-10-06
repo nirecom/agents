@@ -20,7 +20,12 @@ const { locatePayload, loadPayload, validateStructure } = require("./worker-disp
 const { validate } = require("./worker-dispatch/capability");
 const fsguard = require("./worker-dispatch/fsguard");
 const emit = require("./worker-dispatch/emit");
-const { controlPath, getSessionControlDir } = require("../hooks/workflow-state/state-io/control-dir");
+const {
+  controlPath,
+  getSessionControlDir,
+  getWorkerLogsDir,
+  assertRealControlDir,
+} = require("../hooks/workflow-state/state-io/control-dir");
 
 const USAGE = "usage: worker-dispatch.js <worker-name> <main-root> <payload-json-path>";
 
@@ -36,6 +41,7 @@ function errText(e, fallback) {
 // Write scopes are anchor-derived. The backup dir needs the payload's branch and the
 // control dir the validated session id; both values are already proven derivations,
 // so lifting them into the fsguard context only makes the declared scope resolvable.
+// The log dir is decided here too, once per run; a symlinked or non-directory one is not used.
 function writeContext(entry, anchors, value, payloadSid) {
   const extra = {};
   const spec = entry.payloadSpec || {};
@@ -48,7 +54,28 @@ function writeContext(entry, anchors, value, payloadSid) {
   } catch (_e) {
     extra.controlDir = null;
   }
+  extra.logDir = resolveLogDir(sid);
   return Object.assign({}, anchors, extra);
+}
+
+function realLogDir(dir) {
+  assertRealControlDir(dir);
+  return realAbs(dir);
+}
+
+// An invalid sid still logs, to worker-logs/; a symlinked or non-directory candidate never falls back.
+function resolveLogDir(sid) {
+  let dir = null;
+  try {
+    dir = sid ? getSessionControlDir(sid) : getWorkerLogsDir();
+  } catch (_e) {
+    try { dir = getWorkerLogsDir(); } catch (_e2) { return null; }
+  }
+  try {
+    return realLogDir(dir);
+  } catch (_e) {
+    return null;
+  }
 }
 
 // One-shot marker: `wx` makes the second dispatch of the same payload lose the race.
@@ -143,6 +170,7 @@ function main() {
       anchors,
       entry,
       workerName,
+      logDir: writeCtx.logDir,
       fsguard: {
         assertWritable: (target) => fsguard.assertWritable(workerName, target, writeCtx),
         writeFile: (target, data) => fsguard.writeFile(workerName, target, data, writeCtx),

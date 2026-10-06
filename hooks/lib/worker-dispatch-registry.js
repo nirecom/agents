@@ -85,7 +85,7 @@ const CHILD_ENV_ALLOWLIST = [
 ];
 
 // Write-scope tokens understood by bin/worker-dispatch/fsguard.js.
-const WRITE_SCOPES = ["plans-dir", "control-dir", "family-worktree", "backup-dir", "main-root-docs"];
+const WRITE_SCOPES = ["plans-dir", "control-dir", "family-worktree", "backup-dir", "main-root-docs", "log-dir"];
 
 // Script-anchor tokens understood by bin/worker-dispatch/spawn.js. `acd` and
 // `main-root` resolve into reviewed, merged code. `family-worktree` resolves into
@@ -162,7 +162,7 @@ const workers = {
       },
     },
     envPassthrough: ["COPIED_JSON", "SIBLING_WORKTREES_JSON", "WORKTREE_BASE_DIR"],
-    writeScopes: ["family-worktree", "plans-dir"],
+    writeScopes: ["family-worktree", "log-dir"],
     renderer: "status-triple",
   },
 
@@ -184,7 +184,7 @@ const workers = {
     },
     binaries: { external: ["git", "docker"], scripts: {} },
     envPassthrough: ["WORKTREE_BASE_DIR", "WORKTREE_BACKUP_MAX_FILES", "WORKTREE_BACKUP_MAX_BYTES", "WORKTREE_BACKUP_MAX_ENUMERATE"],
-    writeScopes: ["backup-dir", "plans-dir"],
+    writeScopes: ["backup-dir", "log-dir"],
     renderer: "status-triple-quoted",
   },
 
@@ -221,7 +221,7 @@ const workers = {
     // composeEntry shells out to `gh` for issue/PR metadata lookups — without a
     // token passthrough every gh call in the child fails unauthenticated.
     envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN"],
-    writeScopes: ["family-worktree", "plans-dir"],
+    writeScopes: ["family-worktree", "log-dir"],
     renderer: "status-triple-quoted",
   },
 
@@ -242,7 +242,7 @@ const workers = {
     // every gh call this worker makes needs the token, so the full declared set
     // reaches every child unscoped.
     envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN"],
-    writeScopes: ["plans-dir"],
+    writeScopes: ["plans-dir", "log-dir"],
     renderer: "status-triple",
   },
 
@@ -264,7 +264,7 @@ const workers = {
       },
     },
     envPassthrough: [],
-    writeScopes: ["control-dir", "plans-dir"],
+    writeScopes: ["control-dir", "log-dir"],
     renderer: "status-triple",
   },
 
@@ -355,7 +355,7 @@ const workers = {
       // without this the child has no signing oracle and every SSH push fails.
       "SSH_AUTH_SOCK",
     ],
-    writeScopes: ["family-worktree", "plans-dir"],
+    writeScopes: ["family-worktree", "log-dir"],
     renderer: "status-triple-quoted",
   },
 
@@ -389,7 +389,7 @@ const workers = {
       },
     },
     envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN"],
-    writeScopes: ["plans-dir"],
+    writeScopes: ["log-dir"],
     renderer: "status-triple-quoted",
   },
 
@@ -436,7 +436,7 @@ const workers = {
     // Both non-token names are derived from anchors and set explicitly via
     // extraEnv; declaring them here only makes that assignment legal.
     envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN", "FINALIZE_SCRIPTS_DIR", "MAIN_WORKTREE_PATH"],
-    writeScopes: ["control-dir", "plans-dir"],
+    writeScopes: ["control-dir", "log-dir"],
     renderer: "status-triple-quoted",
   },
 };

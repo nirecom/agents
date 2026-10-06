@@ -9,9 +9,8 @@
 // payload file is invisible to it; (2) per-mode conditional required fields,
 // which the registry's flat payloadSpec cannot express, checked before spawn.
 
-const path = require("path");
-
 const { run: spawnRun, resolveScript } = require("../spawn");
+const { tryWriteLog } = require("../worker-log");
 const { isPrivateRepo } = require("../../../hooks/lib/is-private-repo");
 const { hasCJK } = require("../../../hooks/lib/detect-cjk");
 
@@ -20,10 +19,6 @@ const NOOP_RE = /already exists|noop/i;
 // The text fields that end up as document body content. Order fixes the order
 // they are reported in, so a caller sees the same message for the same input.
 const CONTENT_FIELDS = ["category", "subject", "background", "changes", "test_gap"];
-
-function stamp() {
-  return new Date().toISOString().replace(/[:.]/g, "-");
-}
 
 // doc-append.py requires --date and never defaults it. The agent supplied it from
 // its own sense of "today", which is why no caller passes a date field. Local
@@ -124,9 +119,8 @@ function buildArgs(payload, ctx) {
 }
 
 function run(payload, ctx) {
-  const { anchors, fsguard } = ctx;
+  const { anchors } = ctx;
   const cwd = payload.cwd;
-  const artifactDir = payload.artifact_dir || anchors.plansDir;
 
   const required = checkRequired(payload);
   if (required !== null) return { status: "failed", summary: required, artifactPath: "(none)" };
@@ -170,25 +164,21 @@ function run(payload, ctx) {
 
   // The log is written before the status is decided: a failed append is exactly
   // the case where the caller needs the CLI's own output most.
-  let written = "(none)";
-  try {
-    written = fsguard.writeFile(
-      path.join(artifactDir, `${stamp()}-doc-append-worker.log`),
-      [
-        `mode: ${payload.mode}`,
-        `cwd: ${cwd}`,
-        `command: ${plan.command}`,
-        `exit: ${res.timedOut ? "(timed out)" : res.status}`,
-        "--- stdout ---",
-        String(res.stdout || ""),
-        "--- stderr ---",
-        String(res.stderr || ""),
-        "",
-      ].join("\n")
-    );
-  } catch (_e) {
-    written = "(none)";
-  }
+  const written = tryWriteLog(
+    ctx,
+    "doc-append-worker.log",
+    [
+      `mode: ${payload.mode}`,
+      `cwd: ${cwd}`,
+      `command: ${plan.command}`,
+      `exit: ${res.timedOut ? "(timed out)" : res.status}`,
+      "--- stdout ---",
+      String(res.stdout || ""),
+      "--- stderr ---",
+      String(res.stderr || ""),
+      "",
+    ].join("\n")
+  );
 
   if (res.timedOut) {
     return {

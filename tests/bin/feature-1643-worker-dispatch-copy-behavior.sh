@@ -65,10 +65,13 @@ BRANCH="feature/wc-probe"
 LINKED_RAW="$TMPD/linked-wt"
 git -C "$MAIN_RAW" worktree add -q -b "$BRANCH" "$LINKED_RAW" >/dev/null 2>&1
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+# #2558: worker logs land under the workflow dir, so pin it to the fixture too.
+WF_RAW="$TMPD/wf"; mkdir -p "$WF_RAW"
 
 MAIN="$(nodepath "$MAIN_RAW")"
 LINKED="$(nodepath "$LINKED_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
+WF="$(nodepath "$WF_RAW")"
 CANNED="$TMPD/canned.json"
 CALLLOG="$TMPD/calls.jsonl"
 
@@ -79,7 +82,7 @@ field_of() { printf '%s\n' "$DOUT" | sed -n "s/^$1: //p" | head -1; }
 # Real child CLIs — no preload.
 dispatch_real() {
     DRC=0
-    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF" \
         node "$(nodepath "$DISPATCH_JS")" worktree-copy "$MAIN" "$1" 2>/dev/null)" || DRC=$?
 }
 # Canned child CLIs — $1 is the rules JSON array, $2 the payload path.
@@ -87,7 +90,7 @@ dispatch_stubbed() {
     printf '%s' "$1" > "$CANNED"
     : > "$CALLLOG"
     DRC=0
-    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
@@ -197,13 +200,17 @@ case_end
 case_begin "log-failure-non-fatal" "bin/worker-dispatch.js"
 group_log_failure_non_fatal() {
     local p blocker
-    blocker="$PLANS_RAW/blocked-artifacts"
+    # #2558: no session_id, so the log dir would be <WF>/worker-logs; making that
+    # a regular file leaves the run with no usable log dir.
+    blocker="$WF_RAW/worker-logs"
+    rm -rf "$blocker"
     printf 'not a directory\n' > "$blocker"
-    p="$(write_payload wc-logfail "{\"worktree_path\":\"$LINKED\",\"branch\":\"$BRANCH\",\"artifact_dir\":\"$(nodepath "$blocker")\"}")"
+    p="$(write_payload wc-logfail "{\"worktree_path\":\"$LINKED\",\"branch\":\"$BRANCH\",\"artifact_dir\":\"$PLANS\"}")"
     dispatch_stubbed "[{\"match\":\"includeFilter\",\"stdout\":\"$OK_COPY\"},{}]" "$p"
-    # artifact_dir is a regular file, so the log write throws inside the worker.
-    # The worktree is already correctly populated at that point, so the caller
-    # must still be told `complete` — only artifact_path degrades.
+    rm -f "$blocker"
+    # The log write fails, but the worktree is already correctly populated at
+    # that point, so the caller must still be told `complete` — only
+    # artifact_path degrades.
     assert_eq "logfail/status-still-complete" "complete" "$(field_of status)"
     assert_eq "logfail/artifact-path-degrades-to-none" "(none)" "$(field_of artifact_path)"
     case "$(field_of summary)" in

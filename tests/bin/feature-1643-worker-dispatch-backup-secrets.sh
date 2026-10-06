@@ -2,36 +2,19 @@
 # tests/bin/feature-1643-worker-dispatch-backup-secrets.sh
 # Tests: bin/worker-dispatch/workers/worktree-backup.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, worktree-backup, secrets, manifest, idempotency, protection-fix, TL2, scope:issue-specific
-#
-# Issue #1643 — worktree-backup inventories gitignored/untracked state and copies
-# it aside. The files it handles are exactly the ones most likely to hold local
-# credentials, so the worker hashes content instead of quoting it: a manifest
-# that embedded the bytes of a local .env would turn the backup index into a
-# secret of its own.
-#
-# This file is the protection-fix test for that property. The fixture worktree
-# carries obviously-fake secret literals; after each mode every byte the worker
-# produced — manifest, dry-run log, execute log, stdout, stderr — is scanned for
-# those literals. The assertion is negative and made against the protected
-# resource itself (protection-fix Pattern 1), not against an exit status.
-#
-# Real git runs here (inventory is `git ls-files --others`), so this is TL2.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - A real worktree whose ignored set includes NTFS junctions, files locked by
-#     another process, or paths beyond MAX_PATH — all of which change what
-#     `git ls-files` returns and what readFileSync can open.
-#   - Real `docker ps` bind-mount detection (docker_check is false throughout).
+# #1643 protection-fix (Pattern 1): every byte worktree-backup produces — manifest,
+# dry-run log, execute log, stdout, stderr — is scanned for fake secret literals.
+# TL3 gap: NTFS junctions / locked files / MAX_PATH in the ignored set; real docker ps.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
-#
-# Skipped-Because: "a payload naming a backup_dir other than the derived
-# <main-root>/.worktree-backup/<branch> is rejected" is NOT re-asserted here.
-# tests/bin/feature-1643-worker-dispatch-capability.sh already drives that as rows
-# `backup-dir-arbitrary` and `backup-dir-sibling` with all three protection
-# properties. Duplicating it would add a second place to update.
 
 set -u
+
+# Why: the worker hashes content instead of quoting it, so the backup index never
+# becomes a secret of its own. Real git runs here (`git ls-files --others`): TL2.
+# Skipped-Because: a payload backup_dir other than <main-root>/.worktree-backup/<branch>
+# is rejected — already driven by feature-1643-worker-dispatch-capability.sh rows
+# `backup-dir-arbitrary` / `backup-dir-sibling`; a copy here would be a second place to update.
 
 if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_BS_INNER:-}" ]; then
     _WD1643_BS_INNER=1 timeout 420 bash "$0" "$@"
@@ -100,19 +83,22 @@ printf 'DB_PASSWORD=%s\n' "$SECRET_PW" > "$LINKED_RAW/local/creds.txt"
 printf 'scratch\n' > "$LINKED_RAW/untracked-note.txt"
 
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+# #2558: the dry-run.txt / execute.log land under the workflow dir — pin it too.
+WF_RAW="$TMPD/wf"; mkdir -p "$WF_RAW"
 BACKUP_RAW="$MAIN_RAW/.worktree-backup/$BRANCH"
 
 MAIN="$(nodepath "$MAIN_RAW")"
 LINKED="$(nodepath "$LINKED_RAW")"
 EMPTY="$(nodepath "$EMPTY_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
+WF="$(nodepath "$WF_RAW")"
 
 DOUT=""; DERR=""; DRC=0
 dispatch_backup() {
     local pfile="$1"
     DRC=0
     DERR="$TMPD/stderr.txt"
-    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF" \
         node "$(nodepath "$DISPATCH_JS")" worktree-backup "$MAIN" "$pfile" 2>"$DERR")" || DRC=$?
 }
 field_of() {
@@ -125,8 +111,10 @@ write_payload() { printf '%s' "$2" > "$PLANS_RAW/$1.json"; nodepath "$PLANS_RAW/
 
 # Every byte the worker produced, EXCEPT the backup copies themselves — a copy of
 # a secret file is supposed to contain the secret; the index describing it is not.
+# #2558: the worker logs moved out of PLANS into the workflow dir, so scan both.
 scan_targets() {
     find "$PLANS_RAW" -type f 2>/dev/null
+    find "$WF_RAW" -type f 2>/dev/null
     find "$MAIN_RAW/.worktree-backup" -type f -name 'manifest.json' 2>/dev/null
     [ -f "$DERR" ] && echo "$DERR"
     printf '%s\n' "$DOUT" > "$TMPD/stdout.txt"; echo "$TMPD/stdout.txt"
@@ -248,18 +236,11 @@ group_zero_files() {
 
 # ===========================================================================
 # Group 5 — the backup root must be ignored by the TRACKED .gitignore
-#
-# Groups 1-4 prove the worker does not QUOTE a secret. This group covers the
-# other way the same secret escapes: worktree-backup copies gitignored files —
-# `.env` among them — into <main-root>/.worktree-backup/<branch>, verbatim and
-# by design. If that directory is not ignored, the very next `git add -A` in the
-# main worktree stages a copy of every local credential for commit.
-#
-# The rule has to live in the tracked `.gitignore`, not in `.git/info/exclude`:
-# info/exclude is per-clone local state that no checkout inherits, so a machine
-# that never ran the setup would stage the backups while this repo looked safe.
-# Both halves are asserted — the file is tracked, AND it is the file git names
-# as the source of the ignore decision.
+# Groups 1-4 prove the worker does not QUOTE a secret; this covers the other
+# escape: the verbatim .env copies under .worktree-backup/ would be staged by
+# the next `git add -A` unless ignored. The rule must live in the tracked
+# .gitignore (info/exclude is per-clone and no checkout inherits it), so both
+# halves are asserted: the file is tracked AND git names it as the ignore source.
 # ===========================================================================
 group_gitignore() {
     local gi="$AGENTS_DIR/.gitignore"

@@ -60,6 +60,12 @@ function getSessionControlDir(sid) {
   return path.join(getWorkflowDir(), `${sid}.control`);
 }
 
+const WORKER_LOGS_DIRNAME = "worker-logs";
+
+function getWorkerLogsDir() {
+  return path.join(getWorkflowDir(), WORKER_LOGS_DIRNAME);
+}
+
 function assertControlName(name) {
   if (typeof name !== "string" || !CONTROL_NAME_RE.test(name) || name.includes("..")) {
     throw new Error(`control-dir: invalid control file name: ${JSON.stringify(name)}`);
@@ -135,6 +141,9 @@ module.exports = {
   ControlMigrationError,
   diagnoseControlMigration,
   getSessionControlDir,
+  WORKER_LOGS_DIRNAME,
+  getWorkerLogsDir,
+  assertRealControlDir,
   sessionControlDir,
   controlPath,
   assertControlName,

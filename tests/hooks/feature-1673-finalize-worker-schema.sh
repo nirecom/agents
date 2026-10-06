@@ -108,7 +108,8 @@ group_registry() {
     assert_eq "registry/type-artifact-dir" "path-under-plansdir" "$(ev type_artifact_dir)"
     assert_eq "registry/no-invented-fields" "" "$(ev unknown_fields)"
     assert_eq "registry/renderer" "status-triple-quoted" "$(ev renderer)"
-    assert_eq "registry/write-scopes" "control-dir,plans-dir" "$(ev write_scopes)"
+    # #2558: the worker log moved to the log dir; plans-dir is no longer needed.
+    assert_eq "registry/write-scopes" "control-dir,log-dir" "$(ev write_scopes)"
     assert_eq "registry/external-binaries" "bash,gh,node" "$(ev external)"
     assert_eq "registry/script-keys" "runInitial,runLoopStep,runTerminal" "$(ev scripts)"
     assert_eq "registry/script-anchor-is-acd" "acd" "$(ev script_anchors)"
