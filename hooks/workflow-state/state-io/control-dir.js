@@ -4,17 +4,14 @@
 // Policy and inventory: docs/architecture/claude-code/state-dirs.md.
 const fs = require("fs");
 const path = require("path");
-const { getWorkflowDir } = require("./core");
+const {
+  STATE_SID_RE: CONTROL_SID_RE,
+  assertValidStateSid: assertValidControlSid,
+  getStateRoot,
+  getSessionStateDir,
+} = require("./state-root");
 
 const CONTROL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-// The #2025 C9 path-token alphabet: a dot is legal inside a sid, but never leading, never `..`.
-const CONTROL_SID_RE = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
-
-function assertValidControlSid(sid) {
-  if (typeof sid !== "string" || !CONTROL_SID_RE.test(sid) || sid.includes("..")) {
-    throw new Error(`Invalid sessionId: ${JSON.stringify(sid)}`);
-  }
-}
 
 class ControlMigrationError extends Error {
   constructor({ sid, name, legacyPath, cause } = {}) {
@@ -49,7 +46,7 @@ function diagnoseControlMigration(e, who) {
 
 function appendMigrationLog(line) {
   try {
-    const wf = getWorkflowDir();
+    const wf = getStateRoot();
     fs.mkdirSync(wf, { recursive: true });
     fs.appendFileSync(path.join(wf, "control-migration.log"), `${new Date().toISOString()} ${line}\n`);
   } catch (_) { /* the log is diagnostic only */ }
@@ -57,7 +54,7 @@ function appendMigrationLog(line) {
 
 function getSessionControlDir(sid) {
   assertValidControlSid(sid);
-  return path.join(getWorkflowDir(), `${sid}.control`);
+  return path.join(getSessionStateDir(sid), `${sid}.control`);
 }
 
 function assertControlName(name) {

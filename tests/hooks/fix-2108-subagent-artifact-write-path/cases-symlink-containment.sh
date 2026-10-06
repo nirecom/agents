@@ -282,8 +282,11 @@ _sy_workflow_state_escape() {
 
     # A22-7b — Pattern 4, the allow direction: an artifact name ending in a protected kind is
     # NOT clearance state (#2108), and without this row A22-7 would also pass against a hook
-    # that had simply started blocking every path holding a link.
-    assert_eq "A22-7b control: an artifact name through the same link is allowed" "approve" \
+    # that had simply started blocking every path holding a link. The link must lead outside
+    # the state dir: through the state-dir link the write IS a state-root write (#2512 C6).
+    assert_eq "A22-7b control: an artifact name through a link to elsewhere is allowed" "approve" \
+        "$(_sy_bctw "$SY_OUTLINK_FWD/issue-2108-survey.gh-env")"
+    assert_eq "A22-7b the same artifact name through the state-dir link is a state-root write" "block" \
         "$(_sy_bctw "$SY_WFLINK_SCRATCH_FWD/issue-2108-survey.gh-env")"
 
     # A22-7c — attribution: the early gate APPROVES that same token path (A22-6's residual,

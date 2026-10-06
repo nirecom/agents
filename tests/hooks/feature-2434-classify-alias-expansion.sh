@@ -24,7 +24,7 @@ CLASSIFY_JS="$AGENTS_DIR/hooks/block-clearance-token-write/bash-target-context/c
 
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
-mkdir -p "$TMP/home/wf" "$TMP/home/.claude/projects/workflow" "$TMP/plans" "$TMP/tx" "$TMP/out"
+mkdir -p "$TMP/home/wf" "$TMP/home/.workflow-state" "$TMP/home/.claude/projects/workflow" "$TMP/plans" "$TMP/tx" "$TMP/out"
 export HOME; HOME="$(np "$TMP/home")"
 if command -v cygpath >/dev/null 2>&1; then export USERPROFILE; USERPROFILE="$(cygpath -w "$TMP/home")"; fi
 export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR="$(np "$TMP/home/wf")"
@@ -39,7 +39,9 @@ WF="$WORKFLOW_STATE_DIR"
 HOME_N="$HOME"
 PLANS="$WORKFLOW_PLANS_DIR"
 OUT="$(np "$TMP/out")"
-DEFAULT_WF="$HOME_N/.claude/projects/workflow"
+# #2511: the resolver default is <home>/.workflow-state; the legacy root stays guarded.
+DEFAULT_WF="$HOME_N/.workflow-state"
+LEGACY_WF="$HOME_N/.claude/projects/workflow"
 
 cat > "$TMP/probe.js" <<'JS'
 "use strict";
@@ -211,13 +213,13 @@ case_end
 
 case_begin "default-word-names-default-workflow-dir" "hooks/lib/bash-write-targets/detection-expand.js"
 # `${WORKFLOW_STATE_DIR:-$HOME/.claude/projects/workflow}` with the variable unset or empty
-# lands on the default workflow dir, which is protected like the configured one.
+# lands on the legacy workflow dir, which is protected like the configured one.
 SPELL='${WORKFLOW_STATE_DIR:-$HOME/.claude/projects/workflow}'
 for mode in unset empty; do
     pfn="probe_${mode}_wf"
     got="$("$pfn" expand "$SPELL/y" "$OUT" path)"
-    if [[ "$got" == "$DEFAULT_WF/y" ]]; then pass "expand[$mode] default-word -> default wf"
-    else fail "expand[$mode] default-word" "want=$DEFAULT_WF/y got=${got:-empty}"; fi
+    if [[ "$got" == "$LEGACY_WF/y" ]]; then pass "expand[$mode] default-word -> legacy wf"
+    else fail "expand[$mode] default-word" "want=$LEGACY_WF/y got=${got:-empty}"; fi
     got="$("$pfn" scan "echo x > $SPELL/s1*" "$OUT" "$SID")"
     if [[ "$got" == "workflow-glob" ]]; then pass "scan[$mode] default-word glob -> workflow-glob"
     else fail "scan[$mode] default-word glob" "want=workflow-glob got=${got:-empty}"; fi
@@ -226,8 +228,8 @@ for mode in unset empty; do
     else fail "scan[$mode] cd default-word glob" "want=workflow-glob got=${got:-empty}"; fi
 done
 got="$(probe_unset_wf rds "$SPELL/sub" '')"
-if [[ "$got" == "$DEFAULT_WF/sub" ]]; then pass "rds[unset] default-word -> default wf"
-else fail "rds[unset] default-word" "want=$DEFAULT_WF/sub got=${got:-empty}"; fi
+if [[ "$got" == "$LEGACY_WF/sub" ]]; then pass "rds[unset] default-word -> legacy wf"
+else fail "rds[unset] default-word" "want=$LEGACY_WF/sub got=${got:-empty}"; fi
 case_end
 
 case_begin "expander-non-default-ops-never-resolve" "hooks/lib/bash-write-targets/detection-expand.js"
@@ -269,8 +271,9 @@ TABLE
 case_end
 
 case_begin "unset-workflow-dir-falls-back-to-default" "hooks/block-clearance-token-write/bash-scan/scan.js"
-# With WORKFLOW_STATE_DIR unset the resolver's default (<home>/.claude/projects/workflow)
-# is the workflow dir; an alias spelling must resolve to it, never to "allow everything".
+# With WORKFLOW_STATE_DIR unset the resolver's default (<home>/.workflow-state) is the
+# workflow dir; an alias spelling must resolve to it, never to "allow everything".
+# The legacy root (<home>/.claude/projects/workflow) stays guarded while it exists.
 while IFS='|' read -r name cmd want; do
     name="$(trim "$name")"; cmd="$(trim "$cmd")"; want="$(trim "$want")"
     [[ -z "$name" ]] && continue
@@ -283,7 +286,8 @@ bare-alias-glob         | echo x > $WORKFLOW_STATE_DIR/s1*                    | 
 braced-alias-glob       | echo x > ${WORKFLOW_STATE_DIR}/s1*                  | workflow-glob
 default-op-glob         | echo x > ${WORKFLOW_STATE_DIR:-__DEF__}/s1*         | workflow-glob
 cd-default-op-glob      | cd ${WORKFLOW_STATE_DIR:-__DEF__} && echo x > s1*   | workflow-glob
-tilde-default-glob      | echo x > ~/.claude/projects/workflow/s1*             | workflow-glob
+tilde-default-glob      | echo x > ~/.workflow-state/s1*                       | workflow-glob
+tilde-legacy-glob       | echo x > ~/.claude/projects/workflow/s1*             | workflow-glob
 TABLE
 got="$(probe_unset_wf rds '$WORKFLOW_STATE_DIR/sub' '')"
 if [[ "$got" == "$DEFAULT_WF/sub" ]]; then pass "unset-wf rds \$WORKFLOW_STATE_DIR -> default"

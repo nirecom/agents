@@ -263,13 +263,14 @@ function buildWorkflowStatus(sessionId) {
 // SessionStart hooks must output valid JSON
 const lines = [];
 if (sessionId) {
-  const stateDir = process.env.WORKFLOW_STATE_DIR ||
-    path.join(os.homedir(), ".claude", "projects", "workflow");
+  // The routed path (#2511): a legacy-root session's file is named where it really lives.
+  let statePath = null;
+  try { statePath = getStatePath(sessionId); } catch (_) { /* invalid sid: omit the line */ }
   // This line is itself lineage evidence: a compacted / forked transcript copies
   // the attachment forward, which is how readLineageAncestors recovers the
   // ancestor when no forkedFrom row exists. SSOT for the wording: lib/session-announce.
   lines.push(`${SESSION_ID_ANNOUNCE_PREFIX}${sessionId}`);
-  lines.push(`State file: ${path.join(stateDir, sessionId + ".json")}`);
+  if (statePath) lines.push(`State file: ${statePath}`);
   const { buildInheritanceNotice } = require("./session-start/inheritance-notice");
   for (const line of buildInheritanceNotice({
     sessionId, sessionSource, inheritedFromSessionId,

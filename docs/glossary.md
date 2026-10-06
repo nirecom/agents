@@ -87,6 +87,17 @@ definition, and related links.
   "in-skill step" when the ID needs a noun.
 - **Related**: [rules/prompt.md](../rules/prompt.md) §4
 
+### workflow state dir
+
+- **Full name**: Workflow state directory (env pin: `WORKFLOW_STATE_DIR`)
+- **Definition**: The root holding per-session machine state — `<sid>.json`
+  and the `<sid>.control/` control dir — default `~/.workflow-state/`. Before
+  the #2511 rename it lived at `~/.claude/projects/workflow/` (the "legacy root",
+  kept only until session close moves a pre-rename session). Distinct from
+  PLANS_DIR (`WORKFLOW_PLANS_DIR`), which holds model-readable artifacts. Tests
+  must never write it; they isolate it with `harness_isolate`.
+- **Related**: [architecture/claude-code/state-dirs.md](architecture/claude-code/state-dirs.md)
+
 ### turn
 
 - **Full name**: Conversational turn

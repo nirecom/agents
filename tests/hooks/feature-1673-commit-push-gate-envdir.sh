@@ -3,8 +3,8 @@
 # Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/spawn.js, hooks/workflow-gate.js, hooks/workflow-state/state-io/core.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/gate.js
 # Tags: worker-dispatch, commit-push, workflow-gate, env-propagation, state-dir, fail-quiet, TL2, scope:issue-specific
 #
-# Issue #1673 Risk 3 — the quiet failure. getWorkflowDir() reads exactly one
-# variable, WORKFLOW_STATE_DIR, falling back to <HOME>/.claude/projects/workflow;
+# Issue #1673 Risk 3 — the quiet failure. getSessionStateDir() reads exactly one
+# variable, WORKFLOW_STATE_DIR, falling back to the per-session default root;
 # spawn.js's buildEnv hands a child only CHILD_ENV_ALLOWLIST plus the entry's
 # envPassthrough, and WORKFLOW_STATE_DIR is in neither by default. A worker that
 # forgets it does not crash: the gate child looks in the wrong directory, finds no
@@ -180,7 +180,11 @@ gate_decision() {
             "DEFAULT_BRANCHES=main,master" \
             node "$(nodepath "$GATE_JS")" 2>/dev/null)" || rc=$?
     else
+        # HOME is pinned too, so the unpinned gate falls back to a fixture home
+        # instead of the developer's live state root (#2512).
+        mkdir -p "$TMPD/sc-$scenario/home"
         out="$(printf '%s' "$payload" | run_with_timeout 60 env -u WORKFLOW_STATE_DIR \
+            "HOME=$(nodepath "$TMPD/sc-$scenario/home")" "USERPROFILE=$(nodepath "$TMPD/sc-$scenario/home")" \
             "WORKFLOW_PLANS_DIR=$(nodepath "$pdir")" "DEFAULT_BRANCHES=main,master" \
             node "$(nodepath "$GATE_JS")" 2>/dev/null)" || rc=$?
     fi
@@ -222,12 +226,15 @@ group_worker_source() {
         fail "worker/sets-workflow-state-dir" "the worker never names WORKFLOW_STATE_DIR"
     fi
     # envPassthrough also permits inheritance; the plan requires the worker to
-    # compute the documented default when the parent env has nothing.
-    if printf '%s\n' "$blob" | grep -qE 'projects.{1,4}workflow'; then
+    # compute the documented default when the parent env has nothing. #2511: the
+    # default is per-session, so the worker must resolve it through state-root's
+    # getSessionStateDir rather than hard-code a directory.
+    if printf '%s\n' "$blob" | grep -qE 'state-io/state-root' \
+        && printf '%s\n' "$blob" | grep -qE 'getSessionStateDir\('; then
         pass "worker/computes-default-state-dir"
     else
         fail "worker/computes-default-state-dir" \
-            "no <HOME>/.claude/projects/workflow fallback found — inheritance-only resolution"
+            "no getSessionStateDir (state-root) default resolution found — inheritance-only resolution"
     fi
 }
 

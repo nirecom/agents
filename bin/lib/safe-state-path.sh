@@ -425,14 +425,27 @@ _sp_nothing_to_migrate() {
 # AGENTS_CONFIG_DIR cannot skip the migration) is authoritative and its non-zero exit
 # is returned as-is (3 = migration failed). Fast path, no node spawn: both dirs pinned
 # in env, the dir real, and nothing left to migrate (no legacy <file>; for the dir form
-# no <sid>-* plans entry at all). Named exception (CPR-UNV): a stripped install without
-# that CLI resolves the same path in bash, refuses a symlinked or non-directory entry,
+# no <sid>-* plans entry at all). Unpinned, node routes the sid (#2511 legacy root).
+# Named exception (CPR-UNV): a stripped install without that CLI resolves the default
+# root in bash (no legacy routing), refuses a symlinked or non-directory entry,
 # and fails closed (3) on a legacy copy (dir form: any <sid>-* entry, unclassifiable here).
+_sp_is_abs_path() {
+    # Named exception to state-root.js#normalizePin (drive form only on Windows): Git Bash
+    # converts a driveless `/tmp/x` to the same `C:/...` for every node child, so both agree.
+    [[ "$1" == /* || "$1" =~ ^[A-Za-z]:[\\/] ]]
+}
+
 sp_control_dir() {
     local sid="${1-}" file="${2-}" root="" d rc bd legacy
     sp_valid_token "$sid" || return 2
     [ -z "$file" ] || sp_valid_token "$file" || return 2
-    bd="${WORKFLOW_STATE_DIR:-${HOME:?HOME not set}/.claude/projects/workflow}/$sid.control"
+    # Same rule as state-root.js resolvePin: a relative pin would follow the caller's cwd.
+    if [[ -n "${WORKFLOW_STATE_DIR:-}" ]] && ! _sp_is_abs_path "$WORKFLOW_STATE_DIR"; then
+        printf 'sp_control_dir: WORKFLOW_STATE_DIR must be an absolute path (tilde is not expanded). Got: %s\n' \
+            "$WORKFLOW_STATE_DIR" >&2
+        return 1
+    fi
+    bd="${WORKFLOW_STATE_DIR:-${HOME:?HOME not set}/.workflow-state}/$sid.control"
     legacy="${WORKFLOW_PLANS_DIR:-${HOME}/.workflow-plans}/$sid-$file"
     if [ -n "${WORKFLOW_STATE_DIR:-}" ] && [ -n "${WORKFLOW_PLANS_DIR:-}" ] \
         && [[ -z "$file" || "$file" =~ ^[A-Za-z0-9] ]]; then

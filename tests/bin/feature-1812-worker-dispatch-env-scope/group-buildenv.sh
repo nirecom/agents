@@ -117,7 +117,7 @@ run_envscope_probe() {
 }
 epv() { printf '%s\n' "$EPROBE_OUT" | sed -n "s/^$1=//p" | head -1; }
 
-ALL_DECLARED="CLAUDE_PROJECT_DIR,WORKFLOW_STATE_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,GITLAB_HOST,GITLAB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID"
+ALL_DECLARED="CLAUDE_PROJECT_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,GITLAB_HOST,GITLAB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID,WORKFLOW_STATE_DIR"
 NO_DECL_ERR="does not declare the child env var"
 NOT_ARRAY_ERR="child env scope must be an array of env var names"
 
@@ -165,7 +165,7 @@ group_a() {
     assert_eq "A5/extraEnv-with-omitted-scope-unchanged" "NO_THROW" "$(epv extra_omitted_scope)"
 
     assert_eq "A6/gate-scope-admits-its-six-and-no-credential" \
-        "CLAUDE_PROJECT_DIR,WORKFLOW_STATE_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID" \
+        "CLAUDE_PROJECT_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID,WORKFLOW_STATE_DIR" \
         "$(epv gate_scope_declared)"
 
     assert_eq "A7/doc-append-compose-scope" "GH_TOKEN,GITHUB_TOKEN" "$(epv da_compose_declared)"

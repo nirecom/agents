@@ -45,8 +45,8 @@ new_sandbox() {  # <tag> → echoes "<pinned>|<decoyhome>|<cfgdir>"
 # #2434 control file <sid>.control/supervisor-state.json.
 count_states() { find "$1" -name '*supervisor-state.json' 2>/dev/null | wc -l | tr -d ' '; }
 # #2434: the state is a control file; with WORKFLOW_STATE_DIR unset it resolves to the
-# default workflow dir under the (decoy) home.
-home_state() { printf '%s/.claude/projects/workflow/%s.control/supervisor-state.json' "$1" "$SID"; }
+# default workflow dir under the (decoy) home (#2511: <home>/.workflow-state).
+home_state() { printf '%s/.workflow-state/%s.control/supervisor-state.json' "$1" "$SID"; }
 
 # emit_call <js-body> — the snippet run inside the emit process.
 EMIT_SENTINEL="const em=require('$EMIT_NODE'); em.reportSentinel('WORKFLOW_OFF','G-case reason','$SID');"

@@ -1,7 +1,7 @@
 "use strict";
 
 const fs = require("fs");
-const { withStateLock } = require("./lock");
+const { withSessionStateLock } = require("./lock");
 const { validateFinding, validate, validateTranscriptCursor, AUDIT_PHASE_VALUES, AUDIT_VERDICT_VALUES, AUDIT_RETRY_THRESHOLD } = require("../supervisor-state-schema");
 const {
   SESSION_ID_RE,
@@ -90,7 +90,7 @@ function writeAuditStateCore(sessionId, patch) {
 // around the final writeAtomic.
 function writeAuditState(sessionId, patch) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return false;
-  return withStateLock(getStatePath(sessionId, { forWrite: true }), () => writeAuditStateCore(sessionId, patch)) === true;
+  return withSessionStateLock(sessionId, () => writeAuditStateCore(sessionId, patch)) === true;
 }
 
 // CAS clear: applies patch only when the current audit_phase matches expectedPhase.
@@ -98,7 +98,7 @@ function writeAuditState(sessionId, patch) {
 // the pre-lock "done" snapshot was read (#2256 stale-clear race).
 function writeAuditStateCas(sessionId, expectedPhase, patch) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return false;
-  return withStateLock(getStatePath(sessionId, { forWrite: true }), () => {
+  return withSessionStateLock(sessionId, () => {
     const fresh = readStateOrInit(sessionId);
     const currentPhase = (fresh.audit && fresh.audit.audit_phase != null)
       ? fresh.audit.audit_phase : null;
@@ -126,7 +126,7 @@ function incrementAuditRetryCountCore(sessionId) {
 
 function incrementAuditRetryCount(sessionId) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return { count: 0, frozen: false };
-  const r = withStateLock(getStatePath(sessionId, { forWrite: true }), () => incrementAuditRetryCountCore(sessionId));
+  const r = withSessionStateLock(sessionId, () => incrementAuditRetryCountCore(sessionId));
   return r === undefined ? { count: 0, frozen: false } : r;
 }
 

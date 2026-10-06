@@ -13,6 +13,7 @@
 const path = require("path");
 
 const { readEnvFile } = require("../../../../hooks/lib/load-env");
+const { getSessionStateDir } = require("../../../../hooks/workflow-state/state-io/state-root");
 const { run: spawnRun } = require("../../spawn");
 
 const GIT_TIMEOUT_MS = 300000;
@@ -57,8 +58,12 @@ function homeDir() {
 function resolveGateEnv(payload, ctx) {
   const cfg = readEnvFile(path.join(ctx.anchors.acd, ".env")) || {};
   return {
-    WORKFLOW_STATE_DIR:
-      cfg.WORKFLOW_STATE_DIR || path.join(homeDir(), ".claude", "projects", "workflow"),
+    // Per-session routed dir (#2511); envFallback:false — process.env is never consulted.
+    WORKFLOW_STATE_DIR: getSessionStateDir(payload.session_id, {
+      pin: cfg.WORKFLOW_STATE_DIR || null,
+      home: homeDir(),
+      envFallback: false,
+    }),
     WORKFLOW_PLANS_DIR: ctx.anchors.plansDir,
     WORKFLOW_SESSION_ID: payload.session_id,
     CLAUDE_PROJECT_DIR: payload.worktree_path,

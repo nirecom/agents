@@ -13,7 +13,7 @@ case "${BASH_SOURCE[0]}" in
 esac
 
 # Always overrides the inherited pair: a test that pins neither or only one of them must
-# never reach the developer's live ~/.claude/projects/workflow or ~/.workflow-plans.
+# never reach the developer's live ~/.workflow-state (or its legacy root) or ~/.workflow-plans.
 run_all_pin_state_dirs() {
   local root="${1:-}"
   [[ -n "$root" ]] || return 1

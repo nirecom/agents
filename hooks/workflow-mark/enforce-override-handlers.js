@@ -14,7 +14,7 @@ const {
   ISSUE_CLOSE_VERIFIED_RE_DQ, ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE,
   ISSUE_CLOSE_VERIFIED_END_RE_DQ, ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE,
 } = require("../lib/sentinel-patterns");
-const { getWorkflowDir } = require("../workflow-state");
+const { getSessionStateDir } = require("../workflow-state");
 const { consumeOffClearance, handleEmergencyOff } = require("./enforce-override-handlers/off-clearance");
 const { handleNextStepPause } = require("./enforce-override-handlers/next-step-pause");
 
@@ -64,7 +64,7 @@ function handle(ctx) {
       );
     }
     try {
-      const dir = getWorkflowDir();
+      const dir = getSessionStateDir(sessionId);
       fs.mkdirSync(dir, { recursive: true });
       const markerPath = path.join(dir, `${sessionId}.worktree-off`);
       const tmp = markerPath + ".tmp";
@@ -124,7 +124,7 @@ function handle(ctx) {
       );
     }
     try {
-      const dir = getWorkflowDir();
+      const dir = getSessionStateDir(sessionId);
       const markerPath = path.join(dir, `${sessionId}.worktree-off`);
       try {
         fs.unlinkSync(markerPath);
@@ -177,7 +177,7 @@ function handle(ctx) {
       );
     }
     try {
-      const dir = getWorkflowDir();
+      const dir = getSessionStateDir(sessionId);
       fs.mkdirSync(dir, { recursive: true });
       const markerPath = path.join(dir, `${sessionId}.workflow-off`);
       const tmp = markerPath + ".tmp";
@@ -236,7 +236,7 @@ function handle(ctx) {
       );
     }
     try {
-      const dir = getWorkflowDir();
+      const dir = getSessionStateDir(sessionId);
       const markerPath = path.join(dir, `${sessionId}.workflow-off`);
       try {
         fs.unlinkSync(markerPath);
@@ -325,7 +325,7 @@ function handle(ctx) {
       );
     }
     try {
-      const dir = getWorkflowDir();
+      const dir = getSessionStateDir(sessionId);
       fs.mkdirSync(dir, { recursive: true });
       const markerPath = path.join(dir, `${sessionId}.issue-close-verified`);
       const tmp = markerPath + ".tmp";
@@ -378,7 +378,7 @@ function handle(ctx) {
       );
     }
     try {
-      const dir = getWorkflowDir();
+      const dir = getSessionStateDir(sessionId);
       const markerPath = path.join(dir, `${sessionId}.issue-close-verified`);
       try {
         fs.unlinkSync(markerPath);

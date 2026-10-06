@@ -123,9 +123,10 @@ prefix or by a poisoned parent env. Both are decisions a gate depends on:
 
 `readEnvFile` returns null when the file is missing or unreadable; that is
 treated exactly like an empty map and the documented defaults apply.
-`getWorkflowDir()`'s own fallback is `<HOME>/.claude/projects/workflow`, so the
-default here resolves to the same directory the gate child would compute for
-itself.
+Without a `.env` value the dir is `getSessionStateDir(sid, { pin: null, envFallback: false })`:
+it never reads `process.env.WORKFLOW_STATE_DIR`, and routes from `<HOME>` exactly
+as the gate child would for that session (`~/.workflow-state/`, or the legacy
+root for a pre-move session — [state-dirs.md](../state-dirs.md#state-root-migration-temporary)).
 
 ## Step 7 — the push retry and the rebase ladder
 

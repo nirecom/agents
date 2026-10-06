@@ -6,7 +6,7 @@
 // Policy: docs/architecture/claude-code/state-dirs.md.
 const fs = require("fs");
 const path = require("path");
-const { SESSION_ID_VALID_RE, getWorkflowDir } = require("../workflow-state/state-io/core");
+const { SESSION_ID_VALID_RE, getStatePath } = require("../workflow-state/state-io/core");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
 
 const FORMAT_TOKENS = Object.freeze([
@@ -140,14 +140,13 @@ function classifyPlansEntry(name, ctx) {
     if (typeof own === "string" && own.length > 0 && name.startsWith(`${own}-`)) return "unregistered";
   }
   let plansDir = c.plansDir;
-  let workflowDir = c.workflowDir;
   try { if (!plansDir) plansDir = getWorkflowPlansDir(); } catch (_) { plansDir = null; }
-  if (!workflowDir) workflowDir = getWorkflowDir();
   for (let i = name.indexOf("-"); i > 0; i = name.indexOf("-", i + 1)) {
     const prefix = name.slice(0, i);
     if (!SESSION_ID_VALID_RE.test(prefix)) continue;
-    if (plansDir && sessionEvidence(prefix, plansDir, workflowDir)) return "unregistered";
-    if (!plansDir && sessionEvidence(prefix, workflowDir, workflowDir)) return "unregistered";
+    // Each candidate prefix is its own sid, so it routes to its own state dir (#2511).
+    const workflowDir = c.workflowDir || path.dirname(getStatePath(prefix));
+    if (sessionEvidence(prefix, plansDir || workflowDir, workflowDir)) return "unregistered";
   }
   return "no-sid";
 }

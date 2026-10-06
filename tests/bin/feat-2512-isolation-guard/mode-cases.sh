@@ -90,3 +90,34 @@ c_i12_repo_clean() {
   expect "I12 the whole repo (no args) exits 0" rc_is 0
   expect "I12 the whole repo prints no violation line" no_violation_for ""
 }
+
+# Codex C2: --staged is the pre-commit gate, so its isolation verdict must follow the
+# index (what is committed), not the working tree. Index and worktree diverge both ways.
+c_staged_reads_index() {
+  local d
+  d="$T/staged-index"
+  cls_repo "$d"
+  fx "$d/tests/hooks/gate.sh" '#!/usr/bin/env bash' "$PIN_BOTH" "$EXEC_RO"
+  commit_all "$d"
+
+  fx "$d/tests/hooks/gate.sh" '#!/usr/bin/env bash' "$EXEC_RO"
+  git -C "$d" add tests/hooks/gate.sh
+  fx "$d/tests/hooks/gate.sh" '#!/usr/bin/env bash' "$PIN_BOTH" "$EXEC_RO"
+  run_cls_in "$d" "$d/bin/check-plans-dir-isolation.sh" --staged
+  expect "staged index: a staged unpinned blob fails although the worktree is pinned (rc=1)" rc_is 1
+  expect "staged index: STATE-UNPINNED names the staged tests/hooks/gate.sh" label_hits STATE-UNPINNED "hooks/gate.sh"
+
+  git -C "$d" reset -q
+  fx "$d/tests/hooks/gate.sh" '#!/usr/bin/env bash' "$PIN_BOTH" "$EXEC_RO" '# touched'
+  git -C "$d" add tests/hooks/gate.sh
+  fx "$d/tests/hooks/gate.sh" '#!/usr/bin/env bash' "$EXEC_RO"
+  fx "$d/tests/hooks/untracked.sh" '#!/usr/bin/env bash' "$EXEC_RO"
+  run_cls_in "$d" "$d/bin/check-plans-dir-isolation.sh" --staged
+  expect "staged index: a pinned staged blob passes although the worktree copy is unpinned (rc=0)" rc_is 0
+  expect "staged index: the unstaged worktree edit is not reported" no_violation_for "hooks/gate.sh"
+  expect "staged index: an untracked tests .sh is not reported" no_violation_for "hooks/untracked.sh"
+}
+
+case_begin "staged-reads-index" "bin/check-plans-dir-isolation.sh"
+c_staged_reads_index
+case_end

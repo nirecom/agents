@@ -38,7 +38,7 @@ Session start → session-start.js (SessionStart hook)
       that failed only on lineage (no provable descent) is offered via the
       explicit adoption path below, never auto-inherited
     if no match found: creates fresh state with all steps pending
-  writes ~/.claude/projects/workflow/<sid>.json (includes cwd, git_branch)
+  writes ~/.workflow-state/<sid>.json (includes cwd, git_branch)
   calls bin/workflow/next-step --session <sid> → injects every step status
     + "NEXT ACTION: <next-step NEXT_HINT>" into additionalContext (fail-open)
   outputs additionalContext: "Current workflow session_id: <sid>\nState file: ..."
@@ -96,7 +96,7 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     (AGENTS_CONFIG_DIR unresolved, script missing, bash not on PATH, unexpected exit code);
     fails open only on the 3s spawn timeout.
     Implementation: checkCodeSizeHardLimit() in hooks/workflow-gate/code-size-gate.js.
-  loads ~/.claude/projects/workflow/<session_id>.json
+  loads ~/.workflow-state/<session_id>.json
   docs-only short-circuit: if ALL staged files match the human-facing docs allowlist,
     only user_verification is checked; all other steps are bypassed.
     Behaviour/prompt files are deliberately outside the allowlist even when they are
@@ -224,7 +224,7 @@ Priority order for recovery:
 3. **Auto-repair**: next-step calls `hasCompletionEvidence()` for evidence-backed steps and self-corrects — no action needed.
 4. **`--mark <step>`**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step>` marks one step complete without touching others (session-global; run from any directory). Use when next-step's scoped hint names a specific step to mark.
 5. **RESET_FROM**: when the session needs to redo a phase or state became inconsistent.
-6. **Direct JSON edit** (`~/.claude/projects/workflow/<sid>.json`): last resort for surgical per-step changes (e.g. setting one step to `skipped` without affecting others).
+6. **Direct JSON edit** (`<sid>.json` under `bin/workflow-state-dir --session <sid>`): last resort for surgical per-step changes (e.g. setting one step to `skipped` without affecting others).
 
 Argv note (#1947): the settling status is passed as a value-less flag — `--complete` / `--skipped` / `--pending` on `--advance`, and no trailing token at all on `--mark`. A bare `complete` argv token is misread as the bash builtin by the worktree-isolation command classifier, which blocks the whole call. The old `--status <value>` spelling, and the trailing status token on `--mark`, still work and warn on stderr; the persisted status strings are unchanged.
 

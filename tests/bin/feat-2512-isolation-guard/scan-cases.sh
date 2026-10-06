@@ -304,3 +304,35 @@ c_gap_idempotent() {
   expect "idempotency: a second run returns the same rc" test "$rc1" = "$CLS_RC"
   expect "idempotency: a second run prints the same lines" test "$out1" = "$CLS_OUT"
 }
+
+# Codex C1: an export that carries no value is no pin. An empty value makes the resolver
+# fall back to the live default root, and a bare export with no assignment in the file
+# only re-exports whatever the caller had. A bare export after an assignment is the
+# repo's existing two-step form and stays a pin.
+c_pin_without_value() {
+  local r
+  r="$(new_root pin-novalue)"
+  fx "$r/hooks/empty-val.sh" '#!/usr/bin/env bash' 'export WORKFLOW_STATE_DIR= WORKFLOW_PLANS_DIR=/tmp/p' "$EXEC_RO"
+  fx "$r/hooks/empty-quoted.sh" '#!/usr/bin/env bash' 'export WORKFLOW_STATE_DIR="" WORKFLOW_PLANS_DIR=/tmp/p' "$EXEC_RO"
+  fx "$r/hooks/empty-eol.sh" '#!/usr/bin/env bash' 'export WORKFLOW_PLANS_DIR=/tmp/p' 'export WORKFLOW_STATE_DIR=' "$EXEC_RO"
+  fx "$r/hooks/bare-unassigned.sh" '#!/usr/bin/env bash' 'export WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR' "$EXEC_RO"
+  fx "$r/hooks/bare-assigned.sh" '#!/usr/bin/env bash' 'WORKFLOW_STATE_DIR=/tmp/s; export WORKFLOW_STATE_DIR' \
+    'export WORKFLOW_PLANS_DIR=/tmp/p' "$EXEC_RO"
+  fx "$r/hooks/bare-then-assign.sh" '#!/usr/bin/env bash' 'export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR=/tmp/s' \
+    'export WORKFLOW_PLANS_DIR=/tmp/p' "$EXEC_RO"
+  fx "$r/hooks/bare-then-empty.sh" '#!/usr/bin/env bash' 'export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR=""' \
+    'export WORKFLOW_PLANS_DIR=/tmp/p' "$EXEC_RO"
+  run_cls --root "$r"
+  expect "no-value pin: export WORKFLOW_STATE_DIR= (empty, mid-list) is a violation" violation_for "hooks/empty-val.sh"
+  expect "no-value pin: export WORKFLOW_STATE_DIR=\"\" is a violation" violation_for "hooks/empty-quoted.sh"
+  expect "no-value pin: export WORKFLOW_STATE_DIR= (empty, end of line) is a violation" violation_for "hooks/empty-eol.sh"
+  expect "no-value pin: a bare export with no assignment in the file is a violation" violation_for "hooks/bare-unassigned.sh"
+  expect "no-value pin: assign-then-bare-export stays a pin" no_violation_for "hooks/bare-assigned.sh"
+  expect "no-value pin: bare-export-then-assign stays a pin" no_violation_for "hooks/bare-then-assign.sh"
+  expect "no-value pin: bare-export-then-empty-assign is a violation" violation_for "hooks/bare-then-empty.sh"
+  expect "no-value pin: rc=1" rc_is 1
+}
+
+case_begin "pin-without-value" "bin/check-plans-dir-isolation.sh"
+c_pin_without_value
+case_end

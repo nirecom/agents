@@ -1,7 +1,7 @@
 "use strict";
 
 const fs = require("fs");
-const { withStateLock } = require("./lock");
+const { withSessionStateLock } = require("./lock");
 const { validateFinding, validate, validateTranscriptCursor, SEVERITY_VALUES, ALERT_PHASE_VALUES, ALERT_ELIGIBLE_PHASE_VALUES, ALERT_RETRY_THRESHOLD } = require("../supervisor-state-schema");
 const findingStatus = require("../supervisor-finding-status");
 const {
@@ -129,7 +129,7 @@ function writeAlertStateCore(sessionId, patch) {
 // Locked wrappers (#2256 S2-c): the lock spans read-modify-write, so the
 // increment's second read can no longer drop a concurrent writer's update.
 function writeAlertState(sessionId, patch) {
-  return withStateLock(getStatePath(sessionId, { forWrite: true }), () => writeAlertStateCore(sessionId, patch)) === true;
+  return withSessionStateLock(sessionId, () => writeAlertStateCore(sessionId, patch)) === true;
 }
 
 function incrementAlertRetryCountCore(sessionId) {
@@ -151,13 +151,13 @@ function incrementAlertRetryCountCore(sessionId) {
 }
 
 function incrementAlertRetryCount(sessionId) {
-  const r = withStateLock(getStatePath(sessionId, { forWrite: true }), () => incrementAlertRetryCountCore(sessionId));
+  const r = withSessionStateLock(sessionId, () => incrementAlertRetryCountCore(sessionId));
   return r === undefined ? { count: 0, frozen: false } : r;
 }
 
 function mutateAlertState(sid, mutator) {
-  const fp = getStatePath(sid, { forWrite: true });
-  return withStateLock(fp, () => {
+  return withSessionStateLock(sid, () => {
+    const fp = getStatePath(sid, { forWrite: true });
     const state = readStateOrInit(sid); mutator(state);
     state.last_updated = new Date().toISOString();
     const vr = validate(state);

@@ -3,7 +3,8 @@
 // CLI for bin/check-plans-dir-isolation.sh (#2512 stage 4).
 // Exit 0 = clean (N-candidate lines are informational), 1 = violation, 2 = usage error.
 //   (no args)      isolation scan of <repo>/tests + residual token over tracked files
-//   --staged       residual token over staged files; scan only if a tests/*.sh is staged
+//   --staged       residual token over staged files; scan the index's tests/*.sh blobs
+//                  only if a tests/*.sh is staged
 //   --root <dir>   isolation scan of <dir> only
 //   <file>...      isolation verdict for the named files only
 
@@ -14,7 +15,7 @@ const { analyze, verdict, isViolation } = require("./classify");
 const { sourceEdges } = require("./source-resolve");
 const { buildGraph } = require("./source-graph");
 const { addDeclaredEdges } = require("./declared-parents");
-const { listShellFiles } = require("./scan");
+const { listShellFiles, readIndexShellFiles } = require("./scan");
 const residual = require("./residual-token");
 
 // The module set may be copied into a throwaway repo, so the repo is located from here.
@@ -55,12 +56,14 @@ function parseArgs(argv) {
   return opts;
 }
 
-// loadUnits(files) → Map<absPath, { text, lines, facts, edges }> (the files are read, never run).
-function loadUnits(files) {
+const readWorktree = (file) => fs.readFileSync(file, "utf8");
+
+// loadUnits(files, read) → Map<absPath, { text, lines, facts, edges }> (the files are read, never run).
+function loadUnits(files, read) {
   const units = new Map();
   for (const file of files) {
     if (units.has(file)) continue;
-    const text = fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+    const text = read(file).replace(/\r\n/g, "\n");
     const lines = parseShell(text);
     units.set(file, { text, lines, facts: analyze(lines, text), edges: sourceEdges(file, lines, REPO_ROOT) });
   }
@@ -68,9 +71,9 @@ function loadUnits(files) {
   return units;
 }
 
-// isolation(targets, universe) — targets: [{ abs, shown }]; universe adds parent candidates.
-function isolation(targets, universe) {
-  const units = loadUnits([...targets.map((t) => t.abs), ...universe]);
+// isolation(targets, universe, read) — targets: [{ abs, shown }]; universe adds parent candidates.
+function isolation(targets, universe, read = readWorktree) {
+  const units = loadUnits([...targets.map((t) => t.abs), ...universe], read);
   const graph = buildGraph(units);
   const out = [];
   for (const t of targets) {
@@ -98,7 +101,12 @@ function run(opts) {
   if (opts.staged) {
     const staged = residual.stagedPaths(REPO_ROOT);
     const out = residual.stagedHits(REPO_ROOT, staged);
-    if (staged.some((p) => TESTS_RE.test(p))) out.push(...scanRoot(testsRoot, REPO_ROOT));
+    if (staged.some((p) => TESTS_RE.test(p))) {
+      // The commit carries the index, so every tests/*.sh is judged by its staged blob.
+      const blobs = readIndexShellFiles(REPO_ROOT, "tests");
+      const targets = [...blobs.keys()].map((abs) => ({ abs, shown: slash(path.relative(REPO_ROOT, abs)) }));
+      out.push(...isolation(targets, [], (file) => blobs.get(file)));
+    }
     return out;
   }
   return [...scanRoot(testsRoot, REPO_ROOT), ...residual.trackedHits(REPO_ROOT)];

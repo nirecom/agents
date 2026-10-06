@@ -195,3 +195,128 @@ c_declared_parent() {
 case_begin "source-declared-parent" "bin/check-plans-dir-isolation.sh"
 c_declared_parent
 case_end
+
+# trim <s> — strip leading and trailing whitespace.
+trim() {
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  printf '%s' "${s%"${s##*[![:space:]]}"}"
+}
+
+# split_rows <s> — the `@@`-separated lines of a table cell, one per array element.
+split_rows() {
+  local s="$1"
+  SPLIT=()
+  while [[ "$s" == *@@* ]]; do
+    SPLIT+=("${s%%@@*}")
+    s="${s#*@@}"
+  done
+  SPLIT+=("$s")
+}
+
+# assert_table_rows <label> <root> <names-var> <keys-var> <wants-var> — one verdict per
+# row; a key is the path fragment that names the row's child in the classifier output.
+assert_table_rows() {
+  local label="$1" root="$2" i
+  local -n tnames="$3" tkeys="$4" twants="$5"
+  run_cls --root "$root"
+  for i in "${!tnames[@]}"; do
+    if [[ "${twants[$i]}" == inherit ]]; then
+      expect "$label ${tnames[$i]}: the child inherits the pin" no_violation_for "${tkeys[$i]}"
+    else
+      expect "$label ${tnames[$i]}: the child is a violation" violation_for "${tkeys[$i]}"
+    fi
+  done
+}
+
+# Codex C4: source-resolve.js path grammar, one row per BASE/REL shape. Each row is a
+# pinned parent (PIN_BOTH, then the cell lines) and an EXEC_RO child at <child> under it.
+c_source_resolve_table() {
+  local r name lines child want
+  local -a names=() keys=() wants=()
+  r="$(new_root sr-table)"
+  while IFS='|' read -r name lines child want; do
+    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+    name="$(trim "$name")"
+    child="$(trim "$child")"
+    split_rows "$(trim "$lines")"
+    names+=("$name")
+    wants+=("$(trim "$want")")
+    if [[ "$child" == ../* ]]; then keys+=("hooks/sr/${child#../}"); else keys+=("hooks/sr/$name/$child"); fi
+    fx "$r/hooks/sr/$name/parent.sh" '#!/usr/bin/env bash' "$PIN_BOTH" "${SPLIT[@]}"
+    fx "$r/hooks/sr/$name/$child" "$EXEC_RO"
+  done <<'TABLE'
+# name        | parent lines (@@ = newline)                               | child           | want
+dirname0      | . "$(dirname "$0")/kid.sh"                                 | kid.sh          | inherit
+dirname0-brace| . "$(dirname "${0}")/kid.sh"                               | kid.sh          | inherit
+bs-index      | source "$(dirname "${BASH_SOURCE[0]}")/kid.sh"             | kid.sh          | inherit
+bs-plain      | source "$(dirname "$BASH_SOURCE")/kid.sh"                  | kid.sh          | inherit
+bs-strip      | . "${BASH_SOURCE%/*}/kid.sh"                               | kid.sh          | inherit
+bs0-strip     | . "${BASH_SOURCE[0]%/*}/kid.sh"                            | kid.sh          | inherit
+unquoted      | . $(dirname "$0")/kid.sh                                   | kid.sh          | inherit
+subdir        | . "$(dirname "$0")/sub/deep/kid.sh"                        | sub/deep/kid.sh | inherit
+updir         | . "$(dirname "$0")/../updir-up/kid.sh"                     | ../updir-up/kid.sh | inherit
+cd-pwd        | . "$(cd "$(dirname "$0")" && pwd)/kid.sh"                  | kid.sh          | inherit
+cd-pwd-P      | . "$(cd "$(dirname "$0")/sub" && pwd -P)/kid.sh"           | sub/kid.sh      | inherit
+then-chain    | . "$(dirname "$0")/kid.sh"; true                           | kid.sh          | inherit
+var-once      | D="$(dirname "$0")"@@. "$D/kid.sh"                         | kid.sh          | inherit
+var-brace     | D="$(dirname "$0")"@@. "${D}/kid.sh"                       | kid.sh          | inherit
+var-readonly  | readonly D="$(dirname "$0")"@@source "$D/kid.sh"           | kid.sh          | inherit
+var-same-line | D="$(dirname "$0")"; . "$D/kid.sh"                         | kid.sh          | inherit
+fn-after-pin  | load() { . "$(dirname "$0")/kid.sh"; }@@load               | kid.sh          | inherit
+var-append    | D="$(dirname "$0")"@@D+=/x@@. "$D/kid.sh"                  | kid.sh          | violation
+var-reassign  | D="$(dirname "$0")"@@D="$D"@@. "$D/kid.sh"                 | kid.sh          | violation
+var-for       | for D in a; do . "$D/kid.sh"; done                         | kid.sh          | violation
+glob          | . "$(dirname "$0")"/kid*.sh                                | kid.sh          | violation
+pwd-only      | . "$(pwd)/kid.sh"                                          | kid.sh          | violation
+home-path     | . "$HOME/kid.sh"                                           | kid.sh          | violation
+comment-only  | # . "$(dirname "$0")/kid.sh"                               | kid.sh          | violation
+heredoc-body  | cat <<'EOF'@@. "$(dirname "$0")/kid.sh"@@EOF               | kid.sh          | violation
+TABLE
+  expect "source-resolve table: the table has rows" test "${#names[@]}" -eq 25
+  assert_table_rows "source-resolve" "$r" names keys wants
+}
+
+case_begin "source-resolve-table" "bin/check-plans-dir-isolation.sh"
+c_source_resolve_table
+case_end
+
+# Codex C4: declared-parents.js, one row per declaration / mention shape. Each row is a
+# pinned parent (PIN_BOTH, then the cell lines) and a child kids/kid.sh carrying the
+# declaration cell, then EXEC_RO.
+c_declared_parents_table() {
+  local r name lines decl want
+  local -a names=() keys=() wants=()
+  r="$(new_root dp-table)"
+  while IFS='|' read -r name lines decl want; do
+    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+    name="$(trim "$name")"
+    split_rows "$(trim "$lines")"
+    names+=("$name")
+    keys+=("hooks/dp/$name/kids/kid.sh")
+    wants+=("$(trim "$want")")
+    fx "$r/hooks/dp/$name/parent.sh" '#!/usr/bin/env bash' "$PIN_BOTH" "${SPLIT[@]}"
+    fx "$r/hooks/dp/$name/kids/kid.sh" "$(trim "$decl")" "$EXEC_RO"
+  done <<'TABLE'
+# name          | parent lines (@@ = newline)        | child declaration line                       | want
+plain           | bash "$D/kids/kid.sh"              | # isolation: inherits-from ../parent.sh      | inherit
+no-space-hash   | bash "$D/kids/kid.sh"              | #isolation: inherits-from ../parent.sh       | inherit
+mention-ext     | run kid.sh                         | # isolation: inherits-from ../parent.sh      | inherit
+mention-string  | echo "kid"                         | # isolation: inherits-from ../parent.sh      | inherit
+mention-list    | for p in alpha kid; do :; done     | # isolation: inherits-from ../parent.sh      | inherit
+trailing-word   | bash "$D/kids/kid.sh"              | # isolation: inherits-from ../parent.sh now  | violation
+wrong-key       | bash "$D/kids/kid.sh"              | # isolation: inherit-from ../parent.sh       | violation
+wrong-rel-path  | bash "$D/kids/kid.sh"              | # isolation: inherits-from ./parent.sh       | violation
+self-declared   | bash "$D/kids/kid.sh"              | # isolation: inherits-from ./kid.sh          | violation
+longer-name     | run kidney                         | # isolation: inherits-from ../parent.sh      | violation
+prefixed-name   | run subkid                         | # isolation: inherits-from ../parent.sh      | violation
+dashed-name     | run kid-two                        | # isolation: inherits-from ../parent.sh      | violation
+heredoc-mention | cat <<'EOF'@@kid@@EOF              | # isolation: inherits-from ../parent.sh      | violation
+TABLE
+  expect "declared-parents table: the table has rows" test "${#names[@]}" -eq 13
+  assert_table_rows "declared-parents" "$r" names keys wants
+}
+
+case_begin "declared-parents-table" "bin/check-plans-dir-isolation.sh"
+c_declared_parents_table
+case_end

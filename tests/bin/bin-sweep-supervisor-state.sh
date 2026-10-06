@@ -145,6 +145,10 @@ run_sweep_stubbed() {
         cp "$SWEEP" "$bin/"
         cp -r "$AGENTS_DIR/bin/sweep-supervisor-state" "$bin/"
         cp "$AGENTS_DIR/bin/lib/sweep-write-mode.sh" "$bin/lib/"
+        # The state-root lister resolves hooks/ from its own location, so the stub
+        # delegates to the real one instead of copying it (#2511).
+        printf 'require(%s);\n' "\"$(node_path "$AGENTS_DIR/bin/workflow-state-dir")\"" \
+            > "$bin/workflow-state-dir"
         printf '#!/usr/bin/env bash\nprintf "resolve-session-id: resolver failed: boom\\n" >&2\nexit %s\n' \
             "$stub_rc" > "$bin/resolve-session-id"
         chmod +x "$bin/resolve-session-id"

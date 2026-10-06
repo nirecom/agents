@@ -261,7 +261,7 @@ group_c() {
     # #2308: GITLAB_HOST + GITLAB_TOKEN join the passthrough so the dispatched
     # glab child authenticates against a self-hosted GitLab on the MR path.
     assert_eq "env/declared-set" \
-        "CLAUDE_PROJECT_DIR,WORKFLOW_STATE_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,GITLAB_HOST,GITLAB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID" \
+        "CLAUDE_PROJECT_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,GITLAB_HOST,GITLAB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID,WORKFLOW_STATE_DIR" \
         "$(ev declared)"
     # run-stage-chain.sh / run-finalize-terminal.sh export it themselves; the
     # dispatcher must not be the one handing it out.

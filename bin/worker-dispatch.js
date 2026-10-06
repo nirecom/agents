@@ -99,7 +99,7 @@ function main() {
   let located = null;
   let payload = null;
   try {
-    located = locatePayload(payloadPathArg, { workflowDir: anchors.workflowDir, plansDir: anchors.plansDir });
+    located = locatePayload(payloadPathArg, { stateRoots: anchors.stateRoots, plansDir: anchors.plansDir });
     payload = loadPayload(located.abs);
   } catch (e) {
     emit.failure(entry, `payload: ${errText(e, "could not be loaded")}`);

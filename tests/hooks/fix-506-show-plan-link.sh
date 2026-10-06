@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/show-plan-link.js
-# Tags: plan, vscode, hook, bin, env, scope:issue-specific
+# Tags: plan, vscode, hook, bin, env, scope:issue-specific, workflow-state, turn-marker, TL2
 # Tests for URI encoding fix in workspaceFolderUriFrom() (issue #492).
 # Branch: fix/506-show-plan-link
 # The helper operates on string content only (not process.platform), so all
@@ -160,6 +160,24 @@ if [ "$GOT" = "$EXPECTED" ]; then
   pass "T-URI-7 already-encoded literal % re-encoded as %25"
 else
   fail "T-URI-7 expected '$EXPECTED', got '$GOT'"
+fi
+
+# T-STATE-1 (#2511): the turn marker follows the WORKFLOW_STATE_DIR pin alone. The
+# retired variable is unset for this call and HOME points at a decoy, so a marker
+# written through the old resolution lands in the decoy instead.
+OLD_TOKEN="CLAUDE_""WORKFLOW_DIR"
+DECOY="$ISO_TMP/decoy-home"
+mkdir -p "$DECOY"
+SID="aaaaaaaa-2511-4000-8000-000000000001"
+echo "{\"session_id\":\"$SID\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$DETAIL_PATH\"},\"tool_response\":{\"success\":true}}" |
+  run_with_timeout env -u "$OLD_TOKEN" HOME="$DECOY" USERPROFILE="$DECOY" SHOW_PLAN_LINK_NO_SPAWN=1 \
+    node "$HOOK" >/dev/null 2>&1
+PINNED_MARKERS="$(find "$WORKFLOW_STATE_DIR" -maxdepth 1 -name "$SID.confirm-plan-turn-*.json" | wc -l | tr -d ' ')"
+DECOY_FILES="$(find "$DECOY" -type f | wc -l | tr -d ' ')"
+if [ "$PINNED_MARKERS" = "1" ] && [ "$DECOY_FILES" = "0" ]; then
+  pass "T-STATE-1 turn marker lands under the pinned WORKFLOW_STATE_DIR, none in the decoy HOME"
+else
+  fail "T-STATE-1 expected 1 marker under the pin and 0 decoy files, got pin=$PINNED_MARKERS decoy=$DECOY_FILES"
 fi
 
 echo ""

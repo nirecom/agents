@@ -10,7 +10,7 @@ echo "=== workflow-state: Unit checks ==="
 WS_UNIT1_DIR="$TMPDIR_BASE/custom-workflow-$$"
 WS_UNIT1_RESULT=$(cd "$DOTFILES_DIR" && WORKFLOW_STATE_DIR="$WS_UNIT1_DIR" node -e "
 const wf = require('$WS_REL');
-console.log(wf.getWorkflowDir() === process.env.WORKFLOW_STATE_DIR ? 'ok' : wf.getWorkflowDir());
+console.log(wf.getStateRoot() === process.env.WORKFLOW_STATE_DIR ? 'ok' : wf.getStateRoot());
 " 2>/dev/null || echo "ERROR")
 if [ "$WS_UNIT1_RESULT" = "ok" ]; then
     pass "WS-UNIT-1. WORKFLOW_STATE_DIR override is respected"
@@ -18,7 +18,7 @@ else
     fail "WS-UNIT-1. WORKFLOW_STATE_DIR override not respected: $WS_UNIT1_RESULT"
 fi
 
-# WS-UNIT-2: WORKFLOW_STATE_DIR unset → uses os.homedir()/.claude/projects/workflow
+# WS-UNIT-2: WORKFLOW_STATE_DIR unset → uses os.homedir()/.workflow-state (#2511)
 WS_FAKEHOME="$TMPDIR_BASE/fakehome"
 WS_UNIT2_RESULT=$(cd "$DOTFILES_DIR" && HOME="$WS_FAKEHOME" USERPROFILE="$WS_FAKEHOME" node -e "
 process.env.WORKFLOW_STATE_DIR = '';
@@ -26,8 +26,8 @@ delete process.env.WORKFLOW_STATE_DIR;
 const wf = require('$WS_REL');
 const os = require('os');
 const path = require('path');
-const expected = path.join(os.homedir(), '.claude', 'projects', 'workflow');
-console.log(wf.getWorkflowDir() === expected ? 'ok' : wf.getWorkflowDir());
+const expected = path.join(os.homedir(), '.workflow-state');
+console.log(wf.getStateRoot() === expected ? 'ok' : wf.getStateRoot());
 " 2>/dev/null || echo "ERROR")
 if [ "$WS_UNIT2_RESULT" = "ok" ]; then
     pass "WS-UNIT-2. WORKFLOW_STATE_DIR unset → os.homedir() path used"
@@ -44,7 +44,7 @@ try {
   wf.writeState('test-sid-unit3', state);
   const fs = require('fs');
   const path = require('path');
-  console.log(fs.existsSync(path.join(wf.getWorkflowDir(), 'test-sid-unit3.json')) ? 'ok' : 'missing');
+  console.log(fs.existsSync(path.join(wf.getStateRoot(), 'test-sid-unit3.json')) ? 'ok' : 'missing');
 } catch(e) { console.log('ERROR: ' + e.message); }
 " 2>/dev/null || echo "ERROR")
 if [ "$WS_UNIT3_RESULT" = "ok" ]; then

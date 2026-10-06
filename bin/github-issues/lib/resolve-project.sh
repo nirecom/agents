@@ -1,50 +1,27 @@
-# resolve-project.sh — auto-resolve Projects v2 config from git remote.
-#
-# Sourced (not executed). Exposes `resolve_project_for_repo` which sets the
-# following caller-scope variables on success (rc=0):
-#   RESOLVED_OWNER                    project node owner.login (NOT repo owner)
-#   RESOLVED_PROJECT_NUM              project number
-#   RESOLVED_PROJECT_ID              project node id
-#   RESOLVED_CONTENT_DATE_FIELD_ID   Content Date field id (empty if not present)
-#   RESOLVED_STATUS_FIELD_ID         Status single-select field id (empty if absent)
-#   RESOLVED_TODO_OPTION_ID          Status "Todo" option id (empty if absent)
-#   RESOLVED_IN_PROGRESS_OPTION_ID   Status "In Progress" option id (empty if absent)
-#   RESOLVED_DONE_OPTION_ID          Status "Done" option id (empty if absent)
-#   RESOLVED_FINGERPRINT_FIELD_ID    session-fingerprint text field id (empty if absent)
-#
-# Returns rc=1 on:
-#   - gh not in PATH
-#   - owner/repo unresolvable from the origin remote (no origin remote, origin
-#     is not github.com, or owner/repo is not extractable from its URL)
-#   - 0 linked Projects v2 to the repo
-#   - any gh api graphql failure
-#
-# Internal short-circuit: when all three of
-#   _ISSUE_CREATE_INTERNAL_OWNER, _ISSUE_CREATE_INTERNAL_PROJECT_NUM,
-#   _ISSUE_CREATE_INTERNAL_PROJECT_ID
-# are set in the environment, populate RESOLVED_* from them and skip GraphQL.
-# The optional _ISSUE_CREATE_INTERNAL_FIELD_ID and the five field/option-id
-# overrides (_ISSUE_CREATE_INTERNAL_STATUS_FIELD_ID, _TODO_OPTION_ID,
-# _IN_PROGRESS_OPTION_ID, _DONE_OPTION_ID, _FINGERPRINT_FIELD_ID) are used when set.
-#
-# Cache: ${WORKFLOW_STATE_DIR:-$HOME/.claude/projects/workflow}/cache/project-resolve.tsv
-# TSV (10 cols): owner/repo \t project_owner \t project_num \t project_id \t
-#   content_date_field_id \t status_field_id \t todo_option_id \t
-#   in_progress_option_id \t done_option_id \t fingerprint_field_id
-# Cache lookup is fixed-string (awk $1==key) — no regex metachar exposure.
-# Schema guard requires exactly 10 fields — older 5/9-col rows are treated as a
-# cache miss and overwritten on refetch (self-healing).
-# Cache write uses mktemp + mv for atomicity; mv failure is non-fatal (warn,
-# return 0 with resolved values still set).
-#
-# Set-safety: callers may have `set -e`. Every external command is guarded
-# with `|| return 1` / `|| true` / `if !` so a single failing gh invocation
-# never aborts the caller mid-resolve.
+# resolve-project.sh — auto-resolve Projects v2 config from the origin remote (sourced, not executed).
+# resolve_project_for_repo sets RESOLVED_{OWNER (project owner, not repo owner),PROJECT_NUM,PROJECT_ID,
+#   CONTENT_DATE_FIELD_ID,STATUS_FIELD_ID,TODO/IN_PROGRESS/DONE_OPTION_ID,FINGERPRINT_FIELD_ID}; optional ids
+#   may be empty. rc=1: gh missing, origin not a github.com owner/repo, no linked Project, or a graphql failure.
+# _ISSUE_CREATE_INTERNAL_{OWNER,PROJECT_NUM,PROJECT_ID} (+ the optional *_FIELD_ID/*_OPTION_ID overrides) skip GraphQL.
+# Cache: <bin/workflow-state-dir --global>/cache/project-resolve.tsv (#2511): 10-col TSV keyed by owner/repo
+#   (fixed-string awk match); any other width is a miss and is refetched; written via mktemp + mv (non-fatal).
+# Set-safety: every external command is guarded, so a failing gh never aborts a `set -e` caller.
 
-# resolve_project_for_repo
-#   no positional args.
-#   side effect: sets RESOLVED_OWNER, RESOLVED_PROJECT_NUM, RESOLVED_PROJECT_ID,
-#                RESOLVED_CONTENT_DATE_FIELD_ID.
+
+# _resolve_project_cache_dir <dir-of-this-lib> — cache dir under the global state root;
+# rc 1, no output, for a relative WORKFLOW_STATE_DIR (the caller then runs uncached).
+_resolve_project_cache_dir() {
+    local root=""
+    root="$(node "$1/../../workflow-state-dir" --global 2>/dev/null)" || root=""
+    root="${root%$'\r'}"
+    if [[ -z "$root" ]]; then
+        root="${WORKFLOW_STATE_DIR:-$HOME/.workflow-state}"
+        [[ "$root" == /* || "$root" =~ ^[A-Za-z]:[\\/] ]] || return 1
+    fi
+    printf '%s/cache\n' "$root"
+}
+
+# resolve_project_for_repo — no positional args; sets the RESOLVED_* variables above.
 resolve_project_for_repo() {
     # Always clear before populating so a stale value from a prior call cannot
     # leak through on failure.
@@ -97,9 +74,9 @@ resolve_project_for_repo() {
 
     # ---- Cache lookup (fixed-string match on $1) ----
     local cache_dir cache_file cache_row
-    cache_dir="${WORKFLOW_STATE_DIR:-$HOME/.claude/projects/workflow}/cache"
-    cache_file="$cache_dir/project-resolve.tsv"
-    if [ -f "$cache_file" ]; then
+    cache_dir="$(_resolve_project_cache_dir "$script_dir")" || cache_dir=""
+    cache_file="${cache_dir:+$cache_dir/project-resolve.tsv}"
+    if [[ -n "$cache_file" && -f "$cache_file" ]]; then
         cache_row=$(awk -F'\t' -v key="$owner_repo" '$1==key {print; exit}' "$cache_file" 2>/dev/null || true)
         if [ -n "$cache_row" ]; then
             # Require exactly 10 fields. NF check rejects malformed rows and old
@@ -336,6 +313,7 @@ _resolve_project_write_cache() {
     local p_status_field="${8:-}" p_todo_opt="${9:-}" p_in_progress_opt="${10:-}"
     local p_done_opt="${11:-}" p_fp_field="${12:-}"
 
+    [[ -n "$cache_dir" ]] || return 0
     if ! mkdir -p "$cache_dir" 2>/dev/null; then
         echo "warn: resolve-project: cache write failed (mkdir $cache_dir)" >&2
         return 1

@@ -8,7 +8,7 @@ migration all enforce it from the same registry,
 | Directory | Holds | Who may write |
 |---|---|---|
 | `WORKFLOW_PLANS_DIR` (default `~/.workflow-plans/`) | **Artifacts** — prose a human reads (`<sid>-detail.md`, surveys, raw review rounds, logs) | The model (Write), workers, wrappers |
-| `<WORKFLOW_STATE_DIR>/<sid>.control/` | **Control files** — JSON and numbers a machine reads to drive a gate (round counters, terminal markers, ledgers, payloads, outcomes) | Only the owning CLI or hook, never the model while `WORKFLOW=on` |
+| `<WORKFLOW_STATE_DIR>/<sid>.control/` (default root `~/.workflow-state/`) | **Control files** — JSON and numbers a machine reads to drive a gate (round counters, terminal markers, ledgers, payloads, outcomes) | Only the owning CLI or hook, never the model while `WORKFLOW=on` |
 
 ## Why the split
 
@@ -85,6 +85,26 @@ Named exceptions:
   `guard-attempt.tmp` is a short-lived marker that expires in place
   (`MIGRATABLE_KINDS` excludes it).
 
+## Resolving the state root
+
+`hooks/workflow-state/state-io/state-root.js` owns the root (SSOT); shell and
+prompts use `bin/workflow-state-dir --session <sid> | --global | --roots`.
+
+- `WORKFLOW_STATE_DIR` set (the pin) → every session uses it. It must be
+  absolute (an MSYS `/c/...` spelling is converted); a relative value is
+  refused, as for `WORKFLOW_PLANS_DIR`, since it would follow each reader's cwd.
+- Unset → `~/.workflow-state/`. `getStateRoot()` is the root for sid-less
+  files (`cache/`); `getSessionStateDir(sid)` is the root for one session;
+  `listStateRoots()` is every root a scan must cover (sweeps, zombie cleanup,
+  active-session enumeration, guards); the legacy root is listed even when
+  absent, and every caller reads it as empty then. A missing primary root
+  still leaves the active-session enumeration incomplete (fail-closed).
+- commit-push `gate.js` alone passes `envFallback: false`: its pin comes from
+  `.env`, never from the parent process environment.
+
+While the legacy root still exists, an unpinned session routes per the
+migration below.
+
 ## Resolving a control path
 
 Every reader and writer goes through one entry point:
@@ -119,7 +139,7 @@ target into three classes:
 | Class | Target | `WORKFLOW=off` |
 |---|---|---|
 | (a) | Protected tokens and OFF markers (`.off-clearance`, sentinels) | Still blocked |
-| (b) `control-dir` | Anything under `WORKFLOW_STATE_DIR` (lexically, so a symlinked `<x>.control/` is covered): control dirs, any session's `<sid>.json` and other sessions' files (#1814) | Allowed |
+| (b) `control-dir` | Anything under any state root, by spelling or through a symlink or junction (an unresolvable path counts as inside): control dirs, any session's `<sid>.json` and other sessions' files (#1814) | Allowed |
 | (c) `plans-unregistered` | A PLANS_DIR entry that parses as control, ambiguous or unregistered | Allowed |
 
 Reads are never judged. An unresolved sid is treated as `WORKFLOW=on`.
@@ -181,6 +201,47 @@ blocks with the deletion condition "remove after 2026-12-28". The daily
 sweep (`sweep.yml` job `stale-migration-issue`) opens a "Stale temporary migration blocks (>90 days)" issue when a block
 outlives it (`bin/open-stale-migration-issue.sh`); that job fails loudly
 rather than `|| true`.
+
+## State-root migration (temporary)
+
+The default root moved from `~/.claude/projects/workflow/` to
+`~/.workflow-state/` (#2511). A session started before the move keeps writing
+the legacy root until session close moves it; new sessions never touch it.
+
+- **Routing (M1)**: a session is new once `<new>/<sid>.json` exists — the
+  single commit point, cached per process. Otherwise a legacy `<sid>.json` or
+  `<sid>.control/` keeps it on the legacy root; anything else is new. A new
+  `<sid>.control/` or `<sid>.instructions-loaded/` alone never decides, so a
+  half-published move or an early receipt cannot split a session.
+- **Re-acquire after lock**: the workflow-state lock (`withStateLock(sid)`)
+  and the supervisor-state lock (`withSessionStateLock(sid)`) re-resolve the
+  path right after acquiring; on a change they release and retry on the new
+  root (at most twice), so a whole read-modify-write runs under one root.
+- **Move**: SC-9 of `/session-close` runs
+  `bin/state-dir-relocation move --session <sid>` under both locks. Entries
+  are copied to a work dir, embedded legacy paths rewritten, then renamed in
+  with `<sid>.json` last. A failure before that rename leaves the legacy root
+  authoritative; the next move clears the leftovers. Still under the locks,
+  legacy files changed, added or removed since the copy are carried across,
+  then the legacy entries go. A session's entries are only the
+  `<sid>.<suffix>` / `<sid>-<suffix>` names whose suffix is on the owned-suffix
+  whitelist in `state-dir-relocation/legacy.js` (plus their transient tails), so
+  neither `<sid>-other` nor a dotted `<sid>.peer` session is ever taken, and a sid
+  shaped like another session's entry name is refused. The one-shot OFF-clearance
+  token and claim are dropped from legacy, not migrated: an unlocked consumer could
+  otherwise spend the legacy token and leave the copy as a second grant (fails
+  closed; re-mint if needed). A small lock-free check-then-write race against
+  unlocked marker writers remains in the post-commit reconcile (`reconcile.js`).
+  Output is one stdout line
+  (`RELOCATED` / `RELOCATE_SKIPPED` / `RELOCATE_FAILED`); a failure is
+  reported to the supervisor once per session.
+- **Deletion**: `bin/state-dir-relocation remaining` exits 0 when no legacy
+  `<sid>.json` or `<sid>.control` is left (any sid shape). Then delete the
+  `BEGIN/END temporary: ~/.claude/projects/workflow -> ~/.workflow-state migration`
+  blocks in `state-root.js`, `state-lock.js` and `supervisor-state-writer/lock.js`,
+  `hooks/lib/temporary-migrations/state-dir-relocation/`,
+  `bin/state-dir-relocation`, `skills/session-close/scripts/relocate-session-state.sh`
+  with SC-9, and this section.
 
 ## RC-4 lint
 

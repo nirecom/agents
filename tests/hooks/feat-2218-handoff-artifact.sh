@@ -70,10 +70,10 @@ run_H1() {
     out="$(run_node "
 const path = require('path');
 const { getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
-const { getWorkflowDir } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io/core');
+const { getSessionStateDir } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io/state-root');
 const problems = [];
 const got = getHandoffPath('sess-h1');
-const want = path.join(getWorkflowDir(), 'sess-h1.control', 'handoff.md');
+const want = path.join(getSessionStateDir('sess-h1'), 'sess-h1.control', 'handoff.md');
 if (got !== want) problems.push('path:want=' + want + ',got=' + String(got));
 for (const bad of ['../escape', 'a/b', '', null]) {
   let threw = false;

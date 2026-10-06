@@ -27,6 +27,11 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'mint1608'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+# Top-level pin: case B pinned only the plans dir, so the supervisor-state writer
+# fell back to the live state root and left bsid.control there (#2512).
+readonly ISO_ROOT="$(make_tmp)"
+trap 'rm -rf "$ISO_ROOT"' EXIT
+harness_isolate "$(node_path "$ISO_ROOT")"
 
 # ===== A: schema permits off_examination + off_clearance_consumed record_types =====
 run_A() {
@@ -295,10 +300,10 @@ run_CO4() {
 
 # ===== mint-dir + stale-claim reset (bin/request-off-clearance) =====
 
-# MD-1 (#1658): with WORKFLOW_STATE_DIR unset, the mint fallback must resolve to the
-# SAME directory as the canonical getWorkflowDir() in hooks/workflow-state/state-io/core.js
-# ($HOME/.claude/projects/workflow) — not the legacy $HOME/.workflow-state. A mismatch
-# means the minted token lands where no hook ever looks for it.
+# MD-1 (#1658, #2511): with WORKFLOW_STATE_DIR unset, the mint fallback must resolve to
+# the SAME directory as getSessionStateDir() in hooks/workflow-state/state-io/state-root.js
+# ($HOME/.workflow-state for a new session) — not the legacy $HOME/.claude/projects/workflow.
+# A mismatch means the minted token lands where no hook ever looks for it.
 run_MD1() {
     if ! mint_available; then fail "MD-1: RED-EXPECTED (script missing)"; return; fi
     local fh stubbin out canon legacy ok=1
@@ -308,15 +313,15 @@ run_MD1() {
     out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$(node_path "$fh")" \
         HOME="$fh" USERPROFILE="$(node_path "$fh")" SESSION_ID="md1sid" CLAUDE_CODE_SESSION_ID="md1sid" \
         env -u WORKFLOW_STATE_DIR "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" 2>&1)
-    canon="$fh/.claude/projects/workflow/md1sid.off-clearance"
-    legacy="$fh/.workflow-state/md1sid.off-clearance"
+    canon="$fh/.workflow-state/md1sid.off-clearance"
+    legacy="$fh/.claude/projects/workflow/md1sid.off-clearance"
     [ -f "$canon" ] || ok=0
     [ -f "$legacy" ] && ok=0
     rm -rf "$fh" "$stubbin" 2>/dev/null || true
     if [ "$ok" = "1" ]; then
-        pass "MD-1: WORKFLOW_STATE_DIR unset → token minted under \$HOME/.claude/projects/workflow (canonical getWorkflowDir)"
+        pass "MD-1: WORKFLOW_STATE_DIR unset → token minted under \$HOME/.workflow-state (getSessionStateDir)"
     else
-        fail "MD-1: RED-EXPECTED (legacy \$HOME/.workflow-state fallback still in bin/request-off-clearance); out=$out"
+        fail "MD-1: token not minted under \$HOME/.workflow-state, or minted under the legacy \$HOME/.claude/projects/workflow; out=$out"
     fi
 }
 

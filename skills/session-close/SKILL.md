@@ -176,6 +176,10 @@ Mark surfaced and complete:
 
 - Runs after the Final Report is emitted, only when unpromoted entries remain (`/worktree-end` WE-11 normally clears them): resolve the notes path via `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" resolve --caller session-close --session-id "<session-id>"`; on `action: skip` return, otherwise run `skills/_shared/notes-promotion.md` (NP-1..NP-11) against the returned `notesPath`.
 
+## SC-9 — Relocate legacy session state (temporary, #2511)
+
+Run last, once: `bash "$AGENTS_CONFIG_DIR/skills/session-close/scripts/relocate-session-state.sh" "<session-id>"` (always exits 0; the script reports a failure itself).
+
 ## Rules
 
 - Orchestrates only — never modifies workflow state directly.

@@ -12,8 +12,12 @@ const EXEC_RES = [
   new RegExp(CMD + "bash\\s+(?:-\\S+\\s+)*[\"']?[^\\s\"']*\\bbin/"),
 ];
 const VAR_TAIL = "(?=[=\\s;&|)]|$)";
-const exportRe = (name) => new RegExp(CMD + "export\\s+(?:[^;&|]*?\\s)?" + name + VAR_TAIL);
-const PIN_RES = { state: exportRe("WORKFLOW_STATE_DIR"), plans: exportRe("WORKFLOW_PLANS_DIR") };
+const NAMES = { state: "WORKFLOW_STATE_DIR", plans: "WORKFLOW_PLANS_DIR" };
+const exportRe = (name) => new RegExp(CMD + "export\\s+(?:[^;&|]*?\\s)?" + name + VAR_TAIL, "g");
+const assignRe = (name) => new RegExp(CMD + name + "=", "g");
+// An empty value (`NAME=`, `NAME=""`, `NAME=''`) leaves the variable unset-equivalent:
+// the resolver falls back to the live default, so it is no pin.
+const EMPTY_VALUE_RE = /^(?:""|'')?(?=[\s;&|)]|$)/;
 const HARNESS_RE = new RegExp(CMD + "harness_isolate(?=\\s|;|$)(?!\\s*\\(\\s*\\))");
 const INLINE_STATE_RE = /(?:^|[\s;&|(`])WORKFLOW_STATE_DIR=/;
 const SUPERVISOR_EMIT_RE = /workflow-gate|workflow-mark|supervisor-emit|reportSentinel|reportBlock|reportFallback|reportRetrospective/;
@@ -59,16 +63,49 @@ function execPos(l) {
   return l.fnStart !== null ? pos(l.fnStart, -1) : pos(l.line, idx);
 }
 
-// pinPos(l, kind) → position of a permanent pin of kind on line l, or null.
-function pinPos(l, kind) {
-  if (l.heredoc || l.comment || l.inString || l.fnStart !== null) return null;
-  const idx = firstMatch([PIN_RES[kind], HARNESS_RE], l.code);
-  return idx < 0 ? null : pos(l.line, idx);
+const topLevel = (l) => !(l.heredoc || l.comment || l.inString || l.fnStart !== null);
+const valuePresent = (code, at) => !EMPTY_VALUE_RE.test(code.slice(at));
+
+// assignPos(l, kind) → position of the first top-level non-empty assignment of kind's
+// variable on line l, or null.
+function assignPos(l, kind) {
+  if (!topLevel(l)) return null;
+  const g = assignRe(NAMES[kind]);
+  let m;
+  while ((m = g.exec(l.code)) !== null) {
+    if (valuePresent(l.code, g.lastIndex)) return pos(l.line, m.index);
+  }
+  return null;
 }
 
+// pinPos(l, kind) → { pin, bare } on line l: `pin` is a self-contained permanent pin
+// (`export NAME=<non-empty>` or harness_isolate), `bare` a value-less `export NAME`.
+function pinPos(l, kind) {
+  const found = { pin: null, bare: null };
+  if (!topLevel(l)) return found;
+  let best = firstMatch([HARNESS_RE], l.code);
+  const g = exportRe(NAMES[kind]);
+  let m;
+  while ((m = g.exec(l.code)) !== null) {
+    const end = m.index + m[0].length;
+    if (l.code[end] !== "=") {
+      if (!found.bare) found.bare = pos(l.line, m.index);
+    } else if (valuePresent(l.code, end + 1) && (best < 0 || m.index < best)) {
+      best = m.index;
+    }
+  }
+  if (best >= 0) found.pin = pos(l.line, best);
+  return found;
+}
+
+const earlier = (a, b) => (!a || (b && before(b, a)) ? b : a);
+
 // analyze(lines, text) → { exec, own: { state, plans }, inlineState, emit }.
+// A bare export pins once a non-empty assignment exists too, in either order
+// (`export NAME; NAME=…` or `NAME=…; export NAME`), at the later of the two.
 function analyze(lines, text) {
   const facts = { exec: null, own: { state: null, plans: null }, inlineState: false, emit: SUPERVISOR_EMIT_RE.test(text) };
+  const seen = { state: { assigned: null, bare: null }, plans: { assigned: null, bare: null } };
   for (const l of lines) {
     const e = execPos(l);
     if (e) {
@@ -76,9 +113,16 @@ function analyze(lines, text) {
       if (INLINE_STATE_RE.test(l.text)) facts.inlineState = true;
     }
     for (const kind of ["state", "plans"]) {
-      const p = pinPos(l, kind);
-      if (p && (!facts.own[kind] || before(p, facts.own[kind]))) facts.own[kind] = p;
+      const s = seen[kind];
+      const found = pinPos(l, kind);
+      s.assigned = earlier(s.assigned, assignPos(l, kind));
+      s.bare = earlier(s.bare, found.bare);
+      facts.own[kind] = earlier(facts.own[kind], found.pin);
     }
+  }
+  for (const kind of ["state", "plans"]) {
+    const { assigned, bare } = seen[kind];
+    if (assigned && bare) facts.own[kind] = earlier(facts.own[kind], before(assigned, bare) ? bare : assigned);
   }
   return facts;
 }

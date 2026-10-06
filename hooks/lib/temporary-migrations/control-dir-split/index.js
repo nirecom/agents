@@ -7,7 +7,7 @@
 // Paths are built here directly; this module never calls controlPath.
 const fs = require("fs");
 const path = require("path");
-const { getWorkflowDir } = require("../../../workflow-state/state-io/core");
+const { getStateRoot, getSessionStateDir, listStateRoots } = require("../../../workflow-state/state-io/state-root");
 const { getWorkflowPlansDir } = require("../../workflow-plans-dir");
 const { legacyBasename, parsePlansEntry } = require("../../plans-artifact-registry");
 const { MIGRATABLE, readEntries, listSessionEntries, groupAllSessions } = require("./plan");
@@ -30,10 +30,10 @@ function migrateSessionSync(sid, opts) {
   if (running) return [];
   running = true;
   try {
-    const rows = applyBatch(sid, listSessionEntries(sid, getWorkflowPlansDir()), { wf: getWorkflowDir() });
+    const rows = applyBatch(sid, listSessionEntries(sid, getWorkflowPlansDir()), { wf: getSessionStateDir(sid) });
     const only = opts && opts.only;
     if (only && !rows.some((r) => r.name === only)) {
-      const done = fs.existsSync(path.join(getWorkflowDir(), `${sid}.control`, only));
+      const done = fs.existsSync(path.join(getSessionStateDir(sid), `${sid}.control`, only));
       if (done) rows.push({ sid, name: only, outcome: "identical" });
     }
     return rows;
@@ -121,7 +121,7 @@ function migrateAllSync(opts) {
   const start = Date.now();
   // Half-pinned env (a test fixture) would sweep the real plans dir into a throwaway dir.
   if (!process.env.WORKFLOW_STATE_DIR !== !process.env.WORKFLOW_PLANS_DIR) return { complete: false, failed: 0, skipped: "half-pinned" };
-  const wf = getWorkflowDir();
+  const wf = getStateRoot();
   const plansDir = getWorkflowPlansDir();
   let st;
   try { st = fs.statSync(plansDir); } catch (_) { return { complete: true, failed: 0 }; }
@@ -129,7 +129,7 @@ function migrateAllSync(opts) {
   if (canSkipScan(prior, plansDir, st.mtimeMs, start)) return prior;
   trace(`readdir ${plansDir}`);
   const groups = groupAllSessions(readEntries(plansDir), plansDir);
-  sweepStaleTmps(wf, start);
+  for (const root of listStateRoots()) sweepStaleTmps(root, start);
   let complete = true;
   let retryAfter = null;
   let failed = 0;
@@ -142,7 +142,7 @@ function migrateAllSync(opts) {
       retryAfter = Math.min(retryAfter === null ? Infinity : retryAfter, newest + QUIET_MS);
       continue;
     }
-    const bad = applyBatch(sid, entries, { wf }).filter((r) => r.outcome === "failed");
+    const bad = applyBatch(sid, entries, { wf: getSessionStateDir(sid) }).filter((r) => r.outcome === "failed");
     if (bad.length > 0) {
       complete = false;
       failed += bad.length;

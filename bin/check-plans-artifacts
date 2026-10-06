@@ -15,7 +15,6 @@ const fs = require("fs");
 const path = require("path");
 
 const REG = require(path.join(__dirname, "..", "hooks", "lib", "plans-artifact-registry.js"));
-const { getWorkflowDir } = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "core.js"));
 
 const SCAN_ROOTS = ["skills", "agents", "bin", "hooks", "rules", "docs"];
 const SKIP_DIRS = new Set([".git", "node_modules"]);
@@ -140,7 +139,7 @@ function scanSource(root, exceptions) {
 function scanDir(dir) {
   const errors = [];
   const warnings = [];
-  const ctx = { plansDir: dir, workflowDir: getWorkflowDir() };
+  const ctx = { plansDir: dir };
   for (const name of fs.readdirSync(dir).sort()) {
     const verdict = REG.classifyPlansEntry(name, ctx);
     if (verdict === "control" || verdict === "ambiguous") errors.push(`${path.join(dir, name)}: ${verdict}`);

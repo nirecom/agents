@@ -11,7 +11,7 @@ const {
   ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ, ENFORCE_WORKFLOW_OFF_EMERGENCY_LOOKSLIKE_RE,
   ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ, ENFORCE_WORKTREE_OFF_EMERGENCY_LOOKSLIKE_RE,
 } = require("../../lib/sentinel-patterns");
-const { getWorkflowDir } = require("../../workflow-state");
+const { getSessionStateDir } = require("../../workflow-state");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -62,7 +62,7 @@ function resolveClearanceWsid() {
 // so a later identity-bound removal (consume-exact-file.js) deletes the exact
 // bytes that were inspected here.
 function readClearance(sid) {
-  const claimedPath = path.join(getWorkflowDir(), `${sid}.off-clearance.claimed`);
+  const claimedPath = path.join(getSessionStateDir(sid), `${sid}.off-clearance.claimed`);
   let raw;
   try {
     raw = fs.readFileSync(claimedPath, "utf8");
@@ -197,7 +197,7 @@ const {
 // no note; only a real I/O fault does.
 function readAndClearProvenance(sid, target) {
   const { EMERGENCY_PROVENANCE_MARKER_KIND } = require("../../lib/protected-basenames");
-  const markerPath = path.join(getWorkflowDir(), `${sid}.${EMERGENCY_PROVENANCE_MARKER_KIND}`);
+  const markerPath = path.join(getSessionStateDir(sid), `${sid}.${EMERGENCY_PROVENANCE_MARKER_KIND}`);
   let raw;
   try {
     raw = fs.readFileSync(markerPath, "utf8");
@@ -263,7 +263,7 @@ function resolveEmergencyProvenance(sessionId, target) {
 
 // writeMarker(kind, sessionId, payload): atomic marker write; throws on failure.
 function writeMarker(kind, sessionId, payload) {
-  const dir = getWorkflowDir();
+  const dir = getSessionStateDir(sessionId);
   fs.mkdirSync(dir, { recursive: true });
   const markerPath = path.join(dir, `${sessionId}.${kind}`);
   const tmp = markerPath + ".tmp";

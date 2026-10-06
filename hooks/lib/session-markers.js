@@ -3,7 +3,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { getWorkflowDir } = require("../workflow-state");
+const { getSessionStateDir } = require("../workflow-state");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -12,7 +12,7 @@ const SID_RE = /^[A-Za-z0-9_-]+$/;
 function isWorkflowOff(sid) {
   try {
     if (typeof sid !== "string" || !SID_RE.test(sid)) return false;
-    const dir = getWorkflowDir();
+    const dir = getSessionStateDir(sid);
     const markerPath = path.join(dir, sid + ".workflow-off");
     return fs.existsSync(markerPath);
   } catch (_e) {
@@ -22,11 +22,11 @@ function isWorkflowOff(sid) {
 
 // workflowOffNoticeText(hookName, sid): returns a human-readable string about
 // the workflow-off override. NEVER throws — falls back to `<unresolved: ...>`
-// if getWorkflowDir() or path resolution throws.
+// if getSessionStateDir() or path resolution throws.
 function workflowOffNoticeText(hookName, sid) {
   let markerPath;
   try {
-    const dir = getWorkflowDir();
+    const dir = getSessionStateDir(sid);
     markerPath = path.join(dir, sid + ".workflow-off");
   } catch (e) {
     markerPath = "<unresolved: " + (e && e.message ? e.message : String(e)) + ">";
@@ -43,7 +43,7 @@ function workflowOffNoticeText(hookName, sid) {
 function isWorktreeOff(sid) {
   try {
     if (typeof sid !== "string" || !SID_RE.test(sid)) return false;
-    const dir = getWorkflowDir();
+    const dir = getSessionStateDir(sid);
     const markerPath = path.join(dir, sid + ".worktree-off");
     return fs.existsSync(markerPath);
   } catch (_e) {
@@ -53,11 +53,11 @@ function isWorktreeOff(sid) {
 
 // worktreeOffNoticeText(hookName, sid): returns a human-readable string about
 // the worktree-off session override. NEVER throws — falls back to
-// `<unresolved: ...>` if getWorkflowDir() or path resolution throws.
+// `<unresolved: ...>` if getSessionStateDir() or path resolution throws.
 function worktreeOffNoticeText(hookName, sid) {
   let markerPath;
   try {
-    const dir = getWorkflowDir();
+    const dir = getSessionStateDir(sid);
     markerPath = path.join(dir, sid + ".worktree-off");
   } catch (e) {
     markerPath = "<unresolved: " + (e && e.message ? e.message : String(e)) + ">";
@@ -73,7 +73,7 @@ function worktreeOffNoticeText(hookName, sid) {
 function isIssueCloseVerified(sid) {
   try {
     if (typeof sid !== "string" || !SID_RE.test(sid)) return false;
-    const dir = getWorkflowDir();
+    const dir = getSessionStateDir(sid);
     const markerPath = path.join(dir, sid + ".issue-close-verified");
     return fs.existsSync(markerPath);
   } catch (_e) {
@@ -86,7 +86,7 @@ function isIssueCloseVerified(sid) {
 function issueCloseVerifiedNoticeText(hookName, sid) {
   let markerPath;
   try {
-    const dir = getWorkflowDir();
+    const dir = getSessionStateDir(sid);
     markerPath = path.join(dir, sid + ".issue-close-verified");
   } catch (e) {
     markerPath = "<unresolved: " + (e && e.message ? e.message : String(e)) + ">";
@@ -116,7 +116,7 @@ function isNextStepPaused(sid, currentStep = null) {
 function nextStepPausedNoticeText(hookName, sid) {
   let markerPath;
   try {
-    const dir = getWorkflowDir();
+    const dir = getSessionStateDir(sid);
     markerPath = path.join(dir, sid + ".next-step-paused");
   } catch (e) {
     markerPath = "<unresolved: " + (e && e.message ? e.message : String(e)) + ">";
@@ -136,7 +136,7 @@ function nextStepPausedNoticeText(hookName, sid) {
 function readOffClearance(sid) {
   try {
     if (typeof sid !== "string" || !SID_RE.test(sid)) return null;
-    const tokenPath = path.join(getWorkflowDir(), sid + ".off-clearance");
+    const tokenPath = path.join(getSessionStateDir(sid), sid + ".off-clearance");
     const token = JSON.parse(fs.readFileSync(tokenPath, "utf8"));
     if (!token || typeof token !== "object") return null;
     return token;
