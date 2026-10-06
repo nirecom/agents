@@ -13,7 +13,7 @@
 9. [Project-Local Env Overrides](claude-code/local-env-overrides.md) — the global `.env` / project `.env.local` two-layer resolver, its trust model, why the local layer is gated by a blocklist alone, and `bin/show-local-env-overrides`
 10. [Test Host Lanes and the Corpus Cache](claude-code/test-host-lanes.md) — host-wide lanes bounded by the max jobs per host and shared by find-tests and run-all (`min(per-run, host−1)` for a run), exit 4 on the wait cap, `bin/test-lanes-status.sh`, the git-keyed corpus parse cache
 11. [Test Language Registry](claude-code/test-language-registry.md) — the one table of test file names per language, its readers, per-language parts, the `UNSUPPORTED:` display, and the residue check
-12. [Plan Sync](claude-code/plan-sync.md) — final plan files pushed to a private remote so the breadcrumb shows a URL readable from mobile apps or a browser; provisioning, allowlist, visibility policy, risks
+12. [Plan Sync](claude-code/plan-sync.md) — final plan files pushed to a private remote so the model can write a URL readable from mobile apps or a browser in the conversation; provisioning, allowlist, visibility policy, risks
 
 ## 5. EM Supervisor (alert/audit two-mode design)
 

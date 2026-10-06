@@ -1,14 +1,12 @@
 #!/usr/bin/env node
 // PostToolUse hook: for any final plan artifact written under the plans dir
 // (basename *-(intent|outline|detail).md; drafts/ excluded), publish it through
-// plan-sync and emit a breadcrumb systemMessage — the blob URL when the push landed
-// on a GitHub remote, otherwise the absolute local path plus a [plan-sync] status line.
-// Always emits regardless of CONFIRM_<STEP>: the breadcrumb is the sole plan surface.
-// Triggers on the whole write-tool class (hooks/lib/write-tools.js): every edit-write tool,
-// because a plan revised by Edit/MultiEdit/editFiles must reach the remote like a Write, and
+// plan-sync and tell the model the blob URL (or a reason, never a path) via PostToolUse
+// additionalContext (hooks/lib/plan-link.js); a breadcrumb systemMessage with the local path
+// follows only when some plan has no URL. Runs regardless of CONFIRM_<STEP>.
+// Triggers on the whole write-tool class (hooks/lib/write-tools.js): every edit-write tool and
 // every command tool running skills/_shared/assemble-mandatory.sh (final-plan assembly).
-// All plans of one invocation share one sync budget, so the message lands before the hook timeout.
-// Emits { "systemMessage": "..." } only (siblings use `additionalContext`). Design: docs/architecture/claude-code/plan-sync.md.
+// All plans of one invocation share one sync budget. Design: docs/architecture/claude-code/plan-sync.md.
 "use strict";
 
 const path = require("path");
@@ -108,9 +106,9 @@ function markTurn(filePath, absPath, input) {
   } catch (_) { /* fail-open */ }
 }
 
-// breadcrumbsForArtifacts(filePaths, input, { sync, now, budgetMs }) -> joined systemMessage.
+// syncArtifacts(filePaths, input, opts) -> [{ stage, result, absPath }] in input order.
 // Never calls sync with budgetMs <= 0: commit-push treats a falsy budget as its 20 s default.
-function breadcrumbsForArtifacts(filePaths, input, { sync = defaultSync, now = Date.now, budgetMs = SHARED_SYNC_BUDGET_MS } = {}) {
+function syncArtifacts(filePaths, input, { sync = defaultSync, now = Date.now, budgetMs = SHARED_SYNC_BUDGET_MS } = {}) {
   const deadline = now() + budgetMs;
   return filePaths.map((filePath) => {
     const absPath = toAbsPath(filePath);
@@ -121,13 +119,54 @@ function breadcrumbsForArtifacts(filePaths, input, { sync = defaultSync, now = D
     else {
       try { result = sync(absPath, { budgetMs: remaining }); } catch (_) { result = { status: "failed", reason: "internal-error" }; }
     }
-    return formatBreadcrumb(result, absPath);
-  }).join("\n");
+    return { stage: getSuffix(filePath), result, absPath };
+  });
+}
+
+// breadcrumbsForArtifacts(filePaths, input, { sync, now, budgetMs }) -> joined user-facing breadcrumbs.
+function breadcrumbsForArtifacts(filePaths, input, opts) {
+  return syncArtifacts(filePaths, input, opts).map((s) => formatBreadcrumb(s.result, s.absPath)).join("\n");
+}
+
+// renderOutput(synced, { resolve }) -> the hook's stdout object: additionalContext always (URL or
+// reason, no path), plus the breadcrumb systemMessage only when some plan has no URL (D2).
+// A failed sync of a file already published unchanged still has a URL: resolve(s) recovers it.
+function renderOutput(synced, { resolve } = {}) {
+  const { linkFromSyncResult, renderModelContext } = require("./lib/plan-link");
+  const entries = synced.map((s) => {
+    const link = linkFromSyncResult(s.result);
+    if (link.url || typeof resolve !== "function") return { stage: s.stage, ...link };
+    let fallback = null;
+    try { fallback = resolve(s); } catch (_) { fallback = null; }
+    const url = fallback && typeof fallback.url === "string" ? fallback.url : "";
+    return url ? { stage: s.stage, url } : { stage: s.stage, ...link };
+  });
+  const out = {
+    hookSpecificOutput: {
+      hookEventName: "PostToolUse",
+      additionalContext: renderModelContext(entries, { when: "after-write" }),
+    },
+  };
+  // D2 keys the breadcrumb on the sync failure itself, even when resolve recovered a URL.
+  if (synced.some((s) => !linkFromSyncResult(s.result).url)) {
+    out.systemMessage = synced.map((s) => formatBreadcrumb(s.result, s.absPath)).join("\n");
+  }
+  return out;
 }
 
 function emitForArtifacts(filePaths, input) {
-  const msg = breadcrumbsForArtifacts(filePaths, input);
-  process.stdout.write(JSON.stringify({ systemMessage: msg }));
+  const synced = syncArtifacts(filePaths, input);
+  let out;
+  try {
+    const { resolveSessionId } = require("./workflow-state");
+    const sid = resolveSessionId({ sessionIdFromInput: input.session_id, transcriptPath: input.transcript_path });
+    const { resolvePlanLink } = require("./lib/plan-link");
+    out = renderOutput(synced, { resolve: (s) => resolvePlanLink(sid, s.stage, { absPath: s.absPath }) });
+  } catch (_) {
+    // fail-open: the user still sees the breadcrumbs.
+    out = { systemMessage: synced.map((s) => formatBreadcrumb(s.result, s.absPath)).join("\n") };
+  }
+  process.stdout.write(JSON.stringify(out));
   process.exit(0);
 }
 

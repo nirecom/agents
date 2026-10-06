@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-checkpoint.js, hooks/lib/turn-marker.js
-# Tags: confirm-checkpoint, hook, plan, sentinel, workflow, scope:issue-specific, plan-sync
+# Tags: confirm-checkpoint, hook, plan, sentinel, workflow, scope:issue-specific, plan-sync, additional-context, fail-open
 # hooks/confirm-checkpoint.js — PreToolUse hook for WORKFLOW_CONFIRM_* sentinels in Bash.
 # L3 gap (what this test does NOT catch):
 # - confirm-checkpoint.js firing in a real Claude Code PreToolUse session (hook wiring)
@@ -66,7 +66,7 @@ unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 # Test mode: don't actually open a browser for the user-verified path
 export SHOW_USER_VERIFIED_NO_SPAWN=1
 unset TERM_PROGRAM CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
-unset CLAUDE_CODE_ENTRYPOINT SHOW_PLAN_LINK_NO_AUTO_OPEN SHOW_PLAN_LINK_NO_SPAWN SHOW_PLAN_LINK_MARKER_FILE 2>/dev/null || true
+unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 # #2513 safety net: a probed `code` stub is first on PATH for the whole file, so no
 # case can launch the real editor (T15 asserts its log stays empty).
 # shellcheck source=../lib/code-stub.sh

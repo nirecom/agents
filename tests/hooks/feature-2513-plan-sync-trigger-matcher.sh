@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-plan-sync-trigger-matcher.sh
 # Tests: hooks/show-plan-link.js, settings.json
-# Tags: plan-sync, show-plan-link, settings, matcher, hook-registration, static, TL1, scope:issue-specific, edit-write-tools, command-tools, sync-budget, unit, timeout-contract
+# Tags: plan-sync, show-plan-link, settings, matcher, hook-registration, static, TL1, scope:issue-specific, edit-write-tools, command-tools, sync-budget, unit, timeout-contract, additional-context
 # #2513: the PostToolUse registration of show-plan-link.js must fire for every
 # edit-write and command tool (hooks/lib/write-tools.js), or a plan revised by
 # that tool never reaches the plan remote.
@@ -187,6 +187,34 @@ const bad = hooks.filter((h) => !(typeof h.timeout === "number" && budget < h.ti
 process.stdout.write(hooks.length === 0 ? "NO_HOOKS" : bad.length === 0 ? `OK:${hooks.length}` : `BAD:${JSON.stringify(bad)}`);' "$SETTINGS" "$SPL_JS")" || SPL_C7="ERROR: node failed"
 if [[ "$SPL_C7" == OK:* ]]; then pass "C7 SHARED_SYNC_BUDGET_MS < every show-plan-link PostToolUse timeout ($SPL_C7)"
 else fail "C7 SHARED_SYNC_BUDGET_MS < every show-plan-link PostToolUse timeout" "got=$SPL_C7"; fi
+case_end
+
+# ── D1-D2: real hook output shape for one multi-plan call (sync off) ─────────
+# D2: no URL -> the reason rides PostToolUse additionalContext (no local path) AND a
+# systemMessage stays; markTurn still runs for every plan (order unchanged).
+case_begin "D2-multi-plan-sync-off-context-and-message" "hooks/show-plan-link.js"
+SPL_D_PLANS="$(np "$SPL_TMP/iso/plans")"
+mkdir -p "$SPL_TMP/d-cfg"
+printf 'i\n' > "$SPL_D_PLANS/s2513d-intent.md"; printf 'o\n' > "$SPL_D_PLANS/s2513d-outline.md"
+SPL_D_JSON="$(run_with_timeout 30 node -e '
+const [d] = process.argv.slice(1);
+process.stdout.write(JSON.stringify({ tool_name: "editFiles", session_id: "test-sid-d2", tool_response: { success: true },
+  tool_input: { edits: [{ path: d + "/s2513d-intent.md" }, { path: d + "/s2513d-outline.md" }] } }));' "$SPL_D_PLANS")"
+SPL_D_OUT="$(cd "$SPL_TMP" && printf '%s' "$SPL_D_JSON" \
+  | AGENTS_CONFIG_DIR="$(np "$SPL_TMP/d-cfg")" PLAN_SYNC_REMOTE_URL="" run_with_timeout 60 node "$SPL_JS" 2>/dev/null)" || true
+SPL_D_RES="$(printf '%s' "$SPL_D_OUT" | run_with_timeout 30 node -e '
+let d; try { d = JSON.parse(require("fs").readFileSync(0, "utf8")); } catch (e) { process.stdout.write("NOT_JSON"); process.exit(0); }
+const h = d.hookSpecificOutput || {}; const ctx = String(h.additionalContext || "");
+const dir = process.argv[1]; const bs = dir.replace(/\//g, "\\");
+const leak = [dir, bs, ".workflow-plans"].some((f) => ctx.includes(f));
+process.stdout.write([h.hookEventName || "-", ctx.includes("plan-sync-off") ? "reason" : "no-reason",
+  leak ? "leak" : "clean", d.systemMessage ? "msg" : "no-msg"].join("|"));' "$SPL_D_PLANS")"
+if [[ "$SPL_D_RES" == "PostToolUse|reason|clean|msg" ]]; then
+  pass "D2 sync off -> PostToolUse additionalContext names plan-sync-off without a path, systemMessage kept"
+else fail "D2 sync off -> PostToolUse additionalContext names plan-sync-off without a path, systemMessage kept" "got=$SPL_D_RES out=$SPL_D_OUT"; fi
+SPL_D_MARKS=("$CLAUDE_WORKFLOW_DIR"/test-sid-d2.confirm-plan-turn-*.json)
+if [[ -f "${SPL_D_MARKS[0]}" ]]; then pass "D2 turn marker still written for the plans"
+else fail "D2 turn marker still written for the plans" "no test-sid-d2.confirm-plan-turn-*.json"; fi
 case_end
 
 echo ""

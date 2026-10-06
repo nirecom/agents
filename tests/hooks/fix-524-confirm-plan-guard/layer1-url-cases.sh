@@ -86,5 +86,12 @@ if printf '%s' "$L1_REASON" | grep -qF "blob URL"; then
 else
   fail "T-L1-URL block reason lacks the 'blob URL' allowance (new #2513 wording not implemented) — got '$L1_REASON'"
 fi
+# #2513 D2: show-plan-link no longer prints a success breadcrumb, so the reason must not
+# call it "the sole plan surface" (the URL reaches the model via additionalContext).
+if [ -n "$L1_REASON" ] && ! printf '%s' "$L1_REASON" | grep -qF "sole plan surface"; then
+  pass "T-L1-URL block reason no longer calls the breadcrumb the sole plan surface"
+else
+  fail "T-L1-URL block reason still says 'sole plan surface' (or is empty) — got '$L1_REASON'"
+fi
 rm -rf "$SPACE_PLANS"
 rm -f "$TRANSCRIPT_DIR"/sid-l1-*-"$$".out 2>/dev/null || true

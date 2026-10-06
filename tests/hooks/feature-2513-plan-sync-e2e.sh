@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-plan-sync-e2e.sh
 # Tests: hooks/show-plan-link.js, bin/plan-sync-init, hooks/confirm-checkpoint.js
-# Tags: plan-sync, e2e, ssh-stub, show-plan-link, confirm-checkpoint, TL2, scope:issue-specific, cli, init, redact, visibility, gh-stub, remote-url-mismatch, cli-args
+# Tags: plan-sync, e2e, ssh-stub, show-plan-link, confirm-checkpoint, TL2, scope:issue-specific, cli, init, redact, visibility, gh-stub, remote-url-mismatch, cli-args, interactive, additional-context, env-write
 # #2513 end-to-end (detail.md "テストの構成" 4, S3-5): real CLI + real hooks over the
 # test-only ssh stub (tests/lib/git-ssh-stub.sh) into a local bare repo. No network.
 set -uo pipefail
@@ -33,11 +33,23 @@ export PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_E2E"
 # The real CLI probes visibility with the real gh (network): keep it off PATH throughout.
 psf_drop_gh_from_path
 
-# hook_msg <hook.js> <json> [plansDir] — prints the hook's .systemMessage.
-hook_msg() {
+# hook_run <hook.js> <json> [plansDir] — sets H_MSG, H_CTX, H_EVT from one hook run.
+hook_run() {
   local out
   out="$(printf '%s' "$2" | WORKFLOW_PLANS_DIR="${3:-$PLANS}" psf_timeout 60 node "$1" 2>/dev/null)"
-  psf_sysmsg "$out"
+  H_MSG="$(psf_sysmsg "$out")"
+  H_CTX="$(psf_hso "$out" additionalContext)"
+  H_EVT="$(psf_hso "$out" hookEventName)"
+}
+
+# expect_ctx_url <name> <event> <url> <plansDir> — D1: the URL rides additionalContext, no local path.
+expect_ctx_url() {
+  local leak
+  leak="$(psf_path_leak "$H_CTX" "$4")"
+  if [ "$H_EVT" != "$2" ]; then fail "$1" "hookEventName=$(printf '%q' "$H_EVT") want $2"
+  elif [[ "$H_CTX" != *"$3"* ]]; then fail "$1" "ctx lacks $3: $(printf '%q' "$H_CTX")"
+  elif [ -n "$leak" ]; then fail "$1" "ctx leaks a local path ($leak)"
+  else pass "$1"; fi
 }
 
 # init_cli <plansDir> — prints the CLI rc; "NI" when the CLI is absent.
@@ -86,8 +98,10 @@ else fail "E1 plan-sync-init exit 0" "rc=$RC out=$(cat "$PSF_ROOT/init.out" 2>/d
 if grep -qi 'visibility' "$PSF_ROOT/init.out" 2>/dev/null; then pass "E1 init warns that visibility was not verified"
 else fail "E1 init warns that visibility was not verified" "out=$(cat "$PSF_ROOT/init.out" 2>/dev/null)"; fi
 printf 'e2e intent\n' > "$PLANS/s2513e2e-intent.md"
-MSG="$(hook_msg "$SPL" "$(psf_write_json "$PLANS/s2513e2e-intent.md" test-sid-e2e)")"
-expect_has "E1 breadcrumb shows the GitHub blob URL" "$MSG" "Plan file: $BLOB/s2513e2e-intent.md"
+hook_run "$SPL" "$(psf_write_json "$PLANS/s2513e2e-intent.md" test-sid-e2e)"
+expect_ctx_url "E1 additionalContext carries the GitHub blob URL" PostToolUse "$BLOB/s2513e2e-intent.md" "$PLANS"
+if [ -z "$H_MSG" ]; then pass "E1 success emits no systemMessage (D2)"
+else fail "E1 success emits no systemMessage (D2)" "msg=$(printf '%q' "$H_MSG")"; fi
 expect_has "E1 bare main holds the written content" "$(git -C "$BARE" show refs/heads/main:s2513e2e-intent.md 2>&1)" "e2e intent"
 BM="$(git -C "$BARE" rev-parse --verify -q refs/heads/main)"
 expect_has "E1 local origin/main == bare main" "$(git -C "$PLANS" rev-parse --verify -q refs/remotes/origin/main 2>&1)/" "${BM:-no-bare-main}/"
@@ -97,8 +111,9 @@ case_end
 case_begin "confirm-checkpoint-same-url" "hooks/confirm-checkpoint.js"
 CCP_JSON="$(psf_timeout 30 node -e 'process.stdout.write(JSON.stringify({ tool_name: "Bash",
   tool_input: { command: "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"" }, session_id: "test-sid-e2e" }));')"
-MSG="$(hook_msg "$CCP" "$CCP_JSON")"
-expect_has "E2 confirm-checkpoint shows the same blob URL" "$MSG" "$BLOB/s2513e2e-intent.md"
+hook_run "$CCP" "$CCP_JSON"
+expect_has "E2 confirm-checkpoint shows the same blob URL" "$H_MSG" "$BLOB/s2513e2e-intent.md"
+expect_ctx_url "E2 confirm-checkpoint additionalContext carries the same blob URL" PreToolUse "$BLOB/s2513e2e-intent.md" "$PLANS"
 case_end
 
 case_begin "non-ff-through-stub" "hooks/show-plan-link.js"
@@ -107,11 +122,11 @@ P2="$PSF_ROOT/plans-2"; mkdir -p "$P2"
 RC="$(init_cli "$P2")"
 if [ "$RC" = 0 ]; then pass "E3 second machine init exit 0"; else fail "E3 second machine init exit 0" "rc=$RC"; fi
 printf 'other machine\n' > "$P2/s2513other-intent.md"
-MSG="$(hook_msg "$SPL" "$(psf_write_json "$P2/s2513other-intent.md" test-sid-e2e2)" "$P2")"
-expect_has "E3 second machine pushes first" "$MSG" "Plan file: $BLOB/s2513other-intent.md"
+hook_run "$SPL" "$(psf_write_json "$P2/s2513other-intent.md" test-sid-e2e2)" "$P2"
+expect_ctx_url "E3 second machine pushes first" PostToolUse "$BLOB/s2513other-intent.md" "$P2"
 printf 'e2e outline\n' > "$PLANS/s2513e2e-outline.md"
-MSG="$(hook_msg "$SPL" "$(psf_write_json "$PLANS/s2513e2e-outline.md" test-sid-e2e)")"
-expect_has "E3 behind machine still gets the blob URL" "$MSG" "Plan file: $BLOB/s2513e2e-outline.md"
+hook_run "$SPL" "$(psf_write_json "$PLANS/s2513e2e-outline.md" test-sid-e2e)"
+expect_ctx_url "E3 behind machine still gets the blob URL" PostToolUse "$BLOB/s2513e2e-outline.md" "$PLANS"
 TREE="$(git -C "$BARE" ls-tree -r --name-only refs/heads/main 2>/dev/null | tr '\n' ' ')"
 expect_has "E3 remote keeps the earlier push and both local files" "$TREE" \
   ".gitignore s2513e2e-intent.md s2513e2e-outline.md s2513other-intent.md "
@@ -338,6 +353,10 @@ for cla_row in "${CLA_ROWS[@]}"; do
   cla_case "$cla_id" "$cla_needle" "${cla_args[@]}"
 done
 case_end
+
+# Interactive mode (#2513 4d): own fragment to keep this file under the split threshold.
+# shellcheck source=feature-2513-plan-sync-e2e/plan-sync-init-interactive.sh
+. "$AGENTS_DIR/tests/hooks/feature-2513-plan-sync-e2e/plan-sync-init-interactive.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

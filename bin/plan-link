@@ -1,0 +1,52 @@
+#!/usr/bin/env node
+// bin/plan-link [--session <sid>] [--stage intent|outline|detail]
+// Prints the model-facing link of each plan stage, one line per stage:
+//   <stage>: <GitHub blob URL>        or        <stage>: (unavailable: <reason>)
+// The session defaults to CLAUDE_CODE_SESSION_ID. Read-only and network-free: it never
+// fetches, pushes or writes, and never prints a local path (the plans dir stays private).
+// Exit: 0 printed (even when every stage is unavailable); 1 unknown session; 2 usage error.
+"use strict";
+const path = require("path");
+
+const { STAGES, resolvePlanLink } = require(path.join(__dirname, "..", "hooks", "lib", "plan-link.js"));
+
+// A Claude Code session id is a UUID; clarify-intent falls back to YYYYMMDD-HHMMSS when it has
+// none. Anything else cannot name a plan artifact.
+const SESSION_ID_RE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{8}-\d{6})$/i;
+
+function die(code, msg) {
+  process.stderr.write(`plan-link: ${msg}\n`);
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a !== "--session" && a !== "--stage") die(2, `unknown argument: ${a}`);
+    if (i + 1 >= argv.length || argv[i + 1].startsWith("--")) die(2, `${a} needs a value`);
+    const v = argv[++i];
+    if (a === "--session") out.session = v;
+    else if (!STAGES.includes(v)) die(2, `--stage must be one of ${STAGES.join(", ")}`);
+    else out.stage = v;
+  }
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+const sid = args.session !== undefined ? args.session : process.env.CLAUDE_CODE_SESSION_ID || "";
+if (!sid) die(1, "no session (pass --session <id> or set CLAUDE_CODE_SESSION_ID)");
+if (!SESSION_ID_RE.test(sid)) die(1, "unknown session: not a session id");
+
+let plansDir;
+try {
+  plansDir = require(path.join(__dirname, "..", "hooks", "lib", "workflow-plans-dir.js")).getWorkflowPlansDir();
+} catch (_) {
+  die(1, "cannot resolve the plans dir");
+}
+
+const lines = (args.stage ? [args.stage] : STAGES).map((stage) => {
+  const link = resolvePlanLink(sid, stage, { plansDir });
+  return link.url ? `${stage}: ${link.url}` : `${stage}: (unavailable: ${link.reason})`;
+});
+process.stdout.write(lines.join("\n") + "\n");

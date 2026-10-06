@@ -11,7 +11,7 @@ SPS_HOOK="$(psf_np "$HOOK")"
 SPS_PLANS="$WORKFLOW_PLANS_DIR"
 SPS_RUN_HINT='— run node "$AGENTS_CONFIG_DIR/bin/plan-sync-init"'
 
-# sps_run_hook <json> — sets HOOK_RC, HOOK_OUT, HOOK_MSG, HOOK_SECS.
+# sps_run_hook <json> — sets HOOK_RC, HOOK_OUT, HOOK_MSG, HOOK_CTX, HOOK_EVT, HOOK_SECS.
 sps_run_hook() {
   local t0
   t0="$(date +%s)"
@@ -19,6 +19,42 @@ sps_run_hook() {
   HOOK_RC=$?
   HOOK_SECS=$(( $(date +%s) - t0 ))
   HOOK_MSG="$(psf_sysmsg "$HOOK_OUT")"
+  HOOK_CTX="$(psf_hso "$HOOK_OUT" additionalContext)"
+  HOOK_EVT="$(psf_hso "$HOOK_OUT" hookEventName)"
+}
+
+# sps_expect_ctx_url <name> <url> <plans-dir> — D1/D2 success: the blob URL rides
+# PostToolUse additionalContext only; no systemMessage, no local path for the model.
+sps_expect_ctx_url() {
+  local name="$1" url="$2" leak
+  leak="$(psf_path_leak "$HOOK_CTX" "$3")"
+  if [ "$HOOK_EVT" != PostToolUse ]; then
+    fail "$name — hookEventName=$(printf '%q' "$HOOK_EVT") out=$(printf '%q' "$HOOK_OUT")"
+  elif [[ "$HOOK_CTX" != *"$url"* ]]; then
+    fail "$name — additionalContext lacks $url — ctx=$(printf '%q' "$HOOK_CTX")"
+  elif [ -n "$HOOK_MSG" ]; then
+    fail "$name — success must not emit systemMessage — msg=$(printf '%q' "$HOOK_MSG")"
+  elif [ -n "$leak" ]; then
+    fail "$name — additionalContext leaks a local path ($leak)"
+  else
+    pass "$name"
+  fi
+}
+
+# sps_expect_ctx_reason <name> <reason> <plans-dir> — D2 failure: the reason rides
+# additionalContext (no local path) and the systemMessage breadcrumb stays.
+sps_expect_ctx_reason() {
+  local name="$1" leak
+  leak="$(psf_path_leak "$HOOK_CTX" "$3")"
+  if [ "$HOOK_EVT" != PostToolUse ] || [[ "$HOOK_CTX" != *"$2"* ]]; then
+    fail "$name — want PostToolUse ctx containing $2 — evt=$(printf '%q' "$HOOK_EVT") ctx=$(printf '%q' "$HOOK_CTX")"
+  elif [ -z "$HOOK_MSG" ]; then
+    fail "$name — failure must also emit a systemMessage"
+  elif [ -n "$leak" ]; then
+    fail "$name — additionalContext leaks a local path ($leak)"
+  else
+    pass "$name"
+  fi
 }
 
 # sps_expect_msg_has <name> <needle...> — every needle is a fixed substring of HOOK_MSG.
@@ -67,6 +103,7 @@ echo "=== H2: unprovisioned PLANS_DIR -> local path + no-repo hint, marker writt
 printf 'plan\n' > "$SPS_PLANS/s2513-intent.md"
 PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513-intent.md" test-sid-h2)"
 sps_expect_msg_has "H2 Plan file + [plan-sync] no-repo + run hint" "Plan file: " "s2513-intent.md" "[plan-sync] no-repo $SPS_RUN_HINT"
+sps_expect_ctx_reason "H2 additionalContext carries not-provisioned, no path" not-provisioned "$SPS_PLANS"
 if [ "$HOOK_RC" = 0 ]; then pass "H2 exit 0"; else fail "H2 exit 0 — rc=$HOOK_RC"; fi
 SPS_MARKERS=("$CLAUDE_WORKFLOW_DIR"/test-sid-h2.confirm-plan-turn-*.json)
 if [ -f "${SPS_MARKERS[0]}" ]; then pass "H2 turn marker written before the message"
@@ -75,6 +112,7 @@ else fail "H2 turn marker written before the message — no test-sid-h2.confirm-
 echo "=== H3: empty PLAN_SYNC_REMOTE_URL -> not configured ==="
 PLAN_SYNC_REMOTE_URL="" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513-intent.md" test-sid-h3)"
 sps_expect_msg_has "H3 Plan file + not configured" "Plan file: " "[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)"
+sps_expect_ctx_reason "H3 additionalContext carries plan-sync-off, no path" plan-sync-off "$SPS_PLANS"
 
 echo "=== H4: provisioned repo + local insteadOf -> url-rewritten, no URL ==="
 SPS_PI="$PSF_ROOT/pi-plans"
@@ -165,7 +203,7 @@ if psf_make_provisioned "$SPS_H9" "$PSF_ORIGIN_E2E" >/dev/null 2>&1; then
   if [ ! -s "$GIT_SSH_STUB_LOG" ]; then pass "H9 cat form -> remote never contacted"
   else fail "H9 cat form -> remote never contacted — ssh stub log: $(tr '\n' ' ' < "$GIT_SSH_STUB_LOG")"; fi
   WORKFLOW_PLANS_DIR="$SPS_H9" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_E2E" sps_run_hook "$(sps_h9_json bash)"
-  sps_expect_msg_has "H9 positive control: bash <script> ... <dest> -> blob URL breadcrumb" "Plan file: $SPS_H9_URL"
+  sps_expect_ctx_url "H9 positive control: bash <script> ... <dest> -> blob URL in additionalContext" "$SPS_H9_URL" "$SPS_H9"
   SPS_H9_GOT="$(git -C "$SPS_H9_BARE" show refs/heads/main:s2513h9-outline.md 2>&1)"
   if [ "$SPS_H9_GOT" = "h9 outline" ]; then pass "H9 positive control: bare main holds the dest content"
   else fail "H9 positive control: bare main holds the dest content — got=$SPS_H9_GOT"; fi
@@ -211,8 +249,8 @@ else
   rm -f "$SPS_H8B_SECRET"
   WORKFLOW_PLANS_DIR="$SPS_H8B" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_E2E" \
     sps_run_hook "$(psf_write_json "$SPS_H8B/s2513h8b-detail.md" test-sid-h8b)"
-  sps_expect_msg_has "H8b positive control: extra link removed (nlink 1) -> blob URL breadcrumb" \
-    "Plan file: https://github.com/test-owner/test-repo/blob/main/s2513h8b-detail.md"
+  sps_expect_ctx_url "H8b positive control: extra link removed (nlink 1) -> blob URL in additionalContext" \
+    "https://github.com/test-owner/test-repo/blob/main/s2513h8b-detail.md" "$SPS_H8B"
   unset GIT_SSH_COMMAND GIT_SSH_VARIANT GIT_SSH_STUB_BARE GIT_SSH_STUB_LOG
 fi
 
@@ -236,7 +274,7 @@ sps_ew_expect_synced() {
   got="$(git -C "$bare" show "refs/heads/main:$rel" 2>&1)"
   if [[ "$got" == "$want" ]]; then pass "$name — bare main:$rel holds the post-edit content"
   else fail "$name — bare main:$rel holds the post-edit content — got=$(printf '%q' "$got") msg=$(printf '%q' "$HOOK_MSG")"; fi
-  sps_expect_msg_has "$name — breadcrumb shows the blob URL" "Plan file: $SPS_EW_BLOB/$rel"
+  sps_expect_ctx_url "$name — additionalContext carries the blob URL" "$SPS_EW_BLOB/$rel" "$SPS_EW"
 }
 
 SPS_EW_BARE="$PSF_ROOT/ew-bare.git"; psf_make_bare "$SPS_EW_BARE"

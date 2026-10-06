@@ -50,6 +50,7 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/check-japanese-in-docs.js` | PreToolUse | **No** | **No** |
 | `hooks/show-user-verified-context.js` | PreToolUse | **No** | **No** |
 | `hooks/confirm-checkpoint.js` | PreToolUse | **No** | **No** |
+| `hooks/block-send-user-file.js` | PreToolUse | **No** | **No** |
 | `hooks/show-diff.js` | PreToolUse | **No** | **No** |
 | `hooks/block-tests-direct.js` | PreToolUse | **No** | **No** |
 | `hooks/supervisor-off-proposal-shim.js` | PreToolUse | Yes | Yes (only when the OFF proposal's target is `worktree`) |
