@@ -3,10 +3,10 @@
 # Usage: bin/audit-tests-common.sh [--dry-run] [--apply] [--offline]
 #                                  [--stale-months N] [--format text|json]
 #                                  [--fix-headers] [--dup-groups]
-# Exit:  0 = orphans found, 1 = no orphans, 2 = error
-# Writes by default: a flagless run DELETES orphans (git rm); --dry-run reports
-# only. --dup-groups is read-only: a corpus-wide `# Tests:` duplicate inventory
-# as TSV, identical from either entrypoint (bin/lib/test-dup-group.sh).
+#        bin/audit-tests-common.sh --embed-cases [--band-size N] [--order frequency|priority]
+# Exit:  0 = orphans found, 1 = no orphans, 2 = error. Writes by default: a flagless
+# run DELETES orphans (git rm); --dry-run reports only. --dup-groups: read-only TSV
+# (bin/lib/test-dup-group.sh). --embed-cases: docs/architecture/claude-code/sweep-tests-embed-cases.md.
 # Scans tests/<category>/*.{sh,Tests.ps1} and test_*.py EXCEPT feature-<N>-*;
 # unit=case (refcount 0 git rm, partial-orphan excises dead blocks, else file).
 
@@ -23,6 +23,9 @@ source "$SCRIPT_DIR/lib/test-retire-predicate.sh" || { echo "ERROR: test languag
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
 # shellcheck source=lib/test-dup-group.sh
 source "$SCRIPT_DIR/lib/test-dup-group.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
+# shellcheck source=lib/test-embed-cases.sh
+source "$SCRIPT_DIR/lib/test-embed-cases.sh"
+tec_dispatch "$@"
 
 STALE_MONTHS=3
 OFFLINE=0

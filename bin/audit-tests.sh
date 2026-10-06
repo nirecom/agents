@@ -2,11 +2,11 @@
 # audit-tests.sh — Retire checker for issue-specific test files.
 # Usage: bin/audit-tests.sh [--dry-run] [--stale-months N] [--offline]
 #                           [--format text|json] [--fix-headers] [--dup-groups]
-# Exit:  0 = candidates found, 1 = no candidates, 2 = error
-# Writes by default: a flagless run DELETES candidates (git rm), and
-# --fix-headers rewrites headers in place. Pass --dry-run to report only.
-# --dup-groups is read-only: a corpus-wide `# Tests:` duplicate inventory as TSV.
-# It rejects --apply, --fix-headers and --format json. See bin/lib/test-dup-group.sh.
+#        bin/audit-tests.sh --embed-cases [--band-size N] [--order frequency|priority]
+# Exit:  0 = candidates found, 1 = no candidates, 2 = error. Writes by default: a
+# flagless run DELETES candidates (git rm), --fix-headers rewrites headers in place;
+# --dry-run reports only. --dup-groups: read-only TSV (bin/lib/test-dup-group.sh).
+# --embed-cases: docs/architecture/claude-code/sweep-tests-embed-cases.md.
 # Scans tests/<category>/feature-NNN-*.{sh,Tests.ps1}. Unit=case: refcount 0
 # whole-unit git rm, partial-orphan excises dead blocks, else file-level fallback.
 
@@ -23,6 +23,9 @@ source "$SCRIPT_DIR/lib/test-retire-predicate.sh" || { echo "ERROR: test languag
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
 # shellcheck source=lib/test-dup-group.sh
 source "$SCRIPT_DIR/lib/test-dup-group.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
+# shellcheck source=lib/test-embed-cases.sh
+source "$SCRIPT_DIR/lib/test-embed-cases.sh"
+tec_dispatch "$@"
 
 STALE_MONTHS=3
 OFFLINE=0

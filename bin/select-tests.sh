@@ -147,42 +147,13 @@ else
   changed=$(git diff --name-only "${MERGE_BASE}...HEAD" -- 2>/dev/null) || exit 1
 fi
 
+# shellcheck source=bin/lib/select-tests-stem.sh
+. "${AGENTS_DIR}/bin/lib/select-tests-stem.sh"
 stems=()
 while IFS= read -r path; do
   [[ -z "${path}" ]] && continue
-  stem=""
-  case "${path}" in
-    skills/*/SKILL.md)
-      stem="${path#skills/}"
-      stem="${stem%/SKILL.md}"
-      ;;
-    skills/*/scripts/*)
-      area="${path#skills/}"
-      area="${area%%/*}"
-      file="${path##*/}"
-      file="${file%.*}"
-      stems+=("${area}")
-      stem="${file}"
-      ;;
-    agents/*.md)
-      stem="${path#agents/}"
-      stem="${stem%.md}"
-      ;;
-    hooks/*.js)
-      stem="${path#hooks/}"
-      stem="${stem%.*}"
-      ;;
-    bin/*)
-      stem="${path#bin/}"
-      stem="${stem%.*}"
-      stem="${stem##*/}"
-      ;;
-    *)
-      continue
-      ;;
-  esac
-  [[ ${#stem} -lt 3 ]] && continue
-  stems+=("${stem}")
+  sts_stems_of_path "${path}"
+  [[ ${#STS_STEMS[@]} -gt 0 ]] && stems+=("${STS_STEMS[@]}")
 done <<< "${changed}"
 
 # Portable seen-set: temp file; compatible with bash 3.x (macOS default).
@@ -224,7 +195,7 @@ if [[ ${#stems[@]} -gt 0 ]]; then
     [[ -f "${test}" ]] || continue
     fname="${test##*/}"
     for stem in "${stems[@]}"; do
-      if [[ "${fname}" == *"${stem}"* ]]; then
+      if sts_name_matches "${fname}" "${stem}"; then
         _emit_if_new "${test}"
         break
       fi

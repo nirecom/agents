@@ -179,6 +179,7 @@ make_fake_selector() {
     local fake="$1"
     mkdir -p "$fake/bin/lib" "$fake/hooks/lib" "$fake/tests/bin"
     cp "$SELECT_SH" "$fake/bin/select-tests.sh"
+    cp "$AGENTS_DIR/bin/lib/select-tests-stem.sh" "$fake/bin/lib/select-tests-stem.sh"
     install_test_language_registry "$fake" "$AGENTS_DIR"
 }
 

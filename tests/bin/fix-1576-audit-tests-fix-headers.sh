@@ -98,6 +98,10 @@ case_begin "comment-prefix-apply" "bin/lib/test-frontmatter-fix.sh"
 source "$CASES_DIR/comment-prefix-apply.sh"           # TC27-TC28
 case_end
 
+# TC29-TC32 carry their own per-case markers, so they are sourced outside a group.
+# shellcheck source=fix-1576-audit-tests-fix-headers/apply-dst-arg.sh
+source "$CASES_DIR/apply-dst-arg.sh"
+
 # --- Summary ---------------------------------------------------------------
 echo "1..$((PASS+FAIL))"
 echo "# PASS=$PASS FAIL=$FAIL"

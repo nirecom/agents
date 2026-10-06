@@ -213,6 +213,12 @@ trp_case_refcount_verdict() {
 # and TRP_MARKER_REASON. Always returns 0; the caller decides.
 trp_marker_conformance() {
   trp_parse_case_markers "${1:?trp_marker_conformance: file required}"
+  trp_marker_state_from_globals
+}
+
+# trp_marker_state_from_globals — the state rule over the globals the preceding
+# caseMarkerReader call left (_TRP_MARKER_*, TRP_HAS_MARKERS). Always returns 0.
+trp_marker_state_from_globals() {
   TRP_MARKER_LINE="$_TRP_MARKER_MALFORMED_LINE"
   TRP_MARKER_REASON="$_TRP_MARKER_MALFORMED_REASON"
   if [[ "$_TRP_MARKER_MALFORMED" -eq 1 ]]; then

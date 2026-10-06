@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Fake codex CLI for bin-audit-tests-embed-cases (copied to <tmp>/fakebin/codex).
+# Accepts any argv (`exec --skip-git-repo-check -`), reads the prompt from stdin.
+# FAKE_CODEX_LOG       — when set, appends "ARGS: <argv>" then the prompt.
+# FAKE_CODEX_MODE      — respond (default): print $FAKE_CODEX_RESPONSE verbatim, rc 0;
+#                        fail: print to stderr, rc 3 (codex-core reports FAILED).
+prompt="$(cat)"
+if [ -n "${FAKE_CODEX_LOG:-}" ]; then
+  printf 'ARGS: %s\n%s\n' "$*" "$prompt" >>"$FAKE_CODEX_LOG"
+fi
+case "${FAKE_CODEX_MODE:-respond}" in
+  fail)
+    echo "fake codex: forced failure" >&2
+    exit 3
+    ;;
+  *)
+    if [ -n "${FAKE_CODEX_RESPONSE:-}" ] && [ -f "$FAKE_CODEX_RESPONSE" ]; then
+      cat "$FAKE_CODEX_RESPONSE"
+    fi
+    exit 0
+    ;;
+esac
