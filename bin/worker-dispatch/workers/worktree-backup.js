@@ -11,6 +11,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { run: spawnRun } = require("../spawn");
+const { writeLog, tryWriteLog } = require("../worker-log");
 
 const GIT_TIMEOUT_MS = 120000;
 const DOCKER_TIMEOUT_MS = 30000;
@@ -19,10 +20,6 @@ const parseCap = (v, def) => { const n = Number(v); return Number.isFinite(n) &&
 const MAX_BACKUP_FILES    = parseCap(process.env.WORKTREE_BACKUP_MAX_FILES,     2000);
 const MAX_BACKUP_BYTES    = parseCap(process.env.WORKTREE_BACKUP_MAX_BYTES,     50 * 1024 * 1024);
 const MAX_ENUMERATE_FILES = parseCap(process.env.WORKTREE_BACKUP_MAX_ENUMERATE, 20000);
-
-function stamp() {
-  return new Date().toISOString().replace(/[:.]/g, "-");
-}
 
 function splitNul(text) {
   return String(text || "")
@@ -280,9 +277,7 @@ function applyReadBudget(describedFiles) {
 }
 
 function dryRun(payload, ctx, inv) {
-  const { fsguard, anchors } = ctx;
   const worktreePath = payload.worktree_path;
-  const artifactDir = payload.artifact_dir || anchors.plansDir;
 
   const described = inv.candidates.map((rel) => describe(worktreePath, rel));
   const files = described.filter((d) => d.skip === undefined);
@@ -302,8 +297,9 @@ function dryRun(payload, ctx, inv) {
 
   let written = null;
   try {
-    written = fsguard.writeFile(
-      path.join(artifactDir, `${stamp()}-backup-worker-dry-run.txt`),
+    written = writeLog(
+      ctx,
+      "backup-worker-dry-run.txt",
       [
         `DRY RUN — ${worktreePath} (${payload.branch})`,
         `destination: ${payload.backup_dir}`,
@@ -340,10 +336,9 @@ function dryRun(payload, ctx, inv) {
 }
 
 function execute(payload, ctx, inv) {
-  const { fsguard, anchors } = ctx;
+  const { fsguard } = ctx;
   const worktreePath = payload.worktree_path;
   const backupDir = payload.backup_dir;
-  const artifactDir = payload.artifact_dir || anchors.plansDir;
 
   const described = inv.candidates.map((rel) => describe(worktreePath, rel));
   const pending = described.filter((d) => d.skip === undefined);
@@ -426,23 +421,20 @@ function execute(payload, ctx, inv) {
 
   // The execute log is best-effort: the manifest is the artifact the caller
   // needs, and losing the log must not downgrade a completed backup.
-  try {
-    fsguard.writeFile(
-      path.join(artifactDir, `${stamp()}-backup-worker-execute.log`),
-      [
-        `worktree: ${worktreePath}`,
-        `branch: ${payload.branch}`,
-        `backup-dir: ${backupDir}`,
-        `copied: ${manifestFiles.length} / ${actualPending.length} candidates (${humanSize(copiedBytes)})`,
-        `manifest: ${manifestPath}`,
-        `docker: ${docker.checked ? `${docker.containers.length} bind-mount(s)` : "not checked"}`,
-        ...notes.map((n) => `  ${n}`),
-        "",
-      ].join("\n")
-    );
-  } catch (_e) {
-    /* keep the reported status; the manifest already carries `issues` */
-  }
+  tryWriteLog(
+    ctx,
+    "backup-worker-execute.log",
+    [
+      `worktree: ${worktreePath}`,
+      `branch: ${payload.branch}`,
+      `backup-dir: ${backupDir}`,
+      `copied: ${manifestFiles.length} / ${actualPending.length} candidates (${humanSize(copiedBytes)})`,
+      `manifest: ${manifestPath}`,
+      `docker: ${docker.checked ? `${docker.containers.length} bind-mount(s)` : "not checked"}`,
+      ...notes.map((n) => `  ${n}`),
+      "",
+    ].join("\n")
+  );
 
   const failedCopies = actualPending.length - manifestFiles.length;
   const notPreservedCount = inv.expansionIssues.length + budgetIssues.length;

@@ -7,9 +7,9 @@
 // Control files (supervisor state, gate JSON) live in <sid>.control/; the log is an artifact.
 
 const fs = require("fs");
-const path = require("path");
 
 const { run: spawnRun } = require("../spawn");
+const { tryWriteLog } = require("../worker-log");
 const { controlPath } = require("../../../hooks/workflow-state/state-io/control-dir");
 
 const REPORT_TIMEOUT_MS = 30000;
@@ -210,9 +210,8 @@ function readSupervisorState(sessionId) {
 }
 
 function run(payload, ctx) {
-  const { anchors, fsguard } = ctx;
+  const { fsguard } = ctx;
   const sessionId = payload.session_id;
-  const artifactDir = payload.artifact_dir || anchors.plansDir;
   const nowMs = Date.now();
 
   // SC-4 — retrospective scan. Non-fatal throughout: a missing or malformed
@@ -280,22 +279,19 @@ function run(payload, ctx) {
     ` SC-5b audit_phase: ${auditPhase === null ? phaseUnset : auditPhase}`;
 
   // Log write is best-effort — the gate JSON is the contract, the log is not.
-  try {
-    fsguard.writeFile(
-      path.join(artifactDir, `${sessionId}-session-close-worker.log`),
-      [
-        `state file: ${stateRead.kind === "ok" ? statePath : `(${stateRead.kind})`}`,
-        `gate_action: ${gateAction}`,
-        `alert_phase: ${alertPhase === null ? "(absent)" : alertPhase}`,
-        `audit_phase: ${auditPhase === null ? "(absent)" : auditPhase}`,
-        `findings: ${findings.length}`,
-        ...findings.map((f) => `  [${f.severity}] ${f.detail}`),
-        "",
-      ].join("\n")
-    );
-  } catch (_e) {
-    // ignore
-  }
+  tryWriteLog(
+    ctx,
+    "session-close-worker.log",
+    [
+      `state file: ${stateRead.kind === "ok" ? statePath : `(${stateRead.kind})`}`,
+      `gate_action: ${gateAction}`,
+      `alert_phase: ${alertPhase === null ? "(absent)" : alertPhase}`,
+      `audit_phase: ${auditPhase === null ? "(absent)" : auditPhase}`,
+      `findings: ${findings.length}`,
+      ...findings.map((f) => `  [${f.severity}] ${f.detail}`),
+      "",
+    ].join("\n")
+  );
 
   return { status: "complete", summary, artifactPath: written };
 }

@@ -2,28 +2,21 @@
 # tests/bin/feature-1643-worker-dispatch-output-contract.sh
 # Tests: bin/worker-dispatch/emit.js, bin/worker-dispatch.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/workers/worktree-copy.js, bin/worker-dispatch/workers/worktree-backup.js, bin/worker-dispatch/workers/doc-append.js, bin/worker-dispatch/workers/issue-reconcile.js, bin/worker-dispatch/workers/session-close-gate.js
 # Tags: worker-dispatch, emit, output-contract, renderer, yaml, status-triple, stub-cli, TL2, scope:issue-specific
-#
-# Issue #1643 — the plain-script dispatcher replaces six LLM workers. Calling
-# skills parse the workers' stdout, so the rendered output must stay BYTE-
-# IDENTICAL to the `## Output contract` sections of the agents/*.md files that
-# this issue deletes. The literals below were extracted from those files before
-# deletion and are the only surviving copy — do not "tidy" them.
-#
-# Quoting differs per worker and is part of the contract:
-#   worktree-copy / issue-reconcile / session-close-gate : UNQUOTED values
-#   worktree-backup / doc-append                         : QUOTED values
-#   test-runner                                          : fenced YAML block
-#
 # TL3 gap (what this TL2 test does NOT catch):
-#   - Real `gh` / `uv run doc-append.py` / `docker` output shapes: the domain CLIs
-#     are stubbed here. The real `gh issue list` flag contract is covered by
-#     tests/bin/TL3-worker-dispatch-gh-contract.sh (RUN_TL3-gated).
-#   - Whether the calling SKILL.md parsers actually accept the bytes — only a real
-#     skill run exercises that.
+#   - Real `gh` / `uv run doc-append.py` / `docker` output shapes (stubbed here; the
+#     `gh issue list` flag contract is tests/bin/TL3-worker-dispatch-gh-contract.sh).
+#   - Whether the calling SKILL.md parsers actually accept the bytes.
 # Closest-to-action mitigation: bin/check-verification-gate.sh category
 # skill-orchestration fires at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
+# Issue #1643 — the plain-script dispatcher replaces six LLM workers. Calling skills
+# parse their stdout, so output must stay BYTE-IDENTICAL to the `## Output contract`
+# sections of the deleted agents/*.md files. The literals below are the only
+# surviving copy — do not "tidy" them. Quoting is part of the contract:
+#   worktree-copy / issue-reconcile / session-close-gate : UNQUOTED values
+#   worktree-backup / doc-append                         : QUOTED values
+#   test-runner                                          : fenced YAML block
 
 if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_OC_INNER:-}" ]; then
     _WD1643_OC_INNER=1 timeout 420 bash "$0" "$@"
@@ -60,13 +53,9 @@ trap 'rm -rf "$TMPD"' EXIT
 # ---------------------------------------------------------------------------
 # Frozen literals — transcribed verbatim, before deletion, from the
 # `## Output contract` sections of the six agents/*.md subagents that #1643
-# removed. Each now belongs to the worker module that replaced it:
-#   bin/worker-dispatch/workers/worktree-copy.js   (was worktree-copy-worker)
-#   bin/worker-dispatch/workers/worktree-backup.js (was worktree-backup-worker)
-#   bin/worker-dispatch/workers/doc-append.js      (was doc-append-worker)
-#   bin/worker-dispatch/workers/issue-reconcile.js (was issue-reconcile-worker)
-#   bin/worker-dispatch/workers/session-close-gate.js (was session-close-worker)
-#   bin/worker-dispatch/workers/test-runner.js     (was test-runner)
+# removed. Each now belongs to bin/worker-dispatch/workers/<worker>.js
+# (worktree-copy, worktree-backup, doc-append, issue-reconcile,
+# session-close-gate [was session-close-worker], test-runner).
 # ---------------------------------------------------------------------------
 SPECS="$TMPD/specs"; mkdir -p "$SPECS"
 
@@ -132,9 +121,7 @@ cat > "$YAML_CHECK_JS" <<'YCJS'
 // The `## Output contract` (fenced YAML) of the deleted agents/test-runner.md,
 // now owned by bin/worker-dispatch/workers/test-runner.js:
 //   status: pass | fail | timeout | runner-error
-//   exit_code: <int>
-//   duration_seconds: <int>
-//   summary: <=300-char human summary
+//   exit_code: <int>   duration_seconds: <int>   summary: <=300-char human summary
 //   failing_tests:
 //     - <up to 10 test names>
 //   log_tail: |
@@ -195,6 +182,7 @@ echo x > "$MAIN_RAW/README.md"
 git -C "$MAIN_RAW" add -A >/dev/null 2>&1
 git -C "$MAIN_RAW" commit -q --no-verify -m init >/dev/null 2>&1
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 MAIN="$(nodepath "$MAIN_RAW")"; PLANS="$(nodepath "$PLANS_RAW")"
 
 STUB="$TMPD/stub"; mkdir -p "$STUB"
@@ -248,7 +236,7 @@ write_payload() {
 
 dispatch() {
     local worker="$1" pfile="$2"
-    run_with_timeout 90 env "PATH=$STUB:$PATH" "WORKFLOW_PLANS_DIR=$PLANS" \
+    run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "PATH=$STUB:$PATH" "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
         node "$(nodepath "$DISPATCH_JS")" "$worker" "$MAIN" "$pfile" 2>/dev/null
 }
 
@@ -334,7 +322,7 @@ group_failure() {
         impl_missing "failure/$name" "$DISPATCH_JS" "bin/worker-dispatch.js" && continue
         p="$(write_payload "bad-$name" "$json")"
         out="$TMPD/fail-$name.txt"
-        run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+        run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
             node "$(nodepath "$DISPATCH_JS")" "$worker" "$MAIN" "$p" > "$out" 2>/dev/null
         st="$(sed -n '1s/^status: //p' "$out")"
         assert_eq "failure/$name/status" "failed" "$st"

@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const { getWorkflowDir, normalizeStateVersion } = require("./core");
 const { RECEIPT_DIR_SUFFIX } = require("../../lib/instructions-loaded-receipt");
+const { WORKER_LOGS_DIRNAME } = require("./control-dir");
 
 // Last moment this session showed a sign of life. Since #1733 that is `created_at`
 // plus the newest `events[].at` — reading the retired `steps[*].updated_at` would
@@ -49,6 +50,22 @@ function sweepControlDir(workflowDir, file, tmpCutoff) {
   if (fs.existsSync(path.join(workflowDir, `${sid}.json`))) return;
   if (newest < Date.now() - CONTROL_RETENTION_DAYS * 24 * 60 * 60 * 1000) {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const WORKER_LOG_RETENTION_DAYS = 30;
+
+// lstat throughout: a symlinked worker-logs dir or entry is never followed.
+function sweepWorkerLogs(workflowDir, file) {
+  const dir = path.join(workflowDir, file);
+  if (!fs.lstatSync(dir).isDirectory()) return;
+  const cutoff = Date.now() - WORKER_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  for (const name of fs.readdirSync(dir)) {
+    const p = path.join(dir, name);
+    try {
+      const est = fs.lstatSync(p);
+      if (est.isFile() && est.mtimeMs < cutoff) fs.unlinkSync(p);
+    } catch (e) {}
   }
 }
 
@@ -103,6 +120,11 @@ function cleanupZombies(maxAgeDays = 7) {
       continue;
     }
 
+    if (file === WORKER_LOGS_DIRNAME) {
+      try { sweepWorkerLogs(workflowDir, file); } catch (e) {}
+      continue;
+    }
+
     if (
       file.endsWith(".workflow-off") ||
       file.endsWith(".worktree-off") ||
@@ -134,4 +156,4 @@ function cleanupZombies(maxAgeDays = 7) {
   }
 }
 
-module.exports = { cleanupZombies };
+module.exports = { cleanupZombies, sweepWorkerLogs, WORKER_LOG_RETENTION_DAYS };

@@ -2,27 +2,20 @@
 # tests/bin/feature-1643-worker-dispatch-doc-append-behavior.sh
 # Tests: bin/worker-dispatch/workers/doc-append.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, doc-append, argv-contract, idempotency, table-driven, TL2, scope:issue-specific
-#
-# Issue #1643 — doc-append is one CLI call in three shapes. The agent it replaced
-# had its argv mangled by shell quoting; a table decides it here, and this file
-# is what proves the table maps each mode to the right binary and the right
-# flags. Nothing else covered which argv a mode produces.
-#
-# The process seam is canned via tests/feature-1643-worker-dispatch-lib/
-# spawn-stub.js, so the exact argv the worker asked for is recorded and asserted
-# instead of being inferred from a side effect. Everything up to the seam —
-# per-mode required-field checks, script resolution under the ACD anchor,
-# fsguard, emit — runs for real.
-#
 # TL3 gap (what this TL2 test does NOT catch):
-#   - Whether bin/doc-append.py and bin/compose-doc-append-entry actually ACCEPT
-#     the flags assembled here; only the real CLIs can answer that.
-#     tests/bin/TL3-worker-dispatch-run-tests.sh covers the real-runner tier.
+#   - Whether bin/doc-append.py / bin/compose-doc-append-entry ACCEPT the flags
+#     assembled here (real-runner tier: tests/bin/TL3-worker-dispatch-run-tests.sh).
 #   - `uv` being absent from PATH on the host.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+# Issue #1643 — doc-append is one CLI call in three shapes; the agent it replaced
+# had its argv mangled by shell quoting. This file proves the mode table maps each
+# mode to the right binary and flags. The process seam is canned via
+# tests/feature-1643-worker-dispatch-lib/spawn-stub.js so the exact argv is
+# recorded; everything up to the seam (required-field checks, ACD-anchored script
+# resolution, fsguard, emit) runs for real.
 
 if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_DA_INNER:-}" ]; then
     _WD1643_DA_INNER=1 timeout 420 bash "$0" "$@"
@@ -87,6 +80,7 @@ LINKED_RAW="$TMPD/linked-wt"
 git -C "$MAIN_RAW" worktree add -q -b feature/da-probe "$LINKED_RAW" >/dev/null 2>&1
 printf '## BugsFound\n- (none)\n' > "$LINKED_RAW/WORKTREE_NOTES.md"
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 
 MAIN="$(nodepath "$MAIN_RAW")"
 CWD="$(nodepath "$LINKED_RAW")"
@@ -107,7 +101,7 @@ dispatch_da() {
     printf '%s' "$1" > "$CANNED"
     : > "$CALLLOG"
     DRC=0
-    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

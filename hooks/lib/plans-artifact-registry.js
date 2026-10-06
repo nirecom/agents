@@ -64,8 +64,6 @@ const ARTIFACT_KINDS = Object.freeze([
   k("judge-raw", "(?:complexity|outline|detail|write-tests|write-code)-judge-raw\\.txt"),
   k("finalize-diagnostic", `${F}-finalize-diagnostic\\.txt`),
   k("worker-draft", `${WORKER}\\.draft\\.json`),
-  k("finalize-worker-log", "finalize-worker-[A-Za-z0-9._]+(?:-[A-Za-z0-9._]+)*\\.log"),
-  k("session-close-worker-log", "session-close-worker\\.log"),
   k("notes-backup", "notes-backup"),
   k("issue-create-dispatch", "issue-create-dispatch\\.txt"),
   k("issue-create-survey", "issue-create-survey\\.json"),

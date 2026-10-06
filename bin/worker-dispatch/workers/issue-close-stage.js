@@ -11,6 +11,7 @@
 
 const { run: spawnRun } = require("../spawn");
 const { samePath } = require("../anchor");
+const { tryWriteLog } = require("../worker-log");
 const { parseOriginOwnerRepo, redactUserinfo } = require("../../../hooks/lib/parse-remote-url");
 
 const CHAIN_TIMEOUT_MS = 600000;
@@ -22,12 +23,6 @@ const RE_OWNER_REPO = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 const STATUS_VOCABULARY = ["phase1_done", "blocked_sub_issue", "error"];
 
 const KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
-function stamp() {
-  // Compact UTC stamp: sorts chronologically and stays filesystem-safe on
-  // Windows, where `:` cannot appear in a file name.
-  return new Date().toISOString().replace(/[:.]/g, "-").replace(/Z$/, "Z");
-}
 
 // Parse the chain's KEY=VALUE stdout.
 //
@@ -120,20 +115,11 @@ function issueRepoMatchesCurrent(issueRepo, ownerRepo) {
 // Phase 1 into a reported failure — the issue-side effects have already
 // happened by then. fsguard routes the bytes through redactSentinels.
 function writeLog(payload, ctx, lines) {
-  const dir = payload.artifact_dir || ctx.anchors.plansDir;
-  const target = ctx.path.join(
-    dir,
-    `${stamp()}-issue-close-stage-worker-${payload.issue_number}.log`,
-  );
   const body = lines
     .map((l) => String(l === null || l === undefined ? "" : l))
     .filter((l) => l !== "")
     .join("\n");
-  try {
-    return ctx.fsguard.writeFile(target, `${body}\n`);
-  } catch (_e) {
-    return "(none)";
-  }
+  return tryWriteLog(ctx, `issue-close-stage-worker-${payload.issue_number}.log`, `${body}\n`);
 }
 
 function run(payload, ctx) {

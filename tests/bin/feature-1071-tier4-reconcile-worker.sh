@@ -2,21 +2,11 @@
 # tests/bin/feature-1071-tier4-reconcile-worker.sh
 # Tests: bin/worker-dispatch/workers/issue-reconcile.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/emit.js, agents/issue-create-survey-worker.md, skills/issue-create/SKILL.md, skills/issue-reconcile/SKILL.md
 # Tags: static, agent, worker, worker-dispatch, issue-reconcile, issue-create, survey-worker, TL2, scope:issue-specific
-#
-# Tier 4 contract test for the reconcile worker and the issue-create survey worker
-# (originally issue #1071).
-# #1643 replaced the LLM subagent agents/issue-reconcile-worker.md with the plain
-# script bin/worker-dispatch/workers/issue-reconcile.js, dispatched by
-# skills/issue-reconcile/SKILL.md Step 2 through skills/_shared/worker-dispatch.md.
-# Cases 1-3 therefore assert against the module, the renderer and the registry
-# capability declaration. agents/issue-create-survey-worker.md is NOT part of that
-# migration — it is still an LLM subagent, so cases 4-10 are unchanged.
-#
-# TL3 gap (what this test does NOT catch):
-# - actual survey-worker verdict classification by the LLM (requires real claude -p)
-# - a real reconcile scan over real GitHub issues (see tests/bin/TL3-worker-dispatch-gh-contract.sh)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
+# Tier 4 (#1071): cases 1-3 pin the issue-reconcile script worker (#1643); cases 4-10
+# pin the still-LLM issue-create survey worker.
+# TL3 gap: LLM verdict classification and a real gh scan (TL3-worker-dispatch-gh-contract.sh).
+# Mitigation: WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: skill-orchestration
 
 set -u
 
@@ -111,8 +101,9 @@ test_reconcile_worker_readonly() {
     ' "$(nodepath "$REGISTRY_JS")" 2>&1)
     local has_comment=0
     grep -qE 'gh[^\n]*issue[^\n]*comment|issue", *"comment"' "$RECONCILE_WORKER_JS" && has_comment=1
-    if [ "$caps" = "ext=gh scripts= scopes=plans-dir" ] && [ "$has_comment" -eq 0 ]; then
-        pass "3: reconcile worker declares gh as its only binary and plans-dir as its only write scope"
+    # #2558: the .jsonl artifact stays in plans-dir; the worker log moved to log-dir.
+    if [ "$caps" = "ext=gh scripts= scopes=log-dir|plans-dir" ] && [ "$has_comment" -eq 0 ]; then
+        pass "3: reconcile worker declares gh as its only binary and plans-dir + log-dir as its write scopes"
     else
         fail "3: reconcile worker read-only constraint broken" "$caps has_comment=$has_comment"
     fi

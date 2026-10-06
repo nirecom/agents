@@ -109,6 +109,7 @@ git -C "$MAIN_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
 LINKED_RAW="$TMPD/linked-wt"
 git -C "$MAIN_RAW" worktree add -q -b feature/ics-probe "$LINKED_RAW" >/dev/null 2>&1
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 
 MAIN="$(nodepath "$MAIN_RAW")"
 LINKED="$(nodepath "$LINKED_RAW")"
@@ -144,7 +145,7 @@ line_count() { printf '%s\n' "$DOUT" | grep -c '' | tr -d ' '; }
 dispatch_stage() {
     DRC=0
     : > "$CALLLOG"
-    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

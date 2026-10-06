@@ -2,26 +2,20 @@
 # tests/bin/feature-1643-worker-dispatch-anchor.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/anchor.js, hooks/lib/agents-config-dir.js
 # Tags: worker-dispatch, anchor, trust-anchor, c2, security, TL1, scope:issue-specific
-#
-# Issue #1643 — C2 core: the dispatcher's trust anchors must not be movable by
-# caller-controlled input. Concretely:
-#   (a) process cwd pointed at an ALTERNATE repo must leave that repo untouched
-#       (no effectful child process against it, no fs write into it),
-#   (b) a planted fake agents checkout in $AGENTS_CONFIG_DIR (both marker files
-#       present) must NOT become the resolved ACD — the module/realpath anchor wins,
-#   (c) argv[3] pointing at a LINKED worktree must exit 2 (git-common-dir check),
-#   (d) argv[3] non-git / non-existent / relative must exit 2,
-#   (e) `process.cwd()` and `rev-parse --show-toplevel` must not appear anywhere
-#       under bin/worker-dispatch/** (regression fence for the design rule).
-#
 # TL3 gap (what this TL1 test does NOT catch):
-#   - A real Claude Code Bash tool call supplying tool_input.cwd, where the guard
-#     process and the dispatcher process see different cwds.
+#   - A real Bash tool call supplying tool_input.cwd (guard vs dispatcher cwds differ).
 #   - Real AGENTS_CONFIG_DIR resolution across a symlinked ~/.claude checkout.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+# Issue #1643 — C2 core: trust anchors must not be movable by caller input.
+#   (a) cwd at an ALTERNATE repo leaves that repo untouched (no child, no write),
+#   (b) a planted fake agents checkout in $AGENTS_CONFIG_DIR never becomes the ACD,
+#   (c) argv[3] at a LINKED worktree exits 2 (git-common-dir check),
+#   (d) argv[3] non-git / non-existent / relative exits 2,
+#   (e) `process.cwd()` / `rev-parse --show-toplevel` never appear under
+#       bin/worker-dispatch/** (regression fence for the design rule).
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
@@ -101,6 +95,7 @@ NONGIT_RAW="$TMPD/plain-dir"; mkdir -p "$NONGIT_RAW"
 NONGIT="$(nodepath "$NONGIT_RAW")"
 
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 PLANS="$(nodepath "$PLANS_RAW")"
 printf '%s' "{\"cwd\":\"$MAIN\",\"test_args\":[],\"timeout_seconds\":15}" > "$PLANS_RAW/tr.json"
 PAYLOAD="$(nodepath "$PLANS_RAW/tr.json")"
@@ -137,9 +132,9 @@ DRC=0
 run_dispatch() {
     local cwd="$1"; shift
     DRC=0
-    DOUT="$(cd "$cwd" && run_with_timeout 60 env \
+    DOUT="$(cd "$cwd" && run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID \
         "PATH=$SHIM_DIR:$PATH" \
-        "WORKFLOW_PLANS_DIR=$PLANS" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
         node "$DISPATCH_JS" "$@" 2>&1)" || DRC=$?
 }
 

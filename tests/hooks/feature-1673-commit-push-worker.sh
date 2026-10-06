@@ -182,7 +182,8 @@ group_a() {
     assert_eq "spec/artifact_dir-type" "path-under-plansdir" "$(ev type_artifact_dir)"
     assert_eq "spec/no-invented-fields" "" "$(ev unknown_fields)"
 
-    assert_eq "registry/write-scopes" "family-worktree,plans-dir" "$(ev write_scopes)"
+    # #2558: the worker log moved to the log dir; plans-dir is no longer needed.
+    assert_eq "registry/write-scopes" "family-worktree,log-dir" "$(ev write_scopes)"
     # #2308: glab joins the external binaries for pr.js's GitLab MR path.
     assert_eq "registry/external-binaries" "bash,gh,git,glab,node" "$(ev external)"
     # #2308: isGithubRemote dropped — forge is now resolved in-process via
