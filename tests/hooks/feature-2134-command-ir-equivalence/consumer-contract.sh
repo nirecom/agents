@@ -23,7 +23,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
 # Fixture isolation (rules/test/fixture-isolation.md): pure function calls only, but the
 # parent session's id must always be dropped -- the child node inheriting it could touch real session state.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 npath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 AGENTS_N="$(npath "$AGENTS_DIR")"

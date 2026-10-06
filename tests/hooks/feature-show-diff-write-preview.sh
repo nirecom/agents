@@ -79,4 +79,16 @@ out=$(run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$HWORK/
 out=$(echo '"not valid json"' | run_with_timeout node "$HOOK")
 [ -z "$out" ] || fail "test 7: malformed JSON should produce empty output"
 
+# 8) Self-identifying test names outside any test directory stay suppressed
+#    (the registry's selfIdentifying patterns); plain source names still diff.
+mkdir -p "$WORK/src8"
+for name in a.spec.js a.test.js test_a.sh a_test.sh foo.Tests.ps1 test_a.py; do
+  out=$(run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$HWORK/src8/$name\",\"content\":\"x\"}}")
+  [ -z "$out" ] || fail "test 8: self-identifying test name $name should produce empty output"
+done
+for name in a.sh a.js a.py; do
+  out=$(run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$HWORK/src8/$name\",\"content\":\"x\"}}")
+  echo "$out" | grep -qF 'DIFF PREVIEW' || fail "test 8: non-test name $name should still produce a diff preview"
+done
+
 echo "PASS: all assertions passed"

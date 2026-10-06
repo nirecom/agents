@@ -23,7 +23,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Reuse across steps.
 
 MOP-0. **Surface premise contradictions** from Research artifacts.
-   MOP-0a. Determine session-id from `CLAUDE_SESSION_ID` env (MOP-1 has not run yet — this lookup precedes intent-file resolution).
+   MOP-0a. Determine session-id from `CLAUDE_CODE_SESSION_ID` env (MOP-1 has not run yet — this lookup precedes intent-file resolution).
        - `state.steps.research.status === "skipped"` → skip to MOP-0d.
        - One/both `<session-id>-survey-{code,history}.md` missing AND research not skipped → warn once in chat ("Research artifacts incomplete — proceeding without full premise verification") and continue to MOP-0d. Do not block.
    MOP-0b. Read `## Verified Claims` from each existing artifact; collect items with `verdict: contradicted`.
@@ -115,9 +115,10 @@ MOP-7. On `APPROVED`:
 
    Do NOT write this prose to outline.md. MOP-8 handles the file write.
 
-MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + breadcrumb). Then branch on the bypass condition:
-   - **Bypass (CONFIRM_OUTLINE=off only):** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
-   - **Sentinel** (ON path): apply confirm-plan CPA-3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
+MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + breadcrumb).
+   Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
+   - **`GATE_ACTION=proceed`:** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
+   - **`GATE_ACTION=ask`:** apply confirm-plan CPA-3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
 
 ## Output Schema (`<session-id>-outline.md`)
 
@@ -139,7 +140,7 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 
 - **Chat output during the discussion loop** is restricted to:
   (a) one status line per round (`Round N: APPROVED` / `Round N: NEEDS_REVISION (proceeding)`)
-  (b) NO path output — `show-plan-link.js` PostToolUse hook emits the sole authoritative breadcrumb. Orchestrator MUST NOT print, duplicate, translate, paraphrase, or reformat the path. See `skills/_shared/confirm-plan.md` CPA-2.
+  (b) no local path output — the `show-plan-link.js` `Plan file:` breadcrumb is the sole plan surface. See `skills/_shared/confirm-plan.md` CPA-2.
   (c) the MOP-7 turn-final prose rationale summary
   (d) the concern summary block rendered by the MOP-6 ESCALATE/HIGH_UNRESOLVED path when exit 2 or exit 6 fires — exactly one block per cap-reach event.
   No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception), no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.

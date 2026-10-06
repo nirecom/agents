@@ -42,7 +42,7 @@ require_module() {
 report() {
     local tmp="$1" envsid="$2"
     shift 2
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$envsid" \
+    env CLAUDE_CODE_SESSION_ID="$envsid" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$CLI" --categories 'workflow' --severity 'warning' \
@@ -54,7 +54,7 @@ report() {
 # (workflow_init complete, final_report pending).
 seed_active() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -66,7 +66,7 @@ markStep('$sid', 'workflow_init', 'complete');
 
 inspect() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID SID="$sid" \
+    env -u CLAUDE_CODE_SESSION_ID SID="$sid" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -183,7 +183,7 @@ run_S5() {
     local tmp rc problems files
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="usage-sid-s5" \
+    env CLAUDE_CODE_SESSION_ID="usage-sid-s5" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$CLI" --severity 'warning' >/dev/null 2>&1

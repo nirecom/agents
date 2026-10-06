@@ -19,7 +19,7 @@ trap 'cd /; rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
 export WORKFLOW_STATE_DIR="$(np "$WORKFLOW_STATE_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE SYSTEM_OPS_APPROVED 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID SYSTEM_OPS_APPROVED 2>/dev/null || true
 unset ANTHROPIC_API_KEY ENFORCE_WORKTREE_EXCLUDE 2>/dev/null || true
 mkdir -p "$TMPD/transcripts" "$TMPD/neutral"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMPD/transcripts")"

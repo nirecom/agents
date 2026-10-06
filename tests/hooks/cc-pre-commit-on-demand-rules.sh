@@ -125,7 +125,7 @@ OUT=""; RC=0
 run_precommit() {
     local cwd="$1"; shift
     RC=0
-    OUT="$( (cd "$cwd" && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID \
+    OUT="$( (cd "$cwd" && unset CLAUDE_CODE_SESSION_ID \
         && run_with_timeout 90 env "$@" bash "$PRECOMMIT") 2>&1 )" || RC=$?
 }
 

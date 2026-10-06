@@ -9,12 +9,7 @@
 # T18a/T18b: real session-start.js hook execution (writeSetIssue wired; writeClearWaiting NOT called)
 # T19-T22: skip guard, cwd-constrained mtime fallback
 
-# ===========================================================================
-# T18a: REAL hooks/session-start.js execution — writeSetIssue is wired and writes the title.
-# Runs the actual hook with piped stdin {"session_id","transcript_path"} so the title-write
-# block is exercised end-to-end. Catches: hook syntax errors, broken require/wiring of
-# writeSetIssue, and a missing intent.md → title resolution. (Review C1 (ii)(iii).)
-# ===========================================================================
+# T18a: REAL session-start.js run via piped stdin — catches hook syntax/require breaks of writeSetIssue and intent.md title resolution.
 run_t18a() {
   local tmp_bash="$TMPDIR_BASE/t18a"
   local plans_bash="$tmp_bash/plans"
@@ -49,7 +44,7 @@ run_t18a() {
   # _getJsonlPath resolves to this fixture JSONL. Other hook side-effects
   # (cleanupZombies, next-step spawn, additionalContext) fail-open in the fixture env.
   (
-    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_ENV_FILE CLAUDE_SESSION_ID CLAUDE_PROJECT_DIR
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_PROJECT_DIR
     printf '%s' "{\"session_id\":\"$sid\",\"transcript_path\":\"$jsonl_node\"}" | \
       WORKFLOW_STATE_DIR="$workflow_node" WORKFLOW_PLANS_DIR="$plans_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
@@ -105,7 +100,7 @@ run_t18b() {
   make_jsonl_with_title "$jsonl_bash" "$sid" "⏳#11 Session start integration test"
 
   (
-    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_ENV_FILE CLAUDE_SESSION_ID CLAUDE_PROJECT_DIR
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_PROJECT_DIR
     printf '%s' "{\"session_id\":\"$sid\",\"transcript_path\":\"$jsonl_node\"}" | \
       WORKFLOW_STATE_DIR="$workflow_node" WORKFLOW_PLANS_DIR="$plans_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
@@ -271,7 +266,7 @@ fs.utimesSync('$jsonl_a_node', t2, t2);
   # Call from repo-a cwd → should pick sid_a (from repo-a's transcript dir), not sid_b
   (
     cd "$cwd_a_bash"  # cd away from worktree so WORKTREE_NOTES.md is not found; mtime scan uses cwd_a's dir
-    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_SESSION_ID
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
     CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$cwd_a_node" "$plans_node" 2>/dev/null || true
   )
@@ -334,7 +329,7 @@ fs.utimesSync('$(to_node_path "$jsonl_new_bash")', older, older);
   # Mtime scan picks prior_sid (newer), which has intent.md
   (
     cd "$tmp_bash"  # cd away from worktree so WORKTREE_NOTES.md is not found by resolveSessionId step 6
-    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_SESSION_ID
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
     CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$tmp_node" "$plans_node" 2>/dev/null || true
   )
@@ -385,8 +380,8 @@ run_tnew1() {
   touch "$jsonl_bash"
 
   (
-    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
-    CLAUDE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$tmp_node" "$plans_node" 2>/dev/null || true
   )
 

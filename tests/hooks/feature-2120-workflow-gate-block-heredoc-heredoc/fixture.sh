@@ -50,7 +50,7 @@ fi
 export WORKFLOW_STATE_DIR="$(np "$WF")"
 export WORKFLOW_PLANS_DIR="$(np "$PLANS")"
 export ENFORCE_WORKTREE=on
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 # SCRATCHPAD is inherited from the live session and would tighten the scratchpad
 # allow root to THAT session's dir (claude-scratchpad-base.js H2). Unset it so the
 # root falls back to <os-tmpdir>/claude, which M10 can address deterministically.

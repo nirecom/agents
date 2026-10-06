@@ -73,7 +73,7 @@ PROBE_EOF
 run_observation() {
     (
         cd "$1" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+        unset CLAUDE_CODE_SESSION_ID
         WORKFLOW_STATE_DIR="$2" WORKFLOW_PLANS_DIR="$PLANS" \
             "$RWT" 30 node "$TMP/observe-probe.js" "$PB_NODE" 2>/dev/null
     )

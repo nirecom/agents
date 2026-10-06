@@ -22,7 +22,7 @@ export WORKFLOW_STATE_DIR="$tn/isolation/workflow-state" WORKFLOW_PLANS_DIR="$tn
 
 # Same fixture donor/heir pair and OMIT-opts call as project_stream('OMIT')
 # in ../feat-2218-inheritance-equivalence.sh — keep the two in sync.
-out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+out=$(env -u CLAUDE_CODE_SESSION_ID \
     WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
     HOME="$tn/home" USERPROFILE="$tn/home" \
     "$RWT" 60 node -e "

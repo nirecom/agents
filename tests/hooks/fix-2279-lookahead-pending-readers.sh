@@ -36,7 +36,7 @@ COMPLETION_APPROVAL="$N/hooks/workflow-state/completion-approval.js"
 DETECT_CLI="$N/bin/resume-session-detect"
 
 # Fixture isolation (rules/test/fixture-isolation.md).
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 export CLAUDE_TRANSCRIPT_BASE_DIR=""
 
 PASS=0; FAIL=0; SKIP=0
@@ -93,7 +93,7 @@ process.stdout.write(String(isAllPending(readState(process.env.SID))));" 2>/dev/
 
 # detect_type <tn> <sid> — bin/resume-session-detect's detect(), in-process.
 detect_type() {
-    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" CLAUDE_SESSION_ID="$2" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" CLAUDE_CODE_SESSION_ID="$2" "$RWT" 20 node -e "
 const r = require('$DETECT_CLI').detect();
 process.stdout.write(String(r && r.type) + ':' + String((r && r.step) || '-'));" 2>/dev/null
 }

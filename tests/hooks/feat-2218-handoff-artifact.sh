@@ -42,7 +42,7 @@ require_module() {
 run_node() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "$1" 2>&1)
@@ -53,7 +53,7 @@ run_node() {
 # seed_active <node-dir> <sid> — #2430: the CLI writes through the workflow
 # active-period gate, so a CLI case that expects a write seeds workflow_init.
 seed_active() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$1/wf" WORKFLOW_PLANS_DIR="$1/wf" HOME="$1/home" USERPROFILE="$1/home" \
         "$RWT" 30 node -e "
 const S = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -398,7 +398,7 @@ run_H9() {
     # prefix heuristic it would append here instead of to the CC-native sid.
     printf '# decoy\n' > "$tmp/wf/wsid-decoy-intent.md"
     seed_active "$tn" "cli-sid-h9"
-    out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="cli-sid-h9" \
+    out=$(env CLAUDE_CODE_SESSION_ID="cli-sid-h9" \
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node "$AGENTS_DIR/$CLI" --class E --step write_tests --key write-tests:not-needed --summary "no test surface" --pointer - --origin procedure-point 2>&1)
@@ -424,7 +424,7 @@ run_H10() {
     local tmp tn out rc
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     mkdir -p "$tmp/wf" "$tmp/home"
-    out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="cli-sid-h10" \
+    out=$(env CLAUDE_CODE_SESSION_ID="cli-sid-h10" \
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node "$AGENTS_DIR/$CLI" --class E --step write_tests --key k --summary s --pointer - --origin bogus-origin 2>&1)
@@ -448,7 +448,7 @@ run_H11() {
     local tmp tn out rc
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     mkdir -p "$tmp/wf" "$tmp/home"
-    out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="unused-h11" \
+    out=$(env CLAUDE_CODE_SESSION_ID="unused-h11" \
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node "$AGENTS_DIR/$CLI" --session "../../evil" --class E --step write_tests --key k --summary s --pointer - --origin procedure-point 2>&1)

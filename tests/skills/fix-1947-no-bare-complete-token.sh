@@ -189,7 +189,7 @@ multiline: CLI line continues into --status complete|status|hit|node bin/workflo
 multiline: --status dangles and the value is on the next line|status|hit|node bin/workflow/next-step --advance --step detail --status \\\n  complete --next
 multiline: three-way split still reassembles|status|hit|node bin/workflow/next-step \\\n  --advance --step detail \\\n  --status complete
 multiline: canonical form split the same way stays clean|status|miss|node bin/workflow/next-step --advance --step detail \\\n  --complete --next
-legacy --mark <step> complete|mark|hit|node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step> complete
+legacy --mark <step> complete|mark|hit|node bin/workflow/next-step --session $CLAUDE_CODE_SESSION_ID --mark <step> complete
 legacy --mark quoted step|mark|hit|node bin/workflow/next-step --session "$SID" --mark "$step" complete
 legacy --mark interpolated step|mark|hit|node bin/workflow/next-step --mark $CURRENT_STEP complete
 legacy --mark double-quoted status token|mark|hit|node bin/workflow/next-step --session "$SID" --mark "$step" "complete"
@@ -197,7 +197,7 @@ legacy --mark single-quoted status token|mark|hit|node bin/workflow/next-step --
 legacy --mark quoted step and quoted status|mark|hit|node bin/workflow/next-step --mark 'outline' 'complete'
 canonical quoted --complete is NOT a status token|mark|miss|node bin/workflow/next-step --mark "$step" "--complete"
 canonical single-quoted --complete is NOT a status token|mark|miss|node bin/workflow/next-step --mark 'outline' '--complete'
-canonical --mark <step> stays clean|mark|miss|node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step>
+canonical --mark <step> stays clean|mark|miss|node bin/workflow/next-step --session $CLAUDE_CODE_SESSION_ID --mark <step>
 migrated prose sentence stays clean|mark|miss|`--mark <step>` marks one step complete without touching others
 multiline: --mark <step> continues into complete|mark|hit|node bin/workflow/next-step --mark docs \\\n  complete
 multiline: --mark continues into <step> complete|mark|hit|node bin/workflow/next-step --mark \\\n  docs complete

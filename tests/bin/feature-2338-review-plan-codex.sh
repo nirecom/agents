@@ -29,7 +29,7 @@ fi
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; [ "$FAIL" -eq 0 ] || exit 1; exit 77; }
 command -v jq   >/dev/null 2>&1 || { echo "SKIP: jq not available (review-plan-codex prerequisite)"; [ "$FAIL" -eq 0 ] || exit 1; exit 77; }
 
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR 2>/dev/null || true
 cd "$TMPD" || exit 1
 
 FAKE_BIN="$TMPD/fakebin"

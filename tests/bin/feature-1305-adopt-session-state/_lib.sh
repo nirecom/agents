@@ -81,12 +81,12 @@ adopt() {
 }
 
 # run_driver <heir-sid> <cwd> <args...> → stdout+stderr; DRIVER_RC holds the code
-# CLAUDE_SESSION_ID is set per invocation (never inherited) so the driver keys
+# CLAUDE_CODE_SESSION_ID is set per invocation (never inherited) so the driver keys
 # its checkpoint on the fixture heir, not on the live session.
 run_driver() {
     local heir="$1" cwd="$2"; shift 2
     set +e
-    DRIVER_OUT="$( (cd "$TMPDIR_BASE" && CLAUDE_SESSION_ID="$heir" \
+    DRIVER_OUT="$( (cd "$TMPDIR_BASE" && CLAUDE_CODE_SESSION_ID="$heir" \
         WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TBASE_NODE" CLAUDE_PROJECT_DIR="$cwd" \
         AGENTS_CONFIG_DIR="$AGENTS_DIR" \

@@ -26,7 +26,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
 # Fixture isolation (rules/test/fixture-isolation.md): pure function calls only, so
 # WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR pinning is unnecessary, but drop the parent session's id.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 RUNNER="$AGENTS_DIR/bin/run-with-timeout.sh"
 OWNERSHIP_DOC="$AGENTS_DIR/docs/architecture/claude-code/shell-command-parsing.md"

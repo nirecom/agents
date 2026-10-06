@@ -38,7 +38,7 @@ export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$AGENTS_NODE"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
 # mk_repo <name> — a git fixture whose hooks are disabled and whose line endings are fixed.

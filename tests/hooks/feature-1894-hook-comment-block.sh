@@ -87,7 +87,6 @@ WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # Node on Windows wants a drive-letter path; msys hands us /c/... shapes.
@@ -216,7 +215,7 @@ _hk_run() {
     local errfile="$TMPDIR_BASE/hook.err"
     HK_RC=0
     HK_OUT="$( (cd "$NEUTRAL_CWD" \
-        && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID \
+        && unset CLAUDE_CODE_SESSION_ID \
         && run_with_timeout 30 env "${HK_ENVS[@]}" \
             node "$(mpath "$HOOK")" < "$PAYLOAD_FILE") 2>"$errfile" )" || HK_RC=$?
     HK_ERR="$(cat "$errfile" 2>/dev/null || true)"

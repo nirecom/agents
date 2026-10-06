@@ -55,7 +55,7 @@ run_worker() {
         unset GH_TOKEN GITHUB_TOKEN
         for kv in "$@"; do export "$kv"; done
         run_with_timeout 300 env \
-            -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+             -u CLAUDE_CODE_SESSION_ID \
             "GH_CONFIG_DIR=$EMPTY_GH_CONFIG" \
             "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
             node "$(nodepath "$AGENTS_DIR/bin/worker-dispatch.js")" \

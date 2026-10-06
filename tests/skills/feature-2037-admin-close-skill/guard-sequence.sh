@@ -30,7 +30,7 @@ s9_close_rc() {
     local sid="$1" wfdir="$2" rc=0 payload
     payload="$(node -e 'process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:"Bash",tool_input:{command:"gh issue close "+process.argv[2]}}))' "$sid" 4242)"
     printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u ISSUE_CLOSE_SKILL \
+        env -u ISSUE_CLOSE_SKILL \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
@@ -115,7 +115,7 @@ else
     S9_CLEAN_WF="$(fresh_workflow_dir)"
     S9_SKILL_RC=0
     printf '%s' "$(node -e 'process.stdout.write(JSON.stringify({session_id:"s9esid2037",tool_name:"Bash",tool_input:{command:"gh issue close 4242"}}))')" \
-        | run_with_timeout 30 env -u CLAUDE_ENV_FILE \
+        | run_with_timeout 30 env \
             "ISSUE_CLOSE_SKILL=1" \
             "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "WORKFLOW_STATE_DIR=$S9_CLEAN_WF" \
@@ -129,7 +129,7 @@ else
 
     S9_UNREL_RC=0
     printf '%s' "$(node -e 'process.stdout.write(JSON.stringify({session_id:"s9fsid2037",tool_name:"Bash",tool_input:{command:"gh issue list --state open"}}))')" \
-        | run_with_timeout 30 env -u CLAUDE_ENV_FILE -u ISSUE_CLOSE_SKILL \
+        | run_with_timeout 30 env -u ISSUE_CLOSE_SKILL \
             "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "WORKFLOW_STATE_DIR=$S9_CLEAN_WF" \
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \

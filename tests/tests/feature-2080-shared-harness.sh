@@ -207,20 +207,17 @@ group_a_harness_isolate() {
   # C4: session-var cleanup — sourcing the harness must truly unset inherited
   # session ids (not merely empty them) so a fixture never mutates the developer's
   # live session state. ${VAR+set} returns "set" if VAR is set (even empty),
-  # "" if VAR is truly unset — so the expected output is three empty tokens.
+  # "" if VAR is truly unset — so the expected output is "unset:" (empty token).
   local sv
   sv="$(bash -euo pipefail -c "
-    export CLAUDE_SESSION_ID=test123
     export CLAUDE_CODE_SESSION_ID=test456
-    export CLAUDE_ENV_FILE=/tmp/envfile
     source '$HARNESS'
-    echo \"\${CLAUDE_SESSION_ID+set}|\${CLAUDE_CODE_SESSION_ID+set}|\${CLAUDE_ENV_FILE+set}\"
+    echo \"unset:\${CLAUDE_CODE_SESSION_ID+set}\"
   " 2>/dev/null || true)"
-  # All three must be truly unset → each token is empty → output is "||"
-  if [ "$sv" = "||" ]; then
-    t_ok "A4 harness source truly unsets CLAUDE_SESSION_ID/CODE_SESSION_ID/ENV_FILE"
+  if [ "$sv" = "unset:" ]; then
+    t_ok "A4 harness source truly unsets CLAUDE_CODE_SESSION_ID"
   else
-    t_bad "A4 harness source did not truly unset session vars (got='$sv' want='||')"
+    t_bad "A4 harness source did not truly unset CLAUDE_CODE_SESSION_ID (got='$sv' want='unset:')"
   fi
   # C4: child-process export — harness_isolate must export WORKFLOW_STATE_DIR
   # and WORKFLOW_PLANS_DIR so child node processes inherit them.

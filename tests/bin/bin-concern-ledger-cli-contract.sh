@@ -43,7 +43,6 @@ assert_eq_nz() {
 # Fixture isolation (rules/test/fixture-isolation.md).
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 unset CL_SHA_TOOL 2>/dev/null || true
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"

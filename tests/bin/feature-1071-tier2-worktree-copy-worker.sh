@@ -2,15 +2,7 @@
 # tests/bin/feature-1071-tier2-worktree-copy-worker.sh
 # Tests: bin/worker-dispatch/workers/worktree-copy.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/emit.js, skills/worktree-start/SKILL.md, bin/worktree-copy-include.js
 # Tags: static, worker, worker-dispatch, worktree-copy, worktree-start, TL2, scope:issue-specific
-#
-# Tier 2 contract test for the worktree-copy worker (originally issue #1071).
-# #1643 replaced the LLM subagent agents/worktree-copy-worker.md with the plain
-# script bin/worker-dispatch/workers/worktree-copy.js, dispatched by
-# skills/worktree-start/SKILL.md step WS-7 through skills/_shared/worker-dispatch.md.
-# The contract each case guards is unchanged; only its subject moved from prose to
-# code, so the assertions now run against the module, the registry SSOT and the
-# renderer instead of grepping a deleted .md file.
-#
+# Tier 2 contract for the worktree-copy worker (#1071; #1643 moved it to bin/worker-dispatch/workers/worktree-copy.js, dispatched at WS-7).
 # TL3 gap (what this test does NOT catch):
 # - a real /worktree-start run driving the dispatcher through the Claude Code Bash tool
 # - runtime copy correctness for gitignored files inside a real linked worktree
@@ -176,8 +168,9 @@ test_ws_confirm_worktree_ask() {
         return
     fi
     local off_block on_block st missing
-    off_block="$(sed -n '/CONFIRM_WORKTREE=OFF/,/CONFIRM_WORKTREE=ON/p' "$WS_MD")"
-    on_block="$(sed -n '/CONFIRM_WORKTREE=ON/,/^WS-8/p' "$WS_MD")"
+    # #2490: the branch headings are the next-step --gate vocabulary (proceed = OFF, ask = ON).
+    off_block="$(sed -n '/GATE_ACTION=proceed/,/GATE_ACTION=ask/p' "$WS_MD")"
+    on_block="$(sed -n '/GATE_ACTION=ask/,/^WS-8/p' "$WS_MD")"
     if [ -n "$off_block" ] && [ -n "$on_block" ]; then
         pass "7a: OFF and ON branches are documented separately"
     else
@@ -206,8 +199,8 @@ test_ws_confirm_worktree_ask() {
     else
         fail "7d: a branch leaves statuses undisposed" "missing:$missing"
     fi
-    if grep -q 'headless.*CONFIRM_WORKTREE. as OFF' "$WS_MD"; then
-        pass "7e: headless mode is pinned to the OFF branch"
+    if grep -q 'headless.*skip the gate check.*proceed' "$WS_MD"; then
+        pass "7e: headless mode is pinned to the proceed (OFF) branch"
     else
         fail "7e: headless mode is not pinned to OFF"
     fi

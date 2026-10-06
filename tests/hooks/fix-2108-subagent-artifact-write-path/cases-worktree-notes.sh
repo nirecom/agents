@@ -126,7 +126,7 @@ _wtn_in() {
     local dir="$1"; shift
     (
         cd "$dir" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         run_probe "$@"
     )
 }

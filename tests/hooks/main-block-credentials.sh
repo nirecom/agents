@@ -431,18 +431,18 @@ echo "test" > "$MARKER_FILE"
 cleanup() { rm -f "$MARKER_FILE"; }
 trap cleanup EXIT
 
-# We invoke the hook directly with CLAUDE_SESSION_ID set in env so that any
+# We invoke the hook directly with CLAUDE_CODE_SESSION_ID set in env so that any
 # would-be workflow-off lookup resolves to our marker. The expectation is that
 # block-credentials.js still blocks credential access — WORKFLOW_OFF must NOT
 # bypass this hook.
-result=$(CLAUDE_SESSION_ID="$SESSION_ID" sh -c "echo '{\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"~/.aws/credentials\"}}' | node \"$HOOK\" 2>/dev/null" || true)
+result=$(CLAUDE_CODE_SESSION_ID="$SESSION_ID" sh -c "echo '{\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"~/.aws/credentials\"}}' | node \"$HOOK\" 2>/dev/null" || true)
 if echo "$result" | grep -q '"block"'; then
     pass "WORKFLOW_OFF active: Read ~/.aws/credentials still blocked"
 else
     fail "WORKFLOW_OFF active: Read ~/.aws/credentials should still block, got: $result"
 fi
 
-result=$(CLAUDE_SESSION_ID="$SESSION_ID" sh -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat ~/.ssh/id_rsa\"}}' | node \"$HOOK\" 2>/dev/null" || true)
+result=$(CLAUDE_CODE_SESSION_ID="$SESSION_ID" sh -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat ~/.ssh/id_rsa\"}}' | node \"$HOOK\" 2>/dev/null" || true)
 if echo "$result" | grep -q '"block"'; then
     pass "WORKFLOW_OFF active: Bash cat ~/.ssh/id_rsa still blocked"
 else
@@ -450,7 +450,7 @@ else
 fi
 
 # New family (vault-token) is also non-bypassable (#537)
-result=$(CLAUDE_SESSION_ID="$SESSION_ID" sh -c "echo '{\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"~/.vault-token\"}}' | node \"$HOOK\" 2>/dev/null" || true)
+result=$(CLAUDE_CODE_SESSION_ID="$SESSION_ID" sh -c "echo '{\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"~/.vault-token\"}}' | node \"$HOOK\" 2>/dev/null" || true)
 if echo "$result" | grep -q '"block"'; then
     pass "WORKFLOW_OFF active: Read ~/.vault-token still blocked"
 else

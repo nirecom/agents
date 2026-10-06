@@ -33,7 +33,7 @@ _sy_classify() {
     local tool="$1" p="$2" sp="${3:-}"
     (
         cd "$NEUTRAL_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_CODE_SESSION_ID
         if [ -n "$sp" ]; then export SCRATCHPAD="$sp"; else unset SCRATCHPAD; fi
         run_probe -e "const m=require(process.argv[1]);process.stdout.write(String(m.classifyEarlyWriteAllow(process.argv[2],{file_path:process.argv[3]})))" \
             "$ALLOWLIST_NODE" "$tool" "$p"
@@ -49,7 +49,7 @@ _sy_read() { if [ -e "$1" ]; then cat "$1"; else printf '<absent>'; fi; }
 _sy_bctw() {
     (
         cd "$NEUTRAL_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE SCRATCHPAD
+        unset CLAUDE_CODE_SESSION_ID SCRATCHPAD
         gate_decision "$(run_hook_capture "$(mk_edit_input Write "$SID_T1" "$1")" "$RWT" 20 node "$BCTW_HOOK")"
     )
 }

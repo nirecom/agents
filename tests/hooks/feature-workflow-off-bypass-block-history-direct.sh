@@ -113,7 +113,7 @@ run_hook() {
     local errfile="$TMPDIR_BASE/stderr.$$"
     HOOK_RC=0
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$REPO_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \

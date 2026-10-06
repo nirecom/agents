@@ -2,18 +2,9 @@
 # tests/bin/fix-session-id-fixes-451-469-543.sh
 # Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-set-single.sh, bin/workflow/workflow-init-driver, hooks/workflow-state/state-io.js, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
 # Tags: session-id, wip-state, cleanup-zombies, scope:issue-specific
-#
-# RED suite — three combined fixes:
-#   #451 — clarify-intent/workflow-init SKILL.md must mention CLAUDE_SESSION_ID
-#           in the session-id-failure hint text.
-#   #469 — hooks/workflow-state/state-io.js cleanupZombies must also delete
-#           stale .workflow-off and .worktree-off marker files.
-#   #543 — wip-state.sh / wip-set-single.sh / wip-set-resume.sh /
-#           aggregate-wip-check.sh must accept and propagate a --session-id
-#           option so callers can pin the resolved SID.
-#
-# Dispatcher: frontmatter + shared helpers + sourcing of
-# fix-session-id-fixes-451-469-543/ sub-files. No test-case logic here.
+# #451 SKILL.md session-id recovery hint; #469 cleanupZombies deletes stale off-markers;
+# #543 wip-state CLIs accept and propagate --session-id.
+# Dispatcher only: helpers + sourcing of fix-session-id-fixes-451-469-543/ sub-files.
 
 set -u
 

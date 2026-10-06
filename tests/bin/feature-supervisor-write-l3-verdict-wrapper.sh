@@ -62,7 +62,7 @@ run_v1() {
     local tmp rc audit_phase audit_verdict audit_verdict_summary audit_cause
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
-    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
+    unset CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         CONTINUE "all checks passed" --session-id sid-v1 >/dev/null 2>&1
     rc=$?
@@ -84,7 +84,7 @@ run_v2() {
     local tmp rc audit_verdict
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
-    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
+    unset CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         WARN "minor concern detected" --session-id sid-v2 >/dev/null 2>&1
     rc=$?
@@ -103,7 +103,7 @@ run_v3() {
     local tmp rc audit_verdict
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
-    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
+    unset CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         BLOCK "critical security issue" --session-id sid-v3 >/dev/null 2>&1
     rc=$?
@@ -122,7 +122,7 @@ run_v4() {
     local tmp out rc
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
-    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
+    unset CLAUDE_CODE_SESSION_ID || true
     out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         MAYBE "some cause" --session-id sid-v4 2>&1)
     rc=$?
@@ -140,7 +140,7 @@ run_v5() {
     local tmp out rc
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
-    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
+    unset CLAUDE_CODE_SESSION_ID || true
     out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         CONTINUE --session-id sid-v5 2>&1)
     rc=$?
@@ -158,7 +158,7 @@ run_v6() {
     local tmp rc exists_named exists_wsid exists_cc
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
-    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID || true
+    unset CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$CLI_NODE" \
         CONTINUE "pass-through test" --session-id sid-v6 >/dev/null 2>&1
     rc=$?

@@ -3,20 +3,11 @@
 # Tests: tests/run-all.sh
 # Tags: tests, bin, parallel, positional-args, globbing, injection, TL2, scope:issue-specific
 
-# WHY: the positional branch (`for pattern in "$@"` / `for f in $pattern`) is the
-# surface every skill/hook uses to run a subset of the suite; this file pins it
-# before the parallelism rewrite touches it.
-
-# Adversarial reason: `for f in $pattern` is UNQUOTED, so args are word-split and
-# glob-expanded before `[ -f ]` — a path with a space breaks, and an
-# attacker-shaped filename could be re-interpreted. Both covered below.
-
-# FIXTURE SHAPE: runner copy lives at <root>/bin/run-all.sh, tests at
-# <root>/tests — one directory up so it can't glob-match and re-exec itself.
-
-# TL3 gap: real suite's 780+ files under load, and native-Windows shell argument
-# splitting. Closest-to-action mitigation: bin/check-verification-gate.sh at
-# WORKFLOW_USER_VERIFIED preflight.
+# WHY: pins the positional branch every skill/hook uses to run a suite subset,
+# including spaced paths and attacker-shaped names (word-split / glob hazards).
+# FIXTURE SHAPE: runner copy at <root>/bin/run-all.sh, tests at <root>/tests.
+# TL3 gap: the real suite under load and native-Windows argv splitting;
+# mitigation: bin/check-verification-gate.sh at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
@@ -43,7 +34,8 @@ trap 'rm -rf "$TMPD"' EXIT
 export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
+export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
@@ -54,11 +46,11 @@ mkdir -p "$RUN_ALL_CACHE_DIR"
 # run-with-timeout.sh execs argv directly). GNU `env` needs all `-u` flags before
 # any pass-through assignment.
 senv() {
-    env -u RUN_ALL_JOBS -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
-        -u FEATURE_644_PHASE "$@"
+    env -u TEST_MAX_JOBS_PER_RUN -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
+        -u FEATURE_644_PHASE -u TEST_MAX_JOBS_PER_HOST RUN_ALL_CONFIG_VAR_CMD=/nonexistent/get-config-var "$@"
 }
-AMBIENT_VARS="RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
-unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
+unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 
 ROOT="$TMPD/fx"
 RUNNER="$ROOT/bin/run-all.sh"
@@ -257,16 +249,16 @@ case_ambient_sanitized() {
         printf 'for v in %s; do printf "%%s=%%s " "$v" "${!v-<unset>}"; done\n' "$AMBIENT_VARS"
     } > "$probe"
     want=""; for v in $AMBIENT_VARS; do want="$want$v=<unset> "; done
-    got="$(RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
+    got="$(TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile \
         RUN_ALL_REAP=hostile FEATURE_644_PHASE=9 senv bash "$probe" 2>/dev/null)"
     assert_eq "o-pos/ambient/senv-strips-every-hostile-value" "$want" "$got"
     # The behavioural half: the glob verdict must not move under a hostile
     # ambient environment. Asserted against the literal expectation, so an
     # invocation that silently ran nothing cannot satisfy it.
-    export RUN_ALL_JOBS=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile
+    export TEST_MAX_JOBS_PER_RUN=hostile RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=hostile
     export RUN_ALL_REAP=hostile FEATURE_644_PHASE=9
     run_all "tests/t*.sh"
-    unset RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+    unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
     assert_eq "o-pos/ambient/glob-verdict-unchanged-under-hostile-ambient" \
         "3/t1 t2 t3" "$(executed_of)/$(order_of)"
 }

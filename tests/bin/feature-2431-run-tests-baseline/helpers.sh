@@ -33,7 +33,7 @@ PLANS_DIR="$TMPROOT/plans"
 mkdir -p "$WF_DIR" "$PLANS_DIR"
 export WORKFLOW_STATE_DIR="$(np "$WF_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$PLANS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # Baseline cache in a temp dir so the real ~/.claude/run-all is never touched.
 export RUN_ALL_CACHE_DIR="$TMPROOT/run-all-cache"

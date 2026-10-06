@@ -41,7 +41,6 @@ export WORKFLOW_PLANS_DIR
 # (WS-SK-NO-SID-*) rely on resolution returning null — this unset ensures that
 # fallback is not short-circuited by inherited session state from the runner.
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 
 setup_repo() {
     local repo="$TMPDIR_BASE/repo-$RANDOM"

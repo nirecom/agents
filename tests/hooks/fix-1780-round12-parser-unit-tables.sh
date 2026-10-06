@@ -92,7 +92,7 @@ assert_eq() {
 # rules/test/fixture-isolation.md: never let anything here resolve the live
 # session or the developer's real plans dir. These modules touch no files, but
 # the pins are dual and unconditional so no future side effect can escape.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 SANDBOX=$(make_tmp); WF=$(node_path "$SANDBOX")
 export WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF"
 cleanup() { [ -n "${SANDBOX:-}" ] && [ -d "$SANDBOX" ] && rm -r -f "$SANDBOX" 2>/dev/null; return 0; }

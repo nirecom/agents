@@ -21,7 +21,6 @@ fs.mkdirSync(d,{recursive:true});
 process.stdout.write(d);
 ")"
 export WORKFLOW_STATE_DIR="$TMPDIR_ROOT/workflow"
-export CLAUDE_ENV_FILE="$TMPDIR_ROOT/claude_env"
 mkdir -p "$WORKFLOW_STATE_DIR"
 cleanup() { rm -rf "$TMPDIR_ROOT"; }
 trap cleanup EXIT

@@ -161,7 +161,7 @@ d_node() {
     (
         export WORKFLOW_STATE_DIR="$D_STATE"
         export WORKFLOW_PLANS_DIR="$(nodepath "$D_PLANS")"
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+        unset CLAUDE_CODE_SESSION_ID
         run_with_timeout 60 node "$@"
     )
 }

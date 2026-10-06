@@ -66,7 +66,7 @@ fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json"),
 resolve() {
     local envkv="$1"; shift
     run_with_timeout 60 env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+         -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$WFDIR_N" WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
         $envkv node "$SCRIPT_N" "$@" </dev/null 2>/dev/null
 }

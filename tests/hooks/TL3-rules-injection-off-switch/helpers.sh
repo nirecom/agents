@@ -132,7 +132,6 @@ ril_run_claude() {
     RIL_LAST_OUTPUT="$(
         cd "$RIL_REPO" || exit 90
         unset CLAUDECODE
-        unset CLAUDE_SESSION_ID
         unset CLAUDE_CODE_SESSION_ID
         # Dual-pin the isolation pair (rules/test/fixture-isolation.md).
         export WORKFLOW_STATE_DIR="$(node_path "$wf")"

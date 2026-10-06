@@ -90,7 +90,6 @@ WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 BLOCK_LINE='BLOCK: sample.js — longest comment run 10 → 23 lines (over-threshold runs 1 → 2)'
@@ -364,7 +363,7 @@ _pc_run() {
     _pc_env "$cfg" "$ambient" "$@"
     RC=0
     OUT="$( (cd "$repo" \
-        && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID \
+        && unset CLAUDE_CODE_SESSION_ID \
         && run_with_timeout 60 env "${PC_ENVS[@]}" \
             bash "$cfg/hooks/pre-commit") 2>"$errfile" )" || RC=$?
     ERR="$(cat "$errfile" 2>/dev/null || true)"
@@ -380,7 +379,7 @@ _pc_commit() {
     _pc_env "$cfg" "$ambient" "$@"
     RC=0
     OUT="$( (cd "$repo" \
-        && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID \
+        && unset CLAUDE_CODE_SESSION_ID \
         && run_with_timeout 60 env "${PC_ENVS[@]}" \
             git -c "core.hooksPath=$hooks" commit -q -m "$msg") 2>&1 )" || RC=$?
     ERR=""

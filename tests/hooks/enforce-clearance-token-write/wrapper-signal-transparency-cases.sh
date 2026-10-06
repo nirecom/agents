@@ -44,7 +44,7 @@ run_signalled() {
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     stubbin=$(make_tmp); hb="$stubbin/hb"
     blocking_stub "$hb" > "$stubbin/codex"; chmod +x "$stubbin/codex"
-    ( cd "$stubbin" && env -u SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    ( cd "$stubbin" && env -u SESSION_ID -u CLAUDE_CODE_SESSION_ID \
         -u WORKTREE_PATH -u AGENTS_CONFIG_DIR \
         "PATH=$stubbin:$OFFCLR_CLEAN_PATH" \
         "WORKFLOW_PLANS_DIR=$tn" "WORKFLOW_STATE_DIR=$tn" \

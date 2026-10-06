@@ -69,7 +69,7 @@ mkdir -p "$ISOLATED_PLANS_DIR"
 run_hook() {
     local out
     out="$(printf '%s' "$1" | run_with_timeout 30 \
-        env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_ENV_FILE \
+        env -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_STATE_DIR=$ISOLATED_WORKFLOW_DIR" \
     "WORKFLOW_PLANS_DIR=$ISOLATED_PLANS_DIR" \
         node "$HOOK" 2>/dev/null)"
@@ -171,7 +171,7 @@ echo ""
 echo "=== T1-P/c: fail-open ==="
 
 got="$(printf '%s' 'not json at all {{{' | run_with_timeout 30 \
-    env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_ENV_FILE \
+    env -u CLAUDE_CODE_SESSION_ID \
     "WORKFLOW_STATE_DIR=$ISOLATED_WORKFLOW_DIR" \
     "WORKFLOW_PLANS_DIR=$ISOLATED_PLANS_DIR" \
     node "$HOOK" 2>/dev/null | grep -c '"decision":"approve"' || true)"

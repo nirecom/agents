@@ -108,10 +108,9 @@ EOF
     # Build injection path with literal $() in the dirname (bash does not expand \$)
     INJECTION_PATH="${TMPDIR_BASE}/repo-l5d-\$(touch ${PWNED_MARKER})-$$"
     SID_5D="l5d-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    ENV_5D="$TMPDIR_BASE/5d.env"
     L5D_EXIT=0
     echo "{\"session_id\":\"$SID_5D\"}" | \
-        CLAUDE_PROJECT_DIR="$INJECTION_PATH" CLAUDE_ENV_FILE="$ENV_5D" \
+        CLAUDE_PROJECT_DIR="$INJECTION_PATH" \
         WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || L5D_EXIT=$?
     if [ "$L5D_EXIT" = "0" ]; then
         pass "L5-d(exit). shell metachar in CLAUDE_PROJECT_DIR → exit 0 (no crash)"

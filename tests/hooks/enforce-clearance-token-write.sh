@@ -231,7 +231,7 @@ assert_approve 'A-off5 absolute-path workaround' \
 # either, so this reads the same context a real Bash turn reaches the classifier with.
 # All four exported messages are covered in the derived S1b matrix of the sibling
 # spelling-ssot-static.sh; this row keeps the parent suite's own regression anchor.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 A_OFF6="$(WORKFLOW_STATE_DIR="$TN" WORKFLOW_PLANS_DIR="$TN/plans" "$RWT" 12 node -e "const d=require(process.argv[1]+'/hooks/block-clearance-token-write/dispatch.js');const {bashHitsProtected}=require(process.argv[1]+'/hooks/block-clearance-token-write/bash-scan.js');process.stdout.write(String(bashHitsProtected(d.TOKEN_BLOCK_MSG,{})))" "$_AGENTS_DIR_NODE" 2>/dev/null)"
 if [ "$A_OFF6" = "null" ]; then
     pass "A-off6 TOKEN_BLOCK_MSG is not itself blocked (got null)"

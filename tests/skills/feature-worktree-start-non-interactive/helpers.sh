@@ -98,7 +98,6 @@ setup_fixture() {
     mkdir -p "$FIXTURE/wf" "$FIXTURE/plans"
     export WORKFLOW_STATE_DIR="$FIXTURE/wf"
     export WORKFLOW_PLANS_DIR="$FIXTURE/plans"
-    unset CLAUDE_SESSION_ID 2>/dev/null || true
     unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
     # Live-`gh` insulation. derive-worktree-name.sh resolves the user's private-repo

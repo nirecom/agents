@@ -29,9 +29,11 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # --- Mock gh CLI ---
 # Create mock gh that returns configurable responses
-# On Windows, Node.js execSync uses cmd.exe, so we need .cmd files
+# On Windows the .cmd mocks are reached through a gh.exe bridge (the forge
+# descriptor spawns gh without a shell); setup_mock_gh_missing removes it too.
 MOCK_BIN="$TMPDIR_BASE/mock-bin"
 mkdir -p "$MOCK_BIN"
+. "$AGENTS_DIR/tests/lib/cli-stub.sh"
 
 GH_CALL_LOG="$MOCK_BIN/gh-calls.log"
 if command -v cygpath >/dev/null 2>&1; then
@@ -46,6 +48,7 @@ setup_mock_gh_public() {
     printf '@echo off\r\necho false\r\n' > "$MOCK_BIN/gh.cmd"
     printf '#!/bin/bash\necho "false"\n' > "$MOCK_BIN/gh"
     chmod +x "$MOCK_BIN/gh"
+    cli_stub_bridge_cmd "$MOCK_BIN" gh
 }
 
 # Mock: repo is private (returns "true")
@@ -54,6 +57,7 @@ setup_mock_gh_private() {
     printf '@echo off\r\necho true\r\n' > "$MOCK_BIN/gh.cmd"
     printf '#!/bin/bash\necho "true"\n' > "$MOCK_BIN/gh"
     chmod +x "$MOCK_BIN/gh"
+    cli_stub_bridge_cmd "$MOCK_BIN" gh
 }
 
 # Mock: gh fails (network error, auth error, etc.)
@@ -62,11 +66,12 @@ setup_mock_gh_error() {
     printf '@echo off\r\necho gh: Not Found (HTTP 404) 1>&2\r\nexit /b 1\r\n' > "$MOCK_BIN/gh.cmd"
     printf '#!/bin/bash\necho "gh: Not Found (HTTP 404)" >&2\nexit 1\n' > "$MOCK_BIN/gh"
     chmod +x "$MOCK_BIN/gh"
+    cli_stub_bridge_cmd "$MOCK_BIN" gh
 }
 
 # Mock: gh not found (remove from PATH)
 setup_mock_gh_missing() {
-    rm -f "$GH_CALL_LOG" "$MOCK_BIN/gh" "$MOCK_BIN/gh.cmd"
+    rm -f "$GH_CALL_LOG" "$MOCK_BIN/gh" "$MOCK_BIN/gh.cmd" "$MOCK_BIN/gh.exe"
 }
 
 # Mock: records one line per invocation, then answers "true" (private).
@@ -77,6 +82,7 @@ setup_mock_gh_recording() {
     printf '@echo off\r\necho call 1>>"%s"\r\necho true\r\n' "$GH_CALL_LOG_WIN" > "$MOCK_BIN/gh.cmd"
     printf '#!/bin/bash\necho call >> "%s"\necho "true"\n' "$GH_CALL_LOG" > "$MOCK_BIN/gh"
     chmod +x "$MOCK_BIN/gh"
+    cli_stub_bridge_cmd "$MOCK_BIN" gh
 }
 
 gh_call_count() {

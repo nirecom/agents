@@ -10,6 +10,12 @@ migration all enforce it from the same registry,
 | `WORKFLOW_PLANS_DIR` (default `~/.workflow-plans/`) | **Artifacts** — prose a human reads (`<sid>-detail.md`, surveys, raw review rounds, logs) | The model (Write), workers, wrappers |
 | `<WORKFLOW_STATE_DIR>/<sid>.control/` (default root `~/.workflow-state/`) | **Control files** — JSON and numbers a machine reads to drive a gate (round counters, terminal markers, ledgers, payloads, outcomes) | Only the owning CLI or hook, never the model while `WORKFLOW=on` |
 
+When `PLAN_SYNC_REMOTE_URL` is set and `bin/plan-sync-init` has run, the artifacts
+directory is also a git working tree: it gains a `.git/` and an allowlist `.gitignore`
+that tracks only `*-intent.md`, `*-outline.md` and `*-detail.md`. Every other artifact
+stays untracked and local; control files live outside it. See
+[plan-sync.md](plan-sync.md).
+
 ## Why the split
 
 A control file decides what a gate does next: a round number caps the review

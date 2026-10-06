@@ -41,7 +41,7 @@ require_module() {
 run_hook() {
     local tmp="$1" sid="$2"
     printf '{"session_id":"%s"}' "$sid" \
-        | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        | env -u CLAUDE_CODE_SESSION_ID \
             WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 60 node "$HOOK" 2>/dev/null
@@ -51,7 +51,7 @@ run_hook() {
 # period, so a case that expects an entry seeds workflow_init complete first.
 seed_active() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -65,7 +65,7 @@ markStep('$sid', 'workflow_init', 'complete');
 # grepping the file — the grammar is the writer's business, not this file's.
 inspect() {
     local tmp="$1" sid="$2"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID SID="$sid" \
+    env -u CLAUDE_CODE_SESSION_ID SID="$sid" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -129,7 +129,7 @@ run_P2() {
     seed_active "$tmp" "twice-sid-p2"
     run_hook "$tmp" "twice-sid-p2" >/dev/null
     run_hook "$tmp" "twice-sid-p2" >/dev/null
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -167,7 +167,7 @@ run_P3() {
     mkdir -p "$tmp/wf"
     seed_active "$tmp" "dedup-sid-p3"
     run_hook "$tmp" "dedup-sid-p3" >/dev/null
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -219,7 +219,7 @@ run_P5() {
     local tmp out rc problems files
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
-    out=$(printf '{}' | env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(printf '{}' | env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$HOOK" 2>/dev/null)

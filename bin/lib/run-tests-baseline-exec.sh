@@ -4,6 +4,8 @@
 # checkout's own bin/lib/run-all-launch.sh when present, else this checkout's), so each
 # test kind starts exactly as tests/run-all.sh would start it. A watchdog enforces the
 # timeout; RTB_EXEC_TIMEDOUT comes from <logdir>/<i>.timedout, never from the exit code.
+# RTB_EXEC_UNSUPPORTED=1 when run_all_exec did not launch (78 with RUN_ALL_EXEC_LAUNCHED=0),
+# flagged via <logdir>/<i>.unsupported so a test that itself exits 78 is not mistaken for it.
 
 case "${BASH_SOURCE[0]}" in
   */*) RTB_EXEC_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
@@ -12,6 +14,7 @@ esac
 
 RTB_EXEC_RC=""
 RTB_EXEC_TIMEDOUT=""
+RTB_EXEC_UNSUPPORTED=""
 RTB_EXEC_SEQ=0
 
 # rtb_exec_kill_group <pid> <signal> — the job's process group first, the pid as fallback.
@@ -24,6 +27,7 @@ rtb_exec_one() {
     local launcher i cpid wpid rc iso restore_m=0
     RTB_EXEC_RC=""
     RTB_EXEC_TIMEDOUT=""
+    RTB_EXEC_UNSUPPORTED=""
     [ -n "$wt" ] && [ -n "$rel" ] && [ -n "$logdir" ] || return 2
     case "$timeout" in ''|*[!0-9]*) timeout=300 ;; esac
     mkdir -p "$logdir" 2>/dev/null || return 2
@@ -39,7 +43,7 @@ rtb_exec_one() {
 
     RTB_EXEC_SEQ=$((RTB_EXEC_SEQ + 1))
     i="$RTB_EXEC_SEQ"
-    rm -f "$logdir/$i.timedout" "$logdir/$i.nolaunch"
+    rm -f "$logdir/$i.timedout" "$logdir/$i.nolaunch" "$logdir/$i.unsupported"
 
     # Job control gives each background job its own process group, so the watchdog
     # can take down the whole test tree, not just the launching subshell.
@@ -54,7 +58,10 @@ rtb_exec_one() {
         export AGENTS_CONFIG_DIR="$wt" WORKFLOW_STATE_DIR="$iso/workflow" \
             WORKFLOW_PLANS_DIR="$iso/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$iso/transcripts"
         run_all_exec "$wt/$rel" "$logdir/$i.out" "$logdir/$i.err"
-    ) </dev/null >/dev/null 2>&1 &
+        rc=$?
+        [ "$rc" = 78 ] && [ "${RUN_ALL_EXEC_LAUNCHED:-1}" = 0 ] && : >"$logdir/$i.unsupported"
+        exit "$rc"
+    )</dev/null >/dev/null 2>&1 &
     cpid=$!
     (
         sleep "$timeout"
@@ -77,5 +84,7 @@ rtb_exec_one() {
     RTB_EXEC_RC="$rc"
     # shellcheck disable=SC2034
     if [ -e "$logdir/$i.timedout" ]; then RTB_EXEC_TIMEDOUT=1; else RTB_EXEC_TIMEDOUT=0; fi
+    # shellcheck disable=SC2034
+    if [ -e "$logdir/$i.unsupported" ]; then RTB_EXEC_UNSUPPORTED=1; else RTB_EXEC_UNSUPPORTED=0; fi
     return 0
 }

@@ -41,7 +41,7 @@ export WORKFLOW_PLANS_DIR="$(nodepath "$PLANS_DIR")"
 mkdir -p "$TMPD/workflow"
 # The parent Claude Code session exports these; inheriting them would resolve the
 # live session's state file.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # Neutral CWD: hooks and CLIs that shell out to `git rev-parse` must not resolve
 # the real agents repo.

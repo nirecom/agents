@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tests: hooks/workflow-state/session-id.js, hooks/lib/git-common-dir.js
 # Tags: workflow, hook, scope:common
-# Tests for resolveSessionId() — #2270 pruned it to a 4-tier SUPPLY-only chain
+# Tests for resolveSessionId() — #2270/#1091 pruned it to a 3-tier SUPPLY-only chain
 # (no filesystem inference); see docs/architecture/claude-code/session-id-resolution.md.
 # Tests use `node -e` inline scripts; CLAUDE_TRANSCRIPT_BASE_DIR isolates from
 # the real ~/.claude/projects.
@@ -63,14 +63,14 @@ setup() {
     TMP="$(mktemp -d)"
     export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts"
     mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
-    unset CLAUDE_PROJECT_DIR CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID 2>/dev/null || true
+    unset CLAUDE_PROJECT_DIR CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 }
 teardown() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID 2>/dev/null || true
+    unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 }
 
 # Encoding helper for JS-1: CC-native encoding via shell to match the helper.

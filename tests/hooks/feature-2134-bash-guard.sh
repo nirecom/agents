@@ -75,7 +75,7 @@ FIXTURE_HOME="$TMPROOT/home"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$FIXTURE_HOME/.claude"
 printf '%s\n' '{"permissions":{"allow":[],"deny":[]}}' > "$FIXTURE_HOME/.claude/settings.json"
 export WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 # The default session must look SETTLED, or the early-write-gate interlock would silence the
 # guard for every row in every file and the whole suite would report allow. Sessions that need

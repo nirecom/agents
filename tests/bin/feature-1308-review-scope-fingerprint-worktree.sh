@@ -155,7 +155,7 @@ fi
 # Per plan: missing worktree path is a calc error; 0 in-scope files is exit 0 + empty.
 # ---------------------------------------------------------------------------
 case2_rc=0
-case2_got="$(SESSION_ID="" CLAUDE_SESSION_ID="" run_script_cwd "$WTA")" || case2_rc=$?
+case2_got="$(SESSION_ID="" CLAUDE_CODE_SESSION_ID="" run_script_cwd "$WTA")" || case2_rc=$?
 if [[ $case2_rc -ne 0 ]]; then
   pass "Case 2 (no session → calc error): non-zero exit when no arg and no SESSION_ID"
 elif [[ -z "$case2_got" ]]; then

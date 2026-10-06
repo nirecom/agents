@@ -83,7 +83,7 @@ _cwg_env_run() {
     local root="$1"; shift
     (
         cd "$root/cwd" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_CODE_SESSION_ID
         export WORKFLOW_STATE_DIR="$(node_path "$root/wf")"
         export WORKFLOW_PLANS_DIR="$(node_path "$root/plans")"
         "$@"

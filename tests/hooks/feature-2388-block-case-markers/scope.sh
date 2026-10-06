@@ -23,7 +23,8 @@ assert_decision "env-file-off-still-blocks" block
 case_end
 
 case_begin "non-entrypoint-path-approves" "hooks/block-case-markers.js"
-for rel in tests/hooks/suite/sub.sh tests/lib/extra.sh tests/run-all.sh tests/_archive/old.sh tests/hooks/x.Tests.ps1 bin/tool.sh; do
+for rel in tests/hooks/suite/sub.sh tests/lib/extra.sh tests/run-all.sh tests/_archive/old.sh tests/hooks/x.Tests.ps1 bin/tool.sh \
+    tests/hooks/test_x.py tests/hooks/a.js tests/hooks/.sh; do
   mkpayload Write "$REPO_M" "$REPO_M/$rel" "content=@$BODIES/missing.sh"
   hk_run
   assert_decision "non-entrypoint-path-approves $rel" approve
@@ -67,6 +68,30 @@ hk_run
 HK_HOOK="$HOOK"
 assert_decision "checker-missing-approves" approve
 assert_eq "$HK_RC" "0"
+case_end
+
+case_begin "registry-unreadable-approves" "hooks/block-case-markers.js"
+# A hook copy with its checker beside it; only the registry table differs between
+# the control run (table present: blocks) and the probe (table removed: fails open).
+NOREG="$TMPBASE/noreg"
+mkdir -p "$NOREG/hooks" "$NOREG/bin"
+cp -R "$AGENTS_DIR/hooks/lib" "$NOREG/hooks/lib"
+cp -R "$AGENTS_DIR/bin/lib" "$NOREG/bin/lib"
+cp "$AGENTS_DIR/bin/check-case-markers.sh" "$NOREG/bin/check-case-markers.sh"
+# shellcheck source=../../lib/test-language-registry-fixture.sh
+. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
+install_test_language_registry "$NOREG" "$AGENTS_DIR"
+[ -f "$HOOK" ] && cp "$HOOK" "$NOREG/hooks/block-case-markers.js"
+HK_HOOK="$NOREG/hooks/block-case-markers.js"
+mkpayload Write "$REPO_M" "$REPO_M/tests/hooks/new-noreg.sh" "content=@$BODIES/missing.sh"
+hk_run
+assert_decision "registry-unreadable control: the copied hook still blocks" block
+rm -f "$NOREG/hooks/lib/test-language-registry.json"
+hk_run
+HK_HOOK="$HOOK"
+assert_decision "registry-unreadable-approves" approve
+assert_eq "$HK_RC" "0"
+assert_eq "$(printf '%s\n' "$HK_ERR" | grep -c .)" "1"
 case_end
 
 case_begin "malformed-stdin-approves" "hooks/block-case-markers.js"

@@ -225,7 +225,7 @@ console.log('OK');
 }
 
 run_g8() {
-    local label="G8: CC UUID sessionId x workflow SID env file -> guard fires (cross-ID)"
+    local label="G8: CC UUID sessionId x workflow SID from CLAUDE_CODE_SESSION_ID -> guard fires (cross-ID)"
     require_guard "$label" || return
     local tmp out rc
     tmp="$(mktemp -d)"
@@ -233,8 +233,6 @@ run_g8() {
     touch_anchor "$tmp" g8-wfsid
     # intent.md so Priority 2 of resolveWorkflowSessionId can confirm the SID
     touch "$tmp/g8-wfsid-intent.md"
-    # env file read by CLAUDE_ENV_FILE
-    printf 'CLAUDE_SESSION_ID=g8-wfsid\n' > "$tmp/g8-claude-env"
     # write JS to temp file (avoid quoting issues in bash -c)
     cat > "$tmp/g8.js" <<JSEOF
 const w = require("$WRITER_NODE");
@@ -247,8 +245,8 @@ if (state.alert.alert_armed_at !== null) {
 console.log('OK');
 JSEOF
     # Run node from tmp dir: no WORKTREE_NOTES.md there, so Priority 1 misses,
-    # Priority 2 reads CLAUDE_ENV_FILE -> g8-wfsid, checks g8-wfsid-final-report-env.json -> found -> guard fires
-    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" CLAUDE_ENV_FILE="$tmp/g8-claude-env" run_with_timeout 5 \
+    # Priority 2 reads CLAUDE_CODE_SESSION_ID -> g8-wfsid, checks its final-report-env.json anchor -> found -> guard fires
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" CLAUDE_CODE_SESSION_ID=g8-wfsid run_with_timeout 5 \
         bash -c 'cd "$1" && exec node "$2"' _ "$tmp" "$tmp/g8.js" 2>&1)
     rc=$?
     rm -rf "$tmp"
@@ -276,7 +274,7 @@ if (state.alert.alert_armed_at == null) {
 }
 console.log('OK');
 JSEOF
-    # Run from tmp; no WORKTREE_NOTES.md, no CLAUDE_ENV_FILE -> resolveWorkflowSessionId returns null
+    # Run from tmp; no WORKTREE_NOTES.md, no plans artifact -> resolveWorkflowSessionId returns null
     # candidates = {g8b-ccsid}; g8b-ccsid-final-report-env.json absent -> schedules normally
     out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 \
         bash -c 'cd "$1" && exec node "$2"' _ "$tmp" "$tmp/g8b.js" 2>&1)

@@ -45,7 +45,7 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 require_granularity() {
     local out
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID "$RWT" 30 node -e "
+    out=$(env -u CLAUDE_CODE_SESSION_ID "$RWT" 30 node -e "
 const missing = [];
 const apply = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/apply');
 if (typeof apply.applyInheritance !== 'function' || apply.applyInheritance.length < 4) missing.push('applyInheritance(...,opts)');
@@ -79,7 +79,7 @@ markStep(donorSid, 'run_tests', 'pending', { reset_reason: 'flaky-rerun' });
 run_node() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "$1" 2>&1)

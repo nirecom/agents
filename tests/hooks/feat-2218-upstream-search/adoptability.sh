@@ -161,7 +161,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # Its own store: adding a second context candidate to the shared fixture would
 # move U5/U6's leading record.
 _u13_run() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$TMP/u13/wf" WORKFLOW_PLANS_DIR="$TMP/u13/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u13/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
@@ -226,7 +226,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # then false for this donor. Asserted as a biconditional: whichever way the two
 # paths are made to agree, they must agree.
 _u17_run() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$TMP/u17/wf" WORKFLOW_PLANS_DIR="$TMP/u17/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u17/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
@@ -319,7 +319,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 _U18_CLI="$AGENTS_DIR/bin/resume-session-detect"
 
 _u18_run() {
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+    env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$TMP/u18/wf" WORKFLOW_PLANS_DIR="$TMP/u18/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u18/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
@@ -329,8 +329,7 @@ _u18_run() {
 _u18_cli() {
     local sid="$1"
     shift
-    env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
-        CLAUDE_SESSION_ID="$sid" \
+    env CLAUDE_CODE_SESSION_ID="$sid" \
         WORKFLOW_STATE_DIR="$TMP/u18/wf" WORKFLOW_PLANS_DIR="$TMP/u18/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u18/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \

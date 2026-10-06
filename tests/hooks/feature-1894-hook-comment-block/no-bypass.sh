@@ -3,16 +3,9 @@
 # Tests: hooks/block-comment-block-size.js, docs/architecture/claude-code/marker-bypass-contract.md
 # Tags: comment-block-size, hook, pretooluse, no-bypass, workflow-off, worktree-off, omission, static-guard, scope:issue-specific, scope:feature-1894, layer:TL2
 
-# Part 5 — a property guaranteed by ABSENCE. Almost every other guard here
-# honours the session-scoped escape hatches (WORKFLOW_OFF etc.); this one
-# doesn't (outline plan: accepted tradeoff; intent.md requires both block
-# paths non-bypassable). Implemented by omission — the hook never reads
-# marker state — which is easy to lose: someone ADDS a bypass in good faith
-# the first time it blocks them. Asserted twice (CPR-SC): behavioural (both
-# markers present, verdict doesn't move) and static (source references no
-# marker helpers — survives a future refactor). Static needs a positive
-# control, or it degrades into "grep found nothing" once renamed.
-
+# Part 5 — a property guaranteed by ABSENCE: unlike most guards, this hook honours no
+# session escape hatch (WORKFLOW_OFF etc.) because it never reads marker state. Asserted
+# behaviourally (B1, B3) and statically (B2, with B2b as the positive control).
 # Sourced by the dispatcher; all helpers are defined there.
 
 HK_SID="fixture-nobypass-0000"
@@ -27,21 +20,21 @@ b1_markers_do_not_suspend_the_block() {
 
     # Baseline: no markers.
     rm -f "$WORKFLOW_STATE_DIR/$HK_SID".*
-    hk_run "CLAUDE_SESSION_ID=$HK_SID" "CLAUDE_CODE_SESSION_ID=$HK_SID"
+    hk_run "CLAUDE_CODE_SESSION_ID=$HK_SID"
     assert_decision "B1/premise-blocked-without-markers" "block"
 
     local m
     for m in workflow-off worktree-off; do
         rm -f "$WORKFLOW_STATE_DIR/$HK_SID".*
         printf '{"reason":"fixture"}\n' > "$WORKFLOW_STATE_DIR/$HK_SID.$m"
-        hk_run "CLAUDE_SESSION_ID=$HK_SID" "CLAUDE_CODE_SESSION_ID=$HK_SID"
+        hk_run "CLAUDE_CODE_SESSION_ID=$HK_SID"
         assert_decision "B1/$m-marker-does-not-suspend" "block"
     done
 
     # Both at once, which is what a session that has given up would actually do.
     printf '{"reason":"fixture"}\n' > "$WORKFLOW_STATE_DIR/$HK_SID.workflow-off"
     printf '{"reason":"fixture"}\n' > "$WORKFLOW_STATE_DIR/$HK_SID.worktree-off"
-    hk_run "CLAUDE_SESSION_ID=$HK_SID" "CLAUDE_CODE_SESSION_ID=$HK_SID"
+    hk_run "CLAUDE_CODE_SESSION_ID=$HK_SID"
     assert_decision "B1/both-markers-do-not-suspend" "block"
     rm -f "$WORKFLOW_STATE_DIR/$HK_SID".*
 }

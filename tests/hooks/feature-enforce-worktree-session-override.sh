@@ -109,19 +109,6 @@ setup_main_checkout() {
     fi
 }
 
-# Write an env-file for CLAUDE_ENV_FILE-based session resolution.
-# Usage: setup_fake_env_file <session-id>  → echoes the path of the env file.
-setup_fake_env_file() {
-    local sid="$1"
-    local f="$TMPDIR_BASE/envfile-$RANDOM-$$"
-    printf 'CLAUDE_SESSION_ID=%s\n' "$sid" > "$f"
-    if command -v cygpath >/dev/null 2>&1; then
-        cygpath -m "$f"
-    else
-        echo "$f"
-    fi
-}
-
 MARK_OUT=""
 # run_workflow_mark <stdin-json> <workflow-dir> [extra env var ...]
 # Returns workflow-mark.js exit code; captures stdout+stderr into MARK_OUT.
@@ -132,7 +119,7 @@ run_workflow_mark() {
     local wfdir="$1"; shift
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "$@" \
         "WORKFLOW_STATE_DIR=$wfdir" \
@@ -159,7 +146,7 @@ run_enforce_worktree() {
     local repo_scope="$1"; shift
     GUARD_RC=0
     GUARD_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo_scope" \
@@ -192,7 +179,7 @@ build_mark_payload() {
         "$q_sid" "$q_cmd" "$rc"
 }
 
-# Same but with session_id omitted entirely (env-file fallback test).
+# Same but with session_id omitted entirely (CLAUDE_CODE_SESSION_ID fallback test).
 build_mark_payload_no_sid() {
     local cmd="$1" rc="$2"
     local q_cmd
@@ -301,24 +288,17 @@ test_A3_non_zero_exit_skips() {
     pass "A3: non-zero exit_code → no marker, hook exits 0"
 }
 
-test_A4_env_file_fallback() {
+test_A4_env_sid_fallback() {
     require_files "A4" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="xyz"
-    local envfile; envfile="$(setup_fake_env_file "$sid")"
-    local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A4 env-file fallback>>"' 0)"
-    # Note: run_workflow_mark unsets CLAUDE_ENV_FILE; pass it explicitly here.
-    MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "WORKFLOW_STATE_DIR=$wfdir" \
-        "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile" \
-        node "$MARK_JS" 2>&1)" || true
+    local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A4 env fallback>>"' 0)"
+    # run_workflow_mark clears CLAUDE_CODE_SESSION_ID; supply it as an extra here.
+    run_workflow_mark "$payload" "$wfdir" "CLAUDE_CODE_SESSION_ID=$sid" || true
     if [ -f "$wfdir/$sid.worktree-off" ]; then
-        pass "A4: env-file fallback resolves session ID"
+        pass "A4: CLAUDE_CODE_SESSION_ID fallback resolves session ID"
     else
-        fail "A4: env-file fallback did not create marker (out: $MARK_OUT)"
+        fail "A4: CLAUDE_CODE_SESSION_ID fallback did not create marker (out: $MARK_OUT)"
     fi
 }
 
@@ -327,9 +307,9 @@ test_A5_no_session_id_hard_blocks() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A5 no session id>>"' 0)"
     local rc=0
-    # No CLAUDE_ENV_FILE → no session ID resolvable. Must hard-block (rc=2).
+    # No CLAUDE_CODE_SESSION_ID → no session ID resolvable. Must hard-block (rc=2).
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
@@ -437,7 +417,7 @@ test_A9_on_sentinel_no_marker_idempotent() {
 
 test_A10_on_sentinel_no_session_id() {
     require_files "A10" || return
-    # No session_id, no CLAUDE_ENV_FILE → must hard-block (rc=2), preserve any
+    # No session_id, no CLAUDE_CODE_SESSION_ID → must hard-block (rc=2), preserve any
     # pre-existing unrelated marker (cross-session isolation), and emit a
     # diagnostic mentioning session resolution failure.
     local wfdir; wfdir="$(fresh_workflow_dir)"
@@ -526,7 +506,7 @@ test_A13_bare_on_malformed() {
 
 # ----------------------------------------------------------------------------
 # A14-A15: transcript_path fallback (#461)
-# When session_id is absent from input AND CLAUDE_ENV_FILE is unset,
+# When session_id is absent from input AND CLAUDE_CODE_SESSION_ID is unset,
 # workflow-mark.js must fall back to deriving the session ID from
 # transcript_path (basename without .jsonl). Path must be validated.
 # ----------------------------------------------------------------------------
@@ -541,7 +521,7 @@ test_A14_transcript_path_fallback() {
     local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A14 transcript fallback>>"' 0 "$tp")"
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
@@ -565,7 +545,7 @@ test_A15_transcript_path_invalid_chars() {
     local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A15 invalid chars>>"' 0 "$tp")"
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
@@ -660,33 +640,32 @@ test_B4_no_session_id_blocks() {
     require_files "B4" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local repo; repo="$(setup_main_checkout "b4-main")"
-    # No marker, no session_id, no CLAUDE_ENV_FILE → fail-closed.
+    # No marker, no session_id, no CLAUDE_CODE_SESSION_ID → fail-closed.
     local payload; payload="$(build_guard_payload_write_no_sid "Write" "$repo/foo.txt")"
     local rc=0; run_enforce_worktree "$payload" "$wfdir" "$repo" || rc=$?
     assert_guard_block "B4: no session_id + no marker → blocked (fail-closed)" "$rc"
 }
 
-test_B5_input_session_id_wins_over_env_file() {
+test_B5_input_session_id_wins_over_env_sid() {
     require_files "B5" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local repo; repo="$(setup_main_checkout "b5-main")"
-    local envfile; envfile="$(setup_fake_env_file "different-session")"
-    # Marker for input.session_id only — NOT for the env-file session.
+    # Marker for input.session_id only — NOT for the env-supplied session.
     write_marker_file "$wfdir" "abc123"
     local payload; payload="$(build_guard_payload_write "abc123" "Write" "$repo/foo.txt")"
     GUARD_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile" \
+        "CLAUDE_CODE_SESSION_ID=different-session" \
         node "$GUARD_JS" 2>&1)" || true
     if echo "$GUARD_OUT" | grep -q '"decision":"block"'; then
-        fail "B5: input.session_id should take precedence over env-file (out: $GUARD_OUT)"
+        fail "B5: input.session_id should take precedence over CLAUDE_CODE_SESSION_ID (out: $GUARD_OUT)"
     else
-        pass "B5: input.session_id wins over CLAUDE_ENV_FILE"
+        pass "B5: input.session_id wins over CLAUDE_CODE_SESSION_ID"
     fi
 }
 
@@ -823,15 +802,14 @@ test_SEC2_shell_metachars_rejected() {
     fi
 }
 
-test_SEC3_env_file_traversal_blocked() {
+test_SEC3_env_sid_traversal_blocked() {
     require_files "SEC3" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local repo; repo="$(setup_main_checkout "sec3-main")"
-    # CLAUDE_ENV_FILE supplies a malicious session ID. Use a one-level traversal
+    # CLAUDE_CODE_SESSION_ID supplies a malicious session ID. Use a one-level traversal
     # (../passwd) so the resolved plant path lands INSIDE $TMPDIR_BASE (matches
     # the SEC4 pattern). A two-level traversal would resolve outside the test
     # sandbox and risk clobbering an unrelated file in /tmp (codex review HIGH#1).
-    local envfile; envfile="$(setup_fake_env_file "../passwd")"
     # Plant a marker at the traversal path so we can detect a faulty bypass.
     local parent; parent="$(dirname "$wfdir")"   # = $TMPDIR_BASE, inside sandbox
     printf '{"set_at":"x"}' > "$parent/passwd.worktree-off"
@@ -839,21 +817,21 @@ test_SEC3_env_file_traversal_blocked() {
     local rc=0
     local out
     out="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile" \
+        "CLAUDE_CODE_SESSION_ID=../passwd" \
         node "$GUARD_JS" 2>&1)" || rc=$?
     rm -f "$parent/passwd.worktree-off" 2>/dev/null || true
     if [ "$rc" -ne 0 ]; then
         fail "SEC3: guard hook crashed rc=$rc (out: $out)"
     elif echo "$out" | grep -q '"decision":"block"'; then
-        pass "SEC3: env-file traversal session ID does NOT grant bypass — blocked"
+        pass "SEC3: env traversal session ID does NOT grant bypass — blocked"
     else
-        fail "SEC3: bypass granted via traversal CLAUDE_SESSION_ID (out: $out)"
+        fail "SEC3: bypass granted via traversal CLAUDE_CODE_SESSION_ID (out: $out)"
     fi
 }
 
@@ -908,7 +886,7 @@ run_all() {
     test_A1_marker_created_on_sentinel
     test_A2_marker_with_reason
     test_A3_non_zero_exit_skips
-    test_A4_env_file_fallback
+    test_A4_env_sid_fallback
     test_A5_no_session_id_hard_blocks
     test_A6_chained_sentinels_accepted
     test_A7_idempotent_marker_write
@@ -929,7 +907,7 @@ run_all() {
     test_B2_no_marker_blocks
     test_B3_session_isolation
     test_B4_no_session_id_blocks
-    test_B5_input_session_id_wins_over_env_file
+    test_B5_input_session_id_wins_over_env_sid
     # C: round trip
     test_C1_round_trip_creates_and_allows
     test_C2_marker_deletion_restores_block
@@ -937,7 +915,7 @@ run_all() {
     # SEC
     test_SEC1_path_traversal_rejected
     test_SEC2_shell_metachars_rejected
-    test_SEC3_env_file_traversal_blocked
+    test_SEC3_env_sid_traversal_blocked
     test_SEC4_guard_input_traversal_blocked
     test_SEC5_on_sentinel_traversal_blocked
 }

@@ -2,20 +2,13 @@
 # tests/hooks/feature-1665-seq-cascade/helpers.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/effective-state/write-code-resume.js
 # Tags: workflow-state, updated-seq, causal-order, write-code-resume, harness, scope:issue-specific, pwsh-not-required, TL1, TL2
-#
-# Shared harness for the #1665 commit-3 suite (seq projection + write-code resume
-# cascade). SOURCED by each case file; never run standalone.
+# Shared harness for the #1665 commit-3 suite (seq projection + write-code resume cascade); SOURCED by each case file, never run standalone.
 
-# Isolation contract — rules/test/fixture-isolation.md:
-#   - WORKFLOW_STATE_DIR and WORKFLOW_PLANS_DIR are BOTH pinned (dual-pin).
-#   - CLAUDE_SESSION_ID / CLAUDE_CODE_SESSION_ID are unset before any node spawn.
-#   - CWD is a neutral temp dir, never the worktree.
-#   - Fixture repos get `git config core.hooksPath /dev/null`.
-#   - Paths handed to node are normalized with `cygpath -m`.
+# Isolation (rules/test/fixture-isolation.md): WORKFLOW_STATE_DIR + WORKFLOW_PLANS_DIR dual-pinned;
+#   CLAUDE_CODE_SESSION_ID unset before any node spawn; CWD is a neutral temp dir, never the worktree;
+#   fixture repos get `git config core.hooksPath /dev/null`; node paths normalized with `cygpath -m`.
 
-# NO SKIP PATH: exit 77 is reserved for "node is not installed". Every other
-# outcome is PASS or FAIL — an unimplemented feature must surface as a genuine
-# assertion failure, never as a skip.
+# NO SKIP PATH: exit 77 only for "node is not installed"; an unimplemented feature is a genuine FAIL, never a skip.
 
 set -uo pipefail
 
@@ -40,7 +33,7 @@ WORKFLOW_PLANS_DIR="$(nrm "$TMPROOT/plans")"; export WORKFLOW_PLANS_DIR
 AGENTS_CONFIG_DIR="$(nrm "$TMPROOT/cfg")"; export AGENTS_CONFIG_DIR
 HOME="$TMPROOT/home"; export HOME
 USERPROFILE="$(nrm "$TMPROOT/home")"; export USERPROFILE
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
+unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
 
 # Neutral CWD: hooks that shell out to `git rev-parse` must not resolve the worktree.
 cd "$TMPROOT" || exit 1

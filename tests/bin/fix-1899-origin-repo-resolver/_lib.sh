@@ -50,7 +50,7 @@ export HOME="$TMP/home"
 export WORKFLOW_STATE_DIR="$TMP/workflow"
 export WORKFLOW_PLANS_DIR="$TMP/plans"
 mkdir -p "$HOME" "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 _fix1899_origin_cleanup() { cd "$TMP/.." 2>/dev/null || true; rm -rf "$TMP"; }
 trap _fix1899_origin_cleanup EXIT
 

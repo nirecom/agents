@@ -66,7 +66,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/workflow-plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 # ── decision helpers ────────────────────────────────────────────────────────
 # Two-state: anything that is not an explicit block counts as allow. The one

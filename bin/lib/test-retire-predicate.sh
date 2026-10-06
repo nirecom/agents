@@ -12,9 +12,9 @@
 
 _TRP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=test-frontmatter-constants.sh
-source "$_TRP_DIR/test-frontmatter-constants.sh"
+source "$_TRP_DIR/test-frontmatter-constants.sh" || return 1
 # shellcheck source=test-frontmatter-fix.sh
-source "$_TRP_DIR/test-frontmatter-fix.sh"
+source "$_TRP_DIR/test-frontmatter-fix.sh" || return 1
 # shellcheck source=test-retire-predicate/case-parser.sh
 source "$_TRP_DIR/test-retire-predicate/case-parser.sh"
 
@@ -91,7 +91,7 @@ trp_scope_of() {
 # and delete it without ever checking issue state.
 trp_issue_ref() {
   local name="${1##*/}"
-  local stem="${name%.sh}"; stem="${stem%.Tests.ps1}"; stem="${stem%.py}"
+  local stem; stem="$(tlr_stem "$name")"
   if [[ "$stem" =~ ^(feature|fix|feat)-([0-9]+)- ]]; then
     printf 'explicit\n'
     return 0
@@ -106,7 +106,7 @@ trp_issue_ref() {
 # trp_issue_number <filename> — the explicit issue number, or empty.
 trp_issue_number() {
   local name="${1##*/}"
-  local stem="${name%.sh}"; stem="${stem%.Tests.ps1}"; stem="${stem%.py}"
+  local stem; stem="$(tlr_stem "$name")"
   if [[ "$stem" =~ ^(feature|fix|feat)-([0-9]+)- ]]; then
     printf '%s' "${BASH_REMATCH[2]}"
   fi
@@ -213,6 +213,12 @@ trp_case_refcount_verdict() {
 # and TRP_MARKER_REASON. Always returns 0; the caller decides.
 trp_marker_conformance() {
   trp_parse_case_markers "${1:?trp_marker_conformance: file required}"
+  trp_marker_state_from_globals
+}
+
+# trp_marker_state_from_globals — the state rule over the globals the preceding
+# caseMarkerReader call left (_TRP_MARKER_*, TRP_HAS_MARKERS). Always returns 0.
+trp_marker_state_from_globals() {
   TRP_MARKER_LINE="$_TRP_MARKER_MALFORMED_LINE"
   TRP_MARKER_REASON="$_TRP_MARKER_MALFORMED_REASON"
   if [[ "$_TRP_MARKER_MALFORMED" -eq 1 ]]; then
@@ -395,12 +401,11 @@ trp_gate_line_token() {
 # sibling, ONE retire unit) and sets $TRP_GC=1; refcount>0 leaves nothing to GC.
 # Sets $TRP_SIBLING (relative, no trailing slash, empty when absent),
 # $TRP_SIBLING_COUNT, $TRP_UNIT_PATHS[] and $TRP_GC.
-# The ${rel%.sh} stem is .sh-only, but .ps1/.py reach here solely via the
-# refcount==0 whole-file path (C10 guarantees TRP_HAS_MARKERS=0), where the
-# absent sibling is silently ignored — a single-file unit, as intended (C9).
+# The tests/<stem>/ sibling joins only when the file's registry entry has siblingSuiteDir;
+# any other file, matched or not, is a single-file unit (C9).
 trp_unit_of() {
-  local repo_root="$1" rel="$2" refcount="${3:-0}"
-  local stem="${rel%.sh}"
+  local repo_root="$1" rel="$2" refcount="${3:-0}" stem=""
+  tlr_match "$rel" && _tlr_get "$TLR_ID" siblingSuiteDir && [[ "$_TLR_V" == 1 ]] && stem="${rel%"${rel##*/}"}$(tlr_stem "${rel##*/}")"
   TRP_SIBLING=""
   TRP_SIBLING_COUNT=0
   TRP_UNIT_PATHS=()
@@ -410,7 +415,7 @@ trp_unit_of() {
   fi
   TRP_UNIT_PATHS=("$rel")
   TRP_GC=1
-  if [[ -d "$repo_root/$stem" ]]; then
+  if [[ -n "$stem" && -d "$repo_root/$stem" ]]; then
     TRP_SIBLING="$stem"
     TRP_SIBLING_COUNT="$(find "$repo_root/$stem" -type f 2>/dev/null | wc -l | tr -d ' ')"
     TRP_UNIT_PATHS+=("$stem")

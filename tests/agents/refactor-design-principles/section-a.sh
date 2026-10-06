@@ -82,16 +82,13 @@ test_A4_no_session_id_not_recorded() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_USER_VERIFIED: no session id branch>>"' 0)"
     local rc=0
-    # Block all resolveSessionId fallback paths:
-    #   P2: unset CLAUDE_CODE_SESSION_ID
-    #   P4: unset CLAUDE_SESSION_ID
-    #   P6: run node from TMPDIR_BASE (no WORKTREE_NOTES.md there)
-    #   P7: point CLAUDE_TRANSCRIPT_BASE_DIR at an empty dir (no JSONL files)
+    # Block all resolveSessionId fallback paths: unset CLAUDE_CODE_SESSION_ID,
+    # run node from TMPDIR_BASE, and point CLAUDE_TRANSCRIPT_BASE_DIR at an
+    # empty dir (no JSONL files).
     local _mark_js="$MARK_JS" _agents_dir="$AGENTS_DIR" _tmpbase="$TMPDIR_BASE"
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env \
         -u CLAUDE_CODE_SESSION_ID \
-        -u CLAUDE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$_agents_dir" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "CLAUDE_TRANSCRIPT_BASE_DIR=$_tmpbase/no-transcripts" \

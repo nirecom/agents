@@ -55,7 +55,7 @@ function outcome(fn) {
 run_node() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
+    out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "$1" 2>&1)
@@ -128,7 +128,7 @@ run_R2() {
         fail "R2: fixture setup failed — could not create a linked worktree"
         return 0
     fi
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
+    out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
@@ -201,7 +201,7 @@ run_R4() {
     local tmp out
     tmp="$(make_tmp)"
     mkdir -p "$tmp/plain-a" "$tmp/plain-b"
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
+    out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
@@ -288,7 +288,7 @@ run_R5_cli() {
     git -C "$repo" add -A
     git -C "$repo" commit -q -m ahead
     own="own-sid-r5"; other="other-sid-r5"; ownmain="own-main-sid-r5"
-    env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -310,13 +310,13 @@ markStep('$ownmain', 'workflow_init', 'complete');
     probe() {
         local env_sid="$1" args_sid="$2" o r
         if [ -z "$args_sid" ]; then
-            o=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$env_sid" \
+            o=$(env CLAUDE_CODE_SESSION_ID="$env_sid" \
                 WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
                 CLAUDE_PROJECT_DIR="$repo" HOME="$tmp/home" USERPROFILE="$tmp/home" \
                 "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" 2>&1)
             r=$?
         else
-            o=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$env_sid" \
+            o=$(env CLAUDE_CODE_SESSION_ID="$env_sid" \
                 WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
                 CLAUDE_PROJECT_DIR="$repo" HOME="$tmp/home" USERPROFILE="$tmp/home" \
                 "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" --session "$args_sid" 2>&1)
@@ -434,7 +434,7 @@ run_R6() {
         symlink_row="['untracked-symlink-same-target', '$(node_path "$tmp/s1")', '$(node_path "$tmp/s2")', false],"
         symlink_note=""
     fi
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
+    out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 90 node -e "

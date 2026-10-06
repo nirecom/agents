@@ -110,7 +110,7 @@ RC=0
 run_sweep() {
     local dir="$1"; shift
     local out
-    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
@@ -119,13 +119,13 @@ run_sweep() {
 }
 
 # run_sweep_as_session <plansdir> <sid> [flags...] — same, but live under <sid>.
-# The id arrives ONLY through CLAUDE_CODE_SESSION_ID with CLAUDE_SESSION_ID unset:
+# The id arrives ONLY through CLAUDE_CODE_SESSION_ID:
 # the canonical variable alone has to reach the engine as --current-session, which
 # is the supply path a Bash-tool subprocess actually has.
 run_sweep_as_session() {
     local dir="$1" sid="$2"; shift 2
     local out
-    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID \
+    out="$(env -u AGENTS_CONFIG_DIR \
         "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" "CLAUDE_CODE_SESSION_ID=$sid" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
@@ -154,7 +154,7 @@ run_sweep_stubbed() {
         chmod +x "$bin/resolve-session-id"
     fi
     local out
-    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$bin/sweep-supervisor-state.sh" "$@" 2>&1)"
     RC=$?
@@ -604,7 +604,7 @@ S10_no_live_override() {
     # S10c: capture exit code directly (run_sweep sets RC inside a command substitution
     # subshell — the update does not propagate to the caller's shell).
     local incl_out incl_rc
-    incl_out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    incl_out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" --apply --include-live 2>&1)"
     incl_rc=$?
@@ -729,7 +729,7 @@ S14_ci_mode_and_list_signatures() {
     fi
 
     local sig rc n
-    sig="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    sig="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" "$RWT" 30 bash "$SWEEP" --list-signatures 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ]; then

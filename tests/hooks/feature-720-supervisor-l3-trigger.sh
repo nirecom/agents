@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-720-supervisor-l3-trigger.sh
 # Tests: hooks/supervisor-guard/collect-audit-triggers.js
-# Tags: supervisor, em-supervisor, layer3, collect, unit, scope:issue-specific
+# Tags: supervisor, em-supervisor, layer3, collect, unit, scope:issue-specific, unsettled-audit-phases
 # L3 gap (what this test does NOT catch):
 #   Pure function unit test against synthetic transcript+state inputs.
 #   Does not verify behavior under a real transcript read from disk by the
@@ -119,7 +119,26 @@ run_t10() {
     assert_collect "T10: audit_phase=in_progress → shouldArm=false (no double-arm while running)" "$tr" "$st" "false" ""
 }
 
-run_t1; run_t2; run_t3; run_t4; run_t5; run_t6; run_t7; run_t8; run_t9; run_t10
+# #2400 S17g — isQuiescent keeps the same 4-value deny set once it reads UNSETTLED_AUDIT_PHASES.
+run_t11() {
+    local tr='[{ "role": "assistant", "content": "<<WORKFLOW_CONFIRM_INTENT: x>>" }]'
+    local ph exp
+    for ph in '"done":false' null:true '"weird":true'; do
+        exp="${ph##*:}"
+        assert_collect "T11: audit_phase=${ph%:*} → shouldArm=$exp" "$tr" "{ \"alert\": {}, \"audit\": { \"audit_phase\": ${ph%:*} } }" "$exp" ""
+    done
+    assert_collect "T11d: no audit object → shouldArm=true" "$tr" '{ "alert": {} }' "true" ""
+}
+
+run_t12() {
+    if grep -q 'UNSETTLED_AUDIT_PHASES' "$SRC" && ! grep -q 'phase !== "frozen"' "$SRC"; then
+        pass "T12: isQuiescent reads UNSETTLED_AUDIT_PHASES (no literal phase enumeration)"
+    else
+        fail "T12: isQuiescent reads UNSETTLED_AUDIT_PHASES (no literal phase enumeration)"
+    fi
+}
+
+run_t1; run_t2; run_t3; run_t4; run_t5; run_t6; run_t7; run_t8; run_t9; run_t10; run_t11; run_t12
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

@@ -67,6 +67,8 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/block-case-markers.js` | PreToolUse | **No** | **No** |
 | `hooks/postuse-step-in-flight-mark.js` | PostToolUse | **No** | **No** |
 | `hooks/user-prompt-submit-mechanism-check.js` | UserPromptSubmit | **No** | **No** |
+| `hooks/jev-shadow-pre.js` | PreToolUse | **No** | **No** |
+| `hooks/jev-shadow-post.js` | PostToolUse | **No** | **No** |
 
 `hooks/pre-commit` honors both markers for **two separate sections**: the worktree-isolation
 gate ("commits from main worktree are blocked" / "commits to protected branch" guard) and
@@ -93,6 +95,10 @@ the next user turn. There is nothing for a session override to suspend, so they 
 **No/No** rather than left out of the table (CPR-ORTH — absence would be indistinguishable
 from an oversight). The `.stall-reported` ledger they write is protected state, not a
 bypass: see `hooks/lib/protected-basenames.js`.
+
+`hooks/jev-shadow-pre.js` and `hooks/jev-shadow-post.js` (#2460) are **No/No** for the same
+reason: they record a shadow comparison and never block, so a session override has nothing
+to suspend. Their only switch is `JEV` — see [jev.md](../jev.md).
 
 `hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info
 scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-ORTH). Users
@@ -122,23 +128,10 @@ not by this module.
 All hooks resolve the session ID via `hooks/workflow-state.js#resolveSessionId()`.
 See that module for the full priority chain. The git hook context is notable:
 
-- `CLAUDE_ENV_FILE` is propagated by Claude Code to its own process but may or may not
-  reach the shell that runs `git commit`. When present, `resolveSessionId()` reads it and
-  returns the session ID without JSONL scanning.
-- When absent, `resolveSessionId()` falls back to a JSONL scan of
-  `~/.claude/projects/<encoded-cwd>/` by modification time.
-- That scan now skips any candidate directory (`CLAUDE_PROJECT_DIR`, cwd, realpath) whose
-  git common-dir differs from the agents config repo's, so a foreign-repo working directory
-  cannot surface another session's transcript id (#1099). The check fails open when git is
-  unavailable, preserving headless/CI behavior.
-
-## Multi-session heuristic
-
-When `CLAUDE_ENV_FILE` is absent and multiple Claude Code sessions are concurrently open
-on the same project directory, the JSONL scan returns the most recently modified
-transcript, which may not match the session that issued `git commit`. This is a known
-best-effort limitation. See the Accepted Tradeoffs in the issue #550 intent document for
-the rationale for accepting it.
+- The git hook runs as a descendant of the Bash tool, so it inherits
+  `CLAUDE_CODE_SESSION_ID` from Claude Code and `resolveSessionId()` returns it.
+- When that variable is absent, `resolveSessionId()` returns null — it never infers an id
+  from filesystem traces (see [session-id-resolution.md](session-id-resolution.md)).
 
 ## Exit-code contract (pre-commit inline Node)
 

@@ -39,7 +39,7 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 # The parent session exports these; leaving them set resolves the LIVE session.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 # Empty fixture config dir: no CONFIRM_* leaks in from the repo .env, so the F11 gate is ARMED.
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"

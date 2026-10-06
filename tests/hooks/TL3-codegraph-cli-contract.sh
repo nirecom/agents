@@ -29,7 +29,6 @@ fi
 
 # Unset inherited session/workflow env so this run cannot resolve real state
 # (rules/test/fixture-isolation.md).
-unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 # isolation (#2512): pin state and plans dirs to a private temp root instead of leaving them to the home default.
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT

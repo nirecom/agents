@@ -106,7 +106,7 @@ test_case_d_echo_and_gh_issue_comment_integration() {
     stdin_json='{"tool_name":"Bash","tool_input":{"command":"echo x && gh issue comment 123 --body \"hello\""},"session_id":"test-session-458"}'
     got="$( \
         echo "$stdin_json" | \
-        ENFORCE_WORKTREE=on CLAUDE_SESSION_ID=test-session-458 \
+        ENFORCE_WORKTREE=on \
         run_with_timeout 30 node "$HOOK" 2>/dev/null)"
     if [ "$got" = "{}" ]; then
         pass "integration: 'echo x && gh issue comment ...' → '{}' (read, allow)"

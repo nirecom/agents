@@ -29,7 +29,7 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # the developer's real ~/.workflow-plans/.
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 # Empty config dir: no CONFIRM_* is inherited from the repo's .env, and
 # isAgentsSessionRepo() cannot resolve it as a git tree so the gate stays

@@ -5,6 +5,6 @@
 #
 # B-30 defended the removed P7 JSONL-mtime-scan tier against unsafe basenames
 # (#2270 dropped P7; the bridge now rc=2s regardless of transcript-dir
-# contents, so the case would only restate B-23). P4 basename charset
+# contents, so the case would only restate B-23). Transcript-basename charset
 # rejection lives on in section-supply-tier.sh (JS-23, JS-26) and
 # harden-1319-session-id-central-validation.sh (U5). Deleted, not rewritten.

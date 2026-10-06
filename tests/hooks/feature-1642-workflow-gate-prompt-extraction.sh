@@ -181,7 +181,7 @@ run_hook() {
     # env(1) is last-wins: AGENTS_CONFIG_DIR is an overridable parameter so it
     # precedes "$@"; the isolation pins follow "$@" so callers cannot unpin them.
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 60 \
-        env -u CLAUDE_ENV_FILE \
+        env \
         "AGENTS_CONFIG_DIR=$cfg" \
         "$@" \
         "WORKFLOW_STATE_DIR=$wfdir" \
@@ -203,7 +203,7 @@ run_gate_module() {
     local repo="$1" cfg="$2"; shift 2
     MOD_RC=0
     MOD_OUT="$(run_with_timeout 60 \
-        env -u CLAUDE_ENV_FILE "AGENTS_CONFIG_DIR=$cfg" "$@" \
+        env "AGENTS_CONFIG_DIR=$cfg" "$@" \
         node -e "
 const mod = require('$GATE_MODULE_NODE');
 const key = Object.keys(mod).find((k) => typeof mod[k] === 'function');

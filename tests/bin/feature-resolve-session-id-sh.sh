@@ -4,8 +4,8 @@
 # Tests bin/resolve-session-id (bash bridge) and all callers — Issue #1251.
 # Contract (SSOT: docs/architecture/claude-code/session-id-resolution.md): stdout =
 #   session id; rc=0 success, rc=2 + stderr unresolvable, rc=3 + stderr resolver threw.
-# L3 gap: no live ~/.claude/projects JSONL, no CLAUDE_ENV_FILE from the real
-#   session-start.js (nor an unreadable one — MSYS ACLs), no native-Windows node path
+# L3 gap: no live ~/.claude/projects JSONL, no CLAUDE_CODE_SESSION_ID set by the
+#   real CC binary, no native-Windows node path
 #   round-trip, no live gh for wip-set-resume.sh, no AGENTS_CONFIG_DIR-unset
 #   catch-fallback in issue-close-write-outcome.js. Closest-to-action mitigation:
 #   skill-orchestration gate at WORKFLOW_USER_VERIFIED preflight.
@@ -52,7 +52,7 @@ setup() {
     TMP="$(mktemp -d)"
     export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts"
     mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
-    unset CLAUDE_PROJECT_DIR CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+    unset CLAUDE_PROJECT_DIR CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 }
 
 teardown() {
@@ -60,7 +60,7 @@ teardown() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+    unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 }
 
 # enc <path> — encode a path exactly as the JS resolver's P7 does.
@@ -78,7 +78,7 @@ run_bridge() {
         exports+="export ${kv%%=*}='${kv#*=}'; "
     done
     BRIDGE_OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
         export AGENTS_CONFIG_DIR='$AGENTS_DIR'
         $exports

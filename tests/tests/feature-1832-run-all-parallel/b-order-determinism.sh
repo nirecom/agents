@@ -16,7 +16,7 @@ fx_init "b-order-determinism"
 export RUN_ALL_CACHE_DIR="$FX_CACHE_DIR"
 export WORKFLOW_STATE_DIR="$FX_TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$FX_TMP_ROOT/plans"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # --- phase 1: empty ledger (fx_exec clears it before every run) ------------
 

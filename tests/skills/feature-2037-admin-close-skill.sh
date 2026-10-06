@@ -36,7 +36,6 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 # Inherited session ids are dropped so nothing here can resolve the live session.
 mkdir -p "$TMPDIR_BASE/workflow-state" "$TMPDIR_BASE/plans"
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state" WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-unset CLAUDE_SESSION_ID || true
 unset CLAUDE_CODE_SESSION_ID || true
 
 run_with_timeout() {

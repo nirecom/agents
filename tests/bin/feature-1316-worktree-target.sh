@@ -58,8 +58,7 @@ mkdir -p "$WORKFLOW_STATE_DIR"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 # rules/test/fixture-isolation.md: the parent Claude Code session exports
-# CLAUDE_CODE_SESSION_ID, which outranks the CLAUDE_SESSION_ID each case sets, so the
-# live session's id would resolve instead of the fixture's and every fingerprint come back empty.
+# CLAUDE_CODE_SESSION_ID; clear it so only the id each case sets per invocation resolves.
 unset CLAUDE_CODE_SESSION_ID
 
 # ---------------------------------------------------------------------------
@@ -132,7 +131,7 @@ write_state() {
 # Run compute-review-scope-fingerprint.js with the given SESSION_ID, from a specific CWD.
 run_compute() {
     local sid="$1" cwd="$2"
-    ( cd "$cwd" && SESSION_ID="$sid" CLAUDE_SESSION_ID="$sid" \
+    ( cd "$cwd" && SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
         "$RWT" 120 node "$COMPUTE_JS" ) 2>/dev/null
 }
 
@@ -296,7 +295,7 @@ STUBATF
     chmod +x "$FAKE_ACD2/bin/resolve-accepted-tradeoffs-file"
 
     ( cd "$MAIN_WT" && \
-        AGENTS_CONFIG_DIR="$FAKE_ACD2" SESSION_ID="$SID_A" CLAUDE_SESSION_ID="$SID_A" \
+        AGENTS_CONFIG_DIR="$FAKE_ACD2" SESSION_ID="$SID_A" CLAUDE_CODE_SESSION_ID="$SID_A" \
         PLANS_DIR="$PLANS_DIR2" EXTENSIONS_USED=0 \
         "$RWT" 120 bash "$LOOP_SH" >/dev/null 2>&1 || true )
 
@@ -353,7 +352,7 @@ if [[ -f "$LOOP_SH" ]]; then
     : > "$PLANS_DIR5/$SID_NOCWD-outline.md"
     rc5=0
     ( cd "$MAIN_WT" && \
-        AGENTS_CONFIG_DIR="$AGENTS_DIR" SESSION_ID="$SID_NOCWD" CLAUDE_SESSION_ID="$SID_NOCWD" \
+        AGENTS_CONFIG_DIR="$AGENTS_DIR" SESSION_ID="$SID_NOCWD" CLAUDE_CODE_SESSION_ID="$SID_NOCWD" \
         PLANS_DIR="$PLANS_DIR5" EXTENSIONS_USED=0 \
         "$RWT" 120 bash "$LOOP_SH" >/dev/null 2>&1 ) || rc5=$?
     if [[ "$rc5" -ne 0 ]]; then

@@ -170,7 +170,7 @@ CHILD_SCRIPT='printf "sock=%s\n" "${SSH_AUTH_SOCK-<unset>}"; printf "agentpid=%s
 run_probe() {
     local mode="$1" entry="$2"; shift 2
     PROBE_OUT="$(run_with_timeout 90 env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+         -u CLAUDE_CODE_SESSION_ID \
         -u SSH_AUTH_SOCK -u SSH_AGENT_PID -u SOME_UNRELATED_SECRET "$@" \
         "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "PROBE_FAKE_SECRET=$FAKE_SECRET" \

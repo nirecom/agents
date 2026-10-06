@@ -53,7 +53,7 @@ mkdir -p "$TMPD/workflow-state" "$TMPD/workflow-plans"
 trap 'rm -rf "$TMPD"' EXIT
 export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$(nodepath "$TMPD/workflow-plans")"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 # The CLI is the subject; its absence is a FAIL, never a skip.
 if [ ! -f "$CLI" ]; then

@@ -41,7 +41,7 @@ t28_run_build() {
     fi
     tb="$(repo_tree_manifest "$T28_FX")"
     hb="$(tree_manifest "$T28_FX/home")"
-    out="$( (cd "$T28_FX" && unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+    out="$( (cd "$T28_FX" && unset CLAUDE_CODE_SESSION_ID && \
         HOME="$T28_FX/home" USERPROFILE="$(node_path "$T28_FX/home")" \
         CLAUDE_CONFIG_DIR="$T28_FX/home/.claude" \
         run_with_timeout 30 node -e '
@@ -74,7 +74,7 @@ t28_run_require() {
     if ! have_lib; then T28_REQ="$(missing_lib)"; return; fi
     tb="$(repo_tree_manifest "$T28_FX")"
     hb="$(tree_manifest "$T28_FX/home")"
-    ( cd "$T28_FX" && unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID && \
+    ( cd "$T28_FX" && unset CLAUDE_CODE_SESSION_ID && \
         HOME="$T28_FX/home" USERPROFILE="$(node_path "$T28_FX/home")" \
         CLAUDE_CONFIG_DIR="$T28_FX/home/.claude" \
         run_with_timeout 30 node -e '

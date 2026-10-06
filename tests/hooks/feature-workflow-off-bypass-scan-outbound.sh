@@ -97,7 +97,7 @@ run_hook() {
     local payload="$1" wfdir="$2"
     HOOK_RC=0
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
@@ -242,7 +242,7 @@ c_run_hook() {
     local payload="$1" cfg="$2" cwd="$3"
     HOOK_RC=0
     HOOK_OUT="$( ( cd "$cwd" && printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env \
         "AGENTS_CONFIG_DIR=$cfg" \
         "WORKFLOW_STATE_DIR=$(fresh_workflow_dir)" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \

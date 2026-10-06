@@ -172,7 +172,7 @@ run_hook() {
     local payload="$1" wfdir="$2" cfg="$3"; shift 3
     HOOK_RC=0
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 60 \
-        env -u CLAUDE_ENV_FILE -u CODE_FILE_EXTENSIONS \
+        env -u CODE_FILE_EXTENSIONS \
         "AGENTS_CONFIG_DIR=$cfg" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "$@" \

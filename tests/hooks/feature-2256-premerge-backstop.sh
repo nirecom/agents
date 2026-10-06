@@ -47,7 +47,7 @@ export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$WORK_NODE/cfg"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
 REPO="$WORK/repo"
@@ -232,9 +232,9 @@ assert_match "18: the deny reason carries the freshness-backstop:pre-merge cause
     "$(reason_of "$(gate "$MERGE_CMD")")" 'freshness-backstop:pre-merge'
 
 # --- 22-24: a later terminal BLOCK postdating a fresh non-BLOCK TR5 denies the merge ---
-# Guards supervisor-check.js:151-153 (hasLaterTerminalBlock at the pre-merge gate).
+# Guards checkSupervisorPreMerge's later-BLOCK deny (hasLaterTerminalBlock branch).
 # Case 10 allows the merge on a fresh CONTINUE TR5; a later terminal BLOCK must flip
-# it to a deny with the post-TR5 reason. Deleting lines 151-153 re-allows it (the
+# it to a deny with the post-TR5 reason. Deleting that branch re-allows it (the
 # case-10 path), so this case fails then. Self-contained — seeds its own ledger.
 seed_two_run CONTINUE "$FK" BLOCK >/dev/null
 out="$(gate "$MERGE_CMD")"
@@ -269,7 +269,7 @@ fi
 # The positive counterpart to case 7 (a fresh BLOCK denies the merge). Once the
 # reviewer records an override for the exact run + freshness key, the read-only
 # backstop must APPROVE the merge — arming nothing and appending no error finding.
-# Deleting the override-release branch (supervisor-check.js:167-175) flips case 25 to
+# Deleting the override-release branch (checkSupervisorPreMerge's overrideActive) flips case 25 to
 # a deny, so the positive path is what this case pins.
 FK_OV="$(fresh_key)"
 seed_state BLOCK "$FK_OV" >/dev/null

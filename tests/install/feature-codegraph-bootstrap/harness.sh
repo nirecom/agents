@@ -14,7 +14,7 @@ posixify() { printf '%s' "$1" | tr '\\' '/'; }
 # The parent session exports the session ids; a child that resolves them would mutate
 # live workflow state. CODEGRAPH must be unset too — load-env lets process.env win
 # over .env, which would pin every case to one branch.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CODEGRAPH 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID CODEGRAPH 2>/dev/null || true
 
 BASE="$(mktemp -d)"
 # chmod first: AL-14 (lockdir) may leave a read-only directory under $BASE.

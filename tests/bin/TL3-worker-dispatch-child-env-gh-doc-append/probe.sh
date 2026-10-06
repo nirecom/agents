@@ -164,7 +164,7 @@ CHILD_SCRIPT='gh auth status --hostname "$GH_HOST" 2>&1; printf "ghrc=%s\n" "$?"
 run_probe() {
     local mode="$1" entry="$2"; shift 2
     PROBE_OUT="$(run_with_timeout 90 env \
-        -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+         -u CLAUDE_CODE_SESSION_ID \
         -u GH_TOKEN -u GITHUB_TOKEN -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN \
         -u SOME_UNRELATED_SECRET "$@" \
         "GH_HOST=$TARGET_HOST" "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \

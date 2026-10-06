@@ -31,7 +31,7 @@ function resolveSessionId() {
     // session-id-ssot: waived (catch fallback) — reached only when the resolver above is unloadable
     const codeSid = process.env.CLAUDE_CODE_SESSION_ID;
     if (codeSid && /^[A-Za-z0-9_-]+$/.test(codeSid.trim())) return codeSid.trim();
-    return process.env.CLAUDE_SESSION_ID || ""; // session-id-ssot: waived (catch fallback) — same branch as above
+    return "";
   }
 }
 

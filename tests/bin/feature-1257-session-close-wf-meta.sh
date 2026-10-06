@@ -46,7 +46,7 @@ export HOME="${TMPDIR_BASE}/home"
 export WORKFLOW_STATE_DIR="$WF_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 export CLAUDE_TRANSCRIPT_BASE_DIR="${TMPDIR_BASE}/tx"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 SC_SID="f1257-sid"
 SC_OTHER_SID="f1257-other"
 SC_DERIVED_ENV="${WF_DIR}/${SC_SID}.control/final-report-env.json"

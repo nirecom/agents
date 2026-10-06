@@ -6,8 +6,8 @@
 # frontmatter — that is Tier 2 — and never returns tests/_archive/ entries).
 # Usage: --auto (resolve via bin/resolve-merge-base.sh) | <merge-base-ref>.
 # Output: newline test paths (may be empty), exit 0; exit 1 missing arg/git error;
-# exit 4 (--auto) merge-base untrustworthy → nothing selected (an empty list reads
-# as all-green, so we stop). No-own-commits branch: base IS HEAD (#1779) → rebuild
+# exit 4 (--auto) merge-base untrustworthy, or test-language registry unreadable → nothing
+# selected (an empty list reads as all-green, so we stop). No-own-commits branch: base IS HEAD (#1779) → rebuild
 # from working tree (git diff HEAD ∪ ls-files --others), stderr note; errors exit 1.
 
 set -euo pipefail
@@ -147,42 +147,13 @@ else
   changed=$(git diff --name-only "${MERGE_BASE}...HEAD" -- 2>/dev/null) || exit 1
 fi
 
+# shellcheck source=bin/lib/select-tests-stem.sh
+. "${AGENTS_DIR}/bin/lib/select-tests-stem.sh"
 stems=()
 while IFS= read -r path; do
   [[ -z "${path}" ]] && continue
-  stem=""
-  case "${path}" in
-    skills/*/SKILL.md)
-      stem="${path#skills/}"
-      stem="${stem%/SKILL.md}"
-      ;;
-    skills/*/scripts/*)
-      area="${path#skills/}"
-      area="${area%%/*}"
-      file="${path##*/}"
-      file="${file%.*}"
-      stems+=("${area}")
-      stem="${file}"
-      ;;
-    agents/*.md)
-      stem="${path#agents/}"
-      stem="${stem%.md}"
-      ;;
-    hooks/*.js)
-      stem="${path#hooks/}"
-      stem="${stem%.js}"
-      ;;
-    bin/*)
-      stem="${path#bin/}"
-      stem="${stem%.*}"
-      stem="${stem##*/}"
-      ;;
-    *)
-      continue
-      ;;
-  esac
-  [[ ${#stem} -lt 3 ]] && continue
-  stems+=("${stem}")
+  sts_stems_of_path "${path}"
+  [[ ${#STS_STEMS[@]} -gt 0 ]] && stems+=("${STS_STEMS[@]}")
 done <<< "${changed}"
 
 # Portable seen-set: temp file; compatible with bash 3.x (macOS default).
@@ -196,18 +167,40 @@ _emit_if_new() {
   printf '%s\n' "${path}" >> "${_seen}"
 }
 
+# Test files are what the test-language registry's supported entries match, directly under the
+# six category dirs. Loaded lazily, so a docs-only diff never needs node. Unreadable is exit 4:
+# an empty selection would read as all-green.
+_REGISTRY_LOADED=0
+_load_registry() {
+  [[ "${_REGISTRY_LOADED}" -eq 1 ]] && return 0
+  local lib="${AGENTS_DIR}/bin/lib/test-language-registry.sh"
+  # shellcheck source=bin/lib/test-language-registry.sh
+  if [[ ! -f "${lib}" ]] || ! . "${lib}" || ! tlr_load; then
+    echo "[select-tests] the test language registry is not readable (bin/lib/test-language-registry.sh); test selection aborted." >&2
+    exit 4
+  fi
+  _REGISTRY_LOADED=1
+}
+_list_tests() {
+  local cat
+  for cat in hooks bin skills agents install tests; do
+    tlr_list_dir "${TESTS_DIR}/${cat}" supported
+  done | sort
+}
+
 # Stem-match selection (skipped when the diff produced no stems, e.g. docs-only).
 if [[ ${#stems[@]} -gt 0 ]]; then
+  _load_registry
   while IFS= read -r test; do
     [[ -f "${test}" ]] || continue
     fname="${test##*/}"
     for stem in "${stems[@]}"; do
-      if [[ "${fname}" == *"${stem}"* ]]; then
+      if sts_name_matches "${fname}" "${stem}"; then
         _emit_if_new "${test}"
         break
       fi
     done
-  done < <(find "${TESTS_DIR}/hooks" "${TESTS_DIR}/bin" "${TESTS_DIR}/skills" "${TESTS_DIR}/agents" "${TESTS_DIR}/install" "${TESTS_DIR}/tests" -maxdepth 1 \( -name "*.sh" -o -name "*.Tests.ps1" -o -name "test_*.py" \) 2>/dev/null | sort)
+  done < <(_list_tests)
 fi
 
 # RUN_TL3=on: append TL3-*.sh (real-environment tier) — but only when the diff could
@@ -233,10 +226,11 @@ _tl3_wanted() {
 if [[ -x "${AGENTS_DIR}/bin/get-config-var" ]]; then
   if ! "${AGENTS_DIR}/bin/get-config-var" --is-off RUN_TL3 off 2>/dev/null; then
     if _tl3_wanted; then
+      _load_registry
       while IFS= read -r tl3; do
-        [[ -f "${tl3}" ]] || continue
+        [[ -f "${tl3}" && "${tl3##*/}" == TL3-* ]] || continue
         _emit_if_new "${tl3}"
-      done < <(find "${TESTS_DIR}/hooks" "${TESTS_DIR}/bin" "${TESTS_DIR}/skills" "${TESTS_DIR}/agents" "${TESTS_DIR}/install" "${TESTS_DIR}/tests" -maxdepth 1 -name "TL3-*.sh" 2>/dev/null | sort)
+      done < <(_list_tests)
     fi
   fi
 fi

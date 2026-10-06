@@ -62,7 +62,7 @@ trap 'rm -rf "$TMPD"' EXIT
 export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 # Neutral fixture repo: hooks that shell out to git must not resolve the real
 # worktree. core.hooksPath is disabled so the installed pre-commit hook cannot

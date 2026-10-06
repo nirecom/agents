@@ -50,13 +50,17 @@ export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 # Slots and the corpus cache must never reach the developer's ~/.claude/run-all, and
 # an inherited lane control would silently change which path a case exercises.
 export RUN_ALL_CACHE_DIR="$TMPDIR_BASE/run-all-cache"
 unset TEST_LANES_HELD TEST_LANES FIND_TESTS_CORPUS_CACHE TEST_LANES_TTL TEST_LANES_HEARTBEAT \
-    TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP TEST_LANES_BUDGET RUN_ALL_LANES_LIB \
-    TCC_LOGIC_DIR RUN_ALL_EXPECT_BUCKET TESTS_DIR GIT_DIR GIT_WORK_TREE
+    TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP TEST_MAX_JOBS_PER_HOST TEST_MAX_JOBS_PER_RUN \
+    RUN_ALL_LANES_LIB TCC_LOGIC_DIR TESTS_DIR GIT_DIR GIT_WORK_TREE
+# A nonexistent resolver skips the .env layer, so the developer's real .env never
+# decides a limit; cases that test that layer pass their own stub per call.
+NO_CONFIG_VAR_CMD="$TMPDIR_BASE/no-such-config-var-cmd"
+export RUN_ALL_CONFIG_VAR_CMD="$NO_CONFIG_VAR_CMD"
 
 NEUTRAL_DIR="$TMPDIR_BASE/neutral"
 mkdir -p "$NEUTRAL_DIR"
@@ -117,6 +121,8 @@ case_end
 . "$GROUP_DIR/lanes-cases.sh"
 # shellcheck source=feature-2455-test-load-control/run-all-lease-cases.sh
 . "$GROUP_DIR/run-all-lease-cases.sh"
+# shellcheck source=feature-2455-test-load-control/registry-fail-closed-cases.sh
+. "$GROUP_DIR/registry-fail-closed-cases.sh"
 
 case_begin "suite-integrity" "bin/find-tests-for-source.sh"
 
@@ -143,9 +149,9 @@ else
 fi
 
 # CASE1 — every planned case id reported at least once.
-CASE_EXPECTED="FC1 FC2 FC3 FC4 EQ1 C1 C2 C3 C4 C5 C6 C7 C8 C9 C10 C11 C12 C13 \
-L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15 L16 L17 L18 LS1 LS2 LS3 LS4 \
-R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12"
+CASE_EXPECTED="FC1 FC2 FC3 FC4 EQ1 C1 C2 C3 C3b C4 C5 C6 C7 C8 C9 C10 C11 C12 C13 \
+L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15 L16 L17 L18 LS1 LS2 LS3 LS4 LS5 \
+R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 RF1 RF2"
 CASE_MISSING=""
 for _c in $CASE_EXPECTED; do
     case " $CASE_RAN " in

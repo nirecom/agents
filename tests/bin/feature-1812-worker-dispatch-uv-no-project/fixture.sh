@@ -194,12 +194,11 @@ run_compose() {
     local script="$1"; shift
     RUN_RC=0
     RUN_OUT="$(cd "$WORK" && env \
-        -u CLAUDE_CODE_SESSION_ID \
         "PATH=$STUB_BIN:$PATH" \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_PLANS_DIR=$STAGING" \
         "WORKFLOW_STATE_DIR=$ARM_DIR/workflow" \
-        "CLAUDE_SESSION_ID=uvnp-arm$ARM_N" \
+        "CLAUDE_CODE_SESSION_ID=uvnp-arm$ARM_N" \
         "CANARY_OUT=$CANARY" \
         "GH_CALL_LOG=$CALLLOG" \
         "GH_PUT_DIR=$PUTDIR" \

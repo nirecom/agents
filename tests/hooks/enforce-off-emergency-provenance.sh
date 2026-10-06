@@ -22,7 +22,7 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # and the recorder falls back to them whenever a payload carries no usable
 # session_id (P12) - inherited values would make those cases resolve the REAL
 # session instead of the one the case names.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi

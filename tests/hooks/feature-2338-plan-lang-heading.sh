@@ -197,7 +197,7 @@ else
         (
             cd "$C1_ROOT" || exit 97
             unset PLAN_LANG DOCS_LANG_PUBLIC DOCS_LANG_PRIVATE
-            unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+            unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
             export AGENTS_CONFIG_DIR="$C1_CFG_NODE"
             export WORKFLOW_PLANS_DIR="$C1_PLANS_NODE"
             export WORKFLOW_STATE_DIR="$C1_WF_NODE"

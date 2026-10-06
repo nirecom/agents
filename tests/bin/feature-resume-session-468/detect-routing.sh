@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# tests/bin/feature-resume-session-468/detect-routing.sh — T1-T20: local detect routing and exit codes. Sourced by tests/bin/feature-resume-session-468.sh; not standalone.
+# tests/bin/feature-resume-session-468/detect-routing.sh — T1, T3-T20: local detect routing and exit codes. Sourced by tests/bin/feature-resume-session-468.sh; not standalone.
 # Tests: bin/resume-session-detect
 # Tags: session, resume, workflow, bin, tests, scope:common, pwsh-not-required, TL2
 
@@ -8,22 +8,10 @@ if ! declare -F run_cli >/dev/null 2>&1; then
     return 1 2>/dev/null || exit 1
 fi
 
-echo "=== T1: none_when_no_envfile ==="
+echo "=== T1: none_when_no_session_id ==="
 run_cli "t1" "" "" ""
-assert_type "T1. type=none when CLAUDE_ENV_FILE unset" "none"
-assert_exit "T1. exit 0 when CLAUDE_ENV_FILE unset" "0"
-
-echo ""
-echo "=== T2: none_when_envfile_lacks_sid ==="
-T2_ROOT="$TMPDIR_BASE/t2"
-mkdir -p "$T2_ROOT/state" "$T2_ROOT/plans/worktree-end"
-printf 'SOMETHING_ELSE=foo\n' > "$T2_ROOT/env"
-( cd "$AGENTS_DIR" && CLAUDE_ENV_FILE="$T2_ROOT/env" WORKFLOW_STATE_DIR="$T2_ROOT/state" WORKFLOW_PLANS_DIR="$T2_ROOT/plans" run_with_timeout node "$CLI" >"$T2_ROOT/stdout" 2>"$T2_ROOT/stderr" ) || true
-LAST_EXIT=$?
-LAST_OUT=$(cat "$T2_ROOT/stdout" 2>/dev/null || true)
-LAST_ERR=$(cat "$T2_ROOT/stderr" 2>/dev/null || true)
-assert_type "T2. type=none when env file lacks CLAUDE_SESSION_ID" "none"
-assert_exit "T2. exit 0 when env file lacks CLAUDE_SESSION_ID" "0"
+assert_type "T1. type=none when no session id is supplied" "none"
+assert_exit "T1. exit 0 when no session id is supplied" "0"
 
 echo ""
 echo "=== T3: none_when_state_missing ==="

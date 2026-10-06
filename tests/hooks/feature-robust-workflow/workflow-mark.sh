@@ -136,14 +136,14 @@ E4_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_user_verification_skipped>
 run_mark_hook "$REPO" "$E4_JSON" >/dev/null
 expect_no_state_change "E4. user_verification_skipped via marker → REJECTED" "test-session" "user_verification" "pending"
 
-# Test E5: session_id not in stdin AND CLAUDE_ENV_FILE unset →
+# Test E5: session_id not in stdin AND CLAUDE_CODE_SESSION_ID unset →
 #   state unchanged, hook stdout JSON contains "systemMessage", exit 0
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_PENDING_JSON test-session)"
 E5_CMD='echo "<<WORKFLOW_MARK_STEP_research_complete>>"'
 E5_ESC=${E5_CMD//\"/\\\"}
 E5_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"%s\\n","stderr":""}}' "$E5_ESC" "$E5_ESC")
-E5_OUT=$(echo "$E5_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" env -u CLAUDE_ENV_FILE node "$MARK_HOOK" 2>/dev/null || true)
+E5_OUT=$(echo "$E5_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" env node "$MARK_HOOK" 2>/dev/null || true)
 E5_EXIT=$?
 expect_no_state_change "E5a. no session_id → research unchanged" "test-session" "research" "pending"
 if echo "$E5_OUT" | grep -q "additionalContext"; then
@@ -300,7 +300,7 @@ write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
 RE2_CMD='echo "<<WORKFLOW_RESET_FROM_write_tests: test reason>>"'
 RE2_ESC=${RE2_CMD//\"/\\\"}
 RE2_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"%s\\n","stderr":""}}' "$RE2_ESC" "$RE2_ESC")
-RE2_OUT=$(echo "$RE2_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" env -u CLAUDE_ENV_FILE node "$MARK_HOOK" 2>/dev/null || true)
+RE2_OUT=$(echo "$RE2_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" env node "$MARK_HOOK" 2>/dev/null || true)
 RE2_EXIT=$?
 expect_no_state_change "RE2a. no session_id → write_tests unchanged (complete)" "test-session" "write_tests" "complete"
 if echo "$RE2_OUT" | grep -q "additionalContext"; then
@@ -339,13 +339,8 @@ expect_state_step "RI1c. RESET_FROM applied twice → run_tests=pending (idempot
 echo ""
 echo "=== workflow-mark: RESET_FROM marker — Validation error cases ==="
 
-# Table-driven: RE4a–RE4e + RE4g–RE4j (all rejection cases).
-# Columns: case_id | sentinel_cmd | expect_msg
-# expect_msg is a fixed-string fragment checked in hook additionalContext output.
-# State assertion: write_tests must remain "complete" after each rejected sentinel.
-# RE4f (boundary accept, state changes) is kept standalone below — mixing polarities
-# into a single table loop would obscure the positive-case intent.
-#
+# Table-driven rejections RE4a–RE4e + RE4g–RE4j: case_id | sentinel_cmd | expect_msg (fixed-string in
+# additionalContext); write_tests must stay "complete". RE4f (boundary accept) stays standalone below.
 # Rejection branches exercised:
 #   LOOKSLIKE path  → "malformed RESET_FROM"  (RE4a, RE4e)
 #   DUD placeholder → "RESET_FROM rejected"   (RE4b none, RE4g skip, RE4h n/a, RE4i スキップ)

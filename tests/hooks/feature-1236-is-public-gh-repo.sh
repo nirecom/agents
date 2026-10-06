@@ -2,24 +2,14 @@
 # tests/hooks/feature-1236-is-public-gh-repo.sh
 # Tests: hooks/lib/is-private-repo.js
 # Tags: hook, scan, github, security, scope:issue-specific, pwsh-not-required
-#
-# Unit tests for the NEW exports shouldScanAsPublicTarget(ownerRepo) and
-# listPrivateRepoNames() added to hooks/lib/is-private-repo.js.
-#
-# Strategy: node driver that require()s the module directly, catching
-# MODULE_NOT_FOUND or missing-function and reporting "not yet implemented"
-# for each case. gh is stubbed by prepending a temp dir to PATH.
-#
-# Security boundary: shouldScanAsPublicTarget is fail-CLOSED — any
-# uncertainty (gh error, missing, empty output) → return true (scan).
-# listPrivateRepoNames is fail-OPEN — error → return [].
-#
-# L3 gap (what this test does NOT catch):
-# - real gh CLI round-trip against GitHub API (private/public status in live env)
-# - stub-controlled gh value cases (gh=false/true) run on POSIX only; on Windows-native
-#   spawnSync resolves the real gh.exe and the bash stub cannot override it
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# Unit tests for shouldScanAsPublicTarget(ownerRepo) / listPrivateRepoNames() in
+# hooks/lib/is-private-repo.js via a node driver; gh is a PATH-prepended stub.
+# shouldScanAsPublicTarget is fail-CLOSED (uncertainty -> true); listPrivateRepoNames
+# is fail-OPEN (error -> []).
+
+# L3 gap: no real gh round trip; stub-controlled gh cases run on POSIX only (on
+# Windows-native spawnSync resolves the real gh.exe). Mitigation: WORKFLOW_USER_VERIFIED
+# preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
@@ -180,7 +170,7 @@ fi
 # make_gh_stub <dir> <private_output> <list_output> <exit_code_api> <exit_code_list>
 # Creates an executable `gh` in <dir> that:
 #   - `gh api repos/<any> --jq .private` → prints <private_output>, exits <exit_code_api>
-#   - `gh repo list --visibility private --json nameWithOwner --jq ...` → prints <list_output>, exits <exit_code_list>
+#   - `gh repo list ...` → prints <list_output> (`<VISIBILITY>\t<nameWithOwner>` rows), exits <exit_code_list>
 make_gh_stub() {
     local dir="$1" priv_out="$2" list_out="$3" api_rc="${4:-0}" list_rc="${5:-0}"
     mkdir -p "$dir"
@@ -389,8 +379,7 @@ if is_windows_native; then
 else
     # Normal: gh prints two owner/name lines → both appear in result
     GH_LIST1="$TMPBASE/gh-list-two"
-    make_gh_stub "$GH_LIST1" "false" "owner1/private-a
-owner2/private-b" 0 0
+    make_gh_stub "$GH_LIST1" "false" $'PRIVATE\towner1/private-a\nINTERNAL\towner2/private-b' 0 0
     assert_list_contains "listPrivateRepoNames includes owner1/private-a" "$GH_LIST1" "owner1/private-a"
     assert_list_contains "listPrivateRepoNames includes owner2/private-b" "$GH_LIST1" "owner2/private-b"
 

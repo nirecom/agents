@@ -3,375 +3,113 @@
 # Tests: tests/run-all.sh, bin/calibrate-test-parallelism.sh, bin/lib/run-all-parallelism.sh, bin/worker-dispatch/workers/test-runner.js
 # Tags: tests, bin, parallel, calibrator, TL2, scope:issue-specific
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
+# WHY (CPR-WPH): the calibrator is the sole record writer — unreachable from a normal run,
+# free on inquiry sub-modes, opt-in via RUN_CALIBRATION=1. The knee is SELECTED by a fixed
+# rule and the record is the reader's v2 key set (#2079 S11). Measurements go through the
+# _cal-fixture.sh seam stub over a 2-level ledger corpus (#2079 S5); nothing times a real run.
+# TL3 gap: whether the knee heuristic picks a genuinely good value on real hardware is not covered.
 
-# WHY (CPR-WPH): the calibrator is the sole cache writer. Must never be reachable from
-# a normal run, must cost nothing on inquiry sub-modes, and a real measurement is
-# opt-in via RUN_CALIBRATION=1. Write side: exactly the reader's 7 keys, valid charsets,
-# zero contract-shaped output, and an unstable measurement writes nothing.
-
-# RED-FIRST: bin/calibrate-test-parallelism.sh doesn't exist yet; rows needing it
-# report `implementation missing: <path>`.
-
-# ISOLATION: RUN_ALL_CACHE_DIR/TESTS_DIR pinned to temp fixtures — the real
-# ~/.claude/run-all and suite are never touched.
-
-# TL3 gap: whether the knee heuristic picks a genuinely good `jobs` on real hardware is not covered here.
-
-set -u
-
-# isolation (#2512): pin state and plans dirs once for this file
-_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
-mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
-export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
-
+set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-RUNNER="$AGENTS_DIR/tests/run-all.sh"
-CAL_REL="bin/calibrate-test-parallelism.sh"
-CAL="$AGENTS_DIR/$CAL_REL"
-LIB_REL="bin/lib/run-all-parallelism.sh"
-LIB="$AGENTS_DIR/$LIB_REL"
-EXEC_MODEL="$AGENTS_DIR/hooks/workflow-run-tests/exec-model.js"
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
-assert_eq() {
-    local name="$1" want="$2" got="$3"
-    if [ "$want" = "$got" ]; then pass "$name"
-    else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
-}
-run_with_timeout() { local s="$1"; shift; bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
-nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-
-cal_missing() {
-    if [ -f "$CAL" ]; then return 1; fi
-    fail "$1" "implementation missing: $CAL_REL"
-    return 0
-}
-
-TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/ra-cal-$$")"
-mkdir -p "$TMPD"
-trap 'rm -rf "$TMPD"' EXIT
-
-# --- fixture isolation (rules/test/fixture-isolation.md) --------------------
-export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
-export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
-mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
-export RUN_ALL_CACHE_DIR="$TMPD/cache"
-mkdir -p "$RUN_ALL_CACHE_DIR"
-CACHE_FILE="$RUN_ALL_CACHE_DIR/parallelism.conf"
-
-# Snapshot the developer's real cache dir BEFORE anything runs, so the closing
-# case can prove this file neither created nor removed it.
+. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/_cal-fixture.sh"
 REAL_RUN_ALL="${HOME:-/nonexistent}/.claude/run-all"
 REAL_PRE=0; [ -e "$REAL_RUN_ALL" ] && REAL_PRE=1
+cf_init
 
-trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
-
-# Stable fixture: four dummies of equal, non-trivial duration, so repeat-to-repeat
-# wall time varies by far less than the 1.5x stability threshold.
-FXS="$TMPD/fx-stable"; mkdir -p "$FXS"
-for i in 1 2 3 4; do
-    printf '#!/usr/bin/env bash\n# stable dummy\nsleep 0.5\nexit 0\n' > "$FXS/s$i.sh"
-done
-
-# Unstable fixture: the first four invocations are instant, every later one sleeps.
-# Repeat 3 is therefore many times slower than repeat 1 — the stability gate must
-# refuse to write a cache from that.
-FXU="$TMPD/fx-unstable"; mkdir -p "$FXU"
-UCOUNTER="$TMPD/ucount"; : > "$UCOUNTER"
-for i in 1 2 3 4; do
-    cat > "$FXU/u$i.sh" <<UDUMMY
-#!/usr/bin/env bash
-n=\$(cat "$UCOUNTER" 2>/dev/null || echo 0)
-n=\$((n + 1))
-echo "\$n" > "$UCOUNTER"
-if [ "\$n" -gt 4 ]; then sleep 1; fi
-exit 0
-UDUMMY
-done
-
-# --- drivers ----------------------------------------------------------------
-C_OUT=""; C_ERR=""; C_RC=0
-# run_cal <env-assignments-as-args...> -- <cal-args...>
-run_cal() {
-    local tests_dir="$1"; shift
-    local extra_env="$1"; shift
-    C_RC=0
-    : > "$TMPD/cal-stderr.txt"
-    if [ -n "$extra_env" ]; then
-        C_OUT="$(run_with_timeout 120 env "RUN_ALL_CACHE_DIR=$RUN_ALL_CACHE_DIR" \
-            "TESTS_DIR=$tests_dir" "$extra_env" bash "$CAL" "$@" 2>"$TMPD/cal-stderr.txt")" || C_RC=$?
-    else
-        C_OUT="$(run_with_timeout 120 env "RUN_ALL_CACHE_DIR=$RUN_ALL_CACHE_DIR" \
-            "TESTS_DIR=$tests_dir" bash "$CAL" "$@" 2>"$TMPD/cal-stderr.txt")" || C_RC=$?
-    fi
-    C_ERR="$(cat "$TMPD/cal-stderr.txt")"
-}
-
-CAL_ENV=()
-run_cal2() {
-    C_RC=0
-    : > "$TMPD/cal-stderr.txt"
-    C_OUT="$(run_with_timeout 120 env ${CAL_ENV[@]+"${CAL_ENV[@]}"} bash "$CAL" "$@" \
-        2>"$TMPD/cal-stderr.txt")" || C_RC=$?
-    C_ERR="$(cat "$TMPD/cal-stderr.txt")"
-}
+RUNNER="$AGENTS_DIR/tests/run-all.sh"
+EXEC_MODEL="$AGENTS_DIR/hooks/workflow-run-tests/exec-model.js"
+CAL_TGT="bin/calibrate-test-parallelism.sh"
 
 contract_count() {
     printf '%s\n' "$1" | grep -cE '^[[:space:]]*RUN_CONTRACT: PASS=[0-9]+ FAIL=[0-9]+ SKIP=[0-9]+ EXECUTED=[0-9]+' || true
 }
-cache_value() { sed -n "s/^$1=//p" "$CACHE_FILE" 2>/dev/null | head -1; }
-cache_keys() { sed -n 's/^\([a-z_]*\)=.*/\1/p' "$CACHE_FILE" 2>/dev/null | LC_ALL=C sort | tr '\n' ' '; }
+conf_value() { sed -n "s/^$2=//p" "$1/parallelism.conf" 2>/dev/null | head -n 1; }
+conf_keys() { sed -n 's/^\([a-z_]*\)=.*/\1/p' "$1/parallelism.conf" 2>/dev/null | LC_ALL=C sort | tr '\n' ' '; }
+trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
+cal_missing() { [ -f "$CF_CAL" ] && return 1; fail "$1" "implementation missing: $CAL_TGT"; return 0; }
 
-# ===========================================================================
-# 1. Unreachable from a normal run (invariant 4)
-# ===========================================================================
+# 30 in-band ledger candidates: n = 3 x 8 = 24, required 30 -> the knee ladder never probes.
+SK="$(cf_new_suite)"; RK="$(cf_new_real)"
+cf_populate "$SK" "$RK" bin/a 15 6
+cf_populate "$SK" "$RK" hooks/b 15 6
+
+# 1. Unreachable from a normal run
 case_unreachable() {
     local hits got
-    hits="$(grep -cE '(bash|sh|exec|source|^[[:space:]]*\.)[[:space:]]+[^[:space:]]*calibrate-test-parallelism\.sh' \
-        "$RUNNER" 2>/dev/null || true)"
-    assert_eq "g-cal/unreachable/runner-never-executes-it" "0" "$hits"
-
+    hits="$(grep -cE '(bash|sh|exec|source|^[[:space:]]*\.)[[:space:]]+[^[:space:]]*calibrate-test-parallelism\.sh' "$RUNNER" 2>/dev/null || true)"
+    ck "g-cal/unreachable/runner-never-executes-it" "0" "$hits"
     if [ ! -f "$EXEC_MODEL" ]; then
         fail "g-cal/unreachable/name-is-not-a-test-command" "missing: hooks/workflow-run-tests/exec-model.js"
-        return
-    fi
-    got="$(run_with_timeout 30 node -e '
-try {
-  const m = require(process.argv[1]);
+    else
+        got="$(run_with_timeout 30 node -e '
+try { const m = require(process.argv[1]);
   process.stdout.write(String(m.isTestCommand("bash bin/calibrate-test-parallelism.sh --dry-run")));
-} catch (e) { process.stdout.write("ERR"); }
-' "$(nodepath "$EXEC_MODEL")" 2>/dev/null)"
-    assert_eq "g-cal/unreachable/name-is-not-a-test-command" "false" "$got"
+} catch (e) { process.stdout.write("ERR"); }' "$(np "$EXEC_MODEL")" 2>/dev/null)"
+        ck "g-cal/unreachable/name-is-not-a-test-command" "false" "$got"
+    fi
 }
 
-# ===========================================================================
 # 2. Inquiry sub-modes cost nothing and write nothing
-# ===========================================================================
 case_inquiry() {
-    local mode
+    local mode n st
     for mode in --help --dry-run; do
-        local n="${mode#--}"
-        if cal_missing "g-cal/inquiry/$n-exit-zero"; then
-            fail "g-cal/inquiry/$n-writes-no-cache" "implementation missing: $CAL_REL"
-            fail "g-cal/inquiry/$n-no-contract-shape" "implementation missing: $CAL_REL"
-            continue
-        fi
-        rm -f "$CACHE_FILE"
-        run_cal "$FXS" "" "$mode"
-        assert_eq "g-cal/inquiry/$n-exit-zero" "0" "$C_RC"
-        if [ -e "$CACHE_FILE" ]; then
-            fail "g-cal/inquiry/$n-writes-no-cache" "$mode wrote $CACHE_FILE"
-        else pass "g-cal/inquiry/$n-writes-no-cache"; fi
-        assert_eq "g-cal/inquiry/$n-no-contract-shape" "0" "$(contract_count "$C_OUT$C_ERR")"
+        n="${mode#--}"
+        cal_missing "g-cal/inquiry/$n-exit-zero" && continue
+        rm -f "$RK/parallelism.conf"
+        st="$(cf_stub)"
+        CF_NO_OPTIN=1 cf_run "$SK" "$RK" "$st" "$mode"
+        ck "g-cal/inquiry/$n-exit-zero" "0" "$CF_RC"
+        if [ -e "$RK/parallelism.conf" ]; then fail "g-cal/inquiry/$n-writes-no-record" "$mode wrote a record"
+        else pass "g-cal/inquiry/$n-writes-no-record"; fi
+        ck "g-cal/inquiry/$n-no-seam-call" "0" "$(cf_calls "$st")"
+        ck "g-cal/inquiry/$n-no-contract-shape" "0" "$(contract_count "$CF_OUT$CF_ERR")"
     done
-
-    # --print reports the cached decision without measuring or rewriting.
-    if cal_missing "g-cal/inquiry/print-without-cache-is-nonzero"; then
-        fail "g-cal/inquiry/print-with-cache-shows-jobs" "implementation missing: $CAL_REL"
-        fail "g-cal/inquiry/print-leaves-cache-byte-identical" "implementation missing: $CAL_REL"
-        return
+    if ! cal_missing "g-cal/inquiry/print-without-record-is-nonzero"; then
+        rm -f "$RK/parallelism.conf"
+        CF_NO_OPTIN=1 cf_run "$SK" "$RK" - --print
+        if [ "$CF_RC" -ne 0 ]; then pass "g-cal/inquiry/print-without-record-is-nonzero"
+        else fail "g-cal/inquiry/print-without-record-is-nonzero" "want non-zero, got 0"; fi
     fi
-    rm -f "$CACHE_FILE"
-    run_cal "$FXS" "" --print
-    if [ "$C_RC" -ne 0 ]; then pass "g-cal/inquiry/print-without-cache-is-nonzero"
-    else fail "g-cal/inquiry/print-without-cache-is-nonzero" "want non-zero, got 0"; fi
 }
 
-# ===========================================================================
 # 3. A real measurement is opt-in
-# ===========================================================================
 case_opt_in() {
-    if cal_missing "g-cal/optin/without-flag-exits-77"; then
-        fail "g-cal/optin/without-flag-writes-no-cache" "implementation missing: $CAL_REL"
-        return
+    local st
+    if ! cal_missing "g-cal/optin/without-flag-exits-77"; then
+        rm -f "$RK/parallelism.conf"
+        st="$(cf_stub)"
+        CF_NO_OPTIN=1 cf_run "$SK" "$RK" "$st" --jobs-list "1 2" --repeat 3 --warmup 0
+        ck "g-cal/optin/without-flag-exits-77" "77" "$CF_RC"
+        ck "g-cal/optin/without-flag-no-seam-call" "0" "$(cf_calls "$st")"
+        if [ -e "$RK/parallelism.conf" ]; then fail "g-cal/optin/without-flag-writes-no-record" "a record was written without RUN_CALIBRATION=1"
+        else pass "g-cal/optin/without-flag-writes-no-record"; fi
     fi
-    rm -f "$CACHE_FILE"
-    run_cal "$FXS" "" --sample 2 --jobs-list "1 2" --repeat 3 --warmup 0
-    assert_eq "g-cal/optin/without-flag-exits-77" "77" "$C_RC"
-    if [ -e "$CACHE_FILE" ]; then
-        fail "g-cal/optin/without-flag-writes-no-cache" "a cache was written without RUN_CALIBRATION=1"
-    else pass "g-cal/optin/without-flag-writes-no-cache"; fi
 }
 
-# ===========================================================================
-# 4. A stable measurement writes exactly the reader's seven keys
-# ===========================================================================
-EXPECTED_KEYS="count_bucket host_id jobs measured_at repeat sample_size schema "
-case_write() {
-    local names n schema_want v before after
-    names="exit-zero cache-in-pinned-dir exactly-seven-keys schema-matches-ssot \
-           jobs-in-range measured-at-charset host-id-charset bucket-numeric \
-           no-contract-shape print-agrees"
-    if cal_missing "g-cal/write/exit-zero"; then
-        for n in $names; do
-            [ "$n" = "exit-zero" ] && continue
-            fail "g-cal/write/$n" "implementation missing: $CAL_REL"
-        done
-        return
-    fi
-    rm -f "$CACHE_FILE"
-    run_cal "$FXS" "RUN_CALIBRATION=1" --sample 2 --jobs-list "1 2" --repeat 3 --warmup 0
-    assert_eq "g-cal/write/exit-zero" "0" "$C_RC"
-    if [ ! -e "$CACHE_FILE" ]; then
-        for n in cache-in-pinned-dir exactly-seven-keys schema-matches-ssot jobs-in-range \
-                 measured-at-charset host-id-charset bucket-numeric print-agrees; do
-            fail "g-cal/write/$n" "no cache at the pinned RUN_ALL_CACHE_DIR"
-        done
-        assert_eq "g-cal/write/no-contract-shape" "0" "$(contract_count "$C_OUT$C_ERR")"
-        return
-    fi
-    pass "g-cal/write/cache-in-pinned-dir"
-    assert_eq "g-cal/write/exactly-seven-keys" "$EXPECTED_KEYS" "$(cache_keys)"
-
-    schema_want="1"
-    if [ -f "$LIB" ]; then
-        schema_want="$(run_with_timeout 30 bash -c '. "$0" >/dev/null 2>&1; printf "%s" "${RUN_ALL_CACHE_SCHEMA:-1}"' "$LIB" 2>/dev/null)"
-    fi
-    assert_eq "g-cal/write/schema-matches-ssot" "$schema_want" "$(cache_value schema)"
-
-    v="$(cache_value jobs)"
-    case "$v" in
-        ''|*[!0-9]*) fail "g-cal/write/jobs-in-range" "jobs=$(printf '%q' "$v") is not numeric" ;;
-        *) if [ "$v" -ge 1 ] && [ "$v" -le 1024 ]; then pass "g-cal/write/jobs-in-range"
-           else fail "g-cal/write/jobs-in-range" "jobs=$v outside 1..1024"; fi ;;
-    esac
-    v="$(cache_value measured_at)"
-    if [ -n "$v" ] && [ "${#v}" -le 24 ] && case "$v" in *[!0-9TZ:+-]*) false ;; *) true ;; esac; then
-        pass "g-cal/write/measured-at-charset"
-    else fail "g-cal/write/measured-at-charset" "measured_at=$(printf '%q' "$v") fails the reader's char class"; fi
-    v="$(cache_value host_id)"
-    if [ -n "$v" ] && [ "${#v}" -le 200 ] && case "$v" in *[!A-Za-z0-9._\|-]*) false ;; *) true ;; esac; then
-        pass "g-cal/write/host-id-charset"
-    else fail "g-cal/write/host-id-charset" "host_id fails the reader's char class"; fi
-    v="$(cache_value count_bucket)"
-    case "$v" in
-        ''|*[!0-9]*) fail "g-cal/write/bucket-numeric" "count_bucket=$(printf '%q' "$v")" ;;
-        *) pass "g-cal/write/bucket-numeric" ;;
-    esac
-    assert_eq "g-cal/write/no-contract-shape" "0" "$(contract_count "$C_OUT$C_ERR")"
-
-    before="$(cat "$CACHE_FILE")"
-    run_cal "$FXS" "" --print
-    after="$(cat "$CACHE_FILE")"
-    case "$C_OUT" in
-        *"$(cache_value jobs)"*) pass "g-cal/inquiry/print-with-cache-shows-jobs" ;;
-        *) fail "g-cal/inquiry/print-with-cache-shows-jobs" "--print did not report the cached jobs value" ;;
-    esac
-    assert_eq "g-cal/inquiry/print-leaves-cache-byte-identical" "$before" "$after"
-    assert_eq "g-cal/write/print-agrees" "0" "$C_RC"
-}
-
-# ===========================================================================
-# 5. An unstable measurement writes nothing
-# ===========================================================================
-case_stability_gate() {
-    if cal_missing "g-cal/stability/unstable-exits-1"; then
-        fail "g-cal/stability/unstable-writes-no-cache" "implementation missing: $CAL_REL"
-        fail "g-cal/stability/unstable-explains-itself" "implementation missing: $CAL_REL"
-        return
-    fi
-    rm -f "$CACHE_FILE"
-    : > "$UCOUNTER"
-    run_cal "$FXU" "RUN_CALIBRATION=1" --sample 2 --jobs-list "1" --repeat 3 --warmup 0
-    assert_eq "g-cal/stability/unstable-exits-1" "1" "$C_RC"
-    if [ -e "$CACHE_FILE" ]; then
-        fail "g-cal/stability/unstable-writes-no-cache" "an unstable measurement was persisted"
-    else pass "g-cal/stability/unstable-writes-no-cache"; fi
-    case "$C_ERR" in
-        *unstable*|*stability*|*variance*) pass "g-cal/stability/unstable-explains-itself" ;;
-        *) fail "g-cal/stability/unstable-explains-itself" "stderr must state why no cache was written" ;;
-    esac
-}
-
-# ===========================================================================
-# 6. Synthetic measurement curves — the knee is SELECTED, not guessed
-# ===========================================================================
-
-# WHY: a range check alone can't tell an empirical calibrator from `echo jobs=1`, so the
-# selection rule itself is pinned: knee = smallest w with 100*min_median >= 95*median(w).
-
-# SEAM: RUN_ALL_CALIBRATION_MEASURE_CMD replaces the real timed run — the calibrator
-# runs it once per measurement and reads one elapsed-ms integer from stdout.
-
-# make_stub <spec>: "<width>:<ms>,<ms>,<ms> ..." — Nth call to a width returns the Nth value.
-# Uses mktemp (not a counter) since these run inside `$(...)` subshells.
-make_stub() {
-    local d
-    d="$(mktemp -d "$TMPD/stub.XXXXXX")"
-    mkdir -p "$d/state"
-    printf '%s\n' "$1" > "$d/spec"
-    : > "$d/calls.log"
-    cat > "$d/measure.sh" <<'STUB'
-#!/usr/bin/env bash
-d="$(cd "$(dirname "$0")" && pwd)"
-w="${1:-}"
-printf '%s\n' "$w" >> "$d/calls.log"
-n="$(cat "$d/state/$w" 2>/dev/null || echo 0)"; n=$((n + 1))
-printf '%s\n' "$n" > "$d/state/$w"
-vals=""
-for grp in $(cat "$d/spec"); do
-    case "$grp" in "$w":*) vals="${grp#*:}" ;; esac
-done
-[ -n "$vals" ] || { echo "no spec for width $w" >&2; exit 3; }
-IFS=',' read -r -a arr <<< "$vals"
-i=$((n - 1)); [ "$i" -ge "${#arr[@]}" ] && i=$(( ${#arr[@]} - 1 ))
-printf '%s\n' "${arr[$i]}"
-STUB
-    chmod +x "$d/measure.sh" 2>/dev/null || true
-    printf '%s' "$d"
-}
-
-# make_drift_stub <base-ms> <step-ms>: elapsed depends on the GLOBAL call index,
-# not the width — a pure warm-up drift with zero real width effect.
-make_drift_stub() {
-    local d
-    d="$(mktemp -d "$TMPD/stub.XXXXXX")"
-    : > "$d/calls.log"; printf '0\n' > "$d/n"
-    cat > "$d/measure.sh" <<STUB
-#!/usr/bin/env bash
-d="\$(cd "\$(dirname "\$0")" && pwd)"
-printf '%s\n' "\${1:-}" >> "\$d/calls.log"
-n="\$(cat "\$d/n" 2>/dev/null || echo 0)"
-printf '%s\n' "\$((n + 1))" > "\$d/n"
-printf '%s\n' "\$(( $1 + $2 * n ))"
-STUB
-    chmod +x "$d/measure.sh" 2>/dev/null || true
-    printf '%s' "$d"
-}
-
-synth_env() {
-    CAL_ENV=("RUN_ALL_CACHE_DIR=$RUN_ALL_CACHE_DIR" "TESTS_DIR=$FXS" "RUN_CALIBRATION=1"
-             "RUN_ALL_CALIBRATION_MEASURE_CMD=$1/measure.sh")
-}
-
+# 4. Synthetic curves — knee = smallest w with 100*min_median >= 95*median(w); rc=1 is unstable.
 case_knee_curves() {
-    local have=1; [ -f "$CAL" ] || have=0
-    local name spec want_rc want_jobs d
+    local name spec want_rc want_jobs st
     while IFS='|' read -r name spec want_rc want_jobs; do
         name="$(trim "$name")"
         [ -z "$name" ] && continue
         case "$name" in \#*) continue ;; esac
         spec="$(trim "$spec")"; want_rc="$(trim "$want_rc")"; want_jobs="$(trim "$want_jobs")"
-        if [ "$have" -eq 0 ]; then
-            fail "g-cal/knee/$name/exit-code" "implementation missing: $CAL_REL"
-            fail "g-cal/knee/$name/selected-jobs" "implementation missing: $CAL_REL"
-            continue
-        fi
-        rm -f "$CACHE_FILE"
-        d="$(make_stub "$spec")"
-        synth_env "$d"
-        run_cal2 --sample 4 --jobs-list "1 2 4 8" --repeat 3 --warmup 0
-        assert_eq "g-cal/knee/$name/exit-code" "$want_rc" "$C_RC"
+        cal_missing "g-cal/knee/$name/exit-code" && continue
+        rm -f "$RK/parallelism.conf"
+        st="$(cf_stub "$spec")"; : > "$st/noseg"
+        cf_run "$SK" "$RK" "$st" --jobs-list "1 2 4 8" --repeat 3 --warmup 0
+        ck "g-cal/knee/$name/exit-code" "$want_rc" "$CF_RC"
+        ck "g-cal/knee/$name/twelve-measure-calls-no-probe" "0:12" "$(cf_calls "$st" probe):$(cf_calls "$st" measure)"
         if [ "$want_jobs" = "none" ]; then
-            if [ -e "$CACHE_FILE" ]; then
-                fail "g-cal/knee/$name/selected-jobs" "stability gate did not fire: jobs=$(cache_value jobs)"
-            else pass "g-cal/knee/$name/selected-jobs"; fi
+            if [ -e "$RK/parallelism.conf" ]; then fail "g-cal/knee/$name/selected" "stability gate did not fire: a record was written"
+            else pass "g-cal/knee/$name/selected"; fi
+            case "$CF_ERR" in
+                *unstable*|*stability*|*variance*) pass "g-cal/knee/$name/explains-itself" ;;
+                *) fail "g-cal/knee/$name/explains-itself" "stderr must state why no record was written" ;;
+            esac
         else
-            assert_eq "g-cal/knee/$name/selected-jobs" "$want_jobs" "$(cache_value jobs)"
+            ck "g-cal/knee/$name/selected" "$want_jobs" "$(cf_selected)"
         fi
     done <<'TABLE'
 # name                 | width:ms,ms,ms per repeat (jobs-list 1 2 4 8, repeat 3)                | rc | jobs
@@ -385,64 +123,85 @@ noisy-over-gate        | 1:1000,1600,1000 2:500,500,500 4:480,480,480 8:470,470,
 TABLE
 }
 
-# ===========================================================================
-# 7. Warmup discard and order-crossing traversal
-# ===========================================================================
+# 5. Warmup discard and order-crossing traversal
 case_protocol() {
-    local d calls w1 w2 w3
-    if [ ! -f "$CAL" ]; then
-        for n in warmup-exit-zero warmup-excluded-from-selection measurement-call-count \
-                 order-crossing-traversal-varies order-crossing-neutralizes-drift; do
-            fail "g-cal/protocol/$n" "implementation missing: $CAL_REL"
-        done
-        return
+    local st w1 w2 w3
+    if ! cal_missing "g-cal/protocol/warmup-exit-zero"; then
+        # A 5000 ms warmup per width would trip the 1.5x gate if counted; discarded, width 2 wins.
+        st="$(cf_stub "1:5000,1000,1000,1000 2:5000,500,500,500")"; : > "$st/noseg"
+        cf_run "$SK" "$RK" "$st" --sample 4 --jobs-list "1 2" --repeat 3 --warmup 1
+        ck "g-cal/protocol/warmup-exit-zero" "0" "$CF_RC"
+        ck "g-cal/protocol/warmup-excluded-from-selection" "2" "$(cf_selected)"
+        ck "g-cal/protocol/measurement-call-count" "8" "$(cf_calls "$st")"
+        ck "g-cal/protocol/sample-4-per-call" "4 " "$(awk '{ print $6 }' "$st/calls.log" 2>/dev/null | LC_ALL=C sort -u | tr '\n' ' ')"
+        # Pure drift, no width effect: a single-order traversal would select 1; crossing gives 2.
+        st="$(cf_stub_drift 1000 20)"
+        cf_run "$SK" "$RK" "$st" --sample 8 --jobs-list "1 2 4 8" --repeat 3 --warmup 0
+        w1="$(awk '$1 >= 1 && $1 <= 4 { print $3 }' "$st/calls.log" 2>/dev/null | tr '\n' ' ')"
+        w2="$(awk '$1 >= 5 && $1 <= 8 { print $3 }' "$st/calls.log" 2>/dev/null | tr '\n' ' ')"
+        w3="$(awk '$1 >= 9 && $1 <= 12 { print $3 }' "$st/calls.log" 2>/dev/null | tr '\n' ' ')"
+        if [ -n "$w1" ] && { [ "$w1" != "$w2" ] || [ "$w2" != "$w3" ]; }; then
+            pass "g-cal/protocol/order-crossing-traversal-varies"
+        else fail "g-cal/protocol/order-crossing-traversal-varies" "every repeat traversed: $(printf '%q' "$w1")"; fi
+        ck "g-cal/protocol/order-crossing-neutralizes-drift" "2" "$(cf_selected)"
     fi
-
-    # A 5000ms warmup against 1000/500ms repeats: counted, it would trip the 1.5x
-    # stability gate; discarded, selection proceeds and picks width 2.
-    rm -f "$CACHE_FILE"
-    d="$(make_stub "1:5000,1000,1000,1000 2:5000,500,500,500")"
-    synth_env "$d"
-    run_cal2 --sample 4 --jobs-list "1 2" --repeat 3 --warmup 1
-    assert_eq "g-cal/protocol/warmup-exit-zero" "0" "$C_RC"
-    assert_eq "g-cal/protocol/warmup-excluded-from-selection" "2" "$(cache_value jobs)"
-    calls="$(grep -c . "$d/calls.log" 2>/dev/null || echo 0)"
-    assert_eq "g-cal/protocol/measurement-call-count" "8" "$calls"
-
-    # Pure monotonic drift, no real width effect. A single-order traversal would
-    # read it as "width 1 is fastest" and select jobs=1; the approved protocol
-    # crosses the traversal order between repeats, so the median lands on 2.
-    rm -f "$CACHE_FILE"
-    d="$(make_drift_stub 1000 20)"
-    synth_env "$d"
-    run_cal2 --sample 4 --jobs-list "1 2 4 8" --repeat 3 --warmup 0
-    w1="$(sed -n '1,4p' "$d/calls.log" | tr '\n' ' ')"
-    w2="$(sed -n '5,8p' "$d/calls.log" | tr '\n' ' ')"
-    w3="$(sed -n '9,12p' "$d/calls.log" | tr '\n' ' ')"
-    if [ -n "$w1" ] && { [ "$w1" != "$w2" ] || [ "$w2" != "$w3" ]; }; then
-        pass "g-cal/protocol/order-crossing-traversal-varies"
-    else
-        fail "g-cal/protocol/order-crossing-traversal-varies" \
-             "every repeat traversed the same order: $(printf '%q' "$w1")"
-    fi
-    assert_eq "g-cal/protocol/order-crossing-neutralizes-drift" "2" "$(cache_value jobs)"
 }
 
-# ===========================================================================
-# 8. The developer's real cache dir was never touched
-# ===========================================================================
+# 6. record_*: the published record is the reader's v2 key set (#2079 S11)
+V2_KEYS="host_id max_jobs_per_host measured_at os repeat sample_size schema "
+lib_eval() { env "TESTS_DIR=$SK" bash -c '. "$1" >/dev/null 2>&1 || exit 9; shift; "$@"' _ "$CF_LIB_PAR" "$@" 2>/dev/null; }
+record_published() {
+    local st v schema_want os_want before after
+    cal_missing "g-cal/record/exit-zero" && return
+    rm -f "$RK/parallelism.conf"
+    st="$(cf_stub "1:8000 2:4000 4:2000 8:1950")"; : > "$st/noseg"
+    cf_run "$SK" "$RK" "$st" --jobs-list "1 2 4 8" --repeat 3 --warmup 0
+    ck "g-cal/record/exit-zero" "0" "$CF_RC"
+    ck "g-cal/record/no-contract-shape" "0" "$(contract_count "$CF_OUT$CF_ERR")"
+    if [ ! -e "$RK/parallelism.conf" ]; then fail "g-cal/record/written" "no record in the pinned RUN_ALL_CACHE_DIR"; return; fi
+    pass "g-cal/record/written"
+    ck "g-cal/record/v2-seven-keys" "$V2_KEYS" "$(conf_keys "$RK")"
+    schema_want="$(bash -c '. "$1" >/dev/null 2>&1; printf "%s" "${RUN_ALL_CACHE_SCHEMA:-}"' _ "$CF_LIB_PAR" 2>/dev/null)"
+    ck "g-cal/record/schema-is-lib-ssot" "$schema_want" "$(conf_value "$RK" schema)"
+    ck "g-cal/record/schema-is-2" "2" "$(conf_value "$RK" schema)"
+    ck "g-cal/record/max-jobs-per-host-is-knee" "4" "$(conf_value "$RK" max_jobs_per_host)"
+    ck "g-cal/record/agrees-with-final-line" "$(cf_selected)" "$(conf_value "$RK" max_jobs_per_host)"
+    os_want="$(lib_eval run_all_os_attr)"
+    if [ -n "$os_want" ]; then ck "g-cal/record/os-is-current-attr" "$os_want" "$(conf_value "$RK" os)"
+    else fail "g-cal/record/os-is-current-attr" "run_all_os_attr is unavailable in $CF_LIB_PAR"; fi
+    v="$(conf_value "$RK" measured_at)"
+    if [ -n "$v" ] && [ "${#v}" -le 24 ] && case "$v" in *[!0-9TZ:+-]*) false ;; *) true ;; esac; then
+        pass "g-cal/record/measured-at-charset"
+    else fail "g-cal/record/measured-at-charset" "measured_at=$(printf '%q' "$v")"; fi
+    v="$(conf_value "$RK" host_id)"
+    if [ -n "$v" ] && [ "${#v}" -le 200 ] && case "$v" in *[!A-Za-z0-9._\|-]*) false ;; *) true ;; esac; then
+        pass "g-cal/record/host-id-charset"
+    else fail "g-cal/record/host-id-charset" "host_id fails the reader's char class"; fi
+    if lib_eval run_all_cache_read "$RK/parallelism.conf" >/dev/null; then pass "g-cal/record/reader-accepts"
+    else fail "g-cal/record/reader-accepts" "run_all_cache_read rejected the published record"; fi
+    before="$(cat "$RK/parallelism.conf")"
+    CF_NO_OPTIN=1 cf_run "$SK" "$RK" - --print
+    after="$(cat "$RK/parallelism.conf")"
+    ck "g-cal/record/print-exit-zero" "0" "$CF_RC"
+    if printf '%s\n' "$CF_OUT" | grep -qx 'max_jobs_per_host=4'; then pass "g-cal/record/print-shows-max-jobs-per-host"
+    else fail "g-cal/record/print-shows-max-jobs-per-host" "--print: $(printf '%s' "$CF_OUT" | tr '\n' ' ')"; fi
+    if [ -n "$os_want" ] && printf '%s\n' "$CF_OUT" | grep -qxF "os=$os_want"; then pass "g-cal/record/print-shows-os"
+    else fail "g-cal/record/print-shows-os" "--print lacks os=$os_want"; fi
+    ck "g-cal/record/print-leaves-record-byte-identical" "$before" "$after"
+}
+
+# 7. The developer's real cache dir was never touched
 case_real_home_untouched() {
     local now=0; [ -e "$REAL_RUN_ALL" ] && now=1
-    assert_eq "g-cal/isolation/real-home-run-all-untouched" "$REAL_PRE" "$now"
+    ck "g-cal/isolation/real-home-run-all-untouched" "$REAL_PRE" "$now"
 }
 
 case_unreachable
 case_inquiry
 case_opt_in
-case_write
-case_stability_gate
 case_knee_curves
 case_protocol
+record_published
 case_real_home_untouched
 
 echo ""

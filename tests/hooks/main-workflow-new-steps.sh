@@ -375,7 +375,7 @@ expect_state_step "C1. CLARIFY_INTENT_COMPLETE → clarify_intent=complete" "$SI
 # C2: No session_id → error message emitted, state not written
 C2_CMD='echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"'
 C2_JSON=$(build_mark_json_no_sid "$C2_CMD")
-C2_OUT=$(echo "$C2_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" node "$MARK_HOOK" 2>/dev/null || true)
+C2_OUT=$(echo "$C2_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" CLAUDE_CODE_SESSION_ID="" node "$MARK_HOOK" 2>/dev/null || true)
 if echo "$C2_OUT" | grep -qiE "could not resolve session_id|session_id"; then
     pass "C2a. CLARIFY_INTENT_COMPLETE with no session_id → error in additionalContext"
 else
@@ -499,7 +499,7 @@ fi
 # B6: No session_id → error message, state not written (backward compat: old sentinel)
 B6_CMD='echo "<<WORKFLOW_BRANCHING_DECIDED: main direct work>>"'
 B6_JSON=$(build_mark_json_no_sid "$B6_CMD")
-B6_OUT=$(echo "$B6_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" node "$MARK_HOOK" 2>/dev/null || true)
+B6_OUT=$(echo "$B6_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" CLAUDE_CODE_SESSION_ID="" node "$MARK_HOOK" 2>/dev/null || true)
 if echo "$B6_OUT" | grep -qiE "could not resolve session_id|session_id"; then
     pass "B6a. BRANCHING_DECIDED with no session_id → error in additionalContext"
 else

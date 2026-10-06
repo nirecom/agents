@@ -215,7 +215,7 @@ echo ""
 echo "=== WGE-4: run-tests-baseline-evidence record is an internal-only door (#2431) ==="
 # `record` completes run_tests from a caller-built file, so a tool-issued call would forge
 # evidence; `failing` is read-only and must stay reachable (non-vacuity half).
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 SID="wge4-$$"
 write_state "$SID" "$(CI_COMPLETE_STATE $SID)"
 bash_gate_json() {

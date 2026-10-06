@@ -14,7 +14,6 @@ V2_ISO="$(mktemp -d)"
 mkdir -p "$V2_ISO/workflow" "$V2_ISO/plans"
 export WORKFLOW_STATE_DIR="$V2_ISO/workflow"
 export WORKFLOW_PLANS_DIR="$V2_ISO/plans"
-unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
 
 # Known-gap assertions for case 18's pipe-count boundary. The parent counts

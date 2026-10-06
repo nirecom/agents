@@ -48,7 +48,7 @@ export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$WORK_NODE/cfg"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
 SID="ext2319"
@@ -304,7 +304,7 @@ s5_reason() {
 const { checkUserVerifiedAudit } = require(process.env.UVA);
 const writer = require(process.env.WR);
 const schema = require(process.env.SC);
-require('fs').writeFileSync(writer.getStatePath(process.env.SESS), JSON.stringify(schema.createEmptyState(process.env.SESS)));
+require('fs').writeFileSync(writer.getStatePath(process.env.SESS, { forWrite: true }), JSON.stringify(schema.createEmptyState(process.env.SESS)));
 let reason = null;
 checkUserVerifiedAudit(process.env.SESS, process.env.RCWD, {
   approveFn: () => { reason = 'APPROVED'; },

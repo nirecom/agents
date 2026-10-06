@@ -21,7 +21,7 @@ for variant in off unset invalid; do
     raw=$(
         cd "$ORD_PLAIN" || exit 99
         printf '{"prompt":"hi","cwd":"%s","session_id":"s1","hook_event_name":"UserPromptSubmit"}' "$ORD_PLAIN" | \
-            run_with_timeout 15 env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+            run_with_timeout 15 env -u CLAUDE_CODE_SESSION_ID \
             AGENTS_CONFIG_DIR="$(to_node_path "$CFG")" \
             PATH="$BIN:$PATH" \
             WORKFLOW_STATE_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
@@ -102,7 +102,7 @@ LOG19B="$TMPDIR_BASE/log-call-m19b"
 raw19b=$(
     cd "$ORD_PLAIN" || exit 99
     printf '{"prompt":"hi","cwd":"%s","session_id":"s1","hook_event_name":"UserPromptSubmit"}' "$ORD_PLAIN" | \
-        run_with_timeout 15 env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        run_with_timeout 15 env -u CLAUDE_CODE_SESSION_ID \
         AGENTS_CONFIG_DIR="$CFG_ON_N" \
         PATH="$NODE_ONLY_DIR_N" \
         WORKFLOW_STATE_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
@@ -142,7 +142,7 @@ for stdin_variant in "" "not-json{{{"; do
     LOG21="$TMPDIR_BASE/log-call-m21"
     raw21=$(
         cd "$ORD_PLAIN" || exit 99
-        printf '%s' "$stdin_variant" | run_with_timeout 15 env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        printf '%s' "$stdin_variant" | run_with_timeout 15 env -u CLAUDE_CODE_SESSION_ID \
             AGENTS_CONFIG_DIR="$CFG_ON_N" PATH="$BIN:$PATH" \
             WORKFLOW_STATE_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
             HOME="$FAKE_HOME_N" USERPROFILE="$FAKE_HOME_N" \

@@ -26,7 +26,6 @@ git -C "$REPO" config user.name "Test"
 export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR="$(node_path "$WFDIR")"
 export WORKFLOW_PLANS_DIR; WORKFLOW_PLANS_DIR="$(node_path "$PLANS")"
 export CLAUDE_PROJECT_DIR; CLAUDE_PROJECT_DIR="$(node_path "$REPO")"
-unset CLAUDE_SESSION_ID || true
 unset CLAUDE_CODE_SESSION_ID || true
 
 # --- rules fixtures on disk (the verdict is decided from the ON-DISK frontmatter) ---

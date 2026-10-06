@@ -168,7 +168,7 @@ fc_no_sid_run() {
         export PATH="$FULL_PATH" HOME="$TMPDIR_BASE" AGENTS_CONFIG_DIR="$1"
         export CODEX_MOCK_PROMPT="$TMPDIR_BASE/fc-nosid-prompt.txt" \
                CODEX_MOCK_BODY="$NONE_BODY" CODEX_MOCK_EXIT=0
-        env -u SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+        env -u SESSION_ID -u CLAUDE_CODE_SESSION_ID \
             bash "$1/bin/run-codex-review-loop" --format "$LOOP_FORMAT" \
             --plans-dir "$PLANS" --cap 2 --max-extensions 0 --extensions-used 0 \
             --accepted-tradeoffs "$PLANS/tradeoffs.md" --repo-root "$REPO" 2>"$errf"

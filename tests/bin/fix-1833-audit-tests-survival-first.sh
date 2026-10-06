@@ -381,6 +381,8 @@ fi
 . "$GROUP_DIR/group-m-offline-fallback.sh"
 # shellcheck source=fix-1833-audit-tests-survival-first/group-n-sibling-unit.sh
 . "$GROUP_DIR/group-n-sibling-unit.sh"
+# shellcheck source=fix-1833-audit-tests-survival-first/group-o-marker-state-extraction.sh
+. "$GROUP_DIR/group-o-marker-state-extraction.sh"
 
 echo ""
 echo "─────────────────────────────────────────"

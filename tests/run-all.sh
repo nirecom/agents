@@ -3,14 +3,17 @@
 # Tests: tests/run-all.sh
 # Tags: bin, env, config, tests, scope:common
 # Usage: tests/run-all.sh [-j N|auto] [--deadline SECS] [--print-plan] [--all | <glob-or-file> ...]
-# Env:   FEATURE_644_PHASE, RUN_ALL_JOBS, RUN_ALL_DEADLINE, RUN_ALL_PROGRESS, RUN_ALL_REAP
-# Exit:  0 pass / 1 fail / 2 argument error / 3 deadline abort / 4 no test lane / 130 interrupted
+# Env:   FEATURE_644_PHASE, TEST_MAX_JOBS_PER_RUN, RUN_ALL_DEADLINE, RUN_ALL_PROGRESS, RUN_ALL_REAP
+# Exit:  0 pass / 1 fail / 2 argument error / 3 deadline abort / 4 no test lane / 5 registry unreadable / 130 interrupted
 # See docs/architecture/claude-code/test-runner-parallelism.md for the full contract.
 
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TESTS_DIR="${TESTS_DIR:-$AGENTS_DIR/tests}"
+REGISTRY_LIB="${RUN_ALL_REGISTRY_LIB:-$AGENTS_DIR/bin/lib/test-language-registry.sh}"
+# shellcheck source=/dev/null
+{ [ -f "$REGISTRY_LIB" ] && . "$REGISTRY_LIB" && tlr_load; } || { echo "[run-all] test language registry not readable: $REGISTRY_LIB (RUN_ALL_REGISTRY_LIB)" >&2; exit 5; }
 
 export FEATURE_644_PHASE="${FEATURE_644_PHASE:-0}"
 
@@ -41,17 +44,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ "$JOBS_SET" -eq 0 ] && [ -n "${RUN_ALL_JOBS+x}" ] && { JOBS_SET=1; JOBS_RAW="$RUN_ALL_JOBS"; }
+{ [ "$JOBS_SET" -eq 0 ] || [ "$JOBS_RAW" = auto ]; } && [ -n "${TEST_MAX_JOBS_PER_RUN:-}" ] && { JOBS_SET=1; JOBS_RAW="$TEST_MAX_JOBS_PER_RUN"; }
 [ "$DEADLINE_SET" -eq 0 ] && [ -n "${RUN_ALL_DEADLINE+x}" ] && { DEADLINE_SET=1; DEADLINE_RAW="$RUN_ALL_DEADLINE"; }
 
-JOBS_MODE=auto; JOBS_FIXED=0
+JOBS_MODE=auto; MAX_JOBS_PER_RUN_FIXED=0
 if [ "$JOBS_SET" -eq 1 ]; then
   case "$JOBS_RAW" in
     auto) ;;
     ''|*[!0-9]*) usage_error "invalid jobs value '$JOBS_RAW' (expected auto or an integer 1-1024)" ;;
     *) { [ "$JOBS_RAW" -ge 1 ] && [ "$JOBS_RAW" -le 1024 ]; } 2>/dev/null ||
          usage_error "invalid jobs value '$JOBS_RAW' (expected auto or an integer 1-1024)"
-       JOBS_MODE=fixed; JOBS_FIXED="$JOBS_RAW" ;;
+       JOBS_MODE=fixed; MAX_JOBS_PER_RUN_FIXED="$JOBS_RAW" ;;
   esac
 fi
 
@@ -71,8 +74,7 @@ say() { [ "$PROGRESS" -eq 1 ] && printf '[run-all] %s\n' "$1" >&2; return 0; }
 
 # --- work list -------------------------------------------------------------
 # #1836: exclude self — the glob matches this script too.
-SELF_BASE="${BASH_SOURCE[0]##*/}"
-SELF_PATH=""
+SELF_BASE="${BASH_SOURCE[0]##*/}"; SELF_PATH=""
 
 # Basename check is a fast gate before the canonicalising subshell.
 is_self() {
@@ -87,11 +89,11 @@ is_self() {
   [ "$d/$SELF_BASE" = "$SELF_PATH" ]
 }
 
-WORK=()
+WORK=(); UNSUP=()   # UNSUP: files no supported registry entry covers — listed, never run
 add_work() {
   [ -f "$1" ] || return 0
   is_self "$1" && return 0
-  WORK+=("$1")
+  if tlr_match "$1" && [ "$TLR_STATUS" = supported ]; then WORK+=("$1"); else UNSUP+=("$1"); fi
   return 0
 }
 
@@ -103,20 +105,21 @@ expand_pattern() {
 }
 
 if [ "$WANT_ALL" -eq 1 ] || [ $# -eq 0 ]; then
-  # Six categories' direct *.sh / *.Tests.ps1 / test_*.py only; sub-dirs, lib,
-  # fixtures and tests/ top level (run-all.sh itself) are excluded.
+  # The six categories' direct files only (sub-dirs, lib, fixtures, tests/ top level excluded).
   for cat in hooks bin skills agents install tests; do
-    for f in "$TESTS_DIR/$cat"/*.sh "$TESTS_DIR/$cat"/*.Tests.ps1 "$TESTS_DIR/$cat"/test_*.py; do add_work "$f"; done
+    tlr_list_dir_into "$TESTS_DIR/$cat" supported && for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do add_work "$f"; done
+    tlr_list_dir_into "$TESTS_DIR/$cat" recognized-only && for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do tlr_match "$f" && [ "$TLR_STATUS" != supported ] && UNSUP+=("$f"); done
   done
 else
   for pattern in "$@"; do expand_pattern "$pattern"; done
 fi
+# A suite-unit language runs once per suite root (tlr_dedupe_suites keeps one file per root).
+tlr_dedupe_suites_into ${WORK[@]+"${WORK[@]}"}; WORK=(${TLR_LIST[@]+"${TLR_LIST[@]}"})
 TOTAL=${#WORK[@]}
 
 WORKDIR="$(mktemp -d 2>/dev/null)" || usage_error "cannot create a temporary work directory"
 
-CLEANUP_DONE=0
-INFLIGHT=()
+CLEANUP_DONE=0; INFLIGHT=()
 declare -a JOB_PID JOB_START JOB_RC DONE_FLAG LANE TIER KEY
 
 signal_tree() {
@@ -146,19 +149,19 @@ cleanup_all() {
     sleep 1
     for pid in $pids; do signal_tree KILL "$pid"; done
   fi
+  command -v run_all_dur_close >/dev/null 2>&1 && run_all_dur_close
   [ -n "${WORKDIR:-}" ] && rm -rf "$WORKDIR" 2>/dev/null
   [ "${LANES_LIB_OK:-0}" -eq 1 ] && thl_release_all
   return 0
 }
 trap 'cleanup_all; exit 130' INT TERM
 trap 'cleanup_all' EXIT
-
 # --- serial lane (reader side) ---------------------------------------------
-# Reader window is lines 1-20 (lenient); authors are held to 10.
+# Reader window is the registry's headerMaxLines, the same limit authors are held to.
 SERIAL_COUNT=0
-scan_serial_batch() {
-  awk 'FNR<=20 && /^# Serial:[ \t]*[^ \t]/ && !seen[FILENAME]++ { print FILENAME }' \
-    "$@" >>"$WORKDIR/serial.list" 2>/dev/null
+scan_serial_batch() { # args: <header.commentPrefix>TAB<file>, matched as a fixed string
+  printf '%s\n' "$@" | awk -v M="$TLR_HEADER_MAX_LINES" '{ t = index($0, "\t"); p = substr($0, 1, t - 1) " Serial:"; f = substr($0, t + 1); n = 0
+    while (n++ < M + 0 && (getline l < f) > 0) { if (index(l, p) == 1 && substr(l, length(p) + 1) ~ /^[ \t]*[^ \t]/) { print f; break } } close(f) }' >>"$WORKDIR/serial.list" 2>/dev/null
   return 0
 }
 
@@ -169,7 +172,7 @@ detect_serial() {
   : >"$WORKDIR/serial.list"
   # Batched so the argument vector stays clear of the 32KB Windows limit.
   for ((i = 0; i < TOTAL; i++)); do
-    batch+=("${WORK[$i]}")
+    tlr_comment_prefix "${WORK[$i]}" >/dev/null; batch+=("$TLR_COMMENT_PREFIX"$'\t'"${WORK[$i]}")
     if [ "${#batch[@]}" -ge 200 ]; then scan_serial_batch "${batch[@]}"; batch=(); fi
   done
   [ "${#batch[@]}" -gt 0 ] && scan_serial_batch "${batch[@]}"
@@ -187,9 +190,7 @@ detect_serial
 # --- duration ledger -------------------------------------------------------
 # Submission order is Longest-Processing-Time-first over historical durations (rationale:
 # docs/architecture/claude-code/test-runner-parallelism.md).
-PARALLELISM_LIB_OK=0
-DUR_LIB_OK=0; LANES_LIB_OK=0
-LEDGER_INITED=0
+PARALLELISM_LIB_OK=0; DUR_LIB_OK=0; LANES_LIB_OK=0; LEDGER_INITED=0
 UNMEASURED=99
 
 load_run_all_libs() {
@@ -295,24 +296,23 @@ ledger_record() {
 }
 
 # --- width -----------------------------------------------------------------
-RESOLVED_J=4
+RUN_JOBS=4
 resolve_jobs() {
-  if [ "$JOBS_MODE" = "fixed" ]; then RESOLVED_J="$JOBS_FIXED"; return 0; fi
-  if [ "$PARALLELISM_LIB_OK" -eq 1 ] && command -v run_all_resolve_auto_jobs >/dev/null 2>&1; then
-    run_all_resolve_auto_jobs; RESOLVED_J="$RUN_ALL_RESOLVED_J"; say "$RUN_ALL_RESOLVE_NOTE"; return 0
+  if [ "$JOBS_MODE" = "fixed" ]; then RUN_JOBS="$MAX_JOBS_PER_RUN_FIXED"; return 0; fi
+  if [ "$PARALLELISM_LIB_OK" -eq 1 ]; then
+    run_all_resolve_max_jobs_per_run || usage_error "$RUN_ALL_RESOLVE_NOTE"
+    RUN_JOBS="$RUN_ALL_MAX_JOBS_PER_RUN"; say "$RUN_ALL_RESOLVE_NOTE"; return 0
   fi
-  say "parallelism cache missing; using -j $RESOLVED_J (conservative default). Calibrate with: bin/calibrate-test-parallelism.sh"
-  return 0
+  say "parallelism library unavailable; max jobs per run $RUN_JOBS (built-in default)"
 }
 resolve_jobs
-
-EFFECTIVE_J="$RESOLVED_J"
-[ "$TOTAL" -lt "$EFFECTIVE_J" ] && EFFECTIVE_J="$TOTAL"
-[ "$EFFECTIVE_J" -lt 1 ] && EFFECTIVE_J=1
+[ "$TOTAL" -lt "$RUN_JOBS" ] && RUN_JOBS="$TOTAL"
+[ "$RUN_JOBS" -lt 1 ] && RUN_JOBS=1
 
 if [ "$PRINT_PLAN" -eq 1 ]; then
+  [ "$LANES_LIB_OK" -eq 1 ] && { thl_plan "$RUN_JOBS"; RUN_JOBS="$THL_PLAN_JOBS"; say "plan: $THL_NOTE"; }
   printf 'tests_dir=%s\n' "$TESTS_DIR"
-  printf 'jobs=%s\n' "$EFFECTIVE_J"
+  printf 'jobs=%s\n' "$RUN_JOBS"
   printf 'serial_count=%s\n' "$SERIAL_COUNT"
   for ((idx = 0; idx < TOTAL; idx++)); do
     printf 'plan\t%s\t%s\t%s\t%s\n' "$idx" "${LANE[$idx]}" "${WORK[$idx]}" "${TIER[$idx]:-$UNMEASURED}"
@@ -340,15 +340,13 @@ esac
 say "reap: $REAP"
 
 # --- scheduler -------------------------------------------------------------
-PASS=0; FAIL=0; SKIP=0
-NEXT=0; REPORTED=0; HARVESTED=0
-SERIAL_INFLIGHT=0; BARRIER_ANNOUNCED=0; DEADLINE_HIT=0; IDLE_SPINS=0
-START_TS=$SECONDS
-# Host-wide lanes (#2455): the lease can only narrow EFFECTIVE_J, never widen it.
+PASS=0; FAIL=0; SKIP=0; NEXT=0; REPORTED=0; HARVESTED=0
+SERIAL_INFLIGHT=0; BARRIER_ANNOUNCED=0; DEADLINE_HIT=0; IDLE_SPINS=0; START_TS=$SECONDS
+# Host-wide lanes (#2455): the lease can only narrow RUN_JOBS, never widen it.
 if [ "$LANES_LIB_OK" -eq 1 ] && [ "$TOTAL" -gt 0 ]; then
-  thl_init_dir; thl_run_all_lease "$EFFECTIVE_J" "$DEADLINE" || { cleanup_all
+  thl_init_dir; thl_run_all_lease "$RUN_JOBS" "$DEADLINE" || { cleanup_all
     echo "[run-all] no test lane freed within ${THL_WAIT_CAP_USED}s; inspect holders with: bash bin/test-lanes-status.sh" >&2; exit 4; }
-  EFFECTIVE_J="$THL_GRANTED"; [ -n "$THL_NOTE" ] && say "lanes: $THL_NOTE"
+  RUN_JOBS="$THL_GRANTED"; [ -n "$THL_NOTE" ] && say "lanes: $THL_NOTE"
 fi
 
 # Only a line-initial RUN_CONTRACT marker is disarmed, by prefixing.
@@ -369,7 +367,7 @@ neutralize_stream() {
 LAUNCH_LIB="${RUN_ALL_LAUNCH_LIB:-$AGENTS_DIR/bin/lib/run-all-launch.sh}"
 # shellcheck source=/dev/null
 [ -f "$LAUNCH_LIB" ] && . "$LAUNCH_LIB"
-command -v run_all_exec >/dev/null 2>&1 || run_all_exec() { bash "$1" >"$2" 2>"$3" </dev/null; }
+command -v run_all_exec >/dev/null 2>&1 || run_all_exec() { tlr_exec_plain "$@"; }
 if command -v run_all_pin_state_dirs >/dev/null 2>&1; then run_all_pin_state_dirs "$WORKDIR" || usage_error "cannot pin the per-run state directories"; fi
 
 launch() {
@@ -378,14 +376,14 @@ launch() {
   # sole completion signal — a harvest that sees <i>.rc always sees a finished <i>.dur.
   ( __t0=$SECONDS
     run_all_exec "$script" "$WORKDIR/$i.out" "$WORKDIR/$i.err"
-    __rc=$?
+    __rc=$?; [ "$__rc" = 78 ] && [ "${RUN_ALL_EXEC_LAUNCHED:-1}" = 0 ] && __rc=U
     echo $((SECONDS - __t0)) >"$WORKDIR/$i.dur"
     echo "$__rc" >"$WORKDIR/$i.rc" ) &
   JOB_PID[$i]=$!
   JOB_START[$i]=$SECONDS
   INFLIGHT+=("$i")
   [ "${LANE[$i]}" = serial ] && SERIAL_INFLIGHT=1
-  say "$((i + 1))/$TOTAL start $script (j=$EFFECTIVE_J inflight=${#INFLIGHT[@]})"
+  say "$((i + 1))/$TOTAL start $script (j=$RUN_JOBS inflight=${#INFLIGHT[@]})"
   NEXT=$((NEXT + 1))
   return 0
 }
@@ -420,11 +418,11 @@ flush() {
     i="$REPORTED"
     [ "${DONE_FLAG[$i]:-0}" = "1" ] || break
     script="${WORK[$i]}"
-    rc="${JOB_RC[$i]:-1}"
-    case "$rc" in ''|*[!0-9]*) rc=1 ;; esac
+    rc="${JOB_RC[$i]:-1}"; case "$rc" in U) ;; ''|*[!0-9]*) rc=1 ;; esac
     neutralize_stream "$WORKDIR/$i.out"
     neutralize_stream "$WORKDIR/$i.err" >&2
-    if [ "$rc" -eq 0 ]; then
+    if [ "$rc" = U ]; then verdict=UNSUPPORTED  # not launched; <i>.out already holds its UNSUPPORTED line
+    elif [ "$rc" -eq 0 ]; then
       echo "PASS: $script"; PASS=$((PASS + 1)); verdict=PASS
     elif [ "$rc" -eq 77 ]; then
       echo "SKIP: $script"; SKIP=$((SKIP + 1)); verdict=SKIP
@@ -479,7 +477,7 @@ while [ "$REPORTED" -lt "$TOTAL" ]; do
       launch "$NEXT"
       break
     fi
-    [ "${#INFLIGHT[@]}" -lt "$EFFECTIVE_J" ] || break
+    [ "${#INFLIGHT[@]}" -lt "$RUN_JOBS" ] || break
     launch "$NEXT"
   done
   if [ "${#INFLIGHT[@]}" -eq 0 ]; then flush; break; fi
@@ -493,6 +491,7 @@ if [ "$DEADLINE_HIT" -eq 1 ]; then
   exit 3
 fi
 
+for f in ${UNSUP[@]+"${UNSUP[@]}"}; do tlr_match "$f"; printf 'UNSUPPORTED: %s (language: %s; not run)\n' "$f" "${TLR_ID:-unknown}"; done
 echo ""
 echo "Results: PASS=$PASS  FAIL=$FAIL  SKIP=$SKIP"
 EXECUTED=$((PASS + FAIL + SKIP))

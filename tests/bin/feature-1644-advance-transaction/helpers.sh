@@ -31,7 +31,7 @@ export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 
 # The parent Claude Code session exports these; leaving them set would make the
 # CLI resolve the LIVE session and mutate its real state file.
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 # Config-dependent branches (CONFIRM_*) must be pinned per case, never inherited
 # from the repo's .env. An empty fixture config dir makes readDefaultEnvFile()

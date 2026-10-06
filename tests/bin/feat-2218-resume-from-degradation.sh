@@ -56,7 +56,7 @@ init_repo() {
 run_F1() {
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="f1-sess" \
+    env CLAUDE_CODE_SESSION_ID="f1-sess" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -67,7 +67,7 @@ writeState('f1-sentinel', createInitialState('f1-sentinel', { cwd: '/f1', git_br
 markStep('f1-sentinel', 'review_tests', 'in_progress');
 " >/dev/null 2>&1
     probe_keys() {
-        env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$1" \
+        env CLAUDE_CODE_SESSION_ID="$1" \
             WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 30 node "$CLI" 2>/dev/null
@@ -103,7 +103,7 @@ run_F2() {
     require_module "$VIEW" || return 0
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="heir-f2" \
+    env CLAUDE_CODE_SESSION_ID="heir-f2" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -122,7 +122,7 @@ writeState('stateonly-f2', createInitialState('stateonly-f2', { cwd: '/heir', gi
 markStep('stateonly-f2', 'workflow_init', 'complete');
 " >/dev/null 2>&1
     from() {
-        env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="heir-f2" \
+        env CLAUDE_CODE_SESSION_ID="heir-f2" \
             WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 60 node "$CLI" --from "$1" 2>&1
@@ -168,7 +168,7 @@ run_F3() {
     git -C "$tmp/drift" add -A
     git -C "$tmp/drift" commit -q -m drift
     seed_pair() {
-        env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$1" \
+        env CLAUDE_CODE_SESSION_ID="$1" \
             WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 30 node -e "
@@ -184,7 +184,7 @@ fs.writeFileSync(path.join(dir, '$3' + '-intent.md'), 'intent body' + String.fro
 " >/dev/null 2>&1
     }
     read_step() {
-        env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="$1" \
+        env CLAUDE_CODE_SESSION_ID="$1" \
             WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 30 node -e "
@@ -194,14 +194,14 @@ process.stdout.write(String(((s.steps || {})['$2'] || {}).status || 'pending'));
 " 2>/dev/null
     }
     seed_pair heir-twin "$(node_path "$tmp/twin")" donor-twin
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="heir-twin" \
+    env CLAUDE_CODE_SESSION_ID="heir-twin" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 90 node "$CLI" --from donor-twin >/dev/null 2>&1
     out="$(read_step heir-twin write_tests)"
     [ "$out" = "complete" ] || problems="$problems equivalent-sibling-did-not-inherit-full:write_tests=$out"
     seed_pair heir-drift "$(node_path "$tmp/drift")" donor-drift
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="heir-drift" \
+    env CLAUDE_CODE_SESSION_ID="heir-drift" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 90 node "$CLI" --from donor-drift >/dev/null 2>&1
@@ -225,7 +225,7 @@ run_F4() {
     require_module "$TAIL" || return 0
     local tmp out problems
     tmp="$(make_tmp)"; problems=""
-    out=$(env -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID \
+    out=$(env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -242,14 +242,14 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
     local upcwd encoded
     upcwd="$(node_path "$tmp/upstream-repo")"
     mkdir -p "$tmp/upstream-repo"
-    encoded=$(env -u CLAUDE_SESSION_ID "$RWT" 30 node -e "
+    encoded=$(env "$RWT" 30 node -e "
 const { _encodeCwd } = require('$AGENTS_DIR_NODE/hooks/lib/session-title');
 process.stdout.write(_encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
     cp "$FIXTURE" "$tmp/transcripts/$encoded/up-f4.jsonl"
     printf '{"type":"user","sessionId":"decoy","message":{"role":"user","content":"DECOY-SHOULD-NOT-BE-READ"}}\n' > "$tmp/decoy.jsonl"
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="heir-f4" \
+    env CLAUDE_CODE_SESSION_ID="heir-f4" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -263,14 +263,14 @@ fs.writeFileSync(path.join(dir, 'up-f4-intent.md'), 'intent body' + String.fromC
 writeState('up-f4', createInitialState('up-f4', { cwd: '$upcwd', git_branch: 'main' }));
 markStep('up-f4', 'workflow_init', 'complete');
 " >/dev/null 2>&1
-    out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="heir-f4" \
+    out=$(env CLAUDE_CODE_SESSION_ID="heir-f4" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
         CLAUDE_SESSION_JSONL_PATH="$tmp/decoy.jsonl" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$CLI" --from up-f4 2>&1)
     local scratch
-    scratch=$(env -u CLAUDE_SESSION_ID OUT="$out" "$RWT" 30 node -e "
+    scratch=$(env OUT="$out" "$RWT" 30 node -e "
 let j = null;
 try { j = JSON.parse(process.env.OUT); } catch (e) {}
 const t = (j && (j.transcript_tail || (j.upstream && j.upstream.transcript_tail))) || {};
@@ -301,19 +301,19 @@ run_F5() {
     tmp="$(make_tmp)"; problems=""
     upcwd="$(node_path "$tmp/upstream-repo")"
     mkdir -p "$tmp/upstream-repo"
-    encoded=$(env -u CLAUDE_SESSION_ID "$RWT" 30 node -e "
+    encoded=$(env "$RWT" 30 node -e "
 const { _encodeCwd } = require('$AGENTS_DIR_NODE/hooks/lib/session-title');
 process.stdout.write(_encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
-    env -u CLAUDE_SESSION_ID "$RWT" 30 node -e "
+    env "$RWT" 30 node -e "
 const fs = require('fs');
 const filler = JSON.stringify({ type: 'user', sessionId: 'up-f5', message: { role: 'user', content: 'x'.repeat(400) } });
 const lines = [];
 for (let i = 0; i < 3000; i++) lines.push(filler);
 fs.writeFileSync('$(node_path "$tmp")/transcripts/$encoded/up-f5.jsonl', lines.join(String.fromCharCode(10)) + String.fromCharCode(10) + fs.readFileSync('$(node_path "$FIXTURE")', 'utf8'));
 " >/dev/null 2>&1
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="heir-f5" \
+    env CLAUDE_CODE_SESSION_ID="heir-f5" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -327,12 +327,12 @@ fs.writeFileSync(path.join(dir, 'up-f5-intent.md'), 'intent body' + String.fromC
 writeState('up-f5', createInitialState('up-f5', { cwd: '$upcwd', git_branch: 'main' }));
 markStep('up-f5', 'workflow_init', 'complete');
 " >/dev/null 2>&1
-    out=$(env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="heir-f5" \
+    out=$(env CLAUDE_CODE_SESSION_ID="heir-f5" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$CLI" --from up-f5 2>&1)
-    scratch=$(env -u CLAUDE_SESSION_ID OUT="$out" "$RWT" 30 node -e "
+    scratch=$(env OUT="$out" "$RWT" 30 node -e "
 let j = null;
 try { j = JSON.parse(process.env.OUT); } catch (e) {}
 const t = (j && (j.transcript_tail || (j.upstream && j.upstream.transcript_tail))) || {};
@@ -341,7 +341,7 @@ process.stdout.write(String(t.path || ''));
     if [ -z "$scratch" ] || [ ! -f "$scratch" ]; then
         problems="$problems no-scratch-file:'${out:0:200}'"
     else
-        size=$(env -u CLAUDE_SESSION_ID P="$scratch" "$RWT" 30 node -e "
+        size=$(env P="$scratch" "$RWT" 30 node -e "
 const fs = require('fs');
 process.stdout.write(String(fs.statSync(process.env.P).size));
 " 2>/dev/null)
@@ -352,7 +352,7 @@ process.stdout.write(String(fs.statSync(process.env.P).size));
             resume-tail-up-f5-*.txt) : ;;
             *) problems="$problems scratch-name:'$(basename "$scratch")'" ;;
         esac
-        out=$(env -u CLAUDE_SESSION_ID P="$scratch" "$RWT" 30 node -e "
+        out=$(env P="$scratch" "$RWT" 30 node -e "
 const os = require('os');
 const path = require('path');
 const rel = path.relative(os.tmpdir(), process.env.P);
@@ -377,13 +377,13 @@ run_F6() {
     tmp="$(make_tmp)"; problems=""
     upcwd="$(node_path "$tmp/upstream-repo")"
     mkdir -p "$tmp/upstream-repo"
-    encoded=$(env -u CLAUDE_SESSION_ID "$RWT" 30 node -e "
+    encoded=$(env "$RWT" 30 node -e "
 const { _encodeCwd } = require('$AGENTS_DIR_NODE/hooks/lib/session-title');
 process.stdout.write(_encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
     cp "$FIXTURE" "$tmp/transcripts/$encoded/up-f6.jsonl"
-    env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="heir-f6" \
+    env CLAUDE_CODE_SESSION_ID="heir-f6" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -402,7 +402,7 @@ writeState('nocwd-f6', createInitialState('nocwd-f6', {}));
 markStep('nocwd-f6', 'workflow_init', 'complete');
 " >/dev/null 2>&1
     from() {
-        env -u CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID="heir-f6" \
+        env CLAUDE_CODE_SESSION_ID="heir-f6" \
             WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
@@ -410,7 +410,7 @@ markStep('nocwd-f6', 'workflow_init', 'complete');
     }
     out="$(from up-f6)"
     case "$out" in *FEAT2218-TAIL-TOKEN*|*FEAT2218-UPSTREAM-TOKEN*) problems="$problems raw-transcript-text-leaked-into-stdout" ;; *) : ;; esac
-    verdict=$(env -u CLAUDE_SESSION_ID OUT="$out" "$RWT" 30 node -e "
+    verdict=$(env OUT="$out" "$RWT" 30 node -e "
 const problems = [];
 let j = null;
 try { j = JSON.parse(process.env.OUT); } catch (e) { problems.push('stdout-not-json'); }
@@ -449,7 +449,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 run_F7() {
     local out problems
     problems=""
-    out=$(env -u CLAUDE_SESSION_ID "$RWT" 30 node -e "
+    out=$(env "$RWT" 30 node -e "
 const path = require('path');
 const { _encodeCwd } = require('$AGENTS_DIR_NODE/hooks/lib/session-title');
 const { transcriptDirFor } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/candidates');

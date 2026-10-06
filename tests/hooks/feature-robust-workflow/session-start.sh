@@ -5,16 +5,7 @@
 echo ""
 echo "=== session-start: Normal cases ==="
 
-# Test 35: With CLAUDE_ENV_FILE set → file contains CLAUDE_SESSION_ID=abc123
-REPO=$(setup_repo)
-ENV_FILE="$TMPDIR_BASE/claude-env-$RANDOM.txt"
-touch "$ENV_FILE"
-echo '{"session_id":"abc123"}' | CLAUDE_PROJECT_DIR="$REPO" CLAUDE_ENV_FILE="$ENV_FILE" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null || true
-if grep -qx "CLAUDE_SESSION_ID=abc123" "$ENV_FILE" 2>/dev/null; then
-    pass "35. CLAUDE_ENV_FILE → file contains KEY=VALUE line (no export prefix)"
-else
-    fail "35. CLAUDE_ENV_FILE → expected exact line 'CLAUDE_SESSION_ID=abc123', file content: $(cat "$ENV_FILE" 2>/dev/null || echo '(not found)')"
-fi
+# Tests 35 and 39 (env-file relay) moved to tests/hooks/legacy-session-id-relay-purge.sh (#1091).
 
 # Test 36: stdout is valid JSON (may include additionalContext)
 REPO=$(setup_repo)
@@ -94,14 +85,6 @@ fi
 
 echo ""
 echo "=== session-start: Edge cases ==="
-
-# Test 39: CLAUDE_ENV_FILE not set → exits 0, no error
-REPO=$(setup_repo)
-if echo '{"session_id":"abc123"}' | CLAUDE_PROJECT_DIR="$REPO" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$SESSION_START" 2>/dev/null; then
-    pass "39. CLAUDE_ENV_FILE not set → exits 0"
-else
-    fail "39. CLAUDE_ENV_FILE not set → expected exit 0, got non-zero"
-fi
 
 # Test 40: .git/workflow/ directory doesn't exist → cleanup runs without error
 REPO=$(setup_repo)

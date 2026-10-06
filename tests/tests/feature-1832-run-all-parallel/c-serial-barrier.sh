@@ -16,7 +16,7 @@ fx_init "c-serial-barrier"
 export RUN_ALL_CACHE_DIR="$FX_CACHE_DIR"
 export WORKFLOW_STATE_DIR="$FX_TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$FX_TMP_ROOT/plans"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # serial_violations <log> <serial-id> — ordinary job ids whose active interval overlaps the
 # serial test's (empty = respected); unterminated jobs are treated as still running so a mid-flight kill can't hide.

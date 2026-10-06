@@ -156,8 +156,8 @@ run_resolver() {
 }
 
 # The env-explicit resolver runner every case above and below routes through.
-# CWD is a parameter (default $TMPDIR_BASE, outside any worktree) and the three
-# session vars plus CLAUDE_ENV_FILE / CLAUDE_TRANSCRIPT_BASE_DIR are pinned, so
+# CWD is a parameter (default $TMPDIR_BASE, outside any worktree) and the two
+# session vars plus CLAUDE_TRANSCRIPT_BASE_DIR are pinned, so
 # the developer's real host session can never leak into a fixture assertion
 # (rules/test/fixture-isolation.md "Unset inherited session IDs").
 #   $1: SESSION_ID   $2: CLAUDE_CODE_SESSION_ID   $3: process cwd
@@ -166,9 +166,7 @@ run_resolver_env() {
   (
     cd "${3:-$TMPDIR_BASE}" || exit 1
     SESSION_ID="$1" \
-    CLAUDE_SESSION_ID="" \
     CLAUDE_CODE_SESSION_ID="$2" \
-    CLAUDE_ENV_FILE="" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
@@ -226,9 +224,7 @@ run_select() {
   local out
   out="$(cd "$proc_cwd" && \
     SESSION_ID="" \
-    CLAUDE_SESSION_ID="" \
     CLAUDE_CODE_SESSION_ID="$effective_ccsid" \
-    CLAUDE_ENV_FILE="" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \

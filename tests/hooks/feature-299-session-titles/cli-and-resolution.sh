@@ -32,7 +32,7 @@ run_t12() {
 
   (
     unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
-    CLAUDE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$tmp_node" "$plans_node" 2>/dev/null || true
   )
 
@@ -66,7 +66,7 @@ run_t13() {
 
   (
     unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
-    CLAUDE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" add-pr "$tmp_node" "999" 2>/dev/null || true
   )
 
@@ -100,7 +100,7 @@ run_t14() {
 
   (
     unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
-    CLAUDE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" mark-complete "$tmp_node" 2>/dev/null || true
   )
 
@@ -114,54 +114,7 @@ run_t14() {
 }
 
 # ===========================================================================
-# T15: CLAUDE_ENV_FILE resolution → correct session ID used
-# ===========================================================================
-run_t15() {
-  local tmp_bash="$TMPDIR_BASE/t15"
-  local plans_bash="$tmp_bash/plans"
-  local transcript_bash="$tmp_bash/transcript"
-  local sid="t15-session-abc"
-  local env_file_bash="$tmp_bash/claude.env"
-  local tmp_node
-  tmp_node=$(to_node_path "$tmp_bash")
-  local plans_node
-  plans_node=$(to_node_path "$plans_bash")
-  local transcript_node
-  transcript_node=$(to_node_path "$transcript_bash")
-  local env_file_node
-  env_file_node=$(to_node_path "$env_file_bash")
-  local tdir_bash
-  tdir_bash=$(make_transcript_dir "$transcript_bash" "$tmp_node")
-  local jsonl_bash="$tdir_bash/${sid}.jsonl"
-  local jsonl_node
-  jsonl_node=$(to_node_path "$jsonl_bash")
-
-  make_intent "$plans_bash" "$sid" "# Intent
-
-## Issues
-
-- #33: Env file resolution test
-"
-  # Write env file with session ID
-  printf "CLAUDE_SESSION_ID=%s\n" "$sid" > "$env_file_bash"
-
-  (
-    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
-    CLAUDE_ENV_FILE="$env_file_node" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
-      run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$tmp_node" "$plans_node" 2>/dev/null || true
-  )
-
-  local title
-  title=$(read_last_title "$jsonl_node" "$sid")
-  if [ "$title" = "#33 Env file resolution test" ]; then
-    pass "T15: CLAUDE_ENV_FILE resolution → correct session ID"
-  else
-    fail "T15: CLAUDE_ENV_FILE resolution (got: '$title', expected: '#33 Env file resolution test')"
-  fi
-}
-
-# ===========================================================================
-# T16: Both CLAUDE_ENV_FILE and CLAUDE_SESSION_ID absent → mtime JSONL fallback
+# T16: CLAUDE_CODE_SESSION_ID absent → mtime JSONL fallback
 # ===========================================================================
 run_t16() {
   local tmp_bash="$TMPDIR_BASE/t16"
@@ -192,7 +145,7 @@ run_t16() {
 
   (
     cd "$tmp_bash"  # cd away from worktree so WORKTREE_NOTES.md is not found by resolveSessionId step 6
-    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_SESSION_ID
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
     CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$tmp_node" "$plans_node" 2>/dev/null || true
   )
@@ -249,7 +202,7 @@ run_t17() {
   # cwd arg wins over CLAUDE_PROJECT_DIR for encoding
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
@@ -316,7 +269,7 @@ run_t17b() {
   # Seed title using writeSetIssue so JSONL exists at other_cwd-encoded path
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
@@ -327,7 +280,7 @@ m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
   # Now call writeAddPr — cwd arg wins, PR# appended to cwd-encoded JSONL
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
@@ -394,7 +347,7 @@ run_t17c() {
   # Seed title using writeSetIssue so JSONL exists at other_cwd-encoded path
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
@@ -405,7 +358,7 @@ m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
   # Now call writeMarkComplete — cwd arg wins, ✓ prefix written to cwd-encoded JSONL
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
@@ -584,7 +537,7 @@ run_t17_cli() {
 
   (
     unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$other_cwd_node" "$plans_node" 2>/dev/null || true
   )
@@ -648,7 +601,7 @@ run_t17b_cli() {
   # Pre-seed the JSONL at other_cwd-encoded location using the library directly
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
@@ -659,7 +612,7 @@ m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
   # Call add-pr via CLI — CLAUDE_PROJECT_DIR must be ignored
   (
     unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" add-pr "$other_cwd_node" 99 2>/dev/null || true
   )
@@ -723,7 +676,7 @@ run_t17c_cli() {
   # Pre-seed the JSONL at other_cwd-encoded location using the library directly
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
@@ -734,7 +687,7 @@ m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
   # Call mark-complete via CLI — CLAUDE_PROJECT_DIR must be ignored
   (
     unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" mark-complete "$other_cwd_node" 2>/dev/null || true
   )
@@ -807,7 +760,7 @@ run_t17_idempotency() {
   # Step 1: Seed JSONL via writeSetIssue with CLAUDE_PROJECT_DIR=project_dir_A
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_a_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_a_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
@@ -819,7 +772,7 @@ m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
   #   Should read existing title from cwd-encoded path and append " PR #42"
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_b_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_b_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
@@ -850,7 +803,7 @@ m.writeAddPr('$sid', '$other_cwd_node', 42);
   # Step 3: Call writeAddPr again (idempotency) — should be a no-op, no duplicate " PR #42"
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_b_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_b_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
@@ -902,7 +855,7 @@ run_t17_special_chars() {
   # Use library directly — cwd has special characters (space, mixed case)
   (
     unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+    CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node -e "
 const m = require('$SESSION_TITLE_LIB');
 m.writeSetIssue('$sid', '$special_cwd_node', '$plans_node');
@@ -931,7 +884,6 @@ m.writeSetIssue('$sid', '$special_cwd_node', '$plans_node');
 run_t12
 run_t13
 run_t14
-run_t15
 run_t16
 run_t17
 run_t17b

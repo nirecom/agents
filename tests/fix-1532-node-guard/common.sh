@@ -1,14 +1,13 @@
 # Part of tests/fix-1532-node-guard-*.sh (sourced, not standalone).
 # Tests: bin/get-config-var, bin/confirm-off, bin/resolve-session-id, bin/resolve-worktree-path, bin/is-github-dotcom-remote
 # Tags: bin, polyglot-guard, node-misinvocation, invariance, scope:issue-specific, pwsh-not-required, TL2
-
-# Shared setup for the #1532 guard suite (targets, envelope literals, counters, helpers, isolation); sourced first by dispatch.sh.
-
-# TL3 gap: fs.writeSync diagnostics on async-stderr hosts (macOS/Linux; this host's pipes are synchronous) and installed
-# ~/.local/bin shims after an installer run. Mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: installer.
-
-# Not covered (review rounds 2-3, C4): repo paths with spaces, shell metacharacters or newlines — no group under rules/,
-# skills/ or hooks/ covers them and such a checkout is unsupported, so widening it here alone would be a lone special case.
+# Shared setup for the #1532 node-misinvocation guard suite: target list, envelope
+#   literals, counters, helpers, fixture isolation. Sourced first by dispatch.sh.
+# TL3 gap: fs.writeSync diagnostics on async stderr pipes (macOS/Linux), and ~/.local/bin
+#   installed shims carrying the envelope. Mitigation: WORKFLOW_USER_VERIFIED preflight
+#   via bin/check-verification-gate.sh category: installer.
+# Not covered (review rounds 2-3, C4): repo paths with spaces, metacharacters or
+#   newlines -- an unsupported layout repo-wide, so not special-cased here.
 
 set -u
 
@@ -105,7 +104,7 @@ trap 'cd / 2>/dev/null; rm -rf "$TESTTMP"' EXIT
 export WORKFLOW_STATE_DIR="$TESTTMP/workflow"
 export WORKFLOW_PLANS_DIR="$TESTTMP/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID SESSION_ID
+unset CLAUDE_CODE_SESSION_ID SESSION_ID
 
 # Portable timeout (macOS has no `timeout`) — rules/test/macos-timeout.md.
 # Defined after the pins above so no bin/ exec can run before isolation (#2512).
@@ -114,11 +113,11 @@ run_with_timeout() { # <seconds> <cmd> [args...]
 }
 
 # Everything else the targets branch on, unset explicitly rather than assumed
-# absent (review-tests C2). CLAUDE_ENV_FILE is priority 3 of resolveSessionId and
-# CLAUDE_TRANSCRIPT_BASE_DIR feeds the transcript scan, so a developer shell that
-# exports either turns "there is no session" into a claim about their machine.
+# absent (review-tests C2). CLAUDE_TRANSCRIPT_BASE_DIR feeds the transcript scan,
+# so a developer shell that exports it turns "there is no session" into a claim
+# about their machine.
 # The GETCFG_/CONFIRM_ names are the keys the B cases assert as absent.
-unset CLAUDE_ENV_FILE CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR
+unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR
 unset GETCFG_ABSENT_VAR GETCFG_T CONFIRM_T
 unset FIX1532_ABS_KEY FIX1532_ABS_OFF FIX1532_ABS_ON FIX1532_ABS_ABSENT
 unset FIX1532_DIRECT_KEY

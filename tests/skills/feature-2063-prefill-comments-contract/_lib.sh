@@ -37,7 +37,7 @@ trap 'rm -rf "$TMPD"' EXIT
 export WORKFLOW_STATE_DIR="$TMPD/state"
 WORKFLOW_PLANS_DIR="$(nodepath "$TMPD/plans")"
 export WORKFLOW_PLANS_DIR
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # The extracted command may reference $AGENTS_CONFIG_DIR; export it absolute so the
 # `bash -c` run never depends on MSYS2 path translation.

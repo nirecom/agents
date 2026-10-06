@@ -4,11 +4,11 @@
 echo ""
 echo "=== Part C: agents-repo gates (real checkers) ==="
 
-# C1a: session-id SSOT gate VIOLATION — a direct process.env.CLAUDE_SESSION_ID read
+# C1a: session-id SSOT gate VIOLATION — a direct process.env.CLAUDE_CODE_SESSION_ID read
 # in an in-scope tracked file must block with the session-id diagnostic.
 case_begin "C1a-session-id-violation" "hooks/lib/precommit-agents-repo-gates.sh"
 R="$TMPBASE/c1a"; mk_agents_fixture "$R"
-printf 'const x = process.env.CLAUDE_SESSION_ID;\n' > "$R/hooks/leak.js"
+printf 'const x = process.env.CLAUDE_CODE_SESSION_ID;\n' > "$R/hooks/leak.js"
 git -C "$R" add -- hooks/leak.js >/dev/null 2>&1
 run_agents_gates "$R" "$R"
 if [ "$GRC" -ne 1 ]; then
@@ -78,7 +78,7 @@ OTHER="$TMPBASE/c1e-other"; init_repo_bare "$OTHER"
 printf 'init\n' > "$OTHER/README.md"
 git -C "$OTHER" add README.md >/dev/null 2>&1
 git -C "$OTHER" commit -q -m initial >/dev/null 2>&1
-printf 'const x = process.env.CLAUDE_SESSION_ID;\n' > "$OTHER/leak.js"
+printf 'const x = process.env.CLAUDE_CODE_SESSION_ID;\n' > "$OTHER/leak.js"
 git -C "$OTHER" add -- leak.js >/dev/null 2>&1
 run_agents_gates "$OTHER" "$CFG"
 if [ "$GRC" -ne 0 ]; then

@@ -18,7 +18,7 @@ PASS=0; FAIL=0; SKIP=0
 
 TMP="$(make_tmp)"
 trap 'cd / 2>/dev/null; rm -rf "$TMP"' EXIT
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 harness_isolate "$TMP"
 mkdir -p "$TMP/empty-transcripts"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/empty-transcripts"

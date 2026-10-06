@@ -53,7 +53,7 @@ trap 'rm -rf "$BASE"' EXIT
 # writes can reach the developer's real workflow state.
 export WORKFLOW_STATE_DIR="$BASE/workflow"
 export WORKFLOW_PLANS_DIR="$BASE/plans"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 # C4 (config-dependent branches, skills/_shared/test-design.md): every variable

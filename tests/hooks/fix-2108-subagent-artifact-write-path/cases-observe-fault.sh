@@ -66,7 +66,7 @@ _of_probe() {
     local mode="$1"; shift
     (
         cd "$OF_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export WORKFLOW_STATE_DIR="$OF_WF" WORKFLOW_PLANS_DIR="$OF_WF"
         export OF_MODULE="$ACTIVE_SIDS_NODE" OF_FAULT_MODE="$mode"
         run_probe -r "$OF_PRELOAD_SH" "$@"
@@ -78,7 +78,7 @@ _of_hook() {
     local mode="$1" input="$2"
     (
         cd "$OF_CWD" || exit 1
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+        unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export AGENTS_CONFIG_DIR="$OF_CFG"
         export WORKFLOW_STATE_DIR="$OF_WF" WORKFLOW_PLANS_DIR="$OF_WF"
         export OF_MODULE="$ACTIVE_SIDS_NODE" OF_FAULT_MODE="$mode"

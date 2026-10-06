@@ -49,7 +49,7 @@ trap 'chmod -R u+rwX "$TMPDIR_BASE" 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 # Neutral CWD for the "outside any git repository" cases (never a git repo).
 NEUTRAL_DIR="$TMPDIR_BASE/neutral"
@@ -172,12 +172,19 @@ case_end
 case_begin "preconditions-frontmatter-constants" "bin/lib/test-frontmatter-constants.sh"
 if [[ -f "$FM_CONST" ]]; then pass "P0 bin/lib/test-frontmatter-constants.sh exists"; else fail "P0 bin/lib/test-frontmatter-constants.sh missing at $FM_CONST"; fi
 
-# P2 — the header-position contract constant (S1-1) is the SSOT the classifier
-# keys on. Read it out of the constants file rather than assuming the value.
-if grep -qE '^[[:space:]]*FRONTMATTER_HEADER_MAX_LINE=10([[:space:]]|$)' "$FM_CONST" 2>/dev/null; then
-    pass "P2 FRONTMATTER_HEADER_MAX_LINE=10 is defined in test-frontmatter-constants.sh"
+# P2 — the header-position constant derives from the registry headerMaxLines
+# (its SSOT); the constants file must carry no numeric literal for it.
+_p2_reg="$(node "$AGENTS_ROOT/bin/test-language-registry" --format shell 2>/dev/null | awk -F'\t' '$1=="headerMaxLines"{print $2}')"
+_p2_val="$(bash -c '. "$1" >/dev/null 2>&1; printf "%s" "${FRONTMATTER_HEADER_MAX_LINE:-}"' _ "$FM_CONST")"
+if [[ -n "$_p2_reg" && "$_p2_val" == "$_p2_reg" ]]; then
+    pass "P2 FRONTMATTER_HEADER_MAX_LINE equals registry headerMaxLines ($_p2_reg)"
 else
-    fail "P2 FRONTMATTER_HEADER_MAX_LINE=10 not defined in $FM_CONST (not implemented yet)"
+    fail "P2 FRONTMATTER_HEADER_MAX_LINE='$_p2_val' vs registry headerMaxLines='$_p2_reg'"
+fi
+if grep -qE '^[[:space:]]*(readonly[[:space:]]+|export[[:space:]]+)?FRONTMATTER_HEADER_MAX_LINE=[0-9]' "$FM_CONST" 2>/dev/null; then
+    fail "P2b test-frontmatter-constants.sh still hard-codes FRONTMATTER_HEADER_MAX_LINE"
+else
+    pass "P2b FRONTMATTER_HEADER_MAX_LINE carries no numeric literal"
 fi
 case_end
 
@@ -217,6 +224,8 @@ case_end
 . "$GROUP_DIR/escaping-hostile-names.sh"
 # shellcheck source=feature-2065-dup-group-inventory/verdict-coverage.sh
 . "$GROUP_DIR/verdict-coverage.sh"
+# shellcheck source=feature-2065-dup-group-inventory/comment-prefix.sh
+. "$GROUP_DIR/comment-prefix.sh"
 
 case_begin "suite-integrity" "bin/lib/test-dup-group.sh"
 

@@ -13,7 +13,7 @@ fx_init "e-reap-fallback"
 export RUN_ALL_CACHE_DIR="$FX_CACHE_DIR"
 export WORKFLOW_STATE_DIR="$FX_TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$FX_TMP_ROOT/plans"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # --- E1: the two reapers, and `auto`, agree byte for byte ------------------
 EQ="$(fx_new_root)"

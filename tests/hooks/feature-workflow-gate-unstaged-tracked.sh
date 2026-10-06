@@ -137,7 +137,7 @@ run_hook() {
     local payload="$1" wfdir="$2"
     HOOK_RC=0
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
-        env -u CLAUDE_ENV_FILE \
+        env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         node "$HOOK_JS" 2>&1)" || HOOK_RC=$?

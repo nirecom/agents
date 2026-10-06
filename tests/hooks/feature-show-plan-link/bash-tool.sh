@@ -1,4 +1,4 @@
-# Bash tool tests (T-BASH-1~9).
+# Bash tool tests (T-BASH-1~9) and command-tool siblings runInTerminal/runCommands (A7).
 # Sourced by ../feature-show-plan-link.sh — inherits all vars and functions.
 #
 # Bash branch — show-plan-link.js handling for Bash tool invocations of
@@ -20,7 +20,7 @@ T_BASH_1_JSON=$(run_with_timeout node -e "
   }));
 " "$PLANS_DIR")
 expect_message "T-BASH-1 Bash + valid assemble + exit_code=0 — systemMessage emitted" \
-  "$T_BASH_1_JSON" "Plan file written:"
+  "$T_BASH_1_JSON" "$OFF_LINE"
 
 # ── T-BASH-2: --source-kind detail targeting -detail.md ────────────────────
 echo "=== T-BASH-2: Bash --source-kind detail — systemMessage ==="
@@ -34,7 +34,7 @@ T_BASH_2_JSON=$(run_with_timeout node -e "
   }));
 " "$T_BASH_2_CMD")
 expect_message "T-BASH-2 Bash --source-kind detail — systemMessage emitted" \
-  "$T_BASH_2_JSON" "Plan file written:"
+  "$T_BASH_2_JSON" "$OFF_LINE"
 
 # ── T-BASH-3: Bash but no assemble-mandatory.sh — noop ─────────────────────
 echo "=== T-BASH-3: Bash without assemble-mandatory.sh — noop ==="
@@ -71,10 +71,11 @@ T_BASH_5_JSON=$(run_with_timeout node -e "
 expect_empty "T-BASH-5 Bash + assemble of flat intermediate-suffix path — noop (not final artifact)" \
   "$T_BASH_5_JSON"
 
-# ── T-BASH-6: Bash + SHOW_PLAN_LINK_NO_SPAWN=1 + CONFIRM_OUTLINE=on ────────
-echo "=== T-BASH-6: Bash + CONFIRM_OUTLINE=on + NO_SPAWN — marker written ==="
-T_BASH_6_MARKER="${NODE_TMPDIR}/show-plan-link-marker-bash6-$$"
-rm -f "$T_BASH_6_MARKER"
+# ── T-BASH-6: Bash + CONFIRM_OUTLINE=on — turn marker written (#563) ───────
+# #2513: the VS Code open path is gone; the turn marker under WORKFLOW_STATE_DIR
+# is the observable side effect (Stop guard input).
+echo "=== T-BASH-6: Bash + CONFIRM_OUTLINE=on — turn marker written ==="
+rm -f "$WORKFLOW_STATE_DIR"/test-sid-bash-6.confirm-plan-turn-*.json
 T_BASH_6_CMD="assemble-mandatory.sh --source-kind intent /a/intent.md /a/draft.md $PLANS_DIR/abc-outline.md"
 T_BASH_6_JSON=$(run_with_timeout node -e "
   process.stdout.write(JSON.stringify({
@@ -85,23 +86,21 @@ T_BASH_6_JSON=$(run_with_timeout node -e "
   }));
 " "$T_BASH_6_CMD")
 (
-  export SHOW_PLAN_LINK_NO_SPAWN=1
-  export SHOW_PLAN_LINK_MARKER_FILE="$T_BASH_6_MARKER"
   export CONFIRM_OUTLINE=on
-  export TERM_PROGRAM=vscode
   echo "$T_BASH_6_JSON" | run_with_timeout node "$HOOK" >/dev/null 2>&1
 )
-if [ -f "$T_BASH_6_MARKER" ]; then
-  pass "T-BASH-6 CONFIRM_OUTLINE=on + NO_SPAWN — marker file written"
-else
-  fail "T-BASH-6 CONFIRM_OUTLINE=on + NO_SPAWN — marker file NOT written at $T_BASH_6_MARKER"
-fi
-rm -f "$T_BASH_6_MARKER"
+T_BASH_6_ABS=$(run_with_timeout node -e "
+  const fs = require('fs'), path = require('path'); const dir = process.argv[1];
+  const f = fs.readdirSync(dir).find((n) => n.startsWith('test-sid-bash-6.confirm-plan-turn-') && n.endsWith('.json'));
+  if (f) process.stdout.write(String(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).absPath || ''));
+" "$WORKFLOW_STATE_DIR" 2>/dev/null)
+case "$T_BASH_6_ABS" in
+  *abc-outline.md) pass "T-BASH-6 CONFIRM_OUTLINE=on — turn marker written with the assemble destination" ;;
+  *) fail "T-BASH-6 CONFIRM_OUTLINE=on — turn marker missing or wrong absPath: '$T_BASH_6_ABS'" ;;
+esac
 
-# ── T-BASH-7: Bash + CONFIRM_OUTLINE=off — marker IS still written (#563) ──
+# ── T-BASH-7: Bash + CONFIRM_OUTLINE=off — breadcrumb still emitted (#563) ──
 echo "=== T-BASH-7: Bash + CONFIRM_OUTLINE=off — always-on after #563 ==="
-T_BASH_7_MARKER="${NODE_TMPDIR}/show-plan-link-marker-bash7-$$"
-rm -f "$T_BASH_7_MARKER"
 T_BASH_7_CMD="assemble-mandatory.sh --source-kind intent /a/intent.md /a/draft.md $PLANS_DIR/abc-outline.md"
 T_BASH_7_JSON=$(run_with_timeout node -e "
   process.stdout.write(JSON.stringify({
@@ -112,22 +111,18 @@ T_BASH_7_JSON=$(run_with_timeout node -e "
   }));
 " "$T_BASH_7_CMD")
 T_BASH_7_STDOUT=$(
-  export SHOW_PLAN_LINK_NO_SPAWN=1
-  export SHOW_PLAN_LINK_MARKER_FILE="$T_BASH_7_MARKER"
   export CONFIRM_OUTLINE=off
-  export TERM_PROGRAM=vscode
   echo "$T_BASH_7_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
 )
 T_BASH_7_MSG=$(echo "$T_BASH_7_STDOUT" | run_with_timeout node -e "
   let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
   process.stdout.write(d.systemMessage || '');
 " 2>/dev/null)
-if echo "$T_BASH_7_MSG" | grep -q "Plan file written:"; then
+if echo "$T_BASH_7_MSG" | grep -qF "Plan file: " && echo "$T_BASH_7_MSG" | grep -qF "$OFF_LINE"; then
   pass "T-BASH-7 CONFIRM_OUTLINE=off — systemMessage still emitted (#563 always-on)"
 else
   fail "T-BASH-7 CONFIRM_OUTLINE=off — systemMessage missing: $T_BASH_7_STDOUT"
 fi
-rm -f "$T_BASH_7_MARKER"
 
 # ── T-BASH-8: literal multi-line backslash-LF form from SKILL.md ──────────
 # Target is placed under PLANS_DIR so isFinalPlanArtifact accepts it.
@@ -161,3 +156,28 @@ T_BASH_9_JSON=$(run_with_timeout node -e "
 " "$PLANS_DIR")
 expect_message "T-BASH-9 new SKILL.md _shared direct form — systemMessage with session-ID path" \
   "$T_BASH_9_JSON" "20260617-002151-outline.md"
+
+# ── A7: runInTerminal / runCommands assemble — same path as Bash ──────────
+# Payload shapes per hooks/lib/tool-command-text.js commandTextOf: runInTerminal
+# reads tool_input.command (string); runCommands reads tool_input.commands (array).
+# a7_json <tool_name> <commands-field: command|commands> <dest> [exit_code]
+a7_json() {
+  run_with_timeout node -e "
+    const [tool, field, dest, rc] = process.argv.slice(1);
+    const cmd = 'bash \"\$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh\" --source-kind intent /a/intent.md ' + dest + ' ' + dest;
+    const input = field === 'commands' ? { commands: ['echo prelude', cmd] } : { command: cmd };
+    process.stdout.write(JSON.stringify({ tool_name: tool, tool_input: input,
+      tool_response: { exit_code: Number(rc || 0) }, session_id: 'test-sid-a7' }));
+  " "$1" "$2" "$3" "${4:-0}"
+}
+echo "=== A7: runInTerminal / runCommands invoking assemble-mandatory.sh ==="
+expect_message "A7a runInTerminal assemble -> breadcrumb with destination" \
+  "$(a7_json runInTerminal command "$PLANS_DIR/a7rit-outline.md")" "a7rit-outline.md"
+expect_message "A7b runInTerminal assemble -> sync path entered" \
+  "$(a7_json runInTerminal command "$PLANS_DIR/a7rit-outline.md")" "$OFF_LINE"
+expect_message "A7c runCommands (assemble in commands[1]) -> breadcrumb with destination" \
+  "$(a7_json runCommands commands "$PLANS_DIR/a7rc-detail.md")" "a7rc-detail.md"
+expect_message "A7d runCommands assemble -> sync path entered" \
+  "$(a7_json runCommands commands "$PLANS_DIR/a7rc-detail.md")" "$OFF_LINE"
+expect_empty "A7e runCommands assemble with exit_code=1 — noop" \
+  "$(a7_json runCommands commands "$PLANS_DIR/a7rc-detail.md" 1)"

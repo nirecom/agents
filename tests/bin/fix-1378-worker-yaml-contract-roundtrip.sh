@@ -69,7 +69,7 @@ mkdir -p "$TMPD/workflow-state" "$TMPD/workflow-plans"
 trap 'rm -rf "$TMPD"' EXIT
 export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 # The real WD-3 dispatch command string, exactly as /run-tests RNT-1 spells it.
 # It contains no `tests/run-all.sh` literal — that absence is the whole of #1798

@@ -172,7 +172,7 @@ run_c7() {
         export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         # No id may reach the CLI from ANY source, or the parent Claude Code
         # session's own id leaks in and this case silently stops testing.
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID WORKFLOW_SESSION_ID
+        unset CLAUDE_CODE_SESSION_ID WORKFLOW_SESSION_ID
         run_with_timeout 5 node "$CLI" --audit-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
     )
     rc=$?
@@ -195,7 +195,7 @@ run_c9() {
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
         export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
-        unset CLAUDE_SESSION_ID WORKFLOW_SESSION_ID
+        unset WORKFLOW_SESSION_ID
         export CLAUDE_CODE_SESSION_ID="$sid"
         run_with_timeout 5 node "$CLI" --set-audit-phase done >/dev/null 2>&1
     )
@@ -206,33 +206,6 @@ run_c9() {
         pass "C9: CLAUDE_CODE_SESSION_ID resolves the target session"
     else
         fail "C9: CLAUDE_CODE_SESSION_ID resolves the target session (rc=$rc, val=$val)"
-    fi
-}
-
-# C10 (#2270, CPR-ORTH with SP-20f / T-marker-9): BOTH session vars set to
-# different ids. SID_SOURCES.ccuuid must rank CLAUDE_CODE_SESSION_ID first, the
-# same order the SSOT resolver uses — otherwise the audit record lands in the
-# store of an identity the caller is not.
-run_c10() {
-    require_source "$CLI" "C10: CLAUDE_CODE_SESSION_ID outranks CLAUDE_SESSION_ID" || return
-    local tmp cc_sid legacy_sid cc_val legacy_val rc
-    tmp="$(mktemp -d)"; cc_sid="c10ccsid"; legacy_sid="c10legacysid"
-    (
-        export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
-        unset WORKFLOW_SESSION_ID
-        export CLAUDE_SESSION_ID="$legacy_sid"
-        export CLAUDE_CODE_SESSION_ID="$cc_sid"
-        run_with_timeout 5 node "$CLI" --set-audit-phase done >/dev/null 2>&1
-    )
-    rc=$?
-    cc_val=$(read_field "$tmp" "$cc_sid" "audit.audit_phase")
-    legacy_val=$(read_field "$tmp" "$legacy_sid" "audit.audit_phase")
-    rm -rf "$tmp"
-    if [ $rc -eq 0 ] && [ "$cc_val" = "\"done\"" ] && [ "$legacy_val" != "\"done\"" ]; then
-        pass "C10: both vars set -> CLAUDE_CODE_SESSION_ID names the store"
-    else
-        fail "C10: both vars set -> CLAUDE_CODE_SESSION_ID names the store (rc=$rc, cc=$cc_val, legacy=$legacy_val)"
     fi
 }
 
@@ -247,7 +220,6 @@ run_c11() {
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
         export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
-        unset CLAUDE_SESSION_ID
         export WORKFLOW_SESSION_ID="$wsid"
         export CLAUDE_CODE_SESSION_ID="$cc_sid"
         run_with_timeout 5 node "$CLI" --set-audit-phase done >/dev/null 2>&1
@@ -302,7 +274,7 @@ if (typeof w.writeAuditState === 'function') {
     fi
 }
 
-run_c1; run_c2; run_c3; run_c4; run_c5; run_c6; run_c7; run_c8; run_c9; run_c10; run_c11
+run_c1; run_c2; run_c3; run_c4; run_c5; run_c6; run_c7; run_c8; run_c9; run_c11
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

@@ -20,7 +20,7 @@ cc_repo() {
 # cc_run <repo> <cache> <mode:on|off> <args...> — run_ft from the neutral dir.
 cc_run() {
     local repo="$1" cache="$2" mode="$3"; shift 3
-    local -a extra=("RUN_ALL_CACHE_DIR=$cache" TEST_LANES_BUDGET=4)
+    local -a extra=("RUN_ALL_CACHE_DIR=$cache" TEST_MAX_JOBS_PER_HOST=4)
     [ "$mode" = "off" ] && extra+=(FIND_TESTS_CORPUS_CACHE=off)
     run_ft "$NEUTRAL_DIR" "${extra[@]}" -- --root "$repo" "$@"
 }
@@ -56,7 +56,7 @@ else
     fail "C1 cache file missing or malformed: [$_files]"
 fi
 cc_run "$CC_R" "$TMPDIR_BASE/c1-off" off "${QS[@]}"; C1_OFF="$OUT"
-fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C1C" TEST_LANES_BUDGET=4 -- --root "$CC_R" "${QS[@]}"
+fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C1C" TEST_MAX_JOBS_PER_HOST=4 -- --root "$CC_R" "${QS[@]}"
 assert_eq "C1 the second run is a hit (awk launched 0 times)" "0" "$(fc_count awk)"
 assert_eq "C1 the hit run exits 0" "0" "$RC"
 if [ -n "$C1_OFF" ] && [ "$OUT" = "$C1_OFF" ]; then
@@ -114,14 +114,14 @@ case_ran C2
 # ── C3 the parser libs are part of the key ──────────────────────────────────
 C3L="$TMPDIR_BASE/c3-logic"
 mkdir -p "$C3L"
-for _b in test-route-destination.sh test-dup-group.sh test-frontmatter-fix.sh test-frontmatter-constants.sh test-corpus-cache.sh; do
+for _b in test-route-destination.sh test-dup-group.sh test-frontmatter-fix.sh test-frontmatter-constants.sh test-corpus-cache.sh test-language-registry.sh; do
     cp "$AGENTS_ROOT/bin/lib/$_b" "$C3L/$_b" 2>/dev/null || true
 done
 C3C="$TMPDIR_BASE/c3-cache"
-run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3C" TEST_LANES_BUDGET=4 "TCC_LOGIC_DIR=$C3L" -- --root "$CC_R" "${QS[@]}"
+run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3C" TEST_MAX_JOBS_PER_HOST=4 "TCC_LOGIC_DIR=$C3L" -- --root "$CC_R" "${QS[@]}"
 _d1="$(cc_ndigests "$C3C")"
 printf '#\n' >> "$C3L/test-corpus-cache.sh"
-run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3C" TEST_LANES_BUDGET=4 "TCC_LOGIC_DIR=$C3L" -- --root "$CC_R" "${QS[@]}"
+run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3C" TEST_MAX_JOBS_PER_HOST=4 "TCC_LOGIC_DIR=$C3L" -- --root "$CC_R" "${QS[@]}"
 _d2="$(cc_ndigests "$C3C")"
 if [ "$_d1" = "1" ] && [ "$_d2" = "2" ]; then
     pass "C3 a one-byte change to a TCC_LOGIC_DIR lib changes the digest"
@@ -129,6 +129,44 @@ else
     fail "C3 lib change did not re-key the cache — digests before=$_d1 after=$_d2 (want 1 then 2)"
 fi
 case_ran C3
+
+# ── C3b the registry table and its reader are part of the key ──────────────
+C3G="$TMPDIR_BASE/c3-registry"
+mkdir -p "$C3G"
+for _b in test-language-registry.json test-language-registry.js; do
+    cp "$AGENTS_ROOT/hooks/lib/$_b" "$C3G/$_b" 2>/dev/null || true
+done
+C3GC="$TMPDIR_BASE/c3g-cache"
+run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3GC" TEST_LANES_BUDGET=4 "TCC_REGISTRY_DIR=$C3G" -- --root "$CC_R" "${QS[@]}"
+_g1="$(cc_ndigests "$C3GC")"; _go1="$OUT"
+printf ' ' >> "$C3G/test-language-registry.json"
+run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3GC" TEST_LANES_BUDGET=4 "TCC_REGISTRY_DIR=$C3G" -- --root "$CC_R" "${QS[@]}"
+_g2="$(cc_ndigests "$C3GC")"
+if [ -f "$C3G/test-language-registry.json" ] && [ "$_g1" = "1" ] && [ "$_g2" = "2" ]; then
+    pass "C3b a one-byte change to the TCC_REGISTRY_DIR table changes the digest"
+else
+    fail "C3b registry change did not re-key the cache — digests before=$_g1 after=$_g2 (want 1 then 2)"
+fi
+# Only the reader changes now (the table stays as the previous run left it).
+printf '\n' >> "$C3G/test-language-registry.js"
+run_ft "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3GC" TEST_LANES_BUDGET=4 "TCC_REGISTRY_DIR=$C3G" -- --root "$CC_R" "${QS[@]}"
+_g3="$(cc_ndigests "$C3GC")"
+if [ -f "$C3G/test-language-registry.js" ] && [ "$_g2" = "2" ] && [ "$_g3" = "3" ]; then
+    pass "C3b a one-byte change to the TCC_REGISTRY_DIR reader alone changes the digest"
+else
+    fail "C3b reader change did not re-key the cache — digests before=$_g2 after=$_g3 (want 2 then 3)"
+fi
+# The same reader again: a cache hit (no awk launched, no new digest) with the very same selection.
+_go3="$OUT"
+fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C3GC" TEST_LANES_BUDGET=4 "TCC_REGISTRY_DIR=$C3G" -- --root "$CC_R" "${QS[@]}"
+assert_eq "C3b the repeat run is a hit (awk 0)" "0" "$(fc_count awk)"
+_g4="$(cc_ndigests "$C3GC")"
+if [ "$RC" -eq 0 ] && [ "$_g3" = "3" ] && [ "$_g4" = "3" ] && [ -n "$OUT" ] && [ "$OUT" = "$_go3" ] && [ "$OUT" = "$_go1" ]; then
+    pass "C3b a repeat run with the same reader hits the cache and selects byte-identically"
+else
+    fail "C3b repeat run with the same reader — rc=$RC digests=$_g3 then $_g4 (want 3 then 3) same-as-reader-run=$([ "$OUT" = "$_go3" ] && echo yes || echo no) same-as-first-run=$([ "$OUT" = "$_go1" ] && echo yes || echo no) empty=$([ -z "$OUT" ] && echo yes || echo no)"
+fi
+case_ran C3b
 
 # ── C4 an LF in a corpus path disables the write, never the answer ──────────
 C4R="$(cc_repo)"
@@ -177,7 +215,7 @@ if [ -n "$C5_NAME" ]; then
         else
             fail "C5 $_kind: no valid cache file after the run [$_last]"
         fi
-        fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C5C" TEST_LANES_BUDGET=4 -- --root "$CC_R" "${QS[@]}"
+        fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C5C" TEST_MAX_JOBS_PER_HOST=4 -- --root "$CC_R" "${QS[@]}"
         assert_eq "C5 $_kind: the next run is a hit (awk 0)" "0" "$(fc_count awk)"
         if [ "$RC" -eq 0 ] && [ "$OUT" = "$C5_OFF" ]; then
             pass "C5 $_kind: the hit run exits 0 with the uncached answer"
@@ -226,7 +264,7 @@ git -C "$C8R" worktree add -q "$TMPDIR_BASE/c8-wt1" -b c8w1 >/dev/null 2>&1
 git -C "$C8R" worktree add -q "$TMPDIR_BASE/c8-wt2" -b c8w2 >/dev/null 2>&1
 C8C="$TMPDIR_BASE/c8-cache"
 cc_run "$TMPDIR_BASE/c8-wt1" "$C8C" on "${QS[@]}"; _o1="$OUT"
-fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C8C" TEST_LANES_BUDGET=4 -- --root "$TMPDIR_BASE/c8-wt2" "${QS[@]}"
+fork_run "$NEUTRAL_DIR" "RUN_ALL_CACHE_DIR=$C8C" TEST_MAX_JOBS_PER_HOST=4 -- --root "$TMPDIR_BASE/c8-wt2" "${QS[@]}"
 if [ "$RC" -eq 0 ] && [ "$(cc_ndigests "$C8C")" = "1" ] && [ "$(fc_count awk)" = "0" ] && [ "$OUT" = "$_o1" ]; then
     pass "C8 the second worktree reuses the first worktree's digest and hits"
 else
@@ -265,7 +303,7 @@ case_ran C9
 # ── C10 a relative RUN_ALL_CACHE_DIR resolves against the caller's cwd ──────
 C10CWD="$TMPDIR_BASE/c10-cwd"
 mkdir -p "$C10CWD"
-run_ft "$C10CWD" RUN_ALL_CACHE_DIR=rel TEST_LANES_BUDGET=4 -- --root "$CC_R" "${QS[@]}"
+run_ft "$C10CWD" RUN_ALL_CACHE_DIR=rel TEST_MAX_JOBS_PER_HOST=4 -- --root "$CC_R" "${QS[@]}"
 if [ "$RC" -eq 0 ] && [ -d "$C10CWD/rel/corpus" ] && [ -d "$C10CWD/rel/slots" ] && [ ! -e "$CC_R/rel" ]; then
     pass "C10 corpus/ and slots/ land under <caller cwd>/rel, not under --root"
 else

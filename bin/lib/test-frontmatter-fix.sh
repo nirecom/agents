@@ -5,7 +5,7 @@
 
 _TFF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=test-frontmatter-constants.sh
-source "$_TFF_DIR/test-frontmatter-constants.sh"
+source "$_TFF_DIR/test-frontmatter-constants.sh" || return 1
 
 # find_renamed_path <old_path> — prints the new path if <old_path> was renamed
 # (git rename tracking), else empty.
@@ -75,7 +75,7 @@ _is_root_like_token() {
 # the FIRST matching line (unchanged rule) and sets TFM_PRESENT,
 # TFM_TESTS_CSV (trimmed), TFM_TOKENS[] (comma-split, trimmed, empties dropped),
 # TFM_EMPTY_ELEMENT (1 when the CSV held an empty element: `a,,b`, `,a`, `a,`),
-# TFM_HEADER_COUNT (`^# Tests:` line count) and TFM_HEADER_LINENO (first match,
+# TFM_HEADER_COUNT (`Tests:` header line count) and TFM_HEADER_LINENO (first match,
 # 0 when absent). The last three are structural metadata read only by --dup-groups.
 tfm_parse_tests_line() {
   local matches
@@ -84,9 +84,12 @@ tfm_parse_tests_line() {
 }
 
 # tfm_tests_line_matches <file> — prints the `lineno:line` rows of every
-# `# Tests:` header line; the single owner of that match rule.
+# `<prefix> Tests:` header line, <prefix> being the file's registry
+# header.commentPrefix; the single owner of that match rule. The prefix is
+# matched as a fixed string, never as a regex.
 tfm_tests_line_matches() {
-  grep -n -E '^# Tests:' "$1" 2>/dev/null || true
+  tlr_comment_prefix "$1" >/dev/null
+  LC_ALL=C awk -v p="$TLR_COMMENT_PREFIX Tests:" 'index($0, p) == 1 { print FNR ":" $0 }' "$1" 2>/dev/null || true
 }
 
 # _tfm_trim <string> — sets _TFM_TRIMMED; the fork-free twin of
@@ -98,9 +101,9 @@ _tfm_trim() {
   _TFM_TRIMMED="$t"
 }
 
-# tfm_parse_tests_matches <grep -n output> — the fork-free body of
-# tfm_parse_tests_line, fed `lineno:line` rows for `^# Tests:` matches so a
-# corpus scan can collect every file's matches in one process (#2455).
+# tfm_parse_tests_matches <lineno:line rows> — the fork-free body of
+# tfm_parse_tests_line, fed `lineno:line` rows for `<prefix> Tests:` matches so
+# a corpus scan can collect every file's matches in one process (#2455).
 tfm_parse_tests_matches() {
   local matches="${1-}"
   TFM_PRESENT=0
@@ -122,7 +125,7 @@ tfm_parse_tests_matches() {
   TFM_PRESENT=1
 
   local csv="${first#*:}"
-  csv="${csv#\# Tests:}"
+  csv="${csv#*Tests:}"
   _tfm_trim "$csv"
   csv="$_TFM_TRIMMED"
   TFM_TESTS_CSV="$csv"
@@ -302,11 +305,12 @@ _rebuild_tests_value() {
   printf '%s' "$joined"
 }
 
-# _fix_headers_apply <file> — atomically rewrites the `# Tests:` header,
-# preserving the file mode. Blocked cases print a SKIP_* line and leave the
-# file unchanged.
+# _fix_headers_apply <file> [<dst>] — atomically rewrites the `# Tests:` header,
+# preserving the file mode. Classifies <file> (PWD = repo root) and writes the
+# result to <dst> (default <file>). Blocked cases print a SKIP_* line and leave
+# both unchanged.
 _fix_headers_apply() {
-  local file="$1"
+  local file="$1" dst="${2:-$1}"
   classify_tests_header "$file"
 
   if [[ "$CHR_MULTI_PAREN" -eq 1 ]]; then
@@ -326,10 +330,12 @@ _fix_headers_apply() {
   [[ -z "$new_value" ]] && return 0
 
   local tmp; tmp="$(mktemp)"
-  local replaced=0 line
+  local replaced=0 line pfx
+  tlr_comment_prefix "$file" >/dev/null
+  pfx="$TLR_COMMENT_PREFIX"
   while IFS= read -r line || [[ -n "$line" ]]; do
-    if [[ "$replaced" -eq 0 && "$line" == '# Tests:'* ]]; then
-      printf '# Tests: %s\n' "$new_value" >> "$tmp"
+    if [[ "$replaced" -eq 0 && "$line" == "$pfx Tests:"* ]]; then
+      printf '%s Tests: %s\n' "$pfx" "$new_value" >> "$tmp"
       replaced=1
     else
       printf '%s\n' "$line" >> "$tmp"
@@ -338,12 +344,12 @@ _fix_headers_apply() {
 
   # Preserve file mode.
   local mode
-  mode="$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file" 2>/dev/null || true)"
+  mode="$(stat -c '%a' "$dst" 2>/dev/null || stat -f '%Lp' "$dst" 2>/dev/null || true)"
   if [[ -n "$mode" ]]; then
     chmod "$mode" "$tmp" 2>/dev/null || true
   fi
-  [[ -x "$file" ]] && { chmod +x "$tmp" 2>/dev/null || true; }
+  [[ -x "$dst" ]] && { chmod +x "$tmp" 2>/dev/null || true; }
 
-  mv "$tmp" "$file"
-  echo "APPLIED: ${file}: # Tests: ${new_value}"
+  mv "$tmp" "$dst"
+  echo "APPLIED: ${file}: ${pfx} Tests: ${new_value}"
 }

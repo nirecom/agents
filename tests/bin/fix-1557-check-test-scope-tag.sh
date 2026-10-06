@@ -2,17 +2,9 @@
 # Tests: bin/check-test-frontmatter.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
 #
-# TL2 test of bin/check-test-frontmatter.sh, which enforces that every test
-# file under tests/ carries a `# Tags: scope:...` tag. Covers --staged
-# (explicit file list) and --all (repo-wide fixture scan) modes. Source
-# under test is being created by #1557 — cases go green once the script
-# lands.
-#
-# TL3 gap (what this test does NOT catch):
-# - Real `git diff --cached` staged-file discovery in --staged mode
-#   (this test passes the file list explicitly to stay hermetic)
-# Closest-to-action mitigation: pre-commit hook exercises the real staged
-# path before commit.
+# TL2: the `# Tags: scope:...` check of bin/check-test-frontmatter.sh, --staged and --all.
+# TL3 gap: real `git diff --cached` staged-file discovery (file lists are passed
+# explicitly to stay hermetic); the pre-commit hook exercises the real staged path.
 
 set -euo pipefail
 
@@ -176,6 +168,35 @@ else
   fail "TC9 scope:issue-specific accepted in staged mode" "rc=$RC err=<<$ERR>>"
 fi
 rm -rf "$STAGE9_DIR"
+
+# TC10: --all reads each language's own header.commentPrefix (#2500). A fixture
+# checkout whose table adds slash-lang (*.slt, "//"): a `//` header satisfies a .slt
+# file and a `#` line there is only a decoy; bash keeps `#` and ignores a `//` line.
+# shellcheck source=test-language-registry/slash-header-fixture.sh
+. "$SCRIPT_DIR/test-language-registry/slash-header-fixture.sh"
+SLASH_DIR="$(mktemp -d)"
+SLASH_CO="$SLASH_DIR/co"
+slash_fx_checkout "$SLASH_CO" "$REPO_ROOT" bin/check-test-frontmatter.sh
+slash_write "$SLASH_CO/tests/bin/a.slt" '// Tests: bin/foo.sh' '// Tags: TL2, scope:common' 'echo hi'
+slash_write "$SLASH_CO/tests/bin/b.slt" '# Tests: bin/foo.sh' '# Tags: TL2, scope:common' 'echo hi'
+slash_write "$SLASH_CO/tests/bin/d.sh" '#!/usr/bin/env bash' '# Tests: bin/foo.sh' '# Tags: TL2, scope:common' 'echo hi'
+slash_write "$SLASH_CO/tests/bin/e.sh" '#!/usr/bin/env bash' '// Tests: bin/foo.sh' '// Tags: TL2, scope:common' 'echo hi'
+set +e
+SLASH_ERR="$(cd "$SLASH_CO" && bash "$SLASH_CO/bin/check-test-frontmatter.sh" --all "$SLASH_CO" 2>&1 >/dev/null)"
+RC=$?
+set -e
+SLASH_GOT="$(printf '%s\n' "$SLASH_ERR" | LC_ALL=C sort)"
+SLASH_WANT="$(printf '%s\n' \
+  'MISSING_SCOPE_TAG: tests/bin/b.slt (no # Tags: line)' \
+  'MISSING_SCOPE_TAG: tests/bin/e.sh (no # Tags: line)' \
+  'MISSING_TESTS_HEADER: tests/bin/b.slt' \
+  'MISSING_TESTS_HEADER: tests/bin/e.sh' | LC_ALL=C sort)"
+if [[ $RC -eq 1 && "$SLASH_GOT" == "$SLASH_WANT" ]]; then
+  pass "TC10 --all matches // headers for .slt and # for .sh; the other prefix is a decoy"
+else
+  fail "TC10 --all matches // headers for .slt and # for .sh; the other prefix is a decoy" "rc=$RC err=<<$SLASH_ERR>>"
+fi
+rm -rf "$SLASH_DIR"
 
 # --- Summary ---------------------------------------------------------------
 echo "1..$((PASS+FAIL))"

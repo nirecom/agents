@@ -55,7 +55,7 @@ trap 'rm -rf "$tmp"' EXIT
 export WORKFLOW_STATE_DIR="$tmp/workflow-state"; mkdir -p "$WORKFLOW_STATE_DIR"
 export WORKFLOW_PLANS_DIR="$tmp/plans"; mkdir -p "$WORKFLOW_PLANS_DIR"
 # Never inherit the outer Claude Code session into resolveSessionId().
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # --- module / barrel node paths --------------------------------------------
 CR_MOD_N="$(to_node_path "$AGENTS_DIR/hooks/workflow-state/complexity-routing.js")"

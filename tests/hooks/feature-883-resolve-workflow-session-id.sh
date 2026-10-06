@@ -40,36 +40,25 @@ require_function() {
 TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toString()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'));" 2>/dev/null)
 YESTERDAY=$(node -e "const d=new Date(Date.now()-86400000); process.stdout.write(d.getFullYear().toString()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'));" 2>/dev/null)
 
-# Invoke resolveWorkflowSessionId({}) with WORKFLOW_PLANS_DIR=$1, (optional) CLAUDE_ENV_FILE=$2,
-# and (optional) work_dir=$3 (defaults to $1). process.cwd() is set to work_dir so Priority 1
-# (WORKTREE_NOTES.md) can be controlled per-test without interference from the repo CWD.
+# Invoke resolveWorkflowSessionId({}) with WORKFLOW_PLANS_DIR=$1 and (optional) work_dir=$2
+# (defaults to $1). process.cwd() is set to work_dir so Priority 1 (WORKTREE_NOTES.md) can be
+# controlled per-test. CLAUDE_CODE_SESSION_ID is unset so the host session cannot leak in.
 # Stdout: 'NULL' or the resolved sid.
 call_resolve() {
-    local plans_dir="$1" env_file="${2:-}" work_dir="${3:-$1}"
-    if [ -n "$env_file" ]; then
-        (cd "$work_dir" && WORKFLOW_PLANS_DIR="$plans_dir" CLAUDE_ENV_FILE="$env_file" \
-            run_with_timeout 5 env -u CLAUDE_CODE_SESSION_ID node -e "
+    local plans_dir="$1" work_dir="${2:-$1}"
+    (cd "$work_dir" && WORKFLOW_PLANS_DIR="$plans_dir" \
+        run_with_timeout 5 env -u CLAUDE_CODE_SESSION_ID node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
 process.stdout.write(r == null ? 'NULL' : r);
 " 2>/dev/null)
-    else
-        # Explicitly unset CLAUDE_ENV_FILE and CLAUDE_CODE_SESSION_ID so leaked env
-        # vars from the host shell cannot influence the test outcome.
-        (cd "$work_dir" && WORKFLOW_PLANS_DIR="$plans_dir" \
-            run_with_timeout 5 env -u CLAUDE_ENV_FILE -u CLAUDE_CODE_SESSION_ID node -e "
-const m = require('$RESOLVE_WSID_NODE');
-const r = m.resolveWorkflowSessionId({});
-process.stdout.write(r == null ? 'NULL' : r);
-" 2>/dev/null)
-    fi
 }
 
 # Variant of call_resolve that injects CLAUDE_CODE_SESSION_ID explicitly.
 call_resolve_with_code_sid() {
     local plans_dir="$1" code_sid="$2" work_dir="${3:-$1}"
     (cd "$work_dir" && WORKFLOW_PLANS_DIR="$plans_dir" CLAUDE_CODE_SESSION_ID="$code_sid" \
-        run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
+        run_with_timeout 5 node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
 process.stdout.write(r == null ? 'NULL' : r);
@@ -100,7 +89,7 @@ run_r0() {
     # Also add a context.md with a different id to confirm it is NOT picked.
     printf "Session-ID: %s-r0session\n" "$TODAY" > "$tmp/WORKTREE_NOTES.md"
     : > "$tmp/${TODAY}-other-context.md"
-    out=$(call_resolve "$tmp" "" "$tmp")
+    out=$(call_resolve "$tmp" "$tmp")
     rm -rf "$tmp"
     if [ "$out" = "${TODAY}-r0session" ]; then
         pass "R0: WORKTREE_NOTES.md Session-ID takes priority"
@@ -125,7 +114,7 @@ run_r0b() {
     # WORKTREE_NOTES.md in main repo root (git common-dir parent).
     printf "Session-ID: %s\n" "$sid" > "$main_repo/WORKTREE_NOTES.md"
     # Run from linked worktree: CWD has no WORKTREE_NOTES.md; common-dir parent does.
-    out=$(call_resolve "$plans_tmp" "" "$linked_wt")
+    out=$(call_resolve "$plans_tmp" "$linked_wt")
     rm -rf "$main_repo" "$plans_tmp"
     if [ "$out" = "$sid" ]; then
         pass "R0b: WORKTREE_NOTES.md via git common-dir (linked worktree)"
@@ -134,41 +123,7 @@ run_r0b() {
     fi
 }
 
-run_r1() {
-    require_function "resolveWorkflowSessionId" "R1: env+intent happy path" || return
-    local tmp out envfile
-    tmp="$(mktemp -d)"
-    envfile="$tmp/claude.env"
-    echo "CLAUDE_SESSION_ID=cc-uuid" > "$envfile"
-    : > "$tmp/cc-uuid-intent.md"
-    out=$(call_resolve "$tmp" "$envfile")
-    rm -rf "$tmp"
-    if [ "$out" = "cc-uuid" ]; then
-        pass "R1: env+intent happy path"
-    else
-        fail "R1: env+intent happy path (out=$out)"
-    fi
-}
-
-run_r2() {
-    require_function "resolveWorkflowSessionId" "R2: env present but no intent.md, 2 stubs (no ccBucket=0) -> NULL" || return
-    local tmp out envfile
-    tmp="$(mktemp -d)"
-    envfile="$tmp/claude.env"
-    echo "CLAUDE_SESSION_ID=cc-uuid" > "$envfile"
-    # NOTE: no cc-uuid-intent.md — force fallthrough to mtime scan.
-    # Both stubs have ccBucket=1 (cc-uuid not in context.md content); gate fires → NULL.
-    : > "$tmp/${TODAY}-early-context.md"
-    : > "$tmp/${TODAY}-later-context.md"
-    set_mtimes "$tmp/${TODAY}-early-context.md" -4 "$tmp/${TODAY}-later-context.md" -2
-    out=$(call_resolve "$tmp" "$envfile")
-    rm -rf "$tmp"
-    if [ "$out" = "NULL" ]; then
-        pass "R2: env present but no intent.md, 2 stubs (no ccBucket=0) -> NULL"
-    else
-        fail "R2: env present but no intent.md, 2 stubs (no ccBucket=0) -> NULL (out=$out)"
-    fi
-}
+# R1 / R2 / R14 (env-file relay Priority 3) were retired with that priority in #1091.
 
 run_r3() {
     require_function "resolveWorkflowSessionId" "R3: single same-day context.md" || return
@@ -224,7 +179,7 @@ run_r6() {
     tmp="$(mktemp -d)"
     bogus="$tmp/does-not-exist"
     # work_dir=$tmp (exists) so cd succeeds; plans_dir=bogus so readdirSync returns null.
-    out=$(call_resolve "$bogus" "" "$tmp")
+    out=$(call_resolve "$bogus" "$tmp")
     rm -rf "$tmp"
     if [ "$out" = "NULL" ]; then
         pass "R6: nonexistent plans-dir -> null (no throw)"
@@ -360,7 +315,7 @@ run_r11() {
     # resolver falls through Priority 1 -> Priority 3 depth-scan). The stub cc
     # sid validates against SESSION_ID_RE but has no final-report-env.json;
     # only the resolver-found active sid carries the final-report-env marker.
-    armed_at_out=$(cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
+    armed_at_out=$(cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 env -u CLAUDE_CODE_SESSION_ID node -e "
 const m = require('$SUPERVISOR_STATE_WRITER_NODE');
 const state = { layer2: { alert_armed_at: null, alert_phase: null } };
 m.ensureAlertScheduled(state, '${TODAY}-stub-r11cc');
@@ -386,7 +341,7 @@ run_r12() {
     : > "$tmp/${TODAY}r12active-intent.md"
     # Use call_resolve with work_dir=$tmp so P1 reads WORKTREE_NOTES.md from $tmp,
     # finds the invalid Session-ID, returns null, and P3 scans $tmp for context.md.
-    out=$(call_resolve "$tmp" "" "$tmp")
+    out=$(call_resolve "$tmp" "$tmp")
     rm -rf "$tmp"
     if [ "$out" = "${TODAY}r12active" ]; then
         pass "R12: invalid charset in Session-ID value (P1 path-traversal guard) -> P3 fallback"
@@ -415,24 +370,6 @@ fs.utimesSync(process.argv[2],t,t);
         pass "R13: 2 stubs identical mtime, no env (both ccBucket=1) -> NULL"
     else
         fail "R13: 2 stubs identical mtime, no env (both ccBucket=1) -> NULL (out=$out)"
-    fi
-}
-
-run_r14() {
-    require_function "resolveWorkflowSessionId" "R14: CLAUDE_SESSION_ID invalid charset falls through to P3" || return
-    local tmp envfile out
-    tmp="$(mktemp -d)"
-    envfile="$tmp/test.env"
-    # Contains '!' which fails /^[A-Za-z0-9_-]+$/ → P2 skips, P3 scans.
-    printf "CLAUDE_SESSION_ID=%s!invalid\n" "$TODAY" > "$envfile"
-    : > "$tmp/${TODAY}r14active-context.md"
-    : > "$tmp/${TODAY}r14active-intent.md"
-    out=$(call_resolve "$tmp" "$envfile" "$tmp")
-    rm -rf "$tmp"
-    if [ "$out" = "${TODAY}r14active" ]; then
-        pass "R14: CLAUDE_SESSION_ID invalid charset falls through to P3"
-    else
-        fail "R14: CLAUDE_SESSION_ID invalid charset falls through to P3 (out=$out)"
     fi
 }
 
@@ -471,7 +408,7 @@ run_r16() {
     printf "Session-ID: \n" > "$tmp/WORKTREE_NOTES.md"
     : > "$tmp/${TODAY}r16active-context.md"
     : > "$tmp/${TODAY}r16active-intent.md"
-    out=$(call_resolve "$tmp" "" "$tmp")
+    out=$(call_resolve "$tmp" "$tmp")
     rm -rf "$tmp"
     if [ "$out" = "${TODAY}r16active" ]; then
         pass "R16: whitespace-only Session-ID (P1 falls through to P3)"
@@ -482,8 +419,6 @@ run_r16() {
 
 run_r0
 run_r0b
-run_r1
-run_r2
 run_r3
 run_r4
 run_r5
@@ -495,7 +430,6 @@ run_r10
 run_r11
 run_r12
 run_r13
-run_r14
 run_r15
 run_r16
 
@@ -575,7 +509,7 @@ run_r19() {
         "$tmp/${TODAY}-r19active-context.md" -8 \
         "$tmp/${TODAY}-r19active-intent.md" -8 \
         "$tmp/${TODAY}-r19stub-context.md" -2
-    out=$(call_resolve "$tmp" "" "$tmp")
+    out=$(call_resolve "$tmp" "$tmp")
     rm -rf "$tmp"
     if [ "$out" = "NULL" ]; then
         pass "R19: CLAUDE_CODE_SESSION_ID unset, active+stub, no env (both ccBucket=1) -> NULL"
@@ -641,15 +575,14 @@ run_r21
 # Gate: !candidates.some(c=>c.ccBucket===0) && candidates.length > 1.
 # When owner context.md has CC UUID, ccBucket=0 -> !some() is FALSE -> dormant.
 # Validates gate does NOT over-fire when ccBucket=0 is present.
+# #1091: the CC UUID comes from CLAUDE_CODE_SESSION_ID (no <UUID>-*.md, so P2 skips).
 # ---------------------------------------------------------------------------
 
 run_r22() {
     require_function "resolveWorkflowSessionId" "R22: multiple candidates, one ccBucket=0 -> gate dormant -> ccBucket=0 wins" || return
-    local tmp out envfile ccuuid
+    local tmp out ccuuid
     tmp="$(mktemp -d)"
-    envfile="$tmp/claude.env"
-    ccuuid="r22-ccuuid"
-    echo "CLAUDE_SESSION_ID=$ccuuid" > "$envfile"
+    ccuuid="2a7d4c10-2222-4333-8444-955566667777"
     # Owner: context.md has CC UUID -> ccBucket=0.
     printf "Session-ID: %s\n%s\n" "${TODAY}-r22owner" "$ccuuid" > "$tmp/${TODAY}-r22owner-context.md"
     # Foreign: empty context.md -> ccBucket=1; newer mtime still loses ccBucket sort.
@@ -657,7 +590,7 @@ run_r22() {
     set_mtimes \
         "$tmp/${TODAY}-r22owner-context.md" -10 \
         "$tmp/${TODAY}-r22foreign-context.md" -2
-    out=$(call_resolve "$tmp" "$envfile")
+    out=$(call_resolve_with_code_sid "$tmp" "$ccuuid" "$tmp")
     rm -rf "$tmp"
     if [ "$out" = "${TODAY}-r22owner" ]; then
         pass "R22: multiple candidates, one ccBucket=0 -> gate dormant -> ccBucket=0 wins"
@@ -666,7 +599,60 @@ run_r22() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# R23 (#1091): CLAUDE_CODE_SESSION_ID feeds the P4 ccBucket even when P2 skips for
+# lack of a <UUID>-*.md artifact. The UUID-bearing stub beats a deeper, newer foreign
+# session, so hook/Bash paths without the old env-file relay still resolve their own sid.
+# ---------------------------------------------------------------------------
+
+run_r23() {
+    require_function "resolveWorkflowSessionId" "R23: native UUID ccBucket beats deeper newer foreign session" || return
+    local tmp out ccuuid
+    tmp="$(mktemp -d)"
+    ccuuid="5f3c2a10-1111-4222-8333-944455556666"
+    printf "Session-ID: %s\ncc: %s\n" "${TODAY}-r23own" "$ccuuid" > "$tmp/${TODAY}-r23own-context.md"
+    : > "$tmp/${TODAY}-r23foreign-context.md"
+    : > "$tmp/${TODAY}-r23foreign-intent.md"
+    : > "$tmp/${TODAY}-r23foreign-detail.md"
+    set_mtimes \
+        "$tmp/${TODAY}-r23own-context.md" -10 \
+        "$tmp/${TODAY}-r23foreign-context.md" -2
+    out=$(call_resolve_with_code_sid "$tmp" "$ccuuid" "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}-r23own" ]; then
+        pass "R23: native UUID ccBucket beats deeper newer foreign session"
+    else
+        fail "R23: native UUID ccBucket beats deeper newer foreign session (out=$out, expected ${TODAY}-r23own)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# R24 (#1091): a malformed CLAUDE_CODE_SESSION_ID must disable the ccBucket, even when
+# a context.md happens to contain that raw string -> multiple candidates -> NULL.
+# ---------------------------------------------------------------------------
+
+run_r24() {
+    require_function "resolveWorkflowSessionId" "R24: malformed native sid disables ccBucket -> NULL" || return
+    local tmp out bad
+    tmp="$(mktemp -d)"
+    bad="../x"
+    printf "Session-ID: %s\n%s\n" "${TODAY}-r24a" "$bad" > "$tmp/${TODAY}-r24a-context.md"
+    : > "$tmp/${TODAY}-r24b-context.md"
+    set_mtimes \
+        "$tmp/${TODAY}-r24a-context.md" -10 \
+        "$tmp/${TODAY}-r24b-context.md" -2
+    out=$(call_resolve_with_code_sid "$tmp" "$bad" "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "NULL" ]; then
+        pass "R24: malformed native sid disables ccBucket -> NULL"
+    else
+        fail "R24: malformed native sid disables ccBucket -> NULL (out=$out)"
+    fi
+}
+
 run_r22
+run_r23
+run_r24
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

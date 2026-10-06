@@ -48,6 +48,8 @@ write_notests() {
   printf '#!/usr/bin/env bash\n# Tags: scope:%s\necho hi\n' "$2" > "$1"
 }
 
+source "$AGENTS_DIR/tests/tests/feature-1834-2level-consumer-updates/_install-selector.sh"
+
 case_begin "run-all-enum" "tests/run-all.sh"
 # =====================================================================
 # 1a/1b/1c — run-all.sh --all enumeration (fixture TESTS_DIR)
@@ -146,7 +148,7 @@ git -C "$ST_REPO" config core.autocrlf false
 git -C "$ST_REPO" config user.email "t@example.com"
 git -C "$ST_REPO" config user.name "t"
 # Copy the real (post-migration) selector so TESTS_DIR resolves inside the fixture.
-cp "$SELECT_TESTS" "$ST_REPO/bin/select-tests.sh"
+install_selector "$ST_REPO"
 printf 'init\n' > "$ST_REPO/README.md"
 git -C "$ST_REPO" add -A >/dev/null 2>&1
 git -C "$ST_REPO" commit -q -m "initial" >/dev/null 2>&1
@@ -177,7 +179,7 @@ git -C "$ST6_REPO" config core.hooksPath /dev/null
 git -C "$ST6_REPO" config core.autocrlf false
 git -C "$ST6_REPO" config user.email "t@example.com"
 git -C "$ST6_REPO" config user.name "t"
-cp "$SELECT_TESTS" "$ST6_REPO/bin/select-tests.sh"
+install_selector "$ST6_REPO"
 printf 'init\n' > "$ST6_REPO/README.md"
 git -C "$ST6_REPO" add -A >/dev/null 2>&1
 git -C "$ST6_REPO" commit -q -m "initial" >/dev/null 2>&1
@@ -269,7 +271,7 @@ git -C "$TL3_REPO" config user.name "t"
 printf '#!/usr/bin/env bash\nexit 1\n' > "$TL3_REPO/bin/get-config-var"
 chmod +x "$TL3_REPO/bin/get-config-var"
 # is-docs-only absent: _tl3_wanted returns 0 (run TL3) for any non-empty diff.
-cp "$SELECT_TESTS" "$TL3_REPO/bin/select-tests.sh"
+install_selector "$TL3_REPO"
 printf 'init\n' > "$TL3_REPO/README.md"
 git -C "$TL3_REPO" add -A >/dev/null 2>&1
 git -C "$TL3_REPO" commit -q -m "initial" >/dev/null 2>&1

@@ -414,10 +414,10 @@ assert_eq "B6/hasOpenPrForBranch no MR -> false" "false" \
 unset GLAB_MOCK_MR GLAB_MOCK_VISIBILITY
 case_end
 
-# C1: listPrivateRepoNames — must query glab for PRIVATE repos only and return
-# the parsed path list (subgroup paths preserved), [] on empty, [] on error.
-# spawnSync is monkeypatched: canned stdout keyed by CG_MODE, every glab argv
-# logged so the private-only query is asserted. Windows-safe.
+# C1: listPrivateRepoNames — ONE membership query (no visibility= filter) whose
+# "<visibility>\t<path>" rows keep private/internal and drop public; subgroup paths
+# preserved, [] on empty, [] on error (#2513). spawnSync is monkeypatched: canned
+# stdout keyed by CG_MODE, every glab argv logged so the query is asserted.
 CG_DRIVER="$TMPROOT/cg-list-driver.js"
 cat > "$CG_DRIVER" <<'NODE'
 "use strict";
@@ -433,9 +433,9 @@ cp.spawnSync = function (cmd, args, opts) {
   if (LOG) { try { fs.appendFileSync(LOG, String(cmd) + " " + joined + "\n"); } catch (e) {} }
   if (MODE === "error") return { status: 1, stdout: "", stderr: "boom", error: null };
   if (MODE === "empty") return { status: 0, stdout: "", stderr: "", error: null };
-  // Three private projects incl. a subgroup path; trailing blank line on purpose
-  // (the parser must trim/filter it, like the github side does).
-  return { status: 0, stdout: "acme/widgets\ngroup/sub/repo\nteam/app\n\n", stderr: "", error: null };
+  // Private, public, subgroup-private and internal rows; trailing blank line on
+  // purpose (the parser must trim/filter it, like the github side does).
+  return { status: 0, stdout: "private\tacme/widgets\npublic\tacme/open\nprivate\tgroup/sub/repo\ninternal\tteam/app\n\n", stderr: "", error: null };
 };
 let gl;
 try { gl = require(process.argv[2]).codehostGitlab; } catch (e) { process.stdout.write("ERR:require"); process.exit(0); }
@@ -451,23 +451,23 @@ run_cg() { # $1 = mode ; $2 = log file ; echoes the JSON array (or ERR:*)
 case_begin "codehost-gitlab-list-private-repos" "hooks/lib/forge/gitlab.js"
 CG_LIST3_LOG="$TMPROOT/cg-list3.log"; : > "$CG_LIST3_LOG"
 CG_LIST3="$(run_cg list3 "$CG_LIST3_LOG")"
-assert_eq "C1/listPrivateRepoNames parses list + preserves subgroup path" \
+assert_eq "C1/listPrivateRepoNames keeps private+internal, drops public, preserves subgroup path" \
     '["acme/widgets","group/sub/repo","team/app"]' "$CG_LIST3"
 case_end
 case_begin "codehost-gitlab-list-private-query" "hooks/lib/forge/gitlab.js"
-# Prove the query asked glab for PRIVATE repos specifically (not all repos).
-if grep -qi "private" "$CG_LIST3_LOG" 2>/dev/null; then
-    pass "C1b/listPrivateRepoNames issues a private-only query"
-else
-    fail "C1b/listPrivateRepoNames issues a private-only query — glab-log=[$(cat "$CG_LIST3_LOG" 2>/dev/null)]"
-fi
+# One membership listing; visibility is filtered from the rows, not by the query.
+CG_SEEN="$(tr -d '"' < "$CG_LIST3_LOG" 2>/dev/null)"
+assert_eq "C1b/listPrivateRepoNames issues exactly one glab query" "1" "$(grep -c 'glab' "$CG_LIST3_LOG" 2>/dev/null)"
+assert_not_contains "C1b/listPrivateRepoNames query has no visibility= filter" "visibility=" "$CG_SEEN"
+assert_contains "C1b/listPrivateRepoNames query asks for membership=true" "membership=true" "$CG_SEEN"
+assert_contains "C1b/listPrivateRepoNames query asks for per_page=100" "per_page=100" "$CG_SEEN"
 case_end
 case_begin "codehost-gitlab-list-private-empty" "hooks/lib/forge/gitlab.js"
-case_end
 assert_eq "C1c/listPrivateRepoNames empty result -> []" "[]" "$(run_cg empty "$TMPROOT/cg-empty.log")"
-case_begin "codehost-gitlab-list-private-error" "hooks/lib/forge/gitlab.js"
 case_end
+case_begin "codehost-gitlab-list-private-error" "hooks/lib/forge/gitlab.js"
 assert_eq "C1d/listPrivateRepoNames glab error -> [] (safe)" "[]" "$(run_cg error "$TMPROOT/cg-error.log")"
+case_end
 
 # C2: hasOpenPrForBranch must target the CURRENT branch — an MR on the checked-out
 # branch is reused; an MR that exists only for a DIFFERENT branch is ignored. The
@@ -567,7 +567,7 @@ assert_eq "C3/github remote + gh private -> true" "true" "$(run_ipr "$REPO_GH")"
 setup_mock_gh false
 assert_eq "C3b/github remote + gh public -> false" "false" "$(run_ipr "$REPO_GH")"
 case_end
-rm -f "$MOCK_BIN/gh" "$MOCK_BIN/gh.cmd"
+remove_mock_gh
 case_end
 
 

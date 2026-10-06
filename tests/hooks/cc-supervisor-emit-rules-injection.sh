@@ -45,7 +45,6 @@ mkdir -p "$WFDIR" "$PLANS"
 # supervisor-emit's isolationContradiction guard refuses every write.
 export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR="$(node_path "$WFDIR")"
 export WORKFLOW_PLANS_DIR; WORKFLOW_PLANS_DIR="$(node_path "$PLANS")"
-unset CLAUDE_SESSION_ID || true
 unset CLAUDE_CODE_SESSION_ID || true
 
 # emit <sid> <js-call> — runs the facade against the real writer

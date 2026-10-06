@@ -58,7 +58,7 @@ ml_render() {
         cd "$ML_WORK/neutral" || exit 1
         run_with_timeout 10 env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL -u PRODUCER_LOW_MODEL \
             -u CLAUDE_CODE_SUBAGENT_MODEL -u CLAUDE_PROJECT_DIR \
-            -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
+             -u CLAUDE_CODE_SESSION_ID \
             AGENTS_CONFIG_DIR="$(_to_node_path "$ML_WORK/cfg")" \
             WORKFLOW_STATE_DIR="$ML_WORK/wf" WORKFLOW_PLANS_DIR="$ML_WORK/plans" \
             ML_FORMATTER="$FORMATTER_NODE" ML_OUTDIR="$(_to_node_path "$ML_WORK/out/$tag")" \

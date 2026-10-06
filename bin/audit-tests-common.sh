@@ -3,10 +3,10 @@
 # Usage: bin/audit-tests-common.sh [--dry-run] [--apply] [--offline]
 #                                  [--stale-months N] [--format text|json]
 #                                  [--fix-headers] [--dup-groups]
-# Exit:  0 = orphans found, 1 = no orphans, 2 = error
-# Writes by default: a flagless run DELETES orphans (git rm); --dry-run reports
-# only. --dup-groups is read-only: a corpus-wide `# Tests:` duplicate inventory
-# as TSV, identical from either entrypoint (bin/lib/test-dup-group.sh).
+#        bin/audit-tests-common.sh --embed-cases [--band-size N] [--order frequency|priority]
+# Exit:  0 = orphans found, 1 = no orphans, 2 = error. Writes by default: a flagless
+# run DELETES orphans (git rm); --dry-run reports only. --dup-groups: read-only TSV
+# (bin/lib/test-dup-group.sh). --embed-cases: docs/architecture/claude-code/sweep-tests-embed-cases.md.
 # Scans tests/<category>/*.{sh,Tests.ps1} and test_*.py EXCEPT feature-<N>-*;
 # unit=case (refcount 0 git rm, partial-orphan excises dead blocks, else file).
 
@@ -14,15 +14,18 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/test-frontmatter-constants.sh
-source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh"
+source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
 # shellcheck source=lib/test-frontmatter-fix.sh
-source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh"
+source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
 # shellcheck source=lib/test-retire-predicate.sh
-source "$SCRIPT_DIR/lib/test-retire-predicate.sh"
+source "$SCRIPT_DIR/lib/test-retire-predicate.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
 # shellcheck source=lib/sweep-write-mode.sh
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
 # shellcheck source=lib/test-dup-group.sh
-source "$SCRIPT_DIR/lib/test-dup-group.sh"
+source "$SCRIPT_DIR/lib/test-dup-group.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
+# shellcheck source=lib/test-embed-cases.sh
+source "$SCRIPT_DIR/lib/test-embed-cases.sh"
+tec_dispatch "$@"
 
 STALE_MONTHS=3
 OFFLINE=0
@@ -112,8 +115,14 @@ in_common_scope() {
   [[ "$(trp_scope_of "$name")" == "common" ]]
 }
 
+# Top-level files of a supported test language per category; scope is filtered per file below.
+TESTFILES=()
+for _cat in hooks bin skills agents install tests; do
+  tlr_list_dir_into "tests/$_cat" supported && TESTFILES+=(${TLR_LIST[@]+"${TLR_LIST[@]}"})
+done
+
 if [[ "$FIX_HEADERS" -eq 1 ]]; then
-  for testfile in tests/hooks/*.sh tests/bin/*.sh tests/skills/*.sh tests/agents/*.sh tests/install/*.sh tests/tests/*.sh; do
+  for testfile in ${TESTFILES[@]+"${TESTFILES[@]}"}; do
     [[ -e "$testfile" ]] || continue
     in_common_scope "$testfile" || continue
     _fix_headers_report "$testfile"
@@ -136,7 +145,7 @@ JSON_ITEMS=()
 
 if [[ "$FORMAT" == "text" ]]; then
   echo "# audit-tests-common.sh report — ${TODAY}"
-  echo "# Scope: tests/<cat>/{*.sh,*.Tests.ps1,test_*.py} (six categories) excluding feature-<N>-*"
+  echo "# Scope: tests/<cat>/*.sh, tests/<cat>/*.Tests.ps1, tests/<cat>/test_*.py (six categories) excluding feature-<N>-*"
   echo "# Criteria: every '# Tests:' target is missing — the filename's issue reference gates deletion only"
   echo "# Cutoff: ${CUTOFF_DATE} (stale-months: ${STALE_MONTHS})"
   if [[ "$OFFLINE" -eq 1 ]]; then
@@ -145,7 +154,7 @@ if [[ "$FORMAT" == "text" ]]; then
   echo ""
 fi
 
-for testfile in tests/hooks/*.sh tests/bin/*.sh tests/skills/*.sh tests/agents/*.sh tests/install/*.sh tests/tests/*.sh tests/hooks/*.Tests.ps1 tests/bin/*.Tests.ps1 tests/skills/*.Tests.ps1 tests/agents/*.Tests.ps1 tests/install/*.Tests.ps1 tests/tests/*.Tests.ps1 tests/hooks/test_*.py tests/bin/test_*.py tests/skills/test_*.py tests/agents/test_*.py tests/install/test_*.py tests/tests/test_*.py; do
+for testfile in ${TESTFILES[@]+"${TESTFILES[@]}"}; do
   [[ -e "$testfile" ]] || continue
   in_common_scope "$testfile" || continue
   base="$(basename "$testfile")"

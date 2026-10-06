@@ -145,14 +145,7 @@ RC=0
 run_precommit() {
     local cwd="$1"; shift
     RC=0
-    OUT="$( (cd "$cwd" && unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID && run_with_timeout 60 env "$@" bash "$PRECOMMIT") 2>&1 )" || RC=$?
-}
-
-write_env_file() {
-    local sid="$1"
-    local f="$TMPDIR_BASE/envfile-$RANDOM-$$"
-    printf 'CLAUDE_SESSION_ID=%s\n' "$sid" > "$f"
-    echo "$f"
+    OUT="$( (cd "$cwd" && unset CLAUDE_CODE_SESSION_ID && run_with_timeout 60 env "$@" bash "$PRECOMMIT") 2>&1 )" || RC=$?
 }
 
 # ============================================================================
@@ -242,14 +235,13 @@ assert_marker_skips_backstop() {
     local wfdir="$TMPDIR_BASE/wf-$tag"
     mkdir -p "$wfdir"
     printf '{"set_at":"2026-01-01T00:00:00Z"}\n' > "$wfdir/$sid.$marker"
-    local envfile; envfile="$(write_env_file "$sid")"
     stage_violation "$repo"
     run_precommit "$repo" \
         "AGENTS_CONFIG_DIR=$repo" \
         "ENFORCE_WORKTREE=off" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile"
+        "CLAUDE_CODE_SESSION_ID=$sid"
     if [ "$RC" -eq 0 ]; then
         pass "$label: .$marker marker -> backstop skipped, commit passes"
     else
@@ -273,14 +265,13 @@ t03c_no_marker_still_blocks() {
     local repo; repo="$(make_agents_like_repo cfg03c yes real)"
     local wfdir="$TMPDIR_BASE/wf03c"
     mkdir -p "$wfdir"
-    local envfile; envfile="$(write_env_file "pe1642t03c")"
     stage_violation "$repo"
     run_precommit "$repo" \
         "AGENTS_CONFIG_DIR=$repo" \
         "ENFORCE_WORKTREE=off" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
-        "CLAUDE_ENV_FILE=$envfile"
+        "CLAUDE_CODE_SESSION_ID=pe1642t03c"
     if [ "$RC" -eq 1 ]; then
         pass "T03c: no marker present -> the same staged violation blocks (exit 1)"
     else

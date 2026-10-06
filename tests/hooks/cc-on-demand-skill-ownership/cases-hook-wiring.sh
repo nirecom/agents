@@ -34,7 +34,7 @@ else
     HW_PLANS="$HW_ROOT/plans"
     HW_REPO="$HW_ROOT/repo"
     mkdir -p "$HW_WF" "$HW_PLANS" "$HW_REPO/src"
-    unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+    unset CLAUDE_CODE_SESSION_ID
     git -C "$HW_REPO" init -q >/dev/null 2>&1
     git -C "$HW_REPO" config core.hooksPath /dev/null
     git -C "$HW_REPO" config user.email fixture@example.com

@@ -270,7 +270,7 @@ else
 fi
 
 unset CLAUDECODE
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 CMD_FOREIGN="gh issue create --repo $FOREIGN/some-repo --title TOKEN --body TOKEN"
 CMD_OWNED="gh issue create --title TOKEN --body TOKEN"

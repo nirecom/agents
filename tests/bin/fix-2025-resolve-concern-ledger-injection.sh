@@ -57,7 +57,6 @@ run_with_timeout() {
 # --- fixture isolation (rules/test/fixture-isolation.md) --------------------
 TMP="$(mktemp -d)"
 trap 'cd / 2>/dev/null; rm -rf "$TMP"' EXIT
-unset CLAUDE_SESSION_ID 2>/dev/null || true
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export WORKFLOW_STATE_DIR="$TMP/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMP/plans-root"

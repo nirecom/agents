@@ -46,7 +46,7 @@ trap 'rm -rf "$TMPD"' EXIT
 export WORKFLOW_PLANS_DIR="$(nodepath "$TMPD/plans")"
 export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 mkdir -p "$TMPD/plans" "$TMPD/workflow-state"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 REPO_RAW="$TMPD/repo"
 mkdir -p "$REPO_RAW/tests"

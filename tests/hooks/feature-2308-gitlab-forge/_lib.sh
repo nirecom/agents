@@ -57,8 +57,8 @@ run_with_timeout() {
 TMPROOT="$(mktemp -d)"
 trap 'rm -rf "$TMPROOT"' EXIT
 
-# Mock glab: node wrapper reachable from Node spawnSync (resolves glab.cmd on
-# Windows) and bash PATH lookups. Keyed by env: GLAB_MOCK_VISIBILITY
+# Mock glab: node wrapper reachable from a shell-less Node spawnSync (glab.exe
+# bridge on Windows) and bash PATH lookups. Keyed by env: GLAB_MOCK_VISIBILITY
 # (private|public), GLAB_MOCK_MR (open|none), GLAB_MOCK_LIST (newline paths),
 # GLAB_MOCK_LOG (file appended with each invocation argv).
 MOCK_BIN="$TMPROOT/mock-bin"
@@ -94,13 +94,19 @@ exec node "$GLAB_JS_MOCK" "\$@"
 EOF
 chmod +x "$MOCK_BIN/glab"
 printf '@echo off\r\nnode "%s" %%*\r\n' "$GLAB_JS_MOCK_WIN" > "$MOCK_BIN/glab.cmd"
+# The forge descriptors spawn without a shell, which cannot run a .cmd: bridge it.
+. "$AGENTS_DIR/tests/lib/cli-stub.sh"
+cli_stub_bridge_cmd "$MOCK_BIN" glab
 
-# Mock gh: visibility echo, mirrors main-private-repo-detection.sh.
+# Mock gh: visibility echo, mirrors main-private-repo-detection.sh. Remove it with
+# remove_mock_gh, which also drops the Windows bridge exe.
 setup_mock_gh() {
     printf '#!/bin/bash\necho "%s"\n' "$1" > "$MOCK_BIN/gh"
     printf '@echo off\r\necho %s\r\n' "$1" > "$MOCK_BIN/gh.cmd"
     chmod +x "$MOCK_BIN/gh"
+    cli_stub_bridge_cmd "$MOCK_BIN" gh
 }
+remove_mock_gh() { rm -f "$MOCK_BIN/gh" "$MOCK_BIN/gh.cmd" "$MOCK_BIN/gh.exe"; }
 
 setup_repo_with_origin() {
     local url="$1"

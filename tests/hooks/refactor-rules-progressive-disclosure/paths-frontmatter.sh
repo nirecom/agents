@@ -22,10 +22,10 @@ rules/docs/readme.md|README.md
 rules/docs/todo.md|docs/todo.md
 rules/installer.md|install/**|**/*.ps1|**/*.nsi|**/*.iss
 rules/prompt.md|rules/**/*.md|skills/**/SKILL.md|agents/**/*.md
-rules/test/claude-e2e.md|tests/**|**/*.sh|**/*.Tests.ps1|test_*.py|**/*.spec.*
-rules/test/fixture-isolation.md|tests/**|**/*.sh|**/*.Tests.ps1|test_*.py|**/*.spec.*
-rules/test/installer.md|install/**|**/*.Tests.ps1
-rules/test/macos-timeout.md|tests/**|**/*.sh|**/*.Tests.ps1
+rules/test/claude-e2e.md|tests/**
+rules/test/fixture-isolation.md|tests/**
+rules/test/installer.md|install/**|tests/install/**
+rules/test/macos-timeout.md|tests/**
 SPEC
 )"
 
