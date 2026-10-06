@@ -675,3 +675,7 @@ Changes: Added an opt-in Jev shadow mode: with `JEV=on` and `TYPESAFE_API_KEY` s
 ### FEATURE: PR #2537 (2026-10-05)
 Background: feat(#2513): publish plans to a private git remote so they can be rea...
 Changes: Plans (intent / outline / detail) can now be read from the iOS/Android Claude apps or any browser: set `PLAN_SYNC_REMOTE_URL` to a private repository and run `bin/plan-sync-init`; each plan breadcrumb then shows a forge URL instead of a local path. The VS Code auto-open of plan files and its `.env` setting were removed.;scan-outbound now treats internal repositories like private ones when blocking repo names in public-destination outbound.
+
+### FEATURE: PR #2554 (2026-10-06)
+Background: feat(#2372): add sweep-tests --embed-cases to auto-embed case markers
+Changes: `sweep-tests --embed-cases` wraps existing tests in case_begin/case_end markers one band at a time, with mechanical verification and a codex boundary review, so they move to case-level refcount GC.
