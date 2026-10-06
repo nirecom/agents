@@ -367,14 +367,13 @@ process.stdout.write(String(em.isolationContradiction()));"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # G9 — bin/check-plans-dir-isolation.sh, the static audit classifier.
-#      Report-only tool: always exit 0, never a gate. The two files below are the
-#      pre-verified disputed pair from the audit manifest.
+#      A gate since #2512: exit 1 on any violation; an N-candidate alone is still 0.
 # ─────────────────────────────────────────────────────────────────────────────
 G9_classifier_verdicts() {
     if [ ! -f "$CLASSIFIER" ]; then
         fail "G9 classifier: $CLASSIFIER does not exist"
-        fail "G9b classifier W-candidate for feature-workflow-off-chain-guard.sh (blocked: no classifier)"
-        fail "G9c classifier N-candidate for feature-workflow-off-bypass-block-history-direct.sh (blocked: no classifier)"
+        fail "G9b classifier STATE-INLINE-ONLY / STATE-UNPINNED for inline-pinned fixtures (blocked: no classifier)"
+        fail "G9c classifier N-candidate for an exported-state-pin read-only fixture (blocked: no classifier)"
         fail "G9d classifier sweep-complete regression guard (blocked: no classifier)"
         return
     fi
@@ -383,59 +382,86 @@ G9_classifier_verdicts() {
 
     # G9a/G9c use a FIXTURE N-candidate for the same reason G9b uses one: this fix
     # dual-pinned every live repo test, so no production file is a candidate any more.
-    # The fixture pins WORKFLOW_STATE_DIR, omits WORKFLOW_PLANS_DIR, and reaches only a
-    # read-only hook — exactly the shape the classifier must call N rather than W.
+    # #2512: the fixture exports WORKFLOW_STATE_DIR before its first exec (a valid state
+    # pin), omits WORKFLOW_PLANS_DIR, and reaches only a read-only hook -> N, not W.
     local n_fixture_dir n_fixture
     n_fixture_dir="$TMPDIR_BASE/g9c-fixture"
     n_fixture="$n_fixture_dir/feature-readonly-halfpinned-suite.sh"
     mkdir -p "$n_fixture_dir"
-    printf '#!/usr/bin/env bash\n# Tests: hooks/block-history-direct.js\nWORKFLOW_STATE_DIR=/tmp/pin node hooks/block-history-direct.js\n' > "$n_fixture"
+    printf '#!/usr/bin/env bash\n# Tests: hooks/block-history-direct.js\nexport WORKFLOW_STATE_DIR=/tmp/pin\nnode hooks/block-history-direct.js\n' > "$n_fixture"
 
-    # G9a — classifier exits 0 even while reporting a candidate (report tool, not a gate).
-    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$n_fixture" 2>&1)"
+    # G9a (#2512) — the classifier is a gate now: an N-candidate alone still exits 0,
+    # a W-candidate (state pinned, plans not, supervisor-emitting hook) exits 1.
+    local g9a_dir g9a_n g9a_w
+    g9a_dir="$TMPDIR_BASE/g9a-fixture"
+    g9a_n="$g9a_dir/feature-g9a-readonly-suite.sh"
+    g9a_w="$g9a_dir/feature-g9a-gate-suite.sh"
+    mkdir -p "$g9a_dir"
+    printf '#!/usr/bin/env bash\n# Tests: hooks/block-history-direct.js\nexport WORKFLOW_STATE_DIR=/tmp/pin\nnode hooks/block-history-direct.js\n' > "$g9a_n"
+    printf '#!/usr/bin/env bash\n# Tests: hooks/workflow-gate.js\nexport WORKFLOW_STATE_DIR=/tmp/pin\nnode hooks/workflow-gate.js\n' > "$g9a_w"
+    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$g9a_n" 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ]; then
-        pass "G9a classifier exits 0 (report tool, not a gate)"
+        pass "G9a N-candidate-only fixture exits 0"
     else
-        fail "G9a classifier exited $rc, must always be 0: $out"
+        fail "G9a N-candidate-only fixture exited $rc, want 0: $out"
+    fi
+    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$g9a_w" 2>&1)"
+    rc=$?
+    if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q 'W-candidate'; then
+        pass "G9a W-candidate fixture exits 1 with a W-candidate line"
+    else
+        fail "G9a W-candidate fixture: want rc=1 + W-candidate line, got rc=$rc: $out"
     fi
 
-    # G9b — classifier recognises a W-candidate from a FIXTURE file (not a live repo file,
-    # because all live tests have been dual-pinned as part of this fix making them not W).
-    # The fixture simulates an unfixed test that pins WORKFLOW_STATE_DIR, references
-    # workflow-gate.js, but has no WORKFLOW_PLANS_DIR pin.
-    local fixture_dir fixture_file
+    # G9b (#2512) — an inline pin on the exec line is not a file pin: new-name inline pins
+    # alone are STATE-INLINE-ONLY. The retired name (built by concatenation so the stage-1
+    # rename never rewrites this fixture) is no pin at all -> STATE-UNPINNED. Files mode
+    # skips the residual-token check, so no RESIDUAL-TOKEN line is expected here.
+    local fixture_dir fixture_file old_file old_tok="CLAUDE_""WORKFLOW_DIR"
     fixture_dir="$TMPDIR_BASE/g9b-fixture"
-    fixture_file="$fixture_dir/feature-unfixed-suite.sh"
+    fixture_file="$fixture_dir/feature-inline-only-suite.sh"
+    old_file="$fixture_dir/feature-old-token-inline-suite.sh"
     mkdir -p "$fixture_dir"
-    printf '#!/usr/bin/env bash\n# Tests: hooks/workflow-gate.js\nWORKFLOW_STATE_DIR=/tmp/pin node hooks/workflow-gate.js\n' > "$fixture_file"
-    local fixture_rel; fixture_rel="$(cd "$AGENTS_DIR" && realpath --relative-to=. "$fixture_file" 2>/dev/null || echo "$fixture_file")"
+    printf '#!/usr/bin/env bash\n# Tests: hooks/workflow-gate.js\nWORKFLOW_STATE_DIR=/tmp/pin WORKFLOW_PLANS_DIR=/tmp/pin node hooks/workflow-gate.js\n' > "$fixture_file"
+    printf '#!/usr/bin/env bash\n# Tests: hooks/workflow-gate.js\n%s=/tmp/pin node hooks/workflow-gate.js\n' "$old_tok" > "$old_file"
     out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$fixture_file" 2>&1)"
-    if echo "$out" | grep -q 'W-candidate'; then
-        pass "G9b classifier correctly identifies a fixture unfixed suite as W-candidate (WORKFLOW_STATE_DIR pinned, no WORKFLOW_PLANS_DIR, calls workflow-gate.js)"
+    rc=$?
+    if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -E '^STATE-INLINE-ONLY:' | grep -qF "$(basename "$fixture_file")"; then
+        pass "G9b inline-only new-name pins -> rc=1 + STATE-INLINE-ONLY naming the fixture"
     else
-        fail "G9b fixture unfixed suite must be W-candidate: $out"
+        fail "G9b inline-only fixture: want rc=1 + STATE-INLINE-ONLY, got rc=$rc: $out"
+    fi
+    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$old_file" 2>&1)"
+    rc=$?
+    if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -E '^STATE-UNPINNED:' | grep -qF "$(basename "$old_file")"; then
+        pass "G9b a retired-name inline pin is no pin -> rc=1 + STATE-UNPINNED"
+    else
+        fail "G9b retired-name inline fixture: want rc=1 + STATE-UNPINNED, got rc=$rc: $out"
     fi
 
     # G9c — the fixture launches only hooks/block-history-direct.js, which READS the plans dir
-    # (helpers.js tryResolveEnvUnderPlansDir) but never calls appendFinding → N-candidate.
+    # (helpers.js tryResolveEnvUnderPlansDir) but never calls appendFinding → N-candidate, rc 0.
     out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$n_fixture" 2>&1)"
-    if echo "$out" | grep -F "$(basename "$n_fixture")" | grep -q 'N-candidate'; then
-        pass "G9c fixture read-only half-pinned suite classified N-candidate (no supervisor write)"
+    rc=$?
+    if [ "$rc" -eq 0 ] && echo "$out" | grep -F "$(basename "$n_fixture")" | grep -q 'N-candidate'; then
+        pass "G9c fixture read-only half-pinned suite classified N-candidate with rc=0"
     else
-        fail "G9c fixture read-only half-pinned suite must be N-candidate: $out"
+        fail "G9c fixture read-only half-pinned suite must be N-candidate with rc=0, got rc=$rc: $out"
     fi
 
     # Regression guard: once the sweep is done, every W file carries the pin and therefore
     # drops out of the candidate population entirely. A non-empty W-candidate list means the
     # audit has rotted — a new or reverted suite is contaminating the live plans dir again.
-    local full wcount
-    full="$(cd "$AGENTS_DIR" && "$RWT" 120 bash "$CLASSIFIER" 2>&1)"
-    wcount="$(echo "$full" | grep -c 'W-candidate')"
-    if [ "$wcount" = "0" ]; then
-        pass "G9d repo-wide sweep complete: zero W-candidate files remain unpinned"
+    # #2512: the full scan is a gate — exit 0 AND zero violation lines of any label.
+    local full full_rc violations
+    full="$(cd "$AGENTS_DIR" && "$RWT" 300 bash "$CLASSIFIER" 2>&1)"
+    full_rc=$?
+    violations="$(printf '%s\n' "$full" | grep -E '^(STATE-UNPINNED|STATE-INLINE-ONLY|STATE-PIN-LATE|HALF-PIN-REVERSE|W-candidate|RESIDUAL-TOKEN):' || true)"
+    if [ "$full_rc" -eq 0 ] && [ -z "$violations" ]; then
+        pass "G9d repo-wide scan exits 0 with zero violation lines"
     else
-        fail "G9d $wcount file(s) reach supervisor-emit with WORKFLOW_STATE_DIR pinned but WORKFLOW_PLANS_DIR unpinned:"$'\n'"$(echo "$full" | grep 'W-candidate')"
+        fail "G9d repo-wide scan: want rc=0 + no violations, got rc=$full_rc:"$'\n'"$(printf '%s\n' "$violations" | head -20)"
     fi
 }
 

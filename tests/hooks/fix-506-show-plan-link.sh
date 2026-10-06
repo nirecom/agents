@@ -8,6 +8,12 @@
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$AGENTS_DIR/tests/lib/harness.sh"
+ISO_TMP="$(make_tmp)"
+harness_isolate "$ISO_TMP"
+export WORKFLOW_STATE_DIR="$ISO_TMP/workflow-state"
+mkdir -p "$ISO_TMP/no-transcripts"
+export CLAUDE_TRANSCRIPT_BASE_DIR="$ISO_TMP/no-transcripts"
 HOOK="$AGENTS_DIR/hooks/show-plan-link.js"
 ERRORS=0
 
@@ -30,7 +36,7 @@ parse_marker() {
 NODE_TMPDIR="$(run_with_timeout node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
 PLANS_DIR="${NODE_TMPDIR}/show-plan-link-uri-test-$$"
 mkdir -p "$PLANS_DIR"
-trap 'rm -rf "$PLANS_DIR"' EXIT
+trap 'rm -rf "$PLANS_DIR" "$ISO_TMP"' EXIT
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 
 unset TERM_PROGRAM 2>/dev/null || true

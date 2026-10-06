@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-forge-target-ownership.js, hooks/confirm-forge-target-ownership/
 # Tags: hook, pre-tool-use, github, gh, ownership, security, scope:issue-specific
-# Part of tests/hooks/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
+# isolation: inherits-from ../feature-2053-forge-target-ownership.sh
 # Blocks C12 (issue-create SKILL.md Scope) and C14 (marker-bypass contract).
 #
 # WHY C12: #2053's documented path was "run gh issue create --repo OWNER/REPO
