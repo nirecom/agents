@@ -54,9 +54,10 @@ HOOKEOF
 }
 
 # newest_artifact <glob> — the log the run just wrote, resolved by mtime so a
-# previous arm's file can never be read in place of this one.
+# previous arm's file can never be read in place of this one. #2558: worker logs
+# live in the workflow dir — worker-logs/ without a session, <sid>.control/ with one.
 newest_artifact() {
-    ls -t "$PLANS_RAW"/*"$1" 2>/dev/null | head -1
+    ls -t "$WFDIR_RAW"/worker-logs/*"$1" "$WFDIR_RAW"/*.control/*"$1" 2>/dev/null | head -1
 }
 
 dispatch_worker() {

@@ -90,6 +90,7 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$MAIN_RAW/tests/run-all.sh"
 BARE_RAW="$TMPD/barerepo"; mk_repo "$BARE_RAW"
 
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 MAIN="$(nodepath "$MAIN_RAW")"
 BARE="$(nodepath "$BARE_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
@@ -109,7 +110,7 @@ dispatch_tr() {
     local root="$1" pfile="$2"
     : > "$CALLLOG"
     DRC=0
-    DOUT="$(run_with_timeout 90 env "${AMBIENT_ENV_FLAGS[@]}" "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 90 env "${AMBIENT_ENV_FLAGS[@]}" -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

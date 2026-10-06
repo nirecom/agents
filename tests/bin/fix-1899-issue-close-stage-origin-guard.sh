@@ -2,42 +2,24 @@
 # tests/bin/fix-1899-issue-close-stage-origin-guard.sh
 # Tests: bin/worker-dispatch/workers/issue-close-stage.js, hooks/lib/parse-remote-url.js, bin/worker-dispatch.js
 # Tags: worker-dispatch, issue-close-stage, origin-resolution, fail-closed, secret-redaction, security, table-driven, stub-seam, TL2, scope:issue-specific
-#
-# Issue #1899 — the issue-close-stage worker decides WHICH repository Phase 1
-# mutates. It used to ask `gh repo view --json nameWithOwner`, which on a fork
-# carrying both `origin` and `upstream` can answer with the upstream repository,
-# so Steps D/F/G land on the wrong repo while the caller reads `phase1_done` for
-# the one it meant. The fix replaces that probe with a local
-# `git remote get-url origin` read, parsed by hooks/lib/parse-remote-url.js.
-#
-# tests/bin/feature-1673-issue-close-stage-behavior.sh cans the probe to AGREE with
-# the payload (happy path + redaction only) and never drives the guard itself.
-# The guard's value is negative: when the probe can't produce a trustworthy
-# owner/repo, the chain must NOT run — reporting `error` while still spawning it
-# would pass every status assertion. So every BLOCK case here asserts the
-# CHILD-PROCESS COUNT (1 = only the probe ran), not just the status token.
-#
-# Group D is the secret half: an HTTPS origin can carry an access token in its
-# userinfo. On probe FAILURE the credential can reach an error message
-# (`parsed.message`, or git's stderr) rendered into both the dispatcher's
-# `summary` and the on-disk artifact — both surfaces are asserted absent-of-token.
-# Credentials are FAKE placeholders (`ghp_EXAMPLEEXAMPLE`, under
-# bin/scan-outbound.sh's token-pattern length), same as
-# tests/hooks/fix-1899-parse-remote-url/redaction.sh.
-#
-# TL2: real dispatcher, payload/capability walls, worker, and parse-remote-url.js
-# run; only the child-process seam is canned
-# (tests/feature-1643-worker-dispatch-lib/spawn-stub.js).
-# TL3 gap (what this does NOT catch): no real fork checkout with two remotes and
-# no real `git` binary produce the probe output here, so a real git whose
-# `remote get-url origin` output shape differs (extra whitespace, insteadOf
-# rewriting, a URL rewritten by a credential helper) is out of reach, and no real
-# `gh` round-trip proves the resolved owner/repo is the repository GitHub itself
-# resolves. Fenced by tests/bin/TL3-issue-close-stage-dispatch.sh (RUN_TL3-gated).
+# TL3 gap (what this TL2 does NOT catch): no real fork checkout / real `git` produce
+# the probe output (whitespace, insteadOf, credential-helper rewrites), and no real
+# `gh` round-trip proves the resolved owner/repo. Fenced by
+# tests/bin/TL3-issue-close-stage-dispatch.sh (RUN_TL3-gated).
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+# Issue #1899 — issue-close-stage decides WHICH repo Phase 1 mutates. `gh repo view`
+# could answer with the upstream on a fork; the fix reads `git remote get-url origin`
+# parsed by hooks/lib/parse-remote-url.js. The guard's value is negative: when the
+# probe can't produce a trustworthy owner/repo the chain must NOT run, so every
+# BLOCK case asserts the CHILD-PROCESS COUNT (1 = only the probe ran).
+# Group D: an HTTPS origin can carry a token in userinfo; on probe FAILURE it can
+# reach the summary and the on-disk log — both asserted token-free. Credentials are
+# FAKE placeholders (`ghp_EXAMPLEEXAMPLE`, under bin/scan-outbound.sh's length).
+# TL2: real dispatcher, walls, worker and parse-remote-url.js; only the child-process
+# seam is canned (tests/feature-1643-worker-dispatch-lib/spawn-stub.js).
 
 if command -v timeout >/dev/null 2>&1 && [ -z "${_FIX1899_ICS_INNER:-}" ]; then
     _FIX1899_ICS_INNER=1 timeout 300 bash "$0" "$@"
@@ -102,6 +84,7 @@ git -C "$MAIN_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
 LINKED_RAW="$TMPD/linked-wt"
 git -C "$MAIN_RAW" worktree add -q -b feature/origin-guard "$LINKED_RAW" >/dev/null 2>&1
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 
 MAIN="$(nodepath "$MAIN_RAW")"
 LINKED="$(nodepath "$LINKED_RAW")"
@@ -143,7 +126,7 @@ unquote() { local v="$1"; v="${v#\"}"; v="${v%\"}"; printf '%s' "$v"; }
 dispatch_stage() {
     DRC=0
     : > "$CALLLOG"
-    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
@@ -358,22 +341,13 @@ group_positive_control() {
 }
 
 # ===========================================================================
-# Group D — a credential must not survive a FAILING probe.
-#
-#   Three distinct leak surfaces, and the behaviour suite covers none of them
-#   because it only cans a probe that SUCCEEDS:
-#     1. an unparsable URL that still carries userinfo — resolveCurrentRepo puts
-#        `parsed.message` into the refusal summary, and that message is built
-#        from the URL
-#     2. git's STDERR on a failed invocation, which commonly echoes the remote
-#        URL back and is pushed into the same on-disk log
-#     3. a well-formed but MISMATCHED origin, where the refusal summary names the
-#        resolved repository — the resolved value must be the owner/repo, never
-#        the raw URL it came from
-#   Each row asserts the credential is absent from BOTH the dispatcher's stdout
-#   (which the calling skill reads and may quote into a comment) and the artifact
-#   file on disk. Each also asserts a positive marker, so a run that produced no
-#   text at all cannot satisfy the absence assertion vacuously.
+# Group D — a credential must not survive a FAILING probe. Three leak surfaces:
+#   1. an unparsable URL with userinfo (`parsed.message` is built from the URL)
+#   2. git's STDERR on a failed invocation, which echoes the remote URL into the log
+#   3. a MISMATCHED origin, whose refusal summary must name owner/repo, not the URL
+#   Each row asserts the token is absent from BOTH dispatcher stdout and the log
+#   file on disk (#2558: under the workflow dir), plus a positive marker so an
+#   empty run cannot pass the absence check vacuously.
 # ===========================================================================
 group_credential_on_failure() {
     impl_ready "cred/setup" || return

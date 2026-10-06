@@ -2,41 +2,24 @@
 # tests/bin/feature-1673-commit-push-gate.sh
 # Tests: bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch.js, bin/worker-dispatch/spawn.js, hooks/workflow-gate.js
 # Tags: worker-dispatch, commit-push, workflow-gate, merge-gate, fail-closed, TL2, scope:issue-specific
-#
-# Issue #1673 D1 — this file is the acceptance point for the whole decision.
-#
-# Moving `git commit` / `git push` from the Bash tool into a dispatcher child
-# takes them out of PreToolUse, so hooks/workflow-gate.js stops firing. Two
-# guards are lost with it: the commit-completion gate (run_tests / review_security
-# / docs / user_verification) and the MERGE GATE, which hard-blocks a push to a
-# protected branch until user_verification completes. `hooks/pre-commit` replaces
-# neither. D1 reproduces both by driving the real gate binary twice — once before
-# the commit, once before the push — with a synthetic PreToolUse payload on stdin.
-#
-# What is asserted:
-#   (a) a blocking verdict before the commit leaves no commit call behind
-#   (b) an approving verdict lets the commit through
-#   (c) a blocking verdict before the push leaves no push call behind, AFTER the
-#       commit already happened — the case the caller must be told about
-#   (d) the gate's `tool_input.command` is byte-identical to the argv the worker
-#       is about to spawn, and never the bare `git push` form the classifier
-#       cannot decide on
-#   (e) an abnormal gate exit still refuses a push to a protected branch
-#
-# The process boundary is canned through tests/feature-1673-commit-push-lib/
-# gate-spawn-stub.js, which — unlike the #1643 stub — records `opts.input`. The
-# gate contract lives entirely in those stdin bytes, so a stub that dropped them
-# could not distinguish a correct payload from an empty one.
-#
 # TL3 gap (what this TL2 test does NOT catch):
-#   - Whether the REAL hooks/workflow-gate.js parses this synthetic payload and
-#     returns the verdict expected here; only a real gate process can answer.
-#     Covered by tests/bin/TL3-worker-dispatch-commit-push.sh (RUN_TL3).
+#   - Whether the REAL hooks/workflow-gate.js parses this synthetic payload as
+#     expected (tests/bin/TL3-worker-dispatch-commit-push.sh, RUN_TL3).
 #   - Real `git push` reaching a real remote, and the retry/rebase ladder.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+# Issue #1673 D1 acceptance point. Moving commit/push into a dispatcher child skips
+# PreToolUse, losing the commit-completion gate and the MERGE GATE (push to a
+# protected branch blocked until user_verification). D1 drives the real gate binary
+# before the commit and before the push with a synthetic PreToolUse payload.
+# Asserted: (a) block-before-commit leaves no commit call; (b) approve lets it
+# through; (c) block-before-push leaves no push call AFTER the commit happened;
+# (d) the gate's tool_input.command is byte-identical to the spawned argv, never
+# bare `git push`; (e) an abnormal gate exit still refuses a protected-branch push.
+# gate-spawn-stub.js (tests/feature-1673-commit-push-lib/) records `opts.input`,
+# where the whole gate contract lives.
 
 if command -v timeout >/dev/null 2>&1 && [ -z "${_CP1673_GATE_INNER:-}" ]; then
     _CP1673_GATE_INNER=1 timeout 300 bash "$0" "$@"
@@ -87,6 +70,7 @@ git -C "$MAIN_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
 LINKED_RAW="$TMPD/linked-wt"
 git -C "$MAIN_RAW" worktree add -q -b feature/1673-probe "$LINKED_RAW" >/dev/null 2>&1
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 
 MAIN="$(nodepath "$MAIN_RAW")"
 CWD="$(nodepath "$LINKED_RAW")"
@@ -103,7 +87,7 @@ dispatch() {
     printf '%s' "$1" > "$CANNED"
     : > "$CALLLOG"
     DRC=0
-    DOUT="$(run_with_timeout 120 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 120 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         "WD_SPAWN_MODULE=$(nodepath "$SPAWN_JS")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

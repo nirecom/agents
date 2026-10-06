@@ -679,3 +679,7 @@ Changes: Plans (intent / outline / detail) can now be read from the iOS/Android 
 ### FEATURE: PR #2554 (2026-10-06)
 Background: feat(#2372): add sweep-tests --embed-cases to auto-embed case markers
 Changes: `sweep-tests --embed-cases` wraps existing tests in case_begin/case_end markers one band at a time, with mechanical verification and a codex boundary review, so they move to case-level refcount GC.
+
+### FEATURE: PR #2563 (2026-10-06)
+Background: feat(#2558): write worker logs to the session control dir instead of PLANS_DIR
+Changes: Worker logs now live in the session control directory (or `worker-logs/` when there is no session) instead of the synced plans directory, and logs in `worker-logs/` are cleaned up after 30 days.

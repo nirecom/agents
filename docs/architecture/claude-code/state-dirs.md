@@ -7,7 +7,7 @@ migration all enforce it from the same registry,
 
 | Directory | Holds | Who may write |
 |---|---|---|
-| `WORKFLOW_PLANS_DIR` (default `~/.workflow-plans/`) | **Artifacts** — prose a human reads (`<sid>-detail.md`, surveys, raw review rounds, logs) | The model (Write), workers, wrappers |
+| `WORKFLOW_PLANS_DIR` (default `~/.workflow-plans/`) | **Artifacts** — prose a human reads (`<sid>-detail.md`, surveys, raw review rounds) | The model (Write), workers, wrappers |
 | `<WORKFLOW_STATE_DIR>/<sid>.control/` (default root `~/.workflow-state/`) | **Control files** — JSON and numbers a machine reads to drive a gate (round counters, terminal markers, ledgers, payloads, outcomes) | Only the owning CLI or hook, never the model while `WORKFLOW=on` |
 
 When `PLAN_SYNC_REMOTE_URL` is set and `bin/plan-sync-init` has run, the artifacts
@@ -43,7 +43,7 @@ guard refuse every model write there without touching the artifact workflow.
   stay ambiguous.
 - A name that matches no kind is `unregistered` when some `-`-prefix is a live
   session (its `-context.md`, `-intent.md` or `<wf>/<prefix>.json` exists) and
-  `no-sid` otherwise (worker `stamp()` logs).
+  `no-sid` otherwise.
 
 ## Inventory
 
@@ -62,7 +62,6 @@ guard refuse every model write there without touching the artifact workflow.
 | `{complexity,outline,detail,write-tests,write-code}-judge-raw.txt` | Model | `normalize-judge-signals` (the normalized signals drive the gate) |
 | `<fmt>-finalize-diagnostic.txt` | `concern-ledger finalize` (on failure) | Human |
 | `worker-<name>[-<seq>].draft.json` | Model (WD-2) | `bin/worker-dispatch-payload` only; deleted on publish |
-| `finalize-worker-<stamp>.log`, `session-close-worker.log` | Workers | Human |
 | `notes-backup/` | `capture-env.sh` | worktree-end |
 | `issue-create-dispatch.txt`, `issue-create-survey.json`, `sweep-issues-{survivors,decisions}.tsv`, `refactor-prompts-scan.json` | Model, subagents, scratchpad scripts | Owning skill |
 | `note-<topic>.{md,txt,json,tsv}` | Model scratch notes | Human |
@@ -87,6 +86,7 @@ guard refuse every model write there without touching the artifact workflow.
 Named exceptions:
 
 - The sid-less `cache/` lives at `<WORKFLOW_STATE_DIR>/cache/`.
+- Sid-less worker logs live at `<WORKFLOW_STATE_DIR>/worker-logs/` (see "Worker logs").
 - Never moved: `*.lock`, `*.tmp`, `*.migrating.*.tmp`, `.sg-*`, `.prev-*`.
   `guard-attempt.tmp` is a short-lived marker that expires in place
   (`MIGRATABLE_KINDS` excludes it).
@@ -110,6 +110,24 @@ prompts use `bin/workflow-state-dir --session <sid> | --global | --roots`.
 
 While the legacy root still exists, an unpinned session routes per the
 migration below.
+
+## Worker logs
+
+Worker logs are neither plan artifacts nor gate inputs, so they stay out of
+PLANS_DIR, which syncs to the plans repository and has no retention for them (#2558).
+
+- Location: `<sid>.control/<stamp>-<label>` when the run has a session id, else
+  `<state root>/worker-logs/<stamp>-<label>`. An invalid sid falls back
+  to `worker-logs/`.
+- The dispatcher (`writeContext` in `bin/worker-dispatch.js`) decides the
+  directory once per run; workers never pick one. fsguard's `log-dir` write
+  scope confines writes to it.
+- When the final path component is a symlink or a non-directory, no log is
+  written and the worker reports `(none)`; there is no fallback location.
+- Name SSOT: `bin/worker-dispatch/worker-log.js` (`stamp`, labels) and
+  `hooks/workflow-state/state-io/control-dir.js` (`WORKER_LOGS_DIRNAME`).
+- Exception: issue-reconcile's `<stamp>-issue-reconcile-worker.jsonl` is a
+  worklist its caller reads, so it stays in PLANS_DIR.
 
 ## Resolving a control path
 
@@ -267,6 +285,10 @@ pre-commit gate.
 - `zombie-cleanup` removes `<wf>/<sid>.control/` when `<sid>.json` is gone and
   the newest file inside is older than 30 days (migration preserves mtimes, so
   this never shortens the PLANS_DIR retention), and any `*.tmp` inside it
-  (including `*.migrating.*.tmp`) after 24 hours.
+  (including `*.migrating.*.tmp`) after 24 hours. A worker log written after
+  the session ended counts as the newest file, so it restarts the 30 days.
+- `zombie-cleanup` removes regular files directly under `<wf>/worker-logs/`
+  older than 30 days. It uses `lstat`: a symlinked `worker-logs` or entry is
+  never followed, and subdirectories and the directory itself are kept.
 - `sweep-plans.sh` keeps handling PLANS_DIR artifacts only. `sweep-worktrees`
   and session-close never delete a control directory.

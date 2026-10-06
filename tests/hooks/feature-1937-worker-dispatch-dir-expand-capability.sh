@@ -63,6 +63,7 @@ BRANCH="feature/de-cap-probe"
 LINKED_RAW="$TMPD/linked-wt"
 git -C "$MAIN_RAW" worktree add -q -b "$BRANCH" "$LINKED_RAW" >/dev/null 2>&1
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 
 MAIN="$(nodepath "$MAIN_RAW")"
 LINKED="$(nodepath "$LINKED_RAW")"
@@ -72,7 +73,7 @@ DOUT=""; DRC=0
 dispatch_backup() {
     DRC=0
     printf '%s' "$2" > "$PLANS_RAW/$1.json"
-    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         node "$(nodepath "$DISPATCH_JS")" worktree-backup "$MAIN" "$PLANS/$1.json" 2>/dev/null)" || DRC=$?
 }
 field_of() {

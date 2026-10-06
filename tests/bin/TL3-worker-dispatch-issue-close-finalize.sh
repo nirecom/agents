@@ -2,31 +2,20 @@
 # tests/bin/TL3-worker-dispatch-issue-close-finalize.sh
 # Tests: bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/anchor.js, skills/issue-close-finalize/scripts/run-initial.sh
 # Tags: worker-dispatch, issue-close-finalize, real-environment, anchor-resolution, main-worktree, TL3, scope:issue-specific
-#
-# Issue #1673 — TL3, one real seam: a real `phase=initial` dispatch from the real
-# main worktree, with the real ACD / main-root anchors and the real run-initial.sh
-# child process. Everything the TL2 files can the stub over — anchor derivation,
-# the child actually starting, the KEY=VALUE stdout of a real bash script
-# crossing the process boundary — is exercised here for real.
-#
-# Safety: the issue number is deliberately unresolvable, so run-initial.sh stops
-# at its pre-flight/triage step. Steps 4-6 (sub-issue gate, parent body update,
-# G.5 prepare) are the only mutating ones and are never reached. Nothing on the
-# forge is created, closed, or edited.
-#
-# Gate: RUN_TL3=on, a real `gh` on PATH, and a resolvable main worktree.
-# Exits 77 (SKIP) otherwise.
-#
 # TL3 gap (what even this test does NOT catch):
-#   - The happy path of a real close: it would mutate live issues, so it stays
-#     manual. tests/bin/feature-1673-finalize-multipass.sh covers the transitions
-#     with the seam canned.
-#   - The operator's real PLANS_DIR (pinned to a temp dir here so a real session's
-#     state files are never touched).
+#   - The happy path of a real close (mutates live issues; stays manual —
+#     tests/bin/feature-1673-finalize-multipass.sh covers it with the seam canned).
+#   - The operator's real PLANS_DIR / workflow dir (pinned to temp dirs here).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+# Issue #1673 — TL3, one real seam: a real `phase=initial` dispatch from the real main
+# worktree with the real ACD / main-root anchors and the real run-initial.sh child;
+# anchor derivation and real KEY=VALUE stdout crossing the boundary run for real.
+# Safety: the issue number is deliberately unresolvable, so run-initial.sh stops at
+# pre-flight/triage; the mutating Steps 4-6 are never reached.
+# Gate: RUN_TL3=on, a real `gh` on PATH, and a resolvable main worktree; else 77.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 [ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
@@ -60,6 +49,7 @@ nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else e
 TMPD="$(mktemp -d)"
 trap 'rm -rf "$TMPD"' EXIT
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 PLANS="$(nodepath "$PLANS_RAW")"
 MAIN="$(nodepath "$MAIN_ROOT")"
 
@@ -75,7 +65,7 @@ PAYLOAD_RAW="$PLANS_RAW/$SID-worker-issue-close-finalize-1.json"
 printf '%s' "{\"phase\":\"initial\",\"issue_number\":$UNRESOLVABLE,\"root_issue_number\":$UNRESOLVABLE,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"main_worktree_path\":\"$MAIN\",\"session_id\":\"$SID\",\"artifact_dir\":\"$PLANS\"}" > "$PAYLOAD_RAW"
 
 DRC=0
-DOUT="$(run_with_timeout 180 env "WORKFLOW_PLANS_DIR=$PLANS" \
+DOUT="$(run_with_timeout 180 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
     node "$(nodepath "$DISPATCH_JS")" issue-close-finalize "$MAIN" "$(nodepath "$PAYLOAD_RAW")" 2>&1)" || DRC=$?
 
 field_of() {

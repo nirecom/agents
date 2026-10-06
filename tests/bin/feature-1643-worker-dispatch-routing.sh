@@ -2,29 +2,21 @@
 # tests/bin/feature-1643-worker-dispatch-routing.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/registry.js
 # Tags: worker-dispatch, routing, exit-code-contract, prototype-pollution, fail-closed, TL1, TL2, scope:issue-specific
-#
-# Issue #1643 — the dispatcher is the one door six workers are reached through.
-# The per-worker suites prove each worker behaves; this file proves the DOOR
-# behaves: that every registered name reaches a real module, that names which
-# exist on every JavaScript object cannot masquerade as registered workers, and
-# that a worker misbehaving becomes a rendered failure the caller can parse
-# rather than a Node crash the caller cannot.
-#
-# The exit-code contract is the load-bearing part. Callers branch on it: exit 0
-# means "read the contract on stdout", exit 2 means "the invocation was unusable
-# and there is nothing to read". A worker that throws must NOT turn into exit 1
-# with a stack trace, because a caller that only knows 0 and 2 would then treat
-# a crash as an unknown-worker error.
-#
 # TL3 gap (what this TL1+TL2 test does NOT catch):
-#   - The real skills invoking the dispatcher with an argv shape no test uses;
-#     tests/skills/feature-1643-worker-dispatch-callers.sh covers the caller side by
-#     source scan, and tests/bin/TL3-worker-dispatch-gh-contract.sh is the gated
-#     real-environment tier.
+#   - Real skills invoking the dispatcher with an argv shape no test uses (caller side:
+#     tests/skills/feature-1643-worker-dispatch-callers.sh; gated real tier:
+#     tests/bin/TL3-worker-dispatch-gh-contract.sh).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+# Issue #1643 — the dispatcher is the one door six workers are reached through. This
+# file proves the DOOR behaves: every registered name reaches a real module, names
+# that exist on every JS object cannot masquerade as workers, and a misbehaving
+# worker becomes a rendered failure rather than a Node crash.
+# Exit-code contract (load-bearing): exit 0 = "read the contract on stdout", exit 2 =
+# "invocation unusable, nothing to read". A throwing worker must NOT become exit 1
+# with a stack trace, or a 0/2-only caller treats a crash as an unknown worker.
 
 if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_ROUTE_INNER:-}" ]; then
     _WD1643_ROUTE_INNER=1 timeout 420 bash "$0" "$@"
@@ -92,6 +84,7 @@ git -C "$MAIN_RAW" add -A >/dev/null 2>&1
 git -C "$MAIN_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
 
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
+WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 OUTSIDE_RAW="$TMPD/outside"; mkdir -p "$OUTSIDE_RAW"
 MAIN="$(nodepath "$MAIN_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
@@ -108,7 +101,7 @@ DOUT=""; DERR=""; DRC=0
 dispatch() {
     DRC=0
     DERR="$TMPD/stderr.txt"
-    DOUT="$(run_with_timeout 60 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         node "$(nodepath "$DISPATCH_JS")" "$1" "$2" "$3" 2>"$DERR")" || DRC=$?
 }
 # dispatch_stub <mode> [worker] [payload-basename] — routes to the misbehaving
@@ -118,7 +111,7 @@ dispatch_stub() {
     local worker="${2:-test-runner}" pfile="${3:-ok.json}"
     DRC=0
     DERR="$TMPD/stderr.txt"
-    DOUT="$(run_with_timeout 60 env "WORKFLOW_PLANS_DIR=$PLANS" \
+    DOUT="$(run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         "WD_MODE=$1" "WD_REGISTRY_MODULE=$(nodepath "$REGISTRY_JS")" \
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" \
         "$worker" "$MAIN" "$PLANS/$pfile" 2>"$DERR")" || DRC=$?
@@ -259,21 +252,13 @@ group_bad_result_shape() {
 }
 
 # ===========================================================================
-# Group 6 (TL2) — a worker that RETURNS a degenerate value is reported honestly
-#
-# `emit.render()` coerces a non-object result into a failure render before the
-# renderers dereference `result.status`. Without that, a worker returning null or
-# undefined was an uncaught TypeError: exit 1, nothing parseable on stdout, and a
-# stack trace on stderr carrying absolute host paths straight into a transcript.
-# A bare string was worse in a quieter way — it rendered with a DEFAULTED status
-# and looked like an ordinary failure, hiding the fact that the worker never
-# produced a result at all.
-#
-# So three things are pinned per row: exit 0, the rejection status of the row's
-# own renderer, and a summary that names the degenerate shape. Plus the negative
-# the fix was really about — stderr carries no stack frames and no absolute host
-# path. Both renderers are driven, because the coercion has to speak whichever
-# vocabulary the caller is parsing.
+# Group 6 (TL2) — a worker that RETURNS a degenerate value is reported honestly.
+# `emit.render()` coerces a non-object result into a failure render; without it a
+# null/undefined return was an uncaught TypeError (exit 1, stack trace with host
+# paths), and a bare string rendered with a DEFAULTED status, hiding that no result
+# was produced. Pinned per row: exit 0, the row renderer's rejection status, a
+# summary naming the shape, and no stack frames / host paths on stderr. Both
+# renderers are driven, since the coercion must speak the caller's vocabulary.
 # ===========================================================================
 group_degenerate_result() {
     local mode worker pfile want_status shape err
