@@ -40,11 +40,30 @@ flat-reject-code-bad-suffix|t.entries[0].diagnostics.flatRejectCode = "FLAT_TEST
 part-ref-absolute-file|t.entries[0].caseMarkerReader.file = "/abs/case-parser.sh";
 part-ref-bad-function|t.entries[0].tableDrivenDetector.function = "has table driven";
 part-ref-missing-function|delete t.entries[0].caseMarkerReader.function;
+embed-rules-absolute-file|t.entries[0].caseEmbedRules = {file: "/abs/bash-case-embed.sh", function: "bash_case_embed"};
+embed-rules-bad-function|t.entries[0].caseEmbedRules = {file: "bin/lib/test-language-parts/bash-case-embed.sh", function: "bash case embed"};
+embed-rules-missing-function|t.entries[0].caseEmbedRules = {file: "bin/lib/test-language-parts/bash-case-embed.sh"};
 suite-without-root-marker|delete t.entries[1].launch.suiteRootMarker;
 suite-command-uses-path|t.entries[1].launch.command = ["bash", "{path}"];
 suite-command-uses-native-path|t.entries[1].launch.command = ["run", "{nativePath}"];
 suite-command-uses-native-path-sq|t.entries[1].launch.command = ["run", "'{nativePathSq}'"];
 fallback-entry-nonexistent|t.tableDrivenFallbackEntry = "no-such-entry";
+ROWS
+case_end
+
+case_begin "validation-accepts-case-embed-rules" "hooks/lib/test-language-registry.js"
+# The control for the embed-rules-* rejects: a well-formed part reference and null are
+# both valid, so each reject above is caused by its malformed value alone.
+while IFS='|' read -r vname vbody; do
+  [ -n "$vname" ] || continue
+  fx_table_edit "$VAL_BASE" "$VAL_DIR/$vname.json" "$vbody"
+  cli --format shell --file "$(np "$VAL_DIR/$vname.json")"
+  assert_eq "$vname rc=$CLI_RC" "$vname rc=0"
+  got="$(drv load "$READER" "$VAL_DIR/$vname.json")"
+  assert_eq "$vname loadRegistry=$got" "$vname loadRegistry=OK"
+done <<'ROWS'
+embed-rules-well-formed|t.entries[0].caseEmbedRules = {file: "bin/lib/test-language-parts/bash-case-embed.sh", function: "bash_case_embed"};
+embed-rules-null|t.entries[0].caseEmbedRules = null;
 ROWS
 case_end
 

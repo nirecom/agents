@@ -29,6 +29,7 @@ RUN_ALL_DUR_WRITE_OK=0
 RUN_ALL_DUR_TIER_OUT=""
 RUN_ALL_DUR_SEGMENTS_READ=0
 RUN_ALL_DUR_KEY_OUT=""
+RUN_ALL_DUR_SEGMENTS_OUT=()
 
 # --- identity ---------------------------------------------------------------
 
@@ -142,14 +143,32 @@ run_all_dur_blank() {
     return 0
 }
 
+# run_all_dur_segments_into <dir> <host-token> — this host's own segments in RUN_ALL_DUR_SEGMENTS_OUT,
+# newest first, capped at RUN_ALL_DUR_MAX_SEGMENTS_READ (fixed-width stamps make the C-collated glob
+# chronological) whether or not consolidation (consolidate-durations) ever ran; empty when <dir> is
+# missing. Always returns 0.
+run_all_dur_segments_into() {
+    local dir="${1:-}" tok="${2:-}" f i LC_ALL=C LC_CTYPE=C
+    local -a segs=()
+    RUN_ALL_DUR_SEGMENTS_OUT=()
+    for f in "$dir"/dur."$RUN_ALL_DUR_SCHEMA"."$tok".*.log; do
+        [ -f "$f" ] && segs+=("$f")
+    done
+    i=$(( ${#segs[@]} - 1 ))
+    while [ "$i" -ge 0 ] && [ "${#RUN_ALL_DUR_SEGMENTS_OUT[@]}" -lt "$RUN_ALL_DUR_MAX_SEGMENTS_READ" ]; do
+        RUN_ALL_DUR_SEGMENTS_OUT+=("${segs[$i]}")
+        i=$((i - 1))
+    done
+    return 0
+}
+
 # run_all_dur_lookup <agents-dir> <keys-file> <out-file> — `<id>\t<key>` lines in, `<id>\t<secs-
 # or-empty>` out in the SAME order. ALWAYS returns 0 (a missing or corrupt ledger is normal);
 # RUN_ALL_DUR_REASON carries the why.
 run_all_dur_lookup() {
     local agents_dir="${1:-}" keys="${2:-}" out="${3:-}"
     local LC_ALL=C LC_CTYPE=C
-    local dir tok f i c
-    local -a segs=() use=()
+    local dir tok c
 
     RUN_ALL_DUR_REASON=""
     RUN_ALL_DUR_SEGMENTS_READ=0
@@ -168,18 +187,8 @@ run_all_dur_lookup() {
     run_all_dur_host_token >/dev/null
     tok="$RUN_ALL_DUR_HOST_TOKEN"
     dir="$(run_all_dur_dir)"
-    # Fixed-width stamps make the C-collated glob chronological; walking it backwards yields
-    # newest-first, capped here whether or not consolidation (consolidate-durations) ever ran.
-    for f in "$dir"/dur."$RUN_ALL_DUR_SCHEMA"."$tok".*.log; do
-        [ -f "$f" ] && segs+=("$f")
-    done
-    i=$(( ${#segs[@]} - 1 ))
-    c=0
-    while [ "$i" -ge 0 ] && [ "$c" -lt "$RUN_ALL_DUR_MAX_SEGMENTS_READ" ]; do
-        use+=("${segs[$i]}")
-        i=$((i - 1))
-        c=$((c + 1))
-    done
+    run_all_dur_segments_into "$dir" "$tok"
+    c="${#RUN_ALL_DUR_SEGMENTS_OUT[@]}"
     RUN_ALL_DUR_SEGMENTS_READ="$c"
     if [ "$c" -eq 0 ]; then
         RUN_ALL_DUR_REASON="missing"
@@ -221,7 +230,7 @@ END {
     merge()
     for (j = 1; j <= n; j++) print id[j] "\t" ((key[j] in secs) ? secs[key[j]] : "")
 }
-' "$keys" "${use[@]}" >"$out" 2>/dev/null; then
+' "$keys" "${RUN_ALL_DUR_SEGMENTS_OUT[@]}" >"$out" 2>/dev/null; then
         RUN_ALL_DUR_REASON="ok"
     else
         RUN_ALL_DUR_REASON="unreadable"

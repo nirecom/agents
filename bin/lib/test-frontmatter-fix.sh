@@ -305,11 +305,12 @@ _rebuild_tests_value() {
   printf '%s' "$joined"
 }
 
-# _fix_headers_apply <file> — atomically rewrites the `# Tests:` header,
-# preserving the file mode. Blocked cases print a SKIP_* line and leave the
-# file unchanged.
+# _fix_headers_apply <file> [<dst>] — atomically rewrites the `# Tests:` header,
+# preserving the file mode. Classifies <file> (PWD = repo root) and writes the
+# result to <dst> (default <file>). Blocked cases print a SKIP_* line and leave
+# both unchanged.
 _fix_headers_apply() {
-  local file="$1"
+  local file="$1" dst="${2:-$1}"
   classify_tests_header "$file"
 
   if [[ "$CHR_MULTI_PAREN" -eq 1 ]]; then
@@ -343,12 +344,12 @@ _fix_headers_apply() {
 
   # Preserve file mode.
   local mode
-  mode="$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file" 2>/dev/null || true)"
+  mode="$(stat -c '%a' "$dst" 2>/dev/null || stat -f '%Lp' "$dst" 2>/dev/null || true)"
   if [[ -n "$mode" ]]; then
     chmod "$mode" "$tmp" 2>/dev/null || true
   fi
-  [[ -x "$file" ]] && { chmod +x "$tmp" 2>/dev/null || true; }
+  [[ -x "$dst" ]] && { chmod +x "$tmp" 2>/dev/null || true; }
 
-  mv "$tmp" "$file"
+  mv "$tmp" "$dst"
   echo "APPLIED: ${file}: ${pfx} Tests: ${new_value}"
 }

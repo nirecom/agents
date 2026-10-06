@@ -19,6 +19,7 @@ const SHELL_FIELDS = [
   "nameStrip.prefix", "nameStrip.suffix", "siblingSuiteDir", "header.commentPrefix",
   "launch.unit", "launch.requires", "launch.timeoutSeconds", "launch.suiteRootMarker",
   "caseMarkerReader.file", "caseMarkerReader.function",
+  "caseEmbedRules.file", "caseEmbedRules.function",
   "tableDrivenDetector.file", "tableDrivenDetector.function",
   "helperLibrary.path", "helperLibrary.sourceRegex",
   "diagnostics.nameLabel", "diagnostics.flatRejectCode",
@@ -119,6 +120,7 @@ function checkEntry(e, i, seen) {
   }
   checkLaunch(e.launch, `${where}.launch`, e.status);
   checkPart(e.caseMarkerReader, `${where}.caseMarkerReader`);
+  checkPart(e.caseEmbedRules, `${where}.caseEmbedRules`);
   checkPart(e.tableDrivenDetector, `${where}.tableDrivenDetector`);
   if (!nullOr(e.helperLibrary, isObj)) fail(`${where}.helperLibrary`, "must be {path, sourceRegex} or null");
   if (e.helperLibrary) {
