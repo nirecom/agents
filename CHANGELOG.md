@@ -683,3 +683,7 @@ Changes: `sweep-tests --embed-cases` wraps existing tests in case_begin/case_end
 ### FEATURE: PR #2563 (2026-10-06)
 Background: feat(#2558): write worker logs to the session control dir instead of PLANS_DIR
 Changes: Worker logs now live in the session control directory (or `worker-logs/` when there is no session) instead of the synced plans directory, and logs in `worker-logs/` are cleaned up after 30 days.
+
+### FEATURE: PR #2569 (2026-10-07)
+Background: feat(#2079): offer parallelism calibration from /run-tests and silence the run-all hint once never-ask is recorded
+Changes: `/run-tests` now offers to calibrate test parallelism on hosts that were never calibrated, and you can choose never to be asked again; the run-all calibration hint stops appearing once you do.
