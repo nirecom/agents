@@ -19,7 +19,7 @@ fi
 
 TMPDIR_WT="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_WT"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_WT"
+export WORKFLOW_STATE_DIR="$TMPDIR_WT"
 # Dual-pin (#1799): keep supervisor-emit out of the real ~/.workflow-plans tree.
 mkdir -p "$TMPDIR_WT/plans"
 export WORKFLOW_PLANS_DIR="$TMPDIR_WT/plans"

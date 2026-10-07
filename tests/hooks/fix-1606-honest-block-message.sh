@@ -30,7 +30,7 @@ OFF='echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: [workflow-bug] cannot proceed>>"'
 run_shim() {  # <tmp_node> <sid> → prints "rc|<stdout>"
     local tn="$1" sid="$2" hook_input out rc
     hook_input=$("$RWT" 8 node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'$sid',tool_input:{command:process.argv[1]}}))" "$OFF")
-    out=$(WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" AGENTS_CONFIG_DIR="$tn" "$RWT" 12 node "$SHIM" <<< "$hook_input" 2>/dev/null)
+    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$tn" "$RWT" 12 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$out"
 }
@@ -64,7 +64,7 @@ run_C1() {
 run_C2() {
     local tmp tn r rc out
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 10 node -e "
+    WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" "$RWT" 10 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('c2sid');
 st.layer1.findings=[{categories:['code'],severity:'error',detail:'x',reporter:'workflow-gate',timestamp:new Date().toISOString()}];

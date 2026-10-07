@@ -12,6 +12,7 @@ const events = require("./state-io/events");
 const intervals = require("./state-io/intervals");
 const projection = require("./state-io/projection");
 const stateLock = require("./state-io/state-lock");
+const stateRoot = require("./state-io/state-root");
 const stepContextClass = require("./state-io/step-context-class");
 
 module.exports = {
@@ -23,7 +24,10 @@ module.exports = {
   SKIPPABLE_STEPS: core.SKIPPABLE_STEPS,
   VALID_STATUSES: core.VALID_STATUSES,
   isSettledStatus: core.isSettledStatus,
-  getWorkflowDir: core.getWorkflowDir,
+  getStateRoot: stateRoot.getStateRoot,
+  getSessionStateDir: stateRoot.getSessionStateDir,
+  listStateRoots: stateRoot.listStateRoots,
+  assertValidStateSid: stateRoot.assertValidStateSid,
   getStatePath: core.getStatePath,
   assertValidSessionId: core.assertValidSessionId,
   SESSION_ID_VALID_RE: core.SESSION_ID_VALID_RE,

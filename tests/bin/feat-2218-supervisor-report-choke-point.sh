@@ -15,6 +15,12 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 CLI="$AGENTS_DIR/bin/supervisor-report"
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -37,7 +43,7 @@ report() {
     local tmp="$1" envsid="$2"
     shift 2
     env CLAUDE_CODE_SESSION_ID="$envsid" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$CLI" --categories 'workflow' --severity 'warning' \
         --detail 'gate blocked a sanctioned command' --reporter 'write-tests' "$@" 2>&1
@@ -49,7 +55,7 @@ report() {
 seed_active() {
     local tmp="$1" sid="$2"
     env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -61,7 +67,7 @@ markStep('$sid', 'workflow_init', 'complete');
 inspect() {
     local tmp="$1" sid="$2"
     env -u CLAUDE_CODE_SESSION_ID SID="$sid" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { readHandoff } = require('$AGENTS_DIR_NODE/$ARTIFACT');
@@ -178,7 +184,7 @@ run_S5() {
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
     env CLAUDE_CODE_SESSION_ID="usage-sid-s5" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$CLI" --severity 'warning' >/dev/null 2>&1
     rc=$?

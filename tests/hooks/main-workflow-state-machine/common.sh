@@ -127,7 +127,7 @@ run_gate() {
     # Unconditionally set AGENTS_CONFIG_DIR="$repo" so isAgentsSessionRepo() (#1138)
     # treats the target repo as the agents session repo — enforcement always applies.
     # Cross-repo tests that need a different agents dir must use an inline node call.
-    echo "$json" | CLAUDE_PROJECT_DIR="$repo" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         AGENTS_CONFIG_DIR="$repo" node "$GATE_HOOK" 2>/dev/null || true
 }
 
@@ -160,7 +160,7 @@ expect_block_gate_contains() {
 
 run_mark_hook() {
     local repo="$1" json="$2"
-    echo "$json" | CLAUDE_PROJECT_DIR="$repo" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$MARK_HOOK" 2>/dev/null || true
 }
 
@@ -237,7 +237,7 @@ call_resolve_donor() {
     workflow_dir_node="$(to_node_path "$WORKFLOW_DIR")"
     tpath="$(to_node_path "$fake_home/.claude/projects/$enc/${heir}.jsonl")"
     HOME="$fake_home" \
-        CLAUDE_WORKFLOW_DIR="$workflow_dir_node" \
+        WORKFLOW_STATE_DIR="$workflow_dir_node" \
         WORKFLOW_PLANS_DIR="$(to_node_path "$TEST_PLANS_DIR")" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_base_node" \
         run_with_timeout node -e "

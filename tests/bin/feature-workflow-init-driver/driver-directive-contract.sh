@@ -209,7 +209,7 @@ else
     fail "S4: path-traversal artifact found at $S4_ESCAPED"
     rm -rf "$S4_ESCAPED"
 fi
-# #2434: the checkpoint lives at <CLAUDE_WORKFLOW_DIR>/<sid>.control/wi-checkpoint.json.
+# #2434: the checkpoint lives at <WORKFLOW_STATE_DIR>/<sid>.control/wi-checkpoint.json.
 S4_CKPT="$(find "$WF" -mindepth 2 -maxdepth 2 -path '*.control/wi-checkpoint.json' 2>/dev/null | head -1)"
 S4_SID=""
 if [ -n "$S4_CKPT" ]; then S4_SID="$(basename "$(dirname "$S4_CKPT")")"; S4_SID="${S4_SID%.control}"; fi

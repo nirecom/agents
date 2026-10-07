@@ -115,7 +115,7 @@ group_f() {
     pfile="$PLANS_RAW/tr-linked.json"
     printf '%s' "{\"cwd\":\"$LINKED\",\"test_args\":[],\"timeout_seconds\":60}" > "$pfile"
     rc=0
-    out="$(cd "$MAIN_RAW" && run_with_timeout 60 env "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+    out="$(cd "$MAIN_RAW" && run_with_timeout 60 env "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         node "$DISPATCH_JS" test-runner "$MAIN" "$(nodepath "$pfile")" 2>&1)" || rc=$?
     status="$(printf '%s\n' "$out" | sed -n 's/^status: *//p' | head -1)"
     assert_eq "e2e/exit0" "0" "$rc"

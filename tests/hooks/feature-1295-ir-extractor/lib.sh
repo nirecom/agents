@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
-# Shared helpers + JS bridges for feature-1295-ir-extractor part suites.
-# Sourced by each part-N-*.sh. NOT run standalone.
-#
+# Shared helpers + JS bridges for feature-1295-ir-extractor part suites. Sourced by each part-N-*.sh. NOT run standalone.
+
 # Contract with the dispatcher (feature-1295-ir-extractor.sh):
 #   - $1 = WORKTREE root (agents repo). All node require() targets resolve here.
 #   - Each part script sources this file, runs assert_eq cases, and exits $FAIL.
-#
-# Pre-implementation (WF-CODE-4 / write-tests): several APIs under test do NOT
-# exist yet. NEW-API cases use a try/catch bridge that emits an "ERROR:..."
-# sentinel instead of crashing, so a pre-impl run FAILS the assertion cleanly
-# rather than aborting the suite. EXISTING infrastructure (string-API extractors,
-# parse, collectBashWriteTargets string bridge) must PASS now and keep passing.
+
+# Pre-implementation (WF-CODE-4 / write-tests): several APIs under test do NOT exist yet. NEW-API cases use a try/catch bridge that emits an "ERROR:..." sentinel instead of crashing, so a pre-impl run FAILS the assertion cleanly rather than aborting the suite.
+# EXISTING infrastructure (string-API extractors, parse, collectBashWriteTargets string bridge) must PASS now and keep passing.
 
 set -uo pipefail
 
@@ -21,6 +17,11 @@ WORKTREE="${1:-}"
 [ -n "$WORKTREE" ] && [ -d "$WORKTREE" ] || WORKTREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found — skipping tests"; exit 77; }
+
+# isolation (#2512): the sourcing part pins via harness_isolate before sourcing this file.
+declare -F harness_assert_isolated >/dev/null || . "$WORKTREE/tests/lib/harness.sh"
+harness_assert_isolated
+HOME_DIR="$(cd "$WORKTREE" && node -e 'const p=require("path"); process.stdout.write(require("os").homedir().split(p.sep).join("/"))')"
 
 # ---------------------------------------------------------------------------
 # assert_eq — table-driven assertion (inlined per test-design.md; no shared lib).
@@ -34,15 +35,8 @@ assert_eq() {
   fi
 }
 
-# ---------------------------------------------------------------------------
-# JS bridges — each shells out to node once per case. The command/segment string
-# is passed as argv (process.argv[N]) to avoid quoting/escaping surprises from
-# string-interpolating into the -e source (canary-2 pattern).
-#
-# NEW-API bridges (tok_quotes, ir_*, expand_raw, has_verb, collect_targets,
-# *_ir) emit "ERROR:<why>" on the pre-impl absence path so the harness reports
-# a clean FAIL rather than a node crash.
-# ---------------------------------------------------------------------------
+# JS bridges — each shells out to node once per case; the command/segment string is passed as argv (process.argv[N]) to avoid quoting/escaping surprises from string-interpolating into the -e source (canary-2 pattern).
+# NEW-API bridges (tok_quotes, ir_*, expand_raw, has_verb, collect_targets, *_ir) emit "ERROR:<why>" on the pre-impl absence path so the harness reports a clean FAIL rather than a node crash.
 
 # tokenizeSegmentWithQuotes(seg) → JSON [{value,raw},...] ; "ERROR:not-exported" if missing.
 # MSYS_NO_PATHCONV=1: git-bash on Windows rewrites a literal `/foo` argument (e.g. the
@@ -398,15 +392,12 @@ try_resolve_plans() {
 
 # ---------------------------------------------------------------------------
 # Shared expected-expansion values, computed via the SAME code the implementation
-# uses so assertions are platform-independent. WORKFLOW_PLANS_DIR must resolve
-# under HOME for the plans-dir-constrained paths (R2/E2) to be accepted.
+# uses so assertions are platform-independent. $HOME expands to os.homedir();
+# WORKFLOW_PLANS_DIR is the temp pin from the sourcing part (#2512).
 # ---------------------------------------------------------------------------
 # Normalize via path.sep (NOT a /\\/g regex): the test harness collapses a literal
 # double-backslash in an inline -e body, corrupting the regex. path.sep carries no
 # literal backslash in the source, so it survives the harness intact.
-HOME_DIR="$(cd "$WORKTREE" && node -e 'const p=require("path"); process.stdout.write(require("os").homedir().split(p.sep).join("/"))')"
-export WORKFLOW_PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME_DIR/.workflow-plans}"
-
 EXP_HOME_PLANS="$(cd "$WORKTREE" && WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR" node -e '
   const {expandStaticShellTokens}=require("./hooks/lib/bash-write-targets/redirect");
   process.stdout.write(expandStaticShellTokens("$HOME/.workflow-plans/f.json",{fromQuotedContext:"double"}));

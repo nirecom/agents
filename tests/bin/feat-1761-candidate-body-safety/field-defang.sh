@@ -44,9 +44,9 @@ trap 'rm -rf "$WORK"' EXIT
 
 # Fixture isolation: the review script never reads workflow state, but a child `node`
 # or a future supervisor emit must not resolve the developer's real dirs.
-export CLAUDE_WORKFLOW_DIR="$WORK/workflow"
+export WORKFLOW_STATE_DIR="$WORK/workflow"
 export WORKFLOW_PLANS_DIR="$WORK/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 MOCKDIR="$WORK/bin"; mkdir -p "$MOCKDIR"

@@ -43,7 +43,7 @@ write_state_json() {
     now="$(node -e "process.stdout.write(new Date().toISOString())" 2>/dev/null)"
     [ -n "$ws" ] && ws_json=",\"warnings_summary\":\"$ws\""
     printf '%s\n' "{\"version\":1,\"session_id\":\"$sid\",\"git_branch\":\"feature/x\",\"created_at\":\"$now\",\"steps\":{\"review_tests\":{\"status\":\"pending\",\"token\":\"oldtoken\",\"reopen_reason\":\"write-code-stale\"$ws_json,\"updated_at\":\"$now\"}}}" \
-        > "$CLAUDE_WORKFLOW_DIR/${sid}.json"
+        > "$WORKFLOW_STATE_DIR/${sid}.json"
 }
 
 SEEDED_WS="W-seeded: 1 prior advisory finding"
@@ -77,7 +77,7 @@ run_mark() {
     local repo_n; repo_n="$(np "$repo")"
     echo "$json" | run_with_timeout 30 env \
         CLAUDE_PROJECT_DIR="$repo_n" \
-        CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR" \
+        WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" \
         AGENTS_CONFIG_DIR="$AGENTS_N" \
         node "$MARK_HOOK" 2>/dev/null
 }
@@ -87,7 +87,7 @@ run_mark_rc() {
     local repo_n; repo_n="$(np "$repo")"
     echo "$json" | run_with_timeout 30 env \
         CLAUDE_PROJECT_DIR="$repo_n" \
-        CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR" \
+        WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" \
         AGENTS_CONFIG_DIR="$AGENTS_N" \
         node "$MARK_HOOK" >/dev/null 2>/dev/null
     echo $?

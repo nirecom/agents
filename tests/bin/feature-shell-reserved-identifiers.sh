@@ -14,6 +14,8 @@ source "$AGENTS_DIR/tests/lib/harness.sh"
 
 SRI_TMP="$(make_tmp)"
 trap 'rm -rf "$SRI_TMP"' EXIT
+# isolation (#2512): pin state and plans dirs once for this file
+harness_isolate "$SRI_TMP/isolation"
 DETECT_JS="$SRI_TMP/detect.js"
 
 cat > "$DETECT_JS" <<'JS'

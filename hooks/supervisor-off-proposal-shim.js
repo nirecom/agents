@@ -168,8 +168,8 @@ process.stdin.on("end", () => {
       if (!sid || !SID_RE.test(sid)) return { status: "absent" };
       let tokenPath;
       try {
-        const { getWorkflowDir } = require(path.join(__dirname, "./workflow-state"));
-        tokenPath = path.join(getWorkflowDir(), sid + ".off-clearance");
+        const { getSessionStateDir } = require(path.join(__dirname, "./workflow-state"));
+        tokenPath = path.join(getSessionStateDir(sid), sid + ".off-clearance");
       } catch (e) {
         return { status: "error" };
       }
@@ -226,10 +226,10 @@ process.stdin.on("end", () => {
       const wsidForClaimedCheck = resolveWsid();
       if (wsidForClaimedCheck && wsidForClaimedCheck !== sessionId) candidateSids.push(wsidForClaimedCheck);
       try {
-        const { getWorkflowDir } = require(path.join(__dirname, "./workflow-state"));
-        const dir = getWorkflowDir();
+        const { getSessionStateDir } = require(path.join(__dirname, "./workflow-state"));
         for (const sid of candidateSids) {
-          if (sid && SID_RE.test(sid) && fs.existsSync(path.join(dir, sid + ".off-clearance.claimed"))) {
+          if (sid && SID_RE.test(sid) &&
+              fs.existsSync(path.join(getSessionStateDir(sid), sid + ".off-clearance.claimed"))) {
             claimFailedBecauseClaimed = true;
             break;
           }

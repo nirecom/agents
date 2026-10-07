@@ -47,7 +47,7 @@ setup_wrapper_env() {
     local test_tmp="$1" mode="$2"
     local agents_dir="$test_tmp/agents"
     mkdir -p "$agents_dir/bin/lib" "$agents_dir/rules" "$test_tmp/plans" "$test_tmp/workflow-state"
-    export CLAUDE_WORKFLOW_DIR="$test_tmp/workflow-state"
+    export WORKFLOW_STATE_DIR="$test_tmp/workflow-state"
     export WORKFLOW_PLANS_DIR="$test_tmp/plans"
     echo "# core principles stub" > "$agents_dir/rules/core-principles.md"
 
@@ -188,7 +188,7 @@ setup_bin_env() {
     local test_tmp="$1"
     local agents_dir="$test_tmp/agents"
     mkdir -p "$agents_dir/bin" "$agents_dir/rules" "$test_tmp/workflow-state"
-    export CLAUDE_WORKFLOW_DIR="$test_tmp/workflow-state"
+    export WORKFLOW_STATE_DIR="$test_tmp/workflow-state"
     export WORKFLOW_PLANS_DIR="$test_tmp/plans"
     echo "# core principles stub" > "$agents_dir/rules/core-principles.md"
 

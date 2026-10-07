@@ -89,14 +89,14 @@ call_session_start() {
         raw=$(printf '%s' "$payload" | \
             CONV_LANG="$value" \
             CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
-            CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow" \
+            WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow" \
             HOME="$TMPDIR_BASE/home" \
             run_with_timeout 30 node "$SESSION_START" 2>/dev/null)
     else
         raw=$(printf '%s' "$payload" | (
             unset CONV_LANG
             CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
-            CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow" \
+            WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow" \
             HOME="$TMPDIR_BASE/home" \
             run_with_timeout 30 node "$SESSION_START" 2>/dev/null
         ))
@@ -120,13 +120,13 @@ call_post_compact() {
     if [ "$mode" = "set" ]; then
         raw=$(printf '%s' "$payload" | \
             CONV_LANG="$value" \
-            CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow" \
+            WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow" \
             HOME="$TMPDIR_BASE/home" \
             run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)
     else
         raw=$(printf '%s' "$payload" | (
             unset CONV_LANG
-            CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow" \
+            WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow" \
             HOME="$TMPDIR_BASE/home" \
             run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null
         ))

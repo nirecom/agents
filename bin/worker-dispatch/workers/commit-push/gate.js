@@ -13,6 +13,7 @@
 const path = require("path");
 
 const { readEnvFile } = require("../../../../hooks/lib/load-env");
+const { getSessionStateDir } = require("../../../../hooks/workflow-state/state-io/state-root");
 const { run: spawnRun } = require("../../spawn");
 
 const GIT_TIMEOUT_MS = 300000;
@@ -27,7 +28,7 @@ const GATE_APPROVE = "approve";
 // The six workflow env vars the gate child is allowed to see, and the only
 // names extraEnv below may set.
 const GATE_ENV_SCOPE = [
-  "CLAUDE_WORKFLOW_DIR",
+  "WORKFLOW_STATE_DIR",
   "WORKFLOW_PLANS_DIR",
   "WORKFLOW_SESSION_ID",
   "CLAUDE_PROJECT_DIR",
@@ -57,8 +58,12 @@ function homeDir() {
 function resolveGateEnv(payload, ctx) {
   const cfg = readEnvFile(path.join(ctx.anchors.acd, ".env")) || {};
   return {
-    CLAUDE_WORKFLOW_DIR:
-      cfg.CLAUDE_WORKFLOW_DIR || path.join(homeDir(), ".claude", "projects", "workflow"),
+    // Per-session routed dir (#2511); envFallback:false — process.env is never consulted.
+    WORKFLOW_STATE_DIR: getSessionStateDir(payload.session_id, {
+      pin: cfg.WORKFLOW_STATE_DIR || null,
+      home: homeDir(),
+      envFallback: false,
+    }),
     WORKFLOW_PLANS_DIR: ctx.anchors.plansDir,
     WORKFLOW_SESSION_ID: payload.session_id,
     CLAUDE_PROJECT_DIR: payload.worktree_path,
@@ -147,7 +152,7 @@ function runGate(ctx, payload, gateEnv, gitArgs, log) {
       timeoutMs: GATE_TIMEOUT_MS,
       envScope: GATE_ENV_SCOPE,
       extraEnv: {
-        CLAUDE_WORKFLOW_DIR: gateEnv.CLAUDE_WORKFLOW_DIR,
+        WORKFLOW_STATE_DIR: gateEnv.WORKFLOW_STATE_DIR,
         WORKFLOW_PLANS_DIR: gateEnv.WORKFLOW_PLANS_DIR,
         WORKFLOW_SESSION_ID: gateEnv.WORKFLOW_SESSION_ID,
         CLAUDE_PROJECT_DIR: gateEnv.CLAUDE_PROJECT_DIR,

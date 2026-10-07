@@ -121,7 +121,7 @@ mk_runcommands_json() {
 # read cannot pick up the developer's real session id.
 run_shim() {
     local tn="$1" cwd="$2" input="$3" out rc
-    out=$(cd "$cwd" && WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    out=$(cd "$cwd" && WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 15 node "$SHIM" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"

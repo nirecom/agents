@@ -72,11 +72,11 @@ assert_contains_block() {
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 cd "$TMPDIR_BASE" || exit 1
 
 # --- fixture git repos ------------------------------------------------------
@@ -188,7 +188,7 @@ new_env() {
     PLANS="$TMPDIR_BASE/plans-$ENV_SEQ"
     WORKFLOW_STATE="$TMPDIR_BASE/workflow-$ENV_SEQ"
     mkdir -p "$PLANS" "$WORKFLOW_STATE"
-    export CLAUDE_WORKFLOW_DIR="$WORKFLOW_STATE"
+    export WORKFLOW_STATE_DIR="$WORKFLOW_STATE"
     export WORKFLOW_PLANS_DIR="$PLANS"
     printf 'none\n' > "$PLANS/tradeoffs.md"
     RL_REPO="$REPO"
@@ -240,10 +240,10 @@ run_cli() { bash "$CLI" "$@"; }
 cl() { ( set +u; . "$LIB" >/dev/null 2>&1 || exit 127; "$@" ); }
 
 # --- artifact readers -------------------------------------------------------
-# Control files live in <CLAUDE_WORKFLOW_DIR>/<sid>.control/ (#2434); ctl_dir
+# Control files live in <WORKFLOW_STATE_DIR>/<sid>.control/ (#2434); ctl_dir
 # creates it so a case can seed a file there before the loop first runs.
-ctl_dir()      { mkdir -p "$CLAUDE_WORKFLOW_DIR/$1.control"; printf '%s/%s.control' "$CLAUDE_WORKFLOW_DIR" "$1"; }
-ctl_count()    { find "$CLAUDE_WORKFLOW_DIR" -path "*.control/*" -name "$1" -type f 2>/dev/null | wc -l | tr -d ' '; }
+ctl_dir()      { mkdir -p "$WORKFLOW_STATE_DIR/$1.control"; printf '%s/%s.control' "$WORKFLOW_STATE_DIR" "$1"; }
+ctl_count()    { find "$WORKFLOW_STATE_DIR" -path "*.control/*" -name "$1" -type f 2>/dev/null | wc -l | tr -d ' '; }
 ledger_file()  { printf '%s/%s-concern-ledger.txt' "$(ctl_dir "$2")" "$LEDGER_FORMAT"; }
 round_file()   { printf '%s/%s-round-number.txt' "$(ctl_dir "$2")" "$LOOP_FORMAT"; }
 delta_file()   { printf '%s/%s-round-%s-delta-%s.txt' "$(ctl_dir "$2")" "$LEDGER_FORMAT" "$3" "$4"; }

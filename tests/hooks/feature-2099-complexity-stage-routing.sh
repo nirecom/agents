@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing.sh
 # Tests: hooks/workflow-state/complexity-routing.js, hooks/workflow-state/complexity-routing/secret-shape.js, hooks/workflow-state.js, hooks/workflow-state/state-io/session-fields.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/skip-signal-resolver/complexity.js, hooks/workflow-state/skip-signal-resolver/condition-schemas.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-and-skip, skills/_shared/judge-task-complexity.md, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md
 # Tags: complexity, routing, stage, workflow-state, cli, fail-open, scope:issue-specific
-# Serial: writes complexity_evaluation events into a pinned CLAUDE_WORKFLOW_DIR
+# Serial: writes complexity_evaluation events into a pinned WORKFLOW_STATE_DIR
 # Issue #2099 — per-stage complexity routing. Dispatcher: fixtures + helpers,
 # then sources the case files in feature-2099-complexity-stage-routing/.
 set -uo pipefail
@@ -60,7 +60,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"

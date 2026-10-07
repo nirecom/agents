@@ -5,11 +5,8 @@
 # Shared helpers + node bridges for the canary6a pkg-mgr/interpreter-c parts.
 # Sourced by each part; NOT run standalone. Contract: $1 = WORKTREE root.
 #
-# RED-pending (#1411 write-tests): isPkgMgrWriteIR (new module pkg-mgr.js) and
-# isInterpreterCWriteIR (new export in bash-write-targets.js) do NOT exist yet.
-# The bridges guard require()/typeof and emit "ERROR:no-module" / "ERROR:not-exported"
-# instead of crashing so the harness records a clean FAIL. When pkg-mgr.js is
-# entirely absent, the part MAY choose to SKIP (exit 0) so the dispatcher stays green.
+# RED-pending (#1411): bridges guard require()/typeof of isPkgMgrWriteIR (pkg-mgr.js) and isInterpreterCWriteIR
+# and emit "ERROR:no-module" / "ERROR:not-exported" for a clean FAIL; a part MAY SKIP (exit 0) when pkg-mgr.js is absent.
 
 set -uo pipefail
 
@@ -23,6 +20,10 @@ WORKTREE="${1:-}"
 [ -n "$WORKTREE" ] && [ -d "$WORKTREE" ] || WORKTREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found — skipping tests"; exit 77; }
+
+# isolation (#2512): the sourcing part pins via harness_isolate before sourcing this file.
+declare -F harness_assert_isolated >/dev/null || . "$WORKTREE/tests/lib/harness.sh"
+harness_assert_isolated
 
 if command -v cygpath >/dev/null 2>&1; then WT_NODE="$(cygpath -m "$WORKTREE")"; else WT_NODE="$WORKTREE"; fi
 GUARD_JS="${WT_NODE}/hooks/enforce-worktree.js"

@@ -2,7 +2,7 @@
 # bin/concern-ledger — CLI front end for bin/lib/concern-ledger.sh (#1992/#1996).
 #
 # Every subcommand addresses the ledger by (session-id, format); the on-disk paths
-# are derived into <CLAUDE_WORKFLOW_DIR>/<sid>.control (#2434), never passed in.
+# are derived into <WORKFLOW_STATE_DIR>/<sid>.control (#2434), never passed in.
 # --plans-dir now only places the finalize diagnostic; elsewhere it is a legacy no-op.
 #
 # Exit codes: 0 ok, 1 verdict "not satisfied", 2 usage/invalid argument,

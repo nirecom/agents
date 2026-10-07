@@ -257,7 +257,7 @@ test_G50_unusable_workflow_dir_fails_open() {
         "$(node_path "$plans_dir")" "$(node_path "$bogus_dir")"
 
     if [ "$B_CODE" = "0" ] && [ -z "$(printf '%s' "$B_OUT" | tr -d '[:space:]')" ]; then
-        pass "G50: unusable CLAUDE_WORKFLOW_DIR → exit 0, no output (fail-open)"
+        pass "G50: unusable WORKFLOW_STATE_DIR → exit 0, no output (fail-open)"
     else
         fail "G50: expected exit 0 with empty stdout, got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
     fi

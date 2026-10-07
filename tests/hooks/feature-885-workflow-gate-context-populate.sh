@@ -73,7 +73,7 @@ SID_WG1="sid-wg1-$$"
 TMP_WG1=$(make_tmp)
 if command -v cygpath >/dev/null 2>&1; then TMP_WG1_NODE=$(cygpath -m "$TMP_WG1"); else TMP_WG1_NODE="$TMP_WG1"; fi
 # Send invalid JSON
-WORKFLOW_PLANS_DIR="$TMP_WG1_NODE" CLAUDE_WORKFLOW_DIR="$TMP_WG1_NODE" run_with_timeout 10 bash -c "printf 'not-json' | node '$HOOK'" >/dev/null 2>&1 || true
+WORKFLOW_PLANS_DIR="$TMP_WG1_NODE" WORKFLOW_STATE_DIR="$TMP_WG1_NODE" run_with_timeout 10 bash -c "printf 'not-json' | node '$HOOK'" >/dev/null 2>&1 || true
 findings_json=$(read_findings "$TMP_WG1" "$SID_WG1")
 # Early block has no sessionId resolved → no finding written. That's acceptable.
 out=$(node -e "
@@ -98,7 +98,7 @@ if [ -z "$MAIN_WT" ] || [ ! -d "$MAIN_WT" ]; then
     skip "WG2: cannot resolve main worktree"
 else
     JSON='{"tool_name":"Bash","tool_input":{"command":"git commit -m x","cwd":"'"$MAIN_WT_NODE"'"},"session_id":"'"$SID_WG2"'"}'
-    WORKFLOW_PLANS_DIR="$TMP_WG2_NODE" CLAUDE_WORKFLOW_DIR="$TMP_WG2_NODE" ENFORCE_WORKTREE=on \
+    WORKFLOW_PLANS_DIR="$TMP_WG2_NODE" WORKFLOW_STATE_DIR="$TMP_WG2_NODE" ENFORCE_WORKTREE=on \
         run_with_timeout 15 bash -c "echo '$JSON' | node '$HOOK'" >/dev/null 2>&1 || true
     findings_json=$(read_findings "$TMP_WG2" "$SID_WG2")
     out=$(node -e "
@@ -129,7 +129,7 @@ SID_WG3="sid-wg3-$$"
 TMP_WG3=$(make_tmp)
 if command -v cygpath >/dev/null 2>&1; then TMP_WG3_NODE=$(cygpath -m "$TMP_WG3"); else TMP_WG3_NODE="$TMP_WG3"; fi
 JSON='{"tool_name":"Bash","tool_input":{"command":"git commit -m x"},"session_id":"'"$SID_WG3"'"}'
-WORKFLOW_PLANS_DIR="$TMP_WG3_NODE" CLAUDE_WORKFLOW_DIR="$TMP_WG3_NODE" ENFORCE_WORKTREE=on \
+WORKFLOW_PLANS_DIR="$TMP_WG3_NODE" WORKFLOW_STATE_DIR="$TMP_WG3_NODE" ENFORCE_WORKTREE=on \
     run_with_timeout 15 bash -c "echo '$JSON' | node '$HOOK'" >/dev/null 2>&1 || true
 findings_json=$(read_findings "$TMP_WG3" "$SID_WG3")
 out=$(node -e "

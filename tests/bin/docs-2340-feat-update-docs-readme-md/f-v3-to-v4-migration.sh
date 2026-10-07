@@ -24,7 +24,7 @@ const out = { version: Number(process.env.F_VER), session_id: process.env.F_SID,
   created_at: "2026-01-01T00:00:00.000Z",
   session_start_context: { cwd: null, git_branch: null },
   workflow_type: "wf-code", events };
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.F_SID + ".json"),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, process.env.F_SID + ".json"),
   JSON.stringify(out, null, 2));
 ' 2>&1
 }
@@ -38,7 +38,7 @@ f_probe() {
 const fs = require("fs"), path = require("path");
 const CORE = require(process.env.CORE_N);
 const sid = process.env.F_SID;
-const sp = path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json");
+const sp = path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json");
 const rd = () => JSON.parse(fs.readFileSync(sp, "utf8"));
 const norm = () => CORE.normalizeStateVersion(rd());
 const rdEvents = (st) => (st.events || []).filter((e) => e.kind === "step_status" && e.step === "review_docs");

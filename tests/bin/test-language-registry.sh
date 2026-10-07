@@ -35,19 +35,19 @@ done
 case_end
 
 # shellcheck source=test-language-registry/validation.sh
-. "$TLR_CASES/validation.sh"
+. "$AGENTS_DIR/tests/bin/test-language-registry/validation.sh"
 # shellcheck source=test-language-registry/reader.sh
-. "$TLR_CASES/reader.sh"
+. "$AGENTS_DIR/tests/bin/test-language-registry/reader.sh"
 # shellcheck source=test-language-registry/loader.sh
-. "$TLR_CASES/loader.sh"
+. "$AGENTS_DIR/tests/bin/test-language-registry/loader.sh"
 # shellcheck source=test-language-registry/parity.sh
-. "$TLR_CASES/parity.sh"
+. "$AGENTS_DIR/tests/bin/test-language-registry/parity.sh"
 # shellcheck source=test-language-registry/parts.sh
-. "$TLR_CASES/parts.sh"
+. "$AGENTS_DIR/tests/bin/test-language-registry/parts.sh"
 # shellcheck source=test-language-registry/launch.sh
-. "$TLR_CASES/launch.sh"
+. "$AGENTS_DIR/tests/bin/test-language-registry/launch.sh"
 # shellcheck source=test-language-registry/mutation.sh
-. "$TLR_CASES/mutation.sh"
+. "$AGENTS_DIR/tests/bin/test-language-registry/mutation.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

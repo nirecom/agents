@@ -48,7 +48,7 @@ rj_write_state() {
         steps="$steps,\"$step\":{\"status\":\"$status\",\"updated_at\":null}"
     done
     printf '{"version":1,"session_id":"%s","created_at":"2026-01-01T00:00:00.000Z","is_bugfix":false,"git_branch":"feature/2403-allow-read-only-gh-read","steps":{%s},"workflow_type":"wf-code"}' \
-        "$sid" "${steps#,}" > "$CLAUDE_WORKFLOW_DIR/$sid.json"
+        "$sid" "${steps#,}" > "$WORKFLOW_STATE_DIR/$sid.json"
 }
 rj_write_state "sid-bg-armed" "complete"
 

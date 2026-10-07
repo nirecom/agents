@@ -19,6 +19,26 @@ function hitsAnyProtectedBasename(basename, opts) {
 const { isContainedUnder, normalizeTarget } = require("./target-normalize");
 const { realResolve } = require("./realpath-resolve");
 
+// Every state root, realpath'd (#2511: a legacy-routed session still writes under
+// the legacy root). The two directions fail closed differently:
+// - allow (areAllBashTargetsUnderWorkflowDir): any resolution fault yields [], so nothing is allowed;
+// - detection (targetsHitOtherSessionWorkflowState): a rejected (relative) WORKFLOW_STATE_DIR
+//   still leaves the default roots guarded — [] there would wave every write through.
+// Same fallback as placement-guard.js#stateRoots and bash-target-context/classify.js (CPR-ORTH).
+function listRoots(opts) {
+  const { listStateRoots } = require("../../workflow-state");
+  return listStateRoots(opts).filter(Boolean).map((r) => realResolve(r));
+}
+
+function resolvedStateRoots() {
+  try { return listRoots(); } catch (_) { return []; }
+}
+
+function guardedStateRoots() {
+  try { return listRoots(); } catch (_) { /* fall through to the default roots */ }
+  try { return listRoots({ envFallback: false }); } catch (_) { return []; }
+}
+
 // The workflow-dir allow fast-path approves every write beneath the workflow dir,
 // including the session-marker files that gate clearance (session-markers.js
 // authorizes purely on a marker's existence) — without this exclusion a bare
@@ -34,15 +54,12 @@ function areAllBashTargetsUnderWorkflowDir(targets, opts) {
   const sessionCtx = opts && opts.sessionCtx;
   try {
     const nodePath = require("path");
-    const { getWorkflowDir } = require("../../workflow-state");
-    let wfDir;
-    try { wfDir = getWorkflowDir(); } catch (_) { return false; }
-    if (!wfDir) return false;
+    const normRoots = resolvedStateRoots();
+    if (normRoots.length === 0) return false;
     // Containment is decided by isContainedUnder(), which folds case only on a
     // filesystem proven case-insensitive by probe — pre-folding both sides
     // here made `<wf>/State` look contained in `<wf>/state` on a
     // case-sensitive volume, an allow for a path outside the workflow dir.
-    const normWf = realResolve(wfDir);
     const isUnder = (rawT) => {
       const t = normalizeTarget(rawT);
       if (t.malformed === true) return false;           // fail-closed
@@ -68,8 +85,8 @@ function areAllBashTargetsUnderWorkflowDir(targets, opts) {
       if (hitsAnyProtectedBasename(nodePath.basename(resolved), { sessionCtx })) return false;
       if (hitsAnyProtectedBasename(nodePath.basename(n), { sessionCtx })) return false;
       // Directory itself is NOT allowed (unlike the plans-dir variant): that keeps
-      // `rm -rf <workflowDir>` blocked. Only strict descendants pass.
-      return isContainedUnder(n, normWf, { allowEqual: false });
+      // `rm -rf <workflowDir>` blocked. Only strict descendants of some root pass.
+      return normRoots.some((r) => isContainedUnder(n, r, { allowEqual: false }));
     };
     return targets.every(isUnder);
   } catch (_) {
@@ -128,13 +145,8 @@ const SESSION_STEM_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 function targetsHitOtherSessionWorkflowState(targets, sessionCtx) {
   if (!Array.isArray(targets) || targets.length === 0) return false;
   const nodePath = require("path");
-  const { getWorkflowDir } = require("../../workflow-state");
-  let normWf;
-  try {
-    const wfDir = getWorkflowDir();
-    if (!wfDir) return false;
-    normWf = realResolve(wfDir);
-  } catch (_) { return false; }
+  const normRoots = guardedStateRoots();
+  if (normRoots.length === 0) return false;
   const ownSid = sessionCtx && typeof sessionCtx.sessionId === "string" ? sessionCtx.sessionId.toLowerCase() : "";
   return targets.some((rawT) => {
     const t = normalizeTarget(rawT);
@@ -148,7 +160,8 @@ function targetsHitOtherSessionWorkflowState(targets, sessionCtx) {
     }
     let n;
     try { n = realResolve(resolved); } catch (_) { return false; }
-    if (!isContainedUnder(n, normWf, { allowEqual: false })) return false;
+    const normWf = normRoots.find((r) => isContainedUnder(n, r, { allowEqual: false }));
+    if (normWf === undefined) return false;
     const first = nodePath.relative(normWf, n).split(/[\\/]/)[0];
     const stem = first.split(".")[0].toLowerCase();
     if (!SESSION_STEM_RE.test(stem)) return false;

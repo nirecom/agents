@@ -163,7 +163,7 @@ call_find_latest() {
     else
         branch_js="'$branch'"
     fi
-    HOME="$fake_home" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" CLAUDE_TRANSCRIPT_BASE_DIR="$fake_home/.claude/projects" run_with_timeout node -e "
+    HOME="$fake_home" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" CLAUDE_TRANSCRIPT_BASE_DIR="$fake_home/.claude/projects" run_with_timeout node -e "
 try {
   const { findLatestStateForContext } = require('$WORKFLOW_STATE_LIB_NODE');
   if (typeof findLatestStateForContext !== 'function') {
@@ -550,7 +550,7 @@ SID_A12="a12-test-$(printf '%04x%04x' $RANDOM $RANDOM)"
 ENV_FILE_A12="$TMPDIR_BASE/a12.env"
 
 # First run: creates state file
-run_with_timeout bash -c "echo '{\"session_id\":\"$SID_A12\"}' | CLAUDE_WORKFLOW_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$ENV_FILE_A12' node '$SESSION_START_NODE'" >/dev/null 2>&1 || true
+run_with_timeout bash -c "echo '{\"session_id\":\"$SID_A12\"}' | WORKFLOW_STATE_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$ENV_FILE_A12' node '$SESSION_START_NODE'" >/dev/null 2>&1 || true
 
 # Modify state — set research=complete.
 # Via markStep, never by mutating the file: since #1733 the event stream is
@@ -559,13 +559,13 @@ run_with_timeout bash -c "echo '{\"session_id\":\"$SID_A12\"}' | CLAUDE_WORKFLOW
 # that has nothing to do with idempotency.
 STATE_FILE_A12="$WORKFLOW_DIR/${SID_A12}.json"
 if [ -f "$STATE_FILE_A12" ]; then
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 require('$WORKFLOW_STATE_LIB_NODE').markStep('$SID_A12', 'research', 'complete');
 " 2>/dev/null || true
 fi
 
 # Second run with same session_id
-run_with_timeout bash -c "echo '{\"session_id\":\"$SID_A12\"}' | CLAUDE_WORKFLOW_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$ENV_FILE_A12' node '$SESSION_START_NODE'" >/dev/null 2>&1 || true
+run_with_timeout bash -c "echo '{\"session_id\":\"$SID_A12\"}' | WORKFLOW_STATE_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$ENV_FILE_A12' node '$SESSION_START_NODE'" >/dev/null 2>&1 || true
 
 if [ ! -f "$STATE_FILE_A12" ]; then
     fail "A12. state file missing after second run"
@@ -596,7 +596,7 @@ echo "=== T-C1: session-start → stdout has additionalContext with session_id =
 TC1_SID="tc1-test-$(printf '%04x%04x' $RANDOM $RANDOM)"
 TC1_ENV="$TMPDIR_BASE/tc1.env"
 
-TC1_OUTPUT=$(run_with_timeout bash -c "echo '{\"session_id\":\"$TC1_SID\"}' | CLAUDE_WORKFLOW_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$TC1_ENV' node '$SESSION_START_NODE'" 2>/dev/null || echo "ERROR")
+TC1_OUTPUT=$(run_with_timeout bash -c "echo '{\"session_id\":\"$TC1_SID\"}' | WORKFLOW_STATE_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$TC1_ENV' node '$SESSION_START_NODE'" 2>/dev/null || echo "ERROR")
 
 TC1_HAS_CONTEXT=$(printf '%s' "$TC1_OUTPUT" | node -e "
 try {
@@ -639,7 +639,7 @@ write_state "$SID_TC2_OLD" "$STATE_TC2"
 JSONL_TC2="$TRANS_DIR_TC2/${SID_TC2_OLD}.jsonl"
 write_transcript_line "$JSONL_TC2" "$SID_TC2_OLD" "$WORKFLOW_DIR/${SID_TC2_OLD}.json"
 
-TC2_OUTPUT=$(HOME="$FAKE_HOME_TC2" run_with_timeout bash -c "echo '{\"session_id\":\"$SID_TC2_NEW\"}' | CLAUDE_WORKFLOW_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$TC2_ENV' CLAUDE_PROJECT_DIR='$CWD_TC2' node '$SESSION_START_NODE'" 2>/dev/null || echo "ERROR")
+TC2_OUTPUT=$(HOME="$FAKE_HOME_TC2" run_with_timeout bash -c "echo '{\"session_id\":\"$SID_TC2_NEW\"}' | WORKFLOW_STATE_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$TC2_ENV' CLAUDE_PROJECT_DIR='$CWD_TC2' node '$SESSION_START_NODE'" 2>/dev/null || echo "ERROR")
 
 TC2_HAS_INHERITED=$(printf '%s' "$TC2_OUTPUT" | node -e "
 try {
@@ -706,7 +706,7 @@ JSONL_TC3="$TRANS_DIR_TC3/${SID_TC3_OLD}.jsonl"
 write_transcript_line "$JSONL_TC3" "$SID_TC3_OLD" "$WORKFLOW_DIR/${SID_TC3_OLD}.json"
 
 # Spawn session-start with NEW session id
-HOME="$FAKE_HOME_TC3" run_with_timeout bash -c "echo '{\"session_id\":\"$SID_TC3_NEW\"}' | CLAUDE_WORKFLOW_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$TC3_ENV' CLAUDE_PROJECT_DIR='$CWD_TC3' node '$SESSION_START_NODE'" >/dev/null 2>&1 || true
+HOME="$FAKE_HOME_TC3" run_with_timeout bash -c "echo '{\"session_id\":\"$SID_TC3_NEW\"}' | WORKFLOW_STATE_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$TC3_ENV' CLAUDE_PROJECT_DIR='$CWD_TC3' node '$SESSION_START_NODE'" >/dev/null 2>&1 || true
 
 NEW_STATE_EXISTS="no"
 if [ -f "$WORKFLOW_DIR/${SID_TC3_NEW}.json" ]; then

@@ -36,7 +36,7 @@ PLANS_DIR="$TMPD/plans"
 mkdir -p "$PLANS_DIR"
 # Dual-pin: pinning only one of the pair lets the supervisor emitter fall back to
 # the developer's real ~/.workflow-plans and contaminate it.
-export CLAUDE_WORKFLOW_DIR="$(nodepath "$TMPD/workflow")"
+export WORKFLOW_STATE_DIR="$(nodepath "$TMPD/workflow")"
 export WORKFLOW_PLANS_DIR="$(nodepath "$PLANS_DIR")"
 mkdir -p "$TMPD/workflow"
 # The parent Claude Code session exports these; inheriting them would resolve the

@@ -80,7 +80,7 @@ run_session_start() {
   rcwd="$(resolved_cwd "$proj")"
   tpath="$tbase/$(transcript_dir_for "$rcwd")/$new_sid.jsonl"
   SS_OUT="$(printf '{"session_id":"%s","source":"resume","transcript_path":"%s"}' "$new_sid" "$tpath" | \
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     AGENTS_CONFIG_DIR="$CONFIG_DIR_ON" CLAUDE_PROJECT_DIR="$proj" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$tbase" CONFIRM_OUTLINE=on CONFIRM_DETAIL=on \
     run_with_timeout node "$SESSION_START" 2>&1 || true)"

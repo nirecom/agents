@@ -7,6 +7,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -39,7 +45,7 @@ require_source() {
 # phase_literal: pass "null" for null, or 'pending' / 'paused' / 'closed' / 'done' (with single quotes for strings).
 seed_state_phase() {
     local tmp="$1" sid="$2" phase_literal="$3" cum_sev_literal="$4"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -61,7 +67,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 run_guard() {
     local tmp="$1" sid="$2"
     echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null
 }
 
 # F1: alert_phase=null, cumulative_severity=error -> SHOULD block (normal case)
@@ -88,7 +94,7 @@ run_f2() {
     seed_state_phase "$tmp" "f2-sid" "'paused'" "'error'"
     out=$(run_guard "$tmp" "f2-sid")
     rc=$?
-    audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('f2-sid');
 if (!st || !st.audit) { process.stdout.write('MISSING'); process.exit(0); }
@@ -110,7 +116,7 @@ run_f3() {
     seed_state_phase "$tmp" "f3-sid" "'done'" "'error'"
     out=$(run_guard "$tmp" "f3-sid")
     rc=$?
-    audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('f3-sid');
 if (!st || !st.audit) { process.stdout.write('MISSING'); process.exit(0); }
@@ -145,7 +151,7 @@ run_f5() {
     require_source "$HOOK" "F5: malformed stdin -> fail-open, exit 0" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    echo "not-json" | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    echo "not-json" | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then

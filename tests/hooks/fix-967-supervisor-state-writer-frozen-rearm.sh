@@ -9,6 +9,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -56,7 +62,7 @@ process.stdout.write(typeof w.validateAlertPhaseTransition === 'function' ? 'yes
 # (use "null" or "'pending'", etc.). retry_count is a numeric literal.
 seed_state_layer2() {
     local tmp="$1" sid="$2" phase="$3" armed_at="$4" retry_count="$5"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -76,7 +82,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 
 seed_marker() {
     local tmp="$1" sid="$2"
-    CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const cd = require('$_AGENTS_DIR_NODE/hooks/workflow-state/state-io/control-dir.js');
 require('fs').writeFileSync(cd.controlPath('$sid', 'final-report-env.json', { forWrite: true }), '');
 " >/dev/null 2>&1
@@ -88,7 +94,7 @@ run_r1() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r1-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const r = w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'new finding after pause', reporter: 'test' });
 if (r !== true) { console.error('appendFinding returned: '+r); process.exit(2); }
@@ -111,7 +117,7 @@ run_r2() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r2-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -133,7 +139,7 @@ run_r3() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r3-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -155,7 +161,7 @@ run_r4() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r4-sid"
     seed_state_layer2 "$tmp" "$sid" "'done'" "null" "0"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -179,7 +185,7 @@ run_r5() {
     tmp="$(mktemp -d)"; sid="r5-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
     seed_marker "$tmp" "$sid"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -205,7 +211,7 @@ run_r5b() {
     tmp="$(mktemp -d)"; sid="r5b-sid"
     seed_state_layer2 "$tmp" "$sid" "null" "null" "0"
     seed_marker "$tmp" "$sid"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -228,7 +234,7 @@ run_r5c() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r5c-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const w = require('$WRITER_NODE');
 // Re-arm from paused
@@ -358,7 +364,7 @@ run_r7() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r7-sid"
     seed_state_layer2 "$tmp" "$sid" "'pending'" "'2026-06-06T11:00:00.000Z'" "0"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -381,7 +387,7 @@ run_r8() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r8-sid"
     seed_state_layer2 "$tmp" "$sid" "null" "null" "0"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -405,7 +411,7 @@ run_r9() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r9-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const now = new Date().toISOString();
 const result = w.writeAlertState('$sid', { alert_phase: 'pending', alert_armed_at: now, alert_retry_count: 0 });

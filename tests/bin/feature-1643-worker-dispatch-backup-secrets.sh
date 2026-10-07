@@ -98,7 +98,7 @@ dispatch_backup() {
     local pfile="$1"
     DRC=0
     DERR="$TMPD/stderr.txt"
-    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF" \
         node "$(nodepath "$DISPATCH_JS")" worktree-backup "$MAIN" "$pfile" 2>"$DERR")" || DRC=$?
 }
 field_of() {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bin/lib/codex-review-loop/control-paths.sh — the control-file paths of
-# bin/run-codex-review-loop (#2434). Every one lives in <CLAUDE_WORKFLOW_DIR>/<sid>.control/;
+# bin/run-codex-review-loop (#2434). Every one lives in <WORKFLOW_STATE_DIR>/<sid>.control/;
 # PLANS_DIR keeps only artifacts. An unusable control dir halts the loop (exit 4).
 # Caller globals: SID FORMAT LEDGER_FORMAT LEDGER_OVERRIDE. Needs sp_control_dir.
 # Sets: CONTROL_DIR CONTEXT_OUT MARKER LEDGER ROUND_FILE LAST_ROUND_FILE ROUND_LOCK ROUND_LOCK_HELD.

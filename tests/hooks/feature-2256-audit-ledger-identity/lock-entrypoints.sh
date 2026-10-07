@@ -37,7 +37,7 @@ if command -v cygpath >/dev/null 2>&1; then WORK_NODE="$(cygpath -m "$WORK")"; e
 
 mkdir -p "$WORK/plans" "$WORK/wf" "$WORK/transcripts"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
-export CLAUDE_WORKFLOW_DIR="$WORK_NODE/wf"
+export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
 export AGENTS_CONFIG_DIR="$AGENTS_NODE"
 unset CLAUDE_CODE_SESSION_ID
@@ -160,25 +160,80 @@ out((st.layer1.findings || []).length + '|' + (st.layer1.findings || []).map((f)
 ")
 assert_match "9: appendFinding dedup collapse still produces a consistent state" "$out" '^[12]\|'
 assert_match "10: appendFinding normal append still lands the distinct finding" "$out" 'd-other'
-grep -q 'withStateLock' "$SW_DIR/append.js" 2>/dev/null \
+grep -Eq 'with(Session)?StateLock\(' "$SW_DIR/append.js" 2>/dev/null \
     && pass "11: append.js acquires the state lock" \
-    || fail "11: append.js acquires the state lock" "no withStateLock reference in append.js"
+    || fail "11: append.js acquires the state lock" "no withStateLock/withSessionStateLock call in append.js"
 
-# --- 12-15: the lock is taken before the read, in every entrypoint module ---
+# --- 12-15: every read-modify-write read runs under the lock, in every entrypoint module ---
+# A readStateOrInit( call is locked when it sits inside a with(Session)?StateLock( callback, or
+# inside a non-exported function whose every in-module call site is itself locked. The span
+# starts at the first top-level comma: the lock-target argument is evaluated before the lock.
+cat > "$WORK/lock-check.js" <<'LOCKJS'
+const src = require('fs').readFileSync(process.argv[2], 'utf8');
+const spans = [];
+for (const m of src.matchAll(/with(?:Session)?StateLock\(/g)) {
+  let depth = 0, i = m.index + m[0].length - 1, cb = -1;
+  for (; i < src.length; i++) {
+    if (src[i] === '(') depth++;
+    else if (src[i] === ')' && --depth === 0) break;
+    else if (src[i] === ',' && depth === 1 && cb < 0) cb = i;
+  }
+  if (cb >= 0) spans.push([cb, i]);
+}
+const fnDefs = [...src.matchAll(/^(?:async\s+)?function\s+(\w+)\s*\(/gm)].map((m) => {
+  const end = src.indexOf('\n}', m.index);
+  return { name: m[1], at: m.index, end: end < 0 ? src.length : end };
+});
+const exportsAt = src.lastIndexOf('module.exports');
+const exported = new Set(exportsAt < 0 ? [] : (src.slice(exportsAt).match(/\w+/g) || []));
+const inSpan = (p) => spans.some(([a, b]) => a < p && p < b);
+const enclosing = (p) => fnDefs.find((d) => d.at < p && p < d.end) || null;
+const locked = (p, seen) => {
+  if (inSpan(p)) return true;
+  const f = enclosing(p);
+  if (!f || exported.has(f.name) || seen.has(f.name)) return false;
+  const calls = [...src.matchAll(new RegExp('\\b' + f.name + '\\(', 'g'))]
+    .filter((m) => !/function\s+$/.test(src.slice(Math.max(0, m.index - 16), m.index)));
+  return calls.length > 0 && calls.every((m) => locked(m.index, new Set([...seen, f.name])));
+};
+const reads = [...src.matchAll(/\breadStateOrInit\(/g)];
+const bad = reads.filter((m) => !locked(m.index, new Set()));
+process.stdout.write('reads=' + reads.length + ' unlocked=' + bad.length);
+process.exit(reads.length > 0 && bad.length === 0 ? 0 : 1);
+LOCKJS
+mkdir -p "$WORK/probe"
 for mod in append alert audit; do
-    if node -e "
-const src = require('fs').readFileSync('$SW_NODE/$mod.js', 'utf8');
-const lockAt = src.indexOf('withStateLock');
-const readAt = src.search(/readStateOrInit|readState\(/);
-process.exit(lockAt >= 0 && (readAt < 0 || lockAt < readAt) ? 0 : 1);
-" 2>/dev/null; then
-        pass "12-$mod: $mod.js takes the lock before its first read"
+    out=$(node "$WORK/lock-check.js" "$SW_NODE/$mod.js" 2>&1)
+    if [ $? -eq 0 ]; then
+        pass "12-$mod: every $mod.js readStateOrInit runs under the state lock"
     else
-        fail "12-$mod: $mod.js takes the lock before its first read" "withStateLock missing or after the read"
+        fail "12-$mod: every $mod.js readStateOrInit runs under the state lock" "$out"
+    fi
+    # Mutation probe: strip the arrow-form lock wrappers; the check must then reject the copy.
+    node -e "
+const fs = require('fs');
+const src = fs.readFileSync(process.argv[1], 'utf8');
+fs.writeFileSync(process.argv[2], src.replace(/with(?:Session)?StateLock\(\w+, \(\) => (\w+\([^()]*\))\)/g, '\$1'));
+" "$SW_NODE/$mod.js" "$WORK_NODE/probe/$mod.js"
+    if [ ! -s "$WORK/probe/$mod.js" ] || cmp -s "$SW_DIR/$mod.js" "$WORK/probe/$mod.js"; then
+        fail "12-probe-$mod: the lock check rejects $mod.js with its lock wrappers stripped" "mutation did not change the copy"
+    elif node "$WORK/lock-check.js" "$WORK_NODE/probe/$mod.js" >/dev/null 2>&1; then
+        fail "12-probe-$mod: the lock check rejects $mod.js with its lock wrappers stripped" "check stayed green"
+    else
+        pass "12-probe-$mod: the lock check rejects $mod.js with its lock wrappers stripped"
     fi
 done
-if grep -q 'withStateLock' "$SW_DIR/shared.js" 2>/dev/null; then
-    fail "15: shared.js primitives stay lock-free" "shared.js references withStateLock"
+# A read inside the lock-target argument runs before the lock is taken: the check must reject it.
+printf '%s\n' \
+    'function f(sid) { return withSessionStateLock(readStateOrInit(sid), () => 1); }' \
+    'module.exports = { f };' >"$WORK/probe/arg-read.js"
+if node "$WORK/lock-check.js" "$WORK_NODE/probe/arg-read.js" >/dev/null 2>&1; then
+    fail "12-probe-arg: the lock check rejects a read in the lock-target argument" "check stayed green"
+else
+    pass "12-probe-arg: the lock check rejects a read in the lock-target argument"
+fi
+if grep -Eq 'with(Session)?StateLock' "$SW_DIR/shared.js" 2>/dev/null; then
+    fail "15: shared.js primitives stay lock-free" "shared.js references withStateLock/withSessionStateLock"
 else
     pass "15: shared.js primitives stay lock-free"
 fi
@@ -196,12 +251,12 @@ for (const fn of ['confirmFinding', 'dropFindings', 'promotePendingDraftsToConfi
 out(errs.length === 0 ? 'all-present' : errs.join(','));
 ")
 assert_eq "16: the mutateAlertState derivatives are all exported" "$out" "all-present"
+# Each derivative's own definition must delegate to mutateAlertState, whose read case 12-alert
+# already pins under the lock; a lock elsewhere in alert.js proves nothing about this one.
 for fn in confirmFinding dropFindings promotePendingDraftsToConfirmed; do
     if node -e "
 const src = require('fs').readFileSync('$SW_NODE/alert.js', 'utf8');
-const i = src.indexOf('$fn');
-if (i < 0) process.exit(1);
-process.exit(src.indexOf('withStateLock') >= 0 || src.indexOf('mutateAlertState') >= 0 ? 0 : 1);
+process.exit(new RegExp('const $fn = \\\\([^)]*\\\\) => mutateAlertState\\\\(').test(src) ? 0 : 1);
 " 2>/dev/null; then
         pass "17-$fn: $fn routes through a locked mutator"
     else

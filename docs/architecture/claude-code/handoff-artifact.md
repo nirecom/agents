@@ -6,7 +6,7 @@ The handoff artifact is the durable home for that micro-state: an append-only, h
 
 ## Location and shape
 
-`<CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff.md` — a control file, kept apart from the prose artifacts in `PLANS_DIR` so that it is guarded while `WORKFLOW=on`. The path resolves via `controlPath` in `hooks/workflow-state/state-io/control-dir.js`, which also migrates the legacy session-prefixed `handoff.md` left in `PLANS_DIR`.
+`<WORKFLOW_STATE_DIR>/<sid>.control/handoff.md` — a control file, kept apart from the prose artifacts in `PLANS_DIR` so that it is guarded while `WORKFLOW=on`. The path resolves via `controlPath` in `hooks/workflow-state/state-io/control-dir.js`, which also migrates the legacy session-prefixed `handoff.md` left in `PLANS_DIR`.
 
 The document opens with a title line and `handoff_schema_version: 1`, then one `## <class>` section per class that has entries, in A–G order. Each entry is exactly one line:
 
@@ -140,7 +140,7 @@ A user's Revise and a tool-permission refusal would also qualify, but have no me
 
 ### Files
 
-All control files under `<CLAUDE_WORKFLOW_DIR>/<sid>.control/`, one writer each:
+All control files under `<WORKFLOW_STATE_DIR>/<sid>.control/`, one writer each:
 
 | File | Content | Writer |
 |---|---|---|
@@ -162,4 +162,4 @@ All three are constants. After rollout, measure nudge count, flush count, and th
 
 ## Lifecycle
 
-The artifact is a control file (`<CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff.md`), so it follows the control-directory lifecycle in [state-dirs.md](state-dirs.md) "Cleanup": `bin/sweep-plans.sh` never touches it, and `bin/session-sync.sh` — which copies `PLANS_DIR` files only — does not carry it between machines. State files expire on their own 7-day zombie cleanup while the control directory is kept until its newest file is 30 days old, so an artifact routinely outlives the state file it accompanied — `/resume-session --from` treats that as the `artifacts-only` rung of its availability ladder, not as a failure.
+The artifact is a control file (`<WORKFLOW_STATE_DIR>/<sid>.control/handoff.md`), so it follows the control-directory lifecycle in [state-dirs.md](state-dirs.md) "Cleanup": `bin/sweep-plans.sh` never touches it, and `bin/session-sync.sh` — which copies `PLANS_DIR` files only — does not carry it between machines. State files expire on their own 7-day zombie cleanup while the control directory is kept until its newest file is 30 days old, so an artifact routinely outlives the state file it accompanied — `/resume-session --from` treats that as the `artifacts-only` rung of its availability ladder, not as a failure.

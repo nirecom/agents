@@ -12,7 +12,7 @@ exec_req() {
     printf '%s' "$body" > "$stubbin/codex"
     chmod +x "$stubbin/codex"
     out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
-        CLAUDE_WORKFLOW_DIR="$tn" SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
+        WORKFLOW_STATE_DIR="$tn" SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
         "$RWT" 40 bash "$REQ" "$@" 2>&1)
     rc=$?
     rm -rf "$stubbin" 2>/dev/null || true
@@ -155,7 +155,7 @@ run_EX5() {
     stubbin=$(make_tmp)                       # working codex on PATH so the wrapper check (not codex) is what fails
     write_examiner_stub "$stubbin/codex" ALLOW "would-allow but wrapper missing"
     out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
-        CLAUDE_WORKFLOW_DIR="$tn" SESSION_ID="ex5sid" CLAUDE_CODE_SESSION_ID="ex5sid" \
+        WORKFLOW_STATE_DIR="$tn" SESSION_ID="ex5sid" CLAUDE_CODE_SESSION_ID="ex5sid" \
         bash "$bindir/request-off-clearance" --target workflow --category workflow-bug --detail "bug" 2>&1)
     rc=$?
     local ok=1

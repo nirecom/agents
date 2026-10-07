@@ -55,10 +55,10 @@ fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 WF="$TMP/wf"; mkdir -p "$WF"
-export CLAUDE_WORKFLOW_DIR="$(node_path "$WF")"
+export WORKFLOW_STATE_DIR="$(node_path "$WF")"
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMP/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 WORKFLOW_PLANS_DIR="$(node_path "$WORKFLOW_PLANS_DIR")"
@@ -96,7 +96,7 @@ const state={version:1,session_id:sid,created_at:new Date().toISOString(),
   steps:{workflow_init:st(),clarify_intent:st(),branching_complete:st()}};
 if(extra) Object.assign(state,JSON.parse(extra));
 fs.writeFileSync(path.join(dir,sid+".json"),JSON.stringify(state,null,2));
-' "$CLAUDE_WORKFLOW_DIR" "$1" "${2:-}"
+' "$WORKFLOW_STATE_DIR" "$1" "${2:-}"
 }
 
 # state_field <sid> <key>
@@ -112,7 +112,7 @@ const [dir,sid,key]=process.argv.slice(1);
 try{const s=JSON.parse(fs.readFileSync(path.join(dir,sid+".json"),"utf8"));
   const v=s[key]!=null?s[key]:(s.current?s.current[key]:null);
   process.stdout.write(v==null?"":String(v));}catch(e){}
-' "$CLAUDE_WORKFLOW_DIR" "$1" "$2"
+' "$WORKFLOW_STATE_DIR" "$1" "$2"
 }
 
 # state_event_field <sid> <kind> <field>
@@ -129,7 +129,7 @@ try{const s=JSON.parse(fs.readFileSync(path.join(dir,sid+".json"),"utf8"));
   else{const v=ev[ev.length-1][field];
     process.stdout.write(v===undefined?"(absent)":JSON.stringify(v));}
 }catch(e){}
-' "$CLAUDE_WORKFLOW_DIR" "$1" "$2" "$3"
+' "$WORKFLOW_STATE_DIR" "$1" "$2" "$3"
 }
 
 state_keys() {
@@ -138,7 +138,7 @@ const fs=require("fs"),path=require("path");
 const [dir,sid]=process.argv.slice(1);
 try{const s=JSON.parse(fs.readFileSync(path.join(dir,sid+".json"),"utf8"));
   process.stdout.write(Object.keys(s).sort().join(","));}catch(e){}
-' "$CLAUDE_WORKFLOW_DIR" "$1"
+' "$WORKFLOW_STATE_DIR" "$1"
 }
 
 check_has() { if printf '%s' "$3" | grep -qF "$2"; then pass "$1"; else fail "$1 -- missing [$2] in: $3"; fi; }

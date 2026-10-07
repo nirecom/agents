@@ -13,7 +13,7 @@
 # Required env: AGENTS_CONFIG_DIR
 # Session id: resolved through bin/resolve-session-id (SSOT) — rc 2 is "no session"
 # and fails closed here; any other non-zero rc is a bridge fault and also fails closed.
-# Optional env: CLAUDE_WORKFLOW_DIR, WORKFLOW_PLANS_DIR
+# Optional env: WORKFLOW_STATE_DIR, WORKFLOW_PLANS_DIR
 #
 # Split under the file-split HARD limit (rules/coding/file-split.md): the verdict-parsing
 # and token-minting logic live in ./request-off-clearance.d/{parse-verdict,mint-token}.js
@@ -239,25 +239,19 @@ GRANTED
   exit 0
 }
 
-# Resolve via the SAME getWorkflowDir() the shim and workflow-mark use, rather
-# than duplicating its $HOME-based fallback in bash (which can diverge from
-# Node's os.homedir() on Windows). Wrapped so a resolution failure reports
-# through the same audit trail and emergency hint as other examiner-side
-# failures, instead of exiting silently under `set -e`. No EXIT trap for the
-# error-capture temp file — later steps install their own (single slot); it's
-# cleaned up synchronously instead.
+# Resolve via the SAME per-session routing (bin/workflow-state-dir -> state-root.js)
+# the shim and workflow-mark use, so the token lands where they read it (#2511).
+# Wrapped so a resolution failure reports through the same audit trail and
+# emergency hint as other examiner-side failures, instead of exiting silently
+# under `set -e`. The error-capture temp file is cleaned up synchronously.
 WORKFLOW_DIR_ERR_FILE="$(mktemp 2>/dev/null || mktemp -t offclrwfdir)"
 set +e
-WORKFLOW_DIR="$(node -e '
-"use strict";
-const { getWorkflowDir } = require(process.env.AGENTS_CONFIG_DIR + "/hooks/workflow-state/state-io/core.js");
-process.stdout.write(getWorkflowDir());
-' 2>"$WORKFLOW_DIR_ERR_FILE")"
+WORKFLOW_DIR="$(node "$AGENTS_CONFIG_DIR/bin/workflow-state-dir" --session "$SID" 2>"$WORKFLOW_DIR_ERR_FILE")"
 WORKFLOW_DIR_RC=$?
 set -e
 if [[ $WORKFLOW_DIR_RC -ne 0 || -z "$WORKFLOW_DIR" ]]; then
   append_audit "UNAVAILABLE" "workflow dir resolution failed (rc=$WORKFLOW_DIR_RC)"
-  echo "Examiner unavailable: could not resolve the workflow directory (node missing, module load failure, or getWorkflowDir() threw)." >&2
+  echo "Examiner unavailable: could not resolve the session state directory (node missing, module load failure, or bin/workflow-state-dir refused the sid)." >&2
   if [[ -s "$WORKFLOW_DIR_ERR_FILE" ]]; then
     echo "--- resolution stderr ---" >&2
     cat "$WORKFLOW_DIR_ERR_FILE" >&2

@@ -56,13 +56,13 @@ PLANS_DIR_N="$(cygpath -m "$PLANS_DIR" 2>/dev/null || echo "$PLANS_DIR")"
 # start so the back-compat mode's `levels=<json>` line cannot satisfy it.
 read_ce_level() {
     local sid="$1"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" run_with_timeout 10 node "$READ_CE" --session "$sid" 2>/dev/null | grep -oE '^level=[^ ]+' | head -1 || true
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" run_with_timeout 10 node "$READ_CE" --session "$sid" 2>/dev/null | grep -oE '^level=[^ ]+' | head -1 || true
 }
 
 # Helper: read skip judgment for a session+target
 read_skip_judgment() {
     local sid="$1" target="$2"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" run_with_timeout 10 node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" run_with_timeout 10 node -e "
 const io = require('$STATEIO_N');
 try {
     const s = io.readState('$sid');
@@ -75,7 +75,7 @@ try {
 echo "=== RCS-1: auto path stdout purity (verdict=low, signals='') ==="
 if require_rcs "RCS-1"; then
     SID="rcs1-$$"
-    OUT=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    OUT=$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout 15 bash "$RCS_SCRIPT" --session "$SID" --signals "" --target outline 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && [ "$OUT" = "auto" ]; then
@@ -88,7 +88,7 @@ fi
 echo "=== RCS-2: judgment path stdout purity (verdict=high, signals=S1-multi-file) ==="
 if require_rcs "RCS-2"; then
     SID="rcs2-$$"
-    OUT=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    OUT=$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout 15 bash "$RCS_SCRIPT" --session "$SID" --signals "S1-multi-file" --target outline 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && [ "$OUT" = "judgment" ]; then
@@ -101,7 +101,7 @@ fi
 echo "=== RCS-3: no RECORDED_* lines in stdout (max 1 line) ==="
 if require_rcs "RCS-3"; then
     SID="rcs3-$$"
-    OUT=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    OUT=$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout 15 bash "$RCS_SCRIPT" --session "$SID" --signals "" --target outline 2>/dev/null)
     RC=$?
     LINE_COUNT=$(printf '%s' "$OUT" | wc -l | tr -d ' ')
@@ -117,7 +117,7 @@ fi
 echo "=== RCS-4: auto path writes skip-judgment record ==="
 if require_rcs "RCS-4"; then
     SID="rcs4-$$"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout 15 bash "$RCS_SCRIPT" --session "$SID" --signals "" --target outline >/dev/null 2>&1
     SJ=$(read_skip_judgment "$SID" "outline")
     if printf '%s' "$SJ" | grep -q '"all_conditions_met":true\|"all_conditions_met": true'; then
@@ -130,7 +130,7 @@ fi
 echo "=== RCS-5: judgment path does NOT write skip-judgment ==="
 if require_rcs "RCS-5"; then
     SID="rcs5-$$"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout 15 bash "$RCS_SCRIPT" --session "$SID" --signals "S1-multi-file" --target outline >/dev/null 2>&1
     SJ=$(read_skip_judgment "$SID" "outline")
     if [ "$SJ" = "null" ]; then
@@ -143,7 +143,7 @@ fi
 echo "=== RCS-6: complexity_evaluation always recorded (auto path) ==="
 if require_rcs "RCS-6a"; then
     SID="rcs6a-$$"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout 15 bash "$RCS_SCRIPT" --session "$SID" --signals "" --target outline >/dev/null 2>&1
     CE=$(read_ce_level "$SID")
     if [ -n "$CE" ]; then
@@ -156,7 +156,7 @@ fi
 echo "=== RCS-6b: complexity_evaluation always recorded (judgment path) ==="
 if require_rcs "RCS-6b"; then
     SID="rcs6b-$$"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout 15 bash "$RCS_SCRIPT" --session "$SID" --signals "S1-multi-file" --target outline >/dev/null 2>&1
     CE=$(read_ce_level "$SID")
     if [ -n "$CE" ]; then
@@ -169,7 +169,7 @@ fi
 echo "=== RCS-7: --target detail auto path records sd_c3 in skip-judgment ==="
 if require_rcs "RCS-7"; then
     SID="rcs7-$$"
-    OUT=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    OUT=$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout 15 bash "$RCS_SCRIPT" --session "$SID" --signals "" --target detail 2>/dev/null)
     RC=$?
     SJ=$(read_skip_judgment "$SID" "detail")
@@ -184,7 +184,7 @@ echo "=== RCS-8: missing AGENTS_CONFIG_DIR -> non-zero exit ==="
 if require_rcs "RCS-8"; then
     SID="rcs8-$$"
     SAVED_ACD="$AGENTS_CONFIG_DIR"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="" \
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" WORKFLOW_PLANS_DIR="$PLANS_DIR_N" AGENTS_CONFIG_DIR="" \
         run_with_timeout 5 bash "$RCS_SCRIPT" --session "$SID" --signals "" --target outline >/dev/null 2>/dev/null
     RC=$?
     # restore
@@ -222,7 +222,7 @@ if require_rcs "RCS-9"; then
         esac
         SID="rcs9-$LABEL-$$"
         ERRF="$TMPDIR_BASE/rcs9-$LABEL.err"
-        OUT=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+        OUT=$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
             run_with_timeout 15 bash "$RCS_SCRIPT" --session "$SID" --signals "" "$@" 2>"$ERRF")
         RC=$?
         ERR=$(cat "$ERRF" 2>/dev/null || true)
@@ -242,7 +242,7 @@ fi
 echo "=== RCS-10: --target guard control (a valid target still works) ==="
 if require_rcs "RCS-10"; then
     SID="rcs10-$$"
-    OUT=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    OUT=$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout 15 bash "$RCS_SCRIPT" --session "$SID" --signals "" --target outline 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && [ "$OUT" = "auto" ]; then

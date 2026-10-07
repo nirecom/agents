@@ -3,7 +3,7 @@
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/payload.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch/workers/issue-close-finalize.js, hooks/stop-final-report-guard.js
 # Tags: worker-dispatch, control-dir, fsguard, stop-guard, TL2, scope:issue-specific
 #
-# Issue #2434 — control files move to CLAUDE_WORKFLOW_DIR/<sid>.control/.
+# Issue #2434 — control files move to WORKFLOW_STATE_DIR/<sid>.control/.
 # Tests payload residency, fsguard scopes, stop-guard gate path, double-dispatch.
 #
 # TL3 gap: real gh calls (run-initial/run-finalize-terminal), CLI end-to-end
@@ -35,7 +35,7 @@ export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPD/transcripts"
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
 
 P_DIR="$WORKFLOW_PLANS_DIR"
-W_DIR="$CLAUDE_WORKFLOW_DIR"
+W_DIR="$WORKFLOW_STATE_DIR"
 
 # Shared git fixture
 MAIN_RAW="$TMPD/mainrepo"

@@ -61,7 +61,7 @@ mkdir -p "$PLANS_DIR" "$WORKFLOW_DIR" "$NEUTRAL_CWD" "$OUTSIDE_DIR"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 
 # RED-phase visibility: name missing sources so a MODULE_NOT_FOUND below is attributable.
 for _src in "$PLAN_GATE" "$NOTES_GATE" "$PRETOOL_LIB" "$PLAN_ARTIFACT_LIB"; do

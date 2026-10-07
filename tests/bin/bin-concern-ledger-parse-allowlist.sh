@@ -74,9 +74,9 @@ strip() {
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
 
@@ -156,8 +156,8 @@ new_env() {
     mkdir -p "$PLANS"
 }
 
-# <plans> is kept for call-site symmetry; #2434 stages into <CLAUDE_WORKFLOW_DIR>/<sid>.control.
-delta_file() { printf '%s/%s.control/%s-round-%s-delta-%s.txt' "$CLAUDE_WORKFLOW_DIR" "$2" "$FORMAT" "$3" "$4"; }
+# <plans> is kept for call-site symmetry; #2434 stages into <WORKFLOW_STATE_DIR>/<sid>.control.
+delta_file() { printf '%s/%s.control/%s-round-%s-delta-%s.txt' "$WORKFLOW_STATE_DIR" "$2" "$FORMAT" "$3" "$4"; }
 
 mk_report() {
     local f="$1" l

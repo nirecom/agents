@@ -9,6 +9,11 @@
 # hook, a verbose transport. This file drives both real workers to a real
 # failure and follows the printed value to every place it lands.
 set -u
+# isolation (#2512): pin both dirs before the timeout re-exec below; the inner run reuses the root.
+_ISOLATION_TMP_ROOT="${_ISOLATION_TMP_ROOT:-$(mktemp -d)}"
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export _ISOLATION_TMP_ROOT WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 # Finding, pinned rather than asserted away: fsguard.writeFile applies only
 # redactSentinels, and emit.js's sanitizeLine only collapses control characters,
@@ -62,7 +67,7 @@ done
 
 TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/wd1812-leak-$$")"
 mkdir -p "$TMPD"
-trap 'rm -rf "$TMPD"' EXIT
+trap 'rm -rf "$TMPD" "$_ISOLATION_TMP_ROOT"' EXIT
 
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
 WFDIR_RAW="$TMPD/workflow"; mkdir -p "$WFDIR_RAW"

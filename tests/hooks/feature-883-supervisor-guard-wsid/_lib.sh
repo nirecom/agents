@@ -32,11 +32,11 @@ require_source() {
     return 0
 }
 
-# #2434: supervisor state lives at <CLAUDE_WORKFLOW_DIR>/<sid>.control/, so the
-# seed and every hook call pin CLAUDE_WORKFLOW_DIR="$tmp" (forWrite creates the dir).
+# #2434: supervisor state lives at <WORKFLOW_STATE_DIR>/<sid>.control/, so the
+# seed and every hook call pin WORKFLOW_STATE_DIR="$tmp" (forWrite creates the dir).
 seed_state() {
     local tmp="$1" sid="$2" alert_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -48,16 +48,16 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 
 # seed_workflow_started(tmp, sid): mark `workflow_init` complete for `sid`
 # in the workflow-state store rooted at `$tmp` (hooks/workflow-state, keyed
-# by CLAUDE_WORKFLOW_DIR — a DIFFERENT store than the supervisor alert state
+# by WORKFLOW_STATE_DIR — a DIFFERENT store than the supervisor alert state
 # that seed_state() writes into WORKFLOW_PLANS_DIR). Since #1794,
 # hooks/supervisor-guard.js gates branch (3) alert_armed_at on
 # isWorkflowStarted(sessionId), which reads THIS store. Callers must invoke
 # this with the same session id that the hook will resolve at runtime, and
-# must also export CLAUDE_WORKFLOW_DIR="$tmp" on the hook invocation itself
+# must also export WORKFLOW_STATE_DIR="$tmp" on the hook invocation itself
 # so both reads and writes land in the same fixture directory.
 seed_workflow_started() {
     local tmp="$1" sid="$2"
-    CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node -e "
 const { markStep } = require('$WORKFLOW_STATE_IO_NODE');
 markStep('$sid', 'workflow_init', 'complete');
 " >/dev/null 2>&1

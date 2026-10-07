@@ -21,15 +21,15 @@ ROUTING_JS="hooks/workflow-state/complexity-routing.js"
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-# #2434: normalize writes the DERIVED <CLAUDE_WORKFLOW_DIR>/<sid>.control/<stage>-signals.txt;
+# #2434: normalize writes the DERIVED <WORKFLOW_STATE_DIR>/<sid>.control/<stage>-signals.txt;
 # dual-pin both dirs (rules/test/fixture-isolation.md) so no write leaves the fixture.
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 mkdir -p "$TMP_ROOT/workflow-state" "$TMP_ROOT/plans" "$TMP_ROOT/empty-transcripts"
-export CLAUDE_WORKFLOW_DIR="$TMP_ROOT/workflow-state"
+export WORKFLOW_STATE_DIR="$TMP_ROOT/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMP_ROOT/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP_ROOT/empty-transcripts"
 NORMALIZE_STAGE="detail"
-signals_path() { printf '%s/%s.control/%s-signals.txt' "$CLAUDE_WORKFLOW_DIR" "$1" "$NORMALIZE_STAGE"; }
+signals_path() { printf '%s/%s.control/%s-signals.txt' "$WORKFLOW_STATE_DIR" "$1" "$NORMALIZE_STAGE"; }
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

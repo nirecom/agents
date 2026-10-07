@@ -4,7 +4,7 @@
 #
 # Issue #943 — per-hook seam TL3 test: stop-confirm-plan-guard.js (Stop).
 # A per-turn marker fixture is placed in the sandbox that the runner pins via the
-# CLAUDE_WORKFLOW_DIR + WORKFLOW_PLANS_DIR pair (#1799); a live `claude -p`
+# WORKFLOW_STATE_DIR + WORKFLOW_PLANS_DIR pair (#1799); a live `claude -p`
 # session triggers the Stop hook, which reads and deletes the marker via
 # readAndDeleteTurnMarkers(). Assert marker present before, absent after.
 # Layer: TL3 (live claude -p session, real Stop firing, real turn marker).

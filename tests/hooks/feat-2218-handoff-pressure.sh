@@ -35,7 +35,7 @@ require_module() {
 run_node() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
-    out=$(env CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+    out=$(env WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "$1" 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
@@ -47,7 +47,7 @@ run_node() {
 run_js() {
     local tn; tn="$(node_path "$1")"
     mkdir -p "$1/wf" "$1/home"
-    env CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+    env WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" TMPD="$tn" AGENTS="$AGENTS_DIR_NODE" \
         "$RWT" 60 node "$2" 2>&1
 }
@@ -182,7 +182,7 @@ run_hook() {
     local tmp="$1" sid="$2" tn; tn="$(node_path "$tmp")"
     printf '{"session_id":"%s","transcript_path":"%s","cwd":"%s","hook_event_name":"UserPromptSubmit","prompt":"go"}' \
         "$sid" "$tn/transcript.jsonl" "$tn" \
-        | env CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        | env WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
             HOME="$tn/home" USERPROFILE="$tn/home" \
             "$RWT" 60 node "$AGENTS_DIR/$HOOK" 2>&1
 }
@@ -230,14 +230,14 @@ run_P4() {
     tmp="$(make_tmp)"
     problems=""
     bad1=$(printf 'not json at all' | env \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$AGENTS_DIR/$HOOK" 2>/dev/null)
     bad2=$(printf '{"session_id":"sid-p4"}' | env \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$AGENTS_DIR/$HOOK" 2>/dev/null)
     bad3=$(printf '{"session_id":"sid-p4","transcript_path":"%s/nope.jsonl"}' "$(node_path "$tmp")" \
         | env \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$AGENTS_DIR/$HOOK" 2>/dev/null)
     rm -rf "$tmp" 2>/dev/null || true
     [ "$(printf '%s' "$bad1" | tr -d ' \n\r')" = "{}" ] || problems="$problems malformed-stdin:'${bad1}'"

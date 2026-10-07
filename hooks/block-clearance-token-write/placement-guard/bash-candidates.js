@@ -28,11 +28,16 @@ function foldText(text) {
 
 // The spellings of the workflow dir a command text can carry: the folded
 // absolute path, its MSYS `/c/...` form, and the env-var name itself.
+// `foldedWf` is one folded root or a list of them (#2511: every state root counts).
 function workflowDirSpellings(foldedWf) {
-  if (!foldedWf) return [];
-  const out = [foldedWf, "claude_workflow_dir"];
-  const m = /^([a-z]):\/(.*)$/i.exec(foldedWf);
-  if (m) out.push(`/${m[1].toLowerCase()}/${m[2]}`);
+  const roots = [].concat(foldedWf || []).filter(Boolean);
+  if (roots.length === 0) return [];
+  const out = ["workflow_state_dir"];
+  for (const r of roots) {
+    out.push(r);
+    const m = /^([a-z]):\/(.*)$/i.exec(r);
+    if (m) out.push(`/${m[1].toLowerCase()}/${m[2]}`);
+  }
   return out;
 }
 
@@ -40,7 +45,7 @@ function mentionsWorkflowDir(text, foldedWf) {
   const t = foldText(text);
   const upper = String(text || "");
   return workflowDirSpellings(foldedWf).some((s) =>
-    s === "claude_workflow_dir" ? /CLAUDE_WORKFLOW_DIR/.test(upper) : t.includes(s)
+    s === "workflow_state_dir" ? /WORKFLOW_STATE_DIR/.test(upper) : t.includes(s)
   );
 }
 

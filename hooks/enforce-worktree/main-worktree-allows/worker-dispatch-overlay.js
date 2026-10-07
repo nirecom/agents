@@ -17,7 +17,7 @@ const { getSessionRepoRoots } = require("../session-scope");
 const {
   stripRelSuffix, isUnderPlansDir, hasControlChar, UNSAFE_ARG_VALUE_RE,
 } = require("../arg-value-guard");
-const { getWorkflowDir } = require("../../workflow-state/state-io/core");
+const { listStateRoots } = require("../../workflow-state/state-io/state-root");
 
 // Worker-name enum SSOT. Loaded defensively: a partial revert that removes the
 // registry must degrade this overlay to BLOCK, not crash the whole hook.
@@ -80,18 +80,19 @@ function isSafeValue(v) {
   return !UNSAFE_ARG_VALUE_RE.test(v);
 }
 
-// True when `token` is <workflowDir>/<sid>.control/worker-*.json — exactly two segments
-// below the workflow dir after resolution, so `..` escapes and nesting are refused.
+// True when `token` is <root>/<sid>.control/worker-*.json for some state root (#2511) —
+// exactly two segments below that root after resolution, so `..` escapes and nesting are refused.
 function isControlDirPayload(token) {
   try {
     if (!isSafeValue(token)) return false;
-    const wf = getWorkflowDir();
-    if (!wf) return false;
-    const normWf = normalizeForCompare(normalizeCwd(wf) || wf);
     const normTok = normalizeForCompare(normalizeCwd(token) || token);
-    if (!normWf || !normTok || !normTok.startsWith(normWf + path.sep)) return false;
-    const segs = normTok.slice(normWf.length + 1).split(/[\\/]/);
-    return segs.length === 2 && CONTROL_SEG_RE.test(segs[0]) && PAYLOAD_NAME_RE.test(segs[1]);
+    if (!normTok) return false;
+    return listStateRoots().some((wf) => {
+      const normWf = wf ? normalizeForCompare(normalizeCwd(wf) || wf) : null;
+      if (!normWf || !normTok.startsWith(normWf + path.sep)) return false;
+      const segs = normTok.slice(normWf.length + 1).split(/[\\/]/);
+      return segs.length === 2 && CONTROL_SEG_RE.test(segs[0]) && PAYLOAD_NAME_RE.test(segs[1]);
+    });
   } catch (_e) {
     return false;
   }

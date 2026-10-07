@@ -6,6 +6,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -35,7 +41,7 @@ guard_implemented() {
     tmp="$(mktemp -d)"
     mkdir -p "$tmp/probe-sid.control"  # #2434 control file
     touch "$tmp/probe-sid.control/final-report-env.json"
-    probe=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
+    probe=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null } };
 try { w.ensureAlertScheduled(state, 'probe-sid'); } catch (e) { process.stdout.write('error'); process.exit(0); }
@@ -64,7 +70,7 @@ run_r1() {
     sid="r1-sid"
     mkdir -p "$tmp/$sid.control"  # #2434 control file
     touch "$tmp/$sid.control/final-report-env.json"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 10 node "$REPORT_BIN_NODE" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$REPORT_BIN_NODE" \
         --categories workflow --severity warning --detail "post-final test" \
         --reporter test --session-id "$sid" 2>&1)
     rc=$?
@@ -75,7 +81,7 @@ run_r1() {
     fi
     # Verify state
     local check
-    check=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
+    check=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st) { console.error('no state'); process.exit(2); }
@@ -100,7 +106,7 @@ run_r2() {
     local tmp out rc sid
     tmp="$(mktemp -d)"
     sid="r2-sid"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 10 node "$REPORT_BIN_NODE" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 10 node "$REPORT_BIN_NODE" \
         --categories workflow --severity warning --detail "normal test" \
         --reporter test --session-id "$sid" 2>&1)
     rc=$?
@@ -110,7 +116,7 @@ run_r2() {
         return
     fi
     local check
-    check=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
+    check=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st) { console.error('no state'); process.exit(2); }

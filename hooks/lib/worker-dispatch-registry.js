@@ -346,7 +346,7 @@ const workers = {
       "ENFORCE_WORKTREE",
       // The other five the gate child needs to answer as the PreToolUse hook
       // would (this one plus ENFORCE_WORKTREE above make GATE_ENV_SCOPE's six):
-      "CLAUDE_WORKFLOW_DIR",   // state-io's only state-directory variable
+      "WORKFLOW_STATE_DIR",   // state-io's only state-directory variable
       "WORKFLOW_PLANS_DIR",    // detail-plan read for the scope-drift verdict
       "WORKFLOW_SESSION_ID",   // supervisor-state resolution fallback
       "CLAUDE_PROJECT_DIR",    // getCurrentContext()'s cwd resolution

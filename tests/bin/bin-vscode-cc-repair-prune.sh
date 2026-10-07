@@ -2,52 +2,16 @@
 # tests/bin/bin-vscode-cc-repair-prune.sh
 # Tests: bin/vscode-cc-repair, bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/verify.js, bin/vscode-cc-repair/prune/execute.js, bin/vscode-cc-repair/cli.js, bin/vscode-cc-repair/patch/apply.js
 # Tags: bin, vscode, prune, session-files, scope:common, pwsh-not-required, TL2
-#
-# The `--prune-stub-sessions` path: scan ~/.claude/projects for title-only stub
-# session files and delete only those whose content is provably a subset of a
-# surviving counterpart copy. This is a NEW suite; the shipped patch path keeps its
-# own suite (tests/bin/bin-vscode-cc-repair.sh) which must stay untouched
-# so that "the existing 10 parts are still green" remains the evidence that the
-# module migration preserved behaviour.
-#
-# Run wrapper: bin/run-with-timeout.sh 120 bash tests/bin/bin-vscode-cc-repair-prune.sh
-# (every inner CLI / node invocation carries its own shorter timeout below).
-#
-# ISOLATION CONTRACT (intent.md Constraints — the single most important property
-# of this suite). The tool under test deletes files out of the user's own Claude
-# Code session storage, so a test that leaks onto the real host is not a flaky
-# test, it is data loss. Three overrides are applied on EVERY invocation:
-#   1. --extensions-dir <tmp>       — the prune flag is ADDITIVE, so the patch path
-#                                     still runs and would otherwise scan ~/.vscode*
-#   2. --claude-projects-dir <tmp>  — replaces the ~/.claude/projects default
-#   3. HOME / USERPROFILE = <tmp>   — belt and braces: even a dropped override
-#                                     lands in a fixture tree, never in the real home
-# run_cli_prune supplies all three; run_iso is the lower-level form used by the
-# argument-rejection tables and always still supplies 1 and 3.
-#
-# TL3 gap (what this test does NOT catch):
-# - the real ~/.claude/projects tree (164 slugs, 7,196 .jsonl, ~3.3 GB): scan cost,
-#   the real distribution of duplicate basenames, and the real record shapes are
-#   fixture-approximated here. Only a read-only --dry-run against the live tree
-#   (detail plan R10) measures those.
-# - a genuinely concurrent writer landing between the re-verification and the
-#   unlink syscall (the residual TOCTOU window, detail plan R11). The R-1..R-9 rows
-#   in lifecycle-race.sh drive the real deletion path with a deterministic mutation
-#   injected between planPruneRoots and executePrunePlan, which is strictly stronger
-#   than nothing but is still not a real race.
-# - POSIX permission semantics on the Windows host: every EACCES-shaped row
-#   (unreadable file, unreadable directory, unlink failure, R-6) degrades to a
-#   documented SKIP when chmod is advisory. See the Skipped-Because blocks.
-# - `changed` reached through a spawned CLI process: 6.6 of the detail plan rules
-#   out timing-dependent injection into a live subprocess as inherently flaky, so
-#   the `changed` exit-code row is pinned at the module boundary instead.
-# Documented SKIP categories (each increments SKIP and prints why):
-# - EACCES rows (D08/D09, F-exit unreadable/scan-error/failed, R-6): chmod is
-#   advisory on this host, or the test runs as root
-# - symlink rows (D03): `ln -s` yields a copy, not a link, on this host
-# - unreadable-by-EISDIR row (A22): the host does not fault on opening a directory
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: installer.
+
+# The `--prune-stub-sessions` path: scan ~/.claude/projects for title-only stub session files and delete only those whose content is provably a subset of a surviving counterpart copy. This is a NEW suite; the shipped patch path keeps its own suite (tests/bin/bin-vscode-cc-repair.sh), which must stay untouched so that "the existing 10 parts are still green" remains the evidence that the module migration preserved behaviour.
+# Run wrapper: bin/run-with-timeout.sh 120 bash tests/bin/bin-vscode-cc-repair-prune.sh (every inner CLI / node invocation carries its own shorter timeout below).
+
+# ISOLATION CONTRACT (intent.md Constraints — the single most important property of this suite): the tool under test deletes files out of the user's own Claude Code session storage, so a test that leaks onto the real host is not a flaky test, it is data loss. Three overrides are applied on EVERY invocation: 1. --extensions-dir <tmp> — the prune flag is ADDITIVE, so the patch path still runs and would otherwise scan ~/.vscode*; 2. --claude-projects-dir <tmp> — replaces the ~/.claude/projects default; 3. HOME / USERPROFILE = <tmp> — belt and braces: even a dropped override lands in a fixture tree, never in the real home. run_cli_prune supplies all three; run_iso is the lower-level form used by the argument-rejection tables and always still supplies 1 and 3.
+
+# TL3 gap (what this test does NOT catch): - the real ~/.claude/projects tree (164 slugs, 7,196 .jsonl, ~3.3 GB): scan cost, the real distribution of duplicate basenames, and the real record shapes are fixture-approximated here; only a read-only --dry-run against the live tree (detail plan R10) measures those. - a genuinely concurrent writer landing between the re-verification and the unlink syscall (the residual TOCTOU window, detail plan R11): the R-1..R-9 rows in lifecycle-race.sh drive the real deletion path with a deterministic mutation injected between planPruneRoots and executePrunePlan, strictly stronger than nothing but still not a real race.
+#   - POSIX permission semantics on the Windows host: every EACCES-shaped row (unreadable file, unreadable directory, unlink failure, R-6) degrades to a documented SKIP when chmod is advisory (see the Skipped-Because blocks). - `changed` reached through a spawned CLI process: 6.6 of the detail plan rules out timing-dependent injection into a live subprocess as inherently flaky, so the `changed` exit-code row is pinned at the module boundary instead.
+# Documented SKIP categories (each increments SKIP and prints why): EACCES rows (D08/D09, F-exit unreadable/scan-error/failed, R-6): chmod is advisory on this host, or the test runs as root; symlink rows (D03): `ln -s` yields a copy, not a link, on this host; unreadable-by-EISDIR row (A22): the host does not fault on opening a directory.
+# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: installer.
 
 set -euo pipefail
 
@@ -78,6 +42,9 @@ fi
 TMPROOT="$(mktemp -d)"
 # chmod 000 fixtures would otherwise defeat the teardown.
 trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT"' EXIT
+# isolation (#2512): pin state and plans dirs once for this file and its sourced parts.
+mkdir -p "$TMPROOT/isolation/workflow-state" "$TMPROOT/isolation/plans"
+export WORKFLOW_STATE_DIR="$TMPROOT/isolation/workflow-state" WORKFLOW_PLANS_DIR="$TMPROOT/isolation/plans"
 
 PASS=0
 FAIL=0

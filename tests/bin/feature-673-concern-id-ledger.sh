@@ -35,12 +35,12 @@ if ! grep -q -- "--round" "$WRAPPER_SRC" || ! grep -q -- "--ledger" "$WRAPPER_SR
 fi
 
 # #2434: control files (counter, last-round, terminal) live under
-# $CLAUDE_WORKFLOW_DIR/<sid>.control/, so pin both state roots to a fixture.
+# $WORKFLOW_STATE_DIR/<sid>.control/, so pin both state roots to a fixture.
 STATE_ROOT=$(mktemp -d)
 trap 'rm -rf "$STATE_ROOT"' EXIT
-export CLAUDE_WORKFLOW_DIR="$STATE_ROOT/workflow-state"
+export WORKFLOW_STATE_DIR="$STATE_ROOT/workflow-state"
 export WORKFLOW_PLANS_DIR="$STATE_ROOT/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 # ---------------------------------------------------------------------------
 # Test scaffolding — sets up an isolated AGENTS_CONFIG_DIR with mocked
@@ -364,7 +364,7 @@ case_begin "missing-round-defaults-to-counter" "bin/run-codex-review-loop"
     --accepted-tradeoffs "$PLANS/outline.md" --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
   # Composite: exit 0 alone would not show *which* round it ran; the settled
   # last-round file names it (#2434: a control file under <sid>.control/).
-  SETTLED=$(cat "$CLAUDE_WORKFLOW_DIR/sid9.control/detail-plan-last-round.txt" 2>/dev/null)
+  SETTLED=$(cat "$WORKFLOW_STATE_DIR/sid9.control/detail-plan-last-round.txt" 2>/dev/null)
   if [[ $rc -eq 0 && "$SETTLED" == "1" ]]; then
     pass "9: missing --round → defaults to round 1, exit 0"
   else

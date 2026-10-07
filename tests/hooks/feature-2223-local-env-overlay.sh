@@ -32,9 +32,9 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 
 # Isolation: pin both halves of the plans-dir pair, drop inherited session ids,
 # and let no ambient AGENTS_CONFIG_DIR, project dir, or tested key reach a child.
-export CLAUDE_WORKFLOW_DIR="$TMP_ROOT/workflow"
+export WORKFLOW_STATE_DIR="$TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMP_ROOT/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 unset CLAUDE_PROJECT_DIR
 unset AGENTS_CONFIG_DIR

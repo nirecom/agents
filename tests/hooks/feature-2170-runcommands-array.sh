@@ -43,9 +43,9 @@ EV="$TMPD/event.json"
 OUT="$TMPD/out.json"
 
 unset CLAUDE_CODE_SESSION_ID
-export CLAUDE_WORKFLOW_DIR="$TMPD/workflow"
+export WORKFLOW_STATE_DIR="$TMPD/workflow"
 export WORKFLOW_PLANS_DIR="$TMPD/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 cd "$TMPD" || exit 1
 
 # verdict <hook> <tool> <cmd...> -> block|deny-partial|allow|passthrough|other:...

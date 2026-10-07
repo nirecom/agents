@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Build a minimal final-report-env.json for the ENFORCE_WORKTREE=off path.
 // Fetches PR metadata for the current branch via gh CLI and writes the JSON file
-// to <CLAUDE_WORKFLOW_DIR>/<sid>.control/final-report-env.json.
+// to <WORKFLOW_STATE_DIR>/<sid>.control/final-report-env.json.
 //
 // Usage: node session-close-build-env.js [--wf-meta] --session <sid>
 //   --wf-meta: write env JSON with all empty-string fields (no PR needed)

@@ -24,7 +24,7 @@ fi
 # Updated for #1340: 10-column cache schema (cols 6-10: status, todo, inprog, done, finger).
 # ===========================================================================
 setup_mock
-CACHE_DIR="$CLAUDE_WORKFLOW_DIR/cache"
+CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
 printf 'mock-owner/mock-repo\tcached-owner\t99\tPVT_cached\tPVTF_cached_field\tPVTF_status\tPVTF_todo\tPVTF_inprog\tPVTF_done\tPVTF_finger\n' > "$CACHE_FILE"
@@ -58,7 +58,7 @@ teardown_mock
 # ===========================================================================
 setup_mock
 export GH_MOCK_OWNER_REPO="mock-owner/my.repo"
-CACHE_DIR="$CLAUDE_WORKFLOW_DIR/cache"
+CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
 printf 'mock-owner/myXrepo\tWRONG-owner\t100\tPVT_WRONG\tPVTF_WRONG\tst\ttd\tip\tdn\tfg\n' > "$CACHE_FILE"
@@ -83,7 +83,7 @@ teardown_mock
 # T7c: cache update — old row replaced, only 1 row for the key after re-resolve
 # ===========================================================================
 setup_mock
-CACHE_DIR="$CLAUDE_WORKFLOW_DIR/cache"
+CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
 printf 'mock-owner/mock-repo\tstale-owner\t100\tPVT_stale\tPVTF_stale\n' > "$CACHE_FILE"
@@ -113,7 +113,7 @@ teardown_mock
 # T7d: malformed cache row → treated as miss, re-fetch via graphql
 # ===========================================================================
 setup_mock
-CACHE_DIR="$CLAUDE_WORKFLOW_DIR/cache"
+CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
 printf 'mock-owner/mock-repo\tincomplete\n' > "$CACHE_FILE"
@@ -138,7 +138,7 @@ teardown_mock
 # T8: cache miss → fetch → cache file created with correct TSV row
 # ===========================================================================
 setup_mock
-CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
+CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
 [ -f "$CACHE_FILE" ] && rm "$CACHE_FILE"
 STDERR_FILE="$TMP/t8-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
@@ -170,7 +170,7 @@ teardown_mock
 # T8b: second resolution with different data → cache row updated (not duplicated)
 # ===========================================================================
 setup_mock
-CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
+CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
 export GH_MOCK_PROJECT_NUM=10
 export GH_MOCK_PROJECT_ID="PVT_v1"
 run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '/dev/null'" >/dev/null

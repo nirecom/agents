@@ -45,8 +45,8 @@ run_g_c3a() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g-c3a-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     printf '{"stop_hook_active":false,"session_id":"g-c3a-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
-    cause=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" read_alert_cause "$tmp" "g-c3a-sid")
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    cause=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" read_alert_cause "$tmp" "g-c3a-sid")
     rm -rf "$tmp"
     if [ "$cause" = "C3 worktree-off proposal" ]; then
         pass "G-C3a: WORKTREE_OFF sentinel in Bash tool_use -> alert_cause = 'C3 worktree-off proposal'"
@@ -65,8 +65,8 @@ run_g_c3b() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g-c3b-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     printf '{"stop_hook_active":false,"session_id":"g-c3b-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
-    cause=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" read_alert_cause "$tmp" "g-c3b-sid")
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    cause=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" read_alert_cause "$tmp" "g-c3b-sid")
     rm -rf "$tmp"
     if [ "$cause" = "C3 workflow-off proposal" ]; then
         pass "G-C3b: WORKFLOW_OFF sentinel in Bash tool_use -> alert_cause = 'C3 workflow-off proposal'"
@@ -85,8 +85,8 @@ run_g_c3c() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g-c3c-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     printf '{"stop_hook_active":false,"session_id":"g-c3c-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
-    phase=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" read_alert_phase "$tmp" "g-c3c-sid")
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    phase=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" read_alert_phase "$tmp" "g-c3c-sid")
     rm -rf "$tmp"
     if [ "$phase" = "pending" ]; then
         pass "G-C3c: WORKTREE_OFF sentinel in Bash tool_use -> alert_phase = 'pending'"
@@ -111,7 +111,7 @@ run_g_c3d() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g-c3d-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g-c3d-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -q '"decision":"block"' ); then
@@ -135,7 +135,7 @@ run_g_c3_text_neg() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g-c3-text-neg-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g-c3-text-neg-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! ( echo "$out" | grep -q '"decision":"block"' ); then

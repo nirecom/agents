@@ -111,8 +111,8 @@ MOCK_EOF
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
-    # #2434: the resolve cache lives under CLAUDE_WORKFLOW_DIR; pin it per case so rows never carry over.
-    export CLAUDE_WORKFLOW_DIR="$TMP/workflow"
+    # #2434: the resolve cache lives under WORKFLOW_STATE_DIR; pin it per case so rows never carry over.
+    export WORKFLOW_STATE_DIR="$TMP/workflow"
 }
 
 teardown_mock() {
@@ -120,7 +120,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR CLAUDE_WORKFLOW_DIR \
+    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR \
           GH_MOCK_OWNER_REPO GH_MOCK_PROJECTS_NODE_COUNT GH_MOCK_PROJECT_OWNER \
           GH_MOCK_PROJECT_NUM GH_MOCK_PROJECT_ID GH_MOCK_CONTENT_DATE_FIELD_ID \
           GH_MOCK_STATUS_FIELD_ID GH_MOCK_TODO_OPTION_ID \
@@ -203,7 +203,7 @@ while IFS='|' read -r name setup_kind expect; do
     [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
     name="${name//[[:space:]]/}"; setup_kind="${setup_kind//[[:space:]]/}"; expect="${expect//[[:space:]]/}"
     setup_mock
-    CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
+    CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
     write_cache_case "$setup_kind"
     STDERR_FILE="$TMP/tst-$name.log"
     OUT=$(bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
@@ -258,7 +258,7 @@ TABLE
 # TS-4: 10-column cache row → hit; all 5 new RESOLVED_* set; NO graphql call
 # ===========================================================================
 setup_mock
-CACHE_DIR="$CLAUDE_WORKFLOW_DIR/cache"
+CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
 # Exactly 10 columns
@@ -340,7 +340,7 @@ export GH_MOCK_TODO_OPTION_ID="opt_w_todo"
 export GH_MOCK_IN_PROGRESS_OPTION_ID="opt_w_inprog"
 export GH_MOCK_DONE_OPTION_ID="opt_w_done"
 export GH_MOCK_FINGERPRINT_FIELD_ID="PVTF_w_finger"
-CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
+CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
 STDERR_FILE="$TMP/ts6-stderr.log"
 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'" >/dev/null
 if [ -f "$CACHE_FILE" ]; then
@@ -373,7 +373,7 @@ teardown_mock
 # the table's col7-retention-hit row, which only checks PROJECT_ID).
 # ===========================================================================
 setup_mock
-CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
+CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
 mkdir -p "$(dirname "$CACHE_FILE")"
 printf 'nirecom/agents\towner\t1\tPVT_id\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tfinger_f\n' > "$CACHE_FILE"
 STDERR_FILE="$TMP/ts7-stderr.log"

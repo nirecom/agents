@@ -31,7 +31,7 @@ trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT"' EXIT
 WF_DIR="$TMPROOT/workflow-state"
 PLANS_DIR="$TMPROOT/plans"
 mkdir -p "$WF_DIR" "$PLANS_DIR"
-export CLAUDE_WORKFLOW_DIR="$(np "$WF_DIR")"
+export WORKFLOW_STATE_DIR="$(np "$WF_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 

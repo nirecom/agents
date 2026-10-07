@@ -80,7 +80,7 @@ process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1]
 run_shim() {
     local tn="$1" sid="$2" cmd="$3" hi out rc
     hi=$(mk_input "$sid" "$cmd")
-    out=$(WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" AGENTS_CONFIG_DIR="$tn" \
+    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$tn" \
         "$RWT" 12 node "$SHIM" <<< "$hi" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$out"

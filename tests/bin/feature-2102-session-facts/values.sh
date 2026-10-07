@@ -29,7 +29,7 @@ TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
-CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"; export CLAUDE_WORKFLOW_DIR
+WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"; export WORKFLOW_STATE_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
 unset CLAUDE_CODE_SESSION_ID CONFIRM_TESTS CONFIRM_CODE
 
@@ -83,7 +83,7 @@ write_env() {
 # deliberately has none) plus two pure probes, HOME_PD for (b) v and GDEF for (d).
 VFIX_OUT="$(run_with_timeout node -e '
   const fs = require("fs"), path = require("path"), os = require("os");
-  const put = (sid, body) => { try { fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR,
+  const put = (sid, body) => { try { fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR,
     sid + ".json"), JSON.stringify({ steps: {}, complexity_evaluation: body })); }
     catch (e) { process.stderr.write("fixture " + sid + ": " + e.message + "\n"); } };
   const at = "2026-09-04T00:00:00.000Z";
@@ -246,7 +246,7 @@ check "(b) iv: a relative override yields NONE" "NONE" "$(val_of PLANS_DIR)"
 check "(b) iv: exit 3" 3 "$RC"
 check_contains "(b) iv: stderr names the absolute-path requirement" "absolute" "$ERR"
 # Fixture note: this one cell deliberately runs with WORKFLOW_PLANS_DIR unset while
-# CLAUDE_WORKFLOW_DIR is pinned. read-session-facts only reads, so nothing can be
+# WORKFLOW_STATE_DIR is pinned. read-session-facts only reads, so nothing can be
 # written into the developer's real plans dir.
 run_facts_pd "$CFG" "pd5" "__UNSET__"
 check "(b) v: unset falls back to the home plans dir" "$(norm_path "$HOME_PD")" "$(norm_path "$(val_of PLANS_DIR)")"

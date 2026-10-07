@@ -13,7 +13,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { getWorkflowDir } = require("./workflow-state");
+const { getSessionStateDir } = require("./workflow-state");
 const { EMERGENCY_PROVENANCE_MARKER_KIND } = require("./lib/protected-basenames");
 const { buildProvenanceMarker, promptInvokesOffSkill } = require("./lib/off-emergency-provenance");
 
@@ -22,7 +22,7 @@ const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 
 function markerPathFor(sessionId) {
-  return path.join(getWorkflowDir(), `${sessionId}.${EMERGENCY_PROVENANCE_MARKER_KIND}`);
+  return path.join(getSessionStateDir(sessionId), `${sessionId}.${EMERGENCY_PROVENANCE_MARKER_KIND}`);
 }
 
 // The marker payload is the SHARED contract in lib/off-emergency-provenance.js:
@@ -31,7 +31,7 @@ function markerPathFor(sessionId) {
 // M-4). Building it here from the typed prompt would let prompt content decide
 // what the marker claims.
 function writeProvenanceMarker(sessionId) {
-  const dir = getWorkflowDir();
+  const dir = getSessionStateDir(sessionId);
   fs.mkdirSync(dir, { recursive: true });
   const target = markerPathFor(sessionId);
   const tmp = target + ".tmp";

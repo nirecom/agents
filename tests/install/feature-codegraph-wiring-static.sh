@@ -11,6 +11,11 @@
 # upstream installer, C2 substring daemon matching, C5 init-as-repair, C6 magic-only).
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 # Layer TL2 — the repo tree read as text, JSON and frontmatter; nothing is spawned.
 # TL3 gap (what this test does NOT catch):
 # - Whether install.ps1 / install/win/codegraph.ps1 complete non-interactively under

@@ -18,7 +18,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # seed_in_flight <tmp> <tn> <sid> <step> <ms-ago> — a real markStep, then the
 # timestamp backdated so the age axis is exercised without sleeping.
 seed_in_flight() {
-    CLAUDE_WORKFLOW_DIR="$2" WORKFLOW_PLANS_DIR="$2" SID="$3" ST="$4" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$2" WORKFLOW_PLANS_DIR="$2" SID="$3" ST="$4" "$RWT" 15 node -e "
 const wf = require('$STATEIO_NODE');
 wf.markStep(process.env.SID, 'workflow_init', 'complete');
 wf.markStep(process.env.SID, process.env.ST, 'in_progress');" >/dev/null 2>&1
@@ -35,7 +35,7 @@ fs.writeFileSync(process.env.P, JSON.stringify(s));" >/dev/null 2>&1
 # `THREW:<msg>` when the total-function contract is broken, so a throw can never
 # be mistaken for "no findings".
 detect() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" "$RWT" 20 node -e "
 const { detectStalledSteps } = require('$MF_NODE');
 let out;
 try { out = detectStalledSteps(process.env.SID); } catch (e) { process.stdout.write('THREW:' + e.message); process.exit(0); }
@@ -62,7 +62,7 @@ report_once() { report_once_pd "$1" "$1" "$2" "$3" "$4"; }
 # two directories pinned SEPARATELY, so the supervisor destination can be made
 # to fail while the ledger destination stays writable (the ordering case).
 report_once_pd() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$2" SID="$3" ST="$4" KIND="$5" "$RWT" 25 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$2" SID="$3" ST="$4" KIND="$5" "$RWT" 25 node -e "
 const { reportMechanismFailureOnce } = require('$MF_NODE');
 let r;
 try {
@@ -106,7 +106,7 @@ sup_state_path() { printf '%s/%s.control/supervisor-state.json' "$1" "$2"; }
 # Sets C4_OUT / C4_RC (rc 0 = silent, rc 2 = blocked).
 run_c4() {
     C4_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 25 node "$(node_path "$GUARD_C4")" 2>/dev/null)
     C4_RC=$?
 }

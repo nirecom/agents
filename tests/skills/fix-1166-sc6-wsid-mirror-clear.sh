@@ -78,7 +78,7 @@ run_l2() {
 
     # Seed wsid state with alert_armed_at set (armed state) and alert_phase=null
     # so that --set-alert-phase closed + --clear-alert-armed-at is a valid transition.
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -90,7 +90,7 @@ fs.writeFileSync(w.getStatePath('$wsid', { forWrite: true }), JSON.stringify(st)
 
     # Verify that alert_armed_at was actually seeded (sanity check)
     local seeded
-    seeded=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    seeded=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$wsid');
 process.stdout.write(st && st.alert && st.alert.alert_armed_at ? 'armed' : 'not-armed');
@@ -113,7 +113,7 @@ process.stdout.write(st && st.alert && st.alert.alert_armed_at ? 'armed' : 'not-
 
     # Run the mirror-clear: --set-alert-phase closed clears alert_armed_at at the writer level
     # (terminal state enforced by writeAlertState). Also pass --clear-alert-armed-at explicitly.
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$WRITE_ALERT" \
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$WRITE_ALERT" \
         --session-id "$extracted_wsid" \
         --set-alert-phase closed \
         --clear-alert-armed-at \
@@ -121,7 +121,7 @@ process.stdout.write(st && st.alert && st.alert.alert_armed_at ? 'armed' : 'not-
     local write_rc=$?
 
     # Read back the wsid state and check alert_armed_at is null
-    armed_after=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    armed_after=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$wsid');
 if (!st || !st.alert) { process.stdout.write('MISSING'); process.exit(0); }

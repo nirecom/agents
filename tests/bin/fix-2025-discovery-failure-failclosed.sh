@@ -63,9 +63,9 @@ assert_contains() {
 TMPDIR_BASE="$(mktemp -d)"
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans-root"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
 
@@ -93,7 +93,7 @@ chmod +x "$STUB/find"
 # artifact live there, sid-unprefixed. One dir per session, so each case below
 # takes its own SID rather than sharing one control dir across plans dirs.
 ctl_of() {
-    local d="$CLAUDE_WORKFLOW_DIR/$SID.control"
+    local d="$WORKFLOW_STATE_DIR/$SID.control"
     mkdir -p "$d"
     printf '%s' "$d"
 }
@@ -221,7 +221,7 @@ echo "--- discovery 3: check-staged tells a broken mechanism from an empty dir -
     }
     # on_disk3 — every entry the staged round has, plans dir and control dir.
     on_disk3() {
-        find "$P3" "$CLAUDE_WORKFLOW_DIR/$SID3.control" -maxdepth 1 -mindepth 1 \
+        find "$P3" "$WORKFLOW_STATE_DIR/$SID3.control" -maxdepth 1 -mindepth 1 \
             | LC_ALL=C sort | tr '\n' ' '
     }
 

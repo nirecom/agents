@@ -130,8 +130,8 @@ run_capture_env() {
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans"
     export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-    export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
-    mkdir -p "$PLANS_DIR" "$CLAUDE_WORKFLOW_DIR"
+    export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
+    mkdir -p "$PLANS_DIR" "$WORKFLOW_STATE_DIR"
     mkdir -p "$backup_dir"
 
     PATH="$envdir/bin:$PATH" \

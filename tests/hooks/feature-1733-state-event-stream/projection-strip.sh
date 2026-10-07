@@ -137,7 +137,7 @@ if run_case "S7/all-write-paths-strip"; then
 const E = require("./hooks/workflow-state/state-io/events");
 const forbidden = process.env.FORBIDDEN.split(",");
 const leaks = (s) => {
-  const p = path.join(process.env.CLAUDE_WORKFLOW_DIR, s + ".json");
+  const p = path.join(process.env.WORKFLOW_STATE_DIR, s + ".json");
   const o = JSON.parse(fs.readFileSync(p, "utf8"));
   return forbidden.filter((k) => Object.prototype.hasOwnProperty.call(o, k));
 };

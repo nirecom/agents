@@ -145,7 +145,7 @@ run_C8() {
     out=$(CMD='echo "<<WORKFLOW_NEXT_STEP_PAUSE: [for=research] waiting on a survey subagent>>"' "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ tool_name: 'Bash', session_id: 'c8', transcript_path: '',
   tool_input: { command: process.env.CMD } }));" \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
           "$RWT" 20 node "$(node_path "$MARK_HOOK")" 2>/dev/null)
     [ -f "$(marker_path "$tmp" c8)" ] || problems="$problems [handler wrote no marker]"
     if [ -f "$(marker_path "$tmp" c8)" ]; then
@@ -179,7 +179,7 @@ run_C8_audit() {
     CMD='echo "<<WORKFLOW_NEXT_STEP_PAUSE: [for=research] waiting on a survey subagent>>"' "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ tool_name: 'Bash', session_id: 'c8audit', transcript_path: '',
   tool_input: { command: process.env.CMD } }));" \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
           "$RWT" 20 node "$(node_path "$MARK_HOOK")" >/dev/null 2>&1
     out=$(P="$(node_path "$(marker_path "$tmp" c8audit)")" "$RWT" 20 node -e "
 const fs = require('fs');
@@ -214,14 +214,14 @@ run_C8_resume() {
     CMD='echo "<<WORKFLOW_NEXT_STEP_PAUSE: [for=research] waiting on a survey subagent>>"' "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ tool_name: 'Bash', session_id: 'c8resume', transcript_path: '',
   tool_input: { command: process.env.CMD } }));" \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
           "$RWT" 20 node "$(node_path "$MARK_HOOK")" >/dev/null 2>&1
     [ -f "$(marker_path "$tmp" c8resume)" ] || problems="$problems [setup: pause marker never appeared]"
 
     CMD='echo "<<WORKFLOW_NEXT_STEP_RESUME: done>>"' "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ tool_name: 'Bash', session_id: 'c8resume', transcript_path: '',
   tool_input: { command: process.env.CMD } }));" \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
           "$RWT" 20 node "$(node_path "$MARK_HOOK")" >/dev/null 2>&1
     rc1=$?
     [ "$rc1" -eq 0 ] || problems="$problems [1st RESUME: handler exited $rc1]"
@@ -231,7 +231,7 @@ process.stdout.write(JSON.stringify({ tool_name: 'Bash', session_id: 'c8resume',
     CMD='echo "<<WORKFLOW_NEXT_STEP_RESUME: done-again>>"' "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ tool_name: 'Bash', session_id: 'c8resume', transcript_path: '',
   tool_input: { command: process.env.CMD } }));" \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
           "$RWT" 20 node "$(node_path "$MARK_HOOK")" >/dev/null 2>&1
     rc2=$?
     [ "$rc2" -eq 0 ] || problems="$problems [2nd RESUME (already-gone marker): handler exited $rc2]"

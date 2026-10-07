@@ -4,7 +4,7 @@
 # Tags: feature-2434, control-dir, codex-review-loop, escalation-table, TL2, scope:issue-specific, pwsh-not-required
 #
 # #2434 Step 5-9 / Step 10: the five stage wrappers keep their control files in
-# $CLAUDE_WORKFLOW_DIR/<sid>.control/ and leave only artifacts in PLANS_DIR;
+# $WORKFLOW_STATE_DIR/<sid>.control/ and leave only artifacts in PLANS_DIR;
 # exit-codes.md owns the one format x exit-code escalation table.
 set -uo pipefail
 

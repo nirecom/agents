@@ -112,7 +112,7 @@ function raceConsume(file, rawFile, outFile) {
 }
 
 function provOnce(dir, sid, target) {
-  process.env.CLAUDE_WORKFLOW_DIR = dir;
+  process.env.WORKFLOW_STATE_DIR = dir;
   process.env.WORKFLOW_PLANS_DIR = dir;
   const { resolveEmergencyProvenance } = require(
     H("workflow-mark", "enforce-override-handlers", "off-clearance.js"));

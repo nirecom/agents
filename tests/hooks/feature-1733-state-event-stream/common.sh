@@ -7,7 +7,7 @@
 # standalone (it has no cases of its own).
 #
 # ISOLATION CONTRACT (identical across every case file):
-#   CLAUDE_WORKFLOW_DIR -> per-file temp dir, so no real session state is touched.
+#   WORKFLOW_STATE_DIR -> per-file temp dir, so no real session state is touched.
 #   AGENTS_CONFIG_DIR   -> fixture config dir whose .env carries no workflow toggles,
 #                          so env-dependent branches resolve from a known file rather
 #                          than the developer's real .env (test-design.md
@@ -94,7 +94,7 @@ PLANS_NATIVE="$(native_path "$PLANS")"
 
 # node_env — the isolation env prefix shared by every node invocation below.
 node_env() {
-    printf '%s' "CLAUDE_WORKFLOW_DIR=$WF_NATIVE AGENTS_CONFIG_DIR=$CFG_NATIVE WORKFLOW_PLANS_DIR=$PLANS_NATIVE"
+    printf '%s' "WORKFLOW_STATE_DIR=$WF_NATIVE AGENTS_CONFIG_DIR=$CFG_NATIVE WORKFLOW_PLANS_DIR=$PLANS_NATIVE"
 }
 
 # mk_git_repo <dir> <branch> — a REAL git repository with one commit, checked out on
@@ -148,7 +148,7 @@ nodejs() {
     local sid="$1" js="$2"
     NODE_RC=0
     NODE_OUT="$(cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$sid" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node -e "$js" 2>&1)" || NODE_RC=$?
@@ -160,7 +160,7 @@ nodejs_env() {
     NODE_RC=0
     # shellcheck disable=SC2086
     NODE_OUT="$(cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$sid" $extra \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node -e "$js" 2>&1)" || NODE_RC=$?
@@ -170,7 +170,7 @@ nodejs_env() {
 nodejs_bg() {
     local sid="$1" js="$2" outfile="$3"
     (cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$sid" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node -e "$js" >"$outfile" 2>&1) &
@@ -199,7 +199,7 @@ mod_exists() { [ -f "$AGENTS_DIR/$1" ]; }
 exports_have() {
     local out
     out="$(cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node -e \
@@ -226,7 +226,7 @@ feature_banner() {
 PRE='const S = require("./hooks/workflow-state/state-io");
 const fs = require("fs"), path = require("path");
 const sid = process.env.SID;
-const sp = () => path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json");
+const sp = () => path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json");
 const raw = () => fs.readFileSync(sp(), "utf8");
 const rd = () => JSON.parse(raw());
 const wraw = (o) => fs.writeFileSync(sp(), JSON.stringify(o, null, 2));

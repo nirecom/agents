@@ -7,6 +7,12 @@
 # prints `BASELINE: <class> <path> [detail]` + `BASELINE_SUMMARY: preexisting=N inherited=N
 # broken=N undetermined=N`; exit 0 all-preexisting, 1 otherwise, 3 no failing list, 4 bad base.
 
+# isolation (#2512): re-pin to helpers.sh's private dirs (a sibling's pin is invisible to the scanner).
+: "${WF_DIR:?helpers.sh must be sourced first}" "${PLANS_DIR:?helpers.sh must be sourced first}"
+export WORKFLOW_STATE_DIR="$(np "$WF_DIR")" WORKFLOW_PLANS_DIR="$(np "$PLANS_DIR")"
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"
+harness_assert_isolated
+
 # cli_case_cache <label> — a fresh ledger/cache dir per case, so no case reuses another's records.
 cli_case_cache() {
   mkdir -p "$TMPROOT/cache-cli-$1"

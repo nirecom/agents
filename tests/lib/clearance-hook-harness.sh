@@ -21,14 +21,14 @@ trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]
 HOOK_PRESENT=no; [ -f "$HOOK" ] && HOOK_PRESENT=yes
 
 # run_hook <tmp_node> <hook-input-json> -> "<rc>|<stdout, newlines stripped>"
-# WORKFLOW_PLANS_DIR is dual-pinned with CLAUDE_WORKFLOW_DIR (rules/test/fixture-isolation.md)
+# WORKFLOW_PLANS_DIR is dual-pinned with WORKFLOW_STATE_DIR (rules/test/fixture-isolation.md)
 # so nothing reaches the developer's real ~/.workflow-plans. stderr is dropped on
 # purpose: a crash is caught by rc, never by eyeballing a stack trace.
 run_hook() {
     local tn="$1" input="$2" out rc
     [ "$HOOK_PRESENT" = "yes" ] || { printf 'absent|'; return; }
     mkdir -p "$tn/plans" 2>/dev/null || true
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn/plans" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn/plans" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 12 node "$HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"

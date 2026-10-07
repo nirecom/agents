@@ -82,7 +82,7 @@ field_of() { printf '%s\n' "$DOUT" | sed -n "s/^$1: //p" | head -1; }
 # Real child CLIs — no preload.
 dispatch_real() {
     DRC=0
-    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF" \
         node "$(nodepath "$DISPATCH_JS")" worktree-copy "$MAIN" "$1" 2>/dev/null)" || DRC=$?
 }
 # Canned child CLIs — $1 is the rules JSON array, $2 the payload path.
@@ -90,7 +90,7 @@ dispatch_stubbed() {
     printf '%s' "$1" > "$CANNED"
     : > "$CALLLOG"
     DRC=0
-    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

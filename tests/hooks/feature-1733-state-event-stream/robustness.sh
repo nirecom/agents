@@ -32,7 +32,7 @@ echo "== X1: a traversal-shaped session id is refused, and nothing outside the w
 if run_case "X1/traversal-refused"; then
     # The session id now resolves TWO paths (state file + lock file). The earlier
     # version of this case only asked that the two stay paired, which a traversal id
-    # satisfies trivially by landing BOTH outside CLAUDE_WORKFLOW_DIR  a pair of files
+    # satisfies trivially by landing BOTH outside WORKFLOW_STATE_DIR  a pair of files
     # written into someone else's directory is not a pass. The invariant asserted here
     # is absolute: a traversal-shaped id is refused outright, and the filesystem outside
     # the workflow dir is byte-identical afterwards.
@@ -205,12 +205,12 @@ fi
 echo "== X8: an empty-string and a whitespace session id are refused, not written =="
 if run_case "X8/empty-session-id"; then
     nodejs "x8" "$PRE"'
-const before = fs.readdirSync(process.env.CLAUDE_WORKFLOW_DIR).length;
+const before = fs.readdirSync(process.env.WORKFLOW_STATE_DIR).length;
 const results = ["", "   ", null, undefined].map((s) => {
   try { S.markStep(s, "workflow_init", "complete"); return "WROTE"; }
   catch (e) { return "REFUSED"; }
 });
-const after = fs.readdirSync(process.env.CLAUDE_WORKFLOW_DIR).length;
+const after = fs.readdirSync(process.env.WORKFLOW_STATE_DIR).length;
 console.log(results.join(",") + " new_files=" + (after - before));
 '
     # Fail-open (no throw) is acceptable; creating a junk state file is not.
@@ -237,7 +237,7 @@ const E = require("./hooks/workflow-state/state-io/events");
 const { spawnSync } = require("child_process");
 // Truncated mid-event: valid JSON prefix, unparseable as a whole.
 const CORRUPT = "{\"version\": 2, \"session_id\": \"corrupt\", \"events\": [{\"kind\": \"step_stat";
-const p = (s) => path.join(process.env.CLAUDE_WORKFLOW_DIR, s + ".json");
+const p = (s) => path.join(process.env.WORKFLOW_STATE_DIR, s + ".json");
 const seed = (s) => { fs.writeFileSync(p(s), CORRUPT, "utf8"); return fs.readFileSync(p(s)); };
 const probe = (label, suffix, fn) => {
   const s = sid + "-" + suffix;
@@ -290,7 +290,7 @@ const V3 = (s) => JSON.stringify({
   // A key only the newer schema knows about: it must not be quietly dropped either.
   future_only_field: { note: "written by a newer release" },
 }, null, 2);
-const p = (s) => path.join(process.env.CLAUDE_WORKFLOW_DIR, s + ".json");
+const p = (s) => path.join(process.env.WORKFLOW_STATE_DIR, s + ".json");
 const seed = (s) => { fs.writeFileSync(p(s), V3(s), "utf8"); return s; };
 const diskVersion = (s) => { try { return JSON.parse(fs.readFileSync(p(s), "utf8")).version; }
                              catch (e) { return "UNPARSEABLE"; } };

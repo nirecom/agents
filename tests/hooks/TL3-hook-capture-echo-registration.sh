@@ -86,7 +86,7 @@ run_turn() {
     local rc=0
     ( cd "$REPO" && \
       PATH="$MOCKBIN:$PATH" \
-      CLAUDE_WORKFLOW_DIR="$WFDIR" \
+      WORKFLOW_STATE_DIR="$WFDIR" \
       WORKFLOW_PLANS_DIR="$PLANSDIR" \
       AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
       run_with_timeout 180 claude -p "$2" \

@@ -69,7 +69,7 @@ BG_STATE_DIR="$TMPDIR_BASE/inv6-workflow"; mkdir -p "$BG_STATE_DIR" "$TMPDIR_BAS
 # One node judges every command (argv); require.cache is cleared per row so no judge
 # state carries over, and each row prints exactly one "<idx>\t<verdict>\t<code>" line.
 bg_judge_batch() {
-  CLAUDE_WORKFLOW_DIR="$(nrm "$BG_STATE_DIR")" WORKFLOW_PLANS_DIR="$(nrm "$TMPDIR_BASE/inv6-plans")" \
+  WORKFLOW_STATE_DIR="$(nrm "$BG_STATE_DIR")" WORKFLOW_PLANS_DIR="$(nrm "$TMPDIR_BASE/inv6-plans")" \
   JUDGE="$(nrm "$REPO_ROOT/hooks/bash-guard/judge.js")" run_with_timeout node -e '
     "use strict";
     process.argv.slice(1).forEach((cmd, i) => {

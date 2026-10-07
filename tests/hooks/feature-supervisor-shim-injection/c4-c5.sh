@@ -7,7 +7,7 @@ run_c5_notice_only_pass_through() {
     sid="c5-notice-$$"
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$sid');
 st.layer1 = { findings: [
@@ -19,7 +19,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'$sid',tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>\"'}}))" 2>/dev/null)
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -35,7 +35,7 @@ run_c5_notice_only_pass_through
 eval_with_state() {
     local tmp_node="$1" sid="$2" out rc hook_input
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1],tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>\"'}}))" -- "$sid" 2>/dev/null)
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     if echo "$out" | grep -q '"decision":"block"' || [ $rc -eq 2 ]; then echo "block"; else echo "pass"; fi
@@ -48,7 +48,7 @@ run_c4_layer1_findings() {
     sid_block="c4-l1-block-$$"
     sid_wt="c4-l1-wt-$$"
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$sid_block');
 st.layer1={findings:[{categories:['code'],severity:'warning',detail:'l1 warning',reporter:'write-code',timestamp:new Date().toISOString()}]};
@@ -61,7 +61,7 @@ fs.writeFileSync(w.getStatePath('$sid_block',{forWrite:true}),JSON.stringify(st)
         fail "C4-block: layer1 WARNING finding must block, got=$got"
     fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$sid_wt');
 st.layer1={findings:[{categories:['workflow'],severity:'warning',detail:'enforcer false-block',reporter:'enforce-worktree',timestamp:new Date().toISOString()}]};
@@ -87,7 +87,7 @@ eval_toolname() {
     tmp=$(make_tmp)
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:process.argv[1],session_id:'c6-tool-$$',tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>\"'}}))" -- "$toolname" 2>/dev/null)
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -117,7 +117,7 @@ run_c4_state_c_alert_phase_done() {
     sid="c4-state-c-$$"
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$sid');
 st.alert = {
@@ -134,7 +134,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 " >/dev/null 2>&1 || fail "seed($sid): supervisor-state seed write failed"
 
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1],tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>\"'}}))" -- "$sid" 2>/dev/null)
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -161,7 +161,7 @@ run_c4_state_d_alert_phase_closed() {
     sid="c4-state-d-$$"
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$sid');
 st.alert = {
@@ -178,7 +178,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 " >/dev/null 2>&1 || fail "seed($sid): supervisor-state seed write failed"
 
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1],tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>\"'}}))" -- "$sid" 2>/dev/null)
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -203,7 +203,7 @@ run_c4_state_e_alert_phase_paused() {
     sid="c4-state-e-$$"
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$sid');
 st.alert = {
@@ -220,7 +220,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 " >/dev/null 2>&1 || fail "seed($sid): supervisor-state seed write failed"
 
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1],tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>\"'}}))" -- "$sid" 2>/dev/null)
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -245,7 +245,7 @@ run_c4_state_f_alert_phase_closed_error() {
     sid="c4-state-f-$$"
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$sid');
 st.alert = {
@@ -262,7 +262,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 " >/dev/null 2>&1 || fail "seed($sid): supervisor-state seed write failed"
 
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1],tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>\"'}}))" -- "$sid" 2>/dev/null)
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -304,7 +304,7 @@ run_c4_state_h_alert_phase_paused_error() {
     sid="c4-state-h-$$"
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
 
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$sid');
 st.alert = {
@@ -321,7 +321,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 " >/dev/null 2>&1 || fail "seed($sid): supervisor-state seed write failed"
 
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1],tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>\"'}}))" -- "$sid" 2>/dev/null)
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"

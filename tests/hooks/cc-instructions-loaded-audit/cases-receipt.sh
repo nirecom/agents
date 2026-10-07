@@ -103,7 +103,7 @@ fi
 I3_SID="idemsuper"
 I3_CWD="$BASE/i3-cwd"
 I3_PLANS="$BASE/i3-plans"
-I3_WF="$BASE/i3-wf"   # #2434: supervisor state is a control file under CLAUDE_WORKFLOW_DIR
+I3_WF="$BASE/i3-wf"   # #2434: supervisor state is a control file under WORKFLOW_STATE_DIR
 I3_WSID="20260101-000000"
 mkdir -p "$I3_CWD" "$I3_PLANS" "$I3_WF"
 printf 'Session-ID: %s\n' "$I3_WSID" > "$I3_CWD/WORKTREE_NOTES.md"
@@ -113,7 +113,7 @@ I3_FP="$(node_path "$REPO/rules/idem3.md")"
 I3_PAYLOAD="$(node -e 'console.log(JSON.stringify({session_id:process.argv[1],file_path:process.argv[2],hook_event_name:"InstructionsLoaded"}))' "$I3_SID" "$I3_FP")"
 for _ in $(seq 1 10); do
     printf '%s' "$I3_PAYLOAD" \
-        | (cd "$I3_CWD" && WORKFLOW_PLANS_DIR="$(node_path "$I3_PLANS")" CLAUDE_WORKFLOW_DIR="$(node_path "$I3_WF")" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || true
+        | (cd "$I3_CWD" && WORKFLOW_PLANS_DIR="$(node_path "$I3_PLANS")" WORKFLOW_STATE_DIR="$(node_path "$I3_WF")" node "$(node_path "$HOOK")" >/dev/null 2>/dev/null) || true
 done
 
 I3_STATES="$(find "$I3_WF" -path '*.control/supervisor-state.json' 2>/dev/null | wc -l | tr -d ' ')"
@@ -215,7 +215,7 @@ fi
 BLOCKER="$BASE/blocker"; printf 'not a directory\n' > "$BLOCKER"
 run_failopen() {
     local label="$1" input="$2" wfdir="$3" rc=0 out
-    out="$(printf '%s' "$input" | (cd "$BASE" && CLAUDE_WORKFLOW_DIR="$wfdir" node "$(node_path "$HOOK")" 2>/dev/null))" || rc=$?
+    out="$(printf '%s' "$input" | (cd "$BASE" && WORKFLOW_STATE_DIR="$wfdir" node "$(node_path "$HOOK")" 2>/dev/null))" || rc=$?
     if [ "$rc" != "0" ]; then
         fail "$label: want exit 0 (fail-open), got $rc"
     elif [ -n "$out" ]; then

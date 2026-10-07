@@ -5,7 +5,7 @@
 # #1644 C9: parse-closes-issues, render-final-report and issue-close-write-outcome
 # must report the same issue numbers for one seeded cache (object + legacy shapes).
 # #2434 C9-6: render-final-report derives its control files from --session under
-# $CLAUDE_WORKFLOW_DIR/<sid>.control/; legacy positionals only via the shim.
+# $WORKFLOW_STATE_DIR/<sid>.control/; legacy positionals only via the shim.
 # TL3 gap: the real ~/.workflow-plans layout and a merged PR's outcome JSON.
 
 set -uo pipefail
@@ -43,7 +43,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # DUAL-PIN (#1799).
-export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 PLANS_DIR_N="$(nrm "$PLANS_DIR")"
 WORKFLOW_DIR_N="$(nrm "$WORKFLOW_DIR")"

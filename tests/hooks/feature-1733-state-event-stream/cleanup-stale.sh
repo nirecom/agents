@@ -35,7 +35,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 # Fixture builders shared by every case. Ages are expressed in days from now so the
 # assertions read the same way the cutoff does.
 CLEAN_JS='const os = require("os");
-const WF = process.env.CLAUDE_WORKFLOW_DIR;
+const WF = process.env.WORKFLOW_STATE_DIR;
 const DAY = 24 * 60 * 60 * 1000;
 const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
 const agoMs = (days) => Date.now() - days * DAY;

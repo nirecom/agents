@@ -74,7 +74,7 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
     # pair, and drop inherited session ids so no child resolves live state.
     BeforeEach {
         [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $script:cfgDir, 'Process')
-        [System.Environment]::SetEnvironmentVariable('CLAUDE_WORKFLOW_DIR', (Join-Path $script:tmp 'workflow'), 'Process')
+        [System.Environment]::SetEnvironmentVariable('WORKFLOW_STATE_DIR', (Join-Path $script:tmp 'workflow'), 'Process')
         [System.Environment]::SetEnvironmentVariable('WORKFLOW_PLANS_DIR', (Join-Path $script:tmp 'plans'), 'Process')
         [System.Environment]::SetEnvironmentVariable('CLAUDE_CODE_SESSION_ID', $null, 'Process')
         [System.Environment]::SetEnvironmentVariable('CLAUDE_PROJECT_DIR', $null, 'Process')

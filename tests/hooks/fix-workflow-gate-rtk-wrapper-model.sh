@@ -124,7 +124,7 @@ run_with_timeout 30 node -e "
   steps.run_tests = { status: 'pending', updated_at: null };
   const st = { version: 1, session_id: process.argv[2], created_at: now, steps };
   fs.writeFileSync(path.join(process.argv[3], process.argv[2] + '.json'), JSON.stringify(st, null, 2));
-" "$HOOKS_N" "$WG_SID" "$(np "$CLAUDE_WORKFLOW_DIR")"
+" "$HOOKS_N" "$WG_SID" "$(np "$WORKFLOW_STATE_DIR")"
 
 # wg_run <command> → approve | block | timeout | crash:<rc> | other:<out>
 wg_run() {

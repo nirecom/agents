@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-forge-target-ownership.js, hooks/confirm-forge-target-ownership/
 # Tags: hook, pre-tool-use, github, gh, ownership, security, scope:issue-specific
+# isolation: inherits-from ../feature-2053-forge-target-ownership.sh
 # Part of tests/hooks/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
 # Block C5 — classifier symmetry across the whole gh issue / gh pr verb family.
 
@@ -75,10 +76,10 @@ TABLE
     # A fresh session id with no markers: isWorkflowOff / isIssueCloseVerified
     # must not be pre-satisfied, or the block below would be vacuous.
     local close_sid="cccccccc-0000-4000-8000-000000000001" close_rc
-    rm -f "$CLAUDE_WORKFLOW_DIR/$close_sid".* 2>/dev/null || true
+    rm -f "$WORKFLOW_STATE_DIR/$close_sid".* 2>/dev/null || true
     printf '{"session_id":"%s","tool_name":"Bash","cwd":"%s","tool_input":{"command":"gh issue close 5 --repo %s"}}' \
         "$close_sid" "$FX_OWNED" "$FOREIGN/r" > "$BASE/close-in.json"
-    env "${ENV_UNSET[@]}" -u ISSUE_CLOSE_SKILL CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR" \
+    env "${ENV_UNSET[@]}" -u ISSUE_CLOSE_SKILL WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" \
         "$RWT" 15 node "$close_hook" < "$BASE/close-in.json" \
         > "$BASE/close-out.txt" 2> "$BASE/close-err.txt"
     close_rc=$?

@@ -172,7 +172,7 @@ export FIXTURE_ORIGIN_URL="git@github.com:ssh-org/ssh-repo.git"
 STDERR_FILE="$TMP/t-ssh-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
-CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
+CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
 HAS_KEY=0
 [ -f "$CACHE_FILE" ] && grep -q "^ssh-org/ssh-repo" "$CACHE_FILE" 2>/dev/null && HAS_KEY=1
 if [ "$RC" = "0" ] && [ "$HAS_KEY" = "1" ]; then
@@ -192,7 +192,7 @@ export FIXTURE_UPSTREAM_URL="https://github.com/upstream-org/upstream-repo.git"
 STDERR_FILE="$TMP/t-origin-upstream-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
-CACHE_FILE="$CLAUDE_WORKFLOW_DIR/cache/project-resolve.tsv"
+CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
 CACHE_TXT="$(cat "$CACHE_FILE" 2>/dev/null)"
 if [ "$RC" = "0" ] && printf '%s' "$CACHE_TXT" | grep -q "^fork-org/fork-repo"; then
     pass "T-origin-vs-upstream: cache keyed on origin, not upstream"

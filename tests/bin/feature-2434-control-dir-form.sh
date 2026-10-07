@@ -38,9 +38,9 @@ new_fx() {
 fx_env() {
   cd "$1/cwd" || exit 99
   export HOME="$1/home"
-  CLAUDE_WORKFLOW_DIR="$(np "$1/workflow-state")"
+  WORKFLOW_STATE_DIR="$(np "$1/workflow-state")"
   WORKFLOW_PLANS_DIR="$(np "$1/plans")"
-  export CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR
+  export WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR
   export CONTROL_MIGRATION_FAULT="${FX_FAULT:-}"
 }
 

@@ -152,7 +152,7 @@ unset CLAUDECODE CLAUDE_CODE_SESSION_ID
 # `/c/...` path as relative to the current drive root, so the hook would write
 # its marker into a directory this test never looks at and the run would fail
 # for a reason that has nothing to do with provenance.
-export CLAUDE_WORKFLOW_DIR="$(node_path "$WFDIR")"
+export WORKFLOW_STATE_DIR="$(node_path "$WFDIR")"
 export WORKFLOW_PLANS_DIR="$(node_path "$PLANSDIR")"
 export AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")"
 export PATH="$MOCKBIN:$PATH"

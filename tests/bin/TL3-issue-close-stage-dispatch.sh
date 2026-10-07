@@ -114,7 +114,7 @@ printf '%s' \
 DRC=0
 DOUT="$(run_with_timeout 120 env -u CLAUDE_CODE_SESSION_ID \
     "PATH=$GHBIN:$PATH" \
-    "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+    "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
     node "$(nodepath "$DISPATCH_JS")" issue-close-stage "$MAIN" "$(nodepath "$PAYLOAD")" 2>/dev/null)" || DRC=$?
 
 field_of() { printf '%s\n' "$DOUT" | sed -n "s/^$1: //p" | head -1; }

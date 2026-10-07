@@ -2,7 +2,7 @@
 // Render SC-7 supervisor alert findings (post-Final-Report surfacing).
 //
 // Usage: node session-close-render-sc7.js --session <session-id>
-//   reads <CLAUDE_WORKFLOW_DIR>/<sid>.control/supervisor-state.json.
+//   reads <WORKFLOW_STATE_DIR>/<sid>.control/supervisor-state.json.
 // Legacy: <supervisor-state-json-path> <session-id> — accepted only as the derived path or its
 //   <sid>-supervisor-state.json basename.
 // Outputs: rendered findings text (trailing newline) to stdout, or empty if none.

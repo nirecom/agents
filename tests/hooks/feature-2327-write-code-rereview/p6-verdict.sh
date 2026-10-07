@@ -65,7 +65,7 @@ const steps = {
   user_verification:{status:"pending"}, cleanup:{status:"pending"},
   pre_final_report_gate:{status:"pending"}, final_report:{status:"pending"}
 };
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, "v2rere.json"),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, "v2rere.json"),
   JSON.stringify({steps,closes_issues:[2327]}));
 JS
 
@@ -103,7 +103,7 @@ const steps = {
   user_verification:{status:"pending"}, cleanup:{status:"pending"},
   pre_final_report_gate:{status:"pending"}, final_report:{status:"pending"}
 };
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, "v3rere.json"),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, "v3rere.json"),
   JSON.stringify({steps,closes_issues:[2327]}));
 JS
 
@@ -128,7 +128,7 @@ const steps = {
   user_verification:{status:"pending"}, cleanup:{status:"pending"},
   pre_final_report_gate:{status:"pending"}, final_report:{status:"pending"}
 };
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, "v4rere.json"),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, "v4rere.json"),
   JSON.stringify({steps,closes_issues:[2327]}));
 JS
 
@@ -152,7 +152,7 @@ const steps = {
   user_verification:{status:"pending"}, cleanup:{status:"pending"},
   pre_final_report_gate:{status:"pending"}, final_report:{status:"pending"}
 };
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, "v5rere.json"),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, "v5rere.json"),
   JSON.stringify({steps,closes_issues:[2327]}));
 JS
 
@@ -176,7 +176,7 @@ const steps = {
   user_verification:{status:"pending"}, cleanup:{status:"pending"},
   pre_final_report_gate:{status:"pending"}, final_report:{status:"pending"}
 };
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, "v6rere.json"),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, "v6rere.json"),
   JSON.stringify({steps,closes_issues:[2327]}));
 JS
 

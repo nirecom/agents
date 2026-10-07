@@ -7,6 +7,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -95,7 +101,7 @@ console.log(JSON.stringify({
         cd "$_AGENTS_DIR_NODE" && \
         ENFORCE_WORKTREE=on \
         WORKFLOW_PLANS_DIR="$tmp" \
-        CLAUDE_WORKFLOW_DIR="$tmp" \
+        WORKFLOW_STATE_DIR="$tmp" \
         run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/enforce-worktree.js" 2>/dev/null
     ))
     rc=$?
@@ -137,7 +143,7 @@ console.log(JSON.stringify({
   tool_input: { command: 'gh issue close 1' }
 }));" 2>/dev/null)
     local out rc
-    out=$(echo "$payload" | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" \
+    out=$(echo "$payload" | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" \
         run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/enforce-issue-close.js" 2>/dev/null)
     rc=$?
     local n; n=$(finding_count "$tmp_node" "$sid")
@@ -189,7 +195,7 @@ console.log(JSON.stringify({
     out=$(echo "$payload" | (
         cd "$repo" && \
         WORKFLOW_PLANS_DIR="$tmp" \
-        CLAUDE_WORKFLOW_DIR="$tmp" \
+        WORKFLOW_STATE_DIR="$tmp" \
         run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/workflow-gate.js" 2>/dev/null
     ))
     rc=$?
@@ -220,7 +226,7 @@ run_i4() {
     # point — we exercise the override-handlers contract from inside it.
     local prog="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
     WORKFLOW_PLANS_DIR="$tmp" \
-    CLAUDE_WORKFLOW_DIR="$tmp" \
+    WORKFLOW_STATE_DIR="$tmp" \
     WORKFLOW_DIR="$tmp" \
     run_with_timeout 10 node -e "
 const oh = require('$prog');
@@ -253,7 +259,7 @@ run_i5() {
     tmp="$(mktemp -d)"; tmp_node="$(to_node_path "$tmp")"
     local prog="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
     WORKFLOW_PLANS_DIR="$tmp" \
-    CLAUDE_WORKFLOW_DIR="$tmp" \
+    WORKFLOW_STATE_DIR="$tmp" \
     WORKFLOW_DIR="$tmp" \
     run_with_timeout 10 node -e "
 const oh = require('$prog');

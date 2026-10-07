@@ -3,7 +3,7 @@
 # Tests: bin/worker-dispatch/workers/issue-close-finalize/state.js, bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, issue-close-finalize, state-file, untrusted-input, session-rebinding, security, TL2, scope:issue-specific
 #
-# Issue #1673/D3 — state file in $CLAUDE_WORKFLOW_DIR/<sid>.control/ is attacker-
+# Issue #1673/D3 — state file in $WORKFLOW_STATE_DIR/<sid>.control/ is attacker-
 # reachable; a swapped file is a swapped forge target. Tests that NO CHILD PROCESS
 # starts for non-conforming state (spawn counter = 0). Row (ok) is the non-vacuity
 # control. TL3 gap: real gh mutation avoidance; concurrent PLANS_DIR races.
@@ -134,7 +134,7 @@ dispatch_loop_step() {
     : > "$CALLLOG"
     DRC=0
     DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
-        "CLAUDE_WORKFLOW_DIR=$WF" \
+        "WORKFLOW_STATE_DIR=$WF" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

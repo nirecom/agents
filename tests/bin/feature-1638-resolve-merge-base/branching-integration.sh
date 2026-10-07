@@ -51,7 +51,7 @@ dispatch_branching() { # <sid> <decision>
   e="$(mktemp "$TMPROOT/bi-err.XXXXXX")"
   BI_RC=0
   printf '%s' "$payload" | env \
-    "CLAUDE_WORKFLOW_DIR=$(to_node_path "$WFDIR")" \
+    "WORKFLOW_STATE_DIR=$(to_node_path "$WFDIR")" \
     "AGENTS_CONFIG_DIR=$(to_node_path "$AGENTS_DIR")" \
     node "$MARK_HOOK" >"$o" 2>"$e" || BI_RC=$?
   BI_OUT="$(cat "$o")"
@@ -60,7 +60,7 @@ dispatch_branching() { # <sid> <decision>
 }
 
 baseline_field() { # <sid> <field>
-  env "AGENTS_DIR=$(to_node_path "$AGENTS_DIR")" "CLAUDE_WORKFLOW_DIR=$(to_node_path "$WFDIR")" \
+  env "AGENTS_DIR=$(to_node_path "$AGENTS_DIR")" "WORKFLOW_STATE_DIR=$(to_node_path "$WFDIR")" \
     node "$STATE_JS" field "$1" "$2" 2>/dev/null
 }
 
@@ -148,7 +148,7 @@ b3_recording_failure_is_not_fatal() {
   # The step itself must still be recorded: the baseline is an optimisation, branching_complete
   # is the fact the workflow depends on.
   check "B3-step: and branching_complete is still marked" "complete" \
-    "$(env "AGENTS_DIR=$(to_node_path "$AGENTS_DIR")" "CLAUDE_WORKFLOW_DIR=$(to_node_path "$WFDIR")" \
+    "$(env "AGENTS_DIR=$(to_node_path "$AGENTS_DIR")" "WORKFLOW_STATE_DIR=$(to_node_path "$WFDIR")" \
       node -e 'const path=require("path");let ws;try{ws=require(path.join(process.env.AGENTS_DIR,"hooks","workflow-state"));const st=ws.readState("'"$sid"'");process.stdout.write(String(st.steps.branching_complete.status));}catch(e){process.stdout.write("READ_ERROR");}' 2>/dev/null)"
   # And the failure is not silent. Whichever stream workflow-mark uses, the reason has to be
   # somewhere a reader can find it.

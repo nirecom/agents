@@ -12,6 +12,11 @@
 # mitigation: WORKFLOW_USER_VERIFIED preflight (skill-orchestration category).
 set -uo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 AGENTS_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 GATE="$AGENTS_ROOT/bin/check-issues-class-coverage"
 ASSEMBLE="$AGENTS_ROOT/skills/_shared/assemble-mandatory.sh"

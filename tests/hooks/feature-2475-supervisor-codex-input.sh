@@ -94,7 +94,7 @@ sci_msys_path() {
 #   reaches node verbatim. MSYS_NO_PATHCONV also stops env conversion, so the fixture
 #   dirs are handed over in native form explicitly (else node reads /tmp/... as C:\tmp).
 sci_run_msys() {
-  WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")" CLAUDE_WORKFLOW_DIR="$(np "$CLAUDE_WORKFLOW_DIR")" \
+  WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")" WORKFLOW_STATE_DIR="$(np "$WORKFLOW_STATE_DIR")" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$CLAUDE_TRANSCRIPT_BASE_DIR")" HOME="$(np "$HOME")" \
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' run_with_timeout 30 node "$SCI_CLI" "$@"
 }

@@ -25,13 +25,13 @@ const ENV_ENTRY_BLOCKLIST_EXACT = new Set([
   // PLAN_SYNC_REMOTE_URL names the one remote every plan is pushed to; a project
   // pointing it elsewhere would publish plans to a repo the user never chose.
   "PLAN_SYNC_REMOTE_URL",
-  // CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR are one class — load-env.js names
+  // WORKFLOW_STATE_DIR and WORKFLOW_PLANS_DIR are one class — load-env.js names
   // them together as ISOLATION_ENV_KEYS — and a local value for either relocates
   // the workflow-state root holding gate state and off-clearance tokens.
   // AGENTS_STATE_DIR is their sibling: the state/log root retention deletes under.
   // AGENTS_CONFIG_DIR names the very directory this layer resolves the global
   // .env from, so a local value would redirect the layer that reads it.
-  "CLAUDE_WORKFLOW_DIR",
+  "WORKFLOW_STATE_DIR",
   "WORKFLOW_PLANS_DIR",
   "AGENTS_STATE_DIR",
   "AGENTS_CONFIG_DIR",

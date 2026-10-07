@@ -16,6 +16,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 REAL_RUN_ALL="${HOME:-/nonexistent}/.claude/run-all"
 REAL_PRE=0; [ -e "$REAL_RUN_ALL" ] && REAL_PRE=1
 cf_init
+harness_isolate "$CF_T/iso"   # top-level pin: cf_init pins inside a function, which the guard does not read
 
 RUNNER="$AGENTS_DIR/tests/run-all.sh"
 EXEC_MODEL="$AGENTS_DIR/hooks/workflow-run-tests/exec-model.js"

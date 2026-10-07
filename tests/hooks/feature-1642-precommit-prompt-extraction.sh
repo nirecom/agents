@@ -40,10 +40,13 @@ TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_STATE_DIR"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -236,7 +239,7 @@ assert_marker_skips_backstop() {
     run_precommit "$repo" \
         "AGENTS_CONFIG_DIR=$repo" \
         "ENFORCE_WORKTREE=off" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_CODE_SESSION_ID=$sid"
     if [ "$RC" -eq 0 ]; then
@@ -266,7 +269,7 @@ t03c_no_marker_still_blocks() {
     run_precommit "$repo" \
         "AGENTS_CONFIG_DIR=$repo" \
         "ENFORCE_WORKTREE=off" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_CODE_SESSION_ID=pe1642t03c"
     if [ "$RC" -eq 1 ]; then

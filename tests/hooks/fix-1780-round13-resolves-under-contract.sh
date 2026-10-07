@@ -55,7 +55,7 @@
 # HERMETICITY (rules/test/fixture-isolation.md): everything lives in a mktemp
 # tree, the process CWD is that temp tree (never the repo), and no workflow
 # state dir is involved - path-containment.js reads no env and no config, so no
-# CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR pinning is applicable here. Inherited
+# WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR pinning is applicable here. Inherited
 # session ids are unset anyway so a future dependency cannot silently appear.
 # ---------------------------------------------------------------------------
 

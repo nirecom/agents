@@ -51,6 +51,9 @@ else
     TMPDIR_NODE="$TMPDIR_BASE"
 fi
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# isolation (#2512): pin state and plans dirs once for this file; run_migrate still unsets the plans dir per call.
+mkdir -p "$TMPDIR_BASE/isolation/workflow-state" "$TMPDIR_BASE/isolation/plans"
+export WORKFLOW_STATE_DIR="$TMPDIR_NODE/isolation/workflow-state" WORKFLOW_PLANS_DIR="$TMPDIR_NODE/isolation/plans"
 
 # Build a per-test fixture: a fake HOME containing .claude/plans and
 # .workflow-plans (controlled by WORKFLOW_PLANS_DIR), plus a fixture
@@ -185,7 +188,7 @@ run_migrate() {
         WORKFLOW_PLANS_DIR="$wpd" HOME="$node_home" USERPROFILE="$node_home" \
             run_with_timeout node "$node_script" >"$tmp_out" 2>"$tmp_err" || exit_code=$?
     else
-        unset WORKFLOW_PLANS_DIR
+        unset WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR
         HOME="$node_home" USERPROFILE="$node_home" \
             run_with_timeout node "$node_script" >"$tmp_out" 2>"$tmp_err" || exit_code=$?
     fi

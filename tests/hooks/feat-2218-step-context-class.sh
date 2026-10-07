@@ -36,7 +36,7 @@ run_node() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     out=$(env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "$1" 2>&1)
     rm -rf "$tmp" 2>/dev/null || true

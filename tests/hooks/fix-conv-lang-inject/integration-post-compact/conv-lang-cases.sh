@@ -73,7 +73,7 @@ EOF
 
     T16_RAW=$(printf '{"session_id":"t16-sid"}' | \
         CONV_LANG="japanese" \
-        CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-t16" \
+        WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t16" \
         HOME="$TMPDIR_BASE/home-t16" \
         AGENTS_CONFIG_DIR="$EMPTY_CFG" \
         run_with_timeout 30 node "$T16_HOOKS/post-compact.js" 2>/dev/null)
@@ -161,7 +161,7 @@ fi
 # ===========================================================================
 T20_RAW=$(printf '{}' | \
     CONV_LANG="japanese" \
-    CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-t20" \
+    WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t20" \
     HOME="$TMPDIR_BASE/home-t20" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
     run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)
@@ -180,7 +180,7 @@ fi
 # ===========================================================================
 T23_RAW=$(printf 'not-json' | \
     CONV_LANG="japanese" \
-    CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-t23" \
+    WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t23" \
     HOME="$TMPDIR_BASE/home-t23" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
     run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)

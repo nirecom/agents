@@ -46,9 +46,9 @@ trap 'chmod -R u+rwX "$TMPDIR_BASE" 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 
 # Fixture isolation (rules/test/fixture-isolation.md): dual-pin the workflow dirs
 # and drop the parent session ids so no child resolves the live session.
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 
 # Neutral CWD for the "outside any git repository" cases (never a git repo).

@@ -35,7 +35,7 @@ require_source() {
 
 read_field() {
     local tmp="$1" sid="$2" path="$3"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 const parts = '$path'.split('.');
@@ -49,7 +49,7 @@ run_c1() {
     require_source "$CLI" "C1: --alert-armed-at sets alert.alert_armed_at" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c1-sid"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --alert-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --alert-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "$sid" "alert.alert_armed_at")
     rm -rf "$tmp"
@@ -64,7 +64,7 @@ run_c2() {
     require_source "$CLI" "C2: --last-run-at + --cumulative-severity" || return
     local tmp sid v1 v2 rc
     tmp="$(mktemp -d)"; sid="c2-sid"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --last-run-at "2026-06-06T11:00:00Z" --cumulative-severity warning --session-id "$sid" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --last-run-at "2026-06-06T11:00:00Z" --cumulative-severity warning --session-id "$sid" >/dev/null 2>&1
     rc=$?
     v1=$(read_field "$tmp" "$sid" "alert.last_run_at")
     v2=$(read_field "$tmp" "$sid" "alert.cumulative_severity")
@@ -80,14 +80,14 @@ run_c3() {
     require_source "$CLI" "C3: --finding-* flags append to layer2.findings" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="c3-sid"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --finding-categories intent,workflow \
         --finding-severity error \
         --finding-detail "test detail" \
         --finding-reporter supervisor \
         --session-id "$sid" >/dev/null 2>&1
     rc=$?
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 const fs2 = st.alert.findings;
@@ -112,7 +112,7 @@ run_c4() {
     require_source "$CLI" "C4: missing --session-id exits non-zero" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --alert-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --alert-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -ne 0 ]; then
@@ -126,7 +126,7 @@ run_c5() {
     require_source "$CLI" "C5: invalid --cumulative-severity exits non-zero" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --cumulative-severity critical --session-id "c5-sid" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --cumulative-severity critical --session-id "c5-sid" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -ne 0 ]; then
@@ -140,7 +140,7 @@ run_c6() {
     require_source "$CLI" "C6: no mutating flags exits non-zero" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "c6-sid" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --session-id "c6-sid" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -ne 0 ]; then
@@ -155,8 +155,8 @@ run_c7() {
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c7-sid"
     # seed with a value first
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --alert-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --clear-alert-armed-at --session-id "$sid" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --alert-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --clear-alert-armed-at --session-id "$sid" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "$sid" "alert.alert_armed_at")
     rm -rf "$tmp"

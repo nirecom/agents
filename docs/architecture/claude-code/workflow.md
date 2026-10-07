@@ -29,7 +29,8 @@ the per-mode rendering is under [Workflow types](#workflow-types-in-next-step---
 
 ## State file
 
-Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outside any repo)
+Path: `~/.workflow-state/<session-id>.json`, or `$WORKFLOW_STATE_DIR/<session-id>.json` when pinned (never committed — outside any repo).
+During the migration a pre-move session may still live in the legacy root — see [state-dirs.md](state-dirs.md#state-root-migration-temporary).
 
 Since #1733 the file is an **append-only event stream**. `events` is the only source of
 truth (CPR-SSOT); every other field is a derived view folded from it and rewritten on each

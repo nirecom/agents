@@ -42,7 +42,7 @@ run_hook() {
     printf '%s' "$json" > "$input_file"
     result=$(
         (
-            export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
+            export WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR"
             export WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
             export CLAUDE_CODE_SESSION_ID="test-sess-1097"
             # shellcheck disable=SC2163
@@ -211,7 +211,7 @@ assert_block_reason_not_contains "A4n" "Block reason omits retired 4-option prom
 case_end
 
 case_begin "a5-workflow-off-bypass-write" "hooks/block-memory-direct.js"
-WORKFLOW_OFF_MARKER="$CLAUDE_WORKFLOW_DIR/test-sess-1097.workflow-off"
+WORKFLOW_OFF_MARKER="$WORKFLOW_STATE_DIR/test-sess-1097.workflow-off"
 touch "$WORKFLOW_OFF_MARKER"
 assert_approve "A5" "Write + memory dir + WORKFLOW_OFF active → approve" \
     '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
@@ -219,7 +219,7 @@ rm -f "$WORKFLOW_OFF_MARKER"
 case_end
 
 case_begin "a5b-workflow-off-bypass-bash" "hooks/block-memory-direct.js"
-WORKFLOW_OFF_MARKER="$CLAUDE_WORKFLOW_DIR/test-sess-1097.workflow-off"
+WORKFLOW_OFF_MARKER="$WORKFLOW_STATE_DIR/test-sess-1097.workflow-off"
 touch "$WORKFLOW_OFF_MARKER"
 assert_approve "A5b" "Bash redirect to memory dir + WORKFLOW_OFF active → approve" \
     '{"tool_name":"Bash","tool_input":{"command":"echo foo >> '"$MEMORY_DIR"'/MEMORY.md"},"session_id":"test-sess-1097","agent_id":""}'
@@ -257,7 +257,7 @@ b10_input_file="$(mktemp "$TMPDIR_ROOT/b10_input.XXXXXX")"
 printf '%s' 'NOT VALID JSON {{{' > "$b10_input_file"
 b10_result=$(
     (
-        export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
+        export WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR"
         export WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
         export CLAUDE_CODE_SESSION_ID="test-sess-1097"
         run_with_timeout 120 node "$HOOK" < "$b10_input_file" 2>/dev/null
@@ -285,7 +285,7 @@ printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"'"$MEMORY_DIR"'/MEM
 b12_result=$(
     (
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-        export CLAUDE_WORKFLOW_DIR="$CLAUDE_WORKFLOW_DIR"
+        export WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR"
         export WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
         run_with_timeout 120 node "$HOOK" < "$b12_input_file" 2>/dev/null
     )

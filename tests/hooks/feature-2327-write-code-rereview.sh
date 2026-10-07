@@ -24,7 +24,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_DIR="$TMPDIR_BASE/wf"
 PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
-export CLAUDE_WORKFLOW_DIR="$(np "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(np "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
@@ -92,7 +92,7 @@ steps.write_code = wc ? JSON.parse(wc) : {status:"pending"};
 for(const s of ["run_tests","review_security","docs","review_docs","user_verification","cleanup","pre_final_report_gate","final_report"]) steps[s] = {status:"pending"};
 const st = {version:1, session_id:sid, steps, closes_issues:[2327]};
 if(wt) st.session_worktree = wt;
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json"), JSON.stringify(st));
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json"), JSON.stringify(st));
 ' "$1" "$2" "${3:-}" "${4:-}"
 }
 

@@ -145,7 +145,7 @@ if [ ! -e "$LINKED/.git" ]; then
 fi
 
 MAIN_N="$(np "$MAIN")"; LINKED_N="$(np "$LINKED")"
-export CLAUDE_WORKFLOW_DIR="$(np "$WF")"
+export WORKFLOW_STATE_DIR="$(np "$WF")"
 export WORKFLOW_PLANS_DIR="$(np "$PLANS")"
 export ENFORCE_WORKTREE=on
 SID="feat1610t1"
@@ -166,7 +166,7 @@ const state={version:1,session_id:sid,created_at:new Date().toISOString(),cwd,st
 if(swt) state.session_worktree=swt;
 if(extra) Object.assign(state,JSON.parse(extra));
 fs.writeFileSync(path.join(dir,sid+".json"),JSON.stringify(state,null,2));
-' "$CLAUDE_WORKFLOW_DIR" "$SID" "$MAIN_N" "$2" "$1" "${3:-}"
+' "$WORKFLOW_STATE_DIR" "$SID" "$MAIN_N" "$2" "$1" "${3:-}"
 }
 
 # mk_payload <tool> <tool_input_key|""> <value> <cwd|__OMIT__> <agent_id|"">

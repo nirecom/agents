@@ -3,7 +3,7 @@
 // string, so block-clearance-token-write.js would block an interpreter body
 // spelling one. Suffixes are derived from the SSOT at runtime, never hardcoded.
 // Usage: node round5-containment-probe.js <agentsDir> <wfDir> <aliasDir> <outsideDir>
-// CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR must point at <wfDir> so both sides
+// WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR must point at <wfDir> so both sides
 // resolve the same directory. Prints `key=value` — one assertion each.
 "use strict";
 
@@ -70,7 +70,7 @@ emit("inside_gate", () => gateAllows(j(wfDir, "x.json")));
 
 // Stem realigned to an effective sid (#2108): a protected suffix confers
 // clearance only when the STEM is a session id. This probe pins its own
-// CLAUDE_WORKFLOW_DIR, so the parent's registered stems are not observable
+// WORKFLOW_STATE_DIR, so the parent's registered stems are not observable
 // here; a canonical UUID needs no observation and keeps these cases about
 // CONTAINMENT rather than stem semantics.
 const SID_2108 = "0f3d9a21-1111-4222-8333-444455556666";

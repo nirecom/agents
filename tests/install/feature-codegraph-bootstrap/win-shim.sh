@@ -39,7 +39,7 @@ wc_run() {
         AGENTS_CONFIG_DIR="$(node_path "$d/cfg")"; export AGENTS_CONFIG_DIR
         CLAUDE_STUB_LOG="$(node_path "$d/claude.log")"; export CLAUDE_STUB_LOG
         CG_STUB_LOG="$(node_path "$d/codegraph.log")"; export CG_STUB_LOG
-        export CLAUDE_WORKFLOW_DIR="$d/wf" WORKFLOW_PLANS_DIR="$d/plans"
+        export WORKFLOW_STATE_DIR="$d/wf" WORKFLOW_PLANS_DIR="$d/plans"
         bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" node "$MCP_JS_NATIVE" register
     ) >"$d/out.log" 2>"$d/err.log" </dev/null
 }

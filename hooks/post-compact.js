@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 // Claude Code PostCompact hook: re-inject session ID into conversation context
 
-const path = require("path");
-const os = require("os");
 const { getConvLangInjection } = require("./lib/conv-lang");
-const { readState } = require("./workflow-state");
+const { readState, getStatePath } = require("./workflow-state");
 const { SESSION_ID_ANNOUNCE_PREFIX } = require("./lib/session-announce");
 
 const WORKFLOW_STEPS = [
@@ -51,14 +49,13 @@ try {
 } catch (_e) { /* fail-open */ }
 
 try {
-  const stateDir = process.env.CLAUDE_WORKFLOW_DIR ||
-    path.join(os.homedir(), ".claude", "projects", "workflow");
   const lines = [
     // Lineage evidence for #1305 — the compacted transcript carries this
     // attachment forward, naming the pre-compact session. SSOT: lib/session-announce.
     `${SESSION_ID_ANNOUNCE_PREFIX}${sessionId}`,
-    `State file: ${path.join(stateDir, sessionId + ".json")}`,
   ];
+  // The routed path (#2511): a legacy-root session's file is named where it really lives.
+  try { lines.push(`State file: ${getStatePath(sessionId)}`); } catch (_e) { /* invalid sid: omit */ }
   try {
     const state = readState(sessionId);
     lines.push("");

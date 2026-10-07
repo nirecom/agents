@@ -12,6 +12,11 @@
 
 set -uo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 # ---------------------------------------------------------------------------
 # Resolve paths
 # ---------------------------------------------------------------------------
@@ -163,7 +168,7 @@ run_resolver_env() {
     SESSION_ID="$1" \
     CLAUDE_CODE_SESSION_ID="$2" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
-    CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
+    WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
     AGENTS_CONFIG_DIR="$AGENTS_NODE" \
       bash "$RUN_TIMEOUT" 30 "$RESOLVER_BIN" ${4:+--session "$4"}
@@ -221,7 +226,7 @@ run_select() {
     SESSION_ID="" \
     CLAUDE_CODE_SESSION_ID="$effective_ccsid" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
-    CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
+    WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
     AGENTS_CONFIG_DIR="$agents_dir" \
       bash "$RUN_TIMEOUT" 30 bash "$SELECT_SH" 2>"$errfile")"

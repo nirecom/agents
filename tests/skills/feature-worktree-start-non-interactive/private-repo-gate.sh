@@ -5,6 +5,12 @@
 # B21 — the private-repo-name half of derive-worktree-name.sh's scan gate, and the
 # one-shot cache that feeds it.
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # Why: scan-outbound.sh consults only two static files, so a private repo's bare
 # name reaches a public branch unless scan_clean() also checks the private-repo
 # list. "The gate ran" and "the gate had anything to compare against" are separate

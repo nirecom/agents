@@ -56,7 +56,7 @@ function runCloseProcedureLane(sid) {
     const nextStepPath = path.join(agentsDir, "bin", "workflow", "next-step");
     if (!fs.existsSync(nextStepPath)) return;
 
-    // The current environment MUST be inherited: CLAUDE_WORKFLOW_DIR decides
+    // The current environment MUST be inherited: WORKFLOW_STATE_DIR decides
     // where the workflow state lives. Passing a scrubbed env would lose it and
     // silently fail open.
     const { spawnSync } = require("child_process");

@@ -33,7 +33,7 @@ case_begin "control-dir-destructive-side-effects" "hooks/block-clearance-token-w
 
 # C1: directory-level delete and outside-to-control mv/cp against a preseeded
 # terminal. Each attempt is judged on the real directory and terminal bytes.
-CTL_RAW="$CLAUDE_WORKFLOW_DIR/$SID.control"
+CTL_RAW="$WORKFLOW_STATE_DIR/$SID.control"
 CTL="$WFN/$SID.control"
 OUT_DIR="$(make_tmp)"; OUT_N="$(np "$OUT_DIR")"
 c1_seed() {
@@ -81,7 +81,7 @@ case_begin "plans-rule-c-edit-rm-rename" "hooks/block-clearance-token-write/plac
 # C2: rule (c) with WORKFLOW=on against a legacy terminal (registered control
 # kind) and an unregistered session file. Edit, rm and rename in both
 # directions are blocked; source and destination bytes stay unchanged.
-rm -f "$CLAUDE_WORKFLOW_DIR/$SID.workflow-off"
+rm -f "$WORKFLOW_STATE_DIR/$SID.workflow-off"
 PL_RAW="$WORKFLOW_PLANS_DIR"
 LEG="$SID-detail-plan-terminal.txt"
 UNR="$SID-scratch-state.json"

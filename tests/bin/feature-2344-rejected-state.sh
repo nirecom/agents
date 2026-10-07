@@ -67,17 +67,17 @@ trim() {
 # ---------------------------------------------------------------------------
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
 # ledger_path_for <sid> <format> — the ledger the CLI reads under the #2434
 # control-dir layout; creates <sid>.control so the fixture can seed it directly.
 ledger_path_for() {
-    mkdir -p "$CLAUDE_WORKFLOW_DIR/$1.control"
-    printf '%s/%s.control/%s-concern-ledger.txt' "$CLAUDE_WORKFLOW_DIR" "$1" "$2"
+    mkdir -p "$WORKFLOW_STATE_DIR/$1.control"
+    printf '%s/%s.control/%s-concern-ledger.txt' "$WORKFLOW_STATE_DIR" "$1" "$2"
 }
 
 # ---------------------------------------------------------------------------

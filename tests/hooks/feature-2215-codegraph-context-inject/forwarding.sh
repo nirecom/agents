@@ -24,7 +24,7 @@ for variant in off unset invalid; do
             run_with_timeout 15 env -u CLAUDE_CODE_SESSION_ID \
             AGENTS_CONFIG_DIR="$(to_node_path "$CFG")" \
             PATH="$BIN:$PATH" \
-            CLAUDE_WORKFLOW_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
+            WORKFLOW_STATE_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
             HOME="$FAKE_HOME_N" USERPROFILE="$FAKE_HOME_N" \
             CG_STUB_LOG="$(to_node_path "$LOG")" \
             node "$HOOK" 2>/dev/null
@@ -105,7 +105,7 @@ raw19b=$(
         run_with_timeout 15 env -u CLAUDE_CODE_SESSION_ID \
         AGENTS_CONFIG_DIR="$CFG_ON_N" \
         PATH="$NODE_ONLY_DIR_N" \
-        CLAUDE_WORKFLOW_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
+        WORKFLOW_STATE_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
         HOME="$FAKE_HOME_N" USERPROFILE="$FAKE_HOME_N" \
         CG_STUB_LOG="$(to_node_path "$LOG19B")" \
         node "$HOOK" 2>/dev/null
@@ -144,7 +144,7 @@ for stdin_variant in "" "not-json{{{"; do
         cd "$ORD_PLAIN" || exit 99
         printf '%s' "$stdin_variant" | run_with_timeout 15 env -u CLAUDE_CODE_SESSION_ID \
             AGENTS_CONFIG_DIR="$CFG_ON_N" PATH="$BIN:$PATH" \
-            CLAUDE_WORKFLOW_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
+            WORKFLOW_STATE_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
             HOME="$FAKE_HOME_N" USERPROFILE="$FAKE_HOME_N" \
             CG_STUB_LOG="$(to_node_path "$LOG21")" \
             node "$HOOK" 2>/dev/null

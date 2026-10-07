@@ -12,6 +12,11 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 RUNNER="$AGENTS_DIR/tests/run-all.sh"
 CAL_REL="bin/calibrate-test-parallelism.sh"
@@ -38,9 +43,9 @@ mkdir -p "$TMPD"
 trap 'rm -rf "$TMPD"' EXIT
 
 # --- fixture isolation (rules/test/fixture-isolation.md) --------------------
-export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 CACHE_DIR="$TMPD/cache"; mkdir -p "$CACHE_DIR"
 CACHE_FILE="$CACHE_DIR/parallelism.conf"

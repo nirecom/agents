@@ -14,7 +14,7 @@ const { getPristineIsolationEnv } = require("./load-env");
 function isolationContradiction() {
   try {
     const snap = getPristineIsolationEnv();
-    const workflowDirSet = snap.CLAUDE_WORKFLOW_DIR !== null;
+    const workflowDirSet = snap.WORKFLOW_STATE_DIR !== null;
     const plansDirSet = snap.WORKFLOW_PLANS_DIR !== null;
     return workflowDirSet !== plansDirSet;
   } catch (_) {
@@ -32,7 +32,7 @@ function safeAppend(sessionId, finding) {
         try {
           const snap = getPristineIsolationEnv();
           const missing =
-            snap.CLAUDE_WORKFLOW_DIR === null ? "CLAUDE_WORKFLOW_DIR" : "WORKFLOW_PLANS_DIR";
+            snap.WORKFLOW_STATE_DIR === null ? "WORKFLOW_STATE_DIR" : "WORKFLOW_PLANS_DIR";
           // Variable NAME only — never the path value.
           process.stderr.write(`[supervisor-emit] isolation contradiction: ${missing} unset\n`);
         } catch (_) {

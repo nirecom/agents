@@ -74,7 +74,7 @@ test_B5_isworkflowoff_traversal_sid_returns_false() {
 
 test_B6_isworkflowoff_failclosed_when_getworkflowdir_throws() {
     require_session_markers_js "B6" || return
-    # Without CLAUDE_WORKFLOW_DIR / HOME / USERPROFILE, getWorkflowDir() should
+    # Without WORKFLOW_STATE_DIR / HOME / USERPROFILE, getWorkflowDir() should
     # throw or yield an unusable path. isWorkflowOff must fail-closed (false)
     # rather than propagating the exception.
     local out; out="$(run_is_workflow_off "" '"abc123"')"

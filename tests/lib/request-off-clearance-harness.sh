@@ -119,7 +119,7 @@ run_req() {
     envargs=(-u SESSION_ID -u CLAUDE_CODE_SESSION_ID -u WORKTREE_PATH
              -u AGENTS_CONFIG_DIR
              "PATH=$stubbin:$OFFCLR_CLEAN_PATH"
-             "WORKFLOW_PLANS_DIR=$tn" "CLAUDE_WORKFLOW_DIR=$tn")
+             "WORKFLOW_PLANS_DIR=$tn" "WORKFLOW_STATE_DIR=$tn")
     [ "$REQ_NO_CONFIG_DIR" = "1" ] || envargs+=("AGENTS_CONFIG_DIR=${REQ_CONFIG_DIR:-$OFFCLR_AGENTS_NODE}")
     [ -z "$REQ_SID" ] || envargs+=("CLAUDE_CODE_SESSION_ID=$REQ_SID")
     [ "${#REQ_ENV[@]}" -eq 0 ] || envargs+=("${REQ_ENV[@]}")

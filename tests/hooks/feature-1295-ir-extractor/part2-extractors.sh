@@ -7,6 +7,11 @@
 # plus env-prefix, quoted-$VAR, and fail-closed security negatives.
 #
 # Sourced-lib contract: $1 = WORKTREE. Exits $FAIL.
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+_ISOLATION_PIN="$_ISOLATION_TMP_ROOT"; command -v cygpath >/dev/null 2>&1 && _ISOLATION_PIN="$(cygpath -m "$_ISOLATION_PIN")"  # node-native form: T4 compares against node's view
+harness_isolate "$_ISOLATION_PIN"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # EXP_PLANS_TEE — plans-dir path a quoted $HOME/... token resolves to, computed

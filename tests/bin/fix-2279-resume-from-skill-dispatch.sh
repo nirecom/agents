@@ -67,7 +67,7 @@ build_fixture() {
 # in_repo <sid> <node-body> — a node one-liner run from the repo with the
 # fixture store pinned, so every write lands in the fixture (fixture-isolation).
 in_repo() {
-    ( cd "$REPO" && CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
+    ( cd "$REPO" && WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
         AGENTS_CONFIG_DIR="$N" SID="$1" "$RWT" 25 node -e "$2" ) 2>/dev/null
 }
 
@@ -96,14 +96,14 @@ dispatch_skill() {
     HOOK_OUT=$( ( cd "$REPO" && SID="$1" SK="$2" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ tool_name: 'Skill', session_id: process.env.SID,
   agent_id: '', transcript_path: '', tool_input: { skill: process.env.SK, description: 'x' } }));" \
-        | CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" AGENTS_CONFIG_DIR="$N" \
+        | WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" AGENTS_CONFIG_DIR="$N" \
           "$RWT" 25 node "$(np "$AUTOMARK")" ) 2>/dev/null )
     HOOK_RC=$?
 }
 
 # run_from <donor> — the user-facing command, exactly as /resume-session runs it.
 run_from() {
-    FROM_OUT=$( ( cd "$REPO" && CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
+    FROM_OUT=$( ( cd "$REPO" && WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
         CLAUDE_CODE_SESSION_ID="$HEIR" "$RWT" 30 node "$CLI" --from "$1" ) 2>/dev/null )
     FROM_RC=$?
 }
@@ -122,7 +122,7 @@ process.stdin.on('end', () => {
 }
 
 steps_of() {
-    CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" SID="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" SID="$1" "$RWT" 15 node -e "
 const s = require('$SIO').readState(process.env.SID) || {};
 const steps = s.steps || {};
 process.stdout.write(Object.keys(steps).sort().map((k) => k + '=' + steps[k].status).join(','));" 2>/dev/null
@@ -172,7 +172,7 @@ else
 fi
 
 AFTER_DISPATCH="$(steps_of "$HEIR")"
-LOOKAHEAD_ONLY=$(CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" "$RWT" 15 node -e "
+LOOKAHEAD_ONLY=$(WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" "$RWT" 15 node -e "
 process.stdout.write(String(require('$LIFECYCLE').isLookaheadOnlyInFlight('$HEIR', 'research')));" 2>/dev/null)
 case "$AFTER_DISPATCH" in
     *research=in_progress*)
@@ -206,7 +206,7 @@ case "$ADOPTED" in
         fail "S7b: the heir recorded '$ADOPTED' — the donor's progress never arrived, so the resume was a no-op for the user" ;;
 esac
 
-FROM_LIST=$( ( cd "$REPO" && CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
+FROM_LIST=$( ( cd "$REPO" && WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
     CLAUDE_CODE_SESSION_ID="$HEIR" "$RWT" 30 node "$CLI" --list ) 2>/dev/null )
 case "$FROM_LIST" in
     *"$DONOR"*)
@@ -240,7 +240,7 @@ for (const s of ['workflow_init','clarify_intent','research','outline','detail',
 }
 
 rt_status() {
-    CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" SID="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" SID="$1" "$RWT" 15 node -e "
 const s = require('$SIO').readState(process.env.SID) || {};
 const e = (s.steps || {}).review_tests;
 process.stdout.write((e && e.status) || '<absent>');" 2>/dev/null
@@ -330,7 +330,7 @@ if (hits.length === 0) { process.stdout.write('NONE' + NL); } else {
 dispatch_via_registration() {
     printf '{"tool_name":"Skill","session_id":"%s","agent_id":"","transcript_path":"","tool_input":{"skill":"%s","description":"x"}}' \
         "$1" "$2" > "$TMP/s11-payload.json"
-    REG_OUT=$( ( cd "$REPO" && CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
+    REG_OUT=$( ( cd "$REPO" && WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
         AGENTS_CONFIG_DIR="$N" "$RWT" 25 bash -c "$REG_CMD" < "$TMP/s11-payload.json" ) 2>/dev/null )
     REG_RC=$?
 }
@@ -385,7 +385,7 @@ build_fixture
 state_bytes() { cat "$STORE/$1.json" 2>/dev/null; }
 
 event_count() {
-    CLAUDE_WORKFLOW_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" SID="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" SID="$1" "$RWT" 15 node -e "
 const s = require('$SIO').readState(process.env.SID) || {};
 process.stdout.write(String(((s.events) || []).length));" 2>/dev/null
 }

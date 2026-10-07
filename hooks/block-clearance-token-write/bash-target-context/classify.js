@@ -28,20 +28,29 @@ const OPERAND_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const WIN_ABS_RE = /^[A-Za-z]:[\\/]/;
 const UNRESOLVABLE_DIR_RE = /[$`*?[\]]/;
 
-// resolveWorkflowDir(): the SAME getWorkflowDir() the rest of the hook chain
-// uses (CPR-SSOT). Lazy-required and fail-soft: an unresolvable workflow dir
-// simply disables the containment qualifier rather than blocking everything.
-// The raw directory is returned; a lexical `startsWith` check was wrong here
-// (misses symlinks, and misjudges case-insensitive volumes that aren't
-// Windows) — resolution is delegated to resolvesUnder() instead.
+// resolveStateRoots(): the SAME listStateRoots() the rest of the hook chain
+// uses (CPR-SSOT; #2511: legacy-routed sessions still live under the legacy root).
+// Lazy-required and fail-soft: an unresolvable root list simply disables the
+// containment qualifier rather than blocking everything. Raw directories are
+// returned; a lexical `startsWith` check was wrong here (misses symlinks, and
+// misjudges case-insensitive volumes) — resolution is delegated to resolvesUnder().
+// A rejected (relative) WORKFLOW_STATE_DIR still keeps the default roots in the list.
+function resolveStateRoots() {
+  const list = (opts) => require("../../workflow-state").listStateRoots(opts).filter(Boolean).map(String);
+  try { return list(); } catch (_e) { /* fall through */ }
+  try { return list({ envFallback: false }); } catch (_e) { return []; }
+}
+
+// resolveWorkflowDir(): one state root (the default one), for callers that must
+// place a single directory — cwd-tracking's fail-closed cwd.
 function resolveWorkflowDir() {
-  try {
-    const { getWorkflowDir } = require("../../workflow-state");
-    const dir = getWorkflowDir();
-    return dir ? String(dir) : null;
-  } catch (_e) {
-    return null;
-  }
+  const roots = resolveStateRoots();
+  return roots.length > 0 ? roots[0] : null;
+}
+
+// ctx.workflowDir is one root or a list of roots.
+function rootsOf(ctx) {
+  return [].concat((ctx && ctx.workflowDir) || []).filter(Boolean);
 }
 
 // A Bash word can be read two ways; test both so neither spelling escapes.
@@ -101,8 +110,8 @@ const RESIDUAL_EXPANSION_RE = /[$`]/;
 // resolvable AND a DIRECTORY that resolves at/under the workflow dir.
 function targetBaseInsideWorkflowDir(rawText, ctx, baseIsSuspect) {
   if (typeof rawText !== "string" || rawText === "") return false;
-  const wfDir = ctx && ctx.workflowDir;
-  if (!wfDir) return false;
+  const roots = rootsOf(ctx);
+  if (roots.length === 0) return false;
   for (const spelling of pathSpellings(rawText)) {
     const stripped = spelling.replace(OPERAND_PREFIX_RE, "");
     const cut = Math.max(stripped.lastIndexOf("/"), stripped.lastIndexOf("\\"));
@@ -117,7 +126,7 @@ function targetBaseInsideWorkflowDir(rawText, ctx, baseIsSuspect) {
     // onUnknown: true (codex scanner C) — this predicate ARMS a block; an
     // unresolvable directory (e.g. a symlink chain crafted to make
     // realResolve() throw) must not be silently treated as "not contained".
-    if (resolvesUnder(dir, wfDir, { allowEqual: true, onUnknown: true })) return true;
+    if (roots.some((wfDir) => resolvesUnder(dir, wfDir, { allowEqual: true, onUnknown: true }))) return true;
   }
   return false;
 }
@@ -144,8 +153,8 @@ function dynamicTargetInsideWorkflowDir(rawText, ctx) {
 const PATH_FRAGMENT_RE = /[^\s'"`$(){}[\],;|&<>]*[\\/][^\s'"`$(){}[\],;|&<>]*/g;
 
 function textNamesPathInsideWorkflowDir(text, ctx) {
-  const wfDir = ctx && ctx.workflowDir;
-  if (!wfDir || typeof text !== "string" || text === "") return false;
+  const roots = rootsOf(ctx);
+  if (roots.length === 0 || typeof text !== "string" || text === "") return false;
   const fragments = text.match(PATH_FRAGMENT_RE);
   if (!fragments) return false;
   for (const fragment of fragments) {
@@ -154,7 +163,7 @@ function textNamesPathInsideWorkflowDir(text, ctx) {
     const resolved = resolveAgainstCwd(stripped, ctx);
     if (resolved === null) continue;
     // onUnknown: true — same detection-direction reasoning as above.
-    if (resolvesUnder(resolved, wfDir, { allowEqual: true, onUnknown: true })) return true;
+    if (roots.some((wfDir) => resolvesUnder(resolved, wfDir, { allowEqual: true, onUnknown: true }))) return true;
   }
   return false;
 }
@@ -219,6 +228,7 @@ function classifyBashWriteTarget(raw, assignText, ctx) {
 }
 
 module.exports = {
+  resolveStateRoots,
   resolveWorkflowDir,
   resolveDirSpelling,
   dirSpellingFailsClosed,

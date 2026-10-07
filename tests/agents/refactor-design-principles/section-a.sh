@@ -90,7 +90,7 @@ test_A4_no_session_id_not_recorded() {
         env \
         -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$_agents_dir" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "CLAUDE_TRANSCRIPT_BASE_DIR=$_tmpbase/no-transcripts" \
         bash -c 'cd "$1" && node "$2"' -- "$_tmpbase" "$_mark_js" 2>&1)" || rc=$?
 

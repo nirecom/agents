@@ -15,6 +15,8 @@ SCRIPT_UNDER_TEST="$AGENTS_WORKTREE/bin/compute-review-scope-fingerprint.js"
 RUN_TIMEOUT="$AGENTS_WORKTREE/bin/run-with-timeout.sh"
 # shellcheck source=tests/lib/harness.sh
 . "$AGENTS_WORKTREE/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 
 PASS=0
 FAIL=0

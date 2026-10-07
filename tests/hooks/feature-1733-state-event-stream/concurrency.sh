@@ -46,7 +46,7 @@ console.log("DONE");
 '
     for i in $(seq 1 "$WORKERS"); do
         (cd "$AGENTS_DIR" && env \
-            CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
             HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_A" MARKS="$MARKS" \
             "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$WORKER_JS" \
             >"$TMPROOT/w$i.out" 2>&1) &
@@ -88,7 +88,7 @@ console.log("DONE");
 '
     for st in complete pending; do
         (cd "$AGENTS_DIR" && env \
-            CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
             HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_B" ST="$st" \
             "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$RACE_JS" \
             >"$TMPROOT/race-$st.out" 2>&1) &
@@ -226,7 +226,7 @@ console.log("DONE");
 '
     for role in sha worktree type issues append append; do
         (cd "$AGENTS_DIR" && env \
-            CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
             WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
             HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_G" ROLE="$role" \
             "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$G_JS" \
@@ -348,7 +348,7 @@ const circular = { kind: "step_annotation", step: "research", key: "warnings_sum
 circular.value = circular;
 let verdict2 = "NO-THROW";
 try { S.appendEvents(sid, [circular]); } catch (e) { verdict2 = "THREW"; }
-const leftovers = fs.readdirSync(process.env.CLAUDE_WORKFLOW_DIR)
+const leftovers = fs.readdirSync(process.env.WORKFLOW_STATE_DIR)
   .filter((f) => f.indexOf(sid) === 0 && (f.endsWith(".tmp") || f.endsWith(".lock"))).length;
 console.log([
   verdict, verdict2,

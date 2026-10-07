@@ -34,12 +34,12 @@ if ! grep -q -- "--round" "$WRAPPER_SRC" || ! grep -q -- "--ledger" "$WRAPPER_SR
 fi
 
 # #2434: control files (counter, ledger default, risk signal) live under
-# $CLAUDE_WORKFLOW_DIR/<sid>.control/, so pin both state roots to a fixture.
+# $WORKFLOW_STATE_DIR/<sid>.control/, so pin both state roots to a fixture.
 STATE_ROOT=$(mktemp -d)
 trap 'rm -rf "$STATE_ROOT"' EXIT
-export CLAUDE_WORKFLOW_DIR="$STATE_ROOT/workflow-state"
+export WORKFLOW_STATE_DIR="$STATE_ROOT/workflow-state"
 export WORKFLOW_PLANS_DIR="$STATE_ROOT/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 setup_mock_env() {
     local test_tmp="$1"

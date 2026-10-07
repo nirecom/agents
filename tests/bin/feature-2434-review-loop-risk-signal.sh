@@ -105,7 +105,7 @@ assert_ne "a missing --planner is refused" "0" "$R_RC"
 assert_eq "no refused call created the control dir" "absent" "$(state "$(ctl rs3-pl)")"
 rs --session "../escape" --planner detail --reason "x"
 assert_ne "a traversing sid is refused" "0" "$R_RC"
-assert_eq "nothing escaped the workflow dir" "absent" "$(state "$CLAUDE_WORKFLOW_DIR/../escape.control")"
+assert_eq "nothing escaped the workflow dir" "absent" "$(state "$WORKFLOW_STATE_DIR/../escape.control")"
 for SID in 20260601-120000 20260509-bundle-a; do
     rs --session "$SID" --planner outline --reason "non-uuid sid"
     assert_eq "non-UUID sid $SID is accepted" "0" "$R_RC"

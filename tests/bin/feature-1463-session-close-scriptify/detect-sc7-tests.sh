@@ -35,18 +35,18 @@ test_T13_detect_wf_meta_yes() {
     if [ ! -f "$DETECT_JS" ]; then skip "T13_detect_wf_meta_yes (bin/session-close-detect-wf-meta.js missing)"; return; fi
     mkdir -p "${TMPDIR_BASE}/wf-state"
     printf '{"workflow_type":"wf-meta","steps":{}}\n' > "${TMPDIR_BASE}/wf-state/t13.json"
-    local out; out="$(run_with_timeout 120 env CLAUDE_WORKFLOW_DIR="$(node_path "${TMPDIR_BASE}/wf-state")" node "$DETECT_JS" t13 2>/dev/null)"
+    local out; out="$(run_with_timeout 120 env WORKFLOW_STATE_DIR="$(node_path "${TMPDIR_BASE}/wf-state")" node "$DETECT_JS" t13 2>/dev/null)"
     if [ "$out" = "yes" ]; then pass "T13_detect_wf_meta_yes: wf-meta state -> 'yes'"; else fail "T13_detect_wf_meta_yes: expected 'yes', got '$out'"; fi
 }
 test_T14_detect_wf_meta_no() {
     if [ ! -f "$DETECT_JS" ]; then skip "T14_detect_wf_meta_no (bin/session-close-detect-wf-meta.js missing)"; return; fi
     printf '{"workflow_type":"wf-code","steps":{}}\n' > "${TMPDIR_BASE}/wf-state/t14.json"
-    local out; out="$(run_with_timeout 120 env CLAUDE_WORKFLOW_DIR="$(node_path "${TMPDIR_BASE}/wf-state")" node "$DETECT_JS" t14 2>/dev/null)"
+    local out; out="$(run_with_timeout 120 env WORKFLOW_STATE_DIR="$(node_path "${TMPDIR_BASE}/wf-state")" node "$DETECT_JS" t14 2>/dev/null)"
     if [ "$out" = "no" ]; then pass "T14_detect_wf_meta_no: wf-code state -> 'no'"; else fail "T14_detect_wf_meta_no: expected 'no', got '$out'"; fi
 }
 test_T17_detect_no_state() {
     if [ ! -f "$DETECT_JS" ]; then skip "T17_detect_no_state (bin/session-close-detect-wf-meta.js missing)"; return; fi
-    local out code; out="$(run_with_timeout 120 env CLAUDE_WORKFLOW_DIR="$(node_path "${TMPDIR_BASE}/wf-state")" node "$DETECT_JS" no-state-t17 2>/dev/null)"; code=$?
+    local out code; out="$(run_with_timeout 120 env WORKFLOW_STATE_DIR="$(node_path "${TMPDIR_BASE}/wf-state")" node "$DETECT_JS" no-state-t17 2>/dev/null)"; code=$?
     if [ "$out" = "no" ] && [ "$code" = "0" ]; then pass "T17_detect_no_state: missing state -> 'no', exit 0"; else fail "T17_detect_no_state: expected 'no'/exit 0, got '$out'/exit $code"; fi
 }
 test_T15_T18_sc7_variants() {

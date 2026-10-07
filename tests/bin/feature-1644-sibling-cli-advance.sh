@@ -28,7 +28,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_DIR="$TMPDIR_BASE/wf"; PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Pinned as a PAIR (#1799) so supervisor-emit never appends to the real ~/.workflow-plans.
-export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
@@ -150,7 +150,7 @@ echo "=== S5: a failed record emits no ACTION line and exits 2 ==="
 BLOCK="$TMPDIR_BASE/blockfile"; : > "$BLOCK"
 at_outline s5
 RC=0
-OUT="$(CLAUDE_WORKFLOW_DIR="$(nrm "$BLOCK")" run_with_timeout node "$RSJ" \
+OUT="$(WORKFLOW_STATE_DIR="$(nrm "$BLOCK")" run_with_timeout node "$RSJ" \
   --session s5 --target outline --c1 true --c2 true --advance --next 2>/dev/null)" || RC=$?
 check "S5: unwritable state exits 2" 2 "$RC"
 check "S5: no ACTION line on failure" 0 "$(action_lines)"
@@ -366,7 +366,7 @@ echo "=== S14: set-workflow-type --advance write failure exits 2 with no ACTION 
 # the workflow-dir path makes every write fail with ENOTDIR.
 make_state s14 ""
 RC=0
-OUT="$(CLAUDE_WORKFLOW_DIR="$(nrm "$BLOCK")" run_with_timeout node "$SWT" \
+OUT="$(WORKFLOW_STATE_DIR="$(nrm "$BLOCK")" run_with_timeout node "$SWT" \
   --session s14 --type wf-code --advance --step workflow_init --status complete --next 2>/dev/null)" || RC=$?
 check "S14: unwritable state exits 2" 2 "$RC"
 check "S14: no ACTION line on failure" 0 "$(action_lines)"

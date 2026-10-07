@@ -128,7 +128,7 @@ echo "--- prompt-injection 3: the no-prior and empty-prior edges ---"
         "$(bash "$CLI" render-prior --plans-dir "$PLANS" --session-id "$SID" --format "$FORMAT" \
             >/dev/null 2>&1; bash -c 'set +u; source "$0" >/dev/null 2>&1
             cl_tally "$1"' "$AGENTS_ROOT/bin/lib/concern-ledger.sh" \
-            "$CLAUDE_WORKFLOW_DIR/$SID.control/$FORMAT-concern-ledger.txt" 2>/dev/null \
+            "$WORKFLOW_STATE_DIR/$SID.control/$FORMAT-concern-ledger.txt" 2>/dev/null \
             | grep -oE 'open_high=[0-9]+')"
 }
 

@@ -31,9 +31,9 @@ mkdir -p "$TMPD"
 trap 'rm -rf "$TMPD"' EXIT
 
 # --- fixture isolation (rules/test/fixture-isolation.md) --------------------
-export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
 export RUN_ALL_CACHE_DIR="$TMPD/cache"

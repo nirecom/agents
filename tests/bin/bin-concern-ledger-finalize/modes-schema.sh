@@ -48,7 +48,7 @@ seed_ledger() {
     assert_eq "1: escalate finalize succeeds" "0" "$LAST_RC"
     assert_eq "1: the cap snapshot is written" "present" "$(file_state "$SNAP")"
     assert_eq "1: the snapshot path is the one make-detail-plan documents" \
-        "$CLAUDE_WORKFLOW_DIR/$SID.control/detail-plan-concern-ledger-cap-snapshot.txt" "$SNAP"
+        "$WORKFLOW_STATE_DIR/$SID.control/detail-plan-concern-ledger-cap-snapshot.txt" "$SNAP"
     assert_eq_nz "1: the snapshot is a byte copy of the live ledger" \
         "$BEFORE" "$(fingerprint "$SNAP")"
     assert_eq "1: escalate removes the live ledger" "missing" "$(file_state "$LED")"

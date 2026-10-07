@@ -29,6 +29,9 @@ AGENTS_DIR="$_SELF_DIR"
 
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 # assert_contains FILE PATTERN DESCRIPTION
 # Greps FILE for PATTERN (extended regex). Prints PASS/FAIL.

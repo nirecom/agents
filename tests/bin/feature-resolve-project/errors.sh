@@ -51,7 +51,7 @@ teardown_mock
 # T9b: cache directory does not exist → mkdir -p creates it, write succeeds
 # ===========================================================================
 setup_mock
-CACHE_DIR="$CLAUDE_WORKFLOW_DIR/cache"
+CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 [ -d "$CACHE_DIR" ] && rm -rf "$CACHE_DIR"
 STDERR_FILE="$TMP/t9b-stderr.log"

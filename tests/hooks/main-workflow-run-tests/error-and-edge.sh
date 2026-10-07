@@ -23,7 +23,7 @@ run_error_and_edge_tests() {
     fi
 
     # Also verify last_run_failed is set
-    E1_FAILED=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+    E1_FAILED=$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 try {
   const s = require('$DOTFILES_WIN/hooks/workflow-state').readState(process.argv[1]);
   const rt = s && s.steps && s.steps.run_tests;

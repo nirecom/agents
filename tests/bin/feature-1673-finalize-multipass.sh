@@ -3,7 +3,7 @@
 # Tests: bin/worker-dispatch/workers/issue-close-finalize.js, bin/worker-dispatch/workers/issue-close-finalize/state.js, skills/issue-close-finalize/SKILL.md
 # Tags: worker-dispatch, issue-close-finalize, multi-pass, state-machine, payload-seq, atomic-write, TL2, scope:issue-specific
 # Issue #1673 — one dispatch advances exactly one pass; the durable state file
-# (in $CLAUDE_WORKFLOW_DIR/<sid>.control/) is the only link between passes.
+# (in $WORKFLOW_STATE_DIR/<sid>.control/) is the only link between passes.
 # Groups 1-4 stub the process seam (spawn-stub.js) to record each pass's argv;
 # Group 5 runs the REAL run-loop-step.js on the `decline` branch (the one child-free transition).
 # TL3 gap: the real run-initial.sh / run-finalize-terminal.sh against live `gh`
@@ -103,11 +103,11 @@ dispatch() {
     DRC=0
     if [ "${3:-on}" = "off" ]; then
         DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
-            "CLAUDE_WORKFLOW_DIR=$WF" \
+            "WORKFLOW_STATE_DIR=$WF" \
             node "$(nodepath "$DISPATCH_JS")" issue-close-finalize "$MAIN" "$1" 2>/dev/null)" || DRC=$?
     else
         DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
-            "CLAUDE_WORKFLOW_DIR=$WF" \
+            "WORKFLOW_STATE_DIR=$WF" \
             "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
             "WD_CANNED=$(nodepath "$CANNED")" \
             "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

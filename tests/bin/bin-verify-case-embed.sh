@@ -25,7 +25,7 @@ mkdir -p "$HOME"
 export NO_LOG=true
 # shellcheck source=../../bin/lib/run-all-launch.sh
 . "$AGENTS_DIR/bin/lib/run-all-launch.sh"
-run_all_pin_state_dirs "$TMPBASE/state" || { echo "FAIL: cannot pin state dirs"; exit 1; }
+harness_isolate "$TMPBASE/state"
 export RUN_ALL_DURATIONS_LIB=/nonexistent RUN_ALL_PROGRESS=off
 
 # fx_table_edit / has_line: the registry suite's helpers (one owner).

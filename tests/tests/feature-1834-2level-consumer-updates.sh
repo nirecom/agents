@@ -12,6 +12,8 @@ set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 
 # --- Skip guard: post-migration state not present yet ----------------------
 if [[ ! -d "$AGENTS_DIR/tests/hooks" ]]; then

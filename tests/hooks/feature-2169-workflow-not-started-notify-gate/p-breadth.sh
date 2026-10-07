@@ -27,7 +27,7 @@ run_P6() {
                 ;;
         esac
 
-        started="$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+        started="$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('$sid')));" 2>/dev/null)"
         want_started=$([ "$started_want" = y ] && echo true || echo false)
         [ "$started" = "$want_started" ] ||
@@ -85,7 +85,7 @@ run_P8() {
     backdate_research "$tmp" p8 $((TTL_MS + 60000))
     seed_workflow_off "$tmp" p8
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('p8')));" 2>/dev/null)
     [ "$out" = "true" ] || problems="$problems [isWorkflowStarted=${out:-<err>}, expected true — fixture setup failed]"
     [ -f "$tmp/p8.workflow-off" ] || problems="$problems [workflow-off marker was not created — fixture setup failed]"
@@ -130,7 +130,7 @@ run_P9() {
     backdate_step "$tmp" p9pre research $((TTL_MS + 60000))
     backdate_step "$tmp" p9pre detail $((TTL_MS + 60000))
 
-    started=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    started=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('p9pre')));" 2>/dev/null)
     [ "$started" = "false" ] || problems="$problems [pre: isWorkflowStarted=${started:-<err>}, expected false — fixture setup failed]"
 
@@ -148,7 +148,7 @@ process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('p9pre'
     case "$compact" in *detail*) : ;; *) problems="$problems [pre: 'detail' not named in the output]" ;; esac
     case "$compact" in *research*) problems="$problems [pre: 'research' unexpectedly named — it should stay exempt (lookahead-only + not started); got '$UPS_OUT']" ;; *) : ;; esac
 
-    ledger_steps="$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    ledger_steps="$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 const fs = require('fs');
 const { ledgerPathFor } = require('$MECHFAIL_NODE');
 let steps = [];
@@ -174,7 +174,7 @@ process.stdout.write(steps.join(','));" 2>/dev/null)"
     backdate_step "$tmp" p9started research $((TTL_MS + 60000))
     backdate_step "$tmp" p9started detail $((TTL_MS + 60000))
 
-    started=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    started=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('p9started')));" 2>/dev/null)
     [ "$started" = "true" ] || problems="$problems [started: isWorkflowStarted=${started:-<err>}, expected true — fixture setup failed]"
 

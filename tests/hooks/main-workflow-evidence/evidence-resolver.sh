@@ -72,7 +72,7 @@ STATEOF
       touch "$PLANS_TMP/${SID}-intent.md"
 
       GATE_INPUT=$(printf '{"tool_name":"Write","tool_input":{"file_path":"/tmp/test.txt","content":"x"},"session_id":"%s"}' "$SID")
-      GATE_OUT=$(WORKFLOW_PLANS_DIR="$PLANS_TMP" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" <<< "$GATE_INPUT" 2>/dev/null)
+      GATE_OUT=$(WORKFLOW_PLANS_DIR="$PLANS_TMP" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" <<< "$GATE_INPUT" 2>/dev/null)
 
       if echo "$GATE_OUT" | grep -q '"approve"' || ! echo "$GATE_OUT" | grep -q 'clarify_intent'; then
         pass "WS-EV-16. intent.md present + clarify_intent=pending → gate does not block clarify_intent"

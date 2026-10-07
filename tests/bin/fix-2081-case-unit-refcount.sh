@@ -26,6 +26,8 @@ CASE_PARSER="$AGENTS_ROOT/bin/lib/test-retire-predicate/case-parser.sh"
 AGENTS_DIR="$AGENTS_ROOT"
 # shellcheck source=../lib/harness.sh
 source "$AGENTS_ROOT/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 
 assert_eq() {
     local name="$1" want="$2" got="$3"

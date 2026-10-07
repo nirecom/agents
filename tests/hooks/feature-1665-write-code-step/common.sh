@@ -73,7 +73,7 @@ stamp_step_at() {
   local sid="$1" step="$2"
   STAMP_SID="$sid" STAMP_STEP="$step" run_with_timeout node -e '
 const fs = require("fs"), path = require("path");
-const p = path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.STAMP_SID + ".json");
+const p = path.join(process.env.WORKFLOW_STATE_DIR, process.env.STAMP_SID + ".json");
 const st = JSON.parse(fs.readFileSync(p, "utf8"));
 st.steps[process.env.STAMP_STEP].updated_at = "2026-01-01T12:00:00.000Z";
 fs.writeFileSync(p, JSON.stringify(st));

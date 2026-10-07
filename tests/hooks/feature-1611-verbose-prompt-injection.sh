@@ -10,7 +10,7 @@
 #   provider    hooks/lib/verbose-prompt.js (pure, no side effects)
 #   consumers   SessionStart, PostCompact
 #
-# Every case runs against a temp CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR /
+# Every case runs against a temp WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR /
 # AGENTS_CONFIG_DIR; the real ~/.claude workflow state is never touched.
 #
 # TL3 gap (what this test does NOT catch):
@@ -20,6 +20,11 @@
 # bin/check-verification-gate.sh categories: hook-registration, skill-orchestration.
 
 set -uo pipefail
+
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
@@ -104,7 +109,7 @@ jsn() {
     local out
     out="$(run_with_timeout 30 env \
         -u VERBOSE_PROMPT_MODELS \
-        CLAUDE_WORKFLOW_DIR="$WFDIR_N" \
+        WORKFLOW_STATE_DIR="$WFDIR_N" \
         WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
         AGENTS_CONFIG_DIR="$CFGDIR_N" \
         CLAUDE_PROJECT_DIR="$PROJDIR_N" \
@@ -118,7 +123,7 @@ jsn() {
 seed_state() {
     local sid="$1" extra="${2:-}"
     [ -z "$extra" ] && extra='{}'
-    run_with_timeout 30 env CLAUDE_WORKFLOW_DIR="$WFDIR_N" node -e '
+    run_with_timeout 30 env WORKFLOW_STATE_DIR="$WFDIR_N" node -e '
 const fs = require("fs"), path = require("path");
 const sid = process.argv[1];
 const extra = JSON.parse(process.argv[2]);
@@ -129,7 +134,7 @@ const steps = {};
 for (const s of STEPS) steps[s] = { status: "pending", updated_at: null };
 const state = Object.assign({ version: 1, session_id: sid,
   created_at: new Date().toISOString(), steps }, extra);
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json"),
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json"),
   JSON.stringify(state, null, 2));
 ' "$sid" "$extra" </dev/null >/dev/null 2>&1
 }

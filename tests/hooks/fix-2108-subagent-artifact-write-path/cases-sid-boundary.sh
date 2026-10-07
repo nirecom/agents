@@ -75,7 +75,7 @@ wsid WSID wsi wsidx backup-wsid backupwsid issue-2108-survey"
     # C8-0 — the fixture's own precondition. If the observation were incomplete the
     # classifier would fail closed and EVERY `null` row would pass for the wrong reason.
     assert_eq "C8-0 observation is complete under the C8 fixture" "true" \
-        "$(cd "$NEUTRAL_CWD" && CLAUDE_WORKFLOW_DIR="$(node_path "$C8_WF")" run_probe -e "const m=require(process.argv[1]);process.stdout.write(String(m.observeActiveSessionIds({sessionId:'wsid'}).complete))" "$ACTIVE_SIDS_NODE")"
+        "$(cd "$NEUTRAL_CWD" && WORKFLOW_STATE_DIR="$(node_path "$C8_WF")" run_probe -e "const m=require(process.argv[1]);process.stdout.write(String(m.observeActiveSessionIds({sessionId:'wsid'}).complete))" "$ACTIVE_SIDS_NODE")"
 
     # Columns: label | stem | clean verdict | bash verdict.
     while IFS='|' read -r label stem want_clean want_bash; do

@@ -3,6 +3,8 @@
 # Tests: bin/worktree-write-notes.js
 # Tags: worktree, sibling, security, scope:issue-specific
 
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; harness_isolate "$_ISOLATION_TMP_ROOT"
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
 # ---- SW-CLI-NonArrayJson: SIBLING_WORKTREES_JSON is valid JSON but not an array ----

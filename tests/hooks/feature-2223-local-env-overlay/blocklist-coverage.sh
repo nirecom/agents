@@ -29,7 +29,7 @@ blocked-enforce-worktree        | ENFORCE_WORKTREE            | on            | 
 blocked-enforce-worktree-excl   | ENFORCE_WORKTREE_EXCLUDE    | repoA         | evil
 blocked-auto-approve-tools      | AUTO_APPROVE_TOOLS          | off           | on
 blocked-workflow-plans-dir      | WORKFLOW_PLANS_DIR          | /global-plans | /tmp/evil
-blocked-claude-workflow-dir     | CLAUDE_WORKFLOW_DIR         | /global-wf    | /tmp/evil
+blocked-workflow-state-dir     | WORKFLOW_STATE_DIR         | /global-wf    | /tmp/evil
 blocked-agents-config-dir       | AGENTS_CONFIG_DIR           | /global-cfg   | /tmp/evil
 blocked-agents-state-dir        | AGENTS_STATE_DIR            | /global-state | /tmp/evil
 blocked-worktree-base-dir      | WORKTREE_BASE_DIR           | /global-wt    | /tmp/evil
@@ -81,13 +81,13 @@ DENY_PREFIXES="$(probe blocklist-keys prefixes)"
 
 # Full membership, not a count: a silently dropped entry is the regression here.
 WANT_EXACT="$(printf '%s\n' AGENTS_CONFIG_DIR AGENTS_STATE_DIR AUTO_APPROVE_TOOLS \
-    CLAUDE_CODE_AUTO_COMPACT_WINDOW CLAUDE_WORKFLOW_DIR \
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW \
     CODE_FILE_EXTENSIONS CODE_LANG_EXCLUDE DEFAULT_BRANCHES ENFORCE_WORKTREE \
     ENFORCE_WORKTREE_ADDITIONAL_REPOS ENFORCE_WORKTREE_EXCLUDE ISSUE_VERDICT_WEB_SEARCH \
     JEV MCP_FS_DEBUG MERGE_BASE_MAX_DIFF_FILES MERGE_BASE_MAX_DIFF_LINES \
     NODE_EXTRA_CA_CERTS NODE_OPTIONS NODE_TLS_REJECT_UNAUTHORIZED NODE_USE_ENV_PROXY \
     PLAN_SYNC_REMOTE_URL SWEEP_AGE_DAYS TYPESAFE_API_KEY VERBOSE_PROMPT_MODELS \
-    WORKFLOW_PLANS_DIR WORKTREE_BASE_DIR)"
+    WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR WORKTREE_BASE_DIR)"
 WANT_PREFIXES="$(printf '%s\n' CODEX_ COMMENT_BLOCK_ JEV_ PROPAGATE_ SESSION_)"
 assert_eq "T2223N2-exact-set-membership" "$WANT_EXACT" "$(printf '%s' "$DENY_EXACT" | sed '/^$/d')"
 assert_eq "T2223N2-prefix-list-membership" "$WANT_PREFIXES" "$(printf '%s' "$DENY_PREFIXES" | sed '/^$/d')"
@@ -117,11 +117,11 @@ for _raw in __UNDEF__ __NULL__ __NUM__ __OBJ__ __ARR__; do
     assert_eq "T2223N2-isBlocklisted-nonstring-$_raw" "true" "$(probe is-blocklisted-raw "$_raw")"
 done
 
-# The isolation pair: a local CLAUDE_WORKFLOW_DIR or AGENTS_CONFIG_DIR would
+# The isolation pair: a local WORKFLOW_STATE_DIR or AGENTS_CONFIG_DIR would
 # relocate the workflow-state root, or the directory this layer reads the global
 # .env from — named here so a removal from the exact set fails by name.
-assert_eq "T2223N2-isBlocklisted-claude-workflow-dir" "true" "$(probe is-blocklisted CLAUDE_WORKFLOW_DIR)"
-assert_eq "T2223N2-isBlocklisted-claude-workflow-dir-lower" "true" "$(probe is-blocklisted claude_workflow_dir)"
+assert_eq "T2223N2-isBlocklisted-workflow-state-dir" "true" "$(probe is-blocklisted WORKFLOW_STATE_DIR)"
+assert_eq "T2223N2-isBlocklisted-workflow-state-dir-lower" "true" "$(probe is-blocklisted workflow_state_dir)"
 assert_eq "T2223N2-isBlocklisted-agents-config-dir" "true" "$(probe is-blocklisted AGENTS_CONFIG_DIR)"
 assert_eq "T2223N2-isBlocklisted-agents-config-dir-lower" "true" "$(probe is-blocklisted agents_config_dir)"
 # Their sibling (#2460): the state/log root that Jev retention deletes under.
@@ -173,23 +173,23 @@ assert_contains "T2223-ordinary-local-sibling-applied" "$ordinary_json" 'other-f
 
 # ---------------------------------------------------------------------------
 # The damage the two NEW entries would do, asserted the way ENFORCE_WORKTREE's
-# is (T2223-door-loadEnv-blocklisted) — CPR-ORTH. CLAUDE_WORKFLOW_DIR travels
+# is (T2223-door-loadEnv-blocklisted) — CPR-ORTH. WORKFLOW_STATE_DIR travels
 # through process.env via applyLocalOverlayToProcessEnv and relocates the
 # workflow-state root; AGENTS_CONFIG_DIR redirects the directory this very layer
 # reads the global .env from.
 # The naive probe would pass for the wrong reason: the harness exports both, and
 # a non-empty process.env outranks either layer — so each row unsets first.
 # ---------------------------------------------------------------------------
-new_case escalate-wf 'CODE_LANG=english' 'CLAUDE_WORKFLOW_DIR=/tmp/evil-wf-2223'
+new_case escalate-wf 'CODE_LANG=english' 'WORKFLOW_STATE_DIR=/tmp/evil-wf-2223'
 export CLAUDE_PROJECT_DIR="$CASE_ROOT"
-esc_wf="$( ( unset CLAUDE_WORKFLOW_DIR; probe load-default CLAUDE_WORKFLOW_DIR ) )"
+esc_wf="$( ( unset WORKFLOW_STATE_DIR; probe load-default WORKFLOW_STATE_DIR ) )"
 assert_eq "T2223N2-escalate-workflow-dir-never-injected" "__ABSENT__" "$esc_wf"
 
 # Positive control in the same shape: without it the row above could pass
 # because the probe itself is broken rather than because the key was refused.
 new_case escalate-wf-control 'CODE_LANG=english' 'ORDINARY_WF_KEY=/tmp/ok-2223'
 export CLAUDE_PROJECT_DIR="$CASE_ROOT"
-esc_ok="$( ( unset CLAUDE_WORKFLOW_DIR; probe load-default ORDINARY_WF_KEY ) )"
+esc_ok="$( ( unset WORKFLOW_STATE_DIR; probe load-default ORDINARY_WF_KEY ) )"
 assert_eq "T2223N2-escalate-control-ordinary-key-injected" '"/tmp/ok-2223"' "$esc_ok"
 
 # AGENTS_STATE_DIR (#2460) in the same shape: a local value would move the state
@@ -280,7 +280,7 @@ comment-block-bare         | COMMENT_BLOCK             | false
 agents-config-dir-suffixed | AGENTS_CONFIG_DIR_OLD     | false
 agents-state-dir-longer    | AGENTS_STATE_DIRX         | false
 agents-state-dir-shorter   | AGENTS_STATE              | false
-claude-workflow-dir-longer | CLAUDE_WORKFLOW_DIRECTORY | false
+workflow-state-dir-longer  | WORKFLOW_STATE_DIRECTORY | false
 auto-approve-tools-extra   | AUTO_APPROVE_TOOLS_EXTRA  | false
 enforce-bare               | ENFORCE                   | false
 codex-prefix-itself        | CODEX_                    | true

@@ -102,7 +102,7 @@ FIND_EOF
         rc=0
         out="$(run_with_timeout 60 env \
             "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-            "CLAUDE_WORKFLOW_DIR=$wf" \
+            "WORKFLOW_STATE_DIR=$wf" \
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
             node "$SR_CLI" --categories "$cat" --severity "$sev" \
                 --detail "$SR_DETAIL" \
@@ -264,7 +264,7 @@ ARGV_EOF
         # preserved end to end, and values containing spaces stay single arguments.
         S10_OUT="$(run_with_timeout 60 env \
             "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-            "CLAUDE_WORKFLOW_DIR=$S10_WF" \
+            "WORKFLOW_STATE_DIR=$S10_WF" \
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
             xargs -0 node "$SR_CLI" <"$S10_ARGV_FILE" 2>&1)" || S10_RC=$?
         S10_GOT="$(node "$TMPDIR_BASE/findings.js" "$S10_WF" "$S10_SID" 2>/dev/null || echo "ERR|")"

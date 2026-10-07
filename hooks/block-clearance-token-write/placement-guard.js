@@ -7,6 +7,7 @@
 const path = require("path");
 const { parse } = require("../lib/command-ir");
 const { toWindowsPath } = require("../lib/branch-diff");
+const { realResolve, resolvesUnder } = require("../lib/path-containment");
 const { collectDetectionTargets } = require("../lib/bash-write-targets/detection-targets");
 const { expandForDetection } = require("../lib/bash-write-targets/detection-expand");
 const { classifyProtectedPath } = require("../lib/protected-basenames");
@@ -30,7 +31,7 @@ const CANONICAL_ROUTES = [
 ];
 const PLACEMENT_MESSAGES = Object.freeze({
   "control-dir": [
-    "Direct write under the workflow dir (<CLAUDE_WORKFLOW_DIR>: <sid>.control/, <sid>.json, any session's files) blocked.",
+    "Direct write under the workflow dir (<WORKFLOW_STATE_DIR>: <sid>.control/, <sid>.json, any session's files) blocked.",
     `Control files are written only by the owning CLIs and hooks; see ${STATE_DIRS_DOC}.`,
     ...CANONICAL_ROUTES,
   ].join("\n"),
@@ -40,7 +41,7 @@ const PLACEMENT_MESSAGES = Object.freeze({
     ...CANONICAL_ROUTES,
   ].join("\n"),
   "alias-unresolved": [
-    "Write through an unresolvable CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR / HOME expansion blocked.",
+    "Write through an unresolvable WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR / HOME expansion blocked.",
     `The target cannot be placed, so it may land in the control dir or the plans dir (${STATE_DIRS_DOC}).`,
     "Spell the path with a plain $VAR, ${VAR} or ${VAR:-default}, or write it literally.",
     ...CANONICAL_ROUTES,
@@ -58,8 +59,33 @@ function relUnder(abs, dir) {
   return abs.startsWith(`${d}/`) ? abs.slice(d.length + 1) : null;
 }
 
-function workflowDir() {
-  try { return require("../workflow-state").getWorkflowDir(); } catch (_) { return null; }
+// Lexical OR physical: a symlink or junction into a state root is the same write as
+// the direct spelling. Unresolvable reads as inside — this guard fails closed.
+function underStateRoot(absPath, root, allowEqual) {
+  if (relUnder(fold(absPath), root) !== null || (allowEqual && fold(absPath) === fold(root))) return true;
+  return resolvesUnder(toWindowsPath(absPath), toWindowsPath(root), { onUnknown: true, allowEqual });
+}
+
+// The plans entry relative to WORKFLOW_PLANS_DIR, lexically or through a link; null
+// when outside or unresolvable (the plans check has always failed open).
+function plansRel(absPath) {
+  const dir = plansDir();
+  if (!dir) return null;
+  const lex = relUnder(fold(absPath), dir);
+  if (lex !== null) return lex;
+  try {
+    return relUnder(fold(realResolve(toWindowsPath(absPath))), realResolve(toWindowsPath(dir)));
+  } catch (_) {
+    return null;
+  }
+}
+
+// Every state root (#2511): a legacy-routed session's files are as protected as new-root ones.
+// A rejected (relative) WORKFLOW_STATE_DIR still leaves the default roots guarded.
+function stateRoots() {
+  const list = (opts) => require("../workflow-state").listStateRoots(opts).filter(Boolean);
+  try { return list(); } catch (_) { /* fall through */ }
+  try { return list({ envFallback: false }); } catch (_) { return []; }
 }
 function plansDir() {
   try { return require("../lib/workflow-plans-dir").getWorkflowPlansDir(); } catch (_) { return null; }
@@ -82,19 +108,18 @@ function classifyPlansName(name, ctx) {
 function classifyPlacement(absPath, ctx) {
   const c = ctx || {};
   if (c.workflowOff || typeof absPath !== "string" || absPath === "") return null;
-  const abs = fold(absPath);
-  if (relUnder(abs, workflowDir()) !== null) return "control-dir";
-  const inPlans = relUnder(abs, plansDir());
+  if (stateRoots().some((r) => underStateRoot(absPath, r, false))) return "control-dir";
+  const inPlans = plansRel(absPath);
   if (inPlans === null || inPlans.includes("/")) return null;
   return classifyPlansName(path.basename(absPath.replace(/[\\/]+$/, "")), c);
 }
 
 // A dynamic tail is placed only when its static prefix already sits inside the workflow dir.
 function dynamicPrefixKind(prefix, cwd) {
-  const wf = workflowDir();
-  if (!prefix || !wf) return null;
-  const abs = fold(path.resolve(cwd, prefix));
-  const inside = relUnder(abs, wf) !== null || (abs === fold(wf) && /[\\/]$/.test(prefix));
+  if (!prefix) return null;
+  const abs = path.resolve(cwd, prefix);
+  const atRoot = /[\\/]$/.test(prefix);
+  const inside = stateRoots().some((wf) => underStateRoot(abs, wf, atRoot));
   return inside ? "control-dir" : null;
 }
 
@@ -125,8 +150,8 @@ function classifyBashPlacement(cmd, opts, _depth) {
   if (!ir || ir.parseFailure) return null;
   const cwd = o.cwd ? toWindowsPath(o.cwd) : process.cwd();
   const env = { o, cwd, workflowOff, ctx: { sid: o.sid, wsid: o.wsid, workflowOff } };
-  const wf = workflowOff ? null : workflowDir();
-  const foldedWf = wf ? fold(wf) : null;
+  const roots = workflowOff ? [] : stateRoots();
+  const foldedWf = roots.length > 0 ? roots.map(fold) : null;
   const recurse = (t) => (depth < MAX_PLACEMENT_DEPTH ? classifyBashPlacement(t, o, depth + 1) : null);
   if (foldedWf) {
     for (const sub of extractSubstitutionContents(text)) {

@@ -12,7 +12,7 @@ run_gate_cases() {
   : > "$block"
   block_n="$(nrm "$block")"
   NS_RC=0
-  NS_OUT="$(CLAUDE_WORKFLOW_DIR="$block_n" run_with_timeout node "$NEXT_STEP_N" \
+  NS_OUT="$(WORKFLOW_STATE_DIR="$block_n" run_with_timeout node "$NEXT_STEP_N" \
     --session a2 --advance --step research --status complete --next 2>"$errf")" || NS_RC=$?
   NS_ERR="$(cat "$errf" 2>/dev/null || echo "")"
   check "A2a: write failure exits 2" 2 "$NS_RC"

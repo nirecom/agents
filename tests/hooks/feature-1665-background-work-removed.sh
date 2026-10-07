@@ -46,7 +46,7 @@ FIXTURE_ROOT="$(mktemp -d 2>/dev/null || mktemp -d -t 'bgwork1665')"
 mkdir -p "$FIXTURE_ROOT/wf" "$FIXTURE_ROOT/cwd"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 WF_NODE="$(node_path "$FIXTURE_ROOT/wf")"
-export CLAUDE_WORKFLOW_DIR="$WF_NODE"
+export WORKFLOW_STATE_DIR="$WF_NODE"
 export WORKFLOW_PLANS_DIR="$WF_NODE"
 cd "$FIXTURE_ROOT/cwd" || exit 1
 
@@ -355,7 +355,7 @@ run_Z1() {
 const fs = require('fs');
 const t = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 fs.utimesSync(process.env.P, t, t);" >/dev/null 2>&1
-    CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 require('$STATEIO_NODE').cleanupZombies();" >/dev/null 2>&1
     [ ! -f "$wf/z1-old.next-step-paused" ] || problems="$problems [stale next-step-paused marker survived the sweep]"
     [ -f "$wf/z1-fresh.next-step-paused" ] || problems="$problems [fresh next-step-paused marker was deleted]"

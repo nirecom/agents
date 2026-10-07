@@ -11,6 +11,12 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -72,7 +78,7 @@ run_R4b() {
     # #2316: the recorded worktree is gone from disk (a completed /worktree-end).
     rm -rf "$wt" 2>/dev/null || true
     out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
 $PRELUDE
@@ -123,7 +129,7 @@ run_R4c() {
     init_repo "$a"
     init_repo "$b"
     out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
 $PRELUDE
@@ -169,7 +175,7 @@ run_R7_cli() {
     fi
     sid="del-sid-r7"
     env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -181,7 +187,7 @@ markStep('$sid', 'workflow_init', 'complete');
     # /worktree-end has removed the linked worktree from disk.
     rm -rf "$wt" 2>/dev/null || true
     out=$(env CLAUDE_CODE_SESSION_ID="$sid" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_PROJECT_DIR="$main" HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" 2>&1)
     # Capture the CLI exit code before any other command can clobber $?.
@@ -231,7 +237,7 @@ run_R7b_cli() {
     fi
     sid="del-sid-r7b"
     env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -249,7 +255,7 @@ for (const s of steps) { markStep('$sid', s, 'complete', {}, gated.has(s) ? { sa
     # /worktree-end has removed the linked worktree from disk.
     rm -rf "$wt" 2>/dev/null || true
     out=$(env CLAUDE_CODE_SESSION_ID="$sid" \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_PROJECT_DIR="$main" HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" 2>&1)
     # Capture the CLI exit code before any other command can clobber $?.

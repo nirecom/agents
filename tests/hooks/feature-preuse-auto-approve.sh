@@ -1,11 +1,10 @@
 #!/bin/bash
 # Tests: hooks/preuse-auto-approve.js
 # Tags: scope:issue-specific
-#
-# PreToolUse hook (matcher: Monitor|EnterWorktree) that auto-approves
-# low-risk tool calls: Monitor always, EnterWorktree only when the target
-# path resolves inside WORKTREE_BASE_DIR.
-#
+
+# PreToolUse hook (matcher: Monitor|EnterWorktree) that auto-approves low-risk tool calls:
+# Monitor always, EnterWorktree only when the target path resolves inside WORKTREE_BASE_DIR.
+
 # TL3 gap (what this test does NOT catch):
 # - Does not verify the hook fires in a live CC session when Monitor/EnterWorktree is called
 # - Does not verify permissionDecision is honored by the CC runtime
@@ -38,6 +37,9 @@ fi
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
+# isolation (#2512): pin state and plans dirs file-wide under the trap above.
+mkdir -p "$WORK_DIR/isolation/workflow-state" "$WORK_DIR/isolation/plans"
+export WORKFLOW_STATE_DIR="$WORK_DIR/isolation/workflow-state" WORKFLOW_PLANS_DIR="$WORK_DIR/isolation/plans"
 
 # make_fixture writes a fixture .env into a fresh subdir and echoes its path.
 # Args are raw lines to write into the .env file.

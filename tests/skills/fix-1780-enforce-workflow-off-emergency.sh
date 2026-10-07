@@ -119,7 +119,7 @@ process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1]
 run_shim() {
     local tn="$1" sid="$2" cmd="$3" hi out rc
     hi=$(mk_input "$sid" "$cmd")
-    out=$(WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" AGENTS_CONFIG_DIR="$tn" \
+    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$tn" \
         "$RWT" 12 node "$SHIM" <<< "$hi" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$out"
@@ -163,7 +163,7 @@ if [ ! -f "$AGENTS_DIR/hooks/workflow-mark/enforce-override-handlers.js" ]; then
     echo "SKIP: E4-E5 workflow-mark integration - enforce-override-handlers.js not present"; SKIP=$((SKIP + 2))
 else
     TMP4=$(make_tmp); TN4=$(node_path "$TMP4")
-    handled=$(WORKFLOW_PLANS_DIR="$TN4" CLAUDE_WORKFLOW_DIR="$TN4" "$RWT" 12 node -e "
+    handled=$(WORKFLOW_PLANS_DIR="$TN4" WORKFLOW_STATE_DIR="$TN4" "$RWT" 12 node -e "
 process.stdout.write(String(require(process.argv[1]).handle({cmd:process.argv[2],sessionId:'e4sid',pushMessage:()=>{},signalFatal:()=>{}})));" \
         "$HANDLER_NODE" "$EMERG_CMD" 2>/dev/null)
     marker=no; [ -f "$TMP4/e4sid.workflow-off" ] && marker=yes

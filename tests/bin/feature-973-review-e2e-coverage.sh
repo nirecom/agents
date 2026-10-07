@@ -1,24 +1,18 @@
 #!/bin/bash
 # Tests: bin/review-e2e-coverage
 # Tags: scope:issue-specific, lint, hook-audit, review, e2e-coverage
-# Verifies: Hook Audit table parsing, P1/P2/P3/OUT priority handling,
-# WARN/INFO/SKIPPED output, exit-0 invariant (soft-warn only),
+# Verifies: Hook Audit table parsing, P1/P2/P3/OUT priorities, WARN/INFO/SKIPPED output, exit-0 invariant,
 # self-test exclusion, --base/--all argument handling, graceful degradation.
-#
-# Layer: L2 (broad integration — real script, real fixtures, real git diff,
-# but no full host environment).
-#
-# L3 gap (what this test does NOT catch):
-# - Real WF-CODE-6 parallel-invocation wiring from CLAUDE.md (only an actual
-#   /run-tests + workflow run can verify the status line is consumed by
-#   /run-codex-review-loop / commit-push parsers).
-# - Real cross-repo behavior when the script runs from a non-worktree CWD
-#   (Windows path quirks, drive-letter handling).
+# Layer: L2 (real script, real fixtures, real git diff, no full host environment).
+# L3 gap: real WF-CODE-6 parallel-invocation wiring (status line consumed by /run-codex-review-loop /
+# commit-push parsers); real cross-repo behavior from a non-worktree CWD (Windows path / drive-letter quirks).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: hook-registration.
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# isolation (#2512): harness first, so the pass/fail/run_with_timeout below override harness's.
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 SCRIPT="$AGENTS_ROOT/bin/review-e2e-coverage"
 ERRORS=0
 
@@ -35,6 +29,7 @@ run_with_timeout() {
 
 TMPDIR_BASE=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+harness_isolate "$TMPDIR_BASE/isolation"
 
 EMPTY_HOOKS_DIR="$TMPDIR_BASE/no-hooks"
 mkdir -p "$EMPTY_HOOKS_DIR"

@@ -109,7 +109,7 @@ run_with_timeout() {
 # Signals-only since #2099: the level is derived, never supplied by the caller.
 node_record() {
   local sid="$1" signals_json="$2"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
     io.recordComplexityEvaluation('$sid', $signals_json);
   " 2>&1
@@ -123,7 +123,7 @@ node_record() {
 # assertStreamIntegrity() rejects the file otherwise and readState() yields null.
 inject_ce_event() {
   local sid="$1" ce_json="$2"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const fs = require('fs');
     const path = require('path');
     const io = require('$STATEIO_N');
@@ -146,7 +146,7 @@ inject_ce_event() {
 # silently-vanished injection cannot make the assertion after it vacuous.
 ce_projected() {
   local sid="$1"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
     const s = io.readState('$sid');
     if (!s) { console.log('__NO_STATE__'); }
@@ -158,7 +158,7 @@ ce_projected() {
 # Raw complexity_evaluation event count (append-only audit history; C11).
 ce_event_count() {
   local sid="$1"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
     const s = io.readState('$sid');
     const ev = (s && s.events) || [];
@@ -169,7 +169,7 @@ ce_event_count() {
 # read via the resolver read API; prints JSON or the literal 'null'.
 node_read_json() {
   local sid="$1"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const r = require('$RESOLVER_N');
     const v = r.readComplexityEvaluation('$sid');
     console.log(v === null ? 'null' : JSON.stringify(v));
@@ -179,7 +179,7 @@ node_read_json() {
 # read a single field from the returned object.
 node_read_field() {
   local sid="$1" field="$2"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const r = require('$RESOLVER_N');
     const v = r.readComplexityEvaluation('$sid');
     if (v === null) { console.log('__NULL__'); }
@@ -189,7 +189,7 @@ node_read_field() {
 
 node_has() {
   local sid="$1"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const r = require('$RESOLVER_N');
     console.log(r.hasComplexityEvaluation('$sid') ? 'true' : 'false');
   " 2>/dev/null

@@ -43,7 +43,7 @@ EOF
     L2B_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2B\"}"
     # Inline call: CLAUDE_PROJECT_DIR=REPO_B (invoking session), AGENTS_CONFIG_DIR=REPO_A
     # (agents session repo), git -C REPO_A targets REPO_A → same git dir → enforce.
-    L2B_RESULT=$(echo "$L2B_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    L2B_RESULT=$(echo "$L2B_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         AGENTS_CONFIG_DIR="$REPO_A" node "$GATE_HOOK" 2>/dev/null || true)
     if echo "$L2B_RESULT" | grep -q '"block"' && echo "$L2B_RESULT" | grep -qi "write_tests"; then
         pass "L2-b. repoA write_tests=pending, git -C repoA → block (write_tests)"
@@ -75,7 +75,7 @@ EOF
     echo "change" > "$REPO_A/docs/todo.md"
     git -C "$REPO_A" add docs/todo.md
     L2C_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2C\"}"
-    L2C_RESULT=$(echo "$L2C_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    L2C_RESULT=$(echo "$L2C_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         AGENTS_CONFIG_DIR="$REPO_A" node "$GATE_HOOK" 2>/dev/null || true)
     git -C "$REPO_A" reset HEAD -- . 2>/dev/null || true
     git -C "$REPO_A" clean -fdq 2>/dev/null || true
@@ -177,7 +177,7 @@ EOF
     echo "test" > "$REPO_A/tests/test-case.sh"
     git -C "$REPO_A" add tests/test-case.sh
     L2D_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2D\"}"
-    L2D_RESULT=$(echo "$L2D_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    L2D_RESULT=$(echo "$L2D_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$GATE_HOOK" 2>/dev/null || true)
     git -C "$REPO_A" reset HEAD -- . 2>/dev/null || true
     git -C "$REPO_A" clean -fdq 2>/dev/null || true
@@ -198,7 +198,7 @@ EOF
     SID_2F="l2f-$(printf '%04x%04x' $RANDOM $RANDOM)"
     NONEXISTENT="$TMPDIR_BASE/nonexistent-l2f-$$"
     L2F_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $NONEXISTENT commit -m test\"},\"session_id\":\"$SID_2F\"}"
-    L2F_RESULT=$(echo "$L2F_JSON" | CLAUDE_PROJECT_DIR="$REPO_A" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    L2F_RESULT=$(echo "$L2F_JSON" | CLAUDE_PROJECT_DIR="$REPO_A" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$GATE_HOOK" 2>/dev/null || true)
     if echo "$L2F_RESULT" | grep -q '"block"'; then
         pass "L2-f. git -C /nonexistent → block (no crash)"
@@ -245,7 +245,7 @@ EOF
     echo "unit test" > "$REPO_A/test/unit.sh"
     git -C "$REPO_A" add test/unit.sh
     L2H_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2H\"}"
-    L2H_RESULT=$(echo "$L2H_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    L2H_RESULT=$(echo "$L2H_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$GATE_HOOK" 2>/dev/null || true)
     git -C "$REPO_A" reset HEAD -- . 2>/dev/null || true
     git -C "$REPO_A" clean -fdq 2>/dev/null || true
@@ -279,7 +279,7 @@ EOF
     echo "changelog" > "$REPO_A/CHANGES.md"
     git -C "$REPO_A" add CHANGES.md
     L2I_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2I\"}"
-    L2I_RESULT=$(echo "$L2I_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    L2I_RESULT=$(echo "$L2I_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$GATE_HOOK" 2>/dev/null || true)
     git -C "$REPO_A" reset HEAD -- . 2>/dev/null || true
     git -C "$REPO_A" clean -fdq 2>/dev/null || true
@@ -312,7 +312,7 @@ EOF
 )"
     L2J_TRAVERSAL="$TMPDIR_BASE/sub/../../nonexistent-l2j-$$"
     L2J_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $L2J_TRAVERSAL commit -m test\"},\"session_id\":\"$SID_2J\"}"
-    L2J_RESULT=$(echo "$L2J_JSON" | CLAUDE_PROJECT_DIR="$REPO_A" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    L2J_RESULT=$(echo "$L2J_JSON" | CLAUDE_PROJECT_DIR="$REPO_A" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$GATE_HOOK" 2>/dev/null || true)
     if echo "$L2J_RESULT" | grep -q '"block"'; then
         pass "L2-j(security). path traversal in git -C → block (git fails gracefully, state check succeeds)"
@@ -352,7 +352,7 @@ EOF
         echo "change" > "$REPO_2K_EXT/docs/todo.md"
         git -C "$REPO_2K_EXT" add docs/todo.md
         L2K_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_2K_SRC commit -m test\"},\"session_id\":\"$SID_2K\"}"
-        L2K_RESULT=$(echo "$L2K_JSON" | CLAUDE_PROJECT_DIR="$REPO_2K_SRC" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+        L2K_RESULT=$(echo "$L2K_JSON" | CLAUDE_PROJECT_DIR="$REPO_2K_SRC" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
             node "$GATE_HOOK" 2>/dev/null || true)
         git -C "$REPO_2K_EXT" reset HEAD -- . 2>/dev/null || true
         git -C "$REPO_2K_EXT" clean -fdq 2>/dev/null || true
@@ -383,7 +383,7 @@ EOF
 EOF
 )"
         L2L_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_2K_SRC commit -m test\"},\"session_id\":\"$SID_2L\"}"
-        L2L_RESULT=$(echo "$L2L_JSON" | CLAUDE_PROJECT_DIR="$REPO_2K_SRC" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+        L2L_RESULT=$(echo "$L2L_JSON" | CLAUDE_PROJECT_DIR="$REPO_2K_SRC" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
             node "$GATE_HOOK" 2>/dev/null || true)
         if echo "$L2L_RESULT" | grep -q '"block"'; then
             pass "L2-l. docs/ symlink/junction, no staged docs → block"

@@ -2,28 +2,21 @@
 # tests/hooks/feature-1733-state-event-stream/final-report-step.sh
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-mark/mark-step-handler.js, hooks/lib/sentinel-patterns.js, hooks/workflow-gate.js
 # Tags: workflow-state, event-stream, final-report, valid-steps, terminal-steps, sentinel-parsing, scope:issue-specific, pwsh-not-required, TL2
-#
-# #1733 adds `final_report` to VALID_STEPS so the event stream has a terminal boundary
-# for computeIntervals. Two failure modes come with it. (1) VALID_STEPS is also the list
-# the commit gate iterates, so an unguarded addition would demand a step nobody can
-# complete before committing — hence the NON_GATE_STEPS / TERMINAL_STEPS coverage here.
-# (2) The MARK_STEP regex is `([a-z_]+)_(complete|skipped|pending|in_progress)`, whose
-# greedy first group only yields step=final_report by BACKTRACKING; the neighbouring
-# `pre_final_report_gate` shares that prefix, so both are parsed here explicitly.
-#
-# TL3 gap (what this test does NOT catch):
-# - hook REGISTRATION: F11 spawns hooks/workflow-gate.js as its own process and feeds it
-#   the PreToolUse JSON payload, so the gate's real verdict is observed — but the run is
-#   still driven by this script, not by Claude Code reading settings.json. A gate that
-#   stops being wired as a PreToolUse hook still passes here.
-# - a real `git commit` actually being refused by the harness (the gate only prints a
-#   verdict; the enforcement of that verdict belongs to Claude Code).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+
+# #1733 adds `final_report` to VALID_STEPS as the event stream's terminal boundary for computeIntervals. (1) VALID_STEPS is also the
+# commit gate's list, so an unguarded addition would demand a step nobody can complete — hence the NON_GATE_STEPS / TERMINAL_STEPS
+# coverage. (2) The MARK_STEP regex `([a-z_]+)_(complete|skipped|pending|in_progress)` only yields step=final_report by BACKTRACKING,
+# and the neighbouring `pre_final_report_gate` shares that prefix, so both are parsed here explicitly.
+# TL3 gap: hook REGISTRATION (F11 spawns hooks/workflow-gate.js itself with the PreToolUse payload, so a gate unwired from settings.json
+# still passes) and a real `git commit` being refused by the harness (the gate only prints a verdict; Claude Code enforces it).
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="fr"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
+
+# isolation (#2512): pin state and plans dirs file-wide to common.sh's fixture dirs; the per-call pins below still override them.
+export WORKFLOW_STATE_DIR="$WF_NATIVE" WORKFLOW_PLANS_DIR="$PLANS_NATIVE"
 
 echo "== F1: final_report is the last entry of VALID_STEPS =="
 if run_case "F1/valid-steps-tail"; then
@@ -147,7 +140,7 @@ run_next_step() {
     local sid="$1"; shift
     NS_RC=0
     NS_OUT="$(cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node "$AGENTS_DIR/bin/workflow/next-step" \
@@ -257,7 +250,7 @@ fi
 run_gate() { # <payload-file>
     GATE_RC=0
     GATE_OUT="$(cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         ENFORCE_WORKTREE=off \

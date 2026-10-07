@@ -22,7 +22,7 @@ UUID="aabbccdd-1111-2222-3333-444455556666"
 run_wcd() {
   local sid="$1" fname="$2" wf="$3" plans="$4" fault="${5:-}"
   local out
-  out=$(CLAUDE_WORKFLOW_DIR="$wf" WORKFLOW_PLANS_DIR="$plans" CONTROL_MIGRATION_FAULT="$fault" \
+  out=$(WORKFLOW_STATE_DIR="$wf" WORKFLOW_PLANS_DIR="$plans" CONTROL_MIGRATION_FAULT="$fault" \
         node "$WCD_CLI" --session "$sid" --file "$fname" 2>&1)
   echo "$?|$out"
 }
@@ -35,7 +35,7 @@ printf 'terminal\n' > "$T/plans/${SID}-detail-plan-terminal.txt"
 if [ ! -f "$WCD_CLI" ]; then
   fail "fault-link-fail-exit3-stderr" "bin/workflow-control-dir not found (implementation absent)"
 else
-  RESULT=$(CLAUDE_WORKFLOW_DIR="$(np "$T/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
+  RESULT=$(WORKFLOW_STATE_DIR="$(np "$T/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
            CONTROL_MIGRATION_FAULT="link-fail" \
            node "$WCD_CLI" --session "$SID" --file "detail-plan-terminal.txt" 2>&1)
   RC=$?
@@ -62,7 +62,7 @@ printf 'terminal\n' > "$T/plans/${SID}-detail-plan-terminal.txt"
 if [ ! -f "$WCD_CLI" ]; then
   fail "fault-dst-unwritable-exit3" "bin/workflow-control-dir not found (implementation absent)"
 else
-  RESULT=$(CLAUDE_WORKFLOW_DIR="$(np "$T/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
+  RESULT=$(WORKFLOW_STATE_DIR="$(np "$T/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
            CONTROL_MIGRATION_FAULT="dst-unwritable" \
            node "$WCD_CLI" --session "$SID" --file "detail-plan-terminal.txt" 2>&1)
   RC=$?
@@ -84,7 +84,7 @@ printf 'BROKEN JSON {{{' > "$T/plans/${SID}-finalize-binding-1.json"
 if [ ! -f "$WCD_CLI" ]; then
   fail "fault-rewrite-fail-exit3" "bin/workflow-control-dir not found (implementation absent)"
 else
-  RESULT=$(CLAUDE_WORKFLOW_DIR="$(np "$T/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
+  RESULT=$(WORKFLOW_STATE_DIR="$(np "$T/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
            CONTROL_MIGRATION_FAULT="rewrite-fail" \
            node "$WCD_CLI" --session "$SID" --file "detail-plan-terminal.txt" 2>&1)
   RC=$?
@@ -117,7 +117,7 @@ else
   done
   RESULT=$(AGENTS_CONFIG_DIR="$TMPROOT" SESSION_ID="$SID" \
            PLANS_DIR="$(np "$T/plans")" EXTENSIONS_USED="0" \
-           CLAUDE_WORKFLOW_DIR="$(np "$T/workflow-state")" \
+           WORKFLOW_STATE_DIR="$(np "$T/workflow-state")" \
            WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
            CONTROL_MIGRATION_FAULT="link-fail" \
            bash "$WRAPPER" 2>&1)
@@ -150,7 +150,7 @@ WF_NP="$(np "$T/workflow-state")"
 PLANS_NP="$(np "$T/plans")"
 FILES_BEFORE=$(find "$T/workflow-state" -type f 2>/dev/null | wc -l || echo 0)
 RESULT=$(node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$WF_NP';
+process.env.WORKFLOW_STATE_DIR='$WF_NP';
 process.env.WORKFLOW_PLANS_DIR='$PLANS_NP';
 process.env.CONTROL_MIGRATION_FAULT='link-fail';
 try {
@@ -188,7 +188,7 @@ printf 'terminal\n' > "$T/plans/${SID}-detail-plan-terminal.txt"
 WF_NP="$(np "$T/workflow-state")"
 PLANS_NP="$(np "$T/plans")"
 RESULT=$(node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$WF_NP';
+process.env.WORKFLOW_STATE_DIR='$WF_NP';
 process.env.WORKFLOW_PLANS_DIR='$PLANS_NP';
 process.env.CONTROL_MIGRATION_FAULT='link-fail';
 try {
@@ -231,13 +231,13 @@ age_files 700 "$T/plans/${SID}-detail-plan-terminal.txt"
 WF_NP="$(np "$T/workflow-state")"
 PLANS_NP="$(np "$T/plans")"
 node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$WF_NP';
+process.env.WORKFLOW_STATE_DIR='$WF_NP';
 process.env.WORKFLOW_PLANS_DIR='$PLANS_NP';
 process.env.CONTROL_MIGRATION_FAULT='link-fail';
 try { var m=require('$IDX_MOD'); m.migrateAll({budgetMs:5000}).catch(function(){}); } catch(e){}
 " 2>/dev/null
 RESULT=$(node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$WF_NP';
+process.env.WORKFLOW_STATE_DIR='$WF_NP';
 process.env.WORKFLOW_PLANS_DIR='$PLANS_NP';
 try {
   var m=require('$IDX_MOD');
@@ -274,7 +274,7 @@ printf 'terminal\n' > "$T/plans/${SID}-detail-plan-terminal.txt"
 if [ ! -f "$WCD_CLI" ]; then
   fail "fault-link-fail-wcd-stderr-legacy-path" "bin/workflow-control-dir not found (implementation absent)"
 else
-  STDERR=$(CLAUDE_WORKFLOW_DIR="$(np "$T/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
+  STDERR=$(WORKFLOW_STATE_DIR="$(np "$T/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
            CONTROL_MIGRATION_FAULT="link-fail" \
            node "$WCD_CLI" --session "$SID" --file "detail-plan-terminal.txt" 2>&1 >/dev/null)
   EXPECTED_LEGACY="${SID}-detail-plan-terminal.txt"
@@ -307,11 +307,11 @@ c7_migrate() { # <sid> <wf> <plans> [fault]
   local drv="$T/c7-driver.js"
   printf '%s' "$C7_DRIVER_SRC" > "$drv"
   if [ -n "${4:-}" ]; then
-    CLAUDE_WORKFLOW_DIR="$2" WORKFLOW_PLANS_DIR="$3" CONTROL_MIGRATION_FAULT="$4" \
+    WORKFLOW_STATE_DIR="$2" WORKFLOW_PLANS_DIR="$3" CONTROL_MIGRATION_FAULT="$4" \
       node "$drv" "$IDX_MOD" "$1" 2>/dev/null | tr -d '\r'
   else
     ( unset CONTROL_MIGRATION_FAULT
-      CLAUDE_WORKFLOW_DIR="$2" WORKFLOW_PLANS_DIR="$3" node "$drv" "$IDX_MOD" "$1" 2>/dev/null | tr -d '\r' )
+      WORKFLOW_STATE_DIR="$2" WORKFLOW_PLANS_DIR="$3" node "$drv" "$IDX_MOD" "$1" 2>/dev/null | tr -d '\r' )
   fi
 }
 

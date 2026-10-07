@@ -1,6 +1,7 @@
 # tests/bin/bin-codex-review-loop-security-code/chain-failure-branches.sh
 # Tests: bin/run-codex-review-loop, bin/concern-ledger
 # Tags: concern-ledger, review-code-security, fail-closed, full-chain, TL2, scope:common
+# isolation: inherits-from ../bin-codex-review-loop-security-code.sh
 # Sourced after fail-closed.sh, whose FC_ROOT shimmed tree and fc_shim helper
 # are reused. full-chain-integration.sh proves the chain agrees when nothing
 # goes wrong; this file covers the branch where one ledger call refuses and the
@@ -18,10 +19,10 @@ CFB_SCAN="the scanner finding that the failed round still owes the author"
 cfb_env() {
     SID="cfb$1"
     PLANS="$TMPDIR_BASE/cfb-plans-$1"
-    export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/cfb-workflow-$1"
+    export WORKFLOW_STATE_DIR="$TMPDIR_BASE/cfb-workflow-$1"
     export WORKFLOW_PLANS_DIR="$PLANS"
-    rm -rf "$PLANS" "$CLAUDE_WORKFLOW_DIR"
-    mkdir -p "$PLANS/workflow-state" "$CLAUDE_WORKFLOW_DIR"
+    rm -rf "$PLANS" "$WORKFLOW_STATE_DIR"
+    mkdir -p "$PLANS/workflow-state" "$WORKFLOW_STATE_DIR"
     printf 'none\n' > "$PLANS/tradeoffs.md"
     RL_REPO="$REPO"; RL_PATH="$FULL_PATH"; RL_ROOT="$FC_ROOT"
     RL_CODEX_BODY="$NONE_BODY"; RL_CODEX_EXIT=0
@@ -218,9 +219,9 @@ INCOMPLETE
     e3_run() {
         local fmt="$1" sid="e3$1"
         local plans="$TMPDIR_BASE/cfb-plans-3-$fmt"
-        export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/cfb-workflow-3-$fmt"
+        export WORKFLOW_STATE_DIR="$TMPDIR_BASE/cfb-workflow-3-$fmt"
         export WORKFLOW_PLANS_DIR="$plans"
-        rm -rf "$plans" "$CLAUDE_WORKFLOW_DIR"
+        rm -rf "$plans" "$WORKFLOW_STATE_DIR"
         mkdir -p "$plans/workflow-state"
         printf '# Draft\n' > "$plans/draft.md"
         printf '# Tradeoffs\n' > "$plans/tradeoffs.md"

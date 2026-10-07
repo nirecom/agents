@@ -195,7 +195,7 @@ case_begin "stdin-json-invalid-diagnostic" "hooks/workflow-run-tests.js"
 mkdir -p "$TMPD/ws-D1"
 _d1='{"tool_name":"Bash","x":"SECRET-TOKEN-abc'
 printf '%s' "$_d1" \
-    | CLAUDE_WORKFLOW_DIR="$TMPD/ws-D1" run_with_timeout 30 node "$RUN_TESTS_HOOK" >"$TMPD/D1.out" 2>"$TMPD/D1.err"
+    | WORKFLOW_STATE_DIR="$TMPD/ws-D1" run_with_timeout 30 node "$RUN_TESTS_HOOK" >"$TMPD/D1.out" 2>"$TMPD/D1.err"
 DRIVE_RC="${PIPESTATUS[1]}"
 assert_diagnostic D1 "[workflow-run-tests] stdin json-invalid (${#_d1} bytes, SyntaxError): run_tests not recorded (fail-open)"
 case_end
@@ -204,7 +204,7 @@ case_end
 case_begin "stdin-empty-diagnostic" "hooks/workflow-run-tests.js"
 # ============================================================================
 mkdir -p "$TMPD/ws-D2"
-CLAUDE_WORKFLOW_DIR="$TMPD/ws-D2" run_with_timeout 30 node "$RUN_TESTS_HOOK" < /dev/null >"$TMPD/D2.out" 2>"$TMPD/D2.err"
+WORKFLOW_STATE_DIR="$TMPD/ws-D2" run_with_timeout 30 node "$RUN_TESTS_HOOK" < /dev/null >"$TMPD/D2.out" 2>"$TMPD/D2.err"
 DRIVE_RC=$?
 assert_diagnostic D2 "[workflow-run-tests] stdin json-invalid (0 bytes, empty): run_tests not recorded (fail-open)"
 case_end
@@ -213,7 +213,7 @@ case_end
 case_begin "stdin-read-error-diagnostic" "hooks/workflow-run-tests.js"
 # ============================================================================
 mkdir -p "$TMPD/ws-D3"
-CLAUDE_WORKFLOW_DIR="$TMPD/ws-D3" run_with_timeout 30 node "$RUN_TESTS_HOOK" 0>"$TMPD/wo.txt" >"$TMPD/D3.out" 2>"$TMPD/D3.err"
+WORKFLOW_STATE_DIR="$TMPD/ws-D3" run_with_timeout 30 node "$RUN_TESTS_HOOK" 0>"$TMPD/wo.txt" >"$TMPD/D3.out" 2>"$TMPD/D3.err"
 DRIVE_RC=$?
 assert_diagnostic D3 "[workflow-run-tests] stdin read-error (EBADF): run_tests not recorded (fail-open)"
 case_end

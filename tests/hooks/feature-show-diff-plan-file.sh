@@ -39,6 +39,9 @@ mkdir -p "$ISOLATED_CFG_DIR"
 export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
 cleanup_isolated() { rm -rf "$ISOLATED_CFG_DIR"; }
 trap cleanup_isolated EXIT
+# isolation (#2512): the state dir is pinned file-wide too; the plans dir above stays home-anchored on purpose.
+mkdir -p "$ISOLATED_CFG_DIR/workflow-state"
+export WORKFLOW_STATE_DIR="$ISOLATED_CFG_DIR/workflow-state"
 
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 

@@ -28,7 +28,7 @@ sb_run_guard() {
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo_scope" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         node "$GUARD_JS" 2>&1)" || SB_RC=$?
 }
 

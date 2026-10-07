@@ -18,7 +18,7 @@ run_P1() {
     [ "$rstatus" = "in_progress" ] ||
         problems="$problems [research status after dispatch is '${rstatus:-<err>}', expected in_progress — fixture setup failed]"
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('p1')));" 2>/dev/null)
     [ "$out" = "false" ] || problems="$problems [isWorkflowStarted=${out:-<err>}, expected false after a bare WI-10 dispatch]"
 
@@ -89,7 +89,7 @@ run_P2() {
         problems="$problems [research status after dispatch is '${rstatus:-<err>}', expected in_progress — fixture setup failed]"
 
     complete_workflow_init "$tn" p2
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 process.stdout.write(String(require('$LIFECYCLE_NODE').isWorkflowStarted('p2')));" 2>/dev/null)
     [ "$out" = "true" ] || problems="$problems [isWorkflowStarted=${out:-<err>}, expected true once workflow_init genuinely completed]"
 

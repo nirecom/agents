@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/bash-write-targets/encoded.js, hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-patterns/classify.js
 # Tags: scope:issue-specific, canary-7, ir-migration, encoded-ir, pwsh-not-required
+# isolation: inherits-from ../feature-1402-canary7.sh
 #
 # encoded.js IR predicate for pwsh-encoded retire (#1402 canary-7 Step 3).
 #

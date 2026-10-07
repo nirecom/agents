@@ -1,23 +1,14 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-mark/branching-handler.js, hooks/workflow-state/state-io.js, hooks/workflow-state/resolve-worktree-path.js
 # Tags: fix, branching-handler, state-io, session-worktree, scope:issue-specific
-#
-# Tests for issue #950: branching-handler.js must write state.session_worktree
-# when the WORKFLOW_BRANCHING_COMPLETE decision includes a "worktree:" segment.
-#
-# BH-1: BRANCHING_COMPLETE sentinel with worktree: path → state.session_worktree written
-# BH-2: Regression guard — branching_complete.decision still written (not dropped)
-# BH-3: Stale clear — main-only decision (no worktree: segment) → state.session_worktree=null
-# BH-4: decision with non-existent path → state.session_worktree not written / null
-#
-# BH-1, BH-3, BH-4 are EXPECTED TO FAIL until the source fix lands.
-# BH-2 is a regression guard that MUST PASS both before and after the fix.
-#
-# L3 gap (what this test does NOT catch):
-# - That the hook fires in a real Claude Code session triggered by an actual sentinel
-# - End-to-end: sentinel emission → hook dispatch → state persisted → resolveSessionWorktreePath reads it
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+
+# Issue #950: branching-handler.js must write state.session_worktree when the
+# WORKFLOW_BRANCHING_COMPLETE decision includes a "worktree:" segment.
+# BH-1 worktree: path → session_worktree written; BH-2 regression guard: branching_complete.decision still written;
+# BH-3 stale clear: main-only decision → session_worktree=null; BH-4 non-existent path → not written / null.
+# BH-1/3/4 are EXPECTED TO FAIL until the source fix lands; BH-2 MUST PASS both before and after.
+# L3 gap: real-session hook firing on an actual sentinel, and sentinel → dispatch → persisted → resolveSessionWorktreePath end-to-end.
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -uo pipefail
 
@@ -84,11 +75,13 @@ fi
 NONEXISTENT_NODE="$TMPDIR_BASE/does-not-exist"
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 WORKFLOW_PLANS_DIR="$(cygpath -m "$WORKFLOW_PLANS_DIR" 2>/dev/null || echo "$WORKFLOW_PLANS_DIR")"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR="$WF_DIR_NODE"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -138,7 +131,7 @@ run_hook() {
   local err_file="$TMPDIR_BASE/err-$$.txt"
   local rc=0
   ( \
-    CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
+    WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     AGENTS_CONFIG_DIR="$AGENTS_NODE" \
       bash "$RUN_TIMEOUT" 30 node "$HOOK_JS" <<< "$payload" \
       > "$out_file" 2> "$err_file"

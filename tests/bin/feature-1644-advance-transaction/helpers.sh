@@ -23,10 +23,10 @@ WORKFLOW_DIR="$TMPDIR_BASE/wf"
 PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 
-# Plans-dir isolation (#1799): CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR are
+# Plans-dir isolation (#1799): WORKFLOW_STATE_DIR and WORKFLOW_PLANS_DIR are
 # pinned as a PAIR so supervisor-emit never appends to the developer's real
 # ~/.workflow-plans/. Exported once here so every child node inherits them.
-export CLAUDE_WORKFLOW_DIR="$(nrm "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 
 # The parent Claude Code session exports these; leaving them set would make the

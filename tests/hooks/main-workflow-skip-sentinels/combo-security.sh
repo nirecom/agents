@@ -116,7 +116,7 @@ write_state "$SID" "$(ALL_COMPLETE_EXCEPT research "$SID")"
 # Build JSON manually with a backslash in the reason (JSON-escaped as \\)
 SEC4_CMD='echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: path\\\\value>>"'
 SEC4_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"echo \\"<<WORKFLOW_RESEARCH_NOT_NEEDED: path\\\\\\\\value>>\\""  },"tool_response":{"exit_code":0},"session_id":"%s"}' "$SID")
-SEC4_OUT=$(echo "$SEC4_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$(to_node_path "$MARK_HOOK")" 2>/dev/null || true)
+SEC4_OUT=$(echo "$SEC4_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$(to_node_path "$MARK_HOOK")" 2>/dev/null || true)
 
 STATE_FILE="$WORKFLOW_DIR/${SID}.json"
 if [ -f "$STATE_FILE" ]; then

@@ -78,14 +78,14 @@ case_end
 case_begin "workflow-off-bypasses" "hooks/block-clearance-token-write/placement-guard.js"
 
 # WORKFLOW=off: (b)(c) allowed; (a) .off-clearance still blocked.
-touch "$CLAUDE_WORKFLOW_DIR/$SID.workflow-off"
+touch "$WORKFLOW_STATE_DIR/$SID.workflow-off"
 CTL="$WFN/$SID.control"
 
 expect_approve "wf-off b-ctl-redirect"  "$(local_classify "$(local_run_hook "$WFN" "$(mk_bash_in "echo x > $CTL/detail-plan-terminal.txt")")")"
 expect_approve "wf-off c-control-kind"  "$(local_classify "$(local_run_hook "$WFN" "$(mk_file_in Write "$PLDN/$SID-security-code-terminal.txt")")")"
 expect_block   "wf-off a-off-clearance" "$(local_classify "$(local_run_hook "$WFN" "$(mk_file_in Write "$WFN/$SID.off-clearance")")")"
 
-rm -f "$CLAUDE_WORKFLOW_DIR/$SID.workflow-off"
+rm -f "$WORKFLOW_STATE_DIR/$SID.workflow-off"
 
 case_end
 
@@ -106,10 +106,10 @@ done <<'TABLE'
 alias-tilde-ctl          | block   | echo x > ~/.claude/projects/workflow/__SID__.control/x
 alias-home-ctl           | block   | echo x > $HOME/.claude/projects/workflow/__SID__.control/x
 alias-home-brace-ctl     | block   | echo x > ${HOME}/.claude/projects/workflow/__SID__.control/x
-alias-cwdvar-ctl         | block   | echo x > ${CLAUDE_WORKFLOW_DIR}/__SID__.control/x
-alias-cwdvar-plain-ctl   | block   | echo x > $CLAUDE_WORKFLOW_DIR/__SID__.control/x
-alias-unresolved-plus    | block   | echo x > ${CLAUDE_WORKFLOW_DIR:+x}/__SID__.control/x
-alias-unresolved-suffix  | block   | echo x > ${CLAUDE_WORKFLOW_DIR%/}/__SID__.control/x
+alias-cwdvar-ctl         | block   | echo x > ${WORKFLOW_STATE_DIR}/__SID__.control/x
+alias-cwdvar-plain-ctl   | block   | echo x > $WORKFLOW_STATE_DIR/__SID__.control/x
+alias-unresolved-plus    | block   | echo x > ${WORKFLOW_STATE_DIR:+x}/__SID__.control/x
+alias-unresolved-suffix  | block   | echo x > ${WORKFLOW_STATE_DIR%/}/__SID__.control/x
 alias-unresolved-plans   | block   | echo x > ${WORKFLOW_PLANS_DIR/a/b}/__SID__-detail.md
 alias-home-unrelated     | approve | echo x > $HOME/scratch-notes.txt
 alias-tilde-unrelated    | approve | echo x > ~/scratch-notes.txt
@@ -127,7 +127,7 @@ case_begin "sid-json-protected" "hooks/block-clearance-token-write/placement-gua
 # workflow dir are all writes to the state file, in every path spelling. The
 # state file must be byte-identical afterwards; an unrelated JSON is allowed.
 fake_home_enter
-SJ="$CLAUDE_WORKFLOW_DIR/$SID.json"
+SJ="$WORKFLOW_STATE_DIR/$SID.json"
 SJ_BEFORE="$(sum_of "$SJ")"
 OUTSIDE="$(np "$(make_tmp)")"
 
@@ -143,13 +143,13 @@ done <<'TABLE'
 sid-json-rm-abs          | rm -f __WF__/__SID__.json
 sid-json-rm-home         | rm -f $HOME/.claude/projects/workflow/__SID__.json
 sid-json-rm-tilde        | rm -f ~/.claude/projects/workflow/__SID__.json
-sid-json-rm-cwdvar       | rm -f ${CLAUDE_WORKFLOW_DIR}/__SID__.json
+sid-json-rm-cwdvar       | rm -f ${WORKFLOW_STATE_DIR}/__SID__.json
 sid-json-remove-item     | Remove-Item $HOME/.claude/projects/workflow/__SID__.json
 sid-json-mv-out-abs      | mv __WF__/__SID__.json __OUT__/stash.json
 sid-json-mv-out-home     | mv $HOME/.claude/projects/workflow/__SID__.json __OUT__/stash.json
 sid-json-mv-out-tilde    | mv ~/.claude/projects/workflow/__SID__.json __OUT__/stash.json
-sid-json-mv-out-cwdvar   | mv ${CLAUDE_WORKFLOW_DIR}/__SID__.json __OUT__/stash.json
-sid-json-move-item-out   | Move-Item ${CLAUDE_WORKFLOW_DIR}/__SID__.json __OUT__/stash.json
+sid-json-mv-out-cwdvar   | mv ${WORKFLOW_STATE_DIR}/__SID__.json __OUT__/stash.json
+sid-json-move-item-out   | Move-Item ${WORKFLOW_STATE_DIR}/__SID__.json __OUT__/stash.json
 sid-json-redirect-tilde  | echo {} > ~/.claude/projects/workflow/__SID__.json
 TABLE
 expect_unchanged "sid-json byte-identical after every blocked attempt" "$SJ" "$SJ_BEFORE"
@@ -169,10 +169,10 @@ case_begin "control-dir-symlink-escape" "hooks/block-clearance-token-write/place
 # <sid>.control as a symlink to an outside directory: a write through it must be
 # refused and nothing may appear in the outside directory.
 LSID="aa000000-0000-4000-8000-00000000abcd"
-printf '{}' > "$CLAUDE_WORKFLOW_DIR/$LSID.json"
+printf '{}' > "$WORKFLOW_STATE_DIR/$LSID.json"
 ESC="$(make_tmp)"
-MSYS=winsymlinks:nativestrict ln -s "$ESC" "$CLAUDE_WORKFLOW_DIR/$LSID.control" 2>/dev/null || true
-if [ ! -L "$CLAUDE_WORKFLOW_DIR/$LSID.control" ]; then
+MSYS=winsymlinks:nativestrict ln -s "$ESC" "$WORKFLOW_STATE_DIR/$LSID.control" 2>/dev/null || true
+if [ ! -L "$WORKFLOW_STATE_DIR/$LSID.control" ]; then
     skip "control-dir-symlink-escape (platform cannot create a symlink here)"
 else
     LCTL="$WFN/$LSID.control"
@@ -182,7 +182,7 @@ else
     SID="$SAVED_SID"
     expect_absent "symlink escape wrote nothing outside" "$ESC/detail-plan-terminal.txt"
 fi
-rm -f "$CLAUDE_WORKFLOW_DIR/$LSID.control" 2>/dev/null || true
+rm -f "$WORKFLOW_STATE_DIR/$LSID.control" 2>/dev/null || true
 rm -rf "$ESC" 2>/dev/null || true
 
 case_end

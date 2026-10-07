@@ -3,6 +3,12 @@
 # Tests: hooks/workflow-state/effective-state.js, bin/workflow/lib/next-step/verdict.js, bin/workflow/lib/next-step/list.js, bin/workflow/lib/next-step/advance-shared.js, hooks/workflow-gate.js
 # Tags: workflow-state, write-code-resume, cascade, propagation, next-step, workflow-gate, scope:issue-specific, pwsh-not-required, TL2
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # G — R5 propagation scope: the cascade lives INSIDE reconcileEffectiveState, so
 # every consumer inherits it for free — it must be one implementation and not
 # three, or `next-step` could reopen write_code while the gate still saw it

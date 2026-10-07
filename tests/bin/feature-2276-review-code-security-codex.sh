@@ -58,11 +58,11 @@ assert_not_contains() {
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 cd "$TMPDIR_BASE" || exit 1
 
 # --- fixture repo -----------------------------------------------------------
@@ -147,7 +147,7 @@ new_env() {
     PLANS="$TMPDIR_BASE/plans-$N"
     WORKFLOW_STATE="$TMPDIR_BASE/workflow-$N"
     mkdir -p "$PLANS" "$WORKFLOW_STATE"
-    export CLAUDE_WORKFLOW_DIR="$WORKFLOW_STATE"
+    export WORKFLOW_STATE_DIR="$WORKFLOW_STATE"
     export WORKFLOW_PLANS_DIR="$PLANS"
     printf 'none\n' > "$PLANS/tradeoffs.md"
     RL_REPO="$REPO"
@@ -157,11 +157,11 @@ new_env() {
     RL_EXT_USED=0
     RL_EXTRA=()
 }
-ledger_file()  { printf '%s/%s.control/%s-concern-ledger.txt' "$CLAUDE_WORKFLOW_DIR" "$SID" "$LEDGER_FORMAT"; }
-round_file()   { printf '%s/%s.control/%s-round-number.txt' "$CLAUDE_WORKFLOW_DIR" "$SID" "$LOOP_FORMAT"; }
-delta_file()   { printf '%s/%s.control/%s-round-%s-delta-%s.txt' "$CLAUDE_WORKFLOW_DIR" "$SID" "$LEDGER_FORMAT" "$1" "$2"; }
-# ctl_file <name> — <CLAUDE_WORKFLOW_DIR>/<sid>.control/<name> (#2434), dir created for seeding.
-ctl_file()     { mkdir -p "$CLAUDE_WORKFLOW_DIR/$SID.control"; printf '%s/%s.control/%s' "$CLAUDE_WORKFLOW_DIR" "$SID" "$1"; }
+ledger_file()  { printf '%s/%s.control/%s-concern-ledger.txt' "$WORKFLOW_STATE_DIR" "$SID" "$LEDGER_FORMAT"; }
+round_file()   { printf '%s/%s.control/%s-round-number.txt' "$WORKFLOW_STATE_DIR" "$SID" "$LOOP_FORMAT"; }
+delta_file()   { printf '%s/%s.control/%s-round-%s-delta-%s.txt' "$WORKFLOW_STATE_DIR" "$SID" "$LEDGER_FORMAT" "$1" "$2"; }
+# ctl_file <name> — <WORKFLOW_STATE_DIR>/<sid>.control/<name> (#2434), dir created for seeding.
+ctl_file()     { mkdir -p "$WORKFLOW_STATE_DIR/$SID.control"; printf '%s/%s.control/%s' "$WORKFLOW_STATE_DIR" "$SID" "$1"; }
 staging_field() { grep -m1 '^#producer|' "$1" 2>/dev/null | cut -d'|' -f"$2"; }
 file_state()   { if [ -f "$1" ]; then printf 'present'; else printf 'missing'; fi; }
 counter_state() { if [ -f "$(round_file)" ]; then trim "$(cat "$(round_file)" 2>/dev/null || true)"; else printf 'deleted'; fi; }

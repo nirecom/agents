@@ -21,6 +21,8 @@ nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
 # Sourced before this file's own helpers so they keep precedence; only the case markers are used.
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 HOOK="$AGENTS_DIR_N/hooks/block-subagent-sentinels.js"
 DRIVER_MOD="$AGENTS_DIR_N/hooks/lib/workflow-driver-commands.js"; export DRIVER_MOD
 RSV_MOD="$AGENTS_DIR_N/hooks/workflow-state/record-step-verdict.js"; export RSV_MOD

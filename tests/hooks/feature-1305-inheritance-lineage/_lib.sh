@@ -110,7 +110,7 @@ write_announce_transcript() {
 # probe '<json-args>' → key=value lines (neutral CWD; fixture-pinned env only)
 probe() {
     (cd "$TMPDIR_BASE" && AGENTS_DIR_NODE="$AGENTS_DIR_NODE" \
-        CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_NODE" \
+        WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" \
         WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TBASE_NODE" \
         run_with_timeout node "$PROBE_JS_NODE" "$1" 2>&1) || echo "error=PROBE_CRASHED"

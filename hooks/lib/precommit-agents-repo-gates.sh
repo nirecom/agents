@@ -1,8 +1,9 @@
 #!/bin/bash
 # Sourced by hooks/pre-commit. Runs the agents-repo-only commit gates: the
 # on-demand rules-injection notation gate (#2270 companion), the session-id SSOT
-# gate (#2270), the migration-blocks gate (#1987) and the plans-dir artifact-name
-# gate (#2434). All are skipped unless the repo under commit IS the agents repo.
+# gate (#2270), the migration-blocks gate (#1987), the plans-dir artifact-name
+# gate (#2434) and the plans-dir isolation gate (#2512). All are skipped unless
+# the repo under commit IS the agents repo.
 
 # _precommit_agents_repo_gates — reads $_cfg_dir (ambient). Exits the hook with 1
 # on a violation; returns 0 otherwise. No-op in a non-agents repo.
@@ -10,7 +11,7 @@ _precommit_agents_repo_gates() {
     local _od_repo_top _od_cfg_dir _od_is_agents_repo _od_agents_common _od_repo_common
     local _od_agents_abs _od_repo_abs _od_f _od_checker _od_rc _od_out
     local _si_checker _si_rc _si_out _mb_f _mb_checker _mb_rc _mb_out
-    local _od_staged _mb_staged _pa_checker _pa_rc _pa_out
+    local _od_staged _mb_staged _pa_checker _pa_rc _pa_out _pi_checker _pi_rc _pi_out
 
     _od_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
     [ -n "$_od_repo_top" ] || return 0
@@ -153,6 +154,29 @@ _precommit_agents_repo_gates() {
                 ;;
             *)
                 echo "pre-commit: check-plans-artifacts rc=$_pa_rc — plans-dir artifact gate skipped" >&2
+                ;;
+        esac
+    fi
+
+    # ---------- plans-dir isolation gate (issue #2512) ----------
+    # Staged residual old-name token; the tests/ pin scan runs only when a tests/*.sh is staged.
+    _pi_checker="$_od_cfg_dir/bin/check-plans-dir-isolation.sh"
+    if [ ! -f "$_pi_checker" ]; then
+        echo "pre-commit: check-plans-dir-isolation.sh missing at $_pi_checker — plans-dir isolation gate skipped" >&2
+    else
+        _pi_rc=0
+        _pi_out="$(cd "$_od_repo_top" && bash "$_pi_checker" --staged 2>&1)" || _pi_rc=$?
+        case "$_pi_rc" in
+            0) : ;;
+            1|2)
+                printf '%s\n' "$_pi_out"
+                echo ""
+                echo "Commit blocked: test fixture isolation violations (checker rc=$_pi_rc)."
+                echo "See rules/test/fixture-isolation.md."
+                exit 1
+                ;;
+            *)
+                echo "pre-commit: check-plans-dir-isolation.sh rc=$_pi_rc — plans-dir isolation gate skipped" >&2
                 ;;
         esac
     fi

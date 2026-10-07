@@ -94,7 +94,7 @@ run_dispatch() {
     DRC=0
     DOUT="$(cd "$MAIN_RAW" && run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID \
         "PATH=$SHIM_DIR:$PATH" \
-        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         node "$DISPATCH_JS" "$@" 2>&1)" || DRC=$?
 }
 

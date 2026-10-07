@@ -8,7 +8,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { getWorkflowDir, VALID_STEPS } = require("../workflow-state");
+const { getSessionStateDir, VALID_STEPS } = require("../workflow-state");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 const SID_MAX_LEN = 128;
@@ -29,7 +29,7 @@ function isSafeSid(sid) {
 }
 
 function markerPathFor(sid) {
-  return path.join(getWorkflowDir(), sid + MARKER_SUFFIX);
+  return path.join(getSessionStateDir(sid), sid + MARKER_SUFFIX);
 }
 
 // parseForStep(reason): the `[for=<step>]` prefix, or `any`. Every unreadable

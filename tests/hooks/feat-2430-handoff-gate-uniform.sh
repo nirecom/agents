@@ -16,8 +16,8 @@ source "$AGENTS_DIR/tests/lib/harness.sh"
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
 mkdir -p "$TMP/wf" "$TMP/home" "$TMP/transcripts/c--fixture-project"
-export CLAUDE_WORKFLOW_DIR="$(np "$TMP/wf")"
-export WORKFLOW_PLANS_DIR="$CLAUDE_WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
+export WORKFLOW_PLANS_DIR="$WORKFLOW_STATE_DIR"
 export HOME="$(np "$TMP/home")" USERPROFILE="$(np "$TMP/home")"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/transcripts")"
 export AGENTS="$(np "$AGENTS_DIR")"
@@ -32,7 +32,7 @@ if (mode !== 'none') {
   S.writeState(sid, S.createInitialState(sid, { cwd: '/x', git_branch: 'feature/x' }));
   S.markStep(sid, 'workflow_init', 'complete');
   if (mode === 'final') S.markStep(sid, 'final_report', 'complete');
-  if (mode === 'off') fs.writeFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/' + sid + '.workflow-off', '');
+  if (mode === 'off') fs.writeFileSync(process.env.WORKFLOW_STATE_DIR + '/' + sid + '.workflow-off', '');
   if (mode === 'paused') {
     // The real v2 marker, scoped to the step the session is on right now.
     const step = require(process.env.AGENTS + '/hooks/workflow-state/current-step').resolveCurrentEffectiveStep(sid);
@@ -61,7 +61,7 @@ cat > "$TMP/mark.js" <<'JS'
 const fs = require('fs');
 const [sid, want, since] = process.argv.slice(2);
 let raw;
-try { raw = fs.readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/' + sid + '.control/handoff-flush-mark.json', 'utf8'); }
+try { raw = fs.readFileSync(process.env.WORKFLOW_STATE_DIR + '/' + sid + '.control/handoff-flush-mark.json', 'utf8'); }
 catch (e) { process.stdout.write('NONE'); process.exit(0); }
 const bad = [];
 let j = {};
@@ -178,7 +178,7 @@ const P = require(process.env.AGENTS + '/hooks/lib/handoff-pressure.js');
 const bad = [];
 if (typeof P.recordFlushMark !== 'function') bad.push('recordFlushMark-not-exported');
 else for (const sid of ['../escape', '', null]) { try { P.recordFlushMark(sid, null, new Date().toISOString()); } catch (e) { bad.push('threw:' + e.message); } }
-const W = process.env.CLAUDE_WORKFLOW_DIR;
+const W = process.env.WORKFLOW_STATE_DIR;
 if ([W, W + '/..'].some((d) => fs.readdirSync(d).some((f) => f.indexOf('escape') !== -1 || f === '-handoff-flush-mark.json' || f === '.control'))) bad.push('invalid-sid-written');
 process.stdout.write(bad.length ? 'BAD:' + bad.join(' | ') : 'OK');
 JS
@@ -197,7 +197,7 @@ process.stdout.write((m.for_step === step ? 'scoped' : 'for=' + m.for_step) + ':
 JS
 cat > "$TMP/stale.js" <<'JS'
 // node stale.js <sid> — a baseline two hours old at 0 bytes, so any transcript fires "elapsed".
-const ctlDir = process.env.CLAUDE_WORKFLOW_DIR + '/' + process.argv[2] + '.control';
+const ctlDir = process.env.WORKFLOW_STATE_DIR + '/' + process.argv[2] + '.control';
 require('fs').mkdirSync(ctlDir, { recursive: true });
 require('fs').writeFileSync(ctlDir + '/handoff-pressure.json',
   JSON.stringify({ baseline_bytes: 0, baseline_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString() }));

@@ -13,7 +13,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { getWorkflowDir } = require("../workflow-state");
+const { getSessionStateDir } = require("../workflow-state");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -21,7 +21,7 @@ function writeTurnMarker(sessionId, payload) {
   if (typeof sessionId !== "string" || !SID_RE.test(sessionId)) {
     throw new Error(`writeTurnMarker: invalid session id: ${sessionId}`);
   }
-  const dir = getWorkflowDir();
+  const dir = getSessionStateDir(sessionId);
   try { fs.mkdirSync(dir, { recursive: true }); } catch (_) { /* fail-open */ }
   const rand = crypto.randomBytes(4).toString("hex");
   const filename = `${sessionId}.confirm-plan-turn-${rand}.json`;
@@ -34,7 +34,7 @@ function writeTurnMarker(sessionId, payload) {
 
 function readAndDeleteTurnMarkers(sessionId) {
   if (typeof sessionId !== "string" || !SID_RE.test(sessionId)) return [];
-  const dir = getWorkflowDir();
+  const dir = getSessionStateDir(sessionId);
   let entries;
   try {
     entries = fs.readdirSync(dir);
@@ -74,7 +74,7 @@ function readAndDeleteTurnMarkers(sessionId) {
 // consumer that clears markers).
 function peekTurnMarkers(sessionId) {
   if (typeof sessionId !== "string" || !SID_RE.test(sessionId)) return [];
-  const dir = getWorkflowDir();
+  const dir = getSessionStateDir(sessionId);
   let entries;
   try {
     entries = fs.readdirSync(dir);

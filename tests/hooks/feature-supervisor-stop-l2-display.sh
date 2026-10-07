@@ -9,6 +9,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -52,7 +58,7 @@ node_dir() {
 # Seed alert state via writeAlertState. Args: tmp_node sid phase surfaced_at last_run_at findings_json
 seed_alert() {
     local tmp_node="$1" sid="$2" phase="$3" surfaced="$4" last_run="$5" findings="$6"
-    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const patch = { findings: $findings };
 if ('$last_run' !== 'null') patch.last_run_at = '$last_run';
@@ -65,7 +71,7 @@ if (!ok) { console.error('seed writeAlertState failed'); process.exit(3); }
 
 read_surfaced() {
     local tmp_node="$1" sid="$2"
-    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 process.stdout.write(String((st && st.alert && st.alert.findings_surfaced_at) || 'null'));
@@ -85,7 +91,7 @@ run_t1_normal() {
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     local rc=$?
 
@@ -118,7 +124,7 @@ run_t2_idempotency() {
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     local rc=$?
     rm -rf "$tmp"
@@ -143,7 +149,7 @@ run_t3_not_completed() {
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     local rc=$?
     rm -rf "$tmp"
@@ -169,7 +175,7 @@ run_t4_no_findings() {
     local hook_input
     hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     local rc=$?
     rm -rf "$tmp"
@@ -189,7 +195,7 @@ run_t5_invalid_json() {
     tmp=$(make_tmp)
     tmp_node="$(node_dir "$tmp")"
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "not json" 2>/dev/null)
     local rc=$?
     rm -rf "$tmp"
@@ -232,7 +238,7 @@ run_t6_actionable_only_hook() {
         local hook_input
         hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-        out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
             run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
@@ -270,7 +276,7 @@ run_t6_actionable_only_hook() {
         local hook_input
         hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-        out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
             run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
@@ -299,7 +305,7 @@ run_t6_actionable_only_hook() {
         local hook_input
         hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
 
-        out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
             run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"

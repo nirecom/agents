@@ -26,7 +26,10 @@ fs.mkdirSync(d,{recursive:true});
 console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_BASE"' EXIT
+trap 'rm -rf "$TMPDIR_BASE" ${_ISOLATION_TMP_ROOT:+"$_ISOLATION_TMP_ROOT"}' EXIT
+# isolation (#2512): the sourcing test pins via harness_isolate (its root is removed by the trap above).
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"
+harness_assert_isolated
 
 run_with_timeout() {
     local secs="$1"; shift

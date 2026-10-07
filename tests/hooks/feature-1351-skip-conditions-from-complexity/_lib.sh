@@ -97,7 +97,7 @@ WORKFLOW_DIR_N="$(cygpath -m "$WORKFLOW_DIR" 2>/dev/null || echo "$WORKFLOW_DIR"
 # Signals-only since #2099: the level is derived, never supplied by the caller.
 node_record() {
     local sid="$1" signals_json="$2"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
     io.recordComplexityEvaluation('$sid', $signals_json);
   " 2>&1
@@ -106,7 +106,7 @@ node_record() {
 # call resolveSkipConditionsFromComplexity; print canonical-key-sorted JSON or 'null'.
 node_resolve() {
     local sid="$1" step="$2"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const r = require('$RESOLVER_N');
     const v = r.resolveSkipConditionsFromComplexity('$sid', '$step');
     if (v === null || v === undefined) { console.log('null'); }
@@ -131,7 +131,7 @@ write_raw_state() {
 # rejects the file otherwise and readState() yields null.
 inject_ce_event() {
     local sid="$1" ce_json="$2"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const fs = require('fs');
     const path = require('path');
     const io = require('$STATEIO_N');
@@ -154,7 +154,7 @@ inject_ce_event() {
 # silently-vanished injection cannot make the assertion after it vacuous.
 ce_projected() {
     local sid="$1"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
     const s = io.readState('$sid');
     if (!s) { console.log('__NO_STATE__'); }

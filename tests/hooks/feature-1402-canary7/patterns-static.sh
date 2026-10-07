@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/bash-write-patterns/patterns.js
 # Tags: scope:issue-specific, canary-7, ir-migration, patterns-static, pwsh-not-required
+# isolation: inherits-from ../feature-1402-canary7.sh
 #
 # Static structural checks on patterns.js post-canary-7 retire (#1402).
 #

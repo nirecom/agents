@@ -7,6 +7,11 @@
 # X (collector edge cases).
 #
 # Sourced-lib contract: $1 = WORKTREE. Exits $FAIL.
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+_ISOLATION_PIN="$_ISOLATION_TMP_ROOT"; command -v cygpath >/dev/null 2>&1 && _ISOLATION_PIN="$(cygpath -m "$_ISOLATION_PIN")"  # node-native form: H1/E2 compare against node's view
+harness_isolate "$_ISOLATION_PIN"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # ===========================================================================
@@ -252,15 +257,9 @@ assert_eq "C11 tee normal → parseFailure false (PASS now)" 'false' "$(collect_
 
 # ===========================================================================
 # Section D: #1069 direct-caller regression guard (NEW routing — pre-impl, FAIL)
-#
-# L2 GAP (documented per C3 reviewer note): these cases call
-# collectWriteTargetsFromSegments DIRECTLY — they validate the segment-scanning
-# HELPER in isolation. They do NOT exercise the real callers
-# (hooks/enforce-worktree/block-shell-config.js and siblings) that must route
-# every segment through this helper. If a caller failed to pass all segments,
-# these tests would still PASS. Actual caller wiring (PreToolUse hook fires,
-# full command flows through the enforce-worktree allow-chain into the helper)
-# is L3 (hook-registration) and is covered at the WORKFLOW_USER_VERIFIED
+# L2 GAP (C3 reviewer note): calls collectWriteTargetsFromSegments DIRECTLY, so it
+# cannot prove the real callers (block-shell-config.js and siblings) route every
+# segment through it. Caller wiring is L3, checked at the WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: hook-registration.
 # ===========================================================================
 echo "=== Section D: #1069 direct-caller regression guard (NEW routing; expected FAIL pre-impl) ==="
@@ -282,25 +281,13 @@ D_TABLE
 
 # ===========================================================================
 # Section BL: block-*.js direct-caller integration (C1) — L2 subprocess, PASS now.
-#
-# Coverage: the 3 in-scope callers (block-shell-config / block-history-direct /
-# block-memory-direct) are process-exit hook scripts with NO exported function, so
-# the only L2-viable seam is spawning each as a subprocess with a PreToolUse Bash
-# event on stdin and reading its {decision} (call_hook bridge). These assert the
-# END-TO-END caller decision for a piped later-segment write to a protected target
-# (block) plus a control non-protected case (approve).
-#
-# Why PASS pre-impl (not FAIL): the string-API extractors already scan the whole
-# command, so a non-first-segment tee/redirect/cp to a protected path is caught
-# TODAY. These are therefore MIGRATION REGRESSION PINS — the IR/per-segment routing
-# refactor is additive and MUST keep every one of these blocking. They are the
-# caller-level counterpart to Section D's isolated collectWriteTargetsFromSegments
-# checks (which validate the helper but cannot prove the callers invoke it).
-#
-# L3 gap (NOT covered here): real PreToolUse registration + firing inside a live
-# claude session; the full enforce-worktree allow-chain feeding the command in.
-# That remains the dispatcher-header L3 gap (hook-registration), checked at the
-# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh.
+# Spawns block-shell-config / block-history-direct / block-memory-direct (no exported
+# function) with a PreToolUse Bash event and reads {decision} (call_hook): a piped
+# later-segment write to a protected target blocks; a non-protected control approves.
+# PASS pre-impl because the string-API extractors already scan the whole command —
+# MIGRATION REGRESSION PINS, the caller-level counterpart to Section D.
+# L3 gap: live PreToolUse registration + the enforce-worktree allow-chain, checked at
+# the WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh.
 # ===========================================================================
 echo "=== Section BL: block-*.js direct-caller integration (C1; L2 subprocess; PASS now) ==="
 # Delimiter is ^ (not |) because these commands CONTAIN pipes.
@@ -386,7 +373,7 @@ assert_eq "X3 duplicate path preserved"      '[{"resolveVia":"ancestor","path":"
 # ===========================================================================
 # Section H: tryResolveEnvUnderPlansDir traversal boundary (helpers.js).
 # PASS now — the traversal guard is existing infra.
-# Uses the already-exported WORKFLOW_PLANS_DIR (set in lib.sh to $HOME/.workflow-plans)
+# Uses the already-exported WORKFLOW_PLANS_DIR (temp pin from harness_isolate above)
 # so no MSYS path-conversion issues from inline env-var prefix on Windows.
 # ===========================================================================
 echo "=== Section H: tryResolveEnvUnderPlansDir boundary cases (PASS now) ==="

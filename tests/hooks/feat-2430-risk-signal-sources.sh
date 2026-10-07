@@ -3,7 +3,7 @@
 # Tests: hooks/lib/handoff-risk-signal.js, hooks/post-compact.js, hooks/workflow-gate/handoff-record.js, hooks/workflow-mark/reset-handler.js, bin/supervisor-write-audit-verdict, bin/supervisor-write-audit, hooks/lib/supervisor-state-writer/append.js, hooks/workflow-run-tests.js
 # Tags: handoff, risk-signal, nudge-trigger, post-compact, gate-block, reset-from, supervisor-verdict, supervisor-finding, run-tests, fail-open, regression-2430, scope:issue-specific, pwsh-not-required, TL2
 
-# Issue #2430 — a "risk" is an event after which unrecorded working knowledge is most likely to be lost, so the omission-check nudge restarts its timer and halves its limits. Six producers stamp <CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff-risk.json; everything else must leave it alone, or the halved limits become the permanent default. A test failure while tests are expected to be red (write_tests / review_tests / write_code) is the named exception.
+# Issue #2430 — a "risk" is an event after which unrecorded working knowledge is most likely to be lost, so the omission-check nudge restarts its timer and halves its limits. Six producers stamp <WORKFLOW_STATE_DIR>/<sid>.control/handoff-risk.json; everything else must leave it alone, or the halved limits become the permanent default. A test failure while tests are expected to be red (write_tests / review_tests / write_code) is the named exception.
 
 # TL3 gap: the real dispatch of each producer (PostCompact, a live workflow-gate block, the PostToolUse run-tests hook after a real suite run) is not driven; each is fed the envelope or call it receives in production. Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hooks.
 
@@ -16,8 +16,8 @@ source "$AGENTS_DIR/tests/lib/harness.sh"
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
 mkdir -p "$TMP/wf" "$TMP/home" "$TMP/transcripts"
-export CLAUDE_WORKFLOW_DIR="$(np "$TMP/wf")"
-export WORKFLOW_PLANS_DIR="$CLAUDE_WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
+export WORKFLOW_PLANS_DIR="$WORKFLOW_STATE_DIR"
 export HOME="$(np "$TMP/home")" USERPROFILE="$(np "$TMP/home")"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/transcripts")"
 export AGENTS="$(np "$AGENTS_DIR")"
@@ -45,7 +45,7 @@ cat > "$TMP/risk.js" <<'JS'
 const fs = require('fs');
 const [sid, since] = process.argv.slice(2);
 let raw;
-try { raw = fs.readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/' + sid + '.control/handoff-risk.json', 'utf8'); }
+try { raw = fs.readFileSync(process.env.WORKFLOW_STATE_DIR + '/' + sid + '.control/handoff-risk.json', 'utf8'); }
 catch (e) { process.stdout.write('NONE'); process.exit(0); }
 let j;
 try { j = JSON.parse(raw); } catch (e) { process.stdout.write('UNPARSEABLE'); process.exit(0); }
@@ -96,7 +96,7 @@ RESET_OK='echo "<<WORKFLOW_RESET_FROM_clarify_intent: redo the intent check>>"'
 case_begin "risk-module-contract" "hooks/lib/handoff-risk-signal.js"
 cat > "$TMP/unit.js" <<'JS'
 const fs = require('fs');
-const W = process.env.CLAUDE_WORKFLOW_DIR;
+const W = process.env.WORKFLOW_STATE_DIR;
 const R = require(process.env.AGENTS + '/hooks/lib/handoff-risk-signal.js');
 const bad = [];
 const want = ['compaction', 'gate-block', 'reset-from', 'supervisor-verdict', 'supervisor-finding', 'test-failure'];

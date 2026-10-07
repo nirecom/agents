@@ -107,7 +107,7 @@ HW_STATE_EOF
         printf '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"},"cwd":"%s","session_id":"hwsid2037"}' \
             "$(node_path "$HW_REPO")" \
             | ( cd "$HW_REPO" && env \
-                "CLAUDE_WORKFLOW_DIR=$HW_WF" "WORKFLOW_PLANS_DIR=$HW_PLANS" \
+                "WORKFLOW_STATE_DIR=$HW_WF" "WORKFLOW_PLANS_DIR=$HW_PLANS" \
                 "AGENTS_CONFIG_DIR=$HW_REPO" "CLAUDE_PROJECT_DIR=$HW_REPO" \
                 node "$(node_path "$HW_GATE")" 2>/dev/null )
     }

@@ -39,7 +39,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   marker. See `marker-bypass-contract.md` for the full cross-hook
   honoring contract.
 - `workflow-gate.js` (PreToolUse, matcher: `Bash`) — enforces all 10 workflow steps before
-  `git commit`. Reads state from `~/.claude/projects/workflow/<session-id>.json`. Fail-safe:
+  `git commit`. Reads state from `~/.workflow-state/<session-id>.json`. Fail-safe:
   blocks on missing session_id, missing state file, or corrupted JSON. Evidence-based override
   for `write_tests` (staged `tests/` files) and `docs` (staged `*.md` files).
   **Docs-only short-circuit**: when every staged file matches the human-facing docs allowlist

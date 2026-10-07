@@ -27,7 +27,7 @@ console.log(d);
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -500,7 +500,7 @@ test_reset_triggers_when_head_matches() {
     setup_workflow_state "$sid" "$state_dir" "$state"
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$repo")"
     local out
-    out="$(echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
+    out="$(echo "$payload" | WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
     if echo "$out" | grep -q "branching_complete"; then
         pass "reset triggered when HEAD matches last_pushed_sha"
     else
@@ -521,7 +521,7 @@ test_reset_output_uses_hookSpecificOutput_envelope() {
     setup_workflow_state "$sid" "$state_dir" "$state"
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$repo")"
     local out
-    out="$(echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
+    out="$(echo "$payload" | WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
     # Validate JSON structure via node — must contain hookSpecificOutput.additionalContext
     local valid; valid="$(node -e "
       let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
@@ -550,7 +550,7 @@ test_reset_clears_last_pushed_sha() {
     local state; state="$(printf '{"version":1,"session_id":"%s","steps":{"branching_complete":{"status":"complete","updated_at":null}},"last_pushed_sha":"%s"}' "$sid" "$head")"
     setup_workflow_state "$sid" "$state_dir" "$state"
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$repo")"
-    echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" >/dev/null 2>&1
+    echo "$payload" | WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" >/dev/null 2>&1
     local stored; stored="$(node -e "const j=require('$state_dir/$sid.json');console.log(JSON.stringify(j.last_pushed_sha))" 2>/dev/null)"
     if [ "$stored" = "null" ]; then
         pass "reset clears last_pushed_sha after match"
@@ -570,7 +570,7 @@ test_reset_skips_when_head_differs() {
     setup_workflow_state "$sid" "$state_dir" "$state"
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$repo")"
     local out
-    out="$(echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
+    out="$(echo "$payload" | WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
     if echo "$out" | grep -q "branching_complete"; then
         fail "reset triggered despite HEAD mismatch (got: $out)"
     else
@@ -648,7 +648,7 @@ test_workflow_mark_handles_unix_style_cwd() {
     printf '{"version":1,"session_id":"%s","steps":{"user_verification":{"status":"pending","updated_at":null}}}' "$sid" > "$state_dir/$sid.json"
     local payload
     payload="$(printf '{"session_id":"%s","cwd":"%s","tool_name":"Bash","tool_input":{"command":"git push"},"tool_response":{"exit_code":0}}' "$sid" "$unix_cwd")"
-    echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$WORKFLOW_MARK_JS" >/dev/null 2>&1
+    echo "$payload" | WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$WORKFLOW_MARK_JS" >/dev/null 2>&1
     local recorded; recorded="$(node -e "const j=require('$state_dir/$sid.json');console.log(j.last_pushed_sha||'')" 2>/dev/null)"
     if [ "$recorded" = "$target_sha" ]; then
         pass "workflow-mark normalizes Unix-style cwd on Windows (F3 regression)"
@@ -674,7 +674,7 @@ test_post_push_reset_handles_unix_style_cwd() {
     setup_workflow_state "$sid" "$state_dir" "$state"
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$unix_cwd")"
     local out
-    out="$(echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
+    out="$(echo "$payload" | WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
     if echo "$out" | grep -q "branching_complete"; then
         pass "post-push-reset normalizes Unix-style cwd on Windows (F3 regression)"
     else
@@ -708,7 +708,7 @@ test_workflow_mark_resolves_cwd_when_stdin_lacks_cwd() {
     (
         cd "$repo_other"
         unset CLAUDE_PROJECT_DIR
-        echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$WORKFLOW_MARK_JS" >/dev/null 2>&1
+        echo "$payload" | WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$WORKFLOW_MARK_JS" >/dev/null 2>&1
     )
 
     local recorded; recorded="$(node -e "const j=require('$state_dir/$sid.json');console.log(j.last_pushed_sha||'')" 2>/dev/null)"
@@ -743,7 +743,7 @@ test_workflow_mark_resolves_cwd_from_dash_C() {
     (
         cd "$repo_other"
         unset CLAUDE_PROJECT_DIR
-        echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$WORKFLOW_MARK_JS" >/dev/null 2>&1
+        echo "$payload" | WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$WORKFLOW_MARK_JS" >/dev/null 2>&1
     )
 
     local recorded; recorded="$(node -e "const j=require('$state_dir/$sid.json');console.log(j.last_pushed_sha||'')" 2>/dev/null)"
@@ -773,7 +773,7 @@ test_workflow_mark_resolves_cwd_from_CLAUDE_PROJECT_DIR() {
     local payload
     payload="$(printf '{"session_id":"%s","tool_name":"Bash","tool_input":{"command":"git push origin foo"},"tool_response":{"exit_code":0}}' "$sid")"
 
-    (cd "$repo_other" && echo "$payload" | CLAUDE_PROJECT_DIR="$repo_target" CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$WORKFLOW_MARK_JS" >/dev/null 2>&1)
+    (cd "$repo_other" && echo "$payload" | CLAUDE_PROJECT_DIR="$repo_target" WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$WORKFLOW_MARK_JS" >/dev/null 2>&1)
 
     local recorded; recorded="$(node -e "const j=require('$state_dir/$sid.json');console.log(j.last_pushed_sha||'')" 2>/dev/null)"
     if [ "$recorded" = "$target_sha" ]; then
@@ -810,7 +810,7 @@ test_workflow_mark_records_sha_from_input_cwd() {
     # Simulate push completion: input.cwd = repo_target, but invoke node from repo_other
     local payload
     payload="$(printf '{"session_id":"%s","cwd":"%s","tool_name":"Bash","tool_input":{"command":"git push"},"tool_response":{"exit_code":0}}' "$sid" "$repo_target")"
-    (cd "$repo_other" && echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$WORKFLOW_MARK_JS" >/dev/null 2>&1)
+    (cd "$repo_other" && echo "$payload" | WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$WORKFLOW_MARK_JS" >/dev/null 2>&1)
 
     local recorded; recorded="$(node -e "const j=require('$state_dir/$sid.json');console.log(j.last_pushed_sha||'')" 2>/dev/null)"
     if [ "$recorded" = "$target_sha" ]; then
@@ -831,7 +831,7 @@ test_reset_skips_when_no_last_pushed_sha() {
     setup_workflow_state "$sid" "$state_dir" "$state"
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$repo")"
     local out
-    out="$(echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
+    out="$(echo "$payload" | WORKFLOW_STATE_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
     if echo "$out" | grep -q "branching_complete"; then
         fail "reset triggered without last_pushed_sha (got: $out)"
     else

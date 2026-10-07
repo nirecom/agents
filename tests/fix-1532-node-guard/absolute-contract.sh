@@ -77,12 +77,12 @@ a_resolve_session_id() {
 # Same idea one level up: a state file whose `cwd` is this linked worktree makes
 # resolveSessionWorktreePath return a path, so the row asserts that exact path
 # rather than only the NOSTATE branch. The state file lives in the fixture's
-# CLAUDE_WORKFLOW_DIR, so the developer's real workflow store is never touched.
+# WORKFLOW_STATE_DIR, so the developer's real workflow store is never touched.
 a_resolve_worktree_path() {
   local t wt
   t="$(target_path resolve-worktree-path)"
   if command -v cygpath >/dev/null 2>&1; then wt="$(cygpath -m "$REPO_ROOT")"; else wt="$REPO_ROOT"; fi
-  printf '{"session_id":"%s","cwd":"%s"}' "$A_SID" "$wt" > "$CLAUDE_WORKFLOW_DIR/$A_SID.json"
+  printf '{"session_id":"%s","cwd":"%s"}' "$A_SID" "$wt" > "$WORKFLOW_STATE_DIR/$A_SID.json"
   # #2270: bare SESSION_ID is no longer an input channel -- the bridge only reads
   # CLAUDE_CODE_SESSION_ID.
   export CLAUDE_CODE_SESSION_ID="$A_SID"

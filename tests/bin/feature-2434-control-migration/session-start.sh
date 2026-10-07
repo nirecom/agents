@@ -21,7 +21,7 @@ UUID2="bbccddee-2222-3333-4444-555566667777"
 run_session_start() {
   local sid="$1" wf="$2" plans="$3"
   printf '{"session_id":"%s","source":"new"}' "$sid" \
-    | CLAUDE_WORKFLOW_DIR="$wf" WORKFLOW_PLANS_DIR="$plans" \
+    | WORKFLOW_STATE_DIR="$wf" WORKFLOW_PLANS_DIR="$plans" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$wf/transcripts" \
       node "$SESSION_START" 2>/dev/null
 }
@@ -92,7 +92,7 @@ set_old_mtime "$T/plans/${UUID}-detail-plan-terminal.txt" 700
 if [ ! -f "$WCD_CLI" ]; then
   fail "workflow-control-dir-migrates-terminal" "bin/workflow-control-dir not found (implementation absent)"
 else
-  OUT=$(CLAUDE_WORKFLOW_DIR="$(np "$T/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
+  OUT=$(WORKFLOW_STATE_DIR="$(np "$T/workflow-state")" WORKFLOW_PLANS_DIR="$(np "$T/plans")" \
         node "$WCD_CLI" --session "$UUID" --file "detail-plan-terminal.txt" 2>/dev/null)
   DST="$T/workflow-state/${UUID}.control/detail-plan-terminal.txt"
   if [ -f "$DST" ]; then

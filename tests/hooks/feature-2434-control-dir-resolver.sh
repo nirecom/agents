@@ -57,7 +57,7 @@ check() {
     if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$(printf '%q' "$2") got=$(printf '%q' "$3")"; fi
 }
 
-WF_FWD="$(fwd "$(np "$CLAUDE_WORKFLOW_DIR")")"
+WF_FWD="$(fwd "$(np "$WORKFLOW_STATE_DIR")")"
 
 [ -f "$MOD" ] || fail "implementation missing: hooks/workflow-state/state-io/control-dir.js"
 [ -f "$CLI" ] || fail "implementation missing: bin/workflow-control-dir"
@@ -107,12 +107,12 @@ case_begin "mkdir-only-for-writers" "hooks/workflow-state/state-io/control-dir.j
 S="20260601-120002"
 res path "$S" detail-plan-terminal.txt >/dev/null
 check "a read-mode controlPath creates no directory" "absent" \
-    "$([ -e "$CLAUDE_WORKFLOW_DIR/$S.control" ] && printf present || printf absent)"
+    "$([ -e "$WORKFLOW_STATE_DIR/$S.control" ] && printf present || printf absent)"
 res path-write "$S" detail-plan-terminal.txt >/dev/null
 check "a forWrite controlPath creates <sid>.control" "dir" \
-    "$([ -d "$CLAUDE_WORKFLOW_DIR/$S.control" ] && printf dir || printf absent)"
+    "$([ -d "$WORKFLOW_STATE_DIR/$S.control" ] && printf dir || printf absent)"
 check "but not the file itself" "absent" \
-    "$([ -e "$CLAUDE_WORKFLOW_DIR/$S.control/detail-plan-terminal.txt" ] && printf present || printf absent)"
+    "$([ -e "$WORKFLOW_STATE_DIR/$S.control/detail-plan-terminal.txt" ] && printf present || printf absent)"
 check "ControlMigrationError is an exported Error subclass" "error-subclass" "$(res error-class)"
 case_end
 
@@ -127,10 +127,10 @@ check "--session prints the session's control dir" "$WF_FWD/$S.control" "$(fwd "
 check "--file prints the control file's path" \
     "$WF_FWD/$S.control/detail-plan-terminal.txt" "$(fwd "$(cli --session "$S" --file detail-plan-terminal.txt)")"
 check "without --for-write nothing is created" "absent" \
-    "$([ -e "$CLAUDE_WORKFLOW_DIR/$S.control" ] && printf present || printf absent)"
+    "$([ -e "$WORKFLOW_STATE_DIR/$S.control" ] && printf present || printf absent)"
 check "--for-write exits 0" "0" "$(cli_rc --session "$S" --for-write)"
 check "--for-write creates the control dir" "dir" \
-    "$([ -d "$CLAUDE_WORKFLOW_DIR/$S.control" ] && printf dir || printf absent)"
+    "$([ -d "$WORKFLOW_STATE_DIR/$S.control" ] && printf dir || printf absent)"
 check "an invalid sid exits 2" "2" "$(cli_rc --session "../escape")"
 check "and says why on stderr" "yes" "$([ -s "$TMP/cli.err" ] && printf yes || printf no)"
 check "an invalid name exits 2" "2" "$(cli_rc --session "$S" --file "../x")"
@@ -147,8 +147,8 @@ case_begin "symlinked-control-dir-rejected" "hooks/workflow-state/state-io/contr
 S="20260601-120004"
 ESC="$TMP/escape-target"
 mkdir -p "$ESC"
-MSYS=winsymlinks:nativestrict ln -s "$ESC" "$CLAUDE_WORKFLOW_DIR/$S.control" 2>/dev/null || true
-if [ ! -L "$CLAUDE_WORKFLOW_DIR/$S.control" ]; then
+MSYS=winsymlinks:nativestrict ln -s "$ESC" "$WORKFLOW_STATE_DIR/$S.control" 2>/dev/null || true
+if [ ! -L "$WORKFLOW_STATE_DIR/$S.control" ]; then
     skip "symlinked-control-dir-rejected (platform cannot create a symlink here)"
 else
     check "a forWrite controlPath through a symlinked control dir throws" \
@@ -159,11 +159,11 @@ else
     check "the CLI refuses the symlinked control dir" "nonzero" \
         "$([ "$SYM_RC" = "0" ] && printf zero || printf nonzero)"
     check "the symlink was left in place, not replaced" "link" \
-        "$([ -L "$CLAUDE_WORKFLOW_DIR/$S.control" ] && printf link || printf other)"
+        "$([ -L "$WORKFLOW_STATE_DIR/$S.control" ] && printf link || printf other)"
     check "nothing was created in the outside directory" "0" \
         "$(find "$ESC" -mindepth 1 2>/dev/null | wc -l | tr -d ' ')"
 fi
-rm -f "$CLAUDE_WORKFLOW_DIR/$S.control" 2>/dev/null || true
+rm -f "$WORKFLOW_STATE_DIR/$S.control" 2>/dev/null || true
 case_end
 
 case_begin "plans-dir-import-allowlist" "hooks/workflow-state/state-io/control-dir.js"

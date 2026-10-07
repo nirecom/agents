@@ -4,7 +4,7 @@
 # Tags: worker-dispatch, session-close-gate, decision-table, table-driven, TL1, TL2, scope:issue-specific
 #
 # Issue #1643 — session-close-gate: may the caller run SC-6, or must it halt?
-# Gate JSON written to $CLAUDE_WORKFLOW_DIR/<sid>.control/. TL1 drives SC-5/SC-5b
+# Gate JSON written to $WORKFLOW_STATE_DIR/<sid>.control/. TL1 drives SC-5/SC-5b
 # rows as pure functions; TL2 goes through the real dispatcher with spawn-stub.js.
 # TL3 gap: real supervisor-write-alert/audit CLIs; live supervisor-state.json schema.
 
@@ -189,7 +189,7 @@ dispatch_gate() {
     : > "$CALLLOG"
     DRC=0
     DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
-        "CLAUDE_WORKFLOW_DIR=$WF" \
+        "WORKFLOW_STATE_DIR=$WF" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

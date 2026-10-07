@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
 # run-issue-setup.sh — orchestration backend for the /issue-setup skill.
-#
-# Usage:
-#   run-issue-setup.sh --step labels        --repo OWNER/REPO
-#   run-issue-setup.sh --step check-project --repo OWNER/REPO
-#   run-issue-setup.sh --step ensure-project --repo OWNER/REPO
-#
-# Steps:
-#   labels         : sync-labels.sh --repo REPO on the target repo. Propagates
-#                    the sync-labels exit code verbatim.
-#   check-project  : issue-create-preflight.sh --check-project --repo REPO.
-#                    rc=0 project present, rc=1 absent.
-#   ensure-project : ensure_project_ready REPO, then write the resolved ids as a
-#                    10-column cache row. Propagates ensure failure.
-#
+# Usage: run-issue-setup.sh --step labels|check-project|ensure-project --repo OWNER/REPO
+#   labels         : sync-labels.sh --repo REPO; its exit code verbatim.
+#   check-project  : issue-create-preflight.sh --check-project; rc=0 present, rc=1 absent.
+#   ensure-project : ensure_project_ready REPO, then the 10-column project-resolve cache row
+#                    (cache dir from resolve-project.sh). Propagates ensure failure.
 # --repo is required and format-validated (OWNER/REPO) before any dispatch, so
 # an injection payload never reaches a downstream command.
 set -uo pipefail
@@ -84,7 +75,7 @@ case "$STEP" in
             echo "Error: ensure_project_ready failed for $REPO" >&2
             exit 1
         fi
-        cache_dir="${CLAUDE_WORKFLOW_DIR:-$HOME/.claude/projects/workflow}/cache"
+        cache_dir="$(_resolve_project_cache_dir "$GH_ISSUES_DIR/lib")"
         cache_file="$cache_dir/project-resolve.tsv"
         _resolve_project_write_cache "$cache_dir" "$cache_file" "$REPO" \
             "${EPR_PROJECT_OWNER:-}" "${EPR_PROJECT_NUM:-}" "${EPR_PROJECT_ID:-}" \

@@ -12,7 +12,7 @@ run_t1() {
     seed_workflow_state "$tmp" "$sid" "invoke"
     local out rc
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -33,7 +33,7 @@ run_t2() {
     sid="t2-sid-no-workflow"
     # No workflow state file seeded
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -54,7 +54,7 @@ run_t3() {
     sid="t3-sid"
     seed_workflow_state "$tmp" "$sid" "invoke"
     out=$(echo "{\"stop_hook_active\":true,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -76,7 +76,7 @@ run_t4() {
     # Seed workflow state where next-step would return ACTION=done (all done)
     seed_workflow_state_done "$tmp" "$sid"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -98,7 +98,7 @@ run_t5() {
     sid="t5-sid"
     seed_workflow_state_blocked "$tmp" "$sid"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -111,7 +111,7 @@ run_t5() {
 
 # ---------------------------------------------------------------------------
 # T6: isWorkflowOff=true → exit 0 pass-through (no block even when ACTION=invoke)
-# session-markers.js reads <CLAUDE_WORKFLOW_DIR>/<sid>.workflow-off (not a separate marker dir)
+# session-markers.js reads <WORKFLOW_STATE_DIR>/<sid>.workflow-off (not a separate marker dir)
 # ---------------------------------------------------------------------------
 run_t6() {
     require_source "$HOOK" "T6: isWorkflowOff=true -> exit 0 pass-through" || return
@@ -121,11 +121,11 @@ run_t6() {
     wf_dir="$tmp/workflow"
     mkdir -p "$wf_dir"
     # session-markers.js checks <getWorkflowDir()>/<sid>.workflow-off
-    # CLAUDE_WORKFLOW_DIR is used by getWorkflowDir(), so the marker goes there.
+    # WORKFLOW_STATE_DIR is used by getWorkflowDir(), so the marker goes there.
     touch "$wf_dir/${sid}.workflow-off"
     seed_workflow_state "$tmp" "$sid" "invoke"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$wf_dir" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$wf_dir" WORKFLOW_PLANS_DIR="$tmp/plans" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -144,9 +144,9 @@ run_t7() {
     local tmp sid out rc
     tmp="$(mktemp -d)"
     sid="t7-sid"
-    # Point CLAUDE_WORKFLOW_DIR at a non-existent path so state read fails → fail-open
+    # Point WORKFLOW_STATE_DIR at a non-existent path so state read fails → fail-open
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/nonexistent-wf" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/nonexistent-wf" WORKFLOW_PLANS_DIR="$tmp/plans" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -170,7 +170,7 @@ run_t8() {
     # Seed workflow state under CC session ID (what the hook should use for next-step)
     seed_workflow_state "$tmp" "$cc_sid" "invoke"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$cc_sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           WORKFLOW_SESSION_ID="$ws_sid" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
@@ -194,7 +194,7 @@ run_t9() {
     seed_workflow_state "$tmp" "$cc_sid" "invoke"
     seed_supervisor_state "$tmp" "$cc_sid" "2026-07-17T00:00:00.000Z"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$cc_sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           WORKFLOW_SESSION_ID="$ws_sid" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
@@ -221,7 +221,7 @@ run_t10() {
     # CC state unarmed (empty), wsid env present — hook must still block on ACTION=invoke
     seed_supervisor_state "$tmp" "$cc_sid" ""
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$cc_sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           WORKFLOW_SESSION_ID="$ws_sid" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
@@ -244,7 +244,7 @@ run_t11() {
     sid="t11-sid"
     seed_workflow_state_no_init "$tmp" "$sid"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -293,7 +293,7 @@ run_t14() {
     local tmp out rc
     tmp="$(mktemp -d)"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"sid with spaces\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -317,7 +317,7 @@ run_t15() {
     mkdir -p "$fake_agents"
     seed_workflow_state "$tmp" "$sid" "invoke"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           AGENTS_CONFIG_DIR="$fake_agents" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
@@ -340,7 +340,7 @@ run_t16() {
     sid="t16-sid"
     seed_workflow_state "$tmp" "$sid" "invoke"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+        | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"

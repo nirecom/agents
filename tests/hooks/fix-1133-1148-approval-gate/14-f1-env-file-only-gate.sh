@@ -21,7 +21,7 @@ echo "=== G14 (F1): CONFIRM_<STAGE>=off waiver comes from the .env file, not pro
 # given process.env CONFIRM_* values. Prints NOERROR or THREW:<code>.
 mark_probe() {
   local cfg="$1" co="$2" cd_="$3" sid="$4" step="$5"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     AGENTS_CONFIG_DIR="$cfg" CONFIRM_OUTLINE="$co" CONFIRM_DETAIL="$cd_" \
     run_with_timeout node -e '
       const { markStep } = require(process.argv[1]);
@@ -36,7 +36,7 @@ SID="g14a-$$"
 write_state "$SID" "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete"}')"
 touch "$PLANS_DIR/${SID}-outline.md"
 
-CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
   AGENTS_CONFIG_DIR="$CONFIG_DIR_ON" CONFIRM_OUTLINE=off \
   run_with_timeout node "$NEXT_STEP" --session "$SID" >/dev/null 2>&1 || true
 
@@ -62,7 +62,7 @@ SID_C="g14c-$$"
 write_state "$SID_C" "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete"}')"
 touch "$PLANS_DIR/${SID_C}-outline.md"
 
-CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
   AGENTS_CONFIG_DIR="$CONFIG_DIR_OFF" CONFIRM_OUTLINE=on \
   run_with_timeout node "$NEXT_STEP" --session "$SID_C" >/dev/null 2>&1 || true
 

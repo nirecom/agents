@@ -71,7 +71,7 @@ else
 
     _789_RC=0
     _789_OUT=$(printf '%s' "{\"session_id\":\"$_789_SID\",\"transcript_path\":\"$_789_TP\"}" | \
-      AGENTS_CONFIG_DIR="$_789_CFG" WORKFLOW_PLANS_DIR="$_789_PLANS" CLAUDE_WORKFLOW_DIR="$_789_WORKFLOW" \
+      AGENTS_CONFIG_DIR="$_789_CFG" WORKFLOW_PLANS_DIR="$_789_PLANS" WORKFLOW_STATE_DIR="$_789_WORKFLOW" \
       node "$HOOK_789" 2>&1) || _789_RC=$?
 
     if [ "$_789_RC" -ne 0 ]; then
@@ -103,7 +103,7 @@ else
 
     _789b_RC=0
     _789b_OUT=$(printf '%s' "{\"session_id\":\"$_789b_SID\",\"transcript_path\":\"$_789b_TP\"}" | \
-      AGENTS_CONFIG_DIR="$_789_CFG" WORKFLOW_PLANS_DIR="$_789_PLANS" CLAUDE_WORKFLOW_DIR="$_789b_WORKFLOW" \
+      AGENTS_CONFIG_DIR="$_789_CFG" WORKFLOW_PLANS_DIR="$_789_PLANS" WORKFLOW_STATE_DIR="$_789b_WORKFLOW" \
       node "$HOOK_789" 2>&1) || _789b_RC=$?
     _789b_DEC=$(echo "$_789b_OUT" | node -e \
       "let d;try{d=JSON.parse(require('fs').readFileSync(0,'utf8'));}catch(e){process.exit(1);}process.stdout.write(d.decision||'')" \

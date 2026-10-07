@@ -30,7 +30,7 @@ ARGV_EOF
     --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
   rc=$?
   ARGV=$(cat "$ARGV_FILE" 2>/dev/null || echo "")
-  CNT=$( { tr -d '[:space:]' < "$CLAUDE_WORKFLOW_DIR/sid26.control/detail-plan-round-number.txt"; } 2>/dev/null || echo absent)
+  CNT=$( { tr -d '[:space:]' < "$WORKFLOW_STATE_DIR/sid26.control/detail-plan-round-number.txt"; } 2>/dev/null || echo absent)
   [[ -n "$CNT" ]] || CNT=absent
   if [[ $rc -eq 1 ]] && echo "$ARGV" | grep -q -- "--round 1" && [[ "$CNT" == "1" ]]; then
     pass "26: --round omitted → the wrapper opens round 1 and records it"
@@ -55,8 +55,8 @@ APPROVED
 <!-- end-codex-output -->
 OUT
 )"
-  mkdir -p "$CLAUDE_WORKFLOW_DIR/sid27.control"
-  printf 'C1|HIGH|OPEN|1|a concern from a round that never ran\n' > "$CLAUDE_WORKFLOW_DIR/sid27.control/detail-plan-concern-ledger.txt"
+  mkdir -p "$WORKFLOW_STATE_DIR/sid27.control"
+  printf 'C1|HIGH|OPEN|1|a concern from a round that never ran\n' > "$WORKFLOW_STATE_DIR/sid27.control/detail-plan-concern-ledger.txt"
   OUT27=$(invoke_wrapper "$MOCK" --format detail-plan --session-id sid27 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --round 3 2>&1 > /dev/null)
@@ -127,7 +127,7 @@ OUT
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
   rc=$?
-  CFILE="$CLAUDE_WORKFLOW_DIR/sid30.control/detail-plan-round-number.txt"
+  CFILE="$WORKFLOW_STATE_DIR/sid30.control/detail-plan-round-number.txt"
   if [[ $rc -eq 3 && ! -f "$CFILE" ]]; then
     pass "30: exit 3 rolls the counter back to its pre-call state"
   else

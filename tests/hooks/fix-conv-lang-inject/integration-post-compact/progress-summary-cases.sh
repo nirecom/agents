@@ -33,7 +33,7 @@ fi
 # ---------------------------------------------------------------------------
 T29_SID="t29-nosuchsid-$RANDOM"
 T29_RAW=$(printf '{"session_id":"%s"}' "$T29_SID" | \
-    CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-t29-empty" \
+    WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t29-empty" \
     HOME="$TMPDIR_BASE/home-t29" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
     run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)
@@ -153,7 +153,7 @@ T35_DIR="$TMPDIR_BASE/workflow-t35-corrupt"
 mkdir -p "$T35_DIR"
 printf 'not-valid-json' > "$T35_DIR/${T35_SID}.json"
 T35_RAW=$(printf '{"session_id":"%s"}' "$T35_SID" | \
-    CLAUDE_WORKFLOW_DIR="$T35_DIR" \
+    WORKFLOW_STATE_DIR="$T35_DIR" \
     HOME="$TMPDIR_BASE/home-t35" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
     run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)

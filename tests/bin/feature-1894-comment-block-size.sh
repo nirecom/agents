@@ -73,12 +73,12 @@ TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # --- fixture isolation (rules/test/fixture-isolation.md) --------------------
-# Dual-pin: pinning only CLAUDE_WORKFLOW_DIR would still let supervisor-emit
+# Dual-pin: pinning only WORKFLOW_STATE_DIR would still let supervisor-emit
 # append into the developer's real ~/.workflow-plans/.
-CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-export CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # The three variables that can steer a verdict: the kill switch, the threshold

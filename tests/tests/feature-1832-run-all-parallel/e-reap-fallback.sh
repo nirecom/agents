@@ -11,7 +11,7 @@ set -uo pipefail
 
 fx_init "e-reap-fallback"
 export RUN_ALL_CACHE_DIR="$FX_CACHE_DIR"
-export CLAUDE_WORKFLOW_DIR="$FX_TMP_ROOT/workflow"
+export WORKFLOW_STATE_DIR="$FX_TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$FX_TMP_ROOT/plans"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 

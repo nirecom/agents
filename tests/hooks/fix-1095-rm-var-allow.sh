@@ -17,6 +17,12 @@ else
 fi
 MODULE="${_AGENTS_DIR_NODE}/hooks/lib/bash-write-targets.js"
 
+# isolation (#2512): pin both dirs, so the plans-dir resolved below is a throwaway one.
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 PASS=0
 FAIL=0
 
@@ -73,13 +79,8 @@ call_rm() {
 # Claude Code session and observe whether the hook blocks or allows it.
 # ─────────────────────────────────────────────────────────────────────────────
 
-    # Resolve the ACTUAL plans-dir: extractRmTargets only ALLOWs a $VAR whose value
-    # is under getWorkflowPlansDir() (helpers.js tryResolveEnvUnderPlansDir — a
-    # path-traversal / arbitrary-path guard). The prior fixtures hardcoded
-    # /tmp/... which is NOT under the plans-dir on this host (Windows:
-    # %USERPROFILE%\.workflow-plans), so they fail-closed to null regardless of the
-    # write-patterns migration. We derive the plans-dir at runtime and build the
-    # $VAR value under it so the ALLOW contract is exercised portably.
+    # extractRmTargets only ALLOWs a $VAR under getWorkflowPlansDir() (helpers.js
+    # tryResolveEnvUnderPlansDir), so the fixtures are built under the resolved (pinned) plans-dir.
     PLANS_DIR="$(run_with_timeout 30 node -e "
       try { process.stdout.write(require('${_AGENTS_DIR_NODE}/hooks/lib/workflow-plans-dir').getWorkflowPlansDir().replace(/\\\\/g,'/')); }
       catch (e) { process.stdout.write(''); }

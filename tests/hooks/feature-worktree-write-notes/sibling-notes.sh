@@ -7,6 +7,8 @@
 # tests/hooks/feature-1102-sibling-worktrees/lib-tests.sh.
 # CLI-level sibling tests are in tests/hooks/feature-1102-sibling-worktrees/cli-tests.sh.
 
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; harness_isolate "$_ISOLATION_TMP_ROOT"
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
 # L3 gap (what this test does NOT catch):

@@ -63,17 +63,22 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
-WORKFLOW_DIR="${CLAUDE_WORKFLOW_DIR:-$HOME/.claude/projects/workflow}"
-if [ ! -d "$WORKFLOW_DIR" ]; then
+# Every state root (#2511): a legacy-routed session's control dir is swept too.
+STATE_ROOTS=()
+while IFS= read -r root; do
+    root="${root%$'\r'}"
+    [[ -n "$root" && -d "$root" ]] && STATE_ROOTS+=("$root")
+done < <(node "$(node_path "$SCRIPT_DIR/workflow-state-dir")" --roots 2>/dev/null || true)
+if [ "${#STATE_ROOTS[@]}" -eq 0 ]; then
     if [ "$CI_MODE" = "1" ]; then
         printf '{"scanned":0,"skipped_live":0,"skipped_recent":0,"files_contaminated":0,"files_modified":0,"records_removed":0,"files_emptied":0,"files_skipped_unparsable":0,"backup_dir":"","errors":["workflow dir not found"]}\n'
     else
-        printf 'sweep-supervisor-state: workflow dir not found: %s\n' "$WORKFLOW_DIR"
+        printf 'sweep-supervisor-state: no state root found\n'
     fi
     exit 0
 fi
 
-ENGINE_ARGS=(--workflow-dir "$(node_path "$WORKFLOW_DIR")")
+ENGINE_ARGS=()
 [ "${APPLY:-0}" = "1" ] && ENGINE_ARGS+=(--apply)
 [ -n "$SESSION" ] && ENGINE_ARGS+=(--session "$SESSION")
 
@@ -88,10 +93,39 @@ case "$BRIDGE_RC" in
   *) printf 'sweep-supervisor-state: resolve-session-id failed (exit %s); refusing to sweep without liveness\n' "$BRIDGE_RC" >&2; exit 1 ;;
 esac
 
-SUMMARY="$(node "$(node_path "$ENGINE")" "${ENGINE_ARGS[@]}")"
+SUMMARIES=""
+for root in "${STATE_ROOTS[@]}"; do
+    ONE="$(node "$(node_path "$ENGINE")" --workflow-dir "$(node_path "$root")" "${ENGINE_ARGS[@]}")"
+    RC=$?
+    if [ "$RC" -ne 0 ]; then
+        printf 'sweep-supervisor-state: engine failed (exit %s) for %s\n' "$RC" "$root" >&2
+        exit "$RC"
+    fi
+    SUMMARIES+="$ONE"$'\n'
+done
+
+# One summary per root, merged: counts add, lists concatenate, backup dirs join with ";".
+SUMMARY="$(printf '%s' "$SUMMARIES" | node -e '
+let b = "";
+process.stdin.on("data", (c) => (b += c));
+process.stdin.on("end", () => {
+  const out = {};
+  for (const line of b.split(/\r?\n/).filter((l) => l.trim() !== "")) {
+    const s = JSON.parse(line);
+    for (const [k, v] of Object.entries(s)) {
+      if (typeof v === "number") out[k] = (out[k] || 0) + v;
+      else if (Array.isArray(v)) out[k] = (out[k] || []).concat(v);
+      else if (k === "backup_dir") out[k] = [out[k], v].filter(Boolean).join(";");
+      else if (typeof v === "boolean") out[k] = Boolean(out[k]) || v;
+      else if (!(k in out)) out[k] = v;
+    }
+  }
+  process.stdout.write(JSON.stringify(out));
+});
+')"
 RC=$?
 if [ "$RC" -ne 0 ]; then
-    printf 'sweep-supervisor-state: engine failed (exit %s)\n' "$RC" >&2
+    printf 'sweep-supervisor-state: summary merge failed (exit %s)\n' "$RC" >&2
     exit "$RC"
 fi
 

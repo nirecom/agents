@@ -134,7 +134,7 @@ console.log("DONE");
 '
     for i in 1 2 3 4 5 6 7 8; do
         (cd "$AGENTS_DIR" && env \
-            CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
             WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
             HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_H5" WNO="$i" \
             "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$H5_JS" \

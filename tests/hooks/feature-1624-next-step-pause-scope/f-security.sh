@@ -6,7 +6,7 @@
 # The session id becomes a FILENAME. Every id below is one of the standard ways
 # a filename-shaped input escapes its directory, and the contract is the same for
 # all of them: refuse (or sanitize), never throw, and above all never create a
-# file anywhere except as a direct child of CLAUDE_WORKFLOW_DIR. The fixture root
+# file anywhere except as a direct child of WORKFLOW_STATE_DIR. The fixture root
 # therefore contains a sibling `outside/` directory: a traversal that "worked"
 # lands there, and the walk below sees it.
 
@@ -19,7 +19,7 @@ _sid_probe() {
     root="$(node_path "$tmp")"
     mkdir -p "$tmp/wf" "$tmp/outside"
     out=$(ROOT="$root" BODY="$body" \
-        CLAUDE_WORKFLOW_DIR="$root/wf" WORKFLOW_PLANS_DIR="$root/wf" "$RWT" 25 node -e "
+        WORKFLOW_STATE_DIR="$root/wf" WORKFLOW_PLANS_DIR="$root/wf" "$RWT" 25 node -e "
 const fs = require('fs'), path = require('path');
 const M = require('$PAUSE_NODE');
 const SM = require('$MARKERS_NODE');
@@ -118,7 +118,7 @@ run_F2b() {
 {"reason":"[for=research] PLANTED-DECOY","createdAt":"2000-01-01T00:00:00.000Z"}
 EOF
     cp "$tmp/outside/evil.next-step-paused" "$tmp/evil.next-step-paused"
-    out=$(ROOT="$root" CLAUDE_WORKFLOW_DIR="$root/wf" WORKFLOW_PLANS_DIR="$root/wf" "$RWT" 25 node -e "
+    out=$(ROOT="$root" WORKFLOW_STATE_DIR="$root/wf" WORKFLOW_PLANS_DIR="$root/wf" "$RWT" 25 node -e "
 const M = require('$PAUSE_NODE');
 const SM = require('$MARKERS_NODE');
 const ids = [

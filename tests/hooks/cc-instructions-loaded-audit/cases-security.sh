@@ -6,7 +6,7 @@
 # into a filesystem path (<workflowDir>/<sid>.instructions-loaded/<sha1(file_path)>.json), so a
 # naive join lets a hostile value escape the pinned directory — and the payload as a whole may
 # carry credentials that must never be persisted. CONTRACT NOTE (asserted here): every artifact
-# the hook writes stays under CLAUDE_WORKFLOW_DIR — no traversal, absolute path, separator, or
+# the hook writes stays under WORKFLOW_STATE_DIR — no traversal, absolute path, separator, or
 # control character in session_id/file_path may produce a path outside it. No payload VALUE other
 # than file_path/load_reason is persisted; key NAMES survive in payload_keys. Shell metacharacters
 # are inert: the hook must never hand a payload value to a shell.
@@ -155,7 +155,7 @@ echo "=== security: the two fields that ARE written to disk ==="
 
 # The cases above prove unrecognized payload fields are dropped — trivially safe. The dangerous
 # half is the two fields the receipt is REQUIRED to keep: file_path and load_reason are persisted
-# verbatim by design, so a credential-shaped value in either lands on disk under CLAUDE_WORKFLOW_DIR
+# verbatim by design, so a credential-shaped value in either lands on disk under WORKFLOW_STATE_DIR
 # and survives the session. Both are host-supplied. CONTRACT NOTE (asserted here): a persisted
 # field is not exempt from redaction — a credential-shaped substring in file_path or load_reason
 # must be masked, and the receipt must still be written (redaction must not degrade into dropping

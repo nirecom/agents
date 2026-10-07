@@ -144,7 +144,7 @@ for(const k of ["workflow_init","clarify_intent","research","outline","detail","
 steps.workflow_init=st("complete"); steps.clarify_intent=st("complete"); steps.branching_complete=st("complete");
 const state={version:1,session_id:sid,created_at:new Date().toISOString(),cwd,steps,session_worktree:swt};
 fs.writeFileSync(path.join(dir,sid+".json"),JSON.stringify(state,null,2));
-' "$CLAUDE_WORKFLOW_DIR" "$SID" "$MAIN_N" "$LINKED_N" 2>/dev/null
+' "$WORKFLOW_STATE_DIR" "$SID" "$MAIN_N" "$LINKED_N" 2>/dev/null
 }
 
 # M6 (#2120 case 9) — Tier 3 worktree-entry gate, in two layers: the reason builder

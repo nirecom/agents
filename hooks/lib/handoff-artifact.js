@@ -1,5 +1,5 @@
 "use strict";
-// The handoff artifact: <CLAUDE_WORKFLOW_DIR>/<sid>.control/handoff.md.
+// The handoff artifact: <WORKFLOW_STATE_DIR>/<sid>.control/handoff.md.
 //
 // One canonical writer (appendHandoffEntry) for every producer — skill
 // procedure points, blocked gates, mechanical auto-records, main-session

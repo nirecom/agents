@@ -20,9 +20,9 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 # Fixture isolation: HOME, the plans-dir pair and the session ids all point into
 # TMP_ROOT so codex_core_init's log dir and round files never touch real state.
 export HOME="$TMP_ROOT/home"
-export CLAUDE_WORKFLOW_DIR="$TMP_ROOT/workflow"
+export WORKFLOW_STATE_DIR="$TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMP_ROOT/plans"
-mkdir -p "$HOME" "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$HOME" "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 unset CLAUDE_PROJECT_DIR
 unset PROJECT_NFR

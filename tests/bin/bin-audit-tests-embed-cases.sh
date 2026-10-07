@@ -29,7 +29,7 @@ trap 'chmod -R u+rwX "$EC_TMP" 2>/dev/null; rm -rf "$EC_TMP"' EXIT
 mkdir -p "$EC_TMP/home" "$EC_TMP/fakebin"
 export HOME="$EC_TMP/home"
 export NO_LOG=true
-run_all_pin_state_dirs "$EC_TMP/state" || { echo "FATAL: cannot pin state dirs" >&2; exit 1; }
+harness_isolate "$EC_TMP/state"
 unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_CACHE_DIR="$EC_TMP/run-all-cache"
 export SWEEP_TESTS_STATE_DIR="$EC_TMP/sweep-state"

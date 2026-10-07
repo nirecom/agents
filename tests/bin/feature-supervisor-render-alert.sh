@@ -48,7 +48,7 @@ FALLBACK_LINE="[EM Supervisor] Review complete — no actionable findings."
 # Seed alert state via writeAlertState. Args: tmp_node sid findings_json
 seed_state() {
     local tmp_node="$1" sid="$2" findings="$3"
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const patch = { findings: $findings, alert_phase: 'done' };
 const ok = w.writeAlertState('$sid', patch);
@@ -71,7 +71,7 @@ run_ta_cli_group() {
         tmp=$(make_tmp); tmp_node="$(node_dir "$tmp")"
         local sid="ta1-sid-$$"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -92,7 +92,7 @@ run_ta_cli_group() {
 
         seed_state "$tmp_node" "$sid" "[{\"categories\":[\"other\"],\"severity\":\"notice\",\"detail\":\"audit trail\",\"reporter\":\"test\"}]"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -113,7 +113,7 @@ run_ta_cli_group() {
 
         seed_state "$tmp_node" "$sid" "[{\"categories\":[\"code\"],\"severity\":\"warning\",\"detail\":\"Fix missing check\",\"reporter\":\"supervisor\"}]"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -137,7 +137,7 @@ run_ta_cli_group() {
 
         seed_state "$tmp_node" "$sid" "[{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"err-detail-x\",\"reporter\":\"t\"},{\"categories\":[\"workflow\"],\"severity\":\"warning\",\"detail\":\"warn-detail-y\",\"reporter\":\"t\"},{\"categories\":[\"other\"],\"severity\":\"notice\",\"detail\":\"NOTICE-SHOULD-NOT-APPEAR\",\"reporter\":\"t\"}]"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -167,7 +167,7 @@ run_ta_cli_group() {
 
         seed_state "$tmp_node" "$sid" "[{\"categories\":[\"code\"],\"severity\":\"warning\",\"detail\":\"Fix missing check\",\"reporter\":\"supervisor\"}]"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -185,7 +185,7 @@ run_ta_cli_group() {
         local tmp tmp_node out_err
         tmp=$(make_tmp); tmp_node="$(node_dir "$tmp")"
 
-        out_err=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" 2>&1 >/dev/null)
+        out_err=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" 2>&1 >/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -208,7 +208,7 @@ run_ta_cli_group() {
         mkdir -p "$tmp/${sid}.control"
         echo '{ not valid json' > "$tmp/${sid}.control/supervisor-state.json"
 
-        out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         local rc=$?
         rm -rf "$tmp"
 
@@ -232,8 +232,8 @@ run_ta_cli_group() {
         local state_file="$tmp/${sid}.control/supervisor-state.json"
         before=$(cat "$state_file" 2>/dev/null || echo "")
 
-        out1=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
-        out2=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out1=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
+        out2=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$sid" 2>/dev/null)
         after=$(cat "$state_file" 2>/dev/null || echo "")
         rm -rf "$tmp"
 
@@ -254,7 +254,7 @@ run_ta_cli_group() {
         local payload='x; touch INJECTED'
         local inject_target="$tmp/INJECTED"
 
-        WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$payload" >/dev/null 2>&1 || true
+        WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 10 bash "$CLI" --session-id "$payload" >/dev/null 2>&1 || true
         local had_injection=0
         # Check both the tmp dir and cwd
         [ -f "$inject_target" ] && had_injection=1

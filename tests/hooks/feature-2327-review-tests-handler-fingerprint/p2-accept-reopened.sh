@@ -18,7 +18,7 @@ WFMARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
 WFSTATE_N="$AGENTS_DIR_N/hooks/workflow-state"
 EVIDENCE_N="$AGENTS_DIR_N/hooks/workflow-gate/review-tests-evidence.js"
 
-export CLAUDE_WORKFLOW_DIR="$(np "$CLAUDE_WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(np "$WORKFLOW_STATE_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")"
 unset CLAUDE_PROJECT_DIR
 mkdir -p "$TMPDIR_BASE/cfg" "$TMPDIR_BASE/neutral" "$TMPDIR_BASE/p2-nogit"
@@ -61,7 +61,7 @@ steps.write_code = {status: wcStatus || "pending"};
 for (const s of ["run_tests","review_security","docs","review_docs","user_verification","cleanup","pre_final_report_gate","final_report"]) steps[s] = {status:"pending"};
 const st = {version:1, session_id:sid, steps, closes_issues:[2482]};
 if (wt) st.session_worktree = wt;
-fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json"), JSON.stringify(st));
+fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json"), JSON.stringify(st));
 JS
 
 IFS= read -r -d '' SEND_JS <<'JS'

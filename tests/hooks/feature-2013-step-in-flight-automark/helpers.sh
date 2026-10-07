@@ -30,7 +30,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # so seeding succeeds regardless of the host's CONFIRM_OUTLINE/CONFIRM_DETAIL
 # setting.
 seed_step() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" ST="$3" STATUS="$4" SID="$2" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" ST="$3" STATUS="$4" SID="$2" "$RWT" 15 node -e "
 const CA = require('$COMPLETION_APPROVAL_NODE');
 if (process.env.STATUS === 'complete' && CA.isApprovalGatedStep(process.env.ST)) {
   CA.recordPlanApproval(process.env.SID, process.env.ST, { source: 'reset-sentinel', reason: '2013 fixture' });
@@ -82,7 +82,7 @@ in_flight_fixture() {
 # nothing at all when the module cannot even be loaded (which every case
 # distinguishes from a legitimate `false`).
 pred_eval() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 20 node -e "
 let P = null;
 try { P = require('$POLICY_NODE'); } catch (e) {}
 const L = require('$LIFECYCLE_NODE');
@@ -113,7 +113,7 @@ const ti = { description: 'x' };
 if (process.env.SKILL) ti.skill = process.env.SKILL;
 process.stdout.write(JSON.stringify({ tool_name: process.env.TOOL, session_id: process.env.SID,
   agent_id: process.env.AGENT, transcript_path: '', tool_input: ti }));" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" 2>/dev/null)
     AM_RC=$?
 }
@@ -124,7 +124,7 @@ process.stdout.write(JSON.stringify({ tool_name: process.env.TOOL, session_id: p
 # Sets AM_OUT / AM_RC.
 run_automark_raw() {
     AM_OUT=$(printf '%s' "$2" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" 2>/dev/null)
     AM_RC=$?
 }
@@ -148,7 +148,7 @@ make_repo_fixture() {
 # Honours FIXTURE_REPO when the caller has pinned one.
 run_c4() {
     C4_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"\"}" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           CLAUDE_PROJECT_DIR="${FIXTURE_REPO:-}" \
           "$RWT" 25 node "$(node_path "$GUARD_C4")" 2>/dev/null)
     C4_RC=$?

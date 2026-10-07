@@ -48,7 +48,7 @@ run_w1() {
     require_writer_layer2 "W1: writeAlertState sets alert_armed_at, preserves layer1" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w1-sid"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'warning', detail: 'seed', reporter: 't' });
 const r = w.writeAlertState('$sid', { alert_armed_at: '2026-06-06T12:00:00Z' });
@@ -71,7 +71,7 @@ run_w2() {
     require_writer_layer2 "W2: writeAlertState sets last_run_at + cumulative_severity" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w2-sid"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const r = w.writeAlertState('$sid', { last_run_at: '2026-06-06T11:00:00Z', cumulative_severity: 'warning' });
 if (r !== true) { console.error('write returned: '+r); process.exit(2); }
@@ -93,7 +93,7 @@ run_w3() {
     require_writer_layer2 "W3: writeAlertState appends to layer2.findings" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w3-sid"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const r = w.writeAlertState('$sid', { findings: [{ categories: ['intent'], severity: 'error', detail: 'd', reporter: 'supervisor' }] });
 if (r !== true) { console.error('write returned: '+r); process.exit(2); }
@@ -117,7 +117,7 @@ run_w4() {
     require_writer_layer2 "W4: writeAlertState rejects invalid cumulative_severity" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w4-sid"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.writeAlertState('$sid', { cumulative_severity: 'warning' });
 const before = JSON.stringify(w.readState('$sid'));
@@ -140,7 +140,7 @@ run_w5() {
     require_writer_layer2 "W5: post-write state validates ok=true" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w5-sid"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 w.writeAlertState('$sid', { alert_armed_at: '2026-06-06T12:00:00Z', cumulative_severity: 'warning' });
@@ -162,7 +162,7 @@ run_w6() {
     require_writer_layer2 "W6: writeAlertState on missing file creates it" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w6-sid"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const p = w.getStatePath('$sid');

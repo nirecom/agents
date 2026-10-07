@@ -2,6 +2,7 @@
 # tests/hooks/feature-2256-input-version-full-hash/digest-format.sh
 # Tests: hooks/lib/diff-fingerprint.js
 # Tags: supervisor, input-version, sha256, digest-length, TL2, scope:issue-specific
+# isolation: inherits-from ../feature-2256-input-version-full-hash.sh
 # #2256 round-2 C4: every digest is a full 64-hex sha256, never truncated and never sha1.
 # Parent: tests/hooks/feature-2256-input-version-full-hash.sh
 

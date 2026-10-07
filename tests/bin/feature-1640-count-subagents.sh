@@ -2,37 +2,24 @@
 # tests/bin/feature-1640-count-subagents.sh
 # Tests: bin/count-subagents, hooks/workflow-state/session-id.js, bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/verify.js
 # Tags: measurement, subagent-count, session-transcript, enumeration-failure, stub-classifier, scope:issue-specific, pwsh-not-required, TL2
-#
-# (b) of #1640. `bin/count-subagents` aggregates `input.subagent_type` occurrences out of
-# Claude Code session transcripts, plus the C3 half of the plan: an enumeration failure
-# must never be reported as "0 invocations". `listJsonlByMtimeStrict()` is the new
-# failure-reporting view of the enumerator; `_listJsonlByMtime()` must keep its old
-# swallow-everything semantics so hooks/workflow-state/state-io.js does not change
-# behaviour.
-#
-# ISOLATION CONTRACT (mirrors tests/bin/bin-vscode-cc-repair-prune.sh). The tool reads the
-# user's own session storage, so every invocation applies BOTH overrides:
-#   1. --projects-root <tmp>   — replaces the ~/.claude/projects default
-#   2. HOME / USERPROFILE=<tmp> — belt and braces: a dropped override lands in a fixture
-#                                 tree, never in the real home
-# run_cli supplies both; nothing in this suite ever reads the real session store.
-#
-# TL3 gap (what this test does NOT catch):
-# - the real ~/.claude/projects tree (O(100) slugs, O(1000) .jsonl, multi-GB): scan cost
-#   under VERIFY_MAX_SCAN, and the real record shapes emitted by the installed Claude Code
-#   version (this suite pins only the `Task`/`Agent` tool-name variants known today).
-# - POSIX permission semantics on the Windows host: every chmod-driven row degrades to a
-#   documented SKIP. The nonexistent-directory rows below are the platform-independent
-#   substitute and always run.
-# - a genuinely concurrent writer deleting a file between readdir and stat; C3-b injects a
-#   deterministic statSync fault at the module boundary instead.
-# - the shipped execute bit (git mode 100755): the CLI is always invoked via `node <path>`.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: installer.
+
+# (b) of #1640. `bin/count-subagents` aggregates `input.subagent_type` occurrences out of Claude Code session transcripts, plus the C3 half of the plan: an enumeration failure must never be reported as "0 invocations". `listJsonlByMtimeStrict()` is the new failure-reporting view of the enumerator; `_listJsonlByMtime()` must keep its old swallow-everything semantics so hooks/workflow-state/state-io.js does not change behaviour.
+
+# ISOLATION CONTRACT (mirrors tests/bin/bin-vscode-cc-repair-prune.sh): the tool reads the user's own session storage, so every invocation applies BOTH overrides: 1. --projects-root <tmp> — replaces the ~/.claude/projects default; 2. HOME / USERPROFILE=<tmp> — belt and braces: a dropped override lands in a fixture tree, never in the real home. run_cli supplies both; nothing in this suite ever reads the real session store.
+
+# TL3 gap (what this test does NOT catch): - the real ~/.claude/projects tree (O(100) slugs, O(1000) .jsonl, multi-GB): scan cost under VERIFY_MAX_SCAN, and the real record shapes emitted by the installed Claude Code version (this suite pins only the `Task`/`Agent` tool-name variants known today).
+#   - POSIX permission semantics on the Windows host: every chmod-driven row degrades to a documented SKIP; the nonexistent-directory rows below are the platform-independent substitute and always run. - a genuinely concurrent writer deleting a file between readdir and stat; C3-b injects a deterministic statSync fault at the module boundary instead. - the shipped execute bit (git mode 100755): the CLI is always invoked via `node <path>`.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: installer.
 
 set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
+
+# isolation (#2512): pin state and plans dirs once for this file; lib.sh's EXIT trap removes the dir.
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 # The harness (counters, run_cli / node_m / summary helpers) and the fixture vocabulary
 # live in the sibling lib.sh; only the cases are kept here. The split is the HARD

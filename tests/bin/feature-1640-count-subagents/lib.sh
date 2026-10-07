@@ -2,21 +2,20 @@
 # Shared harness + fixture vocabulary for tests/bin/feature-1640-count-subagents.sh.
 # Sourced by that dispatcher — not executable standalone, and not picked up by
 # tests/run-all.sh (which globs tests/*.sh at the top level only).
-#
-# Extracted from the entry file purely for the HARD 500-line limit in
-# rules/coding/file-split.md; the case bodies all stay in the entry file. Same
-# arrangement as tests/hooks/feature-1180-commit-lang-check/lib.sh.
-#
-# Provides: AGENTS_DIR, SCRIPT, TMPROOT (+ EXIT trap), PASS/FAIL/SKIP counters,
-# assert_eq / skip_case / run_with_timeout / native_path / run_cli / node_m /
-# summary / type_count / has_summary / deny_read, the SID_*/AGENT_UUID/SECRET_TITLE
-# fixture constants, and the rec / content / title / new_root record builders.
+
+# Extracted from the entry file purely for the HARD 500-line limit in rules/coding/file-split.md; the case
+# bodies all stay in the entry file. Same arrangement as tests/hooks/feature-1180-commit-lang-check/lib.sh.
+
+# Provides: AGENTS_DIR, SCRIPT, TMPROOT (+ EXIT trap), PASS/FAIL/SKIP counters, assert_eq / skip_case /
+# run_with_timeout / native_path / run_cli / node_m / summary / type_count / has_summary / deny_read, the
+# SID_*/AGENT_UUID/SECRET_TITLE fixture constants, and the rec / content / title / new_root record builders.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SCRIPT="$AGENTS_DIR/bin/count-subagents"
 
 TMPROOT="$(mktemp -d)"
-trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT"' EXIT
+# The EXIT trap also removes the entry file's isolation dir (#2512), which this trap replaces.
+trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT" ${_ISOLATION_TMP_ROOT:+"$_ISOLATION_TMP_ROOT"}' EXIT
 
 PASS=0
 FAIL=0

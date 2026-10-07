@@ -96,7 +96,7 @@ setup_fixture() {
 
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     mkdir -p "$FIXTURE/wf" "$FIXTURE/plans"
-    export CLAUDE_WORKFLOW_DIR="$FIXTURE/wf"
+    export WORKFLOW_STATE_DIR="$FIXTURE/wf"
     export WORKFLOW_PLANS_DIR="$FIXTURE/plans"
     unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 

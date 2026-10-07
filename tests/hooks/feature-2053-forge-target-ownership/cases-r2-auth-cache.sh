@@ -73,7 +73,7 @@ TABLE
     # above are distinctive strings precisely so this sweep can find them.
     local leaked="" v
     for v in r2-token-alpha r2-token-bravo r2-token-charlie r2-token-delta; do
-        if grep -rqF -- "$v" "$CLAUDE_WORKFLOW_DIR" 2>/dev/null; then leaked="$leaked $v"; fi
+        if grep -rqF -- "$v" "$WORKFLOW_STATE_DIR" 2>/dev/null; then leaked="$leaked $v"; fi
         if grep -rqF -- "$v" "$WORKFLOW_PLANS_DIR" 2>/dev/null; then leaked="$leaked $v(plans)"; fi
     done
     assert_eq "R2-C7-3a no token value was written into the state or plans dir" "" "$leaked"

@@ -2,6 +2,7 @@
 # tests/bin/feature-2223-nfr-injection/production-entry-point.sh
 # Tests: skills/review-code-security/scripts/run-codex-review-loop.sh, bin/run-codex-review-loop, bin/review-code-codex
 # Tags: scope:issue-specific, TL2, codex, nfr, e2e-path, pwsh-not-required
+# isolation: inherits-from ../feature-2223-nfr-injection.sh
 # Case file for tests/bin/feature-2223-nfr-injection.sh — sourced from it, never run
 # standalone (it uses that file's helpers, fixtures and PASS/FAIL counters).
 # Every other case in this suite hands --project-root to the reviewer itself.

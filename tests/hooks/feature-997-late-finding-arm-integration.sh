@@ -43,7 +43,7 @@ require_source() {
 
 append_finding() {
     local tmp="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.appendFinding('$sid', { categories:['code'], severity:'warning', detail:'late-' + Date.now() + Math.random(), reporter:'rep' });
 if (!ok) { console.error('append failed'); process.exit(2); }
@@ -52,7 +52,7 @@ if (!ok) { console.error('append failed'); process.exit(2); }
 
 read_armed_at() {
     local tmp="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st) { process.exit(2); }
@@ -102,7 +102,7 @@ run_l3() {
     append_finding "$tmp" "l3-sid"
     armed_before="$(read_armed_at "$tmp" "l3-sid")"
     # Promote eligibility via CLI
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 10 node "$CLI" --session-id l3-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 10 node "$CLI" --session-id l3-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
     append_finding "$tmp" "l3-sid"
     armed_after="$(read_armed_at "$tmp" "l3-sid")"
     rm -rf "$tmp"
@@ -120,8 +120,8 @@ run_l4() {
     local tmp armed
     tmp="$(mktemp -d)"
     # No anchor; explicitly mark done with eligibility set
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 10 node "$CLI" --session-id l4-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 10 node "$CLI" --session-id l4-sid --set-alert-phase done >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 10 node "$CLI" --session-id l4-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 10 node "$CLI" --session-id l4-sid --set-alert-phase done >/dev/null 2>&1
     append_finding "$tmp" "l4-sid"
     armed="$(read_armed_at "$tmp" "l4-sid")"
     rm -rf "$tmp"

@@ -9,6 +9,12 @@
 
 set -uo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
@@ -84,7 +90,7 @@ echo ""
 SID="mark-wi-complete"
 write_state "$SID" "$(state_wi_ci "$SID" "pending" "pending")"
 MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"' "$SID")
-MARK_OUTPUT=$(echo "$MARK_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
+MARK_OUTPUT=$(echo "$MARK_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
 
 actual_after=$( (cd "$AGENTS_DIR" && node -e "
 const { readState } = require('./hooks/workflow-state.js');

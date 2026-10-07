@@ -8,7 +8,7 @@ echo "=== L2 INTEGRATION: not-needed-handlers.js ==="
 # hook's dispatch: ctx carries cmd + sessionId + pushMessage/signalFatal stubs.
 run_handler() {
   local sid="$1" cmd="$2"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const h=require('$HANDLERS_N');
     const ctx={ cmd: process.argv[1], sessionId: process.argv[2],
       pushMessage: ()=>{}, signalFatal: ()=>{} };

@@ -30,11 +30,11 @@ mark sid-p13 "$P13C"
 ck "P13 mark: exit 0" "0" "$RC"
 ck "P13 mark leaves the cache untouched" "$_before" "$(content_sig "$P13C")"
 ck "P13 control dir holds only the marker" "./calibration-asked.txt" \
-    "$( (cd "$CLAUDE_WORKFLOW_DIR/sid-p13.control" 2>/dev/null && find . -type f) | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+    "$( (cd "$WORKFLOW_STATE_DIR/sid-p13.control" 2>/dev/null && find . -type f) | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
 run_script "$MARK" "$P13C" --
 ck "P13 mark without --session: exit 2" "2" "$RC"
 P13F="$TMPROOT/p13-workflow-is-a-file"; printf 'x\n' > "$P13F"
-run_script "$MARK" "$P13C" "CLAUDE_WORKFLOW_DIR=$P13F" -- --session sid-p13b
+run_script "$MARK" "$P13C" "WORKFLOW_STATE_DIR=$P13F" -- --session sid-p13b
 ck "P13 unwritable control dir: exit 1" "1" "$RC"
 [ "$RC" = "1" ] && [ -n "$ERR" ] && pass "P13 unwritable control dir: stderr explains the exit 1" || fail "P13 unwritable control dir: no exit-1 explanation on stderr" "rc=$RC"
 case_ran P13
@@ -81,7 +81,7 @@ case_ran P3
 
 case_end
 
-case_begin "never-ask-writes-the-host-record" "skills/run-tests/scripts/answer-calibration.sh"
+case_begin "never-ask-writes-host-record" "skills/run-tests/scripts/answer-calibration.sh"
 
 # ── P4 never-ask writes a 3-line record atomically; the next session is silent ─
 C4="$TMPROOT/cwd-p4"; mk_cwd "$C4" "$DEFAULT_LINE"
@@ -118,7 +118,7 @@ ck "I1 mark twice: both exit 0" "0/0" "$_rc1/$RC"
 ck "I1 mark twice: first call prints first=yes, second first=no" "yes/no" "$_first1/$(kv first)"
 _m="$(marker_of sid-i1)"
 ck "I1 mark twice: the control dir holds the one marker, no temp file" "./calibration-asked.txt" \
-    "$( (cd "$CLAUDE_WORKFLOW_DIR/sid-i1.control" 2>/dev/null && find . -type f) | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+    "$( (cd "$WORKFLOW_STATE_DIR/sid-i1.control" 2>/dev/null && find . -type f) | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
 ck "I1 mark twice: two whole asked_at lines, nothing else, newline-terminated" "2/2/yes" \
     "$(grep -c . "$_m" 2>/dev/null)/$(grep -Ecx "asked_at=$_iso" "$_m" 2>/dev/null)/$(ends_nl "$_m")"
 answer never-ask "$CI1" sid-i1 "$I1C"; _rc1="$RC"

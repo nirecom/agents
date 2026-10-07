@@ -6,7 +6,7 @@
 # fixture resolves no session, so emission never runs there — a false green). Fires a
 # canary-stuffed VIOLATING payload and asserts both halves: the emission happened (state
 # file + actionable finding) AND no canary reached any receipt, state, filename, or stderr.
-# #2434: supervisor state is a control file, <CLAUDE_WORKFLOW_DIR>/<wsid>.control/.
+# #2434: supervisor state is a control file, <WORKFLOW_STATE_DIR>/<wsid>.control/.
 
 echo ""
 echo "=== supervisor emission under a resolvable session (containment + actionability) ==="

@@ -2,16 +2,18 @@
 # tests/hooks/feature-worktree-write-notes.sh
 # Tests: hooks/lib/worktree-notes.js, bin/worktree-write-notes.js
 # Tags: worktree, notes, security, scope:common
-#
 # Dispatcher — sub-files: normal-lib-write.sh, normal-lib-run.sh,
 #   normal-cli.sh, security.sh, error.sh, sibling-notes.sh
-#
 # L3 gap (what this test does NOT catch):
 # - Real worktree-start session populating ## SiblingWorktrees via intent.md probe
 # - End-to-end multi-repo flow through worktree-copy-worker Step 3b
 # Covered by tests/hooks/feature-1102-sibling-worktrees.sh at the CLI boundary.
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$TESTS_DIR/../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 TOTAL_PASS=0
 TOTAL_FAIL=0
 

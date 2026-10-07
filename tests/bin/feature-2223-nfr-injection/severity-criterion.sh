@@ -2,6 +2,7 @@
 # tests/bin/feature-2223-nfr-injection/severity-criterion.sh
 # Tests: bin/lib/codex-core.sh, bin/project-nfr-block
 # Tags: scope:issue-specific, TL2, codex, nfr, security, pwsh-not-required, dup-group-keep:size-hard-limit
+# isolation: inherits-from ../feature-2223-nfr-injection.sh
 # Case file for tests/bin/feature-2223-nfr-injection.sh — sourced from it, never run
 # standalone (it uses that file's helpers, fixtures and PASS/FAIL counters).
 # scope 1: the severity-calibration instruction Step 1 appends OUTSIDE the

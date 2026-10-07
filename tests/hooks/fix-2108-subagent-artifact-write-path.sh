@@ -98,9 +98,9 @@ PLANS_SH="$TMPBASE_SH/plans"; mkdir -p "$PLANS_SH"
 WFDIR="$(node_path "$WFDIR_SH")"
 PLANS="$(node_path "$PLANS_SH")"
 
-# Dual-pin: CLAUDE_WORKFLOW_DIR without WORKFLOW_PLANS_DIR leaks supervisor writes
+# Dual-pin: WORKFLOW_STATE_DIR without WORKFLOW_PLANS_DIR leaks supervisor writes
 # into the developer's real ~/.workflow-plans (rules/test/fixture-isolation.md).
-export CLAUDE_WORKFLOW_DIR="$WFDIR"
+export WORKFLOW_STATE_DIR="$WFDIR"
 export WORKFLOW_PLANS_DIR="$PLANS"
 
 NEUTRAL_CWD="$TMPBASE_SH/neutral"; mkdir -p "$NEUTRAL_CWD"

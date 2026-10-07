@@ -6,6 +6,12 @@
 #   claude-global/hooks/session-start.js   (SessionStart hook)
 set -euo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 GATE_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-gate.js"
 MARK_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-mark.js"

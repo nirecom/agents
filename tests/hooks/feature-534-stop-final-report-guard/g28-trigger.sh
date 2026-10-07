@@ -20,7 +20,7 @@
 #   Anything else → exit 0.
 #
 # These tests also pin the child-process environment inheritance regression:
-# next-step is spawned from the hook and must still see CLAUDE_WORKFLOW_DIR.
+# next-step is spawned from the hook and must still see WORKFLOW_STATE_DIR.
 
 # ---------------------------------------------------------------------------
 # Local fixture helpers (parent-scope: TMPDIR_BASE, HOOK_JS, node_path, ...)
@@ -60,7 +60,7 @@ B_CODE=0
 b_run() {
     local hook="$1" stdin_json="$2" plans_dir="$3" wf_dir="$4"
     B_OUT="$(WORKFLOW_PLANS_DIR="$plans_dir" \
-             CLAUDE_WORKFLOW_DIR="$wf_dir" \
+             WORKFLOW_STATE_DIR="$wf_dir" \
              CLAUDE_PROJECT_DIR="$wf_dir" \
              run_with_timeout 120 node "$hook" <<< "$stdin_json" 2>/dev/null)"
     B_CODE=$?

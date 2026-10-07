@@ -23,6 +23,12 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 
 AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
 
+# isolation (#2512): pin state and plans dirs file-wide; the per-call pins below still override them.
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 RECORDER="hooks/workflow-gate/handoff-record.js"
 
 require_module() {
@@ -38,7 +44,7 @@ run_gate() {
     local tmp="$1" sid="$2" cmd="$3"
     printf '{"session_id":"%s","tool_name":"Bash","tool_input":{"command":"%s","cwd":"%s"}}' "$sid" "$cmd" "$(node_path "$tmp")" \
         | env -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=off \
-            CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+            WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 60 node "$GATE" 2>/dev/null
 }
@@ -46,7 +52,7 @@ run_gate() {
 seed_state() {
     local tmp="$1" sid="$2"
     env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -107,7 +113,7 @@ run_C2() {
     n="$(count_entries "$tmp" "two-sid")"
     [ "$n" -eq 2 ] || problems="$problems want-2-entries-got:$n"
     out=$(env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { readHandoff, renderHandoffForResume } = require('$AGENTS_DIR_NODE/hooks/lib/handoff-artifact');
@@ -182,7 +188,7 @@ run_C5() {
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
     out=$(printf 'this is not json' | env -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=off \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node "$GATE" 2>/dev/null)
     rc=$?

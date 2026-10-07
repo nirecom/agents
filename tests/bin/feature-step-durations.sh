@@ -14,11 +14,11 @@ ROOT="$(make_tmp)"
 trap 'rm -rf "$ROOT"' EXIT
 ROOT="$(np "$ROOT")"
 export HOME="$ROOT/home"
-export CLAUDE_WORKFLOW_DIR="$ROOT/workflow"
+export WORKFLOW_STATE_DIR="$ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$ROOT/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$ROOT/projects"
 unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID
-mkdir -p "$HOME" "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR/c--fixture-repo"
+mkdir -p "$HOME" "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR/c--fixture-repo"
 cd "$ROOT" || exit 1
 
 SID_A="aaaaaaaa-1111-2222-3333-444444444444" # state file, 2026-03-15, 60 min (20 + 40)
@@ -29,15 +29,15 @@ SID_D="dddddddd-1111-2222-3333-444444444444" # state file, started 2 h ago
 printf '%s\n' '{"events":[
 {"kind":"step_status","step":"outline","status":"in_progress","at":"2026-03-15T12:00:00.000Z","seq":1},
 {"kind":"step_status","step":"outline","status":"complete","at":"2026-03-15T12:20:00.000Z","seq":2},
-{"kind":"step_status","step":"detail","status":"complete","at":"2026-03-15T13:00:00.000Z","seq":3}]}' > "$CLAUDE_WORKFLOW_DIR/$SID_A.json"
+{"kind":"step_status","step":"detail","status":"complete","at":"2026-03-15T13:00:00.000Z","seq":3}]}' > "$WORKFLOW_STATE_DIR/$SID_A.json"
 
 printf '%s\n' '{"events":[
 {"kind":"step_status","step":"outline","status":"complete","at":"2020-06-15T12:00:00.000Z","seq":1},
-{"kind":"step_status","step":"detail","status":"complete","at":"2020-06-15T12:30:00.000Z","seq":2}]}' > "$CLAUDE_WORKFLOW_DIR/$SID_C.json"
+{"kind":"step_status","step":"detail","status":"complete","at":"2020-06-15T12:30:00.000Z","seq":2}]}' > "$WORKFLOW_STATE_DIR/$SID_C.json"
 
 T_D1="$(node -e 'console.log(new Date(Date.now()-7200000).toISOString())')"
 T_D2="$(node -e 'console.log(new Date(Date.now()-3600000).toISOString())')"
-printf '{"events":[{"kind":"step_status","step":"outline","status":"in_progress","at":"%s","seq":1},{"kind":"step_status","step":"outline","status":"complete","at":"%s","seq":2}]}\n' "$T_D1" "$T_D2" > "$CLAUDE_WORKFLOW_DIR/$SID_D.json"
+printf '{"events":[{"kind":"step_status","step":"outline","status":"in_progress","at":"%s","seq":1},{"kind":"step_status","step":"outline","status":"complete","at":"%s","seq":2}]}\n' "$T_D1" "$T_D2" > "$WORKFLOW_STATE_DIR/$SID_D.json"
 
 TR_B="$CLAUDE_TRANSCRIPT_BASE_DIR/c--fixture-repo/$SID_B.jsonl"
 printf '%s\n' \

@@ -2,29 +2,13 @@
 # tests/bin/bin-vscode-cc-repair.sh
 # Tests: bin/vscode-cc-repair
 # Tags: bin, vscode, extension-patch, scope:common, pwsh-not-required, TL2
-#
-# TL3 gap (what this test does NOT catch):
-# - the real ~2.6 MB minified anthropic.claude-code bundle (node --check timing, latin1
-#   round-trip fidelity, and classifier behaviour on the genuine token soup)
-# - the real installed home-relative extension roots: root discovery is exercised through
-#   an injected fixture HOME/USERPROFILE, so the machine's actual ~/.vscode*/extensions
-#   tree is never read or written by this suite
-# - POSIX extension roots (.vscode-server*, WSL/remote layouts) are fixture-only by an
-#   accepted tradeoff; only the Windows host is exercised for real path normalization
-# - the two pre-rename concurrency branches (`raced` -> exit 0, `changed-during-patch` ->
-#   exit 1): only a real concurrent writer (VS Code auto-update, a second patch run)
-#   can land inside the re-read/rename window. See the Skipped-Because block in
-#   tests/bin/bin-vscode-cc-repair/failclosed-paths.sh
-# - runtime filesystem faults on the write path (.bak write, tmp write, rename,
-#   post-rename verify): same Skipped-Because block
-# Documented SKIP categories (each increments SKIP and prints why):
-# - win32 case-insensitive root dedup (T5d-2): not Windows_NT
-# - symlink root dedup (T5d-3): `ln -s` yields a copy, not a link, on this host
-# - directory-alias cases (C5-a*, C9-d*): neither `ln -s` nor `mklink /J` usable
-# - git index mode (C3-e02): AGENTS_DIR not a git repo, or the script not tracked yet
-# - direct shebang execution (C3-e03): host cannot exec an extensionless `#!` file
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: installer.
+
+# TL3 gap (what this test does NOT catch): - the real ~2.6 MB minified anthropic.claude-code bundle (node --check timing, latin1 round-trip fidelity, classifier behaviour on the genuine token soup);
+#   - the real installed home-relative extension roots: root discovery runs through an injected fixture HOME/USERPROFILE, so the machine's actual ~/.vscode*/extensions tree is never read or written; POSIX extension roots (.vscode-server*, WSL/remote layouts) are fixture-only by an accepted tradeoff — only the Windows host is exercised for real path normalization;
+#   - the two pre-rename concurrency branches (`raced` -> exit 0, `changed-during-patch` -> exit 1): only a real concurrent writer (VS Code auto-update, a second patch run) can land inside the re-read/rename window, and runtime filesystem faults on the write path (.bak write, tmp write, rename, post-rename verify) — see the Skipped-Because block in tests/bin/bin-vscode-cc-repair/failclosed-paths.sh.
+# Documented SKIP categories (each increments SKIP and prints why): win32 case-insensitive root dedup (T5d-2): not Windows_NT; symlink root dedup (T5d-3): `ln -s` yields a copy, not a link, on this host;
+#   directory-alias cases (C5-a*, C9-d*): neither `ln -s` nor `mklink /J` usable; git index mode (C3-e02): AGENTS_DIR not a git repo, or the script not tracked yet; direct shebang execution (C3-e03): host cannot exec an extensionless `#!` file.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: installer.
 
 set -euo pipefail
 
@@ -44,6 +28,9 @@ fi
 
 TMPROOT="$(mktemp -d)"
 trap 'rm -rf "$TMPROOT"' EXIT
+# isolation (#2512): pin state and plans dirs once for this file and its sourced parts.
+mkdir -p "$TMPROOT/isolation/workflow-state" "$TMPROOT/isolation/plans"
+export WORKFLOW_STATE_DIR="$TMPROOT/isolation/workflow-state" WORKFLOW_PLANS_DIR="$TMPROOT/isolation/plans"
 
 PASS=0
 FAIL=0

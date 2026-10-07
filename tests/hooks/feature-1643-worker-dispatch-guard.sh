@@ -27,6 +27,8 @@ WORKER_SCRIPT_JS="$AGENTS_DIR/hooks/enforce-worktree/main-worktree-allows/worker
 REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
 
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 PASS=0
 FAIL=0
 
@@ -331,12 +333,12 @@ mkdir -p "$CTRL_RAW_2434/$SID_2434.control"
 CTRL_PAYLOAD_2434="$CTRL_2434/$SID_2434.control/worker-test-runner-1.json"
 printf '{}' > "$CTRL_RAW_2434/$SID_2434.control/worker-test-runner-1.json"
 
-# Like overlay_verdict but also exports CLAUDE_WORKFLOW_DIR for control-dir check.
+# Like overlay_verdict but also exports WORKFLOW_STATE_DIR for control-dir check.
 overlay_verdict_ctrl() {
     local cmd="$1" repo_root="$2"
     (cd "$MAIN_RAW" && run_with_timeout 30 env \
         "WORKFLOW_PLANS_DIR=$PLANS" \
-        "CLAUDE_WORKFLOW_DIR=$CTRL_2434" \
+        "WORKFLOW_STATE_DIR=$CTRL_2434" \
         node "$PROBE_JS" "$(nodepath "$OVERLAY_JS")" "$cmd" "$ACD" "$repo_root" 2>&1)
 }
 

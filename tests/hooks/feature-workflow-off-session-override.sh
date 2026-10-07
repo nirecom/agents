@@ -46,7 +46,7 @@ NEUTRAL_CWD=""
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE" "$NEUTRAL_CWD"' EXIT
 
 # --- Fixture isolation (see rules/test/fixture-isolation.md) ---------------
-# WORKFLOW_PLANS_DIR is pinned everywhere CLAUDE_WORKFLOW_DIR is pinned, so
+# WORKFLOW_PLANS_DIR is pinned everywhere WORKFLOW_STATE_DIR is pinned, so
 # supervisor-emit never resolves the developer's real ~/.workflow-plans/.
 FIXTURE_PLANS_DIR="$TMPDIR_BASE/fixture-plans"
 FIXTURE_PROJECT_DIR="$TMPDIR_BASE/fixture-project"

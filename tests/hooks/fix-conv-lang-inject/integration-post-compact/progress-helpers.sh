@@ -86,7 +86,7 @@ _call_post_compact_with_state() {
     local sid="$1"
     local raw
     raw=$(printf '{"session_id":"%s"}' "$sid" | \
-        CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow" \
+        WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow" \
         HOME="$TMPDIR_BASE/home" \
         AGENTS_CONFIG_DIR="$EMPTY_CFG" \
         run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)

@@ -22,7 +22,7 @@ touch "$PLANS_DIR/${SID}-outline.md"
 # The waiver is read from the config FILE (isConfirmOffForStageFromFile), never
 # from process.env — see G14. CONFIG_DIR_OFF is the scratch config whose
 # contents carry CONFIRM_OUTLINE=off.
-CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
   AGENTS_CONFIG_DIR="$CONFIG_DIR_OFF" \
   run_with_timeout node "$NEXT_STEP" --session "$SID" >/dev/null 2>&1 || true
 

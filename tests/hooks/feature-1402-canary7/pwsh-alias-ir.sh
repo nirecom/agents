@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-targets.js
 # Tags: scope:issue-specific, canary-7, ir-migration, pwsh-alias, pwsh-not-required
+# isolation: inherits-from ../feature-1402-canary7.sh
 #
 # pwsh-alias retire verification (#1402 canary-7 Step 1):
 # - sc/ac/ni/ri/mi/ci WRITE_PATTERNS entries retired; isPwshWriteIR owns detection.

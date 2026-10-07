@@ -44,11 +44,11 @@ echo "--- sp 4b: the caller that owns a destructive step — finalize --ledger -
 #     Both verdicts are asserted: refused outside, performed inside.
 #     #2434: the ledger, its snapshot and unresolved-concerns.json are control
 #     files, so "inside" is now the session's control dir
-#     ($CLAUDE_WORKFLOW_DIR/<sid>.control/); --plans-dir keeps only the
+#     ($WORKFLOW_STATE_DIR/<sid>.control/); --plans-dir keeps only the
 #     concerns-log artifacts.
 
 # ctl <sid> — the control dir finalize derives from --session-id.
-ctl() { printf '%s/%s.control' "$CLAUDE_WORKFLOW_DIR" "$1"; }
+ctl() { printf '%s/%s.control' "$WORKFLOW_STATE_DIR" "$1"; }
 
 # fin <plans> <ledger> <mode> <sid> — the real CLI, one finalize. Echoes its rc.
 fin() {

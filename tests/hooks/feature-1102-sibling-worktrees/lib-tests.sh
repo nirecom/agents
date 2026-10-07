@@ -5,6 +5,8 @@
 #
 # Security/error tests are in lib-security-tests.sh.
 
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; harness_isolate "$_ISOLATION_TMP_ROOT"
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
 # ---- SW1: siblingWorktrees with one entry → section with entry line ----

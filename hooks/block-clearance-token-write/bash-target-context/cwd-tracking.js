@@ -25,7 +25,7 @@ function staticPathArg(rawArg) {
   if (typeof rawArg !== "string" || rawArg === "" || rawArg[0] === "-") return null;
   const t = unquoteBashWord(rawArg);
   if (t === "") return null;
-  // A known alias with an unplaceable operator (`cd ${CLAUDE_WORKFLOW_DIR:+x}`) may land in
+  // A known alias with an unplaceable operator (`cd ${WORKFLOW_STATE_DIR:+x}`) may land in
   // the workflow dir, so the cd is modelled as landing there (fail closed, detection direction).
   if (dirSpellingFailsClosed(t)) return resolveWorkflowDir();
   const resolved = resolveDirSpelling(t);
@@ -34,7 +34,7 @@ function staticPathArg(rawArg) {
 }
 
 // commandCwd() must recognize every spelling of "change directory", not just
-// `cd` — `pushd "$CLAUDE_WORKFLOW_DIR" && printf x | tee *` is really inside
+// `cd` — `pushd "$WORKFLOW_STATE_DIR" && printf x | tee *` is really inside
 // the workflow dir when `*` expands, but an unrecognized `pushd` would leave
 // the tracked cwd stale and the glob containment check blind. Widening the
 // set is safe by construction (DETECTION direction: recognizing one more

@@ -43,11 +43,6 @@ check() { # <desc> <want> <got>
   if [ "$3" = "$2" ]; then pass "$1"; else fail "$1 -- want [$2] got [$3]"; fi
 }
 
-# Portable timeout (macOS has no `timeout`) — rules/test/macos-timeout.md.
-run_with_timeout() { # <seconds> <cmd> [args...]
-  bash "$REPO_ROOT/bin/run-with-timeout.sh" "$@"
-}
-
 HAVE_NODE=0
 command -v node >/dev/null 2>&1 && HAVE_NODE=1
 
@@ -96,7 +91,7 @@ body_text() { # <file>
 }
 
 # ---- fixture isolation (rules/test/fixture-isolation.md) --------------------
-# CLAUDE_WORKFLOW_DIR and WORKFLOW_PLANS_DIR are pinned as a PAIR: pinning only
+# WORKFLOW_STATE_DIR and WORKFLOW_PLANS_DIR are pinned as a PAIR: pinning only
 # the first is the known contamination bug, where hooks read the fixture but the
 # supervisor emitter still appends to the developer's real ~/.workflow-plans.
 # resolve-session-id / resolve-worktree-path both reach workflow state, so the
@@ -106,10 +101,16 @@ TESTTMP="$(mktemp -d "${TMPDIR:-/tmp}/fix-1532-node-guard.XXXXXX")" || {
   exit 2
 }
 trap 'cd / 2>/dev/null; rm -rf "$TESTTMP"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TESTTMP/workflow"
+export WORKFLOW_STATE_DIR="$TESTTMP/workflow"
 export WORKFLOW_PLANS_DIR="$TESTTMP/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID SESSION_ID
+
+# Portable timeout (macOS has no `timeout`) — rules/test/macos-timeout.md.
+# Defined after the pins above so no bin/ exec can run before isolation (#2512).
+run_with_timeout() { # <seconds> <cmd> [args...]
+  bash "$REPO_ROOT/bin/run-with-timeout.sh" "$@"
+}
 
 # Everything else the targets branch on, unset explicitly rather than assumed
 # absent (review-tests C2). CLAUDE_TRANSCRIPT_BASE_DIR feeds the transcript scan,

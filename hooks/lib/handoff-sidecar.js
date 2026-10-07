@@ -2,13 +2,13 @@
 // Small JSON sidecars next to the handoff artifact (#2430): the nudge baseline,
 // the flush mark and the risk stamp. Each file has exactly one writer; this
 // module only owns the path rule and the tmp + rename write, never the contents.
-// They are control files: <CLAUDE_WORKFLOW_DIR>/<sid>.control/<suffix>.
+// They are control files: <WORKFLOW_STATE_DIR>/<sid>.control/<suffix>.
 
 const fs = require("fs");
 const { controlPath, diagnoseControlMigration } = require("../workflow-state/state-io/control-dir");
 const { SESSION_ID_VALID_RE } = require("../workflow-state/state-io/core");
 
-// <CLAUDE_WORKFLOW_DIR>/<sid>.control/<suffix>, or null for an invalid sid (path-traversal guard).
+// <WORKFLOW_STATE_DIR>/<sid>.control/<suffix>, or null for an invalid sid (path-traversal guard).
 // Throws only what controlPath throws (refused control dir, migration conflict).
 function sidecarPath(sid, suffix, opts) {
   if (typeof sid !== "string" || !SESSION_ID_VALID_RE.test(sid)) return null;

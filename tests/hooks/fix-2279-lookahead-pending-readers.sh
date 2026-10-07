@@ -52,7 +52,7 @@ np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf 
 # hooks/postuse-step-in-flight-mark.js passes, so the lookahead fixture is the
 # hook's own write without spawning the hook (this file is TL1).
 seed_mark() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" ST="$3" ORIGIN="$4" \
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" ST="$3" ORIGIN="$4" \
         "$RWT" 20 node -e "
 require('$SIO').markStep(process.env.SID, process.env.ST, 'in_progress', {},
   { provenance: 'observed', origin: process.env.ORIGIN });" >/dev/null 2>&1
@@ -61,17 +61,17 @@ require('$SIO').markStep(process.env.SID, process.env.ST, 'in_progress', {},
 # seed_complete <tn> <sid> <step> — a finished step, so a later in_progress mark
 # sits mid-workflow rather than at the very front of VALID_STEPS.
 seed_complete() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" ST="$3" \
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" ST="$3" \
         "$RWT" 20 node -e "
 require('$SIO').markStep(process.env.SID, process.env.ST, 'complete');" >/dev/null 2>&1
 }
 
 # seed_untouched <tn> <sid> — a state file that exists and records nothing.
 seed_untouched() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" "$RWT" 20 node -e "
 const io = require('$SIO');
 io.writeState(process.env.SID, io.readState(process.env.SID) || undefined);" >/dev/null 2>&1
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" "$RWT" 20 node -e "
 require('$SIO').markStep(process.env.SID, 'research', 'pending');" >/dev/null 2>&1
 }
 
@@ -79,13 +79,13 @@ require('$SIO').markStep(process.env.SID, 'research', 'pending');" >/dev/null 2>
 # the answer. Asserted as a fixture anchor: when it disagrees with the fixture,
 # L1/L4's verdicts are about a state that is not the one under test.
 lookahead_only() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 20 node -e "
 process.stdout.write(String(require('$LIFECYCLE').isLookaheadOnlyInFlight('$2', '$3')));" 2>/dev/null
 }
 
 # all_pending <tn> <sid> — adopt.js's own gate, over the real projected state.
 all_pending() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" SID="$2" "$RWT" 20 node -e "
 const { readState } = require('$SIO');
 const { isAllPending } = require('$ADOPT');
 process.stdout.write(String(isAllPending(readState(process.env.SID))));" 2>/dev/null
@@ -93,7 +93,7 @@ process.stdout.write(String(isAllPending(readState(process.env.SID))));" 2>/dev/
 
 # detect_type <tn> <sid> — bin/resume-session-detect's detect(), in-process.
 detect_type() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" CLAUDE_CODE_SESSION_ID="$2" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" CLAUDE_CODE_SESSION_ID="$2" "$RWT" 20 node -e "
 const r = require('$DETECT_CLI').detect();
 process.stdout.write(String(r && r.type) + ':' + String((r && r.step) || '-'));" 2>/dev/null
 }

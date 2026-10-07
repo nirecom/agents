@@ -44,7 +44,7 @@ require_writer() {
 # Written directly (not via writeAlertState) so seeds can bypass transition validation.
 seed_alert() {
     local tmp="$1" sid="$2" phase="$3" armed_at="$4" retry_count="$5" eligible="${6:-null}"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -70,7 +70,7 @@ run_t1() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="t1-sid"
     seed_alert "$tmp" "$sid" "'closed'" "null" "0"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'post-close finding', reporter: 't' });
 const st = w.readState('$sid');
@@ -95,7 +95,7 @@ run_t2() {
     tmp="$(mktemp -d)"; sid="t2-sid"
     seed_alert "$tmp" "$sid" "'closed'" "null" "0" "'post_final_report_window'"
     mkdir -p "$tmp/wf/${sid}.control"; touch "$tmp/wf/${sid}.control/final-report-env.json"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -118,7 +118,7 @@ run_t3() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="t3-sid"
     seed_alert "$tmp" "$sid" "'paused'" "null" "2"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
@@ -197,7 +197,7 @@ run_t6() {
     tmp="$(mktemp -d)"; sid="t6-sid"
     # Seed with eligible_phase set and phase=null so null->closed is a valid transition.
     seed_alert "$tmp" "$sid" "null" "null" "0" "'post_final_report_window'"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.writeAlertState('$sid', { alert_phase: 'closed' });
 if (ok !== true) { console.error('writeAlertState returned: '+JSON.stringify(ok)); process.exit(2); }

@@ -10,6 +10,8 @@ set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 HOOK="$AGENTS_DIR/hooks/show-plan-link.js"
 ERRORS=0
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"
 
 SPL_NI=""
 [ -f "$AGENTS_DIR/hooks/lib/plan-sync.js" ] || SPL_NI=" [not implemented: #2513 breadcrumb, hooks/lib/plan-sync.js absent]"
@@ -30,19 +32,20 @@ run_with_timeout() {
 # on Windows, MSYS2 converts /tmp/... env vars to C:/Users/.../Temp/... but
 # the JSON stdin value stays POSIX-form; using Node's tmpdir avoids the mismatch.
 NODE_TMPDIR="$(run_with_timeout node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
-PLANS_DIR="${NODE_TMPDIR}/show-plan-link-test-$$"
-WORKFLOW_DIR_TEST="${NODE_TMPDIR}/show-plan-link-wf-$$"
-CFG_DIR_TEST="${NODE_TMPDIR}/show-plan-link-cfg-$$"
-mkdir -p "$PLANS_DIR" "$WORKFLOW_DIR_TEST" "$CFG_DIR_TEST"
-trap 'rm -rf "$PLANS_DIR" "$WORKFLOW_DIR_TEST" "$CFG_DIR_TEST"' EXIT
-export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_TEST"
+# isolation (#2512): pin state and plans dirs once for this file, rooted in Node's tmpdir form for the reason above.
+_ISOLATION_TMP_ROOT="${NODE_TMPDIR}/show-plan-link-test-$$"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+PLANS_DIR="$WORKFLOW_PLANS_DIR"
+WORKFLOW_DIR_TEST="$WORKFLOW_STATE_DIR"
+CFG_DIR_TEST="$_ISOLATION_TMP_ROOT/cfg"
+mkdir -p "$CFG_DIR_TEST"
 # #2513: plan-sync off (empty export + empty config dir .env), so every
 # breadcrumb is the local path plus the "not configured" line.
 export AGENTS_CONFIG_DIR="$CFG_DIR_TEST"
 export PLAN_SYNC_REMOTE_URL=""
 OFF_LINE="[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # Unset VS Code detection vars by default (restored per-test that needs them).
 unset TERM_PROGRAM 2>/dev/null || true
@@ -136,6 +139,18 @@ expect_message_with_env() {
     fail "$desc — .systemMessage does not contain '$expected': $msg"
   fi
 }
+
+# ── Isolation (#2512): the turn marker lands under the pinned state dir ─────
+# Runs before the groups: plan-sync-breadcrumb.sh re-pins both dirs via psf_setup
+# and deletes them on cleanup, so only here does the file-level pin still hold.
+ISO_SID="25120000-0000-4000-8000-000000002512"
+echo "{\"session_id\":\"$ISO_SID\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/iso-detail.md\"},\"tool_response\":{\"success\":true}}" \
+  | run_with_timeout node "$HOOK" >/dev/null 2>&1
+if compgen -G "$WORKFLOW_STATE_DIR/$ISO_SID.confirm-plan-turn-*.json" >/dev/null; then
+  pass "turn marker lands under \$WORKFLOW_STATE_DIR"
+else
+  fail "turn marker not found under \$WORKFLOW_STATE_DIR ($WORKFLOW_STATE_DIR)"
+fi
 
 # ── Source test groups ─────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

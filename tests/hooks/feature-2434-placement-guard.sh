@@ -31,15 +31,15 @@ DISPATCH_JS="$AGENTS_DIR/hooks/block-clearance-token-write/dispatch.js"
 HOOK_PRESENT=no;  [ -f "$HOOK" ]     && HOOK_PRESENT=yes
 GUARD_PRESENT=no; [ -f "$GUARD_JS" ] && GUARD_PRESENT=yes
 
-WFN="$(np "$CLAUDE_WORKFLOW_DIR")"
+WFN="$(np "$WORKFLOW_STATE_DIR")"
 PLDN="$(np "$WORKFLOW_PLANS_DIR")"
 SID="aa000000-0000-4000-8000-000000001234"
 DATE_SID="20260601-120000"
 DERIVED_SID="cc000000-0000-4000-8000-000000003333-b1"
 
 # Create sid.json so the session is "known"
-printf '{}' > "$CLAUDE_WORKFLOW_DIR/$SID.json"
-mkdir -p "$CLAUDE_WORKFLOW_DIR/$SID.control"
+printf '{}' > "$WORKFLOW_STATE_DIR/$SID.json"
+mkdir -p "$WORKFLOW_STATE_DIR/$SID.control"
 
 # ── local verdict helpers ──────────────────────────────────────────
 # The hook always sees the one plans root the targets below are built from
@@ -47,7 +47,7 @@ mkdir -p "$CLAUDE_WORKFLOW_DIR/$SID.control"
 local_run_hook() {
     local tn="$1" input="$2" out rc
     [ "$HOOK_PRESENT" = "yes" ] || { printf 'absent|'; return; }
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$PLDN" AGENTS_CONFIG_DIR="$AGENTS_N" \
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$PLDN" AGENTS_CONFIG_DIR="$AGENTS_N" \
         "$RWT" 12 node "$HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
@@ -112,20 +112,20 @@ expect_unchanged() {
 }
 
 # Fake HOME whose ~/.claude/projects/workflow is the workflow dir, so the $HOME /
-# ~ / ${CLAUDE_WORKFLOW_DIR} spellings all name the same known session.
+# ~ / ${WORKFLOW_STATE_DIR} spellings all name the same known session.
 fake_home_enter() {
     FAKE_HOME="$(make_tmp)"
     ORIG_HOME="$HOME"
     export HOME="$FAKE_HOME"
-    export CLAUDE_WORKFLOW_DIR="$FAKE_HOME/.claude/projects/workflow"
-    mkdir -p "$CLAUDE_WORKFLOW_DIR/$SID.control"
-    printf '{"sid":"%s"}' "$SID" > "$CLAUDE_WORKFLOW_DIR/$SID.json"
-    WFNA="$(np "$CLAUDE_WORKFLOW_DIR")"
+    export WORKFLOW_STATE_DIR="$FAKE_HOME/.claude/projects/workflow"
+    mkdir -p "$WORKFLOW_STATE_DIR/$SID.control"
+    printf '{"sid":"%s"}' "$SID" > "$WORKFLOW_STATE_DIR/$SID.json"
+    WFNA="$(np "$WORKFLOW_STATE_DIR")"
 }
 fake_home_leave() {
     export HOME="$ORIG_HOME"
-    export CLAUDE_WORKFLOW_DIR="$TMP/workflow-state"
-    printf '{}' > "$CLAUDE_WORKFLOW_DIR/$SID.json"
+    export WORKFLOW_STATE_DIR="$TMP/workflow-state"
+    printf '{}' > "$WORKFLOW_STATE_DIR/$SID.json"
     rm -rf "$FAKE_HOME" 2>/dev/null || true
 }
 

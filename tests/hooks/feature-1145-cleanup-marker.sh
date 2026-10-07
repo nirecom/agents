@@ -3,7 +3,7 @@
 # Tests: hooks/lib/worktree-cleanup-marker.js, hooks/lib/worktree-end-env-anchor.js
 # Tags: scope:issue-specific, pwsh-not-required, worktree-end, cleanup-marker, control-dir
 # L1 unit tests for the worktree-cleanup-marker.js CLI (create/delete of <workflow-dir>/<sid>.control/wt-cleanup-active).
-# Each case dual-pins CLAUDE_WORKFLOW_DIR (<tmp>/wf) and WORKFLOW_PLANS_DIR (<tmp>/plans) to its own fixture.
+# Each case dual-pins WORKFLOW_STATE_DIR (<tmp>/wf) and WORKFLOW_PLANS_DIR (<tmp>/plans) to its own fixture.
 #
 # L3 gap (what this test does NOT catch):
 # - The marker CLI being invoked at the correct WE steps inside a live claude -p session.
@@ -47,7 +47,7 @@ legacy_at() { printf '%s/plans/%s-wt-cleanup-active' "$1" "$2"; }
 # marker_cli <tmp> <args...> — run the marker CLI with both dirs pinned to the fixture.
 marker_cli() {
     local tmp="$1"; shift
-    CLAUDE_WORKFLOW_DIR="$(tmp_node_for "$tmp/wf")" WORKFLOW_PLANS_DIR="$(tmp_node_for "$tmp/plans")" \
+    WORKFLOW_STATE_DIR="$(tmp_node_for "$tmp/wf")" WORKFLOW_PLANS_DIR="$(tmp_node_for "$tmp/plans")" \
         run_with_timeout 10 node "$MARKER_NODE" "$@"
 }
 
@@ -61,7 +61,7 @@ fi
 # Helper: check if isWorktreeEndEnv returns true/false for given fixture + sid
 call_anchor() {
     local tmp="$1" sid="$2"
-    CLAUDE_WORKFLOW_DIR="$(tmp_node_for "$tmp/wf")" WORKFLOW_PLANS_DIR="$(tmp_node_for "$tmp/plans")" \
+    WORKFLOW_STATE_DIR="$(tmp_node_for "$tmp/wf")" WORKFLOW_PLANS_DIR="$(tmp_node_for "$tmp/plans")" \
         run_with_timeout 10 node -e "
 const { isWorktreeEndEnv } = require('$ANCHOR_NODE');
 console.log(isWorktreeEndEnv('$sid') ? 'true' : 'false');

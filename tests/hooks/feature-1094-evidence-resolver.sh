@@ -24,8 +24,8 @@ RESOLVER="$(cygpath -m "$RESOLVER" 2>/dev/null || echo "$RESOLVER")"
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
-mkdir -p "$CLAUDE_WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_STATE_DIR"
 
 PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$PLANS_DIR"

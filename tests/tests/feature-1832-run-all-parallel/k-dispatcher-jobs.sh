@@ -29,7 +29,6 @@ assert_eq() {
     if [ "$want" = "$got" ]; then pass "$name"
     else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
-run_with_timeout() { local s="$1"; shift; bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
 
 if [ ! -f "$DISPATCH_JS" ] || [ ! -f "$REAL_RUNNER" ]; then
     fail "k-jobs/prerequisites" "dispatcher=$DISPATCH_JS runner=$REAL_RUNNER"
@@ -44,13 +43,15 @@ trap cleanup EXIT
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 # --- fixture isolation (rules/test/fixture-isolation.md) --------------------
-export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 FIX_HOME="$TMPD/home"; mkdir -p "$FIX_HOME/.claude"
+# Defined after the pins above so no bin/ exec can run before isolation (#2512).
+run_with_timeout() { local s="$1"; shift; bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
 
 # --- git family fixture -----------------------------------------------------
 MAIN_RAW="$TMPD/mainrepo"

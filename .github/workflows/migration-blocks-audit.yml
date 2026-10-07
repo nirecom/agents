@@ -23,3 +23,8 @@ jobs:
         env:
           AGENTS_CONFIG_DIR: ${{ github.workspace }}
         run: node bin/check-plans-artifacts --source
+
+      - name: Check test fixture isolation (pin order + residual old-name token)
+        env:
+          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+        run: bash bin/check-plans-dir-isolation.sh

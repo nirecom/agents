@@ -70,7 +70,7 @@ run_R5_containment() {
     root_wf="$root/real/wf"
     wf_n=$(node_path "$root_wf"); alias_n=$(node_path "$alias_dir"); out_n=$(node_path "$outside")
 
-    _R5_PROBE_OUT=$(CLAUDE_WORKFLOW_DIR="$wf_n" WORKFLOW_PLANS_DIR="$wf_n" \
+    _R5_PROBE_OUT=$(WORKFLOW_STATE_DIR="$wf_n" WORKFLOW_PLANS_DIR="$wf_n" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 20 node "$probe" \
         "$_AGENTS_DIR_NODE" "$wf_n" "$alias_n" "$out_n" 2>/dev/null)
     if [ -z "$_R5_PROBE_OUT" ]; then

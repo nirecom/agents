@@ -19,6 +19,11 @@ else
 fi
 GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
 
+# isolation (#2512): pin both dirs before the first node call; the EXIT trap below removes the root.
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 PASS=0
 FAIL=0
 
@@ -32,7 +37,7 @@ fs.mkdirSync(d,{recursive:true});
 console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_BASE"' EXIT
+trap 'rm -rf "$TMPDIR_BASE" "$_ISOLATION_TMP_ROOT"' EXIT
 
 run_with_timeout() {
     local secs="$1"; shift

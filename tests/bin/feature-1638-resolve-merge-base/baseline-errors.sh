@@ -182,13 +182,13 @@ e6_post_session_head_boundary() {
   node_state init "$sid" "$repo" work "2099-01-01T00:00:00.000Z" >/dev/null
   node_state record "$sid" "$repo" >/dev/null
   check "E6-before: a HEAD committed before the session started owes no note" "false" \
-    "$(env "AGENTS_DIR=$AGENTS_DIR" "CLAUDE_WORKFLOW_DIR=$WFDIR" node "$STATE_JS" field "$sid" post_session_head 2>/dev/null)"
+    "$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" post_session_head 2>/dev/null)"
 
   sid="sid-e6-after"
   node_state init "$sid" "$repo" work "1990-01-01T00:00:00.000Z" >/dev/null
   node_state record "$sid" "$repo" >/dev/null
   check "E6-after: a HEAD committed after it does" "true" \
-    "$(env "AGENTS_DIR=$AGENTS_DIR" "CLAUDE_WORKFLOW_DIR=$WFDIR" node "$STATE_JS" field "$sid" post_session_head 2>/dev/null)"
+    "$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" post_session_head 2>/dev/null)"
 }
 
 # A write that cannot complete must leave what was already stored intact. A baseline is read by

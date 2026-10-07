@@ -27,7 +27,7 @@ d2099pc_run() {
     (
         # Same cygpath -m requirement as the H-ENV cases: native-Windows node
         # misresolves an untranslated POSIX path against the wrong drive root.
-        export CLAUDE_WORKFLOW_DIR="$(to_node_path "$wf")"
+        export WORKFLOW_STATE_DIR="$(to_node_path "$wf")"
         export WORKFLOW_PLANS_DIR="$(to_node_path "$pl")"
         run_with_timeout "$@"
     )

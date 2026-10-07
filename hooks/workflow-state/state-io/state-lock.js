@@ -20,6 +20,7 @@ const STALE_MS = 30000;
 const DEFAULT_TIMEOUT_MS = 3000;
 const MIN_BACKOFF_MS = 5;
 const MAX_BACKOFF_MS = 25;
+const MAX_REACQUIRE = 2;
 
 class StateLockTimeoutError extends Error {
   constructor(message) {
@@ -142,18 +143,56 @@ function withStateLock(sessionId, fn, opts = {}) {
 
   const timeoutMs =
     typeof opts.timeoutMs === "number" && opts.timeoutMs > 0 ? opts.timeoutMs : DEFAULT_TIMEOUT_MS;
+  let held = lockPath;
+  acquire(held, timeoutMs);
+  // --- BEGIN temporary: ~/.claude/projects/workflow -> ~/.workflow-state migration added 2026-10-04 ---
+  // deletion-condition: remove when bin/state-dir-relocation remaining exits 0 (no session with a <sid>.json or <sid>.control left in the legacy dir, any sid shape); also delete skills/session-close SC-9; review by 2027-01-04
+  // A relocation that committed while we waited moves the state: re-take the lock at the new path.
+  for (let retry = 0; ; retry++) {
+    const now = lockPathFor(sessionId);
+    if (now === held) break;
+    releaseLockFile(held);
+    if (retry >= MAX_REACQUIRE) {
+      throw new StateLockTimeoutError(`workflow state lock moved more than ${MAX_REACQUIRE} times: ${now}`);
+    }
+    held = now;
+    acquire(held, timeoutMs);
+  }
+  // --- END temporary: ~/.claude/projects/workflow -> ~/.workflow-state migration ---
+  heldLocks.set(held, 1);
+  try {
+    return fn();
+  } finally {
+    heldLocks.delete(held);
+    releaseLockFile(held);
+  }
+}
+
+function releaseLockFile(lockPath) {
+  try {
+    fs.unlinkSync(lockPath);
+  } catch (e) {
+    /* already reclaimed */
+  }
+}
+
+// --- BEGIN temporary: ~/.claude/projects/workflow -> ~/.workflow-state migration added 2026-10-04 ---
+// deletion-condition: remove when bin/state-dir-relocation remaining exits 0 (no session with a <sid>.json or <sid>.control left in the legacy dir, any sid shape); also delete skills/session-close SC-9; review by 2027-01-04
+// withStateLockAt(lockPath, fn, opts): the relocation takes the new-root lock before its
+// commit makes lockPathFor() resolve there. Registered for re-entrancy like withStateLock.
+function withStateLockAt(lockPath, fn, opts = {}) {
+  const timeoutMs =
+    typeof opts.timeoutMs === "number" && opts.timeoutMs > 0 ? opts.timeoutMs : DEFAULT_TIMEOUT_MS;
+  if (heldLocks.has(lockPath)) throw new Error(`state lock already held: ${lockPath}`);
   acquire(lockPath, timeoutMs);
   heldLocks.set(lockPath, 1);
   try {
     return fn();
   } finally {
     heldLocks.delete(lockPath);
-    try {
-      fs.unlinkSync(lockPath);
-    } catch (e) {
-      /* already reclaimed */
-    }
+    releaseLockFile(lockPath);
   }
 }
+// --- END temporary: ~/.claude/projects/workflow -> ~/.workflow-state migration ---
 
-module.exports = { withStateLock, StateLockTimeoutError, STALE_MS };
+module.exports = { withStateLock, withStateLockAt, StateLockTimeoutError, STALE_MS };

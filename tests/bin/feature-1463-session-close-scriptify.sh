@@ -3,18 +3,18 @@
 # Tests: bin/render-final-report.js, bin/session-close-detect-wf-meta.js, bin/session-close-render-sc7.js, hooks/lib/final-report-schema.js, hooks/stop-final-report-guard.js, skills/session-close/SKILL.md
 # Tags: scope:issue-specific
 #
-# Issue #1463 — scriptify session-close/SKILL.md.
-# The SC-6 Final Report emit and its `node -e` helpers move out of SKILL.md into
-# three bin/ scripts. This suite verifies those scripts render the full Final
-# Report with no unresolved guard tokens, plus structural assertions on SKILL.md.
-#
-# This is a dispatcher (file-split rule: >500 lines). Series live in
-# feature-1463-session-close-scriptify/: render-tests.sh (bin/render-final-report.js
-# existence + rendering, T1-T9/T7b/T7c/T19-T21), detect-sc7-tests.sh
-# (bin/session-close-detect-wf-meta.js + bin/session-close-render-sc7.js,
-# T10-T18), structural-tests.sh (SKILL.md + guard structural assertions, S1-S7).
+# Issue #1463 — the SC-6 Final Report emit moves out of session-close/SKILL.md into three bin/
+# scripts. Dispatcher (file-split rule) for feature-1463-session-close-scriptify/: render-tests.sh
+# (T1-T9/T7b/T7c/T19-T21), detect-sc7-tests.sh (T10-T18), structural-tests.sh (S1-S7).
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# isolation (#2512): pin state and plans dirs once here so every series inherits them.
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 TOTAL_PASS=0
 TOTAL_FAIL=0
 TOTAL_SKIP=0

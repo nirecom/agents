@@ -2,23 +2,15 @@
 # fix-1138-workflow-gate-cross-repo.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/repo-resolution.js
 # Tags: scope:issue-specific
-# L3 gap (what this test does NOT catch):
-# - Real Claude Code PreToolUse hook firing path (only exercises node hook directly)
-# - Windows-vs-WSL CWD drift behavior in the real VS Code extension host
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-#
+# L3 gap (what this test does NOT catch): the real Claude Code PreToolUse hook firing path (only exercises node hook directly); Windows-vs-WSL CWD drift behavior in the real VS Code extension host.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
+
 # Covers two issues:
-#   #1138 — cross-repo bypass: commits to a repo OTHER than the agents session
-#           repo must skip agents workflow-state enforcement (approve).
-#   #1112 — cleanup exemption: cleanup=pending must be exempted in a linked
-#           worktree context (parallel to the user_verification exemption),
-#           but must still block in the main worktree context.
-#
-# TDD status: the source changes (isAgentsSessionRepo + cross-repo bypass for
-# #1138, and the cleanup isWorktreeContext() exemption for #1112) do NOT exist
-# yet. Cases marked "RED until impl" are expected to FAIL against current source.
-# Each such case prints "(expected RED until <issue> implemented)" on failure.
+#   #1138 — cross-repo bypass: commits to a repo OTHER than the agents session repo must skip agents workflow-state enforcement (approve).
+#   #1112 — cleanup exemption: cleanup=pending must be exempted in a linked worktree context (parallel to the user_verification exemption), but must still block in the main worktree context.
+
+# TDD status: the source changes (isAgentsSessionRepo + cross-repo bypass for #1138, and the cleanup isWorktreeContext() exemption for #1112) do NOT exist yet.
+# Cases marked "RED until impl" are expected to FAIL against current source; each prints "(expected RED until <issue> implemented)" on failure.
 
 set -u
 
@@ -49,13 +41,17 @@ source "$SCRIPT_DIR/feature-robust-workflow/helpers.sh"
 TMP_ROOT="$(run_with_timeout node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
 TEST_ROOT="$TMP_ROOT/fix-1138-cross-repo-$$"
 mkdir -p "$TEST_ROOT"
-trap 'rm -rf "$TEST_ROOT" 2>/dev/null || true' EXIT
+# This trap replaces the helpers.sh one, so it also removes that file's $TMPDIR_BASE (#2512).
+trap 'rm -rf "$TEST_ROOT" "$TMPDIR_BASE" 2>/dev/null || true' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TEST_ROOT/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR="$TEST_ROOT/workflow-state"
+mkdir -p "$WORKFLOW_STATE_DIR"
 
 # Build a fresh git repo at $1. core.hooksPath is emptied so the agents
 # pre-commit hook (ENFORCE_WORKTREE / scan-outbound) does not fire on the
@@ -118,7 +114,7 @@ JSON
 # $1=workflow_dir $2=project_dir $3=agents_config_dir $4=hook_input_json
 run_gate_win() {
     local wfdir="$1" projdir="$2" agentsdir="$3" json="$4"
-    echo "$json" | CLAUDE_PROJECT_DIR="$projdir" CLAUDE_WORKFLOW_DIR="$wfdir" \
+    echo "$json" | CLAUDE_PROJECT_DIR="$projdir" WORKFLOW_STATE_DIR="$wfdir" \
         AGENTS_CONFIG_DIR="$agentsdir" run_with_timeout node "$GATE_HOOK" 2>/dev/null || true
 }
 

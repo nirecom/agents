@@ -28,16 +28,16 @@ PWSH_JS="$AGENTS_DIR/hooks/lib/bash-write-targets/pwsh.js"
 
 DETECT_PRESENT=no; [ -f "$DETECT_JS" ] && DETECT_PRESENT=yes
 
-WFN="$(np "$CLAUDE_WORKFLOW_DIR")"
+WFN="$(np "$WORKFLOW_STATE_DIR")"
 SID="aa000000-0000-4000-8000-000000001001"
 OTHER_SID="bb000000-0000-4000-8000-000000002002"
-printf '{}' > "$CLAUDE_WORKFLOW_DIR/$SID.json"
+printf '{}' > "$WORKFLOW_STATE_DIR/$SID.json"
 
 # ── local run-hook helper (equivalent to clearance-hook-harness; not mixed-source) ──
 local_run_hook() {
     local tn="$1" input="$2" out rc
     [ -f "$HOOK" ] || { printf 'absent|'; return; }
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")" AGENTS_CONFIG_DIR="$AGENTS_N" \
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")" AGENTS_CONFIG_DIR="$AGENTS_N" \
         "$RWT" 12 node "$HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
@@ -107,8 +107,8 @@ done <<'TABLE'
 ~/__WF__/x                              | aliasUnresolved | false
 $HOME/__WF__/x                          | aliasUnresolved | false
 ${HOME}/__WF__/x                        | aliasUnresolved | false
-$CLAUDE_WORKFLOW_DIR/x                  | aliasUnresolved | false
-${CLAUDE_WORKFLOW_DIR}/x               | aliasUnresolved | false
+$WORKFLOW_STATE_DIR/x                  | aliasUnresolved | false
+${WORKFLOW_STATE_DIR}/x               | aliasUnresolved | false
 $WORKFLOW_PLANS_DIR/x                   | aliasUnresolved | false
 ${WORKFLOW_PLANS_DIR}/x                | aliasUnresolved | false
 ${WORKFLOW_PLANS_DIR:-__PLANS__}/x     | aliasUnresolved | false
@@ -132,7 +132,7 @@ while IFS='|' read -r tok fld want; do
         assert_eq "$got" "$want"
     fi
 done <<'TABLE'
-${CLAUDE_WORKFLOW_DIR:+x}              | aliasUnresolved | true
+${WORKFLOW_STATE_DIR:+x}              | aliasUnresolved | true
 ${WORKFLOW_PLANS_DIR%suffix}           | aliasUnresolved | true
 ${WORKFLOW_PLANS_DIR#prefix}           | aliasUnresolved | true
 ${WORKFLOW_PLANS_DIR/old/new}          | aliasUnresolved | true
@@ -161,7 +161,7 @@ else
 fi
 
 # env var pointing at control dir → path under control dir (blocked)
-export _TEST_CTL_VAR="$CLAUDE_WORKFLOW_DIR/$SID.control"
+export _TEST_CTL_VAR="$WORKFLOW_STATE_DIR/$SID.control"
 CTL_TOK="\$_TEST_CTL_VAR/round-number.txt"
 GOT_PATH="$(expand_field "$CTL_TOK" 'path')"
 if [ "$GOT_PATH" = "ERR:absent" ]; then
@@ -174,7 +174,7 @@ else
         *) GOT_PATH="$(np "$GOT_PATH")" ;;
     esac
     case "$GOT_PATH" in
-        "$(np "$CLAUDE_WORKFLOW_DIR")/"*) pass "env-var-to-control-dir path under wf dir" ;;
+        "$(np "$WORKFLOW_STATE_DIR")/"*) pass "env-var-to-control-dir path under wf dir" ;;
         undefined|ERR:*) fail "env-var-to-control-dir path unexpected: $GOT_PATH" ;;
         *) fail "env-var-to-control-dir path not under wf dir: $GOT_PATH" ;;
     esac
@@ -248,9 +248,9 @@ case_end
 # ════════════════════════════════════════════════════════════════════
 case_begin "other-session-gate" "hooks/enforce-worktree/bash-write-scope/marker-gate.js"
 
-# targetsHitOtherSessionWorkflowState must block ${CLAUDE_WORKFLOW_DIR}/<other>.control/x
+# targetsHitOtherSessionWorkflowState must block ${WORKFLOW_STATE_DIR}/<other>.control/x
 # and $HOME/.claude/projects/workflow/<other>.json (after detection-expand integration).
-OTHER_CTL_TOK="\${CLAUDE_WORKFLOW_DIR}/$OTHER_SID.control/x"
+OTHER_CTL_TOK="\${WORKFLOW_STATE_DIR}/$OTHER_SID.control/x"
 GOT_GATE="$("$RWT" 8 node -e "
 try {
   const g = require(process.argv[1] + '/hooks/enforce-worktree/bash-write-scope/marker-gate.js');
@@ -277,9 +277,9 @@ case_begin "source-only-rename-out-of-control" "hooks/lib/bash-write-targets/cp-
 # is protected, so destination-only detection would let these through. Both
 # directions are driven through the real hook, and the protected source must
 # stay byte-identical.
-mkdir -p "$CLAUDE_WORKFLOW_DIR/$SID.control"
+mkdir -p "$WORKFLOW_STATE_DIR/$SID.control"
 CTL="$WFN/$SID.control"
-SRC_FILE="$CLAUDE_WORKFLOW_DIR/$SID.control/detail-plan-terminal.txt"
+SRC_FILE="$WORKFLOW_STATE_DIR/$SID.control/detail-plan-terminal.txt"
 printf 'terminal round=3\n' > "$SRC_FILE"
 SRC_BEFORE="$(cksum < "$SRC_FILE" | tr -d ' \t\r\n')"
 T4="$(make_tmp)"

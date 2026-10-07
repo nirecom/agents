@@ -88,7 +88,7 @@ dispatch() {
     local payload="$1"; shift
     printf '%s' "$payload" > "$PLANS_RAW/p.json"
     DRC=0
-    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" "$@" \
+    DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" "$@" \
         node "$(nodepath "$DISPATCH_JS")" worktree-backup "$MAIN" "$(nodepath "$PLANS_RAW/p.json")" 2>/dev/null)" || DRC=$?
 }
 field_of() {

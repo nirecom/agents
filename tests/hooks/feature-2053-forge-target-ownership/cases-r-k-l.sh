@@ -99,10 +99,10 @@ run_block_r_k_l() {
     # escape hatches must NOT switch it off.
     reset_env
     run_case "$FX_FOREIGN" "echo warmup"
-    : > "$CLAUDE_WORKFLOW_DIR/$SID.workflow-off"
+    : > "$WORKFLOW_STATE_DIR/$SID.workflow-off"
     resume_case "$FX_FOREIGN" "gh issue create --title x"
     assert_decision "L-1 a .workflow-off marker does not silence the guard -> ask" "ask"
-    rm -f "$CLAUDE_WORKFLOW_DIR/$SID.workflow-off"
+    rm -f "$WORKFLOW_STATE_DIR/$SID.workflow-off"
 
     reset_env
     run_case "$FX_TWO" "gh issue create --title x"

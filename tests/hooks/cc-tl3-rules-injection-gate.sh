@@ -14,6 +14,12 @@ HELPERS="$AGENTS_DIR/tests/hooks/TL3-rules-injection-off-switch/helpers.sh"
 HOOK="$AGENTS_DIR/hooks/instructions-loaded-audit.js"
 RECEIPT_LIB="$AGENTS_DIR/hooks/lib/instructions-loaded-receipt.js"
 
+# isolation (#2512): helpers.sh asserts a pin; harness first, so the pass/fail below override harness's.
+. "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }

@@ -14,6 +14,12 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -50,7 +56,7 @@ run_node() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "$1" 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
@@ -123,7 +129,7 @@ run_R2() {
         return 0
     fi
     out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
 $PRELUDE
@@ -196,7 +202,7 @@ run_R4() {
     tmp="$(make_tmp)"
     mkdir -p "$tmp/plain-a" "$tmp/plain-b"
     out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
 $PRELUDE
@@ -283,7 +289,7 @@ run_R5_cli() {
     git -C "$repo" commit -q -m ahead
     own="own-sid-r5"; other="other-sid-r5"; ownmain="own-main-sid-r5"
     env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
 const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -305,13 +311,13 @@ markStep('$ownmain', 'workflow_init', 'complete');
         local env_sid="$1" args_sid="$2" o r
         if [ -z "$args_sid" ]; then
             o=$(env CLAUDE_CODE_SESSION_ID="$env_sid" \
-                CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+                WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
                 CLAUDE_PROJECT_DIR="$repo" HOME="$tmp/home" USERPROFILE="$tmp/home" \
                 "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" 2>&1)
             r=$?
         else
             o=$(env CLAUDE_CODE_SESSION_ID="$env_sid" \
-                CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+                WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
                 CLAUDE_PROJECT_DIR="$repo" HOME="$tmp/home" USERPROFILE="$tmp/home" \
                 "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" --session "$args_sid" 2>&1)
             r=$?
@@ -331,7 +337,7 @@ markStep('$ownmain', 'workflow_init', 'complete');
     # fail fast WITHOUT mutating the TARGET session's persisted state. Snapshot
     # other-sid's state-file bytes immediately before the probe and byte-compare
     # after — a read-only guard leaves the file identical (state-io writes each
-    # session to $CLAUDE_WORKFLOW_DIR/<sid>.json).
+    # session to $WORKFLOW_STATE_DIR/<sid>.json).
     other_state="$tmp/wf/$other.json"
     other_before="$tmp/other-state-before.json"
     cp "$other_state" "$other_before" 2>/dev/null || true
@@ -429,7 +435,7 @@ run_R6() {
         symlink_note=""
     fi
     out=$(env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PROJECT_DIR \
-        CLAUDE_WORKFLOW_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 90 node -e "
 $PRELUDE

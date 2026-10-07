@@ -18,7 +18,7 @@ UUID="aabbccdd-1111-2222-3333-444455556666"
 run_migrate_session() {
   local sid="$1" wf="$2" plans="$3"
   node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$wf';
+process.env.WORKFLOW_STATE_DIR='$wf';
 process.env.WORKFLOW_PLANS_DIR='$plans';
 try {
   var m=require('$IDX_MOD');
@@ -185,7 +185,7 @@ write_race_scripts "$T"
 # One output file per migrator: concurrent `>>` into one file is not atomic on
 # Windows (MSYS) and interleaves the outcome lines.
 for i in 1 2 3; do
-  CLAUDE_WORKFLOW_DIR="$WF_NP" WORKFLOW_PLANS_DIR="$PLANS_NP" node "$T/migrator.js" "$(np "$T/go")" "$IDX_MOD" "$SID" > "$T/mig.$i.out" 2>/dev/null &
+  WORKFLOW_STATE_DIR="$WF_NP" WORKFLOW_PLANS_DIR="$PLANS_NP" node "$T/migrator.js" "$(np "$T/go")" "$IDX_MOD" "$SID" > "$T/mig.$i.out" 2>/dev/null &
   eval "PID$i=\$!"
 done
 : > "$T/go"
@@ -274,11 +274,11 @@ for iter in 1 2 3 4 5; do
   printf '1\n' > "$SRC"
   cp "$SRC" "$T/legacy.orig"
   # Per-migrator output files (see concurrent-migrate-same-source), joined after the wait.
-  CLAUDE_WORKFLOW_DIR="$WF_NP" WORKFLOW_PLANS_DIR="$PLANS_NP" node "$T/migrator.js" "$(np "$T/go")" "$IDX_MOD" "$SID" > "$T/mig.1.out" 2>/dev/null &
+  WORKFLOW_STATE_DIR="$WF_NP" WORKFLOW_PLANS_DIR="$PLANS_NP" node "$T/migrator.js" "$(np "$T/go")" "$IDX_MOD" "$SID" > "$T/mig.1.out" 2>/dev/null &
   P1=$!
   node "$T/writer.js" "$(np "$T/go")" "$(np "$DST")" "writer-A-3" 2>/dev/null &
   P2=$!
-  CLAUDE_WORKFLOW_DIR="$WF_NP" WORKFLOW_PLANS_DIR="$PLANS_NP" node "$T/migrator.js" "$(np "$T/go")" "$IDX_MOD" "$SID" > "$T/mig.3.out" 2>/dev/null &
+  WORKFLOW_STATE_DIR="$WF_NP" WORKFLOW_PLANS_DIR="$PLANS_NP" node "$T/migrator.js" "$(np "$T/go")" "$IDX_MOD" "$SID" > "$T/mig.3.out" 2>/dev/null &
   P3=$!
   node "$T/writer.js" "$(np "$T/go")" "$(np "$DST")" "writer-B-4" 2>/dev/null &
   P4=$!

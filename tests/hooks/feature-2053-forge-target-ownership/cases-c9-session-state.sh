@@ -5,7 +5,7 @@
 # Block C9 — the session id and the cache files it names.
 #
 # WHY: the session id is interpolated into a FILE PATH under
-# CLAUDE_WORKFLOW_DIR. (1) Path: a separator or dot-segment escapes the state
+# WORKFLOW_STATE_DIR. (1) Path: a separator or dot-segment escapes the state
 # directory (CWE-22). (2) Verdict: any state failure — missing id, unreadable
 # cache, unwritable dir — must degrade to ask, never silent allow.
 
@@ -48,15 +48,15 @@ very long|@LONG
 TABLE
 
     echo ""
-    echo "=== C9-2: nothing is written outside CLAUDE_WORKFLOW_DIR ==="
+    echo "=== C9-2: nothing is written outside WORKFLOW_STATE_DIR ==="
 
     # The traversal rows above ran with $BASE/workflow as the state dir. If any
     # id escaped it, the guard's own state files land in $BASE (or above it).
     local strays
     strays="$(find "$BASE" -maxdepth 3 -type f \
                 \( -name '*gh-login*' -o -name '*gh-env*' -o -name '*gh-auth-dirty*' \) \
-                -not -path "$CLAUDE_WORKFLOW_DIR/*" 2>/dev/null | head -5)"
-    assert_eq "C9-2a no guard state file landed outside CLAUDE_WORKFLOW_DIR" "" "$strays"
+                -not -path "$WORKFLOW_STATE_DIR/*" 2>/dev/null | head -5)"
+    assert_eq "C9-2a no guard state file landed outside WORKFLOW_STATE_DIR" "" "$strays"
     # And the plans dir — pinned separately per rules/test/fixture-isolation.md —
     # must stay free of guard state too. Scoped to the guard's own filenames on
     # purpose: the plans dir is shared fixture ground that other blocks in this
@@ -79,13 +79,13 @@ TABLE
         [ -z "$name" ] && continue
         reset_env
         run_case "$FX_OWNED" "echo warmup"
-        printf '%s' "$body" > "$CLAUDE_WORKFLOW_DIR/$SID.gh-login"
-        printf '%s' "$body" > "$CLAUDE_WORKFLOW_DIR/$SID.gh-env"
+        printf '%s' "$body" > "$WORKFLOW_STATE_DIR/$SID.gh-login"
+        printf '%s' "$body" > "$WORKFLOW_STATE_DIR/$SID.gh-env"
         CASE_ENV=("GH_STUB_EXIT=1")
         resume_case "$FX_OWNED" "$FOREIGN_WRITE"
         assert_decision "C9-3 [$name] corrupt cache + unusable gh -> ask" "ask"
         assert_eq "C9-3 [$name] and no crash" "0" "$HOOK_RC"
-        rm -f "$CLAUDE_WORKFLOW_DIR/$SID.gh-login" "$CLAUDE_WORKFLOW_DIR/$SID.gh-env"
+        rm -f "$WORKFLOW_STATE_DIR/$SID.gh-login" "$WORKFLOW_STATE_DIR/$SID.gh-env"
     done <<TABLE
 empty file|
 truncated json|{"login":"tes
@@ -102,10 +102,10 @@ TABLE
     reset_env
     run_case "$FX_OWNED" "echo warmup"
     printf '{"login":"%s","owned":["%s/r"],"admin":true}' "$FOREIGN" "$FOREIGN" \
-        > "$CLAUDE_WORKFLOW_DIR/$SID.gh-login"
+        > "$WORKFLOW_STATE_DIR/$SID.gh-login"
     resume_case "$FX_OWNED" "$FOREIGN_WRITE"
     assert_decision "C9-4 a planted cache claiming foreign ownership -> ask" "ask"
-    rm -f "$CLAUDE_WORKFLOW_DIR/$SID.gh-login"
+    rm -f "$WORKFLOW_STATE_DIR/$SID.gh-login"
 
     echo ""
     echo "=== C9-5: an unwritable state directory fails closed ==="
@@ -119,13 +119,13 @@ TABLE
         rm -f "$rodir/probe"
         skip "C9-5 unwritable state dir (chmod has no effect on this filesystem)"
     else
-        reset_env; add_env "CLAUDE_WORKFLOW_DIR=$rodir"
+        reset_env; add_env "WORKFLOW_STATE_DIR=$rodir"
         run_case "$FX_OWNED" "$FOREIGN_WRITE"
         assert_decision "C9-5a a read-only state dir still yields ask" "ask"
         assert_eq "C9-5b and the hook still exits 0" "0" "$HOOK_RC"
         # The owned side of the same failure: unable to REMEMBER is not the same
         # as unable to PROVE, so a live probe must still be able to allow.
-        reset_env; add_env "CLAUDE_WORKFLOW_DIR=$rodir"
+        reset_env; add_env "WORKFLOW_STATE_DIR=$rodir"
         run_case "$FX_OWNED" "gh issue create --repo $OWNER/agents --title x"
         assert_decision "C9-5c an owned target is still provable without state" "silent"
     fi
@@ -134,13 +134,13 @@ TABLE
     echo ""
     echo "=== C9-6: the state dir env var itself can be missing ==="
 
-    # With no CLAUDE_WORKFLOW_DIR the guard has nowhere to cache. It must not
+    # With no WORKFLOW_STATE_DIR the guard has nowhere to cache. It must not
     # invent a path in the developer's home, and it must not fail open.
-    reset_env; add_env "CLAUDE_WORKFLOW_DIR="
+    reset_env; add_env "WORKFLOW_STATE_DIR="
     run_case "$FX_OWNED" "$FOREIGN_WRITE"
-    assert_decision "C9-6a empty CLAUDE_WORKFLOW_DIR -> ask" "ask"
+    assert_decision "C9-6a empty WORKFLOW_STATE_DIR -> ask" "ask"
     assert_eq "C9-6b and no crash" "0" "$HOOK_RC"
-    reset_env; add_env "CLAUDE_WORKFLOW_DIR=$BASE/does-not-exist-yet/nested"
+    reset_env; add_env "WORKFLOW_STATE_DIR=$BASE/does-not-exist-yet/nested"
     run_case "$FX_OWNED" "$FOREIGN_WRITE"
     assert_decision "C9-6c a nonexistent state dir -> ask" "ask"
     assert_eq "C9-6d and no crash" "0" "$HOOK_RC"

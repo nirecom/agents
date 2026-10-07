@@ -75,7 +75,7 @@ norm_path() { printf '%s' "$1" | tr '\\' '/' | tr 'A-Z' 'a-z'; }
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
-export CLAUDE_WORKFLOW_DIR="$(to_node_path "$WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(to_node_path "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(to_node_path "$PLANS_DIR")"
 
 setup_repo() {

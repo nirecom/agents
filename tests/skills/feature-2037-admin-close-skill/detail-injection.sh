@@ -61,7 +61,7 @@ DI_READ_EOF
         payload="$(di_payload "$variant")"
         out="$(run_with_timeout 60 env \
             "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-            "CLAUDE_WORKFLOW_DIR=$wf" \
+            "WORKFLOW_STATE_DIR=$wf" \
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
             node "$SR_CLI" --categories other --severity notice \
                 --detail "$payload" --reporter di-probe --session-id "$sid" 2>&1)" || rc=$?
@@ -108,7 +108,7 @@ DI_READ_EOF
     DI_MISS_RC=0
     DI_MISS_OUT="$(run_with_timeout 60 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$DI_MISS_WF" \
+        "WORKFLOW_STATE_DIR=$DI_MISS_WF" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$SR_CLI" --categories other --severity notice \
             --reporter di-probe --session-id "$DI_SID_MISSING" 2>&1)" || DI_MISS_RC=$?

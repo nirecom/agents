@@ -29,6 +29,8 @@ pass() { echo "PASS: $1"; }
 TMPDIR_BASE=$(mktemp -d)
 LOG_DIR="$TMPDIR_BASE/.claude/projects/codex-review"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# isolation (#2512): pin state and plans dirs once for this file and its sourced parts.
+harness_isolate "$TMPDIR_BASE"
 
 PLAN_FILE="$TMPDIR_BASE/test-plan.md"
 cat > "$PLAN_FILE" << 'PLAN_EOF'

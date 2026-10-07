@@ -9,8 +9,12 @@
 # Sourced helpers come from _lib.sh. Runnable standalone:
 #   bash tests/bin/feature-sweep-branches/core.sh
 
+# isolation (#2512): harness before _lib.sh so _lib's pass/fail/run_with_timeout override harness's.
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+# Always pin under _lib.sh's TMPDIR_BASE (its EXIT trap removes it); never keep an inherited value.
+harness_isolate "$TMPDIR_BASE/isolation"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T1 — no local branches beyond main → candidates=0 (dry-run, --ci-mode)

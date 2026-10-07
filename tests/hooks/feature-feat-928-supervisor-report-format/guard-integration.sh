@@ -3,6 +3,12 @@
 # Guard integration tests (G/GN/B tests) — supervisor-guard.js end-to-end.
 # Runnable standalone: bash tests/hooks/feature-feat-928-supervisor-report-format/guard-integration.sh
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
@@ -16,7 +22,7 @@ run_g2_regression() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g2r-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"d\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g2r-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "systemMessage"; then
@@ -32,7 +38,7 @@ run_g19_regression() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g19r-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"workflow\"],\"severity\":\"error\",\"detail\":\"first-finding\",\"timestamp\":\"2026-06-06T11:00:00.000Z\"},{\"categories\":[\"workflow\"],\"severity\":\"error\",\"detail\":\"last-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g19r-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "last-finding"; then
@@ -48,7 +54,7 @@ run_g20_regression() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g20r-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"d\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g20r-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Session ID: g20r-sid"; then
@@ -67,7 +73,7 @@ run_g21_regression() {
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     seed_state "$tmp" "g21r-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"d\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"g21r-sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Workflow session ID: $wsid"; then
@@ -86,7 +92,7 @@ run_g22_regression() {
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     seed_state "$tmp" "g22r-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"d\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"g22r-sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Session ID: g22r-sid" && echo "$out" | grep -q "Workflow session ID: $wsid"; then
@@ -107,7 +113,7 @@ run_gn1() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "gn1-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"workflow\",\"code\"],\"severity\":\"error\",\"detail\":\"d\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"gn1-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Categories:"; then
@@ -124,7 +130,7 @@ run_gn2() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "gn2-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"gn2-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     # Primary instruction must be human-readable (To resume / Clear:) — not start with raw "node -e \"require("
@@ -149,7 +155,7 @@ run_b4_warning() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "b4w-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'warning', findings: [{\"categories\":[\"code\"],\"severity\":\"warning\",\"detail\":\"advisory\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"b4w-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && echo "$out" | grep -q "additionalContext"; then
@@ -165,7 +171,7 @@ run_b4_notice() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "b4n-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'notice', findings: [{\"categories\":[\"code\"],\"severity\":\"notice\",\"detail\":\"advisory\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"b4n-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && echo "$out" | grep -q "additionalContext"; then
@@ -181,7 +187,7 @@ run_b5_null_state() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "b5-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"b5-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! echo "$out" | grep -q '"decision":"block"'; then
@@ -197,7 +203,7 @@ run_b1_stop_hook_active() {
     tmp="$(mktemp -d)"
     # No state file seeded — guard must exit before touching state
     out=$(echo '{"stop_hook_active":true,"session_id":"b1-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! echo "$out" | grep -q "decision"; then
@@ -213,7 +219,7 @@ run_b_l2phase_done() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "l2done-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', alert_phase: 'done', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"l2done-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! echo "$out" | grep -q '"decision":"block"'; then
@@ -229,7 +235,7 @@ run_b_l2phase_paused() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "l2paused-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', alert_phase: 'paused', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"l2paused-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! echo "$out" | grep -q '"decision":"block"'; then
@@ -248,10 +254,10 @@ run_b_workflow_off() {
     mkdir -p "$woff_dir"
     # Seed supervisor state that would normally trigger a block
     seed_state "$tmp" "woff-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"d\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
-    # Create the workflow-off marker: <CLAUDE_WORKFLOW_DIR>/<sid>.workflow-off
+    # Create the workflow-off marker: <WORKFLOW_STATE_DIR>/<sid>.workflow-off
     touch "$woff_dir/woff-sid.workflow-off"
     out=$(echo '{"stop_hook_active":false,"session_id":"woff-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$woff_dir" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$woff_dir" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then

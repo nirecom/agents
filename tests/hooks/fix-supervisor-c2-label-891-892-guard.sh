@@ -37,7 +37,7 @@ guard_implemented() {
     tmp="$(mktemp -d)"
     # Create env JSON for probe-sid so guard should fire
     touch_anchor "$tmp" probe-sid
-    probe=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    probe=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null } };
 try { w.ensureAlertScheduled(state, 'probe-sid'); } catch (e) { process.stdout.write('error'); process.exit(0); }
@@ -63,7 +63,7 @@ run_g1() {
     if [ ! -f "$WRITER_MODULE" ]; then skip "$label (writer source not implemented yet)"; return; fi
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null } };
 try { w.ensureAlertScheduled(state, null); } catch (e) { console.error('threw: '+e.message); process.exit(2); }
@@ -84,7 +84,7 @@ run_g2() {
     if [ ! -f "$WRITER_MODULE" ]; then skip "$label (writer source not implemented yet)"; return; fi
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null } };
 try { w.ensureAlertScheduled(state, '../evil'); } catch (e) { console.error('threw: '+e.message); process.exit(2); }
@@ -105,7 +105,7 @@ run_g3() {
     if [ ! -f "$WRITER_MODULE" ]; then skip "$label (writer source not implemented yet)"; return; fi
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null } };
 try { w.ensureAlertScheduled(state, 'g3-sid'); } catch (e) { console.error('threw: '+e.message); process.exit(2); }
@@ -127,7 +127,7 @@ run_g4() {
     local tmp out rc
     tmp="$(mktemp -d)"
     touch_anchor "$tmp" g4-sid
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null } };
 w.ensureAlertScheduled(state, 'g4-sid');
@@ -148,7 +148,7 @@ run_g5() {
     require_guard "$label" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const sid = 'g5-sid';
@@ -181,7 +181,7 @@ run_g6() {
     local tmp out rc
     tmp="$(mktemp -d)"
     touch_anchor "$tmp" g6-sid
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const sid = 'g6-sid';
 const f = { categories: ['workflow'], severity: 'warning', detail: 'main-path-test', reporter: 't' };
@@ -206,7 +206,7 @@ run_g7() {
     local tmp out rc
     tmp="$(mktemp -d)"
     touch_anchor "$tmp" g7-sid
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const sid = 'g7-sid';
 const r = w.writeAlertState(sid, { alert_armed_at: '2026-06-06T12:00:00Z' });
@@ -246,7 +246,7 @@ console.log('OK');
 JSEOF
     # Run node from tmp dir: no WORKTREE_NOTES.md there, so Priority 1 misses,
     # Priority 2 reads CLAUDE_CODE_SESSION_ID -> g8-wfsid, checks its final-report-env.json anchor -> found -> guard fires
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" CLAUDE_CODE_SESSION_ID=g8-wfsid run_with_timeout 5 \
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" CLAUDE_CODE_SESSION_ID=g8-wfsid run_with_timeout 5 \
         bash -c 'cd "$1" && exec node "$2"' _ "$tmp" "$tmp/g8.js" 2>&1)
     rc=$?
     rm -rf "$tmp"
@@ -276,7 +276,7 @@ console.log('OK');
 JSEOF
     # Run from tmp; no WORKTREE_NOTES.md, no plans artifact -> resolveWorkflowSessionId returns null
     # candidates = {g8b-ccsid}; g8b-ccsid-final-report-env.json absent -> schedules normally
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 \
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 \
         bash -c 'cd "$1" && exec node "$2"' _ "$tmp" "$tmp/g8b.js" 2>&1)
     rc=$?
     rm -rf "$tmp"
@@ -292,7 +292,7 @@ run_g10() {
     if [ ! -f "$WRITER_MODULE" ]; then skip "$label (writer source not implemented yet)"; return; fi
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const sid = 'g10-sid';
 w.writeAlertState(sid, { alert_armed_at: '2026-06-01T00:00:00Z', alert_phase: 'pending' });
@@ -314,7 +314,7 @@ run_g11() {
     if [ ! -f "$WRITER_MODULE" ]; then skip "$label (writer source not implemented yet)"; return; fi
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const sid = 'g11-sid';
 w.writeAlertState(sid, { alert_armed_at: '2026-06-01T00:00:00Z', alert_phase: 'pending' });
@@ -336,7 +336,7 @@ run_g12() {
     if [ ! -f "$WRITER_MODULE" ]; then skip "$label (writer source not implemented yet)"; return; fi
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const sid = 'g12-sid';
 w.writeAlertState(sid, { alert_armed_at: '2026-06-01T00:00:00Z', alert_phase: 'pending' });
@@ -358,7 +358,7 @@ run_g13() {
     if [ ! -f "$WRITER_MODULE" ]; then skip "$label (writer source not implemented yet)"; return; fi
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/wf" run_with_timeout 5 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/wf" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const path = require('path');

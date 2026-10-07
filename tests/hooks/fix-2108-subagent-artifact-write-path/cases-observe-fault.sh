@@ -67,7 +67,7 @@ _of_probe() {
     (
         cd "$OF_CWD" || exit 1
         unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
-        export CLAUDE_WORKFLOW_DIR="$OF_WF" WORKFLOW_PLANS_DIR="$OF_WF"
+        export WORKFLOW_STATE_DIR="$OF_WF" WORKFLOW_PLANS_DIR="$OF_WF"
         export OF_MODULE="$ACTIVE_SIDS_NODE" OF_FAULT_MODE="$mode"
         run_probe -r "$OF_PRELOAD_SH" "$@"
     )
@@ -80,7 +80,7 @@ _of_hook() {
         cd "$OF_CWD" || exit 1
         unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export AGENTS_CONFIG_DIR="$OF_CFG"
-        export CLAUDE_WORKFLOW_DIR="$OF_WF" WORKFLOW_PLANS_DIR="$OF_WF"
+        export WORKFLOW_STATE_DIR="$OF_WF" WORKFLOW_PLANS_DIR="$OF_WF"
         export OF_MODULE="$ACTIVE_SIDS_NODE" OF_FAULT_MODE="$mode"
         # NATIVE preload path: run_hook_capture sets MSYS_NO_PATHCONV=1.
         run_hook_capture "$input" "$RWT" 20 node -r "$OF_PRELOAD_NODE" "$BCTW_HOOK"

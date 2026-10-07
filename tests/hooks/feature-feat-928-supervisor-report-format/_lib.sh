@@ -37,11 +37,11 @@ require_source() {
     return 0
 }
 
-# #2434: state lives at <CLAUDE_WORKFLOW_DIR>/<sid>.control/; the seed and every
-# hook call pin CLAUDE_WORKFLOW_DIR="$tmp/workflow" (forWrite creates the dir).
+# #2434: state lives at <WORKFLOW_STATE_DIR>/<sid>.control/; the seed and every
+# hook call pin WORKFLOW_STATE_DIR="$tmp/workflow" (forWrite creates the dir).
 seed_state() {
     local tmp="$1" sid="$2" layer2_json="$3"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
