@@ -283,12 +283,6 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Definition**: Third-party classifier that returns one typed answer per yes/no question. Queried alongside the `complexity-judge` subagent when `JEV=on`; off by default.
 - **Related**: [docs/architecture/jev.md](architecture/jev.md), [bin/jev-report](../bin/jev-report)
 
-### shadow mode
-
-- **Full name**: Jev shadow mode
-- **Definition**: Running Jev next to the LLM judge on the same dispatch, recording both answers, and always adopting the LLM's. Jev's answer is evidence for a later promotion decision, never an input to the workflow.
-- **Related**: [docs/architecture/jev.md](architecture/jev.md)
-
 ### test lane
 
 - **Full name**: Host test lane
