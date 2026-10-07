@@ -42,7 +42,7 @@ na_rec() {
 }
 
 # marker_of <sid> — where the session marker lives (bin/workflow-control-dir layout).
-marker_of() { printf '%s/%s.control/calibration-asked.txt' "$CLAUDE_WORKFLOW_DIR" "$1"; }
+marker_of() { printf '%s/%s.control/calibration-asked.txt' "$WORKFLOW_STATE_DIR" "$1"; }
 
 OUT=""; ERR=""; RC=0
 # run_script <script> <cache> [NAME=VAL ...] -- [args...] — from a neutral cwd; sets OUT/ERR/RC.
@@ -86,7 +86,7 @@ content_sig() {
 # workflow dir's content: a write anywhere by a hostile session id changes it.
 marker_sig() {
     (cd "$TMPROOT" && find . \( -name 'calibration-asked.txt' -o -name '*.control' -o -name '*.tmp' \) -print | LC_ALL=C sort)
-    content_sig "$CLAUDE_WORKFLOW_DIR"
+    content_sig "$WORKFLOW_STATE_DIR"
 }
 
 # ends_nl <file> — "yes" when the file is non-empty and its last byte is a newline (no torn line).
