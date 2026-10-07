@@ -67,8 +67,7 @@ mkdir -p "$NEUTRAL_DIR"
 
 # ── Completion ledger (GRP pattern, as in feature-2075-append-destination.sh) ─
 GRP_DONE=""
-grp_done() { GRP_DONE="${GRP_DONE}$1
-"; }
+grp_done() { GRP_DONE="${GRP_DONE}$1"$'\n'; }
 CASE_RAN=""
 case_ran() { CASE_RAN="${CASE_RAN} $1"; }
 
@@ -119,8 +118,12 @@ case_end
 . "$GROUP_DIR/cache-cases.sh"
 # shellcheck source=feature-2455-test-load-control/lanes-cases.sh
 . "$GROUP_DIR/lanes-cases.sh"
+# shellcheck source=feature-2455-test-load-control/never-ask-cases.sh
+. "$GROUP_DIR/never-ask-cases.sh"
 # shellcheck source=feature-2455-test-load-control/run-all-lease-cases.sh
 . "$GROUP_DIR/run-all-lease-cases.sh"
+# shellcheck source=feature-2455-test-load-control/never-ask-runner-cases.sh
+. "$GROUP_DIR/never-ask-runner-cases.sh"
 # shellcheck source=feature-2455-test-load-control/registry-fail-closed-cases.sh
 . "$GROUP_DIR/registry-fail-closed-cases.sh"
 
@@ -150,7 +153,7 @@ fi
 
 # CASE1 — every planned case id reported at least once.
 CASE_EXPECTED="FC1 FC2 FC3 FC4 EQ1 C1 C2 C3 C3b C4 C5 C6 C7 C8 C9 C10 C11 C12 C13 \
-L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15 L16 L17 L18 LS1 LS2 LS3 LS4 LS5 \
+L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15 L16 L17 L18 LS1 LS2 LS3 LS4 LS5 NA1 NA2 NA3 NA4 NA5 NA6 NA7 NA8 \
 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 RF1 RF2"
 CASE_MISSING=""
 for _c in $CASE_EXPECTED; do

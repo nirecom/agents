@@ -208,6 +208,10 @@ message; there is no code path from `run-all.sh` to the calibrator. A test run t
 silently turned into a two-hour benchmark would be a far worse failure than a
 slightly suboptimal `-j`.
 
+Two paths surface calibration: the runner's hint (the whole command) and the /run-tests
+consent dialog (`skills/run-tests` RNT-6a). Only an explicit "calibrate now" starts it, and
+`run-all.sh` still has no path to the calibrator, so invariant 4 holds.
+
 **The sample.** The calibrator measures only with `RUN_CALIBRATION=1` (exit 77
 otherwise) and sets `TEST_LANES=off` so its own runs are not narrowed. The population
 is the parallel-lane rows of `--print-plan -j 1 --all`. Tests are picked by their
@@ -285,7 +289,8 @@ know what other sessions hold.
 Windows the version and build from `uname -s`; elsewhere `uname -r`). When it
 differs from the current host the value is still used, and the lanes line, the plan
 note and the status line add `measured on X, now Y; re-run
-bin/calibrate-test-parallelism.sh`. An update rarely moves the knee far; falling to
+RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh` (omitted on a host with the
+never-ask record). An update rarely moves the knee far; falling to
 the default would be a larger error than a slightly stale measurement. `os` is the
 only record value ever displayed, and only after its shape check.
 

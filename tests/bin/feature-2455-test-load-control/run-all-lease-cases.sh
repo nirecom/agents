@@ -241,7 +241,7 @@ case "$(r_lanes_line)" in
         pass "R13 the measured record sets the limit (max jobs per host 3, source measured)" ;;
     *) fail "R13 lanes: line does not report the measured limit — got $(printf '%q' "$(r_lanes_line)")" ;;
 esac
-grep -qF -- "; measured on $R13_OLD, now $R13_NOW; re-run bin/calibrate-test-parallelism.sh" "$R_ERR" \
+grep -qF -- "; measured on $R13_OLD, now $R13_NOW; re-run RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh" "$R_ERR" \
     && [ -n "$R13_NOW" ] && pass "R13 the lanes: line carries the OS-version advice" \
     || fail "R13 no OS-version advice — now=[$R13_NOW] lanes=$(printf '%q' "$(r_lanes_line)")"
 rm -f "$FX_CACHE_DIR/parallelism.conf"

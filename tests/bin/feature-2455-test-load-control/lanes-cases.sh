@@ -446,7 +446,7 @@ else
 fi
 LS5_KIND="${L_OS_NOW%%/*}"; [ -n "$LS5_KIND" ] || LS5_KIND="Unknown"
 LS5_OLD="$LS5_KIND/0.0.0-ls5"
-LS5_ADVICE="measured on $LS5_OLD, now $L_OS_NOW; re-run bin/calibrate-test-parallelism.sh"
+LS5_ADVICE="measured on $LS5_OLD, now $L_OS_NOW; re-run RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh"
 LS5_LEASE='thl_init_dir; thl_run_all_lease 2 0; echo "rc=$?"; echo "b=${THL_MAX_JOBS_PER_HOST-}/${THL_MAX_JOBS_PER_HOST_SOURCE-}"; echo "note=${THL_NOTE-}"; thl_release_all'
 LS5D="$TMPDIR_BASE/ls5-diff"
 l12_conf "$LS5D" 5 "$LS5_OLD"

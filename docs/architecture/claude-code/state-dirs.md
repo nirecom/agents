@@ -82,6 +82,7 @@ guard refuse every model write there without touching the artifact workflow.
 | `wi-checkpoint.json`, `handoff.md`, `wt-cleanup-active`, `workflow-init-aborted-*.md` | checkpoint.js, handoff-artifact.js, worktree-cleanup-marker.js, path-a-label-and-board.sh | The same modules, workflow-init |
 | `handoff-{risk,pressure,flush-mark}.json` | handoff-sidecar.js (one writer each: `recordRiskSignal`, the nudge hook, `handoff-append`) | handoff-pressure.js, handoff-risk-signal.js |
 | `companion-precheck.json`, `intent-scan-block.txt`, `guard-attempt.tmp` | precheck-companions.sh, clarify-commit-scope.sh, clarify-guard-loop.sh | clarify-intent |
+| `calibration-asked.txt` | `skills/run-tests/scripts/mark-calibration-asked.sh` (before the dialog), `answer-calibration.sh` | `probe-calibration.sh` |
 
 Named exceptions:
 
