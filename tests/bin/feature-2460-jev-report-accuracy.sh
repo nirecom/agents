@@ -12,10 +12,14 @@
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$AGENTS_DIR/tests/lib/harness.sh"
+# Pin before the fragments run bin/ (they inherit it); _lib.sh below re-pins into its own TMPROOT.
+JEV_PRE_ISO="$(make_tmp)"
+harness_isolate "$JEV_PRE_ISO"
 # Pattern A dispatcher: _lib.sh builds one fixture dir, then each fragment is sourced in order
 # into this process (one FX, one mock, one total). Each fragment documents its own scope.
 SUITE_DIR="$AGENTS_DIR/tests/bin/feature-2460-jev-report-accuracy"
 . "$SUITE_DIR/_lib.sh"
+rm -rf "$JEV_PRE_ISO"
 
 case_begin "report-a-aggregation" "bin/jev-report"
 . "$SUITE_DIR/a-aggregation.sh"

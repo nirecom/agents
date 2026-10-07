@@ -41,6 +41,8 @@ _jev_cleanup() {
   rm -rf "$TMPROOT"
 }
 trap _jev_cleanup EXIT
+# Top-level pin before the first function that runs a hook or bin (fx_new re-pins per fixture).
+harness_isolate "$TMPROOT/iso"
 
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1" "expected [$2] got [$3]"; fi; }
 hq() { run_with_timeout 30 node "$HELPERS" "$@" 2>/dev/null; }

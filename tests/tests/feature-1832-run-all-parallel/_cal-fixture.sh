@@ -21,6 +21,10 @@ CF_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CF_CAL="$CF_REPO/bin/calibrate-test-parallelism.sh"
 CF_LIB_PAR="$CF_REPO/bin/lib/run-all-parallelism.sh"
 CF_LIB_DUR="$CF_REPO/bin/lib/run-all-durations.sh"
+# Top-level pin (rules/test/fixture-isolation.md) for the functions below that run bin/; cf_init
+# re-pins into CF_T and drops this interim dir.
+CF_PRE_ISO="$(mktemp -d 2>/dev/null || mktemp -d -t calfx)"
+harness_isolate "$CF_PRE_ISO"
 CF_T=""
 CF_RC=0
 CF_OUT=""
@@ -36,6 +40,7 @@ cf_init() {
     mkdir -p "$CF_T/workflow" "$CF_T/plans" "$CF_T/home-cache"
     export WORKFLOW_STATE_DIR="$CF_T/workflow"
     export WORKFLOW_PLANS_DIR="$CF_T/plans"
+    rm -rf "$CF_PRE_ISO"
     unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
     unset TEST_LANES TEST_LANES_HELD TEST_LANES_BUDGET TEST_MAX_JOBS_PER_HOST TEST_MAX_JOBS_PER_RUN \
           RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_LANES_LIB RUN_ALL_DURATIONS_LIB \

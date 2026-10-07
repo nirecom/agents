@@ -10,6 +10,7 @@
 # on another terminal; the 7-day floor is the only guard and is what these rows pin.
 
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+harness_isolate "$TMPROOT/iso"   # the guard reads a fragment's own top-level pin, not _lib's
 mock_start
 
 DAY=86400000

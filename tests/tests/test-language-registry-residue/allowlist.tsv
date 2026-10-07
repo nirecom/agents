@@ -14,3 +14,4 @@ bin/review-bare-python	grep -E '\.sh$'	lint target is every changed shell script
 bin/mutation-probe.sh	bname_noext	maps a tests/lib helper to its node unit test tests/lib/test-<name>.js; a fixed helper convention, not a language registry entry
 bin/sweep-issues.sh	referenced tests/*.sh paths	--help prose describing tier 2; not discovery
 tests/lib/test-command-ir.js	for f in tests/*.sh; do head	test data: a sample command string for the parser under test
+bin/check-plans-dir-isolation/main.js	const TESTS_RE = /^tests\/.*\.sh$/;	the isolation audit parses shell exports and harness_isolate calls, so its scope is shell tests by design; not a launch per language

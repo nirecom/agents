@@ -12,6 +12,7 @@
 # PreToolUse and PostToolUse; TL3-hook-agent-jev-shadow.sh T3 covers that.
 
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+harness_isolate "$TMPROOT/iso"   # the guard reads a fragment's own top-level pin, not _lib's
 mock_start
 
 echo "=== one record per dispatch, with step and stage ==="

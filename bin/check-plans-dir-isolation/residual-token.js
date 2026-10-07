@@ -9,7 +9,7 @@ const path = require("path");
 
 const TOKEN_RE = new RegExp("CLAUDE_" + "WORKFLOW_DIR", "i");
 // SSOT exclusion list: append-only history records keep the old name by design.
-const EXEMPT = [(p) => p.startsWith("docs/history/"), (p) => p === "CHANGELOG.md"];
+const EXEMPT = [(p) => p === "docs/history.md", (p) => p.startsWith("docs/history/"), (p) => p === "CHANGELOG.md"];
 
 const isExempt = (rel) => EXEMPT.some((f) => f(rel));
 

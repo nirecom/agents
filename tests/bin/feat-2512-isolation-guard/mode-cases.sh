@@ -39,11 +39,12 @@ c_i9_residual_token() {
 
   d="$T/i9-history"
   cls_repo "$d"
+  fx "$d/docs/history.md" "- renamed $OLD_TOKEN"
   fx "$d/docs/history/2026.md" "- renamed $OLD_TOKEN"
   fx "$d/CHANGELOG.md" "- renamed $OLD_TOKEN"
   commit_all "$d"
   run_cls_in "$d" "$d/bin/check-plans-dir-isolation.sh"
-  expect "I9 docs/history/ and CHANGELOG.md are exempt (rc=0)" rc_is 0
+  expect "I9 docs/history.md, docs/history/ and CHANGELOG.md are exempt (rc=0)" rc_is 0
   expect "I9 no RESIDUAL-TOKEN line for the exempt files" no_violation_for "docs/history"
 
   d="$T/i9-staged"

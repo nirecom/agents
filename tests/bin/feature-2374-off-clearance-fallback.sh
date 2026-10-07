@@ -234,6 +234,8 @@ gd_shadow_config() {
     done
     printf '#!/usr/bin/env bash\nexec bash %s "$@"\n' "$(printf '%q' "$OFFCLR_AGENTS_DIR/bin/resolve-session-id")" > "$dir/bin/resolve-session-id"
     chmod +x "$dir/bin/resolve-session-id"
+    printf '#!/usr/bin/env node\n":" //; exec node "$0" "$@"\nrequire("%s/bin/workflow-state-dir");\n' "$real" > "$dir/bin/workflow-state-dir"
+    chmod +x "$dir/bin/workflow-state-dir"
     node -e 'require("fs").writeFileSync(process.argv[1], "r".repeat(Number(process.argv[2])))' \
         "$(node_path "$dir/skills/_shared/off-legitimacy-rubric.md")" "$n"
 }
