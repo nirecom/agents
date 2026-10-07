@@ -68,6 +68,6 @@ else
 fi
 
 # shellcheck source=./cases-registry.sh
-. "$SCRIPT_DIR/cases-registry.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/cases-registry.sh"
 # shellcheck source=./cases-comment-prefix.sh
 . "$SCRIPT_DIR/cases-comment-prefix.sh"

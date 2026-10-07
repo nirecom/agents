@@ -8,7 +8,7 @@ echo "=== L2 INTEGRATION: next-step write_tests gate ==="
 
 run_next_step() {
   local sid="$1"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
     run_with_timeout node "$NEXT_STEP" --session "$sid" 2>&1
 }
 
@@ -69,7 +69,7 @@ if [ "$GATE_READY" = "true" ]; then
   G5_PLANS_DIR="$(mktemp -d)"
   printf '## outline\n' > "$G5_PLANS_DIR/${SID}-outline.md"
   write_gate_state "$SID" "detail" '{"status":"skipped","updated_at":"2026-04-11T10:00:00.000Z","skip_reason":"r","skip_verdict":{"verdict":"veto","source":"skip-verifier","recorded_at":"2026-04-11T10:00:00.000Z"}}'
-  G5_OUT="$(WORKFLOW_PLANS_DIR="$G5_PLANS_DIR" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" CLAUDE_PROJECT_DIR="$TMPDIR_BASE" run_with_timeout node "$NEXT_STEP" --session "$SID" 2>&1)"
+  G5_OUT="$(WORKFLOW_PLANS_DIR="$G5_PLANS_DIR" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" CLAUDE_PROJECT_DIR="$TMPDIR_BASE" run_with_timeout node "$NEXT_STEP" --session "$SID" 2>&1)"
   if printf '%s' "$G5_OUT" | grep -q "ACTION=invoke" && printf '%s' "$G5_OUT" | grep -qi "detail"; then
     pass "G5. detail veto verdict → invoke make-detail-plan (veto de-skip #1681)"
   else
@@ -85,9 +85,9 @@ if [ "$GATE_READY" = "true" ]; then
   G6_PLANS_DIR="$(mktemp -d)"
   printf '## Issues\n- #9999: g6 test issue\n' > "$G6_PLANS_DIR/${SID}-intent.md"
   write_gate_state "$SID" "outline" '{"status":"pending","updated_at":"2026-04-11T10:00:00.000Z","skip_judgment":{"judgment_source":"orchestrator","all_conditions_met":true,"conditions":{"so_c1":true,"so_c2":true},"recorded_at":"2099-01-01T00:00:00.000Z"}}'
-  WORKFLOW_PLANS_DIR="$G6_PLANS_DIR" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
+  WORKFLOW_PLANS_DIR="$G6_PLANS_DIR" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
     run_with_timeout node "$NEXT_STEP" --session "$SID" >/dev/null 2>&1 || true
-  G6_SV="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+  G6_SV="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
     const s = io.readState('$SID');
     const sv = s && s.steps && s.steps['outline'] && s.steps['outline'].skip_verdict;

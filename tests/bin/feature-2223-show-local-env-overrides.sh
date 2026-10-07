@@ -29,9 +29,9 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 
 # Isolation: pin both halves of the plans-dir pair, drop inherited session ids,
 # and let no ambient AGENTS_CONFIG_DIR, project dir, or tested key reach a child.
-export CLAUDE_WORKFLOW_DIR="$TMP_ROOT/workflow"
+export WORKFLOW_STATE_DIR="$TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMP_ROOT/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 unset CLAUDE_PROJECT_DIR
 unset AGENTS_CONFIG_DIR
@@ -187,7 +187,7 @@ S_WF="SENT2223-refused-wf-5c14e8"
 
 new_case partition \
   "CODE_LANG=english@NL@AGENTS_CONFIG_DIR=/global-cfg@NL@CODEX_NFR_MAX_LINES=200" \
-  "PROJECT_TAGLINE=$S_ORDINARY@NL@PROJECT_NFR=$S_NFR@NL@AGENTS_CONFIG_DIR=$S_EXACT@NL@CODEX_NFR_MAX_LINES=$S_PREFIX@NL@CLAUDE_WORKFLOW_DIR=$S_WF"
+  "PROJECT_TAGLINE=$S_ORDINARY@NL@PROJECT_NFR=$S_NFR@NL@AGENTS_CONFIG_DIR=$S_EXACT@NL@CODEX_NFR_MAX_LINES=$S_PREFIX@NL@WORKFLOW_STATE_DIR=$S_WF"
 run_cli --repo-root "$CASE_ROOT_NODE"
 
 assert_eq "T2223S-partition-exit-0" "0" "$CLI_RC"
@@ -213,11 +213,11 @@ PART_REFUSED="$(section_keys "$CLI_OUT" "refused by blocklist")"
 
 assert_eq "T2223S-partition-applied-keys" "$(printf 'PROJECT_NFR\nPROJECT_TAGLINE')" "$PART_APPLIED"
 assert_eq "T2223S-partition-refused-keys" \
-  "$(printf 'AGENTS_CONFIG_DIR\nCLAUDE_WORKFLOW_DIR\nCODEX_NFR_MAX_LINES')" "$PART_REFUSED"
+  "$(printf 'AGENTS_CONFIG_DIR\nCODEX_NFR_MAX_LINES\nWORKFLOW_STATE_DIR')" "$PART_REFUSED"
 assert_eq "T2223S-partition-applied-count" "2" "$(section_count "$CLI_OUT" applied)"
 assert_eq "T2223S-partition-refused-count" "3" "$(section_count "$CLI_OUT" "refused by blocklist")"
 # G18: the second new blocklist entry, refused at the reporter level (CPR-ORTH).
-assert_contains "T2223S-partition-workflow-dir-refused" "$PART_REFUSED" "CLAUDE_WORKFLOW_DIR"
+assert_contains "T2223S-partition-workflow-dir-refused" "$PART_REFUSED" "WORKFLOW_STATE_DIR"
 assert_report_lacks "T2223S-noleak-refused-wf-stdout" "$CLI_OUT" "$S_WF"
 
 # The whole point of #2223: a project's own PROJECT_NFR applies with nothing

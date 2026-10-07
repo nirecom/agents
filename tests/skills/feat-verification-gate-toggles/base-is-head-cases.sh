@@ -35,7 +35,7 @@ assert_not_contains() {
 # Fixture isolation (rules/test/fixture-isolation.md).
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-export CLAUDE_WORKFLOW_DIR="$tmp/wf"; mkdir -p "$CLAUDE_WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$tmp/wf"; mkdir -p "$WORKFLOW_STATE_DIR"
 export WORKFLOW_PLANS_DIR="$tmp/plans"; mkdir -p "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 unset AGENTS_CONFIG_DIR 2>/dev/null || true

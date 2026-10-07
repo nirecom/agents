@@ -201,7 +201,7 @@ group_matrix() {
         write_stub "$name"
         outfile="$TMPD/out-$name.txt"
         rc=0
-        run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+        run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
             node "$DISPATCH_JS" test-runner "$MAIN" "$PAYLOAD" > "$outfile" 2>&1 || rc=$?
         # Non-vacuity: the dispatcher must actually have written something, else
         # "no sentinel on any line" would hold trivially.
@@ -259,7 +259,7 @@ group_fallback_status_enum() {
     write_stub newline-split
     outfile="$TMPD/out-fallback.txt"
     rc=0
-    run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+    run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         node "$DISPATCH_JS" test-runner "$MAIN" "$PAYLOAD" > "$outfile" 2>&1 || rc=$?
 
     # Non-vacuity: prove the DISCARD arm actually ran. Without this the status

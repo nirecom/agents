@@ -12,6 +12,12 @@
 # digest is a full 64-hex sha256. Cases live in tests/hooks/feature-2256-input-version-full-hash/.
 set -uo pipefail
 
+# isolation (#2512): pin state and plans dirs once here so every section inherits them.
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SECTION_DIR="$AGENTS_ROOT/tests/hooks/feature-2256-input-version-full-hash"
 RWT="$AGENTS_ROOT/bin/run-with-timeout.sh"

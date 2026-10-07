@@ -19,6 +19,8 @@ SCHEMA_NODE="$(node_path "$AGENTS_DIR")/hooks/lib/supervisor-state-schema.js"
 RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -109,7 +111,7 @@ run_sweep() {
     local dir="$1"; shift
     local out
     out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
@@ -124,7 +126,7 @@ run_sweep_as_session() {
     local dir="$1" sid="$2"; shift 2
     local out
     out="$(env -u AGENTS_CONFIG_DIR \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" "CLAUDE_CODE_SESSION_ID=$sid" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" "CLAUDE_CODE_SESSION_ID=$sid" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
@@ -143,13 +145,17 @@ run_sweep_stubbed() {
         cp "$SWEEP" "$bin/"
         cp -r "$AGENTS_DIR/bin/sweep-supervisor-state" "$bin/"
         cp "$AGENTS_DIR/bin/lib/sweep-write-mode.sh" "$bin/lib/"
+        # The state-root lister resolves hooks/ from its own location, so the stub
+        # delegates to the real one instead of copying it (#2511).
+        printf 'require(%s);\n' "\"$(node_path "$AGENTS_DIR/bin/workflow-state-dir")\"" \
+            > "$bin/workflow-state-dir"
         printf '#!/usr/bin/env bash\nprintf "resolve-session-id: resolver failed: boom\\n" >&2\nexit %s\n' \
             "$stub_rc" > "$bin/resolve-session-id"
         chmod +x "$bin/resolve-session-id"
     fi
     local out
     out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$bin/sweep-supervisor-state.sh" "$@" 2>&1)"
     RC=$?
     printf '%s' "$out"
@@ -599,7 +605,7 @@ S10_no_live_override() {
     # subshell — the update does not propagate to the caller's shell).
     local incl_out incl_rc
     incl_out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" \
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" --apply --include-live 2>&1)"
     incl_rc=$?
     if [ "$incl_rc" -ne 0 ]; then
@@ -724,7 +730,7 @@ S14_ci_mode_and_list_signatures() {
 
     local sig rc n
     sig="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "CLAUDE_WORKFLOW_DIR=$(node_path "$dir")" "$RWT" 30 bash "$SWEEP" --list-signatures 2>&1)"
+        "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" "$RWT" 30 bash "$SWEEP" --list-signatures 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ]; then
         pass "S14b --list-signatures exits 0"

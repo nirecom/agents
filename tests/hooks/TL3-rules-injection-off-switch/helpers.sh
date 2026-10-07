@@ -26,6 +26,10 @@ console.log(fs.mkdtempSync(path.join(os.tmpdir(),'ril-')).replace(/\\\\/g,'/'));
     echo "$d"
 }
 
+# isolation (#2512): both sourcing tests pin via harness_isolate before sourcing this file.
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"
+harness_assert_isolated
+
 RIL_TOKEN='.on-demand-only/never-match'
 RIL_MARKER='<!-- injection: on-demand-only - auto-injection disabled; the owning skill Reads it explicitly. -->'
 
@@ -130,7 +134,7 @@ ril_run_claude() {
         unset CLAUDECODE
         unset CLAUDE_CODE_SESSION_ID
         # Dual-pin the isolation pair (rules/test/fixture-isolation.md).
-        export CLAUDE_WORKFLOW_DIR="$(node_path "$wf")"
+        export WORKFLOW_STATE_DIR="$(node_path "$wf")"
         export WORKFLOW_PLANS_DIR="$(node_path "$plans")"
         [ -n "$RIL_ENV_KIND" ] && export "$RIL_ENV_KIND=$RIL_ENV_VALUE"
         run_with_timeout 180 claude -p \

@@ -8,7 +8,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { readStateOrInit, writeAtomic, sessionIdFromStatePath } = require("./shared");
+const { getStatePath, readStateOrInit, writeAtomic, sessionIdFromStatePath } = require("./shared");
 
 const RETRY_INTERVAL_MS = 50;
 const RETRY_LIMIT = 40;
@@ -144,8 +144,35 @@ function withStateLock(filePath, fn) {
   }
 }
 
+const MOVED = Symbol("supervisor-state-moved");
+const MAX_REACQUIRE = 2;
+
+// Resolve the session's supervisor-state path, lock it, and run fn under that lock.
+// Same fail-closed contract as withStateLock: undefined + one stderr note when it cannot.
+function withSessionStateLock(sessionId, fn) {
+  let filePath = getStatePath(sessionId, { forWrite: true });
+  for (let retry = 0; ; retry++) {
+    let now = filePath;
+    const r = withStateLock(filePath, () => {
+      // --- BEGIN temporary: ~/.claude/projects/workflow -> ~/.workflow-state migration added 2026-10-04 ---
+      // deletion-condition: remove when bin/state-dir-relocation remaining exits 0 (no session with a <sid>.json or <sid>.control left in the legacy dir, any sid shape); also delete skills/session-close SC-9; review by 2027-01-04
+      now = getStatePath(sessionId, { forWrite: true });
+      if (now !== filePath) return MOVED;
+      // --- END temporary: ~/.claude/projects/workflow -> ~/.workflow-state migration ---
+      return fn();
+    });
+    if (r !== MOVED) return r;
+    if (retry >= MAX_REACQUIRE) {
+      console.error(`[supervisor-state-lock] state for ${sessionId} moved more than ${MAX_REACQUIRE} times — write skipped (fail-closed)`);
+      return undefined;
+    }
+    filePath = now;
+  }
+}
+
 module.exports = {
   withStateLock,
+  withSessionStateLock,
   RETRY_INTERVAL_MS,
   RETRY_LIMIT,
   STALE_AFTER_MS,

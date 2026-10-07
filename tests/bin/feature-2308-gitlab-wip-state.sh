@@ -29,7 +29,7 @@ FIX_CFG="$TMPROOT/config"
 mkdir -p "$FIX_CFG"
 export AGENTS_CONFIG_DIR="$FIX_CFG"
 export WORKFLOW_PLANS_DIR="$TMPROOT/plans"
-export CLAUDE_WORKFLOW_DIR="$TMPROOT/plans"
+export WORKFLOW_STATE_DIR="$TMPROOT/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 # Drop any inherited WIP_STATE_* so D5's "missing required env vars" path is real.

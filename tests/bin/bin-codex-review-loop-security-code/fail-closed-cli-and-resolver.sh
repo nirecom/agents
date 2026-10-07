@@ -2,9 +2,14 @@
 # Tests: bin/concern-ledger, bin/run-codex-review-loop, bin/resolve-session-id
 # Tags: concern-ledger, fail-closed, error-injection, orthogonality, TL2, scope:common
 # Sourced by tests/bin/bin-codex-review-loop-security-code/fail-closed.sh.
+# isolation: inherits-from fail-closed.sh
 # The two layers below the loop: the CLI's own silent stage failure, and a
 # session resolver that faults while the loop is deciding which session to file
 # the round under. Split out of fail-closed.sh for size (Pattern A).
+
+# isolation (#2512): the dispatcher pins via its temp tree before sourcing this file.
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_ROOT/tests/lib/harness.sh"
+harness_assert_isolated
 
 case_begin "fail-closed-cli-and-resolver" "bin/run-codex-review-loop"
 echo ""
@@ -36,7 +41,7 @@ fc_plan_env() {
     FC_WS="$TMPDIR_BASE/fcp-workflow-$1"
     rm -rf "$FC_PP" "$FC_WS"
     mkdir -p "$FC_PP" "$FC_WS/$FC_PSID.control"
-    export CLAUDE_WORKFLOW_DIR="$FC_WS"
+    export WORKFLOW_STATE_DIR="$FC_WS"
     export WORKFLOW_PLANS_DIR="$FC_PP"
     printf '# Draft\n' > "$FC_PP/draft.md"
     printf '# Tradeoffs\n' > "$FC_PP/tradeoffs.md"
@@ -48,7 +53,7 @@ fc_plan_env() {
     } > "$FC_PLED"
     printf '1\n' > "$FC_WS/$FC_PSID.control/detail-plan-round-number.txt"
 }
-fc_plan_json() { printf '%s/%s.control/detail-plan-unresolved-concerns.json' "$CLAUDE_WORKFLOW_DIR" "$FC_PSID"; }
+fc_plan_json() { printf '%s/%s.control/detail-plan-unresolved-concerns.json' "$WORKFLOW_STATE_DIR" "$FC_PSID"; }
 fc_plan_run() {
     FC_PRC=0
     FC_PERR="$TMPDIR_BASE/fcp-err-$FC_PSID.txt"

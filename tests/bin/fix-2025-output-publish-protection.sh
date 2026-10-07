@@ -59,9 +59,9 @@ run_with_timeout() {
 TMPDIR_BASE="$(mktemp -d)"
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans-root"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 cd "$TMPDIR_BASE" || exit 1
 
 SYMLINKS_OK=no
@@ -124,7 +124,7 @@ inside() { find "$1" -mindepth 1 2>/dev/null | wc -l | tr -d ' '; }
 temps() { find "$1" -maxdepth 1 -name '.sp-tmp.*' -o -maxdepth 1 -name '.build-codex-context.*' | wc -l | tr -d ' '; }
 # ctl_of <sid> — the loop's control dir (#2434): its context, built-marker and
 # round counter are published there under sid-unprefixed names.
-ctl_of() { printf '%s/%s.control' "$CLAUDE_WORKFLOW_DIR" "$1"; }
+ctl_of() { printf '%s/%s.control' "$WORKFLOW_STATE_DIR" "$1"; }
 
 case_begin "publish-1-controls" "bin/build-codex-context"
 echo "--- publish 1: the controls, where both scripts get a clear destination ---"

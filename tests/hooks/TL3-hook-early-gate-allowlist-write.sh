@@ -170,7 +170,7 @@ run_turn() {
     rm -f "$TOOL_LOG"
     ( cd "$REPO" && \
       PATH="$MOCKBIN:$PATH" \
-      CLAUDE_WORKFLOW_DIR="$WFDIR" \
+      WORKFLOW_STATE_DIR="$WFDIR" \
       WORKFLOW_PLANS_DIR="$PLANSDIR" \
       SCRATCHPAD="$(node_path "$SCRATCH_ROOT")" \
       AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \

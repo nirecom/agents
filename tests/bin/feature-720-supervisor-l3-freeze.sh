@@ -57,7 +57,7 @@ read_field() {
     local tmp="$1" sid="$2" path="$3"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
@@ -84,7 +84,7 @@ invoke_l2() {
     local tmp="$1"; shift
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI_L2" "$@" >/dev/null 2>&1
     )
 }
@@ -92,7 +92,7 @@ invoke_l3() {
     local tmp="$1"; shift
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI_L3" "$@" >/dev/null 2>&1
     )
 }
@@ -175,7 +175,7 @@ run_f4() {
     tmp="$(mktemp -d)"; sid="f4sid"
     out=$(
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const fs = require('fs'); const path = require('path');
 const w = require('$WRITER_NODE');
@@ -183,7 +183,7 @@ const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('$sid');
 if (!st.audit || typeof st.audit !== 'object') st.audit = {};
 st.audit.audit_phase = 'frozen';
-const ctrlDir = path.join(process.env.CLAUDE_WORKFLOW_DIR, '$sid' + '.control');
+const ctrlDir = path.join(process.env.WORKFLOW_STATE_DIR, '$sid' + '.control');
 fs.mkdirSync(ctrlDir, {recursive: true});
 fs.writeFileSync(path.join(ctrlDir, 'supervisor-state.json'), JSON.stringify(st, null, 2));
 const ok = w.appendFinding('$sid', { categories: ['code'], severity: 'warning', detail: 'd', reporter: 'test' });

@@ -7,6 +7,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -33,7 +39,7 @@ run_with_timeout() {
 
 seed_state() {
     local tmp="$1" sid="$2" layer2_json="$3"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -85,7 +91,7 @@ run_l1e() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "l1e-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending' }"
     out=$(echo '{"stop_hook_active":false,"session_id":"l1e-sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -q 'Alert mode review required (scheduled review)' ) && ! ( echo "$out" | grep -q 'C2 scheduled review' ); then

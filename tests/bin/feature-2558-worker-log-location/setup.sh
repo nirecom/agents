@@ -68,11 +68,11 @@ dispatch() {
     : > "$CALLLOG"
     DRC=0
     if [ "$3" = "1" ]; then
-        DOUT="$(run_with_timeout 120 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$wf" \
+        DOUT="$(run_with_timeout 120 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$wf" \
             "WD_SPAWN_MODULE=$(np "$SPAWN_JS")" "WD_CANNED=$(np "$CANNED")" "WD_CALL_LOG=$(np "$CALLLOG")" \
             node -r "$(np "$PRELOAD")" "$(np "$DISPATCH_JS")" "$1" "$MAIN" "$2" 2>/dev/null)" || DRC=$?
     else
-        DOUT="$(run_with_timeout 120 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$wf" \
+        DOUT="$(run_with_timeout 120 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$wf" \
             node "$(np "$DISPATCH_JS")" "$1" "$MAIN" "$2" 2>/dev/null)" || DRC=$?
     fi
 }

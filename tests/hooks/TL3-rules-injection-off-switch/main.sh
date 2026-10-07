@@ -16,7 +16,7 @@ RIL_NONCE_A3="RILNONCE-A3-6f23"
 RIL_NONCE_B="RILNONCE-B-6f2b"
 
 RIL_BASE="$(make_tmp_base)"
-trap 'rm -rf "$RIL_BASE"' EXIT
+trap 'rm -rf "$RIL_BASE" "${_ISOLATION_TMP_ROOT:-}"' EXIT  # also the dispatcher's isolation root (#2512)
 RIL_WF="$RIL_BASE/workflow"; RIL_PLANS="$RIL_BASE/plans"
 mkdir -p "$RIL_WF" "$RIL_PLANS"
 
@@ -87,7 +87,7 @@ if [ "$RIL_ABORT" -eq 1 ] && [ -n "$RIL_STRATEGY" ] && [ -d "$(ril_receipt_dir "
     f1_out="$(
         cd "$RIL_REPO" || exit 90
         unset CLAUDECODE; unset CLAUDE_CODE_SESSION_ID
-        export CLAUDE_WORKFLOW_DIR="$(node_path "$RIL_WF")"
+        export WORKFLOW_STATE_DIR="$(node_path "$RIL_WF")"
         export WORKFLOW_PLANS_DIR="$(node_path "$RIL_PLANS")"
         [ -n "$RIL_ENV_KIND" ] && export "$RIL_ENV_KIND=$RIL_ENV_VALUE"
         run_with_timeout 180 claude -p \

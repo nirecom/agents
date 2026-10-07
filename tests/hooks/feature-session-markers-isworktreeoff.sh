@@ -11,6 +11,11 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -67,7 +72,7 @@ call_is_worktree_off() {
     local wfdir="$1" sid="$2"
     run_with_timeout 20 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node -e '
             try {
@@ -94,7 +99,7 @@ call_notice_text() {
     NOTICE_RC=0
     NOTICE_OUT="$(run_with_timeout 20 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node -e '
             try {
@@ -194,14 +199,14 @@ test_E_notice_text() {
 
 test_F_notice_does_not_throw_on_bad_workflow_dir() {
     local sid="testsess006"
-    # Set CLAUDE_WORKFLOW_DIR to a value that won't crash join() but is invalid.
+    # Set WORKFLOW_STATE_DIR to a value that won't crash join() but is invalid.
     # The contract is: worktreeOffNoticeText NEVER throws — returns a string.
     # The empty value IS the test input here, so it is deliberately not dual-pinned
     # (#1799); this path only formats text and never writes a plans-dir record.
     NOTICE_RC=0
     NOTICE_OUT="$(run_with_timeout 20 env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=" \
+        "WORKFLOW_STATE_DIR=" \
         node -e '
             try {
               const m = require(process.env.AGENTS_CONFIG_DIR + "/hooks/lib/session-markers");
@@ -216,7 +221,7 @@ test_F_notice_does_not_throw_on_bad_workflow_dir() {
             }
         ' "$sid" 2>&1)" || NOTICE_RC=$?
     if [ "$NOTICE_RC" = "0" ] && [ -n "$NOTICE_OUT" ]; then
-        pass "F: worktreeOffNoticeText does not throw with empty CLAUDE_WORKFLOW_DIR"
+        pass "F: worktreeOffNoticeText does not throw with empty WORKFLOW_STATE_DIR"
     elif [ "$NOTICE_RC" = "2" ]; then
         fail "F: worktreeOffNoticeText not yet exported"
     else

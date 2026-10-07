@@ -11,6 +11,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # EXPECTED-WORDING CONTRACT (read before implementing #2120): each block reason in
 # enforce-worktree.js, handle-edit-write.js and worktree-entry-gate.js must name an
 # alternative write target in the vocabulary early-gate-messages.js already uses —

@@ -47,7 +47,7 @@ WM_STATE_FILE="$WM_WORKFLOW_DIR/$WM_SID.json"
 WM_OUTPUT=$(
     cd "$WM_REPO" &&
     unset CLAUDECODE &&
-    CLAUDE_WORKFLOW_DIR="$WM_WORKFLOW_DIR" \
+    WORKFLOW_STATE_DIR="$WM_WORKFLOW_DIR" \
     WORKFLOW_PLANS_DIR="$WM_PLANS_DIR" \
     run_with_timeout 180 claude -p \
         'Run exactly this Bash command and nothing else: echo "<<WORKFLOW_MARK_STEP_research_complete>>"' \

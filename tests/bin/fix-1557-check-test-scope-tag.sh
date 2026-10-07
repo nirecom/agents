@@ -18,6 +18,15 @@ FAIL=0
 pass() { PASS=$((PASS+1)); echo "ok - $1"; }
 fail() { FAIL=$((FAIL+1)); echo "not ok - $1"; echo "    $2" >&2; }
 
+# Fixture isolation (rules/test/fixture-isolation.md): pin the workflow state and plans dirs
+# once, before the first function that runs bin/.
+ISO_DIR="$(mktemp -d)"
+trap 'rm -rf "$ISO_DIR"' EXIT
+export WORKFLOW_STATE_DIR="$ISO_DIR/workflow-state"
+export WORKFLOW_PLANS_DIR="$ISO_DIR/plans"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
+unset CLAUDE_CODE_SESSION_ID
+
 if [[ ! -f "$SCRIPT" ]]; then
   fail "script exists" "script not found: $SCRIPT (implemented by #1557)"
   echo "1..1"; echo "# PASS=$PASS FAIL=$FAIL"; exit 1

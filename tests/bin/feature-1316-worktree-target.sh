@@ -51,8 +51,8 @@ fi
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Isolate workflow state so we never touch the real session store.
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
-mkdir -p "$CLAUDE_WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
+mkdir -p "$WORKFLOW_STATE_DIR"
 # Dual-pin (#1799, rules/test/fixture-isolation.md): without this the supervisor
 # emitter still resolves the developer's real ~/.workflow-plans/ and appends there.
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
@@ -114,7 +114,7 @@ write_state() {
         const fs = require("fs");
         const path = require("path");
         const [sid, cwd] = process.argv.slice(1);
-        const dir = process.env.CLAUDE_WORKFLOW_DIR;
+        const dir = process.env.WORKFLOW_STATE_DIR;
         const state = {
             version: 1,
             session_id: sid,

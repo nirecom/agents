@@ -10,6 +10,11 @@
 
 set -uo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 # TL3 gap (what this test does NOT catch):
 # - how the wording renders inside a real Claude Code permission prompt
 # - whether an author who follows a printed recipe actually gets past the guard

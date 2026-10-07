@@ -41,6 +41,8 @@ _jev_cleanup() {
   rm -rf "$TMPROOT"
 }
 trap _jev_cleanup EXIT
+# Top-level pin before the first function that runs a hook or bin (fx_new re-pins per fixture).
+harness_isolate "$TMPROOT/iso"
 
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1" "expected [$2] got [$3]"; fi; }
 hq() { run_with_timeout 30 node "$HELPERS" "$@" 2>/dev/null; }
@@ -51,7 +53,7 @@ fx_new() {
   mkdir -p "$FX/state" "$FX/wf" "$FX/plans" "$FX/cfg" "$FX/cwd" "$FX/transcripts" "$FX/io"
   harness_git_init "$FX/proj"
   export AGENTS_STATE_DIR; AGENTS_STATE_DIR="$(np "$FX/state")"
-  export CLAUDE_WORKFLOW_DIR; CLAUDE_WORKFLOW_DIR="$(np "$FX/wf")"
+  export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR="$(np "$FX/wf")"
   export WORKFLOW_PLANS_DIR; WORKFLOW_PLANS_DIR="$(np "$FX/plans")"
   export AGENTS_CONFIG_DIR; AGENTS_CONFIG_DIR="$(np "$FX/cfg")"
   export CLAUDE_PROJECT_DIR; CLAUDE_PROJECT_DIR="$(np "$FX/proj")"

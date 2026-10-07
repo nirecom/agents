@@ -221,7 +221,7 @@ _c18_run() {
         unset CLAUDE_PROJECT_DIR
         export CLAUDE_TRANSCRIPT_BASE_DIR="$C18_TRANSCRIPTS"
         export AGENTS_CONFIG_DIR="$C18_CONFIG"
-        export CLAUDE_WORKFLOW_DIR="$C18_WFDIR"
+        export WORKFLOW_STATE_DIR="$C18_WFDIR"
         export WORKFLOW_PLANS_DIR="$C18_WFDIR"
         run_hook_capture "$1" "$RWT" 20 node "$BCTW_HOOK"
     )

@@ -5,7 +5,7 @@
 
 _u14_run() {
     env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$TMP/u14/wf" WORKFLOW_PLANS_DIR="$TMP/u14/wf" \
+        WORKFLOW_STATE_DIR="$TMP/u14/wf" WORKFLOW_PLANS_DIR="$TMP/u14/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u14/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node -e "$1" 2>&1
@@ -98,7 +98,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 
 _u15_run() {
     env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$TMP/u15/wf" WORKFLOW_PLANS_DIR="$TMP/u15/wf" \
+        WORKFLOW_STATE_DIR="$TMP/u15/wf" WORKFLOW_PLANS_DIR="$TMP/u15/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u15/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node -e "$1" 2>&1
@@ -198,7 +198,7 @@ _U16_CLI="$AGENTS_DIR/bin/resume-session-detect"
 
 _u16_run() {
     env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$TMP/u16/wf" WORKFLOW_PLANS_DIR="$TMP/u16/wf" \
+        WORKFLOW_STATE_DIR="$TMP/u16/wf" WORKFLOW_PLANS_DIR="$TMP/u16/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u16/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node -e "$1" 2>&1
@@ -210,7 +210,7 @@ _u16_cli() {
     local sid="$1"
     shift
     env CLAUDE_CODE_SESSION_ID="$sid" \
-        CLAUDE_WORKFLOW_DIR="$TMP/u16/wf" WORKFLOW_PLANS_DIR="$TMP/u16/wf" \
+        WORKFLOW_STATE_DIR="$TMP/u16/wf" WORKFLOW_PLANS_DIR="$TMP/u16/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u16/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node "$_U16_CLI" "$@" 2>/dev/null
@@ -304,7 +304,7 @@ _U19_CLI="$AGENTS_DIR/bin/resume-session-detect"
 
 _u19_run() {
     env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$TMP/u19/wf" WORKFLOW_PLANS_DIR="$TMP/u19/wf" \
+        WORKFLOW_STATE_DIR="$TMP/u19/wf" WORKFLOW_PLANS_DIR="$TMP/u19/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u19/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node -e "$1" 2>&1
@@ -312,7 +312,7 @@ _u19_run() {
 
 _u19_cli() {
     env CLAUDE_CODE_SESSION_ID="$1" \
-        CLAUDE_WORKFLOW_DIR="$TMP/u19/wf" WORKFLOW_PLANS_DIR="$TMP/u19/wf" \
+        WORKFLOW_STATE_DIR="$TMP/u19/wf" WORKFLOW_PLANS_DIR="$TMP/u19/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/u19/transcripts" \
         HOME="$TMP/home" USERPROFILE="$TMP/home" \
         "$RWT" 60 node "$_U19_CLI" --list 2>/dev/null

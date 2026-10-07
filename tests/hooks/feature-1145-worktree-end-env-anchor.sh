@@ -42,13 +42,13 @@ tmp_node_for() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
 }
 
-# #2434: marker + env-json are control files — <tmp>/wf/<sid>.control/<name> (call_anchor pins CLAUDE_WORKFLOW_DIR=<tmp>/wf).
+# #2434: marker + env-json are control files — <tmp>/wf/<sid>.control/<name> (call_anchor pins WORKFLOW_STATE_DIR=<tmp>/wf).
 ctl() { mkdir -p "$1/wf/$2.control"; printf '%s' "$1/wf/$2.control/$3"; }
 
 # Invoke isWorktreeEndEnv with a given plans-dir + sessionId; echoes "true"/"false".
 call_anchor() {
     local plansdir="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$plansdir" CLAUDE_WORKFLOW_DIR="$plansdir/wf" run_with_timeout 10 node -e "
+    WORKFLOW_PLANS_DIR="$plansdir" WORKFLOW_STATE_DIR="$plansdir/wf" run_with_timeout 10 node -e "
 const { isWorktreeEndEnv } = require('$ANCHOR_NODE');
 console.log(isWorktreeEndEnv('$sid') ? 'true' : 'false');
 " 2>/dev/null

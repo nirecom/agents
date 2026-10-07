@@ -24,7 +24,7 @@ fi
 T23_CWD="/fixture/inj/repo"
 mkdir -p "$T23_ROOT/state" "$T23_ROOT/plans/worktree-end" "$T23_ROOT/transcripts"
 
-CLAUDE_WORKFLOW_DIR="$T23_ROOT/state" WORKFLOW_PLANS_DIR="$T23_ROOT/plans" \
+WORKFLOW_STATE_DIR="$T23_ROOT/state" WORKFLOW_PLANS_DIR="$T23_ROOT/plans" \
     run_with_timeout node -e "
 const fs = require('fs');
 const path = require('path');
@@ -51,7 +51,7 @@ fs.writeFileSync(path.join(tdir, 'injdonor-t23.jsonl'), [
 ].join(NL) + NL);
 " >/dev/null 2>&1
 
-( cd "$AGENTS_DIR" && CLAUDE_CODE_SESSION_ID="injheir-t23" CLAUDE_WORKFLOW_DIR="$T23_ROOT/state" \
+( cd "$AGENTS_DIR" && CLAUDE_CODE_SESSION_ID="injheir-t23" WORKFLOW_STATE_DIR="$T23_ROOT/state" \
     WORKFLOW_PLANS_DIR="$T23_ROOT/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$T23_ROOT/transcripts" \
     run_with_timeout node "$CLI" --from injdonor-t23 >"$T23_ROOT/stdout" 2>"$T23_ROOT/stderr" ) \
     && LAST_EXIT=0 || LAST_EXIT=$?

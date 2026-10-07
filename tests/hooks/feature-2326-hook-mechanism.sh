@@ -31,10 +31,10 @@ trap 'rm -rf "$TMPDIR_T"' EXIT
 # Node-visible form of the temp root (cygpath -m on Windows, identity elsewhere).
 if command -v cygpath >/dev/null 2>&1; then WF_ROOT="$(cygpath -m "$TMPDIR_T")"; else WF_ROOT="$TMPDIR_T"; fi
 # Dual-pin the workflow state + plans dirs (rules/test/fixture-isolation.md).
-export CLAUDE_WORKFLOW_DIR="$WF_ROOT/workflow-state"
+export WORKFLOW_STATE_DIR="$WF_ROOT/workflow-state"
 export WORKFLOW_PLANS_DIR="$WF_ROOT/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WF_ROOT/transcripts"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 
 # Fake rtk speaking the `hook claude` delegation protocol. The hook spawns the
 # rtk binary with fixed args `["hook","claude"]` via spawnSync (no shell), so the
@@ -106,7 +106,7 @@ const state={version:1,session_id:sid,created_at:"2026-09-29T00:00:00.000Z",
   steps:{workflow_init:st(),clarify_intent:st(),branching_complete:st()}};
 Object.assign(state,JSON.parse(extra));
 fs.writeFileSync(path.join(dir,sid+".json"),JSON.stringify(state,null,2));
-' "$CLAUDE_WORKFLOW_DIR" "$1" "$2"
+' "$WORKFLOW_STATE_DIR" "$1" "$2"
 }
 mk_state "$SID_ACTIVE" '{"worktree_entered_at":"2026-09-29T00:00:00.000Z"}'
 mk_state "$SID_EXITED" '{"worktree_entered_at":"2026-09-29T00:00:00.000Z","worktree_exited_at":"2026-09-29T01:00:00.000Z"}'

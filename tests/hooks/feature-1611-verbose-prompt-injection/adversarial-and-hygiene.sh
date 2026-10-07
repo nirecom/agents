@@ -21,7 +21,7 @@ echo "=== J: adversarial session IDs ==="
 # The session id reaches two places that build paths or spawn work from it:
 # the read-only provider and SessionStart's own state handling. A traversal /
 # metacharacter / control-character id must never create a file outside
-# CLAUDE_WORKFLOW_DIR and must never reach a shell.
+# WORKFLOW_STATE_DIR and must never reach a shell.
 
 snapshot_outside_wfdir() {
     find "$TMPROOT" -mindepth 1 -not -path "$WFDIR" -not -path "$WFDIR/*" 2>/dev/null | LC_ALL=C sort
@@ -108,7 +108,7 @@ echo ""
 echo "=== K: state-write failure and atomic-write hygiene ==="
 # ---------------------------------------------------------------------------
 #
-# CLAUDE_WORKFLOW_DIR is pointed at a regular file, so every open/mkdir beneath
+# WORKFLOW_STATE_DIR is pointed at a regular file, so every open/mkdir beneath
 # it fails with ENOTDIR. Both consumers must fail open, and neither may leave a
 # half-written temp file behind (writeState uses tmp+rename).
 
@@ -117,7 +117,7 @@ printf 'this is a file, not a directory\n' > "$BROKEN_WFDIR"
 BROKEN_WFDIR_N="$(to_node_path "$BROKEN_WFDIR")"
 
 K02_OUT="$(hook_out "$SESSION_START_JS" '{"session_id":"sid-k02","model":"deepseek-v4-flash"}' \
-    'VERBOSE_PROMPT_MODELS=deepseek' "CLAUDE_WORKFLOW_DIR=$BROKEN_WFDIR_N")"
+    'VERBOSE_PROMPT_MODELS=deepseek' "WORKFLOW_STATE_DIR=$BROKEN_WFDIR_N")"
 K02_VALID="$(printf '%s' "$K02_OUT" | run_with_timeout 30 node -e '
 let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
   try { JSON.parse(s); process.stdout.write("ok"); } catch (e) { process.stdout.write("bad"); }

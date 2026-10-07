@@ -150,7 +150,7 @@ run_guard() {
     out=$(cd "$dir" && printf '%s' "$payload" | \
         env -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
             -u ENFORCE_WORKTREE_ADDITIONAL_REPOS -u ENFORCE_WORKTREE_EXTRA_REPOS \
-        ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
+        ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
     rc=$?

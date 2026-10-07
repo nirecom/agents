@@ -24,6 +24,17 @@ assert_eq() {
     else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
 
+TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/ra-serial-prefix-$$")"
+mkdir -p "$TMPD"
+trap 'rm -rf "$TMPD"' EXIT
+
+# --- fixture isolation (rules/test/fixture-isolation.md) --------------------
+# Pinned before run_with_timeout below: a function that execs counts as running at its definition.
+export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
+export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
+unset CLAUDE_CODE_SESSION_ID
+
 # Same ambient sanitization as h-serial-header-convention.sh (senv outermost).
 senv() {
     env -u TEST_MAX_JOBS_PER_RUN -u RUN_ALL_DEADLINE -u RUN_ALL_PROGRESS -u RUN_ALL_REAP \
@@ -32,15 +43,6 @@ senv() {
 unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
 run_with_timeout() { local s="$1"; shift; senv bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
 
-TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/ra-serial-prefix-$$")"
-mkdir -p "$TMPD"
-trap 'rm -rf "$TMPD"' EXIT
-
-# --- fixture isolation (rules/test/fixture-isolation.md) --------------------
-export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
-export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 

@@ -108,7 +108,7 @@ run_turn() {
       PATH="$MOCKBIN:$PATH" \
       TMPDIR="$FTMP" TEMP="$FTMP" TMP="$FTMP" \
       SCRATCHPAD="$SP_M" \
-      CLAUDE_WORKFLOW_DIR="$WFDIR" \
+      WORKFLOW_STATE_DIR="$WFDIR" \
       WORKFLOW_PLANS_DIR="$PLANSDIR" \
       AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
       run_with_timeout 180 claude -p "$2" \
@@ -285,7 +285,7 @@ if command -v cygpath >/dev/null 2>&1 && cygpath -u "C:/" 2>/dev/null | grep -q 
           MSYS_NO_PATHCONV=1 \
           MSYS2_ENV_CONV_EXCL=SCRATCHPAD \
           SCRATCHPAD="$3" \
-          CLAUDE_WORKFLOW_DIR="$WFDIR" \
+          WORKFLOW_STATE_DIR="$WFDIR" \
           WORKFLOW_PLANS_DIR="$PLANSDIR" \
           AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
           run_with_timeout 180 claude -p "$2" \

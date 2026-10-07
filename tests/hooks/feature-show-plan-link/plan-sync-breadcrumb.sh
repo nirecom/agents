@@ -68,7 +68,7 @@ printf 'plan\n' > "$SPS_PLANS/s2513-intent.md"
 PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513-intent.md" test-sid-h2)"
 sps_expect_msg_has "H2 Plan file + [plan-sync] no-repo + run hint" "Plan file: " "s2513-intent.md" "[plan-sync] no-repo $SPS_RUN_HINT"
 if [ "$HOOK_RC" = 0 ]; then pass "H2 exit 0"; else fail "H2 exit 0 — rc=$HOOK_RC"; fi
-SPS_MARKERS=("$CLAUDE_WORKFLOW_DIR"/test-sid-h2.confirm-plan-turn-*.json)
+SPS_MARKERS=("$WORKFLOW_STATE_DIR"/test-sid-h2.confirm-plan-turn-*.json)
 if [ -f "${SPS_MARKERS[0]}" ]; then pass "H2 turn marker written before the message"
 else fail "H2 turn marker written before the message — no test-sid-h2.confirm-plan-turn-*.json"; fi
 

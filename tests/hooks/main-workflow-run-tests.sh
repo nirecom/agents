@@ -23,12 +23,12 @@ mkdir -p "$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Fixture isolation (rules/test/fixture-isolation.md). Dual-pin: pinning only
-# CLAUDE_WORKFLOW_DIR routes hook state into the fixture while any supervisor
+# WORKFLOW_STATE_DIR routes hook state into the fixture while any supervisor
 # emitter on the same code path still resolves ~/.workflow-plans and appends to
 # the developer's real audit trail. Exported once here so every child `node`
 # inherits both, and the inherited live session IDs are cleared so a hook cannot
 # resolve — and mutate — the real session running this suite.
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/workflow-plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID

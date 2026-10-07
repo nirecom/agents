@@ -153,7 +153,7 @@ case_begin "auto-round-numbering" "bin/run-codex-review-loop"
   else
     fail "8: --round absent → expected the auto-numbered round to run (exit 0), got $rc"
   fi
-  if [[ ! -f "$CLAUDE_WORKFLOW_DIR/i8.control/detail-plan-round-number.txt" && ! -f "$PLANS/i8-detail-plan-round-number.txt" ]]; then
+  if [[ ! -f "$WORKFLOW_STATE_DIR/i8.control/detail-plan-round-number.txt" && ! -f "$PLANS/i8-detail-plan-round-number.txt" ]]; then
     pass "8: and the terminal retires the counter it allocated"
   else
     fail "8: the counter outlived the terminal round"

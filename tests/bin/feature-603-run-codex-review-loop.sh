@@ -86,7 +86,7 @@ setup_plans_dir() {
   mkdir -p "$plans_dir" "$workflow_dir"
   echo "# Draft plan" > "$plans_dir/draft.md"
   echo "# Outline" > "$plans_dir/outline.md"
-  export CLAUDE_WORKFLOW_DIR="$workflow_dir"
+  export WORKFLOW_STATE_DIR="$workflow_dir"
   export WORKFLOW_PLANS_DIR="$plans_dir"
   echo "$plans_dir"
 }

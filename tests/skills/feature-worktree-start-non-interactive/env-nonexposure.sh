@@ -8,6 +8,12 @@
 # child (node, git, bash, scan-outbound.sh) inherited it and any process-inspection
 # interface could read it. F3 hands it to the single consumer over stdin.
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # Verdicts are unchanged (B21/B25 pass either way), so the property is asserted from
 # inside the children: a stand-in AGENTS_CONFIG_DIR whose scan-outbound.sh and
 # check-private-repo-name.js record, per call, the candidate, the list delivered,

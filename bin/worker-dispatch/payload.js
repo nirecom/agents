@@ -15,12 +15,13 @@ const MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
 const RE_SESSION_ID = /^[A-Za-z0-9_-]+$/;
 const RE_CONTROL_PAYLOAD = /^worker-[a-z0-9]+(?:-[a-z0-9]+)*\.json$/;
 
-function controlForm(abs, workflowDir) {
-  if (!workflowDir) return null;
+// A session's control dir may sit under any state root (#2511), so every root is accepted.
+function controlForm(abs, stateRoots) {
+  if (!Array.isArray(stateRoots) || stateRoots.length === 0) return null;
   const parent = path.dirname(abs);
   const base = path.basename(abs);
   const m = /^(.+)\.control$/.exec(path.basename(parent));
-  if (m === null || !samePath(path.dirname(parent), workflowDir)) return null;
+  if (m === null || !stateRoots.some((r) => samePath(path.dirname(parent), r))) return null;
   const sid = m[1];
   if (!RE_SESSION_ID.test(sid)) throw new Error("payload control directory names a malformed session id");
   if (base.endsWith(".draft.json") || !RE_CONTROL_PAYLOAD.test(base)) {
@@ -63,7 +64,7 @@ function locatePayload(file, opts) {
   const abs = absPath(file);
   if (abs === null) throw new Error("payload path must be an absolute path");
   const o = opts || {};
-  const found = controlForm(abs, o.workflowDir) || legacyForm(abs, o.plansDir);
+  const found = controlForm(abs, o.stateRoots) || legacyForm(abs, o.plansDir);
   if (found === null) throw new Error("payload file must live in the session control directory");
   return Object.assign({ abs }, found);
 }

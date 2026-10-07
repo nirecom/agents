@@ -22,7 +22,7 @@ CKPT_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/checkpoint.js"
 # writeCheckpoint's mkdirSync of the parent still succeeds and its writeFileSync
 # raises EISDIR — a path the process may traverse but not write, which is the real
 # shape of the failure rather than a stubbed throw. Mirrors what checkpointPath()
-# computes (<CLAUDE_WORKFLOW_DIR>/<sid>.control/wi-checkpoint.json, #2434), without importing it.
+# computes (<WORKFLOW_STATE_DIR>/<sid>.control/wi-checkpoint.json, #2434), without importing it.
 break_checkpoint_write() { mkdir -p "$(ctrl_file wi-checkpoint.json)"; }
 
 # --- K1: the rewrite is applied on win32 and withheld on POSIX ----------------------
@@ -40,7 +40,7 @@ const path = require("path");
 // fresh temp root, so the forWrite mkdir never lands outside the fixture.
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "wid-k1-"));
 const wfDir = root + "\\wi\\dir";
-process.env.CLAUDE_WORKFLOW_DIR = wfDir;
+process.env.WORKFLOW_STATE_DIR = wfDir;
 process.env.WORKFLOW_PLANS_DIR = path.join(root, "plans");
 const { checkpointPath } = require(process.argv[1]);
 const out = checkpointPath("sid-k1");
@@ -84,7 +84,7 @@ const path = require("path");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "wid-k3-"));
 // Nested + not-yet-existing workflow dir: the resolver must mkdir the parents of the
 // value it hands back, the operation a broken separator would break first.
-process.env.CLAUDE_WORKFLOW_DIR = path.join(root, "nested", "deeper");
+process.env.WORKFLOW_STATE_DIR = path.join(root, "nested", "deeper");
 process.env.WORKFLOW_PLANS_DIR = path.join(root, "plans");
 const { checkpointPath, writeCheckpoint, readCheckpoint } = require(process.argv[1]);
 const p = checkpointPath("sid-k3");

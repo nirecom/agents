@@ -57,7 +57,7 @@ run_arm1() {
     require_ensure_alert_scheduled "ARM1: ensureAlertScheduled with warning finding -> arms" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const s = require('$SCHEMA_MODULE_NODE');
 const fs = require('fs');
@@ -83,7 +83,7 @@ run_arm2() {
     require_ensure_alert_scheduled "ARM2: ensureAlertScheduled with notice finding -> does NOT arm" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const s = require('$SCHEMA_MODULE_NODE');
 const fs = require('fs');
@@ -109,7 +109,7 @@ run_arm3() {
     require_ensure_alert_scheduled "ARM3: ensureAlertScheduled with null finding -> arms (backward-compat)" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('arm3-sid');
@@ -133,7 +133,7 @@ run_arm4() {
     require_ensure_alert_scheduled "ARM4: ensureAlertScheduled with error finding -> arms" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node -e "
 const w = require('$WRITER_MODULE_NODE');
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('arm4-sid');

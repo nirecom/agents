@@ -9,6 +9,12 @@
 #   routes those tool calls to it. X6 asserts the registration STATICALLY only.
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # - Real NTFS alternate-data-stream semantics and real shell glob expansion at
 #   redirect time: the OS/shell behaviour is the premise, and only the hook's
 #   treatment of the spelling is asserted here.
@@ -74,7 +80,7 @@ mk_edits_input() {
 run_hook_cwd() {
     local cwd="$1" tn="$2" input="$3" out rc
     [ -f "$HOOK" ] || { printf 'absent|'; return; }
-    out=$(cd "$cwd" 2>/dev/null && CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$PLANSDIR" \
+    out=$(cd "$cwd" 2>/dev/null && WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$PLANSDIR" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
@@ -127,7 +133,7 @@ fi
 
 # --- sandbox: a throwaway workflow dir + a throwaway session id -------------
 # NOTHING here touches the real ~/.claude/projects/workflow. The hook is a pure
-# classifier over the tool payload (it creates no files), but CLAUDE_WORKFLOW_DIR
+# classifier over the tool payload (it creates no files), but WORKFLOW_STATE_DIR
 # and WORKFLOW_PLANS_DIR are sandboxed anyway so that no future side effect can
 # escape into real session state.
 SANDBOX=$(make_tmp); WFDIR=$(node_path "$SANDBOX")
@@ -146,7 +152,7 @@ printf '{"session_id":"s1"}\n' > "$SANDBOX/s1.json"
 # invisible to those probes: they resolve the real workflow dir, `s1` is not an
 # observed sid there, and every stem-dependent case degrades to "unprotected".
 # classify() on line 77 still overrides both per-invocation for its own sandbox.
-export CLAUDE_WORKFLOW_DIR="$WFDIR"
+export WORKFLOW_STATE_DIR="$WFDIR"
 export WORKFLOW_PLANS_DIR="$PLANSDIR"
 
 # --- SSOT introspection: the protected sets are DERIVED, never hardcoded ----

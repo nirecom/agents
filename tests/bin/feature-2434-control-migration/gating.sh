@@ -18,7 +18,7 @@ UUID="aabbccdd-1111-2222-3333-444455556666"
 run_migrate_all() {
   local wf="$1" plans="$2"
   node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$wf';
+process.env.WORKFLOW_STATE_DIR='$wf';
 process.env.WORKFLOW_PLANS_DIR='$plans';
 try {
   var m=require('$IDX_MOD');
@@ -118,7 +118,7 @@ age_files 90100 "$OLD_TMP"
 WF_NP="$(np "$T/workflow-state")"
 PLANS_NP="$(np "$T/plans")"
 node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$WF_NP';
+process.env.WORKFLOW_STATE_DIR='$WF_NP';
 process.env.WORKFLOW_PLANS_DIR='$PLANS_NP';
 try {
   var m=require('$IDX_MOD');
@@ -149,7 +149,7 @@ age_files 700 "$T/plans/${SID}-detail-plan-terminal.txt" "$T/plans/${SID2}-detai
 WF_NP="$(np "$T/workflow-state")"
 PLANS_NP="$(np "$T/plans")"
 RESULT=$(node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$WF_NP';
+process.env.WORKFLOW_STATE_DIR='$WF_NP';
 process.env.WORKFLOW_PLANS_DIR='$PLANS_NP';
 try {
   var m=require('$IDX_MOD');

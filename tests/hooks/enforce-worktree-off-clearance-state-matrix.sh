@@ -7,7 +7,7 @@
 # DEFENDS #1709: the OFF-clearance pipeline lives in the workflow STATE dir (outside any repo) and its reads + bookkeeping writes must stay reachable from the MAIN checkout and a PROTECTED branch, or clearance validation fails shut.
 # MATRIX: {read, state-write, marker-write} x {main, linked-feature, protected} x {Bash, runInTerminal, runCommands} x {ENFORCE_WORKTREE on, off}, plus the edit-write class into the state dir (CPR-ORTH) — the cross-product fix-1709 (Bash, non-git, on, writes only) and fix-1780 round4 (in-repo, on only) leave open.
 # ASSERTION CONTRACT (from fix-1709): the guard prints `{}` (allow) or a block object; a crash, timeout, or empty output is its OWN verdict token, never folded into "allow".
-# HERMETICITY (rules/test/fixture-isolation.md): throwaway repos with core.hooksPath disabled; CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR dual-pinned at DISTINCT dirs (so a state-dir allow cannot come from the plans-dir fast-path); CLAUDE_CODE_SESSION_ID / SCRATCHPAD / DEFAULT_BRANCHES unset per invocation.
+# HERMETICITY (rules/test/fixture-isolation.md): throwaway repos with core.hooksPath disabled; WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR dual-pinned at DISTINCT dirs (so a state-dir allow cannot come from the plans-dir fast-path); CLAUDE_CODE_SESSION_ID / SCRATCHPAD / DEFAULT_BRANCHES unset per invocation.
 
 set -u
 
@@ -98,7 +98,7 @@ run_guard() {
     payload=$("$RWT" 10 node "$DRV" "$tool" "$target" "$(node_path "$dir")" "$shape" "$SID" 2>/dev/null)
     out=$(cd "$dir" && printf '%s' "$payload" | \
         env -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
-        ENFORCE_WORKTREE="$mode" CLAUDE_WORKFLOW_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
+        ENFORCE_WORKTREE="$mode" WORKFLOW_STATE_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
     rc=$?

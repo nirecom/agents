@@ -1,0 +1,50 @@
+#!/usr/bin/env node
+":" //; exec node "$0" "$@"
+// --- BEGIN temporary: ~/.claude/projects/workflow -> ~/.workflow-state migration added 2026-10-04 ---
+// deletion-condition: remove when bin/state-dir-relocation remaining exits 0 (no session with a <sid>.json or <sid>.control left in the legacy dir, any sid shape); also delete skills/session-close SC-9; review by 2027-01-04
+// bin/state-dir-relocation move --session <sid> | remaining
+// move: one stdout line (RELOCATED / RELOCATE_SKIPPED / RELOCATE_FAILED), exit 0.
+// remaining: REMAINING_SIDS=<n> then "<sid> <uuid|timestamp|other>"; exit 0 none left, 1 some left.
+// Exit 2: usage error or invalid sid.
+const path = require("path");
+
+const LIB = path.join(__dirname, "..", "hooks", "lib", "temporary-migrations", "state-dir-relocation");
+const USAGE = "usage: state-dir-relocation move --session <sid> | remaining";
+
+function die(code, msg) {
+  process.stderr.write(`state-dir-relocation: ${msg}\n`);
+  process.exit(code);
+}
+
+function runMove(argv) {
+  if (argv.length !== 2 || argv[0] !== "--session") die(2, USAGE);
+  const { relocate } = require(path.join(LIB, "move.js"));
+  let line;
+  try {
+    line = relocate(argv[1]);
+  } catch (e) {
+    die(2, e.message);
+  }
+  process.stdout.write(`${line}\n`);
+  process.exit(0);
+}
+
+function runRemaining(argv) {
+  if (argv.length !== 0) die(2, USAGE);
+  const { listRemaining } = require(path.join(LIB, "remaining.js"));
+  let rows;
+  try {
+    rows = listRemaining();
+  } catch (e) {
+    die(1, e.message);
+  }
+  const out = [`REMAINING_SIDS=${rows.length}`, ...rows.map((r) => `${r.sid} ${r.shape}`)];
+  process.stdout.write(`${out.join("\n")}\n`);
+  process.exit(rows.length === 0 ? 0 : 1);
+}
+
+const [sub, ...rest] = process.argv.slice(2);
+if (sub === "move") runMove(rest);
+else if (sub === "remaining") runRemaining(rest);
+else die(2, USAGE);
+// --- END temporary: ~/.claude/projects/workflow -> ~/.workflow-state migration ---

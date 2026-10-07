@@ -34,7 +34,7 @@ finish() {
 TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/pfc-$$")"
 mkdir -p "$TMPD/plans" "$TMPD/state"
 trap 'rm -rf "$TMPD"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TMPD/state"
+export WORKFLOW_STATE_DIR="$TMPD/state"
 WORKFLOW_PLANS_DIR="$(nodepath "$TMPD/plans")"
 export WORKFLOW_PLANS_DIR
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true

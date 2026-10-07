@@ -38,7 +38,7 @@
 #   20-nr2  `cd` to an unrelated absolute dir, then a bare glob
 #   20-nr3/20-nr4  ordinary absolute bulk globs
 #
-# NOT HARDCODED. The workflow dir is whatever CLAUDE_WORKFLOW_DIR resolves to at
+# NOT HARDCODED. The workflow dir is whatever WORKFLOW_STATE_DIR resolves to at
 # runtime (hooks/workflow-state/state-io/core.js), which for this suite is a
 # throwaway fixture — so the $HOME-relative spelling is DERIVED from that
 # fixture, never written as `.claude/projects/workflow`. The fixture is created
@@ -48,7 +48,7 @@
 #
 # Table format: name|want|payload, as in ./cases-round6-stdin.sh. Placeholders:
 #   @HWF@ -> $HOME/<derived>    @BWF@ -> ${HOME}/<derived>   @TWF@ -> ~/<derived>
-#   @EWF@ -> $CLAUDE_WORKFLOW_DIR                @LWF@ -> the resolved absolute dir
+#   @EWF@ -> $WORKFLOW_STATE_DIR                @LWF@ -> the resolved absolute dir
 #   @SID@ -> the sandbox session id
 
 R9_WF_DIR=""; R9_WF_POSIX=""; R9_WF_REL=""
@@ -78,7 +78,7 @@ _r9_wf_table() {
         payload="${payload//@HWF@/$hspell}"
         payload="${payload//@BWF@/$bspell}"
         payload="${payload//@TWF@/$tspell}"
-        payload="${payload//@EWF@/\$CLAUDE_WORKFLOW_DIR}"
+        payload="${payload//@EWF@/\$WORKFLOW_STATE_DIR}"
         payload="${payload//@LWF@/$R9_WF_DIR}"
         payload="${payload//@SID@/$SID}"
         assert_verdict "$section $name" "$want" \
@@ -105,7 +105,7 @@ run_R9_workflow_dir_glob() {
 20-e cp into $HOME glob|block|cp /tmp/x @HWF@/*
 20-f cd ~ then bare glob|block|cd @TWF@ && echo x | tee *
 20-g cd $HOME then bare glob|block|cd @HWF@ && echo x | tee *
-20-h tee $CLAUDE_WORKFLOW_DIR glob|block|echo x | tee @EWF@/*
+20-h tee $WORKFLOW_STATE_DIR glob|block|echo x | tee @EWF@/*
 20-i redirect into $HOME glob|block|echo x > @HWF@/*
 20-j tee ~ question-mark glob|block|echo x | tee @TWF@/?
 20-c1 pre-fix control: literal spelling|block|echo x | tee @LWF@/*

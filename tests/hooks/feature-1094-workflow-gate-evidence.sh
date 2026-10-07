@@ -9,6 +9,11 @@
 
 set -euo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 [ -f "hooks/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented (clarify_intent gate not yet evidence-aware)"; exit 0; }
 
 if ! command -v node >/dev/null 2>&1; then
@@ -24,7 +29,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 
 PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$PLANS_DIR"
@@ -73,7 +78,7 @@ read_state_status() {
   if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
   # #1733: state is an append-only event stream on disk (no top-level .steps);
   # read through readState() so v1 fixtures migrate and the event log projects.
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
     try {
       const S = require(process.argv[2]);
       const s = S.readState(process.argv[1]);
@@ -85,7 +90,7 @@ read_state_status() {
 
 run_gate() {
   local json="$1"
-  echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" run_with_timeout node "$GATE_HOOK" 2>/dev/null
+  echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" run_with_timeout node "$GATE_HOOK" 2>/dev/null
 }
 
 # State with workflow_init=complete, clarify_intent=pending

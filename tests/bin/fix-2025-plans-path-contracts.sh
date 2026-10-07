@@ -61,9 +61,9 @@ TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 unset SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 cd "$TMPDIR_BASE" || exit 1
 
 # --- two copies of the tree, differing only in the shared library ------------
@@ -114,7 +114,7 @@ REPORT="$TMPDIR_BASE/report.txt"
 # files, the ledger and every staged delta live there, sid-unprefixed. Cases
 # take distinct session ids so no control dir is shared between them.
 ctl_dir() {
-    local d="$CLAUDE_WORKFLOW_DIR/$1.control"
+    local d="$WORKFLOW_STATE_DIR/$1.control"
     mkdir -p "$d"
     printf '%s' "$d"
 }
@@ -170,7 +170,7 @@ echo "--- contracts 1: the gate fails closed when its library is missing ---"
         "5" "$(rc_of bash "$ROOT/bin/concern-ledger" check-staged --plans-dir "$PLANS" \
             --session-id "$SID" --format "$FORMAT" --round 1)"
     assert_eq_nz "1: and nothing was written into the plans or control dir on the way out" \
-        "0" "$(find "$PLANS" "$CLAUDE_WORKFLOW_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+        "0" "$(find "$PLANS" "$WORKFLOW_STATE_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
 }
 
 {
@@ -270,7 +270,7 @@ echo "--- contracts 2: the security-code loop fails closed on the same library -
         "$(printf '%s' "$W_ERR" | grep -Fq 'NOT-STAGED' && printf 'notice-instead-of-refusal' \
             || printf clean)"
     assert_eq "2: and nothing was written into the plans or control dir on the way out" \
-        "0" "$(find "$W_PLANS" "$CLAUDE_WORKFLOW_DIR/$W_SID.control" -type f 2>/dev/null \
+        "0" "$(find "$W_PLANS" "$WORKFLOW_STATE_DIR/$W_SID.control" -type f 2>/dev/null \
             | wc -l | tr -d ' ')"
 }
 
@@ -422,7 +422,7 @@ echo "--- contracts 5: a legal '..' inside a directory name still works ---"
     U_SID="c2025-u"
     mkdir -p "$U_PLANS" "$U_WF"
 
-    U_STAGE="$(CLAUDE_WORKFLOW_DIR="$U_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" \
+    U_STAGE="$(WORKFLOW_STATE_DIR="$U_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" \
         stage --plans-dir "$U_PLANS" \
         --session-id "$U_SID" --format "$FORMAT" --round 1 \
         --producer review-code-codex --from-report "$REPORT")"
@@ -463,10 +463,10 @@ echo "--- contracts 6: #2088 at the process boundary ---"
         "backslash backslash " \
         "$(for _d in "$B_PLANS" "$B_WF"; do case "$_d" in *\\*) printf 'backslash ' ;; *) printf 'plain ' ;; esac; done)"
 
-    CLAUDE_WORKFLOW_DIR="$B_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage \
+    WORKFLOW_STATE_DIR="$B_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage \
         --plans-dir "$B_PLANS" --session-id "$B_SID" --format "$FORMAT" --round 1 \
         --producer review-code-codex --from-report "$REPORT" >/dev/null
-    CLAUDE_WORKFLOW_DIR="$B_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage \
+    WORKFLOW_STATE_DIR="$B_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage \
         --plans-dir "$B_PLANS" --session-id "$B_SID" --format "$FORMAT" --round 1 \
         --producer security-scanner --from-report "$REPORT" >/dev/null
     assert_eq_nz "6: both deltas were written into that directory (precondition)" \
@@ -474,7 +474,7 @@ echo "--- contracts 6: #2088 at the process boundary ---"
             | wc -l | tr -d ' ')"
 
     assert_eq_nz "6: reduce exits cleanly on a backslash-spelled plans dir" \
-        "0" "$(CLAUDE_WORKFLOW_DIR="$B_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" \
+        "0" "$(WORKFLOW_STATE_DIR="$B_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" \
             reduce --plans-dir "$B_PLANS" \
             --session-id "$B_SID" --format "$FORMAT" --round 1)"
     # A v2 ledger row is `C<n>|SEV|state|...|TEXT`, not the `- ` bullet the

@@ -4,7 +4,7 @@
 # be AUDITED (UNAVAILABLE) and point at the EMERGENCY sentinel, never die silently under
 # set -e. Induced by a synthetic AGENTS_CONFIG_DIR that keeps supervisor-state-writer but
 # OMITS state-io/core.js. R3: the audit write itself failing stays NON-blocking.
-# #2434: the audit trail is the control file <CLAUDE_WORKFLOW_DIR>/<sid>.control/supervisor-state.json.
+# #2434: the audit trail is the control file <WORKFLOW_STATE_DIR>/<sid>.control/supervisor-state.json.
 
 # _r_fake_acd <dir> <with_core yes|no> <with_writer yes|no> — synthetic AGENTS_CONFIG_DIR
 # whose re-exports point at the REAL modules; only each module's PRESENCE varies.
@@ -30,7 +30,7 @@ _r_run() {
     runpath="$PATH"
     [ -n "$stubdir" ] && runpath="$stubdir:$PATH"
     _R_OUT=$(PATH="$runpath" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
-        CLAUDE_WORKFLOW_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" AGENTS_CONFIG_DIR="$acd" \
+        WORKFLOW_STATE_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" AGENTS_CONFIG_DIR="$acd" \
         "$RWT" 90 bash "$REQ" --target "$target" --category workflow-bug \
         --detail "next-step is wedged and blocks all progress" 2>"$errfile")
     _R_RC=$?

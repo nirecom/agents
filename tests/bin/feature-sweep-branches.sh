@@ -12,6 +12,12 @@ set -uo pipefail
 
 DISPATCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/feature-sweep-branches" && pwd)"
 
+# isolation (#2512): pin before any group runs; core.sh re-pins its own private dir.
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 TEST_GROUPS=(core validation remote no-pr pr-state)
 
 TOTAL_PASS=0

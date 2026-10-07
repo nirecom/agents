@@ -74,7 +74,7 @@ printf '{"type":"attachment","attachment":{"hookEvent":"SessionStart","exitCode"
 SS_OUTPUT=$(
     cd "$SS_REPO" &&
     unset CLAUDECODE &&
-    CLAUDE_WORKFLOW_DIR="$SS_WORKFLOW_DIR" \
+    WORKFLOW_STATE_DIR="$SS_WORKFLOW_DIR" \
     WORKFLOW_PLANS_DIR="$SS_PLANS_DIR" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$(node_path "$SS_TBASE")" \
     run_with_timeout 180 claude -p \

@@ -35,7 +35,7 @@ psf_setup() {
   PSF_ROOT="$(psf_np "$(mktemp -d 2>/dev/null || mktemp -d -t psf)")"
   mkdir -p "$PSF_ROOT/workflow-state" "$PSF_ROOT/plans" "$PSF_ROOT/cfg" \
     "$PSF_ROOT/neutral" "$PSF_ROOT/transcripts"
-  export CLAUDE_WORKFLOW_DIR="$PSF_ROOT/workflow-state"
+  export WORKFLOW_STATE_DIR="$PSF_ROOT/workflow-state"
   export WORKFLOW_PLANS_DIR="$PSF_ROOT/plans"
   export AGENTS_CONFIG_DIR="$PSF_ROOT/cfg"
   export CLAUDE_TRANSCRIPT_BASE_DIR="$PSF_ROOT/transcripts"

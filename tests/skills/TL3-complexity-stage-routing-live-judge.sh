@@ -2,11 +2,16 @@
 # tests/skills/TL3-complexity-stage-routing-live-judge.sh
 # Tests: skills/_shared/judge-task-complexity.md, bin/workflow/derive-complexity-level, tests/hooks/feature-2099-complexity-stage-routing.sh
 # Tags: complexity, routing, judge, live-agent, prompt-injection, threshold, TL3, run-e2e, scope:common
-# Serial: drives the #2099 suite, which writes into its own pinned CLAUDE_WORKFLOW_DIR
+# Serial: drives the #2099 suite, which writes into its own pinned WORKFLOW_STATE_DIR
 # RUN_TL3-ON lane for #2099. The suite's live-agent cases (PI-5, JT-*) carry their
 # own in-function gate and SKIP on an ordinary run; `bin/select-tests.sh` picks this
 # file up for the expensive tier by its `TL3-` prefix, and it forbids those cases to skip.
 set -uo pipefail
+
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
@@ -74,7 +79,7 @@ else
     CJ_INTENT="$CJ_TMP/intent.md"
     printf '# Intent\n\nAdd a single log line to one existing function.\n' > "$CJ_INTENT"
     CJ_RAW="$CJ_TMP/judge-raw.txt"
-    # #2434: normalize writes, and derive reads, the derived <CLAUDE_WORKFLOW_DIR>/<sid>.control/
+    # #2434: normalize writes, and derive reads, the derived <WORKFLOW_STATE_DIR>/<sid>.control/
     # detail-signals.txt; both dirs are pinned (dual-pin) for those two calls only.
     CJ_SID="tl3-live-cj-$$"
     CJ_WF="$CJ_TMP/workflow-state"; CJ_PLANS="$CJ_TMP/plans"
@@ -90,7 +95,7 @@ else
     if [ "$cj_rc" -ne 0 ] || [ ! -s "$CJ_RAW" ]; then
         fail "T-LIVE-CJ-1 — complexity-judge spawn produced no output (rc=$cj_rc)"
     else
-        CLAUDE_WORKFLOW_DIR="$CJ_WF" WORKFLOW_PLANS_DIR="$CJ_PLANS" \
+        WORKFLOW_STATE_DIR="$CJ_WF" WORKFLOW_PLANS_DIR="$CJ_PLANS" \
             node "$NORMALIZE_CLI" --raw-file "$CJ_RAW" --session "$CJ_SID" --stage detail >/dev/null 2>&1 || true
         # C3: a single-log-line, one-file intent has no complexity signals, so the
         # judge must emit `SIGNALS: none` -> empty CSV -> level exactly `low`. A
@@ -98,7 +103,7 @@ else
         # fell through to the S0-undecidable fail-open — both are real regressions,
         # so accepting them (the old low|medium|high match) would be too permissive.
         cj_signals="$(tr -d '[:space:]' < "$CJ_SIGNALS" 2>/dev/null)"
-        cj_level="$(CLAUDE_WORKFLOW_DIR="$CJ_WF" WORKFLOW_PLANS_DIR="$CJ_PLANS" \
+        cj_level="$(WORKFLOW_STATE_DIR="$CJ_WF" WORKFLOW_PLANS_DIR="$CJ_PLANS" \
             node "$DERIVE_CLI" --stage detail --session "$CJ_SID" 2>/dev/null | head -n 1 | tr -d '[:space:]')"
         cj_level="${cj_level#level=}"
         if [ -z "$cj_signals" ] && [ "$cj_level" = "low" ]; then

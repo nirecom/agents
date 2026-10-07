@@ -17,7 +17,7 @@ const {
   mentionsProtectedName,
   TOKEN_MENTION_RE,
 } = require("../../lib/protected-basenames");
-const { classifyBashWriteTarget, commandCwd, resolveWorkflowDir } = require("../bash-target-context");
+const { classifyBashWriteTarget, commandCwd, resolveStateRoots } = require("../bash-target-context");
 const {
   hitsProtectedViaInterpreter,
   interpreterBodyHitsProtected,
@@ -142,7 +142,7 @@ function bashHitsProtected(cmd, opts, _depth) {
   if (!cmd || typeof cmd !== "string") return null;
   const depth = typeof _depth === "number" ? _depth : 0;
   const toolCwd = opts && typeof opts.cwd === "string" ? opts.cwd : null;
-  const workflowDir = resolveWorkflowDir();
+  const workflowDir = resolveStateRoots(); // every state root (#2511); ctx.workflowDir takes a list
   // #2108: rides alongside `workflowDir`/`cwd` in the per-segment ctx without
   // changing what either of those means. Self-recursion re-passes `opts` whole,
   // so nested bodies inherit it automatically.

@@ -49,7 +49,7 @@ truth for "this job finished". Liveness probing (`kill -0`) is deliberately not
 used: an exited-but-unreaped child is a zombie that `kill -0` still succeeds on, so
 it is simply the wrong predicate.
 
-Every launched test inherits `CLAUDE_WORKFLOW_DIR` and `WORKFLOW_PLANS_DIR` pinned to fresh
+Every launched test inherits `WORKFLOW_STATE_DIR` and `WORKFLOW_PLANS_DIR` pinned to fresh
 subdirectories of that work directory, overriding any caller value, so a test that pins neither or
 only one cannot write live state; `bin/run-tests-baseline` does the equivalent for base re-runs.
 

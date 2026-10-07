@@ -129,7 +129,7 @@ M12_DIR="$CASE_DIR"
     NPM_STUB_LOG="$(node_path "$M12_DIR/npm.log")"; export NPM_STUB_LOG
     CG_STUB_LOG="$(node_path "$M12_DIR/codegraph.log")"; export CG_STUB_LOG
     CLAUDE_STUB_LOG="$(node_path "$M12_DIR/claude.log")"; export CLAUDE_STUB_LOG
-    export CLAUDE_WORKFLOW_DIR="$M12_DIR/wf" WORKFLOW_PLANS_DIR="$M12_DIR/plans"
+    export WORKFLOW_STATE_DIR="$M12_DIR/wf" WORKFLOW_PLANS_DIR="$M12_DIR/plans"
     bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" bash "$CODEGRAPH_SH"
 ) >"$M12_DIR/out2.log" 2>"$M12_DIR/err2.log" </dev/null
 M12_RC2=$?
@@ -214,7 +214,7 @@ M15F_DIR="$CASE_DIR"
     export HOME="$NORM_HOME" USERPROFILE="$NORM_HOME"
     export PATH="$M15F_DIR/bin:$CLEAN_PATH"
     export PATHEXT="$PINNED_PATHEXT"
-    export CLAUDE_WORKFLOW_DIR="$M15F_DIR/wf" WORKFLOW_PLANS_DIR="$M15F_DIR/plans"
+    export WORKFLOW_STATE_DIR="$M15F_DIR/wf" WORKFLOW_PLANS_DIR="$M15F_DIR/plans"
     bash "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT" node "$M15F_OFF_JS" register
 ) >"$M15F_DIR/out2.log" 2>"$M15F_DIR/err2.log" </dev/null
 assert_eq "M15f-2: turning the constants off does not restore the deleted file" "ABSENT" "$(telemetry_json)"

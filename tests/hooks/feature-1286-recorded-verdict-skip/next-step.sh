@@ -17,7 +17,7 @@ plant_record() {
 
 run_next() {
   local sid="$1"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_with_timeout node "$NEXT_STEP" --session "$sid" 2>/dev/null || echo "ERROR"
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" run_with_timeout node "$NEXT_STEP" --session "$sid" 2>/dev/null || echo "ERROR"
 }
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ write_state "rvrec1" "$RVREC1_JSON"
 # Sanity-guard: verify hasValidSkipJudgment returns true for this fixture so
 # we know the skip branch is actually entered (false → test would never hit
 # the buggy path, giving a false-green).
-HVSJ_CHECK="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" node -e "
+HVSJ_CHECK="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" node -e "
   const r = require('$RESOLVER_N');
   if (typeof r.hasValidSkipJudgment !== 'function') { console.log('NOT_FUNCTION'); process.exit(0); }
   const result = r.hasValidSkipJudgment('rvrec1', 'outline');
@@ -131,7 +131,7 @@ RVREC1_CTR_FILE_N="$(cygpath -m "$RVREC1_CTR_FILE" 2>/dev/null || echo "$RVREC1_
 # Run next-step with the counter+fault preload.  The hard timeout (20 s)
 # prevents a genuine hang from wedging the suite; a stack-overflow/crash
 # exits in < 1 s.
-RVREC1_OUT="$(HVSJ_COUNTER_FILE="$RVREC1_CTR_FILE_N" HVSJ_FAULT_SID="rvrec1" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec1 2>&1)"; RVREC1_RC=$?
+RVREC1_OUT="$(HVSJ_COUNTER_FILE="$RVREC1_CTR_FILE_N" HVSJ_FAULT_SID="rvrec1" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec1 2>&1)"; RVREC1_RC=$?
 
 # Read write-attempt count (default 0 if file missing).
 RVREC1_CTR="$(cat "$RVREC1_CTR_FILE" 2>/dev/null || echo "0")"
@@ -217,7 +217,7 @@ RVREC2_JSON="$(printf '%s' "$JSON_AT_DETAIL" | node -e "
 write_state "rvrec2" "$RVREC2_JSON"
 
 # Sanity-guard for the detail fixture.
-HVSJ_CHECK2="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" node -e "
+HVSJ_CHECK2="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" node -e "
   const r = require('$RESOLVER_N');
   if (typeof r.hasValidSkipJudgment !== 'function') { console.log('NOT_FUNCTION'); process.exit(0); }
   const result = r.hasValidSkipJudgment('rvrec2', 'detail');
@@ -236,7 +236,7 @@ fi
 RVREC2_CTR_FILE="$WORKFLOW_DIR/rvrec2-write-counter.txt"
 RVREC2_CTR_FILE_N="$(cygpath -m "$RVREC2_CTR_FILE" 2>/dev/null || echo "$RVREC2_CTR_FILE")"
 
-RVREC2_OUT="$(HVSJ_COUNTER_FILE="$RVREC2_CTR_FILE_N" HVSJ_FAULT_SID="rvrec2" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec2 2>&1)"; RVREC2_RC=$?
+RVREC2_OUT="$(HVSJ_COUNTER_FILE="$RVREC2_CTR_FILE_N" HVSJ_FAULT_SID="rvrec2" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec2 2>&1)"; RVREC2_RC=$?
 
 RVREC2_CTR="$(cat "$RVREC2_CTR_FILE" 2>/dev/null || echo "0")"
 
@@ -288,7 +288,7 @@ RV36_JSON="$(printf '%s' "$JSON_AT_OUTLINE" | node -e "
 write_state "rv36" "$RV36_JSON"
 
 # Sanity-guard: hasValidSkipJudgment must be TRUE for this fixture.
-RV36_HVSJ="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" node -e "
+RV36_HVSJ="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" node -e "
   const r = require('$RESOLVER_N');
   if (typeof r.hasValidSkipJudgment !== 'function') { console.log('NOT_FUNCTION'); process.exit(0); }
   const result = r.hasValidSkipJudgment('rv36', 'outline');
@@ -307,7 +307,7 @@ RV36_CTR_FILE="$WORKFLOW_DIR/rv36-rsj-counter.txt"
 RV36_CTR_FILE_N="$(cygpath -m "$RV36_CTR_FILE" 2>/dev/null || echo "$RV36_CTR_FILE")"
 
 # Run next-step with the readSkipJudgment counter preload.
-RV36_OUT="$(RSJ_COUNTER_FILE="$RV36_CTR_FILE_N" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$RSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rv36 2>&1)"; RV36_RC=$?
+RV36_OUT="$(RSJ_COUNTER_FILE="$RV36_CTR_FILE_N" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$RSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rv36 2>&1)"; RV36_RC=$?
 
 RV36_CTR="$(cat "$RV36_CTR_FILE" 2>/dev/null || echo "0")"
 

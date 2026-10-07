@@ -10,6 +10,11 @@
 # - ADDITIONAL_REPOS / payload-derived path + Windows backslash normalization differ from in-process fixtures
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 bq_hdr "=== ST: WRITE_PATTERNS / STRIP_KINDS structure (RED-pending-impl) ==="

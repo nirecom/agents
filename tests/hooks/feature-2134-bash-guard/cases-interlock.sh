@@ -16,7 +16,7 @@ bg_write_state() {
         steps="$steps,\"$step\":{\"status\":\"$status\",\"updated_at\":null}"
     done
     printf '{"version":1,"session_id":"%s","created_at":"2026-01-01T00:00:00.000Z","is_bugfix":false,"git_branch":"feature/2134-bash-guard-pretooluse","steps":{%s},"workflow_type":"wf-code"}' \
-        "$sid" "${steps#,}" > "$CLAUDE_WORKFLOW_DIR/$sid.json"
+        "$sid" "${steps#,}" > "$WORKFLOW_STATE_DIR/$sid.json"
 }
 
 # I1: gate armed (every step pending, no marker). Status reports active, and the guard defers
@@ -39,7 +39,7 @@ case_end
 case_begin "interlock-workflow-off-precedence" "hooks/lib/early-write-gate.js"
 BG_SID_OFF="sid-bg-gate-off"
 bg_write_state "$BG_SID_OFF" "pending"
-: > "$CLAUDE_WORKFLOW_DIR/${BG_SID_OFF}.workflow-off"
+: > "$WORKFLOW_STATE_DIR/${BG_SID_OFF}.workflow-off"
 ROWS=$((ROWS + 1))
 assert_eq "I2: a WORKFLOW_OFF marker deactivates the gate and names itself as the reason" \
     "false	-	workflow-off" "$(probe gate '' "$BG_SID_OFF")"

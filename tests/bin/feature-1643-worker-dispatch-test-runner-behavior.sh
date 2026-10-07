@@ -110,7 +110,7 @@ dispatch_tr() {
     local root="$1" pfile="$2"
     : > "$CALLLOG"
     DRC=0
-    DOUT="$(run_with_timeout 90 env "${AMBIENT_ENV_FLAGS[@]}" -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+    DOUT="$(run_with_timeout 90 env "${AMBIENT_ENV_FLAGS[@]}" -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

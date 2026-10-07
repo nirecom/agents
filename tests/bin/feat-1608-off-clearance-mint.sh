@@ -27,6 +27,11 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'mint1608'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+# Top-level pin: case B pinned only the plans dir, so the supervisor-state writer
+# fell back to the live state root and left bsid.control there (#2512).
+readonly ISO_ROOT="$(make_tmp)"
+trap 'rm -rf "$ISO_ROOT"' EXIT
+harness_isolate "$(node_path "$ISO_ROOT")"
 
 # ===== A: schema permits off_examination + off_clearance_consumed record_types =====
 run_A() {
@@ -78,7 +83,7 @@ run_req() {
     fi
     local out rc
     out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
-        CLAUDE_WORKFLOW_DIR="$tn" SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
+        WORKFLOW_STATE_DIR="$tn" SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
         "$RWT" 40 bash "$REQ" "$@" 2>&1)
     rc=$?
     rm -rf "$stubbin" 2>/dev/null || true
@@ -179,7 +184,7 @@ run_F() {
 const fs=require('fs'),path=require('path');
 fs.writeFileSync(path.join('$tn','fsid.off-clearance.claimed'),JSON.stringify({target:'workflow',category:'workflow-bug',expires_at:new Date(Date.now()+900000).toISOString(),claimed_at:new Date().toISOString(),claimed_target:'workflow',claimed_reason:'[workflow-bug] next-step bug'}));" >/dev/null 2>&1
     # drive the OFF marker activation via enforce-override-handlers
-    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 15 node -e "
+    WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" "$RWT" 15 node -e "
 const h=require('$HANDLER_NODE');
 h.handle({cmd:'echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: [workflow-bug] next-step bug>>\"',sessionId:'fsid',pushMessage:()=>{},signalFatal:()=>{}});" >/dev/null 2>&1
     token_gone=no; [ ! -f "$tmp/fsid.off-clearance.claimed" ] && token_gone=yes
@@ -220,7 +225,7 @@ run_CO1() {
     local tmp tn
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     seed_claimed_token "$tn" "co1sid"
-    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
+    WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
         "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co1sid');" >/dev/null 2>&1
     local ok=1
     [ -f "$tmp/co1sid.off-clearance.claimed" ] && ok=0
@@ -240,7 +245,7 @@ run_CO2() {
     cwdd=$(make_tmp)
     printf 'Session-ID: 20260101-000000\n' > "$cwdd/WORKTREE_NOTES.md"
     seed_claimed_token "$tn" "20260101-000000"   # claimed token keyed to the WSID only, NOT to co2sid
-    ( cd "$cwdd" && WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
+    ( cd "$cwdd" && WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
         "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co2sid');" >/dev/null 2>&1 )
     local ok=1
     [ -f "$tmp/20260101-000000.off-clearance.claimed" ] && ok=0               # fallback claimed token consumed
@@ -258,7 +263,7 @@ run_CO2() {
 run_CO3() {
     local tmp tn rc
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    ( cd "$tmp" && WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
+    ( cd "$tmp" && WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
         "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co3sid');" >/dev/null 2>&1 )
     rc=$?
     local ok=1
@@ -281,7 +286,7 @@ run_CO4() {
     local tmp tn ok=1
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     seed_bare_token "$tn" "co4sid"        # bare only — never claimed
-    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
+    WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" CLAUDE_CODE_SESSION_ID="" SESSION_ID="" \
         "$RWT" 15 node -e "require('$OFFCLR_NODE').consumeOffClearance('workflow','co4sid');" >/dev/null 2>&1
     [ -f "$tmp/co4sid.off-clearance" ] || ok=0                        # bare must survive
     ls "$tmp"/*.control/supervisor-state.json >/dev/null 2>&1 && ok=0         # treated `absent` → no audit entry
@@ -295,10 +300,10 @@ run_CO4() {
 
 # ===== mint-dir + stale-claim reset (bin/request-off-clearance) =====
 
-# MD-1 (#1658): with CLAUDE_WORKFLOW_DIR unset, the mint fallback must resolve to the
-# SAME directory as the canonical getWorkflowDir() in hooks/workflow-state/state-io/core.js
-# ($HOME/.claude/projects/workflow) — not the legacy $HOME/.workflow-state. A mismatch
-# means the minted token lands where no hook ever looks for it.
+# MD-1 (#1658, #2511): with WORKFLOW_STATE_DIR unset, the mint fallback must resolve to
+# the SAME directory as getSessionStateDir() in hooks/workflow-state/state-io/state-root.js
+# ($HOME/.workflow-state for a new session) — not the legacy $HOME/.claude/projects/workflow.
+# A mismatch means the minted token lands where no hook ever looks for it.
 run_MD1() {
     if ! mint_available; then fail "MD-1: RED-EXPECTED (script missing)"; return; fi
     local fh stubbin out canon legacy ok=1
@@ -307,16 +312,16 @@ run_MD1() {
     write_examiner_stub "$stubbin/codex" ALLOW "legit workflow bug"
     out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$(node_path "$fh")" \
         HOME="$fh" USERPROFILE="$(node_path "$fh")" SESSION_ID="md1sid" CLAUDE_CODE_SESSION_ID="md1sid" \
-        env -u CLAUDE_WORKFLOW_DIR "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" 2>&1)
-    canon="$fh/.claude/projects/workflow/md1sid.off-clearance"
-    legacy="$fh/.workflow-state/md1sid.off-clearance"
+        env -u WORKFLOW_STATE_DIR "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" 2>&1)
+    canon="$fh/.workflow-state/md1sid.off-clearance"
+    legacy="$fh/.claude/projects/workflow/md1sid.off-clearance"
     [ -f "$canon" ] || ok=0
     [ -f "$legacy" ] && ok=0
     rm -rf "$fh" "$stubbin" 2>/dev/null || true
     if [ "$ok" = "1" ]; then
-        pass "MD-1: CLAUDE_WORKFLOW_DIR unset → token minted under \$HOME/.claude/projects/workflow (canonical getWorkflowDir)"
+        pass "MD-1: WORKFLOW_STATE_DIR unset → token minted under \$HOME/.workflow-state (getSessionStateDir)"
     else
-        fail "MD-1: RED-EXPECTED (legacy \$HOME/.workflow-state fallback still in bin/request-off-clearance); out=$out"
+        fail "MD-1: token not minted under \$HOME/.workflow-state, or minted under the legacy \$HOME/.claude/projects/workflow; out=$out"
     fi
 }
 
@@ -330,7 +335,7 @@ run_MD2() {
     stubbin=$(make_tmp)
     write_examiner_stub "$stubbin/codex" ALLOW "legit workflow bug"
     out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
-        CLAUDE_WORKFLOW_DIR="$tn" SESSION_ID="md2sid" CLAUDE_CODE_SESSION_ID="md2sid" \
+        WORKFLOW_STATE_DIR="$tn" SESSION_ID="md2sid" CLAUDE_CODE_SESSION_ID="md2sid" \
         "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" 2>&1)
     [ -f "$tmp/md2sid.off-clearance.claimed" ] && ok=0   # stale claim must be cleared
     [ -f "$tmp/md2sid.off-clearance" ] || ok=0           # fresh bare token must be present

@@ -11,6 +11,11 @@
 # subprocess call captures the real status and asserts 0.
 set -uo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 HOOK="$DOTFILES_DIR/hooks/block-tests-direct.js"
 ERRORS=0
@@ -41,12 +46,12 @@ unset CLAUDE_CODE_SESSION_ID
 TMPDIR_ROOT="$(mktemp -d 2>/dev/null || mktemp -d -t btest)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 TMPDIR_ROOT_N="$(node_path "$TMPDIR_ROOT")"
-CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
+WORKFLOW_STATE_DIR="$TMPDIR_ROOT/workflow"
 WF_DIR_N="$TMPDIR_ROOT_N/workflow"
 # Dual-pin (#1799): without WORKFLOW_PLANS_DIR the supervisor emitter still
 # resolves the developer's real ~/.workflow-plans/ and appends there.
 PLANS_DIR_N="$TMPDIR_ROOT_N/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$TMPDIR_ROOT/plans"
+mkdir -p "$WORKFLOW_STATE_DIR" "$TMPDIR_ROOT/plans"
 
 cleanup() {
     rm -rf "$TMPDIR_ROOT"
@@ -60,7 +65,7 @@ trap cleanup EXIT
 make_state() {
     local session_id="$1"
     local write_tests_status="$2"
-    cat > "$CLAUDE_WORKFLOW_DIR/${session_id}.json" <<EOF
+    cat > "$WORKFLOW_STATE_DIR/${session_id}.json" <<EOF
 {
   "version": 1,
   "session_id": "${session_id}",
@@ -100,7 +105,7 @@ run_hook() {
         (
             unset CLAUDE_BLOCK_TESTS_DIR_NAMES
             export CLAUDE_CODE_SESSION_ID="$CUR_SID"
-            export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
+            export WORKFLOW_STATE_DIR="$WF_DIR_N"
             export WORKFLOW_PLANS_DIR="$PLANS_DIR_N"
             for kv in "${extra_env[@]+"${extra_env[@]}"}"; do export "$kv"; done
             run_with_timeout node "$HOOK" < "$input_file" 2>/dev/null
@@ -230,7 +235,7 @@ printf '%s' "$b10_input" > "$b10_input_file"
 b10_result=$(
     (
         unset CLAUDE_BLOCK_TESTS_DIR_NAMES
-        export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
+        export WORKFLOW_STATE_DIR="$WF_DIR_N"
         export WORKFLOW_PLANS_DIR="$PLANS_DIR_N"
         run_with_timeout node "$HOOK" < "$b10_input_file" 2>/dev/null
     )
@@ -249,13 +254,13 @@ fi
 
 # B11: session id supplied but no state file → approve (fail-open)
 set_session_id "sess-b11"
-rm -f "$CLAUDE_WORKFLOW_DIR/sess-b11.json"
+rm -f "$WORKFLOW_STATE_DIR/sess-b11.json"
 assert_approve "B11" "state file missing → approve (fail-open)" \
     '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-b11","agent_id":""}'
 
 # B12: state file JSON corrupt → approve (fail-open)
 set_session_id "sess-b12"
-printf 'NOT VALID JSON {{{{' > "$CLAUDE_WORKFLOW_DIR/sess-b12.json"
+printf 'NOT VALID JSON {{{{' > "$WORKFLOW_STATE_DIR/sess-b12.json"
 assert_approve "B12" "state file JSON corrupt → approve (fail-open)" \
     '{"tool_name":"Write","tool_input":{"file_path":"tests/foo.sh"},"session_id":"sess-b12","agent_id":""}'
 
@@ -265,7 +270,7 @@ assert_approve "B12" "state file JSON corrupt → approve (fail-open)" \
 # stands. The case pins that reality rather than the branch the hook still
 # carries; see the note filed with this suite.
 set_session_id "sess-b13"
-cat > "$CLAUDE_WORKFLOW_DIR/sess-b13.json" <<'EOF'
+cat > "$WORKFLOW_STATE_DIR/sess-b13.json" <<'EOF'
 {
   "version": 1,
   "session_id": "sess-b13",
@@ -284,7 +289,7 @@ b14_result=$(
     (
         unset CLAUDE_BLOCK_TESTS_DIR_NAMES
         export CLAUDE_CODE_SESSION_ID="$CUR_SID"
-        export CLAUDE_WORKFLOW_DIR="$WF_DIR_N"
+        export WORKFLOW_STATE_DIR="$WF_DIR_N"
         export WORKFLOW_PLANS_DIR="$PLANS_DIR_N"
         run_with_timeout node "$HOOK" < "$b14_input_file" 2>/dev/null
     )

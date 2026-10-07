@@ -78,14 +78,14 @@ process.stdout.write(p.ENFORCE_WORKFLOW_OFF_RE_DQ.test(process.argv[1])?'CONFUSE
 run_E4() {
     local tmp tn rc out
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 10 node -e "
+    WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" "$RWT" 10 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('emsid');
 st.layer1.findings=[{categories:['code'],severity:'error',detail:'blocking',reporter:'workflow-gate',timestamp:new Date().toISOString()}];
 fs.writeFileSync(w.getStatePath('emsid',{forWrite:true}),JSON.stringify(st));" >/dev/null 2>&1 || fail "E4 seed: supervisor-state seed write failed"
     local hook_input
     hook_input=$("$RWT" 8 node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'emsid',tool_input:{command:process.argv[1]}}))" "$EMERG_WF")
-    out=$(WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" AGENTS_CONFIG_DIR="$tn" "$RWT" 12 node "$SHIM" <<< "$hook_input" 2>/dev/null)
+    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$tn" "$RWT" 12 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$rc" = "0" ] && ! echo "$out" | grep -q '"decision":"block"'; then
@@ -99,7 +99,7 @@ fs.writeFileSync(w.getStatePath('emsid',{forWrite:true}),JSON.stringify(st));" >
 run_E5() {
     local tmp tn marker
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    WORKFLOW_PLANS_DIR="$tn" CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 12 node -e "
+    WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" "$RWT" 12 node -e "
 const h=require('$HANDLER_NODE');
 h.handle({cmd:process.argv[1],sessionId:'emsid',pushMessage:()=>{},signalFatal:()=>{}});" "$EMERG_WF" >/dev/null 2>&1
     marker="$tmp/emsid.workflow-off"

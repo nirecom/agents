@@ -22,6 +22,12 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 
 AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
 
+# isolation (#2512): pin state and plans dirs file-wide; the per-call pins below still override them.
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # Pre-change event stream for the fixture donor: 13 session-inherit events,
 # sha256 over the normalized projection joined by newline.
 GOLDEN_SHA="a935f223cbe7b434030c6a71f97e08676dae718435baf1c48f2a2e2306d5e646"
@@ -49,7 +55,7 @@ project_stream() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     out=$(env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
 const crypto = require('crypto');
@@ -131,7 +137,7 @@ run_E3() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     out=$(env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
 const { writeState, createInitialState, markStep, readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
@@ -166,7 +172,7 @@ run_E4() {
     local tmp tn out
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     out=$(env -u CLAUDE_CODE_SESSION_ID \
-        CLAUDE_WORKFLOW_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
+        WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
 const { writeState, createInitialState, markStep, readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');

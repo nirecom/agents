@@ -76,7 +76,7 @@ _cwg_write_provenance() {
 _cwg_exists() { if [ -e "$1" ]; then printf 'yes'; else printf 'no'; fi; }
 
 # _cwg_env_run <caseroot> <cmd...> — run in the case's CWD with the case's dirs pinned.
-# Dual-pin is mandatory: CLAUDE_WORKFLOW_DIR alone leaks supervisor appends into the
+# Dual-pin is mandatory: WORKFLOW_STATE_DIR alone leaks supervisor appends into the
 # real ~/.workflow-plans AND leaves the resolver scanning the REAL plans dir, which
 # would make every fallback assertion below meaningless.
 _cwg_env_run() {
@@ -84,7 +84,7 @@ _cwg_env_run() {
     (
         cd "$root/cwd" || exit 1
         unset CLAUDE_CODE_SESSION_ID
-        export CLAUDE_WORKFLOW_DIR="$(node_path "$root/wf")"
+        export WORKFLOW_STATE_DIR="$(node_path "$root/wf")"
         export WORKFLOW_PLANS_DIR="$(node_path "$root/plans")"
         "$@"
     )

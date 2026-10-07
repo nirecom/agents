@@ -44,7 +44,7 @@ trap 'rm -rf "$TMPD"' EXIT
 
 # Fixture isolation (rules/test/fixture-isolation.md).
 export WORKFLOW_PLANS_DIR="$(nodepath "$TMPD/plans")"
-export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 mkdir -p "$TMPD/plans" "$TMPD/workflow-state"
 unset CLAUDE_CODE_SESSION_ID
 

@@ -4,6 +4,10 @@
 # shellcheck source=../../lib/test-language-registry-fixture.sh
 . "$AGENTS_ROOT/tests/lib/test-language-registry-fixture.sh"
 
+# isolation (#2512): the dispatcher pins via harness_isolate before sourcing this file.
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_ROOT/tests/lib/harness.sh"
+harness_assert_isolated
+
 # Canonical Hook Audit table fixture. Mirrors the shape of rules/test/claude-e2e.md
 # closely enough for the parser.
 write_hook_audit_md() {

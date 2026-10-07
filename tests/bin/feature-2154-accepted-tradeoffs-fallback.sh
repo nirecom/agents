@@ -37,9 +37,9 @@ TMPROOT="$(mktemp -d)"
 trap 'cd /; chmod -R u+rwX "$TMPROOT" 2>/dev/null; rm -rf "$TMPROOT"' EXIT
 norm() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 TMPROOT="$(norm "$TMPROOT")"
-export CLAUDE_WORKFLOW_DIR="$TMPROOT/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPROOT/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPROOT/workflow-plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 export HOME="$TMPROOT/home"
 mkdir -p "$HOME"

@@ -59,7 +59,7 @@ COUNTER_EOF
   chmod +x "$MOCK/bin/build-codex-context"
 
   # Pre-create the marker file (#2434: control dir, no sid prefix). setup_plans_dir runs
-  # in a command substitution, so its CLAUDE_WORKFLOW_DIR export never reaches this shell;
+  # in a command substitution, so its WORKFLOW_STATE_DIR export never reaches this shell;
   # name the fixture's state dir explicitly and hand it to the wrapper below.
   WF14="$TMP/workflow-state"
   mkdir -p "$WF14/sid14.control"
@@ -73,7 +73,7 @@ APPROVED
 <!-- end-codex-output -->
 OUT
 )"
-  CLAUDE_WORKFLOW_DIR="$WF14" invoke_wrapper "$MOCK" --format detail-plan --session-id sid14 --plans-dir "$PLANS" \
+  WORKFLOW_STATE_DIR="$WF14" invoke_wrapper "$MOCK" --format detail-plan --session-id sid14 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?

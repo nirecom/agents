@@ -35,9 +35,9 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 # #2434: env-file control files live under the pinned workflow dir; per-call WORKFLOW_PLANS_DIR overrides remain.
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 run_with_timeout() {
     local secs="$1"; shift

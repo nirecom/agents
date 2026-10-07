@@ -139,7 +139,7 @@ fx_init() {
     FX_CACHE_DIR="$FX_TMP_ROOT/run-all-cache"
     mkdir -p "$FX_CACHE_DIR" "$FX_TMP_ROOT/workflow" "$FX_TMP_ROOT/plans"
     export RUN_ALL_CACHE_DIR="$FX_CACHE_DIR"
-    export CLAUDE_WORKFLOW_DIR="$FX_TMP_ROOT/workflow"
+    export WORKFLOW_STATE_DIR="$FX_TMP_ROOT/workflow"
     export WORKFLOW_PLANS_DIR="$FX_TMP_ROOT/plans"
     export RUN_ALL_REGISTRY_LIB="$FX_REPO_ROOT/bin/lib/test-language-registry.sh"
     unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true

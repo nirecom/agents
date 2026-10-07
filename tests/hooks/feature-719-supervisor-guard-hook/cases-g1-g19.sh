@@ -8,7 +8,7 @@ run_g1() {
     seed_state "$tmp" "g1-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     seed_workflow_init_complete "$tmp" "g1-sid"
     out=$(echo '{"stop_hook_active":false,"session_id":"g1-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
@@ -24,7 +24,7 @@ run_g2() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g2-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g2-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ) && ( echo "$out" | grep -qi "systemMessage" ); then
@@ -42,7 +42,7 @@ run_g3() {
     # isLegacyLayer2State=true only when st.layer2 exists and st.alert has no meaningful data.
     seed_layer2_state "$tmp" "g3-sid" "{ cumulative_severity: 'warning', findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g3-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( echo "$out" | grep -qi "additionalContext\|warning" ); then
@@ -59,7 +59,7 @@ run_g4() {
     # Use legacy layer2 format: new alert-format state skips the advisory branch (#2256).
     seed_layer2_state "$tmp" "g4-sid" "{ cumulative_severity: 'notice', findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g4-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( echo "$out" | grep -qi "additionalContext\|notice" ); then
@@ -75,7 +75,7 @@ run_g5() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g5-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g5-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -91,7 +91,7 @@ run_g6() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g6-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(echo '{"stop_hook_active":true,"session_id":"g6-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -106,7 +106,7 @@ run_g7() {
     local tmp out rc
     tmp="$(mktemp -d)"
     out=$(echo '{"stop_hook_active":false,"session_id":"g7-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -121,13 +121,13 @@ run_g8() {
     local tmp out rc
     tmp="$(mktemp -d)"
     # write garbage to expected state path
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 fs.writeFileSync(w.getStatePath('g8-sid', { forWrite: true }), 'not-valid-json{{{');
 " >/dev/null 2>&1
     out=$(echo '{"stop_hook_active":false,"session_id":"g8-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -147,7 +147,7 @@ run_g9() {
     touch "$wfdir/g9-sid.workflow-off"
     seed_state "$tmp" "g9-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g9-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$wfdir" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$wfdir" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -164,7 +164,7 @@ run_g10() {
     seed_state "$tmp" "g10-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: 'warning', findings: [] }"
     seed_workflow_init_complete "$tmp" "g10-sid"
     out=$(echo '{"stop_hook_active":false,"session_id":"g10-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
@@ -184,7 +184,7 @@ run_g11() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g11-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g11-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
@@ -204,7 +204,7 @@ run_g12() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g12-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g12-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -224,7 +224,7 @@ run_g13() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g13-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g13-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -244,7 +244,7 @@ run_g14() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g14-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g14-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -259,7 +259,7 @@ run_g15() {
     local tmp out rc
     tmp="$(mktemp -d)"
     out=$(echo '{"stop_hook_active":false,"session_id":"../evil","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -275,7 +275,7 @@ run_g16() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g16-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g16-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -294,7 +294,7 @@ run_g17() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g17-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g17-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -314,7 +314,7 @@ run_g18() {
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g18-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g18-sid","transcript_path":"%s"}' "$tp" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
@@ -330,7 +330,7 @@ run_g19() {
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g19-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"workflow\"],\"severity\":\"error\",\"detail\":\"first-finding\",\"timestamp\":\"2026-06-06T11:00:00.000Z\"},{\"categories\":[\"workflow\"],\"severity\":\"error\",\"detail\":\"last-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g19-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -q "last-finding" ); then

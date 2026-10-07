@@ -2,39 +2,27 @@
 # tests/hooks/feature-1733-state-event-stream/session-inherit.sh
 # Tests: hooks/session-start.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/effective-state.js
 # Tags: workflow-state, event-stream, session-inherit, provenance, backfilled, regression-772, regression-1133, scope:issue-specific, pwsh-not-required, TL2
-#
-# session-start.js inherits a prior session's steps with a blind deep copy, which under
-# #1733 must become a synthesised event batch. The risk is subtraction: it is easy to
-# carry only `status` and silently lose skip_reason / skip_verdict / token / wsid /
-# warnings — the fields the /review-tests and skip gates decide on. Every row of the
-# plan's inheritance table is asserted here, in both directions (what MUST travel, and
-# what must NOT: cleanup annotations per #772, session_model, complexity_evaluation,
-# worktree_*). The one deliberate semantic change — inherited `updated_at` becomes the
-# NEW session's created_at, distinguishable via provenance:backfilled + inherited_from —
-# is pinned so a future reader can tell intent from regression.
-#
-# TL3 gap (what this test does NOT catch):
-# - a real SessionStart firing inside Claude Code. The hook is fed JSON on stdin from a
-#   real cwd/branch here, so context resolution and inheritance are genuine, but the
-#   registration in settings.json is not exercised.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+
+# session-start.js inheritance becomes a synthesised event batch under #1733; the risk is subtraction — carrying only `status` and
+# losing skip_reason / skip_verdict / token / wsid / warnings, the fields the /review-tests and skip gates decide on. Every row of the
+# plan's inheritance table is asserted in both directions (what MUST travel, and what must NOT: cleanup annotations per #772,
+# session_model, complexity_evaluation, worktree_*). The one deliberate change — inherited `updated_at` becomes the NEW session's
+# created_at, marked by provenance:backfilled + inherited_from — is pinned so intent stays distinguishable from regression.
+# TL3 gap: a real SessionStart firing inside Claude Code (the hook is fed stdin JSON from a real cwd/branch; settings.json registration is not exercised).
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="si"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
+# isolation (#2512): pin state and plans dirs file-wide to common.sh's fixture dirs; the per-call pins below still override them.
+export WORKFLOW_STATE_DIR="$WF_NATIVE" WORKFLOW_PLANS_DIR="$PLANS_NATIVE"
+
 # ── donor discovery fixture ──────────────────────────────────────────────────
-# Since #1305 a donor is not found by scanning the cwd's transcript directory for
-# whatever session ran here last — it is reached through the HEIR's OWN lineage:
-# resolveInheritanceDonor (hooks/workflow-state/inheritance.js) reads the heir's
-# transcript, collects the ancestors named by `forkedFrom` rows (and by copied
-# SessionStart/PostCompact announce lines), and takes the nearest ancestor that
-# holds state. The donor's announce line is still needed — it is the breadcrumb
-# that maps an ancestor session id back to its state file — but on its own it no
-# longer makes a session inheritable. This harness drives session-start.js
-# directly via stdin (not through real Claude Code), so both the donor's announce
-# line and the heir's lineage row must be manufactured here.
+# Since #1305 a donor is reached through the HEIR's OWN lineage, not the cwd's latest transcript: resolveInheritanceDonor
+# (hooks/workflow-state/inheritance.js) collects the ancestors named by `forkedFrom` rows (and copied SessionStart/PostCompact
+# announce lines) and takes the nearest one holding state. The donor's announce line is only the ancestor-id → state-file
+# breadcrumb. session-start.js is driven via stdin here, so both the announce line and the heir's lineage row are manufactured.
 TRANSCRIPTS_BASE="$TMPROOT/transcripts"; mkdir -p "$TRANSCRIPTS_BASE"
 TRANSCRIPTS_BASE_NATIVE="$(native_path "$TRANSCRIPTS_BASE")"
 
@@ -79,7 +67,7 @@ start_session() {
     HOOK_RC=0
     HOOK_OUT="$(cd "$AGENTS_DIR" && printf '{"session_id":"%s","source":"%s","transcript_path":"%s"}' \
         "$sid" "$src" "$TRANSCRIPTS_BASE_NATIVE/$ENCODED_CWD/$sid.jsonl" | env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_BASE_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node hooks/session-start.js 2>&1)" || HOOK_RC=$?
@@ -129,7 +117,7 @@ if run_case "SI1/fresh-stream"; then
     seed_pair
     nodejs_env "DONOR=$DONOR" "$HEIR" "$PRE$GENUINE_JS"'
 const heir = rd();
-const donorEvents = JSON.parse(fs.readFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.DONOR + ".json"), "utf8")).events;
+const donorEvents = JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, process.env.DONOR + ".json"), "utf8")).events;
 const donorSeqs = new Set(donorEvents.map((e) => e.at + "|" + e.kind + "|" + e.step));
 const copied = heir.events.filter((e) => donorSeqs.has(e.at + "|" + e.kind + "|" + e.step));
 const created = heir.created_at;
@@ -331,11 +319,11 @@ if run_case "SI11/no-donor-plain-init"; then
     # ancestor to name, which is what "no donor in range" means after #1305.
     (cd "$AGENTS_DIR" && printf '{"session_id":"%s","source":"resume","transcript_path":"%s"}' \
         "$SID" "$TRANSCRIPTS_BASE_NATIVE/$ENCODED_CWD/$SID.jsonl" | env \
-        CLAUDE_WORKFLOW_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node hooks/session-start.js >/dev/null 2>&1) || true
     NODE_OUT="$(cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node -e "$PRE"'
 const st = S.readState(sid);

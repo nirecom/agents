@@ -48,7 +48,7 @@ try { S.persistMigratedState(sid); } catch (e) { console.log("A:THREW:" + (e && 
 console.log("A:DONE");
 '
     (cd "$AGENTS_DIR" && env \
-        CLAUDE_WORKFLOW_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_1" \
         BARRIER_A="$TMPROOT/bar-a" BARRIER_B="$TMPROOT/bar-b" \
         "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$A_JS" >"$TMPROOT/m1-a.out" 2>&1) &
@@ -108,7 +108,7 @@ if run_case "M3/deterministic-prefix"; then
 S.readState(sid); S.persistMigratedState(sid);
 S.markStep(sid, "review_security", "complete");
 const n = rd().events.length;
-fs.writeFileSync(process.env.CLAUDE_WORKFLOW_DIR + "/prefix-a.json",
+fs.writeFileSync(process.env.WORKFLOW_STATE_DIR + "/prefix-a.json",
   JSON.stringify(rd().events.slice(0, n - 1).map((e) => ({ k: e.kind, s: e.step, st: e.status, key: e.key, at: e.at, p: e.provenance }))));
 console.log("A-OK");
 '
@@ -117,7 +117,7 @@ console.log("A-OK");
 S.markStep(sid, "review_security", "complete");
 const n = rd().events.length;
 const b = JSON.stringify(rd().events.slice(0, n - 1).map((e) => ({ k: e.kind, s: e.step, st: e.status, key: e.key, at: e.at, p: e.provenance })));
-const a = fs.readFileSync(process.env.CLAUDE_WORKFLOW_DIR + "/prefix-a.json", "utf8");
+const a = fs.readFileSync(process.env.WORKFLOW_STATE_DIR + "/prefix-a.json", "utf8");
 console.log(a === b ? "IDENTICAL" : "DIFFER\nA=" + a + "\nB=" + b);
 '
     assert_eq "M3/deterministic-prefix" "IDENTICAL" "$NODE_OUT"

@@ -133,8 +133,45 @@ run_with_timeout() { bash "$RWT" "$@"; }
 harness_isolate() {
   local d="${1:-$(make_tmp)}"
   mkdir -p "$d/workflow-state" "$d/plans"
-  export CLAUDE_WORKFLOW_DIR="$d/workflow-state"
+  export WORKFLOW_STATE_DIR="$d/workflow-state"
   export WORKFLOW_PLANS_DIR="$d/plans"
+}
+
+# _harness_norm_path <path> — cygpath -m, backslash -> /, no trailing /,
+# lower-cased on Windows so live-root comparison is case-insensitive there.
+_harness_norm_path() {
+  local p="$1"
+  if command -v cygpath >/dev/null 2>&1; then
+    p="$(cygpath -m "$p" 2>/dev/null || printf '%s' "$p")"
+  fi
+  p="${p//\\//}"
+  while [ "${#p}" -gt 1 ] && [ "${p%/}" != "$p" ]; do p="${p%/}"; done
+  if command -v cygpath >/dev/null 2>&1 || [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then
+    p="$(printf '%s' "$p" | tr '[:upper:]' '[:lower:]')"
+  fi
+  printf '%s' "$p"
+}
+
+# harness_assert_isolated — fail closed unless both dirs are pinned off the live
+# defaults. A helper cannot tell a test's pin from an inherited live value, so
+# helpers assert here and the sourcing test calls harness_isolate first.
+harness_assert_isolated() {
+  local var val nval root nroot
+  for var in WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR; do
+    val="${!var:-}"
+    if [ -z "$val" ]; then
+      echo "harness_assert_isolated: $var is unset or empty; call harness_isolate before this helper" >&2
+      exit 1
+    fi
+    nval="$(_harness_norm_path "$val")"
+    for root in "$HOME/.workflow-state" "$HOME/.claude/projects/workflow" "$HOME/.workflow-plans"; do
+      nroot="$(_harness_norm_path "$root")"
+      if [ "$nval" = "$nroot" ] || [ "${nval#"$nroot"/}" != "$nval" ]; then
+        echo "harness_assert_isolated: $var=$val is under the live dir $root" >&2
+        exit 1
+      fi
+    done
+  done
 }
 
 # harness_git_init <dir> — git repo with core.hooksPath=/dev/null so the

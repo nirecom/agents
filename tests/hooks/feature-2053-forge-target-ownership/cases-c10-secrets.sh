@@ -25,7 +25,7 @@ run_block_c10() {
         printf '%s' "$REASON" | grep -qF -- "$needle" && hits="reason"
         grep -qF -- "$needle" "$BASE/out.txt" 2>/dev/null && hits="$hits stdout"
         grep -qF -- "$needle" "$BASE/err.txt" 2>/dev/null && hits="$hits stderr"
-        if grep -rqF -- "$needle" "$CLAUDE_WORKFLOW_DIR" 2>/dev/null; then hits="$hits state-dir"; fi
+        if grep -rqF -- "$needle" "$WORKFLOW_STATE_DIR" 2>/dev/null; then hits="$hits state-dir"; fi
         if grep -rqF -- "$needle" "$WORKFLOW_PLANS_DIR" 2>/dev/null; then hits="$hits plans-dir"; fi
         if [ -z "$hits" ]; then pass "$id"; else fail "$id" "secret surfaced in:$hits"; fi
     }

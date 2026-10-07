@@ -9,6 +9,11 @@
 
 set -euo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 [ -f "hooks/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented (WORKFLOW_ON detection not yet implemented)"; exit 0; }
 
 if ! command -v node >/dev/null 2>&1; then
@@ -24,7 +29,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 
 PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$PLANS_DIR"
@@ -87,7 +92,7 @@ write_state() {
 
 run_mark() {
   local json="$1"
-  echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     CLAUDE_PROJECT_DIR="$FIXTURE_REPO" \
     run_with_timeout node "$MARK_HOOK" 2>/dev/null || true
 }

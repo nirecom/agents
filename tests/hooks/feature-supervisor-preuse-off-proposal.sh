@@ -48,20 +48,20 @@ fi
 
 # --- fixture writers (run inside a per-case tmp dir) ---
 seed_state_empty() {  # <tmp_node> <sid>
-    WORKFLOW_PLANS_DIR="$1" CLAUDE_WORKFLOW_DIR="$1" "$RWT" 10 node -e "
+    WORKFLOW_PLANS_DIR="$1" WORKFLOW_STATE_DIR="$1" "$RWT" 10 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$2');
 fs.writeFileSync(w.getStatePath('$2', { forWrite: true }), JSON.stringify(st));" >/dev/null 2>&1 || fail "seed($2): supervisor-state seed write failed"
 }
 seed_state_error() {  # <tmp_node> <sid>
-    WORKFLOW_PLANS_DIR="$1" CLAUDE_WORKFLOW_DIR="$1" "$RWT" 10 node -e "
+    WORKFLOW_PLANS_DIR="$1" WORKFLOW_STATE_DIR="$1" "$RWT" 10 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$2');
 st.layer1.findings=[{categories:['code'],severity:'error',detail:'blocking',reporter:'workflow-gate',timestamp:new Date().toISOString()}];
 fs.writeFileSync(w.getStatePath('$2', { forWrite: true }), JSON.stringify(st));" >/dev/null 2>&1 || fail "seed($2): supervisor-state seed write failed"
 }
 seed_state_worktree() {  # <tmp_node> <sid>
-    WORKFLOW_PLANS_DIR="$1" CLAUDE_WORKFLOW_DIR="$1" "$RWT" 10 node -e "
+    WORKFLOW_PLANS_DIR="$1" WORKFLOW_STATE_DIR="$1" "$RWT" 10 node -e "
 const w=require('$WRITER_NODE'),s=require('$SCHEMA_NODE'),fs=require('fs');
 const st=s.createEmptyState('$2');
 st.layer1.findings=[{categories:['workflow'],severity:'warning',detail:'enforce-worktree false block',reporter:'enforce-worktree',timestamp:new Date().toISOString()}];
@@ -82,7 +82,7 @@ run_shim() {
     local tmp_node="$1" sid="$2" cmd="$3" hook_input out rc
     hook_input=$("$RWT" 10 node -e "
 process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'$sid',tool_input:{command:process.argv[1]}}));" "$cmd")
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         "$RWT" 15 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$out"
@@ -96,7 +96,7 @@ run_shim_in_dir() {
     local run_cwd="$1" tmp_node="$2" sid="$3" cmd="$4" hook_input out rc
     hook_input=$("$RWT" 10 node -e "
 process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'$sid',tool_input:{command:process.argv[1]}}));" "$cmd")
-    out=$(cd "$run_cwd" && WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(cd "$run_cwd" && WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         "$RWT" 15 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$out"

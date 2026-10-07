@@ -28,10 +28,10 @@ for _sid in '../evil' '..' 'a/../../evil' "\$(touch $S1_PWN)" "\`touch $S1_PWN\`
     ck "S1 probe sid $_q: nothing written" "$_sig" "$(marker_sig)"
 done
 [ ! -e "$S1_PWN" ] && pass "S1 no sid was executed" || fail "S1 a sid was executed"
-[ ! -e "$(dirname "$CLAUDE_WORKFLOW_DIR")/evil.control" ] && [ ! -e "$TMPROOT/evil.control" ] && [ ! -e "$(dirname "$CLAUDE_WORKFLOW_DIR")/evil" ] \
+[ ! -e "$(dirname "$WORKFLOW_STATE_DIR")/evil.control" ] && [ ! -e "$TMPROOT/evil.control" ] && [ ! -e "$(dirname "$WORKFLOW_STATE_DIR")/evil" ] \
     && pass "S1 no file escaped the workflow dir" || fail "S1 a traversal sid wrote outside the workflow dir"
 ck "S1 nothing written in the workflow dir for invalid sids" "" \
-    "$( (cd "$CLAUDE_WORKFLOW_DIR" 2>/dev/null && find . -name '*evil*' -o -name '*pwned*' -o -name '.hidden*') | tr '\n' ' ')"
+    "$( (cd "$WORKFLOW_STATE_DIR" 2>/dev/null && find . -name '*evil*' -o -name '*pwned*' -o -name '.hidden*') | tr '\n' ' ')"
 case_ran S1
 
 case_end

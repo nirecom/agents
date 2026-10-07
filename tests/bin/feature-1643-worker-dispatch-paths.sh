@@ -2,30 +2,16 @@
 # tests/bin/feature-1643-worker-dispatch-paths.sh
 # Tests: bin/worker-dispatch-paths, bin/worker-dispatch/anchor.js
 # Tags: worker-dispatch, paths-resolver, worktree, anchor, main-root, TL2, scope:issue-specific
-#
-# Issue #1643 — `bin/worker-dispatch-paths` is the read-only resolver every
-# calling skill runs as WD-1. It exists because the enforce-worktree overlay
-# sanctions ONLY the bare form
+
+# Issue #1643 — `bin/worker-dispatch-paths` is the read-only resolver every calling skill runs as WD-1. It exists because the enforce-worktree overlay sanctions ONLY the bare form
 #     node "<ACD>/bin/worker-dispatch.js" <worker> <main-root> <payload>
-# with no `$VAR`, no substitution and no chaining — so all three arguments must
-# reach the command line already literal. The resolver prints exactly:
-#     DISPATCH=<abs>
-#     MAIN_ROOT=<abs>
-#     PLANS_DIR=<abs>
-#
-# The load-bearing case is MAIN_ROOT: bin/worker-dispatch/anchor.js REJECTS a
-# linked worktree in that argument position, and every skill that dispatches runs
-# from a linked worktree. A resolver that answered with the caller's own worktree
-# would make every dispatch exit 2. Group C drives that with a real
-# `git worktree add` fixture.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - The real calling skills running WD-1 through a live Claude Code Bash tool,
-#     where the hook's tool_input.cwd (not this process's cwd) decides the repo.
-#   - A ~/.claude symlinked agents checkout, where the resolver's __dirname anchor
-#     and the session's AGENTS_CONFIG_DIR resolve through different real paths.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# with no `$VAR`, no substitution and no chaining — so all three arguments must reach the command line already literal. The resolver prints exactly DISPATCH=<abs>, MAIN_ROOT=<abs>, PLANS_DIR=<abs>.
+
+# The load-bearing case is MAIN_ROOT: bin/worker-dispatch/anchor.js REJECTS a linked worktree in that argument position, and every skill that dispatches runs from a linked worktree.
+# A resolver that answered with the caller's own worktree would make every dispatch exit 2. Group C drives that with a real `git worktree add` fixture.
+
+# TL3 gap (what this TL2 test does NOT catch): - the real calling skills running WD-1 through a live Claude Code Bash tool, where the hook's tool_input.cwd (not this process's cwd) decides the repo; - a ~/.claude symlinked agents checkout, where the resolver's __dirname anchor and the session's AGENTS_CONFIG_DIR resolve through different real paths.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
@@ -57,6 +43,9 @@ TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/wd-paths-$$")"
 mkdir -p "$TMPD"
 trap 'rm -rf "$TMPD"' EXIT
 TMPD_N="$(nodepath "$TMPD")"
+# isolation (#2512): pin state and plans dirs once for this file
+mkdir -p "$TMPD/isolation/workflow-state" "$TMPD/isolation/plans"
+export WORKFLOW_STATE_DIR="$TMPD_N/isolation/workflow-state" WORKFLOW_PLANS_DIR="$TMPD_N/isolation/plans"
 
 G() { git -c user.email=test@example.com -c user.name=test -c core.hooksPath=/dev/null "$@"; }
 
@@ -381,7 +370,8 @@ group_plans_dir_config() {
 
     # Control: with the variable unset the answer differs, so G1 proves the
     # value was READ rather than coinciding with the default.
-    out="$(run_with_timeout 60 env -u WORKFLOW_PLANS_DIR node "$RESOLVER_N" \
+    out="$(run_with_timeout 60 env -u WORKFLOW_PLANS_DIR -u WORKFLOW_STATE_DIR \
+        HOME="$TMPD/g2-home" USERPROFILE="$TMPD_N/g2-home" node "$RESOLVER_N" \
         "$(nodepath "$FIX_MAIN")" 2>/dev/null)"
     if [ "$(canon "$(value_of "$out" PLANS_DIR)")" = "$(canon "$(nodepath "$pinned")")" ]; then
         fail "G2: the default PLANS_DIR coincides with the pinned fixture — G1 is not meaningful"

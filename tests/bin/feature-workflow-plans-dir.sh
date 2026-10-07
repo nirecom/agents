@@ -62,6 +62,9 @@ else
     TMPDIR_NODE="$TMPDIR_BASE"
 fi
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# isolation (#2512): pin state and plans dirs once for this file; default-path cases still clear the plans dir per call.
+mkdir -p "$TMPDIR_BASE/isolation/workflow-state" "$TMPDIR_BASE/isolation/plans"
+export WORKFLOW_STATE_DIR="$TMPDIR_NODE/isolation/workflow-state" WORKFLOW_PLANS_DIR="$TMPDIR_NODE/isolation/plans"
 
 if [ ! -f "$LOAD_ENV_SRC" ]; then
     echo "FATAL: load-env.js not found at $LOAD_ENV_SRC"

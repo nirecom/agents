@@ -13,7 +13,7 @@ echo ""
 echo "=== SHIM-1: legacy verdict=sonnet blob → level=low ==="
 SID="shim1-$$"
 write_raw_state "$SID" '{"session_id":"shim1","complexity_evaluation":{"verdict":"sonnet","signals":[],"recorded_at":"2026-01-01T00:00:00Z"}}'
-SHIM1_LEVEL="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+SHIM1_LEVEL="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
   const r = require('$RESOLVER_N');
   const v = r.readComplexityEvaluation('$SID');
   console.log(v === null ? 'null' : (v.level || '__NO_LEVEL__'));
@@ -27,7 +27,7 @@ echo ""
 echo "=== SHIM-2: legacy verdict=opus blob → level=high ==="
 SID="shim2-$$"
 write_raw_state "$SID" '{"session_id":"shim2","complexity_evaluation":{"verdict":"opus","signals":["S1"],"recorded_at":"2026-01-01T00:00:00Z"}}'
-SHIM2_LEVEL="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+SHIM2_LEVEL="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
   const r = require('$RESOLVER_N');
   const v = r.readComplexityEvaluation('$SID');
   console.log(v === null ? 'null' : (v.level || '__NO_LEVEL__'));
@@ -41,7 +41,7 @@ echo ""
 echo "=== SHIM-3: returned object has no 'verdict' key (shim non-destructive) ==="
 SID="shim3-$$"
 write_raw_state "$SID" '{"session_id":"shim3","complexity_evaluation":{"verdict":"sonnet","signals":[],"recorded_at":"2026-01-01T00:00:00Z"}}'
-SHIM3_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+SHIM3_OUT="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
   const r = require('$RESOLVER_N');
   const v = r.readComplexityEvaluation('$SID');
   if (v === null) { console.log('null'); }
@@ -67,7 +67,7 @@ echo ""
 echo "=== SHIM-5: legacy sonnet+[] → resolveSkipConditionsFromComplexity populated ==="
 SID="shim5-$$"
 write_raw_state "$SID" '{"session_id":"shim5","complexity_evaluation":{"verdict":"sonnet","signals":[],"recorded_at":"2026-01-01T00:00:00Z"}}'
-SHIM5_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+SHIM5_OUT="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
   const r = require('$RESOLVER_N');
   const v = r.resolveSkipConditionsFromComplexity('$SID', 'outline');
   if (v === null || v === undefined) { console.log('null'); }

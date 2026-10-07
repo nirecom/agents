@@ -12,6 +12,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # rules/test/fixture-isolation.md: the parent Claude Code session exports these,
 # and the recorder falls back to them whenever a payload carries no usable
 # session_id (P12) - inherited values would make those cases resolve the REAL
@@ -72,7 +78,7 @@ if [ ! -f "$AGENTS_DIR/hooks/workflow-mark/enforce-override-handlers/off-clearan
 fi
 pass "P0 recorder and consumer both present"
 
-# HERMETICITY: CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR point at this throwaway
+# HERMETICITY: WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR point at this throwaway
 # dir and every session id is a throwaway ("pv1sid" etc), so no real session
 # marker, token or audit file is ever created, read or removed.
 TMP=$(make_tmp)
@@ -119,7 +125,7 @@ _run_recorder() {
     local label="$1" payload="$2" var="${3:-}" val="${4:-}"
     printf '%s' "$payload" | \
         (cd "$TMP" && if [ -n "$var" ]; then export "$var=$val"; fi
-            CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+            WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
                 "$RWT" 15 node "$RECORDER" >"$CAP_OUT" 2>"$CAP_ERR")
     LAST_RECORDER_STATUS=$?
     LAST_RECORDER_OUT=$(cat "$CAP_OUT" 2>/dev/null)
@@ -233,7 +239,7 @@ process.stdout.write(JSON.stringify({ handled, msgs, fatal, err }));
 DRIVER_EOF
 
 run_emergency() { # <sid> <cmd> -> driver JSON on stdout
-    (cd "$TMP" && CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    (cd "$TMP" && WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 20 node "$DRIVER" "$HANDLER_NODE" "$2" "$1" 2>/dev/null)
 }
 # provenance_in <file>: the provenance value recorded in a marker/audit JSON.

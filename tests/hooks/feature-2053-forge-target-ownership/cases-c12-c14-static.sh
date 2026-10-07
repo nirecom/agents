@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-forge-target-ownership.js, hooks/confirm-forge-target-ownership/
 # Tags: hook, pre-tool-use, github, gh, ownership, security, scope:issue-specific
-# Part of tests/hooks/feature-2053-forge-target-ownership.sh (rules/coding/file-split.md).
+# isolation: inherits-from ../feature-2053-forge-target-ownership.sh
 # Blocks C12 (issue-create SKILL.md Scope) and C14 (marker-bypass contract).
 #
 # WHY C12: #2053's documented path was "run gh issue create --repo OWNER/REPO
@@ -9,6 +9,9 @@
 # part of the fix, not decoration. WHY C14: marker-bypass-contract.md is the
 # SSOT for which hooks a .workflow-off marker silences; this pins that the
 # contract SAYS so, while L-1 in cases-r-k-l.sh is its runtime twin.
+
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"  # isolation (#2512): the dispatcher pins first
+harness_assert_isolated
 
 run_block_c12_c14() {
     echo ""

@@ -15,7 +15,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 GT_BASE="$(make_tmp)"
 trap 'cd /; rm -rf "$GT_BASE"' EXIT
 harness_isolate "$GT_BASE"
-CLAUDE_WORKFLOW_DIR="$(np "$GT_BASE/workflow-state")"; export CLAUDE_WORKFLOW_DIR
+WORKFLOW_STATE_DIR="$(np "$GT_BASE/workflow-state")"; export WORKFLOW_STATE_DIR
 WORKFLOW_PLANS_DIR="$(np "$GT_BASE/plans")"; export WORKFLOW_PLANS_DIR
 PLANS="$GT_BASE/plans"
 mkdir -p "$GT_BASE/transcripts" "$GT_BASE/cwd"

@@ -113,21 +113,21 @@ ck "P7 self-test: content_sig ignores mtime, sees a same-path rewrite" "same/dif
 # Pre-seeded files a rewrite-in-place would alter: a run-all record, another session's marker,
 # the cwd's status file (inside C_DEF), and the never-ask record of each path.
 printf 'max_jobs_per_host=5\nsource=measured\n' > "$P7C/parallelism.conf"
-mkdir -p "$CLAUDE_WORKFLOW_DIR/sid-p7-prior.control"
-printf 'asked_at=2026-01-01T00:00:00Z\nanswer=defer\n' > "$CLAUDE_WORKFLOW_DIR/sid-p7-prior.control/calibration-asked.txt"
+mkdir -p "$WORKFLOW_STATE_DIR/sid-p7-prior.control"
+printf 'asked_at=2026-01-01T00:00:00Z\nanswer=defer\n' > "$WORKFLOW_STATE_DIR/sid-p7-prior.control/calibration-asked.txt"
 # Each "unchanged" check also pins the decision, so a probe that never ran cannot pass it.
 na_rec "$P7C" "Other|x86_64|not-this-host"
-_before="$(content_sig "$P7C" "$CLAUDE_WORKFLOW_DIR" "$C_DEF")"
+_before="$(content_sig "$P7C" "$WORKFLOW_STATE_DIR" "$C_DEF")"
 probe "$C_DEF" sid-p7 "$P7C"
-ck "P7 ask path: cache, workflow dir and cwd bytes unchanged" "$_before|ask" "$(content_sig "$P7C" "$CLAUDE_WORKFLOW_DIR" "$C_DEF")|$(kv decision)"
+ck "P7 ask path: cache, workflow dir and cwd bytes unchanged" "$_before|ask" "$(content_sig "$P7C" "$WORKFLOW_STATE_DIR" "$C_DEF")|$(kv decision)"
 na_rec "$P7C" "$HID"
-_before="$(content_sig "$P7C" "$CLAUDE_WORKFLOW_DIR" "$C_DEF")"
+_before="$(content_sig "$P7C" "$WORKFLOW_STATE_DIR" "$C_DEF")"
 probe "$C_DEF" sid-p7 "$P7C"
-ck "P7 never-ask path: cache, workflow dir and cwd bytes unchanged" "$_before|none" "$(content_sig "$P7C" "$CLAUDE_WORKFLOW_DIR" "$C_DEF")|$(kv decision)"
+ck "P7 never-ask path: cache, workflow dir and cwd bytes unchanged" "$_before|none" "$(content_sig "$P7C" "$WORKFLOW_STATE_DIR" "$C_DEF")|$(kv decision)"
 na_rec "$P7C" "Other|x86_64|not-this-host"
 probe "$C_DEF" sid-p7 "$P7C"
 ck "P7 no control dir for the session, no HOME write" "ask/absent/absent" \
-    "$(kv decision)/$([ -e "$CLAUDE_WORKFLOW_DIR/sid-p7.control" ] && echo present || echo absent)/$([ -e "$HOME/.claude" ] && echo present || echo absent)"
+    "$(kv decision)/$([ -e "$WORKFLOW_STATE_DIR/sid-p7.control" ] && echo present || echo absent)/$([ -e "$HOME/.claude" ] && echo present || echo absent)"
 case_ran P7
 
 case_end
@@ -176,7 +176,7 @@ run_script "$ANSWER" "$CACHE" -- rm-rf --cwd "$C_DEF" --session sid-a1
 ck "A1 answer with an unknown verb: exit 2" "2" "$RC"
 run_script "$ANSWER" "$CACHE" -- defer --session sid-a1
 ck "A1 answer without --cwd: exit 2" "2" "$RC"
-[ ! -e "$CLAUDE_WORKFLOW_DIR/sid-a1.control" ] && pass "A1 argument errors write no marker" || fail "A1 an argument error still wrote a marker"
+[ ! -e "$WORKFLOW_STATE_DIR/sid-a1.control" ] && pass "A1 argument errors write no marker" || fail "A1 an argument error still wrote a marker"
 [ ! -e "$C_DEF/cal.log" ] && pass "A1 argument errors never launch the calibrator" || fail "A1 an argument error launched the calibrator"
 case_ran A1
 

@@ -264,7 +264,7 @@ STUB
 
     local out rc
     out=$(PATH="$stub_dir:$PATH" PLANS_DIR="$plans_dir" \
-          WORKFLOW_PLANS_DIR="$plans_dir" CLAUDE_WORKFLOW_DIR="$plans_dir" \
+          WORKFLOW_PLANS_DIR="$plans_dir" WORKFLOW_STATE_DIR="$plans_dir" \
           run_with_timeout 60 bash "$CAPTURE_ENV" \
               "$tmp_wt" owner/repo "$tmp_backup" testsession 2>&1)
     rc=$?

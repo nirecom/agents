@@ -103,7 +103,7 @@ mk_env() {
     RV_FILE="$TMPDIR_BASE/env$ENV_SEQ/reviewer-rc.txt"
     WORKFLOW_STATE="$TMPDIR_BASE/env$ENV_SEQ/workflow-state"
     mkdir -p "$MOCK/bin/lib" "$MOCK/rules" "$PLANS" "$WORKFLOW_STATE"
-    export CLAUDE_WORKFLOW_DIR="$WORKFLOW_STATE"
+    export WORKFLOW_STATE_DIR="$WORKFLOW_STATE"
     export WORKFLOW_PLANS_DIR="$PLANS"
     printf '# core principles stub\n' > "$MOCK/rules/core-principles.md"
     printf '0\n' > "$RV_FILE"
@@ -172,7 +172,7 @@ invoke_detail() {
     echo "$rc"
 }
 
-counter_file() { echo "$CLAUDE_WORKFLOW_DIR/$1.control/$2-round-number.txt"; }
+counter_file() { echo "$WORKFLOW_STATE_DIR/$1.control/$2-round-number.txt"; }
 argv_has_round() { grep -q -- "--round $1" "$ARGV_FILE" 2>/dev/null; }
 counter_value() { tr -d '[:space:]' < "$1" 2>/dev/null; }
 
@@ -235,8 +235,8 @@ case_begin "terminal-verdicts-retire-counter" "bin/run-codex-review-loop"
     mk_env; seed_drafts sid5
     set_body sid5 "NEEDS_REVISION" "1. [HIGH] $CONCERN"
     invoke_detail sid5 0 >/dev/null
-    mkdir -p "$CLAUDE_WORKFLOW_DIR/sid5.control"
-    printf 'hook-registration\n' > "$CLAUDE_WORKFLOW_DIR/sid5.control/detail-risk-signal.txt"
+    mkdir -p "$WORKFLOW_STATE_DIR/sid5.control"
+    printf 'hook-registration\n' > "$WORKFLOW_STATE_DIR/sid5.control/detail-risk-signal.txt"
     set_body sid5 "NEEDS_REVISION" "C1: $CONCERN"
     RC=$(invoke_detail sid5 1)
     CFILE=$(counter_file sid5 detail-plan)
@@ -321,18 +321,18 @@ case_begin "extensions-budget-and-counter-address" "bin/run-codex-review-loop"
     mk_env; seed_drafts mysid
     set_body mysid "NEEDS_REVISION" "1. [HIGH] $CONCERN"
     invoke_detail mysid 0 >/dev/null
-    EXPECTED="$CLAUDE_WORKFLOW_DIR/mysid.control/detail-plan-round-number.txt"
+    EXPECTED="$WORKFLOW_STATE_DIR/mysid.control/detail-plan-round-number.txt"
     if [[ -f "$EXPECTED" ]]; then
         pass "9: counter at <workflow-dir>/<sid>.control/detail-plan-round-number.txt"
     else
-        fail "9: counter not at $EXPECTED. Listing: $(ls "$CLAUDE_WORKFLOW_DIR/mysid.control/" 2>/dev/null)"
+        fail "9: counter not at $EXPECTED. Listing: $(ls "$WORKFLOW_STATE_DIR/mysid.control/" 2>/dev/null)"
     fi
 
     if [[ -f "$OUTLINE_WRAPPER" ]]; then
         set_body mysid "MISSING_ALTERNATIVE: a third approach was never considered" "1. [HIGH] $CONCERN"
         AGENTS_CONFIG_DIR="$MOCK" SESSION_ID="mysid" PLANS_DIR="$PLANS" EXTENSIONS_USED="0" \
             run_with_timeout bash "$OUTLINE_WRAPPER" >/dev/null 2>&1 || true
-        OEXPECTED="$CLAUDE_WORKFLOW_DIR/mysid.control/outline-plan-round-number.txt"
+        OEXPECTED="$WORKFLOW_STATE_DIR/mysid.control/outline-plan-round-number.txt"
         DVAL="$(counter_value "$EXPECTED")"
         if [[ -f "$OEXPECTED" || "$DVAL" == "1" ]]; then
             pass "9b: outline-plan counts on its own address, leaving detail-plan's at $DVAL"

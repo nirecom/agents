@@ -12,7 +12,7 @@ const {
   NEXT_STEP_PAUSE_RE_DQ, NEXT_STEP_PAUSE_LOOKSLIKE_RE,
   NEXT_STEP_RESUME_RE_DQ, NEXT_STEP_RESUME_LOOKSLIKE_RE,
 } = require("../../lib/sentinel-patterns");
-const { getWorkflowDir } = require("../../workflow-state");
+const { getSessionStateDir } = require("../../workflow-state");
 const {
   writePauseMarker,
   removePauseMarker,
@@ -54,7 +54,7 @@ function handleNextStepPause(ctx) {
       pushMessage(`workflow-mark: NEXT_STEP_PAUSE reason rejected — ${v.msg} (pause still applied)`);
     }
     try {
-      fs.mkdirSync(getWorkflowDir(), { recursive: true });
+      fs.mkdirSync(getSessionStateDir(sessionId), { recursive: true });
       const marker = writePauseMarker(sessionId, {
         reason: reasonStored,
         sentinel: "WORKFLOW_NEXT_STEP_PAUSE",

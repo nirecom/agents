@@ -54,6 +54,10 @@ mkdir -p "$ISOLATED_CFG_DIR"
 
 trap 'rm -rf "$PLANS_DIR" "$ISOLATED_CFG_DIR"' EXIT
 
+# isolation (#2512): pin state and plans dirs file-wide, not only inside the hook-call subshells.
+mkdir -p "$ISOLATED_CFG_DIR/workflow-state"
+export WORKFLOW_STATE_DIR="$ISOLATED_CFG_DIR/workflow-state" WORKFLOW_PLANS_DIR="$PLANS_DIR"
+
 # ── Helper ────────────────────────────────────────────────────────────────────
 # invoke_hook PLAN_LANG TOOL_NAME FILE_PATH CONTENT
 #   Runs the hook with PLAN_LANG (empty = unset) and returns jq-parsed decision.

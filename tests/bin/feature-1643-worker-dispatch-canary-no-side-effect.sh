@@ -155,7 +155,7 @@ group_canary_dispatch() {
         return
     fi
     local out rc=0
-    out="$(cd "$TMPD" && run_with_timeout 120 env "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF" \
+    out="$(cd "$TMPD" && run_with_timeout 120 env "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF" \
         node "$(nodepath "$DISPATCH_JS")" test-runner "$TARGET" "$(nodepath "$PAYLOAD_FILE")" 2>&1)" || rc=$?
     if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '^status:'; then
         pass "canary/dispatch-runs"

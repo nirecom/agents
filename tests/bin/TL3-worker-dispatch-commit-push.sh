@@ -124,7 +124,7 @@ mkdir -p "$PLANS"
 run_worker() {
     local out rc=0
     out="$(run_with_timeout 120 env \
-        "CLAUDE_WORKFLOW_DIR=$(nodepath "$2")" \
+        "WORKFLOW_STATE_DIR=$(nodepath "$2")" \
         "WORKFLOW_PLANS_DIR=$(nodepath "$PLANS")" \
         "ENFORCE_WORKTREE=off" \
         "AGENTS_CONFIG_DIR=$(nodepath "$AGENTS_DIR")" \
@@ -154,7 +154,7 @@ status_of() { printf '%s' "$1" | grep -oE '"?status"?[": ]+[a-z_]+' | head -1 | 
 # Scenario 1 — the gate really blocks: no state file for this session
 #
 # workflow-gate.js fails closed on missing state. If the gate never ran, or ran
-# without CLAUDE_WORKFLOW_DIR reaching it, the commit lands and this fails.
+# without WORKFLOW_STATE_DIR reaching it, the commit lands and this fails.
 # ===========================================================================
 scenario_blocked() {
     local before after res rc out

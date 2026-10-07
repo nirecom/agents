@@ -96,9 +96,9 @@ trim() {
 # ---------------------------------------------------------------------------
 TMPDIR_BASE=$(mktemp -d)
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 

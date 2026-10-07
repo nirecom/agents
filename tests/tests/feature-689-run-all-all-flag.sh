@@ -14,6 +14,11 @@ set -u
 # TL3 gap: non-bash /bin/sh and CI glob/locale drift in category discovery.
 # Mitigation: the runner is bash-pinned by its shebang.
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 SELF="${BASH_SOURCE[0]}"
 AGENTS_DIR="$(cd "$(dirname "$SELF")/../.." && pwd)"
 RUN_ALL="$AGENTS_DIR/tests/run-all.sh"
@@ -79,9 +84,9 @@ trap 'rm -rf "$TMPROOT"' EXIT
 
 # Fixture isolation (rules/test/fixture-isolation.md): pin the workflow dir and
 # the plans dir as a pair, and drop inherited session ids.
-export CLAUDE_WORKFLOW_DIR="$TMPROOT/workflow"
+export WORKFLOW_STATE_DIR="$TMPROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMPROOT/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
 # shellcheck source=../lib/test-language-registry-fixture.sh

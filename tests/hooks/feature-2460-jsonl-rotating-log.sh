@@ -19,6 +19,7 @@ JRL="$(np "$AGENTS_DIR/$JRL_REL")"
 RTK="$(np "$AGENTS_DIR/$RTK_REL")"
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP"' EXIT
+harness_isolate "$TMP/iso"
 cd "$TMP" || exit 1
 PROBE="$(np "$TMP/probe.js")"
 

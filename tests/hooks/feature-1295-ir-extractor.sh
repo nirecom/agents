@@ -2,35 +2,20 @@
 # Tests: hooks/lib/command-parser.js, hooks/lib/command-ir.js, hooks/lib/bash-write-targets/helpers.js, hooks/lib/bash-write-targets/redirect.js, hooks/lib/bash-write-targets/tee.js, hooks/lib/bash-write-targets/cp-mv.js, hooks/lib/bash-write-targets/rm.js, hooks/lib/bash-write-targets/pwsh.js, hooks/lib/bash-write-targets.js, hooks/enforce-worktree/bash-write-scope.js
 # Tags: ir-extractor, bash-write-targets, quote-context, scope:issue-specific
 # mutation-probe: bin/mutation-probe.sh hooks/lib/command-parser.js (tokenizeSegmentWithQuotes)
-# L3 gap: real claude -p session with live file writes not tested (cost-prohibitive; L2 covers contract)
-# L3 gap (what this test does NOT catch):
-# - Real hook registration and firing in a live claude session (block-shell-config.js / block-memory-direct.js / block-history-direct.js wired to PreToolUse)
-# - Behavioral change when a command flows through the full enforce-worktree allow-chain into collectBashWriteTargets
-# - L2 caller coverage (part1 Section BL) spawns each block-*.js as a subprocess with a
-#   PreToolUse event on stdin and asserts its block/approve decision end-to-end; it does
-#   NOT reproduce the live session's PreToolUse dispatch or the enforce-worktree allow-chain.
-# - Whether the real callers route EVERY pipeline segment through collectWriteTargetsFromSegments
-#   post-migration (Section D validates the helper in isolation; Section BL pins current
-#   caller block/approve behavior as a migration regression guard — neither proves the
-#   post-migration wiring calls the new helper).
+# L3 gap: live claude -p hook registration/firing of block-*.js on PreToolUse, the full
+# enforce-worktree allow-chain, and whether real callers route EVERY segment through
+# collectWriteTargetsFromSegments (part1 Sections D/BL cover helper + subprocess only).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
-#
-# Pre-implementation (WF-CODE-4 / write-tests): the NEW APIs under test do NOT
-# exist yet. Cases for NEW functions (tokenizeSegmentWithQuotes, IR additive
-# fields argvRaw/cmd0Raw/redirects[].targetRaw, expandRawToken,
-# collectWriteTargetsFromSegments, FULL_VERB_SET, SHELL_CONFIG_VERB_SET, and the
-# IR-accepting extractor forms) are EXPECTED TO FAIL until the migration lands.
-# Cases for existing infrastructure (string-API extractors, parse,
-# collectBashWriteTargets string bridge, expandStaticShellTokens) are expected to
-# PASS now and must keep passing post-migration (blast-radius-zero / additive-safe pins).
-#
-# Split (file-split.md HARD limit >500): part suites live under
-# feature-1295-ir-extractor/. This dispatcher passes $AGENTS_DIR to each part
-# and sums their FAIL counts (feature-1147 dispatcher convention).
+# NEW-API cases FAIL until the IR migration lands; existing-infra cases must PASS now.
+# Parts live under feature-1295-ir-extractor/ (feature-1147 dispatcher convention).
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 SUITE_DIR="$(cd "$(dirname "$0")/feature-1295-ir-extractor" && pwd)"
 TOTAL_FAIL=0
 

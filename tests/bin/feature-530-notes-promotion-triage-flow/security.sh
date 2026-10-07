@@ -7,6 +7,8 @@
 # an escape steers `resolve` at an arbitrary WORKTREE_NOTES.md that is then filed into public issues — an exfiltration primitive.
 
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
+# isolation (#2512): helpers.sh pins both dirs under its trap-removed TMPD; restate that pin file-wide here.
+export WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
 
 # An outside notes file that no invocation is allowed to reach. Its body carries
 # a unique token so a leak is detectable in output, not just by path compare.
@@ -47,7 +49,7 @@ OUTSIDE_MD5="$(file_md5 "$OUTSIDE_NOTES")"
 mkdir -p "$TMPD/outside-notes-backup"
 cp "$OUTSIDE_NOTES" "$TMPD/outside-notes-backup/WORKTREE_NOTES.md"
 BAIT_BACKUP="$TMPD/outside-notes-backup/WORKTREE_NOTES.md"
-BAIT_WF_DIR="$TMPD/workflow"  # == CLAUDE_WORKFLOW_DIR pinned by helpers.sh
+BAIT_WF_DIR="$TMPD/workflow"  # == WORKFLOW_STATE_DIR pinned by helpers.sh
 mkdir -p "$TMPD/outside.control" "$BAIT_WF_DIR/outside.control"
 for bait_env in "$TMPD/outside-final-report-env.json" \
                 "$TMPD/outside.control/final-report-env.json" \

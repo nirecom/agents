@@ -69,12 +69,12 @@ trap 'rm -rf "$TMPROOT"' EXIT
 # the workflow dir, inherited session ids dropped, and HOME/USERPROFILE pointed at a fixture
 # home, so no row can depend on the developer's real ~/.claude (the guard no longer reads its
 # permissions.allow, and the empty list keeps that true even if a regression re-adds the read).
-CLAUDE_WORKFLOW_DIR="$TMPROOT/workflow"
+WORKFLOW_STATE_DIR="$TMPROOT/workflow"
 WORKFLOW_PLANS_DIR="$TMPROOT/plans"
 FIXTURE_HOME="$TMPROOT/home"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$FIXTURE_HOME/.claude"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$FIXTURE_HOME/.claude"
 printf '%s\n' '{"permissions":{"allow":[],"deny":[]}}' > "$FIXTURE_HOME/.claude/settings.json"
-export CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR
+export WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR
 unset CLAUDE_CODE_SESSION_ID
 
 # The default session must look SETTLED, or the early-write-gate interlock would silence the
@@ -87,7 +87,7 @@ bg_settled_state() {
         steps="$steps,\"$step\":{\"status\":\"complete\",\"updated_at\":null}"
     done
     printf '{"version":1,"session_id":"%s","created_at":"2026-01-01T00:00:00.000Z","is_bugfix":false,"git_branch":"feature/2134-bash-guard-pretooluse","steps":{%s},"workflow_type":"wf-code"}' \
-        "$sid" "${steps#,}" > "$CLAUDE_WORKFLOW_DIR/$sid.json"
+        "$sid" "${steps#,}" > "$WORKFLOW_STATE_DIR/$sid.json"
 }
 bg_settled_state "sid-bg-armed"
 

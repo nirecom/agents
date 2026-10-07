@@ -35,7 +35,7 @@ run_run_tests_hook() {
     # Capture stdout + exit code instead of swallowing with `|| true`. The `local`
     # declaration is split from the assignment so `set -e` cannot abort here and
     # $? reflects the hook's real exit (a `local x=$(...)` would mask the code).
-    LAST_HOOK_STDOUT=$(echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
+    LAST_HOOK_STDOUT=$(echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
     LAST_HOOK_EXIT=$?
     printf '%s' "$LAST_HOOK_STDOUT"
 }
@@ -57,7 +57,7 @@ const payload = {
 };
 process.stdout.write(JSON.stringify(payload));
 " "$command" "$exit_code" "$sid" 2>/dev/null)
-    LAST_HOOK_STDOUT=$(echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
+    LAST_HOOK_STDOUT=$(echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
     LAST_HOOK_EXIT=$?
     printf '%s' "$LAST_HOOK_STDOUT"
 }
@@ -80,7 +80,7 @@ const payload = {
 };
 process.stdout.write(JSON.stringify(payload));
 " "$command" "$exit_code" "$stdout_content" "$sid" 2>/dev/null)
-    LAST_HOOK_STDOUT=$(echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
+    LAST_HOOK_STDOUT=$(echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
     LAST_HOOK_EXIT=$?
     printf '%s' "$LAST_HOOK_STDOUT"
 }
@@ -92,7 +92,7 @@ get_run_tests_status() {
     local sid="$1"
     # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
     # on-disk event stream, not a persisted top-level key.
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 try {
   const s = require('$DOTFILES_WIN/hooks/workflow-state').readState(process.argv[1]);
   console.log(s && s.steps && s.steps.run_tests ? s.steps.run_tests.status : 'absent');
@@ -133,7 +133,7 @@ check_state_file_absent() {
 # The run_tests guard (#1139) reads write_tests status before marking complete.
 seed_write_tests() {
     local sid="$1" status="$2"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
       const m = require('$DOTFILES_WIN/hooks/workflow-state');
       m.markStep(process.argv[1], 'write_tests', process.argv[2]);
     " "$sid" "$status" >/dev/null 2>&1 || true
@@ -145,7 +145,7 @@ seed_write_tests() {
 # the demotion test fires.
 seed_run_tests() {
     local sid="$1" status="$2"
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
       const m = require('$DOTFILES_WIN/hooks/workflow-state');
       m.markStep(process.argv[1], 'run_tests', process.argv[2]);
     " "$sid" "$status" >/dev/null 2>&1 || true
@@ -156,7 +156,7 @@ seed_run_tests() {
 get_write_tests_status() {
     local sid="$1"
     # Read through the canonical API (see get_run_tests_status).
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
 try {
   const s = require('$DOTFILES_WIN/hooks/workflow-state').readState(process.argv[1]);
   console.log(s && s.steps && s.steps.write_tests ? s.steps.write_tests.status : 'absent');

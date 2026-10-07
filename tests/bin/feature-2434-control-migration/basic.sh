@@ -22,7 +22,7 @@ MIGRATE_CLI="$AGENTS_DIR/bin/migrate-control-dir"
 run_migrate_session() {
   local sid="$1" wf_dir="$2" plans_dir="$3"
   node -e "
-process.env.CLAUDE_WORKFLOW_DIR='$wf_dir';
+process.env.WORKFLOW_STATE_DIR='$wf_dir';
 process.env.WORKFLOW_PLANS_DIR='$plans_dir';
 try {
   var m=require('$IDX_MOD');

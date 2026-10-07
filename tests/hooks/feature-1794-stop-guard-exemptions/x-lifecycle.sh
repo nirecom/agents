@@ -15,7 +15,7 @@ run_X1() {
     seed_raw_state "$tmp" "x1-pending" "pending"
     seed_raw_state "$tmp" "x1-inprogress" "in_progress"
     seed_corrupt_state "$tmp" "x1-corrupt"
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn" "$RWT" 20 node -e "
 const { isWorkflowStarted } = require('$_AGENTS_DIR_NODE/hooks/workflow-state/lifecycle.js');
 const rows = [
   ['x1-complete', true], ['x1-skipped', true], ['x1-pending', false],
@@ -51,7 +51,7 @@ process.stdout.write(ok ? 'OK' : 'BAD');" 2>/dev/null)
 }
 
 # ---------------------------------------------------------------------------
-# X3: C2 fail-opens when CLAUDE_WORKFLOW_DIR points at a nonexistent path,
+# X3: C2 fail-opens when WORKFLOW_STATE_DIR points at a nonexistent path,
 #     even with the scheduled-review alert armed
 # ---------------------------------------------------------------------------
 run_X3() {
@@ -60,7 +60,7 @@ run_X3() {
     seed_sup_armed "$tn" "x3sid"
     C2_OUT=""; C2_RC=""
     C2_OUT=$(echo '{"stop_hook_active":false,"session_id":"x3sid","transcript_path":""}' \
-        | CLAUDE_WORKFLOW_DIR="$tn/definitely-not-here" WORKFLOW_PLANS_DIR="$tn" \
+        | WORKFLOW_STATE_DIR="$tn/definitely-not-here" WORKFLOW_PLANS_DIR="$tn" \
           AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 25 node "$(node_path "$GUARD_C2")" 2>/dev/null)
     C2_RC=$?
     rm -rf "$tmp" 2>/dev/null || true
@@ -209,7 +209,7 @@ run_Z1() {
     age_file "$wf/z1-zzy.next-step-paused" 30
     : > "$wf/z1-fresh.next-step-paused"
 
-    CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 require('$STATEIO_NODE').cleanupZombies();" >/dev/null 2>&1
     local rc=$?
 

@@ -43,7 +43,7 @@ else
 fi
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-# Dual-pin CLAUDE_WORKFLOW_DIR + WORKFLOW_PLANS_DIR; unset inherited session
+# Dual-pin WORKFLOW_STATE_DIR + WORKFLOW_PLANS_DIR; unset inherited session
 # ids; redirect HOME/USERPROFILE at a fixture -- never the real HOME.
 WF_DIR="$TMPDIR_BASE/wf"; mkdir -p "$WF_DIR"
 WF_DIR_N="$(to_node_path "$WF_DIR")"
@@ -186,7 +186,7 @@ run_hook() {
             "$@" \
             AGENTS_CONFIG_DIR="$CFG_ON_N" \
             PATH="$BIN:$PATH" \
-            CLAUDE_WORKFLOW_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
+            WORKFLOW_STATE_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
             HOME="$FAKE_HOME_N" USERPROFILE="$FAKE_HOME_N" \
             CG_STUB_LOG="$(to_node_path "$LOG")" \
             CG_STUB_STDIN_LOG="$(to_node_path "$STDIN_LOG")" \

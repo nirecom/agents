@@ -17,7 +17,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 TMPD="$(make_tmp)"
 trap 'cd /; rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
-export CLAUDE_WORKFLOW_DIR="$(np "$CLAUDE_WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(np "$WORKFLOW_STATE_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID SYSTEM_OPS_APPROVED 2>/dev/null || true
 unset ANTHROPIC_API_KEY ENFORCE_WORKTREE ENFORCE_WORKTREE_EXCLUDE 2>/dev/null || true
@@ -137,12 +137,12 @@ case_end
 # the read-error block: that path does not go through blockOrBypass.
 case_begin "block-history-direct-read-error-ignores-workflow-off-marker" "hooks/block-history-direct.js"
 export CLAUDE_CODE_SESSION_ID="srf-workflow-off-fixture"
-: > "$CLAUDE_WORKFLOW_DIR/$CLAUDE_CODE_SESSION_ID.workflow-off"
+: > "$WORKFLOW_STATE_DIR/$CLAUDE_CODE_SESSION_ID.workflow-off"
 printf '{"session_id":"%s","tool_name":"Write","tool_input":{"file_path":"docs/history.md","content":"x"}}' "$CLAUDE_CODE_SESSION_ID" > "$TMPD/hist-ev.json"
 ctl="$(run_with_timeout 60 node "$HOOKS/block-history-direct.js" < "$TMPD/hist-ev.json" 2>/dev/null)"
 if [[ "$ctl" == *'"decision":"approve"'* ]]; then pass "block-history-direct/marker-control-bypasses"; else fail "block-history-direct/marker-control-bypasses" "ctl=${ctl:0:200}"; fi
 expect_decision_block block-history-direct
-rm -f "$CLAUDE_WORKFLOW_DIR/$CLAUDE_CODE_SESSION_ID.workflow-off"
+rm -f "$WORKFLOW_STATE_DIR/$CLAUDE_CODE_SESSION_ID.workflow-off"
 unset CLAUDE_CODE_SESSION_ID
 case_end
 
@@ -209,10 +209,10 @@ case_end
 # The sid comes from CLAUDE_CODE_SESSION_ID only: there is no input to read it from.
 case_begin "enforce-worktree-read-error-worktree-off-marker-passes" "hooks/enforce-worktree.js"
 export CLAUDE_CODE_SESSION_ID="srf-worktree-off-fixture"
-: > "$CLAUDE_WORKFLOW_DIR/$CLAUDE_CODE_SESSION_ID.worktree-off"
+: > "$WORKFLOW_STATE_DIR/$CLAUDE_CODE_SESSION_ID.worktree-off"
 ebadf "$HOOKS/enforce-worktree.js"
 if [[ "$RC" == 0 ]] && ! blocked; then pass "enforce-worktree/marker-pass-through"; else fail "enforce-worktree/marker-pass-through" "$(ctx)"; fi
-rm -f "$CLAUDE_WORKFLOW_DIR/$CLAUDE_CODE_SESSION_ID.worktree-off"
+rm -f "$WORKFLOW_STATE_DIR/$CLAUDE_CODE_SESSION_ID.worktree-off"
 unset CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE
 cd "$TMPD/neutral" || exit 1
 case_end

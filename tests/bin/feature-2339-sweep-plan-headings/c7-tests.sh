@@ -22,7 +22,7 @@ if (out.indexOf(v) === -1) { process.stderr.write('dry-run did not report the ca
 if [[ $? -eq 0 ]]; then pass "C7-dry: dry-run reports the pending canonical rename on stdout, file unmodified"; else fail "C7-dry: $_c7dry"; fi
 
 # C7-all: --fix --all normalizes EVERY outline artifact in the pinned plans dir
-# (WORKFLOW_PLANS_DIR + CLAUDE_WORKFLOW_DIR pinned as a pair, per
+# (WORKFLOW_PLANS_DIR + WORKFLOW_STATE_DIR pinned as a pair, per
 # rules/test/fixture-isolation.md). Two outline files, both carrying a localized
 # H2, must both come out canonical.
 _c7all="$(node -e "
@@ -40,7 +40,7 @@ const files = ['a1b2c3d4-e5f6-7890-abcd-ef1234570001-outline.md', 'a1b2c3d4-e5f6
 files.forEach(function (name) { fs.writeFileSync(dir + '/' + name, '# Plan\n\n## ' + k + '\n\nbody line\n'); });
 const out = cp.execFileSync(process.execPath, ['$SWEEP_NODE', '--fix', '--all'], {
   encoding: 'utf8',
-  env: Object.assign({}, process.env, { WORKFLOW_PLANS_DIR: dir, CLAUDE_WORKFLOW_DIR: wf }),
+  env: Object.assign({}, process.env, { WORKFLOW_PLANS_DIR: dir, WORKFLOW_STATE_DIR: wf }),
 });
 const bad = [];
 files.forEach(function (name) {
@@ -74,7 +74,7 @@ const before = {};
 files.forEach(function (name) { const c = '# Plan\n\n## ' + k + '\n\nbody line\n'; fs.writeFileSync(dir + '/' + name, c); before[name] = c; });
 const out = cp.execFileSync(process.execPath, ['$SWEEP_NODE', '--all'], {
   encoding: 'utf8',
-  env: Object.assign({}, process.env, { WORKFLOW_PLANS_DIR: dir, CLAUDE_WORKFLOW_DIR: wf }),
+  env: Object.assign({}, process.env, { WORKFLOW_PLANS_DIR: dir, WORKFLOW_STATE_DIR: wf }),
 });
 const changed = files.filter(function (name) { return fs.readFileSync(dir + '/' + name, 'utf8') !== before[name]; });
 if (changed.length !== 0) { process.stderr.write('dry-run --all modified files: ' + JSON.stringify(changed) + '\n'); process.exit(1); }
@@ -106,7 +106,7 @@ fs.writeFileSync(dir + '/' + eligible, eligibleContent);
 fs.writeFileSync(dir + '/' + ineligible, ineligibleContent);
 const out = cp.execFileSync(process.execPath, ['$SWEEP_NODE', '--fix', '--all'], {
   encoding: 'utf8',
-  env: Object.assign({}, process.env, { WORKFLOW_PLANS_DIR: dir, CLAUDE_WORKFLOW_DIR: wf }),
+  env: Object.assign({}, process.env, { WORKFLOW_PLANS_DIR: dir, WORKFLOW_STATE_DIR: wf }),
 });
 // eligible file must now be canonical
 const t = fs.readFileSync(dir + '/' + eligible, 'utf8');

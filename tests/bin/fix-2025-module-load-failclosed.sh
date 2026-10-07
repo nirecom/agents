@@ -59,9 +59,9 @@ run_with_timeout() {
 TMPDIR_BASE="$(mktemp -d)"
 trap 'cd / 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans-root"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 cd "$TMPDIR_BASE" || exit 1
 
 SID="s1"
@@ -219,7 +219,7 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
     assert_eq "4: saying which library it needed" \
         "yes" "$(printf '%s' "$O4L" | grep -q -F -e 'required library missing' && printf yes || printf no)"
     assert_eq "4: and allocating no round number for a round that never ran" \
-        "no-round" "$([ -e "$CLAUDE_WORKFLOW_DIR/$SID.control/$FMT-round-number.txt" ] && printf 'allocated-one' || printf no-round)"
+        "no-round" "$([ -e "$WORKFLOW_STATE_DIR/$SID.control/$FMT-round-number.txt" ] && printf 'allocated-one' || printf no-round)"
 
     P4S="$(mkplans plans-secloop)"
     rc=0
@@ -231,7 +231,7 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
     assert_eq "4: saying which library it needed" \
         "yes" "$(printf '%s' "$O4S" | grep -q -F -e 'required library missing' && printf yes || printf no)"
     assert_eq "4: and allocating no round number for a round that never ran" \
-        "no-round" "$([ -e "$CLAUDE_WORKFLOW_DIR/$SID.control/security-code-round-number.txt" ] && printf 'allocated-one' || printf no-round)"
+        "no-round" "$([ -e "$WORKFLOW_STATE_DIR/$SID.control/security-code-round-number.txt" ] && printf 'allocated-one' || printf no-round)"
 }
 
 # 4b. The intact counterpart of the row above. #2276 moved round numbering for the
@@ -257,7 +257,7 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
     assert_eq "4b: a complete tree reaches a verdict rather than the load guard" \
         "reached" "$(printf '%s' "$O4B2" | grep -q -F -e 'required library missing' && printf 'halted-on-load' || printf reached)"
     assert_eq "4b: and the loop numbers the first security-code round 1" \
-        "1" "$(tr -dc '0-9' < "$CLAUDE_WORKFLOW_DIR/$SID.control/security-code-last-round.txt" 2>/dev/null)"
+        "1" "$(tr -dc '0-9' < "$WORKFLOW_STATE_DIR/$SID.control/security-code-last-round.txt" 2>/dev/null)"
     assert_eq "4b: the ledger file is keyed by the ledger format, not the loop label" \
         "yes" "$(grep -qF 'FP_LEDGER_FORMAT="review-security-shared"' "$AGENTS_ROOT/bin/lib/codex-review-loop/format-params.sh" 2>/dev/null && printf yes || printf no)"
 }

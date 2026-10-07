@@ -55,7 +55,7 @@ rtb_exec_one() {
         . "$launcher" || { : >"$logdir/$i.nolaunch"; exit 2; }
         cd "$wt" || { : >"$logdir/$i.nolaunch"; exit 2; }
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
-        export AGENTS_CONFIG_DIR="$wt" CLAUDE_WORKFLOW_DIR="$iso/workflow" \
+        export AGENTS_CONFIG_DIR="$wt" WORKFLOW_STATE_DIR="$iso/workflow" \
             WORKFLOW_PLANS_DIR="$iso/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$iso/transcripts"
         run_all_exec "$wt/$rel" "$logdir/$i.out" "$logdir/$i.err"
         rc=$?

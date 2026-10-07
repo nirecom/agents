@@ -11,7 +11,7 @@
 const fs = require("fs");
 const path = require("path");
 const { ASSIGN_RE, commandBasename } = require("../lib/bash-write-patterns/segment-utils");
-const { getWorkflowDir } = require("../workflow-state/state-io/core");
+const { getSessionStateDir } = require("../workflow-state/state-io/state-root");
 const { normalizeCwd } = require("../lib/path-normalize");
 
 const GH_ENV_NAMES = ["GH_REPO", "GH_HOST"];
@@ -19,21 +19,20 @@ const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const ENV_TTL_MS = 4 * 60 * 60 * 1000;
 
 // The state dir is READ from the environment, never invented. An empty
-// CLAUDE_WORKFLOW_DIR means "no state directory for this run", not "fall back to
+// WORKFLOW_STATE_DIR means "no state directory for this run", not "fall back to
 // the developer's home" — a guard that writes into $HOME because a test or a
 // sandbox blanked the variable has escaped the boundary it was given.
-function stateDir() {
-  const raw = process.env.CLAUDE_WORKFLOW_DIR;
-  if (raw === undefined) {
-    try { return normalizeCwd(getWorkflowDir()); } catch (_e) { return null; }
-  }
-  if (typeof raw !== "string" || raw.trim() === "") return null;
-  return normalizeCwd(raw);
+// Otherwise the dir is the one `sid` routes to (#2511); the resolver rejects a relative
+// pin, which reads as "no state directory" here too.
+function stateDir(sid) {
+  const raw = process.env.WORKFLOW_STATE_DIR;
+  if (raw !== undefined && (typeof raw !== "string" || raw.trim() === "")) return null;
+  try { return normalizeCwd(getSessionStateDir(sid)); } catch (_e) { return null; }
 }
 
 function sessionStatePath(sid, kind) {
   if (typeof sid !== "string" || !SESSION_ID_RE.test(sid)) return null;
-  const dir = stateDir();
+  const dir = stateDir(sid);
   if (!dir) return null;
   try {
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return null;

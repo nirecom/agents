@@ -31,7 +31,7 @@ cd "$BASE" || exit 1
 # and prints one "<probe>=<value>" line per observation.
 drive() {
     mkdir -p "$2"
-    run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID "CLAUDE_WORKFLOW_DIR=$(np "$2")" "WORKFLOW_PLANS_DIR=$PLANS" \
+    run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_STATE_DIR=$(np "$2")" "WORKFLOW_PLANS_DIR=$PLANS" \
         node - "$(np "$CLEANUP_LIB")" "$(np "$CONTROL_LIB")" "$1" "$(np "$2")" 2>&1 <<'JS'
 const fs = require("fs"); const path = require("path");
 const [cleanupLib, controlLib, scenario, wf] = process.argv.slice(-4);

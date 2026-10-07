@@ -18,7 +18,7 @@
 # so check_state_file_absent can assert a clean no-op.
 run_raw_stdin_hook() {
     local raw="$1"
-    LAST_HOOK_STDOUT=$(printf '%s' "$raw" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
+    LAST_HOOK_STDOUT=$(printf '%s' "$raw" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
     LAST_HOOK_EXIT=$?
     printf '%s' "$LAST_HOOK_STDOUT"
 }
@@ -111,9 +111,9 @@ run_robustness_tests() {
         fail "C3-7. command:null → expected {}/exit0/no-state, got stdout='$LAST_HOOK_STDOUT' exit=$LAST_HOOK_EXIT run_tests=$STATUS"
     fi
 
-    # C3-8: state-write failure (CLAUDE_WORKFLOW_DIR points at a regular file) → {} , exit 0, no stack trace.
+    # C3-8: state-write failure (WORKFLOW_STATE_DIR points at a regular file) → {} , exit 0, no stack trace.
     # Seeds write_tests=complete first (real WORKFLOW_DIR) so the hook reaches the markStep path,
-    # then re-runs with CLAUDE_WORKFLOW_DIR redirected to a regular file so the state write throws.
+    # then re-runs with WORKFLOW_STATE_DIR redirected to a regular file so the state write throws.
     # The hook's top-level try/catch must absorb the error and fail open.
     SID="c3-stfail-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
@@ -121,7 +121,7 @@ run_robustness_tests() {
     touch "$REGFILE"
     JSON=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"pytest tests/foo.py"},tool_response:{exit_code:0},session_id:process.argv[1]}))' "$SID" 2>/dev/null)
     C38_STDERR_FILE="${TMPDIR:-/tmp}/rt-c3-stderr-$$-$RANDOM"
-    C38_STDOUT=$(printf '%s' "$JSON" | CLAUDE_WORKFLOW_DIR="$REGFILE" node "$RUN_TESTS_HOOK" 2>"$C38_STDERR_FILE")
+    C38_STDOUT=$(printf '%s' "$JSON" | WORKFLOW_STATE_DIR="$REGFILE" node "$RUN_TESTS_HOOK" 2>"$C38_STDERR_FILE")
     C38_EXIT=$?
     C38_TYPEERR=$(grep -c "TypeError" "$C38_STDERR_FILE" 2>/dev/null || true)
     C38_ATOBJ=$(grep -c "at Object" "$C38_STDERR_FILE" 2>/dev/null || true)
@@ -129,7 +129,7 @@ run_robustness_tests() {
     C38_ATOBJ=${C38_ATOBJ:-0}
     rm -f "$REGFILE" "$C38_STDERR_FILE"
     if [ "$C38_STDOUT" = "{}" ] && [ "$C38_EXIT" -eq 0 ] && [ "$C38_TYPEERR" -eq 0 ] && [ "$C38_ATOBJ" -eq 0 ]; then
-        pass "C3-8. state-write failure (CLAUDE_WORKFLOW_DIR=regular-file) → {} + exit 0 + no stack trace (fail-open bottom catch)"
+        pass "C3-8. state-write failure (WORKFLOW_STATE_DIR=regular-file) → {} + exit 0 + no stack trace (fail-open bottom catch)"
     else
         fail "C3-8. state-write failure → expected {}/exit0/no-stack-trace, got stdout='$C38_STDOUT' exit=$C38_EXIT TypeError=$C38_TYPEERR at-Object=$C38_ATOBJ"
     fi

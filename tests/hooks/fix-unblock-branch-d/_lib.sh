@@ -3,21 +3,14 @@
 # Tests: hooks/enforce-worktree/branch-delete-guard.js, hooks/lib/command-parser.js, hooks/enforce-worktree.js
 # Tags: test-lib, worktree, enforce, hook, branch-delete, redirect, scope:common
 # Shared helpers and fixtures for fix-unblock-branch-d test groups.
-#
-# Sourced by:
-#   - tests/hooks/fix-unblock-branch-d/unit.sh
-#   - tests/hooks/fix-unblock-branch-d/integration.sh
-#   - tests/hooks/fix-unblock-branch-d/hook-redirect.sh
-#
-# Each group script sources this file so it can run standalone, e.g.:
-#   bash tests/hooks/fix-unblock-branch-d/unit.sh
-#
-# This library resolves AGENTS_DIR / MODULE / PATTERNS_MODULE / HOOK_SCRIPT,
-# defines pass / fail / run_with_timeout, the unit-test node -e callers, and the
-# git-repo fixture helpers. It does NOT initialize PASS/FAIL, create TMPDIR_BASE,
-# register a cleanup trap, echo Results, or exit — the group scripts own those,
-# because each group runs as an independent child bash process under the
-# dispatcher and exits on its own.
+
+# Sourced by unit.sh / integration.sh / hook-redirect.sh in tests/hooks/fix-unblock-branch-d/,
+# so each group runs standalone, e.g.: bash tests/hooks/fix-unblock-branch-d/unit.sh
+
+# Resolves AGENTS_DIR / MODULE / PATTERNS_MODULE / HOOK_SCRIPT; defines pass / fail / run_with_timeout,
+# the unit-test node -e callers, and the git-repo fixture helpers. It does NOT initialize PASS/FAIL, create
+# TMPDIR_BASE, register a cleanup trap, echo Results, or exit — the group scripts own those, because each
+# group runs as an independent child bash process under the dispatcher and exits on its own.
 
 set -u
 
@@ -32,6 +25,15 @@ PATTERNS_MODULE="${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns.js"
 GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree/branch-delete-guard.js"
 PARSER_MODULE="${_AGENTS_DIR_NODE}/hooks/lib/command-parser.js"
 HOOK_SCRIPT="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+
+# isolation (#2512): the dispatcher pins and the groups inherit it. A standalone group run
+# inherits nothing (both unset), so it pins its own OS-temp root (not trap-removed: the group owns the trap).
+declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"
+if [ -z "${WORKFLOW_STATE_DIR:-}" ] && [ -z "${WORKFLOW_PLANS_DIR:-}" ]; then
+    _LIB_ISOLATION_ROOT="$(make_tmp)"
+    harness_isolate "$_LIB_ISOLATION_ROOT"
+fi
+harness_assert_isolated
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }

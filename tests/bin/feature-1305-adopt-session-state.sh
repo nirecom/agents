@@ -45,7 +45,7 @@ WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 PLANS_DIR="$TMPDIR_BASE/plans"
 TBASE="$TMPDIR_BASE/transcripts"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR" "$TBASE"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 
 # Never resolve the live session: each case passes its own heir sid explicitly.

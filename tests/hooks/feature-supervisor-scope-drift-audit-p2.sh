@@ -11,6 +11,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -92,7 +98,7 @@ DETAIL
 
 seed_wf_state() {
     local tmp_node="$1" sid="$2"
-    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const wf = require('$WFSTATE_NODE');
 wf.markStep('$sid', 'user_verification', 'complete');
 " >/dev/null 2>&1
@@ -100,7 +106,7 @@ wf.markStep('$sid', 'user_verification', 'complete');
 
 read_audit_field() {
     local tmp_node="$1" sid="$2" field="$3"
-    CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 process.stdout.write(String((st && st.audit && st.audit['$field']) || 'null'));
@@ -132,7 +138,7 @@ run_c3_scope_drift_only() {
 
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash","cwd":"%s"}}' "$sid" "$repodir_node")
 
-    out=$(CLAUDE_WORKFLOW_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
         WORKFLOW_SESSION_ID="$wsid" \
         run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
 

@@ -144,7 +144,7 @@ MV_EOF
     fi
 
     export WORKFLOW_PLANS_DIR="$TMP/plans"
-    export CLAUDE_WORKFLOW_DIR="$TMP/workflow"
+    export WORKFLOW_STATE_DIR="$TMP/workflow"
     _init_repo_fixture
 }
 
@@ -154,7 +154,7 @@ teardown_mock() {
     fi
     TMP=""
     unset REPO_FIXTURE FIXTURE_ORIGIN_URL FIXTURE_UPSTREAM_URL 2>/dev/null || true
-    unset MOCK_LOG WORKFLOW_PLANS_DIR CLAUDE_WORKFLOW_DIR \
+    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR \
           GH_MOCK_OWNER_REPO GH_MOCK_REPO_VIEW_FAIL \
           GH_MOCK_PROJECTS_NODE_COUNT GH_MOCK_PROJECT_OWNER \
           GH_MOCK_PROJECT_NUM GH_MOCK_PROJECT_ID \

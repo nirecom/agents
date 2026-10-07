@@ -33,7 +33,7 @@ command -v rtk >/dev/null 2>&1 || { echo "SKIP: rtk CLI not found on PATH" >&2; 
 
 # --- Fixture isolation (rules/test/fixture-isolation.md) --------------------
 # harness.sh already unset CLAUDE_CODE_SESSION_ID.
-unset CLAUDE_WORKFLOW_DIR
+unset WORKFLOW_STATE_DIR
 unset WORKFLOW_PLANS_DIR
 
 FIXTURE_HOME="$(make_tmp)"

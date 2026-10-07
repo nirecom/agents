@@ -32,7 +32,7 @@ EOF
     UPS_OUT=$(SID="p4" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 25 node -r "$(node_path "$preload")" "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
     [ "$UPS_RC" -eq 0 ] || problems="$problems [hook exited $UPS_RC]"
@@ -77,7 +77,7 @@ EOF
     UPS_OUT=$(SID="p5" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 25 node -r "$(node_path "$preload")" "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
     [ "$UPS_RC" -eq 0 ] || problems="$problems [hook exited $UPS_RC instead of failing open]"
@@ -103,7 +103,7 @@ run_P11() {
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     mark_step_with_origin "$tn" p11a research postuse-in-flight
     mark_step_with_origin "$tn" p11a research mark-step
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 process.stdout.write(String(require('$LIFECYCLE_NODE').isLookaheadOnlyInFlight('p11a', 'research')));" 2>/dev/null)
     [ "$out" = "false" ] ||
         problems="$problems [lookahead-then-genuine: isLookaheadOnlyInFlight=${out:-<err>}, expected false — the LATER genuine mark-step event should win over the earlier lookahead mark]"
@@ -111,7 +111,7 @@ process.stdout.write(String(require('$LIFECYCLE_NODE').isLookaheadOnlyInFlight('
     tmp2="$(make_tmp)"; tn2="$(node_path "$tmp2")"
     mark_step_with_origin "$tn2" p11b research mark-step
     mark_step_with_origin "$tn2" p11b research postuse-in-flight
-    out=$(CLAUDE_WORKFLOW_DIR="$tn2" WORKFLOW_PLANS_DIR="$tn2" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn2" WORKFLOW_PLANS_DIR="$tn2" "$RWT" 20 node -e "
 process.stdout.write(String(require('$LIFECYCLE_NODE').isLookaheadOnlyInFlight('p11b', 'research')));" 2>/dev/null)
     [ "$out" = "true" ] ||
         problems="$problems [genuine-then-lookahead: isLookaheadOnlyInFlight=${out:-<err>}, expected true — the LATER lookahead mark should win over the earlier genuine mark]"
@@ -150,7 +150,7 @@ EOF
     UPS_OUT=$(SID="p12" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 25 node -r "$(node_path "$preload")" "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
     [ "$UPS_RC" -eq 0 ] || problems="$problems [hook exited $UPS_RC instead of failing safe]"
@@ -206,7 +206,7 @@ run_P15() {
 # or a throwing predicate is reported as its own token rather than collapsing
 # into `false`, so the case can name what is actually absent.
 _p16_verdicts() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
     SID="$2" STEP="$3" KIND="$4" "$RWT" 20 node -e "
 const finding = { step: process.env.STEP, kind: process.env.KIND };
 const sid = process.env.SID;

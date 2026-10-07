@@ -11,6 +11,11 @@
 
 set -uo pipefail
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
 # --- skip gates (claude-e2e.md acceptance criteria) --------------------------
@@ -282,7 +287,7 @@ gate_verdict() { # <command> -> "block" | "permit" | "crash:<rc>" | "absent"
     local out rc
     out="$(cd "$REPO" && printf '{"tool_name":"Bash","session_id":"tl3gate","cwd":"%s","tool_input":{"command":"%s"}}' \
              "$(node_path "$REPO")" "$1" \
-           | CLAUDE_WORKFLOW_DIR="$WFDIR" WORKFLOW_PLANS_DIR="$PLANSDIR" \
+           | WORKFLOW_STATE_DIR="$WFDIR" WORKFLOW_PLANS_DIR="$PLANSDIR" \
              AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" PATH="$TURN_PATH" \
              run_with_timeout 20 node "$EW_HOOK" 2>/dev/null)"
     rc=$?
@@ -326,7 +331,7 @@ run_turn() {
           -u GH_HOST -u GH_REPO -u GH_PATH -u GH_FORCE_TTY \
       PATH="$TURN_PATH" \
       GH_CONFIG_DIR="$GHCONFIG" \
-      CLAUDE_WORKFLOW_DIR="$WFDIR" \
+      WORKFLOW_STATE_DIR="$WFDIR" \
       WORKFLOW_PLANS_DIR="$PLANSDIR" \
       TL3_HOOK_LOG="$TURN_LOG" \
       AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \

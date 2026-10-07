@@ -44,11 +44,11 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
@@ -234,7 +234,7 @@ run_gate() {
     if [ -n "$common_dir" ]; then
         main_dir="$(node -e "const p=require('path');process.stdout.write(p.dirname(p.resolve(process.argv[1],process.argv[2])))" -- "$cwd" "$common_dir" 2>/dev/null)" || main_dir=""
     fi
-    local env_args=("CLAUDE_PROJECT_DIR=$cwd" "CLAUDE_WORKFLOW_DIR=$WORKFLOW_DIR")
+    local env_args=("CLAUDE_PROJECT_DIR=$cwd" "WORKFLOW_STATE_DIR=$WORKFLOW_DIR")
     [ -n "$main_dir" ] && env_args+=("AGENTS_CONFIG_DIR=$main_dir")
     echo "$json" | run_with_timeout 30 env "${env_args[@]}" "$@" node "$GATE_HOOK" 2>/dev/null
 }
@@ -242,7 +242,7 @@ run_gate() {
 run_mark() {
     local cwd="$1" json="$2"; shift 2
     echo "$json" | run_with_timeout 30 env CLAUDE_PROJECT_DIR="$cwd" \
-        CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" "$@" node "$MARK_HOOK" 2>/dev/null
+        WORKFLOW_STATE_DIR="$WORKFLOW_DIR" "$@" node "$MARK_HOOK" 2>/dev/null
 }
 
 is_block() { echo "$1" | grep -q '"block"'; }

@@ -73,7 +73,7 @@ const st = s && s.steps && s.steps.review_tests;
 process.stdout.write(st ? st.status : 'MISSING');
 " -- "$sid" 2>/dev/null)
     # Call markReviewTestsComplete with null manifest -> should throw
-    threw=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_with_timeout 10 node -e "
+    threw=$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR" run_with_timeout 10 node -e "
 const m = require('$STATE_IO_NODE');
 try {
     m.markReviewTestsComplete(process.argv[1], null, {});

@@ -4,7 +4,7 @@
 # Tags: session-close, wf-meta, env-json, outcome, scope:issue-specific, feature-2434, control-dir
 # Issue #1257 — /session-close WF-META path (no PR/worktree): --wf-meta in build-env writes empty
 # PR fields, in issue-close-write-outcome writes skipped_wf_meta; S1-S5 pin the SKILL.md path.
-# #2434 (N-series): build-env derives its env file under <CLAUDE_WORKFLOW_DIR>/<sid>.control/.
+# #2434 (N-series): build-env derives its env file under <WORKFLOW_STATE_DIR>/<sid>.control/.
 # L3 gap: a real /session-close on a WF-META session (SC-1 ordering, "(none)" PR fields, no gh
 # call, finalize skipped) needs a claude -p E2E gated on RUN_TL3.
 
@@ -43,7 +43,7 @@ WF_DIR="${TMPDIR_BASE}/wf"
 PLANS_DIR="${TMPDIR_BASE}/plans"
 mkdir -p "$WF_DIR" "$PLANS_DIR" "${TMPDIR_BASE}/home" "${TMPDIR_BASE}/tx" "${TMPDIR_BASE}/cwd"
 export HOME="${TMPDIR_BASE}/home"
-export CLAUDE_WORKFLOW_DIR="$WF_DIR"
+export WORKFLOW_STATE_DIR="$WF_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 export CLAUDE_TRANSCRIPT_BASE_DIR="${TMPDIR_BASE}/tx"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true

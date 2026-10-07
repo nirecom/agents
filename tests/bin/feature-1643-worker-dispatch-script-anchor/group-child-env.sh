@@ -178,7 +178,7 @@ K_APPDATA="$(nodepath "$K_APPDATA_RAW")"
 probe_child_env() {
     PROBE_OUT="$(run_with_timeout 90 env \
         -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "APPDATA=$K_APPDATA" \
         "$K_SENTINEL_NAME=$K_SENTINEL_VALUE" "$K_SENTINEL_B_NAME=$K_SENTINEL_B_VALUE" \
         node "$K_DRIVER" "$(nodepath "$AGENTS_DIR")" "$KMAIN" "$KLINKED" "$K_CHILD_JS" \

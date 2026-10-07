@@ -245,7 +245,7 @@ group_c() {
       const reg = require(process.argv[1]);
       const w = (reg.workers || {})["commit-push"];
       const p = (k, v) => process.stdout.write(k + "=" + String(v) + "\n");
-      const D1 = ["CLAUDE_WORKFLOW_DIR","WORKFLOW_PLANS_DIR","WORKFLOW_SESSION_ID","CLAUDE_PROJECT_DIR","DEFAULT_BRANCHES"];
+      const D1 = ["WORKFLOW_STATE_DIR","WORKFLOW_PLANS_DIR","WORKFLOW_SESSION_ID","CLAUDE_PROJECT_DIR","DEFAULT_BRANCHES"];
       // No early exit on a missing entry: "no ISSUE_CLOSE_SKILL" and "no missing
       // D1 var" are both trivially true of an absent entry, so the absence is
       // reported as a distinct value instead of as a pass.
@@ -262,7 +262,7 @@ group_c() {
     # #2308: GITLAB_HOST + GITLAB_TOKEN join the passthrough so the dispatched
     # glab child authenticates against a self-hosted GitLab on the MR path.
     assert_eq "env/declared-set" \
-        "CLAUDE_PROJECT_DIR,CLAUDE_WORKFLOW_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,GITLAB_HOST,GITLAB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID" \
+        "CLAUDE_PROJECT_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,GITLAB_HOST,GITLAB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID,WORKFLOW_STATE_DIR" \
         "$(ev declared)"
     # run-stage-chain.sh / run-finalize-terminal.sh export it themselves; the
     # dispatcher must not be the one handing it out.
@@ -275,7 +275,7 @@ group_c() {
 # Group D — the worker sets the five D1 vars EXPLICITLY via extraEnv.
 #
 # Declaring them in envPassthrough also permits inheritance. An inherited
-# CLAUDE_WORKFLOW_DIR sends the gate child at a different session's state file,
+# WORKFLOW_STATE_DIR sends the gate child at a different session's state file,
 # where every step reads "missing" and the gate answers approve — the quiet
 # failure mode this group exists to make loud.
 # ===========================================================================
@@ -328,7 +328,7 @@ keys=SCAN_FAILED"
         return
     fi
     missing=""
-    for v in CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR WORKFLOW_SESSION_ID CLAUDE_PROJECT_DIR DEFAULT_BRANCHES; do
+    for v in WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR WORKFLOW_SESSION_ID CLAUDE_PROJECT_DIR DEFAULT_BRANCHES; do
         case ",$keys," in
             *",$v,"*) ;;
             *) missing="$missing $v" ;;

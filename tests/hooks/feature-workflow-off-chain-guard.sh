@@ -2,20 +2,14 @@
 # tests/hooks/feature-workflow-off-chain-guard.sh
 # Tests: hooks/lib/sentinel-patterns.js., hooks/workflow-gate.js
 # Tags: workflow, gate, hook, sentinel, bin, scope:issue-specific
-#
+
 # Chain-guard tests for the new WORKFLOW_ENFORCE_WORKFLOW_OFF / _ON sentinels.
-#
-# workflow-gate.js Step 1 chain-guard already covers the entire
-# WORKFLOW_[A-Za-z_]+ family via CHAIN_BOUNDARY_SENTINEL_DQ_RE in
-# hooks/lib/sentinel-patterns.js. This means chains of the shape
-#   echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: x>>" && <other>
-# must be rejected (workflow-mark.js would otherwise silently drop the state
-# update due to issue #110 all-or-nothing dispatch).
-#
+# workflow-gate.js Step 1 chain-guard already covers the entire WORKFLOW_[A-Za-z_]+ family via CHAIN_BOUNDARY_SENTINEL_DQ_RE in hooks/lib/sentinel-patterns.js.
+# This means chains of the shape `echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: x>>" && <other>` must be rejected (workflow-mark.js would otherwise silently drop the state update due to issue #110 all-or-nothing dispatch).
+
 # Contract:
 #   - Chained OFF sentinel + non-sentinel via `&&` → blocked.
-#   - Standalone OFF sentinel (no chain) → approved (Bash echo of sentinel is
-#     exempt; workflow-mark.js handles it on the PostToolUse side).
+#   - Standalone OFF sentinel (no chain) → approved (Bash echo of sentinel is exempt; workflow-mark.js handles it on the PostToolUse side).
 #   - Chained ON sentinel + non-sentinel → blocked (symmetric).
 
 set -u
@@ -44,10 +38,13 @@ console.log(d);
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_STATE_DIR"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -97,7 +94,7 @@ run_hook() {
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
 }
 

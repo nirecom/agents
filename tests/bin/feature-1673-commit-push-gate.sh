@@ -87,7 +87,7 @@ dispatch() {
     printf '%s' "$1" > "$CANNED"
     : > "$CALLLOG"
     DRC=0
-    DOUT="$(run_with_timeout 120 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+    DOUT="$(run_with_timeout 120 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         "WD_SPAWN_MODULE=$(nodepath "$SPAWN_JS")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

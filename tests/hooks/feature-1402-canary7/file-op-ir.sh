@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/bash-write-targets/file-op.js, hooks/lib/bash-write-patterns/patterns.js, hooks/lib/bash-write-patterns/classify.js
 # Tags: scope:issue-specific, canary-7, ir-migration, file-op-ir, pwsh-not-required
+# isolation: inherits-from ../feature-1402-canary7.sh
 #
 # file-op.js IR predicate + target extractor (#1402 canary-7 Step 4).
 #

@@ -52,7 +52,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 # Dual-pin: hooks resolve state from the fixture AND the supervisor emitter must
 # not append to the developer's ~/.workflow-plans.
-export CLAUDE_WORKFLOW_DIR="$tmp/workflow-state"; mkdir -p "$CLAUDE_WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$tmp/workflow-state"; mkdir -p "$WORKFLOW_STATE_DIR"
 export WORKFLOW_PLANS_DIR="$tmp/plans"; mkdir -p "$WORKFLOW_PLANS_DIR"
 # Never inherit the outer Claude Code session into resolveSessionId().
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
@@ -90,7 +90,7 @@ case_a_verbatim_injection() {
     # read-back. Pre-fix the read-back-mismatch guard exits 1 before printing the
     # receipt, so `rec` is empty and A-0b (not A-0a) is the RED signal.
     rec=$(run_to node "$BIN_RECORD" --session "$sid" --signals "S1-multi-file,INJECT_TEXT" 2>/dev/null)
-    sf_content="$(cat "$CLAUDE_WORKFLOW_DIR/$sid.json" 2>/dev/null)"
+    sf_content="$(cat "$WORKFLOW_STATE_DIR/$sid.json" 2>/dev/null)"
     assert_not_contains "A-0c raw state file on disk does not contain INJECT_TEXT" "INJECT_TEXT" "$sf_content"
     assert_not_contains "A-0a the record receipt never echoes the raw injected token" "INJECT_TEXT" "$rec"
     assert_contains "A-0b the record receipt collapses to UNRECOGNIZED(1)" "signals=UNRECOGNIZED(1)" "$rec"
@@ -111,7 +111,7 @@ case_a3_signals_file() {
 
     sid=$(new_session fileinject)
     rec=$(run_to node "$BIN_RECORD" --session "$sid" --signals-file "$sigfile" 2>/dev/null)
-    sf_content="$(cat "$CLAUDE_WORKFLOW_DIR/$sid.json" 2>/dev/null)"
+    sf_content="$(cat "$WORKFLOW_STATE_DIR/$sid.json" 2>/dev/null)"
     assert_not_contains "A3-0c --signals-file raw state file does not contain INJECT_TEXT" "INJECT_TEXT" "$sf_content"
     assert_not_contains "A3-0 --signals-file receipt never echoes the injected token" "INJECT_TEXT" "$rec"
     assert_contains "A3-0b the --signals-file receipt collapses to UNRECOGNIZED(1)" "signals=UNRECOGNIZED(1)" "$rec"
@@ -242,10 +242,10 @@ case_ssot_vocabulary() {
         fail "SSOT-0 could not read SIGNAL_IDS from complexity-routing.js"
         return
     fi
-    # #2434: the out file is derived as <CLAUDE_WORKFLOW_DIR>/<sid>.control/detail-signals.txt.
+    # #2434: the out file is derived as <WORKFLOW_STATE_DIR>/<sid>.control/detail-signals.txt.
     for id in $ids; do
         raw="$tmp/raw-ssot-$id.txt"
-        outf="$CLAUDE_WORKFLOW_DIR/ssot-$id.control/detail-signals.txt"
+        outf="$WORKFLOW_STATE_DIR/ssot-$id.control/detail-signals.txt"
         printf 'SIGNALS: %s\n' "$id" > "$raw"
         rm -f "$outf"
         run_to node "$NORMALIZE_CLI" --raw-file "$raw" --session "ssot-$id" --stage detail >/dev/null 2>&1 || true
@@ -254,7 +254,7 @@ case_ssot_vocabulary() {
     done
 
     raw="$tmp/raw-ssot-unknown.txt"
-    outf="$CLAUDE_WORKFLOW_DIR/ssot-unknown.control/detail-signals.txt"
+    outf="$WORKFLOW_STATE_DIR/ssot-unknown.control/detail-signals.txt"
     printf 'SIGNALS: S99-bogus\n' > "$raw"
     rm -f "$outf"
     run_to node "$NORMALIZE_CLI" --raw-file "$raw" --session ssot-unknown --stage detail >/dev/null 2>&1 || true

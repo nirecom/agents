@@ -7,6 +7,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # #1821: the invitation is the ONLY way out of a block, and it only helps if it survives
 # the trip through the real hook. Sibling suites assert on the dispatch CONSTANTS; nothing
 # decoded a real blocked RESPONSE. D* drives real tool inputs through the entrypoint,

@@ -224,7 +224,7 @@ _sy_characterize_lexical_residuals() {
 # --- A22-6 / A22-7 — THE SECOND PROTECTED DESTINATION ---------------------------------
 # A21 and A22-1..A22-5 reason about one destination class: files under version control.
 # early-gate.js:33 names TWO — "outside the repo AND outside workflow state". The second,
-# hooks/workflow-state's store (CLAUDE_WORKFLOW_DIR, else ~/.claude/projects/workflow), holds
+# hooks/workflow-state's store (WORKFLOW_STATE_DIR, else ~/.claude/projects/workflow), holds
 # the records this gate reads to decide: step progress, clearance tokens, markers. It sits
 # outside every repo BY CONSTRUCTION, which is exactly why A22-1's clause misses it —
 # findRepoRoot() is the allowlist's only non-lexical test and it answers null here. A22-6
@@ -282,8 +282,11 @@ _sy_workflow_state_escape() {
 
     # A22-7b — Pattern 4, the allow direction: an artifact name ending in a protected kind is
     # NOT clearance state (#2108), and without this row A22-7 would also pass against a hook
-    # that had simply started blocking every path holding a link.
-    assert_eq "A22-7b control: an artifact name through the same link is allowed" "approve" \
+    # that had simply started blocking every path holding a link. The link must lead outside
+    # the state dir: through the state-dir link the write IS a state-root write (#2512 C6).
+    assert_eq "A22-7b control: an artifact name through a link to elsewhere is allowed" "approve" \
+        "$(_sy_bctw "$SY_OUTLINK_FWD/issue-2108-survey.gh-env")"
+    assert_eq "A22-7b the same artifact name through the state-dir link is a state-root write" "block" \
         "$(_sy_bctw "$SY_WFLINK_SCRATCH_FWD/issue-2108-survey.gh-env")"
 
     # A22-7c — attribution: the early gate APPROVES that same token path (A22-6's residual,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 ":" //; exec node "$0" "$@"
 // bin/workflow-control-dir --session <sid> [--file <name>] [--for-write]
-// Prints <CLAUDE_WORKFLOW_DIR>/<sid>.control[/<name>] — the shell and prompt face
+// Prints <WORKFLOW_STATE_DIR>/<sid>.control[/<name>] — the shell and prompt face
 // of hooks/workflow-state/state-io/control-dir.js. Runs under bash or node.
 // Exit: 0 path printed; 2 usage / invalid sid or name; 3 legacy control file could
 // not be migrated (ControlMigrationError); 1 any other refusal (e.g. symlinked dir).

@@ -34,10 +34,13 @@ console.log(d);
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_STATE_DIR"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -96,7 +99,7 @@ run_hook() {
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
 }
@@ -241,7 +244,7 @@ c_run_hook() {
     HOOK_OUT="$( ( cd "$cwd" && printf '%s' "$payload" | run_with_timeout 30 \
         env \
         "AGENTS_CONFIG_DIR=$cfg" \
-        "CLAUDE_WORKFLOW_DIR=$(fresh_workflow_dir)" \
+        "WORKFLOW_STATE_DIR=$(fresh_workflow_dir)" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK_JS" 2>&1 ) )" || HOOK_RC=$?
 }

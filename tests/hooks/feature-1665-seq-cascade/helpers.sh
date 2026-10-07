@@ -4,7 +4,7 @@
 # Tags: workflow-state, updated-seq, causal-order, write-code-resume, harness, scope:issue-specific, pwsh-not-required, TL1, TL2
 # Shared harness for the #1665 commit-3 suite (seq projection + write-code resume cascade); SOURCED by each case file, never run standalone.
 
-# Isolation (rules/test/fixture-isolation.md): CLAUDE_WORKFLOW_DIR + WORKFLOW_PLANS_DIR dual-pinned;
+# Isolation (rules/test/fixture-isolation.md): WORKFLOW_STATE_DIR + WORKFLOW_PLANS_DIR dual-pinned;
 #   CLAUDE_CODE_SESSION_ID unset before any node spawn; CWD is a neutral temp dir, never the worktree;
 #   fixture repos get `git config core.hooksPath /dev/null`; node paths normalized with `cygpath -m`.
 
@@ -28,7 +28,7 @@ trap 'cd /; rm -rf "$TMPROOT" >/dev/null 2>&1 || true' EXIT
 mkdir -p "$TMPROOT/wf" "$TMPROOT/plans" "$TMPROOT/cfg" "$TMPROOT/home"
 : > "$TMPROOT/cfg/.env"
 
-CLAUDE_WORKFLOW_DIR="$(nrm "$TMPROOT/wf")"; export CLAUDE_WORKFLOW_DIR
+WORKFLOW_STATE_DIR="$(nrm "$TMPROOT/wf")"; export WORKFLOW_STATE_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$TMPROOT/plans")"; export WORKFLOW_PLANS_DIR
 AGENTS_CONFIG_DIR="$(nrm "$TMPROOT/cfg")"; export AGENTS_CONFIG_DIR
 HOME="$TMPROOT/home"; export HOME

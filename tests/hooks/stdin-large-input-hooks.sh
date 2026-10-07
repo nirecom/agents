@@ -17,7 +17,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 TMPD="$(make_tmp)"
 trap 'cd /; rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
-export CLAUDE_WORKFLOW_DIR="$(np "$CLAUDE_WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(np "$WORKFLOW_STATE_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID SYSTEM_OPS_APPROVED 2>/dev/null || true
 unset ANTHROPIC_API_KEY ENFORCE_WORKTREE_EXCLUDE 2>/dev/null || true

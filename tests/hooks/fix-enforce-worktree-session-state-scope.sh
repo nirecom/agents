@@ -19,8 +19,8 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 T="$(make_tmp)"
 trap 'rm -rf "$T"' EXIT
 harness_isolate "$T/iso"
-WF="$(np "$CLAUDE_WORKFLOW_DIR")"
-export CLAUDE_WORKFLOW_DIR="$WF"
+WF="$(np "$WORKFLOW_STATE_DIR")"
+export WORKFLOW_STATE_DIR="$WF"
 
 SID="11111111-2222-3333-4444-555555555555"
 OTHER_SID="99999999-8888-7777-6666-555555555555"

@@ -59,7 +59,7 @@ EOF
     T14_OUT=$(printf '{"session_id":"t14-sid"}' | \
         CONV_LANG="japanese" \
         CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
-        CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-t14" \
+        WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t14" \
         HOME="$TMPDIR_BASE/home-t14" \
         AGENTS_CONFIG_DIR="$EMPTY_CFG" \
         run_with_timeout 30 node "$T14_HOOKS/session-start.js" 2>/dev/null)
@@ -122,7 +122,7 @@ fi
 T26_RAW=$(printf '{}' | \
     CONV_LANG="japanese" \
     CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
-    CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-t26" \
+    WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t26" \
     HOME="$TMPDIR_BASE/home-t26" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
     run_with_timeout 30 node "$SESSION_START" 2>/dev/null)
@@ -148,7 +148,7 @@ fi
 T21_RAW=$(printf 'not-json' | \
     CONV_LANG="japanese" \
     CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
-    CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-t21" \
+    WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t21" \
     HOME="$TMPDIR_BASE/home-t21" \
     AGENTS_CONFIG_DIR="$EMPTY_CFG" \
     run_with_timeout 30 node "$SESSION_START" 2>/dev/null)

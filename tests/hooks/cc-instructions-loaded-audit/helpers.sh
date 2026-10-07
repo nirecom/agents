@@ -23,7 +23,7 @@ git -C "$REPO" config user.name "Test"
 
 # Fixture isolation (rules/test/fixture-isolation.md): dual-pin the pair, drop
 # any inherited session id, keep CWD neutral.
-export CLAUDE_WORKFLOW_DIR; CLAUDE_WORKFLOW_DIR="$(node_path "$WFDIR")"
+export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR="$(node_path "$WFDIR")"
 export WORKFLOW_PLANS_DIR; WORKFLOW_PLANS_DIR="$(node_path "$PLANS")"
 export CLAUDE_PROJECT_DIR; CLAUDE_PROJECT_DIR="$(node_path "$REPO")"
 unset CLAUDE_CODE_SESSION_ID || true

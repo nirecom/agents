@@ -236,7 +236,7 @@ write_payload() {
 
 dispatch() {
     local worker="$1" pfile="$2"
-    run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "PATH=$STUB:$PATH" "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+    run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "PATH=$STUB:$PATH" "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         node "$(nodepath "$DISPATCH_JS")" "$worker" "$MAIN" "$pfile" 2>/dev/null
 }
 
@@ -322,7 +322,7 @@ group_failure() {
         impl_missing "failure/$name" "$DISPATCH_JS" "bin/worker-dispatch.js" && continue
         p="$(write_payload "bad-$name" "$json")"
         out="$TMPD/fail-$name.txt"
-        run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+        run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
             node "$(nodepath "$DISPATCH_JS")" "$worker" "$MAIN" "$p" > "$out" 2>/dev/null
         st="$(sed -n '1s/^status: //p' "$out")"
         assert_eq "failure/$name/status" "failed" "$st"

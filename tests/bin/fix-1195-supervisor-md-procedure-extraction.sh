@@ -69,7 +69,7 @@ FAKEGH
     chmod +x "$fake_bin/gh"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$CHECK_SESSION" "test-wsid-a1" > /dev/null 2>&1
     rc=$?
@@ -105,7 +105,7 @@ FAKEGH
     chmod +x "$fake_bin/gh"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$CHECK_SESSION" "test-wsid-a2" > /dev/null 2>&1
     rc=$?
@@ -141,7 +141,7 @@ FAKEGH
     chmod +x "$fake_bin/gh"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$CHECK_SESSION" "test-wsid-a3" > /dev/null 2>&1
     rc=$?
@@ -188,7 +188,7 @@ FAKEGH
     chmod +x "$fake_bin/gh"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$CHECK_SESSION" "test-wsid-a4" > /dev/null 2>&1
     rc=$?
@@ -218,7 +218,7 @@ FAKEGH
     chmod +x "$fake_bin/gh"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$CHECK_SESSION" "test-wsid-a5-missing" > /dev/null 2>&1
     rc=$?
@@ -294,7 +294,7 @@ FAKEWA
     chmod +x "$fake_bin/supervisor-write-alert"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$FINALIZE_VERIFY" "$sid" > /dev/null 2>&1
     rc=$?
@@ -330,7 +330,7 @@ FAKEWA
     chmod +x "$fake_bin/supervisor-write-alert"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$FINALIZE_VERIFY" "$sid" > /dev/null 2>&1
     rc=$?
@@ -366,7 +366,7 @@ FAKEWA
     chmod +x "$fake_bin/supervisor-write-alert"
 
     local rc
-    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")" \
+    WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")" WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")" \
         PATH="$fake_bin:$PATH" \
         run_with_timeout 10 "$FINALIZE_VERIFY" "$sid" > /dev/null 2>&1
     rc=$?

@@ -103,7 +103,7 @@ run_R13_onunknown_direction() {
     outloop_n=$(node_path "$outside/oloopA")
     out_n=$(node_path "$outside")
 
-    _R13_PROBE_OUT=$(CLAUDE_WORKFLOW_DIR="$wf_n" WORKFLOW_PLANS_DIR="$wf_n" \
+    _R13_PROBE_OUT=$(WORKFLOW_STATE_DIR="$wf_n" WORKFLOW_PLANS_DIR="$wf_n" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 25 node "$probe" \
         "$_AGENTS_DIR_NODE" "$wf_n" "$loop_n" "$deep_n" "$outloop_n" "$out_n" 2>/dev/null)
     if [ -z "$_R13_PROBE_OUT" ]; then

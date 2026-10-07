@@ -43,7 +43,7 @@ norm_path() {
 
 # ws_setup <tag> — build an isolated fixture and export the pinned environment.
 #
-# Fixture isolation (rules/test/fixture-isolation.md): CLAUDE_WORKFLOW_DIR and
+# Fixture isolation (rules/test/fixture-isolation.md): WORKFLOW_STATE_DIR and
 # WORKFLOW_PLANS_DIR are dual-pinned, the private-repo cache is declared so no
 # run reaches `gh repo list`, and WORKTREE_BASE_DIR is exported — process env
 # wins over .env in bin/get-config-var, so the model's own lookup resolves to
@@ -100,7 +100,7 @@ SETTINGS_EOF
 
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export WORKTREE_BASE_DIR="$WS_WT"
-    export CLAUDE_WORKFLOW_DIR="$WS_BASE/wf"
+    export WORKFLOW_STATE_DIR="$WS_BASE/wf"
     export WORKFLOW_PLANS_DIR="$WS_BASE/plans"
     export WS_PROBE_LOG
     export PRIVATE_REPO_NAMES_CACHE_SET=1

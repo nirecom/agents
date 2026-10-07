@@ -50,7 +50,7 @@ probe_autoresolve() {
     (
         cd "$workdir" && \
         unset CLAUDE_CODE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "probe" \
             --reporter "probe" >/dev/null 2>&1
     )
@@ -72,7 +72,7 @@ run_s1() {
     (
         cd "$workdir" && \
         CLAUDE_CODE_SESSION_ID="env-sid" \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" --session-id "explicit-sid" >/dev/null 2>&1
     )
@@ -97,7 +97,7 @@ run_s2() {
     (
         cd "$workdir" && \
         CLAUDE_CODE_SESSION_ID="env-sid-s2" \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -123,7 +123,7 @@ run_s3() {
     (
         cd "$workdir" && \
         unset CLAUDE_CODE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -171,7 +171,7 @@ run_s4() {
     (
         cd "$wtdir" && \
         unset CLAUDE_CODE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -192,7 +192,7 @@ run_s5() {
     (
         cd "$workdir" && \
         unset CLAUDE_CODE_SESSION_ID && \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
     )
@@ -209,7 +209,7 @@ run_s5() {
 run_s6() {
     require_source "$CLI" "S6: invalid chars in --session-id rejected" || return
     local tmp; tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --categories workflow --severity warning --detail "d" \
         --reporter "r" --session-id "bad sid/with stuff" >/dev/null 2>&1
     local rc=$?

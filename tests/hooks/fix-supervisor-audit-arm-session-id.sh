@@ -12,6 +12,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -63,7 +69,7 @@ require_stanza_runtime() {
 
 seed_audit_state_arm() {
     local tmp="$1" sid="$2" layer2_json="$3" layer3_json="$4"
-    CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -105,7 +111,7 @@ run_t1() {
         "{ alert_phase: null, alert_armed_at: null, cumulative_severity: null, findings: [], alert_retry_count: 0 }" \
         "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
     out=$(WORKFLOW_SESSION_ID=wsid-bbbb \
-        CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" \
+        WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" \
         run_with_timeout 5 node "$HOOK" \
         <<< '{"stop_hook_active":false,"session_id":"cc-uuid-aaaa","transcript_path":""}' 2>/dev/null)
     rc=$?
@@ -135,7 +141,7 @@ run_t2() {
         "{ alert_phase: 'done', alert_armed_at: '2026-06-22T10:00:00Z', cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], alert_retry_count: 0 }" \
         "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
     unset WORKFLOW_SESSION_ID || true
-    out=$(cd "$tmp" && CLAUDE_WORKFLOW_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" \
+    out=$(cd "$tmp" && WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" \
         run_with_timeout 5 node "$HOOK" \
         <<< '{"stop_hook_active":false,"session_id":"cc-uuid-aaaa","transcript_path":""}' 2>/dev/null)
     rc=$?

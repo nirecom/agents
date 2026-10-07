@@ -41,7 +41,7 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
@@ -123,7 +123,7 @@ read_state_step() {
     local sid="$1" step="$2"
     local f="$WORKFLOW_DIR/${sid}.json"
     [ -f "$f" ] || { echo "MISSING"; return; }
-    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$WORKFLOW_DIR" run_with_timeout 5 node -e "
       try {
         const S = require(process.argv[2] + '/hooks/workflow-state/state-io.js');
         const s = S.readState(process.argv[1]);
@@ -196,7 +196,7 @@ RC=0
 run_mark() {
     local project_dir="$1" json="$2"
     echo "$json" | run_with_timeout 30 env CLAUDE_PROJECT_DIR="$project_dir" \
-        CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" >/dev/null 2>&1
+        WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" >/dev/null 2>&1
     RC=$?
 }
 
@@ -211,7 +211,7 @@ run_gate() {
     main_dir="$(cygpath -m "$main_dir" 2>/dev/null || echo "$main_dir")"
     echo "$json" | run_with_timeout 30 env \
         CLAUDE_PROJECT_DIR="$cwd_n" \
-        CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+        WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         AGENTS_CONFIG_DIR="$main_dir" \
         node "$GATE_HOOK" 2>/dev/null
 }

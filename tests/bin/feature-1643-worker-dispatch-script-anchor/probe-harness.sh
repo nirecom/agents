@@ -279,7 +279,7 @@ PROBEJS
 PROBE_OUT=""
 # probe <mode>
 probe() {
-    PROBE_OUT="$(run_with_timeout 60 env "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+    PROBE_OUT="$(run_with_timeout 60 env "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$1" "$MAIN" "$LINKED" "$OUTSIDE" "$ALT" 2>&1)" || return 1
     return 0
 }
@@ -306,7 +306,7 @@ CFG_GHDIR="$(nodepath "$CFG_GHDIR_RAW")"
 # PROGRAMDATA get the SAME value because Windows env is case-insensitive and two
 # different values would have no defined meaning there.
 probe_with_planted_env() {
-    PROBE_OUT="$(run_with_timeout 60 env "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+    PROBE_OUT="$(run_with_timeout 60 env "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "GH_TOKEN=$FAKE_GH_TOKEN" "GITHUB_TOKEN=$FAKE_GITHUB_TOKEN" \
         "APPDATA=$CFG_APPDATA" "ProgramData=$CFG_PROGDATA" "PROGRAMDATA=$CFG_PROGDATA" \
         "XDG_CONFIG_HOME=$CFG_XDG" "GH_CONFIG_DIR=$CFG_GHDIR" \
@@ -319,7 +319,7 @@ probe_with_planted_env() {
 # options before the assignments, hence the ordering below.
 probe_with_missing_cfg_env() {
     PROBE_OUT="$(run_with_timeout 60 env -u GH_CONFIG_DIR -u XDG_CONFIG_HOME \
-        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "APPDATA=$CFG_APPDATA" "ProgramData=$CFG_PROGDATA" "PROGRAMDATA=$CFG_PROGDATA" \
         node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$1" "$MAIN" "$LINKED" "$OUTSIDE" "$ALT" 2>&1)" || return 1
     return 0

@@ -10,6 +10,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 # SKIPPED: Operational fail-open edge cases for scope-drift (C5)
 # Because: missing detail plan / malformed ## Files to modify / non-git-repo require
 #   fixture manipulation that conflicts with the existing T7 git-based setup; deferred
@@ -54,7 +60,7 @@ make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'supvsr7'; }
 
 write_corrupt_state() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const p = w.getStatePath('$sid', { forWrite: true });
@@ -66,7 +72,7 @@ fs.writeFileSync(p, '{\"version\":1,\"session_id\":\"$sid\",corrupt');
 
 write_empty_state() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
 const p = w.getStatePath('$sid', { forWrite: true });
@@ -75,11 +81,11 @@ fs.writeFileSync(p, '');  // zero-byte
 " >/dev/null 2>&1 || fail "write_empty_state($sid): supervisor-state seed write failed"
 }
 
-# Mint a valid reason-bound clearance token (#1608) at <CLAUDE_WORKFLOW_DIR>/<sid>.off-clearance.
+# Mint a valid reason-bound clearance token (#1608) at <WORKFLOW_STATE_DIR>/<sid>.off-clearance.
 # Shape mirrors bin/request-off-clearance's ALLOW mint.
 mint_clearance_token() {
     local tmp_node="$1" sid="$2" target="$3" category="$4"
-    CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const fs = require('fs'), path = require('path');
 const now = Date.now();
 fs.mkdirSync('$tmp_node', { recursive: true });
@@ -109,7 +115,7 @@ process.stdout.write(JSON.stringify({
 }));
 " -- "$sid" "$off_cmd")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>"$errfile")
     rc=$?
     errlen=$(wc -c < "$errfile" 2>/dev/null | tr -d ' ')
@@ -123,7 +129,7 @@ process.stdout.write(JSON.stringify({
 
 seed_wf_state_complete() {
     local tmp_node="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" run_with_timeout 5 node -e "
 const wf = require('$WFSTATE_NODE');
 wf.markStep('$sid', 'user_verification', 'complete');
 " >/dev/null 2>&1
@@ -216,7 +222,7 @@ run_t7b() {
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 

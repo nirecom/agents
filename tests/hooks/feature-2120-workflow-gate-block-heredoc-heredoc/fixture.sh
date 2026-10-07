@@ -47,7 +47,7 @@ fi
 
 # Dual-pin per rules/test/fixture-isolation.md; inherited session ids unset so the
 # hooks cannot resolve (and mutate) the live session's state file.
-export CLAUDE_WORKFLOW_DIR="$(np "$WF")"
+export WORKFLOW_STATE_DIR="$(np "$WF")"
 export WORKFLOW_PLANS_DIR="$(np "$PLANS")"
 export ENFORCE_WORKTREE=on
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true

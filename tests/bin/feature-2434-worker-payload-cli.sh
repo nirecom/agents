@@ -38,7 +38,7 @@ export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPD/transcripts"
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
 
 SID="test2434pld"
-CTRL="$CLAUDE_WORKFLOW_DIR/$SID.control"
+CTRL="$WORKFLOW_STATE_DIR/$SID.control"
 P_DIR="$WORKFLOW_PLANS_DIR"
 
 # ---------------------------------------------------------------------------
@@ -311,7 +311,7 @@ else
     fail "unknown-session/exit-0" "not implemented"
 fi
 rm -f "$P_DIR/unknown-session-worker-issue-close-finalize-1.draft.json"
-rm -rf "$CLAUDE_WORKFLOW_DIR/unknown-session.control"
+rm -rf "$WORKFLOW_STATE_DIR/unknown-session.control"
 
 # == 12. legacy state_file_path: matching PLANS basename → accepted, removed from payload ==
 # Step 5-6 shim: state_file_path == PLANS path with matching basename → strip it, accept.
@@ -342,7 +342,7 @@ if [ -f "$CLI" ]; then
     node "$(np "$CLI")" --session "$MM_SID" --worker issue-close-finalize --seq 1 --draft "$(np "$P_DIR/$MM_SID-worker-issue-close-finalize-1.draft.json")" >/dev/null 2>&1 ; RC13=$?
     assert_eq "legacy-state-file/mismatch-exit-1" "1" "$RC13"
     draft_unchanged "legacy-state-file/mismatch-draft-intact" "$P_DIR/$MM_SID-worker-issue-close-finalize-1.draft.json"
-    if [ ! -f "$CLAUDE_WORKFLOW_DIR/$MM_SID.control/worker-issue-close-finalize-1.json" ]; then pass "legacy-state-file/mismatch-no-control-payload"
+    if [ ! -f "$WORKFLOW_STATE_DIR/$MM_SID.control/worker-issue-close-finalize-1.json" ]; then pass "legacy-state-file/mismatch-no-control-payload"
     else fail "legacy-state-file/mismatch-no-control-payload" "payload published despite a mismatched legacy state_file_path"; fi
 else
     fail "legacy-state-file/mismatch-exit-1" "not implemented"

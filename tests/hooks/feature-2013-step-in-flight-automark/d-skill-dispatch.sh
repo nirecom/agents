@@ -219,7 +219,7 @@ run_B21() {
 # "<origin>/<isLookaheadOnlyInFlight>" for the step's LAST step_status event —
 # the attribution the discounting readers actually consult.
 _b22_origin() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 15 node -e "
 const L = require('$LIFECYCLE_NODE');
 const { readState } = require('$STATEIO_NODE');
 const s = readState('$2');

@@ -76,7 +76,7 @@ if [ -z "$PROD_CMD" ]; then
 elif [ ! -s "$PROD_PAYLOAD" ]; then
     fail "production-command-records-provenance" "no captured turn-A payload to replay through the registered command"
 else
-    ( CLAUDE_WORKFLOW_DIR="$(node_path "$PROD_WFDIR")" \
+    ( WORKFLOW_STATE_DIR="$(node_path "$PROD_WFDIR")" \
       WORKFLOW_PLANS_DIR="$(node_path "$PLANSDIR")" \
       AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
       run_with_timeout 20 bash -c "$PROD_CMD" <"$PROD_PAYLOAD" >"$PROD_OUT" 2>&1 )

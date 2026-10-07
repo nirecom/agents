@@ -10,6 +10,10 @@
 # real session. Mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration
 
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # ── Fixtures: main repo, non-git CWD, session scratchpad ──
@@ -45,7 +49,7 @@ SCRATCH_FWD="${FAKE_SCRATCHPAD_NODE//\\//}"
 EXT_WORKTREE_WIN="${TMPBASE}\\worktrees\\some-task"
 EXT_WORKTREE="${TMPBASE}/worktrees/some-task"
 
-cleanup() { rm -rf "$TMPBASE" "$FAKE_SCRATCHPAD" 2>/dev/null || true; }
+cleanup() { rm -rf "$TMPBASE" "$FAKE_SCRATCHPAD" "$_ISOLATION_TMP_ROOT" 2>/dev/null || true; }
 trap cleanup EXIT
 
 _make_payload() {

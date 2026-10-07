@@ -1,10 +1,11 @@
 "use strict";
-// Age-based sweep of the workflow directory: stale state files, transient .tmp
+// Age-based sweep of every workflow state root: stale state files, transient .tmp
 // leftovers, and session-scoped marker files. Entrypoint-private to state-io.js.
 
 const fs = require("fs");
 const path = require("path");
-const { getWorkflowDir, normalizeStateVersion } = require("./core");
+const { normalizeStateVersion } = require("./core");
+const { listStateRoots } = require("./state-root");
 const { RECEIPT_DIR_SUFFIX } = require("../../lib/instructions-loaded-receipt");
 const { WORKER_LOGS_DIRNAME } = require("./control-dir");
 
@@ -70,7 +71,10 @@ function sweepWorkerLogs(workflowDir, file) {
 }
 
 function cleanupZombies(maxAgeDays = 7) {
-  const workflowDir = getWorkflowDir();
+  for (const root of listStateRoots()) cleanupRoot(root, maxAgeDays);
+}
+
+function cleanupRoot(workflowDir, maxAgeDays) {
   let files;
   try {
     files = fs.readdirSync(workflowDir);

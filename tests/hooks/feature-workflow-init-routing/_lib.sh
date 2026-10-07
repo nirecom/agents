@@ -48,13 +48,17 @@ else
 fi
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# isolation (#2512): always pin the plans dir beside the state dir; never keep an inherited value.
+mkdir -p "$TMPDIR_BASE/plans"
+export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 
 NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# Resolve the plans dir as Node sees it (Windows path munging safe)
-PLANS_DIR_NATIVE=$(node -e "console.log(require('path').join(require('os').homedir(), '.workflow-plans').replace(/\\\\/g, '/'))")
+# Resolve the pinned plans dir as Node sees it (Windows path munging safe) — the
+# gate's allowlist follows WORKFLOW_PLANS_DIR, so the live ~/.workflow-plans is never the target (#2512).
+PLANS_DIR_NATIVE=$(node -e "console.log(require('path').resolve(process.env.WORKFLOW_PLANS_DIR).replace(/\\\\/g, '/'))")
 
 # ---------------------------------------------------------------------------
 # State helpers

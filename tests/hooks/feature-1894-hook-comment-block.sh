@@ -83,10 +83,10 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 # Fixture isolation (rules/test/fixture-isolation.md): dual-pin both dirs and
 # drop any inherited session id, so a hook that DOES touch session state (the
 # thing no-bypass.sh forbids) cannot reach the developer's real session.
-CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
-export CLAUDE_WORKFLOW_DIR WORKFLOW_PLANS_DIR
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
+export WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # Node on Windows wants a drive-letter path; msys hands us /c/... shapes.

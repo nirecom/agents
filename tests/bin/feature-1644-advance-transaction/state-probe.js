@@ -34,7 +34,7 @@ function stepsOf(state) {
 }
 
 function readRawFile() {
-  const p = path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json");
+  const p = path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json");
   return JSON.parse(fs.readFileSync(p, "utf8"));
 }
 

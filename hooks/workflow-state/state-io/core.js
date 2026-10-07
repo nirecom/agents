@@ -7,9 +7,9 @@
 // projection.js. `markStep` is a thin appender; nothing rewrites history.
 
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const { withStateLock } = require("./state-lock");
+const { getSessionStateDir } = require("./state-root");
 const { getCurrentContext, resolveWorktreeContext } = require("./core/context");
 const {
   PROJECTION_KEYS,
@@ -60,11 +60,6 @@ function isSettledStatus(status) {
   return SETTLED_STATUSES.indexOf(status) !== -1;
 }
 
-function getWorkflowDir() {
-  if (process.env.CLAUDE_WORKFLOW_DIR) return process.env.CLAUDE_WORKFLOW_DIR;
-  return path.join(os.homedir(), ".claude", "projects", "workflow");
-}
-
 // SSOT for sessionId validation (defense-in-depth against path traversal).
 // Real session IDs — UUIDs (hex+hyphen), YYYYMMDD-HHMMSS fallbacks (digit+hyphen),
 // and test sids ("test-sid-bash-9", "20260509-bundle-a") — all match this regex,
@@ -81,7 +76,7 @@ function assertValidSessionId(sessionId) {
 
 function getStatePath(sessionId) {
   assertValidSessionId(sessionId);
-  return path.join(getWorkflowDir(), sessionId + ".json");
+  return path.join(getSessionStateDir(sessionId), sessionId + ".json");
 }
 
 // The schema version THIS release writes. SSOT for the single fact "the newest
@@ -293,7 +288,7 @@ function writeStateLocked(sessionId, state) {
   // before a single byte is written.
   const json = serializeStateForPersist(state);
   const filePath = getStatePath(sessionId);
-  fs.mkdirSync(getWorkflowDir(), { recursive: true });
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   tmpCounter += 1;
   const tmpPath = `${filePath}.${process.pid}.${tmpCounter}.tmp`;
   try {
@@ -423,7 +418,6 @@ module.exports = {
   CorruptStateFileError,
   FutureSchemaVersionError,
   isSettledStatus,
-  getWorkflowDir,
   SESSION_ID_VALID_RE,
   assertValidSessionId,
   getStatePath,

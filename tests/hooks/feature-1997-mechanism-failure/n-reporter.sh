@@ -85,7 +85,7 @@ run_M8() {
     # this probe resolves the developer's REAL workflow dir, where `s1` is not an
     # observed sid, and both classify calls below correctly return null.
     printf '{"session_id":"s1"}\n' > "$wf/s1.json"
-    out=$(CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 const p = require('$BASENAMES_NODE');
 const problems = [];
 if (!p.SESSION_MARKER_KINDS.includes('stall-reported')) problems.push('kind-not-listed');
@@ -104,7 +104,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/
 const fs = require('fs');
 const t = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 fs.utimesSync(process.env.P, t, t);" >/dev/null 2>&1
-    CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 20 node -e "
 require('$STATEIO_NODE').cleanupZombies();" >/dev/null 2>&1
     [ ! -f "$wf/m8-old.stall-reported" ] || problems="$problems [aged stall-reported ledger survived the zombie sweep]"
     [ -f "$wf/m8-fresh.stall-reported" ] || problems="$problems [fresh stall-reported ledger was swept away]"

@@ -198,10 +198,10 @@ MOCK_EOF
     # directly (NOT via the workflow-plans-dir bin), so we must export it here.
     export WORKFLOW_PLANS_DIR="$TMP/wf-plans"
     mkdir -p "$WORKFLOW_PLANS_DIR/cache"
-    # resolve-project.sh's project-resolve.tsv cache lives under CLAUDE_WORKFLOW_DIR
+    # resolve-project.sh's project-resolve.tsv cache lives under WORKFLOW_STATE_DIR
     # (default: the real ~/.claude/projects/workflow); dual-pin it to the fixture.
-    export CLAUDE_WORKFLOW_DIR="$TMP/wf-state"
-    mkdir -p "$CLAUDE_WORKFLOW_DIR/cache"
+    export WORKFLOW_STATE_DIR="$TMP/wf-state"
+    mkdir -p "$WORKFLOW_STATE_DIR/cache"
     cat > "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" <<EOF
 #!/bin/bash
 echo "$PLANS_DIR"

@@ -2,7 +2,7 @@
 // bin/worker-dispatch/anchor.js — trust anchors + shared path canonicalization.
 // Anchors: ACD (from THIS module's realpath, never the env), MAIN_ROOT (argv[3],
 // main worktree only), FAMILY (git-registered worktrees of MAIN_ROOT), PLANS_DIR
-// (artifacts) and WORKFLOW_DIR (holds <sid>.control/, docs/architecture/claude-code/state-dirs.md).
+// (artifacts) and STATE_ROOTS (each may hold <sid>.control/, docs/architecture/claude-code/state-dirs.md).
 // Never reads the process cwd or asks git for a toplevel; the caller's location
 // must not influence any anchor (tests/bin/feature-1643-worker-dispatch-anchor.sh).
 
@@ -13,7 +13,7 @@ const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../../hooks/lib/path-normalize");
 const { configDirCandidates, _resolveFromCandidates } = require("../../hooks/lib/agents-config-dir");
 const { getWorkflowPlansDir } = require("../../hooks/lib/workflow-plans-dir");
-const { getWorkflowDir } = require("../../hooks/workflow-state/state-io/core");
+const { listStateRoots } = require("../../hooks/workflow-state/state-io/state-root");
 
 const GIT_TIMEOUT_MS = 20000;
 const REALPATH_MAX_DEPTH = 64;
@@ -168,7 +168,7 @@ function resolveFamily(mainRoot) {
 // Never throws: callers (including the anchor probe in the test suite) rely on
 // getting a structured result back rather than an exception.
 function resolveAnchors(mainRootArg) {
-  const out = { acd: null, mainRoot: null, family: [], plansDir: null, workflowDir: null, error: null };
+  const out = { acd: null, mainRoot: null, family: [], plansDir: null, stateRoots: [], error: null };
 
   out.acd = resolveAcd();
   if (out.acd === null) {
@@ -201,7 +201,13 @@ function resolveAnchors(mainRootArg) {
     return out;
   }
   out.plansDir = plans;
-  out.workflowDir = realAbs(getWorkflowDir());
+  // A rejected WORKFLOW_STATE_DIR is a refusal like an unresolvable plans dir, never a throw.
+  try {
+    out.stateRoots = listStateRoots().map((r) => realAbs(r)).filter((r) => r !== null);
+  } catch (_e) {
+    out.error = "cannot resolve the workflow state roots";
+    return out;
+  }
 
   return out;
 }

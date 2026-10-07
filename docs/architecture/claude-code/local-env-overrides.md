@@ -53,7 +53,7 @@ each entry there. Two criteria put a key on it:
 
 1. **One machine, one policy.** Settings whose per-repository divergence breaks
    a contract this repository owns — the workflow-state root
-   (`CLAUDE_WORKFLOW_DIR`, `WORKFLOW_PLANS_DIR`; what each holds:
+   (`WORKFLOW_STATE_DIR`, `WORKFLOW_PLANS_DIR`; what each holds:
    [state-dirs.md](state-dirs.md)), the state and log root
    (`AGENTS_STATE_DIR`), the config directory this very
    layer resolves the global `.env` from (`AGENTS_CONFIG_DIR`), the worktree

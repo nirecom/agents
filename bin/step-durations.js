@@ -7,13 +7,13 @@
 //   --since / --until: sessions whose first segment starts in [since 00:00, until 24:00) local time
 //   --days N         : sessions starting within the last N days (exclusive with --since / --until)
 //   --format         : md (default) or csv (one table, kind=session|segment); --out defaults to stdout
-// Segments come from <CLAUDE_WORKFLOW_DIR>/<sid>.json events while the state file exists, and are
+// Segments come from <state root>/<sid>.json events while the state file exists, and are
 // estimated from the transcript (<CLAUDE_TRANSCRIPT_BASE_DIR or ~/.claude/projects>) once it is gone.
 // Exit 0 = report written, 1 = runtime error, 2 = usage error.
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { getWorkflowDir } = require("../hooks/workflow-state/state-io/core");
+const { listStateRoots } = require("../hooks/workflow-state/state-io/state-root");
 const { toWindowsPath } = require("../hooks/lib/branch-diff");
 const { collectSessions } = require("./step-durations/sources");
 const { renderMarkdown, renderCsv } = require("./step-durations/render");
@@ -72,7 +72,7 @@ async function main() {
   }
   const rows = await collectSessions({
     transcriptBase: toWindowsPath(process.env.CLAUDE_TRANSCRIPT_BASE_DIR || path.join(os.homedir(), ".claude", "projects")),
-    stateDir: toWindowsPath(getWorkflowDir()),
+    stateDirs: listStateRoots().map(toWindowsPath),
     sessionPrefix: opts.session,
     from: opts.from,
     to: opts.to,

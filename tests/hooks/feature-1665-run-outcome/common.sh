@@ -54,14 +54,14 @@ mkdir -p "$TMPD"
 trap 'rm -rf "$TMPD"' EXIT
 
 # Fixture isolation (rules/test/fixture-isolation.md): DUAL-PIN the workflow dir
-# and the plans dir — pinning only CLAUDE_WORKFLOW_DIR routes hook state into the
+# and the plans dir — pinning only WORKFLOW_STATE_DIR routes hook state into the
 # fixture while a supervisor emitter on the same path still appends to the
 # developer's real ~/.workflow-plans. Clear the inherited live session ids so a
 # hook can never resolve, and mutate, the session running this suite. Exported
 # once here so every child `node` inherits both.
-export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 
 # Neutral fixture repo: hooks that shell out to git must not resolve the real

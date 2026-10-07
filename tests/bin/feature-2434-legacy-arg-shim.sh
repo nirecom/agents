@@ -15,6 +15,9 @@ set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # shellcheck source=tests/bin/feature-2434-review-loop/fixture.sh
 . "$AGENTS_DIR/tests/bin/feature-2434-review-loop/fixture.sh"
 
@@ -204,7 +207,7 @@ case_begin "derive-stage-traversal-reads-nothing-outside" "bin/workflow/derive-c
 # Decoys sit where the traversal stages would resolve; a level would prove a read.
 SID="sh-dtrav"
 mkdir -p "$(ctl "$SID")"
-printf 'S1-multi-file,S2-architecture,S3-security' > "$CLAUDE_WORKFLOW_DIR/x-signals.txt"
+printf 'S1-multi-file,S2-architecture,S3-security' > "$WORKFLOW_STATE_DIR/x-signals.txt"
 printf 'S1-multi-file,S2-architecture,S3-security' > "$P/x-signals.txt"
 for ST in "../x" "../../plans/x" "detail/../../x" "write-tests" "DETAIL" ""; do
     run2 node "$DCL" --stage "$ST" --session "$SID"

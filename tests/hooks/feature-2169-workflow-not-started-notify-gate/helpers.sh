@@ -22,7 +22,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # tests/hooks/feature-2013-step-in-flight-automark/d-skill-dispatch.sh.
 dispatch_lookahead() {
     printf '{"tool_name":"Agent","session_id":"%s","transcript_path":"","tool_input":{"description":"x"}}' "$2" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" >/dev/null 2>&1
 }
 
@@ -32,7 +32,7 @@ dispatch_lookahead() {
 # tests/hooks/feature-2013-step-in-flight-automark/e-lookahead-guard.sh.
 dispatch_meta_skill() {
     printf '{"tool_name":"Skill","session_id":"%s","transcript_path":"","tool_input":{"skill":"resume-session"}}' "$2" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" >/dev/null 2>&1
 }
 
@@ -83,7 +83,7 @@ fs.writeFileSync(process.env.P, JSON.stringify(s));" >/dev/null 2>&1
 # stalled step needs this instead. Same technique as seed_step_in_flight in
 # tests/hooks/feature-1794-stop-guard-exemptions/helpers.sh.
 mark_step_in_progress() {
-    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$1" "$RWT" 15 node -e "
 require('$STATEIO_NODE').markStep('$2', '$3', 'in_progress');" >/dev/null 2>&1
 }
 
@@ -123,7 +123,7 @@ fs.writeFileSync(process.env.P, JSON.stringify(s));" >/dev/null 2>&1
 # complete_workflow_init <tn> <sid> — genuinely adopt the session (real
 # markStep), so isWorkflowStarted flips from false to true.
 complete_workflow_init() {
-    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$1" "$RWT" 15 node -e "
 require('$STATEIO_NODE').markStep('$2', 'workflow_init', 'complete');" >/dev/null 2>&1
 }
 
@@ -133,14 +133,14 @@ run_ups() {
     UPS_OUT=$(SID="$2" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 25 node "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
 }
 
 # research_status <tn> <sid> — the on-disk status of the research step.
 research_status() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 20 node -e "
 const s = require('$STATEIO_NODE').readState('$2');
 process.stdout.write(String(s && s.steps && s.steps.research && s.steps.research.status));" 2>/dev/null
 }
@@ -148,7 +148,7 @@ process.stdout.write(String(s && s.steps && s.steps.research && s.steps.research
 # stalled_kinds_for <tn> <sid> — "step:kind" for every finding
 # detectStalledSteps reports, newline-joined.
 stalled_kinds_for() {
-    CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 20 node -e "
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 20 node -e "
 const findings = require('$MECHFAIL_NODE').detectStalledSteps('$2') || [];
 process.stdout.write(findings.map((f) => f.step + ':' + f.kind).join('\n'));" 2>/dev/null
 }
@@ -187,6 +187,6 @@ fs.writeFileSync(process.env.P, JSON.stringify(state));" >/dev/null 2>&1
 # (#2169 C2) — mark_step_in_progress above always uses the default
 # ("mark-step") origin, so it cannot construct this on its own.
 mark_step_with_origin() {
-    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$1" "$RWT" 15 node -e "
 require('$STATEIO_NODE').markStep('$2', '$3', 'in_progress', {}, { origin: '$4' });" >/dev/null 2>&1
 }

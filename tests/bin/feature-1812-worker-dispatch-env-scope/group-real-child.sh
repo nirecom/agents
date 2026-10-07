@@ -148,7 +148,7 @@ group_d() {
     local o
     o="$(run_with_timeout 120 env \
          -u CLAUDE_CODE_SESSION_ID \
-        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "SSH_AUTH_SOCK=$FAKE_SSH_SOCK" \
         "GH_TOKEN=$FAKE_GH_TOKEN" "GITHUB_TOKEN=$FAKE_GITHUB_TOKEN" \
         "ENFORCE_WORKTREE=on" \

@@ -72,10 +72,10 @@ expect_empty "T-BASH-5 Bash + assemble of flat intermediate-suffix path — noop
   "$T_BASH_5_JSON"
 
 # ── T-BASH-6: Bash + CONFIRM_OUTLINE=on — turn marker written (#563) ───────
-# #2513: the VS Code open path is gone; the turn marker under CLAUDE_WORKFLOW_DIR
+# #2513: the VS Code open path is gone; the turn marker under WORKFLOW_STATE_DIR
 # is the observable side effect (Stop guard input).
 echo "=== T-BASH-6: Bash + CONFIRM_OUTLINE=on — turn marker written ==="
-rm -f "$CLAUDE_WORKFLOW_DIR"/test-sid-bash-6.confirm-plan-turn-*.json
+rm -f "$WORKFLOW_STATE_DIR"/test-sid-bash-6.confirm-plan-turn-*.json
 T_BASH_6_CMD="assemble-mandatory.sh --source-kind intent /a/intent.md /a/draft.md $PLANS_DIR/abc-outline.md"
 T_BASH_6_JSON=$(run_with_timeout node -e "
   process.stdout.write(JSON.stringify({
@@ -93,7 +93,7 @@ T_BASH_6_ABS=$(run_with_timeout node -e "
   const fs = require('fs'), path = require('path'); const dir = process.argv[1];
   const f = fs.readdirSync(dir).find((n) => n.startsWith('test-sid-bash-6.confirm-plan-turn-') && n.endsWith('.json'));
   if (f) process.stdout.write(String(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).absPath || ''));
-" "$CLAUDE_WORKFLOW_DIR" 2>/dev/null)
+" "$WORKFLOW_STATE_DIR" 2>/dev/null)
 case "$T_BASH_6_ABS" in
   *abc-outline.md) pass "T-BASH-6 CONFIRM_OUTLINE=on — turn marker written with the assemble destination" ;;
   *) fail "T-BASH-6 CONFIRM_OUTLINE=on — turn marker missing or wrong absPath: '$T_BASH_6_ABS'" ;;

@@ -67,10 +67,10 @@ mkdir -p "$PLANS_DIR"
 : > "$PLANS_DIR/$SID-detail-plan.md"
 
 # #2434: the built markers and codex-context.md are control files under
-# $CLAUDE_WORKFLOW_DIR/<sid>.control/ (the <sid>- prefix dropped); pin both roots.
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+# $WORKFLOW_STATE_DIR/<sid>.control/ (the <sid>- prefix dropped); pin both roots.
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-CONTROL_DIR="$CLAUDE_WORKFLOW_DIR/$SID.control"
+CONTROL_DIR="$WORKFLOW_STATE_DIR/$SID.control"
 mkdir -p "$CONTROL_DIR"
 
 MARKER_TR="$CONTROL_DIR/codex-context.test-review.built"

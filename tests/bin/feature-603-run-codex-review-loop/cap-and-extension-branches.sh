@@ -12,8 +12,8 @@ case_begin "cap-and-extension-branches" "bin/run-codex-review-loop"
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  mkdir -p "$CLAUDE_WORKFLOW_DIR/sid23.control"
-  printf 'C1|HIGH|OPEN|1|needs async approach\n' > "$CLAUDE_WORKFLOW_DIR/sid23.control/outline-plan-concern-ledger.txt"
+  mkdir -p "$WORKFLOW_STATE_DIR/sid23.control"
+  printf 'C1|HIGH|OPEN|1|needs async approach\n' > "$WORKFLOW_STATE_DIR/sid23.control/outline-plan-concern-ledger.txt"
   make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
 ## Codex Review: PERFORMED
 
@@ -38,8 +38,8 @@ OUT
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
-  mkdir -p "$CLAUDE_WORKFLOW_DIR/sid24.control"
-  printf 'C1|HIGH|OPEN|1|still need async approach\n' > "$CLAUDE_WORKFLOW_DIR/sid24.control/outline-plan-concern-ledger.txt"
+  mkdir -p "$WORKFLOW_STATE_DIR/sid24.control"
+  printf 'C1|HIGH|OPEN|1|still need async approach\n' > "$WORKFLOW_STATE_DIR/sid24.control/outline-plan-concern-ledger.txt"
   make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
 ## Codex Review: PERFORMED
 

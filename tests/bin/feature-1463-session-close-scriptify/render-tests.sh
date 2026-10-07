@@ -2,6 +2,7 @@
 # render-tests.sh: bin/render-final-report.js existence + rendering behavior
 # Tests: bin/render-final-report.js, hooks/lib/final-report-schema.js
 # Tags: scope:issue-specific, feature-2434, control-dir
+# isolation: inherits-from ../feature-1463-session-close-scriptify.sh
 #
 # Sourced helpers: feature-1463-session-close-scriptify/helpers.sh
 

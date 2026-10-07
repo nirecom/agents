@@ -15,7 +15,7 @@
 const fs = require("fs");
 
 const { resolveSessionId } = require("../workflow-state/session-id");
-const { getWorkflowDir } = require("../workflow-state/state-io/core");
+const { listStateRoots } = require("../workflow-state/state-io/state-root");
 const { enumerateWorktreeNotesSessionIds } = require("./worktree-notes-session-ids");
 
 // The FILENAME alphabet of a state entry (mirrors SESSION_ID_VALID_RE in
@@ -91,11 +91,26 @@ function observeActiveSessionIds(sessionCtx) {
 
   // The workflow state store is the only place live sessions are enumerable. The
   // plans dir is deliberately NOT read: a plan artifact proves a session existed,
-  // not that a clearance reader is keyed on it.
+  // not that a clearance reader is keyed on it. A bare `.off-clearance` token proves no
+  // session either: #1658 left stale ones in what is now the default root (#2511 R14).
+  // The one exception is the legacy root, listed even when absent (#2512 C2): its
+  // ENOENT is an empty store. A missing primary root (the pin or the new root) stays an
+  // incomplete observation, as does any other read error.
   try {
-    for (const entry of fs.readdirSync(getWorkflowDir())) {
-      const stem = stemOfStateEntry(entry);
-      if (stem !== "" && SID_FILENAME_STEM_RE.test(stem)) sids.add(stem.toLowerCase());
+    const roots = listStateRoots();
+    for (const root of roots) {
+      let entries;
+      try {
+        entries = fs.readdirSync(root);
+      } catch (e) {
+        if (e && e.code === "ENOENT" && root !== roots[0]) continue;
+        throw e;
+      }
+      for (const entry of entries) {
+        if (String(entry).endsWith(".off-clearance")) continue;
+        const stem = stemOfStateEntry(entry);
+        if (stem !== "" && SID_FILENAME_STEM_RE.test(stem)) sids.add(stem.toLowerCase());
+      }
     }
   } catch (e) {
     complete = false;

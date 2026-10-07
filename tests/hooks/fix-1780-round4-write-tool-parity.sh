@@ -8,7 +8,7 @@
 # #1780 round-4 H-2: every write-tool class member (hooks/lib/write-tools.js) gets the same
 # enforcement verdict as its reference member (Edit / Bash) — parity AND the expected verdict,
 # for both single-target and batched edits[] payloads. Command class reads tool_input.cwd.
-# Hermetic: temp repos, temp CLAUDE_WORKFLOW_DIR, CLAUDE_CODE_SESSION_ID unset per invocation.
+# Hermetic: temp repos, temp WORKFLOW_STATE_DIR, CLAUDE_CODE_SESSION_ID unset per invocation.
 
 set -u
 
@@ -96,7 +96,7 @@ run_guard() {
     local tool="$1" target="$2" dir="$3" shape="$4" payload out rc
     payload=$("$RWT" 10 node "$DRV" "$tool" "$target" "$(node_path "$dir")" "$shape" 2>/dev/null)
     out=$(cd "$dir" && printf '%s' "$payload" | env -u CLAUDE_CODE_SESSION_ID \
-        ENFORCE_WORKTREE=on CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
     rc=$?
     case "$rc" in

@@ -43,6 +43,10 @@ export HOME="$TMPDIR_BASE"
 # rules/test/fixture-isolation.md "Dual-pin the plans dir".
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/workflow-plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
+# isolation (#2512): the state dir is pinned file-wide too, alongside the plans dir.
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_STATE_DIR"
+
 # bin/session-sync.sh locates bin/workflow-plans-dir relative to AGENTS_CONFIG_DIR.
 # Pin it to this checkout so the resolver under test is this one, not whichever
 # agents config the developer happens to have installed.

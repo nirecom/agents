@@ -30,8 +30,9 @@ fi
 # Unset inherited session/workflow env so this run cannot resolve real state
 # (rules/test/fixture-isolation.md).
 unset CLAUDE_CODE_SESSION_ID
-unset CLAUDE_WORKFLOW_DIR
-unset WORKFLOW_PLANS_DIR
+# isolation (#2512): pin state and plans dirs to a private temp root instead of leaving them to the home default.
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 
 FIXTURE_HOME="$(mktemp -d)"
 FIXTURE_PROJECT="$(mktemp -d)"
@@ -43,7 +44,7 @@ cleanup() {
       node "$AGENTS_DIR/bin/codegraph-lifecycle.js" stop --path "$FIXTURE_PROJECT" --quiet >/dev/null 2>&1 || true
     DAEMON_STOPPED=1
   fi
-  rm -rf "$FIXTURE_HOME" "$FIXTURE_PROJECT"
+  rm -rf "$FIXTURE_HOME" "$FIXTURE_PROJECT" "$_ISOLATION_TMP_ROOT"
 }
 trap cleanup EXIT
 

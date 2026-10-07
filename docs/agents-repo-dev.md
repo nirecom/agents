@@ -48,7 +48,8 @@ set means adding the new target to `TARGETS` in
 
 ## Where session state files live
 
-Control files (JSON, counters, markers) go to `<CLAUDE_WORKFLOW_DIR>/<sid>.control/`, prose artifacts to `WORKFLOW_PLANS_DIR`; register every new name in `hooks/lib/plans-artifact-registry.js`. Policy: `docs/architecture/claude-code/state-dirs.md`.
+Control files (JSON, counters, markers) go to `<WORKFLOW_STATE_DIR>/<sid>.control/`, prose artifacts to `WORKFLOW_PLANS_DIR`; register every new name in `hooks/lib/plans-artifact-registry.js`. Policy: `docs/architecture/claude-code/state-dirs.md`.
+Tests must never reach the live state root: `bin/check-plans-dir-isolation.sh` gates this at pre-commit and in CI (rules: `rules/test/fixture-isolation.md`).
 
 ## Consolidated test suites: one dispatcher, sourced fragments
 

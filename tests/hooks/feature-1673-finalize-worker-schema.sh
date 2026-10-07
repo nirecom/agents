@@ -207,7 +207,7 @@ dispatch_icf() {
     printf '%s' '[{"stdout":"STATUS=init_done\nOWNER_REPO=nirecom/agents\nTRIAGE_ACTION=resume_e\nNEXT_STEPS=G\nSUMMARY=ok\n"}]' > "$CANNED"
     : > "$CALLLOG"
     DRC=0
-    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF" \
+    DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF" \
         "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \

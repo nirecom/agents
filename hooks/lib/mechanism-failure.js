@@ -8,7 +8,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { getWorkflowDir, readState } = require("../workflow-state/state-io");
+const { getSessionStateDir, getStatePath, readState } = require("../workflow-state/state-io");
 const { STEP_IN_FLIGHT_TTL_MS } = require("./step-in-flight-policy");
 const { normalizeCwd } = require("./path-normalize");
 
@@ -25,7 +25,7 @@ function isSafeSid(sid) {
 }
 
 function ledgerPathFor(sid) {
-  return path.join(getWorkflowDir(), sid + LEDGER_SUFFIX);
+  return path.join(getSessionStateDir(sid), sid + LEDGER_SUFFIX);
 }
 
 function findingKey(finding) {
@@ -39,7 +39,7 @@ function findingKey(finding) {
 function detectStalledSteps(sid) {
   try {
     if (!isSafeSid(sid)) return [];
-    const statePath = path.join(getWorkflowDir(), sid + ".json");
+    const statePath = getStatePath(sid);
     if (!fs.existsSync(statePath)) return [{ step: STATE_PSEUDO_STEP, kind: "state-absent" }];
     const state = readState(sid);
     if (!state || !state.steps || typeof state.steps !== "object") {

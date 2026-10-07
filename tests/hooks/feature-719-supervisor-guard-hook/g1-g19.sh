@@ -3,6 +3,12 @@
 # Test functions G1-G19 for supervisor-guard hook.
 # _lib.sh must be sourced by the caller before sourcing this file.
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 run_g1() {
     require_source "$HOOK" "G1: l2_armed_at non-null (no transcript) -> decision=block, exit 2" || return
     local tmp out rc
@@ -142,7 +148,7 @@ run_g9() {
     touch "$wfdir/g9-sid.workflow-off"
     seed_state "$tmp" "g9-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g9-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$wfdir" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$wfdir" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp" "$wfdir"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then

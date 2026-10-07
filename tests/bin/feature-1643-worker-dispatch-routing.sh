@@ -101,7 +101,7 @@ DOUT=""; DERR=""; DRC=0
 dispatch() {
     DRC=0
     DERR="$TMPD/stderr.txt"
-    DOUT="$(run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+    DOUT="$(run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         node "$(nodepath "$DISPATCH_JS")" "$1" "$2" "$3" 2>"$DERR")" || DRC=$?
 }
 # dispatch_stub <mode> [worker] [payload-basename] — routes to the misbehaving
@@ -111,7 +111,7 @@ dispatch_stub() {
     local worker="${2:-test-runner}" pfile="${3:-ok.json}"
     DRC=0
     DERR="$TMPD/stderr.txt"
-    DOUT="$(run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+    DOUT="$(run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
         "WD_MODE=$1" "WD_REGISTRY_MODULE=$(nodepath "$REGISTRY_JS")" \
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" \
         "$worker" "$MAIN" "$PLANS/$pfile" 2>"$DERR")" || DRC=$?

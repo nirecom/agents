@@ -51,7 +51,7 @@ run_with_timeout() {
 TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/rss-$$")"
 mkdir -p "$TMPD/workflow-state" "$TMPD/workflow-plans"
 trap 'rm -rf "$TMPD"' EXIT
-export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$(nodepath "$TMPD/workflow-plans")"
 unset CLAUDE_CODE_SESSION_ID
 

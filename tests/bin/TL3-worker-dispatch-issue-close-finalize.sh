@@ -65,7 +65,7 @@ PAYLOAD_RAW="$PLANS_RAW/$SID-worker-issue-close-finalize-1.json"
 printf '%s' "{\"phase\":\"initial\",\"issue_number\":$UNRESOLVABLE,\"root_issue_number\":$UNRESOLVABLE,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"main_worktree_path\":\"$MAIN\",\"session_id\":\"$SID\",\"artifact_dir\":\"$PLANS\"}" > "$PAYLOAD_RAW"
 
 DRC=0
-DOUT="$(run_with_timeout 180 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WF_PIN" \
+DOUT="$(run_with_timeout 180 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
     node "$(nodepath "$DISPATCH_JS")" issue-close-finalize "$MAIN" "$(nodepath "$PAYLOAD_RAW")" 2>&1)" || DRC=$?
 
 field_of() {

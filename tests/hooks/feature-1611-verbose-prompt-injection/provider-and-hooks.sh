@@ -75,7 +75,7 @@ hook_out() {
     local hook="$1" stdin_json="$2"; shift 2
     printf '%s' "$stdin_json" | run_with_timeout 60 env \
         -u VERBOSE_PROMPT_MODELS \
-        CLAUDE_WORKFLOW_DIR="$WFDIR_N" \
+        WORKFLOW_STATE_DIR="$WFDIR_N" \
         WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
         AGENTS_CONFIG_DIR="$CFGDIR_N" \
         CLAUDE_PROJECT_DIR="$PROJDIR_N" \

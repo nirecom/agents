@@ -10,6 +10,11 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 _AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
@@ -31,7 +36,7 @@ printf '{"granted_at":1750000000}' > "$WD/wsid.off-clearance"
 # feed <raw-stdin> → sets HRC / HOUT / HERR
 feed() {
     if [ "$HOOK_PRESENT" != "yes" ]; then HRC=127; HOUT=""; HERR=""; return; fi
-    HOUT=$(printf '%s' "$1" | CLAUDE_WORKFLOW_DIR="$WDN" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    HOUT=$(printf '%s' "$1" | WORKFLOW_STATE_DIR="$WDN" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
             "$RWT" 12 node "$HOOK" 2>"$WORK/stderr.txt")
     HRC=$?
     HERR=$(cat "$WORK/stderr.txt" 2>/dev/null)

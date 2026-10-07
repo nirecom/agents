@@ -21,7 +21,7 @@ _sid_probe() {
     root="$(make_tmp)"
     mkdir -p "$root/n1/n2/n3/n4/wf" "$root/outside"
     tn="$(node_path "$root/n1/n2/n3/n4/wf")"
-    out=$(ROOT="$(node_path "$root")" CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
+    out=$(ROOT="$(node_path "$root")" WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
         BODY="$1" "$RWT" 40 node -e "
 const fs = require('fs'), path = require('path');
 const MF = require('$MF_NODE');
@@ -70,7 +70,7 @@ run_O1() {
     local out
     out="$(_sid_probe "MF.reportMechanismFailureOnce(sid, { step: 'write_tests', kind: 'in-flight-expired' });")"
     if [ "$out" = "OK" ]; then
-        pass "O1: reportMechanismFailureOnce writes nothing outside CLAUDE_WORKFLOW_DIR for 14 hostile session ids, and never throws"
+        pass "O1: reportMechanismFailureOnce writes nothing outside WORKFLOW_STATE_DIR for 14 hostile session ids, and never throws"
     else
         fail "O1: hostile session ids reach the reporter's path construction — $out"
     fi
@@ -85,7 +85,7 @@ run_O2() {
     local out
     out="$(_sid_probe "MF.detectStalledSteps(sid);")"
     if [ "$out" = "OK" ]; then
-        pass "O2: detectStalledSteps stays inside CLAUDE_WORKFLOW_DIR and never throws for the same 14 hostile session ids"
+        pass "O2: detectStalledSteps stays inside WORKFLOW_STATE_DIR and never throws for the same 14 hostile session ids"
     else
         fail "O2: hostile session ids reach the detector's path construction — $out"
     fi
@@ -109,7 +109,7 @@ run_O2b() {
 {"version":1,"session_id":"evil","steps":{"write_tests":{"status":"in_progress","updated_at":"2000-01-01T00:00:00.000Z"}},"events":[{"step":"write_tests","status":"in_progress","at":"2000-01-01T00:00:00.000Z"}]}
 EOF
     cp "$root/outside/evil.json" "$root/evil.json"
-    out=$(ROOT="$(node_path "$root")" CLAUDE_WORKFLOW_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 40 node -e "
+    out=$(ROOT="$(node_path "$root")" WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" "$RWT" 40 node -e "
 const MF = require('$MF_NODE');
 const ids = [
   ['traversal-rel', '../../../etc/passwd'],

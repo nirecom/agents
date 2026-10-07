@@ -7,6 +7,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -36,11 +42,11 @@ require_source() {
 }
 
 # Read alert_armed_at from a state file via node.
-# #2434: state lives at <CLAUDE_WORKFLOW_DIR>/<sid>.control/, so every seed,
-# read and hook call pins CLAUDE_WORKFLOW_DIR="$tmp/workflow".
+# #2434: state lives at <WORKFLOW_STATE_DIR>/<sid>.control/, so every seed,
+# read and hook call pins WORKFLOW_STATE_DIR="$tmp/workflow".
 read_alert_armed_at() {
     local tmp="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st || !st.alert) { process.stdout.write('MISSING'); process.exit(0); }
@@ -60,7 +66,7 @@ run_l2() {
     wsid="wsid-warn-l2"
 
     # Seed CC UUID state: exists but unarmed
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -71,7 +77,7 @@ fs.writeFileSync(w.getStatePath('$cc_uuid', { forWrite: true }), JSON.stringify(
 " >/dev/null 2>&1
 
     # Seed wsid state: armed + audit_phase=done, audit_verdict=WARN
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -88,7 +94,7 @@ fs.writeFileSync(w.getStatePath('$wsid', { forWrite: true }), JSON.stringify(st)
     # The guard resolves workflowSessionId from WORKFLOW_SESSION_ID env var (line 261-262).
     # session_hash is not used for state resolution — omit it (or pass CC UUID).
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$cc_uuid\",\"transcript_path\":\"\",\"session_hash\":\"$cc_uuid\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_SESSION_ID="$wsid" \
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_SESSION_ID="$wsid" \
           run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
 

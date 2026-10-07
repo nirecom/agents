@@ -69,7 +69,7 @@ test_A4_env_file_fallback() {
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env "CLAUDE_CODE_SESSION_ID=$sid" \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || true
     if [ -f "$wfdir/$sid.workflow-off" ]; then
@@ -88,7 +88,7 @@ test_A5_no_session_id_hard_blocks() {
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     # No marker should be written.
@@ -299,7 +299,7 @@ test_A14_transcript_path_fallback() {
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then
@@ -323,7 +323,7 @@ test_A15_transcript_path_invalid_chars() {
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
     if [ "$rc" -ne 2 ]; then

@@ -34,7 +34,7 @@ command -v node >/dev/null 2>&1 || { fail "H0: node unavailable — every case b
 # pushed through argv, where Windows' ~32KB command-line limit would kill the
 # process and leave an empty stdout that the old `!= "ERROR"` check scored green.
 H_TMP="$(mktemp -d)"
-trap 'rm -rf "$H_TMP"' EXIT
+trap 'rm -rf "$H_TMP" "${_ISOLATION_TMP_ROOT:-}"' EXIT # also the entrypoint's isolation root (#2512)
 if command -v cygpath >/dev/null 2>&1; then H_TMP_N="$(cygpath -m "$H_TMP")"; else H_TMP_N="$H_TMP"; fi
 
 # stripped <cmd> → "true" when stripHeredocBody changed the string, else "false";

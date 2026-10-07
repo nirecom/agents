@@ -25,7 +25,7 @@ function wsCwd(name, notesSid) {
   return d;
 }
 // C12: a notes Session-ID counts only when its workflow state is bound to that very worktree.
-// wsCwdBound gives the notes sid a state (under $CLAUDE_WORKFLOW_DIR) whose session_worktree is <dir>.
+// wsCwdBound gives the notes sid a state (under $WORKFLOW_STATE_DIR) whose session_worktree is <dir>.
 const stateIo = require(path.join(repo, "hooks", "workflow-state", "state-io.js"));
 function wsCwdBound(name, notesSid) {
   const d = wsCwd(name, notesSid);

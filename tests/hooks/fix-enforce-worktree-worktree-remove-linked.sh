@@ -89,7 +89,7 @@ const state={version:1,session_id:sid,created_at:"2026-09-29T00:00:00.000Z",
   steps:{workflow_init:st(),clarify_intent:st(),branching_complete:st()}};
 Object.assign(state,JSON.parse(extra));
 fs.writeFileSync(path.join(dir,sid+".json"),JSON.stringify(state,null,2));
-' "$CLAUDE_WORKFLOW_DIR" "$1" "$2"
+' "$WORKFLOW_STATE_DIR" "$1" "$2"
 }
 mk_state "$SID_EXITED" '{"worktree_entered_at":"2026-09-29T00:00:00.000Z","worktree_exited_at":"2026-09-29T01:00:00.000Z"}'
 mk_state "$SID_ACTIVE" '{"worktree_entered_at":"2026-09-29T00:00:00.000Z"}'

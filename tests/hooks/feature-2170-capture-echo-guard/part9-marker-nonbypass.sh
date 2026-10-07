@@ -49,7 +49,7 @@ if command -v cygpath >/dev/null 2>&1; then
 fi
 
 unset CLAUDE_CODE_SESSION_ID
-export CLAUDE_WORKFLOW_DIR="$WFDIR"
+export WORKFLOW_STATE_DIR="$WFDIR"
 export WORKFLOW_PLANS_DIR="$TMPDIR_G/plans"
 
 SID="g2170markerfixture"

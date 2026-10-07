@@ -6,6 +6,11 @@
 # both plantable by a compromised repo with no privilege, both executed by the
 # dispatcher's own children. Each canary records REACHABILITY of the live agent
 # (ssh-add rc: 0 keys, 1 empty, 2 unreachable), not a string compare.
+
+# isolation (#2512): pin unconditionally to the sourcing test's TMPD dirs — an
+# inherited value may be the developer's live state dir, so it is never kept.
+export WORKFLOW_STATE_DIR="$WFDIR" WORKFLOW_PLANS_DIR="$PLANS"
+
 build_canaries() {
     CANARY_LOG="$TMPD/canary.log"
     : > "$CANARY_LOG"
@@ -148,7 +153,7 @@ PAYEOF
     WORKER_OUT="$(run_with_timeout 240 env \
          -u CLAUDE_CODE_SESSION_ID -u GH_TOKEN -u GITHUB_TOKEN \
         "SSH_AUTH_SOCK=$AGENT_SOCK" "SSH_AGENT_PID=$AGENT_PID" "ENFORCE_WORKTREE=off" \
-        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         node "$(nodepath "$AGENTS_DIR/bin/worker-dispatch.js")" \
         commit-push "$(nodepath "$MAIN_RAW")" "$(nodepath "$p")" 2>&1)" || return 1
     return 0

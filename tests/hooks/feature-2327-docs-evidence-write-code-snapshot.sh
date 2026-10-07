@@ -19,7 +19,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 TMPD="$(make_tmp)"
 trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
-export CLAUDE_WORKFLOW_DIR="$(np "$CLAUDE_WORKFLOW_DIR")"
+export WORKFLOW_STATE_DIR="$(np "$WORKFLOW_STATE_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR 2>/dev/null || true
 cd "$TMPD" || exit 1
@@ -59,7 +59,7 @@ try {
   const di = S.VALID_STEPS.indexOf("docs");
   S.VALID_STEPS.forEach((s, i) => { steps[s] = { status: i < di ? "complete" : "pending" }; });
   if (snapshot !== undefined) steps.write_code.write_code_scope_manifest = snapshot;
-  fs.writeFileSync(path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json"),
+  fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json"),
     JSON.stringify({ version: 1, session_id: sid, steps, closes_issues: [2327] }));
   const state = S.readState(sid);
   if (mode === "resolver") {

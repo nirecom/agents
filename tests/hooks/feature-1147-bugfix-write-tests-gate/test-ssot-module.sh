@@ -20,8 +20,8 @@ const d=path.join(os.tmpdir(),'1147-ssot-'+crypto.randomBytes(6).toString('hex')
 fs.mkdirSync(d,{recursive:true});
 process.stdout.write(d);
 ")"
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_ROOT/workflow"
-mkdir -p "$CLAUDE_WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$TMPDIR_ROOT/workflow"
+mkdir -p "$WORKFLOW_STATE_DIR"
 cleanup() { rm -rf "$TMPDIR_ROOT"; }
 trap cleanup EXIT
 
@@ -106,7 +106,7 @@ echo "=== C3: isBugfixSession — stale stored is_bugfix flag is ignored ==="
 # git_branch:"main" is migrated without that field surviving -- the projection recomputes
 # is_bugfix from git_branch alone, so the stale flag must NOT win.
 SID_C3="test-c3-$$"
-cat > "$CLAUDE_WORKFLOW_DIR/${SID_C3}.json" <<EOF
+cat > "$WORKFLOW_STATE_DIR/${SID_C3}.json" <<EOF
 {
   "version": 1, "session_id": "${SID_C3}", "created_at": "${NOW_ISO}",
   "is_bugfix": true, "git_branch": "main",
@@ -146,10 +146,10 @@ fi
 echo "=== C4: isBugfixSession — old state fallback via git_branch ==="
 SID_C4A="test-c4a-$$"
 SID_C4B="test-c4b-$$"
-cat > "$CLAUDE_WORKFLOW_DIR/${SID_C4A}.json" <<EOF
+cat > "$WORKFLOW_STATE_DIR/${SID_C4A}.json" <<EOF
 {"version":1,"session_id":"${SID_C4A}","created_at":"${NOW_ISO}","git_branch":"fix/x","steps":{"workflow_init":{"status":"complete","updated_at":null},"write_tests":{"status":"pending","updated_at":null},"review_tests":{"status":"pending","updated_at":null},"user_verification":{"status":"pending","updated_at":null}},"workflow_type":"wf-code"}
 EOF
-cat > "$CLAUDE_WORKFLOW_DIR/${SID_C4B}.json" <<EOF
+cat > "$WORKFLOW_STATE_DIR/${SID_C4B}.json" <<EOF
 {"version":1,"session_id":"${SID_C4B}","created_at":"${NOW_ISO}","git_branch":"main","steps":{"workflow_init":{"status":"complete","updated_at":null},"write_tests":{"status":"pending","updated_at":null},"review_tests":{"status":"pending","updated_at":null},"user_verification":{"status":"pending","updated_at":null}},"workflow_type":"wf-code"}
 EOF
 

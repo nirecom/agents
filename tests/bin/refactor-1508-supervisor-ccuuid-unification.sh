@@ -69,7 +69,7 @@ count_findings() {
     local tmp="$1" sid="$2"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
@@ -100,7 +100,7 @@ run_n1() {
     uuid="aaaabbbb-cccc-dddd-eeee-ffffffffffff"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_CODE_SESSION_ID="$uuid"
         unset WORKFLOW_SESSION_ID 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
@@ -131,7 +131,7 @@ run_n2() {
     printf "Session-ID: %s\n" "$wsid_like" > "$tmp/WORKTREE_NOTES.md"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_CODE_SESSION_ID="$uuid"
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories workflow \
@@ -159,7 +159,7 @@ run_n3() {
     sid="n3-explicit-sid"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
         unset WORKFLOW_SESSION_ID 2>/dev/null || true
         run_with_timeout 5 node "$CLI" \
@@ -190,7 +190,7 @@ run_r1() {
     printf "Session-ID: %s\n" "$wsid_like" > "$tmp/WORKTREE_NOTES.md"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         export CLAUDE_CODE_SESSION_ID="$uuid"
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories intent \
@@ -221,7 +221,7 @@ run_w1() {
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \
             --categories code \
@@ -246,7 +246,7 @@ run_v1() {
     tmp="$(mktemp -d)"
     combined=$(
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI" \
             --session-id "explicit-sid-v1" \
             --categories code \
@@ -272,7 +272,7 @@ run_v2() {
     tmp="$(mktemp -d)"
     combined=$(
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node "$CLI" \
             --session-id "bad/sid/with/slashes" \
             --categories code \
@@ -299,7 +299,7 @@ run_e1() {
     tmp="$(mktemp -d)"
     combined=$(
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        export CLAUDE_WORKFLOW_DIR="$(_TMPCONV "$tmp")"
+        export WORKFLOW_STATE_DIR="$(_TMPCONV "$tmp")"
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
         unset WORKFLOW_SESSION_ID 2>/dev/null || true
         cd "$tmp" && run_with_timeout 5 node "$CLI" \

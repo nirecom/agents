@@ -173,14 +173,19 @@ function overlap(waits, s, e) {
 const EMPTY_TRANSCRIPT = Object.freeze({ title: "", first: null, last: null, skills: [], waits: [] });
 
 // One row per session that has at least one segment; the period filters on the first segment's start.
-async function collectSessions({ transcriptBase, stateDir, sessionPrefix, from, to }) {
+// stateDirs: every state root in priority order; a sid present in several is read from the first.
+async function collectSessions({ transcriptBase, stateDirs, sessionPrefix, from, to }) {
   const transcripts = findTranscripts(transcriptBase);
-  const sids = new Set([...transcripts.keys(), ...findStateSids(stateDir)]);
+  const stateDirOf = new Map();
+  for (const dir of stateDirs) {
+    for (const sid of findStateSids(dir)) if (!stateDirOf.has(sid)) stateDirOf.set(sid, dir);
+  }
+  const sids = new Set([...transcripts.keys(), ...stateDirOf.keys()]);
   const rows = [];
   for (const sid of sids) {
     if (sessionPrefix && !sid.startsWith(sessionPrefix)) continue;
     const t = transcripts.has(sid) ? await scanTranscript(transcripts.get(sid)) : EMPTY_TRANSCRIPT;
-    let segs = stateSegments(stateDir, sid);
+    let segs = stateDirOf.has(sid) ? stateSegments(stateDirOf.get(sid), sid) : null;
     let source = "state";
     if (!segs) { segs = transcriptSegments(t); source = "transcript"; }
     if (!segs || segs.length === 0) continue;

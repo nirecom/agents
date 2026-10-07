@@ -48,9 +48,9 @@ ERR="$TMPDIR_F/err.txt"
 
 # Fixture isolation: never let a real session/plan dir leak in.
 unset CLAUDE_CODE_SESSION_ID
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_F/workflow"
+export WORKFLOW_STATE_DIR="$TMPDIR_F/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_F/plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 # A REAL row of the allow SSOT, so the matched (argument-reproducing) branch is
 # genuinely reachable; bail loudly rather than silently if the row ever moves.

@@ -16,7 +16,7 @@ run_g20() {
     # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
     seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Session ID: $sid" && echo "$out" | grep -q "Workflow session ID: $wsid"; then
@@ -38,7 +38,7 @@ run_g21() {
     # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
     seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Workflow session ID: UNAVAILABLE"; then
@@ -61,7 +61,7 @@ run_g22() {
     # cumulative_severity=error triggers branch (2)
     seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "systemMessage" && echo "$out" | grep -q "Workflow session ID: $wsid"; then
@@ -94,7 +94,7 @@ run_g23() {
     seed_workflow_started "$tmp" "$ccuuid"
     # Invoke guard with session_id = ccuuid (CC UUID, different from wsid).
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     # Translate $tmp for Node.js on Windows (MSYS path translation asymmetry)
     if command -v cygpath >/dev/null 2>&1; then
@@ -138,7 +138,7 @@ require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
     # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
     seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"$transcript_path_native\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Workflow session ID: $wsid"; then
@@ -160,7 +160,7 @@ run_g25() {
     # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
     seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "Session ID: $sid"; then
@@ -184,7 +184,7 @@ run_g26() {
     # #1794: branch (3) also requires isWorkflowStarted(sid) — seed workflow_init settled.
     seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ]; then
@@ -203,7 +203,7 @@ run_g27() {
     local json
     json=$(node -e 'process.stdout.write(JSON.stringify({stop_hook_active:false,session_id:"foo;bar",transcript_path:""}))' 2>/dev/null)
     out=$(cd "$tmp" && printf '%s' "$json" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -225,7 +225,7 @@ run_g28() {
     # cumulative_severity=error with empty findings triggers formatCumSevErrorReason empty-findings branch
     seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "systemMessage" && echo "$out" | grep -q "(no findings recorded)" && echo "$out" | grep -q "Workflow session ID: $wsid"; then
@@ -244,7 +244,7 @@ run_g29() {
     # cumulative_severity=warning with alert_armed_at=null triggers branch (4) advisory path
     seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'warning', findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -260,7 +260,7 @@ run_g30() {
     tmp="$(mktemp -d)"
     # No state seeded, no WORKTREE_NOTES.md — branch (1) fires first at line 184.
     out=$(cd "$tmp" && echo '{"stop_hook_active":true,"session_id":"g30-sid","transcript_path":""}' \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -290,7 +290,7 @@ require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
     # Seed alert_armed_at so branch (3) would normally fire.
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"$transcript_path_native\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
@@ -322,7 +322,7 @@ require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
 ' "$transcript_path_native" 2>/dev/null
     # No state seeded: l2ArmedAt=null, cumSev=null — detectSentinelHang returns true triggering branch (3).
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"$transcript_path_native\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "sentinel hang" && ! echo "$out" | grep -q "C1"; then
@@ -344,7 +344,7 @@ run_g33() {
         tmp_node="$tmp"
     fi
     # Seed state with alert_retry_count=2 (at threshold) — incrementAlertRetryCount returns frozen=true.
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
@@ -353,7 +353,7 @@ st.alert = { alert_armed_at: '2026-01-01T12:00:00Z', alert_retry_count: 2, last_
 fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then

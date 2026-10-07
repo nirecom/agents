@@ -81,7 +81,7 @@ out("extra_in_scope_value", spawnMod.buildEnv(cp, anchors, { GH_TOKEN: "x" }, ["
 out("extra_undeclared_scoped", errOf(() => spawnMod.buildEnv(cp, anchors, { [OFF_LIST]: "x" }, [OFF_LIST])));
 
 // A6 — the gate call's own six-name scope, asserted as one set.
-const GATE_SCOPE = ["CLAUDE_WORKFLOW_DIR", "WORKFLOW_PLANS_DIR", "WORKFLOW_SESSION_ID",
+const GATE_SCOPE = ["WORKFLOW_STATE_DIR", "WORKFLOW_PLANS_DIR", "WORKFLOW_SESSION_ID",
   "CLAUDE_PROJECT_DIR", "DEFAULT_BRANCHES", "ENFORCE_WORKTREE"];
 out("gate_scope_declared", present(spawnMod.buildEnv(cp, anchors, null, GATE_SCOPE), declared));
 
@@ -106,7 +106,7 @@ PROBEJS
 EPROBE_OUT=""
 run_envscope_probe() {
     EPROBE_OUT="$(run_with_timeout 60 env \
-        "WORKFLOW_PLANS_DIR=$PLANS" "CLAUDE_WORKFLOW_DIR=$WFDIR" \
+        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "GH_TOKEN=$FAKE_GH_TOKEN" "GITHUB_TOKEN=$FAKE_GITHUB_TOKEN" \
         "GITLAB_TOKEN=$FAKE_GITLAB_TOKEN" "GITLAB_HOST=$FAKE_GITLAB_HOST" \
         "SSH_AUTH_SOCK=$FAKE_SSH_SOCK" "AWS_SECRET_ACCESS_KEY=$FAKE_AWS_SECRET" \
@@ -117,7 +117,7 @@ run_envscope_probe() {
 }
 epv() { printf '%s\n' "$EPROBE_OUT" | sed -n "s/^$1=//p" | head -1; }
 
-ALL_DECLARED="CLAUDE_PROJECT_DIR,CLAUDE_WORKFLOW_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,GITLAB_HOST,GITLAB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID"
+ALL_DECLARED="CLAUDE_PROJECT_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,GH_TOKEN,GITHUB_TOKEN,GITLAB_HOST,GITLAB_TOKEN,SSH_AUTH_SOCK,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID,WORKFLOW_STATE_DIR"
 NO_DECL_ERR="does not declare the child env var"
 NOT_ARRAY_ERR="child env scope must be an array of env var names"
 
@@ -165,7 +165,7 @@ group_a() {
     assert_eq "A5/extraEnv-with-omitted-scope-unchanged" "NO_THROW" "$(epv extra_omitted_scope)"
 
     assert_eq "A6/gate-scope-admits-its-six-and-no-credential" \
-        "CLAUDE_PROJECT_DIR,CLAUDE_WORKFLOW_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID" \
+        "CLAUDE_PROJECT_DIR,DEFAULT_BRANCHES,ENFORCE_WORKTREE,WORKFLOW_PLANS_DIR,WORKFLOW_SESSION_ID,WORKFLOW_STATE_DIR" \
         "$(epv gate_scope_declared)"
 
     assert_eq "A7/doc-append-compose-scope" "GH_TOKEN,GITHUB_TOKEN" "$(epv da_compose_declared)"

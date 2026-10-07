@@ -63,9 +63,9 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 # rules/test/fixture-isolation.md: pin the workflow dir and the plans dir as a
 # PAIR, or supervisor-emit.js resolves the developer's real ~/.workflow-plans/.
 # Unset the inherited session ids for the same reason.
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/workflow-plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 
 # ── decision helpers ────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ run_bash_guard_clean() {
     local payload; payload="$(build_bash_payload "$cmd")"
     (cd "$cwd" && echo "$payload" | run_with_timeout 30 \
         env -i "PATH=$PATH" "HOME=$HOME" \
-        "CLAUDE_WORKFLOW_DIR=$CLAUDE_WORKFLOW_DIR" \
+        "WORKFLOW_STATE_DIR=$WORKFLOW_STATE_DIR" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "$@" node "$GUARD_JS" 2>/dev/null)
 }

@@ -58,7 +58,7 @@ count_state_files() {
 
 read_phase() {
     local tmp="$1" sid="$2"
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node -e "
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st || !st.layer3) { process.stdout.write('MISSING'); process.exit(0); }
@@ -74,7 +74,7 @@ run_r1() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_CODE_SESSION_ID || true
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --session-id sid-a --set-audit-phase done >/dev/null 2>&1
     rc=$?
     count=$(count_state_files "$tmp")
@@ -96,7 +96,7 @@ run_r2() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_CODE_SESSION_ID || true
-    out=$(WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --set-audit-phase done 2>&1)
     rc=$?
     rm -rf "$tmp"
@@ -115,7 +115,7 @@ run_r3() {
     tmp="$(mktemp -d)"
     unset CLAUDE_CODE_SESSION_ID || true
     WORKFLOW_SESSION_ID=wsid-r3test \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" \
         run_with_timeout 5 node "$CLI_NODE" --set-audit-phase done >/dev/null 2>&1
     rc=$?
     exists=0
@@ -137,7 +137,7 @@ run_r4() {
     tmp="$(mktemp -d)"
     WORKFLOW_SESSION_ID=wsid-r4 \
         CLAUDE_CODE_SESSION_ID=ccu-r4 \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" \
         run_with_timeout 5 node "$CLI_NODE" --set-audit-phase done >/dev/null 2>&1
     rc=$?
     wsid_phase=$(read_phase "$tmp" "wsid-r4")
@@ -160,7 +160,7 @@ run_r5() {
     tmp="$(mktemp -d)"
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_CODE_SESSION_ID || true
-    WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
+    WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
         --session-id sid-x --mirror-session-id sid-y --set-audit-phase done >/dev/null 2>&1
     rc=$?
     x_phase=$(read_phase "$tmp" "sid-x")
@@ -180,7 +180,7 @@ run_r6() {
     local tmp out rc count exists_wsid
     tmp="$(mktemp -d)"
     out=$(WORKFLOW_SESSION_ID=wsid-r6 \
-        WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$tmp" \
+        WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" \
         run_with_timeout 5 node "$CLI_NODE" \
             --session-id sid-r6 --increment-audit-retry-count 2>&1)
     rc=$?

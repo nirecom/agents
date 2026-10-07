@@ -24,7 +24,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # seed_started <tn> <sid> — workflow_init + clarify_intent complete, so
 # next-step's current step is `research` → ACTION=invoke (C4 would normally block).
 seed_started() {
-    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$1" "$RWT" 15 node -e "
 const wf = require('$STATEIO_NODE');
 wf.markStep('$2', 'workflow_init', 'complete');
 wf.markStep('$2', 'clarify_intent', 'complete');" >/dev/null 2>&1
@@ -32,7 +32,7 @@ wf.markStep('$2', 'clarify_intent', 'complete');" >/dev/null 2>&1
 
 # seed_preinit <tn> <sid> — state file exists, workflow_init still pending.
 seed_preinit() {
-    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$1" "$RWT" 15 node -e "
 require('$STATEIO_NODE').markStep('$2', 'workflow_init', 'pending');" >/dev/null 2>&1
 }
 
@@ -59,7 +59,7 @@ seed_corrupt_state() { printf '{ this is not json' > "$1/$2.json"; }
 
 # seed_sup_armed <tn> <sid> — C2 scheduled-review trigger (alert_armed_at set).
 seed_sup_armed() {
-    WORKFLOW_PLANS_DIR="$1" CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_PLANS_DIR="$1" WORKFLOW_STATE_DIR="$1" "$RWT" 15 node -e "
 const w = require('$WRITER_NODE'), s = require('$SCHEMA_NODE'), fs = require('fs');
 const st = s.createEmptyState('$2');
 st.alert.alert_armed_at = new Date().toISOString();
@@ -69,7 +69,7 @@ fs.writeFileSync(w.getStatePath('$2', { forWrite: true }), JSON.stringify(st));"
 
 # seed_sup_error <tn> <sid> — C2 severity-escalation trigger (cumSev=error).
 seed_sup_error() {
-    WORKFLOW_PLANS_DIR="$1" CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_PLANS_DIR="$1" WORKFLOW_STATE_DIR="$1" "$RWT" 15 node -e "
 const w = require('$WRITER_NODE'), s = require('$SCHEMA_NODE'), fs = require('fs');
 const st = s.createEmptyState('$2');
 st.alert.cumulative_severity = 'error';
@@ -84,7 +84,7 @@ fs.writeFileSync(w.getStatePath('$2', { forWrite: true }), JSON.stringify(st));"
 # at `in_progress` inside the 4h TTL. There is no marker file to write, so the
 # fixture is a real markStep on the real state store.
 seed_write_code_in_flight() {
-    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$1" "$RWT" 15 node -e "
 require('$STATEIO_NODE').markStep('$2', 'write_code', 'in_progress');" >/dev/null 2>&1
 }
 
@@ -92,7 +92,7 @@ require('$STATEIO_NODE').markStep('$2', 'write_code', 'in_progress');" >/dev/nul
 # STEP_IN_FLIGHT_ALLOWLIST (research/detail/write_tests/review_tests) sitting at
 # `in_progress` inside the TTL exempts C4, not just write_code.
 seed_step_in_flight() {
-    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$1" "$RWT" 15 node -e "
 require('$STATEIO_NODE').markStep('$2', '$3', 'in_progress');" >/dev/null 2>&1
 }
 
@@ -104,7 +104,7 @@ require('$STATEIO_NODE').markStep('$2', '$3', 'in_progress');" >/dev/null 2>&1
 # markers). Routing through the real writer — rather than hand-assembling
 # JSON — keeps the fixture in lockstep with whatever the marker schema is.
 seed_pause_marker() {
-    CLAUDE_WORKFLOW_DIR="$1" "$RWT" 15 node -e "
+    WORKFLOW_STATE_DIR="$1" "$RWT" 15 node -e "
 require('$PAUSE_MARKER_NODE').writePauseMarker('$2', { reason: '${3:-test pause}', sentinel: 'WORKFLOW_NEXT_STEP_PAUSE' });" >/dev/null 2>&1
 }
 
@@ -121,7 +121,7 @@ fs.utimesSync(process.env.P, t, t);" >/dev/null 2>&1
 # node_path-normalised path so the JSON payload needs no escaping.
 run_c4() {
     C4_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"${3:-}\"}" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 25 node "$(node_path "$GUARD_C4")" 2>/dev/null)
     C4_RC=$?
 }
@@ -133,7 +133,7 @@ run_c2() {
     local errf
     errf="$(mktemp)"
     C2_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"${3:-}\"}" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
           "$RWT" 25 node "$(node_path "$GUARD_C2")" 2>"$errf")
     C2_RC=$?
     C2_ERR=$(cat "$errf" 2>/dev/null)
@@ -146,14 +146,14 @@ run_mark() {
     MARK_OUT=$(CMD="$3" SID="$2" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ tool_name: 'Bash', session_id: process.env.SID,
   transcript_path: '', tool_input: { command: process.env.CMD } }));" \
-        | CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 20 node "$(node_path "$MARK_HOOK")" 2>/dev/null)
     MARK_RC=$?
 }
 
 # run_next_step <tn> <sid> — real bin/workflow/next-step run. Sets NS_OUT.
 run_next_step() {
-    NS_OUT=$(CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
+    NS_OUT=$(WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
         "$RWT" 20 node "$NEXT_STEP" --session "$2" 2>/dev/null)
 }
 
@@ -172,7 +172,7 @@ hostile_sid_probe() {
     mkdir -p "$tmp/wf" "$tmp/outside"
     wf="$root/wf"
     out=$(MOD="$mod" FN="$fn" SUFFIX="$suffix" CMD="$cmd" ROOT="$root" \
-        CLAUDE_WORKFLOW_DIR="$wf" WORKFLOW_PLANS_DIR="$wf" "$RWT" 20 node -e "
+        WORKFLOW_STATE_DIR="$wf" WORKFLOW_PLANS_DIR="$wf" "$RWT" 20 node -e "
 const fs = require('fs'), path = require('path');
 const handler = require(process.env.MOD)[process.env.FN];
 const root = process.env.ROOT, wf = path.join(root, 'wf');

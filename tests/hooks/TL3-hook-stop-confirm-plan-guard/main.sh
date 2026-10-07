@@ -39,7 +39,7 @@ cat > "$SCP_REPO/.claude/settings.json" <<SETTINGS_EOF
 }
 SETTINGS_EOF
 
-# Pre-create a per-turn marker in CLAUDE_WORKFLOW_DIR. readAndDeleteTurnMarkers()
+# Pre-create a per-turn marker in WORKFLOW_STATE_DIR. readAndDeleteTurnMarkers()
 # consumes any <sid>.confirm-plan-turn-*.json on Stop.
 SCP_MARKER="$SCP_WORKFLOW_DIR/$SCP_SID.confirm-plan-turn-abcd1234.json"
 cat > "$SCP_MARKER" <<'MARKER_EOF'
@@ -58,7 +58,7 @@ set +e
 SCP_OUTPUT=$(
     cd "$SCP_REPO" &&
     unset CLAUDECODE &&
-    CLAUDE_WORKFLOW_DIR="$SCP_WORKFLOW_DIR" \
+    WORKFLOW_STATE_DIR="$SCP_WORKFLOW_DIR" \
     WORKFLOW_PLANS_DIR="$SCP_PLANS_DIR" \
     run_with_timeout 180 claude -p \
         'Output the exact text: DONE' \

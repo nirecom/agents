@@ -16,6 +16,8 @@ unset CLAUDE_CODE_SESSION_ID
 
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_DIR/tests/lib/harness.sh"
+_ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
+harness_isolate "$_ISOLATION_TMP_ROOT"
 
 # Overrides the harness run_with_timeout: callers here pass no seconds argument.
 run_with_timeout() {
@@ -85,9 +87,9 @@ run_cli() {
     if [ -n "$sid" ]; then
         # CLAUDE_CODE_SESSION_ID is the supported env carrier
         # (docs/architecture/claude-code/session-id-resolution.md).
-        ( cd "$AGENTS_DIR" && CLAUDE_CODE_SESSION_ID="$sid" CLAUDE_WORKFLOW_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
+        ( cd "$AGENTS_DIR" && CLAUDE_CODE_SESSION_ID="$sid" WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
     else
-        ( cd "$AGENTS_DIR" && CLAUDE_WORKFLOW_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
+        ( cd "$AGENTS_DIR" && WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
     fi
     LAST_OUT=$(cat "$out_file" 2>/dev/null || true)
     LAST_ERR=$(cat "$err_file" 2>/dev/null || true)

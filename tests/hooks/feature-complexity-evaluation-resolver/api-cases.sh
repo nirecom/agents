@@ -66,7 +66,7 @@ assert_eq "CE-5. readComplexityEvaluation null when state absent" 'null' "$(node
 echo ""
 echo "=== CE-6: legacy 3-arg record call → throw ==="
 SID="ce6-$$"
-CE6_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+CE6_OUT="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
   const io = require('$STATEIO_N');
   try {
     io.recordComplexityEvaluation('$SID', 'invalid', []);

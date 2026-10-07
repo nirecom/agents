@@ -51,7 +51,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
-export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 
 # Pin the CONFIRM_* stage gates ON for the whole suite. The developer's ambient
@@ -120,7 +120,7 @@ check_not_contains() {
 # as process.argv[1] when WFSTATE_N is passed. stderr merged; never fails the shell.
 node_probe() {
   local code="$1"; shift
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     run_with_timeout node -e "$code" "$@" 2>&1 || true
 }
 
@@ -184,7 +184,7 @@ has_approval() {
 
 # run_next_step: KEY=value lines on stdout (always exits 0 in verdict mode)
 run_next_step() {
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     run_with_timeout node "$NEXT_STEP" "$@" 2>/dev/null || true
 }
 
@@ -192,7 +192,7 @@ run_next_step() {
 run_next_step_rc() {
   local err_file="$TMPDIR_BASE/stderr.$RANDOM"
   set +e
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     run_with_timeout node "$NEXT_STEP" "$@" >/dev/null 2>"$err_file"
   RC=$?
   set -e 2>/dev/null || true
@@ -203,7 +203,7 @@ run_next_step_rc() {
 # run_reconcile: capture stdout+stderr → global RECONCILE_OUT
 run_reconcile() {
   local out_file="$TMPDIR_BASE/reconcile.$RANDOM"
-  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     run_with_timeout node "$RECONCILE" "$@" >"$out_file" 2>&1 || true
   RECONCILE_OUT="$(cat "$out_file" 2>/dev/null || true)"
   rm -f "$out_file"
@@ -214,7 +214,7 @@ run_mark() {
   local command="$1" sid="$2"
   local payload_file="$TMPDIR_BASE/payload.$RANDOM"
   run_with_timeout node "$MK_PAYLOAD" "$command" "$sid" > "$payload_file"
-  MARK_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+  MARK_OUT="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
     run_with_timeout node "$HOOK_MARK" < "$payload_file" 2>&1 || true)"
   rm -f "$payload_file"
 }

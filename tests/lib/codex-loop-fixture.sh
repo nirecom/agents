@@ -141,10 +141,10 @@ clf_plans() {
     printf '# Tradeoffs\n' > "$1/tradeoffs.md"
 }
 
-# Control-dir paths: control files moved from PLANS_DIR to CLAUDE_WORKFLOW_DIR/<sid>.control/
+# Control-dir paths: control files moved from PLANS_DIR to WORKFLOW_STATE_DIR/<sid>.control/
 # (#2434). First arg ($1, formerly plans-dir) is ignored so callers need no change.
 # clf_control_dir <sid> — the per-session control directory.
-clf_control_dir()     { printf '%s/%s.control' "${CLAUDE_WORKFLOW_DIR:?CLAUDE_WORKFLOW_DIR not set}" "$1"; }
+clf_control_dir()     { printf '%s/%s.control' "${WORKFLOW_STATE_DIR:?WORKFLOW_STATE_DIR not set}" "$1"; }
 clf_ledger_path()     { local d; d="$(clf_control_dir "$2")"; mkdir -p "$d"; printf '%s/%s-concern-ledger.txt' "$d" "$3"; }
 clf_round_path()      { local d; d="$(clf_control_dir "$2")"; mkdir -p "$d"; printf '%s/%s-round-number.txt' "$d" "$3"; }
 clf_last_round_path() { local d; d="$(clf_control_dir "$2")"; mkdir -p "$d"; printf '%s/%s-last-round.txt' "$d" "$3"; }

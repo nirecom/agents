@@ -10,6 +10,12 @@
 
 set -u
 
+# isolation (#2512): pin state and plans dirs once for this file
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -62,7 +68,7 @@ run_case() {
         tmpdir_node="$tmpdir"
     fi
     local out rc
-    out=$(WORKFLOW_PLANS_DIR="$tmpdir_node" CLAUDE_WORKFLOW_DIR="$tmpdir_node/workflow" run_with_timeout 8 node -e "
+    out=$(WORKFLOW_PLANS_DIR="$tmpdir_node" WORKFLOW_STATE_DIR="$tmpdir_node/workflow" run_with_timeout 8 node -e "
 process.env.WORKFLOW_PLANS_DIR = '$tmpdir_node';
 const emit = require('$EMIT_MODULE_NODE');
 const fs = require('fs');

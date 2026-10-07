@@ -93,7 +93,7 @@ fi
 # contamination bug). The hook creates no files; the pin also keeps the
 # workflow-dir qualifier resolving to the fixture rather than the real dir.
 SANDBOX=$(make_tmp); WF=$(node_path "$SANDBOX")
-export CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF"
+export WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF"
 cleanup() { [ -n "${SANDBOX:-}" ] && [ -d "$SANDBOX" ] && rm -r -f "$SANDBOX" 2>/dev/null; return 0; }
 trap cleanup EXIT
 
@@ -130,7 +130,7 @@ run_hook() {
         'process.stdout.write(JSON.stringify({tool_name:process.argv[1],session_id:"s1",cwd:process.argv[3],tool_input:JSON.parse(process.argv[2])}))' \
         "$tool" "$ti" "$WF" 2>/dev/null)
     [ -z "$input" ] && { printf 'nopayload|'; return; }
-    out=$(printf '%s' "$input" | CLAUDE_WORKFLOW_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" \
+    out=$(printf '%s' "$input" | WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" \
         AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$HOOK" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"

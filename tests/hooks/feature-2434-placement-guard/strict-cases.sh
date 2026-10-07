@@ -4,10 +4,10 @@
 # Part of tests/hooks/feature-2434-placement-guard.sh (rules/coding/file-split.md);
 # sourced by it — relies on its harness, $TMP and $GUARD_JS. Not run standalone.
 # ── strict classifier cases (TL1) ──────────────────────────────────
-# #2434 D7b / #1814 (user decision: strict): EVERY write under CLAUDE_WORKFLOW_DIR is
+# #2434 D7b / #1814 (user decision: strict): EVERY write under WORKFLOW_STATE_DIR is
 # control-dir — own <sid>.json, other sessions' files, arbitrary names. WF == PLANS blocks.
 # classifyPlacement / classifyBashPlacement are called directly with explicit dir env,
-# so the dispatcher's fake-HOME juggling of CLAUDE_WORKFLOW_DIR cannot leak in here.
+# so the dispatcher's fake-HOME juggling of WORKFLOW_STATE_DIR cannot leak in here.
 ST_T="$TMP/strict"
 mkdir -p "$ST_T/wf" "$ST_T/plans" "$ST_T/elsewhere" "$ST_T/wf-sibling" "$ST_T/same"
 
@@ -21,7 +21,7 @@ command -v cygpath >/dev/null 2>&1 && ST_IS_WIN=1
 
 # st_verdict <wf-env> <plans-env> <path> [workflowOff] -> classifyPlacement result or "null"
 st_verdict() {
-  CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$2" run_with_timeout 15 node -e '
+  WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$2" run_with_timeout 15 node -e '
 const g = require(process.argv[1]);
 const v = g.classifyPlacement(process.argv[2], { sid: process.argv[3], wsid: process.argv[3], workflowOff: process.argv[4] === "1" });
 process.stdout.write(String(v));
@@ -30,7 +30,7 @@ process.stdout.write(String(v));
 
 # st_bash_verdict <wf-env> <plans-env> <command> -> classifyBashPlacement result or "null"
 st_bash_verdict() {
-  CLAUDE_WORKFLOW_DIR="$1" WORKFLOW_PLANS_DIR="$2" run_with_timeout 15 node -e '
+  WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$2" run_with_timeout 15 node -e '
 const g = require(process.argv[1]);
 process.stdout.write(String(g.classifyBashPlacement(process.argv[2], { sid: process.argv[3], wsid: process.argv[3] })));
 ' "$ST_GUARD" "$3" "$ST_SID" 2>&1

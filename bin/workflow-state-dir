@@ -1,0 +1,59 @@
+#!/usr/bin/env node
+":" //; exec node "$0" "$@"
+// bin/workflow-state-dir --session <sid> | --global | --roots
+// The shell and prompt face of hooks/workflow-state/state-io/state-root.js (#2511):
+// --session prints the routed state dir of one session, --global the default root
+// (shared caches live under it), --roots every state root, default first, one per line.
+// Exit: 0 printed; 2 usage error or invalid sid; 1 any other failure.
+"use strict";
+const path = require("path");
+
+const SR = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io", "state-root.js"));
+const USAGE = "usage: workflow-state-dir --session <sid> | --global | --roots";
+
+function die(code, msg) {
+  process.stderr.write(`workflow-state-dir: ${msg}\n`);
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const out = { mode: null, session: undefined };
+  const setMode = (m) => {
+    if (out.mode !== null) die(2, `only one mode allowed\n${USAGE}`);
+    out.mode = m;
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--global" || a === "--roots") setMode(a.slice(2));
+    else if (a === "--session") {
+      if (i + 1 >= argv.length) die(2, "--session needs a value");
+      setMode("session");
+      out.session = argv[++i];
+    } else die(2, `unknown argument: ${a}\n${USAGE}`);
+  }
+  if (out.mode === null) die(2, USAGE);
+  return out;
+}
+
+function show(p) {
+  return process.platform === "win32" ? String(p).replace(/\\/g, "/") : String(p);
+}
+
+const args = parseArgs(process.argv.slice(2));
+if (args.mode === "session") {
+  try {
+    SR.assertValidStateSid(args.session);
+  } catch (e) {
+    die(2, e.message);
+  }
+}
+
+let lines;
+try {
+  if (args.mode === "session") lines = [SR.getSessionStateDir(args.session)];
+  else if (args.mode === "global") lines = [SR.getStateRoot()];
+  else lines = SR.listStateRoots();
+} catch (e) {
+  die(1, (e && e.message) || String(e));
+}
+process.stdout.write(lines.map((l) => `${show(l)}\n`).join(""));

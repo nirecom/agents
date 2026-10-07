@@ -115,9 +115,9 @@ trap 'rm -rf "$TMPD"' EXIT
 # Fixture isolation (rules/test/fixture-isolation.md): dual-pin the workflow dir
 # and the plans dir, and clear the inherited live session ids so the hook can
 # never resolve — and mutate — the session running this suite.
-export CLAUDE_WORKFLOW_DIR="$TMPD/workflow-state"
+export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 
 # --- drivers ---------------------------------------------------------------

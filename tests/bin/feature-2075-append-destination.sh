@@ -48,10 +48,10 @@ trap 'chmod -R u+rwX "$TMPDIR_BASE" 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 
 # Fixture isolation (rules/test/fixture-isolation.md): dual-pin the workflow dirs,
 # drop every inherited session channel, and never resolve the developer's session.
-export CLAUDE_WORKFLOW_DIR="$TMPDIR_BASE/workflow"
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
-mkdir -p "$CLAUDE_WORKFLOW_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 unset CLAUDE_CODE_SESSION_ID
 # #2455: an inherited lane marker or TEST_LANES=off would bypass the lease path, and
 # the corpus cache / slots must never land in the developer's ~/.claude/run-all.

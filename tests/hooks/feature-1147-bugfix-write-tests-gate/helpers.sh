@@ -2,7 +2,7 @@
 # Shared helpers for feature-1147-bugfix-write-tests-gate/ sub-scripts.
 # Sourced by test-ssot-module.sh and test-defenses.sh.
 # Callers must set: AGENTS_DIR, WIN_AGENTS_DIR, TMPDIR_ROOT,
-#   CLAUDE_WORKFLOW_DIR, HOOK_MARK, HOOK_GATE, NOW_ISO.
+#   WORKFLOW_STATE_DIR, HOOK_MARK, HOOK_GATE, NOW_ISO.
 # Callers must define: fail(), pass() (with their own ERRORS / PASS_COUNT counters).
 
 run_with_timeout() {
@@ -14,7 +14,7 @@ run_with_timeout() {
 }
 
 # write_state <sid> [is_bugfix: true|false|absent] [git_branch]
-# Writes an all-pending-except-boilerplate state into CLAUDE_WORKFLOW_DIR.
+# Writes an all-pending-except-boilerplate state into WORKFLOW_STATE_DIR.
 write_state() {
     local sid="$1"
     local is_bugfix="${2:-false}"
@@ -25,7 +25,7 @@ write_state() {
     elif [ "$is_bugfix" = "false" ]; then
         is_bugfix_field='"is_bugfix": false,'
     fi
-    cat > "$CLAUDE_WORKFLOW_DIR/${sid}.json" <<EOF
+    cat > "$WORKFLOW_STATE_DIR/${sid}.json" <<EOF
 {
   "version": 1,
   "session_id": "${sid}",
@@ -58,7 +58,7 @@ write_state_with_steps() {
     local sid="$1" is_bugfix="$2" git_branch="$3" wt_status="$4" rt_status="$5" uv_status="${6:-pending}"
     local is_bugfix_field='"is_bugfix": false,'
     [ "$is_bugfix" = "true" ] && is_bugfix_field='"is_bugfix": true,'
-    cat > "$CLAUDE_WORKFLOW_DIR/${sid}.json" <<EOF
+    cat > "$WORKFLOW_STATE_DIR/${sid}.json" <<EOF
 {
   "version": 1,
   "session_id": "${sid}",
@@ -96,7 +96,7 @@ read_step_status() {
             const s=S.readState(process.argv[2]);
             process.stdout.write((s && s.steps && s.steps[process.argv[3]] || {}).status||'MISSING');
         } catch(e){ process.stdout.write('ERR'); }
-    " -- "$CLAUDE_WORKFLOW_DIR" "$sid" "$step" 2>/dev/null || true
+    " -- "$WORKFLOW_STATE_DIR" "$sid" "$step" 2>/dev/null || true
 }
 
 run_hook() {

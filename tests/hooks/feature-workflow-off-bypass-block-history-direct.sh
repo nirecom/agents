@@ -56,10 +56,13 @@ TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
-# developer's real ~/.workflow-plans/. Pinned alongside CLAUDE_WORKFLOW_DIR.
+# developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_STATE_DIR"
 
 fresh_workflow_dir() {
     local d="$TMPDIR_BASE/wf-$RANDOM-$$-${1:-x}"
@@ -99,7 +102,7 @@ payload_cmd() {
 }
 
 # run_hook <payload> <wfdir> — sets HOOK_OUT (stdout), HOOK_ERR (stderr), HOOK_RC.
-# CLAUDE_WORKFLOW_DIR is pinned to an isolated temp dir and every ambient
+# WORKFLOW_STATE_DIR is pinned to an isolated temp dir and every ambient
 # session-identifying env var is stripped, so the real session's WORKFLOW_OFF
 # marker can never leak into a verdict here.
 HOOK_OUT=""
@@ -112,7 +115,7 @@ run_hook() {
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
         "AGENTS_CONFIG_DIR=$REPO_DIR" \
-        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK" 2>"$errfile")" || HOOK_RC=$?
     HOOK_ERR="$(cat "$errfile" 2>/dev/null)"

@@ -121,10 +121,10 @@ gh issue create --repo $OWNER/agents"
     reset_env
     run_case "$FX_OWNED" "export GH_TOKEN=xxx"
     assert_decision "Q-13a the export alone writes nothing -> passThrough" "silent"
-    if [ -f "$CLAUDE_WORKFLOW_DIR/$SID.gh-auth-dirty" ]; then
+    if [ -f "$WORKFLOW_STATE_DIR/$SID.gh-auth-dirty" ]; then
         pass "Q-13b the session is marked auth-dirty"
     else
-        fail "Q-13b auth-dirty marker" "no $SID.gh-auth-dirty in $CLAUDE_WORKFLOW_DIR"
+        fail "Q-13b auth-dirty marker" "no $SID.gh-auth-dirty in $WORKFLOW_STATE_DIR"
     fi
     resume_case "$FX_OWNED" "gh issue create --repo $OWNER/agents --title x"
     assert_decision "Q-13c the NEXT call still asks -> ask" "ask" "auth-context-change"

@@ -178,16 +178,12 @@ function sanitizeSessionSegment(sessionId) {
   return safe.replace(/^_+$/, "") === "" ? UNKNOWN_SESSION : safe;
 }
 
-function getWorkflowDirSafe() {
-  const { getWorkflowDir } = require("../workflow-state");
-  return getWorkflowDir();
-}
-
 // Absolute path of the receipt directory for a session. Throws only if the
-// workflow directory itself cannot be resolved.
+// session's state directory itself cannot be resolved.
 function receiptDirFor(sessionId, workflowDir) {
-  const base = workflowDir || getWorkflowDirSafe();
-  return path.join(base, sanitizeSessionSegment(sessionId) + RECEIPT_DIR_SUFFIX);
+  const segment = sanitizeSessionSegment(sessionId);
+  const base = workflowDir || require("../workflow-state").getSessionStateDir(segment);
+  return path.join(base, segment + RECEIPT_DIR_SUFFIX);
 }
 
 // The receipt directory is a NAME the hook derives, not a handle it owns.
