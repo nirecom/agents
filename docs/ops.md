@@ -259,6 +259,28 @@ native environment before declaring an E2E test green. See
 [`rules/test/claude-e2e.md`](../rules/test/claude-e2e.md) for the full
 precaution list and acceptance criteria.
 
+## Test parallelism calibration
+
+An uncalibrated host runs tests at the default max jobs per host (4). Measure the real
+knee once per host, from the repo root:
+
+- bash: `RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh`
+- PowerShell: `$env:RUN_CALIBRATION = "1"; bash bin/calibrate-test-parallelism.sh`
+
+It takes up to 90 minutes; `--time-limit <min>` changes the cap. Add `--dry-run` to see
+the plan and its cost without measuring, and `--print` to show the current record.
+
+/run-tests asks once per session on an uncalibrated host: calibrate now, not now, or
+never ask again on this host. To undo "never ask again", delete
+`~/.claude/run-all/calibration-never-ask.conf` (or the same file under
+`RUN_ALL_CACHE_DIR` when that is set).
+
+To pin a value instead, set `TEST_MAX_JOBS_PER_HOST` in `.env`. A pin outranks the
+measured record, so calibrating then leaves the effective value unchanged, and /run-tests
+reports `source=dotenv` (or `env`) after the run.
+
+Design rationale: [test-runner-parallelism.md](architecture/claude-code/test-runner-parallelism.md) Section 5.
+
 ## Jev shadow mode
 
 Jev is a second-opinion complexity classifier that only logs; the LLM judge's

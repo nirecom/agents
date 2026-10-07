@@ -25,6 +25,7 @@ THL_RECORD_REASON=""
 THL_RECORD_OS=""
 THL_OS_NOW=""
 THL_RECORD_ADVICE=""
+THL_NEVER_ASK=0
 THL_PLAN_JOBS=0
 THL_STATE=""
 THL_AGE="-"
@@ -62,7 +63,7 @@ thl_init_dir() {
 # first valid layer wins. An invalid value skips its layer with one fixed notice
 # that never echoes it. A valid env value launches no .env resolver.
 thl_max_jobs_per_host() {
-    THL_RECORD_REASON=""; THL_RECORD_OS=""; THL_OS_NOW=""; THL_RECORD_ADVICE=""
+    THL_RECORD_REASON=""; THL_RECORD_OS=""; THL_OS_NOW=""; THL_RECORD_ADVICE=""; THL_NEVER_ASK=0
     if [ -n "${TEST_MAX_JOBS_PER_HOST:-}" ]; then
         if run_all_valid_max_jobs "$TEST_MAX_JOBS_PER_HOST"; then
             THL_MAX_JOBS_PER_HOST="$((10#$TEST_MAX_JOBS_PER_HOST))"; THL_MAX_JOBS_PER_HOST_SOURCE="env"; return 0
@@ -80,12 +81,17 @@ thl_max_jobs_per_host() {
         THL_MAX_JOBS_PER_HOST="$RUN_ALL_CACHE_MAX_JOBS_PER_HOST"; THL_MAX_JOBS_PER_HOST_SOURCE=measured
         THL_RECORD_OS="$RUN_ALL_CACHE_OS"
         THL_OS_NOW="$(run_all_os_attr)"
-        [ "$THL_RECORD_OS" = "$THL_OS_NOW" ] ||
-            THL_RECORD_ADVICE="measured on $THL_RECORD_OS, now $THL_OS_NOW; re-run $RUN_ALL_CALIBRATOR_HINT"
+        if [ "$THL_RECORD_OS" != "$THL_OS_NOW" ]; then
+            run_all_never_ask_active && THL_NEVER_ASK=1
+            THL_RECORD_ADVICE="measured on $THL_RECORD_OS, now $THL_OS_NOW"
+            [ "$THL_NEVER_ASK" -eq 1 ] || THL_RECORD_ADVICE="$THL_RECORD_ADVICE; re-run $RUN_ALL_CALIBRATOR_HINT"
+        fi
         return 0
     fi
     THL_MAX_JOBS_PER_HOST="$RUN_ALL_DEFAULT_MAX_JOBS_PER_HOST"; THL_MAX_JOBS_PER_HOST_SOURCE=default
     THL_RECORD_REASON="${RUN_ALL_CACHE_REASON:-missing}"
+    run_all_never_ask_active && THL_NEVER_ASK=1
+    return 0
 }
 
 # _thl_lanes_for <requested> — the one width rule: _THL_TOP = H-1 (1 when H<2),
@@ -100,11 +106,13 @@ _thl_lanes_for() {
     return 0
 }
 
-# _thl_source_text — `max jobs per host <H>, source <s>[, record <reason>; calibrate with <hint>]`.
+# _thl_source_text — `max jobs per host <H>, source <s>[, record <reason>[; calibrate with <hint>]]` (hint omitted under never-ask).
 _thl_source_text() {
     _THL_SRC="max jobs per host $THL_MAX_JOBS_PER_HOST, source $THL_MAX_JOBS_PER_HOST_SOURCE"
-    [ "$THL_MAX_JOBS_PER_HOST_SOURCE" = default ] &&
-        _THL_SRC="$_THL_SRC, record $THL_RECORD_REASON; calibrate with $RUN_ALL_CALIBRATOR_HINT"
+    if [ "$THL_MAX_JOBS_PER_HOST_SOURCE" = default ]; then
+        _THL_SRC="$_THL_SRC, record $THL_RECORD_REASON"
+        [ "$THL_NEVER_ASK" -eq 1 ] || _THL_SRC="$_THL_SRC; calibrate with $RUN_ALL_CALIBRATOR_HINT"
+    fi
     return 0
 }
 

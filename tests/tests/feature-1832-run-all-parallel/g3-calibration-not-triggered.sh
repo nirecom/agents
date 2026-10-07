@@ -18,6 +18,8 @@ CAL_REL="bin/calibrate-test-parallelism.sh"
 CAL="$AGENTS_DIR/$CAL_REL"
 LIB_REL="bin/lib/run-all-parallelism.sh"
 LIB="$AGENTS_DIR/$LIB_REL"
+# shellcheck source=../../lib/harness.sh
+. "$AGENTS_DIR/tests/lib/harness.sh"   # for the case markers; the reporters below replace its own
 
 PASS=0
 FAIL=0
@@ -205,7 +207,7 @@ case_no_auto_calibration() {
             if [ "$want" = "advice" ]; then
                 # A same-family record from another OS version is still used, and only advises.
                 case "$(lanes_line)" in
-                    *"measured on $OTHER_OS, now $REAL_OS; re-run $CAL_REL"*) pass "$row/reason" ;;
+                    *"measured on $OTHER_OS, now $REAL_OS; re-run RUN_CALIBRATION=1 bash $CAL_REL"*) pass "$row/reason" ;;
                     *) fail "$row/reason" "want the re-calibration advice on the lanes: line, got [$(lanes_line)]" ;;
                 esac
                 case "$(lanes_line)" in
@@ -306,11 +308,21 @@ case_real_home_untouched() {
     assert_eq "g3-cal/isolation/real-home-run-all-untouched" "$REAL_PRE" "$now"
 }
 
+case_begin "runner-never-names-the-calibrator" "tests/run-all.sh"
 case_static_augment
+case_end
+case_begin "no-cache-state-triggers-calibration" "tests/run-all.sh"
 case_no_auto_calibration
+case_end
+case_begin "bash-env-sentinel-is-live" "tests/run-all.sh"
 case_probe_is_live
+case_end
+case_begin "calibrator-opt-in-gate" "bin/calibrate-test-parallelism.sh"
 case_explicit_run_gate
+case_end
+case_begin "real-cache-dir-untouched" "bin/lib/run-all-parallelism.sh"
 case_real_home_untouched
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
