@@ -687,3 +687,7 @@ Changes: Worker logs now live in the session control directory (or `worker-logs/
 ### FEATURE: PR #2569 (2026-10-07)
 Background: feat(#2079): offer parallelism calibration from /run-tests and silence the run-all hint once never-ask is recorded
 Changes: `/run-tests` now offers to calibrate test parallelism on hosts that were never calibrated, and you can choose never to be asked again; the run-all calibration hint stops appearing once you do.
+
+### FEATURE: PR #2560 (2026-10-07)
+Background: Isolate tests from the live state dir and relocate state to ~/.workflow-state (#2512, #1884, #2511)
+Changes: Workflow state now lives in `~/.workflow-state/`; the env pin is renamed from `CLAUDE_WORKFLOW_DIR` to `WORKFLOW_STATE_DIR` (no compatibility alias). Sessions already running keep the old dir until session close moves them.;The test suite no longer writes fixture files into your live workflow state dir.
