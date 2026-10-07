@@ -152,7 +152,8 @@ case_end
 # The three that PR #2158's security review removed (get-config-var, request-off-clearance,
 # worker-dispatch.js) stay out. #2201 admitted two; #2102 admitted read-session-facts (it was
 # never pinned here, so the count row is what caught it); #2075 admitted find-tests-for-source.sh;
-# #2265 admitted handoff-append; #2455 admitted the read-only test-lanes-status.sh.
+# #2265 admitted handoff-append; #2455 admitted the read-only test-lanes-status.sh;
+# #2079 admitted the run-tests calibration probe and the one-effect session mark.
 case_begin "t3b-snapshot" "install/settings-allow-commands.txt"
 t3b_snapshot() {
     local entry n
@@ -188,9 +189,11 @@ skills/issue-create/scripts/make-empty-verdict.sh
 bin/find-tests-for-source.sh
 bin/workflow/handoff-append
 bin/test-lanes-status.sh
+skills/run-tests/scripts/probe-calibration.sh
+skills/run-tests/scripts/mark-calibration-asked.sh
 T3B_CASES
     n="$(printf '%s\n' "$SSOT_LIST" | grep -c . || true)"
-    assert_eq "T3b: the SSOT holds exactly the 27 pinned entries and nothing else" "27" "${n:-0}"
+    assert_eq "T3b: the SSOT holds exactly the 29 pinned entries and nothing else" "29" "${n:-0}"
 }
 t3b_snapshot
 case_end

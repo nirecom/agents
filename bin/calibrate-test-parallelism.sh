@@ -46,13 +46,13 @@ JOBS_LIST="4 6 8 12 16"
 REPEAT=3
 WARMUP=1
 BAND="5:10"
-TIME_LIMIT=90
+TIME_LIMIT="$RUN_ALL_CALIBRATION_TIME_LIMIT_MIN"
 NO_WRITE=0
 MODE="measure"
 MAX_REVISIONS=3
 
 usage() {
-    cat <<'USAGE'
+    cat <<USAGE
 Usage: bin/calibrate-test-parallelism.sh [options]
 
 Measures a ledger-chosen test sample at several parallel widths and records the
@@ -63,7 +63,7 @@ knee in the host-local parallelism cache. Requires RUN_CALIBRATION=1 to measure.
   --repeat N        measured passes per width (default 3)
   --warmup N        discarded passes per width (default 1)
   --band LO:HI      seconds a test must take to be sampled (default 5:10)
-  --time-limit MIN  stop as inconclusive before exceeding this (default 90)
+  --time-limit MIN  stop as inconclusive before exceeding this (default ${RUN_ALL_CALIBRATION_TIME_LIMIT_MIN})
   --no-write        measure and select, but publish nothing
   --dry-run         show the plan and cost, measure nothing
   --print           show the cached decision, measure nothing

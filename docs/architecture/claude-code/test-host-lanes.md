@@ -63,7 +63,9 @@ token) and a heartbeat epoch.
 
 When the measured record was taken on another OS version than the current one, the
 value is still used and the lanes, plan and status lines add `measured on X, now Y;
-re-run bin/calibrate-test-parallelism.sh` (`test-runner-parallelism.md` Section 5).
+re-run RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh` (`test-runner-parallelism.md`
+Section 5). On a host with the never-ask record (`calibration-never-ask.conf`) the lines
+keep the advice but omit the command.
 
 Why slots and not CPU measurement: measuring CPU on Windows means launching
 PowerShell each time and is noisy under changing load. Slots are deterministic,

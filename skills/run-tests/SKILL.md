@@ -1,7 +1,7 @@
 ---
 name: run-tests
 description: Runs the test suite through the test-runner worker and emits the run_tests workflow sentinel. Used by the run_tests workflow step.
-tools: Bash, Write
+tools: Bash, Write, AskUserQuestion
 model: sonnet
 user-invocable: false
 ---
@@ -48,6 +48,21 @@ RNT-5. **Empty-selection policy (no silent `--all` fallback).**
 RNT-6. **Run tests.**
    Pass the final list as positional args to `tests/run-all.sh`. Use `tests/run-all.sh --all` only when the user explicitly opts in. Never pass `auto-detect`.
 
+RNT-6a. **Calibration offer.**
+   - Run `bash "$AGENTS_CONFIG_DIR/skills/run-tests/scripts/probe-calibration.sh" --cwd <cwd> --session <sid>` and read `decision=`.
+   - `none` -> go to RNT-7.
+   - `notice`, or `ask` when AskUserQuestion is unavailable (non-interactive: `claude -p`, `/loop`, subagents) -> show `notice=` verbatim, write no record, go to RNT-7.
+   - `ask` -> first run `bash "$AGENTS_CONFIG_DIR/skills/run-tests/scripts/mark-calibration-asked.sh" --session <sid>`; if it fails or prints `first=no`, treat as `notice`.
+   - Then show `notice=` and ask with AskUserQuestion: calibrate now (long-running) / not now / never ask again on this host.
+   - not now or no answer -> run `bash "$AGENTS_CONFIG_DIR/skills/run-tests/scripts/answer-calibration.sh" defer --cwd <cwd> --session <sid>`, then go to RNT-7.
+   - never ask again (explicit choice only) -> run `bash "$AGENTS_CONFIG_DIR/skills/run-tests/scripts/answer-calibration.sh" never-ask --cwd <cwd> --session <sid>`; if it fails, show its stderr and say the choice was not saved; then go to RNT-7.
+   - calibrate now -> run Bash `echo "<<WORKFLOW_NEXT_STEP_PAUSE: [for=run_tests] run-tests calibration>>"`.
+   - Then run `bash "$AGENTS_CONFIG_DIR/skills/run-tests/scripts/answer-calibration.sh" calibrate --cwd <cwd> --session <sid>` with Bash `run_in_background`, and wait for its completion notice.
+   - On completion, failure or interruption run Bash `echo "<<WORKFLOW_NEXT_STEP_RESUME: run-tests calibration done>>"` and show the exit code with the last output lines.
+   - Then re-run the probe and read `source=`, `max_jobs=`, `os_match=`; the exit code alone never proves the new value applies.
+   - `source=measured` with `os_match=yes` -> say the run uses the measured `max_jobs=`, then go to RNT-7 with the payload unchanged.
+   - Otherwise -> report the actual `source=` and `os_match=` (an OS-mismatched record stays `measured`), say the run continues at that effective value, never retry, and go to RNT-7 with the payload unchanged.
+
 RNT-7. **Dispatch the `test-runner` worker** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list, or `["--all"]` on explicit opt-in), `jobs` (optional 1..1024 parallelism; omit to leave the suite's own `-j auto` in force, `1` restores the sequential run), `timeout_seconds` (omit for the 120s default; pass `min(600 + 60 × <selected count>, 21600)` explicitly when the selection exceeds 10 tests or `RUN_TL3=on`).
 
 RNT-8. **Parse the YAML** the dispatch call printed on stdout. A leading `RUN_CONTRACT: PASS=.. FAIL=.. SKIP=.. EXECUTED=..` line may precede `status:` — it is the suite's own verdict, and RNT-9's fallback branch reads it.
@@ -79,6 +94,7 @@ RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tai
 - Recover a pre-existing failure only through `bin/run-tests-baseline`, which alone may complete run_tests for it. Never substitute a session-wide OFF sentinel.
 - Fall back to sequential execution with `"jobs": 1` in the payload; `test_args` cannot carry `-j 1` (its `rel-path-arg[]` type rejects a leading `-`).
 - The worker derives `--deadline max(30, timeout_seconds − 5)`, so the suite folds itself up before the dispatcher's budget expires; a deadline abort, like a lane wait-cap abort (exit 4), prints no `RUN_CONTRACT:` line and surfaces as `status: fail`.
+- Launch calibration only from RNT-6a after an explicit "calibrate now" answer; tests/run-all.sh never starts it.
 - Never modify source code or test files.
 - Never retry on failure (Phase 1 only).
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

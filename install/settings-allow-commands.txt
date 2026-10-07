@@ -32,4 +32,6 @@ bin/worktree-notes-append.js
 skills/issue-create/scripts/make-empty-verdict.sh
 bin/find-tests-for-source.sh
 bin/test-lanes-status.sh
+skills/run-tests/scripts/probe-calibration.sh
+skills/run-tests/scripts/mark-calibration-asked.sh
 bin/workflow/handoff-append
