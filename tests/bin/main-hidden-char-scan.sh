@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Tests: bin/scan-outbound.sh
-# Tags: scan, filter, outbound, hook, bin, agents-config-dir, fail-closed, manifest, scope:issue-specific
+# Tags: scan, filter, outbound, hook, bin, script-checkout-root, fail-closed, manifest, scope:issue-specific
 # Test suite for Trojan Source / hidden-char detection in scan-outbound.sh
 # Zero-width chars (U+200B/C/D, U+FEFF) → [zero-width]
 # Bidi override chars (U+202D/E, U+2066-2069) → [bidi-override]
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-AGENTS_DIR="$DOTFILES_DIR"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 SCANNER_SRC="$DOTFILES_DIR/bin/scan-outbound.sh"
 ERRORS=0
 
@@ -36,7 +36,7 @@ chmod +x "$FAKE_DOTFILES/bin/scan-outbound.sh"
 SCANNER="$FAKE_DOTFILES/bin/scan-outbound.sh"
 : > "$FAKE_DOTFILES/.private-info-allowlist"
 # Baseline blocklist for hidden-char normal-case tests: an empty (comment-only)
-# blocklist so fail-closed does not trigger when AGENTS_CONFIG_DIR is unset and
+# blocklist so fail-closed does not trigger when AGENTS_MAIN_ROOT is unset and
 # the scanner falls back to SCRIPT_DIR/.. = $FAKE_DOTFILES. The built-in
 # zero-width / bidi scan fires independently of the blocklist.
 printf '# baseline — no custom blocklist entries for hidden-char scan tests\n' > "$FAKE_DOTFILES/.private-info-blocklist"
@@ -44,7 +44,7 @@ printf '# baseline — no custom blocklist entries for hidden-char scan tests\n'
 scan_output() {
     local input="$1"
     local label="${2:-test.txt}"
-    printf '%s\n' "$input" | run_with_timeout env -u AGENTS_CONFIG_DIR "$SCANNER" --stdin "$label" 2>&1 || true
+    printf '%s\n' "$input" | run_with_timeout env -u AGENTS_MAIN_ROOT "$SCANNER" --stdin "$label" 2>&1 || true
 }
 expect_label() {
     local desc="$1" input="$2" label="$3"
@@ -57,7 +57,7 @@ expect_label() {
 }
 expect_clean() {
     local desc="$1" input="$2"
-    if printf '%s\n' "$input" | run_with_timeout "$SCANNER" --stdin "test.txt" >/dev/null 2>&1; then
+    if printf '%s\n' "$input" | run_with_timeout env -u AGENTS_MAIN_ROOT "$SCANNER" --stdin "test.txt" >/dev/null 2>&1; then
         pass "$desc"
     else
         fail "$desc — false positive on: $input"
@@ -87,7 +87,7 @@ expect_clean "Latin extended (é, ü) — clean"       $'caf\xc3\xa9 R\xc3\xbcck
 
 echo ""
 echo "=== Edge Cases ==="
-if printf '' | run_with_timeout "$SCANNER" --stdin "test.txt" >/dev/null 2>&1; then
+if printf '' | run_with_timeout env -u AGENTS_MAIN_ROOT "$SCANNER" --stdin "test.txt" >/dev/null 2>&1; then
     pass "empty input — exit 0"
 else
     fail "empty input — unexpected non-zero exit"
@@ -108,7 +108,7 @@ fi
 echo ""
 echo "=== Security Cases (allowlist) ==="
 printf '%s\n' $'hello\xe2\x80\x8bworld' > "$FAKE_DOTFILES/.private-info-allowlist"
-if printf '%s\n' $'hello\xe2\x80\x8bworld' | run_with_timeout env -u AGENTS_CONFIG_DIR "$SCANNER" --stdin "test.txt" >/dev/null 2>&1; then
+if printf '%s\n' $'hello\xe2\x80\x8bworld' | run_with_timeout env -u AGENTS_MAIN_ROOT "$SCANNER" --stdin "test.txt" >/dev/null 2>&1; then
     pass "allowlisted zero-width line suppressed"
 else
     fail "allowlisted zero-width line still detected"
@@ -118,28 +118,28 @@ expect_label "non-allowlisted bidi still detected when zwsp is allowlisted" \
 : > "$FAKE_DOTFILES/.private-info-allowlist"
 
 echo ""
-echo "=== Group A (#1593): AGENTS_CONFIG_DIR anchor + fail-closed + --manifest ==="
+echo "=== Group A (#1593): AGENTS_MAIN_ROOT anchor + fail-closed + --manifest ==="
 # These cases target POST-implementation behavior of bin/scan-outbound.sh:
-#   - blocklist resolved via AGENTS_CONFIG_DIR (new anchor), fail-closed with rc=4
+#   - blocklist resolved via AGENTS_MAIN_ROOT (new anchor), fail-closed with rc=4
 #     when the blocklist cannot be resolved (was: silent skip → rc=0)
 #   - allowlist absence is non-fatal: stderr warning, processing continues
 #   - --manifest mode: RS-delimited, length-prefixed multi-file framing with
 #     per-file allowlist labels (a.txt:<pattern> scopes the suppression to a.txt)
 # Against CURRENT code these FAIL (fail-before-fix for this security branch):
-#   the scanner ignores AGENTS_CONFIG_DIR, treats a missing blocklist as clean,
+#   the scanner ignores AGENTS_MAIN_ROOT, treats a missing blocklist as clean,
 #   and has no --manifest mode (it tries to scan a file literally named --manifest).
 
 A_RC=0; A_OUT=""; A_ERR=""
 
 # run_anchor <cfg|__unset__> <stdin-content> — invoke scanner in --stdin mode with
-# AGENTS_CONFIG_DIR pinned (or unset). Captures A_RC / A_OUT / A_ERR.
+# AGENTS_MAIN_ROOT pinned (or unset). Captures A_RC / A_OUT / A_ERR.
 run_anchor() {
     local cfg="$1" content="$2"
     local ofile efile
     ofile="$(mktemp)"; efile="$(mktemp)"
     set +e
     (
-        if [ "$cfg" = "__unset__" ]; then unset AGENTS_CONFIG_DIR; else export AGENTS_CONFIG_DIR="$cfg"; fi
+        if [ "$cfg" = "__unset__" ]; then unset AGENTS_MAIN_ROOT; else export AGENTS_MAIN_ROOT="$cfg"; fi
         printf '%s' "$content" | run_with_timeout "$SCANNER" --stdin "test.txt"
     ) >"$ofile" 2>"$efile"
     A_RC=$?
@@ -155,7 +155,7 @@ run_manifest() {
     ofile="$(mktemp)"; efile="$(mktemp)"
     set +e
     (
-        export AGENTS_CONFIG_DIR="$cfg"
+        export AGENTS_MAIN_ROOT="$cfg"
         printf '%s' "$manifest" | run_with_timeout "$SCANNER" --manifest
     ) >"$ofile" 2>"$efile"
     A_RC=$?
@@ -243,16 +243,16 @@ run_anchor "$A_CFG_NOALLOW" "see forbiddenword42 here"
 a_expect_rc "A3b: missing allowlist + blocklist match → rc=1" 1
 a_out_has "A3b: missing allowlist does not suppress blocklist match" "[blocklist]"
 
-# A4: AGENTS_CONFIG_DIR points at a dir with a real blocklist → resolves + scans.
+# A4: AGENTS_MAIN_ROOT points at a dir with a real blocklist → resolves + scans.
 run_anchor "$A_CFG_WITH" "see forbiddenword42 here"
 a_expect_rc "A4: anchored blocklist hard match → rc=1" 1
 a_out_has "A4: hard match labelled [blocklist]" "[blocklist]"
 
-# A5: AGENTS_CONFIG_DIR set but that dir has no blocklist → rc=4 (fail-closed).
+# A5: AGENTS_MAIN_ROOT set but that dir has no blocklist → rc=4 (fail-closed).
 run_anchor "$A_CFG_EMPTY" "totally clean text"
 a_expect_rc "A5: anchor set but blocklist missing → rc=4" 4
 
-# A6: AGENTS_CONFIG_DIR unset → falls back to SCRIPT_DIR/.. (backward compat).
+# A6: AGENTS_MAIN_ROOT unset → falls back to SCRIPT_DIR/.. (backward compat).
 #     Give the fallback (FAKE_DOTFILES) a blocklist for this case only.
 printf 'forbiddenword[0-9]+\n' > "$FAKE_DOTFILES/.private-info-blocklist"
 run_anchor "__unset__" "see forbiddenword7 here"

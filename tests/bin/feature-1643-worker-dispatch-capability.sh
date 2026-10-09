@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-1643-worker-dispatch-capability.sh
 # Tests: bin/worker-dispatch/capability.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch/spawn.js, bin/worker-dispatch/anchor.js, hooks/lib/worker-dispatch-registry.js
-# Tags: worker-dispatch, capability, fsguard, spawn, security, attack-matrix, TL1, scope:issue-specific
+# Tags: worker-dispatch, capability, fsguard, spawn, security, attack-matrix, child-env, root-names, TL1, scope:issue-specific
 # TL3 gap (what this TL1 test does NOT catch):
 #   - A real linked-worktree family with NTFS junctions / bind mounts (realpath differs).
 #   - Real PLANS_DIR shared between concurrent sessions.
@@ -18,23 +18,37 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_CAP_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
 # Issue #1643 — capability attack matrix: each row drives one hostile field type and
 # asserts a rejection status, no effectful child process, and no filesystem write.
 # Entrypoint only sources the modules and tallies; the cases live in the sibling dir.
-CASE_DIR="$AGENTS_DIR/tests/bin/feature-1643-worker-dispatch-capability"
+CASE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1643-worker-dispatch-capability"
 . "$CASE_DIR/helpers.sh"
+
+# Isolation, pinned once before anything is started: state, plans, home and the forge
+# CLI config all live under the temp dir, and no inherited session id or token survives.
+mkdir -p "$TMPD/wf" "$TMPD/plans" "$TMPD/home/.config" "$TMPD/home/gh" "$TMPD/home/glab"
+ISO_HOME="$(nodepath "$TMPD/home")"
+export WORKFLOW_STATE_DIR="$(nodepath "$TMPD/wf")" WORKFLOW_PLANS_DIR="$(nodepath "$TMPD/plans")"
+export HOME="$ISO_HOME" USERPROFILE="$ISO_HOME" XDG_CONFIG_HOME="$ISO_HOME/.config"
+export GH_CONFIG_DIR="$ISO_HOME/gh" GLAB_CONFIG_DIR="$ISO_HOME/glab"
+unset CLAUDE_CODE_SESSION_ID WORKFLOW_SESSION_ID GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITLAB_TOKEN
+
 . "$CASE_DIR/fixtures.sh"
 . "$CASE_DIR/observe.sh"
 . "$CASE_DIR/matrix.sh"
 . "$CASE_DIR/validator.sh"
+. "$CASE_DIR/agents-main-root-child-env.sh"
 
 # Group V runs FIRST: it is seconds of in-process function calls, while the
 # matrix below is a dispatch (and a full fixture-tree hash) per row. Ordering the
 # cheap deterministic rows ahead of the expensive ones means a run that is cut
 # short by the wall-clock guard still reports the validator verdicts.
 group_validator_rows
+group_agents_main_root_child_env
+run_matrix_controls
+run_observer_controls
 run_matrix
 
 echo ""

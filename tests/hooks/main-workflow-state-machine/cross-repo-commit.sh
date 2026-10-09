@@ -41,10 +41,10 @@ run_cross_repo_commit_tests() {
 EOF
 )"
     L2B_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2B\"}"
-    # Inline call: CLAUDE_PROJECT_DIR=REPO_B (invoking session), AGENTS_CONFIG_DIR=REPO_A
+    # Inline call: CLAUDE_PROJECT_DIR=REPO_B (invoking session), AGENTS_MAIN_ROOT=REPO_A
     # (agents session repo), git -C REPO_A targets REPO_A → same git dir → enforce.
     L2B_RESULT=$(echo "$L2B_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
-        AGENTS_CONFIG_DIR="$REPO_A" node "$GATE_HOOK" 2>/dev/null || true)
+        AGENTS_MAIN_ROOT="$REPO_A" node "$GATE_HOOK" 2>/dev/null || true)
     if echo "$L2B_RESULT" | grep -q '"block"' && echo "$L2B_RESULT" | grep -qi "write_tests"; then
         pass "L2-b. repoA write_tests=pending, git -C repoA → block (write_tests)"
     else
@@ -76,7 +76,7 @@ EOF
     git -C "$REPO_A" add docs/todo.md
     L2C_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2C\"}"
     L2C_RESULT=$(echo "$L2C_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
-        AGENTS_CONFIG_DIR="$REPO_A" node "$GATE_HOOK" 2>/dev/null || true)
+        AGENTS_MAIN_ROOT="$REPO_A" node "$GATE_HOOK" 2>/dev/null || true)
     git -C "$REPO_A" reset HEAD -- . 2>/dev/null || true
     git -C "$REPO_A" clean -fdq 2>/dev/null || true
     if echo "$L2C_RESULT" | grep -q '"block"' && echo "$L2C_RESULT" | grep -qi "docs-only"; then

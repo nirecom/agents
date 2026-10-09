@@ -21,8 +21,8 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -85,7 +85,7 @@ read_state_status() {
       const step = s && s.steps && s.steps['$step'];
       console.log(step && step.status ? step.status : 'MISSING');
     } catch (e) { console.log('MISSING'); }
-  " "$sid" "$AGENTS_DIR/hooks/workflow-state/state-io.js" 2>/dev/null || echo "MISSING"
+  " "$sid" "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js" 2>/dev/null || echo "MISSING"
 }
 
 run_gate() {
@@ -221,8 +221,8 @@ write_state "$SID" "$(CI_COMPLETE_STATE $SID)"
 bash_gate_json() {
   CMD="$1" SID="$2" node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.env.CMD},session_id:process.env.SID}))'
 }
-REC_CMD='node "$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" record --session s1 --file x.tsv'
-FAILING_CMD='node "$AGENTS_CONFIG_DIR/bin/workflow/run-tests-baseline-evidence" failing --session s1'
+REC_CMD='node "$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" record --session s1 --file x.tsv'
+FAILING_CMD='node "$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" failing --session s1'
 GATE_OUT=$(cd "$TMPDIR_BASE" && run_gate "$(bash_gate_json "$REC_CMD" "$SID")")
 check_contains "WGE-4a. Bash record call -> block" '"decision":"block"' "$GATE_OUT"
 check_contains "WGE-4b. block reason names the internal-only door" "internal to bin/run-tests-baseline" "$GATE_OUT"

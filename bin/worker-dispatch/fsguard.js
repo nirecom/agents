@@ -21,7 +21,7 @@ const SCOPE_ROOTS = {
   "control-dir": (ctx) => (ctx.controlDir ? [ctx.controlDir] : []),
   "family-worktree": (ctx) => (Array.isArray(ctx.family) ? ctx.family.slice() : []),
   "backup-dir": (ctx) => (ctx.backupDir ? [ctx.backupDir] : []),
-  "main-root-docs": (ctx) => (ctx.mainRoot ? [path.join(ctx.mainRoot, "docs")] : []),
+  "target-main-root-docs": (ctx) => (ctx.targetMainRoot ? [path.join(ctx.targetMainRoot, "docs")] : []),
   "log-dir": (ctx) => (ctx.logDir ? [ctx.logDir] : []),
 };
 

@@ -10,14 +10,14 @@
 
 echo "=== W8: settings.json permissions.allow granularity ==="
 
-SETTINGS="$AGENTS_DIR/settings.json"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
 READ_ALLOW='const fs=require("fs");const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const a=(s.permissions&&s.permissions.allow)||[];console.log(a.join("\n"));'
 if ! command -v node >/dev/null 2>&1; then
     fail "W8-00: node is not on PATH" "settings.json must be read as JSON, not as text; this environment cannot run the check"
 elif [ ! -f "$SETTINGS" ]; then
     fail "W8-00: settings.json is absent" "cannot read permissions.allow"
 else
-    ALLOW="$(bash "$AGENTS_DIR/bin/run-with-timeout.sh" 120 node -e "$READ_ALLOW" "$(nodepath "$SETTINGS")" 2>"$TMPDIR_LOCAL/w8.err" || true)"
+    ALLOW="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 120 node -e "$READ_ALLOW" "$(nodepath "$SETTINGS")" 2>"$TMPDIR_LOCAL/w8.err" || true)"
     if [ -s "$TMPDIR_LOCAL/w8.err" ]; then
         fail "W8-00: could not parse settings.json" "$(head -1 "$TMPDIR_LOCAL/w8.err")"
     fi
@@ -40,8 +40,8 @@ fi
 # assignment makes the last one silently win over the documented default.
 echo "=== W9: .env.example CodeGraph block, uniqueness and env-example rules ==="
 
-ENV_EX="$AGENTS_DIR/.env.example"
-REVIEWER="$AGENTS_DIR/bin/review-env-example"
+ENV_EX="$SCRIPT_CHECKOUT_ROOT/.env.example"
+REVIEWER="$SCRIPT_CHECKOUT_ROOT/bin/review-env-example"
 CG_START="$(first_line_of "$ENV_EX" '# --- CodeGraph ---')"
 CG_END="$(first_line_of "$ENV_EX" 'CODEGRAPH=off')"
 if [ ! -f "$REVIEWER" ]; then
@@ -50,7 +50,7 @@ elif [ -z "$CG_START" ] || [ -z "$CG_END" ]; then
     fail "W9-01: .env.example has no '# --- CodeGraph ---' section ending at a CODEGRAPH=off line" \
          "header=${CG_START:-<none>} assignment=${CG_END:-<none>}"
 else
-    RV_OUT="$(cd "$AGENTS_DIR" && bash "$AGENTS_DIR/bin/run-with-timeout.sh" 120 bash "$REVIEWER" --all 2>&1 || true)"
+    RV_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 120 bash "$REVIEWER" --all 2>&1 || true)"
     BLOCK_HARD="$(printf '%s\n' "$RV_OUT" \
         | grep '^HARD:' \
         | grep -E '(^|/)\.env\.example:[0-9]+:' \
@@ -76,7 +76,7 @@ for guard in block-dotenv.js block-credentials.js; do
         fail "W11/$guard: settings.json is absent" "cannot read hooks.PreToolUse"
         continue
     fi
-    MATCHERS="$(bash "$AGENTS_DIR/bin/run-with-timeout.sh" 120 node -e "$READ_MATCHERS" "$(nodepath "$SETTINGS")" "$guard" 2>/dev/null || true)"
+    MATCHERS="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 120 node -e "$READ_MATCHERS" "$(nodepath "$SETTINGS")" "$guard" 2>/dev/null || true)"
     HITS="$(printf '%s' "$MATCHERS" | grep -c . || true)"
     assert_eq "W11/$guard: registered under exactly one PreToolUse matcher" "1" "${HITS:-0}"
     if printf '%s' "$MATCHERS" | grep -qF 'mcp__codegraph__codegraph_explore'; then

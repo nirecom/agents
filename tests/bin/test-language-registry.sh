@@ -7,9 +7,9 @@
 # fixtures/*.json, installed as the default table of a fixture checkout (no env override).
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
@@ -22,32 +22,32 @@ harness_isolate "$TMPBASE/iso"
 export RUN_ALL_DURATIONS_LIB=/nonexistent RUN_ALL_PROGRESS=off
 
 # shellcheck source=test-language-registry/_lib.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/_lib.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/_lib.sh"
 
 case_begin "registry-files-present" "hooks/lib/test-language-registry.js"
 for f in "$CLI" "$LOADER" "$READER" "$TABLE"; do
   if [ -f "$f" ]; then
-    pass "present: ${f#"$AGENTS_DIR/"}"
+    pass "present: ${f#"$SCRIPT_CHECKOUT_ROOT/"}"
   else
-    fail "present: ${f#"$AGENTS_DIR/"}" "missing — the cases that use it fail too"
+    fail "present: ${f#"$SCRIPT_CHECKOUT_ROOT/"}" "missing — the cases that use it fail too"
   fi
 done
 case_end
 
 # shellcheck source=test-language-registry/validation.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/validation.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/validation.sh"
 # shellcheck source=test-language-registry/reader.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/reader.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/reader.sh"
 # shellcheck source=test-language-registry/loader.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/loader.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/loader.sh"
 # shellcheck source=test-language-registry/parity.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/parity.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/parity.sh"
 # shellcheck source=test-language-registry/parts.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/parts.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/parts.sh"
 # shellcheck source=test-language-registry/launch.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/launch.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/launch.sh"
 # shellcheck source=test-language-registry/mutation.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/mutation.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/mutation.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

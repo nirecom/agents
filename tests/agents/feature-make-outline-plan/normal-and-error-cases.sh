@@ -112,7 +112,7 @@ case_begin "Normal REVIEWER_MD" "agents/outline-reviewer.md"
 # N14 (#2100): REVIEWER_MD frontmatter keeps a fallback model: equal to the reviewer
 # role default in ROLE_TABLE (hooks/lib/role-model.js). First ---...--- pair only.
 # Tests LOCAL_REVIEWER_MD (worktree copy).
-_n14_js="$(np "$AGENTS_DIR/hooks/lib/role-model.js")"
+_n14_js="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/role-model.js")"
 _n14_want=$(ROLE_MODEL_JS="$_n14_js" node - 2>/dev/null <<'JS'
 const t = require(process.env.ROLE_MODEL_JS).ROLE_TABLE.reviewer;
 process.stdout.write(t && typeof t.default === "string" ? t.default : "");

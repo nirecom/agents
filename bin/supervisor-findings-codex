@@ -9,6 +9,8 @@
 # Always exits 0 (STATUS carries the outcome).
 set -uo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 MODE=""
 SID=""
 WSID=""
@@ -48,19 +50,14 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 0
 fi
 
-AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-}"
-if [[ -z "$AGENTS_CONFIG_DIR" ]]; then
-  echo "STATUS: FAILED"; echo "reason: AGENTS_CONFIG_DIR not set"; exit 0
-fi
-
 # shellcheck source=lib/codex-core.sh
-source "$AGENTS_CONFIG_DIR/bin/lib/codex-core.sh"
+source "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-core.sh"
 codex_core_init "Supervisor Findings Codex"
 
 # A terminated session (all closes_issues CLOSED) narrows alert to the intent only.
 PLAN_SCOPE="all"
 if [[ "$MODE" == "alert" && -n "$WSID" && "$WSID" != "UNAVAILABLE" ]]; then
-  bash "$AGENTS_CONFIG_DIR/bin/supervisor-check-session-active" --wsid "$WSID" >/dev/null 2>&1 || PLAN_SCOPE="intent"
+  bash "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-check-session-active" --wsid "$WSID" >/dev/null 2>&1 || PLAN_SCOPE="intent"
 fi
 
 INPUT_FILE="$(mktemp "${TMPDIR:-/tmp}/supervisor-codex-input-XXXXXX")"
@@ -70,7 +67,7 @@ ASM_ARGS=(--mode "$MODE" --sid "$SID" --wsid "${WSID:-UNAVAILABLE}" --transcript
 [[ -n "$SNAPSHOT" ]] && ASM_ARGS+=(--state-snapshot "$SNAPSHOT")
 ASM_ERR="$(mktemp "${TMPDIR:-/tmp}/supervisor-codex-input-err-XXXXXX")"
 trap 'rm -f "$INPUT_FILE" "$ASM_ERR"' EXIT
-if ! ASM_OUT="$(node "$AGENTS_CONFIG_DIR/hooks/lib/supervisor-codex-input.js" "${ASM_ARGS[@]}" 2>"$ASM_ERR")"; then
+if ! ASM_OUT="$(node "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-codex-input.js" "${ASM_ARGS[@]}" 2>"$ASM_ERR")"; then
   echo "STATUS: FAILED"
   # An uncaught node exception puts a stack location on line 1; prefer the *Error: line.
   echo "reason: input assembly failed: $(grep -m1 -E '^[A-Za-z]*Error:' "$ASM_ERR" || head -n 1 "$ASM_ERR")"
@@ -108,12 +105,12 @@ export INPUT_LINES
 CODEX_OUT="$(codex_core_run "$CODEX_PROMPT")"
 
 if printf '%s\n' "$CODEX_OUT" | grep -q ': PERFORMED'; then
-  PARSE_OUT="$(printf '%s' "$CODEX_OUT" | node "$AGENTS_CONFIG_DIR/hooks/lib/supervisor-codex-parse.js" --mode "$MODE")"
+  PARSE_OUT="$(printf '%s' "$CODEX_OUT" | node "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-codex-parse.js" --mode "$MODE")"
   if printf '%s\n' "$PARSE_OUT" | grep -q '^OUTFILE:'; then
     echo "STATUS: SUCCESS"
     printf '%s\n' "$PARSE_OUT"
     CURSOR_STATE="not-advanced"
-    if [[ -n "$CURSOR_NEXT" ]] && node "$AGENTS_CONFIG_DIR/bin/supervisor-write-${MODE}" --session-id "$SID" \
+    if [[ -n "$CURSOR_NEXT" ]] && node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-${MODE}" --session-id "$SID" \
         --set-transcript-cursor "$CURSOR_NEXT" >/dev/null 2>&1; then
       CURSOR_STATE="advanced"
     fi

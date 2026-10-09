@@ -12,16 +12,16 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 nrm() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
-AGENTS_NODE="$(nrm "$AGENTS_DIR")"
+AGENTS_NODE="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 HOOKS_NODE="$AGENTS_NODE/hooks"
 FP_NODE="$HOOKS_NODE/lib/diff-fingerprint.js"
 WRITER_NODE="$HOOKS_NODE/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$HOOKS_NODE/lib/supervisor-state-schema.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 assert_eq() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "expected '$3', got '$2'"; fi; }
 assert_match() {
@@ -47,7 +47,7 @@ mkdir -p "$WORK/plans" "$WORK/wf" "$WORK/transcripts" "$WORK/cfg"
 export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
-export AGENTS_CONFIG_DIR="$WORK_NODE/cfg"
+export AGENTS_MAIN_ROOT="$WORK_NODE/cfg"
 unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
@@ -185,7 +185,7 @@ else if (process.env.MODE === 'empty') ti.cwd = '';
 process.stdout.write(JSON.stringify({ tool_name: 'Bash', tool_input: ti, session_id: process.env.SESS }));
 JS
 )
-    ( cd "$REPO" && printf '%s' "$payload" | bash "$RWT" 60 node "$AGENTS_DIR/hooks/workflow-gate.js" 2>/dev/null )
+    ( cd "$REPO" && printf '%s' "$payload" | bash "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js" 2>/dev/null )
 }
 decision_of() {
     JBODY="$1" node -e "
@@ -316,7 +316,7 @@ JS
     mkdir -p "$cfg"
     printf '%b' "$2" > "$cfg/.env"
     ( cd "$REPO" && env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL -u PRODUCER_LOW_MODEL \
-        -u CLAUDE_PROJECT_DIR -u WORKFLOW_SESSION_ID AGENTS_CONFIG_DIR="$(nrm "$cfg")" \
+        -u CLAUDE_PROJECT_DIR -u WORKFLOW_SESSION_ID AGENTS_MAIN_ROOT="$(nrm "$cfg")" \
         UVA="$UVA_NODE" WR="$WRITER_NODE" SC="$SCHEMA_NODE" SESS="$sid" RCWD="$REPO_NODE" \
         bash "$RWT" 30 node -e "$js" 2>&1 )
 }

@@ -1,49 +1,29 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/record-skip-verdict, hooks/workflow-state/state-io/skip-verdict.js, tests/bin/feature-1644-sibling-cli-advance.sh
 # Tags: tl2, workflow, advance, named-exception, record-skip-verdict, class-completeness, scope:issue-specific, pwsh-not-required
-#
-# #1644 review gap C4 — the NAMED EXCEPTION to the advance class.
-#
-# Why this file exists: every other CLI under bin/workflow/ that settles a step
-# learned `--advance` / `--next` in #1644. record-skip-verdict deliberately did
-# NOT, and its header states why: its only caller is the skip-verifier subagent,
-# and a subagent must not advance the workflow on its own behalf — recording a
-# verdict is a PRECONDITION for advancing, not the advance itself. The main
-# conversation observes the subagent and calls `next-step --advance --next`.
-#
-# So this file PINS THE DESIGN INTENT. It must fail if someone "completes the
-# class" by teaching record-skip-verdict to advance, and it must equally fail if
-# the CLI stops recording verdicts correctly. It does NOT demand the flags.
-#
-# Sibling boundary (no duplication): tests/bin/feature-1644-sibling-cli-advance.sh
-# S11 already owns the three-way partition of bin/workflow/ (advance members /
-# named exceptions / non-members) and registers record-skip-verdict in
-# NAMED_EXCEPTIONS. What S11 does NOT do — and what is added here — is prove
-# (a) the registration is backed by a source-level rationale rather than by a
-# test-side literal, and (b) the CLI actually REFUSES --advance / --next at
-# runtime with no state effect.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the real skip-verifier subagent invokes this CLI with the argv shape
-#   asserted here, and whether the main conversation then issues the follow-up
-#   `next-step --advance --next` that this CLI deliberately does not issue.
-# - Whether settings.json permissions.allow admits the record-skip-verdict argv
-#   form without an approval dialog in a live session.
-# Closest-to-action mitigation: surfaced at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+
+# #1644 review gap C4 — record-skip-verdict is the NAMED EXCEPTION to the advance
+# class: its only caller is the skip-verifier subagent, which must not advance the
+# workflow itself (rationale: the CLI's own header). This file pins that intent: it
+# fails if the CLI learns --advance/--next, or stops recording verdicts. Beyond
+# feature-1644-sibling-cli-advance.sh S11 it proves the registration has a
+# source-level rationale and that the flags are refused at runtime with no state effect.
+
+# TL3 gap: the real skip-verifier's argv shape and the main conversation's follow-up
+# `next-step --advance --next`; settings.json admission of this argv form.
 
 set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-RSV="$AGENTS_DIR_N/bin/workflow/record-skip-verdict"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+RSV="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-verdict"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
 # CPR-SSOT: the one fixture-state reader shared by every #1644 test file.
-PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
-SIBLING_TEST="$AGENTS_DIR/tests/bin/feature-1644-sibling-cli-advance.sh"
+PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+SIBLING_TEST="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1644-sibling-cli-advance.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -71,7 +51,7 @@ export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1
@@ -181,14 +161,14 @@ echo "=== C4-5: the exception is registered, not merely unimplemented ==="
 #  (1) the SOURCE documents the rationale at the exception itself, and
 #  (2) the sibling class-completeness guard lists it under NAMED_EXCEPTIONS
 #      rather than under the advance members.
-HDR="$(sed -n '1,20p' "$AGENTS_DIR/bin/workflow/record-skip-verdict")"
+HDR="$(sed -n '1,20p' "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-verdict")"
 check_contains "C4-5a: the source declares itself a NAMED EXCEPTION" "NAMED EXCEPTION" "$HDR"
 check_contains "C4-5a: ...to the #1644 advance class specifically" "advance class" "$HDR"
 check_contains "C4-5a: ...and names the subagent rationale" "subagent" "$HDR"
 # The absence check is what makes this an exception rather than a member: no
 # --advance implementation may quietly appear in the file. Only the `//` comment
 # lines that document the exception are allowed to mention the token.
-ADV_NONCOMMENT="$(grep -n -- '--advance' "$AGENTS_DIR/bin/workflow/record-skip-verdict" \
+ADV_NONCOMMENT="$(grep -n -- '--advance' "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-verdict" \
   | grep -vE '^[0-9]+:(//|\s*\*)' || true)"
 check "C4-5b: no non-comment --advance token exists in the source" "" "$ADV_NONCOMMENT"
 

@@ -3,7 +3,7 @@
 # Tests: bin/worktree-notes-triage.js, bin/worktree-notes-triage/resolve.js
 # Tags: notes-promotion, worktree-notes, triage, security, path-traversal, TL2, scope:issue-specific
 # S — attacker-controlled resolve flags must not escape their anchors; notes paths must not be followed out of the worktree (injection cases: injection.sh).
-# Threat model: --session-id / --pr-branch reach paths under the plans dir, the session control dir and <main-root>/.worktree-backup/;
+# Threat model: --session-id / --pr-branch reach paths under the plans dir, the session control dir and <target-main-root>/.worktree-backup/;
 # an escape steers `resolve` at an arbitrary WORKTREE_NOTES.md that is then filed into public issues — an exfiltration primitive.
 
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
@@ -42,7 +42,7 @@ OUTSIDE_MD5="$(file_md5 "$OUTSIDE_NOTES")"
 # else a case passes because the target was absent rather than because the guard fired.
 #   --session-id '../outside'   → <plans>/../outside-notes-backup/                      (branch 3)
 #                               → <workflow>/../outside.control/final-report-env.json   (branch 2, #2434)
-#   --pr-branch '../../outside' → <main-root>/.worktree-backup/../../outside/ == OUTSIDE_DIR (branch 4)
+#   --pr-branch '../../outside' → <target-main-root>/.worktree-backup/../../outside/ == OUTSIDE_DIR (branch 4)
 # The legacy <plans>/../outside-final-report-env.json bait stays so a regression to the old path is caught too;
 # S1c reaches the in-anchor twin <workflow>/outside.control/final-report-env.json with an honest sid.
 # --------------------------------------------------------------------------
@@ -138,10 +138,10 @@ s1c_bait_is_reachable() {
 }
 
 # ===========================================================================
-# S2 — --pr-branch is interpolated into <main-root>/.worktree-backup/<branch>/
+# S2 — --pr-branch is interpolated into <target-main-root>/.worktree-backup/<branch>/
 # ===========================================================================
 s2_pr_branch_attacks() {
-    # `../../outside` from <main-root>/.worktree-backup/ resolves to $TMPD/outside,
+    # `../../outside` from <target-main-root>/.worktree-backup/ resolves to $TMPD/outside,
     # i.e. OUTSIDE_DIR itself — the escape lands on a real notes file, so a
     # missing guard would promote it rather than resolve nothing. The deeper
     # `../../../` variants are kept as shape coverage.
@@ -159,7 +159,7 @@ s2_pr_branch_attacks() {
         '..'
     do
         resolve --caller issue-close-finalize --issue 5 \
-                --pr-branch "$a" --main-root "$(nodepath "$MAIN_ROOT")"
+                --pr-branch "$a" --target-main-root "$(nodepath "$TARGET_MAIN_ROOT")"
         assert_contained "S2: --pr-branch '$a' cannot escape .worktree-backup/"
     done
 }
@@ -168,9 +168,9 @@ s2_pr_branch_attacks() {
 # would also pass against a `resolve` that never uses --pr-branch at all.
 s2c_backup_branch_anchor_works() {
     local missing="" notes
-    notes="$(write_notes "$MAIN_ROOT/.worktree-backup/feature/legit" "sess-s2c")"
+    notes="$(write_notes "$TARGET_MAIN_ROOT/.worktree-backup/feature/legit" "sess-s2c")"
     resolve --caller issue-close-finalize --issue 5 \
-            --pr-branch "feature/legit" --main-root "$(nodepath "$MAIN_ROOT")"
+            --pr-branch "feature/legit" --target-main-root "$(nodepath "$TARGET_MAIN_ROOT")"
     [ "$(jfield "$RESOLVE_OUT" resolvedVia)" = "backup-branch-dir" ] \
         || missing="$missing via=$(jfield "$RESOLVE_OUT" resolvedVia)"
     [ "$(norm_path "$(jfield "$RESOLVE_OUT" notesPath)")" = "$(norm_path "$notes")" ] \
@@ -184,7 +184,7 @@ s2c_backup_branch_anchor_works() {
 }
 
 # ===========================================================================
-# S3 — --worktree / --main-root pointed straight at the protected area
+# S3 — --worktree / --target-main-root pointed straight at the protected area
 # ===========================================================================
 # These flags are caller-supplied absolute paths, so "escape" is not the risk —
 # the risk is that a mis-aimed or attacker-supplied root silently promotes
@@ -213,11 +213,11 @@ s3_worktree_and_main_root() {
         fail "S3b: separator handling inconsistent" "$missing"
     fi
 
-    # (c) --main-root aimed at the protected parent: the backup-branch branch
+    # (c) --target-main-root aimed at the protected parent: the backup-branch branch
     # must not turn that into a read of the outside notes.
     resolve --caller issue-close-finalize --issue 5 \
-            --pr-branch "../outside" --main-root "$(nodepath "$TMPD")"
-    assert_contained "S3c: --main-root + traversing branch cannot reach the outside notes"
+            --pr-branch "../outside" --target-main-root "$(nodepath "$TMPD")"
+    assert_contained "S3c: --target-main-root + traversing branch cannot reach the outside notes"
 
     # (d) Control — the anchor genuinely works when used honestly. Without this
     # the S3 cases could all "pass" because resolve is a no-op stub.

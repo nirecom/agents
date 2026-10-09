@@ -9,23 +9,23 @@
 # RED for issue #720.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
     _TMPCONV() { cygpath -m "$1"; }
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
     _TMPCONV() { printf '%s' "$1"; }
 fi
 
-CLI_L2="$AGENTS_DIR/bin/supervisor-write-alert"
-CLI_L3="$AGENTS_DIR/bin/supervisor-write-audit"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-COLLECT_L3_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
-COLLECT_L3_FILE="$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js"
+CLI_L2="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-alert"
+CLI_L3="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+COLLECT_L3_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
+COLLECT_L3_FILE="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard/collect-audit-triggers.js"
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -44,7 +44,7 @@ require_source() {
 }
 
 l3_retry_threshold_present() {
-    grep -q "AUDIT_RETRY_THRESHOLD" "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" 2>/dev/null
+    grep -q "AUDIT_RETRY_THRESHOLD" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-schema.js" 2>/dev/null
 }
 
 require_l3_threshold() {

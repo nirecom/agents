@@ -9,16 +9,18 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Convert MSYS paths to mixed paths (C:/...) for Node.js on Windows
 if command -v cygpath >/dev/null 2>&1; then
-  AGENTS_DIR="$(cygpath -m "$AGENTS_DIR")"
+  _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
+else
+  _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 # Hooks live at <repo>/hooks/ since the dotfiles→agents split; the stale
 # claude-global/ prefix this file used to carry made every case here abort on a
 # MODULE_NOT_FOUND before a single assertion ran.
-LIB="$AGENTS_DIR/hooks/lib/is-private-repo.js"
-HOOK_PRIVATE="$AGENTS_DIR/hooks/scan-outbound.js"
+LIB="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/is-private-repo.js"
+HOOK_PRIVATE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/scan-outbound.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -33,7 +35,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 # descriptor spawns gh without a shell); setup_mock_gh_missing removes it too.
 MOCK_BIN="$TMPDIR_BASE/mock-bin"
 mkdir -p "$MOCK_BIN"
-. "$AGENTS_DIR/tests/lib/cli-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/cli-stub.sh"
 
 GH_CALL_LOG="$MOCK_BIN/gh-calls.log"
 if command -v cygpath >/dev/null 2>&1; then

@@ -12,16 +12,15 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LOOP_BIN="$AGENTS_DIR/bin/run-codex-review-loop"
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOOP_BIN="$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop"
 
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # ---------------------------------------------------------------------------
 # Precondition gate
@@ -106,41 +105,40 @@ exit 0
 RPCEOF
 chmod +x "$STUB_BIN/review-plan-codex"
 
-# Override AGENTS_CONFIG_DIR to point at a local dir that has the stub bin/ but
-# falls back to real rules/ from the real AGENTS_DIR.
+# Launch the loop from a local fake checkout that has the stub bin/ plus copies
+# of the real loop, its libs and rules/ from the real SCRIPT_CHECKOUT_ROOT.
 FAKE_AGENTS="$TMPDIR_BASE/fake-agents"
 mkdir -p "$FAKE_AGENTS/bin" "$FAKE_AGENTS/rules"
 cp "$STUB_BIN/build-codex-context" "$FAKE_AGENTS/bin/"
 cp "$STUB_BIN/review-plan-codex" "$FAKE_AGENTS/bin/"
 # Symlink rules so core-principles.md is reachable.
-if [[ -d "$AGENTS_DIR/rules" ]]; then
-    cp -r "$AGENTS_DIR/rules" "$FAKE_AGENTS/" 2>/dev/null || true
+if [[ -d "$SCRIPT_CHECKOUT_ROOT/rules" ]]; then
+    cp -r "$SCRIPT_CHECKOUT_ROOT/rules" "$FAKE_AGENTS/" 2>/dev/null || true
 fi
-# Also copy bin/run-with-timeout.sh and review-loop-verdict if present.
-for f in run-with-timeout.sh review-loop-verdict; do
-    [[ -f "$AGENTS_DIR/bin/$f" ]] && cp "$AGENTS_DIR/bin/$f" "$FAKE_AGENTS/bin/" 2>/dev/null || true
+# Also copy the loop itself, bin/run-with-timeout.sh and review-loop-verdict if present.
+for f in run-codex-review-loop run-with-timeout.sh review-loop-verdict; do
+    [[ -f "$SCRIPT_CHECKOUT_ROOT/bin/$f" ]] && cp "$SCRIPT_CHECKOUT_ROOT/bin/$f" "$FAKE_AGENTS/bin/" 2>/dev/null || true
 done
 mkdir -p "$FAKE_AGENTS/bin/lib/codex-review-loop"
-cp "$AGENTS_DIR/bin/lib/codex-review-loop/"*.sh "$FAKE_AGENTS/bin/lib/codex-review-loop/" 2>/dev/null || true
+cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-review-loop/"*.sh "$FAKE_AGENTS/bin/lib/codex-review-loop/" 2>/dev/null || true
 # The loop sources bin/lib/safe-state-path.sh (#2434 rename of safe-plans-path.sh);
 # name its absence instead of leaving cases 9-12 to fail without a reason.
-if [[ -f "$AGENTS_DIR/bin/lib/safe-state-path.sh" ]]; then
-    cp "$AGENTS_DIR/bin/lib/safe-state-path.sh" "$FAKE_AGENTS/bin/lib/safe-state-path.sh"
+if [[ -f "$SCRIPT_CHECKOUT_ROOT/bin/lib/safe-state-path.sh" ]]; then
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/safe-state-path.sh" "$FAKE_AGENTS/bin/lib/safe-state-path.sh"
 else
     fail "implementation missing: bin/lib/safe-state-path.sh (cases 9-12 cannot reach the marker logic until it exists)"
 fi
-cp "$AGENTS_DIR/bin/concern-ledger" "$FAKE_AGENTS/bin/concern-ledger" 2>/dev/null || true
+cp "$SCRIPT_CHECKOUT_ROOT/bin/concern-ledger" "$FAKE_AGENTS/bin/concern-ledger" 2>/dev/null || true
 chmod +x "$FAKE_AGENTS/bin/concern-ledger" 2>/dev/null || true
-cp "$AGENTS_DIR/bin/lib/concern-ledger.sh" "$FAKE_AGENTS/bin/lib/concern-ledger.sh" 2>/dev/null || true
+cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/concern-ledger.sh" "$FAKE_AGENTS/bin/lib/concern-ledger.sh" 2>/dev/null || true
 mkdir -p "$FAKE_AGENTS/bin/lib/concern-ledger"
-cp "$AGENTS_DIR"/bin/lib/concern-ledger/*.sh "$FAKE_AGENTS/bin/lib/concern-ledger/" 2>/dev/null || true
+cp "$SCRIPT_CHECKOUT_ROOT"/bin/lib/concern-ledger/*.sh "$FAKE_AGENTS/bin/lib/concern-ledger/" 2>/dev/null || true
 
 run_loop() {
     local format="$1" round="${2:-1}"
     STUB_CALLED_FILE_PATH="$STUB_CALLED_FILE" \
     export STUB_CALLED_FILE_PATH
-    AGENTS_CONFIG_DIR="$FAKE_AGENTS" \
-    "$RWT" 120 bash "$LOOP_BIN" \
+    "$RWT" 120 bash "$FAKE_AGENTS/bin/run-codex-review-loop" \
         --format "$format" \
         --session-id "$SID" \
         --plans-dir "$PLANS_DIR" \
@@ -222,8 +220,7 @@ STDERR_FILE_12="$TMPDIR_BASE/stderr-case12.txt"
 
 STUB_CALLED_FILE_PATH="$STUB_CALLED_FILE" \
 export STUB_CALLED_FILE_PATH
-AGENTS_CONFIG_DIR="$FAKE_AGENTS" \
-"$RWT" 120 bash "$LOOP_BIN" \
+"$RWT" 120 bash "$FAKE_AGENTS/bin/run-codex-review-loop" \
     --format "test-review" \
     --session-id "$SID" \
     --plans-dir "$PLANS_DIR" \

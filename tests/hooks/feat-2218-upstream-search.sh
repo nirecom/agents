@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -20,13 +20,13 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 TARGET="hooks/workflow-state/upstream-search.js"
 HEIR_CWD="/fixture/heir/repo"
 
 require_module() {
-    if [ -f "$AGENTS_DIR/$1" ]; then return 0; fi
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
     fail "MODULE NOT FOUND: $1 — expected per issue #2218 Step 7, not yet implemented (write_code has not run)"
     return 1
 }
@@ -51,7 +51,7 @@ build_fixture() {
         "$RWT" 60 node -e "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$TMP_NODE/wf';
 fs.mkdirSync(dir, { recursive: true });
 const w = (name, body, ageMinutes) => {
@@ -96,7 +96,7 @@ run_case() {
 # Shared helper: normalize whatever container the search returns (array, or an
 # object with a records/results array) to a plain array of records.
 PRELUDE="
-const search = require('$AGENTS_DIR_NODE/$TARGET');
+const search = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 function rows(r) {
   if (Array.isArray(r)) return r;
   if (r && Array.isArray(r.records)) return r.records;
@@ -281,9 +281,9 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # need $PRELUDE, run_case, require_module and $HEIR_CWD, so they are sourced here
 # rather than at the top of the file.
 # shellcheck source=/dev/null
-. "$AGENTS_DIR/tests/hooks/feat-2218-upstream-search/adoptability.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2218-upstream-search/adoptability.sh"
 # shellcheck source=/dev/null
-. "$AGENTS_DIR/tests/hooks/feat-2218-upstream-search/list-vs-from.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2218-upstream-search/list-vs-from.sh"
 
 build_fixture
 run_U1

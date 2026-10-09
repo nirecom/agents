@@ -81,7 +81,7 @@ run_cli_with_path() {
     (
         cd "$cwd" || exit 70
         export PATH="$newpath"
-        export AGENTS_CONFIG_DIR="$cfg"
+        export AGENTS_MAIN_ROOT="$cfg"
         if [ -n "$TIMEOUT_BIN" ]; then "$TIMEOUT_BIN" 20 node "$CLI_NODE" "$@"
         else node "$CLI_NODE" "$@"; fi
     ) >"$outf" 2>"$errf" || CLI_RC=$?

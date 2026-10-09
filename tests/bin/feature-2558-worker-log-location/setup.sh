@@ -4,12 +4,12 @@
 # Shared fixture: one main repo plus one linked worktree that every C1 row reuses,
 # the dual-pinned PLANS/WF dirs, and the dispatch / listing helpers.
 
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
-SPAWN_JS="$AGENTS_DIR/bin/worker-dispatch/spawn.js"
-WORKER_LOG_JS="$AGENTS_DIR/bin/worker-dispatch/worker-log.js"
-FSGUARD_JS="$AGENTS_DIR/bin/worker-dispatch/fsguard.js"
-REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+SPAWN_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js"
+WORKER_LOG_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/worker-log.js"
+FSGUARD_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/fsguard.js"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
 
 assert_eq() {
     local name="$1" want="$2" got="$3"

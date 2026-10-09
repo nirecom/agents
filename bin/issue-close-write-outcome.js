@@ -12,7 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const AGENTS_CONFIG_DIR = process.env.AGENTS_CONFIG_DIR;
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
 const OUTCOME_NAME = "issue-close-outcome.json";
 
 function outcomePathFor(sessionId) {
@@ -133,7 +133,7 @@ if (args[0] === "--fallback") {
     // #1644 stage 4: route through the write-once session cache. sessionId is
     // derived from the <sid>-intent.md filename convention (no --session-id
     // is passed to --fallback mode).
-    const { getClosesIssues } = require(path.join(AGENTS_CONFIG_DIR, "hooks/workflow-state/session-facts.js"));
+    const { getClosesIssues } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks/workflow-state/session-facts.js"));
     const fallbackSessionId = path.basename(intentMd, "-intent.md");
     issues = getClosesIssues(fallbackSessionId, { plansDir: path.dirname(intentMd) });
   } catch (e) {
@@ -194,7 +194,7 @@ if (args[0] === "--session-id") {
   // this, only the primary N gets written and siblings go missing.
   try {
     // #1644 stage 4: route through the write-once session cache.
-    const { getClosesIssues } = require(path.join(AGENTS_CONFIG_DIR, "hooks/workflow-state/session-facts.js"));
+    const { getClosesIssues } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks/workflow-state/session-facts.js"));
     const siblings = getClosesIssues(sessionId, { plansDir: plansDirOrEmpty() }) || [];
     for (const entry of siblings) {
       const siblingNumber = typeof entry === "number" ? entry : entry.number;

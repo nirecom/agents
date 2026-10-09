@@ -1,6 +1,6 @@
 'use strict';
 
-// General/class-level checker for #2262's root defect (bare "$AGENTS_CONFIG_DIR/<path>" in
+// General/class-level checker for #2262's root defect (bare "$AGENTS_MAIN_ROOT/<path>" in
 // execution position, or the wrong interpreter). Scope is driven from
 // install/settings-allow-commands.txt (CPR-SSOT); rationale: docs/architecture/claude-code/settings.md.
 // Scans code spans only (fenced blocks + inline `...`) -- a prose mention is not a command line.
@@ -143,7 +143,7 @@ const main = () => {
 
     // Longest-entry-first so "bin/foo/bar" is not shadowed by a coincidental "bin/foo" prefix match.
     const entriesByLength = [...entries].sort((a, b) => b.length - a.length);
-    const matchEntry = (bare) => entriesByLength.find((e) => bare === `$AGENTS_CONFIG_DIR/${e}`) || null;
+    const matchEntry = (bare) => entriesByLength.find((e) => bare === `$AGENTS_MAIN_ROOT/${e}`) || null;
 
     const files = listPromptFiles();
     const occurrences = [];

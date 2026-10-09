@@ -8,20 +8,21 @@
 # #2476: WAIT_CC_RESULT is unset here (parent memo: clear/timeout short-circuits the helper).
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
-SUITE_DIR="$AGENTS_DIR/tests/install/feature-2284-install-cc-claude-codex-cli"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/home-userprofile-pin.sh"
+SUITE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/install/feature-2284-install-cc-claude-codex-cli"
 
 # #2476 result memo: a leftover WAIT_CC_RESULT would short-circuit the helper cases, and the
 # PS installer path inherits the parent env.
 unset WAIT_CC_RESULT
 
-WAIT_SH="$AGENTS_DIR/install/lib/wait-cc-exit.sh"
-WAIT_PS="$AGENTS_DIR/install/lib/wait-cc-exit.ps1"
-CC_SH="$AGENTS_DIR/install/linux/claude-code.sh"
-CC_PS="$AGENTS_DIR/install/win/claude-code.ps1"
-CODEX_SH="$AGENTS_DIR/install/linux/codex.sh"
-CODEX_PS="$AGENTS_DIR/install/win/codex.ps1"
+WAIT_SH="$SCRIPT_CHECKOUT_ROOT/install/lib/wait-cc-exit.sh"
+WAIT_PS="$SCRIPT_CHECKOUT_ROOT/install/lib/wait-cc-exit.ps1"
+CC_SH="$SCRIPT_CHECKOUT_ROOT/install/linux/claude-code.sh"
+CC_PS="$SCRIPT_CHECKOUT_ROOT/install/win/claude-code.ps1"
+CODEX_SH="$SCRIPT_CHECKOUT_ROOT/install/linux/codex.sh"
+CODEX_PS="$SCRIPT_CHECKOUT_ROOT/install/win/codex.ps1"
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT

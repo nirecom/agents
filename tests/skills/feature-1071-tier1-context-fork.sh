@@ -16,10 +16,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SB_MD="${AGENTS_DIR}/skills/sweep-branches/SKILL.md"
-SW_MD="${AGENTS_DIR}/skills/sweep-worktrees/SKILL.md"
-SP_MD="${AGENTS_DIR}/skills/sweep-plans/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SB_MD="${SCRIPT_CHECKOUT_ROOT}/skills/sweep-branches/SKILL.md"
+SW_MD="${SCRIPT_CHECKOUT_ROOT}/skills/sweep-worktrees/SKILL.md"
+SP_MD="${SCRIPT_CHECKOUT_ROOT}/skills/sweep-plans/SKILL.md"
 
 PASS=0
 FAIL=0

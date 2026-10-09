@@ -8,7 +8,7 @@
 # Split into one case per place: dropping one is the typical asymmetric bug.
 site1_sentinel_patterns() {
   local out
-  out="$(SP_MOD="$AGENTS_DIR_N/hooks/lib/sentinel-patterns" \
+  out="$(SP_MOD="$SCRIPT_CHECKOUT_ROOT_N/hooks/lib/sentinel-patterns" \
     run_with_timeout node -e '
 const sp = require(process.env.SP_MOD);
 const ok = (v) => (v ? "yes" : "no");
@@ -52,7 +52,7 @@ process.stdout.write(
 # the path was registered under the wrong approval semantics.
 site3_settings_permissions() {
   local out
-  out="$(SETTINGS="$AGENTS_DIR_N/settings.json" run_with_timeout node -e '
+  out="$(SETTINGS="$SCRIPT_CHECKOUT_ROOT_N/settings.json" run_with_timeout node -e '
 const s = require(process.env.SETTINGS);
 const want = "Bash(echo \"<<WORKFLOW_RUN_TESTS_NOT_NEEDED: *>>\")";
 const has = (k) => (((s.permissions || {})[k] || []).indexOf(want) !== -1 ? "yes" : "no");
@@ -67,13 +67,13 @@ process.stdout.write("allow=" + has("allow") + "\nask=" + has("ask") + "\ndeny="
 # sentinel exists but a blocked session is never told it may emit it.
 site4_skill_map() {
   local line
-  line="$(grep -n "^    run_tests: " "$AGENTS_DIR/hooks/workflow-gate.js" || true)"
+  line="$(grep -n "^    run_tests: " "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js" || true)"
   check_contains "R4 site4 SKILL_MAP.run_tests names the sentinel literal" "$SENTINEL_LITERAL" "$line"
 }
 
 # Site 8 — docs/architecture/claude-code/workflow.md, all three places.
 site8_docs() {
-  local doc="$AGENTS_DIR/docs/architecture/claude-code/workflow.md"
+  local doc="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/workflow.md"
   local skippable_line notskippable_lines run_tests_row
   skippable_line="$(grep -n '^- `skipped`: allowed for the `SKIPPABLE_STEPS` set' "$doc" || true)"
   notskippable_lines="$(grep -n 'cannot be `skipped`' "$doc" || true)"

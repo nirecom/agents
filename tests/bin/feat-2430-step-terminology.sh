@@ -8,8 +8,8 @@
 # TDD (write_code has not run): every case is expected to FAIL until the docs are updated.
 
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 expect() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$3 got=${2:0:300}"; fi; }
 
@@ -17,7 +17,7 @@ expect() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$3 got=${2:0
 section() { awk -v h="## $2" '$0 == h { on = 1; next } /^## / { on = 0 } on' "$1"; }
 
 case_begin "glossary-owns-the-three-terms" "docs/glossary.md"
-WF="$(section "$AGENTS_DIR/docs/glossary.md" Workflow)"
+WF="$(section "$SCRIPT_CHECKOUT_ROOT/docs/glossary.md" Workflow)"
 for term in 'workflow step' 'in-skill step' 'turn'; do
     expect "S1: glossary ## Workflow has a '### $term' entry" "$(printf '%s\n' "$WF" | grep -cx "### $term")" "1"
 done
@@ -26,7 +26,7 @@ case_end
 # A count of the whole step set (16 or 17, the two values that disagreed) in
 # prose that should point at VALID_STEPS instead of restating its length.
 COUNT_RE='\b1[67][- ](workflow[- ])?(steps?|units)\b'
-no_count() { expect "S2: $1 states no workflow-step count" "$(grep -nEi "$COUNT_RE" "$AGENTS_DIR/$1" 2>/dev/null)" ""; }
+no_count() { expect "S2: $1 states no workflow-step count" "$(grep -nEi "$COUNT_RE" "$SCRIPT_CHECKOUT_ROOT/$1" 2>/dev/null)" ""; }
 
 case_begin "glossary-states-no-step-count" "docs/glossary.md"
 no_count docs/glossary.md
@@ -53,7 +53,7 @@ no_count CLAUDE.md
 case_end
 
 case_begin "flush-rule-owns-what-to-record" "rules/handoff-emergency-flush.md"
-RULE="$AGENTS_DIR/rules/handoff-emergency-flush.md"
+RULE="$SCRIPT_CHECKOUT_ROOT/rules/handoff-emergency-flush.md"
 expect "S3: the flush rule has a '## What to record' section" "$(grep -cx '## What to record' "$RULE")" "1"
 WHAT="$(section "$RULE" 'What to record')"
 for cls in C D F; do
@@ -65,26 +65,26 @@ expect "S3: the flush rule stays under 100 lines" "$([ "$LINES" -lt 100 ] && ech
 case_end
 
 case_begin "class-table-files-reset-from-under-e" "docs/architecture/claude-code/handoff-artifact.md"
-DOC="$AGENTS_DIR/docs/architecture/claude-code/handoff-artifact.md"
+DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/handoff-artifact.md"
 expect "S4: the class E row names RESET_FROM" "$(grep -E '^\| *E *\|' "$DOC" | grep -c 'RESET_FROM')" "1"
 expect "S4: no other class row names RESET_FROM" "$(grep -E '^\| *[ABCDFG] *\|' "$DOC" | grep -c 'RESET_FROM')" "0"
 case_end
 
 # #2475: the supervisor codex engine became a second (read-only) handoff reader.
 case_begin "flush-rule-names-two-handoff-readers" "rules/handoff-emergency-flush.md"
-RULE="$AGENTS_DIR/rules/handoff-emergency-flush.md"
+RULE="$SCRIPT_CHECKOUT_ROOT/rules/handoff-emergency-flush.md"
 expect "S5: the flush rule no longer says nothing else consumes the artifact" "$(grep -c 'nothing else consumes it' "$RULE")" "0"
 expect "S5: the flush rule names the supervisor as a reader" "$(grep -qi 'supervisor' "$RULE" && echo yes || echo no)" "yes"
 case_end
 
 case_begin "handoff-doc-names-two-readers" "docs/architecture/claude-code/handoff-artifact.md"
-DOC="$AGENTS_DIR/docs/architecture/claude-code/handoff-artifact.md"
+DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/handoff-artifact.md"
 expect "S5: the handoff doc no longer calls /resume-session the only reader" "$(grep -c "only reader is \`/resume-session\`" "$DOC")" "0"
 expect "S5: the handoff doc names the supervisor codex engine" "$(grep -qiE 'supervisor.{0,40}codex|codex.{0,40}supervisor' "$DOC" && echo yes || echo no)" "yes"
 case_end
 
 case_begin "glossary-handoff-names-two-readers" "docs/glossary.md"
-GL_LINE="$(grep -F -- '-handoff.md`' "$AGENTS_DIR/docs/glossary.md" | grep -F 'resume-session')"
+GL_LINE="$(grep -F -- '-handoff.md`' "$SCRIPT_CHECKOUT_ROOT/docs/glossary.md" | grep -F 'resume-session')"
 expect "S5: glossary handoff definition names the supervisor as a reader" "$(printf '%s\n' "$GL_LINE" | grep -qi 'supervisor' && echo yes || echo no)" "yes"
 case_end
 

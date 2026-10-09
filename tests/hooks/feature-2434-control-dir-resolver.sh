@@ -13,12 +13,12 @@ set -uo pipefail
 # The CONTROL_DIR session-facts key is pinned by
 # tests/bin/feature-2102-session-facts/contract.sh (C11), not duplicated here.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-MOD="$AGENTS_DIR/hooks/workflow-state/state-io/control-dir.js"
-CLI="$AGENTS_DIR/bin/workflow-control-dir"
+MOD="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/control-dir.js"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir"
 
 TMP="$(make_tmp)"
 trap 'cd / 2>/dev/null; rm -rf "$TMP"' EXIT
@@ -177,11 +177,11 @@ for F in hooks/workflow-state/evidence-resolver.js \
          hooks/lib/worktree-cleanup-marker.js \
          hooks/lib/supervisor-state-writer/shared.js; do
     check "$F no longer imports getWorkflowPlansDir" "0" \
-        "$(grep -c 'getWorkflowPlansDir' "$AGENTS_DIR/$F" 2>/dev/null | tr -d ' ')"
+        "$(grep -c 'getWorkflowPlansDir' "$SCRIPT_CHECKOUT_ROOT/$F" 2>/dev/null | tr -d ' ')"
 done
 # issue-close-write-outcome.js read the env var directly rather than importing.
 check "bin/issue-close-write-outcome.js no longer reads WORKFLOW_PLANS_DIR" "0" \
-    "$(grep -c 'WORKFLOW_PLANS_DIR' "$AGENTS_DIR/bin/issue-close-write-outcome.js" 2>/dev/null | tr -d ' ')"
+    "$(grep -c 'WORKFLOW_PLANS_DIR' "$SCRIPT_CHECKOUT_ROOT/bin/issue-close-write-outcome.js" 2>/dev/null | tr -d ' ')"
 case_end
 
 echo ""

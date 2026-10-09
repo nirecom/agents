@@ -7,26 +7,17 @@
 
 set -u
 
-# ---- AGENTS_CONFIG_DIR resolution + early SKIP guard --------------------
-if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
-    # Fall back to the repo containing this test file (worktree root).
-    AGENTS_CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-fi
-
-if [ ! -d "$AGENTS_CONFIG_DIR" ]; then
-    echo "SKIP: AGENTS_CONFIG_DIR not set / not a directory"
-    exit 0
-fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_CONFIG_DIR_NODE="$(cygpath -m "$AGENTS_CONFIG_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    AGENTS_CONFIG_DIR_NODE="$AGENTS_CONFIG_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-SKILL_MD="$AGENTS_CONFIG_DIR/skills/worktree-end/SKILL.md"
-SCRIPTS_DIR="$AGENTS_CONFIG_DIR/skills/worktree-end/scripts"
-SCRIPTS_DIR_NODE="$AGENTS_CONFIG_DIR_NODE/skills/worktree-end/scripts"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/SKILL.md"
+SCRIPTS_DIR="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts"
+SCRIPTS_DIR_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/skills/worktree-end/scripts"
 
 CAPTURE_ENV="$SCRIPTS_DIR/capture-env.sh"
 WRITE_ENV_JSON="$SCRIPTS_DIR_NODE/write-env-json.js"

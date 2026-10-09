@@ -1,18 +1,48 @@
 #!/bin/bash
 # Tests: bin/github-issues/sync-labels.sh, tests/fixtures/gh-mock/gh
-# Tags: github, labels, sync, three-way-status, gitlab, forge, scope:common
+# Tags: github, labels, sync, three-way-status, gitlab, forge, scope:common, root-names, security, idempotency
 # Tests for issue #724 — three-way create/update/already-exists status in sync-labels.sh.
 #
-# RED: these S-series tests fail against the current sync-labels.sh (which
-# always passes --force). They will PASS once the three-way diff logic lands.
+# S series: the three-way status. E series and the copy/forge lookup live in the sibling directory.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SYNC_SCRIPT="$AGENTS_DIR/bin/github-issues/sync-labels.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SYNC_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 # Capture real git before PATH gets $MOCK_DIR prepended by setup_sync_tmp.
 REAL_GIT="$(command -v git)"
+[ -n "$REAL_GIT" ] || { echo "SKIP: git not available"; exit 77; }
+
+# One temp root owns every fixture: an empty path would send `git -C ""` at the real worktree.
+S_ROOT="$(mktemp -d 2>/dev/null || mktemp -d -t sync-labels)"
+[ -n "$S_ROOT" ] && [ -d "$S_ROOT" ] || { echo "cannot create a temp root" >&2; exit 1; }
+readonly S_ROOT
+trap 'cd / 2>/dev/null || true; rm -rf "$S_ROOT"' EXIT
+# Any bare `mktemp` further down (the script under test included) stays under the root too.
+mkdir -p "$S_ROOT/tmp" || exit 1
+export TMPDIR="$S_ROOT/tmp"
+# Nothing launched below may reach the live workflow state, a live session, or the real home.
+mkdir -p "$S_ROOT/workflow-state" "$S_ROOT/plans" "$S_ROOT/home" || exit 1
+export WORKFLOW_STATE_DIR="$S_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$S_ROOT/plans"
+export HOME="$S_ROOT/home" USERPROFILE="$S_ROOT/home"
+unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+
+# Bind AGENTS_MAIN_ROOT and every retired root name to the decoy, as the launcher does:
+# a case that follows any of them reaches a stub, never a real root.
+if [ -z "${RUN_ALL_CACHE_DIR:-}" ]; then
+    mkdir -p "$S_ROOT/run-all-cache" || exit 1
+    export RUN_ALL_CACHE_DIR="$S_ROOT/run-all-cache"
+fi
+# A decoy of this run alone, so the hit counts below are this file's and no other test's.
+export ROOT_DECOY_DIR="$S_ROOT/decoy"
+# shellcheck source=tests/lib/root-decoy.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy.sh"
+root_decoy_ensure || exit 1
+# decoy_hits — "main=<n> old=<n>": the stubs reached through AGENTS_MAIN_ROOT / a retired name.
+decoy_hits() {
+    printf 'main=%s old=%s' "$(root_decoy_hit_count "$ROOT_DECOY_DIR/main")" "$(root_decoy_hit_count "$ROOT_DECOY_DIR/old")"
+}
 
 PASS=0
 FAIL=0
@@ -41,14 +71,15 @@ done
 # undetected one (no github fallback). So each S case must run inside a real repo
 # whose origin is github. S_MOCK carries gh (+ doc-append) but deliberately NOT
 # git — real git must answer the origin query and cannot be shadowed by the mock.
-S_MOCK="$(mktemp -d)/s-mock"
-mkdir -p "$S_MOCK"
-for f in gh doc-append; do
-    if [ -f "$MOCK_DIR/$f" ]; then
-        cp "$MOCK_DIR/$f" "$S_MOCK/$f" 2>/dev/null || true
-        chmod +x "$S_MOCK/$f" 2>/dev/null || true
-    fi
-done
+S_MOCK="$S_ROOT/s-mock"
+mkdir -p "$S_MOCK" || exit 1
+# Without the gh mock a case would reach the real CLI: stop instead.
+cp "$MOCK_DIR/gh" "$S_MOCK/gh" || { echo "cannot copy the gh mock" >&2; exit 1; }
+chmod +x "$S_MOCK/gh" || exit 1
+if [ -f "$MOCK_DIR/doc-append" ]; then
+    cp "$MOCK_DIR/doc-append" "$S_MOCK/doc-append" || exit 1
+    chmod +x "$S_MOCK/doc-append" || exit 1
+fi
 
 # ----------------------------------------------------------------------------
 # Fixture helpers
@@ -58,7 +89,8 @@ done
 # Creates a temp dir, writes labels.yml with the given content, sets up
 # PATH/LOG/LIST env vars. Caller may override GH_MOCK_LABEL_LIST afterward.
 setup_sync_tmp() {
-    TMP="$(mktemp -d)"
+    TMP="$(mktemp -d "$S_ROOT/case.XXXXXX")"
+    [ -n "$TMP" ] && [ -d "$TMP" ] || { echo "cannot create a case directory" >&2; exit 1; }
     LABELS_FILE="$TMP/labels.yml"
     printf '%s' "$1" > "$LABELS_FILE"
 
@@ -76,19 +108,19 @@ setup_sync_tmp() {
 
     # S_MOCK has gh but no git → real git answers the origin query (see S_MOCK note).
     export PATH="$S_MOCK:$PATH"
+    if [ "$(command -v gh)" != "$S_MOCK/gh" ]; then
+        echo "the gh mock is not first on PATH ($(command -v gh))" >&2
+        exit 1
+    fi
     export GH_MOCK_LABEL_LOG="$TMP/labels.log"
     : > "$GH_MOCK_LABEL_LOG"
     unset GH_MOCK_LABEL_LIST
     unset GH_MOCK_LABEL_LIST_FAIL
-    # Force sync-labels.sh to self-resolve AGENTS_CONFIG_DIR to this worktree (where
-    # the #2308 detect-forge-type lives). An ambient value points at the main repo,
-    # which lacks the new CLI, so detect returns unknown and the forge gate rejects.
-    unset AGENTS_CONFIG_DIR
 }
 
 teardown_sync_tmp() {
     # Leave the repo CWD before removing it (some platforms refuse to rm the CWD).
-    cd "${S_PREV_CWD:-$AGENTS_DIR}" 2>/dev/null || true
+    cd "${S_PREV_CWD:-$SCRIPT_CHECKOUT_ROOT}" 2>/dev/null || true
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP" 2>/dev/null || true
     fi
@@ -424,8 +456,19 @@ else
 fi
 teardown_sync_tmp
 
+S_HITS="$(decoy_hits)"
+if [ "$S_HITS" = "main=0 old=0" ]; then
+    pass "S-series: no case reached a decoy stub"
+else
+    fail "S-series: a case followed AGENTS_MAIN_ROOT or a retired root name ($S_HITS)"
+fi
+
 # shellcheck source=fix-issue-724-sync-labels-status/e-series.sh
 . "$(dirname "${BASH_SOURCE[0]}")/fix-issue-724-sync-labels-status/e-series.sh"
+
+# shellcheck source=fix-issue-724-sync-labels-status/copy-forge-lookup.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fix-issue-724-sync-labels-status/copy-forge-lookup.sh"
+run_copy_forge_lookup_cases
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

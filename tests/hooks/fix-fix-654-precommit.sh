@@ -13,9 +13,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PRE_COMMIT="${AGENTS_DIR}/hooks/pre-commit"
-SHARED_JS="${AGENTS_DIR}/hooks/enforce-worktree/shared-cmd-utils.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PRE_COMMIT="${SCRIPT_CHECKOUT_ROOT}/hooks/pre-commit"
+SHARED_JS="${SCRIPT_CHECKOUT_ROOT}/hooks/enforce-worktree/shared-cmd-utils.js"
 
 if [ ! -f "$PRE_COMMIT" ]; then
     echo "SKIP: hooks/pre-commit not present"
@@ -72,11 +72,11 @@ setup_main_checkout() {
     git -C "$repo" init -q -b main
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
-    git -C "$repo" config core.hooksPath "${AGENTS_DIR}/hooks"
+    git -C "$repo" config core.hooksPath "${SCRIPT_CHECKOUT_ROOT}/hooks"
     echo "init" > "$repo/README.md"
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+    ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath=/dev/null add README.md >/dev/null 2>&1
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+    ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath=/dev/null commit -q -m "initial" >/dev/null 2>&1
     echo "$repo"
 }
@@ -85,7 +85,7 @@ RUN_OUT=""
 run_pre_commit() {
     local cwd="$1"; shift
     local rc=0
-    RUN_OUT="$(cd "$cwd" && AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    RUN_OUT="$(cd "$cwd" && \
         run_with_timeout 30 env "$@" bash "$PRE_COMMIT" 2>&1)" || rc=$?
     return $rc
 }

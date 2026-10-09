@@ -18,21 +18,21 @@ set -uo pipefail
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    AGENTS_DIR_NODE="$AGENTS_DIR"
+    SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-PLAN_GATE="$AGENTS_DIR/hooks/gate-plan-lang.js"
-NOTES_GATE="$AGENTS_DIR/hooks/gate-worktree-notes-lang.js"
-PRETOOL_LIB="$AGENTS_DIR/hooks/lib/pretool-lang-gate.js"
-PLAN_ARTIFACT_LIB="$AGENTS_DIR/hooks/lib/plan-artifact-lang.js"
-SETTINGS_JSON="$AGENTS_DIR/settings.json"
-PRETOOL_LIB_NODE="$AGENTS_DIR_NODE/hooks/lib/pretool-lang-gate.js"
-WRITE_TOOLS_LIB_NODE="$AGENTS_DIR_NODE/hooks/lib/write-tools.js"
-PLAN_ARTIFACT_LIB_NODE="$AGENTS_DIR_NODE/hooks/lib/plan-artifact-lang.js"
+PLAN_GATE="$SCRIPT_CHECKOUT_ROOT/hooks/gate-plan-lang.js"
+NOTES_GATE="$SCRIPT_CHECKOUT_ROOT/hooks/gate-worktree-notes-lang.js"
+PRETOOL_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/pretool-lang-gate.js"
+PLAN_ARTIFACT_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/plan-artifact-lang.js"
+SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT/settings.json"
+PRETOOL_LIB_NODE="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/pretool-lang-gate.js"
+WRITE_TOOLS_LIB_NODE="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/write-tools.js"
+PLAN_ARTIFACT_LIB_NODE="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/plan-artifact-lang.js"
 
 PASS=0
 FAIL=0

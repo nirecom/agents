@@ -16,6 +16,8 @@ const { TERMINAL_ALERT_PHASES } = require('./lib/supervisor-state-schema');
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
+
 if (require.main === module) {
   const r = readHookInput();
   if (r.kind !== "ok") {
@@ -105,10 +107,7 @@ if (require.main === module) {
   const findings = Array.isArray(alert.findings) ? alert.findings : [];
   const alertPhase = alert.alert_phase === undefined ? null : alert.alert_phase;
 
-  const agentsDir = process.env.AGENTS_CONFIG_DIR || "";
-  const supervisorPath = agentsDir
-    ? path.join(agentsDir, "agents", "supervisor.md")
-    : "agents/supervisor.md";
+  const supervisorPath = path.join(SCRIPT_CHECKOUT_ROOT, "agents", "supervisor.md");
 
   const askUserQuestionTurn = detectAskUserQuestionTurn(input.transcript_path || "");
   const hangDetected = detectSentinelHang(input.transcript_path || "");
@@ -258,9 +257,7 @@ if (require.main === module) {
           sessionId,
           effectiveSid: effectiveSupervisorStateSessionId,
           stateFilePath,
-          auditAgentPath: agentsDir
-            ? path.join(agentsDir, "agents", "supervisor-audit.md")
-            : "agents/supervisor-audit.md",
+          auditAgentPath: path.join(SCRIPT_CHECKOUT_ROOT, "agents", "supervisor-audit.md"),
         },
       });
     } catch (_) { reason = null; }

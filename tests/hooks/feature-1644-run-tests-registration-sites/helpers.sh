@@ -6,16 +6,16 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-export AGENTS_DIR AGENTS_DIR_N
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$_HELPERS_SCRIPT_CHECKOUT_ROOT")"
+export SCRIPT_CHECKOUT_ROOT_N
 
-WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
-WORKFLOW_GATE_N="$AGENTS_DIR_N/hooks/workflow-gate.js"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"
+WORKFLOW_MARK_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-mark.js"
+WORKFLOW_GATE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-gate.js"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"
 # Reused read-only probe (CPR-SSOT: one fixture-state reader for all #1644 tests).
-PROBE_N="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+PROBE_N="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 export WORKFLOW_MARK_N WORKFLOW_GATE_N WFSTATE_MODULE PROBE_N
 
 TMPDIR_BASE="$(mktemp -d)"
@@ -31,13 +31,13 @@ export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
-# Empty config dir: no CONFIRM_* is inherited from the repo's .env, and
+# Empty agents main root: no CONFIRM_* is inherited from the repo's .env, and
 # isAgentsSessionRepo() cannot resolve it as a git tree so the gate stays
 # fail-closed (enforcement ON) for the fixture repos.
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"
 mkdir -p "$CONFIG_EMPTY"
 : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 mk_repo() {
   local dir="$1"

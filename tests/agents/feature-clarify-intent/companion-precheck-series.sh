@@ -106,17 +106,17 @@ assert_contains "$JUDGE_DECOMP" '\(companion-driven\)' \
 # PC-SH-*: behavioral tests for precheck-companions.sh.
 # Pre-implementation RED: each case FAILs while the script is missing.
 #
-# Mock strategy: a fake AGENTS_CONFIG_DIR tree carries a companion-search.sh
+# Mock strategy: a fake AGENTS_MAIN_ROOT tree carries a companion-search.sh
 # mock at skills/clarify-intent/scripts/, the precheck script itself is COPIED
-# into that tree and invoked from there (so both $AGENTS_CONFIG_DIR-based and
+# into that tree and invoked from there (so both $AGENTS_MAIN_ROOT-based and
 # dirname-$0 sibling resolution hit the mock), and the mock dir is also
 # prepended to PATH. A permissive gh mock absorbs any candidate-metadata calls.
 # The whole file already runs under a 120s alarm (re-exec guard in _lib.sh).
 # ---------------------------------------------------------------------------
 if [ -f "$PRECHECK" ]; then
     PC_TMP="$(mktemp -d)"
-    PC_ACD="$PC_TMP/acd"
-    PC_SCRIPTS="$PC_ACD/skills/clarify-intent/scripts"
+    PC_AGENTS_ROOT="$PC_TMP/agents-root"
+    PC_SCRIPTS="$PC_AGENTS_ROOT/skills/clarify-intent/scripts"
     mkdir -p "$PC_SCRIPTS" "$PC_TMP/mock-bin"
     cp "$PRECHECK" "$PC_SCRIPTS/precheck-companions.sh"
     PC_RUN="$PC_SCRIPTS/precheck-companions.sh"
@@ -137,9 +137,9 @@ if [ -f "$PRECHECK" ]; then
     chmod +x "$PC_TMP/mock-bin/gh"
 
     ORIG_PATH="$PATH"
-    ORIG_ACD="${AGENTS_CONFIG_DIR:-}"
+    ORIG_AGENTS_ROOT="${AGENTS_MAIN_ROOT:-}"
     export PATH="$PC_TMP/mock-bin:$PATH"
-    export AGENTS_CONFIG_DIR="$PC_ACD"
+    export AGENTS_MAIN_ROOT="$PC_AGENTS_ROOT"
 
     # PC-SH-1: candidates exist → exit 0, first stdout line has 7 TSV columns
     write_companion_search_mock one
@@ -188,7 +188,7 @@ if [ -f "$PRECHECK" ]; then
     fi
 
     export PATH="$ORIG_PATH"
-    if [ -n "$ORIG_ACD" ]; then export AGENTS_CONFIG_DIR="$ORIG_ACD"; else unset AGENTS_CONFIG_DIR; fi
+    if [ -n "$ORIG_AGENTS_ROOT" ]; then export AGENTS_MAIN_ROOT="$ORIG_AGENTS_ROOT"; else unset AGENTS_MAIN_ROOT; fi
     rm -rf "$PC_TMP"
 else
     fail "PC-SH-1: precheck-companions.sh not yet present (expected RED before /write-code)"

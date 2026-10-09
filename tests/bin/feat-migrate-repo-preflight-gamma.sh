@@ -5,9 +5,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ORCH_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/orchestrate.sh"
-FIXTURE_DIR="$AGENTS_DIR/tests/fixtures/migration"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ORCH_REL="bin/github-issues/migration/orchestrate.sh"
+ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/$ORCH_REL"
+FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration"
+# shellcheck source=tests/lib/script-checkout-fixture.sh
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -63,14 +66,13 @@ EOF
 
     export MOCK_LOG MOCK_COUNTER
     export PATH="$MOCK_DIR:$PATH"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 }
 
 teardown_fixture() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset MOCK_LOG MOCK_COUNTER AGENTS_CONFIG_DIR MOCK_HAS_ISSUES
+    unset MOCK_LOG MOCK_COUNTER MOCK_HAS_ISSUES
 }
 
 # ---------------------------------------------------------------------------
@@ -79,7 +81,7 @@ teardown_fixture() {
 seed_state_history() {
     local repo_path="$1" count="$2"
     # shellcheck disable=SC1090
-    source "$AGENTS_DIR/bin/github-issues/migration/state.sh"
+    source "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/state.sh"
     state_init "$repo_path" >/dev/null 2>&1
     state_load "$repo_path" >/dev/null 2>&1
     local sf="$repo_path/.migration-state.json"
@@ -390,9 +392,10 @@ teardown_fixture
 
 # ---------------------------------------------------------------------------
 # PF13: self-repo dry-run (#1234 identity guard).
-#       When REPO == AGENTS_CONFIG_DIR, dry-run must detect the self-repo
-#       condition (emit SELF_REPO_DETECTED) yet still complete (rc==0) and
-#       emit the dry-run highest-issue sentinel.
+#       When the target is the checkout the orchestrator runs from (it is
+#       launched from a copy placed inside the target), dry-run must detect the
+#       self-repo condition (emit SELF_REPO_DETECTED) yet still complete (rc==0)
+#       and emit the dry-run highest-issue sentinel.
 #       FAIL-BEFORE-FIX: guard not implemented → no SELF_REPO_DETECTED.
 # ---------------------------------------------------------------------------
 setup_fixture
@@ -404,9 +407,9 @@ cat > "$SELF/docs/history.md" <<'EOF'
 Background: test entry 1
 Changes: change 1
 EOF
+script_checkout_fixture_copy "$SELF" bin hooks .github
 SELF="$(cd "$SELF" && pwd)"
-export AGENTS_CONFIG_DIR="$SELF"
-OUT_PF13=$(run_with_timeout 30 bash "$ORCH_SCRIPT" "$SELF" --dry-run 2>&1)
+OUT_PF13=$(run_with_timeout 30 bash "$SELF/$ORCH_REL" "$SELF" --dry-run 2>&1)
 RC_PF13=$?
 HAS_SELF_PF13=$(echo "$OUT_PF13" | grep -c "SELF_REPO_DETECTED" 2>/dev/null) || HAS_SELF_PF13=0
 HAS_HIGHEST_PF13=$(echo "$OUT_PF13" | grep -c "MIGRATE_DRY_RUN_HIGHEST_ISSUE_N=" 2>/dev/null) || HAS_HIGHEST_PF13=0
@@ -419,7 +422,7 @@ teardown_fixture
 
 # ---------------------------------------------------------------------------
 # PF14: self-repo live --from-step 1 (#1234 identity guard).
-#       Live migration targeting AGENTS_CONFIG_DIR itself must abort because
+#       Live migration targeting the orchestrator's own checkout must abort because
 #       it would corrupt the agents repo's own issues (misidentification).
 #       FAIL-BEFORE-FIX: guard absent → no abort referencing the self-repo.
 # ---------------------------------------------------------------------------
@@ -432,11 +435,11 @@ cat > "$SELF/docs/history.md" <<'EOF'
 Background: test entry 1
 Changes: change 1
 EOF
+script_checkout_fixture_copy "$SELF" bin hooks .github
 SELF="$(cd "$SELF" && pwd)"
-export AGENTS_CONFIG_DIR="$SELF"
-OUT_PF14=$(run_with_timeout 30 bash "$ORCH_SCRIPT" "$SELF" --from-step 1 2>&1)
+OUT_PF14=$(run_with_timeout 30 bash "$SELF/$ORCH_REL" "$SELF" --from-step 1 2>&1)
 RC_PF14=$?
-HAS_SELF_MSG_PF14=$(echo "$OUT_PF14" | grep -c "AGENTS_CONFIG_DIR\|取り違え\|misidentification" 2>/dev/null) || HAS_SELF_MSG_PF14=0
+HAS_SELF_MSG_PF14=$(echo "$OUT_PF14" | grep -c "equals this agents checkout\|取り違え\|misidentification" 2>/dev/null) || HAS_SELF_MSG_PF14=0
 if [ "$RC_PF14" -ne 0 ] && [ "$HAS_SELF_MSG_PF14" -gt 0 ]; then
     pass "PF14: self-repo live invocation aborts with misidentification guard"
 else
@@ -448,11 +451,10 @@ teardown_fixture
 # PF14b: self-repo live --from-step 1 with full ack (#1234 identity guard —
 #        CHARACTERIZATION test, inverse direction from PF14).
 #        Approved design: MIGRATE_ACK_EXISTING_ISSUES=1 is the deliberate gate
-#        for legitimate Phase 3 self-migration. When the full ack env is present
-#        and Layer P/C are satisfied, a self-repo live invocation must NOT be
-#        blocked by the identity guard — it should proceed to Step 1.
-#        This pins the approved behaviour so a future change that makes the
-#        identity guard unconditional (blocking even with ACK=1) would break here.
+#        for legitimate Phase 3 self-migration. With the full ack env present
+#        and Layer P/C satisfied, a self-repo live invocation must NOT be
+#        blocked by the identity guard — it proceeds to Step 1. Pins it so an
+#        unconditional guard (blocking even with ACK=1) would break here.
 #        PASS both before and after the fix (pure characterization).
 # ---------------------------------------------------------------------------
 setup_fixture
@@ -463,18 +465,18 @@ cat > "$SELF/docs/history.md" <<'EOF'
 Background: test entry 1
 Changes: change 1
 EOF
+script_checkout_fixture_copy "$SELF" bin hooks .github
 SELF="$(cd "$SELF" && pwd)"
-export AGENTS_CONFIG_DIR="$SELF"
 export MOCK_HAS_ISSUES=1
 # MOCK_HIGHEST_ISSUE_N defaults to 5 in the mock when unset.
 # Layer P/C: MIGRATE_ACK_UP_TO_ISSUE_N=5 matches the mock's highest issue N;
 # MIGRATE_ACK_SELF_COUNT_AT_ACK=0 means self_delta=0, expected_max=5+0=5,
 # existing_n=5 <= 5, so Layer C passes.
 OUT_PF14B=$(MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N=5 MIGRATE_ACK_SELF_COUNT_AT_ACK=0 \
-    run_with_timeout 30 bash "$ORCH_SCRIPT" "$SELF" --from-step 1 --stage canary-1 2>&1)
+    run_with_timeout 30 bash "$SELF/$ORCH_REL" "$SELF" --from-step 1 --stage canary-1 2>&1)
 RC_PF14B=$?
 # Assert NOT blocked by the self-repo identity guard (abort-specific phrase only).
-# The broad vocabulary (AGENTS_CONFIG_DIR / 取り違え / misidentification) also appears in two
+# The broad vocabulary (this agents checkout / 取り違え / misidentification) also appears in two
 # approved non-abort WARNINGs present in this run: the self-repo ack-proceed WARNING and the
 # strengthened existing-issues WARNING (MOCK_HAS_ISSUES=1). "Refusing live migration" is emitted
 # exclusively by the guard's exit 1 path in orchestrate.sh — never by WARNINGs — so it is the

@@ -9,17 +9,17 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-ENFORCE_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
-ENFORCE_DIR="${_AGENTS_DIR_NODE}/hooks/enforce-worktree"
-CLEANUP_JS="${_AGENTS_DIR_NODE}/hooks/cleanup-orphan-dir.js"
+ENFORCE_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
+ENFORCE_DIR="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree"
+CLEANUP_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/cleanup-orphan-dir.js"
 
 if [ ! -f "$ENFORCE_JS" ]; then
     echo "SKIP: hooks/enforce-worktree.js not present"
@@ -180,7 +180,7 @@ if (typeof m.isAllowedNewItemDirectory !== 'function') {
   process.exit(0);
 }
 const cmd = \"New-Item -ItemType Directory -Path '${OUTSIDE_PATH}'\";
-const repoRoot = '${_AGENTS_DIR_NODE}';
+const repoRoot = '${_SCRIPT_CHECKOUT_ROOT_NODE}';
 if (m.isAllowedNewItemDirectory(cmd, repoRoot) === true) {
   console.log('OK');
 } else { console.log('FAIL'); process.exit(1); }

@@ -164,7 +164,7 @@ run_A13() {
 run_A14() {
     local out
     out=$("$RWT" 20 node -e "
-const s = require('$_AGENTS_DIR_NODE/settings.json');
+const s = require('$_SCRIPT_CHECKOUT_ROOT_NODE/settings.json');
 const problems = [];
 const groups = (s.hooks && s.hooks.PostToolUse) || [];
 const entry = groups.find((g) => (g.hooks || []).some((h) =>
@@ -177,7 +177,7 @@ if (!entry) {
     if (m.split('|').indexOf(tool) === -1) problems.push('matcher-missing:' + tool);
   }
   const hook = (entry.hooks || []).find((h) => String(h.command).includes('postuse-step-in-flight-mark.js'));
-  if (!String(hook.command).includes('\$AGENTS_CONFIG_DIR')) problems.push('command-not-AGENTS_CONFIG_DIR-relative');
+  if (!String(hook.command).includes('\$AGENTS_MAIN_ROOT')) problems.push('command-not-AGENTS_MAIN_ROOT-relative');
   if (typeof hook.timeout !== 'number') problems.push('no-timeout');
 }
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/dev/null)

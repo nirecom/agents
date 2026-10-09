@@ -24,7 +24,7 @@ _u14_fixture() {
     _u14_run "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const NL = String.fromCharCode(10);
 const dir = '$TMP_NODE/u14/wf';
 fs.mkdirSync(dir, { recursive: true });
@@ -55,7 +55,7 @@ run_U14() {
     _u14_fixture
     out="$(_u14_run "
 $PRELUDE
-const view = require('$AGENTS_DIR_NODE/bin/lib/resume-session/upstream-view.js');
+const view = require('$SCRIPT_CHECKOUT_ROOT_NODE/bin/lib/resume-session/upstream-view.js');
 const problems = [];
 const merged = rows(search.listUpstreamCandidates({ heirSid: 'heir-sess-14', ctx: { cwd: '$HEIR_CWD', git_branch: 'feature/donor' } }));
 const grains = [];
@@ -111,7 +111,7 @@ _u15_fixture() {
     _u15_run "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const NL = String.fromCharCode(10);
 const dir = '$TMP_NODE/u15/wf';
 fs.mkdirSync(dir, { recursive: true });
@@ -137,9 +137,9 @@ run_U15() {
     _u15_fixture
     out="$(_u15_run "
 $PRELUDE
-const view = require('$AGENTS_DIR_NODE/bin/lib/resume-session/upstream-view.js');
-const { readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { isAllPending } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/adopt.js');
+const view = require('$SCRIPT_CHECKOUT_ROOT_NODE/bin/lib/resume-session/upstream-view.js');
+const { readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { isAllPending } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/adopt.js');
 const problems = [];
 // Fixture anchors: without them a passing verdict could be about an heir that
 // carries a top-level cwd (the shape already covered) or recorded steps.
@@ -194,7 +194,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # stay green while `--list` in a real session silently loses exactly the donors
 # this heir shape depends on. Spawned as a subprocess, the way the skill runs it.
 
-_U16_CLI="$AGENTS_DIR/bin/resume-session-detect"
+_U16_CLI="$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect"
 
 _u16_run() {
     env -u CLAUDE_CODE_SESSION_ID \
@@ -220,7 +220,7 @@ _u16_fixture() {
     _u16_run "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const NL = String.fromCharCode(10);
 const dir = '$TMP_NODE/u16/wf';
 fs.mkdirSync(dir, { recursive: true });
@@ -300,7 +300,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # never a `skill` to dispatch, never executed, and the donor's intent.md BODY
 # stays behind a path the way T23's transcript does.
 
-_U19_CLI="$AGENTS_DIR/bin/resume-session-detect"
+_U19_CLI="$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect"
 
 _u19_run() {
     env -u CLAUDE_CODE_SESSION_ID \
@@ -325,7 +325,7 @@ _u19_fixture() {
     _u19_run "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const NL = String.fromCharCode(10);
 const DOLLAR = String.fromCharCode(36);
 const dir = '$TMP_NODE/u19/wf';

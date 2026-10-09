@@ -9,10 +9,11 @@
 # appears in a text block (Layer 1). Layer 2 (#2278) cases: fix-524-confirm-plan-guard/layer2-cases.sh.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
-STOP_HOOK="$AGENTS_DIR/hooks/stop-confirm-plan-guard.js"
-SHOW_HOOK="$AGENTS_DIR/hooks/show-plan-link.js"
-TURN_MARKER_LIB="$AGENTS_DIR/hooks/lib/turn-marker.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
+STOP_HOOK="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/stop-confirm-plan-guard.js"
+SHOW_HOOK="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/show-plan-link.js"
+TURN_MARKER_LIB="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/turn-marker.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -39,7 +40,7 @@ trap 'rm -rf "$WORKFLOW_DIR" "$PLANS_DIR" "$ISOLATED_CFG_DIR" "$TRANSCRIPT_DIR"'
 
 export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
 
 # Unset CONFIRM_* / VS Code detection so they don't bleed in from the parent shell.
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true

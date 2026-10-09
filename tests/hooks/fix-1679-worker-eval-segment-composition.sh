@@ -16,9 +16,9 @@
 # sanctioned segment, and every companion segment must be write=null AND
 # non-env-mutating (new ENV_MUTATION_RE / ASSIGN_RE guards). The env-mutation
 # guards close the confused-deputy hole that a naive composition rule would open
-# together with the S-7 $AGENTS_CONFIG_DIR prefix resolution: detectWritePredicate
+# together with the S-7 $AGENTS_MAIN_ROOT prefix resolution: detectWritePredicate
 # classifies `export VAR=val`, `VAR=val`, `unset VAR` and `source f` as read
-# (null), so without them an attacker could repoint AGENTS_CONFIG_DIR in a
+# (null), so without them an attacker could repoint AGENTS_MAIN_ROOT in a
 # companion segment and have the sanctioned segment resolve against it.
 #
 # IN1679-*  real logged blocked command strings — RED before the fix, GREEN after
@@ -36,15 +36,15 @@
 #
 # Drive surface (full hook, TL2):
 #   echo '{"tool_name":"Bash","tool_input":{"command":"<cmd>"}}' | \
-#     (cd <main-worktree> && ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=<fake-acd> \
+#     (cd <main-worktree> && ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=<fake-script-checkout-root> \
 #      WORKFLOW_PLANS_DIR=<plans> node hooks/enforce-worktree.js)
 #
 # TL3 gap (what this TL2 test does NOT catch):
 #   - A real /session-close → /issue-close-finalize chain issuing the eval from a
-#     genuine main worktree with a live AGENTS_CONFIG_DIR and real finalize scripts.
+#     genuine main worktree with a live AGENTS_MAIN_ROOT and real finalize scripts.
 #   - Whether the hook is actually registered as PreToolUse in settings.json, so a
 #     real Claude Code session routes the Bash command through it at all.
-#   - Real shell expansion of $AGENTS_CONFIG_DIR inside the eval sub-shell.
+#   - Real shell expansion of $AGENTS_MAIN_ROOT inside the eval sub-shell.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration
 
@@ -59,13 +59,13 @@ if command -v timeout >/dev/null 2>&1; then
     fi
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -175,7 +175,7 @@ assert_block() {
 }
 
 # ----------------------------------------------------------------------------
-# Fixtures — one shared main worktree + linked worktree + fake acd + plans dir.
+# Fixtures — one shared main worktree + linked worktree + fake script checkout root + plans dir.
 # No case mutates fixture state, so a single build keeps the 25+ guard spawns
 # inside the 120s budget. Pattern lifted from tests/hooks/fix-1600-finalize-worker-overlay.sh.
 # ----------------------------------------------------------------------------
@@ -201,12 +201,12 @@ add_linked_worktree() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$wt_path"; else echo "$wt_path"; fi
 }
 
-# Fake AGENTS_CONFIG_DIR carrying BOTH trust markers (hooks/enforce-worktree.js
-# and bin/) so hooks/lib/agents-config-dir.js accepts it as a legitimate agents
+# Fake AGENTS_MAIN_ROOT carrying BOTH trust markers (hooks/enforce-worktree.js
+# and bin/) so hooks/lib/script-checkout-root.js accepts it as a legitimate agents
 # checkout — the hostile marker-less case is owned by tests/fix-1630-*.sh.
-setup_fake_acd() {
+setup_fake_script_checkout_root() {
     local name="$1"
-    local d="$TMPDIR_BASE/fake-acd-$name"
+    local d="$TMPDIR_BASE/fake-script-checkout-root-$name"
     mkdir -p "$d/bin/github-issues" "$d/hooks"
     touch "$d/hooks/enforce-worktree.js"
     touch "$d/bin/check-unstaged-tracked.sh"
@@ -229,13 +229,13 @@ setup_plans_dir() {
 
 REPO="$(setup_main_worktree "repo")"
 LINKED="$(add_linked_worktree "$REPO" "wt1" "feat/x")"
-ACD="$(setup_fake_acd "main")"
+FAKE_SCRIPT_CHECKOUT_ROOT="$(setup_fake_script_checkout_root "main")"
 PLANS="$(setup_plans_dir "main")"
-SCRIPTS="$ACD/skills/issue-close-finalize/scripts"
+SCRIPTS="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts"
 
 # The literal (unexpanded) prefix is what PreToolUse actually receives, because
 # the hook fires BEFORE the shell expands the command.
-PF_LITERAL='$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh'
+PF_LITERAL='$AGENTS_MAIN_ROOT/skills/issue-close-finalize/scripts/pre-flight.sh'
 PF_RESOLVED="$SCRIPTS/pre-flight.sh"
 
 # eval-wrapped sanctioned segment. $1 = script path literal.
@@ -246,7 +246,7 @@ guard() {
     local cmd="$1"
     local rc=0
     run_guard "$(build_bash_payload "$cmd")" "$REPO" \
-        "AGENTS_CONFIG_DIR=$ACD" "WORKFLOW_PLANS_DIR=$PLANS" || rc=$?
+        "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$PLANS" || rc=$?
     return $rc
 }
 

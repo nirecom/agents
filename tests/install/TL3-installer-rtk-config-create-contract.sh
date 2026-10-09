@@ -10,8 +10,8 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # TL3 gap (what this test does NOT catch):
 # - Windows-native path (rtk.ps1 via winget, %LOCALAPPDATA% resolution, bounded poll) --
@@ -21,10 +21,10 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Closest-to-action mitigation: pwsh-required category fires at WORKFLOW_USER_VERIFIED preflight
 
 # Skip-gate 1: get-config-var must be usable.
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || { echo "SKIP: $AGENTS_DIR/bin/get-config-var not found or not executable" >&2; exit 77; }
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || { echo "SKIP: $SCRIPT_CHECKOUT_ROOT/bin/get-config-var not found or not executable" >&2; exit 77; }
 
 # Skip-gate 2: RUN_TL3 must be explicitly on (rules/test/claude-e2e.md).
-if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
   echo "SKIP: requires RUN_TL3=on in .env" >&2; exit 77
 fi
 

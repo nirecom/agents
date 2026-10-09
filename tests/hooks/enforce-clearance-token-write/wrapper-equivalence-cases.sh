@@ -18,15 +18,15 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 SEC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SEC_DIR/../../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
 EXPECTED_WRAPPER_REL="bin/request-off-mode-clearance"
-MINTER_ABS="$AGENTS_DIR/bin/request-off-clearance"
+MINTER_ABS="$SCRIPT_CHECKOUT_ROOT/bin/request-off-clearance"
 
 # Sourced FIRST, before any counting: the harness initialises its own PASS/FAIL, so
 # sourcing it later would silently discard everything asserted above it.
 # shellcheck source=tests/lib/request-off-clearance-harness.sh
-. "$AGENTS_DIR/tests/lib/request-off-clearance-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/request-off-clearance-harness.sh"
 
 echo "=== B: the SSOT invitation is bound to the file this suite actually runs ==="
 # The invitation is a STRING; nothing else in the tree forces it to name a program that
@@ -34,7 +34,7 @@ echo "=== B: the SSOT invitation is bound to the file this suite actually runs =
 # below a statement about the command users are told to run, not about a path this test
 # happened to hardcode. B3 then pins the derived path to the expected spelling, so a
 # silently re-pointed SSOT cannot quietly retarget the whole suite.
-SSOT_VALUE="$("$OFFCLR_RWT" 10 node -e "const m=require(process.argv[1]+'/hooks/lib/off-clearance-invocation.js');process.stdout.write(String(m.OFF_CLEARANCE_INVOCATION||''))" "$_AGENTS_DIR_NODE" 2>/dev/null)"
+SSOT_VALUE="$("$OFFCLR_RWT" 10 node -e "const m=require(process.argv[1]+'/hooks/lib/off-clearance-invocation.js');process.stdout.write(String(m.OFF_CLEARANCE_INVOCATION||''))" "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>/dev/null)"
 SSOT_REL="$("$OFFCLR_RWT" 10 node -e "const m=String(process.argv[1]).match(/bin[/][A-Za-z0-9._-]+/);process.stdout.write(m?m[0]:'')" "$SSOT_VALUE" 2>/dev/null)"
 
 if [ -n "$SSOT_VALUE" ] && [ -n "$SSOT_REL" ]; then
@@ -44,7 +44,7 @@ else
     fail "B1 no bin/<script> path could be derived from OFF_CLEARANCE_INVOCATION ('${SSOT_VALUE:-<unset>}') — falling back to $EXPECTED_WRAPPER_REL so the E* cases still report"
     WRAPPER_REL="$EXPECTED_WRAPPER_REL"
 fi
-WRAPPER_ABS="$AGENTS_DIR/$WRAPPER_REL"
+WRAPPER_ABS="$SCRIPT_CHECKOUT_ROOT/$WRAPPER_REL"
 
 if [ "$WRAPPER_REL" = "$EXPECTED_WRAPPER_REL" ]; then
     pass "B3 the SSOT-derived path is the expected re-spelled entrypoint"
@@ -157,13 +157,13 @@ OFFCLR_REQ="$MINTER_ABS"
 echo ""
 echo "=== V: the SSOT string is EXECUTED verbatim, exactly as a user would paste it ==="
 # B/E run the wrapper by a path PARSED out of the invitation, discarding the rest of the
-# string: the `bash ` prefix, the quoting, and the `$AGENTS_CONFIG_DIR` expansion that is
+# string: the `bash ` prefix, the quoting, and the `$AGENTS_MAIN_ROOT` expansion that is
 # the only thing making the constant runnable on a user's machine. Re-spelled to
 # `bash "$AGENTS_HOME/bin/request-off-mode-clearance"` it would keep every B/E case green
 # and be unrunnable for everyone. V* hands the constant to `bash -c` UNMODIFIED.
 
 # run_verbatim <tn> <stub-body> <pin-config:1|0> <arg-string> -> sets RC / OUT / ERR
-# AGENTS_CONFIG_DIR is PINNED, not inherited (test-design.md "Config-dependent branches"):
+# AGENTS_MAIN_ROOT is PINNED, not inherited (test-design.md "Config-dependent branches"):
 # the live session exports it, so an ambient value would make V* a statement about this
 # machine instead of about the string. V3 is the paired negative proving the pin matters.
 run_verbatim() {
@@ -173,10 +173,10 @@ run_verbatim() {
     printf '%s' "$body" > "$stubbin/codex"; chmod +x "$stubbin/codex"
     outf="$stubbin/.stdout"; errf="$stubbin/.stderr"
     envargs=(-u SESSION_ID -u CLAUDE_CODE_SESSION_ID -u WORKTREE_PATH
-             -u AGENTS_CONFIG_DIR
+             -u AGENTS_MAIN_ROOT
              "PATH=$stubbin:$OFFCLR_CLEAN_PATH"
              "WORKFLOW_PLANS_DIR=$tn" "WORKFLOW_STATE_DIR=$tn" "SESSION_ID=verbsid")
-    [ "$pin" = "1" ] && envargs+=("AGENTS_CONFIG_DIR=$_AGENTS_DIR_NODE")
+    [ "$pin" = "1" ] && envargs+=()
     ( cd "$stubbin" && env "${envargs[@]}" "$OFFCLR_RWT" 60 bash -c "$SSOT_VALUE $args" ) >"$outf" 2>"$errf"
     RC=$?; OUT="$(cat "$outf" 2>/dev/null)"; ERR="$(cat "$errf" 2>/dev/null)"
     rm -r -f "$stubbin" 2>/dev/null || true
@@ -209,24 +209,24 @@ compare_verbatim "V1 verbatim successful mint" "$(allow_stub 'legitimate workflo
 compare_verbatim "V2 verbatim rejected examination" "$(reject_stub 'use the sanctioned path')" 1 0
 
 # V3 — the paired negative (test-design.md Pattern 4). Without it V1/V2 would still pass if
-# the constant hardcoded an absolute path and ignored AGENTS_CONFIG_DIR entirely.
+# the constant hardcoded an absolute path and ignored AGENTS_MAIN_ROOT entirely.
 TMP_V3=$(make_tmp); TN_V3=$(node_path "$TMP_V3")
 run_verbatim "$TN_V3" "$(allow_stub 'legitimate workflow bug')" 0 "$VALID_ARGS"
 if [ "$RC" != "0" ] && [ "$(token_count "$TMP_V3")" = "0" ]; then
-    pass "V3 with AGENTS_CONFIG_DIR unset the same string resolves nothing and mints nothing (rc=$RC)"
+    pass "V3 with AGENTS_MAIN_ROOT unset the same string resolves nothing and mints nothing (rc=$RC)"
 else
-    fail "V3 the SSOT string still ran (rc=$RC, tokens=$(token_count "$TMP_V3")) without AGENTS_CONFIG_DIR — it does not depend on the documented variable, so V1/V2 prove nothing about a user's machine"
+    fail "V3 the SSOT string still ran (rc=$RC, tokens=$(token_count "$TMP_V3")) without AGENTS_MAIN_ROOT — it does not depend on the documented variable, so V1/V2 prove nothing about a user's machine"
 fi
 rm -r -f "$TMP_V3" 2>/dev/null || true
 
 echo ""
-echo "=== V4: argv survives an AGENTS_CONFIG_DIR whose path contains a space ==="
+echo "=== V4: argv survives an AGENTS_MAIN_ROOT whose path contains a space ==="
 # V1-V3 run in a sandbox whose path has no space, so they cannot tell a correctly quoted
 # SSOT from one that word-splits. The wrapper re-execs a sibling by a path built from its
 # own location, so a lost quote there splits the PROGRAM path as well as the arguments.
 # The stub prints one argument per line inside delimiters: asserting on a joined string
 # could not tell one argument containing a space from two arguments.
-argv_probe() {  # <config-dir> -> sets RC / OUT
+argv_probe() {  # <agents-main-root> -> sets RC / OUT
     local cfg="$1" outf
     mkdir -p "$cfg/bin"
     cp "$WRAPPER_ABS" "$cfg/bin/request-off-mode-clearance"
@@ -235,9 +235,9 @@ argv_probe() {  # <config-dir> -> sets RC / OUT
     chmod +x "$cfg/bin/request-off-mode-clearance" "$cfg/bin/request-off-clearance"
     outf="$cfg/.out"
     ( cd "$cfg" && env -u CLAUDE_CODE_SESSION_ID -u SESSION_ID \
-        -u WORKTREE_PATH -u AGENTS_CONFIG_DIR "PATH=$OFFCLR_CLEAN_PATH" \
+        -u WORKTREE_PATH -u AGENTS_MAIN_ROOT "PATH=$OFFCLR_CLEAN_PATH" \
         "WORKFLOW_PLANS_DIR=$cfg/plans" "WORKFLOW_STATE_DIR=$cfg/plans" \
-        "AGENTS_CONFIG_DIR=$cfg" \
+        "AGENTS_MAIN_ROOT=$cfg" \
         "$OFFCLR_RWT" 60 bash -c "$SSOT_VALUE $VALID_ARGS" ) >"$outf" 2>&1
     RC=$?; OUT="$(cat "$outf" 2>/dev/null)"
 }
@@ -251,20 +251,20 @@ ARG<one-line typo fix>'
 
 TMP_V4=$(make_tmp); SPACED="$TMP_V4/cfg dir with spaces"
 case "$SPACED" in
-    *" "*) pass "V4-fixture the config dir path genuinely contains a space" ;;
+    *" "*) pass "V4-fixture the agents main root path genuinely contains a space" ;;
     *) fail "V4-fixture no space in '$SPACED' — V4a below would restate V1 and prove nothing" ;;
 esac
 argv_probe "$SPACED"
 if [ "$OUT" = "$V4_WANT" ]; then
-    pass "V4a the verbatim SSOT delivers all 6 arguments intact through a spaced config dir"
+    pass "V4a the verbatim SSOT delivers all 6 arguments intact through a spaced agents main root"
 else
-    fail "V4a argv mangled through a spaced AGENTS_CONFIG_DIR (rc=$RC): got '$(printf '%.300s' "$OUT")'"
+    fail "V4a argv mangled through a spaced AGENTS_MAIN_ROOT (rc=$RC): got '$(printf '%.300s' "$OUT")'"
 fi
 # The paired control: the identical probe in a space-free dir. If it also fails, V4a is
 # reporting a broken probe rather than a quoting defect.
 argv_probe "$TMP_V4/nospace"
 if [ "$OUT" = "$V4_WANT" ]; then
-    pass "V4b the same probe in a space-free config dir delivers the same argv (V4a is about the space)"
+    pass "V4b the same probe in a space-free agents main root delivers the same argv (V4a is about the space)"
 else
     fail "V4b the probe itself is broken in a space-free dir (rc=$RC): got '$(printf '%.300s' "$OUT")' — V4a's verdict is not interpretable"
 fi

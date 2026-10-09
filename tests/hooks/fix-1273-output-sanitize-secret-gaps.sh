@@ -49,9 +49,9 @@ set -u
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-SANITIZE_JS="$(nodepath "$AGENTS_DIR")/hooks/lib/output-sanitize.js"
+SANITIZE_JS="$(nodepath "$SCRIPT_CHECKOUT_ROOT")/hooks/lib/output-sanitize.js"
 
 PASS=0
 FAIL=0
@@ -64,7 +64,7 @@ run_with_timeout() {
 }
 
 # The module is the subject; its absence is a FAIL, never a skip.
-if [ ! -f "$AGENTS_DIR/hooks/lib/output-sanitize.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/output-sanitize.js" ]; then
     fail "0/module-present" "missing: hooks/lib/output-sanitize.js"
     echo ""
     echo "Total: PASS=$PASS FAIL=$FAIL"

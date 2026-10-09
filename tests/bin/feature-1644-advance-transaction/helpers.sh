@@ -6,14 +6,14 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$_HELPERS_SCRIPT_CHECKOUT_ROOT")"
 
-NEXT_STEP_N="$AGENTS_DIR_N/bin/workflow/next-step"
-WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"
-PROBE_N="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+NEXT_STEP_N="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+WORKFLOW_MARK_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-mark.js"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"
+PROBE_N="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 export WFSTATE_MODULE
 
 TMPDIR_BASE="$(mktemp -d)"
@@ -34,14 +34,14 @@ export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
 # Config-dependent branches (CONFIRM_*) must be pinned per case, never inherited
-# from the repo's .env. An empty fixture config dir makes readDefaultEnvFile()
+# from the repo's .env. An empty fixture settings root makes readDefaultEnvFile()
 # and loadDefaultEnv() see NO CONFIRM_* at all; cases that need one write their
 # own .env into a dedicated dir.
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"
 mkdir -p "$CONFIG_EMPTY"
 : > "$CONFIG_EMPTY/.env"
 CONFIG_EMPTY_N="$(nrm "$CONFIG_EMPTY")"
-export AGENTS_CONFIG_DIR="$CONFIG_EMPTY_N"
+export AGENTS_MAIN_ROOT="$CONFIG_EMPTY_N"
 
 # Neutral CWD: a throwaway git repo, so hooks that shell out to `git rev-parse`
 # resolve the fixture and never the real worktree.

@@ -33,13 +33,12 @@ require_value() {
   [[ "$val" != --* ]] || die "$flag requires a value (got flag-like token: $val)"
 }
 
-# --- Pre-flight: AGENTS_CONFIG_DIR and core-principles.md ---
-[[ -n "${AGENTS_CONFIG_DIR:-}" ]] || die "AGENTS_CONFIG_DIR is not set"
-[[ -d "$AGENTS_CONFIG_DIR" ]]      || die "AGENTS_CONFIG_DIR does not exist: $AGENTS_CONFIG_DIR"
-CORE_PRINCIPLES="$AGENTS_CONFIG_DIR/rules/core-principles.md"
+# --- Pre-flight: core-principles.md ---
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CORE_PRINCIPLES="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
 [[ -f "$CORE_PRINCIPLES" ]] || die "required context missing: $CORE_PRINCIPLES"
 
-CODEX_CORE="$AGENTS_CONFIG_DIR/bin/lib/codex-core.sh"
+CODEX_CORE="$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-core.sh"
 # shellcheck source=/dev/null
 [[ -f "$CODEX_CORE" ]] && source "$CODEX_CORE"
 
@@ -160,7 +159,7 @@ if [[ -n "${ROUND:-}" ]] || [[ -n "${FORCE_ROUND:-}" ]]; then
 fi
 
 # --- Per-format parameters (fp_resolve): the one allowlist for --format ---
-FP_LIB="$AGENTS_CONFIG_DIR/bin/lib/codex-review-loop/format-params.sh"
+FP_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-review-loop/format-params.sh"
 [[ -f "$FP_LIB" ]] || die "required library missing: $FP_LIB"
 # shellcheck source=/dev/null
 source "$FP_LIB" || die "required library failed to load: $FP_LIB"
@@ -203,7 +202,7 @@ fi
 
 # Validated here, not at the ledger CLI: this wrapper creates the session's control
 # files itself long before any concern-ledger code runs (#2025 C9).
-SAFE_TOKEN_LIB="$AGENTS_CONFIG_DIR/bin/lib/safe-state-path.sh"
+SAFE_TOKEN_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/safe-state-path.sh"
 [[ -f "$SAFE_TOKEN_LIB" ]] || die "required library missing: $SAFE_TOKEN_LIB"
 # shellcheck source=/dev/null
 source "$SAFE_TOKEN_LIB" || die "required library failed to load: $SAFE_TOKEN_LIB"
@@ -222,13 +221,13 @@ if [[ -n "$REPO_ROOT_ARG" ]] && [[ ! -d "$REPO_ROOT_ARG" ]]; then
   die "--repo-root is not a directory: $REPO_ROOT_ARG"
 fi
 
-BUILDER="$AGENTS_CONFIG_DIR/bin/build-codex-context"
-REVIEWER="$AGENTS_CONFIG_DIR/bin/$REVIEWER_BIN"
+BUILDER="$SCRIPT_CHECKOUT_ROOT/bin/build-codex-context"
+REVIEWER="$SCRIPT_CHECKOUT_ROOT/bin/$REVIEWER_BIN"
 [[ -f "$BUILDER" ]]  || die "build-codex-context not found: $BUILDER"
 [[ -f "$REVIEWER" ]] || die "reviewer not found: $REVIEWER"
 
 # --- Sourced helper modules (rules/coding/file-split.md Pattern A) ---
-CRL_LIB="$AGENTS_CONFIG_DIR/bin/lib/codex-review-loop"
+CRL_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-review-loop"
 # shellcheck source=bin/lib/codex-review-loop/control-paths.sh
 source "$CRL_LIB/control-paths.sh"  || die "required library failed to load: control-paths.sh"
 # shellcheck source=bin/lib/codex-review-loop/round-counter.sh
@@ -244,7 +243,7 @@ source "$CRL_LIB/verdict-dispatch.sh" || die "required library failed to load: v
 # shellcheck source=bin/lib/codex-review-loop/prestaged-pass.sh
 source "$CRL_LIB/prestaged-pass.sh"  || die "required library failed to load: prestaged-pass.sh"
 
-resolve_concern_ledger || die "concern-ledger not found under AGENTS_CONFIG_DIR (${AGENTS_CONFIG_DIR}) or beside the wrapper ($(dirname "$(dirname "$0")")); set AGENTS_CONFIG_DIR to your agents checkout"
+resolve_concern_ledger || die "concern-ledger not found in this checkout (${SCRIPT_CHECKOUT_ROOT}) or beside the wrapper ($(dirname "$(dirname "$0")")); repair the agents checkout"
 
 # The scanner may only stage under a producer the ledger format admits (#2276 C3).
 if (( PRESTAGED_MODE == 1 )); then

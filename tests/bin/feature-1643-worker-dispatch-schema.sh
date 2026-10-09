@@ -8,10 +8,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-PAYLOAD_JS="$AGENTS_DIR/bin/worker-dispatch/payload.js"
-REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+PAYLOAD_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/payload.js"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
 
 PASS=0
 FAIL=0
@@ -48,16 +48,16 @@ nodepath() {
 # ---------------------------------------------------------------------------
 # Fixtures: a temp main worktree + a PLANS_DIR
 # ---------------------------------------------------------------------------
-MAIN_ROOT_RAW="$TMPD/mainrepo"
-mkdir -p "$MAIN_ROOT_RAW"
-git -C "$MAIN_ROOT_RAW" init -q -b main
-git -C "$MAIN_ROOT_RAW" config user.email "test@example.com"
-git -C "$MAIN_ROOT_RAW" config user.name "Test"
-git -C "$MAIN_ROOT_RAW" config core.hooksPath /dev/null
-echo init > "$MAIN_ROOT_RAW/README.md"
-git -C "$MAIN_ROOT_RAW" add README.md 2>/dev/null
-git -C "$MAIN_ROOT_RAW" commit -q --no-verify -m initial 2>/dev/null
-MAIN_ROOT="$(nodepath "$MAIN_ROOT_RAW")"
+TARGET_MAIN_ROOT_RAW="$TMPD/mainrepo"
+mkdir -p "$TARGET_MAIN_ROOT_RAW"
+git -C "$TARGET_MAIN_ROOT_RAW" init -q -b main
+git -C "$TARGET_MAIN_ROOT_RAW" config user.email "test@example.com"
+git -C "$TARGET_MAIN_ROOT_RAW" config user.name "Test"
+git -C "$TARGET_MAIN_ROOT_RAW" config core.hooksPath /dev/null
+echo init > "$TARGET_MAIN_ROOT_RAW/README.md"
+git -C "$TARGET_MAIN_ROOT_RAW" add README.md 2>/dev/null
+git -C "$TARGET_MAIN_ROOT_RAW" commit -q --no-verify -m initial 2>/dev/null
+TARGET_MAIN_ROOT="$(nodepath "$TARGET_MAIN_ROOT_RAW")"
 
 PLANS_RAW="$TMPD/plans"
 mkdir -p "$PLANS_RAW"
@@ -70,7 +70,7 @@ write_payload() {
     nodepath "$PLANS_RAW/$1"
 }
 
-VALID_TR_PAYLOAD="{\"cwd\":\"$MAIN_ROOT\",\"test_args\":[],\"timeout_seconds\":30}"
+VALID_TR_PAYLOAD="{\"cwd\":\"$TARGET_MAIN_ROOT\",\"test_args\":[],\"timeout_seconds\":30}"
 
 # run_dispatch <args...> → sets DOUT / DRC
 DOUT=""
@@ -110,11 +110,11 @@ group_a() {
     done <<TABLE
 arity-0            | NONE                                                        | 2
 arity-1            | test-runner                                                 | 2
-arity-2            | test-runner $MAIN_ROOT                                      | 2
-arity-4            | test-runner $MAIN_ROOT $PLANS/p.json extra                  | 2
-unknown-worker     | not-a-worker $MAIN_ROOT $PLANS/p.json                       | 2
-unknown-worker-mix | Test-Runner $MAIN_ROOT $PLANS/p.json                        | 2
-unknown-worker-path | ../../etc/passwd $MAIN_ROOT $PLANS/p.json                  | 2
+arity-2            | test-runner $TARGET_MAIN_ROOT                                      | 2
+arity-4            | test-runner $TARGET_MAIN_ROOT $PLANS/p.json extra                  | 2
+unknown-worker     | not-a-worker $TARGET_MAIN_ROOT $PLANS/p.json                       | 2
+unknown-worker-mix | Test-Runner $TARGET_MAIN_ROOT $PLANS/p.json                        | 2
+unknown-worker-path | ../../etc/passwd $TARGET_MAIN_ROOT $PLANS/p.json                  | 2
 TABLE
 }
 
@@ -137,15 +137,15 @@ group_b() {
         impl_missing "payload/$name" "$DISPATCH_JS" "bin/worker-dispatch.js" && continue
 
         p="$(write_payload "$name.json" "$json")"
-        run_dispatch test-runner "$MAIN_ROOT" "$p"
+        run_dispatch test-runner "$TARGET_MAIN_ROOT" "$p"
         first="$(status_of)"
         assert_eq "payload/$name/status" "runner-error" "$first"
         assert_eq "payload/$name/exit0" "0" "$DRC"
     done <<TABLE
 missing-required-key  | {"test_args":[]}
-type-mismatch-int     | {"cwd":"$MAIN_ROOT","test_args":[],"timeout_seconds":"abc"}
-type-mismatch-array   | {"cwd":"$MAIN_ROOT","test_args":"not-an-array"}
-unknown-key           | {"cwd":"$MAIN_ROOT","test_args":[],"bogus_key":1}
+type-mismatch-int     | {"cwd":"$TARGET_MAIN_ROOT","test_args":[],"timeout_seconds":"abc"}
+type-mismatch-array   | {"cwd":"$TARGET_MAIN_ROOT","test_args":"not-an-array"}
+unknown-key           | {"cwd":"$TARGET_MAIN_ROOT","test_args":[],"bogus_key":1}
 malformed-json        | {"cwd": not json
 not-an-object         | ["cwd"]
 empty-file            |

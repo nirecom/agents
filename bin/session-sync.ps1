@@ -19,7 +19,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ProjectsDir = Join-Path $ClaudeDir "projects"
-$helperJs = if ($env:AGENTS_CONFIG_DIR) { Join-Path $env:AGENTS_CONFIG_DIR "hooks/lib/workflow-plans-dir.js" } else { $null }
+$helperJs = Join-Path $PSScriptRoot "../hooks/lib/workflow-plans-dir.js"
 $PlansDir = if ($helperJs -and (Test-Path $helperJs)) {
     & node -e "process.stdout.write(require('$($helperJs -replace '\\','/'  )').getWorkflowPlansDir())" 2>$null
 } else { Join-Path $env:USERPROFILE ".workflow-plans" }

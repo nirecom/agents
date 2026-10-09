@@ -19,8 +19,8 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$AGENTS_DIR" || exit 1
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$SCRIPT_CHECKOUT_ROOT" || exit 1
 
 CTRL_DIR="$(mktemp -d)"
 trap 'rm -rf "$CTRL_DIR"' EXIT
@@ -177,12 +177,12 @@ run_detector_matrix() {
 }
 
 run_detector_matrix <<'MATRIX'
-legacy --status complete|status|hit|node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --status complete --next
+legacy --status complete|status|hit|node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step detail --status complete --next
 legacy --status quoted value|status|hit|node bin/workflow/next-step --advance --step detail --status "complete"
 legacy --status skipped|status|hit|node bin/workflow/next-step --advance --step run_tests --status skipped
 legacy --status placeholder|status|hit|node bin/workflow/next-step --advance --step <step> --status <status> --next
 legacy set-workflow-type --status|status|hit|node bin/workflow/set-workflow-type --session X --type wf-code --advance --step workflow_init --status complete
-canonical --complete stays clean|status|miss|node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --complete --next
+canonical --complete stays clean|status|miss|node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step detail --complete --next
 canonical set-workflow-type stays clean|status|miss|node bin/workflow/set-workflow-type --session X --type wf-code --advance --step workflow_init --complete
 --status with no advance CLI on the line|status|miss|some-other-tool --status complete
 multiline: CLI line continues into --status complete|status|hit|node bin/workflow/next-step --advance --step detail \\\n  --status complete --next
@@ -398,7 +398,7 @@ echo "=== S11: write-tests SKILL.md Completion instructs staging BEFORE the adva
 # INV-1 (#2102) is an evidence-cwd property; the INSTRUCTION half that makes it hold in a
 # live session is unpinned by any other test: WT completion must (a) stage tests/ before
 # calling the CLI door -- an unstaged tests/ makes the evidence check reject fail-closed --
-# and (b) never wrap the call in `cd "$AGENTS_CONFIG_DIR" &&`, which points
+# and (b) never wrap the call in `cd "$AGENTS_MAIN_ROOT" &&`, which points
 # resolveTrustedRepoDir() at the main agents worktree instead of the linked one
 # (tests/hooks/feature-2102-door-parity/evidence-cwd.sh E1b/E2b reproduce exactly that failure).
 WT_SKILL="skills/write-tests/SKILL.md"

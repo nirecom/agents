@@ -19,7 +19,7 @@ const { isEditWriteTool, isCommandTool, collectEditWritePaths, commandListOf } =
 
 const { readHookInput } = require("./lib/read-stdin");
 
-const RUN_HINT = '— run node "$AGENTS_CONFIG_DIR/bin/plan-sync-init"';
+const RUN_HINT = '— run node "$AGENTS_MAIN_ROOT/bin/plan-sync-init"';
 // One budget per invocation, kept below the 30 s hook timeout in settings.json.
 const SHARED_SYNC_BUDGET_MS = 20000;
 

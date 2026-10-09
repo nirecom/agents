@@ -18,13 +18,13 @@ NFR_CLI_GUARD_CASES_LOADED=1
 # ---------------------------------------------------------------------------
 nfr_block_caps() {
     local cfg="$1" root="$2" lines="$3" bytes="$4"
-    AGENTS_CONFIG_DIR="$cfg" CODEX_NFR_MAX_LINES="$lines" CODEX_NFR_MAX_BYTES="$bytes" \
+    AGENTS_MAIN_ROOT="$cfg" CODEX_NFR_MAX_LINES="$lines" CODEX_NFR_MAX_BYTES="$bytes" \
     run_with_timeout 30 bash -c '
       source "$1/bin/lib/codex-core.sh" >/dev/null 2>&1 || exit 3
       codex_core_init "Probe" >/dev/null 2>&1
       declare -F codex_core_project_nfr_block >/dev/null || exit 4
       codex_core_project_nfr_block "$2"
-    ' _ "$AGENTS_DIR" "$root" 2>/dev/null
+    ' _ "$SCRIPT_CHECKOUT_ROOT" "$root" 2>/dev/null
 }
 
 # The frame is what keeps the payload quotable as data, so every cap case
@@ -215,7 +215,7 @@ assert_one_frame "T2223E2-multibyte-whole" "$WHOLE_FILE"
 # user looks for it. The REAL .env.example is read, never a fixture that would
 # invent the key, and the file must still parse as a whole after the addition.
 # ---------------------------------------------------------------------------
-ENV_EXAMPLE="$AGENTS_DIR/.env.example"
+ENV_EXAMPLE="$SCRIPT_CHECKOUT_ROOT/.env.example"
 if [ -f "$ENV_EXAMPLE" ]; then
     pass "T2223E3-env-example-present"
 else
@@ -243,7 +243,7 @@ const m = require(process.argv[1] + "/hooks/lib/load-env.js");
 const map = m.readEnvFile(process.argv[2]);
 if (!map) { process.stdout.write("__UNREADABLE__"); }
 else { process.stdout.write(JSON.stringify([Object.prototype.hasOwnProperty.call(map, "PROJECT_NFR"), map.PROJECT_NFR, Object.keys(map).length > 10])); }
-' "$(command -v cygpath >/dev/null 2>&1 && cygpath -m "$AGENTS_DIR" || printf '%s' "$AGENTS_DIR")" "$ENV_EXAMPLE_NODE" 2>/dev/null)"
+' "$(command -v cygpath >/dev/null 2>&1 && cygpath -m "$SCRIPT_CHECKOUT_ROOT" || printf '%s' "$SCRIPT_CHECKOUT_ROOT")" "$ENV_EXAMPLE_NODE" 2>/dev/null)"
 assert_eq "T2223E3-env-example-parses-cleanly" '[true,"",true]' "$ee_got"
 
 # ---------------------------------------------------------------------------
@@ -264,8 +264,8 @@ REPO_GUARD="$(make_repo guard)"
 # and print the exit status, so the no-codex claim is provable per case.
 guard_plan() {
     rm -f "$CAPTURE" "$GUARD_OUT"
-    (cd "$TMP_ROOT" && AGENTS_CONFIG_DIR="$CFG_GUARD" PATH="$MOCK_BIN:$PATH" \
-        run_with_timeout 60 bash "$AGENTS_DIR/bin/review-plan-codex" \
+    (cd "$TMP_ROOT" && AGENTS_MAIN_ROOT="$CFG_GUARD" PATH="$MOCK_BIN:$PATH" \
+        run_with_timeout 60 bash "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" \
         --input "$PLAN_INPUT" --format detail-plan --round 1 --no-log "$@" \
         > "$GUARD_OUT" 2>&1)
     printf '%s' "$?"
@@ -274,8 +274,8 @@ guard_plan() {
 guard_code() {
     rm -f "$CAPTURE" "$GUARD_OUT"
     (cd "$REPO_GUARD" && run_with_timeout 60 env -u CODEX_REVIEW_MAX_DIFF_LINES \
-        AGENTS_CONFIG_DIR="$CFG_GUARD" PATH="$MOCK_BIN:$PATH" \
-        bash "$AGENTS_DIR/bin/review-code-codex" --base main "$@" \
+        AGENTS_MAIN_ROOT="$CFG_GUARD" PATH="$MOCK_BIN:$PATH" \
+        bash "$SCRIPT_CHECKOUT_ROOT/bin/review-code-codex" --base main "$@" \
         > "$GUARD_OUT" 2>&1)
     printf '%s' "$?"
 }
@@ -382,8 +382,8 @@ fi
 # inside the NFR frame, or a project could fabricate a plan section the
 # reviewer would treat as the genuine plan.
 rm -f "$CAPTURE" "$PWNED"
-(cd "$TMP_ROOT" && AGENTS_CONFIG_DIR="$CFG_HOSTILE" PATH="$MOCK_BIN:$PATH" \
-    run_with_timeout 60 bash "$AGENTS_DIR/bin/review-plan-codex" \
+(cd "$TMP_ROOT" && AGENTS_MAIN_ROOT="$CFG_HOSTILE" PATH="$MOCK_BIN:$PATH" \
+    run_with_timeout 60 bash "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" \
     --input "$PLAN_INPUT" --format detail-plan --round 1 --no-log \
     --project-root "$PROJ_HOSTILE" >/dev/null 2>&1) || true
 assert_file_has "T2223G-plan-hostile-nfr-reaches-prompt" "$CAPTURE" "$NFR_SENTINEL"
@@ -424,8 +424,8 @@ else
 fi
 rm -f "$CAPTURE" "$PWNED"
 (cd "$REPO_HOSTILE" && run_with_timeout 60 env -u CODEX_REVIEW_MAX_DIFF_LINES \
-    AGENTS_CONFIG_DIR="$CFG_HOSTILE" PATH="$MOCK_BIN:$PATH" \
-    bash "$AGENTS_DIR/bin/review-code-codex" --base main \
+    AGENTS_MAIN_ROOT="$CFG_HOSTILE" PATH="$MOCK_BIN:$PATH" \
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/review-code-codex" --base main \
     --project-root "$REPO_HOSTILE" >/dev/null 2>&1) || true
 if [ -e "$PWNED" ]; then
     fail "T2223G-code-no-command-execution — the NFR value executed a command"
@@ -447,8 +447,8 @@ assert_eq "T2223H-loop-implicit-root-value" "$LOOP_TOPLEVEL" \
     "$(arg_after "$ARGS_CAPTURE" "--project-root")"
 
 rm -f "$ARGS_CAPTURE"
-(cd "$REPO_LOOP" && AGENTS_CONFIG_DIR="$CFG_LOOP" PATH="$MOCK_BIN:$PATH" CODEX_MCP_FS=off \
-    run_with_timeout 60 bash "$AGENTS_DIR/bin/run-codex-review-loop" \
+(cd "$REPO_LOOP" && AGENTS_MAIN_ROOT="$CFG_LOOP" PATH="$MOCK_BIN:$PATH" CODEX_MCP_FS=off \
+    run_with_timeout 60 bash "$LOOP_BIN" \
     --format detail-plan --session-id loopB2 --plans-dir "$LOOP_PLANS" \
     --draft-file "$LOOP_DRAFT" --cap 3 --max-extensions 1 \
     --accepted-tradeoffs "$LOOP_TRADEOFFS" --repo-root "$REPO_LOOP" >/dev/null 2>&1) || true
@@ -459,7 +459,7 @@ assert_eq "T2223H-loop-mcp-off-project-root-value" "$REPO_LOOP" \
 # captures the prompt the loop actually causes. Two repos with different local
 # NFRs prove the loop selects by project root, not by ambient config.
 CFG_E2E="$(make_cfg loope2e "PROJECT_NFR=global-fallback-nfr")"
-printf '%s\n' '#!/usr/bin/env bash' "exec bash \"$AGENTS_DIR/bin/review-plan-codex\" \"\$@\"" \
+printf '%s\n' '#!/usr/bin/env bash' "exec bash \"$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex\" \"\$@\"" \
     > "$CFG_E2E/bin/review-plan-codex"
 chmod +x "$CFG_E2E/bin/review-plan-codex"
 printf '%s\n' '#!/usr/bin/env bash' 'out=""' \
@@ -467,6 +467,7 @@ printf '%s\n' '#!/usr/bin/env bash' 'out=""' \
     '[ -n "$out" ] && printf "context\n" > "$out"' 'exit 0' \
     > "$CFG_E2E/bin/build-codex-context"
 chmod +x "$CFG_E2E/bin/build-codex-context"
+cp "$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "$SCRIPT_CHECKOUT_ROOT/bin/concern-ledger" "$CFG_E2E/bin/"
 
 REPO_E2E_A="$(make_repo e2ea)"
 REPO_E2E_B="$(make_repo e2eb)"
@@ -477,8 +478,8 @@ printf 'PROJECT_NFR=%s-loop-repo-b\n' "$NFR_SENTINEL" > "$REPO_E2E_B/$LOCAL_ENV_
 run_loop_e2e() {
     local sid="$1" repo="$2"
     rm -f "$CAPTURE"
-    (cd "$repo" && AGENTS_CONFIG_DIR="$CFG_E2E" PATH="$MOCK_BIN:$PATH" \
-        run_with_timeout 90 bash "$AGENTS_DIR/bin/run-codex-review-loop" \
+    (cd "$repo" && AGENTS_MAIN_ROOT="$CFG_E2E" PATH="$MOCK_BIN:$PATH" \
+        run_with_timeout 90 bash "$CFG_E2E/bin/run-codex-review-loop" \
         --format detail-plan --session-id "$sid" --plans-dir "$LOOP_PLANS" \
         --draft-file "$LOOP_DRAFT" --cap 1 --max-extensions 0 \
         --accepted-tradeoffs "$LOOP_TRADEOFFS" --repo-root "$repo" >/dev/null 2>&1) || true

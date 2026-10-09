@@ -30,18 +30,18 @@ setup_fixture
 # D6 rebuilds "<issue>-worktree-<ts>" when the name fails the scan; the rebuilt
 # value still embeds $ISSUE so it must be re-scanned, and a second failure drops
 # the prefix. The real scanner (B16) cannot fail a derived name whose source text
-# passes, so this file uses a stand-in AGENTS_CONFIG_DIR whose scan-outbound.sh
+# passes, so this file uses a stand-in AGENTS_MAIN_ROOT whose scan-outbound.sh
 # logs every value and rejects a per-case ERE — the log makes the scan *sequence*
 # observable ("re-scanned" vs "assumed safe").
 D6_CFG="$FIXTURE/d6-cfg"
 mkdir -p "$D6_CFG/bin" "$D6_CFG/hooks/lib"
 # parse-closes-issues resolves its lib as <cfg>/hooks/lib/, so both halves are copied;
 # the issue number is what the fail-safe prefix-drop tier is about.
-cp "$AGENTS_DIR/bin/parse-closes-issues" "$D6_CFG/bin/parse-closes-issues"
+cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/parse-closes-issues" "$D6_CFG/bin/parse-closes-issues"
 # scan_clean() also shells out to check-private-repo-name.js (D0's REPO_NAME gate runs
 # through the same scan_clean() as every other D6 tier) — without a copy here, D0 would
 # fail closed on a missing script before any of the stand-in scanner logic below runs.
-cp "$AGENTS_DIR/bin/check-private-repo-name.js" "$D6_CFG/bin/check-private-repo-name.js"
+cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/check-private-repo-name.js" "$D6_CFG/bin/check-private-repo-name.js"
 # The whole hooks/lib/ rather than parse-closes-issues.js alone: check-private-repo-name.js
 # resolves its matcher as <cfg>/hooks/lib/is-private-repo.js and fail-OPENS (exit 0) when
 # that require throws, so a partial copy would leave the private-name half of scan_clean()
@@ -49,7 +49,7 @@ cp "$AGENTS_DIR/bin/check-private-repo-name.js" "$D6_CFG/bin/check-private-repo-
 # is-private-repo.js has lib-local requires of its own, so the directory goes in whole.
 # B19a-B19c are unaffected: they run under setup_fixture's empty declared list, where an
 # armed checker and a fail-open one are indistinguishable by construction.
-cp -r "$AGENTS_DIR/hooks/lib/." "$D6_CFG/hooks/lib/"
+cp -r "$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/lib/." "$D6_CFG/hooks/lib/"
 # bin/is-github-dotcom-remote is deliberately NOT provided: its absence makes the D4
 # gh label lookup a no-op, so BRANCH_TYPE stays title-derived and no network is touched.
 D6_LOG="$FIXTURE/d6-scan-log.txt"
@@ -69,7 +69,7 @@ chmod +x "$D6_CFG/bin/scan-outbound.sh"
 INTENT_D6="$FIXTURE/d6-intent.md"
 write_intent "$INTENT_D6" 'Zeta gamma delta epsilon' '- #4242: d6 rescan'
 D6_TITLE_SLUG="4242-zeta-gamma-delta-epsilon"
-D6_SAVED_CFG="$AGENTS_CONFIG_DIR"
+D6_SAVED_CFG="$AGENTS_MAIN_ROOT"
 # A fixed-name repo dir rather than $FIXTURE itself: D0 now scans REPO_NAME, and the
 # per-case reject ERE must not be able to match a random mktemp basename by accident
 # (a `4242` substring in the temp name would abort the run at D0 instead).
@@ -79,9 +79,9 @@ mkdir -p "$D6_REPO"
 # B19a: only the primary name is rejected — the rebuilt fallback is scanned and kept.
 : > "$D6_LOG"
 printf '%s\n' "^$D6_TITLE_SLUG\$" > "$D6_REJECT"
-export AGENTS_CONFIG_DIR="$D6_CFG"
+export AGENTS_MAIN_ROOT="$D6_CFG"
 run_derive B19a --intent "$INTENT_D6" --repo-dir "$D6_REPO"
-export AGENTS_CONFIG_DIR="$D6_SAVED_CFG"
+export AGENTS_MAIN_ROOT="$D6_SAVED_CFG"
 
 B19A_TN="$(task_name)"
 B19A_SCANS="$(grep -c '[^[:space:]]' "$D6_LOG")"
@@ -110,9 +110,9 @@ fi
 # Without the re-scan this case would emit an unscanned 4242-prefixed name.
 : > "$D6_LOG"
 printf '%s\n' '4242' > "$D6_REJECT"
-export AGENTS_CONFIG_DIR="$D6_CFG"
+export AGENTS_MAIN_ROOT="$D6_CFG"
 run_derive B19b --intent "$INTENT_D6" --repo-dir "$D6_REPO"
-export AGENTS_CONFIG_DIR="$D6_SAVED_CFG"
+export AGENTS_MAIN_ROOT="$D6_SAVED_CFG"
 
 B19B_TN="$(task_name)"
 if [ "$RC" -eq 0 ] && printf '%s' "$B19B_TN" | grep -qE "^worktree-$TS_RE\$"; then
@@ -159,9 +159,9 @@ fi
 # REPO_NAME (`d6-repo`) nor the raw title (`Zeta ...`, capitalized).
 : > "$D6_LOG"
 printf '%s\n' 'zeta|worktree' > "$D6_REJECT"
-export AGENTS_CONFIG_DIR="$D6_CFG"
+export AGENTS_MAIN_ROOT="$D6_CFG"
 run_derive B19c --intent "$INTENT_D6" --repo-dir "$D6_REPO"
-export AGENTS_CONFIG_DIR="$D6_SAVED_CFG"
+export AGENTS_MAIN_ROOT="$D6_SAVED_CFG"
 
 B19C_TN="$(task_name)"
 if [ "$RC" -eq 0 ] && printf '%s' "$B19C_TN" | grep -qE "^worktree-$TS_RE\$" \
@@ -214,9 +214,9 @@ write_intent "$INTENT_D6F1" '!!! @@@' '- #4242: d6 tier-2 emission'
 # only the OUTBOUND direction: the script no longer re-exports either variable, and the
 # list now reaches the checker over stdin (asserted directly in env-nonexposure.sh).
 PRIVATE_REPO_NAMES_CACHE="$(printf 'worktree\nd6-f1-repo')"
-export AGENTS_CONFIG_DIR="$D6_CFG"
+export AGENTS_MAIN_ROOT="$D6_CFG"
 run_derive B19d --intent "$INTENT_D6F1" --repo-dir "$D6_F1_REPO"
-export AGENTS_CONFIG_DIR="$D6_SAVED_CFG"
+export AGENTS_MAIN_ROOT="$D6_SAVED_CFG"
 PRIVATE_REPO_NAMES_CACHE=''
 
 B19D_TN="$(task_name)"

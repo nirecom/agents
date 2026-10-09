@@ -20,7 +20,7 @@ CL_CLI="$AGENTS_ROOT/bin/concern-ledger"
 CL_LIB="$AGENTS_ROOT/bin/lib/concern-ledger.sh"
 CODEX_BIN="$AGENTS_ROOT/bin/review-code-codex"
 
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$AGENTS_ROOT/tests/lib/harness.sh"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -61,7 +61,6 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
-export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 cd "$TMPDIR_BASE" || exit 1
 

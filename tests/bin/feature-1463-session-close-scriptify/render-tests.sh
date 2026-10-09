@@ -53,7 +53,7 @@ test_T4_render_all_headings() {
     # Collect the canonical headings from the schema and require each in stdout.
     local headings missing=""
     headings="$(run_with_timeout 120 node -e "
-        const s=require('${AGENTS_DIR_NODE}/hooks/lib/final-report-schema');
+        const s=require('${SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/final-report-schema');
         process.stdout.write(s.getSectionHeadings('${SID}').join('\n'));
     " 2>/dev/null)"
     if [ -z "$headings" ]; then

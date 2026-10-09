@@ -10,7 +10,7 @@
 # SSOT for which hooks a .workflow-off marker silences; this pins that the
 # contract SAYS so, while L-1 in cases-r-k-l.sh is its runtime twin.
 
-declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"  # isolation (#2512): the dispatcher pins first
+declare -F harness_assert_isolated >/dev/null || . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"  # isolation (#2512): the dispatcher pins first
 harness_assert_isolated
 
 run_block_c12_c14() {
@@ -25,7 +25,7 @@ run_block_c12_c14() {
     # this defect needs a BYTE-level check. Scoped to the whole guard directory
     # (CPR-E2C): the class is "a raw NUL anywhere in this implementation".
 
-    local GUARD="$AGENTS_DIR/hooks/confirm-forge-target-ownership"
+    local GUARD="$SCRIPT_CHECKOUT_ROOT/hooks/confirm-forge-target-ownership"
     local js_count=0
     if [ -d "$GUARD" ]; then js_count="$(ls "$GUARD"/*.js 2>/dev/null | wc -l | tr -d ' ')"; fi
     if [ "${js_count:-0}" -lt 1 ]; then
@@ -62,7 +62,7 @@ run_block_c12_c14() {
     # R3-NUL-4: nul_scan only walks .js files, so a raw NUL planted in one of
     # THIS suite's own .sh files — this file included — would pass R3-NUL-1
     # silently. Scope matches the class, not just the guard's own language.
-    local TESTDIR="$AGENTS_DIR/tests/hooks/feature-2053-forge-target-ownership"
+    local TESTDIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2053-forge-target-ownership"
     local sh_offenders
     sh_offenders="$(nul_scan_sh "$(npath "$TESTDIR")")"
     if [ -z "$sh_offenders" ]; then
@@ -101,7 +101,7 @@ run_block_c12_c14() {
     # concatenate to the same "abc" without a separator but must not fingerprint
     # the same WITH one.
     local FP_MOD
-    FP_MOD="$(npath "$AGENTS_DIR/hooks/confirm-forge-target-ownership/prove-ownership.js")"
+    FP_MOD="$(npath "$SCRIPT_CHECKOUT_ROOT/hooks/confirm-forge-target-ownership/prove-ownership.js")"
     local fp_a fp_b
     fp_a="$(env -i PATH="$PATH" GH_CONFIG_DIR="ab" GH_HOST="c" \
         node -e 'process.stdout.write(require(process.argv[1]).authFingerprint());' "$FP_MOD" 2>/dev/null)"
@@ -123,7 +123,7 @@ run_block_c12_c14() {
     echo ""
     echo "=== C12: skills/issue-create/SKILL.md no longer routes around the guard ==="
 
-    local SKILL="$AGENTS_DIR/skills/issue-create/SKILL.md"
+    local SKILL="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/SKILL.md"
     if [ ! -f "$SKILL" ]; then
         fail "GAP-C12-0 skills/issue-create/SKILL.md exists" "not found at $SKILL"
         return
@@ -190,7 +190,7 @@ run_block_c12_c14() {
     echo ""
     echo "=== C14: the guard is registered in the marker-bypass contract ==="
 
-    local CONTRACT="$AGENTS_DIR/docs/architecture/claude-code/marker-bypass-contract.md"
+    local CONTRACT="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/marker-bypass-contract.md"
     if [ ! -f "$CONTRACT" ]; then
         fail "GAP-C14-0 marker-bypass-contract.md exists" "not found at $CONTRACT"
         return
@@ -219,7 +219,7 @@ run_block_c12_c14() {
     # Registration in settings.json is what makes the contract row true. The TL3
     # sibling exercises it live; this is the static half, and it is the assertion
     # that fails first if the hook is written but never wired.
-    local SETTINGS="$AGENTS_DIR/settings.json"
+    local SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
     local reg
     reg="$(node -e '
         const s = require(process.argv[1]);

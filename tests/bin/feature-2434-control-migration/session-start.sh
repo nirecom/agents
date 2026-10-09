@@ -6,14 +6,14 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight category: migration.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/_mtime.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-SESSION_START="$AGENTS_DIR/hooks/session-start.js"
-WCD_CLI="$AGENTS_DIR/bin/workflow-control-dir"
+SESSION_START="$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js"
+WCD_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir"
 UUID="aabbccdd-1111-2222-3333-444455556666"
 UUID2="bbccddee-2222-3333-4444-555566667777"
 
@@ -105,7 +105,7 @@ rm -rf "$T"
 case_end
 
 case_begin "static-begin-line-control-dir" "hooks/workflow-state/state-io/control-dir.js"
-CTRL_DIR_FILE="$AGENTS_DIR/hooks/workflow-state/state-io/control-dir.js"
+CTRL_DIR_FILE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/control-dir.js"
 BEGIN_LINE="// --- BEGIN temporary: plans-dir control files -> workflow control dir migration added 2026-09-28 ---"
 if [ ! -f "$CTRL_DIR_FILE" ]; then
   fail "static-begin-line-control-dir" "control-dir.js not found (implementation absent)"
@@ -136,7 +136,7 @@ fi
 case_end
 
 case_begin "check-migration-blocks-clean" "hooks/workflow-state/state-io/control-dir.js"
-CHECK_BLOCKS="$AGENTS_DIR/bin/check-migration-blocks.sh"
+CHECK_BLOCKS="$SCRIPT_CHECKOUT_ROOT/bin/check-migration-blocks.sh"
 if [ ! -f "$CHECK_BLOCKS" ]; then
   fail "check-migration-blocks-clean" "bin/check-migration-blocks.sh not found"
 else

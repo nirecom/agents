@@ -13,9 +13,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
-SUITE_DIR="$AGENTS_DIR/tests/hooks/feature-2460-jev-shadow"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+SUITE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2460-jev-shadow"
 RC_ALL=0
 
 # run_suite <fragment>: run one fragment in its own process and fold its exit code in.

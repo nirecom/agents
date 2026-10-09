@@ -19,9 +19,9 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLI="$AGENTS_DIR/bin/scan-offensive"
-BLOCKLIST="$AGENTS_DIR/.offensive-content-blocklist"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/scan-offensive"
+BLOCKLIST="$SCRIPT_CHECKOUT_ROOT/.offensive-content-blocklist"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -152,7 +152,7 @@ run_t_prompt() {
     fi
     local rc out
     rc=0
-    out=$(cd "$AGENTS_DIR" && run_with_timeout 10 node -e \
+    out=$(cd "$SCRIPT_CHECKOUT_ROOT" && run_with_timeout 10 node -e \
         'const m = require("./bin/scan-offensive"); process.stdout.write(m.buildLlmPrompt("hello body", "test-label"));' 2>&1) || rc=$?
     if [ "$rc" -ne 0 ]; then
         fail "T-prompt: node invocation failed rc=$rc; out=$out"
@@ -183,7 +183,7 @@ run_t_prompt() {
     # (c) length comparison
     local prompt_len si_len
     prompt_len=$(printf '%s' "$out" | wc -c)
-    si_len=$(cd "$AGENTS_DIR" && run_with_timeout 10 node -e \
+    si_len=$(cd "$SCRIPT_CHECKOUT_ROOT" && run_with_timeout 10 node -e \
         'const m = require("./bin/scan-offensive"); process.stdout.write(String(m.STANDING_INSTRUCTION.length));' 2>/dev/null)
     if [ -z "$si_len" ] || [ "$prompt_len" -le "$si_len" ]; then
         fail "T-prompt(c): prompt len ($prompt_len) not greater than STANDING_INSTRUCTION len ($si_len)"

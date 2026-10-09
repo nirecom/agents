@@ -8,16 +8,16 @@
 # block-comment-block-size) must consume it instead of keeping private copies.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
   exit 77
 fi
 
-MOD="$AGENTS_DIR/hooks/lib/post-edit-content.js"
+MOD="$SCRIPT_CHECKOUT_ROOT/hooks/lib/post-edit-content.js"
 TMPBASE="$(make_tmp)"
 trap 'rm -rf "$TMPBASE"' EXIT
 FIX="$TMPBASE/fix"
@@ -169,7 +169,7 @@ JS
 export MOD FIX LANG_GATE
 MOD="$(np "$MOD")"
 FIX="$(np "$FIX")"
-LANG_GATE="$(np "$AGENTS_DIR/hooks/lib/pretool-lang-gate.js")"
+LANG_GATE="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/pretool-lang-gate.js")"
 DRV_N="$(np "$DRV")"
 drv() {
   DOUT="$(run_with_timeout 30 node "$DRV_N" "$1" 2>&1)"
@@ -263,7 +263,7 @@ expect sibling-reexport '[true,true,true]'
 case_end
 
 case_begin "comment-block-consumes-shared" "hooks/block-comment-block-size.js"
-if grep -qF "./lib/post-edit-content" "$AGENTS_DIR/hooks/block-comment-block-size.js"; then
+if grep -qF "./lib/post-edit-content" "$SCRIPT_CHECKOUT_ROOT/hooks/block-comment-block-size.js"; then
   pass "comment-block-consumes-shared: requires ./lib/post-edit-content"
 else
   fail "comment-block-consumes-shared" "hooks/block-comment-block-size.js does not require ./lib/post-edit-content"

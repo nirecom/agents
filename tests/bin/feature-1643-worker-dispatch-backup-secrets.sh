@@ -12,7 +12,7 @@ set -u
 
 # Why: the worker hashes content instead of quoting it, so the backup index never
 # becomes a secret of its own. Real git runs here (`git ls-files --others`): TL2.
-# Skipped-Because: a payload backup_dir other than <main-root>/.worktree-backup/<branch>
+# Skipped-Because: a payload backup_dir other than <target-main-root>/.worktree-backup/<branch>
 # is rejected — already driven by feature-1643-worker-dispatch-capability.sh rows
 # `backup-dir-arbitrary` / `backup-dir-sibling`; a copy here would be a second place to update.
 
@@ -21,8 +21,8 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_BS_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 PASS=0
@@ -243,14 +243,14 @@ group_zero_files() {
 # halves are asserted: the file is tracked AND git names it as the ignore source.
 # ===========================================================================
 group_gitignore() {
-    local gi="$AGENTS_DIR/.gitignore"
+    local gi="$SCRIPT_CHECKOUT_ROOT/.gitignore"
     if [ ! -f "$gi" ]; then
         fail "gitignore/file-exists" "$gi"
         return
     fi
     pass "gitignore/file-exists"
 
-    if git -C "$AGENTS_DIR" ls-files --error-unmatch .gitignore >/dev/null 2>&1; then
+    if git -C "$SCRIPT_CHECKOUT_ROOT" ls-files --error-unmatch .gitignore >/dev/null 2>&1; then
         pass "gitignore/is-tracked"
     else
         fail "gitignore/is-tracked" ".gitignore is not tracked by git"
@@ -266,11 +266,11 @@ group_gitignore() {
     # prints `<source>:<line>:<pattern>\t<path>`; the source must be .gitignore,
     # never .git/info/exclude or a global core.excludesFile.
     local src
-    src="$(git -C "$AGENTS_DIR" check-ignore -v ".worktree-backup/some-branch/.env" 2>/dev/null | head -1 | cut -d: -f1)"
+    src="$(git -C "$SCRIPT_CHECKOUT_ROOT" check-ignore -v ".worktree-backup/some-branch/.env" 2>/dev/null | head -1 | cut -d: -f1)"
     assert_eq "gitignore/ignore-source-is-the-tracked-file" ".gitignore" "$src"
 
     # Non-vacuity: check-ignore must be discriminating, not ignoring everything.
-    if git -C "$AGENTS_DIR" check-ignore -q "README.md" 2>/dev/null; then
+    if git -C "$SCRIPT_CHECKOUT_ROOT" check-ignore -q "README.md" 2>/dev/null; then
         fail "gitignore/check-ignore-is-discriminating" "README.md reported as ignored"
     else
         pass "gitignore/check-ignore-is-discriminating"

@@ -11,18 +11,18 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=./lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-SCRIPT_SEC="$AGENTS_DIR/skills/review-code-security/scripts/run-codex-review-loop.sh"
+SCRIPT_SEC="$SCRIPT_CHECKOUT_ROOT/skills/review-code-security/scripts/run-codex-review-loop.sh"
 
 if ! command -v git >/dev/null 2>&1; then
     skip "git unavailable — cannot exercise the diff-fingerprint seam"
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 0
 fi
 
-# --- fake AGENTS_CONFIG_DIR: only the two bin scripts the wrapper shells out to ---
+# --- fake AGENTS_MAIN_ROOT: only the two bin scripts the wrapper shells out to ---
 build_fake_config_sec() {
     local fake; fake=$(make_tmp)
     mkdir -p "$fake/bin"
@@ -60,7 +60,7 @@ ACCEPT_SUFFIX_SEC=".control/security-code-exit6-accepted.txt"
 # run_loop_sec <plans> <fake> <repo> <stub_rc> → prints exit code
 run_loop_sec() {
     local plans="$1" fake="$2" repo="$3" rc="$4" ec
-    ( cd "$repo" && AGENTS_CONFIG_DIR="$fake" SESSION_ID="sid1361" PLANS_DIR="$plans" \
+    ( cd "$repo" && AGENTS_MAIN_ROOT="$fake" SESSION_ID="sid1361" PLANS_DIR="$plans" \
         WORKFLOW_STATE_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" \
         EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$SCRIPT_SEC" >/dev/null 2>&1 )
     ec=$?
@@ -199,7 +199,7 @@ run_case_sec_c2() {
 # an exit-6 marker present and a fingerprint change after arming.
 run_loop_sec_prestaged() {
     local plans="$1" fake="$2" repo="$3" rc="$4" ec
-    ( cd "$repo" && AGENTS_CONFIG_DIR="$fake" SESSION_ID="sid1361" PLANS_DIR="$plans" \
+    ( cd "$repo" && AGENTS_MAIN_ROOT="$fake" SESSION_ID="sid1361" PLANS_DIR="$plans" \
         WORKFLOW_STATE_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" \
         EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$SCRIPT_SEC" --prestaged-report >/dev/null 2>&1 )
     ec=$?

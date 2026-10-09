@@ -14,9 +14,9 @@ set -uo pipefail
 # rule instead of re-describing shell mechanics inline. refactor-prompts (also `context: fork`)
 # gets a parallel one-sentence reminder ahead of its own shell-command-substitution step.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-REVIEW_TESTS_SKILL="$AGENTS_DIR/skills/review-tests/SKILL.md"
-REFACTOR_PROMPTS_SKILL="$AGENTS_DIR/skills/refactor-prompts/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REVIEW_TESTS_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/review-tests/SKILL.md"
+REFACTOR_PROMPTS_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/refactor-prompts/SKILL.md"
 
 # LAYER. Static/structural only: both SKILL.md files are read as TEXT; nothing is dispatched,
 # injected, or executed as a prompt. Negative controls run the SAME predicates over throwaway
@@ -93,9 +93,9 @@ ROWS_EXPECTED=20  # G1..G18 (plus G17c) negative-control rows -- see negative-co
 # Closest-to-action mitigation: a real fork-dispatch E2E (rules/test/claude-e2e.md) and the
 # per-session receipt written by hooks/instructions-loaded-audit.js.
 
-PART_DIR="$AGENTS_DIR/tests/skills/feature-2140-fork-dispatch-shell-commands"
+PART_DIR="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-2140-fork-dispatch-shell-commands"
 
-. "$AGENTS_DIR/tests/lib/read-directive-negation.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/read-directive-negation.sh"
 . "$PART_DIR/review-tests-checks.sh"
 . "$PART_DIR/refactor-prompts-checks.sh"
 . "$PART_DIR/negative-controls.sh"

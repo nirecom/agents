@@ -39,14 +39,14 @@ else
 fi
 
 # T24r2: hooks/lib/lang-config.js does NOT contain ASK_LANG reference (removed in #645)
-if ! grep -q "ASK_LANG" "$AGENTS_DIR/hooks/lib/lang-config.js"; then
+if ! grep -q "ASK_LANG" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/lang-config.js"; then
     pass "T24r2: lang-config.js has no ASK_LANG reference (removal regression)"
 else
     fail "T24r2: lang-config.js still references ASK_LANG — removal regression"
 fi
 
 # T24r3: hooks/check-ask-lang.js does NOT exist (removed in #645)
-if [ ! -f "$AGENTS_DIR/hooks/check-ask-lang.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/check-ask-lang.js" ]; then
     pass "T24r3: hooks/check-ask-lang.js is absent (removal regression)"
 else
     fail "T24r3: hooks/check-ask-lang.js still exists — removal regression"
@@ -75,7 +75,7 @@ DOCS_LANG_CHANGELOG_PUBLIC absent
 DOCS_LANG_CHANGELOG_PRIVATE absent"
 
 for _g5_file in ".env.example" "skills/update-docs/SKILL.md"; do
-    _g5_path="$AGENTS_DIR/$_g5_file"
+    _g5_path="$SCRIPT_CHECKOUT_ROOT/$_g5_file"
     if [ ! -f "$_g5_path" ]; then
         fail "T24r4: $_g5_file not found at $_g5_path"
         continue
@@ -98,12 +98,12 @@ done
 echo ""
 echo "=== Group 6: detect-cjk.js — hasCJK SSOT ==="
 
-DETECT_CJK_LIB="$AGENTS_DIR/hooks/lib/detect-cjk.js"
+DETECT_CJK_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/detect-cjk.js"
 if [ "$(src_present "$DETECT_CJK_LIB")" != "ok" ]; then
     echo "SKIP G6: hooks/lib/detect-cjk.js not yet implemented (RED phase)"
 else
     _g6_out="$(node -e "
-      const { hasCJK } = require('$_AGENTS_DIR_NODE/hooks/lib/detect-cjk');
+      const { hasCJK } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/detect-cjk');
       if (!hasCJK('日本語テスト')) { process.stderr.write('T26 fail\n'); process.exit(1); }
       if (hasCJK('안녕하세요 World')) { process.stderr.write('T26b fail\n'); process.exit(1); }
       if (hasCJK('plain english')) { process.stderr.write('T26c fail\n'); process.exit(1); }
@@ -121,4 +121,4 @@ fi
 # G7 previously tested the docs-lang-config.js compatibility shim. After #619
 # the shim is deleted; all callers import hooks/lib/lang-config.js directly.
 
-LANG_CONFIG_LIB="$AGENTS_DIR/hooks/lib/lang-config.js"
+LANG_CONFIG_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/lang-config.js"

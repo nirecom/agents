@@ -128,7 +128,7 @@ chmod +x "$STUB_BIN/gh"
 # prove the hostile fixture is live; if M1 went green too, A1-A3 would be vacuous.
 MUTANT="$TMPD/compose-doc-append-entry.no-fix"
 sed -e 's|uv run --no-project|uv run|g' \
-    -e "s|^SCRIPT_DIR=.*|SCRIPT_DIR=\"$AGENTS_DIR/bin\"|" \
+    -e "s|^SCRIPT_DIR=.*|SCRIPT_DIR=\"$SCRIPT_CHECKOUT_ROOT/bin\"|" \
     "$CLI" > "$MUTANT"
 MUTANT_UV_SITES="$(grep -c 'uv run --no-project' "$MUTANT" || true)"
 REAL_UV_SITES="$(grep -c 'uv run --no-project' "$CLI" || true)"
@@ -195,7 +195,6 @@ run_compose() {
     RUN_RC=0
     RUN_OUT="$(cd "$WORK" && env \
         "PATH=$STUB_BIN:$PATH" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_PLANS_DIR=$STAGING" \
         "WORKFLOW_STATE_DIR=$ARM_DIR/workflow" \
         "CLAUDE_CODE_SESSION_ID=uvnp-arm$ARM_N" \

@@ -8,9 +8,10 @@
 # the dispatcher asserts them. Real uname/host on purpose: the runner computes its own key.
 
 set -uo pipefail
-. "$AGENTS_DIR/tests/tests/feature-1832-run-all-parallel/_lib.sh"
-. "$AGENTS_DIR/bin/lib/run-all-parallelism.sh" || exit 98
-. "$AGENTS_DIR/bin/lib/run-all-durations.sh" || exit 98
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-1832-run-all-parallel/_lib.sh"
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-parallelism.sh" || exit 98
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-durations.sh" || exit 98
 
 fx_init "n17-14-runner-lpt" >/dev/null
 r14() { printf 'R14 %s=%s\n' "$1" "$2"; }

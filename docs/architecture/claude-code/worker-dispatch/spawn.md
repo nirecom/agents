@@ -15,17 +15,17 @@ Every child process the dispatcher starts holds all three:
    table — an external command the worker declared in `binaries.external`, or a
    script resolved from an anchor plus a hardcoded relative path. The payload
    never names an executable.
-3. **The child env is an allowlist.** `AGENTS_CONFIG_DIR` is set explicitly from
-   the resolved ACD anchor and is never inherited, so a poisoned parent env
+3. **The child env is an allowlist.** `AGENTS_MAIN_ROOT` is set explicitly from
+   the resolved script checkout root anchor and is never inherited, so a poisoned parent env
    cannot redirect a child at a planted checkout.
 
 ## Anchors
 
-`anchorRoot()` resolves `acd`, `main-root` and `family-worktree`.
+`anchorRoot()` resolves `script-checkout-root`, `target-main-root` and `family-worktree`.
 `family-worktree` is the one anchor that deliberately resolves into unreviewed
 code, and the only one that can serve a worker whose job IS to execute the
 branch under review: `tests/run-all.sh` derives its test directory from its own
-location, so a main-root-anchored script runs main's suite no matter what cwd it
+location, so a target-main-root-anchored script runs main's suite no matter what cwd it
 is given — i.e. it silently verifies the wrong tree. The widening is bounded —
 the root is the validated family worktree, never an arbitrary payload path.
 

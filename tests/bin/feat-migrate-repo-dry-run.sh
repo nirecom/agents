@@ -1,20 +1,17 @@
 #!/bin/bash
 # Tests: bin/github-issues/migration/orchestrate.sh
 # Tags: migration, repo, github, issues, bin, scope:issue-specific
-# Tests for feat/migrate-repo — orchestrate.sh --dry-run
-#
-# Dry-run must:
+# Tests for feat/migrate-repo — orchestrate.sh --dry-run. Dry-run must:
 #   - Exit 0
 #   - Create no state file, no .github/, no commits
 #   - Never invoke gh (mock exits 99 if called)
 #   - Print Step 3 ordering gate as SKIPPED
-#
 # RED: fails clean while orchestrate.sh is missing.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ORCH_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/orchestrate.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
 
 PASS=0
 FAIL=0
@@ -66,21 +63,20 @@ EOF
     # Destructive calls (issue create/close) must not appear in the log.
     MOCK_DIR="$TMP/mock"
     mkdir -p "$MOCK_DIR"
-    cp "$AGENTS_DIR/tests/fixtures/migration/gh-mock.sh" "$MOCK_DIR/gh"
+    cp "$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration/gh-mock.sh" "$MOCK_DIR/gh"
     chmod +x "$MOCK_DIR/gh"
 
     MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export MOCK_LOG
     export PATH="$MOCK_DIR:$PATH"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 }
 
 teardown_fixture() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset MOCK_LOG AGENTS_CONFIG_DIR
+    unset MOCK_LOG
 }
 
 # Run dry-run once and reuse the output across multiple assertions.
@@ -123,6 +119,14 @@ if [ "$destructive" -eq 0 ]; then
     pass "D5: no destructive gh calls (create/close) in dry-run"
 else
     fail "D5: gh called: $(grep -E '^gh issue create|^gh issue close' "$MOCK_LOG" | head -1)"
+fi
+
+# --- D6: the backfill step is shown with the repository handed over by flag (#2561).
+BACKFILL_LINE="backfill-commit-comments.sh --target-checkout-root $(cd "$FIXTURE" && pwd)"
+if printf '%s\n' "$OUT" | grep -qF -- "$BACKFILL_LINE"; then
+    pass "D6: backfill step names the repository by --target-checkout-root"
+else
+    fail "D6: missing '$BACKFILL_LINE' in: $(printf '%s\n' "$OUT" | grep -F backfill-commit-comments)"
 fi
 
 teardown_fixture

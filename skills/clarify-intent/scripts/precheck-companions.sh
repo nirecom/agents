@@ -9,6 +9,8 @@
 #   6 --session: JSON snapshot of baseline + per-candidate verdicts at <session control dir>/companion-precheck.json.
 set -uo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+
 SEED=""
 EXCLUDE_CSV=""
 SESSION=""
@@ -37,7 +39,7 @@ fi
 # --- BEGIN temporary: plans-dir control files -> workflow control dir migration added 2026-09-28 ---
 # deletion-condition: remove after 2026-12-28 (release + 3 months) together with hooks/lib/temporary-migrations/control-dir-split/, bin/migrate-control-dir and the legacy-argument shims; keep guard (c) until then
 if [[ -n "$LEGACY_OUTPUT" ]]; then
-    if ! LEGACY_HIT="$(node "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}/hooks/lib/temporary-migrations/control-dir-split/legacy-arg.js" "$LEGACY_OUTPUT" "$SESSION" companion-precheck.json)"; then
+    if ! LEGACY_HIT="$(node "${SCRIPT_CHECKOUT_ROOT}/hooks/lib/temporary-migrations/control-dir-split/legacy-arg.js" "$LEGACY_OUTPUT" "$SESSION" companion-precheck.json)"; then
         echo "[precheck-companions] --output-file is accepted only as the legacy session-prefixed companion-precheck.json path in the plans dir" >&2
         exit 2
     fi
@@ -46,7 +48,7 @@ fi
 # --- END temporary: plans-dir control files -> workflow control dir migration ---
 
 if [[ -n "$SESSION" ]]; then
-    if ! OUTPUT_FILE="$(node "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}/bin/workflow-control-dir" --session "$SESSION" --file companion-precheck.json --for-write)"; then
+    if ! OUTPUT_FILE="$(node "${SCRIPT_CHECKOUT_ROOT}/bin/workflow-control-dir" --session "$SESSION" --file companion-precheck.json --for-write)"; then
         echo "[precheck-companions] session control directory unresolved for '$SESSION'" >&2
         exit 2
     fi

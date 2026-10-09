@@ -18,6 +18,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="pstrip"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
@@ -132,7 +133,7 @@ if run_case "S7/all-write-paths-strip"; then
     next_sid; SID_A="$SID"
     next_sid; SID_B="$SID"
     MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"
-    (cd "$AGENTS_DIR" && "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node "$MKV1" toplevel) > "$WF/$SID_B.json"
+    (cd "$SCRIPT_CHECKOUT_ROOT" && "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$MKV1" toplevel) > "$WF/$SID_B.json"
     nodejs_env "SID_B=$SID_B FORBIDDEN=$FORBIDDEN" "$SID_A" "$PRE"'
 const E = require("./hooks/workflow-state/state-io/events");
 const forbidden = process.env.FORBIDDEN.split(",");

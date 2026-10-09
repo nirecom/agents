@@ -22,14 +22,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-MARK_JS="${_AGENTS_DIR_NODE}/hooks/workflow-mark.js"
-MARK_DIR="${_AGENTS_DIR_NODE}/hooks/workflow-mark"
+MARK_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/workflow-mark.js"
+MARK_DIR="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/workflow-mark"
 
 if [ ! -f "$MARK_JS" ]; then
     echo "SKIP: hooks/workflow-mark.js not present"

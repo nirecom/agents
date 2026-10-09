@@ -10,8 +10,8 @@
 # directly, as tests/bin/main-block-dotenv.sh does.
 ALLOW_DUMP_GUARD_CASES_LOADED=1
 
-DUMP_HOOK="$AGENTS_DIR/hooks/block-dotenv.js"
-DUMP_TOOL="$AGENTS_DIR/bin/env-effective-kv"
+DUMP_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-dotenv.js"
+DUMP_TOOL="$SCRIPT_CHECKOUT_ROOT/bin/env-effective-kv"
 
 # hook_verdict <command> — "block", "approve", or "unparsable".
 hook_verdict() {
@@ -74,7 +74,7 @@ DUMP_CFG="$TMP_ROOT/allow-dump-cfg"
 mkdir -p "$DUMP_CFG"
 printf 'CODE_LANG=english\nDUMPCANARY2223=canary-value-2223\n' > "$DUMP_CFG/.env"
 DUMP_OUT="$TMP_ROOT/allow-dump-out.txt"
-AGENTS_CONFIG_DIR="$(to_node_path "$DUMP_CFG")" run_with_timeout 20 \
+AGENTS_MAIN_ROOT="$(to_node_path "$DUMP_CFG")" run_with_timeout 20 \
     bash "$DUMP_TOOL" --global-only --allow-dump 2>/dev/null | tr '\0' '\n' > "$DUMP_OUT"
 if grep -qF 'canary-value-2223' "$DUMP_OUT" 2>/dev/null; then
     pass "T2223AD-cli-still-dumps-when-run-by-a-script"
@@ -85,4 +85,4 @@ fi
 # The nested form the #2223 suites themselves use: the hook only ever sees the
 # literal outer command string, so an invocation inside a test script is unseen.
 assert_eq "T2223AD-nested-invocation-not-seen-by-hook" "approve" \
-    "$(hook_verdict "bash $AGENTS_DIR/tests/hooks/feature-2223-local-env-overlay.sh")"
+    "$(hook_verdict "bash $SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2223-local-env-overlay.sh")"

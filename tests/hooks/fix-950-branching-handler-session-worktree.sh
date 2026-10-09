@@ -12,9 +12,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HOOK_JS="$AGENTS_DIR/hooks/workflow-mark.js"
-RUN_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK_JS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
+RUN_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -64,12 +64,12 @@ if command -v cygpath >/dev/null 2>&1; then
   MAIN_NODE="$(cygpath -m "$MAIN_REPO")"
   WTA_NODE="$(cygpath -m "$WTA")"
   WF_DIR_NODE="$(cygpath -m "$WF_DIR")"
-  AGENTS_NODE="$(cygpath -m "$AGENTS_DIR")"
+  AGENTS_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
   MAIN_NODE="$MAIN_REPO"
   WTA_NODE="$WTA"
   WF_DIR_NODE="$WF_DIR"
-  AGENTS_NODE="$AGENTS_DIR"
+  AGENTS_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 NONEXISTENT_NODE="$TMPDIR_BASE/does-not-exist"
@@ -132,7 +132,6 @@ run_hook() {
   local rc=0
   ( \
     WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
-    AGENTS_CONFIG_DIR="$AGENTS_NODE" \
       bash "$RUN_TIMEOUT" 30 node "$HOOK_JS" <<< "$payload" \
       > "$out_file" 2> "$err_file"
   ) || rc=$?

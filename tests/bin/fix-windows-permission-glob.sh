@@ -14,14 +14,14 @@ set -u
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL="*"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-PM_MODULE="${_AGENTS_DIR_NODE}/hooks/lib/path-match.js"
-SETTINGS_FILE="${_AGENTS_DIR_NODE}/settings.json"
+PM_MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/path-match.js"
+SETTINGS_FILE="${_SCRIPT_CHECKOUT_ROOT_NODE}/settings.json"
 
 PASS=0
 FAIL=0

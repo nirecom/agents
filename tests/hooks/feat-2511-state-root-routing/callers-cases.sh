@@ -14,7 +14,7 @@ c_r11_session_start_fresh() {
   local sid
   new_home r11
   sid="$(sid_of 1101)"
-  dhook "$AGENTS_DIR/hooks/session-start.js" "{\"session_id\":\"$sid\",\"source\":\"startup\",\"transcript_path\":\"\",\"model\":\"m\"}" >/dev/null
+  dhook "$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js" "{\"session_id\":\"$sid\",\"source\":\"startup\",\"transcript_path\":\"\",\"model\":\"m\"}" >/dev/null
   eq "R11 SessionStart creates ~/.workflow-state/<sid>.json" "$(test -f "$NEW/$sid.json" && echo yes)" "yes"
   eq "R11 SessionStart creates nothing for the sid in the legacy root" "$(sid_entries "$LEG" "$sid")" ""
 }
@@ -26,13 +26,13 @@ c_r21_state_file_line() {
   old="$(sid_of 2102)"
   probe_seed "$LEG" "$old"
   o="$T/r21-out.json"
-  dhook "$AGENTS_DIR/hooks/session-start.js" "{\"session_id\":\"$fresh\",\"source\":\"startup\",\"transcript_path\":\"\",\"model\":\"m\"}" >"$o"
+  dhook "$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js" "{\"session_id\":\"$fresh\",\"source\":\"startup\",\"transcript_path\":\"\",\"model\":\"m\"}" >"$o"
   eq "R21 session-start State file (fresh sid) is the new path" "$(dprobe stateline "$(np "$o")")" "$NEW/$fresh.json"
-  dhook "$AGENTS_DIR/hooks/session-start.js" "{\"session_id\":\"$old\",\"source\":\"resume\",\"transcript_path\":\"\",\"model\":\"m\"}" >"$o"
+  dhook "$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js" "{\"session_id\":\"$old\",\"source\":\"resume\",\"transcript_path\":\"\",\"model\":\"m\"}" >"$o"
   eq "R21 session-start State file (legacy sid) is the legacy path" "$(dprobe stateline "$(np "$o")")" "$LEG/$old.json"
-  dhook "$AGENTS_DIR/hooks/post-compact.js" "{\"session_id\":\"$fresh\"}" >"$o"
+  dhook "$SCRIPT_CHECKOUT_ROOT/hooks/post-compact.js" "{\"session_id\":\"$fresh\"}" >"$o"
   eq "R21 post-compact State file (fresh sid) is the new path" "$(dprobe stateline "$(np "$o")")" "$NEW/$fresh.json"
-  dhook "$AGENTS_DIR/hooks/post-compact.js" "{\"session_id\":\"$old\"}" >"$o"
+  dhook "$SCRIPT_CHECKOUT_ROOT/hooks/post-compact.js" "{\"session_id\":\"$old\"}" >"$o"
   eq "R21 post-compact State file (legacy sid) is the legacy path" "$(dprobe stateline "$(np "$o")")" "$LEG/$old.json"
 }
 
@@ -136,7 +136,7 @@ c_r18_sp_control_dir() {
   old="$(sid_of 1801)"
   fresh="$(sid_of 1802)"
   probe_seed "$LEG" "$old"
-  lib="$AGENTS_DIR/bin/lib/safe-state-path.sh"
+  lib="$SCRIPT_CHECKOUT_ROOT/bin/lib/safe-state-path.sh"
   eq "R18 sp_control_dir: a legacy session gets the legacy control dir" "$(np "$(dsh "$lib" sp_control_dir "$old")")" "$LEG/$old.control"
   eq "R18 sp_control_dir: a fresh session gets the new control dir" "$(np "$(dsh "$lib" sp_control_dir "$fresh")")" "$NEW/$fresh.control"
 }
@@ -150,6 +150,6 @@ c_r19_sweep_both_roots() {
     printf '%s\n' '{"layer1":{"findings":[]},"last_updated":"2020-01-01T00:00:00.000Z"}' \
       >"$r/$(sid_of "190$i").control/supervisor-state.json"
   done
-  out="$(drun "$AGENTS_DIR/bin/sweep-supervisor-state.sh" --ci-mode)"
+  out="$(drun "$SCRIPT_CHECKOUT_ROOT/bin/sweep-supervisor-state.sh" --ci-mode)"
   eq "R19 sweep scans the control dirs of both roots" "$(grep -o '"scanned":[0-9]*' <<<"$out")" '"scanned":2'
 }

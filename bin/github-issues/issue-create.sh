@@ -23,8 +23,7 @@ MILESTONE=""
 REPORTER_MODEL=""
 REPORTER_MODEL_TEXT=""
 
-# Repo root, resolved from this script's own location. AGENTS_CONFIG_DIR is not
-# usable here: callers (and tests) legitimately run with it unset or empty.
+# Repo root, resolved from this script's own location.
 _IC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 while [ $# -gt 0 ]; do
@@ -64,42 +63,37 @@ if ! gh auth status 2>&1 | grep -q "'project'"; then
     echo "warn: Run 'gh auth refresh -s project' to add it (browser-based OAuth)." >&2
 fi
 
-# Phase 0a — label auto-repair (non-interactive). Only when AGENTS_CONFIG_DIR is
-# set AND the remote is GitHub. Missing config or non-GitHub remote → warn+skip
-# (backward compatible). Independent of the skill-layer Phase 0b project check.
-if [ -n "${AGENTS_CONFIG_DIR:-}" ]; then
-    _ic_is_github=1
-    if command -v is-github-dotcom-remote >/dev/null 2>&1; then
-        is-github-dotcom-remote >/dev/null 2>&1 || _ic_is_github=0
-    elif [ -x "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote" ]; then
-        bash "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote" >/dev/null 2>&1 || _ic_is_github=0
-    fi
-    if [ "$_ic_is_github" -eq 1 ]; then
-        _ic_preflight_rc=0
-        bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-preflight.sh" --check-labels \
-            ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} || _ic_preflight_rc=$?
-        if [ "$_ic_preflight_rc" -eq 1 ]; then
-            # type:task absent → auto-sync labels before creating the issue.
-            # --no-delete: repairing one missing label must never delete the repo's other
-            # labels. Sibling of the make-parent `meta` repair in issue-create-dispatch.sh.
-            if ! bash "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh" --no-delete \
-                    ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} \
-                    "$AGENTS_CONFIG_DIR/.github/labels.yml"; then
-                echo "Error: label sync failed — aborting issue creation" >&2
-                exit 1
-            fi
-            echo "note: labels synced (type:task was missing)" >&2
-        elif [ "$_ic_preflight_rc" -ge 2 ]; then
-            # Preflight HARD failure (gh error) — fail closed, do NOT sync.
-            echo "Error: label preflight hard-failed (rc=$_ic_preflight_rc) — aborting" >&2
+# Phase 0a — label auto-repair (non-interactive). Only when the remote is GitHub;
+# a non-GitHub remote → warn+skip. Independent of the skill-layer Phase 0b project check.
+_ic_is_github=1
+if command -v is-github-dotcom-remote >/dev/null 2>&1; then
+    is-github-dotcom-remote >/dev/null 2>&1 || _ic_is_github=0
+elif [ -x "$_IC_ROOT/bin/is-github-dotcom-remote" ]; then
+    bash "$_IC_ROOT/bin/is-github-dotcom-remote" >/dev/null 2>&1 || _ic_is_github=0
+fi
+if [ "$_ic_is_github" -eq 1 ]; then
+    _ic_preflight_rc=0
+    bash "$_IC_ROOT/bin/github-issues/issue-create-preflight.sh" --check-labels \
+        ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} || _ic_preflight_rc=$?
+    if [ "$_ic_preflight_rc" -eq 1 ]; then
+        # type:task absent → auto-sync labels before creating the issue.
+        # --no-delete: repairing one missing label must never delete the repo's other
+        # labels. Sibling of the make-parent `meta` repair in issue-create-dispatch.sh.
+        if ! bash "$_IC_ROOT/bin/github-issues/sync-labels.sh" --no-delete \
+                ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} \
+                "$_IC_ROOT/.github/labels.yml"; then
+            echo "Error: label sync failed — aborting issue creation" >&2
             exit 1
         fi
-        # rc=0 → type:task present; nothing to repair.
-    else
-        echo "warn: Phase 0a skipping label auto-repair (non-GitHub remote)" >&2
+        echo "note: labels synced (type:task was missing)" >&2
+    elif [ "$_ic_preflight_rc" -ge 2 ]; then
+        # Preflight HARD failure (gh error) — fail closed, do NOT sync.
+        echo "Error: label preflight hard-failed (rc=$_ic_preflight_rc) — aborting" >&2
+        exit 1
     fi
+    # rc=0 → type:task present; nothing to repair.
 else
-    echo "warn: AGENTS_CONFIG_DIR unset — Phase 0a skipping label auto-repair" >&2
+    echo "warn: Phase 0a skipping label auto-repair (non-GitHub remote)" >&2
 fi
 
 if [ -z "$TITLE" ]; then

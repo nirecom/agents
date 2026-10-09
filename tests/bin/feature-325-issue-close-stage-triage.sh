@@ -2,34 +2,26 @@
 # Tests: bin/github-issues/issue-close-stage-triage.sh, bin/github-issues/issue-close-triage-lib.sh
 # Tags: issue-close, stage, workflow, finalize, triage, scope:common
 # Serial: shell-injection guard asserts the fixed path /tmp/ST6_INJECT stays absent
-# Tests for issue #325 — /issue-close-stage skill triage script.
-#
-# Phase 1 (`/issue-close-stage`) runs inside the linked worktree BEFORE PR merge.
-# After issue #325 centralized history.md writes into Phase 2, Phase 1 steps
-# are B,D,F,G (Step E — doc-append — has been moved to Phase 2 entirely).
-
-# Routing scenarios for issue-close-stage-triage.sh:
-#   ST1: OPEN + no sentinel        → proceed, B,D,F,G
-#   ST2: OPEN + pending            → resume_f, F,G
-#   ST4: OPEN + appended           → resume_g, G
-#   ST5: CLOSED:*                  → error (mentions /issue-close-finalize)
-#   ST6: non-numeric N             → error (injection guard)
-#   ST7: AGENTS_CONFIG_DIR unset   → error
-
-# Note: pre-#325 ST3 (`phase1_done` short-circuit when history.md already
-# contained an entry for #N) was removed — Phase 1 no longer touches
-# history.md, so the only signal that determines Phase 1 completion is
-# the sentinel state. ST2's branching on history presence collapses into
-# a single `resume_f` case.
-#
-# RED: this suite fails clean while the script + shared lib are missing.
+# Issue #325 — /issue-close-stage triage. Phase 1 runs in the linked worktree BEFORE PR merge; its steps
+# are B,D,F,G (Step E — doc-append — moved to Phase 2 entirely). Routing scenarios:
+#   ST1 OPEN + no sentinel → proceed, B,D,F,G | ST2 OPEN + pending → resume_f, F,G | ST4 OPEN + appended → resume_g, G
+#   ST5 CLOSED:* → error (mentions /issue-close-finalize) | ST6 non-numeric N → error (injection guard)
+#   ST7: no root env var at all → routing unchanged
+# Pre-#325 ST3 (`phase1_done` on an existing history entry) was removed: Phase 1 no longer touches history.md,
+# so the sentinel state alone decides completion. RED while the script + shared lib are missing.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-triage-lib.sh"
-STAGE_TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-stage-triage.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-triage-lib.sh"
+STAGE_TRIAGE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-stage-triage.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
+
+# Top-level dual pin (rules/test/fixture-isolation.md) for every triage run below.
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
 PASS=0
 FAIL=0
@@ -70,7 +62,6 @@ setup_tmp() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/docs/history"
     : > "$TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"
@@ -80,7 +71,6 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR
     unset GH_MOCK_COMMENT_LOG
 }
 
@@ -163,15 +153,24 @@ else
 fi
 teardown_tmp
 
-# --- ST7: AGENTS_CONFIG_DIR unset → non-zero
+# --- ST7: no root env var at all → routing is unchanged
+# The script finds its lib beside its own path, so AGENTS_MAIN_ROOT and every
+# retired root name can be absent. Asserted on the routing output, not on rc alone.
 setup_tmp
-unset AGENTS_CONFIG_DIR
-GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$STAGE_TRIAGE_SCRIPT" 42 >/dev/null 2>&1
+ST7_UNSET=(-u AGENTS_MAIN_ROOT)
+while IFS= read -r ST7_NAME; do
+    ST7_NAME="${ST7_NAME%$'\r'}"
+    [ -n "$ST7_NAME" ] && ST7_UNSET+=(-u "$ST7_NAME")
+done < <(node "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js" --print-retired-env-names 2>/dev/null)
+ST7_OUT=$(cd "$TMP" && GH_MOCK_SCENARIO=issue_task \
+    run_with_timeout 15 env "${ST7_UNSET[@]}" bash "$STAGE_TRIAGE_SCRIPT" 42 2>/dev/null)
 RC=$?
-if [ "$RC" -ne 0 ]; then
-    pass "ST7: AGENTS_CONFIG_DIR unset → non-zero"
+if [ "${#ST7_UNSET[@]}" -gt 2 ] && [ "$RC" -eq 0 ] \
+   && echo "$ST7_OUT" | grep -qx "ACTION=proceed" \
+   && echo "$ST7_OUT" | grep -qx "NEXT_STEPS=B,D,F,G"; then
+    pass "ST7: no root env var → still routes OPEN:(none) to proceed (B,D,F,G)"
 else
-    fail "ST7: rc=$RC"
+    fail "ST7: rc=$RC unset-args=${#ST7_UNSET[@]} out=$(printf '%q' "$ST7_OUT")"
 fi
 teardown_tmp
 

@@ -20,7 +20,7 @@ _c6_run() {
     (
         cd "$NEUTRAL_CWD" || exit 1
         unset CLAUDE_CODE_SESSION_ID
-        export AGENTS_CONFIG_DIR="$C6_CONFIG"
+        export AGENTS_MAIN_ROOT="$C6_CONFIG"
         export WORKFLOW_STATE_DIR="$C6_WFDIR"
         export WORKFLOW_PLANS_DIR="$C6_WFDIR"
         run_hook_capture "$1" "$RWT" 20 node "$BCTW_HOOK"

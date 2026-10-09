@@ -19,8 +19,8 @@ Use after `/update-docs`, once doc/changelog edits are staged, before commit.
 
 ## Procedure
 
-RD-1. Run `bash "$AGENTS_CONFIG_DIR/bin/review-doc-gates" --all` for an advisory full-tree scan of size and heading-order issues.
-RD-2. Run `bash "$AGENTS_CONFIG_DIR/bin/review-doc-gates" --staged` to see exactly what the commit gate will block; exit 1 means a staged doc violates a HARD limit.
+RD-1. Run `bash "$AGENTS_MAIN_ROOT/bin/review-doc-gates" --all` for an advisory full-tree scan of size and heading-order issues.
+RD-2. Run `bash "$AGENTS_MAIN_ROOT/bin/review-doc-gates" --staged` to see exactly what the commit gate will block; exit 1 means a staged doc violates a HARD limit.
 RD-3. Fix each HARD failure — split an oversized file per Pattern A/C, or reorder README sections per the SSOT block — then re-run RD-2 until it exits 0.
 
 ## Completion

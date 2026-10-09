@@ -6,12 +6,12 @@
 # files print UNSUPPORTED (#2007 / #1765 / #2392 / #2500). B3/B4 need uv/pwsh on PATH.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RUN_ALL="$AGENTS_DIR/tests/run-all.sh"
-LAUNCH_LIB="$AGENTS_DIR/bin/lib/run-all-launch.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RUN_ALL="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
+LAUNCH_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-launch.sh"
 
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 [ -f "$RUN_ALL" ] || { echo "SKIP: tests/run-all.sh not present"; exit 77; }
 
@@ -32,7 +32,7 @@ run_all_fx() { OUT="$(bash "$RUN_ALL" "$@" 2>&1)"; RC=$?; }
 case_begin "registry-launch-rows" "bin/lib/run-all-launch.sh"
 T=$'\t'
 REG_RC=0
-REG_SHELL="$(node "$AGENTS_DIR/bin/test-language-registry" --format shell 2>&1)" || REG_RC=$?
+REG_SHELL="$(node "$SCRIPT_CHECKOUT_ROOT/bin/test-language-registry" --format shell 2>&1)" || REG_RC=$?
 reg_has() { printf '%s\n' "$REG_SHELL" | grep -qxF -- "$1"; }
 for s in "S1 pester *.Tests.ps1 pwsh" "S2 pytest test_*.py uv"; do
     read -r sid lid pat tool <<<"$s"
@@ -51,7 +51,7 @@ FX3="$TMPDIR_FX/s3-tests"
 mkdir -p "$FX3/skills"
 : >"$FX3/skills/x.Tests.ps1"
 : >"$FX3/skills/test_x.py"
-OUT="$(TESTS_DIR="$FX3" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 180 bash "$RUN_ALL" --print-plan --all 2>/dev/null)"; RC=$?
+OUT="$(TESTS_DIR="$FX3" bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 bash "$RUN_ALL" --print-plan --all 2>/dev/null)"; RC=$?
 s3_plan="$(printf '%s\n' "$OUT" | grep -E '^plan' | awk -F'\t' '{print $4}' | sed 's#.*/##' | LC_ALL=C sort | tr '\n' ' ')"
 if [ "$RC" = "0" ] && [ "$s3_plan" = "test_x.py x.Tests.ps1 " ]; then
     pass "S3: --all lists tests/<category>/x.Tests.ps1 and test_x.py"
@@ -200,7 +200,7 @@ printf '#!/usr/bin/env bash\nexit 1\n' >"$FXR/tests/hooks/ng.sh"
 u_run() {
     local tag="$1"; shift
     U_RC=0
-    U_OUT="$(cd "$FXR" && TESTS_DIR="$FXR/tests" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 180 bash "$RUN_ALL" "$@" 2>/dev/null)" || U_RC=$?
+    U_OUT="$(cd "$FXR" && TESTS_DIR="$FXR/tests" bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 bash "$RUN_ALL" "$@" 2>/dev/null)" || U_RC=$?
     printf '%s\n' "$U_OUT" >"$TMPDIR_FX/$tag.out"
 }
 u_tail() { printf '%s\n' "$1" | grep -E '^(Results|RUN_CONTRACT):'; }
@@ -218,7 +218,7 @@ const { extractFailingTests } = require(hooks + "/failing-list.js");
 console.log("trusted=" + isContractTrusted({ attributed: true, contract }) +
   " failing=" + JSON.stringify(extractFailingTests({ stdout: out, worktreeRoot: root, contract })));
 JS
-u_hook() { node "$TMPDIR_FX/u_hook.js" "$1" "$FXR" "$AGENTS_DIR/hooks/workflow-run-tests"; }
+u_hook() { node "$TMPDIR_FX/u_hook.js" "$1" "$FXR" "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests"; }
 
 # U1: --all — js shown once, after the result lines and before Results:; tallies/exit/contract unchanged.
 u_run u1-base --all; base_rc=$U_RC; base_tail="$(u_tail "$U_OUT")"
@@ -291,7 +291,7 @@ fi
 
 # U5: an unreadable registry loader aborts with exit 5 and one exact stderr line.
 u5_rc=0
-u5_err="$(RUN_ALL_REGISTRY_LIB=/nonexistent bash "$AGENTS_DIR/bin/run-with-timeout.sh" 180 bash "$RUN_ALL" "$FXR/tests/hooks/ok.sh" 2>&1 >/dev/null)" || u5_rc=$?
+u5_err="$(RUN_ALL_REGISTRY_LIB=/nonexistent bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 bash "$RUN_ALL" "$FXR/tests/hooks/ok.sh" 2>&1 >/dev/null)" || u5_rc=$?
 if [ "$u5_rc" = "5" ] && printf '%s\n' "$u5_err" | grep -qxF '[run-all] test language registry not readable: /nonexistent (RUN_ALL_REGISTRY_LIB)'; then
     pass "U5: RUN_ALL_REGISTRY_LIB=/nonexistent → exit 5 with the registry-not-readable message"
 else
@@ -300,15 +300,15 @@ fi
 # U5b: the loader exists but tlr_load fails — its sibling registry table is corrupt JSON.
 U5B="$TMPDIR_FX/u5b-agents"
 # shellcheck source=../lib/test-language-registry-fixture.sh
-. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
 u5b_lib="$U5B/bin/lib/test-language-registry.sh"
 # Control: the installed set loads before corruption, so the abort below is the JSON's doing.
 u5b_ok=0
-install_test_language_registry "$U5B" "$AGENTS_DIR" && [ -f "$u5b_lib" ] \
+install_test_language_registry "$U5B" "$SCRIPT_CHECKOUT_ROOT" && [ -f "$u5b_lib" ] \
   && bash -c '. "$1" && tlr_load' _ "$u5b_lib" >/dev/null 2>&1 && u5b_ok=1
 printf '{ "schema": 1, "entries": [ \n' >"$U5B/hooks/lib/test-language-registry.json"
 u5b_rc=0
-u5b_err="$(RUN_ALL_REGISTRY_LIB="$u5b_lib" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 180 bash "$RUN_ALL" "$FXR/tests/hooks/ok.sh" 2>&1 >/dev/null)" || u5b_rc=$?
+u5b_err="$(RUN_ALL_REGISTRY_LIB="$u5b_lib" bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 bash "$RUN_ALL" "$FXR/tests/hooks/ok.sh" 2>&1 >/dev/null)" || u5b_rc=$?
 if [ "$u5b_ok" = "1" ] && [ "$u5b_rc" = "5" ] && printf '%s\n' "$u5b_err" | grep -qxF "[run-all] test language registry not readable: $u5b_lib (RUN_ALL_REGISTRY_LIB)"; then
     pass "U5b: loader present but its registry JSON corrupt → exit 5 with the registry-not-readable message"
 else
@@ -317,7 +317,7 @@ fi
 case_end
 
 # shellcheck source=feature-2007-run-all-ps1-dispatch/pester-quoting.sh
-. "$AGENTS_DIR/tests/tests/feature-2007-run-all-ps1-dispatch/pester-quoting.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-2007-run-all-ps1-dispatch/pester-quoting.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

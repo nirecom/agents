@@ -9,9 +9,9 @@
 # the #1810 static lint that no hook / bin file reads stdin privately.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
@@ -20,7 +20,7 @@ trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-AGENTS_WIN="$(np "$AGENTS_DIR")"
+AGENTS_WIN="$(np "$SCRIPT_CHECKOUT_ROOT")"
 TMPW="$(np "$TMPD")"
 READ_STDIN_JS="$AGENTS_WIN/hooks/lib/read-stdin.js"
 GATE_JS="$AGENTS_WIN/hooks/lib/pretool-lang-gate.js"
@@ -410,7 +410,7 @@ case_begin "lint-bin-exclusion-rows-live" "hooks/lib/read-stdin.js"
 # ============================================================================
 # A row that stops matching (or whose file is gone) is a stale exception -> red.
 for _row in "${BIN_EXCLUDED[@]}"; do
-    if [[ ! -f "$AGENTS_DIR/$_row" ]]; then
+    if [[ ! -f "$SCRIPT_CHECKOUT_ROOT/$_row" ]]; then
         fail "bin-exclusion-live/$_row" "file no longer exists; drop the row"
     elif grep -qx "$_row" <<< "$_lint_hits"; then
         pass "bin-exclusion-live/$_row"

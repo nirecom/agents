@@ -8,9 +8,8 @@
 set -u
 
 _LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$_LIB_DIR/../../.." && pwd)"
-DRIVER="${WID_DRIVER_OVERRIDE:-$AGENTS_DIR/bin/workflow/workflow-init-driver}"
-TIMEOUT_WRAP="$AGENTS_DIR/bin/run-with-timeout.sh"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+TIMEOUT_WRAP="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -44,6 +43,14 @@ export CLAUDE_TRANSCRIPT_BASE_DIR="$ROOT_TMP/transcripts"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 _CASE_N=0
 
+# The driver finds wip-state.sh, parse-issue-tokens, resolve-session-id and adopt.js from
+# its own location, so the suite runs a copy of it from a mock checkout ($CFG) that
+# setup_case fills with the per-case mocks.
+CFG="$ROOT_TMP/mock-checkout"
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+script_checkout_fixture_copy "$CFG" bin/workflow bin/parse-issue-tokens hooks/lib hooks/workflow-state
+DRIVER="${WID_DRIVER_OVERRIDE:-$CFG/bin/workflow/workflow-init-driver}"
+
 # --- per-case environment ---------------------------------------------------
 setup_case() {  # <session-id>
     SID="$1"
@@ -51,20 +58,21 @@ setup_case() {  # <session-id>
     CASE_DIR="$ROOT_TMP/case-$_CASE_N"
     PLANS="$CASE_DIR/plans"
     WF="$CASE_DIR/wf"
-    CFG="$CASE_DIR/agents-config"
     MOCKBIN="$CASE_DIR/mock-bin"
     RESP="$CASE_DIR/gh-responses"
     WIPD="$CASE_DIR/wip"
     GH_LOG="$CASE_DIR/gh-calls.log"
     mkdir -p "$PLANS" "$WF" "$MOCKBIN" "$RESP" "$WIPD" \
         "$CFG/bin/github-issues" "$CFG/hooks/lib" "$CFG/skills/workflow-init/scripts"
+    # No adopt module (nor a previous case's stub and its call log) unless the case stages
+    # its own after setup_case: the phase fail-opens without it.
+    rm -rf "$CFG/hooks/workflow-state/inheritance"
     _init_case_repo
     _write_gh_mock
     _write_wip_mock
     _write_cfg_prims
     export WORKFLOW_PLANS_DIR="$PLANS"
     export WORKFLOW_STATE_DIR="$WF"
-    export AGENTS_CONFIG_DIR="$CFG"
     # Overwrites the value the developer's live session exports, so an inherited
     # id never decides the case (#2270).
     export CLAUDE_CODE_SESSION_ID="$SID"
@@ -74,7 +82,7 @@ setup_case() {  # <session-id>
 
 teardown_case() {
     export PATH="$ORIG_PATH"
-    unset AGENTS_CONFIG_DIR CLAUDE_CODE_SESSION_ID NON_GITHUB 2>/dev/null || true
+    unset CLAUDE_CODE_SESSION_ID NON_GITHUB 2>/dev/null || true
     # Back to the suite pins, never unset: an unset pair resolves the real home dirs.
     export WORKFLOW_STATE_DIR="$ROOT_TMP/wf-suite"
     export WORKFLOW_PLANS_DIR="$ROOT_TMP/plans-suite"
@@ -239,8 +247,6 @@ MOCKWIP2
 
 _write_cfg_prims() {
     printf '#!/bin/bash\necho "${CLAUDE_CODE_SESSION_ID:-mock-sid}"\n' > "$CFG/bin/resolve-session-id"
-    cp "$AGENTS_DIR/bin/parse-issue-tokens" "$CFG/bin/parse-issue-tokens"
-    cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$CFG/hooks/lib/parse-closes-issues.js"
     cat > "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FILT'
 #!/bin/bash
 # Passthrough filter mock: emit every issue-number arg back as '#N' (no filtering).

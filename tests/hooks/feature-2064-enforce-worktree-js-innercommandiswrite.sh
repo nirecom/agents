@@ -27,11 +27,11 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: hook-registration.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_NODE_DIR="$(cygpath -m "$AGENTS_DIR")"
+    AGENTS_NODE_DIR="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    AGENTS_NODE_DIR="$AGENTS_DIR"
+    AGENTS_NODE_DIR="$SCRIPT_CHECKOUT_ROOT"
 fi
 export AGENTS_NODE_DIR
 

@@ -46,11 +46,11 @@ _make_payload() { run_with_timeout 30 node -e "var o={tool_name:'Bash',tool_inpu
 run_hook() {
   local cmd="$1"; shift; local p; p="$(_make_payload "$cmd")"
   ( cd "$MAIN_REPO" || exit 1; for _kv in "$@"; do export "$_kv"; done
-    ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )
+    ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )
 }
 run_nongit() {
   local cmd="$1"; local p; p="$(_make_payload "$cmd")"
-  ( cd "$NONGIT_CWD" && ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$NONGIT_CWD" MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )
+  ( cd "$NONGIT_CWD" && ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT="$NONGIT_CWD" MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )
 }
 is_allow() { [ "$1" = "{}" ]; }
 

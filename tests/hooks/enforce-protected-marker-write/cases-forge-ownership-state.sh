@@ -11,7 +11,7 @@
 
 run_O_forge_ownership_state() {
     local probe="$SANDBOX/forge-state-probe.js" out
-    local CLASSIFY_NODE="$_AGENTS_DIR_NODE/hooks/block-clearance-token-write/bash-target-context/classify.js"
+    local CLASSIFY_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/block-clearance-token-write/bash-target-context/classify.js"
     local kind
 
     cat > "$probe" <<'PROBE_EOF'
@@ -103,9 +103,9 @@ PROBE_EOF
     done
     assert_eq "O5 a bare word without the session prefix does not" \
         "mention-bareword=false" "$(_o_line 'mention-bareword=')"
-    if [ -f "$AGENTS_DIR/hooks/block-clearance-token-write/bash-target-context/classify.js" ]; then
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write/bash-target-context/classify.js" ]; then
         if grep -q 'mentionsProtectedName' \
-            "$AGENTS_DIR/hooks/block-clearance-token-write/bash-target-context/classify.js"; then
+            "$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write/bash-target-context/classify.js"; then
             pass "O5 classify.js still sources the mention gate from the SSOT"
         else
             fail "O5 classify.js no longer imports mentionsProtectedName - the mention set has forked"

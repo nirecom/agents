@@ -12,7 +12,7 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 to_node_path() {
     if command -v cygpath >/dev/null 2>&1; then
@@ -22,8 +22,8 @@ to_node_path() {
     fi
 }
 
-AGENTS_DIR_NODE="$(to_node_path "$AGENTS_DIR")"
-GUARD_JS="${AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+SCRIPT_CHECKOUT_ROOT_NODE="$(to_node_path "$SCRIPT_CHECKOUT_ROOT")"
+GUARD_JS="${SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -242,7 +242,7 @@ setup_repo_with_remote() {
 # The real main worktree of this repository — the target-extraction and
 # block-reporting cases assert against a genuine main checkout, not a fixture.
 main_worktree_dir() {
-    git -C "$AGENTS_DIR" worktree list --porcelain 2>/dev/null \
+    git -C "$SCRIPT_CHECKOUT_ROOT" worktree list --porcelain 2>/dev/null \
         | awk '/^worktree /{print substr($0, 10); exit}'
 }
 
@@ -250,7 +250,7 @@ BASELINE_REPO="$(setup_main_checkout "baseline")"
 export BASELINE_REPO
 
 # ── fragments ───────────────────────────────────────────────────────────────
-FRAGMENT_DIR="$AGENTS_DIR/tests/hooks/main-enforce-worktree-guard"
+FRAGMENT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/main-enforce-worktree-guard"
 
 # Completion ledger: every fragment's LAST line is `frag_done <its own basename>`.
 # The `.` exit status cannot stand in for this — a bare `return` yields the status

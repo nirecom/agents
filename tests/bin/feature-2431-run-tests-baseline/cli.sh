@@ -10,7 +10,7 @@
 # isolation (#2512): re-pin to helpers.sh's private dirs (a sibling's pin is invisible to the scanner).
 : "${WF_DIR:?helpers.sh must be sourced first}" "${PLANS_DIR:?helpers.sh must be sourced first}"
 export WORKFLOW_STATE_DIR="$(np "$WF_DIR")" WORKFLOW_PLANS_DIR="$(np "$PLANS_DIR")"
-declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"
+declare -F harness_assert_isolated >/dev/null || . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 harness_assert_isolated
 
 # cli_case_cache <label> — a fresh ledger/cache dir per case, so no case reuses another's records.

@@ -4,18 +4,19 @@
 # Tags: worker-dispatch, capability, fsguard, spawn, security, attack-matrix, TL1, scope:issue-specific
 # Sourced by ../feature-1643-worker-dispatch-capability.sh after fixtures.sh — spawn counting, tree snapshot, dispatch runner.
 
-# An invocation is "read-only anchor probe" when it is git rev-parse / git
-# worktree list. Anything else counts as an effectful spawn.
-# Same pattern the `grep -v … | grep -c .` form used, evaluated in-process: two
-# more process starts saved per matrix row. The log is normally empty, so the
-# loop body rarely runs at all.
-SPAWN_PROBE_RE='^git (-C [^ ]+ )?(rev-parse|worktree list)'
+# One JSONL record per child the dispatcher started (held or run). A record is a
+# "read-only anchor probe" when it is `git -C <dir> rev-parse …` or `git -C <dir> worktree
+# list …`; every other record counts as an effectful spawn. Matched in-process to save
+# process starts per matrix row. A missing log is a counted failure, never a silent zero.
+SPAWN_PROBE_RE='"command":"git","args":\["-C","[^"]*","(rev-parse"|worktree","list")'
 count_effectful_spawns() {
     local line
     EFFECTFUL_SPAWNS=0
-    [ -f "$SPAWN_LOG" ] || return 0
+    TOTAL_SPAWNS=0
+    if [ ! -f "$SPAWN_LOG" ]; then EFFECTFUL_SPAWNS="no-record-file"; return 0; fi
     while IFS= read -r line; do
         [ -n "$line" ] || continue
+        TOTAL_SPAWNS=$((TOTAL_SPAWNS + 1))
         if [[ $line =~ $SPAWN_PROBE_RE ]]; then continue; fi
         EFFECTFUL_SPAWNS=$((EFFECTFUL_SPAWNS + 1))
     done < "$SPAWN_LOG"
@@ -82,7 +83,7 @@ snapshot_all() {
         "$EVIL_RAW"       "$EVIL" \
         "$OUTSIDE_RAW"    "$OUTSIDE" \
         "$NONGIT_RAW"     "$NONGIT" \
-        "$FAKE_ACD_RAW"   "$FAKE_ACD" \
+        "$OTHER_CHECKOUT_RAW" "$OTHER_CHECKOUT" \
         "$WF_PIN"         "$WF_PIN" \
         | node "$SNAP_JS_N" 2>/dev/null \
         | grep -v '/\.control-migration-cursor\.json '
@@ -92,10 +93,39 @@ DOUT=""
 DRC=0
 run_dispatch() {
     DRC=0
-    DOUT="$(cd "$MAIN_RAW" && run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID \
-        "PATH=$SHIM_DIR:$PATH" \
-        "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
-        node "$DISPATCH_JS" "$@" 2>&1)" || DRC=$?
+    : > "$SPAWN_LOG"
+    DOUT="$(cd "$MAIN_RAW" && run_with_timeout 60 env \
+        "SPAWN_RECORD_OUT=$SPAWN_LOG_N" "SPAWN_RECORD_MODE=run-real" "SPAWN_RECORD_ALLOW=git" \
+        node -r "$SPAWN_PRELOAD_N" "$DISPATCH_JS" "$@" 2>&1)" || DRC=$?
+}
+
+# Shows the two observers can fail: the snapshot sees the fixture tree and a new byte in
+# it, and an accepted dispatch moves the spawn counter (its bash child is recorded, held).
+run_observer_controls() {
+    local before after pfile="$PLANS_RAW/control-spawn.json"
+    before="$(snapshot_all)"
+    if [ -n "$before" ]; then pass "cap-control/snapshot/non-empty"; else fail "cap-control/snapshot/non-empty — the snapshot printed nothing"; fi
+    echo "probe" > "$OUTSIDE_RAW/snapshot-probe.txt"
+    after="$(snapshot_all)"
+    rm -f "$OUTSIDE_RAW/snapshot-probe.txt"
+    if [ "$before" != "$after" ]; then pass "cap-control/snapshot/sees-a-new-file"; else fail "cap-control/snapshot/sees-a-new-file — a written file left the snapshot unchanged"; fi
+    assert_eq "cap-control/snapshot/stable-when-nothing-changes" "$before" "$(snapshot_all)"
+
+    printf '%s' "{\"cwd\":\"$LINKED\",\"test_args\":[],\"timeout_seconds\":15}" > "$pfile"
+    run_dispatch test-runner "$MAIN" "$PLANS/control-spawn.json"
+    count_effectful_spawns
+    status_of
+    assert_eq "cap-control/spawn-counter/accepted-row-status" "pass" "$STATUS_LINE"
+    assert_eq "cap-control/spawn-counter/accepted-row-counts-one-spawn" "1" "$EFFECTFUL_SPAWNS"
+    if [ "$TOTAL_SPAWNS" -gt 1 ]; then
+        pass "cap-control/spawn-counter/anchor-probes-recorded-and-not-counted"
+    else
+        fail "cap-control/spawn-counter/anchor-probes-recorded-and-not-counted — records=$TOTAL_SPAWNS"
+    fi
+    case "$(cat "$SPAWN_LOG")" in
+        *'"held":true'*'"command":"bash"'*) pass "cap-control/spawn-counter/non-git-child-held" ;;
+        *) fail "cap-control/spawn-counter/non-git-child-held — $(tr '\n' ' ' < "$SPAWN_LOG")" ;;
+    esac
 }
 
 # First `status: <value>` line of the dispatcher output, matched in-process for

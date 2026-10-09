@@ -29,7 +29,7 @@ NODE_HELPER
 
 classify() {
   local cmd="$1"
-  run_with_timeout 15 node "$CLASSIFY_HELPER" "$AGENTS_DIR" "$cmd"
+  run_with_timeout 15 node "$CLASSIFY_HELPER" "$SCRIPT_CHECKOUT_ROOT" "$cmd"
 }
 
 assert_classify() {
@@ -70,7 +70,7 @@ assert_git_write() {
   local label="$1" cmd="$2"
   local c g
   c="$(classify "$cmd")"
-  g="$(run_with_timeout 15 node "$GITWRITE_HELPER" "$AGENTS_DIR" "$cmd")"
+  g="$(run_with_timeout 15 node "$GITWRITE_HELPER" "$SCRIPT_CHECKOUT_ROOT" "$cmd")"
   if [ "$c" = "read" ] && [ "$g" = "true" ]; then
     pass "$label → git-write (classify=read + isGitWriteIR=true)"
   else
@@ -84,7 +84,7 @@ assert_file_op_write() {
   local label="$1" cmd="$2"
   local c f
   c="$(classify "$cmd")"
-  f="$(run_with_timeout 15 node "$FILEOP_HELPER" "$AGENTS_DIR" "$cmd")"
+  f="$(run_with_timeout 15 node "$FILEOP_HELPER" "$SCRIPT_CHECKOUT_ROOT" "$cmd")"
   if [ "$c" = "read" ] && [ "$f" = "true" ]; then
     pass "$label → file-op-write (classify=read + isFileOpWriteIR=true)"
   else
@@ -125,7 +125,7 @@ assert_pkg_mgr_write() {
   local label="$1" cmd="$2"
   local c p
   c="$(classify "$cmd")"
-  p="$(run_with_timeout 15 node "$PKGMGR_HELPER" "$AGENTS_DIR" "$cmd")"
+  p="$(run_with_timeout 15 node "$PKGMGR_HELPER" "$SCRIPT_CHECKOUT_ROOT" "$cmd")"
   if [ "$c" = "read" ] && [ "$p" = "true" ]; then
     pass "$label → pkg-mgr-write (classify=read + isPkgMgrWriteIR=true)"
   else
@@ -138,7 +138,7 @@ assert_interpreter_c_write() {
   local label="$1" cmd="$2"
   local c i
   c="$(classify "$cmd")"
-  i="$(run_with_timeout 15 node "$INTERPC_HELPER" "$AGENTS_DIR" "$cmd")"
+  i="$(run_with_timeout 15 node "$INTERPC_HELPER" "$SCRIPT_CHECKOUT_ROOT" "$cmd")"
   if [ "$c" = "read" ] && [ "$i" = "true" ]; then
     pass "$label → interpreter-c-write (classify=read + isInterpreterCWriteIR=true)"
   else
@@ -164,7 +164,7 @@ NODE_RAW
 assert_classify_raw() {
   local label="$1" jsexpr="$2" expected="$3"
   local got
-  got="$(run_with_timeout 15 node "$CLASSIFY_RAW_HELPER" "$AGENTS_DIR" "$jsexpr")"
+  got="$(run_with_timeout 15 node "$CLASSIFY_RAW_HELPER" "$SCRIPT_CHECKOUT_ROOT" "$jsexpr")"
   if [ "$got" = "$expected" ]; then
     pass "$label → $expected"
   else

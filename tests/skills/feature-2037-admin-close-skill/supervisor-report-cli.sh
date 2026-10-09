@@ -4,7 +4,7 @@
 
 # The supervisor-report half of #2037: grades skills/supervisor-report against its real
 # consumer, bin/supervisor-report (split from the entry file per file-split.md Pattern A).
-# Assumes AGENTS_DIR, TMPDIR_BASE, SR_SKILL, SR_CLI, WORKFLOW_PLANS_DIR,
+# Assumes SCRIPT_CHECKOUT_ROOT, TMPDIR_BASE, SR_SKILL, SR_CLI, WORKFLOW_PLANS_DIR,
 # fresh_workflow_dir(), run_with_timeout(), pass(), fail() from the entry file.
 echo ""
 echo "=== S5: the supervisor-report skill's CLI call satisfies the CLI's own required flags ==="
@@ -44,7 +44,7 @@ echo "=== S8: the supervisor-report skill's documented call is accepted by the r
 # enum (a category or severity that does not exist), aborts in usage() at run time. So the
 # flag set is handed to the real CLI with test values and the exit code is the assertion.
 if [ ! -f "$SR_SKILL" ] || [ ! -f "$SR_CLI" ]; then
-    fail "S8: IMPLEMENTATION MISSING: ${SR_SKILL##"$AGENTS_DIR/"} or bin/supervisor-report"
+    fail "S8: IMPLEMENTATION MISSING: ${SR_SKILL##"$SCRIPT_CHECKOUT_ROOT/"} or bin/supervisor-report"
 else
     # EVERY documented value is exercised, not one sample: the skill's tables are what a
     # reporter chooses from, and a single stale row is enough to lose the one observation
@@ -101,7 +101,6 @@ FIND_EOF
         wf="$(fresh_workflow_dir)"
         rc=0
         out="$(run_with_timeout 60 env \
-            "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "WORKFLOW_STATE_DIR=$wf" \
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
             node "$SR_CLI" --categories "$cat" --severity "$sev" \
@@ -263,7 +262,6 @@ ARGV_EOF
         # xargs -0 reads the NUL stream straight from the file — the tokenization is
         # preserved end to end, and values containing spaces stay single arguments.
         S10_OUT="$(run_with_timeout 60 env \
-            "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "WORKFLOW_STATE_DIR=$S10_WF" \
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
             xargs -0 node "$SR_CLI" <"$S10_ARGV_FILE" 2>&1)" || S10_RC=$?
@@ -295,4 +293,4 @@ fi
 # --- S9: the guard sequence. Split into a sibling file because this one crossed the
 # 300-line WARN (rules/coding/file-split.md Pattern A); sourced from here so the extracted
 # sentinel commands and the fixture helpers above stay in scope. ---
-GUARD_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/guard-sequence.sh"
+GUARD_CASES="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-2037-admin-close-skill/guard-sequence.sh"

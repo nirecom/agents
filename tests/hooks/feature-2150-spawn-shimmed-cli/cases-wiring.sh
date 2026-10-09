@@ -44,9 +44,9 @@ run_W_wiring() {
 # the "bypassed" half of C1. Counts, not presence: `spawnSync("codegraph"` must
 # reach zero, and install/codegraph-mcp.js has TWO call sites (claudeCliPresent
 # and runClaude), so CPR-ORTH is a number here, not a yes/no.
-local life="$AGENTS_DIR/bin/codegraph-lifecycle.js"
-local mcp="$AGENTS_DIR/install/codegraph-mcp.js"
-local boundary="$AGENTS_DIR/hooks/lib/codegraph-boundary.js"
+local life="$SCRIPT_CHECKOUT_ROOT/bin/codegraph-lifecycle.js"
+local mcp="$SCRIPT_CHECKOUT_ROOT/install/codegraph-mcp.js"
+local boundary="$SCRIPT_CHECKOUT_ROOT/hooks/lib/codegraph-boundary.js"
 assert_eq "W-1 codegraph-boundary.js requires the shared helper" "1" \
     "$(grep -c 'require(.*spawn-shimmed-cli' "$boundary" 2>/dev/null || true)"
 assert_eq "W-2 codegraph-mcp.js requires the shared helper" "1" \
@@ -65,7 +65,7 @@ assert_eq "W-7 the module exports exactly one entry point" "spawnShimmedCli" \
     "$(node -e 'try{console.log(Object.keys(require(process.argv[1])).sort().join(","))}catch(e){console.log("load-failed")}' \
         "$ROOT_N/$MODULE_REL" 2>/dev/null || true)"
 assert_eq "W-8 the module never opts into shell:true" "0" \
-    "$(grep -cE '^[^/]*shell:[[:space:]]*true' "$AGENTS_DIR/$MODULE_REL" 2>/dev/null || true)"
+    "$(grep -cE '^[^/]*shell:[[:space:]]*true' "$SCRIPT_CHECKOUT_ROOT/$MODULE_REL" 2>/dev/null || true)"
 
 # W-9 — Section O pins the value 60000 as the timeout that must survive the
 # helper. If the caller ever changes STATUS_TIMEOUT_MS, that expectation goes
@@ -78,7 +78,7 @@ assert_eq "W-9 codegraph-boundary.js still bounds the binary at STATUS_TIMEOUT_M
 # `codegraph --version`" teaches the exact check that passes in PowerShell while
 # spawnSync fails, which is the defect. Absence AND presence are both asserted:
 # deleting the old row without adding the new one would satisfy only one.
-local ops="$AGENTS_DIR/docs/ops/codegraph.md"
+local ops="$SCRIPT_CHECKOUT_ROOT/docs/ops/codegraph.md"
 assert_eq "W-10 the bare shell-mediated \`codegraph --version\` check is gone from Verifying the setup" "0" \
     "$(grep -c '^| Binary | `codegraph --version` |' "$ops" 2>/dev/null || true)"
 assert_eq "W-11 the docs verify through spawnShimmedCli instead" "1" \

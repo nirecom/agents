@@ -25,9 +25,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")/cc-instructions-loaded-quiescence"
-RECEIPT_LIB="$AGENTS_DIR/hooks/lib/instructions-loaded-receipt.js"
+RECEIPT_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/instructions-loaded-receipt.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

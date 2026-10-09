@@ -21,10 +21,12 @@ set -u
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: installer
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SNIPPET="${AGENTS_DIR}/profile-snippet.sh"
-MARKERS_LIB="${AGENTS_DIR}/bin/lib/session-sync-markers.sh"
-RUN_TIMEOUT="${AGENTS_DIR}/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SNIPPET="${SCRIPT_CHECKOUT_ROOT}/profile-snippet.sh"
+MARKERS_LIB="${SCRIPT_CHECKOUT_ROOT}/bin/lib/session-sync-markers.sh"
+RUN_TIMEOUT="${SCRIPT_CHECKOUT_ROOT}/bin/run-with-timeout.sh"
+# shellcheck source=/dev/null
+. "${SCRIPT_CHECKOUT_ROOT}/tests/lib/home-userprofile-pin.sh"
 
 PASS=0
 FAIL=0
@@ -116,19 +118,24 @@ EOF
 # snippet's own skip condition), GIT_SSH_COMMAND and GIT_TERMINAL_PROMPT.
 run_driver() {
     local shell="$1" sb="$2" driver="$3" ss="${4:-UNSET}"
+    # The real snippet can start the real install/linux/dotfileslink.sh (symlink
+    # repair), so HOME and USERPROFILE are pinned together; the subshell scopes the pin.
+    (
+    pin_home_and_userprofile "$sb/home"
     if [ "$ss" = "UNSET" ]; then
         env -u SESSION_SYNC -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
-            HOME="$sb/home" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
+            HOME="$HOME" USERPROFILE="$USERPROFILE" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
             bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
     else
         env -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
-            SESSION_SYNC="$ss" HOME="$sb/home" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
+            SESSION_SYNC="$ss" HOME="$HOME" USERPROFILE="$USERPROFILE" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
             bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
     fi
+    )
 }
 
 # --- Mirror sandbox (SESSION_SYNC gate cases) -------------------------------
-# profile-snippet.sh re-exports AGENTS_CONFIG_DIR / AGENTS_DIR to *its own* parent
+# profile-snippet.sh re-exports AGENTS_MAIN_ROOT / SCRIPT_CHECKOUT_ROOT to *its own* parent
 # directory, so sourcing it from the real checkout would resolve the real .env and
 # the real session-sync CLI — pushing the developer's actual session repo. The
 # mirror copies the snippet into a throwaway tree carrying just enough of the repo
@@ -139,23 +146,23 @@ make_mirror_sandbox() {
 
     mkdir -p "$sb/agents/bin/lib" "$sb/agents/hooks" "$sb/agents/install/linux"
     cp "$SNIPPET" "$sb/agents/profile-snippet.sh"
-    cp "$AGENTS_DIR/bin/get-config-var" "$sb/agents/bin/get-config-var"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" "$sb/agents/bin/get-config-var"
     chmod +x "$sb/agents/bin/get-config-var"
     # codes() delegates to bin/codes-launch.sh (re-read from disk on every call,
     # unlike a sourced function) — mirror it too, or codes() would fail to find it.
     # No vscode-cc-repair stub: codes-launch.sh's own -e guard skips the repair
     # call cleanly when the directory is absent, as it is in this mirror.
-    cp "$AGENTS_DIR/bin/codes-launch.sh" "$sb/agents/bin/codes-launch.sh"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/codes-launch.sh" "$sb/agents/bin/codes-launch.sh"
     chmod +x "$sb/agents/bin/codes-launch.sh"
     # The marker SSOT lib ships beside the snippet; copying it here keeps the
     # mirror on the `source the lib` path rather than the inline fallback.
     if [ -f "$MARKERS_LIB" ]; then
         cp "$MARKERS_LIB" "$sb/agents/bin/lib/session-sync-markers.sh"
     fi
-    # get-config-var resolves hooks/lib/load-env.js under AGENTS_CONFIG_DIR.
-    cp -R "$AGENTS_DIR/hooks/lib" "$sb/agents/hooks/lib"
+    # get-config-var resolves hooks/lib/load-env.js under AGENTS_MAIN_ROOT.
+    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$sb/agents/hooks/lib"
     # No .env in the mirror on purpose: loadDefaultEnv short-circuits on
-    # AGENTS_CONFIG_DIR and never falls back, so SESSION_SYNC can only come from
+    # AGENTS_MAIN_ROOT and never falls back, so SESSION_SYNC can only come from
     # the process environment. That makes each case decide its own value.
 
     # Recording stub for the manual sync CLI — never touches a real repo.
@@ -205,21 +212,24 @@ run_mirror_driver() {
     local shell="$1" sb="$2" driver="$3" ss="${4:-UNSET}" node_mode="${5:-with-node}"
     local path_val="$sb/bin:$PATH"
     [ "$node_mode" = "no-node" ] && path_val="$sb/nonode:$sb/bin:$PATH"
+    (
+    pin_home_and_userprofile "$sb/home"
     if [ "$ss" = "UNSET" ]; then
         env -u SESSION_SYNC -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
-            HOME="$sb/home" PATH="$path_val" \
+            HOME="$HOME" USERPROFILE="$USERPROFILE" PATH="$path_val" \
             SNIPPET="$sb/agents/profile-snippet.sh" \
             bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
     else
         env -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
-            SESSION_SYNC="$ss" HOME="$sb/home" PATH="$path_val" \
+            SESSION_SYNC="$ss" HOME="$HOME" USERPROFILE="$USERPROFILE" PATH="$path_val" \
             SNIPPET="$sb/agents/profile-snippet.sh" \
             bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
     fi
+    )
 }
 
 # ---------------------------------------------------------------------------
-# TC1 / TC2 — Normal source: guard + AGENTS_CONFIG_DIR set, no errors
+# TC1 / TC2 — Normal source: guard + AGENTS_MAIN_ROOT set, no errors
 # ---------------------------------------------------------------------------
 tc_normal() {
     local shell="$1" label="$2"
@@ -227,12 +237,12 @@ tc_normal() {
     local drv="$sb/drv_normal.sh"
     cat > "$drv" <<'EOF'
 . "$SNIPPET"
-echo "CFGDIR=${AGENTS_CONFIG_DIR-MISSING}"
+echo "CFGDIR=${AGENTS_MAIN_ROOT-MISSING}"
 EOF
     local out; out="$(run_driver "$shell" "$sb" "$drv")"
-    if echo "$out" | grep -q "CFGDIR=${AGENTS_DIR}" \
+    if echo "$out" | grep -q "CFGDIR=${SCRIPT_CHECKOUT_ROOT}" \
         && ! echo "$out" | grep -qi "error\|command not found"; then
-        pass "$label: source sets AGENTS_CONFIG_DIR, no errors"
+        pass "$label: source sets AGENTS_MAIN_ROOT, no errors"
     else
         fail "$label: normal source. Output: $out"
     fi
@@ -453,24 +463,24 @@ fi
 # 500-line HARD limit of rules/coding/file-split.md. Each part file self-invokes
 # its cases at source time.
 # shellcheck source=tests/install/fix-1225-profile-snippet-guards/shell-compat.sh
-. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/shell-compat.sh"
+. "${SCRIPT_CHECKOUT_ROOT}/tests/install/fix-1225-profile-snippet-guards/shell-compat.sh"
 # shellcheck source=tests/install/fix-1225-profile-snippet-guards/session-sync-gate.sh
-. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/session-sync-gate.sh"
+. "${SCRIPT_CHECKOUT_ROOT}/tests/install/fix-1225-profile-snippet-guards/session-sync-gate.sh"
 # shellcheck source=tests/install/fix-1225-profile-snippet-guards/ssh-command-override.sh
-. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/ssh-command-override.sh"
+. "${SCRIPT_CHECKOUT_ROOT}/tests/install/fix-1225-profile-snippet-guards/ssh-command-override.sh"
 # shellcheck source=tests/install/fix-1225-profile-snippet-guards/ssh-command-injection.sh
-. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/ssh-command-injection.sh"
+. "${SCRIPT_CHECKOUT_ROOT}/tests/install/fix-1225-profile-snippet-guards/ssh-command-injection.sh"
 # shellcheck source=tests/install/fix-1225-profile-snippet-guards/fetch-frequency-guard.sh
-. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/fetch-frequency-guard.sh"
+. "${SCRIPT_CHECKOUT_ROOT}/tests/install/fix-1225-profile-snippet-guards/fetch-frequency-guard.sh"
 # shellcheck source=tests/install/fix-1225-profile-snippet-guards/fetch-guard-boundary-clock.sh
-. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/fetch-guard-boundary-clock.sh"
+. "${SCRIPT_CHECKOUT_ROOT}/tests/install/fix-1225-profile-snippet-guards/fetch-guard-boundary-clock.sh"
 # shellcheck source=tests/install/fix-1225-profile-snippet-guards/stdout-stderr-split.sh
-. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/stdout-stderr-split.sh"
+. "${SCRIPT_CHECKOUT_ROOT}/tests/install/fix-1225-profile-snippet-guards/stdout-stderr-split.sh"
 # shellcheck source=tests/install/fix-1225-profile-snippet-guards/fetch-kill-deadline.sh
-. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/fetch-kill-deadline.sh"
+. "${SCRIPT_CHECKOUT_ROOT}/tests/install/fix-1225-profile-snippet-guards/fetch-kill-deadline.sh"
 # set-e-source-safety.sh reuses _ffg_stamp, so it must follow fetch-frequency-guard.sh.
 # shellcheck source=tests/install/fix-1225-profile-snippet-guards/set-e-source-safety.sh
-. "${AGENTS_DIR}/tests/install/fix-1225-profile-snippet-guards/set-e-source-safety.sh"
+. "${SCRIPT_CHECKOUT_ROOT}/tests/install/fix-1225-profile-snippet-guards/set-e-source-safety.sh"
 
 echo "----------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"

@@ -9,7 +9,7 @@ const fs = require("fs");
 const { spawnSync } = require("child_process");
 const path = require("path");
 
-// Load $AGENTS_CONFIG_DIR/.env into process.env (existing env wins)
+// Load the settings .env into process.env (existing env wins)
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
 const { normalizeCwd } = require("./lib/path-normalize");

@@ -10,19 +10,19 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # --- skip gates (rules/test/claude-e2e.md acceptance criteria) ----------------
-if [ ! -x "$AGENTS_DIR/bin/get-config-var" ]; then
+if [ ! -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
     echo "SKIP: bin/get-config-var not found or not executable" >&2; exit 77
 fi
-if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
     echo "SKIP: requires RUN_TL3=on in .env" >&2; exit 77
 fi
 if ! command -v claude >/dev/null 2>&1; then
     echo "SKIP: claude CLI not found" >&2; exit 77
 fi
-HOOK="$AGENTS_DIR/hooks/block-capture-echo.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-capture-echo.js"
 if [ ! -f "$HOOK" ]; then
     echo "FAIL: RED-EXPECTED — hooks/block-capture-echo.js not yet created" >&2; exit 1
 fi
@@ -70,8 +70,8 @@ chmod +x "$REPO/captured.sh" "$REPO/control.sh"
 # settings.json (round 13, C9): a hand-written matcher would test this file's author,
 # not the artifact that ships. real-hook-entry.js itself is covered at TL2 by
 # tests/hooks/feature-2170-capture-echo-guard/part6-settings.sh E-5.
-ENTRY_DRV="$AGENTS_DIR/tests/hooks/feature-2170-capture-echo-guard/real-hook-entry.js"
-AGENTS_DIR="$AGENTS_DIR" node "$ENTRY_DRV" --emit "block-capture-echo.js" > "$REPO/.claude/settings.json"
+ENTRY_DRV="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2170-capture-echo-guard/real-hook-entry.js"
+node "$ENTRY_DRV" --emit "block-capture-echo.js" > "$REPO/.claude/settings.json"
 if grep -q 'NOT_REGISTERED\|SETTINGS_UNREADABLE\|BAD_MODE' "$REPO/.claude/settings.json"; then
     echo "FAIL: block-capture-echo.js is not registered in the real settings.json" >&2
     exit 1
@@ -88,7 +88,6 @@ run_turn() {
       PATH="$MOCKBIN:$PATH" \
       WORKFLOW_STATE_DIR="$WFDIR" \
       WORKFLOW_PLANS_DIR="$PLANSDIR" \
-      AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
       run_with_timeout 180 claude -p "$2" \
         --session-id "$1" \
         --setting-sources project \
@@ -101,7 +100,7 @@ run_turn() {
 # One transcript reader for this file (CPR-SSOT): tests/lib/tl3-turn-transcript.js owns
 # both the is_error read and the tool_use/tool_result probe below. Its own logic is
 # verified against saved fixture transcripts by tests/tests/unit-tl3-turn-transcript.sh.
-PROBE="$AGENTS_DIR/tests/lib/tl3-turn-transcript.js"
+PROBE="$SCRIPT_CHECKOUT_ROOT/tests/lib/tl3-turn-transcript.js"
 
 # is_error of a --output-format json transcript, or "unreadable".
 turn_is_error() {
@@ -110,7 +109,7 @@ turn_is_error() {
 
 # Every file that can carry this turn's tool_use / tool_result records: the CLI's own
 # --output-format json output holds the final result record, while the per-session
-# transcript Claude Code writes under its config dir holds the tool blocks. Both are
+# transcript Claude Code writes under its agents main root holds the tool blocks. Both are
 # handed over, so the attempt assertion does not depend on which shape this CLI emits.
 turn_evidence() {
     local sid="$1" root="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" f

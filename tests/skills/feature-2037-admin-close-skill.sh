@@ -11,17 +11,17 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-ICV_SKILL="$AGENTS_DIR/skills/issue-close-verified/SKILL.md"
-SR_SKILL="$AGENTS_DIR/skills/supervisor-report/SKILL.md"
-HANDLERS_JS="${_AGENTS_DIR_NODE}/hooks/workflow-mark/enforce-override-handlers.js"
-SR_CLI="$AGENTS_DIR/bin/supervisor-report"
+ICV_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-verified/SKILL.md"
+SR_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/supervisor-report/SKILL.md"
+HANDLERS_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/workflow-mark/enforce-override-handlers.js"
+SR_CLI="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-report"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -95,7 +95,7 @@ echo "=== S2: executable document — running the skill's own commands opens the
 
 if [ -z "$ICV_ON_CMD" ] || [ -z "$ICV_END_CMD" ]; then
     fail "S2: could not extract both sentinel echo commands from the skill (on='${ICV_ON_CMD:-<none>}' end='${ICV_END_CMD:-<none>}') — they must appear as a quoted 'echo \"<<...: reason>>\"' command a reader can run verbatim"
-elif [ ! -f "$AGENTS_DIR/hooks/workflow-mark/enforce-override-handlers.js" ]; then
+elif [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark/enforce-override-handlers.js" ]; then
     fail "S2: IMPLEMENTATION MISSING: hooks/workflow-mark/enforce-override-handlers.js"
 else
     S2_WF="$(fresh_workflow_dir)"
@@ -125,7 +125,6 @@ console.log("FATAL=" + (messages.some((m) => m.startsWith("FATAL:")) ? "yes" : "
 DRIVE_EOF
 
     S2_OUT="$(run_with_timeout 60 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$S2_WF" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$TMPDIR_BASE/drive.js" "$HANDLERS_JS" "$S2_SID" "$S2_WF" "$ICV_ON_CMD" "$ICV_END_CMD" 2>&1)"
@@ -241,7 +240,7 @@ echo "=== S7: running the documented sequence twice leaves the same state as onc
 # retry after a failed close must not fail or resurrect the marker.
 if [ -z "${ICV_ON_CMD:-}" ] || [ -z "${ICV_END_CMD:-}" ]; then
     fail "S7: the sentinel commands could not be extracted (see S2) — idempotency was not exercised"
-elif [ ! -f "$AGENTS_DIR/hooks/workflow-mark/enforce-override-handlers.js" ]; then
+elif [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark/enforce-override-handlers.js" ]; then
     fail "S7: IMPLEMENTATION MISSING: hooks/workflow-mark/enforce-override-handlers.js"
 else
     S7_WF="$(fresh_workflow_dir)"
@@ -278,7 +277,6 @@ console.log("FATAL=" + (messages.some((m) => m.startsWith("FATAL:")) ? "yes" : "
 IDEM_EOF
 
     S7_OUT="$(run_with_timeout 60 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$S7_WF" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$TMPDIR_BASE/drive-idem.js" "$HANDLERS_JS" "$S7_SID" "$S7_WF" "$ICV_ON_CMD" "$ICV_END_CMD" 2>&1)"
@@ -306,7 +304,7 @@ fi
 # the guard sequence for issue-close-verified, and everything about supervisor-report.
 # Both are sourced rather than run standalone so the extracted sentinel commands and the
 # fixture helpers above stay in scope. ---
-SR_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/supervisor-report-cli.sh"
+SR_CASES="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-2037-admin-close-skill/supervisor-report-cli.sh"
 if [ -f "$SR_CASES" ]; then
     # shellcheck source=./feature-2037-admin-close-skill/supervisor-report-cli.sh
     . "$SR_CASES"
@@ -317,7 +315,7 @@ fi
 # S11/S12/S13 are their own files rather than additions to supervisor-report-cli.sh, which
 # is already past the 300-line WARN. Each carries one axis: --detail payload safety, the
 # doc-vs-schema enum set equality, and the C3 alert's verify-pointer.
-DI_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/detail-injection.sh"
+DI_CASES="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-2037-admin-close-skill/detail-injection.sh"
 if [ -f "$DI_CASES" ]; then
     # shellcheck source=./feature-2037-admin-close-skill/detail-injection.sh
     . "$DI_CASES"
@@ -325,7 +323,7 @@ else
     fail "IMPLEMENTATION MISSING: $DI_CASES (--detail shell-injection cases)"
 fi
 
-EC_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/enum-completeness.sh"
+EC_CASES="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-2037-admin-close-skill/enum-completeness.sh"
 if [ -f "$EC_CASES" ]; then
     # shellcheck source=./feature-2037-admin-close-skill/enum-completeness.sh
     . "$EC_CASES"
@@ -333,7 +331,7 @@ else
     fail "IMPLEMENTATION MISSING: $EC_CASES (enum completeness oracle)"
 fi
 
-FP_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/formatter-pointer.sh"
+FP_CASES="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-2037-admin-close-skill/formatter-pointer.sh"
 if [ -f "$FP_CASES" ]; then
     # shellcheck source=./feature-2037-admin-close-skill/formatter-pointer.sh
     . "$FP_CASES"
@@ -341,7 +339,7 @@ else
     fail "IMPLEMENTATION MISSING: $FP_CASES (C3 alert verify-pointer cases)"
 fi
 
-GUARD_CASES="$AGENTS_DIR/tests/skills/feature-2037-admin-close-skill/guard-sequence.sh"
+GUARD_CASES="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-2037-admin-close-skill/guard-sequence.sh"
 if [ -f "$GUARD_CASES" ]; then
     # shellcheck source=./feature-2037-admin-close-skill/guard-sequence.sh
     . "$GUARD_CASES"

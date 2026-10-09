@@ -37,7 +37,7 @@ echo "=== W3: nothing that launches codegraph reaches for the upstream installer
 
 W3_ANCHORS_OK=1
 for anchor in install/codegraph-mcp.js install/win/codegraph.ps1 install/linux/codegraph.sh hooks/lib/codegraph-boundary.js hooks/codegraph-context-inject.js; do
-    if [ ! -f "$AGENTS_DIR/$anchor" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/$anchor" ]; then
         W3_ANCHORS_OK=0
         fail "W3-00: anchor $anchor is absent" "until the CodeGraph installer files exist, a clean scan proves nothing"
     fi
@@ -47,7 +47,7 @@ while IFS='|' read -r name needle; do
     name="$(trim "$name")"; [ -z "$name" ] && continue
     case "$name" in \#*) continue ;; esac
     needle="$(trim "$needle")"
-    hits="$(grep -rIlF -e "$needle" "$AGENTS_DIR/install" "$AGENTS_DIR/hooks/lib/codegraph-boundary.js" "$AGENTS_DIR/hooks/codegraph-context-inject.js" 2>/dev/null || true)"
+    hits="$(grep -rIlF -e "$needle" "$SCRIPT_CHECKOUT_ROOT/install" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/codegraph-boundary.js" "$SCRIPT_CHECKOUT_ROOT/hooks/codegraph-context-inject.js" 2>/dev/null || true)"
     if [ -n "$hits" ]; then
         fail "$name: '$needle' appears in the scanned tree" "$(printf '%s' "$hits" | tr '\n' ' ')"
     elif [ "$W3_ANCHORS_OK" -eq 1 ]; then

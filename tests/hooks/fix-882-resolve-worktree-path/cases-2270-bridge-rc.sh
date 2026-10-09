@@ -13,7 +13,7 @@ REVIEW_LOOP_SH="$AGENTS_WORKTREE/skills/review-tests/scripts/run-codex-review-lo
 BRC_SID="fix-882-bridge-rc-sid"
 BRC_WSID="fix-882-bridge-rc-wsid"
 
-# A shadow AGENTS_CONFIG_DIR whose bin/resolve-session-id exits with a chosen rc.
+# A shadow AGENTS_MAIN_ROOT whose bin/resolve-session-id exits with a chosen rc.
 # The whole bin/ is copied (the scripts reach for sibling bins), the four hooks
 # modules the copied bridges require are forwarded to the real tree, and
 # bin/run-codex-review-loop is stubbed out so no case can ever spawn codex.
@@ -40,7 +40,7 @@ brc_shadow_root() {
   _tonode "$root"
 }
 
-# A shadow AGENTS_CONFIG_DIR whose bin/resolve-session-id unconditionally
+# A shadow AGENTS_MAIN_ROOT whose bin/resolve-session-id unconditionally
 # echoes a fixed sid (rc 0), ignoring every env var. Used to prove a receiver
 # script follows the BRIDGE's sid rather than deriving its own from env
 # (test-reviewer Blocker #2: cross-module wiring — skills/_shared/test-design.md
@@ -69,7 +69,7 @@ brc_shadow_root_sid() {
 
 # Run run-codex-review-loop.sh with the three script-required vars pinned
 # (:6-8) and the session vars under test. Sets RCRL_RC / RCRL_ERR.
-#   $1: AGENTS_CONFIG_DIR (node form)   $2: CLAUDE_CODE_SESSION_ID ("" to unset)
+#   $1: AGENTS_MAIN_ROOT (node form)   $2: CLAUDE_CODE_SESSION_ID ("" to unset)
 RCRL_RC=0
 RCRL_ERR=""
 run_review_loop() {
@@ -83,7 +83,7 @@ run_review_loop() {
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-    AGENTS_CONFIG_DIR="$1" \
+    AGENTS_MAIN_ROOT="$1" \
       bash "$RUN_TIMEOUT" 60 bash "$REVIEW_LOOP_SH"
   ) >/dev/null 2>"$errfile"
   RCRL_RC=$?

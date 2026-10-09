@@ -7,13 +7,13 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-NEXT_STEP="$AGENTS_DIR_N/bin/workflow/next-step"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$_HELPERS_SCRIPT_CHECKOUT_ROOT")"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
 # CPR-SSOT: the one fixture-state reader shared by every #1644 test file.
-PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -80,7 +80,7 @@ git -C "$REPO_DOCS" add docs/note.md >/dev/null 2>&1
 REPO_CODE_N="$(nrm "$REPO_CODE")"; REPO_DOCS_N="$(nrm "$REPO_DOCS")"
 cd "$TMPDIR_BASE" || exit 1
 export CLAUDE_PROJECT_DIR="$REPO_CODE_N"
-export AGENTS_CONFIG_DIR="$CFG_UNSET"
+export AGENTS_MAIN_ROOT="$CFG_UNSET"
 
 STEPS_ALL="workflow_init clarify_intent research outline detail branching_complete write_tests review_tests write_code run_tests review_security docs user_verification cleanup pre_final_report_gate final_report"
 make_state() {
@@ -111,7 +111,7 @@ repo_fingerprint() {
 }
 
 OUT=""; ERR=""; RC=0
-# run_ns <cwd> <config-dir> <project-dir> [ENV=VAL ...] -- <argv...>
+# run_ns <cwd> <agents-main-root> <project-dir> [ENV=VAL ...] -- <argv...>
 # Inline ENV=VAL pairs are applied to the CHILD's environment only — that is
 # precisely the forgery shape under test, so they are passed the same way a
 # model-issued Bash command would type them.
@@ -122,7 +122,7 @@ run_ns() {
   shift || true
   local errf="$TMPDIR_BASE/ns.err"
   RC=0
-  OUT="$(cd "$cwd" && env AGENTS_CONFIG_DIR="$cfg" CLAUDE_PROJECT_DIR="$proj" \
+  OUT="$(cd "$cwd" && env AGENTS_MAIN_ROOT="$cfg" CLAUDE_PROJECT_DIR="$proj" \
     ${envs[@]+"${envs[@]}"} \
     node "$NEXT_STEP" "$@" 2>"$errf")" || RC=$?
   ERR="$(cat "$errf" 2>/dev/null || echo "")"

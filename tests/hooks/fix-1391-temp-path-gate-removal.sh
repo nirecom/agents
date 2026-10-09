@@ -47,13 +47,13 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -79,10 +79,10 @@ run_with_timeout() {
 
 # Subject drivers — one node process per call, IR-based (matches production path).
 classify_ir() {
-    node -e "const {classify}=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns'); const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir'); process.stdout.write(classify(parse(process.argv[1])))" -- "$1" 2>/dev/null
+    node -e "const {classify}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-patterns'); const {parse}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir'); process.stdout.write(classify(parse(process.argv[1])))" -- "$1" 2>/dev/null
 }
 gh_write_ir() {
-    node -e "const {isGhWriteIR}=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns/patterns'); const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir'); process.stdout.write(String(isGhWriteIR(parse(process.argv[1]))))" -- "$1" 2>/dev/null
+    node -e "const {isGhWriteIR}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-patterns/patterns'); const {parse}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir'); process.stdout.write(String(isGhWriteIR(parse(process.argv[1]))))" -- "$1" 2>/dev/null
 }
 
 echo "=== Section A: classify temp-path gate removal — new contract ==="
@@ -359,13 +359,13 @@ echo "=== Section E: retire proof (fail-before-fix) ==="
 
 # E1: WRITE_PATTERNS contains NO entry with kind === "gh".
 e1_gh_pattern_count() {
-    node -e "const {WRITE_PATTERNS}=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns/patterns'); process.stdout.write(String(WRITE_PATTERNS.filter(p => p.kind === 'gh').length))" 2>/dev/null
+    node -e "const {WRITE_PATTERNS}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-patterns/patterns'); process.stdout.write(String(WRITE_PATTERNS.filter(p => p.kind === 'gh').length))" 2>/dev/null
 }
 assert_eq "E1: WRITE_PATTERNS has zero kind:gh entries" "0" "$(e1_gh_pattern_count)"
 
 # E2: STRIP_KINDS does NOT contain "gh".
 e2_strip_kinds_has_gh() {
-    node -e "const {STRIP_KINDS}=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns/patterns'); process.stdout.write(String(STRIP_KINDS.has('gh')))" 2>/dev/null
+    node -e "const {STRIP_KINDS}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-patterns/patterns'); process.stdout.write(String(STRIP_KINDS.has('gh')))" 2>/dev/null
 }
 assert_eq "E2: STRIP_KINDS does not contain gh" "false" "$(e2_strip_kinds_has_gh)"
 

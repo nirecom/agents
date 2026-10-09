@@ -14,7 +14,6 @@ const path = require("path");
 const { FACTS_VERSION, FACTS_KEYS } = require("./keys");
 const { modelForLevel } = require("../../../../hooks/lib/role-model");
 const { readGateFacts } = require("./gate-facts");
-const { resolveConfigDir } = require("../../../../hooks/lib/confirm-gate/probe");
 const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
 const { readComplexityEvaluation } = require("../../../../hooks/workflow-state");
 const { normalizeCwd } = require("../../../../hooks/lib/path-normalize");
@@ -99,7 +98,7 @@ function readComplexityFacts(sessionId) {
 
 async function collectSessionFacts(sessionId) {
   const plans = resolvePlansDir();
-  const gates = await readGateFacts(resolveConfigDir());
+  const gates = await readGateFacts();
   const values = Object.assign(
     {
       FACTS_VERSION: String(FACTS_VERSION),

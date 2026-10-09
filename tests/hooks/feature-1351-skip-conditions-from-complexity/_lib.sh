@@ -10,16 +10,16 @@ if [ -n "${_SC_COMPLEXITY_LIB_SOURCED:-}" ]; then
 fi
 _SC_COMPLEXITY_LIB_SOURCED=1
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-RESOLVER="$AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+RESOLVER="$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/skip-signal-resolver.js"
 RESOLVER_N="$(cygpath -m "$RESOLVER" 2>/dev/null || echo "$RESOLVER")"
-STATEIO="$AGENTS_DIR/hooks/workflow-state/state-io.js"
+STATEIO="$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js"
 STATEIO_N="$(cygpath -m "$STATEIO" 2>/dev/null || echo "$STATEIO")"
-ROUTING="$AGENTS_DIR/hooks/workflow-state/complexity-routing.js"
+ROUTING="$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/complexity-routing.js"
 ROUTING_N="$(cygpath -m "$ROUTING" 2>/dev/null || echo "$ROUTING")"
 
-CI_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
-MOP_SKILL="$AGENTS_DIR/skills/make-outline-plan/SKILL.md"
+CI_SKILL="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
+MOP_SKILL="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/SKILL.md"
 
 PASS=0
 FAIL=0

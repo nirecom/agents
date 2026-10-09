@@ -15,9 +15,9 @@ set -u
 # check accepting a git-registered linked worktree, (c) the real chain's KV bytes
 # matching the worker's parser.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v git >/dev/null 2>&1 || exit 77
 command -v node >/dev/null 2>&1 || exit 77
 
@@ -37,8 +37,8 @@ run_with_timeout() {
 }
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/issue-close-stage.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+WORKER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-close-stage.js"
 if [ ! -f "$DISPATCH_JS" ] || [ ! -f "$WORKER_JS" ]; then
     fail "impl/present" "missing dispatcher or bin/worker-dispatch/workers/issue-close-stage.js"
     echo ""
@@ -147,7 +147,7 @@ else
     fail "dispatch/gh-stub-was-reached" "no gh invocation recorded; PATH did not propagate"
 fi
 
-# The chain runs INSIDE the linked worktree, not in main-root.
+# The chain runs INSIDE the linked worktree, not in the target main worktree.
 CWD_LINE="$(head -1 "$GHLOG" 2>/dev/null | sed -n 's/^cwd=\([^ ]*\) .*/\1/p')"
 if [ -n "$CWD_LINE" ]; then
     assert_eq "dispatch/child-cwd-is-linked-worktree" "$(nodepath "$LINKED_RAW")" "$(nodepath "$CWD_LINE")"

@@ -20,13 +20,13 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # predicate the shipped code uses — `includes("request-off")` — never a hardcoded list.
 
 SEC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SEC_DIR/../../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # shellcheck source=tests/lib/clearance-hook-harness.sh
-. "$AGENTS_DIR/tests/lib/clearance-hook-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/clearance-hook-harness.sh"
 
 if [ "$HOOK_PRESENT" = "yes" ]; then
     pass "D0 the hook entrypoint is present"
@@ -57,7 +57,7 @@ else if (r === c) match = "exact";
 else if (r.endsWith(c)) match = "prefixed";
 const advertises = typeof c === "string" && c.includes("request-off");
 process.stdout.write(match + "|" + advertises + "|" + (inv !== "" && r.includes(inv)));
-' "$_AGENTS_DIR_NODE" "$1" "$2" 2>/dev/null
+' "$_SCRIPT_CHECKOUT_ROOT_NODE" "$1" "$2" 2>/dev/null
 }
 
 # probe <label> <expected-const> <expected-match> <hook-input-json>
@@ -99,7 +99,7 @@ const d = require(process.argv[1] + "/hooks/block-clearance-token-write/dispatch
 const names = Object.keys(d).filter((k) => /_BLOCK_MSG$/.test(k) && typeof d[k] === "string");
 const yes = names.filter((n) => d[n].includes("request-off"));
 process.stdout.write(yes.length + "/" + names.length);
-' "$_AGENTS_DIR_NODE" 2>/dev/null)"
+' "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>/dev/null)"
 ADV_N="${SPREAD%%/*}"; ALL_N="${SPREAD##*/}"
 if [ -n "$ALL_N" ] && [ "$ALL_N" -gt 1 ] && [ "$ADV_N" -gt 0 ] && [ "$ADV_N" -lt "$ALL_N" ]; then
     pass "D-pre the block messages split into advertising and non-advertising ($SPREAD advertise the minter)"

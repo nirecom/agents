@@ -14,8 +14,8 @@
 # tolerant of those expected FAILs (exit 0) so it can be committed alongside
 # the failing implementation as fail-before-fix evidence.
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$AGENTS_DIR")"; else _A="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _A="$SCRIPT_CHECKOUT_ROOT"; fi
 WP="${_A}/hooks/lib/bash-write-patterns.js"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }

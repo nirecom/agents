@@ -5,19 +5,15 @@
 # Tests for issue #695 — a session that subsumes multiple issues (closes_issues
 # with N1 + N2) must record an outcome entry for EVERY N, not just the primary.
 #
-# Before #695: a single `--from-session` finalize records only the issue it was
-# handed; subsumed siblings from intent.md's `## Issues` block are never written
-# to the outcome JSON. This suite is RED: after processing the primary issue,
-# the second subsumed N is missing from the outcome bag.
-#
-# L3 gap (what this test does NOT catch):
-# - real GitHub API calls and actual issue state transitions
+# Before #695 a single `--from-session` finalize recorded only the issue it was handed; subsumed siblings from
+# intent.md's `## Issues` block never reached the outcome JSON. Written RED (second subsumed N missing).
+# L3 gap (NOT caught): real GitHub API calls and actual issue state transitions.
 # Closest-to-action mitigation: manual verification at WORKFLOW_USER_VERIFIED preflight
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WRITE_OUTCOME="$AGENTS_DIR/bin/issue-close-write-outcome.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+WRITE_OUTCOME="$SCRIPT_CHECKOUT_ROOT/bin/issue-close-write-outcome.js"
 
 PASS=0
 FAIL=0
@@ -44,7 +40,6 @@ fi
 
 setup_tmp() {
     TMP="$(mktemp -d)"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     # WORKFLOW_PLANS_DIR must point at TMP so write-outcome.js resolves
     # "testsid-intent.md" when looking up subsumed issues in the session.
     export WORKFLOW_PLANS_DIR="$TMP"
@@ -63,7 +58,6 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR
     unset WORKFLOW_PLANS_DIR
 }
 

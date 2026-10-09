@@ -10,14 +10,14 @@
 # TL3 gap (what this test does NOT catch): a real permission-denied log generation; the
 # unreadable case uses a directory (EISDIR), which fails the same read on every platform.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # Pin before the fragments run bin/ (they inherit it); _lib.sh below re-pins into its own TMPROOT.
 JEV_PRE_ISO="$(make_tmp)"
 harness_isolate "$JEV_PRE_ISO"
 # Pattern A dispatcher: _lib.sh builds one fixture dir, then each fragment is sourced in order
 # into this process (one FX, one mock, one total). Each fragment documents its own scope.
-SUITE_DIR="$AGENTS_DIR/tests/bin/feature-2460-jev-report-accuracy"
+SUITE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2460-jev-report-accuracy"
 . "$SUITE_DIR/_lib.sh"
 rm -rf "$JEV_PRE_ISO"
 

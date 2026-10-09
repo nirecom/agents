@@ -12,8 +12,8 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-EXTRACT="$AGENTS_ROOT/bin/extract-mandatory-sections"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+EXTRACT="$SCRIPT_CHECKOUT_ROOT/bin/extract-mandatory-sections"
 STRIP_AWK="$SCRIPT_DIR/strip-mandatory-sections.awk"
 
 # --source-kind is now vestigial (#2228): Class members is no longer injected, so intent vs
@@ -260,7 +260,7 @@ fi
 if [[ "$OUT" == *-outline.md ]]; then
   EXPECTED_FIRST=""
   if command -v node > /dev/null 2>&1; then
-    EXPECTED_FIRST="$(node "$AGENTS_ROOT/hooks/lib/plan-schema.js" --first-body-section outline 2>/dev/null || true)"
+    EXPECTED_FIRST="$(node "$SCRIPT_CHECKOUT_ROOT/hooks/lib/plan-schema.js" --first-body-section outline 2>/dev/null || true)"
   fi
   if [[ -n "$EXPECTED_FIRST" ]]; then
     first_body_h2="$(awk '
@@ -276,7 +276,7 @@ fi
 
 # --- Gate: outline coverage check (fires whenever OUT is an outline artifact) ---
 if [[ "$OUT" == *-outline.md ]]; then
-  GATE="$AGENTS_ROOT/bin/check-issues-class-coverage"
+  GATE="$SCRIPT_CHECKOUT_ROOT/bin/check-issues-class-coverage"
   if [[ -x "$GATE" ]]; then
     if ! "$GATE" --mode outline "$SOURCE"; then
       verify_fail "Issues→Class-members coverage gate failed (see stderr above)"

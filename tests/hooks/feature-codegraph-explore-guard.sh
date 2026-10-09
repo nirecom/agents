@@ -9,10 +9,10 @@
 # switch fell through to approve and EVERY block row below failed against them.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DOTENV_HOOK="$AGENTS_DIR/hooks/block-dotenv.js"
-CREDS_HOOK="$AGENTS_DIR/hooks/block-credentials.js"
-RUN_WITH_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DOTENV_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-dotenv.js"
+CREDS_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-credentials.js"
+RUN_WITH_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 TOOL="mcp__codegraph__codegraph_explore"
 
 # TL3 gap (what this test does NOT catch):
@@ -36,7 +36,7 @@ export HOME="$TMP_BASE/home"
 mkdir -p "$HOME" "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 for h in "$DOTENV_HOOK" "$CREDS_HOOK"; do
-    [ -f "$h" ] || fail "IMPLEMENTATION MISSING: ${h#"$AGENTS_DIR"/}"
+    [ -f "$h" ] || fail "IMPLEMENTATION MISSING: ${h#"$SCRIPT_CHECKOUT_ROOT"/}"
 done
 [ -f "$RUN_WITH_TIMEOUT" ] || { echo "FAIL: harness missing bin/run-with-timeout.sh"; exit 1; }
 

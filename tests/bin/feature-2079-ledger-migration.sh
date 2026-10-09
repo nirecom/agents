@@ -10,11 +10,11 @@
 # Mitigation: WORKFLOW_USER_VERIFIED preflight on a Windows host with an existing ledger.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 unset CLAUDE_CODE_SESSION_ID RUN_ALL_CACHE_DIR
-. "$AGENTS_DIR/tests/bin/feature-2079-ledger-migration/_lib.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2079-ledger-migration/_lib.sh"
 for part in "$LM_PARTS"/*-cases.sh; do . "$part"; done
 
 case_begin "n16-windows-one-key" "bin/lib/run-all-parallelism.sh"

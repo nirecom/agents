@@ -22,13 +22,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 unset CLAUDE_CODE_SESSION_ID
 
@@ -37,11 +37,11 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
-STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
-LIFECYCLE_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/lifecycle.js"
-MF_NODE="$_AGENTS_DIR_NODE/hooks/lib/mechanism-failure.js"
-COMPLETION_APPROVAL_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/completion-approval.js"
-UPS_HOOK="$AGENTS_DIR/hooks/user-prompt-submit-mechanism-check.js"
+STATEIO_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io.js"
+LIFECYCLE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/lifecycle.js"
+MF_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/mechanism-failure.js"
+COMPLETION_APPROVAL_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/completion-approval.js"
+UPS_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/user-prompt-submit-mechanism-check.js"
 TTL_MS=$((4 * 60 * 60 * 1000))
 
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'stall1979'; }
@@ -76,7 +76,7 @@ run_ups() {
     UPS_OUT=$(SID="$2" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 25 node "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
 }
@@ -166,7 +166,7 @@ run_R3() {
 # ---------------------------------------------------------------------------
 # R3a/R3b: cross-module reporting path — R3 only checks the block payload;
 # these also verify supervisor-report was actually invoked (via a stub
-# binary reached through AGENTS_CONFIG_DIR) and that a second prompt against
+# binary reached through AGENTS_MAIN_ROOT) and that a second prompt against
 # the SAME unchanged stall is idempotent: the .stall-reported ledger stays at
 # one entry and supervisor-report is not called a second time.
 # ---------------------------------------------------------------------------
@@ -187,7 +187,7 @@ EOF
     UPS_OUT=$(SID=r3ab "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$cfgdir_n" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_MAIN_ROOT="$cfgdir_n" \
           "$RWT" 25 node "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
     [ "$UPS_RC" -eq 0 ] || problems="$problems [1st call: hook exited $UPS_RC]"
@@ -202,7 +202,7 @@ process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_pa
     UPS_OUT2=$(SID=r3ab "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'still there?', hook_event_name: 'UserPromptSubmit' }));" \
-        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$cfgdir_n" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_MAIN_ROOT="$cfgdir_n" \
           "$RWT" 25 node "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC2=$?
     [ "$UPS_RC2" -eq 0 ] || problems="$problems [2nd call: hook exited $UPS_RC2]"
@@ -298,13 +298,13 @@ run_R6() {
 run_R5() {
     local out
     out=$("$RWT" 20 node -e "
-const s = require('$_AGENTS_DIR_NODE/settings.json');
+const s = require('$_SCRIPT_CHECKOUT_ROOT_NODE/settings.json');
 const groups = (s.hooks && s.hooks.UserPromptSubmit) || [];
 const cmds = groups.reduce((a, g) => a.concat((g.hooks || []).map((h) => String(h.command))), []);
 const problems = [];
 const entry = cmds.find((c) => c.includes('user-prompt-submit-mechanism-check.js'));
 if (!entry) problems.push('not-registered');
-else if (!entry.includes('\$AGENTS_CONFIG_DIR')) problems.push('command-not-AGENTS_CONFIG_DIR-relative');
+else if (!entry.includes('\$AGENTS_MAIN_ROOT')) problems.push('command-not-AGENTS_MAIN_ROOT-relative');
 for (const sibling of ['post-push-workflow-reset.js', 'lang-inject.js', 'record-off-skill-invocation.js']) {
   if (!cmds.some((c) => c.includes(sibling))) problems.push('sibling-lost:' + sibling);
 }

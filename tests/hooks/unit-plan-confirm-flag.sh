@@ -11,8 +11,9 @@ set -uo pipefail
 # Use `pwd -W` on Windows (MSYS2/Git Bash) to get a Windows-form path that
 # Node.js can resolve when embedded inside `node -e` script strings. Falls
 # back to plain `pwd` on POSIX where `-W` is unsupported.
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
-LIB="$AGENTS_DIR/hooks/lib/plan-confirm-flag.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
+LIB="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/plan-confirm-flag.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -32,12 +33,12 @@ NODE_TMPDIR="$(run_with_timeout node -e "process.stdout.write(require('os').tmpd
 PLANS_DIR="${NODE_TMPDIR}/pcf-test-$$"
 mkdir -p "$PLANS_DIR"
 
-# Isolated AGENTS_CONFIG_DIR with NO .env file — workflow-plans-dir lazily
-# calls loadDefaultEnv() on first access; with AGENTS_CONFIG_DIR pointing to
+# Isolated AGENTS_MAIN_ROOT with NO .env file — workflow-plans-dir lazily
+# calls loadDefaultEnv() on first access; with AGENTS_MAIN_ROOT pointing to
 # an empty dir, no real .env is read and CONFIRM_* defaults stay clean.
 ISOLATED_CFG_DIR="${NODE_TMPDIR}/pcf-cfg-$$"
 mkdir -p "$ISOLATED_CFG_DIR"
-export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
 
 trap 'rm -rf "$PLANS_DIR" "$ISOLATED_CFG_DIR"' EXIT
 

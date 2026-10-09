@@ -6,7 +6,7 @@
 # Checks: notice pushed, review_tests reopened, write_code stays complete,
 # write_code_scope_manifest written, notice text = formatReviewTestsReopenNotice output.
 
-REOPEN_MOD="$AGENTS_DIR_N/hooks/workflow-state/review-tests-reopen.js"
+REOPEN_MOD="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/review-tests-reopen.js"
 
 echo "=== P3: sentinel entry (WORKFLOW_MARK_STEP_write_code_complete) ==="
 
@@ -40,7 +40,7 @@ const env = Object.assign({}, process.env);
 delete env.CLAUDE_PROJECT_DIR;
 try {
   const out = execSync(
-    'node "' + path.join(process.env.AGENTS_DIR_N, "hooks/workflow-mark.js") + '"',
+    'node "' + path.join(process.env.SCRIPT_CHECKOUT_ROOT_N, "hooks/workflow-mark.js") + '"',
     { input: payload, encoding:"utf8", timeout:15000, env, cwd: process.env.SE_NEUTRAL_N }
   );
   process.stdout.write("STDOUT:" + out);

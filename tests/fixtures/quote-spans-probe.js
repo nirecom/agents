@@ -15,8 +15,8 @@
 
 const path = require("path");
 
-const AGENTS_DIR = path.resolve(__dirname, "..", "..");
-const BARREL = path.join(AGENTS_DIR, "hooks", "lib", "quote-spans.js");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
+const BARREL = path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "quote-spans.js");
 
 function out(v) {
   process.stdout.write(String(v));

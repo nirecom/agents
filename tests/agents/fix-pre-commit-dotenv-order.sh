@@ -86,20 +86,20 @@ make_repo() {
     fi
     echo "init" > "$repo/README.md"
     git -C "$repo" add README.md
-    PATH="$EXEC_PATH" AGENTS_CONFIG_DIR="$FAKE_AGENTS" \
+    PATH="$EXEC_PATH" AGENTS_MAIN_ROOT="$FAKE_AGENTS" \
         env -u AGENT_AUTO_BRANCH ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath= commit -q -m "init"
 }
 
 # Sets PC_RC, PC_OUT. `exec_path` lets each test inject its own gh stub.
-# AGENTS_CONFIG_DIR points to FAKE_AGENTS so pre-commit's _load_env_file does
+# AGENTS_MAIN_ROOT points to FAKE_AGENTS so pre-commit's _load_env_file does
 # not pick up the real repo .env (which sets ENFORCE_WORKTREE=on and blocks).
 # ENFORCE_WORKTREE and AGENT_AUTO_BRANCH are explicitly unset for the same reason.
 run_commit() {
     local repo="$1" msg="$2" exec_path="${3:-$EXEC_PATH}"
     local out
     set +e
-    out="$(PATH="$exec_path" AGENTS_CONFIG_DIR="$FAKE_AGENTS" \
+    out="$(PATH="$exec_path" AGENTS_MAIN_ROOT="$FAKE_AGENTS" \
         run_with_timeout env -u AGENT_AUTO_BRANCH ENFORCE_WORKTREE=off \
         git -C "$repo" commit -m "$msg" </dev/null 2>&1)"
     PC_RC=$?
@@ -210,7 +210,7 @@ PATH7="$(test_path_with_gh "$STUBDIR" "false")"
 # Commit the .env first (bypassing hooks) so it exists in HEAD.
 echo "SECRET=v1" > "$REPO/.env"
 git -C "$REPO" add .env
-PATH="$EXEC_PATH" AGENTS_CONFIG_DIR="$FAKE_AGENTS" \
+PATH="$EXEC_PATH" AGENTS_MAIN_ROOT="$FAKE_AGENTS" \
     env -u AGENT_AUTO_BRANCH ENFORCE_WORKTREE=off \
     git -C "$REPO" -c core.hooksPath= commit -q -m "seed env"
 # Now modify it.

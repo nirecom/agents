@@ -12,13 +12,13 @@ set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-PARSE_CLI_N="$AGENTS_DIR_N/bin/parse-closes-issues"
-RENDER_CLI_N="$AGENTS_DIR_N/bin/render-final-report.js"
-OUTCOME_CLI_N="$AGENTS_DIR_N/bin/issue-close-write-outcome.js"
-SKILL_MD="$AGENTS_DIR/skills/session-close/SKILL.md"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+PARSE_CLI_N="$SCRIPT_CHECKOUT_ROOT_N/bin/parse-closes-issues"
+RENDER_CLI_N="$SCRIPT_CHECKOUT_ROOT_N/bin/render-final-report.js"
+OUTCOME_CLI_N="$SCRIPT_CHECKOUT_ROOT_N/bin/issue-close-write-outcome.js"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/session-close/SKILL.md"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -51,11 +51,10 @@ unset CLAUDE_CODE_SESSION_ID
 export HOME="$TMPDIR_BASE/home"; mkdir -p "$HOME" "$TMPDIR_BASE/tx"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(nrm "$TMPDIR_BASE/tx")"
 
-# issue-close-write-outcome.js resolves session-facts.js under AGENTS_CONFIG_DIR,
+# issue-close-write-outcome.js resolves session-facts.js under AGENTS_MAIN_ROOT,
 # so it must point at the worktree under test (an isolated empty dir would make
 # the require fail). The plans dir it would otherwise derive from config is
 # pinned above, so no ambient config reaches the run.
-export AGENTS_CONFIG_DIR="$AGENTS_DIR_N"
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1

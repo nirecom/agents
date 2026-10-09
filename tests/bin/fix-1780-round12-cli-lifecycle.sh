@@ -12,9 +12,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=./lib/request-off-clearance-harness.sh
-. "$AGENTS_DIR/tests/lib/request-off-clearance-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/request-off-clearance-harness.sh"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 offclr_require_script
 
@@ -135,17 +137,27 @@ exit 0
 run_B_env_and_sid() {
     local tmp tn notes
 
-    # B1 AGENTS_CONFIG_DIR is a hard precondition: without it the script cannot
-    # even resolve the canonical workflow dir, so it must refuse before anything.
+    # B1 the state-dir resolver is a hard precondition: launched from a script
+    # checkout that lacks bin/workflow-state-dir, the script cannot resolve the
+    # canonical workflow dir, so it must refuse before the examiner and mint nothing.
+    local b1co b1saved
+    b1co=$(make_tmp)
+    script_checkout_fixture_copy "$b1co"
+    rm -f "$b1co/bin/workflow-state-dir"
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    REQ_SID="b1sid"; REQ_NO_CONFIG_DIR=1
+    REQ_SID="b1sid"; REQ_NO_CFG_ROOT=1
+    b1saved="$OFFCLR_REQ"
+    OFFCLR_REQ="$b1co/bin/request-off-clearance"
     run_req "$tn" "$(allow_stub)" --target workflow --category workflow-bug --detail "bug"
-    if [ "$RC" -eq 1 ] && echo "$ERR" | grep -q "AGENTS_CONFIG_DIR not set" && [ "$(token_count "$tmp")" -eq 0 ]; then
-        pass "B1 AGENTS_CONFIG_DIR unset -> exit 1 on stderr, NO token"
+    OFFCLR_REQ="$b1saved"
+    if [ -f "$b1co/bin/request-off-clearance" ] && [ "$RC" -eq 1 ] \
+       && echo "$ERR" | grep -q "could not resolve the session state directory" \
+       && ! echo "$OUT" | grep -q "Clearance token minted" && [ "$(token_count "$tmp")" -eq 0 ]; then
+        pass "B1 checkout without bin/workflow-state-dir -> exit 1 on stderr, NO token"
     else
-        fail "B1 want rc=1 + 'AGENTS_CONFIG_DIR not set' + no token; got rc=$RC tokens=$(token_count "$tmp") err=$(printf '%q' "$ERR")"
+        fail "B1 want rc=1 + 'could not resolve the session state directory' + no token; got rc=$RC tokens=$(token_count "$tmp") err=$(printf '%q' "$ERR")"
     fi
-    rm -r -f "$tmp" 2>/dev/null || true
+    rm -r -f "$tmp" "$b1co" 2>/dev/null || true
 
     # B2 the BRIDGE env source, alone, mints under exactly that sid.
     local val="sid-from-claude_code_session_id"
@@ -245,35 +257,31 @@ run_B_env_and_sid() {
     # B10 the resolver FAULTS (rc 3) instead of answering "no session". Only rc 2
     # means "no session"; any other rc is an unknown state, and minting a token
     # whose filename is a guess hands a clearance to the wrong session. The fault
-    # is injected where the script actually looks — $AGENTS_CONFIG_DIR/bin.
-    local shadow
-    shadow="$(make_tmp)/rc3-config"
-    offclr_shadow_resolver "$shadow" 3
+    # is injected where the script actually looks — bin/ beside its own path.
+    local fake_script_checkout_root saved_req="$OFFCLR_REQ"
+    fake_script_checkout_root="$(make_tmp)/rc3-checkout"
+    offclr_fake_checkout_resolver "$fake_script_checkout_root" 3
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     REQ_ENV=("CLAUDE_CODE_SESSION_ID=b10sid")
-    REQ_CONFIG_DIR="$(node_path "$shadow")"
+    OFFCLR_REQ="$fake_script_checkout_root/bin/request-off-clearance"
     run_req "$tn" "$(allow_stub)" --target workflow --category workflow-bug --detail "bug"
+    OFFCLR_REQ="$saved_req"
     if [ "$RC" -eq 1 ] && echo "$ERR" | grep -q "resolve-session-id failed (rc 3)" \
        && [ "$(token_count "$tmp")" -eq 0 ]; then
         pass "B10 resolver rc 3 -> exit 1 naming the rc, NO token (a fault is not 'no session')"
     else
         fail "B10 want rc=1 + 'resolve-session-id failed (rc 3)' + no token; got rc=$RC tokens=$(token_count "$tmp") err=$(printf '%q' "$ERR")"
     fi
-    rm -r -f "$tmp" "$shadow" 2>/dev/null || true
+    rm -r -f "$tmp" "$(dirname "$fake_script_checkout_root")" 2>/dev/null || true
 }
 
-# offclr_shadow_resolver <dir> <rc> — a minimal AGENTS_CONFIG_DIR whose
-# bin/resolve-session-id is a stub exiting <rc>; every module the mint path
-# requires is re-exported unchanged from the real tree, so the ONLY difference
-# from a normal run is the bridge's exit code (CPR-SC).
-offclr_shadow_resolver() {
-    local dir="$1" rc="$2" real="$OFFCLR_AGENTS_NODE" m
-    mkdir -p "$dir/bin" "$dir/hooks/lib" "$dir/hooks/workflow-state/state-io"
-    for m in hooks/workflow-state/index.js hooks/workflow-state/state-io/core.js \
-             hooks/lib/supervisor-state-writer.js hooks/lib/off-clearance-mint-lock.js \
-             hooks/lib/consume-exact-file.js; do
-        printf 'module.exports = require("%s/%s");\n' "$real" "$m" > "$dir/$m"
-    done
+# offclr_fake_checkout_resolver <dir> <rc> — a fake script checkout (a copy of
+# bin hooks skills) whose bin/resolve-session-id is a stub exiting <rc>; every
+# other file is the real one, so the ONLY difference from a normal run is the
+# bridge's exit code (CPR-SC). The caller launches <dir>/bin/request-off-clearance.
+offclr_fake_checkout_resolver() {
+    local dir="$1" rc="$2"
+    script_checkout_fixture_copy "$dir" || return 1
     printf '#!/usr/bin/env bash\nprintf "resolve-session-id: resolver failed: boom\\n" >&2\nexit %s\n' \
         "$rc" > "$dir/bin/resolve-session-id"
     chmod +x "$dir/bin/resolve-session-id"
@@ -433,15 +441,16 @@ exit 7
     rm -r -f "$tmp" 2>/dev/null || true
 
     # D6 the missing timeout wrapper is a REFUSAL, not a fallback to an unbounded
-    # codex call. Simulated by pointing BASH_SOURCE's dirname at a copy of the
-    # script with no run-with-timeout.sh beside it.
+    # codex call. Simulated by launching the script from a fake script checkout
+    # (a copy of bin hooks skills) with only run-with-timeout.sh removed.
     local fakebin
     fakebin=$(make_tmp)
-    cp "$OFFCLR_REQ" "$fakebin/request-off-clearance"
+    script_checkout_fixture_copy "$fakebin"
+    rm -f "$fakebin/bin/run-with-timeout.sh"
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     REQ_SID="d6sid"
     local saved="$OFFCLR_REQ"
-    OFFCLR_REQ="$fakebin/request-off-clearance"
+    OFFCLR_REQ="$fakebin/bin/request-off-clearance"
     run_req "$tn" "$(allow_stub)" --target workflow --category workflow-bug --detail "bug"
     OFFCLR_REQ="$saved"
     ok=1

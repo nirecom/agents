@@ -1,38 +1,11 @@
 # Part of tests/bin/feature-1643-worker-dispatch-script-anchor.sh — sourced, not run.
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, script-anchor, family-worktree, spawn, registry, regression, TL2, scope:issue-specific
-#
-# Group L: the two VALUE-LENGTH extremes across a REAL subprocess boundary
-# (#1719 review C4).
-#
-# Group I already asserts byte-exact preservation of a single-character and an
-# 8192-character config-path value — but it asserts it on buildEnv's RETURN
-# VALUE, an in-process JavaScript object where a length limit cannot possibly
-# bite. Length is precisely the property that stops being free once the value
-# has to cross into a real child: on Windows a single environment variable is
-# capped near 32767 characters and the child's whole environment block draws on
-# the same budget, so an over-long value is truncated or the spawn fails
-# outright, and neither outcome is visible one layer up.
-#
-# So this group plants each extreme in the PARENT of a real spawnMod.run() call
-# — the same vehicle group K uses — and asks the CHILD what it received. The
-# child never has the expected bytes handed to it through the env it is
-# measuring: it is given a generating SPEC on argv (`literal:X` for the short
-# arm, `rule:<prefix>:<length>` for the long one) and rebuilds the expectation
-# itself, so a truncated value cannot match by comparing a truncated thing to
-# itself — and the rebuilt expectation's own length is asserted too.
-#
-# 8192 is chosen the same way in both places, and the probe's comment is the
-# reason: large enough that truncation would be obvious, far enough under the
-# platform cap that a pass means "the dispatcher preserved it", not "the OS
-# happened to have room today".
-#
-# APPDATA is the vehicle for the same reason as group I: it is ALREADY on
-# CHILD_ENV_ALLOWLIST, so these rows stay green across the #1719 fix and leave
-# group G as the single place the membership signal lives.
-#
-# There is no skip path. A probe that cannot run is a FAIL — an unproven
-# preservation claim is worth exactly as much as a disproven one.
+# Group L (#1719 review C4): the two VALUE-LENGTH extremes across a REAL child boundary.
+# Group I asserts them on buildEnv's return value, where a length limit cannot bite; here
+# each is planted in the PARENT of a real spawnMod.run() and the CHILD rebuilds the
+# expectation from a SPEC on argv, so a truncated value cannot match itself. APPDATA
+# (already allowlisted) is the vehicle; 8192 is far under the Windows cap. No skip path.
 
 # The generating rule, stated once. The driver builds the value from it and the
 # child rebuilds the expectation from it independently.
@@ -84,7 +57,7 @@ L_CHILD_JS="$(nodepath "$L_CHILD_JS_RAW")"
 L_DRIVER="$TMPD/longvalue-driver.js"
 cat > "$L_DRIVER" <<'LDRIVERJS'
 const path = require("path");
-const [agentsDir, mainRoot, familyCwd, childJs, prefix, longLenRaw] = process.argv.slice(2);
+const [agentsDir, targetMainRoot, familyCwd, childJs, prefix, longLenRaw] = process.argv.slice(2);
 const spawnMod = require(path.join(agentsDir, "bin/worker-dispatch/spawn.js"));
 const anchorMod = require(path.join(agentsDir, "bin/worker-dispatch/anchor.js"));
 const registry = require(path.join(agentsDir, "hooks/lib/worker-dispatch-registry.js"));
@@ -92,7 +65,7 @@ const registry = require(path.join(agentsDir, "hooks/lib/worker-dispatch-registr
 const out = (k, v) => process.stdout.write(k + "=" + String(v) + "\n");
 const longLen = Number(longLenRaw);
 
-const anchors = anchorMod.resolveAnchors(mainRoot);
+const anchors = anchorMod.resolveAnchors(targetMainRoot);
 if (anchors.error) { out("anchors_error", anchors.error); process.exit(9); }
 
 // Precondition: the vehicle really is allowlisted, so an absent value in the
@@ -160,9 +133,9 @@ LDRIVERJS
 
 probe_longvalue() {
     PROBE_OUT="$(run_with_timeout 90 env \
-        -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
+        -u AGENTS_MAIN_ROOT -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
-        node "$L_DRIVER" "$(nodepath "$AGENTS_DIR")" "$MAIN" "$LINKED" "$L_CHILD_JS" \
+        node "$L_DRIVER" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$MAIN" "$LINKED" "$L_CHILD_JS" \
         "$L_LONG_PREFIX" "$L_LONG_LEN" 2>&1)" || return 1
     return 0
 }

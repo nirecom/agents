@@ -5,7 +5,7 @@
 #
 # L3 gap (what this test does NOT catch):
 # - Real clarify-commit-scope.sh / clarify-guard-loop.sh network calls against GitHub API
-# - AGENTS_CONFIG_DIR resolution in a real claude -p session
+# - AGENTS_MAIN_ROOT resolution in a real claude -p session
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
 #
@@ -20,11 +20,11 @@ set -uo pipefail
 REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 RUN_COMPLETION="$REPO_ROOT/skills/clarify-intent/scripts/run-completion.sh"
 
-# Helper: run run-completion.sh with a given AGENTS_CONFIG_DIR and args
+# Helper: run run-completion.sh with a given AGENTS_MAIN_ROOT and args
 # Sets OUT and RC
 run_completion() {
     local agents_dir="$1"; shift
-    OUT="$(AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout 30 bash "$RUN_COMPLETION" "$@" 2>/dev/null)"
+    OUT="$(AGENTS_MAIN_ROOT="$agents_dir" run_with_timeout 30 bash "$RUN_COMPLETION" "$@" 2>/dev/null)"
     RC=$?
 }
 
@@ -351,7 +351,7 @@ JS
     local danger_marker="$TEST_DIR/injection_marker"
     local EVIL_SESSION="\$(touch $danger_marker);evil-session"
 
-    AGENTS_CONFIG_DIR="$TEST_DIR" run_with_timeout 10 bash "$RUN_COMPLETION" \
+    AGENTS_MAIN_ROOT="$TEST_DIR" run_with_timeout 10 bash "$RUN_COMPLETION" \
         --session-id "$EVIL_SESSION" \
         --plans-dir "$PLANS_DIR" >/dev/null 2>&1 || true
 
@@ -372,7 +372,7 @@ test_RC_E1_missing_session_id() {
     local PLANS_DIR="$TEST_DIR/plans"
     mkdir -p "$PLANS_DIR"
 
-    AGENTS_CONFIG_DIR="$TEST_DIR" run_with_timeout 10 bash "$RUN_COMPLETION" \
+    AGENTS_MAIN_ROOT="$TEST_DIR" run_with_timeout 10 bash "$RUN_COMPLETION" \
         --plans-dir "$PLANS_DIR" >/dev/null 2>&1
     local rc=$?
 
@@ -390,7 +390,7 @@ test_RC_E2_missing_plans_dir() {
     require_script "$label" "$RUN_COMPLETION" || return
     setup_test_dir
 
-    AGENTS_CONFIG_DIR="$TEST_DIR" run_with_timeout 10 bash "$RUN_COMPLETION" \
+    AGENTS_MAIN_ROOT="$TEST_DIR" run_with_timeout 10 bash "$RUN_COMPLETION" \
         --session-id "some-session" >/dev/null 2>&1
     local rc=$?
 

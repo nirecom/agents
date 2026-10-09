@@ -217,7 +217,7 @@ else
     # An ABSENT CLI also exits non-zero with empty stdout and a one-line diagnostic, so
     # every assertion in this case would be satisfied by a command that never ran. The
     # bridge's own existence is therefore checked, not inferred from the exit status.
-    if [ ! -f "$AGENTS_DIR/bin/workflow/render-issue-comments" ]; then
+    if [ ! -f "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/render-issue-comments" ]; then
         fail "W14(i): bin/workflow/render-issue-comments does not exist — its failure path is not observable"
         fail "W14(i): a failed B1 run writing nothing to stdout is not observable"
     elif [ "$W14_RC" = "0" ]; then
@@ -254,7 +254,7 @@ else
         W14_TITLE_KEPT="$(grep -c "^# Issue #$N: " "$W14_FILE" || true)"
         assert_eq "W14(iii): the rest of the prefill is still written (title present)" "1" "$W14_TITLE_KEPT"
         W14_TOKEN="$(head -c 400 "$W14_ERR" 2>/dev/null | tr -d '\r\n')"
-        if [ ! -f "$AGENTS_DIR/bin/workflow/render-issue-comments" ]; then
+        if [ ! -f "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/render-issue-comments" ]; then
             fail "W14(iv): the diagnostic under test would be the shell's own 'not found' — the leak check is not observable"
         elif [ -z "$W14_TOKEN" ]; then
             fail "W14(iv): B1 printed no diagnostic, so the leak check has nothing to hunt for"

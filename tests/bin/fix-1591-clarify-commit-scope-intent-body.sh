@@ -8,10 +8,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CCS="$AGENTS_DIR/bin/github-issues/clarify-commit-scope.sh"
-GUARD_LIB="$AGENTS_DIR/bin/lib/gh-outbound-guard.sh"
-REAL_SCANNER="$AGENTS_DIR/bin/scan-outbound.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CCS="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/clarify-commit-scope.sh"
+GUARD_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh"
+REAL_SCANNER="$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh"
 
 PASS=0
 FAIL=0
@@ -35,12 +35,12 @@ unset CLAUDE_CODE_SESSION_ID
 setup() {
     TMP="$(mktemp -d)"
     export MOCK_LOG_DIR="$TMP"
-    mkdir -p "$TMP/mock-bin" "$TMP/plans" "$TMP/acd/bin"
-    # Real scanner isolated in a controlled AGENTS_CONFIG_DIR.
-    cp "$REAL_SCANNER" "$TMP/acd/bin/scan-outbound.sh"
-    chmod +x "$TMP/acd/bin/scan-outbound.sh"
-    : > "$TMP/acd/.private-info-allowlist"
-    : > "$TMP/acd/.private-info-blocklist"
+    mkdir -p "$TMP/mock-bin" "$TMP/plans" "$TMP/agents-main-root/bin"
+    # Empty allow/block lists in a controlled AGENTS_MAIN_ROOT (the scanner's anchor).
+    cp "$REAL_SCANNER" "$TMP/agents-main-root/bin/scan-outbound.sh"
+    chmod +x "$TMP/agents-main-root/bin/scan-outbound.sh"
+    : > "$TMP/agents-main-root/.private-info-allowlist"
+    : > "$TMP/agents-main-root/.private-info-blocklist"
     # gh mock — records every call; issue create returns a canned URL.
     cat > "$TMP/mock-bin/gh" <<'MOCKGH'
 #!/usr/bin/env bash
@@ -59,7 +59,7 @@ MOCKGH
         echo "FATAL: gh does not resolve to the mock ($(command -v gh 2>/dev/null)); aborting before any real gh call"
         exit 1
     fi
-    export AGENTS_CONFIG_DIR="$TMP/acd"
+    export AGENTS_MAIN_ROOT="$TMP/agents-main-root"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
     export WORKFLOW_STATE_DIR="$TMP/wf"
     mkdir -p "$WORKFLOW_STATE_DIR"
@@ -68,7 +68,6 @@ MOCKGH
 teardown() {
     [ -n "${TMP:-}" ] && [ -d "$TMP" ] && rm -rf "$TMP" 2>/dev/null || true
     unset MOCK_LOG_DIR WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR 2>/dev/null || true
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
 

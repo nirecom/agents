@@ -15,7 +15,7 @@ Usage: `/issue-reconcile`
 
 ## Pre-flight
 
-- `AGENTS_CONFIG_DIR` must be set.
+- `AGENTS_MAIN_ROOT` must be set.
 - Read `rules/github-issues.md` — on-demand-only, never auto-injected.
 
 ## IRC-1: pre-resolve
@@ -39,7 +39,7 @@ Ask whether to **append**, **skip**, or **stop**.
 
 On "append":
 
-Run one standalone call per issue: `bash "$AGENTS_CONFIG_DIR/skills/issue-reconcile/scripts/append-one.sh" "<NUM>"`. It stages the current `docs/history.md`, appends the entry with `--allow-backdate`, and PUTs the result back through the Contents API.
+Run one standalone call per issue: `bash "$AGENTS_MAIN_ROOT/skills/issue-reconcile/scripts/append-one.sh" "<NUM>"`. It stages the current `docs/history.md`, appends the entry with `--allow-backdate`, and PUTs the result back through the Contents API.
 
 The script is internally idempotent — running it on `history-only` does
 nothing harmful — but skip those in IRC-2 anyway to avoid unnecessary

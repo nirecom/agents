@@ -47,7 +47,7 @@ run_plansdir_table() {
         [ -z "$name" ] && continue
         case "$name" in \#*) continue ;; esac
         assert_eq "$name" \
-            "$(AGENTS_CONFIG_DIR="$XV_ACD" WORKFLOW_PLANS_DIR="$XV_PLANS" \
+            "$(AGENTS_MAIN_ROOT="$XV_SCRIPT_CHECKOUT_ROOT" WORKFLOW_PLANS_DIR="$XV_PLANS" \
                 overlay_probe plansdir "${XV_PLANS}/$(_trim "$token")" "$XV_REPO")" \
             "$(_trim "$want")"
     done
@@ -56,9 +56,9 @@ run_plansdir_table() {
 # run-initial.sh with an attacker-chosen FIRST argument. Same shape as the
 # suite's build_initial, which hardcodes the clean "1234".
 build_initial_arg1() {
-    local acd_val="$1" scripts="$2" mwt_val="$3" arg1="$4"
-    printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" bash "%s/run-initial.sh" "%s" "1234" "")"' \
-        "$acd_val" "$scripts" "$mwt_val" "$scripts" "$arg1"
+    local script_checkout_root_val="$1" scripts="$2" mwt_val="$3" arg1="$4"
+    printf 'eval "$(AGENTS_MAIN_ROOT="%s" FINALIZE_SCRIPTS_DIR="%s" TARGET_MAIN_ROOT="%s" bash "%s/run-initial.sh" "%s" "1234" "")"' \
+        "$script_checkout_root_val" "$scripts" "$mwt_val" "$scripts" "$arg1"
 }
 
 run_overlay_metachar_cases() {
@@ -118,10 +118,10 @@ TABLE
     # Whitespace: a space is not in the current regex either, and it splits the
     # eval into two words. The control is the same token with the space removed.
     assert_eq "ARG-tok-space whitespace inside a plans-dir token is rejected" \
-        "$(AGENTS_CONFIG_DIR="$XV_ACD" WORKFLOW_PLANS_DIR="$XV_PLANS" \
+        "$(AGENTS_MAIN_ROOT="$XV_SCRIPT_CHECKOUT_ROOT" WORKFLOW_PLANS_DIR="$XV_PLANS" \
             overlay_probe plansdir "$XV_PLANS/a b.json" "$XV_REPO")" "rejected"
     assert_eq "ARG-tok-space-control the same token without the space is accepted" \
-        "$(AGENTS_CONFIG_DIR="$XV_ACD" WORKFLOW_PLANS_DIR="$XV_PLANS" \
+        "$(AGENTS_MAIN_ROOT="$XV_SCRIPT_CHECKOUT_ROOT" WORKFLOW_PLANS_DIR="$XV_PLANS" \
             overlay_probe plansdir "$XV_PLANS/ab.json" "$XV_REPO")" "accepted"
 }
 
@@ -137,28 +137,28 @@ run_metachar_hook_cases() {
     local rc
 
     rc=0
-    run_guard "$(build_bash_payload "$(build_loop_step "$XV_ACD" "$XV_SCRIPTS" "$XV_SCRIPTS" "$XV_PLANS/a';gh issue close 999;'b" "accept")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    run_guard "$(build_bash_payload "$(build_loop_step "$XV_SCRIPT_CHECKOUT_ROOT" "$XV_SCRIPTS" "$XV_SCRIPTS" "$XV_PLANS/a';gh issue close 999;'b" "accept")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
     assert_block "ARG-hook loop-step state file carrying a quoted command separator" "$rc"
 
     rc=0
-    run_guard "$(build_bash_payload "$(build_loop_step "$XV_ACD" "$XV_SCRIPTS" "$XV_SCRIPTS" "$XV_PLANS/state.json" "accept")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    run_guard "$(build_bash_payload "$(build_loop_step "$XV_SCRIPT_CHECKOUT_ROOT" "$XV_SCRIPTS" "$XV_SCRIPTS" "$XV_PLANS/state.json" "accept")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
     assert_block "ARG-hook the identical loop-step with a clean state file — eval path retired (#1673)" "$rc"
 
     rc=0
-    run_guard "$(build_bash_payload "$(build_loop_step "$XV_ACD" "$XV_SCRIPTS" "$XV_SCRIPTS" "$XV_PLANS/a>b.json" "accept")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    run_guard "$(build_bash_payload "$(build_loop_step "$XV_SCRIPT_CHECKOUT_ROOT" "$XV_SCRIPTS" "$XV_SCRIPTS" "$XV_PLANS/a>b.json" "accept")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
     assert_block "ARG-hook loop-step state file carrying a redirection" "$rc"
 
     rc=0
-    run_guard "$(build_bash_payload "$(build_initial_arg1 "$XV_ACD" "$XV_SCRIPTS" "$XV_REPO" "1;gh issue close 999")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    run_guard "$(build_bash_payload "$(build_initial_arg1 "$XV_SCRIPT_CHECKOUT_ROOT" "$XV_SCRIPTS" "$XV_REPO" "1;gh issue close 999")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
     assert_block "ARG-hook run-initial issue id carrying a command separator" "$rc"
 
     rc=0
-    run_guard "$(build_bash_payload "$(build_initial_arg1 "$XV_ACD" "$XV_SCRIPTS" "$XV_REPO" "1234")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    run_guard "$(build_bash_payload "$(build_initial_arg1 "$XV_SCRIPT_CHECKOUT_ROOT" "$XV_SCRIPTS" "$XV_REPO" "1234")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
     assert_block "ARG-hook the identical run-initial with a clean issue id — eval path retired (#1673)" "$rc"
 }
 

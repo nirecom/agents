@@ -14,16 +14,16 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-RENDER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-findings-render.js"
-FORMAT_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format.js"
-CONV_LANG_NODE="$_AGENTS_DIR_NODE/hooks/lib/conv-lang.js"
+RENDER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-findings-render.js"
+FORMAT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-report-format.js"
+CONV_LANG_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/conv-lang.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -49,7 +49,7 @@ fi
 # T4c: summaryOnly:true → individual detail NOT present (RED-EXPECTED until C3 lands)
 
 run_t4_summary_only() {
-    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-findings-render.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-findings-render.js" ]; then
         skip "T4-all: supervisor-findings-render.js not present"
         return
     fi
@@ -126,11 +126,11 @@ process.stdout.write(result || '');
 # T5d: CONV_LANG=english → formatWorktreeOffProposalReason does NOT add prefix (GREEN)
 
 run_t5_conv_lang_symmetric() {
-    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-report-format.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-report-format.js" ]; then
         skip "T5-all: supervisor-report-format.js not present"
         return
     fi
-    if [ ! -f "$AGENTS_DIR/hooks/lib/conv-lang.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/conv-lang.js" ]; then
         skip "T5-all: conv-lang.js not present"
         return
     fi
@@ -227,7 +227,7 @@ run_t5_conv_lang_symmetric
 # T7e: classifier both-verdicts — workflow→/issue-create signal; code→no /issue-create signal (RED-EXPECTED)
 
 run_t7_actionable_only() {
-    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-findings-render.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-findings-render.js" ]; then
         skip "T7-all: supervisor-findings-render.js not present"
         return
     fi

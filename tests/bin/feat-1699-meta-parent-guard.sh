@@ -2,30 +2,21 @@
 # tests/bin/feat-1699-meta-parent-guard.sh
 # Tests: bin/github-issues/lib/require-meta-parent.sh, bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create-preflight.sh, bin/github-issues/lib/meta-parent-body.sh, bin/github-issues/issue-create.sh, bin/github-issues/sync-labels.sh
 # Tags: issue-create, dispatch, meta-parent, guard, labels, preflight, sync-labels, no-delete, tmpfile, permissions, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - Real GitHub semantics: whether `meta` + `Group: ` on a live issue actually make it
-#   an acceptable sub-issue parent, and whether a real partial failure leaves the same
-#   intermediate state the mock reproduces. Every gh call here is mocked.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
-#
-# Dispatcher for the split suite. Sections live in feat-1699-meta-parent-guard/ and
-# share the gh mock below, because all four exercise the same seam (the dispatcher's
-# argv → gh call sequence) and a per-section mock would drift between them.
-#
-# Why a guard at all: `sub-of` attaches a NEWLY CREATED issue under a parent. If the
-# parent turns out to be unusable, the issue already exists and cannot be un-created —
-# the failure mode is an orphan issue plus a human cleanup. So the eligibility question
-# has to be answered BEFORE the first `gh issue create`, and "no issue was created" is
-# asserted on every rejection path in this file rather than only the exit code.
+# TL3 gap (what this test does NOT catch): real GitHub semantics — every gh call is
+# mocked (live `meta` + `Group: ` parent eligibility, real partial-failure state).
+# Mitigation: WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# Dispatcher for the split suite: sections in feat-1699-meta-parent-guard/ share the gh
+# mock below (same seam: the dispatcher's argv → gh call sequence).
+# Why a guard: `sub-of` attaches a NEWLY CREATED issue, which cannot be un-created, so
+# every rejection path here asserts "no issue was created", not only the exit code.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH="$AGENTS_DIR/bin/github-issues/issue-create-dispatch.sh"
-GUARD="$AGENTS_DIR/bin/github-issues/lib/require-meta-parent.sh"
-PREFLIGHT="$AGENTS_DIR/bin/github-issues/issue-create-preflight.sh"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-dispatch.sh"
+GUARD="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/require-meta-parent.sh"
+PREFLIGHT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -214,7 +205,6 @@ MOCK_EOF
     export GH_MOCK_CREATE_CURSOR="$TMP/create-cursor"
     export GH_MOCK_CREATE_COUNTER="$TMP/create-counter"
     export GH_MOCK_SUBISSUE_CURSOR="$TMP/attach-cursor"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     : > "$GH_MOCK_ARGS_LOG"
 }
 
@@ -230,7 +220,7 @@ teardown_mock() {
           GH_MOCK_SUBISSUE_FAIL_FROM GH_MOCK_GRAPHQL_DBID_FAIL GH_MOCK_SLUG \
           GH_MOCK_REOPEN_FAIL GH_MOCK_VIEW_FAIL_MSG \
           GH_MOCK_LABELS_99 GH_MOCK_TITLE_99 GH_MOCK_LABELS_42 GH_MOCK_TITLE_42 \
-          AGENTS_CONFIG_DIR 2>/dev/null || true
+          2>/dev/null || true
 }
 
 # --- call-log helpers ---------------------------------------------------------------

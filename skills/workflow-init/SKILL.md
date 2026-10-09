@@ -22,10 +22,10 @@ Canonical: `skills/_shared/resolve-plans-dir.md`. Substitute the resolved absolu
 
 The driver (`bin/workflow/workflow-init-driver`) handles WI-3..WI-9: token detection, `gh issue view` fetch for each N in `ISSUES`, CLOSED detection, label extraction, meta classification (meta strip / open sub-issue guard), Aggregate WIP check (all N: all_same / all_none / any_other), route decision, and context.md write. The driver writes the checkpoint and `<SID>-context.md` directly under PLANS_DIR (outside git repos → ENFORCE_WORKTREE does not apply).
 
-Invocation: `node "$AGENTS_CONFIG_DIR/bin/workflow/workflow-init-driver" <raw-tokens> 2>/dev/null`
+Invocation: `node "$AGENTS_MAIN_ROOT/bin/workflow/workflow-init-driver" <raw-tokens> 2>/dev/null`
 (`<raw-tokens>` = issue number tokens like `#15` or `#15 #22` — not the full user prompt)
 
-On resume (after `ask_user`): `node "$AGENTS_CONFIG_DIR/bin/workflow/workflow-init-driver" --resume <CHECKPOINT> --answer '<token>'`
+On resume (after `ask_user`): `node "$AGENTS_MAIN_ROOT/bin/workflow/workflow-init-driver" --resume <CHECKPOINT> --answer '<token>'`
 
 Read all `KEY=VALUE` output lines. Dispatch on `ACTION=`:
 
@@ -67,24 +67,24 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 
 #### Path META — meta label issue
 WI-8 open sub-issue guard ensures all `ISSUES[@]` have no open sub-issues before reaching this path.
-- PM1. `node "$AGENTS_CONFIG_DIR/bin/workflow/set-workflow-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete` (single Bash call — records `workflow_type` and completes `workflow_init` together; no `--next` since the next action is fixed at PM2).
+- PM1. `node "$AGENTS_MAIN_ROOT/bin/workflow/set-workflow-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete` (single Bash call — records `workflow_type` and completes `workflow_init` together; no `--next` since the next action is fixed at PM2).
 - PM2. `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: meta issue — WF-META type; intent confirmed from issue body>>"`.
 - PM3. Use `/issue-create --skip-survey` with `--verdict bulk-sub-of --parent <meta-N> --manifest <file>` to create all planned sub-issues under the meta parent in a single bulk pass.
 - PM4. Invoke `make-outline-plan`. (next-step auto-skips `detail` and 8 other non-applicable WF-CODE steps after outline completes — `make-detail-plan` is never invoked in WF-META.)
 
 #### Path A — intent:clarified
 - A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, then immediately a `**Title:** <human-readable one-line title>` line (same data contract as clarify-intent CI-4), `## Issues` (one `- #<N>: <title>` line per entry in `ISSUES[@]`, in insertion order, no annotations), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Title for each N from WI-4's `gh issue view`; fetch failure → `- #<N>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`). `ISSUES[0]` is the first entry; it becomes `closes_issues[0]`; this entry becomes `closes_issues[0]`.
-- A1a. Record `closes_issues` into session state: `node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" --session "$SESSION_ID"` (separate Bash call; routes through the write-once cache in `hooks/workflow-state/session-facts.js`).
-- A1b. Set session title: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "<PLANS_DIR>"` (the CLI defaults `<cwd>` to its own working directory).
-- A2. **Label + board-card parity for all N.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with `"${REPO_MAP_ARGS[@]}"` followed by all entries of `ISSUES[@]` as positional args; export `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each related entry (fail-closed — on failure writes ABORT marker `<CONTROL_DIR>/workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every issue it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
-- A3. `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step workflow_init --complete` (no `--next` — the next action is fixed at A3a, not next-step's judgment), then, unchanged, as a separate Bash call: `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #{N} has intent:clarified label>>"`.
+- A1a. Record `closes_issues` into session state: `node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" --session "$SESSION_ID"` (separate Bash call; routes through the write-once cache in `hooks/workflow-state/session-facts.js`).
+- A1b. Set session title: `node "$AGENTS_MAIN_ROOT/bin/cc-session-title" set-issue "<PLANS_DIR>"` (the CLI defaults `<cwd>` to its own working directory).
+- A2. **Label + board-card parity for all N.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with `"${REPO_MAP_ARGS[@]}"` followed by all entries of `ISSUES[@]` as positional args; export `SESSION_ID`, `AGENTS_MAIN_ROOT`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each related entry (fail-closed — on failure writes ABORT marker `<CONTROL_DIR>/workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every issue it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
+- A3. `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step workflow_init --complete` (no `--next` — the next action is fixed at A3a, not next-step's judgment), then, unchanged, as a separate Bash call: `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #{N} has intent:clarified label>>"`.
 - A3a. **Complexity evaluation + outline-skip dispatch**: follow `skills/_shared/complexity-and-outline-skip.md` end to end (judge → Write the signals CSV → one `record-complexity-and-skip --dispatch-only` call → branch on the printed `SKIP_DISPATCH` value). Its COS-4 branch outcome resumes here at A4.
 - A4. Invoke `make-outline-plan` (surveys already complete via WI-9).
 
 > When `--advance` is called without `--next`, no `ACTION=` block is ever emitted — proceed directly to the next documented in-skill step above rather than waiting on `next-step`'s judgment.
 
 #### Path B — issue exists, no intent:clarified
-- **B1.** Run `node "$AGENTS_CONFIG_DIR/bin/workflow/render-issue-comments" --checkpoint '<CHECKPOINT>' --issue <N>` against the driver's own `CHECKPOINT=` value and the same `<N>` B2 seeds; on a non-zero exit discard its stdout and keep its stderr out of every artifact; when that path holds an apostrophe, replace each `'` in it with `'\''` before pasting.
+- **B1.** Run `node "$AGENTS_MAIN_ROOT/bin/workflow/render-issue-comments" --checkpoint '<CHECKPOINT>' --issue <N>` against the driver's own `CHECKPOINT=` value and the same `<N>` B2 seeds; on a non-zero exit discard its stdout and keep its stderr out of every artifact; when that path holds an apostrophe, replace each `'` in it with `'\''` before pasting.
 - **B2.** Write `<PLANS_DIR>/<session-id>-issue-prefill.md` with `<!-- Issue #<N> seed for clarify-intent. Confirm framing, do not start from scratch. -->`, `# Issue #<N>: <title>`, `<body>`, then B1's stdout verbatim, separated by one blank line; on a non-zero B1 rc omit the comments section entirely and fabricate no replacement.
 - **B3.** `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
 - **B4.** Invoke `clarify-intent` with `#<N>` in args so CI-1a auto-detect fires.

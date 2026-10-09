@@ -19,7 +19,7 @@ test_N1_writeNotes_exact_content() {
             createdDate: '2024-01-15',
             resolvedPath: '/tmp/wt',
             baseDir: 'C:/git/worktrees',
-            mainRoot: '/tmp/main',
+            targetMainRoot: '/tmp/main',
             sessionId: 'sess-abc-123',
             copiedFiles: ['a.env','b/.env.local']
         });
@@ -118,7 +118,7 @@ test_I1_writeNotes_idempotent() {
             createdDate: '2024-01-15',
             resolvedPath: '/tmp/wt',
             baseDir: 'C:/git/worktrees',
-            mainRoot: '/tmp/main',
+            targetMainRoot: '/tmp/main',
             sessionId: 'sess-abc-123',
             copiedFiles: ['a.env','b/.env.local']
         };
@@ -207,7 +207,7 @@ test_N4_appendExclude_appends_to_existing() {
     printf 'existing-pattern\n' > "$main/.git/info/exclude"
 
     local out
-    out="$(lib_eval "const r=lib.appendExclude({mainRoot:process.argv[1],pattern:'WORKTREE_NOTES.md'});process.stdout.write(JSON.stringify(r));" "$main_node" 2>/dev/null)"
+    out="$(lib_eval "const r=lib.appendExclude({targetMainRoot:process.argv[1],pattern:'WORKTREE_NOTES.md'});process.stdout.write(JSON.stringify(r));" "$main_node" 2>/dev/null)"
     local added; added="$(json_field "$out" "excludeAdded")"
     if [ "$added" = "true" ] && grep -q "^WORKTREE_NOTES.md$" "$main/.git/info/exclude" \
        && grep -q "^existing-pattern$" "$main/.git/info/exclude"; then
@@ -225,7 +225,7 @@ test_N5_appendExclude_creates_dir_and_file() {
     rm -rf "$main/.git/info"
 
     local out
-    out="$(lib_eval "const r=lib.appendExclude({mainRoot:process.argv[1],pattern:'WORKTREE_NOTES.md'});process.stdout.write(JSON.stringify(r));" "$main_node" 2>/dev/null)"
+    out="$(lib_eval "const r=lib.appendExclude({targetMainRoot:process.argv[1],pattern:'WORKTREE_NOTES.md'});process.stdout.write(JSON.stringify(r));" "$main_node" 2>/dev/null)"
     local added; added="$(json_field "$out" "excludeAdded")"
     if [ "$added" = "true" ] && [ -d "$main/.git/info" ] \
        && grep -q "^WORKTREE_NOTES.md$" "$main/.git/info/exclude"; then
@@ -245,7 +245,7 @@ test_I2_appendExclude_already_present() {
     local before_md5
     before_md5="$(node -e "const c=require('crypto'),fs=require('fs');process.stdout.write(c.createHash('md5').update(fs.readFileSync(process.argv[1])).digest('hex'));" -- "$main/.git/info/exclude" 2>/dev/null)"
     local out
-    out="$(lib_eval "const r=lib.appendExclude({mainRoot:process.argv[1],pattern:'WORKTREE_NOTES.md'});process.stdout.write(JSON.stringify(r));" "$main_node" 2>/dev/null)"
+    out="$(lib_eval "const r=lib.appendExclude({targetMainRoot:process.argv[1],pattern:'WORKTREE_NOTES.md'});process.stdout.write(JSON.stringify(r));" "$main_node" 2>/dev/null)"
     local added; added="$(json_field "$out" "excludeAdded")"
     local reason; reason="$(json_field "$out" "excludeSkipReason")"
     local after_md5

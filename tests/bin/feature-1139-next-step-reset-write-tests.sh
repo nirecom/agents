@@ -18,8 +18,8 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -106,7 +106,7 @@ read_state_status() {
       const step = s && s.steps && s.steps['$step'];
       console.log(step && step.status ? step.status : 'MISSING');
     } catch (e) { console.log('MISSING'); }
-  " "$sid" "$AGENTS_DIR/hooks/workflow-state/state-io.js" 2>/dev/null || echo "MISSING"
+  " "$sid" "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js" 2>/dev/null || echo "MISSING"
 }
 
 # Run next-step for verdict output (always exits 0; KEY=value lines on stdout).

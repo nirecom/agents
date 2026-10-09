@@ -15,7 +15,7 @@ else
 # ---------------------------------------------------------------------------
 T5_RAW=$(printf '{}' | \
     CONV_LANG="japanese" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$SUBAGENT_START" 2>/dev/null)
 T5_RC=$?
 if [ "$T5_RC" -ne 0 ]; then
@@ -41,7 +41,7 @@ fi
 # ---------------------------------------------------------------------------
 T6_RAW=$(printf '{}' | (
     unset CONV_LANG PLAN_LANG
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$SUBAGENT_START" 2>/dev/null
 ))
 T6_RC=$?
@@ -69,7 +69,7 @@ fi
 T7_RAW=$(printf '{}' | (
     unset PLAN_LANG
     CONV_LANG="english" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$SUBAGENT_START" 2>/dev/null
 ))
 T7_RC=$?
@@ -95,7 +95,7 @@ fi
 # ---------------------------------------------------------------------------
 T8_RAW=$(printf 'not-json' | \
     CONV_LANG="japanese" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$SUBAGENT_START" 2>/dev/null)
 T8_RC=$?
 if [ "$T8_RC" -ne 0 ]; then
@@ -120,7 +120,7 @@ fi
 # ---------------------------------------------------------------------------
 printf '{}' | \
     CONV_LANG="japanese" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$SUBAGENT_START" >/dev/null 2>&1
 T9_RC=$?
 if [ "$T9_RC" -eq 0 ]; then

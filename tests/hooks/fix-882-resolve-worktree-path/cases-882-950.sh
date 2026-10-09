@@ -45,7 +45,7 @@ run_resolver_js() {
   CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
   WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
   WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-  AGENTS_CONFIG_DIR="$AGENTS_NODE" \
+  AGENTS_MAIN_ROOT="$AGENTS_NODE" \
     bash "$RUN_TIMEOUT" 30 node -e "
 const { resolveSessionWorktreePath } = require('$AGENTS_NODE/hooks/workflow-state/resolve-worktree-path.js');
 const result = resolveSessionWorktreePath('$sid');
@@ -151,7 +151,7 @@ caseH_got="$(SESSION_ID="" \
   CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
   WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
   WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-  AGENTS_CONFIG_DIR="$AGENTS_NODE" \
+  AGENTS_MAIN_ROOT="$AGENTS_NODE" \
   bash "$RUN_TIMEOUT" 30 node "$COMPUTE_JS" "$WTA_NODE" 2>/dev/null)"
 if [[ -n "$caseH_got" ]]; then
   pass "Case H (fingerprint for linked worktree): non-empty fingerprint '$caseH_got'"

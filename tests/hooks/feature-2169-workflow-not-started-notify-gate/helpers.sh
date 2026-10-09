@@ -4,7 +4,7 @@
 # Shared fixture/dispatch helpers for the #2169 pre-workflow-init notify-gate
 # test suite. Sourced by the top-level
 # tests/hooks/feature-2169-workflow-not-started-notify-gate.sh dispatcher; relies on
-# AGENTS_DIR / _AGENTS_DIR_NODE / RWT / AUTOMARK_HOOK / UPS_HOOK /
+# SCRIPT_CHECKOUT_ROOT / _SCRIPT_CHECKOUT_ROOT_NODE / RWT / AUTOMARK_HOOK / UPS_HOOK /
 # STATEIO_NODE / LIFECYCLE_NODE / MECHFAIL_NODE / TTL_MS being set by the
 # dispatcher before any function here is invoked.
 
@@ -22,7 +22,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # tests/hooks/feature-2013-step-in-flight-automark/d-skill-dispatch.sh.
 dispatch_lookahead() {
     printf '{"tool_name":"Agent","session_id":"%s","transcript_path":"","tool_input":{"description":"x"}}' "$2" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" >/dev/null 2>&1
 }
 
@@ -32,7 +32,7 @@ dispatch_lookahead() {
 # tests/hooks/feature-2013-step-in-flight-automark/e-lookahead-guard.sh.
 dispatch_meta_skill() {
     printf '{"tool_name":"Skill","session_id":"%s","transcript_path":"","tool_input":{"skill":"resume-session"}}' "$2" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" >/dev/null 2>&1
 }
 
@@ -133,7 +133,7 @@ run_ups() {
     UPS_OUT=$(SID="$2" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 25 node "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
 }

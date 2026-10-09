@@ -12,8 +12,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB="$AGENTS_DIR/bin/github-issues/lib/intent-to-issue.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/intent-to-issue.sh"
 
 PASS=0
 FAIL=0

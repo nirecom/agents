@@ -35,7 +35,7 @@ run_with_timeout() {
     fi
 }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Files exempted from the scan (matched by path suffix):
 #   - skills/_shared/resolve-plans-dir.md : canonical documentation of both
@@ -66,7 +66,7 @@ strip_code_blocks() {
 }
 
 echo "=== skills/agents plans-dir drift guard ==="
-echo "AGENTS_DIR: $AGENTS_DIR"
+echo "SCRIPT_CHECKOUT_ROOT: $SCRIPT_CHECKOUT_ROOT"
 echo ""
 
 violations_file=$(mktemp)
@@ -101,7 +101,7 @@ while IFS= read -r -d '' file; do
             printf '%s:B:%s\n' "$file" "$line" >> "$violations_file"
         done <<< "$matches_b"
     fi
-done < <(run_with_timeout find "$AGENTS_DIR/skills" "$AGENTS_DIR/agents" -type f -name '*.md' -print0 2>/dev/null | sort -z)
+done < <(run_with_timeout find "$SCRIPT_CHECKOUT_ROOT/skills" "$SCRIPT_CHECKOUT_ROOT/agents" -type f -name '*.md' -print0 2>/dev/null | sort -z)
 
 violation_count=$(wc -l < "$violations_file" | tr -d ' ')
 

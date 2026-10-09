@@ -20,7 +20,7 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 #   treatment of the spelling is asserted here.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # WHAT THIS FILE DEFENDS (#1780 security-scanner round 8: H-1..H-4, M-1, M-3)
 # hooks/lib/session-markers.js authorizes purely on a marker file's EXISTENCE, so
@@ -28,7 +28,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # clearance. The guard against that must be location-independent (H-1, Section L),
 # glob-aware (H-3, Section G), ADS-aware (H-4, Section A), shape-complete
 # (M-1, Section S) and .tmp-symmetric (M-3, Section X).
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
 
 # Every block case is paired with its CPR-ORTH sanctioned counterpart: a guard that
 # over-blocks ordinary work is a different, equally real defect (Section N).
@@ -39,13 +39,13 @@ if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGE
 # empty stdout or unparseable stdout each get their own verdict token and can
 # never be confused with "approve". See classify() below.
 
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-PB_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
-MARKER_GATE_NODE="$_AGENTS_DIR_NODE/hooks/enforce-worktree/bash-write-scope/marker-gate.js"
-SESSION_MARKERS_SRC="$AGENTS_DIR/hooks/lib/session-markers.js"
-ZOMBIE_SRC="$AGENTS_DIR/hooks/workflow-state/state-io/zombie-cleanup.js"
-SETTINGS="$AGENTS_DIR/settings.json"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+PB_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/protected-basenames.js"
+MARKER_GATE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/enforce-worktree/bash-write-scope/marker-gate.js"
+SESSION_MARKERS_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/session-markers.js"
+ZOMBIE_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/zombie-cleanup.js"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -81,7 +81,7 @@ run_hook_cwd() {
     local cwd="$1" tn="$2" input="$3" out rc
     [ -f "$HOOK" ] || { printf 'absent|'; return; }
     out=$(cd "$cwd" 2>/dev/null && WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$PLANSDIR" \
-        AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$HOOK" <<< "$input" 2>/dev/null)
+        "$RWT" 15 node "$HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
 }
@@ -199,12 +199,12 @@ fi
 if [ "$LOCATION_FIXTURE_OK" = "yes" ]; then
     pass "H2 location fixture: LINKED worktree on feature branch fix/protected-marker-probe"
 else
-    skip "H2 location fixture unavailable (git missing or worktree add failed) - Section L falls back to CWD=$AGENTS_DIR only"
-    LINKED_WT="$AGENTS_DIR"; MAIN_WT="$AGENTS_DIR"; NONREPO="$SANDBOX"
+    skip "H2 location fixture unavailable (git missing or worktree add failed) - Section L falls back to CWD=$SCRIPT_CHECKOUT_ROOT only"
+    LINKED_WT="$SCRIPT_CHECKOUT_ROOT"; MAIN_WT="$SCRIPT_CHECKOUT_ROOT"; NONREPO="$SANDBOX"
 fi
 
 # ---- case parts (rules/coding/file-split.md: sibling <name>/ folder) -------
-PARTS_DIR="$AGENTS_DIR/tests/hooks/enforce-protected-marker-write"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/enforce-protected-marker-write"
 # shellcheck source=./enforce-protected-marker-write/cases-location.sh
 . "$PARTS_DIR/cases-location.sh"
 # shellcheck source=./enforce-protected-marker-write/cases-normalize.sh

@@ -12,17 +12,16 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COMPUTE_JS="$AGENTS_DIR/bin/compute-review-scope-fingerprint.js"
-LOOP_SH="$AGENTS_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+COMPUTE_JS="$SCRIPT_CHECKOUT_ROOT/bin/compute-review-scope-fingerprint.js"
+LOOP_SH="$SCRIPT_CHECKOUT_ROOT/skills/review-tests/scripts/run-codex-review-loop.sh"
 
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # Normalize a path for cross-platform comparison: C:/foo and /c/foo are equivalent.
 norm_path() {
@@ -234,14 +233,19 @@ else
     REPO_ROOT_RECORD="$TMPDIR_BASE/repo-root-record.txt"
     STUB_BIN2="$TMPDIR_BASE/stubbin2"
     mkdir -p "$STUB_BIN2"
-    # The run-codex-review-loop.sh script calls "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop".
-    # We can't stub it via PATH because it uses an absolute path from AGENTS_CONFIG_DIR.
-    # Instead we create a fake AGENTS_CONFIG_DIR that has a stub run-codex-review-loop.
-    FAKE_ACD2="$TMPDIR_BASE/fake-acd2"
-    mkdir -p "$FAKE_ACD2/bin" "$FAKE_ACD2/rules"
-    [[ -d "$AGENTS_DIR/rules" ]] && cp -r "$AGENTS_DIR/rules" "$FAKE_ACD2/" 2>/dev/null || true
+    # The loop script calls bin/run-codex-review-loop by an absolute path under the checkout
+    # it lives in, so PATH cannot stub it. Launch a copy of the loop script (plus the libs it
+    # sources) from a fake checkout whose bin/ holds a stub run-codex-review-loop.
+    FAKE_SCRIPT_CHECKOUT_ROOT2="$TMPDIR_BASE/fake-script-checkout-root2"
+    # shellcheck source=tests/lib/script-checkout-fixture.sh
+    . "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+    script_checkout_fixture_copy "$FAKE_SCRIPT_CHECKOUT_ROOT2" skills/review-tests/scripts \
+        bin/lib/codex-review-loop bin/lib/safe-state-path.sh
+    FAKE_LOOP_SH2="$FAKE_SCRIPT_CHECKOUT_ROOT2/skills/review-tests/scripts/run-codex-review-loop.sh"
+    mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin" "$FAKE_SCRIPT_CHECKOUT_ROOT2/rules"
+    [[ -d "$SCRIPT_CHECKOUT_ROOT/rules" ]] && cp -r "$SCRIPT_CHECKOUT_ROOT/rules" "$FAKE_SCRIPT_CHECKOUT_ROOT2/" 2>/dev/null || true
     # Stub run-codex-review-loop to record --repo-root arg and exit 3.
-    cat > "$FAKE_ACD2/bin/run-codex-review-loop" <<STUBSCRIPT
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin/run-codex-review-loop" <<STUBSCRIPT
 #!/bin/bash
 # Stub: record --repo-root arg value.
 while [[ \$# -gt 0 ]]; do
@@ -254,27 +258,27 @@ done
 echo "## Codex Review: SKIPPED -- stub"
 exit 3
 STUBSCRIPT
-    chmod +x "$FAKE_ACD2/bin/run-codex-review-loop"
+    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin/run-codex-review-loop"
     # Also stub build-codex-context.
-    cat > "$FAKE_ACD2/bin/build-codex-context" <<'BSTUB'
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin/build-codex-context" <<'BSTUB'
 #!/bin/bash
 while [[ $# -gt 0 ]]; do
     if [[ "$1" == "--output" && -n "${2:-}" ]]; then
         echo "stub" > "$2"; break; fi
     shift; done; exit 0
 BSTUB
-    chmod +x "$FAKE_ACD2/bin/build-codex-context"
+    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin/build-codex-context"
     # #2270: the loop script now resolves the CC session id and the session's worktree
-    # through these two bridges before anything else. They live under AGENTS_CONFIG_DIR,
-    # so the fake tree must carry them or the script halts (exit 4) before the probe.
+    # through these two bridges before anything else. They live under its own checkout's
+    # bin/, so the fake tree must carry them or the script halts (exit 4) before the probe.
     # The worktree stub answers only for SID_A's --session, so the recorded --repo-root
     # is still evidence that the script forwarded the SESSION's worktree, not its CWD.
-    cat > "$FAKE_ACD2/bin/resolve-session-id" <<STUBSID
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin/resolve-session-id" <<STUBSID
 #!/bin/bash
 printf '%s' "${SID_A}"
 STUBSID
-    chmod +x "$FAKE_ACD2/bin/resolve-session-id"
-    cat > "$FAKE_ACD2/bin/resolve-worktree-path" <<STUBWTP
+    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin/resolve-session-id"
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin/resolve-worktree-path" <<STUBWTP
 #!/bin/bash
 while [[ \$# -gt 0 ]]; do
     if [[ "\$1" == "--session" && "\${2:-}" == "${SID_A}" ]]; then
@@ -285,19 +289,19 @@ while [[ \$# -gt 0 ]]; do
 done
 printf 'NOSTATE'
 STUBWTP
-    chmod +x "$FAKE_ACD2/bin/resolve-worktree-path"
-    # The third AGENTS_CONFIG_DIR entrypoint the loop reaches before the probe; its
+    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin/resolve-worktree-path"
+    # The third bin/ entrypoint the loop reaches before the probe; its
     # non-zero rc is an unconditional exit 4, so a missing file hides the assertion too.
-    cat > "$FAKE_ACD2/bin/resolve-accepted-tradeoffs-file" <<'STUBATF'
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin/resolve-accepted-tradeoffs-file" <<'STUBATF'
 #!/bin/bash
 printf '%s' "$1/$2-outline.md"
 STUBATF
-    chmod +x "$FAKE_ACD2/bin/resolve-accepted-tradeoffs-file"
+    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT2/bin/resolve-accepted-tradeoffs-file"
 
     ( cd "$MAIN_WT" && \
-        AGENTS_CONFIG_DIR="$FAKE_ACD2" SESSION_ID="$SID_A" CLAUDE_CODE_SESSION_ID="$SID_A" \
+        SESSION_ID="$SID_A" CLAUDE_CODE_SESSION_ID="$SID_A" \
         PLANS_DIR="$PLANS_DIR2" EXTENSIONS_USED=0 \
-        "$RWT" 120 bash "$LOOP_SH" >/dev/null 2>&1 || true )
+        "$RWT" 120 bash "$FAKE_LOOP_SH2" >/dev/null 2>&1 || true )
 
     if [[ -f "$REPO_ROOT_RECORD" ]]; then
         recorded_root="$(cat "$REPO_ROOT_RECORD")"
@@ -352,7 +356,7 @@ if [[ -f "$LOOP_SH" ]]; then
     : > "$PLANS_DIR5/$SID_NOCWD-outline.md"
     rc5=0
     ( cd "$MAIN_WT" && \
-        AGENTS_CONFIG_DIR="$AGENTS_DIR" SESSION_ID="$SID_NOCWD" CLAUDE_CODE_SESSION_ID="$SID_NOCWD" \
+        SESSION_ID="$SID_NOCWD" CLAUDE_CODE_SESSION_ID="$SID_NOCWD" \
         PLANS_DIR="$PLANS_DIR5" EXTENSIONS_USED=0 \
         "$RWT" 120 bash "$LOOP_SH" >/dev/null 2>&1 ) || rc5=$?
     if [[ "$rc5" -ne 0 ]]; then

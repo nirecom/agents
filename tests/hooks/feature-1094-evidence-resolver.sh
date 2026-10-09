@@ -16,8 +16,8 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RESOLVER="$AGENTS_DIR/hooks/workflow-state/evidence-resolver.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RESOLVER="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/evidence-resolver.js"
 # Node on Windows requires a native path (C:/...), not a POSIX/MSYS path (/c/...).
 RESOLVER="$(cygpath -m "$RESOLVER" 2>/dev/null || echo "$RESOLVER")"
 

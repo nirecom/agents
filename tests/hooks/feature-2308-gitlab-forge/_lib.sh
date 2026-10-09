@@ -13,16 +13,16 @@ _FEAT2308_FORGE_LIB_SOURCED=1
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
 
-PRU_JS="$(nodepath "$AGENTS_DIR/hooks/lib/parse-remote-url.js")"
-GITLAB_JS="$(nodepath "$AGENTS_DIR/hooks/lib/forge/gitlab.js")"
-GITHUB_JS="$(nodepath "$AGENTS_DIR/hooks/lib/forge/github.js")"
-IPR_JS="$(nodepath "$AGENTS_DIR/hooks/lib/is-private-repo.js")"
-DETECT_CLI="$AGENTS_DIR/bin/detect-forge-type"
+PRU_JS="$(nodepath "$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-remote-url.js")"
+GITLAB_JS="$(nodepath "$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/lib/forge/gitlab.js")"
+GITHUB_JS="$(nodepath "$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/lib/forge/github.js")"
+IPR_JS="$(nodepath "$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/lib/is-private-repo.js")"
+DETECT_CLI="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/detect-forge-type"
 
 PASS=0
 FAIL=0
@@ -95,7 +95,7 @@ EOF
 chmod +x "$MOCK_BIN/glab"
 printf '@echo off\r\nnode "%s" %%*\r\n' "$GLAB_JS_MOCK_WIN" > "$MOCK_BIN/glab.cmd"
 # The forge descriptors spawn without a shell, which cannot run a .cmd: bridge it.
-. "$AGENTS_DIR/tests/lib/cli-stub.sh"
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/cli-stub.sh"
 cli_stub_bridge_cmd "$MOCK_BIN" glab
 
 # Mock gh: visibility echo, mirrors main-private-repo-detection.sh. Remove it with

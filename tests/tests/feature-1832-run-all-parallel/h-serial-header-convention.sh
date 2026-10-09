@@ -16,10 +16,10 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-RUNNER="$AGENTS_DIR/tests/run-all.sh"
-REAL_TESTS="$AGENTS_DIR/tests"
-DESIGN_DOC="$AGENTS_DIR/skills/_shared/test-design.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
+REAL_TESTS="$SCRIPT_CHECKOUT_ROOT/tests"
+DESIGN_DOC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/test-design.md"
 
 PASS=0
 FAIL=0
@@ -41,7 +41,7 @@ senv() {
 }
 AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
 unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
-run_with_timeout() { local s="$1"; shift; senv bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
+run_with_timeout() { local s="$1"; shift; senv bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$s" "$@"; }
 
 TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/ra-serial-$$")"
 mkdir -p "$TMPD"
@@ -90,7 +90,7 @@ case_static_convention() {
 # 1b. Static audit: every hazardous test must CARRY the header. Criteria pinned here:
 #   H1 fixed shared temp path — write verb on a literal /tmp/<name> without
 #      $$/mktemp/$RANDOM (two tests would collide on one /tmp namespace).
-#   H2 real-tree write — write verb/redirect targeting $AGENTS_DIR (REPO_ROOT is
+#   H2 real-tree write — write verb/redirect targeting $SCRIPT_CHECKOUT_ROOT (REPO_ROOT is
 #      excluded: some tests bind it to an already-isolated fixture dir).
 #   H3 global state mutation — an executed `git config --global`/`--system`.
 HAZARD_PROG='
@@ -100,8 +100,8 @@ HAZARD_PROG='
   h = ""
   if (line ~ /^[[:space:]]*(rm|mkdir|touch|cp|mv|tee|install|sed -i)([[:space:]]+-[A-Za-z-]+)*[[:space:]]+"?\/tmp\/[A-Za-z0-9._-]+/ \
       && line !~ /\$\$|mktemp|\$RANDOM/) h = "H1"
-  else if (line ~ />>?[[:space:]]*"?\$\{?AGENTS_DIR/ \
-      || line ~ /^[[:space:]]*(rm|mkdir|touch|tee|ln -s|sed -i|install)([[:space:]]+-[A-Za-z-]+)*[[:space:]]+"?\$\{?AGENTS_DIR/) h = "H2"
+  else if (line ~ />>?[[:space:]]*"?\$\{?SCRIPT_CHECKOUT_ROOT/ \
+      || line ~ /^[[:space:]]*(rm|mkdir|touch|tee|ln -s|sed -i|install)([[:space:]]+-[A-Za-z-]+)*[[:space:]]+"?\$\{?SCRIPT_CHECKOUT_ROOT/) h = "H2"
   else if (line ~ /(^|[;&|][[:space:]]*)git config[[:space:]]+(--global|--system)/) h = "H3"
   if (h != "") print FILENAME "\t" h "\t" FNR
 }'

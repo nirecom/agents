@@ -6,9 +6,9 @@
 # L3 gap: a real claude -p session verifying the injected context changes
 # assistant behavior — checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
-# Sourced after helpers.sh; inherits TMPDIR_BASE, AGENTS_DIR, pass/fail functions.
+# Sourced after helpers.sh; inherits TMPDIR_BASE, SCRIPT_CHECKOUT_ROOT, pass/fail functions.
 
-WORKFLOW_MARK="$AGENTS_DIR/hooks/workflow-mark.js"
+WORKFLOW_MARK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 WM_WORKFLOW_DIR="$TMPDIR_BASE/workflow-wm"
 mkdir -p "$WM_WORKFLOW_DIR"
 
@@ -70,7 +70,7 @@ fs.writeFileSync(f,process.argv[1],'utf8');
 process.stdout.write(f);
 " "$json" 2>/dev/null)
     WORKFLOW_STATE_DIR="$WM_WORKFLOW_DIR" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$WORKFLOW_MARK" < "$tmpf" >/dev/null 2>&1 || true
     node -e "require('fs').unlinkSync(process.argv[1])" "$tmpf" 2>/dev/null || true
 }

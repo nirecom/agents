@@ -111,9 +111,9 @@ else
         fail "N23a. profile-snippet.ps1 does not use \$PSScriptRoot (hardcoded path risk)"
         _n23_ok=0
     fi
-    # Must set AGENTS_CONFIG_DIR
-    if ! grep -q 'AGENTS_CONFIG_DIR' "$SNIPPET_PS1"; then
-        fail "N23b. profile-snippet.ps1 does not set AGENTS_CONFIG_DIR"
+    # Must set AGENTS_MAIN_ROOT
+    if ! grep -q 'AGENTS_MAIN_ROOT' "$SNIPPET_PS1"; then
+        fail "N23b. profile-snippet.ps1 does not set AGENTS_MAIN_ROOT"
         _n23_ok=0
     fi
     # Must reference CLAUDE.md (repair logic)
@@ -127,7 +127,7 @@ else
         _n23_ok=0
     fi
     if [ "$_n23_ok" -eq 1 ]; then
-        pass "N23. profile-snippet.ps1 exists with PSScriptRoot, AGENTS_CONFIG_DIR, and repair logic"
+        pass "N23. profile-snippet.ps1 exists with PSScriptRoot, AGENTS_MAIN_ROOT, and repair logic"
     fi
 fi
 
@@ -164,9 +164,9 @@ else
         fail "N25a. profile-snippet.sh does not use BASH_SOURCE (hardcoded path risk)"
         _n25_ok=0
     fi
-    # Must export AGENTS_CONFIG_DIR
-    if ! grep -qE 'export\s+AGENTS_CONFIG_DIR' "$SNIPPET_SH"; then
-        fail "N25b. profile-snippet.sh does not export AGENTS_CONFIG_DIR"
+    # Must export AGENTS_MAIN_ROOT
+    if ! grep -qE 'export\s+AGENTS_MAIN_ROOT' "$SNIPPET_SH"; then
+        fail "N25b. profile-snippet.sh does not export AGENTS_MAIN_ROOT"
         _n25_ok=0
     fi
     # Must reference CLAUDE.md (repair logic)
@@ -180,7 +180,7 @@ else
         _n25_ok=0
     fi
     if [ "$_n25_ok" -eq 1 ]; then
-        pass "N25. profile-snippet.sh exists with BASH_SOURCE, AGENTS_CONFIG_DIR export, CLAUDE.md repair, and no settings.json watch"
+        pass "N25. profile-snippet.sh exists with BASH_SOURCE, AGENTS_MAIN_ROOT export, CLAUDE.md repair, and no settings.json watch"
     fi
 fi
 
@@ -278,7 +278,7 @@ else
     _n34_ok=1
     mkdir -p "$_n34_td/home/.claude"
     printf 'fake content\n' > "$_n34_td/home/.claude/CLAUDE.md"
-    HOME="$_n34_td/home" bash "$DOTFILESLINK_SH" >/dev/null 2>&1 || true
+    ( pin_home_and_userprofile "$_n34_td/home"; bash "$DOTFILESLINK_SH" >/dev/null 2>&1 ) || true
     if [ ! -f "$_n34_td/home/.claude/CLAUDE.md.bak" ]; then
         fail "N34a. dotfileslink.sh did not create CLAUDE.md.bak for fake-file"
         _n34_ok=0
@@ -349,8 +349,8 @@ else
     touch "$_n27_fake_bashrc"
 
     # Run install.sh twice in a subshell with fake HOME and AGENTS_ROOT
-    (export HOME="$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; export SHELL=/bin/bash; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
-    (export HOME="$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; export SHELL=/bin/bash; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
+    (pin_home_and_userprofile "$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; export SHELL=/bin/bash; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
+    (pin_home_and_userprofile "$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; export SHELL=/bin/bash; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
 
     _n27_marker_count=$(grep -c 'BEGIN agents profile sourcing' "$_n27_fake_bashrc" 2>/dev/null; true)
     _n27_marker_count="${_n27_marker_count:-0}"

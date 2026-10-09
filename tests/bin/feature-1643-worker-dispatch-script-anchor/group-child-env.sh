@@ -1,33 +1,14 @@
 # Part of tests/bin/feature-1643-worker-dispatch-script-anchor.sh — sourced, not run.
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, script-anchor, family-worktree, spawn, registry, regression, TL2, scope:issue-specific
-#
-# Group K: the child env as a REAL CHILD PROCESS sees it. Every other env
-# group calls spawnMod.buildEnv() directly and asserts on the returned
-# object, leaving the WIRING between buildEnv and spawnSync unmeasured: a
-# regression from `env: buildEnv(...)` to `env: process.env` (or a dropped
-# `env` key) would keep groups G-J green while the dispatched child silently
-# received the operator's entire environment. So this group plants a
-# synthetic variable in the PARENT of a real dispatch, runs a real child
-# through spawnMod.run(), and asks the CHILD ITSELF which names it can see.
-#
-# Three arms (a one-arm version could hide behind a special case):
-#   real-test-runner  unmodified registry entry, dispatched the real way:
-#                     command `bash`, family-worktree-anchored run-all.sh.
-#   synth-plain       synthetic entry, EMPTY envPassthrough, command `node`.
-#   synth-declared    same synthetic entry with the sentinel DECLARED — the
-#                     child must now SEE it, which is what makes the first
-#                     two arms conclusive rather than "the probe never read
-#                     its env at all". APPDATA (already allowlisted) is the
-#                     per-arm positive control, asserted byte-identical.
-#
-# No skip path anywhere in this group: a probe that cannot run is a FAIL, not
-# a quiet pass for an unproven isolation claim.
+# Group K: the child env as a REAL CHILD sees it. G-J assert buildEnv's return value only, so a
+# regression to `env: process.env` would stay green there; here a sentinel is planted in the PARENT
+# of a real spawnMod.run() and the CHILD reports which names it can see. No skip path.
+# Arms: real-test-runner (registry entry, `bash` + family-worktree run-all.sh), synth-plain (EMPTY
+# envPassthrough), synth-declared (sentinel DECLARED, must be seen — makes the absences conclusive).
 
-# Sentinels. Both undeclared by construction: not on CHILD_ENV_ALLOWLIST and
-# not in any worker's envPassthrough (driver asserts both facts against the
-# live registry rather than trusting this comment). Inert text, never sent
-# anywhere — no `gh`, no network, no credential shape.
+# Sentinels: on no allowlist and in no worker's envPassthrough (the driver asserts
+# both against the live registry). Inert text, never sent anywhere.
 K_SENTINEL_NAME="WORKER_DISPATCH_LEAK_SENTINEL_1719"
 K_SENTINEL_VALUE="leak-sentinel-1719-must-not-reach-any-child"
 K_SENTINEL_B_NAME="WORKER_DISPATCH_LEAK_SENTINEL_1719_B"
@@ -64,7 +45,7 @@ o("sentinel_value_match", process.env[sName] === sValue ? 1 : 0);
 o("sentinel_b_seen", typeof process.env[sBName] === "string" ? 1 : 0);
 o("appdata_seen", typeof process.env.APPDATA === "string" ? 1 : 0);
 o("appdata_match", process.env.APPDATA === expAppdata ? 1 : 0);
-o("acd_seen", typeof process.env.AGENTS_CONFIG_DIR === "string" ? 1 : 0);
+o("agents_main_root_seen", typeof process.env.AGENTS_MAIN_ROOT === "string" ? 1 : 0);
 // Non-vacuity: a child handed a literally empty env would report every name as
 // absent and pass the leak assertion for the wrong reason.
 o("env_key_count", Object.keys(process.env).length);
@@ -90,7 +71,7 @@ K_CHILD_JS="$(nodepath "$K_CHILD_JS_RAW")"
 K_DRIVER="$TMPD/child-env-driver.js"
 cat > "$K_DRIVER" <<'DRIVERJS'
 const path = require("path");
-const [agentsDir, mainRoot, familyCwd, childJs, expAppdata, sName, sValue, sBName] =
+const [agentsDir, targetMainRoot, familyCwd, childJs, expAppdata, sName, sValue, sBName] =
   process.argv.slice(2);
 const spawnMod = require(path.join(agentsDir, "bin/worker-dispatch/spawn.js"));
 const anchorMod = require(path.join(agentsDir, "bin/worker-dispatch/anchor.js"));
@@ -99,7 +80,7 @@ const registry = require(path.join(agentsDir, "hooks/lib/worker-dispatch-registr
 const out = (k, v) => process.stdout.write(k + "=" + String(v) + "\n");
 const workers = registry.workers || registry.WORKERS || {};
 
-const anchors = anchorMod.resolveAnchors(mainRoot);
+const anchors = anchorMod.resolveAnchors(targetMainRoot);
 if (anchors.error) { out("anchors_error", anchors.error); process.exit(9); }
 
 // Preconditions, all measured against the live registry and the live parent env.
@@ -108,11 +89,11 @@ if (anchors.error) { out("anchors_error", anchors.error); process.exit(9); }
 out("parent_sentinel_planted", process.env[sName] === sValue ? 1 : 0);
 out("parent_sentinel_b_planted", typeof process.env[sBName] === "string" ? 1 : 0);
 out("parent_appdata_planted", process.env.APPDATA === expAppdata ? 1 : 0);
-// The parent deliberately does NOT hold AGENTS_CONFIG_DIR, which turns the
-// child's acd_seen row into a real discriminator: the only way the child can
-// hold it is buildEnv setting it from the resolved anchor. A bare `env:
+// The parent deliberately does NOT hold AGENTS_MAIN_ROOT, which turns the
+// child's agents_main_root_seen row into a real discriminator: the only way the
+// child can hold it is buildEnv deriving it from its own checkout. A bare `env:
 // process.env` regression cannot produce it out of nothing.
-out("parent_acd_absent", typeof process.env.AGENTS_CONFIG_DIR === "string" ? 0 : 1);
+out("parent_agents_main_root_absent", typeof process.env.AGENTS_MAIN_ROOT === "string" ? 0 : 1);
 out("sentinel_not_allowlisted", registry.CHILD_ENV_ALLOWLIST.includes(sName) ? 0 : 1);
 out("sentinel_b_not_allowlisted", registry.CHILD_ENV_ALLOWLIST.includes(sBName) ? 0 : 1);
 out("appdata_allowlisted", registry.CHILD_ENV_ALLOWLIST.includes("APPDATA") ? 1 : 0);
@@ -177,11 +158,11 @@ K_APPDATA="$(nodepath "$K_APPDATA_RAW")"
 
 probe_child_env() {
     PROBE_OUT="$(run_with_timeout 90 env \
-        -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
+        -u AGENTS_MAIN_ROOT -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "APPDATA=$K_APPDATA" \
         "$K_SENTINEL_NAME=$K_SENTINEL_VALUE" "$K_SENTINEL_B_NAME=$K_SENTINEL_B_VALUE" \
-        node "$K_DRIVER" "$(nodepath "$AGENTS_DIR")" "$KMAIN" "$KLINKED" "$K_CHILD_JS" \
+        node "$K_DRIVER" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$KMAIN" "$KLINKED" "$K_CHILD_JS" \
         "$K_APPDATA" "$K_SENTINEL_NAME" "$K_SENTINEL_VALUE" "$K_SENTINEL_B_NAME" 2>&1)" || return 1
     return 0
 }
@@ -193,7 +174,7 @@ K_ASSERT_NAMES="
 child-env/parent-sentinel-planted
 child-env/parent-sentinel-b-planted
 child-env/parent-appdata-planted
-child-env/parent-lacks-agents-config-dir
+child-env/parent-lacks-agents-main-root
 child-env/sentinel-is-not-allowlisted
 child-env/sentinel-b-is-not-allowlisted
 child-env/appdata-is-allowlisted
@@ -205,7 +186,7 @@ child-env/real-test-runner/sentinel-not-visible
 child-env/real-test-runner/sentinel-b-not-visible
 child-env/real-test-runner/appdata-visible
 child-env/real-test-runner/appdata-byte-identical
-child-env/real-test-runner/acd-set
+child-env/real-test-runner/agents-main-root-set
 child-env/real-test-runner/env-non-vacuous
 child-env/synth-plain/child-ran
 child-env/synth-plain/child-exit-0
@@ -214,7 +195,7 @@ child-env/synth-plain/sentinel-not-visible
 child-env/synth-plain/sentinel-b-not-visible
 child-env/synth-plain/appdata-visible
 child-env/synth-plain/appdata-byte-identical
-child-env/synth-plain/acd-set
+child-env/synth-plain/agents-main-root-set
 child-env/synth-plain/env-non-vacuous
 child-env/synth-declared/child-ran
 child-env/synth-declared/child-exit-0
@@ -247,9 +228,9 @@ group_k() {
     assert_eq "child-env/parent-sentinel-planted" "1" "$(pv parent_sentinel_planted)"
     assert_eq "child-env/parent-sentinel-b-planted" "1" "$(pv parent_sentinel_b_planted)"
     assert_eq "child-env/parent-appdata-planted" "1" "$(pv parent_appdata_planted)"
-    # The parent must NOT hold AGENTS_CONFIG_DIR, or the per-arm acd-set row
-    # below would be satisfied by plain inheritance instead of by buildEnv.
-    assert_eq "child-env/parent-lacks-agents-config-dir" "1" "$(pv parent_acd_absent)"
+    # The parent must NOT hold AGENTS_MAIN_ROOT, or the per-arm agents-main-root-set
+    # row below would be satisfied by plain inheritance instead of by buildEnv.
+    assert_eq "child-env/parent-lacks-agents-main-root" "1" "$(pv parent_agents_main_root_absent)"
     # The sentinels must be undeclared for the leak assertion to mean anything;
     # if someone ever adds either name to the allowlist, this says so instead of
     # letting the leak rows flip to green for the wrong reason.
@@ -273,10 +254,10 @@ group_k() {
         # allowlisted name arrived, and arrived byte for byte.
         assert_eq "child-env/$arm/appdata-visible" "1" "$(pv "${arm}__child_appdata_seen")"
         assert_eq "child-env/$arm/appdata-byte-identical" "1" "$(pv "${arm}__child_appdata_match")"
-        # AGENTS_CONFIG_DIR is set from the resolved anchor, never inherited. The
+        # AGENTS_MAIN_ROOT is derived from buildEnv's own checkout, never inherited. The
         # probe's parent has it unset (asserted above), so a child that holds it
         # proves the env was BUILT by buildEnv rather than inherited wholesale.
-        assert_eq "child-env/$arm/acd-set" "1" "$(pv "${arm}__child_acd_seen")"
+        assert_eq "child-env/$arm/agents-main-root-set" "1" "$(pv "${arm}__child_agents_main_root_seen")"
         if [ "$(pv "${arm}__child_env_key_count")" -ge 3 ] 2>/dev/null; then
             pass "child-env/$arm/env-non-vacuous"
         else

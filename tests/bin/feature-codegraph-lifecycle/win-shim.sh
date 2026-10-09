@@ -14,8 +14,8 @@ else
     echo "--- WS-1: telemetry env reaches the process spawned via the default .cmd-shim path ---"
     # Expected values come from the SSOT (install/codegraph-constants.txt), not
     # a hardcoded literal, so a future flip of the pair cannot silently drift.
-    WS1_EXPECTED_TELEMETRY="$(sed -n 's/^CODEGRAPH_TELEMETRY=//p' "$AGENTS_DIR/install/codegraph-constants.txt" | head -1)"
-    WS1_EXPECTED_DNT="$(sed -n 's/^DO_NOT_TRACK=//p' "$AGENTS_DIR/install/codegraph-constants.txt" | head -1)"
+    WS1_EXPECTED_TELEMETRY="$(sed -n 's/^CODEGRAPH_TELEMETRY=//p' "$SCRIPT_CHECKOUT_ROOT/install/codegraph-constants.txt" | head -1)"
+    WS1_EXPECTED_DNT="$(sed -n 's/^DO_NOT_TRACK=//p' "$SCRIPT_CHECKOUT_ROOT/install/codegraph-constants.txt" | head -1)"
     reset_env
     root="$(mkroot "ws1")"
     export CG_STUB_MAKEDB=healthy
@@ -111,7 +111,7 @@ else
     # the whole options object was delegated intact through the .cmd-shim path.
     echo "--- WS-10: caller-supplied spawn options survive delegation unchanged (C3) ---"
     # The forced var's expected value comes from the SSOT, same rationale as WS-1.
-    WS10_EXPECTED_TELEMETRY="$(sed -n 's/^CODEGRAPH_TELEMETRY=//p' "$AGENTS_DIR/install/codegraph-constants.txt" | head -1)"
+    WS10_EXPECTED_TELEMETRY="$(sed -n 's/^CODEGRAPH_TELEMETRY=//p' "$SCRIPT_CHECKOUT_ROOT/install/codegraph-constants.txt" | head -1)"
     reset_env
     root="$(mkroot "ws10")"
     env_log="$TMP_BASE/env-log-ws10.txt"; rm -f "$env_log"

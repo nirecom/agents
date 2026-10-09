@@ -7,7 +7,7 @@
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const { resolveAgentsConfigDir } = require("../lib/agents-config-dir");
+const { resolveScriptCheckoutRoot } = require("../lib/script-checkout-root");
 const { readDefaultEnvFile } = require("../lib/load-env");
 const { normalizeForWindows } = require("./path-normalize");
 
@@ -34,7 +34,7 @@ function infraBlock(causeLine, resolveLines) {
 }
 
 const RESOLVE_CONFIG =
-  "  - Confirm AGENTS_CONFIG_DIR points at a valid agents checkout and bin/review-code-size exists.";
+  "  - Confirm the hook runs from a valid agents checkout and bin/review-code-size exists.";
 const RESOLVE_BASH =
   "  - Confirm bash is on PATH (required on Windows via Git Bash).";
 const RESOLVE_RAW =
@@ -48,17 +48,17 @@ function checkCodeSizeHardLimit(rawRepoDir) {
   // L2: normalize POSIX drive-letter paths (/c/...) to Windows form before
   // passing to spawnSync cwd — Node.js fs/process APIs fail with ENOENT on /c/.
   const repoDir = normalizeForWindows(rawRepoDir);
-  const agentsDir = resolveAgentsConfigDir();
-  if (!agentsDir) {
-    return infraBlock("as expected: AGENTS_CONFIG_DIR could not be resolved.", [
-      "  - Confirm AGENTS_CONFIG_DIR points at a valid agents checkout.",
+  const SCRIPT_CHECKOUT_ROOT = resolveScriptCheckoutRoot();
+  if (!SCRIPT_CHECKOUT_ROOT) {
+    return infraBlock("as expected: the checkout this hook runs from could not be resolved.", [
+      "  - Confirm the hook runs from a valid agents checkout.",
       RESOLVE_RAW,
     ]);
   }
 
   // Normalize path for Windows/Git Bash compatibility (same as scan-outbound.js).
   const scriptPath = path
-    .join(agentsDir, "bin", "review-code-size")
+    .join(SCRIPT_CHECKOUT_ROOT, "bin", "review-code-size")
     .replace(/\\/g, "/");
 
   if (!fs.existsSync(scriptPath)) {

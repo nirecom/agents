@@ -1,24 +1,11 @@
 # Part of tests/bin/feature-1638-resolve-merge-base.sh (sourced, not standalone).
 # Tests: bin/resolve-merge-base.sh, hooks/workflow-state/merge-base-baseline.js
 # Tags: merge-base, baseline, error-handling, degradation, scope:issue-specific, pwsh-not-required, TL2
-#
-# E — THE RECORDED BASELINE WHEN THE EVIDENCE IS BAD.
-#
-# R1-R4 cover a well-formed record and the three identity checks that demote it. Every row
-# there hands layer 1 a record it can reason about. The rows below hand it the inputs that
-# exist in the field instead: no state file at all, a state file that is not JSON, a record
-# missing a field the identity checks need, a git command that fails while the checks are
-# running, and a null alt_base.
-#
-# THE ONE RULE THEY ALL SHARE: layer 1 not answering is NORMAL. It is the reason layer 2
-# exists. So none of these inputs may crash, none may exit non-zero on a repository where a
-# base is available, and none may be adopted anyway. The failure this guards against is not a
-# stack trace — it is an implementation that treats a half-read record as good enough, which
-# is how a base from another branch becomes the range every gate is scoped by.
-#
-# The two writer rows (E6/E7) are here rather than with R14-R17 because they are about the
-# writer's EVIDENCE — the timestamp comparison that decides post_session_head — and about the
-# writer failing without corrupting what was already stored.
+# E — THE RECORDED BASELINE WHEN THE EVIDENCE IS BAD. R1-R4 cover a well-formed record and the three identity checks that demote it; every row there hands layer 1 a record it can reason about.
+# The rows below hand it the inputs that exist in the field instead: no state file at all, a state file that is not JSON, a record missing a field the identity checks need, a git command that fails while the checks are running, and a null alt_base.
+# THE ONE RULE THEY ALL SHARE: layer 1 not answering is NORMAL. It is the reason layer 2 exists. So none of these inputs may crash, none may exit non-zero on a repository where a base is available, and none may be adopted anyway.
+# The failure this guards against is not a stack trace — it is an implementation that treats a half-read record as good enough, which is how a base from another branch becomes the range every gate is scoped by.
+# The two writer rows (E6/E7) are here rather than with R14-R17 because they are about the writer's EVIDENCE — the timestamp comparison that decides post_session_head — and about the writer failing without corrupting what was already stored.
 
 # Every row that expects a fall-through asserts the same three things, so the shape is shared:
 # layer 2 answered, layer 1 did not, and the output is still the machine-readable contract.
@@ -182,13 +169,13 @@ e6_post_session_head_boundary() {
   node_state init "$sid" "$repo" work "2099-01-01T00:00:00.000Z" >/dev/null
   node_state record "$sid" "$repo" >/dev/null
   check "E6-before: a HEAD committed before the session started owes no note" "false" \
-    "$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" post_session_head 2>/dev/null)"
+    "$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" post_session_head 2>/dev/null)"
 
   sid="sid-e6-after"
   node_state init "$sid" "$repo" work "1990-01-01T00:00:00.000Z" >/dev/null
   node_state record "$sid" "$repo" >/dev/null
   check "E6-after: a HEAD committed after it does" "true" \
-    "$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" post_session_head 2>/dev/null)"
+    "$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" post_session_head 2>/dev/null)"
 }
 
 # A write that cannot complete must leave what was already stored intact. A baseline is read by

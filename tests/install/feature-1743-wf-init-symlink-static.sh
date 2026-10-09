@@ -20,12 +20,12 @@ set -u
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: installer.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PS_FILE="$AGENTS_DIR/install/win/dotfileslink.ps1"
-SH_FILE="$AGENTS_DIR/install/linux/dotfileslink.sh"
-GITIGNORE_FILE="$AGENTS_DIR/.gitignore"
-source "$AGENTS_DIR/tests/lib/harness.sh"
-SUITE_DIR="$AGENTS_DIR/tests/install/feature-1743-wf-init-symlink-static"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PS_FILE="$SCRIPT_CHECKOUT_ROOT/install/win/dotfileslink.ps1"
+SH_FILE="$SCRIPT_CHECKOUT_ROOT/install/linux/dotfileslink.sh"
+GITIGNORE_FILE="$SCRIPT_CHECKOUT_ROOT/.gitignore"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+SUITE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/install/feature-1743-wf-init-symlink-static"
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT

@@ -8,14 +8,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-CHECKER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-gate/review-tests-checker.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+CHECKER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-gate/review-tests-checker.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -52,7 +52,7 @@ process.stdout.write(JSON.stringify(checkReviewTests('review_tests', stepState, 
     printf '%s' "$out"
 }
 
-if [ ! -f "$AGENTS_DIR/hooks/workflow-gate/review-tests-checker.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-checker.js" ]; then
     fail "checker file missing (harness error)"
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
 fi

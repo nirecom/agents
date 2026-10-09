@@ -6,12 +6,12 @@
 # Extracted from the entry file purely for the HARD 500-line limit in rules/coding/file-split.md; the case
 # bodies all stay in the entry file. Same arrangement as tests/hooks/feature-1180-commit-lang-check/lib.sh.
 
-# Provides: AGENTS_DIR, SCRIPT, TMPROOT (+ EXIT trap), PASS/FAIL/SKIP counters, assert_eq / skip_case /
+# Provides: _LIB_SCRIPT_CHECKOUT_ROOT, SCRIPT, TMPROOT (+ EXIT trap), PASS/FAIL/SKIP counters, assert_eq / skip_case /
 # run_with_timeout / native_path / run_cli / node_m / summary / type_count / has_summary / deny_read, the
 # SID_*/AGENT_UUID/SECRET_TITLE fixture constants, and the rec / content / title / new_root record builders.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SCRIPT="$AGENTS_DIR/bin/count-subagents"
+_LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT="$_LIB_SCRIPT_CHECKOUT_ROOT/bin/count-subagents"
 
 TMPROOT="$(mktemp -d)"
 # The EXIT trap also removes the entry file's isolation dir (#2512), which this trap replaces.
@@ -29,7 +29,7 @@ assert_eq() {
 
 skip_case() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
-run_with_timeout() { "$AGENTS_DIR/bin/run-with-timeout.sh" "$@"; }
+run_with_timeout() { "$_LIB_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$@"; }
 
 native_path() { (cd "$1" 2>/dev/null && (pwd -W 2>/dev/null || pwd)) || printf '%s' "$1"; }
 
@@ -53,7 +53,7 @@ $CLI_STDERR"
 # Direct module access, same isolation. Sets NODE_RC / NODE_OUT.
 node_m() { # <js>
     NODE_RC=0
-    NODE_OUT="$(cd "$AGENTS_DIR" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
+    NODE_OUT="$(cd "$_LIB_SCRIPT_CHECKOUT_ROOT" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         run_with_timeout 60 node -e "$1" 2>&1)" || NODE_RC=$?
 }
 

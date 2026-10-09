@@ -82,18 +82,18 @@ const WHY_WIN_UNQ = "retired spelling: bash drops the unquoted backslashes so it
 const familyOf = (body) => {
   const bc = /^bash -c '(.*)'$/.exec(body);
   if (bc) {
-    const cd = /^cd "\$AGENTS_CONFIG_DIR" && (.*)$/.exec(bc[1]);
+    const cd = /^cd "\$AGENTS_MAIN_ROOT" && (.*)$/.exec(bc[1]);
     if (cd) return cd[1].includes("/") ? "bashc-cd" : "bashc-cd-bare";
     return bc[1].includes("/") ? "bashc" : "bashc-bare";
   }
-  if (body.startsWith('"$AGENTS_CONFIG_DIR/')) return "exec-env";
+  if (body.startsWith('"$AGENTS_MAIN_ROOT/')) return "exec-env";
   if (body.startsWith("@ROOT@/")) return "exec-abs";
   if (body.startsWith('"@ROOT@/')) return "exec-abs-q";
   if (body.startsWith('"@WIN@\\')) return "exec-win-q";
   const interp = /^(?:bash|node) (.*)$/.exec(body);
   if (interp) {
     const rest = interp[1];
-    if (rest.startsWith('"$AGENTS_CONFIG_DIR/')) return "env";
+    if (rest.startsWith('"$AGENTS_MAIN_ROOT/')) return "env";
     if (rest.startsWith("@ROOT@/")) return "abs";
     if (rest.startsWith('"@ROOT@/')) return "abs-q";
     if (rest.startsWith("@WIN@\\")) return "win-unq";

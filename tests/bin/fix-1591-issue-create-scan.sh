@@ -7,16 +7,14 @@
 # into one temp file and guards it before the real gh issue create. A blocked
 # pattern in ANY field aborts (exit 1) before gh is invoked; body-file CONTENT is
 # scanned (not just its filename). All-clean reaches gh.
-#
-# ISSUE_CREATE_SKIP_SCHEMA=1 isolates the guard from the Background/Changes schema
-# check. RED until /write-code creates gh-outbound-guard.sh and wires the guard.
+# ISSUE_CREATE_SKIP_SCHEMA=1 isolates the guard from the Background/Changes schema check.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IC="$AGENTS_DIR/bin/github-issues/issue-create.sh"
-GUARD_LIB="$AGENTS_DIR/bin/lib/gh-outbound-guard.sh"
-REAL_SCANNER="$AGENTS_DIR/bin/scan-outbound.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+IC="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create.sh"
+GUARD_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh"
+REAL_SCANNER="$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh"
 
 PASS=0
 FAIL=0
@@ -38,18 +36,18 @@ TMP=""
 setup() {
     TMP="$(mktemp -d)"
     export MOCK_LOG_DIR="$TMP"
-    mkdir -p "$TMP/mock-bin" "$TMP/acd/bin"
-    cp "$REAL_SCANNER" "$TMP/acd/bin/scan-outbound.sh"
-    chmod +x "$TMP/acd/bin/scan-outbound.sh"
-    : > "$TMP/acd/.private-info-allowlist"
-    : > "$TMP/acd/.private-info-blocklist"
+    mkdir -p "$TMP/mock-bin" "$TMP/fake_main_root/bin"
+    cp "$REAL_SCANNER" "$TMP/fake_main_root/bin/scan-outbound.sh"
+    chmod +x "$TMP/fake_main_root/bin/scan-outbound.sh"
+    : > "$TMP/fake_main_root/.private-info-allowlist"
+    : > "$TMP/fake_main_root/.private-info-blocklist"
     # is-github-dotcom-remote mock -> non-github (exit 1) so Phase 0a label
     # auto-repair is skipped and no preflight/sync mocks are needed.
-    cat > "$TMP/acd/bin/is-github-dotcom-remote" <<'MOCKREMOTE'
+    cat > "$TMP/fake_main_root/bin/is-github-dotcom-remote" <<'MOCKREMOTE'
 #!/usr/bin/env bash
 exit 1
 MOCKREMOTE
-    chmod +x "$TMP/acd/bin/is-github-dotcom-remote"
+    chmod +x "$TMP/fake_main_root/bin/is-github-dotcom-remote"
     # gh mock — logs; auth status advertises project scope; issue create returns URL.
     cat > "$TMP/mock-bin/gh" <<'MOCKGH'
 #!/usr/bin/env bash
@@ -62,14 +60,13 @@ exit 0
 MOCKGH
     chmod +x "$TMP/mock-bin/gh"
     export PATH="$TMP/mock-bin:$PATH"
-    export AGENTS_CONFIG_DIR="$TMP/acd"
+    export AGENTS_MAIN_ROOT="$TMP/fake_main_root"
     export ISSUE_CREATE_SKIP_SCHEMA=1
 }
 
 teardown() {
     [ -n "${TMP:-}" ] && [ -d "$TMP" ] && rm -rf "$TMP" 2>/dev/null || true
     unset MOCK_LOG_DIR ISSUE_CREATE_SKIP_SCHEMA 2>/dev/null || true
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
 

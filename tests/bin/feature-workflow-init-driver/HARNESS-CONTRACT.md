@@ -9,16 +9,18 @@ carries a one-line pointer here; this file is the SSOT.
 - `gh` is spawned via bare PATH lookup (never an absolute path) — the harness
   intercepts it with a PATH-prepended mock; fixtures live in `$RESP` and every
   invocation appends one line to `$GH_LOG` (call-count assertions C2/C6/C7/C12).
-- `wip-state.sh` is resolved as `$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh`
-  when `AGENTS_CONFIG_DIR` is set (repo-root-relative fallback only when unset).
-  The harness points `AGENTS_CONFIG_DIR` at a per-case mock config root.
+- `wip-state.sh` is resolved as `bin/github-issues/wip-state.sh` under the checkout the
+  driver itself lives in; `bin/parse-issue-tokens`, `bin/resolve-session-id` and
+  `hooks/workflow-state/inheritance/adopt.js` are found the same way, and no environment
+  variable redirects them. The harness therefore runs a copy of the driver from a mock
+  checkout (`$CFG`, one per suite) and `setup_case` rewrites the mocks in it per case.
 - `context.md` is written under `WORKFLOW_PLANS_DIR`; the checkpoint JSON is written
   at `$WORKFLOW_STATE_DIR/<sid>.control/wi-checkpoint.json` (#2434). The harness pins
   both per case (`$PLANS`, `$WF`) and never leaves either unset.
 - `CLAUDE_CODE_SESSION_ID` provides the session id deterministically and is read by
   the driver's fast path (#2270). `setup_case` exports it as the case id, overwriting
   the developer's live value; a case that needs another value exports it after
-  `setup_case`. The mock config root also ships `bin/resolve-session-id` echoing
+  `setup_case`. The mock checkout also ships `bin/resolve-session-id` echoing
   `$CLAUDE_CODE_SESSION_ID` in case the driver spawns that primitive.
   `driver-session-id-precedence.sh` replaces that mock with a distinct sentinel so a
   fast-path hit and a fall-through to the spawned resolver are distinguishable.

@@ -12,6 +12,7 @@
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 require_sut
 
@@ -137,9 +138,9 @@ teardown_case
 # Missing any of those, the case SKIPs with its reason: a synthetic stand-in would only
 # restate C13 while reading as live coverage.
 C14_SKIP=""
-if [ ! -x "$AGENTS_DIR/bin/get-config-var" ]; then
+if [ ! -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
     C14_SKIP="bin/get-config-var is unavailable, so the RUN_TL3 gate cannot be read"
-elif "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+elif "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
     C14_SKIP="RUN_TL3 is off — this case needs live access to api.github.com"
 elif ! command -v gh >/dev/null 2>&1; then
     C14_SKIP="the gh CLI is not on PATH"

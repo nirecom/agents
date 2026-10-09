@@ -12,20 +12,20 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 node_path() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
 }
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
-RENDER_JS="${AGENTS_DIR}/bin/render-final-report.js"
-NOTES_JS="${AGENTS_DIR}/bin/render-final-report/notes.js"
-LOCAL_SESSION_CLOSE_MD="${AGENTS_DIR}/skills/session-close/SKILL.md"
-LOCAL_EMISSION_MD="${AGENTS_DIR}/skills/_shared/final-report-emission.md"
-LOCAL_MIDWF_MD="${AGENTS_DIR}/rules/mid-workflow-findings.md"
-LOCAL_WORKTREE_END_MD="${AGENTS_DIR}/skills/worktree-end/SKILL.md"
-LOCAL_APPEND_JS="${AGENTS_DIR}/bin/worktree-notes-append.js"
-RWT="${AGENTS_DIR}/bin/run-with-timeout.sh"
+RENDER_JS="${SCRIPT_CHECKOUT_ROOT}/bin/render-final-report.js"
+NOTES_JS="${SCRIPT_CHECKOUT_ROOT}/bin/render-final-report/notes.js"
+LOCAL_SESSION_CLOSE_MD="${SCRIPT_CHECKOUT_ROOT}/skills/session-close/SKILL.md"
+LOCAL_EMISSION_MD="${SCRIPT_CHECKOUT_ROOT}/skills/_shared/final-report-emission.md"
+LOCAL_MIDWF_MD="${SCRIPT_CHECKOUT_ROOT}/rules/mid-workflow-findings.md"
+LOCAL_WORKTREE_END_MD="${SCRIPT_CHECKOUT_ROOT}/skills/worktree-end/SKILL.md"
+LOCAL_APPEND_JS="${SCRIPT_CHECKOUT_ROOT}/bin/worktree-notes-append.js"
+RWT="${SCRIPT_CHECKOUT_ROOT}/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -33,7 +33,7 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
 # ---- fixture isolation (rules/test/fixture-isolation.md) --------------------
-unset AGENTS_CONFIG_DIR
+unset AGENTS_MAIN_ROOT
 unset CLAUDE_CODE_SESSION_ID
 
 TMPD="$(mktemp -d)"
@@ -257,7 +257,7 @@ test_thirteen_headings_survive() {
     local out headings missing="" h
     out="$(render "${TMPD}/env-high.json" 2>/dev/null)"
     headings="$("$RWT" 120 node -e "
-        const s=require('${AGENTS_DIR_NODE}/hooks/lib/final-report-schema');
+        const s=require('${SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/final-report-schema');
         process.stdout.write(s.getSectionHeadings('${SID}').join('\n'));
     " 2>/dev/null)"
     if [ -z "$headings" ]; then
@@ -303,7 +303,7 @@ test_no_token_leak() {
 # assert_max_lines <label> <file> <max>
 assert_max_lines() {
     local label="$1" f="$2" max="$3" n
-    if [ ! -f "$f" ]; then fail "${label}: ${f#$AGENTS_DIR/} missing"; return; fi
+    if [ ! -f "$f" ]; then fail "${label}: ${f#$SCRIPT_CHECKOUT_ROOT/} missing"; return; fi
     n="$(grep -c '' "$f")"
     if [ "$n" -le "$max" ]; then
         pass "${label}: ${n} lines (<= ${max})"

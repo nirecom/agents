@@ -23,7 +23,7 @@ L2_JA_PROSE='この計画書は日本語で書かれています。'
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
-# set_plan_lang <value|->  — the fixture AGENTS_CONFIG_DIR/.env is the sole PLAN_LANG
+# set_plan_lang <value|->  — the fixture AGENTS_MAIN_ROOT/.env is the sole PLAN_LANG
 # source; "-" writes an empty .env (PLAN_LANG unset). Never carries DOCS_LANG_* keys.
 set_plan_lang() {
   if [ -n "$1" ] && [ "$1" != "-" ]; then

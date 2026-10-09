@@ -15,6 +15,7 @@
 # s-series.sh (worktree-notes.js buildNotesBody), k-series.sh (renderSkeleton /
 # renderFinalReport), i-series.sh (SKILL.md + detect-restart.sh invariants).
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOTAL_PASS=0
 TOTAL_FAIL=0

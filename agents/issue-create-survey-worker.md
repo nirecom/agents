@@ -14,7 +14,7 @@ Receive a JSON object with:
 - `title`: proposed issue title
 - `background`: issue background text
 - `changes`: description of changes
-- `agents_config_dir`: absolute path to agents config dir
+- `agents_main_root`: absolute path to the agents main worktree
 - `artifact_dir`: absolute path to `PLANS_DIR` resolved by the caller via `bin/workflow-plans-dir`; write all output files here
 
 ## Procedure
@@ -30,9 +30,9 @@ Receive a JSON object with:
 
 3. Deduplicate candidates across passes; inspect up to 25 unique candidates via `gh issue view <N> --json number,title,body,state,labels`.
 
-4. Run `bash "$agents_config_dir/bin/github-issues/candidate-relations.sh" <owner/repo> <N,M,...>` once; keep its stdout array and its exit code (0 → `batched`, 3 → `partial`, 4 → `unavailable`).
+4. Run `bash "$agents_main_root/bin/github-issues/candidate-relations.sh" <owner/repo> <N,M,...>` once; keep its stdout array and its exit code (0 → `batched`, 3 → `partial`, 4 → `unavailable`).
 
-5. Read `$agents_config_dir/skills/_shared/issue-verdict-cascade.md` and decide with the ordered cascade defined there.
+5. Read `$agents_main_root/skills/_shared/issue-verdict-cascade.md` and decide with the ordered cascade defined there.
    Order: IC-C1, IC-C2, IC-C3, IC-C4 — first match wins. Never restate the rules here.
    Take `same_fix` from that file's `same_fix` table — it is fixed by the verdict, never judged separately.
 

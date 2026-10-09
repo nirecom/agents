@@ -33,16 +33,16 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 
-NEXT_STEP_N="$AGENTS_DIR_N/bin/workflow/next-step"
-WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
-GATE_HOOK_N="$AGENTS_DIR_N/hooks/workflow-gate.js"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"
+NEXT_STEP_N="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+WORKFLOW_MARK_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-mark.js"
+GATE_HOOK_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-gate.js"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"
 # Reused read-only probe (CPR-SSOT: one fixture-state reader for all #1644 tests).
-PROBE_N="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+PROBE_N="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 export WFSTATE_MODULE
 
 TMPDIR_BASE="$(mktemp -d)"
@@ -60,7 +60,7 @@ unset CLAUDE_CODE_SESSION_ID
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"
 mkdir -p "$CONFIG_EMPTY"
 : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 mk_repo() {
   local dir="$1"

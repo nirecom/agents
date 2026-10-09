@@ -11,9 +11,9 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 T="$(make_tmp)"
 trap 'rm -rf "$T"' EXIT
@@ -24,7 +24,7 @@ harness_isolate "$T/iso"
 # Each section is one node process printing `name<TAB>want<TAB>got` rows; ro_section asserts
 # every row and the exact row count, so a crashed or truncated section cannot report green.
 
-RO_AGENTS="$(np "$AGENTS_DIR")"
+RO_AGENTS="$(np "$SCRIPT_CHECKOUT_ROOT")"
 RO_T="$(np "$T")"
 export RO_AGENTS RO_T
 

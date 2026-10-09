@@ -7,11 +7,11 @@
 
 const path = require("path");
 
-const AGENTS_DIR = process.env.AGENTS_DIR || "";
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
 
 let remedy;
 try {
-  remedy = require(path.join(AGENTS_DIR, "hooks", "block-capture-echo", "remedy.js"));
+  remedy = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "block-capture-echo", "remedy.js"));
 } catch (_e) {
   console.log("MODULE_MISSING");
   process.exit(0);

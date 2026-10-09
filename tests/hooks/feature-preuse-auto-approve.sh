@@ -13,8 +13,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HOOK_SRC="$AGENTS_DIR/hooks/preuse-auto-approve.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/preuse-auto-approve.js"
 
 PASS=0; FAIL=0; SKIP=0
 
@@ -54,17 +54,17 @@ make_fixture() {
     printf '%s' "$dir"
 }
 
-# run_hook <config_dir> <stdin_json>
-# Runs the hook from the repo root with AGENTS_CONFIG_DIR pointed at
-# <config_dir>, feeding <stdin_json> on stdin. Sets globals OUT and RC.
+# run_hook <cfg_root> <stdin_json>
+# Runs the hook from the repo root with AGENTS_MAIN_ROOT pointed at
+# <cfg_root>, feeding <stdin_json> on stdin. Sets globals OUT and RC.
 #
-# C3: uses `env -i` to run with a CLEAN environment (PATH/HOME/AGENTS_CONFIG_DIR
+# C3: uses `env -i` to run with a CLEAN environment (PATH/HOME/AGENTS_MAIN_ROOT
 # only) so an AUTO_APPROVE_TOOLS or WORKTREE_BASE_DIR value inherited from the
 # real shell environment cannot flip the verdict — every config-dependent
 # value must come from the fixture .env file, not from ambient env.
 run_hook() {
-    local config_dir="$1" stdin_json="$2"
-    OUT="$(cd "$AGENTS_DIR" && printf '%s' "$stdin_json" | run_with_timeout 10 env -i PATH="$PATH" HOME="$HOME" AGENTS_CONFIG_DIR="$config_dir" node hooks/preuse-auto-approve.js 2>/dev/null)"
+    local cfg_root="$1" stdin_json="$2"
+    OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && printf '%s' "$stdin_json" | run_with_timeout 10 env -i PATH="$PATH" HOME="$HOME" AGENTS_MAIN_ROOT="$cfg_root" node hooks/preuse-auto-approve.js 2>/dev/null)"
     RC=$?
 }
 

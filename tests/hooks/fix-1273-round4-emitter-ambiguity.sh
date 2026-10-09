@@ -73,10 +73,10 @@ set -u
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-AGENTS_WIN="$(nodepath "$AGENTS_DIR")"
-RUN_TESTS_HOOK="$AGENTS_DIR/hooks/workflow-run-tests.js"
+AGENTS_WIN="$(nodepath "$SCRIPT_CHECKOUT_ROOT")"
+RUN_TESTS_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js"
 EXEC_MODEL_JS="$AGENTS_WIN/hooks/workflow-run-tests/exec-model.js"
 
 PASS=0
@@ -101,7 +101,7 @@ run_with_timeout() {
     else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
 }
 
-if [ ! -f "$RUN_TESTS_HOOK" ] || [ ! -f "$AGENTS_DIR/hooks/workflow-run-tests/exec-model.js" ]; then
+if [ ! -f "$RUN_TESTS_HOOK" ] || [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests/exec-model.js" ]; then
     fail "0/prerequisites" "hook=$RUN_TESTS_HOOK model=$EXEC_MODEL_JS"
     echo ""
     echo "Total: PASS=$PASS FAIL=$FAIL"

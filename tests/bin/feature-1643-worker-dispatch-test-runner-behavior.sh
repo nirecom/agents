@@ -18,9 +18,9 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_TR_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 PASS=0
@@ -111,7 +111,7 @@ dispatch_tr() {
     : > "$CALLLOG"
     DRC=0
     DOUT="$(run_with_timeout 90 env "${AMBIENT_ENV_FLAGS[@]}" -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
-        "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
+        "WD_SPAWN_MODULE=$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" test-runner "$root" "$pfile" 2>/dev/null)" || DRC=$?

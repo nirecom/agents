@@ -26,7 +26,7 @@ test_in_cases() {
     rc=0; guard "$cmd" || rc=$?
     assert_allow "IN1679-2: pre-flight eval || exit 0; echo OWNER_REPO → ALLOW (RED before fix)" "$rc"
 
-    # IN1679-3 — same as IN1679-2 but with the acd already resolved.
+    # IN1679-3 — same as IN1679-2 but with the script checkout root already resolved.
     cmd="$(printf '%s || exit 0; echo "OWNER_REPO=$OWNER_REPO"' "$(pf_eval "$PF_RESOLVED")")"
     rc=0; guard "$cmd" || rc=$?
     assert_allow "IN1679-3: resolved-path pre-flight eval || exit 0; echo → ALLOW (RED before fix)" "$rc"
@@ -42,8 +42,8 @@ test_in_cases() {
     # is now reached exclusively as a spawnSync child of bin/worker-dispatch.js
     # (shell:false, no eval). No segment composition of this shape can ALLOW any
     # more; retired-capability pin (same treatment as #1673's other eval-path suites).
-    cmd="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" bash "%s/run-initial.sh" "1234" "1234")"; echo "STATUS=$STATUS"' \
-        "$ACD" "$SCRIPTS" "$REPO" "$SCRIPTS")"
+    cmd="$(printf 'eval "$(AGENTS_MAIN_ROOT="%s" FINALIZE_SCRIPTS_DIR="%s" TARGET_MAIN_ROOT="%s" bash "%s/run-initial.sh" "1234" "1234")"; echo "STATUS=$STATUS"' \
+        "$FAKE_SCRIPT_CHECKOUT_ROOT" "$SCRIPTS" "$REPO" "$SCRIPTS")"
     rc=0; guard "$cmd" || rc=$?
     assert_block "IN1679-5: run-initial 2-arg eval; echo STATUS → BLOCK — eval path retired (#1673)" "$rc"
 
@@ -92,10 +92,10 @@ test_ad_cases() {
     rc=0; guard "$cmd" || rc=$?
     assert_block "AD1679-6: pre-flight eval chained twice → BLOCK" "$rc"
 
-    # AD1679-7: eval of a non-sanctioned script under acd, with a read companion.
-    cmd="$(printf 'eval "$(bash "%s/bin/evil.sh")" ; echo hi' "$ACD")"
+    # AD1679-7: eval of a non-sanctioned script under script checkout root, with a read companion.
+    cmd="$(printf 'eval "$(bash "%s/bin/evil.sh")" ; echo hi' "$FAKE_SCRIPT_CHECKOUT_ROOT")"
     rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-7: eval of non-allowlisted <acd>/bin/evil.sh ; echo hi → BLOCK" "$rc"
+    assert_block "AD1679-7: eval of non-allowlisted <script-checkout-root>/bin/evil.sh ; echo hi → BLOCK" "$rc"
 
     # AD1679-8: pipe into a writer whose target lands in the main worktree.
     # The plan wrote this row as `| tee /tmp/x`, but that target is OUTSIDE
@@ -119,20 +119,20 @@ test_ad_cases() {
     # detectWritePredicate, so a write-only composition rule would admit them —
     # and each can repoint the very variable the sanctioned segment resolves against.
 
-    # AD1679-9: export repoints AGENTS_CONFIG_DIR before the sanctioned segment.
-    cmd="$(printf 'export AGENTS_CONFIG_DIR=/evil; %s' "$(pf_eval "$PF_LITERAL")")"
+    # AD1679-9: export repoints AGENTS_MAIN_ROOT before the sanctioned segment.
+    cmd="$(printf 'export AGENTS_MAIN_ROOT=/evil; %s' "$(pf_eval "$PF_LITERAL")")"
     rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-9: export AGENTS_CONFIG_DIR=/evil; + pre-flight → BLOCK (env mutation)" "$rc"
+    assert_block "AD1679-9: export AGENTS_MAIN_ROOT=/evil; + pre-flight → BLOCK (env mutation)" "$rc"
 
     # AD1679-10: bare assignment, same effect.
-    cmd="$(printf 'AGENTS_CONFIG_DIR=/evil ; %s' "$(pf_eval "$PF_LITERAL")")"
+    cmd="$(printf 'AGENTS_MAIN_ROOT=/evil ; %s' "$(pf_eval "$PF_LITERAL")")"
     rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-10: AGENTS_CONFIG_DIR=/evil ; + pre-flight → BLOCK (assignment)" "$rc"
+    assert_block "AD1679-10: AGENTS_MAIN_ROOT=/evil ; + pre-flight → BLOCK (assignment)" "$rc"
 
     # AD1679-11: unset makes the literal prefix resolve against nothing.
-    cmd="$(printf 'unset AGENTS_CONFIG_DIR; %s' "$(pf_eval "$PF_LITERAL")")"
+    cmd="$(printf 'unset AGENTS_MAIN_ROOT; %s' "$(pf_eval "$PF_LITERAL")")"
     rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-11: unset AGENTS_CONFIG_DIR; + pre-flight → BLOCK (env mutation)" "$rc"
+    assert_block "AD1679-11: unset AGENTS_MAIN_ROOT; + pre-flight → BLOCK (env mutation)" "$rc"
 
     # AD1679-12: `source` can mutate the environment arbitrarily and opaquely.
     cmd="$(printf 'source /tmp/x.sh && %s' "$(pf_eval "$PF_LITERAL")")"

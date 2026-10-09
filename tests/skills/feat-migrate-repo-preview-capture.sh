@@ -6,7 +6,7 @@
 # L3 gap (what this test does NOT catch):
 # - Real gh / real GitHub: actual self-repo issue enumeration against the live
 #   agents repo, real authentication, and whether a live migration would in fact
-#   land on AGENTS_CONFIG_DIR's own issue space.
+#   land on AGENTS_MAIN_ROOT's own issue space.
 # - End-to-end /migrate-repo skill behavior when the captured snapshot flows into
 #   a real orchestrate.sh live run.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
@@ -14,16 +14,16 @@
 #
 # PF-PC1 — direct test of preview-and-capture.sh against a self-repo (#1234).
 # preview-and-capture.sh internally calls orchestrate.sh --dry-run, so gh-mock
-# must be on PATH and AGENTS_CONFIG_DIR set. We invoke it with the repo path equal
-# to AGENTS_CONFIG_DIR (the self-repo condition) and assert the identity guard's
+# must be on PATH and AGENTS_MAIN_ROOT set. We invoke it with the repo path equal
+# to AGENTS_MAIN_ROOT (the self-repo condition) and assert the identity guard's
 # dry-run signals appear on stdout (sentinels) and stderr (SELF_REPO_DETECTED).
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PREVIEW_SCRIPT="$AGENTS_DIR/skills/migrate-repo/scripts/preview-and-capture.sh"
-ORCH_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/orchestrate.sh"
-FIXTURE_DIR="$AGENTS_DIR/tests/fixtures/migration"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PREVIEW_SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/migrate-repo/scripts/preview-and-capture.sh"
+ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
+FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration"
 
 PASS=0
 FAIL=0
@@ -55,7 +55,7 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Fixture: gh-mock on PATH + AGENTS_CONFIG_DIR set (overridden per case for self-repo).
+# Fixture: gh-mock on PATH + AGENTS_MAIN_ROOT set (overridden per case for self-repo).
 # ---------------------------------------------------------------------------
 setup_fixture() {
     TMP="$(mktemp -d)"
@@ -72,14 +72,13 @@ setup_fixture() {
 
     export MOCK_LOG MOCK_COUNTER
     export PATH="$MOCK_DIR:$PATH"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 }
 
 teardown_fixture() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset MOCK_LOG MOCK_COUNTER AGENTS_CONFIG_DIR MOCK_HAS_ISSUES
+    unset MOCK_LOG MOCK_COUNTER AGENTS_MAIN_ROOT MOCK_HAS_ISSUES
 }
 
 # ---------------------------------------------------------------------------
@@ -101,13 +100,13 @@ cat > "$SELF_PC1/docs/history.md" <<'EOF'
 Background: test entry 1
 Changes: change 1
 EOF
-# preview-and-capture.sh invokes orchestrate.sh via $AGENTS_CONFIG_DIR/bin/...,
+# preview-and-capture.sh invokes orchestrate.sh via $AGENTS_MAIN_ROOT/bin/...,
 # and orchestrate.sh sources SCRIPT_DIR siblings (migrate-history.sh etc.).
 # Symlinking the entire bin/ directory to the real one lets SCRIPT_DIR resolve
 # to the real location so all sibling scripts are found.
-ln -sf "$AGENTS_DIR/bin" "$SELF_PC1/bin"
+ln -sf "$SCRIPT_CHECKOUT_ROOT/bin" "$SELF_PC1/bin"
 SELF_PC1="$(cd "$SELF_PC1" && pwd)"
-export AGENTS_CONFIG_DIR="$SELF_PC1"
+export AGENTS_MAIN_ROOT="$SELF_PC1"
 
 run_with_timeout 30 bash "$PREVIEW_SCRIPT" "$SELF_PC1" > "$TMP/stdout" 2> "$TMP/stderr"
 RC=$?
@@ -138,7 +137,7 @@ teardown_fixture
 setup_fixture
 unset MOCK_HAS_ISSUES
 
-# Build a minimal non-self fixture repo (distinct from AGENTS_CONFIG_DIR)
+# Build a minimal non-self fixture repo (distinct from AGENTS_MAIN_ROOT)
 REPO_NORMAL="$TMP/repo"
 mkdir -p "$REPO_NORMAL/docs"
 cat > "$REPO_NORMAL/docs/history.md" <<'HISTEOF'

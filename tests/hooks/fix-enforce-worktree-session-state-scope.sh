@@ -10,11 +10,11 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/lib/ew-runner.sh
-. "$AGENTS_DIR/tests/lib/ew-runner.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/ew-runner.sh"
 
 T="$(make_tmp)"
 trap 'rm -rf "$T"' EXIT
@@ -27,7 +27,7 @@ OTHER_SID="99999999-8888-7777-6666-555555555555"
 MAIN="$(np "$T/main")"
 ew_make_repo "$MAIN"
 mkdir -p "$WF/$SID.instructions-loaded"
-EW_CONFIG_DIR="$MAIN"
+EW_CFG_ROOT="$MAIN"
 
 bash_run() { ew_run "$MAIN" "$(ew_bash_payload "$SID" "$1")"; }
 tool_run() { ew_run "$MAIN" "$(ew_write_payload "$SID" "$1" "$2")"; }
@@ -73,7 +73,7 @@ unit() {
           f([{ resolveVia: 'ancestor', path: process.argv[5] }], ctx),
         ].join(','));
       }
-    " "$(np "$AGENTS_DIR/hooks/enforce-worktree/bash-write-scope/marker-gate.js")" "$WF" "$SID" "$OTHER_SID" "$MAIN/README.md" 2>&1 || true
+    " "$(np "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/bash-write-scope/marker-gate.js")" "$WF" "$SID" "$OTHER_SID" "$MAIN/README.md" 2>&1 || true
 }
 # order: other→true, own→false, own subdir→false, null ctx→true (fail-closed), outside wf→false
 expect="true,false,false,true,false"

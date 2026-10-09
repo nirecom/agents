@@ -33,8 +33,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUT="$AGENTS_DIR/skills/workflow-init/scripts/filter-init-candidates.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SUT="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/filter-init-candidates.sh"
 
 PASS=0
 FAIL=0
@@ -102,7 +102,7 @@ exit 0
 MOCKSTATE
     chmod +x "$TMP/bin/github-issues/issue-state-check.sh"
 
-    export AGENTS_CONFIG_DIR="$TMP"
+    export AGENTS_MAIN_ROOT="$TMP"
     export PATH="$TMP/mock-bin:$PATH"
 }
 

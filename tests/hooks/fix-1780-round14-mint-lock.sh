@@ -50,15 +50,15 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
 
-LOCK_MOD_NODE="$_AGENTS_DIR_NODE/hooks/lib/off-clearance-mint-lock.js"
-BASENAMES_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-BLOCK_HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-REQ="$AGENTS_DIR/bin/request-off-clearance"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+LOCK_MOD_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/off-clearance-mint-lock.js"
+BASENAMES_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/protected-basenames.js"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+BLOCK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+REQ="$SCRIPT_CHECKOUT_ROOT/bin/request-off-clearance"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -122,7 +122,7 @@ process.stdout.write(JSON.stringify({tool_name:"Bash",session_id:process.argv[1]
 run_shim() {
     local tn="$1" sid="$2" cmd="$3" hi out rc
     hi=$(mk_shim_input "$sid" "$cmd")
-    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" \
         "$RWT" 20 node "$SHIM" <<< "$hi" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
@@ -140,15 +140,15 @@ catch(e){ process.stdout.write("ABSENT"); }' "$1" "$2" 2>/dev/null
 
 exists_str() { [ -e "$1" ] && printf 'yes' || printf 'no'; }
 
-if [ ! -f "$SHIM" ] || [ ! -f "$AGENTS_DIR/hooks/lib/off-clearance-mint-lock.js" ]; then
+if [ ! -f "$SHIM" ] || [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/off-clearance-mint-lock.js" ]; then
     fail "mint-lock module or shim not present (harness error)"
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
 fi
 
 # shellcheck source=./lib/examiner-stub.sh
-. "$AGENTS_DIR/tests/lib/examiner-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/examiner-stub.sh"
 
-PARTS_DIR="$AGENTS_DIR/tests/hooks/fix-1780-round14-mint-lock"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1780-round14-mint-lock"
 # shellcheck source=./fix-1780-round14-mint-lock/cases-lock-primitive.sh
 . "$PARTS_DIR/cases-lock-primitive.sh"
 # shellcheck source=./fix-1780-round14-mint-lock/cases-lock-protected.sh

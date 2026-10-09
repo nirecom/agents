@@ -11,15 +11,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 SHARED_REL="skills/_shared/notes-promotion.md"
-SHARED_MD="$AGENTS_DIR/$SHARED_REL"
-WE_MD="$AGENTS_DIR/skills/worktree-end/SKILL.md"
-SC_MD="$AGENTS_DIR/skills/session-close/SKILL.md"
-ICF_MD="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
-IC_MD="$AGENTS_DIR/skills/issue-create/SKILL.md"
-MWF_MD="$AGENTS_DIR/rules/mid-workflow-findings.md"
+SHARED_MD="$SCRIPT_CHECKOUT_ROOT/$SHARED_REL"
+WE_MD="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/SKILL.md"
+SC_MD="$SCRIPT_CHECKOUT_ROOT/skills/session-close/SKILL.md"
+ICF_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/SKILL.md"
+IC_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/SKILL.md"
+MWF_MD="$SCRIPT_CHECKOUT_ROOT/rules/mid-workflow-findings.md"
 
 PASS=0
 FAIL=0
@@ -135,7 +135,7 @@ group_callsites_reference_shared() {
                  "skills/session-close/SKILL.md|SC-8" \
                  "skills/issue-close-finalize/SKILL.md|ICF-residual"; do
         rel="${entry%%|*}"; label="${entry##*|}"
-        path="$AGENTS_DIR/$rel"
+        path="$SCRIPT_CHECKOUT_ROOT/$rel"
         if [ ! -f "$path" ]; then
             fail "B/$label: $rel missing"
             continue
@@ -352,7 +352,7 @@ group_callsites_delegate_the_loop() {
                  "skills/issue-close-finalize/SKILL.md|ICF|notes-promotion"; do
         rel="$(printf '%s' "$entry" | cut -d'|' -f1)"
         label="$(printf '%s' "$entry" | cut -d'|' -f2)"
-        path="$AGENTS_DIR/$rel"
+        path="$SCRIPT_CHECKOUT_ROOT/$rel"
         if [ ! -f "$path" ]; then
             fail "F4/$label: $rel missing"
             continue

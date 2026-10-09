@@ -3,19 +3,15 @@
 // Committed pre-commit helper: are ALL staged files covered by
 // ENFORCE_WORKTREE_EXCLUDE? Shares shared-cmd-utils with the JS hook so JS/Bash
 // parity is structural (no reimplemented matcher in Bash).
-// Env in: AGENTS_CONFIG_DIR, _PRECOMMIT_STAGED, _PRECOMMIT_REPO_TOP (all
+// Env in: _PRECOMMIT_STAGED, _PRECOMMIT_REPO_TOP (both
 // required), ENFORCE_WORKTREE_EXCLUDE (optional, semicolon-separated).
 // Exit: 0 covered (gate may be skipped) / 2 not covered or empty list / 1 input error.
 
 const path = require("path");
 const fs = require("fs");
 
-const cfg = process.env.AGENTS_CONFIG_DIR;
-if (!cfg) process.exit(1);
-
-// __dirname-relative require: OS-agnostic. AGENTS_CONFIG_DIR may be a POSIX drive-letter
-// path under Git-Bash, which Windows Node cannot resolve via require();
-// resolving relative to this file's directory avoids that platform dependency.
+// __dirname-relative require: OS-agnostic. A path handed over by Git-Bash may be
+// in POSIX drive-letter form, which Windows Node cannot resolve via require().
 const { getExcludePatterns, isExcluded } =
   require("../enforce-worktree/shared-cmd-utils");
 

@@ -69,6 +69,16 @@ printf '#!/usr/bin/env bash\nwhile [[ $# -gt 0 ]]; do case "$1" in --output) : >
   > "$FROOT/bin/build-codex-context"
 chmod +x "$FROOT/bin/build-codex-context"
 
+# A stage wrapper finds bin/ from its own path, so the stubs are reached only from a copy.
+copy_stage_wrappers() { # <fake_script_checkout_root>
+  local fake_script_checkout_root="$1" s
+  for s in make-outline-plan make-detail-plan review-plan-security review-tests; do
+    mkdir -p "$fake_script_checkout_root/skills/$s"
+    cp -r "$AGENTS_ROOT/skills/$s/scripts" "$fake_script_checkout_root/skills/$s/scripts"
+  done
+}
+copy_stage_wrappers "$FROOT"
+
 # CPR-SSOT enforcement (approved plan Step 3: "consolidate the resolution logic into one place"): the
 # forwarded PATH alone cannot distinguish a wrapper that CALLS the shared helper
 # from one that re-implements the fallback chain inline — both forward the same
@@ -135,12 +145,12 @@ run_wrapper() {
   WRAP_RC=0
   (
     cd "$REPO_FIXTURE" || exit 1
-    export AGENTS_CONFIG_DIR="$FROOT"
+    export AGENTS_MAIN_ROOT="$FROOT"
     export SESSION_ID="$sid"
     export PLANS_DIR="$WRAP_PLANS"
     export EXTENSIONS_USED=0
     export REVIEW_TESTS_FULL_SCAN=1
-    with_timeout bash "$AGENTS_ROOT/skills/$stage/scripts/run-codex-review-loop.sh" >/dev/null 2>&1
+    with_timeout bash "$FROOT/skills/$stage/scripts/run-codex-review-loop.sh" >/dev/null 2>&1
   ) || WRAP_RC=$?
   ARGV_TRADEOFFS=""
   if [[ -f "$ARGV_FILE" ]]; then

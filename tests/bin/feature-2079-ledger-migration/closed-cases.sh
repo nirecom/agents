@@ -34,7 +34,7 @@ c21_close_twice() {
 C21_OUT=""
 c21_runner_load() {
   [ -n "$C21_OUT" ] || C21_OUT="$(run_with_timeout 280 env -u RUN_ALL_DUR_REPO_ID -u RUN_ALL_DUR_HOST_TOKEN \
-    AGENTS_DIR="$AGENTS_DIR" bash "$LM_PARTS/_runner-closed.sh" 2>/dev/null | sed -n 's/^R21 //p')"
+    bash "$LM_PARTS/_runner-closed.sh" 2>/dev/null | sed -n 's/^R21 //p')"
 }
 
 run_closed_runner_cases() {

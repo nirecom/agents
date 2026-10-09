@@ -12,12 +12,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
-_AGENTS_DIR_NODE="$(np "$AGENTS_DIR")"
-SCRIPT="$AGENTS_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+_SCRIPT_CHECKOUT_ROOT_NODE="$(np "$SCRIPT_CHECKOUT_ROOT")"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/review-tests/scripts/run-codex-review-loop.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 
@@ -41,7 +41,7 @@ fi
 # review-scope fingerprint. The reset seam is the fingerprint mismatch, not invalidateReviewTests
 # (which has been deleted). A mismatch auto-clears the marker; a compute failure keeps it (fail-CLOSED).
 
-# --- Build a fake AGENTS_CONFIG_DIR with stub bin scripts + real evidence.js ---
+# --- Build a fake AGENTS_MAIN_ROOT with stub bin scripts + real evidence.js ---
 build_fake_config() {
     local with_evidence="$1" fake
     fake=$(make_tmp)
@@ -56,7 +56,7 @@ STUB
 echo NOSTATE
 STUB
     # #2270: the script resolves the session id through this bridge before it
-    # touches the worktree, so the fake config dir has to answer rc 0 — a missing
+    # touches the worktree, so the fake agents root has to answer rc 0 — a missing
     # file would read as rc 127 (node absent) and HALT the loop at exit 4.
     cat > "$fake/bin/resolve-session-id" <<'STUB'
 #!/usr/bin/env bash
@@ -70,7 +70,7 @@ STUB
     chmod +x "$fake/bin/run-codex-review-loop" "$fake/bin/resolve-worktree-path" \
         "$fake/bin/resolve-session-id" "$fake/bin/resolve-accepted-tradeoffs-file"
     if [ "$with_evidence" = "yes" ]; then
-        cp "$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js" "$fake/hooks/workflow-gate/review-tests-evidence.js"
+        cp "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-evidence.js" "$fake/hooks/workflow-gate/review-tests-evidence.js"
     fi
     printf '%s' "$fake"
 }
@@ -116,14 +116,14 @@ ACCEPT_NAME="review-tests-exit6-accepted.txt"
 seed_control() {
     local r="$1" sid="$2" name="$3" dir
     shift 3
-    dir="$(pinned "$r" node "$AGENTS_DIR/bin/workflow-control-dir" --session "$sid" --for-write)" || return 1
+    dir="$(pinned "$r" node "$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir" --session "$sid" --for-write)" || return 1
     printf '%s\n' "$@" > "$dir/$name"
 }
 
 # run_loop <root> <fake_config> <repo> <stub_rc> → prints exit code
 run_loop() {
     local root="$1" fake="$2" repo="$3" rc="$4" ec
-    ( cd "$repo" && pinned "$root" AGENTS_CONFIG_DIR="$fake" SESSION_ID="sid1361" \
+    ( cd "$repo" && pinned "$root" AGENTS_MAIN_ROOT="$fake" SESSION_ID="sid1361" \
         PLANS_DIR="$(np "$root/plans")" \
         CLAUDE_CODE_SESSION_ID="sid1361" \
         EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$SCRIPT" >/dev/null 2>&1 )
@@ -134,7 +134,7 @@ run_loop() {
 # run_accept_handler <root> <sid> — the real WARNINGS_ACCEPTED call site.
 run_accept_handler() {
     pinned "$1" "$RWT" 20 node -e "
-const handler = require('$_AGENTS_DIR_NODE/hooks/workflow-mark/review-tests-handler.js');
+const handler = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-mark/review-tests-handler.js');
 handler.handle({
   cmd: 'echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: accept coverage gap for now>>\"',
   sessionId: process.argv[1],

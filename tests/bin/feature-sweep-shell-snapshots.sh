@@ -18,8 +18,8 @@ set -uo pipefail
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SWEEP="$AGENTS_DIR/bin/sweep-shell-snapshots.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SWEEP="$SCRIPT_CHECKOUT_ROOT/bin/sweep-shell-snapshots.sh"
 
 PASS=0
 FAIL=0
@@ -382,11 +382,11 @@ T6_second_run_is_a_no_op() {
 # (CLI and PATH classifier tables), T17-T19 (adversarial inputs) and T20 (marker
 # SSOT mutation) live in sibling part files — rules/coding/file-split.md
 # Pattern A. Each self-invokes its cases at source time.
-. "$AGENTS_DIR/tests/bin/feature-sweep-shell-snapshots/age-and-flag-guards.sh"
-. "$AGENTS_DIR/tests/bin/feature-sweep-shell-snapshots/age-boundary-and-io.sh"
-. "$AGENTS_DIR/tests/bin/feature-sweep-shell-snapshots/classifier-tables.sh"
-. "$AGENTS_DIR/tests/bin/feature-sweep-shell-snapshots/adversarial-inputs.sh"
-. "$AGENTS_DIR/tests/bin/feature-sweep-shell-snapshots/marker-ssot-mutation.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-sweep-shell-snapshots/age-and-flag-guards.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-sweep-shell-snapshots/age-boundary-and-io.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-sweep-shell-snapshots/classifier-tables.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-sweep-shell-snapshots/adversarial-inputs.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-sweep-shell-snapshots/marker-ssot-mutation.sh"
 
 # ─────────────────────────────────────────────────────────────────────────────
 

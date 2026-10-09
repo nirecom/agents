@@ -19,8 +19,8 @@ NFR_PRODUCTION_ENTRY_CASES_LOADED=1
 # plumbing against the caller's repo, and what decides the NFR's fate is the one
 # wrapper line, read from disk so a change to it changes this test's answer.
 # ---------------------------------------------------------------------------
-GATES_SCRIPT="$AGENTS_DIR/skills/review-code-security/scripts/run-quality-gates.sh"
-LOOP_WRAPPER="$AGENTS_DIR/skills/review-code-security/scripts/run-codex-review-loop.sh"
+GATES_SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/review-code-security/scripts/run-quality-gates.sh"
+LOOP_WRAPPER="$SCRIPT_CHECKOUT_ROOT/skills/review-code-security/scripts/run-codex-review-loop.sh"
 
 if [ -f "$GATES_SCRIPT" ]; then
     pass "T2223L-gate-script-present"
@@ -81,8 +81,8 @@ run_secloop_in() {
     mkdir -p "$plans"
     rm -f "$CAPTURE"
     (cd "$repo" && run_with_timeout 90 env -u CODEX_REVIEW_MAX_DIFF_LINES \
-        AGENTS_CONFIG_DIR="$cfg" PATH="$MOCK_BIN:$PATH" \
-        bash "$AGENTS_DIR/bin/run-codex-review-loop" --format security-code \
+        AGENTS_MAIN_ROOT="$cfg" PATH="$MOCK_BIN:$PATH" \
+        bash "$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" --format security-code \
         --session-id "prodnfr$PROD_SEQ" --plans-dir "$plans" \
         --cap 2 --max-extensions 1 --extensions-used 0 \
         --accepted-tradeoffs "$PROD_TRADEOFFS" --repo-root "$repo" \

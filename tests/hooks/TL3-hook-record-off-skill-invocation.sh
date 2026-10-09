@@ -17,23 +17,23 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # --- skip gates (claude-e2e.md acceptance criteria) --------------------------
-if [ ! -x "$AGENTS_DIR/bin/get-config-var" ]; then
+if [ ! -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
     echo "SKIP: bin/get-config-var not found or not executable" >&2; exit 77
 fi
-if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
     echo "SKIP: requires RUN_TL3=on in .env" >&2; exit 77
 fi
 if ! command -v claude >/dev/null 2>&1; then
     echo "SKIP: claude CLI not found" >&2; exit 77
 fi
-HOOK="$AGENTS_DIR/hooks/record-off-skill-invocation.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/record-off-skill-invocation.js"
 if [ ! -f "$HOOK" ]; then
     echo "FAIL: hooks/record-off-skill-invocation.js missing - provenance is unrecorded" >&2; exit 1
 fi
-SKILL_SRC="$AGENTS_DIR/skills/enforce-workflow-off"
+SKILL_SRC="$SCRIPT_CHECKOUT_ROOT/skills/enforce-workflow-off"
 if [ ! -d "$SKILL_SRC" ]; then
     echo "FAIL: skills/enforce-workflow-off missing - the CLI would not register the slash command" >&2; exit 1
 fi
@@ -93,7 +93,7 @@ EMERG_CMD="echo \"${_S_OPEN}WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY: ${EMERG_REA
 # this test loudly rather than let the fixture drift into asserting a dead name.
 MARKER_KIND=$(run_with_timeout 20 node -e \
     "process.stdout.write(require(process.argv[1]).EMERGENCY_PROVENANCE_MARKER_KIND)" \
-    "$(node_path "$AGENTS_DIR/hooks/lib/protected-basenames.js")" 2>/dev/null)
+    "$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/lib/protected-basenames.js")" 2>/dev/null)
 if [ -z "$MARKER_KIND" ]; then
     echo "FAIL: EMERGENCY_PROVENANCE_MARKER_KIND not exported by hooks/lib/protected-basenames.js" >&2
     exit 1
@@ -107,7 +107,7 @@ MARKER3="$WFDIR/$SID3.$MARKER_KIND"
 OVERRIDE_MARKER3="$WFDIR/$SID3.workflow-off"
 AUDIT3="$WFDIR/$SID3.control/supervisor-state.json"
 
-PARTS_DIR="$AGENTS_DIR/tests/hooks/TL3-hook-record-off-skill-invocation"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/TL3-hook-record-off-skill-invocation"
 # The capture wrapper, the Bash guard, the project settings.json that registers
 # them next to the real consumer, and the environment the live turns run under.
 # shellcheck source=./TL3-hook-record-off-skill-invocation/fixture-hooks.sh

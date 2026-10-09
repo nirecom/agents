@@ -9,7 +9,7 @@
 # (state-write failure and atomic-write hygiene) and I (CPR-SSOT drift check on
 # the injected text).
 #
-# Depends on the parent for: TMPROOT, WFDIR, WFDIR_N, REPO_DIR, SESSION_START_JS,
+# Depends on the parent for: TMPROOT, WFDIR, WFDIR_N, REPO_PATH, SESSION_START_JS,
 # jsn, seed_state, run_with_timeout, to_node_path, assert_eq, pass, fail — and on
 # provider-and-hooks.sh for VP_TEXT, VP_TEXT_OK, hook_out, contains.
 
@@ -146,7 +146,7 @@ case "$VP_TEXT_OK" in
         fail "I01-text-defined-once" "VERBOSE_PROMPT_TEXT unavailable (module not implemented yet)"
         ;;
     *)
-        HITS="$(grep -rlF "$VP_TEXT" "$REPO_DIR" \
+        HITS="$(grep -rlF "$VP_TEXT" "$REPO_PATH" \
             --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=tests 2>/dev/null | sort -u)"
         COUNT="$(printf '%s\n' "$HITS" | grep -c . || true)"
         if [ "$COUNT" = "1" ] && [ "$(basename "$HITS")" = "verbose-prompt.js" ]; then

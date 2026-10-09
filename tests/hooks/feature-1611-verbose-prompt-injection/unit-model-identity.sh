@@ -9,7 +9,7 @@
 # (extractModelIdFromHookInput shape tolerance), B (resolveModelId layer①) and
 # C (recordSessionModel write-once + verbose_prompt decision).
 #
-# Depends on the parent for: REPO_DIR, MODEL_IDENTITY_JS, VERBOSE_PROMPT_JS,
+# Depends on the parent for: REPO_PATH, MODEL_IDENTITY_JS, VERBOSE_PROMPT_JS,
 # jsn, seed_state, state_file, state_field, assert_eq, assert_ne, pass, fail.
 
 # ---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ echo "=== preconditions (new modules) ==="
 # ---------------------------------------------------------------------------
 
 for f in "$MODEL_IDENTITY_JS" "$VERBOSE_PROMPT_JS"; do
-    rel="${f#$REPO_DIR/}"
+    rel="${f#$REPO_PATH/}"
     if [ -f "$f" ]; then pass "X-exists-$rel"
     else fail "X-exists-$rel" "not implemented yet"; fi
 done

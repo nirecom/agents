@@ -12,18 +12,18 @@
 # a level trigger on the working-tree diff.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_NODE="$(cygpath -m "$AGENTS_DIR")"
+    AGENTS_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    AGENTS_NODE="$AGENTS_DIR"
+    AGENTS_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 COLLECT_NODE="$AGENTS_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
 PROJ_NODE="$AGENTS_NODE/hooks/workflow-state/state-io/projection.js"
 WRITER_NODE="$AGENTS_NODE/hooks/lib/supervisor-state-writer.js"
 AUDIT_NODE="$AGENTS_NODE/hooks/lib/supervisor-state-writer/audit.js"
 SCHEMA_NODE="$AGENTS_NODE/hooks/lib/supervisor-state-schema.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -45,7 +45,6 @@ mkdir -p "$WORK/plans" "$WORK/wf" "$WORK/transcripts"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
-export AGENTS_CONFIG_DIR="$AGENTS_NODE"
 unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 

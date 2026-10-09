@@ -2,8 +2,6 @@
 # Usage: index.sh [--keywords-only] [--context-lines N]
 set -uo pipefail
 
-[[ -z "${AGENTS_CONFIG_DIR:-}" ]] && { echo "refactor-prompts: AGENTS_CONFIG_DIR not set" >&2; exit 2; }
-
 KEYWORDS_ONLY=0
 CONTEXT_LINES=3
 

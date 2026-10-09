@@ -2,6 +2,7 @@
 # Tests: bin/worker-dispatch/workers/commit-push/procedure.js
 # Tags: scope:issue-specific, gitlab, forge, commit-push, TL2
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # Issue #2308 — Group F of the split gitlab-forge suite: the commit-push
 # procedure.js forge gate. Drives run() to step 8 with every child result
@@ -102,7 +103,7 @@ const payload = {
 };
 const ctx = {
   entry: { name: "commit-push", binaries: { external: [], scripts: {} } },
-  anchors: { acd: path.join(tmp, "acd-none"), plansDir: tmp },
+  anchors: { script_checkout_root: path.join(tmp, "script-checkout-root-none"), plansDir: tmp },
   path: path,
   fsguard: { writeFile: (t) => t },
 };
@@ -113,12 +114,12 @@ NODE
 
 run_f() {
     F_TMP="$TMPROOT/f-$RANDOM" && mkdir -p "$F_TMP"
-    F_TMP="$F_TMP" run_with_timeout 40 node "$F_DRIVER" "$AGENTS_DIR" "$1" 2>/dev/null
+    F_TMP="$F_TMP" run_with_timeout 40 node "$F_DRIVER" "$SCRIPT_CHECKOUT_ROOT" "$1" 2>/dev/null
 }
 # run_f_mr <remote> <GL_MR_EXISTS 0|1> : run the driver with the existing-MR flag.
 run_f_mr() {
     F_TMP="$TMPROOT/f-$RANDOM" && mkdir -p "$F_TMP"
-    F_TMP="$F_TMP" GL_MR_EXISTS="$2" run_with_timeout 40 node "$F_DRIVER" "$AGENTS_DIR" "$1" 2>/dev/null
+    F_TMP="$F_TMP" GL_MR_EXISTS="$2" run_with_timeout 40 node "$F_DRIVER" "$SCRIPT_CHECKOUT_ROOT" "$1" 2>/dev/null
 }
 json_field() { printf '%s' "$2" | run_with_timeout 20 node -e '
 let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{ try{const j=JSON.parse(s); process.stdout.write(String(j[process.argv[1]]));}catch(e){process.stdout.write("ERR");} });' "$1" 2>/dev/null; }

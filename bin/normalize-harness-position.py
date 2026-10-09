@@ -7,7 +7,7 @@ Transformations applied to each file:
   1. Remove single-line pass()/fail()/skip() function defs (harness provides them)
   2. Remove bare PASS=0 / FAIL=0 / SKIP=0 init lines (compound forms too)
   3. Move (or add) `. "...tests/lib/harness.sh"` to the line immediately after
-     the last AGENTS_DIR / REPO_ROOT definition
+     the last SCRIPT_CHECKOUT_ROOT / REPO_ROOT definition
   4. Collapse consecutive blank lines down to one
 
 Usage:
@@ -43,7 +43,7 @@ REMOVE_PATTERNS = [
 ]
 
 HARNESS_RE = re.compile(r'^\.\s+"[^"]*tests/lib/harness\.sh"')
-ROOT_VAR_RE = re.compile(r'^(AGENTS_DIR|REPO_ROOT)=')
+ROOT_VAR_RE = re.compile(r'^(SCRIPT_CHECKOUT_ROOT|REPO_ROOT)=')
 
 
 def _make_harness_line(lines: list[str]) -> str:
@@ -51,7 +51,7 @@ def _make_harness_line(lines: list[str]) -> str:
     uses_repo_root = any(ROOT_VAR_RE.match(ln.rstrip()) and 'REPO_ROOT' in ln for ln in lines)
     if uses_repo_root:
         return '. "$REPO_ROOT/tests/lib/harness.sh"\n'
-    return '. "$AGENTS_DIR/tests/lib/harness.sh"\n'
+    return '. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"\n'
 
 
 def normalize(path: Path, dry_run: bool, add_harness: bool = False) -> str:
@@ -60,7 +60,7 @@ def normalize(path: Path, dry_run: bool, add_harness: bool = False) -> str:
       'modified'       — file was (or would be) changed
       'already-ok'     — harness is already in the right place, no removals needed
       'no-harness'     — file doesn't source harness.sh (skipped; use --add-harness)
-      'no-root-var'    — AGENTS_DIR / REPO_ROOT not found (skip)
+      'no-root-var'    — SCRIPT_CHECKOUT_ROOT / REPO_ROOT not found (skip)
       'error:<msg>'    — unexpected problem
     """
     try:

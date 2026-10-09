@@ -11,7 +11,6 @@
 _FCI_OLD_PWD="$PWD"
 _FCI_OLD_HOME="${HOME-}"
 _FCI_OLD_NO_LOG="${NO_LOG-__unset__}"
-_FCI_OLD_ACD="${AGENTS_CONFIG_DIR-__unset__}"
 _FCI_OLD_PROMPT="${PROMPT-__unset__}"
 _fci_restore() { # <var> <saved>
     if [ "$2" = "__unset__" ]; then unset "$1"; else export "$1=$2"; fi
@@ -21,7 +20,6 @@ FC_TMP="$TMPDIR_BASE/findings-codex-input"
 mkdir -p "$FC_TMP/home" "$FC_TMP/proj" "$FC_TMP/mock"
 export HOME="$FC_TMP/home"
 export NO_LOG=true
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 unset PROMPT 2>/dev/null || true
 PLANS="$WORKFLOW_PLANS_DIR"
 cd "$FC_TMP" || exit 1
@@ -51,7 +49,7 @@ fc_run() {
     shift 4
     [ "$mode" = audit ] && audit=1
     rm -f "$CODEX_PROMPT_CAPTURE" "$CODEX_ENV_CAPTURE" "$MOCK_CALLED"
-    FC_OUT="$(MOCK_AUDIT=$audit PATH="${FC_PATH:-$FC_PRESENT_PATH}" run_with_timeout 120 bash "$FINDINGS_CLI" --mode "$mode" --sid "$sid" --wsid "$wsid" --transcript "$tf" "$@" 2>"$FC_TMP/stderr.txt")"
+    FC_OUT="$(MOCK_AUDIT=$audit PATH="${FC_PATH:-$FC_PRESENT_PATH}" run_with_timeout 120 bash "${FC_CLI:-$FINDINGS_CLI}" --mode "$mode" --sid "$sid" --wsid "$wsid" --transcript "$tf" "$@" 2>"$FC_TMP/stderr.txt")"
 }
 fc_prompt() { cat "$CODEX_PROMPT_CAPTURE" 2>/dev/null; }
 fc_block() { # <NAME> — block of the captured prompt
@@ -164,12 +162,14 @@ assert_eq "fci UNAVAILABLE: PLAN ARTIFACTS (none)" "(none)" "$(fc_block "PLAN AR
 assert_not_contains "fci UNAVAILABLE: --artifact not embedded" "$(fc_prompt)" "intent-art-body"
 
 echo "--- findings-codex-input: assembly failure reason line ---"
-# A lib-copy AGENTS_CONFIG_DIR whose assembler is absent / throws / fails plainly.
+# A copied checkout (CLI + bin/lib) whose assembler is absent / throws / fails plainly.
 # node's uncaught-exception stderr starts with a stack location, not the message,
 # so the reason must come from the first ^[A-Za-z]*Error: line (fallback: line 1).
 FCA_DIR="$FC_TMP/asm-cfg"
 mkdir -p "$FCA_DIR/bin" "$FCA_DIR/hooks/lib"
-cp -r "$AGENTS_DIR/bin/lib" "$FCA_DIR/bin/lib"
+cp -r "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$FCA_DIR/bin/lib"
+cp "$FINDINGS_CLI" "$FCA_DIR/bin/supervisor-findings-codex"
+FCA_CLI="$FCA_DIR/bin/supervisor-findings-codex"
 FCA_T="$FC_TMP/proj/asm.jsonl"
 fc_human "asm-utter" a1 > "$FCA_T"
 FCA_TN="$(to_node_path "$FCA_T")"
@@ -184,15 +184,15 @@ fca_assert_error_reason() { # <label>
     esac
 }
 rm -f "$FCA_DIR/hooks/lib/supervisor-codex-input.js"
-AGENTS_CONFIG_DIR="$FCA_DIR" fc_run alert fcasm UNAVAILABLE "$FCA_TN"
+FC_CLI="$FCA_CLI" fc_run alert fcasm UNAVAILABLE "$FCA_TN"
 fca_assert_error_reason "module absent"
 assert_contains "fci asm module absent: reason names Cannot find module" "$(fc_reason)" "Error: Cannot find module"
 printf '%s\n' "'use strict';" "const o = null;" "o.boom;" > "$FCA_DIR/hooks/lib/supervisor-codex-input.js"
-AGENTS_CONFIG_DIR="$FCA_DIR" fc_run alert fcasm UNAVAILABLE "$FCA_TN"
+FC_CLI="$FCA_CLI" fc_run alert fcasm UNAVAILABLE "$FCA_TN"
 fca_assert_error_reason "module throws"
 assert_contains "fci asm module throws: reason names the TypeError" "$(fc_reason)" "TypeError:"
 printf '%s\n' "process.stderr.write('asm-plain-failure-one\\nasm-plain-failure-two\\n');" "process.exit(3);" > "$FCA_DIR/hooks/lib/supervisor-codex-input.js"
-AGENTS_CONFIG_DIR="$FCA_DIR" fc_run alert fcasm UNAVAILABLE "$FCA_TN"
+FC_CLI="$FCA_CLI" fc_run alert fcasm UNAVAILABLE "$FCA_TN"
 assert_eq "fci asm no Error: line: STATUS: FAILED" "STATUS: FAILED" "$(fc_first)"
 assert_eq "fci asm no Error: line: reason falls back to stderr line 1" "reason: input assembly failed: asm-plain-failure-one" "$(fc_reason)"
 if [ -e "$MOCK_CALLED" ]; then fail "fci asm: codex mock not invoked after assembly failure"; else pass "fci asm: codex mock not invoked after assembly failure"; fi
@@ -201,6 +201,5 @@ if [ -e "$MOCK_CALLED" ]; then fail "fci asm: codex mock not invoked after assem
 unset CODEX_PROMPT_CAPTURE CODEX_ENV_CAPTURE MOCK_CALLED
 export HOME="$_FCI_OLD_HOME"
 _fci_restore NO_LOG "$_FCI_OLD_NO_LOG"
-_fci_restore AGENTS_CONFIG_DIR "$_FCI_OLD_ACD"
 _fci_restore PROMPT "$_FCI_OLD_PROMPT"
 cd "$_FCI_OLD_PWD" || true

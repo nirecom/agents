@@ -22,17 +22,17 @@ set -u
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    N="$(cygpath -m "$AGENTS_DIR")"
+    N="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    N="$AGENTS_DIR"
+    N="$SCRIPT_CHECKOUT_ROOT"
 fi
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 SIO="$N/hooks/workflow-state/state-io.js"
 LIFECYCLE="$N/hooks/workflow-state/lifecycle.js"
-CLI="$AGENTS_DIR/bin/resume-session-detect"
-AUTOMARK="$AGENTS_DIR/hooks/postuse-step-in-flight-mark.js"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect"
+AUTOMARK="$SCRIPT_CHECKOUT_ROOT/hooks/postuse-step-in-flight-mark.js"
 
 unset CLAUDE_CODE_SESSION_ID
 export CLAUDE_TRANSCRIPT_BASE_DIR=""
@@ -68,7 +68,7 @@ build_fixture() {
 # fixture store pinned, so every write lands in the fixture (fixture-isolation).
 in_repo() {
     ( cd "$REPO" && WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
-        AGENTS_CONFIG_DIR="$N" SID="$1" "$RWT" 25 node -e "$2" ) 2>/dev/null
+        AGENTS_MAIN_ROOT="$N" SID="$1" "$RWT" 25 node -e "$2" ) 2>/dev/null
 }
 
 # The donor: a session that genuinely got as far as `research`. Not all-pending
@@ -96,7 +96,7 @@ dispatch_skill() {
     HOOK_OUT=$( ( cd "$REPO" && SID="$1" SK="$2" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ tool_name: 'Skill', session_id: process.env.SID,
   agent_id: '', transcript_path: '', tool_input: { skill: process.env.SK, description: 'x' } }));" \
-        | WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" AGENTS_CONFIG_DIR="$N" \
+        | WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" AGENTS_MAIN_ROOT="$N" \
           "$RWT" 25 node "$(np "$AUTOMARK")" ) 2>/dev/null )
     HOOK_RC=$?
 }
@@ -331,7 +331,7 @@ dispatch_via_registration() {
     printf '{"tool_name":"Skill","session_id":"%s","agent_id":"","transcript_path":"","tool_input":{"skill":"%s","description":"x"}}' \
         "$1" "$2" > "$TMP/s11-payload.json"
     REG_OUT=$( ( cd "$REPO" && WORKFLOW_STATE_DIR="$STORE_N" WORKFLOW_PLANS_DIR="$STORE_N" \
-        AGENTS_CONFIG_DIR="$N" "$RWT" 25 bash -c "$REG_CMD" < "$TMP/s11-payload.json" ) 2>/dev/null )
+        AGENTS_MAIN_ROOT="$N" "$RWT" 25 bash -c "$REG_CMD" < "$TMP/s11-payload.json" ) 2>/dev/null )
     REG_RC=$?
 }
 

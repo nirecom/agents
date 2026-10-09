@@ -390,11 +390,11 @@ rh.handle({
 console.log("DONE");
 '
     for reason in alpha bravo; do
-        (cd "$AGENTS_DIR" && env \
-            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        (cd "$SCRIPT_CHECKOUT_ROOT" && env \
+            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
             WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
             HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_R17" REASON="$reason" \
-            "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$R17_JS" \
+            "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 90 node -e "$R17_JS" \
             >"$TMPROOT/r17-$reason.out" 2>&1) &
     done
     wait

@@ -23,7 +23,7 @@ CLI="$AGENTS_ROOT/bin/concern-ledger"
 
 # harness.sh supplies the case markers only; the name-first reporters below
 # are defined after the source so they take precedence.
-AGENTS_DIR="$AGENTS_ROOT"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_ROOT/tests/lib/harness.sh"
 

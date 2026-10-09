@@ -125,7 +125,7 @@ mint_resolver_mock
 export GH_MOCK_LINKED_COUNT=0
 export WORKFLOW_PLANS_DIR="$TMP/resolver-plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
-ENV_FILE="$AGENTS_CONFIG_DIR/.env"
+ENV_FILE="$AGENTS_MAIN_ROOT/.env"
 : > "$ENV_FILE"
 STDERR_FILE="$TMP/r-preflight-stderr.log"
 OUT=$(run_with_timeout 60 bash "$TARGET" setup 2>"$STDERR_FILE")
@@ -156,7 +156,7 @@ mint_resolver_mock
 export GH_MOCK_LINKED_COUNT=0
 export WORKFLOW_PLANS_DIR="$TMP/resolver-plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
-ENV_FILE="$AGENTS_CONFIG_DIR/.env"
+ENV_FILE="$AGENTS_MAIN_ROOT/.env"
 : > "$ENV_FILE"
 STDERR_FILE="$TMP/r-setup-noproj-stderr.log"
 run_with_timeout 60 bash "$TARGET" setup >/dev/null 2>"$STDERR_FILE"

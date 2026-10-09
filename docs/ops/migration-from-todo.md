@@ -14,7 +14,7 @@ Each section is labeled:
 
 Run `/issue-setup` to initialize the target repo's labels and Projects v2 board. It handles label sync and project creation/linking in one pass.
 
-To sync labels manually only (e.g. when the project already exists): `bash "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh"`, or add `--repo OWNER/REPO` for a different target.
+To sync labels manually only (e.g. when the project already exists): `bash "$AGENTS_MAIN_ROOT/bin/github-issues/sync-labels.sh"`, or add `--repo OWNER/REPO` for a different target.
 
 Creates all labels defined in `.github/labels.yml` (the canonical set) from that file. Safe to re-run (uses `--force`).
 
@@ -99,15 +99,14 @@ auto-close, web UI / mobile / out-of-band close.
 3. No hash found → no-hash class (J-2 only)
 
 **Prerequisites:**
-- `REPO_DIR` (or `AGENTS_CONFIG_DIR` as fallback) points to the target repo root
 - `gh auth status` is authenticated
-- Run from inside the target repo, or pass `REPO_DIR=/path/to/repo` env var
+- Pass `--target-checkout-root /path/to/repo`; the script changes into that directory itself, so the current directory does not select the repo. Without the flag, the script works on the agents main root (`AGENTS_MAIN_ROOT`)
 
 **Migration procedure:**
 
 ```bash
 # 5a — Dry-run: see what will be posted without touching GitHub
-REPO_DIR=/path/to/repo bash bin/github-issues/backfill-commit-comments.sh --dry-run
+bash bin/github-issues/backfill-commit-comments.sh --target-checkout-root /path/to/repo --dry-run
 ```
 
 Output format: `[dry-run class=CLASS] #N hash=HASH_OR_none`
@@ -118,7 +117,7 @@ git log). `no-hash` issues will get a sentinel-only comment — acceptable.
 
 ```bash
 # 5b — Canary: post to 1 issue per class (max 6 total)
-REPO_DIR=/path/to/repo bash bin/github-issues/backfill-commit-comments.sh --canary
+bash bin/github-issues/backfill-commit-comments.sh --target-checkout-root /path/to/repo --canary
 ```
 
 After this runs, open each posted comment on GitHub and verify:
@@ -130,7 +129,7 @@ Once satisfied, proceed to the full run.
 
 ```bash
 # 5c — Full run: process all remaining closed issues
-REPO_DIR=/path/to/repo bash bin/github-issues/backfill-commit-comments.sh
+bash bin/github-issues/backfill-commit-comments.sh --target-checkout-root /path/to/repo
 ```
 
 The canary issues are automatically skipped (idempotency check on the sentinel comment).

@@ -10,16 +10,16 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-BUILD_ENV_JS="${_AGENTS_DIR_NODE}/bin/session-close-build-env.js"
-WRITE_OUTCOME_JS="${_AGENTS_DIR_NODE}/bin/issue-close-write-outcome.js"
-SKILL_MD="${AGENTS_DIR}/skills/session-close/SKILL.md"
+BUILD_ENV_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/bin/session-close-build-env.js"
+WRITE_OUTCOME_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/bin/issue-close-write-outcome.js"
+SKILL_MD="${SCRIPT_CHECKOUT_ROOT}/skills/session-close/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -388,7 +388,7 @@ test_S4_skill_md_has_skipped_wf_meta_and_kept_open() {
     fi
     local has_skipped has_kept
     grep -qF "skipped_wf_meta" "$SKILL_MD" && has_skipped=1 || has_skipped=0
-    grep -qF "kept open (planning session)" "${AGENTS_DIR}/hooks/lib/final-report-schema.js" && has_kept=1 || has_kept=0
+    grep -qF "kept open (planning session)" "${SCRIPT_CHECKOUT_ROOT}/hooks/lib/final-report-schema.js" && has_kept=1 || has_kept=0
     if [ "$has_skipped" = "1" ] && [ "$has_kept" = "1" ]; then
         pass "S4_skill_md_has_skipped_wf_meta_and_kept_open: both 'skipped_wf_meta' and 'kept open (planning session)' found"
     elif [ "$has_skipped" = "0" ] && [ "$has_kept" = "0" ]; then

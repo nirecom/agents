@@ -10,16 +10,16 @@
 # TL3 gap: whether the knee heuristic picks a genuinely good value on real hardware is not covered.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 . "$(dirname "${BASH_SOURCE[0]}")/_cal-fixture.sh"
 REAL_RUN_ALL="${HOME:-/nonexistent}/.claude/run-all"
 REAL_PRE=0; [ -e "$REAL_RUN_ALL" ] && REAL_PRE=1
 cf_init
 harness_isolate "$CF_T/iso"   # top-level pin: cf_init pins inside a function, which the guard does not read
 
-RUNNER="$AGENTS_DIR/tests/run-all.sh"
-EXEC_MODEL="$AGENTS_DIR/hooks/workflow-run-tests/exec-model.js"
+RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
+EXEC_MODEL="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests/exec-model.js"
 CAL_TGT="bin/calibrate-test-parallelism.sh"
 
 contract_count() {

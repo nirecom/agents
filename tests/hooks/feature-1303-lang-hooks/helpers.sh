@@ -1,12 +1,13 @@
 # helpers.sh — Shared setup for feature-1303-lang-hooks; sourced by the entrypoint.
 # Tests: hooks/lang-inject.js, hooks/subagent-start.js
 # Tags: hook-injection, lang-inject, subagent-start, plan-lang, pwsh-not-required, scope:issue-specific
-# Sets the AGENTS_DIR / hook-path / tmpdir vars, the PASS/FAIL/SKIP counters and their
+# Sets the SCRIPT_CHECKOUT_ROOT_NATIVE / hook-path / tmpdir vars, the PASS/FAIL/SKIP counters and their
 # reporters, and run_with_timeout, to_node_path, build_state plus the hook-output
 # extractors every case file in this suite uses.
 # Env vars reach node directly (not via .env) to avoid the block-dotenv.js hook.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && (pwd -W 2>/dev/null || pwd))"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$_HELPERS_SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
 
 to_node_path() {
     if command -v cygpath >/dev/null 2>&1; then
@@ -16,9 +17,9 @@ to_node_path() {
     fi
 }
 
-LANG_INJECT_HOOK="$AGENTS_DIR/hooks/lang-inject.js"
-SUBAGENT_START_HOOK="$AGENTS_DIR/hooks/subagent-start.js"
-SETTINGS_JSON="$AGENTS_DIR/settings.json"
+LANG_INJECT_HOOK="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lang-inject.js"
+SUBAGENT_START_HOOK="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/subagent-start.js"
+SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT_NATIVE/settings.json"
 
 PASS=0
 FAIL=0

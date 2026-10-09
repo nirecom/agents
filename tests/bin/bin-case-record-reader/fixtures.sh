@@ -116,7 +116,7 @@ FX
 # The guarded SKIP init, the Results echo and `exit "$FAIL"` are not self-implementation.
 cat >"$FXD/self-impl.sh" <<'FX'
 #!/usr/bin/env bash
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 pass() { echo ok; }
@@ -130,7 +130,7 @@ FX
 # self-impl-clean — the shared harness only, closed by the conventional trailer.
 cat >"$FXD/self-impl-clean.sh" <<'FX'
 #!/usr/bin/env bash
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 assert_eq "1" "1"
 echo "Results: $PASS passed, $FAIL failed"
 exit "$FAIL"
@@ -141,17 +141,17 @@ while IFS='|' read -r sname sline; do
   [ -n "$sname" ] || continue
   printf '%s\n' '#!/usr/bin/env bash' "$sline" 'echo x' >"$FXD/skip-$sname.sh"
 done <<'ROWS'
-narrow-dot-agents|. "$AGENTS_DIR/tests/lib/request-off-clearance-harness.sh"
+narrow-dot-agents|. "$SCRIPT_CHECKOUT_ROOT/tests/lib/request-off-clearance-harness.sh"
 narrow-source-repo-root|source "$REPO_ROOT/tests/lib/clearance-hook-harness.sh"
-narrow-unquoted|. $AGENTS_DIR/tests/lib/clearance-hook-harness.sh
-shared-harness|. "$AGENTS_DIR/tests/lib/harness.sh"
+narrow-unquoted|. $SCRIPT_CHECKOUT_ROOT/tests/lib/clearance-hook-harness.sh
+shared-harness|. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 section-runner|. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/section-runner.sh"
 ROWS
 cat >"$FXD/skip-narrow-in-heredoc.sh" <<'FX'
 #!/usr/bin/env bash
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 cat <<'EOF'
-. "$AGENTS_DIR/tests/lib/clearance-hook-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/clearance-hook-harness.sh"
 EOF
 FX
 

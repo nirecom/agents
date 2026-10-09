@@ -13,7 +13,7 @@
 # (bin/github-issues/clarify-guard-loop.sh, issue #1198).
 #
 # Contract:
-#   Allow exactly: bash "<AGENTS_CONFIG_DIR>/bin/github-issues/clarify-guard-loop.sh" [args...]
+#   Allow exactly: bash "<AGENTS_MAIN_ROOT>/bin/github-issues/clarify-guard-loop.sh" [args...]
 #   (double-quoted script path). Reject: chaining (&& ; | || bare &), command
 #   substitution ($(...) / backticks), a different script path, any redirect
 #   in the arg tail, single-quoted path, wrong interpreter.
@@ -23,11 +23,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _A="$(cygpath -m "$AGENTS_DIR")"
+    _A="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _A="$AGENTS_DIR"
+    _A="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 STANDARD_JS="${_A}/hooks/enforce-worktree/main-worktree-allows/standard.js"
@@ -49,9 +49,9 @@ run_with_timeout() {
 # --- T-series: table-driven predicate cases (single node process) -----------
 # The case table lives in JS ({name, cmd, want}); node prints one PASS/FAIL
 # line per case; bash tallies them. Env carries paths to avoid quoting issues.
-TABLE_OUT=$(ACD_VAL="$_A" STD_JS_VAL="$STANDARD_JS" SP_VAL="$SCRIPT_PATH" OTHER_VAL="$OTHER_SCRIPT" \
+TABLE_OUT=$(FAKE_SCRIPT_CHECKOUT_ROOT_VAL="$_A" STD_JS_VAL="$STANDARD_JS" SP_VAL="$SCRIPT_PATH" OTHER_VAL="$OTHER_SCRIPT" \
 run_with_timeout node -e '
-  process.env.AGENTS_CONFIG_DIR = process.env.ACD_VAL || "";
+  process.env.AGENTS_MAIN_ROOT = process.env.FAKE_SCRIPT_CHECKOUT_ROOT_VAL || "";
   const sp = process.env.SP_VAL;
   const other = process.env.OTHER_VAL;
   const repoRoot = "/some/repo/root";

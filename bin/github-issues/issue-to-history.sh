@@ -6,9 +6,9 @@
 # Convert a (typically closed) GitHub issue into a docs/history.md entry.
 # Usage: issue-to-history.sh <issue-number> [--commit <hash>]
 #   [--history-notes-file <path>] [--target <abs-path>] [--allow-backdate]
-#   [--no-auto-rotate] [--non-github-mode --title <t> --body-file <f>
+#   [--target-checkout-root <dir>] [--no-auto-rotate] [--non-github-mode --title <t> --body-file <f>
 #   --closed-date <YYYY-MM-DD>]
-# Each flag, AGENTS_CONFIG_DIR and the idempotency guard are documented at
+# Each flag, the target root and the idempotency guard are documented at
 # their use site below.
 
 set -uo pipefail
@@ -39,6 +39,7 @@ NG_TITLE=""
 NG_BODY_FILE=""
 NG_CLOSED_DATE=""
 TARGET=""
+TARGET_CHECKOUT_ROOT=""
 ALLOW_BACKDATE=0
 NO_AUTO_ROTATE=0
 
@@ -76,6 +77,11 @@ while [ $# -gt 0 ]; do
             TARGET="${2:-}"
             shift 2
             ;;
+        --target-checkout-root)
+            [ -n "${2:-}" ] || { echo "Error: --target-checkout-root needs a directory" >&2; exit 1; }
+            TARGET_CHECKOUT_ROOT="$2"
+            shift 2
+            ;;
         --allow-backdate)
             ALLOW_BACKDATE=1
             shift
@@ -89,15 +95,16 @@ while [ $# -gt 0 ]; do
 done
 
 # --- Environment check ---
-# AGENTS_CONFIG_DIR is the docs/ root; the script cd's there before writing so
-# a consumer repo can target its own history.md.
-if [ -z "${DRY_RUN:-}" ] && [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
-    echo "Error: AGENTS_CONFIG_DIR is not set. /issue-close-stage and /issue-close-finalize must be run from a session that has it configured." >&2
+# --target-checkout-root is the docs/ root; the script cd's there before writing so
+# a consumer repo can target its own history.md. Omitted, the agents main root is the target.
+TARGET_CHECKOUT_ROOT="${TARGET_CHECKOUT_ROOT:-${AGENTS_MAIN_ROOT:-}}"
+if [ -z "${DRY_RUN:-}" ] && [ -z "$TARGET_CHECKOUT_ROOT" ]; then
+    echo "Error: neither --target-checkout-root nor AGENTS_MAIN_ROOT is given. /issue-close-stage and /issue-close-finalize must be run from a session that has AGENTS_MAIN_ROOT configured." >&2
     exit 1
 fi
 
 if [ -z "${DRY_RUN:-}" ]; then
-  cd "$AGENTS_CONFIG_DIR" || { echo "Error: failed to cd into AGENTS_CONFIG_DIR=$AGENTS_CONFIG_DIR" >&2; exit 1; }
+  cd "$TARGET_CHECKOUT_ROOT" || { echo "Error: failed to cd into TARGET_CHECKOUT_ROOT=$TARGET_CHECKOUT_ROOT" >&2; exit 1; }
 fi
 
 HISTORY_FILE="docs/history.md"

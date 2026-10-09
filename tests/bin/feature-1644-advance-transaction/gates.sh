@@ -89,7 +89,7 @@ run_gate_cases() {
 
   at_outline a10 ',"git_branch":"fix/advance-bugfix"'
   NS_RC=0
-  NS_OUT="$(AGENTS_CONFIG_DIR="$cfg_tests_off_n" CONFIRM_TESTS= run_with_timeout node "$NEXT_STEP_N" \
+  NS_OUT="$(AGENTS_MAIN_ROOT="$cfg_tests_off_n" CONFIRM_TESTS= run_with_timeout node "$NEXT_STEP_N" \
     --session a10 --advance --step write_tests --status skipped \
     --skip-reason "no behavior change in this fix" 2>"$errf")" || NS_RC=$?
   NS_ERR="$(cat "$errf" 2>/dev/null || echo "")"
@@ -116,7 +116,7 @@ run_gate_cases() {
   # Config-file value: the only sanctioned waiver for the CLI path.
   at_outline a16c
   NS_RC=0
-  NS_OUT="$(AGENTS_CONFIG_DIR="$cfg_tests_off_n" run_with_timeout node "$NEXT_STEP_N" \
+  NS_OUT="$(AGENTS_MAIN_ROOT="$cfg_tests_off_n" run_with_timeout node "$NEXT_STEP_N" \
     --session a16c --advance --step write_tests --status skipped \
     --skip-reason "docs-only change, no tests to write" 2>"$errf")" || NS_RC=$?
   NS_ERR="$(cat "$errf" 2>/dev/null || echo "")"

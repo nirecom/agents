@@ -4,7 +4,7 @@
 #
 # The independent (tree-first) mention axis. Sourced from cases-required.sh, which
 # crossed the 300-line WARN of rules/coding/file-split.md Pattern A.
-# Assumes REQUIRED_TABLE, csv_sorted(), BASE, READER, AGENTS_DIR, POLICY, node_path(),
+# Assumes REQUIRED_TABLE, csv_sorted(), BASE, READER, SCRIPT_CHECKOUT_ROOT, POLICY, node_path(),
 # pass(), fail() from cases-required.sh and the entry file.
 
 # --- R: the independent detection axis (mentions, discovered from the tree) ---
@@ -122,7 +122,7 @@ mention_verdict() {
     printf 'OK'
 }
 
-MENTION_REPORT="$(mention_scan "$AGENTS_DIR" "$POLICY")"
+MENTION_REPORT="$(mention_scan "$SCRIPT_CHECKOUT_ROOT" "$POLICY")"
 R_ROWS=0; R_SKILL_ROWS=0; R_BAD=0
 while IFS='|' read -r tag m_rule m_doc m_read; do
     [ "$tag" = "MENTION" ] || continue

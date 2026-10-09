@@ -7,17 +7,17 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-ANCHOR="$AGENTS_DIR/hooks/lib/worktree-end-env-anchor.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+ANCHOR="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worktree-end-env-anchor.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -88,7 +88,7 @@ run_t4e() {
     touch "$(ctl "$tmp" "$sid" wt-cleanup-active)"
     hook_input=$(build_hook_input "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_MAIN_ROOT="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -112,7 +112,7 @@ run_t4f() {
     # no marker file — simulates post-WE-22 scenario where marker has been deleted
     hook_input=$(build_hook_input "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_MAIN_ROOT="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -136,7 +136,7 @@ run_t4g() {
     rm "$(ctl "$tmp" "$sid" wt-cleanup-active)"
     hook_input=$(build_hook_input "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_MAIN_ROOT="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -158,7 +158,7 @@ run_t4h() {
     touch "$(ctl "$tmp" "$sid" wt-cleanup-active)"
     hook_input=$(build_hook_input "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_MAIN_ROOT="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -192,7 +192,7 @@ run_t4i() {
     hook_input=$(build_hook_input "$ccSid")
 
     # Run from a non-git-repo dir so Priority 1 (WORKTREE_NOTES.md) does not interfere.
-    out=$( cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$( cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_MAIN_ROOT="$tmp_node" \
         CLAUDE_CODE_SESSION_ID="$wsid" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null )
     rc=$?
@@ -221,7 +221,7 @@ run_t4j() {
     printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$(ctl "$tmp" "$sid" final-report-env.json)"
     hook_input=$(build_hook_input "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_MAIN_ROOT="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"

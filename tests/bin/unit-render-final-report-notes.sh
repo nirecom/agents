@@ -20,10 +20,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-MOD_JS="$AGENTS_DIR/bin/render-final-report/notes.js"
-GUARD_JS="$AGENTS_DIR/hooks/stop-final-report-guard.js"
+MOD_JS="$SCRIPT_CHECKOUT_ROOT/bin/render-final-report/notes.js"
+GUARD_JS="$SCRIPT_CHECKOUT_ROOT/hooks/stop-final-report-guard.js"
 
 PASS=0
 FAIL=0

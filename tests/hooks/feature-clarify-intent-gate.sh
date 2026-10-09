@@ -5,8 +5,8 @@
 # Pre-implementation: tests 1-5 and 13 are expected to FAIL until earlyGate lands.
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -180,7 +180,7 @@ mkdir -p "$COMMIT_REPO"
 SID="sid-commit-regression"
 write_state "$SID" "$(complete_state "$SID")"
 COMMIT_INPUT=$(printf '{"session_id":"%s","tool_name":"Bash","tool_input":{"command":"git -C %s commit -m test"}}' "$SID" "$COMMIT_REPO")
-COMMIT_OUTPUT=$(printf '%s' "$COMMIT_INPUT" | AGENTS_CONFIG_DIR="$COMMIT_REPO" run_with_timeout node "$GATE_HOOK" 2>/dev/null || true)
+COMMIT_OUTPUT=$(printf '%s' "$COMMIT_INPUT" | AGENTS_MAIN_ROOT="$COMMIT_REPO" run_with_timeout node "$GATE_HOOK" 2>/dev/null || true)
 COMMIT_DECISION=$(echo "$COMMIT_OUTPUT" | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{try{process.stdout.write(JSON.parse(d).decision||'')}catch(e){process.stdout.write('')}})")
 if [ "$COMMIT_DECISION" = "block" ]; then
     pass "commit_gate_regression"

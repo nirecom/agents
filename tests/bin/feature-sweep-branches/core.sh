@@ -24,7 +24,7 @@ T1_no_branches_zero_candidates() {
     local repo="$TMPDIR_BASE/t1-repo"
     local stubdir="$TMPDIR_BASE/t1-stub"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
 
     if [ ! -x "$SWEEP" ]; then
         fail "T1 no_branches_zero_candidates: $SWEEP not found / not executable"
@@ -32,7 +32,7 @@ T1_no_branches_zero_candidates() {
     fi
 
     local out exit_code
-    out="$(cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" run_with_timeout bash "$SWEEP" --dry-run --ci-mode 2>&1)"
+    out="$(cd "$repo" && run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -65,7 +65,7 @@ T3_stale_branch_dry_run_candidate() {
     local stubdir="$TMPDIR_BASE/t3-stub"
     local stale_epoch="1577836800"  # 2020-01-01 00:00:00 UTC
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     make_branch_with_date "$repo" "feature/stale-t3" "$stale_epoch"
 
     if [ ! -x "$SWEEP" ]; then
@@ -74,8 +74,7 @@ T3_stale_branch_dry_run_candidate() {
     fi
 
     local out exit_code
-    out="$(cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" \
-        run_with_timeout bash "$SWEEP" --skip-gh-check --dry-run --ci-mode 2>&1)"
+    out="$(cd "$repo" && run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --skip-gh-check --dry-run --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -104,7 +103,7 @@ T4_apply_deletes_stale_local_branch() {
     local stubdir="$TMPDIR_BASE/t4-stub"
     local stale_epoch="1577836800"  # 2020-01-01 00:00:00 UTC
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     make_branch_with_date "$repo" "feature/stale-t4" "$stale_epoch"
 
     if [ ! -x "$SWEEP" ]; then
@@ -121,8 +120,7 @@ T4_apply_deletes_stale_local_branch() {
     fi
 
     local out exit_code
-    out="$(cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" \
-        run_with_timeout bash "$SWEEP" --apply --skip-gh-check --ci-mode 2>&1)"
+    out="$(cd "$repo" && run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --apply --skip-gh-check --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -149,7 +147,7 @@ T7_ci_mode_json_shape() {
     local repo="$TMPDIR_BASE/t7-repo"
     local stubdir="$TMPDIR_BASE/t7-stub"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
 
     if [ ! -x "$SWEEP" ]; then
         fail "T7 ci_mode_json_shape: $SWEEP not found / not executable"
@@ -157,8 +155,7 @@ T7_ci_mode_json_shape() {
     fi
 
     local out exit_code
-    out="$(cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" \
-        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
+    out="$(cd "$repo" && run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --apply --ci-mode --skip-gh-check 2>/dev/null)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -201,7 +198,7 @@ T8_fresh_commit_skipped_young() {
     local fresh_epoch
     fresh_epoch="$(date +%s)"  # now
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     make_branch_with_date "$repo" "feature/fresh-t8" "$fresh_epoch"
 
     if [ ! -x "$SWEEP" ]; then
@@ -210,8 +207,7 @@ T8_fresh_commit_skipped_young() {
     fi
 
     local out exit_code
-    out="$(cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --skip-gh-check \
+    out="$(cd "$repo" && run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode --skip-gh-check \
         --min-age-hours 999 2>&1)"
     exit_code=$?
 
@@ -242,7 +238,7 @@ T10_age_gate_fresh_vs_stale() {
     local fresh_epoch
     fresh_epoch="$(date +%s)"      # now — definitely fresh
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     make_branch_with_date "$repo" "feature/old-t10" "$stale_epoch"
     make_branch_with_date "$repo" "feature/new-t10" "$fresh_epoch"
 
@@ -253,8 +249,7 @@ T10_age_gate_fresh_vs_stale() {
 
     # Use a large min-age-hours to ensure fresh branch never qualifies
     local out exit_code
-    out="$(cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --skip-gh-check \
+    out="$(cd "$repo" && run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode --skip-gh-check \
         --min-age-hours 100 2>&1)"
     exit_code=$?
 
@@ -292,10 +287,10 @@ T11_isSweepBranchesSkillForceDelete_unit() {
         return
     fi
 
-    # Run inline node -e from AGENTS_DIR so require('./hooks/...') resolves on
+    # Run inline node -e from this checkout so require('./hooks/...') resolves on
     # Windows/Git Bash without needing a temp file (avoids heredoc write issues).
     local result
-    result="$(cd "$AGENTS_DIR" && node -e \
+    result="$(cd "$__LIB_SCRIPT_CHECKOUT_ROOT" && node -e \
         "const g=require('./hooks/enforce-worktree/branch-delete-guard.js');const fn=typeof g.isSweepBranchesSkillForceDelete==='function'?g.isSweepBranchesSkillForceDelete:null;if(!fn){console.log('MISSING_FN');process.exit(0);}const a=fn('SWEEP_BRANCHES_SKILL=1 git -C /fake branch -D feature/x');const b=fn('SWEEP_BRANCHES_SKILL=1 git -C /fake branch -D main');const c=fn('git -C /fake branch -D feature/x');console.log(a===true&&b===false&&c===false?'OK':'FAIL:a='+a+',b='+b+',c='+c);" \
         2>/dev/null)"
 
@@ -321,7 +316,7 @@ T11_isSweepBranchesSkillForceDelete_unit() {
 
 # Call isSweepBranchesSkillForceDelete('$1') → 'true' | 'false' | 'MISSING_FN'.
 call_isSweepForceDelete() {
-    cd "$AGENTS_DIR" && node -e \
+    cd "$__LIB_SCRIPT_CHECKOUT_ROOT" && node -e \
         "const g=require('./hooks/enforce-worktree/branch-delete-guard.js');const fn=typeof g.isSweepBranchesSkillForceDelete==='function'?g.isSweepBranchesSkillForceDelete:null;if(!fn){console.log('MISSING_FN');process.exit(0);}console.log(fn(process.argv[1])===true?'true':'false');" \
         -- "$1" 2>/dev/null
 }

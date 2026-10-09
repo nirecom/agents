@@ -11,8 +11,8 @@
 # `set -u` only (not -euo pipefail): X3 captures nonzero exits and RED cases must run to completion.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
 
 PASS=0
 FAIL=0
@@ -135,7 +135,7 @@ raw_step_field() {
     local sid="$1" step="$2" field="$3"
     # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
     # on-disk event stream, not a persisted top-level key.
-    (cd "$AGENTS_DIR" && node -e '
+    (cd "$SCRIPT_CHECKOUT_ROOT" && node -e '
 const [sid, step, field] = process.argv.slice(1);
 try {
   const s = require("./hooks/workflow-state").readState(sid);
@@ -181,7 +181,7 @@ new_sid() { printf '%s-%04x%04x' "$1" $RANDOM $RANDOM; }
 # write_code) extends these baselines instead of stranding them.
 VALID_STEPS_COUNT="$(run_with_timeout 60 node -e '
 process.stdout.write(String(require(process.argv[1]).VALID_STEPS.length));
-' "$(to_node_path "$AGENTS_DIR/hooks/workflow-state/state-io.js")" 2>/dev/null || echo "")"
+' "$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js")" 2>/dev/null || echo "")"
 
 # ---- Shared fixture fragments ---------------------------------------------
 RV_OUTLINE='"outline":{"status":"skipped","skip_reason":"recorded-verdict: so_c1+so_c2 met"}'
@@ -242,11 +242,11 @@ const count = (re) => (src.match(re) || []).length;
 say("callsites", count(/isSettledStatus\(/g));
 say("inline_pair", count(/!==\s*"complete"[^\n]{0,60}!==\s*"skipped"/g));
 say("inline_terminal", count(/\.status\s*===\s*"skipped"\s*\)\s*continue/g));
-' "$(to_node_path "$AGENTS_DIR/hooks/workflow-state/state-io/core.js")" \
-  "$(to_node_path "$AGENTS_DIR/hooks/workflow-state/state-io.js")" \
-  "$(to_node_path "$AGENTS_DIR/hooks/workflow-state")" \
+' "$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/core.js")" \
+  "$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js")" \
+  "$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state")" \
   "$(to_node_path "$NEXT_STEP")" \
-  "$(to_node_path "$AGENTS_DIR/bin/workflow/lib/next-step")" 2>/dev/null || true)"
+  "$(to_node_path "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/next-step")" 2>/dev/null || true)"
 
 s1_row() { printf '%s\n' "$PROBE_OUT" | awk -F= -v k="$1" '$1==k{print $2; found=1} END{if(!found) print "NO-OUTPUT"}'; }
 

@@ -27,7 +27,7 @@ test_CCS_N1_skip_mode_auto() {
     local SESSION_ID="test-session-ccs-n1"
     write_mock "$TEST_DIR/bin/workflow/record-skip-judgment" 0
 
-    OUT="$(AGENTS_CONFIG_DIR="$TEST_DIR" SKIP_MODE=auto run_with_timeout 30 bash "$CHECK_COMPLEXITY_SKIP" \
+    OUT="$(AGENTS_MAIN_ROOT="$TEST_DIR" SKIP_MODE=auto run_with_timeout 30 bash "$CHECK_COMPLEXITY_SKIP" \
         --session "$SESSION_ID" 2>/dev/null)"
     RC=$?
 
@@ -60,7 +60,7 @@ process.exit(0);
 MOCK
     chmod +x "$TEST_DIR/bin/workflow/record-skip-judgment"
 
-    OUT="$(AGENTS_CONFIG_DIR="$TEST_DIR" SKIP_MODE=judgment run_with_timeout 30 bash "$CHECK_COMPLEXITY_SKIP" \
+    OUT="$(AGENTS_MAIN_ROOT="$TEST_DIR" SKIP_MODE=judgment run_with_timeout 30 bash "$CHECK_COMPLEXITY_SKIP" \
         --session "$SESSION_ID" --so-c1 true --so-c2 true 2>/dev/null)"
     RC=$?
 
@@ -86,7 +86,7 @@ test_CCS_N3_judgment_c1_false() {
     local SESSION_ID="test-session-ccs-n3"
     write_mock "$TEST_DIR/bin/workflow/record-skip-judgment" 0
 
-    OUT="$(AGENTS_CONFIG_DIR="$TEST_DIR" SKIP_MODE=judgment run_with_timeout 30 bash "$CHECK_COMPLEXITY_SKIP" \
+    OUT="$(AGENTS_MAIN_ROOT="$TEST_DIR" SKIP_MODE=judgment run_with_timeout 30 bash "$CHECK_COMPLEXITY_SKIP" \
         --session "$SESSION_ID" --so-c1 false --so-c2 true 2>/dev/null)"
     RC=$?
 
@@ -110,7 +110,7 @@ test_CCS_N4_judgment_c2_false() {
     local SESSION_ID="test-session-ccs-n4"
     write_mock "$TEST_DIR/bin/workflow/record-skip-judgment" 0
 
-    OUT="$(AGENTS_CONFIG_DIR="$TEST_DIR" SKIP_MODE=judgment run_with_timeout 30 bash "$CHECK_COMPLEXITY_SKIP" \
+    OUT="$(AGENTS_MAIN_ROOT="$TEST_DIR" SKIP_MODE=judgment run_with_timeout 30 bash "$CHECK_COMPLEXITY_SKIP" \
         --session "$SESSION_ID" --so-c1 true --so-c2 false 2>/dev/null)"
     RC=$?
 
@@ -134,7 +134,7 @@ test_CCS_N5_judgment_both_false() {
     local SESSION_ID="test-session-ccs-n5"
     write_mock "$TEST_DIR/bin/workflow/record-skip-judgment" 0
 
-    OUT="$(AGENTS_CONFIG_DIR="$TEST_DIR" SKIP_MODE=judgment run_with_timeout 30 bash "$CHECK_COMPLEXITY_SKIP" \
+    OUT="$(AGENTS_MAIN_ROOT="$TEST_DIR" SKIP_MODE=judgment run_with_timeout 30 bash "$CHECK_COMPLEXITY_SKIP" \
         --session "$SESSION_ID" --so-c1 false --so-c2 false 2>/dev/null)"
     RC=$?
 
@@ -156,7 +156,7 @@ test_CCS_E1_invalid_skip_mode() {
     require_script "$label" "$CHECK_COMPLEXITY_SKIP" || return
     setup_test_dir
 
-    AGENTS_CONFIG_DIR="$TEST_DIR" SKIP_MODE=invalid run_with_timeout 10 bash "$CHECK_COMPLEXITY_SKIP" \
+    AGENTS_MAIN_ROOT="$TEST_DIR" SKIP_MODE=invalid run_with_timeout 10 bash "$CHECK_COMPLEXITY_SKIP" \
         --session "some-session" >/dev/null 2>&1
     local rc=$?
 
@@ -174,7 +174,7 @@ test_CCS_E2_missing_session() {
     require_script "$label" "$CHECK_COMPLEXITY_SKIP" || return
     setup_test_dir
 
-    AGENTS_CONFIG_DIR="$TEST_DIR" SKIP_MODE=auto run_with_timeout 10 bash "$CHECK_COMPLEXITY_SKIP" \
+    AGENTS_MAIN_ROOT="$TEST_DIR" SKIP_MODE=auto run_with_timeout 10 bash "$CHECK_COMPLEXITY_SKIP" \
         >/dev/null 2>&1
     local rc=$?
 
@@ -197,7 +197,7 @@ test_CCS_SEC1_metachar_session() {
 
     write_mock "$TEST_DIR/bin/workflow/record-skip-judgment" 0
 
-    AGENTS_CONFIG_DIR="$TEST_DIR" SKIP_MODE=auto run_with_timeout 10 bash "$CHECK_COMPLEXITY_SKIP" \
+    AGENTS_MAIN_ROOT="$TEST_DIR" SKIP_MODE=auto run_with_timeout 10 bash "$CHECK_COMPLEXITY_SKIP" \
         --session "$EVIL_SESSION" >/dev/null 2>&1 || true
 
     if [ ! -f "$danger_marker" ]; then

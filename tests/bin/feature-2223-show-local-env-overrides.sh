@@ -15,11 +15,11 @@ set -u
 #   from the live Claude Code session's own cwd and inherited environment.
 # - A PATH shim symlinked into ~/.local/bin resolving the library through
 #   realpathSync back to the repo it points at.
-# - A symlinked AGENTS_CONFIG_DIR whose hooks/lib is reached through the link.
+# - A symlinked AGENTS_MAIN_ROOT whose global .env is reached through the link.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Never named as a whole path literal: hooks/block-dotenv.js blocks that (DD-1).
 LOCAL_ENV_BASENAME=".env"".local"
@@ -28,13 +28,13 @@ TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
 # Isolation: pin both halves of the plans-dir pair, drop inherited session ids,
-# and let no ambient AGENTS_CONFIG_DIR, project dir, or tested key reach a child.
+# and let no ambient AGENTS_MAIN_ROOT, project dir, or tested key reach a child.
 export WORKFLOW_STATE_DIR="$TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMP_ROOT/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 unset CLAUDE_PROJECT_DIR
-unset AGENTS_CONFIG_DIR
+unset AGENTS_MAIN_ROOT
 unset CODE_LANG
 unset PROJECT_NFR
 
@@ -92,7 +92,7 @@ to_node_path() {
 
 decode() { local s="$1"; s="${s//@NL@/$'\n'}"; printf '%s' "$s"; }
 
-CLI="$AGENTS_DIR/bin/show-local-env-overrides"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/show-local-env-overrides"
 CLI_NODE="$(to_node_path "$CLI")"
 if [ ! -f "$CLI" ]; then
     echo "NOTE: bin/show-local-env-overrides absent — every case below is expected RED."
@@ -141,7 +141,7 @@ run_cli_in() {
     CLI_RC=0
     (
         cd "$cwd" || exit 70
-        AGENTS_CONFIG_DIR="$(to_node_path "$CASE_CFG")" \
+        AGENTS_MAIN_ROOT="$(to_node_path "$CASE_CFG")" \
             run_with_timeout 20 node "$CLI_NODE" "$@"
     ) >"$outf" 2>"$errf" || CLI_RC=$?
     CLI_OUT="$(cat "$outf")"
@@ -186,8 +186,8 @@ S_PREFIX="SENT2223-refused-prefix-9d26b7"
 S_WF="SENT2223-refused-wf-5c14e8"
 
 new_case partition \
-  "CODE_LANG=english@NL@AGENTS_CONFIG_DIR=/global-cfg@NL@CODEX_NFR_MAX_LINES=200" \
-  "PROJECT_TAGLINE=$S_ORDINARY@NL@PROJECT_NFR=$S_NFR@NL@AGENTS_CONFIG_DIR=$S_EXACT@NL@CODEX_NFR_MAX_LINES=$S_PREFIX@NL@WORKFLOW_STATE_DIR=$S_WF"
+  "CODE_LANG=english@NL@AGENTS_MAIN_ROOT=/global-cfg@NL@CODEX_NFR_MAX_LINES=200" \
+  "PROJECT_TAGLINE=$S_ORDINARY@NL@PROJECT_NFR=$S_NFR@NL@AGENTS_MAIN_ROOT=$S_EXACT@NL@CODEX_NFR_MAX_LINES=$S_PREFIX@NL@WORKFLOW_STATE_DIR=$S_WF"
 run_cli --repo-root "$CASE_ROOT_NODE"
 
 assert_eq "T2223S-partition-exit-0" "0" "$CLI_RC"
@@ -213,7 +213,7 @@ PART_REFUSED="$(section_keys "$CLI_OUT" "refused by blocklist")"
 
 assert_eq "T2223S-partition-applied-keys" "$(printf 'PROJECT_NFR\nPROJECT_TAGLINE')" "$PART_APPLIED"
 assert_eq "T2223S-partition-refused-keys" \
-  "$(printf 'AGENTS_CONFIG_DIR\nCODEX_NFR_MAX_LINES\nWORKFLOW_STATE_DIR')" "$PART_REFUSED"
+  "$(printf 'AGENTS_MAIN_ROOT\nCODEX_NFR_MAX_LINES\nWORKFLOW_STATE_DIR')" "$PART_REFUSED"
 assert_eq "T2223S-partition-applied-count" "2" "$(section_count "$CLI_OUT" applied)"
 assert_eq "T2223S-partition-refused-count" "3" "$(section_count "$CLI_OUT" "refused by blocklist")"
 # G18: the second new blocklist entry, refused at the reporter level (CPR-ORTH).
@@ -389,12 +389,12 @@ assert_report_lacks "T2223S-spaced-no-value-leak" "$CLI_OUT" "SENT2223-"
 # the report is stable across repeated runs over an unchanged fixture.
 # ---------------------------------------------------------------------------
 new_case sorted 'CODE_LANG=english' \
-  'ZULU_KEY=z@NL@ALPHA_KEY=a@NL@MIKE_KEY=m@NL@WORKTREE_BASE_DIR=w@NL@AGENTS_CONFIG_DIR=g@NL@SWEEP_AGE_DAYS=s'
+  'ZULU_KEY=z@NL@ALPHA_KEY=a@NL@MIKE_KEY=m@NL@WORKTREE_BASE_DIR=w@NL@AGENTS_MAIN_ROOT=g@NL@SWEEP_AGE_DAYS=s'
 run_cli --repo-root "$CASE_ROOT_NODE"
 assert_eq "T2223S-sorted-applied" "$(printf 'ALPHA_KEY\nMIKE_KEY\nZULU_KEY')" \
   "$(section_keys "$CLI_OUT" applied)"
 assert_eq "T2223S-sorted-refused" \
-  "$(printf 'AGENTS_CONFIG_DIR\nSWEEP_AGE_DAYS\nWORKTREE_BASE_DIR')" \
+  "$(printf 'AGENTS_MAIN_ROOT\nSWEEP_AGE_DAYS\nWORKTREE_BASE_DIR')" \
   "$(section_keys "$CLI_OUT" "refused by blocklist")"
 assert_eq "T2223S-sorted-applied-count" "3" "$(section_count "$CLI_OUT" applied)"
 assert_eq "T2223S-sorted-refused-count" "3" "$(section_count "$CLI_OUT" "refused by blocklist")"
@@ -470,7 +470,7 @@ fi
 # and counters above; split off to stay under the 500-line HARD limit of
 # rules/coding/file-split.md, the same shape feature-2223-local-env-overlay uses.
 # ---------------------------------------------------------------------------
-CASES_DIR="$AGENTS_DIR/tests/bin/feature-2223-show-local-env-overrides"
+CASES_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2223-show-local-env-overrides"
 for _case in resolution security degradation readonly; do
     _case_file="$CASES_DIR/$_case.sh"
     if [ -f "$_case_file" ]; then

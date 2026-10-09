@@ -60,7 +60,7 @@ fa_run() {
     local errf="$2/fa-err.txt"
     FA_RC=0
     FA_OUT="$(
-        export AGENTS_CONFIG_DIR="$ROOT" FA_MODE="$1"
+        export FA_MODE="$1"
         bash "$ROOT/bin/run-codex-review-loop" --format detail-plan --session-id "$3" \
             --plans-dir "$2" --draft-file "$2/draft.md" \
             --accepted-tradeoffs "$2/tradeoffs.md" \

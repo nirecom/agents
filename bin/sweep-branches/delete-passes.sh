@@ -18,7 +18,7 @@
 # `errors[]` tag, both of which are parameters.
 #
 # Must be `source`d, not executed directly — it reads and mutates caller-scope
-# state ($DRY_RUN, $APPLY, $DELETE_NO_PR, $MAIN_ROOT, $TIMEOUT_SECONDS,
+# state ($DRY_RUN, $APPLY, $DELETE_NO_PR, $TARGET_MAIN_ROOT, $TIMEOUT_SECONDS,
 # local_candidates, no_pr_branches, remote_candidates, and the counters).
 
 # Print the worktree directory that has <branch> checked out, or "(unknown)".
@@ -52,7 +52,7 @@ delete_local_branch() {
   local branch="$1" label="$2" errtag="$3"
   local err_file err wt_path
   err_file="$(mktemp 2>/dev/null || printf '%s' "/tmp/sweep_branch_err.$$")"
-  if timeout "$TIMEOUT_SECONDS" git -C "$MAIN_ROOT" branch -D "$branch" 2>"$err_file"; then
+  if timeout "$TIMEOUT_SECONDS" git -C "$TARGET_MAIN_ROOT" branch -D "$branch" 2>"$err_file"; then
     rm -f "$err_file" 2>/dev/null || true
     return 0
   fi

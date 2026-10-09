@@ -31,7 +31,7 @@ while IFS='|' read -r name rel; do
     name="$(trim "$name")"; [ -z "$name" ] && continue
     case "$name" in \#*) continue ;; esac
     rel="$(trim "$rel")"
-    abs="$AGENTS_DIR/$rel"
+    abs="$SCRIPT_CHECKOUT_ROOT/$rel"
     if [ ! -f "$abs" ]; then
         fail "$name: $rel is absent" "this file is edited, not created, by ST-14"
         continue

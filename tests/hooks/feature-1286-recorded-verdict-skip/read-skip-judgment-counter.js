@@ -41,11 +41,11 @@ let readSkipJudgmentCallCount = 0;
 
 // Resolve module paths from this file's location.
 // this file: tests/hooks/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js
-// AGENTS_DIR is two levels up.
-const AGENTS_DIR = path.resolve(__dirname, "..", "..");
-const workflowStatePath = path.join(AGENTS_DIR, "hooks", "workflow-state.js");
+// SCRIPT_CHECKOUT_ROOT is two levels up.
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
+const workflowStatePath = path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state.js");
 const skipSignalResolverPath = path.join(
-  AGENTS_DIR, "hooks", "workflow-state", "skip-signal-resolver.js"
+  SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "skip-signal-resolver.js"
 );
 
 // Wrap the dispatch/re-export module (hooks/workflow-state.js).

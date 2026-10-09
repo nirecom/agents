@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="${AGENTS_CONFIG_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TITLE="Stale temporary migration blocks (>90 days)"
 
 report="$(node "$SCRIPT_DIR/lib/check-migration-blocks.js" --stale-report "$ROOT")"

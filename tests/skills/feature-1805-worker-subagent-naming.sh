@@ -22,12 +22,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
-REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
 SHARED_REL="skills/_shared/worker-dispatch.md"
-SHARED_MD="$AGENTS_DIR/$SHARED_REL"
+SHARED_MD="$SCRIPT_CHECKOUT_ROOT/$SHARED_REL"
 
 PASS=0
 FAIL=0
@@ -82,8 +82,8 @@ DISPATCH_VERB='[Dd]ispatch(es|ed|ing)?'
 
 # Prompt files that can dispatch something.
 prompt_files() {
-    ls "$AGENTS_DIR"/skills/*/SKILL.md 2>/dev/null
-    ls "$AGENTS_DIR"/skills/*/scripts/*.md 2>/dev/null
+    ls "$SCRIPT_CHECKOUT_ROOT"/skills/*/SKILL.md 2>/dev/null
+    ls "$SCRIPT_CHECKOUT_ROOT"/skills/*/scripts/*.md 2>/dev/null
 }
 
 WORKER_NAMES=""
@@ -148,7 +148,7 @@ group_worker_sites_say_worker() {
             clean="$(sanitize "$line")"
             printf '%s' "$clean" | grep -q 'worker' && continue
             bad="$bad
-    ${f#"$AGENTS_DIR/"}: $line"
+    ${f#"$SCRIPT_CHECKOUT_ROOT/"}: $line"
         done < <(grep -E "$DISPATCH_VERB" "$f" 2>/dev/null | grep -E "$worker_re" || true)
     done < <(prompt_files)
 
@@ -185,9 +185,9 @@ build_entity_kinds() {
     ENT_KINDS_FILE="$TMPD/entity-kinds.txt"
     : > "$TMPD/kind-worker.txt"; : > "$TMPD/kind-subagent.txt"; : > "$TMPD/kind-skill.txt"
     printf '%s\n' "$WORKER_NAMES" | grep -vE '^[[:space:]]*$' | sort -u > "$TMPD/kind-worker.txt"
-    ls "$AGENTS_DIR"/agents/*.md 2>/dev/null | while IFS= read -r f; do basename "$f" .md; done \
+    ls "$SCRIPT_CHECKOUT_ROOT"/agents/*.md 2>/dev/null | while IFS= read -r f; do basename "$f" .md; done \
         | sort -u > "$TMPD/kind-subagent.txt"
-    ls -d "$AGENTS_DIR"/skills/*/ 2>/dev/null | while IFS= read -r d; do basename "$d"; done \
+    ls -d "$SCRIPT_CHECKOUT_ROOT"/skills/*/ 2>/dev/null | while IFS= read -r d; do basename "$d"; done \
         | sort -u > "$TMPD/kind-skill.txt"
 
     : > "$ENT_KINDS_FILE"
@@ -267,10 +267,10 @@ TABLE
 
 entity_names() {
     printf '%s\n' "$WORKER_NAMES"
-    ls "$AGENTS_DIR"/agents/*.md 2>/dev/null | while IFS= read -r f; do
+    ls "$SCRIPT_CHECKOUT_ROOT"/agents/*.md 2>/dev/null | while IFS= read -r f; do
         basename "$f" .md
     done
-    ls -d "$AGENTS_DIR"/skills/*/ 2>/dev/null | while IFS= read -r d; do
+    ls -d "$SCRIPT_CHECKOUT_ROOT"/skills/*/ 2>/dev/null | while IFS= read -r d; do
         basename "$d"
     done
 }
@@ -305,10 +305,10 @@ group_no_bare_dispatch_residual() {
                 verdict="$(marker_verdict "$line" "$e" "$(kinds_of "$e")")"
                 [ "$verdict" = "ok" ] && continue
                 bad="$bad
-    ${f#"$AGENTS_DIR/"} [$e → $verdict]: $line"
+    ${f#"$SCRIPT_CHECKOUT_ROOT/"} [$e → $verdict]: $line"
             done < <(cut -d' ' -f1 "$ENT_KINDS_FILE")
         done < <(grep -E "$DISPATCH_VERB" "$f" 2>/dev/null | grep -E "$ent_re" || true)
-    done < <(ls "$AGENTS_DIR"/skills/*/SKILL.md 2>/dev/null)
+    done < <(ls "$SCRIPT_CHECKOUT_ROOT"/skills/*/SKILL.md 2>/dev/null)
 
     if [ "$checked" -eq 0 ]; then
         fail "C1: no dispatch-plus-entity line found at all — the scan is broken, not clean"

@@ -1,15 +1,15 @@
 # #2513 plan-sync breadcrumb cases (H1-H9, A1-A6, A8): formatBreadcrumb pure function plus the real
 # hook on every path where no push succeeds. Sourced last by ../feature-show-plan-link.sh
-# (inherits pass/fail, HOOK, AGENTS_DIR); psf_setup re-pins every env var to a fresh root.
+# (inherits pass/fail, HOOK, SCRIPT_CHECKOUT_ROOT); psf_setup re-pins every env var to a fresh root.
 # The successful push path lives in feature-2513-plan-sync-e2e.sh (ssh stub).
 
 # shellcheck source=../../lib/plan-sync-fixture.sh
-. "$AGENTS_DIR/tests/lib/plan-sync-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-sync-fixture.sh"
 psf_setup || { fail "H setup — psf_setup failed"; return 0; }
 trap 'psf_cleanup; rm -rf "$PLANS_DIR" "$WORKFLOW_DIR_TEST" "$CFG_DIR_TEST"' EXIT
 SPS_HOOK="$(psf_np "$HOOK")"
 SPS_PLANS="$WORKFLOW_PLANS_DIR"
-SPS_RUN_HINT='— run node "$AGENTS_CONFIG_DIR/bin/plan-sync-init"'
+SPS_RUN_HINT='— run node "$AGENTS_MAIN_ROOT/bin/plan-sync-init"'
 
 # sps_run_hook <json> — sets HOOK_RC, HOOK_OUT, HOOK_MSG, HOOK_SECS.
 sps_run_hook() {
@@ -39,7 +39,7 @@ OUT="$(PSF_HOOK="$SPS_HOOK" psf_timeout 30 node -e '
 const m = require(process.env.PSF_HOOK);
 if (typeof m.formatBreadcrumb !== "function") { process.stdout.write("NOT_IMPLEMENTED"); process.exit(0); }
 const abs = "/plans/s2513-intent.md"; const url = "https://github.com/test-owner/test-repo/blob/main/s2513-intent.md";
-const hint = " — run node \"$AGENTS_CONFIG_DIR/bin/plan-sync-init\"";
+const hint = " — run node \"$AGENTS_MAIN_ROOT/bin/plan-sync-init\"";
 const cases = [
   [{ status: "pushed", url }, ["Plan file: " + url]],
   [{ status: "pushed", reason: "non-github" }, ["Plan file: " + abs, "[plan-sync] pushed (non-GitHub remote; no URL)"]],
@@ -143,7 +143,7 @@ echo "=== H9: Bash command that only mentions assemble-mandatory.sh -> no push, 
 # wrongly extracted dest would really push. Negative (cat) first, then the bash positive control.
 SPS_H9_BARE="$PSF_ROOT/h9-bare.git"; psf_make_bare "$SPS_H9_BARE"
 SPS_H9="$PSF_ROOT/h9-plans"
-SPS_H9_SCRIPT="$(psf_np "$AGENTS_DIR/skills/_shared/assemble-mandatory.sh")"
+SPS_H9_SCRIPT="$(psf_np "$SCRIPT_CHECKOUT_ROOT/skills/_shared/assemble-mandatory.sh")"
 SPS_H9_URL="https://github.com/test-owner/test-repo/blob/main/s2513h9-outline.md"
 # sps_h9_json <verb...> — PostToolUse Bash payload "<verb...> <script> --source-kind intent <src> <draft> <dest>".
 sps_h9_json() {

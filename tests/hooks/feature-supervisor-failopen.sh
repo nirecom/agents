@@ -23,11 +23,11 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # L3 gap: integration test that calls checkSupervisorPreMerge with a real git repo
 #   whose detail.md has a malformed Files-to-modify section
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 # T7: Corrupt/invalid JSON (and zero-byte) supervisor state file.
@@ -40,10 +40,10 @@ fi
 # T7a/T7c cover the no-token (block) side; T7a-token/T7c-token cover the token (pass) side.
 # workflow-gate.js (T7b) keeps its own fail-open invariant on corrupt state.
 
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-WFSTATE_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state.js"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+WFSTATE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -115,7 +115,7 @@ process.stdout.write(JSON.stringify({
 }));
 " -- "$sid" "$off_cmd")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_MAIN_ROOT="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>"$errfile")
     rc=$?
     errlen=$(wc -c < "$errfile" 2>/dev/null | tr -d ' ')
@@ -222,7 +222,7 @@ run_t7b() {
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_MAIN_ROOT="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" \
         run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 

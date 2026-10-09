@@ -169,12 +169,15 @@ rm -f "$F_SHIM/git"
 
 # (c) config lookup fails. This one must NOT fail the review: an unreadable setting is a
 #     reason to use the default, not a reason to skip reviewing the code.
+#     The reviewer calls the get-config-var beside itself, so a copy of it runs from a fake
+#     script checkout whose get-config-var is the failing stub.
 F_BADCFG="$TMPDIR_BASE/pp-f-badcfg"
 rm -rf "$F_BADCFG"
 mkdir -p "$F_BADCFG/bin"
 printf '#!/usr/bin/env bash\necho "get-config-var: exploded" >&2\nexit 1\n' > "$F_BADCFG/bin/get-config-var"
 chmod +x "$F_BADCFG/bin/get-config-var"
-PP_ENV=(AGENTS_CONFIG_DIR="$F_BADCFG")
+script_checkout_fixture_copy "$F_BADCFG" bin hooks
+PP_SCRIPT="$F_BADCFG/bin/review-code-codex"
 pp_exec "$F_FAIL" --base main --no-log
 if ! pp_has "$PP_OUT_TEXT" "^## Codex Review: PERFORMED"; then
     fail "F2c: a failing config lookup cost the whole review. Output: $PP_OUT_TEXT stderr: $PP_ERR_TEXT"
@@ -184,9 +187,10 @@ else
     pass "F2c: a failing config lookup falls back to the default budget and the review still runs"
 fi
 PP_ENV=()
+PP_SCRIPT=""
 
 # (c-bis) the same config-lookup failure, but proven on a fixture PAST the default cap, and
-#         against get-config-var being ABSENT from AGENTS_CONFIG_DIR/bin entirely as well as
+#         against get-config-var being ABSENT from the script checkout's bin/ entirely as well as
 #         exiting non-zero. F_FAIL above is only 40 lines — too small to tell "capped at 5000"
 #         from "the fallback silently means no cap at all", which is exactly the bug this row
 #         exists to catch.
@@ -199,12 +203,12 @@ for f_cfgmode in absent failing; do
     F_BADCFG2="$TMPDIR_BASE/pp-f-badcfg-$f_cfgmode"
     rm -rf "$F_BADCFG2"
     mkdir -p "$F_BADCFG2/bin"
-    if [ "$f_cfgmode" = "failing" ]; then
-        printf '#!/usr/bin/env bash\necho "get-config-var: exploded" >&2\nexit 1\n' > "$F_BADCFG2/bin/get-config-var"
-        chmod +x "$F_BADCFG2/bin/get-config-var"
-    fi
-    # "absent": bin/ exists but get-config-var itself is deliberately never placed in it.
-    PP_ENV=(AGENTS_CONFIG_DIR="$F_BADCFG2")
+    printf '#!/usr/bin/env bash\necho "get-config-var: exploded" >&2\nexit 1\n' > "$F_BADCFG2/bin/get-config-var"
+    chmod +x "$F_BADCFG2/bin/get-config-var"
+    script_checkout_fixture_copy "$F_BADCFG2" bin hooks
+    # "absent": bin/ exists but get-config-var itself is deliberately removed from it.
+    [ "$f_cfgmode" = "absent" ] && rm -f "$F_BADCFG2/bin/get-config-var"
+    PP_SCRIPT="$F_BADCFG2/bin/review-code-codex"
     pp_exec "$F_BIGCFG" --base main --no-log
     f2c_n="$(pp_diff_body_lines "$PP_CAPTURE")"
     if ! pp_has "$PP_OUT_TEXT" "^## Codex Review: PERFORMED"; then
@@ -218,6 +222,7 @@ for f_cfgmode in absent failing; do
     fi
 done
 PP_ENV=()
+PP_SCRIPT=""
 
 # ---------------------------------------------------------------------------
 # F3 — the same degraded-state suppression as P6, but with logging ON and the CLI failing, so

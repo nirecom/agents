@@ -69,7 +69,7 @@ fi
 
 # This is a THIRD producer of schema_version / same_fix. Both are read out of the
 # validator module rather than retyped here, so a table change cannot leave this
-# route behind. Resolved relative to this script — AGENTS_CONFIG_DIR may be unset.
+# route behind. Resolved relative to this script, like every other sibling lookup.
 MEV_VALIDATOR_DIR="$(cd "$(dirname "$0")/../../../bin/github-issues/lib" && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     MEV_VALIDATOR_DIR="$(cygpath -m "$MEV_VALIDATOR_DIR")"

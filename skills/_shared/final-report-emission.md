@@ -18,4 +18,4 @@ Emit the renderer's stdout as-is: no preamble, no summarization, no section reor
 
 Only the free-text prose of the compressed Bugs Found / Related Tasks / Next Tasks sections: the title-line text, and the prose words of the summary line.
 
-Retrieve with `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG`. Empty or `english` → translate nothing.
+Retrieve with `bash "$AGENTS_MAIN_ROOT/bin/get-config-var" CONV_LANG`. Empty or `english` → translate nothing.

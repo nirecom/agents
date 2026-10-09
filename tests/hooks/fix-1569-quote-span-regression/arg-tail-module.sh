@@ -9,7 +9,7 @@
 #
 # Direct-module assertions, split out of the parent per rules/coding/file-split.md.
 # Sourced by tests/hooks/fix-1569-quote-span-regression.sh — uses its pass/fail,
-# run_with_timeout, ACD/ACD_RAW, DISPATCH, EVIL, MAIN_WT and _AGENTS_DIR_NODE.
+# run_with_timeout, script checkout root/FAKE_SCRIPT_CHECKOUT_ROOT_RAW, DISPATCH, EVIL, MAIN_WT and _SCRIPT_CHECKOUT_ROOT_NODE.
 
 run_arg_tail_module_cases() {
 
@@ -29,7 +29,7 @@ run_arg_tail_module_cases() {
 # ============================================================================
 
 arg_tail_probe() {
-    run_with_timeout 30 env "AGENTS_CONFIG_DIR=$ACD" node -e '
+    run_with_timeout 30 env "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" node -e '
       const path = require("path");
       const mod = path.join(process.argv[1], "hooks", "enforce-worktree",
                             "main-worktree-allows", "worker-script.js");
@@ -39,7 +39,7 @@ arg_tail_probe() {
       if (typeof f !== "function") { console.log("ERROR: isAllowedWorkerScriptInvocation not exported"); process.exit(0); }
       try { console.log(String(f(process.argv[2], process.argv[3]))); }
       catch (e) { console.log("ERROR: threw " + e.message); }
-    ' "$_AGENTS_DIR_NODE" "$1" "$MAIN_WT" 2>&1
+    ' "$_SCRIPT_CHECKOUT_ROOT_NODE" "$1" "$MAIN_WT" 2>&1
 }
 
 assert_arg_tail() {
@@ -125,15 +125,15 @@ assert_arg_tail "ARG-reject process substitution '<('" \
 # keeps `&>` rejected here while the worker-script rows above accept it.
 # ============================================================================
 
-mkdir -p "$ACD_RAW/bin"
-touch "$ACD_RAW/bin/compose-doc-append-entry" \
-      "$ACD_RAW/bin/github-issues/clarify-guard-loop.sh"
-COMPOSE="$ACD/bin/compose-doc-append-entry"
-CLARIFY="$ACD/bin/github-issues/clarify-guard-loop.sh"
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin"
+touch "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/compose-doc-append-entry" \
+      "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/github-issues/clarify-guard-loop.sh"
+COMPOSE="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/compose-doc-append-entry"
+CLARIFY="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/clarify-guard-loop.sh"
 
 # sanctioned_bin_probe <predicate-name> <command> -> "true" | "false" | "ERROR: ..."
 sanctioned_bin_probe() {
-    run_with_timeout 30 env "AGENTS_CONFIG_DIR=$ACD" node -e '
+    run_with_timeout 30 env "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" node -e '
       const path = require("path");
       const mod = path.join(process.argv[1], "hooks", "enforce-worktree",
                             "main-worktree-allows", "standard.js");
@@ -143,7 +143,7 @@ sanctioned_bin_probe() {
       if (typeof f !== "function") { console.log("ERROR: " + process.argv[2] + " not exported"); process.exit(0); }
       try { console.log(String(f(process.argv[3], process.argv[4]))); }
       catch (e) { console.log("ERROR: threw " + e.message); }
-    ' "$_AGENTS_DIR_NODE" "$1" "$2" "$MAIN_WT" 2>&1
+    ' "$_SCRIPT_CHECKOUT_ROOT_NODE" "$1" "$2" "$MAIN_WT" 2>&1
 }
 
 assert_sanctioned_bin() {
@@ -242,7 +242,7 @@ assert_sanctioned_bin "RISK10-399-rule2 clarify ansic rejected" \
 # line 17 of the same file).
 # ============================================================================
 
-WORKER_SRC="$AGENTS_DIR/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
+WORKER_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
 
 assert_worker_src() {
     local label="$1" pattern="$2" want="$3" got=false

@@ -10,6 +10,7 @@
 # TL3 gap (what this test does NOT catch): a live Claude Code session whose shell exports
 # JEV_* itself; that is the user's own configuration by design (detail plan, Risks).
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 mock_start
 SID="jev2460-b-sid"
@@ -64,7 +65,7 @@ case_end
 echo "=== entrypoints snapshot before load-env / broker are required ==="
 # order_ok <file>: "ok" when captureTestOverrides( precedes every load-env and jev/broker require.
 order_ok() {
-  local f="$AGENTS_DIR/$1" cap le br
+  local f="$SCRIPT_CHECKOUT_ROOT/$1" cap le br
   [ -f "$f" ] || { echo "missing"; return; }
   cap="$(grep -n 'captureTestOverrides(' "$f" | grep -v 'require(' | head -n 1 | cut -d: -f1)"
   le="$(grep -nE 'require\(.*load-env' "$f" | head -n 1 | cut -d: -f1)"
@@ -84,9 +85,9 @@ case_begin "b-order-report" "bin/jev-report"
 check "bin/jev-report snapshots before requiring load-env / broker" ok "$(order_ok bin/jev-report)"
 case_end
 case_begin "b-overrides-module-is-leaf" "hooks/lib/jev/test-overrides.js"
-if [ -f "$AGENTS_DIR/hooks/lib/jev/test-overrides.js" ]; then
+if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/jev/test-overrides.js" ]; then
   check "test-overrides.js requires neither load-env nor another jev module" "0" \
-    "$(grep -cE 'require\(.*(load-env|broker|provider-core|pending|registry)' "$AGENTS_DIR/hooks/lib/jev/test-overrides.js")"
+    "$(grep -cE 'require\(.*(load-env|broker|provider-core|pending|registry)' "$SCRIPT_CHECKOUT_ROOT/hooks/lib/jev/test-overrides.js")"
 else
   fail "test-overrides.js requires neither load-env nor another jev module" "module missing"
 fi

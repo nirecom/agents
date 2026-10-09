@@ -11,9 +11,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$AGENTS_DIR/install/linux/dotfileslink.sh"
-PROFILE_SH="$AGENTS_DIR/profile-snippet.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/install/linux/dotfileslink.sh"
+PROFILE_SH="$SCRIPT_CHECKOUT_ROOT/profile-snippet.sh"
+# shellcheck source=/dev/null
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/home-userprofile-pin.sh"
 
 PASS=0
 FAIL=0
@@ -49,8 +51,7 @@ FIXTURE_SCRIPT="$AGENTS_FIXTURE/install/linux/dotfileslink.sh"
 reset_home() {
     rm -rf "$SANDBOX/home"
     mkdir -p "$SANDBOX/home/.claude" "$SANDBOX/home/.local/bin"
-    HOME="$SANDBOX/home"
-    export HOME
+    pin_home_and_userprofile "$SANDBOX/home"
 }
 
 invoke_script() {

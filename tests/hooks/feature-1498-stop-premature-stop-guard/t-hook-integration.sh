@@ -305,7 +305,7 @@ run_t14() {
 }
 
 # ---------------------------------------------------------------------------
-# T15: next-step binary absent (AGENTS_CONFIG_DIR points to empty dir,
+# T15: next-step binary absent (AGENTS_MAIN_ROOT points to empty dir,
 #      but workflow state IS present) → exit 0 fail-open
 # ---------------------------------------------------------------------------
 run_t15() {
@@ -318,7 +318,7 @@ run_t15() {
     seed_workflow_state "$tmp" "$sid" "invoke"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
-          AGENTS_CONFIG_DIR="$fake_agents" \
+          AGENTS_MAIN_ROOT="$fake_agents" \
           run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"

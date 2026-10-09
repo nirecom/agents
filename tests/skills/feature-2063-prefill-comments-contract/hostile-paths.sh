@@ -3,7 +3,7 @@
 # Tests: skills/workflow-init/SKILL.md, bin/workflow/render-issue-comments
 # Tags: workflow-init, prompt-contract, static-grep, issue-comments, tl2, scope:issue-specific
 
-# W9, W9b, W9c, W12 (#2063, security): the <CHECKPOINT> placeholder and the $AGENTS_CONFIG_DIR the command resolves the CLI through are values, never fragments of shell — one row per hostile shape a user-owned path may legitimately contain, plus the apostrophe handed over as argv data and the apostrophe pushed back through the real template.
+# W9, W9b, W9c, W12 (#2063, security): the <CHECKPOINT> placeholder and the $AGENTS_MAIN_ROOT the command resolves the CLI through are values, never fragments of shell — one row per hostile shape a user-owned path may legitimately contain, plus the apostrophe handed over as argv data and the apostrophe pushed back through the real template.
 
 # TL3 gap: whether the agent performs the documented steps is not observable — only
 # the structure of what it is told to do is. Mitigated at WORKFLOW_USER_VERIFIED
@@ -116,7 +116,7 @@ TABLE
 # element the shell never re-parses, which is what any caller building the invocation
 # programmatically does — and success is REQUIRED. Together the two rows separate the
 # defect from the shape: the string is what breaks, never `O'Brien` in a home directory.
-W9B_CLI="$AGENTS_DIR/bin/workflow/render-issue-comments"
+W9B_CLI="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/render-issue-comments"
 W9B_PATH="$INJ_ROOT/plans'dir"
 if [ ! -f "$W9B_CLI" ]; then
     fail "W9b/apostrophe-argv: not observable — bin/workflow/render-issue-comments does not exist"
@@ -217,7 +217,7 @@ fi
 
 # --- W12 (security): the EXECUTABLE half of the command carries a hostile path too --
 # Every row above varies <CHECKPOINT> and leaves the other half of the B1 command — the
-# path the CLI itself is resolved through, $AGENTS_CONFIG_DIR — on the tame worktree.
+# path the CLI itself is resolved through, $AGENTS_MAIN_ROOT — on the tame worktree.
 # A checkout under `C:\Users\First Last\...` is ordinary, so that half is user-owned
 # input on the same footing: unquoted, it word-splits on the first space and the step
 # fails for every such user, and `$( )` in the directory name is the injection shape.
@@ -232,16 +232,16 @@ else
     # Relocating the tree only proves something if the command actually resolves the CLI
     # through the variable being relocated; otherwise every assertion below is vacuous.
     case "$CMD_TEMPLATE" in
-        *AGENTS_CONFIG_DIR*)
-            pass "W12: the B1 command resolves the CLI through \$AGENTS_CONFIG_DIR (the relocation is observable)" ;;
+        *AGENTS_MAIN_ROOT*)
+            pass "W12: the B1 command resolves the CLI through \$AGENTS_MAIN_ROOT (the relocation is observable)" ;;
         *)
-            fail "W12: the B1 command never names AGENTS_CONFIG_DIR, so relocating the tree proves nothing: '$CMD_TEMPLATE'" ;;
+            fail "W12: the B1 command never names AGENTS_MAIN_ROOT, so relocating the tree proves nothing: '$CMD_TEMPLATE'" ;;
     esac
-    cp -R "$AGENTS_DIR/bin" "$W12_CFG/bin" 2>/dev/null || true
+    cp -R "$__LIB_SCRIPT_CHECKOUT_ROOT/bin" "$W12_CFG/bin" 2>/dev/null || true
     # The checkpoint stays tame here: exactly one variable changes, so a failure names
     # the executable path rather than being shared with the W9 rows above.
     W12_CMD="$(subst_raw "$CMD_TEMPLATE" "$(nodepath "$TMPD/ckpt.json")" "$N")"
-    W12_OUT="$(cd "$INJ_CWD" && AGENTS_CONFIG_DIR="$(nodepath "$W12_CFG")" bash -c "$W12_CMD" 2>"$TMPD/w12.err")"
+    W12_OUT="$(cd "$INJ_CWD" && AGENTS_MAIN_ROOT="$(nodepath "$W12_CFG")" bash -c "$W12_CMD" 2>"$TMPD/w12.err")"
     W12_RC=$?
     assert_eq "W12: the B1 command exits 0 with the CLI under a path with spaces and metacharacters" "0" "$W12_RC"
     case "$W12_OUT" in

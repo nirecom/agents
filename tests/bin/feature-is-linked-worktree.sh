@@ -15,8 +15,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$AGENTS_DIR/bin/is-linked-worktree.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/is-linked-worktree.sh"
 
 PASS=0
 FAIL=0

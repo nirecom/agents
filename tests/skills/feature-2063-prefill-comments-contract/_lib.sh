@@ -8,10 +8,10 @@ set -u
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
-GOLDEN="$AGENTS_DIR/tests/fixtures/issue-prefill-with-comments.expected.md"
+SKILL="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
+GOLDEN="$__LIB_SCRIPT_CHECKOUT_ROOT/tests/fixtures/issue-prefill-with-comments.expected.md"
 # The suite spans a dispatcher plus this folder, so W7 excludes both by name
 # rather than by "the one file I live in" (which no longer identifies the suite).
 SUITE_NAME="feature-2063-prefill-comments-contract"
@@ -39,10 +39,13 @@ WORKFLOW_PLANS_DIR="$(nodepath "$TMPD/plans")"
 export WORKFLOW_PLANS_DIR
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-# The extracted command may reference $AGENTS_CONFIG_DIR; export it absolute so the
-# `bash -c` run never depends on MSYS2 path translation.
-AGENTS_CONFIG_DIR="$(nodepath "$AGENTS_DIR")"
-export AGENTS_CONFIG_DIR
+# The extracted command resolves its CLI through $AGENTS_MAIN_ROOT, so the suite hands it
+# a copy of this checkout's bin/ and hooks/ — absolute, so `bash -c` never depends on
+# MSYS2 path translation, and never the checkout itself.
+# shellcheck source=../../lib/script-checkout-fixture.sh
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+script_checkout_fixture_copy "$TMPD/agents-root" bin hooks
+export AGENTS_MAIN_ROOT="$(nodepath "$TMPD/agents-root")"
 
 # --- fixture: one healthy version-3 checkpoint, plus a container-corrupt one ----
 N=4200

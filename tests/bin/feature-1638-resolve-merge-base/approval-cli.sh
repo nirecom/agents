@@ -1,29 +1,12 @@
 # Part of tests/bin/feature-1638-resolve-merge-base.sh (sourced, not standalone).
 # Tests: bin/workflow/record-merge-base-baseline, bin/resolve-merge-base.sh, bin/select-tests.sh
 # Tags: merge-base, baseline, approval, cli, security, recovery, scope:issue-specific, pwsh-not-required, TL2
-#
-# A — THE APPROVAL CLI'S ARGUMENTS, and P — THE RECOVERY IT EXISTS FOR.
-#
-# record-merge-base-baseline is the ONE sanctioned way to overwrite a write-once record. R16/R17
-# cover the two interesting values of --base (a good one and two bad ones). What they do not
-# cover is everything else about a CLI that is invited into the workflow by a stderr hint the
-# model is told to run: a missing flag, an empty --reason, an unknown flag, and three inputs
-# that arrive as text from a session the tool does not control (session id, reason, repo path).
-#
-# WHY THE ARGUMENT ROWS ARE SECURITY ROWS. The session id becomes part of a FILE PATH under the
-# workflow directory, and the repo path is handed to git. A session id containing `..` writes
-# outside the workflow directory; one containing shell metacharacters is only safe if nothing
-# ever interpolates it into a command. Both are asserted by side effect (did a file appear where
-# it must not?) rather than by inspecting the implementation.
-#
-# AND EVERY REJECTION IS ALSO AN INTEGRITY ROW. `--reason` is mandatory because the override is
-# an audited decision; a rejected request that had already written the base would make the
-# validation cosmetic. So each rejection row re-reads the stored baseline afterwards.
-#
-# P1-P4 are the other half: the recovery path END TO END. The stderr hint select-tests.sh prints
-# on SUSPECT tells the user to approve a base and re-run, and nothing today proves that
-# sequence actually terminates in a successful selection. P1-P4 run it: approve → resolve →
-# select. Without them the hint is a documented procedure with no test behind it.
+# A — THE APPROVAL CLI'S ARGUMENTS, and P — THE RECOVERY IT EXISTS FOR. record-merge-base-baseline is the ONE sanctioned way to overwrite a write-once record. R16/R17 cover the two interesting values of --base (a good one and two bad ones).
+# What they do not cover is everything else about a CLI that is invited into the workflow by a stderr hint the model is told to run: a missing flag, an empty --reason, an unknown flag, and three inputs that arrive as text from a session the tool does not control (session id, reason, repo path).
+# WHY THE ARGUMENT ROWS ARE SECURITY ROWS. The session id becomes part of a FILE PATH under the workflow directory, and the repo path is handed to git. A session id containing `..` writes outside the workflow directory; one containing shell metacharacters is only safe if nothing ever interpolates it into a command.
+# Both are asserted by side effect (did a file appear where it must not?) rather than by inspecting the implementation.
+# AND EVERY REJECTION IS ALSO AN INTEGRITY ROW. `--reason` is mandatory because the override is an audited decision; a rejected request that had already written the base would make the validation cosmetic. So each rejection row re-reads the stored baseline afterwards.
+# P1-P4 are the other half: the recovery path END TO END. The stderr hint select-tests.sh prints on SUSPECT tells the user to approve a base and re-run, and nothing today proves that sequence actually terminates in a successful selection. P1-P4 run it: approve → resolve → select. Without them the hint is a documented procedure with no test behind it.
 
 A_RC=0
 A_OUT=""
@@ -49,12 +32,12 @@ setup_approval_fixture() {
   A_REPO="$(repo_with_main)"
   node_state init "$A_SID" "$A_REPO" work >/dev/null
   node_state record "$A_SID" "$A_REPO" >/dev/null
-  A_STORED="$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" \
+  A_STORED="$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" \
     node "$STATE_JS" field "$A_SID" base 2>/dev/null)"
 }
 
 stored_base() {
-  env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" \
+  env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" \
     node "$STATE_JS" field "$A_SID" base 2>/dev/null
 }
 
@@ -147,7 +130,7 @@ a10_malicious_reason() {
   fi
   if [ "$A_RC" = "0" ]; then
     check "A10-verbatim: an accepted reason is stored exactly as given" "$reason" \
-      "$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" \
+      "$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" \
         node "$STATE_JS" field "$A_SID" approved_reason 2>/dev/null)"
     A_STORED="$(stored_base)"
   else
@@ -187,8 +170,8 @@ a11_repository_argument() {
 P_TREE=""
 setup_recovery_tree() { # <sid>
   P_TREE="$(mktemp -d "$TMPROOT/ptree.XXXXXX")"
-  cp -r "$AGENTS_DIR/bin" "$P_TREE/bin"
-  cp -r "$AGENTS_DIR/hooks" "$P_TREE/hooks"
+  cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$P_TREE/bin"
+  cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$P_TREE/hooks"
   mkdir -p "$P_TREE/tests"
   : > "$P_TREE/tests/feature-689-select-tests.sh"
   printf '#!/usr/bin/env bash\necho "%s"\n' "$1" > "$P_TREE/bin/resolve-session-id"
@@ -234,8 +217,8 @@ p_recovery_end_to_end() {
   rc=0
   (
     cd "$repo" || exit 1
-    export WORKFLOW_STATE_DIR="$WFDIR" AGENTS_CONFIG_DIR="$P_TREE"
-    bash "$AGENTS_DIR/bin/run-with-timeout.sh" 60 bash "$P_TREE/bin/select-tests.sh" --auto
+    export WORKFLOW_STATE_DIR="$WFDIR" AGENTS_MAIN_ROOT="$P_TREE"
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 bash "$P_TREE/bin/select-tests.sh" --auto
   ) >"$o" 2>"$e" || rc=$?
   local sel serr
   sel="$(cat "$o")"

@@ -15,19 +15,19 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 
 # Derived from this file's own location so a worktree run tests the worktree's
-# sources rather than the deployed $AGENTS_CONFIG_DIR copy.
-NEXT_STEP_N="$AGENTS_DIR_N/bin/workflow/next-step"
-WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
-GATE_HOOK_N="$AGENTS_DIR_N/hooks/workflow-gate.js"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"
-STEPS_MODULE="$AGENTS_DIR_N/bin/workflow/lib/next-step/steps.js"
+# sources rather than the deployed $AGENTS_MAIN_ROOT copy.
+NEXT_STEP_N="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+WORKFLOW_MARK_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-mark.js"
+GATE_HOOK_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-gate.js"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"
+STEPS_MODULE="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/lib/next-step/steps.js"
 # Reused read-only fixture-state probe (CPR-SSOT: one reader for all suites).
-PROBE_N="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+PROBE_N="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 export WFSTATE_MODULE STEPS_MODULE
 
 TMPDIR_BASE="$(mktemp -d)"
@@ -47,7 +47,7 @@ unset CLAUDE_CODE_SESSION_ID
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"
 mkdir -p "$CONFIG_EMPTY"
 : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 # Fixture repo for the commit gate: one staged non-docs file, nothing unstaged
 # (Gate 1) and no staged tests/ (review_tests token path stays silent).
@@ -65,7 +65,7 @@ export CLAUDE_PROJECT_DIR="$GATE_REPO_N"
 # Neutral CWD: hooks that call `git rev-parse` must not resolve the real repo.
 cd "$TMPDIR_BASE" || exit 1
 
-SCRIPT_DIR="$AGENTS_DIR/tests/hooks/feature-1665-write-code-step"
+SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1665-write-code-step"
 
 # shellcheck source=./feature-1665-write-code-step/common.sh
 . "$SCRIPT_DIR/common.sh"

@@ -22,10 +22,10 @@ FAIL=0
 # covering bin/github-issues/**, so no preflight ask fires; the residue is
 # closed by the plan's manual render check before merge.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB="$AGENTS_DIR/bin/github-issues/lib/extract-field.sh"
-SCRIPT="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/extract-field.sh"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-to-history.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 # Documented marker recipe (SSOT: extract-field.sh, extract_field_or_marker()).
 MARKER_ERE='\(no (Background|Changes|Cause|Fix) recorded\)'
@@ -214,8 +214,8 @@ case "$SEC_OUT" in
         fail "S3-subprocess-verbatim — payload was altered on the way to --background: $SEC_OUT" ;;
 esac
 
-if compgen -G "$TMP/PWNED*" >/dev/null 2>&1 || compgen -G "$AGENTS_DIR/PWNED*" >/dev/null 2>&1; then
-    fail "S3-no-execution — the injected payload EXECUTED: $(ls -d "$TMP"/PWNED* "$AGENTS_DIR"/PWNED* 2>/dev/null)"
+if compgen -G "$TMP/PWNED*" >/dev/null 2>&1 || compgen -G "$SCRIPT_CHECKOUT_ROOT/PWNED*" >/dev/null 2>&1; then
+    fail "S3-no-execution — the injected payload EXECUTED: $(ls -d "$TMP"/PWNED* "$SCRIPT_CHECKOUT_ROOT"/PWNED* 2>/dev/null)"
 else
     pass "S3-no-execution no artefact from the injected payload exists"
 fi
@@ -270,10 +270,9 @@ E2_LOG="$TMP/doc-append-calls.log"
 E2_RC=0
 PATH="$E2_BIN:$MOCK_DIR:$PATH" \
     DOC_APPEND_CALL_LOG="$E2_LOG" \
-    AGENTS_CONFIG_DIR="$E2_HOME" \
     GH_MOCK_SCENARIO=issue_task_post_fix \
     DRY_RUN= \
-    run_with_timeout 30 bash "$SCRIPT" 42 --commit abc1234 \
+    run_with_timeout 30 bash "$SCRIPT" 42 --commit abc1234 --target-checkout-root "$E2_HOME" \
     >"$TMP/e2.out" 2>"$TMP/e2.err" || E2_RC=$?
 
 if [ "$E2_RC" -ne 0 ]; then
@@ -370,10 +369,9 @@ while IFS='|' read -r name scenario failfield sibling; do
     PATH="$E4_BIN:$MOCK_DIR:$PATH" \
         SELECTIVE_FAIL_FIELD="$failfield" \
         DOC_APPEND_CALL_LOG="$E4_LOG" \
-        AGENTS_CONFIG_DIR="$E4_HOME" \
         GH_MOCK_SCENARIO="$scenario" \
         DRY_RUN= \
-        run_with_timeout 30 bash "$SCRIPT" 42 --commit abc1234 \
+        run_with_timeout 30 bash "$SCRIPT" 42 --commit abc1234 --target-checkout-root "$E4_HOME" \
         >"$TMP/e4-$name.out" 2>"$TMP/e4-$name.err" || E4_RC=$?
 
     if [ "$E4_RC" -ne 0 ]; then

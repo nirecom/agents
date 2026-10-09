@@ -282,7 +282,7 @@ WRAPPER="$AGENTS_ROOT/skills/review-code-security/scripts/run-codex-review-loop.
 # leak a --context file into the isolated fixture.
 run_wrapper_sc() {
     WRAP_OUT="$(cd "$RL_REPO" && PATH="$RL_PATH" \
-        AGENTS_CONFIG_DIR="$AGENTS_ROOT" SESSION_ID="$SID" PLANS_DIR="$PLANS" \
+        SESSION_ID="$SID" PLANS_DIR="$PLANS" \
         EXTENSIONS_USED="$RL_EXT_USED" \
         CTX_SURVEY_CODE="" CTX_SURVEY_HISTORY="" CTX_CONCERNS_LOG="" \
         CODEX_MOCK_BODY="$RL_CODEX_BODY" CODEX_MOCK_EXIT="$RL_CODEX_EXIT" \

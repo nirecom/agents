@@ -421,8 +421,8 @@ _sp_nothing_to_migrate() {
 
 # sp_control_dir <sid> [<file>] — print <WORKFLOW_STATE_DIR>/<sid>.control (or a
 # file in it), created, as a bash path, after migrating legacy copies (the dir form: all
-# of <sid>'s). bin/workflow-control-dir (this file's own tree first, so a stub
-# AGENTS_CONFIG_DIR cannot skip the migration) is authoritative and its non-zero exit
+# of <sid>'s). bin/workflow-control-dir (this file's own tree only, so a stub
+# checkout cannot skip the migration) is authoritative and its non-zero exit
 # is returned as-is (3 = migration failed). Fast path, no node spawn: both dirs pinned
 # in env, the dir real, and nothing left to migrate (no legacy <file>; for the dir form
 # no <sid>-* plans entry at all). Unpinned, node routes the sid (#2511 legacy root).
@@ -458,7 +458,6 @@ sp_control_dir() {
         fi
     fi
     if _sp_has_resolver "$_SP_OWN_ROOT"; then root="$_SP_OWN_ROOT"
-    elif _sp_has_resolver "${AGENTS_CONFIG_DIR:-}"; then root="$AGENTS_CONFIG_DIR"
     fi
     if [ -n "$root" ]; then
         if [ -n "$file" ]; then

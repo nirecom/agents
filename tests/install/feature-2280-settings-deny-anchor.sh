@@ -10,9 +10,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SETTINGS="$AGENTS_DIR/settings.json"
-PART_DIR="$AGENTS_DIR/tests/install/feature-2280-settings-deny-anchor"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
+PART_DIR="$SCRIPT_CHECKOUT_ROOT/tests/install/feature-2280-settings-deny-anchor"
 
 # CONTRACT: MUST-trigger rules are anchored to the four git invocation forms (bare /
 # `git -C *` / `git -c *` / `git --no-pager`). OPTIONAL rm/find/sudo/docker/aws family
@@ -20,7 +20,7 @@ PART_DIR="$AGENTS_DIR/tests/install/feature-2280-settings-deny-anchor"
 # (P13-P37 = NO-MATCH); bash-guard denies the chain operator itself instead.
 # OUT OF SCOPE: deployed ~/.claude/settings.json drift, JSON re-assembly, #2266 redesign.
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 PEND=0
 ROWS=0

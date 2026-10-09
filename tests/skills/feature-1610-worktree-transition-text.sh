@@ -12,15 +12,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-FRAGMENT="$AGENTS_DIR/skills/_shared/worktree-transition.md"
-WS="$AGENTS_DIR/skills/worktree-start/SKILL.md"
-WE="$AGENTS_DIR/skills/worktree-end/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+FRAGMENT="$SCRIPT_CHECKOUT_ROOT/skills/_shared/worktree-transition.md"
+WS="$SCRIPT_CHECKOUT_ROOT/skills/worktree-start/SKILL.md"
+WE="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/SKILL.md"
 # STEP_HINT moved out of the bin/workflow/next-step entrypoint when it was split
 # into bin/workflow/lib/next-step/ (#1756); steps.js now owns the hint strings.
-NEXT_STEP="$AGENTS_DIR/bin/workflow/lib/next-step/steps.js"
-ENTRY_GATE="$AGENTS_DIR/hooks/workflow-gate/worktree-entry-gate.js"
-REMEDY="$AGENTS_DIR/hooks/enforce-worktree/worktree-remedy.js"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/next-step/steps.js"
+ENTRY_GATE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/worktree-entry-gate.js"
+REMEDY="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/worktree-remedy.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -237,12 +237,12 @@ run_X12() {
 # 3-token set cannot be applied verbatim without a guaranteed false-red:
 #   - WS  (worktree-start SKILL.md): WS-8 legitimately names the
 #     `EnterWorktree` tool; WS-7 legitimately uses `git rev-parse
-#     --show-toplevel` to resolve main_root; line 59 legitimately does
-#     `cd "$AGENTS_CONFIG_DIR"` to invoke bin/confirm-off. Only the exclusion-
+#     --show-toplevel` to resolve the main worktree root; line 59 legitimately does
+#     `cd "$AGENTS_MAIN_ROOT"` to invoke bin/confirm-off. Only the exclusion-
 #     scoped `cd "` check is meaningful here.
 #   - WE  (worktree-end SKILL.md): WE-2 legitimately uses `git rev-parse
 #     --git-dir` / `--git-common-dir` for the linked-worktree preflight; line
-#     37 does the same `cd "$AGENTS_CONFIG_DIR"` idiom as WS; WE-13 legitimately
+#     37 does the same `cd "$AGENTS_MAIN_ROOT"` idiom as WS; WE-13 legitimately
 #     does `cd "<main-worktree-root>"` (pre-existing CWD-switch step, distinct
 #     from the WE-13a EnterWorktree/ExitWorktree protocol). `EnterWorktree` has
 #     no legitimate current use in this file, so it is checked as a blanket
@@ -259,14 +259,14 @@ run_X12e() {
 
     label="X12e: worktree-start SKILL.md has no unaccounted cd-mechanic occurrence"
     if require_source "$WS" "$label"; then
-        check_lacks_except "$label" 'cd "' "$WS" 'cd "$AGENTS_CONFIG_DIR"'
+        check_lacks_except "$label" 'cd "' "$WS" 'cd "$AGENTS_MAIN_ROOT"'
     fi
 
     label="X12f: worktree-end SKILL.md omits EnterWorktree and has no unaccounted cd-mechanic occurrence"
     if require_source "$WE" "$label"; then
         check_lacks "X12f-1: worktree-end SKILL.md omits EnterWorktree" "EnterWorktree" "$WE"
         check_lacks_except "X12f-2: worktree-end SKILL.md has no unaccounted cd-mechanic occurrence" \
-            'cd "' "$WE" 'cd "$AGENTS_CONFIG_DIR"' 'cd "<main-worktree-root>"'
+            'cd "' "$WE" 'cd "$AGENTS_MAIN_ROOT"' 'cd "<main-worktree-root>"'
     fi
 
     label="X12g: next-step CLI has no unaccounted cd-mechanic occurrence"

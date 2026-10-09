@@ -1,25 +1,18 @@
 #!/usr/bin/env bash
 # Tests: bin/doc-append.py, bin/github-issues/issue-to-history.sh
 # Tags: history, docs, backdate, bin, scope:issue-specific
-#
-# Tests for issue #1672 --allow-backdate: doc-append.py's ascending-date
-# guard (DATE_ORDER_TOLERANCE_DAYS=7) is skipped when --allow-backdate is
-# passed, so /issue-reconcile can backfill long-closed issues. Also verifies
-# issue-to-history.sh forwards --allow-backdate / --no-auto-rotate to
-# doc-append unchanged.
-#
-# TL3 gap (what this test does NOT catch):
-# - Real /issue-reconcile invoking issue-to-history.sh end-to-end against a
-#   live gh CLI and a real docs/history.md (this test uses temp fixtures and
-#   DRY_RUN passthrough checks only).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: none (docs-only
-# backfill tool, not in the risk-category list).
+# Issue #1672 --allow-backdate: doc-append.py's ascending-date guard
+# (DATE_ORDER_TOLERANCE_DAYS=7) is skipped when the flag is passed, so /issue-reconcile can
+# backfill long-closed issues; issue-to-history.sh forwards --allow-backdate / --no-auto-rotate.
+# TL3 gap: real /issue-reconcile driving issue-to-history.sh end-to-end against a live gh CLI
+# and a real docs/history.md (temp fixtures and DRY_RUN passthrough checks only here).
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: none (docs-only backfill tool).
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DOC_APPEND_PY="$AGENTS_DIR/bin/doc-append.py"
-ISSUE_TO_HISTORY="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DOC_APPEND_PY="$SCRIPT_CHECKOUT_ROOT/bin/doc-append.py"
+ISSUE_TO_HISTORY="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-to-history.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
@@ -225,7 +218,7 @@ fi
 
 # --- Case 11: --target-aware idempotency — entry present ONLY in --target ---
 # The idempotency check must inspect --target too. Canonical
-# $AGENTS_CONFIG_DIR/docs/history.md deliberately lacks #1901, so a check that
+# $TARGET_CHECKOUT_ROOT/docs/history.md deliberately lacks #1901, so a check that
 # looks at the canonical pair alone would fall through and append a duplicate
 # into the target (an append-only record).
 if [ -x "$ISSUE_TO_HISTORY" ]; then
@@ -243,7 +236,7 @@ Background: b
 Changes: c
 EOF
     BEFORE11=$(sha256sum "$T11/repo/docs/history.md" | awk '{print $1}')
-    OUT11=$(AGENTS_CONFIG_DIR="$T11/cfg" bash "$ISSUE_TO_HISTORY" 1901 \
+    OUT11=$(bash "$ISSUE_TO_HISTORY" 1901 --target-checkout-root "$T11/cfg" \
         --target "$T11/repo/docs/history.md" --allow-backdate --no-auto-rotate 2>&1)
     RC11=$?
     AFTER11=$(sha256sum "$T11/repo/docs/history.md" | awk '{print $1}')
@@ -277,7 +270,7 @@ Changes: c
 EOF
     printf '#!/bin/bash\nexit 1\n' > "$T12/stubbin/gh"
     chmod +x "$T12/stubbin/gh"
-    OUT12=$(PATH="$T12/stubbin:$PATH" AGENTS_CONFIG_DIR="$T12/cfg" bash "$ISSUE_TO_HISTORY" 1902 \
+    OUT12=$(PATH="$T12/stubbin:$PATH" bash "$ISSUE_TO_HISTORY" 1902 --target-checkout-root "$T12/cfg" \
         --target "$T12/repo/docs/history.md" --allow-backdate --no-auto-rotate 2>&1)
     RC12=$?
     if [ "$RC12" -ne 0 ] && ! echo "$OUT12" | grep -q "Already in history" \

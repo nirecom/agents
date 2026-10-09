@@ -54,7 +54,7 @@ run_R6_identity() {
         fail "R6-ID probe missing at $probe - the identity SSOT is unasserted"
         return
     fi
-    _R6_PROBE_OUT="$("$RWT" 20 node "$(node_path "$probe")" "$_AGENTS_DIR_NODE" 2>/dev/null)"
+    _R6_PROBE_OUT="$("$RWT" 20 node "$(node_path "$probe")" "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>/dev/null)"
     if [ -z "$_R6_PROBE_OUT" ]; then
         fail "R6-ID probe produced no output (interpreter-scan.js / nested-bodies.js not loadable)"
         return

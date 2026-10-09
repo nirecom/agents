@@ -171,10 +171,10 @@ Describe "codes function (profile-snippet.ps1)" {
 Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git -ErrorAction SilentlyContinue)) {
     BeforeAll {
         # Build a throwaway copy of the agents tree. profile-snippet.ps1 pins
-        # $env:AGENTS_CONFIG_DIR to $PSScriptRoot, so the only way to keep the
+        # $env:AGENTS_MAIN_ROOT to $PSScriptRoot, so the only way to keep the
         # gate reading a controlled config is to run a copy of the snippet.
         # No .env is written: hooks/lib/load-env.js short-circuits on
-        # AGENTS_CONFIG_DIR and a missing .env is a silent no-op, which leaves
+        # AGENTS_MAIN_ROOT and a missing .env is a silent no-op, which leaves
         # the process environment as the single SESSION_SYNC source.
         function New-MirrorSandbox {
             param([switch]$WithSessionRepo, [switch]$NoopConfigVar, [switch]$WithRepairStub, [switch]$FailingRepairStub)
@@ -288,8 +288,7 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
 
     BeforeEach {
         $script:SavedSessionSync   = $env:SESSION_SYNC
-        $script:SavedConfigDir     = $env:AGENTS_CONFIG_DIR
-        $script:SavedAgentsDir     = $env:AGENTS_DIR
+        $script:SavedAgentsMainRoot     = $env:AGENTS_MAIN_ROOT
         $script:SavedPath          = $env:PATH
         $script:SavedHome          = $HOME
         $script:SavedHomeOptions   = (Get-Variable HOME).Options
@@ -315,12 +314,9 @@ Describe "SESSION_SYNC gate (profile-snippet.ps1)" -Skip:(-not (Get-Command git 
         if ($null -eq $script:SavedSessionSync) {
             Remove-Item Env:SESSION_SYNC -ErrorAction SilentlyContinue
         } else { $env:SESSION_SYNC = $script:SavedSessionSync }
-        if ($null -eq $script:SavedConfigDir) {
-            Remove-Item Env:AGENTS_CONFIG_DIR -ErrorAction SilentlyContinue
-        } else { $env:AGENTS_CONFIG_DIR = $script:SavedConfigDir }
-        if ($null -eq $script:SavedAgentsDir) {
-            Remove-Item Env:AGENTS_DIR -ErrorAction SilentlyContinue
-        } else { $env:AGENTS_DIR = $script:SavedAgentsDir }
+        if ($null -eq $script:SavedAgentsMainRoot) {
+            Remove-Item Env:AGENTS_MAIN_ROOT -ErrorAction SilentlyContinue
+        } else { $env:AGENTS_MAIN_ROOT = $script:SavedAgentsMainRoot }
         $env:PATH = $script:SavedPath
         Set-Variable -Name HOME -Value $script:SavedHome -Scope Global -Force `
             -Option $script:SavedHomeOptions

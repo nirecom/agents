@@ -10,11 +10,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 PASS=0
@@ -86,7 +86,7 @@ setup_main_repo() {
 # Run pre-commit hook from within the repo.
 run_precommit() {
     local repo="$1"; shift
-    (cd "$repo" && run_with_timeout 30 env "$@" bash "$AGENTS_DIR/hooks/pre-commit") 2>&1
+    (cd "$repo" && run_with_timeout 30 env "$@" bash "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit") 2>&1
 }
 
 # ----------------------------------------------------------------------------
@@ -94,7 +94,6 @@ test_A_baseline_blocks_main_worktree() {
     local repo; repo="$(setup_main_repo "repoA")"
     local out rc=0
     out="$(run_precommit "$repo" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on")" || rc=$?
     if [ "$rc" -ne 0 ] && echo "$out" | grep -q "commits from main worktree are blocked"; then
         pass "A: baseline — pre-commit blocks commits from main worktree"
@@ -110,7 +109,6 @@ test_B_workflow_off_marker_bypasses() {
     printf '{"set_at":"x"}' > "$wfdir/$sid.workflow-off"
     local out rc=0
     out="$(run_precommit "$repo" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
@@ -129,7 +127,6 @@ test_C_worktree_off_marker_bypasses() {
     printf '{"set_at":"x"}' > "$wfdir/$sid.worktree-off"
     local out rc=0
     out="$(run_precommit "$repo" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
@@ -147,15 +144,14 @@ test_D_no_markers_no_session_id_blocks_gracefully() {
     local empty_transcript="$TMPDIR_BASE/empty-transcript-$RANDOM"
     mkdir -p "$empty_transcript"
     local out rc=0
-    # Blank CLAUDE_CODE_SESSION_ID so no session id resolves; keep AGENTS_CONFIG_DIR
+    # Blank CLAUDE_CODE_SESSION_ID so no session id resolves; keep AGENTS_MAIN_ROOT
     out="$(cd "$repo" && run_with_timeout 30 env \
         "CLAUDE_CODE_SESSION_ID=" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_TRANSCRIPT_BASE_DIR=$empty_transcript" \
-        bash "$AGENTS_DIR/hooks/pre-commit" 2>&1)" || rc=$?
+        bash "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ] && echo "$out" | grep -q "commits from main worktree are blocked"; then
         pass "D: no markers + no session id → graceful block (no crash)"
     else
@@ -176,12 +172,11 @@ test_E_no_node_falls_through_to_enforcement() {
     # Strip PATH so node is not findable; bash builtins still work
     out="$(cd "$repo" && run_with_timeout 30 env \
         "PATH=/nonexistent" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_CODE_SESSION_ID=$sid" \
-        bash "$AGENTS_DIR/hooks/pre-commit" 2>&1)" || rc=$?
+        bash "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit" 2>&1)" || rc=$?
     # Without node, marker check (which requires node) cannot succeed → falls through to enforcement → exit 1.
     if [ "$rc" -ne 0 ]; then
         pass "E: node unavailable → bypass attempt fails gracefully, enforcement runs"
@@ -190,22 +185,22 @@ test_E_no_node_falls_through_to_enforcement() {
     fi
 }
 
-test_F_bad_agents_config_dir_falls_through() {
+test_F_bad_agents_main_root_falls_through() {
     local repo; repo="$(setup_main_repo "repoF")"
     local sid="testsessF001"
     local wfdir; wfdir="$(fresh_workflow_dir)"
     printf '{"set_at":"x"}' > "$wfdir/$sid.workflow-off"
     local out rc=0
-    # Bad AGENTS_CONFIG_DIR for the marker-check; the script itself still resolves via $0.
+    # Bad AGENTS_MAIN_ROOT for the marker-check; the script itself still resolves via $0.
     out="$(cd "$repo" && run_with_timeout 30 env \
-        "AGENTS_CONFIG_DIR=/nonexistent/path" \
+        "AGENTS_MAIN_ROOT=/nonexistent/path" \
         "ENFORCE_WORKTREE=on" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_CODE_SESSION_ID=$sid" \
-        bash "$AGENTS_DIR/hooks/pre-commit" 2>&1)" || rc=$?
+        bash "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then
-        pass "F: bad AGENTS_CONFIG_DIR → graceful fall-through to enforcement"
+        pass "F: bad AGENTS_MAIN_ROOT → graceful fall-through to enforcement"
     else
         fail "F: expected non-zero, got rc=$rc out=$out"
     fi
@@ -226,12 +221,11 @@ test_G_enforce_worktree_notice_regression() {
 
     local out rc=0
     out="$(printf '%s' "$payload" | run_with_timeout 30 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
-        node "$AGENTS_DIR/hooks/enforce-worktree.js" 2>&1)" || rc=$?
+        node "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js" 2>&1)" || rc=$?
 
     local ok=1
     echo "$out" | grep -q "session override active" || ok=0
@@ -249,7 +243,7 @@ run_all() {
     test_C_worktree_off_marker_bypasses
     test_D_no_markers_no_session_id_blocks_gracefully
     test_E_no_node_falls_through_to_enforcement
-    test_F_bad_agents_config_dir_falls_through
+    test_F_bad_agents_main_root_falls_through
     test_G_enforce_worktree_notice_regression
 }
 

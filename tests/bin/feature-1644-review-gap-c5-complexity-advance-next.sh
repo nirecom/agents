@@ -1,61 +1,31 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/record-complexity-and-skip, bin/workflow/record-skip-judgment, bin/workflow/record-complexity-evaluation, hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, advance, record-complexity-and-skip, skip-dispatch, class-contract, scope:issue-specific, pwsh-not-required
-#
-# #1644 review gap C5 — record-complexity-and-skip on the `--advance` path.
-#
-# Why: this CLI is the one advance-class member that does not settle the step
-# itself. It resolves WHICH branch applies (complexity-derived auto vs. the
-# orchestrator's own judgment) and, on the auto branch only, DELEGATES the
-# forward operation to record-skip-judgment --advance. The two stdout lines it
-# emits — SKIP_MODE= and SKIP_DISPATCH= — are the caller's only view of which of
-# those three outcomes happened, so each branch is pinned against the resulting
-# state, not only against stdout.
-#
-# ################ DOCUMENTED GAP — SOURCE FOLLOW-UP REQUIRED ################
-# `--next` is NOT accepted by this CLI. Its argument loop (bin/workflow/
-# record-complexity-and-skip lines 15-26) has cases for --advance, --so-c1 and
-# --so-c2 but none for --next, so the flag falls into the catch-all and exits 2
-# with "Unknown flag: --next" on stderr. Every other member of the #1644 advance
-# class (next-step, record-skip-judgment, set-workflow-type) accepts the
-# `--advance --next` pair, so the class contract is INCOMPLETE here.
-#
-# Case C5-6 below pins the CURRENT behavior deliberately. It is an assertion of
-# what the source does today, NOT an endorsement: closing the gap requires a
-# SOURCE change (either implement --next by delegating it through to
-# record-skip-judgment, or document record-complexity-and-skip as a second named
-# exception alongside record-skip-verdict). This test file must not fix it.
-# ############################################################################
-#
-# Sibling boundary (no duplication): tests/bin/feature-1644-sibling-cli-advance.sh
-# S9 (legacy pass-through), S10 (exit-3 normalization), S12 (auto vs judgment on
-# outline) and S13c/d (argument errors) already exist. Added here: the detail
-# target's --c3 delegation, the explicit-false so_c1/so_c2 override, the
-# SKIP_DISPATCH token VALUES (S12 asserts only that one such line exists), and
-# the --next gap above.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether skills/clarify-intent and skills/make-outline-plan actually invoke
-#   this CLI with --advance rather than the legacy CLI-then-next-step pair.
-# - Whether settings.json permissions.allow admits the --advance argv form
-#   without an approval dialog in a live session.
-# Closest-to-action mitigation: surfaced at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+
+# #1644 review gap C5 — record-complexity-and-skip on the `--advance` path. It picks
+# the branch (complexity-derived auto vs. orchestrator judgment) and, on auto only,
+# delegates the forward operation to record-skip-judgment --advance; each branch is
+# pinned against the resulting state, not only SKIP_MODE=/SKIP_DISPATCH= on stdout.
+# DOCUMENTED GAP (source follow-up required, not fixed here): `--next` is rejected
+# with exit 2 "Unknown flag: --next", unlike the rest of the advance class. C5-6
+# pins that CURRENT behavior. Beyond feature-1644-sibling-cli-advance.sh S9-S13.
+
+# TL3 gap: whether the skills invoke this CLI with --advance; settings.json admission.
 
 set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-# RCAS is invoked through bash with a POSIX path (it is a #!/bin/bash script),
-# while AGENTS_CONFIG_DIR must be the WORKTREE root so the script can resolve its
-# siblings under bin/workflow/ and hooks/workflow-state/.
-RCAS="$AGENTS_DIR/bin/workflow/record-complexity-and-skip"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+# RCAS is invoked through bash with a POSIX path (it is a #!/bin/bash script); it
+# finds its siblings under bin/workflow/ and hooks/workflow-state/ from its own
+# location, so the worktree's copy is the one launched.
+RCAS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
 # CPR-SSOT: the one fixture-state reader shared by every #1644 test file.
-PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -102,15 +72,15 @@ at_outline() { make_state "$1" "workflow_init clarify_intent research"; }
 at_detail()  { make_state "$1" "workflow_init clarify_intent research outline"; }
 
 OUT=""; ERR=""; RC=0
-# Every invocation carries AGENTS_CONFIG_DIR=<worktree root>: RCAS resolves its
-# siblings through it, and a stub config dir would defeat the delegation this
-# file is about. The repo's own .env cannot decide any case here — the only
+# Every invocation launches the worktree's RCAS: it resolves its siblings from its
+# own location, and a stub tree would defeat the delegation this file is about.
+# The settings root's .env cannot decide any case here — the only
 # config-file branch on the CLI door is CONFIRM_TESTS for write_tests, and the
 # targets used below are outline/detail, which the door admits unconditionally.
 run_rcas() {
   local errf="$TMPDIR_BASE/rcas.err"
   RC=0
-  OUT="$(AGENTS_CONFIG_DIR="$AGENTS_DIR_N" run_with_timeout bash "$RCAS" "$@" 2>"$errf")" || RC=$?
+  OUT="$(run_with_timeout bash "$RCAS" "$@" 2>"$errf")" || RC=$?
   ERR="$(cat "$errf" 2>/dev/null || echo "")"
 }
 probe() {
@@ -254,7 +224,7 @@ check_contains "C5-6b: the same unknown-flag diagnostic" "Unknown flag: --next" 
 # Contrast pin (CPR-ORTH evidence that the class really does differ here):
 # record-skip-judgment rejects the same bare form with exit 1 and a DIFFERENT
 # diagnostic, because it knows the flag and is validating its combination.
-RSJ_ERR="$( (run_with_timeout node "$AGENTS_DIR_N/bin/workflow/record-skip-judgment" \
+RSJ_ERR="$( (run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment" \
   --session a6b --target outline --c1 true --c2 true --next >/dev/null) 2>&1 || true)"
 check_contains "C5-6b: a class member that KNOWS --next says so differently" \
   "--next is only meaningful with --advance" "$RSJ_ERR"

@@ -21,7 +21,7 @@ while IFS='|' read -r name rel; do
     name="$(trim "$name")"; [ -z "$name" ] && continue
     case "$name" in \#*) continue ;; esac
     rel="$(trim "$rel")"
-    abs="$AGENTS_DIR/$rel"
+    abs="$SCRIPT_CHECKOUT_ROOT/$rel"
     if [ ! -f "$abs" ]; then
         fail "$name: $rel is absent" "both hooks are edited, not created, by this feature"
         continue
@@ -66,8 +66,8 @@ W4_TABLE
 # switch); post-merge takes no positional arguments.
 extract_block() { sed -n '/BEGIN codegraph sync/,/END codegraph sync/p' "$1" 2>/dev/null; }
 
-PC="$AGENTS_DIR/hooks/post-checkout"
-PM="$AGENTS_DIR/hooks/post-merge"
+PC="$SCRIPT_CHECKOUT_ROOT/hooks/post-checkout"
+PM="$SCRIPT_CHECKOUT_ROOT/hooks/post-merge"
 if [ ! -f "$PC" ] || [ ! -f "$PM" ]; then
     fail "W4-03: one or both hooks are absent" "cannot compare the two blocks"
 else

@@ -31,10 +31,10 @@ run_block_c13() {
         mutcount=$((mutcount + 1))
         local tree="$MUTROOT/$mutcount"
         rm -rf "$tree"; mkdir -p "$tree"
-        if [ ! -d "$AGENTS_DIR/hooks" ]; then
-            fail "$id" "hooks/ tree not found at $AGENTS_DIR/hooks"; return
+        if [ ! -d "$SCRIPT_CHECKOUT_ROOT/hooks" ]; then
+            fail "$id" "hooks/ tree not found at $SCRIPT_CHECKOUT_ROOT/hooks"; return
         fi
-        cp -r "$AGENTS_DIR/hooks" "$tree/hooks" 2>/dev/null
+        cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$tree/hooks" 2>/dev/null
         local mut_hook="$tree/hooks/confirm-forge-target-ownership.js"
         if [ ! -f "$mut_hook" ]; then
             fail "$id [pristine copy reproduces the baseline]" \

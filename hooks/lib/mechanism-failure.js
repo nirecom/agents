@@ -10,7 +10,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { getSessionStateDir, getStatePath, readState } = require("../workflow-state/state-io");
 const { STEP_IN_FLIGHT_TTL_MS } = require("./step-in-flight-policy");
-const { normalizeCwd } = require("./path-normalize");
+
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 const SID_MAX_LEN = 128;
@@ -102,18 +103,6 @@ function writeLedger(sid, ledger) {
   }
 }
 
-// The CLI is located from AGENTS_CONFIG_DIR verbatim rather than through
-// resolveAgentsConfigDir(): the caller may point at an alternate config dir
-// that carries only bin/, and marker validation would silently redirect the
-// report back to the installed checkout.
-function resolveConfigDir() {
-  const raw = process.env.AGENTS_CONFIG_DIR;
-  if (typeof raw === "string" && raw.trim()) {
-    try { return path.resolve(normalizeCwd(raw.trim()) || raw.trim()); } catch (_e) {}
-  }
-  return path.resolve(__dirname, "..", "..");
-}
-
 // Git Bash cannot exec a shebang script directly through spawnSync, so the
 // interpreter is chosen from the script's own first line.
 function interpreterFor(cliPath) {
@@ -142,7 +131,9 @@ function detailFor(finding) {
 // Spawning bin/supervisor-report (rather than calling appendFinding in-process)
 // keeps one reporting entrypoint for every producer of supervisor findings.
 function runSupervisorReport(sid, finding) {
-  const cli = path.join(resolveConfigDir(), "bin", "supervisor-report");
+  // Taken from this file's own checkout: an inherited environment value must not
+  // be able to redirect where a mechanism failure is reported.
+  const cli = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "supervisor-report");
   if (!fs.existsSync(cli)) return { ok: false, reason: "supervisor-report-missing" };
   const args = [
     cli,

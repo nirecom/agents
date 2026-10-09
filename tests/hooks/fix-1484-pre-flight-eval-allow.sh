@@ -2,34 +2,23 @@
 # tests/hooks/fix-1484-pre-flight-eval-allow.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js
 # Tags: worktree, enforce, hook, security, scope:issue-specific
-#
-# L3 gap (what this test does NOT catch):
-#   - Real sessions where AGENTS_CONFIG_DIR is an actual live config dir with
-#     a real pre-flight.sh that produces output consumed by eval
-#   - Cross-platform shell expansion of $AGENTS_CONFIG_DIR in sub-shells
-#   - Hook invocation ordering when multiple allow predicates contest the command
-# Closest-to-action mitigation: gap is covered at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-#
-# Issue #1484: eval-wrapped pre-flight.sh form is false-blocked because
-# isAllowedWorkerScriptInvocation() primary regex `^\s*bash\s+"([^"]+)"(\s[\s\S]*)?$`
-# does not match `eval "$(bash "$acd/skills/issue-close-finalize/scripts/pre-flight.sh")"`.
-# The fix adds: (1) pre-flight.sh to SANCTIONED, (2) eval-unwrap secondary regex,
-# (3) resolution of literal $AGENTS_CONFIG_DIR prefix before SANCTIONED comparison.
-#
-# Drive surface (full hook):
-#   echo '{"tool_name":"Bash","tool_input":{"command":"<cmd>"}}' | \
-#     (cd <main-worktree> && AGENTS_CONFIG_DIR=<fake-acd> node hooks/enforce-worktree.js)
+# L3 gap (what this test does NOT catch): a live pre-flight.sh whose output eval consumes,
+#   sub-shell expansion of $AGENTS_MAIN_ROOT, ordering between contesting allow predicates.
+#   Mitigation: WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, hook-registration).
+# Issue #1484: `eval "$(bash "<root>/skills/issue-close-finalize/scripts/pre-flight.sh")"` was
+#   false-blocked; the fix sanctioned pre-flight.sh and added an eval-unwrap regex. A path still
+#   carrying an unexpanded $AGENTS_MAIN_ROOT is blocked with a hint since #2561.
+# Drive: payload JSON on stdin of `node hooks/enforce-worktree.js`, cwd = a fixture main worktree.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -81,7 +70,7 @@ GUARD_RC=0
 run_guard() {
     local payload="$1"; shift
     local main_wt="$1"; shift
-    # Remaining args are extra env vars (KEY=VAL form), e.g. AGENTS_CONFIG_DIR=...
+    # Remaining args are extra env vars (KEY=VAL form), e.g. AGENTS_MAIN_ROOT=...
     GUARD_RC=0
     GUARD_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env \
@@ -177,17 +166,17 @@ add_linked_worktree() {
     fi
 }
 
-# Create a fake AGENTS_CONFIG_DIR with all sanctioned worker scripts as empty
+# Create a fake AGENTS_MAIN_ROOT with all sanctioned worker scripts as empty
 # files, including the pre-flight.sh targeted by #1484. Echoes the
 # cygpath-normalized path.
-setup_fake_acd() {
+setup_fake_script_checkout_root() {
     local name="$1"
-    local d="$TMPDIR_BASE/fake-acd-$name"
+    local d="$TMPDIR_BASE/fake-script-checkout-root-$name"
     mkdir -p "$d/bin/github-issues"
-    # Both trust markers (hooks/lib/agents-config-dir.js: hooks/enforce-worktree.js
+    # Both trust markers (hooks/lib/script-checkout-root.js: hooks/enforce-worktree.js
     # AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real
     # one always carries the guard itself — a marker-less stub is not a faithful
-    # config dir, it is the hostile case, which tests/fix-1630-*.sh own.
+    # agents main root, it is the hostile case, which tests/fix-1630-*.sh own.
     mkdir -p "$d/hooks"
     touch "$d/hooks/enforce-worktree.js"
     touch "$d/bin/check-unstaged-tracked.sh"
@@ -195,7 +184,7 @@ setup_fake_acd() {
     touch "$d/bin/issue-close-gate.sh"
     touch "$d/bin/github-issues/issue-close-stage-triage.sh"
     touch "$d/bin/github-issues/parent-body-update.sh"
-    # #1484: pre-flight.sh must exist in the fake ACD so SANCTIONED path resolves
+    # #1484: pre-flight.sh must exist in the fake script checkout root so SANCTIONED path resolves
     mkdir -p "$d/skills/issue-close-finalize/scripts"
     touch "$d/skills/issue-close-finalize/scripts/pre-flight.sh"
     if command -v cygpath >/dev/null 2>&1; then
@@ -206,26 +195,21 @@ setup_fake_acd() {
 }
 
 # ============================================================================
-# F1484 series — eval-unwrap branch for isAllowedWorkerScriptInvocation
-#
-# The hook receives commands from the main worktree CWD. Because pre-flight.sh
-# is invoked via eval "$(bash "...")" rather than bare bash "...", the primary
-# regex in worker-script.js does not match, causing a false-block. These tests
-# drive the fix by confirming:
-#   RED (BLOCK now, ALLOW after fix): F1484-1, F1484-2, F1484-7
-#   GREEN (BLOCK always):             F1484-3, F1484-4, F1484-6
-#   GREEN (ALLOW always, regression): F1484-5
+# F1484 series — eval-unwrap branch for isAllowedWorkerScriptInvocation.
+# pre-flight.sh is invoked via eval "$(bash "...")", which the primary bare-bash
+# regex in worker-script.js does not match.
+#   ALLOW: F1484-1, F1484-2, F1484-5   BLOCK: F1484-3, F1484-4, F1484-6, F1484-7
 # ============================================================================
 
 # F1484-1: eval-wrapped pre-flight.sh (no `|| exit 0`) → ALLOW
 # RED before fix: primary regex doesn't match eval-wrapped form.
 test_F1484_1_allow_eval_preflight_no_tail() {
     local repo; repo="$(setup_main_worktree "f1484-1")"
-    local fake_acd; fake_acd="$(setup_fake_acd "1")"
-    local cmd; cmd="eval \"\$(bash \"$fake_acd/skills/issue-close-finalize/scripts/pre-flight.sh\")\""
+    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "1")"
+    local cmd; cmd="eval \"\$(bash \"$fake_script_checkout_root/skills/issue-close-finalize/scripts/pre-flight.sh\")\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" || rc=$?
     assert_allow "F1484-1: eval-wrapped pre-flight.sh (no tail) → ALLOW (RED before fix)" "$rc"
 }
 
@@ -233,11 +217,11 @@ test_F1484_1_allow_eval_preflight_no_tail() {
 # RED before fix: primary regex doesn't match eval-wrapped form.
 test_F1484_2_allow_eval_preflight_exit0_tail() {
     local repo; repo="$(setup_main_worktree "f1484-2")"
-    local fake_acd; fake_acd="$(setup_fake_acd "2")"
-    local cmd; cmd="eval \"\$(bash \"$fake_acd/skills/issue-close-finalize/scripts/pre-flight.sh\")\" || exit 0"
+    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "2")"
+    local cmd; cmd="eval \"\$(bash \"$fake_script_checkout_root/skills/issue-close-finalize/scripts/pre-flight.sh\")\" || exit 0"
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" || rc=$?
     assert_allow "F1484-2: eval-wrapped pre-flight.sh + || exit 0 → ALLOW (RED before fix)" "$rc"
 }
 
@@ -245,13 +229,13 @@ test_F1484_2_allow_eval_preflight_exit0_tail() {
 # GREEN always: bin/some-other.sh is not in SANCTIONED list, identity gate rejects.
 test_F1484_3_block_eval_non_sanctioned() {
     local repo; repo="$(setup_main_worktree "f1484-3")"
-    local fake_acd; fake_acd="$(setup_fake_acd "3")"
-    mkdir -p "$fake_acd/bin"
-    touch "$fake_acd/bin/some-other.sh"
-    local cmd; cmd="eval \"\$(bash \"$fake_acd/bin/some-other.sh\")\""
+    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "3")"
+    mkdir -p "$fake_script_checkout_root/bin"
+    touch "$fake_script_checkout_root/bin/some-other.sh"
+    local cmd; cmd="eval \"\$(bash \"$fake_script_checkout_root/bin/some-other.sh\")\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" || rc=$?
     assert_block "F1484-3: eval-wrapped non-sanctioned script → BLOCK (identity gate, GREEN always)" "$rc"
 }
 
@@ -260,11 +244,11 @@ test_F1484_3_block_eval_non_sanctioned() {
 # A trailing argument makes this out-of-scope and must be rejected.
 test_F1484_4_block_eval_with_args() {
     local repo; repo="$(setup_main_worktree "f1484-4")"
-    local fake_acd; fake_acd="$(setup_fake_acd "4")"
-    local cmd; cmd="eval \"\$(bash \"$fake_acd/skills/issue-close-finalize/scripts/pre-flight.sh\" \"$repo\")\""
+    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "4")"
+    local cmd; cmd="eval \"\$(bash \"$fake_script_checkout_root/skills/issue-close-finalize/scripts/pre-flight.sh\" \"$repo\")\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" || rc=$?
     assert_block "F1484-4: eval-wrapped + inner args → BLOCK (no-arg restriction, GREEN always)" "$rc"
 }
 
@@ -272,11 +256,11 @@ test_F1484_4_block_eval_with_args() {
 # GREEN always: primary regex path must not regress after the eval-unwrap branch is added.
 test_F1484_5_allow_bare_bash_sanctioned_regression() {
     local repo; repo="$(setup_main_worktree "f1484-5")"
-    local fake_acd; fake_acd="$(setup_fake_acd "5")"
-    local cmd; cmd="bash \"$fake_acd/bin/check-unstaged-tracked.sh\" \"$repo\""
+    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "5")"
+    local cmd; cmd="bash \"$fake_script_checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" || rc=$?
     assert_allow "F1484-5: bare bash + sanctioned script → ALLOW (primary-regex regression, GREEN always)" "$rc"
 }
 
@@ -284,28 +268,33 @@ test_F1484_5_allow_bare_bash_sanctioned_regression() {
 # GREEN always: non-exit command in tail; structural argTail scan must catch it.
 test_F1484_6_block_eval_dangerous_tail() {
     local repo; repo="$(setup_main_worktree "f1484-6")"
-    local fake_acd; fake_acd="$(setup_fake_acd "6")"
-    local cmd; cmd="eval \"\$(bash \"$fake_acd/skills/issue-close-finalize/scripts/pre-flight.sh\")\" || rm -rf /"
+    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "6")"
+    local cmd; cmd="eval \"\$(bash \"$fake_script_checkout_root/skills/issue-close-finalize/scripts/pre-flight.sh\")\" || rm -rf /"
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" || rc=$?
     assert_block "F1484-6: eval-wrapped + || rm -rf / chaining → BLOCK (argTail security pin, GREEN always)" "$rc"
 }
 
-# F1484-7: literal $AGENTS_CONFIG_DIR prefix (env-var unexpanded) → ALLOW
-# RED before fix: the hook receives the raw command string before shell expansion,
-# so the path contains the literal text `$AGENTS_CONFIG_DIR`. The fix must resolve
-# this literal prefix to the actual acd value before SANCTIONED comparison.
-test_F1484_7_allow_literal_env_var_prefix() {
+# F1484-7: literal $AGENTS_MAIN_ROOT prefix (env-var unexpanded) → BLOCK with a hint (#2561).
+# The hook reads the raw command before the shell expands it, so it cannot confirm which
+# file will run: the prefix is no longer rewritten, and the block reason names the literal form.
+test_F1484_7_block_literal_env_var_prefix() {
     local repo; repo="$(setup_main_worktree "f1484-7")"
-    local fake_acd; fake_acd="$(setup_fake_acd "7")"
-    # Pass the LITERAL string $AGENTS_CONFIG_DIR — NOT the expanded path.
+    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "7")"
+    # Pass the LITERAL string $AGENTS_MAIN_ROOT — NOT the expanded path.
     # json_quote will properly escape the $ signs so the JSON payload contains them verbatim.
-    local literal_cmd='eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh")" || exit 0'
+    local literal_cmd='eval "$(bash "$AGENTS_MAIN_ROOT/skills/issue-close-finalize/scripts/pre-flight.sh")" || exit 0'
     local payload; payload="$(build_bash_payload "$literal_cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" || rc=$?
-    assert_allow "F1484-7: literal \$AGENTS_CONFIG_DIR prefix → ALLOW (env-var resolution, RED before fix)" "$rc"
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" || rc=$?
+    assert_block "F1484-7: literal \$AGENTS_MAIN_ROOT prefix → BLOCK (unexpanded variable, #2561)" "$rc"
+    local hint='Hint: skills/issue-close-finalize/scripts/pre-flight.sh is allowed from the main worktree, but this command names it through $AGENTS_MAIN_ROOT'
+    if printf '%s' "$GUARD_OUT" | grep -qF "$hint"; then
+        pass "F1484-7 hint: the block reason names the script and the variable it was reached through"
+    else
+        fail "F1484-7 hint: block reason lacks the variable-path hint (out: $GUARD_OUT)"
+    fi
 }
 
 # ============================================================================
@@ -319,7 +308,7 @@ run_all() {
     test_F1484_4_block_eval_with_args
     test_F1484_5_allow_bare_bash_sanctioned_regression
     test_F1484_6_block_eval_dangerous_tail
-    test_F1484_7_allow_literal_env_var_prefix
+    test_F1484_7_block_literal_env_var_prefix
 }
 
 # 180s outer timeout so a stuck git op cannot wedge the suite.

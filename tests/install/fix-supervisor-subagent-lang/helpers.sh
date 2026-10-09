@@ -1,24 +1,24 @@
 # helpers.sh — Shared setup and helper functions for fix-supervisor-subagent-lang tests.
 # Sourced by the dispatch entrypoint; not executable directly.
-# Sets: AGENTS_DIR, SETTINGS_JSON, SUBAGENT_START, AGENT_FILES, EXPECTED_JA,
+# Sets: _HELPERS_SCRIPT_CHECKOUT_ROOT, SETTINGS_JSON, SUBAGENT_START, AGENT_FILES, EXPECTED_JA,
 #       TMPDIR_BASE, PASS, FAIL, SKIP counters, pass/fail/skip functions,
 #       run_with_timeout, to_node_path.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SETTINGS_JSON="$AGENTS_DIR/settings.json"
-SUBAGENT_START="$AGENTS_DIR/hooks/subagent-start.js"
-ASSEMBLE_SETTINGS="$AGENTS_DIR/install/assemble-settings.js"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SETTINGS_JSON="$_HELPERS_SCRIPT_CHECKOUT_ROOT/settings.json"
+SUBAGENT_START="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/subagent-start.js"
+ASSEMBLE_SETTINGS="$_HELPERS_SCRIPT_CHECKOUT_ROOT/install/assemble-settings.js"
 
 # 8 agent files (per #897 plan; workers and other non-MUST agents are out of scope).
 AGENT_FILES=(
-    "$AGENTS_DIR/agents/supervisor.md"
-    "$AGENTS_DIR/agents/survey-history.md"
-    "$AGENTS_DIR/agents/survey-code.md"
-    "$AGENTS_DIR/agents/detail-planner.md"
-    "$AGENTS_DIR/agents/outline-planner.md"
-    "$AGENTS_DIR/agents/security-scanner.md"
-    "$AGENTS_DIR/agents/detail-reviewer.md"
-    "$AGENTS_DIR/agents/outline-reviewer.md"
+    "$_HELPERS_SCRIPT_CHECKOUT_ROOT/agents/supervisor.md"
+    "$_HELPERS_SCRIPT_CHECKOUT_ROOT/agents/survey-history.md"
+    "$_HELPERS_SCRIPT_CHECKOUT_ROOT/agents/survey-code.md"
+    "$_HELPERS_SCRIPT_CHECKOUT_ROOT/agents/detail-planner.md"
+    "$_HELPERS_SCRIPT_CHECKOUT_ROOT/agents/outline-planner.md"
+    "$_HELPERS_SCRIPT_CHECKOUT_ROOT/agents/security-scanner.md"
+    "$_HELPERS_SCRIPT_CHECKOUT_ROOT/agents/detail-reviewer.md"
+    "$_HELPERS_SCRIPT_CHECKOUT_ROOT/agents/outline-reviewer.md"
 )
 
 EXPECTED_JA='Respond to the user in japanese. This applies to all text you write, including narration between tool calls.'
@@ -64,7 +64,7 @@ NODE_ASSEMBLE_SETTINGS=$(to_node_path "$ASSEMBLE_SETTINGS")
 # Isolate from any user .env that might define CONV_LANG.
 EMPTY_CFG="$TMPDIR_BASE/empty-cfg"
 mkdir -p "$EMPTY_CFG"
-export AGENTS_CONFIG_DIR="$EMPTY_CFG"
+export AGENTS_MAIN_ROOT="$EMPTY_CFG"
 
 assert_eq() {
     # assert_eq <label> <expected> <actual>

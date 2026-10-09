@@ -237,12 +237,11 @@ T20_cross_repo_registered_worktree_guards_parent() {
         return
     fi
 
-    # Run sweep from repoA context, but MAIN_ROOT explicitly set to repoA.
-    # The script must discover repoB's worktree registry via cross-repo scan
+    # Run sweep from repoA context, so the script resolves repoA as its target
+    # main root. It must discover repoB's worktree registry via cross-repo scan
     # under WORKTREE_BASE_DIR.
     local out exit_code json_line
     out="$(cd "$repoA" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" SWEEP_AGE_DAYS=1 \
-        MAIN_ROOT="$repoA" \
         run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
     exit_code=$?
     json_line="$(printf '%s\n' "$out" | grep -E '^\{.*\}$' | tail -1)"

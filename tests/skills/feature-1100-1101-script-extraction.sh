@@ -60,7 +60,7 @@ const state = {
   schema_version: sv,
   root_issue_number: 42, current_issue_number: 42,
   owner_repo: 'owner/repo',
-  agents_config_dir: '/tmp/x', main_worktree_path: '/tmp/x',
+  script_checkout_root: '/tmp/x', target_main_root: '/tmp/x',
   phase: 'init_done', triage_action: 'resume_h',
   g5_loop_iteration: 0, g5_history: hist,
   proposal_counters: {accepted: 0, declined: 0, skipped: 0}
@@ -112,7 +112,7 @@ test_l1_decline_decision() {
     _write_state "$STATE" 3 false false
 
     local OUTPUT
-    OUTPUT=$(AGENTS_CONFIG_DIR=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
+    OUTPUT=$(AGENTS_MAIN_ROOT=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
         node skills/issue-close-finalize/scripts/run-loop-step.js \
         "$STATE" "decline" 2>/dev/null || true)
 
@@ -146,7 +146,7 @@ test_l2_llm_declined_decision() {
     _write_state "$STATE" 3 false false
 
     local OUTPUT
-    OUTPUT=$(AGENTS_CONFIG_DIR=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
+    OUTPUT=$(AGENTS_MAIN_ROOT=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
         node skills/issue-close-finalize/scripts/run-loop-step.js \
         "$STATE" "llm_declined" 2>/dev/null || true)
 
@@ -180,7 +180,7 @@ test_l3_unknown_g5_decision() {
     _write_state "$STATE" 3 false false
 
     local OUTPUT
-    OUTPUT=$(AGENTS_CONFIG_DIR=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
+    OUTPUT=$(AGENTS_MAIN_ROOT=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
         node skills/issue-close-finalize/scripts/run-loop-step.js \
         "$STATE" "bogus_decision" 2>/dev/null || true)
 
@@ -196,7 +196,7 @@ test_l3_unknown_g5_decision() {
 
 test_l4_missing_state_file() {
     local OUTPUT
-    OUTPUT=$(AGENTS_CONFIG_DIR=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
+    OUTPUT=$(AGENTS_MAIN_ROOT=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
         node skills/issue-close-finalize/scripts/run-loop-step.js \
         "/nonexistent/path/state.json" "decline" 2>/dev/null || true)
 
@@ -215,7 +215,7 @@ test_l5_wrong_schema_version() {
     _write_state "$STATE" 2 false false
 
     local OUTPUT
-    OUTPUT=$(AGENTS_CONFIG_DIR=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
+    OUTPUT=$(AGENTS_MAIN_ROOT=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
         node skills/issue-close-finalize/scripts/run-loop-step.js \
         "$STATE" "decline" 2>/dev/null || true)
 
@@ -236,7 +236,7 @@ test_l6_empty_g5_history() {
     _write_state "$STATE" 3 false true  # empty_history=true
 
     local OUTPUT
-    OUTPUT=$(AGENTS_CONFIG_DIR=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
+    OUTPUT=$(AGENTS_MAIN_ROOT=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
         node skills/issue-close-finalize/scripts/run-loop-step.js \
         "$STATE" "decline" 2>/dev/null || true)
 
@@ -387,7 +387,7 @@ test_a1_accept_g5_3a_not_completed() {
     chmod +x "$TMP/step-g5-loop.sh"
 
     local OUTPUT
-    OUTPUT=$(AGENTS_CONFIG_DIR="$TMP" FINALIZE_SCRIPTS_DIR="$TMP" \
+    OUTPUT=$(AGENTS_MAIN_ROOT="$TMP" FINALIZE_SCRIPTS_DIR="$TMP" \
         node skills/issue-close-finalize/scripts/run-loop-step.js \
         "$STATE" "accept" 2>/dev/null || true)
 
@@ -426,7 +426,7 @@ test_a2_accept_g5_3a_already_completed_idempotent() {
     chmod +x "$TMP/step-g5-loop.sh"
 
     local OUTPUT
-    OUTPUT=$(AGENTS_CONFIG_DIR="$TMP" FINALIZE_SCRIPTS_DIR="$TMP" \
+    OUTPUT=$(AGENTS_MAIN_ROOT="$TMP" FINALIZE_SCRIPTS_DIR="$TMP" \
         node skills/issue-close-finalize/scripts/run-loop-step.js \
         "$STATE" "accept" 2>/dev/null || true)
 

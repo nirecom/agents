@@ -10,13 +10,13 @@ set -uo pipefail
 
 # TL2 — shared fixture: tests/bin/feature-2434-review-loop/fixture.sh.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/bin/feature-2434-review-loop/fixture.sh
-. "$AGENTS_DIR/tests/bin/feature-2434-review-loop/fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2434-review-loop/fixture.sh"
 
-[ -f "$AGENTS_DIR/bin/workflow-control-dir" ] || fail "implementation missing: bin/workflow-control-dir"
+[ -f "$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir" ] || fail "implementation missing: bin/workflow-control-dir"
 
 case_begin "control-dir-failure-halts-with-exit-4" "bin/workflow-control-dir"
 # A regular file squatting <sid>.control makes the resolver fail.
@@ -37,7 +37,7 @@ case_begin "legacy-terminal-keeps-the-guard" "skills/review-plan-security/script
 # Step 5-9: a terminal under its pre-#2434 PLANS name (unreadable fingerprint)
 # still blocks the unchanged re-run: it is moved into <sid>.control/ first and
 # then honoured -> exit 8, so the upgrade opens no window around the guard.
-[ -f "$AGENTS_DIR/hooks/workflow-state/state-io/control-dir.js" ] || \
+[ -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/control-dir.js" ] || \
     fail "implementation missing: hooks/workflow-state/state-io/control-dir.js"
 for ROW in review-plan-security:security-plan review-code-security:security-code review-tests:test-review; do
     SKILL="${ROW%%:*}"; FMT="${ROW#*:}"

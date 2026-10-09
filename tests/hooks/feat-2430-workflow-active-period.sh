@@ -8,8 +8,8 @@
 # TDD (write_code has not run): every row is expected to FAIL with "MODULE NOT FOUND" until hooks/lib/workflow-active-period.js exists.
 
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 MOD="hooks/lib/workflow-active-period.js"
 TMP="$(make_tmp)"
@@ -18,10 +18,10 @@ mkdir -p "$TMP/wf" "$TMP/home"
 export WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
 export WORKFLOW_PLANS_DIR="$WORKFLOW_STATE_DIR"
 export HOME="$(np "$TMP/home")" USERPROFILE="$(np "$TMP/home")"
-export AGENTS="$(np "$AGENTS_DIR")"
+export AGENTS="$(np "$SCRIPT_CHECKOUT_ROOT")"
 cd "$TMP" || exit 1
 
-if [ ! -f "$AGENTS_DIR/$MOD" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/$MOD" ]; then
     fail "MODULE NOT FOUND: $MOD — expected per issue #2430, not yet implemented (write_code has not run)"
     echo ""; echo "Results: $PASS passed, $FAIL failed"; exit 1
 fi

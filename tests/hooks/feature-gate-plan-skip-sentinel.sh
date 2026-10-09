@@ -23,8 +23,8 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-GATE_HOOK="$AGENTS_DIR/hooks/gate-plan-skip-sentinel.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/gate-plan-skip-sentinel.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -156,7 +156,7 @@ echo "=== T14: WRITE_TESTS_NOT_NEEDED with CONFIRM_TESTS=\"\" (empty string) →
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: docs-only change>>"')
 # Isolate from parent .env (load-env.js treats "" as unset, so .env wins otherwise)
 _T14_ENV=$(mktemp -d)
-CONFIRM_TESTS="" AGENTS_CONFIG_DIR="$_T14_ENV" assert_passthrough \
+CONFIRM_TESTS="" AGENTS_MAIN_ROOT="$_T14_ENV" assert_passthrough \
     "T14. CONFIRM_TESTS=\"\" (empty) → pass-through (fail-safe to ON)" "$INPUT"
 rmdir "$_T14_ENV" 2>/dev/null || true
 
@@ -165,7 +165,7 @@ INPUT=$(build_bash_input 'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: docs-only cha
 # Isolate from parent .env so unset truly means unset
 _T14B_ENV=$(mktemp -d)
 unset CONFIRM_TESTS 2>/dev/null || true
-AGENTS_CONFIG_DIR="$_T14B_ENV" assert_passthrough \
+AGENTS_MAIN_ROOT="$_T14B_ENV" assert_passthrough \
     "T14b. CONFIRM_TESTS unset → pass-through" "$INPUT"
 rmdir "$_T14B_ENV" 2>/dev/null || true
 

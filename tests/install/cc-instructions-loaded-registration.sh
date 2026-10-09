@@ -13,10 +13,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SETTINGS="$AGENTS_DIR/settings.json"
-ASSEMBLER="$AGENTS_DIR/install/assemble-settings.js"
-HOOK="$AGENTS_DIR/hooks/instructions-loaded-audit.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
+ASSEMBLER="$SCRIPT_CHECKOUT_ROOT/install/assemble-settings.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/instructions-loaded-audit.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -25,7 +25,7 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 EVENT="InstructionsLoaded"
-WANT_CMD='node "$AGENTS_CONFIG_DIR/hooks/instructions-loaded-audit.js"'
+WANT_CMD='node "$AGENTS_MAIN_ROOT/hooks/instructions-loaded-audit.js"'
 WANT_TIMEOUT=5
 
 # --- Tier 1: the hook file itself must exist before its registration can mean
@@ -182,10 +182,10 @@ fi
 # --- R4: the command's script path must resolve to a file that exists in the repo.
 # A registered-but-misspelled path is a dead hook that no behavioural test detects. ---
 R4_CMD="$(rcmd)"
-R4_REL="$(printf '%s' "$R4_CMD" | sed -n 's|.*AGENTS_CONFIG_DIR/\([^"]*\)".*|\1|p')"
+R4_REL="$(printf '%s' "$R4_CMD" | sed -n 's|.*AGENTS_MAIN_ROOT/\([^"]*\)".*|\1|p')"
 if [ -z "$R4_REL" ]; then
-    fail "R4: could not extract a \$AGENTS_CONFIG_DIR-relative script path from [$R4_CMD]"
-elif [ -f "$AGENTS_DIR/$R4_REL" ]; then
+    fail "R4: could not extract a \$AGENTS_MAIN_ROOT-relative script path from [$R4_CMD]"
+elif [ -f "$SCRIPT_CHECKOUT_ROOT/$R4_REL" ]; then
     pass "R4: the registered command points at an existing file ($R4_REL)"
 else
     fail "R4: the registered command points at a missing file ($R4_REL)"

@@ -17,10 +17,10 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HELPER="$AGENTS_DIR/bin/resolve-merge-base.sh"
-RECORD_CLI="$AGENTS_DIR/bin/workflow/record-merge-base-baseline"
-READ_CLI="$AGENTS_DIR/bin/workflow/read-merge-base-baseline"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HELPER="$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh"
+RECORD_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-merge-base-baseline"
+READ_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/read-merge-base-baseline"
 
 PASS=0
 FAIL=0
@@ -143,7 +143,7 @@ const path = require("path");
 const fs = require("fs");
 let ws;
 try {
-  ws = require(path.join(process.env.AGENTS_DIR, "hooks", "workflow-state"));
+  ws = require(path.join(process.env.SCRIPT_CHECKOUT_ROOT_NODE, "hooks", "workflow-state"));
 } catch (e) {
   process.stdout.write("ERR:require:" + e.message + "\n");
   process.exit(1);
@@ -190,7 +190,7 @@ NODEEOF
 NODE_RC=0
 node_state() { # <subcommand> <sid> [args...] ; prints stdout, sets NODE_RC
   NODE_RC=0
-  env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" "WORKFLOW_PLANS_DIR=$PLANSDIR" \
+  env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" "WORKFLOW_PLANS_DIR=$PLANSDIR" \
     node "$STATE_JS" "$@" 2>/dev/null || NODE_RC=$?
 }
 
@@ -238,19 +238,19 @@ kv() { printf '%s\n' "$HB_OUT" | sed -n "s/^$1=//p" | head -1; }
 # the fixtures, the state driver and the invocation helper above are shared by all three.
 
 # shellcheck source=./feature-1638-resolve-merge-base/recorded-baseline.sh
-. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/recorded-baseline.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1638-resolve-merge-base/recorded-baseline.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/resolution-and-anomaly.sh
-. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/resolution-and-anomaly.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1638-resolve-merge-base/resolution-and-anomaly.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/writer-and-degradation.sh
-. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/writer-and-degradation.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1638-resolve-merge-base/writer-and-degradation.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/branching-integration.sh
-. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/branching-integration.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1638-resolve-merge-base/branching-integration.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/thresholds-and-edges.sh
-. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/thresholds-and-edges.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1638-resolve-merge-base/thresholds-and-edges.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/baseline-errors.sh
-. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/baseline-errors.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1638-resolve-merge-base/baseline-errors.sh"
 # shellcheck source=./feature-1638-resolve-merge-base/approval-cli.sh
-. "$AGENTS_DIR/tests/bin/feature-1638-resolve-merge-base/approval-cli.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1638-resolve-merge-base/approval-cli.sh"
 
 # ---- run --------------------------------------------------------------------
 

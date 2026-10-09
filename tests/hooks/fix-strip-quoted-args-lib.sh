@@ -9,13 +9,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-MODULE="${_AGENTS_DIR_NODE}/hooks/lib/strip-quoted-args.js"
+MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/strip-quoted-args.js"
 
 PASS=0
 FAIL=0
@@ -167,7 +167,7 @@ test_idempotency() {
 # stripShellVarAssignment tests (#659)
 # ─────────────────────────────────────────────────────────────────────────────
 
-PATTERNS_MODULE="${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns.js"
+PATTERNS_MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-patterns.js"
 
 # Helper: call stripShellVarAssignment from strip-quoted-args.js
 # The function does NOT exist yet → all call_strip_shell_var tests are RED.

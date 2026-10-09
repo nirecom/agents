@@ -8,27 +8,27 @@
 
 set -euo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 if [ "$#" -eq 0 ]; then
-  REPO_DIR="$PWD"
+  TARGET_CHECKOUT_ROOT="$PWD"
 elif [ "$#" -eq 1 ]; then
-  REPO_DIR="$1"
+  TARGET_CHECKOUT_ROOT="$1"
 else
   echo "Usage: check-unstaged-tracked.sh [repo-dir]" >&2
   exit 2
 fi
 
-: "${AGENTS_CONFIG_DIR:=$(cd "$(dirname "$0")/.." && pwd)}"
-
-HELPER_JS="$AGENTS_CONFIG_DIR/hooks/workflow-gate/staged-evidence.js"
+HELPER_JS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/staged-evidence.js"
 
 rc=0
-HELPER_JS="$HELPER_JS" REPO_DIR="$REPO_DIR" node -e '
-  const { hasUnstagedTrackedChanges } = require(process.env.HELPER_JS);
-  const r = hasUnstagedTrackedChanges(process.env.REPO_DIR);
+node -e '
+  const { hasUnstagedTrackedChanges } = require(process.argv[1]);
+  const r = hasUnstagedTrackedChanges(process.argv[2]);
   if (r.error !== null) { process.stderr.write(r.error + "\n"); process.exit(3); }
   if (r.hasChanges) { process.stdout.write(r.files.join("\n") + "\n"); process.exit(1); }
   process.exit(0);
-' || rc=$?
+' "$HELPER_JS" "$TARGET_CHECKOUT_ROOT" || rc=$?
 
 case "$rc" in
   0|1|2|3) exit "$rc" ;;

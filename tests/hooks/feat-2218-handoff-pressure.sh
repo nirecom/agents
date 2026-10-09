@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -20,14 +20,21 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 unset CLAUDE_CODE_SESSION_ID
+
+# Top-level pin (rules/test/fixture-isolation.md): no call can reach the live state or plans
+# dir. Each case still re-points both at its own tmp dir on the call.
+ISO_ROOT="$(node_path "$(make_tmp)")"
+readonly ISO_ROOT
+trap 'rm -rf "$ISO_ROOT"' EXIT
+export WORKFLOW_STATE_DIR="$ISO_ROOT/wf" WORKFLOW_PLANS_DIR="$ISO_ROOT/wf"
 
 LIB="hooks/lib/handoff-pressure.js"
 HOOK="hooks/handoff-pressure-nudge.js"
 
 require_module() {
-    if [ -f "$AGENTS_DIR/$1" ]; then return 0; fi
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
     fail "MODULE NOT FOUND: $1 — expected per issue #2218 Step 10, not yet implemented (write_code has not run)"
     return 1
 }
@@ -48,7 +55,7 @@ run_js() {
     local tn; tn="$(node_path "$1")"
     mkdir -p "$1/wf" "$1/home"
     env WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
-        HOME="$tn/home" USERPROFILE="$tn/home" TMPD="$tn" AGENTS="$AGENTS_DIR_NODE" \
+        HOME="$tn/home" USERPROFILE="$tn/home" TMPD="$tn" AGENTS="$SCRIPT_CHECKOUT_ROOT_NODE" \
         "$RWT" 60 node "$2" 2>&1
 }
 
@@ -184,7 +191,7 @@ run_hook() {
         "$sid" "$tn/transcript.jsonl" "$tn" \
         | env WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
             HOME="$tn/home" USERPROFILE="$tn/home" \
-            "$RWT" 60 node "$AGENTS_DIR/$HOOK" 2>&1
+            "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/$HOOK" 2>&1
 }
 
 # P3 — output shape and wording. The envelope must match hooks/lang-inject.js
@@ -231,14 +238,14 @@ run_P4() {
     problems=""
     bad1=$(printf 'not json at all' | env \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 30 node "$AGENTS_DIR/$HOOK" 2>/dev/null)
+        "$RWT" 30 node "$SCRIPT_CHECKOUT_ROOT/$HOOK" 2>/dev/null)
     bad2=$(printf '{"session_id":"sid-p4"}' | env \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 30 node "$AGENTS_DIR/$HOOK" 2>/dev/null)
+        "$RWT" 30 node "$SCRIPT_CHECKOUT_ROOT/$HOOK" 2>/dev/null)
     bad3=$(printf '{"session_id":"sid-p4","transcript_path":"%s/nope.jsonl"}' "$(node_path "$tmp")" \
         | env \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 30 node "$AGENTS_DIR/$HOOK" 2>/dev/null)
+        "$RWT" 30 node "$SCRIPT_CHECKOUT_ROOT/$HOOK" 2>/dev/null)
     rm -rf "$tmp" 2>/dev/null || true
     [ "$(printf '%s' "$bad1" | tr -d ' \n\r')" = "{}" ] || problems="$problems malformed-stdin:'${bad1}'"
     [ "$(printf '%s' "$bad2" | tr -d ' \n\r')" = "{}" ] || problems="$problems no-transcript_path:'${bad2}'"
@@ -258,7 +265,7 @@ run_P5() {
     local out
     out="$(run_node "
 const fs = require('fs');
-const s = JSON.parse(fs.readFileSync('$AGENTS_DIR_NODE/settings.json', 'utf8'));
+const s = JSON.parse(fs.readFileSync('$SCRIPT_CHECKOUT_ROOT_NODE/settings.json', 'utf8'));
 const problems = [];
 const hooks = (s && s.hooks) || {};
 const registeredIn = [];

@@ -92,11 +92,11 @@ EOF
 assert_eq 'N5: $VAR in double quotes -> expanded+normalized' 'C:\git\fornix-stream' "$result"
 
 # N6: ${VAR} braced form
-result=$(AGENTS_DIR_TEST="C:/git/agents" node_hook --input-type=module <<'EOF'
+result=$(SCRIPT_CHECKOUT_ROOT_TEST="C:/git/agents" node_hook --input-type=module <<'EOF'
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { resolveRepoDir } = require(process.env.HOOK_PATH);
-process.stdout.write(resolveRepoDir('git -C "${AGENTS_DIR_TEST}" commit -m "msg"'));
+process.stdout.write(resolveRepoDir('git -C "${SCRIPT_CHECKOUT_ROOT_TEST}" commit -m "msg"'));
 EOF
 )
 assert_eq 'N6: ${VAR} braced form -> expanded+normalized' 'C:\git\agents' "$result"

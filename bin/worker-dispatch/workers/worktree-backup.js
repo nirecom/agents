@@ -3,7 +3,7 @@
 //
 // Stage 2 worker (replaces agents/worktree-backup-worker.md): copies gitignored
 // and untracked worktree state through fsguard, so there is no command line for a
-// write hook to parse. backup_dir is derived (<main-root>/.worktree-backup/<branch>),
+// write hook to parse. backup_dir is derived (<target-main-root>/.worktree-backup/<branch>),
 // never accepted from the caller — see bin/worker-dispatch/capability.js.
 
 const crypto = require("crypto");

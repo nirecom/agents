@@ -53,9 +53,9 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HOOK="$AGENTS_DIR/hooks/enforce-system-ops.js"
-SETTINGS="$AGENTS_DIR/settings.json"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-system-ops.js"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
 
 PASS=0
 FAIL=0
@@ -186,7 +186,7 @@ assert_eq "H1 harness reports BLOCK for a canonical category-A command" \
 assert_eq "H2 harness reports ALLOW for an ordinary command" \
     "ALLOW" "$(run_cmd 'ls -la')"
 
-PARTS_DIR="$AGENTS_DIR/tests/hooks/enforce-system-ops-classifier"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/enforce-system-ops-classifier"
 # shellcheck source=./enforce-system-ops-classifier/cases-categories.sh
 . "$PARTS_DIR/cases-categories.sh"
 # shellcheck source=./enforce-system-ops-classifier/cases-anchoring.sh

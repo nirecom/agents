@@ -4,7 +4,7 @@
 # R26 (C5): a relative WORKFLOW_STATE_DIR is refused by every reader; absolute values
 # are normalized, and an MSYS /c/... spelling is converted on Windows.
 c_r26_relative_pin() {
-  local sid lib out rc msys acd
+  local sid lib out rc msys script_checkout_root
   new_home r26
   sid="$(sid_of 2601)"
   mkdir -p "$T/cwd/rel-state"
@@ -24,15 +24,15 @@ c_r26_relative_pin() {
   fi
   rc=0
   (cd "$T/cwd" && run_with_timeout 30 env -u "$OLD_TOKEN" WORKFLOW_STATE_DIR=rel-state HOME="$H" USERPROFILE="$H" \
-    node "$AGENTS_DIR/bin/workflow-state-dir" --global >/dev/null 2>&1) || rc=$?
+    node "$SCRIPT_CHECKOUT_ROOT/bin/workflow-state-dir" --global >/dev/null 2>&1) || rc=$?
   eq "R26 bin/workflow-state-dir exits 1 on a relative pin" "$rc" "1"
-  lib="$AGENTS_DIR/bin/lib/safe-state-path.sh"
+  lib="$SCRIPT_CHECKOUT_ROOT/bin/lib/safe-state-path.sh"
   rc=0
   (cd "$T/cwd" && run_with_timeout 30 env -u "$OLD_TOKEN" WORKFLOW_STATE_DIR=rel-state HOME="$H" USERPROFILE="$H" \
     bash -c '. "$1"; sp_control_dir "$2"' _ "$lib" "$sid" >/dev/null 2>"$T/r26-sp.err") || rc=$?
   eq "R26 sp_control_dir returns 1 on a relative pin" "$rc" "1"
   eq "R26 sp_control_dir names the rule on stderr" "$(grep -c 'must be an absolute path' "$T/r26-sp.err" || true)" "1"
-  lib="$AGENTS_DIR/bin/github-issues/lib/resolve-project.sh"
+  lib="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh"
   rc=0
   out="$(cd "$T/cwd" && run_with_timeout 30 env -u "$OLD_TOKEN" WORKFLOW_STATE_DIR=rel-state HOME="$H" USERPROFILE="$H" \
     bash -c '. "$1"; _resolve_project_cache_dir "$(dirname "$1")"' _ "$lib" 2>/dev/null)" || rc=$?
@@ -40,10 +40,10 @@ c_r26_relative_pin() {
   eq "R26 gh-env state is not persisted under a relative pin" \
     "$(pprobe rel-state ghsave "$sid")" '{"persisted":false,"failed":true}'
   eq "R26 nothing was written under the cwd-relative dir" "$(ls -A "$T/cwd/rel-state")" ""
-  acd="$(np "$T/r26-acd")"
-  mkdir -p "$acd"
-  printf 'WORKFLOW_STATE_DIR=rel-state\n' >"$acd/.env"
-  like_err "R26 the commit-push gate refuses a relative .env pin" "$(dprobe gateenv "$acd" "$sid")"
+  script_checkout_root="$(np "$T/r26-script-checkout-root")"
+  mkdir -p "$script_checkout_root"
+  printf 'WORKFLOW_STATE_DIR=rel-state\n' >"$script_checkout_root/.env"
+  like_err "R26 the commit-push gate refuses a relative .env pin" "$(dprobe gateenv "$script_checkout_root" "$sid")"
 }
 
 # R26b (round 2 C5): on Windows a driveless pin is cwd-drive-relative to Node, so only a
@@ -67,7 +67,7 @@ c_r26b_driveless_pin() {
     eq "R26b a POSIX /tmp/x pin stays absolute off Windows" "$(dprobe rawpin tmp/x)" "/tmp/x"
     skip "R26b win32 drive-form checks (not a win32 host)"
   fi
-  lib="$AGENTS_DIR/bin/lib/safe-state-path.sh"
+  lib="$SCRIPT_CHECKOUT_ROOT/bin/lib/safe-state-path.sh"
   isabs() { bash -c '. "$1"; _sp_is_abs_path "$2" && echo abs || echo rel' _ "$lib" "$1"; }
   eq "R26b _sp_is_abs_path accepts /c/x" "$(isabs /c/x)" "abs"
   eq "R26b _sp_is_abs_path accepts C:/x" "$(isabs C:/x)" "abs"
@@ -106,7 +106,7 @@ c_r27_absent_legacy_root() {
   eq "R27 active ids still enumerate the new root" "$(dprobe active "$own")" "$own,$a"
   eq "R27 an absent legacy root keeps the enumeration complete" "$(dprobe activecomplete "$own")" "true"
   eq "R27 zombie cleanup tolerates the absent root" "$(dprobe zombies)" "done"
-  out="$(dcli "$AGENTS_DIR/bin/workflow-state-dir" --roots || true)"
+  out="$(dcli "$SCRIPT_CHECKOUT_ROOT/bin/workflow-state-dir" --roots || true)"
   eq "R27 --roots lists the absent legacy root" "$(roots_np "$out")" "$NEW,$LEG"
   eq "R27 a write into the not-yet-created legacy root is still control-dir" \
     "$(dprobe placement "$LEG/$a.json")" "control-dir"

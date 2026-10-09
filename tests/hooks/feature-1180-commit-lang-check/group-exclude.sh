@@ -33,7 +33,7 @@
 #   Windows coverage at all.
 # - Real `git commit` wiring: like the rest of this family, integration cases
 #   invoke hooks/pre-commit directly rather than through a real commit.
-# - Real Windows git-bash PATH + AGENTS_CONFIG_DIR symlink resolution.
+# - Real Windows git-bash PATH + AGENTS_MAIN_ROOT symlink resolution.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 #
@@ -41,7 +41,7 @@
 # treats an empty process.env value as unset and lets .env overwrite it. lib.sh's
 # helpers therefore inject $EXCLUDE_ISOLATION_SENTINEL into every call that does
 # not decide the variable itself; the single case that needs a genuinely empty
-# value (X11) stubs AGENTS_CONFIG_DIR at an isolated directory with no .env.
+# value (X11) stubs AGENTS_MAIN_ROOT at an isolated directory with no .env.
 
 _XG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

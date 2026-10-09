@@ -13,7 +13,7 @@
 #   is_reachable_from_default <branch> — salvage check before a no-PR delete.
 #
 # Must be `source`d, not executed directly — it reads and mutates caller-scope
-# variables ($MAIN_ROOT, $MIN_AGE_HOURS, $SWEEP_AGE_DAYS, DEFAULT_REMOTE_REF).
+# variables ($TARGET_MAIN_ROOT, $MIN_AGE_HOURS, $SWEEP_AGE_DAYS, DEFAULT_REMOTE_REF).
 
 # Protected branch names — never deleted.
 is_protected() {
@@ -29,7 +29,7 @@ is_protected() {
 is_old_enough_for_no_pr() {
   local ref="$1"
   local commit_ts
-  commit_ts="$(git -C "$MAIN_ROOT" log -1 --format='%ct' "$ref" 2>/dev/null || echo 0)"
+  commit_ts="$(git -C "$TARGET_MAIN_ROOT" log -1 --format='%ct' "$ref" 2>/dev/null || echo 0)"
   if [[ ! "$commit_ts" =~ ^[0-9]+$ ]]; then
     commit_ts=0
   fi
@@ -44,12 +44,12 @@ resolve_default_remote_ref() {
     return 0
   fi
   local out cand
-  if out="$(git -C "$MAIN_ROOT" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)"; then
+  if out="$(git -C "$TARGET_MAIN_ROOT" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)"; then
     DEFAULT_REMOTE_REF="$out"
     return 0
   fi
   for cand in origin/main origin/master; do
-    if git -C "$MAIN_ROOT" rev-parse --verify --quiet "$cand" >/dev/null 2>&1; then
+    if git -C "$TARGET_MAIN_ROOT" rev-parse --verify --quiet "$cand" >/dev/null 2>&1; then
       DEFAULT_REMOTE_REF="$cand"
       return 0
     fi
@@ -65,7 +65,7 @@ is_reachable_from_default() {
   if ! resolve_default_remote_ref; then
     return 1
   fi
-  git -C "$MAIN_ROOT" merge-base --is-ancestor \
+  git -C "$TARGET_MAIN_ROOT" merge-base --is-ancestor \
     "refs/heads/$branch" "$DEFAULT_REMOTE_REF" 2>/dev/null
 }
 

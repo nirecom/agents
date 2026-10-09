@@ -1,8 +1,7 @@
 # Sourced from dotfiles' profile.ps1 (sibling-detected) or directly from $PROFILE.
 # Idempotent — safe to source twice.
 $AgentsRoot = $PSScriptRoot
-$env:AGENTS_CONFIG_DIR = $AgentsRoot
-$env:AGENTS_DIR        = $AgentsRoot
+$env:AGENTS_MAIN_ROOT = $AgentsRoot
 
 # Global default for Claude Code's auto-compact token window, read from .env.
 # get-config-var resolves process-env-wins-over-.env precedence itself, so a value

@@ -7,14 +7,13 @@
 #   Usage: issue-state-check.sh <N>
 #   stdout: exactly `open`, `closed`, or `error`
 #   exit 0 for open/closed; exit 1 for error; exit 2 for bad args
-#   Does NOT require AGENTS_CONFIG_DIR
-#
+#   Does NOT require AGENTS_MAIN_ROOT (no root env var is read)
 # RED: this suite fails clean while bin/github-issues/issue-state-check.sh is missing.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TARGET="$AGENTS_DIR/bin/github-issues/issue-state-check.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TARGET="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-state-check.sh"
 
 PASS=0
 FAIL=0
@@ -167,18 +166,18 @@ fi
 rm -rf "$TMP" 2>/dev/null || true
 TMP=""
 
-# E7: AGENTS_CONFIG_DIR unset → still works
+# E7: AGENTS_MAIN_ROOT unset → still works
 setup_mock
 export GH_MOCK_STATE="OPEN"
-SAVED_ACD="${AGENTS_CONFIG_DIR:-}"
-unset AGENTS_CONFIG_DIR
+SAVED_MAIN_ROOT="${AGENTS_MAIN_ROOT:-}"
+unset AGENTS_MAIN_ROOT
 OUT=$(run_with_timeout 15 bash "$TARGET" 42 2>/dev/null)
 RC=$?
-[ -n "$SAVED_ACD" ] && export AGENTS_CONFIG_DIR="$SAVED_ACD"
+[ -n "$SAVED_MAIN_ROOT" ] && export AGENTS_MAIN_ROOT="$SAVED_MAIN_ROOT"
 if [ "$RC" -eq 0 ] && [ "$OUT" = "open" ]; then
-    pass "E7: AGENTS_CONFIG_DIR unset → still works (out='open', rc=0)"
+    pass "E7: AGENTS_MAIN_ROOT unset → still works (out='open', rc=0)"
 else
-    fail "E7: rc=$RC out='$OUT' (script must not require AGENTS_CONFIG_DIR)"
+    fail "E7: rc=$RC out='$OUT' (script must not require AGENTS_MAIN_ROOT)"
 fi
 teardown_mock
 

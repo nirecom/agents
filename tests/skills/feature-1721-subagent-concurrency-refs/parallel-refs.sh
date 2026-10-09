@@ -30,7 +30,7 @@ group_parallel_refs() {
     while IFS='|' read -r rel label start end maxl; do
         [ -z "${rel// /}" ] && continue
         [ -n "$only" ] && [ "$rel" != "$only" ] && continue
-        path="$AGENTS_DIR/$rel"
+        path="$SCRIPT_CHECKOUT_ROOT/$rel"
         block_to_file "$label" "$path" "$start" "$end" "$maxl" || continue
         bf="$BLOCK_FILE"
         if grep -qF "$SHARED_REL" "$bf"; then

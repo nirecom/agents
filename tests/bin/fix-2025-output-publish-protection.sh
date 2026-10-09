@@ -10,7 +10,7 @@
 set -uo pipefail
 
 # TL2. Real bin/build-codex-context and real bin/run-codex-review-loop run in a
-# fixture AGENTS_CONFIG_DIR carrying real bin/lib, so a regression in
+# fixture checkout carrying real bin/lib, so a regression in
 # safe-state-path.sh surfaces here too.
 
 # TL3 gap (environment-specific): a symlink pre-placed at a destination,
@@ -68,9 +68,10 @@ SYMLINKS_OK=no
 ln -s "$TMPDIR_BASE" "$TMPDIR_BASE/.symprobe" 2>/dev/null \
     && [ -h "$TMPDIR_BASE/.symprobe" ] && SYMLINKS_OK=yes
 
-# The fixture AGENTS_CONFIG_DIR: the real scripts and the real bin/lib, with the
-# codex reviewer replaced by a mock that always approves. Only the reviewer is
-# stubbed, so every publish under test is the shipped code path.
+# The fixture checkout: the real scripts and the real bin/lib, with the codex
+# reviewer replaced by a mock that always approves. Each script resolves its
+# siblings from its own location, so launching the copy is what selects the mock.
+# Only the reviewer is stubbed, so every publish under test is the shipped code path.
 MOCK="$TMPDIR_BASE/agents"
 mkdir -p "$MOCK/bin/lib" "$MOCK/rules"
 echo "# core principles stub" > "$MOCK/rules/core-principles.md"
@@ -112,7 +113,7 @@ build() {
 }
 loop() {
     local rc=0
-    OUT="$(AGENTS_CONFIG_DIR="$MOCK" run_with_timeout "$MOCK/bin/run-codex-review-loop" \
+    OUT="$(run_with_timeout "$MOCK/bin/run-codex-review-loop" \
         --format "$FMT" --session-id "$2" --plans-dir "$1" --draft-file "$1/draft.md" \
         --cap 2 --max-extensions 2 --extensions-used 0 \
         --accepted-tradeoffs "$1/outline.md" --round 1 2>&1)" || rc=$?

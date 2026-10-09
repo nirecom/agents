@@ -30,20 +30,20 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
-RECONCILE="$AGENTS_DIR/bin/workflow/reconcile-state"
-HOOK_MARK="$AGENTS_DIR/hooks/workflow-mark.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
+RECONCILE="$SCRIPT_CHECKOUT_ROOT/bin/workflow/reconcile-state"
+HOOK_MARK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUB_DIR="$SCRIPT_DIR/fix-1133-1148-approval-gate"
 MK_STATE="$SUB_DIR/mk-state.js"
 MK_PAYLOAD="$SUB_DIR/mk-payload.js"
 
 to_node_path() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(to_node_path "$AGENTS_DIR")"
-WFSTATE_N="$AGENTS_DIR_N/hooks/workflow-state.js"
-COMPLETION_APPROVAL_N="$AGENTS_DIR_N/hooks/workflow-state/completion-approval.js"
-EFFECTIVE_STATE_N="$AGENTS_DIR_N/hooks/workflow-state/effective-state.js"
+SCRIPT_CHECKOUT_ROOT_N="$(to_node_path "$SCRIPT_CHECKOUT_ROOT")"
+WFSTATE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state.js"
+COMPLETION_APPROVAL_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/completion-approval.js"
+EFFECTIVE_STATE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/effective-state.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -61,15 +61,15 @@ export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 # approval record" assertion below.
 # The gate decision is resolved from the CONFIG FILE only (isConfirmOffForStageFromFile),
 # so process.env exports alone cannot isolate the suite: it must point
-# AGENTS_CONFIG_DIR at a scratch config whose contents are known. Both a gates-ON
+# AGENTS_MAIN_ROOT at a scratch config whose contents are known. Both a gates-ON
 # and a gates-OFF scratch config are provided; cases that exercise the legitimate
-# waiver (G05, G14c/d) select CONFIG_DIR_OFF per invocation.
-CONFIG_DIR_ON="$TMPDIR_BASE/config-on"
-CONFIG_DIR_OFF="$TMPDIR_BASE/config-off"
-mkdir -p "$CONFIG_DIR_ON" "$CONFIG_DIR_OFF"
-printf 'CONFIRM_INTENT=on\nCONFIRM_OUTLINE=on\nCONFIRM_DETAIL=on\n' > "$CONFIG_DIR_ON/.env"
-printf 'CONFIRM_INTENT=off\nCONFIRM_OUTLINE=off\nCONFIRM_DETAIL=off\n' > "$CONFIG_DIR_OFF/.env"
-export AGENTS_CONFIG_DIR="$CONFIG_DIR_ON"
+# waiver (G05, G14c/d) select CFG_ROOT_OFF per invocation.
+CFG_ROOT_ON="$TMPDIR_BASE/config-on"
+CFG_ROOT_OFF="$TMPDIR_BASE/config-off"
+mkdir -p "$CFG_ROOT_ON" "$CFG_ROOT_OFF"
+printf 'CONFIRM_INTENT=on\nCONFIRM_OUTLINE=on\nCONFIRM_DETAIL=on\n' > "$CFG_ROOT_ON/.env"
+printf 'CONFIRM_INTENT=off\nCONFIRM_OUTLINE=off\nCONFIRM_DETAIL=off\n' > "$CFG_ROOT_OFF/.env"
+export AGENTS_MAIN_ROOT="$CFG_ROOT_ON"
 export CONFIRM_OUTLINE=on
 export CONFIRM_DETAIL=on
 

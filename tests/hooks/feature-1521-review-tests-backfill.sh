@@ -9,11 +9,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-REVIEW_TESTS_HANDLER="$AGENTS_DIR/hooks/workflow-mark/review-tests-handler.js"
-REVIEW_TESTS_EVIDENCE="$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+REVIEW_TESTS_HANDLER="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark/review-tests-handler.js"
+REVIEW_TESTS_EVIDENCE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-evidence.js"
 
 PASS=0
 FAIL=0
@@ -118,7 +118,7 @@ write_state() {
     printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
 }
 
-AGENTS_DIR_N="$(cygpath -m "$AGENTS_DIR" 2>/dev/null || echo "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_N="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT" 2>/dev/null || echo "$SCRIPT_CHECKOUT_ROOT")"
 read_state_step() {
     local sid="$1" step="$2"
     local f="$WORKFLOW_DIR/${sid}.json"
@@ -130,7 +130,7 @@ read_state_step() {
         const st = s && s.steps && s.steps['$step'];
         console.log(st && st.status ? st.status : 'MISSING');
       } catch(e){ console.log('MISSING'); }
-    " "$sid" "$AGENTS_DIR_N" 2>/dev/null || echo "MISSING"
+    " "$sid" "$SCRIPT_CHECKOUT_ROOT_N" 2>/dev/null || echo "MISSING"
 }
 
 state_json() {
@@ -203,7 +203,7 @@ run_mark() {
 run_gate() {
     local cwd="$1" json="$2"
     local cwd_n; cwd_n="$(cygpath -m "$cwd" 2>/dev/null || echo "$cwd")"
-    # AGENTS_CONFIG_DIR = fixture main checkout so the #1138 cross-repo bypass
+    # AGENTS_MAIN_ROOT = fixture main checkout so the #1138 cross-repo bypass
     # does not approve before review_tests is evaluated.
     local common_dir main_dir
     common_dir="$(git -C "$cwd" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
@@ -212,7 +212,7 @@ run_gate() {
     echo "$json" | run_with_timeout 30 env \
         CLAUDE_PROJECT_DIR="$cwd_n" \
         WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
-        AGENTS_CONFIG_DIR="$main_dir" \
+        AGENTS_MAIN_ROOT="$main_dir" \
         node "$GATE_HOOK" 2>/dev/null
 }
 

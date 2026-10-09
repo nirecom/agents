@@ -13,9 +13,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-FIND_SCRIPT="$AGENTS_DIR/bin/github-issues/find-pr-by-marker.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+FIND_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/find-pr-by-marker.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -48,7 +48,6 @@ done
 
 setup_tmp_find() {
     TMP="$(mktemp -d)"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"
@@ -58,7 +57,7 @@ teardown_tmp_find() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR GH_MOCK_COMMENT_LOG
+    unset GH_MOCK_COMMENT_LOG
 }
 
 # Helper: run find-pr-by-marker.sh and capture PR_NUMBER/MERGE_COMMIT.
@@ -246,8 +245,8 @@ teardown_tmp_find
 # G-series (#2308) — GitLab forge path. CPR-ORTH mirror of the GitHub F-series:
 # primary `glab api .../closed_by`, marker fallback across merged MR
 # descriptions, primary-wins, and the gitlab-only edges (unresolvable project,
-# cross-repo rejection). Forge is forced with a fake bin/detect-forge-type CLI
-# under AGENTS_CONFIG_DIR; glab is a bash mock keyed by GL_MOCK_* env.
+# cross-repo rejection). Forge is forced with a fake bin/detect-forge-type in a
+# fake script checkout the script runs from; glab is a mock keyed by GL_MOCK_*.
 # ============================================================================
 
 # setup_tmp_gl: fake detect-forge-type (gitlab) + glab mock; SHIM_PROJECT picks
@@ -255,9 +254,11 @@ teardown_tmp_find
 # GL_MOCK_MARKER hold pre-jq'd `<iid>\t<sha>` lines (real tab), empty = miss.
 setup_tmp_gl() {
     TMP="$(mktemp -d)"
-    export AGENTS_CONFIG_DIR="$TMP"
-    mkdir -p "$TMP/bin" "$TMP/glmockbin"
-    cat > "$TMP/bin/detect-forge-type" <<'NODE'
+    FAKE_SCRIPT_CHECKOUT_ROOT="$TMP/fake-script-checkout-root"
+    mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues" "$TMP/glmockbin"
+    GL_FIND_SCRIPT="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/find-pr-by-marker.sh"
+    cp "$FIND_SCRIPT" "$GL_FIND_SCRIPT"
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/detect-forge-type" <<'NODE'
 "use strict";
 const argv = process.argv;
 function arg(n){const i=argv.indexOf(n);return i>=0&&i+1<argv.length?argv[i+1]:null;}
@@ -288,14 +289,14 @@ EOF
 teardown_tmp_gl() {
     export PATH="$_GL_OLDPATH"
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then rm -rf "$TMP"; fi
-    unset AGENTS_CONFIG_DIR GL_LOG SHIM_PROJECT GL_MOCK_CLOSED_BY GL_MOCK_MARKER GL_MOCK_EXIT TMP
+    unset FAKE_SCRIPT_CHECKOUT_ROOT GL_FIND_SCRIPT GL_LOG SHIM_PROJECT GL_MOCK_CLOSED_BY GL_MOCK_MARKER GL_MOCK_EXIT TMP
 }
 
 # run_find_gl [--repo <slug>] <N>: run under the gitlab setup; parses PR_NUMBER /
 # MERGE_COMMIT like run_find and exposes FIND_ERR.
 run_find_gl() {
     local out rc
-    out=$(run_with_timeout 15 bash "$FIND_SCRIPT" "$@" 2>/tmp/find_gl_err.$$)
+    out=$(run_with_timeout 15 bash "$GL_FIND_SCRIPT" "$@" 2>/tmp/find_gl_err.$$)
     rc=$?
     FIND_ERR=$(cat /tmp/find_gl_err.$$ 2>/dev/null)
     rm -f /tmp/find_gl_err.$$
@@ -384,7 +385,7 @@ teardown_tmp_gl
 # --- G8 (mirror F6, ORTH): non-numeric N rejected BEFORE forge detection → exit
 # 1, no shell injection, and glab is never invoked (numeric guard precedes forge).
 setup_tmp_gl
-GL_MOCK_CLOSED_BY="$GL_CB" run_with_timeout 15 bash "$FIND_SCRIPT" "42; touch /tmp/G8_INJECT" >/dev/null 2>&1
+GL_MOCK_CLOSED_BY="$GL_CB" run_with_timeout 15 bash "$GL_FIND_SCRIPT" "42; touch /tmp/G8_INJECT" >/dev/null 2>&1
 RC=$?
 if [ "$RC" -ne 0 ] && [ ! -f /tmp/G8_INJECT ] && [ ! -s "$GL_LOG" ]; then
     pass "G8: gitlab non-numeric N → exit 1 before forge detection, glab not called"

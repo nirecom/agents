@@ -34,7 +34,7 @@ run_I12() {
     write_hang_transcript "$tmp/hang.jsonl"
     tp="$(node_path "$tmp/hang.jsonl")"
     hang=$(TP="$tp" "$RWT" 20 node -e "
-const { detectSentinelHang } = require('$_AGENTS_DIR_NODE/hooks/supervisor-guard/detect.js');
+const { detectSentinelHang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/supervisor-guard/detect.js');
 process.stdout.write(String(detectSentinelHang(process.env.TP)));" 2>&1)
     [ "$hang" = "true" ] || problems="$problems [hang-fixture-not-detected:${hang:-<err>}]"
     inh_guard c2 "$tmp" "i12-heir" "$tp"

@@ -1,4 +1,4 @@
-# tests/lib/codex-loop-fixture.sh — a throwaway AGENTS_CONFIG_DIR that runs the
+# tests/lib/codex-loop-fixture.sh — a throwaway AGENTS_MAIN_ROOT that runs the
 # real bin/run-codex-review-loop with only bin/review-plan-codex stubbed.
 # Tests: tests/lib/codex-loop-fixture.sh
 # Tags: test-infrastructure, codex-review-loop, shared-lib, scope:common
@@ -159,7 +159,7 @@ clf_run() {
     local errf="$plans/.clf-err-$sid-$RANDOM.txt"
     CLF_RC=0
     CLF_OUT="$(
-        export AGENTS_CONFIG_DIR="$root"
+        export AGENTS_MAIN_ROOT="$root"
         bash "$root/bin/run-codex-review-loop" \
             --format "$fmt" --session-id "$sid" --plans-dir "$plans" \
             --draft-file "$plans/draft.md" \

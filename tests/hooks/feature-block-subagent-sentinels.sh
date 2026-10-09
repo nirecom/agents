@@ -20,9 +20,9 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-HOOK="$AGENTS_DIR/hooks/block-subagent-sentinels.js"
-DETECT_LIB="$AGENTS_DIR/hooks/lib/subagent-detect.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-subagent-sentinels.js"
+DETECT_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/subagent-detect.js"
 ERRORS=0
 PASS_COUNT=0
 

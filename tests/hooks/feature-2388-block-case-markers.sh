@@ -8,19 +8,19 @@
 # TL3 gap: real Claude Code routing into the hook (mitigation: WORKFLOW_USER_VERIFIED).
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
   exit 77
 fi
 
-HOOK="$AGENTS_DIR/hooks/block-case-markers.js"
-SETTINGS_JSON="$AGENTS_DIR/settings.json"
-PRECOMMIT_LIB="$AGENTS_DIR/hooks/lib/precommit-tests-frontmatter.sh"
-CASE_DIR="$AGENTS_DIR/tests/hooks/feature-2388-block-case-markers"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-case-markers.js"
+SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT/settings.json"
+PRECOMMIT_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-tests-frontmatter.sh"
+CASE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2388-block-case-markers"
 
 TMPBASE="$(make_tmp)"
 trap 'rm -rf "$TMPBASE"' EXIT
@@ -30,7 +30,7 @@ harness_isolate "$TMPBASE/iso"
 NEUTRAL_CWD="$TMPBASE/neutral"
 mkdir -p "$NEUTRAL_CWD"
 
-# Empty fixture config dir: the hook must not see the developer's real one.
+# Empty fixture agents main root: the hook must not see the developer's real one.
 CFG_DIR="$TMPBASE/agents-config"
 mkdir -p "$CFG_DIR"
 CFG_DIR_M="$(np "$CFG_DIR")"
@@ -101,7 +101,7 @@ hk_run() {
   local hook_m
   hook_m="$(np "$HK_HOOK")"
   HK_RC=0
-  (cd "$NEUTRAL_CWD" || exit 99; run_with_timeout 30 env "${HK_ENV_RESET[@]}" "AGENTS_CONFIG_DIR=$CFG_DIR_M" "$@" node "$hook_m" < "$PAYLOAD_FILE" > "$outfile" 2> "$errfile") || HK_RC=$?
+  (cd "$NEUTRAL_CWD" || exit 99; run_with_timeout 30 env "${HK_ENV_RESET[@]}" "AGENTS_MAIN_ROOT=$CFG_DIR_M" "$@" node "$hook_m" < "$PAYLOAD_FILE" > "$outfile" 2> "$errfile") || HK_RC=$?
   HK_OUT="$(cat "$outfile" 2>/dev/null)"
   HK_ERR="$(cat "$errfile" 2>/dev/null)"
   HK_REASON="$(node "$REASON_JS_M" "$(np "$outfile")")"

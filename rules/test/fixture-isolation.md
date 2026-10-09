@@ -46,6 +46,11 @@ at a throwaway `git init` fixture when the code under test needs a repo.
 Normalize fixture paths with `cygpath -m` when available so Node receives a
 POSIX-style path on Windows.
 
+## Decoy agents root
+
+`tests/lib/harness.sh` points `AGENTS_MAIN_ROOT` at a stub tree on load, so a test that reaches a tool through it fails instead of running the installed copy.
+Call `root_decoy_use_real_main_root` only in a test that must read the real main worktree; `bin/check-root-names.sh` rejects the call in any file the classification table does not list.
+
 ## Disable git hooks in fixture repos
 
 Every fixture repo must have `core.hooksPath` set to `/dev/null` before anything runs in it.

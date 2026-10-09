@@ -3,24 +3,18 @@
 # Tests: bin/compose-doc-append-entry
 # Tags: scope:issue-specific
 # Tests for issue #437 — compose-doc-append-entry idempotency guard.
-#
-# Two invocations with the same branch + PR number must not append twice:
-# the first call stakes a per-branch/PR marker file; the second finds the
-# marker and skips the history write entirely (WANT_HISTORY=0 → early exit).
-#
-# This exercises the EXISTING guard, so it PASSES against current source.
-# We drive it in --dry-run so no real gh API call is made: dry-run still
-# consults the marker and prints its intent only when a write would occur.
-#
-# L3 gap (what this test does NOT catch):
-# - real GitHub API calls and actual issue state transitions
+# Two invocations with the same branch + PR number must not append twice: the first stakes a
+# per-branch/PR marker; the second finds it and skips the history write (WANT_HISTORY=0).
+# Driven in --dry-run so no real gh API call is made: dry-run still consults the marker and
+# prints its intent only when a write would occur.
+# L3 gap: real GitHub API calls and actual issue state transitions.
 # Closest-to-action mitigation: manual verification at WORKFLOW_USER_VERIFIED preflight
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COMPOSE="$AGENTS_DIR/bin/compose-doc-append-entry"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+COMPOSE="$SCRIPT_CHECKOUT_ROOT/bin/compose-doc-append-entry"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -53,7 +47,6 @@ done
 
 setup_tmp() {
     TMP="$(mktemp -d)"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
     mkdir -p "$WORKFLOW_PLANS_DIR"
     export PATH="$MOCK_DIR:$PATH"
@@ -71,7 +64,7 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR WORKFLOW_PLANS_DIR
+    unset WORKFLOW_PLANS_DIR
 }
 
 BRANCH="fix/fix-437-idempotency"

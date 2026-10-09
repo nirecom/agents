@@ -6,13 +6,13 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight category: migration.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/_mtime.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-IDX_MOD="$(np "$AGENTS_DIR/hooks/lib/temporary-migrations/control-dir-split/index.js")"
+IDX_MOD="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/temporary-migrations/control-dir-split/index.js")"
 UUID="aabbccdd-1111-2222-3333-444455556666"
 
 run_migrate_all() {

@@ -9,12 +9,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL_FILE="$AGENTS_DIR/skills/refactor-prompts/SKILL.md"
-JUDGE_FILE="$AGENTS_DIR/agents/refactor-prompts-judge.md"
-WRAPPER="$AGENTS_DIR/bin/refactor-prompts/index.sh"
-EXTRACT_CLI="$AGENTS_DIR/bin/refactor-prompts/extract-keywords.js"
-HANDOFF_DIR="$AGENTS_DIR/tests/fixtures/refactor-prompts/handoff"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL_FILE="$SCRIPT_CHECKOUT_ROOT/skills/refactor-prompts/SKILL.md"
+JUDGE_FILE="$SCRIPT_CHECKOUT_ROOT/agents/refactor-prompts-judge.md"
+WRAPPER="$SCRIPT_CHECKOUT_ROOT/bin/refactor-prompts/index.sh"
+EXTRACT_CLI="$SCRIPT_CHECKOUT_ROOT/bin/refactor-prompts/extract-keywords.js"
+HANDOFF_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/refactor-prompts/handoff"
 
 PASS=0
 FAIL=0
@@ -30,7 +30,7 @@ run_with_timeout() {
     fi
 }
 
-export AGENTS_CONFIG_DIR="C:/git/agents"
+export AGENTS_MAIN_ROOT="C:/git/agents"
 
 # --- Existence gate ---------------------------------------------------------
 missing=()
@@ -193,7 +193,7 @@ rm -rf "$TC6_TMP_DIR"
 # is absent from that set. Assert the sanctioned edit applies while
 # protected.md stays byte-identical.
 # ============================================================================
-INJ_DIR="$AGENTS_DIR/tests/fixtures/refactor-prompts/handoff-injection"
+INJ_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/refactor-prompts/handoff-injection"
 TC7_TMP_DIR="$(mktemp -d)"
 cp "$INJ_DIR/sanctioned.md" "$TC7_TMP_DIR/sanctioned.md"
 cp "$INJ_DIR/protected.md" "$TC7_TMP_DIR/protected.md"

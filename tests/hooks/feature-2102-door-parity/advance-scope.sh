@@ -17,11 +17,11 @@ set -uo pipefail
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-NS="$AGENTS_DIR_N/bin/workflow/next-step"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+NS="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -32,7 +32,7 @@ WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
 WF_OUT="$WORKFLOW_STATE_DIR"; export WF_OUT
 unset CLAUDE_CODE_SESSION_ID
 CONFIG_EMPTY="$TMPDIR_BASE/cfg"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
-AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"; export AGENTS_CONFIG_DIR
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

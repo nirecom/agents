@@ -2,41 +2,26 @@
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, child-env, config-path, gh-cli, auth-resolution, real-environment, TL3, scope:common
 #
-# The dispatched arms. ARM_TABLE is the single source of truth for which arms
-# exist, what each expects, whether it counts toward the exit contract, and
-# where it applies; run_arm_table() is the only reader, and REQUIRED is
-# derived from it rather than written down twice.
+# The dispatched arms. ARM_TABLE is the single source of truth for the arms
+# (expectation, exit-contract weight, platform); run_arm_table() is its only
+# reader and REQUIRED is derived from it.
 # run_control_arms() stays hand-written: arms 5-6 are a premise and its
-# dependent, not two instances of one shape — folding that conditional
-# dependency into a row would hide the thing that makes the pair conclusive.
+# dependent, which a table row would hide.
 
 run_arm_table() {
     local a_name a_kind a_env a_want a_req a_plat a_extra _tok
     local _a_kind _a_env _a_want
-    # Arms 1-4 and 7 — one table, one loop.
-    # Arm 1 is #1719 itself: a dispatched child, inheriting the parent's config
-    # location vars, must reach the same hosts.yml the gate just read.
-    # Arms 2-4 prove REACHABILITY by REDIRECTION, not removal: removing a var
-    # can't prove it was reaching the child (POSIX falls XDG_CONFIG_HOME back
-    # to HOME anyway), but pointing it at an empty dir makes the two outcomes
-    # distinguishable on every platform — reached => unauthenticated empty
-    # dir, not reached => still reading the parent's real config.
-    # Arm 7 asks arm 1's question of the REAL registry entry (issue-reconcile)
-    # rather than the synthetic one — only this row proves the property for an
-    # entry the operator actually dispatches, which is what #1719 broke in
-    # production. issue-reconcile declares GH_TOKEN/GITHUB_TOKEN, but
-    # STRIP_CREDS removes them from every row's parent env, so an ambient
-    # token can't substitute for the config path here.
-    #
-    # Columns: name, kind (synthetic|registry entry), env (parent-env
-    # manipulation handed to `env`; `@EMPTY@` expands to the empty gh config
-    # dir AFTER splitting so a space in the temp path can't break the row),
-    # want (expected class), req (1=counted into REQUIRED/PROVEN), platform
-    # (any|windows — data, not a branch; APPDATA is Windows-only), extra
-    # (additional assert name, or `-`).
+    # Arm 1 is #1719 itself: a dispatched child must reach the parent's hosts.yml.
+    # Arms 2-4 prove reachability by REDIRECTION to an empty dir, not removal:
+    # reached => unauthenticated, not reached => still the parent's real config.
+    # Arm 7 asks arm 1's question of the REAL registry entry (issue-reconcile);
+    # STRIP_CREDS removes its tokens so only the config path can authenticate.
+    # Columns: name, kind, env (handed to `env`; `@EMPTY@` expands to the empty
+    # gh config dir AFTER splitting), want, req (1=counted into REQUIRED/PROVEN),
+    # platform (any|windows — APPDATA is Windows-only), extra (assert name or `-`).
     ARM_TABLE=$(cat <<'TABLE'
     env/dispatched-child-resolves-auth | synthetic |                                                        | authenticated   | 1 | any     | env/dispatcher-really-started-gh
-    env/gh-config-dir-reaches-child    | synthetic | GH_CONFIG_DIR=@EMPTY@                                  | unauthenticated | 1 | any     | -
+    env/GH_CONFIG_DIR-reaches-child    | synthetic | GH_CONFIG_DIR=@EMPTY@                                  | unauthenticated | 1 | any     | -
     env/xdg-config-home-reaches-child  | synthetic | -u GH_CONFIG_DIR XDG_CONFIG_HOME=@EMPTY@               | unauthenticated | 1 | any     | -
     env/appdata-reaches-child          | synthetic | -u GH_CONFIG_DIR -u XDG_CONFIG_HOME APPDATA=@EMPTY@    | unauthenticated | 1 | windows | -
     env/real-gh-worker-resolves-auth   | registry  |                                                        | authenticated   | 1 | any     | -

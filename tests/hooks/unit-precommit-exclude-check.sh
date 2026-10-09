@@ -2,21 +2,21 @@
 # tests/unit-precommit-exclude-check.js
 # Tests: hooks/lib/precommit-exclude-check.js
 # Tags: unit, pre-commit, exclude-check, scope:common, pwsh-not-required
-# Exit codes: 0=covered, 2=not-covered/empty, 1=input-error (AGENTS_CONFIG_DIR unset)
+# Exit codes: 0=covered, 2=not-covered/empty, 1=input-error (AGENTS_MAIN_ROOT unset)
 # L3 gap: real pre-commit session, WORKFLOW_OFF interaction, Windows path casing;
 #   mitigation: bin/check-verification-gate.sh category: hook-registration
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _AGENTS_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_NODE="$AGENTS_DIR"
+    _AGENTS_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 MODULE_PATH="$_AGENTS_NODE/hooks/lib/precommit-exclude-check.js"
-MODULE_FS="$AGENTS_DIR/hooks/lib/precommit-exclude-check.js"
+MODULE_FS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-exclude-check.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
@@ -73,14 +73,12 @@ echo "=== precommit-exclude-check module tests ==="
 
 # Case 1: all staged files covered by EXCLUDE (prefix match) → rc 0
 assert_rc "exit0-all-covered" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=docs/readme.md" \
     "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE"
 
 # Case 2: one staged file not covered → rc 2
 assert_rc "exit2-one-uncovered" "2" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=docs/readme.md
 src/x.py" \
@@ -88,25 +86,23 @@ src/x.py" \
 
 # Case 3: EXCLUDE empty, staged non-empty → rc 2
 assert_rc "exit2-empty-exclude" "2" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=docs/readme.md" \
     "ENFORCE_WORKTREE_EXCLUDE="
 
 # Case 4: staged empty → rc 2
 assert_rc "exit2-empty-staged" "2" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=" \
     "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE"
 
-# Case 5: AGENTS_CONFIG_DIR unset → rc 1
+# Case 5: AGENTS_MAIN_ROOT unset → rc 1
 if [ "$MODULE_MISSING" = "1" ]; then
     fail "exit1-no-config — MODULE_NOT_FOUND (expected red)"
 else
     got_rc=0
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
-    run_with_timeout 10 env -u AGENTS_CONFIG_DIR \
+    run_with_timeout 10 env -u AGENTS_MAIN_ROOT \
         "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
         "_PRECOMMIT_STAGED=docs/readme.md" \
         node "$MODULE_PATH" >"$TMPBASE/stdout.txt" 2>"$TMPBASE/stderr.txt" || got_rc=$?
@@ -119,14 +115,12 @@ fi
 
 # Case 7: bare repo-root prefix entry covers all staged → rc 0
 assert_rc "prefix-match" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=src/main.py" \
     "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE"
 
 # Case 8: glob entry covers staged → rc 0
 assert_rc "glob-match" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=todo.md" \
     "ENFORCE_WORKTREE_EXCLUDE=**/todo.md"
@@ -141,7 +135,6 @@ else
     got_rc=0
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
     run_with_timeout 10 env -u _PRECOMMIT_REPO_TOP \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "_PRECOMMIT_STAGED=$REPO_TOP_NODE/deep/file.txt" \
         "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE" \
         node "$MODULE_PATH" >"$TMPBASE/stdout.txt" 2>"$TMPBASE/stderr.txt" || got_rc=$?
@@ -156,7 +149,6 @@ fi
 # path.resolve(repoTop,"../escape.py") lands OUTSIDE the EXCLUDE prefix → rc 2.
 # A traversal filename must not be silently excluded from enforcement.
 assert_rc "traversal-staged-not-excluded" "2" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=../escape.py" \
     "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE"
@@ -164,7 +156,6 @@ assert_rc "traversal-staged-not-excluded" "2" \
 # Case 11: semicolon list where only the 2nd entry covers the staged file → rc 0.
 # Validates the helper passes the WHOLE list through, not just the first entry.
 assert_rc "multi-entry-second-match" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=src/main.py" \
     "ENFORCE_WORKTREE_EXCLUDE=/nonexistent/nomatch;$REPO_TOP_NODE"
@@ -173,7 +164,6 @@ assert_rc "multi-entry-second-match" "0" \
 # → rc 0. Proves a space in a staged filename survives the newline-split env
 # transport (files split on /\r?\n/, not on whitespace) and is still covered.
 assert_rc "space-in-staged-covered" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=docs/my file.md" \
     "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE"
@@ -182,7 +172,6 @@ assert_rc "space-in-staged-covered" "0" \
 # under that subtree → rc 0. Proves a space in an exclude entry is preserved
 # (entries split on ';', never shell-split on whitespace).
 assert_rc "space-in-exclude-entry-covered" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=my dir/file.txt" \
     "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE/my dir"
@@ -200,7 +189,6 @@ else
     ( cd "$INJECT_PROBE_DIR" &&
       MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
       run_with_timeout 10 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
         '_PRECOMMIT_STAGED=$(touch pwned).txt' \
         "ENFORCE_WORKTREE_EXCLUDE=/nonexistent/nomatch" \
@@ -227,7 +215,6 @@ else
     ( cd "$REPO_TOP" &&
       MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
       run_with_timeout 10 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
         "_PRECOMMIT_STAGED=docs/x.md" \
         "ENFORCE_WORKTREE_EXCLUDE=docs" \
@@ -244,7 +231,6 @@ fi
 # built-ins through the new path-coverage matcher) did not break the /worktree-end
 # Step WE-8 backup bypass.
 assert_rc "builtin-excludes-worktree-backup" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=.worktree-backup/some-file.txt" \
     "ENFORCE_WORKTREE_EXCLUDE="
@@ -255,7 +241,6 @@ assert_rc "builtin-excludes-worktree-backup" "0" \
 # An entry like "todo.md" (no slash, no glob) matches any staged file named "todo.md"
 # regardless of directory depth.
 assert_rc "basename-entry-matches-file" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=docs/todo.md" \
     "ENFORCE_WORKTREE_EXCLUDE=todo.md"
@@ -265,7 +250,6 @@ assert_rc "basename-entry-matches-file" "0" \
 # prefix EXCLUDE → rc 0. The semicolon is part of the filename, not a separator
 # (staged paths split on newlines only, not semicolons).
 assert_rc "semicolon-in-staged-path-not-bypass" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=docs/semi;colon.md" \
     "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE"
@@ -281,7 +265,6 @@ assert_rc "semicolon-in-staged-path-not-bypass" "0" \
 # `/some/path\n/other` (backslash-n, not newline) must NOT match the staged
 # path — verifying that a non-matching exclude always gives rc 2.
 assert_rc "newline-in-exclude-entry-no-bypass" "2" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=docs/readme.md" \
     "ENFORCE_WORKTREE_EXCLUDE=/some/path\\n/other"
@@ -305,7 +288,6 @@ trap 'rm -rf "$TMPBASE" "$REPO_TOP2"' EXIT
 # acceptable behaviour if the implementation does not trim (documented here).
 # We assert rc 0 because shared-cmd-utils.js trims entries via .trim().filter(Boolean).
 assert_rc "whitespace-padded-entries" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP2_NODE" \
     "_PRECOMMIT_STAGED=src/main.py" \
     "ENFORCE_WORKTREE_EXCLUDE= $REPO_TOP2_NODE ; /other "
@@ -314,7 +296,6 @@ assert_rc "whitespace-padded-entries" "0" \
 # Double semicolon creates an empty entry between two real entries.
 # Empty entries should be ignored; the first real entry (REPO_TOP2) covers staged.
 assert_rc "empty-entries-in-list" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP2_NODE" \
     "_PRECOMMIT_STAGED=src/main.py" \
     "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP2_NODE;;/other"
@@ -323,7 +304,6 @@ assert_rc "empty-entries-in-list" "0" \
 # Same repo root appears twice in the semicolon list.
 # First match short-circuits; result is rc 0.
 assert_rc "duplicate-entries" "0" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP2_NODE" \
     "_PRECOMMIT_STAGED=src/main.py" \
     "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP2_NODE;$REPO_TOP2_NODE"

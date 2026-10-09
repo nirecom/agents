@@ -12,11 +12,11 @@
 # write+read combined test provides the practical coverage. Closest-to-action: bin/check-verification-gate.sh.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-BIN_RECORD="$AGENTS_DIR/bin/workflow/record-complexity-evaluation"
-BIN_READ="$AGENTS_DIR/bin/workflow/read-complexity-evaluation"
-NORMALIZE_CLI="$AGENTS_DIR/bin/workflow/normalize-judge-signals"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+BIN_RECORD="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-evaluation"
+BIN_READ="$SCRIPT_CHECKOUT_ROOT/bin/workflow/read-complexity-evaluation"
+NORMALIZE_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/normalize-judge-signals"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -58,8 +58,8 @@ export WORKFLOW_PLANS_DIR="$tmp/plans"; mkdir -p "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # --- module / barrel node paths --------------------------------------------
-CR_MOD_N="$(to_node_path "$AGENTS_DIR/hooks/workflow-state/complexity-routing.js")"
-BARREL_N="$(to_node_path "$AGENTS_DIR/hooks/workflow-state.js")"
+CR_MOD_N="$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/complexity-routing.js")"
+BARREL_N="$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state.js")"
 export CR_MOD_N BARREL_N
 
 # Run a JS snippet under the pinned fixture env; stderr folds into stdout so a

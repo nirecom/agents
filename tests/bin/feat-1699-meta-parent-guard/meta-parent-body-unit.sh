@@ -18,7 +18,7 @@
 # Called directly, no gh mock — there is no forge call on this path, itself part of the
 # contract (U0).
 
-MPB="$AGENTS_DIR/bin/github-issues/lib/meta-parent-body.sh"
+MPB="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/meta-parent-body.sh"
 
 u_run() {  # <args...> → U_OUT, U_ERR, U_RC
     U_OUT="$(bash "$RWT" 20 bash "$MPB" "$@" 2>"$U_ERRFILE")"

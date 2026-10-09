@@ -18,7 +18,7 @@ set -u
 #   Both gaps are closed by tests/bin/TL3-worker-dispatch-doc-append-compose.sh.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Stage 1 (buildEnv unit cases) runs ungated and shows the gap on any host.
 # Stage 2 adds a real gh: a deliberately invalid GH_TOKEN in the parent is the
@@ -57,8 +57,8 @@ gate_unmet() { GATE_OK=0; [ -n "$GATE_REASON" ] || GATE_REASON="$1"; }
 
 HAVE_NODE=1; command -v node >/dev/null 2>&1 || HAVE_NODE=0
 HAVE_GIT=1; command -v git >/dev/null 2>&1 || HAVE_GIT=0
-if [ -x "$AGENTS_DIR/bin/get-config-var" ]; then
-    if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then gate_unmet "RUN_TL3 is off"; fi
+if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
+    if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then gate_unmet "RUN_TL3 is off"; fi
 else
     gate_unmet "bin/get-config-var is not executable"
 fi

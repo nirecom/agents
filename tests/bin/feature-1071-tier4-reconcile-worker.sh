@@ -10,14 +10,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-RECONCILE_WORKER_JS="${AGENTS_DIR}/bin/worker-dispatch/workers/issue-reconcile.js"
-REGISTRY_JS="${AGENTS_DIR}/hooks/lib/worker-dispatch-registry.js"
-EMIT_JS="${AGENTS_DIR}/bin/worker-dispatch/emit.js"
-SURVEY_WORKER_MD="${AGENTS_DIR}/agents/issue-create-survey-worker.md"
-IC_MD="${AGENTS_DIR}/skills/issue-create/SKILL.md"
-IR_MD="${AGENTS_DIR}/skills/issue-reconcile/SKILL.md"
+RECONCILE_WORKER_JS="${SCRIPT_CHECKOUT_ROOT}/bin/worker-dispatch/workers/issue-reconcile.js"
+REGISTRY_JS="${SCRIPT_CHECKOUT_ROOT}/hooks/lib/worker-dispatch-registry.js"
+EMIT_JS="${SCRIPT_CHECKOUT_ROOT}/bin/worker-dispatch/emit.js"
+SURVEY_WORKER_MD="${SCRIPT_CHECKOUT_ROOT}/agents/issue-create-survey-worker.md"
+IC_MD="${SCRIPT_CHECKOUT_ROOT}/skills/issue-create/SKILL.md"
+IR_MD="${SCRIPT_CHECKOUT_ROOT}/skills/issue-reconcile/SKILL.md"
 
 PASS=0
 FAIL=0

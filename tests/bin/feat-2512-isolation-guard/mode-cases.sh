@@ -10,8 +10,8 @@ cls_repo() {
   git -C "$d" config user.email test@example.com
   git -C "$d" config user.name test
   cp "$CLS" "$d/bin/"
-  if [[ -d "$AGENTS_DIR/bin/check-plans-dir-isolation" ]]; then
-    cp -r "$AGENTS_DIR/bin/check-plans-dir-isolation" "$d/bin/"
+  if [[ -d "$SCRIPT_CHECKOUT_ROOT/bin/check-plans-dir-isolation" ]]; then
+    cp -r "$SCRIPT_CHECKOUT_ROOT/bin/check-plans-dir-isolation" "$d/bin/"
   fi
 }
 
@@ -87,7 +87,7 @@ c_i11_usage_errors() {
 
 c_i12_repo_clean() {
   CLS_RC=0
-  CLS_OUT="$(cd "$AGENTS_DIR" && run_with_timeout 300 bash "$CLS" 2>&1)" || CLS_RC=$?
+  CLS_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && run_with_timeout 300 bash "$CLS" 2>&1)" || CLS_RC=$?
   expect "I12 the whole repo (no args) exits 0" rc_is 0
   expect "I12 the whole repo prints no violation line" no_violation_for ""
 }

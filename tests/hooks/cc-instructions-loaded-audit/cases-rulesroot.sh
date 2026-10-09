@@ -17,7 +17,7 @@ echo "=== rules-key root anchoring (table-driven) ==="
 
 RR="$BASE/rr"
 RR_P="$(node_path "$RR/proj")"        # CLAUDE_PROJECT_DIR
-RR_A="$(node_path "$RR/agentscfg")"   # AGENTS_CONFIG_DIR
+RR_A="$(node_path "$RR/agentscfg")"   # AGENTS_MAIN_ROOT
 RR_C="$(node_path "$RR/cfg")"         # CLAUDE_CONFIG_DIR
 RR_H="$(node_path "$RR/home")"        # HOME
 mkdir -p "$RR/proj/rules" "$RR/proj/.claude/rules" "$RR/agentscfg/rules" \
@@ -41,9 +41,9 @@ RR_LIB_NODE="$(node_path "$RECEIPT_LIB")"
 # The three env shapes the table selects between. `json_env` builds them through node so
 # Windows drive-letter paths survive JSON quoting untouched.
 rr_env_json() { node -e 'const o={};for(let i=1;i<process.argv.length;i+=2){if(process.argv[i+1]!=="")o[process.argv[i]]=process.argv[i+1];}console.log(JSON.stringify(o));' "$@"; }
-RR_ENV_ALL="$(rr_env_json CLAUDE_PROJECT_DIR "$RR_P" AGENTS_CONFIG_DIR "$RR_A" CLAUDE_CONFIG_DIR "$RR_C" HOME "$RR_H")"
+RR_ENV_ALL="$(rr_env_json CLAUDE_PROJECT_DIR "$RR_P" AGENTS_MAIN_ROOT "$RR_A" CLAUDE_CONFIG_DIR "$RR_C" HOME "$RR_H")"
 RR_ENV_NOAGENTS="$(rr_env_json CLAUDE_PROJECT_DIR "$RR_P" CLAUDE_CONFIG_DIR "$RR_C" HOME "$RR_H")"
-RR_ENV_NOPROJ="$(rr_env_json AGENTS_CONFIG_DIR "$RR_A" CLAUDE_CONFIG_DIR "$RR_C" HOME "$RR_H")"
+RR_ENV_NOPROJ="$(rr_env_json AGENTS_MAIN_ROOT "$RR_A" CLAUDE_CONFIG_DIR "$RR_C" HOME "$RR_H")"
 
 # rr_key <env-token> <input-with-placeholders> -> the key, or EMPTY
 rr_key() {

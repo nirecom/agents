@@ -2,10 +2,12 @@
 # Tests: bin/sweep-worktrees.sh
 # Tags: sweep, worktree, maintenance, bin, git, scope:common
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+
 # shellcheck source=./_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T1 — no linked worktrees → zero candidates

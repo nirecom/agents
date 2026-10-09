@@ -8,9 +8,9 @@
 # Mitigation: hook-registration in bin/check-verification-gate.sh.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
@@ -19,8 +19,8 @@ trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-AGENTS_WIN="$(np "$AGENTS_DIR")"
-RUN_TESTS_HOOK="$AGENTS_DIR/hooks/workflow-run-tests.js"
+AGENTS_WIN="$(np "$SCRIPT_CHECKOUT_ROOT")"
+RUN_TESTS_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js"
 FAILING_LIST_JS="$AGENTS_WIN/hooks/workflow-run-tests/failing-list.js"
 
 # Fixture repo for run-all.sh provenance checks (TL2 cases).
@@ -29,7 +29,7 @@ harness_git_init "$FIXTURE_REPO"
 git -C "$FIXTURE_REPO" config user.email test@example.com
 git -C "$FIXTURE_REPO" config user.name "Test"
 mkdir -p "$FIXTURE_REPO/tests"
-cp "$AGENTS_DIR/tests/run-all.sh" "$FIXTURE_REPO/tests/run-all.sh"
+cp "$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh" "$FIXTURE_REPO/tests/run-all.sh"
 FIXTURE_WIN="$(np "$FIXTURE_REPO")"
 
 step_field() {
@@ -190,7 +190,7 @@ done <<< "$_fl_out"
 
 # Parity: classifyTestKind must equal bash tlr_match (supported id, else null) so
 # baseline runs classify exactly what run-all launches; every supported id is hit.
-TLR_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
+TLR_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh"
 _ctk_names="tests/a.sh tests/b.Tests.ps1 tests/test_c.py tests/x.ps1 tests/tc.py tests/x.txt tests/.sh tests/a.js tests/a.test.js tests/test_a.sh"
 _ctk_got=$(run_with_timeout 30 node -e '
 var m=require(process.argv[1]);process.argv.slice(2).forEach(function(n){
@@ -207,7 +207,7 @@ if [ -f "$TLR_LIB" ] && (. "$TLR_LIB" && tlr_load) >/dev/null 2>&1; then
     done
     assert_eq "$_ctk_got" "${_ctk_want%$'\n'}" "parity/classifyTestKind-equals-tlr_match"
     _ctk_missing=""
-    for _id in $(node "$AGENTS_DIR/bin/test-language-registry" --format shell | awk -F'\t' '$1=="entry" && $3=="supported" {print $2}'); do
+    for _id in $(node "$SCRIPT_CHECKOUT_ROOT/bin/test-language-registry" --format shell | awk -F'\t' '$1=="entry" && $3=="supported" {print $2}'); do
         case "$_ctk_hit" in *" $_id "*) ;; *) _ctk_missing+=" $_id" ;; esac
     done
     assert_eq "${_ctk_missing:-none}" "none" "parity/every-supported-id-exercised"

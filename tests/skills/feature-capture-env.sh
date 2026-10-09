@@ -7,9 +7,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WRITE_ENV_JS="$AGENTS_DIR/skills/worktree-end/scripts/write-env-json.js"
-CAPTURE_ENV_SH="$AGENTS_DIR/skills/worktree-end/scripts/capture-env.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+WRITE_ENV_JS="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/write-env-json.js"
+CAPTURE_ENV_SH="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/capture-env.sh"
 
 PASS=0
 FAIL=0
@@ -165,11 +165,11 @@ DREOF
     chmod +x "$lib_dir/detect-restart.sh"
 
     # Use the REAL write-env-json.js (we are testing that it passes SIBLING_REPOS_JSON through)
-    cp "$AGENTS_DIR/skills/worktree-end/scripts/write-env-json.js" "$lib_dir/write-env-json.js"
+    cp "$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/write-env-json.js" "$lib_dir/write-env-json.js"
 
     # Copy extract-pr-fields.js (needed by non-bootstrap path but not used in BOOTSTRAP_MODE=1)
-    if [ -f "$AGENTS_DIR/skills/worktree-end/scripts/extract-pr-fields.js" ]; then
-        cp "$AGENTS_DIR/skills/worktree-end/scripts/extract-pr-fields.js" "$lib_dir/extract-pr-fields.js"
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/extract-pr-fields.js" ]; then
+        cp "$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/extract-pr-fields.js" "$lib_dir/extract-pr-fields.js"
     fi
 
     # Patch LIB_DIR in a copy of capture-env.sh
@@ -185,7 +185,6 @@ DREOF
 
     BOOTSTRAP_MODE=1 \
     BOOTSTRAP_COMMIT_SHA=abc1234567890def \
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" \
     PLANS_DIR="$plans_dir" \
     WORKFLOW_PLANS_DIR="$plans_dir" \
     WORKFLOW_STATE_DIR="$wf_dir" \

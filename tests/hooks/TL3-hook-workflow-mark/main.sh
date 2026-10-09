@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # TL3 seam body for workflow-mark.js (PostToolUse).
 # Sourced by ../TL3-hook-workflow-mark.sh after helpers.sh.
-# Assumes AGENTS_DIR, pass(), fail(), and helpers already loaded.
+# Assumes SCRIPT_CHECKOUT_ROOT, pass(), fail(), and helpers already loaded.
 
 echo ""
 echo "=== TL3: workflow-mark.js PostToolUse real invocation ==="
@@ -19,7 +19,7 @@ git -C "$WM_REPO" init -q
 git -C "$WM_REPO" config user.email "test@example.com"
 git -C "$WM_REPO" config user.name "Test"
 
-HOOK_JS="$(node_path "$AGENTS_DIR/hooks/workflow-mark.js")"
+HOOK_JS="$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js")"
 
 # Minimal settings.json: only the PostToolUse (Bash) hook; no disableBypassPermissionsMode.
 cat > "$WM_REPO/.claude/settings.json" <<SETTINGS_EOF

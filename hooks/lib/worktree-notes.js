@@ -60,14 +60,14 @@ function formatBaseDir(baseDir) {
   return String(baseDir);
 }
 
-function buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId, siblingWorktrees } = {}) {
-  const normalizedMainRoot = mainRoot ? normalizePath(mainRoot) : "";
+function buildNotesBody({ branch, createdDate, resolvedPath, targetMainRoot, baseDir, copiedFiles, sessionId, siblingWorktrees } = {}) {
+  const normalizedTargetMainRoot = targetMainRoot ? normalizePath(targetMainRoot) : "";
   const lines = [
     "# Worktree Notes",
     `Branch: ${branch}`,
     `Created: ${createdDate}`,
     `Path: ${resolvedPath}`,
-    `Main repo: ${normalizedMainRoot}`,
+    `Main repo: ${normalizedTargetMainRoot}`,
     `WORKTREE_BASE_DIR: ${formatBaseDir(baseDir)}`,
   ];
   if (sessionId) {
@@ -140,31 +140,31 @@ function buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, 
   return lines.join("\n") + "\n";
 }
 
-function writeNotes({ worktreePath, branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId, siblingWorktrees }) {
+function writeNotes({ worktreePath, branch, createdDate, resolvedPath, targetMainRoot, baseDir, copiedFiles, sessionId, siblingWorktrees }) {
   const notesPath = path.join(worktreePath, "WORKTREE_NOTES.md");
-  const body = buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId, siblingWorktrees });
+  const body = buildNotesBody({ branch, createdDate, resolvedPath, targetMainRoot, baseDir, copiedFiles, sessionId, siblingWorktrees });
   fs.writeFileSync(notesPath, body, { encoding: "utf8" });
   return { notesPath, notesWritten: true };
 }
 
 /**
- * Append a pattern to <mainRoot>/.git/info/exclude.
+ * Append a pattern to <targetMainRoot>/.git/info/exclude.
  *
- * IMPORTANT: `mainRoot` MUST be the **main repository root** (the directory
+ * IMPORTANT: `targetMainRoot` MUST be the **main repository root** (the directory
  * containing `.git/` as a real directory). It must NOT be a linked worktree
  * root, where `.git` is a file pointing back at the main repo. Callers are
  * responsible for resolving the main worktree path before invoking this
  * function.
  */
-function appendExclude({ mainRoot, pattern }) {
-  const gitPath = path.join(mainRoot, ".git");
+function appendExclude({ targetMainRoot, pattern }) {
+  const gitPath = path.join(targetMainRoot, ".git");
 
   let gitStat;
   try {
     gitStat = fs.lstatSync(gitPath);
   } catch (e) {
     if (e.code === "ENOENT") {
-      throw new Error(`no .git directory at ${mainRoot}`);
+      throw new Error(`no .git directory at ${targetMainRoot}`);
     }
     throw e;
   }
@@ -183,7 +183,7 @@ function appendExclude({ mainRoot, pattern }) {
     );
   }
 
-  const infoDir = path.join(mainRoot, ".git", "info");
+  const infoDir = path.join(targetMainRoot, ".git", "info");
   const excludePath = path.join(infoDir, "exclude");
   fs.mkdirSync(infoDir, { recursive: true });
 
@@ -217,7 +217,7 @@ function appendExclude({ mainRoot, pattern }) {
 
 function run(input) {
   const {
-    mainRoot,
+    targetMainRoot,
     worktreePath,
     branch,
     createdDate,
@@ -229,8 +229,8 @@ function run(input) {
     siblingWorktrees,
   } = input;
 
-  if (hasTraversal(mainRoot)) {
-    throw new Error(`Path traversal detected in mainRoot: ${mainRoot}`);
+  if (hasTraversal(targetMainRoot)) {
+    throw new Error(`Path traversal detected in targetMainRoot: ${targetMainRoot}`);
   }
   if (hasTraversal(worktreePath)) {
     throw new Error(`Path traversal detected in worktreePath: ${worktreePath}`);
@@ -256,8 +256,8 @@ function run(input) {
   if (baseDir != null && hasNewline(String(baseDir))) {
     throw new Error(`Newline character in baseDir is not allowed`);
   }
-  if (mainRoot && hasNewline(mainRoot)) {
-    throw new Error(`Newline character in mainRoot is not allowed`);
+  if (targetMainRoot && hasNewline(targetMainRoot)) {
+    throw new Error(`Newline character in targetMainRoot is not allowed`);
   }
   if (sessionId != null && sessionId !== "") {
     if (typeof sessionId !== "string") {
@@ -301,7 +301,7 @@ function run(input) {
       branch,
       createdDate,
       resolvedPath: resolvedPath || worktreePath,
-      mainRoot,
+      targetMainRoot,
       baseDir,
       copiedFiles,
       sessionId,
@@ -315,7 +315,7 @@ function run(input) {
   }
 
   try {
-    const a = appendExclude({ mainRoot, pattern: excludePattern || "WORKTREE_NOTES.md" });
+    const a = appendExclude({ targetMainRoot, pattern: excludePattern || "WORKTREE_NOTES.md" });
     result.excludePath = a.excludePath;
     result.excludeAdded = a.excludeAdded;
     result.excludeSkipReason = a.excludeSkipReason;

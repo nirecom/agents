@@ -16,7 +16,7 @@ const { checkField } = require("../../capability");
 const { samePath, realAbs } = require("../../anchor");
 const paths = require("./paths");
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 // The closed triage vocabulary. `stuck_*` is open-ended by design (the chain
 // scripts name the step they got stuck at) but bounded in shape.
@@ -39,8 +39,9 @@ const STATE_FIELDS = {
   current_issue_number: { type: "int", required: true, min: 1 },
   issue_repo: { type: "repo-ref", required: false },
   owner_repo: { type: "owner-repo", required: true },
-  agents_config_dir: { type: "anchor-acd", required: true },
-  main_worktree_path: { type: "anchor-main-root", required: true },
+  // Accepted only when equal to anchors.scriptCheckoutRoot (the type enforces it).
+  script_checkout_root: { type: "anchor-script-checkout-root", required: true },
+  target_main_root: { type: "anchor-target-main-root", required: true },
   merge_commit: { type: "text", required: false, max: 64 },
   phase: { type: "enum:init_done|awaiting_recursion|terminal", required: true },
   triage_action: { type: "text", required: true, max: 64 },
@@ -72,7 +73,7 @@ const BINDING_FIELDS = [
   "session_id",
   "root_issue_number",
   "owner_repo",
-  "main_worktree_path",
+  "target_main_root",
   "state_file_path",
 ];
 
@@ -260,11 +261,11 @@ function checkBinding(payload, state, ctx) {
   if (rec.owner_repo !== payload.owner_repo || rec.owner_repo !== state.owner_repo) {
     return "finalize session binding record owner_repo does not match payload and state";
   }
-  if (!samePath(rec.main_worktree_path, ctx.anchors.mainRoot)) {
-    return "finalize session binding record main_worktree_path does not match the resolved main-root";
+  if (!samePath(rec.target_main_root, ctx.anchors.targetMainRoot)) {
+    return "finalize session binding record target_main_root does not match the resolved target-main-root";
   }
-  if (!samePath(rec.main_worktree_path, state.main_worktree_path)) {
-    return "finalize session binding record main_worktree_path does not match the state file";
+  if (!samePath(rec.target_main_root, state.target_main_root)) {
+    return "finalize session binding record target_main_root does not match the state file";
   }
   if (!paths.bindingStateMatches(rec.state_file_path, payload.state_file_path, sessionId, payload.root_issue_number)) {
     return "finalize session binding record points at a different state file";
@@ -400,7 +401,7 @@ function writeInitial(payload, ctx, state) {
       session_id: payload.session_id,
       root_issue_number: Number(payload.root_issue_number),
       owner_repo: state.owner_repo,
-      main_worktree_path: ctx.anchors.mainRoot,
+      target_main_root: ctx.anchors.targetMainRoot,
       state_file_path: statePath,
       created_at: new Date().toISOString(),
     };

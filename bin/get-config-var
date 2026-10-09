@@ -24,9 +24,7 @@ AGENTS_NODE_GUARD
 #       fail-safe-OFF pattern deliberately.
 #   Usage error (missing NAME arg): exit 64.
 #
-# Resolution order for hooks/lib/load-env.js:
-#   1. $AGENTS_CONFIG_DIR/hooks/lib/load-env.js  (when AGENTS_CONFIG_DIR set)
-#   2. $(dirname $0)/../hooks/lib/load-env.js     (SCRIPT_DIR fallback)
+# hooks/lib/load-env.js is always the one beside this script (symlinks followed).
 # Process env wins over .env (parity with load-env.js). This is the opposite of
 # bin/env-effective-kv, which never reads process.env — callers resolving a
 # prompt-bound value (e.g. PROJECT_NFR) that must not be forgeable by an inline
@@ -57,21 +55,17 @@ if [ -z "$GETCV_NAME" ]; then
   exit 64
 fi
 
-if [ -n "${AGENTS_CONFIG_DIR:-}" ] && [ -f "$AGENTS_CONFIG_DIR/hooks/lib/load-env.js" ]; then
-  GETCV_LOADENV="$AGENTS_CONFIG_DIR/hooks/lib/load-env.js"
-else
-  _SCRIPT="${BASH_SOURCE[0]}"
+_SCRIPT="${BASH_SOURCE[0]}"
+_target="$(readlink "$_SCRIPT" 2>/dev/null)"
+while [ -n "$_target" ]; do
+  case "$_target" in
+    /*) _SCRIPT="$_target" ;;
+    *)  _SCRIPT="$(cd "$(dirname "$_SCRIPT")" && pwd)/$_target" ;;
+  esac
   _target="$(readlink "$_SCRIPT" 2>/dev/null)"
-  while [ -n "$_target" ]; do
-    case "$_target" in
-      /*) _SCRIPT="$_target" ;;
-      *)  _SCRIPT="$(cd "$(dirname "$_SCRIPT")" && pwd)/$_target" ;;
-    esac
-    _target="$(readlink "$_SCRIPT" 2>/dev/null)"
-  done
-  SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT")" && pwd -P)"
-  GETCV_LOADENV="$SCRIPT_DIR/../hooks/lib/load-env.js"
-fi
+done
+SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT")" && pwd -P)"
+GETCV_LOADENV="$SCRIPT_DIR/../hooks/lib/load-env.js"
 
 GETCV_KIND_FILE=""
 trap 'rm -f "$GETCV_KIND_FILE"' EXIT

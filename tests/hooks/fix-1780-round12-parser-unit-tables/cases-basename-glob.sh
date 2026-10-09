@@ -119,7 +119,7 @@ B-comma   | ab~ac~a{b,c}                  | braces | a{b,c}
 B-single  | {x}                           | braces | {x}
 B-range   | f1~f2~f3~f{1..3}              | braces | f{1..3}
 B-pad     | f01~f02~f03~f{01..03}         | braces | f{01..03}
-B-cart    | abd~abe~acd~ace~a{b,c}{d,e}   | braces | a{b,c}{d,e}
+B-cart    | abd~abe~script_checkout_root~ace~a{b,c}{d,e}   | braces | a{b,c}{d,e}
 B-plain   | plain                         | braces | plain
 B-cap     | false                         | bracecap | a{b,c}
 B-raw     | s1@MK@~s1@MK1@{f..f}          | spellings | s1@MK1@{f..f}

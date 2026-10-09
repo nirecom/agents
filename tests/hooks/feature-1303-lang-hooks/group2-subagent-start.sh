@@ -22,22 +22,22 @@ else
         if [ -n "$conv_lang" ] && [ -n "$plan_lang" ]; then
             printf '%s' "$stdin_json" | \
                 CONV_LANG="$conv_lang" PLAN_LANG="$plan_lang" \
-                AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+                AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
                 run_with_timeout 15 node "$SUBAGENT_START_HOOK" 2>/dev/null
         elif [ -n "$conv_lang" ]; then
             printf '%s' "$stdin_json" | \
                 (unset PLAN_LANG; CONV_LANG="$conv_lang" \
-                AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+                AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
                 run_with_timeout 15 node "$SUBAGENT_START_HOOK" 2>/dev/null)
         elif [ -n "$plan_lang" ]; then
             printf '%s' "$stdin_json" | \
                 (unset CONV_LANG; PLAN_LANG="$plan_lang" \
-                AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+                AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
                 run_with_timeout 15 node "$SUBAGENT_START_HOOK" 2>/dev/null)
         else
             printf '%s' "$stdin_json" | \
                 (unset CONV_LANG; unset PLAN_LANG; \
-                AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+                AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
                 run_with_timeout 15 node "$SUBAGENT_START_HOOK" 2>/dev/null)
         fi
     }
@@ -107,8 +107,8 @@ else
     # G2-T11/T12 (#2278): the complete injected directive equals what the SSOT
     # getPlanLangInjection() (hooks/lib/lang-config.js) returns for japanese —
     # full-line match, not just the prefix. (a) non-whitelisted agent, (b) no agent_type.
-    _plan_full_ja="$( (unset CONV_LANG; PLAN_LANG=japanese AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        run_with_timeout 15 node -e "process.stdout.write(String(require('$AGENTS_DIR/hooks/lib/lang-config.js').getPlanLangInjection()))" 2>/dev/null) )"
+    _plan_full_ja="$( (unset CONV_LANG; PLAN_LANG=japanese AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
+        run_with_timeout 15 node -e "process.stdout.write(String(require('$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/lang-config.js').getPlanLangInjection()))" 2>/dev/null) )"
     if [ -z "$_plan_full_ja" ] || [ "$_plan_full_ja" = "null" ]; then
         fail "G2-T11/T12 precondition: getPlanLangInjection() returned '$_plan_full_ja' for japanese"
     else
@@ -130,8 +130,8 @@ else
 
     # G2-T13/T14 (#2278): hint tier (PLAN_LANG=french) is injected the same way —
     # the full line must equal getPlanLangInjection() for french, whitelist or not.
-    _plan_full_fr="$( (unset CONV_LANG; PLAN_LANG=french AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
-        run_with_timeout 15 node -e "process.stdout.write(String(require('$AGENTS_DIR/hooks/lib/lang-config.js').getPlanLangInjection()))" 2>/dev/null) )"
+    _plan_full_fr="$( (unset CONV_LANG; PLAN_LANG=french AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
+        run_with_timeout 15 node -e "process.stdout.write(String(require('$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/lang-config.js').getPlanLangInjection()))" 2>/dev/null) )"
     if [ -z "$_plan_full_fr" ] || [ "$_plan_full_fr" = "null" ] || [ "$_plan_full_fr" = "$_plan_full_ja" ]; then
         fail "G2-T13/T14 precondition: getPlanLangInjection() returned '$_plan_full_fr' for french"
     else
@@ -211,7 +211,7 @@ else
     # G2-T8: malformed stdin → fail-open, exit 0, valid JSON
     _raw_s8=$(printf 'not-json' | \
         CONV_LANG=japanese PLAN_LANG=english \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         run_with_timeout 15 node "$SUBAGENT_START_HOOK" 2>/dev/null)
     _rc_s8=$?
     _valid_s8=$(is_valid_hook_output "$_raw_s8")

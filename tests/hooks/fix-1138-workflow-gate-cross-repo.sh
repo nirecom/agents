@@ -15,8 +15,8 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
 
 PASS=0; FAIL=0
 pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
@@ -111,11 +111,11 @@ JSON
 }
 
 # Run the gate against an explicit Windows-native WORKFLOW_DIR.
-# $1=workflow_dir $2=project_dir $3=agents_config_dir $4=hook_input_json
+# $1=workflow_dir $2=project_dir $3=script_checkout_root $4=hook_input_json
 run_gate_win() {
     local wfdir="$1" projdir="$2" agentsdir="$3" json="$4"
     echo "$json" | CLAUDE_PROJECT_DIR="$projdir" WORKFLOW_STATE_DIR="$wfdir" \
-        AGENTS_CONFIG_DIR="$agentsdir" run_with_timeout node "$GATE_HOOK" 2>/dev/null || true
+        AGENTS_MAIN_ROOT="$agentsdir" run_with_timeout node "$GATE_HOOK" 2>/dev/null || true
 }
 
 # Per-case workflow dir + state writer.

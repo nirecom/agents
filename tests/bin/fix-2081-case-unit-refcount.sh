@@ -23,7 +23,7 @@ CASE_PARSER="$AGENTS_ROOT/bin/lib/test-retire-predicate/case-parser.sh"
 
 # The harness owns PASS/FAIL and pass()/fail() (#1834). assert_eq and
 # run_with_timeout are redefined below: this dispatcher's signatures differ.
-AGENTS_DIR="$AGENTS_ROOT"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
 source "$AGENTS_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT

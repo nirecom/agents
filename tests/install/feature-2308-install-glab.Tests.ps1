@@ -35,7 +35,7 @@ BeforeAll {
         param([string]$Dir, [string]$HostName, [string]$Token, [string]$Subfolder, [string]$Mode)
         Set-Content -LiteralPath (Join-Path $Dir 'driver.ps1') -Encoding UTF8 -Value @"
 `$env:PATH = '$Dir;' + `$env:PATH
-`$env:AGENTS_CONFIG_DIR = '$Dir'
+`$env:AGENTS_MAIN_ROOT = '$Dir'
 Set-Location '$Dir'
 `$env:GITLAB = 'on'
 `$env:GITLAB_HOSTNAME = '$HostName'
@@ -59,7 +59,7 @@ try { & '$script:GlabPs1' } finally {
         param([string]$Dir, [string]$HostName, [string]$Token)
         Set-Content -LiteralPath (Join-Path $Dir 'driver.ps1') -Encoding UTF8 -Value @"
 `$env:PATH = '$Dir;' + `$env:PATH
-`$env:AGENTS_CONFIG_DIR = '$Dir'
+`$env:AGENTS_MAIN_ROOT = '$Dir'
 Set-Location '$Dir'
 `$env:GITLAB = 'on'
 `$env:GITLAB_HOSTNAME = '$HostName'

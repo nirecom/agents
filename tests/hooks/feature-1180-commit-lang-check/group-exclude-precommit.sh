@@ -19,7 +19,7 @@ printf 'const msg = "日本語テスト";\n' > "$_x12_repo/test.js"
 git -C "$_x12_repo" add test.js
 _x12_root="$(git -C "$_x12_repo" rev-parse --show-toplevel)"
 _x12_out="$(run_precommit "$_x12_repo" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+    "ENFORCE_WORKTREE=off" \
     "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_x12_root")"
 _x12_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _x12_v="rc:nonzero"; [ "$_x12_rc" -eq 0 ] && _x12_v="rc:zero"
@@ -36,7 +36,7 @@ _x13_repo="$(make_git_repo x13)"
 printf 'const msg = "日本語テスト";\n' > "$_x13_repo/test.js"
 git -C "$_x13_repo" add test.js
 _x13_out="$(run_precommit "$_x13_repo" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+    "ENFORCE_WORKTREE=off" \
     "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_X_MISS_A")"
 _x13_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _x13_v="rc:zero"; [ "$_x13_rc" -ne 0 ] && _x13_v="rc:nonzero"
@@ -46,7 +46,7 @@ assert_eq "X13: non-matching CODE_LANG_EXCLUDE + CJK staged → pre-commit still
     "$_x13_v block:$_x13_block"
 
 # X14: CODE_LANG_EXCLUDE delivered via a stubbed .env under an isolated
-# AGENTS_CONFIG_DIR (same pattern as CL-I10). Two entries, only the second
+# AGENTS_MAIN_ROOT (same pattern as CL-I10). Two entries, only the second
 # matches. $EXCLUDE_FROM_DOTENV opts this call out of lib.sh's process-env
 # isolation sentinel — here the .env IS the source under test. The stub dir must
 # carry every module the require graph needs — path-coverage-match.js /
@@ -61,11 +61,11 @@ git -C "$_x14_repo" add test.js
 _x14_root="$(git -C "$_x14_repo" rev-parse --show-toplevel)"
 printf 'CODE_LANG=english\nCODE_LANG_EXCLUDE=%s;%s\n' "$_X_MISS_A" "$_x14_root" > "$_x14_cfg/.env"
 for _x14_mod in lint-commit-lang.js detect-cjk.js lang-config.js lint-plan-lang.js \
-                load-env.js agents-config-dir.js path-normalize.js \
+                load-env.js script-checkout-root.js path-normalize.js \
                 path-coverage-match.js glob-match.js; do
-    cp "$AGENTS_DIR/hooks/lib/$_x14_mod" "$_x14_cfg/hooks/lib/" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/$_x14_mod" "$_x14_cfg/hooks/lib/" 2>/dev/null || true
 done
-_x14_out="$(run_precommit "$_x14_repo" "AGENTS_CONFIG_DIR=$_x14_cfg" "ENFORCE_WORKTREE=off" \
+_x14_out="$(run_precommit "$_x14_repo" "AGENTS_MAIN_ROOT=$_x14_cfg" "ENFORCE_WORKTREE=off" \
     "$EXCLUDE_FROM_DOTENV")"
 _x14_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _x14_v="rc:nonzero"; [ "$_x14_rc" -eq 0 ] && _x14_v="rc:zero"
@@ -87,7 +87,7 @@ assert_eq "X14: CODE_LANG_EXCLUDE from .env (2 entries, 2nd matches) → allowed
 # tells lib.sh's isolation helper this case decides the variable itself, so the
 # stubbed .env is genuinely the only possible source.
 #
-# The stub AGENTS_CONFIG_DIR carries the same module set as X14 — a missing
+# The stub AGENTS_MAIN_ROOT carries the same module set as X14 — a missing
 # module makes require() throw, the hook fails open with rc=0, and the case
 # would be false-green on rc alone. "skipped ABSENT" is the assertion that
 # detects it; "block PRESENT" pins that the block is a language block rather
@@ -97,9 +97,9 @@ _x26_mk_cfg() {
     mkdir -p "$cfg/hooks/lib"
     printf 'CODE_LANG=english\n%s' "$excl_line" > "$cfg/.env"
     for mod in lint-commit-lang.js detect-cjk.js lang-config.js lint-plan-lang.js \
-               load-env.js agents-config-dir.js path-normalize.js \
+               load-env.js script-checkout-root.js path-normalize.js \
                path-coverage-match.js glob-match.js; do
-        cp "$AGENTS_DIR/hooks/lib/$mod" "$cfg/hooks/lib/" 2>/dev/null || true
+        cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/$mod" "$cfg/hooks/lib/" 2>/dev/null || true
     done
 }
 
@@ -110,7 +110,7 @@ _x26_probe() {
     printf 'const msg = "日本語テスト";\n' > "$repo/test.js"
     git -C "$repo" add test.js
     out="$(run_precommit "$repo" -u CODE_LANG_EXCLUDE \
-        "AGENTS_CONFIG_DIR=$cfg" "ENFORCE_WORKTREE=off")"
+        "AGENTS_MAIN_ROOT=$cfg" "ENFORCE_WORKTREE=off")"
     rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     v="rc:zero"; [ "$rc" -ne 0 ] && v="rc:nonzero"
     block="absent"; printf '%s' "$out" | grep -qF "$LANG_BLOCK_MARKER" && block="present"
@@ -140,11 +140,11 @@ assert_eq "X26b: CODE_LANG_EXCLUDE present but empty + CJK staged → pre-commit
 # never overwritten by .env) in BOTH directions — one direction alone would be
 # satisfied by whichever source happens to be consulted.
 #
-# AGENTS_CONFIG_DIR is stubbed at an isolated dir holding ONLY a .env: the check()
+# AGENTS_MAIN_ROOT is stubbed at an isolated dir holding ONLY a .env: the check()
 # driver requires the real hooks/lib/lint-commit-lang.js by absolute path, so
 # (unlike the X14 pre-commit stub) no module copies are needed there. CODE_LANG is
 # supplied as a real env var because the short-circuit on an explicit
-# AGENTS_CONFIG_DIR means the real repo's .env is never read.
+# AGENTS_MAIN_ROOT means the real repo's .env is never read.
 _x19_cfg_a="$TMPDIR_BASE/cfg-x19a"
 _x19_cfg_b="$TMPDIR_BASE/cfg-x19b"
 mkdir -p "$_x19_cfg_a" "$_x19_cfg_b"
@@ -160,7 +160,7 @@ if require_sut "X19a" "$LINT_LIB"; then
     _x19a_out="$(run_check_node_raw "$_x19a_repo" \
         "CODE_LANG=english" \
         "CODE_LANG_EXCLUDE=$_X_MISS_A" \
-        "AGENTS_CONFIG_DIR=$_x19_cfg_a")"
+        "AGENTS_MAIN_ROOT=$_x19_cfg_a")"
     _x19a_got="$(printf '%s' "$_x19a_out" | _x_classify)"
     assert_eq "X19a: process-env CODE_LANG_EXCLUDE (non-matching) overrides a matching .env value → still blocks" \
         "nonempty" "$_x19a_got"
@@ -177,7 +177,7 @@ if require_sut "X19b" "$LINT_LIB"; then
     _x19b_out="$(run_check_node_raw "$_x19b_repo" \
         "CODE_LANG=english" \
         "CODE_LANG_EXCLUDE=$_x19b_root" \
-        "AGENTS_CONFIG_DIR=$_x19_cfg_b")"
+        "AGENTS_MAIN_ROOT=$_x19_cfg_b")"
     _x19b_got="$(printf '%s' "$_x19b_out" | _x_classify)"
     assert_eq "X19b: process-env CODE_LANG_EXCLUDE (matching) overrides a non-matching .env value → skips" \
         "empty" "$_x19b_got"
@@ -259,7 +259,7 @@ _x24_repo="$(make_git_repo x24)"
 printf 'const msg = "日本語テスト";\n' > "$_x24_repo/test.js"
 git -C "$_x24_repo" add test.js
 _x24_out="$(run_precommit "$_x24_repo" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+    "ENFORCE_WORKTREE=off" \
     "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_x24_val")"
 _x24_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _x24_v="rc:zero"; [ "$_x24_rc" -ne 0 ] && _x24_v="rc:nonzero"
@@ -312,7 +312,7 @@ _x30_probe() {
     excl="$_X_MISS_A"
     [ "$mode" = "match" ] && excl="$root"
     out="$(run_precommit "$repo" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+        "ENFORCE_WORKTREE=off" \
         "CODE_LANG=english" "CODE_LANG_EXCLUDE=$excl")"
     rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     v="rc:zero"; [ "$rc" -ne 0 ] && v="rc:nonzero"

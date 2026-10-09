@@ -13,11 +13,11 @@ if [ -z "${C_RESET+x}" ]; then
     fi
 fi
 
-AGENTS_ROOT="${AGENTS_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # GITLAB is opt-in (default off): exit 1 means explicit ON; every other exit resolves to OFF.
 _gitlab_rc=0
-bash "$AGENTS_ROOT/bin/get-config-var" --is-off GITLAB off >/dev/null 2>&1 || _gitlab_rc=$?
+bash "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off GITLAB off >/dev/null 2>&1 || _gitlab_rc=$?
 if [ "$_gitlab_rc" -ne 1 ]; then
     printf "${C_GRAY}GITLAB is off (default); skipping glab installation.${C_RESET}\n"
     exit 0
@@ -58,10 +58,10 @@ if ! command -v glab &>/dev/null; then
 fi
 
 # Read auth config from .env; non-interactive when both GITLAB_HOSTNAME and GITLAB_TOKEN are set.
-_hostname="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_HOSTNAME 2>/dev/null || true)"
-_token="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_TOKEN 2>/dev/null || true)"
-_subfolder="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_SUBFOLDER 2>/dev/null || true)"
-_ssh_host="$(bash "$AGENTS_ROOT/bin/get-config-var" GITLAB_SSH_HOSTNAME 2>/dev/null || true)"
+_hostname="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" GITLAB_HOSTNAME 2>/dev/null || true)"
+_token="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" GITLAB_TOKEN 2>/dev/null || true)"
+_subfolder="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" GITLAB_SUBFOLDER 2>/dev/null || true)"
+_ssh_host="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" GITLAB_SSH_HOSTNAME 2>/dev/null || true)"
 
 # _glab_probe <host> <port>: TCP connect via bash /dev/tcp, name resolution included, 3s hard
 # limit. $BASH (the running shell), not PATH's bash, so a PATH-mocked bash cannot stand in.

@@ -11,12 +11,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SHARED_REL="skills/_shared/subagent-concurrency.md"
-SHARED_MD="$AGENTS_DIR/$SHARED_REL"
+SHARED_MD="$SCRIPT_CHECKOUT_ROOT/$SHARED_REL"
 
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # Overrides the harness run_with_timeout to keep the in-process timeout/perl path.
 run_with_timeout() {
@@ -64,11 +64,11 @@ block_to_file() {
     local label="$1" path="$2" start="$3" end="$4" maxl="$5" out lines
     BLOCK_FILE=""
     if [ ! -f "$path" ]; then
-        fail "$label: file missing: ${path#$AGENTS_DIR/}"
+        fail "$label: file missing: ${path#$SCRIPT_CHECKOUT_ROOT/}"
         return 1
     fi
     if ! has_prefix_line "$path" "$end"; then
-        fail "$label: end anchor '$end' not found in ${path#$AGENTS_DIR/} (block scoping unreliable)"
+        fail "$label: end anchor '$end' not found in ${path#$SCRIPT_CHECKOUT_ROOT/} (block scoping unreliable)"
         return 1
     fi
     out="$TMPD/block-$(printf '%s' "$label" | tr -c 'A-Za-z0-9' '_').md"
@@ -76,7 +76,7 @@ block_to_file() {
     lines=$(wc -l < "$out" | tr -d '[:space:]')
     [ -n "$lines" ] || lines=0
     if [ "$lines" -eq 0 ]; then
-        fail "$label: start anchor '$start' not found in ${path#$AGENTS_DIR/}"
+        fail "$label: start anchor '$start' not found in ${path#$SCRIPT_CHECKOUT_ROOT/}"
         return 1
     fi
     if [ "$lines" -gt "$maxl" ]; then
@@ -89,7 +89,7 @@ block_to_file() {
 
 # Fragments only define group functions and their tables; a missing fragment
 # is a hard stop, since its groups would otherwise silently vanish from the run.
-FRAG_DIR="$AGENTS_DIR/tests/skills/feature-1721-subagent-concurrency-refs"
+FRAG_DIR="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-1721-subagent-concurrency-refs"
 for frag in shared-doc parallel-refs serial-annotation serial-syntax negatives-and-wait; do
     if [ ! -f "$FRAG_DIR/$frag.sh" ]; then
         fail "fragment missing: $FRAG_DIR/$frag.sh"

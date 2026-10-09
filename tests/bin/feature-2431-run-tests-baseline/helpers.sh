@@ -7,16 +7,16 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-AGENTS_WIN="$(if command -v cygpath >/dev/null 2>&1; then cygpath -m "$AGENTS_DIR"; else echo "$AGENTS_DIR"; fi)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+AGENTS_WIN="$(if command -v cygpath >/dev/null 2>&1; then cygpath -m "$_HELPERS_SCRIPT_CHECKOUT_ROOT"; else echo "$_HELPERS_SCRIPT_CHECKOUT_ROOT"; fi)"
 np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
-LEDGER_LIB="$AGENTS_DIR/bin/lib/run-tests-baseline-ledger.sh"
-WORKTREE_LIB="$AGENTS_DIR/bin/lib/run-tests-baseline-worktree.sh"
-EXEC_LIB="$AGENTS_DIR/bin/lib/run-tests-baseline-exec.sh"
-MARKER_JS="$AGENTS_DIR/hooks/lib/baseline-checkout-marker.js"
-BASELINE_CLI="$AGENTS_DIR/bin/run-tests-baseline"
-EVIDENCE_CLI="$AGENTS_DIR/bin/workflow/run-tests-baseline-evidence"
+LEDGER_LIB="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-ledger.sh"
+WORKTREE_LIB="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-worktree.sh"
+EXEC_LIB="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-exec.sh"
+MARKER_JS="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/lib/baseline-checkout-marker.js"
+BASELINE_CLI="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/run-tests-baseline"
+EVIDENCE_CLI="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/workflow/run-tests-baseline-evidence"
 
 PASS=0
 FAIL=0
@@ -25,7 +25,10 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
 TMPROOT="$(mktemp -d)"
-trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT"' EXIT
+[[ -n "$TMPROOT" && -d "$TMPROOT" ]] || { echo "cannot create a temp root" >&2; exit 1; }
+readonly TMPROOT
+# OWN_CACHE_DIR: the decoy cache the dispatcher made for the harness when no launcher gave one.
+trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT"; [[ -z "${OWN_CACHE_DIR:-}" ]] || rm -rf "$OWN_CACHE_DIR"' EXIT
 
 # Workflow isolation (rules/test/fixture-isolation.md).
 WF_DIR="$TMPROOT/workflow-state"
@@ -33,13 +36,17 @@ PLANS_DIR="$TMPROOT/plans"
 mkdir -p "$WF_DIR" "$PLANS_DIR"
 export WORKFLOW_STATE_DIR="$(np "$WF_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$PLANS_DIR")"
-unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID 2>/dev/null || true
+# No process started here reads the developer's home (Node on Windows reads USERPROFILE).
+mkdir -p "$TMPROOT/home" || exit 1
+HOME="$(np "$TMPROOT/home")"
+export HOME USERPROFILE="$HOME"
 
 # Baseline cache in a temp dir so the real ~/.claude/run-all is never touched.
 export RUN_ALL_CACHE_DIR="$TMPROOT/run-all-cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
-run_with_timeout() { bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$@"; }
+run_with_timeout() { bash "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$@"; }
 
 # rtb_call <timeout> <lib> <fn> [args...] — a lib function runs in a child bash,
 # because run-with-timeout execs a program and shell functions do not cross exec.

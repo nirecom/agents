@@ -7,28 +7,22 @@
 # token trips the worktree-isolation command classifier). Old forms stay accepted,
 # with a stderr deprecation line.
 
-# Why TL2: acceptance/refusal plus the PERSISTED result of real argv handed to a real
-# CLI. A unit parser call loses the exit-code contract and usedFlagForm interaction.
-
-# TL3 gap (what this test does NOT catch):
-# - Whether the external EnterWorktree validator admits the new argv shape (it
-#   lives in the Claude Code extension host, not reproducible locally).
-# - Whether a live session's settings.json permissions.allow admits it without
-#   an approval dialog.
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# Why TL2: acceptance/refusal plus the PERSISTED result of real argv handed to a real CLI.
+# TL3 gap: whether the external EnterWorktree validator and a live session's
+# permissions.allow admit the new argv shape. Mitigation: WORKFLOW_USER_VERIFIED
+# preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-NS="$AGENTS_DIR_N/bin/workflow/next-step"
-SWT="$AGENTS_DIR_N/bin/workflow/set-workflow-type"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
-PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+NS="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+SWT="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/set-workflow-type"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
+PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -41,9 +35,9 @@ export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 # The parent session exports these; leaving them set resolves the LIVE session.
 unset CLAUDE_CODE_SESSION_ID
 
-# Empty fixture config dir: no CONFIRM_* leaks in from the repo .env, so the F11 gate is ARMED.
+# Empty fixture settings root: no CONFIRM_* leaks in from the repo .env, so the F11 gate is ARMED.
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1

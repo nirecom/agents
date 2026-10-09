@@ -5,6 +5,7 @@
 // install/assemble-settings.js comes through here, so the deploy has one polarity.
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const assembly = require('./settings-assembly');
@@ -63,9 +64,36 @@ const detachDecision = (outPath, agentsRoot) => {
     return { detach: false, reason: '' };
 };
 
+// Git Bash spells a drive as `/c/...`, which win32 fs calls do not resolve. Kept here rather than
+// required from hooks/lib: install/lib must load on its own (its fixtures copy this directory alone).
+const toNativePath = (p) => (process.platform === 'win32' && /^\/[a-zA-Z]\//.test(p)
+    ? `${p[1].toUpperCase()}:${p.slice(2)}`
+    : p);
+
+const canonicalDir = (p) => {
+    const abs = path.resolve(toNativePath(p));
+    return realpathOr(abs) || abs;
+};
+
+// Node on win32 takes the home from USERPROFILE and never reads HOME, so a caller that re-points
+// HOME alone still deploys into the real profile (#2561: a test overwrote the developer's own
+// settings.json this way). With no explicit homeDir the two must name one directory, or nothing
+// is written. An unset HOME is not a disagreement: the platform home is then the only answer.
+const assertHomeAgreement = () => {
+    const envHome = process.env.HOME;
+    if (!envHome) return;
+    const platformHome = os.homedir();
+    if (samePath(canonicalDir(envHome), canonicalDir(platformHome))) return;
+    throw new GenError(`HOME is ${envHome} but the platform home directory (os.homedir(), which ` +
+        `on Windows comes from USERPROFILE) is ${platformHome} - two different directories, so ` +
+        'the destination of settings.json is ambiguous. Nothing was written; point HOME and the ' +
+        'platform home at the same directory, or pass homeDir explicitly, and deploy again');
+};
+
 // Written IN PLACE rather than through a temp file and a rename so the detach decision above sits
 // immediately in front of the one write, with nothing between deciding and doing.
 const deployAssembledSettings = ({ agentsRoot = assembly.DEFAULT_ROOT, homeDir } = {}) => {
+    if (!homeDir) assertHomeAgreement();
     const built = assembly.buildAssembledSettings({ agentsRoot });
     const outPath = assembly.deployedSettingsPath(homeDir);
     fs.mkdirSync(path.dirname(outPath), { recursive: true });

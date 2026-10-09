@@ -13,15 +13,15 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Standard TL3 gates (rules/test/claude-e2e.md). Past them nothing may skip: the
 # live cases below really do spawn `claude -p`, and this lane exists to run them.
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 
-SUITE="$AGENTS_DIR/tests/hooks/feature-2099-complexity-stage-routing.sh"
+SUITE="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2099-complexity-stage-routing.sh"
 [ -f "$SUITE" ] || { echo "FAIL: the #2099 suite is missing at $SUITE"; exit 1; }
 
 ERRORS=0
@@ -33,8 +33,8 @@ pass() { echo "PASS: $1"; }
 OUT_FILE="$(mktemp)"
 trap 'rm -f "$OUT_FILE"' EXIT
 RC=0
-if [ -x "$AGENTS_DIR/bin/run-with-timeout.sh" ]; then
-    D2099_REQUIRE_LIVE=1 bash "$AGENTS_DIR/bin/run-with-timeout.sh" 3600 \
+if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" ]; then
+    D2099_REQUIRE_LIVE=1 bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 3600 \
         bash "$SUITE" > "$OUT_FILE" 2>&1 || RC=$?
 else
     D2099_REQUIRE_LIVE=1 bash "$SUITE" > "$OUT_FILE" 2>&1 || RC=$?
@@ -69,9 +69,9 @@ fi
 # derives a valid level. Past the top RUN_TL3/claude gates this must not skip.
 # ---------------------------------------------------------------------------
 unset CLAUDECODE
-NORMALIZE_CLI="$AGENTS_DIR/bin/workflow/normalize-judge-signals"
-DERIVE_CLI="$AGENTS_DIR/bin/workflow/derive-complexity-level"
-RUN_TO="$AGENTS_DIR/bin/run-with-timeout.sh"
+NORMALIZE_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/normalize-judge-signals"
+DERIVE_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/derive-complexity-level"
+RUN_TO="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 if [ ! -f "$NORMALIZE_CLI" ] || [ ! -f "$DERIVE_CLI" ]; then
     fail "T-LIVE-CJ-1 — normalize/derive CLI missing; scope 4 not implemented"
 else

@@ -14,7 +14,7 @@ set -u
 #   injectable where chmod bites, and is skipped elsewhere.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # WHAT THIS FILE DEFENDS (#2108) — two defects leave a subagent with no legal exit:
 # (1) early-gate.js Tier 1/2 block every Write/Edit/MultiEdit except into PLANS_DIR,
@@ -35,7 +35,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # protected-basenames.js gains SID_UUID_BODY / SID_TS_BODY / SID_CANONICAL_EXACT_RE /
 # SID_CANONICAL_TAIL_RE, run `bin/mutation-probe.sh hooks/lib/protected-basenames.js`.
 # It cannot run now — the constants do not exist, so the probe has nothing to mutate.
-AGENTS_NODE="$(node_path "$AGENTS_DIR")"
+AGENTS_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 # Hook paths are NATIVE (AGENTS_NODE), not msys-style: every invocation below sets
 # MSYS_NO_PATHCONV=1, which suppresses the /c/... -> C:/... rewrite, and node would
@@ -43,7 +43,7 @@ AGENTS_NODE="$(node_path "$AGENTS_DIR")"
 GATE_HOOK="$AGENTS_NODE/hooks/workflow-gate.js"
 EW_HOOK="$AGENTS_NODE/hooks/enforce-worktree.js"
 BCTW_HOOK="$AGENTS_NODE/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PB_NODE="$AGENTS_NODE/hooks/lib/protected-basenames.js"
 MARKER_GATE_NODE="$AGENTS_NODE/hooks/enforce-worktree/bash-write-scope/marker-gate.js"
@@ -234,7 +234,7 @@ PROBE_DIR="$TMPBASE_SH/probes"; mkdir -p "$PROBE_DIR"
 # H0 - harness self-check. Without the entrypoints every case below is vacuous.
 if [ -f "$GATE_HOOK" ]; then pass "H0 workflow-gate.js present"
 else fail "H0 workflow-gate.js MISSING at $GATE_HOOK - Sections A/B would be vacuous"; fi
-if [ -f "$AGENTS_DIR/hooks/lib/protected-basenames.js" ]; then pass "H0 protected-basenames.js present"
+if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/protected-basenames.js" ]; then pass "H0 protected-basenames.js present"
 else fail "H0 hooks/lib/protected-basenames.js MISSING - Sections C1..C3 would be vacuous"; fi
 if [ "$REPO_OK" = yes ]; then pass "H0 git fixture repo built"
 else skip "H0 git unavailable - in-repo block cases and Section D fall back to path-shape only"; fi
@@ -256,7 +256,7 @@ assert_eq "H0-rc gate_decision maps a non-zero exit to crash" "crash" \
     "$(gate_decision "$(run_hook_capture "" node -e "process.exit(3)")")"
 
 # ---- case parts (rules/coding/file-split.md: sibling <name>/ folder) --------
-PARTS="$AGENTS_DIR/tests/hooks/fix-2108-subagent-artifact-write-path"
+PARTS="$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-2108-subagent-artifact-write-path"
 # shellcheck source=./fix-2108-subagent-artifact-write-path/cases-allowlist.sh
 . "$PARTS/cases-allowlist.sh"
 # shellcheck source=./fix-2108-subagent-artifact-write-path/cases-plans-containment.sh

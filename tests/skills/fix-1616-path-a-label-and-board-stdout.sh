@@ -16,8 +16,8 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$AGENTS_DIR/skills/workflow-init/scripts/path-a-label-and-board.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/path-a-label-and-board.sh"
 
 PASS=0
 FAIL=0
@@ -53,8 +53,8 @@ TMP=""
 #   MOCK_BOARD_RC=<n>    forces the ensure-board-card.sh failure path.
 setup_mock() {
     TMP="$(mktemp -d)"
-    FAKE_ACD="$TMP/agents-root"
-    mkdir -p "$TMP/mock-bin" "$TMP/plans" "$FAKE_ACD/bin/github-issues"
+    FAKE_AGENTS_ROOT="$TMP/agents-root"
+    mkdir -p "$TMP/mock-bin" "$TMP/plans" "$FAKE_AGENTS_ROOT/bin/github-issues"
 
     cat > "$TMP/mock-bin/gh" <<'MOCKGH'
 #!/usr/bin/env bash
@@ -79,18 +79,18 @@ exit 0
 MOCKGH
     chmod +x "$TMP/mock-bin/gh"
 
-    cat > "$FAKE_ACD/bin/github-issues/ensure-board-card.sh" <<'MOCKBOARD'
+    cat > "$FAKE_AGENTS_ROOT/bin/github-issues/ensure-board-card.sh" <<'MOCKBOARD'
 #!/usr/bin/env bash
 exit "${MOCK_BOARD_RC:-0}"
 MOCKBOARD
-    chmod +x "$FAKE_ACD/bin/github-issues/ensure-board-card.sh"
+    chmod +x "$FAKE_AGENTS_ROOT/bin/github-issues/ensure-board-card.sh"
 
-    # #2434: the abort marker is a control file resolved via $AGENTS_CONFIG_DIR/bin/workflow-control-dir;
-    # the fake ACD delegates to the real CLI (which resolves hooks/ from its own __dirname).
-    local real_cli="$AGENTS_DIR/bin/workflow-control-dir"
+    # #2434: the abort marker is a control file resolved via $AGENTS_MAIN_ROOT/bin/workflow-control-dir;
+    # the fake agents root delegates to the real CLI (which resolves hooks/ from its own __dirname).
+    local real_cli="$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir"
     command -v cygpath >/dev/null 2>&1 && real_cli="$(cygpath -m "$real_cli")"
     printf 'require(%s);\n' "$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$real_cli")" \
-        > "$FAKE_ACD/bin/workflow-control-dir"
+        > "$FAKE_AGENTS_ROOT/bin/workflow-control-dir"
     mkdir -p "$TMP/workflow"
     export WORKFLOW_STATE_DIR="$TMP/workflow"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
@@ -98,7 +98,7 @@ MOCKBOARD
     export MOCK_GH_LOG="$TMP/gh-calls.log"
     : > "$MOCK_GH_LOG"
     export PATH="$TMP/mock-bin:$PATH"
-    export AGENTS_CONFIG_DIR="$FAKE_ACD"
+    export AGENTS_MAIN_ROOT="$FAKE_AGENTS_ROOT"
     export PLANS_DIR="$TMP/plans"
     export SESSION_ID="test-sid-1616"
 }
@@ -110,7 +110,6 @@ teardown_mock() {
     fi
     unset MOCK_GH_LOG MOCK_GH_LABEL_RC MOCK_BOARD_RC \
           PLANS_DIR SESSION_ID WORKFLOW_STATE_DIR WORKFLOW_PLANS_DIR 2>/dev/null || true
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
 

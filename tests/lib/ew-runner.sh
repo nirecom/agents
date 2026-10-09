@@ -6,7 +6,7 @@
 # files. Source AFTER tests/lib/harness.sh (needs np, run_with_timeout).
 # The hook resolves the repo from the real process CWD, so ew_run cd's into it.
 
-EW_GUARD="$(np "$AGENTS_DIR/hooks/enforce-worktree.js")"
+EW_GUARD="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js")"
 
 # ew_make_repo <dir> — main-branch repo with one commit; hooks disabled per
 # rules/test/fixture-isolation.md.
@@ -33,7 +33,7 @@ ew_write_payload() {
 }
 
 # ew_run <cwd> <payload> [KEY=VAL...] → allow | block | timeout | crash:<rc> | other:<out>
-# AGENTS_CONFIG_DIR defaults to EW_CONFIG_DIR (a fixture) so the real .env is never
+# AGENTS_MAIN_ROOT defaults to EW_CFG_ROOT (a fixture) so the real .env is never
 # read; callers' KEY=VAL pairs come last and therefore win.
 ew_run() {
     local cwd="$1" payload="$2"; shift 2
@@ -41,7 +41,7 @@ ew_run() {
     out="$(cd "$cwd" && printf '%s' "$payload" | run_with_timeout 30 env \
          -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
         -u ENFORCE_WORKTREE_ADDITIONAL_REPOS -u WORKFLOW_OFF \
-        ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=${EW_CONFIG_DIR:?EW_CONFIG_DIR unset}" \
+        ENFORCE_WORKTREE=on "AGENTS_MAIN_ROOT=${EW_CFG_ROOT:?EW_CFG_ROOT unset}" \
         "$@" node "$EW_GUARD" 2>/dev/null)" || rc=$?
     out="$(printf '%s' "$out" | tr -d '\r\n')"
     case "$rc" in
@@ -62,7 +62,7 @@ ew_raw() {
     (cd "$cwd" && printf '%s' "$payload" | run_with_timeout 30 env \
          -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
         -u ENFORCE_WORKTREE_ADDITIONAL_REPOS -u WORKFLOW_OFF \
-        ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=${EW_CONFIG_DIR:?EW_CONFIG_DIR unset}" \
+        ENFORCE_WORKTREE=on "AGENTS_MAIN_ROOT=${EW_CFG_ROOT:?EW_CFG_ROOT unset}" \
         "$@" node "$EW_GUARD" 2>/dev/null) || true
 }
 

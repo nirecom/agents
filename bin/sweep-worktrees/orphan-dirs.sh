@@ -5,8 +5,8 @@
 # sweep_orphan_dirs (unregistered depth-2 dirs under WORKTREE_BASE_DIR; removal
 # delegated to hooks/cleanup-orphan-dir.js and its 4-AND safety gate) and
 # sweep_stale_backups (.worktree-backup/* older than MIN_AGE_HOURS * 7). Must be
-# `source`d, not executed: it reads caller-scope variables ($MAIN_ROOT,
-# $WORKTREE_BASE_DIR, $APPLY, $DRY_RUN, $MIN_AGE_HOURS, $AGENTS_CONFIG_DIR) and
+# `source`d, not executed: it reads caller-scope variables ($TARGET_MAIN_ROOT,
+# $WORKTREE_BASE_DIR, $APPLY, $DRY_RUN, $MIN_AGE_HOURS, $SCRIPT_CHECKOUT_ROOT) and
 # mutates the orphan_dirs_* counters.
 
 sweep_orphan_dirs() {
@@ -21,7 +21,7 @@ sweep_orphan_dirs() {
   }
   trap cleanup_registered_files EXIT
   local skip_orphan_dir_scan=0
-  if ! git -C "$MAIN_ROOT" worktree list --porcelain > "${registered_norm_file}.raw" 2>/dev/null; then
+  if ! git -C "$TARGET_MAIN_ROOT" worktree list --porcelain > "${registered_norm_file}.raw" 2>/dev/null; then
     printf 'WARNING: git worktree list --porcelain failed; skipping orphan-dir scan pass\n' >&2
     skip_orphan_dir_scan=1
   else
@@ -37,7 +37,7 @@ sweep_orphan_dirs() {
 
   local current_repo_name wt_base_norm cand_dir cand_name cand_norm
   local notes_file recorded main_norm_fs rec_norm_fs node_out node_rc
-  current_repo_name="$(basename "$MAIN_ROOT")"
+  current_repo_name="$(basename "$TARGET_MAIN_ROOT")"
   wt_base_norm="$(norm_path "$WORKTREE_BASE_DIR")"
 
   while IFS= read -r -d '' cand_dir; do
@@ -67,7 +67,7 @@ sweep_orphan_dirs() {
       continue
     fi
     # Gate (5): cross-repo ownership proof — WORKTREE_NOTES.md must carry a
-    # `Main repo:` line matching the current MAIN_ROOT (forward-slash form).
+    # `Main repo:` line matching the current TARGET_MAIN_ROOT (forward-slash form).
     # Basename match alone is not unique ownership (two unrelated repos can
     # share `agents`/`dotfiles` basenames under different parents), so legacy
     # notes lacking the field and missing notes files are SKIPPED, never fall
@@ -85,7 +85,7 @@ sweep_orphan_dirs() {
       orphan_dirs_skipped_repo_mismatch=$((orphan_dirs_skipped_repo_mismatch + 1))
       continue
     fi
-    main_norm_fs="$(norm_path "$MAIN_ROOT")"
+    main_norm_fs="$(norm_path "$TARGET_MAIN_ROOT")"
     rec_norm_fs="$(norm_path "$recorded")"
     if [[ "$rec_norm_fs" != "$main_norm_fs" ]]; then
       orphan_dirs_skipped_repo_mismatch=$((orphan_dirs_skipped_repo_mismatch + 1))
@@ -97,11 +97,11 @@ sweep_orphan_dirs() {
     else
       # Release the CodeGraph index lock (Windows file lock) before removal.
       if command -v node >/dev/null 2>&1; then
-        node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" stop --path "$cand_dir" || true
+        node "$SCRIPT_CHECKOUT_ROOT/bin/codegraph-lifecycle.js" stop --path "$cand_dir" || true
       fi
 
       node_out="$(WORKTREE_BASE_DIR="$WORKTREE_BASE_DIR" \
-        node "$AGENTS_CONFIG_DIR/hooks/cleanup-orphan-dir.js" \
+        node "$SCRIPT_CHECKOUT_ROOT/hooks/cleanup-orphan-dir.js" \
         --force-if-not-registered "$cand_dir" 2>&1)"
       node_rc=$?
       if [[ "$node_rc" -eq 0 ]]; then
@@ -114,9 +114,9 @@ sweep_orphan_dirs() {
   done < <(find "$WORKTREE_BASE_DIR" -mindepth 2 -maxdepth 2 -type d -print0 2>/dev/null)
 }
 
-# Remove stale <main-root>/.worktree-backup/* directories.
+# Remove stale <target-main-root>/.worktree-backup/* directories.
 sweep_stale_backups() {
-  local backup_base="$MAIN_ROOT/.worktree-backup"
+  local backup_base="$TARGET_MAIN_ROOT/.worktree-backup"
   [[ -d "$backup_base" ]] || return 0
 
   local backup_threshold backup_threshold_mins real_base backup_dir real_backup

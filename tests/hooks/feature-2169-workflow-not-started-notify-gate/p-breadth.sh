@@ -268,7 +268,7 @@ run_P13() {
 
     XFAIL_ISSUE="#2219"
     # shellcheck source=/dev/null
-    . "$AGENTS_DIR/tests/lib/xfail.sh"
+    . "$SCRIPT_CHECKOUT_ROOT/tests/lib/xfail.sh"
     xfail_not_contains "P13a: the persisted supervisor alert state file ($alert_path) does not contain the raw injection payload — detailFor() should apply isKnownStep()-style substitution before interpolating finding.step, the same guard describe() already applies" \
         "$payload" "$alert_content"
     xfail_not_contains "P13b: the .stall-reported ledger ($tmp/p13.stall-reported) does not contain the raw injection payload" \

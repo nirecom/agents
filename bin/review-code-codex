@@ -417,9 +417,7 @@ esac
 # every direction: a missing, broken or malformed resolver is not evidence of contamination.
 if (( CP_TRUNCATED )) && [[ "$BASE_STATE" == "RECORDED" ]]; then
   MB_RESOLVER=""
-  if [[ -n "${AGENTS_CONFIG_DIR:-}" && -x "${AGENTS_CONFIG_DIR}/bin/resolve-merge-base.sh" ]]; then
-    MB_RESOLVER="${AGENTS_CONFIG_DIR}/bin/resolve-merge-base.sh"
-  elif [[ -x "$SCRIPT_DIR/resolve-merge-base.sh" ]]; then
+  if [[ -x "$SCRIPT_DIR/resolve-merge-base.sh" ]]; then
     MB_RESOLVER="$SCRIPT_DIR/resolve-merge-base.sh"
   fi
   if [[ -n "$MB_RESOLVER" ]]; then

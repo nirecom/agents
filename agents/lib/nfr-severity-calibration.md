@@ -5,7 +5,7 @@ Retrieve and apply the project's NFR block before reviewing or planning.
 ## Steps
 
 1. Resolve the repo root (standalone Bash call): `git rev-parse --show-toplevel`
-2. Fetch the NFR block (second standalone Bash call — do NOT chain with `&&`): `bash "$AGENTS_CONFIG_DIR/bin/project-nfr-block" <ROOT>`
+2. Fetch the NFR block (second standalone Bash call — do NOT chain with `&&`): `bash "$AGENTS_MAIN_ROOT/bin/project-nfr-block" <ROOT>`
 
 ## Handling the output
 

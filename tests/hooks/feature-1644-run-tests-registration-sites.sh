@@ -21,6 +21,7 @@
 # via bin/check-verification-gate.sh categories: hook-registration, skill-orchestration.
 
 set -uo pipefail
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"

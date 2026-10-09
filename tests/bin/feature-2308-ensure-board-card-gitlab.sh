@@ -15,8 +15,10 @@ set -u
 # - Real `gh project` refusal — the mock only records that gh was never called.
 # Closest mitigation: WORKFLOW_USER_VERIFIED preflight (skill-orchestration).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-EBC_SCRIPT="$AGENTS_DIR/bin/github-issues/ensure-board-card.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+EBC_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/ensure-board-card.sh"
+# shellcheck source=tests/lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -45,7 +47,10 @@ _OLDPATH="$PATH"
 setup_ebc() {
     EBCTMP="$(mktemp -d)"
     mkdir -p "$EBCTMP/bin" "$EBCTMP/mockbin"
-    export AGENTS_CONFIG_DIR="$EBCTMP"
+    # The script finds detect-forge-type from its own path, so the fake is reached only when a
+    # copy of the script (with its lib/) runs from the same fake checkout.
+    script_checkout_fixture_copy "$EBCTMP" bin/github-issues/ensure-board-card.sh bin/github-issues/lib
+    FAKE_EBC_SCRIPT="$EBCTMP/bin/github-issues/ensure-board-card.sh"
     cat > "$EBCTMP/bin/detect-forge-type" <<'NODE'
 "use strict";
 const argv = process.argv;
@@ -72,14 +77,14 @@ EOF
 teardown_ebc() {
     export PATH="$_OLDPATH"
     if [ -n "${EBCTMP:-}" ] && [ -d "$EBCTMP" ]; then rm -rf "$EBCTMP"; fi
-    unset AGENTS_CONFIG_DIR GH_LOG SHIM_FORGE SHIM_PROJECT EBCTMP
+    unset GH_LOG SHIM_FORGE SHIM_PROJECT EBCTMP FAKE_EBC_SCRIPT
 }
 
-# run_ebc <args...> : run the real script from a neutral CWD; captures stderr
-# into EBC_ERR and returns the exit code.
+# run_ebc <args...> : run the fake-checkout copy of the real script from a neutral CWD;
+# captures stderr into EBC_ERR and returns the exit code.
 run_ebc() {
     local rc
-    ( cd "$EBCTMP" && run_with_timeout 20 bash "$EBC_SCRIPT" "$@" ) >/tmp/ebc_out.$$ 2>/tmp/ebc_err.$$
+    ( cd "$EBCTMP" && run_with_timeout 20 bash "$FAKE_EBC_SCRIPT" "$@" ) >/tmp/ebc_out.$$ 2>/tmp/ebc_err.$$
     rc=$?
     EBC_OUT=$(cat /tmp/ebc_out.$$ 2>/dev/null)
     EBC_ERR=$(cat /tmp/ebc_err.$$ 2>/dev/null)

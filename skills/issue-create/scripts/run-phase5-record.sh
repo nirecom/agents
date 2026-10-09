@@ -4,7 +4,6 @@
 #          [--input-file <path>]
 # `auto` resolves WORKTREE_NOTES.md from the git toplevel, and --input-file
 # replaces the stdin pipe, so a prompt can issue this as one command (#2132).
-# Env:   AGENTS_CONFIG_DIR
 # Stdin: Phase 4 dispatch stdout (URL lines) when --input-file is absent
 # Exit:  0 always (non-fatal script — failures logged to stderr and skipped)
 set -euo pipefail
@@ -13,7 +12,7 @@ VERDICT="${1:?verdict required}"
 NOTES_PATH="${2:?notes_path required}"
 TITLE="${3:?title required}"
 MANIFEST="${4:-}"
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 shift $(( $# < 4 ? $# : 4 ))
 
 INPUT_FILE=""
@@ -55,7 +54,7 @@ if [[ "$VERDICT" == "bulk-sub-of" ]]; then
         fi
         row_title="$(awk -F'\t' "NR==$(( row_index + 1 )) { print \$1 }" "$MANIFEST" || true)"
         TITLE_FOR_ISSUE="${row_title:-$TITLE}"
-        node "$AGENTS_CONFIG_DIR/bin/worktree-notes-append.js" \
+        node "$SCRIPT_CHECKOUT_ROOT/bin/worktree-notes-append.js" \
             --notes-path "$NOTES_PATH" \
             --issue-number "$N" \
             --title "$TITLE_FOR_ISSUE" \
@@ -70,7 +69,7 @@ else
         echo "run-phase5-record.sh: warning: could not extract issue number from dispatch output (non-fatal)" >&2
         exit 0
     fi
-    node "$AGENTS_CONFIG_DIR/bin/worktree-notes-append.js" \
+    node "$SCRIPT_CHECKOUT_ROOT/bin/worktree-notes-append.js" \
         --notes-path "$NOTES_PATH" \
         --issue-number "$N" \
         --title "$TITLE" \

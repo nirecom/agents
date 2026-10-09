@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -20,14 +20,14 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 TARGET="hooks/workflow-state/state-io/step-context-class.js"
 
 # RED gate: the module under test does not exist yet. Fail loudly and name the
 # expected path rather than skipping — a silent skip would read as green.
 require_module() {
-    if [ -f "$AGENTS_DIR/$1" ]; then return 0; fi
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
     fail "MODULE NOT FOUND: $1 — expected per issue #2218, not yet implemented (write_code has not run)"
     return 1
 }
@@ -50,8 +50,8 @@ run_L1() {
     require_module "$TARGET" || return 0
     local out
     out="$(run_node "
-const { VALID_STEPS } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io/core');
-const { STEP_CONTEXT_CLASS } = require('$AGENTS_DIR_NODE/$TARGET');
+const { VALID_STEPS } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io/core');
+const { STEP_CONTEXT_CLASS } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const problems = [];
 const keys = Object.keys(STEP_CONTEXT_CLASS);
 const missing = VALID_STEPS.filter((s) => !(s in STEP_CONTEXT_CLASS));
@@ -75,7 +75,7 @@ run_L2() {
     require_module "$TARGET" || return 0
     local out
     out="$(run_node "
-const { STEP_CONTEXT_CLASS } = require('$AGENTS_DIR_NODE/$TARGET');
+const { STEP_CONTEXT_CLASS } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const EXPECTED = {
   workflow_init: 'context-independent',
   clarify_intent: 'context-independent',
@@ -117,8 +117,8 @@ run_L3() {
     require_module "$TARGET" || return 0
     local out
     out="$(run_node "
-const { STEP_CONTEXT_CLASS, isContextIndependentStep } = require('$AGENTS_DIR_NODE/$TARGET');
-const { VALID_STEPS } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io/core');
+const { STEP_CONTEXT_CLASS, isContextIndependentStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
+const { VALID_STEPS } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io/core');
 const problems = [];
 if (STEP_CONTEXT_CLASS.detail !== 'context-independent') problems.push('detail:' + String(STEP_CONTEXT_CLASS.detail));
 if (STEP_CONTEXT_CLASS.branching_complete !== 'worktree-dependent') problems.push('branching_complete:' + String(STEP_CONTEXT_CLASS.branching_complete));
@@ -144,7 +144,7 @@ run_L4() {
     require_module "$TARGET" || return 0
     local out
     out="$(run_node "
-const { isContextIndependentStep } = require('$AGENTS_DIR_NODE/$TARGET');
+const { isContextIndependentStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const problems = [];
 const cases = [['plan', false], ['', false], ['DETAIL', false], ['detail ', false]];
 for (const c of cases) {
@@ -174,7 +174,7 @@ run_L5() {
     require_module "$TARGET" || return 0
     local out
     out="$(run_node "
-const mod = require('$AGENTS_DIR_NODE/$TARGET');
+const mod = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const problems = [];
 const values = mod.CONTEXT_CLASS_VALUES;
 if (!Array.isArray(values)) problems.push('CONTEXT_CLASS_VALUES-not-array:' + String(values));
@@ -203,9 +203,9 @@ run_L6() {
     require_module "$TARGET" || return 0
     local out
     out="$(run_node "
-const direct = require('$AGENTS_DIR_NODE/$TARGET');
-const barrel = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const top = require('$AGENTS_DIR_NODE/hooks/workflow-state');
+const direct = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
+const barrel = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const top = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state');
 const problems = [];
 for (const name of ['STEP_CONTEXT_CLASS', 'isContextIndependentStep', 'CONTEXT_CLASS_VALUES']) {
   if (barrel[name] === undefined) problems.push('state-io-missing:' + name);

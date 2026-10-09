@@ -4,7 +4,7 @@
 # Section C2 — the allowlist file itself is unusable (#2170 review gap C9).
 # part3 covers lists whose ENTRIES are hostile; this file covers lists that carry no
 # usable entry at all. readSsotEntries answers null for each, and buildRemedy must then
-# take the SAME generic branch c it takes when AGENTS_CONFIG_DIR is unset — never crash,
+# take the SAME generic branch c it takes when AGENTS_MAIN_ROOT is unset — never crash,
 # and never fall through to a branch that names a sanctioned entry point.
 
 set -uo pipefail
@@ -16,8 +16,7 @@ set -uo pipefail
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
-AGENTS_DIR="${1:-$(cd "$(dirname "$0")/../../.." && pwd)}"
-export AGENTS_DIR
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 DRIVER="$(cd "$(dirname "$0")" && pwd)/remedy-driver.js"
 command -v node >/dev/null 2>&1 || exit 77
 
@@ -59,9 +58,9 @@ has_substr() {
         *) printf 'no' ;;
     esac
 }
-run_remedy() { env AGENTS_CONFIG_DIR="$1" node "$DRIVER" "$2" 2>&1; }
+run_remedy() { env AGENTS_MAIN_ROOT="$1" node "$DRIVER" "$2" 2>&1; }
 RECIPE='Reissue it as a single bare command:'
-PROBE='bash "$AGENTS_CONFIG_DIR/bin/good"'
+PROBE='bash "$AGENTS_MAIN_ROOT/bin/good"'
 
 # Every fixture ships the SAME sibling `bin/good` with a bash shebang, so the probe
 # command would reach branch a if the list were usable. A "both" verdict can therefore

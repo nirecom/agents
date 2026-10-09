@@ -17,6 +17,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="migconc"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
@@ -24,7 +25,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"
 
 seed_v1() { # <sid> <preset>
-    (cd "$AGENTS_DIR" && "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node "$MKV1" "$2") > "$WF/$1.json"
+    (cd "$SCRIPT_CHECKOUT_ROOT" && "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$MKV1" "$2") > "$WF/$1.json"
 }
 
 echo "== M1: B's appended events survive A's late persist of a stale v1 snapshot =="
@@ -47,11 +48,11 @@ while (!fs.existsSync(process.env.BARRIER_B) && Date.now() - t0 < 30000) {}
 try { S.persistMigratedState(sid); } catch (e) { console.log("A:THREW:" + (e && e.name)); }
 console.log("A:DONE");
 '
-    (cd "$AGENTS_DIR" && env \
-        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+    (cd "$SCRIPT_CHECKOUT_ROOT" && env \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_1" \
         BARRIER_A="$TMPROOT/bar-a" BARRIER_B="$TMPROOT/bar-b" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$A_JS" >"$TMPROOT/m1-a.out" 2>&1) &
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 90 node -e "$A_JS" >"$TMPROOT/m1-a.out" 2>&1) &
     A_PID=$!
 
     # Wait for A to be holding its snapshot.

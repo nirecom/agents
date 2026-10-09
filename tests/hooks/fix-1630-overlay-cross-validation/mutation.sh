@@ -1,12 +1,12 @@
 # tests/hooks/fix-1630-overlay-cross-validation/mutation.sh
 # Tests: hooks/enforce-worktree/arg-value-guard.js
-# Tags: worktree, enforce, hook, config-dir, overlay, mutation, security, scope:issue-specific
+# Tags: worktree, enforce, hook, agents-main-root, overlay, mutation, security, scope:issue-specific
 #
 # RETIRED BY #1673.
 #
 # This file used to carry the mutation-sensitive proof that BOTH equalities of
 #
-#     anchorAcd === derivedAcd && anchorAcd === payloadAcd
+#     anchorScriptCheckoutRoot === derivedScriptCheckoutRoot && anchorScriptCheckoutRoot === payloadScriptCheckoutRoot
 #
 # inside matchFinalizeWorkerOverlay were individually load-bearing: for each one
 # there was a command the real module must reject and a mutant with that single

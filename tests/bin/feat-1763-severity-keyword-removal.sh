@@ -2,21 +2,18 @@
 # tests/bin/feat-1763-severity-keyword-removal.sh
 # Tests: bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, .github/labels.yml
 # Tags: issue-create, severity, keyword-scan, label-policy, table-driven, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - Real GitHub label application (needs a live token + network).
-# - The SKILL.md label policy actually being applied by the model at runtime.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-#
+# TL3 gap (what this test does NOT catch): real GitHub label application (live token +
+# network); the SKILL.md label policy actually being applied by the model at runtime.
+# Mitigation: WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
 # S1/S2: bin/ scripts must no longer infer severity. The keyword scan
 # (grep -qwE 'abort|hang|security|leak') is deleted; severity is decided solely by
 # the /issue-create label policy and arrives via --label.
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IC="$AGENTS_DIR/bin/github-issues/issue-create.sh"
-SKILL_MD="$AGENTS_DIR/skills/issue-create/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+IC="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create.sh"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/SKILL.md"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -55,7 +52,7 @@ run_ic() {
     GH_LABEL_CAPTURE="$CAP" \
     GH_CREATE_LOG="$CREATED" \
     PATH="$MOCKDIR:$PATH" \
-    AGENTS_CONFIG_DIR="" \
+    AGENTS_MAIN_ROOT="" \
     ISSUE_VERDICT_REVIEW=off \
     ISSUE_PROVENANCE=off \
     ISSUE_CREATE_SKIP_SCHEMA=1 \

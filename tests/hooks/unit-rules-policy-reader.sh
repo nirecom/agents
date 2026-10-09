@@ -11,10 +11,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/unit-rules-policy-reader"
-READER="$AGENTS_DIR/hooks/lib/rules-policy-reader.js"
-POLICY="$AGENTS_DIR/hooks/lib/rules-injection-policy.js"
+READER="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-policy-reader.js"
+POLICY="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-injection-policy.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

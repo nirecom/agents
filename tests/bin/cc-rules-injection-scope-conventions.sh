@@ -8,10 +8,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-FIXTURE_RULE="$AGENTS_DIR/rules/test/fixture-isolation.md"
-E2E_RULE="$AGENTS_DIR/rules/test/claude-e2e.md"
-TEST_RULE="$AGENTS_DIR/rules/test.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+FIXTURE_RULE="$SCRIPT_CHECKOUT_ROOT/rules/test/fixture-isolation.md"
+E2E_RULE="$SCRIPT_CHECKOUT_ROOT/rules/test/claude-e2e.md"
+TEST_RULE="$SCRIPT_CHECKOUT_ROOT/rules/test.md"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

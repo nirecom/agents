@@ -10,13 +10,13 @@ ENVSCOPE_PROBE="$TMPD/envscope-probe.js"
 cat > "$ENVSCOPE_PROBE" <<'PROBEJS'
 "use strict";
 const path = require("path");
-const [agentsDir, mainRoot] = process.argv.slice(2);
+const [agentsDir, targetMainRoot] = process.argv.slice(2);
 const spawnMod = require(path.join(agentsDir, "bin/worker-dispatch/spawn.js"));
 const anchorMod = require(path.join(agentsDir, "bin/worker-dispatch/anchor.js"));
 const registry = require(path.join(agentsDir, "hooks/lib/worker-dispatch-registry.js"));
 
 const out = (k, v) => process.stdout.write(k + "=" + String(v) + "\n");
-const anchors = anchorMod.resolveAnchors(mainRoot);
+const anchors = anchorMod.resolveAnchors(targetMainRoot);
 if (anchors.error) { out("anchors_error", anchors.error); process.exit(9); }
 
 const workers = registry.workers || {};
@@ -44,13 +44,13 @@ out("narrow_declared", present(env, declared));
 out("narrow_value_identical", env.SSH_AUTH_SOCK === process.env.SSH_AUTH_SOCK ? 1 : 0);
 // Non-vacuity: the base allowlist is untouched, so an empty env cannot pass.
 out("narrow_path", typeof (env.PATH || env.Path) === "string" ? 1 : 0);
-out("narrow_acd", env.AGENTS_CONFIG_DIR === anchors.acd ? 1 : 0);
+out("narrow_agents_main_root", env.AGENTS_MAIN_ROOT === anchorMod.resolveAgentsMainRoot() ? 1 : 0);
 
 // A2 — the default every commit-push helper uses when no scope is given.
 env = spawnMod.buildEnv(cp, anchors, null, []);
 out("empty_declared", present(env, declared));
 out("empty_path", typeof (env.PATH || env.Path) === "string" ? 1 : 0);
-out("empty_acd", env.AGENTS_CONFIG_DIR === anchors.acd ? 1 : 0);
+out("empty_agents_main_root", env.AGENTS_MAIN_ROOT === anchorMod.resolveAgentsMainRoot() ? 1 : 0);
 
 // A3 — regression guard for the six workers that pass no scope at all: an
 // omitted argument must still yield the FULL declared set.
@@ -112,7 +112,7 @@ run_envscope_probe() {
         "SSH_AUTH_SOCK=$FAKE_SSH_SOCK" "AWS_SECRET_ACCESS_KEY=$FAKE_AWS_SECRET" \
         "ENFORCE_WORKTREE=on" "DEFAULT_BRANCHES=main,master" \
         "WORKFLOW_SESSION_ID=$SID" "CLAUDE_PROJECT_DIR=$CWD" \
-        node "$(nodepath "$ENVSCOPE_PROBE")" "$(nodepath "$AGENTS_DIR")" "$MAIN" 2>&1)" || return 1
+        node "$(nodepath "$ENVSCOPE_PROBE")" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$MAIN" 2>&1)" || return 1
     return 0
 }
 epv() { printf '%s\n' "$EPROBE_OUT" | sed -n "s/^$1=//p" | head -1; }
@@ -134,11 +134,11 @@ group_a() {
     assert_eq "A1/scope-narrows-to-the-intersection" "SSH_AUTH_SOCK" "$(epv narrow_declared)"
     assert_eq "A1/scoped-value-identical" "1" "$(epv narrow_value_identical)"
     assert_eq "A1/base-allowlist-untouched" "1" "$(epv narrow_path)"
-    assert_eq "A1/acd-still-pinned" "1" "$(epv narrow_acd)"
+    assert_eq "A1/agents-main-root-still-derived" "1" "$(epv narrow_agents_main_root)"
 
     assert_eq "A2/empty-scope-admits-no-declared-var" "" "$(epv empty_declared)"
     assert_eq "A2/empty-scope-keeps-base-allowlist" "1" "$(epv empty_path)"
-    assert_eq "A2/empty-scope-keeps-acd" "1" "$(epv empty_acd)"
+    assert_eq "A2/empty-scope-keeps-agents-main-root" "1" "$(epv empty_agents_main_root)"
 
     assert_eq "A3/omitted-scope-keeps-full-set" "$ALL_DECLARED" "$(epv omitted_declared)"
     assert_eq "A3/explicit-undefined-keeps-full-set" "$ALL_DECLARED" "$(epv undefined_declared)"

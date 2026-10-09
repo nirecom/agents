@@ -12,7 +12,8 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && (pwd -W 2>/dev/null || pwd))"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
 
 # Windows-mixed-path helper for node require()
 to_node_path() {
@@ -23,9 +24,9 @@ to_node_path() {
     fi
 }
 
-AGENTS_DIR_NODE="$(to_node_path "$AGENTS_DIR")"
-LANG_CONFIG_LIB="$AGENTS_DIR/hooks/lib/lang-config.js"
-CONV_LANG_LIB="$AGENTS_DIR/hooks/lib/conv-lang.js"
+SCRIPT_CHECKOUT_ROOT_NODE="$(to_node_path "$SCRIPT_CHECKOUT_ROOT_NATIVE")"
+LANG_CONFIG_LIB="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/lang-config.js"
+CONV_LANG_LIB="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/conv-lang.js"
 
 PASS=0
 FAIL=0
@@ -75,14 +76,14 @@ CONV_LANG_NODE="$(to_node_path "$CONV_LANG_LIB")"
 call_plan_injection() {
     local mode="$1" value="${2-}"
     if [ "$mode" = "unset" ]; then
-        (unset PLAN_LANG; AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        (unset PLAN_LANG; AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
             run_with_timeout 10 node -e "
 const m = require('$LANG_CONFIG_NODE');
 const r = m.getPlanLangInjection();
 process.stdout.write(JSON.stringify(r === undefined ? null : r));
 " 2>/dev/null)
     else
-        PLAN_LANG="$value" AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        PLAN_LANG="$value" AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
             run_with_timeout 10 node -e "
 const m = require('$LANG_CONFIG_NODE');
 const r = m.getPlanLangInjection();
@@ -105,14 +106,14 @@ catch (e) { process.stdout.write(''); }
 call_conv_injection() {
     local mode="$1" value="${2-}"
     if [ "$mode" = "unset" ]; then
-        (unset CONV_LANG; AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        (unset CONV_LANG; AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
             run_with_timeout 10 node -e "
 const m = require('$CONV_LANG_NODE');
 const r = m.getConvLangInjection();
 process.stdout.write(JSON.stringify(r === undefined ? null : r));
 " 2>/dev/null)
     else
-        CONV_LANG="$value" AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        CONV_LANG="$value" AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
             run_with_timeout 10 node -e "
 const m = require('$CONV_LANG_NODE');
 const r = m.getConvLangInjection();
@@ -149,7 +150,7 @@ process.stdout.write(JSON.stringify(state, null, 2));
 call_is_planning() {
     local sid="$1" wf_dir="$2"
     local wf_dir_node; wf_dir_node="$(to_node_path "$wf_dir")"
-    local state_io_node; state_io_node="$(to_node_path "$AGENTS_DIR/hooks/workflow-state")"
+    local state_io_node; state_io_node="$(to_node_path "$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/workflow-state")"
     # Dual-pin (#1799): keep supervisor-emit out of the real ~/.workflow-plans tree.
     mkdir -p "$wf_dir/plans"
     local plans_dir_node; plans_dir_node="$(to_node_path "$wf_dir/plans")"
@@ -179,7 +180,7 @@ echo "=== Group 1: getPlanLangInjection() unit tests ==="
 if [ ! -f "$LANG_CONFIG_LIB" ]; then
     skip "G1: hooks/lib/lang-config.js not found"
 else
-    _has_export=$(AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+    _has_export=$(AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         run_with_timeout 10 node -e "
 const m = require('$LANG_CONFIG_NODE');
 process.stdout.write(typeof m.getPlanLangInjection === 'function' ? 'yes' : 'no');
@@ -231,7 +232,7 @@ process.stdout.write(typeof m.getPlanLangInjection === 'function' ? 'yes' : 'no'
         fi
 
         # G1-T7: control char → null
-        got=$(PLAN_LANG=$'japanese\x01evil' AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        got=$(PLAN_LANG=$'japanese\x01evil' AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
             run_with_timeout 10 node -e "
 const m = require('$LANG_CONFIG_NODE');
 const r = m.getPlanLangInjection();
@@ -248,7 +249,7 @@ process.stdout.write(JSON.stringify(r === undefined ? null : r));
         # Inject the control char INSIDE node (see G1-T12): shell env-marshaling of
         # control chars through GNU timeout is non-portable; in-node injection is
         # deterministic across platforms.
-        got=$(AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        got=$(AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
             run_with_timeout 10 node -e "
 process.env.PLAN_LANG = 'japanese\nRespond in English';
 const m = require('$LANG_CONFIG_NODE');
@@ -263,7 +264,7 @@ process.stdout.write(JSON.stringify(r === undefined ? null : r));
         # Inject the control char INSIDE node (not via a shell env prefix): mid-string
         # CR (0x0d) is stripped by GNU timeout env-marshaling on Git-Bash/Windows, so a
         # shell-passed \r never reaches the code. In-node injection is deterministic.
-        got=$(AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        got=$(AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
             run_with_timeout 10 node -e "
 process.env.PLAN_LANG = 'japanese\revil';
 const m = require('$LANG_CONFIG_NODE');
@@ -338,7 +339,7 @@ else
     assert_eq "G2-T6: CONV_LANG empty → null (regression)" "null" "$got"
 
     # G2-T7: control char → null (regression)
-    got=$(CONV_LANG=$'japanese\x01evil' AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+    got=$(CONV_LANG=$'japanese\x01evil' AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         run_with_timeout 10 node -e "
 const m = require('$CONV_LANG_NODE');
 const r = m.getConvLangInjection();
@@ -364,8 +365,8 @@ echo ""
 
 echo "=== Group 3: isPlanning() logic unit tests ==="
 
-if [ ! -f "$AGENTS_DIR/hooks/workflow-state.js" ] && \
-   [ ! -f "$AGENTS_DIR/hooks/workflow-state/state-io.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/workflow-state.js" ] && \
+   [ ! -f "$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/workflow-state/state-io.js" ]; then
     skip "G3: workflow-state not found"
 else
     # G3-T1: all planning steps pending → true

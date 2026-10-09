@@ -140,11 +140,11 @@ fi
 # a failure instead of a stuck suite — the unit-level guarantee under TC9's WS-7
 # headless pinning rule.
 # Stdout contract is three lines since #1910: TASK_NAME=, BRANCH_TYPE=, REPO_NAME=.
-# REPO_NAME comes from the running worktree, so the call is pinned to $AGENTS_DIR
+# REPO_NAME comes from the running worktree, so the call is pinned to $_HELPERS_SCRIPT_CHECKOUT_ROOT
 # and the expectation derived the same way (correct in any checkout name).
 B15_ERR="$FIXTURE/b15-stderr.txt"
-B15_WANT_REPO="$(basename "$(git -C "$AGENTS_DIR" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$AGENTS_DIR")")"
-B15_OUT="$(cd "$AGENTS_DIR" && CONFIRM_WORKTREE=on bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 \
+B15_WANT_REPO="$(basename "$(git -C "$_HELPERS_SCRIPT_CHECKOUT_ROOT" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$_HELPERS_SCRIPT_CHECKOUT_ROOT")")"
+B15_OUT="$(cd "$_HELPERS_SCRIPT_CHECKOUT_ROOT" && CONFIRM_WORKTREE=on bash "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 20 \
     bash "$SCRIPT" --intent "$ABSENT_INTENT" --headless confirm-pinning-probe \
     2>"$B15_ERR" </dev/null)"
 B15_RC=$?

@@ -5,8 +5,8 @@
 SHIM_HOOK="$AGENTS_NODE/hooks/supervisor-off-proposal-shim.js"
 OFFCLR_NODE="$AGENTS_NODE/hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
 RESOLVER_NODE="$AGENTS_NODE/hooks/lib/resolve-workflow-session-id.js"
-SHIM_SH="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-OFFCLR_SH="$AGENTS_DIR/hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
+SHIM_SH="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+OFFCLR_SH="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
 
 # Section A (clearance-wsid-gate) — the READ-side hole that #2108's write-gate
 # narrowing opened. WRITE side: protected-basenames.js `isClearanceBearingStem` is

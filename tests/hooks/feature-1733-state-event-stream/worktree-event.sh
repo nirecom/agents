@@ -10,6 +10,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="wt"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
@@ -32,12 +33,12 @@ run_hook() {
     local sid="$1" tool="$2" ti="$3" payload
     payload="$(printf '{"session_id":"%s","tool_name":"%s","tool_input":%s}' "$sid" "$tool" "$ti")"
     HOOK_RC=0
-    HOOK_OUT="$(cd "${HOOK_CWD:-$AGENTS_DIR}" && printf '%s' "$payload" | env \
-        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+    HOOK_OUT="$(cd "${HOOK_CWD:-$SCRIPT_CHECKOUT_ROOT}" && printf '%s' "$payload" | env \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node \
-        "$AGENTS_DIR/hooks/postuse-native-worktree-record.js" 2>&1)" || HOOK_RC=$?
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node \
+        "$SCRIPT_CHECKOUT_ROOT/hooks/postuse-native-worktree-record.js" 2>&1)" || HOOK_RC=$?
 }
 
 # Creates the state file the recorder needs (it fail-opens when there is none).
@@ -194,7 +195,7 @@ fi
 echo "== W-d: a v1-migrated transition is labelled migration-unknown with a null path =="
 if run_case "W-d/path-source-migration-unknown"; then
     next_sid
-    (cd "$AGENTS_DIR" && "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node "$MKV1" toplevel) > "$WF/$SID.json"
+    (cd "$SCRIPT_CHECKOUT_ROOT" && "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$MKV1" toplevel) > "$WF/$SID.json"
     nodejs "$SID" "$PRE"'
 const ev = S.readState(sid).events.filter((e) => e.kind === "worktree");
 console.log("n=" + ev.length +
@@ -316,10 +317,10 @@ RC_NOSTATE="$HOOK_RC"
 run_hook "$NOSTATE_SID" "Bash" '{"command":"ls"}'
 RC_OTHERTOOL="$HOOK_RC"
 RC_BADJSON=0
-BAD_OUT="$(cd "$AGENTS_DIR" && printf 'not-json' | env \
-    WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+BAD_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && printf 'not-json' | env \
+    WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
     HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
-    "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node hooks/postuse-native-worktree-record.js 2>&1)" || RC_BADJSON=$?
+    "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node hooks/postuse-native-worktree-record.js 2>&1)" || RC_BADJSON=$?
 FILE_CREATED="no"; [ -f "$WF/$NOSTATE_SID.json" ] && FILE_CREATED="yes"
 # Bad stdin yields exactly one stderr diagnostic line (#1810 S2a) and nothing else.
 BAD_DIAG="[postuse-native-worktree-record] stdin json-invalid (8 bytes, SyntaxError): worktree event not recorded (fail-open)"

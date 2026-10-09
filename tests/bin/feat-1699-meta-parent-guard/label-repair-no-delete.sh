@@ -20,8 +20,8 @@
 # the DELETE branch is real and that `--no-delete` is what suppresses it — without R3 the
 # first two would pass against a flag nobody honours.
 
-R_SYNC="$AGENTS_DIR/bin/github-issues/sync-labels.sh"
-R_LABELS_YML="$AGENTS_DIR/.github/labels.yml"
+R_SYNC="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
+R_LABELS_YML="$SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
 # In no labels.yml and no protected: list — the DELETE branch's one candidate, standing
 # in for a repo's own taxonomy.
 R_DOOMED="doomed-taxonomy-label"

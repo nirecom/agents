@@ -13,16 +13,16 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _AGENTS_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_NODE="$AGENTS_DIR"
+    _AGENTS_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-CONFIG_JS="$AGENTS_DIR/hooks/enforce-worktree/config.js"
-HOOK_JS="$AGENTS_DIR/hooks/enforce-worktree.js"
-PRE_COMMIT="$AGENTS_DIR/hooks/pre-commit"
+CONFIG_JS="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/config.js"
+HOOK_JS="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
+PRE_COMMIT="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -194,7 +194,7 @@ RUN_OUT=""
 run_pre_commit() {
     local cwd="$1"; shift
     local rc=0
-    RUN_OUT="$(cd "$cwd" && AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    RUN_OUT="$(cd "$cwd" && \
         run_with_timeout 30 env "$@" bash "$PRE_COMMIT" 2>&1)" || rc=$?
     return $rc
 }
@@ -207,9 +207,9 @@ setup_repo() {
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
     echo "init" > "$repo/README.md"
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+    ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath=/dev/null add README.md >/dev/null 2>&1
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+    ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath=/dev/null commit -q -m "initial" >/dev/null 2>&1
     echo "$repo"
 }
@@ -260,9 +260,9 @@ git -C "$REPO_B3" init -q -b main 2>/dev/null || git -C "$REPO_B3" init -q
 git -C "$REPO_B3" config user.email "test@example.com"
 git -C "$REPO_B3" config user.name "Test"
 echo "init" > "$REPO_B3/README.md"
-AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+ENFORCE_WORKTREE=off \
     git -C "$REPO_B3" -c core.hooksPath=/dev/null add README.md >/dev/null 2>&1
-AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+ENFORCE_WORKTREE=off \
     git -C "$REPO_B3" -c core.hooksPath=/dev/null commit -q -m "initial" >/dev/null 2>&1
 stage_file "$REPO_B3" "src/z.txt" "content"
 if run_pre_commit "$REPO_B3" ENFORCE_WORKTREE=on \
@@ -299,7 +299,7 @@ else
 run_hook() {
     local json="$1"; shift
     local out
-    out="$(echo "$json" | run_with_timeout 15 env AGENTS_CONFIG_DIR="$AGENTS_DIR" "$@" \
+    out="$(echo "$json" | run_with_timeout 15 env "$@" \
         node "$HOOK_JS" 2>/dev/null)" || true
     echo "$out"
 }
@@ -307,7 +307,7 @@ run_hook() {
 run_hook_with_stderr() {
     local json="$1" stderr_file="$2"; shift 2
     local out
-    out="$(echo "$json" | run_with_timeout 15 env AGENTS_CONFIG_DIR="$AGENTS_DIR" "$@" \
+    out="$(echo "$json" | run_with_timeout 15 env "$@" \
         node "$HOOK_JS" 2>"$stderr_file")" || true
     echo "$out"
 }
@@ -364,9 +364,9 @@ setup_repo() {
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
     echo "init" > "$repo/README.md"
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+    ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath=/dev/null add README.md >/dev/null 2>&1
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+    ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath=/dev/null commit -q -m "initial" >/dev/null 2>&1
     echo "$repo"
 }
@@ -392,7 +392,7 @@ run_parity_check() {
     # node). MSYS conv disabled so POSIX-style globs/paths survive Git-Bash mangling.
     local js_rc=0
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
-    run_with_timeout 10 env "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
+    run_with_timeout 10 env \
         "_PRECOMMIT_REPO_TOP=$repo_node" \
         "_PRECOMMIT_STAGED=$staged" \
         "ENFORCE_WORKTREE_EXCLUDE=$exclude" \
@@ -405,7 +405,7 @@ run_parity_check() {
         stage_file "$repo" "$f" "parity content" 2>/dev/null || true
     done
     local bash_rc=0
-    ( cd "$repo" && AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    ( cd "$repo" && \
         run_with_timeout 30 env ENFORCE_WORKTREE=on \
         "ENFORCE_WORKTREE_EXCLUDE=$exclude" \
         bash "$PRE_COMMIT" >/dev/null 2>/dev/null ) || bash_rc=$?

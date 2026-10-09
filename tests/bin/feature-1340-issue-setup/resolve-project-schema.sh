@@ -11,7 +11,7 @@
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-TARGET="$AGENTS_DIR/bin/github-issues/lib/resolve-project.sh"
+TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh"
 export TARGET
 
 # Early-exit: if the helper is missing, report cleanly and exit.
@@ -153,7 +153,7 @@ run_resolver() {
     " 2>"$stderr_file"
 }
 
-# get_field / pass / fail / AGENTS_DIR provided by _lib.sh.
+# get_field / pass / fail / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
 
 # TSV parser / schema-guard table (C7, table-driven). Row: name | setup_kind (cache row for "nirecom/agents") | expect.
 # expect: miss → graphql called; hit:<ID> → no graphql, PROJECT_ID==<ID>; hit-emptystatus:<ID> → also STATUS empty.

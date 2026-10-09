@@ -16,9 +16,9 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-HOOK="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+HOOK="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -76,28 +76,28 @@ _make_payload() {
 }
 run_hook() {
     local p; p="$(_make_payload "$1")"
-    ( cd "$MAIN_REPO" && ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
+    ( cd "$MAIN_REPO" && ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_MAIN_ROOT="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
 }
 run_nongit() {
     local p; p="$(_make_payload "$1")"
-    ( cd "$NONGIT_CWD" && ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$NONGIT_CWD" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
+    ( cd "$NONGIT_CWD" && ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_MAIN_ROOT="$NONGIT_CWD" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
 }
 run_hook_env() {
     local cmd="$1"; shift; local p; p="$(_make_payload "$cmd")"
     ( cd "$MAIN_REPO" || exit 1; for _kv in "$@"; do export "$_kv"; done
-      ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
+      ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_MAIN_ROOT="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
 }
 # run_hook_unset: like run_hook but explicitly UNSETs the named env vars first
 run_hook_unset() {
     local cmd="$1"; shift; local p; p="$(_make_payload "$cmd")"
     ( cd "$MAIN_REPO" || exit 1; for _v in "$@"; do unset "$_v"; done
-      ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
+      ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_MAIN_ROOT="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
 }
 # run_nongit_env: run_nongit + extra KEY=VAL env vars (mirror of run_hook_env)
 run_nongit_env() {
     local cmd="$1"; shift; local p; p="$(_make_payload "$cmd")"
     ( cd "$NONGIT_CWD" || exit 1; for _kv in "$@"; do export "$_kv"; done
-      ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_CONFIG_DIR="$NONGIT_CWD" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
+      ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$TMPPLANS_NODE" WORKFLOW_PLANS_DIR="$TMPPLANS_NODE" AGENTS_MAIN_ROOT="$NONGIT_CWD" MSYS_NO_PATHCONV=1 run_with_timeout 15 node "$HOOK" <<< "$p" 2>/dev/null )
 }
 is_allow() { [ "$1" = "{}" ]; }
 is_block() { echo "$1" | grep -q '"decision":"block"'; }

@@ -25,18 +25,18 @@ pt_parity() {
 }
 
 case_begin "parity-real-table-repo-tests" "bin/lib/test-language-registry.sh"
-git -C "$AGENTS_DIR" ls-files tests >"$PT_DIR/repo-list"
+git -C "$SCRIPT_CHECKOUT_ROOT" ls-files tests >"$PT_DIR/repo-list"
 if [ "$(grep -c . "$PT_DIR/repo-list")" -gt 100 ]; then
   pass "git ls-files tests lists $(grep -c . "$PT_DIR/repo-list") paths"
 else
   fail "git ls-files tests lists the repo's tests" "only $(grep -c . "$PT_DIR/repo-list") paths"
 fi
-pt_parity "real table x git ls-files tests" "$AGENTS_DIR" "$PT_DIR/repo-list"
+pt_parity "real table x git ls-files tests" "$SCRIPT_CHECKOUT_ROOT" "$PT_DIR/repo-list"
 case_end
 
 case_begin "parity-real-table-boundary-names" "bin/lib/test-language-registry.sh"
 printf '%s\n' "${BOUNDARY_NAMES[@]}" >"$PT_DIR/boundary-list"
-pt_parity "real table x boundary names" "$AGENTS_DIR" "$PT_DIR/boundary-list"
+pt_parity "real table x boundary names" "$SCRIPT_CHECKOUT_ROOT" "$PT_DIR/boundary-list"
 case_end
 
 case_begin "parity-fixture-tables" "bin/lib/test-language-registry.sh"
@@ -66,12 +66,12 @@ if [ "$(grep -c . "$PT_DIR/want")" -ge 6 ]; then
 else
   fail "Node supported set has the boundary names" "$(tr '\n' ' ' <"$PT_DIR/want")"
 fi
-tlr_bash "$AGENTS_DIR" 'tlr_load || exit 96; tlr_globs supported' >"$PT_DIR/globs"
+tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; tlr_globs supported' >"$PT_DIR/globs"
 mapfile -t GB_GLOBS <"$PT_DIR/globs"
 inc=() ps=()
 for g in "${GB_GLOBS[@]}"; do inc+=("--include=$g"); ps+=(":(glob)tests/hooks/$g"); done
-tlr_bash "$AGENTS_DIR" 'tlr_load || exit 96; tlr_list_dir "$1" supported' "$GB/tests/hooks" | sed 's#.*/##' | sort -u >"$PT_DIR/got-list-dir"
-tlr_bash "$AGENTS_DIR" 'tlr_load || exit 96; tlr_find "$1" supported' "$GB/tests" | sed 's#.*/##' | sort -u >"$PT_DIR/got-find"
+tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; tlr_list_dir "$1" supported' "$GB/tests/hooks" | sed 's#.*/##' | sort -u >"$PT_DIR/got-list-dir"
+tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; tlr_find "$1" supported' "$GB/tests" | sed 's#.*/##' | sort -u >"$PT_DIR/got-find"
 grep -rl -e x "${inc[@]}" "$GB/tests" | sed 's#.*/##' | sort -u >"$PT_DIR/got-grep"
 git -C "$GB" ls-files -- "${ps[@]}" | sed 's#.*/##' | sort -u >"$PT_DIR/got-git"
 for tool in list-dir find grep git; do

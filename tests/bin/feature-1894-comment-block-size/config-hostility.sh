@@ -3,25 +3,13 @@
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, glob, extensions, scan-scope, tmpdir, quoting, trap, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
 
-# Part 9 — env values the scanner treats as syntax rather than data. Split
-# out of injection-hardening.sh to stay inside the 300-line file-split WARN
-# (rules/coding/file-split.md); same fail-before-fix batch.
-
-# C1/C2 (F4): F4 read ext_ok's `[[ "$p" == *".$e" ]]` as leaving $e unquoted,
-# letting a configured extension act as a glob and widen the scan. It does
-# not — the quotes span `.` through `$e`, and a quoted [[ ]] pattern region
-# matches literally, so only the leading `*` is a wildcard. These are a
-# REGRESSION PIN, not fail-before-fix: they pass against the unfixed scanner
-# and break the moment the quotes are dropped, i.e. the mis-aimed fix (CPR-
-# ORTH: pin both that a metachar can't widen the scan and can still match
-# literally).
-
-# C3 (F3): run_staged's cleanup trap is string-interpolated —
-# `trap "rm -f '$list'" EXIT` — so a single quote in $TMPDIR unbalances it;
-# it's re-parsed at exit, after real work, so it fails quietly: a stale temp
-# file and an unchecked stderr diagnostic.
-
-# Sourced by the dispatcher; every helper and constant is defined there.
+# Part 9 — env values the scanner treats as syntax rather than data. Split out
+# of injection-hardening.sh for the file-split WARN; sourced by the dispatcher.
+# C1/C2 (F4): REGRESSION PIN, not fail-before-fix — ext_ok's quoted pattern
+# matches a configured extension literally, so a metachar can neither widen the
+# scan nor stop matching literally; dropping the quotes breaks these.
+# C3 (F3): run_staged's string-interpolated cleanup trap is unbalanced by a
+# single quote in $TMPDIR and fails quietly at exit (stale temp file).
 
 cpad() { local n="$1" i; for ((i = 1; i <= n; i++)); do echo "c_$i=$i"; done; }
 ccm() { local n="$1" tag="$2" i; for ((i = 1; i <= n; i++)); do echo "# $tag $i"; done; }
@@ -140,7 +128,7 @@ else
 fi
 
 # C6/C7 — ambient environment must never reach a verdict (S2-4 / C5). The two
-# knobs deciding whether a commit is blocked resolve from the config dir's
+# knobs deciding whether a commit is blocked resolve from AGENTS_MAIN_ROOT's
 # .env and nowhere else: an author who can turn the gate off by exporting a
 # shell var has an undocumented bypass, and pre-commit is supposed to have
 # none. run_cb / run_cb_ambient can't express this alone (both also write to
@@ -155,7 +143,7 @@ run_cb_split() {
     local kv
     # shellcheck disable=SC2086
     for kv in $ambient; do envs+=("$kv"); done
-    envs+=("AGENTS_CONFIG_DIR=$CB_CFG_DIR")
+    envs+=("AGENTS_MAIN_ROOT=$CB_CFG_DIR")
     CB_MODE="none"
     for kv in "$@"; do
         case "$kv" in

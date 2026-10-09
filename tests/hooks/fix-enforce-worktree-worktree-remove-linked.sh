@@ -9,11 +9,11 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/lib/ew-runner.sh
-. "$AGENTS_DIR/tests/lib/ew-runner.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/ew-runner.sh"
 
 T="$(make_tmp)"
 trap 'rm -rf "$T"' EXIT
@@ -27,7 +27,7 @@ ew_make_repo "$MAIN"
 ew_make_repo "$OTHER"
 git -C "$MAIN" worktree add -q -b feature/foo "$LINKED"
 git -C "$MAIN" worktree add -q -b feature/victim "$VICTIM"
-EW_CONFIG_DIR="$MAIN"
+EW_CFG_ROOT="$MAIN"
 
 run() { ew_run "$1" "$(ew_bash_payload test "$2")"; }
 
@@ -70,11 +70,11 @@ mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
 GONE="$(np "$T/wt-gone")"
 git -C "$MAIN" worktree add -q -b feature/gone "$GONE"
 git -C "$MAIN" worktree remove "$GONE"
-# Marker-valid AGENTS_CONFIG_DIR (bin/ + hooks/enforce-worktree.js) for the eval case.
-ACD="$(np "$T/acd")"
-mkdir -p "$ACD/bin" "$ACD/hooks" "$ACD/skills/issue-close-finalize/scripts"
-touch "$ACD/hooks/enforce-worktree.js" "$ACD/bin/check-unstaged-tracked.sh" \
-      "$ACD/skills/issue-close-finalize/scripts/pre-flight.sh"
+# Marker-valid AGENTS_MAIN_ROOT (bin/ + hooks/enforce-worktree.js) for the eval case.
+FAKE_SCRIPT_CHECKOUT_ROOT="$(np "$T/script_checkout_root")"
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin" "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks" "$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts"
+touch "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/check-unstaged-tracked.sh" \
+      "$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts/pre-flight.sh"
 
 SID_EXITED="test-1680-exited"
 SID_ACTIVE="test-1680-active"
@@ -94,7 +94,7 @@ fs.writeFileSync(path.join(dir,sid+".json"),JSON.stringify(state,null,2));
 mk_state "$SID_EXITED" '{"worktree_entered_at":"2026-09-29T00:00:00.000Z","worktree_exited_at":"2026-09-29T01:00:00.000Z"}'
 mk_state "$SID_ACTIVE" '{"worktree_entered_at":"2026-09-29T00:00:00.000Z"}'
 PRE="$(node -e 'const s=require(process.argv[1]).readState(process.argv[2]);process.stdout.write(String(s&&s.worktree_exited_at))' \
-    "$(np "$AGENTS_DIR/hooks/workflow-state/state-io.js")" "$SID_EXITED")"
+    "$(np "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js")" "$SID_EXITED")"
 [[ "$PRE" == "2026-09-29T01:00:00.000Z" ]] || { fail "fixture: readState did not surface worktree_exited_at" "got=$PRE"; exit 1; }
 
 # stale <sid> <tool-cwd> <command> — hook process runs from MAIN (the real cwd
@@ -102,7 +102,7 @@ PRE="$(node -e 'const s=require(process.argv[1]).readState(process.argv[2]);proc
 stale() {
     local payload
     payload="$(node -e 'process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:"Bash",tool_input:{command:process.argv[3],cwd:process.argv[2]}}))' "$1" "$2" "$3")"
-    ew_run "$MAIN" "$payload" "AGENTS_CONFIG_DIR=$ACD" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN"
+    ew_run "$MAIN" "$payload" "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN"
 }
 # stale_write <sid> <tool-cwd> <file-path> — same as stale() but uses the Write
 # tool path (handleEditWrite) so that the stale-cwd guard is exercised for that
@@ -110,10 +110,10 @@ stale() {
 stale_write() {
     local payload
     payload="$(node -e 'process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:"Write",tool_input:{file_path:process.argv[3],content:"x",cwd:process.argv[2]}}))' "$1" "$2" "$3")"
-    ew_run "$MAIN" "$payload" "AGENTS_CONFIG_DIR=$ACD" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN"
+    ew_run "$MAIN" "$payload" "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN"
 }
-# shellcheck disable=SC2016  # the unexpanded $AGENTS_CONFIG_DIR literal IS the payload.
-EVAL_PREFLIGHT='eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh")"'
+# shellcheck disable=SC2016  # the unexpanded $AGENTS_MAIN_ROOT literal IS the payload.
+EVAL_PREFLIGHT='eval "$(bash "$AGENTS_MAIN_ROOT/skills/issue-close-finalize/scripts/pre-flight.sh")"'
 
 case_begin "exited-stale-cwd-allow" "hooks/enforce-worktree.js"
 ew_expect allow "WE-15-ALLOW: exited_at set, cwd=linked: git worktree remove <linked> → ALLOW" \

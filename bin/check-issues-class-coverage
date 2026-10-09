@@ -20,11 +20,8 @@
 #   3 -- internal error (file not found)
 set -uo pipefail
 
-if [[ -n "${AGENTS_CONFIG_DIR:-}" ]]; then
-  AGENTS_ROOT="$AGENTS_CONFIG_DIR"
-else
-  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AGENTS_ROOT="$SCRIPT_CHECKOUT_ROOT"
 
 PARSE_ISSUES="$AGENTS_ROOT/bin/parse-closes-issues"
 EXTRACT="$AGENTS_ROOT/bin/extract-mandatory-sections"

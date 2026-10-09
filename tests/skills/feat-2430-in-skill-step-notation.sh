@@ -8,10 +8,10 @@
 # TDD (write_code has not run): expected to FAIL until the in-skill step rewrite (the last delivery of #2430) lands. N4 (bare numeric "Step 1" / "step 2" / "Step 3b" references, C4) FAILs until those lines are rewritten; N5 and N6 hold today.
 
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-SKILLS="$AGENTS_DIR/skills"
+SKILLS="$SCRIPT_CHECKOUT_ROOT/skills"
 
 hits="$(grep -rnE --include='*.md' '\bStep [A-Z]{1,5}-[0-9]+[a-z]?\b' "$SKILLS" 2>/dev/null)"
 if [ -z "$hits" ]; then
@@ -72,7 +72,7 @@ raw="$(grep -rnE --include='*.md' -- "$STEP_RE" "$SKILLS" 2>/dev/null)"
 flagged=""
 while IFS= read -r hit; do
     [[ -z "$hit" ]] && continue
-    rel="${hit#"$AGENTS_DIR/"}"
+    rel="${hit#"$SCRIPT_CHECKOUT_ROOT/"}"
     file="${rel%%:*}"
     content="${rel#*:}"; content="${content#*:}"
     [[ "$(allowed "$file" "$content")" == "yes" ]] && continue
@@ -91,7 +91,7 @@ stale=""
 while IFS='|' read -r file sub reason; do
     [[ -z "$file" ]] && continue
     # Stale = the substring is gone from the file, or it holds no occurrence to cover.
-    if ! grep -qF -- "$sub" "$AGENTS_DIR/$file" 2>/dev/null || [[ "$(flags "$STEP_RE" "$sub")" != "flag" ]]; then
+    if ! grep -qF -- "$sub" "$SCRIPT_CHECKOUT_ROOT/$file" 2>/dev/null || [[ "$(flags "$STEP_RE" "$sub")" != "flag" ]]; then
         stale+=" [$file|$sub]"
     fi
 done <<<"$ALLOWLIST"

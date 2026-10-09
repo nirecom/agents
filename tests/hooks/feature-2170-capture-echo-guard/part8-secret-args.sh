@@ -11,10 +11,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="${1:-$(cd "$(dirname "$0")/../../.." && pwd)}"
-export AGENTS_DIR
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-HOOK="$AGENTS_DIR/hooks/block-capture-echo.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-capture-echo.js"
 command -v node >/dev/null 2>&1 || exit 77
 
 PASS=0
@@ -55,7 +54,7 @@ mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 # A REAL row of the allow SSOT, so the matched (argument-reproducing) branch is
 # genuinely reachable; bail loudly rather than silently if the row ever moves.
 ENTRY='bin/workflow/record-complexity-and-skip'
-if ! grep -Fxq "$ENTRY" "$AGENTS_DIR/install/settings-allow-commands.txt"; then
+if ! grep -Fxq "$ENTRY" "$SCRIPT_CHECKOUT_ROOT/install/settings-allow-commands.txt"; then
     assert_eq "F-0-entry-is-on-the-real-ssot-list" "listed" "NOT_LISTED"
     finish
 fi
@@ -63,8 +62,8 @@ fi
 VERDICT=""
 run_case() { # <arg-string>
     node "$HERE/mk-event.js" Bash \
-        "X=\$(bash \"\$AGENTS_CONFIG_DIR/$ENTRY\" $1); echo \"\$X\"" >"$EV"
-    env AGENTS_CONFIG_DIR="$AGENTS_DIR" node "$HOOK" <"$EV" >"$OUT" 2>"$ERR"
+        "X=\$(bash \"\$AGENTS_MAIN_ROOT/$ENTRY\" $1); echo \"\$X\"" >"$EV"
+    env node "$HOOK" <"$EV" >"$OUT" 2>"$ERR"
     VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
 }
 

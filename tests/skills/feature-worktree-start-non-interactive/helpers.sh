@@ -8,9 +8,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SKILL_MD="$AGENTS_DIR/skills/worktree-start/SKILL.md"
-SCRIPT="$AGENTS_DIR/skills/worktree-start/scripts/derive-worktree-name.sh"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SKILL_MD="$_HELPERS_SCRIPT_CHECKOUT_ROOT/skills/worktree-start/SKILL.md"
+SCRIPT="$_HELPERS_SCRIPT_CHECKOUT_ROOT/skills/worktree-start/scripts/derive-worktree-name.sh"
 
 PASS=0
 FAIL=0
@@ -81,9 +81,9 @@ finish() {
 #
 # Fixture isolation (rules/test/fixture-isolation.md): dual-pin the state dirs and
 # drop any inherited session id so the script can never touch the real $HOME state.
-# The script under test resolves its helper CLIs from AGENTS_CONFIG_DIR; pin it
+# The script under test resolves its helper CLIs from AGENTS_MAIN_ROOT; pin it
 # unconditionally to the checkout under test. Honouring an inherited value would make
-# the suite assert against whatever config dir the invoking shell happened to export
+# the suite assert against whatever agents root the invoking shell happened to export
 # (typically the deployed $HOME/.claude copy) instead of the worktree being tested.
 setup_fixture() {
     FIXTURE="$(mktemp -d)"
@@ -94,7 +94,6 @@ setup_fixture() {
     STUBDIR=""
     trap 'rm -rf "$FIXTURE" ${STUBDIR:+"$STUBDIR"}' EXIT
 
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     mkdir -p "$FIXTURE/wf" "$FIXTURE/plans"
     export WORKFLOW_STATE_DIR="$FIXTURE/wf"
     export WORKFLOW_PLANS_DIR="$FIXTURE/plans"

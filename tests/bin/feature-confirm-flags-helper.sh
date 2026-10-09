@@ -2,25 +2,13 @@
 # Tests: bin/get-config-var
 # Tags: bin, shell, env, config, tests, scope:common
 # Tests for bin/get-config-var helper used by confirm-flags feature.
-#
-# L3 gap (what this test does NOT catch):
-# - real symlink installed by dotfileslink.sh/ps1 into ~/.local/bin reading
-#   the actual user .env (symlink regression test uses a tmp fake-agents dir)
-# - pwsh variant behavior (covered by tests/fix-get-config-var-hardening.Tests.ps1)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: pwsh-required
-#
-# Pre-implementation: ALL tests are expected to FAIL with "file/command not
-# found" because bin/get-config-var has not been written yet. Once the
-# implementation lands, these tests must pass.
-#
-# Test categories (see rules/test.md):
-#   - Unit:         --is-off matrix (truthy / falsy), missing arg
-#   - Narrow:       tmpdir .env via AGENTS_CONFIG_DIR, process.env precedence,
-#                   default fallback, no-.env-token check, clean-PATH lookup
-#   - Edge:         quoted values, spaces in AGENTS_CONFIG_DIR
-#   - Security:     path traversal in AGENTS_CONFIG_DIR, shell metachars in
-#                   arg name, idempotency of repeated calls
+# L3 gap: the real ~/.local/bin symlink reading the actual user .env, and the pwsh
+# variant (tests/fix-get-config-var-hardening.Tests.ps1); checked at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh (pwsh-required).
+# Categories: Unit (--is-off matrix, missing arg); Narrow (tmpdir .env via
+# AGENTS_MAIN_ROOT, process.env precedence, default fallback, clean-PATH lookup);
+# Edge (quoted values, spaces in the root path); Security (path traversal in the
+# root, shell metachars in the arg name, idempotency).
 set -u
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -50,10 +38,10 @@ else
 fi
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-# Always isolate AGENTS_CONFIG_DIR per case unless overridden.
+# Always isolate AGENTS_MAIN_ROOT per case unless overridden.
 # Some tests deliberately export it; reset between cases.
 unset_isolated_env() {
-    unset AGENTS_CONFIG_DIR
+    unset AGENTS_MAIN_ROOT
     unset CONFIRM_OUTLINE
     unset CONFIRM_DETAIL
     unset CONFIRM_TESTS
@@ -164,7 +152,7 @@ unset_isolated_env
 capture_exit 1 "unset key + default 'on' exits 1" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
 
 # Internal failure: copy helper to a dir with no sibling hooks/lib/load-env.js
-# and unset AGENTS_CONFIG_DIR so the require() chain cannot resolve.
+# and unset AGENTS_MAIN_ROOT so the require() chain cannot resolve.
 mkdir -p "$TMPDIR_BASE/helpers"
 cp "$HELPER" "$TMPDIR_BASE/helpers/get-config-var"
 chmod +x "$TMPDIR_BASE/helpers/get-config-var" 2>/dev/null || true
@@ -204,15 +192,15 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Narrow: tmpdir .env + AGENTS_CONFIG_DIR → value-mode prints value
+# Narrow: tmpdir .env + AGENTS_MAIN_ROOT → value-mode prints value
 # ---------------------------------------------------------------------------
-echo "=== Narrow: AGENTS_CONFIG_DIR + .env value lookup ==="
+echo "=== Narrow: AGENTS_MAIN_ROOT + .env value lookup ==="
 NDIR1="$TMPDIR_BASE/cfg1"
 mkdir -p "$NDIR1"
 # Write .env via printf to avoid the .env block hook on Edit/Read tools
 printf 'CONFIRM_OUTLINE=off\nCONFIRM_DETAIL=on\n' > "$NDIR1/.env"
 unset_isolated_env
-export AGENTS_CONFIG_DIR="$NDIR1"
+export AGENTS_MAIN_ROOT="$NDIR1"
 val=$(run_with_timeout "$HELPER" CONFIRM_OUTLINE on 2>/dev/null || true)
 if [ "$val" = "off" ]; then
     pass "value-mode reads .env: CONFIRM_OUTLINE=off"
@@ -234,7 +222,7 @@ NDIR2="$TMPDIR_BASE/cfg2"
 mkdir -p "$NDIR2"
 printf 'CONFIRM_OUTLINE=off\n' > "$NDIR2/.env"
 unset_isolated_env
-export AGENTS_CONFIG_DIR="$NDIR2"
+export AGENTS_MAIN_ROOT="$NDIR2"
 export CONFIRM_OUTLINE="on"
 val=$(run_with_timeout "$HELPER" CONFIRM_OUTLINE off 2>/dev/null || true)
 if [ "$val" = "on" ]; then
@@ -252,7 +240,7 @@ NDIR3="$TMPDIR_BASE/cfg3"
 mkdir -p "$NDIR3"
 printf 'OTHER_KEY=foo\n' > "$NDIR3/.env"
 unset_isolated_env
-export AGENTS_CONFIG_DIR="$NDIR3"
+export AGENTS_MAIN_ROOT="$NDIR3"
 val=$(run_with_timeout "$HELPER" CONFIRM_OUTLINE on 2>/dev/null || true)
 if [ "$val" = "on" ]; then
     pass "missing key falls back to default arg"
@@ -264,7 +252,7 @@ fi
 NDIR4="$TMPDIR_BASE/cfg4-no-env"
 mkdir -p "$NDIR4"
 unset_isolated_env
-export AGENTS_CONFIG_DIR="$NDIR4"
+export AGENTS_MAIN_ROOT="$NDIR4"
 val=$(run_with_timeout "$HELPER" CONFIRM_OUTLINE on 2>/dev/null || true)
 if [ "$val" = "on" ]; then
     pass "missing .env falls back to default arg"
@@ -277,7 +265,7 @@ NDIR5="$TMPDIR_BASE/cfg5-empty"
 mkdir -p "$NDIR5"
 : > "$NDIR5/.env"
 unset_isolated_env
-export AGENTS_CONFIG_DIR="$NDIR5"
+export AGENTS_MAIN_ROOT="$NDIR5"
 val=$(run_with_timeout "$HELPER" CONFIRM_OUTLINE off 2>/dev/null || true)
 if [ "$val" = "off" ]; then
     pass "empty .env falls back to default arg"
@@ -326,31 +314,31 @@ NDIR6="$TMPDIR_BASE/cfg6-quoted"
 mkdir -p "$NDIR6"
 printf 'CONFIRM_TESTS="off"\n' > "$NDIR6/.env"
 unset_isolated_env
-export AGENTS_CONFIG_DIR="$NDIR6"
+export AGENTS_MAIN_ROOT="$NDIR6"
 capture_exit 0 "quoted value 'off' parses as OFF" -- run_with_timeout "$HELPER" --is-off CONFIRM_TESTS on
 
 # ---------------------------------------------------------------------------
-# Edge: AGENTS_CONFIG_DIR path containing spaces
+# Edge: AGENTS_MAIN_ROOT path containing spaces
 # ---------------------------------------------------------------------------
-echo "=== Edge: AGENTS_CONFIG_DIR with spaces ==="
+echo "=== Edge: AGENTS_MAIN_ROOT with spaces ==="
 NDIR7="$TMPDIR_BASE/cfg dir with spaces"
 mkdir -p "$NDIR7"
 printf 'CONFIRM_OUTLINE=off\n' > "$NDIR7/.env"
 unset_isolated_env
-export AGENTS_CONFIG_DIR="$NDIR7"
+export AGENTS_MAIN_ROOT="$NDIR7"
 val=$(run_with_timeout "$HELPER" CONFIRM_OUTLINE on 2>/dev/null || true)
 if [ "$val" = "off" ]; then
-    pass "AGENTS_CONFIG_DIR with spaces resolves"
+    pass "AGENTS_MAIN_ROOT with spaces resolves"
 else
-    fail "AGENTS_CONFIG_DIR with spaces should resolve, got: '$val'"
+    fail "AGENTS_MAIN_ROOT with spaces should resolve, got: '$val'"
 fi
 
 # ---------------------------------------------------------------------------
-# Security: path traversal in AGENTS_CONFIG_DIR
+# Security: path traversal in AGENTS_MAIN_ROOT
 # ---------------------------------------------------------------------------
-echo "=== Security: path traversal in AGENTS_CONFIG_DIR ==="
+echo "=== Security: path traversal in AGENTS_MAIN_ROOT ==="
 unset_isolated_env
-export AGENTS_CONFIG_DIR="../../etc"
+export AGENTS_MAIN_ROOT="../../etc"
 rc=0
 out=$(run_with_timeout "$HELPER" CONFIRM_OUTLINE on 2>&1) || rc=$?
 # Should fall back silently to default, no error/leakage; default 'on' printed
@@ -396,7 +384,7 @@ NDIR8="$TMPDIR_BASE/cfg8-idem"
 mkdir -p "$NDIR8"
 printf 'CONFIRM_OUTLINE=off\n' > "$NDIR8/.env"
 unset_isolated_env
-export AGENTS_CONFIG_DIR="$NDIR8"
+export AGENTS_MAIN_ROOT="$NDIR8"
 out1=$(run_with_timeout "$HELPER" --is-off CONFIRM_OUTLINE on 2>&1; echo "EXIT=$?")
 out2=$(run_with_timeout "$HELPER" --is-off CONFIRM_OUTLINE on 2>&1; echo "EXIT=$?")
 if [ "$out1" = "$out2" ]; then
@@ -416,8 +404,8 @@ FAKE_AGENTS="$TMPDIR_BASE/fake-agents"
 FAKE_HOME="$TMPDIR_BASE/fake-home"
 mkdir -p "$FAKE_AGENTS/hooks/lib" "$FAKE_HOME"
 cp "$REPO_ROOT/hooks/lib/load-env.js" "$FAKE_AGENTS/hooks/lib/load-env.js"
-# Transitive requires of load-env.js: ./agents-config-dir -> ./path-normalize
-cp "$REPO_ROOT/hooks/lib/agents-config-dir.js" "$FAKE_AGENTS/hooks/lib/agents-config-dir.js"
+# Transitive requires of load-env.js: ./script-checkout-root -> ./path-normalize
+cp "$REPO_ROOT/hooks/lib/script-checkout-root.js" "$FAKE_AGENTS/hooks/lib/script-checkout-root.js"
 cp "$REPO_ROOT/hooks/lib/path-normalize.js" "$FAKE_AGENTS/hooks/lib/path-normalize.js"
 printf 'CONFIRM_DETAIL=off\n' > "$FAKE_AGENTS/.env"
 
@@ -427,10 +415,10 @@ if [ "$ln_ok" = "0" ] || [ ! -L "$FAKE_HOME/get-config-var" ]; then
     echo "SKIP: symlink creation not available (Windows non-dev-mode?)"
 else
     unset_isolated_env
-    capture_exit 0 "symlink resolves real repo (AGENTS_CONFIG_DIR wins)" -- env AGENTS_CONFIG_DIR="$FAKE_AGENTS" run_with_timeout "$FAKE_HOME/get-config-var" --is-off CONFIRM_DETAIL on  # pre-implementation
-    val=$(AGENTS_CONFIG_DIR="$FAKE_AGENTS" run_with_timeout "$FAKE_HOME/get-config-var" CONFIRM_DETAIL on 2>/dev/null || true)
+    capture_exit 0 "symlink resolves real repo (AGENTS_MAIN_ROOT wins)" -- run_with_timeout env AGENTS_MAIN_ROOT="$FAKE_AGENTS" "$FAKE_HOME/get-config-var" --is-off CONFIRM_DETAIL on  # pre-implementation
+    val=$(AGENTS_MAIN_ROOT="$FAKE_AGENTS" run_with_timeout "$FAKE_HOME/get-config-var" CONFIRM_DETAIL on 2>/dev/null || true)
     if [ "$val" = "off" ]; then
-        pass "symlink value-mode reads .env via AGENTS_CONFIG_DIR"
+        pass "symlink value-mode reads .env via AGENTS_MAIN_ROOT"
     else
         fail "symlink value-mode should print 'off', got: '$val'"  # pre-implementation
     fi

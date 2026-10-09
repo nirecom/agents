@@ -40,11 +40,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
 MOD_REL="hooks/enforce-worktree/bash-write-scope/target-normalize.js"
-MOD="$_AGENTS_DIR_NODE/$MOD_REL"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+MOD="$_SCRIPT_CHECKOUT_ROOT_NODE/$MOD_REL"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -56,7 +56,7 @@ assert_eq() {
     if [ "$want" = "$got" ]; then pass "$name"; else fail "$name - want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
 
-if [ ! -f "$AGENTS_DIR/$MOD_REL" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/$MOD_REL" ]; then
     fail "H0 $MOD_REL missing - every case below is vacuous"
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
 fi

@@ -25,8 +25,8 @@ FAIL=0
 # auto-prompt fires for this file set; the gap is closed only by the manual
 # post-merge render check on github.com recorded in the plan's S10 step.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TEMPLATE_DIR="$AGENTS_DIR/.github/ISSUE_TEMPLATE"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TEMPLATE_DIR="$SCRIPT_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }

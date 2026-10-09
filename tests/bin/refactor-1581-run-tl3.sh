@@ -3,15 +3,15 @@
 # Tests: bin/select-tests.sh, .env.example, tests/hooks/TL3-hook-clearance-token-write.sh, tests/hooks/TL3-hook-forge-target-ownership.sh, tests/hooks/TL3-hook-post-compact.sh, tests/hooks/TL3-hook-session-start.sh, tests/hooks/TL3-hook-stop-confirm-plan-guard.sh, tests/hooks/TL3-hook-stop-final-report-guard.sh, tests/hooks/TL3-hook-subagent-start.sh, tests/hooks/TL3-hook-workflow-mark.sh
 # Tags: test-selection, tl3-toggle, run-tl3, scope:issue-specific
 #
-# TL3 gap: actual get-config-var/.env invocation and AGENTS_CONFIG_DIR≠AGENTS_DIR
+# TL3 gap: actual get-config-var/.env invocation and AGENTS_MAIN_ROOT≠SCRIPT_CHECKOUT_ROOT
 # behavior only testable in a real run-tests session. Mitigation: pwsh-required gate.
 # Issue #1581: RUN_E2E→RUN_TL3 rename; #1689: TL3 skipped for empty/docs-only diffs.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SELECT_SH="${AGENTS_DIR}/bin/select-tests.sh"
-ENV_EXAMPLE="${AGENTS_DIR}/.env.example"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SELECT_SH="${SCRIPT_CHECKOUT_ROOT}/bin/select-tests.sh"
+ENV_EXAMPLE="${SCRIPT_CHECKOUT_ROOT}/.env.example"
 
 PASS=0
 FAIL=0
@@ -80,7 +80,7 @@ test_C1b_tl3_on_code_diff_appends() {
     local repo="$TMPDIR_BASE/c1b"
     make_repo "$repo" "bin/somefile.sh"
     local out expected_count actual_count
-    expected_count="$(find "$AGENTS_DIR/tests" -maxdepth 1 -name "TL3-*.sh" | wc -l | tr -d ' ')"
+    expected_count="$(find "$SCRIPT_CHECKOUT_ROOT/tests" -maxdepth 1 -name "TL3-*.sh" | wc -l | tr -d ' ')"
     out="$(cd "$repo" && RUN_TL3=on run_with_timeout 120 bash "$SELECT_SH" base 2>/dev/null)"
     actual_count="$(echo "$out" | grep -cE "tests/TL3-.*\.sh" || true)"
     if [ "$actual_count" -eq "$expected_count" ] && [ "$expected_count" -gt 0 ]; then
@@ -119,7 +119,8 @@ test_C3_tl3_unset_absent() {
     local repo="$TMPDIR_BASE/c3"
     make_repo "$repo" "bin/somefile.sh"
     local out
-    out="$(cd "$repo" && env -u RUN_TL3 run_with_timeout 120 bash "$SELECT_SH" base 2>/dev/null)"
+    # run_with_timeout is a shell function: unset in the $( ) subshell, not via `env -u`.
+    out="$(cd "$repo" && unset RUN_TL3 && run_with_timeout 120 bash "$SELECT_SH" base 2>/dev/null)"
     if echo "$out" | grep -qE "tests/TL3-.*\.sh"; then
         fail "C3_tl3_unset_absent: TL3-*.sh appended with RUN_TL3 unset
 --- output ---
@@ -226,14 +227,14 @@ test_C7_tl3_hooks_use_run_tl3() {
     while IFS= read -r f; do
         [ -f "$f" ] || continue
         found=$((found + 1))
-        local rel="${f#"$AGENTS_DIR"/}"
+        local rel="${f#"$SCRIPT_CHECKOUT_ROOT"/}"
         if ! grep -qE -- '--is-off RUN_TL3' "$f"; then
             bad="${bad}\n  missing --is-off RUN_TL3: $rel"
         fi
         if grep -qE -- '--is-off RUN_E2E' "$f"; then
             bad="${bad}\n  still uses --is-off RUN_E2E: $rel"
         fi
-    done < <(find "$AGENTS_DIR/tests" -maxdepth 1 -name "TL3-hook-*.sh" | sort)
+    done < <(find "$SCRIPT_CHECKOUT_ROOT/tests" -maxdepth 1 -name "TL3-hook-*.sh" | sort)
     if [ "$found" -eq 0 ]; then
         fail "C7_tl3_hooks_use_run_tl3: no TL3-hook-* shell files found (recursive)"
     elif [ -z "$bad" ]; then

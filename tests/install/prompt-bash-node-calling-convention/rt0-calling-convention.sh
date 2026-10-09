@@ -5,7 +5,7 @@
 # which owns PASS/FAIL/ROWS, assert_eq and TMPROOT.
 
 RT0_SKILL_REL="skills/review-tests/SKILL.md"
-RT0_SKILL="$AGENTS_DIR/$RT0_SKILL_REL"
+RT0_SKILL="$SCRIPT_CHECKOUT_ROOT/$RT0_SKILL_REL"
 RT0_DIR=""
 RT0_REGION=""
 
@@ -97,7 +97,7 @@ rt0_probe() { # <text-file> <clause> -> satisfied|NOT-SATISFIED|sentinel
 # drops or contradicts exactly one and the others keep answering `satisfied`.
 rt0_fixture() { # <case> <out-file>
     local cmd bashpos args envp chain exitc
-    cmd='RT-0. Run `"$AGENTS_CONFIG_DIR/bin/resolve-worktree-path"` as a single standalone command.'
+    cmd='RT-0. Run `"$AGENTS_MAIN_ROOT/bin/resolve-worktree-path"` as a single standalone command.'
     # The hardened wording states the obligation WITHOUT a negation: the clause's own veto reads
     # `never invoke` / `do not pass` as a polarity reversal, so a control fixture that reached for
     # "never invoke it directly" would disqualify itself and make the probe look unsatisfiable.
@@ -108,7 +108,7 @@ rt0_fixture() { # <case> <out-file>
     exitc='  Inspect its exit code in a separate, subsequent command.'
     case "$1" in
         hardened)              : ;;
-        omit-one-command)      cmd='RT-0. Run `"$AGENTS_CONFIG_DIR/bin/resolve-worktree-path"`.' ;;
+        omit-one-command)      cmd='RT-0. Run `"$AGENTS_MAIN_ROOT/bin/resolve-worktree-path"`.' ;;
         omit-bash-arg-position) bashpos='' ;;
         contradict-bash-arg-position) bashpos='  Invoke the script path directly; do not pass it to `bash` as an argument.' ;;
         omit-arguments)        args='' ;;

@@ -23,6 +23,7 @@
 # via bin/check-verification-gate.sh category: hook-registration.
 
 # isolation (#2512): pin state and plans dirs once for this file
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
@@ -121,14 +122,14 @@ echo "== G7: after migration, a v1 timestamp keeps its verdict and a null timest
 if run_case "G7/v1-timestamped-stays-genuine"; then
     next_sid
     SID_G7A="$SID"
-    (cd "$AGENTS_DIR" && "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node "$MKV1" ordering) > "$WF/$SID_G7A.json"
+    (cd "$SCRIPT_CHECKOUT_ROOT" && "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$MKV1" ordering) > "$WF/$SID_G7A.json"
     next_sid
     SID_G7B="$SID"
     # Same fixture, one field changed: clarify_intent loses its timestamp. That single
     # difference is the whole pre-#1733 heuristic ("raw key + non-empty updated_at"),
     # so the pair isolates it from every other property of the fixture.
-    (cd "$AGENTS_DIR" && "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node "$MKV1" ordering) \
-        | (cd "$AGENTS_DIR" && "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node -e '
+    (cd "$SCRIPT_CHECKOUT_ROOT" && "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$MKV1" ordering) \
+        | (cd "$SCRIPT_CHECKOUT_ROOT" && "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node -e '
 let buf = ""; process.stdin.on("data", (d) => { buf += d; });
 process.stdin.on("end", () => { const s = JSON.parse(buf); s.steps.clarify_intent.updated_at = null;
   process.stdout.write(JSON.stringify(s, null, 2)); });

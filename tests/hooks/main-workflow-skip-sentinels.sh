@@ -5,9 +5,9 @@
 # and DOCS_NOT_NEEDED deprecation.
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -71,7 +71,7 @@ read_state_status() {
     if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
     # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
     # on-disk event stream, not a persisted top-level key.
-    (cd "$AGENTS_DIR" && node -e "
+    (cd "$SCRIPT_CHECKOUT_ROOT" && node -e "
       try {
         const s = require('./hooks/workflow-state').readState(process.argv[1]);
         const step = s && s.steps && s.steps['$step'];
@@ -85,7 +85,7 @@ read_state_field() {
     local state_file="$WORKFLOW_DIR/${sid}.json"
     if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
     # Read through the canonical API (see read_state_status).
-    (cd "$AGENTS_DIR" && node -e "
+    (cd "$SCRIPT_CHECKOUT_ROOT" && node -e "
       try {
         const s = require('./hooks/workflow-state').readState(process.argv[1]);
         const step = s && s.steps && s.steps['$step'];
@@ -187,9 +187,9 @@ to_node_path() {
 
 run_gate() {
     local json="$1"
-    # Extract the -C <repo-path> from the gate command so that AGENTS_CONFIG_DIR
+    # Extract the -C <repo-path> from the gate command so that AGENTS_MAIN_ROOT
     # points at the same repo. isAgentsSessionRepo() compares the git common-dirs
-    # of the target repo and AGENTS_CONFIG_DIR; when they match (same temp repo),
+    # of the target repo and AGENTS_MAIN_ROOT; when they match (same temp repo),
     # the gate enforces workflow state rather than short-circuiting via the
     # cross-repo bypass (#1138). This is correct: the test exercises the gate
     # logic itself, not which physical repo the commit targets.
@@ -201,7 +201,7 @@ run_gate() {
       console.log(m ? m[1] : '');
     " 2>/dev/null || true)
     if [ -n "$gate_repo" ]; then
-        echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" AGENTS_CONFIG_DIR="$gate_repo" node "$GATE_HOOK" 2>/dev/null
+        echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" AGENTS_MAIN_ROOT="$gate_repo" node "$GATE_HOOK" 2>/dev/null
     else
         echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null
     fi

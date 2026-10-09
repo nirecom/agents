@@ -18,17 +18,17 @@
 # per-session marker appears, disappears, stays isolated from another session, and
 # tolerates a repeated restore. Nothing is reconstructed.
 
-# Assumes AGENTS_DIR, BASE, EWO_ABS, pass(), fail(), node_path() from the entry file.
+# Assumes SCRIPT_CHECKOUT_ROOT, BASE, EWO_ABS, pass(), fail(), node_path() from the entry file.
 
 echo ""
 echo "=== E10: the relocated OFF/ON commands, driven through the real handler ==="
 
-E10_HANDLERS="$AGENTS_DIR/hooks/workflow-mark/enforce-override-handlers.js"
+E10_HANDLERS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark/enforce-override-handlers.js"
 
 E10_run_with_timeout() {
     local secs="$1"; shift
-    if [ -x "$AGENTS_DIR/bin/run-with-timeout.sh" ]; then
-        "$AGENTS_DIR/bin/run-with-timeout.sh" "$secs" "$@"
+    if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" ]; then
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$secs" "$@"
     else
         "$@"
     fi
@@ -49,7 +49,6 @@ mkdir -p "$E10_WF" "$E10_PLANS"
 e10_emit() {
     local sid="$1" cmd="$2"
     E10_run_with_timeout 30 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$(node_path "$E10_WF")" \
         "WORKFLOW_PLANS_DIR=$(node_path "$E10_PLANS")" \
         node -e '
@@ -197,7 +196,7 @@ echo "=== E11: the relocated WORKTREE_OFF actually moves the guard a blocked ses
 # E10 case green while the documented hatch changed nothing — and this is the one hatch
 # whose reader is, by definition, already blocked.
 
-E11_HOOK="$(node_path "$AGENTS_DIR/hooks/enforce-worktree.js")"
+E11_HOOK="$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js")"
 
 # A main-worktree repo with ENFORCE_WORKTREE=on: the state the hatch exists to escape.
 E11_REPO="$BASE/e11-repo"
@@ -214,7 +213,6 @@ e11_write_blocked() {
     local sid="$1" payload out
     payload="$(node -e 'process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:"Write",tool_input:{file_path:process.argv[2]+"/probe.txt",content:"x"}}))' "$sid" "$E11_REPO_N")"
     out="$( cd "$E11_REPO" && printf '%s' "$payload" | E10_run_with_timeout 30 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "WORKFLOW_STATE_DIR=$(node_path "$E10_WF")" \
         "WORKFLOW_PLANS_DIR=$(node_path "$E10_PLANS")" \
@@ -225,7 +223,7 @@ e11_write_blocked() {
     esac
 }
 
-if [ ! -f "$AGENTS_DIR/hooks/enforce-worktree.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js" ]; then
     fail "E11: IMPLEMENTATION MISSING: hooks/enforce-worktree.js — the guard the WORKTREE_OFF hatch exists to suspend"
 elif [ -z "${E10_WT_OFF:-}" ] || [ -z "${E10_WT_ON:-}" ]; then
     fail "E11: the relocated WORKTREE_OFF/ON commands could not be extracted (see E10f-setup), so the guard sequence cannot be driven from the document"

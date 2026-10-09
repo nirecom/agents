@@ -19,14 +19,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-PRE_COMMIT="${AGENTS_DIR}/hooks/pre-commit"
-GLOB_JS="${_AGENTS_DIR_NODE}/hooks/lib/glob-match.js"
+PRE_COMMIT="${SCRIPT_CHECKOUT_ROOT}/hooks/pre-commit"
+GLOB_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/glob-match.js"
 
 if [ ! -f "$PRE_COMMIT" ]; then
     echo "SKIP: hooks/pre-commit not present"
@@ -77,12 +77,12 @@ setup_main_checkout() {
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
     # Use the agents-repo pre-commit so we exercise the real hook.
-    git -C "$repo" config core.hooksPath "${AGENTS_DIR}/hooks"
+    git -C "$repo" config core.hooksPath "${SCRIPT_CHECKOUT_ROOT}/hooks"
     echo "init" > "$repo/README.md"
     # Bootstrap commit must bypass our hook (otherwise main-checkout block fires).
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+    ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath=/dev/null add README.md >/dev/null 2>&1
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+    ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath=/dev/null commit -q -m "initial" >/dev/null 2>&1
     # Switch to a feature branch so the protected-branch block does not fire;
     # the main-checkout block is what we want to exercise (and bypass via
@@ -100,7 +100,7 @@ RUN_OUT=""
 run_pre_commit() {
     local cwd="$1"; shift
     local rc=0
-    RUN_OUT="$(cd "$cwd" && AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    RUN_OUT="$(cd "$cwd" && \
         run_with_timeout 30 env "$@" bash "$PRE_COMMIT" 2>&1)" || rc=$?
     return $rc
 }
@@ -129,7 +129,7 @@ seed_committed_file() {
     mkdir -p "$(dirname "$full")"
     printf '%s\n' "$content" > "$full"
     git -C "$repo" -c core.hooksPath=/dev/null add "$rel" >/dev/null 2>&1
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+    ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath=/dev/null \
         commit -q -m "seed $rel" >/dev/null 2>&1
 }

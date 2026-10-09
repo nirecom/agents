@@ -23,8 +23,8 @@ T37_MARKER='Bash(t37-marker *)'
 t37_have() { # -> ok | sentinel-text
     have_lib || { missing_lib; return; }
     [ -f "$ASSEMBLE" ] || { missing_assemble; return; }
-    [ -f "$AGENTS_DIR/$POST_MERGE_REL" ] || { printf '<MISSING:%s>' "$POST_MERGE_REL"; return; }
-    [ -f "$AGENTS_DIR/$POST_CHECKOUT_REL" ] || { printf '<MISSING:%s>' "$POST_CHECKOUT_REL"; return; }
+    [ -f "$SCRIPT_CHECKOUT_ROOT/$POST_MERGE_REL" ] || { printf '<MISSING:%s>' "$POST_MERGE_REL"; return; }
+    [ -f "$SCRIPT_CHECKOUT_ROOT/$POST_CHECKOUT_REL" ] || { printf '<MISSING:%s>' "$POST_CHECKOUT_REL"; return; }
     command -v git >/dev/null 2>&1 || { printf '<MISSING:git>'; return; }
     printf 'ok'
 }
@@ -41,11 +41,11 @@ t37_seed() { # <dir>
     git -C "$d" config user.name "Test"
     git -C "$d" config commit.gpgsign false
     git -C "$d" config init.defaultBranch main >/dev/null 2>&1 || true
-    cp "$AGENTS_DIR/$POST_MERGE_REL" "$d/hooks/post-merge"
-    cp "$AGENTS_DIR/$POST_CHECKOUT_REL" "$d/hooks/post-checkout"
+    cp "$SCRIPT_CHECKOUT_ROOT/$POST_MERGE_REL" "$d/hooks/post-merge"
+    cp "$SCRIPT_CHECKOUT_ROOT/$POST_CHECKOUT_REL" "$d/hooks/post-checkout"
     chmod +x "$d/hooks/post-merge" "$d/hooks/post-checkout" 2>/dev/null || true
     cp "$ASSEMBLE" "$d/install/assemble-settings.js"
-    cp "$AGENTS_DIR"/install/lib/*.js "$d/install/lib/" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT"/install/lib/*.js "$d/install/lib/" 2>/dev/null || true
     printf '%s\n' '# fixture PATH-exposed list (never the real one)' > "$d/install/path-exposed-commands.txt"
     mk_tool "$d" bin/fx-tool env-bash
     write_ssot "$d" bin/fx-tool
@@ -214,8 +214,8 @@ t38_shim_canary() { # <shimdir> -> "<no-node|NODE-FOUND>/<git-ok|GIT-MISSING>"
 }
 
 t38_have() { # <no-node|with-node> -> ok | sentinel
-    [ -f "$AGENTS_DIR/$POST_MERGE_REL" ] || { printf '<MISSING:%s>' "$POST_MERGE_REL"; return; }
-    [ -f "$AGENTS_DIR/$POST_CHECKOUT_REL" ] || { printf '<MISSING:%s>' "$POST_CHECKOUT_REL"; return; }
+    [ -f "$SCRIPT_CHECKOUT_ROOT/$POST_MERGE_REL" ] || { printf '<MISSING:%s>' "$POST_MERGE_REL"; return; }
+    [ -f "$SCRIPT_CHECKOUT_ROOT/$POST_CHECKOUT_REL" ] || { printf '<MISSING:%s>' "$POST_CHECKOUT_REL"; return; }
     command -v git >/dev/null 2>&1 || { printf '<MISSING:git>'; return; }
     [ -n "$T38_BASH" ] || { printf '<MISSING:bash>'; return; }
     if [ "$1" = "with-node" ]; then

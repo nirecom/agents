@@ -10,8 +10,8 @@
 # TDD (write_code has not run): the "records" cases are expected to FAIL until hooks/lib/handoff-risk-signal.js exists and the six producers call it; the "records nothing" and "output unchanged" cases hold today and pin the contract.
 
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
@@ -20,7 +20,7 @@ export WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
 export WORKFLOW_PLANS_DIR="$WORKFLOW_STATE_DIR"
 export HOME="$(np "$TMP/home")" USERPROFILE="$(np "$TMP/home")"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/transcripts")"
-export AGENTS="$(np "$AGENTS_DIR")"
+export AGENTS="$(np "$SCRIPT_CHECKOUT_ROOT")"
 cd "$TMP" || exit 1
 
 cat > "$TMP/seed.js" <<'JS'
@@ -79,15 +79,15 @@ nj() { run_with_timeout 60 node "$(np "$TMP/$1")" "${@:2}" 2>&1; }
 seed() { local o; o="$(nj seed.js "$@")"; [ -z "$o" ] || fail "fixture seed for $1" "$o"; }
 now_ms() { run_with_timeout 10 node -e "process.stdout.write(String(Date.now()))"; }
 risk() { nj risk.js "$1" "$2"; }
-compact() { printf '{"session_id":"%s"}' "$1" | run_with_timeout 60 node "$AGENTS_DIR/hooks/post-compact.js" 2>/dev/null; }
-verdict_cli() { run_with_timeout 60 node "$AGENTS_DIR/bin/supervisor-write-audit-verdict" --session-id "$1" --verdict "$2" --verdict-summary "fixture" 2>/dev/null; }
+compact() { printf '{"session_id":"%s"}' "$1" | run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/post-compact.js" 2>/dev/null; }
+verdict_cli() { run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit-verdict" --session-id "$1" --verdict "$2" --verdict-summary "fixture" 2>/dev/null; }
 # run_tests_hook <sid> <exit> — the PostToolUse envelope after tests/run-all.sh.
 run_tests_hook() {
     local contract="RUN_CONTRACT: PASS=3 FAIL=2 SKIP=0 EXECUTED=5"
     [ "$2" = "0" ] && contract="RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5"
     printf '{"tool_name":"Bash","tool_input":{"command":"bash %s/tests/run-all.sh","cwd":"%s"},"tool_response":{"exit_code":%s,"stdout":"%s\\n"},"session_id":"%s"}' \
         "$AGENTS" "$AGENTS" "$2" "$contract" "$1" \
-        | run_with_timeout 60 node "$AGENTS_DIR/hooks/workflow-run-tests.js" >/dev/null 2>&1
+        | run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js" >/dev/null 2>&1
 }
 expect() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$3 got=${2:0:300}"; fi; }
 injected() { case "$1" in *'"additionalContext"'*) printf 'yes' ;; *) printf 'no:%s' "${1:0:120}" ;; esac; }
@@ -150,7 +150,7 @@ case_end
 
 case_begin "set-audit-verdict-stamps-risk" "bin/supervisor-write-audit"
 seed rk-wa-block; T="$(now_ms)"
-run_with_timeout 60 node "$AGENTS_DIR/bin/supervisor-write-audit" --session-id rk-wa-block --set-audit-verdict BLOCK --set-audit-verdict-summary fixture >/dev/null 2>&1
+run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit" --session-id rk-wa-block --set-audit-verdict BLOCK --set-audit-verdict-summary fixture >/dev/null 2>&1
 expect "RS4b: --set-audit-verdict BLOCK stamps source supervisor-verdict" "$(risk rk-wa-block "$T")" "supervisor-verdict"
 case_end
 

@@ -14,13 +14,13 @@ set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # native path: node on Windows needs a drive-letter path, not /c/...
 nrm() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
 
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$_HELPERS_SCRIPT_CHECKOUT_ROOT")"
+RWT="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 TMPROOT="$(mktemp -d)"
 trap 'cd /; rm -rf "$TMPROOT" >/dev/null 2>&1 || true' EXIT
@@ -30,7 +30,7 @@ mkdir -p "$TMPROOT/wf" "$TMPROOT/plans" "$TMPROOT/cfg" "$TMPROOT/home"
 
 WORKFLOW_STATE_DIR="$(nrm "$TMPROOT/wf")"; export WORKFLOW_STATE_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$TMPROOT/plans")"; export WORKFLOW_PLANS_DIR
-AGENTS_CONFIG_DIR="$(nrm "$TMPROOT/cfg")"; export AGENTS_CONFIG_DIR
+export AGENTS_MAIN_ROOT="$(nrm "$TMPROOT/cfg")"
 HOME="$TMPROOT/home"; export HOME
 USERPROFILE="$(nrm "$TMPROOT/home")"; export USERPROFILE
 unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
@@ -39,22 +39,22 @@ unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
 cd "$TMPROOT" || exit 1
 
 # Module paths handed to node via env (keeps the -e scripts free of interpolation).
-M_SIO="$AGENTS_DIR_N/hooks/workflow-state/state-io.js"; export M_SIO
-M_CORE="$AGENTS_DIR_N/hooks/workflow-state/state-io/core.js"; export M_CORE
-M_PROJ="$AGENTS_DIR_N/hooks/workflow-state/state-io/projection.js"; export M_PROJ
-M_EVT="$AGENTS_DIR_N/hooks/workflow-state/state-io/events.js"; export M_EVT
-M_V1V2="$AGENTS_DIR_N/hooks/workflow-state/state-io/migrations/v1-to-v2.js"; export M_V1V2
-M_ES="$AGENTS_DIR_N/hooks/workflow-state/effective-state.js"; export M_ES
-M_WCR="$AGENTS_DIR_N/hooks/workflow-state/effective-state/write-code-resume.js"; export M_WCR
-M_INH="$AGENTS_DIR_N/hooks/workflow-state/inheritance/apply.js"; export M_INH
-M_LIFE="$AGENTS_DIR_N/hooks/workflow-state/lifecycle.js"; export M_LIFE
-M_POLICY="$AGENTS_DIR_N/hooks/lib/stop-exemption-policy.js"; export M_POLICY
-M_GUARD="$AGENTS_DIR_N/hooks/stop-premature-stop-guard.js"; export M_GUARD
+M_SIO="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io.js"; export M_SIO
+M_CORE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/core.js"; export M_CORE
+M_PROJ="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/projection.js"; export M_PROJ
+M_EVT="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/events.js"; export M_EVT
+M_V1V2="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/migrations/v1-to-v2.js"; export M_V1V2
+M_ES="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/effective-state.js"; export M_ES
+M_WCR="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/effective-state/write-code-resume.js"; export M_WCR
+M_INH="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/inheritance/apply.js"; export M_INH
+M_LIFE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/lifecycle.js"; export M_LIFE
+M_POLICY="$SCRIPT_CHECKOUT_ROOT_N/hooks/lib/stop-exemption-policy.js"; export M_POLICY
+M_GUARD="$SCRIPT_CHECKOUT_ROOT_N/hooks/stop-premature-stop-guard.js"; export M_GUARD
 # #2013: the in-flight TTL moved out of lifecycle.js into the policy SSOT.
-M_STEP_POLICY="$AGENTS_DIR_N/hooks/lib/step-in-flight-policy.js"; export M_STEP_POLICY
+M_STEP_POLICY="$SCRIPT_CHECKOUT_ROOT_N/hooks/lib/step-in-flight-policy.js"; export M_STEP_POLICY
 
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
+NEXT_STEP="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
+GATE_HOOK="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
 
 PASS_N=0; FAIL_N=0
 pass() { PASS_N=$((PASS_N + 1)); echo "  PASS: $1"; }

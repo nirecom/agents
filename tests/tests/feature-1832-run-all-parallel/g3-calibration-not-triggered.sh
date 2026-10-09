@@ -17,14 +17,14 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-RUNNER="$AGENTS_DIR/tests/run-all.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
 CAL_REL="bin/calibrate-test-parallelism.sh"
-CAL="$AGENTS_DIR/$CAL_REL"
+CAL="$SCRIPT_CHECKOUT_ROOT/$CAL_REL"
 LIB_REL="bin/lib/run-all-parallelism.sh"
-LIB="$AGENTS_DIR/$LIB_REL"
+LIB="$SCRIPT_CHECKOUT_ROOT/$LIB_REL"
 # shellcheck source=../../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"   # for the case markers; the reporters below replace its own
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"   # for the case markers; the reporters below replace its own
 
 PASS=0
 FAIL=0
@@ -35,7 +35,7 @@ assert_eq() {
     if [ "$want" = "$got" ]; then pass "$name"
     else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
-run_with_timeout() { local s="$1"; shift; bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
+run_with_timeout() { local s="$1"; shift; bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$s" "$@"; }
 trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
 
 TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/ra-nocal-$$")"

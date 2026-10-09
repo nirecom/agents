@@ -53,21 +53,17 @@ if [ "$EEK_KEY_SET" -eq 0 ] && [ "$EEK_ALLOW_DUMP" -eq 0 ]; then
   usage
 fi
 
-if [ -n "${AGENTS_CONFIG_DIR:-}" ] && [ -f "$AGENTS_CONFIG_DIR/hooks/lib/load-env.js" ]; then
-  EEK_LOADENV="$AGENTS_CONFIG_DIR/hooks/lib/load-env.js"
-else
-  _SCRIPT="${BASH_SOURCE[0]}"
+_SCRIPT="${BASH_SOURCE[0]}"
+_target="$(readlink "$_SCRIPT" 2>/dev/null)"
+while [ -n "$_target" ]; do
+  case "$_target" in
+    /*) _SCRIPT="$_target" ;;
+    *)  _SCRIPT="$(cd "$(dirname "$_SCRIPT")" && pwd)/$_target" ;;
+  esac
   _target="$(readlink "$_SCRIPT" 2>/dev/null)"
-  while [ -n "$_target" ]; do
-    case "$_target" in
-      /*) _SCRIPT="$_target" ;;
-      *)  _SCRIPT="$(cd "$(dirname "$_SCRIPT")" && pwd)/$_target" ;;
-    esac
-    _target="$(readlink "$_SCRIPT" 2>/dev/null)"
-  done
-  EEK_SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT")" && pwd -P)"
-  EEK_LOADENV="$EEK_SCRIPT_DIR/../hooks/lib/load-env.js"
-fi
+done
+EEK_SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT")" && pwd -P)"
+EEK_LOADENV="$EEK_SCRIPT_DIR/../hooks/lib/load-env.js"
 
 if ! command -v node >/dev/null 2>&1; then
   printf 'env-effective-kv: node not found in PATH; config resolution unavailable\n' >&2

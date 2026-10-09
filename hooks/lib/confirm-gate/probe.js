@@ -9,8 +9,9 @@
 
 const path = require("path");
 const { execFile, spawnSync } = require("child_process");
-const { normalizeCwd } = require("../path-normalize");
 const { CONFIRM_GATE_DEFAULTS } = require("./step-gate-map");
+
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
 
 const VERDICTS = ["OFF", "ON", "ERROR"];
 
@@ -25,21 +26,16 @@ function posixJoin(dir, ...rest) {
   return path.join(dir, ...rest).replace(/\\/g, "/");
 }
 
-function resolveConfigDir() {
-  const fromEnv = normalizeCwd(process.env.AGENTS_CONFIG_DIR);
-  if (fromEnv) return fromEnv;
-  return path.resolve(__dirname, "..", "..", "..");
-}
-
-function buildProbeInvocation(configDir, key, timeoutMs) {
+// The probe always runs the confirm-off of the checkout this file lives in, and
+// the child inherits the environment unchanged: which .env it reads is the
+// child's own decision.
+function buildProbeInvocation(key, timeoutMs) {
   return {
     file: "bash",
-    args: [posixJoin(configDir, "bin", "confirm-off"), key, CONFIRM_GATE_DEFAULTS[key] || "on"],
+    args: [posixJoin(SCRIPT_CHECKOUT_ROOT, "bin", "confirm-off"), key, CONFIRM_GATE_DEFAULTS[key] || "on"],
     opts: {
-      cwd: configDir,
-      env: Object.assign({}, process.env, {
-        AGENTS_CONFIG_DIR: configDir.replace(/\\/g, "/"),
-      }),
+      cwd: SCRIPT_CHECKOUT_ROOT,
+      env: process.env,
       timeout: timeoutMs,
       windowsHide: true,
       maxBuffer: 1024 * 1024,
@@ -47,11 +43,10 @@ function buildProbeInvocation(configDir, key, timeoutMs) {
   };
 }
 
-function probeConfirmGate(configDir, key, timeoutMs) {
+function probeConfirmGate(key, timeoutMs) {
   return new Promise((resolve) => {
-    if (!configDir) return resolve("ERROR");
     try {
-      const inv = buildProbeInvocation(configDir, key, timeoutMs);
+      const inv = buildProbeInvocation(key, timeoutMs);
       execFile(inv.file, inv.args, inv.opts, (err, stdout) => {
         if (err && err.killed) return resolve("ERROR");
         resolve(verdictOf(stdout));
@@ -62,10 +57,9 @@ function probeConfirmGate(configDir, key, timeoutMs) {
   });
 }
 
-function probeConfirmGateSync(configDir, key, timeoutMs) {
-  if (!configDir) return "ERROR";
+function probeConfirmGateSync(key, timeoutMs) {
   try {
-    const inv = buildProbeInvocation(configDir, key, timeoutMs);
+    const inv = buildProbeInvocation(key, timeoutMs);
     const r = spawnSync(inv.file, inv.args, Object.assign({ encoding: "utf8" }, inv.opts));
     if (r.error || r.signal) return "ERROR";
     return verdictOf(r.stdout);
@@ -77,7 +71,6 @@ function probeConfirmGateSync(configDir, key, timeoutMs) {
 module.exports = {
   verdictOf,
   posixJoin,
-  resolveConfigDir,
   buildProbeInvocation,
   probeConfirmGate,
   probeConfirmGateSync,

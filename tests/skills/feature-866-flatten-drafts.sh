@@ -21,9 +21,9 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-HOOK="$AGENTS_DIR/hooks/show-diff.js"
-ASSEMBLE="$AGENTS_DIR/skills/_shared/assemble-mandatory.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/show-diff.js"
+ASSEMBLE="$SCRIPT_CHECKOUT_ROOT/skills/_shared/assemble-mandatory.sh"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -52,7 +52,7 @@ cleanup() { rm -rf "$ISOLATED_CFG_DIR" "$PLANS_DIR"; }
 trap cleanup EXIT
 
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 
 run_hook() {

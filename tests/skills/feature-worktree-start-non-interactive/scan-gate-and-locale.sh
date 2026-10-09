@@ -90,16 +90,16 @@ fi
 
 # --- B17: disambiguator() is a pure UTC timestamp ---------------------------
 # The suffix must be `date -u +%Y%m%d%H%M%S` and nothing else. resolve-session-id is
-# broken two ways at once — on PATH, and inside a stand-in AGENTS_CONFIG_DIR — so a
+# broken two ways at once — on PATH, and inside a stand-in AGENTS_MAIN_ROOT — so a
 # suffix that still brackets wall-clock UTC proves the session id is not consulted.
 FAKE_CFG="$FIXTURE/fake-cfg"
 mkdir -p "$FAKE_CFG/bin"
-cp "$AGENTS_DIR/bin/scan-outbound.sh" "$FAKE_CFG/bin/scan-outbound.sh"
+cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" "$FAKE_CFG/bin/scan-outbound.sh"
 # scan_clean() also shells out to check-private-repo-name.js (D0's REPO_NAME gate runs
 # through the same scan_clean() as the title/label gates) — without a copy here, D0
 # would fail closed on a missing script rather than exercising the disambiguator this
 # case is actually about.
-cp "$AGENTS_DIR/bin/check-private-repo-name.js" "$FAKE_CFG/bin/check-private-repo-name.js"
+cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/check-private-repo-name.js" "$FAKE_CFG/bin/check-private-repo-name.js"
 cat > "$FAKE_CFG/bin/resolve-session-id" <<'STUB'
 #!/bin/sh
 printf 'resolve-session-id: deliberately broken\n' >&2
@@ -113,13 +113,13 @@ cp "$FAKE_CFG/bin/resolve-session-id" "$B17_STUBDIR/resolve-session-id"
 B17_SID="b17sessionidmarker"
 B17_BEFORE="$(date -u +%Y%m%d%H%M%S)"
 B17_SAVED_PATH="$PATH"
-B17_SAVED_CFG="$AGENTS_CONFIG_DIR"
+B17_SAVED_CFG="$AGENTS_MAIN_ROOT"
 PATH="$B17_STUBDIR:$PATH"
-export AGENTS_CONFIG_DIR="$FAKE_CFG"
+export AGENTS_MAIN_ROOT="$FAKE_CFG"
 export CLAUDE_CODE_SESSION_ID="$B17_SID"
 run_derive B17 --intent "$ABSENT_INTENT" --headless timestamp-probe
 unset CLAUDE_CODE_SESSION_ID
-export AGENTS_CONFIG_DIR="$B17_SAVED_CFG"
+export AGENTS_MAIN_ROOT="$B17_SAVED_CFG"
 PATH="$B17_SAVED_PATH"
 B17_AFTER="$(date -u +%Y%m%d%H%M%S)"
 

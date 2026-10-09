@@ -12,6 +12,7 @@
 # exercised — the writers are invoked as modules. Mitigation: the hook-registration
 # category in bin/check-verification-gate.sh.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="cls"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
@@ -133,11 +134,11 @@ catch (e) { console.log("THREW:" + e.name); }
 console.log("DONE");
 '
     for i in 1 2 3 4 5 6 7 8; do
-        (cd "$AGENTS_DIR" && env \
-            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        (cd "$SCRIPT_CHECKOUT_ROOT" && env \
+            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
             WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
             HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_H5" WNO="$i" \
-            "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$H5_JS" \
+            "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 90 node -e "$H5_JS" \
             >"$TMPROOT/h5-$i.out" 2>&1) &
     done
     wait

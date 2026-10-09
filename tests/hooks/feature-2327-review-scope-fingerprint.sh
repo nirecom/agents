@@ -11,12 +11,12 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-REVIEW_TESTS_EVIDENCE="$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js"
-CLI="$AGENTS_DIR/bin/compute-review-scope-fingerprint.js"
+REVIEW_TESTS_EVIDENCE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-evidence.js"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/compute-review-scope-fingerprint.js"
 EVIDENCE_N="$(np "$REVIEW_TESTS_EVIDENCE")"
 CLI_N="$(np "$CLI")"
 

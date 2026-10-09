@@ -101,7 +101,7 @@ prevent (Risk 3).
 worktree-enforcement mode (`WORKFLOW_PLANS_DIR`, `WORKFLOW_SESSION_ID`,
 `CLAUDE_PROJECT_DIR`, `ENFORCE_WORKTREE`) come from the validated payload and
 the resolved anchors ONLY — the same rule `spawn.js` applies to
-`AGENTS_CONFIG_DIR`. An inherited `WORKFLOW_SESSION_ID` or `CLAUDE_PROJECT_DIR`
+`AGENTS_MAIN_ROOT`. An inherited `WORKFLOW_SESSION_ID` or `CLAUDE_PROJECT_DIR`
 from a stale or poisoned parent env would otherwise out-rank the payload and
 point the gate at another session's step statuses or another checkout's staged
 changes — i.e. redirect the verdict away from the work actually being
@@ -109,9 +109,9 @@ committed; an inherited `ENFORCE_WORKTREE` would let a poisoned parent env
 silently downgrade the gate's own enforcement mode.
 
 The other two have no payload or anchor counterpart, so they are read from the
-`.env` at the ACD anchor via `readEnvFile()`, which is pure and never consults
+`.env` at the script checkout root anchor via `readEnvFile()`, which is pure and never consults
 `process.env`. That file lives in the reviewed main checkout resolved from the
-module's own realpath (`anchor.js` `resolveAcd` drops the env candidate for the
+module's own realpath (`anchor.js` `resolveScriptCheckoutRootAnchor` has no env candidate for the
 same reason), so neither value is forgeable by an inline `VAR=x node bin/...`
 prefix or by a poisoned parent env. Both are decisions a gate depends on:
 

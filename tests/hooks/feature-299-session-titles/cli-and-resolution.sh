@@ -387,7 +387,7 @@ m.writeMarkComplete('$sid', '$other_cwd_node');
 #         cc-session-title set-issue (CI-C1a step). Fails before write-code adds it.
 # ===========================================================================
 run_tnew2() {
-  local skill_md="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
+  local skill_md="$SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
   if [ ! -f "$skill_md" ]; then
     fail "T-new2: skills/clarify-intent/SKILL.md not found at $skill_md"
     return
@@ -407,7 +407,7 @@ run_tnew2() {
 #         cc-session-title set-issue call (within 20 lines of it).
 # ===========================================================================
 run_tnew3() {
-  local skill_md="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
+  local skill_md="$SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
   if [ ! -f "$skill_md" ]; then
     fail "T-new3: skills/clarify-intent/SKILL.md not found"
     return
@@ -436,7 +436,7 @@ run_tnew3() {
 #         ⏳ waiting-indicator lifecycle that couldn't work in the CC hook model.
 # ===========================================================================
 run_tnew4() {
-  local session_title_js="$AGENTS_DIR/hooks/lib/session-title.js"
+  local session_title_js="$SCRIPT_CHECKOUT_ROOT/hooks/lib/session-title.js"
   if [ ! -f "$session_title_js" ]; then
     fail "T-new4: hooks/lib/session-title.js not found"
     return
@@ -456,7 +456,7 @@ run_tnew4() {
 #         writeWaiting/writeClearWaiting functions.
 # ===========================================================================
 run_tnew5() {
-  local cc_bin="$AGENTS_DIR/bin/cc-session-title"
+  local cc_bin="$SCRIPT_CHECKOUT_ROOT/bin/cc-session-title"
   if [ ! -f "$cc_bin" ]; then
     fail "T-new5: bin/cc-session-title not found"
     return
@@ -479,9 +479,9 @@ run_tnew6() {
   local existing_files=""
 
   for hook_file in \
-    "$AGENTS_DIR/hooks/stop-session-title-waiting.js" \
-    "$AGENTS_DIR/hooks/user-prompt-clear-waiting.js" \
-    "$AGENTS_DIR/hooks/pre-askuserquestion-clear-waiting.js"
+    "$SCRIPT_CHECKOUT_ROOT/hooks/stop-session-title-waiting.js" \
+    "$SCRIPT_CHECKOUT_ROOT/hooks/user-prompt-clear-waiting.js" \
+    "$SCRIPT_CHECKOUT_ROOT/hooks/pre-askuserquestion-clear-waiting.js"
   do
     if [ -e "$hook_file" ]; then
       existing_files="$existing_files $(basename "$hook_file")"

@@ -37,7 +37,7 @@ const REQUIRED_BY_PHASE = {
     "root_issue_number",
     "owner_repo",
     "state_file_path",
-    "main_worktree_path",
+    "target_main_root",
   ],
   loop_step: ["root_issue_number", "owner_repo", "state_file_path", "g5_decision"],
   finalize_terminal: [
@@ -89,12 +89,12 @@ function writeLog(payload, ctx, lines) {
   return tryWriteLog(ctx, "finalize-worker.log", `${body}\n`);
 }
 
-// The finalize chain scripts are found from the ACD anchor, never from an
+// The finalize chain scripts are found from the script checkout root anchor, never from an
 // ambient FINALIZE_SCRIPTS_DIR. capability.js derives the same value for the
 // `derived-finalize-scripts-dir` field; recomputing it from the anchor keeps
 // this module's assumption explicit rather than inherited.
 function finalizeScriptsDir(ctx) {
-  return ctx.path.join(ctx.anchors.acd, "skills", "issue-close-finalize", "scripts");
+  return ctx.path.join(ctx.anchors.scriptCheckoutRoot, "skills", "issue-close-finalize", "scripts");
 }
 
 function spawnChild(ctx, opts, log) {
@@ -129,8 +129,8 @@ function buildInitialState(payload, ctx, kv) {
     state.issue_repo = payload.issue_repo;
   }
   state.owner_repo = kv.OWNER_REPO;
-  state.agents_config_dir = ctx.anchors.acd;
-  state.main_worktree_path = ctx.anchors.mainRoot;
+  state.script_checkout_root = ctx.anchors.scriptCheckoutRoot;
+  state.target_main_root = ctx.anchors.targetMainRoot;
   state.merge_commit = typeof kv.MERGE_COMMIT === "string" ? kv.MERGE_COMMIT.trim() : "";
   state.phase = "init_done";
   state.triage_action = typeof kv.TRIAGE_ACTION === "string" ? kv.TRIAGE_ACTION.trim() : "";
@@ -173,7 +173,12 @@ function runInitial(payload, ctx, log, finish) {
     return finish("failed", stateStore.ALREADY_INITIALIZED);
   }
 
-  const args = [String(payload.issue_number), String(payload.root_issue_number)];
+  const args = [
+    "--target-main-root",
+    ctx.anchors.targetMainRoot,
+    String(payload.issue_number),
+    String(payload.root_issue_number),
+  ];
   if (typeof payload.issue_repo === "string" && payload.issue_repo !== "") {
     args.push(payload.issue_repo);
   }
@@ -185,12 +190,9 @@ function runInitial(payload, ctx, log, finish) {
       command: "bash",
       script: "runInitial",
       args,
-      cwd: payload.main_worktree_path,
+      cwd: payload.target_main_root,
       timeoutMs: INITIAL_TIMEOUT_MS,
-      extraEnv: {
-        FINALIZE_SCRIPTS_DIR: finalizeScriptsDir(ctx),
-        MAIN_WORKTREE_PATH: ctx.anchors.mainRoot,
-      },
+      extraEnv: { FINALIZE_SCRIPTS_DIR: finalizeScriptsDir(ctx) },
     },
     log,
   );
@@ -255,7 +257,7 @@ function runLoopStep(payload, ctx, log, finish) {
       command: "node",
       script: "runLoopStep",
       args: [payload.state_file_path, payload.g5_decision, loaded.token],
-      cwd: ctx.anchors.mainRoot,
+      cwd: ctx.anchors.targetMainRoot,
       timeoutMs: LOOP_TIMEOUT_MS,
       extraEnv: {
         FINALIZE_SCRIPTS_DIR: finalizeScriptsDir(ctx),
@@ -294,8 +296,8 @@ function runFinalizeTerminal(payload, ctx, log, finish) {
   const conflict = stateStore.checkToken(payload.state_file_path, loaded.token);
   if (conflict) return finish("failed", conflict);
 
-  // No extraEnv at all: AGENTS_CONFIG_DIR comes from the ACD anchor via
-  // spawn.js, and the script exports its own ISSUE_CLOSE_SKILL around the two
+  // No extraEnv at all: spawn.js sets the child's settings root itself,
+  // and the script exports its own ISSUE_CLOSE_SKILL around the two
   // `gh` calls that need it. See the header note.
   const out = spawnChild(
     ctx,
@@ -309,7 +311,7 @@ function runFinalizeTerminal(payload, ctx, log, finish) {
         payload.outcome_file_path,
         loaded.token,
       ],
-      cwd: ctx.anchors.mainRoot,
+      cwd: ctx.anchors.targetMainRoot,
       timeoutMs: TERMINAL_TIMEOUT_MS,
     },
     log,
@@ -333,11 +335,11 @@ function run(payload, ctx) {
   });
 
   // Echo-only field; capability.js already refused anything but the resolved
-  // ACD. Re-checked so this module's assumption is explicit rather than
+  // script checkout root. Re-checked so this module's assumption is explicit rather than
   // inherited, exactly as the sibling close-family workers do.
-  if (payload.agents_config_dir !== undefined && payload.agents_config_dir !== null) {
-    if (!samePath(payload.agents_config_dir, ctx.anchors.acd)) {
-      return finish("failed", "agents_config_dir does not match the resolved agents config dir");
+  if (payload.script_checkout_root !== undefined && payload.script_checkout_root !== null) {
+    if (!samePath(payload.script_checkout_root, ctx.anchors.scriptCheckoutRoot)) {
+      return finish("failed", "script_checkout_root does not match the resolved script checkout root");
     }
   }
 

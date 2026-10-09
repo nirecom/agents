@@ -15,17 +15,17 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
     _TMPCONV() { cygpath -m "$1"; }
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
     _TMPCONV() { printf '%s' "$1"; }
 fi
 
-CLI="$AGENTS_DIR/bin/supervisor-write-audit"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -251,7 +251,7 @@ if (typeof w.writeAuditState === 'function') {
   w.writeAuditState('$sid', { audit_retry_count: 1, audit_phase: 'pending' });
 } else {
   const fs = require('fs'); const path = require('path');
-  const { createEmptyState } = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
+  const { createEmptyState } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js');
   const ctrlDir = path.join(process.env.WORKFLOW_STATE_DIR, '$sid' + '.control');
   require('fs').mkdirSync(ctrlDir, {recursive: true});
   const fp = path.join(ctrlDir, 'supervisor-state.json');

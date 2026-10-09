@@ -2,32 +2,16 @@
 # tests/bin/fix-issue-513-clarify-commit-scope.sh
 # Tests: bin/github-issues/clarify-commit-scope.sh
 # Tags: clarify-intent, github, issues, wip, board-card, scope:issue-specific
-# L3 gap (what this test does NOT catch):
-# - Whether real gh API calls succeed or fail in the live environment.
-# - Whether real wip-set-single.sh session-id resolution works outside test mocks.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
-#
-# Contract (issue #513 — GH reconcile extraction from clarify-intent Completion):
-#   clarify-commit-scope.sh --session-id <sid> --plans-dir <dir> --issues <csv>
-#                           [--non-github] [--repo <slug>]
-#   - Requires AGENTS_CONFIG_DIR; plans-dir hard-validated against the base
-#     ($WORKFLOW_PLANS_DIR or $HOME/.workflow-plans) — outside base → exit 2.
-#   - --non-github: skip ALL gh calls, exit 0.
-#   - Empty --issues (Path C): gh issue create --label "intent:clarified",
-#     stdout CREATED:<N>; gh failure → stderr warning + exit 1.
-#   - Non-empty --issues (Path B): CLOSED-entry pre-scan via issue-state-check.sh
-#     per N — first CLOSED → stdout CLOSED:<N> + exit 2 immediately (no side
-#     effects). Then per-N: gh issue edit <N> --add-label "intent:clarified" →
-#     wip-set-single.sh → ensure-board-card.sh. WIP exit 2 → stdout RC2 + exit 2.
-#
-# Pre-implementation RED: each case FAILs with a clear "not yet present"
-# message while the target script is missing. They turn GREEN after /write-code.
+# L3 gap (what this test does NOT catch): whether real gh API calls and real
+# wip-set-single.sh session-id resolution work outside the test mocks.
+# Mitigation: WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# Contract (issue #513): the header of bin/github-issues/clarify-commit-scope.sh
+# owns it — Path B (non-empty --issues), Path C (empty), --non-github, exit codes.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CCS="$AGENTS_DIR/bin/github-issues/clarify-commit-scope.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CCS="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/clarify-commit-scope.sh"
 
 PASS=0
 FAIL=0
@@ -48,14 +32,13 @@ TMP=""
 
 # Mocks write every invocation to a single ordered log ($MOCK_LOG_DIR/calls.log)
 # so cross-tool call ORDER (label → wip → board) is observable, plus their own
-# per-tool logs for counting. AGENTS_CONFIG_DIR points at a fake root that
-# carries the same mocks under bin/github-issues/, so both absolute-path
-# ("$AGENTS_CONFIG_DIR/bin/github-issues/...") and PATH-based invocation are
-# intercepted.
+# per-tool logs for counting. The script reaches its helpers through PATH, so
+# the mocks in $TMP/mock-bin intercept them. AGENTS_MAIN_ROOT points at a fake
+# root holding empty allow/block lists for the outbound scanner.
 setup_mock() {
     TMP="$(mktemp -d)"
-    FAKE_ACD="$TMP/agents-root"
-    mkdir -p "$TMP/mock-bin" "$TMP/plans" "$FAKE_ACD/bin/github-issues"
+    FAKE_AGENTS_MAIN_ROOT="$TMP/agents-main-root"
+    mkdir -p "$TMP/mock-bin" "$TMP/plans" "$FAKE_AGENTS_MAIN_ROOT/bin/github-issues"
     export MOCK_LOG_DIR="$TMP"
 
     # gh mock — records; handles issue create / issue edit --add-label /
@@ -135,11 +118,11 @@ exit "${MOCK_BOARD_RC:-0}"
 MOCKBOARD
     chmod +x "$TMP/mock-bin/ensure-board-card.sh"
 
-    # Mirror the helper mocks into the fake AGENTS_CONFIG_DIR layout.
+    # Mirror the helper mocks into the fake agents main root layout.
     cp "$TMP/mock-bin/issue-state-check.sh" \
        "$TMP/mock-bin/wip-set-single.sh" \
        "$TMP/mock-bin/ensure-board-card.sh" \
-       "$FAKE_ACD/bin/github-issues/"
+       "$FAKE_AGENTS_MAIN_ROOT/bin/github-issues/"
 
     # Path C reads <plans-dir>/<sid>-intent.md for the issue title/body. Every
     # case uses --session-id "test-sid", so stage a minimal valid intent.md with
@@ -155,17 +138,17 @@ Placeholder background text.
 Placeholder scope text.
 INTENTMD
 
-    # gh_outbound_guard resolves the scanner from $AGENTS_CONFIG_DIR/bin and
-    # fails CLOSED when it is missing. Provide the real scanner plus empty
-    # allow/block lists so the placeholder content scans clean (rc=0).
-    mkdir -p "$FAKE_ACD/bin"
-    cp "$AGENTS_DIR/bin/scan-outbound.sh" "$FAKE_ACD/bin/scan-outbound.sh"
-    chmod +x "$FAKE_ACD/bin/scan-outbound.sh"
-    : > "$FAKE_ACD/.private-info-allowlist"
-    : > "$FAKE_ACD/.private-info-blocklist"
+    # gh_outbound_guard runs the scanner beside its own library; the scanner
+    # anchors its allow/block lists at AGENTS_MAIN_ROOT. Provide empty lists
+    # there so the placeholder content scans clean (rc=0).
+    mkdir -p "$FAKE_AGENTS_MAIN_ROOT/bin"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" "$FAKE_AGENTS_MAIN_ROOT/bin/scan-outbound.sh"
+    chmod +x "$FAKE_AGENTS_MAIN_ROOT/bin/scan-outbound.sh"
+    : > "$FAKE_AGENTS_MAIN_ROOT/.private-info-allowlist"
+    : > "$FAKE_AGENTS_MAIN_ROOT/.private-info-blocklist"
 
     export PATH="$TMP/mock-bin:$PATH"
-    export AGENTS_CONFIG_DIR="$FAKE_ACD"
+    export AGENTS_MAIN_ROOT="$FAKE_AGENTS_MAIN_ROOT"
     # The temp plans dir IS the expected base so the prefix check passes.
     export WORKFLOW_PLANS_DIR="$TMP/plans"
 }
@@ -178,7 +161,6 @@ teardown_mock() {
     unset GH_MOCK_STATE GH_MOCK_STATE_101 GH_MOCK_STATE_102 \
           MOCK_WIP_RC MOCK_BOARD_RC MOCK_GH_CREATE_RC MOCK_LOG_DIR \
           WORKFLOW_PLANS_DIR 2>/dev/null || true
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
 
@@ -390,38 +372,37 @@ else
     fail "CCS-8: clarify-commit-scope.sh not yet present (expected RED before /write-code)"
 fi
 
-# CCS-9: missing AGENTS_CONFIG_DIR → stderr error + non-zero exit
+# CCS-9: the script itself reads no root variable — with AGENTS_MAIN_ROOT unset
+# Path B still completes (exit 0) and claims WIP for the issue.
 if [ -f "$CCS" ]; then
     setup_mock
-    STDERR=$(env -u AGENTS_CONFIG_DIR run_with_timeout 15 bash "$CCS" \
+    export GH_MOCK_STATE_101="OPEN"
+    # run_with_timeout is a shell function: unset in the $( ) subshell, not via `env -u`.
+    STDERR=$(unset AGENTS_MAIN_ROOT; run_with_timeout 15 bash "$CCS" \
         --session-id "test-sid" \
         --plans-dir "$TMP/plans" \
         --issues "101" 2>&1 >/dev/null)
     RC=$?
-    if [ "$RC" -ne 0 ] && [ -n "$STDERR" ]; then
-        pass "CCS-9: missing AGENTS_CONFIG_DIR → stderr error, non-zero exit"
+    if [ "$RC" -eq 0 ] && grep -q "wip-set-single .*101" "$TMP/wip-calls.log" 2>/dev/null; then
+        pass "CCS-9: AGENTS_MAIN_ROOT unset → Path B completes (exit 0, wip claimed)"
     else
-        fail "CCS-9: expected non-zero exit with stderr; got rc=$RC stderr='$STDERR'"
+        fail "CCS-9: expected exit 0 with wip claimed for 101; got rc=$RC stderr='$STDERR'"
     fi
     teardown_mock
 else
     fail "CCS-9: clarify-commit-scope.sh not yet present (expected RED before /write-code)"
 fi
 
-# ============================================================================
-# Bash-version guard (issue: bash 3.2 `declare -A` / empty-array nounset)
-# The guard rejects bash major < 4 up front, because this script depends on
-# associative arrays (`declare -A REPO_OF`) and bash-4 array semantics.
+# Bash-version guard (issue: bash 3.2 `declare -A` / empty-array nounset).
+# The guard rejects bash major < 4 up front (the script needs `declare -A`).
 # AGENTS_BASH_MAJOR_OVERRIDE lets the test force the detected major version.
-#
-# CRITICAL exit-code contract: the guard MUST exit 1, NOT 2. run-completion.sh
-# treats exit 2 from this script as a CLOSED-entry success signal, so a version
-# failure that exited 2 would be silently swallowed as "issue already closed".
-# ============================================================================
+# The guard MUST exit 1, NOT 2: run-completion.sh treats exit 2 from this
+# script as a CLOSED-entry success signal, so a version failure exiting 2
+# would be silently swallowed as "issue already closed".
 
 # CCS-GUARD-1: bash major < 4 → version guard fires: exit 1 + "requires bash"
-# stderr. AGENTS_CONFIG_DIR is set (via setup_mock) so exit 1 can only originate
-# from the guard, not from the AGENTS_CONFIG_DIR :? check.
+# stderr. With --issues "101" on an OPEN issue the mocked run otherwise exits 0,
+# so exit 1 can only originate from the guard.
 # TEST_EXPECTED_FAIL_UNTIL_GUARD_IMPLEMENTED (guard not yet in source)
 if [ -f "$CCS" ]; then
     setup_mock

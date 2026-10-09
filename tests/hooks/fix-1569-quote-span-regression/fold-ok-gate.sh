@@ -4,8 +4,8 @@
 #
 # STATUS: FOLDOK-src RED; the FOLDOK-verdict / FOLDOK-fold rows are GREEN today
 # and must stay green. Sourced by tests/hooks/fix-1569-quote-span-regression.sh —
-# uses its pass/fail, run_with_timeout, ACD, DISPATCH, MAIN_WT, AGENTS_DIR and
-# _AGENTS_DIR_NODE.
+# uses its pass/fail, run_with_timeout, script checkout root, DISPATCH, MAIN_WT, SCRIPT_CHECKOUT_ROOT and
+# _SCRIPT_CHECKOUT_ROOT_NODE.
 #
 # Defect: worker-script.js reads `foldNewlinesInSpans(argTail, ["dq"]).out` and
 # never looks at the accompanying `.ok`. The fold's contract is that `.ok:false`
@@ -27,7 +27,7 @@ run_fold_ok_gate_cases() {
 
 # ── Behaviour: a fold-failing arg tail must reject ──────────────────────────
 fold_probe() {
-    run_with_timeout 30 env "AGENTS_CONFIG_DIR=$ACD" node -e '
+    run_with_timeout 30 env "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" node -e '
       const path = require("path");
       const root = process.argv[1];
       const op = process.argv[2], tail = process.argv[3];
@@ -48,7 +48,7 @@ fold_probe() {
           console.log("ERROR: unknown op " + op);
         }
       } catch (e) { console.log("ERROR: threw " + e.message); }
-    ' "$_AGENTS_DIR_NODE" "$1" "$2" "$MAIN_WT" 2>&1
+    ' "$_SCRIPT_CHECKOUT_ROOT_NODE" "$1" "$2" "$MAIN_WT" 2>&1
 }
 
 assert_fold() {
@@ -78,7 +78,7 @@ assert_fold "FOLDOK-verdict balanced twin accepted"    allowed "bash \"$DISPATCH
 
 # ── Structure: the call site must own its fail-closed decision ──────────────
 # RED today: line 97 is `const scanTail = foldNewlinesInSpans(argTail, ["dq"]).out;`.
-WORKER_SRC_FOLDOK="$AGENTS_DIR/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
+WORKER_SRC_FOLDOK="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
 
 assert_foldok_src() {
     local label="$1" pattern="$2" want="$3" got=false

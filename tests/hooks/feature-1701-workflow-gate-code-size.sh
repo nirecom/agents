@@ -9,14 +9,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-HOOK_JS="${_AGENTS_DIR_NODE}/hooks/workflow-gate.js"
-GATE_MODULE="${AGENTS_DIR}/hooks/workflow-gate/code-size-gate.js"
+HOOK_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/workflow-gate.js"
+GATE_MODULE="${SCRIPT_CHECKOUT_ROOT}/hooks/workflow-gate/code-size-gate.js"
 
 # Pre-implementation skip gate: Gate 2 lives in hooks/workflow-gate/code-size-gate.js — until that module exists there is nothing to assert, so exit 77 (run-all.sh treats it as SKIP).
 if [ ! -f "$GATE_MODULE" ]; then
@@ -86,7 +86,7 @@ write_complete_state() {
     node -e "
 const fs = require('fs');
 const path = require('path');
-const { VALID_STEPS } = require('$_AGENTS_DIR_NODE/hooks/workflow-state.js');
+const { VALID_STEPS } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state.js');
 const steps = {};
 const now = new Date().toISOString();
 for (const s of VALID_STEPS) steps[s] = { status: 'complete', updated_at: now };
@@ -100,21 +100,21 @@ write_workflow_off_marker() {
     printf '{"set_at":"2026-01-01T00:00:00Z"}\n' > "$wfdir/$sid.workflow-off"
 }
 
-# Config-dir fixtures. AGENTS_CONFIG_DIR drives two independent decisions (CPR-SC):
-#   1. isAgentsSessionRepo() — a NON-git config dir fails closed (true), keeping Gate 2 armed for the temp repo under test.
-#   2. resolveAgentsConfigDir() — env candidate adopted only with BOTH markers (hooks/enforce-worktree.js + bin/); a marker-less dir falls through to the module anchor (the real agents checkout).
+# Agents main root fixtures. AGENTS_MAIN_ROOT drives two independent decisions (CPR-SC):
+#   1. isAgentsSessionRepo() — a NON-git agents main root fails closed (true), keeping Gate 2 armed for the temp repo under test.
+#   2. resolveScriptCheckoutRoot() — env candidate adopted only with BOTH markers (hooks/enforce-worktree.js + bin/); a marker-less dir falls through to the module anchor (the real agents checkout).
 # ---------------------------------------------------------------------------
 
 # Plain dir: no markers -> real bin/review-code-size is used, Gate 2 armed.
-make_plain_config_dir() {
+make_plain_cfg_root() {
     local d="$TMPDIR_BASE/cfg-$1"
     mkdir -p "$d"
     to_node_path "$d"
 }
 
-# Marker dir: adopted by resolveAgentsConfigDir(); bin/review-code-size is
+# Marker dir: adopted by resolveScriptCheckoutRoot(); bin/review-code-size is
 # whatever this fixture puts there (or nothing at all).
-make_marker_config_dir() {
+make_marker_cfg_root() {
     local d="$TMPDIR_BASE/cfg-$1"
     mkdir -p "$d/hooks" "$d/bin"
     echo "// stub marker" > "$d/hooks/enforce-worktree.js"
@@ -123,7 +123,7 @@ make_marker_config_dir() {
 
 # A separate git repo used as the "agents session repo" so that the repo being
 # committed to is recognised as a DIFFERENT repo (cross-repo bypass).
-make_foreign_git_config_dir() {
+make_foreign_git_cfg_root() {
     local d="$TMPDIR_BASE/cfg-$1"
     mkdir -p "$d"
     git -C "$d" init -q -b main
@@ -173,7 +173,7 @@ run_hook() {
     HOOK_RC=0
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 60 \
         env -u CODE_FILE_EXTENSIONS \
-        "AGENTS_CONFIG_DIR=$cfg" \
+        "AGENTS_MAIN_ROOT=$cfg" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "$@" \
         node "$HOOK_JS" 2>&1)" || HOOK_RC=$?

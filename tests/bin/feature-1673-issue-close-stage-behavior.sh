@@ -5,7 +5,7 @@
 #
 # Issue #1673 — the old worker ran `eval "$(bash run-stage-chain.sh ...)"`, so issue-derived SUMMARY
 # text could become command execution. The plain worker must parse KEY=VALUE without eval.
-# Group A drives the REAL run-stage-chain.sh (fixture AGENTS_CONFIG_DIR + PATH `gh` stub); Groups B/C
+# Group A drives the REAL run-stage-chain.sh (copied into a fixture checkout + PATH `gh` stub); Groups B/C
 # drive the real dispatcher with spawn-stub.js canned. TL3 gap: real `gh` comment-URL shape and a real
 # linked-worktree dispatch (tests/bin/TL3-issue-close-stage-dispatch.sh); mitigated at
 # WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
@@ -17,11 +17,11 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_ICS1673_BEH_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
-CHAIN_SH="$AGENTS_DIR/skills/issue-close-stage/scripts/run-stage-chain.sh"
-WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/issue-close-stage.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+CHAIN_SH="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-stage/scripts/run-stage-chain.sh"
+WORKER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-close-stage.js"
 
 PASS=0
 FAIL=0
@@ -62,13 +62,18 @@ trap 'rm -rf "$TMPD"' EXIT
 # ===========================================================================
 # Group A — the real run-stage-chain.sh KV contract (green today)
 # ===========================================================================
-bash "$AGENTS_DIR/tests/feature-1673-issue-close-stage-lib/make-chain-fixture.sh" "$TMPD"
-FAKE_ACD="$TMPD/fakeacd"
+bash "$SCRIPT_CHECKOUT_ROOT/tests/feature-1673-issue-close-stage-lib/make-chain-fixture.sh" "$TMPD"
+FAKE_SCRIPT_CHECKOUT_ROOT="$TMPD/fake-checkout"
+# The chain resolves its siblings from its own location, so the real script is
+# copied into the fixture checkout and launched from there.
+FAKE_CHAIN_SH="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-close-stage/scripts/run-stage-chain.sh"
+mkdir -p "$(dirname "$FAKE_CHAIN_SH")"
+[ -f "$CHAIN_SH" ] && cp "$CHAIN_SH" "$FAKE_CHAIN_SH"
 
 # chain_out [VAR=value ...] — extra assignments steer the fixture scripts.
 chain_out() {
-    env PATH="$TMPD/ghbin:$PATH" AGENTS_CONFIG_DIR="$FAKE_ACD" "$@" \
-        bash "$CHAIN_SH" 12 example-owner/example-repo 2>/dev/null
+    env PATH="$TMPD/ghbin:$PATH" "$@" \
+        bash "$FAKE_CHAIN_SH" 12 example-owner/example-repo 2>/dev/null
 }
 kv_of() { printf '%s\n' "$2" | sed -n "s/^$1=//p" | head -1; }
 
@@ -146,7 +151,7 @@ dispatch_stage() {
     DRC=0
     : > "$CALLLOG"
     DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
-        "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
+        "WD_SPAWN_MODULE=$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" \

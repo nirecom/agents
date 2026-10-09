@@ -8,11 +8,11 @@
 # docs/history.md and CHANGELOG.md in separate commits from main worktree.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 PASS=0
@@ -56,7 +56,7 @@ run_with_timeout() {
     fi
 }
 
-CLI="$AGENTS_DIR/bin/compose-doc-append-entry"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/compose-doc-append-entry"
 if [ ! -f "$CLI" ]; then
     echo "SKIP: bin/compose-doc-append-entry not found (RED phase — not yet implemented)"
     echo ""
@@ -226,7 +226,7 @@ fi
 
 echo "--- F17b: buildNotesBody template ---"
 _f17b_result="$(run_with_timeout 15 node -e "
-    const m = require('$_AGENTS_DIR_NODE/hooks/lib/worktree-notes.js');
+    const m = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/worktree-notes.js');
     const body = typeof m.buildNotesBody === 'function' ? m.buildNotesBody() : '';
     process.stdout.write(body);
 " 2>/dev/null)"

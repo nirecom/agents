@@ -5,7 +5,7 @@
 # owns PASS/FAIL/ROWS and assert_eq.
 
 SWEEP_JS_REL="tests/install/prompt-bash-node-calling-convention/exec-position-sweep.js"
-SWEEP_JS="$AGENTS_DIR/$SWEEP_JS_REL"
+SWEEP_JS="$SCRIPT_CHECKOUT_ROOT/$SWEEP_JS_REL"
 FX_ROOT=""
 FX_MAIN=""
 FX_ORPHAN=""
@@ -23,7 +23,7 @@ ALLOW_LIB_REL="hooks/lib/allow-command-list.js"
 
 fx_real_lib() { # <fixture-root> -- re-export, not a copy: the real module is root-parameterised
     local real
-    real="$(node_path "$AGENTS_DIR/$ALLOW_LIB_REL")"
+    real="$(node_path "$SCRIPT_CHECKOUT_ROOT/$ALLOW_LIB_REL")"
     printf '%s\n' "// Test-owned re-export of the REAL allow-list reader, asked about the fixture root." \
         "module.exports = require('$real');" > "$1/$ALLOW_LIB_REL"
 }
@@ -34,7 +34,7 @@ fx_real_lib() { # <fixture-root> -- re-export, not a copy: the real module is ro
 # real module being made wrong.
 fx_stub_lib() { # <fixture-root>
     local real
-    real="$(node_path "$AGENTS_DIR/$ALLOW_LIB_REL")"
+    real="$(node_path "$SCRIPT_CHECKOUT_ROOT/$ALLOW_LIB_REL")"
     printf '%s\n' \
         '"use strict";' \
         '// TEST-OWNED STUB. The real reader, except fx-orphan resolves to no interpreter.' \
@@ -72,13 +72,13 @@ fx_ssot() { # <fixture-root> <entry>...
 # attributable to exactly one defect shape.
 fx_deviant_assets() { # <fixture-root>
     printf '%s\n' '# fx deviant no-interpreter' '' \
-        'Run `"$AGENTS_CONFIG_DIR/bin/fx-bash-tool"` and read what it prints.' \
+        'Run `"$AGENTS_MAIN_ROOT/bin/fx-bash-tool"` and read what it prints.' \
         > "$1/rules/fx-deviant-no-interpreter.md"
     printf '%s\n' '# fx deviant unexpected-prefix' '' \
-        'Run `sh "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"` and read what it prints.' \
+        'Run `sh "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"` and read what it prints.' \
         > "$1/rules/fx-deviant-unexpected-prefix.md"
     printf '%s\n' '# fx deviant wrong-interpreter' '' \
-        'Run `node "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"` and read what it prints.' \
+        'Run `node "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"` and read what it prints.' \
         > "$1/rules/fx-deviant-wrong-interpreter.md"
 }
 
@@ -87,37 +87,37 @@ fx_deviant_assets() { # <fixture-root>
 # opened -- a scan that skipped the file would lose the sentinel too.
 fx_exclusion_assets() { # <fixture-root>
     printf '%s\n' '# fx exclusion prose' '' \
-        'The tool lives at $AGENTS_CONFIG_DIR/bin/fx-bash-tool, where the installer puts it.' \
-        'Even a sentence spelling bash $AGENTS_CONFIG_DIR/bin/fx-bash-tool is prose, not a command line.' \
-        '' 'Sentinel: `bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' \
+        'The tool lives at $AGENTS_MAIN_ROOT/bin/fx-bash-tool, where the installer puts it.' \
+        'Even a sentence spelling bash $AGENTS_MAIN_ROOT/bin/fx-bash-tool is prose, not a command line.' \
+        '' 'Sentinel: `bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"`.' \
         > "$1/rules/fx-exclusion-prose.md"
     printf '%s\n' '# fx exclusion argument position' '' \
-        'Read it with `cat "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' \
-        'Stage it with `git add "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' \
-        'Copy it with `cp "$AGENTS_CONFIG_DIR/bin/fx-bash-tool" /tmp/fx-copy`.' \
-        '' 'Sentinel: `bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' \
+        'Read it with `cat "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"`.' \
+        'Stage it with `git add "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"`.' \
+        'Copy it with `cp "$AGENTS_MAIN_ROOT/bin/fx-bash-tool" /tmp/fx-copy`.' \
+        '' 'Sentinel: `bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"`.' \
         > "$1/rules/fx-exclusion-argument.md"
     printf '%s\n' '# fx exclusion allow-rule strings' '' \
-        'The argument-less rule is `Bash(bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool")`.' \
-        'Its argument-bearing twin is `Bash(node "$AGENTS_CONFIG_DIR/bin/fx-node-tool.js" *)`.' \
-        'The interpreter-free spelling is `Bash("$AGENTS_CONFIG_DIR/bin/fx-bash-tool")`.' \
-        '' 'Sentinel: `bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' \
+        'The argument-less rule is `Bash(bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool")`.' \
+        'Its argument-bearing twin is `Bash(node "$AGENTS_MAIN_ROOT/bin/fx-node-tool.js" *)`.' \
+        'The interpreter-free spelling is `Bash("$AGENTS_MAIN_ROOT/bin/fx-bash-tool")`.' \
+        '' 'Sentinel: `bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"`.' \
         > "$1/rules/fx-exclusion-allow-rule.md"
 }
 
 # THE FOURTH EXCLUSION CLASS -- a documentary path CITATION (label, colon, a backtick span
 # holding the bare entry path alone), real instance at skills/issue-setup/SKILL.md:38, plus its
-# boundary companion, which keeps the $AGENTS_CONFIG_DIR/ prefix and so stays deviant. Its own
+# boundary companion, which keeps the $AGENTS_MAIN_ROOT/ prefix and so stays deviant. Its own
 # tree: the pair's occurrences would move FX_MAIN's offender roster. Rationale: T52 rows in
 # exec-position-sweep.sh.
 fx_doc_assets() { # <fixture-root>
     printf '%s\n' '# fx documentary label mention' '' \
         'Backend script path: `bin/fx-bash-tool`.' \
-        '' 'Sentinel: `bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' \
+        '' 'Sentinel: `bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"`.' \
         > "$1/rules/fx-doc-label-mention.md"
     printf '%s\n' '# fx bare path as an instruction' '' \
-        'Run: `$AGENTS_CONFIG_DIR/bin/fx-bash-tool`' \
-        '' 'Sentinel: `bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' \
+        'Run: `$AGENTS_MAIN_ROOT/bin/fx-bash-tool`' \
+        '' 'Sentinel: `bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"`.' \
         > "$1/rules/fx-doc-run-instruction.md"
 }
 
@@ -125,22 +125,22 @@ fx_doc_assets() { # <fixture-root>
 # a row red instead of quietly shrinking the corpus.
 fx_ok_assets() { # <fixture-root>
     printf '%s\n' '# fx ok control' '' \
-        'Run `bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"` as a single standalone command.' '' \
-        'Run `node "$AGENTS_CONFIG_DIR/bin/fx-node-tool.js"` the same way.' \
+        'Run `bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"` as a single standalone command.' '' \
+        'Run `node "$AGENTS_MAIN_ROOT/bin/fx-node-tool.js"` the same way.' \
         > "$1/rules/fx-ok-control.md"
     printf '%s\n' '# fx edge' '' \
-        'Env prefix: `CLAUDE_CODE_SESSION_ID=abc bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' \
-        'Chained: `cd /tmp && bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"`.' '' \
+        'Env prefix: `CLAUDE_CODE_SESSION_ID=abc bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"`.' \
+        'Chained: `cd /tmp && bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"`.' '' \
         '```bash' \
-        'bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"' \
-        'node "$AGENTS_CONFIG_DIR/bin/fx-node-tool.js"' \
+        'bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"' \
+        'node "$AGENTS_MAIN_ROOT/bin/fx-node-tool.js"' \
         '```' \
         > "$1/agents/fx-edge.md"
     printf '%s\n' '# fx shared' '' \
-        'Run `bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"` here too.' \
+        'Run `bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"` here too.' \
         > "$1/skills/_shared/fx-shared.md"
     printf '%s\n' '# fx skill' '' \
-        'Run `node "$AGENTS_CONFIG_DIR/bin/fx-bash-tool-extra"` -- the longer entry, not its prefix.' \
+        'Run `node "$AGENTS_MAIN_ROOT/bin/fx-bash-tool-extra"` -- the longer entry, not its prefix.' \
         > "$1/skills/fx-skill/SKILL.md"
 }
 
@@ -257,10 +257,10 @@ fx_setup() {
     fx_scaffold "$FX_ORPHAN" stub
     fx_ssot "$FX_ORPHAN" 'bin/fx-bash-tool' 'bin/fx-orphan'
     printf '%s\n' '# fx unresolvable' '' \
-        'Run `bash "$AGENTS_CONFIG_DIR/bin/fx-orphan"` as a single standalone command.' \
+        'Run `bash "$AGENTS_MAIN_ROOT/bin/fx-orphan"` as a single standalone command.' \
         > "$FX_ORPHAN/rules/fx-unresolvable.md"
     printf '%s\n' '# fx orphan control' '' \
-        'Run `bash "$AGENTS_CONFIG_DIR/bin/fx-bash-tool"` as a single standalone command.' \
+        'Run `bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"` as a single standalone command.' \
         > "$FX_ORPHAN/rules/fx-orphan-control.md"
 
     fx_scaffold "$FX_DOC" real
@@ -278,7 +278,7 @@ fx_setup() {
     fx_run orphan "$FX_ORPHAN"
     fx_run drop "$FX_DROP"
     fx_run doc "$FX_DOC"
-    fx_run real "$AGENTS_DIR"
+    fx_run real "$SCRIPT_CHECKOUT_ROOT"
     fx_run noargv NOARG
 
     fx_failclosed_setup

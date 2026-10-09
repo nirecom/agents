@@ -5,7 +5,7 @@
   --IsOff exit codes: 0 (OFF) | 1 (explicit ON) | 2 (unset, no default) |
   3 (unrecognized value) | 4 (internal failure).
   Usage error (missing Name): exit 64.
-  Resolution: $env:AGENTS_CONFIG_DIR first, then $PSScriptRoot/../hooks/lib/load-env.js.
+  Resolution: $PSScriptRoot/../hooks/lib/load-env.js (this script's own checkout).
 #>
 param(
   [switch]$IsOff,
@@ -19,20 +19,13 @@ if (-not $Name) {
   exit 64
 }
 
-$loadEnv = $null
-if ($env:AGENTS_CONFIG_DIR) {
-  $candidate = Join-Path $env:AGENTS_CONFIG_DIR 'hooks/lib/load-env.js'
-  if (Test-Path $candidate) { $loadEnv = ($candidate -replace '\\', '/') }
-}
-if (-not $loadEnv) {
-  $scriptPath = $MyInvocation.MyCommand.Path
-  $item = Get-Item $scriptPath -ErrorAction SilentlyContinue
-  if ($item -and $item.Target) { $scriptPath = $item.Target }
-  # Not $repoRoot: PowerShell variable names are case-insensitive, so that name
-  # would clobber the -RepoRoot parameter this script still has to forward.
-  $agentsDir = Split-Path (Split-Path $scriptPath -Parent) -Parent
-  $loadEnv = ((Join-Path $agentsDir 'hooks/lib/load-env.js') -replace '\\', '/')
-}
+$scriptPath = $MyInvocation.MyCommand.Path
+$item = Get-Item $scriptPath -ErrorAction SilentlyContinue
+if ($item -and $item.Target) { $scriptPath = $item.Target }
+# Not $repoRoot: PowerShell variable names are case-insensitive, so that name
+# would clobber the -RepoRoot parameter this script still has to forward.
+$agentsDir = Split-Path (Split-Path $scriptPath -Parent) -Parent
+$loadEnv = ((Join-Path $agentsDir 'hooks/lib/load-env.js') -replace '\\', '/')
 
 $kindFile = [System.IO.Path]::GetTempFileName()
 try {

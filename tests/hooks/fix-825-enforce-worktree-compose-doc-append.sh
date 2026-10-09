@@ -4,8 +4,8 @@
 # Tags: worktree, enforce, hook, compose-doc-append, fix-825, scope:issue-specific
 # Tests for isAllowedComposeDocAppend() — #825
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$AGENTS_DIR")"; else _A="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _A="$SCRIPT_CHECKOUT_ROOT"; fi
 GUARD_JS="${_A}/hooks/enforce-worktree.js"
 ALLOWS_JS="${_A}/hooks/enforce-worktree/main-worktree-allows.js"
 PASS=0; FAIL=0
@@ -18,17 +18,17 @@ run_with_timeout() {
 TMPBASE="$(mktemp -d 2>/dev/null || mktemp -d -t mctest)"
 trap 'rm -rf "$TMPBASE" 2>/dev/null' EXIT
 
-# FAKE_ACD: emulate AGENTS_CONFIG_DIR with the bin/compose-doc-append-entry file present.
-FAKE_ACD="$TMPBASE/fake-agents"
-mkdir -p "$FAKE_ACD/bin"
-touch "$FAKE_ACD/bin/compose-doc-append-entry"
-# Both trust markers (hooks/lib/agents-config-dir.js: hooks/enforce-worktree.js
+# FAKE_SCRIPT_CHECKOUT_ROOT: emulate AGENTS_MAIN_ROOT with the bin/compose-doc-append-entry file present.
+FAKE_SCRIPT_CHECKOUT_ROOT="$TMPBASE/fake-agents"
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin"
+touch "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/compose-doc-append-entry"
+# Both trust markers (hooks/lib/script-checkout-root.js: hooks/enforce-worktree.js
 # AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real one
 # always carries the guard itself — a marker-less stub is not a faithful config
 # dir, it is the hostile case, which tests/fix-1630-*.sh own.
-mkdir -p "$FAKE_ACD/hooks"
-touch "$FAKE_ACD/hooks/enforce-worktree.js"
-if command -v cygpath >/dev/null 2>&1; then FAKE_ACD_N="$(cygpath -m "$FAKE_ACD")"; else FAKE_ACD_N="$FAKE_ACD"; fi
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks"
+touch "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
+if command -v cygpath >/dev/null 2>&1; then FAKE_SCRIPT_CHECKOUT_ROOT_N="$(cygpath -m "$FAKE_SCRIPT_CHECKOUT_ROOT")"; else FAKE_SCRIPT_CHECKOUT_ROOT_N="$FAKE_SCRIPT_CHECKOUT_ROOT"; fi
 
 # Main repo with NO linked worktrees (post-worktree-end state)
 MAIN_CLEAN="$TMPBASE/main-clean"
@@ -52,13 +52,13 @@ git -C "$MAIN_DIRTY" worktree add -q -b feature-x "$TMPBASE/dirty-wt" 2>/dev/nul
 if command -v cygpath >/dev/null 2>&1; then MAIN_DIRTY_N="$(cygpath -m "$MAIN_DIRTY")"; else MAIN_DIRTY_N="$MAIN_DIRTY"; fi
 if command -v cygpath >/dev/null 2>&1; then DIRTY_WT_N="$(cygpath -m "$TMPBASE/dirty-wt")"; else DIRTY_WT_N="$TMPBASE/dirty-wt"; fi
 
-# Predicate-level check: isAllowedComposeDocAppend(cmd, repoRoot) with AGENTS_CONFIG_DIR env.
+# Predicate-level check: isAllowedComposeDocAppend(cmd, repoRoot) with AGENTS_MAIN_ROOT env.
 # C3 fix from codex review: ALLOWS_JS_VAL must be BEFORE `node`, not after `node -e`.
 check_ca() {
-  local acd="$1" cmd="$2" repo="$3"
-  AGENTS_CONFIG_DIR_VAL="$acd" CMD_VAL="$cmd" REPO_VAL="$repo" ALLOWS_JS_VAL="$ALLOWS_JS" \
+  local script_checkout_root="$1" cmd="$2" repo="$3"
+  AGENTS_MAIN_ROOT_VAL="$script_checkout_root" CMD_VAL="$cmd" REPO_VAL="$repo" ALLOWS_JS_VAL="$ALLOWS_JS" \
   run_with_timeout node -e "
-    process.env.AGENTS_CONFIG_DIR = process.env.AGENTS_CONFIG_DIR_VAL || '';
+    process.env.AGENTS_MAIN_ROOT = process.env.AGENTS_MAIN_ROOT_VAL || '';
     const {isAllowedComposeDocAppend} = require(process.env.ALLOWS_JS_VAL);
     console.log(isAllowedComposeDocAppend(process.env.CMD_VAL, process.env.REPO_VAL) ? 'allow' : 'reject');
   " 2>/dev/null
@@ -75,7 +75,7 @@ check_hook() {
   cmd_json="$(CMDVAL="$cmd" node -e 'console.log(JSON.stringify(process.env.CMDVAL))' 2>/dev/null)"
   ( cd "$cwd" && printf '{"tool_name":"Bash","tool_input":{"command":%s},"cwd":"%s"}' \
       "$cmd_json" "$cwd" \
-      | ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$_A" run_with_timeout node "$GUARD_JS" 2>/dev/null )
+      | ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT="$_A" run_with_timeout node "$GUARD_JS" 2>/dev/null )
 }
 assert_hook_allow() {
   local out; out="$(check_hook "$1" "" "$2")"
@@ -89,44 +89,44 @@ assert_hook_block() {
 }
 
 # Canonical command shape:
-#   bash "<ACD>/bin/compose-doc-append-entry" --notes ... --branch ... --pr ... --merge-commit ... --background ... --closes-issues-count ...
+#   bash "<FAKE_SCRIPT_CHECKOUT_ROOT>/bin/compose-doc-append-entry" --notes ... --branch ... --pr ... --merge-commit ... --background ... --closes-issues-count ...
 
-CANON="bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --notes \"WORKTREE_NOTES.md\" --branch \"feature/x\" --pr 123 --merge-commit abc1234 --background \"bg\" --closes-issues-count 1"
-BOOT="bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --notes \"WORKTREE_NOTES.md\" --branch \"feature/x\" --bootstrap --merge-commit abc1234 --background \"bg\" --closes-issues-count 1"
-BARE="bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\""
+CANON="bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --notes \"WORKTREE_NOTES.md\" --branch \"feature/x\" --pr 123 --merge-commit abc1234 --background \"bg\" --closes-issues-count 1"
+BOOT="bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --notes \"WORKTREE_NOTES.md\" --branch \"feature/x\" --bootstrap --merge-commit abc1234 --background \"bg\" --closes-issues-count 1"
+BARE="bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\""
 
 # === P-series: canonical allow shapes ===
-assert_allow_ca "$FAKE_ACD_N" "$CANON" "$MAIN_CLEAN_N" "P1: canonical normal-mode invocation → allow"
-assert_allow_ca "$FAKE_ACD_N" "$BOOT"  "$MAIN_CLEAN_N" "P2: canonical bootstrap-mode invocation → allow"
-assert_allow_ca "$FAKE_ACD_N" "$BARE"  "$MAIN_CLEAN_N" "P3: bare invocation (no args) → allow"
-assert_allow_ca "$FAKE_ACD_N" "  bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "P4: leading whitespace before bash → allow"
-# P5: path with .. that normalizes to canonical. Create the .. shape under FAKE_ACD.
-P5_CMD="bash \"$FAKE_ACD_N/bin/../bin/compose-doc-append-entry\" --pr 1"
-assert_allow_ca "$FAKE_ACD_N" "$P5_CMD" "$MAIN_CLEAN_N" "P5: path with .. normalizing to canonical → allow"
+assert_allow_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "$CANON" "$MAIN_CLEAN_N" "P1: canonical normal-mode invocation → allow"
+assert_allow_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "$BOOT"  "$MAIN_CLEAN_N" "P2: canonical bootstrap-mode invocation → allow"
+assert_allow_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "$BARE"  "$MAIN_CLEAN_N" "P3: bare invocation (no args) → allow"
+assert_allow_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "  bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "P4: leading whitespace before bash → allow"
+# P5: path with .. that normalizes to canonical. Create the .. shape under FAKE_SCRIPT_CHECKOUT_ROOT.
+P5_CMD="bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/../bin/compose-doc-append-entry\" --pr 1"
+assert_allow_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "$P5_CMD" "$MAIN_CLEAN_N" "P5: path with .. normalizing to canonical → allow"
 
 # === C-series: redirect / substitution chars in args ===
-assert_block_ca "$FAKE_ACD_N" "bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1 > /tmp/out" "$MAIN_CLEAN_N" "C1a: stdout redirect > → block"
-assert_block_ca "$FAKE_ACD_N" "bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1 >> /tmp/out" "$MAIN_CLEAN_N" "C1b: append redirect >> → block"
-assert_block_ca "$FAKE_ACD_N" "bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1 < /tmp/in" "$MAIN_CLEAN_N" "C1c: input redirect < → block"
-assert_block_ca "$FAKE_ACD_N" "bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --background \"\$(touch /tmp/x)\"" "$MAIN_CLEAN_N" "C2a: \$() inside double-quoted arg → block"
-assert_block_ca "$FAKE_ACD_N" "bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --background \"\`touch /tmp/x\`\"" "$MAIN_CLEAN_N" "C2b: backtick inside double-quoted arg → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 > /tmp/out" "$MAIN_CLEAN_N" "C1a: stdout redirect > → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 >> /tmp/out" "$MAIN_CLEAN_N" "C1b: append redirect >> → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 < /tmp/in" "$MAIN_CLEAN_N" "C1c: input redirect < → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --background \"\$(touch /tmp/x)\"" "$MAIN_CLEAN_N" "C2a: \$() inside double-quoted arg → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --background \"\`touch /tmp/x\`\"" "$MAIN_CLEAN_N" "C2b: backtick inside double-quoted arg → block"
 
 # === S-series: shell chaining / pipes (the root incident) ===
-assert_block_ca "$FAKE_ACD_N" "bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1 | tee /tmp/out" "$MAIN_CLEAN_N" "S1: pipe to tee → block (root incident)"
-assert_block_ca "$FAKE_ACD_N" "bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1 && rm -rf /tmp/x" "$MAIN_CLEAN_N" "S2: && chaining → block"
-assert_block_ca "$FAKE_ACD_N" "bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1 ; echo done" "$MAIN_CLEAN_N" "S3: ; chaining → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 | tee /tmp/out" "$MAIN_CLEAN_N" "S1: pipe to tee → block (root incident)"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 && rm -rf /tmp/x" "$MAIN_CLEAN_N" "S2: && chaining → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 ; echo done" "$MAIN_CLEAN_N" "S3: ; chaining → block"
 
 # === W-series: wrong shapes ===
-assert_block_ca "$FAKE_ACD_N" "bash \"$FAKE_ACD_N/bin/doc-append\" --pr 1" "$MAIN_CLEAN_N" "W1: wrong script name (doc-append) → block"
-assert_block_ca "$FAKE_ACD_N" "bash \"$FAKE_ACD_N/scripts/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W2: correct script name in wrong directory → block"
-assert_block_ca "$FAKE_ACD_N" "bash '$FAKE_ACD_N/bin/compose-doc-append-entry' --pr 1" "$MAIN_CLEAN_N" "W3: single-quoted script path → block"
-assert_block_ca "$FAKE_ACD_N" "pwsh \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W4: wrong interpreter pwsh → block"
-assert_block_ca "$FAKE_ACD_N" "node \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W5: wrong interpreter node → block"
-assert_block_ca "$FAKE_ACD_N" "sudo bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W6: sudo prefix → block"
-assert_block_ca "" "bash \"$FAKE_ACD_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W7: AGENTS_CONFIG_DIR unset (empty) → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/doc-append\" --pr 1" "$MAIN_CLEAN_N" "W1: wrong script name (doc-append) → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/scripts/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W2: correct script name in wrong directory → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash '$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry' --pr 1" "$MAIN_CLEAN_N" "W3: single-quoted script path → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "pwsh \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W4: wrong interpreter pwsh → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "node \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W5: wrong interpreter node → block"
+assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "sudo bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W6: sudo prefix → block"
+assert_block_ca "" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W7: AGENTS_MAIN_ROOT unset (empty) → block"
 
 # === E-series: end-to-end hook dispatch ===
-# For E-series we use the real agents repo path ($_A) as AGENTS_CONFIG_DIR so that
+# For E-series we use the real agents repo path ($_A) as AGENTS_MAIN_ROOT so that
 # the hook can require modules and resolve real paths. We invoke `bash "$_A/bin/compose-doc-append-entry" ...`.
 HOOK_CANON="bash \"$_A/bin/compose-doc-append-entry\" --notes \"WORKTREE_NOTES.md\" --branch \"feature/x\" --pr 123 --merge-commit abc1234 --background \"bg\" --closes-issues-count 1"
 # Tee target must be inside the cwd's session scope (= cwd repo root). Session-scope

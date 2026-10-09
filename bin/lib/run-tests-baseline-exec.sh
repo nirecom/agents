@@ -22,6 +22,17 @@ rtb_exec_kill_group() {
     kill "-$2" -- "-$1" 2>/dev/null || kill "-$2" "$1" 2>/dev/null || true
 }
 
+# rtb_base_predates_root_names <root> <commit> — 0 when <commit> carries a top-level
+# profile-snippet.sh that does not name AGENTS_MAIN_ROOT (its tests cannot run under
+# today's root names); 1 otherwise, including when the commit has no such file.
+rtb_base_predates_root_names() {
+    local root="${1:-}" commit="${2:-}" body
+    [ -n "$root" ] && [ -n "$commit" ] || return 1
+    body="$(git -C "$root" show "$commit:profile-snippet.sh" 2>/dev/null)" || return 1
+    case "$body" in *AGENTS_MAIN_ROOT*) return 1 ;; esac
+    return 0
+}
+
 rtb_exec_one() {
     local wt="${1:-}" rel="${2:-}" timeout="${3:-300}" logdir="${4:-}"
     local launcher i cpid wpid rc iso restore_m=0
@@ -55,8 +66,13 @@ rtb_exec_one() {
         . "$launcher" || { : >"$logdir/$i.nolaunch"; exit 2; }
         cd "$wt" || { : >"$logdir/$i.nolaunch"; exit 2; }
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
-        export AGENTS_CONFIG_DIR="$wt" WORKFLOW_STATE_DIR="$iso/workflow" \
+        export WORKFLOW_STATE_DIR="$iso/workflow" \
             WORKFLOW_PLANS_DIR="$iso/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$iso/transcripts"
+        # The base test finds its tools from its own checkout; the launcher's decoy pin
+        # makes any reach through a root variable visible instead of silently working.
+        if declare -F run_all_pin_root_decoy >/dev/null 2>&1; then
+            run_all_pin_root_decoy || { : >"$logdir/$i.nolaunch"; exit 2; }
+        fi
         run_all_exec "$wt/$rel" "$logdir/$i.out" "$logdir/$i.err"
         rc=$?
         [ "$rc" = 78 ] && [ "${RUN_ALL_EXEC_LAUNCHED:-1}" = 0 ] && : >"$logdir/$i.unsupported"

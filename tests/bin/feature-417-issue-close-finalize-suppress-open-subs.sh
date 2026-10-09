@@ -5,12 +5,8 @@
 # Tests for issue #417 — /issue-close-finalize must skip (not error) an issue
 # that still has OPEN sub-issues, recording a `skipped_open_sub_issues` outcome.
 #
-# Before #417: OPEN + open sub-issues either errors (OPEN:none) or is not
-# routed to a graceful skip. This suite is RED against the current source: the
-# `skipped_open_sub_issues` ACTION/state does not exist yet.
-#
-# L3 gap (what this test does NOT catch):
-# - real GitHub API calls and actual issue state transitions
+# Before #417 OPEN + open sub-issues errored (OPEN:none) instead of skipping; written RED (no such ACTION yet).
+# L3 gap (NOT caught): real GitHub API calls and actual issue state transitions.
 # Closest-to-action mitigation: manual verification at WORKFLOW_USER_VERIFIED preflight
 
 set -u
@@ -21,10 +17,10 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-triage-lib.sh"
-FINALIZE_TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-finalize-triage.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-triage-lib.sh"
+FINALIZE_TRIAGE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-finalize-triage.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -64,7 +60,6 @@ setup_tmp() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/docs/history"
     : > "$TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"
@@ -74,7 +69,6 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR
     unset GH_MOCK_COMMENT_LOG
 }
 
@@ -121,7 +115,7 @@ teardown_tmp
 # state. Uses the --session-id / --out-file form so the test is deterministic.
 setup_tmp
 OUTCOME="$TMP/session-issue-close-outcome.json"
-run_with_timeout 15 node "$AGENTS_DIR/bin/issue-close-write-outcome.js" \
+run_with_timeout 15 node "$SCRIPT_CHECKOUT_ROOT/bin/issue-close-write-outcome.js" \
     --session-id testsid --out-file "$OUTCOME" \
     42 skipped_open_sub_issues skipped skipped skipped skipped >/dev/null 2>&1
 if [ -f "$OUTCOME" ] && grep -q '"skipped_open_sub_issues"' "$OUTCOME"; then

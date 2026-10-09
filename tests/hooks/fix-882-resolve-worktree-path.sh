@@ -170,7 +170,7 @@ run_resolver_env() {
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-    AGENTS_CONFIG_DIR="$AGENTS_NODE" \
+    AGENTS_MAIN_ROOT="$AGENTS_NODE" \
       bash "$RUN_TIMEOUT" 30 "$RESOLVER_BIN" ${4:+--session "$4"}
   ) 2>/dev/null
 }
@@ -195,7 +195,7 @@ EOF
 #   $1: process cwd   $2: sid, routed to CLAUDE_CODE_SESSION_ID when $5 is
 #       empty (SESSION_ID is not a supply channel — #2270)   $3: "state" /
 #       "nostate"   $4: cwd embedded in state ("wta"/"main")   $5: explicit
-#       CLAUDE_CODE_SESSION_ID (wins over $2)   $6: AGENTS_CONFIG_DIR override.
+#       CLAUDE_CODE_SESSION_ID (wins over $2)   $6: AGENTS_MAIN_ROOT override.
 # Sets SELECT_OUT / SELECT_ERR / SELECT_RC; stderr kept out of stdout.
 # ---------------------------------------------------------------------------
 SELECT_RC=0
@@ -228,7 +228,7 @@ run_select() {
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-    AGENTS_CONFIG_DIR="$agents_dir" \
+    AGENTS_MAIN_ROOT="$agents_dir" \
       bash "$RUN_TIMEOUT" 30 bash "$SELECT_SH" 2>"$errfile")"
   SELECT_RC=$?
   SELECT_OUT="$out"

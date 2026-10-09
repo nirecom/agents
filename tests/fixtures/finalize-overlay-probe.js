@@ -19,7 +19,7 @@
 // Usage:
 //   node finalize-overlay-probe.js strip <absScriptPath> <relSuffix>
 //   node finalize-overlay-probe.js match <command> <repoRoot>
-//     (AGENTS_CONFIG_DIR from the environment supplies the acd argument)
+//     (AGENTS_MAIN_ROOT from the environment supplies the agents root argument)
 //   node finalize-overlay-probe.js mutmatch <mutation> <command> <repoRoot>
 //     mutation ∈ none | drop-derived | drop-payload
 //
@@ -36,15 +36,15 @@ const fs = require("fs");
 const path = require("path");
 const Module = require("module");
 
-const AGENTS_DIR = path.resolve(__dirname, "..", "..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 // Overlay module (retired by #1673 commit 5) — required lazily/softly.
 const MODULE_PATH = path.join(
-  AGENTS_DIR, "hooks", "enforce-worktree", "main-worktree-allows",
+  SCRIPT_CHECKOUT_ROOT, "hooks", "enforce-worktree", "main-worktree-allows",
   "finalize-worker-overlay.js"
 );
 // Shared value helpers (#1673 commit 1) — the durable home.
 const GUARD_PATH = path.join(
-  AGENTS_DIR, "hooks", "enforce-worktree", "arg-value-guard.js"
+  SCRIPT_CHECKOUT_ROOT, "hooks", "enforce-worktree", "arg-value-guard.js"
 );
 
 const line1 = (s) => String(s).split("\n")[0];
@@ -89,17 +89,17 @@ const a3 = process.argv[5] || "";
 const fwd = (s) => String(s).replace(/\\/g, "/");
 
 // Each mutation neutralises exactly ONE equality of
-// `anchorAcd === derivedAcd && anchorAcd === payloadAcd`, in either polarity
+// `anchorRoot === derivedRoot && anchorRoot === payloadRoot`, in either polarity
 // (`a === b` inside the conjunction, or `a !== b` in a fail-closed early
 // return). Returns { src, hits }.
 function applyMutation(src, which) {
-  // The anchor may be spelled `anchorAcd` or reuse the existing `acdNorm`, and
+  // The anchor may be spelled `anchorRoot` or reuse the existing `rootNorm`, and
   // the payload equality may stay inside the requiredEnv loop in its legacy
-  // `normLower(val) !== acdNorm` form. All spellings of ONE equality are
+  // `normLower(val) !== rootNorm` form. All spellings of ONE equality are
   // neutralised together; the other equality is left untouched.
   const pairs = {
-    "drop-derived": [["anchorAcd", "derivedAcd"], ["acdNorm", "derivedAcd"]],
-    "drop-payload": [["anchorAcd", "payloadAcd"], ["acdNorm", "payloadAcd"]],
+    "drop-derived": [["anchorRoot", "derivedRoot"], ["rootNorm", "derivedRoot"]],
+    "drop-payload": [["anchorRoot", "payloadRoot"], ["rootNorm", "payloadRoot"]],
   };
   const sets = pairs[which];
   if (!sets) return { src, hits: -1 };
@@ -112,8 +112,8 @@ function applyMutation(src, which) {
     out = out.replace(ne, () => { hits += 1; return "false"; });
   }
   if (which === "drop-payload") {
-    const legacyNe = /(?:normLower\([A-Za-z0-9_.[\]]+\)\s*!==\s*acdNorm|acdNorm\s*!==\s*normLower\([A-Za-z0-9_.[\]]+\))/g;
-    const legacyEq = /(?:normLower\([A-Za-z0-9_.[\]]+\)\s*===\s*acdNorm|acdNorm\s*===\s*normLower\([A-Za-z0-9_.[\]]+\))/g;
+    const legacyNe = /(?:normLower\([A-Za-z0-9_.[\]]+\)\s*!==\s*rootNorm|rootNorm\s*!==\s*normLower\([A-Za-z0-9_.[\]]+\))/g;
+    const legacyEq = /(?:normLower\([A-Za-z0-9_.[\]]+\)\s*===\s*rootNorm|rootNorm\s*===\s*normLower\([A-Za-z0-9_.[\]]+\))/g;
     out = out.replace(legacyNe, () => { hits += 1; return "false"; });
     out = out.replace(legacyEq, () => { hits += 1; return "true"; });
   }
@@ -134,15 +134,15 @@ function loadMutant(which) {
 // The run-loop-step payload shape, byte-identical to the suite's
 // `build_loop_step` helper. Built here (not passed on argv) so that the ONLY
 // thing that varies between the accepted and rejected rows is the token itself.
-function buildLoopStep(acd, args) {
-  const scripts = fwd(acd) + "/skills/issue-close-finalize/scripts";
+function buildLoopStep(agentsRoot, args) {
+  const scripts = fwd(agentsRoot) + "/skills/issue-close-finalize/scripts";
   const quoted = args.map((a) => '"' + a + '"').join(" ");
-  return 'eval "$(AGENTS_CONFIG_DIR="' + fwd(acd) + '" FINALIZE_SCRIPTS_DIR="' + scripts +
+  return 'eval "$(AGENTS_MAIN_ROOT="' + fwd(agentsRoot) + '" FINALIZE_SCRIPTS_DIR="' + scripts +
     '" node "' + scripts + '/run-loop-step.js" ' + quoted + ')"';
 }
 
-function showMatch(m, cmd, acd, repoRoot) {
-  const r = m.matchFinalizeWorkerOverlay(cmd, acd, repoRoot);
+function showMatch(m, cmd, agentsRoot, repoRoot) {
+  const r = m.matchFinalizeWorkerOverlay(cmd, agentsRoot, repoRoot);
   if (r === null || r === undefined) return "null";
   const p = r.scriptPath || r.script || r.path || r.rel || "";
   return p ? path.basename(fwd(p)) : JSON.stringify(r);
@@ -163,7 +163,7 @@ try {
       console.log(r === null || r === undefined ? "null" : fwd(r));
       break;
     }
-    // matchFinalizeWorkerOverlay(cmd, acd, repoRoot) -> the matched registry
+    // matchFinalizeWorkerOverlay(cmd, agentsRoot, repoRoot) -> the matched registry
     // script's basename, or "null".
     case "match": {
       if (!requireOverlay()) break;
@@ -171,8 +171,8 @@ try {
         console.log("ERROR: matchFinalizeWorkerOverlay is not exported");
         break;
       }
-      const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
-      const r = mod.matchFinalizeWorkerOverlay(a1, acd, a2);
+      const agentsRoot = (process.env.AGENTS_MAIN_ROOT || "").trim();
+      const r = mod.matchFinalizeWorkerOverlay(a1, agentsRoot, a2);
       if (r === null || r === undefined) { console.log("null"); break; }
       const p = r.scriptPath || r.script || r.path || r.rel || "";
       console.log(p ? path.basename(fwd(p)) : JSON.stringify(r));
@@ -185,12 +185,12 @@ try {
         console.log("ERROR: matchFinalizeWorkerOverlay is not exported");
         break;
       }
-      const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
-      if (a1 === "none") { console.log(showMatch(mod, a2, acd, a3)); break; }
+      const agentsRoot = (process.env.AGENTS_MAIN_ROOT || "").trim();
+      if (a1 === "none") { console.log(showMatch(mod, a2, agentsRoot, a3)); break; }
       const { mod: mutant, hits } = loadMutant(a1);
       if (hits === -1) { console.log("ERROR: unknown mutation " + JSON.stringify(a1)); break; }
       if (!mutant) { console.log("NO-MUTATION-SITE"); break; }
-      console.log(showMatch(mutant, a2, acd, a3));
+      console.log(showMatch(mutant, a2, agentsRoot, a3));
       break;
     }
     // plansdir <token> <repoRoot> — is `token` acceptable as a `path-plansdir`
@@ -211,8 +211,8 @@ try {
         console.log("ERROR: matchFinalizeWorkerOverlay is not exported");
         break;
       }
-      const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
-      console.log(showMatch(mod, buildLoopStep(acd, [a1, "accept"]), acd, a2) === "null"
+      const agentsRoot = (process.env.AGENTS_MAIN_ROOT || "").trim();
+      console.log(showMatch(mod, buildLoopStep(agentsRoot, [a1, "accept"]), agentsRoot, a2) === "null"
         ? "rejected" : "accepted");
       break;
     }
@@ -234,13 +234,13 @@ try {
       if (!Array.isArray(reg)) { console.log("ERROR: FINALIZE_OVERLAY_REGISTRY is not exported"); break; }
       const entry = reg.filter((e) => String(e.rel).indexOf("run-loop-step.js") !== -1)[0];
       if (!entry) { console.log("ERROR: no run-loop-step registry entry"); break; }
-      const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
+      const agentsRoot = (process.env.AGENTS_MAIN_ROOT || "").trim();
       const plans = (process.env.WORKFLOW_PLANS_DIR || "").trim();
       const saved = entry.argCountMax;
       entry.argCountMax = entry.argSpec.length + 1;
       let shown;
       try {
-        shown = showMatch(mod, buildLoopStep(acd, [plans + "/state.json", "accept", a1]), acd, a2);
+        shown = showMatch(mod, buildLoopStep(agentsRoot, [plans + "/state.json", "accept", a1]), agentsRoot, a2);
       } finally {
         entry.argCountMax = saved;
       }
@@ -268,8 +268,8 @@ try {
     // Same call, raw JSON result — diagnostic only.
     case "matchraw": {
       if (!requireOverlay()) break;
-      const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
-      console.log(JSON.stringify({ acd, r: mod.matchFinalizeWorkerOverlay(a1, acd, a2) }));
+      const agentsRoot = (process.env.AGENTS_MAIN_ROOT || "").trim();
+      console.log(JSON.stringify({ agentsRoot, r: mod.matchFinalizeWorkerOverlay(a1, agentsRoot, a2) }));
       break;
     }
     default:

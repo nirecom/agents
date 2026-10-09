@@ -8,9 +8,9 @@
 # corrupted / truncated read produces (json-invalid fail-open or fail-close).
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
@@ -34,8 +34,8 @@ git -C "$REPO" config core.hooksPath /dev/null
 git -C "$REPO" -c user.email=t@example.invalid -c user.name=t commit -q --allow-empty -m init
 export CLAUDE_PROJECT_DIR="$(np "$REPO")"
 
-HOOKS="$(np "$AGENTS_DIR/hooks")"
-SUITE="$(np "$AGENTS_DIR/tests/hooks/stdin-large-input-hooks")"
+HOOKS="$(np "$SCRIPT_CHECKOUT_ROOT/hooks")"
+SUITE="$(np "$SCRIPT_CHECKOUT_ROOT/tests/hooks/stdin-large-input-hooks")"
 NEUTRAL="$(np "$TMPD/neutral")"
 PAYLOAD="$TMPD/payload.json"
 SIZES=(5000 70000)
@@ -80,7 +80,7 @@ case_end
 case_begin "scan-offensive-stdin-term-past-padding-hard-hit" "bin/scan-offensive"
 for n in "${SIZES[@]}"; do for r in "${ROUTES[@]}"; do
     node -e 'process.stdout.write("p".repeat(+process.argv[1]) + " __cli_test_sentinel__ end\n")' "$n" >"$PAYLOAD"
-    feed "$r" "$(np "$AGENTS_DIR/bin/scan-offensive")" --stdin lbl
+    feed "$r" "$(np "$SCRIPT_CHECKOUT_ROOT/bin/scan-offensive")" --stdin lbl
     if [[ "$RC" == 1 && "$ERR" == *"[offensive-hard] __cli_test_sentinel__"* ]]; then
         pass "scan-offensive/$n/$r"
     else
@@ -107,7 +107,7 @@ case_begin "workflow-mark-user-verified-past-padding-recorded" "hooks/workflow-m
 for n in "${SIZES[@]}"; do for r in "${ROUTES[@]}"; do
     sid="sil-mark-$n-$r"
     build mark "$n" "$sid"; feed "$r" "$HOOKS/workflow-mark.js"
-    st="$(node "$SUITE/step-status.js" "$(np "$AGENTS_DIR")" "$sid" user_verification)"
+    st="$(node "$SUITE/step-status.js" "$(np "$SCRIPT_CHECKOUT_ROOT")" "$sid" user_verification)"
     if [[ "$st" == complete ]] && no_stdin_diag "$ERR"; then pass "workflow-mark/$n/$r"; else fail "workflow-mark/$n/$r" "status=$st $(ctx)"; fi
 done; done
 case_end

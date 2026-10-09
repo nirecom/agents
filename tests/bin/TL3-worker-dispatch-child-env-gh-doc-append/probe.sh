@@ -9,7 +9,7 @@ cat > "$PROBE" <<'PROBEJS'
 const path = require("path");
 const childProcess = require("child_process");
 
-const [agentsDir, mode, mainRoot, entryName, script] = process.argv.slice(2);
+const [agentsDir, mode, targetMainRoot, entryName, script] = process.argv.slice(2);
 const spawnMod = require(path.join(agentsDir, "bin/worker-dispatch/spawn.js"));
 const anchorMod = require(path.join(agentsDir, "bin/worker-dispatch/anchor.js"));
 const registry = require(path.join(agentsDir, "hooks/lib/worker-dispatch-registry.js"));
@@ -37,8 +37,7 @@ function classify(stdout, status) {
 }
 
 if (mode === "unit") {
-  const ACD = "/fixture-acd-root";
-  const anchors = { acd: ACD };
+  const anchors = { scriptCheckoutRoot: "/fixture-script-checkout-root" };
   const TOKEN = process.env.PROBE_FAKE_GH_TOKEN || "fake-token";
   const SECRET = process.env.PROBE_FAKE_SECRET || "fake-secret";
 
@@ -126,7 +125,7 @@ if (mode === "direct") {
 }
 
 if (mode === "dispatch") {
-  const anchors = anchorMod.resolveAnchors(mainRoot);
+  const anchors = anchorMod.resolveAnchors(targetMainRoot);
   if (anchors.error) {
     out("dispatch_error", 1);
     out("dispatch_message", "anchors: " + anchors.error);
@@ -136,7 +135,7 @@ if (mode === "dispatch") {
   let res;
   try {
     res = spawnMod.run(entryOf(entryName), {
-      anchors, command: "bash", args: ["-c", script], cwd: mainRoot, timeoutMs: 40000,
+      anchors, command: "bash", args: ["-c", script], cwd: targetMainRoot, timeoutMs: 40000,
     });
   } catch (e) {
     out("dispatch_error", 1);
@@ -169,7 +168,7 @@ run_probe() {
         -u SOME_UNRELATED_SECRET "$@" \
         "GH_HOST=$TARGET_HOST" "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "PROBE_FAKE_GH_TOKEN=$FAKE_GH_TOKEN" "PROBE_FAKE_SECRET=$FAKE_SECRET" \
-        node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$mode" "$MAIN" "$entry" "$CHILD_SCRIPT" 2>&1)" || return 1
+        node "$PROBE" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$mode" "$MAIN" "$entry" "$CHILD_SCRIPT" 2>&1)" || return 1
     return 0
 }
 

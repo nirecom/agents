@@ -21,8 +21,8 @@ SKIP=0
 # category covers .github/ISSUE_TEMPLATE/*.yml; the gap closes only at the
 # manual post-merge render check on github.com.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TEMPLATE_DIR="$AGENTS_DIR/.github/ISSUE_TEMPLATE"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TEMPLATE_DIR="$SCRIPT_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE"
 TASK_YML="$TEMPLATE_DIR/task.yml"
 INCIDENT_YML="$TEMPLATE_DIR/incident.yml"
 

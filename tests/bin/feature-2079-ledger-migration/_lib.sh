@@ -8,7 +8,8 @@
 # Child side (LM_CHILD=1, via _driver.sh): helpers that need the libraries loaded.
 
 LM_ARCH="x86_64"
-LM_PARTS="$AGENTS_DIR/tests/bin/feature-2079-ledger-migration"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+LM_PARTS="$__LIB_SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2079-ledger-migration"
 # The pre-#2079 OS field is the raw `uname -s`; these are the four spellings the issue names.
 LM_W26300="MINGW64_NT-10.0-26300"
 LM_M26300="MSYS_NT-10.0-26300"
@@ -56,7 +57,7 @@ lm_run() {
     PATH="$LM_TMP/stubbin:$PATH" HOSTNAME="$LM_HOST" \
     LM_STUB_S="$LM_S" LM_STUB_R="$LM_R" LM_STUB_M="$LM_ARCH" LM_STUB_N="$LM_HOST" \
     RUN_ALL_CACHE_DIR="$cache" LM_CHILD=1 LM_TMP="$LM_TMP" LM_REPO="$LM_REPO" LM_HOST="$LM_HOST" \
-    LM_LIBSET="$LM_LIBSET" LM_PART_DIRS="$LM_PART_DIRS" AGENTS_DIR="$AGENTS_DIR" LM_XVAR="${LM_XVAR:-}" \
+    LM_LIBSET="$LM_LIBSET" LM_PART_DIRS="$LM_PART_DIRS" LM_XVAR="${LM_XVAR:-}" \
     LM_DAY="$LM_DAY" LM_DAY_OLDER="$LM_DAY_OLDER" LM_DAY_NEWER="$LM_DAY_NEWER" \
     bash "$LM_PARTS/_driver.sh" "$@" 2>/dev/null
 }

@@ -1,9 +1,9 @@
 # helpers.sh - env/payload builders and hook drivers for the workflow-off
 # session-override suite. Sourced by tests/hooks/feature-workflow-off-session-override.sh.
-# Expects AGENTS_DIR, _AGENTS_DIR_NODE, TMPDIR_BASE, and the pass/fail counters.
+# Expects SCRIPT_CHECKOUT_ROOT, _SCRIPT_CHECKOUT_ROOT_NODE, TMPDIR_BASE, and the pass/fail counters.
 
-MARK_JS="${_AGENTS_DIR_NODE}/hooks/workflow-mark.js"
-SESSION_MARKERS_JS="${_AGENTS_DIR_NODE}/hooks/lib/session-markers.js"
+MARK_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/workflow-mark.js"
+SESSION_MARKERS_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/session-markers.js"
 
 # Portable timeout: prefers `timeout`, falls back to perl alarm (macOS-safe).
 run_with_timeout() {
@@ -51,7 +51,6 @@ run_workflow_mark() {
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "$@" \
@@ -73,7 +72,6 @@ run_workflow_mark_isolated() {
     local rc=0
     MARK_OUT="$(cd "$TMPDIR_BASE" && printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         "$@" \
@@ -141,7 +139,6 @@ run_is_workflow_off() {
     if [ -n "$wfdir" ]; then
         out="$(run_with_timeout 30 \
             env -u CLAUDE_CODE_SESSION_ID \
-            "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "WORKFLOW_STATE_DIR=$wfdir" \
             "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
             node -e "const sm=require('$SESSION_MARKERS_JS'); try { console.log(sm.isWorkflowOff($sid_js)); } catch(e) { console.log('THREW:'+e.message); }" 2>&1)" || rc=$?
@@ -151,7 +148,6 @@ run_is_workflow_off() {
         out="$(run_with_timeout 30 \
             env -u CLAUDE_CODE_SESSION_ID \
             -u WORKFLOW_STATE_DIR -u WORKFLOW_PLANS_DIR -u HOME -u USERPROFILE \
-            "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             node -e "const sm=require('$SESSION_MARKERS_JS'); try { console.log(sm.isWorkflowOff($sid_js)); } catch(e) { console.log('THREW:'+e.message); }" 2>&1)" || rc=$?
     fi
     printf '%s' "$out"
@@ -164,7 +160,6 @@ run_notice_text() {
     local out rc=0
     out="$(run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node -e "const sm=require('$SESSION_MARKERS_JS'); try { const r = sm.workflowOffNoticeText($hook_js, $sid_js); console.log('TYPE:'+typeof r); console.log('VAL:'+r); } catch(e) { console.log('THREW:'+e.message); }" 2>&1)" || rc=$?

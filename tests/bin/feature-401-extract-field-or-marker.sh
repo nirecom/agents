@@ -22,8 +22,8 @@ set -u
 PASS=0
 FAIL=0
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-EXTRACT_LIB="$AGENTS_DIR/bin/github-issues/lib/extract-field.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+EXTRACT_LIB="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/extract-field.sh"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }

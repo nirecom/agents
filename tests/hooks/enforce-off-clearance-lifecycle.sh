@@ -52,12 +52,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
 
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-PROBE="$AGENTS_DIR/tests/hooks/enforce-off-clearance-lifecycle/probe.js"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+PROBE="$SCRIPT_CHECKOUT_ROOT/tests/hooks/enforce-off-clearance-lifecycle/probe.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -82,7 +82,7 @@ pass "H0 shim + probe present"
 
 # Protected suffixes come from the SSOT, so a renamed suffix fails here loudly
 # instead of turning the fixtures into files nothing protects.
-SUF=$("$RWT" 10 node "$PROBE" suffixes "$_AGENTS_DIR_NODE" 2>/dev/null)
+SUF=$("$RWT" 10 node "$PROBE" suffixes "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>/dev/null)
 TOKEN_SUF=$(printf '%s' "$SUF" | awk '{print $1}')
 CLAIMED_SUF=$(printf '%s' "$SUF" | awk '{print $2}')
 MARKER_SUF=$(printf '%s' "$SUF" | awk '{print $3}')
@@ -121,7 +121,7 @@ mk_runcommands_json() {
 # read cannot pick up the developer's real session id.
 run_shim() {
     local tn="$1" cwd="$2" input="$3" out rc
-    out=$(cd "$cwd" && WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    out=$(cd "$cwd" && WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" \
         "$RWT" 15 node "$SHIM" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
@@ -146,7 +146,7 @@ assert_verdict() {
     else fail "$label want=$want got=$got  [raw=$(printf '%.200s' "$raw")]"; fi
 }
 
-PARTS_DIR="$AGENTS_DIR/tests/hooks/enforce-off-clearance-lifecycle"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/enforce-off-clearance-lifecycle"
 # shellcheck source=./enforce-off-clearance-lifecycle/cases-multi-sentinel.sh
 . "$PARTS_DIR/cases-multi-sentinel.sh"
 # shellcheck source=./enforce-off-clearance-lifecycle/cases-single-use.sh

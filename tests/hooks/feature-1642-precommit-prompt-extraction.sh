@@ -11,12 +11,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PRECOMMIT="$AGENTS_DIR/hooks/pre-commit"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PRECOMMIT="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 if [ ! -f "$PRECOMMIT" ]; then
@@ -75,7 +75,7 @@ init_repo() {
 }
 
 # An "agents-like" repo: it is simultaneously the repo under commit AND the
-# AGENTS_CONFIG_DIR, so isAgentsSessionRepo() sees identical git common-dirs.
+# AGENTS_MAIN_ROOT, so isAgentsSessionRepo() sees identical git common-dirs.
 # Node helpers referenced by pre-commit are re-exported from the real checkout
 # via one-line shims so the fixture stays tiny.
 #
@@ -89,18 +89,18 @@ make_agents_like_repo() {
     local dir="$TMPDIR_BASE/$name"
     init_repo "$dir"
     mkdir -p "$dir/hooks/lib" "$dir/bin" "$dir/rules"
-    printf 'module.exports = require("%s/hooks/workflow-state.js");\n' "$_AGENTS_DIR_NODE" \
+    printf 'module.exports = require("%s/hooks/workflow-state.js");\n' "$_SCRIPT_CHECKOUT_ROOT_NODE" \
         > "$dir/hooks/workflow-state.js"
-    printf 'module.exports = require("%s/hooks/lib/session-markers.js");\n' "$_AGENTS_DIR_NODE" \
+    printf 'module.exports = require("%s/hooks/lib/session-markers.js");\n' "$_SCRIPT_CHECKOUT_ROOT_NODE" \
         > "$dir/hooks/lib/session-markers.js"
-    printf 'module.exports = require("%s/hooks/lib/precommit-exclude-check.js");\n' "$_AGENTS_DIR_NODE" \
+    printf 'module.exports = require("%s/hooks/lib/precommit-exclude-check.js");\n' "$_SCRIPT_CHECKOUT_ROOT_NODE" \
         > "$dir/hooks/lib/precommit-exclude-check.js"
     echo "// stub marker" > "$dir/hooks/enforce-worktree.js"
 
     case "$engine" in
         real)
             printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-prompt-extraction" "$@"\n' \
-                "$AGENTS_DIR" > "$dir/bin/check-prompt-extraction"
+                "$SCRIPT_CHECKOUT_ROOT" > "$dir/bin/check-prompt-extraction"
             chmod +x "$dir/bin/check-prompt-extraction"
             ;;
         none)
@@ -161,7 +161,7 @@ t01_other_repo_untouched() {
     git -C "$other" add README.md
     git -C "$other" commit -q -m "initial"
     stage_violation "$other"
-    run_precommit "$other" "AGENTS_CONFIG_DIR=$cfg" "ENFORCE_WORKTREE=off"
+    run_precommit "$other" "AGENTS_MAIN_ROOT=$cfg" "ENFORCE_WORKTREE=off"
     if [ "$RC" -eq 0 ]; then
         pass "T01: foreign repo without an allowlist -> backstop skipped, commit passes"
     else
@@ -173,7 +173,7 @@ t01_other_repo_untouched() {
 t02_agents_repo_blocked() {
     local repo; repo="$(make_agents_like_repo cfg02 yes real)"
     stage_violation "$repo"
-    run_precommit "$repo" "AGENTS_CONFIG_DIR=$repo" "ENFORCE_WORKTREE=off"
+    run_precommit "$repo" "AGENTS_MAIN_ROOT=$repo" "ENFORCE_WORKTREE=off"
     if [ "$RC" -eq 1 ]; then
         pass "T02: staged extraction violation -> commit blocked (exit 1)"
     else
@@ -199,7 +199,7 @@ t01b_foreign_repo_with_allowlist_untouched() {
     git -C "$other" add -A
     git -C "$other" commit -q -m "initial"
     stage_violation "$other"
-    run_precommit "$other" "AGENTS_CONFIG_DIR=$cfg" "ENFORCE_WORKTREE=off"
+    run_precommit "$other" "AGENTS_MAIN_ROOT=$cfg" "ENFORCE_WORKTREE=off"
     if [ "$RC" -eq 0 ]; then
         pass "T01b: foreign repo WITH an allowlist -> still skipped (repo identity gates it)"
     else
@@ -217,7 +217,7 @@ t01b_foreign_repo_with_allowlist_untouched() {
 t01c_agents_repo_without_allowlist_skipped() {
     local repo; repo="$(make_agents_like_repo cfg01c no real)"
     stage_violation "$repo"
-    run_precommit "$repo" "AGENTS_CONFIG_DIR=$repo" "ENFORCE_WORKTREE=off"
+    run_precommit "$repo" "AGENTS_MAIN_ROOT=$repo" "ENFORCE_WORKTREE=off"
     if [ "$RC" -eq 0 ]; then
         pass "T01c: agents repo without an allowlist -> backstop skipped, commit passes"
     else
@@ -237,7 +237,7 @@ assert_marker_skips_backstop() {
     printf '{"set_at":"2026-01-01T00:00:00Z"}\n' > "$wfdir/$sid.$marker"
     stage_violation "$repo"
     run_precommit "$repo" \
-        "AGENTS_CONFIG_DIR=$repo" \
+        "AGENTS_MAIN_ROOT=$repo" \
         "ENFORCE_WORKTREE=off" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
@@ -267,7 +267,7 @@ t03c_no_marker_still_blocks() {
     mkdir -p "$wfdir"
     stage_violation "$repo"
     run_precommit "$repo" \
-        "AGENTS_CONFIG_DIR=$repo" \
+        "AGENTS_MAIN_ROOT=$repo" \
         "ENFORCE_WORKTREE=off" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
@@ -283,7 +283,7 @@ t03c_no_marker_still_blocks() {
 assert_warns_and_continues() {
     local label="$1" repo="$2"
     stage_clean "$repo"
-    run_precommit "$repo" "AGENTS_CONFIG_DIR=$repo" "ENFORCE_WORKTREE=off"
+    run_precommit "$repo" "AGENTS_MAIN_ROOT=$repo" "ENFORCE_WORKTREE=off"
     if [ "$RC" -ne 0 ]; then
         fail "$label: expected exit 0 (commit continues), got $RC" "$OUT"
         return
@@ -301,7 +301,7 @@ assert_warns_and_continues() {
 t04_exit2_blocks() {
     local repo; repo="$(make_agents_like_repo cfg04 yes 2)"
     stage_clean "$repo"
-    run_precommit "$repo" "AGENTS_CONFIG_DIR=$repo" "ENFORCE_WORKTREE=off"
+    run_precommit "$repo" "AGENTS_MAIN_ROOT=$repo" "ENFORCE_WORKTREE=off"
     if [ "$RC" -eq 1 ]; then
         pass "T04: engine exit 2 -> commit blocked (exit 1)"
     else
@@ -330,7 +330,7 @@ t06_exit126_blocks() {
         return
     fi
     stage_clean "$repo"
-    run_precommit "$repo" "AGENTS_CONFIG_DIR=$repo" "ENFORCE_WORKTREE=off"
+    run_precommit "$repo" "AGENTS_MAIN_ROOT=$repo" "ENFORCE_WORKTREE=off"
     if [ "$RC" -eq 1 ]; then
         pass "T06: engine exit 126 (permission denied) -> commit blocked (exit 1)"
     else
@@ -362,7 +362,7 @@ t07_worktree_gate_regression() {
     git -C "$linked" config user.name "Test"
     echo "change" > "$linked/README.md"
     git -C "$linked" add README.md
-    run_precommit "$linked" "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=on"
+    run_precommit "$linked" "ENFORCE_WORKTREE=on"
     if [ "$RC" -eq 0 ]; then
         pass "T07: linked worktree + feature branch still commits under ENFORCE_WORKTREE=on"
     else

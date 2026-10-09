@@ -3,22 +3,36 @@
 # Tests: bin/github-issues/issue-create.sh, bin/github-issues/issue-create-preflight.sh, bin/github-issues/sync-labels.sh
 # Tags: issue-setup, issue-create, github-issues, scope:issue-specific
 # issue-create.sh Phase 0a label auto-repair (#1340 step 6). L2: --check-labels rc=1 + sync ok → create proceeds;
-# sync failure → exit 1; --check-labels rc=0 → sync NOT called; AGENTS_CONFIG_DIR unset → skip with warn, continue.
+# sync failure → exit 1; --check-labels rc=0 → sync NOT called; no root env var at all → Phase 0a still runs.
 # L3 gap: live GitHub API call chain (real network, real label 422 errors).
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# pass / fail / AGENTS_DIR provided by _lib.sh.
-export AGENTS_DIR
-TARGET_IC="$AGENTS_DIR/bin/github-issues/issue-create.sh"
+# Top-level dual pin (rules/test/fixture-isolation.md): covers every line that runs
+# outside a case; setup_mock re-points both under its own $TMP, teardown_mock restores.
+_PHASE0A_TMP_ROOT="$(mktemp -d)"; readonly _PHASE0A_TMP_ROOT
+trap 'rm -rf "$_PHASE0A_TMP_ROOT"' EXIT
+mkdir -p "$_PHASE0A_TMP_ROOT/workflow-state" "$_PHASE0A_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_PHASE0A_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_PHASE0A_TMP_ROOT/plans"
+
+# pass / fail / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
+# shellcheck source=../../lib/script-checkout-fixture.sh
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+TARGET_IC_REL="bin/github-issues/issue-create.sh"
 
 TMP=""
 
 setup_mock() {
     TMP="$(mktemp -d)"
-    mkdir -p "$TMP/mock-bin" "$TMP/agents-config/bin"
+    # issue-create.sh resolves the preflight, sync-labels and scanner from its
+    # own checkout, so it runs as a copy inside a fake checkout holding the mocks.
+    FAKE_SCRIPT_CHECKOUT_ROOT="$TMP/fake-script-checkout-root"
+    TARGET_IC="$FAKE_SCRIPT_CHECKOUT_ROOT/$TARGET_IC_REL"
+    mkdir -p "$TMP/mock-bin" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues" \
+             "$FAKE_SCRIPT_CHECKOUT_ROOT/.github"
+    touch "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
 
     # Default mock knobs
     : "${GH_MOCK_LABELS_HAVE_TASK:=1}"
@@ -27,7 +41,7 @@ setup_mock() {
 
     # Create mock issue-create-preflight.sh — logs its invocation so tests can
     # assert POSITIVE evidence that Phase 0a actually ran the preflight.
-    cat > "$TMP/agents-config/bin/issue-create-preflight.sh" <<'PREFLIGHT_EOF'
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh" <<'PREFLIGHT_EOF'
 #!/bin/bash
 ARGS="$*"
 if [ -n "${MOCK_LOG:-}" ]; then
@@ -55,10 +69,10 @@ case "$ARGS" in
     ;;
 esac
 PREFLIGHT_EOF
-    chmod +x "$TMP/agents-config/bin/issue-create-preflight.sh"
+    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
 
     # Create mock sync-labels.sh
-    cat > "$TMP/agents-config/bin/sync-labels.sh" <<'SYNC_EOF'
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" <<'SYNC_EOF'
 #!/bin/bash
 if [ -n "${MOCK_LOG:-}" ]; then
     printf 'sync-labels called: %s\n' "$*" >> "$MOCK_LOG"
@@ -70,7 +84,9 @@ fi
 echo "labels synced"
 exit 0
 SYNC_EOF
-    chmod +x "$TMP/agents-config/bin/sync-labels.sh"
+    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
+    # Copy the real tree around the two mocks (existing files are never overwritten).
+    script_checkout_fixture_copy "$FAKE_SCRIPT_CHECKOUT_ROOT" bin hooks
 
     # Create mock gh
     cat > "$TMP/mock-bin/gh" <<'GH_MOCK_EOF'
@@ -113,7 +129,7 @@ GH_MOCK_EOF
     # Mock is-github-dotcom-remote
     cat > "$TMP/mock-bin/bin" <<'REMOTE_EOF'
 #!/bin/bash
-# Placeholder — is-github-dotcom-remote is at $AGENTS_DIR/bin/is-github-dotcom-remote
+# Placeholder — is-github-dotcom-remote is at <script checkout>/bin/is-github-dotcom-remote
 exit 0
 REMOTE_EOF
     # The actual is-github-dotcom-remote check in issue-create.sh uses the agents bin
@@ -129,27 +145,14 @@ REMOTE_EOF
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
     export WORKFLOW_STATE_DIR="$TMP/workflow"
-    # AGENTS_CONFIG_DIR points to TMP — mock scripts live under bin/github-issues/
-    export AGENTS_CONFIG_DIR="$TMP/agents-config"
-    mkdir -p "$AGENTS_CONFIG_DIR/bin/github-issues" "$AGENTS_CONFIG_DIR/.github"
-    touch "$AGENTS_CONFIG_DIR/.github/labels.yml"
-
     # gh_outbound_guard (sourced by issue-create.sh before the real gh call)
-    # resolves the scanner from $AGENTS_CONFIG_DIR/bin and fails CLOSED when it
-    # is missing. Provide the real scanner plus empty allow/block lists so the
-    # guard scans the clean placeholder title/body and returns rc=0.
-    cp "$AGENTS_DIR/bin/scan-outbound.sh" "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh"
-    chmod +x "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh"
-    : > "$AGENTS_CONFIG_DIR/.private-info-allowlist"
-    : > "$AGENTS_CONFIG_DIR/.private-info-blocklist"
-
-    # Phase 0a calls: bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-preflight.sh"
-    # and:           bash "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh"
-    # Place mock scripts at those exact paths.
-    cp "$TMP/agents-config/bin/issue-create-preflight.sh" \
-       "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-preflight.sh" 2>/dev/null || true
-    cp "$TMP/agents-config/bin/sync-labels.sh" \
-       "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh" 2>/dev/null || true
+    # runs the scanner copied into the fake checkout, which reads its allow/block
+    # lists from $AGENTS_MAIN_ROOT and fails CLOSED when the blocklist is missing.
+    # Empty lists let it scan the clean placeholder title/body and return rc=0.
+    export AGENTS_MAIN_ROOT="$TMP/fake-main-root"
+    mkdir -p "$AGENTS_MAIN_ROOT"
+    : > "$AGENTS_MAIN_ROOT/.private-info-allowlist"
+    : > "$AGENTS_MAIN_ROOT/.private-info-blocklist"
 }
 
 teardown_mock() {
@@ -157,7 +160,8 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR AGENTS_CONFIG_DIR \
+    export WORKFLOW_STATE_DIR="$_PHASE0A_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_PHASE0A_TMP_ROOT/plans"
+    unset MOCK_LOG AGENTS_MAIN_ROOT \
           GH_MOCK_LABELS_HAVE_TASK GH_MOCK_SYNC_LABELS_FAIL \
           GH_MOCK_CREATE_ISSUE_FAIL GH_MOCK_OWNER_REPO \
           GH_MOCK_PREFLIGHT_HARD_FAIL \
@@ -264,18 +268,26 @@ fi
 teardown_mock
 
 # ===========================================================================
-# TICA-4: AGENTS_CONFIG_DIR unset → Phase 0a skipped WITH a stderr warning,
-# and issue creation still proceeds (backward compat). C10: assert the warning
-# is actually emitted — not just that creation proceeds. RED now: Phase 0a
-# absent → no skip-warning is emitted. Green post-implementation.
+# TICA-4: no root env var at all → Phase 0a still RUNS. issue-create.sh finds the
+# preflight and sync-labels beside its own path, so an absent AGENTS_MAIN_ROOT (and
+# every retired root name) must not skip the label repair. Asserted on the calls:
+# preflight ran, sync-labels ran, gh issue create ran, and no skip warning.
+# The scanner then anchors its allow/block lists at the script checkout, so the
+# empty lists are placed there for this case.
 # ===========================================================================
 setup_mock
-unset AGENTS_CONFIG_DIR
 export GH_MOCK_LABELS_HAVE_TASK=0
+: > "$FAKE_SCRIPT_CHECKOUT_ROOT/.private-info-allowlist"
+: > "$FAKE_SCRIPT_CHECKOUT_ROOT/.private-info-blocklist"
+TICA4_UNSET=(-u AGENTS_MAIN_ROOT)
+while IFS= read -r TICA4_NAME; do
+    TICA4_NAME="${TICA4_NAME%$'\r'}"
+    [ -n "$TICA4_NAME" ] && TICA4_UNSET+=(-u "$TICA4_NAME")
+done < <(node "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js" --print-retired-env-names 2>/dev/null)
 
 STDERR_FILE="$TMP/tica4-stderr.log"
 RC=0
-OUT=$(ISSUE_CREATE_SKIP_SCHEMA=1 bash "$TARGET_IC" \
+OUT=$(env "${TICA4_UNSET[@]}" ISSUE_CREATE_SKIP_SCHEMA=1 bash "$TARGET_IC" \
     --title "Test issue" \
     --body "$VALID_BODY" \
     2>"$STDERR_FILE") || RC=$?
@@ -283,14 +295,18 @@ OUT=$(ISSUE_CREATE_SKIP_SCHEMA=1 bash "$TARGET_IC" \
 STDERR_CONTENT=$(cat "$STDERR_FILE" 2>/dev/null)
 ISSUE_CREATE_CALLED=0
 grep -q "issue create" "$MOCK_LOG" 2>/dev/null && ISSUE_CREATE_CALLED=1
-# Phase 0a must warn that it is skipping label auto-repair due to missing config.
-WARN_EMITTED=0
-echo "$STDERR_CONTENT" | grep -qiE "AGENTS_CONFIG_DIR|label auto-repair|phase 0a|skipping label" && WARN_EMITTED=1
+SYNC_LABELS_CALLED=0
+grep -q "sync-labels called" "$MOCK_LOG" 2>/dev/null && SYNC_LABELS_CALLED=1
+PREFLIGHT_CALLED=0
+preflight_invoked && PREFLIGHT_CALLED=1
+SKIP_WARNED=0
+echo "$STDERR_CONTENT" | grep -qiE "skipping label" && SKIP_WARNED=1
 
-if [ "$RC" = "0" ] && [ "$ISSUE_CREATE_CALLED" = "1" ] && [ "$WARN_EMITTED" = "1" ]; then
-    pass "TICA-4: AGENTS_CONFIG_DIR unset → skip warning emitted; issue create continues (rc=0)"
+if [ "${#TICA4_UNSET[@]}" -gt 2 ] && [ "$RC" = "0" ] && [ "$PREFLIGHT_CALLED" = "1" ] \
+   && [ "$SYNC_LABELS_CALLED" = "1" ] && [ "$ISSUE_CREATE_CALLED" = "1" ] && [ "$SKIP_WARNED" = "0" ]; then
+    pass "TICA-4: no root env var → preflight ran → sync-labels ran → issue create proceeds, no skip warning"
 else
-    fail "TICA-4: rc=$RC create=$ISSUE_CREATE_CALLED warn=$WARN_EMITTED — expected RED (Phase 0a skip-warning not yet implemented) stderr=$STDERR_CONTENT"
+    fail "TICA-4: rc=$RC unset-args=${#TICA4_UNSET[@]} preflight=$PREFLIGHT_CALLED sync=$SYNC_LABELS_CALLED create=$ISSUE_CREATE_CALLED skip-warned=$SKIP_WARNED stderr=$STDERR_CONTENT"
 fi
 teardown_mock
 

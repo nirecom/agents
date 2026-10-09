@@ -7,7 +7,7 @@
 #
 # L3 gap (what this test does NOT catch):
 # - Real clarify-commit-scope.sh / clarify-guard-loop.sh network calls against GitHub API
-# - AGENTS_CONFIG_DIR resolution in a real claude -p session
+# - AGENTS_MAIN_ROOT resolution in a real claude -p session
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
 #

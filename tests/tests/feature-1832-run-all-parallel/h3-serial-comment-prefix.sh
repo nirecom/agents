@@ -9,10 +9,10 @@ set -u
 # table adds slash-lang (*.slt, "//"); a line in the other language's prefix is a decoy.
 # TL3 gap: a real non-bash language's launcher; the fixture language runs under bash.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-RUNNER="$AGENTS_DIR/tests/run-all.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
 # shellcheck source=../../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"   # for the case markers; the reporters below replace its own
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"   # for the case markers; the reporters below replace its own
 
 PASS=0
 FAIL=0
@@ -41,16 +41,16 @@ senv() {
         -u FEATURE_644_PHASE -u TEST_MAX_JOBS_PER_HOST RUN_ALL_CONFIG_VAR_CMD=/nonexistent/get-config-var "$@"
 }
 unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
-run_with_timeout() { local s="$1"; shift; senv bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
+run_with_timeout() { local s="$1"; shift; senv bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$s" "$@"; }
 
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
 # shellcheck source=../../bin/test-language-registry/slash-header-fixture.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/slash-header-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/slash-header-fixture.sh"
 CO="$TMPD/co"
 # The calibrator takes its population from the checkout's own run-all plan (#2079).
-slash_fx_checkout "$CO" "$AGENTS_DIR" bin/calibrate-test-parallelism.sh bin/calibrate-test-parallelism tests/run-all.sh
+slash_fx_checkout "$CO" "$SCRIPT_CHECKOUT_ROOT" bin/calibrate-test-parallelism.sh bin/calibrate-test-parallelism tests/run-all.sh
 
 # fx_test <path> <serial-line-or-empty> — a header block in the file's own prefix,
 # plus the given Serial line (which may be in the other prefix: a decoy).

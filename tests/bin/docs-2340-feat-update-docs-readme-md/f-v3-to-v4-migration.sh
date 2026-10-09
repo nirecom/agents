@@ -32,8 +32,8 @@ fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, process.env.F_SID + "
 # f_probe <sid> <js> — one node process with the fixture reader preamble bound.
 f_probe() {
   local sid="$1" js="$2"
-  F_SID="$sid" CORE_N="$AGENTS_DIR_N/hooks/workflow-state/state-io/core.js" \
-  MIG_N="$AGENTS_DIR_N/hooks/workflow-state/state-io/migrations/v3-to-v4.js" \
+  F_SID="$sid" CORE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/core.js" \
+  MIG_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/migrations/v3-to-v4.js" \
   run_node -e '
 const fs = require("fs"), path = require("path");
 const CORE = require(process.env.CORE_N);

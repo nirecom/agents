@@ -58,13 +58,13 @@ set -u
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 command -v git  >/dev/null 2>&1 || { echo "SKIP: git not found";  exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -93,7 +93,7 @@ json_payload() {
     node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.argv[1]}}))' "$1"
 }
 
-# ── Fixtures: one main worktree (+ one linked worktree), one fake ACD, plans ──
+# ── Fixtures: one main worktree (+ one linked worktree), one fake script checkout root, plans ──
 MAIN_WT_RAW="$TMPDIR_BASE/repo"
 mkdir -p "$MAIN_WT_RAW"
 git -C "$MAIN_WT_RAW" init -q -b main
@@ -106,24 +106,24 @@ git -C "$MAIN_WT_RAW" commit -q --no-verify -m initial
 git -C "$MAIN_WT_RAW" worktree add -q -b feature/x "$MAIN_WT_RAW/.wt/x" >/dev/null
 MAIN_WT="$(norm "$MAIN_WT_RAW")"
 
-ACD_RAW="$TMPDIR_BASE/acd"
-mkdir -p "$ACD_RAW/bin/github-issues" "$ACD_RAW/skills/issue-create/scripts" \
-         "$ACD_RAW/skills/review-code-security/scripts" \
-         "$ACD_RAW/skills/issue-close-finalize/scripts" \
-         "$ACD_RAW/hooks"
-# Both trust markers (hooks/lib/agents-config-dir.js: hooks/enforce-worktree.js
+FAKE_SCRIPT_CHECKOUT_ROOT_RAW="$TMPDIR_BASE/script_checkout_root"
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/github-issues" "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/skills/issue-create/scripts" \
+         "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/skills/review-code-security/scripts" \
+         "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/skills/issue-close-finalize/scripts" \
+         "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/hooks"
+# Both trust markers (hooks/lib/script-checkout-root.js: hooks/enforce-worktree.js
 # AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real one
 # always carries the guard itself — a marker-less stub is not a faithful config
 # dir, it is the hostile case, which tests/fix-1630-*.sh own (T4a-attack et al.).
-touch "$ACD_RAW/hooks/enforce-worktree.js"
-touch "$ACD_RAW/bin/github-issues/issue-create-dispatch.sh" \
-      "$ACD_RAW/bin/check-unstaged-tracked.sh" \
-      "$ACD_RAW/skills/review-code-security/scripts/run-quality-gates.sh" \
-      "$ACD_RAW/skills/issue-close-finalize/scripts/run-loop-step.js"
-ACD="$(norm "$ACD_RAW")"
-DISPATCH="$ACD/bin/github-issues/issue-create-dispatch.sh"
-QGATES="$ACD/skills/review-code-security/scripts/run-quality-gates.sh"
-FSD="$ACD/skills/issue-close-finalize/scripts"
+touch "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/hooks/enforce-worktree.js"
+touch "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/github-issues/issue-create-dispatch.sh" \
+      "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/check-unstaged-tracked.sh" \
+      "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/skills/review-code-security/scripts/run-quality-gates.sh" \
+      "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/skills/issue-close-finalize/scripts/run-loop-step.js"
+FAKE_SCRIPT_CHECKOUT_ROOT="$(norm "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW")"
+DISPATCH="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-dispatch.sh"
+QGATES="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/review-code-security/scripts/run-quality-gates.sh"
+FSD="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts"
 
 PLANS_RAW="$TMPDIR_BASE/plans"
 mkdir -p "$PLANS_RAW"
@@ -145,7 +145,7 @@ run_guard() {
         env \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN_WT" \
-        "AGENTS_CONFIG_DIR=$ACD" \
+        "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" \
         "WORKFLOW_PLANS_DIR=$PLANS" \
         "$@" \
         node "$GUARD_JS" 2>&1)" || rc=$?
@@ -262,28 +262,28 @@ assert_block "FP6b-attack #1191 same form, tee target moved into the MAIN worktr
 # tests/hooks/fix-1679-finalize-overlay-arg-contract.sh.
 # ============================================================================
 assert_block "PR1612 finalize loop-step with clean enum decision — eval path retired (#1673)" \
-    "eval \"\$(AGENTS_CONFIG_DIR=\"$ACD\" FINALIZE_SCRIPTS_DIR=\"$FSD\" node \"$FSD/run-loop-step.js\" \"$STATE\" \"accept\")\""
+    "eval \"\$(AGENTS_MAIN_ROOT=\"$FAKE_SCRIPT_CHECKOUT_ROOT\" FINALIZE_SCRIPTS_DIR=\"$FSD\" node \"$FSD/run-loop-step.js\" \"$STATE\" \"accept\")\""
 assert_block "PR1612-attack finalize loop-step with decision 'accept|evil'" \
-    "eval \"\$(AGENTS_CONFIG_DIR=\"$ACD\" FINALIZE_SCRIPTS_DIR=\"$FSD\" node \"$FSD/run-loop-step.js\" \"$STATE\" \"accept|evil\")\""
+    "eval \"\$(AGENTS_MAIN_ROOT=\"$FAKE_SCRIPT_CHECKOUT_ROOT\" FINALIZE_SCRIPTS_DIR=\"$FSD\" node \"$FSD/run-loop-step.js\" \"$STATE\" \"accept|evil\")\""
 
 # shellcheck source=tests/hooks/fix-1569-quote-span-regression/rules-hook.sh
-. "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/rules-hook.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1569-quote-span-regression/rules-hook.sh"
 run_rule_hook_cases
 
 # shellcheck source=tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh
-. "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh"
 run_arg_tail_module_cases
 
 # shellcheck source=tests/hooks/fix-1569-quote-span-regression/case-pattern.sh
-. "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/case-pattern.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1569-quote-span-regression/case-pattern.sh"
 run_case_pattern_cases
 
 # shellcheck source=tests/hooks/fix-1569-quote-span-regression/fold-ok-gate.sh
-. "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/fold-ok-gate.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1569-quote-span-regression/fold-ok-gate.sh"
 run_fold_ok_gate_cases
 
 # shellcheck source=tests/hooks/fix-1569-quote-span-regression/canary.sh
-. "$AGENTS_DIR/tests/hooks/fix-1569-quote-span-regression/canary.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1569-quote-span-regression/canary.sh"
 run_canary_cases
 
 echo ""

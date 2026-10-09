@@ -78,7 +78,7 @@ _r13_kv() {
 _r13_expect() { assert_eq "R13 $1 == $2" "$2" "$(_r13_kv "$1")"; }
 
 run_R13_onunknown_direction() {
-    local probe="$AGENTS_DIR/tests/hooks/enforce-protected-marker-write/round13-onunknown-probe.js"
+    local probe="$SCRIPT_CHECKOUT_ROOT/tests/hooks/enforce-protected-marker-write/round13-onunknown-probe.js"
     if [ ! -f "$probe" ]; then
         fail "R13 probe helper missing at $probe - the whole section is vacuous"
         return
@@ -104,8 +104,8 @@ run_R13_onunknown_direction() {
     out_n=$(node_path "$outside")
 
     _R13_PROBE_OUT=$(WORKFLOW_STATE_DIR="$wf_n" WORKFLOW_PLANS_DIR="$wf_n" \
-        AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 25 node "$probe" \
-        "$_AGENTS_DIR_NODE" "$wf_n" "$loop_n" "$deep_n" "$outloop_n" "$out_n" 2>/dev/null)
+        "$RWT" 25 node "$probe" \
+        "$_SCRIPT_CHECKOUT_ROOT_NODE" "$wf_n" "$loop_n" "$deep_n" "$outloop_n" "$out_n" 2>/dev/null)
     if [ -z "$_R13_PROBE_OUT" ]; then
         fail "R13 onUnknown probe produced no output (crash/timeout) - section vacuous"
         cleanup_tmp "$root"

@@ -12,12 +12,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WORKFLOW_INIT_SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
-ROUTE_DECISION_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/route-decision.js"
-META_CLASSIFY_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/meta-classify.js"
-DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
-SECTION_BULK="$AGENTS_DIR/tests/agents/feature-issue-create-skill/section-dispatch-bulk.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+WORKFLOW_INIT_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
+ROUTE_DECISION_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/route-decision.js"
+META_CLASSIFY_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/meta-classify.js"
+DRIVER="$SCRIPT_CHECKOUT_ROOT/bin/workflow/workflow-init-driver"
+SECTION_BULK="$SCRIPT_CHECKOUT_ROOT/tests/agents/feature-issue-create-skill/section-dispatch-bulk.sh"
 
 PASS=0
 FAIL=0
@@ -136,7 +136,7 @@ else
     trap 'rm -rf "$ROOT1181"' EXIT
     ORIG_PATH1181="$PATH"
     _CN1181=0
-    TIMEOUT_WRAP="$AGENTS_DIR/bin/run-with-timeout.sh"
+    TIMEOUT_WRAP="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
     setup_t() {
         local sid="$1"
@@ -203,8 +203,8 @@ esac
 WIPEOF
         chmod +x "$T_CFG/bin/github-issues/wip-state.sh"
         printf '#!/bin/bash\necho "${CLAUDE_CODE_SESSION_ID:-mock}"\n' > "$T_CFG/bin/resolve-session-id"
-        cp "$AGENTS_DIR/bin/parse-issue-tokens" "$T_CFG/bin/parse-issue-tokens"
-        cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$T_CFG/hooks/lib/parse-closes-issues.js"
+        cp "$SCRIPT_CHECKOUT_ROOT/bin/parse-issue-tokens" "$T_CFG/bin/parse-issue-tokens"
+        cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-closes-issues.js" "$T_CFG/hooks/lib/parse-closes-issues.js"
         cat > "$T_CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
 #!/bin/bash
 while [ $# -gt 0 ]; do
@@ -214,14 +214,14 @@ exit 0
 FEOF
         chmod +x "$T_CFG/bin/resolve-session-id" "$T_CFG/bin/parse-issue-tokens" \
             "$T_CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
-        export WORKFLOW_PLANS_DIR="$T_PLANS" AGENTS_CONFIG_DIR="$T_CFG" CLAUDE_CODE_SESSION_ID="$sid"
+        export WORKFLOW_PLANS_DIR="$T_PLANS" AGENTS_MAIN_ROOT="$T_CFG" CLAUDE_CODE_SESSION_ID="$sid"
         unset NON_GITHUB 2>/dev/null || true
         export PATH="$T_MOCKBIN:$ORIG_PATH1181"
     }
 
     teardown_t() {
         export PATH="$ORIG_PATH1181"
-        unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR 2>/dev/null || true
+        unset WORKFLOW_PLANS_DIR AGENTS_MAIN_ROOT 2>/dev/null || true
     }
 
     mock_issue() {

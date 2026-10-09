@@ -20,9 +20,9 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # measurement rather than a claim in a comment.
 
 SEC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SEC_DIR/../../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -70,7 +70,7 @@ const armedN = rows.filter((r) => r[1]).length;
 if (armedN > 0 && armedN < rows.length) process.stdout.write("OK|AW-split the table holds both armed and unarmed rows (" + armedN + "/" + rows.length + ")\n");
 else process.stdout.write("NG|AW-split every AW row is on the same side (" + armedN + "/" + rows.length + ") — the column asserts nothing\n");
 process.stdout.write("DONE|" + n + "\n");
-' "$_AGENTS_DIR_NODE" 2>&1)"
+' "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>&1)"
 
 AW_DONE=no
 while IFS= read -r line; do
@@ -109,7 +109,7 @@ const wanted = ["PYTHON_CLUSTER_FLAG", "PERL_CLUSTER_FLAG", "FALLBACK_CLUSTER_FL
 const missing = wanted.filter((n) => !new RegExp("const " + n + "\\s*=").test(src));
 const shapes = (src.match(/^\s*new RegExp\(String\.raw`\^/gm) || []).length;
 process.stdout.write(missing.join(",") + "|" + shapes);
-' "$_AGENTS_DIR_NODE" 2>/dev/null)"
+' "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>/dev/null)"
 MU_MISSING="${MU_OUT%%|*}"; MU_SHAPES="${MU_OUT##*|}"
 if [ -z "$MU_MISSING" ]; then
     pass "MU1 all three cluster-flag constants named in the mutation record still exist"

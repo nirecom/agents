@@ -11,7 +11,7 @@
 # All output to stdout is KEY=value (sourceable). Diagnostics go to stderr.
 set -euo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 SUBCMD="${1:?subcommand required: prepare|execute}"
 shift
@@ -21,7 +21,7 @@ case "$SUBCMD" in
         N="${1:?N required}"
         # ICF-E — Pre-check. Capture stdout only; let stderr pass through.
         rc=0
-        PROPOSAL_PARENT=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-close-proposal-prepare.sh" \
+        PROPOSAL_PARENT=$(bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/parent-close-proposal-prepare.sh" \
             "$OWNER_REPO" "$N") || rc=$?
         case "$rc" in
             0)
@@ -48,7 +48,7 @@ case "$SUBCMD" in
         ACTION="${2:?ACTION required: accept|decline|skip}"
         case "$ACTION" in
             accept)
-                if ! bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-close-proposal-execute.sh" \
+                if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/parent-close-proposal-execute.sh" \
                         "$PROPOSAL_PARENT" >&2; then
                     echo "[step-g5: parent-close-proposal-execute.sh failed for #$PROPOSAL_PARENT]" >&2
                     echo "PROPOSAL_RESULT=execute-failed"

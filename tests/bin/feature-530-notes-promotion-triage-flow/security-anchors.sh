@@ -2,34 +2,13 @@
 # tests/bin/feature-530-notes-promotion-triage-flow/security-anchors.sh
 # Tests: bin/worktree-notes-triage/resolve.js, hooks/lib/worktree-notes.js
 # Tags: notes-promotion, worktree-notes, triage, security, path-traversal, shell-metachar, TL2, scope:issue-specific
-#
-# A — the two *directory* flags, --worktree and --main-root.
-#
-# security.sh covers the two attacker-shaped *identifier* flags (--session-id,
-# --pr-branch). The directory flags are the symmetric other half (CPR-ORTH) and are
-# attacked differently:
-#
-#   A1/A2  shell metacharacters. The resolved notesPath is interpolated into a
-#          shell command by the caller (notes-promotion.md NP-5/NP-8), so a
-#          notes file living under a directory named `x;id` must never be handed
-#          back as a promotable path — resolve must skip with notes-path-unsafe.
-#   A3     anchor semantics for ABSOLUTE paths. --main-root is an anchor, not a
-#          notes location: pointing it straight at a directory that holds a
-#          WORKTREE_NOTES.md must not promote that file; only
-#          <main-root>/.worktree-backup/<branch>/ counts.
-#   A4     `..` inside an ABSOLUTE path. hasTraversal() screens the RAW argument,
-#          so an absolute path is not exempt from the traversal check just
-#          because it is rooted.
-#
-# Each attack case is paired with a control that differs only in the attacked
-# character/segment, so a blanket-deny implementation cannot pass the file.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the SKILL.md callsites quote the notesPath when they interpolate it
-#   into the Bash tool, i.e. whether notes-path-unsafe is the only thing standing
-#   between a metachar path and execution. Only a live session shows that.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# A — the two *directory* flags, --worktree and --target-main-root (CPR-ORTH half of security.sh).
+#   A1/A2  a notes file under a dir named with shell metacharacters -> notes-path-unsafe skip.
+#   A3     --target-main-root is an anchor: only <target-main-root>/.worktree-backup/<branch>/ counts.
+#   A4     `..` inside an ABSOLUTE path is still screened by hasTraversal().
+# Each attack case has a control differing only in the attacked character/segment.
+# TL3 gap: whether SKILL.md callsites quote notesPath when interpolating it (live session only;
+# checked at WORKFLOW_USER_VERIFIED preflight, category: skill-orchestration).
 
 . "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
@@ -127,7 +106,7 @@ a1c_clean_worktree_promotes() {
 }
 
 # ---------------------------------------------------------------------------
-# A2 — --main-root under a directory whose name carries a shell metacharacter
+# A2 — --target-main-root under a directory whose name carries a shell metacharacter
 # ---------------------------------------------------------------------------
 a2_main_root_metachars() {
     local i=0 c root np missing action reason
@@ -141,7 +120,7 @@ a2_main_root_metachars() {
             continue
         fi
         missing=""
-        resolve --caller worktree-end --main-root "$np" --pr-branch feature/anchor
+        resolve --caller worktree-end --target-main-root "$np" --pr-branch feature/anchor
         action="$(jfield "$RESOLVE_OUT" action)"
         reason="$(jfield "$RESOLVE_OUT" skipReason)"
         [ "$RESOLVE_RC" = "0" ] || missing="$missing rc=$RESOLVE_RC"
@@ -150,9 +129,9 @@ a2_main_root_metachars() {
         case "$RESOLVE_OUT$RESOLVE_ERR" in *"$A_LEAK"*) missing="$missing leaked-body" ;; esac
 
         if [ -z "$missing" ]; then
-            pass "A2: --main-root holding '$c' is skipped as notes-path-unsafe on the backup-branch-dir branch"
+            pass "A2: --target-main-root holding '$c' is skipped as notes-path-unsafe on the backup-branch-dir branch"
         else
-            fail "A2: metachar '$c' in --main-root not screened" "$missing (out=$RESOLVE_OUT err=$RESOLVE_ERR)"
+            fail "A2: metachar '$c' in --target-main-root not screened" "$missing (out=$RESOLVE_OUT err=$RESOLVE_ERR)"
         fi
     done
 }
@@ -160,27 +139,27 @@ a2_main_root_metachars() {
 a2c_clean_main_root_promotes() {
     local root="$TMPD/a2c/root-x" missing=""
     plant_notes "$root/.worktree-backup/feature/anchor"
-    resolve --caller worktree-end --main-root "$(nodepath "$root")" --pr-branch feature/anchor
+    resolve --caller worktree-end --target-main-root "$(nodepath "$root")" --pr-branch feature/anchor
     [ "$(jfield "$RESOLVE_OUT" action)" = "promote" ] || missing="$missing action=$(jfield "$RESOLVE_OUT" action)"
     [ "$(jfield "$RESOLVE_OUT" resolvedVia)" = "backup-branch-dir" ] || missing="$missing via=$(jfield "$RESOLVE_OUT" resolvedVia)"
 
     if [ -z "$missing" ]; then
-        pass "A2c: control — the same --main-root layout without a metacharacter resolves via backup-branch-dir"
+        pass "A2c: control — the same --target-main-root layout without a metacharacter resolves via backup-branch-dir"
     else
-        fail "A2c: clean --main-root did not promote" "$missing (out=$RESOLVE_OUT)"
+        fail "A2c: clean --target-main-root did not promote" "$missing (out=$RESOLVE_OUT)"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# A3 — an absolute --main-root is an anchor, not a notes location
+# A3 — an absolute --target-main-root is an anchor, not a notes location
 # ---------------------------------------------------------------------------
-# --main-root is caller-supplied, so it is honored as an absolute path — but only
-# through the <main-root>/.worktree-backup/<branch>/ segments. Handing it a
+# --target-main-root is caller-supplied, so it is honored as an absolute path — but only
+# through the <target-main-root>/.worktree-backup/<branch>/ segments. Handing it a
 # directory that already contains a WORKTREE_NOTES.md must resolve nothing.
 a3_main_root_is_anchor_only() {
     local root="$TMPD/a3/root" missing=""
-    plant_notes "$root"                     # decoy: sits directly at --main-root
-    resolve --caller worktree-end --main-root "$(nodepath "$root")" --pr-branch feature/anchor
+    plant_notes "$root"                     # decoy: sits directly at --target-main-root
+    resolve --caller worktree-end --target-main-root "$(nodepath "$root")" --pr-branch feature/anchor
     [ "$RESOLVE_RC" = "0" ] || missing="$missing rc=$RESOLVE_RC"
     [ "$(jfield "$RESOLVE_OUT" action)" = "skip" ] || missing="$missing action=$(jfield "$RESOLVE_OUT" action)"
     [ "$(jfield "$RESOLVE_OUT" skipReason)" = "notes-path-unresolved" ] \
@@ -192,15 +171,15 @@ a3_main_root_is_anchor_only() {
     # difference is the .worktree-backup/<branch>/ path, so A3's skip is the
     # anchor requirement and not a dead branch.
     plant_notes "$root/.worktree-backup/feature/anchor"
-    resolve --caller worktree-end --main-root "$(nodepath "$root")" --pr-branch feature/anchor
+    resolve --caller worktree-end --target-main-root "$(nodepath "$root")" --pr-branch feature/anchor
     [ "$(jfield "$RESOLVE_OUT" action)" = "promote" ] || missing="$missing control-action=$(jfield "$RESOLVE_OUT" action)"
     [ "$(norm_path "$(jfield "$RESOLVE_OUT" notesPath)")" = "$(norm_path "$root/.worktree-backup/feature/anchor/WORKTREE_NOTES.md")" ] \
         || missing="$missing control-path=$(jfield "$RESOLVE_OUT" notesPath)"
 
     if [ -z "$missing" ]; then
-        pass "A3: an absolute --main-root only resolves through .worktree-backup/<branch>/ — a notes file sitting at the root itself is not promoted"
+        pass "A3: an absolute --target-main-root only resolves through .worktree-backup/<branch>/ — a notes file sitting at the root itself is not promoted"
     else
-        fail "A3: --main-root treated as a notes location" "$missing (out=$RESOLVE_OUT)"
+        fail "A3: --target-main-root treated as a notes location" "$missing (out=$RESOLVE_OUT)"
     fi
 }
 
@@ -226,8 +205,8 @@ a4_absolute_traversal_segments() {
         || missing="$missing wt-reason=$(jfield "$RESOLVE_OUT" skipReason)"
     case "$RESOLVE_OUT$RESOLVE_ERR" in *"$A_LEAK"*) missing="$missing wt-leaked-body" ;; esac
 
-    # (2) --main-root: same shape, other flag.
-    resolve --caller worktree-end --main-root "$abs/root/../root" --pr-branch feature/anchor
+    # (2) --target-main-root: same shape, other flag.
+    resolve --caller worktree-end --target-main-root "$abs/root/../root" --pr-branch feature/anchor
     [ "$(jfield "$RESOLVE_OUT" action)" = "skip" ] || missing="$missing root-action=$(jfield "$RESOLVE_OUT" action)"
     [ "$(jfield "$RESOLVE_OUT" skipReason)" = "notes-path-unresolved" ] \
         || missing="$missing root-reason=$(jfield "$RESOLVE_OUT" skipReason)"
@@ -237,11 +216,11 @@ a4_absolute_traversal_segments() {
     # This is what makes (1) and (2) assertions about the segment, not the path.
     resolve --caller worktree-end --worktree "$abs/wt"
     [ "$(jfield "$RESOLVE_OUT" action)" = "promote" ] || missing="$missing wt-control=$(jfield "$RESOLVE_OUT" action)"
-    resolve --caller worktree-end --main-root "$abs/root" --pr-branch feature/anchor
+    resolve --caller worktree-end --target-main-root "$abs/root" --pr-branch feature/anchor
     [ "$(jfield "$RESOLVE_OUT" action)" = "promote" ] || missing="$missing root-control=$(jfield "$RESOLVE_OUT" action)"
 
     if [ -z "$missing" ]; then
-        pass "A4: a '..' segment inside an absolute --worktree/--main-root is refused even though the collapsed path exists"
+        pass "A4: a '..' segment inside an absolute --worktree/--target-main-root is refused even though the collapsed path exists"
     else
         fail "A4: absolute traversal accepted" "$missing"
     fi

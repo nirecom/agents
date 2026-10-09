@@ -37,10 +37,10 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_CP1673_PRURL_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-OPEN_PR_JS="$AGENTS_DIR/bin/open-pr-url.js"
-OPEN_EXTERNAL_JS="$AGENTS_DIR/hooks/lib/open-external.js"
-SKILL_MD="$AGENTS_DIR/skills/commit-push/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+OPEN_PR_JS="$SCRIPT_CHECKOUT_ROOT/bin/open-pr-url.js"
+OPEN_EXTERNAL_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/open-external.js"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/commit-push/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -133,7 +133,7 @@ group_wording() {
     esac
     # Non-vacuity: the old hook DOES carry that wording, so the greps above are
     # matching something that exists rather than a typo of my own.
-    if [ -f "$AGENTS_DIR/hooks/pr-created-open.js" ] && grep -qF "Click Allow" "$AGENTS_DIR/hooks/pr-created-open.js"; then
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/pr-created-open.js" ] && grep -qF "Click Allow" "$SCRIPT_CHECKOUT_ROOT/hooks/pr-created-open.js"; then
         pass "wording/old-hook-still-has-it (grep is live)"
     else
         fail "wording/old-hook-still-has-it (grep is live)" \

@@ -18,13 +18,13 @@
 # reaches, or in a comment; and it misses an instruction assembled from parts. Each hook is
 # driven twice — once through the branch that should carry the instruction and once through
 # a branch that should not — so a constant footer cannot satisfy the assertion.
-# Assumes AGENTS_DIR, BASE, node_path(), pass(), fail() from the entry file.
+# Assumes SCRIPT_CHECKOUT_ROOT, BASE, node_path(), pass(), fail() from the entry file.
 
 echo ""
 echo "=== HW: the two rules delivered by a hook rather than by a SKILL.md Read ==="
 
-HW_SYSOPS="$AGENTS_DIR/hooks/enforce-system-ops.js"
-HW_GATE="$AGENTS_DIR/hooks/workflow-gate.js"
+HW_SYSOPS="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-system-ops.js"
+HW_GATE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
 
 if [ ! -f "$HW_SYSOPS" ] || [ ! -f "$HW_GATE" ]; then
     fail "HW: IMPLEMENTATION MISSING: hooks/enforce-system-ops.js or hooks/workflow-gate.js"
@@ -100,7 +100,7 @@ else
 HW_STATE_EOF
     }
 
-    # AGENTS_CONFIG_DIR points at the fixture repo on purpose: the gate self-limits to the
+    # AGENTS_MAIN_ROOT points at the fixture repo on purpose: the gate self-limits to the
     # agents session repo (isAgentsSessionRepo), so a fixture that is a different repo would
     # be waved through and every assertion below would pass without the gate ever deciding.
     hw_gate() {
@@ -108,7 +108,7 @@ HW_STATE_EOF
             "$(node_path "$HW_REPO")" \
             | ( cd "$HW_REPO" && env \
                 "WORKFLOW_STATE_DIR=$HW_WF" "WORKFLOW_PLANS_DIR=$HW_PLANS" \
-                "AGENTS_CONFIG_DIR=$HW_REPO" "CLAUDE_PROJECT_DIR=$HW_REPO" \
+                "AGENTS_MAIN_ROOT=$HW_REPO" "CLAUDE_PROJECT_DIR=$HW_REPO" \
                 node "$(node_path "$HW_GATE")" 2>/dev/null )
     }
 
@@ -145,7 +145,7 @@ HW_STATE_EOF
     # the string assertions above would still be green.
     HW3_MISSING=""
     for hw_rule in rules/ops.md rules/branch.md rules/worktree.md; do
-        [ -f "$AGENTS_DIR/$hw_rule" ] || HW3_MISSING="$HW3_MISSING $hw_rule"
+        [ -f "$SCRIPT_CHECKOUT_ROOT/$hw_rule" ] || HW3_MISSING="$HW3_MISSING $hw_rule"
     done
     if [ -n "$HW3_MISSING" ]; then
         fail "HW3: the hooks name rule file(s) that do not exist in the tree:$HW3_MISSING — the Read instruction cannot be carried out"

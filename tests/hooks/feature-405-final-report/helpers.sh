@@ -6,24 +6,24 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$_HELPERS_SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$_HELPERS_SCRIPT_CHECKOUT_ROOT"
 fi
 
-PARSE_JS="${_AGENTS_DIR_NODE}/hooks/lib/parse-closes-issues.js"
-NOTES_JS="${_AGENTS_DIR_NODE}/hooks/lib/worktree-notes.js"
-SCHEMA_JS="${_AGENTS_DIR_NODE}/hooks/lib/final-report-schema.js"
-SKILL_MD="${AGENTS_DIR}/skills/worktree-end/SKILL.md"
-SESSION_CLOSE_SKILL_MD="${AGENTS_DIR}/skills/session-close/SKILL.md"
+PARSE_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/parse-closes-issues.js"
+NOTES_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/worktree-notes.js"
+SCHEMA_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/final-report-schema.js"
+SKILL_MD="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/skills/worktree-end/SKILL.md"
+SESSION_CLOSE_SKILL_MD="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/skills/session-close/SKILL.md"
 
 PASS=0
 FAIL=0
 SKIP=0
-# Guard: ensure AGENTS_CONFIG_DIR does not bleed into pre-agents-gate tests
-unset AGENTS_CONFIG_DIR
+# Guard: ensure AGENTS_MAIN_ROOT does not bleed into pre-agents-gate tests
+unset AGENTS_MAIN_ROOT
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }

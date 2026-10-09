@@ -15,14 +15,14 @@ set -euo pipefail
 # - the real PowerShell tool path (Move-Item / Rename-Item are fed as Bash text here).
 # Closest-to-action mitigation: the real hook entrypoint runs as a subprocess.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-AGENTS_N="$(np "$AGENTS_DIR")"
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-SCAN_JS="$AGENTS_DIR/hooks/block-clearance-token-write/bash-scan/scan.js"
-DETECT_TARGETS_JS="$AGENTS_DIR/hooks/lib/bash-write-targets/detection-targets.js"
+AGENTS_N="$(np "$SCRIPT_CHECKOUT_ROOT")"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+SCAN_JS="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write/bash-scan/scan.js"
+DETECT_TARGETS_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/bash-write-targets/detection-targets.js"
 
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
@@ -32,7 +32,6 @@ if command -v cygpath >/dev/null 2>&1; then export USERPROFILE; USERPROFILE="$(c
 export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
 export WORKFLOW_PLANS_DIR; WORKFLOW_PLANS_DIR="$(np "$TMP/plans")"
 export CLAUDE_TRANSCRIPT_BASE_DIR; CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/tx")"
-export AGENTS_CONFIG_DIR="$AGENTS_N"
 unset CLAUDE_CODE_SESSION_ID CLAUDECODE 2>/dev/null || true
 cd "$TMP"
 

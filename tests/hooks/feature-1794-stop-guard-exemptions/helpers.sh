@@ -4,19 +4,19 @@
 #
 # State/marker seeding and hook drivers for the #1794/#1665/#1685 stop-guard
 # exemption suite. Sourced by tests/hooks/feature-1794-stop-guard-exemptions.sh.
-# Expects AGENTS_DIR, _AGENTS_DIR_NODE, RWT, and the pass/fail/skip counters.
+# Expects SCRIPT_CHECKOUT_ROOT, _SCRIPT_CHECKOUT_ROOT_NODE, RWT, and the pass/fail/skip counters.
 
-STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-PATTERNS_NODE="$_AGENTS_DIR_NODE/hooks/lib/sentinel-patterns.js"
-POLICY_NODE="$_AGENTS_DIR_NODE/hooks/lib/stop-exemption-policy.js"
-UPS_HOOK_NODE="$_AGENTS_DIR_NODE/hooks/user-prompt-submit-mechanism-check.js"
-PAUSE_MARKER_NODE="$_AGENTS_DIR_NODE/hooks/lib/next-step-pause-marker.js"
-GUARD_C4="$AGENTS_DIR/hooks/stop-premature-stop-guard.js"
-GUARD_C2="$AGENTS_DIR/hooks/supervisor-guard.js"
-MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
+STATEIO_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
+PATTERNS_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/sentinel-patterns.js"
+POLICY_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/stop-exemption-policy.js"
+UPS_HOOK_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/user-prompt-submit-mechanism-check.js"
+PAUSE_MARKER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/next-step-pause-marker.js"
+GUARD_C4="$SCRIPT_CHECKOUT_ROOT/hooks/stop-premature-stop-guard.js"
+GUARD_C2="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard.js"
+MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
 
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'stopexempt1794'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
@@ -121,7 +121,7 @@ fs.utimesSync(process.env.P, t, t);" >/dev/null 2>&1
 # node_path-normalised path so the JSON payload needs no escaping.
 run_c4() {
     C4_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"${3:-}\"}" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 25 node "$(node_path "$GUARD_C4")" 2>/dev/null)
     C4_RC=$?
 }
@@ -133,7 +133,7 @@ run_c2() {
     local errf
     errf="$(mktemp)"
     C2_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"${3:-}\"}" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 25 node "$(node_path "$GUARD_C2")" 2>"$errf")
     C2_RC=$?
     C2_ERR=$(cat "$errf" 2>/dev/null)

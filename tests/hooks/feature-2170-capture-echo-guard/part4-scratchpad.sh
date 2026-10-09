@@ -20,8 +20,7 @@ set -uo pipefail
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
-AGENTS_DIR="${1:-$(cd "$(dirname "$0")/../../.." && pwd)}"
-export AGENTS_DIR
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DRIVER="$HERE/scratchpad-driver.js"
 command -v node >/dev/null 2>&1 || exit 77
@@ -29,7 +28,7 @@ command -v node >/dev/null 2>&1 || exit 77
 # Harness: provides pass/fail/skip/case_begin/case_end/run_with_timeout.
 # PASS/FAIL/SKIP initialized by harness guards.
 # assert_eq below is 3-arg (name, want, got); it overrides harness's 2-arg version.
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -164,7 +163,7 @@ case_end
 # EV/OUT/HOOK defined outside all spans so no single span deletion leaves them orphaned.
 EV="$TMPROOT_RAW/event.json"
 OUT="$TMPROOT_RAW/out.json"
-HOOK="$AGENTS_DIR/hooks/preuse-auto-approve.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/preuse-auto-approve.js"
 
 # --- SP-10: AUTO_APPROVE_TOOLS kill switch (hook process boundary) -----------
 case_begin "SP10-kill-switch" "hooks/preuse-auto-approve.js"

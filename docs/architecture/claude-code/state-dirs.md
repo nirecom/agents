@@ -213,7 +213,7 @@ manual face `bin/migrate-control-dir --session <sid> | --all`.
 - **Isolation**: never run an in-development worktree's bins or hooks against
   the live `WORKFLOW_STATE_DIR` / `WORKFLOW_PLANS_DIR` — isolate both (and
   `HOME`) to temp dirs; agents invoked from a worktree use
-  `$AGENTS_CONFIG_DIR/bin`. A worktree's migration would otherwise move live
+  `$AGENTS_MAIN_ROOT/bin`. A worktree's migration would otherwise move live
   sessions while main's hooks still write the legacy paths.
 
 Dependency: guard (c) must not be weakened while the migration code remains,

@@ -12,7 +12,7 @@ SR-1. Resolve `$SID`: read the `Session-ID:` field of the worktree's `WORKTREE_N
 
 SR-2. Choose `categories` (comma-separated, multi-select), `severity`, `detail` (what was observed, free text), and `reporter` (the skill or agent name) from the tables below.
 
-SR-3. Run, as one Bash call: `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories <cats> --severity <sev> --detail "<text>" --reporter "<name>" --session-id "$SID"`. All four flags are mandatory — the CLI aborts when one is missing.
+SR-3. Run, as one Bash call: `node "$AGENTS_MAIN_ROOT/bin/supervisor-report" --categories <cats> --severity <sev> --detail "<text>" --reporter "<name>" --session-id "$SID"`. All four flags are mandatory — the CLI aborts when one is missing.
    `<text>` is observation text that may come from tool output or a file, so treat it as untrusted: before substituting it, strip every `` ` ``, `$`, `\`, `"`, newline and control character from it, and collapse the remainder to a single line — a `$(...)` or backtick left in the detail executes inside the double-quoted argument.
    Text you cannot safely reduce that way must not be interpolated at all: shorten the detail to your own one-line summary and leave the raw text out.
 

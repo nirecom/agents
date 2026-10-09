@@ -11,7 +11,7 @@ exec_req() {
     stubbin=$(make_tmp)
     printf '%s' "$body" > "$stubbin/codex"
     chmod +x "$stubbin/codex"
-    out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
+    out=$(PATH="$stubbin:$PATH" WORKFLOW_PLANS_DIR="$tn" \
         WORKFLOW_STATE_DIR="$tn" SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
         "$RWT" 40 bash "$REQ" "$@" 2>&1)
     rc=$?
@@ -147,14 +147,17 @@ exit 124
 # EX-5: run a copy of the script whose SCRIPT_DIR lacks run-with-timeout.sh → UNAVAILABLE → NO token
 run_EX5() {
     if ! mint_available; then fail "EX-5: RED-EXPECTED (script missing)"; return; fi
-    local tmp tn bindir stubbin r out rc
+    local tmp tn fake_script_checkout_root bindir stubbin r out rc
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    bindir=$(make_tmp)                       # copy of the script only — NO run-with-timeout.sh sibling
-    cp "$REQ" "$bindir/request-off-clearance"
-    chmod +x "$bindir/request-off-clearance"
+    # The script finds its siblings from its own path, so the copy is a whole fake
+    # checkout (bin hooks skills) with only the run-with-timeout.sh sibling removed.
+    fake_script_checkout_root=$(make_tmp)
+    script_checkout_fixture_copy "$fake_script_checkout_root"
+    bindir="$fake_script_checkout_root/bin"
+    rm -f "$bindir/run-with-timeout.sh"
     stubbin=$(make_tmp)                       # working codex on PATH so the wrapper check (not codex) is what fails
     write_examiner_stub "$stubbin/codex" ALLOW "would-allow but wrapper missing"
-    out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
+    out=$(PATH="$stubbin:$PATH" WORKFLOW_PLANS_DIR="$tn" \
         WORKFLOW_STATE_DIR="$tn" SESSION_ID="ex5sid" CLAUDE_CODE_SESSION_ID="ex5sid" \
         bash "$bindir/request-off-clearance" --target workflow --category workflow-bug --detail "bug" 2>&1)
     rc=$?
@@ -162,7 +165,7 @@ run_EX5() {
     [ "$(token_count "$tmp")" -eq 0 ] || ok=0
     echo "$out" | grep -qiE 'unavailable|timeout wrapper' || ok=0
     [ "$rc" -ne 0 ] || ok=0
-    rm -rf "$tmp" "$bindir" "$stubbin" 2>/dev/null || true
+    rm -rf "$tmp" "$fake_script_checkout_root" "$stubbin" 2>/dev/null || true
     if [ "$ok" = "1" ]; then
         pass "EX-5: missing timeout wrapper → examiner UNAVAILABLE → NO token (even with a working codex)"
     else

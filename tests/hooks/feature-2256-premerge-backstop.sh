@@ -9,15 +9,15 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
-AGENTS_NODE="$(nrm "$AGENTS_DIR")"
+AGENTS_NODE="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 HOOKS_NODE="$AGENTS_NODE/hooks"
 FP_NODE="$HOOKS_NODE/lib/diff-fingerprint.js"
 WRITER_NODE="$HOOKS_NODE/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$HOOKS_NODE/lib/supervisor-state-schema.js"
-SUP_CHECK="$AGENTS_DIR/hooks/workflow-gate/supervisor-check.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SUP_CHECK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/supervisor-check.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -46,7 +46,7 @@ mkdir -p "$WORK/plans" "$WORK/wf" "$WORK/transcripts" "$WORK/cfg"
 export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
-export AGENTS_CONFIG_DIR="$WORK_NODE/cfg"
+export AGENTS_MAIN_ROOT="$WORK_NODE/cfg"
 unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
@@ -147,7 +147,7 @@ process.stdout.write(JSON.stringify({
   tool_input: { command: process.env.CMDTEXT, cwd: process.env.RCWD },
   session_id: process.env.SESS,
 }));
-" 2>/dev/null | bash "$RWT" 60 node "$AGENTS_DIR/hooks/workflow-gate.js" 2>/dev/null
+" 2>/dev/null | bash "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js" 2>/dev/null
 }
 decision_of() {
     JBODY="$1" node -e "
@@ -273,7 +273,7 @@ fi
 # a deny, so the positive path is what this case pins.
 FK_OV="$(fresh_key)"
 seed_state BLOCK "$FK_OV" >/dev/null
-bash "$RWT" 60 node "$AGENTS_DIR/bin/supervisor-record-block-override" \
+bash "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-record-block-override" \
     run-0011 "verified manually with the reviewer; the BLOCK is a false positive here" \
     --session-id "$SID" >/dev/null 2>&1
 out="$(gate "$MERGE_CMD")"

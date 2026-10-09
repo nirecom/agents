@@ -10,8 +10,8 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CASE_DIR="$AGENTS_DIR/tests/tests/feature-1832-run-all-parallel"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CASE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-1832-run-all-parallel"
 CASE_TIMEOUT="${FEATURE_1832_CASE_TIMEOUT:-300}"
 
 PASSED=0
@@ -19,7 +19,7 @@ FAILED=0
 SKIPPED=0
 FAILED_CASES=""
 
-run_with_timeout() { "$AGENTS_DIR/bin/run-with-timeout.sh" "$@"; }
+run_with_timeout() { "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$@"; }
 mask_contract() { sed 's/^\([[:blank:]]*\)RUN_CONTRACT:/\1[masked] RUN_CONTRACT:/'; }
 
 if [ ! -d "$CASE_DIR" ]; then

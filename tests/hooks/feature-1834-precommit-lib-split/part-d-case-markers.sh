@@ -2,21 +2,21 @@
 # Sourced by tests/hooks/feature-1834-precommit-lib-split.sh; shares its helpers/globals.
 # Fixture test bodies carrying marker text live only in heredoc bodies below.
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 echo ""
 echo "=== Part D: staged case-marker gate (#2388) ==="
 
-LOAD_ENV_SH="$AGENTS_DIR/hooks/lib/load-env.sh"
+LOAD_ENV_SH="$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.sh"
 # shellcheck source=hooks/lib/load-env.sh
 [ -f "$LOAD_ENV_SH" ] && . "$LOAD_ENV_SH"
 
-# CM_CFG — a fixture config dir: a copy of the real checker plus its predicate
+# CM_CFG — a fixture agents main root: a copy of the real checker plus its predicate
 # library, so each case controls $_cfg_dir/.env without touching the developer's.
 CM_CFG="$TMPBASE/cm-cfg"
 mkdir -p "$CM_CFG/bin"
-cp "$AGENTS_DIR/bin/check-case-markers.sh" "$CM_CFG/bin/check-case-markers.sh"
-cp -R "$AGENTS_DIR/bin/lib" "$CM_CFG/bin/lib"
+cp "$SCRIPT_CHECKOUT_ROOT/bin/check-case-markers.sh" "$CM_CFG/bin/check-case-markers.sh"
+cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$CM_CFG/bin/lib"
 
 # CM_BROKEN_CFG — checker replaced by a stub that exits 2 (infrastructure error).
 CM_BROKEN_CFG="$TMPBASE/cm-cfg-broken"
@@ -26,9 +26,9 @@ printf '#!/usr/bin/env bash\necho "stub infra failure" >&2\nexit 2\n' > "$CM_BRO
 # Both config dirs carry the test language registry (CLI, reader, table, loader):
 # the gate resolves the entrypoint predicate through it, so only the checker differs.
 # shellcheck source=../../lib/test-language-registry-fixture.sh
-. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
 for _cm_dir in "$CM_CFG" "$CM_BROKEN_CFG"; do
-    install_test_language_registry "$_cm_dir" "$AGENTS_DIR"
+    install_test_language_registry "$_cm_dir" "$SCRIPT_CHECKOUT_ROOT"
 done
 unset _cm_dir
 
@@ -273,7 +273,7 @@ expect_pass_silent "single-path-header-skipped"
 case_end
 
 case_begin "env-file-off-still-blocks" "hooks/lib/precommit-tests-frontmatter.sh"
-# The gate has no disable switch: an off value in the config dir .env is ignored.
+# The gate has no disable switch: an off value in the agents main root .env is ignored.
 R="$(cm_repo env-off)"
 cm_stage "$R" tests/hooks/new-missing.sh missing.sh
 printf 'CASE_MARKERS_ENFORCE=off\n' > "$CM_CFG/.env"

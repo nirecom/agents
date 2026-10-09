@@ -61,10 +61,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-SRC="$AGENTS_DIR/hooks/lib/path-containment.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/path-containment.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -226,7 +226,7 @@ PROBE_EOF
 # Neutral CWD: run from the temp tree, never the repo (rules/test/fixture-isolation.md).
 OUT=$(cd "$TMP" && env -u CLAUDE_CODE_SESSION_ID \
     "$RWT" 30 node "$(node_path "$PROBE")" \
-        "$_AGENTS_DIR_NODE" \
+        "$_SCRIPT_CHECKOUT_ROOT_NODE" \
         "$(node_path "$PARENT")" \
         "$(node_path "$PARENT/inside")" \
         "$(node_path "$TMP/outside")" \

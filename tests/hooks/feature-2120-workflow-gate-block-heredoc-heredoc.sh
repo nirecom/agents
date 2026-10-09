@@ -26,9 +26,9 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # RED before the fix: M1, M2-M6, M8 (plus one M7 case). GREEN before and after:
 # the rest of M7 — the invariant the widening must not break.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-AN="$(np "$AGENTS_DIR")"
+AN="$(np "$SCRIPT_CHECKOUT_ROOT")"
 
 # TL3 gap (what this test does NOT catch):
 # - whether a real agent stops reaching for Bash after reading the narrowed

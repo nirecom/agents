@@ -37,13 +37,13 @@ mkdir -p "$T14_LIB"
 # session-start.js requires ./workflow-state and ./lib/settings-drift, plus
 # ./lib/conv-lang (the new one). We mirror lib/* by symlink/copy, then override
 # conv-lang.js with a thrower.
-if [ -d "$AGENTS_DIR/hooks/lib" ]; then
+if [ -d "$SCRIPT_CHECKOUT_ROOT/hooks/lib" ]; then
     # Copy all lib files (cheap — small directory).
-    cp -r "$AGENTS_DIR/hooks/lib/." "$T14_LIB/" 2>/dev/null || true
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/lib/." "$T14_LIB/" 2>/dev/null || true
     # Copy the entry script.
     cp "$SESSION_START" "$T14_HOOKS/session-start.js" 2>/dev/null || true
     # Mirror bin/ so the resume-session-detect lookup behaves the same.
-    if [ -d "$AGENTS_DIR/bin" ]; then
+    if [ -d "$SCRIPT_CHECKOUT_ROOT/bin" ]; then
         mkdir -p "$T14_AGENTS/bin"
         # No need to copy contents — the script only checks fs.existsSync.
     fi
@@ -61,7 +61,7 @@ EOF
         CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
         WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t14" \
         HOME="$TMPDIR_BASE/home-t14" \
-        AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+        AGENTS_MAIN_ROOT="$EMPTY_CFG" \
         run_with_timeout 30 node "$T14_HOOKS/session-start.js" 2>/dev/null)
     T14_RC=$?
     if [ "$T14_RC" -ne 0 ] || [ -z "$T14_OUT" ]; then
@@ -124,7 +124,7 @@ T26_RAW=$(printf '{}' | \
     CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
     WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t26" \
     HOME="$TMPDIR_BASE/home-t26" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$SESSION_START" 2>/dev/null)
 T26_RC=$?
 if [ "$T26_RC" -ne 0 ]; then
@@ -150,7 +150,7 @@ T21_RAW=$(printf 'not-json' | \
     CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
     WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t21" \
     HOME="$TMPDIR_BASE/home-t21" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$SESSION_START" 2>/dev/null)
 T21_RC=$?
 if [ "$T21_RC" -ne 0 ]; then

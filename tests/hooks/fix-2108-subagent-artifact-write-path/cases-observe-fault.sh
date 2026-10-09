@@ -79,7 +79,7 @@ _of_hook() {
     (
         cd "$OF_CWD" || exit 1
         unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
-        export AGENTS_CONFIG_DIR="$OF_CFG"
+        export AGENTS_MAIN_ROOT="$OF_CFG"
         export WORKFLOW_STATE_DIR="$OF_WF" WORKFLOW_PLANS_DIR="$OF_WF"
         export OF_MODULE="$ACTIVE_SIDS_NODE" OF_FAULT_MODE="$mode"
         # NATIVE preload path: run_hook_capture sets MSYS_NO_PATHCONV=1.

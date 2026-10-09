@@ -2,7 +2,6 @@
 # run-finalize-terminal.sh — phase=finalize_terminal for the issue-close-finalize worker
 # Runs ICF-H (close), ICF-I (sentinels), ICF-J (wip clear), ICF-K (outcome), then the terminal state write.
 # Usage: bash run-finalize-terminal.sh <state_file_path> <session_id> <outcome_file_path> [expected_token]
-# Env:   AGENTS_CONFIG_DIR  FINALIZE_SCRIPTS_DIR
 # Stdout (eval-able KEY=VALUE): STATUS  SUMMARY. Exit 0 always; check STATUS.
 # COMPARE-AND-SWAP: <expected_token> is the sha256 of the state file's raw bytes as the caller
 # validated them (run-loop-step.js 3rd-argument protocol). This script re-reads and EVALS the file, so
@@ -14,7 +13,7 @@ STATE_FILE_PATH="${1:?state_file_path required}"
 SESSION_ID="${2:?session_id required}"
 OUTCOME_FILE_PATH="${3:?outcome_file_path required}"
 EXPECTED_TOKEN="${4:-}"
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 export ISSUE_CLOSE_SKILL=1
 
@@ -43,30 +42,36 @@ if [[ -n "$EXPECTED_TOKEN" ]]; then
     fi
 fi
 
-# Read required fields from state file
+# Read required fields from state file. The accepted schema version is the writer's own
+# constant (state.js), so a version bump there cannot leave this reader behind.
+STATE_WRITER="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-close-finalize/state.js"
 read_state() {
     node -e "
+const path = require('path');
+const want = require(path.resolve(process.argv[2])).SCHEMA_VERSION;
 const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-if (s.schema_version !== 3) { process.stderr.write('schema_version must be 3\n'); process.exit(1); }
+if (s.schema_version !== want) { process.stderr.write('schema_version must be ' + want + '\n'); process.exit(1); }
 console.log('CURRENT_ISSUE_NUMBER=' + s.current_issue_number);
 console.log('OWNER_REPO=' + s.owner_repo);
 console.log('TRIAGE_ACTION=' + s.triage_action);
 console.log('MERGE_COMMIT=' + (s.merge_commit || ''));
-" "$STATE_FILE_PATH"
+" "$STATE_FILE_PATH" "$STATE_WRITER"
 }
 
+# Captured before the eval: `eval "$(read_state)" || rc=$?` reports eval's status, not node's.
 rc=0
-eval "$(read_state)" || rc=$?
+STATE_KV="$(read_state)" || rc=$?
 if [[ "$rc" -ne 0 ]]; then
     printf 'STATUS=failed\nSUMMARY=state file read failed\n'
     exit 0
 fi
+eval "$STATE_KV"
 
 # ICF-H: close issue (skipped when triage_action=resume_j — issue already closed)
 ICF_H_STATUS=succeeded
 if [[ "$TRIAGE_ACTION" != "resume_j" ]]; then
     rc=0
-    bash "$AGENTS_CONFIG_DIR/bin/github-issues/close-completed.sh" \
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/close-completed.sh" \
         --repo "$OWNER_REPO" "$CURRENT_ISSUE_NUMBER" || rc=$?
     if [[ "$rc" -ne 0 ]]; then
         printf 'STATUS=failed\nSUMMARY=ICF-H: gh issue close failed for #%s\n' "$CURRENT_ISSUE_NUMBER"
@@ -75,12 +80,12 @@ if [[ "$TRIAGE_ACTION" != "resume_j" ]]; then
 fi
 
 # ICF-I: post-close sentinels (non-fatal)
-bash "$AGENTS_CONFIG_DIR/bin/github-issues/post-close-sentinels.sh" \
+bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/post-close-sentinels.sh" \
     "$CURRENT_ISSUE_NUMBER" "${MERGE_COMMIT:-}" || true
 ICF_I_STATUS=succeeded
 
 # ICF-J: wip clear (non-fatal)
-bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" clear "$CURRENT_ISSUE_NUMBER" || true
+bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh" clear "$CURRENT_ISSUE_NUMBER" || true
 ICF_J_STATUS=succeeded
 
 # ICF-K: determine history_entry_status and write outcome
@@ -90,7 +95,7 @@ case "$TRIAGE_ACTION" in
     *)                 HISTORY_ENTRY_STATUS=written_by_step_6h ;;
 esac
 
-node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
+node "$SCRIPT_CHECKOUT_ROOT/bin/issue-close-write-outcome.js" \
     --session-id "$SESSION_ID" \
     --out-file "$OUTCOME_FILE_PATH" \
     "$CURRENT_ISSUE_NUMBER" \
@@ -100,13 +105,15 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
     "$ICF_I_STATUS" \
     "$ICF_J_STATUS" || true
 
-# Write terminal state atomically
+# Write terminal state atomically. The temp name is unique per writer (as in run-loop-step.js):
+# a fixed '<p>.tmp' is shared by every process writing this file.
 node -e "
 const fs = require('fs');
+const crypto = require('crypto');
 const p = process.argv[1];
 const s = JSON.parse(fs.readFileSync(p, 'utf8'));
 s.phase = 'terminal';
-const tmp = p + '.tmp';
+const tmp = p + '.' + process.pid + '.' + crypto.randomBytes(6).toString('hex') + '.tmp';
 fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
 fs.renameSync(tmp, p);
 " "$STATE_FILE_PATH"

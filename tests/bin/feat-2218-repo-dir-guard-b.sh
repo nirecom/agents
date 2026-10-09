@@ -8,8 +8,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # isolation (#2512): pin state and plans dirs once for this file
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
@@ -24,12 +24,12 @@ skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218b'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 TARGET="bin/workflow/lib/next-step/repo-dir-guard.js"
 
 PRELUDE="
-const guard = require('$AGENTS_DIR_NODE/$TARGET');
+const guard = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 function verdictOf(v) { return (v && typeof v === 'object') ? (v.verdict || v.result || JSON.stringify(v)) : String(v); }
 function outcome(fn) {
   try { const r = fn(); if (r && r.ok === false) return 'fail-fast'; return 'continue'; }
@@ -38,7 +38,7 @@ function outcome(fn) {
 "
 
 require_module() {
-    if [ -f "$AGENTS_DIR/$1" ]; then return 0; fi
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
     fail "MODULE NOT FOUND: $1 — expected per issue #2218 Step 9, not yet implemented (write_code has not run)"
     return 1
 }
@@ -82,7 +82,7 @@ run_R4b() {
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
 $PRELUDE
-const { writeState, createInitialState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const problems = [];
 const main = '$(node_path "$main")';
 const wt = '$(node_path "$wt")';
@@ -133,7 +133,7 @@ run_R4c() {
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
 $PRELUDE
-const { writeState, createInitialState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const problems = [];
 const a = '$(node_path "$a")';
 const b = '$(node_path "$b")';
@@ -178,7 +178,7 @@ run_R7_cli() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const st = createInitialState('$sid', { cwd: '$(node_path "$wt")' });
 st.closes_issues = [2218];
 writeState('$sid', st);
@@ -189,7 +189,7 @@ markStep('$sid', 'workflow_init', 'complete');
     out=$(env CLAUDE_CODE_SESSION_ID="$sid" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_PROJECT_DIR="$main" HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" 2>&1)
+        "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step" 2>&1)
     # Capture the CLI exit code before any other command can clobber $?.
     rc=$?
     rm -rf "$tmp" 2>/dev/null || true
@@ -240,7 +240,7 @@ run_R7b_cli() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const st = createInitialState('$sid', { cwd: '$(node_path "$wt")' });
 st.closes_issues = [2218];
 writeState('$sid', st);
@@ -257,7 +257,7 @@ for (const s of steps) { markStep('$sid', s, 'complete', {}, gated.has(s) ? { sa
     out=$(env CLAUDE_CODE_SESSION_ID="$sid" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_PROJECT_DIR="$main" HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" 2>&1)
+        "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step" 2>&1)
     # Capture the CLI exit code before any other command can clobber $?.
     rc=$?
     rm -rf "$tmp" 2>/dev/null || true

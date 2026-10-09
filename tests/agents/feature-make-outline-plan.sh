@@ -22,13 +22,12 @@ REVIEWER_MD="$HOME/.claude/agents/outline-reviewer.md"
 
 # LOCAL_* point at the worktree copies (rules/test/fixture-isolation.md).
 # Assertions about changes in this branch must use LOCAL_* — they fail pre-merge otherwise.
-_SELF_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-LOCAL_SKILL_MD="$_SELF_DIR/skills/make-outline-plan/SKILL.md"
-LOCAL_REVIEWER_MD="$_SELF_DIR/agents/outline-reviewer.md"
-AGENTS_DIR="$_SELF_DIR"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOCAL_SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/SKILL.md"
+LOCAL_REVIEWER_MD="$SCRIPT_CHECKOUT_ROOT/agents/outline-reviewer.md"
 
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT

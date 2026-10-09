@@ -38,14 +38,14 @@ M25B_SCRIPT="$TMPDIR_BASE/m25b.js"
 cat > "$M25B_SCRIPT" <<'M25BEOF'
 const fs = require("fs");
 const path = require("path");
-const AGENTS_DIR = process.argv[2];
+const SCRIPT_CHECKOUT_ROOT_NATIVE = process.argv[2];
 const HOME_DIR = process.argv[3];
 
-const assemblyPath = path.join(AGENTS_DIR, "install", "lib", "settings-assembly.js");
+const assemblyPath = path.join(SCRIPT_CHECKOUT_ROOT_NATIVE, "install", "lib", "settings-assembly.js");
 const assembly = require(assemblyPath);
 const origBuild = assembly.buildAssembledSettings;
 
-const built = origBuild({ agentsRoot: AGENTS_DIR });
+const built = origBuild({ agentsRoot: SCRIPT_CHECKOUT_ROOT_NATIVE });
 const deployed = JSON.parse(JSON.stringify(built.settings));
 // Deployed side: drop OUR new command from its UserPromptSubmit group (matcher
 // count is unaffected -- exactly the nested-command drop S5-3b must catch).
@@ -65,7 +65,7 @@ assembly.buildAssembledSettings = function (opts) {
     const already = (groups[0].hooks || []).some((h) => typeof h.command === "string" && h.command.indexOf(OURS) >= 0);
     if (!already) {
       groups[0].hooks = groups[0].hooks || [];
-      groups[0].hooks.push({ type: "command", command: 'node "$AGENTS_CONFIG_DIR/hooks/codegraph-context-inject.js"', timeout: 5 });
+      groups[0].hooks.push({ type: "command", command: 'node "$AGENTS_MAIN_ROOT/hooks/codegraph-context-inject.js"', timeout: 5 });
     }
   }
   return { settings, generatorError: b.generatorError };
@@ -74,13 +74,13 @@ assembly.buildAssembledSettings = function (opts) {
 fs.mkdirSync(path.join(HOME_DIR, ".claude"), { recursive: true });
 fs.writeFileSync(path.join(HOME_DIR, ".claude", "settings.json"), JSON.stringify(deployed, null, 2));
 
-const driftPath = path.join(AGENTS_DIR, "hooks", "lib", "settings-drift.js");
+const driftPath = path.join(SCRIPT_CHECKOUT_ROOT_NATIVE, "hooks", "lib", "settings-drift.js");
 const { detectDrift } = require(driftPath);
 const result = detectDrift({ homeDir: HOME_DIR });
 process.stdout.write(JSON.stringify(result));
 M25BEOF
 M25B_HOME="$TMPDIR_BASE/m25b-home"; mkdir -p "$M25B_HOME"
-m25b_out=$(node "$M25B_SCRIPT" "$(to_node_path "$AGENTS_DIR")" "$(to_node_path "$M25B_HOME")" 2>&1)
+m25b_out=$(node "$M25B_SCRIPT" "$(to_node_path "$SCRIPT_CHECKOUT_ROOT_NATIVE")" "$(to_node_path "$M25B_HOME")" 2>&1)
 m25b_drifted=$(json_field "$m25b_out" "drifted")
 m25b_missing=$(json_field "$m25b_out" "missingHooks.UserPromptSubmit.0")
 if [ "$m25b_drifted" = "true" ] && printf '%s' "$m25b_missing" | grep -qF "codegraph-context-inject.js"; then

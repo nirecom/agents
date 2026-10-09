@@ -39,15 +39,15 @@ test_e2e_cases() {
         fail "E2E1679-3-reason: not blocked, reason unassertable (rc=$rc)"
     fi
 
-    cmd="$(printf 'export AGENTS_CONFIG_DIR=/evil; %s' "$(pf_eval "$PF_LITERAL")")"
+    cmd="$(printf 'export AGENTS_MAIN_ROOT=/evil; %s' "$(pf_eval "$PF_LITERAL")")"
     rc=0; guard "$cmd" || rc=$?
     assert_block "E2E1679-4: AD1679-9 through the real hook → BLOCK" "$rc"
 
     # See IN1679-5 above: #1673 deleted finalize-worker-overlay.js, so this literal
     # eval-wrapped run-initial.sh form has no ALLOW route left at any segment
     # composition. Retired-capability pin.
-    cmd="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" bash "%s/run-initial.sh" "1234" "1234")"' \
-        "$ACD" "$SCRIPTS" "$REPO" "$SCRIPTS")"
+    cmd="$(printf 'eval "$(AGENTS_MAIN_ROOT="%s" FINALIZE_SCRIPTS_DIR="%s" TARGET_MAIN_ROOT="%s" bash "%s/run-initial.sh" "1234" "1234")"' \
+        "$FAKE_SCRIPT_CHECKOUT_ROOT" "$SCRIPTS" "$REPO" "$SCRIPTS")"
     rc=0; guard "$cmd" || rc=$?
     assert_block "E2E1679-5: run-initial 2-arg form (S-6) through the real hook → BLOCK — eval path retired (#1673)" "$rc"
 }
@@ -66,8 +66,8 @@ test_e2e_cases() {
 # hooks/enforce-worktree.js happened to block (or allow) the same string, TL2
 # could not tell the difference. These rows isolate the predicate.
 #
-# The acd is resolved by hooks/lib/agents-config-dir.js from
-# process.env.AGENTS_CONFIG_DIR (marker-validated), so the shared fake-acd
+# The script checkout root is resolved by hooks/lib/script-checkout-root.js from
+# process.env.AGENTS_MAIN_ROOT (marker-validated), so the shared fake-script-checkout-root
 # fixture is passed through env; repoRoot is the shared main worktree, which
 # owns one registered linked worktree.
 
@@ -82,21 +82,21 @@ const repoRoot = process.env.TL1_REPO;
 
 // Literal (unexpanded) pre-flight eval — exactly what PreToolUse receives.
 const PF =
-  'eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh")"';
+  'eval "$(bash "$AGENTS_MAIN_ROOT/skills/issue-close-finalize/scripts/pre-flight.sh")"';
 
 const cases = [
   // -- ENV_MUTATION companion segments: BLOCK before AND after the fix. ------
-  ["MU1679-TL1-1", PF + ' && export AGENTS_CONFIG_DIR=/evil', false,
+  ["MU1679-TL1-1", PF + ' && export AGENTS_MAIN_ROOT=/evil', false,
     "export in companion segment"],
-  ["MU1679-TL1-2", PF + ' ; AGENTS_CONFIG_DIR=/evil', false,
+  ["MU1679-TL1-2", PF + ' ; AGENTS_MAIN_ROOT=/evil', false,
     "bare assignment in companion segment"],
-  ["MU1679-TL1-3", PF + ' && unset AGENTS_CONFIG_DIR', false,
+  ["MU1679-TL1-3", PF + ' && unset AGENTS_MAIN_ROOT', false,
     "unset in companion segment"],
   ["MU1679-TL1-4", PF + ' && source /tmp/x.sh', false,
     "source in companion segment"],
   ["MU1679-TL1-5", PF + ' && eval "$DYNAMIC"', false,
     "opaque eval in companion segment"],
-  ["MU1679-TL1-6", 'export AGENTS_CONFIG_DIR=/evil; ' + PF, false,
+  ["MU1679-TL1-6", 'export AGENTS_MAIN_ROOT=/evil; ' + PF, false,
     "mutation BEFORE the sanctioned segment"],
 
   // -- Benign companion segments: ALLOW after the fix. ----------------------
@@ -138,8 +138,8 @@ test_tl1_cases() {
     echo "=== TL1: isAllowedWorkerScriptInvocation() called directly ==="
     local out rc=0
     out="$(run_with_timeout 30 env \
-        "AGENTS_CONFIG_DIR=$ACD" \
-        "TL1_WORKER_JS=${_AGENTS_DIR_NODE}/hooks/enforce-worktree/main-worktree-allows/worker-script.js" \
+        "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" \
+        "TL1_WORKER_JS=${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree/main-worktree-allows/worker-script.js" \
         "TL1_REPO=$REPO" \
         node "$TL1_JS" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then

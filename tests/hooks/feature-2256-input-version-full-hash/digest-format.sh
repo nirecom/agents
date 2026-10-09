@@ -7,6 +7,7 @@
 # Parent: tests/hooks/feature-2256-input-version-full-hash.sh
 
 set -uo pipefail
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # shellcheck source=./_common.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"
 
@@ -61,14 +62,14 @@ else
 fi
 
 # --- 10-11: source-level pin against a truncation or sha1 regression ---
-if grep -n "createHash('sha256')" "$AGENTS_DIR/hooks/lib/diff-fingerprint.js" >/dev/null 2>&1; then
+if grep -n "createHash('sha256')" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/diff-fingerprint.js" >/dev/null 2>&1; then
     if grep -nE "digest\('hex'\)\s*\.slice\(|digest\('hex'\)\.substring\(|digest\('hex'\)\.substr\(" \
-        "$AGENTS_DIR/hooks/lib/diff-fingerprint.js" >/dev/null 2>&1; then
+        "$SCRIPT_CHECKOUT_ROOT/hooks/lib/diff-fingerprint.js" >/dev/null 2>&1; then
         fail "10: no digest in diff-fingerprint.js is truncated" "a .slice/.substring follows digest('hex')"
     else
         pass "10: no digest in diff-fingerprint.js is truncated"
     fi
-    if grep -n "sha1" "$AGENTS_DIR/hooks/lib/diff-fingerprint.js" >/dev/null 2>&1; then
+    if grep -n "sha1" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/diff-fingerprint.js" >/dev/null 2>&1; then
         fail "11: diff-fingerprint.js never uses sha1" "a sha1 reference is present"
     else
         pass "11: diff-fingerprint.js never uses sha1"

@@ -12,6 +12,8 @@
 
 set -euo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/sweep-write-mode.sh
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
@@ -158,9 +160,8 @@ done
 
 # ─── Required environment ───────────────────────────────────────────────────
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
 if [[ -z "${WORKTREE_BASE_DIR:-}" ]]; then
-  WORKTREE_BASE_DIR="$(cd "$AGENTS_CONFIG_DIR" && get-config-var WORKTREE_BASE_DIR 2>/dev/null || echo "")"
+  WORKTREE_BASE_DIR="$(cd "$SCRIPT_CHECKOUT_ROOT" && get-config-var WORKTREE_BASE_DIR 2>/dev/null || echo "")"
 fi
 WORKTREE_BASE_DIR="${WORKTREE_BASE_DIR:-$HOME/git/worktrees}"
 
@@ -171,7 +172,7 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 # Resolve main worktree root (the cwd is expected to be inside it).
-if ! MAIN_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+if ! TARGET_MAIN_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
   printf 'ERROR: not inside a git repository\n' >&2
   exit 1
 fi
@@ -202,15 +203,15 @@ errors=()
 # ─── Main loop: enumerate linked worktrees ──────────────────────────────────
 
 # Parse `git worktree list --porcelain` into records separated by blank lines.
-porcelain="$(git -C "$MAIN_ROOT" worktree list --porcelain 2>/dev/null || true)"
+porcelain="$(git -C "$TARGET_MAIN_ROOT" worktree list --porcelain 2>/dev/null || true)"
 
-main_root_norm="$(norm_path "$MAIN_ROOT")"
+target_main_root_norm="$(norm_path "$TARGET_MAIN_ROOT")"
 
 # ── Cross-repo registered-worktree discovery (#809) ─────────────────────────
 # Snapshot the registry BEFORE the main loop modifies it via `git worktree
 # remove`, so the empty-parent pass can still recognize parents whose leaf
 # was registered at the start of the run.
-declare -A DISCOVERED_MAIN_ROOTS=()
+declare -A DISCOVERED_TARGET_MAIN_ROOTS=()
 declare -A REGISTERED_WT_PARENTS=()
 discover_registered_wt_parents
 
@@ -225,7 +226,7 @@ process_record() {
   # Skip main worktree.
   local wt_norm
   wt_norm="$(norm_path "$wt_path")"
-  if [[ "$wt_norm" == "$main_root_norm" ]]; then
+  if [[ "$wt_norm" == "$target_main_root_norm" ]]; then
     return 0
   fi
 
@@ -271,7 +272,7 @@ process_record() {
 
   # Release the CodeGraph index lock (Windows file lock) before removal.
   if command -v node >/dev/null 2>&1; then
-    node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" stop --path "$wt_path" || true
+    node "$SCRIPT_CHECKOUT_ROOT/bin/codegraph-lifecycle.js" stop --path "$wt_path" || true
   fi
 
   # (a) git worktree remove.
@@ -286,7 +287,7 @@ process_record() {
   local force_flag=""
   [[ "$FORCE" == "1" ]] && force_flag="--force"
   # shellcheck disable=SC2086
-  if git -C "$MAIN_ROOT" worktree remove $force_flag "$wt_path" 2>"$err_file"; then
+  if git -C "$TARGET_MAIN_ROOT" worktree remove $force_flag "$wt_path" 2>"$err_file"; then
     worktree_removed=$((worktree_removed + 1)) || true
   else
     local err
@@ -299,7 +300,7 @@ process_record() {
   rm -f "$err_file"
 
   # (b) git branch -D (cascade rule: only after worktree gone).
-  if git -C "$MAIN_ROOT" branch -D "$branch" 2>/dev/null; then
+  if git -C "$TARGET_MAIN_ROOT" branch -D "$branch" 2>/dev/null; then
     branch_deleted=$((branch_deleted + 1)) || true
   else
     printf 'WARN: branch -D %s failed; will be reclaimed next cycle\n' \

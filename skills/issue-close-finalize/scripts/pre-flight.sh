@@ -10,10 +10,10 @@
 #        treating non-GitHub as no-op). Diagnostic goes to stderr.
 set -euo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # shellcheck source=../../../bin/github-issues/lib/origin-repo.sh
-. "$AGENTS_CONFIG_DIR/bin/github-issues/lib/origin-repo.sh"
+. "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/origin-repo.sh"
 
 rc=0
 OWNER_REPO=$(resolve_origin_owner_repo) || rc=$?

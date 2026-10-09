@@ -3,17 +3,12 @@
 # Tests: bin/run-codex-review-loop, skills/.../scripts/, skills/_shared/codex-review-loop.md, skills/make-detail-plan/SKILL.md, skills/make-detail-plan/scripts/assemble-mandatory.sh, skills/make-detail-plan/scripts/run-codex-review-loop.sh, skills/make-outline-plan/SKILL.md, skills/make-outline-plan/scripts/assemble-mandatory.sh, skills/make-outline-plan/scripts/run-codex-review-loop.sh
 # Tags: outline, planning, detail, skill, bin, scope:issue-specific
 #
-# Tests for feature/630-skill-scripts-extraction:
-#   - rules/ rename: prompt-criteria→prompt, docs-convention→docs, test-rules→test
-#   - Repo root CLAUDE.md does not reference old rules/ paths
-#   - Internal Sub-rules links in rules/docs.md, rules/test.md point to new dirs
-#   - Inline code blocks extracted to skills/.../scripts/ files
-#   - SKILL.md / _shared/codex-review-loop.md inline blocks removed
-#   - rules/prompt.md contains §1.4 prohibition heading + text
-#   - Scripts have set -euo pipefail and are executable (git mode 100755)
-#
-# Tests are written BEFORE implementation. They SKIP (not FAIL) when the
-# implementation hasn't happened yet, and PASS once implementation completes.
+# Tests for feature/630-skill-scripts-extraction: the rules/ rename
+# (prompt-criteria→prompt, docs-convention→docs, test-rules→test) with no stale
+# CLAUDE.md / Sub-rules links, inline code blocks extracted to
+# skills/.../scripts/ (set -euo pipefail, git mode 100755) and removed from
+# SKILL.md / _shared/codex-review-loop.md, and the rules/prompt.md §1.4 text.
+# Written before the implementation: cases SKIP (not FAIL) until it exists.
 
 if [ -z "$_TIMEOUT_WRAPPED" ]; then
     export _TIMEOUT_WRAPPED=1
@@ -324,7 +319,7 @@ if [ ! -f "$DETAIL_SKILL" ]; then
 elif [ ! -f "$DETAIL_SCRIPT" ]; then
     skip "T18: make-detail-plan/SKILL.md inline block" "extraction not yet performed"
 else
-    if grep -qF '$AGENTS_CONFIG_DIR/bin/run-codex-review-loop' "$DETAIL_SKILL"; then
+    if grep -qE '\$\{?[A-Z_]+\}?/bin/run-codex-review-loop' "$DETAIL_SKILL"; then
         fail "T18: make-detail-plan/SKILL.md inline block" "inline reference still present"
     else
         pass "T18: make-detail-plan/SKILL.md no inline run-codex-review-loop reference"
@@ -342,7 +337,7 @@ if [ ! -f "$OUTLINE_SKILL" ]; then
 elif [ ! -f "$OUTLINE_SCRIPT" ]; then
     skip "T19: make-outline-plan/SKILL.md inline block" "extraction not yet performed"
 else
-    if grep -qF '$AGENTS_CONFIG_DIR/bin/run-codex-review-loop' "$OUTLINE_SKILL"; then
+    if grep -qE '\$\{?[A-Z_]+\}?/bin/run-codex-review-loop' "$OUTLINE_SKILL"; then
         fail "T19: make-outline-plan/SKILL.md inline block" "inline reference still present"
     else
         pass "T19: make-outline-plan/SKILL.md no inline run-codex-review-loop reference"
@@ -360,7 +355,7 @@ if [ ! -f "$SHARED_LOOP" ]; then
 elif [ ! -f "$DETAIL_SCRIPT" ] && [ ! -f "$OUTLINE_SCRIPT" ]; then
     skip "T20: _shared/codex-review-loop.md inline block" "extraction not yet performed"
 else
-    if grep -qF '$AGENTS_CONFIG_DIR/bin/run-codex-review-loop' "$SHARED_LOOP"; then
+    if grep -qE '\$\{?[A-Z_]+\}?/bin/run-codex-review-loop' "$SHARED_LOOP"; then
         fail "T20: _shared/codex-review-loop.md inline block" "inline reference still present"
     else
         pass "T20: _shared/codex-review-loop.md no inline run-codex-review-loop reference"

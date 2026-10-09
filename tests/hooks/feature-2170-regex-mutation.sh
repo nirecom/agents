@@ -11,10 +11,8 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-export AGENTS_DIR
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
-MUT="$AGENTS_DIR/tests/hooks/feature-2170-regex-mutation/mutate.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+MUT="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2170-regex-mutation/mutate.js"
 command -v node >/dev/null 2>&1 || exit 77
 [ -f "$MUT" ] || exit 77
 
@@ -32,7 +30,7 @@ assert_eq() {
 }
 
 # A real allow-SSOT entry, so remedy.js reaches its matched (argument-rendering) branch.
-ENTRY='bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip"'
+ENTRY='bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip"'
 
 judge() { # <module> <fragment> <predicate> <input>
     node "$MUT" "$1" "$2" "$3" "$4"

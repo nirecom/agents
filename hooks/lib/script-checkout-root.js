@@ -1,24 +1,13 @@
 "use strict";
-// hooks/lib/agents-config-dir.js
-// Env-independent trust anchor for the agents config dir (#1630).
+// hooks/lib/script-checkout-root.js
+// Env-independent trust anchor for the script checkout root (#1630, #2561).
 //
-// Hook predicates that identify a sanctioned script by `<config-dir>/<rel>` used
-// to read process.env.AGENTS_CONFIG_DIR directly. That value is absent in
-// subagent / Bash-tool subprocess environments (false BLOCK) and attacker-supplied
-// in the hostile case (false ALLOW). This module answers the question
-// "which directory is the agents checkout that is executing me?" from evidence
-// that does not depend on the environment being intact.
-//
-// Deliberate policy asymmetry with hooks/lib/load-env.js (CPR-SC): both consume
-// configDirCandidates(), but only the CANDIDATE ENUMERATION is shared —
-//   resolveAgentsConfigDir : env -> module -> realpath  (falls through)
-//   loadDefaultEnv         : env only                   (short-circuits)
-// load-env decides where SETTINGS come from (an explicit AGENTS_CONFIG_DIR must
-// stay the sole config source, or a test/alternate config dir would silently get
-// the real repo's .env injected); this resolver decides WHO is executing, where a
-// broken env value must lose to a verified module anchor. Do not "unify" them —
-// tests/hooks/fix-389-load-env-default-fallback/config-dir-cases.sh T389-7 pins it.
-//
+// Answers "which directory is the agents checkout that is executing me?" from
+// this module's own location only. No environment variable is a candidate: one
+// is absent in subagent subprocesses (false BLOCK) and attacker-supplied in the
+// hostile case (false ALLOW).
+// hooks/lib/load-env.js decides where SETTINGS come from and reads its own
+// environment variable for that; only the enumeration and normDir are shared (CPR-SC).
 // Circular-dependency note: this module must NOT require load-env.js.
 
 const fs = require("fs");
@@ -32,8 +21,8 @@ const MARKER_FILE = ["hooks", "enforce-worktree.js"];
 const MARKER_DIR = ["bin"];
 
 // Windows POSIX normalization (rules/coding/nodejs.md): `/c/git/agents` from Git
-// Bash must become a real path before any path.join / fs call. Applied to all
-// three candidate sources symmetrically (CPR-ORTH).
+// Bash must become a real path before any path.join / fs call. Applied to every
+// candidate source and to load-env's own environment read symmetrically (CPR-ORTH).
 function normDir(p) {
   if (typeof p !== "string") return null;
   const t = p.trim();
@@ -46,21 +35,17 @@ function normDir(p) {
 }
 
 /**
- * Ordered config-dir candidates, most-explicit first.
+ * Ordered script-checkout-root candidates.
  *
- * @returns {{dir: string, source: "env"|"module"|"realpath"}[]}
- *   `env`      — process.env.AGENTS_CONFIG_DIR (present only when non-empty after trim)
+ * @returns {{dir: string, source: "module"|"realpath"}[]}
  *   `module`   — path.resolve(__dirname, "..", "..") — hooks/lib -> repo root
  *   `realpath` — the same walk after resolving __filename through symlinks
  *                (the ~/.claude/hooks/lib -> agents-repo install layout)
  *
- * SSOT for candidate ENUMERATION only. The selection policy belongs to each
- * consumer and is intentionally different between them (see the header note).
+ * SSOT for candidate ENUMERATION only; each consumer owns its selection policy.
  */
-function configDirCandidates() {
+function scriptCheckoutRootCandidates() {
   const out = [];
-  const envDir = normDir(process.env.AGENTS_CONFIG_DIR);
-  if (envDir) out.push({ dir: envDir, source: "env" });
   const moduleDir = normDir(path.resolve(__dirname, "..", ".."));
   if (moduleDir) out.push({ dir: moduleDir, source: "module" });
   try {
@@ -80,7 +65,7 @@ function configDirCandidates() {
  * @param {{dir: string, source: string}[]} candidates
  * @param {{existsSync?: (p: string) => boolean}} [opts] — options object, not a bare fn
  * @returns {string|null} the candidate's dir verbatim (already normalized by
- *   configDirCandidates), or null when no candidate validates. Never invents a path.
+ *   scriptCheckoutRootCandidates), or null when no candidate validates. Never invents a path.
  */
 function _resolveFromCandidates(candidates, opts) {
   const exists = (opts && opts.existsSync) || fs.existsSync;
@@ -96,12 +81,11 @@ function _resolveFromCandidates(candidates, opts) {
       valid = false;
     }
     if (!valid) continue;
-    // Log the ADOPTED SOURCE ONLY — never a directory value. A rejected
-    // AGENTS_CONFIG_DIR is attacker- or misconfiguration-controlled text, and
-    // echoing it into a transcript leaks the filesystem layout.
-    if (process.env.AGENTS_HOOK_DEBUG === "1" && c.source !== "env") {
+    // Log the ADOPTED SOURCE ONLY — never a directory value, so a transcript
+    // does not carry the filesystem layout.
+    if (process.env.AGENTS_HOOK_DEBUG === "1") {
       process.stderr.write(
-        `[agents-config-dir] config dir resolved from source=${c.source}\n`
+        `[script-checkout-root] resolved from source=${c.source}\n`
       );
     }
     return c.dir;
@@ -116,12 +100,12 @@ let _cached = null;
 let _cachedResolved = false;
 
 /**
- * The validated absolute agents config dir, or null when none can be trusted.
- * Callers stay fail-closed on null (`if (!acd) return false;`).
+ * The validated absolute script checkout root, or null when none can be trusted.
+ * Callers stay fail-closed on null.
  */
-function resolveAgentsConfigDir() {
+function resolveScriptCheckoutRoot() {
   if (_cachedResolved) return _cached;
-  _cached = _resolveFromCandidates(configDirCandidates());
+  _cached = _resolveFromCandidates(scriptCheckoutRootCandidates());
   _cachedResolved = true;
   return _cached;
 }
@@ -132,8 +116,11 @@ function _resetCacheForTest() {
 }
 
 module.exports = {
-  configDirCandidates,
-  resolveAgentsConfigDir,
+  MARKER_FILE,
+  MARKER_DIR,
+  normDir,
+  scriptCheckoutRootCandidates,
+  resolveScriptCheckoutRoot,
   _resolveFromCandidates,
   _resetCacheForTest,
 };

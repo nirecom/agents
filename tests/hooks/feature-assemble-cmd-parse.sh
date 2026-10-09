@@ -8,8 +8,9 @@
 # or null when the command does not invoke the script or has malformed args.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
-LIB="$AGENTS_DIR/hooks/lib/assemble-cmd-parse.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
+LIB="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/assemble-cmd-parse.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -60,7 +61,7 @@ expect_result() {
 }
 
 # ── T1: full path with --source-kind intent ─────────────────────────────────
-CMD_T1='"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent /a/intent.md /a/draft.md /tmp/test-outline.md'
+CMD_T1='"$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent /a/intent.md /a/draft.md /tmp/test-outline.md'
 expect_result "T1 --source-kind intent — returns 3rd positional (outline.md)" \
   "$CMD_T1" '"/tmp/test-outline.md"'
 
@@ -80,7 +81,7 @@ expect_result "T4 bare positionals — returns 3rd positional" \
   "$CMD_T4" '"/tmp/test-outline.md"'
 
 # ── T5: quoted paths with spaces ─────────────────────────────────────────────
-CMD_T5='"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "/a/path with space/intent.md" "/a/path with space/draft.md" "/a/path with space/outline.md"'
+CMD_T5='"$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent "/a/path with space/intent.md" "/a/path with space/draft.md" "/a/path with space/outline.md"'
 expect_result "T5 quoted paths with spaces — extracts last positional" \
   "$CMD_T5" '"/a/path with space/outline.md"'
 
@@ -103,22 +104,22 @@ expect_result "T8 trailing && echo — returns 3rd positional, ignores trailing"
 # Mirrors the actual SKILL.md form: backslash followed by newline.
 # NODE_TMPDIR gives a Windows-style path on Windows so MSYS2 path conversion
 # in env vars does not corrupt the \<LF> continuation bytes.
-CMD_T9=$(printf '"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/20260527-intent.md" \\\n  "%s/20260527-outline.md" \\\n  "%s/20260527-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
+CMD_T9=$(printf '"$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/20260527-intent.md" \\\n  "%s/20260527-outline.md" \\\n  "%s/20260527-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
 expect_result "T9 multi-line \\<LF> continuation — returns last path" \
   "$CMD_T9" "\"${NODE_TMPDIR}/20260527-outline.md\""
 
 # ── T10: multi-line backslash-CRLF continuation (Windows) ────────────────────
-CMD_T10=$(printf '"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\r\n  "%s/20260527-intent.md" \\\r\n  "%s/20260527-outline.md" \\\r\n  "%s/20260527-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
+CMD_T10=$(printf '"$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\r\n  "%s/20260527-intent.md" \\\r\n  "%s/20260527-outline.md" \\\r\n  "%s/20260527-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
 expect_result "T10 multi-line \\<CRLF> continuation — returns last path" \
   "$CMD_T10" "\"${NODE_TMPDIR}/20260527-outline.md\""
 
 # ── T11: wrapper env-var-only form (no positionals) — returns null ────────────
-CMD_T11='SESSION_ID=abc PLANS_DIR=/tmp "$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/assemble-mandatory.sh"'
+CMD_T11='SESSION_ID=abc PLANS_DIR=/tmp "$AGENTS_MAIN_ROOT/skills/make-outline-plan/scripts/assemble-mandatory.sh"'
 expect_result "T11 wrapper env-var-only (no positionals) — returns null (retired pattern)" \
   "$CMD_T11" 'null'
 
 # ── T12: env-var prefix + _shared + positionals — returns 3rd positional ──────
-CMD_T12='SESSION_ID=abc PLANS_DIR=/tmp "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent /a/intent.md /a/draft.md /a/outline.md'
+CMD_T12='SESSION_ID=abc PLANS_DIR=/tmp "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent /a/intent.md /a/draft.md /a/outline.md'
 expect_result "T12 env-var prefix + positionals — returns 3rd positional" \
   "$CMD_T12" '"/a/outline.md"'
 
@@ -168,13 +169,13 @@ CP-reject-bak-suffix   ~ bash /x/assemble-mandatory.sh.bak a b c                
 TABLE
 
 # Backslash-continuation forms through the same gate (bash-prefixed SKILL.md form + cat form).
-CMD_CP_BS=$(printf 'bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/cp-intent.md" \\\n  "%s/cp-outline.md" \\\n  "%s/cp-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
+CMD_CP_BS=$(printf 'bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/cp-intent.md" \\\n  "%s/cp-outline.md" \\\n  "%s/cp-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
 expect_result "CP-bash-backslash-LF — bash-prefixed multi-line form returns the dest" \
   "$CMD_CP_BS" "\"${NODE_TMPDIR}/cp-outline.md\""
-CMD_CP_BS_CR=$(printf 'bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\r\n  "%s/cp-intent.md" \\\r\n  "%s/cp-outline.md" \\\r\n  "%s/cp-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
+CMD_CP_BS_CR=$(printf 'bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\r\n  "%s/cp-intent.md" \\\r\n  "%s/cp-outline.md" \\\r\n  "%s/cp-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
 expect_result "CP-bash-backslash-CRLF — bash-prefixed multi-line CRLF form returns the dest" \
   "$CMD_CP_BS_CR" "\"${NODE_TMPDIR}/cp-outline.md\""
-CMD_CP_CAT_BS=$(printf 'cat "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" \\\n  "%s/cp-intent.md" \\\n  "%s/cp-outline.md" \\\n  "%s/cp-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
+CMD_CP_CAT_BS=$(printf 'cat "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" \\\n  "%s/cp-intent.md" \\\n  "%s/cp-outline.md" \\\n  "%s/cp-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
 expect_result "CP-cat-backslash-LF — cat of the script across continuation lines returns null" \
   "$CMD_CP_CAT_BS" 'null'
 

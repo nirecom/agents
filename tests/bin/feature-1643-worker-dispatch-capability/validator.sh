@@ -9,16 +9,16 @@ CAP_PROBE="$TMPD/cap-probe.js"
 cat > "$CAP_PROBE" <<'CAPJS'
 const fs = require("fs");
 const path = require("path");
-const [agentsDir, mainRoot, rowsFile, outFile] = process.argv.slice(2);
-const capMod = require(path.join(agentsDir, "bin/worker-dispatch/capability.js"));
-const anchorMod = require(path.join(agentsDir, "bin/worker-dispatch/anchor.js"));
+const [scriptCheckoutRoot, targetMainRoot, rowsFile, outFile] = process.argv.slice(2);
+const capMod = require(path.join(scriptCheckoutRoot, "bin/worker-dispatch/capability.js"));
+const anchorMod = require(path.join(scriptCheckoutRoot, "bin/worker-dispatch/anchor.js"));
 
-const anchors = anchorMod.resolveAnchors(mainRoot);
+const anchors = anchorMod.resolveAnchors(targetMainRoot);
 if (anchors.error) {
   fs.writeFileSync(outFile, "ANCHORS_ERROR\tANCHORS_ERROR\t" + anchors.error + "\n");
   process.exit(9);
 }
-const backupRoot = path.join(anchors.mainRoot, capMod.BACKUP_DIR_NAME);
+const backupRoot = path.join(anchors.targetMainRoot, capMod.BACKUP_DIR_NAME);
 
 // The row's value column is a JSON string BODY: the shell hands over bytes it
 // can carry, node reconstitutes the ones it cannot (control chars, backslashes).
@@ -76,12 +76,12 @@ cap_load() {
 # Row classes, as the original Group V header described them:
 #   branch       — `isSafeBranch`. `../../../pwned` passes a charset test, and
 #                  path.join normalizes `..`, so derived-backup-dir resolved OUTSIDE
-#                  <main-root>/.worktree-backup and became an fsguard write scope for
+#                  <target-main-root>/.worktree-backup and became an fsguard write scope for
 #                  the worker that copies .env aside. Both layers are asserted.
 #   rel-path-arg — test-runner's `test_args` (argv for tests/run-all.sh); an absolute
 #                  path or `..` climb selected a script outside the family worktree.
 group_validator_rows() {
-    if [ ! -f "$AGENTS_DIR/bin/worker-dispatch/capability.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/capability.js" ]; then
         fail "cap-row/probe — implementation missing: bin/worker-dispatch/capability.js"
         return
     fi
@@ -178,7 +178,7 @@ ra-count-64              | relarg-n | 64                                       |
 ra-count-65              | relarg-n | 65                                       | reject
 TABLE
 
-    if ! run_with_timeout 90 node "$CAP_PROBE" "$(nodepath "$AGENTS_DIR")" "$MAIN" \
+    if ! run_with_timeout 90 node "$CAP_PROBE" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$MAIN" \
             "$(nodepath "$CAP_ROWS")" "$(nodepath "$CAP_OUT")" >/dev/null 2>"$TMPD/cap-probe.err"; then
         fail "cap-row/probe — validator probe failed: $(cat "$TMPD/cap-probe.err" 2>/dev/null)"
         return
@@ -191,7 +191,7 @@ TABLE
         got="${CAP_VERDICT[${NAMES[$i]}]-}"
         assert_eq "cap-row/${NAMES[$i]}" "${WANTS[$i]}" "$got"
         # Second layer for the derived field: an ACCEPTED derivation must still
-        # land inside <main-root>/.worktree-backup. This is the assertion that
+        # land inside <target-main-root>/.worktree-backup. This is the assertion that
         # would have caught `../../../pwned` even if the branch rule had missed
         # it, because it measures the joined result rather than the input.
         if [ "${KINDS[$i]}" = "backup" ] && [ "$got" = "accept" ]; then

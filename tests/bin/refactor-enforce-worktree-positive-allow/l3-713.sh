@@ -4,25 +4,11 @@
 # Tags: worktree, enforce, hook, issue-create, quote-spans, scope:issue-specific
 #
 # Sourced by tests/bin/refactor-enforce-worktree-positive-allow.sh.
-#
-# ============================================================================
-# L3 — #713: /issue-create callable from main worktree (T1–T10)
-# ============================================================================
-#
-# DQ-newline folding coverage note (Gap 6):
-# Newline folding inside double-quoted spans is no longer a private helper of
-# worker-script.js: after #1569 the span geometry comes from the shared scanner
-# (hooks/lib/quote-spans.js) and the folding itself lives in
-# hooks/enforce-worktree/arg-tail-guard.js, which worker-script.js calls.
-# The behaviour is still exercised INDIRECTLY here via
-# isAllowedWorkerScriptInvocation in L3.46 (dispatch.sh with a real-newline DQ
-# body — the embedded LF is folded so the command is still recognised as a
-# sanctioned pattern) and in L3.48 (ANSI-C quoting with skill prefix).
-# Direct unit coverage of the shared layer now lives in
-# tests/hooks/unit-quote-spans.sh (span geometry) and
-# tests/hooks/unit-quote-spans-differential.sh (old-vs-new foldDqNewlines parity),
-# so no dedicated helper unit test is added here; L3.46 and L3.48 remain the
-# closest-to-action coverage for the worker-script call path.
+# L3 — #713: /issue-create callable from main worktree (T1–T10).
+# DQ-newline folding (Gap 6) is covered here only indirectly, through
+# isAllowedWorkerScriptInvocation in L3.46 (real-newline DQ body) and L3.48
+# (ANSI-C quoting). Direct coverage of the shared layer:
+# tests/hooks/unit-quote-spans.sh and tests/hooks/unit-quote-spans-differential.sh.
 
 test_l3_36_issue_713_skill_inline_prefix_allowed_from_main() {
     require_file "$GUARD_JS" "test_l3_36_issue_713_skill_inline_prefix_allowed_from_main" || return
@@ -171,9 +157,9 @@ test_l3_46_issue_1533_dispatch_multiline_body_allowed_from_main() {
     require_file "$GUARD_JS" "test_l3_46_issue_1533_dispatch_multiline_body_allowed_from_main" || return
     local repo; repo="$(setup_main_checkout "l3-46")"
     local body; body="$(printf 'line1\nrm -rf /\nline3')"
-    local cmd; cmd="ISSUE_CREATE_SKILL=1 bash \"$AGENTS_DIR/bin/github-issues/issue-create-dispatch.sh\" --body \"$body\""
+    local cmd; cmd="ISSUE_CREATE_SKILL=1 bash \"$_SETUP_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-dispatch.sh\" --body \"$body\""
     local out
-    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$AGENTS_DIR")"
+    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         pass "L3.46 #1533: dispatch.sh with real-newline body + ISSUE_CREATE_SKILL=1 from main: allowed"
     else
@@ -184,9 +170,9 @@ test_l3_46_issue_1533_dispatch_multiline_body_allowed_from_main() {
 test_l3_47_issue_1533_dispatch_command_substitution_blocked_from_main() {
     require_file "$GUARD_JS" "test_l3_47_issue_1533_dispatch_command_substitution_blocked_from_main" || return
     local repo; repo="$(setup_main_checkout "l3-47")"
-    local cmd; cmd='ISSUE_CREATE_SKILL=1 bash "'"$AGENTS_DIR"'/bin/github-issues/issue-create-dispatch.sh" --body "$(rm -rf /tmp/testfile)"'
+    local cmd; cmd='ISSUE_CREATE_SKILL=1 bash "'"$_SETUP_SCRIPT_CHECKOUT_ROOT"'/bin/github-issues/issue-create-dispatch.sh" --body "$(rm -rf /tmp/testfile)"'
     local out
-    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$AGENTS_DIR")"
+    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "L3.47 #1533 security: \$() in argTail should BLOCK (fail-closed) ($out)"
     else
@@ -217,9 +203,9 @@ test_l3_48_issue_1457_ansi_c_quote_allowed_from_main() {
 test_l3_49_issue_1449_run_quality_gates_allowed_from_main() {
     require_file "$GUARD_JS" "test_l3_49_issue_1449_run_quality_gates_allowed_from_main" || return
     local repo; repo="$(setup_main_checkout "l3-49")"
-    local cmd; cmd="bash \"$AGENTS_DIR/skills/review-code-security/scripts/run-quality-gates.sh\""
+    local cmd; cmd="bash \"$_SETUP_SCRIPT_CHECKOUT_ROOT/skills/review-code-security/scripts/run-quality-gates.sh\""
     local out
-    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$AGENTS_DIR")"
+    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         pass "L3.49 #1449: run-quality-gates.sh from main: allowed"
     else
@@ -230,9 +216,9 @@ test_l3_49_issue_1449_run_quality_gates_allowed_from_main() {
 test_l3_50_issue_1191_var_prefix_bash_dispatch_allowed_from_main() {
     require_file "$GUARD_JS" "test_l3_50_issue_1191_var_prefix_bash_dispatch_allowed_from_main" || return
     local repo; repo="$(setup_main_checkout "l3-50")"
-    local cmd; cmd="ISSUE_CREATE_SKILL=1 bash \"$AGENTS_DIR/bin/github-issues/issue-create-dispatch.sh\""
+    local cmd; cmd="ISSUE_CREATE_SKILL=1 bash \"$_SETUP_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-dispatch.sh\""
     local out
-    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$AGENTS_DIR")"
+    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         pass "L3.50 #1191: VAR=val prefix + bash dispatch.sh from main: allowed"
     else
@@ -243,9 +229,9 @@ test_l3_50_issue_1191_var_prefix_bash_dispatch_allowed_from_main() {
 test_l3_51_issue_1385_bash_c_readonly_workflow_allowed_from_main() {
     require_file "$GUARD_JS" "test_l3_51_issue_1385_bash_c_readonly_workflow_allowed_from_main" || return
     local repo; repo="$(setup_main_checkout "l3-51")"
-    local cmd; cmd="bash -c 'node \"$AGENTS_DIR/bin/workflow/read-complexity-evaluation\" --session sid'"
+    local cmd; cmd="bash -c 'node \"$_SETUP_SCRIPT_CHECKOUT_ROOT/bin/workflow/read-complexity-evaluation\" --session sid'"
     local out
-    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$AGENTS_DIR")"
+    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         pass "L3.51 #1385: bash -c read-only workflow CLI from main: allowed"
     else
@@ -256,9 +242,9 @@ test_l3_51_issue_1385_bash_c_readonly_workflow_allowed_from_main() {
 test_l3_52_issue_1385_bash_c_write_body_blocked_from_main() {
     require_file "$GUARD_JS" "test_l3_52_issue_1385_bash_c_write_body_blocked_from_main" || return
     local repo; repo="$(setup_main_checkout "l3-52")"
-    local cmd; cmd="bash -c 'node \"$AGENTS_DIR/bin/workflow/read-complexity-evaluation\" && rm -rf /tmp/testfile'"
+    local cmd; cmd="bash -c 'node \"$_SETUP_SCRIPT_CHECKOUT_ROOT/bin/workflow/read-complexity-evaluation\" && rm -rf /tmp/testfile'"
     local out
-    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$AGENTS_DIR")"
+    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "L3.52 #1385 security: bash -c with write body should BLOCK (fail-closed) ($out)"
     else

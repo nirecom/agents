@@ -124,11 +124,11 @@ EOF
 
 run_gate() {
     local repo="$1" json="$2"
-    # Unconditionally set AGENTS_CONFIG_DIR="$repo" so isAgentsSessionRepo() (#1138)
+    # Unconditionally set AGENTS_MAIN_ROOT="$repo" so isAgentsSessionRepo() (#1138)
     # treats the target repo as the agents session repo — enforcement always applies.
     # Cross-repo tests that need a different agents dir must use an inline node call.
     echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
-        AGENTS_CONFIG_DIR="$repo" node "$GATE_HOOK" 2>/dev/null || true
+        AGENTS_MAIN_ROOT="$repo" node "$GATE_HOOK" 2>/dev/null || true
 }
 
 expect_approve_gate() {

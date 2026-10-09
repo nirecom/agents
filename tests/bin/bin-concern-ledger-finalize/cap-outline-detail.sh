@@ -78,7 +78,7 @@ run_loop_x() {
     : > "$LOOP_ERR"
     LOOP_RC=0
     LOOP_OUT="$(
-        AGENTS_CONFIG_DIR="$MOCKD" bash "$MOCKD/bin/run-codex-review-loop" \
+        bash "$MOCKD/bin/run-codex-review-loop" \
             --format "$fmt" --session-id "$sid" --plans-dir "$LPLANS" \
             --draft-file "$LPLANS/draft.md" --cap "$cap" --max-extensions "$mx" \
             --extensions-used 0 --accepted-tradeoffs "$LPLANS/tradeoffs.md" \

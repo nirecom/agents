@@ -102,7 +102,7 @@ function buildArgs(payload, ctx) {
 
   // `uv run <script>` rather than the doc-append PATH launcher: the launcher is
   // installed by the dotfiles repo and may be absent, while the script is always
-  // present under the resolved ACD anchor.
+  // present under the resolved script checkout root anchor.
   // --no-project: cwd is the branch worktree, so without it `uv run` walks up
   // for a pyproject.toml/workspace and can execute a branch-supplied PEP 517
   // build backend. doc-append.py is stdlib-only — discovery buys nothing.

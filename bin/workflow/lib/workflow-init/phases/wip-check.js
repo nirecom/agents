@@ -4,6 +4,8 @@ const { spawnSync } = require("child_process");
 const path = require("path");
 const { buildBashScriptSpawn } = require("../spawn-env");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..", "..", "..");
+
 /**
  * Phase: wip-check — check WIP state for each issue, then set WIP for unowned ones.
  * Evaluation order (CRITICAL — fixes ALL_NONE-before-ALL_SAME bug):
@@ -13,8 +15,8 @@ const { buildBashScriptSpawn } = require("../spawn-env");
  * 4. all wip=same (none are 'none') → continue without set
  * 5. mixed (some none, some same) → set only the 'none' Ns; continue
  */
-function wipCheck(state, agentsConfigDir, sessionId) {
-  const wipScript = path.join(agentsConfigDir, "bin", "github-issues", "wip-state.sh");
+function wipCheck(state, sessionId) {
+  const wipScript = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "github-issues", "wip-state.sh");
   // Meta-labelled issues are never wip-checked (#2087).
   const issues = state.issues.filter(
     (n) => !(state.label_sets[n] || []).includes("meta")

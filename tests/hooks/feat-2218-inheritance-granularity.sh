@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -35,7 +35,7 @@ init_repo() {
         git -C "$1" commit -q -m init
 }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 # isolation (#2512): pin state and plans dirs file-wide; the per-call pins below still override them.
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
@@ -47,10 +47,10 @@ require_granularity() {
     local out
     out=$(env -u CLAUDE_CODE_SESSION_ID "$RWT" 30 node -e "
 const missing = [];
-const apply = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/apply');
+const apply = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/apply');
 if (typeof apply.applyInheritance !== 'function' || apply.applyInheritance.length < 4) missing.push('applyInheritance(...,opts)');
 if (typeof apply.describeGranularInheritance !== 'function') missing.push('describeGranularInheritance');
-try { require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io/step-context-class'); }
+try { require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io/step-context-class'); }
 catch (e) { missing.push('hooks/workflow-state/state-io/step-context-class.js'); }
 process.stdout.write(missing.join(','));
 " 2>&1)
@@ -93,9 +93,9 @@ run_G1() {
     require_granularity || return 0
     local out
     out="$(run_node "
-const { writeState, createInitialState, markStep, readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { applyInheritance } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance');
-const { isContextIndependentStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io/step-context-class');
+const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
+const { isContextIndependentStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io/step-context-class');
 const donorSid = 'donor-g1';
 $DONOR_JS
 const donor = readState(donorSid);
@@ -142,8 +142,8 @@ run_G2() {
     require_granularity || return 0
     local out
     out="$(run_node "
-const { writeState, createInitialState, markStep, readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { applyInheritance } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance');
+const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
 const donorSid = 'donor-g2';
 $DONOR_JS
 const donor = readState(donorSid);
@@ -178,8 +178,8 @@ run_G3() {
     require_granularity || return 0
     local out
     out="$(run_node "
-const { writeState, createInitialState, markStep, readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { adoptState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/adopt');
+const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { adoptState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/adopt');
 const problems = [];
 const donorSid = 'donor-g3';
 $DONOR_JS
@@ -214,8 +214,8 @@ run_G4() {
     require_granularity || return 0
     local out
     out="$(run_node "
-const { writeState, createInitialState, markStep, readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { adoptState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/adopt');
+const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { adoptState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/adopt');
 const problems = [];
 const donorSid = 'donor-g4';
 $DONOR_JS
@@ -258,8 +258,8 @@ run_G5() {
     # the verifiedEquivalent path cannot use the fixture's opaque fake path.
     donor_js_g5="${DONOR_JS//\/fixture\/repo/$main_n}"
     out="$(run_node "
-const { writeState, createInitialState, markStep, readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { adoptState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/adopt');
+const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { adoptState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/adopt');
 const problems = [];
 const donorSid = 'donor-g5';
 $donor_js_g5
@@ -302,7 +302,7 @@ run_G6() {
     require_granularity || return 0
     local out
     out="$(run_node "
-const { describeGranularInheritance } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/apply');
+const { describeGranularInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/apply');
 const problems = [];
 const degraded = describeGranularInheritance({
   granularity: 'context-independent-only',

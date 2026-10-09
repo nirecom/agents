@@ -3,7 +3,7 @@
 # migrate only invalid config via rtk config --create.
 export SYSTEM_OPS_APPROVED=1
 
-AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 if [ -z "${C_RESET+x}" ]; then
     if [ -t 1 ]; then
@@ -16,7 +16,7 @@ fi
 # RTK is opt-in (default off): exit 1 means explicit ON; every other exit
 # (off / unset / unrecognized / internal failure) resolves to OFF.
 _rtk_rc=0
-bash "$AGENTS_ROOT/bin/get-config-var" --is-off RTK off >/dev/null 2>&1 || _rtk_rc=$?
+bash "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RTK off >/dev/null 2>&1 || _rtk_rc=$?
 if [ "$_rtk_rc" -ne 1 ]; then
     printf "${C_GRAY}RTK is off (default).${C_RESET}\n"
     exit 0

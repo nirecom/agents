@@ -2,7 +2,7 @@
 # Static: install.ps1 runs the wait helper once, after its Node.js check
 # and before the first child (dotfileslink), and publishes the verdict as WAIT_CC_RESULT.
 
-_PP_PS1="$AGENTS_DIR/install.ps1"
+_PP_PS1="$SCRIPT_CHECKOUT_ROOT/install.ps1"
 
 # The installer body sits one level deep inside the env-restoring try/finally.
 _pp_fnm="$(_pp_line "$_PP_PS1" '^[[:space:]]*Write-Host "--- Checking Node\.js \(fnm\) ---"')"

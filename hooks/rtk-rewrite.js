@@ -16,6 +16,8 @@ const { recordGuardReject } = require("./lib/rtk-guard-audit");
 const { isUnderNativeIsolation } = require("./lib/native-isolation");
 const { readHookInput } = require("./lib/read-stdin");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
+
 const DELEGATE_TIMEOUT_MS = 3000;
 
 const GIT_GLOBAL_OPTS_WITH_VALUE = new Set([
@@ -77,9 +79,7 @@ function peelEnvTokens(tokens) {
 
 // RTK on/off resolves through bin/get-config-var (exit 1 = explicit ON).
 function loadDefaultEnv() {
-  const agentsDir = process.env.AGENTS_CONFIG_DIR;
-  if (!agentsDir) return false;
-  const script = path.join(agentsDir, "bin", "get-config-var");
+  const script = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "get-config-var");
   try {
     execFileSync("bash", [script, "--is-off", "RTK", "off"], { stdio: "ignore" });
     return false; // exit 0 => OFF
@@ -89,9 +89,7 @@ function loadDefaultEnv() {
 }
 
 function loadAuditEnabled() {
-  const agentsDir = process.env.AGENTS_CONFIG_DIR;
-  if (!agentsDir) return false;
-  const script = path.join(agentsDir, "bin", "get-config-var");
+  const script = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "get-config-var");
   try {
     execFileSync("bash", [script, "--is-off", "RTK_AUDIT", "off"], { stdio: "ignore" });
     return false; // exit 0 => OFF
@@ -167,10 +165,10 @@ function substituteRtkHead(command, rtkBin, platform = process.platform) {
 }
 
 let binNamesCache = null;
-function getBinNames(agentsDir) {
+function getBinNames(agentsMainRoot) {
   if (binNamesCache) return binNamesCache;
   try {
-    binNamesCache = new Set(fs.readdirSync(path.join(agentsDir, "bin")));
+    binNamesCache = new Set(fs.readdirSync(path.join(agentsMainRoot, "bin")));
   } catch (_e) {
     binNamesCache = new Set(); // fail-safe: nothing matches, guard does not fire
   }
@@ -180,17 +178,17 @@ function getBinNames(agentsDir) {
 const SCRIPT_RUNNERS = new Set(["node", "bash", "sh"]);
 
 function isAgentsEmit(cmd) {
-  const agentsDir = process.env.AGENTS_CONFIG_DIR;
-  if (!agentsDir) return false;
-  if (/\$\{?AGENTS_CONFIG_DIR\b/.test(cmd)) return true; // unexpanded env ref
-  let resolvedAgentsDir;
+  const agentsMainRoot = process.env.AGENTS_MAIN_ROOT;
+  if (!agentsMainRoot) return false;
+  if (/\$\{?AGENTS_MAIN_ROOT\b/.test(cmd)) return true; // unexpanded env ref
+  let resolvedAgentsMainRoot;
   try {
-    resolvedAgentsDir = fs.realpathSync(path.resolve(agentsDir));
+    resolvedAgentsMainRoot = fs.realpathSync(path.resolve(agentsMainRoot));
   } catch (_e) {
-    resolvedAgentsDir = path.resolve(agentsDir);
+    resolvedAgentsMainRoot = path.resolve(agentsMainRoot);
   }
-  const binNames = getBinNames(agentsDir);
-  const underAgents = (p) => isUnderPath(p, resolvedAgentsDir);
+  const binNames = getBinNames(agentsMainRoot);
+  const underAgents = (p) => isUnderPath(p, resolvedAgentsMainRoot);
   const checkTokens = (toks) => {
     const head = toks[0];
     if (!head) return false;

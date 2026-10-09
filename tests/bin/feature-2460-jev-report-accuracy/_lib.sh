@@ -7,7 +7,7 @@
 
 [ -n "${JEV_REPORT_LIB_LOADED:-}" ] && return 0
 JEV_REPORT_LIB_LOADED=1
-. "$AGENTS_DIR/tests/hooks/feature-2460-jev-shadow/_lib.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2460-jev-shadow/_lib.sh"
 REPORT="$REPO_N/bin/jev-report"
 
 fx_new report

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Shared helpers for feature-1147-bugfix-write-tests-gate/ sub-scripts.
 # Sourced by test-ssot-module.sh and test-defenses.sh.
-# Callers must set: AGENTS_DIR, WIN_AGENTS_DIR, TMPDIR_ROOT,
+# Callers must set: SCRIPT_CHECKOUT_ROOT, WIN_SCRIPT_CHECKOUT_ROOT, TMPDIR_ROOT,
 #   WORKFLOW_STATE_DIR, HOOK_MARK, HOOK_GATE, NOW_ISO.
 # Callers must define: fail(), pass() (with their own ERRORS / PASS_COUNT counters).
 
@@ -90,7 +90,7 @@ EOF
 # read through readState() so the event log is projected before reading status.
 read_step_status() {
     local sid="$1" step="$2"
-    AGENTS_REQ="$WIN_AGENTS_DIR" node -e "
+    AGENTS_REQ="$WIN_SCRIPT_CHECKOUT_ROOT" node -e "
         const S=require(process.env.AGENTS_REQ + '/hooks/workflow-state/state-io');
         try {
             const s=S.readState(process.argv[2]);

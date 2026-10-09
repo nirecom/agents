@@ -111,15 +111,10 @@ if ! command -v gh >/dev/null 2>&1; then
     echo "Error: gh CLI not found" >&2; exit 1
 fi
 
-CONFIG_DIR="${AGENTS_CONFIG_DIR:-}"
-if [ -z "$CONFIG_DIR" ]; then
-    CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-fi
-ISSUE_CREATE_SH="$CONFIG_DIR/bin/github-issues/issue-create.sh"
-# Siblings of THIS script, resolved from its own path rather than from CONFIG_DIR: a
-# checkout under test must run its own helpers, not the deployed copy's (same reason
-# reopen-with-update.sh and parent-ancestor-reopen.sh are called that way below).
+# Siblings of THIS script, resolved from its own path: a checkout under test must run
+# its own helpers, not the deployed copy's.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ISSUE_CREATE_SH="$SCRIPT_DIR/issue-create.sh"
 
 get_repo_slug() {
     gh repo view --json nameWithOwner --jq .nameWithOwner | tr -d '\r'

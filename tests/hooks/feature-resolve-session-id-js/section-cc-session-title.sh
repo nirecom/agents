@@ -8,7 +8,7 @@
 # We exercise the set-issue subcommand with CLAUDE_CODE_SESSION_ID set and confirm
 # the session-title state file is written with own-sid (not a foreign session).
 # ===========================================================================
-CC_SESSION_TITLE="$AGENTS_DIR/bin/cc-session-title"
+CC_SESSION_TITLE="$SCRIPT_CHECKOUT_ROOT/bin/cc-session-title"
 if [ ! -f "$CC_SESSION_TITLE" ]; then
     fail "JS-10: cc-session-title not found at $CC_SESSION_TITLE"
 else
@@ -22,7 +22,7 @@ else
     # cc-session-title writes state files under $CLAUDE_TRANSCRIPT_BASE_DIR/<encoded-cwd>/
     # keyed by session-id. Use CLAUDE_TRANSCRIPT_BASE_DIR to isolate from ~/.claude/projects.
     # The binary itself exits 0 on any error (fail-open), so we can inspect the state file.
-    CC_CST_NODE="$AGENTS_DIR/bin/cc-session-title"
+    CC_CST_NODE="$SCRIPT_CHECKOUT_ROOT/bin/cc-session-title"
     if command -v cygpath >/dev/null 2>&1; then
         CC_CST_NODE="$(cygpath -w "$CC_CST_NODE" | sed 's|\\|/|g')"
         FAKE_CWD_NODE="$(cygpath -w "$FAKE_CWD" | sed 's|\\|/|g')"

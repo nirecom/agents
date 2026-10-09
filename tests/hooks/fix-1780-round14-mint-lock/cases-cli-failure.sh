@@ -2,35 +2,35 @@
 # Part of tests/hooks/fix-1780-round14-mint-lock.sh (rules/coding/file-split.md).
 # Round-14 MEDIUM: a WORKFLOW_DIR resolution failure in bin/request-off-clearance must
 # be AUDITED (UNAVAILABLE) and point at the EMERGENCY sentinel, never die silently under
-# set -e. Induced by a synthetic AGENTS_CONFIG_DIR that keeps supervisor-state-writer but
+# set -e. Induced by a synthetic AGENTS_MAIN_ROOT that keeps supervisor-state-writer but
 # OMITS state-io/core.js. R3: the audit write itself failing stays NON-blocking.
 # #2434: the audit trail is the control file <WORKFLOW_STATE_DIR>/<sid>.control/supervisor-state.json.
 
-# _r_fake_acd <dir> <with_core yes|no> <with_writer yes|no> — synthetic AGENTS_CONFIG_DIR
+# _r_fake_script_checkout_root <dir> <with_core yes|no> <with_writer yes|no> — synthetic AGENTS_MAIN_ROOT
 # whose re-exports point at the REAL modules; only each module's PRESENCE varies.
-_r_fake_acd() {
+_r_fake_script_checkout_root() {
     local root="$1" with_core="$2" with_writer="$3"
     mkdir -p "$root/hooks/lib" "$root/hooks/workflow-state/state-io"
     if [ "$with_writer" = "yes" ]; then
-        printf 'module.exports = require(%s);\n' "\"$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js\"" \
+        printf 'module.exports = require(%s);\n' "\"$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js\"" \
             > "$root/hooks/lib/supervisor-state-writer.js"
     fi
     if [ "$with_core" = "yes" ]; then
-        printf 'module.exports = require(%s);\n' "\"$_AGENTS_DIR_NODE/hooks/workflow-state/state-io/core.js\"" \
+        printf 'module.exports = require(%s);\n' "\"$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io/core.js\"" \
             > "$root/hooks/workflow-state/state-io/core.js"
     fi
 }
 
-# _r_run <acd_node> <plans_node> <target> [stub_bin_dir] → sets _R_RC/_R_OUT/_R_ERR
+# _r_run <script_checkout_root_node> <plans_node> <target> [stub_bin_dir] → sets _R_RC/_R_OUT/_R_ERR
 # When <stub_bin_dir> is given it is PREPENDED to PATH, so the run picks up the
 # fake `codex` examiner from tests/lib/examiner-stub.sh instead of a real one.
 _r_run() {
-    local acd="$1" plans="$2" target="$3" stubdir="${4-}" errfile runpath
+    local script_checkout_root="$1" plans="$2" target="$3" stubdir="${4-}" errfile runpath
     errfile=$(mktemp 2>/dev/null || mktemp -t offclrerr)
     runpath="$PATH"
     [ -n "$stubdir" ] && runpath="$stubdir:$PATH"
     _R_OUT=$(PATH="$runpath" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
-        WORKFLOW_STATE_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" AGENTS_CONFIG_DIR="$acd" \
+        WORKFLOW_STATE_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" AGENTS_MAIN_ROOT="$script_checkout_root" \
         "$RWT" 90 bash "$REQ" --target "$target" --category workflow-bug \
         --detail "next-step is wedged and blocks all progress" 2>"$errfile")
     _R_RC=$?
@@ -46,12 +46,12 @@ _r_audit_text() {
 }
 
 run_R_cli_wfdir_failure() {
-    local tmp tn acd
+    local tmp tn script_checkout_root
 
     # ---- R1: the regression itself, workflow target.
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    acd="$tmp/fake-acd"; _r_fake_acd "$acd" "no" "yes"
-    _r_run "$(node_path "$acd")" "$tn" "workflow"
+    script_checkout_root="$tmp/fake-script-checkout-root"; _r_fake_script_checkout_root "$script_checkout_root" "no" "yes"
+    _r_run "$(node_path "$script_checkout_root")" "$tn" "workflow"
 
     assert_eq  "R1 a WORKFLOW_DIR failure exits 1 (not a silent set -e death)" "1" "$_R_RC"
     assert_has "R1 the failure is NAMED on stderr" \
@@ -78,8 +78,8 @@ run_R_cli_wfdir_failure() {
     # naming the wrong sentinel is worse than none, since the operator would emit
     # a sentinel that does not clear their block.
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    acd="$tmp/fake-acd"; _r_fake_acd "$acd" "no" "yes"
-    _r_run "$(node_path "$acd")" "$tn" "worktree"
+    script_checkout_root="$tmp/fake-script-checkout-root"; _r_fake_script_checkout_root "$script_checkout_root" "no" "yes"
+    _r_run "$(node_path "$script_checkout_root")" "$tn" "worktree"
     assert_eq  "R1b worktree target also exits 1" "1" "$_R_RC"
     assert_has "R1b hint names the WORKTREE emergency sentinel" \
         "WORKFLOW_ENFORCE_WORKTREE_OFF_EMERGENCY" "$_R_OUT"
@@ -97,7 +97,7 @@ run_R_cli_wfdir_failure() {
     # model, or the case is neither hermetic nor repeatable.
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     mkdir -p "$tmp/bin"; write_examiner_stub "$tmp/bin/codex" "REJECT" "not legitimate under the rubric"
-    _r_run "$_AGENTS_DIR_NODE" "$tn" "workflow" "$tmp/bin"
+    _r_run "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "workflow" "$tmp/bin"
     assert_not_has "R2 resolution step is passed when the module loads" \
         "could not resolve the workflow directory" "$_R_ERR"
     assert_has "R2 the examination runs through to the examiner's verdict" \
@@ -113,7 +113,7 @@ run_R_cli_wfdir_failure() {
     # for this SID until the 24h transient sweep.
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     mkdir -p "$tmp/bin"; write_examiner_stub "$tmp/bin/codex" "ALLOW" "workflow-bug blocks all progress"
-    _r_run "$_AGENTS_DIR_NODE" "$tn" "workflow" "$tmp/bin"
+    _r_run "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "workflow" "$tmp/bin"
     assert_eq  "R4 an ALLOW examination succeeds (exit 0)" "0" "$_R_RC"
     assert_eq  "R4 the clearance token is minted" "yes" "$(exists_str "$tmp/$SID.off-clearance")"
     assert_eq  "R4 the mint released its lock" "no" "$(exists_str "$tmp/$SID.off-clearance.mint.lock.tmp")"
@@ -131,7 +131,7 @@ run_R_cli_wfdir_failure() {
     tmp=$(make_tmp); tn=$(node_path "$tmp")
     mkdir -p "$tmp/bin"; write_examiner_stub "$tmp/bin/codex" "ALLOW" "workflow-bug blocks all progress"
     : > "$tmp/$SID.off-clearance.mint.lock.tmp"
-    _r_run "$_AGENTS_DIR_NODE" "$tn" "workflow" "$tmp/bin"
+    _r_run "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "workflow" "$tmp/bin"
     assert_eq  "R5 a held mint lock fails the run closed (exit 1)" "1" "$_R_RC"
     assert_has "R5 the operator is told another run holds the lock" \
         "holds the mint lock for this session" "$_R_ERR"
@@ -151,8 +151,8 @@ run_R_cli_wfdir_failure() {
     # explicitly NON-blocking: the operator must still get the diagnosis and the
     # emergency guidance, and the exit status must not change.
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    acd="$tmp/fake-acd"; _r_fake_acd "$acd" "no" "no"
-    _r_run "$(node_path "$acd")" "$tn" "workflow"
+    script_checkout_root="$tmp/fake-script-checkout-root"; _r_fake_script_checkout_root "$script_checkout_root" "no" "no"
+    _r_run "$(node_path "$script_checkout_root")" "$tn" "workflow"
     assert_eq  "R3 a failed audit does not change the exit status" "1" "$_R_RC"
     assert_has "R3 the dropped audit entry is ANNOUNCED, not hidden" \
         "OFF-clearance audit write failed" "$_R_ERR"

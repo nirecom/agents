@@ -6,26 +6,22 @@
 # Usage: bin/run-tests-baseline --session <sid> [--worktree <path>] [--per-test-timeout <sec>]
 # Output: `BASELINE: <class> <path> [detail]` lines, then
 #         `BASELINE_SUMMARY: preexisting=N inherited=N broken=N undetermined=N`.
-# Exit:   0 all pre-existing (run_tests completed), 1 otherwise, 2 usage,
-#         3 no hook-recorded failing list (or state moved), 4 merge base not trustworthy.
+# Exit:   0 all pre-existing (run_tests completed), 1 otherwise, 2 usage, 3 no hook-recorded failing
+#         list (or state moved), 4 merge base not trustworthy, 5 no baseline (base predates the root names).
 # Child test output goes to log files only, never to stdout.
 
 set -uo pipefail
 
-case "${BASH_SOURCE[0]}" in
-  */*) RTB_BIN_DIR="${BASH_SOURCE[0]%/*}" ;;
-  *)   RTB_BIN_DIR="." ;;
-esac
-RTB_AGENTS_DIR="$(cd "$RTB_BIN_DIR/.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=bin/lib/run-tests-baseline-ledger.sh
-. "$RTB_AGENTS_DIR/bin/lib/run-tests-baseline-ledger.sh"
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-ledger.sh"
 # shellcheck source=bin/lib/run-tests-baseline-worktree.sh
-. "$RTB_AGENTS_DIR/bin/lib/run-tests-baseline-worktree.sh"
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-worktree.sh"
 # shellcheck source=bin/lib/run-tests-baseline-exec.sh
-. "$RTB_AGENTS_DIR/bin/lib/run-tests-baseline-exec.sh"
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-exec.sh"
 
-RTB_EVIDENCE="$RTB_AGENTS_DIR/bin/workflow/run-tests-baseline-evidence"
-RTB_RESOLVE="$RTB_AGENTS_DIR/bin/resolve-merge-base.sh"
+RTB_EVIDENCE="$SCRIPT_CHECKOUT_ROOT/bin/workflow/run-tests-baseline-evidence"
+RTB_RESOLVE="$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh"
 # shellcheck disable=SC2016,SC2088  # literal grep patterns, never expanded
 RTB_HOME_REFS=('$HOME/.claude' '${HOME}/.claude' '~/.claude' '$env:USERPROFILE' '$env:HOME' 'Path.home()' 'expanduser("~')
 
@@ -73,6 +69,10 @@ case "$MB_STATE" in
 esac
 [ "$MB_RC" -eq 0 ] || die 4 "resolve-merge-base exited $MB_RC"
 B2="$(git -C "$ROOT" rev-parse --verify --quiet "$MB_BASE^{commit}")" || die 4 "merge base $MB_BASE is not a local commit"
+# Decided before the ledger: a cached verdict for such a base would be just as unusable.
+if rtb_base_predates_root_names "$ROOT" "$B2"; then
+  die 5 "no baseline, rebase needed: merge base $B2 predates the root names this checkout's tests run under"
+fi
 
 export RTB_LEDGER_REPO="$ROOT"
 run_all_dur_repo_id "$ROOT" >/dev/null
@@ -84,7 +84,7 @@ rtb_wt_sweep_stale "$ROOT"
 # This checkout's test language registry; used only to normalize names (the base side's own
 # table launches the base side's tests).
 # shellcheck source=bin/lib/test-language-registry.sh
-{ . "$RTB_AGENTS_DIR/bin/lib/test-language-registry.sh" && tlr_load; } || die 2 "test language registry not readable"
+{ . "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh" && tlr_load; } || die 2 "test language registry not readable"
 
 # Entry point minus its language's nameStrip: the test's own data directory.
 test_dir_of() {
