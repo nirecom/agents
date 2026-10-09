@@ -6,8 +6,10 @@
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
-DETAIL_WRAPPER="$AGENTS_WORKTREE/skills/make-detail-plan/scripts/run-codex-review-loop.sh"
-OUTLINE_WRAPPER="$AGENTS_WORKTREE/skills/make-outline-plan/scripts/run-codex-review-loop.sh"
+DETAIL_REL="skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+OUTLINE_REL="skills/make-outline-plan/scripts/run-codex-review-loop.sh"
+DETAIL_WRAPPER="$AGENTS_WORKTREE/$DETAIL_REL"
+OUTLINE_WRAPPER="$AGENTS_WORKTREE/$OUTLINE_REL"
 BIN_WRAPPER="$AGENTS_WORKTREE/bin/run-codex-review-loop"
 REVIEW_LOOP_VERDICT="$AGENTS_WORKTREE/bin/review-loop-verdict"
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -89,6 +91,12 @@ EOF
     done
     [[ -d "$AGENTS_WORKTREE/bin/lib/concern-ledger" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$agents_dir/bin/lib/"
     [[ -d "$AGENTS_WORKTREE/bin/lib/codex-review-loop" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/codex-review-loop" "$agents_dir/bin/lib/"
+    # The stage wrappers find bin/ from their own location, so T1-T3 launch these copies.
+    for f in "$DETAIL_REL" "$OUTLINE_REL"; do
+        [[ -f "$AGENTS_WORKTREE/$f" ]] || continue
+        mkdir -p "$agents_dir/${f%/*}"
+        cp "$AGENTS_WORKTREE/$f" "$agents_dir/$f"
+    done
     return 0
 }
 
@@ -108,12 +116,12 @@ else
     echo "# outline" > "$TMP/plans/sid1-outline.md"
     AGENTS_MAIN_ROOT="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
-      run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || true
+      run_with_timeout bash "$TMP/agents/$DETAIL_REL" >/dev/null 2>&1 || true
     rm -f "$TMP/workflow-state/sid1.control/detail-plan-concern-ledger.txt"
     RC=0
     AGENTS_MAIN_ROOT="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
-      run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || RC=$?
+      run_with_timeout bash "$TMP/agents/$DETAIL_REL" >/dev/null 2>&1 || RC=$?
     CFILE="$TMP/workflow-state/sid1.control/detail-plan-round-number.txt"
     CVAL="$(tr -d '[:space:]' < "$CFILE" 2>/dev/null || echo absent)"
     if [[ "$RC" == "4" && "$CVAL" == "1" ]]; then
@@ -140,7 +148,7 @@ else
     RC=0
     AGENTS_MAIN_ROOT="$TMP/agents" SESSION_ID="sid2" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
-      run_with_timeout bash "$OUTLINE_WRAPPER" >/dev/null 2>&1 || RC=$?
+      run_with_timeout bash "$TMP/agents/$OUTLINE_REL" >/dev/null 2>&1 || RC=$?
     CFILE="$TMP/workflow-state/sid2.control/outline-plan-round-number.txt"
     if [[ "$RC" == "4" && ! -f "$CFILE" ]]; then
       pass "T2: exit 4 leaves no counter where there was none (outline wrapper)"
@@ -165,7 +173,7 @@ else
     RC=0
     AGENTS_MAIN_ROOT="$TMP/agents" SESSION_ID="sid3" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
-      run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || RC=$?
+      run_with_timeout bash "$TMP/agents/$DETAIL_REL" >/dev/null 2>&1 || RC=$?
     CFILE="$TMP/workflow-state/sid3.control/detail-plan-round-number.txt"
     if [[ "$RC" == "1" ]] && [[ "$(tr -d '[:space:]' < "$CFILE" 2>/dev/null)" == "1" ]]; then
       pass "T3: CONTINUE (exit 1) preserves counter file at value 1"

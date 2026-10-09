@@ -27,6 +27,10 @@ d2099rp_mock() {
     if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/lib/cli-exec-guard.sh" ]; then cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/cli-exec-guard.sh" "$root/bin/lib/cli-exec-guard.sh"; fi
     printf '#!/usr/bin/env bash\nc=$(grep -c "PLANLINE-")\necho "PLANLINE-count-is-${c:-0}"\nexit 0\n' > "$root/stub/codex"
     chmod +x "$root/stub/codex"
+    # codex-timeout.sh falls back to a get-config-var on PATH when none sits beside it:
+    # that must be this checkout's, never whatever shim the developer installed.
+    printf '#!/usr/bin/env bash\nexec bash "%s/bin/get-config-var" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" > "$root/stub/get-config-var"
+    chmod +x "$root/stub/get-config-var"
     if [ -n "$gcv" ]; then
         printf '#!/usr/bin/env bash\nprintf %%s %s\n' "$gcv" > "$root/bin/get-config-var"
         chmod +x "$root/bin/get-config-var"

@@ -395,20 +395,29 @@ test_C7_ambient_sanitized() {
 # UNSUPPORTED path (recognized-only / unmatched) is U1-U5 in feature-2007-run-all-ps1-dispatch.sh.
 # The runner and launcher load a fixture checkout's table, never the repo's.
 test_C8_not_launched_unsupported_not_counted() {
-    local co="$TMPROOT/co-unsup" lone x78 okt out rc ctl_out ctl_rc ok=1
-    mkdir -p "$co/bin" "$co/hooks/lib" "$co/tests/lone" "$co/tests/bin"
+    local co="$TMPROOT/co-unsup" lone x78 okt out rc ctl_out ctl_rc ok=1 f decoy
+    mkdir -p "$co/bin" "$co/hooks/lib" "$co/tests/lone" "$co/tests/bin" "$co/tests/lib"
     cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$co/bin/lib"
     cp "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$co/bin/"
+    # The fixture launcher refuses to run without its own root decoy: the library, its builder
+    # and the file the builder reads the retired names from. The builder lists the checkout's
+    # tracked files, so the checkout is a git repo; a run with no inherited decoy builds in TMPROOT.
+    for f in tests/lib/root-decoy.sh tests/lib/root-decoy-build.js tests/bin/feature-2561-root-names-residue.sh; do
+        cp "$SCRIPT_CHECKOUT_ROOT/$f" "$co/$f"
+    done
+    git init -q "$co" >/dev/null 2>&1
+    git -C "$co" config core.hooksPath /dev/null
+    decoy="${ROOT_DECOY_DIR:-$TMPROOT/co-unsup-decoy}"
     install_test_language_registry "$co" "$SCRIPT_CHECKOUT_ROOT"
     cp "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/fixtures/fake-suite.json" "$co/hooks/lib/test-language-registry.json"
     lone="$co/tests/lone/c.fakesuite"; x78="$co/tests/bin/x78.sh"; okt="$co/tests/bin/ok.sh"
     printf '# t\n' > "$lone"
     printf '#!/bin/bash\nexit 78\n' > "$x78"
     printf '#!/bin/bash\nexit 0\n' > "$okt"
-    out="$(RUN_ALL_REGISTRY_LIB="$co/bin/lib/test-language-registry.sh" RUN_ALL_LAUNCH_LIB="$co/bin/lib/run-all-launch.sh" \
+    out="$(ROOT_DECOY_DIR="$decoy" RUN_ALL_REGISTRY_LIB="$co/bin/lib/test-language-registry.sh" RUN_ALL_LAUNCH_LIB="$co/bin/lib/run-all-launch.sh" \
         run_with_timeout 120 bash "$RUN_ALL" "$lone" "$x78" "$okt" 2>/dev/null)"
     rc=$?
-    ctl_out="$(RUN_ALL_REGISTRY_LIB="$co/bin/lib/test-language-registry.sh" RUN_ALL_LAUNCH_LIB="$co/bin/lib/run-all-launch.sh" \
+    ctl_out="$(ROOT_DECOY_DIR="$decoy" RUN_ALL_REGISTRY_LIB="$co/bin/lib/test-language-registry.sh" RUN_ALL_LAUNCH_LIB="$co/bin/lib/run-all-launch.sh" \
         run_with_timeout 120 bash "$RUN_ALL" "$lone" "$okt" 2>/dev/null)"
     ctl_rc=$?
     [ "$(count_lines '^UNSUPPORTED: ' "$out")" = "1" ] || ok=0

@@ -123,7 +123,7 @@ function check(ctx) {
         if (!isTest(file.rel) && paramsOf(v.bare[i]).some((p) => PARAM_RE.test(p))) {
           say(i, "a function takes the checkout root as a parameter; each file derives its own");
         }
-        if (ctx.repo === "agents") for (const msg of carrierWrites(table, file.rel, v, i)) say(i, msg);
+        if (ctx.repo === "agents" && !isTest(file.rel)) for (const msg of carrierWrites(table, file.rel, v, i)) say(i, msg);
       }
       if (v.lang === "sh" && line.includes(LEAVE_DECOY) && !forms.has("leave-decoy")) {
         const called = v.cmds[i].some((words) => splitCommand(words).word === LEAVE_DECOY);

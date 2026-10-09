@@ -15,7 +15,7 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 # Verdicts are unchanged (B21/B25 pass either way), so the property is asserted from
-# inside the children: a stand-in AGENTS_MAIN_ROOT whose scan-outbound.sh and
+# inside the children: a stand-in checkout whose scan-outbound.sh and
 # check-private-repo-name.js record, per call, the candidate, the list delivered,
 # and whether either cache variable was present in their environment.
 
@@ -27,7 +27,7 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
 setup_fixture
 
-# ── The spy AGENTS_MAIN_ROOT ───────────────────────────────────────────────
+# ── The spy checkout (helpers.sh derive_copy_into) ─────────────────────────
 C_CFG="$FIXTURE/spy-cfg"
 mkdir -p "$C_CFG/bin" "$C_CFG/hooks/lib"
 # parse-closes-issues resolves its lib as <cfg>/hooks/lib/; the issue number is what
@@ -120,7 +120,7 @@ git -C "$C_REPO" remote add origin https://github.com/acme-org/spy-repo.git
 C_INTENT="$FIXTURE/spy-intent.md"
 write_intent "$C_INTENT" '!!! @@@' '- #4242: env non-exposure'
 
-C_SAVED_CFG="$AGENTS_MAIN_ROOT"
+derive_copy_into "$C_CFG"
 # c_run <label> — drive one derivation with both cache variables absent from the
 # script's own environment, which is the only condition under which the script's
 # non-exported assignment is what the children see.
@@ -128,9 +128,7 @@ c_run() {
     : > "$C_LOG"
     unset PRIVATE_REPO_NAMES_CACHE
     unset PRIVATE_REPO_NAMES_CACHE_SET
-    export AGENTS_MAIN_ROOT="$C_CFG"
-    run_derive "$1" --intent "$C_INTENT" --repo-dir "$C_REPO"
-    export AGENTS_MAIN_ROOT="$C_SAVED_CFG"
+    run_derive_in "$C_CFG" "$1" --intent "$C_INTENT" --repo-dir "$C_REPO"
     # Restore the suite-wide insulation immediately (private-repo-gate.sh does the same):
     # any later run_derive in this file must not fall through to a live `gh` call.
     export PRIVATE_REPO_NAMES_CACHE_SET=1

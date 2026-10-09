@@ -50,6 +50,8 @@ require_source() {
 
 SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1498-stop-premature-stop-guard"
 
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 # shellcheck source=./feature-1498-stop-premature-stop-guard/state-seeds.sh
 . "$SCRIPT_DIR/state-seeds.sh"
 # shellcheck source=./feature-1498-stop-premature-stop-guard/t-hook-integration.sh

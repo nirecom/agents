@@ -42,6 +42,14 @@ export WORKFLOW_PLANS_DIR
 # fallback is not short-circuited by inherited session state from the runner.
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
+# The gate enforces only in the repo its own checkout belongs to: run_gate launches it from a
+# copy of this checkout attached to the repo the commit targets.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+GATE_HOOK="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
+
 setup_repo() {
     local repo="$TMPDIR_BASE/repo-$RANDOM"
     mkdir -p "$repo"
@@ -187,12 +195,11 @@ to_node_path() {
 
 run_gate() {
     local json="$1"
-    # Extract the -C <repo-path> from the gate command so that AGENTS_MAIN_ROOT
-    # points at the same repo. isAgentsSessionRepo() compares the git common-dirs
-    # of the target repo and AGENTS_MAIN_ROOT; when they match (same temp repo),
-    # the gate enforces workflow state rather than short-circuiting via the
-    # cross-repo bypass (#1138). This is correct: the test exercises the gate
-    # logic itself, not which physical repo the commit targets.
+    # Extract the -C <repo-path> from the gate command and attach the gate's checkout to that
+    # repo. isAgentsSessionRepo() compares the git common-dirs of the target repo and the
+    # hook's own checkout; when they match, the gate enforces workflow state rather than
+    # short-circuiting via the cross-repo bypass (#1138). This is correct: the test exercises
+    # the gate logic itself, not which physical repo the commit targets.
     local gate_repo
     gate_repo=$(echo "$json" | node -e "
       const s = JSON.parse(require('fs').readFileSync(0,'utf8'));
@@ -201,6 +208,7 @@ run_gate() {
       console.log(m ? m[1] : '');
     " 2>/dev/null || true)
     if [ -n "$gate_repo" ]; then
+        session_repo_fixture_attach "$GATE_CHECKOUT" "$gate_repo" || return 1
         echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" AGENTS_MAIN_ROOT="$gate_repo" node "$GATE_HOOK" 2>/dev/null
     else
         echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null

@@ -33,7 +33,7 @@ assert_eq() {
 ENTRY='bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip"'
 
 judge() { # <module> <fragment> <predicate> <input>
-    node "$MUT" "$1" "$2" "$3" "$4"
+    env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$MUT" "$1" "$2" "$3" "$4"
 }
 
 # id~module~fragment~predicate~input~baseline~mutated~control-input~control-verdict

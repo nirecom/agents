@@ -129,7 +129,14 @@ chmod +x "$STUB_BIN/gh"
 MUTANT="$TMPD/compose-doc-append-entry.no-fix"
 sed -e 's|uv run --no-project|uv run|g' \
     -e "s|^SCRIPT_DIR=.*|SCRIPT_DIR=\"$SCRIPT_CHECKOUT_ROOT/bin\"|" \
+    -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
     "$CLI" > "$MUTANT"
+
+# The outbound scanner anchors its blocklist on AGENTS_MAIN_ROOT; an empty one in
+# a fixture root keeps the arms independent of the caller's environment.
+MAIN_ROOT_FIXTURE="$TMPD/agents-main"
+mkdir -p "$MAIN_ROOT_FIXTURE"
+: > "$MAIN_ROOT_FIXTURE/.private-info-blocklist"
 MUTANT_UV_SITES="$(grep -c 'uv run --no-project' "$MUTANT" || true)"
 REAL_UV_SITES="$(grep -c 'uv run --no-project' "$CLI" || true)"
 
@@ -195,6 +202,7 @@ run_compose() {
     RUN_RC=0
     RUN_OUT="$(cd "$WORK" && env \
         "PATH=$STUB_BIN:$PATH" \
+        AGENTS_MAIN_ROOT="$MAIN_ROOT_FIXTURE" \
         "WORKFLOW_PLANS_DIR=$STAGING" \
         "WORKFLOW_STATE_DIR=$ARM_DIR/workflow" \
         "CLAUDE_CODE_SESSION_ID=uvnp-arm$ARM_N" \

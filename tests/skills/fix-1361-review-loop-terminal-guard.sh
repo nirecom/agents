@@ -15,8 +15,12 @@ set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+# shellcheck source=tests/lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 _SCRIPT_CHECKOUT_ROOT_NODE="$(np "$SCRIPT_CHECKOUT_ROOT")"
-SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/review-tests/scripts/run-codex-review-loop.sh"
+# The wrapper finds its siblings from its own location, so each case launches a
+# copy of it placed inside the fake checkout that holds the stubs.
+SCRIPT_REL="skills/review-tests/scripts/run-codex-review-loop.sh"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
@@ -41,10 +45,11 @@ fi
 # review-scope fingerprint. The reset seam is the fingerprint mismatch, not invalidateReviewTests
 # (which has been deleted). A mismatch auto-clears the marker; a compute failure keeps it (fail-CLOSED).
 
-# --- Build a fake AGENTS_MAIN_ROOT with stub bin scripts + real evidence.js ---
+# --- Build a fake checkout: the real wrapper + bin/lib, stub bin scripts, real evidence.js ---
 build_fake_config() {
     local with_evidence="$1" fake
     fake=$(make_tmp)
+    script_checkout_fixture_copy "$fake" bin/lib skills/review-tests/scripts >&2 || return 1
     mkdir -p "$fake/bin" "$fake/hooks/workflow-gate"
     cat > "$fake/bin/run-codex-review-loop" <<'STUB'
 #!/usr/bin/env bash
@@ -126,7 +131,7 @@ run_loop() {
     ( cd "$repo" && pinned "$root" AGENTS_MAIN_ROOT="$fake" SESSION_ID="sid1361" \
         PLANS_DIR="$(np "$root/plans")" \
         CLAUDE_CODE_SESSION_ID="sid1361" \
-        EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$SCRIPT" >/dev/null 2>&1 )
+        EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$fake/$SCRIPT_REL" >/dev/null 2>&1 )
     ec=$?
     printf '%s' "$ec"
 }

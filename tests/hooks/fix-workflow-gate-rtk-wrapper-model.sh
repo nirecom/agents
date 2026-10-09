@@ -99,8 +99,9 @@ expect_eq "B7. isCommitCommand(git add -A && rtk git commit -m x) → true (comm
 case_end
 
 # --- Hook-level: hooks/workflow-gate.js end to end --------------------------
-# The fixture repo doubles as AGENTS_MAIN_ROOT so isAgentsSessionRepo() keeps the
-# gate armed; run_tests is pending, so any commit that reaches the gate is BLOCKed.
+# The gate runs from a copy of this checkout attached to the fixture repo, so
+# isAgentsSessionRepo() keeps it armed; run_tests is pending, so any commit that reaches the
+# gate is BLOCKed.
 WG_REPO="$(np "$T/wg-repo")"
 mkdir -p "$WG_REPO"
 git -C "$WG_REPO" init -q -b main
@@ -113,6 +114,12 @@ git -C "$WG_REPO" add README.md
 git -C "$WG_REPO" commit -q -m "initial"
 echo "src" > "$WG_REPO/app.js"
 git -C "$WG_REPO" add app.js
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+WG_CHECKOUT="$T/wg-checkout"
+session_repo_fixture_create "$WG_CHECKOUT"
+session_repo_fixture_attach "$WG_CHECKOUT" "$WG_REPO"
+GATE_HOOK="$(session_repo_fixture_path "$WG_CHECKOUT" hooks/workflow-gate.js)"
 WG_SID="wg2393pending"
 
 run_with_timeout 30 node -e "

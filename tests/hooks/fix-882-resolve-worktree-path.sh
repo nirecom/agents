@@ -23,7 +23,9 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 AGENTS_WORKTREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RESOLVER_JS="$AGENTS_WORKTREE/hooks/workflow-state/resolve-worktree-path.js"
 RESOLVER_BIN="$AGENTS_WORKTREE/bin/resolve-worktree-path"
-SELECT_SH="$AGENTS_WORKTREE/skills/review-tests/scripts/select-staged-files.sh"
+REVIEW_TESTS_SCRIPTS_REL="skills/review-tests/scripts"
+SELECT_REL="$REVIEW_TESTS_SCRIPTS_REL/select-staged-files.sh"
+SELECT_SH="$AGENTS_WORKTREE/$SELECT_REL"
 COMPUTE_JS="$AGENTS_WORKTREE/bin/compute-review-scope-fingerprint.js"
 RUN_TIMEOUT="$AGENTS_WORKTREE/bin/run-with-timeout.sh"
 PARTS="$AGENTS_WORKTREE/tests/hooks/fix-882-resolve-worktree-path"
@@ -195,7 +197,8 @@ EOF
 #   $1: process cwd   $2: sid, routed to CLAUDE_CODE_SESSION_ID when $5 is
 #       empty (SESSION_ID is not a supply channel — #2270)   $3: "state" /
 #       "nostate"   $4: cwd embedded in state ("wta"/"main")   $5: explicit
-#       CLAUDE_CODE_SESSION_ID (wins over $2)   $6: AGENTS_MAIN_ROOT override.
+#       CLAUDE_CODE_SESSION_ID (wins over $2)   $6: checkout whose copy of the
+#       script runs (the script finds its bins from its own location).
 # Sets SELECT_OUT / SELECT_ERR / SELECT_RC; stderr kept out of stdout.
 # ---------------------------------------------------------------------------
 SELECT_RC=0
@@ -229,7 +232,7 @@ run_select() {
     WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
     AGENTS_MAIN_ROOT="$agents_dir" \
-      bash "$RUN_TIMEOUT" 30 bash "$SELECT_SH" 2>"$errfile")"
+      bash "$RUN_TIMEOUT" 30 bash "$agents_dir/$SELECT_REL" 2>"$errfile")"
   SELECT_RC=$?
   SELECT_OUT="$out"
   SELECT_ERR="$(cat "$errfile" 2>/dev/null || true)"

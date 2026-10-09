@@ -23,7 +23,7 @@ readonly _CFL_TMP
 mkdir -p "$_CFL_TMP/workflow-state" "$_CFL_TMP/plans" || exit 1
 export WORKFLOW_STATE_DIR="$_CFL_TMP/workflow-state"
 export WORKFLOW_PLANS_DIR="$_CFL_TMP/plans"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # shellcheck source=tests/lib/root-decoy.sh
 . "$_COPY_FORGE_LOOKUP_SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy.sh"

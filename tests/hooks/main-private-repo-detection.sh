@@ -28,6 +28,11 @@ pass() { echo "PASS: $1"; }
 
 TMPDIR_BASE=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# Settings root: a fixture with empty private-info lists, so scan-outbound reaches its verdict.
+mkdir -p "$TMPDIR_BASE/agents-main"
+: > "$TMPDIR_BASE/agents-main/.private-info-blocklist"
+: > "$TMPDIR_BASE/agents-main/.private-info-allowlist"
+export AGENTS_MAIN_ROOT="$TMPDIR_BASE/agents-main"
 
 # --- Mock gh CLI ---
 # Create mock gh that returns configurable responses

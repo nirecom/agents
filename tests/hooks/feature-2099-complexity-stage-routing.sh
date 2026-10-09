@@ -65,7 +65,8 @@ export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
-
+# The skills' documented commands spell their CLI through this root: pin it to the checkout under test.
+export AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT"
 
 # Model-producer aliases used by #2100 model= line tests. Exported so every
 # child node process (BIN_DERIVE, BIN_READ) inherits them regardless of what

@@ -192,7 +192,7 @@ group_a() {
     assert_eq "registry/script-keys" "bootstrapProbe,scanOutbound,unstagedCheck,workflowGate" "$(ev scripts)"
     # D1: the gate must be the reviewed, merged copy — never the branch's own.
     assert_eq "registry/gate-script-rel" "hooks/workflow-gate.js" "$(ev gate_script_rel)"
-    assert_eq "registry/gate-script-anchor" "script_checkout_root" "$(ev gate_script_anchor)"
+    assert_eq "registry/gate-script-anchor" "script-checkout-root" "$(ev gate_script_anchor)"
 }
 
 # ===========================================================================
@@ -457,7 +457,7 @@ const payload = {
 };
 const ctx = {
   entry: { name: "commit-push", binaries: { external: [], scripts: {} } },
-  anchors: { script_checkout_root: path.join(tmp, "script-checkout-root-none"), plansDir: tmp },
+  anchors: { scriptCheckoutRoot: path.join(tmp, "script-checkout-root-none"), plansDir: tmp },
   path: path,
   fsguard: { writeFile: (t) => t },
 };

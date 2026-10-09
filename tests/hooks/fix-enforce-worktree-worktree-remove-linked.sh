@@ -70,11 +70,9 @@ mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
 GONE="$(np "$T/wt-gone")"
 git -C "$MAIN" worktree add -q -b feature/gone "$GONE"
 git -C "$MAIN" worktree remove "$GONE"
-# Marker-valid AGENTS_MAIN_ROOT (bin/ + hooks/enforce-worktree.js) for the eval case.
-FAKE_SCRIPT_CHECKOUT_ROOT="$(np "$T/script_checkout_root")"
-mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin" "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks" "$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts"
-touch "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/check-unstaged-tracked.sh" \
-      "$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts/pre-flight.sh"
+# The eval case names the pre-flight script of the checkout the hook runs from:
+# the hook sanctions a script only under its own checkout, by literal path (#2561).
+GUARD_CHECKOUT="$(np "$SCRIPT_CHECKOUT_ROOT")"
 
 SID_EXITED="test-1680-exited"
 SID_ACTIVE="test-1680-active"
@@ -102,7 +100,7 @@ PRE="$(node -e 'const s=require(process.argv[1]).readState(process.argv[2]);proc
 stale() {
     local payload
     payload="$(node -e 'process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:"Bash",tool_input:{command:process.argv[3],cwd:process.argv[2]}}))' "$1" "$2" "$3")"
-    ew_run "$MAIN" "$payload" "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN"
+    ew_run "$MAIN" "$payload" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN"
 }
 # stale_write <sid> <tool-cwd> <file-path> — same as stale() but uses the Write
 # tool path (handleEditWrite) so that the stale-cwd guard is exercised for that
@@ -110,10 +108,9 @@ stale() {
 stale_write() {
     local payload
     payload="$(node -e 'process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:"Write",tool_input:{file_path:process.argv[3],content:"x",cwd:process.argv[2]}}))' "$1" "$2" "$3")"
-    ew_run "$MAIN" "$payload" "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN"
+    ew_run "$MAIN" "$payload" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$MAIN"
 }
-# shellcheck disable=SC2016  # the unexpanded $AGENTS_MAIN_ROOT literal IS the payload.
-EVAL_PREFLIGHT='eval "$(bash "$AGENTS_MAIN_ROOT/skills/issue-close-finalize/scripts/pre-flight.sh")"'
+EVAL_PREFLIGHT="eval \"\$(bash \"$GUARD_CHECKOUT/skills/issue-close-finalize/scripts/pre-flight.sh\")\""
 
 case_begin "exited-stale-cwd-allow" "hooks/enforce-worktree.js"
 ew_expect allow "WE-15-ALLOW: exited_at set, cwd=linked: git worktree remove <linked> → ALLOW" \

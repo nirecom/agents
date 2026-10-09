@@ -2,25 +2,13 @@
 # tests/hooks/fix-959-enforce-worktree-worker-path-arg.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/standard.js
 # Tags: worktree, enforce, hook, security, scope:issue-specific
-#
-# L3 gap (what this test does NOT catch):
-#   - Real worker agent sessions where AGENTS_MAIN_ROOT contains actual agent scripts
-#   - Cross-platform path normalization edge cases in live Claude Code sessions
-#   - Hook invocation ordering when multiple allow predicates contest the same command
-# Closest-to-action mitigation: gap is covered at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-#
-# Class 3 (#959): worker scripts (bash "<script-checkout-root>/bin/check-unstaged-tracked.sh" ...)
-# launched from main-worktree CWD with log redirects to a linked worktree are
-# false-blocked because the hook sees the write target and applies main-worktree
-# enforcement. The fix adds isAllowedWorkerScriptInvocation(cmd, repoRoot)
-# recognizing sanctioned worker scripts via `bash "<double-quoted-path>"` identity
-# matching + collectBashWriteTargets() + worktree registry validation.
-#
-# Drive surface (full hook):
-#   echo '{"tool_name":"Bash","tool_input":{"command":"<cmd>"}}' | \
-#     (cd <main-worktree> && AGENTS_MAIN_ROOT=<fake-script-checkout-root> node hooks/enforce-worktree.js)
-
+# L3 gap: real worker sessions, live path-normalization edge cases, and the ordering of competing
+# allow predicates are not covered; checked at WORKFLOW_USER_VERIFIED preflight
+# (bin/check-verification-gate.sh category: hook-registration).
+# Class 3 (#959): bash "<script-checkout-root>/bin/check-unstaged-tracked.sh" run from the main
+# worktree with a log redirect into a linked worktree was false-blocked. The fix is
+# isAllowedWorkerScriptInvocation(cmd, repoRoot): script identity + write targets + worktree registry.
+# Drive surface: the payload on stdin of hooks/enforce-worktree.js, cwd = the main worktree.
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -177,42 +165,18 @@ add_linked_worktree() {
     fi
 }
 
-# Create a fake AGENTS_MAIN_ROOT with all sanctioned worker scripts as empty
-# files. Echoes the cygpath-normalized path.
-setup_fake_script_checkout_root() {
-    local name="$1"
-    local d="$TMPDIR_BASE/fake-script-checkout-root-$name"
-    mkdir -p "$d/bin/github-issues"
-    # Both trust markers (hooks/lib/script-checkout-root.js: hooks/enforce-worktree.js
-    # AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real
-    # one always carries the guard itself — a marker-less stub is not a faithful
-    # agents main root, it is the hostile case, which tests/fix-1630-*.sh own.
-    mkdir -p "$d/hooks"
-    touch "$d/hooks/enforce-worktree.js"
-    # Only entries that are still SANCTIONED. #1673 removed issue-close-gate.sh,
-    # github-issues/issue-close-stage-triage.sh and github-issues/parent-body-update.sh
-    # from the list (subprocess-only; no Bash-tool call site), so staging them here
-    # would model a state the guard no longer recognizes.
-    touch "$d/bin/check-unstaged-tracked.sh"
-    touch "$d/bin/probe-remote-bootstrap.sh"
-    touch "$d/bin/github-issues/issue-create-dispatch.sh"
-    if command -v cygpath >/dev/null 2>&1; then
-        cygpath -m "$d"
-    else
-        echo "$d"
-    fi
+# The guard accepts a sanctioned script only under the checkout the guard itself runs from
+# (hooks/lib/script-checkout-root.js), and matches it by path. Every case therefore names
+# scripts under that checkout. Echoes its node-style path.
+guard_checkout_root() {
+    echo "$_SCRIPT_CHECKOUT_ROOT_NODE"
 }
 
 # ============================================================================
 # F959 series — isAllowedWorkerScriptInvocation (Class 3)
-#
-# Setup contract: every case registers BOTH the main worktree and the linked
-# worktree in session scope (ENFORCE_WORKTREE_ADDITIONAL_REPOS="$repo;$linked"). This
-# is what reproduces the #959 false-block: with the linked worktree in scope, a
-# log-redirect target inside it resolves in-scope, and because the command runs
-# from the main-worktree CWD the main-checkout guard fires. Without the linked
-# worktree in scope the target would resolve out-of-scope and be allowed by the
-# universal-target rule — never exercising the new predicate at all.
+# Setup contract: every case puts BOTH the main worktree and the linked worktree in session
+# scope (ENFORCE_WORKTREE_ADDITIONAL_REPOS="$repo;$linked"). Only then does a log target inside
+# the linked worktree resolve in-scope and reach the predicate under test.
 # ============================================================================
 
 # Case 1 — ALLOW: sanctioned script + log redirect to registered linked worktree.
@@ -220,13 +184,13 @@ setup_fake_script_checkout_root() {
 test_F959_1_allow_sanctioned_linked_log() {
     local repo; repo="$(setup_main_worktree "f959-1")"
     local linked; linked="$(add_linked_worktree "$repo" "f959-lw1" "feature/f959-lw1")"
-    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "1")"
+    local checkout_root; checkout_root="$(guard_checkout_root)"
     mkdir -p "$linked/artifacts"
     local log_path="$linked/artifacts/test.log"
-    local cmd; cmd="bash \"$fake_script_checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\""
+    local cmd; cmd="bash \"$checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_allow "F959-1: sanctioned script + linked-wt log → ALLOW (fix #959 Class 3)" "$rc"
 }
 
@@ -237,11 +201,11 @@ test_F959_1_allow_sanctioned_linked_log() {
 test_F959_2_allow_sanctioned_no_redirect() {
     local repo; repo="$(setup_main_worktree "f959-2")"
     local linked; linked="$(add_linked_worktree "$repo" "f959-lw2" "feature/f959-lw2")"
-    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "2")"
-    local cmd; cmd="bash \"$fake_script_checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\""
+    local checkout_root; checkout_root="$(guard_checkout_root)"
+    local cmd; cmd="bash \"$checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_allow "F959-2: sanctioned script + no redirect (targets=null) → ALLOW (fix #959 Class 3)" "$rc"
 }
 
@@ -252,12 +216,12 @@ test_F959_2_allow_sanctioned_no_redirect() {
 test_F959_3_block_sanctioned_main_log() {
     local repo; repo="$(setup_main_worktree "f959-3")"
     local linked; linked="$(add_linked_worktree "$repo" "f959-lw3" "feature/f959-lw3")"
-    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "3")"
+    local checkout_root; checkout_root="$(guard_checkout_root)"
     local log_path="$repo/bad.log"
-    local cmd; cmd="bash \"$fake_script_checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\""
+    local cmd; cmd="bash \"$checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-3: sanctioned script + main-wt log → BLOCK (main-wt write target, Class 3 fail-closed)" "$rc"
 }
 
@@ -269,13 +233,13 @@ test_F959_3_block_sanctioned_main_log() {
 test_F959_4_block_unregistered_log() {
     local repo; repo="$(setup_main_worktree "f959-4")"
     local linked; linked="$(add_linked_worktree "$repo" "f959-lw4" "feature/f959-lw4")"
-    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "4")"
+    local checkout_root; checkout_root="$(guard_checkout_root)"
     mkdir -p "$repo/.wt/ghost"   # looks like a worktree path but is unregistered
     local log_path="$repo/.wt/ghost/test.log"
-    local cmd; cmd="bash \"$fake_script_checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\""
+    local cmd; cmd="bash \"$checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-4: sanctioned script + unregistered .wt/ghost log → BLOCK (registry mismatch, Class 3 fail-closed)" "$rc"
 }
 
@@ -284,15 +248,14 @@ test_F959_4_block_unregistered_log() {
 test_F959_5_block_non_sanctioned_script() {
     local repo; repo="$(setup_main_worktree "f959-5")"
     local linked; linked="$(add_linked_worktree "$repo" "f959-lw5" "feature/f959-lw5")"
-    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "5")"
-    mkdir -p "$fake_script_checkout_root/bin"
-    touch "$fake_script_checkout_root/bin/some-other.sh"  # not in sanctioned set
+    local checkout_root; checkout_root="$(guard_checkout_root)"
+    # bin/some-other.sh is not in the sanctioned set; the guard matches by path, so no file is made.
     mkdir -p "$linked/artifacts"
     local log_path="$linked/artifacts/test.log"
-    local cmd; cmd="bash \"$fake_script_checkout_root/bin/some-other.sh\" \"$repo\" &> \"$log_path\""
+    local cmd; cmd="bash \"$checkout_root/bin/some-other.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-5: non-sanctioned script + linked-wt log → BLOCK (identity gate rejects, Class 3)" "$rc"
 }
 
@@ -302,12 +265,12 @@ test_F959_5_block_non_sanctioned_script() {
 test_F959_6_block_log_basename_only() {
     local repo; repo="$(setup_main_worktree "f959-6")"
     local linked; linked="$(add_linked_worktree "$repo" "f959-lw6" "feature/f959-lw6")"
-    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "6")"
+    local checkout_root; checkout_root="$(guard_checkout_root)"
     local log_path="$linked/20260620-202454-commit-push-worker.log"
     local cmd="echo done > \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-6: echo to *-worker.log (no bash identity) → BLOCK (identity anchor test, Class 3)" "$rc"
 }
 
@@ -316,13 +279,13 @@ test_F959_6_block_log_basename_only() {
 test_F959_7_block_trailing_chaining() {
     local repo; repo="$(setup_main_worktree "f959-7")"
     local linked; linked="$(add_linked_worktree "$repo" "f959-lw7" "feature/f959-lw7")"
-    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "7")"
+    local checkout_root; checkout_root="$(guard_checkout_root)"
     mkdir -p "$linked/artifacts"
     local log_path="$linked/artifacts/test.log"
-    local cmd; cmd="bash \"$fake_script_checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\" && rm -rf /"
+    local cmd; cmd="bash \"$checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\" && rm -rf /"
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-7: sanctioned script + linked-wt log + && chaining → BLOCK (argTail chaining gate, Class 3)" "$rc"
 }
 
@@ -339,12 +302,12 @@ test_F959_7_block_trailing_chaining() {
 test_F959_8_block_bare_ampersand_background() {
     local repo; repo="$(setup_main_worktree "f959-8")"
     local linked; linked="$(add_linked_worktree "$repo" "f959-lw8" "feature/f959-lw8")"
-    local fake_script_checkout_root; fake_script_checkout_root="$(setup_fake_script_checkout_root "8")"
+    local checkout_root; checkout_root="$(guard_checkout_root)"
     # No redirect target: git push is write-classified but has no file write target.
-    local cmd; cmd="bash \"$fake_script_checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\" & git push origin main"
+    local cmd; cmd="bash \"$checkout_root/bin/check-unstaged-tracked.sh\" \"$repo\" & git push origin main"
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$fake_script_checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_MAIN_ROOT=$checkout_root" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-8: sanctioned script + bare & git push → BLOCK (bare-& security pin, Class 3)" "$rc"
 }
 

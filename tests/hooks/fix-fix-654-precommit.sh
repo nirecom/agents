@@ -7,9 +7,7 @@
 # .worktree-backup commits from the main worktree even when
 # ENFORCE_WORKTREE_EXCLUDE is unset, while NOT over-matching unrelated paths.
 #
-# Run BEFORE source changes land → all cases FAIL (red phase) or SKIP if the
-#   pre-commit hook has not yet been updated.
-# Run AFTER  source changes land → all cases PASS.
+# Red before the source change lands (or SKIP on an old pre-commit); green after.
 
 set -u
 
@@ -53,6 +51,13 @@ console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# The settings root is this file's own fixture, never the caller's: no .env, and an
+# empty blocklist so the outbound scanner resolves a list without the developer's.
+MAIN_ROOT_FIXTURE="$TMPDIR_BASE/agents-main"
+mkdir -p "$MAIN_ROOT_FIXTURE"
+: > "$MAIN_ROOT_FIXTURE/.private-info-blocklist"
+export AGENTS_MAIN_ROOT="$MAIN_ROOT_FIXTURE"
 
 run_with_timeout() {
     local secs="$1"; shift

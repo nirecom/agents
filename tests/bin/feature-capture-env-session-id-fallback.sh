@@ -123,7 +123,8 @@ run_capture_env() {
     setup_mock_env "$envdir"
 
     local script_copy="$TMPDIR_BASE/capture-env-test.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
 
@@ -177,7 +178,8 @@ test_F2a_no_notes_no_arg_errors() {
     local envdir="$TMPDIR_BASE/mockenv_f2a"
     setup_mock_env "$envdir"
     local script_copy="$TMPDIR_BASE/capture-env-f2a.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
     export PLANS_DIR="$TMPDIR_BASE/plans_f2a"
@@ -208,7 +210,8 @@ test_F2b_notes_without_session_id_errors() {
     local envdir="$TMPDIR_BASE/mockenv_f2b"
     setup_mock_env "$envdir"
     local script_copy="$TMPDIR_BASE/capture-env-f2b.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
     export PLANS_DIR="$TMPDIR_BASE/plans_f2b"
@@ -265,7 +268,8 @@ test_F4_invalid_session_id_in_notes_rejected() {
     local envdir="$TMPDIR_BASE/mockenv_f4"
     setup_mock_env "$envdir"
     local script_copy="$TMPDIR_BASE/capture-env-f4.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
     export PLANS_DIR="$TMPDIR_BASE/plans_f4"

@@ -101,7 +101,7 @@ const MODES = {
   gateenv: () => {
     const gate = require(path.join(A, "bin", "worker-dispatch", "workers", "commit-push", "gate.js"));
     const env = gate.resolveGateEnv({ session_id: args[1], worktree_path: args[2] || A },
-      { anchors: { script_checkout_root: args[0], plansDir: args[3] || path.join(args[0], "plans") } });
+      { anchors: { scriptCheckoutRoot: args[0], plansDir: args[3] || path.join(args[0], "plans") } });
     return JSON.stringify(Object.fromEntries(Object.entries(env).map(([k, v]) => [k, norm(v)])));
   },
   turnmarker: () => lib("lib/turn-marker").writeTurnMarker(args[0], { probe: true }),

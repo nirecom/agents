@@ -179,8 +179,16 @@ mkdir -p "$COMMIT_REPO"
 )
 SID="sid-commit-regression"
 write_state "$SID" "$(complete_state "$SID")"
+# The commit gate fires only for the repo the hook's own checkout belongs to: this case launches
+# the hook from a copy of this checkout attached to COMMIT_REPO.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+COMMIT_CHECKOUT="$TMPDIR_BASE/commit-gate-checkout"
+session_repo_fixture_create "$COMMIT_CHECKOUT"
+session_repo_fixture_attach "$COMMIT_CHECKOUT" "$COMMIT_REPO"
+COMMIT_GATE_HOOK="$(session_repo_fixture_path "$COMMIT_CHECKOUT" hooks/workflow-gate.js)"
 COMMIT_INPUT=$(printf '{"session_id":"%s","tool_name":"Bash","tool_input":{"command":"git -C %s commit -m test"}}' "$SID" "$COMMIT_REPO")
-COMMIT_OUTPUT=$(printf '%s' "$COMMIT_INPUT" | AGENTS_MAIN_ROOT="$COMMIT_REPO" run_with_timeout node "$GATE_HOOK" 2>/dev/null || true)
+COMMIT_OUTPUT=$(printf '%s' "$COMMIT_INPUT" | AGENTS_MAIN_ROOT="$COMMIT_REPO" run_with_timeout node "$COMMIT_GATE_HOOK" 2>/dev/null || true)
 COMMIT_DECISION=$(echo "$COMMIT_OUTPUT" | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{try{process.stdout.write(JSON.parse(d).decision||'')}catch(e){process.stdout.write('')}})")
 if [ "$COMMIT_DECISION" = "block" ]; then
     pass "commit_gate_regression"

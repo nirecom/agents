@@ -78,7 +78,7 @@ function hitIn(text, list) {
 
 // History documents and the list's own file are the only places an old name may stay.
 function isExempt(rel, list) {
-  return rel.startsWith("docs/history") || rel === "CHANGELOG.md" || rel.startsWith("changelog/") || rel === list.listRel;
+  return rel === "docs/history.md" || rel.startsWith("docs/history/") || rel === "CHANGELOG.md" || rel.startsWith("changelog/") || rel === list.listRel;
 }
 
 function check(ctx) {

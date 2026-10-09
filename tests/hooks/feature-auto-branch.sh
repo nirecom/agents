@@ -26,6 +26,13 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# A case that names no settings root gets this file's own fixture, never the
+# caller's: no .env, and an empty blocklist the outbound scanner can resolve.
+MAIN_ROOT_FIXTURE="$TMPDIR_BASE/agents-main"
+mkdir -p "$MAIN_ROOT_FIXTURE"
+: > "$MAIN_ROOT_FIXTURE/.private-info-blocklist"
+export AGENTS_MAIN_ROOT="$MAIN_ROOT_FIXTURE"
+
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
 # developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"

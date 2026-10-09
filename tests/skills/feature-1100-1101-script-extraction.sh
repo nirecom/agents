@@ -43,7 +43,7 @@ run() {
 # g5_history_empty_bool: "true" writes [], "false" writes one default entry
 _write_state() {
     local file="$1"
-    local sv="${2:-3}"
+    local sv="${2:-4}"
     local g5_3a="${3:-false}"
     local empty_history="${4:-false}"
     node -e "
@@ -109,7 +109,7 @@ test_l1_decline_decision() {
     local TMP rc=0
     TMP=$(mktemp -d)
     local STATE="$TMP/state.json"
-    _write_state "$STATE" 3 false false
+    _write_state "$STATE" 4 false false
 
     local OUTPUT
     OUTPUT=$(AGENTS_MAIN_ROOT=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
@@ -143,7 +143,7 @@ test_l2_llm_declined_decision() {
     local TMP
     TMP=$(mktemp -d)
     local STATE="$TMP/state.json"
-    _write_state "$STATE" 3 false false
+    _write_state "$STATE" 4 false false
 
     local OUTPUT
     OUTPUT=$(AGENTS_MAIN_ROOT=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
@@ -177,7 +177,7 @@ test_l3_unknown_g5_decision() {
     local TMP
     TMP=$(mktemp -d)
     local STATE="$TMP/state.json"
-    _write_state "$STATE" 3 false false
+    _write_state "$STATE" 4 false false
 
     local OUTPUT
     OUTPUT=$(AGENTS_MAIN_ROOT=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
@@ -233,7 +233,7 @@ test_l6_empty_g5_history() {
     local TMP
     TMP=$(mktemp -d)
     local STATE="$TMP/state.json"
-    _write_state "$STATE" 3 false true  # empty_history=true
+    _write_state "$STATE" 4 false true  # empty_history=true
 
     local OUTPUT
     OUTPUT=$(AGENTS_MAIN_ROOT=/tmp/x FINALIZE_SCRIPTS_DIR=/tmp/x \
@@ -380,7 +380,7 @@ test_a1_accept_g5_3a_not_completed() {
     local TMP
     TMP=$(mktemp -d)
     local STATE="$TMP/state.json"
-    _write_state "$STATE" 3 false false  # g5_3a_completed=false
+    _write_state "$STATE" 4 false false  # g5_3a_completed=false
 
     # Write mock step-g5-loop.sh that exits 0
     printf '#!/bin/bash\nexit 0\n' > "$TMP/step-g5-loop.sh"
@@ -419,7 +419,7 @@ test_a2_accept_g5_3a_already_completed_idempotent() {
     TMP=$(mktemp -d)
     local STATE="$TMP/state.json"
     local MARKER="$TMP/mock-was-called"
-    _write_state "$STATE" 3 true false  # g5_3a_completed=true
+    _write_state "$STATE" 4 true false  # g5_3a_completed=true
 
     # Write mock step-g5-loop.sh that writes a marker file if called
     printf '#!/bin/bash\ntouch %s\nexit 0\n' "$MARKER" > "$TMP/step-g5-loop.sh"

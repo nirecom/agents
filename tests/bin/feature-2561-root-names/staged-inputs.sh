@@ -56,6 +56,8 @@ c_scope() {
   fx "$REPO/bin/o-res.sh" "$OLD_LINE"
   fx "$REPO/bin/o-more.sh" "$OLD_LINE"
   fx "$REPO/hooks/o-res.js" "use(\"$OLD_ENV\");"
+  fx "$REPO/bi/o-clean.sh" 'echo clean'
+  fx "$REPO/bin/o-res/o-clean.sh" 'echo clean'
   commit_all "$REPO"
   # Columns: scope|verdict for bin/o-res.sh|for bin/o-more.sh|for hooks/o-res.js.
   local scope a b c
@@ -73,10 +75,28 @@ hooks/|accepted|accepted|env@1
 bin/o-res.sh|env@1|accepted|accepted
 bi|accepted|accepted|accepted
 bin/o-res|accepted|accepted|accepted
-docs|accepted|accepted|accepted
 TABLE
   run_gate "$KIT" --root "$REPO" --only residue --scope bi
   expect "scope: a prefix that only begins a directory name exits 0" rc_is 0
+}
+
+c_hostile_arguments() {
+  make_kit args
+  write_table "$KIT"
+  new_repo args
+  fx "$REPO/bin/h.sh" 'echo clean'
+  commit_all "$REPO"
+  run_gate "$KIT" --root "$REPO" --only '$(touch PWNED_O)'
+  expect "hostile: a command substitution as a check name exits 2" rc_is 2
+  run_gate "$KIT" --root "$REPO;touch PWNED_R"
+  expect "hostile: a root with a command separator exits 2" rc_is 2
+  run_gate "$KIT" --root "$REPO" --repo 'agents`touch PWNED_P`'
+  expect "hostile: a backtick in the repo value exits 2" rc_is 2
+  run_gate "$KIT" --root "$REPO" --scope '$(touch PWNED_S);touch PWNED_T'
+  expect "hostile: a hostile scope selects no file (exit 2)" rc_is 2
+  run_gate "$KIT" --root "$REPO" --retired-names-from '$(touch PWNED_L)'
+  expect "hostile: a hostile list path exits 2" rc_is 2
+  expect "hostile: no argument was executed" no_marker_file
 }
 
 # What a tree run reads: tracked files only, every file outside git, and of a
@@ -166,6 +186,58 @@ c_staged_fails_closed() {
 notable|table-match|$TABLE_REL
 nolist|residue|$LIST_REL
 TABLE
+}
+
+# A staged path whose blob cannot be read stops the run; a gitlink has no blob and is skipped.
+c_staged_blob_must_be_readable() {
+  local hash
+  staged_kit gitlink
+  git -C "$KIT" update-index --add --cacheinfo "160000,$(printf '%040d' 1),sub"
+  staged --only residue
+  expect "gitlink: a staged gitlink alone exits 0" rc_is 0
+  fx "$KIT/bin/s-n.sh" "$OLD_LINE"
+  git -C "$KIT" add bin/s-n.sh
+  staged --only residue
+  expect "gitlink: the file staged beside it is still judged" reports "bin/s-n.sh" residue 1
+  staged_kit lostblob
+  fx "$KIT/bin/s-p.sh" 'echo zzq lost blob'
+  git -C "$KIT" add bin/s-p.sh
+  hash="$(git -C "$KIT" rev-parse :bin/s-p.sh)"
+  rm -f "$KIT/.git/objects/${hash:0:2}/${hash:2}"
+  expect "lost blob: the staged object is gone" test ! -e "$KIT/.git/objects/${hash:0:2}/${hash:2}"
+  staged --only residue
+  expect "lost blob: a staged path without its blob exits 2, never 0" rc_is 2
+  expect "lost blob: it names the path" says 'cannot read the staged content of bin/s-p.sh'
+}
+
+# A tree or a scope that selects no file is an error; only an empty index is a clean answer.
+c_empty_input() {
+  local scope want _what
+  make_kit empty
+  write_table "$KIT"
+  new_repo empty
+  mkdir -p "$T/empty-dir/sub"
+  run_gate "$KIT" --root "$REPO"
+  expect "empty: a git repo without a tracked file exits 2" rc_is 2
+  expect "empty: it says there is no file to check" says 'no file to check'
+  run_gate "$KIT" --root "$T/empty-dir"
+  expect "empty: a directory without a file exits 2" rc_is 2
+  fx "$REPO/bin/e.sh" 'echo clean'
+  commit_all "$REPO"
+  # Columns: scope|exit code|what the scope selects.
+  while IFS='|' read -r scope want _what <&3; do
+    run_gate "$KIT" --root "$REPO" --only residue --scope "$scope"
+    expect "empty: the scope '$scope' exits $want" rc_is "$want"
+  done 3<<'TABLE'
+bin|0|the one tracked file
+docs|2|no file
+bin/e|2|no file: half a file name
+TABLE
+  staged_kit emptyindex
+  staged
+  expect "empty: the staged flag with nothing staged exits 0" rc_is 0
+  staged --scope docs
+  expect "empty: nothing staged under a scope exits 0 as well" rc_is 0
 }
 
 c_file_arguments() {

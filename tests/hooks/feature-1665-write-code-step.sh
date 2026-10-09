@@ -42,8 +42,7 @@ export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
-# Empty agents config: keeps get-config-var reads deterministic and makes
-# isAgentsSessionRepo() treat the fixture repo as the session repo.
+# Empty agents config: keeps get-config-var reads deterministic.
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"
 mkdir -p "$CONFIG_EMPTY"
 : > "$CONFIG_EMPTY/.env"
@@ -61,6 +60,14 @@ printf '// code\n' > "$GATE_REPO/hooks/thing.js"
 git -C "$GATE_REPO" add hooks/thing.js >/dev/null 2>&1
 GATE_REPO_N="$(nrm "$GATE_REPO")"
 export CLAUDE_PROJECT_DIR="$GATE_REPO_N"
+# The gate enforces only in the repo its own checkout belongs to: launch it from a copy of this
+# checkout attached to GATE_REPO.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+session_repo_fixture_attach "$GATE_CHECKOUT" "$GATE_REPO" || { echo "FAIL: cannot attach the gate checkout"; exit 1; }
+GATE_HOOK_N="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
 
 # Neutral CWD: hooks that call `git rev-parse` must not resolve the real repo.
 cd "$TMPDIR_BASE" || exit 1

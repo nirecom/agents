@@ -99,10 +99,16 @@ function treeFiles(root) {
 function stagedFiles(root) {
   const listed = git(root, ["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"]);
   if (listed === null) throw new UsageError("cannot read the index");
+  const entries = git(root, ["ls-files", "-s", "-z"]);
+  if (entries === null) throw new UsageError("cannot read the index");
+  // A gitlink (mode 160000) has no blob; every other staged path must be readable.
+  const gitlinks = new Set(nulList(entries).filter((e) => e.startsWith("160000 ")).map((e) => e.slice(e.indexOf("\t") + 1)));
   const files = [];
   for (const rel of nulList(listed)) {
+    if (gitlinks.has(rel)) continue;
     const blob = git(root, ["show", `:${rel}`]);
-    if (blob !== null) files.push({ rel, text: textOf(blob) });
+    if (blob === null) throw new UsageError(`cannot read the staged content of ${rel}`);
+    files.push({ rel, text: textOf(blob) });
   }
   return files;
 }
@@ -145,6 +151,8 @@ function run(opts) {
   else if (opts.files.length > 0) files = namedFiles(opts.files);
   else files = treeFiles(opts.root === null ? SCRIPT_CHECKOUT_ROOT : path.resolve(nativePath(opts.root)));
   if (opts.scope !== null) files = files.filter((f) => inScope(f.rel, opts.scope));
+  // An empty index is a real answer; an empty tree or scope means the gate looked at nothing.
+  if (!opts.staged && files.length === 0) throw new UsageError("no file to check");
   let list = null;
   let table = null;
   const ctx = {

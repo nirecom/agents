@@ -160,7 +160,7 @@ assert_no_secret "B-16-secret-absent-in-degraded-remedy" "$OUT" "$TMPDIR_B/err.t
 CFGTOK='--token=supersecret123unique'
 node "$HERE/mk-event.js" Bash \
     "X=\$(bash \"\$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip\" $CFGTOK); echo \"\$X\"" >"$EV"
-env node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
+env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
 VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
 assert_eq "B-17-matched-secret-arg-still-blocked" "block" "$VERDICT"
 grep -qF -e "$CFGTOK" "$OUT" && TOK_IN_OUT=yes || TOK_IN_OUT=no
@@ -172,7 +172,7 @@ assert_eq "B-18-matched-secret-arg-not-reproduced" "no" "$TOK_IN_OUT"
 CFGARG='--target outline'
 node "$HERE/mk-event.js" Bash \
     "X=\$(bash \"\$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip\" $CFGARG); echo \"\$X\"" >"$EV"
-env node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err2.txt"
+env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err2.txt"
 VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
 assert_eq "B-18b-matched-plain-arg-still-blocked" "block" "$VERDICT"
 grep -qF -e "$CFGARG" "$OUT" && ARG_IN_OUT=yes || ARG_IN_OUT=no
@@ -183,7 +183,7 @@ assert_eq "B-19-stderr-never-carries-the-command" "no" "$TOK_IN_ERR"
 # guidance, so verbatim reproduction is scoped to a recipe the SSOT already sanctions.
 node "$HERE/mk-event.js" Bash \
     "X=\$(bash /tmp/not-registered $CFGTOK); echo \"\$X\"" >"$EV"
-env node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
+env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
 grep -qF -e "$CFGTOK" "$OUT" && TOK_IN_OUT=yes || TOK_IN_OUT=no
 assert_eq "B-20-unmatched-entry-does-not-reproduce-arg" "no" "$TOK_IN_OUT"
 

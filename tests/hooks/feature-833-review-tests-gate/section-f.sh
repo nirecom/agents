@@ -17,6 +17,7 @@ TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toStri
 run_gate_wsid() {
     local plans_dir="$1" repo_cwd="$2" json="$3"
     local common_dir main_dir=""
+    session_repo_fixture_attach "$GATE_CHECKOUT" "$repo_cwd" 2>/dev/null
     common_dir="$(git -C "$repo_cwd" rev-parse --git-common-dir 2>/dev/null)" || common_dir=""
     if [ -n "$common_dir" ]; then
         main_dir="$(node -e "const p=require('path');process.stdout.write(p.dirname(p.resolve(process.argv[1],process.argv[2])))" -- "$repo_cwd" "$common_dir" 2>/dev/null)" || main_dir=""

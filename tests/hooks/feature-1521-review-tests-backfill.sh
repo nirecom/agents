@@ -50,6 +50,14 @@ export WORKFLOW_PLANS_DIR
 
 NOW_ISO="$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
+# workflow-gate gates only the repo its own checkout belongs to: run_gate launches it from a copy
+# of this checkout attached to the fixture repo.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+GATE_HOOK="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
+
 # ---------------------------------------------------------------------------
 # Repo / worktree setup
 # ---------------------------------------------------------------------------
@@ -203,8 +211,9 @@ run_mark() {
 run_gate() {
     local cwd="$1" json="$2"
     local cwd_n; cwd_n="$(cygpath -m "$cwd" 2>/dev/null || echo "$cwd")"
-    # AGENTS_MAIN_ROOT = fixture main checkout so the #1138 cross-repo bypass
+    # The gate's checkout is attached to the fixture repo so the #1138 cross-repo bypass
     # does not approve before review_tests is evaluated.
+    session_repo_fixture_attach "$GATE_CHECKOUT" "$cwd" || return 1
     local common_dir main_dir
     common_dir="$(git -C "$cwd" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
     main_dir="$(dirname "$common_dir")"

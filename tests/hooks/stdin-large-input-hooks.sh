@@ -23,6 +23,11 @@ unset CLAUDE_CODE_SESSION_ID SYSTEM_OPS_APPROVED 2>/dev/null || true
 unset ANTHROPIC_API_KEY ENFORCE_WORKTREE_EXCLUDE 2>/dev/null || true
 mkdir -p "$TMPD/transcripts" "$TMPD/neutral"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMPD/transcripts")"
+# Settings root: a fixture with empty private-info lists, so scan-outbound reaches its verdict.
+mkdir -p "$TMPD/agents-main"
+: > "$TMPD/agents-main/.private-info-blocklist"
+: > "$TMPD/agents-main/.private-info-allowlist"
+export AGENTS_MAIN_ROOT="$(np "$TMPD/agents-main")"
 
 # Hard-hit term reused from the scan-offensive CLI fixture (feature-990).
 printf '%s\n' "__cli_test_sentinel__" > "$TMPD/blocklist.txt"

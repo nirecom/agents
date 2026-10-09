@@ -30,6 +30,16 @@ cli() {
   case "$CLI_ERR" in *MODULE_NOT_FOUND* | *"Cannot find module"*) CLI_RC="missing-cli" ;; esac
 }
 
+# fx_root_decoy <dir> — the root decoy a checkout's launcher refuses to run without: the
+# library, its builder, and the file the builder reads the retired names from.
+fx_root_decoy() {
+  local d="$1" f
+  mkdir -p "$d/tests/lib" "$d/tests/bin"
+  for f in tests/lib/root-decoy.sh tests/lib/root-decoy-build.js tests/bin/feature-2561-root-names-residue.sh; do
+    cp "$SCRIPT_CHECKOUT_ROOT/$f" "$d/$f"
+  done
+}
+
 # fx_checkout <dir> [<table.json>] — a minimal agents checkout in a git repo:
 # bin/lib, the registry CLI/reader/table and the scripts the cases launch. A given
 # table replaces the default one: the reader and loader have no env override.
@@ -42,6 +52,7 @@ fx_checkout() {
   done
   install_test_language_registry "$d" "$SCRIPT_CHECKOUT_ROOT"
   cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh" "$d/tests/lib/harness.sh"
+  fx_root_decoy "$d"
   if [ -n "$t" ]; then cp "$t" "$d/hooks/lib/test-language-registry.json"; fi
   harness_git_init "$d"
   git -C "$d" config user.email t@example.com

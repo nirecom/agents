@@ -1,24 +1,13 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-gate.js, hooks/enforce-system-ops.js, rules/ops.md, rules/branch.md, rules/worktree.md
 # Tags: rules-injection, on-demand-rules, skill-ownership, hook-wiring, observed-behavior, TL2, scope:common
-
-# WHY (CPR-WPH): the ownership map in hooks/lib/rules-injection-policy.js records which
-# SKILL.md Reads each de-injected rule. Two rules are not owned by a skill at all — they are
-# owned by a HOOK, which tells the agent to Read them at the moment the rule becomes
-# relevant. rules/ops.md arrives that way from enforce-system-ops.js when a destructive
-# command is blocked, and rules/branch.md + rules/worktree.md arrive from workflow-gate.js
-# when branching_complete is the step standing between the session and its commit.
-
-# Those two instructions are the entire delivery path for those rules once auto-injection
-# is off. If the hook stops emitting them, nothing else in the suite notices: the notation
-# checks still pass, and the ownership map still lists an owner that no longer speaks.
-
-# METHOD: both hooks are INVOKED for real over stdin and graded on what they emit, not
-# grepped. A grep matches a string sitting in dead code, in a branch this input never
-# reaches, or in a comment; and it misses an instruction assembled from parts. Each hook is
-# driven twice — once through the branch that should carry the instruction and once through
-# a branch that should not — so a constant footer cannot satisfy the assertion.
-# Assumes SCRIPT_CHECKOUT_ROOT, BASE, node_path(), pass(), fail() from the entry file.
+# WHY (CPR-WPH): two de-injected rules are owned by a HOOK, not a SKILL.md. rules/ops.md arrives
+# from enforce-system-ops.js when a destructive command is blocked; rules/branch.md +
+# rules/worktree.md arrive from workflow-gate.js when branching_complete blocks the commit. Those
+# instructions are the entire delivery path; if a hook stops emitting them, nothing else notices.
+# METHOD: both hooks are INVOKED over stdin and graded on what they emit, not grepped. Each is
+# driven through the branch that should carry the instruction and one that should not, so a
+# constant footer cannot pass. Assumes SCRIPT_CHECKOUT_ROOT, BASE, node_path(), pass(), fail().
 
 echo ""
 echo "=== HW: the two rules delivered by a hook rather than by a SKILL.md Read ==="
@@ -100,9 +89,18 @@ else
 HW_STATE_EOF
     }
 
-    # AGENTS_MAIN_ROOT points at the fixture repo on purpose: the gate self-limits to the
-    # agents session repo (isAgentsSessionRepo), so a fixture that is a different repo would
-    # be waved through and every assertion below would pass without the gate ever deciding.
+    # The gate self-limits to the repo its own checkout belongs to (isAgentsSessionRepo), so a
+    # gate run from this checkout would wave the fixture repo through and every assertion below
+    # would pass without the gate ever deciding. It runs from a copy attached to the fixture.
+    # shellcheck source=tests/lib/session-repo-fixture.sh
+    . "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+    HW_GATE_CHECKOUT="$HW_ROOT/gate-checkout"
+    if session_repo_fixture_create "$HW_GATE_CHECKOUT" \
+       && session_repo_fixture_attach "$HW_GATE_CHECKOUT" "$HW_REPO"; then
+        HW_GATE="$(session_repo_fixture_path "$HW_GATE_CHECKOUT" hooks/workflow-gate.js)"
+    else
+        fail "HW2-fixture: cannot copy the checkout for the gate — HW2 below runs an unarmed gate"
+    fi
     hw_gate() {
         printf '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"},"cwd":"%s","session_id":"hwsid2037"}' \
             "$(node_path "$HW_REPO")" \

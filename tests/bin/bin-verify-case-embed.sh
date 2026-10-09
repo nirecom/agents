@@ -49,6 +49,7 @@ vce_checkout() {
   install_test_language_registry "$d" "$SCRIPT_CHECKOUT_ROOT"
   if [ -n "$t" ]; then cp "$t" "$d/hooks/lib/test-language-registry.json"; fi
   cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh" "$d/tests/lib/harness.sh"
+  fx_root_decoy "$d"
   if [ -d "$SCRIPT_CHECKOUT_ROOT/skills/sweep-tests" ]; then
     mkdir -p "$d/skills"
     cp -R "$SCRIPT_CHECKOUT_ROOT/skills/sweep-tests" "$d/skills/sweep-tests"

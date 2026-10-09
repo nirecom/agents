@@ -100,24 +100,32 @@ write_workflow_off_marker() {
     printf '{"set_at":"2026-01-01T00:00:00Z"}\n' > "$wfdir/$sid.workflow-off"
 }
 
-# Agents main root fixtures. AGENTS_MAIN_ROOT drives two independent decisions (CPR-SC):
-#   1. isAgentsSessionRepo() — a NON-git agents main root fails closed (true), keeping Gate 2 armed for the temp repo under test.
-#   2. resolveScriptCheckoutRoot() — env candidate adopted only with BOTH markers (hooks/enforce-worktree.js + bin/); a marker-less dir falls through to the module anchor (the real agents checkout).
+# Checkout fixtures. The hook decides both things from the checkout it is launched from (CPR-SC):
+#   1. isAgentsSessionRepo() — Gate 2 is armed only for the repo that checkout belongs to.
+#   2. resolveScriptCheckoutRoot() — bin/review-code-size is the one inside that checkout.
+# run_hook therefore launches a copy of this checkout attached to the repo under test.
+# AGENTS_MAIN_ROOT (the cfg dir) only supplies the settings file.
 # ---------------------------------------------------------------------------
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+# setup_repo runs in a command substitution, so the repo under test is handed over in a file.
+REPO_UNDER_TEST_FILE="$TMPDIR_BASE/repo-under-test"
 
-# Plain dir: no markers -> real bin/review-code-size is used, Gate 2 armed.
+# Plain dir: the unmodified copy (real bin/review-code-size) is used, Gate 2 armed.
 make_plain_cfg_root() {
     local d="$TMPDIR_BASE/cfg-$1"
     mkdir -p "$d"
     to_node_path "$d"
 }
 
-# Marker dir: adopted by resolveScriptCheckoutRoot(); bin/review-code-size is
-# whatever this fixture puts there (or nothing at all).
+# Own copy of the checkout without bin/review-code-size: run_hook launches the hook from
+# this dir, so bin/review-code-size is whatever the case puts there (or nothing at all).
 make_marker_cfg_root() {
     local d="$TMPDIR_BASE/cfg-$1"
-    mkdir -p "$d/hooks" "$d/bin"
-    echo "// stub marker" > "$d/hooks/enforce-worktree.js"
+    session_repo_fixture_create "$d" || return 1
+    rm -f "$d/bin/review-code-size"
     to_node_path "$d"
 }
 
@@ -150,6 +158,7 @@ setup_repo() {
     echo "doc" > "$repo/docs/notes.md"
     git -C "$repo" add README.md docs/notes.md
     git -C "$repo" commit -q -m "initial"
+    to_node_path "$repo" > "$REPO_UNDER_TEST_FILE"
     to_node_path "$repo"
 }
 
@@ -170,13 +179,22 @@ HOOK_RC=0
 # run_hook <payload> <wfdir> <cfgdir> [extra KEY=VALUE ...]
 run_hook() {
     local payload="$1" wfdir="$2" cfg="$3"; shift 3
+    # The launched checkout belongs to the repo under test, except when the cfg dir is itself a
+    # git repo: then it belongs to that foreign repo (the cross-repo case).
+    local checkout="$GATE_CHECKOUT" owner
+    owner="$(cat "$REPO_UNDER_TEST_FILE")"
+    [ -f "$cfg/hooks/workflow-gate.js" ] && checkout="$cfg"
+    [ -d "$cfg/.git" ] && owner="$cfg"
     HOOK_RC=0
+    if ! session_repo_fixture_attach "$checkout" "$owner"; then
+        HOOK_RC=1; HOOK_OUT="fixture: cannot attach $checkout to $owner"; return
+    fi
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 60 \
         env -u CODE_FILE_EXTENSIONS \
         "AGENTS_MAIN_ROOT=$cfg" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "$@" \
-        node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
+        node "$(session_repo_fixture_path "$checkout" hooks/workflow-gate.js)" 2>&1)" || HOOK_RC=$?
 }
 
 assert_approve() {

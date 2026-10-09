@@ -79,7 +79,7 @@ fi
 # once per check is what turns N `gh repo list` round-trips into one — and it is the
 # same seam this suite relies on to stay off the network entirely.
 #
-# A stand-in AGENTS_MAIN_ROOT makes the lister observable: the stub records every
+# A stand-in checkout (helpers.sh derive_copy_into) makes the lister observable: the stub records every
 # invocation and answers with a fictional private name, so both halves of the contract
 # are testable — how often it runs, and whether its answer is actually used.
 PR_CFG="$FIXTURE/pr-cfg"
@@ -118,15 +118,13 @@ else
     fail "B21/stub: the stand-in lister cannot record invocations — B21b/B21c cannot be trusted (marker='$PR_MARKER_NATIVE')"
 fi
 
-PR_SAVED_CFG="$AGENTS_MAIN_ROOT"
+derive_copy_into "$PR_CFG"
 
 # B21b: a caller that already declared the list keeps it — the lister must not run.
 : > "$PR_MARKER"
 PRIVATE_REPO_NAMES_CACHE_SET=1
 PRIVATE_REPO_NAMES_CACHE=''
-export AGENTS_MAIN_ROOT="$PR_CFG"
-run_derive B21b --intent "$ABSENT_INTENT" --headless "keep-the-$PRIV-label"
-export AGENTS_MAIN_ROOT="$PR_SAVED_CFG"
+run_derive_in "$PR_CFG" B21b --intent "$ABSENT_INTENT" --headless "keep-the-$PRIV-label"
 
 B21B_CALLS="$(grep -c 'invoked' "$PR_MARKER")"
 B21B_TN="$(task_name)"
@@ -145,9 +143,7 @@ fi
 : > "$PR_MARKER"
 unset PRIVATE_REPO_NAMES_CACHE_SET
 unset PRIVATE_REPO_NAMES_CACHE
-export AGENTS_MAIN_ROOT="$PR_CFG"
-run_derive B21c --intent "$ABSENT_INTENT" --headless "keep-the-$PRIV-label"
-export AGENTS_MAIN_ROOT="$PR_SAVED_CFG"
+run_derive_in "$PR_CFG" B21c --intent "$ABSENT_INTENT" --headless "keep-the-$PRIV-label"
 # Restore the suite-wide insulation immediately: every later run_derive depends on it.
 export PRIVATE_REPO_NAMES_CACHE_SET=1
 export PRIVATE_REPO_NAMES_CACHE=''

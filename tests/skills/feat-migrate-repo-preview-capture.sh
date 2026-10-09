@@ -3,27 +3,21 @@
 # Tests: skills/migrate-repo/scripts/preview-and-capture.sh
 # Tags: migration, repo, preview, identity-guard, scope:issue-specific
 #
-# L3 gap (what this test does NOT catch):
-# - Real gh / real GitHub: actual self-repo issue enumeration against the live
-#   agents repo, real authentication, and whether a live migration would in fact
-#   land on AGENTS_MAIN_ROOT's own issue space.
-# - End-to-end /migrate-repo skill behavior when the captured snapshot flows into
-#   a real orchestrate.sh live run.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: installer.
-#
-# PF-PC1 — direct test of preview-and-capture.sh against a self-repo (#1234).
-# preview-and-capture.sh internally calls orchestrate.sh --dry-run, so gh-mock
-# must be on PATH and AGENTS_MAIN_ROOT set. We invoke it with the repo path equal
-# to AGENTS_MAIN_ROOT (the self-repo condition) and assert the identity guard's
-# dry-run signals appear on stdout (sentinels) and stderr (SELF_REPO_DETECTED).
+# L3 gap (what this test does NOT catch): real gh / real GitHub self-repo
+# issue enumeration, and the captured snapshot flowing into a live
+# orchestrate.sh run; checked at WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: installer.
+# PF-PC1 (#1234): the repo path equals the checkout the script itself lives in
+# (the self-repo condition); the identity guard's dry-run signals must appear.
 
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PREVIEW_SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/migrate-repo/scripts/preview-and-capture.sh"
+PREVIEW_REL="skills/migrate-repo/scripts/preview-and-capture.sh"
+PREVIEW_SCRIPT="$SCRIPT_CHECKOUT_ROOT/$PREVIEW_REL"
 ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
 FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -100,15 +94,14 @@ cat > "$SELF_PC1/docs/history.md" <<'EOF'
 Background: test entry 1
 Changes: change 1
 EOF
-# preview-and-capture.sh invokes orchestrate.sh via $AGENTS_MAIN_ROOT/bin/...,
-# and orchestrate.sh sources SCRIPT_DIR siblings (migrate-history.sh etc.).
-# Symlinking the entire bin/ directory to the real one lets SCRIPT_DIR resolve
-# to the real location so all sibling scripts are found.
-ln -sf "$SCRIPT_CHECKOUT_ROOT/bin" "$SELF_PC1/bin"
+# Both preview-and-capture.sh and orchestrate.sh compare the repo path with the
+# checkout they live in, so the self-repo condition needs a real copy of both
+# (and of orchestrate.sh's siblings) inside the repo under test.
+script_checkout_fixture_copy "$SELF_PC1" bin "${PREVIEW_REL%/*}" \
+    || fail "PF-PC1: fixture copy failed"
 SELF_PC1="$(cd "$SELF_PC1" && pwd)"
-export AGENTS_MAIN_ROOT="$SELF_PC1"
 
-run_with_timeout 30 bash "$PREVIEW_SCRIPT" "$SELF_PC1" > "$TMP/stdout" 2> "$TMP/stderr"
+run_with_timeout 30 bash "$SELF_PC1/$PREVIEW_REL" "$SELF_PC1" > "$TMP/stdout" 2> "$TMP/stderr"
 RC=$?
 
 A=0; [ "$RC" -eq 0 ] && A=1

@@ -82,7 +82,10 @@ group_a_np_function() {
     filtered_path="${filtered_path:+$filtered_path:}$np_dir"
   done <<< "$(printf '%s\n' "$PATH" | tr ':' '\n')"
   [ -z "$filtered_path" ] && filtered_path="/usr/bin:/bin"
-  out="$(PATH="$filtered_path" "$bash_bin" -euo pipefail -c "source '$HARNESS'; np '/a/b/c'" 2>/dev/null || true)"
+  # The filter drops coreutils along with cygpath where they share a directory, so the one
+  # external the harness needs while being sourced (dirname) is supplied as a function.
+  local dirname_fn='dirname() { case "$1" in */*) printf "%s\n" "${1%/*}" ;; *) printf ".\n" ;; esac; }'
+  out="$(PATH="$filtered_path" "$bash_bin" -euo pipefail -c "$dirname_fn; source '$HARNESS'; np '/a/b/c'" 2>/dev/null || true)"
   if [ -n "$out" ]; then
     t_eq "A1b np() passthrough (no cygpath) returns input unchanged" "$out" "/a/b/c"
   else
@@ -90,10 +93,21 @@ group_a_np_function() {
   fi
 
   # cygpath branch: inject a stub that echoes "WIN:<path>" for `cygpath -m <path>`.
-  # np() calls `cygpath -m "$1"`, so stub receives args: -m  <path>.
+  # np() calls `cygpath -m "$1"`, so stub receives args: -m  <path>. Every other path (the
+  # harness converts its own while being sourced) goes to the real cygpath, or passes through.
+  local real_cygpath
+  real_cygpath="$(command -v cygpath 2>/dev/null || true)"
   tmpdir="$(make_tmp)"
   stub="$tmpdir/cygpath"
-  printf '#!/usr/bin/env bash\nprintf "WIN:%%s\\n" "$2"\n' >"$stub"
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf 'if [ "$1" = "-m" ] && [ "$2" = "/a/b/c" ]; then printf "WIN:%%s\\n" "$2"; exit 0; fi\n'
+    if [ -n "$real_cygpath" ]; then
+      printf 'exec "%s" "$@"\n' "$real_cygpath"
+    else
+      printf 'printf "%%s\\n" "$2"\n'
+    fi
+  } >"$stub"
   chmod +x "$stub"
   out="$(PATH="$tmpdir:$PATH" bash -euo pipefail -c "source '$HARNESS'; np '/a/b/c'" 2>/dev/null || true)"
   t_eq "A1b np() cygpath branch uses cygpath -m (stub echo)" "$out" "WIN:/a/b/c"
@@ -265,15 +279,16 @@ group_a_harness_isolate() {
   local expected_agents_dir
   expected_agents_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
   t_eq "A4 SCRIPT_CHECKOUT_ROOT resolves to parent of tests/" "$SCRIPT_CHECKOUT_ROOT" "$expected_agents_dir"
-  # C2: SCRIPT_CHECKOUT_ROOT auto-resolves in a fresh shell where it was not pre-set.
-  # harness.sh must derive it from BASH_SOURCE relative to tests/lib/harness.sh.
+  # C2: in a fresh shell the harness derives its OWN root from BASH_SOURCE relative to
+  # tests/lib/harness.sh under its prefixed name, and leaves the caller's name unset — the
+  # sourcing test assigns that one itself.
   local resolved
   resolved="$(bash -euo pipefail -c "
     unset SCRIPT_CHECKOUT_ROOT
     source '$HARNESS'
-    echo \"\$SCRIPT_CHECKOUT_ROOT\"
+    echo \"caller:\${SCRIPT_CHECKOUT_ROOT+set}|own:\$_HARNESS_SCRIPT_CHECKOUT_ROOT\"
   " 2>/dev/null || true)"
-  t_eq "A4 SCRIPT_CHECKOUT_ROOT auto-resolves when not pre-set" "$resolved" "$expected_agents_dir"
+  t_eq "A4 harness resolves its own root and leaves the caller's SCRIPT_CHECKOUT_ROOT unset" "$resolved" "caller:|own:$expected_agents_dir"
 }
 
 # A-rwt: run_with_timeout wrapper forwards exit status of the wrapped command.

@@ -47,7 +47,7 @@ trap cleanup_broken EXIT
 # ============================================================================
 TC1_OUT="$(mktemp -t index-tc1-out.XXXXXX.json)"
 TC1_ERR="$(mktemp -t index-tc1-err.XXXXXX.log)"
-run_with_timeout bash "$INDEX_SH" >"$TC1_OUT" 2>"$TC1_ERR"
+AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" run_with_timeout bash "$INDEX_SH" >"$TC1_OUT" 2>"$TC1_ERR"
 TC1_RC=$?
 if [ "$TC1_RC" -eq 0 ] && is_valid_json "$TC1_OUT" && doc_has_key "$TC1_OUT" hot_regions && ! doc_has_key "$TC1_OUT" keywords; then
     pass "TC1: index.sh full-scan mode exits 0 with a valid hot_regions scan doc"
@@ -61,7 +61,7 @@ rm -f "$TC1_OUT" "$TC1_ERR"
 # ============================================================================
 TC2_OUT="$(mktemp -t index-tc2-out.XXXXXX.json)"
 TC2_ERR="$(mktemp -t index-tc2-err.XXXXXX.log)"
-run_with_timeout bash "$INDEX_SH" --keywords-only >"$TC2_OUT" 2>"$TC2_ERR"
+AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" run_with_timeout bash "$INDEX_SH" --keywords-only >"$TC2_OUT" 2>"$TC2_ERR"
 TC2_RC=$?
 if [ "$TC2_RC" -eq 0 ] && is_valid_json "$TC2_OUT" && doc_has_key "$TC2_OUT" keywords && ! doc_has_key "$TC2_OUT" hot_regions; then
     pass "TC2: index.sh --keywords-only exits 0 and short-circuits before scan-prompts.js"
@@ -75,7 +75,7 @@ rm -f "$TC2_OUT" "$TC2_ERR"
 # ============================================================================
 TC3_OUT="$(mktemp -t index-tc3-out.XXXXXX.json)"
 TC3_ERR="$(mktemp -t index-tc3-err.XXXXXX.log)"
-run_with_timeout bash "$INDEX_SH" --context-lines 1 >"$TC3_OUT" 2>"$TC3_ERR"
+AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" run_with_timeout bash "$INDEX_SH" --context-lines 1 >"$TC3_OUT" 2>"$TC3_ERR"
 TC3_RC=$?
 if [ "$TC3_RC" -eq 0 ] && is_valid_json "$TC3_OUT" && doc_has_key "$TC3_OUT" hot_regions; then
     pass "TC3: index.sh --context-lines N is accepted and passed through to the scan"
@@ -114,7 +114,7 @@ rm -f "$TC4_OUT" "$TC4_ERR"
 # ============================================================================
 TC5_OUT="$(mktemp -t index-tc5-out.XXXXXX.json)"
 TC5_ERR="$(mktemp -t index-tc5-err.XXXXXX.log)"
-run_with_timeout bash "$INDEX_SH" --bogus-flag >"$TC5_OUT" 2>"$TC5_ERR"
+AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" run_with_timeout bash "$INDEX_SH" --bogus-flag >"$TC5_OUT" 2>"$TC5_ERR"
 TC5_RC=$?
 if [ "$TC5_RC" -eq 2 ]; then
     pass "TC5: an unrecognized flag exits 2"

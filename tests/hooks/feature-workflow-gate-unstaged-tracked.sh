@@ -41,6 +41,14 @@ export WORKFLOW_PLANS_DIR
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_STATE_DIR"
 
+# workflow-gate gates only the repo its own checkout belongs to: the hook is launched from a
+# copy of this checkout, which setup_repo attaches to the repo it builds.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+HOOK_JS="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
+
 run_with_timeout() {
     local secs="$1"; shift
     if command -v timeout >/dev/null 2>&1; then
@@ -106,6 +114,7 @@ setup_repo() {
     echo "src" > "$repo/app.js"
     git -C "$repo" add README.md app.js
     git -C "$repo" commit -q -m "initial"
+    session_repo_fixture_attach "$GATE_CHECKOUT" "$repo" || return 1
     if command -v cygpath >/dev/null 2>&1; then
         cygpath -m "$repo"
     else

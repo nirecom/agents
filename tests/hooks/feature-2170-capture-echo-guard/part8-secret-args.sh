@@ -63,7 +63,7 @@ VERDICT=""
 run_case() { # <arg-string>
     node "$HERE/mk-event.js" Bash \
         "X=\$(bash \"\$AGENTS_MAIN_ROOT/$ENTRY\" $1); echo \"\$X\"" >"$EV"
-    env node "$HOOK" <"$EV" >"$OUT" 2>"$ERR"
+    env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$HOOK" <"$EV" >"$OUT" 2>"$ERR"
     VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
 }
 

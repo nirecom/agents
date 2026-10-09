@@ -55,9 +55,12 @@ fs.writeFileSync(process.argv[1], JSON.stringify(obj));
 
 # run_hook <json_file> <tmpdir_node>
 # Returns stdout from the hook (unaffected by WORKFLOW_PLANS_DIR path).
+# The main worktree is named as a session repo here: the cases write into it and
+# must not depend on the developer's own settings listing it (#2561).
 run_hook() {
     local json_file="$1" tmpdir_node="$2"
     WORKFLOW_PLANS_DIR="$tmpdir_node" ENFORCE_WORKTREE=on \
+    ENFORCE_WORKTREE_ADDITIONAL_REPOS="${MAIN_WT_J:-}" \
         run_with_timeout 15 bash -c "cat '$json_file' | node '$HOOK'" 2>/dev/null
 }
 

@@ -11,6 +11,8 @@ set -u
 _HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SKILL_MD="$_HELPERS_SCRIPT_CHECKOUT_ROOT/skills/worktree-start/SKILL.md"
 SCRIPT="$_HELPERS_SCRIPT_CHECKOUT_ROOT/skills/worktree-start/scripts/derive-worktree-name.sh"
+# shellcheck source=tests/lib/script-checkout-fixture.sh
+. "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -81,10 +83,9 @@ finish() {
 #
 # Fixture isolation (rules/test/fixture-isolation.md): dual-pin the state dirs and
 # drop any inherited session id so the script can never touch the real $HOME state.
-# The script under test resolves its helper CLIs from AGENTS_MAIN_ROOT; pin it
-# unconditionally to the checkout under test. Honouring an inherited value would make
-# the suite assert against whatever agents root the invoking shell happened to export
-# (typically the deployed $HOME/.claude copy) instead of the worktree being tested.
+# The script under test reads its private-info lists from AGENTS_MAIN_ROOT; pin it
+# unconditionally to a fixture root holding empty lists. Honouring an inherited value
+# would make the scan verdict depend on whatever root the invoking shell exported.
 setup_fixture() {
     FIXTURE="$(mktemp -d)"
     # STUBDIR is allocated on demand by ensure_stubdir(): only derive-gh.sh and
@@ -98,22 +99,20 @@ setup_fixture() {
     export WORKFLOW_STATE_DIR="$FIXTURE/wf"
     export WORKFLOW_PLANS_DIR="$FIXTURE/plans"
     unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+    mkdir -p "$FIXTURE/agents-main"
+    : > "$FIXTURE/agents-main/.private-info-blocklist"
+    : > "$FIXTURE/agents-main/.private-info-allowlist"
+    export AGENTS_MAIN_ROOT="$FIXTURE/agents-main"
 
     # Live-`gh` insulation. derive-worktree-name.sh resolves the user's private-repo
     # name list once per run (bin/list-private-repo-names.js -> `gh repo list
-    # --visibility private`) and scan_clean() then checks every emitted value against
-    # it via bin/check-private-repo-name.js. Left undeclared, every run_derive call in
-    # this suite issues a live, credentialed, network round trip: slow, rate-limited,
-    # broken offline, and — worse — the derived name would depend on which private
-    # repos the running user happens to own. Declaring the cache pins the list for the
-    # whole suite, so no sub-file needs its own `gh` PATH shim for this path
-    # (rules/test/fixture-isolation.md).
-    #
-    # SET=1 means "this list is authoritative", so the empty CACHE below means
-    # "confirmed: no private repos" — behaviorally identical to the "no private repo
-    # name matched" outcome every existing fixture title/label already assumed.
-    # A case that needs a populated list overrides these two for its own invocation
-    # (see private-repo-gate.sh); nothing here forces them to stay empty.
+    # --visibility private`) and scan_clean() checks every emitted value against it.
+    # Left undeclared, every run_derive call issues a live, credentialed round trip and
+    # the derived name would depend on which private repos the running user owns.
+    # Declaring the cache pins the list for the whole suite (rules/test/fixture-isolation.md).
+    # SET=1 means "this list is authoritative", so the empty CACHE means "confirmed: no
+    # private repos". A case that needs a populated list overrides these two for its own
+    # invocation (see private-repo-gate.sh).
     export PRIVATE_REPO_NAMES_CACHE_SET=1
     export PRIVATE_REPO_NAMES_CACHE=''
 
@@ -177,6 +176,20 @@ run_derive() {
         '') ;;
         .|..|*[!a-zA-Z0-9._-]*) SHAPE_VIOLATIONS="$SHAPE_VIOLATIONS $label:REPO_NAME='$rn'" ;;
     esac
+}
+
+# The script finds its siblings from its own path, so a case that needs a stand-in
+# sibling reached launches a copy of the script placed in the stand-in root.
+# derive_copy_into <root> — copy the script into <root> at its repo-relative path.
+derive_copy_into() {
+    script_checkout_fixture_copy "$1" skills/worktree-start/scripts
+}
+
+# run_derive_in <root> <label> [args...] — run_derive against the copy in <root>.
+run_derive_in() {
+    local root="$1"; shift
+    local SCRIPT="$root/skills/worktree-start/scripts/derive-worktree-name.sh"
+    run_derive "$@"
 }
 
 has_line() { printf '%s\n' "$OUT" | grep -qxF "$1"; }

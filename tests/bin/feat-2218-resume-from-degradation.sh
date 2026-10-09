@@ -30,6 +30,13 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 
 SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
+# The CONFIRM_DETAIL waiver is read from the settings root's file only, so the fixture owns one.
+CFG_FIXTURE="$_ISOLATION_TMP_ROOT/cfg"
+mkdir -p "$CFG_FIXTURE"
+printf 'CONFIRM_DETAIL=off\n' > "$CFG_FIXTURE/.env"
+CFG_FIXTURE_NODE="$(node_path "$CFG_FIXTURE")"
+export AGENTS_MAIN_ROOT="$CFG_FIXTURE_NODE"
+
 VIEW="bin/lib/resume-session/upstream-view.js"
 TAIL="bin/lib/resume-session/transcript-fallback.js"
 

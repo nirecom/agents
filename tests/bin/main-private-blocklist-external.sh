@@ -48,6 +48,9 @@ SCANNER="$FAKE_DOTFILES/bin/scan-outbound.sh"
 
 # Create empty local allowlist (scanner expects it)
 touch "$FAKE_DOTFILES/.private-info-allowlist"
+# The scanner reads both lists from its settings root: pin that to the fake tree.
+: > "$FAKE_DOTFILES/.private-info-blocklist"
+export AGENTS_MAIN_ROOT="$FAKE_DOTFILES"
 
 echo "=== Normal Cases ==="
 

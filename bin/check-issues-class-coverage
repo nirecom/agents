@@ -21,10 +21,9 @@
 set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-AGENTS_ROOT="$SCRIPT_CHECKOUT_ROOT"
 
-PARSE_ISSUES="$AGENTS_ROOT/bin/parse-closes-issues"
-EXTRACT="$AGENTS_ROOT/bin/extract-mandatory-sections"
+PARSE_ISSUES="$SCRIPT_CHECKOUT_ROOT/bin/parse-closes-issues"
+EXTRACT="$SCRIPT_CHECKOUT_ROOT/bin/extract-mandatory-sections"
 
 MODE=""
 FILE=""

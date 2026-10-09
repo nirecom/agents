@@ -62,6 +62,16 @@ c_keep_effect() {
   expect_rows "look-alike without keep lines" residue <<<"$LOOKALIKE_ROWS"
 }
 
+c_exempt_paths() {
+  c_rows exempt 0 "exempt" EXEMPT_ROWS
+  seed "$REPO" NOT_EXEMPT_ROWS 1
+  commit_all "$REPO"
+  run_gate "$KIT" --root "$REPO" --only residue
+  expect "exempt: look-alike paths are not exempt (exit 1)" rc_is 1
+  expect_rows "not exempt" residue <<<"$NOT_EXEMPT_ROWS"
+  expect_rows "exempt" residue <<<"$EXEMPT_ROWS"
+}
+
 c_custom_list() {
   local list="$T/custom-list.txt"
   make_kit custom
@@ -163,7 +173,7 @@ c_root_stays_inside() {
   expect "traversal: no reported path climbs out" never_says "../"
   expect "traversal: the sibling of the root is not scanned" never_says "outside-leak"
   run_gate "$KIT" --root "$REPO" --only residue --scope "../"
-  expect "traversal: a dot-dot scope matches nothing (exit 0)" rc_is 0
+  expect "traversal: a dot-dot scope selects no file (exit 2)" rc_is 2
   expect "traversal: a scope never reports a file outside the root" test "${GATE_OUT/outside-leak/}" = "$GATE_OUT"
   run_gate "$KIT" --root "$T/repos/absent/../nowhere" --only residue
   expect "traversal: a root that does not exist exits 2" rc_is 2

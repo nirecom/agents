@@ -1,30 +1,14 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-mark/not-needed-handlers.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-state/evidence-resolver.js, hooks/workflow-gate.js, hooks/workflow-gate/staged-evidence.js, bin/workflow/next-step, hooks/lib/sentinel-patterns.js
 # Tags: tl2, workflow, run-tests, docs-only, skip-sentinel, classifier, workflow-gate, scope:issue-specific, pwsh-not-required
-#
-# #1644 review gap C1 (HIGH) — normal + classifier + integration coverage for the
-# NEW run_tests docs-only skip. Sibling file tests/hooks/feature-1644-run-tests-docs-only.sh
-# owns the hint/first-write cases (D1-D6); this file deliberately extends past them:
-#   - the AUDIT PAYLOAD of a real sentinel write (skip_reason + provenance/origin),
-#     not merely the resulting status;
-#   - byte-for-byte state immutability on the rejected (code-staged) verdict,
-#     which a status-only assertion cannot prove;
-#   - hasCompletionEvidence AFTER a recorded skip (D6 probes it before one);
-#   - the PERSISTED status of the --advance --status skipped door (D5b asserts
-#     only the stdout ADVANCED line);
-#   - the H1 TOCTOU integration: staged set grows to include code AFTER the skip
-#     was legitimately recorded, and the real commit gate must stop honoring it.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether Claude Code's live PreToolUse dispatch actually routes a `git commit`
-#   Bash call into hooks/workflow-gate.js (registration is asserted statically in
-#   tests/hooks/feature-1644-run-tests-registration-sites.sh, not through a real session).
-# - Whether the permission layer auto-approves the RUN_TESTS_NOT_NEEDED echo
-#   literal in a real dialog.
-# - Whether /run-tests SKILL.md emits the sentinel when the model reaches its
-#   docs-only branch.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# #1644 review gap C1 (HIGH): the run_tests docs-only skip, past the sibling file's D1-D6
+# (tests/hooks/feature-1644-run-tests-docs-only.sh): the audit payload of a real sentinel write,
+# byte-for-byte state immutability on the rejected verdict, hasCompletionEvidence after a recorded
+# skip, the persisted status of the --advance door, and the H1 TOCTOU integration (the staged set
+# grows to code after the skip was recorded, and the real commit gate must stop honoring it).
+# TL3 gap: live PreToolUse routing of `git commit` into workflow-gate.js, permission auto-approval
+# of the sentinel echo, and /run-tests emitting the sentinel are not caught here; checked at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -uo pipefail
 
@@ -92,6 +76,13 @@ git -C "$REPO_MIX" add docs/note.md >/dev/null 2>&1
 REPO_DOCS_N="$(nrm "$REPO_DOCS")"
 REPO_CODE_N="$(nrm "$REPO_CODE")"
 REPO_MIX_N="$(nrm "$REPO_MIX")"
+# The gate enforces only in the repo its own checkout belongs to: run_gate_commit launches it
+# from a copy of this checkout attached to the repo under judgment.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+GATE_HOOK_N="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
 # Neutral CWD: hooks that call `git rev-parse` must not resolve the real repo.
 cd "$TMPDIR_BASE" || exit 1
 
@@ -178,6 +169,7 @@ run_mark_hook() {
 # resolveRepoDir, so the gate judges the fixture repo deterministically.
 run_gate_commit() {
   local sid="$1" repo="$2"
+  session_repo_fixture_attach "$GATE_CHECKOUT" "$repo" || return 1
   printf '{"session_id":"%s","tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"x\\"","cwd":"%s"}}' \
     "$sid" "$repo" "$repo" \
     | run_with_timeout node "$GATE_HOOK_N" 2>/dev/null || true

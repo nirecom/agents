@@ -22,10 +22,8 @@ if (-not $Name) {
 $scriptPath = $MyInvocation.MyCommand.Path
 $item = Get-Item $scriptPath -ErrorAction SilentlyContinue
 if ($item -and $item.Target) { $scriptPath = $item.Target }
-# Not $repoRoot: PowerShell variable names are case-insensitive, so that name
-# would clobber the -RepoRoot parameter this script still has to forward.
-$agentsDir = Split-Path (Split-Path $scriptPath -Parent) -Parent
-$loadEnv = ((Join-Path $agentsDir 'hooks/lib/load-env.js') -replace '\\', '/')
+$SCRIPT_CHECKOUT_ROOT = Split-Path (Split-Path $scriptPath -Parent) -Parent
+$loadEnv = ((Join-Path $SCRIPT_CHECKOUT_ROOT 'hooks/lib/load-env.js') -replace '\\', '/')
 
 $kindFile = [System.IO.Path]::GetTempFileName()
 try {

@@ -5,7 +5,7 @@
 // parity is structural (no reimplemented matcher in Bash).
 // Env in: _PRECOMMIT_STAGED, _PRECOMMIT_REPO_TOP (both
 // required), ENFORCE_WORKTREE_EXCLUDE (optional, semicolon-separated).
-// Exit: 0 covered (gate may be skipped) / 2 not covered or empty list / 1 input error.
+// Exit: 0 covered (gate may be skipped) / 2 not covered or empty list.
 
 const path = require("path");
 const fs = require("fs");

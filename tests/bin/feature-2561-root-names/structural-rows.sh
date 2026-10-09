@@ -90,7 +90,8 @@ c-default-value  | parameter | clean       | bin/c-default-value.js       | func
 c-condition      | parameter | clean       | bin/c-if.js                  | if ($CAMEL_SCR) { use(); }
 c-js-comment     | parameter | clean       | bin/c-comment.js             | use(); // function probe($CAMEL_SCR) {}
 c-js-string      | parameter | clean       | bin/c-string.js              | log("function probe($CAMEL_SCR) {}");
-# carrier: only the source of a carrier writes it. Its clean rows go into every tree.
+# carrier: only the source of a carrier writes it; a test file is free to (each d-test-*
+# row pairs with the reported row of the same line). Its clean rows go into every tree.
 d-prop-write     | carrier   | prop        | bin/carrier-listed.js        | $C_PROP = other;
 d-literal-write  | carrier   | prop        | bin/carrier-user.js          | const anchors = { $CAMEL_SCR: other };
 d-fn-redefine    | carrier   | fn          | hooks/fn-user.js             | function $C_FN() { return 1; }
@@ -104,6 +105,10 @@ d-destructure    | carrier   | clean       | bin/d-destructure.js         | cons
 d-fn-import      | carrier   | clean       | hooks/d-fn-import.js         | const { $C_FN } = require("./fn-src");
 d-fn-require     | carrier   | clean       | hooks/d-fn-require.js        | const $C_FN = require("./fn-src").$C_FN;
 d-js-comment     | carrier   | clean       | bin/d-comment.js             | use(); // $C_PROP = other;
+d-test-prop      | carrier   | clean       | tests/d-test-prop.js         | $C_PROP = other;
+d-test-literal   | carrier   | clean       | tests/d-test-literal.js      | const anchors = { $CAMEL_SCR: other };
+d-test-fn        | carrier   | clean       | tests/d-test-fn.js           | function $C_FN() { return 1; }
+d-test-fn-const  | carrier   | clean       | tests/d-test-fn-const.js     | const $C_FN = () => 1;
 d-prop-reader    | carrier   | clean-alone | bin/carrier-user.js          | use($C_PROP);
 d-prop-compare   | carrier   | clean-alone | bin/carrier-listed.js        | if ($C_PROP === other) use();
 d-fn-caller      | carrier   | clean-alone | hooks/fn-user.js             | use($C_FN());

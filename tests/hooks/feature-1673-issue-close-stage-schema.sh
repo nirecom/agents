@@ -76,7 +76,7 @@ group_registry() {
     assert_eq "registry/entry-present" "1" "$(rv entry)"
     # The six fields of agents/issue-close-stage-worker.md — no more, no fewer.
     assert_eq "registry/payload-field-set" \
-        "script_checkout_root,artifact_dir,issue_number,issue_repo,owner_repo,worktree_path" \
+        "artifact_dir,issue_number,issue_repo,owner_repo,script_checkout_root,worktree_path" \
         "$(rv fields)"
     assert_eq "registry/issue_number" "int:req" "$(rv f.issue_number)"
     assert_eq "registry/issue_number-min-1" "1" "$(rv issue_number_min)"
@@ -92,7 +92,7 @@ group_registry() {
     # be refused at spawn time.
     assert_eq "registry/external-binaries" "bash,gh,git" "$(rv external)"
     assert_eq "registry/script-keys" "stageChain" "$(rv script_keys)"
-    assert_eq "registry/chain-anchor-script-checkout-root" "script_checkout_root" "$(rv chain_anchor)"
+    assert_eq "registry/chain-anchor-script-checkout-root" "script-checkout-root" "$(rv chain_anchor)"
     assert_eq "registry/chain-rel" "skills/issue-close-stage/scripts/run-stage-chain.sh" "$(rv chain_rel)"
     assert_eq "registry/envpassthrough-tokens-only" "GH_TOKEN,GITHUB_TOKEN" "$(rv envpass)"
     # run-stage-chain.sh exports ISSUE_CLOSE_SKILL=1 itself; the dispatcher must
@@ -133,11 +133,11 @@ repo-ref-empty           | repo-ref  |                            | reject
 repo-ref-dotdot          | repo-ref  | ../etc                     | reject
 repo-ref-shell-meta      | repo-ref  | owner/repo;id              | reject
 repo-ref-space           | repo-ref  | owner repo                 | reject
-script-checkout-root-exact                | anchor-script-checkout-root | @FAKE_SCRIPT_CHECKOUT_ROOT@                     | ok
-script-checkout-root-parent               | anchor-script-checkout-root | @FAKE_SCRIPT_CHECKOUT_ROOT_PARENT@              | reject
-script-checkout-root-sibling-lookalike    | anchor-script-checkout-root | @FAKE_SCRIPT_CHECKOUT_ROOT@-other                | reject
-script-checkout-root-empty                | anchor-script-checkout-root |                            | reject
-script-checkout-root-non-string           | anchor-script-checkout-root | @NUMBER@                   | reject
+script-checkout-root-exact             | anchor-script-checkout-root | @SCR@         | ok
+script-checkout-root-parent            | anchor-script-checkout-root | @SCR_PARENT@  | reject
+script-checkout-root-sibling-lookalike | anchor-script-checkout-root | @SCR@-other   | reject
+script-checkout-root-empty             | anchor-script-checkout-root |               | reject
+script-checkout-root-non-string        | anchor-script-checkout-root | @NUMBER@      | reject
 TABLE
 }
 

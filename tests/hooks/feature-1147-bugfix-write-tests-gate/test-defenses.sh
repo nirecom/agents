@@ -33,6 +33,14 @@ NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u
 # shellcheck source=helpers.sh
 . "$SUITE_DIR/helpers.sh"
 
+# workflow-gate gates only the repo its own checkout belongs to, so the gate cases launch it from
+# a copy of this checkout attached to each case's temp repo.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_ROOT/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate cases"; exit 1; }
+HOOK_GATE="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
+
 # ---------------------------------------------------------------------------
 # C7: First defense (BUGFIX reject): WRITE_TESTS_NOT_NEEDED blocked for BUGFIX
 # ---------------------------------------------------------------------------
@@ -97,6 +105,7 @@ process.stdout.write(JSON.stringify({
 }));
 " -- "$SID_C9")"
 
+session_repo_fixture_attach "$GATE_CHECKOUT" "$REPO_C9"
 C9_OUT="$(AGENTS_MAIN_ROOT="$REPO_C9" CLAUDE_PROJECT_DIR="$REPO_C9" run_gate "$C9_PAYLOAD")"
 
 if echo "$C9_OUT" | grep -q '"decision":"block"'; then
@@ -132,6 +141,7 @@ process.stdout.write(JSON.stringify({
 }));
 " -- "$SID_C10A")"
 
+session_repo_fixture_attach "$GATE_CHECKOUT" "$REPO_C10"
 C10A_OUT="$(AGENTS_MAIN_ROOT="$REPO_C10" CLAUDE_PROJECT_DIR="$REPO_C10" run_gate "$C10A_PAYLOAD")"
 
 if echo "$C10A_OUT" | grep -q '"decision":"block"' && echo "$C10A_OUT" | grep -qi "review_tests"; then
@@ -158,6 +168,7 @@ process.stdout.write(JSON.stringify({
 }));
 " -- "$SID_C10B")"
 
+session_repo_fixture_attach "$GATE_CHECKOUT" "$REPO_C10B"
 C10B_OUT="$(AGENTS_MAIN_ROOT="$REPO_C10B" CLAUDE_PROJECT_DIR="$REPO_C10B" run_gate "$C10B_PAYLOAD")"
 
 if echo "$C10B_OUT" | grep -q '"decision":"approve"'; then
@@ -192,6 +203,7 @@ process.stdout.write(JSON.stringify({
 }));
 " -- "$SID_C11")"
 
+session_repo_fixture_attach "$GATE_CHECKOUT" "$REPO_C11"
 C11_OUT="$(AGENTS_MAIN_ROOT="$REPO_C11" CLAUDE_PROJECT_DIR="$REPO_C11" run_gate "$C11_PAYLOAD")"
 
 # write_tests must NOT appear in the block reason (evidence bypasses it)

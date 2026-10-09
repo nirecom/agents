@@ -4,7 +4,7 @@
 # Tags: worker-dispatch, enforce-worktree, hook, guard, overlay, security, lock1, lock2, lock3, control-dir, TL2, scope:issue-specific
 #
 # Issue #1643 overlay guard + #2434 control-dir extension. Canonical WD-3 form:
-#   node "<FAKE_SCRIPT_CHECKOUT_ROOT>/bin/worker-dispatch.js" <worker> <target-main-root> <payload-json>
+#   node "<this checkout>/bin/worker-dispatch.js" <worker> <target-main-root> <payload-json>
 # Locks 1-3 (script checkout root root, target-main-root match, MAIN worktree in getSessionRepoRoots).
 # Drive surface: matchWorkerDispatchOverlay predicate (not the full hook — see
 # file comment history for why the BLOCK rows stay at predicate level).
@@ -77,10 +77,10 @@ ALT_RAW="$TMPD/altrepo";   mk_repo "$ALT_RAW"
 LINKED_RAW="$MAIN_RAW/.wt/probe"
 git -C "$MAIN_RAW" worktree add -q -b feature/guard-probe "$LINKED_RAW" >/dev/null 2>&1
 
-FAKE_SCRIPT_CHECKOUT_ROOT_RAW="$TMPD/fake-script-checkout-root"
-mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/hooks" "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin" "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/xbin"
-touch "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/hooks/enforce-worktree.js" "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/worker-dispatch.js"
-touch "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/worker-dispatch.js.bak" "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/xbin/worker-dispatch.js"
+# Lock 1 accepts only the checkout the overlay itself was loaded from (#2561), so
+# the ALLOW rows name this checkout. The overlay compares paths only: the .bak and
+# xbin rows need no file, and nothing is created inside this checkout.
+GUARD_CHECKOUT="$AGENTS_NODE"
 OTHER_SCRIPT_CHECKOUT_ROOT_RAW="$TMPD/other-script-checkout-root"
 mkdir -p "$OTHER_SCRIPT_CHECKOUT_ROOT_RAW/hooks" "$OTHER_SCRIPT_CHECKOUT_ROOT_RAW/bin"
 touch "$OTHER_SCRIPT_CHECKOUT_ROOT_RAW/hooks/enforce-worktree.js" "$OTHER_SCRIPT_CHECKOUT_ROOT_RAW/bin/worker-dispatch.js"
@@ -93,7 +93,6 @@ printf '{}' > "$EVIL_RAW/p.json"
 MAIN="$(nodepath "$MAIN_RAW")"
 ALT="$(nodepath "$ALT_RAW")"
 LINKED="$(nodepath "$LINKED_RAW")"
-FAKE_SCRIPT_CHECKOUT_ROOT="$(nodepath "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW")"
 OTHER_SCRIPT_CHECKOUT_ROOT="$(nodepath "$OTHER_SCRIPT_CHECKOUT_ROOT_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
 EVIL="$(nodepath "$EVIL_RAW")"
@@ -109,7 +108,7 @@ catch (e) { process.stdout.write("LOADFAIL:" + e.message.slice(0, 80)); process.
 const fn = mod.matchWorkerDispatchOverlay;
 if (typeof fn !== "function") { process.stdout.write("NO_EXPORT"); process.exit(0); }
 let r;
-try { r = fn(process.argv[3], process.argv[4], process.argv[5]); }
+try { r = fn(process.argv[3], process.argv[4]); }
 catch (e) { process.stdout.write("THREW:" + e.message.slice(0, 80)); process.exit(0); }
 process.stdout.write(r === null || r === undefined || r === false ? "BLOCK" : "ALLOW");
 PROBEJS
@@ -117,7 +116,7 @@ PROBEJS
 # expand <template> — substitutes the fixture placeholders.
 expand() {
     local s="$1"
-    s="${s//@FAKE_SCRIPT_CHECKOUT_ROOT@/$FAKE_SCRIPT_CHECKOUT_ROOT}"
+    s="${s//@GUARD_CHECKOUT@/$GUARD_CHECKOUT}"
     s="${s//@OTHER_SCRIPT_CHECKOUT_ROOT@/$OTHER_SCRIPT_CHECKOUT_ROOT}"
     s="${s//@MAIN@/$MAIN}"
     s="${s//@ALT@/$ALT}"
@@ -135,10 +134,10 @@ overlay_verdict() {
     local cmd="$1" repo_root="$2"
     (cd "$MAIN_RAW" && run_with_timeout 30 env \
         "WORKFLOW_PLANS_DIR=$PLANS" \
-        node "$PROBE_JS" "$(nodepath "$OVERLAY_JS")" "$cmd" "$FAKE_SCRIPT_CHECKOUT_ROOT" "$repo_root" 2>&1)
+        node "$PROBE_JS" "$(nodepath "$OVERLAY_JS")" "$cmd" "$repo_root" 2>&1)
 }
 
-CANONICAL='node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json'
+CANONICAL='node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json'
 
 # ===========================================================================
 # Group A — ALLOW: the six canonical worker forms (classifier both-direction)
@@ -150,7 +149,7 @@ group_allow() {
             fail "allow/$w — implementation missing: hooks/enforce-worktree/main-worktree-allows/worker-dispatch-overlay.js"
             continue
         fi
-        cmd="$(expand "node \"@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js\" $w @MAIN@ @PLANS@/p.json")"
+        cmd="$(expand "node \"@GUARD_CHECKOUT@/bin/worker-dispatch.js\" $w @MAIN@ @PLANS@/p.json")"
         got="$(overlay_verdict "$cmd" "$MAIN")"
         assert_eq "allow/$w" "ALLOW" "$got"
     done
@@ -180,42 +179,42 @@ group_block() {
         got="$(overlay_verdict "$cmd" "$root")"
         assert_eq "block/$name" "BLOCK" "$got"
     done <<'TABLE'
-lock3-alt-repo-both        | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @ALT@ @PLANS@/p.json                    | ALT
-lock2-mainroot-mismatch    | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @ALT@ @PLANS@/p.json                    | MAIN
-lock3-linked-worktree      | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @LINKED@ @PLANS@/p.json                 | LINKED
+lock3-alt-repo-both        | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @ALT@ @PLANS@/p.json                    | ALT
+lock2-mainroot-mismatch    | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @ALT@ @PLANS@/p.json                    | MAIN
+lock3-linked-worktree      | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @LINKED@ @PLANS@/p.json                 | LINKED
 lock1-other-script-checkout-root            | node "@OTHER_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json             | MAIN
-path-bak-suffix            | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js.bak" test-runner @MAIN@ @PLANS@/p.json              | MAIN
-path-xbin-prefix           | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/xbin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json                 | MAIN
-path-unquoted              | node @FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js test-runner @MAIN@ @PLANS@/p.json                    | MAIN
-path-single-quoted         | node '@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js' test-runner @MAIN@ @PLANS@/p.json                  | MAIN
+path-bak-suffix            | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js.bak" test-runner @MAIN@ @PLANS@/p.json              | MAIN
+path-xbin-prefix           | node "@GUARD_CHECKOUT@/xbin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json                 | MAIN
+path-unquoted              | node @GUARD_CHECKOUT@/bin/worker-dispatch.js test-runner @MAIN@ @PLANS@/p.json                    | MAIN
+path-single-quoted         | node '@GUARD_CHECKOUT@/bin/worker-dispatch.js' test-runner @MAIN@ @PLANS@/p.json                  | MAIN
 path-var-dollar            | node "@DOLLAR@AGENTS_MAIN_ROOT/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json | MAIN
 path-tilde                 | node "~/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json                      | MAIN
-arity-0                    | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js"                                                    | MAIN
-arity-1                    | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner                                        | MAIN
-arity-2                    | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@                                 | MAIN
-arity-4                    | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json extra            | MAIN
-unknown-worker             | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" not-a-worker @MAIN@ @PLANS@/p.json                 | MAIN
-unknown-worker-case        | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" Test-Runner @MAIN@ @PLANS@/p.json                  | MAIN
-payload-outside-plans      | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @MAIN@/p.json                   | MAIN
-payload-sibling-prefix     | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @EVIL@/p.json                   | MAIN
-payload-dotdot-escape      | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/../plans-evil/p.json    | MAIN
-payload-relative           | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ p.json                          | MAIN
-meta-semicolon             | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json; id              | MAIN
-meta-and-and               | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json && id            | MAIN
-meta-pipe                  | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json @PIPE@ cat       | MAIN
-meta-cmd-subst             | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @DOLLAR@(pwd) @PLANS@/p.json           | MAIN
-meta-backtick              | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @BQ@pwd@BQ@ @PLANS@/p.json             | MAIN
-meta-redirect              | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json > @MAIN@/log.txt | MAIN
-cd-alt-repo-chain          | cd @ALT@ && node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @ALT@ @PLANS@/p.json       | MAIN
-git-c-alt-repo-chain       | git -C @ALT@ status && node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @ALT@ @PLANS@/p.json | MAIN
-env-prefix-single          | AGENTS_MAIN_ROOT="@FAKE_SCRIPT_CHECKOUT_ROOT@" node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json | MAIN
-env-prefix-bare            | FOO=1 node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json            | MAIN
-newline-injection-lf       | node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json@NL@id            | MAIN
-newline-injection-leading  | @NL@node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json              | MAIN
-interp-bash                | bash "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json                  | MAIN
-interp-sh                  | sh "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json                    | MAIN
-interp-node-flag           | node --experimental-vm-modules "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json | MAIN
-eval-wrapper               | eval "@DOLLAR@(node "@FAKE_SCRIPT_CHECKOUT_ROOT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json)" | MAIN
+arity-0                    | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js"                                                    | MAIN
+arity-1                    | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner                                        | MAIN
+arity-2                    | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@                                 | MAIN
+arity-4                    | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json extra            | MAIN
+unknown-worker             | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" not-a-worker @MAIN@ @PLANS@/p.json                 | MAIN
+unknown-worker-case        | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" Test-Runner @MAIN@ @PLANS@/p.json                  | MAIN
+payload-outside-plans      | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @MAIN@/p.json                   | MAIN
+payload-sibling-prefix     | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @EVIL@/p.json                   | MAIN
+payload-dotdot-escape      | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/../plans-evil/p.json    | MAIN
+payload-relative           | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ p.json                          | MAIN
+meta-semicolon             | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json; id              | MAIN
+meta-and-and               | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json && id            | MAIN
+meta-pipe                  | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json @PIPE@ cat       | MAIN
+meta-cmd-subst             | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @DOLLAR@(pwd) @PLANS@/p.json           | MAIN
+meta-backtick              | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @BQ@pwd@BQ@ @PLANS@/p.json             | MAIN
+meta-redirect              | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json > @MAIN@/log.txt | MAIN
+cd-alt-repo-chain          | cd @ALT@ && node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @ALT@ @PLANS@/p.json       | MAIN
+git-c-alt-repo-chain       | git -C @ALT@ status && node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @ALT@ @PLANS@/p.json | MAIN
+env-prefix-single          | AGENTS_MAIN_ROOT="@GUARD_CHECKOUT@" node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json | MAIN
+env-prefix-bare            | FOO=1 node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json            | MAIN
+newline-injection-lf       | node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json@NL@id            | MAIN
+newline-injection-leading  | @NL@node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json              | MAIN
+interp-bash                | bash "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json                  | MAIN
+interp-sh                  | sh "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json                    | MAIN
+interp-node-flag           | node --experimental-vm-modules "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json | MAIN
+eval-wrapper               | eval "@DOLLAR@(node "@GUARD_CHECKOUT@/bin/worker-dispatch.js" test-runner @MAIN@ @PLANS@/p.json)" | MAIN
 TABLE
 }
 
@@ -255,17 +254,24 @@ group_fail_closed() {
     rm -rf "$sandbox"
     mkdir -p "$sandbox"
     cp -R "$SCRIPT_CHECKOUT_ROOT/hooks" "$sandbox/hooks" 2>/dev/null || true
-    rm -f "$sandbox/hooks/lib/worker-dispatch-registry.js"
+    # The copied overlay is its own checkout: it needs the bin/ marker, and the
+    # command must name the sandbox, so the registry is the only thing that differs.
+    mkdir -p "$sandbox/bin"
     local copied="$sandbox/hooks/enforce-worktree/main-worktree-allows/worker-dispatch-overlay.js"
     if [ ! -f "$copied" ]; then
         fail "fail-closed/registry-missing — hooks/ sandbox copy failed"
         return
     fi
     local cmd got
-    cmd="$(expand "$CANONICAL")"
+    cmd="node \"$(nodepath "$sandbox")/bin/worker-dispatch.js\" test-runner $MAIN $PLANS/p.json"
     got="$(cd "$MAIN_RAW" && run_with_timeout 30 env \
         "WORKFLOW_PLANS_DIR=$PLANS" \
-        node "$PROBE_JS" "$(nodepath "$copied")" "$cmd" "$FAKE_SCRIPT_CHECKOUT_ROOT" "$MAIN" 2>&1)"
+        node "$PROBE_JS" "$(nodepath "$copied")" "$cmd" "$MAIN" 2>&1)"
+    assert_eq "fail-closed/registry-present-control" "ALLOW" "$got"
+    rm -f "$sandbox/hooks/lib/worker-dispatch-registry.js"
+    got="$(cd "$MAIN_RAW" && run_with_timeout 30 env \
+        "WORKFLOW_PLANS_DIR=$PLANS" \
+        node "$PROBE_JS" "$(nodepath "$copied")" "$cmd" "$MAIN" 2>&1)"
     # LOADFAIL is NOT acceptable: S1 requires the require() to be try/catch-wrapped
     # so a partial revert degrades to BLOCK rather than crashing the hook.
     assert_eq "fail-closed/registry-missing" "BLOCK" "$got"
@@ -283,7 +289,6 @@ hook_verdict() {
     local cmd="$1" out rc=0
     out="$(printf '%s' "$(json_payload "$cmd")" | (cd "$MAIN_RAW" && run_with_timeout 30 env \
         "ENFORCE_WORKTREE=on" \
-        "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" \
         "WORKFLOW_PLANS_DIR=$PLANS" \
         node "$GUARD_JS") 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then printf 'CRASH'; return; fi
@@ -339,7 +344,7 @@ overlay_verdict_ctrl() {
     (cd "$MAIN_RAW" && run_with_timeout 30 env \
         "WORKFLOW_PLANS_DIR=$PLANS" \
         "WORKFLOW_STATE_DIR=$CTRL_2434" \
-        node "$PROBE_JS" "$(nodepath "$OVERLAY_JS")" "$cmd" "$FAKE_SCRIPT_CHECKOUT_ROOT" "$repo_root" 2>&1)
+        node "$PROBE_JS" "$(nodepath "$OVERLAY_JS")" "$cmd" "$repo_root" 2>&1)
 }
 
 group_control_dir_allow() {
@@ -352,7 +357,7 @@ group_control_dir_allow() {
     # Before fix: overlay checks only PLANS residency → BLOCK → FAIL.
     local ctrl_cmd
     ctrl_cmd="$(printf 'node "%s/bin/worker-dispatch.js" test-runner "%s" "%s"' \
-        "$FAKE_SCRIPT_CHECKOUT_ROOT" "$MAIN" "$CTRL_PAYLOAD_2434")"
+        "$GUARD_CHECKOUT" "$MAIN" "$CTRL_PAYLOAD_2434")"
     assert_eq "2434-ctrl/control-dir-payload-allowed" "ALLOW" \
         "$(overlay_verdict_ctrl "$ctrl_cmd" "$MAIN")"
     # Legacy PLANS payload must remain ALLOW (existing-behaviour contract; passes today).

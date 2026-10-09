@@ -160,11 +160,11 @@ hooks/enforce-worktree/main-worktree-allows/standard.js|accepted|module.exports 
 hooks/lib/script-checkout-root.js|accepted|module.exports = {};
 docs/target-main-root.md|accepted|notes
 TABLE
-# The exempt set is docs/history*, CHANGELOG.md, changelog/ and this file — from the root.
+# The exempt set is docs/history.md, docs/history/, CHANGELOG.md, changelog/ and this file — from the root.
 table EXEMPT_ROWS <<TABLE
 docs/history.md|accepted|- renamed AGENTS_CONFIG_DIR
 docs/history/2026.md|accepted|- renamed mainRoot
-docs/history-2025.md|accepted|- renamed MAIN_ROOT
+docs/history/a.md|accepted|- renamed MAIN_ROOT
 CHANGELOG.md|accepted|- renamed AGENTS_DIR
 changelog/2026-10.md|accepted|- dropped the acd anchor
 $SELF_REL|accepted|# name mainRoot
@@ -172,6 +172,9 @@ TABLE
 table NOT_EXEMPT_ROWS <<'TABLE'
 notes/history.md|env AGENTS_CONFIG_DIR@1|- renamed AGENTS_CONFIG_DIR
 sub/docs/history.md|name mainRoot@1|- renamed mainRoot
+docs/history-2025.md|name MAIN_ROOT@1|- renamed MAIN_ROOT
+docs/history-foo/a.md|name mainRoot@1|- renamed mainRoot
+docs/historyX.md|env AGENTS_CONFIG_DIR@1|- renamed AGENTS_CONFIG_DIR
 sub/CHANGELOG.md|env AGENTS_DIR@1|- renamed AGENTS_DIR
 CHANGELOG.md.bak|env AGENTS_DIR@1|- renamed AGENTS_DIR
 sub/changelog/2026.md|stem acd@1|- dropped the acd anchor
@@ -253,16 +256,6 @@ c_path_hits() {
 tests/fixtures/fake-acd/both.sh|stem acd@0
 tests/fixtures/fake-acd/both.sh|name MAIN_ROOT@1
 TABLE
-}
-
-c_exempt_paths() {
-  c_rows exempt 0 "exempt" EXEMPT_ROWS
-  seed "$REPO" NOT_EXEMPT_ROWS 1
-  commit_all "$REPO"
-  run_gate "$KIT" --root "$REPO" --only residue
-  expect "exempt: look-alike paths are not exempt (exit 1)" rc_is 1
-  expect_rows "not exempt" residue <<<"$NOT_EXEMPT_ROWS"
-  expect_rows "exempt" residue <<<"$EXEMPT_ROWS"
 }
 
 case_begin "retired-list-section-is-well-formed" "bin/check-root-names/residue.js"

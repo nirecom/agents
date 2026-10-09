@@ -74,7 +74,7 @@ test_I6_backup_vars_defined_in_step5() {
 
 # detect-restart.sh failsafe + rules-reason — still relevant; not touched by #771
 test_I12_detect_restart_failsafe() {
-    local detect_sh="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/detect-restart.sh"
+    local detect_sh="$_HELPERS_SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/detect-restart.sh"
     if [ ! -f "$detect_sh" ]; then
         skip "I12_detect_restart_failsafe (detect-restart.sh not found)"
         return
@@ -103,7 +103,7 @@ _make_mock_gh() {
 }
 
 test_I13_detect_restart_rules_reason() {
-    local detect_sh="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/detect-restart.sh"
+    local detect_sh="$_HELPERS_SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/detect-restart.sh"
     if [ ! -f "$detect_sh" ]; then
         skip "I13_detect_restart_rules_reason (detect-restart.sh not found)"
         return
@@ -125,7 +125,7 @@ $out"
 }
 
 test_I13b_detect_restart_rules_and_claude_priority() {
-    local detect_sh="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/detect-restart.sh"
+    local detect_sh="$_HELPERS_SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/detect-restart.sh"
     if [ ! -f "$detect_sh" ]; then
         skip "I13b_detect_restart_rules_and_claude_priority (detect-restart.sh not found)"
         return
@@ -147,7 +147,7 @@ $out"
 }
 
 test_I14_dispatcher_propagates_crashed_child_exit_code() {
-    local dispatcher="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-405-final-report.sh"
+    local dispatcher="$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-405-final-report.sh"
     if [ ! -f "$dispatcher" ]; then
         skip "I14_dispatcher_propagates_crashed_child_exit_code (dispatcher not found)"
         return

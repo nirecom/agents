@@ -2,40 +2,18 @@
 # Tests: skills/issue-reconcile/scripts/backfill-batch.sh
 # Tags: history, docs, backdate, bin, issue-reconcile, scope:issue-specific
 #
-# Coverage for #1672's backfill-batch.sh: batch-appends a list of closed
-# issue numbers into docs/history.md via issue-to-history.sh, then runs
-# sort-history.py / doc-rotate.py exactly once for the whole batch (not once
-# per issue -- that single-invocation property is the point of the
-# --no-auto-rotate design in the per-issue append call).
-#
-# Stubbing approach: every executable backfill-batch.sh reaches for lives in a
-# fake AGENTS_MAIN_ROOT built by make_config():
-#   - bin/github-issues/issue-to-history.sh -- stubbed (its own coverage lives
-#     in tests/bin/feature-1672-doc-append-backdate.sh and
-#     tests/bin/feature-401-issue-to-history-shapes.sh) so this file can assert on
-#     call args/counts and control per-issue success/failure deterministically.
-#   - bin/sort-history.py and bin/doc-rotate.py -- stubbed under the SAME fake
-#     agents root, because backfill-batch.sh resolves its tooling from
-#     AGENTS_MAIN_ROOT (it cd's there before `uv run bin/<tool>.py`), never
-#     from the caller-supplied --repo-dir. Stubs keep call-count assertions
-#     exact and independent of real history.md content/size -- `uv run
-#     bin/<stub>.py` behaves identically to the real scripts from the invoking
-#     script's point of view (cwd + argv + exit code), which is all
-#     backfill-batch.sh depends on.
-# The --repo-dir fixture (make_repo) therefore holds only docs/history.md. Case
-# 11 additionally plants a *poisoned* bin/sort-history.py inside --repo-dir and
-# asserts it never executes -- the regression guard for agents-root resolution.
-#
-# TL3 gap (what this test does NOT catch):
-# - Real issue-to-history.sh + real sort-history.py/doc-rotate.py running
-#   against a live gh CLI and a real docs/history.md end-to-end.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: none (docs-only
-# backfill tool, not in the risk-category list).
+# backfill-batch.sh appends each closed issue via issue-to-history.sh, then
+# runs sort-history.py / doc-rotate.py exactly once for the whole batch.
+# It finds that tooling from its own location, never from --repo-dir, so each
+# case runs a copy placed in a fake root (make_config) next to stubbed tooling.
+# TL3 gap (what this test does NOT catch): the real tooling against a live gh
+# CLI and a real docs/history.md; checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: none.
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/issue-reconcile/scripts/backfill-batch.sh"
+SCRIPT_REL="skills/issue-reconcile/scripts/backfill-batch.sh"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/$SCRIPT_REL"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
@@ -63,7 +41,8 @@ make_config() {
     local fail_nums="$1"
     local rotate_rc="${2:-0}"
     local cfg; cfg=$(mktemp -d "$WORKDIR/cfg-XXXXXX")
-    mkdir -p "$cfg/bin/github-issues"
+    mkdir -p "$cfg/bin/github-issues" "$cfg/${SCRIPT_REL%/*}"
+    cp "$SCRIPT" "$cfg/$SCRIPT_REL"
     cat > "$cfg/bin/github-issues/issue-to-history.sh" <<EOF
 #!/bin/bash
 N="\$1"
@@ -128,7 +107,7 @@ REPO1=$(make_repo)
 NUMFILE1="$WORKDIR/numbers1.txt"
 write_numbers "$NUMFILE1" $'101\n102\n103\n'
 BEFORE_SUM1=$(sha256sum "$REPO1/docs/history.md" | awk '{print $1}')
-OUT1=$(AGENTS_MAIN_ROOT="$CFG1" bash "$SCRIPT" --repo-dir "$REPO1" --numbers-file "$NUMFILE1" --dry-run 2>&1)
+OUT1=$(bash "$CFG1/$SCRIPT_REL" --repo-dir "$REPO1" --numbers-file "$NUMFILE1" --dry-run 2>&1)
 RC1=$?
 AFTER_SUM1=$(sha256sum "$REPO1/docs/history.md" | awk '{print $1}')
 CALLS1=$(wc -l < "$CFG1/call.log" | tr -d ' ')
@@ -151,7 +130,7 @@ CFG2=$(make_config "")
 REPO2=$(make_repo)
 NUMFILE2="$WORKDIR/numbers2.txt"
 write_numbers "$NUMFILE2" $'201\n202\n203\n'
-OUT2=$(AGENTS_MAIN_ROOT="$CFG2" bash "$SCRIPT" --repo-dir "$REPO2" --numbers-file "$NUMFILE2" 2>&1)
+OUT2=$(bash "$CFG2/$SCRIPT_REL" --repo-dir "$REPO2" --numbers-file "$NUMFILE2" 2>&1)
 RC2=$?
 APPENDED2=$(cat "$REPO2/.backfill-appended.txt" 2>/dev/null | tr '\n' ' ')
 SORT_CALLS2=$(grep -c '^sort ' "$CFG2/rotate.log" 2>/dev/null || echo 0)
@@ -173,7 +152,7 @@ CFG3=$(make_config "302")
 REPO3=$(make_repo)
 NUMFILE3="$WORKDIR/numbers3.txt"
 write_numbers "$NUMFILE3" $'301\n302\n303\n'
-OUT3=$(AGENTS_MAIN_ROOT="$CFG3" bash "$SCRIPT" --repo-dir "$REPO3" --numbers-file "$NUMFILE3" 2>"$WORKDIR/c3.err")
+OUT3=$(bash "$CFG3/$SCRIPT_REL" --repo-dir "$REPO3" --numbers-file "$NUMFILE3" 2>"$WORKDIR/c3.err")
 RC3=$?
 ERR3=$(cat "$WORKDIR/c3.err")
 APPENDED3=$(cat "$REPO3/.backfill-appended.txt" 2>/dev/null | tr '\n' ' ')
@@ -195,7 +174,7 @@ CFG4=$(make_config "")
 NUMFILE4="$WORKDIR/numbers4.txt"
 write_numbers "$NUMFILE4" $'401\n'
 
-OUT4A=$(AGENTS_MAIN_ROOT="$CFG4" bash "$SCRIPT" --numbers-file "$NUMFILE4" 2>&1)
+OUT4A=$(bash "$CFG4/$SCRIPT_REL" --numbers-file "$NUMFILE4" 2>&1)
 RC4A=$?
 if [ "$RC4A" -ne 0 ] && echo "$OUT4A" | grep -qi "usage"; then
     pass "4a: missing --repo-dir -- usage message on stderr, non-zero exit"
@@ -203,7 +182,7 @@ else
     fail "4a: rc=$RC4A out='$OUT4A'"
 fi
 
-OUT4B=$(AGENTS_MAIN_ROOT="$CFG4" bash "$SCRIPT" --repo-dir "$WORKDIR" 2>&1)
+OUT4B=$(bash "$CFG4/$SCRIPT_REL" --repo-dir "$WORKDIR" 2>&1)
 RC4B=$?
 if [ "$RC4B" -ne 0 ] && echo "$OUT4B" | grep -qi "usage"; then
     pass "4b: missing --numbers-file -- usage message on stderr, non-zero exit"
@@ -211,7 +190,7 @@ else
     fail "4b: rc=$RC4B out='$OUT4B'"
 fi
 
-OUT4C=$(AGENTS_MAIN_ROOT="$CFG4" bash "$SCRIPT" --repo-dir "$WORKDIR" --numbers-file "$NUMFILE4" --bogus-flag 2>&1)
+OUT4C=$(bash "$CFG4/$SCRIPT_REL" --repo-dir "$WORKDIR" --numbers-file "$NUMFILE4" --bogus-flag 2>&1)
 RC4C=$?
 if [ "$RC4C" -ne 0 ] && echo "$OUT4C" | grep -qi "unknown argument"; then
     pass "4c: unknown argument -- error message on stderr, non-zero exit"
@@ -220,28 +199,14 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case 5: AGENTS_MAIN_ROOT unset -- explicit error, non-zero exit.
-# ---------------------------------------------------------------------------
-REPO5=$(make_repo)
-NUMFILE5="$WORKDIR/numbers5.txt"
-write_numbers "$NUMFILE5" $'501\n'
-OUT5=$(env -u AGENTS_MAIN_ROOT bash "$SCRIPT" --repo-dir "$REPO5" --numbers-file "$NUMFILE5" 2>&1)
-RC5=$?
-if [ "$RC5" -ne 0 ] && echo "$OUT5" | grep -qi "AGENTS_MAIN_ROOT"; then
-    pass "5: AGENTS_MAIN_ROOT unset -- explicit error, non-zero exit"
-else
-    fail "5: rc=$RC5 out='$OUT5'"
-fi
-
-# ---------------------------------------------------------------------------
-# Case 6: --repo-dir without docs/history.md; nonexistent --numbers-file.
+# Case 6:--repo-dir without docs/history.md; nonexistent --numbers-file.
 # ---------------------------------------------------------------------------
 CFG6=$(make_config "")
 REPO6_NOHIST="$WORKDIR/repo6-nohist"
 mkdir -p "$REPO6_NOHIST"
 NUMFILE6="$WORKDIR/numbers6.txt"
 write_numbers "$NUMFILE6" $'601\n'
-OUT6A=$(AGENTS_MAIN_ROOT="$CFG6" bash "$SCRIPT" --repo-dir "$REPO6_NOHIST" --numbers-file "$NUMFILE6" 2>&1)
+OUT6A=$(bash "$CFG6/$SCRIPT_REL" --repo-dir "$REPO6_NOHIST" --numbers-file "$NUMFILE6" 2>&1)
 RC6A=$?
 if [ "$RC6A" -ne 0 ] && echo "$OUT6A" | grep -qi "not found" && echo "$OUT6A" | grep -q "history.md"; then
     pass "6a: --repo-dir without docs/history.md -- not-found error, non-zero exit"
@@ -250,7 +215,7 @@ else
 fi
 
 REPO6=$(make_repo)
-OUT6B=$(AGENTS_MAIN_ROOT="$CFG6" bash "$SCRIPT" --repo-dir "$REPO6" --numbers-file "$WORKDIR/does-not-exist.txt" 2>&1)
+OUT6B=$(bash "$CFG6/$SCRIPT_REL" --repo-dir "$REPO6" --numbers-file "$WORKDIR/does-not-exist.txt" 2>&1)
 RC6B=$?
 if [ "$RC6B" -ne 0 ] && echo "$OUT6B" | grep -qi "not found" && echo "$OUT6B" | grep -q "does-not-exist.txt"; then
     pass "6b: nonexistent --numbers-file -- not-found error, non-zero exit"
@@ -266,7 +231,7 @@ CFG7=$(make_config "")
 REPO7=$(make_repo)
 NUMFILE7="$WORKDIR/numbers7.txt"
 write_numbers "$NUMFILE7" $'\n# nothing here\n   \n# another comment\n'
-OUT7=$(AGENTS_MAIN_ROOT="$CFG7" bash "$SCRIPT" --repo-dir "$REPO7" --numbers-file "$NUMFILE7" 2>&1)
+OUT7=$(bash "$CFG7/$SCRIPT_REL" --repo-dir "$REPO7" --numbers-file "$NUMFILE7" 2>&1)
 RC7=$?
 if [ "$RC7" -ne 0 ] && echo "$OUT7" | grep -qi "no issue numbers"; then
     pass "7: numbers-file with only blanks/comments -- no-issue-numbers error, non-zero exit"
@@ -282,7 +247,7 @@ CFG8=$(make_config "")
 REPO8=$(make_repo)
 NUMFILE8="$WORKDIR/numbers8.txt"
 write_numbers "$NUMFILE8" $'811\n\n# a full-line comment\n822 # closed last week\nnotanumber\n833\n'
-OUT8=$(AGENTS_MAIN_ROOT="$CFG8" bash "$SCRIPT" --repo-dir "$REPO8" --numbers-file "$NUMFILE8" --dry-run 2>&1)
+OUT8=$(bash "$CFG8/$SCRIPT_REL" --repo-dir "$REPO8" --numbers-file "$NUMFILE8" --dry-run 2>&1)
 RC8=$?
 if [ "$RC8" -eq 0 ] && echo "$OUT8" | grep -q "811" && echo "$OUT8" | grep -q "822" && echo "$OUT8" | grep -q "833" \
     && ! echo "$OUT8" | grep -q "notanumber"; then
@@ -299,7 +264,7 @@ CFG9=$(make_config "" 1)
 REPO9=$(make_repo)
 NUMFILE9="$WORKDIR/numbers9.txt"
 write_numbers "$NUMFILE9" $'901\n902\n'
-OUT9=$(AGENTS_MAIN_ROOT="$CFG9" bash "$SCRIPT" --repo-dir "$REPO9" --numbers-file "$NUMFILE9" 2>&1)
+OUT9=$(bash "$CFG9/$SCRIPT_REL" --repo-dir "$REPO9" --numbers-file "$NUMFILE9" 2>&1)
 RC9=$?
 APPENDED9=$(cat "$REPO9/.backfill-appended.txt" 2>/dev/null | tr '\n' ' ')
 if [ "$RC9" -ne 0 ] && echo "$OUT9" | grep -qi "doc-rotate.py failed" && [ "$APPENDED9" = "901 902 " ]; then
@@ -321,7 +286,7 @@ REPO10=$(make_repo)
 REPO10_BASE=$(basename "$REPO10")
 NUMFILE10="$WORKDIR/numbers10.txt"
 write_numbers "$NUMFILE10" $'1001\n'
-AGENTS_MAIN_ROOT="$CFG10" bash "$SCRIPT" --repo-dir "$REPO10" --numbers-file "$NUMFILE10" >/dev/null 2>&1
+bash "$CFG10/$SCRIPT_REL" --repo-dir "$REPO10" --numbers-file "$NUMFILE10" >/dev/null 2>&1
 RC10=$?
 SORT_LINE10=$(grep '^sort ' "$CFG10/rotate.log" 2>/dev/null | head -1 | tr '\\' '/')
 ROTATE_LINE10=$(grep '^rotate ' "$CFG10/rotate.log" 2>/dev/null | head -1 | tr '\\' '/')
@@ -353,7 +318,7 @@ sys.exit(0)
 EOF
 NUMFILE11="$WORKDIR/numbers11.txt"
 write_numbers "$NUMFILE11" $'1101\n'
-AGENTS_MAIN_ROOT="$CFG11" bash "$SCRIPT" --repo-dir "$REPO11" --numbers-file "$NUMFILE11" >/dev/null 2>&1
+bash "$CFG11/$SCRIPT_REL" --repo-dir "$REPO11" --numbers-file "$NUMFILE11" >/dev/null 2>&1
 RC11=$?
 SORT_CALLS11=$(grep -c '^sort ' "$CFG11/rotate.log" 2>/dev/null)
 POISON_HITS11=$(grep -c 'POISONED' "$CFG11/rotate.log" 2>/dev/null)

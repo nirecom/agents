@@ -3,30 +3,25 @@
 # Tags: enforce-worktree, allowlist, security, TL1, TL2, pwsh-not-required, scope:issue-specific
 #
 # Sourced by tests/hooks/fix-1679-worker-eval-segment-composition.sh.
-# Contains the E2E1679-* (real hook process assertions) and MU1679-TL1-*
-# (direct isAllowedWorkerScriptInvocation() unit) test groups. See the
-# entrypoint file's header comment for the full issue background.
-
-# ============================================================================
-# E2E — decision + block-reason assertions against the real hook process.
-# ============================================================================
+# E2E1679-* = decision + block-reason assertions against the real hook process;
+# MU1679-TL1-* = isAllowedWorkerScriptInvocation() called directly.
 
 test_e2e_cases() {
     echo "=== E2E: real hook process, main worktree on branch main ==="
     local cmd rc
 
-    cmd="$(printf 'cd "%s" && %s && echo "OWNER_REPO=$OWNER_REPO"' "$REPO" "$(pf_eval "$PF_LITERAL")")"
+    cmd="$(printf 'cd "%s" && %s && echo "OWNER_REPO=$OWNER_REPO"' "$REPO" "$(pf_eval "$PF_RESOLVED")")"
     rc=0; guard "$cmd" || rc=$?
     assert_allow "E2E1679-1: IN1679-1 through hooks/enforce-worktree.js → exit 0 (RED before fix)" "$rc"
 
-    cmd="$(printf '%s || exit 0; echo "OWNER_REPO=$OWNER_REPO"' "$(pf_eval "$PF_LITERAL")")"
+    cmd="$(printf '%s || exit 0; echo "OWNER_REPO=$OWNER_REPO"' "$(pf_eval "$PF_RESOLVED")")"
     rc=0; guard "$cmd" || rc=$?
     assert_allow "E2E1679-2: IN1679-2 through hooks/enforce-worktree.js → exit 0 (RED before fix)" "$rc"
 
     # E2E1679-3 also asserts the block REASON, not just the decision: an
     # adversarial composition must be refused as a main-worktree write, not
     # silently allowed nor blocked for some unrelated reason.
-    cmd="$(printf '%s || exit 0\nrm -f README.md' "$(pf_eval "$PF_LITERAL")")"
+    cmd="$(printf '%s || exit 0\nrm -f README.md' "$(pf_eval "$PF_RESOLVED")")"
     rc=0; guard "$cmd" || rc=$?
     assert_block "E2E1679-3: AD1679-1 through the real hook → BLOCK" "$rc"
     if [ "$rc" -eq 1 ]; then
@@ -39,7 +34,7 @@ test_e2e_cases() {
         fail "E2E1679-3-reason: not blocked, reason unassertable (rc=$rc)"
     fi
 
-    cmd="$(printf 'export AGENTS_MAIN_ROOT=/evil; %s' "$(pf_eval "$PF_LITERAL")")"
+    cmd="$(printf 'export AGENTS_MAIN_ROOT=/evil; %s' "$(pf_eval "$PF_RESOLVED")")"
     rc=0; guard "$cmd" || rc=$?
     assert_block "E2E1679-4: AD1679-9 through the real hook → BLOCK" "$rc"
 
@@ -47,29 +42,18 @@ test_e2e_cases() {
     # eval-wrapped run-initial.sh form has no ALLOW route left at any segment
     # composition. Retired-capability pin.
     cmd="$(printf 'eval "$(AGENTS_MAIN_ROOT="%s" FINALIZE_SCRIPTS_DIR="%s" TARGET_MAIN_ROOT="%s" bash "%s/run-initial.sh" "1234" "1234")"' \
-        "$FAKE_SCRIPT_CHECKOUT_ROOT" "$SCRIPTS" "$REPO" "$SCRIPTS")"
+        "$GUARD_CHECKOUT" "$SCRIPTS" "$REPO" "$SCRIPTS")"
     rc=0; guard "$cmd" || rc=$?
     assert_block "E2E1679-5: run-initial 2-arg form (S-6) through the real hook → BLOCK — eval path retired (#1673)" "$rc"
 }
 
 # =============================================================================
-# TL1 — Direct unit tests for companion-segment ENV_MUTATION guard (S-8)
+# TL1 — isAllowedWorkerScriptInvocation() called directly (no subprocess), so the
+# predicate is isolated from every other branch of hooks/enforce-worktree.js: TL2
+# sees only the hook's final decision. The predicate resolves its checkout from the
+# module's own location (#2561), so the pre-flight path names this checkout and no
+# environment variable is passed; repoRoot is the shared main worktree.
 # =============================================================================
-# These call isAllowedWorkerScriptInvocation() directly (no subprocess).
-# Before fix: env-mutation BLOCK cases are GREEN (existing behavior),
-# but benign-companion ALLOW cases that need segmentation are RED (bug not fixed).
-# After fix: all GREEN.
-#
-# Why TL1 in addition to the TL2 rows above: the TL2 driver observes only the
-# hook's final decision, which is the OR/AND of several predicates. If
-# isAllowedWorkerScriptInvocation itself regressed but some other branch of
-# hooks/enforce-worktree.js happened to block (or allow) the same string, TL2
-# could not tell the difference. These rows isolate the predicate.
-#
-# The script checkout root is resolved by hooks/lib/script-checkout-root.js from
-# process.env.AGENTS_MAIN_ROOT (marker-validated), so the shared fake-script-checkout-root
-# fixture is passed through env; repoRoot is the shared main worktree, which
-# owns one registered linked worktree.
 
 TL1_JS="$TMPDIR_BASE/tl1-worker-script.js"
 
@@ -80,8 +64,10 @@ const { isAllowedWorkerScriptInvocation } = require(process.env.TL1_WORKER_JS);
 
 const repoRoot = process.env.TL1_REPO;
 
-// Literal (unexpanded) pre-flight eval — exactly what PreToolUse receives.
-const PF =
+// The literal absolute path of the pre-flight script in the predicate's own checkout.
+const PF = 'eval "$(bash "' + process.env.TL1_PREFLIGHT + '")"';
+// The unexpanded form — what PreToolUse receives when the prompt names a variable.
+const PF_VARIABLE =
   'eval "$(bash "$AGENTS_MAIN_ROOT/skills/issue-close-finalize/scripts/pre-flight.sh")"';
 
 const cases = [
@@ -106,6 +92,10 @@ const cases = [
     "|| exit 0 tail"],
   ["MU1679-TL1-9", PF, true,
     "no companion segment"],
+
+  // -- Unexpanded variable path: never rewritten, so never sanctioned (#2561). --
+  ["MU1679-TL1-10", PF_VARIABLE, false,
+    "unexpanded variable path"],
 ];
 
 // The bash side parses one TAB-delimited record per line, so every detail
@@ -138,8 +128,8 @@ test_tl1_cases() {
     echo "=== TL1: isAllowedWorkerScriptInvocation() called directly ==="
     local out rc=0
     out="$(run_with_timeout 30 env \
-        "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" \
         "TL1_WORKER_JS=${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree/main-worktree-allows/worker-script.js" \
+        "TL1_PREFLIGHT=$PF_RESOLVED" \
         "TL1_REPO=$REPO" \
         node "$TL1_JS" 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then

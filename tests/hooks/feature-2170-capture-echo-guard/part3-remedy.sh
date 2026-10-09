@@ -134,7 +134,7 @@ OUT="$(run_remedy "$NOT_A_DIR" 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"'
 assert_eq "C-10-agents-main-root-not-a-directory" "both" "$(classify "$OUT")"
 
 # --- C-11: buildRemedy never throws (fail-open to generic wording) -----------
-OUT="$(env MALFORMED_HIT=1 node "$DRIVER" '' 2>&1)"
+OUT="$(env AGENTS_MAIN_ROOT="$CONFIG_REAL" MALFORMED_HIT=1 node "$DRIVER" '' 2>&1)"
 throw_token() {
     case "$1" in
         THREW:*) printf 'threw' ;;

@@ -2,14 +2,10 @@
 # tests/hooks/feature-1611-verbose-prompt-injection/adversarial-and-hygiene.sh
 # Tests: hooks/lib/verbose-prompt.js, hooks/session-start.js, hooks/workflow-state/state-io.js
 # Tags: hook, model-detection, session-state, prompt-injection, scope:issue-specific, TL2
-#
 # Fragment of tests/hooks/feature-1611-verbose-prompt-injection.sh — sourced by the
-# parent, not run directly; cases run at source time. Owns groups J (adversarial
-# session IDs: traversal / shell metacharacters / control characters), K
-# (state-write failure and atomic-write hygiene) and I (CPR-SSOT drift check on
-# the injected text).
-#
-# Depends on the parent for: TMPROOT, WFDIR, WFDIR_N, REPO_PATH, SESSION_START_JS,
+# parent, not run directly; cases run at source time. Owns groups J (adversarial session
+# IDs), K (state-write failure, atomic-write hygiene), I (CPR-SSOT drift of the injected text).
+# Depends on the parent for: TMPROOT, WFDIR, WFDIR_N, SCRIPT_CHECKOUT_ROOT, SESSION_START_JS,
 # jsn, seed_state, run_with_timeout, to_node_path, assert_eq, pass, fail — and on
 # provider-and-hooks.sh for VP_TEXT, VP_TEXT_OK, hook_out, contains.
 
@@ -146,7 +142,7 @@ case "$VP_TEXT_OK" in
         fail "I01-text-defined-once" "VERBOSE_PROMPT_TEXT unavailable (module not implemented yet)"
         ;;
     *)
-        HITS="$(grep -rlF "$VP_TEXT" "$REPO_PATH" \
+        HITS="$(grep -rlF "$VP_TEXT" "$SCRIPT_CHECKOUT_ROOT" \
             --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=tests 2>/dev/null | sort -u)"
         COUNT="$(printf '%s\n' "$HITS" | grep -c . || true)"
         if [ "$COUNT" = "1" ] && [ "$(basename "$HITS")" = "verbose-prompt.js" ]; then

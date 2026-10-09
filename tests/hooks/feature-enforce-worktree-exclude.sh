@@ -3,19 +3,11 @@
 # Tests: hooks/lib/glob-match.js, hooks/pre-commit
 # Tags: worktree, enforce, hook, git, pre-commit, scope:issue-specific
 #
-# Integration tests for hooks/pre-commit ENFORCE_WORKTREE_EXCLUDE bypass.
-#
-# Each test sets up a throwaway main worktree with `core.hooksPath` pointing
-# at the agents-repo `hooks/` directory, stages files, and invokes
-# hooks/pre-commit directly (L2 — not a real git commit hook registration
-# test; the hook binary is called as a subprocess, not via `git commit`).
-#
-# Skips gracefully when the EXCLUDE feature is not yet implemented in
-# hooks/pre-commit (detected by grepping for ENFORCE_WORKTREE_EXCLUDE).
-#
-# L3 gap: real git commit hook-registration (hooks/ wired into a live `git
-# commit` invocation) is not tested at L2. The closest-to-action verification
-# is bin/check-verification-gate.sh category: hook-registration.
+# Integration tests for hooks/pre-commit ENFORCE_WORKTREE_EXCLUDE bypass: each
+# case stages files in a throwaway main worktree and invokes hooks/pre-commit
+# directly as a subprocess (L2), not via `git commit`.
+# L3 gap: real git commit hook-registration is not tested here; the closest
+# check is bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
@@ -57,6 +49,13 @@ console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# The settings root is this file's own fixture, never the caller's: no .env, and an
+# empty blocklist so the outbound scanner resolves a list without the developer's.
+MAIN_ROOT_FIXTURE="$TMPDIR_BASE/agents-main"
+mkdir -p "$MAIN_ROOT_FIXTURE"
+: > "$MAIN_ROOT_FIXTURE/.private-info-blocklist"
+export AGENTS_MAIN_ROOT="$MAIN_ROOT_FIXTURE"
 
 run_with_timeout() {
     local secs="$1"; shift

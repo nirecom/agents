@@ -52,6 +52,14 @@ export WORKFLOW_PLANS_DIR
 
 NOW_ISO="$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
+# workflow-gate gates only the repo its own checkout belongs to: the gate runners launch it from
+# a copy of this checkout attached to the fixture repo.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+GATE_HOOK="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
+
 # ---------------------------------------------------------------------------
 # Repo / worktree setup
 # ---------------------------------------------------------------------------
@@ -270,6 +278,7 @@ build_mark_json() {
 run_gate() {
     local cwd="$1" json="$2"
     local common_dir main_dir=""
+    session_repo_fixture_attach "$GATE_CHECKOUT" "$cwd" 2>/dev/null
     common_dir="$(git -C "$cwd" rev-parse --git-common-dir 2>/dev/null)" || common_dir=""
     if [ -n "$common_dir" ]; then
         main_dir="$(node -e "const p=require('path');process.stdout.write(p.dirname(p.resolve(process.argv[1],process.argv[2])))" -- "$cwd" "$common_dir" 2>/dev/null)" || main_dir=""

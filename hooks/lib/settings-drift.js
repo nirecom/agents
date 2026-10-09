@@ -2,7 +2,7 @@
 // (base + extension) against ~/.claude/settings.json (assembled).
 // Consumed by hooks/session-start.js.
 //
-// agentsRoot resolution: this module is loaded from the globally-set core.hooksPath
+// SCRIPT_CHECKOUT_ROOT resolution: this module is loaded from the globally-set core.hooksPath
 // (agents/hooks/lib/), so __dirname always resolves to the agents MAIN worktree's
 // hooks/lib/ dir regardless of which repo or linked worktree triggered the hook.
 // Linked worktrees (feature branches) are intentionally NOT used as source — only
@@ -12,8 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// agentsRoot: agents repo root (two levels up from hooks/lib/)
-const agentsRoot = path.resolve(__dirname, '..', '..');
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, '..', '..');
 
 function readJson(p) {
   const raw = fs.readFileSync(p, 'utf8');
@@ -105,8 +104,8 @@ function detectDrift({ homeDir }) {
   // stay silent, not to crash the session.
   let expected;
   try {
-    const assembly = require(path.join(agentsRoot, 'install', 'lib', 'settings-assembly.js'));
-    expected = assembly.buildAssembledSettings({ agentsRoot }).settings;
+    const assembly = require(path.join(SCRIPT_CHECKOUT_ROOT, 'install', 'lib', 'settings-assembly.js'));
+    expected = assembly.buildAssembledSettings({ agentsRoot: SCRIPT_CHECKOUT_ROOT }).settings;
   } catch (err) {
     return { drifted: false, sourceUnreadable: true, reason: 'settings source: ' + err.message };
   }

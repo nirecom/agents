@@ -176,7 +176,7 @@ run_verbatim() {
              -u AGENTS_MAIN_ROOT
              "PATH=$stubbin:$OFFCLR_CLEAN_PATH"
              "WORKFLOW_PLANS_DIR=$tn" "WORKFLOW_STATE_DIR=$tn" "SESSION_ID=verbsid")
-    [ "$pin" = "1" ] && envargs+=()
+    [ "$pin" = "1" ] && envargs+=("AGENTS_MAIN_ROOT=$_SCRIPT_CHECKOUT_ROOT_NODE")
     ( cd "$stubbin" && env "${envargs[@]}" "$OFFCLR_RWT" 60 bash -c "$SSOT_VALUE $args" ) >"$outf" 2>"$errf"
     RC=$?; OUT="$(cat "$outf" 2>/dev/null)"; ERR="$(cat "$errf" 2>/dev/null)"
     rm -r -f "$stubbin" 2>/dev/null || true

@@ -18,17 +18,15 @@ run_with_timeout() {
 TMPBASE="$(mktemp -d 2>/dev/null || mktemp -d -t mctest)"
 trap 'rm -rf "$TMPBASE" 2>/dev/null' EXIT
 
-# FAKE_SCRIPT_CHECKOUT_ROOT: emulate AGENTS_MAIN_ROOT with the bin/compose-doc-append-entry file present.
-FAKE_SCRIPT_CHECKOUT_ROOT="$TMPBASE/fake-agents"
-mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin"
-touch "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/compose-doc-append-entry"
-# Both trust markers (hooks/lib/script-checkout-root.js: hooks/enforce-worktree.js
-# AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real one
-# always carries the guard itself — a marker-less stub is not a faithful config
-# dir, it is the hostile case, which tests/fix-1630-*.sh own.
-mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks"
-touch "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
-if command -v cygpath >/dev/null 2>&1; then FAKE_SCRIPT_CHECKOUT_ROOT_N="$(cygpath -m "$FAKE_SCRIPT_CHECKOUT_ROOT")"; else FAKE_SCRIPT_CHECKOUT_ROOT_N="$FAKE_SCRIPT_CHECKOUT_ROOT"; fi
+# The predicate accepts the script only under the checkout the guard itself runs from ($_A);
+# since #2561 no environment variable names that root. The commands below therefore name
+# "$_A/bin/compose-doc-append-entry" (compared as a path, never executed).
+# FOREIGN_CHECKOUT: a look-alike checkout (script + both trust markers) that is NOT the guard's
+# own — the W7/W8 cases name the script under it and must stay blocked.
+FOREIGN_CHECKOUT="$TMPBASE/foreign-agents"
+mkdir -p "$FOREIGN_CHECKOUT/bin" "$FOREIGN_CHECKOUT/hooks"
+touch "$FOREIGN_CHECKOUT/bin/compose-doc-append-entry" "$FOREIGN_CHECKOUT/hooks/enforce-worktree.js"
+if command -v cygpath >/dev/null 2>&1; then FOREIGN_CHECKOUT_N="$(cygpath -m "$FOREIGN_CHECKOUT")"; else FOREIGN_CHECKOUT_N="$FOREIGN_CHECKOUT"; fi
 
 # Main repo with NO linked worktrees (post-worktree-end state)
 MAIN_CLEAN="$TMPBASE/main-clean"
@@ -89,41 +87,45 @@ assert_hook_block() {
 }
 
 # Canonical command shape:
-#   bash "<FAKE_SCRIPT_CHECKOUT_ROOT>/bin/compose-doc-append-entry" --notes ... --branch ... --pr ... --merge-commit ... --background ... --closes-issues-count ...
+#   bash "<the guard's own checkout>/bin/compose-doc-append-entry" --notes ... --branch ... --pr ... --merge-commit ... --background ... --closes-issues-count ...
 
-CANON="bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --notes \"WORKTREE_NOTES.md\" --branch \"feature/x\" --pr 123 --merge-commit abc1234 --background \"bg\" --closes-issues-count 1"
-BOOT="bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --notes \"WORKTREE_NOTES.md\" --branch \"feature/x\" --bootstrap --merge-commit abc1234 --background \"bg\" --closes-issues-count 1"
-BARE="bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\""
+CANON="bash \"$_A/bin/compose-doc-append-entry\" --notes \"WORKTREE_NOTES.md\" --branch \"feature/x\" --pr 123 --merge-commit abc1234 --background \"bg\" --closes-issues-count 1"
+BOOT="bash \"$_A/bin/compose-doc-append-entry\" --notes \"WORKTREE_NOTES.md\" --branch \"feature/x\" --bootstrap --merge-commit abc1234 --background \"bg\" --closes-issues-count 1"
+BARE="bash \"$_A/bin/compose-doc-append-entry\""
 
 # === P-series: canonical allow shapes ===
-assert_allow_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "$CANON" "$MAIN_CLEAN_N" "P1: canonical normal-mode invocation → allow"
-assert_allow_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "$BOOT"  "$MAIN_CLEAN_N" "P2: canonical bootstrap-mode invocation → allow"
-assert_allow_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "$BARE"  "$MAIN_CLEAN_N" "P3: bare invocation (no args) → allow"
-assert_allow_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "  bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "P4: leading whitespace before bash → allow"
-# P5: path with .. that normalizes to canonical. Create the .. shape under FAKE_SCRIPT_CHECKOUT_ROOT.
-P5_CMD="bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/../bin/compose-doc-append-entry\" --pr 1"
-assert_allow_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "$P5_CMD" "$MAIN_CLEAN_N" "P5: path with .. normalizing to canonical → allow"
+assert_allow_ca "$_A" "$CANON" "$MAIN_CLEAN_N" "P1: canonical normal-mode invocation → allow"
+assert_allow_ca "$_A" "$BOOT"  "$MAIN_CLEAN_N" "P2: canonical bootstrap-mode invocation → allow"
+assert_allow_ca "$_A" "$BARE"  "$MAIN_CLEAN_N" "P3: bare invocation (no args) → allow"
+assert_allow_ca "$_A" "  bash \"$_A/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "P4: leading whitespace before bash → allow"
+# P5: path with .. that normalizes to canonical.
+P5_CMD="bash \"$_A/bin/../bin/compose-doc-append-entry\" --pr 1"
+assert_allow_ca "$_A" "$P5_CMD" "$MAIN_CLEAN_N" "P5: path with .. normalizing to canonical → allow"
+# P6/P7: the environment never decides — the guard's own script stays allowed whatever AGENTS_MAIN_ROOT holds.
+assert_allow_ca "" "$CANON" "$MAIN_CLEAN_N" "P6: own-checkout script with AGENTS_MAIN_ROOT empty → allow (#2561)"
+assert_allow_ca "$FOREIGN_CHECKOUT_N" "$CANON" "$MAIN_CLEAN_N" "P7: own-checkout script with AGENTS_MAIN_ROOT naming a foreign checkout → allow (#2561)"
 
 # === C-series: redirect / substitution chars in args ===
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 > /tmp/out" "$MAIN_CLEAN_N" "C1a: stdout redirect > → block"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 >> /tmp/out" "$MAIN_CLEAN_N" "C1b: append redirect >> → block"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 < /tmp/in" "$MAIN_CLEAN_N" "C1c: input redirect < → block"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --background \"\$(touch /tmp/x)\"" "$MAIN_CLEAN_N" "C2a: \$() inside double-quoted arg → block"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --background \"\`touch /tmp/x\`\"" "$MAIN_CLEAN_N" "C2b: backtick inside double-quoted arg → block"
+assert_block_ca "$_A" "bash \"$_A/bin/compose-doc-append-entry\" --pr 1 > /tmp/out" "$MAIN_CLEAN_N" "C1a: stdout redirect > → block"
+assert_block_ca "$_A" "bash \"$_A/bin/compose-doc-append-entry\" --pr 1 >> /tmp/out" "$MAIN_CLEAN_N" "C1b: append redirect >> → block"
+assert_block_ca "$_A" "bash \"$_A/bin/compose-doc-append-entry\" --pr 1 < /tmp/in" "$MAIN_CLEAN_N" "C1c: input redirect < → block"
+assert_block_ca "$_A" "bash \"$_A/bin/compose-doc-append-entry\" --background \"\$(touch /tmp/x)\"" "$MAIN_CLEAN_N" "C2a: \$() inside double-quoted arg → block"
+assert_block_ca "$_A" "bash \"$_A/bin/compose-doc-append-entry\" --background \"\`touch /tmp/x\`\"" "$MAIN_CLEAN_N" "C2b: backtick inside double-quoted arg → block"
 
 # === S-series: shell chaining / pipes (the root incident) ===
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 | tee /tmp/out" "$MAIN_CLEAN_N" "S1: pipe to tee → block (root incident)"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 && rm -rf /tmp/x" "$MAIN_CLEAN_N" "S2: && chaining → block"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1 ; echo done" "$MAIN_CLEAN_N" "S3: ; chaining → block"
+assert_block_ca "$_A" "bash \"$_A/bin/compose-doc-append-entry\" --pr 1 | tee /tmp/out" "$MAIN_CLEAN_N" "S1: pipe to tee → block (root incident)"
+assert_block_ca "$_A" "bash \"$_A/bin/compose-doc-append-entry\" --pr 1 && rm -rf /tmp/x" "$MAIN_CLEAN_N" "S2: && chaining → block"
+assert_block_ca "$_A" "bash \"$_A/bin/compose-doc-append-entry\" --pr 1 ; echo done" "$MAIN_CLEAN_N" "S3: ; chaining → block"
 
 # === W-series: wrong shapes ===
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/doc-append\" --pr 1" "$MAIN_CLEAN_N" "W1: wrong script name (doc-append) → block"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/scripts/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W2: correct script name in wrong directory → block"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "bash '$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry' --pr 1" "$MAIN_CLEAN_N" "W3: single-quoted script path → block"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "pwsh \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W4: wrong interpreter pwsh → block"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "node \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W5: wrong interpreter node → block"
-assert_block_ca "$FAKE_SCRIPT_CHECKOUT_ROOT_N" "sudo bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W6: sudo prefix → block"
-assert_block_ca "" "bash \"$FAKE_SCRIPT_CHECKOUT_ROOT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W7: AGENTS_MAIN_ROOT unset (empty) → block"
+assert_block_ca "$_A" "bash \"$_A/bin/doc-append\" --pr 1" "$MAIN_CLEAN_N" "W1: wrong script name (doc-append) → block"
+assert_block_ca "$_A" "bash \"$_A/scripts/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W2: correct script name in wrong directory → block"
+assert_block_ca "$_A" "bash '$_A/bin/compose-doc-append-entry' --pr 1" "$MAIN_CLEAN_N" "W3: single-quoted script path → block"
+assert_block_ca "$_A" "pwsh \"$_A/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W4: wrong interpreter pwsh → block"
+assert_block_ca "$_A" "node \"$_A/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W5: wrong interpreter node → block"
+assert_block_ca "$_A" "sudo bash \"$_A/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W6: sudo prefix → block"
+assert_block_ca "" "bash \"$FOREIGN_CHECKOUT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W7: script under a foreign checkout with AGENTS_MAIN_ROOT empty → block (#2561)"
+assert_block_ca "$FOREIGN_CHECKOUT_N" "bash \"$FOREIGN_CHECKOUT_N/bin/compose-doc-append-entry\" --pr 1" "$MAIN_CLEAN_N" "W8: script under a foreign checkout that AGENTS_MAIN_ROOT names → block (#2561)"
 
 # === E-series: end-to-end hook dispatch ===
 # For E-series we use the real agents repo path ($_A) as AGENTS_MAIN_ROOT so that

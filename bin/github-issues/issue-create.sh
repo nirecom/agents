@@ -10,8 +10,8 @@
 # Stdout: created issue URL (one line).
 # Stderr: progress and warnings.
 
-# -e is safe here: all gh invocations use `if !` blocks, which are exempt from errexit.
 set -euo pipefail
+# -e is safe here: all gh invocations use `if !` blocks, which are exempt from errexit.
 
 TITLE=""
 BODY=""
@@ -23,8 +23,7 @@ MILESTONE=""
 REPORTER_MODEL=""
 REPORTER_MODEL_TEXT=""
 
-# Repo root, resolved from this script's own location.
-_IC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -56,32 +55,28 @@ if ! command -v gh >/dev/null 2>&1; then
     echo "Error: gh CLI not found" >&2; exit 1
 fi
 
-# Soft preflight: warn if `project` scope is absent. Non-fatal so issue creation
-# still proceeds; only the Projects v2 attach step will fail (also non-fatal).
+# Soft preflight: a missing `project` scope only fails the (non-fatal) Projects v2 attach.
 if ! gh auth status 2>&1 | grep -q "'project'"; then
     echo "warn: gh auth lacks 'project' scope — Projects v2 attach will fail." >&2
     echo "warn: Run 'gh auth refresh -s project' to add it (browser-based OAuth)." >&2
 fi
 
-# Phase 0a — label auto-repair (non-interactive). Only when the remote is GitHub;
-# a non-GitHub remote → warn+skip. Independent of the skill-layer Phase 0b project check.
+# Phase 0a — label auto-repair, GitHub remotes only (skills/issue-create/SKILL.md).
 _ic_is_github=1
 if command -v is-github-dotcom-remote >/dev/null 2>&1; then
     is-github-dotcom-remote >/dev/null 2>&1 || _ic_is_github=0
-elif [ -x "$_IC_ROOT/bin/is-github-dotcom-remote" ]; then
-    bash "$_IC_ROOT/bin/is-github-dotcom-remote" >/dev/null 2>&1 || _ic_is_github=0
+elif [ -x "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" ]; then
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" >/dev/null 2>&1 || _ic_is_github=0
 fi
 if [ "$_ic_is_github" -eq 1 ]; then
     _ic_preflight_rc=0
-    bash "$_IC_ROOT/bin/github-issues/issue-create-preflight.sh" --check-labels \
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh" --check-labels \
         ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} || _ic_preflight_rc=$?
     if [ "$_ic_preflight_rc" -eq 1 ]; then
-        # type:task absent → auto-sync labels before creating the issue.
-        # --no-delete: repairing one missing label must never delete the repo's other
-        # labels. Sibling of the make-parent `meta` repair in issue-create-dispatch.sh.
-        if ! bash "$_IC_ROOT/bin/github-issues/sync-labels.sh" --no-delete \
+        # type:task absent → sync labels; --no-delete keeps the repo's other labels.
+        if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" --no-delete \
                 ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} \
-                "$_IC_ROOT/.github/labels.yml"; then
+                "$SCRIPT_CHECKOUT_ROOT/.github/labels.yml"; then
             echo "Error: label sync failed — aborting issue creation" >&2
             exit 1
         fi
@@ -109,11 +104,7 @@ if [ -n "$BODY_FILE" ] && [ ! -f "$BODY_FILE" ]; then
     echo "Error: --body-file not found: $BODY_FILE" >&2; exit 1
 fi
 
-# Schema validation (#443): canonical Background + Changes required at creation.
-# ISSUE_CREATE_SKIP_SCHEMA=1 is an emergency escape hatch — sanctioned path is
-# to add the missing fields. (type:* labels are rejected by the --label arg
-# parser above; when type:incident becomes routable, swap the field list to
-# "Cause" "Fix".)
+# Schema validation (#443): Background + Changes required; ISSUE_CREATE_SKIP_SCHEMA=1 is emergency-only.
 if [ "${ISSUE_CREATE_SKIP_SCHEMA:-0}" != "1" ]; then
     # SSOT: shape regex lives in extract-field.sh — source rather than duplicate.
     # shellcheck source=lib/extract-field.sh
@@ -136,9 +127,7 @@ if [ "${ISSUE_CREATE_SKIP_SCHEMA:-0}" != "1" ]; then
     fi
 fi
 
-# Outbound scan guard (#1591): title AND body travel to GitHub, so both are
-# scanned as one stream — scanning only the body would let a leak in --title
-# through. Body-file CONTENT is scanned, not the path.
+# Outbound scan guard (#1591): title and body content are scanned as one stream.
 # shellcheck source=../lib/gh-outbound-guard.sh
 . "$(cd "$(dirname "$0")" && pwd)/../lib/gh-outbound-guard.sh"
 SCAN_TMP=$(mktemp)
@@ -150,31 +139,21 @@ SCAN_TMP=$(mktemp)
         printf '%s\n' "$BODY"
     fi
 } > "$SCAN_TMP"
-# Fixed literal label, never the caller-supplied --body-file path: scan-outbound.sh's
-# allowlist keys file-shaped labels to the destination repo path of a committed file
-# (see github-contents-write.sh). This label is composed issue-body text, not a
-# committed file's content, so a local/caller-controlled path must never be able to
-# coincidentally match an unrelated allowlist glob entry.
+# A fixed literal label, never the caller's path: it must not match an allowlist glob (bin/scan-outbound.sh).
 gh_outbound_guard "issue-body" < "$SCAN_TMP" || { rm -f "$SCAN_TMP"; exit 1; }
 rm -f "$SCAN_TMP"
 
-# Map the reporting model to its reporter-model:* label.
-# SSOT for the extraction rule, the keyword matcher and the label table:
-# hooks/lib/model-match.js (drift-checked by tests/fix-1579-*.sh T15).
-# --reporter-model carries an already-extracted id and wins when both are given;
-# --reporter-model-text carries the raw self-report sentence verbatim.
+# Reporting model → reporter-model:* label; --reporter-model wins. SSOT: hooks/lib/model-match.js.
 if [ -z "$REPORTER_MODEL" ] && [ -n "$REPORTER_MODEL_TEXT" ]; then
-    REPORTER_MODEL="$(node "$_IC_ROOT/bin/model-match.js" --extract-self-report "$REPORTER_MODEL_TEXT" 2>/dev/null || true)"
+    REPORTER_MODEL="$(node "$SCRIPT_CHECKOUT_ROOT/bin/model-match.js" --extract-self-report "$REPORTER_MODEL_TEXT" 2>/dev/null || true)"
 fi
 # Degrade to no label (same as an unknown model) when node is unavailable.
 if [ -n "$REPORTER_MODEL" ]; then
-    _rm_label="$(node "$_IC_ROOT/bin/model-match.js" --reporter-label "$REPORTER_MODEL" 2>/dev/null || true)"
+    _rm_label="$(node "$SCRIPT_CHECKOUT_ROOT/bin/model-match.js" --reporter-label "$REPORTER_MODEL" 2>/dev/null || true)"
     [ -n "$_rm_label" ] && EXTRA_LABELS+=("$_rm_label")
 fi
 
-# severity is NEVER inferred here (#1763). The Label policy in
-# skills/issue-create/SKILL.md is the single source of truth for severity
-# classification; whatever arrives via --label flows through untouched.
+# severity is never inferred here (#1763). SSOT: the Label policy in skills/issue-create/SKILL.md.
 
 GH_ARGS=(issue create --title "$TITLE" --label "type:task")
 if [ "$BODY_PROVIDED" -eq 1 ]; then
@@ -189,10 +168,7 @@ done
 [ -n "$ASSIGNEE" ]  && GH_ARGS+=(--assignee  "$ASSIGNEE")
 [ -n "$MILESTONE" ] && GH_ARGS+=(--milestone "$MILESTONE")
 
-# Auto-resolve Projects v2 config from git remote (#641). Lazy: runs only after
-# schema validation passes so --help / arg-error paths skip the network call.
-# Resolver failure is non-fatal — issue creation proceeds, Projects v2 attach is
-# skipped with a warning when the resolver returns 1.
+# Projects v2 config from the git remote (#641), resolved lazily; a failure only skips the attach.
 # shellcheck source=lib/resolve-project.sh
 . "$(cd "$(dirname "$0")" && pwd)/lib/resolve-project.sh"
 RESOLVER_OK=0
@@ -216,10 +192,7 @@ if ! printf '%s' "$URL" | grep -qE '^https://github\.com/.+/issues/[0-9]+$'; the
 fi
 
 ISSUE_NUM=$(printf '%s' "$URL" | grep -oE '[0-9]+$')
-# Pass resolved Projects v2 config to ensure-board-card.sh via the
-# _ISSUE_CREATE_INTERNAL_* env vars (resolver short-circuit). Skip the call
-# entirely when the resolver failed — no defaults exist any more, so
-# attempting attach without resolved IDs would just error.
+# The resolved config reaches ensure-board-card.sh through _ISSUE_CREATE_INTERNAL_*; no resolve, no attach.
 if [ "$RESOLVER_OK" -eq 1 ]; then
     if ! _ISSUE_CREATE_INTERNAL_OWNER="$RESOLVED_OWNER" \
          _ISSUE_CREATE_INTERNAL_PROJECT_NUM="$RESOLVED_PROJECT_NUM" \

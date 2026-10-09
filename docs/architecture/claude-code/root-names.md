@@ -101,7 +101,7 @@ A test that reached a tool through `AGENTS_MAIN_ROOT` would pass against the ins
 |---|---|
 | `residue` | a retired name, in file content or in a file path |
 | `table-match` | a root name the classification table does not allow in that file |
-| `structural` | the agents root joined to a code directory; the checkout root leaving its process; a carrier written outside its source; an unlisted exit from the decoy |
+| `structural` | the agents root joined to a code directory; the checkout root leaving its process; a carrier written outside its source (test files are exempt); an unlisted exit from the decoy |
 | `script-root-form` | a checkout-root assignment that is repeated, conditional, non-standard, of the wrong depth, or too far from the top |
 | `env-name` | the agents root as a local variable or set outside the permitted files; another root name as an environment variable |
 

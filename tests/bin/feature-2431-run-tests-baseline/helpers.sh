@@ -36,7 +36,7 @@ PLANS_DIR="$TMPROOT/plans"
 mkdir -p "$WF_DIR" "$PLANS_DIR"
 export WORKFLOW_STATE_DIR="$(np "$WF_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$PLANS_DIR")"
-unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 # No process started here reads the developer's home (Node on Windows reads USERPROFILE).
 mkdir -p "$TMPROOT/home" || exit 1
 HOME="$(np "$TMPROOT/home")"

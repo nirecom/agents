@@ -117,7 +117,8 @@ run_capture_env_real_dir() {
     setup_mock_env "$envdir"
 
     local script_copy="$TMPDIR_BASE/capture-env-$suffix.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
 
@@ -146,7 +147,8 @@ run_capture_env_raw() {
     setup_mock_env "$envdir"
 
     local script_copy="$TMPDIR_BASE/capture-env-$suffix.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
 

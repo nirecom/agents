@@ -43,6 +43,14 @@ WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
 
+# The gate arms only for the repo its own checkout belongs to, so the cases that need an
+# armed gate run a copy of this checkout attached to the fixture repo (ARMED_GATE_HOOK).
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$DOTFILES_DIR/tests/lib/session-repo-fixture.sh"
+ARMED_GATE_CHECKOUT="$TMPDIR_BASE/armed-gate-checkout"
+session_repo_fixture_create "$ARMED_GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+ARMED_GATE_HOOK="$(session_repo_fixture_path "$ARMED_GATE_CHECKOUT" hooks/workflow-gate.js)"
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)/main-workflow-state-machine"
 
 # shellcheck source=./main-workflow-state-machine/common.sh

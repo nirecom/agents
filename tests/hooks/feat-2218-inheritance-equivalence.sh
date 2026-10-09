@@ -28,6 +28,13 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
+# The CONFIRM_DETAIL waiver is read from the settings root's file only, so the fixture owns one.
+CFG_FIXTURE="$_ISOLATION_TMP_ROOT/cfg"
+mkdir -p "$CFG_FIXTURE"
+printf 'CONFIRM_DETAIL=off\n' > "$CFG_FIXTURE/.env"
+CFG_FIXTURE_NODE="$(node_path "$CFG_FIXTURE")"
+export AGENTS_MAIN_ROOT="$CFG_FIXTURE_NODE"
+
 # Pre-change event stream for the fixture donor: 13 session-inherit events,
 # sha256 over the normalized projection joined by newline.
 GOLDEN_SHA="a935f223cbe7b434030c6a71f97e08676dae718435baf1c48f2a2e2306d5e646"

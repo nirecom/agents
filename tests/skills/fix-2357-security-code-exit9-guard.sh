@@ -14,17 +14,22 @@ set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=./lib/harness.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+# shellcheck source=./lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
-SCRIPT_SEC="$SCRIPT_CHECKOUT_ROOT/skills/review-code-security/scripts/run-codex-review-loop.sh"
+# The wrapper finds its siblings from its own location, so each case launches a
+# copy of it placed inside the fake checkout that holds the stubs.
+SCRIPT_SEC_REL="skills/review-code-security/scripts/run-codex-review-loop.sh"
 
 if ! command -v git >/dev/null 2>&1; then
     skip "git unavailable — cannot exercise the diff-fingerprint seam"
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 0
 fi
 
-# --- fake AGENTS_MAIN_ROOT: only the two bin scripts the wrapper shells out to ---
+# --- fake checkout: the real wrapper + bin/lib, and stubs for the two bin scripts it shells out to ---
 build_fake_config_sec() {
     local fake; fake=$(make_tmp)
+    script_checkout_fixture_copy "$fake" bin/lib skills/review-code-security/scripts >&2 || return 1
     mkdir -p "$fake/bin"
     cat > "$fake/bin/run-codex-review-loop" <<'STUB'
 #!/usr/bin/env bash
@@ -62,7 +67,7 @@ run_loop_sec() {
     local plans="$1" fake="$2" repo="$3" rc="$4" ec
     ( cd "$repo" && AGENTS_MAIN_ROOT="$fake" SESSION_ID="sid1361" PLANS_DIR="$plans" \
         WORKFLOW_STATE_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" \
-        EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$SCRIPT_SEC" >/dev/null 2>&1 )
+        EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$fake/$SCRIPT_SEC_REL" >/dev/null 2>&1 )
     ec=$?
     printf '%s' "$ec"
 }
@@ -201,7 +206,7 @@ run_loop_sec_prestaged() {
     local plans="$1" fake="$2" repo="$3" rc="$4" ec
     ( cd "$repo" && AGENTS_MAIN_ROOT="$fake" SESSION_ID="sid1361" PLANS_DIR="$plans" \
         WORKFLOW_STATE_DIR="$plans" WORKFLOW_PLANS_DIR="$plans" \
-        EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$SCRIPT_SEC" --prestaged-report >/dev/null 2>&1 )
+        EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT" 40 bash "$fake/$SCRIPT_SEC_REL" --prestaged-report >/dev/null 2>&1 )
     ec=$?
     printf '%s' "$ec"
 }

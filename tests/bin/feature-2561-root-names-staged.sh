@@ -195,25 +195,6 @@ c_usage_errors() {
   expect "usage: the empty scope itself is what is refused" test "${GATE_OUT/--scope needs a value/}" != "$GATE_OUT"
 }
 
-c_hostile_arguments() {
-  make_kit args
-  write_table "$KIT"
-  new_repo args
-  fx "$REPO/bin/h.sh" 'echo clean'
-  commit_all "$REPO"
-  run_gate "$KIT" --root "$REPO" --only '$(touch PWNED_O)'
-  expect "hostile: a command substitution as a check name exits 2" rc_is 2
-  run_gate "$KIT" --root "$REPO;touch PWNED_R"
-  expect "hostile: a root with a command separator exits 2" rc_is 2
-  run_gate "$KIT" --root "$REPO" --repo 'agents`touch PWNED_P`'
-  expect "hostile: a backtick in the repo value exits 2" rc_is 2
-  run_gate "$KIT" --root "$REPO" --scope '$(touch PWNED_S);touch PWNED_T'
-  expect "hostile: a hostile scope matches nothing (exit 0)" rc_is 0
-  run_gate "$KIT" --root "$REPO" --retired-names-from '$(touch PWNED_L)'
-  expect "hostile: a hostile list path exits 2" rc_is 2
-  expect "hostile: no argument was executed" no_marker_file
-}
-
 case_begin "staged-blob-is-judged-not-the-working-file" "bin/check-root-names/main.js"
 c_index_blob_is_read
 case_end
@@ -274,6 +255,14 @@ case_end
 
 case_begin "staged-flag-fails-closed-without-an-index-or-its-inputs" "bin/check-root-names/main.js"
 c_staged_fails_closed
+case_end
+
+case_begin "staged-path-without-a-readable-blob-exits-2-and-a-gitlink-is-skipped" "bin/check-root-names/main.js"
+c_staged_blob_must_be_readable
+case_end
+
+case_begin "tree-or-scope-without-a-file-exits-2-and-an-empty-index-passes" "bin/check-root-names/main.js"
+c_empty_input
 case_end
 
 case_begin "report-is-sorted-and-free-of-repeats" "bin/check-root-names/main.js"

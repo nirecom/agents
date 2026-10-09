@@ -2,7 +2,7 @@
 # tests/unit-precommit-exclude-check.js
 # Tests: hooks/lib/precommit-exclude-check.js
 # Tags: unit, pre-commit, exclude-check, scope:common, pwsh-not-required
-# Exit codes: 0=covered, 2=not-covered/empty, 1=input-error (AGENTS_MAIN_ROOT unset)
+# Exit codes: 0=covered, 2=not-covered/empty
 # L3 gap: real pre-commit session, WORKFLOW_OFF interaction, Windows path casing;
 #   mitigation: bin/check-verification-gate.sh category: hook-registration
 
@@ -95,23 +95,6 @@ assert_rc "exit2-empty-staged" "2" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=" \
     "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE"
-
-# Case 5: AGENTS_MAIN_ROOT unset → rc 1
-if [ "$MODULE_MISSING" = "1" ]; then
-    fail "exit1-no-config — MODULE_NOT_FOUND (expected red)"
-else
-    got_rc=0
-    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
-    run_with_timeout 10 env -u AGENTS_MAIN_ROOT \
-        "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
-        "_PRECOMMIT_STAGED=docs/readme.md" \
-        node "$MODULE_PATH" >"$TMPBASE/stdout.txt" 2>"$TMPBASE/stderr.txt" || got_rc=$?
-    if [ "$got_rc" = "1" ]; then
-        pass "exit1-no-config (rc=1)"
-    else
-        fail "exit1-no-config — want rc=1 got rc=$got_rc"
-    fi
-fi
 
 # Case 7: bare repo-root prefix entry covers all staged → rc 0
 assert_rc "prefix-match" "0" \
@@ -268,6 +251,10 @@ assert_rc "newline-in-exclude-entry-no-bypass" "2" \
     "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
     "_PRECOMMIT_STAGED=docs/readme.md" \
     "ENFORCE_WORKTREE_EXCLUDE=/some/path\\n/other"
+
+# Case 22 (#2561): the helper reads no root variable — AGENTS_MAIN_ROOT unset still gives rc 0.
+assert_rc "exit0-root-env-unset" "0" -u AGENTS_MAIN_ROOT "_PRECOMMIT_REPO_TOP=$REPO_TOP_NODE" \
+    "_PRECOMMIT_STAGED=docs/readme.md" "ENFORCE_WORKTREE_EXCLUDE=$REPO_TOP_NODE"
 
 rm -rf "$REPO_TOP"
 

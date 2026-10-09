@@ -19,7 +19,7 @@ const { listShellFiles, readIndexShellFiles } = require("./scan");
 const residual = require("./residual-token");
 
 // The module set may be copied into a throwaway repo, so the repo is located from here.
-const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 const TESTS_RE = /^tests\/.*\.sh$/;
 
 class UsageError extends Error {}
@@ -65,7 +65,7 @@ function loadUnits(files, read) {
     if (units.has(file)) continue;
     const text = read(file).replace(/\r\n/g, "\n");
     const lines = parseShell(text);
-    units.set(file, { text, lines, facts: analyze(lines, text), edges: sourceEdges(file, lines, REPO_ROOT) });
+    units.set(file, { text, lines, facts: analyze(lines, text), edges: sourceEdges(file, lines, SCRIPT_CHECKOUT_ROOT) });
   }
   addDeclaredEdges(units);
   return units;
@@ -89,7 +89,7 @@ function scanRoot(root, shownBase) {
 }
 
 function run(opts) {
-  const testsRoot = path.join(REPO_ROOT, "tests");
+  const testsRoot = path.join(SCRIPT_CHECKOUT_ROOT, "tests");
   if (opts.root !== null) {
     const root = path.resolve(nativePath(opts.root));
     return scanRoot(root, root);
@@ -99,17 +99,17 @@ function run(opts) {
     return isolation(targets, listShellFiles(testsRoot));
   }
   if (opts.staged) {
-    const staged = residual.stagedPaths(REPO_ROOT);
-    const out = residual.stagedHits(REPO_ROOT, staged);
+    const staged = residual.stagedPaths(SCRIPT_CHECKOUT_ROOT);
+    const out = residual.stagedHits(SCRIPT_CHECKOUT_ROOT, staged);
     if (staged.some((p) => TESTS_RE.test(p))) {
       // The commit carries the index, so every tests/*.sh is judged by its staged blob.
-      const blobs = readIndexShellFiles(REPO_ROOT, "tests");
-      const targets = [...blobs.keys()].map((abs) => ({ abs, shown: slash(path.relative(REPO_ROOT, abs)) }));
+      const blobs = readIndexShellFiles(SCRIPT_CHECKOUT_ROOT, "tests");
+      const targets = [...blobs.keys()].map((abs) => ({ abs, shown: slash(path.relative(SCRIPT_CHECKOUT_ROOT, abs)) }));
       out.push(...isolation(targets, [], (file) => blobs.get(file)));
     }
     return out;
   }
-  return [...scanRoot(testsRoot, REPO_ROOT), ...residual.trackedHits(REPO_ROOT)];
+  return [...scanRoot(testsRoot, SCRIPT_CHECKOUT_ROOT), ...residual.trackedHits(SCRIPT_CHECKOUT_ROOT)];
 }
 
 function main(argv) {

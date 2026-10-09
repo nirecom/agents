@@ -18,6 +18,14 @@ GUARD="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/require-meta-parent.sh"
 PREFLIGHT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
+# Settings root: a fixture with empty private-info lists, so the outbound scan reaches its verdict.
+SETTINGS_FIXTURE="$(mktemp -d)"; readonly SETTINGS_FIXTURE
+trap 'rm -rf "$SETTINGS_FIXTURE"' EXIT
+mkdir -p "$SETTINGS_FIXTURE/agents-main"
+: > "$SETTINGS_FIXTURE/agents-main/.private-info-blocklist"
+: > "$SETTINGS_FIXTURE/agents-main/.private-info-allowlist"
+export AGENTS_MAIN_ROOT="$SETTINGS_FIXTURE/agents-main"
+
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }

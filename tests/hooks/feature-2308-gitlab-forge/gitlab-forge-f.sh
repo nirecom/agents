@@ -103,7 +103,7 @@ const payload = {
 };
 const ctx = {
   entry: { name: "commit-push", binaries: { external: [], scripts: {} } },
-  anchors: { script_checkout_root: path.join(tmp, "script-checkout-root-none"), plansDir: tmp },
+  anchors: { scriptCheckoutRoot: path.join(tmp, "script-checkout-root-none"), plansDir: tmp },
   path: path,
   fsguard: { writeFile: (t) => t },
 };

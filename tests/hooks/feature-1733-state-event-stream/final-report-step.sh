@@ -255,7 +255,7 @@ run_gate() { # <payload-file>
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         ENFORCE_WORKTREE=off \
-        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js" \
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node "$F11_GATE_HOOK" \
         < "$1" 2>/dev/null)" || GATE_RC=$?
 }
 
@@ -276,7 +276,14 @@ if run_case "F11/gate-live-verdicts"; then
     GATE_REPO="$TMPROOT/gate-repo"
     if ! mk_git_repo "$GATE_REPO" "feature/1733-gate-fixture"; then
         fail "F11/fixture-repo" "mk_git_repo failed for $GATE_REPO"
+    elif ! . "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh" \
+         || ! session_repo_fixture_create "$TMPROOT/gate-checkout" \
+         || ! session_repo_fixture_attach "$TMPROOT/gate-checkout" "$GATE_REPO"; then
+        fail "F11/fixture-gate-checkout" "cannot copy the checkout for the gate"
     else
+        # The gate arms only for the repo its own checkout belongs to, so it runs from a
+        # copy of this checkout attached to the fixture repo.
+        F11_GATE_HOOK="$(session_repo_fixture_path "$TMPROOT/gate-checkout" hooks/workflow-gate.js)"
         # A NON-docs staged file: a docs-only staging set short-circuits every step except
         # user_verification, which would make the negative control approve for the wrong
         # reason. Kept tiny so the #1701 file-size gate has nothing to say about it.

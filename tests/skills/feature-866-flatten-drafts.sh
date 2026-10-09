@@ -1,19 +1,8 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/assemble-mandatory.sh, hooks/show-diff.js, bin/run-codex-review-loop, skills/_shared/codex-review-loop.md
 # Tags: workflow, plans, hook, bin, env, scope:issue-specific
-#
-# Issue #866 — remove drafts/ subdirectory from ~/.workflow-plans/.
-# After this change, all intermediate plan artifacts live directly under
-# PLANS_DIR root, distinguished by filename suffix instead of directory.
-# assemble-mandatory.sh moves to in-place overwrite mode (arg 2 == arg 3).
-# show-diff.js switches from path-prefix suppression (`drafts/`) to
-# filename-suffix pattern matching via INTERMEDIATE_PATTERNS.
-#
-# L3 gap (what this test does NOT catch):
-# - Real make-outline-plan/make-detail-plan orchestration with actual codex calls
-# - Live show-diff.js hook firing inside a real Claude Code session
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
+# Issue #866 — plan intermediates live flat under PLANS_DIR, told apart by filename suffix; contract: assemble-mandatory.sh header and INTERMEDIATE_PATTERNS in hooks/show-diff.js.
+# L3 gap (real planner orchestration, live hook firing): bin/check-verification-gate.sh category skill-orchestration.
 set -uo pipefail
 
 # isolation (#2512): pin state and plans dirs once for this file
@@ -82,9 +71,7 @@ expect_nonempty() {
   fi
 }
 
-# ============================================================================
 # T1 — assemble-mandatory.sh in-place mode (intent → outline overwrite)
-# ============================================================================
 T1_PLANS="${NODE_TMPDIR}/f866-t1-$$"
 mkdir -p "$T1_PLANS"
 
@@ -108,10 +95,7 @@ Some intro.
 - tradeoff-a
 EOF
 
-# Planner output (initial outline at the target path — in-place mode overwrites it).
-# Body must start with a ## header so extract-mandatory-sections stops at the
-# first planner section boundary rather than absorbing plain text into the last
-# mandatory section's body.
+# Planner output at the target path; the body starts with a ## header so the extractor stops at the first planner section.
 cat > "$T1_PLANS/20260620-TEST-outline.md" << 'EOF'
 # Planner-Produced Outline
 
@@ -150,10 +134,7 @@ fi
 
 rm -rf "$T1_PLANS"
 
-# ============================================================================
-# T2 — assemble-mandatory.sh in-place soft-fail
-# (source-kind intent, missing ## Class members → stub injected)
-# ============================================================================
+# T2 — in-place hard-fail: intent without ## Class members fails the outline coverage gate (exit 4; no stub since #2228)
 T2_PLANS="${NODE_TMPDIR}/f866-t2-$$"
 mkdir -p "$T2_PLANS"
 
@@ -184,18 +165,21 @@ bash "$ASSEMBLE" --source-kind intent \
   "$T2_PLANS/20260620-TEST-outline.md" \
   > "$T2_PLANS/t2.stdout" 2> "$T2_PLANS/t2.stderr" || T2_RC=$?
 
-if [[ $T2_RC -eq 0 ]]; then
-  pass "T2 in-place soft-fail (intent, missing Class members) exits 0"
+if [[ $T2_RC -eq 4 ]]; then
+  pass "T2 in-place hard-fail (intent, missing Class members) exits 4"
 else
-  fail "T2 expected exit 0 (soft-fail with stub), got $T2_RC. stderr: $(cat "$T2_PLANS/t2.stderr")"
+  fail "T2 expected exit 4 (coverage gate hard-fail), got $T2_RC. stderr: $(cat "$T2_PLANS/t2.stderr")"
+fi
+
+if grep -qF "GATE FAIL" "$T2_PLANS/t2.stderr"; then
+  pass "T2 stderr reports GATE FAIL (intent, missing Class members)"
+else
+  fail "T2 expected GATE FAIL on stderr, got: $(cat "$T2_PLANS/t2.stderr")"
 fi
 
 rm -rf "$T2_PLANS"
 
-# ============================================================================
-# T3 — assemble-mandatory.sh in-place hard-fail
-# (source-kind outline, missing ## Class members → exit non-zero)
-# ============================================================================
+# T3 — in-place hard-fail: outline source without ## Class members exits non-zero
 T3_PLANS="${NODE_TMPDIR}/f866-t3-$$"
 mkdir -p "$T3_PLANS"
 
@@ -232,10 +216,7 @@ fi
 
 rm -rf "$T3_PLANS"
 
-# ============================================================================
-# T4 — show-diff.js suppresses all intermediate suffix patterns
-# (PLANS_DIR-root flat paths)
-# ============================================================================
+# T4 — show-diff.js suppresses all intermediate suffix patterns (PLANS_DIR-root flat paths)
 INTERMEDIATE_PATTERNS=(
   "20260620-TEST-outline-draft.md"
   "20260620-TEST-detail-draft.md"
@@ -263,21 +244,15 @@ for pat in "${INTERMEDIATE_PATTERNS[@]}"; do
     "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/$pat\",\"content\":\"x\"}}"
 done
 
-# ============================================================================
 # T5 — show-diff.js does NOT suppress <sid>-context.md (WI-9 session-context)
-# ============================================================================
 expect_nonempty "T5 <sid>-context.md NOT suppressed (session-context final artifact)" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/20260620-TEST-context.md\",\"content\":\"x\"}}"
 
-# ============================================================================
 # T6 — show-diff.js does NOT suppress final artifact (outline.md)
-# ============================================================================
 expect_nonempty "T6 final outline.md artifact NOT suppressed" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/20260620-TEST-outline.md\",\"content\":\"x\"}}"
 
-# ============================================================================
 # T7 — no drafts/ directory created by assemble-mandatory in-place mode
-# ============================================================================
 T7_PLANS="${NODE_TMPDIR}/f866-t7-$$"
 mkdir -p "$T7_PLANS"
 
@@ -317,9 +292,6 @@ fi
 
 rm -rf "$T7_PLANS"
 
-# ============================================================================
-# Results
-# ============================================================================
 echo ""
 echo "=== Results ==="
 if [ "$ERRORS" -eq 0 ]; then

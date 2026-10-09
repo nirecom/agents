@@ -30,7 +30,7 @@ blocked-enforce-worktree-excl   | ENFORCE_WORKTREE_EXCLUDE    | repoA         | 
 blocked-auto-approve-tools      | AUTO_APPROVE_TOOLS          | off           | on
 blocked-workflow-plans-dir      | WORKFLOW_PLANS_DIR          | /global-plans | /tmp/evil
 blocked-workflow-state-dir     | WORKFLOW_STATE_DIR         | /global-wf    | /tmp/evil
-blocked-script-checkout-root       | AGENTS_MAIN_ROOT           | /global-cfg   | /tmp/evil
+blocked-agents-main-root        | AGENTS_MAIN_ROOT            | /global-cfg   | /tmp/evil
 blocked-agents-state-dir        | AGENTS_STATE_DIR            | /global-state | /tmp/evil
 blocked-worktree-base-dir      | WORKTREE_BASE_DIR           | /global-wt    | /tmp/evil
 blocked-default-branches        | DEFAULT_BRANCHES            | main          | evil
@@ -122,8 +122,8 @@ done
 # .env from — named here so a removal from the exact set fails by name.
 assert_eq "T2223N2-isBlocklisted-workflow-state-dir" "true" "$(probe is-blocklisted WORKFLOW_STATE_DIR)"
 assert_eq "T2223N2-isBlocklisted-workflow-state-dir-lower" "true" "$(probe is-blocklisted workflow_state_dir)"
-assert_eq "T2223N2-isBlocklisted-script-checkout-root" "true" "$(probe is-blocklisted AGENTS_MAIN_ROOT)"
-assert_eq "T2223N2-isBlocklisted-script-checkout-root-lower" "true" "$(probe is-blocklisted script_checkout_root)"
+assert_eq "T2223N2-isBlocklisted-agents-main-root" "true" "$(probe is-blocklisted AGENTS_MAIN_ROOT)"
+assert_eq "T2223N2-isBlocklisted-agents-main-root-lower" "true" "$(probe is-blocklisted agents_main_root)"
 # Their sibling (#2460): the state/log root that Jev retention deletes under.
 assert_eq "T2223N2-isBlocklisted-agents-state-dir" "true" "$(probe is-blocklisted AGENTS_STATE_DIR)"
 assert_eq "T2223N2-isBlocklisted-agents-state-dir-lower" "true" "$(probe is-blocklisted agents_state_dir)"
@@ -277,7 +277,7 @@ codex-bare                 | CODEX                     | false
 session-bare               | SESSION                   | false
 propagate-bare             | PROPAGATE                 | false
 comment-block-bare         | COMMENT_BLOCK             | false
-script-checkout-root-suffixed | AGENTS_MAIN_ROOT_OLD     | false
+agents-main-root-suffixed  | AGENTS_MAIN_ROOT_OLD      | false
 agents-state-dir-longer    | AGENTS_STATE_DIRX         | false
 agents-state-dir-shorter   | AGENTS_STATE              | false
 workflow-state-dir-longer  | WORKFLOW_STATE_DIRECTORY | false

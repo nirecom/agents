@@ -43,6 +43,13 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
+# The CONFIRM_DETAIL waiver is read from the settings root's file only, so the fixture owns one.
+CFG_FIXTURE="$_ISOLATION_TMP_ROOT/cfg"
+mkdir -p "$CFG_FIXTURE"
+printf 'CONFIRM_DETAIL=off\n' > "$CFG_FIXTURE/.env"
+CFG_FIXTURE_NODE="$(node_path "$CFG_FIXTURE")"
+export AGENTS_MAIN_ROOT="$CFG_FIXTURE_NODE"
+
 require_granularity() {
     local out
     out=$(env -u CLAUDE_CODE_SESSION_ID "$RWT" 30 node -e "

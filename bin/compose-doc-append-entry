@@ -180,17 +180,16 @@ write_changelog_marker() {
 # --- Language lint (WORKTREE_NOTES.md sections) ---
 LANG_VIOLATIONS="$(
     NOTES_PATH="$NOTES_PATH" \
-    CDAE_ROOT="$SCRIPT_CHECKOUT_ROOT" \
     env -u DOCS_LANG_PUBLIC -u DOCS_LANG_PRIVATE node -e '
         const fs = require("fs");
         const path = require("path");
-        const agentsDir = process.env.CDAE_ROOT;
+        const hooksLib = path.join(process.argv[1], "hooks", "lib");
         const notesPath = process.env.NOTES_PATH;
         let cfgMod, lintMod, privMod;
         try {
-            cfgMod = require(path.join(agentsDir, "hooks/lib/lang-config.js"));
-            lintMod = require(path.join(agentsDir, "hooks/lib/lint-worktree-notes-lang.js"));
-            privMod = require(path.join(agentsDir, "hooks/lib/is-private-repo.js"));
+            cfgMod = require(path.join(hooksLib, "lang-config.js"));
+            lintMod = require(path.join(hooksLib, "lint-worktree-notes-lang.js"));
+            privMod = require(path.join(hooksLib, "is-private-repo.js"));
         } catch (e) { process.exit(0); }
         let content;
         try { content = fs.readFileSync(notesPath, "utf8"); } catch (e) { process.exit(0); }
@@ -203,7 +202,7 @@ LANG_VIOLATIONS="$(
         if (violations.length > 0) {
             process.stdout.write(JSON.stringify(violations));
         }
-    ' 2>/dev/null || true
+    ' "$SCRIPT_CHECKOUT_ROOT" 2>/dev/null || true
 )"
 if [[ -n "$LANG_VIOLATIONS" ]]; then
     echo "compose-doc-append-entry: language lint failed — WORKTREE_NOTES.md content does not match the configured language policy:" >&2

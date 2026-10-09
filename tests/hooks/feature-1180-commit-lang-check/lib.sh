@@ -51,18 +51,24 @@ EXCLUDE_FROM_DOTENV="@exclude-from-dotenv@"
 # `CODE_LANG_EXCLUDE` operand of `env -u`, or the opt-out marker).
 _ISOLATED_ENV_ARGS=()
 _isolate_exclude_env() {
-    local a decided=no
+    local a decided=no root_decided=no
     _ISOLATED_ENV_ARGS=()
     for a in "$@"; do
         case "$a" in
             "$EXCLUDE_FROM_DOTENV") decided=yes; continue ;;
             CODE_LANG_EXCLUDE=*|CODE_LANG_EXCLUDE) decided=yes ;;
+            "AGENTS_MAIN_ROOT="*|"AGENTS_MAIN_ROOT") root_decided=yes ;;
         esac
         _ISOLATED_ENV_ARGS+=("$a")
     done
     if [ "$decided" = no ]; then
         _ISOLATED_ENV_ARGS=("CODE_LANG_EXCLUDE=$EXCLUDE_ISOLATION_SENTINEL" \
             ${_ISOLATED_ENV_ARGS[@]+"${_ISOLATED_ENV_ARGS[@]}"})
+    fi
+    # The settings root is never inherited: a case that names none gets the fixture
+    # (appended, so a caller's `-u NAME` options stay ahead of the assignments).
+    if [ "$root_decided" = no ]; then
+        _ISOLATED_ENV_ARGS+=("AGENTS_MAIN_ROOT=$MAIN_ROOT_FIXTURE")
     fi
 }
 
@@ -77,6 +83,12 @@ console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# Settings root handed to every hook run: no .env, and an empty blocklist so the
+# outbound scanner can resolve one without reading the developer's real list.
+MAIN_ROOT_FIXTURE="$TMPDIR_BASE/agents-main"
+mkdir -p "$MAIN_ROOT_FIXTURE"
+: > "$MAIN_ROOT_FIXTURE/.private-info-blocklist"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -141,8 +153,7 @@ CHECK_NODE_SRC="
     "
 
 # Run the check() driver with process.cwd() = the temp git repo. AGENTS_MAIN_ROOT
-# points at the real repo (where the module lives); CODE_LANG is passed as a
-# direct env var (wins over real .env).
+# is the fixture root; CODE_LANG is passed as a direct env var.
 # Args: $1=repo, $2=CODE_LANG value (may be empty), $3=CODE_LANG_EXCLUDE (OPTIONAL).
 # When $3 is omitted, $EXCLUDE_ISOLATION_SENTINEL is injected instead: a
 # never-matching absolute path that is behaviourally identical to "no exclude"
@@ -158,6 +169,7 @@ run_check_node() {
     (cd "$repo" && run_with_timeout 15 env \
         CODE_LANG="$lang" \
         CODE_LANG_EXCLUDE="$excl" \
+        AGENTS_MAIN_ROOT="$MAIN_ROOT_FIXTURE" \
         node -e "$CHECK_NODE_SRC" 2>/dev/null)
 }
 

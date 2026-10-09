@@ -141,6 +141,7 @@ run_registered() {
         unset DOCS_LANG_HISTORY_PUBLIC DOCS_LANG_HISTORY_PRIVATE
         unset DOCS_LANG_CHANGELOG_PUBLIC DOCS_LANG_CHANGELOG_PRIVATE
         unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
+        export AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT_NODE"
         for _kv in "$@"; do export "${_kv?}"; done
         printf '%s' "$payload" | run_with_timeout 20 bash -c "$cmd" 2>"$errf"
     )"

@@ -1,28 +1,10 @@
 #!/usr/bin/env bash
 # Part of tests/hooks/fix-1780-round12-parser-unit-tables.sh (rules/coding/file-split.md).
-# Sections N, G and B - the basename side of the pipeline:
-#   N  normalizeCandidateBasename()  (hooks/lib/basename-glob-normalize.js)
-#   G  hasGlobMetachar() + candidateBasenameMatchesAnySuffix()
-#   B  brace / ANSI-C expansion      (hooks/lib/basename-glob-normalize/brace-ansi-expand.js)
-# Sourced by the parent, which owns run_table(), _expand() and the counters.
+# Sections N, G and B - the basename side of the pipeline; the parent owns the harness
+# and explains the row-pairing discipline in its header.
 
-# ===========================================================================
-# Section N — normalizeCandidateBasename() (hooks/lib/basename-glob-normalize.js)
-#
-# The normalizer answers "what basename does the OS actually see?" for a spelling
-# a hook reads BEFORE the shell and the filesystem have had their say. It is
-# consumed in the DETECTION direction, so it may widen and may never rewrite.
-#
-# PAIRING (the mutation-evidence discipline of parser-regex-tests.md): each strip
-# rule is stated by a row that exercises it and a row that must NOT trigger it and
-# differs by exactly one property —
-#   N-ads1/N-ads2 (`::$DATA` / `:alt` are stream specs) vs N-drive (`C:` is not)
-#   N-trail1/N-trail2 (trailing dot / space are stripped by Windows)
-#                      vs N-interior (an interior dot is content, not padding)
-#   N-quote (outer quotes are shell syntax) vs N-quoteinner (an interior quote is not)
-#   N-glob (metachars SURVIVE normalization — the round-8 H-3 regression: resolving
-#           `?` to a filler char here NARROWED the deny match and was a live bypass)
-# ===========================================================================
+# Section N - normalizeCandidateBasename(); strip rules: hooks/lib/basename-glob-normalize.js.
+# N-glob is the round-8 H-3 regression: resolving `?` to a filler char narrowed the deny match (a live bypass).
 run_N_normalize_basename() {
 run_table N <<'TABLE'
 N-plain      | s1@MK@             | norm | s1@MK@
@@ -41,25 +23,8 @@ N-globstar   | s1@MK1@*           | norm | s1@MK1@*
 TABLE
 }
 
-# ===========================================================================
-# Section G — hasGlobMetachar() + candidateBasenameMatchesAnySuffix()
-#
-# The deny decision. `?`/`[…]`/`*` are over-approximated (a glob that COULD expand
-# onto a protected name is a hit), and the named exception from the module header
-# is pinned by its own rows: a pattern contributing NO literal character to the
-# protected suffix is NOT a hit, or `rm -rf build/*` would be blocked.
-#
-# PAIRING:
-#   G-hit vs G-miss           full suffix vs the same string one char short
-#   G-q / G-star vs G-bare / G-bulk   glob WITH literal overlap vs glob WITHOUT
-#   G-case vs G-suffixword    case-folding vs a name that merely CONTAINS the
-#                             suffix but does not END with it (`…-offx`)
-#   G-brace-same vs G-brace-none  a brace alternative that rebuilds the marker vs
-#                             one where no alternative does
-#   G-meta-yes/G-meta-no      hasGlobMetachar is the predicate the caller branches
-#                             on, so it gets its own pair; `{` is deliberately NOT
-#                             a glob metachar (brace expansion is a separate axis)
-# ===========================================================================
+# Section G - hasGlobMetachar() + candidateBasenameMatchesAnySuffix(); the deny decision
+# and its no-literal-overlap exception: hooks/lib/basename-glob-normalize.js header.
 run_G_glob_match() {
 run_table G <<'TABLE'
 G-meta-yes    | true  | hasglob | s1@MK1@?
@@ -86,27 +51,9 @@ G-ordinary    | false | match | src/app.js
 TABLE
 }
 
-# ===========================================================================
-# Section B — brace-ansi-expand.js. These two constructs differ IN KIND from a
-# glob and the difference is the whole point: a glob can only match a file that
-# already EXISTS, while `{f..f}` and `$'…\x66'` CREATE the exact protected
-# basename — and a marker's existence alone is clearance.
-#
-# PAIRING:
-#   B-hex/B-oct vs B-none      an escape that decodes vs text with none
-#   B-upperX                   uppercase `\X` — bash does NOT decode it, the shared
-#                              decoder does. Named, accepted over-detection: the
-#                              widening direction is the safe one, do not "fix" it
-#                              by narrowing the decoder.
-#   B-comma/B-range vs B-single   `{a,b}` and `{a..b}` expand; a single element
-#                              `{x}` does NOT — bash fidelity, and the boundary a
-#                              too-eager widener would cross
-#   B-pad                      zero-padded ranges keep their width
-#   B-cart                     adjacent groups multiply (cartesian product)
-#   B-raw                      the RAW spelling is always in the candidate set —
-#                              a normalizer in the detection direction may add
-#                              spellings but may never drop one
-# ===========================================================================
+# Section B - brace / ANSI-C expansion; direction discipline and bash-fidelity rules:
+# hooks/lib/basename-glob-normalize/brace-ansi-expand.js header.
+# B-upperX: bash does not decode `\X`, the decoder does - accepted over-detection; never narrow the decoder to "fix" it.
 run_B_brace_ansi() {
 run_table B <<'TABLE'
 B-hex     | s1@MK@                        | ansi | s1@MK1@\x66
@@ -119,7 +66,7 @@ B-comma   | ab~ac~a{b,c}                  | braces | a{b,c}
 B-single  | {x}                           | braces | {x}
 B-range   | f1~f2~f3~f{1..3}              | braces | f{1..3}
 B-pad     | f01~f02~f03~f{01..03}         | braces | f{01..03}
-B-cart    | abd~abe~script_checkout_root~ace~a{b,c}{d,e}   | braces | a{b,c}{d,e}
+B-cart    | abd~abe~axd~axe~a{b,x}{d,e}   | braces | a{b,x}{d,e}
 B-plain   | plain                         | braces | plain
 B-cap     | false                         | bracecap | a{b,c}
 B-raw     | s1@MK@~s1@MK1@{f..f}          | spellings | s1@MK1@{f..f}

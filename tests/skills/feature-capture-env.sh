@@ -174,7 +174,8 @@ DREOF
 
     # Patch LIB_DIR in a copy of capture-env.sh
     local script_copy="$TMPDIR_BASE/ce1-capture-env.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$lib_dir\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$lib_dir\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$CAPTURE_ENV_SH" > "$script_copy"
     chmod +x "$script_copy"
 

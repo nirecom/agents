@@ -400,7 +400,7 @@ sp_contained_publish_copy() {
 
 # --- per-session control dir (#2434) ----------------------------------------
 
-_SP_OWN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || _SP_OWN_ROOT=""
+_SAFE_STATE_PATH_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || _SAFE_STATE_PATH_SCRIPT_CHECKOUT_ROOT=""
 
 _sp_has_resolver() {
     [ -n "${1-}" ] && [ -f "$1/bin/workflow-control-dir" ] \
@@ -457,7 +457,7 @@ sp_control_dir() {
             return 0
         fi
     fi
-    if _sp_has_resolver "$_SP_OWN_ROOT"; then root="$_SP_OWN_ROOT"
+    if _sp_has_resolver "$_SAFE_STATE_PATH_SCRIPT_CHECKOUT_ROOT"; then root="$_SAFE_STATE_PATH_SCRIPT_CHECKOUT_ROOT"
     fi
     if [ -n "$root" ]; then
         if [ -n "$file" ]; then

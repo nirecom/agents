@@ -3,27 +3,16 @@
 # tests/skills/feature-worktree-start-non-interactive/scan-gate-and-locale.sh
 # Tests: skills/worktree-start/scripts/derive-worktree-name.sh, bin/scan-outbound.sh
 # Tags: worktree, start, outbound-scan, locale, TL2, scope:issue-specific
-# B16-B18 — the three previously uncovered derive-worktree-name.sh behaviors:
-#   B16: D3a scan_clean() gate — text that fails bin/scan-outbound.sh never reaches
-#        the task name, and the diagnostic never echoes the offending value.
-#   B17: D3b disambiguator() — a pure UTC timestamp; the session id is deliberately
-#        not consulted (a local session must not be correlated to a public branch).
-#   B18: LC_ALL pinning — slugify() and the D5 bracket-class validation are pinned to
-#        LC_ALL=C, so a non-C ambient locale cannot change the derived name.
-# Part of the feature-worktree-start-non-interactive suite — see the dispatcher.
+# B16-B18 — the D3a/D0 scan gates, the D3b timestamp disambiguator, and LC_ALL pinning; contract: the D0/D3/D5 sections of derive-worktree-name.sh.
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
 setup_fixture
 
-# A value the real bin/scan-outbound.sh rejects as a hard violation ([IPv4]).
-# Any private-info pattern would do; an RFC1918 address is the cheapest one that
-# does not require a repo-local .private-info-blocklist. It is assembled at run
-# time so this test file does not itself trip the outbound scan on commit.
+# A value the real bin/scan-outbound.sh rejects ([IPv4]); assembled at run time so this file passes the outbound scan itself.
 LEAK="$(printf '%s.%s.%s.%s' 192 168 1 1)"
 
 # --- B16a: an intent title that fails the scan is not embedded --------------
-# --repo-dir is pinned to a clean fixture repo so the post-scan fallback slug is
-# deterministic (the repo basename) rather than whatever repo the suite runs in.
+# --repo-dir is pinned to a fixed-name fixture repo so the fallback slug is deterministic.
 CLEAN_REPO="$FIXTURE/scan-clean-repo"
 mkdir -p "$CLEAN_REPO"
 git -C "$CLEAN_REPO" init -q >/dev/null 2>&1
@@ -63,12 +52,7 @@ else
     fail "B16b/stderr: expected the fallback diagnostic and no raw label on stderr (err='$ERR')"
 fi
 
-# --- B16c [N2]: a repo name that fails the scan fails CLOSED at D0 ----------
-# REPO_NAME is itself an emitted value (stdout line 3), so D0 scans it before anything
-# downstream can use it. A repo directory named after an RFC1918 host is exactly the
-# case that gate exists for: the run aborts rather than degrading to a fallback slug,
-# because there is no safe REPO_NAME left to emit. The diagnostic is a fixed literal —
-# a value that failed the scan is never echoed, not even to explain the refusal.
+# --- B16c: a repo name that fails the scan fails CLOSED at D0, with a fixed-literal diagnostic ---
 LEAK_REPO="$FIXTURE/host-$LEAK"
 mkdir -p "$LEAK_REPO"
 git -C "$LEAK_REPO" init -q >/dev/null 2>&1
@@ -89,16 +73,10 @@ else
 fi
 
 # --- B17: disambiguator() is a pure UTC timestamp ---------------------------
-# The suffix must be `date -u +%Y%m%d%H%M%S` and nothing else. resolve-session-id is
-# broken two ways at once — on PATH, and inside a stand-in AGENTS_MAIN_ROOT — so a
-# suffix that still brackets wall-clock UTC proves the session id is not consulted.
+# resolve-session-id is broken on PATH and inside a stand-in checkout (see helpers.sh derive_copy_into), so a wall-clock suffix proves the session id is not consulted.
 FAKE_CFG="$FIXTURE/fake-cfg"
 mkdir -p "$FAKE_CFG/bin"
 cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" "$FAKE_CFG/bin/scan-outbound.sh"
-# scan_clean() also shells out to check-private-repo-name.js (D0's REPO_NAME gate runs
-# through the same scan_clean() as the title/label gates) — without a copy here, D0
-# would fail closed on a missing script rather than exercising the disambiguator this
-# case is actually about.
 cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/check-private-repo-name.js" "$FAKE_CFG/bin/check-private-repo-name.js"
 cat > "$FAKE_CFG/bin/resolve-session-id" <<'STUB'
 #!/bin/sh
@@ -106,6 +84,7 @@ printf 'resolve-session-id: deliberately broken\n' >&2
 exit 1
 STUB
 chmod +x "$FAKE_CFG/bin/resolve-session-id"
+derive_copy_into "$FAKE_CFG"
 B17_STUBDIR="$FIXTURE/b17-stub"
 mkdir -p "$B17_STUBDIR"
 cp "$FAKE_CFG/bin/resolve-session-id" "$B17_STUBDIR/resolve-session-id"
@@ -113,13 +92,10 @@ cp "$FAKE_CFG/bin/resolve-session-id" "$B17_STUBDIR/resolve-session-id"
 B17_SID="b17sessionidmarker"
 B17_BEFORE="$(date -u +%Y%m%d%H%M%S)"
 B17_SAVED_PATH="$PATH"
-B17_SAVED_CFG="$AGENTS_MAIN_ROOT"
 PATH="$B17_STUBDIR:$PATH"
-export AGENTS_MAIN_ROOT="$FAKE_CFG"
 export CLAUDE_CODE_SESSION_ID="$B17_SID"
-run_derive B17 --intent "$ABSENT_INTENT" --headless timestamp-probe
+run_derive_in "$FAKE_CFG" B17 --intent "$ABSENT_INTENT" --headless timestamp-probe
 unset CLAUDE_CODE_SESSION_ID
-export AGENTS_MAIN_ROOT="$B17_SAVED_CFG"
 PATH="$B17_SAVED_PATH"
 B17_AFTER="$(date -u +%Y%m%d%H%M%S)"
 
@@ -148,30 +124,17 @@ else
 fi
 
 # --- B18: LC_ALL pinning ----------------------------------------------------
-# Mechanism first: slugify(), D4's title lowercasing, and the D5 validation subshell
-# must each pin LC_ALL=C themselves, because case folding and bracket-class matching
-# are locale-sensitive.
-#
-# Every mechanism pin below is anchored to the function or section that owns the line.
-# A whole-file grep is unusable here: the file carries several LC_ALL=C pins and two
-# `tr 'A-Z' 'a-z'` sites, so a file-wide match can be satisfied by a line the assertion
-# was never about — and an equivalent refactor inside one function can break a pin that
-# has nothing to do with it (a single-subshell rewrite of slugify() is exactly what
-# retired the old `LC_ALL=C sed` literal).
+# Each mechanism pin is scoped to the function or section that owns it (helpers.sh extract_fn / extract_section), never file-wide.
 B18_SLUGIFY="$(extract_fn slugify "$SCRIPT")"
 if [ -z "$B18_SLUGIFY" ]; then
     fail "B18/slugify-pin: slugify() body not found in derive-worktree-name.sh"
     fail "B18/slugify-sed: slugify() body not found in derive-worktree-name.sh"
 else
-    # (a) the locale pin — wherever inside the body it is applied (per-stage prefix
-    #     or one `export LC_ALL=C` covering the whole pipeline subshell).
     if printf '%s\n' "$B18_SLUGIFY" | grep -qF 'LC_ALL=C'; then
         pass "B18/slugify-pin: slugify()'s own body pins LC_ALL=C"
     else
         fail "B18/slugify-pin: slugify()'s body carries no LC_ALL=C pin"
     fi
-    # (b) the sed stage the pin has to cover — asserted separately so reordering the
-    #     pipeline cannot break the locale assertion and vice versa.
     if printf '%s\n' "$B18_SLUGIFY" | grep -qE '(^|[^[:alnum:]_])sed([^[:alnum:]_]|$)'; then
         pass "B18/slugify-sed: slugify() runs at least one sed stage inside that body"
     else
@@ -179,9 +142,6 @@ else
     fi
 fi
 
-# D4 lowercases the title before the keyword match. `tr 'A-Z' 'a-z'` also occurs inside
-# slugify(), so this must be scoped to the D4 section — a file-wide grep would keep
-# passing after D4's own lowercasing line was deleted.
 B18_D4="$(extract_section '# --- D4:' '# --- D5:' "$SCRIPT")"
 if [ -z "$B18_D4" ]; then
     fail "B18/d4-tr-pin: the D4 branch-type section was not found in derive-worktree-name.sh"
@@ -191,9 +151,6 @@ else
     fail "B18/d4-tr-pin: the D4 section does not lowercase the title via LC_ALL=C tr 'A-Z' 'a-z'"
 fi
 
-# Scoped to the D5 section itself (not a whole-file grep): D0's safe_component()
-# and D4's title-lowercasing pipeline also carry `export LC_ALL=C` lines, so an
-# unscoped match could pass on either of those even if D5's own pin were removed.
 B18_D5="$(extract_section '# --- D5:' '# --- D6:' "$SCRIPT")"
 if [ -z "$B18_D5" ]; then
     fail "B18/d5-pin: the D5 output-validation section was not found in derive-worktree-name.sh"
@@ -203,9 +160,7 @@ else
     fail "B18/d5-pin: the D5 validation block does not export LC_ALL=C"
 fi
 
-# Behaviorally: the same input under a UTF-8 locale must derive the same name as
-# under LC_ALL=C. Full-width input is the discriminating case — an unpinned bracket
-# class would keep multibyte characters instead of collapsing them away.
+# Behaviorally: full-width input under a UTF-8 locale must derive the same name as under LC_ALL=C.
 B18_LOCALE=""
 for cand in ja_JP.utf8 ja_JP.UTF-8 en_US.utf8 en_US.UTF-8 C.utf8 C.UTF-8; do
     if locale -a 2>/dev/null | grep -qxF "$cand"; then B18_LOCALE="$cand"; break; fi

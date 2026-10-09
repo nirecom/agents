@@ -12,7 +12,10 @@ set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORKFLOW_INIT_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
-DRIVER="$SCRIPT_CHECKOUT_ROOT/bin/workflow/workflow-init-driver"
+DRIVER_REL="bin/workflow/workflow-init-driver"
+DRIVER="$SCRIPT_CHECKOUT_ROOT/$DRIVER_REL"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -163,6 +166,10 @@ exit 0
 FEOF
     chmod +x "$CFG/bin/resolve-session-id" "$CFG/bin/parse-issue-tokens" \
         "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
+    # The driver resolves its tools from its own checkout, so run a copy that
+    # lives beside the stubs above (the copy never overwrites an existing stub).
+    script_checkout_fixture_copy "$CFG" bin/workflow hooks \
+        || fail "setup_drv: driver fixture copy failed"
     export WORKFLOW_PLANS_DIR="$PLANS" AGENTS_MAIN_ROOT="$CFG" CLAUDE_CODE_SESSION_ID="$sid"
     unset NON_GITHUB 2>/dev/null || true
     export PATH="$MOCKBIN:$ORIG_PATH"
@@ -185,7 +192,7 @@ mock_issue() {
 TIMEOUT_WRAP="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 run_drv() {
-    DROUT="$(cd "$CASE_DIR" && "$TIMEOUT_WRAP" 30 node "$DRIVER" "$@" 2>/dev/null)"
+    DROUT="$(cd "$CASE_DIR" && "$TIMEOUT_WRAP" 30 node "$CFG/$DRIVER_REL" "$@" 2>/dev/null)"
     DRRC=$?
     return 0
 }

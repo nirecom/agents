@@ -41,6 +41,13 @@ run_with_timeout() {
 TMPBASE="$(mktemp -d)"
 trap 'rm -rf "$TMPBASE"' EXIT
 
+# The settings root is this file's own fixture, never the caller's: no .env, and an
+# empty blocklist so the outbound scanner resolves a list without the developer's.
+MAIN_ROOT_FIXTURE="$TMPBASE/agents-main"
+mkdir -p "$MAIN_ROOT_FIXTURE"
+: > "$MAIN_ROOT_FIXTURE/.private-info-blocklist"
+export AGENTS_MAIN_ROOT="$MAIN_ROOT_FIXTURE"
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PART A — isRepoExcluded unit (table-driven, node driver, ENFORCE_WORKTREE_EXCLUDE)
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -41,6 +41,12 @@ export WORKFLOW_PLANS_DIR
 # isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_STATE_DIR"
+# Settings root for the A/B cases: a fixture with empty lists, so a block is the
+# scanner's verdict on the content and never its fail-closed "no blocklist" answer.
+mkdir -p "$TMPDIR_BASE/agents-main"
+: > "$TMPDIR_BASE/agents-main/.private-info-blocklist"
+: > "$TMPDIR_BASE/agents-main/.private-info-allowlist"
+export AGENTS_MAIN_ROOT="$TMPDIR_BASE/agents-main"
 
 run_with_timeout() {
     local secs="$1"; shift

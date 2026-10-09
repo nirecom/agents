@@ -26,7 +26,7 @@ export TMPDIR="$S_ROOT/tmp"
 mkdir -p "$S_ROOT/workflow-state" "$S_ROOT/plans" "$S_ROOT/home" || exit 1
 export WORKFLOW_STATE_DIR="$S_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$S_ROOT/plans"
 export HOME="$S_ROOT/home" USERPROFILE="$S_ROOT/home"
-unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID
 
 # Bind AGENTS_MAIN_ROOT and every retired root name to the decoy, as the launcher does:
 # a case that follows any of them reaches a stub, never a real root.

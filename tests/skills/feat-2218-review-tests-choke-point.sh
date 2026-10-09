@@ -13,7 +13,10 @@ set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
-LOOP="$SCRIPT_CHECKOUT_ROOT/skills/review-tests/scripts/run-codex-review-loop.sh"
+# The wrapper finds its siblings from its own location, so the cases launch the
+# copy build_cfg places inside the fixture checkout that holds the stubs.
+LOOP_REL="skills/review-tests/scripts/run-codex-review-loop.sh"
+LOOP="$SCRIPT_CHECKOUT_ROOT/$LOOP_REL"
 
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
@@ -51,7 +54,8 @@ build_cfg() {
     CFG="$(make_tmp)"
     cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$CFG/hooks" 2>/dev/null || true
     cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$CFG/bin" 2>/dev/null || true
-    mkdir -p "$CFG/bin" "$CFG/skills/_shared"
+    mkdir -p "$CFG/bin" "$CFG/skills/_shared" "$CFG/skills/review-tests"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/skills/review-tests/scripts" "$CFG/skills/review-tests/scripts" 2>/dev/null || true
     printf '#!/bin/bash\nexit "${FORCE_RC:-0}"\n' > "$CFG/bin/run-codex-review-loop"
     # No-colon default: only a truly UNSET FORCE_TARGET becomes NOSTATE, so a
     # caller can still force the empty-commit-target branch by setting it to "".
@@ -70,7 +74,7 @@ run_loop() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 60 bash "$LOOP" >/dev/null 2>&1
+        "$RWT" 60 bash "$CFG/$LOOP_REL" >/dev/null 2>&1
 }
 
 # Same as run_loop, but from a caller-chosen CWD — needed to drive the NOSTATE
@@ -86,7 +90,7 @@ run_loop_at() {
           WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
           CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
           HOME="$tmp/home" USERPROFILE="$tmp/home" \
-          "$RWT" 60 bash "$LOOP" >/dev/null 2>&1 )
+          "$RWT" 60 bash "$CFG/$LOOP_REL" >/dev/null 2>&1 )
 }
 
 # #2430: handoff-append writes only inside the workflow active period, so a case

@@ -2,56 +2,13 @@
 # tests/hooks/fix-1569-quote-span-regression.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/arg-tail-guard.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/arg-value-guard.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/lib/quote-spans.js
 # Tags: worktree, enforce, hook, quote-spans, arg-tail, security, classifier, scope:issue-specific
-#
-# STATUS: partially RED until C3 lands (hooks/enforce-worktree/arg-tail-guard.js
-# + rejectsUnsafeArgTail wiring). Verified against the pre-C3 tree:
-#
-# Expected to FAIL today (15 rows, all in the direct-module ARG-* / RISK10-*
-# section — tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh):
-#   - ARG-accept dq pipe / sq pipe / dq semicolon / dq ampersand /
-#     mixed foo"|"bar / escaped \$( in dq — rule 5, the deliberate relaxation
-#     that IS the #1569 fix; today the flat metachar regex in worker-script.js
-#     rejects them.
-#   - ARG-reject bare subshell — today `(` / `)` are absent from that flat
-#     regex, so an unquoted subshell in the arg tail is accepted; rule 3 (SET-A
-#     includes parens) must start rejecting it.
-#   - RISK10-{341,399}-rule5 compose/clarify dq pipe, sq semicolon, dq
-#     ampersand — the same rule-5 relaxation reaching the sanctioned-bin
-#     profile (rule 5 lives in rejectsUnsafeToken, not in the profile table).
-#   - RISK10-{341,399}-rule2 ansic rejected — `$'...'` is invisible to today's
-#     flat regex (it only looks for `$(`), so an ANSI-C word is accepted;
-#     rule 2 must start rejecting it.
-#
-# Expected to PASS today and STAY green:
-#   - FP1..FP6 ALLOW cases (the 6 false positives fixed in PR #1577) and every
-#     paired *-attack BLOCK case
-#   - the R5-* / RISK2A-* hook-level ALLOW rows: at the hook boundary these are
-#     already allowed (the standard classifier sees no repo write), which is why
-#     the relaxation itself is pinned in the direct-module ARG-* section
-#     (tests/hooks/fix-1569-quote-span-regression/arg-tail-module.sh)
-#   - every other BLOCK row (rules 1-4 are fail-closed today)
-#   - the remaining RISK10-* rows (sanctioned-bin profile: plain `>` / `2>&1` /
-#     `&>` all rejected under allowRedirectAmpersand:false, contrasted with the
-#     ARG-accept '&>' / '&>>' / plain '>' rows on the worker-script profile,
-#     which keep the documented redirect exception)
-#
-# Decision rules under test (top-down, first match wins) for rejectsUnsafeToken:
-#   1. scan.ok===false | pieces coverage gap | tokenize ok:false   -> REJECT
-#   2. any `ansic` piece                                            -> REJECT
-#   3. `unquoted` piece text contains SET-A [|&;<>()]               -> REJECT
-#   4. `unquoted`/`dq` piece text contains SET-B ($( or backtick),
-#      excluding \$ / \` escapes inside dq                          -> REJECT
-#   5. SET-A inside dq/sq pieces                                    -> ALLOW
-#   6. otherwise                                                    -> ALLOW
-#
-# Classifier both-direction coverage (test-design.md): every ALLOW case below is
-# paired with an attack variant that must BLOCK.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-# - a real Claude Code session issuing these commands through the PreToolUse
-#   registration in settings.json (the hook is spawned directly here)
-# - real shell expansion of the command once the hook has allowed it
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
+# Decision rules under test for rejectsUnsafeToken (first match wins): 1 scan or
+# tokenize failure -> REJECT; 2 any `ansic` piece -> REJECT; 3 unquoted SET-A
+# [|&;<>()] -> REJECT; 4 unquoted/dq SET-B ($( or backtick, minus dq escapes) ->
+# REJECT; 5 SET-A inside dq/sq -> ALLOW; 6 otherwise ALLOW. Every ALLOW case is
+# paired with an attack variant that must BLOCK (test-design.md); per-row status
+# notes live in the part files under tests/hooks/fix-1569-quote-span-regression/.
+# TL3 gap (what this TL2 test does NOT catch): a real session issuing these through the PreToolUse registration; checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
@@ -65,6 +22,8 @@ else
     _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -111,16 +70,23 @@ mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/github-issues" "$FAKE_SCRIPT_CHECKO
          "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/skills/review-code-security/scripts" \
          "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/skills/issue-close-finalize/scripts" \
          "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/hooks"
-# Both trust markers (hooks/lib/script-checkout-root.js: hooks/enforce-worktree.js
-# AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real one
-# always carries the guard itself — a marker-less stub is not a faithful config
-# dir, it is the hostile case, which tests/fix-1630-*.sh own (T4a-attack et al.).
-touch "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/hooks/enforce-worktree.js"
+# The guard and its modules find the checkout from their own location, so this
+# stand-in for a LEGITIMATE agents checkout carries a real copy of hooks/ and
+# every case runs that copy. The copy also supplies one trust marker
+# (hooks/lib/script-checkout-root.js: hooks/enforce-worktree.js AND bin/); the
+# marker-less hostile case is owned by tests/fix-1630-*.sh (T4a-attack et al.).
+if ! script_checkout_fixture_copy "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW" hooks; then
+    echo "FAIL: precondition — hooks fixture copy failed"
+    echo ""
+    echo "Total: PASS=0 FAIL=1"
+    exit 1
+fi
 touch "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/github-issues/issue-create-dispatch.sh" \
       "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/check-unstaged-tracked.sh" \
       "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/skills/review-code-security/scripts/run-quality-gates.sh" \
       "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/skills/issue-close-finalize/scripts/run-loop-step.js"
 FAKE_SCRIPT_CHECKOUT_ROOT="$(norm "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW")"
+FAKE_GUARD_JS="$FAKE_SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
 DISPATCH="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-dispatch.sh"
 QGATES="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/review-code-security/scripts/run-quality-gates.sh"
 FSD="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts"
@@ -148,7 +114,7 @@ run_guard() {
         "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" \
         "WORKFLOW_PLANS_DIR=$PLANS" \
         "$@" \
-        node "$GUARD_JS" 2>&1)" || rc=$?
+        node "$FAKE_GUARD_JS" 2>&1)" || rc=$?
     [ "$rc" -ne 0 ] && return 2
     echo "$GUARD_OUT" | grep -q '"decision":"block"' && return 1
     return 0
@@ -245,20 +211,12 @@ assert_block "FP6b-attack #1191 same form, tee target moved into the MAIN worktr
 
 # ============================================================================
 # 7: PR #1612 — enum-g5 decision value carrying a pipe.
-#
-# #1673 deleted finalize-worker-overlay.js and the Bash-tool `eval` path for the
-# finalize scripts, so the clean row is no longer the ALLOW half of a pair: both
-# rows now BLOCK, the first because the capability is retired and the second
-# because it always was an injection. The clean row is kept as a
-# retired-capability pin — its BLOCK is the assertion that the shape a
-# legitimate caller once used stays shut too.
-#
-# The pairing this section provided (clean ALLOW vs. dirty BLOCK, so that
-# "reject everything" cannot pass) is not lost: it moved to the value-token
-# level, where the enum/plans-dir predicate still ships. It is asserted in
-# tests/hooks/fix-1630-overlay-cross-validation/metachar-args.sh (ARG-tok-* rejected
-# rows against their ARG-tok-plain/real/nested/dashes accepted controls), and at
-# hook level by the LIVE1679-* ALLOW rows in
+# #1673 deleted finalize-worker-overlay.js and the Bash-tool `eval` path, so
+# both rows now BLOCK: the clean row is kept as a retired-capability pin, the
+# second always was an injection. The clean-ALLOW vs dirty-BLOCK pairing moved
+# to the value-token level: ARG-tok-* rows in
+# tests/hooks/fix-1630-overlay-cross-validation/metachar-args.sh, and at hook
+# level the LIVE1679-* ALLOW rows in
 # tests/hooks/fix-1679-finalize-overlay-arg-contract.sh.
 # ============================================================================
 assert_block "PR1612 finalize loop-step with clean enum decision — eval path retired (#1673)" \

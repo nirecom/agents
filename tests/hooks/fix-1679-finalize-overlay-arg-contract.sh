@@ -40,8 +40,8 @@ trap 'rm -rf "$TMP_ROOT" 2>/dev/null' EXIT
 
 # ---------------------------------------------------------------------------
 # Fixture: a real git main worktree (the hook shells out to `git`) plus a
-# marker-valid AGENTS_MAIN_ROOT. resolveScriptCheckoutRoot refuses a directory
-# without the markers, so bin/ and hooks/enforce-worktree.js must exist.
+# marker-valid directory handed to the hook as AGENTS_MAIN_ROOT. Since #2561 the
+# hook trusts only its own checkout, so this value must never decide a verdict.
 # ---------------------------------------------------------------------------
 REPO_RAW="$TMP_ROOT/repo"
 FAKE_SCRIPT_CHECKOUT_ROOT_RAW="$TMP_ROOT/script_checkout_root"
@@ -62,7 +62,8 @@ if command -v cygpath >/dev/null 2>&1; then
 else
   REPO="$REPO_RAW"; FAKE_SCRIPT_CHECKOUT_ROOT="$FAKE_SCRIPT_CHECKOUT_ROOT_RAW"
 fi
-SCRIPTS="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts"
+# The sanctioned path is the one under the hook's own checkout (resolveScriptCheckoutRoot).
+SCRIPTS="$WT/skills/issue-close-finalize/scripts"
 
 git -C "$REPO" init -q -b main
 git -C "$REPO" config user.email "test@example.com"
@@ -79,7 +80,7 @@ json_quote() { node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "
 GUARD_OUT=""
 GUARD_RC=0
 # guard_verdict <cmd> [scriptCheckoutRootEnvMode] → sets GUARD_RC: 0 allow, 1 block, 2 crash.
-#   scriptCheckoutRootEnvMode: "same" (default — AGENTS_MAIN_ROOT = script checkout root), "unset",
+#   scriptCheckoutRootEnvMode: "same" (default — AGENTS_MAIN_ROOT = the fixture root), "unset",
 #               or an explicit replacement value.
 guard_verdict() {
   local cmd="$1" mode="${2:-same}"

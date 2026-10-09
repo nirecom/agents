@@ -31,9 +31,7 @@ export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
-# Empty agents main root: no CONFIRM_* is inherited from the repo's .env, and
-# isAgentsSessionRepo() cannot resolve it as a git tree so the gate stays
-# fail-closed (enforcement ON) for the fixture repos.
+# Empty agents main root: no CONFIRM_* is inherited from the repo's .env.
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"
 mkdir -p "$CONFIG_EMPTY"
 : > "$CONFIG_EMPTY/.env"
@@ -61,6 +59,13 @@ git -C "$REPO_CODE" add hooks/thing.js >/dev/null 2>&1
 REPO_DOCS_N="$(nrm "$REPO_DOCS")"
 REPO_CODE_N="$(nrm "$REPO_CODE")"
 export REPO_DOCS REPO_CODE REPO_DOCS_N REPO_CODE_N
+# The gate enforces only in the repo its own checkout belongs to: run_gate_hook launches it from
+# a copy of this checkout attached to the repo CLAUDE_PROJECT_DIR names.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+WORKFLOW_GATE_N="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
 cd "$TMPDIR_BASE" || exit 1
 
 PASS=0
@@ -122,6 +127,7 @@ run_gate_hook() {
   local sid="$1" cmd="$2" esc
   esc=${cmd//\\/\\\\}
   esc=${esc//\"/\\\"}
+  session_repo_fixture_attach "$GATE_CHECKOUT" "$CLAUDE_PROJECT_DIR" || return 1
   printf '{"session_id":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$sid" "$esc" \
     | run_with_timeout node "$WORKFLOW_GATE_N" 2>&1 || true
 }
