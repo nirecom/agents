@@ -104,15 +104,36 @@ function isUnder(childInput, parentInput, allowEqual) {
 // worker module takes over; the capability suite asserts nothing else appears)
 // ---------------------------------------------------------------------------
 
+// Inherited repository-selecting variables (set inside a git hook, for one)
+// would make `git -C <dir>` answer for another repository.
+const GIT_REPO_ENV = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR"];
+
+// The probe passes no `env` option: an explicit environment is what marks a
+// worker-started child (tests/bin/feature-2561-worker-child-roots.sh), so the
+// variables are lifted out of this process only while the synchronous call runs.
+function withoutGitRepoEnv(run) {
+  const held = {};
+  for (const name of GIT_REPO_ENV) {
+    if (!Object.prototype.hasOwnProperty.call(process.env, name)) continue;
+    held[name] = process.env[name];
+    delete process.env[name];
+  }
+  try {
+    return run();
+  } finally {
+    Object.assign(process.env, held);
+  }
+}
+
 function git(args, workDir) {
-  const res = spawnSync("git", args, {
+  const res = withoutGitRepoEnv(() => spawnSync("git", args, {
     cwd: workDir,
     shell: false,
     encoding: "utf8",
     timeout: GIT_TIMEOUT_MS,
     windowsHide: true,
     maxBuffer: 8 * 1024 * 1024,
-  });
+  }));
   if (res.error || res.status !== 0) return null;
   return String(res.stdout === null || res.stdout === undefined ? "" : res.stdout).trim();
 }

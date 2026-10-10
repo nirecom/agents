@@ -35,6 +35,13 @@ proven family member before it can act as a script root. `scriptExists()`
 validates `cwd` unconditionally even though only family-anchored scripts consult
 it, so a caller cannot probe an out-of-family path for existence.
 
+The git probes that derive the anchors ignore the repository-selecting variables
+a parent may hand down (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
+`GIT_OBJECT_DIRECTORY`, `GIT_COMMON_DIR`): a dispatcher started inside a git hook
+would otherwise resolve its anchors against the repository the hook names, not
+the one the directory belongs to. `anchor.js` lifts them out of its own process
+for the duration of each synchronous probe and puts them back afterwards.
+
 ## `envScope` — per-call narrowing of `envPassthrough`
 
 `entry.envPassthrough` is the widest set a worker's children may ever inherit.

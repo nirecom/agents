@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feature-1643-worker-dispatch-capability/agents-main-root-child-env.sh
-# Tests: bin/worker-dispatch/spawn.js
+# Tests: bin/worker-dispatch/spawn.js, bin/worker-dispatch/anchor.js
 # Tags: worker-dispatch, spawn, anchor, child-env, root-names, security, TL1, scope:issue-specific
 # Sourced by ../feature-1643-worker-dispatch-capability.sh after validator.sh — defines
 # group_agents_main_root_child_env (#2561): which AGENTS_MAIN_ROOT a dispatcher child receives.
@@ -27,6 +27,10 @@ const canon = (p) => {
 };
 const finish = () => { process.stdout.write(out.join("\n") + "\n"); process.exit(0); };
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+// The test's own list, snapshotted before any module runs: a name the module drops stays visible.
+const gitNames = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR"];
+const gitBefore = {};
+for (const n of gitNames) if (has(process.env, n)) gitBefore[n] = process.env[n];
 
 let anchorMod = null;
 let spawnMod = null;
@@ -84,14 +88,70 @@ check("no-retired-name-in-child-env", stale.length === 0, stale.join(","));
 const scoped = spawnMod.buildEnv(entry, anchors, undefined, []);
 check("scoped-call-gives-the-same-root-entry", scoped.AGENTS_MAIN_ROOT === env.AGENTS_MAIN_ROOT, scoped.AGENTS_MAIN_ROOT);
 check("second-build-is-identical", JSON.stringify(spawnMod.buildEnv(entry, anchors, undefined, undefined)) === JSON.stringify(env));
+
+// Records what each git call of a fresh module instance could still see.
+if (process.env.AMR_GIT_REPO_ENV_ROW === "1") {
+  const cp = require("child_process");
+  const names = gitNames;
+  check("all-five-git-repo-names-inherited", Object.keys(gitBefore).length === names.length, Object.keys(gitBefore).join(","));
+  const lost = () => names.filter((n) => process.env[n] !== gitBefore[n]).join(",");
+  check("git-repo-names-intact-before-the-recorded-calls", lost() === "", lost());
+  const wanted = (v) => (want === "null" ? v === null : canon(v) === canon(want));
+  const anchorFile = require.resolve(path.join(copyRoot, "bin", "worker-dispatch", "anchor.js"));
+  const fresh = () => { delete require.cache[anchorFile]; return require(anchorFile); };
+  const calls = [];
+  let throwNext = false;
+  const realSpawnSync = cp.spawnSync;
+  cp.spawnSync = function (cmd, _args, opts) {
+    const rec = { cmd, seen: names.filter((n) => has(process.env, n)), env: Boolean(opts) && opts.env !== undefined, status: null };
+    calls.push(rec);
+    if (throwNext) { throwNext = false; throw new Error("amr-recorder-throw"); }
+    const res = realSpawnSync.apply(this, arguments);
+    rec.status = res.status;
+    return res;
+  };
+  try {
+    const one = fresh();
+    const got = one.resolveAgentsMainRoot();
+    check("fresh-resolver-asks-git", calls.length > 0, calls.length);
+    check("fresh-resolver-value", wanted(got), got);
+    check("git-repo-names-restored-after-a-successful-call", lost() === "", lost());
+    let seenCalls = calls.length;
+    const good = one.resolveAnchors(targetMain);
+    check("target-anchors-ask-git", good.error === null && calls.length > seenCalls, `${good.error} calls=${calls.length - seenCalls}`);
+    seenCalls = calls.length;
+    const bad = one.resolveAnchors(process.env.AMR_NON_GIT_DIR);
+    const last = calls[calls.length - 1];
+    check("non-git-target-is-refused", bad.error === "target-main-root is not a git repository", bad.error);
+    check("refused-git-call-exits-non-zero", calls.length > seenCalls && typeof last.status === "number" && last.status !== 0, last.status);
+    check("git-repo-names-restored-after-a-failing-call", lost() === "", lost());
+    throwNext = true;
+    let thrown = null;
+    try { fresh().resolveAgentsMainRoot(); } catch (e) { thrown = e; }
+    check("throwing-git-call-reaches-the-caller", thrown !== null && thrown.message === "amr-recorder-throw", thrown && thrown.message);
+    check("git-repo-names-restored-after-a-throwing-call", lost() === "", lost());
+    seenCalls = calls.length;
+    const again = fresh().resolveAgentsMainRoot();
+    check("repeated-resolver-asks-git", calls.length > seenCalls, calls.length - seenCalls);
+    check("repeated-resolver-value", wanted(again), again);
+    check("git-repo-names-restored-after-the-repeat", lost() === "", lost());
+  } finally {
+    cp.spawnSync = realSpawnSync;
+  }
+  const notGit = calls.filter((c) => c.cmd !== "git").map((c) => c.cmd);
+  check("every-recorded-call-is-git", notGit.length === 0, notGit.join(","));
+  const visible = calls.map((c, i) => (c.seen.length > 0 ? `call${i + 1}:${c.seen.join("+")}` : "")).filter((s) => s !== "");
+  check("no-git-repo-name-visible-at-any-git-call", visible.length === 0, visible.join(" "));
+  check("no-git-call-carries-an-env-option", calls.every((c) => c.env === false), calls.filter((c) => c.env).length);
+}
 finish();
 AMRJS
 
-# _amr_row <label> <copy root> <wanted root | null> — runs the probe with every root name of
-# the parent environment pointing at a decoy directory.
+# _amr_row <label> <copy root> <wanted root | null> [NAME=value...] — runs the probe with every
+# root name of the parent environment pointing at a decoy directory, plus the given variables.
 _amr_row() {
     local out saw=0 kind name detail
-    out="$(AGENTS_MAIN_ROOT="$_AMR_PARENT" run_with_timeout 60 env "${_AMR_PARENT_ENV[@]}" node "$(nodepath "$AMR_PROBE")" \
+    out="$(AGENTS_MAIN_ROOT="$_AMR_PARENT" run_with_timeout 60 env "${_AMR_PARENT_ENV[@]}" "${@:4}" node "$(nodepath "$AMR_PROBE")" \
         "$(nodepath "$2")" "$1" "$3" "$_AMR_PARENT" "$_AMR_TARGET" "$_AMR_RETIRED" 2>&1)"
     while IFS=$'\t' read -r kind name detail; do
         case "$kind" in
@@ -105,9 +165,10 @@ _amr_row() {
 }
 
 group_agents_main_root_child_env() {
-    local base="$TMPD/amr root" plain main linked solo bare bare_linked name
+    local base="$TMPD/amr root" plain main linked solo bare bare_linked git_decoy name
     plain="$base/plain-dir"; main="$base/fake-main"; linked="$base/fake-linked"
     solo="$base/solo-repo"; bare="$base/unmarked-main"; bare_linked="$base/unmarked-linked"
+    git_decoy="$base/git-env-decoy"
     mkdir -p "$base/parent-decoy"
     _AMR_PARENT="$(nodepath "$base/parent-decoy")"
     _AMR_RETIRED="$(run_with_timeout 30 node "$(nodepath "$_AGENTS_MAIN_ROOT_CHILD_ENV_SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js")" \
@@ -119,11 +180,13 @@ group_agents_main_root_child_env() {
         fail "amr/setup: the dispatcher modules could not be copied"
         return
     fi
-    mk_repo "$main"; mk_repo "$solo"; mk_repo "$bare"; mk_repo "$base/target-repo"
+    mk_repo "$main"; mk_repo "$solo"; mk_repo "$bare"; mk_repo "$base/target-repo"; mk_repo "$git_decoy"
     _AMR_TARGET="$(nodepath "$base/target-repo")"
     # The two-point marker a main worktree must carry to be trusted as the agents repository.
-    mkdir -p "$main/hooks" "$main/bin"
+    # The decoy carries it too: only its not being the dispatcher's own repository rules it out.
+    mkdir -p "$main/hooks" "$main/bin" "$git_decoy/hooks" "$git_decoy/bin"
     echo "// marker only" > "$main/hooks/enforce-worktree.js"
+    echo "// marker only" > "$git_decoy/hooks/enforce-worktree.js"
     if ! git -C "$main" worktree add -q -b amr-linked "$linked" >/dev/null 2>&1 ||
        ! git -C "$bare" worktree add -q -b amr-unmarked "$bare_linked" >/dev/null 2>&1; then
         fail "amr/setup: git worktree add failed"
@@ -137,6 +200,18 @@ group_agents_main_root_child_env() {
     fi
 
     _amr_row "linked-copy" "$linked" "$(nodepath "$main")"
+    # A repository-selecting git variable inherited by the dispatcher must not move the answer
+    # of the row above to the marked decoy repository it names.
+    _amr_row "linked-copy-under-inherited-GIT_DIR" "$linked" "$(nodepath "$main")" \
+        "GIT_DIR=$(nodepath "$git_decoy/.git")"
+    _amr_row "linked-copy-under-inherited-GIT_COMMON_DIR" "$linked" "$(nodepath "$main")" \
+        "GIT_COMMON_DIR=$(nodepath "$git_decoy/.git")"
+    # All five at once; this row also turns on the probe's per-git-call recorder.
+    _amr_row "linked-copy-under-all-inherited-git-repo-names" "$linked" "$(nodepath "$main")" \
+        "AMR_GIT_REPO_ENV_ROW=1" "AMR_NON_GIT_DIR=$(nodepath "$plain")" \
+        "GIT_DIR=$(nodepath "$git_decoy/.git")" "GIT_COMMON_DIR=$(nodepath "$git_decoy/.git")" \
+        "GIT_WORK_TREE=$(nodepath "$git_decoy")" "GIT_INDEX_FILE=$(nodepath "$git_decoy/.git/index")" \
+        "GIT_OBJECT_DIRECTORY=$(nodepath "$git_decoy/.git/objects")"
     _amr_row "repo-without-linked-worktree" "$solo" "$(nodepath "$solo")"
     _amr_row "main-worktree-without-markers" "$bare_linked" "null"
     if git -C "$plain" rev-parse --git-dir >/dev/null 2>&1; then

@@ -11,6 +11,11 @@ _ROOT_NAMES_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 _RN_BUILDER="$(np "$_ROOT_NAMES_SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js")"
 _RN_NEW_NAME="AGENTS_MAIN""_ROOT"
 
+# isolation (#2512): re-pin to helpers.sh's private dirs (a sibling's pin is invisible to the scanner).
+: "${WF_DIR:?helpers.sh must be sourced first}" "${PLANS_DIR:?helpers.sh must be sourced first}"
+export WORKFLOW_STATE_DIR="$(np "$WF_DIR")" WORKFLOW_PLANS_DIR="$(np "$PLANS_DIR")"
+harness_assert_isolated
+
 _rn_canon() { local p; p="$(np "$1")"; printf '%s' "${p%/}" | tr 'A-Z' 'a-z'; }
 
 # _rn_load_retired — the retired environment names into _RN_RETIRED (never spelled here).
