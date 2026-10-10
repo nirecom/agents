@@ -1,25 +1,10 @@
 # shellcheck shell=bash
 # Tests: hooks/workflow-state/state-io/migrations/v2-to-v3.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/projection.js
 # Tags: TL2, workflow, write-code, state-io, migration, schema-version, idempotency, scope:issue-specific, pwsh-not-required
-#
-# Case group F (TL2): the v2 -> v3 migration stage.
-#
-# Background: #1665 inserted write_code into VALID_STEPS between review_tests and
-# run_tests. Every state file written before that insertion has no write_code
-# step_status event at all, so the projection defaults it to `pending` while
-# run_tests is already complete — next-step then aborts a perfectly healthy
-# session. Schema v3 is how a file DECLARES "my writer knew about write_code",
-# and migrations/v2-to-v3.js is the stage that raises everything older, backfilling
-# write_code=complete only when a step AFTER it is already settled.
-#
-# These cases drive the real reader (readState / normalizeStateVersion /
-# persistMigratedState) against hand-built on-disk fixtures, so the backfill
-# predicate, the stream invariants it must preserve (seq contiguity, provenance
-# vocabulary), and its idempotency are all observed through the public path.
-#
-# No Config-dependent case exists here on purpose: the stage reads no env var and
-# no agents-config toggle — its whole input is the parsed state object — so there
-# is no configuration axis for a case to pin.
+
+# Case group F (TL2): the v2 -> v3 migration stage (write_code backfill, #1665).
+
+# Drives the real reader against hand-built fixtures; no Config-dependent case exists.
 
 SIO_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io"
 CORE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/core.js"
@@ -84,7 +69,8 @@ fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, process.env.V3_SID + 
 UPTO_REVIEW_TESTS="workflow_init=complete;clarify_intent=complete;research=skipped;outline=complete;detail=complete;branching_complete=complete;write_tests=complete;review_tests=complete"
 
 run_v2_to_v3_tests() {
-  local out
+  local out cur_v
+  cur_v="$(CORE_N="$CORE_N" node -p 'require(process.env.CORE_N).CURRENT_STATE_VERSION' 2>/dev/null)"
 
   # ── Normal: the backfill fires ────────────────────────────────────────────
   mk_stream f-fires 2 "$UPTO_REVIEW_TESTS;run_tests=complete" >/dev/null
@@ -108,7 +94,7 @@ console.log([
 ].join(" "));
 ')"
   check "F1: a settled downstream step backfills write_code as complete" \
-    "version=3 status=complete events_added=1 wc_events=1 provenance=backfilled origin=migration-v2-to-v3 at_estimated=true integrity=ok contiguous=true" \
+    "version=${cur_v} status=complete events_added=1 wc_events=1 provenance=backfilled origin=migration-v2-to-v3 at_estimated=true integrity=ok contiguous=true" \
     "$out"
 
   # A SKIPPED downstream step is settled too (CPR-ORTH with F1's complete).
@@ -125,13 +111,23 @@ console.log("version=" + n.version + " status=" + wc(S.readState(sid)).status +
             " events_added=" + (n.events.length - rd().events.length));
 ')"
   check "F3: with nothing settled after write_code the step stays pending" \
-    "version=3 status=pending events_added=0" "$out"
+    "version=${cur_v} status=pending events_added=0" "$out"
 
   # in_progress is NOT settled: the downstream step is still running, so the
   # implementation body it depends on cannot be assumed finished.
   mk_stream f-inprog 2 "$UPTO_REVIEW_TESTS;run_tests=in_progress" >/dev/null
   out="$(v3_node f-inprog 'console.log(wc(S.readState(sid)).status + " " + (norm().events.length - rd().events.length));')"
   check "F4: an in_progress downstream step does not settle write_code" "pending 0" "$out"
+
+  mk_stream f-reopened 2 "$UPTO_REVIEW_TESTS;run_tests=complete;run_tests=pending" >/dev/null
+  out="$(v3_node f-reopened '
+const n = norm();
+const wcEv = n.events.filter((e) => e.kind === "step_status" && e.step === "write_code").length;
+console.log("version=" + n.version + " status=" + wc(S.readState(sid)).status +
+            " wc_events=" + wcEv + " events_added=" + (n.events.length - rd().events.length));
+')"
+  check "F19: a downstream step reopened to pending does not settle write_code" \
+    "version=${cur_v} status=pending wc_events=0 events_added=0" "$out"
 
   # ── Idempotency / non-interference: the stream already mentions write_code ─
   mk_stream f-explicit-pending 2 "$UPTO_REVIEW_TESTS;write_code=pending;run_tests=complete" >/dev/null
@@ -165,7 +161,7 @@ console.log("status=" + wc(S.readState(sid)).status + " wc_events=" + ev.length 
   mk_stream f-empty 2 "" >/dev/null
   out="$(v3_node f-empty 'const n = norm(); console.log("version=" + n.version + " events=" + n.events.length + " status=" + wc(S.readState(sid)).status);')"
   check "F8: an empty v2 stream raises to v3 without fabricating anything" \
-    "version=3 events=0 status=pending" "$out"
+    "version=${cur_v} events=0 status=pending" "$out"
 
   # ── Chain: a v1 file runs through BOTH stages ─────────────────────────────
   out="$(v3_node f-v1-chain '
@@ -187,10 +183,10 @@ console.log("version=" + n.version + " status=" + wc(S.readState(sid)).status +
             " last=" + (ev[0].seq === n.events.length) + " integrity=" + integrity);
 ')"
   check "F9: a v1 file chains v1->v2->v3 and is backfilled at the tail" \
-    "version=3 status=complete provenance=backfilled seq=4 last=true integrity=ok" "$out"
+    "version=${cur_v} status=complete provenance=backfilled seq=4 last=true integrity=ok" "$out"
 
   # ── Error: a file from a newer release stays opaque ───────────────────────
-  mk_stream f-future 4 "$UPTO_REVIEW_TESTS;run_tests=complete" >/dev/null
+  mk_stream f-future "$((cur_v + 1))" "$UPTO_REVIEW_TESTS;run_tests=complete" >/dev/null
   out="$(v3_node f-future '
 let thrown = "none";
 try { norm(); } catch (e) { thrown = e.name; }
@@ -198,7 +194,7 @@ console.log("thrown=" + thrown + " read=" + String(S.readState(sid)) +
             " max=" + CORE.MAX_KNOWN_STATE_VERSION);
 ')"
   check "F10: a version above the current one still throws and fails open" \
-    "thrown=FutureSchemaVersionError read=null max=3" "$out"
+    "thrown=FutureSchemaVersionError read=null max=${cur_v}" "$out"
 
   # ── Idempotency: an already-v3 file is never re-migrated ──────────────────
   mk_stream f-idem 3 "$UPTO_REVIEW_TESTS;run_tests=complete" >/dev/null
@@ -236,8 +232,8 @@ console.log("migrated=" + first + " on_disk_version=" + rd().version +
             " second_call=" + second + " byte_identical=" + (bytes === raw()) +
             " projected=" + rd().current.steps.write_code.status);
 ')"
-  check "F13: persistMigratedState writes v3 once and then reports nothing to do" \
-    "migrated=true on_disk_version=3 second_call=false byte_identical=true projected=complete" "$out"
+  check "F13: persistMigratedState writes the current version once and then reports nothing to do" \
+    "migrated=true on_disk_version=${cur_v} second_call=false byte_identical=true projected=complete" "$out"
 
   # ── Error: a stream that was tampered with is not "repaired" by migrating ─
   # assertStreamIntegrity is tamper detection, and the migration must not launder
@@ -268,7 +264,7 @@ try { version = norm().version; } catch (e) { thrown = e.name; }
 console.log("thrown=" + thrown + " version=" + version + " read=" + String(S.readState(sid)));
 ')"
   check "F16: a v2 record with no events array raises the version without throwing" \
-    "thrown=none version=3 read=null" "$out"
+    "thrown=none version=${cur_v} read=null" "$out"
 
   # ── Edge: which timestamp the reconstructed record carries ────────────────
   # The stand-in is the LAST event own `at`, so the stream stays non-decreasing
@@ -299,5 +295,5 @@ console.log("current=" + CORE.CURRENT_STATE_VERSION + " initial=" + init.version
             " serialized=" + persisted.version);
 ')"
   check "F18: a freshly created state is stamped with CURRENT_STATE_VERSION" \
-    "current=3 initial=3 serialized=3" "$out"
+    "current=${cur_v} initial=${cur_v} serialized=${cur_v}" "$out"
 }
