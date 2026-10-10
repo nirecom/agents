@@ -161,7 +161,7 @@ done
 # ─── Required environment ───────────────────────────────────────────────────
 
 if [[ -z "${WORKTREE_BASE_DIR:-}" ]]; then
-  WORKTREE_BASE_DIR="$(cd "$SCRIPT_CHECKOUT_ROOT" && get-config-var WORKTREE_BASE_DIR 2>/dev/null || echo "")"
+  WORKTREE_BASE_DIR="$(cd "$SCRIPT_CHECKOUT_ROOT" && "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" WORKTREE_BASE_DIR 2>/dev/null || echo "")"
 fi
 WORKTREE_BASE_DIR="${WORKTREE_BASE_DIR:-$HOME/git/worktrees}"
 
@@ -171,8 +171,13 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
-# Resolve main worktree root (the cwd is expected to be inside it).
-if ! TARGET_MAIN_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+# Resolve main worktree root: the parent of the shared .git, whichever checkout the cwd is in.
+TARGET_MAIN_ROOT="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || TARGET_MAIN_ROOT=""
+case "$TARGET_MAIN_ROOT" in
+  */.git) TARGET_MAIN_ROOT="${TARGET_MAIN_ROOT%/.git}" ;;
+  *) TARGET_MAIN_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || TARGET_MAIN_ROOT="" ;;
+esac
+if [[ -z "$TARGET_MAIN_ROOT" ]]; then
   printf 'ERROR: not inside a git repository\n' >&2
   exit 1
 fi

@@ -44,3 +44,7 @@ for c in NEW-TEST BASE-GREEN EXTRA-FAILS BOTH-RED-NO-FAIL-LINES; do
   echo "--- $c ---"
   grep -a "^$c	" "$CMP/summary.tsv" | sort -t$'\t' -k7
 done
+# A test with no result row in the changed run was never compared: it is not a pass.
+echo "--- not compared (no result row in the changed run) ---"
+[[ -f "$W/absent.txt" ]] && sed 's/^/ABSENT-IN-CHANGED-TREE	/' "$W/absent.txt"
+cut -f3 "$B/results.tsv" | grep -vxFf <(cut -f3 "$W/results.tsv") | sed 's/^/BASELINE-ONLY	/'

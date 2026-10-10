@@ -81,8 +81,8 @@ run_all_pin_test_env() {
   run_all_pin_state_dirs "${1:-}" || return 1
   _RUN_ALL_DECOY_SINCE="${WORKFLOW_STATE_DIR%/workflow}/root-decoy-since"
   : >"$_RUN_ALL_DECOY_SINCE" || return 1
-  # tests/run-all.sh is at its line limit, so the hit report rides on its teardown: a hit
-  # raises its FAIL count before the exit status is decided.
+  # tests/run-all.sh reports a hit itself before it prints its counts; this teardown wrapper
+  # covers the exits that never get there (deadline, signal), and the report runs only once.
   if declare -F cleanup_all >/dev/null 2>&1 && ! declare -F _run_all_cleanup_all_inner >/dev/null 2>&1; then
     eval "_run_all_cleanup_all_inner ()"$'\n'"$(declare -f cleanup_all | tail -n +2)"
     # shellcheck disable=SC2034,SC2317  # FAIL belongs to tests/run-all.sh.

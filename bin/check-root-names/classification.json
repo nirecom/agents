@@ -118,6 +118,7 @@
     {"repo":"agents","glob":"docs/architecture/claude-code/worker-dispatch/**","allow":["AGENTS_MAIN_ROOT","TARGET_MAIN_ROOT"],"sourced":false,"reason":"worker-dispatch documents describe the target repository as well as the agents main worktree"},
     {"repo":"agents","glob":"install/**","allow":["SCRIPT_CHECKOUT_ROOT","AGENTS_MAIN_ROOT"],"sourced":false,"reason":"installers find their siblings from their own checkout and write the profile that exports the agents main worktree"},
     {"repo":"agents","glob":"install.*","allow":["SCRIPT_CHECKOUT_ROOT","AGENTS_MAIN_ROOT"],"sourced":false,"reason":"installer entry points: same as install/"},
+    {"repo":"agents","glob":"experimental/test-jail/*","allow":["SCRIPT_CHECKOUT_ROOT","AGENTS_MAIN_ROOT"],"sourced":false,"reason":"the jail tools find their siblings from their own checkout and pin the agents main worktree for the test they run"},
     {"repo":"agents","glob":"**","allow":["AGENTS_MAIN_ROOT"],"sourced":false,"reason":"prompt text, rules, documents, settings and CI name the agents main worktree only"},
     {"repo":"dotfiles","glob":"tests/**","allow":["SCRIPT_CHECKOUT_ROOT","AGENTS_MAIN_ROOT","TARGET_MAIN_ROOT","TARGET_CHECKOUT_ROOT"],"sourced":false,"reason":"tests may carry all four names"},
     {"repo":"dotfiles","glob":"bin/**","allow":["SCRIPT_CHECKOUT_ROOT"],"sourced":false,"reason":"tools find their siblings from their own checkout"},

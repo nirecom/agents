@@ -76,6 +76,10 @@ rtb_exec_one() {
         run_all_exec "$wt/$rel" "$logdir/$i.out" "$logdir/$i.err"
         rc=$?
         [ "$rc" = 78 ] && [ "${RUN_ALL_EXEC_LAUNCHED:-1}" = 0 ] && : >"$logdir/$i.unsupported"
+        # A base test that reached the decoy is not a valid green, as in tests/run-all.sh.
+        if declare -F run_all_root_decoy_report >/dev/null 2>&1; then
+            run_all_root_decoy_report 2>>"$logdir/$i.err" || { [ "$rc" = 0 ] && rc=1; }
+        fi
         exit "$rc"
     )</dev/null >/dev/null 2>&1 &
     cpid=$!

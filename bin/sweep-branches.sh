@@ -173,8 +173,13 @@ if ! "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" >/dev/null 2>&1; then
   exit 0
 fi
 
-# Resolve main worktree root.
-if ! TARGET_MAIN_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+# Resolve main worktree root: the parent of the shared .git, whichever checkout the cwd is in.
+TARGET_MAIN_ROOT="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || TARGET_MAIN_ROOT=""
+case "$TARGET_MAIN_ROOT" in
+  */.git) TARGET_MAIN_ROOT="${TARGET_MAIN_ROOT%/.git}" ;;
+  *) TARGET_MAIN_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || TARGET_MAIN_ROOT="" ;;
+esac
+if [[ -z "$TARGET_MAIN_ROOT" ]]; then
   printf 'ERROR: not inside a git repository\n' >&2
   exit 1
 fi

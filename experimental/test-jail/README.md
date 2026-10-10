@@ -14,7 +14,7 @@ an export of the pre-change commit while `tests/run-all.sh` could not be used.
 | `run-jailed.sh` | One test in the jail. `--pin none\|state\|full` selects how much of the `tests/run-all.sh` pinning is applied (`full` = state/plans dirs + root decoy). |
 | `run-list.sh` | A list of tests through `run-jailed.sh`, in parallel on leased host test lanes. |
 | `run-one.sh` | Worker of `run-list.sh`: one log + one result line per test. |
-| `compare-runs.sh` | Classifies the red tests of one run against a baseline run. |
+| `compare-runs.sh` | Classifies the red tests of one run against a baseline run, and lists the tests the changed run has no result for. |
 | `new-fail-digest.sh` | First new FAIL lines per test of a `compare-runs.sh` result. |
 | `decoy-summary.sh` | Root decoy hits of a run. |
 | `time-pin-cost.sh` | Times one test under each pin mode. |
@@ -26,7 +26,7 @@ an export of the pre-change commit while `tests/run-all.sh` could not be used.
 - Points `HOME` and `USERPROFILE` at a temp dir.
 - Unsets forge tokens, agent API keys, the ssh agent socket and the live session id; disables git credential prompts and git over ssh.
 - Refuses by name the tests that reach outside by design, and any test path that is not a plain tree-relative path (exit 95).
-- Applies the per-run pins of `tests/run-all.sh` from the tree's own `bin/lib/run-all-launch.sh`.
+- Applies the per-run pins of `tests/run-all.sh` from the tree's own `bin/lib/run-all-launch.sh`; a test that passes but reached the root decoy exits 92.
 
 A `SAFE-RUN:` line in a log is a breach or a refusal: read it before trusting that run.
 

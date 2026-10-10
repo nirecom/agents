@@ -155,6 +155,9 @@ fi
 bash bin/run-with-timeout.sh "$secs" bash "$test_rel"
 rc=$?
 if declare -F run_all_root_decoy_report >/dev/null 2>&1; then
-    run_all_root_decoy_report || echo "PINNED: root decoy was hit (tests/run-all.sh would count one FAIL)"
+    if ! run_all_root_decoy_report; then
+        echo "PINNED: root decoy was hit (tests/run-all.sh would count one FAIL)"
+        [[ "$rc" -eq 0 ]] && rc=92
+    fi
 fi
 exit "$rc"

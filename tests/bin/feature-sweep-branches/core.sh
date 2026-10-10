@@ -353,6 +353,62 @@ TABLE
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T23 — cwd inside a linked worktree → the sweep runs, and every `git -C`
+#       it issues names the main worktree (recorded by a git shim on PATH)
+# ─────────────────────────────────────────────────────────────────────────────
+
+T23_cwd_in_linked_worktree_targets_main_worktree() {
+    local repo="$TMPDIR_BASE/t23-repo"
+    local wpath="$TMPDIR_BASE/t23-wt"
+    local stubdir="$TMPDIR_BASE/t23-stub"
+    local shim="$TMPDIR_BASE/t23-shim"
+    local log="$TMPDIR_BASE/t23-git-c.log"
+    local stale_epoch="1577836800"  # 2020-01-01 00:00:00 UTC
+    local real_git
+    real_git="$(command -v git)"
+    init_repo "$repo"
+    make_stub_checkout "$stubdir"
+    make_branch_with_date "$repo" "feature/stale-t23" "$stale_epoch"
+    if ! git -C "$repo" worktree add -q -b "feature/wt-t23" "$wpath" 2>/dev/null; then
+        fail "T23 cwd_in_linked_worktree_targets_main_worktree: precondition failed — linked worktree not created"
+        return
+    fi
+    mkdir -p "$shim"
+    cat > "$shim/git" <<'SHIM'
+#!/bin/bash
+if [ "${1:-}" = "-C" ]; then printf '%s\n' "$2" >> "$SWEEP_T23_GIT_C_LOG"; fi
+exec "$SWEEP_T23_REAL_GIT" "$@"
+SHIM
+    chmod +x "$shim/git"
+
+    local out exit_code
+    out="$(cd "$wpath" && SWEEP_T23_GIT_C_LOG="$log" SWEEP_T23_REAL_GIT="$real_git" PATH="$shim:$PATH" \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --skip-gh-check --dry-run --ci-mode 2>&1)"
+    exit_code=$?
+
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T23 cwd_in_linked_worktree_targets_main_worktree: exit=$exit_code, out=$out"
+        return
+    fi
+
+    local cands
+    cands="$(ci_field "$out" candidates)"
+    if [ "${cands:-0}" -ge 1 ] 2>/dev/null; then
+        pass "T23 cwd_in_linked_worktree_targets_main_worktree (sweep ran, candidates>=1)"
+    else
+        fail "T23 cwd_in_linked_worktree_targets_main_worktree: candidates=${cands:-?}, out=$out"
+    fi
+
+    local others
+    others="$(grep -v '/t23-repo$' "$log" 2>/dev/null | tr '\n' '|')"
+    if [ -s "$log" ] && [ -z "$others" ]; then
+        pass "T23 cwd_in_linked_worktree_targets_main_worktree (every git -C names the main worktree)"
+    else
+        fail "T23 cwd_in_linked_worktree_targets_main_worktree: git -C targets other than the main worktree: ${others:-no git -C call recorded}"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests in this group
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -364,6 +420,7 @@ T8_fresh_commit_skipped_young
 T10_age_gate_fresh_vs_stale
 T11_isSweepBranchesSkillForceDelete_unit
 T12_isSweepBranchesSkillForceDelete_redirect_suffix
+T23_cwd_in_linked_worktree_targets_main_worktree
 
 echo ""
 echo "─────────────────────────────────────────"

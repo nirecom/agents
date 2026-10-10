@@ -305,3 +305,40 @@ EOF
   [ "$r" = "0/0" ] && pass "RN-exec: no decoy stub was executed (main/old hits 0/0)" \
     || fail "RN-exec: decoy hits main/old = $r: $(root_decoy_hits "$decoy/main" | tr '\n' '|')$(root_decoy_hits "$decoy/old" | tr '\n' '|')"
 }
+
+run_root_names_exec_hit_cases() {
+  local d="$TMPROOT/rn exec hit" wt decoy r name
+  if ! _rn_load_retired; then fail "RN-exec-hit: setup — the retired environment names are unavailable"; return; fi
+  mkdir -p "$d"
+  decoy="$(np "$d/decoy")"
+  if ! run_with_timeout 120 node "$_RN_BUILDER" --out "$decoy" >/dev/null 2>&1 || [ ! -f "$decoy/main/hooks/lib/load-env.js" ]; then
+    fail "RN-exec-hit: setup — the decoy tree could not be built"
+    return
+  fi
+  _RN_ENV=("RN_PROBE=1" "ROOT_DECOY_DIR=$decoy")
+  for name in "${_RN_RETIRED[@]}"; do _RN_ENV+=("$name=$decoy/old"); done
+  _RN_CALLER_MAIN="$decoy/main"
+  wt="$d/repo"
+  mk_fixture_repo "$wt" >/dev/null
+  printf '#!/usr/bin/env bash\nnode "$%s/hooks/lib/load-env.js" >/dev/null 2>&1 || true\necho reached-the-end\nexit 0\n' \
+    "$_RN_NEW_NAME" > "$wt/tests/bin/test-reaches-decoy.sh"
+
+  r="$(_rn_exec_probe "$wt" tests/bin/test-reaches-decoy.sh "$d/logs-hit")"
+  grep -q '^reached-the-end$' "$d/logs-hit/1.out" 2>/dev/null \
+    && pass "RN-exec-hit: the base test itself ran to its exit 0" \
+    || fail "RN-exec-hit: the base test did not run to its end (out: $(tr '\n' '|' < "$d/logs-hit/1.out" 2>/dev/null))"
+  case "$r" in
+    RC=0|RC=unset|"") fail "RN-exec-hit: a base test that reached the decoy must not be green, got: ${r:-none}" ;;
+    *) pass "RN-exec-hit: a base test that exits 0 but reached the decoy is not green ($r)" ;;
+  esac
+  grep -q 'root decoy hit: .*hooks/lib/load-env\.js' "$d/logs-hit/1.err" 2>/dev/null \
+    && pass "RN-exec-hit: the hit is named in the test's stderr log" \
+    || fail "RN-exec-hit: no 'root decoy hit' line in 1.err ($(tr '\n' '|' < "$d/logs-hit/1.err" 2>/dev/null))"
+
+  r="$(_rn_exec_probe "$wt" tests/bin/test-broken.sh "$d/logs-clean")"
+  [ "$r" = "RC=0" ] && pass "RN-exec-hit: a base test that exits 0 without a hit stays green" \
+    || fail "RN-exec-hit: expected RC=0 for the clean base test, got: ${r:-none}"
+  ! grep -q 'root decoy hit' "$d/logs-clean/1.err" 2>/dev/null \
+    && pass "RN-exec-hit: the clean base test's stderr log names no hit" \
+    || fail "RN-exec-hit: the clean base test was charged a hit ($(tr '\n' '|' < "$d/logs-clean/1.err" 2>/dev/null))"
+}

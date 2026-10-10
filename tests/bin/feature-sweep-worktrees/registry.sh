@@ -375,6 +375,43 @@ T30_dirty_tracked_removed_with_force() {
 T30_dirty_tracked_removed_with_force
 case_end
 
+# ─────────────────────────────────────────────────────────────────────────────
+# T31 — cwd inside a linked worktree → the main worktree is still the one skipped
+# ─────────────────────────────────────────────────────────────────────────────
+
+case_begin "cwd-in-linked-worktree-skips-main-worktree" "bin/sweep-worktrees.sh"
+T31_cwd_in_linked_worktree_skips_main_worktree() {
+    local repo="$TMPDIR_BASE/t31-repo"
+    local wpath="$TMPDIR_BASE/t31-wt"
+    local wbase="$TMPDIR_BASE/t31-wbase"
+    mkdir -p "$wbase"
+    init_repo "$repo"
+    add_worktree "$repo" "$wpath" "feature/cwd31"
+    make_stale "$wpath"
+    make_stale "$repo"
+    local out exit_code
+    out="$(cd "$wpath" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" run_with_timeout 120 bash "$SWEEP" --dry-run --skip-gh-check 2>&1)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T31 cwd_in_linked_worktree_skips_main_worktree: exit=$exit_code, out=$out"
+        return
+    fi
+    case "$out" in
+        *"DRY-RUN: candidate"*"branch=main"*)
+            fail "T31 cwd_in_linked_worktree_skips_main_worktree: main worktree listed as a removal candidate: $out" ;;
+        *)
+            pass "T31 cwd_in_linked_worktree_skips_main_worktree (main worktree is no candidate)" ;;
+    esac
+    case "$out" in
+        *"DRY-RUN: candidate"*"branch=feature/cwd31"*)
+            pass "T31 cwd_in_linked_worktree_skips_main_worktree (cwd's linked worktree is evaluated)" ;;
+        *)
+            fail "T31 cwd_in_linked_worktree_skips_main_worktree: cwd's linked worktree not listed in: $out" ;;
+    esac
+}
+T31_cwd_in_linked_worktree_skips_main_worktree
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

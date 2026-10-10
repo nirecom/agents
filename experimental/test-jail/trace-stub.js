@@ -9,7 +9,7 @@ const lines = [
   "cwd=" + process.cwd(),
   "required_by=" + (module.parent ? module.parent.filename : "(main module)"),
   "stack=" + new Error("trace").stack,
-  "env=" + JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k]) => /AGENTS|ROOT|CHECKOUT|CFG|CONFIG_DIR/i.test(k)))),
+  "env=" + JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k]) => /AGENTS|ROOT|CHECKOUT|CFG|CONFIG/i.test(k)))),
   "",
 ];
 try { fs.appendFileSync(out, lines.join("\n")); } catch (_) {}

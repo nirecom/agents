@@ -128,6 +128,10 @@ case_begin "baseline-root-names-exec-decoy" "bin/lib/run-tests-baseline-exec.sh"
 run_root_names_exec_cases
 case_end
 
+case_begin "baseline-root-names-exec-decoy-hit" "bin/lib/run-tests-baseline-exec.sh"
+run_root_names_exec_hit_cases
+case_end
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
