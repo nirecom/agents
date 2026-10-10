@@ -65,8 +65,16 @@ t57_precondition() { # -> "pgrep-state/tasklist-state"
     printf '%s/%s' "$pg" "$ts"
 }
 
+# grep exit 2+ (the MSYS grep aborts on -F -i with non-ASCII text) lands in the caller's gfail, never reads as "not found".
+t57_has() { # <needle> <file>
+    local rc=0
+    grep -Fq -- "$1" "$2" || rc=$?
+    [ "$rc" -le 1 ] || gfail="<GREP-RC:$rc>"
+    return "$rc"
+}
+
 t57_case() { # <slot> <proc-root> [tasklist-dir] -> "rc/wait/indet/pid/methods/tasklist-use"
-    local slot="$1" root="$2" tl="${3:-}" rc=0 err="$T57_DIR/$1.err" wait indet pid methods used
+    local slot="$1" root="$2" tl="${3:-}" rc=0 err="$T57_DIR/$1.err" wait indet pid methods used gfail=""
     [ -f "$T57_WAIT_SH" ] || { printf '<MISSING:install/lib/wait-cc-exit.sh>'; return; }
     [ "$T57_PRE" = "absent/stub" ] || { printf '<PRECONDITION:%s>' "$T57_PRE"; return; }
     run_with_timeout 30 env -u WAIT_CC_RESULT -u MOCK_PGREP_MODE -u CLAUDE_CODE_SESSION_ID \
@@ -74,12 +82,12 @@ t57_case() { # <slot> <proc-root> [tasklist-dir] -> "rc/wait/indet/pid/methods/t
         WAIT_CC_POLL_INTERVAL=0 WAIT_CC_MAX_POLLS=1 \
         "$BASH" "$T57_WAIT_SH" > "$T57_DIR/$slot.out" 2> "$err" || rc=$?
     wait="no-wait"; indet="-"; pid="-"; methods="-"; used="tasklist-not-called"
-    grep -Fq 'Waiting for Claude Code' "$err" 2>/dev/null && wait="waited"
-    grep -Fqi 'cannot determine whether Claude Code is running' "$err" 2>/dev/null && indet="indeterminate"
-    grep -Fq 'PID 4242' "$err" 2>/dev/null && pid="pid-shown"
-    if grep -Fq 'pgrep' "$err" 2>/dev/null && grep -Fq '/proc' "$err" 2>/dev/null \
-        && grep -Fq 'tasklist' "$err" 2>/dev/null; then methods="methods-named"; fi
+    t57_has 'Waiting for Claude Code' "$err" && wait="waited"
+    t57_has 'cannot determine whether Claude Code is running' "$err" && indet="indeterminate"
+    t57_has 'PID 4242' "$err" && pid="pid-shown"
+    if t57_has 'pgrep' "$err" && t57_has '/proc' "$err" && t57_has 'tasklist' "$err"; then methods="methods-named"; fi
     [ -n "$tl" ] && [ -f "$tl/calls.log" ] && used="tasklist-called"
+    [ -z "$gfail" ] || { printf '%s' "$gfail"; return; }
     printf '%s/%s/%s/%s/%s/%s' "$rc" "$wait" "$indet" "$pid" "$methods" "$used"
 }
 
