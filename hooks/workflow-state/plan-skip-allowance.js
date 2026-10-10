@@ -1,25 +1,14 @@
 "use strict";
-// SSOT for "is this plan step permitted to be skipped?" (#1644).
-//
-// Why this module exists: after #1644 a plan step can be skipped through two
-// doors — the *_NOT_NEEDED sentinel the model echoes (gated by
-// hooks/gate-plan-skip-sentinel.js) and the CLI's `--advance --status skipped`.
-// If each door carried its own copy of the rule the two would drift and the
-// stricter one would silently become advisory. Both read this module.
-//
-// The two doors differ in exactly ONE respect, and the difference is about how
-// much the ENVIRONMENT is trusted — never about what counts as a permitted skip:
-//
-//   isSkipAllowedForSentinelPath — reads process.env. The hook process is
-//     launched by Claude Code itself, so its environment is inherited and cannot
-//     be forged by a model-issued command prefix.
-//   isSkipAllowedForCliPath — reads the config FILE only. Any process the Bash
-//     tool can spawn could be launched as `CONFIRM_TESTS=off node bin/...`, and
-//     that prefix is model-issued text, never user approval.
-//
-// The same asymmetry (and the same reasoning) already exists in
-// hooks/lib/plan-confirm-flag.js as isConfirmOffForStage vs
-// isConfirmOffForStageFromFile — that file's comment is the SSOT for the why.
+// SSOT for "is this plan step permitted to be skipped?" (#1644): the *_NOT_NEEDED
+// sentinel door (hooks/gate-plan-skip-sentinel.js) and the CLI's `--advance --status
+// skipped` door both read this module so the rule cannot drift between them.
+// The doors differ only in how much the ENVIRONMENT is trusted:
+//   isSkipAllowedForSentinelPath — reads process.env; the hook's env is inherited
+//     from Claude Code and cannot be forged by a model-issued command prefix.
+//   isSkipAllowedForCliPath — reads the config FILE only; a Bash-spawned process
+//     could carry a model-issued `CONFIRM_TESTS=off` prefix.
+// The config-file-only why is owned by the isConfirmOffForStageFromFile comment
+// in hooks/lib/plan-confirm-flag.js.
 
 const { getConfirmFlagName, isConfirmOffForStageFromFile } = require("../lib/plan-confirm-flag");
 
