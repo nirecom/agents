@@ -695,3 +695,7 @@ Changes: Workflow state now lives in `~/.workflow-state/`; the env pin is rename
 ### FEATURE: PR #2595 (2026-10-10)
 Background: refactor(#2561): replace AGENTS_CONFIG_DIR and AGENTS_DIR with four root names
 Changes: Breaking: the environment variables `AGENTS_CONFIG_DIR` and `AGENTS_DIR` are retired. Set `AGENTS_MAIN_ROOT` instead; re-run the installer so shell profiles and hooks pick up the new name.;Scripts now locate their own code from the file's path, so tools and tests run from a linked worktree use that worktree's code.;Added `bin/check-root-names.sh`, a pre-commit gate for how repository roots are named and assigned; see `docs/architecture/claude-code/root-names.md`.;Tools that work on another repository take that repository's root as a command-line argument instead of reading an environment variable.
+
+### FEATURE: PR #2601 (2026-10-10)
+Background: refactor(#2592): remove the show-diff PreToolUse hook
+Changes: Removed the diff-preview hook that printed a "DIFF PREVIEW" line on every file write; Claude Code now shows file changes only through its own UI, with no extra noise.
