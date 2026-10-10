@@ -189,12 +189,13 @@ run_root_names_predicate_cases() {
 }
 
 # _rn_exec_probe <wt> <rel> <logdir> [NAME=value...] — rtb_exec_one with AGENTS_MAIN_ROOT set to
-# $_RN_CALLER_MAIN and every retired name pointing at the old-name decoy; prints "RC=<n>".
+# $_RN_CALLER_MAIN and every retired name pointing at the old-name decoy; prints
+# "RC=<n> DECOY=<0|1>".
 _rn_exec_probe() {
   local wt="$1" rel="$2" logs="$3"; shift 3
   mkdir -p "$logs"
   (cd "$wt" && AGENTS_MAIN_ROOT="$_RN_CALLER_MAIN" run_with_timeout 90 env "${_RN_ENV[@]}" "$@" bash -c \
-    '. "$1" || exit 98; shift; rtb_exec_one "$@"; printf "RC=%s\n" "${RTB_EXEC_RC:-unset}"' \
+    '. "$1" || exit 98; shift; rtb_exec_one "$@"; printf "RC=%s DECOY=%s\n" "${RTB_EXEC_RC:-unset}" "${RTB_EXEC_DECOY:-unset}"' \
     rn_probe "$EXEC_LIB" "$wt" "$rel" 10 "$logs" 2>/dev/null | grep '^RC=' | tail -1)
 }
 
@@ -242,8 +243,8 @@ bash "$here/bin/fixture-tool.sh"
 EOF
   _RN_CALLER_MAIN="$decoy/main"
   r="$(_rn_exec_probe "$wt" tests/bin/test-uses-bin.sh "$d/logs1")"
-  [ "$r" = "RC=0" ] && pass "RN-exec: the base test ran under the fixture launcher (RC=0)" \
-    || fail "RN-exec: expected RC=0, got: ${r:-none}"
+  [ "$r" = "RC=0 DECOY=0" ] && pass "RN-exec: the base test ran under the fixture launcher (RC=0, no decoy hit)" \
+    || fail "RN-exec: expected 'RC=0 DECOY=0', got: ${r:-none}"
   [ "$(tr '\n' '|' < "$rec" 2>/dev/null)" = "pin|exec|" ] \
     && pass "RN-exec: the selected launcher's decoy pin is called once, before the test" \
     || fail "RN-exec: launcher call order was [$(tr '\n' '|' < "$rec" 2>/dev/null)], expected [pin|exec|]"
@@ -289,8 +290,8 @@ EOF
   printf '#!/usr/bin/env bash\nenv > "%s"\n' "$dump" > "$wt2/tests/bin/test-dump-env.sh"
   _RN_CALLER_MAIN="$(np "$wt2")"
   r="$(_rn_exec_probe "$wt2" tests/bin/test-dump-env.sh "$d/logs2" "ROOT_DECOY_DIR=$decoy")"
-  [ "$r" = "RC=0" ] && [ -f "$dump" ] && pass "RN-exec-own-launcher: the base test ran (RC=0)" \
-    || fail "RN-exec-own-launcher: expected RC=0 and an env dump, got: ${r:-none}"
+  [ "$r" = "RC=0 DECOY=0" ] && [ -f "$dump" ] && pass "RN-exec-own-launcher: the base test ran (RC=0, no decoy hit)" \
+    || fail "RN-exec-own-launcher: expected 'RC=0 DECOY=0' and an env dump, got: ${r:-none}"
   [ "$(_rn_seen "$dump" "$_RN_NEW_NAME")" = "$(_rn_canon "$decoy/main")" ] \
     && pass "RN-exec-own-launcher: the base test sees the decoy as AGENTS_MAIN_ROOT, not the caller's value" \
     || fail "RN-exec-own-launcher: the base test saw AGENTS_MAIN_ROOT=$(_rn_seen "$dump" "$_RN_NEW_NAME"), expected $decoy/main"
@@ -322,23 +323,37 @@ run_root_names_exec_hit_cases() {
   mk_fixture_repo "$wt" >/dev/null
   printf '#!/usr/bin/env bash\nnode "$%s/hooks/lib/load-env.js" >/dev/null 2>&1 || true\necho reached-the-end\nexit 0\n' \
     "$_RN_NEW_NAME" > "$wt/tests/bin/test-reaches-decoy.sh"
+  printf '#!/usr/bin/env bash\nnode "$%s/hooks/lib/load-env.js" >/dev/null 2>&1 || true\nexit 3\n' \
+    "$_RN_NEW_NAME" > "$wt/tests/bin/test-reaches-decoy-exit3.sh"
 
   r="$(_rn_exec_probe "$wt" tests/bin/test-reaches-decoy.sh "$d/logs-hit")"
   grep -q '^reached-the-end$' "$d/logs-hit/1.out" 2>/dev/null \
     && pass "RN-exec-hit: the base test itself ran to its exit 0" \
     || fail "RN-exec-hit: the base test did not run to its end (out: $(tr '\n' '|' < "$d/logs-hit/1.out" 2>/dev/null))"
   case "$r" in
-    RC=0|RC=unset|"") fail "RN-exec-hit: a base test that reached the decoy must not be green, got: ${r:-none}" ;;
+    "RC=0 "*|RC=unset*|"") fail "RN-exec-hit: a base test that reached the decoy must not be green, got: ${r:-none}" ;;
     *) pass "RN-exec-hit: a base test that exits 0 but reached the decoy is not green ($r)" ;;
   esac
+  [ "$r" = "RC=1 DECOY=1" ] && [ -e "$d/logs-hit/1.decoyhit" ] \
+    && pass "RN-exec-hit-flag: the hit is reported as RTB_EXEC_DECOY=1 with a .decoyhit marker" \
+    || fail "RN-exec-hit-flag: expected 'RC=1 DECOY=1' and 1.decoyhit, got: ${r:-none} (logs: $(ls "$d/logs-hit" 2>/dev/null | tr '\n' '|'))"
   grep -q 'root decoy hit: .*hooks/lib/load-env\.js' "$d/logs-hit/1.err" 2>/dev/null \
     && pass "RN-exec-hit: the hit is named in the test's stderr log" \
     || fail "RN-exec-hit: no 'root decoy hit' line in 1.err ($(tr '\n' '|' < "$d/logs-hit/1.err" 2>/dev/null))"
 
+  r="$(_rn_exec_probe "$wt" tests/bin/test-reaches-decoy-exit3.sh "$d/logs-hit3")"
+  [ "$r" = "RC=3 DECOY=1" ] && [ -e "$d/logs-hit3/1.decoyhit" ] \
+    && pass "RN-exec-hit-nonzero: a failing base test that reached the decoy keeps its exit code and is flagged" \
+    || fail "RN-exec-hit-nonzero: expected 'RC=3 DECOY=1' and 1.decoyhit, got: ${r:-none} (logs: $(ls "$d/logs-hit3" 2>/dev/null | tr '\n' '|'))"
+
   r="$(_rn_exec_probe "$wt" tests/bin/test-broken.sh "$d/logs-clean")"
-  [ "$r" = "RC=0" ] && pass "RN-exec-hit: a base test that exits 0 without a hit stays green" \
-    || fail "RN-exec-hit: expected RC=0 for the clean base test, got: ${r:-none}"
-  ! grep -q 'root decoy hit' "$d/logs-clean/1.err" 2>/dev/null \
-    && pass "RN-exec-hit: the clean base test's stderr log names no hit" \
+  [ "$r" = "RC=0 DECOY=0" ] && pass "RN-exec-hit: a base test that exits 0 without a hit stays green (RTB_EXEC_DECOY=0)" \
+    || fail "RN-exec-hit: expected 'RC=0 DECOY=0' for the clean base test, got: ${r:-none}"
+  ! grep -q 'root decoy hit' "$d/logs-clean/1.err" 2>/dev/null && [ ! -e "$d/logs-clean/1.decoyhit" ] \
+    && pass "RN-exec-hit: the clean base test's stderr log names no hit and no marker is left" \
     || fail "RN-exec-hit: the clean base test was charged a hit ($(tr '\n' '|' < "$d/logs-clean/1.err" 2>/dev/null))"
+
+  r="$(_rn_exec_probe "$wt" tests/bin/test-preexisting.sh "$d/logs-fail")"
+  [ "$r" = "RC=1 DECOY=0" ] && pass "RN-exec-hit: a base test that fails without a hit is RC=1 with RTB_EXEC_DECOY=0" \
+    || fail "RN-exec-hit: expected 'RC=1 DECOY=0' for the plain failing base test, got: ${r:-none}"
 }

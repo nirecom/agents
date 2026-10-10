@@ -150,6 +150,8 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
       CLS[i]="undetermined"; DET[i]="timeout-at-base"
     elif [ "$RTB_EXEC_UNSUPPORTED" = "1" ]; then
       CLS[i]="undetermined"; DET[i]="unsupported-at-base"
+    elif [ "$RTB_EXEC_DECOY" = "1" ]; then
+      CLS[i]="undetermined"; DET[i]="root-decoy-hit-at-base"
     else
       case "$RTB_EXEC_RC" in
         77) CLS[i]="undetermined"; DET[i]="skip-at-base" ;;

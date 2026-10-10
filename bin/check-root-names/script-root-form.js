@@ -13,6 +13,7 @@ const W = "[A-Za-z0-9_$]";
 
 const shStandard = (name) =>
   new RegExp(`^${escapeRe(name)}="\\$\\(cd "\\$\\(dirname "\\$\\{BASH_SOURCE\\[0\\]\\}"\\)(?:/(\\.\\.(?:/\\.\\.)*))?" && pwd\\)"\\s*$`);
+const SH_READ = new RegExp(`\\$\\{?${SCR}(?!\\w)`);
 const JS_STANDARD = new RegExp(`^const ${SCR} = path\\.resolve\\(__dirname((?:, ["']\\.\\.["'])*)\\);\\s*$`);
 const JS_ASSIGN = new RegExp(`(?:const|let|var)\\s+${SCR}(?!${W})|(?:const|let|var)\\s*\\{[^}]*(?<!${W})${SCR}(?!${W})[^}]*\\}\\s*=|(?<![\\w$.])${SCR}\\s*=(?![=>])`);
 const PS_ASSIGN = new RegExp(`(?<![\\w:])\\$${SCR}\\s*=(?!=)`);
@@ -88,13 +89,18 @@ function checkShell(file, v, sourced, say) {
   const want = sourced ? sourcedName(file.rel) : SCR;
   const prefixed = new RegExp(`^_[A-Z0-9_]*${SCR}$`);
   const at = [];
+  let read = -1;
   for (let i = 0; i < v.code.length; i++) {
     if (!v.code[i].includes(SCR)) continue;
+    if (read < 0 && SH_READ.test(v.code[i].replace(/'[^']*'/g, ""))) read = i;
     for (const name of shAssigned(v.cmds[i], v.code[i])) {
       if (name === want) at.push(i);
       else if (sourced && (name === SCR || prefixed.test(name))) say(i, "a sourced library assigns the checkout root under its own prefixed name only");
     }
   }
+  // A sourced library may read its caller's value; any other file that reads the name
+  // without assigning it would take the value from the environment.
+  if (!sourced && read >= 0 && at.length === 0) say(read, "the checkout root is read but not assigned in this file");
   judge(file, v, at, say, (i) => {
     const m = shStandard(want).exec(v.raw[i]);
     if (!m || shNested(v, i)) return null;

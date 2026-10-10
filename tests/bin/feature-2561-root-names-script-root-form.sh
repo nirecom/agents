@@ -47,6 +47,7 @@ msg_of() {
     depth) printf 'level(s) but this file sits' ;;
     late) printf 'too far from the top of the file' ;;
     prefix) printf 'under its own prefixed name only' ;;
+    unassigned) printf 'read but not assigned in this file' ;;
     *) printf 'unknown message key %s' "$1" ;;
   esac
 }
@@ -63,7 +64,6 @@ write_good_tree() {
   fx "$REPO/hooks/g-node.js" "${JS_HEAD[@]}" "$(std_js 1)" "use($N_SCR);"
   fx "$REPO/hooks/lib/g-node2.js" "${JS_HEAD[@]}" "$(std_js 2)"
   fx "$REPO/bin/g-none.sh" "${SH_HEAD[@]}" 'echo "no root needed"'
-  fx "$REPO/bin/g-reads.sh" "${SH_HEAD[@]}" "echo \"$V_SCR\"" "echo \"\${$N_SCR}\""
 }
 
 c_standard_forms() {
@@ -78,7 +78,6 @@ skills/s/scripts/g-three.sh|accepted
 hooks/g-node.js|accepted
 hooks/lib/g-node2.js|accepted
 bin/g-none.sh|accepted
-bin/g-reads.sh|accepted
 TABLE
 }
 
@@ -296,6 +295,10 @@ case_end
 
 case_begin "root-file-and-powershell-climb-match-the-depth" "bin/check-root-names/script-root-form.js"
 c_root_depth
+case_end
+
+case_begin "read-without-an-assignment-is-reported" "bin/check-root-names/script-root-form.js"
+c_read_without_assignment
 case_end
 
 case_begin "rerun-is-stable-and-read-only" "bin/check-root-names.sh"

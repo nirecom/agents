@@ -6,14 +6,14 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $env:SYSTEM_OPS_APPROVED = "1"
 
-$AgentsRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$SCRIPT_CHECKOUT_ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 # GITLAB is opt-in (default off): exit 1 means explicit ON; every other exit
 # (off / unset / unrecognized / internal failure) resolves to OFF.
 $_glabOn = $false
 try {
     $global:LASTEXITCODE = 0
-    & "$AgentsRoot\bin\get-config-var.ps1" -IsOff GITLAB off *> $null
+    & "$SCRIPT_CHECKOUT_ROOT\bin\get-config-var.ps1" -IsOff GITLAB off *> $null
     if ($LASTEXITCODE -eq 1) { $_glabOn = $true }
 } catch {
     $_glabOn = $false
@@ -54,10 +54,10 @@ if (-not (Get-Command glab -ErrorAction SilentlyContinue)) {
 }
 
 # Read auth config from .env; non-interactive when both GITLAB_HOSTNAME and GITLAB_TOKEN are set.
-$_hostname  = (& "$AgentsRoot\bin\get-config-var.ps1" GITLAB_HOSTNAME  2>$null) -join ""
-$_token     = (& "$AgentsRoot\bin\get-config-var.ps1" GITLAB_TOKEN     2>$null) -join ""
-$_subfolder = (& "$AgentsRoot\bin\get-config-var.ps1" GITLAB_SUBFOLDER 2>$null) -join ""
-$_sshHost   = (& "$AgentsRoot\bin\get-config-var.ps1" GITLAB_SSH_HOSTNAME 2>$null) -join ""
+$_hostname  = (& "$SCRIPT_CHECKOUT_ROOT\bin\get-config-var.ps1" GITLAB_HOSTNAME  2>$null) -join ""
+$_token     = (& "$SCRIPT_CHECKOUT_ROOT\bin\get-config-var.ps1" GITLAB_TOKEN     2>$null) -join ""
+$_subfolder = (& "$SCRIPT_CHECKOUT_ROOT\bin\get-config-var.ps1" GITLAB_SUBFOLDER 2>$null) -join ""
+$_sshHost   = (& "$SCRIPT_CHECKOUT_ROOT\bin\get-config-var.ps1" GITLAB_SSH_HOSTNAME 2>$null) -join ""
 
 if ($_hostname -and $_token) {
     # TCP reachability guard: name resolution + connect, 3s hard limit in total.

@@ -4,7 +4,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $env:SYSTEM_OPS_APPROVED = "1"
 
-$AgentsRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$SCRIPT_CHECKOUT_ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 # The telemetry pair in install/codegraph-constants.txt is NOT assigned here:
 # install.ps1 runs this script in-process, so DO_NOT_TRACK would leak into the
@@ -23,7 +23,7 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 $_cgOn = $false
 try {
     $global:LASTEXITCODE = 0
-    & "$AgentsRoot\bin\get-config-var.ps1" -IsOff CODEGRAPH off *> $null
+    & "$SCRIPT_CHECKOUT_ROOT\bin\get-config-var.ps1" -IsOff CODEGRAPH off *> $null
     if ($LASTEXITCODE -eq 1) { $_cgOn = $true }
 } catch {
     $_cgOn = $false
@@ -31,7 +31,7 @@ try {
 
 if (-not $_cgOn) {
     Write-Host "CODEGRAPH is off (default)." -ForegroundColor DarkGray
-    node "$AgentsRoot\install\codegraph-mcp.js" unregister
+    node "$SCRIPT_CHECKOUT_ROOT\install\codegraph-mcp.js" unregister
     return
 }
 
@@ -56,4 +56,4 @@ if (Get-Command npm -ErrorAction SilentlyContinue) {
     return
 }
 
-node "$AgentsRoot\install\codegraph-mcp.js" register
+node "$SCRIPT_CHECKOUT_ROOT\install\codegraph-mcp.js" register

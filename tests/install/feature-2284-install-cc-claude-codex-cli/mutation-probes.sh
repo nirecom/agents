@@ -21,7 +21,7 @@ GOOD_SH_EOF
 
 cat > "$MUT_DIR/good.ps1" << 'GOOD_PS_EOF'
 if (Get-Command claude -ErrorAction SilentlyContinue) {
-    & pwsh -NoProfile -File (Join-Path $AgentsRoot "install\lib\wait-cc-exit.ps1")
+    & pwsh -NoProfile -File (Join-Path $SCRIPT_CHECKOUT_ROOT "install\lib\wait-cc-exit.ps1")
     if ($LASTEXITCODE -ne 0) { Write-Warning "CC running; skipping update."; exit 0 }
     claude update
     if ($LASTEXITCODE -ne 0) { Write-Warning "claude update failed; retry manually." }
@@ -134,7 +134,7 @@ fi
 # unconditional `exit 0` after the guard still must.
 cat > "$MUT_DIR/reach-ps-multi.ps1" << 'REACH_PS_MULTI_EOF'
 if (Get-Command claude -ErrorAction SilentlyContinue) {
-    & pwsh -NoProfile -File (Join-Path $AgentsRoot "install\lib\wait-cc-exit.ps1")
+    & pwsh -NoProfile -File (Join-Path $SCRIPT_CHECKOUT_ROOT "install\lib\wait-cc-exit.ps1")
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "CC running; skipping update."
         exit 0

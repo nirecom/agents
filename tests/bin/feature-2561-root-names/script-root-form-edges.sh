@@ -1,6 +1,7 @@
 # Edge cases of the script-root-form check (#2561). Sourced by
 # tests/bin/feature-2561-root-names-script-root-form.sh, which defines tree, scan,
 # msg_of and the fixture heads first. Defines functions only.
+# TL3 gap: a read behind an apostrophe pair on its line, or in a here-document body.
 
 PS_STD="$PS_VAR = (Resolve-Path (Join-Path \$PSScriptRoot '..')).Path"
 SH_STD0="$N_SCR=\"\$(cd \"\$(dirname \"\${BASH_SOURCE[0]}\")\" && pwd)\""
@@ -96,6 +97,47 @@ bin/g-after-subshell.sh|accepted
 bin/g-top.sh|accepted
 hooks/g-node.js|accepted
 TABLE
+}
+
+# A shell file that reads the name without assigning it would take the value from the
+# environment; only a sourced library may read its caller's value.
+c_read_without_assignment() {
+  tree unassigned
+  fx "$REPO/bin/g-assigned.sh" "${SH_HEAD[@]}" "$(std_sh ..)" "echo \"$V_SCR\"" "ls \"\${$N_SCR}/bin\""
+  fx "$REPO/bin/g-quoted.sh" "${SH_HEAD[@]}" "echo 'set $V_SCR first'" "printf '%s\\n' '\${$N_SCR}'"
+  fx "$REPO/bin/g-longer.sh" "${SH_HEAD[@]}" "echo \"${V_SCR}_X\"" "echo \"\$_FOO_$N_SCR\"" "echo \"\${${N_SCR}_X}\""
+  fx "$REPO/bin/g-word.sh" "${SH_HEAD[@]}" "echo $N_SCR"
+  fx "$REPO/bin/g-comment.sh" "${SH_HEAD[@]}" "# needs $V_SCR" "echo ok # from $V_SCR"
+  fx "$REPO/bin/sourced/g-caller.sh" '# a sourced library' "echo \"$V_SCR\"" "ls \"\${$N_SCR}/bin\""
+  scan
+  expect "unassigned: quoted, longer and sourced mentions exit 0" rc_is 0
+  fx "$REPO/bin/x-reads.sh" "${SH_HEAD[@]}" 'echo start' "echo \"$V_SCR\"" "echo \"\${$N_SCR}\""
+  fx "$REPO/bin/x-braced.sh" "${SH_HEAD[@]}" "ls \"\${$N_SCR}/bin\""
+  fx "$REPO/bin/x-expansion.sh" "${SH_HEAD[@]}" "echo \"\${$N_SCR:-/opt/checkout}\""
+  fx "$REPO/bin/x-after-quote.sh" "${SH_HEAD[@]}" "echo '$V_SCR'" "echo \"$V_SCR\""
+  fx "$REPO/bin/x-other-name.sh" "${SH_HEAD[@]}" "_X_OTHER_NAME_$N_SCR=/opt/checkout" "echo \"$V_SCR\""
+  fx "$REPO/skills/s/scripts/x-skill.sh" "${SH_HEAD[@]}" "bash \"$V_SCR/bin/tool\""
+  fx "$REPO/bin/x-form-read.sh" "${SH_HEAD[@]}" "$N_SCR=/opt/checkout" "echo \"$V_SCR\""
+  scan
+  expect "unassigned: a read with no assignment in the file exits 1" rc_is 1
+  expect_rows "unassigned" script-root-form <<'TABLE'
+bin/x-reads.sh|unassigned@5
+bin/x-braced.sh|unassigned@4
+bin/x-expansion.sh|unassigned@4
+bin/x-after-quote.sh|unassigned@5
+bin/x-other-name.sh|unassigned@5
+skills/s/scripts/x-skill.sh|unassigned@4
+bin/x-form-read.sh|form@4
+bin/g-assigned.sh|accepted
+bin/g-quoted.sh|accepted
+bin/g-longer.sh|accepted
+bin/g-word.sh|accepted
+bin/g-comment.sh|accepted
+bin/sourced/g-caller.sh|accepted
+TABLE
+  expect "unassigned: only the first reading line is reported" test "$(lines_for bin/x-reads.sh)" = 1
+  expect "unassigned: a file that assigns in another form gets the form message only" \
+    test "$(lines_for bin/x-form-read.sh)" = 1
 }
 
 # A file at the root climbs nothing; a PowerShell file climbs a fixed number of levels.

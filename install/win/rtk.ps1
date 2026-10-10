@@ -5,14 +5,14 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $env:SYSTEM_OPS_APPROVED = "1"
 
-$AgentsRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$SCRIPT_CHECKOUT_ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 # RTK is opt-in (default off): exit 1 means explicit ON; every other exit
 # (off / unset / unrecognized / internal failure) resolves to OFF.
 $_rtkOn = $false
 try {
     $global:LASTEXITCODE = 0
-    & "$AgentsRoot\bin\get-config-var.ps1" -IsOff RTK off *> $null
+    & "$SCRIPT_CHECKOUT_ROOT\bin\get-config-var.ps1" -IsOff RTK off *> $null
     if ($LASTEXITCODE -eq 1) { $_rtkOn = $true }
 } catch {
     $_rtkOn = $false

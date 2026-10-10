@@ -43,6 +43,8 @@ SUBDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2431-run-tests-bas
 . "$SUBDIR/cli-unsupported.sh"
 # shellcheck source=./feature-2431-run-tests-baseline/root-names.sh
 . "$SUBDIR/root-names.sh"
+# shellcheck source=./feature-2431-run-tests-baseline/cli-decoy-hit.sh
+. "$SUBDIR/cli-decoy-hit.sh"
 
 case_begin "baseline-ledger" "bin/lib/run-tests-baseline-ledger.sh"
 run_ledger_cases
@@ -130,6 +132,10 @@ case_end
 
 case_begin "baseline-root-names-exec-decoy-hit" "bin/lib/run-tests-baseline-exec.sh"
 run_root_names_exec_hit_cases
+case_end
+
+case_begin "baseline-cli-root-decoy-hit-at-base" "bin/run-tests-baseline"
+run_cli_decoy_hit_cases
 case_end
 
 echo ""

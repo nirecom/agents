@@ -59,6 +59,8 @@ A file assigns it at most once, in the standard form for its language, outside a
 
 A shell file that the table marks `sourced` shares its caller's variables, so it assigns `_<STEM>_SCRIPT_CHECKOUT_ROOT` instead, where `<STEM>` is the file name without extension, upper-cased, with every non-alphanumeric character replaced by `_`. `hooks/lib/*`, `bin/**/lib/**` and `tests/lib/**` are marked `sourced` by directory.
 
+A shell file that reads `SCRIPT_CHECKOUT_ROOT` assigns it itself. Only a file marked `sourced` may read the value its caller assigned.
+
 A file that cannot use the standard form carries the form `own-script-root-form` and its reason in the table.
 
 ### `TARGET_MAIN_ROOT`, `TARGET_CHECKOUT_ROOT` — ordinary variables

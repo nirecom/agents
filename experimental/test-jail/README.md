@@ -14,7 +14,7 @@ an export of the pre-change commit while `tests/run-all.sh` could not be used.
 | `run-jailed.sh` | One test in the jail. `--pin none\|state\|full` selects how much of the `tests/run-all.sh` pinning is applied (`full` = state/plans dirs + root decoy). |
 | `run-list.sh` | A list of tests through `run-jailed.sh`, in parallel on leased host test lanes. |
 | `run-one.sh` | Worker of `run-list.sh`: one log + one result line per test. |
-| `compare-runs.sh` | Classifies the red tests of one run against a baseline run, and lists the tests the changed run has no result for. |
+| `compare-runs.sh` | Classifies the red tests of one run against a baseline run. Ends with a `VERDICT:` line: `NO-NEW-RED` (exit 0), `NEW-RED` (exit 1), or `INCOMPLETE` (exit 3) when a test was refused by the jail or has no result in the changed run. |
 | `new-fail-digest.sh` | First new FAIL lines per test of a `compare-runs.sh` result. |
 | `decoy-summary.sh` | Root decoy hits of a run. |
 | `time-pin-cost.sh` | Times one test under each pin mode. |
