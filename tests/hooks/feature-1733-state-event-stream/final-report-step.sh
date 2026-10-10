@@ -3,13 +3,10 @@
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-mark/mark-step-handler.js, hooks/lib/sentinel-patterns.js, hooks/workflow-gate.js
 # Tags: workflow-state, event-stream, final-report, valid-steps, terminal-steps, sentinel-parsing, scope:issue-specific, pwsh-not-required, TL2
 
-# #1733 adds `final_report` to VALID_STEPS as the event stream's terminal boundary for computeIntervals. (1) VALID_STEPS is also the
-# commit gate's list, so an unguarded addition would demand a step nobody can complete — hence the NON_GATE_STEPS / TERMINAL_STEPS
-# coverage. (2) The MARK_STEP regex `([a-z_]+)_(complete|skipped|pending|in_progress)` only yields step=final_report by BACKTRACKING,
-# and the neighbouring `pre_final_report_gate` shares that prefix, so both are parsed here explicitly.
-# TL3 gap: hook REGISTRATION (F11 spawns hooks/workflow-gate.js itself with the PreToolUse payload, so a gate unwired from settings.json
-# still passes) and a real `git commit` being refused by the harness (the gate only prints a verdict; Claude Code enforces it).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
+# final_report is VALID_STEPS' terminal boundary and also the commit gate's list: NON_GATE_STEPS / TERMINAL_STEPS guard it.
+# The MARK_STEP regex yields final_report only by backtracking and shares a prefix with pre_final_report_gate; both are parsed.
+# TL3 gap: hook registration and a real `git commit` refusal are unverified (F11 spawns the gate directly).
+# Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration.
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="fr"
@@ -153,7 +150,7 @@ run_next_step() {
 SEED_DONE_JS='
 S.updateTopLevel(sid, (st) => { st.workflow_type = "wf-code"; st.closes_issues = [1733]; });
 ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests",
- "review_security", "cleanup"].forEach((s) => S.markStep(sid, s, "skipped", { skip_reason: "fixture" }));
+ "review_security", "review_docs", "cleanup"].forEach((s) => S.markStep(sid, s, "skipped", { skip_reason: "fixture" }));
 ["workflow_init", "branching_complete", "write_code", "run_tests", "docs", "user_verification",
  "pre_final_report_gate"].forEach((s) => S.markStep(sid, s, "complete"));
 console.log("SEEDED " + S.readState(sid).steps.final_report.status);

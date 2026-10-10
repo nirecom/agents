@@ -120,6 +120,8 @@ The rc table and how callers read it: [test-runner-parallelism.md](test-runner-p
 
 **Baseline checkout**: `bin/lib/run-tests-baseline-exec.sh` sources the base checkout's own `run-all-launch.sh`, which loads the base checkout's loader and table (the load key differs), so each side launches with its own table.
 
+**Home-reference scan**: `bin/run-tests-baseline` classifies a failing test `undetermined` (reason `home-claude-ref`) when the test file or its sibling directory names a home-claude path, because such a failure may depend on the host rather than the diff. `rtb_has_home_ref` (`bin/lib/run-tests-baseline-homeref.sh`) skips a whole-line comment only when the registry matches the file and its `header.commentPrefix` is non-null; an unmatched file, a null prefix or any read/`find`/`awk` failure counts as a reference (fail-closed), so a comment alone no longer blocks the baseline verdict.
+
 ## Reading the table from other runtimes
 
 Always call `node <path-to>/bin/test-language-registry …`; never rely on the shebang (Windows PowerShell and Python `subprocess` cannot use it).
