@@ -12,19 +12,19 @@ set -uo pipefail
 # TL2 — shared fixture: tests/bin/feature-2434-review-loop/fixture.sh. TL1 —
 # the CLI's own argument rules (merged from feature-2434-risk-signal-cli.sh).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/bin/feature-2434-review-loop/fixture.sh
-. "$AGENTS_DIR/tests/bin/feature-2434-review-loop/fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2434-review-loop/fixture.sh"
 
-[ -f "$AGENTS_DIR/bin/record-risk-signal" ] || fail "implementation missing: bin/record-risk-signal"
+[ -f "$SCRIPT_CHECKOUT_ROOT/bin/record-risk-signal" ] || fail "implementation missing: bin/record-risk-signal"
 
 case_begin "detail-risk-signal-escalates-at-cap" "bin/record-risk-signal"
 SID="rs-detail"
 seed_sid "$SID"
 RS_RC=0
-run_bin "$AGENTS_DIR/bin/record-risk-signal" --session "$SID" --planner detail \
+run_bin "$SCRIPT_CHECKOUT_ROOT/bin/record-risk-signal" --session "$SID" --planner detail \
     --reason "touches a security boundary" >/dev/null 2>"$TMP/rs.err" || RS_RC=$?
 assert_eq "record-risk-signal exits 0" "0" "$RS_RC"
 assert_eq "signal written to the control dir" "touches a security boundary" \
@@ -49,7 +49,7 @@ case_end
 # ── TL1: bin/record-risk-signal argument rules ──────────────────────────────
 # One line, written once into <sid>.control/, outline/detail only, and no way
 # to take it back.
-CLI="$AGENTS_DIR/bin/record-risk-signal"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/record-risk-signal"
 
 # rs <args...> — one CLI call. Sets R_RC / R_OUT (stdout and stderr together).
 rs() {

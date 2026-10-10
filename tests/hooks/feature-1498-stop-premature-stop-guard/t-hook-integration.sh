@@ -305,21 +305,27 @@ run_t14() {
 }
 
 # ---------------------------------------------------------------------------
-# T15: next-step binary absent (AGENTS_CONFIG_DIR points to empty dir,
-#      but workflow state IS present) → exit 0 fail-open
+# T15: next-step binary absent (the hook runs from a checkout copy that has
+#      hooks/ but no bin/; workflow state IS present) → exit 0 fail-open
 # ---------------------------------------------------------------------------
 run_t15() {
     require_source "$HOOK" "T15: next-step binary absent -> exit 0 fail-open" || return
-    local tmp sid out rc fake_agents
+    local tmp sid out rc fake_agents fake_hook
     tmp="$(mktemp -d)"
     sid="t15-sid"
     fake_agents="$tmp/fake-agents"
     mkdir -p "$fake_agents"
+    if ! script_checkout_fixture_copy "$fake_agents" hooks; then
+        rm -rf "$tmp"
+        fail "T15: hooks fixture copy failed"
+        return
+    fi
+    fake_hook="$fake_agents/hooks/stop-premature-stop-guard.js"
+    command -v cygpath >/dev/null 2>&1 && fake_hook="$(cygpath -m "$fake_hook")"
     seed_workflow_state "$tmp" "$sid" "invoke"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_STATE_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
-          AGENTS_CONFIG_DIR="$fake_agents" \
-          run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
+          run_with_timeout 15 node "$fake_hook" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! echo "$out" | grep -q '"block"'; then

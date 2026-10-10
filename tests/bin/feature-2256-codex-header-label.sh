@@ -162,7 +162,7 @@ run_loop() {
     printf 'draft\n' > "$lp/draft.md"
     printf 'none\n' > "$lp/tradeoffs.md"
     : > "$lp/loopsid-codex-context.detail-plan.built"
-    LOOP_OUT="$(AGENTS_CONFIG_DIR="$FAKE_ROOT" STUB_BODY_PRE="$1" STUB_HEADER="$2" STUB_VERDICT="${3:-APPROVED}" \
+    LOOP_OUT="$(STUB_BODY_PRE="$1" STUB_HEADER="$2" STUB_VERDICT="${3:-APPROVED}" \
         bash "$FAKE_ROOT/bin/run-codex-review-loop" \
         --format detail-plan --session-id loopsid --plans-dir "$lp" \
         --draft-file "$lp/draft.md" --cap 2 --max-extensions 1 \

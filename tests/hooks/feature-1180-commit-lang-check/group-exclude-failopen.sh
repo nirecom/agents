@@ -56,7 +56,7 @@ elif require_sut "X10" "$LINT_LIB"; then
     _x10_out="$(run_check_node_raw "$_X_NONREPO" \
         "CODE_LANG=english" \
         "CODE_LANG_EXCLUDE=$_X10_VALUE" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR")"
+)"
     _x10_rc="$(cat "$TMPDIR_BASE/.last_cn_rc" 2>/dev/null || echo 0)"
     _x10_v="rc:zero"
     [ "$_x10_rc" -ne 0 ] && _x10_v="rc:nonzero"
@@ -73,9 +73,9 @@ elif require_sut "X10" "$LINT_LIB"; then
 fi
 
 # X11 (unit, all platforms): same non-repo cwd, but CODE_LANG_EXCLUDE genuinely
-# EMPTY. AGENTS_CONFIG_DIR is stubbed at an isolated directory with NO .env so
+# EMPTY. AGENTS_MAIN_ROOT is stubbed at an isolated directory with NO .env so
 # the real repo's .env can never supply a value (load-env.js short-circuits on an
-# explicit AGENTS_CONFIG_DIR), and `env -u` removes any inherited value — which
+# explicit AGENTS_MAIN_ROOT), and `env -u` removes any inherited value — which
 # also tells lib.sh's isolation helper that this case decides the variable itself.
 # Expectation: no throw, no git invocation, plain empty result — byte-identical
 # to the behavior that existed before this feature.
@@ -87,7 +87,7 @@ elif require_sut "X11" "$LINT_LIB"; then
     _x11_out="$(run_check_node_raw "$_X_NONREPO" \
         -u CODE_LANG_EXCLUDE \
         "CODE_LANG=english" \
-        "AGENTS_CONFIG_DIR=$_x11_cfg")"
+        "AGENTS_MAIN_ROOT=$_x11_cfg")"
     _x11_rc="$(cat "$TMPDIR_BASE/.last_cn_rc" 2>/dev/null || echo 0)"
     _x11_v="rc:nonzero"
     [ "$_x11_rc" -eq 0 ] && _x11_v="rc:zero"
@@ -174,7 +174,7 @@ else
         git -C "$_x28_repo" add test.js
         _x28_out="$(run_precommit "$_x28_repo" \
             "PATH=$_x28_bin" \
-            "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+            "ENFORCE_WORKTREE=off" \
             "CODE_LANG=english" \
             "CODE_LANG_EXCLUDE=$_X_PARENT/__cle-no-such-dir-${_X28_TOKEN}__")"
         _x28_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
@@ -209,7 +209,7 @@ else
     git -C "$_x17_repo" add test.js
     _x17_out="$(run_precommit "$_x17_repo" \
         "PATH=$_x17_shim:$PATH" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+        "ENFORCE_WORKTREE=off" \
         "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_X_MISS_A")"
     _x17_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     _x17_v="rc:nonzero"; [ "$_x17_rc" -eq 0 ] && _x17_v="rc:zero"
@@ -249,7 +249,7 @@ else
     git -C "$_x29_repo" add test.js
     _x29_out="$(run_precommit "$_x29_repo" \
         "PATH=$_x29_shim:$PATH" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+        "ENFORCE_WORKTREE=off" \
         "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_X_MISS_A")"
     _x29_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     _x29_v="rc:nonzero"; [ "$_x29_rc" -eq 0 ] && _x29_v="rc:zero"
@@ -268,7 +268,7 @@ if [ "$_X_NONREPO_OK" != "yes" ]; then
     echo "SKIP: X18: Skipped-Because: the temp directory is itself inside a git repository on this host (see X10)"
 else
     _x18_out="$(run_precommit "$_X_NONREPO" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+        "ENFORCE_WORKTREE=off" \
         "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_X_MISS_A")"
     _x18_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     _x18_v="rc:nonzero"; [ "$_x18_rc" -eq 0 ] && _x18_v="rc:zero"

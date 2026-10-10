@@ -6,12 +6,14 @@
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
-DETAIL_WRAPPER="$AGENTS_WORKTREE/skills/make-detail-plan/scripts/run-codex-review-loop.sh"
-OUTLINE_WRAPPER="$AGENTS_WORKTREE/skills/make-outline-plan/scripts/run-codex-review-loop.sh"
+DETAIL_REL="skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+OUTLINE_REL="skills/make-outline-plan/scripts/run-codex-review-loop.sh"
+DETAIL_WRAPPER="$AGENTS_WORKTREE/$DETAIL_REL"
+OUTLINE_WRAPPER="$AGENTS_WORKTREE/$OUTLINE_REL"
 BIN_WRAPPER="$AGENTS_WORKTREE/bin/run-codex-review-loop"
 REVIEW_LOOP_VERDICT="$AGENTS_WORKTREE/bin/review-loop-verdict"
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -89,6 +91,12 @@ EOF
     done
     [[ -d "$AGENTS_WORKTREE/bin/lib/concern-ledger" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$agents_dir/bin/lib/"
     [[ -d "$AGENTS_WORKTREE/bin/lib/codex-review-loop" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/codex-review-loop" "$agents_dir/bin/lib/"
+    # The stage wrappers find bin/ from their own location, so T1-T3 launch these copies.
+    for f in "$DETAIL_REL" "$OUTLINE_REL"; do
+        [[ -f "$AGENTS_WORKTREE/$f" ]] || continue
+        mkdir -p "$agents_dir/${f%/*}"
+        cp "$AGENTS_WORKTREE/$f" "$agents_dir/$f"
+    done
     return 0
 }
 
@@ -106,14 +114,14 @@ else
     setup_wrapper_env "$TMP" continue
     echo "# detail draft" > "$TMP/plans/sid1-detail.md"
     echo "# outline" > "$TMP/plans/sid1-outline.md"
-    AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
+    AGENTS_MAIN_ROOT="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
-      run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || true
+      run_with_timeout bash "$TMP/agents/$DETAIL_REL" >/dev/null 2>&1 || true
     rm -f "$TMP/workflow-state/sid1.control/detail-plan-concern-ledger.txt"
     RC=0
-    AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
+    AGENTS_MAIN_ROOT="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
-      run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || RC=$?
+      run_with_timeout bash "$TMP/agents/$DETAIL_REL" >/dev/null 2>&1 || RC=$?
     CFILE="$TMP/workflow-state/sid1.control/detail-plan-round-number.txt"
     CVAL="$(tr -d '[:space:]' < "$CFILE" 2>/dev/null || echo absent)"
     if [[ "$RC" == "4" && "$CVAL" == "1" ]]; then
@@ -138,9 +146,9 @@ else
     echo "# intent" > "$TMP/plans/sid2-intent.md"
     # No outline draft: the loop refuses before any round is spent.
     RC=0
-    AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid2" PLANS_DIR="$TMP/plans" \
+    AGENTS_MAIN_ROOT="$TMP/agents" SESSION_ID="sid2" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
-      run_with_timeout bash "$OUTLINE_WRAPPER" >/dev/null 2>&1 || RC=$?
+      run_with_timeout bash "$TMP/agents/$OUTLINE_REL" >/dev/null 2>&1 || RC=$?
     CFILE="$TMP/workflow-state/sid2.control/outline-plan-round-number.txt"
     if [[ "$RC" == "4" && ! -f "$CFILE" ]]; then
       pass "T2: exit 4 leaves no counter where there was none (outline wrapper)"
@@ -163,9 +171,9 @@ else
     echo "# detail draft" > "$TMP/plans/sid3-detail.md"
     echo "# outline" > "$TMP/plans/sid3-outline.md"
     RC=0
-    AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid3" PLANS_DIR="$TMP/plans" \
+    AGENTS_MAIN_ROOT="$TMP/agents" SESSION_ID="sid3" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
-      run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || RC=$?
+      run_with_timeout bash "$TMP/agents/$DETAIL_REL" >/dev/null 2>&1 || RC=$?
     CFILE="$TMP/workflow-state/sid3.control/detail-plan-round-number.txt"
     if [[ "$RC" == "1" ]] && [[ "$(tr -d '[:space:]' < "$CFILE" 2>/dev/null)" == "1" ]]; then
       pass "T3: CONTINUE (exit 1) preserves counter file at value 1"
@@ -181,7 +189,7 @@ case_end
 # Helpers for T4/T5/T6 (bin/run-codex-review-loop with full mock chain)
 # ---------------------------------------------------------------------------
 setup_bin_env() {
-    # $1 = tmp dir. Builds a mock AGENTS_CONFIG_DIR: rules/core-principles.md,
+    # $1 = tmp dir. Builds a mock AGENTS_MAIN_ROOT: rules/core-principles.md,
     # a no-op bin/build-codex-context, and bin/run-codex-review-loop +
     # bin/review-loop-verdict copied from the worktree. Caller must drop the
     # recording shim for review-plan-codex separately.
@@ -289,7 +297,7 @@ run_bin_round2() {
     shift 4
     STDERR_FILE="$TMP/stderr.txt"
     RC=0
-    AGENTS_CONFIG_DIR="$TMP/agents" \
+    AGENTS_MAIN_ROOT="$TMP/agents" \
       run_with_timeout "$TMP/agents/bin/run-codex-review-loop" \
         --format "$fmt" --session-id "$sid" --plans-dir "$TMP/plans" \
         --draft-file "$draft" \
@@ -377,7 +385,7 @@ else
     echo "1" > "$TMP/workflow-state/sid6.control/detail-plan-round-number.txt"
 
     STDERR_FILE="$TMP/stderr.txt"
-    AGENTS_CONFIG_DIR="$TMP/agents" \
+    AGENTS_MAIN_ROOT="$TMP/agents" \
       run_with_timeout "$TMP/agents/bin/run-codex-review-loop" \
         --format detail-plan --session-id sid6 --plans-dir "$TMP/plans" \
         --draft-file "$TMP/plans/sid6-detail-draft.md" \
@@ -433,8 +441,6 @@ to_legacy() {
 
 case_begin "legacy-round-number-continues" "bin/run-codex-review-loop"
 if (
-    # The fixture runs the worktree's wrappers, whatever AGENTS_DIR was inherited.
-    AGENTS_DIR="$AGENTS_WORKTREE"
     . "$AGENTS_WORKTREE/tests/bin/feature-2434-review-loop/fixture.sh"
     [ -f "$AGENTS_WORKTREE/hooks/workflow-state/state-io/control-dir.js" ] || \
         fail "implementation missing: hooks/workflow-state/state-io/control-dir.js"

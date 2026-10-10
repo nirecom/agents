@@ -11,9 +11,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TARGET="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TARGET="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-to-history.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -48,7 +48,6 @@ setup_tmp() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/docs/history"
     : > "$TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
 }
 
@@ -56,14 +55,17 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR
     unset DOC_APPEND_FAIL
 }
+
+# The script appends to docs/history.md under --target-checkout-root; hand it the
+# fixture per call. The flag goes last because the issue number is positional $1.
+run_target() { run_with_timeout "$@" --target-checkout-root "$TMP"; }
 
 # --- N1: ISSUE_CLOSE_SKILL=1 on closed mock issue → appends ---
 setup_tmp
 ISSUE_CLOSE_SKILL=1 GH_MOCK_SCENARIO=issue_task \
-    run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+    run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 if grep -q "#42" "$TMP/docs/history.md"; then
     pass "N1: skill-driven append writes #42"
 else
@@ -94,7 +96,7 @@ fi
 
 # --- N3: reconcile — no sentinel, no entry → appends ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 if grep -q "#42" "$TMP/docs/history.md"; then
     pass "N3: reconcile appends when no entry exists"
 else
@@ -106,7 +108,7 @@ teardown_tmp
 setup_tmp
 echo "### #42: Pre-existing entry (2026-04-01)" >> "$TMP/docs/history.md"
 BEFORE=$(grep -c "#42" "$TMP/docs/history.md")
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
 AFTER=$(grep -c "#42" "$TMP/docs/history.md")
 if [ "$RC" -eq 0 ] && [ "$AFTER" -eq "$BEFORE" ]; then
@@ -119,7 +121,7 @@ teardown_tmp
 # --- I2: rotated archive has #42: → no duplicate ---
 setup_tmp
 echo "### #42: Archived (2025-12-01)" > "$TMP/docs/history/2025.md"
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
 COUNT=$(grep -c "#42" "$TMP/docs/history.md" 2>/dev/null); true
 if [ "$RC" -eq 0 ] && [ "$COUNT" -eq 0 ]; then
@@ -133,7 +135,7 @@ teardown_tmp
 setup_tmp
 # History.md is empty even though the issue was already closed (sentinel set
 # upstream). Reconcile should still append.
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 if grep -q "#42" "$TMP/docs/history.md"; then
     pass "E1: missing history entry is recovered even with sentinel set"
 else
@@ -144,7 +146,7 @@ teardown_tmp
 # --- R1: doc-append fails → script exits non-zero ---
 setup_tmp
 DOC_APPEND_FAIL=1 GH_MOCK_SCENARIO=issue_task \
-    run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+    run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
 if [ "$RC" -ne 0 ]; then
     pass "R1: doc-append failure propagates"

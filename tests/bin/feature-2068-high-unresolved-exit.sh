@@ -53,7 +53,7 @@ save_raw() {
 }
 
 check_finalized() {
-    AGENTS_CONFIG_DIR="$ROOT" bash "$ROOT/bin/concern-ledger" check-finalized \
+    bash "$ROOT/bin/concern-ledger" check-finalized \
         --plans-dir "$1" --session-id "$2" --format "$3" --round "$4" >/dev/null 2>&1
     printf '%s' "$?"
 }

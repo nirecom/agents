@@ -7,9 +7,9 @@
 # - bash 3.x (macOS default) parsing of the extracted library
 # Closest-to-action mitigation: none needed — selection only, every stem rule is pinned here.
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
-. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
 
 ROOT="$(make_tmp)"
 trap 'rm -rf "$ROOT"' EXIT
@@ -20,7 +20,7 @@ cd "$ROOT/work" || exit 1
 
 STS_REL="bin/lib/select-tests-stem.sh"
 # shellcheck source=/dev/null
-[ -f "$AGENTS_DIR/$STS_REL" ] && . "$AGENTS_DIR/$STS_REL"
+[ -f "$SCRIPT_CHECKOUT_ROOT/$STS_REL" ] && . "$SCRIPT_CHECKOUT_ROOT/$STS_REL"
 
 sts_ready() {
   declare -F sts_stems_of_path >/dev/null && declare -F sts_name_matches >/dev/null && return 0
@@ -132,9 +132,9 @@ case_end
 FAKE="$ROOT/fake"
 FREPO="$ROOT/frepo"
 mkdir -p "$FAKE/bin/lib" "$FAKE/tests/bin"
-cp "$AGENTS_DIR/bin/select-tests.sh" "$FAKE/bin/select-tests.sh"
-[ -f "$AGENTS_DIR/$STS_REL" ] && cp "$AGENTS_DIR/$STS_REL" "$FAKE/$STS_REL"
-install_test_language_registry "$FAKE" "$AGENTS_DIR" || fail "fixture" "registry install failed"
+cp "$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh" "$FAKE/bin/select-tests.sh"
+[ -f "$SCRIPT_CHECKOUT_ROOT/$STS_REL" ] && cp "$SCRIPT_CHECKOUT_ROOT/$STS_REL" "$FAKE/$STS_REL"
+install_test_language_registry "$FAKE" "$SCRIPT_CHECKOUT_ROOT" || fail "fixture" "registry install failed"
 for n in feature-run-tests-a.sh bin-sweep-tests-b.sh lab-z.sh hook-block-case-markers-d.sh \
   survey-code-e.sh select-tests-f.sh ab-short.sh runner-h.sh unrelated-g.sh; do
   : >"$FAKE/tests/bin/$n"
@@ -177,7 +177,7 @@ ROWS
 case_end
 
 case_begin "selector-uses-stem-lib" "bin/select-tests.sh"
-if grep -q 'select-tests-stem\.sh' "$AGENTS_DIR/bin/select-tests.sh" && ! grep -q 'skills/\*/scripts/\*)' "$AGENTS_DIR/bin/select-tests.sh"; then
+if grep -q 'select-tests-stem\.sh' "$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh" && ! grep -q 'skills/\*/scripts/\*)' "$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh"; then
   pass "selector-uses-stem-lib: select-tests.sh sources the stem lib and keeps no copy of the rules"
 else
   fail "selector-uses-stem-lib" "bin/select-tests.sh does not source $STS_REL, or still carries its own stem case arms"

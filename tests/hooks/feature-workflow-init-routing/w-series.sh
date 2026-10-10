@@ -7,6 +7,7 @@
 # content assertions (W5-W14).
 
 set -uo pipefail
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -25,7 +26,7 @@ fi
 
 # W6a: >=2 issues handled by driver detect-issues phase (no AskUserQuestion for primary selection).
 # Driver detect-issues.js processes all tokens without interactive narrowing.
-DETECT_ISSUES_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/detect-issues.js"
+DETECT_ISSUES_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/detect-issues.js"
 if [ ! -f "$DETECT_ISSUES_JS" ]; then
     fail "W6a: driver detect-issues.js not found (>=2 branch check failed)"
 elif grep -qiE "(AskUserQuestion|pick.one|primary.issue)" "$DETECT_ISSUES_JS"; then
@@ -94,7 +95,7 @@ fi
 echo ""
 echo "--- Issue #797: all-N routing assertions ---"
 
-FETCH_ISSUES_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/fetch-issues.js"
+FETCH_ISSUES_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/fetch-issues.js"
 if [ ! -f "$FETCH_ISSUES_JS" ]; then
     fail "W12a: driver fetch-issues.js not found (all-N fetch check failed)"
 elif grep -qE "(for|forEach|map|issues\.)" "$FETCH_ISSUES_JS" && grep -qE "issue.*view|gh.*issue" "$FETCH_ISSUES_JS"; then
@@ -118,7 +119,7 @@ else
 fi
 
 # W14: WI-8 (driver route-decision phase) routing predicate covers all N.
-ROUTE_DECISION_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/route-decision.js"
+ROUTE_DECISION_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/route-decision.js"
 if [ ! -f "$ROUTE_DECISION_JS" ]; then
     fail "W14a: driver route-decision.js not found (all-N predicate check failed)"
 elif grep -qE "(every|all|forEach|issues\.)" "$ROUTE_DECISION_JS" && grep -qE "intent.clarified" "$ROUTE_DECISION_JS"; then

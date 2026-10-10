@@ -8,7 +8,7 @@
 
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 show_help() {
     cat <<'HELP'
@@ -76,7 +76,7 @@ fi
 
 # Resolve absolute path
 if [[ "$TARGET" != /* ]]; then
-    TARGET="$REPO_ROOT/$TARGET"
+    TARGET="$SCRIPT_CHECKOUT_ROOT/$TARGET"
 fi
 
 if [[ ! -f "$TARGET" ]]; then
@@ -102,12 +102,12 @@ esac
 # Auto-detect test command if not specified
 if [[ -z "$TEST_CMD" ]]; then
     bname_noext="${basename_target%.js}"
-    if [[ -f "$REPO_ROOT/tests/lib/test-${bname_noext}.js" ]]; then
-        TEST_CMD_ARGV=(node "$REPO_ROOT/tests/lib/test-${bname_noext}.js")
+    if [[ -f "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-${bname_noext}.js" ]]; then
+        TEST_CMD_ARGV=(node "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-${bname_noext}.js")
         USE_ARGV=true
     else
         # shellcheck source=lib/test-language-registry.sh
-        if ! . "$REPO_ROOT/bin/lib/test-language-registry.sh" || ! tlr_load; then
+        if ! . "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh" || ! tlr_load; then
             echo "ERROR: test language registry not readable" >&2
             exit 2
         fi
@@ -124,7 +124,7 @@ if [[ -z "$TEST_CMD" ]]; then
                     found_test="$cand"
                     break
                 fi
-            done < <(grep -rlF -e "$basename_target" "$REPO_ROOT/tests" --include="$g" 2>/dev/null)
+            done < <(grep -rlF -e "$basename_target" "$SCRIPT_CHECKOUT_ROOT/tests" --include="$g" 2>/dev/null)
             [[ -n "$found_test" ]] && break
         done < <(tlr_globs supported)
         if [[ -n "$found_test" ]]; then
@@ -133,7 +133,7 @@ if [[ -z "$TEST_CMD" ]]; then
                 exit 77
             fi
             # shellcheck source=lib/run-all-launch.sh
-            [[ -f "$REPO_ROOT/bin/lib/run-all-launch.sh" ]] && . "$REPO_ROOT/bin/lib/run-all-launch.sh"
+            [[ -f "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-launch.sh" ]] && . "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-launch.sh"
             declare -F run_all_exec >/dev/null || run_all_exec() { tlr_exec_plain "$@"; }
             TEST_CMD_ARGV=(run_all_exec "$found_test" /dev/null /dev/null)
             USE_ARGV=true

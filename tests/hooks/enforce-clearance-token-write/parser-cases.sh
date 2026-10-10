@@ -15,11 +15,11 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-_AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+_SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -36,7 +36,7 @@ printf '{"granted_at":1750000000}' > "$WD/wsid.off-clearance"
 # feed <raw-stdin> → sets HRC / HOUT / HERR
 feed() {
     if [ "$HOOK_PRESENT" != "yes" ]; then HRC=127; HOUT=""; HERR=""; return; fi
-    HOUT=$(printf '%s' "$1" | WORKFLOW_STATE_DIR="$WDN" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    HOUT=$(printf '%s' "$1" | WORKFLOW_STATE_DIR="$WDN" \
             "$RWT" 12 node "$HOOK" 2>"$WORK/stderr.txt")
     HRC=$?
     HERR=$(cat "$WORK/stderr.txt" 2>/dev/null)

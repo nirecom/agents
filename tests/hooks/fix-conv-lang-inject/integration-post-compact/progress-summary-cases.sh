@@ -35,7 +35,7 @@ T29_SID="t29-nosuchsid-$RANDOM"
 T29_RAW=$(printf '{"session_id":"%s"}' "$T29_SID" | \
     WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t29-empty" \
     HOME="$TMPDIR_BASE/home-t29" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)
 T29_RC=$?
 if [ "$T29_RC" -ne 0 ]; then
@@ -155,7 +155,7 @@ printf 'not-valid-json' > "$T35_DIR/${T35_SID}.json"
 T35_RAW=$(printf '{"session_id":"%s"}' "$T35_SID" | \
     WORKFLOW_STATE_DIR="$T35_DIR" \
     HOME="$TMPDIR_BASE/home-t35" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)
 T35_RC=$?
 if [ "$T35_RC" -ne 0 ]; then

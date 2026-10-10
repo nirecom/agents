@@ -14,7 +14,7 @@ UNIT_CASES=(
     "commit-push/undeclared-secret-does-not-reach-child"
     "doc-append/ssh-auth-sock-stays-out-of-a-non-pushing-worker"
     "allowlist/ssh-names-stay-out-of-the-global-child-env-allowlist"
-    "commit-push/agents-config-dir-is-forced-not-inherited"
+    "commit-push/script-checkout-root-is-forced-not-inherited"
     "commit-push/buildenv-is-idempotent-and-non-mutating"
     "commit-push/undeclared-extraenv-is-rejected"
 )

@@ -5,13 +5,13 @@
 # sourced into an interactive shell) take effect immediately, with no need to
 # re-source the profile or open a new shell.
 
-AGENTS_DIR="${AGENTS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Re-apply the VS Code extension's worktree-visibility patch (every extension
 # auto-upgrade overwrites it) and prune stale stub sessions before the extension
 # host loads -- best-effort: a repair failure must never block a `codes` launch.
-if [ -e "$AGENTS_DIR/bin/vscode-cc-repair" ]; then
-    node "$AGENTS_DIR/bin/vscode-cc-repair" --prune-stub-sessions || true
+if [ -e "$SCRIPT_CHECKOUT_ROOT/bin/vscode-cc-repair" ]; then
+    node "$SCRIPT_CHECKOUT_ROOT/bin/vscode-cc-repair" --prune-stub-sessions || true
 fi
 
 # Returns true if any VS Code window is currently open
@@ -42,12 +42,12 @@ _native_opus=""
 _native_sonnet=""
 _native_haiku=""
 _native_subagent=""
-if [ -x "$AGENTS_DIR/bin/get-config-var" ]; then
-    _native_fable=$("$AGENTS_DIR/bin/get-config-var" ANTHROPIC_DEFAULT_FABLE_MODEL 2>/dev/null) || true
-    _native_opus=$("$AGENTS_DIR/bin/get-config-var" ANTHROPIC_DEFAULT_OPUS_MODEL 2>/dev/null) || true
-    _native_sonnet=$("$AGENTS_DIR/bin/get-config-var" ANTHROPIC_DEFAULT_SONNET_MODEL 2>/dev/null) || true
-    _native_haiku=$("$AGENTS_DIR/bin/get-config-var" ANTHROPIC_DEFAULT_HAIKU_MODEL 2>/dev/null) || true
-    _native_subagent=$("$AGENTS_DIR/bin/get-config-var" CLAUDE_CODE_SUBAGENT_MODEL 2>/dev/null) || true
+if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
+    _native_fable=$("$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ANTHROPIC_DEFAULT_FABLE_MODEL 2>/dev/null) || true
+    _native_opus=$("$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ANTHROPIC_DEFAULT_OPUS_MODEL 2>/dev/null) || true
+    _native_sonnet=$("$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ANTHROPIC_DEFAULT_SONNET_MODEL 2>/dev/null) || true
+    _native_haiku=$("$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ANTHROPIC_DEFAULT_HAIKU_MODEL 2>/dev/null) || true
+    _native_subagent=$("$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" CLAUDE_CODE_SUBAGENT_MODEL 2>/dev/null) || true
     [ -n "$_native_fable" ]    && echo "[CC_NATIVE] ANTHROPIC_DEFAULT_FABLE_MODEL=$_native_fable"
     [ -n "$_native_opus" ]     && echo "[CC_NATIVE] ANTHROPIC_DEFAULT_OPUS_MODEL=$_native_opus"
     [ -n "$_native_sonnet" ]   && echo "[CC_NATIVE] ANTHROPIC_DEFAULT_SONNET_MODEL=$_native_sonnet"
@@ -63,15 +63,15 @@ fi
 
     code --new-window "$@"
     _ss_rc=0
-    "$AGENTS_DIR/bin/get-config-var" --is-off SESSION_SYNC off >/dev/null 2>&1 || _ss_rc=$?
+    "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off SESSION_SYNC off >/dev/null 2>&1 || _ss_rc=$?
     _ss_on=0
     if [ "$_ss_rc" -eq 1 ]; then _ss_on=1; fi
     if [ "$_ss_on" = "1" ]; then
-        "$AGENTS_DIR/bin/wait-vscode-window.sh" "$name"
+        "$SCRIPT_CHECKOUT_ROOT/bin/wait-vscode-window.sh" "$name"
         if _any_vscode_window; then
-            "$AGENTS_DIR/bin/session-sync.sh" push --quiet
+            "$SCRIPT_CHECKOUT_ROOT/bin/session-sync.sh" push --quiet
         else
-            "$AGENTS_DIR/bin/session-sync.sh" push --quiet --toast
+            "$SCRIPT_CHECKOUT_ROOT/bin/session-sync.sh" push --quiet --toast
         fi
     fi
 ) &

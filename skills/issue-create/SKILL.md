@@ -26,7 +26,7 @@ Read `rules/coding.md` before writing any issue title or body — on-demand-only
 Runs before Pre-flight. Detects a missing Projects v2 board and offers to run `/issue-setup`. Independent of Phase 0a (label auto-repair in `issue-create.sh`) — one's result never affects the other.
 
 - Skip Phase 0b and proceed to Pre-flight when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote).
-- Run `bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-preflight.sh" --check-project` (add `--repo OWNER/REPO` when targeting another repo).
+- Run `bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-create-preflight.sh" --check-project` (add `--repo OWNER/REPO` when targeting another repo).
 - On rc=1 (no board), AskUserQuestion:
   - `run-issue-setup`: run `/issue-setup` against the target repo, then re-check Phase 0b.
   - `skip-this-time`: proceed to Pre-flight; the attach step remains warn-only.
@@ -34,7 +34,7 @@ Runs before Pre-flight. Detects a missing Projects v2 board and offers to run `/
 
 ## Pre-flight
 
-- `AGENTS_CONFIG_DIR` must be set.
+- `AGENTS_MAIN_ROOT` must be set.
 - `gh` must be authenticated against the current repository.
 - `gh` must have the `project` scope for Projects v2 attach. Add with
   `gh auth refresh -s project`.
@@ -48,7 +48,7 @@ Phase 1 runs unconditionally regardless of gate outcome.
 
 IC-1. Resolve session intent:
    Resolve `<PLANS_DIR>` with one standalone Bash call —
-   `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` — and read `<SESSION_ID>`
+   `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` — and read `<SESSION_ID>`
    from `$CLAUDE_CODE_SESSION_ID`. `<INTENT_MD>` is `<PLANS_DIR>/<SESSION_ID>-intent.md`.
    Skip the gate silently when `<SESSION_ID>` is empty or `<INTENT_MD>` does not exist.
 
@@ -56,7 +56,7 @@ IC-1a. Read `rules/mid-workflow-findings.md` — on-demand-only, never auto-inje
 
 IC-2. Parse `closes_issues` with one standalone call (pass the path as a script
    argument — never use `node -e`):
-   `node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" "<INTENT_MD>"`.
+   `node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" "<INTENT_MD>"`.
    If its stdout is `[]`, empty, or the call fails: skip the gate silently and
    proceed to Phase 1.
 
@@ -94,7 +94,7 @@ When the user-provided body is missing one or both required fields, use `AskUser
 
 The survey follows an ordered cascade that considers `reopen` first; the criteria are defined in `skills/_shared/issue-verdict-cascade.md` (SSOT — never restated here or in the worker).
 
-Every route below produces the same schema-v2 artifact. The worker-bypassing routes write it with `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/make-empty-verdict.sh" <out-path> <verdict> --title T --background B --changes C [--parent N]`.
+Every route below produces the same schema-v2 artifact. The worker-bypassing routes write it with `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/make-empty-verdict.sh" <out-path> <verdict> --title T --background B --changes C [--parent N]`.
 
 Of that artifact the main conversation reads only `verdict` / `target` / `children` / `related` / `reason` / `review_result` / `review.worth_filing`. Never read `proposal` or `candidates[].body` into the main context.
 
@@ -102,7 +102,7 @@ If invoked with `--skip-survey` (caller already ran a bulk dedupe pass and suppl
 
 Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote) — write the artifact with `make-empty-verdict.sh <out> none` and proceed to Phase 3 with `verdict: none`.
 
-2a. Pre-resolve in main: `session_id` (from `$CLAUDE_CODE_SESSION_ID`), `agents_config_dir` (absolute), `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from IC-1).
+2a. Pre-resolve in main: `session_id` (from `$CLAUDE_CODE_SESSION_ID`), `agents_main_root` (absolute), `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from IC-1).
 2b. Invoke the `issue-create-survey-worker` subagent via the Agent tool (`subagent_type`) with `title`, `background`, `changes` from Phase 1 input.
 2c. `status: failed` → stop and report error.
 2d. `status: no_candidates` → write the artifact with `make-empty-verdict.sh <out> none` and proceed to Phase 3 with `verdict: none`.
@@ -110,10 +110,10 @@ Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub 
 
 ### Phase 3 — Review and confirm
 
-3a. Review the survey verdict: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/review-survey-verdict-codex.sh" --artifact <survey-artifact> --out <final-artifact>`.
+3a. Review the survey verdict: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/review-survey-verdict-codex.sh" --artifact <survey-artifact> --out <final-artifact>`.
 3b. Of `<final-artifact>` read only `verdict` / `target` / `children` / `related` / `reason` / `review.status` / `review.worth_filing`. Phase 4 dispatches on these, not on the Phase 2 values.
 3c. Delete the Phase 2 survey artifact (`rm -f <survey-artifact>`) — it is the only file holding full candidate bodies, and the final artifact has superseded it. Skip silently if absent.
-3d. Classify the gate: `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/eval-confirm-gate.sh" <final-artifact> <severity-label>` — stdout is `confirm: yes|no` then `reasons: <G-list>`.
+3d. Classify the gate: `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/eval-confirm-gate.sh" <final-artifact> <severity-label>` — stdout is `confirm: yes|no` then `reasons: <G-list>`.
 3e. `confirm: yes` → AskUserQuestion before Phase 4, naming the fired conditions. `confirm: no` → proceed to Phase 4 without asking.
 
 The gate is the logical OR of five conditions; the script owns the decision, this list only supplies the question text:
@@ -136,7 +136,7 @@ the same routing as `/workflow-init`:
 ### Phase 4 — Dispatch
 
 ```bash
-bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
+bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-create-dispatch.sh" \
     --verdict <none|reopen|sub-of|make-parent|sibling> \
     [--target N | --parent N | --children N,M | --related N,M] [--note "<review note>"] \
     -- \
@@ -144,7 +144,7 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
     [--label "<extra-label>" ...] [--assignee "<user>"] [--milestone "<name>"]
 ```
 
-`--note` applies to `reopen` only, and only when `review.status` is `replaced`: build it with `node "$AGENTS_CONFIG_DIR/bin/github-issues/lib/validate-review-verdict.js" --format-note --from <final-artifact>` — never retype the fields, the note is a public record of what the artifact says.
+`--note` applies to `reopen` only, and only when `review.status` is `replaced`: build it with `node "$AGENTS_MAIN_ROOT/bin/github-issues/lib/validate-review-verdict.js" --format-note --from <final-artifact>` — never retype the fields, the note is a public record of what the artifact says.
 
 `make-parent` creates TWO issues:
 - a `meta`-labeled, `Group: `-titled parent with a generated body
@@ -156,7 +156,7 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
 - parent is unreadable → exit 1
 - recover per `rules/github-issues.md` "Converting an issue into a meta parent"
 
-For `bulk-sub-of`: pipe TSV rows (one `title<TAB>body` per child) to `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/run-bulk-dispatch.sh" "$PLANS_DIR" N [-- passthrough flags]`; the script writes the manifest under `PLANS_DIR` and calls the dispatcher. Stdout is N URL lines (one per child, manifest order).
+For `bulk-sub-of`: pipe TSV rows (one `title<TAB>body` per child) to `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/run-bulk-dispatch.sh" "$PLANS_DIR" N [-- passthrough flags]`; the script writes the manifest under `PLANS_DIR` and calls the dispatcher. Stdout is N URL lines (one per child, manifest order).
 
 **Stdout contract**: `none|reopen|sub-of|sibling` emit exactly one URL line on success (last line of stdout); `make-parent` emits two (parent first, proposal last); `bulk-sub-of` emits N URL lines (one per child, manifest order, end of stdout). All other output goes to stderr. Single-verdict callers read the last stdout line and take the trailing digits of that URL as the issue number — no pipeline; `bulk-sub-of` callers loop over all trailing URL lines. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
 
@@ -165,7 +165,7 @@ Issues created here may be added to an existing session's `closes_issues` list (
 ### Phase 5 — Record to WORKTREE_NOTES.md (primary-path capture)
 
 Runs for all Phase 4 verdicts (none|reopen|sub-of|make-parent|sibling|bulk-sub-of).
-Write Phase 4's stdout to `<PLANS_DIR>/<session-id>-issue-create-dispatch.txt` with the Write tool, then issue one standalone call: `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/run-phase5-record.sh" "<VERDICT>" auto "<Phase 1 title>" "<MANIFEST>" --input-file "<PLANS_DIR>/<session-id>-issue-create-dispatch.txt"` (`auto` resolves WORKTREE_NOTES.md itself; the manifest arg is used only for `bulk-sub-of`, pass `""` otherwise).
+Write Phase 4's stdout to `<PLANS_DIR>/<session-id>-issue-create-dispatch.txt` with the Write tool, then issue one standalone call: `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/run-phase5-record.sh" "<VERDICT>" auto "<Phase 1 title>" "<MANIFEST>" --input-file "<PLANS_DIR>/<session-id>-issue-create-dispatch.txt"` (`auto` resolves WORKTREE_NOTES.md itself; the manifest arg is used only for `bulk-sub-of`, pass `""` otherwise).
 Failure is non-fatal — the script logs a stderr warning and continues.
 
 ## Label policy

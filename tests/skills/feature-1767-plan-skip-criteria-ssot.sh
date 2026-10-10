@@ -9,8 +9,8 @@
 # sites references it by path instead of restating the criteria prose.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$AGENTS_DIR" || exit 1
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$SCRIPT_CHECKOUT_ROOT" || exit 1
 
 PASS=0
 FAIL=0

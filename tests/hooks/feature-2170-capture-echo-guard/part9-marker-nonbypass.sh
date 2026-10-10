@@ -11,10 +11,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="${1:-$(cd "$(dirname "$0")/../../.." && pwd)}"
-export AGENTS_DIR
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-HOOK="$AGENTS_DIR/hooks/block-capture-echo.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-capture-echo.js"
 command -v node >/dev/null 2>&1 || exit 77
 
 PASS=0
@@ -104,7 +103,7 @@ code_hits="$(grep -v -E '^\s*(//|/\*|\*)' "$HOOK" | grep -c -E 'workflow-off|wor
 assert_eq "G-4-marker-names-absent-from-executable-lines" "0" "$code_hits"
 
 # --- G-5: the contract doc still classifies this hook as No/No --------------------
-DOC="$AGENTS_DIR/docs/architecture/claude-code/marker-bypass-contract.md"
+DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/marker-bypass-contract.md"
 row="$(grep -F 'block-capture-echo.js' "$DOC" | head -1 | tr -d ' *')"
 case "$row" in
     *"|No|No|"*) got="no-no" ;;

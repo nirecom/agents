@@ -3,15 +3,15 @@
 # Tags: stop-hook, step-in-flight, posttooluse, regression-2013, scope:issue-specific, pwsh-not-required, TL2
 #
 # State seeding and hook drivers for the #2013 step-in-flight auto-mark suite.
-# Sourced by tests/hooks/feature-2013-step-in-flight-automark.sh; expects AGENTS_DIR,
-# _AGENTS_DIR_NODE, RWT and the pass/fail/skip counters.
+# Sourced by tests/hooks/feature-2013-step-in-flight-automark.sh; expects SCRIPT_CHECKOUT_ROOT,
+# _SCRIPT_CHECKOUT_ROOT_NODE, RWT and the pass/fail/skip counters.
 
-STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
-LIFECYCLE_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/lifecycle.js"
-POLICY_NODE="$_AGENTS_DIR_NODE/hooks/lib/step-in-flight-policy.js"
-COMPLETION_APPROVAL_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/completion-approval.js"
-AUTOMARK_HOOK="$AGENTS_DIR/hooks/postuse-step-in-flight-mark.js"
-GUARD_C4="$AGENTS_DIR/hooks/stop-premature-stop-guard.js"
+STATEIO_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io.js"
+LIFECYCLE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/lifecycle.js"
+POLICY_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/step-in-flight-policy.js"
+COMPLETION_APPROVAL_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/completion-approval.js"
+AUTOMARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/postuse-step-in-flight-mark.js"
+GUARD_C4="$SCRIPT_CHECKOUT_ROOT/hooks/stop-premature-stop-guard.js"
 
 # The TTL the suite backdates against. Pinned independently of the module so a
 # module that silently widens its own TTL cannot make A8 pass by moving the
@@ -113,7 +113,7 @@ const ti = { description: 'x' };
 if (process.env.SKILL) ti.skill = process.env.SKILL;
 process.stdout.write(JSON.stringify({ tool_name: process.env.TOOL, session_id: process.env.SID,
   agent_id: process.env.AGENT, transcript_path: '', tool_input: ti }));" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" 2>/dev/null)
     AM_RC=$?
 }
@@ -124,7 +124,7 @@ process.stdout.write(JSON.stringify({ tool_name: process.env.TOOL, session_id: p
 # Sets AM_OUT / AM_RC.
 run_automark_raw() {
     AM_OUT=$(printf '%s' "$2" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 20 node "$(node_path "$AUTOMARK_HOOK")" 2>/dev/null)
     AM_RC=$?
 }
@@ -148,7 +148,7 @@ make_repo_fixture() {
 # Honours FIXTURE_REPO when the caller has pinned one.
 run_c4() {
     C4_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           CLAUDE_PROJECT_DIR="${FIXTURE_REPO:-}" \
           "$RWT" 25 node "$(node_path "$GUARD_C4")" 2>/dev/null)
     C4_RC=$?

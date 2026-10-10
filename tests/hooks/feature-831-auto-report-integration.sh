@@ -13,18 +13,18 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-ENFORCE_WT="$AGENTS_DIR/hooks/enforce-worktree.js"
-ENFORCE_IC="$AGENTS_DIR/hooks/enforce-issue-close.js"
-WF_GATE="$AGENTS_DIR/hooks/workflow-gate.js"
-OVERRIDE_HANDLERS="$AGENTS_DIR/hooks/workflow-mark/enforce-override-handlers.js"
-EMIT_MODULE="$AGENTS_DIR/hooks/lib/supervisor-emit.js"
+ENFORCE_WT="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
+ENFORCE_IC="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-issue-close.js"
+WF_GATE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+OVERRIDE_HANDLERS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark/enforce-override-handlers.js"
+EMIT_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-emit.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -94,15 +94,15 @@ console.log(JSON.stringify({
   tool_name: 'Edit',
   tool_input: { file_path: process.argv[1] + '/README.md', old_string: 'a', new_string: 'b' }
 }));
-" -- "$_AGENTS_DIR_NODE" 2>/dev/null)
+" -- "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>/dev/null)
     # Run the hook with ENFORCE_WORKTREE=on and an inherited CWD in the agents root.
     local out rc
     out=$(echo "$payload" | (
-        cd "$_AGENTS_DIR_NODE" && \
+        cd "$_SCRIPT_CHECKOUT_ROOT_NODE" && \
         ENFORCE_WORKTREE=on \
         WORKFLOW_PLANS_DIR="$tmp" \
         WORKFLOW_STATE_DIR="$tmp" \
-        run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/enforce-worktree.js" 2>/dev/null
+        run_with_timeout 10 node "$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/enforce-worktree.js" 2>/dev/null
     ))
     rc=$?
     local blocked=0
@@ -144,7 +144,7 @@ console.log(JSON.stringify({
 }));" 2>/dev/null)
     local out rc
     out=$(echo "$payload" | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" \
-        run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/enforce-issue-close.js" 2>/dev/null)
+        run_with_timeout 10 node "$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/enforce-issue-close.js" 2>/dev/null)
     rc=$?
     local n; n=$(finding_count "$tmp_node" "$sid")
     if [ "$rc" = "2" ] && [ "$n" -ge 1 ]; then
@@ -196,7 +196,7 @@ console.log(JSON.stringify({
         cd "$repo" && \
         WORKFLOW_PLANS_DIR="$tmp" \
         WORKFLOW_STATE_DIR="$tmp" \
-        run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/workflow-gate.js" 2>/dev/null
+        run_with_timeout 10 node "$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-gate.js" 2>/dev/null
     ))
     rc=$?
     local n; n=$(finding_count "$tmp_node" "$sid")
@@ -224,7 +224,7 @@ run_i4() {
     # Drive the handler directly via a small node program (it's a library module,
     # not a stdin-reading hook). The workflow-mark dispatcher is the integration
     # point — we exercise the override-handlers contract from inside it.
-    local prog="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
+    local prog="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-mark/enforce-override-handlers.js"
     WORKFLOW_PLANS_DIR="$tmp" \
     WORKFLOW_STATE_DIR="$tmp" \
     WORKFLOW_DIR="$tmp" \
@@ -257,7 +257,7 @@ run_i5() {
     require_source "$OVERRIDE_HANDLERS" "I5: WORKFLOW_ON sentinel does NOT trigger a finding" || return
     local tmp tmp_node sid="i5-sid"
     tmp="$(mktemp -d)"; tmp_node="$(to_node_path "$tmp")"
-    local prog="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
+    local prog="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-mark/enforce-override-handlers.js"
     WORKFLOW_PLANS_DIR="$tmp" \
     WORKFLOW_STATE_DIR="$tmp" \
     WORKFLOW_DIR="$tmp" \

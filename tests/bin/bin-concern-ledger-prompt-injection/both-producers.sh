@@ -54,7 +54,7 @@ echo "--- prompt-injection 5: the other producer's text enters through the loop 
     } > "$SCAN_REPORT"
     (
         cd "$REPO" || exit 1
-        export PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" AGENTS_CONFIG_DIR="$AGENTS_ROOT"
+        export PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE"
         bash "$LOOP_BIN" --format security-code --session-id "$SID" --plans-dir "$PLANS" \
             --cap 2 --max-extensions 1 --extensions-used 0 \
             --accepted-tradeoffs "$SCAN_REPORT" --repo-root "$REPO" \

@@ -15,11 +15,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 PASS=0; FAIL=0; SKIP=0
@@ -27,9 +27,9 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
-SETTINGS="$AGENTS_DIR/settings.json"
-SETTINGS_NODE="$_AGENTS_DIR_NODE/settings.json"
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
+SETTINGS_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/settings.json"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -184,7 +184,7 @@ try {
     if command -v cygpath >/dev/null 2>&1; then tmp_node="$(cygpath -m "$tmp")"; else tmp_node="$tmp"; fi
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'t7s-$$',tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: smoke>>\"'}}))" 2>/dev/null)
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" \
         run_with_timeout 10 bash -c "$hook_cmd" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"

@@ -45,9 +45,9 @@ run_C2() {
         tmp=$(make_tmp); tn=$(node_path "$tmp")
         write_bare "$tn" "c2sid"
         hi=$(mk_input "c2sid" "$WF_BOUND")   # same stdin JSON for both racers
-        ( WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$tn" \
+        ( WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_MAIN_ROOT="$tn" \
             "$RWT" 12 node "$SHIM" <<< "$hi" > "$tmp/out1" 2>/dev/null; echo $? > "$tmp/rc1" ) &
-        ( WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$tn" \
+        ( WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_MAIN_ROOT="$tn" \
             "$RWT" 12 node "$SHIM" <<< "$hi" > "$tmp/out2" 2>/dev/null; echo $? > "$tmp/rc2" ) &
         wait
         rc1=$(cat "$tmp/rc1" 2>/dev/null || echo X); rc2=$(cat "$tmp/rc2" 2>/dev/null || echo X)
@@ -142,7 +142,7 @@ run_C5() {
 
     stubbin=$(make_tmp)
     write_examiner_stub "$stubbin/codex" ALLOW "legit workflow bug"
-    PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
+    PATH="$stubbin:$PATH" WORKFLOW_PLANS_DIR="$tn" \
         WORKFLOW_STATE_DIR="$tn" SESSION_ID="c5sid" CLAUDE_CODE_SESSION_ID="c5sid" \
         "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" >/dev/null 2>&1
     rm -rf "$stubbin" 2>/dev/null || true

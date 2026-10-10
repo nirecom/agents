@@ -187,26 +187,19 @@ MOCK_EOF
     : > "$GH_MOCK_ARGS_LOG"
 
     # Required env vars for the helper.
-    export AGENTS_CONFIG_DIR="$TMP/agents-config"
-    mkdir -p "$AGENTS_CONFIG_DIR"
-    # Fake plans dir resolver: a stub bin/workflow-plans-dir that prints $PLANS_DIR.
-    mkdir -p "$AGENTS_CONFIG_DIR/bin"
+    export AGENTS_MAIN_ROOT="$TMP/agents-config"
+    mkdir -p "$AGENTS_MAIN_ROOT"
     export PLANS_DIR="$TMP/plans"
     mkdir -p "$PLANS_DIR"
     # Isolate resolve-project.sh's cache from the real user cache.
     # resolve-project.sh reads ${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/cache/project-resolve.tsv
     # directly (NOT via the workflow-plans-dir bin), so we must export it here.
-    export WORKFLOW_PLANS_DIR="$TMP/wf-plans"
+    export WORKFLOW_PLANS_DIR="$PLANS_DIR"
     mkdir -p "$WORKFLOW_PLANS_DIR/cache"
     # resolve-project.sh's project-resolve.tsv cache lives under WORKFLOW_STATE_DIR
     # (default: the real ~/.claude/projects/workflow); dual-pin it to the fixture.
     export WORKFLOW_STATE_DIR="$TMP/wf-state"
     mkdir -p "$WORKFLOW_STATE_DIR/cache"
-    cat > "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" <<EOF
-#!/bin/bash
-echo "$PLANS_DIR"
-EOF
-    chmod +x "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
 
     # Deterministic session id via the CLAUDE_CODE_SESSION_ID env tier.
     # Overriding it also stops a runner inside a live Claude Code session from
@@ -241,7 +234,7 @@ teardown_mock() {
           GH_MOCK_LINKED_COUNT GH_MOCK_RESOLVED_PROJECT_ID \
           GH_MOCK_RESOLVED_PROJECT_NUM GH_MOCK_RESOLVED_OWNER \
           GH_MOCK_RESOLVED_CONTENT_DATE_ID GH_MOCK_OWNER_REPO 2>/dev/null || true
-    unset AGENTS_CONFIG_DIR CLAUDE_CODE_SESSION_ID PLANS_DIR WORKFLOW_PLANS_DIR \
+    unset AGENTS_MAIN_ROOT CLAUDE_CODE_SESSION_ID PLANS_DIR WORKFLOW_PLANS_DIR \
           WIP_STATE_STATUS_FIELD_ID WIP_STATE_IN_PROGRESS_OPTION_ID \
           WIP_STATE_DONE_OPTION_ID WIP_STATE_TODO_OPTION_ID \
           WIP_STATE_FINGERPRINT_FIELD_ID \

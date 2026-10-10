@@ -13,8 +13,8 @@ set -u
 # fences the table: zero peers there means nothing ran concurrently at all.
 # TL3 gap: lane behavior under a loaded CI host (bin/check-verification-gate.sh).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-REAL_RUNNER="$AGENTS_DIR/tests/run-all.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+REAL_RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
 
 PASS=0
 FAIL=0
@@ -25,7 +25,7 @@ assert_eq() {
     if [ "$want" = "$got" ]; then pass "$name"
     else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/ra-h2-$$")"
 mkdir -p "$TMPD"
@@ -36,7 +36,7 @@ export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
-export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
+export RUN_ALL_REGISTRY_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh"
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 

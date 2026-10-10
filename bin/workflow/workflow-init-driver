@@ -38,9 +38,7 @@ const emitBlocked = (...a) => { directiveEmitted = true; return directive.emitBl
 
 // --- Env / config -----------------------------------------------------------
 
-const agentsConfigDir =
-  process.env.AGENTS_CONFIG_DIR ||
-  path.resolve(__dirname, "../..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 
 const plansDir =
   process.env.WORKFLOW_PLANS_DIR ||
@@ -111,7 +109,7 @@ function resolveSessionId() {
   if (codeSid) {
     return { sid: codeSid, reliable: true };
   }
-  const resolveScript = path.join(agentsConfigDir, "bin", "resolve-session-id");
+  const resolveScript = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "resolve-session-id");
   // resolve-session-id is a bash script — spawn via bash
   const { buildBashScriptSpawn } = require("./lib/workflow-init/spawn-env");
   const [cmd, args, opts] = buildBashScriptSpawn(resolveScript, []);
@@ -394,9 +392,9 @@ function runPipeline(state, startPhase, tokens, sessionId, ckptFile) {
     let result;
 
     if (phase === "adopt-prior-state") {
-      result = adoptPriorState(state, agentsConfigDir, sessionId);
+      result = adoptPriorState(state, sessionId);
     } else if (phase === "detect-issues") {
-      result = detectIssues(state, tokens, agentsConfigDir);
+      result = detectIssues(state, tokens);
     } else if (phase === "fetch-issues") {
       result = fetchIssues(state);
     } else if (phase === "label-extract") {
@@ -404,7 +402,7 @@ function runPipeline(state, startPhase, tokens, sessionId, ckptFile) {
     } else if (phase === "meta-classify") {
       result = metaClassify(state);
     } else if (phase === "wip-check") {
-      result = wipCheck(state, agentsConfigDir, sessionId);
+      result = wipCheck(state, sessionId);
     } else if (phase === "closed-detection") {
       result = closedDetection(state);
     } else if (phase === "route-decision") {

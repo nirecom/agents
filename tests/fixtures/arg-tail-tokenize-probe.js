@@ -10,9 +10,9 @@
 
 const path = require("path");
 
-const AGENTS_DIR = path.resolve(__dirname, "..", "..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 const MODULE_PATH = path.join(
-  AGENTS_DIR, "hooks", "enforce-worktree", "arg-tail-guard.js"
+  SCRIPT_CHECKOUT_ROOT, "hooks", "enforce-worktree", "arg-tail-guard.js"
 );
 
 const line1 = (s) => String(s).split("\n")[0];

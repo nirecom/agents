@@ -15,11 +15,11 @@ ck "P9 the hint is the runnable command" "RUN_CALIBRATION=1 bash bin/calibrate-t
 P9_SMALL="--sample 4 --jobs-list '1 2' --repeat 3 --warmup 0"
 P9_RES="$TMPROOT/p9.results"
 : > "$P9_RES"
-P9_GIT_BEFORE="$(git -C "$AGENTS_DIR" status --porcelain 2>/dev/null)"
+P9_GIT_BEFORE="$(git -C "$SCRIPT_CHECKOUT_ROOT" status --porcelain 2>/dev/null)"
 if [ -n "$P9_HINT" ]; then
     (
         # shellcheck source=../../tests/feature-1832-run-all-parallel/_cal-fixture.sh
-        . "$AGENTS_DIR/tests/tests/feature-1832-run-all-parallel/_cal-fixture.sh"
+        . "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-1832-run-all-parallel/_cal-fixture.sh"
         cf_init
         S="$(cf_new_suite)"; R="$(cf_new_real)"
         cf_populate "$S" "$R" bin/a 30 6
@@ -60,7 +60,7 @@ ck "P9 hint run as printed: the published record is accepted by run_all_cache_re
 ck "P9 control without RUN_CALIBRATION=1: exit 77" "77" "$(p9_kv bare_rc)"
 ck "P9 control without RUN_CALIBRATION=1: no seam call" "0" "$(p9_kv bare_calls)"
 ck "P9 control without RUN_CALIBRATION=1: no record" "no" "$(p9_kv bare_record)"
-ck "P9 the repo working tree is unchanged by the runs" "$P9_GIT_BEFORE" "$(git -C "$AGENTS_DIR" status --porcelain 2>/dev/null)"
+ck "P9 the repo working tree is unchanged by the runs" "$P9_GIT_BEFORE" "$(git -C "$SCRIPT_CHECKOUT_ROOT" status --porcelain 2>/dev/null)"
 case_ran P9
 
 case_end

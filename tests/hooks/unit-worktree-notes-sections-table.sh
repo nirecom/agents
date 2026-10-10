@@ -28,9 +28,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-LIB_JS="$AGENTS_DIR/hooks/lib/worktree-notes-sections.js"
+LIB_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worktree-notes-sections.js"
 
 PASS=0
 FAIL=0
@@ -424,14 +424,14 @@ TABLE
 MP_THRESHOLD=100
 
 mutation_probe() {
-    local probe="$AGENTS_DIR/bin/mutation-probe.sh" out rc score missing=""
+    local probe="$SCRIPT_CHECKOUT_ROOT/bin/mutation-probe.sh" out rc score missing=""
     if [ ! -f "$probe" ]; then
         fail "MP: bin/mutation-probe.sh missing" "expected at $probe"
         return
     fi
 
     out="$(MP_CHILD=1 bash "$probe" --threshold "$MP_THRESHOLD" \
-            --test-cmd "MP_CHILD=1 bash '$AGENTS_DIR/tests/hooks/unit-worktree-notes-sections-table.sh'" \
+            --test-cmd "MP_CHILD=1 bash '$SCRIPT_CHECKOUT_ROOT/tests/hooks/unit-worktree-notes-sections-table.sh'" \
             "$LIB_JS" 2>&1)"
     rc=$?
 

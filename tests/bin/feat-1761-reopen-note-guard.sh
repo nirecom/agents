@@ -10,10 +10,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWU="$AGENTS_DIR/bin/github-issues/reopen-with-update.sh"
-DISPATCH="$AGENTS_DIR/bin/github-issues/issue-create-dispatch.sh"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWU="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/reopen-with-update.sh"
+DISPATCH="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-dispatch.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -23,9 +23,14 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 MOCKDIR="$WORK/bin"; mkdir -p "$MOCKDIR"
 
-# --- fake AGENTS_CONFIG_DIR so gh_outbound_guard resolves our mock scanner -------
-FAKE_CFG="$WORK/cfg"; mkdir -p "$FAKE_CFG/bin"
-cat > "$FAKE_CFG/bin/scan-outbound.sh" <<'SCAN'
+# --- fake script checkout: gh_outbound_guard runs the scanner beside its own library,
+# so the real script and library are copied next to a mock scanner and run from there.
+FAKE_SCRIPT_CHECKOUT_ROOT="$WORK/fake-script-checkout-root"
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/lib"
+cp "$RWU" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/reopen-with-update.sh"
+cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh"
+RWU_COPY="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/reopen-with-update.sh"
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" <<'SCAN'
 #!/usr/bin/env bash
 # Mock scanner. Records its label; blocks when $GUARD_MOCK_RC is set AND the label
 # matches $GUARD_MOCK_LABEL (glob, default '*' = every call). The filter matters:
@@ -44,7 +49,7 @@ if [ -n "${GUARD_MOCK_RC:-}" ] && [ "${GUARD_MOCK_RC}" != "0" ] \
 fi
 exit 0
 SCAN
-chmod +x "$FAKE_CFG/bin/scan-outbound.sh"
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh"
 
 # --- gh mock ---------------------------------------------------------------
 cat > "$MOCKDIR/gh" <<'MOCK'
@@ -91,10 +96,9 @@ run_reopen() {
     GUARD_LABEL_LOG="$LABEL_FILE" \
     COMMENT_CAPTURE="$COMMENT_FILE" \
     GH_ARGS_LOG="$GH_ARGS_LOG" \
-    AGENTS_CONFIG_DIR="$FAKE_CFG" \
     CLAUDE_CODE_SESSION_ID="test-session" \
     PATH="$MOCKDIR:$PATH" \
-        "$RWT" 30 bash "$RWU" "$num" "$note" >"$d/stdout.txt" 2>"$d/stderr.txt"
+        "$RWT" 30 bash "$RWU_COPY" "$num" "$note" >"$d/stdout.txt" 2>"$d/stderr.txt"
     RC=$?
     COMMENT="$(cat "$COMMENT_FILE" 2>/dev/null)"
     LABELS="$(cat "$LABEL_FILE" 2>/dev/null)"
@@ -228,8 +232,8 @@ echo ""
 echo "=== N10: no-note invocation is unchanged (regression guard) ==="
 d="$WORK/n10"; mkdir -p "$d"
 GUARD_LABEL_LOG="$d/labels.txt" COMMENT_CAPTURE="$d/comment.txt" GH_ARGS_LOG="$d/gh-args.log" \
-AGENTS_CONFIG_DIR="$FAKE_CFG" CLAUDE_CODE_SESSION_ID="test-session" PATH="$MOCKDIR:$PATH" \
-    "$RWT" 30 bash "$RWU" 4242 >"$d/stdout.txt" 2>"$d/stderr.txt"
+CLAUDE_CODE_SESSION_ID="test-session" PATH="$MOCKDIR:$PATH" \
+    "$RWT" 30 bash "$RWU_COPY" 4242 >"$d/stdout.txt" 2>"$d/stderr.txt"
 if [ $? -eq 0 ] && grep -q 'issue reopen' "$d/gh-args.log"; then
     pass "N10-single-arg-invocation-still-works"
 else

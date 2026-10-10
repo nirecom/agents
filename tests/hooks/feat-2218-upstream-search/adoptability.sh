@@ -172,7 +172,7 @@ _u13_fixture() {
     _u13_run "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const NL = String.fromCharCode(10);
 const dir = '$TMP_NODE/u13/wf';
 fs.mkdirSync(dir, { recursive: true });
@@ -242,7 +242,7 @@ _u17_fixture() {
     _u17_run "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const NL = String.fromCharCode(10);
 const dir = '$TMP_NODE/u17/wf';
 fs.mkdirSync(dir, { recursive: true });
@@ -268,9 +268,9 @@ run_U17() {
     _u17_fixture
     out="$(_u17_run "
 $PRELUDE
-const view = require('$AGENTS_DIR_NODE/bin/lib/resume-session/upstream-view.js');
-const { readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { evaluateResumability } = require('$AGENTS_DIR_NODE/hooks/workflow-state/effective-state.js');
+const view = require('$SCRIPT_CHECKOUT_ROOT_NODE/bin/lib/resume-session/upstream-view.js');
+const { readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { evaluateResumability } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/effective-state.js');
 const problems = [];
 // Fixture anchor: without it a passing verdict could be about any other donor
 // shape, and the degradable reason would never have been exercised.
@@ -316,7 +316,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # header fixes the direction — a search hit may never invite an adoption the
 # workflow then refuses — so through the real CLI: never over-promise, explain
 # the conservative refusal, and keep `--from` an escape hatch at a stated grain.
-_U18_CLI="$AGENTS_DIR/bin/resume-session-detect"
+_U18_CLI="$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect"
 
 _u18_run() {
     env -u CLAUDE_CODE_SESSION_ID \
@@ -342,7 +342,7 @@ _u18_fixture() {
     _u18_run "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const NL = String.fromCharCode(10);
 const dir = '$TMP_NODE/u18/wf';
 fs.mkdirSync(dir, { recursive: true });

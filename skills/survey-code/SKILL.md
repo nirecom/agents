@@ -11,7 +11,7 @@ Investigate the codebase related to the given task.
 
 ### SVC-0 — Resolve <PLANS_DIR>
 
-Before any tool call below that references <PLANS_DIR>, run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` exactly once as one bare command — never assigned to a variable and echoed back.
+Before any tool call below that references <PLANS_DIR>, run `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` exactly once as one bare command — never assigned to a variable and echoed back.
 
 Read the printed absolute path from its stdout and substitute it for every <PLANS_DIR>
 placeholder in the remainder of this SKILL.md. Subagent prompts must receive

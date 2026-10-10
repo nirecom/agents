@@ -14,8 +14,8 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$AGENTS_DIR"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$SCRIPT_CHECKOUT_ROOT"
 
 DOC="docs/architecture/claude-code/marker-bypass-contract.md"
 SETTINGS="settings.json"

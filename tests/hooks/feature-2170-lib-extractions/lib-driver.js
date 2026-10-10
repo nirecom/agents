@@ -8,7 +8,7 @@
 
 const path = require("path");
 
-const AGENTS_DIR = process.env.AGENTS_DIR || "";
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
 const mode = process.argv[2];
 const arg = process.argv[3] === undefined ? "" : process.argv[3];
 
@@ -19,7 +19,7 @@ function emit(v) {
 
 function load(rel) {
   try {
-    return require(path.join(AGENTS_DIR, rel));
+    return require(path.join(SCRIPT_CHECKOUT_ROOT, rel));
   } catch (_e) {
     emit("MODULE_MISSING");
   }

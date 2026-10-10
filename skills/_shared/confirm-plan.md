@@ -29,7 +29,7 @@ the plan repo is private. Leak guard and the `.private-info-blocklist` registrat
 Enforcement: `stop-confirm-plan-guard.js` Stop hook structurally blocks turns where a `WORKFLOW_PLANS_DIR` path appears in the last assistant message (always active, regardless of `CONFIRM_<STEP>`).
 
 **CPA-3 — Gate check (`next-step --gate`).**
-Run the standalone command `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --gate` and follow the `GATE_ACTION` line of its stdout.
+Run the standalone command `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate` and follow the `GATE_ACTION` line of its stdout.
 Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different value.
 `--gate` judges the RECORDED current step, which can lag the step the calling skill is on: when the step named at the start of `REASON` (`<step>: CONFIRM_X=...`) is not your own step, treat the result as `none`.
 - `proceed`: take the caller's OFF branch (plan stages: print a one-paragraph prose summary without duplicating the breadcrumb path, then proceed). When `GATE_HINT` carries a warning sentence (e.g. a failed scope-change check), relay it to the user in that summary.
@@ -40,7 +40,7 @@ Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different val
   - **Allow**: continue with the next tool_use already in flight.
   - **Deny**: ask what to change, write edits, loop back to CPA-1.
 - `present-and-stop` (detail only): follow `GATE_HINT` — present, then end the turn without the completion sentinel or `--advance`.
-  - User approves: run the standalone command `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --gate --scope-change-approved` and follow its `GATE_ACTION`.
+  - User approves: run the standalone command `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate --scope-change-approved` and follow its `GATE_ACTION`.
   - User asks for changes: loop back to MDP-5.
 - `none`: take neither branch; report `REASON` to the user and end the turn without the completion sentinel or `--advance` — reaching a gate section with no gate means drifted state or an unresolved session.
 - Pass `--scope-change-approved` only once, right after the user's approval reply; never on any other call.

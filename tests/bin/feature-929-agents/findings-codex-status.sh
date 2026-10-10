@@ -7,7 +7,7 @@
 # so a missing-file error does not masquerade as a STATUS line).
 _fcs_run_absent() {
     local tf="$1"; shift
-    PATH="$(codex_absent_path)" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    PATH="$(codex_absent_path)" \
         WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR" \
         run_with_timeout 60 bash "$FINDINGS_CLI" "$@" 2>/dev/null
 }
@@ -64,7 +64,7 @@ _fcs_run() {
     local called="$TMPDIR_BASE/fcs-mock-called"
     rm -f "$called"
     local out_asm line1_asm
-    out_asm="$(FCS_MOCK_CALLED="$called" PATH="$shim_posix:$PATH" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    out_asm="$(FCS_MOCK_CALLED="$called" PATH="$shim_posix:$PATH" \
         WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR" \
         run_with_timeout 60 bash "$FINDINGS_CLI" --mode alert --sid "$sid" --wsid "$sid" \
         --transcript "$TMPDIR_BASE/no-such-transcript.jsonl" 2>/dev/null)"

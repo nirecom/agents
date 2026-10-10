@@ -25,8 +25,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-CLI="$AGENTS_DIR/bin/check-prompt-extraction"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/check-prompt-extraction"
 
 if [ ! -f "$CLI" ]; then
     echo "SKIP: bin/check-prompt-extraction not found (issue #1642 not implemented yet)"

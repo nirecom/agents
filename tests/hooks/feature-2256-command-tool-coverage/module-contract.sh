@@ -8,6 +8,7 @@
 # Parent: tests/hooks/feature-2256-command-tool-coverage.sh
 
 set -uo pipefail
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # shellcheck source=./_common.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"
 
@@ -72,7 +73,7 @@ assert_match "15: the regex carries no /m flag, so joining can never rescue it" 
 # --- 16-21: the six migrated hooks must consult the shared accessor, not 'Bash' ---
 for h in workflow-gate.js workflow-mark.js confirm-checkpoint.js \
          gate-plan-skip-sentinel.js show-user-verified-context.js supervisor-trigger.js; do
-    src="$AGENTS_DIR/hooks/$h"
+    src="$SCRIPT_CHECKOUT_ROOT/hooks/$h"
     if ! grep -q "tool-command-text" "$src" 2>/dev/null; then
         fail "16-21: $h uses the shared command-tool accessor" "no require of hooks/lib/tool-command-text.js"
     elif grep -Eq '!==\s*"Bash"' "$src" 2>/dev/null; then

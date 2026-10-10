@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PASS=0
 FAIL=0
 
@@ -35,7 +35,7 @@ check_re() {
 # judge-task-complexity/SKILL.md
 # ---------------------------------------------------------------------------
 
-JUDGE="$AGENTS_DIR/skills/_shared/judge-task-complexity.md"
+JUDGE="$SCRIPT_CHECKOUT_ROOT/skills/_shared/judge-task-complexity.md"
 
 check "judge: file exists" "Shared rubric" "$JUDGE"
 check "judge: signal S1-multi-file" "S1-multi-file" "$JUDGE"
@@ -54,9 +54,9 @@ check "judge: S3 covers docs-only" "regardless of whether the change is code-onl
 # make-detail-plan/SKILL.md
 # ---------------------------------------------------------------------------
 
-MDP="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
+MDP="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md"
 # Skip-condition prose lives in the script SKILL.md's "Skip Conditions" section delegates to.
-MDP_SKIP="$AGENTS_DIR/skills/make-detail-plan/scripts/skip-conditions.sh"
+MDP_SKIP="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/scripts/skip-conditions.sh"
 
 check "make-detail-plan: judge-task-complexity invocation" "judge-task-complexity" "$MDP"
 check "make-detail-plan: Model selected output" "Model selected:" "$MDP"
@@ -81,7 +81,7 @@ check "make-detail-plan: Completion preserved" "## Completion" "$MDP"
 # write-tests/SKILL.md
 # ---------------------------------------------------------------------------
 
-WT="$AGENTS_DIR/skills/write-tests/SKILL.md"
+WT="$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md"
 
 check "write-tests: judge-task-complexity invocation" "judge-task-complexity" "$WT"
 check "write-tests: Model selected output" "Model selected:" "$WT"

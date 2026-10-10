@@ -2,12 +2,12 @@
 # Tests: bin/check-case-markers.sh
 # Tags: TL1, review-tests, case-markers, scope:issue-specific
 
-AGENTS_DIR="${AGENTS_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 
-SCRIPT="$AGENTS_DIR/bin/check-case-markers.sh"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/check-case-markers.sh"
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -309,7 +309,7 @@ expect_high "depth-in-if-after-closed-apostrophe" '^HIGH: .*apostrophe-depth\.sh
 case_end
 
 # shellcheck source=feature-check-case-markers/lexer-edges.sh
-. "$AGENTS_DIR/tests/bin/feature-check-case-markers/lexer-edges.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-check-case-markers/lexer-edges.sh"
 
 case_begin "depth-in-if-with-quote-risk" "bin/check-case-markers.sh"
 # Known false negative (accepted tradeoff): a real depth violation after a

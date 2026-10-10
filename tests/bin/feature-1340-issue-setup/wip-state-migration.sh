@@ -10,11 +10,11 @@
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-# pass / fail / AGENTS_DIR provided by _lib.sh.
-TARGET_WIP="$AGENTS_DIR/bin/github-issues/wip-state.sh"
-TARGET_RESOLVE="$AGENTS_DIR/bin/github-issues/lib/resolve-project.sh"
+# pass / fail / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
+TARGET_WIP="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh"
+TARGET_RESOLVE="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh"
 export TARGET_WIP TARGET_RESOLVE
 
 TMP=""
@@ -131,8 +131,8 @@ MOCK_EOF
     export WORKFLOW_PLANS_DIR="$TMP/plans"
     export WORKFLOW_STATE_DIR="$TMP/workflow"
     mkdir -p "$TMP/plans"
-    export AGENTS_CONFIG_DIR="$TMP/agents-config"
-    mkdir -p "$AGENTS_CONFIG_DIR"
+    export AGENTS_MAIN_ROOT="$TMP/agents-main-root"
+    mkdir -p "$AGENTS_MAIN_ROOT"
 }
 
 teardown_mock() {
@@ -140,7 +140,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR AGENTS_CONFIG_DIR \
+    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR AGENTS_MAIN_ROOT \
           GH_MOCK_OWNER_REPO GH_MOCK_RESOLVER_FAIL GH_MOCK_REPO_FAIL \
           GH_MOCK_ISSUE_STATE \
           GH_MOCK_PROJECT_OWNER GH_MOCK_PROJECT_NUM GH_MOCK_PROJECT_ID \
@@ -190,7 +190,7 @@ export GH_MOCK_RESOLVER_FAIL=0
 export GH_MOCK_RESOLVED_STATUS="RES_STATUS_V"
 export GH_MOCK_RESOLVED_INPROG="RES_INPROG_V"
 export GH_MOCK_RESOLVED_FINGER="RES_FINGER_V"
-: > "$AGENTS_CONFIG_DIR/.env"
+: > "$AGENTS_MAIN_ROOT/.env"
 STDERR_FILE="$TMP/twm2-stderr.log"
 run_wip_verb set "$STDERR_FILE"
 S_OK=0; id_in_log "RES_STATUS_V" && S_OK=1
@@ -214,7 +214,7 @@ setup_mock
 export GH_MOCK_RESOLVER_FAIL=0
 export GH_MOCK_RESOLVED_STATUS="RES_STATUS_C"
 export GH_MOCK_RESOLVED_FINGER="RES_FINGER_C"
-: > "$AGENTS_CONFIG_DIR/.env"
+: > "$AGENTS_MAIN_ROOT/.env"
 STDERR_FILE="$TMP/twm2c-stderr.log"
 run_wip_verb check "$STDERR_FILE"
 S_OK=0; id_in_log "RES_STATUS_C" && S_OK=1
@@ -239,7 +239,7 @@ export GH_MOCK_RESOLVER_FAIL=0
 export GH_MOCK_RESOLVED_STATUS="RES_STATUS_D"
 export GH_MOCK_RESOLVED_DONE="RES_DONE_D"
 export GH_MOCK_RESOLVED_FINGER="RES_FINGER_D"
-: > "$AGENTS_CONFIG_DIR/.env"
+: > "$AGENTS_MAIN_ROOT/.env"
 STDERR_FILE="$TMP/twm2d-stderr.log"
 run_wip_verb clear "$STDERR_FILE"
 S_OK=0; id_in_log "RES_STATUS_D" && S_OK=1
@@ -297,7 +297,7 @@ case "$ARGS" in
 esac
 SEMI_GH_EOF
 chmod +x "$SEMI_BIN/gh"
-printf 'CODE_FILE_EXTENSIONS=js;sh;py;md\n' > "$AGENTS_CONFIG_DIR/.env"
+printf 'CODE_FILE_EXTENSIONS=js;sh;py;md\n' > "$AGENTS_MAIN_ROOT/.env"
 git init -q "$SEMI_REPO"
 git -C "$SEMI_REPO" config core.hooksPath /dev/null
 git -C "$SEMI_REPO" remote add origin https://github.com/nirecom/agents.git

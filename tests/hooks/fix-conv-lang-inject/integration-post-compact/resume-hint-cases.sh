@@ -71,7 +71,7 @@ T40_SID="t40-nosuchsid-$RANDOM"
 T40_RAW=$(printf '{"session_id":"%s"}' "$T40_SID" | \
     WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t40-empty" \
     HOME="$TMPDIR_BASE/home-t40" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)
 T40_CTX=$(node -e "
 try {

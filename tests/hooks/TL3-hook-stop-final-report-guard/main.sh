@@ -18,7 +18,7 @@ git -C "$SFR_REPO" init -q
 git -C "$SFR_REPO" config user.email "test@example.com"
 git -C "$SFR_REPO" config user.name "Test"
 
-HOOK_JS="$(node_path "$AGENTS_DIR/hooks/stop-final-report-guard.js")"
+HOOK_JS="$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/stop-final-report-guard.js")"
 
 # Minimal settings.json: only the Stop hook; no disableBypassPermissionsMode.
 cat > "$SFR_REPO/.claude/settings.json" <<SETTINGS_EOF

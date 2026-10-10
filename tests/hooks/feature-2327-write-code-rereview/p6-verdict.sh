@@ -7,7 +7,7 @@
 # advances; negative control (pending review_tests without reopen_reason +
 # run_tests complete → abort); reopen write failure diagnostic.
 
-STEPS_MOD="$AGENTS_DIR_N/bin/workflow/lib/next-step/steps.js"
+STEPS_MOD="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/lib/next-step/steps.js"
 
 echo "=== P6: verdict / record-step-verdict behavior ==="
 

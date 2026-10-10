@@ -16,15 +16,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-FORMAT_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format.js"
-CONV_LANG_NODE="$_AGENTS_DIR_NODE/hooks/lib/conv-lang.js"
+FORMAT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-report-format.js"
+CONV_LANG_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/conv-lang.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -37,7 +37,7 @@ run_with_timeout() {
     else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
 }
 
-FORMAT_FILE="$AGENTS_DIR/hooks/lib/supervisor-report-format.js"
+FORMAT_FILE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-report-format.js"
 if [ ! -f "$FORMAT_FILE" ]; then
     skip "T3: supervisor-report-format.js not present"
     echo ""
@@ -46,7 +46,7 @@ if [ ! -f "$FORMAT_FILE" ]; then
 fi
 
 # Check conv-lang module exists
-CONV_LANG_FILE="$AGENTS_DIR/hooks/lib/conv-lang.js"
+CONV_LANG_FILE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/conv-lang.js"
 if [ ! -f "$CONV_LANG_FILE" ]; then
     skip "T3: conv-lang.js not present"
     echo ""

@@ -20,11 +20,12 @@
 
 const path = require("path");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..", "..", "..");
+
 const ASK_ID = "adopt_prior_state";
 
-function loadAdopt(agentsConfigDir) {
-  const dir = agentsConfigDir || path.resolve(__dirname, "../../../../..");
-  return require(path.join(dir, "hooks", "workflow-state", "inheritance", "adopt.js"));
+function loadAdopt() {
+  return require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "inheritance", "adopt.js"));
 }
 
 function isNonInteractive() {
@@ -33,16 +34,16 @@ function isNonInteractive() {
 }
 
 /**
- * adoptPriorState(state, agentsConfigDir, sessionId) → undefined | { ask, askId, question, options }
+ * adoptPriorState(state, sessionId) → undefined | { ask, askId, question, options }
  */
-function adoptPriorState(state, agentsConfigDir, sessionId) {
+function adoptPriorState(state, sessionId) {
   if (!sessionId) return;
   // Already decided in an earlier pass of this pipeline (post-answer re-entry).
   if (state.adopt_decision === "fresh") return;
 
   let adopt;
   try {
-    adopt = loadAdopt(agentsConfigDir);
+    adopt = loadAdopt();
   } catch (e) {
     return; // fail-open: optional recovery must never break /workflow-init
   }

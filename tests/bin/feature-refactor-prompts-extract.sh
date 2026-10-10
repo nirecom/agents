@@ -12,9 +12,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-EXTRACT_CLI="$AGENTS_DIR/bin/refactor-prompts/extract-keywords.js"
-FILTER_LIB="$AGENTS_DIR/bin/refactor-prompts/lib/filter-kinds.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+EXTRACT_CLI="$SCRIPT_CHECKOUT_ROOT/bin/refactor-prompts/extract-keywords.js"
+FILTER_LIB="$SCRIPT_CHECKOUT_ROOT/bin/refactor-prompts/lib/filter-kinds.js"
 
 PASS=0
 FAIL=0
@@ -31,7 +31,7 @@ run_with_timeout() {
 }
 
 # Use forward slashes so node on Windows + bash both accept the path.
-export AGENTS_CONFIG_DIR="C:/git/agents"
+export AGENTS_MAIN_ROOT="C:/git/agents"
 
 # --- Existence gate ---------------------------------------------------------
 missing=()
@@ -137,7 +137,7 @@ rm -f "$TMP_OUT" "$TMP_ERR"
 #   Rename hooks/enforce-system-ops.js, run extract-keywords.js, assert exit 0
 #   AND stderr mentions warn/WARN. Restore the file.
 # ============================================================================
-HOOK_OPTIONAL="$AGENTS_CONFIG_DIR/hooks/enforce-system-ops.js"
+HOOK_OPTIONAL="$AGENTS_MAIN_ROOT/hooks/enforce-system-ops.js"
 if [ -f "$HOOK_OPTIONAL" ]; then
     BACKUP_FILE="$HOOK_OPTIONAL"
     mv "$HOOK_OPTIONAL" "${HOOK_OPTIONAL}.bak"
@@ -161,7 +161,7 @@ fi
 # ============================================================================
 # TC10: bash-write-patterns.js missing is a hard error
 # ============================================================================
-PATTERNS_REQUIRED="$AGENTS_CONFIG_DIR/hooks/lib/bash-write-patterns.js"
+PATTERNS_REQUIRED="$AGENTS_MAIN_ROOT/hooks/lib/bash-write-patterns.js"
 if [ -f "$PATTERNS_REQUIRED" ]; then
     BACKUP_FILE="$PATTERNS_REQUIRED"
     mv "$PATTERNS_REQUIRED" "${PATTERNS_REQUIRED}.bak"

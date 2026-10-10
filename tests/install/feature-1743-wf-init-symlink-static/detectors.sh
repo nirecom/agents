@@ -8,14 +8,14 @@ has_win_entry() {
     grep -Eq 'Source[[:space:]]*=[[:space:]]*"skills[\\/]workflow-init"[^#]*skills[\\/]wf-init' "$file"
 }
 
-# Windows: the same entry, with Dest anchored under the repo root ($AgentsRoot).
+# Windows: the same entry, with Dest anchored under the repo root ($SCRIPT_CHECKOUT_ROOT).
 # The whole point of this alias is that it is repo-internal — every other entry in the
 # same $links table targets $ClaudeDir, so an accidental $ClaudeDir Dest here would look
 # plausible and still be wrong (CPR-ORTH orthogonality: this member differs by design).
 has_win_dest_under_agents_root() {
     local file="$1"
     [ -f "$file" ] || return 1
-    grep -Eq 'Source[[:space:]]*=[[:space:]]*"skills[\\/]workflow-init"[^#]*Dest[[:space:]]*=[[:space:]]*"\$AgentsRoot[\\/]skills[\\/]wf-init"' "$file"
+    grep -Eq 'Source[[:space:]]*=[[:space:]]*"skills[\\/]workflow-init"[^#]*Dest[[:space:]]*=[[:space:]]*"\$SCRIPT_CHECKOUT_ROOT[\\/]skills[\\/]wf-init"' "$file"
 }
 
 # Windows: the wrong-root regression — Dest pointing under $ClaudeDir instead.

@@ -15,11 +15,11 @@ set -uo pipefail
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-CI_MODULE="$AGENTS_DIR/hooks/lib/checkout-identity.js"
-PROV="$AGENTS_DIR/hooks/workflow-run-tests/provenance-identity.js"
+CI_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/checkout-identity.js"
+PROV="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests/provenance-identity.js"
 
 T="$(make_tmp)"
 trap 'rm -rf "$T"' EXIT
@@ -351,7 +351,7 @@ check "provenance-identity.js requires ../lib/checkout-identity" "yes" \
 check "provenance-identity.js no longer defines its own gitCommonDir" "no" "$(prov_has '^function gitCommonDir')"
 check "verifyEmitterIdentity still accepts this checkout's tests/run-all.sh" "true" \
   "$(run_with_timeout 30 node -e 'const m = require(process.argv[1]); process.stdout.write(String(m.verifyEmitterIdentity("run-all", process.argv[2], process.argv[3])));' \
-    "$(np "$PROV")" "$(np "$AGENTS_DIR/tests/run-all.sh")" "$(np "$AGENTS_DIR")")"
+    "$(np "$PROV")" "$(np "$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh")" "$(np "$SCRIPT_CHECKOUT_ROOT")")"
 case_end
 
 # verifyEmitterIdentity trusts the module's OWN repository, so the behavioural rows run a copy of
@@ -360,7 +360,7 @@ case_end
 E="$T/emit"
 harness_git_init "$E/main"
 mkdir -p "$E/main/hooks/workflow-run-tests" "$E/main/tests"
-cp -r "$AGENTS_DIR/hooks/lib" "$E/main/hooks/lib"
+cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$E/main/hooks/lib"
 cp "$PROV" "$E/main/hooks/workflow-run-tests/provenance-identity.js"
 printf '#!/usr/bin/env bash\n' > "$E/main/tests/run-all.sh"
 commit_one "$E/main"

@@ -1,32 +1,15 @@
 #!/bin/bash
 # Tests: bin/parse-issue-tokens, hooks/lib/parse-closes-issues.js, skills/workflow-init/scripts/filter-init-candidates.sh, bin/github-issues/lib/board-card.sh, bin/github-issues/wip-state.sh, bin/workflow/workflow-init-driver, skills/workflow-init/scripts/path-a-label-and-board.sh, bin/github-issues/clarify-commit-scope.sh, skills/clarify-intent/SKILL.md
 # Tags: workflow-init, cross-repo, parse-issue-tokens, board-card, clarify-intent, scope:issue-specific
-#
-# Feature 1306 — cross-repo issue routing for workflow-init. Covers
-# filter-init-candidates.sh (cross-repo tokens), board-card.sh
-# (resolve_owner_repo / BOARD_CARD_REPO_OVERRIDE), wip-state.sh (--repo arg),
-# workflow-init-driver (wip-check / closed-detection phases),
-# path-a-label-and-board.sh (--repo arg), clarify-commit-scope.sh
-# (per-issue routing), and clarify-intent SKILL.md CI-3b (cross-repo
-# detection SSOT).
-#
-# Layer: TL2 (mock-gh / argument-recording stubs). Tests against
-# not-yet-created source files SKIP; tests against existing files assert the
-# future contract via SKIP where not yet implemented.
-#
-# TL3 gap (what this test does NOT catch):
-# - Real `gh` calls against live GitHub repos with cross-repo issues.
-# - Real worktree switching between sibling repos (agents + dotfiles).
-# - Real `wip-state.sh set` propagating BOARD_CARD_REPO_OVERRIDE through to the
-#   Projects v2 GraphQL query in a live environment.
-# - CI-3b AskUserQuestion flow collecting sibling worktree paths from the user
-#   in a full `claude -p` E2E session.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# Feature 1306 — cross-repo issue routing for workflow-init. Covers filter-init-candidates.sh (cross-repo tokens), board-card.sh (resolve_owner_repo / BOARD_CARD_REPO_OVERRIDE), wip-state.sh (--repo arg), workflow-init-driver (wip-check / closed-detection phases), path-a-label-and-board.sh (--repo arg), clarify-commit-scope.sh (per-issue routing), and clarify-intent SKILL.md CI-3b (cross-repo detection SSOT).
+# Layer: TL2 (mock-gh / argument-recording stubs). Tests against not-yet-created source files SKIP; tests against existing files assert the future contract via SKIP where not yet implemented.
+# TL3 gap (what this test does NOT catch): real `gh` calls against live GitHub repos with cross-repo issues; real worktree switching between sibling repos (agents + dotfiles);
+# real `wip-state.sh set` propagating BOARD_CARD_REPO_OVERRIDE through to the Projects v2 GraphQL query in a live environment; CI-3b AskUserQuestion flow collecting sibling worktree paths from the user in a full `claude -p` E2E session.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PASS=0
 FAIL=0
@@ -54,20 +37,29 @@ run_with_timeout() {
 # ---------------------------------------------------------------------------
 # Paths to source files under test
 # ---------------------------------------------------------------------------
-PARSE_CLOSES_ISSUES_JS="$AGENTS_DIR/hooks/lib/parse-closes-issues.js"
-PARSE_CLOSES_ISSUES_CLI="$AGENTS_DIR/bin/parse-closes-issues"
-PARSE_ISSUE_TOKENS="$AGENTS_DIR/bin/parse-issue-tokens"
-FILTER_SCRIPT="$AGENTS_DIR/skills/workflow-init/scripts/filter-init-candidates.sh"
-BOARD_CARD_LIB="$AGENTS_DIR/bin/github-issues/lib/board-card.sh"
-WIP_STATE="$AGENTS_DIR/bin/github-issues/wip-state.sh"
-WIP_SET_RESUME="$AGENTS_DIR/skills/workflow-init/scripts/wip-set-resume.sh"
-CLOSED_DETECTION="$AGENTS_DIR/skills/workflow-init/scripts/closed-detection.sh"
-AGGREGATE_WIP="$AGENTS_DIR/skills/workflow-init/scripts/aggregate-wip-check.sh"
-DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
-PATH_A_LABEL="$AGENTS_DIR/skills/workflow-init/scripts/path-a-label-and-board.sh"
-CLARIFY_SCOPE="$AGENTS_DIR/bin/github-issues/clarify-commit-scope.sh"
-CLARIFY_INTENT_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
-WIP_SET_SINGLE="$AGENTS_DIR/bin/github-issues/wip-set-single.sh"
+PARSE_CLOSES_ISSUES_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-closes-issues.js"
+PARSE_CLOSES_ISSUES_CLI="$SCRIPT_CHECKOUT_ROOT/bin/parse-closes-issues"
+PARSE_ISSUE_TOKENS="$SCRIPT_CHECKOUT_ROOT/bin/parse-issue-tokens"
+FILTER_SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/filter-init-candidates.sh"
+BOARD_CARD_LIB="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/board-card.sh"
+WIP_STATE="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh"
+WIP_SET_RESUME="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/wip-set-resume.sh"
+CLOSED_DETECTION="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/closed-detection.sh"
+AGGREGATE_WIP="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/aggregate-wip-check.sh"
+DRIVER="$SCRIPT_CHECKOUT_ROOT/bin/workflow/workflow-init-driver"
+PATH_A_LABEL="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/path-a-label-and-board.sh"
+CLARIFY_SCOPE="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/clarify-commit-scope.sh"
+CLARIFY_INTENT_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
+WIP_SET_SINGLE="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-set-single.sh"
+
+# The filter finds issue-state-check.sh from its own path, so a case that stubs that sibling
+# launches a copy of the filter placed inside the fake checkout that holds the stub.
+place_filter_copy() {
+    local fake_script_checkout_root="$1"
+    mkdir -p "$fake_script_checkout_root/skills/workflow-init/scripts"
+    cp "$FILTER_SCRIPT" "$fake_script_checkout_root/skills/workflow-init/scripts/filter-init-candidates.sh"
+    printf '%s' "$fake_script_checkout_root/skills/workflow-init/scripts/filter-init-candidates.sh"
+}
 
 # ---------------------------------------------------------------------------
 # Helper: write a minimal intent.md with ## Issues section and return path
@@ -116,14 +108,11 @@ process.stdout.write(e&&f in e ? 'yes' : 'no');
 
 # ===========================================================================
 # T1-T5, T14, T26: parse-closes-issues — table-driven single/multi-entry cases
-#
 # Table columns (IFS='|'):
 #   name       — test label
-#   tokens     — space-separated issue tokens written as "- TOKEN" lines under ## Issues
-#                Use __NONE__ for placeholder text (not a token)
+#   tokens     — space-separated issue tokens written as "- TOKEN" lines under ## Issues; use __NONE__ for placeholder text (not a token)
 #   want_count — expected JSON array length
 #   want_repos — space-separated "num:repo" pairs (one per entry); empty repo = no repo field
-#
 # Encoding: entry "42:" means {number:42} (no repo); "42:dotfiles" means {number:42,repo:"dotfiles"}
 # ===========================================================================
 if [ ! -f "$PARSE_CLOSES_ISSUES_JS" ] || [ ! -f "$PARSE_CLOSES_ISSUES_CLI" ]; then
@@ -262,14 +251,13 @@ echo "open"
 exit 0
 MOCKSTATE
     chmod +x "$TMP_T6/bin/github-issues/issue-state-check.sh"
-    export AGENTS_CONFIG_DIR="$TMP_T6"
+    FAKE_FILTER_T6="$(place_filter_copy "$TMP_T6")"
     OLD_PATH="$PATH"
     export PATH="$TMP_T6/mock-bin:$PATH"
-    OUT_T6=$(run_with_timeout 10 bash "$FILTER_SCRIPT" 42 2>/dev/null)
+    OUT_T6=$(run_with_timeout 10 bash "$FAKE_FILTER_T6" 42 2>/dev/null)
     RC_T6=$?
     export PATH="$OLD_PATH"
     rm -rf "$TMP_T6" 2>/dev/null
-    unset AGENTS_CONFIG_DIR
     if [ "$RC_T6" -eq 0 ] && printf '%s\n' "$OUT_T6" | grep -qx '#42'; then
         pass "T6: filter bare #42 → outputs '#42' token"
     else
@@ -298,14 +286,13 @@ echo "open"
 exit 0
 MOCKSTATE
     chmod +x "$TMP_T7/bin/github-issues/issue-state-check.sh"
-    export AGENTS_CONFIG_DIR="$TMP_T7"
+    FAKE_FILTER_T7="$(place_filter_copy "$TMP_T7")"
     OLD_PATH="$PATH"
     export PATH="$TMP_T7/mock-bin:$PATH"
-    OUT_T7=$(run_with_timeout 10 bash "$FILTER_SCRIPT" --repo-map "0:nirecom/dotfiles" 42 2>/dev/null)
+    OUT_T7=$(run_with_timeout 10 bash "$FAKE_FILTER_T7" --repo-map "0:nirecom/dotfiles" 42 2>/dev/null)
     RC_T7=$?
     export PATH="$OLD_PATH"
     rm -rf "$TMP_T7" 2>/dev/null
-    unset AGENTS_CONFIG_DIR
     if [ "$RC_T7" -eq 0 ] && printf '%s\n' "$OUT_T7" | grep -qx 'nirecom/dotfiles#42'; then
         pass "T7: filter --repo-map 0:nirecom/dotfiles 42 → outputs 'nirecom/dotfiles#42'"
     else
@@ -336,16 +323,15 @@ echo "open"
 exit 0
 MOCKSTATE
     chmod +x "$TMP_T8/bin/github-issues/issue-state-check.sh"
-    export AGENTS_CONFIG_DIR="$TMP_T8"
+    FAKE_FILTER_T8="$(place_filter_copy "$TMP_T8")"
     OLD_PATH="$PATH"
     export PATH="$TMP_T8/mock-bin:$PATH"
     # Two issues both numbered 42, but in different repos
-    OUT_T8=$(run_with_timeout 10 bash "$FILTER_SCRIPT" \
+    OUT_T8=$(run_with_timeout 10 bash "$FAKE_FILTER_T8" \
         --repo-map "0:nirecom/agents" --repo-map "1:nirecom/dotfiles" 42 42 2>/dev/null)
     RC_T8=$?
     export PATH="$OLD_PATH"
     rm -rf "$TMP_T8" 2>/dev/null
-    unset AGENTS_CONFIG_DIR
     HAS_AGENTS=$(printf '%s\n' "$OUT_T8" | grep -cx 'nirecom/agents#42' || true)
     HAS_DOTFILES=$(printf '%s\n' "$OUT_T8" | grep -cx 'nirecom/dotfiles#42' || true)
     if [ "$RC_T8" -eq 0 ] && [ "$HAS_AGENTS" -ge 1 ] && [ "$HAS_DOTFILES" -ge 1 ]; then
@@ -430,7 +416,7 @@ else
     printf '#!/bin/bash\nif [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ]; then echo "upstream-owner/upstream-repo"; exit 0; fi\nexit 0\n' \
         > "$TMP_T11B/stubbin/gh"
     chmod +x "$TMP_T11B/stubbin/gh"
-    OUT_T11B=$(PATH="$TMP_T11B/stubbin:$PATH" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    OUT_T11B=$(PATH="$TMP_T11B/stubbin:$PATH" \
         run_with_timeout 20 bash -c '
             set -u
             cd "$2" || exit 92
@@ -501,7 +487,7 @@ fi
 # T15: driver wip-check phase handles --repo-map (cross-repo wip-state routing)
 #      (wip-set-resume.sh absorbed into driver wip-check phase)
 # ===========================================================================
-WIPE_CHECK_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/wip-check.js"
+WIPE_CHECK_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/wip-check.js"
 if [ ! -f "$WIPE_CHECK_JS" ]; then
     skip "T15: wip-check.js not found"
 elif grep -qE '(repo_map|repoMap|REPO_MAP|repo)' "$WIPE_CHECK_JS" 2>/dev/null && \
@@ -534,18 +520,18 @@ echo "${VAL:-open}"
 exit 0
 MOCKSTATE
     chmod +x "$TMP_T16/bin/github-issues/issue-state-check.sh"
-    export AGENTS_CONFIG_DIR="$TMP_T16"
+    FAKE_FILTER_T16="$(place_filter_copy "$TMP_T16")"
     OLD_PATH="$PATH"
     export PATH="$TMP_T16/mock-bin:$PATH"
     # agents#100 open, dotfiles#200 closed → only agents#100 survives
     export MOCK_STATE_100=open
     export MOCK_STATE_200=closed
-    OUT_T16=$(run_with_timeout 10 bash "$FILTER_SCRIPT" \
+    OUT_T16=$(run_with_timeout 10 bash "$FAKE_FILTER_T16" \
         --repo-map "0:nirecom/agents" --repo-map "1:nirecom/dotfiles" 100 200 2>/dev/null)
     RC_T16=$?
     export PATH="$OLD_PATH"
     rm -rf "$TMP_T16" 2>/dev/null
-    unset AGENTS_CONFIG_DIR MOCK_STATE_100 MOCK_STATE_200
+    unset MOCK_STATE_100 MOCK_STATE_200
     HAS_AGENTS=$(printf '%s\n' "$OUT_T16" | grep -cx 'nirecom/agents#100' || true)
     HAS_DOTFILES=$(printf '%s\n' "$OUT_T16" | grep -cx 'nirecom/dotfiles#200' || true)
     if [ "$RC_T16" -eq 0 ] && [ "$HAS_AGENTS" -ge 1 ] && [ "$HAS_DOTFILES" -eq 0 ]; then
@@ -561,7 +547,7 @@ fi
 # T17: driver closed-detection phase handles repo context from issue_json_cache
 #      (closed-detection.sh absorbed into driver closed-detection phase)
 # ===========================================================================
-CLOSED_DET_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/closed-detection.js"
+CLOSED_DET_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/closed-detection.js"
 if [ ! -f "$CLOSED_DET_JS" ]; then
     skip "T17: closed-detection.js not found"
 elif grep -qE '(CLOSED|closed|state)' "$CLOSED_DET_JS" 2>/dev/null; then

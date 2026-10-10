@@ -4,15 +4,8 @@
 # Categories: cc_restart, vscode_reload, installer_rerun, os_reboot
 # Always exits 0 (fail-safe). On any gh failure, outputs all not_required|.
 # Args: $1 = PR_NUMBER
-# Env: AGENTS_CONFIG_DIR (empty → all not_required|)
-#
-# reason strings are fixed sentinels (not variable filenames):
-#   cc_restart:       CLAUDE.md modified in PR
-#                     rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)
-#                     settings.json model field changed
-#   vscode_reload:    keybindings.json modified | vscode settings modified
-#   installer_rerun:  install.ps1 modified in PR | install.sh modified in PR | installer script modified in PR
-#   os_reboot:        (always not_required at lib layer; env override in SKILL.md)
+# reason strings are fixed sentinels (not variable filenames) — see each stage below;
+# os_reboot is always not_required at this layer (env override lives in SKILL.md).
 set -euo pipefail
 
 emit_all_not_required() {
@@ -23,7 +16,7 @@ emit_all_not_required() {
 }
 
 PR_NUMBER="${1:-}"
-if [[ -z "$PR_NUMBER" ]] || [[ -z "${AGENTS_CONFIG_DIR:-}" ]]; then
+if [[ -z "$PR_NUMBER" ]]; then
   emit_all_not_required
   exit 0
 fi

@@ -16,11 +16,11 @@ run_g_entrypoint_packaging() {
   first="${first%$'\r'}"
   check "G01: the entrypoint keeps the node shebang" "#!/usr/bin/env node" "$first"
 
-  if ! git -C "$AGENTS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    skip_case "G02 git index mode (AGENTS_DIR is not a git repository)"
+  if ! git -C "$SCRIPT_CHECKOUT_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    skip_case "G02 git index mode (this checkout is not a git repository)"
     return 0
   fi
-  mode="$(git -C "$AGENTS_DIR" ls-files -s -- bin/vscode-cc-repair/index.js | awk '{print $1}')"
+  mode="$(git -C "$SCRIPT_CHECKOUT_ROOT" ls-files -s -- bin/vscode-cc-repair/index.js | awk '{print $1}')"
   if [ -z "$mode" ]; then
     skip_case "G02 git index mode (the entrypoint is not tracked)"
     return 0
@@ -49,15 +49,15 @@ run_g_lib_packaging() {
 
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    rel="${f#"$AGENTS_DIR"/}"
+    rel="${f#"$SCRIPT_CHECKOUT_ROOT"/}"
     first="$(head -1 "$f")"
     first="${first%$'\r'}"
     case "$first" in
       '#!'*) echo "FAIL: G03: $rel carries a shebang -- [$first]"; FAIL=$((FAIL + 1)) ;;
       *)     echo "PASS: G03: $rel carries no shebang"; PASS=$((PASS + 1)) ;;
     esac
-    if git -C "$AGENTS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-      mode="$(git -C "$AGENTS_DIR" ls-files -s -- "$rel" | awk '{print $1}')"
+    if git -C "$SCRIPT_CHECKOUT_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      mode="$(git -C "$SCRIPT_CHECKOUT_ROOT" ls-files -s -- "$rel" | awk '{print $1}')"
       if [ -z "$mode" ]; then
         skip_case "G04 index mode for $rel (not tracked yet)"
       else
@@ -85,7 +85,7 @@ console.log("MISSINGFN="+(missing.join(",")||"-")+" MISSINGCONST="+(consts.join(
 
 run_g_readme() {
   local readme body
-  readme="$AGENTS_DIR/README.md"
+  readme="$SCRIPT_CHECKOUT_ROOT/README.md"
   check_file "G06a: README.md exists at the repo root" "$readme"
   if [ ! -f "$readme" ]; then
     echo "FAIL: G06b: README.md documents --prune-stub-sessions -- no README.md"
@@ -98,36 +98,15 @@ run_g_readme() {
 
 # ---- G2: the single-displacement-site invariant -----------------------------
 
-# This is the structural half of the safety argument. Every behavioural test above
-# proves that the ONE known deletion path refuses correctly; none of them can prove
-# that a second, unguarded deletion path has not appeared elsewhere in the module —
-# an `fs.unlinkSync` added inside the scanner for a "stale temp file" cleanup would
-# leave this whole suite green.
-#
-# The property is NOT "there is exactly one unlink". A session file is just as gone
-# when it is renamed out from under the extension, truncated to zero, or overwritten
-# in place, and the prune path is being changed to displace the stub with rename rather
-# than destroy it with unlink — so a guard spelled `unlinkSync` would have gone green on
-# a build with no protection at all. The invariant restated for the whole class:
-#
-#   there is exactly one place under bin/vscode-cc-repair/ where a
-#   session file is destroyed OR displaced, and it is the place that carries the
-#   re-verification.
-#
-# Everything else that touches these primitives is enumerated below as an allowlist keyed
-# on (file, primitive) — currently the patch path, which legitimately writes a temp file,
-# renames it over the bundle, and removes the temp file on failure. A NEW destructive call
-# anywhere, including a second one inside an already-allowlisted file's new primitive,
-# fails EXTRA. An allowlist entry that no longer matches anything fails MISSING, so the
-# list cannot rot into a blanket permission.
-#
-# Still a SOURCE GREP, not a behavioural assertion: it reads the text of the shipped
-# files. It can be defeated deliberately (an aliased fs handle, a computed member name,
-# a child process) and it will need updating whenever the code is restructured. Only
-# full-line `//` comments are stripped, so a primitive named inside a trailing comment or
-# a string literal still counts — a false positive here is cheap and a false negative is
-# not. It is here because the property is worth an approximate guard, not because the
-# grep itself is authoritative.
+# The structural half of the safety argument: the behavioural tests prove the ONE known
+# deletion path refuses correctly, not that no second, unguarded one has appeared. The
+# invariant covers the whole class (unlink, rename, truncate, overwrite): exactly one
+# place under bin/vscode-cc-repair/ destroys OR displaces a session file, and it is the
+# place that carries the re-verification. Every other use of these primitives is
+# allowlisted by (file, primitive): a new call fails EXTRA, a stale entry fails MISSING.
+# A SOURCE GREP, not a behavioural assertion: defeatable on purpose (aliased fs handle,
+# computed member name, child process). Only full-line `//` comments are stripped, so a
+# false positive is cheap and a false negative is not.
 run_g_destructive_call_sites() {
   if [ ! -d "$LIB_DIR" ]; then
     echo "FAIL: G07: one displacement site under $LIB_REL/ -- directory not found"
@@ -278,7 +257,7 @@ console.log("DEAD="+dead+" PAYLOAD="+(payload instanceof Map)+
     "DEAD=false PAYLOAD=true SIZE=true" "$NODE_OUT"
 
   local hits
-  hits="$( { grep -rlF 'CONTENT_RECORD_TYPES' "$LIB_DIR" 2>/dev/null || true; } | sed "s|^$AGENTS_DIR/||" | sort | tr '\n' ' ')"
+  hits="$( { grep -rlF 'CONTENT_RECORD_TYPES' "$LIB_DIR" 2>/dev/null || true; } | sed "s|^$SCRIPT_CHECKOUT_ROOT/||" | sort | tr '\n' ' ')"
   hits="${hits% }"
   check "G12b: no file under $LIB_REL/ still mentions the retired name" "" "$hits"
 }

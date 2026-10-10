@@ -2,7 +2,7 @@
 # Invoked via `&` from profile-snippet.ps1's `codes` wrapper — every call re-reads this
 # file from disk, so edits here (unlike edits to a dot-sourced function) take effect in
 # already-open shells immediately, with no need to re-source $PROFILE or open a new window.
-$AgentsRoot = Split-Path -Parent $PSScriptRoot
+$SCRIPT_CHECKOUT_ROOT = Split-Path -Parent $PSScriptRoot
 
 # $cmd (built below) is a command STRING executed by a child pwsh, so every value
 # interpolated into it is wrapped in single quotes with embedded quotes doubled ('' is
@@ -14,12 +14,12 @@ function _codesQuote([string]$s) { "'" + ($s -replace "'", "''") + "'" }
 # Re-apply the VS Code extension's worktree-visibility patch (every extension
 # auto-upgrade overwrites it) and prune stale stub sessions before the extension
 # host loads — best-effort: a repair failure must never block a `codes` launch.
-$_repairScript = Join-Path $AgentsRoot 'bin\vscode-cc-repair'
+$_repairScript = Join-Path $SCRIPT_CHECKOUT_ROOT 'bin\vscode-cc-repair'
 if (Test-Path $_repairScript) {
     try { & node $_repairScript --prune-stub-sessions } catch {}
 }
-$syncScript = "$AgentsRoot\bin\session-sync.ps1"
-$waitScript = "$AgentsRoot\bin\wait-vscode-window.ps1"
+$syncScript = "$SCRIPT_CHECKOUT_ROOT\bin\session-sync.ps1"
+$waitScript = "$SCRIPT_CHECKOUT_ROOT\bin\wait-vscode-window.ps1"
 # Default to current directory when no argument is given — mirrors `code` bare behaviour.
 $_effectiveArgs = if ($args.Count -gt 0) { $args } else { @('.') }
 $target = $_effectiveArgs[0]
@@ -29,7 +29,7 @@ if ($target -match '\.code-workspace$') {
     $name = Split-Path -Leaf (Resolve-Path $target).Path
 }
 $_ssOn = $false
-$_getCfg = Join-Path $AgentsRoot 'bin\get-config-var.ps1'
+$_getCfg = Join-Path $SCRIPT_CHECKOUT_ROOT 'bin\get-config-var.ps1'
 # Save the pre-existing $LASTEXITCODE so it can be restored once the gate is finalized —
 # `codes` must not leave 0/1 behind for a caller inspecting $LASTEXITCODE for an
 # unrelated prior command.

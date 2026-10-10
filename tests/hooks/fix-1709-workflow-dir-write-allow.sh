@@ -11,10 +11,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-HOOK="$AGENTS_DIR/hooks/enforce-worktree.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -44,7 +44,7 @@ run_hook() {
     local cmd="$1" hi out rc
     hi=$(mk_input "$cmd")
     out=$( cd "$NONGIT" && printf '%s' "$hi" | WORKFLOW_STATE_DIR="$WFDIR_N" WORKFLOW_PLANS_DIR="$WFDIR_N" \
-        ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        ENFORCE_WORKTREE=on \
         "$RWT" 15 node "$HOOK" 2>/dev/null )
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
@@ -61,7 +61,7 @@ run_hook_default_home() {
     hi=$(mk_input "$cmd")
     out=$( cd "$NONGIT" && printf '%s' "$hi" | env -u WORKFLOW_STATE_DIR -u WORKFLOW_PLANS_DIR \
         HOME="$hm_n" USERPROFILE="$hm_n" \
-        ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        ENFORCE_WORKTREE=on \
         "$RWT" 15 node "$HOOK" 2>/dev/null )
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"

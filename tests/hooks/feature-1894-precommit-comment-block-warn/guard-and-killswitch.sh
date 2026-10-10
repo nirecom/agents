@@ -10,7 +10,7 @@
 # the scanner, since "silent" must mean "not invoked", not "invoked and
 # printed nothing". A third question: whether the kill switch can be
 # flipped by whoever runs `git commit` — it must not be, COMMENT_BLOCK_ENFORCE
-# reads from the config dir's .env only, so P05 drives both the honest path
+# reads from the agents main root's .env only, so P05 drives both the honest path
 # and the ambient spoof.
 
 # Sourced by the dispatcher; all helpers and constants are defined there.

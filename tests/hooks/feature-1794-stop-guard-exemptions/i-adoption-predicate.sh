@@ -30,7 +30,7 @@
 # is observable in the failure text.
 pred_eval() {
     "$RWT" 20 node -e "
-const L = require('$_AGENTS_DIR_NODE/hooks/workflow-state/lifecycle.js');
+const L = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/lifecycle.js');
 const fn = L.hasSelfRecordedStepSettlement;
 if (typeof fn !== 'function') { process.stdout.write('BAD:hasSelfRecordedStepSettlement-not-exported'); process.exit(0); }
 const BASE = Object.freeze({ kind: 'step_status', step: 'research', status: 'complete', provenance: 'observed', origin: 'mark-step' });

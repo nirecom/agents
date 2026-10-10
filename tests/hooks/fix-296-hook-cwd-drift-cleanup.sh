@@ -16,13 +16,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-CLEANUP="${_AGENTS_DIR_NODE}/hooks/cleanup-orphan-dir.js"
+CLEANUP="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/cleanup-orphan-dir.js"
 
 PASS=0
 FAIL=0
@@ -39,7 +39,7 @@ run_with_timeout() {
     fi
 }
 
-if [ ! -f "$AGENTS_DIR/hooks/cleanup-orphan-dir.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/cleanup-orphan-dir.js" ]; then
     echo "FAIL: hooks/cleanup-orphan-dir.js not found"
     echo ""
     echo "Results: 0 passed, 1 failed"
@@ -70,12 +70,12 @@ setup_base() {
 cleanup_base() {
     # Best-effort cleanup. Remove any temp worktree registered under our base.
     if [ -n "${TEMP_WT_PATH:-}" ] && [ -d "$TEMP_WT_PATH" ]; then
-        git -C "$AGENTS_DIR" worktree remove -f "$TEMP_WT_PATH" >/dev/null 2>&1 || true
+        git -C "$SCRIPT_CHECKOUT_ROOT" worktree remove -f "$TEMP_WT_PATH" >/dev/null 2>&1 || true
         # If the branch was created, prune it.
         if [ -n "${TEMP_WT_BRANCH:-}" ]; then
-            git -C "$AGENTS_DIR" branch -D "$TEMP_WT_BRANCH" >/dev/null 2>&1 || true
+            git -C "$SCRIPT_CHECKOUT_ROOT" branch -D "$TEMP_WT_BRANCH" >/dev/null 2>&1 || true
         fi
-        git -C "$AGENTS_DIR" worktree prune >/dev/null 2>&1 || true
+        git -C "$SCRIPT_CHECKOUT_ROOT" worktree prune >/dev/null 2>&1 || true
     fi
     [ -n "${TMPDIR_C:-}" ] && [ -d "$TMPDIR_C" ] && rm -rf "$TMPDIR_C" 2>/dev/null || true
 }
@@ -142,10 +142,10 @@ test_F3() {
     TEMP_WT_PATH="$target"
     TEMP_WT_BRANCH="test/296-cleanup-f3-$$"
     # Use the agents repo (parent of the cleanup script) to register the wt.
-    if ! git -C "$AGENTS_DIR" worktree add -q "$target" -b "$TEMP_WT_BRANCH" >/dev/null 2>&1; then
+    if ! git -C "$SCRIPT_CHECKOUT_ROOT" worktree add -q "$target" -b "$TEMP_WT_BRANCH" >/dev/null 2>&1; then
         # Branch may already exist from a prior failed run; retry without -b.
-        git -C "$AGENTS_DIR" branch -D "$TEMP_WT_BRANCH" >/dev/null 2>&1 || true
-        if ! git -C "$AGENTS_DIR" worktree add -q "$target" -b "$TEMP_WT_BRANCH" >/dev/null 2>&1; then
+        git -C "$SCRIPT_CHECKOUT_ROOT" branch -D "$TEMP_WT_BRANCH" >/dev/null 2>&1 || true
+        if ! git -C "$SCRIPT_CHECKOUT_ROOT" worktree add -q "$target" -b "$TEMP_WT_BRANCH" >/dev/null 2>&1; then
             fail "F3: could not create test worktree at $target"
             return
         fi
@@ -157,9 +157,9 @@ test_F3() {
         fail "F3: rc=$RC out=$OUT"
     fi
     # Clean up the temp worktree.
-    git -C "$AGENTS_DIR" worktree remove -f "$target" >/dev/null 2>&1 || true
-    git -C "$AGENTS_DIR" branch -D "$TEMP_WT_BRANCH" >/dev/null 2>&1 || true
-    git -C "$AGENTS_DIR" worktree prune >/dev/null 2>&1 || true
+    git -C "$SCRIPT_CHECKOUT_ROOT" worktree remove -f "$target" >/dev/null 2>&1 || true
+    git -C "$SCRIPT_CHECKOUT_ROOT" branch -D "$TEMP_WT_BRANCH" >/dev/null 2>&1 || true
+    git -C "$SCRIPT_CHECKOUT_ROOT" worktree prune >/dev/null 2>&1 || true
     TEMP_WT_PATH=""
     TEMP_WT_BRANCH=""
 }

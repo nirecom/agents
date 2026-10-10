@@ -1,7 +1,7 @@
 "use strict";
 
 // Per-context language config. Routes language policy queries to .env keys
-// (PLAN_LANG, DOCS_LANG_PUBLIC, DOCS_LANG_PRIVATE) in $AGENTS_CONFIG_DIR/.env.
+// (PLAN_LANG, DOCS_LANG_PUBLIC, DOCS_LANG_PRIVATE) in $AGENTS_MAIN_ROOT/.env.
 // Fail-open on parse/IO errors: returns "any".
 
 const { loadDefaultEnv, readDefaultEnvFile } = require("./load-env");

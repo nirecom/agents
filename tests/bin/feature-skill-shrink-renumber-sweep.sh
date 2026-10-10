@@ -18,7 +18,7 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PASS=0
 FAIL=0
@@ -27,7 +27,7 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
 # R1: bin/review-step-numbers exists
-SWEEP_SCRIPT="$AGENTS_DIR/bin/review-step-numbers"
+SWEEP_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers"
 if [ -f "$SWEEP_SCRIPT" ]; then
     pass "R1: bin/review-step-numbers exists"
 else
@@ -36,7 +36,7 @@ fi
 
 # R2: bin/review-step-numbers exits 0 in --all mode (no legacy patterns in repo)
 if [ -f "$SWEEP_SCRIPT" ]; then
-    if ( cd "$AGENTS_DIR" && bash bin/review-step-numbers --all ) >/dev/null 2>&1; then
+    if ( cd "$SCRIPT_CHECKOUT_ROOT" && bash bin/review-step-numbers --all ) >/dev/null 2>&1; then
         pass "R2: bin/review-step-numbers --all exits 0 (no decimal step labels present)"
     else
         fail "R2: bin/review-step-numbers --all exited non-zero (decimal step labels still present)"
@@ -50,7 +50,7 @@ check_literal() {
     local label="$1"
     local literal="$2"
     local rel="$3"
-    local path="$AGENTS_DIR/$rel"
+    local path="$SCRIPT_CHECKOUT_ROOT/$rel"
     if [ ! -f "$path" ]; then
         fail "$label: $rel missing"
         return
@@ -67,7 +67,7 @@ check_absent() {
     local label="$1"
     local literal="$2"
     local rel="$3"
-    local path="$AGENTS_DIR/$rel"
+    local path="$SCRIPT_CHECKOUT_ROOT/$rel"
     if [ ! -f "$path" ]; then
         fail "$label: $rel missing"
         return
@@ -113,7 +113,7 @@ check_literal "R10" "written_by_step_6h" "skills/issue-close-finalize/scripts/ru
 # --- New assertions for #971 (step numbering rule + review-step-numbers) ---
 
 # R11: No WE-4.5 decimal label in non-test tracked files (mirrors lint Tier 2 exclusion)
-R11_HITS=$(cd "$AGENTS_DIR" && git ls-files -- '*.md' '*.sh' | \
+R11_HITS=$(cd "$SCRIPT_CHECKOUT_ROOT" && git ls-files -- '*.md' '*.sh' | \
     grep -v '^tests/' | grep -v '^docs/history' | grep -v '^CHANGELOG' | \
     xargs grep -lF 'WE-4.5' 2>/dev/null || true)
 if [ -z "$R11_HITS" ]; then
@@ -155,7 +155,7 @@ if command -v rg >/dev/null 2>&1; then
     _BASELINE=$(git -C "$_TMPGIT" rev-parse HEAD)
     printf '## WE-4.5: inserted step\n' > "$_TMPGIT/bad.md"
     git -C "$_TMPGIT" add . && git -C "$_TMPGIT" commit --quiet -m "add violation"
-    _R18OUT=$(cd "$_TMPGIT" && bash "$AGENTS_DIR/bin/review-step-numbers" --base "$_BASELINE" 2>&1)
+    _R18OUT=$(cd "$_TMPGIT" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --base "$_BASELINE" 2>&1)
     _R18RC=$?
     rm -rf "$_TMPGIT"
     if [ "$_R18RC" -eq 1 ]; then
@@ -192,7 +192,7 @@ else
 fi
 
 # R21: SKIPPED when merge-base cannot be resolved
-_R21OUT=$(cd "$AGENTS_DIR" && bash bin/review-step-numbers --base totally-nonexistent-sha 2>&1)
+_R21OUT=$(cd "$SCRIPT_CHECKOUT_ROOT" && bash bin/review-step-numbers --base totally-nonexistent-sha 2>&1)
 _R21RC=$?
 if [ "$_R21RC" -eq 0 ] && echo "$_R21OUT" | grep -q "SKIPPED"; then
     pass "R21: unresolvable --base → exit 0 + SKIPPED"
@@ -209,7 +209,7 @@ if command -v rg >/dev/null 2>&1; then
     git -C "$_TMPALL" config core.hooksPath /dev/null
     printf '## WE-4.5: violation\n' > "$_TMPALL/bad.md"
     git -C "$_TMPALL" add . && git -C "$_TMPALL" commit --quiet -m "violation"
-    _R22OUT=$(cd "$_TMPALL" && bash "$AGENTS_DIR/bin/review-step-numbers" --all 2>&1)
+    _R22OUT=$(cd "$_TMPALL" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --all 2>&1)
     _R22RC=$?
     rm -rf "$_TMPALL"
     if [ "$_R22RC" -eq 0 ]; then
@@ -255,7 +255,7 @@ if command -v rg >/dev/null 2>&1; then
     _HIST_BASE=$(git -C "$_TMPHIST" rev-parse HEAD)
     printf '### entry 2\nBackground: bar\n' >> "$_TMPHIST/docs/history.md"
     git -C "$_TMPHIST" add . && git -C "$_TMPHIST" commit --quiet -m "append history"
-    _R24OUT=$(cd "$_TMPHIST" && bash "$AGENTS_DIR/bin/review-step-numbers" --base "$_HIST_BASE" 2>&1)
+    _R24OUT=$(cd "$_TMPHIST" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --base "$_HIST_BASE" 2>&1)
     _R24RC=$?
     rm -rf "$_TMPHIST"
     if [ "$_R24RC" -eq 0 ] && echo "$_R24OUT" | grep -q "No diff-mode files to scan"; then
@@ -279,7 +279,7 @@ if command -v rg >/dev/null 2>&1; then
     _STG_BASE=$(git -C "$_TMPSTG" rev-parse HEAD)
     printf '## WE-7.5: staged violation\n' > "$_TMPSTG/staged.md"
     git -C "$_TMPSTG" add staged.md
-    _R25OUT=$(cd "$_TMPSTG" && bash "$AGENTS_DIR/bin/review-step-numbers" --base "$_STG_BASE" 2>&1)
+    _R25OUT=$(cd "$_TMPSTG" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --base "$_STG_BASE" 2>&1)
     _R25RC=$?
     rm -rf "$_TMPSTG"
     if [ "$_R25RC" -eq 1 ]; then
@@ -302,7 +302,7 @@ if command -v rg >/dev/null 2>&1; then
     _TMPTGT=$(mktemp -d)
     mkdir -p "$_TMPTGT/skills/clarify-intent"
     printf '### Step 0: legacy heading\nSome content\n' > "$_TMPTGT/skills/clarify-intent/SKILL.md"
-    _R26OUT=$(cd "$_TMPTGT" && bash "$AGENTS_DIR/bin/review-step-numbers" --all 2>&1)
+    _R26OUT=$(cd "$_TMPTGT" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --all 2>&1)
     _R26RC=$?
     rm -rf "$_TMPTGT"
     if [ "$_R26RC" -eq 0 ]; then
@@ -331,7 +331,7 @@ if command -v rg >/dev/null 2>&1; then
     git -C "$_TMPWT" add . && git -C "$_TMPWT" commit --quiet -m "baseline"
     _WT_BASE=$(git -C "$_TMPWT" rev-parse HEAD)
     printf '## WE-9.5: unstaged violation\n' > "$_TMPWT/unstaged.md"
-    _R27OUT=$(cd "$_TMPWT" && bash "$AGENTS_DIR/bin/review-step-numbers" --base "$_WT_BASE" 2>&1)
+    _R27OUT=$(cd "$_TMPWT" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --base "$_WT_BASE" 2>&1)
     _R27RC=$?
     rm -rf "$_TMPWT"
     if [ "$_R27RC" -eq 1 ]; then
@@ -354,7 +354,7 @@ if command -v rg >/dev/null 2>&1; then
     git -C "$_TMPUT" add . && git -C "$_TMPUT" commit --quiet -m "baseline"
     _UT_BASE=$(git -C "$_TMPUT" rev-parse HEAD)
     printf '## WE-11.5: untracked violation\n' > "$_TMPUT/untracked.md"
-    _R28OUT=$(cd "$_TMPUT" && bash "$AGENTS_DIR/bin/review-step-numbers" --base "$_UT_BASE" 2>&1)
+    _R28OUT=$(cd "$_TMPUT" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --base "$_UT_BASE" 2>&1)
     _R28RC=$?
     rm -rf "$_TMPUT"
     if [ "$_R28RC" -eq 1 ]; then
@@ -378,7 +378,7 @@ if command -v rg >/dev/null 2>&1; then
     _LG_BASE=$(git -C "$_TMPLG" rev-parse HEAD)
     printf '### Step 6a: legacy step\n' > "$_TMPLG/legacy.md"
     git -C "$_TMPLG" add . && git -C "$_TMPLG" commit --quiet -m "add legacy"
-    _R29OUT=$(cd "$_TMPLG" && bash "$AGENTS_DIR/bin/review-step-numbers" --base "$_LG_BASE" 2>&1)
+    _R29OUT=$(cd "$_TMPLG" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --base "$_LG_BASE" 2>&1)
     _R29RC=$?
     rm -rf "$_TMPLG"
     if [ "$_R29RC" -eq 1 ] && echo "$_R29OUT" | grep -q "^HARD:"; then
@@ -395,7 +395,7 @@ if command -v rg >/dev/null 2>&1; then
     _TMPMOP=$(mktemp -d)
     mkdir -p "$_TMPMOP/skills/make-outline-plan"
     printf '### Step 0: legacy heading\n' > "$_TMPMOP/skills/make-outline-plan/SKILL.md"
-    _R30OUT=$(cd "$_TMPMOP" && bash "$AGENTS_DIR/bin/review-step-numbers" --all 2>&1)
+    _R30OUT=$(cd "$_TMPMOP" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --all 2>&1)
     rm -rf "$_TMPMOP"
     if echo "$_R30OUT" | grep -q "HARD:"; then
         pass "R30: run_targeted detects ### Step 0 in make-outline-plan/SKILL.md"
@@ -411,7 +411,7 @@ if command -v rg >/dev/null 2>&1; then
     _TMPSC=$(mktemp -d)
     mkdir -p "$_TMPSC/skills/session-close"
     printf '## Step 1: plain integer heading\n' > "$_TMPSC/skills/session-close/SKILL.md"
-    _R31OUT=$(cd "$_TMPSC" && bash "$AGENTS_DIR/bin/review-step-numbers" --all 2>&1)
+    _R31OUT=$(cd "$_TMPSC" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --all 2>&1)
     rm -rf "$_TMPSC"
     if echo "$_R31OUT" | grep -q "HARD:"; then
         pass "R31: run_targeted detects ## Step [0-9] in session-close/SKILL.md"
@@ -427,7 +427,7 @@ if command -v rg >/dev/null 2>&1; then
     _TMPEX=$(mktemp -d)
     mkdir -p "$_TMPEX/docs"
     printf '### WE-4.5: historical entry (excluded)\n' > "$_TMPEX/docs/history.md"
-    _R32OUT=$(cd "$_TMPEX" && bash "$AGENTS_DIR/bin/review-step-numbers" --all 2>&1)
+    _R32OUT=$(cd "$_TMPEX" && bash "$SCRIPT_CHECKOUT_ROOT/bin/review-step-numbers" --all 2>&1)
     rm -rf "$_TMPEX"
     if echo "$_R32OUT" | grep -q "No decimal step-label violations found"; then
         pass "R32: --all mode excludes docs/history.md (Tier 1 exclusion)"

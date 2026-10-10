@@ -20,7 +20,7 @@ set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CASE_DIR="$DIR/feature-2134-command-ir-equivalence"
-AGENTS_DIR="$(cd "$DIR/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
@@ -28,8 +28,8 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 # WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR pinning is unnecessary, but drop the parent session's id.
 unset CLAUDE_CODE_SESSION_ID
 
-RUNNER="$AGENTS_DIR/bin/run-with-timeout.sh"
-OWNERSHIP_DOC="$AGENTS_DIR/docs/architecture/claude-code/shell-command-parsing.md"
+RUNNER="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+OWNERSHIP_DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/shell-command-parsing.md"
 
 # Blocking cases. The Step 1 completion criterion is that all of these are
 # "green against the current implementation".

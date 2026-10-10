@@ -9,7 +9,7 @@ Write or update tests for the current task.
 
 ## Procedure
 
-WT-0. Read the session facts once, before the pre-launch steps that consume them: `node "$AGENTS_CONFIG_DIR/bin/workflow/read-session-facts" --session "$SESSION_ID"`
+WT-0. Read the session facts once, before the pre-launch steps that consume them: `node "$AGENTS_MAIN_ROOT/bin/workflow/read-session-facts" --session "$SESSION_ID"`
    - `PLANS_DIR=` — substitute this absolute path for every `<PLANS_DIR>` below.
    - `GATE_CONFIRM_TESTS=` — the WT-5 pre-action gate (`ON` / `OFF` / `ERROR`).
    - `COMPLEXITY_LEVEL_write_tests=`, `COMPLEXITY_MODEL_write_tests=` and `COMPLEXITY_SIGNALS=` — the WT-6 level, model and signals.
@@ -29,7 +29,7 @@ WT-3. **Enumerate call paths**: For each source file from WT-2, trace all integr
 WT-4. List all planned test cases by category (include call-path error cases from WT-3).
 WT-5. Decide the destination of each planned case — append to an existing test file, or create a new one.
    - For each planned case, state its complete source set S (the `# Tests:` tokens the case protects).
-   - Run `bash "$AGENTS_CONFIG_DIR/bin/find-tests-for-source.sh" --sources <comma-joined S>` with every distinct S in one call, repeating `--sources` (Bash, standalone command with timeout 600000; split rule in `skills/_shared/test-design/append-vs-new.md`; rows come back in query order; read-only, so `hooks/block-tests-direct.js` does not apply). On exit 4 or a tool timeout, HALT and surface the stderr.
+   - Run `bash "$AGENTS_MAIN_ROOT/bin/find-tests-for-source.sh" --sources <comma-joined S>` with every distinct S in one call, repeating `--sources` (Bash, standalone command with timeout 600000; split rule in `skills/_shared/test-design/append-vs-new.md`; rows come back in query order; read-only, so `hooks/block-tests-direct.js` does not apply). On exit 4 or a tool timeout, HALT and surface the stderr.
    - Record each row's verdict/reason/target as the case group's destination. `append` is mandatory; the sole permitted new file when a target exists is the `size-hard-limit` case, per `skills/_shared/test-design/append-vs-new.md` — do not decide by eye.
    - If `GATE_CONFIRM_TESTS` is `ON` or `ERROR`, present the planned cases together with their destinations and wait for user confirmation before WT-6.
 WT-6. **Determine the subagent's model**:
@@ -37,8 +37,8 @@ WT-6. **Determine the subagent's model**:
    - If `NONE` (fail-open for sessions without persisted evaluation):
      - Dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` + source files from WT-2–WT-3 + planned test cases from WT-4 (+ `detail.md` if present), so S1/S1b and stage-specific signals can be judged (rubric: `skills/_shared/judge-task-complexity.md`).
      - Write the raw subagent output to `<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt` (Write tool — untrusted text via file only).
-     - Run `node "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt" --session "<session-id>" --stage write-tests`.
-     - Run `node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_tests --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
+     - Run `node "$AGENTS_MAIN_ROOT/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt" --session "<session-id>" --stage write-tests`.
+     - Run `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --stage write_tests --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
    - Emit in Claude text output (NOT Bash echo):
      > Model selected: **<model alias>** (signals: [comma-separated triggered signal IDs, or "none"])
 
@@ -82,8 +82,8 @@ WT-8. Present the final test file content to the user for review — gated by **
 After completing this skill:
 The order below is load-bearing — do not reorder.
 1. Stage the test files first: `git add tests/` — the evidence gate is fail-closed, so an unstaged tests/ makes the `next-step --advance` call below reject the completion.
-2. From the linked worktree's CWD, as a single standalone Bash command: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step write_tests --complete --next`
-3. Do NOT prefix that `next-step --advance` call with `cd "$AGENTS_CONFIG_DIR" &&` — the CLI resolves the evidence repo from the Bash process's own CWD via `git rev-parse --show-toplevel` (`resolveTrustedRepoDir()` in `hooks/workflow-state/record-step-verdict.js`), so a `cd` points it at the main agents worktree and the completion is rejected fail-closed.
+2. From the linked worktree's CWD, as a single standalone Bash command: `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step write_tests --complete --next`
+3. Do NOT prefix that `next-step --advance` call with `cd "$AGENTS_MAIN_ROOT" &&` — the CLI resolves the evidence repo from the Bash process's own CWD via `git rev-parse --show-toplevel` (`resolveTrustedRepoDir()` in `hooks/workflow-state/record-step-verdict.js`), so a `cd` points it at the main agents worktree and the completion is rejected fail-closed.
 4. Follow the returned `ACTION` / `NEXT_SKILL` / `NEXT_HINT` per CLAUDE.md.
 5. `/review-tests` auto-backfills write_tests when evidence exists; the `next-step --advance` call is the primary door.
 6. Run tests (validation only — this does not satisfy the run_tests workflow step).

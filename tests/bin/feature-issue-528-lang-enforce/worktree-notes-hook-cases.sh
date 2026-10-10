@@ -15,10 +15,10 @@ echo "=== Group 3: check-worktree-notes-lang.js PostToolUse hook ==="
 if [ "$(src_present "$HOOK")" != "ok" ]; then
     echo "SKIP G3: hooks/check-worktree-notes-lang.js not yet implemented (RED phase)"
 else
-    # Build a test AGENTS_CONFIG_DIR with .env-based config (post-#619 .env-only).
+    # Build a test AGENTS_MAIN_ROOT with .env-based config (post-#619 .env-only).
     _g3_agents_tmp="$(mktemp -d)"; TEST_TMPS+=("$_g3_agents_tmp")
     mkdir -p "$_g3_agents_tmp/hooks/lib"
-    cp "$AGENTS_DIR"/hooks/lib/*.js "$_g3_agents_tmp/hooks/lib/"
+    cp "$SCRIPT_CHECKOUT_ROOT"/hooks/lib/*.js "$_g3_agents_tmp/hooks/lib/"
     printf '%s\n' \
         'DOCS_LANG_PUBLIC=english' \
         'DOCS_LANG_PRIVATE=english' > "$_g3_agents_tmp/.env"
@@ -139,7 +139,7 @@ EOF
             unset DOCS_LANG_PUBLIC DOCS_LANG_PRIVATE
             unset DOCS_LANG_HISTORY_PUBLIC DOCS_LANG_HISTORY_PRIVATE
             unset DOCS_LANG_CHANGELOG_PUBLIC DOCS_LANG_CHANGELOG_PRIVATE
-            export AGENTS_CONFIG_DIR="$agents_dir"
+            export AGENTS_MAIN_ROOT="$agents_dir"
             echo "$json" | run_with_timeout 20 node "$HOOK" 2>/dev/null
         )
     }

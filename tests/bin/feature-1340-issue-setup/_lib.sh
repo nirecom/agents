@@ -1,22 +1,13 @@
 #!/bin/bash
 # tests/bin/feature-1340-issue-setup/_lib.sh — shared scaffolding
-#
-# Sourced by each split file (via a BASH_SOURCE-relative path) so they can also
-# run standalone. Provides the scaffolding common to all 7 split files:
-#   - AGENTS_DIR constant
-#   - PASS / FAIL counters and pass / fail helpers
-#   - assert_eq (table-driven equality assertion)
-#   - run_with_timeout wrapper
-#   - get_field (extract KEY=value from a RESOLVED_*/EPR_* round-trip block)
-#
-# Each split file keeps its OWN file-specific gh mock factory, setup_mock/
-# teardown_mock, and file-specific env knobs — those differ per source-under-test
-# and are intentionally NOT shared here.
-#
+# Sourced by each of the 7 split files (via a BASH_SOURCE-relative path) so they
+# can also run standalone. Provides: __LIB_SCRIPT_CHECKOUT_ROOT, PASS / FAIL
+# counters and pass / fail helpers, assert_eq (table-driven equality),
+# run_with_timeout, get_field (KEY=value from a RESOLVED_*/EPR_* block).
+# Each split file keeps its OWN gh mock factory, setup_mock/teardown_mock and env
+# knobs — those differ per source-under-test and are intentionally NOT shared.
 # NOT a test file: no # Tests:/# Tags: frontmatter; excluded from the
-# dispatcher's SPLIT_GROUPS.
-#
-# Idempotent — guarded so multiple sources do not redefine state.
+# dispatcher's SPLIT_GROUPS. Idempotent — guarded against repeated sourcing.
 
 if [ -n "${_FEATURE_1340_LIB_SOURCED:-}" ]; then
     return 0
@@ -26,7 +17,7 @@ _FEATURE_1340_LIB_SOURCED=1
 set -u
 
 # Repo root, resolved relative to this lib (tests/bin/feature-1340-issue-setup/).
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 PASS=0
 FAIL=0

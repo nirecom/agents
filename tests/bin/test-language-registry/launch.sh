@@ -48,7 +48,7 @@ case_begin "suite-dedupe-through-run-all" "tests/run-all.sh"
 # per suite root, and one result line per suite naming its first file by name.
 FX_RR="$TMPBASE/co-fake-suite-run-all"
 fx_checkout "$FX_RR" "$FIXTURES/fake-suite.json"
-cp "$AGENTS_DIR/tests/run-all.sh" "$FX_RR/tests/run-all.sh"
+cp "$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh" "$FX_RR/tests/run-all.sh"
 RR="$FX_RR/tests/suites"
 for s in s1 s2; do
   mkdir -p "$RR/$s"
@@ -82,7 +82,7 @@ assert_eq "unknown: $got" "unknown: rc=78 launched=0"
 has_line "unknown: UNSUPPORTED line" "$(cat "$TMPBASE/lch-unknown.out" 2>/dev/null)" "UNSUPPORTED: $SU/u.zzz (language: unknown; not run)"
 mkdir -p "$TMPBASE/js"
 echo 'process.exit(0)' >"$TMPBASE/js/x.js"
-got="$(lch "$AGENTS_DIR" "$TMPBASE/js/x.js" js)"
+got="$(lch "$SCRIPT_CHECKOUT_ROOT" "$TMPBASE/js/x.js" js)"
 assert_eq "recognized-only js: $got" "recognized-only js: rc=78 launched=0"
 has_line "js: UNSUPPORTED line" "$(cat "$TMPBASE/lch-js.out" 2>/dev/null)" "UNSUPPORTED: $TMPBASE/js/x.js (language: js; not run)"
 got="$(lch "$FX_SUITE" "$SU/x.sh" bash)"
@@ -153,10 +153,10 @@ case_begin "retire-unit-sibling-dir" "bin/lib/test-retire-predicate.sh"
 UN="$TMPBASE/unit"
 mkdir -p "$UN/tests/hooks/a" "$UN/tests/hooks/b" "$UN/tests/hooks/test_c" "$UN/tests/hooks/d"
 for f in a.sh a/x b.Tests.ps1 b/x test_c.py test_c/x d.zzz d/x; do : >"$UN/tests/hooks/$f"; done
-got="$(tlr_bash "$AGENTS_DIR" '. "$1/bin/lib/test-retire-predicate.sh" || exit 95
+got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" '. "$1/bin/lib/test-retire-predicate.sh" || exit 95
 for rel in tests/hooks/a.sh tests/hooks/b.Tests.ps1 tests/hooks/test_c.py tests/hooks/d.zzz; do
   trp_unit_of "$2" "$rel" 0; printf "[%s|%s]" "${TRP_UNIT_PATHS[*]}" "$TRP_GC"
 done
-trp_unit_of "$2" tests/hooks/a.sh 1; printf "[%s|%s]" "${TRP_UNIT_PATHS[*]}" "$TRP_GC"' "$AGENTS_DIR" "$UN")"
+trp_unit_of "$2" tests/hooks/a.sh 1; printf "[%s|%s]" "${TRP_UNIT_PATHS[*]}" "$TRP_GC"' "$SCRIPT_CHECKOUT_ROOT" "$UN")"
 assert_eq "$got" "[tests/hooks/a.sh tests/hooks/a|1][tests/hooks/b.Tests.ps1|1][tests/hooks/test_c.py|1][tests/hooks/d.zzz|1][|0]"
 case_end

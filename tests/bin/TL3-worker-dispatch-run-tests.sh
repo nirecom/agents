@@ -17,12 +17,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v git >/dev/null 2>&1 || exit 77
 
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
 
 PASS=0
 FAIL=0
@@ -48,9 +48,9 @@ if [ ! -f "$DISPATCH_JS" ]; then
 fi
 
 # Real main worktree root (this file may run from a linked worktree).
-MAIN_ROOT_RAW="$(git -C "$AGENTS_DIR" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
-[ -n "$MAIN_ROOT_RAW" ] || MAIN_ROOT_RAW="$AGENTS_DIR"
-MAIN_ROOT="$(nodepath "$MAIN_ROOT_RAW")"
+TARGET_MAIN_ROOT_RAW="$(git -C "$SCRIPT_CHECKOUT_ROOT" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
+[ -n "$TARGET_MAIN_ROOT_RAW" ] || TARGET_MAIN_ROOT_RAW="$SCRIPT_CHECKOUT_ROOT"
+TARGET_MAIN_ROOT="$(nodepath "$TARGET_MAIN_ROOT_RAW")"
 
 PLANS_RAW="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
 mkdir -p "$PLANS_RAW" || exit 77
@@ -83,9 +83,9 @@ yaml_field() { sed -n "s/^$2: //p" "$1" | head -1; }
 dispatch_test_runner() {
     local out="$1"; shift
     local args_json="$1"
-    printf '{"test_args":%s,"cwd":"%s","timeout_seconds":300}' "$args_json" "$(nodepath "$AGENTS_DIR")" > "$PAYLOAD"
+    printf '{"test_args":%s,"cwd":"%s","timeout_seconds":300}' "$args_json" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" > "$PAYLOAD"
     run_with_timeout 420 env "WORKFLOW_PLANS_DIR=$PLANS" \
-        node "$(nodepath "$DISPATCH_JS")" test-runner "$MAIN_ROOT" "$(nodepath "$PAYLOAD")" > "$out" 2>"$out.err"
+        node "$(nodepath "$DISPATCH_JS")" test-runner "$TARGET_MAIN_ROOT" "$(nodepath "$PAYLOAD")" > "$out" 2>"$out.err"
     return $?
 }
 
@@ -167,9 +167,9 @@ d_node() {
 }
 d_node -e '
 require(process.argv[1] + "/hooks/workflow-state").markStep(process.argv[2], "write_tests", "complete");
-' "$(nodepath "$AGENTS_DIR")" "$D_SID" >/dev/null 2>&1 || true
+' "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$D_SID" >/dev/null 2>&1 || true
 
-D_CMD="node \"$(nodepath "$DISPATCH_JS")\" test-runner \"$MAIN_ROOT\" \"$(nodepath "$PAYLOAD")\""
+D_CMD="node \"$(nodepath "$DISPATCH_JS")\" test-runner \"$TARGET_MAIN_ROOT\" \"$(nodepath "$PAYLOAD")\""
 D_PAYLOAD_JSON="$TMPD/hook-stdin.json"
 d_node -e '
 const fs = require("fs");
@@ -182,13 +182,13 @@ fs.writeFileSync(process.argv[1], JSON.stringify({
 ' "$(nodepath "$D_PAYLOAD_JSON")" "$D_CMD" "$(nodepath "$OUT")" "$D_SID" >/dev/null 2>&1 || true
 
 if [ -f "$D_PAYLOAD_JSON" ]; then
-    d_node "$AGENTS_DIR/hooks/workflow-run-tests.js" < "$D_PAYLOAD_JSON" >/dev/null 2>&1 || true
+    d_node "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js" < "$D_PAYLOAD_JSON" >/dev/null 2>&1 || true
     D_STATUS="$(d_node -e '
 try {
   const s = require(process.argv[1] + "/hooks/workflow-state").readState(process.argv[2]);
   console.log(s && s.steps && s.steps.run_tests ? s.steps.run_tests.status : "absent");
 } catch (e) { console.log("absent"); }
-' "$(nodepath "$AGENTS_DIR")" "$D_SID" 2>/dev/null)"
+' "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$D_SID" 2>/dev/null)"
     assert_eq "tl3/roundtrip/real-worker-output-completes-run_tests" "complete" "$D_STATUS"
 else
     fail "tl3/roundtrip/real-worker-output-completes-run_tests — could not build hook stdin"

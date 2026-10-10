@@ -7,7 +7,7 @@ set -euo pipefail
 _cfg_dir="$(cd "$(dirname "$0")/.." && pwd)"
 SCANNER="$_cfg_dir/bin/scan-outbound.sh"
 
-# Load $AGENTS_CONFIG_DIR/.env (existing env wins). Mirrors hooks/lib/load-env.js.
+# Load the settings .env (existing env wins). Mirrors hooks/lib/load-env.js.
 # _load_env_file lives in hooks/lib/load-env.sh so it can be exercised without
 # also executing this hook's guards (rules/test/fixture-isolation.md).
 # shellcheck source=hooks/lib/load-env.sh
@@ -44,10 +44,9 @@ _is_enforce_worktree_on() {
 # any other rc -> unexpected error (caller decides how to surface it).
 # Shared by the worktree-isolation gate and the prompt-extraction backstop (CPR-SSOT).
 _session_marker_off() {
-    AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$_cfg_dir}" \
     node -e '
       try {
-        const cfg = process.env.AGENTS_CONFIG_DIR;
+        const cfg = process.argv[1];
         if (!cfg) process.exit(2);
         const { resolveSessionId } = require(cfg + "/hooks/workflow-state");
         const { isWorkflowOff, isWorktreeOff } = require(cfg + "/hooks/lib/session-markers");
@@ -58,7 +57,7 @@ _session_marker_off() {
       } catch (_e) {
         process.exit(3);
       }
-    ' 2>/dev/null
+    ' "$_cfg_dir" 2>/dev/null
 }
 
 # Repo-identity probe: does the repo rooted at $1 share the agents repo's git
@@ -69,7 +68,7 @@ _session_marker_off() {
 _is_agents_session_repo() {
     _isr_repo_top="$1"
     [ -n "$_isr_repo_top" ] || return 1
-    _isr_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
+    _isr_cfg_dir="$_cfg_dir"
     _isr_agents_common="$(git -C "$_isr_cfg_dir" rev-parse --git-common-dir 2>/dev/null || true)"
     _isr_repo_common="$(git -C "$_isr_repo_top" rev-parse --git-common-dir 2>/dev/null || true)"
     [ -n "$_isr_agents_common" ] && [ -n "$_isr_repo_common" ] || return 1
@@ -91,10 +90,9 @@ if _is_enforce_worktree_on; then
         _node_rc=0
         ENFORCE_WORKTREE_EXCLUDE="${ENFORCE_WORKTREE_EXCLUDE:-}" \
         ENFORCE_WORKTREE_EXCLUDE_REPOS="${ENFORCE_WORKTREE_EXCLUDE_REPOS:-}" \
-        AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$_cfg_dir}" \
         _PRECOMMIT_REPO_TOP="$_repo_top" \
         _PRECOMMIT_STAGED="$_staged" \
-        node "${AGENTS_CONFIG_DIR:-$_cfg_dir}/hooks/lib/precommit-exclude-check.js" || _node_rc=$?
+        node "$_cfg_dir/hooks/lib/precommit-exclude-check.js" || _node_rc=$?
         if [ "$_node_rc" = "0" ]; then
             _enforce_skip=1
         elif [ "$_node_rc" != "2" ]; then
@@ -190,15 +188,14 @@ fi
 # silently. If the repo root cannot be determined it throws, and the catch below
 # fails open ("lint-commit-lang skipped").
 if [ -n "${CODE_LANG:-}" ]; then
-    _lang_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
+    _lang_cfg_dir="$_cfg_dir"
     if command -v cygpath >/dev/null 2>&1; then
         _lang_cfg_dir="$(cygpath -m "$_lang_cfg_dir")"
     fi
     _lang_node_rc=0
-    AGENTS_CONFIG_DIR="$_lang_cfg_dir" \
     node -e '
       try {
-        var cfg = process.env.AGENTS_CONFIG_DIR;
+        var cfg = process.argv[1];
         var m = require(cfg + "/hooks/lib/lint-commit-lang");
         var r = m.check();
         if (r.excluded) {
@@ -221,7 +218,7 @@ if [ -n "${CODE_LANG:-}" ]; then
         process.stderr.write("pre-commit: lint-commit-lang skipped (" + e.message + ")\n");
         process.exit(0);
       }
-    ' 2>&1 || _lang_node_rc=$?
+    ' "$_lang_cfg_dir" 2>&1 || _lang_node_rc=$?
     if [ "$_lang_node_rc" != "0" ]; then
         echo ""
         echo "Commit blocked: CODE_LANG policy violation in staged files."
@@ -260,7 +257,7 @@ fi
 # The backstop is a safety net, not an availability dependency.
 _pe_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$_pe_repo_top" ] && [ -f "$_pe_repo_top/.prompt-extraction-allowlist" ]; then
-    _pe_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
+    _pe_cfg_dir="$_cfg_dir"
     _pe_is_agents_repo=0
     if _is_agents_session_repo "$_pe_repo_top"; then
         _pe_is_agents_repo=1
@@ -333,11 +330,11 @@ _precommit_agents_repo_gates
 # by omission (outline plan accepted tradeoff).
 _cb_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 _cb_script="$_cfg_dir/bin/review-comment-block-size"
-if (unset AGENTS_CONFIG_DIR; _is_agents_session_repo "$_cb_repo_top") && [ -x "$_cb_script" ]; then
+if (unset AGENTS_MAIN_ROOT; _is_agents_session_repo "$_cb_repo_top") && [ -x "$_cb_script" ]; then
     # Resolve strictly from $_cfg_dir (this hook's real installed location,
     # from $0 — not settable by the invoker). The generic _load_env_only_value
-    # honours ambient AGENTS_CONFIG_DIR via _load_env_cfg_dir, which would let
-    # `AGENTS_CONFIG_DIR=<elsewhere> git commit` repoint COMMENT_BLOCK_ENFORCE
+    # honours ambient AGENTS_MAIN_ROOT via _load_env_cfg_dir, which would let a
+    # commit run with that variable pointed elsewhere repoint COMMENT_BLOCK_ENFORCE
     # at an attacker-controlled .env even after (a)/(b) above stop trusting it
     # for identity and the scanner path.
     _cb_envfile="$_cfg_dir/.env"
@@ -350,7 +347,7 @@ if (unset AGENTS_CONFIG_DIR; _is_agents_session_repo "$_cb_repo_top") && [ -x "$
         [ -n "$out" ] || out="$def"
         printf '%s' "$out"
     }
-    # Read from the config dir's .env ONLY. Consulting the ambient value would
+    # Read from this checkout's .env ONLY. Consulting the ambient value would
     # make `COMMENT_BLOCK_ENFORCE=off git commit` a one-word bypass of the gate.
     _cb_enforce="$(_cb_env_value "COMMENT_BLOCK_ENFORCE:-on")"
     if [ "$_cb_enforce" = "off" ]; then

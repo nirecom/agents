@@ -25,7 +25,8 @@ EOF
 
 run_contents_write() {
     local stubdir="$1"; shift
-    PATH="$stubdir:$PATH" run_with_timeout 30 bash "$CONTENTS_WRITE_SH" "$@" 2>&1
+    AGENTS_MAIN_ROOT="$SCAN_ROOT" PATH="$(path_entry "$stubdir"):$PATH" \
+        run_with_timeout 30 bash "$CONTENTS_WRITE_SH" "$@" 2>&1
 }
 
 test_l1_15_contents_write_success() {

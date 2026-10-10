@@ -10,15 +10,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
-REVIEW_TESTS_HANDLER="$AGENTS_DIR/hooks/workflow-mark/review-tests-handler.js"
-REVIEW_TESTS_EVIDENCE="$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
+REVIEW_TESTS_HANDLER="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark/review-tests-handler.js"
+REVIEW_TESTS_EVIDENCE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-evidence.js"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -51,6 +51,14 @@ mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
 
 NOW_ISO="$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+# workflow-gate gates only the repo its own checkout belongs to: the gate runners launch it from
+# a copy of this checkout attached to the fixture repo.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+GATE_HOOK="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
 
 # ---------------------------------------------------------------------------
 # Repo / worktree setup
@@ -131,7 +139,7 @@ write_state() {
 
 # #1733: state on disk is an append-only event stream (no top-level .steps);
 # read through readState() so v1 fixtures migrate and the event log projects.
-AGENTS_DIR_N="$(cygpath -m "$AGENTS_DIR" 2>/dev/null || echo "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_N="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT" 2>/dev/null || echo "$SCRIPT_CHECKOUT_ROOT")"
 
 read_state_step() {
     local sid="$1" step="$2"
@@ -144,7 +152,7 @@ read_state_step() {
         const st = s && s.steps && s.steps['$step'];
         console.log(st && st.status ? st.status : 'MISSING');
       } catch(e){ console.log('MISSING'); }
-    " "$sid" "$AGENTS_DIR_N" 2>/dev/null || echo "MISSING"
+    " "$sid" "$SCRIPT_CHECKOUT_ROOT_N" 2>/dev/null || echo "MISSING"
 }
 
 read_step_field() {
@@ -160,7 +168,7 @@ read_step_field() {
         const v = st && st['$field'];
         console.log(v == null ? 'MISSING' : (typeof v === 'object' ? JSON.stringify(v) : String(v)));
       } catch(e){ console.log('MISSING'); }
-    " "$sid" "$AGENTS_DIR_N" 2>/dev/null || echo "MISSING"
+    " "$sid" "$SCRIPT_CHECKOUT_ROOT_N" 2>/dev/null || echo "MISSING"
 }
 
 # Build a state JSON with named-step overrides.
@@ -270,12 +278,13 @@ build_mark_json() {
 run_gate() {
     local cwd="$1" json="$2"
     local common_dir main_dir=""
+    session_repo_fixture_attach "$GATE_CHECKOUT" "$cwd" 2>/dev/null
     common_dir="$(git -C "$cwd" rev-parse --git-common-dir 2>/dev/null)" || common_dir=""
     if [ -n "$common_dir" ]; then
         main_dir="$(node -e "const p=require('path');process.stdout.write(p.dirname(p.resolve(process.argv[1],process.argv[2])))" -- "$cwd" "$common_dir" 2>/dev/null)" || main_dir=""
     fi
     local env_args=("CLAUDE_PROJECT_DIR=$cwd" "WORKFLOW_STATE_DIR=$WORKFLOW_DIR")
-    [ -n "$main_dir" ] && env_args+=("AGENTS_CONFIG_DIR=$main_dir")
+    [ -n "$main_dir" ] && env_args+=("AGENTS_MAIN_ROOT=$main_dir")
     echo "$json" | run_with_timeout 30 env "${env_args[@]}" node "$GATE_HOOK" 2>/dev/null
 }
 

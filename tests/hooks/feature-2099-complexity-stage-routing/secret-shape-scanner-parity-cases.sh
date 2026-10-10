@@ -49,7 +49,7 @@ const ROWS = [
 # ssp_scan <scanner> <file>: run one scan with the empty lists; stdout to scan-out.txt, rc echoed.
 ssp_scan() {
     local rc=0
-    AGENTS_CONFIG_DIR="$(to_node_path "$SSP_CFG")" run_with_timeout bash "$1" "$2" \
+    AGENTS_MAIN_ROOT="$(to_node_path "$SSP_CFG")" run_with_timeout bash "$1" "$2" \
         > "$SSP_DIR/scan-out.txt" 2> "$SSP_DIR/scan-err.txt" || rc=$?
     echo "$rc"
 }
@@ -64,9 +64,9 @@ const fs = require("fs");
 fs.writeFileSync(process.env.SSP_SAMPLES_N, ROWS.map((r) => r[1]).join("\n") + "\n");
 fs.writeFileSync(process.env.SSP_NEAR_N, ROWS.filter((r) => !r[2]).map((r) => r[1]).join("\n") + "\n");
 ' > /dev/null
-    rc_near="$(ssp_scan "$AGENTS_DIR/bin/scan-outbound.sh" "$SSP_NEAR")"
+    rc_near="$(ssp_scan "$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" "$SSP_NEAR")"
     rc_near="$rc_near:$(wc -c < "$SSP_DIR/scan-out.txt" | tr -d ' ')"
-    rc_all="$(ssp_scan "$AGENTS_DIR/bin/scan-outbound.sh" "$SSP_SAMPLES")"
+    rc_all="$(ssp_scan "$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" "$SSP_SAMPLES")"
     got=$(run_node "$SSP_ROWS_JS"'
 const fs = require("fs");
 const { isSecretShaped, redactSecretShaped } = require(process.env.SS_MOD_N);
@@ -124,7 +124,7 @@ EOF
 ssp_variant() {
     local root="$SSP_DIR/variant-$1" mod="$SSP_DIR/variant-$1/hooks/workflow-state/complexity-routing"
     mkdir -p "$root/bin" "$mod"
-    cp "$AGENTS_DIR/hooks/workflow-state/complexity-routing/secret-shape.js" "$mod/secret-shape.js"
+    cp "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/complexity-routing/secret-shape.js" "$mod/secret-shape.js"
     [[ "$2" == missing ]] && return 0
     awk -v mode="$2" '
         { sub(/\r$/, "") }
@@ -135,7 +135,7 @@ ssp_variant() {
             if (mode == "malformed" && !done) { print "    \047badentry\047"; done = 1; next }
         }
         { print }
-    ' "$AGENTS_DIR/bin/scan-outbound.sh" > "$root/bin/scan-outbound.sh"
+    ' "$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" > "$root/bin/scan-outbound.sh"
 }
 
 # SS-16: fail closed on both sides. A scanner whose pattern block is empty or malformed exits 4

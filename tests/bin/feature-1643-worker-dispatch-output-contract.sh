@@ -23,9 +23,9 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_OC_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
 
 PASS=0
 FAIL=0

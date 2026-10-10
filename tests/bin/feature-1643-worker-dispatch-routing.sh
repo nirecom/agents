@@ -23,11 +23,11 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_ROUTE_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-REGISTRY_JS="$AGENTS_DIR/bin/worker-dispatch/registry.js"
-DATA_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/routing-stub.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/registry.js"
+DATA_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/routing-stub.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 PASS=0
@@ -97,7 +97,7 @@ printf '{"session_id":"sess-route","plans_dir":"%s","artifact_dir":"%s"}' "$PLAN
     > "$PLANS_RAW/triple.json"
 
 DOUT=""; DERR=""; DRC=0
-# dispatch <worker> <main-root> <payload-path> — no preload; the real registry.
+# dispatch <worker> <target-main-root> <payload-path> — no preload; the real registry.
 dispatch() {
     DRC=0
     DERR="$TMPD/stderr.txt"
@@ -180,7 +180,7 @@ group_prototype_names() {
 # ===========================================================================
 # Group 3 (TL2) — payload residency is enforced at the dispatcher boundary
 #
-# These are rendered failures, not exit 2: the worker name and main-root were
+# These are rendered failures, not exit 2: the worker name and target-main-root were
 # usable, so there is a contract to report into. The rows dispatch `test-runner`,
 # so the contract they report into is the test-runner-yaml one, whose status
 # vocabulary is pass | fail | timeout | runner-error — the value has to be a
@@ -281,7 +281,7 @@ group_degenerate_result() {
         # A stack frame would carry the fixture path AND the dispatcher's own
         # install path; neither belongs in a transcript.
         assert_lacks "degenerate/$mode/$worker/no-fixture-path-on-stderr" "$TMPD" "$err"
-        assert_lacks "degenerate/$mode/$worker/no-install-path-on-stderr" "$AGENTS_DIR" "$err"
+        assert_lacks "degenerate/$mode/$worker/no-install-path-on-stderr" "$SCRIPT_CHECKOUT_ROOT" "$err"
 
         if [ "$worker" = "test-runner" ]; then
             assert_eq "degenerate/$mode/$worker/exit-code-field" "-1" "$(field_of exit_code)"

@@ -52,7 +52,7 @@ group_serial_annotation() {
     while IFS='|' read -r rel label start end maxl phases; do
         [ -z "${rel// /}" ] && continue
         [ -n "$only" ] && [ "$rel" != "$only" ] && continue
-        path="$AGENTS_DIR/$rel"
+        path="$SCRIPT_CHECKOUT_ROOT/$rel"
         block_to_file "$label" "$path" "$start" "$end" "$maxl" || continue
         bf="$BLOCK_FILE"
         # Strict: a LINE must START with the literal including the trailing colon.

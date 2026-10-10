@@ -6,7 +6,7 @@ T=$(make_tmp)
 harness_isolate "$T"
 SID="$UUID"
 
-REG_JS="$AGENTS_DIR/hooks/lib/plans-artifact-registry.js"
+REG_JS="$_BASIC_SCRIPT_CHECKOUT_ROOT/hooks/lib/plans-artifact-registry.js"
 # The kind list comes from the registry's MIGRATABLE_KINDS, not from this file.
 # SAMPLES only supplies one concrete control-file name per kind (a regex kind
 # has no canonical instance); the driver fails any MIGRATABLE_KINDS entry that

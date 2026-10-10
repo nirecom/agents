@@ -1,14 +1,13 @@
 # Sourced from dotfiles' profile.ps1 (sibling-detected) or directly from $PROFILE.
 # Idempotent — safe to source twice.
-$AgentsRoot = $PSScriptRoot
-$env:AGENTS_CONFIG_DIR = $AgentsRoot
-$env:AGENTS_DIR        = $AgentsRoot
+$_agentsRoot = $PSScriptRoot
+$env:AGENTS_MAIN_ROOT = $_agentsRoot
 
 # Global default for Claude Code's auto-compact token window, read from .env.
 # get-config-var resolves process-env-wins-over-.env precedence itself, so a value
 # already set in this shell (or by a launcher such as code-ccgw.cmd for a single
 # local-LLM session) is left untouched.
-$_getCfgAcw = Join-Path $AgentsRoot 'bin\get-config-var.ps1'
+$_getCfgAcw = Join-Path $_agentsRoot 'bin\get-config-var.ps1'
 if (Test-Path $_getCfgAcw) {
     try {
         $_acw = & $_getCfgAcw CLAUDE_CODE_AUTO_COMPACT_WINDOW
@@ -42,7 +41,7 @@ $_agentBroken = $_agentSymlinks | Where-Object {
 }
 if ($_agentBroken) {
     Write-Host "Repairing $($_agentBroken.Count) agents symlink(s)..." -ForegroundColor Yellow
-    & "$AgentsRoot\install\win\dotfileslink.ps1"
+    & "$_agentsRoot\install\win\dotfileslink.ps1"
 }
 Remove-Variable _agentSymlinks, _agentBroken, _path, _item, _target, _resolved -ErrorAction SilentlyContinue
 
@@ -62,7 +61,7 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path "$SessionDir
     # and redirecting streams does not suppress termination. A profile script must
     # not abort the user's shell startup regardless of the caller's own preference.
     $_ssOn = $false
-    $_getCfg = Join-Path $AgentsRoot 'bin\get-config-var.ps1'
+    $_getCfg = Join-Path $_agentsRoot 'bin\get-config-var.ps1'
     # Save the caller's pre-existing $LASTEXITCODE before the reset below, so it can be
     # restored once the gate check is finalized — this profile block runs on every shell
     # startup and must not leave 0/1 behind for a caller inspecting $LASTEXITCODE for an
@@ -135,5 +134,7 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path "$SessionDir
 # dot-sourced function, its edits take effect in already-open shells immediately, with
 # no need to re-source $PROFILE or open a new window.
 function codes {
-    & "$AgentsRoot\bin\codes-launch.ps1" @args
+    & "$env:AGENTS_MAIN_ROOT\bin\codes-launch.ps1" @args
 }
+
+Remove-Variable _agentsRoot -ErrorAction SilentlyContinue

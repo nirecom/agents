@@ -12,8 +12,8 @@ const os = require("os");
 const fs = require("fs");
 const assert = require("assert");
 
-// isAgentsEmit needs AGENTS_CONFIG_DIR; pin it to this worktree's agents root.
-process.env.AGENTS_CONFIG_DIR = path.join(__dirname, "..", "..");
+// isAgentsEmit needs AGENTS_MAIN_ROOT; pin it to this worktree's agents root.
+process.env.AGENTS_MAIN_ROOT = path.join(__dirname, "..", "..");
 delete process.env.CLAUDE_CODE_SESSION_ID;
 
 const HOOK = path.join(__dirname, "..", "..", "hooks", "rtk-rewrite.js");
@@ -71,8 +71,8 @@ function expectWrap(command) {
 
 // G-a: agents-framework emitters.
 const G_A_PASS = [
-  'node "$AGENTS_CONFIG_DIR/bin/next-step" --advance',
-  "$AGENTS_CONFIG_DIR/bin/get-config-var --is-off CODEGRAPH off",
+  'node "$AGENTS_MAIN_ROOT/bin/next-step" --advance',
+  "$AGENTS_MAIN_ROOT/bin/get-config-var --is-off CODEGRAPH off",
 ];
 for (const c of G_A_PASS) check(`G-a passthrough: ${c}`, () => expectPass(c));
 check("G-a does not swallow plain git status", () => expectWrap("git status"));
@@ -347,13 +347,13 @@ for (const c of C4_BASH_CASES) {
 }
 
 // --- #2346 — absolute-path interpreter running an agents script. ---
-const AGENTS_POSIX = process.env.AGENTS_CONFIG_DIR.replace(/\\/g, "/");
+const AGENTS_POSIX = process.env.AGENTS_MAIN_ROOT.replace(/\\/g, "/");
 const AGENTS_SCRIPT = `${AGENTS_POSIX}/bin/get-config-var`; // real file under agents/bin
 check("#2346: /usr/bin/node <agents-abs-script> → passthrough", () => {
   expectPass(`/usr/bin/node ${AGENTS_SCRIPT}`);
 });
-check("#2346: /usr/bin/node with $AGENTS_CONFIG_DIR ref → passthrough", () => {
-  expectPass("/usr/bin/node $AGENTS_CONFIG_DIR/bin/next-step");
+check("#2346: /usr/bin/node with $AGENTS_MAIN_ROOT ref → passthrough", () => {
+  expectPass("/usr/bin/node $AGENTS_MAIN_ROOT/bin/next-step");
 });
 check("#2346: /usr/bin/node /tmp/x.js (non-agents abs script) still wraps", () => {
   expectWrap("/usr/bin/node /tmp/x.js");
@@ -372,7 +372,7 @@ check("#2350: env.exe VAR=1 git rev-parse HEAD → passthrough", () => {
 });
 // #2350 per-guard: absolute-path env peeling covers additional guards (C6).
 check("#2350 per-guard: /usr/bin/env agents-emit → passthrough (G-a)", () => {
-  const adir = process.env.AGENTS_CONFIG_DIR.replace(/\\/g, "/");
+  const adir = process.env.AGENTS_MAIN_ROOT.replace(/\\/g, "/");
   expectPass(`/usr/bin/env DEBUG=1 node "${adir}/bin/get-config-var"`);
 });
 check("#2350 per-guard: /usr/bin/env composite → passthrough (G-c)", () => {
@@ -420,7 +420,7 @@ check("toggle: RTK_AUDIT=off still delegates and drops RTK_HOOK_AUDIT", () => {
 
 // --- C7 — Audit per-guard table (G-a..G-d) and delegate no-audit. ---
 const AUDIT_GUARD_TABLE = [
-  { name: "G-a agents-emit", cmd: `node "${process.env.AGENTS_CONFIG_DIR.replace(/\\/g, "/")}/bin/get-config-var"` },
+  { name: "G-a agents-emit", cmd: `node "${process.env.AGENTS_MAIN_ROOT.replace(/\\/g, "/")}/bin/get-config-var"` },
   { name: "G-b machine-readable", cmd: "git rev-parse HEAD" },
   { name: "G-c composite", cmd: "git status | cat" },
   { name: "G-d shell-builtin", cmd: "declare -A map" },

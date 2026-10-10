@@ -8,7 +8,7 @@
 # CPR-<N> numeric ID survives anywhere (G1), and every reference site carries the
 # CORRECT new semantic code in the right quantity (M1).
 #
-# Depends on the parent for: AGENTS_DIR, ALL_CPR_CODES, cpr_occurrences, pass, fail.
+# Depends on the parent for: SCRIPT_CHECKOUT_ROOT, ALL_CPR_CODES, cpr_occurrences, pass, fail.
 
 # The six downstream prompt files that carried legacy §N cross-references. Was six
 # near-identical cases (N4..N9); one table keeps the semantics identical — missing
@@ -26,7 +26,7 @@ skills/survey-code/SKILL.md
 test_N4_downstream_no_legacy_section_ref() {
     local rel f
     for rel in $LEGACY_SECTION_REF_FILES; do
-        f="$AGENTS_DIR/$rel"
+        f="$SCRIPT_CHECKOUT_ROOT/$rel"
         if [ ! -f "$f" ]; then
             fail "N4[$rel]: file not found (prerequisite)"
         elif grep -qE "§[1-9]" "$f"; then
@@ -64,7 +64,7 @@ test_G1_no_residual_numeric_cpr() {
     case "$-" in *e*) had_errexit=1 ;; *) had_errexit=0 ;; esac
     set +e
     # -n, not -l: the allowlist is line-scoped, so the filter needs lines, not files.
-    hits=$(cd "$AGENTS_DIR" && git grep -nE 'CPR-[0-9]' -- \
+    hits=$(cd "$SCRIPT_CHECKOUT_ROOT" && git grep -nE 'CPR-[0-9]' -- \
              ':(exclude)docs/history.md' \
              ':(exclude)docs/history/*' \
              ':(exclude)changelog/*' 2>&1)
@@ -136,7 +136,7 @@ test_M1_downstream_mapping() {
     # PASS/FAIL increment made inside the loop.
     while IFS='|' read -r rel spec; do
         [ -z "$rel" ] && continue
-        f="$AGENTS_DIR/$rel"
+        f="$SCRIPT_CHECKOUT_ROOT/$rel"
         if [ ! -f "$f" ]; then
             fail "M1[$rel]: file not found (prerequisite)"
             continue

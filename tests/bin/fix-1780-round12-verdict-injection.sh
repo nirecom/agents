@@ -11,9 +11,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=./lib/request-off-clearance-harness.sh
-. "$AGENTS_DIR/tests/lib/request-off-clearance-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/request-off-clearance-harness.sh"
 
 offclr_require_script
 

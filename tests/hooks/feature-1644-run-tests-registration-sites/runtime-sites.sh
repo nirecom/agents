@@ -53,7 +53,7 @@ site6_mark_step_guard() {
   # guard is required unconditionally; when the conjunction actually holds the
   # message says so, because that is the shipping hazard.
   local probe
-  probe="$(WFSTATE_MODULE="$WFSTATE_MODULE" HANDLER="$AGENTS_DIR_N/hooks/workflow-mark/mark-step-handler.js" \
+  probe="$(WFSTATE_MODULE="$WFSTATE_MODULE" HANDLER="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-mark/mark-step-handler.js" \
     run_with_timeout node -e '
 const fs = require("fs");
 const src = fs.readFileSync(process.env.HANDLER, "utf8");

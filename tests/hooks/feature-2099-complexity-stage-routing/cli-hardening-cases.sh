@@ -21,8 +21,8 @@ d2099h_rb_shim() {
 d2099h_build_rb_tree() {
     local kind="$1" root="$TMPDIR_BASE/iso-rb-$1" f
     mkdir -p "$root"
-    cp -r "$AGENTS_DIR/hooks" "$root/hooks"
-    cp -r "$AGENTS_DIR/bin" "$root/bin"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$root/hooks"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$root/bin"
     for f in "$root/hooks/workflow-state.js" "$root/hooks/workflow-state/state-io.js"; do
         [ -f "$f" ] || continue
         cat >> "$f" <<SHIM

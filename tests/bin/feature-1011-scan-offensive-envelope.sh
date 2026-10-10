@@ -12,8 +12,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLI="$AGENTS_DIR/bin/scan-offensive"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/scan-offensive"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -67,7 +67,7 @@ require_jq() {
 # Run a node snippet against bin/scan-offensive module export; print stdout, exit with rc.
 run_node_snippet() {
     local snippet="$1"
-    ( cd "$AGENTS_DIR" && run_with_timeout 30 node -e "$snippet" )
+    ( cd "$SCRIPT_CHECKOUT_ROOT" && run_with_timeout 30 node -e "$snippet" )
 }
 
 run_t1() {

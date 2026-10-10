@@ -14,8 +14,8 @@ printf '#!/usr/bin/env bash\nexec "$@"\n' > "$T1_BIN/sudo"
 chmod +x "$T1_BIN/apt-get" "$T1_BIN/brew" "$T1_BIN/sudo"
 
 if [ "$GLAB_SH_OK" = "1" ]; then
-    run_with_timeout 15 env -i PATH="$T1_BIN:$PATH" HOME="$TMP/home-t1" AGENTS_CONFIG_DIR="$T1_BIN" \
-        bash "$GLAB_SH" >/dev/null 2>/dev/null
+    run_glab_sh 15 "$TMP/home-t1" "$T1_BIN" AGENTS_MAIN_ROOT="$T1_BIN" \
+        >/dev/null 2>/dev/null
     RC=$?
     if [ "$RC" -eq 0 ] && [ ! -f "$T1_PKG_MARKER" ]; then
         pass "T1: glab.sh — GITLAB not set -> exit 0, no package manager called (flag gate)"
@@ -41,8 +41,8 @@ chmod +x "$T2_BIN/apt-get" "$T2_BIN/brew" "$T2_BIN/sudo"
 if [ "$GLAB_SH_OK" = "1" ]; then
     STDOUT_FILE="$TMP/t2-stdout.log"
     STDERR_FILE="$TMP/t2-stderr.log"
-    run_with_timeout 15 env -i PATH="$T2_BIN:$PATH" HOME="$TMP/home-t2" GITLAB=on \
-        bash "$GLAB_SH" >"$STDOUT_FILE" 2>"$STDERR_FILE" </dev/null
+    run_glab_sh 15 "$TMP/home-t2" "$T2_BIN" GITLAB=on \
+        >"$STDOUT_FILE" 2>"$STDERR_FILE" </dev/null
     RC=$?
     COMBINED="$(cat "$STDOUT_FILE" "$STDERR_FILE" 2>/dev/null)"
     if [ "$RC" -eq 0 ] && echo "$COMBINED" | grep -qi "manual\|could not\|warning\|failed\|install"; then
@@ -75,8 +75,8 @@ sed -i "s|LOGIN_MARKER_PLACEHOLDER|$T3_LOGIN_MARKER|" "$T3_BIN/glab"
 chmod +x "$T3_BIN/glab"
 
 if [ "$GLAB_SH_OK" = "1" ]; then
-    run_with_timeout 15 env -i PATH="$T3_BIN:$PATH" HOME="$TMP/home-t3" GITLAB=on AGENTS_CONFIG_DIR="$T3_BIN" \
-        bash "$GLAB_SH" >/dev/null 2>/dev/null
+    run_glab_sh 15 "$TMP/home-t3" "$T3_BIN" GITLAB=on AGENTS_MAIN_ROOT="$T3_BIN" \
+        >/dev/null 2>/dev/null
     RC=$?
     if [ "$RC" -eq 0 ] && [ ! -f "$T3_LOGIN_MARKER" ]; then
         pass "T3: glab.sh — GITLAB=on, already authenticated -> auth login skipped, exit 0"
@@ -104,8 +104,8 @@ sed -i "s|LOGIN_MARKER_PLACEHOLDER|$T4_LOGIN_MARKER|" "$T4_BIN/glab"
 chmod +x "$T4_BIN/glab"
 
 if [ "$GLAB_SH_OK" = "1" ]; then
-    run_with_timeout 15 env -i PATH="$T4_BIN:$PATH" HOME="$TMP/home-t4" GITLAB=on AGENTS_CONFIG_DIR="$T4_BIN" \
-        bash "$GLAB_SH" >/dev/null 2>/dev/null </dev/null
+    run_glab_sh 15 "$TMP/home-t4" "$T4_BIN" GITLAB=on AGENTS_MAIN_ROOT="$T4_BIN" \
+        >/dev/null 2>/dev/null </dev/null
     RC=$?
     if [ "$RC" -eq 0 ] && [ ! -f "$T4_LOGIN_MARKER" ]; then
         pass "T4: glab.sh — GITLAB=on, no creds configured -> auth login never called"
@@ -146,9 +146,9 @@ T5_PROBE_ARGS="$TMP/t5-probe-args.txt"
 make_probe_timeout "$T5_BIN/timeout" 0 "$T5_PROBE_ARGS"
 
 if [ "$GLAB_SH_OK" = "1" ]; then
-    run_with_timeout 15 env -i PATH="$T5_BIN:$PATH" HOME="$TMP/home-t5" \
+    run_glab_sh 15 "$TMP/home-t5" "$T5_BIN" \
         GITLAB=on GITLAB_HOSTNAME=example.com GITLAB_TOKEN=glpat-test \
-        bash "$GLAB_SH" >/dev/null 2>/dev/null </dev/null
+        >/dev/null 2>/dev/null </dev/null
     RC=$?
     AUTH_ARGS="$(cat "$T5_AUTH_ARGS" 2>/dev/null || echo "")"
     AUTH_STDIN="$(cat "$T5_STDIN" 2>/dev/null || echo "")"
@@ -191,9 +191,9 @@ chmod +x "$T6_BIN/glab"
 make_probe_timeout "$T6_BIN/timeout" 0 "$TMP/t6-probe-args.txt"
 
 if [ "$GLAB_SH_OK" = "1" ]; then
-    run_with_timeout 15 env -i PATH="$T6_BIN:$PATH" HOME="$TMP/home-t6" \
+    run_glab_sh 15 "$TMP/home-t6" "$T6_BIN" \
         GITLAB=on GITLAB_HOSTNAME=example.com GITLAB_TOKEN=glpat-test GITLAB_SUBFOLDER=group1/gitlab \
-        bash "$GLAB_SH" >/dev/null 2>/dev/null </dev/null
+        >/dev/null 2>/dev/null </dev/null
     RC=$?
     CONFIG_ARGS="$(cat "$T6_CONFIG_ARGS" 2>/dev/null || echo "")"
     if [ "$RC" -eq 0 ] && echo "$CONFIG_ARGS" | grep -q "subfolder" && \

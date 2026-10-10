@@ -11,10 +11,10 @@ if [ "$FEATURE_644_PHASE" -lt 3 ]; then
 fi
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
-WORKER="$AGENTS_DIR/bin/worker-dispatch/workers/issue-close-finalize.js"
-LEGACY="$AGENTS_DIR/agents/issue-close-finalize-worker.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/SKILL.md"
+WORKER="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-close-finalize.js"
+LEGACY="$SCRIPT_CHECKOUT_ROOT/agents/issue-close-finalize-worker.md"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }

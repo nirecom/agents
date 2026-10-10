@@ -21,22 +21,22 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK="$AGENTS_DIR/hooks/enforce-issue-close.js"
-PREDICATES="$AGENTS_DIR/hooks/lib/block-predicates.js"
-PREDICATES_NODE="$_AGENTS_DIR_NODE/hooks/lib/block-predicates.js"
-RULES="$AGENTS_DIR/rules/github-issues.md"
-CLOSE_COMPLETED="$AGENTS_DIR/bin/github-issues/close-completed.sh"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-issue-close.js"
+PREDICATES="$SCRIPT_CHECKOUT_ROOT/hooks/lib/block-predicates.js"
+PREDICATES_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/block-predicates.js"
+RULES="$SCRIPT_CHECKOUT_ROOT/rules/github-issues.md"
+CLOSE_COMPLETED="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/close-completed.sh"
 # #1673: the ICF worker moved from a subagent prompt to a dispatcher module.
 # Step ICF-H itself (the close call + ISSUE_CLOSE_SKILL bypass) lives in the
 # terminal-pass shell script, not in the JS dispatcher module.
-ICF_TERMINAL="$AGENTS_DIR/skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
+ICF_TERMINAL="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
 
 PASS=0
 FAIL=0

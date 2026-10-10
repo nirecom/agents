@@ -2,8 +2,8 @@
 # Tests: bin/github-issues/issue-to-history.sh, bin/github-issues/lib/extract-field.sh, bin/doc-append.py
 # Tags: history, docs, github, issues, bin, scope:issue-specific, layer:TL2
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB="$AGENTS_DIR/bin/github-issues/lib/extract-field.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/extract-field.sh"
 
 # Documented marker recipe (SSOT: extract-field.sh, extract_field_or_marker()).
 MARKER_ERE='\(no (Background|Changes|Cause|Fix) recorded\)'
@@ -69,8 +69,8 @@ assert_eq Fix $'## Cause\n\nx\n\n## Fix\n\ny' "y" "S9 fix H2"
 
 # === issue-to-history.sh: --history-notes-file / --non-github-mode shapes ===
 
-SCRIPT="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-to-history.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 run_with_timeout() {
     if command -v timeout >/dev/null 2>&1; then timeout "$1" "${@:2}"; else perl -e 'alarm shift; exec @ARGV' "$@"; fi
@@ -98,15 +98,18 @@ setup_ith_tmp() {
     ITH_TMP=$(mktemp -d)
     mkdir -p "$ITH_TMP/docs/history"
     touch "$ITH_TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$ITH_TMP"
     export PATH="$MOCK_DIR:$PATH"
     HIST_BEFORE="$(cksum <"$ITH_TMP/docs/history.md" 2>/dev/null)"
 }
 
 teardown_ith_tmp() {
     [ -n "${ITH_TMP:-}" ] && rm -rf "$ITH_TMP"
-    unset AGENTS_CONFIG_DIR ITH_TMP
+    unset ITH_TMP
 }
+
+# The script appends to docs/history.md under --target-checkout-root; hand it the
+# fixture per call. The flag goes last because the issue number is positional $1.
+run_target() { run_with_timeout "$@" --target-checkout-root "$ITH_TMP"; }
 
 if [ -f "$SCRIPT" ]; then
 
@@ -114,7 +117,7 @@ if [ -f "$SCRIPT" ]; then
 setup_ith_tmp
 NOTES_FILE=$(mktemp)
 printf '## History Notes\n- item A\n- item B\n' > "$NOTES_FILE"
-out=$(DRY_RUN= GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$SCRIPT" 42 --commit abc1234 \
+out=$(DRY_RUN= GH_MOCK_SCENARIO=issue_task run_target 15 bash "$SCRIPT" 42 --commit abc1234 \
     --history-notes-file "$NOTES_FILE" 2>/dev/null)
 rc=$?
 if { [ "$rc" -eq 0 ] && echo "$out" | grep -qE "item A|item B"; } || \
@@ -135,7 +138,7 @@ teardown_ith_tmp
 setup_ith_tmp
 NOTES_FILE=$(mktemp)
 printf '## History Notes\n- (none)\n' > "$NOTES_FILE"
-out=$(DRY_RUN= GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$SCRIPT" 42 --commit abc1234 \
+out=$(DRY_RUN= GH_MOCK_SCENARIO=issue_task run_target 15 bash "$SCRIPT" 42 --commit abc1234 \
     --history-notes-file "$NOTES_FILE" 2>/dev/null)
 rc=$?
 history_content=$(cat "$ITH_TMP/docs/history.md" 2>/dev/null)
@@ -173,7 +176,7 @@ teardown_ith_tmp
 # subprocess — no existing arm drives issue-to-history.sh with a populated
 # incident, and the Cause/Fix assembly is a separate code path from P1's.
 setup_ith_tmp
-out=$(DRY_RUN= GH_MOCK_SCENARIO=issue_incident run_with_timeout 30 bash "$SCRIPT" 42 \
+out=$(DRY_RUN= GH_MOCK_SCENARIO=issue_incident run_target 30 bash "$SCRIPT" 42 \
     --commit abc1234 2>/dev/null)
 rc=$?
 history_content=$(cat "$ITH_TMP/docs/history.md" 2>/dev/null)
@@ -197,7 +200,7 @@ teardown_ith_tmp
 setup_ith_tmp
 BODY_FILE=$(mktemp)
 printf '## Background / Motivation\nSome background text\n\n## Changes\nSome changes\n' > "$BODY_FILE"
-out=$(DRY_RUN= run_with_timeout 15 bash "$SCRIPT" 999 --commit abc1234 \
+out=$(DRY_RUN= run_target 15 bash "$SCRIPT" 999 --commit abc1234 \
     --non-github-mode --title "Non-GitHub Test" --body-file "$BODY_FILE" \
     --closed-date "2026-01-01" 2>/dev/null)
 rc=$?
@@ -229,7 +232,7 @@ teardown_ith_tmp
 setup_ith_tmp
 BODY_FILE=$(mktemp)
 printf '## Background\nreal-bg-text\n' > "$BODY_FILE"
-out=$(DRY_RUN= run_with_timeout 15 bash "$SCRIPT" 998 --commit abc1234 \
+out=$(DRY_RUN= run_target 15 bash "$SCRIPT" 998 --commit abc1234 \
     --non-github-mode --title "NG2 changes missing" --body-file "$BODY_FILE" \
     --closed-date "2026-01-01" 2>/dev/null)
 rc=$?
@@ -250,7 +253,7 @@ teardown_ith_tmp
 # pinned here is the grep recipe against the stub's formatting; the matching
 # guarantee for bin/doc-append.py itself is DA1/DA2 below.
 setup_ith_tmp
-out=$(DRY_RUN= GH_MOCK_SCENARIO=issue_incident_no_fields run_with_timeout 30 bash "$SCRIPT" 42 \
+out=$(DRY_RUN= GH_MOCK_SCENARIO=issue_incident_no_fields run_target 30 bash "$SCRIPT" 42 \
     --commit abc1234 2>/dev/null)
 rc=$?
 history_content=$(cat "$ITH_TMP/docs/history.md" 2>/dev/null)
@@ -321,7 +324,7 @@ while IFS='|' read -r name scenario category title f1 f2 borrowed; do
     title="${title# }"; title="${title% }"
     borrowed="${borrowed# }"; borrowed="${borrowed% }"
     setup_ith_tmp
-    out=$(DRY_RUN= GH_MOCK_SCENARIO="$scenario" run_with_timeout 30 bash "$SCRIPT" 42 \
+    out=$(DRY_RUN= GH_MOCK_SCENARIO="$scenario" run_target 30 bash "$SCRIPT" 42 \
         --commit abc1234 2>/dev/null)
     rc=$?
     history_content=$(cat "$ITH_TMP/docs/history.md" 2>/dev/null)
@@ -358,7 +361,7 @@ while IFS='|' read -r name scenario category title f1 f2 borrowed; do
     # issue-to-history.sh's skip-grep runs before CATEGORY is derived, so it is
     # branch-independent and a second subprocess per row would buy nothing.
     if [ "$name" = "NG6" ]; then
-        out2=$(DRY_RUN= GH_MOCK_SCENARIO="$scenario" run_with_timeout 30 bash "$SCRIPT" 42 \
+        out2=$(DRY_RUN= GH_MOCK_SCENARIO="$scenario" run_target 30 bash "$SCRIPT" 42 \
             --commit abc1234 2>/dev/null)
         rc2=$?
         if [ "$(cksum <"$ITH_TMP/docs/history.md" 2>/dev/null)" = "$HIST_BEFORE" ]; then
@@ -396,7 +399,7 @@ setup_ith_tmp
 SIDECAR_DIR=$(mktemp -d)
 SIDECAR_FILE="$SIDECAR_DIR/issue-42-worktree-notes.md"
 printf '# Worktree Notes\nBranch: fix/test\n\n## History Notes\n- sidecar-note-alpha\n- sidecar-note-beta\n' > "$SIDECAR_FILE"
-out=$(DRY_RUN= GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$SCRIPT" 42 --commit abc1234 \
+out=$(DRY_RUN= GH_MOCK_SCENARIO=issue_task run_target 15 bash "$SCRIPT" 42 --commit abc1234 \
     --history-notes-file "$SIDECAR_FILE" 2>/dev/null)
 rc=$?
 history_content=$(cat "$ITH_TMP/docs/history.md" 2>/dev/null)
@@ -429,7 +432,7 @@ fi
 # NG1-NG3 above only pin the gh-mock doc-append STUB's formatting. DA1/DA2 run
 # the real bin/doc-append.py so the documented ERE is pinned against both
 # branches of _build_entry (INCIDENT vs non-INCIDENT).
-DOC_APPEND_PY="$AGENTS_DIR/bin/doc-append.py"
+DOC_APPEND_PY="$SCRIPT_CHECKOUT_ROOT/bin/doc-append.py"
 DA_TMP=$(mktemp)
 DA_TMP2=$(mktemp)
 trap 'rm -f "$DA_TMP" "$DA_TMP2"' EXIT

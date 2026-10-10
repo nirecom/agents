@@ -23,25 +23,25 @@
 #
 # TL3 gap (what this TL2 test does NOT catch):
 #   - A real /session-close → /issue-close-finalize chain issuing the eval from a
-#     genuine main worktree with a live AGENTS_CONFIG_DIR and real finalize scripts.
+#     genuine main worktree with a live AGENTS_MAIN_ROOT and real finalize scripts.
 #   - Cross-platform shell expansion of the resolved literals inside the sub-shell.
 # Closest-to-action mitigation: hook-registration category at WORKFLOW_USER_VERIFIED
 # preflight (bin/check-verification-gate.sh).
 #
 # Drive surface (full hook):
 #   echo '{"tool_name":"Bash","tool_input":{"command":"<cmd>"}}' | \
-#     (cd <main-worktree> && AGENTS_CONFIG_DIR=<fake-acd> \
+#     (cd <main-worktree> && AGENTS_MAIN_ROOT=<fake-script-checkout-root> \
 #      WORKFLOW_PLANS_DIR=<plans> node hooks/enforce-worktree.js)
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -185,16 +185,16 @@ add_linked_worktree() {
     fi
 }
 
-# Fake AGENTS_CONFIG_DIR with the finalize scripts touched (#1600 overlay targets)
+# Fake AGENTS_MAIN_ROOT with the finalize scripts touched (#1600 overlay targets)
 # plus the legacy sanctioned scripts. Echoes the cygpath-normalized path.
-setup_fake_acd() {
+setup_fake_script_checkout_root() {
     local name="$1"
-    local d="$TMPDIR_BASE/fake-acd-$name"
+    local d="$TMPDIR_BASE/fake-script-checkout-root-$name"
     mkdir -p "$d/bin/github-issues"
-    # Both trust markers (hooks/lib/agents-config-dir.js: hooks/enforce-worktree.js
+    # Both trust markers (hooks/lib/script-checkout-root.js: hooks/enforce-worktree.js
     # AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real
     # one always carries the guard itself — a marker-less stub is not a faithful
-    # config dir, it is the hostile case, which tests/fix-1630-*.sh own.
+    # agents main root, it is the hostile case, which tests/fix-1630-*.sh own.
     mkdir -p "$d/hooks"
     touch "$d/hooks/enforce-worktree.js"
     touch "$d/bin/check-unstaged-tracked.sh"
@@ -233,25 +233,25 @@ setup_plans_dir() {
 # printf format strings are single-quoted so embedded " and $( are verbatim.
 # ----------------------------------------------------------------------------
 
-# initial: env prefix (ACD/FSD/MWT) + bash run-initial.sh + 3 args.
+# initial: env prefix (script checkout root/FSD/MWT) + bash run-initial.sh + 3 args.
 build_initial() {
-    local acd_val="$1" fsd_val="$2" mwt_val="$3" scripts="$4"
-    printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" bash "%s/run-initial.sh" "1234" "1234" "")"' \
-        "$acd_val" "$fsd_val" "$mwt_val" "$scripts"
+    local script_checkout_root_val="$1" fsd_val="$2" mwt_val="$3" scripts="$4"
+    printf 'eval "$(AGENTS_MAIN_ROOT="%s" FINALIZE_SCRIPTS_DIR="%s" TARGET_MAIN_ROOT="%s" bash "%s/run-initial.sh" "1234" "1234" "")"' \
+        "$script_checkout_root_val" "$fsd_val" "$mwt_val" "$scripts"
 }
 
-# loop_step: env prefix (ACD/FSD) + node run-loop-step.js + state + decision.
+# loop_step: env prefix (script checkout root/FSD) + node run-loop-step.js + state + decision.
 build_loop_step() {
-    local acd_val="$1" fsd_val="$2" scripts="$3" statefile="$4" decision="$5"
-    printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" node "%s/run-loop-step.js" "%s" "%s")"' \
-        "$acd_val" "$fsd_val" "$scripts" "$statefile" "$decision"
+    local script_checkout_root_val="$1" fsd_val="$2" scripts="$3" statefile="$4" decision="$5"
+    printf 'eval "$(AGENTS_MAIN_ROOT="%s" FINALIZE_SCRIPTS_DIR="%s" node "%s/run-loop-step.js" "%s" "%s")"' \
+        "$script_checkout_root_val" "$fsd_val" "$scripts" "$statefile" "$decision"
 }
 
-# finalize_terminal: env prefix (ACD) + bash run-finalize-terminal.sh + 3 args.
+# finalize_terminal: env prefix (script checkout root) + bash run-finalize-terminal.sh + 3 args.
 build_finalize_terminal() {
-    local acd_val="$1" scripts="$2" statefile="$3" sid="$4" outcome="$5"
-    printf 'eval "$(AGENTS_CONFIG_DIR="%s" bash "%s/run-finalize-terminal.sh" "%s" "%s" "%s")"' \
-        "$acd_val" "$scripts" "$statefile" "$sid" "$outcome"
+    local script_checkout_root_val="$1" scripts="$2" statefile="$3" sid="$4" outcome="$5"
+    printf 'eval "$(AGENTS_MAIN_ROOT="%s" bash "%s/run-finalize-terminal.sh" "%s" "%s" "%s")"' \
+        "$script_checkout_root_val" "$scripts" "$statefile" "$sid" "$outcome"
 }
 
 # ----------------------------------------------------------------------------
@@ -281,7 +281,7 @@ run_all() {
     test_allow_finalize_terminal
     test_allow_initial_env_order_swapped
     # BLOCK — identity/env (C1)
-    test_block_acd_env_mismatch
+    test_block_script_checkout_root_env_mismatch
     test_block_variable_script_path
     test_block_fsd_env_mismatch
     test_block_mwt_env_mismatch

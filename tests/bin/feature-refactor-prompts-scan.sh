@@ -2,24 +2,20 @@
 # Tests: bin/refactor-prompts/lib/filter-kinds.js, bin/refactor-prompts/scan-prompts.js
 # Tags: prompts, refactor, skill, agent, bin, scope:issue-specific
 # Tests for /refactor-prompts — bin/refactor-prompts/scan-prompts.js
-#
 # scan-prompts.js reads {keywords:[{literal, source}]} from stdin (--keywords -)
-# and walks the prompt corpus under AGENTS_CONFIG_DIR (rules/*.md, skills/*/SKILL.md,
+# and walks the prompt corpus under AGENTS_MAIN_ROOT (rules/*.md, skills/*/SKILL.md,
 # agents/*.md), emitting hot regions as JSON {version:1, scanned_files, hot_regions}.
-#
-# To isolate fixture content from the real corpus we point AGENTS_CONFIG_DIR
-# at a temp directory shaped like the agents repo and place fixture files
-# into temp_root/rules/ etc.
-#
+# To isolate fixture content from the real corpus we point AGENTS_MAIN_ROOT at a temp
+# directory shaped like the agents repo and place fixture files into temp_root/rules/ etc.
 # RED: this suite fails clean while bin/refactor-prompts/scan-prompts.js is
 # missing (precondition gate). Once the CLI lands, all 9 cases must pass.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCAN_CLI="$AGENTS_DIR/bin/refactor-prompts/scan-prompts.js"
-FILTER_LIB="$AGENTS_DIR/bin/refactor-prompts/lib/filter-kinds.js"
-FIX_DIR="$AGENTS_DIR/tests/fixtures/refactor-prompts"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCAN_CLI="$SCRIPT_CHECKOUT_ROOT/bin/refactor-prompts/scan-prompts.js"
+FILTER_LIB="$SCRIPT_CHECKOUT_ROOT/bin/refactor-prompts/lib/filter-kinds.js"
+FIX_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/refactor-prompts"
 
 PASS=0
 FAIL=0
@@ -78,7 +74,7 @@ run_scan() {
     # Args: <temp_root> <keywords_json> [extra scan-prompts.js args ...]
     local root="$1"; shift
     local kws_json="$1"; shift
-    AGENTS_CONFIG_DIR="$root" run_with_timeout node "$SCAN_CLI" --keywords - "$@" \
+    AGENTS_MAIN_ROOT="$root" run_with_timeout node "$SCAN_CLI" --keywords - "$@" \
         <<<"$kws_json"
 }
 

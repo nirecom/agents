@@ -8,10 +8,10 @@ const { hasShellChaining, isExcluded, hasWorktreeEndSkillPrefix, stripWorktreeEn
 const { parseGitCPath } = require("../git-repo-detection");
 const { collectBashWriteTargets } = require("../bash-write-scope");
 const { rejectsUnsafeArgTail } = require("../arg-tail-guard");
-const { resolveAgentsConfigDir } = require("../../lib/agents-config-dir");
+const { resolveScriptCheckoutRoot } = require("../../lib/script-checkout-root");
 // Extracted siblings (file-split per rules/coding/file-split.md) — re-exported below.
 const { isAllowedWorktreeCommand } = require("./worktree-command");
-const { isAllowedWorkerScriptInvocation } = require("./worker-script");
+const { isAllowedWorkerScriptInvocation, describeVariableScriptPath } = require("./worker-script");
 
 /**
  * True if cmd is an isolated `git pull --ff-only` or `git merge --ff-only`
@@ -41,7 +41,7 @@ function isAllowedFastForwardMerge(cmd) {
 /**
  * True if cmd is an isolated `bash -c '...'` matching exactly the
  * read-only CONFIRM_* probe shape used by planning skills:
- *   bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" KEY [on|off]'
+ *   bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" KEY [on|off]'
  *
  * Does NOT call hasShellChaining() — the probe body intentionally uses
  * && as control flow. Safety is enforced by structural clause matching.
@@ -54,7 +54,7 @@ function isAllowedReadOnlyConfigCheck(cmd) {
   if (!m) return false;
   const quote = m[1];
   let body = m[2];
-  // Allow escaped same-quote inside body (e.g. `cd \"$AGENTS_CONFIG_DIR\"` when outer is `"`).
+  // Allow escaped same-quote inside body (e.g. `cd \"$AGENTS_MAIN_ROOT\"` when outer is `"`).
   // The clause regexes below are anchored, so any unescaped quote that breaks the
   // structure will be caught at the clause-match step.
   body = body.replace(quote === '"' ? /\\"/g : /\\'/g, quote);
@@ -66,8 +66,8 @@ function isAllowedReadOnlyConfigCheck(cmd) {
   const clauses = body.split(/\s*&&\s*/);
   if (clauses.length !== 2) return false;
   const [c1, c2] = clauses;
-  if (!/^cd\s+(?:"?\$AGENTS_CONFIG_DIR"?)\s*$/.test(c1.trim())) return false;
-  if (!/^bash\s+"?\$AGENTS_CONFIG_DIR\/bin\/confirm-off"?\s+[A-Z][A-Z0-9_]*(?:\s+(?:on|off))?\s*$/.test(c2.trim())) return false;
+  if (!/^cd\s+(?:"?\$AGENTS_MAIN_ROOT"?)\s*$/.test(c1.trim())) return false;
+  if (!/^bash\s+"?\$AGENTS_MAIN_ROOT\/bin\/confirm-off"?\s+[A-Z][A-Z0-9_]*(?:\s+(?:on|off))?\s*$/.test(c2.trim())) return false;
   return true;
 }
 
@@ -319,9 +319,9 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
 
 /**
  * True when cmd is the canonical compose-doc-append-entry dispatch shape:
- *   bash "<AGENTS_CONFIG_DIR>/bin/compose-doc-append-entry" [--flag value]...
+ *   bash "<script checkout root>/bin/compose-doc-append-entry" [--flag value]...
  * Rejects shell chaining, substitutions, redirects, wrong interpreter/script
- * path, unset AGENTS_CONFIG_DIR. rejectInterpreterAndChaining is intentionally
+ * path, unresolvable checkout root. rejectInterpreterAndChaining is intentionally
  * NOT called (it rejects any `bash …` head); safety comes from the raw argTail
  * scan below, same style as isAllowedReadOnlyConfigCheck. Consumer: the WE-21
  * manual recovery path in skills/worktree-end/scripts/cleanup-cascade.md — if
@@ -329,9 +329,9 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
  */
 function isAllowedComposeDocAppend(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;
-  // Marker-validated config dir (#1630) — env-independent; null stays fail-closed.
-  const acd = resolveAgentsConfigDir();
-  if (!acd) return false;
+  // Marker-validated checkout of this hook (#1630) — env-independent; null stays fail-closed.
+  const SCRIPT_CHECKOUT_ROOT = resolveScriptCheckoutRoot();
+  if (!SCRIPT_CHECKOUT_ROOT) return false;
 
   // Structural opening: `bash "<path>"` double-quoted only (matches worker spec literal).
   const m = cmd.match(/^\s*bash\s+"([^"]+)"(\s[\s\S]*)?$/);
@@ -342,7 +342,7 @@ function isAllowedComposeDocAppend(cmd, repoRoot) {
   // Resolve both sides case-insensitively (Windows filesystem).
   let normScript, normTarget;
   try {
-    const expectedTarget = path.join(acd, "bin", "compose-doc-append-entry");
+    const expectedTarget = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "compose-doc-append-entry");
     normScript = path.resolve(normalizeCwd(scriptPath) || scriptPath);
     normTarget = path.resolve(normalizeCwd(expectedTarget) || expectedTarget);
   } catch (e) { return false; }
@@ -362,16 +362,16 @@ function isAllowedComposeDocAppend(cmd, repoRoot) {
  * resolve to /tmp/ (the universal output sink for supervisor tools).
  *
  * Approved scripts:
- *   bash "$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex" — may write to /tmp/
- *   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" — no write targets
+ *   bash "$AGENTS_MAIN_ROOT/bin/supervisor-findings-codex" — may write to /tmp/
+ *   node "$AGENTS_MAIN_ROOT/bin/supervisor-write-alert" — no write targets
  *
  * Hard restriction: any redirect present must point to /tmp/.
  */
 function isAllowedSupervisorBinTool(cmd) {
   if (!cmd) return false;
 
-  // Pattern: bash or node invoking a supervisor-* bin tool (quoted or unquoted AGENTS_CONFIG_DIR).
-  const supervisorBinPattern = /(?:bash|node)\s+"?\$?\{?AGENTS_CONFIG_DIR\}?\/bin\/supervisor-(?:findings-codex|write-alert)/;
+  // Pattern: bash or node invoking a supervisor-* bin tool (quoted or unquoted AGENTS_MAIN_ROOT).
+  const supervisorBinPattern = /(?:bash|node)\s+"?\$?\{?AGENTS_MAIN_ROOT\}?\/bin\/supervisor-(?:findings-codex|write-alert)/;
   if (!supervisorBinPattern.test(cmd)) return false;
 
   // If there's a redirect, it must point to /tmp/.
@@ -382,7 +382,7 @@ function isAllowedSupervisorBinTool(cmd) {
 
 /**
  * True when cmd is the canonical clarify-guard-loop invocation:
- *   bash "<AGENTS_CONFIG_DIR>/bin/github-issues/clarify-guard-loop.sh" [args...]
+ *   bash "<script checkout root>/bin/github-issues/clarify-guard-loop.sh" [args...]
  * (double-quoted script path only). Rejects: shell chaining, command substitution,
  * redirects, single-quoted path, wrong interpreter, wrong script path.
  * The guard script writes the GUARD_ATTEMPT counter internally (no redirect visible
@@ -390,9 +390,9 @@ function isAllowedSupervisorBinTool(cmd) {
  */
 function isAllowedClarifyGuardLoop(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;
-  // Marker-validated config dir (#1630) — env-independent; null stays fail-closed.
-  const acd = resolveAgentsConfigDir();
-  if (!acd) return false;
+  // Marker-validated checkout of this hook (#1630) — env-independent; null stays fail-closed.
+  const SCRIPT_CHECKOUT_ROOT = resolveScriptCheckoutRoot();
+  if (!SCRIPT_CHECKOUT_ROOT) return false;
 
   // Must start with: bash "<double-quoted-path>" [args...]
   const m = cmd.match(/^\s*bash\s+"([^"]+)"(\s[\s\S]*)?$/);
@@ -400,10 +400,10 @@ function isAllowedClarifyGuardLoop(cmd, repoRoot) {
   const scriptPath = m[1];
   const argTail    = m[2] || "";
 
-  // Identity: script path must match AGENTS_CONFIG_DIR/bin/github-issues/clarify-guard-loop.sh
+  // Identity: script path must match <script checkout root>/bin/github-issues/clarify-guard-loop.sh
   let normScript, normTarget;
   try {
-    const expectedTarget = path.join(acd, "bin", "github-issues", "clarify-guard-loop.sh");
+    const expectedTarget = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "github-issues", "clarify-guard-loop.sh");
     normScript = path.resolve(normalizeCwd(scriptPath) || scriptPath);
     normTarget = path.resolve(normalizeCwd(expectedTarget) || expectedTarget);
   } catch (e) { return false; }
@@ -446,6 +446,7 @@ module.exports = {
   isAllowedMainWorktreeCleanup,
   isAllowedComposeDocAppend,
   isAllowedWorkerScriptInvocation,
+  describeVariableScriptPath,
   isAllowedSupervisorBinTool,
   isAllowedClarifyGuardLoop,
   isAllowedReadOnlyWorkflowCli,

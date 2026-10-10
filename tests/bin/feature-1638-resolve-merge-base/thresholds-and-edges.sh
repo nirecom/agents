@@ -1,56 +1,35 @@
 # Part of tests/bin/feature-1638-resolve-merge-base.sh (sourced, not standalone).
 # Tests: bin/resolve-merge-base.sh
 # Tags: merge-base, anomaly-detection, thresholds, config, boundary, scope:issue-specific, pwsh-not-required, TL2
-#
-# T — WHERE THE THRESHOLDS COME FROM, and N/N+1 on both axes.
-#
-# R8/R9 prove each axis can fire, by injecting an absurd threshold through the environment.
-# That leaves the two things a wrong threshold actually breaks untested:
-#
-#   THE RESOLUTION ORDER (T1-T4). The value is looked up process env → bin/get-config-var
-#   (the repo's .env) → a built-in default. Three sources, so there are two ways to get it
-#   wrong and both are silent: a built-in default that does not match the documented one turns
-#   SUSPECT into a state nobody can predict, and a config file that beats the environment makes
-#   the documented escape hatch inert. skills/_shared/test-design.md requires the value to be
-#   PINNED EXPLICITLY in every branch, so each row asserts BOTH threshold_lines and
-#   threshold_files even where only one of them is the subject — a row that checked only the
-#   axis it changed would accept an implementation that reset the other one to zero.
-#
-#   THE COMPARISON ITSELF (T5-T7). "Over the threshold" is one operator, and `>` versus `>=`
-#   is a one-character difference that no absurd-value row can see. The boundary is taken from
-#   the helper's OWN reported count rather than re-derived here, so the rows pin the operator
-#   instead of re-implementing the measurement; T5 pins the measurement separately against git.
-#
-#   AND THE INPUT (T8). `git diff --numstat` reports `-` for a binary file. Summing that column
-#   naively yields a non-numeric total and an arithmetic error, or a silent 0; either way the
-#   detector stops working on any change that touches an image or an archive. A binary file is
-#   one FILE and zero LINES, and both halves are asserted in the same row because an
-#   implementation that drops binaries entirely gets the line count right by accident.
+# T — WHERE THE THRESHOLDS COME FROM, and N/N+1 on both axes. R8/R9 prove each axis can fire, by injecting an absurd threshold through the environment. That leaves the things a wrong threshold actually breaks untested:
+# THE RESOLUTION ORDER (T1-T4). The value is looked up process env → bin/get-config-var (the repo's .env) → a built-in default. Three sources, so there are two ways to get it wrong and both are silent: a built-in default that does not match the documented one turns SUSPECT into a state nobody can predict, and a config file that beats the environment makes the documented escape hatch inert.
+# skills/_shared/test-design.md requires the value to be PINNED EXPLICITLY in every branch, so each row asserts BOTH threshold_lines and threshold_files even where only one of them is the subject — a row that checked only the axis it changed would accept an implementation that reset the other one to zero.
+# THE COMPARISON ITSELF (T5-T7). "Over the threshold" is one operator, and `>` versus `>=` is a one-character difference that no absurd-value row can see. The boundary is taken from the helper's OWN reported count rather than re-derived here, so the rows pin the operator instead of re-implementing the measurement; T5 pins the measurement separately against git.
+# AND THE INPUT (T8). `git diff --numstat` reports `-` for a binary file. Summing that column naively yields a non-numeric total and an arithmetic error, or a silent 0; either way the detector stops working on any change that touches an image or an archive.
+# A binary file is one FILE and zero LINES, and both halves are asserted in the same row because an implementation that drops binaries entirely gets the line count right by accident.
 
 BUILTIN_THRESHOLD_LINES=20000
 BUILTIN_THRESHOLD_FILES=500
 
-# A config dir the real bin/get-config-var can read: it resolves hooks/lib/load-env.js under
-# $AGENTS_CONFIG_DIR and load-env.js reads $AGENTS_CONFIG_DIR/.env. The hooks tree is copied
-# rather than stubbed so the row goes through the real loader — a hand-written stub would be a
+# A fake main root the real bin/get-config-var can read: its own hooks/lib/load-env.js reads
+# $AGENTS_MAIN_ROOT/.env. The row goes through the real loader — a hand-written stub would be a
 # second implementation of the resolution order this row exists to check.
-make_cfg_with_env() { # <env-file-body> ; prints the config dir
-  local cfg
-  cfg="$(mktemp -d "$TMPROOT/cfg.XXXXXX")"
-  cp -r "$AGENTS_DIR/hooks" "$cfg/hooks"
-  printf '%s\n' "$1" > "$cfg/.env"
-  printf '%s' "$cfg"
+make_main_root_with_env() { # <env-file-body> ; prints the fake main root
+  local fake_main_root
+  fake_main_root="$(mktemp -d "$TMPROOT/cfg.XXXXXX")"
+  printf '%s\n' "$1" > "$fake_main_root/.env"
+  printf '%s' "$fake_main_root"
 }
 
 t1_builtin_defaults() {
-  local repo cfg
+  local repo fake_main_root
   repo="$(repo_with_main)"
-  # A config dir whose .env says NOTHING about the thresholds, rather than an unset
-  # AGENTS_CONFIG_DIR: unset would let get-config-var fall back to the DEVELOPER'S real .env,
+  # A main root whose .env says NOTHING about the thresholds, rather than an unset
+  # AGENTS_MAIN_ROOT: unset would let get-config-var fall back to the DEVELOPER'S real .env,
   # and a machine that happens to set MERGE_BASE_MAX_DIFF_LINES would fail this row for a
   # reason that is not about the code.
-  cfg="$(make_cfg_with_env "# deliberately silent about the thresholds")"
-  HELPER_ENV=("AGENTS_CONFIG_DIR=$cfg")
+  fake_main_root="$(make_main_root_with_env "# deliberately silent about the thresholds")"
+  HELPER_ENV=("AGENTS_MAIN_ROOT=$fake_main_root")
   run_helper "$repo" -
   check "T1-lines: with no override the line threshold is the documented default" \
     "$BUILTIN_THRESHOLD_LINES" "$(kv threshold_lines)"
@@ -60,11 +39,11 @@ t1_builtin_defaults() {
 }
 
 t2_config_file_is_read() {
-  local repo cfg
+  local repo fake_main_root
   repo="$(repo_with_main)"
-  cfg="$(make_cfg_with_env "MERGE_BASE_MAX_DIFF_LINES=3
+  fake_main_root="$(make_main_root_with_env "MERGE_BASE_MAX_DIFF_LINES=3
 MERGE_BASE_MAX_DIFF_FILES=7")"
-  HELPER_ENV=("AGENTS_CONFIG_DIR=$cfg")
+  HELPER_ENV=("AGENTS_MAIN_ROOT=$fake_main_root")
   run_helper "$repo" -
   check "T2-lines: a value in the config .env reaches the detector" "3" "$(kv threshold_lines)"
   check "T2-files: on both axes" "7" "$(kv threshold_files)"
@@ -74,11 +53,11 @@ MERGE_BASE_MAX_DIFF_FILES=7")"
 }
 
 t3_env_beats_config() {
-  local repo cfg
+  local repo fake_main_root
   repo="$(repo_with_main)"
-  cfg="$(make_cfg_with_env "MERGE_BASE_MAX_DIFF_LINES=3
+  fake_main_root="$(make_main_root_with_env "MERGE_BASE_MAX_DIFF_LINES=3
 MERGE_BASE_MAX_DIFF_FILES=7")"
-  HELPER_ENV=("AGENTS_CONFIG_DIR=$cfg" MERGE_BASE_MAX_DIFF_LINES=30000 MERGE_BASE_MAX_DIFF_FILES=400)
+  HELPER_ENV=("AGENTS_MAIN_ROOT=$fake_main_root" MERGE_BASE_MAX_DIFF_LINES=30000 MERGE_BASE_MAX_DIFF_FILES=400)
   run_helper "$repo" -
   check "T3-lines: the process environment wins over the config file" "30000" "$(kv threshold_lines)"
   check "T3-files: on both axes" "400" "$(kv threshold_files)"
@@ -90,11 +69,11 @@ MERGE_BASE_MAX_DIFF_FILES=7")"
 # built-in. Without this row an implementation that reads the environment and then discards
 # the config entirely still satisfies T2 and T3.
 t4_partial_override_keeps_the_other_axis() {
-  local repo cfg
+  local repo fake_main_root
   repo="$(repo_with_main)"
-  cfg="$(make_cfg_with_env "MERGE_BASE_MAX_DIFF_LINES=3
+  fake_main_root="$(make_main_root_with_env "MERGE_BASE_MAX_DIFF_LINES=3
 MERGE_BASE_MAX_DIFF_FILES=7")"
-  HELPER_ENV=("AGENTS_CONFIG_DIR=$cfg" MERGE_BASE_MAX_DIFF_LINES=30000)
+  HELPER_ENV=("AGENTS_MAIN_ROOT=$fake_main_root" MERGE_BASE_MAX_DIFF_LINES=30000)
   run_helper "$repo" -
   check "T4-lines: the overridden axis takes the environment value" "30000" "$(kv threshold_lines)"
   check "T4-files: and the axis with no override keeps the CONFIG value, not the built-in default" \

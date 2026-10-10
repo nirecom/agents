@@ -8,7 +8,7 @@
 
 const path = require("path");
 
-const AGENTS_DIR = process.env.AGENTS_DIR || "";
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
 const args = process.argv.slice(2);
 const fieldsMode = args[0] === "--fields";
 const raw = (fieldsMode ? args[1] : args[0]) || "";
@@ -16,7 +16,7 @@ const cmd = raw.split("<NL>").join("\n").split("<PIPE>").join("|");
 
 let shape;
 try {
-  shape = require(path.join(AGENTS_DIR, "hooks", "block-capture-echo", "shape.js"));
+  shape = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "block-capture-echo", "shape.js"));
 } catch (_e) {
   console.log("MODULE_MISSING");
   process.exit(0);
@@ -28,7 +28,7 @@ if (!shape || typeof shape.detectCaptureEcho !== "function") {
 }
 
 try {
-  const { parse } = require(path.join(AGENTS_DIR, "hooks", "lib", "command-ir.js"));
+  const { parse } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "command-ir.js"));
   const ir = parse(cmd, { preserveSubstitutionSpans: true });
   const hit = shape.detectCaptureEcho(ir);
   if (!fieldsMode) {

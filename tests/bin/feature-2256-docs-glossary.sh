@@ -10,11 +10,11 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-GLOSSARY="$AGENTS_DIR/docs/glossary.md"
-UPDATE_DOCS="$AGENTS_DIR/skills/update-docs/SKILL.md"
-SUP_AUDIT="$AGENTS_DIR/agents/supervisor-audit.md"
-CC_DOC="$AGENTS_DIR/docs/architecture/claude-code.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GLOSSARY="$SCRIPT_CHECKOUT_ROOT/docs/glossary.md"
+UPDATE_DOCS="$SCRIPT_CHECKOUT_ROOT/skills/update-docs/SKILL.md"
+SUP_AUDIT="$SCRIPT_CHECKOUT_ROOT/agents/supervisor-audit.md"
+CC_DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code.md"
 
 PASS=0
 FAIL=0
@@ -69,13 +69,13 @@ assert_nogrep "17: agents/supervisor-audit.md no longer calls the checklist thre
 
 # --- 18-21: the unrelated security-side "three axes" wording is untouched ---
 assert_grep "18: agents/security-scanner.md keeps its three axes wording" \
-    "$AGENTS_DIR/agents/security-scanner.md" 'three axes'
+    "$SCRIPT_CHECKOUT_ROOT/agents/security-scanner.md" 'three axes'
 assert_grep "19: agents/plan-security-reviewer.md keeps its three axes wording" \
-    "$AGENTS_DIR/agents/plan-security-reviewer.md" 'three axes'
+    "$SCRIPT_CHECKOUT_ROOT/agents/plan-security-reviewer.md" 'three axes'
 assert_grep "20: bin/review-plan-codex keeps its three axes wording" \
-    "$AGENTS_DIR/bin/review-plan-codex" 'three axes'
+    "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" 'three axes'
 assert_grep "21: skills/review-code-security/SKILL.md keeps its three axes wording" \
-    "$AGENTS_DIR/skills/review-code-security/SKILL.md" 'three axes'
+    "$SCRIPT_CHECKOUT_ROOT/skills/review-code-security/SKILL.md" 'three axes'
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

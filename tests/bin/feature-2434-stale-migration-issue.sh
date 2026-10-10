@@ -5,12 +5,12 @@
 # TL3 gap (what this test does NOT catch):
 # - Real GitHub API: gh stub replaces live issue list/create calls
 # - Real cron scheduling of the stale-migration-issue job
-# - AGENTS_CONFIG_DIR root discovery if open-stale-migration-issue.sh uses git root
+# - The deployed script scanning its own checkout: the cases launch a copy placed in a fixture
 # Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
@@ -20,8 +20,8 @@ harness_isolate "$T/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$T/transcripts"
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
 
-OPEN_SCRIPT="$AGENTS_DIR/bin/open-stale-migration-issue.sh"
-CMB="$AGENTS_DIR/bin/lib/check-migration-blocks.js"
+OPEN_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/open-stale-migration-issue.sh"
+CMB="$SCRIPT_CHECKOUT_ROOT/bin/lib/check-migration-blocks.js"
 
 # gh stub: logs "$@" to GH_LOG; answers issue list from GH_ISSUE_LIST env
 mkdir -p "$T/bin"
@@ -94,14 +94,17 @@ run_open_script() {
     RUN_RC=99; RUN_OUT="gh stub guard tripped"; GH_LOG_CONTENTS=""; GH_CREATE_CALLS="guard"
     return 0
   fi
+  # The script scans the checkout it lives in, so a copy is launched from inside the fixture.
+  mkdir -p "$root/bin/lib"
+  cp "$OPEN_SCRIPT" "$root/bin/open-stale-migration-issue.sh"
+  cp "$CMB" "$root/bin/lib/check-migration-blocks.js"
   RUN_OUT="$(
     PATH="$STUB_PATH" \
     GH_REPO="gh-stub.invalid/none/none" \
     GH_LOG="$log_file" \
     GH_ISSUE_LIST="$issues_list" \
     GH_CREATE_FAIL="$create_fail" \
-    AGENTS_CONFIG_DIR="$root" \
-    run_with_timeout 30 bash "$OPEN_SCRIPT" 2>&1
+    run_with_timeout 30 bash "$root/bin/open-stale-migration-issue.sh" 2>&1
   )" || RUN_RC=$?
   GH_LOG_CONTENTS=""
   GH_LOG_CONTENTS="$(cat "$log_file" 2>/dev/null || true)"
@@ -195,7 +198,7 @@ fi
 case_end
 
 case_begin "static-sweep-yml-new-job" ".github/workflows/sweep.yml"
-SWEEP_YML="$AGENTS_DIR/.github/workflows/sweep.yml"
+SWEEP_YML="$SCRIPT_CHECKOUT_ROOT/.github/workflows/sweep.yml"
 JOB_FOUND=0
 grep -qF "stale-migration-issue" "$SWEEP_YML" 2>/dev/null && JOB_FOUND=1
 ISSUES_WRITE=0
@@ -212,7 +215,7 @@ fi
 case_end
 
 case_begin "static-issues-write-one-job" ".github/workflows/sweep.yml"
-SWEEP_YML="$AGENTS_DIR/.github/workflows/sweep.yml"
+SWEEP_YML="$SCRIPT_CHECKOUT_ROOT/.github/workflows/sweep.yml"
 WRITE_COUNT=0
 WRITE_COUNT="$(grep -c "issues: write" "$SWEEP_YML" 2>/dev/null || true)"
 IN_NEW_JOB=0

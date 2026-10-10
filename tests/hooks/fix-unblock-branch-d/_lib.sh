@@ -7,28 +7,28 @@
 # Sourced by unit.sh / integration.sh / hook-redirect.sh in tests/hooks/fix-unblock-branch-d/,
 # so each group runs standalone, e.g.: bash tests/hooks/fix-unblock-branch-d/unit.sh
 
-# Resolves AGENTS_DIR / MODULE / PATTERNS_MODULE / HOOK_SCRIPT; defines pass / fail / run_with_timeout,
+# Resolves __LIB_SCRIPT_CHECKOUT_ROOT / MODULE / PATTERNS_MODULE / HOOK_SCRIPT; defines pass / fail / run_with_timeout,
 # the unit-test node -e callers, and the git-repo fixture helpers. It does NOT initialize PASS/FAIL, create
 # TMPDIR_BASE, register a cleanup trap, echo Results, or exit — the group scripts own those, because each
 # group runs as an independent child bash process under the dispatcher and exits on its own.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$__LIB_SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$__LIB_SCRIPT_CHECKOUT_ROOT"
 fi
-MODULE="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
-PATTERNS_MODULE="${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns.js"
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree/branch-delete-guard.js"
-PARSER_MODULE="${_AGENTS_DIR_NODE}/hooks/lib/command-parser.js"
-HOOK_SCRIPT="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
+PATTERNS_MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-patterns.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree/branch-delete-guard.js"
+PARSER_MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-parser.js"
+HOOK_SCRIPT="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 # isolation (#2512): the dispatcher pins and the groups inherit it. A standalone group run
 # inherits nothing (both unset), so it pins its own OS-temp root (not trap-removed: the group owns the trap).
-declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"
+declare -F harness_assert_isolated >/dev/null || . "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 if [ -z "${WORKFLOW_STATE_DIR:-}" ] && [ -z "${WORKFLOW_PLANS_DIR:-}" ]; then
     _LIB_ISOLATION_ROOT="$(make_tmp)"
     harness_isolate "$_LIB_ISOLATION_ROOT"
@@ -86,7 +86,7 @@ call_isGitWriteIR() {
     run_with_timeout 30 node -e "
       try {
         const { isGitWriteIR } = require('$PATTERNS_MODULE');
-        const { parse } = require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+        const { parse } = require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
         console.log(String(isGitWriteIR(parse(process.argv[1]))));
       } catch (e) { console.log('ERROR: ' + e.message); }
     " -- "$1" 2>/dev/null

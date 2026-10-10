@@ -78,8 +78,8 @@ Describe "bin/worktree-copy-include.js Windows path normalization" {
         }
     }
 
-    Context "W1: Windows-style backslash mainRoot is normalized" {
-        It "accepts mainRoot with backslashes (escaped as \\\\ in JSON) and copies files" {
+    Context "W1: Windows-style backslash targetMainRoot is normalized" {
+        It "accepts targetMainRoot with backslashes (escaped as \\\\ in JSON) and copies files" {
             if (-not (Test-Path -LiteralPath $script:binJs)) {
                 Set-ItResult -Skipped -Because "bin/worktree-copy-include.js not implemented yet"
                 return
@@ -92,7 +92,7 @@ Describe "bin/worktree-copy-include.js Windows path normalization" {
             # Build JSON with explicit backslashes (escaped as \\ in JSON source).
             $mainEsc = $main -replace '\\', '\\'
             $wtEsc   = $wt   -replace '\\', '\\'
-            $payload = '{"mainRoot":"' + $mainEsc + '","worktreePath":"' + $wtEsc + '","includeFile":null}'
+            $payload = '{"targetMainRoot":"' + $mainEsc + '","worktreePath":"' + $wtEsc + '","includeFile":null}'
 
             $result = script:Invoke-Bin $payload
             $result.exit | Should -Be 0
@@ -113,7 +113,7 @@ Describe "bin/worktree-copy-include.js Windows path normalization" {
 
             $mainFwd = $main -replace '\\', '/'
             $wtFwd   = $wt   -replace '\\', '/'
-            $payload = '{"mainRoot":"' + $mainFwd + '","worktreePath":"' + $wtFwd + '","includeFile":null}'
+            $payload = '{"targetMainRoot":"' + $mainFwd + '","worktreePath":"' + $wtFwd + '","includeFile":null}'
 
             $result = script:Invoke-Bin $payload
             $result.exit | Should -Be 0
@@ -137,10 +137,10 @@ Describe "bin/worktree-copy-include.js Windows path normalization" {
             Set-Content -LiteralPath (Join-Path $main ".worktreeinclude") -Value ".env.local" -NoNewline
             Set-Content -LiteralPath (Join-Path $main ".env.local")       -Value "x=1"        -NoNewline
 
-            # mainRoot uses forward slashes, worktreePath uses backslashes.
+            # targetMainRoot uses forward slashes, worktreePath uses backslashes.
             $mainFwd = $main -replace '\\', '/'
             $wtEsc   = $wt   -replace '\\', '\\'
-            $payload = '{"mainRoot":"' + $mainFwd + '","worktreePath":"' + $wtEsc + '","includeFile":null}'
+            $payload = '{"targetMainRoot":"' + $mainFwd + '","worktreePath":"' + $wtEsc + '","includeFile":null}'
 
             $result = script:Invoke-Bin $payload
             $result.exit | Should -Be 0

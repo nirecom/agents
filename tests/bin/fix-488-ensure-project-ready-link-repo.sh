@@ -6,7 +6,6 @@
 # Regression test for #488 (reopened): /issue-setup path never linked its
 # Projects v2 board to the repo. Mirrors tests/bin/fix-488-create-project-link-repo.sh
 # (LNK-1..LNK-4); no dry-run case (ensure_project_ready() has none).
-#
 # TL3 gap: mocked gh CLI — real GraphQL link mutation + idempotency unverified.
 # Closer: RUN_TL4=on, or manually confirm the board on github.com after /issue-setup.
 
@@ -15,7 +14,7 @@
 # shellcheck source=feature-1340-issue-setup/_mock-ensure-project-ready.sh
 . "$(dirname "${BASH_SOURCE[0]}")/feature-1340-issue-setup/_mock-ensure-project-ready.sh"
 
-TARGET="$AGENTS_DIR/bin/github-issues/lib/ensure-project-ready.sh"
+TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/ensure-project-ready.sh"
 export TARGET
 
 if [ ! -f "$TARGET" ]; then

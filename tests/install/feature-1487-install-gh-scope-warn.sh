@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Tests: install.sh, install.ps1, install/linux/gh.sh, install/linux/jq.sh
 # Tags: install, gh-install, jq-install, auth-idempotent, non-interactive, scope:issue-specific
-#
 # Tests gh and jq install scripts added in issues #1567 and #1566.
 # Also verifies that the scope-warn block removed from install.sh no longer fires.
-#
 # TL3 gap (what this test does NOT catch):
 # - install.ps1 / install/win/gh.ps1 / install/win/jq.ps1: PowerShell behavior requires real pwsh runtime.
 # - Real winget/apt-get/brew: mock package managers do not verify network or privilege behavior.
@@ -14,8 +12,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-INSTALL_SH="$AGENTS_DIR/install.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+INSTALL_SH="$SCRIPT_CHECKOUT_ROOT/install.sh"
+# shellcheck source=/dev/null
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/home-userprofile-pin.sh"
 
 PASS=0
 FAIL=0
@@ -64,20 +64,10 @@ trap 'rm -rf "$TMP"' EXIT
 # Build a fake AGENTS_ROOT with NOP stub sub-scripts so install.sh can run
 # without performing any real side effects (no curl, no npm, no file mutations
 # outside TMP).
-#
-# Stubs required (all called unconditionally or conditionally by install.sh):
-#   install/linux/dotfileslink.sh
-#   install/linux/claude-code.sh
-#   install/linux/session-sync-init.sh
-#   install/linux/vscode-settings.sh
-#   install/linux/global-gitignore.sh
-#   install/linux/gh.sh
-#   install/linux/jq.sh
-#   (codex.sh / gemini.sh only when --develop, not exercised here)
-#
-# Also stubs:
-#   npm     -- checked via `type npm`
-#   claude  -- checked via `type claude` for session-sync branch
+# Stubs: every install/linux/*.sh sub-script install.sh calls, unconditionally or
+# conditionally (the loop below lists them; gemini.sh runs only under --develop,
+# not exercised here), plus npm (checked via `type npm`) and claude (checked via
+# `type claude` for the session-sync branch).
 # ---------------------------------------------------------------------------
 
 FAKE_ROOT="$TMP/fake-agents-root"
@@ -111,17 +101,11 @@ chmod +x "$FAKE_ROOT/mock-bin/claude"
 
 # ---------------------------------------------------------------------------
 # Helper: run install.sh in a controlled environment.
-#
-# Args:
-#   $1 - path to a mock-bin directory that contains a `gh` stub,
-#        or "none" to omit gh from PATH entirely
-#   $2 - temp file to capture stderr into
-#
-# Env forwarded (minimal, isolated from the real system):
-#   NVM_DIR  -- points to our fake nvm dir
-#   HOME     -- points to $TMP/home so rc-file writes stay isolated
-#   PATH     -- prepends mock-bin so our fake binaries are found first
-#   SHELL    -- set to bash so rc-file is ~/.bashrc
+# Args: $1 - mock-bin dir that contains a `gh` stub, or "none" to omit gh from PATH
+#       $2 - temp file to capture stderr into
+# Env forwarded (minimal, isolated from the real system): NVM_DIR (our fake nvm
+#   dir), HOME + USERPROFILE (both pinned at $TMP/home-* so rc-file and settings
+#   writes stay isolated), PATH (mock-bin first), SHELL (bash, so rc-file is ~/.bashrc).
 # ---------------------------------------------------------------------------
 run_install() {
     local mock_bin_dir="$1"
@@ -143,14 +127,27 @@ run_install() {
     # (install.sh uses dirname of BASH_SOURCE[0] to compute AGENTS_ROOT).
     cp "$INSTALL_SH" "$FAKE_ROOT/install.sh"
 
+    # Subshell: the pin (HOME + USERPROFILE) must not outlive this run.
+    (
+    pin_home_and_userprofile "$fake_home"
     run_with_timeout 30 env -i \
         PATH="$path_prefix:$PATH" \
-        HOME="$fake_home" \
+        HOME="$HOME" USERPROFILE="$USERPROFILE" \
         NVM_DIR="$FAKE_ROOT/fake-nvm" \
         SHELL="/bin/bash" \
         TERM="dumb" \
         bash "$FAKE_ROOT/install.sh" \
         >/dev/null 2>"$stderr_file"
+    )
+}
+
+# run_sub_script <home> <bin-dir> <script> — run one install/linux sub-script under
+# `env -i` with HOME and USERPROFILE both pinned at <home>; the caller redirects.
+run_sub_script() {
+    (
+    pin_home_and_userprofile "$1"
+    run_with_timeout 15 env -i PATH="$2:$PATH" HOME="$HOME" USERPROFILE="$USERPROFILE" bash "$3"
+    )
 }
 
 # ---------------------------------------------------------------------------
@@ -175,7 +172,7 @@ fi
 # skip `gh auth login` entirely and proceed to `gh auth refresh -s project`.
 # Relies on install/linux/gh.sh (created in write-code step).
 # ---------------------------------------------------------------------------
-GH_SH="$AGENTS_DIR/install/linux/gh.sh"
+GH_SH="$SCRIPT_CHECKOUT_ROOT/install/linux/gh.sh"
 T2_BIN="$TMP/t2-bin"
 mkdir -p "$T2_BIN"
 LOGIN_MARKER="$TMP/t2-login-called"
@@ -197,7 +194,7 @@ chmod +x "$T2_BIN/brew" "$T2_BIN/apt-get"
 STDOUT_FILE="$TMP/t2-stdout.log"
 STDERR_FILE="$TMP/t2-stderr.log"
 if [ -f "$GH_SH" ]; then
-    run_with_timeout 15 env -i PATH="$T2_BIN:$PATH" HOME="$TMP/home-t2" bash "$GH_SH" \
+    run_sub_script "$TMP/home-t2" "$T2_BIN" "$GH_SH" \
         >"$STDOUT_FILE" 2>"$STDERR_FILE"
     RC=$?
     if [ "$RC" -eq 0 ] && [ ! -f "$LOGIN_MARKER" ]; then
@@ -216,7 +213,7 @@ fi
 # indicating jq is already installed and exit 0 without calling the installer.
 # Relies on install/linux/jq.sh (created in write-code step).
 # ---------------------------------------------------------------------------
-JQ_SH="$AGENTS_DIR/install/linux/jq.sh"
+JQ_SH="$SCRIPT_CHECKOUT_ROOT/install/linux/jq.sh"
 T3_BIN="$TMP/t3-bin"
 mkdir -p "$T3_BIN"
 # Provide a fake jq binary so command -v jq succeeds
@@ -226,7 +223,7 @@ chmod +x "$T3_BIN/jq"
 STDOUT_FILE="$TMP/t3-stdout.log"
 STDERR_FILE="$TMP/t3-stderr.log"
 if [ -f "$JQ_SH" ]; then
-    run_with_timeout 15 env -i PATH="$T3_BIN:$PATH" HOME="$TMP/home-t3" bash "$JQ_SH" \
+    run_sub_script "$TMP/home-t3" "$T3_BIN" "$JQ_SH" \
         >"$STDOUT_FILE" 2>"$STDERR_FILE"
     RC=$?
     COMBINED_OUT="$(cat "$STDOUT_FILE" "$STDERR_FILE" 2>/dev/null)"
@@ -285,7 +282,7 @@ chmod +x "$T5_BIN/apt-get" "$T5_BIN/brew"
 STDOUT_FILE="$TMP/t5-stdout.log"
 STDERR_FILE="$TMP/t5-stderr.log"
 if [ -f "$GH_SH" ]; then
-    run_with_timeout 15 env -i PATH="$T5_BIN:$PATH" HOME="$TMP/home-t5" bash "$GH_SH" \
+    run_sub_script "$TMP/home-t5" "$T5_BIN" "$GH_SH" \
         >"$STDOUT_FILE" 2>"$STDERR_FILE"
     RC=$?
     if [ "$RC" -eq 0 ]; then
@@ -326,7 +323,7 @@ STDOUT_FILE="$TMP/t6-stdout.log"
 STDERR_FILE="$TMP/t6-stderr.log"
 if [ -f "$GH_SH" ]; then
     # Redirect stdin from /dev/null to simulate non-TTY (CI) environment
-    run_with_timeout 15 env -i PATH="$T6_BIN:$PATH" HOME="$TMP/home-t6" bash "$GH_SH" \
+    run_sub_script "$TMP/home-t6" "$T6_BIN" "$GH_SH" \
         >/dev/null 2>"$STDERR_FILE" </dev/null
     RC=$?
     if [ "$RC" -eq 0 ] && [ ! -f "$T6_LOGIN_MARKER" ]; then
@@ -366,7 +363,7 @@ chmod +x "$T7_BIN/apt-get" "$T7_BIN/brew" "$T7_BIN/jq"
 STDOUT_FILE="$TMP/t7-stdout.log"
 STDERR_FILE="$TMP/t7-stderr.log"
 if [ -f "$JQ_SH" ]; then
-    run_with_timeout 15 env -i PATH="$T7_BIN:$PATH" HOME="$TMP/home-t7" bash "$JQ_SH" \
+    run_sub_script "$TMP/home-t7" "$T7_BIN" "$JQ_SH" \
         >"$STDOUT_FILE" 2>"$STDERR_FILE"
     RC=$?
     if [ "$RC" -eq 0 ]; then

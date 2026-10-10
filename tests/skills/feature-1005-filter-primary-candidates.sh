@@ -2,39 +2,19 @@
 # Tests: skills/workflow-init/scripts/filter-init-candidates.sh
 # Tags: workflow-init, filter-init-candidates, init-detection, parent-filter, closed-filter, meta-filter, scope:issue-specific
 #
-# Feature 1005 — filter-init-candidates.sh (WI-3 init-candidate filter).
-# The script takes a list of candidate issue numbers (the `#N` matches WI-3
-# detected) and emits the subset eligible for the session, one number per
-# line, in input order. Three exclusion axes:
-#   - CLOSED filter: a candidate whose issue-state-check.sh reports "closed"
-#     is dropped (a closed issue is not a valid new init candidate).
-#   - parent filter: a candidate A that is the PARENT of another candidate B
-#     (i.e. B's parentIssue == A) is dropped — the child B is the more specific
-#     work item, so the parent is not proposed.
-#   - meta filter: a candidate carrying the "meta" label is dropped WHEN at least
-#     one non-meta candidate survives (meta issues are planning umbrellas, not
-#     the concrete work item). If every candidate is meta, none is dropped.
-# Fallback: if every candidate is filtered out, emit the ORIGINAL candidate list
-# unchanged (never return an empty set). Output order = input order.
-#
-# Mock contract (matches the helper convention):
-#   issue-state-check.sh <N>  → prints MOCK_STATE_<N> (default "open").
-#   gh issue view <N> --json parent,labels  → {"parent":<p>,"labels":<l>} from
-#     GH_MOCK_PARENT_<N> (default null) and GH_MOCK_LABELS_<N> (default []).
-#     GH_MOCK_PARENT_<N>="fail" → gh exits 1 (fail-open).
-#
-# L3 gap (what these tests do NOT catch):
-# - Whether the real issue-state-check.sh / gh parent+labels linkage match the
-#   mock shapes against a live GitHub repo.
-# - Whether WI-3 (driver detect-issues phase) invokes filter-init-candidates.sh
-#   correctly in a live workflow-init session.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration
+# filter-init-candidates.sh emits the eligible subset of candidate issue
+# numbers in input order: drops CLOSED ones, a parent of another candidate, and
+# "meta"-labelled ones while a non-meta survives; all filtered -> original list.
+# Mocks: issue-state-check.sh prints MOCK_STATE_<N> (default open); gh issue
+# view prints GH_MOCK_PARENT_<N> / GH_MOCK_LABELS_<N> ("fail" -> gh exits 1).
+# L3 gap (what these tests do NOT catch): real issue-state-check.sh / gh shapes
+# and the live WI-3 call site; check-verification-gate.sh: skill-orchestration
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUT="$AGENTS_DIR/skills/workflow-init/scripts/filter-init-candidates.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SUT_REL="skills/workflow-init/scripts/filter-init-candidates.sh"
+SUT="$SCRIPT_CHECKOUT_ROOT/$SUT_REL"
 
 PASS=0
 FAIL=0
@@ -102,7 +82,11 @@ exit 0
 MOCKSTATE
     chmod +x "$TMP/bin/github-issues/issue-state-check.sh"
 
-    export AGENTS_CONFIG_DIR="$TMP"
+    # The script finds issue-state-check.sh from its own location, so each
+    # case runs a copy placed next to the mock.
+    SUT_COPY="$TMP/$SUT_REL"
+    mkdir -p "${SUT_COPY%/*}"
+    [ -f "$SUT" ] && cp "$SUT" "$SUT_COPY"
     export PATH="$TMP/mock-bin:$PATH"
 }
 
@@ -122,7 +106,7 @@ emitted() {  # args: OUT N → 0 if token for N present as a stdout line
 # FP-1: all OPEN candidates, no parent relationships → all pass through.
 setup_mock
 if require_sut "FP-1"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 301 302 303 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 301 302 303 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && emitted "$OUT" 301 && emitted "$OUT" 302 && emitted "$OUT" 303; then
         pass "FP-1: all OPEN, no parents → all three emitted"
@@ -136,7 +120,7 @@ teardown_mock
 setup_mock
 export MOCK_STATE_302=closed
 if require_sut "FP-2"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 301 302 303 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 301 302 303 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && emitted "$OUT" 301 && ! emitted "$OUT" 302 && emitted "$OUT" 303; then
         pass "FP-2: CLOSED #302 excluded; 301/303 kept"
@@ -151,7 +135,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_PARENT_302='{"parent":{"number":301}}'
 if require_sut "FP-3"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 301 302 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 301 302 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && ! emitted "$OUT" 301 && emitted "$OUT" 302; then
         pass "FP-3: parent #301 (of #302) excluded; child #302 kept"
@@ -166,7 +150,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_PARENT_302='{"parent":{"number":999}}'
 if require_sut "FP-4"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 301 302 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 301 302 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && emitted "$OUT" 301 && emitted "$OUT" 302; then
         pass "FP-4: child #302 (parent #999 not a candidate) kept"
@@ -182,7 +166,7 @@ setup_mock
 export MOCK_STATE_301=closed
 export MOCK_STATE_302=closed
 if require_sut "FP-5"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 301 302 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 301 302 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && emitted "$OUT" 301 && emitted "$OUT" 302; then
         pass "FP-5: all CLOSED → fallback emits original 301/302"
@@ -197,7 +181,7 @@ setup_mock
 export MOCK_STATE_302=closed
 export MOCK_STATE_303=closed
 if require_sut "FP-6"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 301 302 303 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 301 302 303 2>/dev/null)
     RC=$?
     COUNT=$(printf '%s\n' "$OUT" | grep -oE '[0-9]+$' | wc -l | tr -d ' ')
     if [ "$RC" -eq 0 ] && [ "$COUNT" -eq 1 ] && emitted "$OUT" 301; then
@@ -215,7 +199,7 @@ setup_mock
 export GH_MOCK_PARENT_302='{"parent":{"number":301}}'
 export MOCK_STATE_303=closed
 if require_sut "FP-7"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 301 302 303 304 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 301 302 303 304 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] \
        && ! emitted "$OUT" 301 && emitted "$OUT" 302 \
@@ -232,7 +216,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_PARENT_302=fail
 if require_sut "FP-8"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 301 302 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 301 302 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && emitted "$OUT" 301 && emitted "$OUT" 302; then
         pass "FP-8: gh parent fetch fail → fail-open, #302 kept"
@@ -245,7 +229,7 @@ teardown_mock
 # FP-9: output order preserves the input argument order.
 setup_mock
 if require_sut "FP-9"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 303 301 302 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 303 301 302 2>/dev/null)
     RC=$?
     ORDER=$(printf '%s\n' "$OUT" | grep -oE '[0-9]+$' | tr '\n' ' ' | sed 's/ *$//')
     if [ "$RC" -eq 0 ] && [ "$ORDER" = "303 301 302" ]; then
@@ -261,7 +245,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_LABELS_401='[{"name":"meta"}]'
 if require_sut "FP-10"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 401 402 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 401 402 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && ! emitted "$OUT" 401 && emitted "$OUT" 402; then
         pass "FP-10: meta #401 excluded when non-meta #402 present"
@@ -277,7 +261,7 @@ setup_mock
 export GH_MOCK_LABELS_401='[{"name":"meta"}]'
 export GH_MOCK_LABELS_402='[{"name":"meta"}]'
 if require_sut "FP-11"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" 401 402 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" 401 402 2>/dev/null)
     RC=$?
     if [ "$RC" -eq 0 ] && emitted "$OUT" 401 && emitted "$OUT" 402; then
         pass "FP-11: all-meta → fallback emits both #401 and #402"
@@ -294,7 +278,7 @@ setup_mock
 export GH_MOCK_LABELS_501='[{"name":"meta"}]'
 export GH_MOCK_LABELS_502='[]'
 if require_sut "FP-12"; then
-    OUT=$(run_with_timeout 10 bash "$SUT" --repo-map 0:acme/repo-a --repo-map 1:acme/repo-b 501 502 2>/dev/null)
+    OUT=$(run_with_timeout 10 bash "$SUT_COPY" --repo-map 0:acme/repo-a --repo-map 1:acme/repo-b 501 502 2>/dev/null)
     RC=$?
     # #501 (meta, repo-a) should be absent; acme/repo-b#502 (non-meta) should be present
     if [ "$RC" -eq 0 ] && ! emitted "$OUT" 501 && printf '%s' "$OUT" | grep -qF 'acme/repo-b#502'; then

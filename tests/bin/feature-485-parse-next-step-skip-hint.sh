@@ -16,11 +16,11 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PARSER="$AGENTS_DIR/bin/workflow/lib/parse-next-step-output.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PARSER="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/parse-next-step-output.js"
 PARSER="$(cygpath -m "$PARSER" 2>/dev/null || echo "$PARSER")"
 
-[ -f "$AGENTS_DIR/bin/workflow/lib/parse-next-step-output.js" ] || {
+[ -f "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/parse-next-step-output.js" ] || {
   echo "SKIP: parse-next-step-output.js not found"
   exit 0
 }

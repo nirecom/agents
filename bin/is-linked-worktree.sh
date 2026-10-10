@@ -9,7 +9,7 @@ git rev-parse --git-dir >/dev/null 2>&1 || { echo "unknown"; exit 0; }
 
 PWD_REAL=$(cd -P "$PWD" 2>/dev/null && pwd -P || pwd)
 
-MAIN_WORKTREE=""
+TARGET_MAIN_ROOT=""
 CURRENT_WORKTREE=""
 STATE=""   # "main" or "linked" for current stanza
 STANZA_PATH=""
@@ -19,9 +19,9 @@ while IFS= read -r line; do
     "worktree "*)
       STANZA_PATH="${line#worktree }"
       # First stanza is always the main worktree
-      if [[ -z "$MAIN_WORKTREE" ]]; then
+      if [[ -z "$TARGET_MAIN_ROOT" ]]; then
         STATE="main"
-        MAIN_WORKTREE="$STANZA_PATH"
+        TARGET_MAIN_ROOT="$STANZA_PATH"
       else
         STATE="linked"
       fi

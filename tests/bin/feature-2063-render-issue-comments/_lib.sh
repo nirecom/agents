@@ -12,7 +12,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 # context.md, and its gh/wip mocks plus pass/fail/finish are that harness's job.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/feature-workflow-init-driver/_lib.sh"
 
-CLI="$AGENTS_DIR/bin/workflow/render-issue-comments"
+CLI="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/render-issue-comments"
 WORK="$ROOT_TMP/ric-work"
 mkdir -p "$WORK/plans" "$WORK/state"
 

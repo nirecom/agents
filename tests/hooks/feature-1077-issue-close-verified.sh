@@ -12,14 +12,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-HOOK_JS="${_AGENTS_DIR_NODE}/hooks/enforce-issue-close.js"
-SENTINEL_PATTERNS_JS="${_AGENTS_DIR_NODE}/hooks/lib/sentinel-patterns.js"
+HOOK_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-issue-close.js"
+SENTINEL_PATTERNS_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/sentinel-patterns.js"
 
 PASS=0
 FAIL=0
@@ -107,7 +107,6 @@ run_hook() {
     local errfile="$TMPDIR_BASE/.err.$$"
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u ISSUE_CLOSE_SKILL \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         node "$HOOK_JS" 2>"$errfile")" || HOOK_RC=$?
     HOOK_ERR="$(cat "$errfile" 2>/dev/null)"
@@ -120,7 +119,6 @@ run_hook_with_skill() {
     local errfile="$TMPDIR_BASE/.err.$$"
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "ISSUE_CLOSE_SKILL=1" \
         node "$HOOK_JS" 2>"$errfile")" || HOOK_RC=$?
@@ -214,7 +212,7 @@ test_E_issue_close_skill_env_bypasses() {
 test_F_sentinel_issue_close_verified_on_recognized() {
     local result
     result="$(node -e "
-const p=require('${_AGENTS_DIR_NODE}/hooks/lib/sentinel-patterns');
+const p=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/sentinel-patterns');
 const r=p.isSentinel('echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED: reason>>\"');
 console.log(r);
 " 2>/dev/null)"
@@ -230,7 +228,7 @@ console.log(r);
 test_G_sentinel_issue_close_verified_end_recognized() {
     local result
     result="$(node -e "
-const p=require('${_AGENTS_DIR_NODE}/hooks/lib/sentinel-patterns');
+const p=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/sentinel-patterns');
 const r=p.isSentinel('echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: reason>>\"');
 console.log(r);
 " 2>/dev/null)"
@@ -246,7 +244,7 @@ console.log(r);
 test_H_sentinel_issue_close_verified_bare_lookslike() {
     local result
     result="$(node -e "
-const p=require('${_AGENTS_DIR_NODE}/hooks/lib/sentinel-patterns');
+const p=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/sentinel-patterns');
 const r=p.isSentinel('echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED>>\"');
 console.log(r);
 " 2>/dev/null)"

@@ -2,28 +2,13 @@
 # tests/bin/bin-sweep-issues-tiers.sh
 # Tests: bin/sweep-issues.sh, bin/sweep-issues/close-batch.sh, bin/sweep-issues/meta-parent-scan.sh
 # Tags: sweep, issues, tier, dry-run, deep, scope:common, TL2
-#
-# Pins the two orthogonal axes of /sweep-issues:
-#   write mode : no flag = apply (tier 1 really closes) | --dry-run = write nothing
-#   depth      : no flag = tier 1 only, non-interactive  | --deep = emit tier 2 gate blocks
-# --deep must NOT change the write mode, and --dry-run must suppress tier 1 closes.
-#
-# Technique (after tests/bin/feature-sweep-worktrees/gh-stub.sh): a shadow
-# AGENTS_CONFIG_DIR holds real copies of bin/sweep-issues* plus RECORDING STUBS
-# for every bin/github-issues/ close helper, so both `$AGENTS_CONFIG_DIR/bin/...`
-# and `$(dirname $0)/../github-issues/...` resolution styles hit the stub. Each
-# stub appends "<helper> <args>" to a record file, which is how call ORDER and
-# ARGUMENTS are asserted (notably: post-close-sentinels must be called with the
-# issue number ONLY — a second commit-hash argument would wrongly post a
-# resolved-by sentinel on an admin_close_path close).
-#
-# TL3 gap (what this test does NOT catch):
-# - Real `gh` API behaviour: rate limits, sub-issue pagination, and the actual
-#   state transitions performed by the real close helpers are all stubbed here.
-# - The SKILL.md human gates (AskUserQuestion) that drive pass 2 / pass 3 in a
-#   real session — only the bash-side flag contract is exercised.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Pins the two orthogonal axes of /sweep-issues: write mode (no flag = apply, tier 1
+# really closes | --dry-run = write nothing) and depth (no flag = tier 1 only | --deep =
+# tier 2 gate blocks). --deep must NOT change the write mode; --dry-run suppresses closes.
+# Technique: a shadow checkout holds real copies of bin/sweep-issues* plus RECORDING STUBS
+# for every bin/github-issues/ close helper; each stub appends "<helper> <args>" to a record
+# file (call ORDER and ARGUMENTS; post-close-sentinels must get the issue number ONLY).
+# TL3 gap: real gh API + SKILL.md gates stubbed; checked at USER_VERIFIED preflight (bin/check-verification-gate.sh).
 
 set -uo pipefail
 
@@ -32,8 +17,8 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ORCH="$AGENTS_DIR/bin/sweep-issues.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ORCH="$SCRIPT_CHECKOUT_ROOT/bin/sweep-issues.sh"
 REPO_SLUG="testowner/testrepo"
 
 PASS=0
@@ -70,23 +55,23 @@ make_fixture() {
     : > "$RECORD"
     : > "$GHREC"
 
-    cp "$AGENTS_DIR/bin/sweep-issues.sh"   "$FAKE/bin/"                 2>/dev/null
-    cp "$AGENTS_DIR"/bin/sweep-issues/*    "$FAKE/bin/sweep-issues/"    2>/dev/null
-    cp "$AGENTS_DIR"/bin/lib/*.sh          "$FAKE/bin/lib/"             2>/dev/null
-    cp "$AGENTS_DIR/bin/run-with-timeout.sh" "$FAKE/bin/"               2>/dev/null
-    [ -f "$AGENTS_DIR/bin/workflow-plans-dir" ] && \
-        cp "$AGENTS_DIR/bin/workflow-plans-dir" "$FAKE/bin/" 2>/dev/null
-    # gh-outbound-guard.sh (sourced by close-batch.sh) resolves this at runtime
-    # via $AGENTS_CONFIG_DIR/bin/scan-outbound.sh and is fail-closed if it is
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/sweep-issues.sh"   "$FAKE/bin/"                 2>/dev/null
+    cp "$SCRIPT_CHECKOUT_ROOT"/bin/sweep-issues/*    "$FAKE/bin/sweep-issues/"    2>/dev/null
+    cp "$SCRIPT_CHECKOUT_ROOT"/bin/lib/*.sh          "$FAKE/bin/lib/"             2>/dev/null
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$FAKE/bin/"               2>/dev/null
+    [ -f "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir" ] && \
+        cp "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir" "$FAKE/bin/" 2>/dev/null
+    # gh-outbound-guard.sh (sourced by close-batch.sh) resolves scan-outbound.sh
+    # at runtime from its own sibling bin/ and is fail-closed if it is
     # missing — see assert_fixture_lib_deps_resolved below for the general check.
-    cp "$AGENTS_DIR/bin/scan-outbound.sh"  "$FAKE/bin/"                 2>/dev/null
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh"  "$FAKE/bin/"                 2>/dev/null
     chmod -R u+rwx "$FAKE/bin" 2>/dev/null
     # scan-outbound.sh itself guards both of these with `-f` (absence tolerated),
     # but copy them when present so the fixture's scan behaviour matches production.
-    [ -f "$AGENTS_DIR/.private-info-allowlist" ] && \
-        cp "$AGENTS_DIR/.private-info-allowlist" "$FAKE/" 2>/dev/null
-    [ -f "$AGENTS_DIR/.private-info-blocklist" ] && \
-        cp "$AGENTS_DIR/.private-info-blocklist" "$FAKE/" 2>/dev/null
+    [ -f "$SCRIPT_CHECKOUT_ROOT/.private-info-allowlist" ] && \
+        cp "$SCRIPT_CHECKOUT_ROOT/.private-info-allowlist" "$FAKE/" 2>/dev/null
+    [ -f "$SCRIPT_CHECKOUT_ROOT/.private-info-blocklist" ] && \
+        cp "$SCRIPT_CHECKOUT_ROOT/.private-info-blocklist" "$FAKE/" 2>/dev/null
 
     printf '#!/bin/bash\nexit 0\n' > "$FAKE/bin/is-github-dotcom-remote"
     chmod +x "$FAKE/bin/is-github-dotcom-remote"
@@ -156,18 +141,12 @@ STUB
     assert_fixture_lib_deps_resolved "$tag"
 }
 
-# Guard-completeness precondition (SI-6 class of bug): every bin/lib/*.sh file
-# actually `source`d by the copied sweep-issues entrypoints may itself resolve
-# a sibling helper by basename at runtime (the way gh-outbound-guard.sh resolves
-# scan-outbound.sh). If that helper is not also present under the fixture's
-# bin/, the security gate fails closed silently instead of exercising the real
-# scan path. This is discovered dynamically from the copied files themselves —
-# not a hardcoded "scan-outbound.sh" check — so the next such dependency
-# surfaces here instead of as a batch of mysteriously-failing test cases.
-#
-# Hard-aborts like the "orchestrator not found" setup check below, rather than
-# going through pass()/fail(): an incomplete fixture is a setup defect, not a
-# test-case outcome.
+# Guard-completeness precondition (SI-6 class): a bin/lib/*.sh sourced by the
+# copied entrypoints may resolve a sibling helper by basename at runtime; if it
+# is absent from the fixture bin/, the security gate fails closed silently rather
+# than exercising the real scan path. Discovered dynamically from the copied
+# files (not a hardcoded name). Hard-aborts on an incomplete fixture: that is a
+# setup defect, not a test-case outcome.
 assert_fixture_lib_deps_resolved() {
     local tag="$1"
     local sourced_libs missing="" lib dep libpath
@@ -212,7 +191,7 @@ STUB
 # (Globals, not stdout: `x=$(run_sweep)` would run the whole function in a
 # subshell and RC would never reach the caller.)
 run_sweep() {
-    OUT="$(cd "$REPO" && PATH="$GHDIR:$PATH" AGENTS_CONFIG_DIR="$FAKE" \
+    OUT="$(cd "$REPO" && PATH="$GHDIR:$PATH" AGENTS_MAIN_ROOT="$FAKE" \
         CNP_FAIL_FOR="${CNP_FAIL_FOR:-}" \
         run_with_timeout bash "$FAKE/bin/sweep-issues.sh" --repo "$REPO_SLUG" "$@" 2>&1)"
     RC=$?

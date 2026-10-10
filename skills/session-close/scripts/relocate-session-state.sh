@@ -9,18 +9,18 @@
 # deletion-condition: remove when bin/state-dir-relocation remaining exits 0 (no session with a <sid>.json or <sid>.control left in the legacy dir, any sid shape); also delete skills/session-close SC-9; review by 2027-01-04
 set -euo pipefail
 
-CFG_DIR="${AGENTS_CONFIG_DIR:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SESSION_ID="${1-}"
 if [[ -z "$SESSION_ID" ]]; then
   echo "relocate-session-state: session-id required" >&2
   exit 0
 fi
 
-RELOCATE_OUT="$(node "$CFG_DIR/bin/state-dir-relocation" move --session "$SESSION_ID" || true)"
+RELOCATE_OUT="$(node "$SCRIPT_CHECKOUT_ROOT/bin/state-dir-relocation" move --session "$SESSION_ID" || true)"
 printf '%s\n' "$RELOCATE_OUT"
 
 if [[ "$RELOCATE_OUT" == RELOCATE_FAILED* && "$RELOCATE_OUT" == *report=first* ]]; then
-  node "$CFG_DIR/bin/supervisor-report" --categories workflow --severity warning \
+  node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-report" --categories workflow --severity warning \
     --detail "session state relocation to ~/.workflow-state failed: $RELOCATE_OUT" \
     --reporter session-close --session-id "$SESSION_ID" >/dev/null 2>&1 || true
 fi

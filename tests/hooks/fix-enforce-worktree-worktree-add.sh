@@ -10,11 +10,11 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/lib/ew-runner.sh
-. "$AGENTS_DIR/tests/lib/ew-runner.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/ew-runner.sh"
 
 T="$(make_tmp)"
 trap 'rm -rf "$T"' EXIT
@@ -23,15 +23,15 @@ harness_isolate "$T/iso"
 MAIN="$(np "$T/main")"
 EXT="$(np "$T/worktrees/my-task/main")"
 ew_make_repo "$MAIN"
-EW_CONFIG_DIR="$MAIN"
-BG="$(np "$AGENTS_DIR/hooks/bash-guard.js")"
+EW_CFG_ROOT="$MAIN"
+BG="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/bash-guard.js")"
 
 # bg_run <command> → approve | block | other:<out>
 bg_run() {
     local out
     out="$(cd "$MAIN" && ew_bash_payload test "$1" | run_with_timeout 30 env \
          -u CLAUDE_CODE_SESSION_ID -u WORKFLOW_OFF \
-        "AGENTS_CONFIG_DIR=$MAIN" node "$BG" 2>/dev/null)" || true
+        "AGENTS_MAIN_ROOT=$MAIN" node "$BG" 2>/dev/null)" || true
     out="$(printf '%s' "$out" | tr -d '\r\n')"
     case "$out" in
         *'"decision":"block"'*) printf 'block' ;;
@@ -59,7 +59,7 @@ ew_expect block "H2b. enforce-worktree: cd <main> && git worktree add → BLOCK 
 case_end
 
 case_begin "worktree-start-skill-emits-isolated-form" "skills/worktree-start/SKILL.md"
-WS_SKILL="$AGENTS_DIR/skills/worktree-start/SKILL.md"
+WS_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/worktree-start/SKILL.md"
 if grep -qE '^[[:space:]]*git worktree add <path> -b ' "$WS_SKILL"; then
     pass "S1. worktree-start SKILL.md WS-6 emits the isolated git worktree add form"
 else

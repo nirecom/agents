@@ -5,7 +5,8 @@
 
 run_git_data_write() {
     local stubdir="$1"; shift
-    PATH="$stubdir:$PATH" run_with_timeout 30 bash "$GIT_DATA_WRITE_SH" "$@" 2>&1
+    AGENTS_MAIN_ROOT="$SCAN_ROOT" PATH="$(path_entry "$stubdir"):$PATH" \
+        run_with_timeout 30 bash "$GIT_DATA_WRITE_SH" "$@" 2>&1
 }
 
 # Make a stub that always succeeds for git data API.

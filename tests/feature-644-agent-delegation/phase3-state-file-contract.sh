@@ -11,9 +11,9 @@ if [ "$FEATURE_644_PHASE" -lt 3 ]; then
 fi
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DOC="$AGENTS_DIR/docs/architecture/claude-code/worker-dispatch/close-family.md"
-STATE="$AGENTS_DIR/bin/worker-dispatch/workers/issue-close-finalize/state.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/worker-dispatch/close-family.md"
+STATE="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-close-finalize/state.js"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }

@@ -4,14 +4,14 @@
 #
 # Marker seeding, state seeding and the real-consumer drivers for the #1624
 # scoped-pause suite. Sourced by tests/hooks/feature-1624-next-step-pause-scope.sh;
-# expects AGENTS_DIR, _AGENTS_DIR_NODE, RWT and the pass/fail/skip counters.
+# expects SCRIPT_CHECKOUT_ROOT, _SCRIPT_CHECKOUT_ROOT_NODE, RWT and the pass/fail/skip counters.
 
-PAUSE_NODE="$_AGENTS_DIR_NODE/hooks/lib/next-step-pause-marker.js"
-MARKERS_NODE="$_AGENTS_DIR_NODE/hooks/lib/session-markers.js"
-STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
-MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
-GUARD_C4="$AGENTS_DIR/hooks/stop-premature-stop-guard.js"
+PAUSE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/next-step-pause-marker.js"
+MARKERS_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-markers.js"
+STATEIO_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io.js"
+MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
+GUARD_C4="$SCRIPT_CHECKOUT_ROOT/hooks/stop-premature-stop-guard.js"
 PAUSE_TTL_MS=$((4 * 60 * 60 * 1000))
 
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'pausescope1624'; }
@@ -92,7 +92,7 @@ fs.writeFileSync(process.env.P, JSON.stringify(m));" >/dev/null 2>&1
 # Sets C4_OUT / C4_RC. rc 0 = silent (exempt), rc 2 = blocked (nudge emitted).
 run_c4() {
     C4_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 25 node "$(node_path "$GUARD_C4")" 2>/dev/null)
     C4_RC=$?
 }

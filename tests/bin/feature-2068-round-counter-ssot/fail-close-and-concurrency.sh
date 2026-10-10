@@ -54,7 +54,7 @@ CORRUPT
     # c2_bg <tag> — one contender, its rc and stderr kept for the joint verdict.
     c2_bg() {
         (
-            CLF_SLEEP=1 AGENTS_CONFIG_DIR="$ROOT" bash "$ROOT/bin/run-codex-review-loop" \
+            CLF_SLEEP=1 bash "$ROOT/bin/run-codex-review-loop" \
                 --format "$FORMAT" --session-id "$RCS_SID" --plans-dir "$RCS_P" \
                 --draft-file "$RCS_P/$RCS_SID-detail.md" \
                 --accepted-tradeoffs "$RCS_P/$RCS_SID-outline.md" \

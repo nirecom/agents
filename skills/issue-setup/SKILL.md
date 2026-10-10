@@ -15,7 +15,7 @@ Initialize a target repo for GitHub Issues: sync its label set and create/link a
 ## Pre-flight
 
 - Read `rules/github-issues.md` — on-demand-only, never auto-injected; it owns the Labels section (`sync-labels.sh`, `.github/labels.yml`) and the Projects v2 `project` scope requirement.
-- `AGENTS_CONFIG_DIR` must be set.
+- `AGENTS_MAIN_ROOT` must be set.
 - `gh` must be authenticated with the `project` scope; if absent, tell the user to run `gh auth refresh -s project` and stop.
 - Run `bin/is-github-dotcom-remote` against the target repo; on rc=1, exit 0 with a notice.
 
@@ -35,4 +35,4 @@ IS-4. When the project is absent, AskUserQuestion:
 
 IS-5. Report the outcome to the user.
 
-Backend script path: `$AGENTS_CONFIG_DIR/skills/issue-setup/scripts/run-issue-setup.sh`.
+Backend script path: `$AGENTS_MAIN_ROOT/skills/issue-setup/scripts/run-issue-setup.sh`.

@@ -6,8 +6,8 @@
 # The interesting failure is not "no ledger" but a stage or reduce that fails
 # while a valid ledger from the round before is still on disk: nothing in the
 # file says which round it describes. Failure is injected by shimming
-# bin/concern-ledger inside a copied agents tree the loop resolves through
-# AGENTS_CONFIG_DIR — real error handling, not a stub.
+# bin/concern-ledger inside a copied agents tree the loop is launched from —
+# real error handling, not a stub.
 
 echo ""
 echo "--- F: a stage, reduce or finalize that fails on a live ledger ---"
@@ -95,7 +95,7 @@ fc_scan_run() {
     RL_EXTRA=()
 }
 fc_check2() {
-    AGENTS_CONFIG_DIR="$FC_ROOT" bash "$CLI" check-finalized --plans-dir "$PLANS" \
+    bash "$CLI" check-finalized --plans-dir "$PLANS" \
         --session-id "$SID" --format "$LEDGER_FORMAT" --round 2 >/dev/null 2>&1
     printf '%s' "$?"
 }

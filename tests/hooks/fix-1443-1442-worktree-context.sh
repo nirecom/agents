@@ -36,17 +36,17 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    AGENTS_DIR_NODE="$AGENTS_DIR"
+    SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK="$AGENTS_DIR/hooks/detect-worktree-conflict.js"
-HOOK_NODE="$AGENTS_DIR_NODE/hooks/detect-worktree-conflict.js"
-SKILL_MD="$AGENTS_DIR/skills/worktree-end/SKILL.md"
-SETTINGS_JSON="$AGENTS_DIR_NODE/settings.json"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/detect-worktree-conflict.js"
+HOOK_NODE="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/detect-worktree-conflict.js"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/SKILL.md"
+SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT_NODE/settings.json"
 
 PASS=0
 FAIL=0

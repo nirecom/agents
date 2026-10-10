@@ -8,7 +8,7 @@
 # contract, and their private copies drifted — "no block string in stdout" scored as
 # approve, so a crash, a timeout or a garbled payload counted as a PASS. classify()
 # settles it: approve requires rc=0 AND an explicit approve decision. Caller sets
-# AGENTS_DIR, _AGENTS_DIR_NODE, RWT and HOOK before sourcing.
+# SCRIPT_CHECKOUT_ROOT, _SCRIPT_CHECKOUT_ROOT_NODE, RWT and HOOK before sourcing.
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -28,7 +28,7 @@ run_hook() {
     local tn="$1" input="$2" out rc
     [ "$HOOK_PRESENT" = "yes" ] || { printf 'absent|'; return; }
     mkdir -p "$tn/plans" 2>/dev/null || true
-    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn/plans" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn/plans" \
         "$RWT" 12 node "$HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"

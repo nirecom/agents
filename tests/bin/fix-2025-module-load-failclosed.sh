@@ -211,7 +211,7 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
 
     P4L="$(mkplans plans-loop)"
     rc=0
-    O4L="$(AGENTS_CONFIG_DIR="$D4" run_with_timeout "$D4/bin/run-codex-review-loop" \
+    O4L="$(run_with_timeout "$D4/bin/run-codex-review-loop" \
         --format "$FMT" --session-id "$SID" --plans-dir "$P4L" --draft-file "$P4L/draft.md" \
         --cap 2 --max-extensions 2 --extensions-used 0 \
         --accepted-tradeoffs "$P4L/outline.md" --round 1 2>&1)" || rc=$?
@@ -223,7 +223,7 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
 
     P4S="$(mkplans plans-secloop)"
     rc=0
-    O4S="$(AGENTS_CONFIG_DIR="$D4" run_with_timeout "$D4/bin/run-codex-review-loop" \
+    O4S="$(run_with_timeout "$D4/bin/run-codex-review-loop" \
         --format security-code --session-id "$SID" --plans-dir "$P4S" \
         --cap 2 --max-extensions 1 --extensions-used 0 \
         --accepted-tradeoffs "$P4S/outline.md" 2>&1)" || rc=$?
@@ -250,7 +250,7 @@ echo "--- load 4: the sibling entrypoints that source the same library ---"
 
     P4B2="$(mkplans plans-secloop-ok)"
     rc=0
-    O4B2="$(AGENTS_CONFIG_DIR="$D4B" run_with_timeout "$D4B/bin/run-codex-review-loop" \
+    O4B2="$(run_with_timeout "$D4B/bin/run-codex-review-loop" \
         --format security-code --session-id "$SID" --plans-dir "$P4B2" \
         --cap 2 --max-extensions 1 --extensions-used 0 \
         --accepted-tradeoffs "$P4B2/outline.md" 2>&1)" || rc=$?

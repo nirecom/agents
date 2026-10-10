@@ -10,8 +10,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CHECKER="$AGENTS_DIR/bin/check-migration-blocks.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CHECKER="$SCRIPT_CHECKOUT_ROOT/bin/check-migration-blocks.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
@@ -33,7 +33,7 @@ if [ ! -f "$CHECKER" ]; then
     exit 0
 fi
 
-AGENTS_RUN_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
+AGENTS_RUN_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 run_checker() {
     bash "$AGENTS_RUN_TIMEOUT" 30 bash "$CHECKER" "$@"

@@ -13,13 +13,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-MODULE="${_AGENTS_DIR_NODE}/hooks/enforce-worktree/git-repo-detection.js"
+MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree/git-repo-detection.js"
 
 PASS=0
 FAIL=0
@@ -47,18 +47,18 @@ assert_fn_result() {
 
 # Build a throwaway git repo to serve as toolCwd. mktemp -d works on both
 # Git Bash and POSIX; convert to forward-slash form for node consumption.
-REPO_DIR="$(mktemp -d 2>/dev/null)"
-if [ -z "$REPO_DIR" ]; then
+REPO_PATH="$(mktemp -d 2>/dev/null)"
+if [ -z "$REPO_PATH" ]; then
     echo "ERROR: mktemp -d failed"; exit 1
 fi
-trap 'rm -rf "$REPO_DIR"' EXIT
-git -C "$REPO_DIR" init -q >/dev/null 2>&1
-git -C "$REPO_DIR" config core.hooksPath /dev/null 2>/dev/null || true
+trap 'rm -rf "$REPO_PATH"' EXIT
+git -C "$REPO_PATH" init -q >/dev/null 2>&1
+git -C "$REPO_PATH" config core.hooksPath /dev/null 2>/dev/null || true
 # Node-friendly form (forward slashes; absolute).
 if command -v cygpath >/dev/null 2>&1; then
-    REPO_DIR_NODE="$(cygpath -m "$REPO_DIR")"
+    REPO_PATH_NODE="$(cygpath -m "$REPO_PATH")"
 else
-    REPO_DIR_NODE="$REPO_DIR"
+    REPO_PATH_NODE="$REPO_PATH"
 fi
 # Resolve the git toplevel of the temp repo for comparison (handles macOS
 # /private symlink and any normalization git applies).
@@ -67,7 +67,7 @@ EXPECTED_ROOT="$(run_with_timeout 30 node -e "
   const r = spawnSync('git', ['rev-parse', '--show-toplevel'],
     { cwd: process.argv[1], encoding: 'utf8' });
   process.stdout.write((r.stdout || '').trim());
-" -- "$REPO_DIR_NODE" 2>/dev/null)"
+" -- "$REPO_PATH_NODE" 2>/dev/null)"
 
 # call_find CMD [TOOLCWD]
 # Invokes findRepoRootForBash(cmd, toolCwd). When TOOLCWD is the literal token
@@ -103,7 +103,7 @@ test_toolcwd_reporoot() {
     # 2nd `toolCwd` arg): cmd has no -C and no cd; toolCwd is inside a git repo
     # → repo root resolves from toolCwd (NOT process.cwd()).
     assert_fn_result 'no -C/cd, toolCwd inside repo → repo root from toolCwd' \
-        "$(call_find 'rm -rf foo' "$REPO_DIR_NODE")" \
+        "$(call_find 'rm -rf foo' "$REPO_PATH_NODE")" \
         "$EXPECTED_ROOT"
 
     # case (b) — EXISTING BEHAVIOR (must pass now and after fix): no -C/cd and
@@ -124,7 +124,7 @@ test_toolcwd_reporoot() {
     # both NOW (only cArg is consulted) and AFTER the fix (cArg precedes
     # toolCwd in the fallback chain) — stable.
     assert_fn_result '-C <repo> with bogus toolCwd → -C path wins' \
-        "$(call_find "git -C $REPO_DIR_NODE status" '/nonexistent/bogus/xyz')" \
+        "$(call_find "git -C $REPO_PATH_NODE status" '/nonexistent/bogus/xyz')" \
         "$EXPECTED_ROOT"
 }
 

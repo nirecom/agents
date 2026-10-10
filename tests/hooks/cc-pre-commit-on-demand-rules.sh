@@ -4,7 +4,7 @@
 # Tags: rules-injection, on-demand-rules, pre-commit, hook-wiring, backstop, exit-codes, TL2, scope:common
 #
 # The static checker is only as good as its invocation: every other file in this series runs bin/check-on-demand-rules.sh directly, so all stay green if the hook that's supposed to call it on every commit is never wired, wired outside the agents-repo guard, or swallows its exit code — the whole point is stopping a de-injected rule BEFORE the commit lands.
-# The hook is exercised for real — actual hooks/pre-commit, in a throwaway repo that is simultaneously the repo under commit and AGENTS_CONFIG_DIR, so `_pe_is_agents_repo` resolves the same git common-dir for both and the on-demand block is genuinely reached (mirrors the fixture in tests/hooks/feature-1642-precommit-prompt-extraction.sh).
+# The hook is exercised for real — actual hooks/pre-commit, in a throwaway repo that is simultaneously the repo under commit and AGENTS_MAIN_ROOT, so `_pe_is_agents_repo` resolves the same git common-dir for both and the on-demand block is genuinely reached (mirrors the fixture in tests/hooks/feature-1642-precommit-prompt-extraction.sh).
 # Exit-code contract (detail plan S2-7): rc 1 (violations) and rc 2 (usage/broken invocation) -> commit BLOCKED; anything else, including a missing or non-executable checker, -> FAIL-OPEN.
 # Fail-open is deliberate and differs from the prompt-extraction backstop next to it, which blocks on 126/127 — asserted, not assumed, since silent behavioural drift either way is invisible from the checker's own tests. Layer: TL2 (real hooks/pre-commit + real git, isolated fixture repos).
 # TL3 gap: whether git actually invokes hooks/pre-commit via core.hooksPath on this host (executed directly here); mitigated at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
@@ -16,9 +16,9 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PRECOMMIT="$AGENTS_DIR/hooks/pre-commit"
-CHECKER="$AGENTS_DIR/bin/check-on-demand-rules.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PRECOMMIT="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit"
+CHECKER="$SCRIPT_CHECKOUT_ROOT/bin/check-on-demand-rules.sh"
 
 PASS=0; FAIL=0; SKIPPED=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -26,7 +26,7 @@ fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL
 skipped() { echo "SKIP: $1"; SKIPPED=$((SKIPPED + 1)); }
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-_AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+_SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 # --- Tier 1: implementation-missing guard, ahead of every skip gate. --------------
 MISSING=0
@@ -71,14 +71,14 @@ mk_repo() {
     init_repo "$dir"
     mkdir -p "$dir/hooks/lib" "$dir/bin" "$dir/rules" "$dir/skills/od-owner"
     # One-line shims: the real modules, reached from the fixture's own tree.
-    printf 'module.exports = require("%s/hooks/workflow-state.js");\n' "$_AGENTS_DIR_NODE" \
+    printf 'module.exports = require("%s/hooks/workflow-state.js");\n' "$_SCRIPT_CHECKOUT_ROOT_NODE" \
         > "$dir/hooks/workflow-state.js"
-    printf 'module.exports = require("%s/hooks/lib/session-markers.js");\n' "$_AGENTS_DIR_NODE" \
+    printf 'module.exports = require("%s/hooks/lib/session-markers.js");\n' "$_SCRIPT_CHECKOUT_ROOT_NODE" \
         > "$dir/hooks/lib/session-markers.js"
-    printf 'module.exports = require("%s/hooks/lib/precommit-exclude-check.js");\n' "$_AGENTS_DIR_NODE" \
+    printf 'module.exports = require("%s/hooks/lib/precommit-exclude-check.js");\n' "$_SCRIPT_CHECKOUT_ROOT_NODE" \
         > "$dir/hooks/lib/precommit-exclude-check.js"
     echo "// stub marker" > "$dir/hooks/enforce-worktree.js"
-    printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-test-frontmatter.sh" "$@"\n' "$AGENTS_DIR" \
+    printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-test-frontmatter.sh" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" \
         > "$dir/bin/check-test-frontmatter.sh"
     chmod +x "$dir/bin/check-test-frontmatter.sh"
 
@@ -100,7 +100,7 @@ POLICY_EOF
 
     case "$engine" in
         real)
-            printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-on-demand-rules.sh" "$@"\n' "$AGENTS_DIR" \
+            printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-on-demand-rules.sh" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" \
                 > "$dir/bin/check-on-demand-rules.sh"
             chmod +x "$dir/bin/check-on-demand-rules.sh" ;;
         none)
@@ -146,7 +146,7 @@ echo "=== hooks/pre-commit wiring for the on-demand rules checker ==="
 R1="$(mk_repo w1 real)"
 printf -- '---\npaths:\n  - "tests/**"\n---\n\n# an ordinary conditional rule\n' > "$R1/rules/cond.md"
 git -C "$R1" add -- rules/cond.md >/dev/null 2>&1
-run_precommit "$R1" "AGENTS_CONFIG_DIR=$R1" "ENFORCE_WORKTREE=off"
+run_precommit "$R1" "AGENTS_MAIN_ROOT=$R1" "ENFORCE_WORKTREE=off"
 if [ "$RC" -eq 0 ]; then
     pass "W1: a clean staged rule passes the hook (exit 0)"
 else
@@ -157,7 +157,7 @@ fi
 # a bare "commit blocked" leaves the contributor guessing which rule broke. ---
 R2="$(mk_repo w2 real)"
 stage_violation "$R2"
-run_precommit "$R2" "AGENTS_CONFIG_DIR=$R2" "ENFORCE_WORKTREE=off"
+run_precommit "$R2" "AGENTS_MAIN_ROOT=$R2" "ENFORCE_WORKTREE=off"
 if [ "$RC" -ne 1 ]; then
     fail "W2: want exit 1 for a staged on-demand violation, got $RC" "$(printf '%s' "$OUT" | head -5 | tr '\n' ' ')"
 elif ! printf '%s' "$OUT" | grep -q 'rules/bad.md'; then
@@ -170,7 +170,7 @@ fi
 # fails open is a gate that silently stops existing. ---
 R3="$(mk_repo w3 2)"
 stage_violation "$R3"
-run_precommit "$R3" "AGENTS_CONFIG_DIR=$R3" "ENFORCE_WORKTREE=off"
+run_precommit "$R3" "AGENTS_MAIN_ROOT=$R3" "ENFORCE_WORKTREE=off"
 if [ "$RC" -eq 1 ]; then
     pass "W3: checker rc=2 (usage error) blocks the commit"
 else
@@ -183,7 +183,7 @@ fi
 # into something a reader notices. ---
 R4="$(mk_repo w4 none)"
 stage_violation "$R4"
-run_precommit "$R4" "AGENTS_CONFIG_DIR=$R4" "ENFORCE_WORKTREE=off"
+run_precommit "$R4" "AGENTS_MAIN_ROOT=$R4" "ENFORCE_WORKTREE=off"
 if [ "$RC" -ne 0 ]; then
     fail "W4: a missing checker must fail open per S2-7, got exit $RC" "$(printf '%s' "$OUT" | head -5 | tr '\n' ' ')"
 elif ! printf '%s' "$OUT" | grep -q 'check-on-demand-rules'; then
@@ -198,7 +198,7 @@ if [ -x "$R5/bin/check-on-demand-rules.sh" ]; then
     # chmod 000 is a no-op on this filesystem, so the case cannot be staged.
     skipped "W5: Skipped-Because: this filesystem ignores chmod 000, so a non-executable checker cannot be created (NTFS)"
 else
-    run_precommit "$R5" "AGENTS_CONFIG_DIR=$R5" "ENFORCE_WORKTREE=off"
+    run_precommit "$R5" "AGENTS_MAIN_ROOT=$R5" "ENFORCE_WORKTREE=off"
     if [ "$RC" -eq 0 ]; then
         pass "W5: a non-executable checker fails open per S2-7"
     else
@@ -216,7 +216,7 @@ echo init > "$OTHER/README.md"
 git -C "$OTHER" add README.md >/dev/null 2>&1
 git -C "$OTHER" commit -q -m initial >/dev/null 2>&1
 stage_violation "$OTHER"
-run_precommit "$OTHER" "AGENTS_CONFIG_DIR=$CFG" "ENFORCE_WORKTREE=off"
+run_precommit "$OTHER" "AGENTS_MAIN_ROOT=$CFG" "ENFORCE_WORKTREE=off"
 if [ "$RC" -eq 0 ]; then
     pass "W6: a foreign repo is not subjected to the on-demand check"
 else
@@ -234,7 +234,7 @@ fi
 R7="$(mk_repo w7 real)"
 SPACE_NAME='rules/bad rule with spaces.md'
 stage_violation "$R7" "$SPACE_NAME"
-run_precommit "$R7" "AGENTS_CONFIG_DIR=$R7" "ENFORCE_WORKTREE=off"
+run_precommit "$R7" "AGENTS_MAIN_ROOT=$R7" "ENFORCE_WORKTREE=off"
 if [ "$RC" -ne 1 ]; then
     fail "C10-space: a violating file whose name contains spaces did not block the commit (exit $RC) — the staged list was almost certainly word-split" "$(printf '%s' "$OUT" | head -5 | tr '\n' ' ')"
 elif ! printf '%s' "$OUT" | grep -qF "$SPACE_NAME"; then
@@ -251,7 +251,7 @@ if ! (set -C; : > "$R8/$EDGE_NAME") 2>/dev/null; then
     skipped "C10-edge: Skipped-Because: this filesystem rejects leading/trailing spaces in filenames"
 else
     stage_violation "$R8" "$EDGE_NAME"
-    run_precommit "$R8" "AGENTS_CONFIG_DIR=$R8" "ENFORCE_WORKTREE=off"
+    run_precommit "$R8" "AGENTS_MAIN_ROOT=$R8" "ENFORCE_WORKTREE=off"
     if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -qF "$EDGE_NAME"; then
         pass "C10-edge: a filename with leading and trailing spaces blocks and is reported whole"
     else
@@ -268,7 +268,7 @@ if ! (mkdir -p "$R9/rules" && : > "$R9/$NL_NAME") 2>/dev/null; then
     skipped "C10-newline: Skipped-Because: this filesystem cannot create a filename containing a newline (NTFS forbids it); the space cases above cover the word-splitting half, and the line-splitting half remains uncovered on this host"
 else
     stage_violation "$R9" "$NL_NAME"
-    run_precommit "$R9" "AGENTS_CONFIG_DIR=$R9" "ENFORCE_WORKTREE=off"
+    run_precommit "$R9" "AGENTS_MAIN_ROOT=$R9" "ENFORCE_WORKTREE=off"
     if [ "$RC" -eq 1 ] && printf '%s' "$OUT" | grep -qF "$(printf 'bad\nname.md')"; then
         pass "C10-newline: a newline-bearing violating filename blocks and is reported whole"
     else

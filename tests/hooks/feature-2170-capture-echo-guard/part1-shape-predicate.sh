@@ -15,8 +15,7 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="${1:-$(cd "$(dirname "$0")/../../.." && pwd)}"
-export AGENTS_DIR
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 DRIVER="$(cd "$(dirname "$0")" && pwd)/shape-driver.js"
 command -v node >/dev/null 2>&1 || exit 77
 
@@ -43,8 +42,8 @@ done <<'TABLE'
 # --- True positives: capture-then-display-only, must be rejected -------------
 TP-1|PLANS_DIR=$(bash bin/workflow-plans-dir); echo "$PLANS_DIR"|reject
 TP-2|X=$(cmd) && echo "$X"|reject
-TP-3|PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")<NL>printf 'PLANS_DIR=%s\n' "$PLANS_DIR"|reject
-TP-4|PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \<NL>              <PIPE><PIPE> printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")<NL>printf 'PLANS_DIR=%s\n' "$PLANS_DIR"|reject
+TP-3|PLANS_DIR=$(bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir")<NL>printf 'PLANS_DIR=%s\n' "$PLANS_DIR"|reject
+TP-4|PLANS_DIR=$(bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir" 2>/dev/null \<NL>              <PIPE><PIPE> printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")<NL>printf 'PLANS_DIR=%s\n' "$PLANS_DIR"|reject
 TP-5|X=$(a); echo "X=$X"|reject
 TP-6|X=$(a); printf 'X=%s\n' "$X"|reject
 TP-7|X="$(cmd -a)"; echo "$X"|reject
@@ -58,7 +57,7 @@ TP-14|X=$(a); Y=$(b); echo "$X $Y"|reject
 TP-15|X=$(cat <<EOF<NL>hi<NL>EOF<NL>); echo "$X"|reject
 # C1: a real registered command with its real argument list must still be caught —
 # the guard must not be reachable only by the toy one-word inner commands above.
-TP-16|SKIP=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance); echo "$SKIP"|reject
+TP-16|SKIP=$(bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance); echo "$SKIP"|reject
 # C1: inner command is an || fallback pair — capture-then-echo regardless.
 TP-17|X=$(a <PIPE><PIPE> b); echo "$X"|reject
 # C1: two separate capture assignments, only the first one echoed.
@@ -71,19 +70,19 @@ TN-4|X=$(a); echo '$X'|allow
 TN-5|X=$(a); echo "${X:-none}"|allow
 TN-6|X=$(a); echo "$X $Y"|allow
 TN-7|X=$(a); echo hello|allow
-TN-8|SKIP_DISPATCH=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --signals-file "<PLANS_DIR>/$SESSION_ID-complexity-signals.txt" --target outline --advance --so-c1 <true<PIPE>false> --so-c2 <true<PIPE>false> <PIPE> tail -1 <PIPE> cut -d= -f2-)|allow
-TN-9|SKIP_DISPATCH=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --signals-file "<PLANS_DIR>/$SESSION_ID-complexity-signals.txt" --target outline --advance --so-c1 true --so-c2 false <PIPE> tail -1 <PIPE> cut -d= -f2-)|allow
-TN-10|PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"|allow
-TN-11|PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \<NL>              <PIPE><PIPE> printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")<NL>SESSION_ID="${CLAUDE_CODE_SESSION_ID:-}"<NL>INTENT_MD="$PLANS_DIR/${SESSION_ID}-intent.md"|allow
+TN-8|SKIP_DISPATCH=$(bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --signals-file "<PLANS_DIR>/$SESSION_ID-complexity-signals.txt" --target outline --advance --so-c1 <true<PIPE>false> --so-c2 <true<PIPE>false> <PIPE> tail -1 <PIPE> cut -d= -f2-)|allow
+TN-9|SKIP_DISPATCH=$(bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --signals-file "<PLANS_DIR>/$SESSION_ID-complexity-signals.txt" --target outline --advance --so-c1 true --so-c2 false <PIPE> tail -1 <PIPE> cut -d= -f2-)|allow
+TN-10|PLANS_DIR="$(bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir")"|allow
+TN-11|PLANS_DIR=$(bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir" 2>/dev/null \<NL>              <PIPE><PIPE> printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")<NL>SESSION_ID="${CLAUDE_CODE_SESSION_ID:-}"<NL>INTENT_MD="$PLANS_DIR/${SESSION_ID}-intent.md"|allow
 TN-12|X=$(a); echo "$X" > /tmp/f|allow
 TN-13|X=$(a) <PIPE> echo "$X"|allow
 TN-14|echo "$(cmd)"|allow
 TN-15|X=$(a); echo "$(other)"|allow
 TN-16|X=$(a); echo "unterminated|allow
-TN-17a|bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"|allow
-TN-17b|bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null|allow
-TN-17c|bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance|allow
-TN-17d|node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" "$INTENT_MD"|allow
+TN-17a|bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"|allow
+TN-17b|bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir" 2>/dev/null|allow
+TN-17c|bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance|allow
+TN-17d|node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" "$INTENT_MD"|allow
 TN-18|X=$(a); echo "$X" other|allow
 TN-19|X=$(a); echo "$X" <<EOF<NL>hi<NL>EOF|allow
 TN-20|X=$(a); printf '%q\n' "$X"|allow
@@ -178,8 +177,8 @@ assert_eq "HIT-4 non-match yields no hit (TN-7)" "null" "$got"
 # C1: innerCommandText is what the remedy quotes back, so it must carry the WHOLE
 # invocation — interpreter, script and every argument. A truncated inner would let
 # the remedy hand back a command that does something other than what was blocked.
-want='vars=SKIP inner=bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance'
-got="$(node "$DRIVER" --fields 'SKIP=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance); echo "$SKIP"' 2>&1)"
+want='vars=SKIP inner=bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance'
+got="$(node "$DRIVER" --fields 'SKIP=$(bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance); echo "$SKIP"' 2>&1)"
 assert_eq "HIT-5 inner keeps full argument list (TP-16)" "$want" "$got"
 
 # C1: an || fallback inner is captured whole, not just its left branch.

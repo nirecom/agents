@@ -12,8 +12,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCAN_CLI="$AGENTS_DIR/bin/refactor-prompts/scan-prompts.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCAN_CLI="$SCRIPT_CHECKOUT_ROOT/bin/refactor-prompts/scan-prompts.js"
 
 PASS=0
 FAIL=0
@@ -55,7 +55,7 @@ make_keywords_json() {
 run_scan() {
     local root="$1"; shift
     local kws_json="$1"; shift
-    AGENTS_CONFIG_DIR="$root" run_with_timeout node "$SCAN_CLI" --keywords - "$@" <<<"$kws_json"
+    AGENTS_MAIN_ROOT="$root" run_with_timeout node "$SCAN_CLI" --keywords - "$@" <<<"$kws_json"
 }
 
 KWS="$(make_keywords_json 'rm -rf|settings.json')"

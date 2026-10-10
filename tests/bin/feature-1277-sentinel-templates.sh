@@ -9,7 +9,8 @@ set -uo pipefail
 
 PASS=0; FAIL=0
 
-SCRIPT="$AGENTS_CONFIG_DIR/bin/review-sentinel-templates"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/review-sentinel-templates"
 [ -x "$SCRIPT" ] || { echo "SKIP: bin/review-sentinel-templates not found — skipping tests"; exit 77; }
 
 # ---------------------------------------------------------------------------

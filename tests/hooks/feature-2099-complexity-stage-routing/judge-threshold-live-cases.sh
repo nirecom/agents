@@ -112,7 +112,7 @@ d2099j_judge() {
 d2099j_ids() { printf '%s' "$1" | sed -E 's/^SIGNALS: *//' | tr -d ' '; }
 
 d2099j_live_threshold() {
-    local gate_bin="$AGENTS_DIR/bin/get-config-var"
+    local gate_bin="$SCRIPT_CHECKOUT_ROOT/bin/get-config-var"
     if [ ! -x "$gate_bin" ]; then
         gated_skip "JT-1 live judge threshold: gate binary $gate_bin is absent/not executable, so RUN_TL3 cannot be read"
         return
@@ -230,7 +230,7 @@ d2099j_live_threshold() {
 
 # Same gates as JT-1 (rules/test/claude-e2e.md); empty means all three are open.
 d2099j_gate_reason() {
-    local gate_bin="$AGENTS_DIR/bin/get-config-var"
+    local gate_bin="$SCRIPT_CHECKOUT_ROOT/bin/get-config-var"
     if [ ! -x "$gate_bin" ]; then
         printf 'gate binary %s is absent/not executable, so RUN_TL3 cannot be read' "$gate_bin"; return
     fi

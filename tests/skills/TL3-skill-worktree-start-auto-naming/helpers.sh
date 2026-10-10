@@ -3,14 +3,14 @@
 # Tests: skills/worktree-start/SKILL.md, skills/worktree-start/scripts/derive-worktree-name.sh
 # Tags: worktree, start, helpers, fixture, claude-e2e, TL3, scope:common
 #
-# Sourced by ../TL3-skill-worktree-start-auto-naming.sh — assumes AGENTS_DIR,
+# Sourced by ../TL3-skill-worktree-start-auto-naming.sh — assumes SCRIPT_CHECKOUT_ROOT,
 # pass() and fail() are already defined. Not a standalone runner.
 
 # The dispatcher runs under `set -e`; a case that probes an expected non-zero
 # exit must not abort the whole file. Keep nounset, drop errexit.
 set +e
 
-WS_SCRIPT="$AGENTS_DIR/skills/worktree-start/scripts/derive-worktree-name.sh"
+WS_SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/worktree-start/scripts/derive-worktree-name.sh"
 WS_CLEANUP=""
 # shellcheck disable=SC2064  # expand WS_CLEANUP at trap time, not at set time
 trap 'for d in $WS_CLEANUP; do rm -rf "$d"; done' EXIT
@@ -65,7 +65,7 @@ ws_setup() {
     git -C "$WS_REPO" add README.md
     git -C "$WS_REPO" commit -qm "init"
 
-    cp -r "$AGENTS_DIR/skills/worktree-start" "$WS_REPO/.claude/skills/worktree-start"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/skills/worktree-start" "$WS_REPO/.claude/skills/worktree-start"
 
     # AskUserQuestion probe: a PreToolUse hook that records the call and denies
     # it. Absence of the log file is the assertion "the model never asked".
@@ -98,7 +98,6 @@ PROBE_EOF
 }
 SETTINGS_EOF
 
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export WORKTREE_BASE_DIR="$WS_WT"
     export WORKFLOW_STATE_DIR="$WS_BASE/wf"
     export WORKFLOW_PLANS_DIR="$WS_BASE/plans"

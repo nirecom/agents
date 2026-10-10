@@ -9,7 +9,7 @@ Edit source code for the current task.
 
 ## Procedure
 
-WCD-0. Read the session facts once, before the pre-launch steps that consume them: `node "$AGENTS_CONFIG_DIR/bin/workflow/read-session-facts" --session "$SESSION_ID"`
+WCD-0. Read the session facts once, before the pre-launch steps that consume them: `node "$AGENTS_MAIN_ROOT/bin/workflow/read-session-facts" --session "$SESSION_ID"`
    - `PLANS_DIR=` (substitute for every `<PLANS_DIR>` below), `GATE_CONFIRM_CODE=` (the WCD-2 gate: `ON`/`OFF`/`ERROR`), `COMPLEXITY_LEVEL_write_code=`, `COMPLEXITY_MODEL_write_code=` and `COMPLEXITY_SIGNALS=` (the WCD-3 level, model and signals).
    - If the command exits non-zero, or `PLANS_DIR=NONE`, stop — do not proceed with any step that uses `<PLANS_DIR>`; report via /supervisor-report; never construct a path like `NONE/<session-id>-...`.
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
@@ -24,8 +24,8 @@ WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: pat
 WCD-3. If `COMPLEXITY_LEVEL_write_code` from WCD-0 is not `NONE`, use `COMPLEXITY_MODEL_write_code` as the model and `COMPLEXITY_SIGNALS` directly; skip the fallback below.
    - If `NONE` (fail-open):
      - Dispatch `subagent_type: complexity-judge` (pass intent/outline/detail + WCD-2 file list; rubric: `skills/_shared/judge-task-complexity.md`); write raw output to `<PLANS_DIR>/<session-id>-write-code-judge-raw.txt` (Write tool — untrusted text via file only).
-     - Run `node "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-code-judge-raw.txt" --session "<session-id>" --stage write-code`.
-     - Run `node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage write_code --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
+     - Run `node "$AGENTS_MAIN_ROOT/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-code-judge-raw.txt" --session "<session-id>" --stage write-code`.
+     - Run `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --stage write_code --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
    Emit in Claude text output (NOT Bash echo): `> Model selected: **<model alias>** (signals: [comma-separated triggered signal IDs, or "none"])`
 WCD-3a. Emit `echo "<<WORKFLOW_MARK_STEP_write_code_in_progress>>"` via Bash immediately before the WCD-4 subagent launch.
 
@@ -52,7 +52,7 @@ WCD-6. Present the final edited file list + skipped-check notes + scope-expansio
    - `GATE_ACTION=proceed`: skip WCD-6; proceed (no user wait).
    - `GATE_ACTION=ask`: present the file list and notes; record each per `skills/_shared/handoff-record.md` (`--step write_code`; `--class E --key write-code:checks-skipped` / `--class D --key write-code:scope-expansion`).
 
-WCD-7. Stage the implementation files so the write_code snapshot sees them: `node "$AGENTS_CONFIG_DIR/bin/stage-review-scope-files.js" --worktree "<cwd>" -- <WCD-5 edited files>`
+WCD-7. Stage the implementation files so the write_code snapshot sees them: `node "$AGENTS_MAIN_ROOT/bin/stage-review-scope-files.js" --worktree "<cwd>" -- <WCD-5 edited files>`
    - Exit non-zero: stop — do not emit the completion sentinel; report via /supervisor-report.
 
 ## A-layer language essence (complement of B-layer — zero overlap with `rules/coding/*.md`)
@@ -91,6 +91,6 @@ Each is best-effort: if the tool or config is absent, skip AND emit `<tool> not 
 ## Completion
 
 Emit `echo "<<WORKFLOW_MARK_STEP_write_code_complete>>"` via Bash after WCD-7 exits 0; skip it when the subagent failed or the WCD-6 review was rejected — fix the work and re-run WCD-4 first.
-Then run `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --session "$SESSION_ID"` and follow its ACTION — it routes to /review-tests when write_code changed the review scope.
+Then run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "$SESSION_ID"` and follow its ACTION — it routes to /review-tests when write_code changed the review scope.
 When /review-tests is reopened and the user decides to stop, emit WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED (procedure: skills/review-tests/SKILL.md).
 Never emit WORKFLOW_REVIEW_TESTS_COMPLETE manually.

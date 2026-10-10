@@ -1,16 +1,16 @@
 # helpers.sh — Shared setup and helper functions for fix-conv-lang-inject tests.
 # Sourced by the dispatch entrypoint; not executable directly.
-# Sets: AGENTS_DIR, CONV_LANG_LIB, SESSION_START, POST_COMPACT,
+# Sets: _HELPERS_SCRIPT_CHECKOUT_ROOT, CONV_LANG_LIB, SESSION_START, POST_COMPACT,
 #       TMPDIR_BASE, EMPTY_CFG, NODE_LIB_PATH,
 #       NODE_SESSION_START, NODE_POST_COMPACT, EXPECTED_JA,
 #       PASS, FAIL, SKIP counters, pass/fail/skip functions,
 #       run_with_timeout, to_node_path, call_helper,
 #       call_session_start, call_post_compact.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-CONV_LANG_LIB="$AGENTS_DIR/hooks/lib/conv-lang.js"
-SESSION_START="$AGENTS_DIR/hooks/session-start.js"
-POST_COMPACT="$AGENTS_DIR/hooks/post-compact.js"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+CONV_LANG_LIB="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/lib/conv-lang.js"
+SESSION_START="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/session-start.js"
+POST_COMPACT="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/post-compact.js"
 
 PASS=0
 FAIL=0
@@ -51,10 +51,10 @@ NODE_SESSION_START=$(to_node_path "$SESSION_START")
 NODE_POST_COMPACT=$(to_node_path "$POST_COMPACT")
 
 # Isolate from any user .env that might define CONV_LANG. Point
-# AGENTS_CONFIG_DIR at an empty dir so load-env's default lookup misses.
+# AGENTS_MAIN_ROOT at an empty dir so load-env's default lookup misses.
 EMPTY_CFG="$TMPDIR_BASE/empty-cfg"
 mkdir -p "$EMPTY_CFG"
-export AGENTS_CONFIG_DIR="$EMPTY_CFG"
+export AGENTS_MAIN_ROOT="$EMPTY_CFG"
 
 # Helper: invoke the conv-lang helper with a given CONV_LANG value (or unset).
 # Prints the JSON-encoded return value (string or null) to stdout.

@@ -10,14 +10,14 @@ set -u
 # hide a protected-branch push. Sections are labelled RED (post-migration,
 # failing today) or GREEN (behavior the migration must not disturb or RELAX).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # TL3 gap: whether workflow-gate.js blocks the live Bash call is out of scope —
 # this file drives the classifier directly. Closest-to-action mitigation: the
 # registration is checked at WORKFLOW_USER_VERIFIED preflight by
 # bin/check-verification-gate.sh, category hook-registration.
 
-if command -v cygpath >/dev/null 2>&1; then AN="$(cygpath -m "$AGENTS_DIR")"; else AN="$AGENTS_DIR"; fi
+if command -v cygpath >/dev/null 2>&1; then AN="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else AN="$SCRIPT_CHECKOUT_ROOT"; fi
 MD="$AN/hooks/lib/merge-detect.js"
 CIR="$AN/hooks/lib/command-ir.js"
 
@@ -38,7 +38,7 @@ assert_eq() {
 
 run_with_timeout() {
     local secs="$1"; shift
-    if [ -x "$AGENTS_DIR/bin/run-with-timeout.sh" ]; then "$AGENTS_DIR/bin/run-with-timeout.sh" "$secs" "$@"
+    if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" ]; then "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$secs" "$@"
     elif command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
     else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
 }
@@ -180,22 +180,22 @@ assert_eq "M4 unclosed quote on a feature-branch push stays a miss" "false:null"
 # M5 (RED until S4 lands) — the SSOT decoupling itself (#2125's headline).
 # merge-detect must stop requiring shell-segments.js and read the IR instead;
 # shell-segments.js survives (2 consumers remain) but drops its SSOT self-claim.
-if grep -q 'require("\./shell-segments")' "$AGENTS_DIR/hooks/lib/merge-detect.js"; then
+if grep -q 'require("\./shell-segments")' "$SCRIPT_CHECKOUT_ROOT/hooks/lib/merge-detect.js"; then
     fail "M5: merge-detect.js still requires ./shell-segments — canary-1 not migrated"
 else
     pass "M5: merge-detect.js no longer requires ./shell-segments"
 fi
-if grep -q 'require("\./command-ir")' "$AGENTS_DIR/hooks/lib/merge-detect.js"; then
+if grep -q 'require("\./command-ir")' "$SCRIPT_CHECKOUT_ROOT/hooks/lib/merge-detect.js"; then
     pass "M5: merge-detect.js consumes ./command-ir"
 else
     fail "M5: merge-detect.js does not consume ./command-ir — canary-1 not migrated"
 fi
-if grep -qi '^// SSOT for ' "$AGENTS_DIR/hooks/lib/shell-segments.js"; then
+if grep -qi '^// SSOT for ' "$SCRIPT_CHECKOUT_ROOT/hooks/lib/shell-segments.js"; then
     fail "M5: shell-segments.js still claims to be the SSOT for shell segmentation"
 else
     pass "M5: shell-segments.js dropped its SSOT self-claim"
 fi
-if [ -f "$AGENTS_DIR/hooks/lib/shell-segments.js" ]; then
+if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/shell-segments.js" ]; then
     pass "M5: shell-segments.js is retained (deletion is out of this PR's scope)"
 else
     fail "M5: shell-segments.js was deleted — out of scope (detail.md S4-4)"
@@ -205,7 +205,7 @@ fi
 # backs workflow-gate.js (hard gate) AND workflow-mark.js (post-push reset); a
 # migration that only kept the gate honest would still break the mark path.
 for consumer in workflow-gate workflow-mark; do
-    if grep -rq 'merge-detect' "$AGENTS_DIR/hooks/$consumer.js" "$AGENTS_DIR/hooks/$consumer" 2>/dev/null; then
+    if grep -rq 'merge-detect' "$SCRIPT_CHECKOUT_ROOT/hooks/$consumer.js" "$SCRIPT_CHECKOUT_ROOT/hooks/$consumer" 2>/dev/null; then
         pass "M6: $consumer still consumes merge-detect"
     else
         fail "M6: $consumer lost its merge-detect consumption"

@@ -9,15 +9,15 @@
 # WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh category: skill-orchestration.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=feat-2490-next-step-gate/common.sh
-. "$AGENTS_DIR/tests/bin/feat-2490-next-step-gate/common.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feat-2490-next-step-gate/common.sh"
 
-# ERROR fixtures, same two shapes value-line.sh uses: get-config-var exits 4, bare config dir.
-CFG_E4="$GT_BASE/cfg-e4"; mk_cfg "$CFG_E4"; printf '#!/usr/bin/env bash\nexit 4\n' > "$CFG_E4/bin/get-config-var"
-CFG_BARE="$GT_BASE/cfg-bare"; mkdir -p "$CFG_BARE"
+# ERROR fixtures, same two shapes value-line.sh uses: get-config-var exits 4, no confirm-off.
+CFG_E4="$GT_BASE/cfg-e4"; mk_tree "$CFG_E4"; printf '#!/usr/bin/env bash\nexit 4\n' > "$CFG_E4/bin/get-config-var"
+CFG_NOCO="$GT_BASE/cfg-noco"; mk_tree "$CFG_NOCO"; rm -f "$CFG_NOCO/bin/confirm-off" "$CFG_NOCO/bin/get-config-var"
 line_n() { printf '%s\n' "$OUT" | sed -n "$1p"; }
 
 echo "=== (C1) seven gates x ON / OFF / ERROR ==="
@@ -34,8 +34,8 @@ for step in $GATE_STEPS; do
     check "$step $key=${row%%:*}: value line is last" "GATE_$key=${row#*:}" "$(last_line "$OUT")"
   done
   export "$key=on"
-  for cfg in "$CFG_E4" "$CFG_BARE"; do
-    OUT="$(AGENTS_CONFIG_DIR="$(np "$cfg")" run_next_step --session "$sid" 2>/dev/null || true)"
+  for cfg in "$CFG_E4" "$CFG_NOCO"; do
+    OUT="$(run_next_step_in "$cfg" --session "$sid" 2>/dev/null || true)"
     check "$step ${cfg##*/}: value line ERROR" "GATE_$key=ERROR" "$(last_line "$OUT")"
     check "$step ${cfg##*/}: ACTION still invoke" "invoke" "$(val ACTION)"
   done

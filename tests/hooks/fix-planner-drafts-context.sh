@@ -32,13 +32,13 @@ NODE_HOME="$(node -e "process.stdout.write(require('os').homedir().replace(/\\\\
 export WORKFLOW_PLANS_DIR="$NODE_HOME/.workflow-plans"
 WIN_PLANS_DIR="$(echo "$WORKFLOW_PLANS_DIR" | sed 's|/|\\|g')"
 
-# Isolated AGENTS_CONFIG_DIR with no .env so CONFIRM_* values from the real
+# Isolated AGENTS_MAIN_ROOT with no .env so CONFIRM_* values from the real
 # agents .env (which may set CONFIRM_DETAIL=off, CONFIRM_OUTLINE=off, etc.)
 # do not leak in and suppress the diff for final-artifact paths.
 NODE_TMPDIR_FPDC="$(node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
 ISOLATED_CFG_DIR_FPDC="${NODE_TMPDIR_FPDC}/fpdc-cfg-$$"
 mkdir -p "$ISOLATED_CFG_DIR_FPDC"
-export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR_FPDC"
+export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR_FPDC"
 trap 'rm -rf "$ISOLATED_CFG_DIR_FPDC"' EXIT
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 

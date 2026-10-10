@@ -10,9 +10,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-SC_FILE="$AGENTS_DIR/skills/session-close/SKILL.md"
+SC_FILE="$SCRIPT_CHECKOUT_ROOT/skills/session-close/SKILL.md"
 
 PASS=0; FAIL=0; SKIP=0
 

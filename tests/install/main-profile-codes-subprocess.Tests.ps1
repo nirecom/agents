@@ -22,7 +22,7 @@ Describe "SESSION_SYNC gate in a real child process (profile-snippet.ps1)" -Skip
         $script:AgentsDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
         # A mirror of the agents tree plus a private HOME. profile-snippet.ps1
-        # pins $env:AGENTS_CONFIG_DIR to its own parent, so a copy of the snippet
+        # pins $env:AGENTS_MAIN_ROOT to its own parent, so a copy of the snippet
         # is the only way to control which config the gate reads. No .env is
         # written: a missing .env is a silent no-op in hooks/lib/load-env.js,
         # which leaves the process environment as the single SESSION_SYNC source.
@@ -158,8 +158,7 @@ Describe "SESSION_SYNC gate in a real child process (profile-snippet.ps1)" -Skip
 
     BeforeEach {
         $script:SavedSessionSync = $env:SESSION_SYNC
-        $script:SavedConfigDir   = $env:AGENTS_CONFIG_DIR
-        $script:SavedAgentsDir   = $env:AGENTS_DIR
+        $script:SavedAgentsMainRoot   = $env:AGENTS_MAIN_ROOT
         $script:SavedPath        = $env:PATH
         $script:Sandbox          = $null
     }
@@ -167,10 +166,8 @@ Describe "SESSION_SYNC gate in a real child process (profile-snippet.ps1)" -Skip
     AfterEach {
         if ($null -eq $script:SavedSessionSync) { Remove-Item Env:SESSION_SYNC -ErrorAction SilentlyContinue }
         else { $env:SESSION_SYNC = $script:SavedSessionSync }
-        if ($null -eq $script:SavedConfigDir) { Remove-Item Env:AGENTS_CONFIG_DIR -ErrorAction SilentlyContinue }
-        else { $env:AGENTS_CONFIG_DIR = $script:SavedConfigDir }
-        if ($null -eq $script:SavedAgentsDir) { Remove-Item Env:AGENTS_DIR -ErrorAction SilentlyContinue }
-        else { $env:AGENTS_DIR = $script:SavedAgentsDir }
+        if ($null -eq $script:SavedAgentsMainRoot) { Remove-Item Env:AGENTS_MAIN_ROOT -ErrorAction SilentlyContinue }
+        else { $env:AGENTS_MAIN_ROOT = $script:SavedAgentsMainRoot }
         $env:PATH = $script:SavedPath
         if ($script:Sandbox) {
             Remove-Item -Recurse -Force $script:Sandbox.Root -ErrorAction SilentlyContinue

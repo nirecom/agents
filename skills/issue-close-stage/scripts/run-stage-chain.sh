@@ -1,19 +1,27 @@
 #!/bin/bash
 # run-stage-chain.sh — Phase 1 issue-close-stage chain (in-skill steps A, B, D, F, G)
 # Usage: bash run-stage-chain.sh <issue_number> <owner_repo>
-# Env:   AGENTS_CONFIG_DIR (required), ISSUE_CLOSE_SKILL=1 (set by caller)
+# Env:   ISSUE_CLOSE_SKILL=1 (set by caller)
 # Stdout (eval-able KEY=VALUE): STATUS  SUMMARY  COMMENT_ID
 # Exit 0 always; check STATUS for outcome.
 set -euo pipefail
 
 ISSUE_NUMBER="${1:?issue_number required}"
 OWNER_REPO="${2:?owner_repo required}"
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 export ISSUE_CLOSE_SKILL=1
 
 # A: triage
-eval "$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-close-stage-triage.sh" "$ISSUE_NUMBER")"
+# The KEY=VALUE output is captured first and evaluated only after the exit code is checked:
+# `eval "$(child)"` reports eval's status, so a failed triage read as success.
+rc=0
+TRIAGE_KV="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-stage-triage.sh" "$ISSUE_NUMBER")" || rc=$?
+if [[ "$rc" -ne 0 ]]; then
+    printf 'STATUS=error\nSUMMARY=triage failed for #%s\n' "$ISSUE_NUMBER"
+    exit 0
+fi
+eval "$TRIAGE_KV"
 # Sets: STATE SENTINEL ACTION NEXT_STEPS
 
 if [[ "$ACTION" == "phase1_done" ]]; then
@@ -36,7 +44,7 @@ for STEP in "${STEPS[@]}"; do
     case "$STEP" in
         B)
             rc=0
-            bash "$AGENTS_CONFIG_DIR/bin/issue-close-gate.sh" "$OWNER_REPO" "$ISSUE_NUMBER" || rc=$?
+            bash "$SCRIPT_CHECKOUT_ROOT/bin/issue-close-gate.sh" "$OWNER_REPO" "$ISSUE_NUMBER" || rc=$?
             if [[ "$rc" -ne 0 ]]; then
                 printf 'STATUS=blocked_sub_issue\nSUMMARY=sub-issue gate blocked #%s\n' "$ISSUE_NUMBER"
                 exit 0
@@ -67,7 +75,7 @@ for STEP in "${STEPS[@]}"; do
             fi
             ;;
         G)
-            bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-body-update.sh" \
+            bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/parent-body-update.sh" \
                 "$OWNER_REPO" "$ISSUE_NUMBER" || true
             ;;
     esac

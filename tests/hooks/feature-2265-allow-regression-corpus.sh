@@ -16,10 +16,10 @@ set -uo pipefail
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
 
-# Pinned before the harness: an inherited AGENTS_DIR would point at another checkout.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
-PART_DIR="$AGENTS_DIR/tests/hooks/feature-2265-allow-regression-corpus"
+# Pinned before the harness: an inherited SCRIPT_CHECKOUT_ROOT would point at another checkout.
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+PART_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2265-allow-regression-corpus"
 
 # fx_build <tmp> builds, under <tmp>:
 #   main    git checkout: the real SSOT pair + every entry file, plus bin/fx-diverge (bash shebang)
@@ -45,17 +45,17 @@ fx_settled_state() {
 fx_layout() {
   local dst="$1" entry
   mkdir -p "$dst/install"
-  cp "$AGENTS_DIR/install/settings-allow-commands.txt" "$AGENTS_DIR/install/path-exposed-commands.txt" "$dst/install/"
+  cp "$SCRIPT_CHECKOUT_ROOT/install/settings-allow-commands.txt" "$SCRIPT_CHECKOUT_ROOT/install/path-exposed-commands.txt" "$dst/install/"
   while IFS= read -r entry; do
     entry="${entry%%$'\r'}"
     [[ -z "$entry" || "$entry" == \#* ]] && continue
     mkdir -p "$dst/$(dirname "$entry")"
-    cp "$AGENTS_DIR/$entry" "$dst/$entry"
-  done < "$AGENTS_DIR/install/settings-allow-commands.txt"
+    cp "$SCRIPT_CHECKOUT_ROOT/$entry" "$dst/$entry"
+  done < "$SCRIPT_CHECKOUT_ROOT/install/settings-allow-commands.txt"
   # The corpus also covers bin/workflow/handoff-append, the entry #2265 adds to the SSOT; its
   # file is copied even while the list does not name it, so only the list decides the verdict.
   mkdir -p "$dst/bin/workflow"
-  cp "$AGENTS_DIR/bin/workflow/handoff-append" "$dst/bin/workflow/handoff-append"
+  cp "$SCRIPT_CHECKOUT_ROOT/bin/workflow/handoff-append" "$dst/bin/workflow/handoff-append"
   printf '#!/usr/bin/env bash\necho diverge\n' > "$dst/bin/fx-diverge"
   printf 'bin/fx-diverge\n' >> "$dst/install/settings-allow-commands.txt"
 }
@@ -153,7 +153,7 @@ const rows = fs.readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean
 const stat = new Set(rows.filter((r) => (r.sources || []).includes("static-2451")).map((r) => r.rule));
 const allow = JSON.parse(fs.readFileSync(process.argv[2], "utf8")).permissions.allow;
 process.stdout.write(String(allow.filter((r) => stat.has(r)).length));
-' "$(np "$PART_DIR/corpus.jsonl")" "$(np "$AGENTS_DIR/settings.json")")"
+' "$(np "$PART_DIR/corpus.jsonl")" "$(np "$SCRIPT_CHECKOUT_ROOT/settings.json")")"
 fx_check "settings.json: none of the 206 #2451 static rules remain" "0" "$LEFT"
 case_end
 

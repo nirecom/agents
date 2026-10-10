@@ -8,8 +8,8 @@ if [ "$FEATURE_644_PHASE" -lt 1 ]; then
 fi
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL="$AGENTS_DIR/skills/update-docs/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL="$SCRIPT_CHECKOUT_ROOT/skills/update-docs/SKILL.md"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }

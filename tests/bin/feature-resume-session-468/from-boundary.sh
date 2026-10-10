@@ -26,7 +26,7 @@ t24_root_of() {
 run_from_arg() {
     local root="$1" sid_arg="$2"
     mkdir -p "$root/state" "$root/plans" "$root/transcripts"
-    ( cd "$AGENTS_DIR" && WORKFLOW_STATE_DIR="$root/state" \
+    ( cd "$SCRIPT_CHECKOUT_ROOT" && WORKFLOW_STATE_DIR="$root/state" \
         WORKFLOW_PLANS_DIR="$root/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$root/transcripts" \
         run_with_timeout node "$CLI" --from "$sid_arg" >"$root/stdout" 2>"$root/stderr" ) \
         && LAST_EXIT=0 || LAST_EXIT=$?

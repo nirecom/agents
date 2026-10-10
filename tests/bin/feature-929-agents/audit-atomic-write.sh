@@ -3,7 +3,7 @@
 # NOTE: RED until write-code adds --findings-jsonl + CAS-success findings merge (#929);
 #   the flag is unknown now, so the CLI exits 1 (usage) and no findings are written.
 
-SSW_JS="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
+SSW_JS="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
 
 _aaw_arm() {
     # Arms a fresh audit run (no cwd -> no git); echoes the minted run id.

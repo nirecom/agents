@@ -7,7 +7,7 @@
 # (rules/test/claude-e2e.md: both branches of a config-gated behaviour need
 # coverage). Nothing below spends a token: it drives the gate, never the judge.
 
-D2099G_LANE="$AGENTS_DIR/tests/skills/TL3-complexity-stage-routing-live-judge.sh"
+D2099G_LANE="$SCRIPT_CHECKOUT_ROOT/tests/skills/TL3-complexity-stage-routing-live-judge.sh"
 
 # GATE-1: with RUN_TL3 off the lane must SKIP the runner's way — exit 77, which
 # tests/run-all.sh counts as SKIP. Exit 0 would be the false green: a lane that
@@ -28,9 +28,9 @@ d2099g_lane_skips_when_off() {
 # expression is re-run here, so a rename that drops the lane out of the tier fails.
 d2099g_lane_is_selected() {
     local found selector
-    found=$(find "$AGENTS_DIR/tests" -maxdepth 1 -name "TL3-*.sh" | grep -c "TL3-complexity-stage-routing-live-judge.sh")
+    found=$(find "$SCRIPT_CHECKOUT_ROOT/tests" -maxdepth 1 -name "TL3-*.sh" | grep -c "TL3-complexity-stage-routing-live-judge.sh")
     assert_eq "GATE-3 the lane matches the TL3 tier's own selection expression" "1" "$found"
-    selector=$(grep -c 'TL3-' "$AGENTS_DIR/bin/select-tests.sh" 2>/dev/null || echo 0)
+    selector=$(grep -c 'TL3-' "$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh" 2>/dev/null || echo 0)
     if [ "$selector" -ge 1 ]; then
         pass "GATE-4 bin/select-tests.sh still selects the tier by the TL3- name prefix"
     else
@@ -39,7 +39,7 @@ d2099g_lane_is_selected() {
 }
 
 # GATE-5..: the gate's own two branches, on the real case files. A harness with
-# no-op assertion helpers sources each live case file against an AGENTS_DIR that
+# no-op assertion helpers sources each live case file against an SCRIPT_CHECKOUT_ROOT that
 # carries no gate binary, so the first gate is closed by construction. The
 # gated_skip implementation is lifted VERBATIM out of the dispatcher rather than
 # restated, so this measures the shipped helper.
@@ -54,11 +54,11 @@ d2099g_harness() {
         printf 'fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }\n'
         printf 'pass() { echo "PASS: $1"; }\n'
         printf 'skip() { echo "SKIP: $1"; }\n'
-        sed -n '/^gated_skip() {/,/^}/p' "$AGENTS_DIR/tests/hooks/feature-2099-complexity-stage-routing.sh"
+        sed -n '/^gated_skip() {/,/^}/p' "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2099-complexity-stage-routing.sh"
         # Everything else the sourced file touches before its gate, neutralized.
         printf 'assert_eq() { :; }\nassert_contains() { :; }\nassert_not_contains() { :; }\n'
         printf 'run_with_timeout() { :; }\nto_node_path() { echo "$1"; }\nnew_session() { echo gate; }\n'
-        printf 'AGENTS_DIR="%s"\nRUBRIC="/dev/null"\nTMPDIR_BASE="%s"\n' "$fake" "$TMPDIR_BASE"
+        printf 'SCRIPT_CHECKOUT_ROOT="%s"\nRUBRIC="/dev/null"\nTMPDIR_BASE="%s"\n' "$fake" "$TMPDIR_BASE"
         printf 'BIN_RECORD="/dev/null"\nBIN_READ="/dev/null"\nBIN_DERIVE="/dev/null"\nCR_MOD_N="/dev/null"\n'
         printf '. "%s"\n' "$case_file"
     } > "$h"
@@ -67,7 +67,7 @@ d2099g_harness() {
 
 d2099g_gate_branches() {
     local out lifted
-    lifted=$(sed -n '/^gated_skip() {/,/^}/p' "$AGENTS_DIR/tests/hooks/feature-2099-complexity-stage-routing.sh" | grep -c 'D2099_REQUIRE_LIVE')
+    lifted=$(sed -n '/^gated_skip() {/,/^}/p' "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2099-complexity-stage-routing.sh" | grep -c 'D2099_REQUIRE_LIVE')
     if [ "$lifted" -lt 1 ]; then
         fail "GATE-5 the dispatcher's gated_skip could not be lifted (or no longer reads D2099_REQUIRE_LIVE) — the branches below would test a stub"
         return
@@ -94,10 +94,10 @@ d2099g_gate_branches() {
 # --- GATE-10..: the gate's ON branch -----------------------------------------
 # GATE-1 only pins RUN_TL3=off. A gate written `!= "on"` where `== "on"` was meant
 # still exits 77 there, so the lane would skip forever and nobody would notice.
-# This builds a throwaway AGENTS_DIR beside the real lane script — a config stub
+# This builds a throwaway SCRIPT_CHECKOUT_ROOT beside the real lane script — a config stub
 # that answers "not off", a `claude` stub on PATH, and a SUITE stub that records
 # having been invoked — so the ON branch is observable without a token or a
-# network call. `$0`'s dirname is what the lane resolves AGENTS_DIR from, so the
+# network call. `$0`'s dirname is what the lane resolves SCRIPT_CHECKOUT_ROOT from, so the
 # lane is copied into the fake tree rather than pointed at it.
 d2099g_build_fake_lane() {
     local fake="$1" ids="$2"

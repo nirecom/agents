@@ -12,15 +12,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK_EW="$AGENTS_DIR/hooks/enforce-worktree.js"
-HOOK_IC="$AGENTS_DIR/hooks/enforce-issue-close.js"
+HOOK_EW="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
+HOOK_IC="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-issue-close.js"
 
 PASS=0
 FAIL=0

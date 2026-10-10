@@ -10,15 +10,15 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 T="$(make_tmp)"
 trap 'rm -rf "$T"' EXIT
 harness_isolate "$T/iso"
 
-HOOKS_N="$(np "$AGENTS_DIR/hooks")"
+HOOKS_N="$(np "$SCRIPT_CHECKOUT_ROOT/hooks")"
 GATE_HOOK="$HOOKS_N/workflow-gate.js"
 
 # commit_eval <js-body> <command> — `cd` = commit-detect module (or null), `ir` =
@@ -99,8 +99,9 @@ expect_eq "B7. isCommitCommand(git add -A && rtk git commit -m x) → true (comm
 case_end
 
 # --- Hook-level: hooks/workflow-gate.js end to end --------------------------
-# The fixture repo doubles as AGENTS_CONFIG_DIR so isAgentsSessionRepo() keeps the
-# gate armed; run_tests is pending, so any commit that reaches the gate is BLOCKed.
+# The gate runs from a copy of this checkout attached to the fixture repo, so
+# isAgentsSessionRepo() keeps it armed; run_tests is pending, so any commit that reaches the
+# gate is BLOCKed.
 WG_REPO="$(np "$T/wg-repo")"
 mkdir -p "$WG_REPO"
 git -C "$WG_REPO" init -q -b main
@@ -113,6 +114,12 @@ git -C "$WG_REPO" add README.md
 git -C "$WG_REPO" commit -q -m "initial"
 echo "src" > "$WG_REPO/app.js"
 git -C "$WG_REPO" add app.js
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+WG_CHECKOUT="$T/wg-checkout"
+session_repo_fixture_create "$WG_CHECKOUT"
+session_repo_fixture_attach "$WG_CHECKOUT" "$WG_REPO"
+GATE_HOOK="$(session_repo_fixture_path "$WG_CHECKOUT" hooks/workflow-gate.js)"
 WG_SID="wg2393pending"
 
 run_with_timeout 30 node -e "
@@ -132,7 +139,7 @@ wg_run() {
     payload="$(node -e "process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:'Bash',tool_input:{command:process.argv[2],cwd:process.argv[3]}}))" "$WG_SID" "$1" "$WG_REPO")"
     out="$(cd "$WG_REPO" && printf '%s' "$payload" | run_with_timeout 30 env \
          -u CLAUDE_CODE_SESSION_ID -u WORKFLOW_OFF \
-        "AGENTS_CONFIG_DIR=$WG_REPO" "CLAUDE_PROJECT_DIR=$WG_REPO" \
+        "AGENTS_MAIN_ROOT=$WG_REPO" "CLAUDE_PROJECT_DIR=$WG_REPO" \
         node "$GATE_HOOK" 2>/dev/null)" || rc=$?
     out="$(printf '%s' "$out" | tr -d '\r\n')"
     case "$rc" in

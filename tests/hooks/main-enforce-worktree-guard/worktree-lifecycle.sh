@@ -13,10 +13,10 @@ WL_REPO="$(setup_main_checkout "wl-repo")"
 WL_EXT_PATH="$TMPDIR_BASE/wl-worktrees/my-task/repo"
 WL_INREPO_PATH="$WL_REPO/subdir"
 
-# AGENTS_CONFIG_DIR points at the fixture repo so New-Item / mkdir targets
+# AGENTS_MAIN_ROOT points at the fixture repo so New-Item / mkdir targets
 # resolve against it rather than the real agents checkout.
 wl_run_hook() {
-    run_bash_guard "$1" "${2:-$WL_REPO}" ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=$WL_REPO"
+    run_bash_guard "$1" "${2:-$WL_REPO}" ENFORCE_WORKTREE=on "AGENTS_MAIN_ROOT=$WL_REPO"
 }
 wl_is_allowed() { [ "$(wl_run_hook "$1" "${2:-}")" = "{}" ]; }
 wl_is_blocked() { [ "$(wl_run_hook "$1" "${2:-}")" != "{}" ]; }

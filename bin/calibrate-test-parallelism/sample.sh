@@ -35,10 +35,10 @@ cal_ledger_secs() {
     POP_SECS=()
     for ((i = 0; i < ${#POP_PATH[@]}; i++)); do
         POP_SECS[i]=""
-        run_all_dur_key_into "${POP_PATH[$i]}" "$AGENTS_DIR" || continue
+        run_all_dur_key_into "${POP_PATH[$i]}" "$SCRIPT_CHECKOUT_ROOT" || continue
         printf '%s\t%s\n' "$i" "$RUN_ALL_DUR_KEY_OUT"
     done > "$keys"
-    run_all_dur_lookup "$AGENTS_DIR" "$keys" "$secs"
+    run_all_dur_lookup "$SCRIPT_CHECKOUT_ROOT" "$keys" "$secs"
     while IFS="$(printf '\t')" read -r id s; do
         if ! is_uint "$id" || ! is_uint "$s"; then continue; fi
         [ "$id" -lt "${#POP_PATH[@]}" ] && POP_SECS[id]="$s"

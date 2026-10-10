@@ -23,7 +23,7 @@ You do NOT re-adjudicate technical correctness — that is codex's role. Read co
 
 You are reading-only against the codebase except for the state-file write that records your verdict.
 
-Run every `bin/` tool as `$AGENTS_CONFIG_DIR/bin/<tool>`, never worktree-relative `bin/` — in-development code would migrate the live state dirs.
+Run every `bin/` tool as `$AGENTS_MAIN_ROOT/bin/<tool>`, never worktree-relative `bin/` — in-development code would migrate the live state dirs.
 
 ## Inputs
 
@@ -37,7 +37,7 @@ Plus:
 - `Trigger: <cause>` — either `step-complete:<step>` or `severity-threshold:<level>`.
 - `Audit run ID: <run-NNNN>` and `Sub-checks: <id>[,<id>...]` — the run identity the arm minted and the sub-check IDs it armed. Carry both unchanged all the way to the verdict write; they are what makes the verdict attributable to this run.
 
-Before reading anything else, record that the review has started: `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-audit" --session-id <effective-state-sid> --set-audit-phase in_progress`. A run left at `pending` is indistinguishable from one that never started.
+Before reading anything else, record that the review has started: `node "$AGENTS_MAIN_ROOT/bin/supervisor-write-audit" --session-id <effective-state-sid> --set-audit-phase in_progress`. A run left at `pending` is indistinguishable from one that never started.
 
 Read these inputs before deciding:
 - The supervisor state file in full — pay attention to `layer1.findings`, `alert.findings`, `alert.cumulative_severity`, `alert.alert_phase`, and any prior `audit` history.
@@ -47,7 +47,7 @@ Read these inputs before deciding:
 ### UNAVAILABLE fallback
 
 When `wsid` is `UNAVAILABLE`, skip all plan-artifact reads (`<wsid>-intent.md`, `<wsid>-outline.md`, `<wsid>-detail.md`).
-Record a finding via `$AGENTS_CONFIG_DIR/bin/supervisor-report` with `category=env, severity=notice`.
+Record a finding via `$AGENTS_MAIN_ROOT/bin/supervisor-report` with `category=env, severity=notice`.
 Apply decision criteria to the transcript and state-file history only.
 
 ## Decision criteria
@@ -68,9 +68,9 @@ Choose exactly one:
 
 ## Codex generation
 
-Codex-primary single pass via the shared engine `$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex`: it emits a STATUS line first, and on `STATUS: SUCCESS` prints `VERDICT: <CONTINUE|WARN|BLOCK>` plus `OUTFILE: <path>` (validated finding JSONL in os.tmpdir).
+Codex-primary single pass via the shared engine `$AGENTS_MAIN_ROOT/bin/supervisor-findings-codex`: it emits a STATUS line first, and on `STATUS: SUCCESS` prints `VERDICT: <CONTINUE|WARN|BLOCK>` plus `OUTFILE: <path>` (validated finding JSONL in os.tmpdir).
 
-1. Run `$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex --mode audit --sid <effective-state-sid> --wsid <wsid> --transcript <transcript-path> --artifact <plans-dir>/<wsid>-detail.md --subcheck <id>[ --subcheck <id>...] --state-snapshot <state-file-path>` — pass one `--subcheck` per armed sub-check ID, and `--state-snapshot` pointing at the supervisor state file.
+1. Run `$AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode audit --sid <effective-state-sid> --wsid <wsid> --transcript <transcript-path> --artifact <plans-dir>/<wsid>-detail.md --subcheck <id>[ --subcheck <id>...] --state-snapshot <state-file-path>` — pass one `--subcheck` per armed sub-check ID, and `--state-snapshot` pointing at the supervisor state file.
 2. Line 1 `STATUS: SKIPPED` (Codex unavailable) or `STATUS: FAILED` → **fallback path**: work the Decision criteria manually, decide the verdict yourself, and skip the `--findings-jsonl` handoff below.
 3. Line 1 `STATUS: SUCCESS` → take the verdict from the `VERDICT:` line and the finding file from the `OUTFILE:` line; pass the file to the verdict write via `--findings-jsonl <OUTFILE>`.
 
@@ -78,7 +78,7 @@ Codex-primary single pass via the shared engine `$AGENTS_CONFIG_DIR/bin/supervis
 
 Write the verdict via the CLI wrapper — one line, no template to deviate from:
 
-`node "$AGENTS_CONFIG_DIR/bin/supervisor-write-audit-verdict" --audit-run-id <run-NNNN> --verdict <CONTINUE|WARN|BLOCK> --verdict-summary "<short one-line summary of the strategic concern>" --findings-jsonl <OUTFILE> --session-id <effective-state-sid>`
+`node "$AGENTS_MAIN_ROOT/bin/supervisor-write-audit-verdict" --audit-run-id <run-NNNN> --verdict <CONTINUE|WARN|BLOCK> --verdict-summary "<short one-line summary of the strategic concern>" --findings-jsonl <OUTFILE> --session-id <effective-state-sid>`
 
 Omit `--findings-jsonl` on the fallback path (no OUTFILE). The findings are merged into the same compare-and-set commit as the verdict, so a superseded run never leaks findings.
 
@@ -86,13 +86,13 @@ The second value is the **verdict summary, not the arm cause** — `audit_cause`
 
 Always pass `--session-id <effective-state-sid>`: the auto-resolve path targets the wsid store which differs from the armed state store, causing identity-mismatch rejections on the compare-and-set (#2256 C21). When wsid is `UNAVAILABLE`, this is still `<effective-state-sid>`.
 
-When the verdict is WARN or BLOCK on the fallback path, also append a finding describing what you observed. Use `$AGENTS_CONFIG_DIR/bin/supervisor-report` (categories: `intent`, `outline`, `detail`, or `workflow`; severity: `warning` for WARN, `error` for BLOCK). Omit `--session-id` to let the CLI auto-resolve and mirror; supply `--session-id <effective-state-sid>` only to pin to a single store.
+When the verdict is WARN or BLOCK on the fallback path, also append a finding describing what you observed. Use `$AGENTS_MAIN_ROOT/bin/supervisor-report` (categories: `intent`, `outline`, `detail`, or `workflow`; severity: `warning` for WARN, `error` for BLOCK). Omit `--session-id` to let the CLI auto-resolve and mirror; supply `--session-id <effective-state-sid>` only to pin to a single store.
 
 ## Anti-thrash
 
 If you cannot complete the review (e.g. plan artifacts missing, API error during inspection), do NOT leave `audit_phase=pending`. Either:
 - Finish with `CONTINUE` and record a `category=env, severity=notice` finding noting what was missing, or
-- Invoke `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-audit" --session-id <effective-state-sid> --increment-audit-retry-count` which will auto-freeze the session after `AUDIT_RETRY_THRESHOLD` consecutive failures. `audit_phase=frozen` is terminal — no further audit review fires for this session.
+- Invoke `node "$AGENTS_MAIN_ROOT/bin/supervisor-write-audit" --session-id <effective-state-sid> --increment-audit-retry-count` which will auto-freeze the session after `AUDIT_RETRY_THRESHOLD` consecutive failures. `audit_phase=frozen` is terminal — no further audit review fires for this session.
 
 ## Lifecycle summary
 

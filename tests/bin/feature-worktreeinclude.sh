@@ -7,7 +7,7 @@
 #
 # Tests the contract of:
 #   - hooks/lib/worktree-include-match.js  (buildMatcher wrapping ignore@^5.3.2)
-#   - hooks/lib/worktree-copy.js            (copyInclude({mainRoot, worktreePath, includeFile}))
+#   - hooks/lib/worktree-copy.js            (copyInclude({targetMainRoot, worktreePath, includeFile}))
 #   - bin/worktree-copy-include.js          (stdin JSON → stdout JSON CLI)
 #
 # Test-first: source files may not yet exist. Tests will FAIL with "Cannot find
@@ -21,15 +21,15 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-BIN_JS="${_AGENTS_DIR_NODE}/bin/worktree-copy-include.js"
-LIB_COPY_JS="${_AGENTS_DIR_NODE}/hooks/lib/worktree-copy.js"
-LIB_MATCH_JS="${_AGENTS_DIR_NODE}/hooks/lib/worktree-include-match.js"
+BIN_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/bin/worktree-copy-include.js"
+LIB_COPY_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/worktree-copy.js"
+LIB_MATCH_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/worktree-include-match.js"
 
 PASS=0
 FAIL=0
@@ -66,14 +66,14 @@ require_bin() {
 }
 
 # Build a JSON payload safely via node (avoids backslash quoting hell).
-# Args: mainRoot worktreePath includeFile-or-empty
+# Args: targetMainRoot worktreePath includeFile-or-empty
 make_payload() {
     local main="$1"
     local wt="$2"
     local inc="${3:-}"
     node -e "
         const j = {
-            mainRoot: process.argv[1],
+            targetMainRoot: process.argv[1],
             worktreePath: process.argv[2]
         };
         if (process.argv[3]) j.includeFile = process.argv[3];
@@ -346,7 +346,7 @@ test_N6b_worktree_backup_denylist_excluded() {
 
     # Copy production .worktree-copyignore — test passes only after step 2 adds
     # .worktree-backup/ to that file.
-    cp "${AGENTS_DIR}/.worktree-copyignore" "$main/.worktree-copyignore"
+    cp "${SCRIPT_CHECKOUT_ROOT}/.worktree-copyignore" "$main/.worktree-copyignore"
 
     # outer/ prefix ensures hardcoded guard does NOT fire (startsWith check).
     mkdir -p "$main/outer/.worktree-backup/inner"
@@ -511,9 +511,9 @@ test_Err2_missing_mainRoot() {
     require_bin "test_Err2_missing_mainRoot" || return
     local code; code="$(run_bin_exitcode '{"worktreePath":"/tmp/wt"}')"
     if [ "$code" != "0" ]; then
-        pass "Err2: missing mainRoot → non-zero exit"
+        pass "Err2: missing targetMainRoot → non-zero exit"
     else
-        fail "Err2: missing mainRoot should non-zero exit (got code=$code)"
+        fail "Err2: missing targetMainRoot should non-zero exit (got code=$code)"
     fi
 }
 
@@ -526,9 +526,9 @@ test_Err3_nonexistent_mainRoot() {
     local errors; errors="$(json_field "$out" "errors")"
 
     if [ "$code" != "0" ]; then
-        pass "Err3: non-existent mainRoot → non-zero exit"
+        pass "Err3: non-existent targetMainRoot → non-zero exit"
     elif [ -n "$errors" ] && [ "$errors" != "[]" ] && [ "$errors" != "null" ]; then
-        pass "Err3: non-existent mainRoot → reported in errors[]"
+        pass "Err3: non-existent targetMainRoot → reported in errors[]"
     else
         fail "Err3: expected non-zero exit or errors[] entry, got code=$code errors=$errors"
     fi
@@ -594,7 +594,7 @@ test_Sec2_denylist_wins_over_includelist() {
 test_Sec3_path_traversal_in_mainRoot_rejected() {
     require_bin "test_Sec3_path_traversal_in_mainRoot_rejected" || return
     local wt; wt="$(setup_worktree_dest "sec3-wt")"
-    # mainRoot containing ../ — should be rejected (non-zero exit) or yield error.
+    # targetMainRoot containing ../ — should be rejected (non-zero exit) or yield error.
     local payload
     payload="$(make_payload "$TMPDIR_BASE/../../../etc" "$wt")"
     local code; code="$(run_bin_exitcode "$payload")"
@@ -603,13 +603,13 @@ test_Sec3_path_traversal_in_mainRoot_rejected() {
     local errors; errors="$(json_field "$out" "errors")"
 
     if [ "$code" != "0" ]; then
-        pass "Sec3: ../ path traversal in mainRoot → non-zero exit"
+        pass "Sec3: ../ path traversal in targetMainRoot → non-zero exit"
     elif [ "$copied" = "[]" ] && [ "$errors" != "[]" ] && [ -n "$errors" ]; then
-        pass "Sec3: ../ path traversal in mainRoot → empty copied[] + errors[]"
+        pass "Sec3: ../ path traversal in targetMainRoot → empty copied[] + errors[]"
     elif [ "$copied" = "[]" ]; then
-        pass "Sec3: ../ path traversal in mainRoot → no files copied"
+        pass "Sec3: ../ path traversal in targetMainRoot → no files copied"
     else
-        fail "Sec3: SECURITY — ../ in mainRoot allowed copy (copied=$copied)"
+        fail "Sec3: SECURITY — ../ in targetMainRoot allowed copy (copied=$copied)"
     fi
 }
 

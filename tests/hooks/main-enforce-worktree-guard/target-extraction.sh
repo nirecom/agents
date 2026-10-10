@@ -77,10 +77,10 @@ else
 fi
 
 # T1-T4 run against a synthetic main checkout, not the real worktree: the point
-# is the redirect target's location relative to THAT repo. AGENTS_CONFIG_DIR is
+# is the redirect target's location relative to THAT repo. AGENTS_MAIN_ROOT is
 # pointed at an empty fake so the command text is all the hook has to go on.
-te_fake_acd() {
-    local d="$TMPDIR_BASE/fake-acd-$1-$$"
+te_fake_script_checkout_root() {
+    local d="$TMPDIR_BASE/fake-script-checkout-root-$1-$$"
     mkdir -p "$d/bin"
     echo "$d"
 }
@@ -89,8 +89,8 @@ te_fake_acd() {
 # target-allow fires even though CWD is a main checkout.
 te_repo="$(setup_main_checkout "sup-rc-main")"
 te_out="$(run_bash_guard \
-    'bash "$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex" --mode alert > /tmp/sup-output.jsonl' \
-    "$te_repo" ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=$(te_fake_acd t1)")"
+    'bash "$AGENTS_MAIN_ROOT/bin/supervisor-findings-codex" --mode alert > /tmp/sup-output.jsonl' \
+    "$te_repo" ENFORCE_WORKTREE=on "AGENTS_MAIN_ROOT=$(te_fake_script_checkout_root t1)")"
 if guard_decision "$te_out"; then
     pass "T1: bash supervisor-findings-codex --mode alert >/tmp/out.jsonl from main worktree: allow"
 else
@@ -101,8 +101,8 @@ fi
 # so it classifies as read-only and passes through.
 te_repo="$(setup_main_checkout "sup-wa-main")"
 te_out="$(run_bash_guard \
-    'node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --severity error --detail "test finding" --session-id abc123' \
-    "$te_repo" ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=$(te_fake_acd t2)")"
+    'node "$AGENTS_MAIN_ROOT/bin/supervisor-write-alert" --severity error --detail "test finding" --session-id abc123' \
+    "$te_repo" ENFORCE_WORKTREE=on "AGENTS_MAIN_ROOT=$(te_fake_script_checkout_root t2)")"
 if guard_decision "$te_out"; then
     pass "T2: node supervisor-write-alert from main worktree: allow (no write targets)"
 else
@@ -113,8 +113,8 @@ fi
 # Without this, T1 could pass because the hook stopped inspecting supervisor bins.
 te_repo="$(setup_main_checkout "sup-rc-block")"
 te_out="$(run_bash_guard \
-    "bash \"\$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex\" --mode alert > $te_repo/output.jsonl" \
-    "$te_repo" ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=$(te_fake_acd t3)")"
+    "bash \"\$AGENTS_MAIN_ROOT/bin/supervisor-findings-codex\" --mode alert > $te_repo/output.jsonl" \
+    "$te_repo" ENFORCE_WORKTREE=on "AGENTS_MAIN_ROOT=$(te_fake_script_checkout_root t3)")"
 if guard_decision "$te_out"; then
     fail "T3: bash supervisor-findings-codex writing into repo should block (main worktree), got allow: $te_out"
 else
@@ -124,8 +124,8 @@ fi
 # T4: no redirect at all → no write target → allow.
 te_repo="$(setup_main_checkout "sup-rc-noredirect")"
 te_out="$(run_bash_guard \
-    'bash "$AGENTS_CONFIG_DIR/bin/supervisor-findings-codex" --mode audit' \
-    "$te_repo" ENFORCE_WORKTREE=on "AGENTS_CONFIG_DIR=$(te_fake_acd t4)")"
+    'bash "$AGENTS_MAIN_ROOT/bin/supervisor-findings-codex" --mode audit' \
+    "$te_repo" ENFORCE_WORKTREE=on "AGENTS_MAIN_ROOT=$(te_fake_script_checkout_root t4)")"
 if guard_decision "$te_out"; then
     pass "T4: bash supervisor-findings-codex --mode audit (no redirect) from main worktree: allow"
 else

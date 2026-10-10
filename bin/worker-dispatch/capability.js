@@ -3,7 +3,7 @@
 // The payload is untrusted: the main-worktree guard sees one identifier and a file
 // path, never what the file says. Every field is typed by *what it can cause*, and
 // every path-shaped type is cross-validated against a derived anchor
-// (ACD / MAIN_ROOT / FAMILY / PLANS_DIR / WORKFLOW_DIR). There is deliberately NO
+// (script checkout root / TARGET_MAIN_ROOT / FAMILY / PLANS_DIR / WORKFLOW_DIR). There is deliberately NO
 // generic `abs-path` type: a field that cannot be tied to an anchor is not a path.
 
 const path = require("path");
@@ -127,7 +127,7 @@ function checkFamilyMember(value, family) {
   const abs = realAbs(value);
   if (abs === null) return { error: "must be an absolute path" };
   const hit = family.find((f) => sameString(stripTrailingSep(f), stripTrailingSep(abs)));
-  if (!hit) return { error: "must be a worktree registered under main-root" };
+  if (!hit) return { error: "must be a worktree registered under target-main-root" };
   return { value: hit };
 }
 
@@ -136,29 +136,29 @@ function checkUnderFamily(value, family) {
   const abs = realAbs(value);
   if (abs === null) return { error: "must be an absolute path" };
   const hit = family.some((f) => isUnder(abs, f, true));
-  if (!hit) return { error: "must be inside a worktree of the main-root family" };
+  if (!hit) return { error: "must be inside a worktree of the target-main-root family" };
   return { value: abs };
 }
 
-// The backup directory is DERIVED, never accepted: <main-root>/.worktree-backup/<branch>.
+// The backup directory is DERIVED, never accepted: <target-main-root>/.worktree-backup/<branch>.
 // A caller may echo it back for readability, but only the exact derived value.
 function checkDerivedBackupDir(value, anchors, payload) {
   const branch = payload ? payload.branch : null;
   if (!isSafeBranch(branch)) {
     return { error: "cannot be validated without a well-formed 'branch'" };
   }
-  const backupRoot = path.join(anchors.mainRoot, BACKUP_DIR_NAME);
+  const backupRoot = path.join(anchors.targetMainRoot, BACKUP_DIR_NAME);
   const derived = path.join(backupRoot, branch);
   // Belt and braces: `isSafeBranch` already rejects every escape, but this is the
   // field that authorizes a write scope, so the containment is asserted on the
   // joined result rather than inferred from the input that produced it.
   if (!isUnder(derived, backupRoot, false)) {
-    return { error: `must resolve inside <main-root>/${BACKUP_DIR_NAME}` };
+    return { error: `must resolve inside <target-main-root>/${BACKUP_DIR_NAME}` };
   }
   if (value === undefined || value === null) return { value: derived };
   if (!isPlainString(value)) return { error: "must be a string" };
   if (!samePath(value, derived)) {
-    return { error: `must be exactly <main-root>/${BACKUP_DIR_NAME}/<branch>` };
+    return { error: `must be exactly <target-main-root>/${BACKUP_DIR_NAME}/<branch>` };
   }
   return { value: derived };
 }
@@ -177,20 +177,20 @@ function checkRepoRef(value) {
   return { value };
 }
 
-// The finalize scripts directory is DERIVED from the ACD anchor, never accepted:
-// <acd>/skills/issue-close-finalize/scripts. Same rule as derived-backup-dir — a
+// The finalize scripts directory is DERIVED from the script checkout root anchor, never accepted:
+// <script checkout root>/skills/issue-close-finalize/scripts. Same rule as derived-backup-dir — a
 // caller may echo it back for readability, but only the exact derived value, so
 // a payload cannot redirect the chain at a script tree it controls.
 function checkDerivedFinalizeScriptsDir(value, anchors) {
-  const acd = anchors ? anchors.acd : null;
-  if (!isPlainString(acd) || acd === "") {
-    return { error: "cannot be validated without a resolved agents config dir" };
+  const anchorScriptCheckoutRoot = anchors ? anchors.scriptCheckoutRoot : null;
+  if (!isPlainString(anchorScriptCheckoutRoot) || anchorScriptCheckoutRoot === "") {
+    return { error: "cannot be validated without a resolved script checkout root" };
   }
-  const derived = path.join(acd, ...FINALIZE_SCRIPTS_REL.split("/"));
+  const derived = path.join(anchorScriptCheckoutRoot, ...FINALIZE_SCRIPTS_REL.split("/"));
   if (value === undefined || value === null) return { value: derived };
   if (!isPlainString(value)) return { error: "must be a string" };
   if (!samePath(value, derived)) {
-    return { error: `must be exactly <agents-config-dir>/${FINALIZE_SCRIPTS_REL}` };
+    return { error: `must be exactly <script checkout root>/${FINALIZE_SCRIPTS_REL}` };
   }
   return { value: derived };
 }
@@ -271,10 +271,10 @@ function checkField(value, field, anchors, payload) {
       return checkPattern(value, RE_SESSION_ID, "session id");
     case "iso-date":
       return checkPattern(value, RE_ISO_DATE, "YYYY-MM-DD date");
-    case "anchor-acd":
-      return checkAnchored(value, anchors.acd, "resolved agents config dir");
-    case "anchor-main-root":
-      return checkAnchored(value, anchors.mainRoot, "resolved main-root");
+    case "anchor-script-checkout-root":
+      return checkAnchored(value, anchors.scriptCheckoutRoot, "resolved script checkout root");
+    case "anchor-target-main-root":
+      return checkAnchored(value, anchors.targetMainRoot, "resolved target-main-root");
     case "family-worktree":
       return checkFamilyMember(value, anchors.family);
     case "path-in-family":

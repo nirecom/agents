@@ -13,9 +13,7 @@ set -euo pipefail
 
 # ---------------------------------------------------------------------------
 # Resolve the load-env.js path.
-# Primary: script-relative (follow symlinks on BASH_SOURCE[0]).
-# Fallback: $AGENTS_CONFIG_DIR/hooks/lib/load-env.js.
-# Script-relative is preferred so this script always uses the same load-env.js
+# Script-relative (follow symlinks on BASH_SOURCE[0]), so this script always uses the same load-env.js
 # version as itself (important in worktrees and symlinked installs).
 # ---------------------------------------------------------------------------
 _SCRIPT="${BASH_SOURCE[0]}"
@@ -29,9 +27,6 @@ while [[ -n "$_target" ]]; do
 done
 _SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT")" && pwd -P)"
 _LOADENV="$_SCRIPT_DIR/../hooks/lib/load-env.js"
-if [[ ! -f "$_LOADENV" ]] && [[ -n "${AGENTS_CONFIG_DIR:-}" ]] && [[ -f "$AGENTS_CONFIG_DIR/hooks/lib/load-env.js" ]]; then
-    _LOADENV="$AGENTS_CONFIG_DIR/hooks/lib/load-env.js"
-fi
 
 # ---------------------------------------------------------------------------
 # Resolve input file (arg or stdin via temp file).

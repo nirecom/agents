@@ -6,21 +6,20 @@
 #   MIGRATE_ACK_SELF_COUNT_AT_ACK   — self-issue count at dry-run time
 # (#834 Option γ)
 set -euo pipefail
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 REPO_PATH="${1:?usage: preview-and-capture.sh <repo_path>}"
 
-# Self-repo identity guard (#1234): detect REPO_PATH == AGENTS_CONFIG_DIR.
+# Self-repo identity guard (#1234): detect REPO_PATH == SCRIPT_CHECKOUT_ROOT.
 _resolved_repo="$(cd "$REPO_PATH" && pwd)"
-_resolved_cfg="$(cd "$AGENTS_CONFIG_DIR" && pwd)"
 _self_repo_detected=0
-if [ "$_resolved_repo" = "$_resolved_cfg" ]; then
+if [ "$_resolved_repo" = "$SCRIPT_CHECKOUT_ROOT" ]; then
   _self_repo_detected=1
-  echo "WARNING: SELF_REPO_DETECTED: REPO_PATH equals AGENTS_CONFIG_DIR ($AGENTS_CONFIG_DIR)." >&2
+  echo "WARNING: SELF_REPO_DETECTED: REPO_PATH equals SCRIPT_CHECKOUT_ROOT ($SCRIPT_CHECKOUT_ROOT)." >&2
   echo "         Continuing dry-run to emit sentinels." >&2
   echo "         The /migrate-repo skill (MR-2) confirms with the user via AskUserQuestion." >&2
 fi
 
-DRY_RUN_OUT=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --dry-run) || _dry_rc=$?
+DRY_RUN_OUT=$(bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --dry-run) || _dry_rc=$?
 echo "$DRY_RUN_OUT" >&2
 if [ "${_dry_rc:-0}" -ne 0 ]; then
   echo "ERROR: dry-run failed (rc=${_dry_rc:-0}). See output above." >&2

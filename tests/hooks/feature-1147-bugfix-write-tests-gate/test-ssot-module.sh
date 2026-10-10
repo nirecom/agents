@@ -1,10 +1,10 @@
 #!/bin/bash
 # C1-C6: Unit tests for is-bugfix-session.js and state-io.js additions (T0-A SSOT module).
 # Expected to FAIL until write-code implements the new module and getSkippableSteps.
-# Usage: bash test-ssot-module.sh <AGENTS_DIR>
+# Usage: bash test-ssot-module.sh <SCRIPT_CHECKOUT_ROOT>
 set -uo pipefail
 
-AGENTS_DIR="${1:?AGENTS_DIR required as \$1}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SUITE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 ERRORS=0
@@ -12,7 +12,7 @@ PASS_COUNT=0
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; PASS_COUNT=$((PASS_COUNT + 1)); }
 
-WIN_AGENTS_DIR="$(node -e "const p=require('path');process.stdout.write(p.resolve(process.argv[1]));" -- "$AGENTS_DIR")"
+WIN_SCRIPT_CHECKOUT_ROOT="$(node -e "const p=require('path');process.stdout.write(p.resolve(process.argv[1]));" -- "$SCRIPT_CHECKOUT_ROOT")"
 
 TMPDIR_ROOT="$(node -e "
 const os=require('os'),path=require('path'),fs=require('fs'),crypto=require('crypto');
@@ -33,7 +33,7 @@ NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u
 # C1: isBugfixBranch() branch name classification
 # ---------------------------------------------------------------------------
 echo "=== C1: isBugfixBranch() — branch name pattern ==="
-C1_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
+C1_OUT="$(AGENTS_REQ="$WIN_SCRIPT_CHECKOUT_ROOT" run_with_timeout node -e "
 try {
     const {isBugfixBranch} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/is-bugfix-session');
     console.log('fix/foo:', isBugfixBranch('fix/foo'));
@@ -67,7 +67,7 @@ echo "=== C2: createInitialState — is_bugfix flag from git_branch ==="
 # never stored on the raw state createInitialState() returns (single source of truth:
 # git_branch is canonical, is_bugfix is folded from it -- see is-bugfix-session.js).
 # Route each raw state through projectState() to read the derived flag.
-C2_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
+C2_OUT="$(AGENTS_REQ="$WIN_SCRIPT_CHECKOUT_ROOT" run_with_timeout node -e "
 try {
     const {createInitialState, projectState} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/state-io');
     const s1 = projectState(createInitialState('test-c2-fix', {git_branch: 'fix/x', cwd: '/tmp'}));
@@ -121,7 +121,7 @@ cat > "$WORKFLOW_STATE_DIR/${SID_C3}.json" <<EOF
 }
 EOF
 
-C3_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
+C3_OUT="$(AGENTS_REQ="$WIN_SCRIPT_CHECKOUT_ROOT" run_with_timeout node -e "
 try {
     const {isBugfixSession} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/is-bugfix-session');
     console.log('result:', isBugfixSession('${SID_C3}'));
@@ -153,7 +153,7 @@ cat > "$WORKFLOW_STATE_DIR/${SID_C4B}.json" <<EOF
 {"version":1,"session_id":"${SID_C4B}","created_at":"${NOW_ISO}","git_branch":"main","steps":{"workflow_init":{"status":"complete","updated_at":null},"write_tests":{"status":"pending","updated_at":null},"review_tests":{"status":"pending","updated_at":null},"user_verification":{"status":"pending","updated_at":null}},"workflow_type":"wf-code"}
 EOF
 
-C4_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
+C4_OUT="$(AGENTS_REQ="$WIN_SCRIPT_CHECKOUT_ROOT" run_with_timeout node -e "
 try {
     const {isBugfixSession} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/is-bugfix-session');
     console.log('fix/x fallback:', isBugfixSession('${SID_C4A}'));
@@ -181,7 +181,7 @@ echo "=== C5: getSkippableSteps — BUGFIX excludes write_tests and review_tests
 SID_C5="test-c5-$$"
 write_state "$SID_C5" "true" "fix/x"
 
-C5_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
+C5_OUT="$(AGENTS_REQ="$WIN_SCRIPT_CHECKOUT_ROOT" run_with_timeout node -e "
 try {
     const {getSkippableSteps} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/state-io');
     const steps = getSkippableSteps('${SID_C5}');
@@ -212,7 +212,7 @@ echo "=== C6: getSkippableSteps — non-BUGFIX includes write_tests and review_t
 SID_C6="test-c6-$$"
 write_state "$SID_C6" "false" "feature/foo"
 
-C6_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
+C6_OUT="$(AGENTS_REQ="$WIN_SCRIPT_CHECKOUT_ROOT" run_with_timeout node -e "
 try {
     const {getSkippableSteps} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/state-io');
     const steps = getSkippableSteps('${SID_C6}');

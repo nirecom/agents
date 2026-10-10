@@ -25,7 +25,7 @@ while [ $# -gt 0 ]; do
 done
 
 PROJECTS_DIR="$CLAUDE_DIR/projects"
-PLANS_DIR="$("${AGENTS_CONFIG_DIR:-$(dirname "$0")/..}/bin/workflow-plans-dir" 2>/dev/null || echo "$HOME/.workflow-plans")"
+PLANS_DIR="$("$(dirname "$0")/workflow-plans-dir" 2>/dev/null || echo "$HOME/.workflow-plans")"
 
 if [ ! -d "$PROJECTS_DIR/.git" ]; then
     echo "Session sync not initialized. Run install.sh or install/linux/session-sync-init.sh first." >&2

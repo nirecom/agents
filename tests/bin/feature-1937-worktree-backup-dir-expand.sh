@@ -17,10 +17,10 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WT1937_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

@@ -8,9 +8,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-TRIAGE_BIN="$(nodepath "$AGENTS_DIR/bin/worktree-notes-triage.js")"
+TRIAGE_BIN="$(nodepath "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/worktree-notes-triage.js")"
 
 PASS=0
 FAIL=0
@@ -50,12 +50,12 @@ mkdir -p "$NEUTRAL_CWD"
 cd "$NEUTRAL_CWD" || exit 1
 
 # Fixture main repo (for the backup-branch-dir branch).
-MAIN_ROOT="$TMPD/main-repo"
-mkdir -p "$MAIN_ROOT"
-git -C "$MAIN_ROOT" init -q 2>/dev/null
+TARGET_MAIN_ROOT="$TMPD/main-repo"
+mkdir -p "$TARGET_MAIN_ROOT"
+git -C "$TARGET_MAIN_ROOT" init -q 2>/dev/null
 # Installed pre-commit hooks must not fire inside the fixture.
-git -C "$MAIN_ROOT" config core.hooksPath /dev/null 2>/dev/null
-export CLAUDE_PROJECT_DIR="$(nodepath "$MAIN_ROOT")"
+git -C "$TARGET_MAIN_ROOT" config core.hooksPath /dev/null 2>/dev/null
+export CLAUDE_PROJECT_DIR="$(nodepath "$TARGET_MAIN_ROOT")"
 
 NOTES_BODY='# Worktree Notes
 Branch: feature/np

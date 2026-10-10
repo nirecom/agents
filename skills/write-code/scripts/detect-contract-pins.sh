@@ -11,9 +11,10 @@
 #        printf '%s\n' file1 file2 | detect-contract-pins.sh
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
-TESTS_DIR="$AGENTS_CONFIG_DIR/tests"
+# The tests that pin a changed file live in the checkout being edited (the CWD's
+# checkout), which is not necessarily the checkout this script was launched from.
+TARGET_CHECKOUT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+TESTS_DIR="$TARGET_CHECKOUT_ROOT/tests"
 
 if [[ $# -gt 0 ]]; then
   FILES=("$@")

@@ -2,29 +2,22 @@
 # tests/hooks/fix-1483-issue-create-allowlist.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js
 # Tags: worktree, enforce, hook, security, scope:issue-specific
-#
-# SKIPPED: Real hook firing inside a live Claude Code session
-# Because: Requires a live claude -p session with ENFORCE_WORKTREE=on; not achievable at L2
-# L3 gap: Live session test would verify the hook actually intercepts the Bash tool call
-#
-# Fix #1483: three new scripts added to the SANCTIONED allowlist in worker-script.js:
-#   - bin/github-issues/issue-create-dispatch.sh
-#   - skills/issue-create/scripts/run-bulk-dispatch.sh
-#   - skills/issue-create/scripts/run-phase5-record.sh
-#
-# Drive surface (full hook):
-#   echo '{"tool_name":"Bash","tool_input":{"command":"<cmd>"}}' | \
-#     (cd <main-worktree> && AGENTS_CONFIG_DIR=<fake-acd> node hooks/enforce-worktree.js)
+# L3 gap: real hook firing inside a live Claude Code session (needs claude -p with
+#   ENFORCE_WORKTREE=on; a live session would verify the hook intercepts the Bash tool call).
+# Fix #1483: three scripts added to the SANCTIONED allowlist in worker-script.js:
+#   bin/github-issues/issue-create-dispatch.sh, skills/issue-create/scripts/run-bulk-dispatch.sh,
+#   skills/issue-create/scripts/run-phase5-record.sh
+# Drive: payload JSON on stdin of `node hooks/enforce-worktree.js`, cwd = a fixture main worktree.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -76,7 +69,7 @@ GUARD_RC=0
 run_guard() {
     local payload="$1"; shift
     local main_wt="$1"; shift
-    # Remaining args are extra env vars (KEY=VAL form), e.g. AGENTS_CONFIG_DIR=...
+    # Remaining args are extra env vars (KEY=VAL form).
     GUARD_RC=0
     GUARD_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env \
@@ -172,36 +165,11 @@ add_linked_worktree() {
     fi
 }
 
-# Create a fake AGENTS_CONFIG_DIR with the pre-existing sanctioned worker scripts
-# (from fix-959) plus the three new scripts added by fix-1483. Echoes the
-# cygpath-normalized path.
-setup_fake_acd_1483() {
-    local name="$1"
-    local d="$TMPDIR_BASE/fake-acd-1483-$name"
-    mkdir -p "$d/bin/github-issues"
-    mkdir -p "$d/skills/issue-create/scripts"
-    # Both trust markers (hooks/lib/agents-config-dir.js: hooks/enforce-worktree.js
-    # AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real
-    # one always carries the guard itself — a marker-less stub is not a faithful
-    # config dir, it is the hostile case, which tests/fix-1630-*.sh own.
-    mkdir -p "$d/hooks"
-    touch "$d/hooks/enforce-worktree.js"
-    # Pre-existing sanctioned scripts (fix-959 baseline)
-    touch "$d/bin/check-unstaged-tracked.sh"
-    touch "$d/bin/probe-remote-bootstrap.sh"
-    touch "$d/bin/issue-close-gate.sh"
-    touch "$d/bin/github-issues/issue-close-stage-triage.sh"
-    touch "$d/bin/github-issues/parent-body-update.sh"
-    # New scripts added by fix-1483
-    touch "$d/bin/github-issues/issue-create-dispatch.sh"
-    touch "$d/skills/issue-create/scripts/run-bulk-dispatch.sh"
-    touch "$d/skills/issue-create/scripts/run-phase5-record.sh"
-    if command -v cygpath >/dev/null 2>&1; then
-        cygpath -m "$d"
-    else
-        echo "$d"
-    fi
-}
+# The root the sanctioned worker scripts are named under. The guard accepts a worker
+# script only under the checkout the guard itself runs from (#2561: no environment
+# variable is consulted), and it compares paths without touching the files — so the
+# commands below name scripts under this checkout and never execute or create them.
+guard_checkout_root() { printf '%s\n' "$_SCRIPT_CHECKOUT_ROOT_NODE"; }
 
 # ============================================================================
 # F1483 series — new SANCTIONED entries in worker-script.js
@@ -217,11 +185,11 @@ setup_fake_acd_1483() {
 test_F1483_1_allow_issue_create_dispatch_no_redirect() {
     local repo; repo="$(setup_main_worktree "f1483-1")"
     local linked; linked="$(add_linked_worktree "$repo" "f1483-lw1" "feature/f1483-lw1")"
-    local fake_acd; fake_acd="$(setup_fake_acd_1483 "1")"
-    local cmd; cmd="bash \"$fake_acd/bin/github-issues/issue-create-dispatch.sh\" \"$repo\""
+    local guard_root; guard_root="$(guard_checkout_root)"
+    local cmd; cmd="bash \"$guard_root/bin/github-issues/issue-create-dispatch.sh\" \"$repo\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_allow "F1483-1: issue-create-dispatch.sh + no redirect → ALLOW" "$rc"
 }
 
@@ -229,11 +197,11 @@ test_F1483_1_allow_issue_create_dispatch_no_redirect() {
 test_F1483_2_allow_run_bulk_dispatch_no_redirect() {
     local repo; repo="$(setup_main_worktree "f1483-2")"
     local linked; linked="$(add_linked_worktree "$repo" "f1483-lw2" "feature/f1483-lw2")"
-    local fake_acd; fake_acd="$(setup_fake_acd_1483 "2")"
-    local cmd; cmd="bash \"$fake_acd/skills/issue-create/scripts/run-bulk-dispatch.sh\" \"$repo\""
+    local guard_root; guard_root="$(guard_checkout_root)"
+    local cmd; cmd="bash \"$guard_root/skills/issue-create/scripts/run-bulk-dispatch.sh\" \"$repo\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_allow "F1483-2: run-bulk-dispatch.sh + no redirect → ALLOW" "$rc"
 }
 
@@ -241,11 +209,11 @@ test_F1483_2_allow_run_bulk_dispatch_no_redirect() {
 test_F1483_3_allow_run_phase5_record_no_redirect() {
     local repo; repo="$(setup_main_worktree "f1483-3")"
     local linked; linked="$(add_linked_worktree "$repo" "f1483-lw3" "feature/f1483-lw3")"
-    local fake_acd; fake_acd="$(setup_fake_acd_1483 "3")"
-    local cmd; cmd="bash \"$fake_acd/skills/issue-create/scripts/run-phase5-record.sh\" \"$repo\""
+    local guard_root; guard_root="$(guard_checkout_root)"
+    local cmd; cmd="bash \"$guard_root/skills/issue-create/scripts/run-phase5-record.sh\" \"$repo\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_allow "F1483-3: run-phase5-record.sh + no redirect → ALLOW" "$rc"
 }
 
@@ -254,13 +222,13 @@ test_F1483_3_allow_run_phase5_record_no_redirect() {
 test_F1483_4_allow_issue_create_dispatch_linked_log() {
     local repo; repo="$(setup_main_worktree "f1483-4")"
     local linked; linked="$(add_linked_worktree "$repo" "f1483-lw4" "feature/f1483-lw4")"
-    local fake_acd; fake_acd="$(setup_fake_acd_1483 "4")"
+    local guard_root; guard_root="$(guard_checkout_root)"
     mkdir -p "$linked/artifacts"
     local log_path="$linked/artifacts/dispatch.log"
-    local cmd; cmd="bash \"$fake_acd/bin/github-issues/issue-create-dispatch.sh\" \"$repo\" &> \"$log_path\""
+    local cmd; cmd="bash \"$guard_root/bin/github-issues/issue-create-dispatch.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_allow "F1483-4: issue-create-dispatch.sh + linked-wt log → ALLOW" "$rc"
 }
 
@@ -269,12 +237,12 @@ test_F1483_4_allow_issue_create_dispatch_linked_log() {
 test_F1483_5_block_issue_create_dispatch_main_log() {
     local repo; repo="$(setup_main_worktree "f1483-5")"
     local linked; linked="$(add_linked_worktree "$repo" "f1483-lw5" "feature/f1483-lw5")"
-    local fake_acd; fake_acd="$(setup_fake_acd_1483 "5")"
+    local guard_root; guard_root="$(guard_checkout_root)"
     local log_path="$repo/bad-dispatch.log"
-    local cmd; cmd="bash \"$fake_acd/bin/github-issues/issue-create-dispatch.sh\" \"$repo\" &> \"$log_path\""
+    local cmd; cmd="bash \"$guard_root/bin/github-issues/issue-create-dispatch.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F1483-5: issue-create-dispatch.sh + main-wt log → BLOCK (fail-closed)" "$rc"
 }
 
@@ -283,12 +251,12 @@ test_F1483_5_block_issue_create_dispatch_main_log() {
 test_F1483_7_block_run_bulk_dispatch_main_log() {
     local repo; repo="$(setup_main_worktree "f1483-7")"
     local linked; linked="$(add_linked_worktree "$repo" "f1483-lw7" "feature/f1483-lw7")"
-    local fake_acd; fake_acd="$(setup_fake_acd_1483 "7")"
+    local guard_root; guard_root="$(guard_checkout_root)"
     local log_path="$repo/bad-bulk.log"
-    local cmd; cmd="bash \"$fake_acd/skills/issue-create/scripts/run-bulk-dispatch.sh\" \"$repo\" &> \"$log_path\""
+    local cmd; cmd="bash \"$guard_root/skills/issue-create/scripts/run-bulk-dispatch.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F1483-7: run-bulk-dispatch.sh + main-wt log → BLOCK (fail-closed)" "$rc"
 }
 
@@ -297,12 +265,12 @@ test_F1483_7_block_run_bulk_dispatch_main_log() {
 test_F1483_8_block_run_phase5_record_main_log() {
     local repo; repo="$(setup_main_worktree "f1483-8")"
     local linked; linked="$(add_linked_worktree "$repo" "f1483-lw8" "feature/f1483-lw8")"
-    local fake_acd; fake_acd="$(setup_fake_acd_1483 "8")"
+    local guard_root; guard_root="$(guard_checkout_root)"
     local log_path="$repo/bad-phase5.log"
-    local cmd; cmd="bash \"$fake_acd/skills/issue-create/scripts/run-phase5-record.sh\" \"$repo\" &> \"$log_path\""
+    local cmd; cmd="bash \"$guard_root/skills/issue-create/scripts/run-phase5-record.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F1483-8: run-phase5-record.sh + main-wt log → BLOCK (fail-closed)" "$rc"
 }
 
@@ -311,24 +279,22 @@ test_F1483_8_block_run_phase5_record_main_log() {
 test_F1483_6_block_non_sanctioned_issue_create() {
     local repo; repo="$(setup_main_worktree "f1483-6")"
     local linked; linked="$(add_linked_worktree "$repo" "f1483-lw6" "feature/f1483-lw6")"
-    local fake_acd; fake_acd="$(setup_fake_acd_1483 "6")"
-    mkdir -p "$fake_acd/bin/github-issues"
-    touch "$fake_acd/bin/github-issues/issue-create.sh"  # not in SANCTIONED list
+    local guard_root; guard_root="$(guard_checkout_root)"
     mkdir -p "$linked/artifacts"
     local log_path="$linked/artifacts/test.log"
-    local cmd; cmd="bash \"$fake_acd/bin/github-issues/issue-create.sh\" \"$repo\" &> \"$log_path\""
+    local cmd; cmd="bash \"$guard_root/bin/github-issues/issue-create.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F1483-6: non-SANCTIONED issue-create.sh → BLOCK (identity gate rejects)" "$rc"
 }
 
 # Table-driven: all 8 SANCTIONED entries → ALLOW (no redirect, no write targets).
-# Uses a single main worktree + linked worktree + fake_acd to cover every entry.
+# Uses a single main worktree + linked worktree to cover every entry.
 test_F1483_table_sanctioned_allow() {
     local repo; repo="$(setup_main_worktree "f1483-tbl")"
     local linked; linked="$(add_linked_worktree "$repo" "f1483-lwtbl" "feature/f1483-lwtbl")"
-    local fake_acd; fake_acd="$(setup_fake_acd_1483 "tbl")"
+    local guard_root; guard_root="$(guard_checkout_root)"
 
     local scripts=(
         "bin/check-unstaged-tracked.sh"
@@ -343,10 +309,10 @@ test_F1483_table_sanctioned_allow() {
 
     local script
     for script in "${scripts[@]}"; do
-        local cmd; cmd="bash \"$fake_acd/$script\" \"$repo\""
+        local cmd; cmd="bash \"$guard_root/$script\" \"$repo\""
         local payload; payload="$(build_bash_payload "$cmd")"
         local rc=0
-        run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
+        run_guard "$payload" "$repo" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
         assert_allow "F1483-table: $script → ALLOW" "$rc"
     done
 }

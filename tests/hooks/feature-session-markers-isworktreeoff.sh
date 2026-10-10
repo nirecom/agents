@@ -16,11 +16,11 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 PASS=0
@@ -71,23 +71,22 @@ fresh_workflow_dir() {
 call_is_worktree_off() {
     local wfdir="$1" sid="$2"
     run_with_timeout 20 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node -e '
             try {
-              const m = require(process.env.AGENTS_CONFIG_DIR + "/hooks/lib/session-markers");
+              const m = require(process.argv[1] + "/hooks/lib/session-markers");
               if (typeof m.isWorktreeOff !== "function") {
                 // Not yet exported — semantically equivalent to "returns false"
                 // (fail-closed). The B test distinguishes positive cases.
                 process.exit(1);
               }
-              process.exit(m.isWorktreeOff(process.argv[1]) ? 0 : 1);
+              process.exit(m.isWorktreeOff(process.argv[2]) ? 0 : 1);
             } catch (e) {
               process.stderr.write("err: " + e.message + "\n");
               process.exit(3);
             }
-        ' "$sid"
+        ' "$_SCRIPT_CHECKOUT_ROOT_NODE" "$sid"
     return $?
 }
 
@@ -98,14 +97,13 @@ call_notice_text() {
     local wfdir="$1" hookName="$2" sid="$3"
     NOTICE_RC=0
     NOTICE_OUT="$(run_with_timeout 20 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node -e '
             try {
-              const m = require(process.env.AGENTS_CONFIG_DIR + "/hooks/lib/session-markers");
+              const m = require(process.argv[1] + "/hooks/lib/session-markers");
               if (typeof m.worktreeOffNoticeText !== "function") { process.stderr.write("missing-fn\n"); process.exit(2); }
-              const out = m.worktreeOffNoticeText(process.argv[1], process.argv[2]);
+              const out = m.worktreeOffNoticeText(process.argv[2], process.argv[3]);
               if (typeof out !== "string") { process.stderr.write("not-string\n"); process.exit(3); }
               process.stdout.write(out);
               process.exit(0);
@@ -113,7 +111,7 @@ call_notice_text() {
               process.stderr.write("err: " + e.message + "\n");
               process.exit(4);
             }
-        ' "$hookName" "$sid" 2>&1)" || NOTICE_RC=$?
+        ' "$_SCRIPT_CHECKOUT_ROOT_NODE" "$hookName" "$sid" 2>&1)" || NOTICE_RC=$?
 }
 
 # ----------------------------------------------------------------------------
@@ -205,13 +203,12 @@ test_F_notice_does_not_throw_on_bad_workflow_dir() {
     # (#1799); this path only formats text and never writes a plans-dir record.
     NOTICE_RC=0
     NOTICE_OUT="$(run_with_timeout 20 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=" \
         node -e '
             try {
-              const m = require(process.env.AGENTS_CONFIG_DIR + "/hooks/lib/session-markers");
+              const m = require(process.argv[1] + "/hooks/lib/session-markers");
               if (typeof m.worktreeOffNoticeText !== "function") { process.stderr.write("missing-fn\n"); process.exit(2); }
-              const out = m.worktreeOffNoticeText("enforce-worktree", process.argv[1]);
+              const out = m.worktreeOffNoticeText("enforce-worktree", process.argv[2]);
               if (typeof out !== "string") { process.stderr.write("not-string\n"); process.exit(3); }
               process.stdout.write(out);
               process.exit(0);
@@ -219,7 +216,7 @@ test_F_notice_does_not_throw_on_bad_workflow_dir() {
               process.stderr.write("THREW: " + e.message + "\n");
               process.exit(4);
             }
-        ' "$sid" 2>&1)" || NOTICE_RC=$?
+        ' "$_SCRIPT_CHECKOUT_ROOT_NODE" "$sid" 2>&1)" || NOTICE_RC=$?
     if [ "$NOTICE_RC" = "0" ] && [ -n "$NOTICE_OUT" ]; then
         pass "F: worktreeOffNoticeText does not throw with empty WORKFLOW_STATE_DIR"
     elif [ "$NOTICE_RC" = "2" ]; then

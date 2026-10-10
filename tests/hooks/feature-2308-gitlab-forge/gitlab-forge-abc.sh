@@ -117,7 +117,7 @@ case_end
 
 # bin/detect-forge-type CLI (A6-A8): reads origin from CWD, prints {type,host,project}.
 # When ghost is not __NONE__, writes a temp .env so readEffectiveEnvFile() (which
-# prefers AGENTS_CONFIG_DIR/.env over process.env) sees the intended GITLAB_HOSTNAME.
+# prefers AGENTS_MAIN_ROOT/.env over process.env) sees the intended GITLAB_HOSTNAME.
 cli_type() {
     local repo="$1" ghost="$2" out cli_cfg
     if [ ! -f "$DETECT_CLI" ]; then printf 'ERR:no-cli'; return 0; fi
@@ -126,7 +126,7 @@ cli_type() {
     else
         cli_cfg="$(mktemp -d)"
         printf 'GITLAB_HOSTNAME=%s\n' "$ghost" > "$cli_cfg/.env"
-        out=$(cd "$repo" && AGENTS_CONFIG_DIR="$(nodepath "$cli_cfg")" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
+        out=$(cd "$repo" && AGENTS_MAIN_ROOT="$(nodepath "$cli_cfg")" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
         rm -rf "$cli_cfg" 2>/dev/null || true
     fi
     printf '%s' "$out" | run_with_timeout 20 node -e '
@@ -161,7 +161,7 @@ case_end
 
 # cli_json <repo> <gitlabHost|__NONE__> -> "type|host|project" from the CLI's
 # full JSON output (C5: A6-A8 only checked .type, never host/project).
-# Same .env isolation as cli_type: writes a temp cfg so AGENTS_CONFIG_DIR picks up
+# Same .env isolation as cli_type: writes a temp cfg so AGENTS_MAIN_ROOT picks up
 # the intended GITLAB_HOSTNAME from the file rather than the developer's real .env.
 cli_json() {
     local repo="$1" ghost="$2" out cli_cfg
@@ -171,7 +171,7 @@ cli_json() {
     else
         cli_cfg="$(mktemp -d)"
         printf 'GITLAB_HOSTNAME=%s\n' "$ghost" > "$cli_cfg/.env"
-        out=$(cd "$repo" && AGENTS_CONFIG_DIR="$(nodepath "$cli_cfg")" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
+        out=$(cd "$repo" && AGENTS_MAIN_ROOT="$(nodepath "$cli_cfg")" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
         rm -rf "$cli_cfg" 2>/dev/null || true
     fi
     printf '%s' "$out" | run_with_timeout 20 node -e '
@@ -246,11 +246,11 @@ try { r = ipr(process.argv[3]); } catch (e) { process.stdout.write("ERR:threw:" 
 process.stdout.write(String(r));
 NODE
 # Use a temp cfg dir so readGitlabHostConfig() reads GITLAB_HOSTNAME from .env
-# (AGENTS_CONFIG_DIR/.env wins over process.env; the developer's real .env must
+# (AGENTS_MAIN_ROOT/.env wins over process.env; the developer's real .env must
 # not interfere with the fixture hostname gitlab.example.com).
 C4C_CFG="$TMPROOT/c4c-cfg"; mkdir -p "$C4C_CFG"
 printf 'GITLAB_HOSTNAME=gitlab.example.com\n' > "$C4C_CFG/.env"
-c4c=$(AGENTS_CONFIG_DIR="$(nodepath "$C4C_CFG")" run_with_timeout 20 node "$IPR_ENV_DRIVER" "$IPR_JS" "$REPO_GL_SELF" 2>/dev/null)
+c4c=$(AGENTS_MAIN_ROOT="$(nodepath "$C4C_CFG")" run_with_timeout 20 node "$IPR_ENV_DRIVER" "$IPR_JS" "$REPO_GL_SELF" 2>/dev/null)
 assert_eq "C4c/isPrivateRepo self-hosted gitlab + glab public -> false (dispatch)" "false" "$c4c"
 case_end
 
@@ -288,9 +288,9 @@ process.stdout.write(String(r));
 NODE
 # Run from C4D_ROOT with GITLAB_HOSTNAME unset so only the .env feeds the host.
 C4D_SCRIPT="$TMPROOT/c4d-run.sh"
-# AGENTS_CONFIG_DIR must point at C4D_ROOT so readDefaultEnvFile() reads
+# AGENTS_MAIN_ROOT must point at C4D_ROOT so readDefaultEnvFile() reads
 # C4D_ROOT/.env; GITLAB_HOSTNAME is explicitly unset from process.env.
-printf '#!/bin/bash\ncd "%s" && unset GITLAB_HOSTNAME && AGENTS_CONFIG_DIR="%s" node "%s" "%s" "%s"\n' \
+printf '#!/bin/bash\ncd "%s" && unset GITLAB_HOSTNAME && AGENTS_MAIN_ROOT="%s" node "%s" "%s" "%s"\n' \
     "$C4D_ROOT" "$C4D_ROOT" "$(nodepath "$IPR_FILE_DRIVER")" "$(nodepath "$IPR_JS")" "$(nodepath "$C4D_REPO")" > "$C4D_SCRIPT"
 chmod +x "$C4D_SCRIPT"
 c4d=$(run_with_timeout 20 bash "$C4D_SCRIPT" 2>/dev/null)
@@ -327,7 +327,7 @@ cli_type_ssh() {
     if [ ! -f "$DETECT_CLI" ]; then printf 'ERR:no-cli'; return 0; fi
     cli_cfg="$(mktemp -d)"
     printf 'GITLAB_SSH_HOSTNAME=%s\n' "$shost" > "$cli_cfg/.env"
-    out=$(cd "$repo" && AGENTS_CONFIG_DIR="$(nodepath "$cli_cfg")" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
+    out=$(cd "$repo" && AGENTS_MAIN_ROOT="$(nodepath "$cli_cfg")" run_with_timeout 20 node "$DETECT_CLI" 2>/dev/null)
     rm -rf "$cli_cfg" 2>/dev/null || true
     printf '%s' "$out" | run_with_timeout 20 node -e '
 let s = ""; process.stdin.on("data", (d) => (s += d)); process.stdin.on("end", () => {

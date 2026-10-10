@@ -14,30 +14,10 @@ MERGE_BASE_DETAIL=""
 MERGE_BASE_WARN=""
 MERGE_BASE_ALT=""
 
-# Every full path below is built from $AGENTS_CONFIG_DIR, so a value the script cannot
-# build a trustworthy path from is not a gate problem — it is a configuration problem, and
-# it has to say so on STDOUT. Under `set -u` an unset variable killed the first gate line
-# with an empty stdout and exit 1, which the SKILL's advisory contract ("non-zero is a
-# warning") reads as a run worth shrugging at. A RELATIVE value is rejected rather than
-# resolved: this runner is invoked with the CWD set to the tree UNDER REVIEW, so a relative
-# path would execute scripts supplied by whatever is being reviewed.
-_unusable_config_reason() {
-    local dir="${AGENTS_CONFIG_DIR:-}"
-    if [[ -z "$dir" ]]; then
-        echo "AGENTS_CONFIG_DIR is unset or empty"
-        return 0
-    fi
-    # Absolute in either dialect: POSIX, and the drive-letter form Git Bash and pwsh hand over.
-    case "$dir" in
-        [A-Za-z]:[/\\]*|/*) ;;
-        *) echo "AGENTS_CONFIG_DIR is not an absolute path (would resolve inside the reviewed tree): $dir"; return 0 ;;
-    esac
-    if [[ ! -d "$dir" ]]; then
-        echo "AGENTS_CONFIG_DIR is not a directory: $dir"
-        return 0
-    fi
-    return 0
-}
+# Every gate path is built from this file's own location, never from the environment: the
+# runner is invoked with the CWD set to the tree UNDER REVIEW, so a caller-supplied root
+# could make it execute scripts supplied by whatever is being reviewed.
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # The base every gate is scoped by. Degradation (detached checkout, shallow clone,
 # non-main default) is not an error — the run continues — but it must reach STDOUT,
@@ -49,7 +29,7 @@ _unusable_config_reason() {
 # changes), never FALLBACK — FALLBACK is the specific claim "no merge-base against main",
 # and stating it when we could not ask would be a report that lies.
 _resolve_merge_base() {
-    local helper="${AGENTS_CONFIG_DIR}/bin/resolve-merge-base.sh"
+    local helper="${SCRIPT_CHECKOUT_ROOT}/bin/resolve-merge-base.sh"
     MERGE_BASE=""
     MERGE_BASE_STATE=UNRESOLVED
     MERGE_BASE_SOURCE=""
@@ -58,7 +38,7 @@ _resolve_merge_base() {
     MERGE_BASE_ALT=""
 
     if [[ ! -r "$helper" ]]; then
-        # basename only — $helper is rooted at $AGENTS_CONFIG_DIR, an absolute host filesystem
+        # basename only — $helper is rooted at $SCRIPT_CHECKOUT_ROOT, an absolute host filesystem
         # path (e.g. C:\Users\<user>\...), and this detail string reaches operator-visible /
         # reviewable output.
         MERGE_BASE_DETAIL="the merge-base helper is not readable at bin/$(basename "$helper")"
@@ -128,7 +108,7 @@ _resolve_merge_base() {
     esac
 }
 
-# Every gate is named by its full path under the agents config dir, never a bare name:
+# Every gate is named by its full path under this checkout, never a bare name:
 # a bare name needs a PATH shim, and `|| true` cannot tell exit 127 from a gate's own
 # advisory non-zero. An absent gate now prints a `## <name>: NOT FOUND` line in the same
 # `## <name>: <verdict>` family the gates print, so a reviewer sees the hole not a pass.
@@ -158,12 +138,6 @@ _run_gate() { # <full-path> [args...]
         bash "$exe" "$@" || true
     fi
 }
-
-CONFIG_REASON=$(_unusable_config_reason)
-if [[ -n "$CONFIG_REASON" ]]; then
-    echo "## gates: NOT RUN — $CONFIG_REASON"
-    exit 0
-fi
 
 # Five states, five reports, in the same `## <name>: <verdict>` family the gates print.
 # RESOLVED prints NOTHING on purpose: a line that appears on every healthy run tells the
@@ -198,13 +172,13 @@ fi
 # bin/run-codex-review-loop --format security-code (#2276 S8-c), which owns the round
 # counter this advisory pass must not touch. The seven lint gates below each receive the
 # resolved base and stay advisory (non-zero is a warning, not a blocker).
-_run_gate "${AGENTS_CONFIG_DIR}/bin/review-prompt-size" --base "$MERGE_BASE"
-_run_gate "${AGENTS_CONFIG_DIR}/bin/check-inline-procedures" --base "$MERGE_BASE"
-_run_gate "${AGENTS_CONFIG_DIR}/bin/review-code-size" --base "$MERGE_BASE"
-_run_gate "${AGENTS_CONFIG_DIR}/bin/review-env-example" --base "$MERGE_BASE"
-_run_gate "${AGENTS_CONFIG_DIR}/bin/review-step-numbers" --base "$MERGE_BASE"
-_run_gate "${AGENTS_CONFIG_DIR}/bin/review-e2e-coverage" --base "$MERGE_BASE"
-_run_gate "${AGENTS_CONFIG_DIR}/bin/review-bare-python" --base "$MERGE_BASE"
+_run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-prompt-size" --base "$MERGE_BASE"
+_run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/check-inline-procedures" --base "$MERGE_BASE"
+_run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-code-size" --base "$MERGE_BASE"
+_run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-env-example" --base "$MERGE_BASE"
+_run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-step-numbers" --base "$MERGE_BASE"
+_run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-e2e-coverage" --base "$MERGE_BASE"
+_run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-bare-python" --base "$MERGE_BASE"
 
 # The last line, and printed even when nothing is missing: a total that appears only when
 # something is wrong cannot be relied on to be there, and one NOT FOUND line among the

@@ -17,11 +17,11 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_F1673_MP_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -66,7 +66,6 @@ WF_RAW="$TMPD/wf"; mkdir -p "$WF_RAW"
 MAIN="$(nodepath "$MAIN_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
 WF="$(nodepath "$WF_RAW")"
-ACD="$(nodepath "$AGENTS_DIR")"
 SID="f1673mp"
 ROOT=1673
 mkdir -p "$WF_RAW/$SID.control"
@@ -108,7 +107,7 @@ dispatch() {
     else
         DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
             "WORKFLOW_STATE_DIR=$WF" \
-            "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
+            "WD_SPAWN_MODULE=$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js")" \
             "WD_CANNED=$(nodepath "$CANNED")" \
             "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
             node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" \
@@ -117,7 +116,7 @@ dispatch() {
 }
 
 INIT_KV='STATUS=init_done\nOWNER_REPO=nirecom/agents\nTRIAGE_ACTION=resume_e\nNEXT_STEPS=G,J\nPR_NUMBER=1711\nMERGE_COMMIT=a29ad788\nPROPOSAL_STATUS=ok\nPROPOSAL_PARENT=1600\nSUMMARY=init_done for #1673\n'
-INITIAL_PAYLOAD="{\"phase\":\"initial\",\"issue_number\":$ROOT,\"root_issue_number\":$ROOT,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"main_worktree_path\":\"$MAIN\",\"session_id\":\"$SID\",\"artifact_dir\":\"$PLANS\"}"
+INITIAL_PAYLOAD="{\"phase\":\"initial\",\"issue_number\":$ROOT,\"root_issue_number\":$ROOT,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"target_main_root\":\"$MAIN\",\"session_id\":\"$SID\",\"artifact_dir\":\"$PLANS\"}"
 
 # ===========================================================================
 # Group 1 — the initial pass writes the state file AND the binding record
@@ -134,7 +133,7 @@ group_initial() {
     assert_has "initial/child-argv-issue-numbers" "1673 1673" "$(call_args)"
 
     assert_eq "initial/state-file-created" "1" "$([ -f "$STATE_RAW" ] && echo 1 || echo 0)"
-    assert_eq "initial/schema-version" "3" "$(json_field "$STATE_RAW" 's.schema_version')"
+    assert_eq "initial/schema-version" "4" "$(json_field "$STATE_RAW" 's.schema_version')"
     assert_eq "initial/phase" "init_done" "$(json_field "$STATE_RAW" 's.phase')"
     assert_eq "initial/owner-repo-from-child-stdout" "nirecom/agents" "$(json_field "$STATE_RAW" 's.owner_repo')"
     assert_eq "initial/triage-action" "resume_e" "$(json_field "$STATE_RAW" 's.triage_action')"
@@ -150,7 +149,7 @@ group_initial() {
     assert_eq "initial/binding-root" "$ROOT" "$(json_field "$BIND_RAW" 's.root_issue_number')"
     assert_eq "initial/binding-owner-repo" "nirecom/agents" "$(json_field "$BIND_RAW" 's.owner_repo')"
     assert_eq "initial/binding-has-state-path" "1" "$([ "$(json_field "$BIND_RAW" 's.state_file_path')" != "READ_ERROR" ] && echo 1 || echo 0)"
-    assert_eq "initial/binding-has-main-worktree" "1" "$([ "$(json_field "$BIND_RAW" 's.main_worktree_path')" != "READ_ERROR" ] && echo 1 || echo 0)"
+    assert_eq "initial/binding-has-main-worktree" "1" "$([ "$(json_field "$BIND_RAW" 's.target_main_root')" != "READ_ERROR" ] && echo 1 || echo 0)"
 }
 
 # ===========================================================================

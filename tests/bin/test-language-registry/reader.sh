@@ -144,7 +144,7 @@ fs.writeFileSync(out, JSON.stringify(t, null, 1));
 fx_checkout "$FX_EXTRA" "$RD_DIR/extra-entry.json"
 assert_eq "extra table adds one entry: $(json_ids "$FX_EXTRA/hooks/lib/test-language-registry.json" | wc -w | tr -d ' ')" \
   "extra table adds one entry: $(($(json_ids "$TABLE" | wc -w) + 1))"
-for co in "$AGENTS_DIR" "$FX_EXTRA"; do
+for co in "$SCRIPT_CHECKOUT_ROOT" "$FX_EXTRA"; do
   tbl="$co/hooks/lib/test-language-registry.json"; tag="${co##*/}"
   want="$(json_ids "$tbl")"
   got="$(node "$(np "$co/bin/test-language-registry")" --format shell 2>&1 | awk -F'\t' '$1=="entry"{printf "%s ", $2}')"

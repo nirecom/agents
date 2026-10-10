@@ -10,12 +10,12 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SWEEP_HUB="$AGENTS_DIR/skills/sweep/SKILL.md"
-SWEEP_WT="$AGENTS_DIR/skills/sweep-worktrees/SKILL.md"
-SWEEP_BR="$AGENTS_DIR/skills/sweep-branches/SKILL.md"
-SWEEP_IS="$AGENTS_DIR/skills/sweep-issues/SKILL.md"
-SWEEP_SS="$AGENTS_DIR/skills/sweep-shell-snapshots/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SWEEP_HUB="$SCRIPT_CHECKOUT_ROOT/skills/sweep/SKILL.md"
+SWEEP_WT="$SCRIPT_CHECKOUT_ROOT/skills/sweep-worktrees/SKILL.md"
+SWEEP_BR="$SCRIPT_CHECKOUT_ROOT/skills/sweep-branches/SKILL.md"
+SWEEP_IS="$SCRIPT_CHECKOUT_ROOT/skills/sweep-issues/SKILL.md"
+SWEEP_SS="$SCRIPT_CHECKOUT_ROOT/skills/sweep-shell-snapshots/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -430,7 +430,7 @@ T14_sweep_hub_worktree_on_references_last_dispatch
 # sibling part file — rules/coding/file-split.md Pattern A. It self-invokes its
 # cases at source time and uses the pass/fail helpers defined above.
 # shellcheck source=tests/skills/feature-sweep-hub/skill-host-integration.sh
-. "$AGENTS_DIR/tests/skills/feature-sweep-hub/skill-host-integration.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-sweep-hub/skill-host-integration.sh"
 
 echo ""
 echo "─────────────────────────────────────────"

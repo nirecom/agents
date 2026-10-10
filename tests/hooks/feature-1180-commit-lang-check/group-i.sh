@@ -17,7 +17,7 @@ echo ""
 _i1_repo="$(make_git_repo i1)"
 printf 'const x = "日本語";\n' > "$_i1_repo/test.js"
 git -C "$_i1_repo" add test.js
-_i1_out="$(run_precommit "$_i1_repo" "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" "CODE_LANG=")"
+_i1_out="$(run_precommit "$_i1_repo" "ENFORCE_WORKTREE=off" "CODE_LANG=")"
 PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 if [ "$PC_RC" -eq 0 ]; then
     pass "CL-I1: CODE_LANG unset + staged CJK → pre-commit succeeds"
@@ -29,7 +29,7 @@ fi
 _i2_repo="$(make_git_repo i2)"
 printf 'const x = "日本語テスト";\n' > "$_i2_repo/test.js"
 git -C "$_i2_repo" add test.js
-_i2_out="$(run_precommit "$_i2_repo" "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
+_i2_out="$(run_precommit "$_i2_repo" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
 PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 if [ "$PC_RC" -ne 0 ] && echo "$_i2_out" | grep -qF "$LANG_BLOCK_MARKER" && echo "$_i2_out" | grep -qE 'test\.js:[0-9]+'; then
     pass "CL-I2: CODE_LANG=english + staged CJK → blocked with marker + file:line (RED until /write-code)"
@@ -41,7 +41,7 @@ fi
 _i3_repo="$(make_git_repo i3)"
 printf '// lang-check: ignore\nconst x = "日本語テスト";\n' > "$_i3_repo/test.js"
 git -C "$_i3_repo" add test.js
-_i3_out="$(run_precommit "$_i3_repo" "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
+_i3_out="$(run_precommit "$_i3_repo" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
 PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 if [ "$PC_RC" -eq 0 ]; then
     pass "CL-I3: lang-check: ignore + CJK → pre-commit succeeds"
@@ -53,7 +53,7 @@ fi
 _i4_repo="$(make_git_repo i4)"
 printf 'function greet(name) { return "Hello, " + name; }\n' > "$_i4_repo/test.js"
 git -C "$_i4_repo" add test.js
-_i4_out="$(run_precommit "$_i4_repo" "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
+_i4_out="$(run_precommit "$_i4_repo" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
 PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 if [ "$PC_RC" -eq 0 ]; then
     pass "CL-I4: CODE_LANG=english + english-only file → pre-commit succeeds"
@@ -65,7 +65,7 @@ fi
 _i5b_repo="$(make_git_repo i5b)"
 printf 'const msg = "日本語テスト";\n' > "$_i5b_repo/test.js"
 git -C "$_i5b_repo" add test.js
-_i5b_out="$(run_precommit "$_i5b_repo" "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
+_i5b_out="$(run_precommit "$_i5b_repo" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
 PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 if [ "$PC_RC" -ne 0 ] && echo "$_i5b_out" | grep -qF "$LANG_BLOCK_MARKER"; then
     pass "CL-I5b: ENFORCE_WORKTREE=off + CODE_LANG=english + CJK → blocked with marker (RED until /write-code)"
@@ -81,7 +81,6 @@ _i5a_repo="$(make_git_repo i5a)"
 printf 'const msg = "日本語テスト";\n' > "$_i5a_repo/test.js"
 git -C "$_i5a_repo" add test.js
 _i5a_out="$(run_precommit "$_i5a_repo" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
     "ENFORCE_WORKTREE=on" \
     "ENFORCE_WORKTREE_EXCLUDE=$_i5a_repo" \
     "CODE_LANG=english")"
@@ -99,7 +98,7 @@ fi
 _i6_repo="$(make_git_repo i6)"
 printf 'const SUPER_SECRET = "FAKE_TOKEN_DO_NOT_USE_0000";\nconst msg = "日本語テスト";\n' > "$_i6_repo/secret_test.js"
 git -C "$_i6_repo" add secret_test.js
-_i6_out="$(run_precommit "$_i6_repo" "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
+_i6_out="$(run_precommit "$_i6_repo" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
 PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _i6_marker=0; _i6_fileline=0; _i6_secret=0
 echo "$_i6_out" | grep -qF "$LANG_BLOCK_MARKER" && _i6_marker=1 || true
@@ -119,7 +118,7 @@ git -C "$_i7_repo" add original.js
 git -C "$_i7_repo" commit -q -m "establish blob (hooks disabled)"
 git -C "$_i7_repo" mv original.js renamed.js
 git -C "$_i7_repo" add renamed.js
-_i7_out="$(run_precommit "$_i7_repo" "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
+_i7_out="$(run_precommit "$_i7_repo" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
 PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 if [ "$PC_RC" -ne 0 ] && echo "$_i7_out" | grep -qF "$LANG_BLOCK_MARKER"; then
     pass "CL-I7: renamed dest with CJK + CODE_LANG=english → blocked (rename blob scanned) (RED until /write-code)"

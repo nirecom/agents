@@ -4,11 +4,11 @@
 # Tests for AGENT_AUTO_BRANCH enforcement and post-push-workflow-reset hook.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-GUARD_JS="$AGENTS_DIR/hooks/auto-branch-guard.js"
-PRE_COMMIT="$AGENTS_DIR/hooks/pre-commit"
-RESET_JS="$AGENTS_DIR/hooks/post-push-workflow-reset.js"
-WORKFLOW_MARK_JS="$AGENTS_DIR/hooks/workflow-mark.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GUARD_JS="$SCRIPT_CHECKOUT_ROOT/hooks/auto-branch-guard.js"
+PRE_COMMIT="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit"
+RESET_JS="$SCRIPT_CHECKOUT_ROOT/hooks/post-push-workflow-reset.js"
+WORKFLOW_MARK_JS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 
 PASS=0
 FAIL=0
@@ -25,6 +25,13 @@ console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# A case that names no settings root gets this file's own fixture, never the
+# caller's: no .env, and an empty blocklist the outbound scanner can resolve.
+MAIN_ROOT_FIXTURE="$TMPDIR_BASE/agents-main"
+mkdir -p "$MAIN_ROOT_FIXTURE"
+: > "$MAIN_ROOT_FIXTURE/.private-info-blocklist"
+export AGENTS_MAIN_ROOT="$MAIN_ROOT_FIXTURE"
 
 # Plans-dir isolation (#1799): supervisor-emit must never write into the
 # developer's real ~/.workflow-plans/. Pinned alongside WORKFLOW_STATE_DIR.
@@ -302,7 +309,7 @@ test_guard_block_message_format() {
 
 # ============ .env loader tests ============
 
-# Run the guard with AGENTS_CONFIG_DIR pointing to a temp dir containing a .env file.
+# Run the guard with AGENTS_MAIN_ROOT pointing to a temp dir containing a .env file.
 # This bypasses the test runner's AGENT_AUTO_BRANCH=on default and exercises the
 # real .env-loading code path that production hooks use.
 run_guard_with_envfile() {
@@ -313,7 +320,7 @@ run_guard_with_envfile() {
     local payload
     payload="$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$file_path")"
     # Unset AGENT_AUTO_BRANCH so the .env file is the only source
-    echo "$payload" | run_with_timeout 30 env -u AGENT_AUTO_BRANCH "AGENTS_CONFIG_DIR=$cfg_dir" node "$GUARD_JS" 2>/dev/null
+    echo "$payload" | run_with_timeout 30 env -u AGENT_AUTO_BRANCH "AGENTS_MAIN_ROOT=$cfg_dir" node "$GUARD_JS" 2>/dev/null
 }
 
 test_envfile_off_allows_default_branch() {
@@ -388,7 +395,7 @@ test_envfile_existing_env_wins() {
     payload="$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$repo/README.md")"
     # Explicit env (on) should override .env (off)
     local out
-    out="$(echo "$payload" | run_with_timeout 30 env "AGENTS_CONFIG_DIR=$cfg_dir" "AGENT_AUTO_BRANCH=on" node "$GUARD_JS" 2>/dev/null)"
+    out="$(echo "$payload" | run_with_timeout 30 env "AGENTS_MAIN_ROOT=$cfg_dir" "AGENT_AUTO_BRANCH=on" node "$GUARD_JS" 2>/dev/null)"
     if guard_decision "$out"; then
         fail "explicit env=on did not override .env=off (got: $out)"
     else
@@ -406,7 +413,7 @@ test_envfile_default_branches_override() {
     local payload
     payload="$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$repo/README.md")"
     local out
-    out="$(echo "$payload" | run_with_timeout 30 env -u AGENT_AUTO_BRANCH -u AGENT_DEFAULT_BRANCHES "AGENTS_CONFIG_DIR=$cfg_dir" node "$GUARD_JS" 2>/dev/null)"
+    out="$(echo "$payload" | run_with_timeout 30 env -u AGENT_AUTO_BRANCH -u AGENT_DEFAULT_BRANCHES "AGENTS_MAIN_ROOT=$cfg_dir" node "$GUARD_JS" 2>/dev/null)"
     if guard_decision "$out"; then
         fail ".env AGENT_DEFAULT_BRANCHES=develop did not block (got: $out)"
     else
@@ -423,7 +430,7 @@ test_envfile_missing_is_silent() {
     local payload
     payload="$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$repo/README.md")"
     local out
-    out="$(echo "$payload" | run_with_timeout 30 env -u AGENT_AUTO_BRANCH "AGENTS_CONFIG_DIR=$cfg_dir" node "$GUARD_JS" 2>/dev/null)"
+    out="$(echo "$payload" | run_with_timeout 30 env -u AGENT_AUTO_BRANCH "AGENTS_MAIN_ROOT=$cfg_dir" node "$GUARD_JS" 2>/dev/null)"
     if guard_decision "$out"; then
         fail "missing .env should fall through to default ON (got allow)"
     else
@@ -436,7 +443,7 @@ test_envfile_missing_is_silent() {
 test_pre_commit_blocks_on_default_branch() {
     if [ ! -f "$PRE_COMMIT" ]; then fail "pre-commit not present"; return; fi
     local repo; repo="$(setup_repo "pc-default-on")"
-    git -C "$repo" config core.hooksPath "$AGENTS_DIR/hooks"
+    git -C "$repo" config core.hooksPath "$SCRIPT_CHECKOUT_ROOT/hooks"
     echo "x" >> "$repo/README.md"
     git -C "$repo" add README.md
     if AGENT_AUTO_BRANCH=on run_with_timeout 30 git -C "$repo" commit -q -m "test" 2>/dev/null; then
@@ -449,7 +456,7 @@ test_pre_commit_blocks_on_default_branch() {
 test_pre_commit_allows_feature_branch() {
     if [ ! -f "$PRE_COMMIT" ]; then fail "pre-commit not present"; return; fi
     local repo; repo="$(setup_repo "pc-feat-on")"
-    git -C "$repo" config core.hooksPath "$AGENTS_DIR/hooks"
+    git -C "$repo" config core.hooksPath "$SCRIPT_CHECKOUT_ROOT/hooks"
     git -C "$repo" switch -q -c "feature/x"
     echo "x" >> "$repo/README.md"
     git -C "$repo" add README.md
@@ -463,7 +470,7 @@ test_pre_commit_allows_feature_branch() {
 test_pre_commit_off_allows_default_branch() {
     if [ ! -f "$PRE_COMMIT" ]; then fail "pre-commit not present"; return; fi
     local repo; repo="$(setup_repo "pc-default-off")"
-    git -C "$repo" config core.hooksPath "$AGENTS_DIR/hooks"
+    git -C "$repo" config core.hooksPath "$SCRIPT_CHECKOUT_ROOT/hooks"
     echo "x" >> "$repo/README.md"
     git -C "$repo" add README.md
     if AGENT_AUTO_BRANCH=off run_with_timeout 30 git -C "$repo" commit -q -m "test" 2>/dev/null; then
@@ -580,7 +587,7 @@ test_reset_skips_when_head_differs() {
 
 test_normalizeCwd_unit() {
     # Unit test for hooks/lib/path-normalize.js
-    local lib="$AGENTS_DIR/hooks/lib/path-normalize.js"
+    local lib="$SCRIPT_CHECKOUT_ROOT/hooks/lib/path-normalize.js"
     if [ ! -f "$lib" ]; then fail "path-normalize.js not present"; return; fi
     # Run a node script that asserts each case and reports overall ok/bad
     local result

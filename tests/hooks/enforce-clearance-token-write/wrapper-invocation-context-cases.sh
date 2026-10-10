@@ -24,12 +24,12 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 #   Z  a genuinely EMPTY argv (E1-E3 there pass an empty STRING, which is one argument)
 
 SEC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SEC_DIR/../../.." && pwd)"
-MINTER_ABS="$AGENTS_DIR/bin/request-off-clearance"
-WRAPPER_ABS="$AGENTS_DIR/bin/request-off-mode-clearance"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+MINTER_ABS="$SCRIPT_CHECKOUT_ROOT/bin/request-off-clearance"
+WRAPPER_ABS="$SCRIPT_CHECKOUT_ROOT/bin/request-off-mode-clearance"
 
 # shellcheck source=tests/lib/request-off-clearance-harness.sh
-. "$AGENTS_DIR/tests/lib/request-off-clearance-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/request-off-clearance-harness.sh"
 
 if [ -x "$WRAPPER_ABS" ] && [ -x "$MINTER_ABS" ]; then
     pass "C0 both entrypoints exist and are executable"
@@ -135,9 +135,9 @@ broken_probe() {
     fi
     outf="$cfg/.stdout"; errf="$cfg/.stderr"
     ( cd "$cfg" && env -u SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        -u WORKTREE_PATH -u AGENTS_CONFIG_DIR "PATH=$OFFCLR_CLEAN_PATH" \
+        -u WORKTREE_PATH -u AGENTS_MAIN_ROOT "PATH=$OFFCLR_CLEAN_PATH" \
         "WORKFLOW_PLANS_DIR=$cfg/plans" "WORKFLOW_STATE_DIR=$cfg/plans" \
-        "AGENTS_CONFIG_DIR=$cfg" "SESSION_ID=brokensid" \
+        "AGENTS_MAIN_ROOT=$cfg" "SESSION_ID=brokensid" \
         "$OFFCLR_RWT" 30 bash "$cfg/bin/request-off-mode-clearance" \
             --target workflow --category trivial-change --detail "broken delegation probe" \
     ) >"$outf" 2>"$errf"

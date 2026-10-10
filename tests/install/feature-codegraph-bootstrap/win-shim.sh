@@ -36,7 +36,7 @@ wc_run() {
         export PATH="$d/bin:$CLEAN_PATH"
         export PATHEXT="$PINNED_PATHEXT"
         export NVM_DIR="$d/nvm"
-        AGENTS_CONFIG_DIR="$(node_path "$d/cfg")"; export AGENTS_CONFIG_DIR
+        export AGENTS_MAIN_ROOT="$(node_path "$d/cfg")"
         CLAUDE_STUB_LOG="$(node_path "$d/claude.log")"; export CLAUDE_STUB_LOG
         CG_STUB_LOG="$(node_path "$d/codegraph.log")"; export CG_STUB_LOG
         export WORKFLOW_STATE_DIR="$d/wf" WORKFLOW_PLANS_DIR="$d/plans"

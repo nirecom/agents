@@ -1,15 +1,15 @@
 # Common helpers sourced by all feature-parallel-sessions-worktree-bash-patterns parts.
 # Defines MODULE path, classify_cmd, assert_classify, and PASS/FAIL counters.
-# Caller (parent dispatch) must export AGENTS_DIR before sourcing.
+# Caller (parent dispatch) must export SCRIPT_CHECKOUT_ROOT before sourcing.
 
 set -u
 
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-MODULE="${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns.js"
+MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-patterns.js"
 
 PASS=0
 FAIL=0
@@ -76,8 +76,8 @@ assert_classify() {
 # pred_targets <fn> <cmd> → "true"|"false" — predicate in bash-write-targets.js.
 pred_targets() {
     run_with_timeout 30 node -e "
-      const m=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-targets');
-      const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+      const m=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-targets');
+      const {parse}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
       const fn=m[process.argv[1]];
       if (typeof fn !== 'function') { process.stdout.write('ERROR:not-exported'); process.exit(0); }
       try { process.stdout.write(String(fn(parse(process.argv[2])))); }
@@ -88,8 +88,8 @@ pred_targets() {
 # git_write_ir <cmd> → "true"|"false" — isGitWriteIR in patterns.js.
 git_write_ir() {
     run_with_timeout 30 node -e "
-      const {isGitWriteIR}=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns/patterns');
-      const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+      const {isGitWriteIR}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-patterns/patterns');
+      const {parse}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
       try { process.stdout.write(String(isGitWriteIR(parse(process.argv[1])))); }
       catch (e) { process.stdout.write('ERROR:threw'); }
     " -- "$1" 2>/dev/null
@@ -101,9 +101,9 @@ git_write_ir() {
 # (RED-pending) rather than aborting the harness.
 pkg_mgr_write_ir() {
     run_with_timeout 30 node -e "
-      let m; try { m=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-targets/pkg-mgr'); }
+      let m; try { m=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-targets/pkg-mgr'); }
       catch (e) { process.stdout.write('ERROR:no-module'); process.exit(0); }
-      const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+      const {parse}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
       if (typeof m.isPkgMgrWriteIR !== 'function') { process.stdout.write('ERROR:not-exported'); process.exit(0); }
       try { process.stdout.write(String(m.isPkgMgrWriteIR(parse(process.argv[1])))); }
       catch (e) { process.stdout.write('ERROR:threw'); }
@@ -115,8 +115,8 @@ pkg_mgr_write_ir() {
 # typeof guard emits ERROR:not-exported → assertion FAILs cleanly (RED-pending).
 interpreter_c_write_ir() {
     run_with_timeout 30 node -e "
-      const m=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-targets');
-      const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+      const m=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-targets');
+      const {parse}=require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
       if (typeof m.isInterpreterCWriteIR !== 'function') { process.stdout.write('ERROR:not-exported'); process.exit(0); }
       try { process.stdout.write(String(m.isInterpreterCWriteIR(parse(process.argv[1])))); }
       catch (e) { process.stdout.write('ERROR:threw'); }

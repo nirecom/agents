@@ -11,17 +11,19 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-HANDLER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
-REQ="$AGENTS_DIR/bin/request-off-clearance"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+HANDLER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-mark/enforce-override-handlers.js"
+REQ="$SCRIPT_CHECKOUT_ROOT/bin/request-off-clearance"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 # shellcheck source=./lib/examiner-stub.sh
-. "$AGENTS_DIR/tests/lib/examiner-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/examiner-stub.sh"
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -82,7 +84,7 @@ run_req() {
         chmod +x "$stubbin/codex"
     fi
     local out rc
-    out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
+    out=$(PATH="$stubbin:$PATH" WORKFLOW_PLANS_DIR="$tn" \
         WORKFLOW_STATE_DIR="$tn" SESSION_ID="$sid" CLAUDE_CODE_SESSION_ID="$sid" \
         "$RWT" 40 bash "$REQ" "$@" 2>&1)
     rc=$?
@@ -202,7 +204,7 @@ h.handle({cmd:'echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: [workflow-bug] next-step 
 }
 
 # ===== consumeOffClearance direct + wsid-fallback (single-use unlink + audit) =====
-OFFCLR_NODE="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
+OFFCLR_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
 
 # seed_claimed_token <tmp_node> <sid> — the post-#1626 consumable form. Only a
 # <sid>.off-clearance.claimed file (produced by the shim's atomic wx claim) may be
@@ -310,7 +312,7 @@ run_MD1() {
     fh=$(make_tmp)
     stubbin=$(make_tmp)
     write_examiner_stub "$stubbin/codex" ALLOW "legit workflow bug"
-    out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$(node_path "$fh")" \
+    out=$(PATH="$stubbin:$PATH" WORKFLOW_PLANS_DIR="$(node_path "$fh")" \
         HOME="$fh" USERPROFILE="$(node_path "$fh")" SESSION_ID="md1sid" CLAUDE_CODE_SESSION_ID="md1sid" \
         env -u WORKFLOW_STATE_DIR "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" 2>&1)
     canon="$fh/.workflow-state/md1sid.off-clearance"
@@ -334,7 +336,7 @@ run_MD2() {
     seed_claimed_token "$tn" "md2sid"
     stubbin=$(make_tmp)
     write_examiner_stub "$stubbin/codex" ALLOW "legit workflow bug"
-    out=$(PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
+    out=$(PATH="$stubbin:$PATH" WORKFLOW_PLANS_DIR="$tn" \
         WORKFLOW_STATE_DIR="$tn" SESSION_ID="md2sid" CLAUDE_CODE_SESSION_ID="md2sid" \
         "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" 2>&1)
     [ -f "$tmp/md2sid.off-clearance.claimed" ] && ok=0   # stale claim must be cleared
@@ -348,7 +350,7 @@ run_MD2() {
 }
 
 # ===== examiner robustness cases (EX-*) live in the sibling part file =====
-PARTS_DIR="$AGENTS_DIR/tests/bin/feat-1608-off-clearance-mint"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feat-1608-off-clearance-mint"
 # shellcheck source=./feat-1608-off-clearance-mint/cases-examiner.sh
 . "$PARTS_DIR/cases-examiner.sh"
 

@@ -10,14 +10,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK="$AGENTS_DIR/hooks/enforce-worktree.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -55,9 +55,12 @@ fs.writeFileSync(process.argv[1], JSON.stringify(obj));
 
 # run_hook <json_file> <tmpdir_node>
 # Returns stdout from the hook (unaffected by WORKFLOW_PLANS_DIR path).
+# The main worktree is named as a session repo here: the cases write into it and
+# must not depend on the developer's own settings listing it (#2561).
 run_hook() {
     local json_file="$1" tmpdir_node="$2"
     WORKFLOW_PLANS_DIR="$tmpdir_node" ENFORCE_WORKTREE=on \
+    ENFORCE_WORKTREE_ADDITIONAL_REPOS="${MAIN_WT_J:-}" \
         run_with_timeout 15 bash -c "cat '$json_file' | node '$HOOK'" 2>/dev/null
 }
 

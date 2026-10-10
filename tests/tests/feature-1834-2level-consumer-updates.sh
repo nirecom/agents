@@ -10,21 +10,21 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 
 # --- Skip guard: post-migration state not present yet ----------------------
-if [[ ! -d "$AGENTS_DIR/tests/hooks" ]]; then
+if [[ ! -d "$SCRIPT_CHECKOUT_ROOT/tests/hooks" ]]; then
   echo "SKIP: 2-level tests/ migration not yet applied (tests/hooks/ absent)"
   exit 77
 fi
 
-RUN_ALL="$AGENTS_DIR/tests/run-all.sh"
-SELECT_TESTS="$AGENTS_DIR/bin/select-tests.sh"
-AUDIT_TESTS="$AGENTS_DIR/bin/audit-tests.sh"
-AUDIT_TESTS_COMMON="$AGENTS_DIR/bin/audit-tests-common.sh"
+RUN_ALL="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
+SELECT_TESTS="$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh"
+AUDIT_TESTS="$SCRIPT_CHECKOUT_ROOT/bin/audit-tests.sh"
+AUDIT_TESTS_COMMON="$SCRIPT_CHECKOUT_ROOT/bin/audit-tests-common.sh"
 
 TMP_ROOT="$(make_tmp)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
@@ -48,7 +48,7 @@ write_notests() {
   printf '#!/usr/bin/env bash\n# Tags: scope:%s\necho hi\n' "$2" > "$1"
 }
 
-source "$AGENTS_DIR/tests/tests/feature-1834-2level-consumer-updates/_install-selector.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-1834-2level-consumer-updates/_install-selector.sh"
 
 case_begin "run-all-enum" "tests/run-all.sh"
 # =====================================================================
@@ -97,7 +97,7 @@ else
 fi
 
 # 1c: run-all.sh does not enumerate itself (real repo, real script).
-REAL_PLAN="$(cd "$AGENTS_DIR" && RUN_ALL_PROGRESS=off bash "$RUN_ALL" --print-plan --all 2>/dev/null || true)"
+REAL_PLAN="$(cd "$SCRIPT_CHECKOUT_ROOT" && RUN_ALL_PROGRESS=off bash "$RUN_ALL" --print-plan --all 2>/dev/null || true)"
 if printf '%s\n' "$REAL_PLAN" | grep -E '^plan' | grep -q -- '/run-all\.sh$'; then
   fail "1c run-all --all excludes tests/run-all.sh itself" "run-all.sh appears in the plan"
 else

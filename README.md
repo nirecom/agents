@@ -165,7 +165,7 @@ waited on. On timeout the install continues but skips the `~/.claude/settings.js
 
 **Configure and authenticate**
 
-Sourcing the profile exports `AGENTS_CONFIG_DIR` / `AGENTS_DIR` for you — no manual setup. All
+Sourcing the profile exports `AGENTS_MAIN_ROOT` for you — no manual setup. All
 tunable behavior lives in `.env`: copy the template (`cp .env.example .env`) and edit as needed.
 `.env.example` documents every setting inline; any repo can override a subset via a `.env.local`
 at its root — see [Configuration](#configuration) for details.
@@ -365,7 +365,7 @@ The template documents every setting inline; the sections below cover only what 
 - **Global** — `.env` at this repo's root is the single source of truth for every setting.
 - **Per-repo override** — any repo you work in may drop a `.env.local` at its root to override a
   subset of settings for that repo only. A blocklist (`hooks/lib/local-env.js`) pins the settings
-  whose per-repo divergence would break the framework's own contract — `AGENTS_CONFIG_DIR`,
+  whose per-repo divergence would break the framework's own contract — `AGENTS_MAIN_ROOT`,
   `ENFORCE_WORKTREE`, `WORKFLOW_PLANS_DIR`, and similar — so those always resolve from the global `.env`.
 
 ## Contributing

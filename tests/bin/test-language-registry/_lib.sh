@@ -1,14 +1,14 @@
 # Shared helpers for tests/bin/test-language-registry.sh. Sourced by the dispatcher.
 # shellcheck shell=bash
 # shellcheck source=../../lib/test-language-registry-fixture.sh
-. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
 
-TLR_CASES="$AGENTS_DIR/tests/bin/test-language-registry"
+TLR_CASES="$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry"
 FIXTURES="$TLR_CASES/fixtures"
-CLI="$AGENTS_DIR/bin/test-language-registry"
-LOADER="$AGENTS_DIR/bin/lib/test-language-registry.sh"
-READER="$AGENTS_DIR/hooks/lib/test-language-registry.js"
-TABLE="$AGENTS_DIR/hooks/lib/test-language-registry.json"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/test-language-registry"
+LOADER="$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh"
+READER="$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.js"
+TABLE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.json"
 CLI_M="$(np "$CLI")"
 READER_M="$(np "$READER")"
 DRIVER_M="$(np "$TLR_CASES/driver.js")"
@@ -30,18 +30,29 @@ cli() {
   case "$CLI_ERR" in *MODULE_NOT_FOUND* | *"Cannot find module"*) CLI_RC="missing-cli" ;; esac
 }
 
+# fx_root_decoy <dir> — the root decoy a checkout's launcher refuses to run without: the
+# library, its builder, and the file the builder reads the retired names from.
+fx_root_decoy() {
+  local d="$1" f
+  mkdir -p "$d/tests/lib" "$d/tests/bin"
+  for f in tests/lib/root-decoy.sh tests/lib/root-decoy-build.js tests/bin/feature-2561-root-names-residue.sh; do
+    cp "$SCRIPT_CHECKOUT_ROOT/$f" "$d/$f"
+  done
+}
+
 # fx_checkout <dir> [<table.json>] — a minimal agents checkout in a git repo:
 # bin/lib, the registry CLI/reader/table and the scripts the cases launch. A given
 # table replaces the default one: the reader and loader have no env override.
 fx_checkout() {
   local d="$1" t="${2:-}" f
   mkdir -p "$d/bin" "$d/hooks/lib" "$d/tests/lib"
-  cp -R "$AGENTS_DIR/bin/lib" "$d/bin/lib"
+  cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$d/bin/lib"
   for f in check-table-driven.sh mutation-probe.sh run-with-timeout.sh normalize-harness-position.py; do
-    if [ -f "$AGENTS_DIR/bin/$f" ]; then cp "$AGENTS_DIR/bin/$f" "$d/bin/$f"; fi
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/$f" ]; then cp "$SCRIPT_CHECKOUT_ROOT/bin/$f" "$d/bin/$f"; fi
   done
-  install_test_language_registry "$d" "$AGENTS_DIR"
-  cp "$AGENTS_DIR/tests/lib/harness.sh" "$d/tests/lib/harness.sh"
+  install_test_language_registry "$d" "$SCRIPT_CHECKOUT_ROOT"
+  cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh" "$d/tests/lib/harness.sh"
+  fx_root_decoy "$d"
   if [ -n "$t" ]; then cp "$t" "$d/hooks/lib/test-language-registry.json"; fi
   harness_git_init "$d"
   git -C "$d" config user.email t@example.com

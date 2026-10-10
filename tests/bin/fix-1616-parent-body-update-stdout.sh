@@ -3,29 +3,18 @@
 # Tests: bin/github-issues/parent-body-update.sh
 # Tags: parent-body-update, issue-close, github, stdout-contract, gh-cli, scope:common, pwsh-not-required
 #
-# Issue #1616 — parent-body-update.sh's final `gh issue edit "$PARENT" --body`
-# is a pure side-effect call with NO redirection at all. On success the real gh
-# prints the parent issue URL to stdout, so a script whose contract is "no
-# stdout, exit code carries the result" starts emitting a URL. Callers that
-# branch on "is stdout non-empty" misread that as data.
-#
-# Fixed state asserted here: the call is wrapped so that stdout+stderr are both
-# silenced (`>/dev/null 2>&1`) while failure stays visible (WARN on stderr,
-# non-zero exit) — silencing must not swallow the error signal.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the REAL `gh issue edit --body` prints the URL on stdout in the
-#   installed gh version, and whether it emits anything else (banners, notices).
-# - Whether the real GitHub API rejects the edit for reasons the mock cannot
-#   reproduce (permissions, body size, concurrent modification).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1616 — parent-body-update.sh's final `gh issue edit "$PARENT" --body` had no redirection, so the real gh
+# leaked the parent issue URL onto stdout of a script whose contract is "no stdout, exit code carries the result".
+# Fixed state asserted here: stdout+stderr silenced (`>/dev/null 2>&1`) while failure stays visible (WARN on
+# stderr, non-zero exit) — silencing must not swallow the error signal.
+# TL3 gap (NOT caught): real `gh issue edit --body` output per gh version; real API rejections (permissions,
+# body size, concurrent modification). Mitigation: bin/check-verification-gate.sh category skill-orchestration.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PARENT_SCRIPT="$AGENTS_DIR/bin/github-issues/parent-body-update.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PARENT_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/parent-body-update.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -57,7 +46,6 @@ done
 
 setup_tmp() {
     TMP="$(mktemp -d)"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"
@@ -68,16 +56,14 @@ teardown_tmp() {
         export PATH="${PATH#"$MOCK_DIR:"}"
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR GH_MOCK_COMMENT_LOG GH_META_LABEL GH_MOCK_EDIT_RC 2>/dev/null || true
+    unset GH_MOCK_COMMENT_LOG GH_META_LABEL GH_MOCK_EDIT_RC 2>/dev/null || true
 }
 
 # Config-dependent env vars pinned explicitly in EVERY case below
-# (rules/test-design.md "Config-dependent branches"):
+# (rules/test-design.md "Config-dependent branches"), never relying on the mock's default:
 #   GH_META_LABEL   — parent-body-update.sh:40-44 meta short-circuit.
-#                     "false" = non-meta parent, so the script proceeds to the
-#                     edit under test. Never rely on the mock's default.
-#   GH_MOCK_EDIT_RC — exit code of the mocked `gh issue edit "$PARENT" --body`.
-#                     "0" = success. Never rely on the mock's default.
+#                     "false" = non-meta parent, so the script proceeds to the edit under test.
+#   GH_MOCK_EDIT_RC — exit code of the mocked `gh issue edit "$PARENT" --body`. "0" = success.
 
 # ---------------------------------------------------------------------------
 # T2-1: parent_42 → exit 0, stdout completely empty, side effect preserved.
@@ -115,7 +101,6 @@ teardown_tmp
 # T2-3: gh issue edit fails → exit 1, WARN on stderr, stdout still empty.
 # Silencing stdout must NOT hide the failure — the fix has to add an explicit
 # `if ! ... ; then echo WARN >&2; exit 1; fi` wrapper.
-#
 # Non-vacuity: the failing mock emits a distinct canary on BOTH streams
 # (GHCANARY_EDIT_STDOUT_LEAK / GHCANARY_EDIT_STDERR_LEAK), so this case proves
 # the `>/dev/null 2>&1` at parent-body-update.sh:49 really swallows the raw gh

@@ -11,13 +11,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 # isolation (#2512): pin both dirs before the first node call; the EXIT trap below removes the root.
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
@@ -92,8 +92,8 @@ setup_linked_worktree() {
 # Args: command cwd [env-VAR=val ...]
 #
 # `cwd` is the working directory the guard runs from — replaces the legacy
-# AGENTS_CONFIG_DIR fallback. The guard now uses process.cwd() (post-fix:
-# fix/enforce-worktree-gh-whitelist) instead of AGENTS_CONFIG_DIR for the
+# AGENTS_MAIN_ROOT fallback. The guard now uses process.cwd() (post-fix:
+# fix/enforce-worktree-gh-whitelist) instead of AGENTS_MAIN_ROOT for the
 # repo-lookup starting directory. Pass an empty string to omit the cd.
 run_bash_guard() {
     local cmd="$1"; shift
@@ -531,7 +531,7 @@ test_main_checkout_ff_only_allowed() {
 }
 
 # ============ NEW: fix-B — read-only config check passthrough ============
-# Allow specifically-shaped `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off KEY on && echo OFF [|| echo ON]'`
+# Allow specifically-shaped `bash -c 'cd "$AGENTS_MAIN_ROOT" && get-config-var --is-off KEY on && echo OFF [|| echo ON]'`
 # probe commands from the main worktree. All deviations must still block.
 
 test_read_only_config_check_passthrough() {
@@ -542,7 +542,7 @@ test_read_only_config_check_passthrough() {
     # --- Positive (allow) — 4 cases ---
 
     # 1. Canonical form with quoted cd and trailing `|| echo ON`
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         pass "fix-B 1. canonical bash -c probe: allow"
     else
@@ -550,7 +550,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 2. Unquoted cd target
-    out="$(run_bash_guard "bash -c 'cd \$AGENTS_CONFIG_DIR && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \$AGENTS_MAIN_ROOT && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         pass "fix-B 2. unquoted cd target: allow"
     else
@@ -558,7 +558,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 3. Double-outer-quote form
-    out="$(run_bash_guard "bash -c \"cd \\\"\$AGENTS_CONFIG_DIR\\\" && get-config-var --is-off CONFIRM_DETAIL on && echo OFF || echo ON\"" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c \"cd \\\"\$AGENTS_MAIN_ROOT\\\" && get-config-var --is-off CONFIRM_DETAIL on && echo OFF || echo ON\"" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         pass "fix-B 3. double-outer-quote form: allow"
     else
@@ -566,7 +566,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 4. Without trailing `|| echo ON`
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off CONFIRM_WORKTREE on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off CONFIRM_WORKTREE on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         pass "fix-B 4. without || echo ON: allow"
     else
@@ -576,7 +576,7 @@ test_read_only_config_check_passthrough() {
     # --- Negative (block) — 11 cases ---
 
     # 5. Extra semicolon clause
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off X on && echo OFF; rm README.md'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off X on && echo OFF; rm README.md'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 5. extra ; clause should block, got allow: $out"
     else
@@ -584,7 +584,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 6. Wrong cd target
-    out="$(run_bash_guard "bash -c 'cd /etc && get-config-var --is-off X on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd /etc && get-config-var --is-off X on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 6. wrong cd target should block, got allow: $out"
     else
@@ -592,7 +592,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 7. Wrong predicate (rm instead of get-config-var)
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && rm -rf foo && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && rm -rf foo && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 7. wrong predicate should block, got allow: $out"
     else
@@ -600,7 +600,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 8. Backtick in body
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off \`whoami\` on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off \`whoami\` on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 8. backtick substitution should block, got allow: $out"
     else
@@ -608,7 +608,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 9. $(...) substitution
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off \$(cat /etc/passwd) on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off \$(cat /etc/passwd) on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 9. \$() substitution should block, got allow: $out"
     else
@@ -616,7 +616,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 10. Output redirect
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off X on > /tmp/out && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off X on > /tmp/out && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 10. output redirect should block, got allow: $out"
     else
@@ -624,7 +624,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 11. Single pipe
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off X on | tee /tmp/out && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off X on | tee /tmp/out && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 11. single pipe should block, got allow: $out"
     else
@@ -632,7 +632,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 12. Wrong final clause
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off X on && echo BAD'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off X on && echo BAD'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 12. wrong final clause should block, got allow: $out"
     else
@@ -640,7 +640,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 13. Non-bash interpreter (pwsh)
-    out="$(run_bash_guard "pwsh -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off X on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "pwsh -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off X on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 13. non-bash interpreter should block, got allow: $out"
     else
@@ -648,7 +648,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 14. --is-on flag (only --is-off allowed)
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-on X on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-on X on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 14. --is-on should block, got allow: $out"
     else
@@ -656,7 +656,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 15. Lowercase key
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off confirm_outline on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off confirm_outline on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         fail "fix-B 15. lowercase key should block, got allow: $out"
     else
@@ -666,14 +666,14 @@ test_read_only_config_check_passthrough() {
     # ============================================================
     # confirm-off helper migration (#XXX): new positive + regression
     # ============================================================
-    # NEW IDIOM: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" KEY default'`
+    # NEW IDIOM: `bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" KEY default'`
     # Pre-implementation: positive cases 16-19 will FAIL until isAllowedReadOnlyConfigCheck
     # is updated to match the new 2-clause absolute-path form. After implementation,
     # the OLD 3-clause idiom (cases 1-4 above) becomes BLOCKED and case 20 below
     # acts as a regression guard.
 
     # 16. New idiom canonical: confirm-off via absolute path, default on
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && bash \"\$AGENTS_MAIN_ROOT/bin/confirm-off\" CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         pass "fix-B 16. new confirm-off idiom CONFIRM_OUTLINE on: allow"
     else
@@ -681,7 +681,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 17. New idiom with off default
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" CONFIRM_DETAIL off'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && bash \"\$AGENTS_MAIN_ROOT/bin/confirm-off\" CONFIRM_DETAIL off'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         pass "fix-B 17. new confirm-off idiom CONFIRM_DETAIL off: allow"
     else
@@ -689,7 +689,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 18. New idiom for CONFIRM_WORKTREE
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" CONFIRM_WORKTREE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && bash \"\$AGENTS_MAIN_ROOT/bin/confirm-off\" CONFIRM_WORKTREE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         pass "fix-B 18. new confirm-off idiom CONFIRM_WORKTREE on: allow"
     else
@@ -697,7 +697,7 @@ test_read_only_config_check_passthrough() {
     fi
 
     # 19. New idiom — double-outer-quote variant
-    out="$(run_bash_guard "bash -c \"cd \\\"\$AGENTS_CONFIG_DIR\\\" && bash \\\"\$AGENTS_CONFIG_DIR/bin/confirm-off\\\" CONFIRM_OUTLINE on\"" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c \"cd \\\"\$AGENTS_MAIN_ROOT\\\" && bash \\\"\$AGENTS_MAIN_ROOT/bin/confirm-off\\\" CONFIRM_OUTLINE on\"" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         pass "fix-B 19. new confirm-off idiom double-quote outer: allow"
     else
@@ -708,7 +708,7 @@ test_read_only_config_check_passthrough() {
     # writes, so non-write commands that don't match any allowlist rule pass through
     # (return `{}`). The idiom is deprecated (replace with confirm-off), but it is
     # not a write and therefore not blocked.
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         pass "fix-B 20. old 3-clause idiom passes through (non-write, no explicit allow needed)"
     else
@@ -718,7 +718,7 @@ test_read_only_config_check_passthrough() {
     # 21. Bare PATH lookup (non-absolute path) is also a non-write command and
     # passes through. The absolute-path form is the only *allowed* form, but
     # disallowed non-write commands simply get no decision (`{}`), not a block.
-    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && confirm-off CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && confirm-off CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
     if guard_decision "$out"; then
         pass "fix-B 21. bare confirm-off PATH lookup passes through (non-write, no explicit allow)"
     else
@@ -737,14 +737,14 @@ test_read_only_config_check_passthrough() {
     # has been expanded to accept an optional `[A-Z_]+=\S+ ` prefix.
     local conv_lang_supported
     conv_lang_supported="$(node -e "
-const { isAllowedReadOnlyConfigCheck } = require('$_AGENTS_DIR_NODE/hooks/enforce-worktree/main-worktree-allows/standard.js');
-const supported = isAllowedReadOnlyConfigCheck(\"CONV_LANG=ja bash -c 'cd \\\\\"\\\$AGENTS_CONFIG_DIR\\\\\" && bash \\\\\"\\\$AGENTS_CONFIG_DIR/bin/confirm-off\\\\\" CONFIRM_OUTLINE on'\");
+const { isAllowedReadOnlyConfigCheck } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/enforce-worktree/main-worktree-allows/standard.js');
+const supported = isAllowedReadOnlyConfigCheck(\"CONV_LANG=ja bash -c 'cd \\\\\"\\\$AGENTS_MAIN_ROOT\\\\\" && bash \\\\\"\\\$AGENTS_MAIN_ROOT/bin/confirm-off\\\\\" CONFIRM_OUTLINE on'\");
 process.stdout.write(supported ? 'yes' : 'no');
 " 2>/dev/null)"
 
     if [ "$conv_lang_supported" = "yes" ]; then
         # 22. CONV_LANG=ja prefix + canonical confirm-off idiom: allow (#1421)
-        out="$(run_bash_guard "CONV_LANG=ja bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+        out="$(run_bash_guard "CONV_LANG=ja bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && bash \"\$AGENTS_MAIN_ROOT/bin/confirm-off\" CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
         if guard_decision "$out"; then
             pass "fix-B 22. CONV_LANG=ja prefix + confirm-off idiom: allow (#1421)"
         else
@@ -753,7 +753,7 @@ process.stdout.write(supported ? 'yes' : 'no');
 
         # Verify that m[1] (quote group) and m[2] (body group) still match correctly
         # by testing the CONV_LANG form with double-outer-quote variant too.
-        out="$(run_bash_guard "CONV_LANG=ja bash -c \"cd \\\"\$AGENTS_CONFIG_DIR\\\" && bash \\\"\$AGENTS_CONFIG_DIR/bin/confirm-off\\\" CONFIRM_DETAIL off\"" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+        out="$(run_bash_guard "CONV_LANG=ja bash -c \"cd \\\"\$AGENTS_MAIN_ROOT\\\" && bash \\\"\$AGENTS_MAIN_ROOT/bin/confirm-off\\\" CONFIRM_DETAIL off\"" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
         if guard_decision "$out"; then
             pass "fix-B 22b. CONV_LANG=ja prefix + double-outer-quote variant: allow (#1421)"
         else
@@ -761,7 +761,7 @@ process.stdout.write(supported ? 'yes' : 'no');
         fi
 
         # Negative: CONV_LANG prefix must NOT weaken safety — wrong body still blocks
-        out="$(run_bash_guard "CONV_LANG=ja bash -c 'cd /etc && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+        out="$(run_bash_guard "CONV_LANG=ja bash -c 'cd /etc && bash \"\$AGENTS_MAIN_ROOT/bin/confirm-off\" CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT=/some/config/path)"
         if guard_decision "$out"; then
             fail "fix-B 22c. CONV_LANG + wrong cd target should block, got allow: $out"
         else

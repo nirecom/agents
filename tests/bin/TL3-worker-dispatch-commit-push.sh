@@ -2,43 +2,25 @@
 # tests/bin/TL3-worker-dispatch-commit-push.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/spawn.js, hooks/workflow-gate.js
 # Tags: worker-dispatch, commit-push, workflow-gate, real-git, TL3, run-e2e, scope:issue-specific
-#
-# Issue #1673 D1 — real-environment seam for the gate reproduction.
-#
-# The sibling TL2 tests (feature-1673-commit-push-gate.sh, -gate-envdir.sh) stub
-# bin/worker-dispatch/spawn.js, so they prove the worker ASKS the gate the right
-# question and reacts to the answer — but every verdict they see is one the test
-# itself wrote. This file removes the stub: a real dispatcher spawns a real
-# hooks/workflow-gate.js child, which reads a real state directory, and real git
-# commits either land in a real repository or do not.
-#
-# That is the one thing no amount of TL2 can establish: that moving `git commit`
-# and `git push` off the Bash tool and into a dispatcher child still leaves the
-# workflow gate standing in front of them. The TL2 stub would report success even
-# if the child could never reach the gate binary at all.
-#
-# Deliberately narrow: one blocked run and one allowed run, on a local bare
-# remote. No GitHub, no `gh`, no network.
-#
-# TL3 gap (what even this test does NOT cover):
-#   - The real PreToolUse invocation path. Claude Code feeds the gate its payload
-#     over stdin from the tool layer; here the worker constructs that payload.
-#     A divergence between the two shapes is only caught by TL4.
-#   - `gh pr create` against real GitHub (both scenarios set enforce_worktree=off
-#     so step 8 short-circuits before the PR path).
-#   - bin/open-pr-url.js opening a real browser.
+# Issue #1673 D1 — real-environment seam for the gate reproduction. The TL2
+# siblings (feature-1673-commit-push-gate.sh, -gate-envdir.sh) stub spawn.js, so
+# every verdict they see is one the test wrote; here a real dispatcher spawns a
+# real hooks/workflow-gate.js child against a real state dir and a real repo,
+# proving the gate still stands in front of dispatcher-run commit/push.
+# Narrow: one blocked, one allowed run on a local bare remote; no gh/network.
+# TL3 gap: real PreToolUse stdin payload shape (TL4), `gh pr create`, open-pr-url.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v git >/dev/null 2>&1 || exit 77
 command -v node >/dev/null 2>&1 || exit 77
 
-DISPATCH="$AGENTS_DIR/bin/worker-dispatch.js"
-GATE="$AGENTS_DIR/hooks/workflow-gate.js"
-WORKER="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push.js"
+DISPATCH="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+GATE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+WORKER="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/commit-push.js"
 
 PASS=0
 FAIL=0
@@ -90,7 +72,7 @@ git -C "$TMPD/wt" config user.email "tl3@example.com"
 git -C "$TMPD/wt" config user.name "TL3"
 git -C "$TMPD/wt" config commit.gpgsign false
 
-MAIN_ROOT="$(cd "$TMPD/main" && pwd)"
+TARGET_MAIN_ROOT="$(cd "$TMPD/main" && pwd)"
 WT="$(cd "$TMPD/wt" && pwd)"
 
 # stage_change <text> — a real staged edit for the worker to commit
@@ -127,8 +109,7 @@ run_worker() {
         "WORKFLOW_STATE_DIR=$(nodepath "$2")" \
         "WORKFLOW_PLANS_DIR=$(nodepath "$PLANS")" \
         "ENFORCE_WORKTREE=off" \
-        "AGENTS_CONFIG_DIR=$(nodepath "$AGENTS_DIR")" \
-        node "$(nodepath "$DISPATCH")" commit-push "$(nodepath "$MAIN_ROOT")" \
+        node "$(nodepath "$DISPATCH")" commit-push "$(nodepath "$TARGET_MAIN_ROOT")" \
         "$(nodepath "$1")" 2>&1)" || rc=$?
     printf '%s|%s' "$rc" "$out"
 }

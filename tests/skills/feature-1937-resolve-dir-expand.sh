@@ -12,14 +12,13 @@
 
 set -uo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-AGENTS_DIR="$REPO_DIR"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$REPO_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
-SCRIPT_JS="$REPO_DIR/skills/worktree-end/scripts/resolve-dir-expand.js"
-VERBOSE_PROMPT_JS="$REPO_DIR/hooks/lib/verbose-prompt.js"
+SCRIPT_JS="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/resolve-dir-expand.js"
+VERBOSE_PROMPT_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/verbose-prompt.js"
 to_node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1 — ${2:-}"; FAIL=$((FAIL + 1)); }

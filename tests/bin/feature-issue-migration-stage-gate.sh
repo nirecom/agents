@@ -9,10 +9,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ORCH_SRC="$AGENTS_DIR/bin/github-issues/migration/orchestrate.sh"
-STATE_SRC="$AGENTS_DIR/bin/github-issues/migration/state.sh"
-SKIPPED_STEP_WARNING_SRC="$AGENTS_DIR/bin/github-issues/migration/skipped-step-warning.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ORCH_SRC="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
+STATE_SRC="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/state.sh"
+SKIPPED_STEP_WARNING_SRC="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/skipped-step-warning.sh"
 
 PASS=0
 FAIL=0
@@ -36,7 +36,11 @@ if [ ! -f "$ORCH_SRC" ] || [ ! -f "$STATE_SRC" ] || [ ! -f "$SKIPPED_STEP_WARNIN
 fi
 
 # ---------------- Harness setup ----------------
-HARNESS_DIR="$(mktemp -d)"
+# The harness sits at bin/github-issues/migration inside a fake script checkout,
+# so orchestrate.sh derives that fake checkout as its own SCRIPT_CHECKOUT_ROOT.
+FAKE_SCRIPT_CHECKOUT_ROOT="$(mktemp -d)"
+HARNESS_DIR="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration"
+mkdir -p "$HARNESS_DIR"
 GH_MOCK_DIR="$(mktemp -d)"
 MOCK_CALLS_LOG="$HARNESS_DIR/mock-calls.log"
 export MOCK_CALLS_LOG
@@ -104,33 +108,31 @@ EOF
 chmod +x "$GH_MOCK_DIR/gh"
 export PATH="$GH_MOCK_DIR:$PATH"
 
-# AGENTS_CONFIG_DIR: build a fake one with mocked sub-scripts so Step 1/5
-# don't run real gh/git operations when tests fall through past Step 2/3.
-FAKE_AGENTS_DIR="$(mktemp -d)"
-mkdir -p "$FAKE_AGENTS_DIR/bin/github-issues" "$FAKE_AGENTS_DIR/.github/ISSUE_TEMPLATE" "$FAKE_AGENTS_DIR/.github/workflows"
-cat > "$FAKE_AGENTS_DIR/bin/github-issues/sync-labels.sh" <<'EOF'
+# Fake script checkout: mocked sub-scripts so Step 1/5 don't run real gh/git
+# operations when tests fall through past Step 2/3.
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues" "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE" "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/workflows"
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" <<'EOF'
 #!/usr/bin/env bash
 echo "sync-labels: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
 exit 0
 EOF
-chmod +x "$FAKE_AGENTS_DIR/bin/github-issues/sync-labels.sh"
-cat > "$FAKE_AGENTS_DIR/bin/github-issues/backfill-commit-comments.sh" <<'EOF'
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/backfill-commit-comments.sh" <<'EOF'
 #!/usr/bin/env bash
 echo "backfill-commit-comments: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
 exit 0
 EOF
-chmod +x "$FAKE_AGENTS_DIR/bin/github-issues/backfill-commit-comments.sh"
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/backfill-commit-comments.sh"
 # bootstrap-labels.sh stub — referenced by /migrate-repo Step 1.3 (issue #283).
-cat > "$FAKE_AGENTS_DIR/bin/github-issues/bootstrap-labels.sh" <<'EOF'
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/bootstrap-labels.sh" <<'EOF'
 #!/usr/bin/env bash
 echo "bootstrap-labels stub"
 exit 0
 EOF
-chmod +x "$FAKE_AGENTS_DIR/bin/github-issues/bootstrap-labels.sh"
-: > "$FAKE_AGENTS_DIR/.github/labels.yml"
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/bootstrap-labels.sh"
+: > "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
 # sync-labels.yml workflow placeholder — copied by bootstrap-labels.sh (issue #283).
-echo "# stub" > "$FAKE_AGENTS_DIR/.github/workflows/sync-labels.yml"
-export AGENTS_CONFIG_DIR="$FAKE_AGENTS_DIR"
+echo "# stub" > "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/workflows/sync-labels.yml"
 
 # Helper: create a clean repo dir with optional history/todo.
 make_repo() {
@@ -442,7 +444,9 @@ rm -rf "$HARNESS_4"
 # T-step5-fail: backfill-commit-comments.sh exits 1 →
 #   orchestrate exits non-zero, current_step stays at 4
 # ============================================================
-HARNESS_5="$(mktemp -d)"
+FAKE_SCRIPT_CHECKOUT_ROOT_5="$(mktemp -d)"
+HARNESS_5="$FAKE_SCRIPT_CHECKOUT_ROOT_5/bin/github-issues/migration"
+mkdir -p "$HARNESS_5"
 cp "$ORCH_SRC" "$HARNESS_5/orchestrate.sh"
 cp "$STATE_SRC" "$HARNESS_5/state.sh"
 cp "$SKIPPED_STEP_WARNING_SRC" "$HARNESS_5/skipped-step-warning.sh"
@@ -472,46 +476,44 @@ exit 0
 EOF
 chmod +x "$HARNESS_5/backfill-content-date.sh"
 
-# backfill-commit-comments.sh in AGENTS_CONFIG_DIR: FAIL (exit 1).
-# orchestrate.sh Step 5 uses $AGENTS_CONFIG_DIR/bin/github-issues/backfill-commit-comments.sh.
-FAKE_AGENTS_DIR_5="$(mktemp -d)"
-mkdir -p "$FAKE_AGENTS_DIR_5/bin/github-issues"
-cat > "$FAKE_AGENTS_DIR_5/bin/github-issues/backfill-commit-comments.sh" <<'EOF'
+# backfill-commit-comments.sh in the fake script checkout: FAIL (exit 1).
+# orchestrate.sh Step 5 runs bin/github-issues/backfill-commit-comments.sh from its own checkout.
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT_5/bin/github-issues"
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT_5/bin/github-issues/backfill-commit-comments.sh" <<'EOF'
 #!/usr/bin/env bash
 echo "backfill-commit-comments: FAIL" >> "${MOCK_CALLS_LOG:-/dev/null}"
 exit 1
 EOF
-chmod +x "$FAKE_AGENTS_DIR_5/bin/github-issues/backfill-commit-comments.sh"
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT_5/bin/github-issues/backfill-commit-comments.sh"
 # Stub other scripts that may be referenced.
-cat > "$FAKE_AGENTS_DIR_5/bin/github-issues/sync-labels.sh" <<'EOF'
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT_5/bin/github-issues/sync-labels.sh" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-chmod +x "$FAKE_AGENTS_DIR_5/bin/github-issues/sync-labels.sh"
-cat > "$FAKE_AGENTS_DIR_5/bin/github-issues/bootstrap-labels.sh" <<'EOF'
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT_5/bin/github-issues/sync-labels.sh"
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT_5/bin/github-issues/bootstrap-labels.sh" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-chmod +x "$FAKE_AGENTS_DIR_5/bin/github-issues/bootstrap-labels.sh"
-mkdir -p "$FAKE_AGENTS_DIR_5/.github/workflows"
-: > "$FAKE_AGENTS_DIR_5/.github/labels.yml"
-echo "# stub" > "$FAKE_AGENTS_DIR_5/.github/workflows/sync-labels.yml"
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT_5/bin/github-issues/bootstrap-labels.sh"
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT_5/.github/workflows"
+: > "$FAKE_SCRIPT_CHECKOUT_ROOT_5/.github/labels.yml"
+echo "# stub" > "$FAKE_SCRIPT_CHECKOUT_ROOT_5/.github/workflows/sync-labels.yml"
 
 REPO_STEP5=$(make_repo)
 write_state_full "$REPO_STEP5" 2 2 4
 : > "$MOCK_CALLS_LOG"
-AGENTS_CONFIG_DIR="$FAKE_AGENTS_DIR_5" \
-    run_with_timeout 30 bash "$HARNESS_5/orchestrate.sh" "$REPO_STEP5" --from-step 5 2>&1; RC_STEP5=$?
+run_with_timeout 30 bash "$HARNESS_5/orchestrate.sh" "$REPO_STEP5" --from-step 5 2>&1; RC_STEP5=$?
 STEP_AFTER5=$(jq -r '.current_step' "$REPO_STEP5/.migration-state.json" 2>/dev/null || echo "?")
 if [ "$RC_STEP5" -ne 0 ] && [ "$STEP_AFTER5" = "4" ]; then
     pass "T-step5-fail: backfill-commit-comments failure → exit non-zero, current_step stays at 4"
 else
     fail "T-step5-fail: rc=$RC_STEP5 current_step=$STEP_AFTER5 (expected rc!=0, step=4)"
 fi
-rm -rf "$HARNESS_5" "$FAKE_AGENTS_DIR_5"
+rm -rf "$FAKE_SCRIPT_CHECKOUT_ROOT_5"
 
 # Cleanup harness
-rm -rf "$HARNESS_DIR" "$GH_MOCK_DIR"
+rm -rf "$FAKE_SCRIPT_CHECKOUT_ROOT" "$GH_MOCK_DIR"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

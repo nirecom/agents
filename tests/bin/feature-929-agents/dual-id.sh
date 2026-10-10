@@ -24,7 +24,7 @@ _did_run() {
 
     # Case 1: different --sid/--wsid — wsid artifact embedded, sid decoy is not.
     local cap1="$TMPDIR_BASE/did-prompt-1.txt"
-    CODEX_PROMPT_CAPTURE="$cap1" PATH="$pp" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    CODEX_PROMPT_CAPTURE="$cap1" PATH="$pp" \
         WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR" \
         run_with_timeout 90 bash "$FINDINGS_CLI" --mode audit --sid "$sid" --wsid "$wsid" \
         --transcript "$tf" --artifact "$wsid_art" \
@@ -40,7 +40,7 @@ _did_run() {
 
     # Case 2: --wsid UNAVAILABLE + valid --sid — artifact ref skipped, still proceeds.
     local cap2="$TMPDIR_BASE/did-prompt-2.txt"
-    CODEX_PROMPT_CAPTURE="$cap2" PATH="$pp" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    CODEX_PROMPT_CAPTURE="$cap2" PATH="$pp" \
         WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR" \
         run_with_timeout 90 bash "$FINDINGS_CLI" --mode audit --sid "$sid" --wsid UNAVAILABLE \
         --transcript "$tf" \

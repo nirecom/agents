@@ -7,7 +7,7 @@
 # rule by matching a path glob, so it is registered UNCONDITIONAL (the 8th entry).
 # Why by name and not by P5's set comparison: while the rule file does not exist, P5 compares two
 # sets that agree vacuously about it, so nothing records that the registration was intended.
-# Assumes AGENTS_DIR, READER, POLICY, pass(), fail(), node_path() come from the dispatcher.
+# Assumes SCRIPT_CHECKOUT_ROOT, READER, POLICY, pass(), fail(), node_path() come from the dispatcher.
 
 echo ""
 echo "=== issue #2218: the emergency-flush rule is registered unconditional ==="
@@ -37,9 +37,9 @@ esac
 # The other half of the same registration. Split from F1 so a listed-but-absent entry and an
 # entry that disables its own auto-injection are distinguishable; P5 would only say "the sets
 # differ". `head -1` is the whole test: a frontmatter block can only open the file.
-if [ ! -f "$AGENTS_DIR/$FLUSH_RULE" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/$FLUSH_RULE" ]; then
     fail "UF2: $FLUSH_RULE does not exist — issue #2218 Step 14 authors it; write_code has not run"
-elif head -1 "$AGENTS_DIR/$FLUSH_RULE" | grep -q '^---'; then
+elif head -1 "$SCRIPT_CHECKOUT_ROOT/$FLUSH_RULE" | grep -q '^---'; then
     fail "UF2: $FLUSH_RULE opens with a frontmatter block — an unconditional escape-hatch rule carries no paths: key at all"
 else
     pass "UF2: $FLUSH_RULE exists and carries no frontmatter block, matching its unconditional registration"

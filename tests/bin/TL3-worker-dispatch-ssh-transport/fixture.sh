@@ -91,7 +91,7 @@ transport_count() { grep -c "^transport-" "$CANARY_LOG" 2>/dev/null || echo 0; }
 
 posixpath() { cygpath -u "$1" 2>/dev/null || printf '%s' "$1"; }
 
-# A main-root repo, a linked worktree on a feature branch, and a bare "remote"
+# A target main repo, a linked worktree on a feature branch, and a bare "remote"
 # reachable ONLY over the ssh:// URL, so every network git call in the worker
 # goes through the canary transport with no local-path fallback.
 build_repos() {
@@ -154,7 +154,7 @@ PAYEOF
          -u CLAUDE_CODE_SESSION_ID -u GH_TOKEN -u GITHUB_TOKEN \
         "SSH_AUTH_SOCK=$AGENT_SOCK" "SSH_AGENT_PID=$AGENT_PID" "ENFORCE_WORKTREE=off" \
         "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
-        node "$(nodepath "$AGENTS_DIR/bin/worker-dispatch.js")" \
+        node "$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js")" \
         commit-push "$(nodepath "$MAIN_RAW")" "$(nodepath "$p")" 2>&1)" || return 1
     return 0
 }

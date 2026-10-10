@@ -1,7 +1,7 @@
 # IC-1467-1 through IC-1467-11: run-bulk-dispatch.sh and run-phase5-record.sh existence
 
-BULK_SCRIPT="$AGENTS_DIR/skills/issue-create/scripts/run-bulk-dispatch.sh"
-PHASE5_SCRIPT="$AGENTS_DIR/skills/issue-create/scripts/run-phase5-record.sh"
+BULK_SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/scripts/run-bulk-dispatch.sh"
+PHASE5_SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/scripts/run-phase5-record.sh"
 
 # ---------------------------------------------------------------------------
 # IC-1467-1: skills/issue-create/scripts/run-bulk-dispatch.sh exists

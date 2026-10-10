@@ -5,7 +5,7 @@
 # Split from bin-sweep-issues-tiers.sh (500-line HARD limit): pins the all-bands
 # snapshot sweep (default mode) — one issue-list fetch, per-band SI-2 scan, a single
 # tier-1 pass, one aggregated tier-2 gate, band_index=all CI contract, --max-bands,
-# on a mid-sweep band failure. Self-contained fixture (shadow AGENTS_CONFIG_DIR).
+# on a mid-sweep band failure. Self-contained fixture (shadow checkout).
 # TL3 gap: real gh API (rate limits, pagination) and SKILL.md AskUserQuestion gates
 # are stubbed; residual gap checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
@@ -17,8 +17,8 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ORCH="$AGENTS_DIR/bin/sweep-issues.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ORCH="$SCRIPT_CHECKOUT_ROOT/bin/sweep-issues.sh"
 REPO_SLUG="testowner/testrepo"
 
 PASS=0
@@ -55,20 +55,20 @@ make_fixture() {
     : > "$RECORD"
     : > "$GHREC"
 
-    cp "$AGENTS_DIR/bin/sweep-issues.sh"   "$FAKE/bin/"                 2>/dev/null
-    cp "$AGENTS_DIR"/bin/sweep-issues/*    "$FAKE/bin/sweep-issues/"    2>/dev/null
-    cp "$AGENTS_DIR"/bin/lib/*.sh          "$FAKE/bin/lib/"             2>/dev/null
-    cp "$AGENTS_DIR/bin/run-with-timeout.sh" "$FAKE/bin/"               2>/dev/null
-    [ -f "$AGENTS_DIR/bin/workflow-plans-dir" ] && \
-        cp "$AGENTS_DIR/bin/workflow-plans-dir" "$FAKE/bin/" 2>/dev/null
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/sweep-issues.sh"   "$FAKE/bin/"                 2>/dev/null
+    cp "$SCRIPT_CHECKOUT_ROOT"/bin/sweep-issues/*    "$FAKE/bin/sweep-issues/"    2>/dev/null
+    cp "$SCRIPT_CHECKOUT_ROOT"/bin/lib/*.sh          "$FAKE/bin/lib/"             2>/dev/null
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$FAKE/bin/"               2>/dev/null
+    [ -f "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir" ] && \
+        cp "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir" "$FAKE/bin/" 2>/dev/null
     # gh-outbound-guard.sh (sourced by close-batch.sh) resolves scan-outbound.sh at
     # runtime and is fail-closed if it is missing — see assert_fixture_lib_deps_resolved.
-    cp "$AGENTS_DIR/bin/scan-outbound.sh"  "$FAKE/bin/"                 2>/dev/null
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh"  "$FAKE/bin/"                 2>/dev/null
     chmod -R u+rwx "$FAKE/bin" 2>/dev/null
-    [ -f "$AGENTS_DIR/.private-info-allowlist" ] && \
-        cp "$AGENTS_DIR/.private-info-allowlist" "$FAKE/" 2>/dev/null
-    [ -f "$AGENTS_DIR/.private-info-blocklist" ] && \
-        cp "$AGENTS_DIR/.private-info-blocklist" "$FAKE/" 2>/dev/null
+    [ -f "$SCRIPT_CHECKOUT_ROOT/.private-info-allowlist" ] && \
+        cp "$SCRIPT_CHECKOUT_ROOT/.private-info-allowlist" "$FAKE/" 2>/dev/null
+    [ -f "$SCRIPT_CHECKOUT_ROOT/.private-info-blocklist" ] && \
+        cp "$SCRIPT_CHECKOUT_ROOT/.private-info-blocklist" "$FAKE/" 2>/dev/null
 
     printf '#!/bin/bash\nexit 0\n' > "$FAKE/bin/is-github-dotcom-remote"
     chmod +x "$FAKE/bin/is-github-dotcom-remote"
@@ -175,7 +175,7 @@ assert_fixture_lib_deps_resolved() {
 
 # Run the orchestrator from the fixture repo. Sets globals OUT and RC.
 run_sweep() {
-    OUT="$(cd "$REPO" && PATH="$GHDIR:$PATH" AGENTS_CONFIG_DIR="$FAKE" \
+    OUT="$(cd "$REPO" && PATH="$GHDIR:$PATH" AGENTS_MAIN_ROOT="$FAKE" \
         CNP_FAIL_FOR="${CNP_FAIL_FOR:-}" \
         run_with_timeout bash "$FAKE/bin/sweep-issues.sh" --repo "$REPO_SLUG" "$@" 2>&1)"
     RC=$?

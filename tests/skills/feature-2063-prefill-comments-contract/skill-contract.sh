@@ -55,7 +55,7 @@ fi
 # are executed against it with that real number substituted for `<N>`.
 W3B_SH="$TMPD/w3b-session.sh"
 W3B_CKPT="$TMPD/w3b-ckpt.json"
-# A subprocess on purpose: the driver harness defines its own pass/fail/AGENTS_DIR and
+# A subprocess on purpose: the driver harness defines its own pass/fail/__LIB_SCRIPT_CHECKOUT_ROOT and
 # an EXIT trap that removes its temp tree, so the checkpoint is copied out before return.
 cat > "$W3B_SH" <<'W3BSH'
 #!/bin/bash
@@ -83,7 +83,7 @@ cp "$W3B_CK" "$W3B_OUT_CKPT" || { echo "BOOTSTRAP=copy-failed"; exit 5; }
 echo "BOOTSTRAP=ok"
 exit 0
 W3BSH
-W3B_LOG="$(bash "$W3B_SH" "$AGENTS_DIR" "$W3B_CKPT" 2>&1 | grep '^BOOTSTRAP=' | tail -1)"
+W3B_LOG="$(bash "$W3B_SH" "$__LIB_SCRIPT_CHECKOUT_ROOT" "$W3B_CKPT" 2>&1 | grep '^BOOTSTRAP=' | tail -1)"
 ckpt_field() {  # <ckpt> <dot.path> — '<missing>' / '<unreadable>' on failure
     node -e '
 const fs = require("fs");
@@ -200,7 +200,7 @@ for lbl in B1 B2 B3 B4; do
 done
 W7_MARK="$(printf '%s\n' "$PATH_B" | grep -cF 'WORKFLOW_MARK_STEP_workflow_init_complete' || true)"
 assert_eq "W7: the completion sentinel appears exactly once in Path B" "1" "$W7_MARK"
-W7_STALE="$(grep -rEl -- 'WI-12 B[23]' "$AGENTS_DIR/skills" "$AGENTS_DIR/tests" "$AGENTS_DIR/CLAUDE.md" --exclude="$SUITE_NAME.sh" --exclude-dir="$SUITE_NAME" 2>/dev/null || true)"
+W7_STALE="$(grep -rEl -- 'WI-12 B[23]' "$__LIB_SCRIPT_CHECKOUT_ROOT/skills" "$__LIB_SCRIPT_CHECKOUT_ROOT/tests" "$__LIB_SCRIPT_CHECKOUT_ROOT/CLAUDE.md" --exclude="$SUITE_NAME.sh" --exclude-dir="$SUITE_NAME" 2>/dev/null || true)"
 if [ -z "$W7_STALE" ]; then
     pass "W7: no stale Path B step references remain in skills/, tests/ or CLAUDE.md"
 else

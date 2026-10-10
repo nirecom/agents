@@ -31,9 +31,9 @@ WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"; export WORKFLOW_STATE_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
 unset CLAUDE_CODE_SESSION_ID
 
-AGENTS_DIR="$REPO_ROOT"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # shellcheck source=../../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1 -- expected [$2] got [$3]"; fi; }
 check_not_contains() {
   case "$3" in *"$2"*) fail "$1 -- did NOT expect [$2] in: $3" ;; *) pass "$1" ;; esac
@@ -43,7 +43,7 @@ run_with_timeout() {
   else perl -e 'alarm 120; exec @ARGV' -- "$@"; fi
 }
 
-# A config dir that mirrors the real layout, so bin/confirm-off can actually resolve
+# A settings root that mirrors the real layout, so bin/confirm-off can actually resolve
 # get-config-var and load-env.js. Without the lib siblings every gate would read ERROR
 # and the value assertions below would be measuring the fixture, not the CLI.
 mk_cfg() {
@@ -53,21 +53,26 @@ mk_cfg() {
   cp "$REPO_ROOT/bin/confirm-off" "$d/bin/"
   cp "$REPO_ROOT/hooks/lib/load-env.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/local-env.js" "$d/hooks/lib/"
-  cp "$REPO_ROOT/hooks/lib/agents-config-dir.js" "$d/hooks/lib/"
+  cp "$REPO_ROOT/hooks/lib/script-checkout-root.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/path-normalize.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/local-env.js" "$d/hooks/lib/"
   chmod +x "$d/bin/get-config-var" "$d/bin/confirm-off" 2>/dev/null || true
 }
 CFG_FULL="$TMPDIR_BASE/cfg-full"; mk_cfg "$CFG_FULL"
 printf 'CONFIRM_TESTS=off\nCONFIRM_CODE=on\n' > "$CFG_FULL/.env"
-CFG_BARE="$TMPDIR_BASE/cfg-bare"; mkdir -p "$CFG_BARE"
+# The reader finds confirm-off and get-config-var beside itself, so a case that needs one
+# of them missing or instrumented runs a copy of the reader from a tree it can change.
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+mk_reader_tree() { script_checkout_fixture_copy "$1" bin/workflow hooks bin/confirm-off bin/get-config-var; }
+CFG_BARE="$TMPDIR_BASE/cfg-bare"; mk_reader_tree "$CFG_BARE"; rm -f "$CFG_BARE/bin/get-config-var"
 
 OUTF="$TMPDIR_BASE/out.txt"; ERRF="$TMPDIR_BASE/err.txt"
 OUT=""; ERR=""; RC=0
+READER="$RSF"
 run_facts() {
   local cfg="$1"; shift
   RC=0
-  AGENTS_CONFIG_DIR="$(nrm "$cfg")" run_with_timeout node "$RSF" "$@" >"$OUTF" 2>"$ERRF" || RC=$?
+  AGENTS_MAIN_ROOT="$(nrm "$cfg")" run_with_timeout node "$READER" "$@" >"$OUTF" 2>"$ERRF" || RC=$?
   OUT="$(cat "$OUTF" 2>/dev/null || echo "")"
   ERR="$(cat "$ERRF" 2>/dev/null || echo "")"
 }
@@ -169,7 +174,9 @@ run_facts "$CFG_FULL" --session c3nostate
 check "C3a: no state file -- exits 0" 0 "$RC"
 check "C3a2: no state file -- all eleven keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3a3: no state file" "$OUTF"
+READER="$(nrm "$CFG_BARE")/bin/workflow/read-session-facts"
 run_facts "$CFG_BARE" --session c3noenv
+READER="$RSF"
 check "C3b: no .env and no get-config-var -- exits 0" 0 "$RC"
 check "C3b2: no .env -- all eleven keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3b3: no .env" "$OUTF"
@@ -202,7 +209,7 @@ STUB_PROOF="$(run_with_timeout node --require "$STUB" -e '
   process.stdout.write(String(wf.ROUTING_STAGES.length));' 2>/dev/null || echo "STUB_FAILED")"
 check "C4a: the stub really adds a routing stage (non-vacuity)" 5 "$STUB_PROOF"
 RC=0
-AGENTS_CONFIG_DIR="$(nrm "$CFG_FULL")" run_with_timeout node --require "$STUB" "$RSF" \
+AGENTS_MAIN_ROOT="$(nrm "$CFG_FULL")" run_with_timeout node --require "$STUB" "$RSF" \
   --session c2 >"$OUTF" 2>"$ERRF" || RC=$?
 OUT="$(cat "$OUTF" 2>/dev/null || echo "")"
 check "C4b: under the stub the key set is unchanged" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
@@ -296,7 +303,7 @@ fi
 # detector just proven sound above. Neither read-session-facts nor gate-facts.js exists
 # yet, so this is expected to fail honestly -- the wrapper's markers are simply never
 # written -- rather than pass vacuously; matches C6a's own not-found failure mode.
-CFG_TIMED="$TMPDIR_BASE/cfg-timed"; mk_cfg "$CFG_TIMED"
+CFG_TIMED="$TMPDIR_BASE/cfg-timed"; mk_reader_tree "$CFG_TIMED"
 printf 'CONFIRM_TESTS=off\nCONFIRM_CODE=on\n' > "$CFG_TIMED/.env"
 MARKERS_LIVE="$TMPDIR_BASE/markers-live"; mkdir -p "$MARKERS_LIVE"
 MARKERS_LIVE_N="$(nrm "$MARKERS_LIVE")"
@@ -311,7 +318,8 @@ printf '%s\n' \
   'exec bash "$(dirname "$0")/confirm-off-real" "$@"' > "$CFG_TIMED/bin/confirm-off"
 chmod +x "$CFG_TIMED/bin/confirm-off" 2>/dev/null || true
 RC=0
-AGENTS_CONFIG_DIR="$(nrm "$CFG_TIMED")" run_with_timeout node "$RSF" --session c6behav \
+AGENTS_MAIN_ROOT="$(nrm "$CFG_TIMED")" run_with_timeout \
+  node "$(nrm "$CFG_TIMED")/bin/workflow/read-session-facts" --session c6behav \
   >"$OUTF" 2>"$ERRF" || RC=$?
 ERR="$(cat "$ERRF" 2>/dev/null || echo "")"
 if [ -f "$MARKERS_LIVE/CONFIRM_TESTS.start" ] && [ -f "$MARKERS_LIVE/CONFIRM_CODE.start" ] \
@@ -333,11 +341,11 @@ echo "=== C7: usage errors are exit 1, silent on stdout, loud on stderr ==="
 for bad in "--session" "--session|c 2" "--session|c2|--bogus" "" ; do
   RC=0
   if [ -z "$bad" ]; then
-    AGENTS_CONFIG_DIR="$(nrm "$CFG_FULL")" run_with_timeout node "$RSF" >"$OUTF" 2>"$ERRF" || RC=$?
+    AGENTS_MAIN_ROOT="$(nrm "$CFG_FULL")" run_with_timeout node "$RSF" >"$OUTF" 2>"$ERRF" || RC=$?
     label="no arguments"
   else
     IFS='|' read -r -a argv <<< "$bad"
-    AGENTS_CONFIG_DIR="$(nrm "$CFG_FULL")" run_with_timeout node "$RSF" "${argv[@]}" >"$OUTF" 2>"$ERRF" || RC=$?
+    AGENTS_MAIN_ROOT="$(nrm "$CFG_FULL")" run_with_timeout node "$RSF" "${argv[@]}" >"$OUTF" 2>"$ERRF" || RC=$?
     label="$bad"
   fi
   check "C7: [$label] exits 1" 1 "$RC"
@@ -354,7 +362,7 @@ case_end
 echo ""
 case_begin "C8-no-env-secret-leak" "bin/workflow/lib/session-facts/collect.js"
 echo "=== C8: the snapshot carries the two gate verdicts, never the .env behind them ==="
-# The reader opens the config dir's .env to answer two boolean questions, and its output
+# The reader opens the settings root's .env to answer two boolean questions, and its output
 # is pasted into a transcript. Anything else living in that file -- API keys, tokens --
 # must not ride along (OWASP ASVS V8). The eleven-key contract implies this, but a
 # key-name assertion cannot see a secret smuggled into a VALUE, so it is witnessed here
@@ -381,7 +389,7 @@ echo "=== C9: exit 3 degrades a VALUE -- the eleven-line shape is unchanged ==="
 # reporting. A build that abandoned the contract there -- dropping keys, or appending a
 # diagnostic to stdout -- would leave the caller parsing a shape it never expects.
 RC=0
-WORKFLOW_PLANS_DIR="plans" AGENTS_CONFIG_DIR="$(nrm "$CFG_FULL")" \
+WORKFLOW_PLANS_DIR="plans" AGENTS_MAIN_ROOT="$(nrm "$CFG_FULL")" \
   run_with_timeout node "$RSF" --session c2 >"$OUTF" 2>"$ERRF" || RC=$?
 check "C9a: a relative WORKFLOW_PLANS_DIR exits 3" 3 "$RC"
 check_shape "C9b" "$OUTF"

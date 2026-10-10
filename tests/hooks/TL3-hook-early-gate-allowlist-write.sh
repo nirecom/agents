@@ -11,20 +11,20 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # --- skip gates (rules/test/claude-e2e.md acceptance criteria) ----------------
-if [ ! -x "$AGENTS_DIR/bin/get-config-var" ]; then
+if [ ! -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
     echo "SKIP: bin/get-config-var not found or not executable" >&2; exit 77
 fi
-if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
     echo "SKIP: requires RUN_TL3=on in .env" >&2; exit 77
 fi
 if ! command -v claude >/dev/null 2>&1; then
     echo "SKIP: claude CLI not found" >&2; exit 77
 fi
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-BCTW_HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+BCTW_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
 for h in "$GATE_HOOK" "$BCTW_HOOK"; do
     if [ ! -f "$h" ]; then echo "FAIL: hook missing: $h" >&2; exit 1; fi
 done
@@ -173,7 +173,6 @@ run_turn() {
       WORKFLOW_STATE_DIR="$WFDIR" \
       WORKFLOW_PLANS_DIR="$PLANSDIR" \
       SCRATCHPAD="$(node_path "$SCRATCH_ROOT")" \
-      AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
       run_with_timeout 180 claude -p "$2" \
         --session-id "$1" \
         --setting-sources project \

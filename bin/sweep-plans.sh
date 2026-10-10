@@ -92,8 +92,8 @@ done
 
 # ─── PLANS_DIR resolution ──────────────────────────────────────────────────
 
-if [[ -n "${AGENTS_CONFIG_DIR:-}" ]] && [[ -x "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir" ]]; then
-  PLANS_DIR="$("${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir" 2>/dev/null || echo "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")"
+if [[ -x "$SCRIPT_DIR/workflow-plans-dir" ]]; then
+  PLANS_DIR="$("$SCRIPT_DIR/workflow-plans-dir" 2>/dev/null || echo "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")"
 else
   PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
 fi

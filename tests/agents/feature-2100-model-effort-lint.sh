@@ -8,10 +8,10 @@
 # L-5 fixed-model agents, L-6 extractor negative control.
 
 set -u
-# Anchor to THIS checkout: an inherited AGENTS_DIR would otherwise win in harness.sh.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Anchor to THIS checkout: an inherited SCRIPT_CHECKOUT_ROOT would otherwise win in harness.sh.
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 WORK="$(make_tmp)"
 trap 'rm -rf "$WORK"' EXIT
@@ -41,7 +41,7 @@ fm_has() {
 
 # lint_absent <label> <rel> <key> — pass when <rel> exists with a frontmatter and no <key>:.
 lint_absent() {
-    local label="$1" rel="$2" key="$3" f="$AGENTS_DIR/$2"
+    local label="$1" rel="$2" key="$3" f="${LINT_ROOT:-$SCRIPT_CHECKOUT_ROOT}/$2"
     if [ ! -f "$f" ]; then
         fail "$label" "$rel missing"
     elif [ -z "$(fm_extract "$f")" ]; then
@@ -55,7 +55,7 @@ lint_absent() {
 
 # lint_value <label> <rel> <key> <want>
 lint_value() {
-    local label="$1" rel="$2" key="$3" want="$4" f="$AGENTS_DIR/$2"
+    local label="$1" rel="$2" key="$3" want="$4" f="${LINT_ROOT:-$SCRIPT_CHECKOUT_ROOT}/$2"
     if [ ! -f "$f" ]; then
         fail "$label" "$rel missing"
     else
@@ -66,7 +66,7 @@ lint_value() {
 # role_default <role> — the role's default read from ROLE_TABLE (hooks/lib/role-model.js
 # owns it), so a changed default moves the expected fallback with it.
 role_default() {
-    ROLE_MODEL_JS="$(np "$AGENTS_DIR/hooks/lib/role-model.js")" ROLE_NAME="$1" node - 2>/dev/null <<'JS'
+    ROLE_MODEL_JS="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/role-model.js")" ROLE_NAME="$1" node - 2>/dev/null <<'JS'
 const t = require(process.env.ROLE_MODEL_JS).ROLE_TABLE[process.env.ROLE_NAME];
 process.stdout.write(t && typeof t.default === "string" ? t.default : "");
 JS
@@ -145,11 +145,11 @@ case_end
 case_begin "L-3 effort-free frontmatter (all files)" "skills/review-code-security/SKILL.md"
 n=0
 bad=""
-for f in "$AGENTS_DIR"/agents/*.md "$AGENTS_DIR"/skills/*/SKILL.md; do
+for f in "$SCRIPT_CHECKOUT_ROOT"/agents/*.md "$SCRIPT_CHECKOUT_ROOT"/skills/*/SKILL.md; do
     [ -f "$f" ] || continue
     n=$((n + 1))
     if fm_has "$f" effort; then
-        bad="$bad ${f#"$AGENTS_DIR"/}"
+        bad="$bad ${f#"$SCRIPT_CHECKOUT_ROOT"/}"
     fi
 done
 if [ "$n" -eq 0 ]; then
@@ -189,7 +189,7 @@ got="$got|$(fm_has "$unclosed" effort && echo hit || echo miss)"
 assert_eq "$got" "haiku/high|miss/miss|miss"
 # lint_absent itself must FAIL on the planted file; the subshell keeps that
 # expected FAIL out of this file's counters.
-sub="$( (AGENTS_DIR="$WORK"; PASS=0; FAIL=0; lint_absent "probe" "planted.md" effort; echo "F=$FAIL") | tail -1)"
+sub="$( (LINT_ROOT="$WORK"; PASS=0; FAIL=0; lint_absent "probe" "planted.md" effort; echo "F=$FAIL") | tail -1)"
 assert_eq "$sub" "F=1"
 case_end
 

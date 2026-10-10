@@ -11,11 +11,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-LOOP="$AGENTS_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+# The wrapper finds its siblings from its own location, so the cases launch the
+# copy build_cfg places inside the fixture checkout that holds the stubs.
+LOOP_REL="skills/review-tests/scripts/run-codex-review-loop.sh"
+LOOP="$SCRIPT_CHECKOUT_ROOT/$LOOP_REL"
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
@@ -25,7 +28,7 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 # The #1361 terminal marker lives in <sid>.control/ since #2434; the legacy
 # PLANS_DIR name must never reappear. $1: tmp root, $2: sid.
@@ -36,7 +39,7 @@ any_terminal_marker() { [ -f "$(control_marker "$1" "$2")" ] || [ -f "$(legacy_m
 ARTIFACT="hooks/lib/handoff-artifact.js"
 
 require_module() {
-    if [ -f "$AGENTS_DIR/$1" ]; then return 0; fi
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
     fail "MODULE NOT FOUND: $1 — expected per issue #2218 Step 12, not yet implemented (write_code has not run)"
     return 1
 }
@@ -49,9 +52,10 @@ require_module() {
 CFG=""
 build_cfg() {
     CFG="$(make_tmp)"
-    cp -r "$AGENTS_DIR/hooks" "$CFG/hooks" 2>/dev/null || true
-    cp -r "$AGENTS_DIR/bin" "$CFG/bin" 2>/dev/null || true
-    mkdir -p "$CFG/bin" "$CFG/skills/_shared"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$CFG/hooks" 2>/dev/null || true
+    cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$CFG/bin" 2>/dev/null || true
+    mkdir -p "$CFG/bin" "$CFG/skills/_shared" "$CFG/skills/review-tests"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/skills/review-tests/scripts" "$CFG/skills/review-tests/scripts" 2>/dev/null || true
     printf '#!/bin/bash\nexit "${FORCE_RC:-0}"\n' > "$CFG/bin/run-codex-review-loop"
     # No-colon default: only a truly UNSET FORCE_TARGET becomes NOSTATE, so a
     # caller can still force the empty-commit-target branch by setting it to "".
@@ -65,12 +69,12 @@ run_loop() {
     local tmp="$1" sid="$2" rc_forced="$3" target="$4"
     mkdir -p "$tmp/transcripts"
     env -u CLAUDE_CODE_SESSION_ID \
-        AGENTS_CONFIG_DIR="$CFG" SESSION_ID="$sid" PLANS_DIR="$tmp/wf" EXTENSIONS_USED="0" \
+        AGENTS_MAIN_ROOT="$CFG" SESSION_ID="$sid" PLANS_DIR="$tmp/wf" EXTENSIONS_USED="0" \
         REVIEW_TESTS_FULL_SCAN=1 FORCE_RC="$rc_forced" FORCE_TARGET="$target" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 60 bash "$LOOP" >/dev/null 2>&1
+        "$RWT" 60 bash "$CFG/$LOOP_REL" >/dev/null 2>&1
 }
 
 # Same as run_loop, but from a caller-chosen CWD — needed to drive the NOSTATE
@@ -81,12 +85,12 @@ run_loop_at() {
     mkdir -p "$tmp/transcripts"
     ( cd "$dir" 2>/dev/null || exit 90
       env -u CLAUDE_CODE_SESSION_ID \
-          AGENTS_CONFIG_DIR="$CFG" SESSION_ID="$sid" PLANS_DIR="$tmp/wf" EXTENSIONS_USED="0" \
+          AGENTS_MAIN_ROOT="$CFG" SESSION_ID="$sid" PLANS_DIR="$tmp/wf" EXTENSIONS_USED="0" \
           REVIEW_TESTS_FULL_SCAN=1 FORCE_RC="$rc_forced" FORCE_TARGET="$target" \
           WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
           CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
           HOME="$tmp/home" USERPROFILE="$tmp/home" \
-          "$RWT" 60 bash "$LOOP" >/dev/null 2>&1 )
+          "$RWT" 60 bash "$CFG/$LOOP_REL" >/dev/null 2>&1 )
 }
 
 # #2430: handoff-append writes only inside the workflow active period, so a case
@@ -97,7 +101,7 @@ seed_active() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const S = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const S = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 S.writeState('$sid', S.createInitialState('$sid', { cwd: '/rt/fixture', git_branch: 'feature/rt' }));
 S.markStep('$sid', 'workflow_init', 'complete');
 " >/dev/null 2>&1
@@ -112,7 +116,7 @@ inspect() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const { readHandoff } = require('$AGENTS_DIR_NODE/$ARTIFACT');
+const { readHandoff } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$ARTIFACT');
 const problems = [];
 const doc = readHandoff(process.env.SID);
 const all = [].concat.apply([], Object.values(doc.entriesByClass || {})).filter((x) => x.key === 'review-tests:codex-exit');
@@ -139,7 +143,7 @@ inspect_code_only() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const { readHandoff } = require('$AGENTS_DIR_NODE/$ARTIFACT');
+const { readHandoff } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$ARTIFACT');
 const problems = [];
 const doc = readHandoff(process.env.SID);
 const all = [].concat.apply([], Object.values(doc.entriesByClass || {})).filter((x) => x.key === 'review-tests:codex-exit');
@@ -456,7 +460,7 @@ run_R11() {
 
 # Shared setup for both cases below. Copying the config fixture is only worth its
 # cost once the recorder exists; until then every R stops at its own require_module guard.
-if [ -f "$LOOP" ] && [ -f "$AGENTS_DIR/$ARTIFACT" ]; then build_cfg; fi
+if [ -f "$LOOP" ] && [ -f "$SCRIPT_CHECKOUT_ROOT/$ARTIFACT" ]; then build_cfg; fi
 
 # What the recorder leaves in the handoff artifact: one class D entry per
 # choke-point exit (R1), deduplicated on repeat (R3), and never at the cost of

@@ -61,6 +61,14 @@ trap cleanup_tmpd EXIT
 
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
+# A fixture that could not be built ends the run with a counted failure and a summary line.
+fixture_abort() {
+    fail "fixture/$1"
+    echo ""
+    echo "Total: PASS=$PASS FAIL=$FAIL"
+    exit 1
+}
+
 mk_repo() {
     local d="$1"
     mkdir -p "$d"

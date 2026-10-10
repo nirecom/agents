@@ -38,7 +38,7 @@ TMPCLEAN_OUT="$TMP_ROOT/tmpclean-out.txt"
 run_codex_core() {
     local mode="$1" tmo="${2:-900}"
     rm -f "$TMPCLEAN_PATHS" "$TMPCLEAN_OUT"
-    AGENTS_CONFIG_DIR="$CFG_TMPCLEAN" PATH="$TMPCLEAN_BIN:$PATH" \
+    AGENTS_MAIN_ROOT="$CFG_TMPCLEAN" PATH="$TMPCLEAN_BIN:$PATH" \
         CODEX_MOCK_MODE="$mode" CODEX_TIMEOUT_SECS="$tmo" \
         TMPCLEAN_PATHS="$TMPCLEAN_PATHS" NO_LOG=true \
         run_with_timeout 60 bash -c '
@@ -47,7 +47,7 @@ run_codex_core() {
           NO_LOG=true
           codex_core_run "prompt body $2"
           printf "%s\n%s\n" "$TMPFILE" "$CODEX_STDERR" > "$TMPCLEAN_PATHS"
-        ' _ "$AGENTS_DIR" "$(nfr_block "$CFG_TMPCLEAN" "$PROJ_TMPCLEAN")" \
+        ' _ "$SCRIPT_CHECKOUT_ROOT" "$(nfr_block "$CFG_TMPCLEAN" "$PROJ_TMPCLEAN")" \
         > "$TMPCLEAN_OUT" 2>/dev/null
 }
 

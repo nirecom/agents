@@ -15,15 +15,11 @@ _TRACKING_GUARD_LIB_SOURCED=1
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-CHECK="$AGENTS_DIR/bin/github-issues/check-closes-issues-nonempty.sh"
-STATE_CHECK="$AGENTS_DIR/bin/github-issues/issue-state-check.sh"
-GUARD_LOOP="$AGENTS_DIR/bin/github-issues/clarify-guard-loop.sh"
-CLARIFY_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
-
-# So `node -e "require('hooks/lib/parse-closes-issues.js')"` resolves
-# correctly from the guard script (which uses AGENTS_CONFIG_DIR).
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+CHECK="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/check-closes-issues-nonempty.sh"
+STATE_CHECK="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-state-check.sh"
+GUARD_LOOP="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/clarify-guard-loop.sh"
+CLARIFY_SKILL="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
 
 PASS=0
 FAIL=0

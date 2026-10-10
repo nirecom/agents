@@ -53,7 +53,6 @@ export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 mkdir -p "$TMPDIR_BASE/work"
 cd "$TMPDIR_BASE" || exit 1
 

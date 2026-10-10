@@ -11,11 +11,11 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-REVIEW_TESTS_EVIDENCE="$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REVIEW_TESTS_EVIDENCE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-evidence.js"
 SCRIPT_DIR="$(dirname "$0")/fix-1068-review-scope-fingerprint-deletion"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 PASS=0
 FAIL=0

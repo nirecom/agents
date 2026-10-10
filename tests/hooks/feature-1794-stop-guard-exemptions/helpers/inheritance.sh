@@ -4,14 +4,14 @@
 # Tags: session-inherit, provenance, regression-1794, scope:issue-specific, pwsh-not-required, TL2
 
 # Session-inheritance fixtures for the #1794 adoption (I) cases, split out of helpers.sh
-# under the 300-line WARN. Expects AGENTS_DIR, RWT, STATEIO_NODE, make_tmp, node_path.
+# under the 300-line WARN. Expects SCRIPT_CHECKOUT_ROOT, RWT, STATEIO_NODE, make_tmp, node_path.
 
 # These build a REAL inherited session — donor state, announcing transcript, and an
 # heir created by launching hooks/session-start.js itself — so inherited step_status
 # carries provenance:"backfilled"/origin:"session-inherit" as a live SessionStart writes.
 # Layout under <tmp>: wf/ (workflow+plans, dual-pinned), repo/, tr/, home/, cfg/.
 
-SESSION_START_HOOK="$AGENTS_DIR/hooks/session-start.js"
+SESSION_START_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js"
 
 # mk_fixture_repo <dir> — a real one-commit git repo with hooks disabled, so the
 # git calls inside getCurrentContext()/resolveRepoDir resolve a throwaway
@@ -31,7 +31,7 @@ mk_fixture_repo() {
 
 # inh_node <tmp> <js|--hook> [sid] — one node launch under the full isolation
 # contract (dual-pinned WORKFLOW_STATE_DIR + WORKFLOW_PLANS_DIR, temp HOME,
-# fixture AGENTS_CONFIG_DIR / CLAUDE_PROJECT_DIR / CLAUDE_TRANSCRIPT_BASE_DIR,
+# fixture AGENTS_MAIN_ROOT / CLAUDE_PROJECT_DIR / CLAUDE_TRANSCRIPT_BASE_DIR,
 # inherited session ids unset), run from the fixture repo. `--hook` form pipes a
 # SessionStart payload for <sid> into the real hooks/session-start.js. Sets INH_OUT.
 inh_node() {
@@ -43,7 +43,7 @@ inh_node() {
             WORKFLOW_STATE_DIR="$wfn" WORKFLOW_PLANS_DIR="$wfn" \
             CLAUDE_TRANSCRIPT_BASE_DIR="$(node_path "$tmp/tr")" \
             CLAUDE_PROJECT_DIR="$(node_path "$tmp/repo")" \
-            AGENTS_CONFIG_DIR="$(node_path "$tmp/cfg")" \
+            AGENTS_MAIN_ROOT="$(node_path "$tmp/cfg")" \
             HOME="$tmp/home" USERPROFILE="$homn" \
             "$RWT" 60 node "$(node_path "$SESSION_START_HOOK")" 2>&1)
         return $?
@@ -53,7 +53,7 @@ inh_node() {
         WORKFLOW_STATE_DIR="$wfn" WORKFLOW_PLANS_DIR="$wfn" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$(node_path "$tmp/tr")" \
         CLAUDE_PROJECT_DIR="$(node_path "$tmp/repo")" \
-        AGENTS_CONFIG_DIR="$(node_path "$tmp/cfg")" \
+        AGENTS_MAIN_ROOT="$(node_path "$tmp/cfg")" \
         HOME="$tmp/home" USERPROFILE="$homn" \
         "$RWT" 60 node -e "$js" 2>&1)
 }
@@ -136,7 +136,7 @@ inh_guard() {
 # about this branch's predicate must not read the deployed ~/.claude/ one.
 inh_probe() {
     inh_node "$1" "
-const L = require('$_AGENTS_DIR_NODE/hooks/workflow-state/lifecycle.js');
+const L = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/lifecycle.js');
 const fs = require('fs'), path = require('path');
 const sid = '$2';
 const st = JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + '.json'), 'utf8'));

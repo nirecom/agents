@@ -9,9 +9,8 @@
 
 set -uo pipefail
 
-# Derive AGENTS_CONFIG_DIR from this script's own path when unset (#2308).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 urlenc() { node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$1"; }
 
 REPO_ARG=""
@@ -37,11 +36,11 @@ if ! printf '%s' "$N" | grep -qE '^[0-9]+$'; then
 fi
 
 # Forge detection (#2308). Unknown/empty falls back to GitHub (pre-2308 default).
-FORGE=$(node "$AGENTS_CONFIG_DIR/bin/detect-forge-type" --repo-dir . --field type 2>/dev/null)
+FORGE=$(node "$SCRIPT_CHECKOUT_ROOT/bin/detect-forge-type" --repo-dir . --field type 2>/dev/null)
 [ -z "$FORGE" ] && FORGE="github"
 
 if [ "$FORGE" = "gitlab" ]; then
-    GL_PROJECT=$(node "$AGENTS_CONFIG_DIR/bin/detect-forge-type" --repo-dir . --field project 2>/dev/null)
+    GL_PROJECT=$(node "$SCRIPT_CHECKOUT_ROOT/bin/detect-forge-type" --repo-dir . --field project 2>/dev/null)
     if [ -z "$GL_PROJECT" ]; then
         echo "Error: could not resolve GitLab project path from origin" >&2; exit 1
     fi

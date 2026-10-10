@@ -26,10 +26,10 @@ set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-SF_MODULE_N="$AGENTS_DIR_N/hooks/workflow-state/session-facts.js"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+SF_MODULE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/session-facts.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -57,7 +57,7 @@ PLANS_DIR_N="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1
@@ -115,7 +115,7 @@ const st = wf.readState(process.env.SF_SID);
 const v = st && st.closes_issues !== undefined ? st.closes_issues : null;
 process.stdout.write(JSON.stringify(v));
 EOF
-raw_closes() { WFM="$AGENTS_DIR_N/hooks/workflow-state" SF_SID="$1" run_with_timeout node "$RAWCLOSES_PROBE" 2>/dev/null || echo ""; }
+raw_closes() { WFM="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state" SF_SID="$1" run_with_timeout node "$RAWCLOSES_PROBE" 2>/dev/null || echo ""; }
 
 # Snapshot every file under the temp base (relative paths, sorted) so a probe
 # that escaped the pinned dirs is visible as a tree delta.

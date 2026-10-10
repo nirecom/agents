@@ -11,7 +11,7 @@
 #   consumers   SessionStart, PostCompact
 #
 # Every case runs against a temp WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR /
-# AGENTS_CONFIG_DIR; the real ~/.claude workflow state is never touched.
+# AGENTS_MAIN_ROOT; the real ~/.claude workflow state is never touched.
 #
 # TL3 gap (what this test does NOT catch):
 # - What the live Claude Code SessionStart payload actually puts in `model`
@@ -26,13 +26,13 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-MODEL_IDENTITY_JS="$REPO_DIR/hooks/lib/model-identity.js"
-VERBOSE_PROMPT_JS="$REPO_DIR/hooks/lib/verbose-prompt.js"
-STATE_IO_JS="$REPO_DIR/hooks/workflow-state/state-io.js"
-SESSION_START_JS="$REPO_DIR/hooks/session-start.js"
-POST_COMPACT_JS="$REPO_DIR/hooks/post-compact.js"
+MODEL_IDENTITY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/model-identity.js"
+VERBOSE_PROMPT_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/verbose-prompt.js"
+STATE_IO_JS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js"
+SESSION_START_JS="$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js"
+POST_COMPACT_JS="$SCRIPT_CHECKOUT_ROOT/hooks/post-compact.js"
 
 PASS=0
 FAIL=0
@@ -111,7 +111,7 @@ jsn() {
         -u VERBOSE_PROMPT_MODELS \
         WORKFLOW_STATE_DIR="$WFDIR_N" \
         WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
-        AGENTS_CONFIG_DIR="$CFGDIR_N" \
+        AGENTS_MAIN_ROOT="$CFGDIR_N" \
         CLAUDE_PROJECT_DIR="$PROJDIR_N" \
         "$@" \
         node -e "$JSN_SCRIPT" "$expr" </dev/null 2>/dev/null)" || out="THREW"

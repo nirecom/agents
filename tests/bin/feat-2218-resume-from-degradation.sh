@@ -11,10 +11,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-CLI="$AGENTS_DIR/bin/resume-session-detect"
-FIXTURE="$AGENTS_DIR/tests/fixtures/feat-2218-sample-transcript.jsonl"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect"
+FIXTURE="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/feat-2218-sample-transcript.jsonl"
 
 # isolation (#2512): pin state and plans dirs once for this file
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
@@ -28,13 +28,20 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
+
+# The CONFIRM_DETAIL waiver is read from the settings root's file only, so the fixture owns one.
+CFG_FIXTURE="$_ISOLATION_TMP_ROOT/cfg"
+mkdir -p "$CFG_FIXTURE"
+printf 'CONFIRM_DETAIL=off\n' > "$CFG_FIXTURE/.env"
+CFG_FIXTURE_NODE="$(node_path "$CFG_FIXTURE")"
+export AGENTS_MAIN_ROOT="$CFG_FIXTURE_NODE"
 
 VIEW="bin/lib/resume-session/upstream-view.js"
 TAIL="bin/lib/resume-session/transcript-fallback.js"
 
 require_module() {
-    if [ -f "$AGENTS_DIR/$1" ]; then return 0; fi
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
     fail "MODULE NOT FOUND: $1 — expected per issue #2218 Step 5/11, not yet implemented (write_code has not run)"
     return 1
 }
@@ -60,7 +67,7 @@ run_F1() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 writeState('f1-sess', createInitialState('f1-sess', { cwd: '/f1', git_branch: 'main' }));
 markStep('f1-sess', 'write_tests', 'in_progress');
 writeState('f1-sentinel', createInitialState('f1-sentinel', { cwd: '/f1', git_branch: 'main' }));
@@ -109,7 +116,7 @@ run_F2() {
         "$RWT" 30 node -e "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
 writeState('heir-f2', createInitialState('heir-f2', { cwd: '/heir', git_branch: 'main' }));
@@ -174,7 +181,7 @@ run_F3() {
             "$RWT" 30 node -e "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
 writeState('$1', createInitialState('$1', { cwd: '$2', git_branch: 'feature/heir' }));
@@ -188,7 +195,7 @@ fs.writeFileSync(path.join(dir, '$3' + '-intent.md'), 'intent body' + String.fro
             WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 30 node -e "
-const { readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const s = readState('$1') || {};
 process.stdout.write(String(((s.steps || {})['$2'] || {}).status || 'pending'));
 " 2>/dev/null
@@ -229,11 +236,11 @@ run_F4() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const t = require('$AGENTS_DIR_NODE/hooks/lib/session-title');
+const t = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title');
 const fs = require('fs');
 const problems = [];
 if (typeof t._getTranscriptBase !== 'function') problems.push('session-title.js does not export _getTranscriptBase');
-const src = fs.readFileSync('$AGENTS_DIR_NODE/$TAIL', 'utf8');
+const src = fs.readFileSync('$SCRIPT_CHECKOUT_ROOT_NODE/$TAIL', 'utf8');
 if (src.indexOf('_getJsonlPath') !== -1) problems.push('transcript-fallback.js still routes through _getJsonlPath');
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 " 2>&1)
@@ -243,7 +250,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
     upcwd="$(node_path "$tmp/upstream-repo")"
     mkdir -p "$tmp/upstream-repo"
     encoded=$(env "$RWT" 30 node -e "
-const { _encodeCwd } = require('$AGENTS_DIR_NODE/hooks/lib/session-title');
+const { _encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title');
 process.stdout.write(_encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
@@ -255,7 +262,7 @@ process.stdout.write(_encodeCwd('$upcwd'));
         "$RWT" 30 node -e "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
 writeState('heir-f4', createInitialState('heir-f4', { cwd: '$upcwd', git_branch: 'main' }));
@@ -302,7 +309,7 @@ run_F5() {
     upcwd="$(node_path "$tmp/upstream-repo")"
     mkdir -p "$tmp/upstream-repo"
     encoded=$(env "$RWT" 30 node -e "
-const { _encodeCwd } = require('$AGENTS_DIR_NODE/hooks/lib/session-title');
+const { _encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title');
 process.stdout.write(_encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
@@ -319,7 +326,7 @@ fs.writeFileSync('$(node_path "$tmp")/transcripts/$encoded/up-f5.jsonl', lines.j
         "$RWT" 30 node -e "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
 writeState('heir-f5', createInitialState('heir-f5', { cwd: '$upcwd', git_branch: 'main' }));
@@ -378,7 +385,7 @@ run_F6() {
     upcwd="$(node_path "$tmp/upstream-repo")"
     mkdir -p "$tmp/upstream-repo"
     encoded=$(env "$RWT" 30 node -e "
-const { _encodeCwd } = require('$AGENTS_DIR_NODE/hooks/lib/session-title');
+const { _encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title');
 process.stdout.write(_encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
@@ -389,7 +396,7 @@ process.stdout.write(_encodeCwd('$upcwd'));
         "$RWT" 30 node -e "
 const fs = require('fs');
 const path = require('path');
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
 writeState('heir-f6', createInitialState('heir-f6', { cwd: '$upcwd', git_branch: 'main' }));
@@ -451,8 +458,8 @@ run_F7() {
     problems=""
     out=$(env "$RWT" 30 node -e "
 const path = require('path');
-const { _encodeCwd } = require('$AGENTS_DIR_NODE/hooks/lib/session-title');
-const { transcriptDirFor } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/candidates');
+const { _encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title');
+const { transcriptDirFor } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/candidates');
 const problems = [];
 for (const cwd of ['/home/user/project', 'C:\\\\Users\\\\dev\\\\repo']) {
   const left = _encodeCwd(cwd);

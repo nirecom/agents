@@ -64,7 +64,7 @@ stage_good_readme() {
 
 run_group_e() {
   require_module "E" "hooks/workflow-gate/review-docs-checker.js" || return 0
-  export MOD_N="$AGENTS_DIR_N/hooks/workflow-gate/review-docs-checker.js"
+  export MOD_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-gate/review-docs-checker.js"
   local repo out
 
   # E1: no staged docs → skip regardless of step state.

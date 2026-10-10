@@ -23,6 +23,7 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="conc"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
@@ -45,10 +46,10 @@ for (let i = 0; i < n; i++) S.markStep(sid, "run_tests", i % 2 ? "complete" : "i
 console.log("DONE");
 '
     for i in $(seq 1 "$WORKERS"); do
-        (cd "$AGENTS_DIR" && env \
-            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        (cd "$SCRIPT_CHECKOUT_ROOT" && env \
+            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
             HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_A" MARKS="$MARKS" \
-            "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$WORKER_JS" \
+            "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 90 node -e "$WORKER_JS" \
             >"$TMPROOT/w$i.out" 2>&1) &
     done
     wait
@@ -87,10 +88,10 @@ for (let i = 0; i < 10; i++) S.markStep(process.env.SID, "run_tests", process.en
 console.log("DONE");
 '
     for st in complete pending; do
-        (cd "$AGENTS_DIR" && env \
-            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        (cd "$SCRIPT_CHECKOUT_ROOT" && env \
+            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
             HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_B" ST="$st" \
-            "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$RACE_JS" \
+            "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 90 node -e "$RACE_JS" \
             >"$TMPROOT/race-$st.out" 2>&1) &
     done
     wait
@@ -225,11 +226,11 @@ for (let attempt = 0; attempt < 3; attempt++) {
 console.log("DONE");
 '
     for role in sha worktree type issues append append; do
-        (cd "$AGENTS_DIR" && env \
-            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        (cd "$SCRIPT_CHECKOUT_ROOT" && env \
+            WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
             WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
             HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID_G" ROLE="$role" \
-            "$AGENTS_DIR/bin/run-with-timeout.sh" 90 node -e "$G_JS" \
+            "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 90 node -e "$G_JS" \
             >"$TMPROOT/g-$role-$RANDOM.out" 2>&1) &
     done
     wait

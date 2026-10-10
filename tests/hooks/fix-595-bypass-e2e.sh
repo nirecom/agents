@@ -25,13 +25,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -94,7 +94,6 @@ run_guard() {
     GUARD_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env \
         -C "$main_wt" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
         "$@" \
@@ -117,7 +116,6 @@ if ! env -C "$TMPDIR_BASE" true 2>/dev/null; then
         GUARD_RC=0
         GUARD_OUT="$(cd "$main_wt" && printf '%s' "$payload" | run_with_timeout 30 \
             env \
-            "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "ENFORCE_WORKTREE=on" \
             "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
             "$@" \

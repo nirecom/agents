@@ -43,7 +43,7 @@ function argLooksSecretBearing(arg) {
 function argIsQuotable(a) {
   return typeof a === "string" && SAFE_ARG_RE.test(a) && !argLooksSecretBearing(a);
 }
-const CONFIG_PREFIXES = ['"$AGENTS_CONFIG_DIR/', "$AGENTS_CONFIG_DIR/"];
+const CONFIG_PREFIXES = ['"$AGENTS_MAIN_ROOT/', "$AGENTS_MAIN_ROOT/"];
 const RULE_REF = 'See rules/shell-commands.md, "Command-Line Issuance Discipline".';
 
 // Resolve the captured inner command to {interpreter, scriptArg, args}. This is a
@@ -67,13 +67,13 @@ function resolveInner(innerCommandText) {
   return { interpreter: null, scriptArg: peeled.cmd0, args: peeled.argv.slice() };
 }
 
-// Absolutize ONLY a literal $AGENTS_CONFIG_DIR prefix. A relative path is
+// Absolutize ONLY a literal $AGENTS_MAIN_ROOT prefix. A relative path is
 // cwd-dependent and is never resolved against cwd; any other expansion is opaque.
-function absolutizeScriptArg(scriptArg, configDir) {
+function absolutizeScriptArg(scriptArg, agentsMainRoot) {
   let s = scriptArg;
   for (const prefix of CONFIG_PREFIXES) {
     if (s.startsWith(prefix)) {
-      s = path.join(configDir, s.slice(prefix.length).replace(/"$/, ""));
+      s = path.join(agentsMainRoot, s.slice(prefix.length).replace(/"$/, ""));
       return s.indexOf("$") === -1 ? s : null;
     }
   }
@@ -82,13 +82,13 @@ function absolutizeScriptArg(scriptArg, configDir) {
 }
 
 // The charset gate admits `..`, so containment is checked separately: an entry
-// resolving outside configDir would make branchA recommend a file the SSOT list
+// resolving outside agentsMainRoot would make branchA recommend a file the SSOT list
 // does not sanction.
 // Lexical containment alone is not enough: an entry spelled impeccably can BE a
 // symlink whose target lives outside the tree, so the resolved path is realpathed
 // too. Fail-closed — an unresolvable entry is not a sanctioned entry point.
-function isContainedEntry(entry, configDir) {
-  const root = path.resolve(configDir);
+function isContainedEntry(entry, agentsMainRoot) {
+  const root = path.resolve(agentsMainRoot);
   const abs = path.resolve(root, entry);
   if (abs !== root && !abs.startsWith(root + path.sep)) return false;
   try {
@@ -103,17 +103,17 @@ function isContainedEntry(entry, configDir) {
 // Entries of the SSOT list, or null when the file is unreadable, empty, or holds
 // anything that is not a plain relative path (charset gate mirrors
 // hooks/lib/allow-command-list.js, so a corrupt file degrades instead of matching).
-// Entries that escape configDir are dropped individually, so one bad line cannot
+// Entries that escape agentsMainRoot are dropped individually, so one bad line cannot
 // promote an unrelated command to "registered entry point".
-function readSsotEntries(configDir) {
-  const raw = fs.readFileSync(path.join(configDir, ...SSOT_REL), "utf8");
+function readSsotEntries(agentsMainRoot) {
+  const raw = fs.readFileSync(path.join(agentsMainRoot, ...SSOT_REL), "utf8");
   const entries = raw
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && !line.startsWith("#"));
   if (entries.length === 0) return null;
   if (!entries.every((e) => ENTRY_RE.test(e))) return null;
-  return entries.filter((e) => isContainedEntry(e, configDir));
+  return entries.filter((e) => isContainedEntry(e, agentsMainRoot));
 }
 
 function shebangInterpreterOf(absPath) {
@@ -128,16 +128,16 @@ function shebangInterpreterOf(absPath) {
 
 // The SSOT entry whose absolute, normalized path is IDENTICAL to the inner
 // command's script, and whose shebang agrees with the detected interpreter.
-function matchSsotEntry(inner, configDir, entries) {
-  const abs = absolutizeScriptArg(inner.scriptArg, configDir);
+function matchSsotEntry(inner, agentsMainRoot, entries) {
+  const abs = absolutizeScriptArg(inner.scriptArg, agentsMainRoot);
   if (abs === null) return null;
   const wanted = normalizeForCompare(abs);
   if (!wanted) return null;
   for (const entry of entries) {
-    if (normalizeForCompare(path.resolve(configDir, entry)) !== wanted) continue;
+    if (normalizeForCompare(path.resolve(agentsMainRoot, entry)) !== wanted) continue;
     let shebang = null;
     try {
-      shebang = shebangInterpreterOf(path.resolve(configDir, entry));
+      shebang = shebangInterpreterOf(path.resolve(agentsMainRoot, entry));
     } catch (_e) {
       return null;
     }
@@ -147,8 +147,8 @@ function matchSsotEntry(inner, configDir, entries) {
   return null;
 }
 
-function usableConfigDir() {
-  const dir = process.env.AGENTS_CONFIG_DIR;
+function usableAgentsMainRoot() {
+  const dir = process.env.AGENTS_MAIN_ROOT;
   if (typeof dir !== "string" || dir.trim() === "") return null;
   return fs.statSync(dir).isDirectory() ? dir : null;
 }
@@ -169,7 +169,7 @@ function branchA(hit, match) {
   const args = Array.isArray(match.args) && match.args.length > 0 ? " " + match.args.join(" ") : "";
   return [
     lead(hit),
-    `Reissue it as a single bare command: ${match.interpreter} "$AGENTS_CONFIG_DIR/${match.entry}"${args}`,
+    `Reissue it as a single bare command: ${match.interpreter} "$AGENTS_MAIN_ROOT/${match.entry}"${args}`,
     LABEL_LINE,
     RULE_REF,
   ].join("\n");
@@ -190,19 +190,19 @@ function branchC(hit) {
 
 function buildRemedy(hit) {
   try {
-    let configDir;
+    let agentsMainRoot;
     let entries;
     try {
-      configDir = usableConfigDir();
-      entries = configDir === null ? null : readSsotEntries(configDir);
+      agentsMainRoot = usableAgentsMainRoot();
+      entries = agentsMainRoot === null ? null : readSsotEntries(agentsMainRoot);
     } catch (_e) {
       return branchC(hit);
     }
-    if (configDir === null || entries === null) return branchC(hit);
+    if (agentsMainRoot === null || entries === null) return branchC(hit);
 
     const inner = resolveInner(hit && hit.innerCommandText);
     if (inner === null) return branchB(hit);
-    const match = matchSsotEntry(inner, configDir, entries);
+    const match = matchSsotEntry(inner, agentsMainRoot, entries);
     return match === null ? branchB(hit) : branchA(hit, match);
   } catch (_e) {
     return branchC(hit);

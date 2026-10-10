@@ -12,12 +12,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -30,7 +30,7 @@ OFF='echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: [workflow-bug] cannot proceed>>"'
 run_shim() {  # <tmp_node> <sid> → prints "rc|<stdout>"
     local tn="$1" sid="$2" hook_input out rc
     hook_input=$("$RWT" 8 node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'$sid',tool_input:{command:process.argv[1]}}))" "$OFF")
-    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$tn" "$RWT" 12 node "$SHIM" <<< "$hook_input" 2>/dev/null)
+    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_MAIN_ROOT="$tn" "$RWT" 12 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$out"
 }

@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # run-completion.sh — clarify-intent Completion orchestrator (#1465)
 # Args: --session-id <sid> --plans-dir <dir> [--non-github (silently ignored; gate is internal)]
-# Env: AGENTS_CONFIG_DIR (required)
 # Stdout: single token on last line: PROCEED | NEED_ISSUE | RETRY_EXHAUSTED | CLOSED_ENTRY | CREATED:<N> | CLOSED:<N> | RC2
 # Exit: 0 on token output, 1 on hard error (missing args)
 set -uo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 SESSION_ID=""
 PLANS_DIR=""
@@ -25,7 +24,7 @@ done
 
 # Phase 2 — NON_GITHUB gate (internal; never rely on caller-passed flag)
 NON_GITHUB_ARG=()
-"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote" 2>/dev/null; _gate_rc=$?
+"$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" 2>/dev/null; _gate_rc=$?
 if [[ $_gate_rc -eq 1 ]]; then
     NON_GITHUB_ARG=(--non-github)
 fi
@@ -36,7 +35,7 @@ INTENT_PATH="$PLANS_DIR/$SESSION_ID-intent.md"
 JSON=""
 JSON="$(node -e "
 const path = require('path');
-const libPath = path.join(process.env.AGENTS_CONFIG_DIR, 'hooks', 'lib', 'parse-closes-issues.js');
+const libPath = path.join(process.argv[2], 'hooks', 'lib', 'parse-closes-issues.js');
 try {
     const lib = require(libPath);
     if (typeof lib.parseClosesIssues === 'function') {
@@ -44,7 +43,7 @@ try {
     }
     // else: standalone stub already output via side effect of require()
 } catch (e) { process.stderr.write(e.message + '\n'); }
-" "$INTENT_PATH" 2>/dev/null)" || { echo "[run-completion] parse-closes-issues failed" >&2; exit 1; }
+" "$INTENT_PATH" "$SCRIPT_CHECKOUT_ROOT" 2>/dev/null)" || { echo "[run-completion] parse-closes-issues failed" >&2; exit 1; }
 
 # Phase 4 — Build CLOSES_NUMBERS and REPO_MAP_ARGS
 CLOSES_NUMBERS=""
@@ -66,7 +65,7 @@ fi
 
 # Phase 5 — clarify-commit-scope.sh
 SCOPE_RC=0
-SCOPE_OUT="$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-commit-scope.sh" \
+SCOPE_OUT="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/clarify-commit-scope.sh" \
     --session-id "$SESSION_ID" \
     --plans-dir "$PLANS_DIR" \
     --issues "$CLOSES_NUMBERS" \
@@ -90,7 +89,7 @@ else
 fi
 
 # Phase 6 — guard-loop
-GUARD_OUT="$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-guard-loop.sh" \
+GUARD_OUT="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/clarify-guard-loop.sh" \
     --session-id "$SESSION_ID" \
     --plans-dir "$PLANS_DIR" \
     "${NON_GITHUB_ARG[@]+"${NON_GITHUB_ARG[@]}"}" \

@@ -12,19 +12,19 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # --- skip gates (claude-e2e.md acceptance criteria) --------------------------
-if [ ! -x "$AGENTS_DIR/bin/get-config-var" ]; then
+if [ ! -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
     echo "SKIP: bin/get-config-var not found or not executable" >&2; exit 77
 fi
-if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
     echo "SKIP: requires RUN_TL3=on in .env" >&2; exit 77
 fi
 if ! command -v claude >/dev/null 2>&1; then
     echo "SKIP: claude CLI not found" >&2; exit 77
 fi
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
 if [ ! -f "$HOOK" ]; then
     echo "FAIL: RED-EXPECTED — hooks/block-clearance-token-write.js not yet created" >&2; exit 1
 fi
@@ -106,7 +106,6 @@ run_turn() {
       PATH="$MOCKBIN:$PATH" \
       WORKFLOW_STATE_DIR="$WFDIR" \
       WORKFLOW_PLANS_DIR="$PLANSDIR" \
-      AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
       run_with_timeout 180 claude -p "$2" \
         --session-id "$1" \
         --setting-sources project \
@@ -165,7 +164,7 @@ fi
 # block (b) control-dir writes and (c) plans-unregistered writes.
 # Observable: target files must remain absent (or byte-unchanged if pre-seeded).
 
-GUARD_JS="$AGENTS_DIR/hooks/block-clearance-token-write/placement-guard.js"
+GUARD_JS="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write/placement-guard.js"
 if [ ! -f "$GUARD_JS" ]; then
     echo "SKIP: placement-guard.js not yet created (expected before fix)" >&2
     PG_SKIP=1

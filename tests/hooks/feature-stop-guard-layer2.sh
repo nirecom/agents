@@ -22,8 +22,9 @@
 # via bin/check-verification-gate.sh category: hook-registration
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
-HOOK="$AGENTS_DIR/hooks/stop-confirm-plan-guard.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
+HOOK="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/stop-confirm-plan-guard.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -59,7 +60,7 @@ mkdir -p "$PLANS_DIR" "$WORKFLOW_DIR_TEST" "$TRANSCRIPT_DIR"
 
 ISOLATED_CFG_DIR="${NODE_TMPDIR}/sg2-cfg-$$"
 mkdir -p "$ISOLATED_CFG_DIR"
-export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 export WORKFLOW_STATE_DIR="$WORKFLOW_DIR_TEST"
 

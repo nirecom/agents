@@ -11,8 +11,8 @@ set -u
 export TEST_LANES=off
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SELF_DIR/.." && pwd)"
-RUNNER="$AGENTS_DIR/tests/run-all.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
 MOD_DIR="$SELF_DIR/calibrate-test-parallelism"
 LIB_PATH="${RUN_ALL_PARALLELISM_LIB:-$SELF_DIR/lib/run-all-parallelism.sh}"
 DUR_LIB="$SELF_DIR/lib/run-all-durations.sh"
@@ -172,7 +172,7 @@ cal_cleanup() {
 }
 trap cal_cleanup EXIT
 CAL_T0=$SECONDS
-TESTS_DIR="${TESTS_DIR:-$AGENTS_DIR/tests}"
+TESTS_DIR="${TESTS_DIR:-$SCRIPT_CHECKOUT_ROOT/tests}"
 export TESTS_DIR
 MEASURE_CMD="${RUN_ALL_CALIBRATION_MEASURE_CMD:-}"
 

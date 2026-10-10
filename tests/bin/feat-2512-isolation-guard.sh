@@ -8,22 +8,22 @@
 # (ubuntu runner, fresh checkout) is what proves the job fails on a violation.
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 T="$(make_tmp)"
 readonly T
 harness_isolate "$T/iso"
 export WORKFLOW_STATE_DIR="$T/iso/workflow-state"
 trap 'rm -rf "$T"' EXIT
 
-CLS="$AGENTS_DIR/bin/check-plans-dir-isolation.sh"
+CLS="$SCRIPT_CHECKOUT_ROOT/bin/check-plans-dir-isolation.sh"
 VIOLATION_RE='^(STATE-UNPINNED|STATE-INLINE-ONLY|STATE-PIN-LATE|HALF-PIN-REVERSE|W-candidate|RESIDUAL-TOKEN):'
 # The retired variable name, assembled so this file never carries the literal.
 OLD_TOKEN="CLAUDE_""WORKFLOW_DIR"
 
 # Fixture line vocabulary (single-quoted: fixtures are text, never run here).
-EXEC_RO='node "$AGENTS_DIR/hooks/block-history-direct.js" </dev/null'
-EXEC_BIN='bash "$AGENTS_DIR/bin/workflow-control-dir" --session s1'
+EXEC_RO='node "$SCRIPT_CHECKOUT_ROOT/hooks/block-history-direct.js" </dev/null'
+EXEC_BIN='bash "$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir" --session s1'
 PIN_BOTH='export WORKFLOW_STATE_DIR=/tmp/s WORKFLOW_PLANS_DIR=/tmp/p'
 TPL_B=(
   '#!/usr/bin/env bash'
@@ -46,7 +46,7 @@ fx() {
 # run_cls <args...> — classifier from the repo root; sets CLS_OUT / CLS_RC.
 run_cls() {
   CLS_RC=0
-  CLS_OUT="$(cd "$AGENTS_DIR" && run_with_timeout 120 bash "$CLS" "$@" 2>&1)" || CLS_RC=$?
+  CLS_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && run_with_timeout 120 bash "$CLS" "$@" 2>&1)" || CLS_RC=$?
 }
 
 # run_cls_in <dir> <classifier> <args...> — same, from another cwd and copy.

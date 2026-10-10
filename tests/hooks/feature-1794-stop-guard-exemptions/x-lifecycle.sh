@@ -16,7 +16,7 @@ run_X1() {
     seed_raw_state "$tmp" "x1-inprogress" "in_progress"
     seed_corrupt_state "$tmp" "x1-corrupt"
     out=$(WORKFLOW_STATE_DIR="$tn" "$RWT" 20 node -e "
-const { isWorkflowStarted } = require('$_AGENTS_DIR_NODE/hooks/workflow-state/lifecycle.js');
+const { isWorkflowStarted } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/lifecycle.js');
 const rows = [
   ['x1-complete', true], ['x1-skipped', true], ['x1-pending', false],
   ['x1-inprogress', false], ['x1-absent', false], ['x1-corrupt', false],
@@ -38,8 +38,8 @@ process.stdout.write(bad.length ? 'BAD:' + bad.join(',') : 'OK');" 2>/dev/null)
 run_X2() {
     local out
     out=$("$RWT" 20 node -e "
-const barrel = require('$_AGENTS_DIR_NODE/hooks/workflow-state.js');
-const lifecycle = require('$_AGENTS_DIR_NODE/hooks/workflow-state/lifecycle.js');
+const barrel = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state.js');
+const lifecycle = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/lifecycle.js');
 const ok = typeof barrel.isWorkflowStarted === 'function' &&
   barrel.isWorkflowStarted === lifecycle.isWorkflowStarted;
 process.stdout.write(ok ? 'OK' : 'BAD');" 2>/dev/null)
@@ -61,7 +61,7 @@ run_X3() {
     C2_OUT=""; C2_RC=""
     C2_OUT=$(echo '{"stop_hook_active":false,"session_id":"x3sid","transcript_path":""}' \
         | WORKFLOW_STATE_DIR="$tn/definitely-not-here" WORKFLOW_PLANS_DIR="$tn" \
-          AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 25 node "$(node_path "$GUARD_C2")" 2>/dev/null)
+          "$RWT" 25 node "$(node_path "$GUARD_C2")" 2>/dev/null)
     C2_RC=$?
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$C2_RC" -eq 0 ] && ! echo "$C2_OUT" | grep -q '"block"'; then

@@ -11,8 +11,9 @@
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 require_sut
 
 # --- WP1: single issue wip=none → wip-state set invoked → done -----------------
@@ -122,9 +123,10 @@ teardown_case
 case_end
 
 # --- probe harness (mirrors driver-meta-classify.sh's probe()) -----------------
-# wipCheck(state, agentsConfigDir, sessionId) spawns the mocked wip-state.sh, so
-# $CFG/$SID ride the extra argv. See driver-meta-classify.sh for the base pattern.
-WIP_MOD="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/wip-check.js"
+# wipCheck(state, sessionId) spawns the wip-state.sh beside its own checkout, so the
+# module is required from $CFG (where the mock lives) and $SID rides the extra argv.
+# See driver-meta-classify.sh for the base pattern.
+WIP_MOD="$CFG/bin/workflow/lib/workflow-init/phases/wip-check.js"
 probe() {  # <module-path> [extra argv...]; snippet on stdin → PROBE_OUT/PROBE_RC/PROBE_ERR
     local mod="$1"; shift
     cat > "$CASE_DIR/probe.js"
@@ -146,10 +148,10 @@ assert_probe() {  # <label> <expected-exact-line>
 # see M5) — wip-check filters #250 via state.label_sets, never touching it.
 case_begin "wp8a-meta-filter" "bin/workflow/workflow-init-driver"
 setup_case wid-wp8a
-probe "$WIP_MOD" "$CFG" "$SID" <<'NODE'
+probe "$WIP_MOD" "$SID" <<'NODE'
 const { wipCheck } = require(process.argv[2]);
 const state = { issues: [250, 251], label_sets: { 250: ["meta"], 251: ["type:task"] }, wip_results: {} };
-const r = wipCheck(state, process.argv[3], process.argv[4]) || {};
+const r = wipCheck(state, process.argv[3]) || {};
 console.log("ask=" + JSON.stringify(!!r.ask));
 console.log("force_path_b=" + JSON.stringify(!!state.force_path_b));
 NODE
@@ -171,10 +173,10 @@ case_end
 # see M5) must not reach wip-state.sh and must not raise force_path_b (M11/M20).
 case_begin "wp8b-all-meta" "bin/workflow/workflow-init-driver"
 setup_case wid-wp8b
-probe "$WIP_MOD" "$CFG" "$SID" <<'NODE'
+probe "$WIP_MOD" "$SID" <<'NODE'
 const { wipCheck } = require(process.argv[2]);
 const state = { issues: [250], label_sets: { 250: ["meta"] }, wip_results: {} };
-const r = wipCheck(state, process.argv[3], process.argv[4]) || {};
+const r = wipCheck(state, process.argv[3]) || {};
 console.log("ask=" + JSON.stringify(!!r.ask));
 console.log("force_path_b=" + JSON.stringify(!!state.force_path_b));
 NODE

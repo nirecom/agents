@@ -14,15 +14,15 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WIP_STATE="$AGENTS_DIR/bin/github-issues/wip-state.sh"
-WIP_SET_SINGLE="$AGENTS_DIR/bin/github-issues/wip-set-single.sh"
-WIP_SET_RESUME="$AGENTS_DIR/skills/workflow-init/scripts/wip-set-resume.sh"
-AGG_WIP_CHECK="$AGENTS_DIR/skills/workflow-init/scripts/aggregate-wip-check.sh"
-DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
-STATE_IO_JS="$AGENTS_DIR/hooks/workflow-state/state-io.js"
-CLARIFY_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
-WI_SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+WIP_STATE="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh"
+WIP_SET_SINGLE="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-set-single.sh"
+WIP_SET_RESUME="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/wip-set-resume.sh"
+AGG_WIP_CHECK="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/aggregate-wip-check.sh"
+DRIVER="$SCRIPT_CHECKOUT_ROOT/bin/workflow/workflow-init-driver"
+STATE_IO_JS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js"
+CLARIFY_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
+WI_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -40,6 +40,8 @@ run_with_timeout() {
 }
 
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")/fix-session-id-fixes-451-469-543"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 # shellcheck source=./fix-session-id-fixes-451-469-543/skill-hints-451.sh
 . "$SCRIPT_DIR/skill-hints-451.sh"

@@ -10,7 +10,6 @@
 // Promise.allSettled, never Promise.all — one broken gate must not discard the
 // verdict the other gate did produce.
 
-const { normalizeCwd } = require("../../../../hooks/lib/path-normalize");
 const { probeConfirmGate } = require("../../../../hooks/lib/confirm-gate/probe");
 const { GATE_DEFAULTS } = require("./keys");
 
@@ -18,12 +17,11 @@ const DEFAULT_TIMEOUT_MS = 5000;
 
 // Never throws and never rejects: every gate resolves to a value, so the caller
 // keeps its fixed key set and its exit code independent of gate health.
-async function readGateFacts(configDir, opts) {
-  const dir = normalizeCwd(configDir) || configDir;
+async function readGateFacts(opts) {
   const timeoutMs = (opts && opts.timeoutMs) || DEFAULT_TIMEOUT_MS;
   const keys = Object.keys(GATE_DEFAULTS);
   const settled = await Promise.allSettled(
-    keys.map((key) => probeConfirmGate(dir, key, timeoutMs))
+    keys.map((key) => probeConfirmGate(key, timeoutMs))
   );
   const out = {};
   keys.forEach((key, i) => {

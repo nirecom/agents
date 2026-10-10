@@ -9,9 +9,9 @@
 # only a full installer run on a throwaway Windows host covers that.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-INSTALL_PS1="$AGENTS_DIR/install.ps1"
-RUN_WITH_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+INSTALL_PS1="$SCRIPT_CHECKOUT_ROOT/install.ps1"
+RUN_WITH_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 CASE_TIMEOUT=60
 
 PASS=0; FAIL=0

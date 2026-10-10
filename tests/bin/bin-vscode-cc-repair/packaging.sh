@@ -20,12 +20,12 @@ run_c3_shebang() {
 
 run_c3_index_mode() {
   local mode
-  if ! git -C "$AGENTS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "SKIP: C3-e02 git index mode (AGENTS_DIR is not a git repository)"
+  if ! git -C "$SCRIPT_CHECKOUT_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "SKIP: C3-e02 git index mode (this checkout is not a git repository)"
     SKIP=$((SKIP + 1))
     return 0
   fi
-  mode="$(git -C "$AGENTS_DIR" ls-files -s -- bin/vscode-cc-repair/index.js \
+  mode="$(git -C "$SCRIPT_CHECKOUT_ROOT" ls-files -s -- bin/vscode-cc-repair/index.js \
     | awk '{print $1}')"
   if [ -z "$mode" ]; then
     echo "SKIP: C3-e02 git index mode (bin/vscode-cc-repair/index.js not tracked yet)"
@@ -61,7 +61,7 @@ run_c3_direct_exec() {
 
 run_c4_readme_entry() {
   local readme body
-  readme="$AGENTS_DIR/README.md"
+  readme="$SCRIPT_CHECKOUT_ROOT/README.md"
   check_file "C4-r01: README.md exists at the repo root" "$readme"
   if [ ! -f "$readme" ]; then
     echo "FAIL: C4-r02: README.md registers bin/vscode-cc-repair -- no README.md"

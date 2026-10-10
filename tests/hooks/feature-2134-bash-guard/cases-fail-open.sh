@@ -50,7 +50,7 @@ case_begin "fail-open-never-allow" "hooks/bash-guard/judge.js"
 for o5_mode in judge-null-command judge-throwing-input; do
     assert_not_contains "O5/$o5_mode: a fail-open verdict is never allow" "allow" "$(probe "$o5_mode" '')"
 done
-o5_cwd="$(probe judge-throwing-cwd 'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list')"
+o5_cwd="$(probe judge-throwing-cwd 'node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list')"
 assert_eq "O5/throwing-cwd: an exception reading cwd falls to passThrough, not allow" \
     "passThrough" "$o5_cwd"
 case_end

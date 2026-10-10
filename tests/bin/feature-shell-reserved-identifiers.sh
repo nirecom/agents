@@ -8,9 +8,9 @@
 # tests/ is excluded: fixtures assign HOME=/PATH=/PROMPT= on purpose for isolation.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 SRI_TMP="$(make_tmp)"
 trap 'rm -rf "$SRI_TMP"' EXIT
@@ -148,7 +148,7 @@ check_line() {
 # scan_dir <label> <prefix>
 scan_dir() {
   local label="$1" prefix="$2" out rc
-  out="$(run_with_timeout 60 node "$(np "$DETECT_JS")" scan "$(np "$AGENTS_DIR")" "$prefix" 2>&1)"
+  out="$(run_with_timeout 60 node "$(np "$DETECT_JS")" scan "$(np "$SCRIPT_CHECKOUT_ROOT")" "$prefix" 2>&1)"
   rc=$?
   if ! printf '%s\n' "$out" | grep -q '^SCANNED [1-9]'; then
     fail "$label" "scan did not complete or matched no file (rc=$rc): $out"
@@ -193,7 +193,7 @@ case_end
 
 case_begin "scan-coverage-extensionless" "bin/"
 # False-green guard: the scan must reach extensionless shebang scripts, not only *.sh.
-SRI_FILES="$(run_with_timeout 60 node "$(np "$DETECT_JS")" files "$(np "$AGENTS_DIR")" bin/ 2>&1)"
+SRI_FILES="$(run_with_timeout 60 node "$(np "$DETECT_JS")" files "$(np "$SCRIPT_CHECKOUT_ROOT")" bin/ 2>&1)"
 for f in bin/review-plan-codex bin/supervisor-findings-codex bin/lib/codex-core.sh; do
   if printf '%s\n' "$SRI_FILES" | grep -qx "FILE $f"; then pass "scan set includes $f"; else fail "scan set includes $f" "not listed"; fi
 done

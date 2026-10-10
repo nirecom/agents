@@ -12,7 +12,7 @@ set -uo pipefail
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 ERRORS=0
 
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_WORKTREE/tests/lib/harness.sh"
 
@@ -28,7 +28,7 @@ run_with_timeout() {
 }
 
 # ---------------------------------------------------------------------------
-# Per-test setup: creates a mock AGENTS_CONFIG_DIR with required binaries
+# Per-test setup: creates a mock agents checkout with required binaries
 # ---------------------------------------------------------------------------
 setup_mock_env() {
   local test_tmp="$1"
@@ -49,7 +49,7 @@ exit 0
 EOF
   chmod +x "$agents_dir/bin/build-codex-context"
 
-  # Copy the wrapper under test into AGENTS_CONFIG_DIR/bin
+  # Copy the wrapper under test into the mock checkout's bin
   if [[ -f "$AGENTS_WORKTREE/bin/run-codex-review-loop" ]]; then
     cp "$AGENTS_WORKTREE/bin/run-codex-review-loop" "$agents_dir/bin/run-codex-review-loop"
     chmod +x "$agents_dir/bin/run-codex-review-loop"
@@ -129,7 +129,7 @@ EOF
 invoke_wrapper() {
   local agents_dir="$1"
   shift
-  AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
+  run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
 }
 
 # Helper: one FORMAT/verdict/exit-code case for Group A table-driven tests.
@@ -153,7 +153,7 @@ run_format_case() {
 ${body}
 <!-- end-codex-output -->"
 
-  AGENTS_CONFIG_DIR="$mock" run_with_timeout "$mock/bin/run-codex-review-loop" \
+  run_with_timeout "$mock/bin/run-codex-review-loop" \
     --format "$format" --session-id "sid-${name}" --plans-dir "$plans" \
     --draft-file "$plans/draft.md" --cap 1 --max-extensions 0 --extensions-used 0 \
     --accepted-tradeoffs "$plans/outline.md" --round 1 > /dev/null 2>&1
@@ -191,7 +191,7 @@ invoke_real_review_plan_codex() {
   if [[ -f "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" ]]; then
     cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$mock_dir/bin/lib/cli-exec-guard.sh"
   fi
-  AGENTS_CONFIG_DIR="$mock_dir" run_with_timeout "$mock_dir/bin/review-plan-codex" \
+  run_with_timeout "$mock_dir/bin/review-plan-codex" \
     --format "$fmt" \
     --session-id "$sid" \
     --log-dir "$plans_dir" \
@@ -229,6 +229,13 @@ trap 'rm -rf "$STATE_ROOT"' EXIT
 export WORKFLOW_STATE_DIR="$STATE_ROOT/workflow-state"
 export WORKFLOW_PLANS_DIR="$STATE_ROOT/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
+# codex-timeout.sh falls back to a get-config-var on PATH when a mock checkout has none:
+# that must be this checkout's, reading an empty settings root, never an installed shim.
+mkdir -p "$STATE_ROOT/path-bin" "$STATE_ROOT/agents-main"
+export AGENTS_MAIN_ROOT="$STATE_ROOT/agents-main"
+printf '#!/usr/bin/env bash\nexec bash "%s/bin/get-config-var" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" > "$STATE_ROOT/path-bin/get-config-var"
+chmod +x "$STATE_ROOT/path-bin/get-config-var"
+export PATH="$STATE_ROOT/path-bin:$PATH"
 
 case_begin "safe-state-path-preflight" "bin/run-codex-review-loop"
 # The loop sources bin/lib/safe-state-path.sh (#2434 rename of safe-plans-path.sh);

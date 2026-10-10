@@ -22,7 +22,7 @@ _seed_corrupt() { printf '{ this is not json' > "$1/$2.json"; }
 # something to report before it can assert what the guard did with it.
 _stalls() {
     WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 20 node -e "
-const f = require('$_AGENTS_DIR_NODE/hooks/lib/mechanism-failure.js').detectStalledSteps('$2') || [];
+const f = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/mechanism-failure.js').detectStalledSteps('$2') || [];
 process.stdout.write(f.map((x) => x.step + ':' + x.kind).join(','));" 2>/dev/null
 }
 

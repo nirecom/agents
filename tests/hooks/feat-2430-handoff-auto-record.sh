@@ -10,8 +10,8 @@
 # TDD (write_code has not run): the "records" cases are expected to FAIL until hooks/lib/handoff-auto-record.js exists and the producers call it; the "records nothing" and "output unchanged" cases already hold today and pin the contract against regression. R3 (C2) is expected to FAIL until reset-handler records the breadcrumb when the session was active BEFORE the reset, not only after it.
 
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
@@ -20,7 +20,7 @@ export WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
 export WORKFLOW_PLANS_DIR="$WORKFLOW_STATE_DIR"
 export HOME="$(np "$TMP/home")" USERPROFILE="$(np "$TMP/home")"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/transcripts")"
-export AGENTS="$(np "$AGENTS_DIR")"
+export AGENTS="$(np "$SCRIPT_CHECKOUT_ROOT")"
 mkdir -p "$TMP/transcripts"
 cd "$TMP" || exit 1
 
@@ -79,9 +79,9 @@ JS
 nj() { run_with_timeout 60 node "$(np "$TMP/$1")" "${@:2}" 2>&1; }
 seed() { nj seed.js "$1" "$2" >/dev/null; }
 entry() { nj entry.js "$@"; }
-verdict_cli() { run_with_timeout 60 node "$AGENTS_DIR/bin/supervisor-write-audit-verdict" "$@" 2>/dev/null; }
-audit_cli() { run_with_timeout 60 node "$AGENTS_DIR/bin/supervisor-write-audit" "$@" 2>/dev/null; }
-compact() { printf '{"session_id":"%s"}' "$1" | run_with_timeout 60 node "$AGENTS_DIR/hooks/post-compact.js" 2>/dev/null; }
+verdict_cli() { run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit-verdict" "$@" 2>/dev/null; }
+audit_cli() { run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit" "$@" 2>/dev/null; }
+compact() { printf '{"session_id":"%s"}' "$1" | run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/post-compact.js" 2>/dev/null; }
 verdict_ptr() { printf '%s' "$1.control/supervisor-state.json"; }
 
 # expect <name> <got> <want> — one verdict line.

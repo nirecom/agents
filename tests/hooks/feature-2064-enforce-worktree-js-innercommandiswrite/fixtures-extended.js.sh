@@ -104,7 +104,7 @@ Object.assign(FIX, {
 // ---------------------------------------------------------------------------
 // The sanctioned truncated `--body "$(cat <<'EOF'` opener, as a reusable tail.
 const TROPEN = ' "$(cat <<' + "'EOF'" + ')"';
-const DPATH = '$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh';
+const DPATH = '$AGENTS_MAIN_ROOT/bin/github-issues/issue-create-dispatch.sh';
 
 Object.assign(FIX, {
   // Section 17 — H1. Every verb GH_GROUP_A_REGEX accepts, one fixture each.

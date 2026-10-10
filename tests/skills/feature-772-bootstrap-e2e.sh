@@ -10,8 +10,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BOOTSTRAP_COMPLETE="$AGENTS_DIR/skills/worktree-end/scripts/bootstrap-complete.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+BOOTSTRAP_COMPLETE="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/bootstrap-complete.sh"
 
 PASS=0
 FAIL=0

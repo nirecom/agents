@@ -14,8 +14,8 @@ set -uo pipefail
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SWEEP="$AGENTS_DIR/bin/sweep-plans.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SWEEP="$SCRIPT_CHECKOUT_ROOT/bin/sweep-plans.sh"
 
 PASS=0
 FAIL=0

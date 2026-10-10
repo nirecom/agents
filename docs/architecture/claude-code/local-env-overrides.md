@@ -15,7 +15,7 @@ reviewed project's own root, not from the machine's config (#2223).
 
 | Layer | File | Authored by | Trust |
 |---|---|---|---|
-| Global | `<AGENTS_CONFIG_DIR>/.env` | the operator of this machine | trusted |
+| Global | `<AGENTS_MAIN_ROOT>/.env` | the operator of this machine | trusted |
 | Local | `<reviewed project>/.env.local` | whoever wrote that repository | untrusted |
 
 The local layer is untrusted on purpose. A reviewed project may be a third-party
@@ -56,7 +56,7 @@ each entry there. Two criteria put a key on it:
    (`WORKFLOW_STATE_DIR`, `WORKFLOW_PLANS_DIR`; what each holds:
    [state-dirs.md](state-dirs.md)), the state and log root
    (`AGENTS_STATE_DIR`), the config directory this very
-   layer resolves the global `.env` from (`AGENTS_CONFIG_DIR`), the worktree
+   layer resolves the global `.env` from (`AGENTS_MAIN_ROOT`), the worktree
    enforcement switches, and `PLAN_SYNC_REMOTE_URL` (the one remote every plan is
    pushed to; a project must not publish plans to a repo the operator never chose —
    [plan-sync.md](plan-sync.md)).

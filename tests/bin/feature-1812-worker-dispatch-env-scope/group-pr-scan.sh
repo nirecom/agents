@@ -86,7 +86,7 @@ const payload = {
 };
 const ctx = {
   entry: { name: "commit-push", binaries: { external: [], scripts: {} } },
-  anchors: { acd: path.join(tmp, "acd-none"), plansDir: tmp },
+  anchors: { scriptCheckoutRoot: path.join(tmp, "script-checkout-none"), plansDir: tmp },
   path: path,
   fsguard: { writeFile: (t) => t },
 };
@@ -102,7 +102,7 @@ _gprs_run() {
     local gtmp="$TMPD/g-prs-$$-$RANDOM"
     mkdir -p "$gtmp"
     run_with_timeout 40 env "F_TMP=$(nodepath "$gtmp")" "SCAN_BLOCK=${2:-0}" \
-        node "$(nodepath "$G_PR_SCAN_DRIVER")" "$(nodepath "$AGENTS_DIR")" "$1" 2>/dev/null
+        node "$(nodepath "$G_PR_SCAN_DRIVER")" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$1" 2>/dev/null
 }
 
 _gprs_status() {
@@ -112,7 +112,7 @@ _gprs_status() {
 }
 
 group_pr_scan() {
-    local PR_JS="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push/pr.js"
+    local PR_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/commit-push/pr.js"
     if [ ! -f "$PR_JS" ]; then
         fail "G/prerequisite" "missing $PR_JS"
         return

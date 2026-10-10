@@ -33,9 +33,9 @@ WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"; export WORKFLOW_STATE_DIR
 WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"; export WORKFLOW_PLANS_DIR
 unset CLAUDE_CODE_SESSION_ID CONFIRM_TESTS CONFIRM_CODE
 
-AGENTS_DIR="$REPO_ROOT"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # shellcheck source=../../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1 -- expected [$2] got [$3]"; fi; }
 check_contains() {
   case "$3" in *"$2"*) pass "$1" ;; *) fail "$1 -- expected [$2] in: $3" ;; esac
@@ -53,20 +53,25 @@ mk_cfg() {
   cp "$REPO_ROOT/bin/confirm-off" "$d/bin/"
   cp "$REPO_ROOT/hooks/lib/load-env.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/local-env.js" "$d/hooks/lib/"
-  cp "$REPO_ROOT/hooks/lib/agents-config-dir.js" "$d/hooks/lib/"
+  cp "$REPO_ROOT/hooks/lib/script-checkout-root.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/path-normalize.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/local-env.js" "$d/hooks/lib/"
   chmod +x "$d/bin/get-config-var" "$d/bin/confirm-off" 2>/dev/null || true
 }
 CFG="$TMPDIR_BASE/cfg"; mk_cfg "$CFG"; : > "$CFG/.env"
-CFG_BARE="$TMPDIR_BASE/cfg-bare"; mkdir -p "$CFG_BARE"
 CFG_PD="$TMPDIR_BASE/cfg-pd"; mk_cfg "$CFG_PD"
+# The reader finds confirm-off and get-config-var beside itself, so a case that needs one
+# of them missing or stubbed runs a copy of the reader from a tree it can break.
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+mk_reader_tree() { script_checkout_fixture_copy "$1" bin/workflow hooks bin/confirm-off bin/get-config-var; }
+reader_of() { printf '%s' "$(nrm "$1")/bin/workflow/read-session-facts"; }
+CFG_BARE="$TMPDIR_BASE/cfg-bare"; mk_reader_tree "$CFG_BARE"; rm -f "$CFG_BARE/bin/get-config-var"
 
 OUTF="$TMPDIR_BASE/out.txt"; ERRF="$TMPDIR_BASE/err.txt"
 OUT=""; ERR=""; RC=0
-run_facts() {
+run_facts() { # <settings root> <session id> [<reader, default: this checkout's>]
   RC=0
-  AGENTS_CONFIG_DIR="$(nrm "$1")" run_with_timeout node "$RSF" --session "$2" >"$OUTF" 2>"$ERRF" || RC=$?
+  AGENTS_MAIN_ROOT="$(nrm "$1")" run_with_timeout node "${3:-$RSF}" --session "$2" >"$OUTF" 2>"$ERRF" || RC=$?
   OUT="$(cat "$OUTF" 2>/dev/null || echo "")"; ERR="$(cat "$ERRF" 2>/dev/null || echo "")"
 }
 val_of() { printf '%s\n' "$OUT" | sed -n "s/^$1=//p" | head -n 1; }
@@ -123,7 +128,8 @@ check_adoption() {
   else fail "(e) $n documents the PLANS_DIR=NONE halt -- literal not found"; fi
 }
 count_lit() { grep -oF -- "$2" "$1" 2>/dev/null | wc -l | tr -d ' '; }
-CONFIRM_CALL='"$AGENTS_CONFIG_DIR/bin/confirm-off"'
+# Root-agnostic on purpose: a call spelled with any root variable ends in this literal.
+CONFIRM_CALL='/bin/confirm-off"'
 # #2490: the post-action probe is now the shared gate trigger (next-step --gate), not confirm-off.
 GATE_TRIGGER='Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.'
 check_round_trips() {
@@ -163,7 +169,7 @@ run_gate_matrix() {
     check "(a) $k=[$v] exit stays 0" 0 "$RC"
     # Differential: the bundled reader must AGREE with the single-purpose helper it
     # composes. A re-implementation that drifts shows up here, not in production.
-    direct="$(AGENTS_CONFIG_DIR="$(nrm "$CFG")" run_with_timeout bash "$CFG/bin/confirm-off" "$k" on 2>/dev/null || true)"
+    direct="$(AGENTS_MAIN_ROOT="$(nrm "$CFG")" run_with_timeout bash "$CFG/bin/confirm-off" "$k" on 2>/dev/null || true)"
     check "(a) $k=[$v] agrees with bin/confirm-off" "$direct" "$got"
   done
 }
@@ -190,7 +196,7 @@ printf 'CONFIRM_TESTS=off\nCONFIRM_CODE=on\n' > "$CFG/.env"
 run_facts "$CFG" "gi"
 check "(a) independence: TESTS=off and CODE=on are not swapped -- TESTS" "OFF" "$(val_of GATE_CONFIRM_TESTS)"
 check "(a) independence: TESTS=off and CODE=on are not swapped -- CODE" "ON" "$(val_of GATE_CONFIRM_CODE)"
-run_facts "$CFG_BARE" "ge"
+run_facts "$CFG_BARE" "ge" "$(reader_of "$CFG_BARE")"
 check "(a) ERROR: no get-config-var -- TESTS" "ERROR" "$(val_of GATE_CONFIRM_TESTS)"
 check "(a) ERROR: no get-config-var -- CODE" "ERROR" "$(val_of GATE_CONFIRM_CODE)"
 check "(a) ERROR is expressed as a value, exit stays 0" 0 "$RC"
@@ -199,7 +205,7 @@ case_end
 # One-sided failure. A Promise.all implementation rejects wholesale and loses the gate
 # that DID resolve; Promise.allSettled keeps it. This cell is the difference.
 case_begin "a-one-sided-gate-failure" "bin/workflow/lib/session-facts/gate-facts.js"
-CFG_HALF="$TMPDIR_BASE/cfg-half"; mk_cfg "$CFG_HALF"
+CFG_HALF="$TMPDIR_BASE/cfg-half"; mk_reader_tree "$CFG_HALF"
 printf 'CONFIRM_TESTS=off\nCONFIRM_CODE=off\n' > "$CFG_HALF/.env"
 mv "$CFG_HALF/bin/get-config-var" "$CFG_HALF/bin/get-config-var-real"
 printf '%s\n' \
@@ -209,7 +215,7 @@ printf '%s\n' \
   'if [ "${1:-}" = "CONFIRM_CODE" ]; then exit 4; fi' \
   'exec bash "$(dirname "$0")/get-config-var-real" --is-off "$@"' > "$CFG_HALF/bin/get-config-var"
 chmod +x "$CFG_HALF/bin/get-config-var" 2>/dev/null || true
-run_facts "$CFG_HALF" "gh"
+run_facts "$CFG_HALF" "gh" "$(reader_of "$CFG_HALF")"
 check "(a) one-sided failure: the healthy gate keeps its value" "OFF" "$(val_of GATE_CONFIRM_TESTS)"
 check "(a) one-sided failure: only the broken gate is ERROR" "ERROR" "$(val_of GATE_CONFIRM_CODE)"
 check "(a) one-sided failure: exit stays 0" 0 "$RC"
@@ -222,9 +228,9 @@ run_facts_pd() {
   RC=0
   if [ "$3" = "__UNSET__" ]; then
     ( unset WORKFLOW_PLANS_DIR
-      AGENTS_CONFIG_DIR="$(nrm "$1")" run_with_timeout node "$RSF" --session "$2" ) >"$OUTF" 2>"$ERRF" || RC=$?
+      AGENTS_MAIN_ROOT="$(nrm "$1")" run_with_timeout node "$RSF" --session "$2" ) >"$OUTF" 2>"$ERRF" || RC=$?
   else
-    WORKFLOW_PLANS_DIR="$3" AGENTS_CONFIG_DIR="$(nrm "$1")" \
+    WORKFLOW_PLANS_DIR="$3" AGENTS_MAIN_ROOT="$(nrm "$1")" \
       run_with_timeout node "$RSF" --session "$2" >"$OUTF" 2>"$ERRF" || RC=$?
   fi
   OUT="$(cat "$OUTF" 2>/dev/null || echo "")"; ERR="$(cat "$ERRF" 2>/dev/null || echo "")"
@@ -309,7 +315,7 @@ printf '%s\n' \
   '  return m;' \
   '};' > "$STUB"
 RC=0
-AGENTS_CONFIG_DIR="$(nrm "$CFG")" run_with_timeout node --require "$STUB" "$RSF" \
+AGENTS_MAIN_ROOT="$(nrm "$CFG")" run_with_timeout node --require "$STUB" "$RSF" \
   --session cx4 >"$OUTF" 2>"$ERRF" || RC=$?
 OUT="$(cat "$OUTF" 2>/dev/null || echo "")"
 check "(c) iv: underivable per-stage view -- write_tests" "NONE" "$(val_of COMPLEXITY_LEVEL_write_tests)"
@@ -327,7 +333,7 @@ printf 'CONFIRM_TESTS=off\n' > "$CFG/.env"
 run_facts "$CFG" nc1
 check "(d) the bundled reader saw the pre-change value" "OFF" "$(val_of GATE_CONFIRM_TESTS)"
 printf 'CONFIRM_TESTS=on\n' > "$CFG/.env"
-LATE="$(AGENTS_CONFIG_DIR="$(nrm "$CFG")" run_with_timeout bash "$CFG/bin/confirm-off" CONFIRM_TESTS on 2>/dev/null || true)"
+LATE="$(AGENTS_MAIN_ROOT="$(nrm "$CFG")" run_with_timeout bash "$CFG/bin/confirm-off" CONFIRM_TESTS on 2>/dev/null || true)"
 check "(d) the later probe reports the NEW value" "ON" "$LATE"
 case_end
 case_begin "d-gate-defaults-table" "bin/workflow/lib/session-facts/keys.js"

@@ -10,19 +10,19 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-SCHEMA_JS="${_AGENTS_DIR_NODE}/hooks/lib/final-report-schema.js"
+SCHEMA_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/final-report-schema.js"
 
 PASS=0
 FAIL=0
 SKIP=0
-unset AGENTS_CONFIG_DIR
+unset AGENTS_MAIN_ROOT
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -99,7 +99,7 @@ test_T7_schema_probes_aggregated() {
 # ============ S-series: Static structural tests ============
 
 test_S1_session_close_skill_exists() {
-    local f="${AGENTS_DIR}/skills/session-close/SKILL.md"
+    local f="${SCRIPT_CHECKOUT_ROOT}/skills/session-close/SKILL.md"
     if [ -f "$f" ]; then
         pass "S1_session_close_skill_exists: skills/session-close/SKILL.md present"
     else
@@ -108,7 +108,7 @@ test_S1_session_close_skill_exists() {
 }
 
 test_S2_worktree_end_no_step7() {
-    local f="${AGENTS_DIR}/skills/worktree-end/SKILL.md"
+    local f="${SCRIPT_CHECKOUT_ROOT}/skills/worktree-end/SKILL.md"
     if [ ! -f "$f" ]; then
         skip "S2_worktree_end_no_step7 (skills/worktree-end/SKILL.md missing — source not yet implemented)"
         return
@@ -122,7 +122,7 @@ test_S2_worktree_end_no_step7() {
 }
 
 test_S3_claude_md_routes_session_close() {
-    local f="${AGENTS_DIR}/CLAUDE.md"
+    local f="${SCRIPT_CHECKOUT_ROOT}/CLAUDE.md"
     if [ ! -f "$f" ]; then
         skip "S3_claude_md_routes_session_close (CLAUDE.md missing)"
         return
@@ -135,7 +135,7 @@ test_S3_claude_md_routes_session_close() {
 }
 
 test_S4_issue_close_finalize_has_step_l() {
-    local f="${AGENTS_DIR}/skills/issue-close-finalize/SKILL.md"
+    local f="${SCRIPT_CHECKOUT_ROOT}/skills/issue-close-finalize/SKILL.md"
     if [ ! -f "$f" ]; then
         skip "S4_issue_close_finalize_has_step_l (skills/issue-close-finalize/SKILL.md missing)"
         return
@@ -152,7 +152,7 @@ test_S4_issue_close_finalize_has_step_l() {
 # and docs/history are excluded from the scan.
 test_S5_no_worktree_final_report_references() {
     local hits=""
-    local search_roots=("$AGENTS_DIR/skills" "$AGENTS_DIR/hooks" "$AGENTS_DIR/bin")
+    local search_roots=("$SCRIPT_CHECKOUT_ROOT/skills" "$SCRIPT_CHECKOUT_ROOT/hooks" "$SCRIPT_CHECKOUT_ROOT/bin")
     for root in "${search_roots[@]}"; do
         if [ -d "$root" ]; then
             # exclude the worktree-notes-triage.js (unrelated filename, but
@@ -176,7 +176,7 @@ $hits"
 }
 
 test_S6_session_close_step4_uses_skeleton() {
-    local f="${AGENTS_DIR}/skills/session-close/SKILL.md"
+    local f="${SCRIPT_CHECKOUT_ROOT}/skills/session-close/SKILL.md"
     if [ ! -f "$f" ]; then
         skip "S6_session_close_step4_uses_skeleton (skills/session-close/SKILL.md missing)"
         return
@@ -189,7 +189,7 @@ test_S6_session_close_step4_uses_skeleton() {
 }
 
 test_S7_renderer_bin_absent() {
-    local f="$AGENTS_DIR/bin/worktree-final-report.js"
+    local f="$SCRIPT_CHECKOUT_ROOT/bin/worktree-final-report.js"
     if [ ! -f "$f" ]; then
         pass "S7_renderer_bin_absent: bin/worktree-final-report.js is absent (renderer abolished)"
     else
@@ -227,7 +227,7 @@ test_S8_schema_exports_renderSkeleton
 
 # S9 (#1027): SC-7 step present in session-close SKILL.md after SC-6.
 test_S9_session_close_has_sc7() {
-    local f="${AGENTS_DIR}/skills/session-close/SKILL.md"
+    local f="${SCRIPT_CHECKOUT_ROOT}/skills/session-close/SKILL.md"
     if [ ! -f "$f" ]; then
         skip "S9_session_close_has_sc7 (skills/session-close/SKILL.md missing)"
         return

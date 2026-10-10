@@ -15,7 +15,7 @@ mk_fixture() { # <name> -> fixture dir
     local dir="$TMPROOT/$1"
     mkdir -p "$dir/install/lib" "$dir/bin" "$dir/home/.claude"
     if [ -f "$ASSEMBLE" ]; then cp "$ASSEMBLE" "$dir/install/assemble-settings.js"; fi
-    cp "$AGENTS_DIR"/install/lib/*.js "$dir/install/lib/" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT"/install/lib/*.js "$dir/install/lib/" 2>/dev/null || true
     printf '# fixture PATH-exposed list (never the real one)\n' > "$dir/install/path-exposed-commands.txt"
     printf '%s\n' "$dir"
 }

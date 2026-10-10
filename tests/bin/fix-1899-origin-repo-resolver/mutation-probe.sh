@@ -82,13 +82,13 @@ mk_mutant() {
     base="$MUT_ROOT/$name"
     rm -rf "$base"
     mkdir -p "$base/bin/github-issues/lib"
-    cp "$AGENTS_DIR/bin/is-github-dotcom-remote" "$base/bin/is-github-dotcom-remote"
+    cp "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" "$base/bin/is-github-dotcom-remote"
     chmod +x "$base/bin/is-github-dotcom-remote" 2>/dev/null || true
     # is-github-dotcom-remote delegates to its .js sibling (#2307): copy both
     # and their Node dependency so the fixture helper resolves correctly.
-    cp "$AGENTS_DIR/bin/is-github-dotcom-remote.js" "$base/bin/is-github-dotcom-remote.js" 2>/dev/null || true
+    cp "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote.js" "$base/bin/is-github-dotcom-remote.js" 2>/dev/null || true
     mkdir -p "$base/hooks/lib"
-    cp "$AGENTS_DIR/hooks/lib/parse-remote-url.js" "$base/hooks/lib/parse-remote-url.js" 2>/dev/null || true
+    cp "$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-remote-url.js" "$base/hooks/lib/parse-remote-url.js" 2>/dev/null || true
     out="$base/bin/github-issues/lib/origin-repo.sh"
     printf '%s\n' "${ORIGIN_SRC/"$search"/"$replace"}" > "$out"
     printf '%s' "$out"

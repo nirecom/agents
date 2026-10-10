@@ -12,8 +12,9 @@ set -uo pipefail
 # settings.json. Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
-HOOK="$AGENTS_DIR/hooks/check-plan-lang.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
+HOOK="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/check-plan-lang.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -47,7 +48,7 @@ NODE_TMPDIR="$(run_with_timeout node -e "process.stdout.write(require('os').tmpd
 PLANS_DIR="${NODE_TMPDIR}/check-plan-lang-test-$$"
 mkdir -p "$PLANS_DIR"
 
-# Isolated AGENTS_CONFIG_DIR with no .env so PLAN_LANG is not inherited from
+# Isolated AGENTS_MAIN_ROOT with no .env so PLAN_LANG is not inherited from
 # the real environment.
 ISOLATED_CFG_DIR="${NODE_TMPDIR}/check-plan-lang-cfg-$$"
 mkdir -p "$ISOLATED_CFG_DIR"
@@ -79,7 +80,7 @@ invoke_hook() {
 
   decision=$(
     export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-    export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+    export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
     unset PLAN_LANG 2>/dev/null || true
     if [ -n "$plan_lang" ]; then
       export PLAN_LANG="$plan_lang"
@@ -96,7 +97,7 @@ invoke_hook_json() {
   local decision
   decision=$(
     export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-    export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+    export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
     unset PLAN_LANG 2>/dev/null || true
     if [ -n "$plan_lang" ]; then
       export PLAN_LANG="$plan_lang"
@@ -248,13 +249,13 @@ process.stdout.write(JSON.stringify({
 
 result1=$(
   export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-  export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+  export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
   unset PLAN_LANG 2>/dev/null || true
   echo "$PAYLOAD_IDEM" | run_with_timeout node "$HOOK" 2>/dev/null | jq -r .decision
 )
 result2=$(
   export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-  export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+  export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
   unset PLAN_LANG 2>/dev/null || true
   echo "$PAYLOAD_IDEM" | run_with_timeout node "$HOOK" 2>/dev/null | jq -r .decision
 )
@@ -300,7 +301,7 @@ fi
 # ── T12: Non-JSON stdin → approve (fail-open) ────────────────────────────────
 result=$(
   export WORKFLOW_PLANS_DIR="$PLANS_DIR"
-  export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+  export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
   unset PLAN_LANG 2>/dev/null || true
   echo "not-valid-json" | run_with_timeout node "$HOOK" 2>/dev/null | jq -r .decision
 )

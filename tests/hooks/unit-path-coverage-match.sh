@@ -16,11 +16,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _AGENTS_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_NODE="$AGENTS_DIR"
+    _AGENTS_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 MODULE="$_AGENTS_NODE/hooks/lib/path-coverage-match.js"

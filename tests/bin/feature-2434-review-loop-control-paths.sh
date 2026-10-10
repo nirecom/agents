@@ -12,14 +12,14 @@ set -uo pipefail
 # TL3 gap: the real codex CLI wording. Sibling suites of the same fixture:
 # feature-2434-review-loop-control-halt.sh, -legacy-state.sh, -risk-signal.sh.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/bin/feature-2434-review-loop/fixture.sh
-. "$AGENTS_DIR/tests/bin/feature-2434-review-loop/fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2434-review-loop/fixture.sh"
 
 for f in bin/workflow-control-dir hooks/workflow-state/state-io/control-dir.js; do
-    [ -f "$AGENTS_DIR/$f" ] || fail "implementation missing: $f"
+    [ -f "$SCRIPT_CHECKOUT_ROOT/$f" ] || fail "implementation missing: $f"
 done
 
 case_begin "all-five-formats-write-control-dir-only" "bin/run-codex-review-loop"
@@ -47,8 +47,8 @@ assert_eq "no .sg-/.prev- temp file in PLANS_DIR" "" "${TEMPS# }"
 case_end
 
 case_begin "escalation-by-format-table" "skills/_shared/codex-review-loop/exit-codes.md"
-EC="$AGENTS_DIR/skills/_shared/codex-review-loop/exit-codes.md"
-CRL="$AGENTS_DIR/skills/_shared/codex-review-loop.md"
+EC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/codex-review-loop/exit-codes.md"
+CRL="$SCRIPT_CHECKOUT_ROOT/skills/_shared/codex-review-loop.md"
 row() { grep -E "^\| *$1( |$)" "$EC" | head -n 1; }
 assert_eq "exit-codes.md has an 'Escalation by format' heading" "1" \
     "$(grep -cE '^#+ .*Escalation by format' "$EC")"
@@ -69,15 +69,15 @@ assert_contains "codex-review-loop.md defers to the table" "Escalation by format
 assert_not_contains "codex-review-loop.md spells no PLANS_DIR round counter" \
     "<PLANS_DIR>/<session-id>-<format>-round-number.txt" "$(cat "$CRL")"
 DUPS=""
-for f in "$AGENTS_DIR"/skills/*/SKILL.md; do
-    grep -qE '^#+ .*Escalation by format' "$f" && DUPS="$DUPS ${f#"$AGENTS_DIR/"}"
+for f in "$SCRIPT_CHECKOUT_ROOT"/skills/*/SKILL.md; do
+    grep -qE '^#+ .*Escalation by format' "$f" && DUPS="$DUPS ${f#"$SCRIPT_CHECKOUT_ROOT/"}"
 done
 assert_eq "no SKILL.md duplicates the table" "" "${DUPS# }"
 case_end
 
 case_begin "terminal-guard-all-five-formats" "bin/run-codex-review-loop"
 # C9: every format honours a terminal already written to its control dir (exit 8).
-[ -f "$AGENTS_DIR/hooks/workflow-state/state-io/control-dir.js" ] || \
+[ -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/control-dir.js" ] || \
     fail "implementation missing: hooks/workflow-state/state-io/control-dir.js"
 while IFS='|' read -r NAME SKILL FMT LFMT PROD; do
     SID="tg-$NAME"
@@ -97,7 +97,7 @@ case_begin "legacy-terminal-outline-detail" "skills/make-outline-plan/scripts/ru
 # C9: outline-plan and detail-plan legacy terminals (PLANS_DIR name) are migrated
 # and honoured (exit 8); the review-only counterpart is legacy-terminal-keeps-the-guard in
 # feature-2434-review-loop-control-halt.sh.
-[ -f "$AGENTS_DIR/hooks/workflow-state/state-io/control-dir.js" ] || \
+[ -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/control-dir.js" ] || \
     fail "implementation missing: hooks/workflow-state/state-io/control-dir.js"
 for FMT_SKILL in "outline-plan:make-outline-plan" "detail-plan:make-detail-plan"; do
     FMT="${FMT_SKILL%%:*}"; SKILL="${FMT_SKILL#*:}"
@@ -121,8 +121,8 @@ case_begin "ask-user-question-instructions" "skills/_shared/codex-review-loop.md
 # C9: the shared instructions must explicitly require AskUserQuestion for exit 8
 # (re-invoked after terminal) and for unresolved concerns after the 2+1 budget.
 # Grep for actual AskUserQuestion text, not just table headings.
-CRL="$AGENTS_DIR/skills/_shared/codex-review-loop.md"
-EC="$AGENTS_DIR/skills/_shared/codex-review-loop/exit-codes.md"
+CRL="$SCRIPT_CHECKOUT_ROOT/skills/_shared/codex-review-loop.md"
+EC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/codex-review-loop/exit-codes.md"
 AUQ_FOUND=0
 grep -Fq 'AskUserQuestion' "$CRL" 2>/dev/null && AUQ_FOUND=1
 grep -Fq 'AskUserQuestion' "$EC"  2>/dev/null && AUQ_FOUND=1

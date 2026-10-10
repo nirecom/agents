@@ -7,13 +7,13 @@
 # contract line absent from log_tail AND surrounding content preserved.
 # TL3 gap: run-all.sh format drift — gated in TL3-worker-dispatch-run-tests.sh.
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 PASS=0
@@ -76,7 +76,7 @@ fs.writeFileSync(process.argv[1], JSON.stringify([{
 dispatch() {
     : > "$CALLLOG"
     DOUT="$(run_with_timeout 90 env \
-        "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
+        "WD_SPAWN_MODULE=$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" \
@@ -166,8 +166,8 @@ assert_eq "e/ambiguous-run-still-reports-its-status" "fail" \
 # (f) MAX_FAILING / MAX_FAILING_TESTS / slice(0, 10) must be absent.
 # Their presence means boundary tests (g)/(h) would test an already-capped
 # value and pass for the wrong reason.
-RUNNER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/test-runner.js"
-EMIT_JS="$AGENTS_DIR/bin/worker-dispatch/emit.js"
+RUNNER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/test-runner.js"
+EMIT_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/emit.js"
 
 if grep -qF 'MAX_FAILING' "$RUNNER_JS" 2>/dev/null; then
     fail "f/MAX_FAILING-absent-in-test-runner" "constant still present in test-runner.js"

@@ -3,21 +3,20 @@
 # Tags: rules-injection, instructions-loaded, rules-key, root-anchoring, table-driven, path-traversal, security, TL2, scope:common
 
 # WHY (CPR-WPH): a rule reaches the loader from five roots, but only one repo-relative path form
-# starts with `rules/`. The old approach TAIL-MATCHED (does `rules/` appear anywhere in the
-# path) — not identity: it turned /home/v/.ssh/rules/id_rsa.md into key `rules/id_rsa.md`,
-# defeating out-of-root:<digest> redaction and handing classify() a bogus error-severity
-# S-MISSING for an unregistered file. toRulesKey() is now ROOT-ANCHORED (segment-aware, win32
+# starts with `rules/`. A TAIL match (does `rules/` appear anywhere) is not identity: it turned
+# /home/v/.ssh/rules/id_rsa.md into key `rules/id_rsa.md`, defeating out-of-root:<digest> redaction
+# and handing classify() a bogus S-MISSING. toRulesKey() is ROOT-ANCHORED (segment-aware, win32
 # case-folded): a key is derived only under a KNOWN rules root. Table-driven pin on that predicate
-# (skills/_shared/test-design/parser-regex-tests.md) plus end-to-end cases proving the hook
-# consumes it. Assumes BASE, WFDIR, REPO, HOOK, RECEIPT_LIB, node_path(), fire(), read_field(),
-# pass(), fail() from dispatcher/helpers.sh.
+# (skills/_shared/test-design/parser-regex-tests.md) plus end-to-end cases through the hook. Assumes
+# BASE, WFDIR, REPO, HOOK, RECEIPT_LIB, node_path(), fire(), read_field(), pass(), fail() in scope.
 
 echo ""
 echo "=== rules-key root anchoring (table-driven) ==="
 
 RR="$BASE/rr"
 RR_P="$(node_path "$RR/proj")"        # CLAUDE_PROJECT_DIR
-RR_A="$(node_path "$RR/agentscfg")"   # AGENTS_CONFIG_DIR
+RR_A="$(node_path "$SCRIPT_CHECKOUT_ROOT")"   # the hook's own checkout (text only, never read)
+RR_E="$(node_path "$RR/agentscfg")"   # AGENTS_MAIN_ROOT — an env root the key must NOT honour
 RR_C="$(node_path "$RR/cfg")"         # CLAUDE_CONFIG_DIR
 RR_H="$(node_path "$RR/home")"        # HOME
 mkdir -p "$RR/proj/rules" "$RR/proj/.claude/rules" "$RR/agentscfg/rules" \
@@ -41,9 +40,9 @@ RR_LIB_NODE="$(node_path "$RECEIPT_LIB")"
 # The three env shapes the table selects between. `json_env` builds them through node so
 # Windows drive-letter paths survive JSON quoting untouched.
 rr_env_json() { node -e 'const o={};for(let i=1;i<process.argv.length;i+=2){if(process.argv[i+1]!=="")o[process.argv[i]]=process.argv[i+1];}console.log(JSON.stringify(o));' "$@"; }
-RR_ENV_ALL="$(rr_env_json CLAUDE_PROJECT_DIR "$RR_P" AGENTS_CONFIG_DIR "$RR_A" CLAUDE_CONFIG_DIR "$RR_C" HOME "$RR_H")"
+RR_ENV_ALL="$(rr_env_json CLAUDE_PROJECT_DIR "$RR_P" AGENTS_MAIN_ROOT "$RR_E" CLAUDE_CONFIG_DIR "$RR_C" HOME "$RR_H")"
 RR_ENV_NOAGENTS="$(rr_env_json CLAUDE_PROJECT_DIR "$RR_P" CLAUDE_CONFIG_DIR "$RR_C" HOME "$RR_H")"
-RR_ENV_NOPROJ="$(rr_env_json AGENTS_CONFIG_DIR "$RR_A" CLAUDE_CONFIG_DIR "$RR_C" HOME "$RR_H")"
+RR_ENV_NOPROJ="$(rr_env_json AGENTS_MAIN_ROOT "$RR_E" CLAUDE_CONFIG_DIR "$RR_C" HOME "$RR_H")"
 
 # rr_key <env-token> <input-with-placeholders> -> the key, or EMPTY
 rr_key() {
@@ -56,12 +55,15 @@ rr_key() {
     esac
     p="${p//@P@/$RR_P}"
     p="${p//@A@/$RR_A}"
+    p="${p//@E@/$RR_E}"
     p="${p//@C@/$RR_C}"
     p="${p//@H@/$RR_H}"
     case "$p" in
         win:*) p="${p#win:}"; p="${p//\//\\}" ;;
     esac
-    node "$RR_HELPER_NODE" "$RR_LIB_NODE" "$p" "$envjson" 2>&1
+    # Neutral CWD: with no project dir a relative input resolves against the CWD, which
+    # must not be the checkout whose own rules/ is a recognized root.
+    (cd "$BASE" && node "$RR_HELPER_NODE" "$RR_LIB_NODE" "$p" "$envjson" 2>&1)
 }
 
 assert_key() {
@@ -89,7 +91,7 @@ done <<'RR_TABLE'
 # --- accept: the five recognized roots ---
 root-project        | all | @P@/rules/test.md                        | rules/test.md
 root-project-claude | all | @P@/.claude/rules/test.md                 | rules/test.md
-root-agents-config  | all | @A@/rules/test.md                        | rules/test.md
+root-script-checkout | all | @A@/rules/test.md                       | rules/test.md
 root-claude-config  | all | @C@/rules/test.md                        | rules/test.md
 root-home-claude    | all | @H@/.claude/rules/test.md                 | rules/test.md
 # --- accept: nested subpaths keep their full tail ---
@@ -113,10 +115,14 @@ wrong-ext-none      | all | @P@/rules/notmd                           | EMPTY
 wrong-ext-nested    | all | @A@/rules/coding/python.py                | EMPTY
 # --- reject: the root itself is not a file ---
 root-itself         | all | @P@/rules                                 | EMPTY
+# --- reject: the env settings root is not a rules root ---
+env-root-ignored    | all       | @E@/rules/test.md                    | EMPTY
+env-root-nested     | all       | @E@/rules/coding/python.md           | EMPTY
+# --- accept: the checkout root comes from the module's own location, so it needs no env ---
+checkout-needs-no-env | no-agents | @A@/rules/test.md                  | rules/test.md
 # --- reject: a root whose env var is UNSET drops out of the candidate list entirely
 # rather than collapsing into a base that matches everything ---
-unset-agents-root   | no-agents | @A@/rules/test.md                    | EMPTY
-unset-proj-root     | no-proj   | @P@/rules/test.md                    | EMPTY
+unset-proj-root    | no-proj   | @P@/rules/test.md                    | EMPTY
 unset-proj-relative | no-proj   | rules/test.md                        | EMPTY
 # --- reject: a `rules/` directory that is not AT a known root ---
 rules-not-at-root   | all | @P@/docs/rules/x.md                       | EMPTY
@@ -149,7 +155,8 @@ win-root-home       | all | win:@H@/.claude/rules/test.md             | rules/te
 win-nested          | all | win:@P@/rules/test/fixture-isolation.md   | rules/test/fixture-isolation.md
 win-adjacent        | all | win:@P@/rulesfoo/x.md                     | EMPTY
 win-wrong-ext       | all | win:@P@/rules/notmd.txt                   | EMPTY
-win-unset-root      | no-agents | win:@A@/rules/test.md               | EMPTY
+win-env-root-ignored | all | win:@E@/rules/test.md                    | EMPTY
+win-checkout-no-env | no-agents | win:@A@/rules/test.md               | rules/test.md
 RR_WIN_TABLE
     # Case folding is a win32-only property of the comparison, asserted where it holds.
     assert_key "W-case-folded-root" "rules/test.md" "$(rr_key all "@P@/RULES/test.md")"

@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS_COUNT=0; FAIL_COUNT=0
 pass() { echo "PASS: $1"; PASS_COUNT=$((PASS_COUNT + 1)); }
@@ -20,7 +20,7 @@ fail() { echo "FAIL: $1"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf1904'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 # isolation (#2512): pin state and plans dirs file-wide; the per-call pins below still override them.
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
@@ -47,8 +47,8 @@ const path = require('path');
 const wfDir = process.env.WORKFLOW_STATE_DIR;
 fs.mkdirSync(wfDir, { recursive: true });
 
-const { readState, writeState, createInitialState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { applyInheritance } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance');
+const { readState, writeState, createInitialState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
 
 const donorSid = 'donor-1904a';
 const heirSid = 'heir-1904a';
@@ -128,8 +128,8 @@ run_1904b() {
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
-const { readState, writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { applyInheritance } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance');
+const { readState, writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
 
 const donorSid = 'donor-1904b';
 const heirSid = 'heir-1904b';

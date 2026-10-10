@@ -8,15 +8,15 @@
 # unchanged exports (the rtk suite feature-2326 is re-run as a regression).
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
 JRL_REL="hooks/lib/jsonl-rotating-log.js"
 RTK_REL="hooks/lib/rtk-guard-audit.js"
-JRL="$(np "$AGENTS_DIR/$JRL_REL")"
-RTK="$(np "$AGENTS_DIR/$RTK_REL")"
+JRL="$(np "$SCRIPT_CHECKOUT_ROOT/$JRL_REL")"
+RTK="$(np "$SCRIPT_CHECKOUT_ROOT/$RTK_REL")"
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP"' EXIT
 harness_isolate "$TMP/iso"
@@ -468,7 +468,7 @@ fi
 case_end
 
 case_begin "rtk-delegates-to-shared-module" "hooks/lib/rtk-guard-audit.js"
-if grep -qE "require\([^)]*jsonl-rotating-log" "$AGENTS_DIR/$RTK_REL"; then
+if grep -qE "require\([^)]*jsonl-rotating-log" "$SCRIPT_CHECKOUT_ROOT/$RTK_REL"; then
   pass "rtk-guard-audit requires the shared jsonl-rotating-log module"
 else
   fail "rtk-guard-audit requires the shared jsonl-rotating-log module" "no require found"
@@ -485,7 +485,7 @@ assert_eq "$(probe rtk-name "$RTK" "$D/rtkname")" "rtk-guard-audit.log,true"
 case_end
 
 case_begin "rtk-suite-2326-regression" "hooks/lib/rtk-guard-audit.js"
-if run_with_timeout 150 node "$(np "$AGENTS_DIR/tests/hooks/feature-2326-rtk-guard-audit.js")" >"$TMP/rtk2326.out" 2>&1; then
+if run_with_timeout 150 node "$(np "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2326-rtk-guard-audit.js")" >"$TMP/rtk2326.out" 2>&1; then
   pass "feature-2326-rtk-guard-audit.js stays green"
 else
   fail "feature-2326-rtk-guard-audit.js stays green" "$(tail -n 3 "$TMP/rtk2326.out" | tr '\n' ' ')"

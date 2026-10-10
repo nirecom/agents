@@ -284,37 +284,37 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-confirm-plan-guard.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/stop-confirm-plan-guard.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-final-report-guard.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/stop-final-report-guard.js\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-l2-findings-display.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/stop-l2-findings-display.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-premature-stop-guard.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/stop-premature-stop-guard.js\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/supervisor-guard.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/supervisor-guard.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-enforce-worktree-on-warn.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/stop-enforce-worktree-on-warn.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-exit-worktree-warn.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/stop-exit-worktree-warn.js\"",
             "timeout": 5
           }
         ]
@@ -326,7 +326,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/session-start.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/session-start.js\"",
             "timeout": 5
           }
         ]
@@ -338,7 +338,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/instructions-loaded-audit.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/instructions-loaded-audit.js\"",
             "timeout": 5
           }
         ]
@@ -350,32 +350,32 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/post-push-workflow-reset.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/post-push-workflow-reset.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/lang-inject.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/lang-inject.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/record-off-skill-invocation.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/record-off-skill-invocation.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/user-prompt-submit-mechanism-check.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/user-prompt-submit-mechanism-check.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/handoff-pressure-nudge.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/handoff-pressure-nudge.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/codegraph-context-inject.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/codegraph-context-inject.js\"",
             "timeout": 5
           }
         ]
@@ -387,7 +387,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/post-compact.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/post-compact.js\"",
             "timeout": 5
           }
         ]
@@ -399,7 +399,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/subagent-start.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/subagent-start.js\"",
             "timeout": 5
           }
         ]
@@ -411,7 +411,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/scan-outbound.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/scan-outbound.js\"",
             "timeout": 5
           }
         ]
@@ -421,7 +421,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-dotenv.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-dotenv.js\"",
             "timeout": 5
           }
         ]
@@ -431,7 +431,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-credentials.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-credentials.js\"",
             "timeout": 5
           }
         ]
@@ -441,7 +441,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-history-direct.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-history-direct.js\"",
             "timeout": 5
           }
         ]
@@ -451,7 +451,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-shell-config.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-shell-config.js\"",
             "timeout": 5
           }
         ]
@@ -461,7 +461,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-memory-direct.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-memory-direct.js\"",
             "timeout": 5
           }
         ]
@@ -471,7 +471,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-clearance-token-write.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-clearance-token-write.js\"",
             "timeout": 5
           }
         ]
@@ -481,7 +481,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/enforce-worktree.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/enforce-worktree.js\"",
             "timeout": 5
           }
         ]
@@ -491,7 +491,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/enforce-issue-close.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/enforce-issue-close.js\"",
             "timeout": 5
           }
         ]
@@ -501,7 +501,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/confirm-forge-target-ownership.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/confirm-forge-target-ownership.js\"",
             "timeout": 15
           }
         ]
@@ -511,7 +511,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/enforce-system-ops.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/enforce-system-ops.js\"",
             "timeout": 5
           }
         ]
@@ -521,7 +521,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-subagent-sentinels.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-subagent-sentinels.js\"",
             "timeout": 5
           }
         ]
@@ -531,7 +531,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-gate.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/workflow-gate.js\"",
             "timeout": 5
           }
         ]
@@ -541,7 +541,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/bash-guard.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/bash-guard.js\"",
             "timeout": 5
           }
         ]
@@ -551,7 +551,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/rtk-rewrite.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/rtk-rewrite.js\"",
             "timeout": 5
           }
         ]
@@ -561,7 +561,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/gate-plan-skip-sentinel.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/gate-plan-skip-sentinel.js\"",
             "timeout": 5
           }
         ]
@@ -571,7 +571,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-cross-platform.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/check-cross-platform.js\"",
             "timeout": 5
           }
         ]
@@ -581,7 +581,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-capture-echo.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-capture-echo.js\"",
             "timeout": 5
           }
         ]
@@ -591,7 +591,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-japanese-in-docs.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/check-japanese-in-docs.js\"",
             "timeout": 5
           }
         ]
@@ -601,7 +601,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-history-direct.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-history-direct.js\"",
             "timeout": 5
           }
         ]
@@ -611,7 +611,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-user-verified-context.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/show-user-verified-context.js\"",
             "timeout": 10
           }
         ]
@@ -621,7 +621,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/confirm-checkpoint.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/confirm-checkpoint.js\"",
             "timeout": 10
           }
         ]
@@ -631,7 +631,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-diff.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/show-diff.js\"",
             "timeout": 10
           }
         ]
@@ -641,7 +641,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-tests-direct.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-tests-direct.js\"",
             "timeout": 5
           }
         ]
@@ -651,7 +651,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-comment-block-size.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-comment-block-size.js\"",
             "timeout": 5
           }
         ]
@@ -661,7 +661,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/gate-plan-lang.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/gate-plan-lang.js\"",
             "timeout": 10
           }
         ]
@@ -671,7 +671,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/gate-worktree-notes-lang.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/gate-worktree-notes-lang.js\"",
             "timeout": 10
           }
         ]
@@ -681,7 +681,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-case-markers.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-case-markers.js\"",
             "timeout": 10
           }
         ]
@@ -691,7 +691,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/supervisor-off-proposal-shim.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/supervisor-off-proposal-shim.js\"",
             "timeout": 5
           }
         ]
@@ -701,7 +701,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/preuse-auto-approve.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/preuse-auto-approve.js\"",
             "timeout": 5
           }
         ]
@@ -711,7 +711,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/jev-shadow-pre.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/jev-shadow-pre.js\"",
             "timeout": 15
           }
         ]
@@ -723,27 +723,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-mark.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/workflow-mark.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-run-tests.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/workflow-run-tests.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-plan-link.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/show-plan-link.js\"",
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/supervisor-trigger.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/supervisor-trigger.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/pr-created-open.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/pr-created-open.js\"",
             "timeout": 5
           }
         ]
@@ -753,7 +753,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/detect-worktree-conflict.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/detect-worktree-conflict.js\"",
             "timeout": 5
           }
         ]
@@ -763,7 +763,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-plan-link.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/show-plan-link.js\"",
             "timeout": 30
           }
         ]
@@ -773,7 +773,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/scan-inbound.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/scan-inbound.js\"",
             "timeout": 5
           }
         ]
@@ -783,7 +783,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-worktree-notes-lang.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/check-worktree-notes-lang.js\"",
             "timeout": 10
           }
         ]
@@ -793,7 +793,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-plan-lang.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/check-plan-lang.js\"",
             "timeout": 10
           }
         ]
@@ -803,7 +803,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/postuse-native-worktree-record.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/postuse-native-worktree-record.js\"",
             "timeout": 5
           }
         ]
@@ -813,7 +813,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/postuse-step-in-flight-mark.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/postuse-step-in-flight-mark.js\"",
             "timeout": 5
           }
         ]
@@ -823,7 +823,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/jev-shadow-post.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/jev-shadow-post.js\"",
             "timeout": 15
           }
         ]

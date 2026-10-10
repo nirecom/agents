@@ -10,7 +10,6 @@
 # The token is NOT a security primitive — the real gate is the Phase2 human approval
 # prompt plus this audit trail.
 #
-# Required env: AGENTS_CONFIG_DIR
 # Session id: resolved through bin/resolve-session-id (SSOT) — rc 2 is "no session"
 # and fails closed here; any other non-zero rc is a bridge fault and also fails closed.
 # Optional env: WORKFLOW_STATE_DIR, WORKFLOW_PLANS_DIR
@@ -21,6 +20,8 @@
 # entrypoint is itself an extensionless file of that exact name).
 
 set -euo pipefail
+
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 TARGET=""
 CATEGORY=""
@@ -63,12 +64,8 @@ if [[ -z "$DETAIL" ]]; then
   echo "ERROR: --detail is required" >&2; usage; exit 2
 fi
 
-if [[ -z "${AGENTS_CONFIG_DIR:-}" ]]; then
-  echo "ERROR: AGENTS_CONFIG_DIR not set" >&2; exit 1
-fi
-
 BRIDGE_RC=0
-SID="$("$AGENTS_CONFIG_DIR/bin/resolve-session-id")" || BRIDGE_RC=$?
+SID="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-session-id")" || BRIDGE_RC=$?
 case "$BRIDGE_RC" in
   0) ;;
   2) SID="" ;;
@@ -96,9 +93,9 @@ append_audit() {
   set +e
   audit_err="$(
     AUDIT_DETAIL="off_examination target=$TARGET category=$CATEGORY urgency=$URGENCY verdict=$verdict reason=$reason at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    AUDIT_SID="$SID" node -e '
+    AUDIT_SID="$SID" AUDIT_WRITER="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer" node -e '
 "use strict";
-const { appendFinding } = require(process.env.AGENTS_CONFIG_DIR + "/hooks/lib/supervisor-state-writer");
+const { appendFinding } = require(process.env.AUDIT_WRITER);
 const ok = appendFinding(process.env.AUDIT_SID, {
   categories: ["workflow"],
   severity: "notice",
@@ -208,7 +205,7 @@ mint_and_report() {
   set +e
   TOKEN_TARGET="$TARGET" TOKEN_CATEGORY="$CATEGORY" TOKEN_URGENCY="$URGENCY" \
   TOKEN_REASON="$VERDICT_REASON" TOKEN_DETAIL="$DETAIL" TOKEN_PATH="$TOKEN_PATH" \
-  AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" node "$SCRIPT_DIR/request-off-clearance.d/mint-token.js"
+  node "$SCRIPT_DIR/request-off-clearance.d/mint-token.js"
   local MINT_RC=$?
   set -e
 
@@ -246,7 +243,7 @@ GRANTED
 # under `set -e`. The error-capture temp file is cleaned up synchronously.
 WORKFLOW_DIR_ERR_FILE="$(mktemp 2>/dev/null || mktemp -t offclrwfdir)"
 set +e
-WORKFLOW_DIR="$(node "$AGENTS_CONFIG_DIR/bin/workflow-state-dir" --session "$SID" 2>"$WORKFLOW_DIR_ERR_FILE")"
+WORKFLOW_DIR="$(node "$SCRIPT_CHECKOUT_ROOT/bin/workflow-state-dir" --session "$SID" 2>"$WORKFLOW_DIR_ERR_FILE")"
 WORKFLOW_DIR_RC=$?
 set -e
 if [[ $WORKFLOW_DIR_RC -ne 0 || -z "$WORKFLOW_DIR" ]]; then
@@ -261,7 +258,7 @@ if [[ $WORKFLOW_DIR_RC -ne 0 || -z "$WORKFLOW_DIR" ]]; then
   exit 1
 fi
 rm -f "$WORKFLOW_DIR_ERR_FILE"
-RUBRIC="$AGENTS_CONFIG_DIR/skills/_shared/off-legitimacy-rubric.md"
+RUBRIC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/off-legitimacy-rubric.md"
 # Resolved here (before any failure path that calls mint_and_report) so that
 # mint_and_report can reference $SCRIPT_DIR even when codex is absent.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

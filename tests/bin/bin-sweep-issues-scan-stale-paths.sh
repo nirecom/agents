@@ -25,8 +25,8 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCANNER="$AGENTS_DIR/bin/sweep-issues/scan-stale-paths.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCANNER="$SCRIPT_CHECKOUT_ROOT/bin/sweep-issues/scan-stale-paths.js"
 
 PASS=0
 FAIL=0

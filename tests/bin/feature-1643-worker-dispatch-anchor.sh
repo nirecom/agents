@@ -1,26 +1,49 @@
 #!/usr/bin/env bash
 # tests/bin/feature-1643-worker-dispatch-anchor.sh
-# Tests: bin/worker-dispatch.js, bin/worker-dispatch/anchor.js, hooks/lib/agents-config-dir.js
+# Tests: bin/worker-dispatch.js, bin/worker-dispatch/anchor.js, hooks/lib/script-checkout-root.js
 # Tags: worker-dispatch, anchor, trust-anchor, c2, security, TL1, scope:issue-specific
 # TL3 gap (what this TL1 test does NOT catch):
 #   - A real Bash tool call supplying tool_input.cwd (guard vs dispatcher cwds differ).
-#   - Real AGENTS_CONFIG_DIR resolution across a symlinked ~/.claude checkout.
+#   - Real script-checkout-root resolution across a symlinked ~/.claude checkout.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 # Issue #1643 — C2 core: trust anchors must not be movable by caller input.
 #   (a) cwd at an ALTERNATE repo leaves that repo untouched (no child, no write),
-#   (b) a planted fake agents checkout in $AGENTS_CONFIG_DIR never becomes the ACD,
+#   (b) a planted fake agents checkout in $AGENTS_MAIN_ROOT never becomes the
+#       script checkout root; the family is the target's, whatever the cwd,
 #   (c) argv[3] at a LINKED worktree exits 2 (git-common-dir check),
 #   (d) argv[3] non-git / non-existent / relative exits 2,
 #   (e) `process.cwd()` / `rev-parse --show-toplevel` never appear under
 #       bin/worker-dispatch/** (regression fence for the design rule).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-ANCHOR_JS="$AGENTS_DIR/bin/worker-dispatch/anchor.js"
-WD_DIR="$AGENTS_DIR/bin/worker-dispatch"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+ANCHOR_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/anchor.js"
+WD_DIR="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch"
+
+TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/wd-anchor-$$")"
+mkdir -p "$TMPD"
+trap 'rm -rf "$TMPD"' EXIT
+
+nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
+
+# Every child (node, git) resolves its home and its workflow dirs under the temp
+# root: resolveAnchors reads the plans dir and the state roots from this env.
+mkdir -p "$TMPD/home" "$TMPD/plans" "$TMPD/wf"
+export HOME="$TMPD/home"
+USERPROFILE="$(nodepath "$TMPD/home")"; export USERPROFILE
+PLANS_RAW="$TMPD/plans"
+PLANS="$(nodepath "$PLANS_RAW")"
+WF_PIN="$(nodepath "$TMPD/wf")"   # #2558: worker logs live under the workflow dir
+export WORKFLOW_PLANS_DIR="$PLANS" WORKFLOW_STATE_DIR="$WF_PIN"
+
+# The shared harness owns the case markers and the root decoy; it is sourced after
+# the home pin so its decoy cache lands in the temp root. The reporters below
+# replace its own, which take their arguments in another order.
+# shellcheck source=../lib/harness.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 PASS=0
 FAIL=0
@@ -52,11 +75,6 @@ impl_missing() {
     return 0
 }
 
-TMPD="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/wd-anchor-$$")"
-mkdir -p "$TMPD"
-trap 'rm -rf "$TMPD"' EXIT
-
-nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 mk_repo() {
     local d="$1"
@@ -94,18 +112,15 @@ LINKED="$(nodepath "$LINKED_RAW")"
 NONGIT_RAW="$TMPD/plain-dir"; mkdir -p "$NONGIT_RAW"
 NONGIT="$(nodepath "$NONGIT_RAW")"
 
-PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
-WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
-PLANS="$(nodepath "$PLANS_RAW")"
 printf '%s' "{\"cwd\":\"$MAIN\",\"test_args\":[],\"timeout_seconds\":15}" > "$PLANS_RAW/tr.json"
 PAYLOAD="$(nodepath "$PLANS_RAW/tr.json")"
 
 # Fake agents checkout carrying BOTH trust markers (hooks/enforce-worktree.js + bin/).
-FAKE_ACD_RAW="$TMPD/fake-acd"
-mkdir -p "$FAKE_ACD_RAW/hooks" "$FAKE_ACD_RAW/bin/worker-dispatch"
-touch "$FAKE_ACD_RAW/hooks/enforce-worktree.js"
-echo "process.stdout.write('PWNED');" > "$FAKE_ACD_RAW/bin/worker-dispatch.js"
-FAKE_ACD="$(nodepath "$FAKE_ACD_RAW")"
+FAKE_CHECKOUT_RAW="$TMPD/fake-script-checkout"
+mkdir -p "$FAKE_CHECKOUT_RAW/hooks" "$FAKE_CHECKOUT_RAW/bin/worker-dispatch"
+touch "$FAKE_CHECKOUT_RAW/hooks/enforce-worktree.js"
+echo "process.stdout.write('PWNED');" > "$FAKE_CHECKOUT_RAW/bin/worker-dispatch.js"
+FAKE_CHECKOUT="$(nodepath "$FAKE_CHECKOUT_RAW")"
 
 # ---------------------------------------------------------------------------
 # Child-process recorder: shims on PATH log every invocation, then exec the real
@@ -165,47 +180,103 @@ case_a() {
 }
 
 # ===========================================================================
-# (b) planted fake AGENTS_CONFIG_DIR must not move the resolved ACD
+# (b) planted fake AGENTS_MAIN_ROOT must not move the script checkout root
 #
 # Contract asserted here: bin/worker-dispatch/anchor.js exports an anchor
 # resolver (resolveAnchors | resolve | getAnchors) whose result carries the
-# agents checkout under `acd` (or `ACD`).
+# running script's checkout under `scriptCheckoutRoot` and the target's
+# worktrees under `family`.
+# Probe: <anchor.js> <target-main-root> <field> prints that field; --canon
+# <path>... prints paths in the form a list field takes (realpath, sorted).
 # ===========================================================================
 ANCHOR_PROBE="$TMPD/anchor-probe.js"
 cat > "$ANCHOR_PROBE" <<'PROBEJS'
+const fs = require("fs");
+const norm = (p) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+const real = (p) => { try { return fs.realpathSync.native(p); } catch (_e) { return p; } };
+const list = (ps) => ps.map((p) => norm(real(p))).sort().join("\n");
+if (process.argv[2] === "--canon") { process.stdout.write(list(process.argv.slice(3))); process.exit(0); }
 const mod = require(process.argv[2]);
-const mainRoot = process.argv[3];
+const targetMainRoot = process.argv[3];
+const field = process.argv[4];
 const fn = mod.resolveAnchors || mod.resolve || mod.getAnchors;
 if (typeof fn !== "function") { process.stderr.write("NO_RESOLVER_EXPORT"); process.exit(3); }
 let a;
-try { a = fn(mainRoot); } catch (e) { process.stderr.write("THREW:" + e.message); process.exit(4); }
+try { a = fn(targetMainRoot); } catch (e) { process.stderr.write("THREW:" + e.message); process.exit(4); }
 if (!a || typeof a !== "object") { process.stderr.write("NO_OBJECT"); process.exit(5); }
-const acd = a.acd || a.ACD;
-if (typeof acd !== "string") { process.stderr.write("NO_ACD_FIELD"); process.exit(6); }
-process.stdout.write(acd.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase());
+const value = a[field];
+if (Array.isArray(value)) {
+  if (a.error) { process.stderr.write("ANCHOR_ERROR:" + a.error); process.exit(7); }
+  process.stdout.write(list(value));
+  process.exit(0);
+}
+if (typeof value !== "string") { process.stderr.write("NO_FIELD:" + field); process.exit(6); }
+process.stdout.write(norm(value));
 PROBEJS
 
 case_b() {
-    if impl_missing "fake-acd/module-anchor-wins" "$ANCHOR_JS" "bin/worker-dispatch/anchor.js"; then
-        fail "fake-acd/not-the-planted-dir — implementation missing: bin/worker-dispatch/anchor.js"
+    if impl_missing "fake-script-checkout-root/module-anchor-wins" "$ANCHOR_JS" "bin/worker-dispatch/anchor.js"; then
+        fail "fake-script-checkout-root/not-the-planted-dir — implementation missing: bin/worker-dispatch/anchor.js"
         return
     fi
     local got rc want
-    want="$(nodepath "$AGENTS_DIR" | tr '[:upper:]' '[:lower:]')"
+    want="$(nodepath "$SCRIPT_CHECKOUT_ROOT" | tr '[:upper:]' '[:lower:]')"
     rc=0
-    got="$(run_with_timeout 60 env "AGENTS_CONFIG_DIR=$FAKE_ACD" \
-        node "$ANCHOR_PROBE" "$ANCHOR_JS" "$MAIN" 2>&1)" || rc=$?
+    got="$(run_with_timeout 60 env "AGENTS_MAIN_ROOT=$FAKE_CHECKOUT" \
+        node "$ANCHOR_PROBE" "$ANCHOR_JS" "$MAIN" scriptCheckoutRoot 2>&1)" || rc=$?
     if [ "$rc" -ne 0 ]; then
-        fail "fake-acd/module-anchor-wins — anchor probe failed (rc=$rc): $got"
+        fail "fake-script-checkout-root/module-anchor-wins — anchor probe failed (rc=$rc): $got"
         return
     fi
-    assert_eq "fake-acd/module-anchor-wins" "$want" "$got"
+    assert_eq "fake-script-checkout-root/module-anchor-wins" "$want" "$got"
     # Pattern 1 negative assertion: the planted checkout is never selected.
-    if [ "$got" = "$(echo "$FAKE_ACD" | tr '[:upper:]' '[:lower:]')" ]; then
-        fail "fake-acd/not-the-planted-dir"
+    if [ "$got" = "$(echo "$FAKE_CHECKOUT" | tr '[:upper:]' '[:lower:]')" ]; then
+        fail "fake-script-checkout-root/not-the-planted-dir"
     else
-        pass "fake-acd/not-the-planted-dir"
+        pass "fake-script-checkout-root/not-the-planted-dir"
     fi
+}
+
+# ===========================================================================
+# (b2) the family is the TARGET's worktree set, wherever the caller stands.
+# Rows: name | cwd | target-main-root | expected members (comma-separated).
+# The control row resolves the cwd-side repo itself: its family is a different
+# set, so a family taken from the caller's toplevel cannot pass the first row.
+# ===========================================================================
+case_family() {
+    if impl_missing "family/cwd-alt-target-main" "$ANCHOR_JS" "bin/worker-dispatch/anchor.js"; then return; fi
+    local name cwd target members want got rc alt_only main_family
+    local -a member_list
+    alt_only="$(node "$ANCHOR_PROBE" --canon "$ALT")"
+    main_family="$(node "$ANCHOR_PROBE" --canon "$MAIN" "$LINKED")"
+    if [ -n "$alt_only" ] && [ "$alt_only" != "$main_family" ]; then
+        pass "family/fixture-premise-cwd-repo-family-differs"
+    else
+        fail "family/fixture-premise-cwd-repo-family-differs — alt=$alt_only main=$main_family"
+    fi
+    while IFS='|' read -r name cwd target members; do
+        [ -z "$name" ] && continue
+        name="$(echo "$name" | xargs)"; cwd="$(echo "$cwd" | xargs)"
+        target="$(echo "$target" | xargs)"; members="$(echo "$members" | xargs)"
+        IFS=',' read -r -a member_list <<< "$members"
+        want="$(node "$ANCHOR_PROBE" --canon "${member_list[@]}")"
+        rc=0
+        got="$(cd "$cwd" && run_with_timeout 60 node "$ANCHOR_PROBE" "$ANCHOR_JS" "$target" family 2>&1)" || rc=$?
+        if [ "$rc" -ne 0 ]; then
+            fail "family/$name — anchor probe failed (rc=$rc): $got"
+            continue
+        fi
+        assert_eq "family/$name" "$want" "$got"
+        [ "$target" = "$ALT" ] && continue
+        case $'\n'"$got"$'\n' in
+            *$'\n'"$alt_only"$'\n'*) fail "family/$name/excludes-cwd-repo — got=$(printf '%q' "$got")" ;;
+            *) pass "family/$name/excludes-cwd-repo" ;;
+        esac
+    done <<TABLE
+cwd-alt-target-main  | $ALT  | $MAIN | $MAIN,$LINKED
+cwd-main-target-main | $MAIN | $MAIN | $MAIN,$LINKED
+control-cwd-repo-own | $ALT  | $ALT  | $ALT
+TABLE
 }
 
 # ===========================================================================
@@ -255,10 +326,25 @@ if command -v timeout >/dev/null 2>&1; then
     fi
 fi
 
+case_begin "cwd-alt-repo-inert" "bin/worker-dispatch.js"
 case_a
+case_end
+
+case_begin "script-checkout-root-anchor" "hooks/lib/script-checkout-root.js"
 case_b
+case_end
+
+case_begin "family-anchor" "bin/worker-dispatch/anchor.js"
+case_family
+case_end
+
+case_begin "target-main-root-validation" "bin/worker-dispatch.js"
 case_cd
+case_end
+
+case_begin "source-scan" "bin/worker-dispatch/anchor.js"
 case_e
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

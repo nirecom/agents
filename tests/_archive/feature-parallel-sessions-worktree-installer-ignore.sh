@@ -12,8 +12,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-INSTALLER="$AGENTS_DIR/install/linux/global-gitignore.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+INSTALLER="$SCRIPT_CHECKOUT_ROOT/install/linux/global-gitignore.sh"
 
 PASS=0
 FAIL=0

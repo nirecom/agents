@@ -50,13 +50,13 @@ function homeDir() {
 // process.env — with the documented default computed when no source names one.
 // The four that name a session, a checkout, or the worktree-enforcement mode
 // come from the validated payload and the resolved anchors; the two with no
-// such counterpart come from the `.env` at the ACD anchor via readEnvFile(),
+// such counterpart come from the `.env` at the script checkout root anchor via readEnvFile(),
 // which never consults process.env.
 // Which side wins, and what each value arms: commit-push.md "Gate env
 // resolution". readEnvFile returns null for a missing or unreadable file, which
 // is treated exactly like an empty map.
 function resolveGateEnv(payload, ctx) {
-  const cfg = readEnvFile(path.join(ctx.anchors.acd, ".env")) || {};
+  const cfg = readEnvFile(path.join(ctx.anchors.scriptCheckoutRoot, ".env")) || {};
   return {
     // Per-session routed dir (#2511); envFallback:false — process.env is never consulted.
     WORKFLOW_STATE_DIR: getSessionStateDir(payload.session_id, {

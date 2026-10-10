@@ -26,10 +26,10 @@ set -u
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-AGENTS_WIN="$(nodepath "$AGENTS_DIR")"
-CLI="$AGENTS_DIR/bin/workflow/read-step-status"
+AGENTS_WIN="$(nodepath "$SCRIPT_CHECKOUT_ROOT")"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/read-step-status"
 
 PASS=0
 FAIL=0
@@ -133,7 +133,7 @@ assert_eq "c/corrupt-state-file-exit" "0" "$RC"
 
 # The sibling bridges' marker is the reference — pinned by reading THEIR source,
 # so a future rename of the marker fails here instead of drifting silently.
-if grep -q '"NONE\\n"' "$AGENTS_DIR/bin/workflow/read-merge-base-baseline"; then
+if grep -q '"NONE\\n"' "$SCRIPT_CHECKOUT_ROOT/bin/workflow/read-merge-base-baseline"; then
     pass "c/absent-marker-matches-the-sibling-bridges"
 else
     fail "c/absent-marker-matches-the-sibling-bridges" \
@@ -229,7 +229,7 @@ fi
 # The bridge must be executable from a shell — a mode-644 file makes every
 # caller's invocation fail on POSIX regardless of correct logic.
 if [ -f "$CLI" ]; then
-    MODE="$(git -C "$AGENTS_DIR" ls-files -s -- bin/workflow/read-step-status | awk '{print $1}')"
+    MODE="$(git -C "$SCRIPT_CHECKOUT_ROOT" ls-files -s -- bin/workflow/read-step-status | awk '{print $1}')"
     case "${MODE:-}" in
         100755) pass "g/execute-bit-recorded-in-the-index" ;;
         "") fail "g/execute-bit-recorded-in-the-index" "file is not tracked yet" ;;

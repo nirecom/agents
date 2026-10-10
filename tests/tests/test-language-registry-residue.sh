@@ -6,16 +6,16 @@
 # language registry and its registered parts; scan.js finds what is left anywhere else.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
 TMPBASE="$(make_tmp)"
 trap 'rm -rf "$TMPBASE"' EXIT
 harness_isolate "$TMPBASE/iso"
 cd "$TMPBASE" || exit 1
-RD="$AGENTS_DIR/tests/tests/test-language-registry-residue"
+RD="$SCRIPT_CHECKOUT_ROOT/tests/tests/test-language-registry-residue"
 FXD="$RD/fixtures"
 FX_TABLE="$FXD/table.json"
 
@@ -161,7 +161,7 @@ case_end
 
 case_begin "repo-has-no-residue" "hooks/lib/test-language-registry.json"
 # The real table and allowlist over this checkout: every flagged line is fixed or allowlisted with a reason.
-scan "$AGENTS_DIR" "$AGENTS_DIR/hooks/lib/test-language-registry.json" "$RD/allowlist.tsv"
+scan "$SCRIPT_CHECKOUT_ROOT" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.json" "$RD/allowlist.tsv"
 if [ "$SC_RC" = "0" ]; then
   pass "no residue outside the registry ($(printf '%s\n' "$SC_OUT" | tail -n 1))"
 else

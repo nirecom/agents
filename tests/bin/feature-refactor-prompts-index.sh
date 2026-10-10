@@ -3,7 +3,7 @@
 # Tags: prompts, refactor, dispatch, scratchpad, scope:common
 #
 # index.sh is the bash wrapper refactor-prompts/SKILL.md's scratchpad script actually
-# invokes -- arg parsing, the AGENTS_CONFIG_DIR guard, the --keywords-only short-circuit,
+# invokes -- arg parsing, the no-root-env-var fallback, the --keywords-only short-circuit,
 # and piping extract-keywords.js's stdout into scan-prompts.js. Existing suites
 # (feature-refactor-prompts-extract.sh, feature-refactor-prompts-scan.sh) call the two
 # JS scripts directly via node and never exercise this wrapper at all -- this file closes
@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-INDEX_SH="$AGENTS_DIR/bin/refactor-prompts/index.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+INDEX_SH="$SCRIPT_CHECKOUT_ROOT/bin/refactor-prompts/index.sh"
 
 PASS=0
 FAIL=0
@@ -35,7 +35,11 @@ doc_has_key() { node -e "const d=JSON.parse(require('fs').readFileSync(process.a
 # --- fixture: a config root that has no hooks/lib/bash-write-patterns.js, so
 # extract-keywords.js's own required-source guard fails and exits 1. ---------
 BROKEN_ROOT="$(mktemp -d)"
-cleanup_broken() { rm -rf "$BROKEN_ROOT"; }
+# Top-level dual pin (rules/test/fixture-isolation.md) for every index.sh run below.
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
+cleanup_broken() { rm -rf "$BROKEN_ROOT" "$_ISOLATION_TMP_ROOT"; }
 trap cleanup_broken EXIT
 
 # ============================================================================
@@ -43,7 +47,7 @@ trap cleanup_broken EXIT
 # ============================================================================
 TC1_OUT="$(mktemp -t index-tc1-out.XXXXXX.json)"
 TC1_ERR="$(mktemp -t index-tc1-err.XXXXXX.log)"
-AGENTS_CONFIG_DIR="$AGENTS_DIR" run_with_timeout bash "$INDEX_SH" >"$TC1_OUT" 2>"$TC1_ERR"
+AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" run_with_timeout bash "$INDEX_SH" >"$TC1_OUT" 2>"$TC1_ERR"
 TC1_RC=$?
 if [ "$TC1_RC" -eq 0 ] && is_valid_json "$TC1_OUT" && doc_has_key "$TC1_OUT" hot_regions && ! doc_has_key "$TC1_OUT" keywords; then
     pass "TC1: index.sh full-scan mode exits 0 with a valid hot_regions scan doc"
@@ -57,7 +61,7 @@ rm -f "$TC1_OUT" "$TC1_ERR"
 # ============================================================================
 TC2_OUT="$(mktemp -t index-tc2-out.XXXXXX.json)"
 TC2_ERR="$(mktemp -t index-tc2-err.XXXXXX.log)"
-AGENTS_CONFIG_DIR="$AGENTS_DIR" run_with_timeout bash "$INDEX_SH" --keywords-only >"$TC2_OUT" 2>"$TC2_ERR"
+AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" run_with_timeout bash "$INDEX_SH" --keywords-only >"$TC2_OUT" 2>"$TC2_ERR"
 TC2_RC=$?
 if [ "$TC2_RC" -eq 0 ] && is_valid_json "$TC2_OUT" && doc_has_key "$TC2_OUT" keywords && ! doc_has_key "$TC2_OUT" hot_regions; then
     pass "TC2: index.sh --keywords-only exits 0 and short-circuits before scan-prompts.js"
@@ -71,7 +75,7 @@ rm -f "$TC2_OUT" "$TC2_ERR"
 # ============================================================================
 TC3_OUT="$(mktemp -t index-tc3-out.XXXXXX.json)"
 TC3_ERR="$(mktemp -t index-tc3-err.XXXXXX.log)"
-AGENTS_CONFIG_DIR="$AGENTS_DIR" run_with_timeout bash "$INDEX_SH" --context-lines 1 >"$TC3_OUT" 2>"$TC3_ERR"
+AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" run_with_timeout bash "$INDEX_SH" --context-lines 1 >"$TC3_OUT" 2>"$TC3_ERR"
 TC3_RC=$?
 if [ "$TC3_RC" -eq 0 ] && is_valid_json "$TC3_OUT" && doc_has_key "$TC3_OUT" hot_regions; then
     pass "TC3: index.sh --context-lines N is accepted and passed through to the scan"
@@ -81,19 +85,27 @@ fi
 rm -f "$TC3_OUT" "$TC3_ERR"
 
 # ============================================================================
-# TC4: AGENTS_CONFIG_DIR unset — exit 2, stderr names the missing var
+# TC4: no root env var at all — the wrapper has no guard; the extractor falls back to
+# the git toplevel of the CWD, says so on stderr, and the scan doc is still produced.
 # ============================================================================
 TC4_OUT="$(mktemp -t index-tc4-out.XXXXXX.json)"
 TC4_ERR="$(mktemp -t index-tc4-err.XXXXXX.log)"
+TC4_UNSET=(-u AGENTS_MAIN_ROOT)
+while IFS= read -r TC4_NAME; do
+    TC4_NAME="${TC4_NAME%$'\r'}"
+    [ -n "$TC4_NAME" ] && TC4_UNSET+=(-u "$TC4_NAME")
+done < <(node "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js" --print-retired-env-names 2>/dev/null)
 (
-    unset AGENTS_CONFIG_DIR
-    run_with_timeout bash "$INDEX_SH" >"$TC4_OUT" 2>"$TC4_ERR"
+    cd "$SCRIPT_CHECKOUT_ROOT" || exit 92
+    run_with_timeout env "${TC4_UNSET[@]}" bash "$INDEX_SH" >"$TC4_OUT" 2>"$TC4_ERR"
 )
 TC4_RC=$?
-if [ "$TC4_RC" -eq 2 ] && grep -qi "AGENTS_CONFIG_DIR" "$TC4_ERR"; then
-    pass "TC4: AGENTS_CONFIG_DIR unset exits 2 with a diagnostic naming the var"
+if [ "${#TC4_UNSET[@]}" -gt 2 ] && [ "$TC4_RC" -eq 0 ] \
+   && is_valid_json "$TC4_OUT" && doc_has_key "$TC4_OUT" hot_regions \
+   && grep -q "AGENTS_MAIN_ROOT not set; falling back to git toplevel" "$TC4_ERR"; then
+    pass "TC4: no root env var → git-toplevel fallback is announced and the scan doc is still valid"
 else
-    fail "TC4: rc=$TC4_RC stderr=$(cat "$TC4_ERR")"
+    fail "TC4: rc=$TC4_RC unset-args=${#TC4_UNSET[@]} stderr=$(cat "$TC4_ERR")"
 fi
 rm -f "$TC4_OUT" "$TC4_ERR"
 
@@ -102,7 +114,7 @@ rm -f "$TC4_OUT" "$TC4_ERR"
 # ============================================================================
 TC5_OUT="$(mktemp -t index-tc5-out.XXXXXX.json)"
 TC5_ERR="$(mktemp -t index-tc5-err.XXXXXX.log)"
-AGENTS_CONFIG_DIR="$AGENTS_DIR" run_with_timeout bash "$INDEX_SH" --bogus-flag >"$TC5_OUT" 2>"$TC5_ERR"
+AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" run_with_timeout bash "$INDEX_SH" --bogus-flag >"$TC5_OUT" 2>"$TC5_ERR"
 TC5_RC=$?
 if [ "$TC5_RC" -eq 2 ]; then
     pass "TC5: an unrecognized flag exits 2"
@@ -116,7 +128,7 @@ rm -f "$TC5_OUT" "$TC5_ERR"
 # ============================================================================
 TC6_OUT="$(mktemp -t index-tc6-out.XXXXXX.json)"
 TC6_ERR="$(mktemp -t index-tc6-err.XXXXXX.log)"
-AGENTS_CONFIG_DIR="$BROKEN_ROOT" run_with_timeout bash "$INDEX_SH" >"$TC6_OUT" 2>"$TC6_ERR"
+AGENTS_MAIN_ROOT="$BROKEN_ROOT" run_with_timeout bash "$INDEX_SH" >"$TC6_OUT" 2>"$TC6_ERR"
 TC6_RC=$?
 if [ "$TC6_RC" -eq 1 ] && [ ! -s "$TC6_OUT" ]; then
     pass "TC6: extract-keywords.js's exit 1 propagates through index.sh with no stdout output"
@@ -136,7 +148,7 @@ SCRATCHPAD_OK="$HANDOFF_DIR/scratchpad-ok.sh"
 {
     echo "#!/bin/bash"
     echo "set -e"
-    echo "AGENTS_CONFIG_DIR=\"$AGENTS_DIR\" bash \"$INDEX_SH\" > \"$TARGET_JSON\""
+    echo "AGENTS_MAIN_ROOT=\"$SCRIPT_CHECKOUT_ROOT\" bash \"$INDEX_SH\" > \"$TARGET_JSON\""
 } >"$SCRATCHPAD_OK"
 run_with_timeout bash "$SCRATCHPAD_OK" >/dev/null 2>&1
 TC7_RC=$?
@@ -156,7 +168,7 @@ SCRATCHPAD_ERR="$HANDOFF_DIR/scratchpad-err.sh"
 {
     echo "#!/bin/bash"
     echo "set -e"
-    echo "AGENTS_CONFIG_DIR=\"$BROKEN_ROOT\" bash \"$INDEX_SH\" > \"$TARGET_JSON_ERR\""
+    echo "AGENTS_MAIN_ROOT=\"$BROKEN_ROOT\" bash \"$INDEX_SH\" > \"$TARGET_JSON_ERR\""
 } >"$SCRATCHPAD_ERR"
 run_with_timeout bash "$SCRATCHPAD_ERR" >/dev/null 2>&1
 TC8_RC=$?

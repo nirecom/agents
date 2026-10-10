@@ -34,10 +34,10 @@ MOP-1. Locate the intent file:
    a. `<session-id>-intent.md` exists → use it.
    b. Otherwise list `<PLANS_DIR>/*-intent.md`. Exactly one → inform the user and use it; multiple → `AskUserQuestion` to select one; none → abort with "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
    c. Extract session-id from the chosen file's name; use it for all subsequent output paths.
-   d. Evaluate the skip-outline 2-condition checklist. First run a separate Bash call to check 0-signal: `SESSION_ID="$SESSION_ID" bash "$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/check-outline-skip.sh"`. If `auto`, no judgment needed — proceed to record. Otherwise evaluate via LLM judgment (so_c1/so_c2 — criteria: `skills/_shared/judge-plan-skip.md`). Record via a SEPARATE Bash call: `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 <true|false> --c2 <true|false>` (no `--next` — settles `outline` as skipped in the same call when both conditions are true; skip to Completion in that case).
+   d. Evaluate the skip-outline 2-condition checklist. First run a separate Bash call to check 0-signal: `SESSION_ID="$SESSION_ID" bash "$AGENTS_MAIN_ROOT/skills/make-outline-plan/scripts/check-outline-skip.sh"`. If `auto`, no judgment needed — proceed to record. Otherwise evaluate via LLM judgment (so_c1/so_c2 — criteria: `skills/_shared/judge-plan-skip.md`). Record via a SEPARATE Bash call: `node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 <true|false> --c2 <true|false>` (no `--next` — settles `outline` as skipped in the same call when both conditions are true; skip to Completion in that case).
 
-MOP-2. **Select the planner model, then delegate.** Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage outline'`. If line 1 is not `NONE`, use its `model=<alias>` and `signals=<csv-or-none>` lines directly.
-   If `NONE`: dispatch `subagent_type: complexity-judge` with the `intent.md` path + task context (rubric: `skills/_shared/judge-task-complexity.md`). Write the raw output to `<PLANS_DIR>/<session-id>-outline-judge-raw.txt` (Write tool — untrusted text via file only). Run `node "$AGENTS_CONFIG_DIR/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-outline-judge-raw.txt" --session "<session-id>" --stage outline`. Run `node "$AGENTS_CONFIG_DIR/bin/workflow/derive-complexity-level" --stage outline --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
+MOP-2. **Select the planner model, then delegate.** Run `bash -c 'node "$AGENTS_MAIN_ROOT/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage outline'`. If line 1 is not `NONE`, use its `model=<alias>` and `signals=<csv-or-none>` lines directly.
+   If `NONE`: dispatch `subagent_type: complexity-judge` with the `intent.md` path + task context (rubric: `skills/_shared/judge-task-complexity.md`). Write the raw output to `<PLANS_DIR>/<session-id>-outline-judge-raw.txt` (Write tool — untrusted text via file only). Run `node "$AGENTS_MAIN_ROOT/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-outline-judge-raw.txt" --session "<session-id>" --stage outline`. Run `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --stage outline --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
    Emit (Claude text, not Bash): `Model selected: **<model= alias>** (signals: [ids from the `signals=` line, or "none"])`.
    Delegate to **outline-planner** (Agent tool, `subagent_type: outline-planner`, `model: <model= from MOP-2>`). Pass full contents of `<session-id>-intent.md` and task context.
    Every outline-planner launch — here, the MOP-3 revise re-run, the MOP-4 re-prompt, the MOP-4a re-prompt, the MOP-5 CONTINUE re-delegate, and the MOP-8 revise re-run — passes the same `model: <model= from MOP-2>`.
@@ -48,7 +48,7 @@ MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optiona
    - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
    - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/<session-id>-outline.md`. Do NOT write `## Issues` / `## Accepted Tradeoffs` — the helper carries them forward next. Do NOT write `## Class members` — its SSOT is intent.md (#2228).
    - Assemble the final outline.md by invoking the shared helper (same call as the normal path in MOP-4a):
-     Run `bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
+     Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
    - Apply the full `skills/_shared/confirm-plan.md` protocol (CPA-1+CPA-2+CPA-3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol CPA-3 covers that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
    - Proceed to the **Completion** sequence below.
 
@@ -56,7 +56,7 @@ MOP-4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then r
 
 MOP-4a. **Mandatory sections carry-forward (helper handles assembly — do not instruct planner to author them):**
    After outline-planner returns its draft (initial or revised round), the orchestrator carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
-   Run `bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
+   Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
    - The helper extracts the 2 sections from intent.md with headers, strips any planner-authored copies (plus any planner-authored `## Class members` residue) and the planner's H1 from the draft, and writes the assembled outline.md.
    - `## Class members` is NOT carried into outline.md — its SSOT is intent.md (#2228).
    - Helper exit non-zero → re-prompt outline-planner once and re-assemble; second failure → halt the loop.
@@ -73,8 +73,8 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    ACCEPTED_TRADEOFFS_FILE=the `intent` candidate resolved by `bin/resolve-accepted-tradeoffs-file`,
    NON_APPROVED_VERDICT=MISSING_ALTERNATIVE).
 
-   For each review round, invoke `"$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/run-codex-review-loop.sh"`
-   (Bash tool) with env vars exported: `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED` (required);
+   For each review round, invoke `"$AGENTS_MAIN_ROOT/skills/make-outline-plan/scripts/run-codex-review-loop.sh"`
+   (Bash tool) with env vars exported: `AGENTS_MAIN_ROOT`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED` (required);
    `CTX_SURVEY_CODE`, `CTX_SURVEY_HISTORY` (optional — passed as
    `--context` when the file exists and is non-empty). Exit codes pass through unchanged.
    `CTX_CONCERNS_LOG` is auto-generated by the wrapper from the ledger (`concern-ledger render-concerns-log`, format `outline-plan`) and auto-exported when non-empty — do not set it manually (#2185).
@@ -90,9 +90,9 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    **Exit 4 must NOT trigger `outline-reviewer` fallback** — halt and surface
    stderr to the user. Only exit 3 falls back silently.
 
-   **exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md` (`<N>` from `<CONTROL_DIR>/outline-plan-round-number.txt`, `<CONTROL_DIR>` = `node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session <session-id>`); re-delegate to planner and loop back to MOP-5.
+   **exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md` (`<N>` from `<CONTROL_DIR>/outline-plan-round-number.txt`, `<CONTROL_DIR>` = `node "$AGENTS_MAIN_ROOT/bin/workflow-control-dir" --session <session-id>`); re-delegate to planner and loop back to MOP-5.
 
-   **Exit 7 (FINALIZE_FAILED)** — `<CONTROL_DIR>/outline-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan` before the sentinel.
+   **Exit 7 (FINALIZE_FAILED)** — `<CONTROL_DIR>/outline-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan` before the sentinel.
 
 MOP-6. **Cap outcome dispatch.**
 
@@ -100,14 +100,14 @@ MOP-6. **Cap outcome dispatch.**
 
    **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MOP-5 (no user confirmation). `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
 
-   **exit 2 (ESCALATE):** Run `"$AGENTS_CONFIG_DIR/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Then stop the loop and re-run `/clarify-intent` (outline-specific override: `adjust` path means scope needs revision).
+   **exit 2 (ESCALATE):** Run `"$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Then stop the loop and re-run `/clarify-intent` (outline-specific override: `adjust` path means scope needs revision).
 
    **exit 6 (HIGH_UNRESOLVED):** run `review-loop-summarize-concerns --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger.txt --raw <RAW_FILE> --label outline-plan`; confirm artifact via `concern-ledger check-finalized`; stop loop, then re-run `/clarify-intent`.
 
    `<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`; `<N>` = value from `<CONTROL_DIR>/outline-plan-last-round.txt`. Exit 8: AskUserQuestion per exit-codes.md "Escalation by format".
 
 MOP-7. On `APPROVED`:
-   Retrieve `<CONV_LANG>` from the stdout of the standalone call `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG`.
+   Retrieve `<CONV_LANG>` from the stdout of the standalone call `bash "$AGENTS_MAIN_ROOT/bin/get-config-var" CONV_LANG`.
 
    Evaluate each approach and select the recommended one (highest trade-off score across cost, risk, existing-code consistency, and delivery timeline). Record it as `CHOSEN_APPROACH=<approach-name>`.
 
@@ -154,4 +154,4 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 
 ## Completion
 
-MOP-C1. Evaluate the skip-detail 3-condition checklist. First run a separate Bash call: `SESSION_ID="$SESSION_ID" bash "$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/check-detail-skip.sh"`. If `auto`, no judgment needed — proceed to record. Otherwise evaluate via LLM judgment against outline.md (sd_c1–sd_c3 — criteria: `skills/_shared/judge-plan-skip.md`). Record via a SEPARATE Bash call BEFORE completing outline (no `--next` — this settles `detail`, not `outline`): `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target detail --advance --c1 <true|false> --c2 <true|false> --c3 <true|false>`. When all conditions are true, also launch `skip-verifier` via the Agent tool (run_in_background: true) with session_id=`$SESSION_ID`, target=`detail`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`, outline_path=`<PLANS_DIR>/$SESSION_ID-outline.md`. Then, as a separate Bash call, complete `outline` and consume its `ACTION=` block: `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step outline --complete --next`; follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`.
+MOP-C1. Evaluate the skip-detail 3-condition checklist. First run a separate Bash call: `SESSION_ID="$SESSION_ID" bash "$AGENTS_MAIN_ROOT/skills/make-outline-plan/scripts/check-detail-skip.sh"`. If `auto`, no judgment needed — proceed to record. Otherwise evaluate via LLM judgment against outline.md (sd_c1–sd_c3 — criteria: `skills/_shared/judge-plan-skip.md`). Record via a SEPARATE Bash call BEFORE completing outline (no `--next` — this settles `detail`, not `outline`): `node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target detail --advance --c1 <true|false> --c2 <true|false> --c3 <true|false>`. When all conditions are true, also launch `skip-verifier` via the Agent tool (run_in_background: true) with session_id=`$SESSION_ID`, target=`detail`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`, outline_path=`<PLANS_DIR>/$SESSION_ID-outline.md`. Then, as a separate Bash call, complete `outline` and consume its `ACTION=` block: `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step outline --complete --next`; follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`.

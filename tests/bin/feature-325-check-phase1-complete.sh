@@ -2,23 +2,18 @@
 # Tests: bin/github-issues/check-phase1-complete.sh, bin/github-issues/issue-close-triage-lib.sh
 # Tags: issue-close, triage, workflow, phase1, gate, scope:common
 # Serial: shell-injection guard asserts the fixed path /tmp/C7_INJECT stays absent
-# Tests for issue #325 — bin/github-issues/check-phase1-complete.sh
-#
-# Verifies that Phase 1 (sentinel posted) is complete before /commit-push
-# allows merge. Pre-flight guard.
-
-# After issue #325, Phase 1 no longer writes docs/history.md (that work
-# moved to Phase 2). The only Phase 1 completion signal is the sentinel —
-# the previous "sentinel AND history entry" gate collapsed to sentinel-only.
-#
+# Issue #325 — pre-flight guard: Phase 1 (sentinel posted) must be complete before
+# /commit-push allows merge. Phase 1 no longer writes docs/history.md (moved to Phase 2), so
+# the sentinel is the only completion signal (the old "sentinel AND history entry" gate
+# collapsed to sentinel-only).
 # RED: this suite fails clean while the script + shared lib are missing.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-triage-lib.sh"
-CHECK_SCRIPT="$AGENTS_DIR/bin/github-issues/check-phase1-complete.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-triage-lib.sh"
+CHECK_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/check-phase1-complete.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -58,7 +53,6 @@ setup_tmp() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/docs/history"
     : > "$TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"
@@ -68,7 +62,6 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR
     unset GH_MOCK_COMMENT_LOG
 }
 
@@ -137,15 +130,17 @@ else
 fi
 teardown_tmp
 
-# --- C8: AGENTS_CONFIG_DIR unset → exit 1
+# --- C8: the gate reads no root variable — with AGENTS_MAIN_ROOT unset the verdict still
+# follows the sentinel alone (no sentinel → exit 1, pending sentinel → exit 0).
 setup_tmp
-unset AGENTS_CONFIG_DIR
-GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$CHECK_SCRIPT" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_with_timeout 15 env -u AGENTS_MAIN_ROOT bash "$CHECK_SCRIPT" 42 >/dev/null 2>&1
 RC=$?
-if [ "$RC" -ne 0 ]; then
-    pass "C8: AGENTS_CONFIG_DIR unset → exit 1"
+GH_MOCK_SCENARIO=open_with_pending run_with_timeout 15 env -u AGENTS_MAIN_ROOT bash "$CHECK_SCRIPT" 42 >/dev/null 2>&1
+RC_PENDING=$?
+if [ "$RC" -ne 0 ] && [ "$RC_PENDING" -eq 0 ]; then
+    pass "C8: AGENTS_MAIN_ROOT unset → no sentinel exit 1, pending sentinel exit 0"
 else
-    fail "C8: rc=$RC"
+    fail "C8: no-sentinel rc=$RC pending rc=$RC_PENDING"
 fi
 teardown_tmp
 

@@ -25,7 +25,7 @@ else
     # G1-T1: planning + CONV_LANG + PLAN_LANG → both lines in additionalContext
     _raw1=$(printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         CONV_LANG=japanese PLAN_LANG=english \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)
     _ctx1=$(extract_additional_context "$_raw1")
@@ -42,7 +42,7 @@ else
     # G1-T2: planning complete + CONV_LANG + PLAN_LANG → only CONV_LANG (no PLAN_LANG)
     _raw2=$(printf "{\"session_id\":\"$SID_DONE\"}" | \
         CONV_LANG=japanese PLAN_LANG=english \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         WORKFLOW_STATE_DIR="$WF_DONE_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)
     _ctx2=$(extract_additional_context "$_raw2")
@@ -58,7 +58,7 @@ else
     # G1-T3: CONV_LANG unset + planning + PLAN_LANG → only PLAN_LANG line
     _raw3=$(printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         PLAN_LANG=japanese \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node -e "
 delete process.env.CONV_LANG;
@@ -67,7 +67,7 @@ const { execFileSync } = require('child_process');
 " 2>/dev/null; \
         (unset CONV_LANG; printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         PLAN_LANG=japanese \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null))
     _ctx3=$(extract_additional_context "$_raw3")
@@ -82,7 +82,7 @@ const { execFileSync } = require('child_process');
 
     # G1-T4: both unset → output is {} (no injection)
     _raw4=$( (unset CONV_LANG; unset PLAN_LANG; printf "{\"session_id\":\"$SID_PLANNING\"}" | \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null) )
     if [ "$_raw4" = "{}" ]; then
@@ -99,7 +99,7 @@ const { execFileSync } = require('child_process');
     # G1-T5: session_id missing → fail-open, exit 0, valid JSON
     _raw5=$(printf '{}' | \
         CONV_LANG=japanese \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)
     _rc5=$?
@@ -113,7 +113,7 @@ const { execFileSync } = require('child_process');
     # G1-T6: malformed stdin → exit 0, valid JSON
     _raw6=$(printf 'not-json' | \
         CONV_LANG=japanese \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)
     _rc6=$?
@@ -127,7 +127,7 @@ const { execFileSync } = require('child_process');
     # G1-T7: output shape has hookSpecificOutput.hookEventName=UserPromptSubmit
     _raw7=$(printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         CONV_LANG=japanese \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)
     _event7=$(node -e "
@@ -153,12 +153,12 @@ try {
     # RED (hook not implemented → no directive), so this only passes post-implementation.
     _idem_ctx_a=$(extract_additional_context "$(printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         CONV_LANG=japanese \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)")
     _idem_ctx_b=$(extract_additional_context "$(printf "{\"session_id\":\"$SID_PLANNING\"}" | \
         CONV_LANG=japanese \
-        AGENTS_CONFIG_DIR="$EMPTY_DIR_NODE" \
+        AGENTS_MAIN_ROOT="$EMPTY_DIR_NODE" \
         WORKFLOW_STATE_DIR="$WF_PLANNING_NODE" \
         run_with_timeout 15 node "$LANG_INJECT_HOOK" 2>/dev/null)")
     _idem_ok=1

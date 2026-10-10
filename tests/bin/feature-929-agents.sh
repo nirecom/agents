@@ -13,19 +13,19 @@ set -u
 # fragment marks them `# NOTE: RED until ...`. The dispatcher's own obligation is
 # HARNESS SOUNDNESS: run, source every fragment, fail cleanly (never hang).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 to_node_path() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-_AGENTS_DIR_NODE="$(to_node_path "$AGENTS_DIR")"
+_SCRIPT_CHECKOUT_ROOT_NODE="$(to_node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 # Sources under test.
-CORE_JS="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io/core.js"
-SESSION_START_JS="$_AGENTS_DIR_NODE/hooks/session-start.js"
-WORKFLOW_STATE_JS="$_AGENTS_DIR_NODE/hooks/workflow-state"
-FINDINGS_CLI="$AGENTS_DIR/bin/supervisor-findings-codex"
-PARSE_MODULE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-codex-parse.js"
-WRITE_AUDIT_CLI="$AGENTS_DIR/bin/supervisor-write-audit-verdict"
-AUDIT_RUN_JS="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer/audit-run.js"
-SCHEMA_JS="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
+CORE_JS="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io/core.js"
+SESSION_START_JS="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/session-start.js"
+WORKFLOW_STATE_JS="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state"
+FINDINGS_CLI="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-findings-codex"
+PARSE_MODULE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-codex-parse.js"
+WRITE_AUDIT_CLI="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit-verdict"
+AUDIT_RUN_JS="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer/audit-run.js"
+SCHEMA_JS="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
 
 # Codex output markers reused across fixtures (SSOT: hooks/lib/codex-review-parse.js).
 CODEX_BEGIN="<!-- begin-codex-output -->"

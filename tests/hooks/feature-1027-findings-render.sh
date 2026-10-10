@@ -9,18 +9,18 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-RENDER_SRC="$AGENTS_DIR/hooks/lib/supervisor-findings-render.js"
-RENDER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-findings-render.js"
+RENDER_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-findings-render.js"
+RENDER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-findings-render.js"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -240,7 +240,7 @@ r9_render() {
         cd "$R9_WORK/neutral" || exit 1
         run_with_timeout 10 env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL \
             -u PRODUCER_LOW_MODEL -u CLAUDE_PROJECT_DIR \
-            -u CLAUDE_CODE_SESSION_ID AGENTS_CONFIG_DIR="$cfg" \
+            -u CLAUDE_CODE_SESSION_ID AGENTS_MAIN_ROOT="$cfg" \
             WORKFLOW_STATE_DIR="$R9_WORK/wf" WORKFLOW_PLANS_DIR="$R9_WORK/plans" node -e "
 const r = require('$RENDER_NODE');
 const findings = [

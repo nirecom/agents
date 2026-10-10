@@ -64,20 +64,20 @@ b_setup() {
 # for the payloads: it strips trailing newlines, and several of these targets emit
 # with printf '%s' and no trailing newline at all.
 compare_case() { # <label> <shell> set|unset [args...]
-  local label="$1" shl="$2" acd="$3"; shift 3
-  local rc1 rc2 tag="B[$GUARD_TARGET] $label ($shl, AGENTS_CONFIG_DIR=$acd)"
-  if [ "$acd" = "set" ]; then
-    ( export AGENTS_CONFIG_DIR="$REPO_ROOT"
+  local label="$1" shl="$2" root_mode="$3"; shift 3
+  local rc1 rc2 tag="B[$GUARD_TARGET] $label ($shl, AGENTS_MAIN_ROOT=$root_mode)"
+  if [ "$root_mode" = "set" ]; then
+    ( export AGENTS_MAIN_ROOT="$B_TMP"
       run_with_timeout 60 "$shl" "$LIVE" "$@" ) >"$B_TMP/o1" 2>"$B_TMP/e1"
     rc1=$?
-    ( export AGENTS_CONFIG_DIR="$REPO_ROOT"
+    ( export AGENTS_MAIN_ROOT="$B_TMP"
       run_with_timeout 60 "$shl" "$TWIN" "$@" ) >"$B_TMP/o2" 2>"$B_TMP/e2"
     rc2=$?
   else
-    ( unset AGENTS_CONFIG_DIR
+    ( unset AGENTS_MAIN_ROOT
       run_with_timeout 60 "$shl" "$LIVE" "$@" ) >"$B_TMP/o1" 2>"$B_TMP/e1"
     rc1=$?
-    ( unset AGENTS_CONFIG_DIR
+    ( unset AGENTS_MAIN_ROOT
       run_with_timeout 60 "$shl" "$TWIN" "$@" ) >"$B_TMP/o2" 2>"$B_TMP/e2"
     rc2=$?
   fi
@@ -94,8 +94,8 @@ compare_case() { # <label> <shell> set|unset [args...]
   fi
 }
 
-# both_env — the same case under AGENTS_CONFIG_DIR set and unset. The two are
-# genuinely different code paths in these targets (explicit config dir vs the
+# both_env — the same case under AGENTS_MAIN_ROOT set and unset. The two are
+# genuinely different code paths in these targets (explicit agents root vs the
 # SCRIPT_DIR fallback), so running only one would leave half the resolution logic
 # unexercised.
 both_env() { # <label> [args...]
@@ -124,8 +124,8 @@ b_cases_confirm_off() {
   both_env "L2 key set to off" CONFIRM_T
   unset CONFIRM_T
   both_env "L3 usage error (no arguments)"
-  # The ERROR path: AGENTS_CONFIG_DIR unset is the only way confirm-off reaches it.
-  compare_case "L4 AGENTS_CONFIG_DIR unset (ERROR path)" bash unset CONFIRM_T on
+  # The ERROR path: AGENTS_MAIN_ROOT unset is the only way confirm-off reaches it.
+  compare_case "L4 AGENTS_MAIN_ROOT unset (ERROR path)" bash unset CONFIRM_T on
 }
 
 # No subshell wrappers around any of these: pass/fail increment shell variables,
@@ -219,10 +219,10 @@ d_precondition() {
 d_compare() { # <label> zero|nonzero [args...]
   local label="$1" class="$2"; shift 2
   local rc_d rc_b tag="D[$GUARD_TARGET] $label"
-  ( export AGENTS_CONFIG_DIR="$REPO_ROOT"
+  ( export AGENTS_MAIN_ROOT="$B_TMP"
     run_with_timeout 60 "$D_TARGET" "$@" ) >"$D_TMP/d.out" 2>"$D_TMP/d.err"
   rc_d=$?
-  ( export AGENTS_CONFIG_DIR="$REPO_ROOT"
+  ( export AGENTS_MAIN_ROOT="$B_TMP"
     run_with_timeout 60 bash "$D_TARGET" "$@" ) >"$D_TMP/b.out" 2>"$D_TMP/b.err"
   rc_b=$?
   if [ "$class" = "zero" ]; then

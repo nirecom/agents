@@ -30,7 +30,7 @@ blocked-enforce-worktree-excl   | ENFORCE_WORKTREE_EXCLUDE    | repoA         | 
 blocked-auto-approve-tools      | AUTO_APPROVE_TOOLS          | off           | on
 blocked-workflow-plans-dir      | WORKFLOW_PLANS_DIR          | /global-plans | /tmp/evil
 blocked-workflow-state-dir     | WORKFLOW_STATE_DIR         | /global-wf    | /tmp/evil
-blocked-agents-config-dir       | AGENTS_CONFIG_DIR           | /global-cfg   | /tmp/evil
+blocked-agents-main-root        | AGENTS_MAIN_ROOT            | /global-cfg   | /tmp/evil
 blocked-agents-state-dir        | AGENTS_STATE_DIR            | /global-state | /tmp/evil
 blocked-worktree-base-dir      | WORKTREE_BASE_DIR           | /global-wt    | /tmp/evil
 blocked-default-branches        | DEFAULT_BRANCHES            | main          | evil
@@ -80,7 +80,7 @@ DENY_EXACT="$(probe blocklist-keys exact)"
 DENY_PREFIXES="$(probe blocklist-keys prefixes)"
 
 # Full membership, not a count: a silently dropped entry is the regression here.
-WANT_EXACT="$(printf '%s\n' AGENTS_CONFIG_DIR AGENTS_STATE_DIR AUTO_APPROVE_TOOLS \
+WANT_EXACT="$(printf '%s\n' AGENTS_MAIN_ROOT AGENTS_STATE_DIR AUTO_APPROVE_TOOLS \
     CLAUDE_CODE_AUTO_COMPACT_WINDOW \
     CODE_FILE_EXTENSIONS CODE_LANG_EXCLUDE DEFAULT_BRANCHES ENFORCE_WORKTREE \
     ENFORCE_WORKTREE_ADDITIONAL_REPOS ENFORCE_WORKTREE_EXCLUDE ISSUE_VERDICT_WEB_SEARCH \
@@ -117,13 +117,13 @@ for _raw in __UNDEF__ __NULL__ __NUM__ __OBJ__ __ARR__; do
     assert_eq "T2223N2-isBlocklisted-nonstring-$_raw" "true" "$(probe is-blocklisted-raw "$_raw")"
 done
 
-# The isolation pair: a local WORKFLOW_STATE_DIR or AGENTS_CONFIG_DIR would
+# The isolation pair: a local WORKFLOW_STATE_DIR or AGENTS_MAIN_ROOT would
 # relocate the workflow-state root, or the directory this layer reads the global
 # .env from — named here so a removal from the exact set fails by name.
 assert_eq "T2223N2-isBlocklisted-workflow-state-dir" "true" "$(probe is-blocklisted WORKFLOW_STATE_DIR)"
 assert_eq "T2223N2-isBlocklisted-workflow-state-dir-lower" "true" "$(probe is-blocklisted workflow_state_dir)"
-assert_eq "T2223N2-isBlocklisted-agents-config-dir" "true" "$(probe is-blocklisted AGENTS_CONFIG_DIR)"
-assert_eq "T2223N2-isBlocklisted-agents-config-dir-lower" "true" "$(probe is-blocklisted agents_config_dir)"
+assert_eq "T2223N2-isBlocklisted-agents-main-root" "true" "$(probe is-blocklisted AGENTS_MAIN_ROOT)"
+assert_eq "T2223N2-isBlocklisted-agents-main-root-lower" "true" "$(probe is-blocklisted agents_main_root)"
 # Their sibling (#2460): the state/log root that Jev retention deletes under.
 assert_eq "T2223N2-isBlocklisted-agents-state-dir" "true" "$(probe is-blocklisted AGENTS_STATE_DIR)"
 assert_eq "T2223N2-isBlocklisted-agents-state-dir-lower" "true" "$(probe is-blocklisted agents_state_dir)"
@@ -175,7 +175,7 @@ assert_contains "T2223-ordinary-local-sibling-applied" "$ordinary_json" 'other-f
 # The damage the two NEW entries would do, asserted the way ENFORCE_WORKTREE's
 # is (T2223-door-loadEnv-blocklisted) — CPR-ORTH. WORKFLOW_STATE_DIR travels
 # through process.env via applyLocalOverlayToProcessEnv and relocates the
-# workflow-state root; AGENTS_CONFIG_DIR redirects the directory this very layer
+# workflow-state root; AGENTS_MAIN_ROOT redirects the directory this very layer
 # reads the global .env from.
 # The naive probe would pass for the wrong reason: the harness exports both, and
 # a non-empty process.env outranks either layer — so each row unsets first.
@@ -207,7 +207,7 @@ assert_map_lacks "T2223N2-escalate-state-dir-absent-from-map" "$esc_state_json" 
 # overlay() names the refused key in `ignored` (both spellings) and applies the
 # look-alike one character past the boundary.
 esc_state_overlay="$(run_with_timeout 20 node -e '
-  const m = require(require("path").join(process.env.AGENTS_DIR_NODE, "hooks", "lib", "local-env.js"));
+  const m = require(require("path").join(process.env.SCRIPT_CHECKOUT_ROOT_NODE, "hooks", "lib", "local-env.js"));
   const r = m.overlay({ AGENTS_STATE_DIR: "global-state-2460" },
     { AGENTS_STATE_DIR: "evil-2460", agents_state_dir: "evil-2460", AGENTS_STATE_DIRX: "applied-2460" });
   process.stdout.write(JSON.stringify({ map: r.map, applied: r.applied, ignored: r.ignored }));
@@ -239,24 +239,24 @@ assert_not_contains "T2223N2-escalate-node-tls-absent-from-map" "$esc_node_json"
 assert_contains "T2223N2-escalate-node-env-in-map" "$esc_node_json" '"NODE_ENV":"node-env-2460"'
 unset CLAUDE_PROJECT_DIR
 
-# A decoy config dir the local file tries to point the reader at. Load-bearing on
+# A decoy agents main root the local file tries to point the reader at. Load-bearing on
 # the map itself: the decoy path must be absent from it, so removing
-# AGENTS_CONFIG_DIR from the exact set lets the key ride in and fails this row.
+# AGENTS_MAIN_ROOT from the exact set lets the key ride in and fails this row.
 DECOY_CFG="$TMP_ROOT/decoy-cfg-2223"
 mkdir -p "$DECOY_CFG"
 printf 'CODE_LANG=decoy-2223\n' > "$DECOY_CFG/.env"
 new_case escalate-cfg 'CODE_LANG=english' \
-  "AGENTS_CONFIG_DIR=$(to_node_path "$DECOY_CFG")@NL@ORDINARY_CFG_KEY=ok-cfg-2223"
+  "AGENTS_MAIN_ROOT=$(to_node_path "$DECOY_CFG")@NL@ORDINARY_CFG_KEY=ok-cfg-2223"
 esc_cfg_json="$(probe effective-json "$CASE_ROOT_NODE")"
-assert_map_lacks "T2223N2-escalate-config-dir-never-redirects" "$esc_cfg_json" 'decoy-cfg-2223'
-assert_eq "T2223N2-escalate-config-dir-global-value-kept" '"english"' \
+assert_map_lacks "T2223N2-escalate-agents-main-root-never-redirects" "$esc_cfg_json" 'decoy-cfg-2223'
+assert_eq "T2223N2-escalate-agents-main-root-global-value-kept" '"english"' \
   "$(probe effective "$CASE_ROOT_NODE" CODE_LANG)"
 # Controls: the local file really was read at all, and the decoy really is a
-# readable config dir with a different answer of its own.
+# readable agents main root with a different answer of its own.
 assert_contains "T2223N2-escalate-control-local-file-read" "$esc_cfg_json" 'ok-cfg-2223'
 ESC_SAVED_CFG="$CASE_CFG"
 CASE_CFG="$DECOY_CFG"
-assert_eq "T2223N2-escalate-decoy-config-dir-is-real" '"decoy-2223"' "$(probe global CODE_LANG)"
+assert_eq "T2223N2-escalate-decoy-agents-main-root-is-real" '"decoy-2223"' "$(probe global CODE_LANG)"
 CASE_CFG="$ESC_SAVED_CFG"
 
 # ---------------------------------------------------------------------------
@@ -277,7 +277,7 @@ codex-bare                 | CODEX                     | false
 session-bare               | SESSION                   | false
 propagate-bare             | PROPAGATE                 | false
 comment-block-bare         | COMMENT_BLOCK             | false
-agents-config-dir-suffixed | AGENTS_CONFIG_DIR_OLD     | false
+agents-main-root-suffixed  | AGENTS_MAIN_ROOT_OLD      | false
 agents-state-dir-longer    | AGENTS_STATE_DIRX         | false
 agents-state-dir-shorter   | AGENTS_STATE              | false
 workflow-state-dir-longer  | WORKFLOW_STATE_DIRECTORY | false
@@ -301,8 +301,8 @@ TABLE
 
 # End to end: a boundary key really does reach the effective map.
 new_case boundary-applies 'CODE_LANG=english' \
-  'CODEX=applied-2223@NL@AGENTS_CONFIG_DIR_OLD=applied-2223'
+  'CODEX=applied-2223@NL@AGENTS_MAIN_ROOT_OLD=applied-2223'
 boundary_json="$(probe effective-json "$CASE_ROOT_NODE")"
 assert_contains "T2223N2-boundary-codex-bare-applies" "$boundary_json" '"CODEX":"applied-2223"'
-assert_contains "T2223N2-boundary-config-dir-suffixed-applies" "$boundary_json" \
-  '"AGENTS_CONFIG_DIR_OLD":"applied-2223"'
+assert_contains "T2223N2-boundary-agents-main-root-suffixed-applies" "$boundary_json" \
+  '"AGENTS_MAIN_ROOT_OLD":"applied-2223"'

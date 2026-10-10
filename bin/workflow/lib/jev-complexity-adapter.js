@@ -11,13 +11,13 @@ const fs = require("fs");
 const path = require("path");
 const { StringDecoder } = require("string_decoder");
 
-const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
-const { SIGNAL_IDS } = require(path.join(REPO_ROOT, "hooks", "workflow-state", "complexity-routing.js"));
-const { redactSecretShaped } = require(path.join(REPO_ROOT, "hooks", "workflow-state", "complexity-routing", "secret-shape.js"));
-const { redactSecrets } = require(path.join(REPO_ROOT, "hooks", "lib", "output-sanitize.js"));
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
+const { SIGNAL_IDS } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "complexity-routing.js"));
+const { redactSecretShaped } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "complexity-routing", "secret-shape.js"));
+const { redactSecrets } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "output-sanitize.js"));
 
-const RUBRIC_PATH = path.join(REPO_ROOT, "skills", "_shared", "judge-task-complexity.md");
-const AGENT_PATH = path.join(REPO_ROOT, "agents", "complexity-judge.md");
+const RUBRIC_PATH = path.join(SCRIPT_CHECKOUT_ROOT, "skills", "_shared", "judge-task-complexity.md");
+const AGENT_PATH = path.join(SCRIPT_CHECKOUT_ROOT, "agents", "complexity-judge.md");
 const MAX_STATE_CHARS = 16000;
 const MAX_ARTIFACT_READ_BYTES = 1048576;
 const ARTIFACTS = ["intent", "outline", "detail"];
@@ -103,7 +103,7 @@ function mapAnswers(response, threshold) {
 
 function plansDirOrNull() {
   try {
-    const { getWorkflowPlansDir } = require(path.join(REPO_ROOT, "hooks", "lib", "workflow-plans-dir.js"));
+    const { getWorkflowPlansDir } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "workflow-plans-dir.js"));
     return getWorkflowPlansDir();
   } catch (_e) {
     return null;
@@ -166,13 +166,13 @@ function pathKey(p, toWindowsPath) {
 function notesSessionId(rawCwd) {
   try {
     if (typeof rawCwd !== "string" || !rawCwd) return null;
-    const { toWindowsPath } = require(path.join(REPO_ROOT, "hooks", "lib", "branch-diff.js"));
+    const { toWindowsPath } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "branch-diff.js"));
     const cwd = toWindowsPath(rawCwd);
     if (typeof cwd !== "string" || !cwd || !path.isAbsolute(cwd)) return null;
-    const notes = require(path.join(REPO_ROOT, "hooks", "lib", "worktree-notes-session-ids.js"));
+    const notes = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "worktree-notes-session-ids.js"));
     const wsid = notes.readSessionIdFromWorktreeNotes(path.join(cwd, notes.NOTES_BASENAME));
     if (!wsid) return null;
-    const { readState } = require(path.join(REPO_ROOT, "hooks", "workflow-state", "state-io.js"));
+    const { readState } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "state-io.js"));
     const state = readState(wsid);
     if (!state || typeof state !== "object") return null;
     const want = pathKey(cwd, toWindowsPath);

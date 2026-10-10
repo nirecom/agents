@@ -37,14 +37,17 @@ run_install() {
     local fake_home="$TMP/home-run-$$"
     mkdir -p "$fake_home"
     touch "$fake_home/.bashrc"
+    (
+    pin_home_and_userprofile "$fake_home"
     run_with_timeout 30 env -i \
         PATH="$fake_root/mock-bin:$PATH" \
-        HOME="$fake_home" \
+        HOME="$HOME" USERPROFILE="$USERPROFILE" \
         NVM_DIR="$fake_root/fake-nvm" \
         SHELL="/bin/bash" \
         TERM="dumb" \
         bash "$fake_root/install.sh" \
         >/dev/null 2>/dev/null
+    )
 }
 
 # T7: install.sh always calls glab.sh (GITLAB gate lives inside glab.sh, not install.sh)

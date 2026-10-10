@@ -59,8 +59,8 @@ T16_AGENTS="$TMPDIR_BASE/t16-agents"
 T16_HOOKS="$T16_AGENTS/hooks"
 T16_LIB="$T16_HOOKS/lib"
 mkdir -p "$T16_LIB"
-if [ -d "$AGENTS_DIR/hooks/lib" ]; then
-    cp -r "$AGENTS_DIR/hooks/lib/." "$T16_LIB/" 2>/dev/null || true
+if [ -d "$SCRIPT_CHECKOUT_ROOT/hooks/lib" ]; then
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/lib/." "$T16_LIB/" 2>/dev/null || true
     cp "$POST_COMPACT" "$T16_HOOKS/post-compact.js" 2>/dev/null || true
     # Overwrite conv-lang.js with a thrower.
     cat > "$T16_LIB/conv-lang.js" <<'EOF'
@@ -75,7 +75,7 @@ EOF
         CONV_LANG="japanese" \
         WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t16" \
         HOME="$TMPDIR_BASE/home-t16" \
-        AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+        AGENTS_MAIN_ROOT="$EMPTY_CFG" \
         run_with_timeout 30 node "$T16_HOOKS/post-compact.js" 2>/dev/null)
     T16_RC=$?
     if [ "$T16_RC" -ne 0 ] || [ -z "$T16_RAW" ]; then
@@ -163,7 +163,7 @@ T20_RAW=$(printf '{}' | \
     CONV_LANG="japanese" \
     WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t20" \
     HOME="$TMPDIR_BASE/home-t20" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)
 T20_RC=$?
 if [ "$T20_RC" -ne 0 ]; then
@@ -182,7 +182,7 @@ T23_RAW=$(printf 'not-json' | \
     CONV_LANG="japanese" \
     WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-t23" \
     HOME="$TMPDIR_BASE/home-t23" \
-    AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+    AGENTS_MAIN_ROOT="$EMPTY_CFG" \
     run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)
 T23_RC=$?
 if [ "$T23_RC" -ne 0 ]; then

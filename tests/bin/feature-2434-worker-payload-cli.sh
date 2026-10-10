@@ -12,8 +12,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # harness.sh assert_eq is 2-arg (actual, expected); override with 3-arg (name, expected, actual).
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -21,9 +21,9 @@ assert_eq() {
     else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
 
-CLI="$AGENTS_DIR/bin/worker-dispatch-payload"
-PAYLOAD_JS="$AGENTS_DIR/bin/worker-dispatch/payload.js"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch-payload"
+PAYLOAD_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/payload.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
 
 # Read MAX_PAYLOAD_BYTES from payload.js (fall back to 4 MiB if file absent)
 MAX_PB="$(node -e 'try{console.log(require(process.argv[1]).MAX_PAYLOAD_BYTES)}catch(e){console.log(4194304)}' "$(np "$PAYLOAD_JS")" 2>/dev/null)"

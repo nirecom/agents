@@ -75,7 +75,7 @@ t7_real_repo_in_sync() {
         return
     fi
     mkdir -p "$home/.claude"
-    out="$( (cd "$AGENTS_DIR" && unset CLAUDE_CODE_SESSION_ID && \
+    out="$( (cd "$SCRIPT_CHECKOUT_ROOT" && unset CLAUDE_CODE_SESSION_ID && \
         HOME="$home" USERPROFILE="$(node_path "$home")" CLAUDE_CONFIG_DIR="$home/.claude" \
         run_with_timeout 60 node "$ASSEMBLE_REL") 2>&1 )" || rc=$?
     if [ "$rc" -ne 0 ]; then
@@ -85,7 +85,7 @@ t7_real_repo_in_sync() {
     out="$(run_with_timeout 30 node -e '
       const r = require(process.argv[1]).detectDrift({ homeDir: process.argv[2] });
       console.log("drifted=" + r.drifted + ";gen=" + ("generatorUnavailable" in r ? "PRESENT" : "absent"));
-    ' "$(node_path "$AGENTS_DIR/hooks/lib/settings-drift.js")" "$(node_path "$home")" 2>&1)"
+    ' "$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/lib/settings-drift.js")" "$(node_path "$home")" 2>&1)"
     assert_eq "T7: what the real deploy writes is what detectDrift calls in sync, with no generatorUnavailable key" \
         "drifted=false;gen=absent" "$out"
 }

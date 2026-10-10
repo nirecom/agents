@@ -65,13 +65,13 @@ tmp → rename so a reader never observes a half-written file.
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "root_issue_number": 1673,
   "current_issue_number": 1673,
   "issue_repo": "owner/repo",
   "owner_repo": "owner/repo",
-  "agents_config_dir": "<resolved ACD>",
-  "main_worktree_path": "<resolved main-root>",
+  "script_checkout_root": "<resolved script checkout root>",
+  "target_main_root": "<resolved target-main-root>",
   "merge_commit": "<40-hex or empty>",
   "phase": "init_done",
   "triage_action": "resume_e",
@@ -112,13 +112,13 @@ refuses the pass **before any child process is spawned**.
 
 | field | type | constraint |
 |---|---|---|
-| `schema_version` | int | `=== 3` only |
+| `schema_version` | int | `=== 4` only |
 | `root_issue_number` | int | min 1; rebind target |
 | `current_issue_number` | int | min 1 |
 | `owner_repo` | `owner-repo` | rebind target |
 | `issue_repo` | `repo-ref` | optional |
-| `agents_config_dir` | `anchor-acd` | must equal the resolved ACD |
-| `main_worktree_path` | `anchor-main-root` | must equal the resolved main-root |
+| `script_checkout_root` | `anchor-script-checkout-root` | must equal the resolved script checkout root |
+| `target_main_root` | `anchor-target-main-root` | must equal the resolved target-main-root |
 | `phase` | enum | `init_done` \| `awaiting_recursion` \| `terminal` |
 | `triage_action` | closed set | `resume_e` \| `resume_h` \| `resume_j` \| `auto_close_path` \| `admin_close_path` \| `meta_pending_subs`, or `^stuck_[a-z0-9_]{1,32}$` |
 | `merge_commit` | text, max 64 | `^[0-9a-f]{0,40}$` |
@@ -154,7 +154,7 @@ So `phase=initial` also writes a binding record beside the state file:
     <WORKFLOW_STATE_DIR>/<session-id>.control/finalize-binding-<rootN>.json
 
 with exactly five load-bearing fields — `session_id`, `root_issue_number`,
-`owner_repo`, `main_worktree_path`, `state_file_path` (plus a `created_at`
+`owner_repo`, `target_main_root`, `state_file_path` (plus a `created_at`
 timestamp that is metadata only). `loop_step` and `finalize_terminal` require a
 **3-way match** across payload, state file and binding record on all five;
 a missing binding record on a non-initial pass is a refusal, not a warning.
@@ -190,25 +190,26 @@ first.
 
 ## Environment resolution
 
-Every child's extra environment is built from the trust anchors (ACD,
-MAIN_ROOT), never read from `process.env`. `envPassthrough` in the registry
+Every child's extra environment is built from the trust anchors (script
+checkout root, target-main-root), never read from `process.env`. `envPassthrough` in the registry
 describes what *may* reach a child, not what *should*; relying on inheritance
 would make a child's behaviour depend on the ambient environment of whoever
 launched the session.
 
 | phase | `extraEnv` | cwd |
 |---|---|---|
-| `initial` | `FINALIZE_SCRIPTS_DIR`, `MAIN_WORKTREE_PATH` | `main_worktree_path` |
-| `loop_step` | `FINALIZE_SCRIPTS_DIR` | main-root |
-| `finalize_terminal` | *(none)* | main-root |
+| `initial` | `FINALIZE_SCRIPTS_DIR`, `TARGET_MAIN_ROOT` | `target_main_root` |
+| `loop_step` | `FINALIZE_SCRIPTS_DIR` | target-main-root |
+| `finalize_terminal` | *(none)* | target-main-root |
 
-`AGENTS_CONFIG_DIR` is absent from every row on purpose:
-`bin/worker-dispatch/spawn.js` sets it itself from the ACD anchor, and the child
+`AGENTS_MAIN_ROOT` is absent from every row on purpose:
+`bin/worker-dispatch/spawn.js` sets it itself, deriving the agents main worktree
+from the script checkout root anchor, and the child
 env allowlist deliberately refuses it as a caller-supplied value.
 
 ## Phase 1 (`issue-close-stage`) for contrast
 
-One child, always: `bash <acd>/skills/issue-close-stage/scripts/run-stage-chain.sh
+One child, always: `bash <script-checkout-root>/skills/issue-close-stage/scripts/run-stage-chain.sh
 <issue_number> <owner_repo>` with cwd = the linked worktree. That script owns
 Phase 1 Steps A, B, D, F and G; the worker module owns only the input contract,
 the KEY=VALUE parse, and the status mapping.

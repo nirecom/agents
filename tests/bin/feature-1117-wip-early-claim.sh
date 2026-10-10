@@ -11,9 +11,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
-TIMEOUT_WRAP="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DRIVER="$SCRIPT_CHECKOUT_ROOT/bin/workflow/workflow-init-driver"
+TIMEOUT_WRAP="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -37,12 +37,18 @@ trap 'rm -rf "$ROOT_TMP"' EXIT
 ORIG_PATH="$PATH"
 _CASE_N=0
 
+# The driver finds wip-state.sh and its other siblings from its own location, so the
+# suite runs a copy of it from a mock checkout that setup_case fills with the mocks.
+CFG="$ROOT_TMP/mock-checkout"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+script_checkout_fixture_copy "$CFG" bin/workflow bin/parse-issue-tokens hooks/lib hooks/workflow-state
+DRIVER="$CFG/bin/workflow/workflow-init-driver"
+
 setup_case() {
     SID="$1"
     _CASE_N=$((_CASE_N + 1))
     CASE_DIR="$ROOT_TMP/case-$_CASE_N"
     PLANS="$CASE_DIR/plans"
-    CFG="$CASE_DIR/agents-config"
     MOCKBIN="$CASE_DIR/mock-bin"
     RESP="$CASE_DIR/gh-responses"
     WIPD="$CASE_DIR/wip"
@@ -59,7 +65,7 @@ setup_case() {
     _write_wip_mock
     _write_cfg_prims
     export WORKFLOW_PLANS_DIR="$PLANS"
-    export AGENTS_CONFIG_DIR="$CFG"
+    export AGENTS_MAIN_ROOT="$CFG"
     export CLAUDE_CODE_SESSION_ID="$SID"
     unset NON_GITHUB 2>/dev/null || true
     export PATH="$MOCKBIN:$ORIG_PATH"
@@ -67,7 +73,7 @@ setup_case() {
 
 teardown_case() {
     export PATH="$ORIG_PATH"
-    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR NON_GITHUB 2>/dev/null || true
+    unset WORKFLOW_PLANS_DIR AGENTS_MAIN_ROOT NON_GITHUB 2>/dev/null || true
 }
 
 _write_gh_mock() {
@@ -146,8 +152,8 @@ MOCKWIP2
 
 _write_cfg_prims() {
     printf '#!/bin/bash\necho "${CLAUDE_CODE_SESSION_ID:-mock-sid}"\n' > "$CFG/bin/resolve-session-id"
-    cp "$AGENTS_DIR/bin/parse-issue-tokens" "$CFG/bin/parse-issue-tokens"
-    cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$CFG/hooks/lib/parse-closes-issues.js"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/parse-issue-tokens" "$CFG/bin/parse-issue-tokens"
+    cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-closes-issues.js" "$CFG/hooks/lib/parse-closes-issues.js"
     cat > "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FILT'
 #!/bin/bash
 # Passthrough filter: emit every issue-number arg back as '#N'.

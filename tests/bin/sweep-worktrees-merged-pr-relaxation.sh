@@ -25,8 +25,8 @@
 #          See tests/claude-e2e.md for L3 acceptance criteria.
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$AGENTS_DIR/bin/sweep-worktrees.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/sweep-worktrees.sh"
 
 plan_tests() {
   echo "1..7"

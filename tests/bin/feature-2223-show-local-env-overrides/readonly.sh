@@ -65,6 +65,6 @@ else
     assert_eq "T2223S-readonly-git-status-unchanged" \
       "$RO_STATUS_BEFORE" "$(git -C "$CASE_ROOT" status --porcelain 2>/dev/null)"
     # The global .env is read, never rewritten.
-    assert_eq "T2223S-readonly-config-dir-unchanged" \
+    assert_eq "T2223S-readonly-global-env-dir-unchanged" \
       "$RO_CFG_BEFORE" "$(tree_digest "$CASE_CFG")"
 fi

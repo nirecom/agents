@@ -57,14 +57,14 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
 
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-PB_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
-SCAN_NODE="$_AGENTS_DIR_NODE/hooks/block-clearance-token-write/bash-scan/scan.js"
-IR_NODE="$_AGENTS_DIR_NODE/hooks/lib/command-ir.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+PB_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/protected-basenames.js"
+SCAN_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/block-clearance-token-write/bash-scan/scan.js"
+IR_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/command-ir.js"
 SCAN_REL="hooks/block-clearance-token-write/bash-scan/scan.js"
 
 PASS=0; FAIL=0; SKIP=0
@@ -121,7 +121,7 @@ run_hook() {
         "$cmd" "$WF" 2>/dev/null)
     [ -z "$input" ] && { printf 'nopayload|'; return; }
     out=$(printf '%s' "$input" | WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" \
-        AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$HOOK" 2>/dev/null)
+        "$RWT" 15 node "$HOOK" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
 }
@@ -207,7 +207,7 @@ const cmd = process.argv[3];
 process.stdout.write(String(substitutionSpanSegments(cmd, parse(cmd)).length));
 ' "$SCAN_NODE" "$IR_NODE" "$1" 2>/dev/null
 }
-if [ -f "$AGENTS_DIR/$SCAN_REL" ]; then
+if [ -f "$SCRIPT_CHECKOUT_ROOT/$SCAN_REL" ]; then
     assert_eq "B6 substitutionSpanSegments() contributes the whole-span segment the ordinary parse lost" \
         "1" "$(span_extra_count "touch \`printf '%s%s' $WF/$MK1 $MK2\`")"
     assert_eq "B7 ... and contributes NOTHING for text with no unquoted span (dedup key intact)" \
@@ -267,14 +267,14 @@ assert_approve "O4 substitution that never touches the workflow dir" \
 # command-ir.js are shared by enforce-worktree.js among others) without any test
 # in this file noticing.
 if command -v grep >/dev/null 2>&1; then
-    X_HITS=$(cd "$AGENTS_DIR" && grep -rn --binary-files=text --include='*.js' \
+    X_HITS=$(cd "$SCRIPT_CHECKOUT_ROOT" && grep -rn --binary-files=text --include='*.js' \
         'preserveSubstitutionSpans[[:space:]]*:[[:space:]]*true' hooks/ 2>/dev/null \
         | grep -v "^$SCAN_REL:" | wc -l | tr -d ' ')
     assert_eq "X1 preserveSubstitutionSpans:true is passed ONLY from $SCAN_REL" "0" "$X_HITS"
-    X_SELF=$(cd "$AGENTS_DIR" && grep -c --binary-files=text \
+    X_SELF=$(cd "$SCRIPT_CHECKOUT_ROOT" && grep -c --binary-files=text \
         'preserveSubstitutionSpans[[:space:]]*:[[:space:]]*true' "$SCAN_REL" 2>/dev/null | tr -d ' ')
     assert_eq "X2 ... and X1 is not vacuous: the one sanctioned call site is present" "1" "$X_SELF"
-    X_DEFAULT=$(cd "$AGENTS_DIR" && grep -c --binary-files=text \
+    X_DEFAULT=$(cd "$SCRIPT_CHECKOUT_ROOT" && grep -c --binary-files=text \
         'preserveSubstitutionSpans' hooks/lib/command-parser.js 2>/dev/null | tr -d ' ')
     if [ "${X_DEFAULT:-0}" -ge 1 ]; then
         pass "X3 hooks/lib/command-parser.js models the option (opt-in, read from opts)"

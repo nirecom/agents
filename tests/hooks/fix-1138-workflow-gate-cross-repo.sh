@@ -15,8 +15,8 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
 
 PASS=0; FAIL=0
 pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
@@ -52,6 +52,14 @@ export WORKFLOW_PLANS_DIR
 # isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
 export WORKFLOW_STATE_DIR="$TEST_ROOT/workflow-state"
 mkdir -p "$WORKFLOW_STATE_DIR"
+
+# The gate treats the repo its own checkout belongs to as the session repo: the hook is launched
+# from a copy of this checkout, attached per case to that case's "agents" repo.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TEST_ROOT/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+GATE_HOOK="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
 
 # Build a fresh git repo at $1. core.hooksPath is emptied so the agents
 # pre-commit hook (ENFORCE_WORKTREE / scan-outbound) does not fire on the
@@ -111,11 +119,12 @@ JSON
 }
 
 # Run the gate against an explicit Windows-native WORKFLOW_DIR.
-# $1=workflow_dir $2=project_dir $3=agents_config_dir $4=hook_input_json
+# $1=workflow_dir $2=project_dir $3=script_checkout_root $4=hook_input_json
 run_gate_win() {
     local wfdir="$1" projdir="$2" agentsdir="$3" json="$4"
+    session_repo_fixture_attach "$GATE_CHECKOUT" "$agentsdir" || return 1
     echo "$json" | CLAUDE_PROJECT_DIR="$projdir" WORKFLOW_STATE_DIR="$wfdir" \
-        AGENTS_CONFIG_DIR="$agentsdir" run_with_timeout node "$GATE_HOOK" 2>/dev/null || true
+        AGENTS_MAIN_ROOT="$agentsdir" run_with_timeout node "$GATE_HOOK" 2>/dev/null || true
 }
 
 # Per-case workflow dir + state writer.

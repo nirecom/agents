@@ -2,44 +2,13 @@
 # tests/bin/fix-1899-origin-repo-resolver/parity.sh
 # Tests: bin/github-issues/lib/origin-repo.sh, hooks/lib/parse-remote-url.js, bin/is-github-dotcom-remote
 # Tags: origin-resolution, parse-remote-url, parity, cpr-orth, table-driven, parser, regex, security, TL2, scope:issue-specific
-#
-# Group P — the CPR-ORTH parity contract between the TWO resolvers #1899 created.
-#
-# Why: repository identity is now derived twice in this codebase — once in bash
-# (bin/github-issues/lib/origin-repo.sh, for the shell callers) and once in JS
-# (hooks/lib/parse-remote-url.js, for the hook/worker callers). Both feed the same
-# authenticated `gh api repos/<owner>/<repo>`. Their per-side tables already pin
-# each side against its OWN expectations, but nothing pinned the two against EACH
-# OTHER: a URL form one side accepts and the other rejects means the same checkout
-# resolves to a different repository depending on which entry point ran. That
-# divergence is invisible to both existing suites.
-#
-# Each row is therefore run through BOTH resolvers and both are asserted against
-# the same expected verdict. Verdicts are normalized to a shared vocabulary so
-# the two return shapes (bash rc + stdout; JS {ok}/{code}) are comparable:
-#
-#   ok:<owner>/<repo>  bash rc 0 + stdout            | JS { ok: true, ownerRepo }
-#   not-github         bash rc 2                     | JS non-github-host / unparsable-host
-#   unparsable-path    bash rc 3                     | JS unparsable-owner-repo / empty-url
-#   no-origin          bash rc 1                     | (no JS counterpart — URL-only rows)
-#
-# The `not-github` bucket deliberately merges "wrong host" and "no host at all":
-# bin/is-github-dotcom-remote answers 2 for both, and the security-relevant claim
-# is identical — the URL was not confirmed to be github.com, so nothing is
-# resolved. Splitting them here would pin an implementation detail, not a contract.
-#
-# Rows cover the URL-form axes the per-side tables under-sample: non-default
-# ports, userinfo variants (plain user, user:token), `.git` + trailing slash in
-# combination, host case-insensitivity vs owner/repo case-SENSITIVITY, the
-# owner-length boundary, lookalike hosts, over-deep paths, dot segments,
-# out-of-charset owner/repo bytes, and an `@` embedded in the PATH.
-#
-# TL2 (real git fixtures, real bash, real node). TL3 gap (what this does NOT
-# catch): no real `gh api repos/<owner>/<repo>` round-trip proves that the agreed
-# owner/repo is the repository GitHub itself resolves, and no real multi-remote
-# clone is exercised. Closest-to-action mitigation: this gap is checked at
-# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category:
-# skill-orchestration.
+# Group P — CPR-ORTH parity between the TWO resolvers #1899 created: bash
+# (bin/github-issues/lib/origin-repo.sh) and JS (hooks/lib/parse-remote-url.js) both
+# feed `gh api repos/<owner>/<repo>`, so a URL form one accepts and the other
+# rejects resolves one checkout to different repositories per entry point. Each
+# row runs through BOTH resolvers against one expected verdict (vocabulary below).
+# TL2 (real git fixtures, bash, node). TL3 gap: no real `gh api` round-trip, no
+# real multi-remote clone; checked at preflight via bin/check-verification-gate.sh.
 
 set -u
 
@@ -47,7 +16,14 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 nodepath_p() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-PRU_JS="$(nodepath_p "$AGENTS_DIR/hooks/lib/parse-remote-url.js")"
+PRU_JS="$(nodepath_p "$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-remote-url.js")"
+
+# Shared verdict vocabulary (bash rc + stdout | JS {ok}/{code}):
+#   ok:<owner>/<repo>  bash rc 0 + stdout  | JS { ok: true, ownerRepo }
+#   not-github         bash rc 2           | JS non-github-host / unparsable-host
+#   unparsable-path    bash rc 3           | JS unparsable-owner-repo / empty-url
+#   no-origin          bash rc 1           | (no JS counterpart — URL-only rows)
+# not-github merges "wrong host" and "no host": is-github-dotcom-remote answers 2 for both.
 
 # js_verdict <url> -> the normalized verdict of parseOriginOwnerRepo.
 #   ERR:* on any load/shape problem, so a missing module reads as a FAIL with a

@@ -2,8 +2,7 @@
 # Tests: bin/gh, bin/github-issues/migration/create-project.sh, bin/github-issues/migration/state.sh
 # Tags: github, issues, bin, git, tests, scope:issue-specific
 # Tests for fix #406 — create-project.sh must NOT use `gh -C` (git flag, not gh flag).
-# Fixed form: (cd "$REPO_DIR" && gh repo view ...) instead of gh -C "$REPO_DIR" repo view ...
-#
+# Fixed form: (cd "$TARGET_CHECKOUT_ROOT" && gh repo view ...), never gh -C <dir> repo view ...
 # Test cases:
 #   C1  — Non-dry-run exits 0 with mock gh in PATH
 #   C1b — State file has correct .project schema after C1
@@ -13,11 +12,10 @@
 
 set -u
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CREATE_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/create-project.sh"
-GH_MOCK="$AGENTS_DIR/tests/fixtures/migration/gh-mock.sh"
-STATE_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/state.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CREATE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/create-project.sh"
+GH_MOCK="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration/gh-mock.sh"
+STATE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/state.sh"
 
 PASS=0
 FAIL=0

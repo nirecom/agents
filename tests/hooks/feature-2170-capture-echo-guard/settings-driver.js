@@ -11,8 +11,8 @@
 const fs = require("fs");
 const path = require("path");
 
-const AGENTS_DIR = process.env.AGENTS_DIR || "";
-const { COMMAND_TOOL_NAMES } = require(path.join(AGENTS_DIR, "hooks", "lib", "tool-command-text.js"));
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
+const { COMMAND_TOOL_NAMES } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "tool-command-text.js"));
 
 const mode = process.argv[2];
 if (mode === "--expected-matcher") {
@@ -22,7 +22,7 @@ if (mode === "--expected-matcher") {
 
 let settings;
 try {
-  settings = JSON.parse(fs.readFileSync(path.join(AGENTS_DIR, "settings.json"), "utf8"));
+  settings = JSON.parse(fs.readFileSync(path.join(SCRIPT_CHECKOUT_ROOT, "settings.json"), "utf8"));
 } catch (e) {
   console.log("SETTINGS_UNREADABLE:" + (e && e.message ? e.message : String(e)));
   process.exit(0);

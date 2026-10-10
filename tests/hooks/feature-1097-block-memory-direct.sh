@@ -8,10 +8,10 @@
 #   - How CC surfaces the block reason to the model is observable only in a live session.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-HOOK="$AGENTS_DIR/hooks/block-memory-direct.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-memory-direct.js"
 
 # ---------------------------------------------------------------------------
 # Temp dir / env setup

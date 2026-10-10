@@ -13,9 +13,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TARGET="$AGENTS_DIR/bin/github-issues/parent-all-closed-check.sh"
-SKILL_CLOSE_FINALIZE="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TARGET="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/parent-all-closed-check.sh"
+SKILL_CLOSE_FINALIZE="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/SKILL.md"
 
 PASS=0
 FAIL=0

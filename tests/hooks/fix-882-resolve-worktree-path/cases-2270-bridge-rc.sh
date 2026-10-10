@@ -9,11 +9,22 @@
 # resolver silently review the wrong file set.
 # rc contract: docs/architecture/claude-code/session-id-resolution.md
 
-REVIEW_LOOP_SH="$AGENTS_WORKTREE/skills/review-tests/scripts/run-codex-review-loop.sh"
+REVIEW_LOOP_REL="$REVIEW_TESTS_SCRIPTS_REL/run-codex-review-loop.sh"
+REVIEW_LOOP_SH="$AGENTS_WORKTREE/$REVIEW_LOOP_REL"
 BRC_SID="fix-882-bridge-rc-sid"
 BRC_WSID="fix-882-bridge-rc-wsid"
 
-# A shadow AGENTS_CONFIG_DIR whose bin/resolve-session-id exits with a chosen rc.
+# Copy the two review-tests scripts (and the shared prompts they read) into a
+# shadow checkout: each script finds its bins from its own location, so only a
+# copy that lives inside the shadow reaches the shadow's stubs.
+#   $1: shadow root
+brc_copy_review_scripts() {
+  mkdir -p "$1/skills/review-tests"
+  cp -r "$AGENTS_WORKTREE/$REVIEW_TESTS_SCRIPTS_REL" "$1/$REVIEW_TESTS_SCRIPTS_REL"
+  cp -r "$AGENTS_WORKTREE/skills/_shared" "$1/skills/_shared"
+}
+
+# A shadow checkout whose bin/resolve-session-id exits with a chosen rc.
 # The whole bin/ is copied (the scripts reach for sibling bins), the four hooks
 # modules the copied bridges require are forwarded to the real tree, and
 # bin/run-codex-review-loop is stubbed out so no case can ever spawn codex.
@@ -24,6 +35,7 @@ brc_shadow_root() {
   if [[ ! -d "$root" ]]; then
     mkdir -p "$root/hooks/workflow-state/state-io" "$root/hooks/workflow-gate"
     cp -r "$AGENTS_WORKTREE/bin" "$root/bin"
+    brc_copy_review_scripts "$root"
     for m in workflow-state workflow-state/session-id workflow-state/state-io \
              workflow-state/state-io/core workflow-state/resolve-worktree-path \
              workflow-gate/review-tests-evidence; do
@@ -40,7 +52,7 @@ brc_shadow_root() {
   _tonode "$root"
 }
 
-# A shadow AGENTS_CONFIG_DIR whose bin/resolve-session-id unconditionally
+# A shadow checkout whose bin/resolve-session-id unconditionally
 # echoes a fixed sid (rc 0), ignoring every env var. Used to prove a receiver
 # script follows the BRIDGE's sid rather than deriving its own from env
 # (test-reviewer Blocker #2: cross-module wiring — skills/_shared/test-design.md
@@ -54,6 +66,7 @@ brc_shadow_root_sid() {
   if [[ ! -d "$root" ]]; then
     mkdir -p "$root/hooks/workflow-state/state-io" "$root/hooks/workflow-gate"
     cp -r "$AGENTS_WORKTREE/bin" "$root/bin"
+    brc_copy_review_scripts "$root"
     for m in workflow-state workflow-state/session-id workflow-state/state-io \
              workflow-state/state-io/core workflow-state/resolve-worktree-path \
              workflow-gate/review-tests-evidence; do
@@ -69,7 +82,7 @@ brc_shadow_root_sid() {
 
 # Run run-codex-review-loop.sh with the three script-required vars pinned
 # (:6-8) and the session vars under test. Sets RCRL_RC / RCRL_ERR.
-#   $1: AGENTS_CONFIG_DIR (node form)   $2: CLAUDE_CODE_SESSION_ID ("" to unset)
+#   $1: shadow checkout (node form)   $2: CLAUDE_CODE_SESSION_ID ("" to unset)
 RCRL_RC=0
 RCRL_ERR=""
 run_review_loop() {
@@ -83,8 +96,8 @@ run_review_loop() {
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-    AGENTS_CONFIG_DIR="$1" \
-      bash "$RUN_TIMEOUT" 60 bash "$REVIEW_LOOP_SH"
+    AGENTS_MAIN_ROOT="$1" \
+      bash "$RUN_TIMEOUT" 60 bash "$1/$REVIEW_LOOP_REL"
   ) >/dev/null 2>"$errfile"
   RCRL_RC=$?
   RCRL_ERR="$(cat "$errfile" 2>/dev/null || true)"

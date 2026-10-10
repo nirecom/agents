@@ -15,11 +15,11 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_F1673_STATE_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -60,7 +60,7 @@ WF_RAW="$TMPD/wf"; mkdir -p "$WF_RAW"
 MAIN="$(nodepath "$MAIN_RAW")"
 PLANS="$(nodepath "$PLANS_RAW")"
 WF="$(nodepath "$WF_RAW")"
-ACD="$(nodepath "$AGENTS_DIR")"
+CHECKOUT_NODE="$(nodepath "$SCRIPT_CHECKOUT_ROOT")"
 SID="f1673state"
 ROOT=1673
 mkdir -p "$WF_RAW/$SID.control"
@@ -75,14 +75,14 @@ MKSTATE="$TMPD/mkstate.js"
 cat > "$MKSTATE" <<'MKJS'
 "use strict";
 const fs = require("fs");
-const [, , outFile, kind, acd, mainPath, statePath, sid, mutation] = process.argv;
+const [, , outFile, kind, scriptCheckoutRoot, mainPath, statePath, sid, mutation] = process.argv;
 const state = {
-  schema_version: 3,
+  schema_version: 4,
   root_issue_number: 1673,
   current_issue_number: 1673,
   owner_repo: "nirecom/agents",
-  agents_config_dir: acd,
-  main_worktree_path: mainPath,
+  script_checkout_root: scriptCheckoutRoot,
+  target_main_root: mainPath,
   merge_commit: "0123456789abcdef0123456789abcdef01234567",
   phase: "init_done",
   triage_action: "resume_e",
@@ -104,7 +104,7 @@ const binding = {
   session_id: sid,
   root_issue_number: 1673,
   owner_repo: "nirecom/agents",
-  main_worktree_path: mainPath,
+  target_main_root: mainPath,
   state_file_path: statePath,
   created_at: "2026-07-30T00:00:00Z",
 };
@@ -113,8 +113,8 @@ if (mutation && mutation !== "-") new Function("s", mutation)(obj);
 fs.writeFileSync(outFile, JSON.stringify(obj, null, 2));
 MKJS
 
-write_state()   { node "$MKSTATE" "$STATE_RAW" state   "$ACD" "$MAIN" "$STATE" "$SID" "$1"; }
-write_binding() { node "$MKSTATE" "$BIND_RAW"  binding "$ACD" "$MAIN" "$STATE" "$SID" "$1"; }
+write_state()   { node "$MKSTATE" "$STATE_RAW" state   "$CHECKOUT_NODE" "$MAIN" "$STATE" "$SID" "$1"; }
+write_binding() { node "$MKSTATE" "$BIND_RAW"  binding "$CHECKOUT_NODE" "$MAIN" "$STATE" "$SID" "$1"; }
 
 DOUT=""; DRC=0
 field_of() {
@@ -135,7 +135,7 @@ dispatch_loop_step() {
     DRC=0
     DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" \
         "WORKFLOW_STATE_DIR=$WF" \
-        "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
+        "WD_SPAWN_MODULE=$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" \
@@ -213,16 +213,16 @@ group_history_element() {
     assert_eq "proposal-counters-negative/status" "failed" "$(field_of status)"
     assert_eq "proposal-counters-negative/no-child-spawned" "0" "$(call_count)"
 
-    # ACD / main-root in the state are echoes of anchors, not inputs: a value that
-    # disagrees with the resolved anchor is a swapped checkout.
-    write_state 's.agents_config_dir = "/tmp/not-the-acd";'
+    # The script checkout / target main worktree in the state are echoes of anchors,
+    # not inputs: a value that disagrees with the resolved anchor is a swapped checkout.
+    write_state 's.script_checkout_root = "/tmp/not-the-script-checkout";'
     write_binding "-"
     dispatch_loop_step
-    assert_eq "acd-mismatch/status" "failed" "$(field_of status)"
-    assert_eq "acd-mismatch/no-child-spawned" "0" "$(call_count)"
+    assert_eq "script-checkout-root-mismatch/status" "failed" "$(field_of status)"
+    assert_eq "script-checkout-root-mismatch/no-child-spawned" "0" "$(call_count)"
 
     # Malformed JSON is the degenerate case of the same rule.
-    printf '%s' '{"schema_version": 3, ' > "$STATE_RAW"
+    printf '%s' '{"schema_version": 4, ' > "$STATE_RAW"
     write_binding "-"
     dispatch_loop_step
     assert_eq "malformed-json/status" "failed" "$(field_of status)"

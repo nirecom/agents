@@ -9,15 +9,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_SECTION_G_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$_SECTION_G_SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$_SECTION_G_SCRIPT_CHECKOUT_ROOT"
 fi
 
-CHECKER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-gate/review-tests-checker.js"
-STATE_IO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
+CHECKER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-gate/review-tests-checker.js"
+STATE_IO_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io.js"
 
 # ============================================================================
 # Section G: checkReviewTests unit tests + markReviewTestsComplete error guard

@@ -14,7 +14,7 @@ D2099_CONSUMERS="make-detail-plan|detail|MDP-3|MDP-4
 write-tests|write_tests|WT-6|WT-7
 write-code|write_code|WCD-3|WCD-4"
 
-d2099_skill_file() { echo "$AGENTS_DIR/skills/$1/SKILL.md"; }
+d2099_skill_file() { echo "$SCRIPT_CHECKOUT_ROOT/skills/$1/SKILL.md"; }
 
 # Pull the shell command the skill tells the orchestrator to run. The skills wrap
 # it as `bash -c '<cmd>'`; the inner command uses double quotes only, so the
@@ -116,7 +116,7 @@ d2099_run_skill_cmd() {
             cmd=$(printf '%s' "$cmd" | sed -E "s/<[^>]*>/$escaped_signals/g")
             ;;
     esac
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" SESSION_ID="$sid" \
+    SESSION_ID="$sid" \
         run_with_timeout bash -c "$cmd" 2>/dev/null
 }
 

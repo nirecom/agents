@@ -15,19 +15,19 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 
 # Derived from this file's own location so a worktree run tests the worktree's
-# sources rather than the deployed $AGENTS_CONFIG_DIR copy.
-NEXT_STEP_N="$AGENTS_DIR_N/bin/workflow/next-step"
-WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
-GATE_HOOK_N="$AGENTS_DIR_N/hooks/workflow-gate.js"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"
-STEPS_MODULE="$AGENTS_DIR_N/bin/workflow/lib/next-step/steps.js"
+# sources rather than the deployed $AGENTS_MAIN_ROOT copy.
+NEXT_STEP_N="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+WORKFLOW_MARK_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-mark.js"
+GATE_HOOK_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-gate.js"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"
+STEPS_MODULE="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/lib/next-step/steps.js"
 # Reused read-only fixture-state probe (CPR-SSOT: one reader for all suites).
-PROBE_N="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+PROBE_N="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 export WFSTATE_MODULE STEPS_MODULE
 
 TMPDIR_BASE="$(mktemp -d)"
@@ -42,12 +42,11 @@ export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
-# Empty agents config: keeps get-config-var reads deterministic and makes
-# isAgentsSessionRepo() treat the fixture repo as the session repo.
+# Empty agents config: keeps get-config-var reads deterministic.
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"
 mkdir -p "$CONFIG_EMPTY"
 : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 # Fixture repo for the commit gate: one staged non-docs file, nothing unstaged
 # (Gate 1) and no staged tests/ (review_tests token path stays silent).
@@ -61,11 +60,19 @@ printf '// code\n' > "$GATE_REPO/hooks/thing.js"
 git -C "$GATE_REPO" add hooks/thing.js >/dev/null 2>&1
 GATE_REPO_N="$(nrm "$GATE_REPO")"
 export CLAUDE_PROJECT_DIR="$GATE_REPO_N"
+# The gate enforces only in the repo its own checkout belongs to: launch it from a copy of this
+# checkout attached to GATE_REPO.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+session_repo_fixture_attach "$GATE_CHECKOUT" "$GATE_REPO" || { echo "FAIL: cannot attach the gate checkout"; exit 1; }
+GATE_HOOK_N="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
 
 # Neutral CWD: hooks that call `git rev-parse` must not resolve the real repo.
 cd "$TMPDIR_BASE" || exit 1
 
-SCRIPT_DIR="$AGENTS_DIR/tests/hooks/feature-1665-write-code-step"
+SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1665-write-code-step"
 
 # shellcheck source=./feature-1665-write-code-step/common.sh
 . "$SCRIPT_DIR/common.sh"

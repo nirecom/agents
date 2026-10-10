@@ -15,11 +15,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-POLICY="$AGENTS_DIR/hooks/lib/rules-injection-policy.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+POLICY="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-injection-policy.js"
 # The reader is agents-owned code, not contributor-editable declaration data, so the
 # reporter require()s IT and hands it the policy PATH. See cases-require-safety.sh.
-READER="$AGENTS_DIR/hooks/lib/rules-policy-reader.js"
+READER="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-policy-reader.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -135,7 +135,7 @@ run_owners() {
         "$(node_path "$READER")" 2>&1
 }
 
-REPORT="$(run_owners "$AGENTS_DIR" "$POLICY")"
+REPORT="$(run_owners "$SCRIPT_CHECKOUT_ROOT" "$POLICY")"
 OD_COUNT="$(printf '%s\n' "$REPORT" | grep '^OD_COUNT=' | head -1 | cut -d= -f2)"
 
 # --- M0: the allowlist must not be empty. An empty on-demand set makes every
@@ -263,7 +263,7 @@ else
 fi
 
 # --- A: require-safety for the reporter itself (sibling folder, file-split Pattern A) ---
-RS_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-require-safety.sh"
+RS_CASES="$SCRIPT_CHECKOUT_ROOT/tests/hooks/cc-on-demand-skill-ownership/cases-require-safety.sh"
 if [ -f "$RS_CASES" ]; then
     # shellcheck source=./cc-on-demand-skill-ownership/cases-require-safety.sh
     . "$RS_CASES"
@@ -273,7 +273,7 @@ fi
 
 # --- C3: reject-context — whether a mention inside a fence / HTML comment / #-line may
 # count as ownership. Runs before C1 so the mapping is read against a stated detector. ---
-RC_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-reject-context.sh"
+RC_CASES="$SCRIPT_CHECKOUT_ROOT/tests/hooks/cc-on-demand-skill-ownership/cases-reject-context.sh"
 if [ -f "$RC_CASES" ]; then
     # shellcheck source=/dev/null
     . "$RC_CASES"
@@ -283,7 +283,7 @@ fi
 
 # --- O: order axis — whether a Read placed AFTER the governed action still counts as
 # ownership. Orthogonal to the reject-context axis above (WHERE vs WHEN). ---
-OA_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-order-axis.sh"
+OA_CASES="$SCRIPT_CHECKOUT_ROOT/tests/hooks/cc-on-demand-skill-ownership/cases-order-axis.sh"
 if [ -f "$OA_CASES" ]; then
     # shellcheck source=/dev/null
     . "$OA_CASES"
@@ -293,7 +293,7 @@ fi
 
 # --- HW: the rules whose owner is a HOOK rather than a SKILL.md. Same ownership question,
 # different delivery mechanism, so it is graded by invoking the hooks. ---
-HW_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-hook-wiring.sh"
+HW_CASES="$SCRIPT_CHECKOUT_ROOT/tests/hooks/cc-on-demand-skill-ownership/cases-hook-wiring.sh"
 if [ -f "$HW_CASES" ]; then
     # shellcheck source=/dev/null
     . "$HW_CASES"
@@ -303,7 +303,7 @@ fi
 
 # --- C1: the exact rule -> required-consumer mapping. In the sibling folder to keep
 # this entry file under the 300-line WARN (rules/coding/file-split.md Pattern A). ---
-REQ_CASES="$AGENTS_DIR/tests/hooks/cc-on-demand-skill-ownership/cases-required.sh"
+REQ_CASES="$SCRIPT_CHECKOUT_ROOT/tests/hooks/cc-on-demand-skill-ownership/cases-required.sh"
 if [ -f "$REQ_CASES" ]; then
     # shellcheck source=/dev/null
     . "$REQ_CASES"

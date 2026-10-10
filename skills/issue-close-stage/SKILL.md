@@ -17,13 +17,13 @@ way as `/issue-close-finalize`: parse `## Issues` and iterate.
 
 ## Pre-flight
 
-Run: `bash "$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "issue-close-stage" || exit 0`
+Run: `bash "$AGENTS_MAIN_ROOT/bin/detect-non-github.sh" "issue-close-stage" || exit 0`
 
 On non-GitHub remote the script exits 1, so `|| exit 0` terminates the skill immediately (no gh work). On a GitHub remote (or unknown/fail-open) the script exits 0 and the skill continues into the checks below.
 
 Skip message on non-GitHub remote (emitted by the script to stdout): `[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping issue-close-stage]`
 
-- `AGENTS_CONFIG_DIR` must be set.
+- `AGENTS_MAIN_ROOT` must be set.
 - Must be invoked from a **linked worktree** (not the main worktree). Abort
   with an error when `git rev-parse --git-dir` equals `git rev-parse --git-common-dir`.
 - Resolve `<owner/repo>` via
@@ -35,7 +35,7 @@ Skip message on non-GitHub remote (emitted by the script to stdout): `[GITHUB_IS
 
 Dispatch in-skill steps A, B, D, F, G to the `issue-close-stage` worker per `skills/_shared/worker-dispatch.md`.
 
-Payload keys: `issue_number` (= N), `worktree_path` (= `git rev-parse --show-toplevel`), `owner_repo`, `agents_config_dir` (= `AGENTS_CONFIG_DIR`), `artifact_dir` (= `PLANS_DIR`), `issue_repo`.
+Payload keys: `issue_number` (= N), `worktree_path` (= `git rev-parse --show-toplevel`), `owner_repo`, `script_checkout_root` (= `AGENTS_MAIN_ROOT`), `artifact_dir` (= `PLANS_DIR`), `issue_repo`.
 
 Omit `issue_repo` for current-repo issues; otherwise take it from the `closes_issues` entry's `repo` field.
 

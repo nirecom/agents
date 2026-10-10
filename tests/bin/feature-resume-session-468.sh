@@ -5,8 +5,8 @@
 # Cases live in the sibling folder feature-resume-session-468/ (sourced below, never run standalone).
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-CLI="$AGENTS_DIR/bin/resume-session-detect"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect"
 
 # Fixture isolation (rules/test/fixture-isolation.md): the parent Claude Code
 # session exports this, and resolveSessionId() would then resolve the developer's
@@ -15,7 +15,7 @@ CLI="$AGENTS_DIR/bin/resume-session-detect"
 unset CLAUDE_CODE_SESSION_ID
 
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 
@@ -31,9 +31,9 @@ run_with_timeout() {
 TMPDIR_BASE=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-AGENTS_DIR_NATIVE="$AGENTS_DIR"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$SCRIPT_CHECKOUT_ROOT"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_DIR_NATIVE=$(cygpath -w "$AGENTS_DIR")
+    SCRIPT_CHECKOUT_ROOT_NATIVE=$(cygpath -w "$SCRIPT_CHECKOUT_ROOT")
 fi
 # Inline SHA-256 computation of REPO_ID — getRepoId was retired in #503
 # along with the pending-branch-delete marker mechanism. Path is forward-
@@ -41,23 +41,23 @@ fi
 # TODO(#503): if bin/resume-session-detect internally calls getRepoId from
 # the (now-retired) module export, this REPO_ID may no longer match what the
 # CLI computes. Verify after source-level changes land.
-REPO_ID=$(AGENTS_DIR_NATIVE="$AGENTS_DIR_NATIVE" node -e 'const p=process.env.AGENTS_DIR_NATIVE.replace(/\\/g,"/");console.log(require("crypto").createHash("sha256").update(p).digest("hex"))' 2>/dev/null)
+REPO_ID=$(SCRIPT_CHECKOUT_ROOT_NATIVE="$SCRIPT_CHECKOUT_ROOT_NATIVE" node -e 'const p=process.env.SCRIPT_CHECKOUT_ROOT_NATIVE.replace(/\\/g,"/");console.log(require("crypto").createHash("sha256").update(p).digest("hex"))' 2>/dev/null)
 
 if [ -z "$REPO_ID" ] || [ "$REPO_ID" = "null" ]; then
-    echo "FATAL: could not compute REPO_ID for $AGENTS_DIR"
+    echo "FATAL: could not compute REPO_ID for $SCRIPT_CHECKOUT_ROOT"
     exit 2
 fi
 
 # Worktree copy of the skill under test (LOCAL_SKILL_MD per fixture-isolation.md).
-SKILL_MD_LOCAL="$AGENTS_DIR/skills/resume-session/SKILL.md"
+SKILL_MD_LOCAL="$SCRIPT_CHECKOUT_ROOT/skills/resume-session/SKILL.md"
 
 # Node-facing module paths for the cases that seed a real store through markStep.
-AGENTS_DIR_NODE="$AGENTS_DIR"
+SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_DIR_NODE=$(cygpath -m "$AGENTS_DIR")
+    SCRIPT_CHECKOUT_ROOT_NODE=$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")
 fi
-SIO_NODE="$AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
-LIFECYCLE_NODE="$AGENTS_DIR_NODE/hooks/workflow-state/lifecycle.js"
+SIO_NODE="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io.js"
+LIFECYCLE_NODE="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/lifecycle.js"
 
 build_state_json() {
     local sid="$1" target="${2:-}"
@@ -87,9 +87,9 @@ run_cli() {
     if [ -n "$sid" ]; then
         # CLAUDE_CODE_SESSION_ID is the supported env carrier
         # (docs/architecture/claude-code/session-id-resolution.md).
-        ( cd "$AGENTS_DIR" && CLAUDE_CODE_SESSION_ID="$sid" WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
+        ( cd "$SCRIPT_CHECKOUT_ROOT" && CLAUDE_CODE_SESSION_ID="$sid" WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
     else
-        ( cd "$AGENTS_DIR" && WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
+        ( cd "$SCRIPT_CHECKOUT_ROOT" && WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" run_with_timeout node "$CLI" $extra >"$out_file" 2>"$err_file" ) && LAST_EXIT=0 || LAST_EXIT=$?
     fi
     LAST_OUT=$(cat "$out_file" 2>/dev/null || true)
     LAST_ERR=$(cat "$err_file" 2>/dev/null || true)
@@ -145,7 +145,7 @@ assert_stdout_contains() {
     fi
 }
 
-FRAG_DIR="$AGENTS_DIR/tests/bin/feature-resume-session-468"
+FRAG_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-resume-session-468"
 
 case_begin "detect-routing" "bin/resume-session-detect"
 if [[ ! -f "$FRAG_DIR/detect-routing.sh" ]]; then

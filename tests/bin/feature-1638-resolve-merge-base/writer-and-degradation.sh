@@ -7,11 +7,11 @@ r14_record_is_write_once() {
   repo="$(repo_with_main)"
   node_state init "$sid" "$repo" work >/dev/null
   node_state record "$sid" "$repo" >/dev/null
-  first="$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
+  first="$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
   # A new commit changes what a SECOND record call would compute, so an overwrite is visible.
   commit_file "$repo" fourth.txt 1 fourth
   node_state record "$sid" "$repo" >/dev/null
-  second="$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
+  second="$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
   if [ -n "$first" ] && [ "$first" != "NONE" ] && [ "$first" != "undefined" ]; then
     check "R14: a second automatic record does not overwrite the first" "$first" "$second"
   else
@@ -26,7 +26,7 @@ r15_base_is_branching_head() {
   mb="$(git -C "$repo" merge-base main HEAD)"
   node_state init "$sid" "$repo" work >/dev/null
   node_state record "$sid" "$repo" >/dev/null
-  recorded="$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
+  recorded="$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
   check "R15-head: the recorded base is the HEAD at branching time" "$head" "$recorded"
   if [ "$head" = "$mb" ]; then
     fail "R15-fixture: the fixture is not ahead of main, so the row asserts nothing"
@@ -47,10 +47,10 @@ r16_approve_overrides_write_once() {
   other="$(git -C "$repo" rev-parse HEAD~1)"
   node_state approve "$sid" "$repo" "$other" "confirmed by the user during run-tests" >/dev/null
   check "R16-base: an approved base overwrites the write-once record" "$other" \
-    "$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
-  src="$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" source 2>/dev/null)"
+    "$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
+  src="$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" source 2>/dev/null)"
   check "R16-source: and is labelled as the user's decision" "user-approved" "$src"
-  reason="$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" approved_reason 2>/dev/null)"
+  reason="$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" approved_reason 2>/dev/null)"
   check_match "R16-reason: with the reason kept for audit" "confirmed by the user" "$reason"
 }
 
@@ -59,7 +59,7 @@ r17_approve_rejects_bad_base() {
   repo="$(repo_with_main)"
   node_state init "$sid" "$repo" work >/dev/null
   node_state record "$sid" "$repo" >/dev/null
-  before="$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
+  before="$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
 
   rc=0
   env "WORKFLOW_STATE_DIR=$WFDIR" node "$RECORD_CLI" --session "$sid" \
@@ -74,7 +74,7 @@ r17_approve_rejects_bad_base() {
   check "R17-ancestor: a sha that is not an ancestor of HEAD is refused" "1" "$rc"
 
   check "R17-intact: and neither refusal touched the stored baseline" "$before" \
-    "$(env "AGENTS_DIR=$AGENTS_DIR" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
+    "$(env "SCRIPT_CHECKOUT_ROOT_NODE=$SCRIPT_CHECKOUT_ROOT" "WORKFLOW_STATE_DIR=$WFDIR" node "$STATE_JS" field "$sid" base 2>/dev/null)"
 }
 
 # ============================================================================

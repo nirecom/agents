@@ -7,12 +7,13 @@
 # TL3 gap: real in-flight files from earlier releases and hook registration; checked at
 # WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="migv"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"
-seed_v1() { (cd "$AGENTS_DIR" && "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node "$MKV1" "$2") > "$WF/$1.json"; }
+seed_v1() { (cd "$SCRIPT_CHECKOUT_ROOT" && "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$MKV1" "$2") > "$WF/$1.json"; }
 
 echo "== V1: events come out in at-order even though insertion order disagrees =="
 if run_case "V1/sorted-by-at"; then

@@ -96,7 +96,7 @@ pol_report() {
         "$(node_path "$1")" "$(node_path "$2")" "$MARKER" 2>&1
 }
 
-POLICY_REPORT="$(pol_report "$AGENTS_DIR" "$POLICY")"
+POLICY_REPORT="$(pol_report "$SCRIPT_CHECKOUT_ROOT" "$POLICY")"
 
 pfield() { printf '%s\n' "$POLICY_REPORT" | grep "^$1=" | head -1 | cut -d= -f2-; }
 

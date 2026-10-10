@@ -11,6 +11,7 @@
 # WORKFLOW_USER_VERIFIED preflight: bin/check-verification-gate.sh — skill-orchestration.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 require_sut
 
@@ -135,7 +136,7 @@ case "$ACT" in
     *) fail "S1: no valid ACTION verb for metachar token (got '$ACT', rc=$DRIVER_RC)" ;;
 esac
 INJECTED=""
-for D in "$CASE_DIR" "$ROOT_TMP" "$_LIB_DIR" "$AGENTS_DIR"; do
+for D in "$CASE_DIR" "$ROOT_TMP" "$_LIB_DIR" "$SCRIPT_CHECKOUT_ROOT"; do
     [ -e "$D/pwned" ] && INJECTED="$D/pwned"
 done
 if [ -z "$INJECTED" ]; then

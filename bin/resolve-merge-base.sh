@@ -16,7 +16,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-REPO_DIR="."
+TARGET_CHECKOUT_ROOT="."
 SESSION_ID=""
 FORMAT="kv"
 DO_FETCH=1
@@ -45,8 +45,8 @@ USAGE
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -C)
-      REPO_DIR="${2:-}"
-      [[ -n "$REPO_DIR" ]] || { echo "[resolve-merge-base] -C needs a directory" >&2; exit 2; }
+      TARGET_CHECKOUT_ROOT="${2:-}"
+      [[ -n "$TARGET_CHECKOUT_ROOT" ]] || { echo "[resolve-merge-base] -C needs a directory" >&2; exit 2; }
       shift 2
       ;;
     --session)
@@ -74,7 +74,7 @@ case "$FORMAT" in
   *) echo "[resolve-merge-base] --format must be kv or base" >&2; exit 2 ;;
 esac
 
-g() { git -C "$REPO_DIR" "$@"; }
+g() { git -C "$TARGET_CHECKOUT_ROOT" "$@"; }
 
 # ---- reported fields --------------------------------------------------------
 
@@ -154,15 +154,15 @@ MAX_FILES="$(resolve_threshold MERGE_BASE_MAX_DIFF_FILES "$DEFAULT_MAX_FILES")"
 
 # ---- repository -------------------------------------------------------------
 
-# $REPO_DIR may be an absolute host filesystem path (caller-supplied via -C). --explain output
+# $TARGET_CHECKOUT_ROOT may be an absolute host filesystem path (caller-supplied via -C). --explain output
 # is operator-visible/reviewable, so it is displayed as a bare basename rather than the full
 # path — same treatment as the helper-path messages in run-quality-gates.sh / select-tests.sh.
 _repo_display() { basename -- "$1" 2>/dev/null || printf '%s' "$1"; }
 
 if ! g rev-parse --git-dir >/dev/null 2>&1; then
-  DETAIL="not a git repository: $(_repo_display "$REPO_DIR")"
+  DETAIL="not a git repository: $(_repo_display "$TARGET_CHECKOUT_ROOT")"
   if [[ $EXPLAIN -eq 1 ]]; then
-    printf '[resolve-merge-base] repo=%s branch=%s state=%s\n' "$(_repo_display "$REPO_DIR")" "-" "UNRESOLVED" >&2
+    printf '[resolve-merge-base] repo=%s branch=%s state=%s\n' "$(_repo_display "$TARGET_CHECKOUT_ROOT")" "-" "UNRESOLVED" >&2
     printf '[resolve-merge-base] %s\n' "$DETAIL" >&2
   fi
   emit_and_exit 3
@@ -294,7 +294,7 @@ fi
 if [[ "$STATE" != "RECORDED" && $DO_FETCH -eq 1 ]]; then
   if [[ -f "$SCRIPT_DIR/run-with-timeout.sh" ]]; then
     bash "$SCRIPT_DIR/run-with-timeout.sh" 20 \
-      git -C "$REPO_DIR" fetch origin main --no-tags >/dev/null 2>&1 || true
+      git -C "$TARGET_CHECKOUT_ROOT" fetch origin main --no-tags >/dev/null 2>&1 || true
   else
     g fetch origin main --no-tags >/dev/null 2>&1 || true
   fi
@@ -373,7 +373,7 @@ if [[ $EXPLAIN -eq 1 ]]; then
     fi
   }
   printf '[resolve-merge-base] repo=%s branch=%s state=%s base_is_head=%s\n' \
-    "$(_repo_display "$REPO_DIR")" "$BRANCH" "$STATE" "$BASE_IS_HEAD" >&2
+    "$(_repo_display "$TARGET_CHECKOUT_ROOT")" "$BRANCH" "$STATE" "$BASE_IS_HEAD" >&2
   if [[ $REC_PRESENT -eq 1 ]]; then
     explain_row "recorded-baseline" "$REC_BASE" "(none)"
   else

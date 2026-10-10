@@ -2,7 +2,7 @@
 # Static: install.sh runs the wait helper once, after its Node.js check
 # and before the first child (dotfileslink), and publishes the verdict as WAIT_CC_RESULT.
 
-_PP_SH="$AGENTS_DIR/install.sh"
+_PP_SH="$SCRIPT_CHECKOUT_ROOT/install.sh"
 
 _pp_npm="$(_pp_line "$_PP_SH" '^if ! type npm')"
 _pp_npm_end="$(_pp_line "$_PP_SH" '^fi' "$_pp_npm")"

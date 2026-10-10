@@ -138,7 +138,7 @@ See that module for the full priority chain. The git hook context is notable:
 | rc | Meaning | Shell action |
 |---|---|---|
 | 0 | Bypass granted (marker present, sid valid) | `_enforce_skip=1` |
-| 2 | No bypass (sid unresolved, no marker, or `AGENTS_CONFIG_DIR` missing) | Enforcement continues |
+| 2 | No bypass (sid unresolved, no marker, or `AGENTS_MAIN_ROOT` missing) | Enforcement continues |
 | 3 | `require()` or thrown error inside try | Warning to stderr; enforcement continues |
 | other | Unexpected (e.g. 127 = node not found) | Warning to stderr; enforcement continues |
 

@@ -74,7 +74,7 @@ check_not_contains "RV-16d: second run not an abort" "ACTION=abort" "$OUT2"
 # These cases FAIL on the unfixed code (count >> 1) and PASS after the fix
 # (count == 1).
 # ---------------------------------------------------------------------------
-HVSJ_COUNTER_PRELOAD_N="$(cygpath -m "$AGENTS_DIR/tests/hooks/feature-1286-recorded-verdict-skip/hvsj-call-counter.js" 2>/dev/null || echo "$AGENTS_DIR/tests/hooks/feature-1286-recorded-verdict-skip/hvsj-call-counter.js")"
+HVSJ_COUNTER_PRELOAD_N="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1286-recorded-verdict-skip/hvsj-call-counter.js" 2>/dev/null || echo "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1286-recorded-verdict-skip/hvsj-call-counter.js")"
 NEXT_STEP_N="$(cygpath -m "$NEXT_STEP" 2>/dev/null || echo "$NEXT_STEP")"
 
 echo ""
@@ -131,7 +131,7 @@ RVREC1_CTR_FILE_N="$(cygpath -m "$RVREC1_CTR_FILE" 2>/dev/null || echo "$RVREC1_
 # Run next-step with the counter+fault preload.  The hard timeout (20 s)
 # prevents a genuine hang from wedging the suite; a stack-overflow/crash
 # exits in < 1 s.
-RVREC1_OUT="$(HVSJ_COUNTER_FILE="$RVREC1_CTR_FILE_N" HVSJ_FAULT_SID="rvrec1" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec1 2>&1)"; RVREC1_RC=$?
+RVREC1_OUT="$(HVSJ_COUNTER_FILE="$RVREC1_CTR_FILE_N" HVSJ_FAULT_SID="rvrec1" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec1 2>&1)"; RVREC1_RC=$?
 
 # Read write-attempt count (default 0 if file missing).
 RVREC1_CTR="$(cat "$RVREC1_CTR_FILE" 2>/dev/null || echo "0")"
@@ -236,7 +236,7 @@ fi
 RVREC2_CTR_FILE="$WORKFLOW_DIR/rvrec2-write-counter.txt"
 RVREC2_CTR_FILE_N="$(cygpath -m "$RVREC2_CTR_FILE" 2>/dev/null || echo "$RVREC2_CTR_FILE")"
 
-RVREC2_OUT="$(HVSJ_COUNTER_FILE="$RVREC2_CTR_FILE_N" HVSJ_FAULT_SID="rvrec2" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec2 2>&1)"; RVREC2_RC=$?
+RVREC2_OUT="$(HVSJ_COUNTER_FILE="$RVREC2_CTR_FILE_N" HVSJ_FAULT_SID="rvrec2" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 20 node --require "$HVSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rvrec2 2>&1)"; RVREC2_RC=$?
 
 RVREC2_CTR="$(cat "$RVREC2_CTR_FILE" 2>/dev/null || echo "0")"
 
@@ -268,7 +268,7 @@ check_contains "RV-REC-2c: fell through to normal detail handling — NEXT_SKILL
 echo ""
 echo "=== RV-36: hardening #3/#7 — applyRecordedVerdictSkip reads skip_judgment exactly once ==="
 
-RSJ_COUNTER_PRELOAD_N="$(cygpath -m "$AGENTS_DIR/tests/hooks/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js" 2>/dev/null || echo "$AGENTS_DIR/tests/hooks/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js")"
+RSJ_COUNTER_PRELOAD_N="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js" 2>/dev/null || echo "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js")"
 
 # Build fixture: valid outline record for rv36.
 RV36_JSON="$(printf '%s' "$JSON_AT_OUTLINE" | node -e "
@@ -307,7 +307,7 @@ RV36_CTR_FILE="$WORKFLOW_DIR/rv36-rsj-counter.txt"
 RV36_CTR_FILE_N="$(cygpath -m "$RV36_CTR_FILE" 2>/dev/null || echo "$RV36_CTR_FILE")"
 
 # Run next-step with the readSkipJudgment counter preload.
-RV36_OUT="$(RSJ_COUNTER_FILE="$RV36_CTR_FILE_N" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$RSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rv36 2>&1)"; RV36_RC=$?
+RV36_OUT="$(RSJ_COUNTER_FILE="$RV36_CTR_FILE_N" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 20 node --require "$RSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rv36 2>&1)"; RV36_RC=$?
 
 RV36_CTR="$(cat "$RV36_CTR_FILE" 2>/dev/null || echo "0")"
 

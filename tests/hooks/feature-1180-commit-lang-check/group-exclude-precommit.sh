@@ -2,24 +2,18 @@
 # Tests: hooks/lib/lint-commit-lang.js, hooks/lib/lang-config.js, hooks/lib/path-coverage-match.js, hooks/pre-commit
 # Tags: lang-enforce, commit-hook, code-lang-exclude, scope:issue-specific
 #
-# Group X — D/E/F/H/I: hook integration, .env-vs-env precedence, policy-tier
-# symmetry, injection inertness and the exclude-skip audit trace.
-# Cases X12..X14, X19, X20, X24, X26, X30.
-# Sourced by group-exclude.sh after group-exclude-lib.sh.
+# Group X hook-integration cases (X12..X14, X19, X20, X24, X26, X30); overview: group-exclude.sh.
 
-# ---------------------------------------------------------------------------
-# D — integration through hooks/pre-commit
-# ---------------------------------------------------------------------------
+# --- D: integration through hooks/pre-commit ---
 
-# X12: repo IS excluded + CJK staged → commit allowed. Both the language block
-# marker AND the fail-open message must be absent: a genuine skip and an
-# accidental fail-open both yield rc=0, so checking rc alone would be false-green.
+# X12: excluded repo + CJK staged → allowed. rc=0 alone cannot tell a real skip
+# from a fail-open, so the block marker and the fail-open notice are asserted absent.
 _x12_repo="$(make_git_repo x12)"
 printf 'const msg = "日本語テスト";\n' > "$_x12_repo/test.js"
 git -C "$_x12_repo" add test.js
 _x12_root="$(git -C "$_x12_repo" rev-parse --show-toplevel)"
 _x12_out="$(run_precommit "$_x12_repo" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+    "ENFORCE_WORKTREE=off" \
     "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_x12_root")"
 _x12_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _x12_v="rc:nonzero"; [ "$_x12_rc" -eq 0 ] && _x12_v="rc:zero"
@@ -29,14 +23,12 @@ assert_eq "X12: excluded repo + CJK staged → pre-commit allows (real skip, not
     "rc:zero block:absent skipped:absent" \
     "$_x12_v block:$_x12_block skipped:$_x12_skip"
 
-# X13: CODE_LANG_EXCLUDE non-empty but does not cover this repo → still blocks.
-# Regression guard against over-skipping; this is the pre-existing behavior and
-# is expected to be GREEN even before the feature lands.
+# X13: a non-matching CODE_LANG_EXCLUDE still blocks (guard against over-skipping).
 _x13_repo="$(make_git_repo x13)"
 printf 'const msg = "日本語テスト";\n' > "$_x13_repo/test.js"
 git -C "$_x13_repo" add test.js
 _x13_out="$(run_precommit "$_x13_repo" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+    "ENFORCE_WORKTREE=off" \
     "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_X_MISS_A")"
 _x13_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _x13_v="rc:zero"; [ "$_x13_rc" -ne 0 ] && _x13_v="rc:nonzero"
@@ -45,27 +37,23 @@ assert_eq "X13: non-matching CODE_LANG_EXCLUDE + CJK staged → pre-commit still
     "rc:nonzero block:present" \
     "$_x13_v block:$_x13_block"
 
-# X14: CODE_LANG_EXCLUDE delivered via a stubbed .env under an isolated
-# AGENTS_CONFIG_DIR (same pattern as CL-I10). Two entries, only the second
-# matches. $EXCLUDE_FROM_DOTENV opts this call out of lib.sh's process-env
-# isolation sentinel — here the .env IS the source under test. The stub dir must
-# carry every module the require graph needs — path-coverage-match.js /
-# glob-match.js / path-normalize.js included — otherwise require() throws, the
-# hook fails open, and rc=0 would be a false green. The "skipped ABSENT"
-# assertion is exactly what detects that.
+# X14: CODE_LANG_EXCLUDE comes from the .env of a stubbed settings root (2 entries,
+# 2nd matches); $EXCLUDE_FROM_DOTENV (lib.sh) keeps the isolation sentinel out.
 _x14_cfg="$TMPDIR_BASE/cfg-x14"
 mkdir -p "$_x14_cfg/hooks/lib"
+# Empty blocklist: the allowed path reaches the outbound scanner (as lib.sh MAIN_ROOT_FIXTURE).
+: > "$_x14_cfg/.private-info-blocklist"
 _x14_repo="$(make_git_repo x14)"
 printf 'const msg = "日本語テスト";\n' > "$_x14_repo/test.js"
 git -C "$_x14_repo" add test.js
 _x14_root="$(git -C "$_x14_repo" rev-parse --show-toplevel)"
 printf 'CODE_LANG=english\nCODE_LANG_EXCLUDE=%s;%s\n' "$_X_MISS_A" "$_x14_root" > "$_x14_cfg/.env"
 for _x14_mod in lint-commit-lang.js detect-cjk.js lang-config.js lint-plan-lang.js \
-                load-env.js agents-config-dir.js path-normalize.js \
+                load-env.js script-checkout-root.js path-normalize.js \
                 path-coverage-match.js glob-match.js; do
-    cp "$AGENTS_DIR/hooks/lib/$_x14_mod" "$_x14_cfg/hooks/lib/" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/$_x14_mod" "$_x14_cfg/hooks/lib/" 2>/dev/null || true
 done
-_x14_out="$(run_precommit "$_x14_repo" "AGENTS_CONFIG_DIR=$_x14_cfg" "ENFORCE_WORKTREE=off" \
+_x14_out="$(run_precommit "$_x14_repo" "AGENTS_MAIN_ROOT=$_x14_cfg" "ENFORCE_WORKTREE=off" \
     "$EXCLUDE_FROM_DOTENV")"
 _x14_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _x14_v="rc:nonzero"; [ "$_x14_rc" -eq 0 ] && _x14_v="rc:zero"
@@ -75,42 +63,27 @@ assert_eq "X14: CODE_LANG_EXCLUDE from .env (2 entries, 2nd matches) → allowed
     "rc:zero block:absent skipped:absent" \
     "$_x14_v block:$_x14_block skipped:$_x14_skip"
 
-# X26a/X26b: DEFAULT (backward-compatibility) guard through the real
-# hooks/pre-commit path. X13 covers a non-matching value; X11 covers an empty
-# value but at the unit layer with NOTHING staged, so neither proves that the
-# untouched default still catches a real language violation end to end.
-#
-# Two states are covered because hooks/lib/load-env.js treats an empty
-# process.env value as UNSET: "key absent from .env" and "key present but empty"
-# reach loadCodeLangExclude() by different routes and must both behave as
-# "no exclusions". `env -u CODE_LANG_EXCLUDE` strips any inherited value and
-# tells lib.sh's isolation helper this case decides the variable itself, so the
-# stubbed .env is genuinely the only possible source.
-#
-# The stub AGENTS_CONFIG_DIR carries the same module set as X14 — a missing
-# module makes require() throw, the hook fails open with rc=0, and the case
-# would be false-green on rc alone. "skipped ABSENT" is the assertion that
-# detects it; "block PRESENT" pins that the block is a language block rather
-# than the worktree gate or the private-info scanner.
+# X26a/X26b: the default still blocks end to end, for "key absent" and "key empty";
+# empty-is-unset rule: hooks/lib/load-env.js loadEnv().
 _x26_mk_cfg() {
     local cfg="$1" excl_line="$2" mod
     mkdir -p "$cfg/hooks/lib"
     printf 'CODE_LANG=english\n%s' "$excl_line" > "$cfg/.env"
     for mod in lint-commit-lang.js detect-cjk.js lang-config.js lint-plan-lang.js \
-               load-env.js agents-config-dir.js path-normalize.js \
+               load-env.js script-checkout-root.js path-normalize.js \
                path-coverage-match.js glob-match.js; do
-        cp "$AGENTS_DIR/hooks/lib/$mod" "$cfg/hooks/lib/" 2>/dev/null || true
+        cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/$mod" "$cfg/hooks/lib/" 2>/dev/null || true
     done
 }
 
-# _x26_probe <label> <cfg-dir> — stage CJK, run the real hook, assert blocked.
+# _x26_probe <label> <cfg-dir> — stage CJK, run the real hook, print the verdict.
 _x26_probe() {
     local label="$1" cfg="$2" repo out rc v block skip
     repo="$(make_git_repo "${label//:/-}")"
     printf 'const msg = "日本語テスト";\n' > "$repo/test.js"
     git -C "$repo" add test.js
     out="$(run_precommit "$repo" -u CODE_LANG_EXCLUDE \
-        "AGENTS_CONFIG_DIR=$cfg" "ENFORCE_WORKTREE=off")"
+        "AGENTS_MAIN_ROOT=$cfg" "ENFORCE_WORKTREE=off")"
     rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     v="rc:zero"; [ "$rc" -ne 0 ] && v="rc:nonzero"
     block="absent"; printf '%s' "$out" | grep -qF "$LANG_BLOCK_MARKER" && block="present"
@@ -131,26 +104,14 @@ assert_eq "X26b: CODE_LANG_EXCLUDE present but empty + CJK staged → pre-commit
     "rc:nonzero block:present skipped:absent" \
     "$(_x26_probe x26b "$_x26b_cfg")"
 
-# ---------------------------------------------------------------------------
-# E — process-env vs .env precedence (X19)
-# ---------------------------------------------------------------------------
-# X1..X18 never put a CONFLICTING value in both sources at once, so none of them
-# can tell "the env var won" from "the .env won". X19 pins the dotenv-style
-# precedence contract of hooks/lib/load-env.js (a non-empty process.env value is
-# never overwritten by .env) in BOTH directions — one direction alone would be
-# satisfied by whichever source happens to be consulted.
-#
-# AGENTS_CONFIG_DIR is stubbed at an isolated dir holding ONLY a .env: the check()
-# driver requires the real hooks/lib/lint-commit-lang.js by absolute path, so
-# (unlike the X14 pre-commit stub) no module copies are needed there. CODE_LANG is
-# supplied as a real env var because the short-circuit on an explicit
-# AGENTS_CONFIG_DIR means the real repo's .env is never read.
+# --- E: process-env vs .env precedence (X19) ---
+# Both directions of "a non-empty process.env value wins over .env":
+# hooks/lib/load-env.js loadEnv() and loadDefaultEnvGlobal().
 _x19_cfg_a="$TMPDIR_BASE/cfg-x19a"
 _x19_cfg_b="$TMPDIR_BASE/cfg-x19b"
 mkdir -p "$_x19_cfg_a" "$_x19_cfg_b"
 
-# X19a: .env says "excluded" (matches the repo root), process env says "not
-# excluded" (sentinel miss). The env var must win → the check still blocks.
+# X19a: .env matches the repo root, process env does not → still blocks.
 if require_sut "X19a" "$LINT_LIB"; then
     _x19a_repo="$(make_git_repo x19a)"
     printf 'const msg = "日本語テスト";\n' > "$_x19a_repo/test.js"
@@ -160,14 +121,13 @@ if require_sut "X19a" "$LINT_LIB"; then
     _x19a_out="$(run_check_node_raw "$_x19a_repo" \
         "CODE_LANG=english" \
         "CODE_LANG_EXCLUDE=$_X_MISS_A" \
-        "AGENTS_CONFIG_DIR=$_x19_cfg_a")"
+        "AGENTS_MAIN_ROOT=$_x19_cfg_a")"
     _x19a_got="$(printf '%s' "$_x19a_out" | _x_classify)"
     assert_eq "X19a: process-env CODE_LANG_EXCLUDE (non-matching) overrides a matching .env value → still blocks" \
         "nonempty" "$_x19a_got"
 fi
 
-# X19b: mirror — .env says "not excluded", process env says "excluded".
-# Same precedence rule, opposite outcome: the env var must win → skip.
+# X19b: mirror — .env does not match, process env does → skips.
 if require_sut "X19b" "$LINT_LIB"; then
     _x19b_repo="$(make_git_repo x19b)"
     printf 'const msg = "日本語テスト";\n' > "$_x19b_repo/test.js"
@@ -177,24 +137,17 @@ if require_sut "X19b" "$LINT_LIB"; then
     _x19b_out="$(run_check_node_raw "$_x19b_repo" \
         "CODE_LANG=english" \
         "CODE_LANG_EXCLUDE=$_x19b_root" \
-        "AGENTS_CONFIG_DIR=$_x19_cfg_b")"
+        "AGENTS_MAIN_ROOT=$_x19_cfg_b")"
     _x19b_got="$(printf '%s' "$_x19b_out" | _x_classify)"
     assert_eq "X19b: process-env CODE_LANG_EXCLUDE (matching) overrides a non-matching .env value → skips" \
         "empty" "$_x19b_got"
 fi
 
-# ---------------------------------------------------------------------------
-# F — exclude gate symmetry across CODE_LANG policy tiers (X20)
-# ---------------------------------------------------------------------------
-# Every other matching case runs CODE_LANG=english. The planned gate sits at the
-# TOP of check(), before the policy switch, and returns { violations: [], hints: [] },
-# so it must behave identically for the other strict policy (japanese) and for the
-# hint tier (any other non-empty token — classifyPolicy() in hooks/lib/lang-config.js).
-# Each matching case is paired with a non-matching control so that "empty" cannot
-# be a false green from a fixture that never violated in the first place.
+# --- F: exclude gate symmetry across CODE_LANG policy tiers (X20) ---
+# The gate runs before the policy switch (hooks/lib/lint-commit-lang.js check());
+# each matching case has a non-matching control.
 
-# X20a/X20b: strict policy `japanese`. Fixture = a long English-only run, the same
-# content CL-U5 uses to produce a japanese-policy violation.
+# X20a/X20b: strict policy `japanese`, fixture = a long English-only run (as CL-U5).
 if require_sut "X20a" "$LINT_LIB"; then
     _x20j_repo="$(make_git_repo x20j)"
     printf '// This function returns the current value of the counter\nconst x = 1;\n' > "$_x20j_repo/test.js"
@@ -208,10 +161,8 @@ if require_sut "X20a" "$LINT_LIB"; then
         "nonempty" "$_x20b_got"
 fi
 
-# X20c/X20d: hint tier (`french`, per CL-U6) — CJK content normally lands in
-# `hints`, not `violations`. The gate returns both arrays empty, so the matching
-# case must suppress the HINTS as well; asserting only on violations would pass
-# even if the gate were never reached.
+# X20c/X20d: hint tier (`french`, as CL-U6) — the gate must empty `hints` too,
+# so both arrays are asserted.
 if require_sut "X20c" "$LINT_LIB"; then
     _x20h_repo="$(make_git_repo x20h)"
     printf 'const msg = "日本語のメッセージ";\n' > "$_x20h_repo/test.js"
@@ -225,41 +176,22 @@ if require_sut "X20c" "$LINT_LIB"; then
         "v:empty h:nonempty" "$_x20d_got"
 fi
 
-# ---------------------------------------------------------------------------
-# H — CODE_LANG_EXCLUDE is inert data, never a shell command (X24)
-# ---------------------------------------------------------------------------
-# CODE_LANG_EXCLUDE arrives from .env / the environment and is user-controlled.
-# hooks/pre-commit is a bash script, so any future `eval`, unquoted expansion, or
-# string-interpolated subshell in the CODE_LANG block would turn the value into
-# executable code. This case feeds a value carrying `$(...)`, backticks and `;`
-# separators and proves NON-EXECUTION directly: two marker files that the injected
-# commands would create must still be absent afterwards. Asserting only "it did not
-# crash" would be false-green — a successful injection does not crash.
-#
-# The markers live inside TMPDIR_BASE (removed by lib.sh's EXIT trap regardless of
-# pass/fail), never in the shared system /tmp, so a genuine escape leaves no
-# artifact outside the test sandbox.
-#
-# None of the four entries can cover the repo root, so the normal non-matching
-# outcome must still hold: CJK stays blocked. That pairing is the "inert DATA"
-# half of the claim — the value is parsed as paths, not run.
-# NOTE: unlike the other new cases this one is GREEN before the feature lands
-# (CODE_LANG_EXCLUDE is simply ignored today); it is a standing regression guard,
-# in the same spirit as X13.
+# --- H: CODE_LANG_EXCLUDE is inert data, never a shell command (X24) ---
+# Non-execution is proven by two marker files the injected commands would create;
+# the CODE_LANG block under test: hooks/pre-commit.
 _x24_sandbox="$TMPDIR_BASE/inject-x24"
 mkdir -p "$_x24_sandbox"
 _x24_m1="$_x24_sandbox/pwned-subst"
 _x24_m2="$_x24_sandbox/pwned-backtick"
 rm -f "$_x24_m1" "$_x24_m2"
-# Single-quoted printf format: bash must NOT expand the payload here — only the
-# hook under test is allowed the opportunity, and it must decline.
+# Single-quoted printf format: bash must not expand the payload here.
 _x24_val="$(printf '%s; $(touch %s); `touch %s`;%s' \
     "$_X_MISS_A" "$_x24_m1" "$_x24_m2" "$_X_MISS_B")"
 _x24_repo="$(make_git_repo x24)"
 printf 'const msg = "日本語テスト";\n' > "$_x24_repo/test.js"
 git -C "$_x24_repo" add test.js
 _x24_out="$(run_precommit "$_x24_repo" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+    "ENFORCE_WORKTREE=off" \
     "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_x24_val")"
 _x24_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _x24_v="rc:zero"; [ "$_x24_rc" -ne 0 ] && _x24_v="rc:nonzero"
@@ -273,36 +205,13 @@ assert_eq "X24: shell metacharacters in CODE_LANG_EXCLUDE are inert data — no 
     "$_x24_v block:$_x24_block subst:$_x24_m1s backtick:$_x24_m2s stray:$_x24_stray"
 rm -f "$_x24_m1" "$_x24_m2"
 
-# ---------------------------------------------------------------------------
-# I — exclude-skip audit trace through hooks/pre-commit (X30)
-# ---------------------------------------------------------------------------
-# A repo-level exclusion suppresses a real language violation, so the bypass has
-# to be VISIBLE in commit output — otherwise a stale CODE_LANG_EXCLUDE entry
-# silently disables the policy and nothing in the commit transcript says so.
-# check() reports the skip via `excluded: true` and hooks/pre-commit turns that
-# into one fixed line on stderr. The trace carries the reason token ONLY: no
-# entry value and no path, so a CODE_LANG_EXCLUDE holding a private path cannot
-# leak into commit output.
-#
-# X12 already pins the allow-outcome of the same scenario, but rc=0 is reached
-# identically by a genuine skip, an accidental fail-open, and a fixture that
-# never violated — none of which the trace should claim. So the line is asserted
-# PRESENT on a real match (X30a) and ABSENT in both non-skip states: a
-# non-matching value that still blocks (X30b) and a non-matching value over
-# clean content that passes anyway (X30c). X30c is the case that separates
-# "printed on an exclude skip" from "printed on every successful hook run" —
-# X30b alone would be satisfied by a line that is merely tied to rc=0.
-#
-# grep -F: the literal carries parentheses, which are regex metacharacters.
-# The trace's "lint-commit-lang: skipped (…)" does not collide with the
-# fail-open "lint-commit-lang skipped (…)" the other cases grep for — the colon
-# distinguishes them, so `skipped:absent` below still means "did not fail open".
+# --- I: exclude-skip audit trace through hooks/pre-commit (X30) ---
+# The trace is asserted present on a real skip and absent otherwise; its contract:
+# hooks/lib/lint-commit-lang.js header. The colon tells it from the fail-open notice.
 _X_AUDIT_TRACE="lint-commit-lang: skipped (CODE_LANG_EXCLUDE match)"
 
-# _x30_probe <label> <content> <exclude-mode> — stage <content>, run the real
-# hook, and report rc / language-block / fail-open / audit-trace state.
-# <exclude-mode>: "match" → CODE_LANG_EXCLUDE = this repo's root; "miss" → a
-# sentinel path that cannot cover any repo root.
+# _x30_probe <label> <content> <match|miss> — stage <content>, run the real hook,
+# print rc / language-block / fail-open / audit-trace state.
 _x30_probe() {
     local label="$1" content="$2" mode="$3" repo root excl out rc v block skip audit
     repo="$(make_git_repo "$label")"
@@ -312,7 +221,7 @@ _x30_probe() {
     excl="$_X_MISS_A"
     [ "$mode" = "match" ] && excl="$root"
     out="$(run_precommit "$repo" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+        "ENFORCE_WORKTREE=off" \
         "CODE_LANG=english" "CODE_LANG_EXCLUDE=$excl")"
     rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     v="rc:zero"; [ "$rc" -ne 0 ] && v="rc:nonzero"

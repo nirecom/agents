@@ -7,9 +7,11 @@ set -euo pipefail
 
 [ $# -ge 1 ] || { printf 'usage: rtk-cmd <command> [args...]\n' >&2; exit 2; }
 
-# AGENTS_CONFIG_DIR unset → fail-safe-OFF: cannot call get-config-var; pass through
-_dir="${AGENTS_CONFIG_DIR:-}"
-[ -n "$_dir" ] || exec "$@"
+# get-config-var: this script's own sibling first, then PATH (a shim install).
+# Neither reachable → fail-safe-OFF: pass through.
+_gcv="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/get-config-var"
+[ -x "$_gcv" ] || _gcv="$(command -v get-config-var 2>/dev/null || true)"
+[ -n "$_gcv" ] || exec "$@"
 
 # RTK on/off probe — fail-safe-OFF: only exit 1 means ON; 2/3/4 treated as OFF.
 # Symmetric with hooks/rtk-rewrite.js loadDefaultEnv() "e.status === 1 → ON".
@@ -19,7 +21,7 @@ _dir="${AGENTS_CONFIG_DIR:-}"
 # Safe exit-code capture under set -e: || prevents abort while $? is saved.
 _rtk_on=0
 _gcv_ec=0
-"$_dir/bin/get-config-var" --is-off RTK off 2>/dev/null || _gcv_ec=$?
+"$_gcv" --is-off RTK off 2>/dev/null || _gcv_ec=$?
 if [ "$_gcv_ec" -eq 1 ]; then _rtk_on=1; fi
 
 # rtk binary resolution: RTK_BIN env var first (validated for executability), then PATH.

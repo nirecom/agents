@@ -13,8 +13,9 @@
 # via bin/check-verification-gate.sh category: hook-registration
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
-LIB="$AGENTS_DIR/hooks/lib/is-plan-artifact.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
+LIB="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/is-plan-artifact.js"
 ERRORS=0
 SKIPS=0
 

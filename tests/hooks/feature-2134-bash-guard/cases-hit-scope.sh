@@ -10,7 +10,7 @@
 # carve-out may remove only the hit it names. There is no single-command predicate to
 # regress to -- H3 asserts none was reintroduced.
 
-BG_DIR="$AGENTS_DIR/hooks/bash-guard"
+BG_DIR="$SCRIPT_CHECKOUT_ROOT/hooks/bash-guard"
 
 case_begin "hit-scope-per-occurrence" "hooks/bash-guard/detect.js"
 h1_hit_scope() {
@@ -61,9 +61,9 @@ assert_eq "H3: no isSingleCommand predicate exists (it re-creates the round-1 al
 # no second filter may sit between detect() and the deny.
 if [ -e "$BG_DIR/exemptions.js" ]; then h4_file="present"; else h4_file="absent"; fi
 assert_eq "H4a: hooks/bash-guard/exemptions.js no longer exists" "absent" "$h4_file"
-h4_refs="$(grep -rlE "applyExemptions|require\(\"\./exemptions\"\)" "$BG_DIR" "$AGENTS_DIR/hooks/bash-guard.js" 2>/dev/null | wc -l | tr -d ' ')"
+h4_refs="$(grep -rlE "applyExemptions|require\(\"\./exemptions\"\)" "$BG_DIR" "$SCRIPT_CHECKOUT_ROOT/hooks/bash-guard.js" 2>/dev/null | wc -l | tr -d ' ')"
 assert_eq "H4b: nothing under hooks/bash-guard still calls applyExemptions" "0" "$h4_refs"
-if [ -e "$AGENTS_DIR/hooks/lib/settings-allow-match.js" ]; then h4_lib="present"; else h4_lib="absent"; fi
+if [ -e "$SCRIPT_CHECKOUT_ROOT/hooks/lib/settings-allow-match.js" ]; then h4_lib="present"; else h4_lib="absent"; fi
 assert_eq "H4c: hooks/lib/settings-allow-match.js (its only consumer was exemptions.js) is gone" \
     "absent" "$h4_lib"
 case_end

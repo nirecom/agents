@@ -18,7 +18,7 @@ JA_PROSE='この段落は日本語で書かれています。'
 SYNTHETIC_SECRET='SYNTHETIC_SECRET_2278_a9f3k2'
 
 # make_env <plan_lang> <docs_public> <docs_private>
-# Creates a fresh AGENTS_CONFIG_DIR whose .env carries exactly the given keys
+# Creates a fresh AGENTS_MAIN_ROOT whose .env carries exactly the given keys
 # (an empty argument omits that key). Prints the Node-form path.
 make_env() {
     local plan_lang="$1" docs_public="$2" docs_private="$3"
@@ -31,7 +31,7 @@ make_env() {
     cygpath -m "$d" 2>/dev/null || echo "$d"
 }
 
-# run_gate <hook.js> <payload_json> <agents_config_dir> [cwd]
+# run_gate <hook.js> <payload_json> <script_checkout_root> [cwd]
 # Runs the PreToolUse hook with the payload on stdin from a neutral cwd (or the
 # given fixture repo), with every shell-inherited policy key and session id
 # removed so the fixture .env is the sole policy source.
@@ -46,7 +46,7 @@ run_gate() {
         unset DOCS_LANG_HISTORY_PUBLIC DOCS_LANG_HISTORY_PRIVATE
         unset DOCS_LANG_CHANGELOG_PUBLIC DOCS_LANG_CHANGELOG_PRIVATE
         unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
-        export AGENTS_CONFIG_DIR="$cfg"
+        export AGENTS_MAIN_ROOT="$cfg"
         printf '%s' "$payload" | run_with_timeout 20 node "$hook" 2>"$errf"
     )"
     GATE_RC=$?

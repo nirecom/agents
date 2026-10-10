@@ -10,7 +10,7 @@
 # wire format itself is asserted, so they are what stands between a green suite and a guard
 # that has never actually blocked anything.
 
-BG_HOOK="$AGENTS_DIR/hooks/bash-guard.js"
+BG_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/bash-guard.js"
 BG_RUNTIME_OUT="$TMPROOT/runtime-out.txt"
 BG_SECRET_OUT="$TMPROOT/secret-out.txt"
 BG_SECRET_ERR="$TMPROOT/secret-err.txt"
@@ -75,7 +75,7 @@ compound-bash ~ Bash          ~ git status && ls | grep x                       
 plain-bash    ~ Bash          ~ git status                                            ~ 0|allow
 no-class-bash ~ Bash          ~ make build                                            ~ 0|passThrough-approve
 out-of-scope  ~ runInTerminal ~ git status && ls | grep x                             ~ 0|passThrough-approve
-self-script   ~ Bash          ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ 0|allow
+self-script   ~ Bash          ~ node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list ~ 0|allow
 L1-no-echo    ~ Bash          ~ "<<WORKFLOW_MARK_STEP_p1_complete>>"                  ~ 0|notify
 TABLE
 }
@@ -152,7 +152,7 @@ bg_env_out() {
 BG_NOTIFY_CANARY="p6canary9e21"
 BG_NOTIFY_ENV="$(bg_env_out "\"<<WORKFLOW_MARK_STEP_${BG_NOTIFY_CANARY}_complete>>\"")"
 BG_ALLOW_CANARY="p6allowcanary4c7d"
-BG_ALLOW_ENV="$(bg_env_out "node \"\$AGENTS_CONFIG_DIR/bin/workflow/next-step\" --list $BG_ALLOW_CANARY")"
+BG_ALLOW_ENV="$(bg_env_out "node \"\$AGENTS_MAIN_ROOT/bin/workflow/next-step\" --list $BG_ALLOW_CANARY")"
 ROWS=$((ROWS + 1))
 assert_contains "P6: the notify envelope is actually a notify (vacuity guard)" '"systemMessage"' "$BG_NOTIFY_ENV"
 ROWS=$((ROWS + 1))
@@ -177,7 +177,7 @@ case_end
 # stdout alone, via the probe: the allow envelope needs only permissionDecision "allow".
 case_begin "runtime-allow-stdout-no-leak" "hooks/bash-guard/judge.js"
 BG_P7_CANARY="p7allowcanary8e2f"
-BG_P7_CMD="node \"\$AGENTS_CONFIG_DIR/bin/workflow/next-step\" --list $BG_P7_CANARY"
+BG_P7_CMD="node \"\$AGENTS_MAIN_ROOT/bin/workflow/next-step\" --list $BG_P7_CANARY"
 BG_P7_STDOUT="$(probe allow-envelope-stdout "$BG_P7_CMD")"
 ROWS=$((ROWS + 1))
 assert_contains "P7: the self-script command yields an allow envelope on stdout (vacuity guard)" \

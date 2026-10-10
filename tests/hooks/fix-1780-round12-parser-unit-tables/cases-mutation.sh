@@ -44,7 +44,7 @@ run_M_mutation_evidence() {
 
         rm -r -f "$work" 2>/dev/null
         mkdir -p "$work" || { fail "M $konst could not create the mutation workdir"; continue; }
-        cp -r "$AGENTS_DIR/hooks" "$work/hooks" 2>/dev/null || { fail "M $konst could not copy hooks/"; continue; }
+        cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$work/hooks" 2>/dev/null || { fail "M $konst could not copy hooks/"; continue; }
 
         tblrow="$(_expand "row|$wnorm|$fn|$input")"
         got_n=$(printf '%s\n' "$tblrow" | "$RWT" 30 node "$(node_path "$PROBE")" "$(node_path "$work")" 2>&1 \

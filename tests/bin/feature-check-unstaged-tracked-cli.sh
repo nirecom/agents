@@ -4,12 +4,11 @@
 # Tags: cli, bin, unstaged-tracked, gate2, git, scope:issue-specific
 #
 # E2E tests for bin/check-unstaged-tracked.sh.
-# Expected red until #269 lands the CLI.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLI_SH="${AGENTS_DIR}/bin/check-unstaged-tracked.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CLI_SH="${SCRIPT_CHECKOUT_ROOT}/bin/check-unstaged-tracked.sh"
 
 PASS=0
 FAIL=0
@@ -24,7 +23,12 @@ fs.mkdirSync(d,{recursive:true});
 console.log(d);
 " 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
+[ -n "$TMPDIR_BASE" ] && [ -d "$TMPDIR_BASE" ] || { echo "cannot create a temp root" >&2; exit 1; }
+readonly TMPDIR_BASE
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# No process started here reads the developer's home (Node on Windows reads USERPROFILE).
+mkdir -p "$TMPDIR_BASE/home" || exit 1
+export HOME="$TMPDIR_BASE/home" USERPROFILE="$TMPDIR_BASE/home"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -66,8 +70,7 @@ run_cli() {
     local stdout_file="$TMPDIR_BASE/cli.out.$RANDOM"
     local stderr_file="$TMPDIR_BASE/cli.err.$RANDOM"
     CLI_RC=0
-    AGENTS_CONFIG_DIR="$AGENTS_DIR" \
-        run_with_timeout 30 bash "$CLI_SH" "$@" \
+    run_with_timeout 30 bash "$CLI_SH" "$@" \
         >"$stdout_file" 2>"$stderr_file" || CLI_RC=$?
     CLI_STDOUT="$(cat "$stdout_file" 2>/dev/null || true)"
     CLI_STDERR="$(cat "$stderr_file" 2>/dev/null || true)"
@@ -159,8 +162,7 @@ test_4_default_cwd_via_pwd() {
     local stdout_file stderr_file rc
     rc=0
     stdout_file="$TMPDIR_BASE/pwdclean.out"; stderr_file="$TMPDIR_BASE/pwdclean.err"
-    (cd "$repo_clean" && AGENTS_CONFIG_DIR="$AGENTS_DIR" \
-        run_with_timeout 30 bash "$CLI_SH") >"$stdout_file" 2>"$stderr_file" || rc=$?
+    (cd "$repo_clean" && run_with_timeout 30 bash "$CLI_SH") >"$stdout_file" 2>"$stderr_file" || rc=$?
     if [ "$rc" -ne 0 ] || [ -n "$(cat "$stdout_file")" ]; then
         fail "4a: default cwd clean → expected exit 0 + empty stdout" "rc=$rc stdout=$(cat "$stdout_file") stderr=$(cat "$stderr_file")"
         return
@@ -168,8 +170,7 @@ test_4_default_cwd_via_pwd() {
 
     rc=0
     stdout_file="$TMPDIR_BASE/pwddirty.out"; stderr_file="$TMPDIR_BASE/pwddirty.err"
-    (cd "$repo_dirty" && AGENTS_CONFIG_DIR="$AGENTS_DIR" \
-        run_with_timeout 30 bash "$CLI_SH") >"$stdout_file" 2>"$stderr_file" || rc=$?
+    (cd "$repo_dirty" && run_with_timeout 30 bash "$CLI_SH") >"$stdout_file" 2>"$stderr_file" || rc=$?
     if [ "$rc" -ne 1 ]; then
         fail "4b: default cwd dirty → expected exit 1" "rc=$rc stdout=$(cat "$stdout_file") stderr=$(cat "$stderr_file")"
         return

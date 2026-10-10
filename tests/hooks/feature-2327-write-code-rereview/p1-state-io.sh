@@ -6,7 +6,7 @@
 # REVIEW_TESTS_REOPEN_REASONS. Exercises direct module API; decide is stubbed,
 # so no fixture repo is needed.
 
-REVIEW_TESTS_IO="$AGENTS_DIR_N/hooks/workflow-state/state-io/review-tests.js"
+REVIEW_TESTS_IO="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/review-tests.js"
 export REVIEW_TESTS_IO
 
 echo "=== P1: state-io review-tests new exports ==="

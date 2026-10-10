@@ -71,7 +71,6 @@ export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
 # ledger_path_for <sid> <format> — the ledger the CLI reads under the #2434
 # control-dir layout; creates <sid>.control so the fixture can seed it directly.

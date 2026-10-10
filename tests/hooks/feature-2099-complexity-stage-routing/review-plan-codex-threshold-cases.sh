@@ -9,10 +9,10 @@
 # 20000). Nothing exercised it end-to-end, so a plan silently reaching codex
 # truncated — the failure this change exists to prevent — was unobservable.
 
-D2099RP_SRC="$AGENTS_DIR/bin/review-plan-codex"
+D2099RP_SRC="$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex"
 D2099RP_PLAN_LINES=30
 
-# A mock AGENTS_CONFIG_DIR holding the REAL wrapper (so resolve_threshold under
+# A mock AGENTS_MAIN_ROOT holding the REAL wrapper (so resolve_threshold under
 # test is the shipped one) plus a stub `codex` that reports how many plan lines
 # actually reached it. $2, when non-empty, installs a get-config-var stub
 # printing that value — the middle tier; omitting it leaves the tier ABSENT,
@@ -22,11 +22,15 @@ d2099rp_mock() {
     mkdir -p "$root/bin/lib" "$root/stub" "$root/home"
     cp "$D2099RP_SRC" "$root/bin/review-plan-codex"
     chmod +x "$root/bin/review-plan-codex"
-    cp "$AGENTS_DIR/bin/lib/codex-core.sh" "$root/bin/lib/codex-core.sh"
-    cp "$AGENTS_DIR/bin/lib/codex-timeout.sh" "$root/bin/lib/codex-timeout.sh"
-    if [ -f "$AGENTS_DIR/bin/lib/cli-exec-guard.sh" ]; then cp "$AGENTS_DIR/bin/lib/cli-exec-guard.sh" "$root/bin/lib/cli-exec-guard.sh"; fi
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-core.sh" "$root/bin/lib/codex-core.sh"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-timeout.sh" "$root/bin/lib/codex-timeout.sh"
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/lib/cli-exec-guard.sh" ]; then cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/cli-exec-guard.sh" "$root/bin/lib/cli-exec-guard.sh"; fi
     printf '#!/usr/bin/env bash\nc=$(grep -c "PLANLINE-")\necho "PLANLINE-count-is-${c:-0}"\nexit 0\n' > "$root/stub/codex"
     chmod +x "$root/stub/codex"
+    # codex-timeout.sh falls back to a get-config-var on PATH when none sits beside it:
+    # that must be this checkout's, never whatever shim the developer installed.
+    printf '#!/usr/bin/env bash\nexec bash "%s/bin/get-config-var" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" > "$root/stub/get-config-var"
+    chmod +x "$root/stub/get-config-var"
     if [ -n "$gcv" ]; then
         printf '#!/usr/bin/env bash\nprintf %%s %s\n' "$gcv" > "$root/bin/get-config-var"
         chmod +x "$root/bin/get-config-var"
@@ -55,7 +59,7 @@ d2099rp_invoke() {
         cd "$root" || exit 1
         export HOME="$root/home"
         export PATH="$root/stub:$PATH"
-        export AGENTS_CONFIG_DIR="$root"
+        export AGENTS_MAIN_ROOT="$root"
         if [ "$envval" = "__UNSET__" ]; then
             unset CODEX_REVIEW_MAX_PLAN_LINES
         else
@@ -190,7 +194,7 @@ d2099rp_run_legacy_name() {
             cd "$root" || exit 1
             export HOME="$root/home"
             export PATH="$root/stub:$PATH"
-            export AGENTS_CONFIG_DIR="$root"
+            export AGENTS_MAIN_ROOT="$root"
             unset CODEX_REVIEW_MAX_PLAN_LINES
             export CODEX_REVIEW_PLAN_MAX_LINES=5
             run_with_timeout "$root/bin/review-plan-codex" --format detail-plan \

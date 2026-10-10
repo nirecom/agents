@@ -112,7 +112,7 @@ _gs_hook() {
     (
         cd "$dir" || exit 1
         unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
-        export AGENTS_CONFIG_DIR="$GS_CFG"
+        export AGENTS_MAIN_ROOT="$GS_CFG"
         export WORKFLOW_STATE_DIR="$GS_WF"
         export WORKFLOW_PLANS_DIR="$GS_WF"
         run_hook_capture "$input" "$RWT" 20 node "$BCTW_HOOK"
@@ -140,7 +140,7 @@ _gs_hook_faulty() {
     (
         cd "$dir" || exit 1
         unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
-        export AGENTS_CONFIG_DIR="$GS_CFG"
+        export AGENTS_MAIN_ROOT="$GS_CFG"
         export WORKFLOW_STATE_DIR="$GS_WF"
         export WORKFLOW_PLANS_DIR="$GS_WF"
         export GS_NOTES_MODULE="$WT_NOTES_NODE"

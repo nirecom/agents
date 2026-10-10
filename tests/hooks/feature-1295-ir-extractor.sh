@@ -11,8 +11,8 @@
 # Parts live under feature-1295-ir-extractor/ (feature-1147 dispatcher convention).
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
@@ -22,7 +22,7 @@ TOTAL_FAIL=0
 run_suite() {
   local script="$1"
   local rc=0
-  bash "$SUITE_DIR/$script" "$AGENTS_DIR" || rc=$?
+  bash "$SUITE_DIR/$script" "$SCRIPT_CHECKOUT_ROOT" || rc=$?
   # rc 77 == SKIP (node absent); propagate as a skip for the whole suite.
   if [ "$rc" -eq 77 ]; then
     echo "SKIP: $script — node not found"; exit 77

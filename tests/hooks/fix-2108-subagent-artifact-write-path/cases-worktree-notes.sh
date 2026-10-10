@@ -237,7 +237,7 @@ READ_TABLE
     # behavioural row above and still drift on the next edit.
     local dup req f
     dup=0; req=0
-    for f in "$AGENTS_DIR/hooks/workflow-state/session-id.js" "$AGENTS_DIR/hooks/lib/resolve-workflow-session-id.js"; do
+    for f in "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/session-id.js" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/resolve-workflow-session-id.js"; do
         grep -qE '^function _(readSessionIdFromWorktreeNotes|findOwnWorktreeDir)' "$f" 2>/dev/null && dup=$((dup + 1))
         grep -qE "require\(.*worktree-notes-session-ids" "$f" 2>/dev/null && req=$((req + 1))
     done
@@ -247,9 +247,9 @@ READ_TABLE
     # so a require silently migrating back into session-id.js still fails this row.
     assert_eq "C10-3 exactly one resolver requires the shared module" "1" "$req"
     assert_eq "C10-3 it is resolve-workflow-session-id.js that requires it" "yes" \
-        "$(grep -qE "require\(.*worktree-notes-session-ids" "$AGENTS_DIR/hooks/lib/resolve-workflow-session-id.js" 2>/dev/null && echo yes || echo no)"
+        "$(grep -qE "require\(.*worktree-notes-session-ids" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/resolve-workflow-session-id.js" 2>/dev/null && echo yes || echo no)"
     assert_eq "C10-3 session-id.js no longer requires it (supply-only chain)" "no" \
-        "$(grep -qE "require\(.*worktree-notes-session-ids" "$AGENTS_DIR/hooks/workflow-state/session-id.js" 2>/dev/null && echo yes || echo no)"
+        "$(grep -qE "require\(.*worktree-notes-session-ids" "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/session-id.js" 2>/dev/null && echo yes || echo no)"
 
     _wtn_teardown
 }

@@ -3,11 +3,11 @@
 # Tags: rules, prompt, dispatch, fork, claude-e2e, TL3, scope:issue-specific
 #
 # Helpers for TL3-review-tests-fork-directive-order. Sourced by
-# ../TL3-review-tests-fork-directive-order.sh (assumes AGENTS_DIR, pass()/fail()/skip() defined).
+# ../TL3-review-tests-fork-directive-order.sh (assumes SCRIPT_CHECKOUT_ROOT, pass()/fail()/skip() defined).
 
 run_with_timeout() {
     local secs="$1"; shift
-    "$AGENTS_DIR/bin/run-with-timeout.sh" "$secs" "$@"
+    "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$secs" "$@"
 }
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
@@ -37,7 +37,7 @@ rfdo_build_repo() {
     git -C "$repo" config core.hooksPath /dev/null
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
-    cp "$AGENTS_DIR/rules/shell-commands.md" "$repo/rules/shell-commands.md"
+    cp "$SCRIPT_CHECKOUT_ROOT/rules/shell-commands.md" "$repo/rules/shell-commands.md"
     printf '%s\n' '{ "hooks": {} }' > "$repo/.claude/settings.json"
 }
 

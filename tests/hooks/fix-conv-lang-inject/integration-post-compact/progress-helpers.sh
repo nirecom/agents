@@ -88,7 +88,7 @@ _call_post_compact_with_state() {
     raw=$(printf '{"session_id":"%s"}' "$sid" | \
         WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow" \
         HOME="$TMPDIR_BASE/home" \
-        AGENTS_CONFIG_DIR="$EMPTY_CFG" \
+        AGENTS_MAIN_ROOT="$EMPTY_CFG" \
         run_with_timeout 30 node "$POST_COMPACT" 2>/dev/null)
     [ -z "$raw" ] && return 0
     node -e "

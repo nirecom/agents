@@ -3,24 +3,21 @@
 # Tests: bin/review-comment-block-size
 # Tags: comment-block-size, parser, review-cli, staged, git, scope:issue-specific, scope:feature-1894, layer:TL2
 
-# Issue #1894 scanner flags over-threshold comment runs (PR #1893 landed one
-# unnoticed). Comparator is `>T`, not `>=T` — exactly T stays silent. `--staged`
-# prints `BLOCK:`/exits 1; `--all` prints `WARN:`/exits 0 — use $CB_FIND /
-# cb_expect_rc, never hardcode a prefix. Threshold/extensions/kill-switch
-# resolve from the config dir's .env only, never ambient shell
-# (config-hostility.sh: run_cb_ambient). Dispatcher: harness here, cases in
-# tests/bin/feature-1894-comment-block-size/*.sh, all via CLI stdout.
+# Issue #1894 scanner flags comment runs `>T` (exactly T stays silent).
+# `--staged` prints `BLOCK:`/exits 1; `--all` prints `WARN:`/exits 0 — use
+# $CB_FIND / cb_expect_rc, never hardcode a prefix. Threshold/extensions/
+# kill-switch resolve from AGENTS_MAIN_ROOT's .env only, never ambient shell
+# (config-hostility.sh). Dispatcher: harness here, cases in the sibling dir.
 
-# TL3 gap: hook integration, installer PATH, pack-file sizes, NTFS-illegal
-# names, symlinks, scanner footprint — see WORKFLOW_USER_VERIFIED preflight
-# (bin/check-verification-gate.sh, category hook-registration).
+# TL3 gap: hook integration, installer PATH, pack-file sizes, NTFS-illegal names,
+# symlinks, scanner footprint — WORKFLOW_USER_VERIFIED preflight covers them.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Worktree-local copy is the state under test (rules/test/fixture-isolation.md:
 # LOCAL_* vs deployed $HOME/.claude copy) — never resolve via PATH.
-SCRIPT="$AGENTS_DIR/bin/review-comment-block-size"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size"
 CASE_DIR="$(dirname "${BASH_SOURCE[0]}")/feature-1894-comment-block-size"
 
 PASS=0
@@ -86,7 +83,7 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 # the child environment" — including the two obsolete COMMENT_BLOCK_WARN* names,
 # which must not be readable by any path — and then re-pins only what the case is
 # about, through the fixture .env. Neither the ambient shell nor the developer's
-# real config dir can decide an outcome (test-design.md "Config-dependent
+# real agents .env can decide an outcome (test-design.md "Config-dependent
 # branches"). The file-count and byte-size caps are compiled-in constants with no
 # knob at all — config-numeric-caps.sh pins both their boundaries and their
 # non-configurability.
@@ -106,7 +103,7 @@ BASE_ENV=(
 # COMMENT_BLOCK_MAX_* knobs, ...) is passed as a genuine child environment
 # variable, because that is what those cases are about.
 CB_DOTENV_KEYS=" COMMENT_BLOCK_MAX_LINES COMMENT_BLOCK_ENFORCE CODE_FILE_EXTENSIONS COMMENT_BLOCK_WARN COMMENT_BLOCK_WARN_LINES "
-# The fixture config dir. Without it the CLI's .env resolution would fall back to
+# The fixture AGENTS_MAIN_ROOT. Without it the CLI's .env resolution would fall back to
 # the installed agents repo and read the DEVELOPER's real .env.
 CB_CFG_DIR="$TMPDIR_BASE/agents-config"
 mkdir -p "$CB_CFG_DIR"
@@ -215,7 +212,7 @@ _cb_invoke() {
     for ((i = 0; i < ${#dot_keys[@]}; i++)); do
         printf '%s=%s\n' "${dot_keys[$i]}" "${dot_vals[$i]}" >> "$CB_CFG_DIR/.env"
     done
-    envs+=("AGENTS_CONFIG_DIR=$CB_CFG_DIR")
+    envs+=("AGENTS_MAIN_ROOT=$CB_CFG_DIR")
 
     CB_MODE="none"
     for kv in "$@"; do

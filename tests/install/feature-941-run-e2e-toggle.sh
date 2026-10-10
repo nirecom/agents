@@ -18,12 +18,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_EXAMPLE="$AGENTS_DIR/.env.example"
-ROBUST_WF="$AGENTS_DIR/tests/hooks/feature-robust-workflow.sh"
-PHASE5_SCRIPT="$AGENTS_DIR/tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh"
-GET_CONFIG_VAR="$AGENTS_DIR/bin/get-config-var"
-REVIEW_ENV_EXAMPLE="$AGENTS_DIR/bin/review-env-example"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ENV_EXAMPLE="$SCRIPT_CHECKOUT_ROOT/.env.example"
+ROBUST_WF="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-robust-workflow.sh"
+PHASE5_SCRIPT="$SCRIPT_CHECKOUT_ROOT/tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh"
+GET_CONFIG_VAR="$SCRIPT_CHECKOUT_ROOT/bin/get-config-var"
+REVIEW_ENV_EXAMPLE="$SCRIPT_CHECKOUT_ROOT/bin/review-env-example"
 
 PASS=0
 FAIL=0
@@ -194,7 +194,7 @@ fi
 # ============================================================================
 echo "=== Case 6: feature-robust-workflow guard migration ==="
 
-SETTINGS_E2E="$AGENTS_DIR/tests/hooks/feature-robust-workflow/settings-e2e.sh"
+SETTINGS_E2E="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-robust-workflow/settings-e2e.sh"
 if [ ! -f "$SETTINGS_E2E" ]; then
     fail "6. feature-robust-workflow/settings-e2e.sh not found"
 else

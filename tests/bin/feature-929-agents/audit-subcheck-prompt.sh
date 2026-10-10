@@ -36,7 +36,7 @@ _asp_run() {
 
     # With --subcheck (x2) + --state-snapshot: PROMPT embeds ids + snapshot.
     local cap1="$TMPDIR_BASE/asp-prompt-1.txt"
-    CODEX_PROMPT_CAPTURE="$cap1" PATH="$pp" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    CODEX_PROMPT_CAPTURE="$cap1" PATH="$pp" \
         WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR" \
         run_with_timeout 90 bash "$FINDINGS_CLI" --mode audit --sid "$sid" --wsid "$sid" \
         --transcript "$tf" --subcheck sc-alpha-01 --subcheck sc-beta-02 --state-snapshot "$snap" \
@@ -56,7 +56,7 @@ _asp_run() {
 
     # Without --subcheck/--state-snapshot: those tokens must be absent.
     local cap2="$TMPDIR_BASE/asp-prompt-2.txt"
-    CODEX_PROMPT_CAPTURE="$cap2" PATH="$pp" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    CODEX_PROMPT_CAPTURE="$cap2" PATH="$pp" \
         WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR" \
         run_with_timeout 90 bash "$FINDINGS_CLI" --mode audit --sid "$sid" --wsid "$sid" \
         --transcript "$tf" \

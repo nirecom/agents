@@ -14,18 +14,18 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK="$AGENTS_DIR/hooks/supervisor-guard.js"
-FINAL_REPORT_SCHEMA="$AGENTS_DIR/hooks/lib/final-report-schema.js"
-FINAL_REPORT_SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/final-report-schema.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard.js"
+FINAL_REPORT_SCHEMA="$SCRIPT_CHECKOUT_ROOT/hooks/lib/final-report-schema.js"
+FINAL_REPORT_SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/final-report-schema.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -107,7 +107,7 @@ console.log('OK');
 # DI5: bin/supervisor-write-alert exists
 run_di5() {
     local label="DI5: bin/supervisor-write-alert exists"
-    if [ -f "$AGENTS_DIR/bin/supervisor-write-alert" ]; then
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-alert" ]; then
         pass "$label"
     else
         fail "$label (bin/supervisor-write-alert not found)"
@@ -117,7 +117,7 @@ run_di5() {
 # DI6: bin/supervisor-write-audit exists
 run_di6() {
     local label="DI6: bin/supervisor-write-audit exists"
-    if [ -f "$AGENTS_DIR/bin/supervisor-write-audit" ]; then
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit" ]; then
         pass "$label"
     else
         fail "$label (bin/supervisor-write-audit not found)"
@@ -127,7 +127,7 @@ run_di6() {
 # DI7: bin/supervisor-write-audit-verdict exists
 run_di7() {
     local label="DI7: bin/supervisor-write-audit-verdict exists"
-    if [ -f "$AGENTS_DIR/bin/supervisor-write-audit-verdict" ]; then
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit-verdict" ]; then
         pass "$label"
     else
         fail "$label (bin/supervisor-write-audit-verdict not found)"
@@ -137,7 +137,7 @@ run_di7() {
 # DI8: bin/supervisor-write-alert accepts --set-alert-phase flag
 run_di8() {
     local label="DI8: bin/supervisor-write-alert accepts --set-alert-phase flag"
-    if [ ! -f "$AGENTS_DIR/bin/supervisor-write-alert" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-alert" ]; then
         skip "$label (bin/supervisor-write-alert not found)"; return
     fi
     local tmp out rc
@@ -150,7 +150,7 @@ const fs = require('fs');
 const st = s.createEmptyState('di8-sid');
 fs.writeFileSync(w.getStatePath('di8-sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
-    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$AGENTS_DIR/bin/supervisor-write-alert" \
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-alert" \
         --session-id "di8-sid" --set-alert-phase "pending" 2>&1)
     rc=$?
     rm -rf "$tmp"
@@ -164,7 +164,7 @@ fs.writeFileSync(w.getStatePath('di8-sid', { forWrite: true }), JSON.stringify(s
 # DI9: bin/supervisor-write-audit accepts --set-audit-phase flag
 run_di9() {
     local label="DI9: bin/supervisor-write-audit accepts --set-audit-phase flag"
-    if [ ! -f "$AGENTS_DIR/bin/supervisor-write-audit" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit" ]; then
         skip "$label (bin/supervisor-write-audit not found)"; return
     fi
     local tmp out rc
@@ -176,7 +176,7 @@ const fs = require('fs');
 const st = s.createEmptyState('di9-sid');
 fs.writeFileSync(w.getStatePath('di9-sid', { forWrite: true }), JSON.stringify(st));
 " >/dev/null 2>&1
-    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$AGENTS_DIR/bin/supervisor-write-audit" \
+    out=$(WORKFLOW_STATE_DIR="$tmp" WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit" \
         --session-id "di9-sid" --set-audit-phase "pending" 2>&1)
     rc=$?
     rm -rf "$tmp"

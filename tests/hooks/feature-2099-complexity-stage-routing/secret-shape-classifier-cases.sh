@@ -9,7 +9,7 @@
 # stopped matching is invisible unless the exact provider shape is exercised.
 # Every row below is the classifier's OWN verdict on one token.
 
-SS_MOD_N="$(to_node_path "$AGENTS_DIR/hooks/workflow-state/complexity-routing/secret-shape.js")"
+SS_MOD_N="$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/complexity-routing/secret-shape.js")"
 export SS_MOD_N
 
 # SS-1: the module surface. Without this a renamed export would make every row

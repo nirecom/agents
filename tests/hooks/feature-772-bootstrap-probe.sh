@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PROBE_LIB="$AGENTS_DIR/hooks/lib/bootstrap-state.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PROBE_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/bootstrap-state.js"
 
 PASS=0
 FAIL=0

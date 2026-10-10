@@ -6,18 +6,15 @@
 # When a meta parent has open sub-issues, /issue-close-finalize must exit 0
 # with ACTION=meta_pending_subs and empty NEXT_STEPS so the caller can return
 # cleanly. A child close cascade will re-attempt the parent close once the
-# last sub-issue closes; surfacing an error here just spammed the user with
-# false alarms (#675-B).
-#
-# RED before /write-code runs — triage source still returns the old
-# `exit 1 + /issue-close-stage` error path for meta_child_open.
+# last sub-issue closes; an error here just spammed false alarms (#675-B).
+# Written RED: triage then returned `exit 1 + /issue-close-stage` for meta_child_open.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-triage-lib.sh"
-FINALIZE_TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-finalize-triage.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-triage-lib.sh"
+FINALIZE_TRIAGE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-finalize-triage.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -57,7 +54,6 @@ setup_tmp() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/docs/history"
     : > "$TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"
@@ -67,7 +63,6 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR
     unset GH_MOCK_COMMENT_LOG
 }
 

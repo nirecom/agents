@@ -18,7 +18,7 @@
 echo ""
 echo "=== G15 (F2): session-start carries plan_approvals across the session boundary ==="
 
-SESSION_START="$AGENTS_DIR/hooks/session-start.js"
+SESSION_START="$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js"
 
 # sha256_of <file> → hex digest (same algorithm as computeArtifactSha)
 sha256_of() {
@@ -81,7 +81,7 @@ run_session_start() {
   tpath="$tbase/$(transcript_dir_for "$rcwd")/$new_sid.jsonl"
   SS_OUT="$(printf '{"session_id":"%s","source":"resume","transcript_path":"%s"}' "$new_sid" "$tpath" | \
     WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-    AGENTS_CONFIG_DIR="$CONFIG_DIR_ON" CLAUDE_PROJECT_DIR="$proj" \
+    AGENTS_MAIN_ROOT="$CFG_ROOT_ON" CLAUDE_PROJECT_DIR="$proj" \
     CLAUDE_TRANSCRIPT_BASE_DIR="$tbase" CONFIRM_OUTLINE=on CONFIRM_DETAIL=on \
     run_with_timeout node "$SESSION_START" 2>&1 || true)"
 }

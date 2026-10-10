@@ -12,7 +12,7 @@ set -uo pipefail
 # block. Following the reminder produces friction: the session that surveyed #2124 was itself
 # blocked by enforce-worktree on a `bash /dev/stdin` heredoc.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # THE ROOT CAUSE is a hole inside the norm layer, not the reminder. rules/shell-commands.md
 # already governs WHAT may be issued through the Bash tool (the Command-Line Issuance
@@ -23,7 +23,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # followed without tripping a guard is an incomplete norm (CPR-WPH, CPR-UNV).
 
 RULES_REL="rules/shell-commands.md"
-RULES="$AGENTS_DIR/$RULES_REL"
+RULES="$SCRIPT_CHECKOUT_ROOT/$RULES_REL"
 
 # THE CONTRACT UNDER TEST. One `## Tool Selection Priority` section is added to
 # rules/shell-commands.md immediately BEFORE Command-Line Issuance Discipline, carrying five
@@ -36,7 +36,7 @@ RULES="$AGENTS_DIR/$RULES_REL"
 # receive it, and BOTH general-purpose dispatch sites — write-code WCD-4 and write-tests WT-7 —
 # get the same wording INSIDE the dispatch step itself, not merely somewhere in the file.
 
-POLICY="$AGENTS_DIR/hooks/lib/rules-injection-policy.js"
+POLICY="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-injection-policy.js"
 
 # OUT OF SCOPE: conditional providers in the verbose-prompt style (session-start receives no
 # permission-mode field, so a provider could only fail open); suppressing the platform
@@ -115,9 +115,9 @@ section_body() { # <file> <heading-literal>
     sed -n "${start},${end}p" "$f"
 }
 
-PART_DIR="$AGENTS_DIR/tests/bin/feature-2124-tool-selection-priority"
+PART_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2124-tool-selection-priority"
 
-. "$AGENTS_DIR/tests/lib/read-directive-negation.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/read-directive-negation.sh"
 . "$PART_DIR/section-contract.sh"
 . "$PART_DIR/injection-policy.sh"
 . "$PART_DIR/dispatch-timing.sh"

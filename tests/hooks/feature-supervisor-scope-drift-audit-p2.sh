@@ -17,16 +17,16 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-WFSTATE_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+WFSTATE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -138,7 +138,7 @@ run_c3_scope_drift_only() {
 
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash","cwd":"%s"}}' "$sid" "$repodir_node")
 
-    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_MAIN_ROOT="$tmp_node" \
         WORKFLOW_SESSION_ID="$wsid" \
         run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
 
@@ -188,7 +188,7 @@ run_parse_detail_table() {
     call_parser() {
         local plans="$1" wsid="$2"
         run_with_timeout 5 node -e "
-const {parseDetailFilesToModify} = require('$_AGENTS_DIR_NODE/hooks/workflow-gate.js');
+const {parseDetailFilesToModify} = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-gate.js');
 const arg = ('$plans' === '__NULL__') ? null : '$plans';
 const r = parseDetailFilesToModify(arg, '$wsid');
 process.stdout.write(JSON.stringify(r));

@@ -26,11 +26,13 @@ const { parseArgs } = require('util');
 
 const { normalizeInputPath } = require('./vscode-cc-repair/primitives');
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
+
 const USAGE = [
   'Usage: measure-norm-docs [options]',
   '',
   'Options:',
-  '  --repo <path>  Repository to scan (absolute, no ".."). Default: $AGENTS_CONFIG_DIR',
+  '  --repo <path>  Repository to scan (absolute, no ".."). Default: $AGENTS_MAIN_ROOT',
   '                 and, failing that, the repository this script ships in.',
   '  --ref <ref>    Measure a past baseline out of git instead of the working tree.',
   '  --json         Emit a machine-readable report instead of the text one.',
@@ -237,7 +239,7 @@ function main() {
   }
 
   const repo = normalizeInputPath(
-    String(parsed.values.repo || process.env.AGENTS_CONFIG_DIR || path.resolve(__dirname, '..'))
+    String(parsed.values.repo || process.env.AGENTS_MAIN_ROOT || SCRIPT_CHECKOUT_ROOT)
   );
   const rejected = rejectBadRepo(repo);
   if (rejected !== null) return rejected;

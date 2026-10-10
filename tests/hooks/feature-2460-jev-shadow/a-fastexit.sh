@@ -66,8 +66,8 @@ echo "=== a .env load failure is off, not on ==="
 case_begin "a-env-load-failure-is-off" "hooks/lib/jev/broker.js"
 fx_new a-envfail-probe
 mkdir -p "$FX/cfg/.env"
-ENVFAIL_CFG="$AGENTS_CONFIG_DIR"
-fast_exit_case env-load-failure hooks/lib/jev/broker.js -- JEV=__unset__ "AGENTS_CONFIG_DIR=$ENVFAIL_CFG"
+ENVFAIL_CFG="$AGENTS_MAIN_ROOT"
+fast_exit_case env-load-failure hooks/lib/jev/broker.js -- JEV=__unset__ "AGENTS_MAIN_ROOT=$ENVFAIL_CFG"
 case_end
 
 echo "=== positive controls: the same fixtures DO reach Jev when enabled ==="

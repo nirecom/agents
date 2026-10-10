@@ -9,9 +9,10 @@
 # via bin/check-verification-gate.sh category: hook-registration
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
-HOOK="$AGENTS_DIR/hooks/confirm-checkpoint.js"
-TURN_MARKER_LIB="$AGENTS_DIR/hooks/lib/turn-marker.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
+HOOK="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/confirm-checkpoint.js"
+TURN_MARKER_LIB="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/turn-marker.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -55,7 +56,7 @@ mkdir -p "$PLANS_DIR" "$WORKFLOW_DIR_TEST"
 
 ISOLATED_CFG_DIR="${NODE_TMPDIR}/ccp-cfg-$$"
 mkdir -p "$ISOLATED_CFG_DIR"
-export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 export WORKFLOW_STATE_DIR="$WORKFLOW_DIR_TEST"
 
@@ -70,13 +71,13 @@ unset CLAUDE_CODE_ENTRYPOINT SHOW_PLAN_LINK_NO_AUTO_OPEN SHOW_PLAN_LINK_NO_SPAWN
 # #2513 safety net: a probed `code` stub is first on PATH for the whole file, so no
 # case can launch the real editor (T15 asserts its log stays empty).
 # shellcheck source=../lib/code-stub.sh
-. "$AGENTS_DIR/tests/lib/code-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/lib/code-stub.sh"
 setup_code_stub "$WORKFLOW_DIR_TEST/code-stub" || { echo "FAIL: code stub setup"; exit 1; }
 code_stub_probe || { echo "FAIL: code stub is not first on PATH; refusing to run (real editor could launch)"; exit 1; }
 # #2513: plan-sync off by default; T13-T15 (sibling plan-sync.sh) pin their own env.
 export PLAN_SYNC_REMOTE_URL=""
 # shellcheck source=../lib/plan-sync-fixture.sh
-. "$AGENTS_DIR/tests/lib/plan-sync-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/lib/plan-sync-fixture.sh"
 
 SID="test-ccp-$$"
 
@@ -283,7 +284,7 @@ clear_markers
 # ── T12: CONFIRM_OUTLINE=off in .env file (NOT exported) → [confirm-skipped] ─
 echo "=== T12: CONFIRM_OUTLINE=off in .env file → skipped systemMessage ==="
 clear_markers
-# Write to .env file in AGENTS_CONFIG_DIR; do NOT export to shell
+# Write to .env file in AGENTS_MAIN_ROOT; do NOT export to shell
 printf 'CONFIRM_OUTLINE=off\n' > "$ISOLATED_CFG_DIR/.env"
 T12_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_OUTLINE>>\"")
 T12_OUT=$(
@@ -300,7 +301,7 @@ rm -f "$ISOLATED_CFG_DIR/.env"
 
 # ── T13-T15 (#2513): published blob URL, push failure, no editor launch ──────
 # shellcheck source=feature-confirm-checkpoint/plan-sync.sh
-. "$AGENTS_DIR/tests/hooks/feature-confirm-checkpoint/plan-sync.sh"
+. "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/hooks/feature-confirm-checkpoint/plan-sync.sh"
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""

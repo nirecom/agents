@@ -23,7 +23,7 @@ require_recipe_block_format() {
     local label="$1"
     local probe
     probe=$(run_with_timeout 5 node -e "
-const f = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format');
+const f = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-report-format');
 const out = f.formatCumSevErrorReason([], 'probe-sid', 'probe-wsid', 'agents/supervisor.md', '/tmp/probe-state.json');
 process.stdout.write(out.indexOf('supervisor-write-layer2') >= 0 ? 'yes' : 'no');
 " 2>/dev/null)

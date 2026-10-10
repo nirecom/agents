@@ -114,7 +114,7 @@ const grd = require(grdPath);
 grd.isMainCheckout = function() { return null; };
 console.log('SKIP_STUB');
 EOF
-br_out=$(BR_GRD_PATH="$AGENTS_DIR_NODE/hooks/enforce-worktree/git-repo-detection.js" \
+br_out=$(BR_GRD_PATH="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/enforce-worktree/git-repo-detection.js" \
     WORKFLOW_PLANS_DIR="$BR_TMP_W3_NODE" WORKFLOW_STATE_DIR="$BR_TMP_W3_NODE" ENFORCE_WORKTREE=on \
     run_with_timeout 8 node "$BR_SHIM_DIR/runner.js" 2>&1)
 if echo "$br_out" | grep -q SKIP_STUB; then

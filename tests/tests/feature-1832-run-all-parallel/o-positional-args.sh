@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-REAL_RUNNER="$AGENTS_DIR/tests/run-all.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+REAL_RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
 
 PASS=0
 FAIL=0
@@ -35,7 +35,7 @@ export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
-export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
+export RUN_ALL_REGISTRY_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh"
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
@@ -79,7 +79,7 @@ OUT=""; RC=0
 run_all() {
     : > "$LOG"
     RC=0
-    OUT="$(cd "$ROOT" && senv bash "$AGENTS_DIR/bin/run-with-timeout.sh" 60 bash "$RUNNER" "$@" 2>&1)" || RC=$?
+    OUT="$(cd "$ROOT" && senv bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 bash "$RUNNER" "$@" 2>&1)" || RC=$?
 }
 executed_of() {
     printf '%s\n' "$OUT" \
@@ -276,7 +276,7 @@ case_injection
 # Last line of defence: no sentinel anywhere under the fixture, and none in the
 # two directories an injected `touch` could plausibly have reached.
 LEFTOVERS="$( { sentinel_hits INJ_SENTINEL_A; sentinel_hits INJ_SENTINEL_B; \
-    ls -d "$AGENTS_DIR"/INJ_SENTINEL_* 2>/dev/null; } | tr '\n' ' ')"
+    ls -d "$SCRIPT_CHECKOUT_ROOT"/INJ_SENTINEL_* 2>/dev/null; } | tr '\n' ' ')"
 if [ -z "${LEFTOVERS// /}" ]; then
     pass "o-pos/inject/no-sentinel-anywhere-at-exit"
 else

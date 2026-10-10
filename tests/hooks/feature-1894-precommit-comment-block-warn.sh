@@ -20,7 +20,7 @@
 # on stderr — a silent skip is how a blocking check quietly stops existing;
 # (4) a real `git commit` with findings is REJECTED (part 3).
 
-# Kill switch and threshold resolve from the config dir's .env ONLY —
+# Kill switch and threshold resolve from the agents main root's .env ONLY —
 # `COMMENT_BLOCK_ENFORCE=off` / `COMMENT_BLOCK_MAX_LINES=999999` on `git
 # commit` are exactly the bypasses this issue closes, so run_precommit /
 # run_commit write config into $cfg/.env and keep those names out of the
@@ -38,11 +38,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # The worktree copy is the state under test — never the deployed ~/.claude one.
-PRECOMMIT="$AGENTS_DIR/hooks/pre-commit"
-LOCAL_SCANNER="$AGENTS_DIR/bin/review-comment-block-size"
-FILE_SPLIT_RULE="$AGENTS_DIR/rules/coding/file-split.md"
+PRECOMMIT="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit"
+LOCAL_SCANNER="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size"
+FILE_SPLIT_RULE="$SCRIPT_CHECKOUT_ROOT/rules/coding/file-split.md"
 CASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1894-precommit-comment-block-warn"
 
 PASS=0
@@ -179,7 +179,7 @@ EOF
             # copy aside to .review-comment-block-size.real before calling
             # this), never the worktree's $LOCAL_SCANNER — the fixture must
             # stay self-contained now that hooks/pre-commit resolves every
-            # path from its own $0, not from AGENTS_CONFIG_DIR.
+            # path from its own $0, not from AGENTS_MAIN_ROOT.
             { printf '#!/usr/bin/env bash\n'
               printf '%s\n' "$STUB_PROLOGUE"
               printf 'exec bash "$(dirname "$0")/.review-comment-block-size.real" "$@"\n'
@@ -225,7 +225,7 @@ CFG
 #   remote: "none" (default) or a URL
 #
 # hooks/pre-commit resolves _cfg_dir from its own $0 (issue #1894 item 1: the
-# gate must ignore ambient AGENTS_CONFIG_DIR for identity + scanner-path
+# gate must ignore ambient AGENTS_MAIN_ROOT for identity + scanner-path
 # resolution). A fixture invoked via the worktree's real $PRECOMMIT can never
 # exercise that gate, so every fixture is its own self-contained mini-install:
 # a copy of hooks/ + bin/, with bin/review-comment-block-size swapped for the
@@ -234,8 +234,8 @@ make_repo() {
     local name="$1" kind="$2" remote="${3:-none}"
     local dir="$TMPDIR_BASE/$name"
     init_repo "$dir"
-    cp -r "$AGENTS_DIR/hooks" "$dir/hooks"
-    cp -r "$AGENTS_DIR/bin" "$dir/bin"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$dir/hooks"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$dir/bin"
     # A self-contained fixture is now indistinguishable from a real agents
     # install to hooks/pre-commit's OTHER _cfg_dir-gated sections too (not
     # just the comment-block-size gate this file targets) — in particular the
@@ -243,7 +243,7 @@ make_repo() {
     # unconditionally re-validates the whole rules/ tree on every commit once
     # it identifies the repo as itself. Without a copy it sees an empty
     # rules/ and hard-blocks every fixture commit on INVALID_ON_DEMAND_PATHS.
-    cp -r "$AGENTS_DIR/rules" "$dir/rules"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/rules" "$dir/rules"
     case "$kind" in
         none) rm -f "$dir/bin/review-comment-block-size" ;;
         noexec)
@@ -347,13 +347,13 @@ _pc_env() {
     for ((i = 0; i < ${#dot_keys[@]}; i++)); do
         printf '%s=%s\n' "${dot_keys[$i]}" "${dot_vals[$i]}" >> "$cfg/.env"
     done
-    PC_ENVS+=("AGENTS_CONFIG_DIR=$cfg" "ENFORCE_WORKTREE=off")
+    PC_ENVS+=("AGENTS_MAIN_ROOT=$cfg" "ENFORCE_WORKTREE=off")
 }
 
 OUT=""
 ERR=""
 RC=0
-# run_precommit <repo> <agents-config-dir> [VAR=VAL ...]
+# run_precommit <repo> <script-checkout-root> [VAR=VAL ...]
 run_precommit() { _pc_run "$1" "$2" 0 "${@:3}"; }
 # Same, with the config keys ALSO in the child environment (hostile direction).
 run_precommit_ambient() { _pc_run "$1" "$2" 1 "${@:3}"; }
@@ -369,7 +369,7 @@ _pc_run() {
     ERR="$(cat "$errfile" 2>/dev/null || true)"
 }
 
-# run_commit <repo> <agents-config-dir> <hooks-dir> <message> [VAR=VAL ...]
+# run_commit <repo> <script-checkout-root> <hooks-dir> <message> [VAR=VAL ...]
 # A real `git commit` — git decides whether to fire the hook and whether the
 # hook's exit code blocks the commit.
 run_commit() { _pc_commit "$1" "$2" "$3" "$4" 0 "${@:5}"; }

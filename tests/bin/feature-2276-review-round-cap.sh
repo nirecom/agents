@@ -155,7 +155,7 @@ loop_run() {
     local approved="${1:-no}" header="${2:-## Codex Review: PERFORMED}" extused="${3:-0}" risk="${4:-}"
     local extra=()
     [ -n "$risk" ] && extra=(--risk-signal "$risk")
-    L_OUT="$(AGENTS_CONFIG_DIR="$FAKE_ROOT" STUB_APPROVED="$approved" STUB_HEADER="$header" \
+    L_OUT="$(STUB_APPROVED="$approved" STUB_HEADER="$header" \
         bash "$FAKE_ROOT/bin/run-codex-review-loop" \
         --format test-review --session-id "$SID" --plans-dir "$LP" \
         --draft-file "$LP/draft.md" --cap 2 --max-extensions 1 \

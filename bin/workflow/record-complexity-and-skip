@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Args: --session <SID> (--signals <csv-or-empty> | --signals-file <path>)
 #       [--target <outline|detail>]
@@ -78,8 +78,8 @@ else
     SIGNALS_ARGS=(--signals "$SIGNALS")
 fi
 
-# Normalize AGENTS_CONFIG_DIR to Windows-style path for Node.js on Windows/Cygwin.
-AGENTS_CONFIG_DIR_N="$(cygpath -m "$AGENTS_CONFIG_DIR" 2>/dev/null || echo "$AGENTS_CONFIG_DIR")"
+# Normalize SCRIPT_CHECKOUT_ROOT to Windows-style path for Node.js on Windows/Cygwin.
+SCRIPT_CHECKOUT_ROOT_N="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT" 2>/dev/null || echo "$SCRIPT_CHECKOUT_ROOT")"
 
 # On the --advance path the internal node exit codes are NORMALIZED, not
 # propagated: `set -e` would otherwise surface a child's own 2 as this script's
@@ -94,12 +94,12 @@ advance_fail() {
 # do NOT contaminate caller's SKIP_MODE capture.
 if [[ "$ADVANCE" -eq 1 ]]; then
     RC=0
-    node "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-evaluation" \
+    node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-evaluation" \
         --session "$SESSION_ID" \
         "${SIGNALS_ARGS[@]}" 1>&2 || RC=$?
     [[ "$RC" -eq 0 ]] || advance_fail "record-complexity-evaluation" "$RC"
 else
-    node "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-evaluation" \
+    node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-evaluation" \
         --session "$SESSION_ID" \
         "${SIGNALS_ARGS[@]}" 1>&2
 fi
@@ -107,7 +107,7 @@ fi
 # Step 2: Resolve skip conditions. Values are passed via env vars (not string interpolation)
 # to prevent JS injection if SESSION_ID or TARGET contain quote characters.
 RESOLVE_SKIP_MODE() {
-    RCS_BRIDGE="$AGENTS_CONFIG_DIR_N/hooks/workflow-state/skip-signal-resolver.js" \
+    RCS_BRIDGE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/skip-signal-resolver.js" \
       RCS_SID="$SESSION_ID" RCS_TARGET="$TARGET" node -e '
 const r = require(process.env.RCS_BRIDGE);
 const v = r.resolveSkipConditionsFromComplexity(process.env.RCS_SID, process.env.RCS_TARGET);
@@ -147,12 +147,12 @@ if [[ "$SKIP_MODE" = "auto" ]]; then
     if [[ "$ADVANCE" -eq 1 ]]; then
         RC=0
         if [[ "$DISPATCH_ONLY" -eq 1 ]]; then
-            node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+            node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-judgment" \
                 --session "$SESSION_ID" \
                 --target "$TARGET" \
                 --c1 true --c2 true ${C3_ARGS[@]+"${C3_ARGS[@]}"} --advance 1>&2 || RC=$?
         else
-            node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+            node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-judgment" \
                 --session "$SESSION_ID" \
                 --target "$TARGET" \
                 --c1 true --c2 true ${C3_ARGS[@]+"${C3_ARGS[@]}"} --advance || RC=$?
@@ -160,7 +160,7 @@ if [[ "$SKIP_MODE" = "auto" ]]; then
         [[ "$RC" -eq 0 ]] || advance_fail "record-skip-judgment" "$RC"
         SKIP_DISPATCH="advanced"
     else
-        node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+        node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-judgment" \
             --session "$SESSION_ID" \
             --target "$TARGET" \
             --c1 true --c2 true ${C3_ARGS[@]+"${C3_ARGS[@]}"} 1>&2

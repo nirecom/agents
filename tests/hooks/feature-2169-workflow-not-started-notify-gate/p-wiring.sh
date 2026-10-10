@@ -32,7 +32,7 @@ EOF
     UPS_OUT=$(SID="p4" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
           "$RWT" 25 node -r "$(node_path "$preload")" "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
     [ "$UPS_RC" -eq 0 ] || problems="$problems [hook exited $UPS_RC]"
@@ -77,7 +77,7 @@ EOF
     UPS_OUT=$(SID="p5" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
           "$RWT" 25 node -r "$(node_path "$preload")" "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
     [ "$UPS_RC" -eq 0 ] || problems="$problems [hook exited $UPS_RC instead of failing open]"
@@ -150,7 +150,7 @@ EOF
     UPS_OUT=$(SID="p12" "$RWT" 15 node -e "
 process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_path: '',
   prompt: 'where are we?', hook_event_name: 'UserPromptSubmit' }));" \
-        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
           "$RWT" 25 node -r "$(node_path "$preload")" "$(node_path "$UPS_HOOK")" 2>/dev/null)
     UPS_RC=$?
     [ "$UPS_RC" -eq 0 ] || problems="$problems [hook exited $UPS_RC instead of failing safe]"
@@ -175,7 +175,7 @@ process.stdout.write(JSON.stringify({ session_id: process.env.SID, transcript_pa
 run_P15() {
     local f label problems="" owner="hooks/workflow-state/lifecycle.js"
     # (a) the constant has exactly one definition site.
-    for f in $(grep -rl 'postuse-in-flight' "$AGENTS_DIR/hooks" "$AGENTS_DIR/bin" 2>/dev/null); do
+    for f in $(grep -rl 'postuse-in-flight' "$SCRIPT_CHECKOUT_ROOT/hooks" "$SCRIPT_CHECKOUT_ROOT/bin" 2>/dev/null); do
         case "$f" in
             *"$owner") : ;;
             *) problems="$problems [$(basename "$f") hard-codes the origin string instead of importing LOOKAHEAD_ORIGIN]" ;;
@@ -187,7 +187,7 @@ run_P15() {
     for label in hooks/user-prompt-submit-mechanism-check.js \
                  hooks/workflow-state/inheritance/adopt.js \
                  bin/resume-session-detect; do
-        f="$AGENTS_DIR/$label"
+        f="$SCRIPT_CHECKOUT_ROOT/$label"
         if [ ! -f "$f" ]; then
             problems="$problems [$label: not found]"
         elif ! grep -qE 'isLookaheadOnlyInFlight|LOOKAHEAD_ORIGIN' "$f"; then
@@ -206,7 +206,7 @@ run_P15() {
 # or a throwing predicate is reported as its own token rather than collapsing
 # into `false`, so the case can name what is actually absent.
 _p16_verdicts() {
-    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
     SID="$2" STEP="$3" KIND="$4" "$RWT" 20 node -e "
 const finding = { step: process.env.STEP, kind: process.env.KIND };
 const sid = process.env.SID;
@@ -236,7 +236,7 @@ process.stdout.write('c4=' + c4 + ',pn=' + pn);" 2>/dev/null
 # isFindingExemptFromC4.
 run_P16() {
     local tmp tn sid label step kind want out c4 pn problems="" C4_HOOK
-    C4_HOOK="$AGENTS_DIR/hooks/stop-premature-stop-guard.js"
+    C4_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/stop-premature-stop-guard.js"
     while IFS='|' read -r label step kind want; do
         label="$(printf '%s' "$label" | tr -d ' ')"
         step="$(printf '%s' "$step" | tr -d ' ')"

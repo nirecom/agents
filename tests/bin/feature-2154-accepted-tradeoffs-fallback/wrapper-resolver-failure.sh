@@ -20,6 +20,7 @@ WF_ROOT="$TMPROOT/wrapfail-agents"
 mkdir -p "$WF_ROOT"
 cp -r "$AGENTS_ROOT/bin" "$WF_ROOT/bin"
 cp -r "$AGENTS_ROOT/hooks" "$WF_ROOT/hooks"
+copy_stage_wrappers "$WF_ROOT"
 
 # The downstream canary: bin/run-codex-review-loop is what every wrapper calls
 # after the resolver. It writes a file when invoked, so "the reviewer never ran"
@@ -60,12 +61,12 @@ wf_run() {
   WF_RC=0
   (
     cd "$WF_REPO" || exit 1
-    export AGENTS_CONFIG_DIR="$WF_ROOT"
+    export AGENTS_MAIN_ROOT="$WF_ROOT"
     export SESSION_ID="$sid"
     export PLANS_DIR="$pd"
     export EXTENSIONS_USED=0
     export REVIEW_TESTS_FULL_SCAN=1
-    with_timeout bash "$AGENTS_ROOT/skills/$stage/scripts/run-codex-review-loop.sh" > "$outf" 2>"$errf"
+    with_timeout bash "$WF_ROOT/skills/$stage/scripts/run-codex-review-loop.sh" > "$outf" 2>"$errf"
   ) || WF_RC=$?
   WF_OUT="$(cat "$outf" 2>/dev/null || true)"
   WF_ERR="$(cat "$errf" 2>/dev/null || true)"

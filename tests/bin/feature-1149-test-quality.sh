@@ -12,11 +12,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-SUT_CTD="$AGENTS_DIR/bin/check-table-driven.sh"
-SUT_CFG="$AGENTS_DIR/bin/check-false-green.sh"
-SUT_MP="$AGENTS_DIR/bin/mutation-probe.sh"
+SUT_CTD="$SCRIPT_CHECKOUT_ROOT/bin/check-table-driven.sh"
+SUT_CFG="$SCRIPT_CHECKOUT_ROOT/bin/check-false-green.sh"
+SUT_MP="$SCRIPT_CHECKOUT_ROOT/bin/mutation-probe.sh"
 
 PASS=0
 FAIL=0

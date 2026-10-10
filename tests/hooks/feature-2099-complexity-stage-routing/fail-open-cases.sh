@@ -11,8 +11,8 @@ D2099_ISO="$TMPDIR_BASE/iso"
 
 d2099_build_isolated_tree() {
     mkdir -p "$D2099_ISO"
-    cp -r "$AGENTS_DIR/hooks" "$D2099_ISO/hooks"
-    cp -r "$AGENTS_DIR/bin" "$D2099_ISO/bin"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$D2099_ISO/hooks"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$D2099_ISO/bin"
 
     # Corrupt ONLY the routing table's data, never its syntax: the module must
     # still parse and load. Patterns are anchored on the D2 field names, which
@@ -178,7 +178,7 @@ d2099_wrapper_contract() {
     local sid rc out
     sid=$(new_session wrapper)
 
-    rc=0; out=$(AGENTS_CONFIG_DIR="$D2099_ISO" run_with_timeout bash "$D2099_ISO/bin/workflow/record-complexity-and-skip" \
+    rc=0; out=$(AGENTS_MAIN_ROOT="$D2099_ISO" run_with_timeout bash "$D2099_ISO/bin/workflow/record-complexity-and-skip" \
         --session "$sid" --signals "S3-security" --target outline --advance 2>&1) || rc=$?
     assert_eq "FO-13 the --advance path normalizes a broken-table failure to exit 3" "3" "$rc"
 

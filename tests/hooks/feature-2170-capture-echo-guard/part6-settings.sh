@@ -9,8 +9,7 @@
 
 set -uo pipefail
 
-AGENTS_DIR="${1:-$(cd "$(dirname "$0")/../../.." && pwd)}"
-export AGENTS_DIR
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 DRIVER="$(cd "$(dirname "$0")" && pwd)/settings-driver.js"
 command -v node >/dev/null 2>&1 || exit 77
 
@@ -45,7 +44,7 @@ assert_eq "E-2c-auto-approve-keeps-enterworktree" "yes" "$(has_tok "$auto_matche
 
 # E-4: the SSOT file buildRemedy reads is present and non-empty.
 ssot_state="missing"
-if [ -s "$AGENTS_DIR/install/settings-allow-commands.txt" ]; then ssot_state="present"; fi
+if [ -s "$SCRIPT_CHECKOUT_ROOT/install/settings-allow-commands.txt" ]; then ssot_state="present"; fi
 assert_eq "E-4-ssot-file-present" "present" "$ssot_state"
 
 # E-5 (round 13, C9): real-hook-entry.js is what the TL3 fixtures build their project
@@ -65,7 +64,7 @@ let s = ""; process.stdin.on("data", (d) => { s += d; }).on("end", () => {
   const es = ((j.hooks || {}).PreToolUse) || [];
   const hs = es.length === 1 ? es[0].hooks || [] : [];
   const cmd = hs.length === 1 ? String(hs[0].command) : "";
-  const placeholder = /\$\{?(CLAUDE_PROJECT_DIR|AGENTS_CONFIG_DIR)\}?|(^|[\s"])~\//.test(cmd);
+  const placeholder = /\$\{?(CLAUDE_PROJECT_DIR|AGENTS_MAIN_ROOT)\}?|(^|[\s"])~\//.test(cmd);
   console.log([es.length, hs.length, placeholder ? "unresolved" : "resolved",
                cmd.indexOf(process.argv[1]) !== -1 ? "names-hook" : "hook-MISSING"].join("/"));
 });' "$hook")"

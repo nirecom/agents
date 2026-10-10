@@ -151,16 +151,16 @@ if [ -s "$GH_ENV_LOG" ]; then
              "expected GH_CONFIG_DIR=$GHCONFIG in $GH_ENV_LOG"
     fi
     if [ -z "$(find "$GHCONFIG" -type f 2>/dev/null | head -1)" ]; then
-        pass "C3-5 the isolated config dir held no credential file at any point"
+        pass "C3-5 the isolated agents main root held no credential file at any point"
     else
-        fail "C3-5 the isolated config dir held no credential file at any point" \
+        fail "C3-5 the isolated agents main root held no credential file at any point" \
              "files appeared under $GHCONFIG"
     fi
 else
     fail "C3-3 every gh invocation ran with all four credential variables unset" \
          "no gh invocation was recorded — the isolation claim is untested"
     fail "C3-4 gh saw the isolated GH_CONFIG_DIR, not the developer's hosts.yml" "no gh invocation recorded"
-    fail "C3-5 the isolated config dir held no credential file at any point" "no gh invocation recorded"
+    fail "C3-5 the isolated agents main root held no credential file at any point" "no gh invocation recorded"
 fi
 
 # C2-7: the positive control for the whole file. If neither turn produced output

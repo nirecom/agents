@@ -3,7 +3,7 @@
 # Harness for feature-2121-heredoc-strip-widening.sh: tallies, the portable
 # timeout wrapper, the H0 availability guards, the scratch dir, and the three
 # node probes every case file drives (stripped / body_gone / strip_fixture).
-# Sourced by feature-2121-heredoc-strip-widening.sh; expects AGENTS_DIR + SQA.
+# Sourced by feature-2121-heredoc-strip-widening.sh; expects SCRIPT_CHECKOUT_ROOT + SQA.
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -21,7 +21,7 @@ assert_eq() {
     else fail "$name — want='$want' got='$got'"; fi
 }
 
-if [ -f "$AGENTS_DIR/hooks/lib/strip-quoted-args.js" ]; then
+if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/strip-quoted-args.js" ]; then
     pass "H0: hooks/lib/strip-quoted-args.js present"
 else
     fail "H0: hooks/lib/strip-quoted-args.js is MISSING — every case below would be vacuous"

@@ -71,7 +71,7 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) IS_WIN=1 ;; esac
 # counterpart is the host shape WC-5 shows the pin protects against.
 PINNED_PATHEXT=".COM;.EXE;.BAT;.CMD"
 HOSTILE_PATHEXT=".EXE"
-SHIM_REF_N="$(node_path "$AGENTS_DIR/tests/lib/shim-resolve-reference.js")"
+SHIM_REF_N="$(node_path "$SCRIPT_CHECKOUT_ROOT/tests/lib/shim-resolve-reference.js")"
 
 # write_npm_stub <path> — a recording npm stub: every argv line is appended to
 # $NPM_STUB_LOG and the process exits with ${NPM_STUB_RC:-0}. A SUCCESSFUL global
@@ -388,7 +388,7 @@ run_case() {
         # Empty CLAUDE_STUB_EMU means the emulator's default `write` mode.
         export CLAUDE_STUB_EMU="${CLAUDE_STUB_EMU-}"
         CLAUDE_STUB_SNAPSHOT="$(node_path "$dir/claude.json.snap")"; export CLAUDE_STUB_SNAPSHOT
-        AGENTS_CONFIG_DIR="$(node_path "$dir/cfg")"; export AGENTS_CONFIG_DIR
+        export AGENTS_MAIN_ROOT="$(node_path "$dir/cfg")"
         NPM_STUB_LOG="$(node_path "$dir/npm.log")"; export NPM_STUB_LOG
         CG_STUB_LOG="$(node_path "$dir/codegraph.log")"; export CG_STUB_LOG
         CLAUDE_STUB_LOG="$(node_path "$dir/claude.log")"; export CLAUDE_STUB_LOG

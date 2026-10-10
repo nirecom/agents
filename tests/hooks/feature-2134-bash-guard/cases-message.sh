@@ -150,7 +150,7 @@ case_begin "message-escape-hatch-source" "hooks/bash-guard/message.js"
 BG_MARKER_SEG="bg-msg-marker-7f3a91"
 SCRATCHPAD="$(run_with_timeout 30 node -e 'const os=require("os"),p=require("path");process.stdout.write(p.join(os.tmpdir(),"claude",process.argv[1]))' "$BG_MARKER_SEG")"
 export SCRATCHPAD
-BG_WANT_SCRATCHPAD="$(run_with_timeout 30 node -e 'process.stdout.write(String(require(process.argv[1]).describeAllowedTargets().scratchpad))' "$(node_path "$AGENTS_DIR/hooks/workflow-gate/early-gate-allowlist.js")" 2>/dev/null)"
+BG_WANT_SCRATCHPAD="$(run_with_timeout 30 node -e 'process.stdout.write(String(require(process.argv[1]).describeAllowedTargets().scratchpad))' "$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/early-gate-allowlist.js")" 2>/dev/null)"
 BG_MARKED_MSG="$(probe judge-message 'git status && ls')"
 unset SCRATCHPAD
 case "$BG_MARKED_MSG" in "<"*) BG_MARKED_MSG="" ;; esac

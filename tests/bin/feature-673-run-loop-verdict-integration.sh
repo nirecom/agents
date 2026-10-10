@@ -7,7 +7,7 @@ set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 WRAPPER_SRC="$AGENTS_WORKTREE/bin/run-codex-review-loop"
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$AGENTS_WORKTREE/tests/lib/harness.sh"
 ERRORS=0
 
@@ -119,7 +119,7 @@ EOF
 
 invoke() {
     local agents_dir="$1"; shift
-    AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
+    run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
 }
 
 SCRIPT_DIR="$(dirname "$0")/feature-673-run-loop-verdict-integration"

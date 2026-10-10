@@ -111,7 +111,7 @@ worktrees created from here on are covered by WS-7a.
 From inside your worktree:
 
 ```bash
-node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" init --path "$(git rev-parse --show-toplevel)"
+node "$AGENTS_MAIN_ROOT/bin/codegraph-lifecycle.js" init --path "$(git rev-parse --show-toplevel)"
 ```
 
 Or with the path written out:
@@ -206,7 +206,7 @@ shell (PowerShell, cmd.exe) resolves `.cmd`/`.ps1` transparently, so a manual ch
 when the actual failure mode is that Node's `spawnSync` — which every part of this framework uses,
 without a shell — cannot spawn a `.cmd`/`.bat` file directly. Verify the way Claude Code itself
 resolves the binary instead, run from the repo root (the require path below is relative, not
-`$AGENTS_CONFIG_DIR`-based, so it works in a plain shell with no environment set up). Any `r.error`
+`$AGENTS_MAIN_ROOT`-based, so it works in a plain shell with no environment set up). Any `r.error`
 (not just `ENOENT`) means the CLI did not resolve for `spawnSync` — `EPERM`/`EACCES`/`EINVAL` are
 just as real a failure as a missing binary and must not be reported as success:
 

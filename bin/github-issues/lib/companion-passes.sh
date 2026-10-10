@@ -29,12 +29,12 @@ companion_pass_a() {
     PASS_A_NUMBERS=$(tr -d '#' <<< "$nums" | sort -u)
 }
 
-# companion_pass_b_identifiers
+# companion_pass_b_identifiers [root]
 # Sets IDENTIFIER_SET (newline-separated lowercase tokens >=4 chars
-# from $AGENTS_CONFIG_DIR/{skills,hooks,bin,agents,rules}).
+# from <root>/{skills,hooks,bin,agents,rules}; omitted, the agents main root).
 companion_pass_b_identifiers() {
     IDENTIFIER_SET=""
-    local root="${AGENTS_CONFIG_DIR:-}"
+    local root="${1:-${AGENTS_MAIN_ROOT:-}}"
     if [ -z "$root" ] || [ ! -d "$root" ]; then return 0; fi
     IDENTIFIER_SET=$(
         {

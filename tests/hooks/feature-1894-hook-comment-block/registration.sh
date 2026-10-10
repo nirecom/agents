@@ -91,9 +91,9 @@ g3_invocation_shape() {
     type="$(printf '%s' "$row" | cut -f4)"
     cmd="$(printf '%s' "$row" | cut -f5)"
     assert_eq "G3/type-is-command" "command" "$type"
-    # $AGENTS_CONFIG_DIR, never an absolute developer path: settings.json is
+    # $AGENTS_MAIN_ROOT, never an absolute developer path: settings.json is
     # installed on every machine that uses this repo.
-    assert_contains "G3/path-is-config-relative" 'AGENTS_CONFIG_DIR' "$cmd"
+    assert_contains "G3/path-is-config-relative" 'AGENTS_MAIN_ROOT' "$cmd"
     assert_absent "G3/no-absolute-home-path" "/Users/" "$cmd"
     assert_absent "G3/no-absolute-windows-path" ":\\" "$cmd"
     # A hook on the Edit hot path without a timeout can hang the editor.
@@ -137,7 +137,7 @@ g4_target_exists_and_runs() {
 # that as a hook error, not a verdict).
 
 # This case takes the command verbatim from settings.json, expands only
-# $AGENTS_CONFIG_DIR to the worktree under test, and hands it a real payload
+# $AGENTS_MAIN_ROOT to the worktree under test, and hands it a real payload
 # on stdin through `bash -c`, exercising the host's own tokenisation. TL3
 # gap: proves the command is runnable and protocol-correct; whether Claude
 # Code dispatches an Edit into it is only checkable on a real host.
@@ -197,10 +197,10 @@ g5_registered_command_speaks_the_protocol() {
     cmd="$(printf '%s' "$row" | cut -f5)"
     E2E_TIMEOUT="$(printf '%s' "$row" | cut -f3)"
     case "$E2E_TIMEOUT" in ''|*[!0-9]*) E2E_TIMEOUT=10 ;; esac
-    # Expand only the config-dir placeholder, and only to the worktree copy:
+    # Expand only the agents-main-root placeholder, and only to the worktree copy:
     # the deployed ~/.claude tree is not the state under test.
-    E2E_CMD="${cmd//\$AGENTS_CONFIG_DIR/$(mpath "$AGENTS_DIR")}"
-    E2E_CMD="${E2E_CMD//\$\{AGENTS_CONFIG_DIR\}/$(mpath "$AGENTS_DIR")}"
+    E2E_CMD="${cmd//\$AGENTS_MAIN_ROOT/$(mpath "$SCRIPT_CHECKOUT_ROOT")}"
+    E2E_CMD="${E2E_CMD//\$\{AGENTS_MAIN_ROOT\}/$(mpath "$SCRIPT_CHECKOUT_ROOT")}"
 
     # --- block half: a fresh file whose content carries an 11-line run
     local f="$REPO_M/e2e-block.js"

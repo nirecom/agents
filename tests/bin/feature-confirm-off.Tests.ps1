@@ -2,9 +2,9 @@
 # Tags: pwsh-required, bin, env, config, scope:common
 # Pester L1 tests for bin/confirm-off.ps1 — pwsh counterpart of bin/confirm-off.
 # L3 gap (what this test does NOT catch):
-# - Real ~/.local/bin/confirm-off(.ps1) symlink and a live-AGENTS_CONFIG_DIR pwsh run.
+# - Real ~/.local/bin/confirm-off(.ps1) symlink and a live-AGENTS_MAIN_ROOT pwsh run.
 # - WSL bash PATH resolution for #677: confirm-off.ps1 is reachable from WSL only via
-#   the AGENTS_CONFIG_DIR absolute path; the WSL→Windows call is not reproduced.
+#   the agents checkout's absolute path; the WSL→Windows call is not reproduced.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: pwsh-required
 
@@ -14,8 +14,8 @@ Describe 'confirm-off.ps1 OFF/ON/ERROR matrix' {
         $script:helper = Join-Path $script:repoRoot 'bin\confirm-off.ps1'
         $script:gcvHelper = Join-Path $script:repoRoot 'bin\get-config-var.ps1'
         $script:loadEnv = Join-Path $script:repoRoot 'hooks\lib\load-env.js'
-        # Transitive requires of load-env.js: ./agents-config-dir -> ./path-normalize
-        $script:acdLib = Join-Path $script:repoRoot 'hooks\lib\agents-config-dir.js'
+        # Transitive requires of load-env.js: ./script-checkout-root -> ./path-normalize
+        $script:scriptCheckoutRootLib = Join-Path $script:repoRoot 'hooks\lib\script-checkout-root.js'
         $script:pathNormLib = Join-Path $script:repoRoot 'hooks\lib\path-normalize.js'
         # Build per-suite fixture mirroring real layout.
         $script:fix = Join-Path ([System.IO.Path]::GetTempPath()) ("co-" + [guid]::NewGuid().ToString('N').Substring(0,8))
@@ -24,7 +24,7 @@ Describe 'confirm-off.ps1 OFF/ON/ERROR matrix' {
         if (Test-Path $script:gcvHelper) { Copy-Item -Path $script:gcvHelper -Destination (Join-Path $script:fix 'bin\get-config-var.ps1') -Force }
         if (Test-Path $script:helper)    { Copy-Item -Path $script:helper    -Destination (Join-Path $script:fix 'bin\confirm-off.ps1')    -Force }
         if (Test-Path $script:loadEnv)   { Copy-Item -Path $script:loadEnv   -Destination (Join-Path $script:fix 'hooks\lib\load-env.js')  -Force }
-        if (Test-Path $script:acdLib)    { Copy-Item -Path $script:acdLib    -Destination (Join-Path $script:fix 'hooks\lib\agents-config-dir.js') -Force }
+        if (Test-Path $script:scriptCheckoutRootLib)    { Copy-Item -Path $script:scriptCheckoutRootLib    -Destination (Join-Path $script:fix 'hooks\lib\script-checkout-root.js') -Force }
         if (Test-Path $script:pathNormLib) { Copy-Item -Path $script:pathNormLib -Destination (Join-Path $script:fix 'hooks\lib\path-normalize.js') -Force }
         $script:fixHelper = Join-Path $script:fix 'bin\confirm-off.ps1'
     }
@@ -37,7 +37,7 @@ Describe 'confirm-off.ps1 OFF/ON/ERROR matrix' {
 
     BeforeEach {
         [System.Environment]::SetEnvironmentVariable('CONFIRM_X', $null, 'Process')
-        [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $script:fix, 'Process')
+        [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $script:fix, 'Process')
         # Reset .env
         Set-Content -Path (Join-Path $script:fix '.env') -Value '' -NoNewline
     }
@@ -99,7 +99,7 @@ Describe 'confirm-off.ps1 OFF/ON/ERROR matrix' {
         }
     }
 
-    Context 'T06 — AGENTS_CONFIG_DIR unset entirely (ERROR + exit 2)' {
+    Context 'T06 — AGENTS_MAIN_ROOT unset entirely (ERROR + exit 2)' {
         It 'prints ERROR and exits 2' {
             # Isolate confirm-off.ps1 in a dir without hooks/lib sibling so
             # SCRIPT_DIR fallback also fails.
@@ -108,52 +108,52 @@ Describe 'confirm-off.ps1 OFF/ON/ERROR matrix' {
             if (Test-Path $script:gcvHelper) { Copy-Item -Path $script:gcvHelper -Destination (Join-Path $iso 'bin\get-config-var.ps1') -Force }
             if (Test-Path $script:helper)    { Copy-Item -Path $script:helper    -Destination (Join-Path $iso 'bin\confirm-off.ps1')    -Force }
             $isoHelper = Join-Path $iso 'bin\confirm-off.ps1'
-            [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $null, 'Process')
+            [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $null, 'Process')
             try {
                 $out = (& pwsh -NoProfile -File $isoHelper CONFIRM_X on 2>&1) -join ''
                 $LASTEXITCODE | Should -Be 2
                 $out | Should -Match 'ERROR'
             } finally {
                 Remove-Item -Recurse -Force $iso -ErrorAction SilentlyContinue
-                [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $script:fix, 'Process')
+                [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $script:fix, 'Process')
             }
         }
     }
 
-    Context 'T6b — AGENTS_CONFIG_DIR valid but hooks/lib/load-env.js absent (no script-dir fallback either)' {
+    Context 'T6b — AGENTS_MAIN_ROOT valid but hooks/lib/load-env.js absent (no script-dir fallback either)' {
         It 'prints ERROR and exits 2' {
             $iso = Join-Path ([System.IO.Path]::GetTempPath()) ("co-iso3-" + [guid]::NewGuid().ToString('N').Substring(0,8))
             New-Item -ItemType Directory -Path (Join-Path $iso 'bin') -Force | Out-Null
-            # hooks\lib intentionally absent — both lookup paths (AGENTS_CONFIG_DIR and script-dir) fail.
+            # hooks\lib intentionally absent — the script-dir lookup fails and AGENTS_MAIN_ROOT does not rescue it.
             if (Test-Path $script:helper) { Copy-Item -Path $script:helper -Destination (Join-Path $iso 'bin\confirm-off.ps1') -Force }
             $isoHelper = Join-Path $iso 'bin\confirm-off.ps1'
-            [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $iso, 'Process')
+            [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $iso, 'Process')
             try {
                 $out = (& pwsh -NoProfile -File $isoHelper CONFIRM_X on 2>&1) -join ''
                 $LASTEXITCODE | Should -Be 2
                 $out | Should -Match 'ERROR'
             } finally {
                 Remove-Item -Recurse -Force $iso -ErrorAction SilentlyContinue
-                [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $script:fix, 'Process')
+                [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $script:fix, 'Process')
             }
         }
     }
 
-    Context 'T07 — AGENTS_CONFIG_DIR set to nonexistent path' {
+    Context 'T07 — AGENTS_MAIN_ROOT set to nonexistent path' {
         It 'prints ERROR and exits 2' {
             $iso = Join-Path ([System.IO.Path]::GetTempPath()) ("co-iso2-" + [guid]::NewGuid().ToString('N').Substring(0,8))
             New-Item -ItemType Directory -Path (Join-Path $iso 'bin') -Force | Out-Null
             if (Test-Path $script:gcvHelper) { Copy-Item -Path $script:gcvHelper -Destination (Join-Path $iso 'bin\get-config-var.ps1') -Force }
             if (Test-Path $script:helper)    { Copy-Item -Path $script:helper    -Destination (Join-Path $iso 'bin\confirm-off.ps1')    -Force }
             $isoHelper = Join-Path $iso 'bin\confirm-off.ps1'
-            [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', 'C:\nonexistent\path\co-test', 'Process')
+            [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', 'C:\nonexistent\path\co-test', 'Process')
             try {
                 $out = (& pwsh -NoProfile -File $isoHelper CONFIRM_X on 2>&1) -join ''
                 $LASTEXITCODE | Should -Be 2
                 $out | Should -Match 'ERROR'
             } finally {
                 Remove-Item -Recurse -Force $iso -ErrorAction SilentlyContinue
-                [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $script:fix, 'Process')
+                [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $script:fix, 'Process')
             }
         }
     }

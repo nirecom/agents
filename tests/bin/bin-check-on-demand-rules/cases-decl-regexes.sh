@@ -24,7 +24,7 @@
 echo ""
 echo "=== declaration-gate regexes: boundary rows + mutation score ==="
 
-DR_LIB="${CHECKER_LIB:-$AGENTS_DIR/bin/lib/check-on-demand-rules.js}"
+DR_LIB="${CHECKER_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/check-on-demand-rules.js}"
 
 if [ ! -f "$DR_LIB" ]; then
     fail "DR: IMPLEMENTATION MISSING: bin/lib/check-on-demand-rules.js"

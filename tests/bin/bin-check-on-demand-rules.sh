@@ -12,20 +12,20 @@ set -u
 # never that injection stops. Mitigated at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh, category hook-registration.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # CONTRACT NOTE (read before implementing bin/check-on-demand-rules.sh): the fixtures ship their own
 # hooks/lib/rules-injection-policy.js inside the tree under check and also export
 # RULES_INJECTION_POLICY. The checker must resolve policy from one of those two
 # (policy-of-the-tree-under-check), else --all <root> grades a foreign tree against the agents repo's
 # own constants.
-CHECKER="$AGENTS_DIR/bin/check-on-demand-rules.sh"
-POLICY="$AGENTS_DIR/hooks/lib/rules-injection-policy.js"
+CHECKER="$SCRIPT_CHECKOUT_ROOT/bin/check-on-demand-rules.sh"
+POLICY="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-injection-policy.js"
 # The policy is contributor-editable declaration DATA; this suite's own harnesses read it
 # through the agents-owned reader (loadPolicyAsData) instead of require()-ing it, for the
 # same reason the checker does — running this suite on a checked-out branch must not run
 # that branch's code. CPR-ORTH sibling of tests/hooks/cc-on-demand-skill-ownership/cases-require-safety.sh.
-READER="$AGENTS_DIR/hooks/lib/rules-policy-reader.js"
+READER="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-policy-reader.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

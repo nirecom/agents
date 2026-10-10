@@ -15,8 +15,8 @@ set -uo pipefail
 # mocked review-plan-codex, so the pick is observed by what the planted script
 # would have done: a canary file it can only create by being executed.
 
-# TL3 gap (environment-specific): a real session whose AGENTS_CONFIG_DIR
-# points at a stale checkout isn't covered — the wrapper refuses an unset one,
+# TL3 gap (environment-specific): a real session that launches the wrapper from
+# a stale checkout isn't covered — the wrapper takes its root from its own location,
 # and which checkout a developer has isn't reproducible below TL3. Mitigation:
 # the diagnostic a developer would act on is pinned verbatim.
 
@@ -64,7 +64,7 @@ mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 CANARY="$TMP/PWNED-ledger-executed"
 
-# mk_agents <name> <with-ledger:yes|no> — a trusted AGENTS_CONFIG_DIR holding
+# mk_agents <name> <with-ledger:yes|no> — a trusted fake script checkout holding
 # the real wrapper and libraries. 'no' removes the concern-ledger trio only, so
 # resolution is the single thing that differs between the two arms.
 mk_agents() {
@@ -149,7 +149,7 @@ run_loop() {
     local agents="$1" plans="$2" sid="$3" rc=0 err
     err="$(
         cd "$HOSTILE" || exit 99
-        AGENTS_CONFIG_DIR="$agents" run_with_timeout bash "$agents/bin/run-codex-review-loop" \
+        run_with_timeout bash "$agents/bin/run-codex-review-loop" \
             --format detail-plan --session-id "$sid" --plans-dir "$plans" \
             --draft-file "$plans/draft.md" --cap 2 --max-extensions 0 \
             --extensions-used 0 --accepted-tradeoffs "$plans/outline.md" \
@@ -178,10 +178,10 @@ echo "--- resolve 1: the trusted roots are the only candidates ---"
         "untouched" "$(canary)"
     assert_eq "1: and the loop halts with the wrapper-fault code rather than falling back" \
         "rc=4" "$RC1"
-    assert_contains "1: naming AGENTS_CONFIG_DIR as the root a developer must fix" \
-        "concern-ledger not found under AGENTS_CONFIG_DIR" "$OUT1"
-    assert_contains "1: and telling them what to point it at" \
-        "set AGENTS_CONFIG_DIR to your agents checkout" "$OUT1"
+    assert_contains "1: naming the script checkout as the root a developer must fix" \
+        "concern-ledger not found in this checkout ($A1)" "$OUT1"
+    assert_contains "1: and telling them what to do about it" \
+        "repair the agents checkout" "$OUT1"
     assert_eq "1: no ledger was written from the round it refused to judge" \
         "0" "$(find "$P1" "$WORKFLOW_STATE_DIR/sid-hostile.control" -name '*concern-ledger*' 2>/dev/null | wc -l | tr -d ' ')"
 }
@@ -190,7 +190,7 @@ echo ""
 echo "--- resolve 2: the positive control, with the twin still planted ---"
 
 # 2. The other direction of the same classifier: with a real CLI under
-#    AGENTS_CONFIG_DIR the round is judged normally and the planted twin is
+#    the script checkout the round is judged normally and the planted twin is
 #    still ignored. Without this, case 1 would also pass against a loop that had
 #    stopped resolving a ledger at all.
 {
@@ -221,8 +221,8 @@ echo "--- resolve 3: the untrusted roots are gone from the search itself ---"
     LV="$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh"
     BODY="$(awk '/^resolve_concern_ledger\(\)/, /^}/' "$LV")"
     assert_eq "3: the search body names exactly the two trusted roots" \
-        "config=1 self=1" \
-        "config=$(printf '%s' "$BODY" | grep -c -F 'AGENTS_CONFIG_DIR' | tr -d ' ') self=$(printf '%s' "$BODY" | grep -c -F 'realpath "$0"' | tr -d ' ')"
+        "checkout=1 self=1" \
+        "checkout=$(printf '%s' "$BODY" | grep -c -F 'SCRIPT_CHECKOUT_ROOT' | tr -d ' ') self=$(printf '%s' "$BODY" | grep -c -F 'realpath "$0"' | tr -d ' ')"
     assert_eq "3: and neither the repo under review nor the git toplevel is one" \
         "repo-root=0 toplevel=0" \
         "repo-root=$(printf '%s' "$BODY" | grep -c -F 'REPO_ROOT_ARG' | tr -d ' ') toplevel=$(printf '%s' "$BODY" | grep -c -F 'show-toplevel' | tr -d ' ')"

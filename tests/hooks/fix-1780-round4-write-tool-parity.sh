@@ -12,12 +12,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-GUARD="$_AGENTS_DIR_NODE/hooks/enforce-worktree.js"
-WRITE_TOOLS="$_AGENTS_DIR_NODE/hooks/lib/write-tools.js"
-SETTINGS="$_AGENTS_DIR_NODE/settings.json"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+GUARD="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/enforce-worktree.js"
+WRITE_TOOLS="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/write-tools.js"
+SETTINGS="$_SCRIPT_CHECKOUT_ROOT_NODE/settings.json"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -29,7 +29,7 @@ assert_eq() {
     if [ "$want" = "$got" ]; then pass "$name"; else fail "$name - want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
 
-if [ ! -f "$AGENTS_DIR/hooks/enforce-worktree.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js" ]; then
     fail "H0 hooks/enforce-worktree.js missing - every case below is vacuous"
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
 fi
@@ -96,7 +96,7 @@ run_guard() {
     local tool="$1" target="$2" dir="$3" shape="$4" payload out rc
     payload=$("$RWT" 10 node "$DRV" "$tool" "$target" "$(node_path "$dir")" "$shape" 2>/dev/null)
     out=$(cd "$dir" && printf '%s' "$payload" | env -u CLAUDE_CODE_SESSION_ID \
-        ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
     rc=$?
     case "$rc" in
@@ -215,7 +215,7 @@ process.stdout.write(JSON.stringify({
   matcherEqualsSsot: String(entry.matcher || "") === wt.TOOL_MATCHER,
 }));
 RDRV_EOF
-if [ ! -f "$AGENTS_DIR/settings.json" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/settings.json" ]; then
     skip "R settings.json not found"
 else
     reg=$("$RWT" 15 node "$RDRV" "$SETTINGS" "$WRITE_TOOLS" 2>/dev/null)

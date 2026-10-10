@@ -13,17 +13,17 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-WFSTATE_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
+WFSTATE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -141,7 +141,7 @@ process.stdout.write(JSON.stringify((st && st.audit) || null));
 
 # Compute the current freshness key over repo working tree + plan artifacts for a
 # sid — must be computed identically to checkSupervisorPreMerge (same repo/plans/sid).
-FP_NODE="$_AGENTS_DIR_NODE/hooks/lib/diff-fingerprint.js"
+FP_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/diff-fingerprint.js"
 fresh_key() {
     local plans_node="$1" repo_node="$2" sid="$3"
     run_with_timeout 5 node -e "
@@ -196,7 +196,7 @@ run_premerge_hook() {
     (
         cd "$tmp_node" || exit 1
         CLAUDE_CODE_SESSION_ID="$wsid" \
-        WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
+        WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_MAIN_ROOT="$tmp_node" \
             run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null
     )
 }

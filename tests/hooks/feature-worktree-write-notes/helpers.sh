@@ -4,14 +4,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$_HELPERS_SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$_HELPERS_SCRIPT_CHECKOUT_ROOT"
 fi
-BIN_JS="${_AGENTS_DIR_NODE}/bin/worktree-write-notes.js"
-LIB_JS="${_AGENTS_DIR_NODE}/hooks/lib/worktree-notes.js"
+BIN_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/bin/worktree-write-notes.js"
+LIB_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/worktree-notes.js"
 
 PASS=0
 FAIL=0
@@ -28,7 +28,7 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE" ${_ISOLATION_TMP_ROOT:+"$_ISOLATION_TMP_ROOT"}' EXIT
 # isolation (#2512): the sourcing test pins via harness_isolate (its root is removed by the trap above).
-declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"
+declare -F harness_assert_isolated >/dev/null || . "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 harness_assert_isolated
 
 run_with_timeout() {
@@ -89,7 +89,7 @@ json_field() {
 }
 
 # Run the bin script with argv + COPIED_JSON env. Stdout only.
-# Usage: run_bin mainRoot worktreePath branch [baseDir] [copiedJSON] [sid]
+# Usage: run_bin targetMainRoot worktreePath branch [baseDir] [copiedJSON] [sid]
 run_bin() {
     local main="$1" wt="$2" branch="$3" baseDir="${4:-}" copied="${5:-}" sid="${6:-}"
     COPIED_JSON="$copied" run_with_timeout 120 node "$BIN_JS" "$main" "$wt" "$branch" "$baseDir" "$sid" 2>/dev/null

@@ -18,7 +18,7 @@ CODEX_BIN="$AGENTS_ROOT/bin/review-code-codex"
 SUMMARIZE="$AGENTS_ROOT/bin/review-loop-summarize-concerns"
 WRAPPER="$AGENTS_ROOT/skills/review-code-security/scripts/run-codex-review-loop.sh"
 
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$AGENTS_ROOT/tests/lib/harness.sh"
 PASS=0
 FAIL=0
@@ -75,7 +75,6 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/transcripts"
-export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CLAUDE_TRANSCRIPT_BASE_DIR"
 cd "$TMPDIR_BASE" || exit 1
 
@@ -212,7 +211,7 @@ run_loop() {
     LAST_RC=0
     LAST_OUT="$(
         cd "$RL_REPO" || exit 1
-        export PATH="$RL_PATH" HOME="$TMPDIR_BASE" AGENTS_CONFIG_DIR="$RL_ROOT"
+        export PATH="$RL_PATH" HOME="$TMPDIR_BASE"
         export CODEX_MOCK_PROMPT="$LAST_PROMPT" CODEX_MOCK_BODY="$RL_CODEX_BODY" \
                CODEX_MOCK_EXIT="$RL_CODEX_EXIT"
         bash "$RL_ROOT/bin/run-codex-review-loop" --format "$LOOP_FORMAT" \
@@ -229,7 +228,7 @@ run_codex_direct() {
     RUN_SEQ=$((RUN_SEQ + 1))
     (
         cd "$RL_REPO" || exit 1
-        export PATH="$RL_PATH" HOME="$TMPDIR_BASE" AGENTS_CONFIG_DIR="$RL_ROOT"
+        export PATH="$RL_PATH" HOME="$TMPDIR_BASE"
         export CODEX_MOCK_PROMPT="$TMPDIR_BASE/prompt-direct-$RUN_SEQ.txt" \
                CODEX_MOCK_BODY="$RL_CODEX_BODY" CODEX_MOCK_EXIT="$RL_CODEX_EXIT"
         bash "$CODEX_BIN" --base main --base-state RECORDED "$@" 2>/dev/null

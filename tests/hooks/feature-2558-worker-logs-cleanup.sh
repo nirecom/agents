@@ -9,10 +9,10 @@
 # TL3 gap: host mtime granularity and a real session-end sweep are not exercised.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
-CLEANUP_LIB="$AGENTS_DIR/hooks/workflow-state/state-io/zombie-cleanup.js"
-CONTROL_LIB="$AGENTS_DIR/hooks/workflow-state/state-io/control-dir.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+CLEANUP_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/zombie-cleanup.js"
+CONTROL_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/control-dir.js"
 
 assert_eq() {
     local name="$1" want="$2" got="$3"

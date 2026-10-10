@@ -97,7 +97,7 @@ group_matrix() {
     fi
 
     run_row w8 issue-close-finalize "$s8" \
-        "{\"phase\":\"initial\",\"issue_number\":2558,\"root_issue_number\":2558,\"owner_repo\":\"nirecom/agents\",\"main_worktree_path\":\"$MAIN\",\"session_id\":\"$s8\",\"artifact_dir\":\"$PLANS\"}" \
+        "{\"phase\":\"initial\",\"issue_number\":2558,\"root_issue_number\":2558,\"owner_repo\":\"nirecom/agents\",\"target_main_root\":\"$MAIN\",\"session_id\":\"$s8\",\"artifact_dir\":\"$PLANS\"}" \
         '[{"stdout":"STATUS=init_done\nOWNER_REPO=nirecom/agents\nTRIAGE_ACTION=resume_e\nNEXT_STEPS=G\nSUMMARY=ok\n"}]' init_done finalize-worker.log artifact-is-log
 
     run_row w9 session-close-gate "$s9" \

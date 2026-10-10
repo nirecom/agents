@@ -16,10 +16,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-VALIDATOR="$AGENTS_DIR/bin/github-issues/lib/validate-review-verdict.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+VALIDATOR="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/validate-review-verdict.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -278,7 +278,7 @@ echo "=== D: make-empty-verdict.sh agrees with SAME_FIX_BY_VERDICT ==="
 
 # The empty-verdict route (zero candidates, non-GitHub remote, --skip-survey) is a THIRD
 # producer. A and B read fixtures; this one reads the shipped script.
-MEV="$AGENTS_DIR/skills/issue-create/scripts/make-empty-verdict.sh"
+MEV="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/scripts/make-empty-verdict.sh"
 
 mev_field() {  # <artifact-path> <field> → JSON value, or <absent>
     "$RWT" 12 node -e '

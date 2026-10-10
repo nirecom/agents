@@ -34,8 +34,8 @@ function isLinkedCwdTargetingOwnMain(cmd, cwdRoot) {
   if (!cTarget || isMainCheckout(cTarget) !== true) return false;
   const cwdCommon = getGitCommonDir(cwdRoot);
   if (cwdCommon === null || cwdCommon !== getGitCommonDir(cTarget)) return false;
-  const mainRoot = resolveRepoRoot(cTarget);
-  return mainRoot !== null && isAllowedWorktreeCommand(cmd, mainRoot);
+  const targetMainRoot = resolveRepoRoot(cTarget);
+  return targetMainRoot !== null && isAllowedWorktreeCommand(cmd, targetMainRoot);
 }
 
 // Compute the write-target list and protected-marker-hit flag ONCE, ahead of

@@ -1,17 +1,17 @@
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_SETUP_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SETUP_SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$_SETUP_SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SETUP_SCRIPT_CHECKOUT_ROOT_NODE="$_SETUP_SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
-VALIDATE_SH="${AGENTS_DIR}/bin/lib/github-contents-validate.sh"
-CONTENTS_WRITE_SH="${AGENTS_DIR}/bin/lib/github-contents-write.sh"
-GIT_DATA_WRITE_SH="${AGENTS_DIR}/bin/lib/github-git-data-write.sh"
-STEP_E_SH="${AGENTS_DIR}/skills/issue-close-finalize/scripts/step-e.sh"
-COMPOSE_DOC_APPEND_BIN="${AGENTS_DIR}/bin/compose-doc-append-entry"
-ISSUE_CREATE_SKILL="${AGENTS_DIR}/skills/issue-create/SKILL.md"
+GUARD_JS="${_SETUP_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
+VALIDATE_SH="${_SETUP_SCRIPT_CHECKOUT_ROOT}/bin/lib/github-contents-validate.sh"
+CONTENTS_WRITE_SH="${_SETUP_SCRIPT_CHECKOUT_ROOT}/bin/lib/github-contents-write.sh"
+GIT_DATA_WRITE_SH="${_SETUP_SCRIPT_CHECKOUT_ROOT}/bin/lib/github-git-data-write.sh"
+STEP_E_SH="${_SETUP_SCRIPT_CHECKOUT_ROOT}/skills/issue-close-finalize/scripts/step-e.sh"
+COMPOSE_DOC_APPEND_BIN="${_SETUP_SCRIPT_CHECKOUT_ROOT}/bin/compose-doc-append-entry"
+ISSUE_CREATE_SKILL="${_SETUP_SCRIPT_CHECKOUT_ROOT}/skills/issue-create/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -28,7 +28,18 @@ console.log(d);
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-FIXTURES_DIR="${AGENTS_DIR}/tests/fixtures/gh-mock"
+# bin/scan-outbound.sh reads its blocklist from AGENTS_MAIN_ROOT and fails closed (rc=4)
+# without one. The write helpers point it here; the single pattern matches no fixture body.
+SCAN_ROOT="$TMPDIR_BASE/scan-root"
+mkdir -p "$SCAN_ROOT"
+printf '%s\n' 'REFT-POSITIVE-ALLOW-SENTINEL-NEVER-IN-A-FIXTURE' > "$SCAN_ROOT/.private-info-blocklist"
+
+# PATH is colon-separated: a C:/ entry is split at its drive colon and never searched.
+path_entry() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"; else printf '%s\n' "$1"; fi
+}
+
+FIXTURES_DIR="${_SETUP_SCRIPT_CHECKOUT_ROOT}/tests/fixtures/gh-mock"
 mkdir -p "$FIXTURES_DIR"
 
 run_with_timeout() {

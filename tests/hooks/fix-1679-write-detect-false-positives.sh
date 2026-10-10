@@ -37,9 +37,9 @@ PASS=0; FAIL=0; SKIP=0
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL='*'
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
-if command -v cygpath >/dev/null 2>&1; then WT="$(cygpath -m "$AGENTS_DIR")"; else WT="$AGENTS_DIR"; fi
+if command -v cygpath >/dev/null 2>&1; then WT="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else WT="$SCRIPT_CHECKOUT_ROOT"; fi
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -152,7 +152,7 @@ while IFS='^' read -r name cmd want; do
   case "$name" in ''|'#'*) continue ;; esac
   assert_eq "$name" "$want" "$(classify_ir "$cmd")"
 done <<'T4_TABLE'
-FP1679-A classify: supervisor-report --detail with <<'EOF' prose^node "$ACD/bin/supervisor-report" --detail "used <<'EOF' heredoc in the script" --reporter x^read
+FP1679-A classify: supervisor-report --detail with <<'EOF' prose^node "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/supervisor-report" --detail "used <<'EOF' heredoc in the script" --reporter x^read
 FP1679-B classify: --detail mentioning the <<< here-string operator^node bin/supervisor-report --detail "the <<< operator is a here-string"^read
 FP1679-C classify: --detail mentioning pwsh @'here'@ syntax^node bin/x --detail "uses @'here'@ syntax"^read
 FP1679-E classify: bash -c body quoting <<EOF prose^bash -c 'echo "see <<EOF in docs"'^read
@@ -333,7 +333,7 @@ assert_eq "GA1679-E detect: opener-shaped prose body → isNewlineInjectedWriteI
 # ===========================================================================
 echo "=== PR/SC/SS: propagation to write-detector and bash-write-scope ==="
 
-CMD_FP_A='node "$ACD/bin/supervisor-report" --detail "used <<'"'"'EOF'"'"' heredoc in the script" --reporter x'
+CMD_FP_A='node "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/supervisor-report" --detail "used <<'"'"'EOF'"'"' heredoc in the script" --reporter x'
 CMD_FC_A='eval "$DYNAMIC"'
 CMD_FP_K='eval "$(fnm env --use-on-cd)"'
 CMD_FC_D5='eval "$(/opt/tool/gen.sh)"'

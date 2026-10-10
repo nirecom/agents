@@ -18,18 +18,18 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-OLD_HOOK="$AGENTS_DIR/hooks/block-off-clearance-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+OLD_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-off-clearance-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # Counters, run_hook, the input builders and the STRICT verdict classifier all live in
 # the shared harness. assert_approve there demands rc=0 AND an explicit approve decision:
 # the local copy this replaced scored "no block string in stdout" as approve, so a crash,
 # a timeout or a garbled payload would have been recorded as a PASS (#1821 cycle-2 C9).
 # shellcheck source=tests/lib/clearance-hook-harness.sh
-. "$AGENTS_DIR/tests/lib/clearance-hook-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/clearance-hook-harness.sh"
 
 TMP=$(make_tmp); TN=$(node_path "$TMP")
 TOKEN="$TN/wsid.off-clearance"
@@ -181,14 +181,14 @@ if [ -f "$OLD_HOOK" ]; then
 else
     pass "N1 old hook file removed by the rename"
 fi
-if grep -qF 'block-off-clearance-write' "$AGENTS_DIR/settings.json" 2>/dev/null; then
+if grep -qF 'block-off-clearance-write' "$SCRIPT_CHECKOUT_ROOT/settings.json" 2>/dev/null; then
     fail "N2 settings.json still references the old hook name"
 else
     pass "N2 settings.json no longer references the old hook name"
 fi
 # The whole file exercises the classifier directly, so without this the guard could be
 # unregistered — never reached on a real turn — and every assertion above would still pass.
-if grep -qF 'block-clearance-token-write' "$AGENTS_DIR/settings.json" 2>/dev/null; then
+if grep -qF 'block-clearance-token-write' "$SCRIPT_CHECKOUT_ROOT/settings.json" 2>/dev/null; then
     pass "N3 settings.json registers block-clearance-token-write.js"
 else
     fail "N3 settings.json does not register block-clearance-token-write.js — the guard would never fire"
@@ -201,24 +201,24 @@ echo "=== #1821: the sanctioned minter invocation must not be blocked by its own
 # user to run) arms it. A-off1..A-off4 use the re-spelled entrypoint, A-off5b the old
 # one; both must be approved, and both are the same class of false positive (CPR-E2C).
 assert_approve 'A-off1 new spelling, quoted' \
-    "$(run_hook "$TN" "$(mk_bash_input 'bash "$AGENTS_CONFIG_DIR/bin/request-off-mode-clearance" --target workflow --category x --detail y')")"
+    "$(run_hook "$TN" "$(mk_bash_input 'bash "$AGENTS_MAIN_ROOT/bin/request-off-mode-clearance" --target workflow --category x --detail y')")"
 assert_approve 'A-off2 new spelling, unquoted' \
-    "$(run_hook "$TN" "$(mk_bash_input 'bash $AGENTS_CONFIG_DIR/bin/request-off-mode-clearance --target workflow --category x --detail y')")"
+    "$(run_hook "$TN" "$(mk_bash_input 'bash $AGENTS_MAIN_ROOT/bin/request-off-mode-clearance --target workflow --category x --detail y')")"
 assert_approve 'A-off3 new spelling via $FOO assignment' \
-    "$(run_hook "$TN" "$(mk_bash_input 'F="$AGENTS_CONFIG_DIR/bin/request-off-mode-clearance"; bash "$F" --target workflow --category x --detail y')")"
+    "$(run_hook "$TN" "$(mk_bash_input 'F="$AGENTS_MAIN_ROOT/bin/request-off-mode-clearance"; bash "$F" --target workflow --category x --detail y')")"
 assert_approve 'A-off4 new spelling after an echo segment' \
-    "$(run_hook "$TN" "$(mk_bash_input 'echo running; bash "$AGENTS_CONFIG_DIR/bin/request-off-mode-clearance" --target workflow --category x --detail y')")"
+    "$(run_hook "$TN" "$(mk_bash_input 'echo running; bash "$AGENTS_MAIN_ROOT/bin/request-off-mode-clearance" --target workflow --category x --detail y')")"
 
 assert_approve 'A-off5b1 old spelling, quoted' \
-    "$(run_hook "$TN" "$(mk_bash_input 'bash "$AGENTS_CONFIG_DIR/bin/request-off-clearance" --target workflow --category x --detail y')")"
+    "$(run_hook "$TN" "$(mk_bash_input 'bash "$AGENTS_MAIN_ROOT/bin/request-off-clearance" --target workflow --category x --detail y')")"
 assert_approve 'A-off5b2 old spelling, unquoted' \
-    "$(run_hook "$TN" "$(mk_bash_input 'bash $AGENTS_CONFIG_DIR/bin/request-off-clearance --target workflow --category x --detail y')")"
+    "$(run_hook "$TN" "$(mk_bash_input 'bash $AGENTS_MAIN_ROOT/bin/request-off-clearance --target workflow --category x --detail y')")"
 assert_approve 'A-off5b3 old spelling via $FOO assignment' \
-    "$(run_hook "$TN" "$(mk_bash_input 'F="$AGENTS_CONFIG_DIR/bin/request-off-clearance"; bash "$F" --target workflow --category x --detail y')")"
+    "$(run_hook "$TN" "$(mk_bash_input 'F="$AGENTS_MAIN_ROOT/bin/request-off-clearance"; bash "$F" --target workflow --category x --detail y')")"
 assert_approve 'A-off5b4 old spelling after an echo segment' \
-    "$(run_hook "$TN" "$(mk_bash_input 'echo running; bash "$AGENTS_CONFIG_DIR/bin/request-off-clearance" --target workflow --category x --detail y')")"
+    "$(run_hook "$TN" "$(mk_bash_input 'echo running; bash "$AGENTS_MAIN_ROOT/bin/request-off-clearance" --target workflow --category x --detail y')")"
 
-# The documented workaround (absolute path, no $AGENTS_CONFIG_DIR) must keep working.
+# The documented workaround (absolute path, no $AGENTS_MAIN_ROOT) must keep working.
 assert_approve 'A-off5 absolute-path workaround' \
     "$(run_hook "$TN" "$(mk_bash_input 'bash "/abs/bin/request-off-clearance" --target workflow --category x --detail y')")"
 
@@ -232,7 +232,7 @@ assert_approve 'A-off5 absolute-path workaround' \
 # All four exported messages are covered in the derived S1b matrix of the sibling
 # spelling-ssot-static.sh; this row keeps the parent suite's own regression anchor.
 unset CLAUDE_CODE_SESSION_ID
-A_OFF6="$(WORKFLOW_STATE_DIR="$TN" WORKFLOW_PLANS_DIR="$TN/plans" "$RWT" 12 node -e "const d=require(process.argv[1]+'/hooks/block-clearance-token-write/dispatch.js');const {bashHitsProtected}=require(process.argv[1]+'/hooks/block-clearance-token-write/bash-scan.js');process.stdout.write(String(bashHitsProtected(d.TOKEN_BLOCK_MSG,{})))" "$_AGENTS_DIR_NODE" 2>/dev/null)"
+A_OFF6="$(WORKFLOW_STATE_DIR="$TN" WORKFLOW_PLANS_DIR="$TN/plans" "$RWT" 12 node -e "const d=require(process.argv[1]+'/hooks/block-clearance-token-write/dispatch.js');const {bashHitsProtected}=require(process.argv[1]+'/hooks/block-clearance-token-write/bash-scan.js');process.stdout.write(String(bashHitsProtected(d.TOKEN_BLOCK_MSG,{})))" "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>/dev/null)"
 if [ "$A_OFF6" = "null" ]; then
     pass "A-off6 TOKEN_BLOCK_MSG is not itself blocked (got null)"
 else
@@ -252,9 +252,9 @@ rm -rf "$TMP" "$OUTTMP" 2>/dev/null || true
 # is reached from here. parser-cases.sh was already unwired before this change; it is
 # folded in with the other two rather than left as a half-fixed instance of the same
 # defect (CPR-E2C/CPR-E2E).
-SECTION_DIR="$AGENTS_DIR/tests/hooks/enforce-clearance-token-write"
+SECTION_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/enforce-clearance-token-write"
 # shellcheck source=tests/lib/section-runner.sh
-. "$AGENTS_DIR/tests/lib/section-runner.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/section-runner.sh"
 run_section "parser-cases.sh" 120
 run_section "read-only-allowlist-cases.sh" 240
 run_section "flag-cluster-coverage-cases.sh" 240

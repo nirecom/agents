@@ -5,12 +5,12 @@
 
 const path = require("path");
 
-const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
 
 const REGISTRY = Object.freeze({
   "complexity-judge": Object.freeze({
-    adapter: path.join(REPO_ROOT, "bin", "workflow", "lib", "jev-complexity-adapter.js"),
-    normalizer: path.join(REPO_ROOT, "bin", "workflow", "normalize-judge-signals"),
+    adapter: path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "lib", "jev-complexity-adapter.js"),
+    normalizer: path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "normalize-judge-signals"),
     confidence_threshold: 0.75,
     mode: "shadow",
     sampling_rate: 1,
@@ -25,4 +25,4 @@ function registryEntry(point) {
   return typeof point === "string" && Object.prototype.hasOwnProperty.call(REGISTRY, point) ? REGISTRY[point] : null;
 }
 
-module.exports = { REGISTRY, REPO_ROOT, registryEntry };
+module.exports = { REGISTRY, SCRIPT_CHECKOUT_ROOT, registryEntry };

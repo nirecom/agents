@@ -13,7 +13,7 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -160,9 +160,9 @@ try {
 NODE
 
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _AGENTS_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_NODE="$AGENTS_DIR"
+    _AGENTS_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 # ── Stub factory ─────────────────────────────────────────────────────────────

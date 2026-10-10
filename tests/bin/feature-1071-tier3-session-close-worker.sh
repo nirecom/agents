@@ -10,12 +10,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-WORKER_JS="${AGENTS_DIR}/bin/worker-dispatch/workers/session-close-gate.js"
-REGISTRY_JS="${AGENTS_DIR}/hooks/lib/worker-dispatch-registry.js"
-EMIT_JS="${AGENTS_DIR}/bin/worker-dispatch/emit.js"
-SC_MD="${AGENTS_DIR}/skills/session-close/SKILL.md"
+WORKER_JS="${SCRIPT_CHECKOUT_ROOT}/bin/worker-dispatch/workers/session-close-gate.js"
+REGISTRY_JS="${SCRIPT_CHECKOUT_ROOT}/hooks/lib/worker-dispatch-registry.js"
+EMIT_JS="${SCRIPT_CHECKOUT_ROOT}/bin/worker-dispatch/emit.js"
+SC_MD="${SCRIPT_CHECKOUT_ROOT}/skills/session-close/SKILL.md"
 SHARED_MD="skills/_shared/worker-dispatch.md"
 
 PASS=0

@@ -10,13 +10,13 @@
 # tests/hooks/feature-883-resolve-workflow-session-id.sh and legacy-session-id-relay-purge.sh.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 E_BASE="$(make_tmp)"
 trap 'rm -rf "$E_BASE"' EXIT

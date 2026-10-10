@@ -18,10 +18,9 @@ if ! command -v git >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-export AGENTS_DIR AGENTS_DIR_N
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 
 TMPDIR_BASE="$(mktemp -d 2>/dev/null || mktemp -d -t 'docs2340')"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -37,7 +36,7 @@ unset CLAUDE_CODE_SESSION_ID
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"
 mkdir -p "$CONFIG_EMPTY"
 : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 # counters + assertions
 PASS=0
@@ -70,13 +69,13 @@ run_node() { run_with_timeout node "$@"; }
 # RED gates: a source that does not exist yet fails loudly, never skips.
 require_bin() {
   local name="$1" rel="$2"
-  if [ -x "$AGENTS_DIR/$rel" ] || [ -f "$AGENTS_DIR/$rel" ]; then return 0; fi
+  if [ -x "$SCRIPT_CHECKOUT_ROOT/$rel" ] || [ -f "$SCRIPT_CHECKOUT_ROOT/$rel" ]; then return 0; fi
   fail "$name: TOOL NOT FOUND: $rel — expected per #2340, not yet implemented (write_code has not run)"
   return 1
 }
 require_module() {
   local name="$1" rel="$2"
-  if [ -f "$AGENTS_DIR/$rel" ]; then return 0; fi
+  if [ -f "$SCRIPT_CHECKOUT_ROOT/$rel" ]; then return 0; fi
   fail "$name: MODULE NOT FOUND: $rel — expected per #2340, not yet implemented (write_code has not run)"
   return 1
 }
@@ -118,17 +117,17 @@ gen_md() {
 # sets TOOL_OUT and TOOL_RC.
 run_tool() {
   local repo="$1" rel="$2"; shift 2
-  TOOL_OUT="$(cd "$repo" && run_with_timeout "$AGENTS_DIR/$rel" "$@" 2>&1)"
+  TOOL_OUT="$(cd "$repo" && run_with_timeout "$SCRIPT_CHECKOUT_ROOT/$rel" "$@" 2>&1)"
   TOOL_RC=$?
 }
 
 # source each case group
-. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/a-review-doc-size.sh"
-. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/b-review-doc-heading-order.sh"
-. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/c-review-doc-gates.sh"
-. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/d-staged-doc-changes.sh"
-. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/e-review-docs-checker.sh"
-. "$AGENTS_DIR/tests/bin/docs-2340-feat-update-docs-readme-md/f-v3-to-v4-migration.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/docs-2340-feat-update-docs-readme-md/a-review-doc-size.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/docs-2340-feat-update-docs-readme-md/b-review-doc-heading-order.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/docs-2340-feat-update-docs-readme-md/c-review-doc-gates.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/docs-2340-feat-update-docs-readme-md/d-staged-doc-changes.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/docs-2340-feat-update-docs-readme-md/e-review-docs-checker.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/docs-2340-feat-update-docs-readme-md/f-v3-to-v4-migration.sh"
 
 echo "=== GROUP A: bin/review-doc-size (staged/all, thresholds, exclusions) ==="
 run_group_a

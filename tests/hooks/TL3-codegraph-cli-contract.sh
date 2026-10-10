@@ -12,13 +12,13 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # Skip-gate 1: RUN_TL3 must be explicitly on (rules/test/claude-e2e.md).
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || { echo "SKIP: $AGENTS_DIR/bin/get-config-var not found or not executable" >&2; exit 77; }
-if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || { echo "SKIP: $SCRIPT_CHECKOUT_ROOT/bin/get-config-var not found or not executable" >&2; exit 77; }
+if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
   echo "SKIP: requires RUN_TL3=on in .env" >&2; exit 77
 fi
 
@@ -41,7 +41,7 @@ DAEMON_STOPPED=0
 cleanup() {
   if [ "$DAEMON_STOPPED" -eq 0 ]; then
     HOME="$FIXTURE_HOME" USERPROFILE="$FIXTURE_HOME" \
-      node "$AGENTS_DIR/bin/codegraph-lifecycle.js" stop --path "$FIXTURE_PROJECT" --quiet >/dev/null 2>&1 || true
+      node "$SCRIPT_CHECKOUT_ROOT/bin/codegraph-lifecycle.js" stop --path "$FIXTURE_PROJECT" --quiet >/dev/null 2>&1 || true
     DAEMON_STOPPED=1
   fi
   rm -rf "$FIXTURE_HOME" "$FIXTURE_PROJECT" "$_ISOLATION_TMP_ROOT"
@@ -71,7 +71,7 @@ case_begin "M37: codegraph --version semver contract" "bin/codegraph-lifecycle.j
 # --- M37: `codegraph --version` answers a semver (no pin since #2254) ------
 VERSION_STDOUT="$(mktemp)"
 VERSION_STDERR="$(mktemp)"
-if bash "$AGENTS_DIR/bin/run-with-timeout.sh" 60 codegraph --version >"$VERSION_STDOUT" 2>"$VERSION_STDERR"; then
+if bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 codegraph --version >"$VERSION_STDOUT" 2>"$VERSION_STDERR"; then
   VERSION_EXIT=0
 else
   VERSION_EXIT=$?
@@ -93,7 +93,7 @@ case_begin "M38: prompt-hook no-op on unstructured prompt" "hooks/lib/codegraph-
 HOOK38_STDOUT="$(mktemp)"
 HOOK38_STDERR="$(mktemp)"
 printf '{"prompt":"fix this typo","cwd":"%s"}' "$FIXTURE_PROJECT" \
-  | bash "$AGENTS_DIR/bin/run-with-timeout.sh" 60 codegraph prompt-hook >"$HOOK38_STDOUT" 2>"$HOOK38_STDERR"
+  | bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 codegraph prompt-hook >"$HOOK38_STDOUT" 2>"$HOOK38_STDERR"
 HOOK38_EXIT=$?
 HOOK38_ERR_BYTES="$(wc -c <"$HOOK38_STDERR" | tr -d '[:space:]')"
 HOOK38_OUT="$(cat "$HOOK38_STDOUT")"
@@ -119,7 +119,7 @@ EOF
 
 INIT_STDOUT="$(mktemp)"
 INIT_STDERR="$(mktemp)"
-if ! bash "$AGENTS_DIR/bin/run-with-timeout.sh" 120 codegraph init -y "$FIXTURE_PROJECT" >"$INIT_STDOUT" 2>"$INIT_STDERR"; then
+if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 120 codegraph init -y "$FIXTURE_PROJECT" >"$INIT_STDOUT" 2>"$INIT_STDERR"; then
   echo "SKIP: codegraph init -y failed or timed out in fixture project (R18)" >&2
   cat "$INIT_STDERR" >&2 || true
   rm -f "$INIT_STDOUT" "$INIT_STDERR"
@@ -130,7 +130,7 @@ rm -f "$INIT_STDOUT" "$INIT_STDERR"
 HOOK39_STDOUT="$(mktemp)"
 HOOK39_STDERR="$(mktemp)"
 printf '{"prompt":"what does %s do?","cwd":"%s"}' "$FIXTURE_SYMBOL" "$FIXTURE_PROJECT" \
-  | bash "$AGENTS_DIR/bin/run-with-timeout.sh" 60 codegraph prompt-hook >"$HOOK39_STDOUT" 2>"$HOOK39_STDERR"
+  | bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 codegraph prompt-hook >"$HOOK39_STDOUT" 2>"$HOOK39_STDERR"
 HOOK39_EXIT=$?
 HOOK39_OUT="$(cat "$HOOK39_STDOUT")"
 

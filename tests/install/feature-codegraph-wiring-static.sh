@@ -26,8 +26,8 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 # - Whether the three deletion paths reach their stop calls at run time: Accepted
 #   Tradeoffs settles this wiring as static-only verification, so no sweep is executed.
 # Closest-to-action: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT_DIR="$AGENTS_DIR/tests/install/feature-codegraph-wiring-static"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/install/feature-codegraph-wiring-static"
 TMPDIR_LOCAL="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_LOCAL"' EXIT
 

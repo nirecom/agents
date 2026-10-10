@@ -34,7 +34,7 @@ codex_timeout_resolve() {
     _gcv="get-config-var"
   fi
   if [ -n "$_gcv" ]; then
-    _t="$(cd "${AGENTS_CONFIG_DIR:-.}" && "$_gcv" CODEX_TIMEOUT_SECS "$CODEX_TIMEOUT_SECS_DEFAULT" 2> /dev/null || true)"
+    _t="$(cd "$_dir/.." && "$_gcv" CODEX_TIMEOUT_SECS "$CODEX_TIMEOUT_SECS_DEFAULT" 2> /dev/null || true)"
   else
     _t="${CODEX_TIMEOUT_SECS:-}"
   fi

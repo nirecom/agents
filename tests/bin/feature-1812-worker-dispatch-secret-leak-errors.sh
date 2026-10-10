@@ -29,7 +29,7 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1812_LEAK_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BRANCH="feature/1812-leak-probe"
 
 PASS=0
@@ -104,7 +104,7 @@ const { redactSecrets } = require(process.argv[1]);
 const line = "err: token " + process.argv[2] + " and " + process.argv[3];
 process.stdout.write(redactSecrets(line).indexOf(process.argv[2]) === -1 &&
   redactSecrets(line).indexOf(process.argv[3]) === -1 ? "masked" : "unmasked");
-' "$(nodepath "$AGENTS_DIR/hooks/lib/output-sanitize.js")" "$FAKE_GH_TOKEN" "$FAKE_GITHUB_TOKEN" 2>&1)"
+' "$(nodepath "$SCRIPT_CHECKOUT_ROOT/hooks/lib/output-sanitize.js")" "$FAKE_GH_TOKEN" "$FAKE_GITHUB_TOKEN" 2>&1)"
 assert_eq "0/redactSecrets-would-mask-both-planted-tokens" "masked" "$MASKED"
 
 arm_doc_append_contained

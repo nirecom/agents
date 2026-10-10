@@ -8,16 +8,16 @@
 # TL3 gap: whether the Agent tool honours the passed model is not observable here.
 
 set -u
-# Anchor to THIS checkout: an inherited AGENTS_DIR would otherwise win in harness.sh.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Anchor to THIS checkout: an inherited SCRIPT_CHECKOUT_ROOT would otherwise win in harness.sh.
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-AGENTS_NODE="$(np "$AGENTS_DIR")"
-ROLE_MODEL="$AGENTS_DIR/hooks/lib/role-model.js"
+AGENTS_NODE="$(np "$SCRIPT_CHECKOUT_ROOT")"
+ROLE_MODEL="$SCRIPT_CHECKOUT_ROOT/hooks/lib/role-model.js"
 ROLE_MODEL_NODE="$AGENTS_NODE/hooks/lib/role-model.js"
-RRM="$AGENTS_DIR/bin/resolve-role-model"
-ENV_EXAMPLE="$AGENTS_DIR/.env.example"
+RRM="$SCRIPT_CHECKOUT_ROOT/bin/resolve-role-model"
+ENV_EXAMPLE="$SCRIPT_CHECKOUT_ROOT/.env.example"
 
 WORK="$(make_tmp)"
 trap 'rm -rf "$WORK"' EXIT
@@ -47,7 +47,7 @@ rm_run() {
         cmd=(node "$(np "$RRM")" "${args[@]}")
     fi
     (cd "$NEUTRAL" && env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL -u PRODUCER_LOW_MODEL \
-        -u CLAUDE_PROJECT_DIR -u CLAUDE_CODE_SUBAGENT_MODEL AGENTS_CONFIG_DIR="$(np "$cfg")" "${envs[@]}" \
+        -u CLAUDE_PROJECT_DIR -u CLAUDE_CODE_SUBAGENT_MODEL AGENTS_MAIN_ROOT="$(np "$cfg")" "${envs[@]}" \
         bash "$RWT" 10 "${cmd[@]}" >"$WORK/out" 2>"$WORK/err")
     RM_RC=$?
     RM_OUT="$(cat "$WORK/out")"; RM_ERR="$(cat "$WORK/err")"

@@ -2,34 +2,25 @@
 # Tests: hooks/enforce-worktree/arg-tail-guard.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/standard.js
 # Tags: worktree, enforce, hook, quote-spans, arg-tail, security, classifier, scope:issue-specific
 #
-# STATUS: 15 rows RED until C3 lands (6x ARG-accept rule-5, ARG-reject bare
-# subshell, 6x RISK10-*-rule5, 2x RISK10-*-rule2); every other row GREEN today
-# and must stay green. See the STATUS block in the parent dispatcher
-# tests/hooks/fix-1569-quote-span-regression.sh.
-#
 # Direct-module assertions, split out of the parent per rules/coding/file-split.md.
 # Sourced by tests/hooks/fix-1569-quote-span-regression.sh — uses its pass/fail,
-# run_with_timeout, ACD/ACD_RAW, DISPATCH, EVIL, MAIN_WT and _AGENTS_DIR_NODE.
+# run_with_timeout, FAKE_SCRIPT_CHECKOUT_ROOT(_RAW), DISPATCH, EVIL, MAIN_WT and
+# SCRIPT_CHECKOUT_ROOT. The probes load the modules from the fake checkout's
+# copy of hooks/, because a module finds its checkout from its own location.
 
 run_arg_tail_module_cases() {
 
 # ============================================================================
 # Arg-tail acceptance, asserted directly on isAllowedWorkerScriptInvocation.
-#
-# Why a direct-module section inside a full-hook file: at the hook boundary the
-# rule-5 relaxation is not observable. A sanctioned invocation whose arg tail
-# carries a quoted metacharacter and no repo write is allowed today anyway (the
-# standard classifier sees no write), and one whose write targets a linked
-# worktree is allowed by the standard classifier too. The ONLY place the
-# relaxation changes an answer is the predicate itself — so it is pinned here.
-#
-# STATUS: the ARG-accept-* rows are RED until C3 lands (today the flat
-# /\|\|&&|;|\$\(|`|<\(|>\(|\n/ scan in worker-script.js rejects them).
-# The ARG-reject-* rows are GREEN today and must stay green.
+# Why direct-module inside a full-hook file: at the hook boundary the rule-5
+# relaxation is not observable (the standard classifier allows a sanctioned
+# invocation with a quoted metacharacter and no repo write, or a write into a
+# linked worktree, either way). The predicate is the ONLY place the relaxation
+# changes an answer, so it is pinned here: ARG-accept-* and ARG-reject-* rows.
 # ============================================================================
 
 arg_tail_probe() {
-    run_with_timeout 30 env "AGENTS_CONFIG_DIR=$ACD" node -e '
+    run_with_timeout 30 env "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" node -e '
       const path = require("path");
       const mod = path.join(process.argv[1], "hooks", "enforce-worktree",
                             "main-worktree-allows", "worker-script.js");
@@ -39,7 +30,7 @@ arg_tail_probe() {
       if (typeof f !== "function") { console.log("ERROR: isAllowedWorkerScriptInvocation not exported"); process.exit(0); }
       try { console.log(String(f(process.argv[2], process.argv[3]))); }
       catch (e) { console.log("ERROR: threw " + e.message); }
-    ' "$_AGENTS_DIR_NODE" "$1" "$MAIN_WT" 2>&1
+    ' "$FAKE_SCRIPT_CHECKOUT_ROOT" "$1" "$MAIN_WT" 2>&1
 }
 
 assert_arg_tail() {
@@ -81,16 +72,13 @@ assert_arg_tail "ARG-reject #1191 tee into a linked worktree" \
     "ISSUE_CREATE_SKILL=1 bash \"$DISPATCH\" 2>&1 | tee \"$MAIN_WT/.wt/x/build.log\"" false
 
 # ── the `&>` redirect exception, isolated on the worker-script profile ───────
-# The profile table gives `worker-script` (and `overlay`) an `&>` exception and
-# a SET-A reject set that does NOT contain a bare `>` — only `<(` / `>(`. The
-# `sanctioned-bin` profile has allowRedirectAmpersand:false and rejects plain
-# `>` / `<` outright. These four rows are the ONLY place that difference is
-# observable; their `sanctioned-bin` counterparts are the RISK10-*-redirect
-# rows below, and the two blocks must disagree. If a C3 refactor collapses the
-# profiles into one table, one of the two blocks flips.
-# The redirect target must sit in a registered linked worktree, otherwise the
-# (c)/(d) write-scope tail rejects the command for an unrelated reason and the
-# row stops being about the arg-tail guard at all.
+# `worker-script` (and `overlay`) have an `&>` exception and a SET-A reject set
+# with only `<(` / `>(`, no bare `>`; `sanctioned-bin` has
+# allowRedirectAmpersand:false and rejects plain `>` / `<` outright. These rows
+# and the RISK10-*-redirect rows below are the ONLY place that difference is
+# observable and the two blocks must disagree (a collapsed profile table flips
+# one of them). The redirect target sits in a registered linked worktree so the
+# (c)/(d) write-scope tail cannot reject the command for an unrelated reason.
 assert_arg_tail "ARG-accept '&>' redirect (worker-script exception)" \
     "bash \"$DISPATCH\" --title ab &> \"$MAIN_WT/.wt/x/out.txt\""   true
 assert_arg_tail "ARG-accept '&>>' redirect (worker-script exception)" \
@@ -108,32 +96,23 @@ assert_arg_tail "ARG-reject process substitution '<('" \
 
 # ============================================================================
 # Risk 10 — the `sanctioned-bin` profile micro-difference must survive C3.
-#
-# standard.js:341 (isAllowedComposeDocAppend) and standard.js:399-401
-# (isAllowedClarifyGuardLoop) are two hand-written scans of the SAME shape,
-# except that :399-401 rejects `&` a second time unconditionally. The plan
-# folds both into rejectsUnsafeArgTail(argTail, "sanctioned-bin") and keeps the
-# difference as the profile flag allowRedirectAmpersand:false — explicitly NOT
-# collapsed. These rows pin the observable verdict of BOTH predicates so the
-# merge cannot silently loosen one or tighten the other. All are GREEN today.
-#
-# Rule 5 (SET-A inside a dq/sq piece is ALLOWed) is a property of
-# rejectsUnsafeToken, not of the profile table — the profile table only selects
-# the SET-A reject set, the `&>` exception and the newline policy. So the
-# relaxation reaches `sanctioned-bin` too, and the quoted/unquoted PAIRS below
-# pin it in both directions for both predicates. `allowRedirectAmpersand:false`
-# keeps `&>` rejected here while the worker-script rows above accept it.
+# isAllowedComposeDocAppend and isAllowedClarifyGuardLoop (standard.js) share
+# rejectsUnsafeArgTail(argTail, "sanctioned-bin"); the profile flag
+# allowRedirectAmpersand:false keeps `&>` rejected here while the worker-script
+# rows above accept it. Rule 5 (SET-A inside dq/sq is ALLOWed) belongs to
+# rejectsUnsafeToken, not the profile table, so it reaches this profile too:
+# the quoted/unquoted PAIRS below pin it both ways for both predicates.
 # ============================================================================
 
-mkdir -p "$ACD_RAW/bin"
-touch "$ACD_RAW/bin/compose-doc-append-entry" \
-      "$ACD_RAW/bin/github-issues/clarify-guard-loop.sh"
-COMPOSE="$ACD/bin/compose-doc-append-entry"
-CLARIFY="$ACD/bin/github-issues/clarify-guard-loop.sh"
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin"
+touch "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/compose-doc-append-entry" \
+      "$FAKE_SCRIPT_CHECKOUT_ROOT_RAW/bin/github-issues/clarify-guard-loop.sh"
+COMPOSE="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/compose-doc-append-entry"
+CLARIFY="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/clarify-guard-loop.sh"
 
 # sanctioned_bin_probe <predicate-name> <command> -> "true" | "false" | "ERROR: ..."
 sanctioned_bin_probe() {
-    run_with_timeout 30 env "AGENTS_CONFIG_DIR=$ACD" node -e '
+    run_with_timeout 30 env "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" node -e '
       const path = require("path");
       const mod = path.join(process.argv[1], "hooks", "enforce-worktree",
                             "main-worktree-allows", "standard.js");
@@ -143,7 +122,7 @@ sanctioned_bin_probe() {
       if (typeof f !== "function") { console.log("ERROR: " + process.argv[2] + " not exported"); process.exit(0); }
       try { console.log(String(f(process.argv[3], process.argv[4]))); }
       catch (e) { console.log("ERROR: threw " + e.message); }
-    ' "$_AGENTS_DIR_NODE" "$1" "$2" "$MAIN_WT" 2>&1
+    ' "$FAKE_SCRIPT_CHECKOUT_ROOT" "$1" "$2" "$MAIN_WT" 2>&1
 }
 
 assert_sanctioned_bin() {
@@ -231,18 +210,14 @@ assert_sanctioned_bin "RISK10-399-rule2 clarify ansic rejected" \
 
 # ============================================================================
 # Integration pin: worker-script.js must consume the SELECTOR form.
-#
-# The behavioural rows above cannot see which fold is used — a worker-script
-# that kept its private foldDqNewlines would answer identically on every input
-# in this file. The kinds argument is a contract though: foldNewlinesInSpans is
-# specified to REQUIRE it, and the plan names ["dq"] as the complete
-# replacement for the deleted local helper. So the call shape is pinned on the
-# source text itself. STATUS: RED until C3 lands (today line 137 reads
-# `const scanTail = foldDqNewlines(argTail);` and the helper is defined at
-# line 17 of the same file).
+# The behavioural rows above cannot see which fold is used (a private
+# foldDqNewlines would answer identically on every input here), but the kinds
+# argument is a contract: foldNewlinesInSpans REQUIRES it and ["dq"] is the
+# complete replacement for the deleted local helper. So the call shape is
+# pinned on the source text itself.
 # ============================================================================
 
-WORKER_SRC="$AGENTS_DIR/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
+WORKER_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
 
 assert_worker_src() {
     local label="$1" pattern="$2" want="$3" got=false

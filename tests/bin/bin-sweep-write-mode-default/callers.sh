@@ -37,7 +37,7 @@ C1_cron_flags_updated() {
 C2_no_stale_dry_run_prose() {
     local hits
     hits="$(grep -rniE 'Default is dry-run|Dry-run by default|Default is report-only|no --apply = dry-run' \
-        "$AGENTS_DIR"/skills/sweep*/SKILL.md 2>/dev/null || true)"
+        "$SCRIPT_CHECKOUT_ROOT"/skills/sweep*/SKILL.md 2>/dev/null || true)"
     if [ -z "$hits" ]; then
         pass "C2 no stale dry-run-default prose in skills/sweep*/SKILL.md"
     else
@@ -48,7 +48,7 @@ C2_no_stale_dry_run_prose() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 D1_sweep_supervisor_state_is_dry_run_by_default() {
-    local sweep="$AGENTS_DIR/bin/sweep-supervisor-state.sh"
+    local sweep="$SCRIPT_CHECKOUT_ROOT/bin/sweep-supervisor-state.sh"
     if [ ! -f "$sweep" ]; then
         fail "D1 exception member: $sweep does not exist"
         return
@@ -83,8 +83,8 @@ fs.writeFileSync(path.join(ctrlDir, "supervisor-state.json"), JSON.stringify(sta
     local f="$plans/d1sess.control/supervisor-state.json"
     local before after
     before="$(md5sum "$f" 2>/dev/null | awk '{print $1}')"
-    env -u AGENTS_CONFIG_DIR "WORKFLOW_PLANS_DIR=$plans_node" "WORKFLOW_STATE_DIR=$plans_node" \
-        run_with_timeout bash "$sweep" >/dev/null 2>&1
+    run_with_timeout env "WORKFLOW_PLANS_DIR=$plans_node" "WORKFLOW_STATE_DIR=$plans_node" \
+        bash "$sweep" >/dev/null 2>&1
     after="$(md5sum "$f" 2>/dev/null | awk '{print $1}')"
 
     if [ -n "$before" ] && [ "$before" = "$after" ]; then

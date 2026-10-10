@@ -11,15 +11,15 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    AGENTS_DIR_NODE="$AGENTS_DIR"
+    SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-RESOLVE_WSID_NODE="$AGENTS_DIR_NODE/hooks/lib/resolve-workflow-session-id.js"
-SESSION_ID_NODE="$AGENTS_DIR_NODE/hooks/workflow-state/session-id.js"
+RESOLVE_WSID_NODE="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/resolve-workflow-session-id.js"
+SESSION_ID_NODE="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/session-id.js"
 
 PASS=0
 FAIL=0

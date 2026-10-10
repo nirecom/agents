@@ -16,8 +16,8 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT

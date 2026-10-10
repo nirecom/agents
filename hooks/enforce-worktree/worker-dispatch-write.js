@@ -5,8 +5,8 @@
 //
 // Why this exists: enforce-worktree.js exits early — ALLOW — as soon as
 // detectWritePredicate() reports a read-only command, which happens BEFORE any
-// main-worktree allow predicate runs. A bare `node "<acd>/bin/worker-dispatch.js"
-// <worker> <main-root> <payload>` carries no redirect and no git subcommand, so
+// main-worktree allow predicate runs. A bare `node "<this checkout>/bin/worker-dispatch.js"
+// <worker> <target-main-root> <payload>` carries no redirect and no git subcommand, so
 // without this predicate it is classified read-only and the worker-dispatch
 // overlay's Locks 1/2/3 never execute at all. (The pre-existing SANCTIONED
 // entries only reach the overlay because they carry log redirects.)

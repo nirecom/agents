@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Batch migration: create GitHub Issues from <REPO_DIR>/docs/todo.md.
+# Batch migration: create GitHub Issues from <TARGET_CHECKOUT_ROOT>/docs/todo.md.
 # Each ## section becomes one open issue (type:task label, NOT closed).
 # After full migration completes (no canary, not dry-run, all sections done),
 # rewrite docs/todo.md as a thin ID index.
@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/state.sh"
 
-REPO_DIR="${1:?usage: migrate-todo.sh <repo_dir> [--dry-run] [--canary N]}"
+TARGET_CHECKOUT_ROOT="${1:?usage: migrate-todo.sh <repo_dir> [--dry-run] [--canary N]}"
 shift
 DRY_RUN=0
 CANARY_LIMIT=""
@@ -28,8 +28,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-REPO_DIR="$(cd "$REPO_DIR" && pwd)"
-FILE_TODO="$REPO_DIR/docs/todo.md"
+TARGET_CHECKOUT_ROOT="$(cd "$TARGET_CHECKOUT_ROOT" && pwd)"
+FILE_TODO="$TARGET_CHECKOUT_ROOT/docs/todo.md"
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "[dry-run] No GitHub API calls will be made"
@@ -38,8 +38,8 @@ fi
 
 # State load (non-dry-run only).
 if [ "$DRY_RUN" -eq 0 ]; then
-  state_init "$REPO_DIR"
-  state_load "$REPO_DIR"
+  state_init "$TARGET_CHECKOUT_ROOT"
+  state_load "$TARGET_CHECKOUT_ROOT"
 fi
 
 TMPDIR_ENTRIES=$(mktemp -d)
@@ -119,7 +119,7 @@ for title_file in $(find "$TMPDIR_ENTRIES" -name "*.title" | sort); do
     continue
   fi
 
-  issue_url=$(cd "$REPO_DIR" && gh issue create \
+  issue_url=$(cd "$TARGET_CHECKOUT_ROOT" && gh issue create \
     --title "$title" \
     --label "type:task" \
     --body-file "$body_file")
@@ -138,11 +138,11 @@ done
 # all sections migrated).
 if [ -z "$CANARY_LIMIT" ] && [ "$DRY_RUN" -eq 0 ] && \
    [ "$(state_count_migrated todo)" -eq "$total" ]; then
-  cp "$REPO_DIR/docs/todo.md" "$REPO_DIR/docs/todo.md.bak"
+  cp "$TARGET_CHECKOUT_ROOT/docs/todo.md" "$TARGET_CHECKOUT_ROOT/docs/todo.md.bak"
   {
     printf "# Active Tasks\n\nSee GitHub Issues for current work.\n\n"
     jq -r '.todo.migrated[] | "- #\(.issue_number) — \(.title)"' "$STATE_FILE"
-  } > "$REPO_DIR/docs/todo.md"
+  } > "$TARGET_CHECKOUT_ROOT/docs/todo.md"
   tmp="${STATE_FILE}.tmp"
   jq '.todo.todo_md_rewritten = true' "$STATE_FILE" > "$tmp"
   mv "$tmp" "$STATE_FILE"

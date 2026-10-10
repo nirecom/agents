@@ -22,16 +22,16 @@ CFG_ACCESS="$(make_cfg access "PROJECT_NFR=$ACCESS_GLOBAL")"
 effective_nfr() {
     local root="$1" root_node="$1"
     if command -v cygpath >/dev/null 2>&1; then root_node="$(cygpath -m "$1")"; fi
-    AGENTS_CONFIG_DIR="$CFG_ACCESS" run_with_timeout 20 node -e '
+    AGENTS_MAIN_ROOT="$CFG_ACCESS" run_with_timeout 20 node -e '
 try {
   const m = require(process.argv[1] + "/hooks/lib/load-env.js");
   const map = m.readEffectiveEnvFile(process.argv[2]);
   process.stdout.write(String(map.PROJECT_NFR === undefined ? "__UNSET__" : map.PROJECT_NFR));
 } catch (e) { process.stdout.write("__THREW__"); }
-' "$AGENTS_DIR_NODE_ACCESS" "$root_node" 2>/dev/null
+' "$SCRIPT_CHECKOUT_ROOT_NODE_ACCESS" "$root_node" 2>/dev/null
 }
-AGENTS_DIR_NODE_ACCESS="$AGENTS_DIR"
-if command -v cygpath >/dev/null 2>&1; then AGENTS_DIR_NODE_ACCESS="$(cygpath -m "$AGENTS_DIR")"; fi
+SCRIPT_CHECKOUT_ROOT_NODE_ACCESS="$SCRIPT_CHECKOUT_ROOT"
+if command -v cygpath >/dev/null 2>&1; then SCRIPT_CHECKOUT_ROOT_NODE_ACCESS="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; fi
 
 # Control: a readable .env.local wins over the global value, so the two cases
 # below measure the loss of the local layer and not a broken fixture.
@@ -63,7 +63,7 @@ chmod 644 "$EACCES_FILE" 2>/dev/null || true
 OUTSIDE_DIR="$TMP_ROOT/outside-any-project"
 mkdir -p "$OUTSIDE_DIR"
 OUTSIDE_ENV="$OUTSIDE_DIR/escaped.env"
-printf 'PROJECT_NFR=%s\nAGENTS_CONFIG_DIR=/hijacked\n' "ESCAPEDNFR5TP" > "$OUTSIDE_ENV"
+printf 'PROJECT_NFR=%s\nAGENTS_MAIN_ROOT=/hijacked\n' "ESCAPEDNFR5TP" > "$OUTSIDE_ENV"
 PROJ_LINK="$(make_project accesslink)"
 LINK_FILE="$PROJ_LINK/$LOCAL_ENV_BASENAME"
 rm -f "$LINK_FILE"
@@ -78,12 +78,12 @@ if [ -L "$LINK_FILE" ]; then
     assert_eq "T2223K-symlink-escape-followed (KNOWN GAP: no containment check)" \
         "ESCAPEDNFR5TP" "$(effective_nfr "$PROJ_LINK")"
     # The blocklist is the one boundary that must survive the escape: whatever
-    # the link points at, a local AGENTS_CONFIG_DIR is still refused.
-    link_cfg="$(AGENTS_CONFIG_DIR="$CFG_ACCESS" run_with_timeout 20 node -e '
+    # the link points at, a local AGENTS_MAIN_ROOT is still refused.
+    link_cfg="$(AGENTS_MAIN_ROOT="$CFG_ACCESS" run_with_timeout 20 node -e '
 const m = require(process.argv[1] + "/hooks/lib/load-env.js");
 const map = m.readEffectiveEnvFile(process.argv[2]);
-process.stdout.write(String(map.AGENTS_CONFIG_DIR === undefined ? "__UNSET__" : map.AGENTS_CONFIG_DIR));
-' "$AGENTS_DIR_NODE_ACCESS" "$(command -v cygpath >/dev/null 2>&1 && cygpath -m "$PROJ_LINK" || printf '%s' "$PROJ_LINK")" 2>/dev/null)"
+process.stdout.write(String(map.AGENTS_MAIN_ROOT === undefined ? "__UNSET__" : map.AGENTS_MAIN_ROOT));
+' "$SCRIPT_CHECKOUT_ROOT_NODE_ACCESS" "$(command -v cygpath >/dev/null 2>&1 && cygpath -m "$PROJ_LINK" || printf '%s' "$PROJ_LINK")" 2>/dev/null)"
     assert_eq "T2223K-symlink-escape-blocklist-still-applies" "__UNSET__" "$link_cfg"
 else
     # TL3 gap: a host where ln -s produces a real link (POSIX, or Windows with

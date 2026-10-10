@@ -2,13 +2,13 @@
 .SYNOPSIS
   confirm-off — fail-safe OFF/ON/ERROR resolver for plan-confirm idiom.
 .DESCRIPTION
-  Reads the config var KEY from $AGENTS_CONFIG_DIR/.env (via load-env.js + node)
+  Reads the config var KEY from the agents .env (via load-env.js + node)
   and maps it to stdout tokens: OFF (exit 0), ON (exit 1), ERROR (exit 2).
   'off' is the only OFF value; anything else (on, unset, unrecognized) → ON.
   Exits: 0 OFF | 1 ON | 2 ERROR | 64 usage.
 
   REQUIRED caller wrapping (PowerShell):
-    $out = & pwsh -NoProfile -File "$env:AGENTS_CONFIG_DIR\bin\confirm-off.ps1" CONFIRM_X on
+    $out = & pwsh -NoProfile -File "<agents-root>\bin\confirm-off.ps1" CONFIRM_X on
     switch ($out.Trim()) {
       'OFF'   { ... }
       'ON'    { ... }
@@ -28,25 +28,15 @@ if (-not $Key) {
   exit 64
 }
 
-if (-not $env:AGENTS_CONFIG_DIR) {
-  Write-Output "ERROR"
-  [System.Console]::Error.WriteLine("confirm-off: AGENTS_CONFIG_DIR not set")
-  exit 2
-}
-
-# Locate load-env.js — prefer AGENTS_CONFIG_DIR, fall back to script's repo root.
+# Locate load-env.js beside this script, so the reader and the script always
+# come from the same checkout.
 $loadEnv = $null
-$candidate = Join-Path $env:AGENTS_CONFIG_DIR 'hooks/lib/load-env.js'
-if (Test-Path $candidate) {
-  $loadEnv = ($candidate -replace '\\', '/')
-} else {
-  $scriptPath = $MyInvocation.MyCommand.Path
-  $item = Get-Item $scriptPath -ErrorAction SilentlyContinue
-  if ($item -and $item.Target) { $scriptPath = $item.Target }
-  $repoRoot = Split-Path (Split-Path $scriptPath -Parent) -Parent
-  $c2 = Join-Path $repoRoot 'hooks/lib/load-env.js'
-  if (Test-Path $c2) { $loadEnv = ($c2 -replace '\\', '/') }
-}
+$scriptPath = $MyInvocation.MyCommand.Path
+$item = Get-Item $scriptPath -ErrorAction SilentlyContinue
+if ($item -and $item.Target) { $scriptPath = $item.Target }
+$repoRoot = Split-Path (Split-Path $scriptPath -Parent) -Parent
+$c2 = Join-Path $repoRoot 'hooks/lib/load-env.js'
+if (Test-Path $c2) { $loadEnv = ($c2 -replace '\\', '/') }
 
 if (-not $loadEnv) {
   Write-Output "ERROR"

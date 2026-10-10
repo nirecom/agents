@@ -58,7 +58,7 @@ if [[ -z "$_top" ]] || ! cd "$_top" 2>/dev/null; then
 fi
 
 # --- configuration ---------------------------------------------------------
-# Every value below comes from the config dir's .env and from nowhere else: this
+# Every value below comes from the agents main root's .env and from nowhere else: this
 # tool now returns a blocking rc, so an ambient `COMMENT_BLOCK_ENFORCE=off` or a
 # raised threshold on the committer's shell would be a one-word bypass.
 _ENFORCE="$(_load_env_only_value "COMMENT_BLOCK_ENFORCE:-on")"

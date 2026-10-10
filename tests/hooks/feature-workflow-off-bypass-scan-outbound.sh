@@ -11,18 +11,18 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-HOOK_JS="${_AGENTS_DIR_NODE}/hooks/scan-outbound.js"
+HOOK_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/scan-outbound.js"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 TMPDIR_BASE="$(node -e "
 const os=require('os'),path=require('path'),fs=require('fs');
@@ -41,6 +41,12 @@ export WORKFLOW_PLANS_DIR
 # isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_STATE_DIR"
+# Settings root for the A/B cases: a fixture with empty lists, so a block is the
+# scanner's verdict on the content and never its fail-closed "no blocklist" answer.
+mkdir -p "$TMPDIR_BASE/agents-main"
+: > "$TMPDIR_BASE/agents-main/.private-info-blocklist"
+: > "$TMPDIR_BASE/agents-main/.private-info-allowlist"
+export AGENTS_MAIN_ROOT="$TMPDIR_BASE/agents-main"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -98,7 +104,6 @@ run_hook() {
     HOOK_RC=0
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
@@ -210,11 +215,11 @@ C_CLEAN='Just an ordinary log line with nothing sensitive.'
 
 c_np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
 
-# Config dir WITH a resolvable blocklist+allowlist so the scanner never hits rc=4.
+# Agents main root WITH a resolvable blocklist+allowlist so the scanner never hits rc=4.
 C_CFG="$TMPDIR_BASE/c-cfg"; mkdir -p "$C_CFG"
 printf 'forbiddenword[0-9]+\n' > "$C_CFG/.private-info-blocklist"
 : > "$C_CFG/.private-info-allowlist"
-# Config dir WITHOUT a blocklist → forces rc=4 fail-closed after the fix.
+# Agents main root WITHOUT a blocklist → forces rc=4 fail-closed after the fix.
 C_CFG_NOBL="$TMPDIR_BASE/c-cfg-nobl"; mkdir -p "$C_CFG_NOBL"
 : > "$C_CFG_NOBL/.private-info-allowlist"
 # Neutral no-remote CWD so listPrivateRepoNames() resolves to [] deterministically.
@@ -236,14 +241,14 @@ c_build_bash_payload() {
         -- "$1" "$2" 2>/dev/null
 }
 
-# c_run_hook <payload> <cfgdir> <cwd> — pins AGENTS_CONFIG_DIR at the fixture cfg
-# (not $AGENTS_DIR) and runs node from <cwd>. Captures HOOK_OUT / HOOK_RC.
+# c_run_hook <payload> <cfgdir> <cwd> — pins AGENTS_MAIN_ROOT at the fixture cfg
+# (not $SCRIPT_CHECKOUT_ROOT) and runs node from <cwd>. Captures HOOK_OUT / HOOK_RC.
 c_run_hook() {
     local payload="$1" cfg="$2" cwd="$3"
     HOOK_RC=0
     HOOK_OUT="$( ( cd "$cwd" && printf '%s' "$payload" | run_with_timeout 30 \
         env \
-        "AGENTS_CONFIG_DIR=$cfg" \
+        "AGENTS_MAIN_ROOT=$cfg" \
         "WORKFLOW_STATE_DIR=$(fresh_workflow_dir)" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK_JS" 2>&1 ) )" || HOOK_RC=$?
@@ -376,7 +381,7 @@ test_C9_cd_form_recognized_blocks() {
     else fail "C9: cd-form commit not recognized as staged-scan target: $HOOK_OUT"; fi
 }
 
-# C10: scanner rc=4 (blocklist unresolvable via AGENTS_CONFIG_DIR) maps to block,
+# C10: scanner rc=4 (blocklist unresolvable via AGENTS_MAIN_ROOT) maps to block,
 #      even for clean content (fail-closed). Uses Edit so no new commit/inline path.
 test_C10_rc4_fail_closed_blocks() {
     require_hook "C10" || return

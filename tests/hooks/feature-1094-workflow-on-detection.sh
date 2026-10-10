@@ -21,8 +21,8 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT

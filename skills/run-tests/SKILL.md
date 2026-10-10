@@ -42,22 +42,22 @@ RNT-4. **Tier 3 — default skip.**
 
 RNT-5. **Empty-selection policy (no silent `--all` fallback).**
    If Tier 1 + Tier 2 = 0 tests:
-   - Docs-only change (all changed files match the docs allowlist): log `[run-tests] docs-only change; skipping tests`, then run `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --skipped --skip-reason "<reason>" --next` and follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`, then stop.
+   - Docs-only change (all changed files match the docs allowlist): log `[run-tests] docs-only change; skipping tests`, then run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step run_tests --skipped --skip-reason "<reason>" --next` and follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`, then stop.
    - Otherwise: log `[run-tests] no tests matched; user judgment required` and ask the user: skip / `--all` (explicit opt-in) / specify tests. Never auto-fallback to `--all` — that recreates the #673 hang.
 
 RNT-6. **Run tests.**
    Pass the final list as positional args to `tests/run-all.sh`. Use `tests/run-all.sh --all` only when the user explicitly opts in. Never pass `auto-detect`.
 
 RNT-6a. **Calibration offer.**
-   - Run `bash "$AGENTS_CONFIG_DIR/skills/run-tests/scripts/probe-calibration.sh" --cwd <cwd> --session <sid>` and read `decision=`.
+   - Run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/probe-calibration.sh" --cwd <cwd> --session <sid>` and read `decision=`.
    - `none` -> go to RNT-7.
    - `notice`, or `ask` when AskUserQuestion is unavailable (non-interactive: `claude -p`, `/loop`, subagents) -> show `notice=` verbatim, write no record, go to RNT-7.
-   - `ask` -> first run `bash "$AGENTS_CONFIG_DIR/skills/run-tests/scripts/mark-calibration-asked.sh" --session <sid>`; if it fails or prints `first=no`, treat as `notice`.
+   - `ask` -> first run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/mark-calibration-asked.sh" --session <sid>`; if it fails or prints `first=no`, treat as `notice`.
    - Then show `notice=` and ask with AskUserQuestion: calibrate now (long-running) / not now / never ask again on this host.
-   - not now or no answer -> run `bash "$AGENTS_CONFIG_DIR/skills/run-tests/scripts/answer-calibration.sh" defer --cwd <cwd> --session <sid>`, then go to RNT-7.
-   - never ask again (explicit choice only) -> run `bash "$AGENTS_CONFIG_DIR/skills/run-tests/scripts/answer-calibration.sh" never-ask --cwd <cwd> --session <sid>`; if it fails, show its stderr and say the choice was not saved; then go to RNT-7.
+   - not now or no answer -> run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/answer-calibration.sh" defer --cwd <cwd> --session <sid>`, then go to RNT-7.
+   - never ask again (explicit choice only) -> run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/answer-calibration.sh" never-ask --cwd <cwd> --session <sid>`; if it fails, show its stderr and say the choice was not saved; then go to RNT-7.
    - calibrate now -> run Bash `echo "<<WORKFLOW_NEXT_STEP_PAUSE: [for=run_tests] run-tests calibration>>"`.
-   - Then run `bash "$AGENTS_CONFIG_DIR/skills/run-tests/scripts/answer-calibration.sh" calibrate --cwd <cwd> --session <sid>` with Bash `run_in_background`, and wait for its completion notice.
+   - Then run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/answer-calibration.sh" calibrate --cwd <cwd> --session <sid>` with Bash `run_in_background`, and wait for its completion notice.
    - On completion, failure or interruption run Bash `echo "<<WORKFLOW_NEXT_STEP_RESUME: run-tests calibration done>>"` and show the exit code with the last output lines.
    - Then re-run the probe and read `source=`, `max_jobs=`, `os_match=`; the exit code alone never proves the new value applies.
    - `source=measured` with `os_match=yes` -> say the run uses the measured `max_jobs=`, then go to RNT-7 with the payload unchanged.
@@ -68,12 +68,12 @@ RNT-7. **Dispatch the `test-runner` worker** per `skills/_shared/worker-dispatch
 RNT-8. **Parse the YAML** the dispatch call printed on stdout. A leading `RUN_CONTRACT: PASS=.. FAIL=.. SKIP=.. EXECUTED=..` line may precede `status:` — it is the suite's own verdict, and RNT-9's fallback branch reads it.
 
 RNT-9. **Settle the step** as a separate Bash call:
-   - `status: pass` → `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --complete --next`; follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`.
+   - `status: pass` → `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step run_tests --complete --next`; follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`.
    - `status: fail | timeout | runner-error` → `echo "<<WORKFLOW_MARK_STEP_run_tests_pending>>"`
      The hook is authoritative for `run_outcome`; this sentinel is a status-only idempotent re-affirmation and writes no outcome.
-   - Pre-existing failures unrelated to this diff: when `status: fail` lists `failing_tests`, run `bash "$AGENTS_CONFIG_DIR/bin/run-tests-baseline" --session <sid> --worktree <cwd>` as its own Bash call (Bash timeout 600000); it re-runs each failing test path at the merge base with main.
+   - Pre-existing failures unrelated to this diff: when `status: fail` lists `failing_tests`, run `bash "$AGENTS_MAIN_ROOT/bin/run-tests-baseline" --session <sid> --worktree <cwd>` as its own Bash call (Bash timeout 600000); it re-runs each failing test path at the merge base with main.
      Never run `--advance --step run_tests --complete --next` yourself after a failing run.
-     exit 0 → the CLI completed run_tests; run `node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --next` and follow its `ACTION`. exit 1 → show the `BASELINE:` lines verbatim in the same turn and stay `pending` for the user. exit 3/4 → show stderr; exit 4 asks the user to choose the base as in RNT-1.
+     exit 0 → the CLI completed run_tests; run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --next` and follow its `ACTION`. exit 1 → show the `BASELINE:` lines verbatim in the same turn and stay `pending` for the user. exit 3/4/5 → show stderr; exit 4 asks the user to choose the base as in RNT-1; exit 5 (no baseline, rebase needed) stays `pending` until the branch is rebased onto a base that carries the current root names.
      Tell the user which tests were classified by inheriting an earlier base (`preexisting-inherited`). Never use `WORKFLOW_ENFORCE_WORKFLOW_OFF` / EMERGENCY OFF for this purpose.
    - **Overwritten-sentinel recovery.** After emitting the `complete` sentinel, run `node bin/workflow/read-step-status --session <sid> --step run_tests` (read-only; never `bin/workflow/next-step`, whose `ACTION` / `NEXT_SKILL` would start the next workflow step from inside this skill). The query prints either `status=<value>` (a recorded fact) or the bare marker `NONE` (nothing recorded — no state file, unknown session, corrupt file, or a step this session never touched).
      Re-emit `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` **once only** if all hold: `status: pass`, the RNT-8 `RUN_CONTRACT:` line exists with `FAIL=0` and `EXECUTED>0`, and the query printed exactly `status=pending` — a recorded demotion overwrote the sentinel.

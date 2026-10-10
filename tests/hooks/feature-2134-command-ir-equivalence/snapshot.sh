@@ -12,7 +12,7 @@
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$DIR/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
@@ -28,7 +28,7 @@ CORPUS="$(npath "$DIR/corpus.js")"
 DELIB="$(npath "$DIR/deliberate-diffs.js")"
 EXPECTED="$DIR/expected.json"
 EXPECTED_N="$(npath "$EXPECTED")"
-RUNNER="$AGENTS_DIR/bin/run-with-timeout.sh"
+RUNNER="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; ROWS=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

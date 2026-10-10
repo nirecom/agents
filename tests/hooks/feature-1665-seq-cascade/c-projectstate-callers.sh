@@ -51,12 +51,13 @@
 # positions against a real appended event stream. Those two fail when a caller
 # folds the wrong stream; this file fails when a caller merely APPEARS.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG=c
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
 
-SCANNER="$AGENTS_DIR_N/tests/hooks/feature-1665-seq-cascade/projectstate-callsites.js"
+SCANNER="$SCRIPT_CHECKOUT_ROOT_N/tests/hooks/feature-1665-seq-cascade/projectstate-callsites.js"
 
-cd "$AGENTS_DIR" || { fail "C: cannot enter repo"; finish; exit; }
+cd "$SCRIPT_CHECKOUT_ROOT" || { fail "C: cannot enter repo"; finish; exit; }
 
 # Per-file call counts, excluding the definition line itself.
 GOT="$(grep -rn "projectState(" hooks bin --include=*.js 2>/dev/null \
@@ -87,14 +88,14 @@ fi
 TOTAL="$(printf '%s\n' "$GOT" | awk -F: '{s+=$2} END {print s+0}')"
 assert_eq "C2 total non-definition call sites" "6" "$TOTAL"
 
-REEXPORT="$(grep -c "projectState: projection.projectState" "$AGENTS_DIR/hooks/workflow-state/state-io.js")"
+REEXPORT="$(grep -c "projectState: projection.projectState" "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js")"
 assert_eq "C3 state-io.js re-exports projectState exactly once" "1" "$REEXPORT"
 
 # No caller may hand the PROJECTOR a filtered / sliced stream. Only the text
 # after `projectState(` is inspected, so a defensive `.slice()` on a different
 # argument of the same line (events.js:168 passes a copy of the stream to the
 # BUILDER) is correctly not counted.
-FILTERED="$(grep -rn "projectState(" "$AGENTS_DIR/hooks" "$AGENTS_DIR/bin" --include=*.js 2>/dev/null \
+FILTERED="$(grep -rn "projectState(" "$SCRIPT_CHECKOUT_ROOT/hooks" "$SCRIPT_CHECKOUT_ROOT/bin" --include=*.js 2>/dev/null \
     | grep -v "function projectState(" \
     | sed 's/.*projectState(//' \
     | grep -cE "\.filter\(|\.slice\(")"
@@ -109,7 +110,7 @@ scan() {
 }
 
 SCAN_ARGS=""
-for f in $SRC_FILES; do SCAN_ARGS="$SCAN_ARGS $AGENTS_DIR_N/$f"; done
+for f in $SRC_FILES; do SCAN_ARGS="$SCAN_ARGS $SCRIPT_CHECKOUT_ROOT_N/$f"; done
 # shellcheck disable=SC2086
 scan $SCAN_ARGS
 
@@ -118,7 +119,7 @@ if [ "$SCAN_RC" -ne 0 ]; then
     fail "C6 scanner total unavailable (C5 did not run)"
 else
     SCAN_INV="$(printf '%s\n' "$SCAN_OUT" | awk -F'\t' '$1=="COUNT"{print $2 ":" $3}' \
-        | sed "s#^$AGENTS_DIR_N/##" | sort)"
+        | sed "s#^$SCRIPT_CHECKOUT_ROOT_N/##" | sort)"
     assert_eq "C5 scanner inventory agrees with the grep inventory" "$WANT" "$SCAN_INV"
 
     SCAN_TOTAL="$(printf '%s\n' "$SCAN_OUT" | awk -F'\t' '$1=="TOTAL"{print $2}')"

@@ -7,12 +7,12 @@
 # refuse when another `code` / `code.cmd` resolves first.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PASS=0 FAIL=0 SKIP=0
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=../lib/code-stub.sh
-. "$AGENTS_DIR/tests/lib/code-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/code-stub.sh"
 unset CLAUDE_CODE_ENTRYPOINT TERM_PROGRAM 2>/dev/null || true
 
 T_ROOT="$(make_tmp)"
@@ -85,7 +85,7 @@ C5_OUT="$(
   env -i PATH="$PATH" PATHEXT="${PATHEXT:-}" HOME="${HOME:-}" USERPROFILE="${USERPROFILE:-}" \
     SYSTEMROOT="${SYSTEMROOT:-}" COMSPEC="${COMSPEC:-}" TEMP="${TEMP:-}" TMP="${TMP:-}" \
     bash -c '. "$1/tests/lib/code-stub.sh"; setup_code_stub "$2" || { echo setup-fail; exit 0; }
-      if code_stub_resolves; then echo resolves; else echo refused; fi' c5 "$AGENTS_DIR" "$(np "$T_ROOT")/stub5" 2>&1
+      if code_stub_resolves; then echo resolves; else echo refused; fi' c5 "$SCRIPT_CHECKOUT_ROOT" "$(np "$T_ROOT")/stub5" 2>&1
 )"
 assert_eq "$C5_OUT" "resolves"
 

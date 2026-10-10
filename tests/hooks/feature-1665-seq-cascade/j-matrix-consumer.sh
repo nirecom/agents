@@ -6,6 +6,7 @@
 # J — the declarative exemption matrix and its consumers stay in agreement. WHY: EXEMPTION_MATRIX is documentation-shaped — it declares which quiet layers each condition affects (c4 / c2 / nextStep) but enforces nothing. A row added without the matching consumer registration is a silent no-op, and a consumer registered without a row is an undocumented bypass. J6 checks the whole class (CPR-E2C), not just the row #1665 adds.
 # `step-in-flight` (renamed from `write-code-in-flight` and widened to the STEP_IN_FLIGHT_ALLOWLIST by #2013) is c4-only by design: next-step must keep answering normally during a long turn, and C2 is a scheduled supervisor review that such a turn should not defer.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG=j
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
 
@@ -56,7 +57,7 @@ if require_js_ok "J: matrix probe"; then
 fi
 
 # The nextStep:false declaration must be true of the code, not just the table.
-VERDICT_REFS="$(grep -cE "isWriteCodeInFlight|anyStepInFlight|isStepInFlight" "$AGENTS_DIR/bin/workflow/lib/next-step/verdict.js" || true)"
+VERDICT_REFS="$(grep -cE "isWriteCodeInFlight|anyStepInFlight|isStepInFlight" "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/next-step/verdict.js" || true)"
 assert_eq "J7 next-step does not consult any step in-flight predicate" "0" "$VERDICT_REFS"
 
 finish

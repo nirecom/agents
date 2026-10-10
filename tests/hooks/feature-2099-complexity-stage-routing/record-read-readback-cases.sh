@@ -15,8 +15,8 @@ D2099_ISO_RB="$TMPDIR_BASE/iso-readback"
 # rollback, so asserting the event vanished would encode a contract D6 rejects.
 d2099_build_readback_tree() {
     mkdir -p "$D2099_ISO_RB"
-    cp -r "$AGENTS_DIR/hooks" "$D2099_ISO_RB/hooks"
-    cp -r "$AGENTS_DIR/bin" "$D2099_ISO_RB/bin"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$D2099_ISO_RB/hooks"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$D2099_ISO_RB/bin"
 
     # Shim BOTH the barrel and the state-io module: which one the CLI requires is
     # an implementation choice, and the invariant must hold either way. The shim

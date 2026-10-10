@@ -21,14 +21,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-FORMAT_MOD="$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format.js"
+FORMAT_MOD="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-report-format.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -41,7 +41,7 @@ run_with_timeout() {
     else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
 }
 
-if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-report-format.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-report-format.js" ]; then
     skip "C7-all: supervisor-report-format.js not present"
     echo ""
     echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

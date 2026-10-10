@@ -10,12 +10,12 @@
 # category: skill-orchestration.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # Worktree copies (LOCAL_SKILL_MD semantics): the state under test, never ~/.claude.
-SK="$AGENTS_DIR/skills"
+SK="$SCRIPT_CHECKOUT_ROOT/skills"
 CPA="$SK/_shared/confirm-plan.md"
 CI="$SK/clarify-intent/SKILL.md"; MOP="$SK/make-outline-plan/SKILL.md"
 MDP="$SK/make-detail-plan/SKILL.md"; WT="$SK/write-tests/SKILL.md"

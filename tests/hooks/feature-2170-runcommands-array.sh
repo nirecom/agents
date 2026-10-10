@@ -13,15 +13,14 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-export AGENTS_DIR
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # `require()` needs a native path: Git Bash hands back `/c/...`, which Node cannot
 # resolve on Windows (rules/coding/nodejs.md "POSIX path normalization").
-NODE_AGENTS_DIR="$AGENTS_DIR"
+NODE_SCRIPT_CHECKOUT_ROOT="$SCRIPT_CHECKOUT_ROOT"
 if command -v cygpath >/dev/null 2>&1; then
-    NODE_AGENTS_DIR="$(cygpath -m "$AGENTS_DIR")"
+    NODE_SCRIPT_CHECKOUT_ROOT="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 fi
-SUITE="$AGENTS_DIR/tests/hooks/feature-2170-capture-echo-guard"
+SUITE="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2170-capture-echo-guard"
 command -v node >/dev/null 2>&1 || exit 77
 [ -f "$SUITE/mk-event.js" ] || exit 77
 
@@ -53,7 +52,7 @@ verdict() {
     local hook="$1" tool="$2"
     shift 2
     node "$SUITE/mk-event.js" "$tool" "$@" >"$EV"
-    node "$AGENTS_DIR/hooks/$hook" <"$EV" >"$OUT" 2>/dev/null
+    node "$SCRIPT_CHECKOUT_ROOT/hooks/$hook" <"$EV" >"$OUT" 2>/dev/null
     node "$SUITE/hook-out.js" "$OUT"
 }
 
@@ -61,14 +60,14 @@ verdict() {
 # `.command` (the shape hooks/lib/scannable-command-list.js keeps scanning).
 verdict_rc_scalar() {
     node -e 'process.stdout.write(JSON.stringify({session_id:"test-2170",hook_event_name:"PreToolUse",tool_name:"runCommands",tool_input:{command:process.argv[1]}}))' "$2" >"$EV"
-    node "$AGENTS_DIR/hooks/$1" <"$EV" >"$OUT" 2>/dev/null
+    node "$SCRIPT_CHECKOUT_ROOT/hooks/$1" <"$EV" >"$OUT" 2>/dev/null
     node "$SUITE/hook-out.js" "$OUT"
 }
 APPROVE='other:{"decision":"approve"}'
 
 # The memory guard's protected root is derived from the real homedir, so ask the
 # module rather than hard-coding a path that would differ per host (CPR-UNV).
-MEMDIR="$(node -p "require('$NODE_AGENTS_DIR/hooks/lib/memory-path-check.js').MEMORY_DIR.replace(/\\\\/g,'/')" 2>/dev/null)"
+MEMDIR="$(node -p "require('$NODE_SCRIPT_CHECKOUT_ROOT/hooks/lib/memory-path-check.js').MEMORY_DIR.replace(/\\\\/g,'/')" 2>/dev/null)"
 if [ -z "$MEMDIR" ]; then
     assert_eq "RC-0-memory-dir-resolved" "resolved" "MODULE_MISSING"
     MEMDIR="/nonexistent/memory"
@@ -124,7 +123,7 @@ assert_eq "RC-5c-capture-echo-array-of-benign-passes" \
     "passthrough" "$(verdict block-capture-echo.js runCommands 'ls' 'git status')"
 
 # --- RC-6: the SSOT helper the guards iterate exposes every array element ---------
-listed="$(node -p "JSON.stringify(require('$NODE_AGENTS_DIR/hooks/lib/tool-command-text.js').commandListOf('runCommands',{commands:['a','b']}))" 2>/dev/null)"
+listed="$(node -p "JSON.stringify(require('$NODE_SCRIPT_CHECKOUT_ROOT/hooks/lib/tool-command-text.js').commandListOf('runCommands',{commands:['a','b']}))" 2>/dev/null)"
 assert_eq "RC-6-commandListOf-returns-every-array-element" '["a","b"]' "$listed"
 
 # --- RC-8: workflow-gate judges a runCommands scalar `.command` like the Bash one --

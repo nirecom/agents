@@ -327,6 +327,32 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Definition**: The retire parser's judgement of a file's markers: `none` (no markers), `conforming` (retire can split the file), `malformed` (a marker retire cannot use; blocked for new files), or `uncertain` (a depth problem after a multi-line quoted string, warned but not blocked). Computed by `trp_marker_conformance`; the case-marker gate consumes it via `bin/check-case-markers.sh`.
 - **Related**: [architecture/claude-code/case-marker-gate.md](architecture/claude-code/case-marker-gate.md), #2388
 
+## Root names
+
+### AGENTS_MAIN_ROOT
+
+- **Full name**: agents main root
+- **Definition**: The main worktree of the agents repository — the place the user's configuration (`.env`, private-info lists) is read from. The only one of the four root names that is an environment variable; it is exported by the shell profile and never used to locate code.
+- **Related**: [architecture/claude-code/root-names.md](architecture/claude-code/root-names.md)
+
+### SCRIPT_CHECKOUT_ROOT
+
+- **Full name**: script checkout root
+- **Definition**: The checkout (main or linked worktree) that holds the script currently running. Each file assigns it once from its own path and uses it to find sibling code; it is never an environment variable. A file read with `source` uses `_<STEM>_SCRIPT_CHECKOUT_ROOT`.
+- **Related**: [architecture/claude-code/root-names.md](architecture/claude-code/root-names.md)
+
+### TARGET_MAIN_ROOT
+
+- **Full name**: target main root
+- **Definition**: The main worktree of the repository a tool operates on, which need not be the agents repository. An ordinary variable, never an environment variable.
+- **Related**: [architecture/claude-code/root-names.md](architecture/claude-code/root-names.md)
+
+### TARGET_CHECKOUT_ROOT
+
+- **Full name**: target checkout root
+- **Definition**: The checkout (main or linked worktree) of the repository a tool operates on, named by the caller; it need not be the tool's own checkout. An ordinary variable, never an environment variable.
+- **Related**: [architecture/claude-code/root-names.md](architecture/claude-code/root-names.md)
+
 ## Miscellaneous
 
 ### IR

@@ -9,8 +9,8 @@
 # TL3 gap: the band's 20% hit-rate on a real host is not covered; seam stubs replace real runs.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 . "$(dirname "${BASH_SOURCE[0]}")/_cal-fixture.sh"
 cf_init
 

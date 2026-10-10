@@ -20,7 +20,7 @@ git -C "$SS_REPO" init -q
 git -C "$SS_REPO" config user.email "test@example.com"
 git -C "$SS_REPO" config user.name "Test"
 
-HOOK_JS="$(node_path "$AGENTS_DIR/hooks/session-start.js")"
+HOOK_JS="$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js")"
 
 # Minimal settings.json: only the SessionStart hook; no disableBypassPermissionsMode.
 cat > "$SS_REPO/.claude/settings.json" <<SETTINGS_EOF

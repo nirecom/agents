@@ -10,9 +10,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WORKFLOW_INIT_SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
-DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+WORKFLOW_INIT_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
+DRIVER_REL="bin/workflow/workflow-init-driver"
+DRIVER="$SCRIPT_CHECKOUT_ROOT/$DRIVER_REL"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -152,8 +155,8 @@ esac
 WIPEOF2
     chmod +x "$CFG/bin/github-issues/wip-state.sh"
     printf '#!/bin/bash\necho "${CLAUDE_CODE_SESSION_ID:-mock}"\n' > "$CFG/bin/resolve-session-id"
-    cp "$AGENTS_DIR/bin/parse-issue-tokens" "$CFG/bin/parse-issue-tokens"
-    cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$CFG/hooks/lib/parse-closes-issues.js"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/parse-issue-tokens" "$CFG/bin/parse-issue-tokens"
+    cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-closes-issues.js" "$CFG/hooks/lib/parse-closes-issues.js"
     cat > "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
 #!/bin/bash
 while [ $# -gt 0 ]; do
@@ -163,14 +166,18 @@ exit 0
 FEOF
     chmod +x "$CFG/bin/resolve-session-id" "$CFG/bin/parse-issue-tokens" \
         "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
-    export WORKFLOW_PLANS_DIR="$PLANS" AGENTS_CONFIG_DIR="$CFG" CLAUDE_CODE_SESSION_ID="$sid"
+    # The driver resolves its tools from its own checkout, so run a copy that
+    # lives beside the stubs above (the copy never overwrites an existing stub).
+    script_checkout_fixture_copy "$CFG" bin/workflow hooks \
+        || fail "setup_drv: driver fixture copy failed"
+    export WORKFLOW_PLANS_DIR="$PLANS" AGENTS_MAIN_ROOT="$CFG" CLAUDE_CODE_SESSION_ID="$sid"
     unset NON_GITHUB 2>/dev/null || true
     export PATH="$MOCKBIN:$ORIG_PATH"
 }
 
 teardown_drv() {
     export PATH="$ORIG_PATH"
-    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR 2>/dev/null || true
+    unset WORKFLOW_PLANS_DIR AGENTS_MAIN_ROOT 2>/dev/null || true
 }
 
 mock_issue() {
@@ -182,10 +189,10 @@ mock_issue() {
         "$n" "$n" "$labels" "$state" > "$RESP/issue-view-$n.json"
 }
 
-TIMEOUT_WRAP="$AGENTS_DIR/bin/run-with-timeout.sh"
+TIMEOUT_WRAP="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 run_drv() {
-    DROUT="$(cd "$CASE_DIR" && "$TIMEOUT_WRAP" 30 node "$DRIVER" "$@" 2>/dev/null)"
+    DROUT="$(cd "$CASE_DIR" && "$TIMEOUT_WRAP" 30 node "$CFG/$DRIVER_REL" "$@" 2>/dev/null)"
     DRRC=$?
     return 0
 }

@@ -7,11 +7,11 @@
 # Advisory: always exits 0.
 set -uo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SESSION_ID="${1:?session-id required}"
 NOTES_BACKUP="${2-}"
 
-node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" \
+node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-alert" \
     --session-id "$SESSION_ID" --set-alert-phase closed || true
 
 # The notes backup carries the session id the WORKTREE recorded, which differs
@@ -22,11 +22,11 @@ if [ -n "$NOTES_BACKUP" ] && [ -f "$NOTES_BACKUP" ]; then
         "$NOTES_BACKUP" 2>/dev/null || true)"
 fi
 if [ -n "$WSID" ] && [ "$WSID" != "$SESSION_ID" ]; then
-    node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" \
+    node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-alert" \
         --session-id "$WSID" --set-alert-phase closed --clear-alert-armed-at || true
 fi
 
-node "$AGENTS_CONFIG_DIR/bin/supervisor-write-audit" \
+node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit" \
     --clear-audit-phase --session-id "$SESSION_ID" || true
 
 exit 0

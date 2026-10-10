@@ -1,7 +1,7 @@
 "use strict";
 
 // Declared parent edges (#2512 stage 4). A part file whose parent reaches it through a
-// shape source-resolve cannot follow — a loop variable, an "$AGENTS_DIR" path, a name
+// shape source-resolve cannot follow — a loop variable, an "$SCRIPT_CHECKOUT_ROOT" path, a name
 // list, or `bash <part>` after the parent exported its pins — names that parent on a
 // comment line, relative to its own directory:
 //   # isolation: inherits-from ../feature-x.sh

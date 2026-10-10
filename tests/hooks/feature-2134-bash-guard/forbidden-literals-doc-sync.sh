@@ -4,9 +4,9 @@
 # S5-3 (detail.md): rules/shell-commands.md is a Read tool, so nothing here may write to it --
 # this file pins the SSOT's 7 human-authored rows against the 10 machine ids, and the
 # generator that is supposed to keep the two in sync. Sourced by the dispatcher, which owns
-# PASS/FAIL/ROWS, assert_eq, probe, node_path, run_with_timeout, AGENTS_DIR.
+# PASS/FAIL/ROWS, assert_eq, probe, node_path, run_with_timeout, SCRIPT_CHECKOUT_ROOT.
 
-DOC_SYNC_FILE="$AGENTS_DIR/rules/shell-commands.md"
+DOC_SYNC_FILE="$SCRIPT_CHECKOUT_ROOT/rules/shell-commands.md"
 
 # Extract the 7 data rows of the "Prohibited literal | Form" table verbatim -- this table has
 # no GENERATED marker today (S5-3 is what would add one); parsing the literal markdown keeps
@@ -68,7 +68,7 @@ case_end
 # generated-block byte-compare) -- RED until the tool exists (S5-3's deliverable), reported
 # attributably rather than as a silent empty-string equality.
 case_begin "doc-sync-generator-table" "bin/print-forbidden-literals"
-PFL="$AGENTS_DIR/bin/print-forbidden-literals"
+PFL="$SCRIPT_CHECKOUT_ROOT/bin/print-forbidden-literals"
 ROWS=$((ROWS + 1))
 if [ -x "$PFL" ] || [ -f "$PFL" ]; then
     DS4_GOT="$(run_with_timeout 30 node "$(node_path "$PFL")" --markdown-table 2>/dev/null)"

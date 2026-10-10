@@ -16,15 +16,20 @@ jobs:
 
       - name: Check migration blocks (format + age warnings)
         env:
-          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+          AGENTS_MAIN_ROOT: ${{ github.workspace }}
         run: bash bin/check-migration-blocks.sh --all
 
       - name: Check plans-dir artifact names
         env:
-          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+          AGENTS_MAIN_ROOT: ${{ github.workspace }}
         run: node bin/check-plans-artifacts --source
 
       - name: Check test fixture isolation (pin order + residual old-name token)
         env:
-          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+          AGENTS_MAIN_ROOT: ${{ github.workspace }}
         run: bash bin/check-plans-dir-isolation.sh
+
+      - name: Check root names (retired names + classification table + derivation form)
+        env:
+          AGENTS_MAIN_ROOT: ${{ github.workspace }}
+        run: bash bin/check-root-names.sh

@@ -15,11 +15,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HIST_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/migrate-history.sh"
-TODO_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/migrate-todo.sh"
-STATE_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/state.sh"
-FIXTURE_DIR="$AGENTS_DIR/tests/fixtures/migration"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HIST_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/migrate-history.sh"
+TODO_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/migrate-todo.sh"
+STATE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/state.sh"
+FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration"
 
 PASS=0
 FAIL=0
@@ -70,7 +70,6 @@ echo 101 > "$MOCK_COUNTER"
 : > "$MOCK_LOG"
 
 export PATH="$MOCK_DIR:$PATH"
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 
 # shellcheck disable=SC1090
 source "$STATE_SCRIPT"

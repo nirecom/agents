@@ -20,7 +20,7 @@ set -u
 #   entry, so a GHES host authenticates by neither path.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # A real, stable, public repository that has no docs/history.md. The arms need a
 # reachable remote whose read succeeds and whose history file is absent.
@@ -69,8 +69,8 @@ nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else e
 GATE_OK=1; GATE_REASON=""
 gate_unmet() { GATE_OK=0; [ -n "$GATE_REASON" ] || GATE_REASON="$1"; }
 
-if [ -x "$AGENTS_DIR/bin/get-config-var" ]; then
-    if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then gate_unmet "RUN_TL3 is off"; fi
+if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
+    if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then gate_unmet "RUN_TL3 is off"; fi
 else
     gate_unmet "bin/get-config-var is not executable"
 fi

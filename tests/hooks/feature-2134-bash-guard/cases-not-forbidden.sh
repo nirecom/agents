@@ -60,7 +60,7 @@ case_end
 # F5: the generator that stamps the document reads the same SSOT. If the ids drift apart, the
 # guard denies something the discipline document never told the model about.
 case_begin "not-forbidden-generator-sync" "bin/print-forbidden-literals"
-PFL="$AGENTS_DIR/bin/print-forbidden-literals"
+PFL="$SCRIPT_CHECKOUT_ROOT/bin/print-forbidden-literals"
 if [ -x "$PFL" ] || [ -f "$PFL" ]; then
     f5_got="$(run_with_timeout 30 node "$(node_path "$PFL")" --ids 2>/dev/null | tr '\n' ',' | sed 's/,$//')"
 else

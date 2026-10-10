@@ -9,16 +9,16 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-COLLECT_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
+COLLECT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -33,7 +33,7 @@ run_with_timeout() {
 
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'supvsr8'; }
 
-if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" ]; then
     skip "T8: supervisor-state-writer.js not present"
     echo ""
     echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
@@ -95,7 +95,7 @@ if (armed_at_after !== armed_at_before) {
 
 # --- T8b: audit_phase="done" → collect-audit-triggers must NOT re-arm ---
 run_t8b() {
-    if [ ! -f "$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
         skip "T8b: collect-audit-triggers.js not present"
         return
     fi
@@ -196,7 +196,7 @@ process.stdout.write(JSON.stringify({ verdict, phase }));
 # But Step 6 restricts trigger (b) to cumSev==="error" only at Stop time.
 # This test asserts the Step 6 behavior: warning does NOT arm at Stop via collect-audit-triggers.
 run_t8d() {
-    if [ ! -f "$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
         skip "T8d: collect-audit-triggers.js not present"
         return
     fi
@@ -241,7 +241,7 @@ process.stdout.write(JSON.stringify(result));
 # --- T8e: AUDIT_SEVERITY_THRESHOLD must be 'warning' after #1256 implementation ---
 # RED-EXPECTED: current value is 'error'; must become 'warning' after /write-code
 run_t8e() {
-    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-schema.js" ]; then
         skip "T8e: supervisor-state-schema.js not present"
         return
     fi
@@ -268,7 +268,7 @@ run_t8e
 # collectAuditCandidates() should return shouldArm=true with a step-complete cause (TR1).
 # This is trigger (a) in collect-audit-triggers.js.
 run_additional1_confirm_sentinel() {
-    if [ ! -f "$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
         skip "Additional-1: collect-audit-triggers.js not present"
         return
     fi
@@ -328,7 +328,7 @@ process.stdout.write(String(r.shouldArm) + '|' + String(r.cause || 'null'));
 }
 
 run_c8_confirm_table() {
-    if [ ! -f "$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
         skip "C8: collect-audit-triggers.js not present"
         return
     fi
@@ -371,9 +371,9 @@ TABLE
 run_c8_confirm_table
 
 # --- T8f: one Stop with several TRs coalesces into a single armed run (S6-c) ---
-AUDIT_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer/audit.js"
+AUDIT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer/audit.js"
 run_t8f_coalescing() {
-    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-state-writer/audit.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer/audit.js" ]; then
         skip "T8f: supervisor-state-writer/audit.js not present"
         return
     fi

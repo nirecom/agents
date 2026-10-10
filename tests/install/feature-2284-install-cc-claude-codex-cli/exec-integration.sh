@@ -59,10 +59,11 @@ _run_installer_sh() {
     local rc=0
     local mock_home="$TMP_DIR/home-$$"
     mkdir -p "$mock_home"
-    env -i PATH="$stub_bin:/usr/bin:/bin" \
-        HOME="$mock_home" \
+    ( pin_home_and_userprofile "$mock_home"
+      env -i PATH="$stub_bin:/usr/bin:/bin" \
+        HOME="$HOME" USERPROFILE="$USERPROFILE" \
         AGENTS_ROOT="$mock_root" \
-        bash "$installer" > "$TMP_DIR/installer-stdout" 2> "$TMP_DIR/installer-stderr" || rc=$?
+        bash "$installer" > "$TMP_DIR/installer-stdout" 2> "$TMP_DIR/installer-stderr" ) || rc=$?
     echo "$rc"
 }
 

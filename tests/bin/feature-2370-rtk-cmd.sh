@@ -11,11 +11,11 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RTK_CMD="$AGENTS_DIR/bin/rtk-cmd"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RTK_CMD="$SCRIPT_CHECKOUT_ROOT/bin/rtk-cmd"
 
 # Shared harness: pass/fail/skip reporters + PASS/FAIL counters + session-ID unset.
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 TMPDIR_T="$(make_tmp)"
 trap 'rm -rf "$TMPDIR_T"' EXIT
@@ -60,10 +60,13 @@ exec "\$@"
 FAKE_CANARY_EOF
 chmod +x "$TMPDIR_T/fake_rtk_canary"
 
-# ---- Fake AGENTS_CONFIG_DIR fixtures ----
+# ---- Fake checkout fixtures ----
+# rtk-cmd takes get-config-var from beside itself, so each fake checkout holds a
+# copy of the wrapper next to its stub; the cases launch that copy.
 
 # case (c): get-config-var exits 1 (RTK ON), but no rtk in PATH
 mkdir -p "$TMPDIR_T/fake_agents_c/bin"
+cp "$RTK_CMD" "$TMPDIR_T/fake_agents_c/bin/rtk-cmd"
 cat > "$TMPDIR_T/fake_agents_c/bin/get-config-var" << 'GCV_C_EOF'
 #!/bin/bash
 exit 1
@@ -73,6 +76,7 @@ mkdir -p "$TMPDIR_T/no-rtk-bin"
 
 # case (h): get-config-var exits 3 (fail-safe-OFF)
 mkdir -p "$TMPDIR_T/fake_agents_h3/bin"
+cp "$RTK_CMD" "$TMPDIR_T/fake_agents_h3/bin/rtk-cmd"
 cat > "$TMPDIR_T/fake_agents_h3/bin/get-config-var" << 'GCV_H3_EOF'
 #!/bin/bash
 exit 3
@@ -81,6 +85,7 @@ chmod +x "$TMPDIR_T/fake_agents_h3/bin/get-config-var"
 
 # case (h): get-config-var exits 4 (fail-safe-OFF)
 mkdir -p "$TMPDIR_T/fake_agents_h4/bin"
+cp "$RTK_CMD" "$TMPDIR_T/fake_agents_h4/bin/rtk-cmd"
 cat > "$TMPDIR_T/fake_agents_h4/bin/get-config-var" << 'GCV_H4_EOF'
 #!/bin/bash
 exit 4
@@ -89,11 +94,16 @@ chmod +x "$TMPDIR_T/fake_agents_h4/bin/get-config-var"
 
 # case (m): get-config-var exits 2 (fail-safe-OFF, CPR-ORTH sibling of 3/4)
 mkdir -p "$TMPDIR_T/fake_agents_h2/bin"
+cp "$RTK_CMD" "$TMPDIR_T/fake_agents_h2/bin/rtk-cmd"
 cat > "$TMPDIR_T/fake_agents_h2/bin/get-config-var" << 'GCV_H2_EOF'
 #!/bin/bash
 exit 2
 GCV_H2_EOF
 chmod +x "$TMPDIR_T/fake_agents_h2/bin/get-config-var"
+
+# case (g): a checkout with the wrapper but no get-config-var beside it
+mkdir -p "$TMPDIR_T/fake_agents_g/bin"
+cp "$RTK_CMD" "$TMPDIR_T/fake_agents_g/bin/rtk-cmd"
 
 # case (k): fake rtk named 'rtk' on PATH, so `command -v rtk` (not RTK_BIN)
 # is the resolution route under test.
@@ -118,7 +128,7 @@ chmod +x "$TMPDIR_T/fake_cmd_argv"
 
 # (a) RTK=on + usable RTK_BIN=fake_rtk → rtk is called, stdout contains RTK_CALLED
 ec_a=0
-out_a=$(env RTK=on RTK_BIN="$TMPDIR_T/fake_rtk" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+out_a=$(env RTK=on RTK_BIN="$TMPDIR_T/fake_rtk" \
   "$RTK_CMD" "$TMPDIR_T/fake_cmd") || ec_a=$?
 if [[ "$out_a" == *"RTK_CALLED"* ]]; then
   pass "(a) RTK=on: stdout contains RTK_CALLED"
@@ -128,7 +138,7 @@ fi
 
 # (b) RTK=off + RTK_BIN set → passthrough (rtk NOT called)
 ec_b=0
-out_b=$(env RTK=off RTK_BIN="$TMPDIR_T/fake_rtk" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+out_b=$(env RTK=off RTK_BIN="$TMPDIR_T/fake_rtk" \
   "$RTK_CMD" "$TMPDIR_T/fake_cmd") || ec_b=$?
 if [[ "$out_b" == *"FAKECMD_CALLED"* ]]; then
   pass "(b) RTK=off: stdout contains FAKECMD_CALLED (passthrough)"
@@ -136,7 +146,7 @@ else
   fail "(b) RTK=off: expected FAKECMD_CALLED, got '$out_b' (ec=$ec_b)"
 fi
 
-# (c) rtk absent — HERMETIC: fake AGENTS_CONFIG_DIR returns exit 1 (RTK ON),
+# (c) rtk absent — HERMETIC: the fake checkout's get-config-var returns exit 1 (RTK ON),
 #     no rtk binary in PATH, RTK_BIN="" → passthrough.
 #     PATH includes /usr/bin:/bin because the wrapper's `#!/usr/bin/env bash`
 #     shebang needs `env`/`bash` resolvable via PATH; the empty no-rtk-bin dir
@@ -145,9 +155,9 @@ fi
 #     the "rtk absent" premise holds. This is the PATH the approved detail plan
 #     specifies (detail.md case (c) — two-stage hermetic approach).
 ec_c=0
-out_c=$(env AGENTS_CONFIG_DIR="$TMPDIR_T/fake_agents_c" RTK_BIN="" \
+out_c=$(env RTK_BIN="" \
   PATH="$TMPDIR_T/no-rtk-bin:/usr/bin:/bin" \
-  "$RTK_CMD" "$TMPDIR_T/fake_cmd") || ec_c=$?
+  "$TMPDIR_T/fake_agents_c/bin/rtk-cmd" "$TMPDIR_T/fake_cmd") || ec_c=$?
 if [[ "$out_c" == *"FAKECMD_CALLED"* ]]; then
   pass "(c) rtk absent: passthrough despite RTK=on (FAKECMD_CALLED)"
 else
@@ -156,7 +166,7 @@ fi
 
 # (d) exit-code transparency: passthrough command exits 42
 ec_d=0
-out_d=$(env RTK=off AGENTS_CONFIG_DIR="$AGENTS_DIR" RTK_BIN="" \
+out_d=$(env RTK=off RTK_BIN="" \
   "$RTK_CMD" "$TMPDIR_T/fake_cmd_ec42") || ec_d=$?
 if [[ "$ec_d" -eq 42 ]]; then
   pass "(d) exit-code transparency: ec=$ec_d (expected 42)"
@@ -169,7 +179,7 @@ fi
 #     "arg with space" into three separate brackets and drop the empty arg,
 #     so these assertions genuinely distinguish correct from broken behavior.
 ec_e=0
-out_e=$(env RTK=off AGENTS_CONFIG_DIR="$AGENTS_DIR" RTK_BIN="" \
+out_e=$(env RTK=off RTK_BIN="" \
   "$RTK_CMD" "$TMPDIR_T/fake_cmd_argv" arg1 "arg with space" "" '*' --flag) || ec_e=$?
 if [[ "$out_e" == *"[arg1]"* ]] \
    && [[ "$out_e" == *"[arg with space]"* ]] \
@@ -183,7 +193,7 @@ fi
 
 # (f) mechanism canary: fake_rtk_canary writes args to canary_args then exec git log
 ec_f=0
-out_f=$(env RTK=on RTK_BIN="$TMPDIR_T/fake_rtk_canary" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+out_f=$(env RTK=on RTK_BIN="$TMPDIR_T/fake_rtk_canary" \
   "$RTK_CMD" git log --oneline -1 2>&1) || ec_f=$?
 
 canary_content=""
@@ -205,20 +215,22 @@ else
   fail "(f) canary: expected exit 0, got ec=$ec_f (out='$out_f')"
 fi
 
-# (g) AGENTS_CONFIG_DIR empty → immediate passthrough (fail-safe-OFF at dir check)
+# (g) get-config-var reachable neither beside the wrapper nor on PATH →
+#     immediate passthrough (fail-safe-OFF at the resolution check)
 ec_g=0
-out_g=$(env AGENTS_CONFIG_DIR="" RTK_BIN="" \
-  "$RTK_CMD" "$TMPDIR_T/fake_cmd") || ec_g=$?
+out_g=$(env RTK_BIN="$TMPDIR_T/fake_rtk" \
+  PATH="$TMPDIR_T/no-rtk-bin:/usr/bin:/bin" \
+  "$TMPDIR_T/fake_agents_g/bin/rtk-cmd" "$TMPDIR_T/fake_cmd") || ec_g=$?
 if [[ "$out_g" == *"FAKECMD_CALLED"* ]]; then
-  pass "(g) AGENTS_CONFIG_DIR empty: passthrough"
+  pass "(g) get-config-var unreachable: passthrough"
 else
-  fail "(g) AGENTS_CONFIG_DIR empty: expected FAKECMD_CALLED, got '$out_g' (ec=$ec_g)"
+  fail "(g) get-config-var unreachable: expected FAKECMD_CALLED, got '$out_g' (ec=$ec_g)"
 fi
 
 # (h) get-config-var exit 3 → fail-safe-OFF → passthrough
 ec_h3=0
-out_h3=$(env AGENTS_CONFIG_DIR="$TMPDIR_T/fake_agents_h3" RTK_BIN="$TMPDIR_T/fake_rtk" \
-  "$RTK_CMD" "$TMPDIR_T/fake_cmd") || ec_h3=$?
+out_h3=$(env RTK_BIN="$TMPDIR_T/fake_rtk" \
+  "$TMPDIR_T/fake_agents_h3/bin/rtk-cmd" "$TMPDIR_T/fake_cmd") || ec_h3=$?
 if [[ "$out_h3" == *"FAKECMD_CALLED"* ]]; then
   pass "(h) gcv exit 3: fail-safe-OFF passthrough"
 else
@@ -227,8 +239,8 @@ fi
 
 # (h) get-config-var exit 4 → fail-safe-OFF → passthrough
 ec_h4=0
-out_h4=$(env AGENTS_CONFIG_DIR="$TMPDIR_T/fake_agents_h4" RTK_BIN="$TMPDIR_T/fake_rtk" \
-  "$RTK_CMD" "$TMPDIR_T/fake_cmd") || ec_h4=$?
+out_h4=$(env RTK_BIN="$TMPDIR_T/fake_rtk" \
+  "$TMPDIR_T/fake_agents_h4/bin/rtk-cmd" "$TMPDIR_T/fake_cmd") || ec_h4=$?
 if [[ "$out_h4" == *"FAKECMD_CALLED"* ]]; then
   pass "(h) gcv exit 4: fail-safe-OFF passthrough"
 else
@@ -238,7 +250,7 @@ fi
 # (i) non-executable RTK_BIN → [ -x ] check fails → passthrough
 touch "$TMPDIR_T/non_exec_rtk"
 ec_i=0
-out_i=$(env RTK=on RTK_BIN="$TMPDIR_T/non_exec_rtk" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+out_i=$(env RTK=on RTK_BIN="$TMPDIR_T/non_exec_rtk" \
   "$RTK_CMD" "$TMPDIR_T/fake_cmd") || ec_i=$?
 if [[ "$out_i" == *"FAKECMD_CALLED"* ]]; then
   pass "(i) non-exec RTK_BIN: passthrough"
@@ -252,7 +264,7 @@ fi
 #      bin/rtk-cmd's RTK_BIN override comment).
 mkdir -p "$TMPDIR_T/dir_rtk"
 ec_i2=0
-out_i2=$(env RTK=on RTK_BIN="$TMPDIR_T/dir_rtk" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+out_i2=$(env RTK=on RTK_BIN="$TMPDIR_T/dir_rtk" \
   "$RTK_CMD" "$TMPDIR_T/fake_cmd") || ec_i2=$?
 if [[ "$out_i2" == *"FAKECMD_CALLED"* && "$ec_i2" -eq 0 ]]; then
   pass "(i2) directory RTK_BIN: -f guard rejects dir, passthrough"
@@ -262,9 +274,9 @@ fi
 
 # (k) RTK=on + RTK_BIN="" + rtk on PATH → `command -v rtk` resolves it → rtk called
 ec_k=0
-out_k=$(env AGENTS_CONFIG_DIR="$TMPDIR_T/fake_agents_c" RTK_BIN="" \
+out_k=$(env RTK_BIN="" \
   PATH="$TMPDIR_T/rtk-on-path:/usr/bin:/bin" \
-  "$RTK_CMD" "$TMPDIR_T/fake_cmd") || ec_k=$?
+  "$TMPDIR_T/fake_agents_c/bin/rtk-cmd" "$TMPDIR_T/fake_cmd") || ec_k=$?
 # Assert both the RTK_CALLED marker AND the forwarded downstream arg: a bare
 # `exec "$_rtk_bin"` (no args) would still print "RTK_CALLED", so requiring the
 # forwarded path guards against that false-green.
@@ -281,8 +293,8 @@ fi
 
 # (m) get-config-var exit 2 → fail-safe-OFF → passthrough (CPR-ORTH sibling of 3/4)
 ec_m=0
-out_m=$(env AGENTS_CONFIG_DIR="$TMPDIR_T/fake_agents_h2" RTK_BIN="$TMPDIR_T/fake_rtk" \
-  "$RTK_CMD" "$TMPDIR_T/fake_cmd") || ec_m=$?
+out_m=$(env RTK_BIN="$TMPDIR_T/fake_rtk" \
+  "$TMPDIR_T/fake_agents_h2/bin/rtk-cmd" "$TMPDIR_T/fake_cmd") || ec_m=$?
 if [[ "$out_m" == *"FAKECMD_CALLED"* ]]; then
   pass "(m) gcv exit 2: fail-safe-OFF passthrough"
 else
@@ -291,7 +303,7 @@ fi
 
 # (n) zero args → usage error on stderr, exit 2
 ec_n=0
-out_n=$(env RTK=off AGENTS_CONFIG_DIR="$AGENTS_DIR" RTK_BIN="" \
+out_n=$(env RTK=off RTK_BIN="" \
   "$RTK_CMD" 2>&1) || ec_n=$?
 if [[ "$ec_n" -eq 2 ]]; then
   pass "(n) zero args: exit 2 (usage)"
@@ -305,7 +317,7 @@ fi
 #     separate variables so each stream is asserted independently.
 o_err_file="$TMPDIR_T/case_o_stderr"
 ec_o=0
-out_o=$(env RTK=on RTK_BIN="$TMPDIR_T/fake_rtk_ec" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+out_o=$(env RTK=on RTK_BIN="$TMPDIR_T/fake_rtk_ec" \
   "$RTK_CMD" "$TMPDIR_T/fake_cmd" 2>"$o_err_file") || ec_o=$?
 err_o=""
 if [[ -f "$o_err_file" ]]; then

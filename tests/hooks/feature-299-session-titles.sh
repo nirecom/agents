@@ -20,7 +20,7 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 # when tests call node subprocesses. T11 re-sets it explicitly to test the guard.
 unset CLAUDE_CODE_CHILD_SESSION 2>/dev/null || true
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Windows-compatible node path resolution (Git Bash: /c/... → C:/...)
 to_node_path() {
@@ -34,10 +34,10 @@ to_node_path() {
   fi
 }
 
-_AGENTS_DIR_NODE="$(to_node_path "$AGENTS_DIR")"
-SESSION_TITLE_LIB="$_AGENTS_DIR_NODE/hooks/lib/session-title.js"
-BIN_CC_SESSION_TITLE="$_AGENTS_DIR_NODE/bin/cc-session-title"
-SESSION_START_HOOK="$_AGENTS_DIR_NODE/hooks/session-start.js"
+_SCRIPT_CHECKOUT_ROOT_NODE="$(to_node_path "$SCRIPT_CHECKOUT_ROOT")"
+SESSION_TITLE_LIB="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title.js"
+BIN_CC_SESSION_TITLE="$_SCRIPT_CHECKOUT_ROOT_NODE/bin/cc-session-title"
+SESSION_START_HOOK="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/session-start.js"
 
 PASS=0; FAIL=0
 

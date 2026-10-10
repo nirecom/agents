@@ -112,7 +112,7 @@ T28_DYN_CASES
 # The static canary covers what the fixture cannot reach: a write on a branch this input never
 # takes. Absence of the API in the source is a stronger claim than absence of an observed write.
 t28_src_probe() { # <relpath> <api> -> absent|PRESENT|<missing sentinel>
-    local f="$AGENTS_DIR/$1"
+    local f="$SCRIPT_CHECKOUT_ROOT/$1"
     [ -f "$f" ] || { printf '<MISSING:%s>' "$1"; return; }
     if grep -Fq -- "$2" "$f"; then printf 'PRESENT'; else printf 'absent'; fi
 }

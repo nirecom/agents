@@ -81,8 +81,8 @@ function check(options) {
   const opts = options || {};
   const violations = [];
   const hints = [];
-  const saved = process.env.AGENTS_CONFIG_DIR;
-  if (opts.configDir) process.env.AGENTS_CONFIG_DIR = opts.configDir;
+  const saved = process.env.AGENTS_MAIN_ROOT;
+  if (opts.agentsMainRoot) process.env.AGENTS_MAIN_ROOT = opts.agentsMainRoot;
   try {
     const policy = loadLangConfig("code");
     if (classifyPolicy(policy) === "noop") return { violations, hints };
@@ -114,9 +114,9 @@ function check(options) {
     }
     return { violations, hints };
   } finally {
-    if (opts.configDir) {
-      if (saved === undefined) delete process.env.AGENTS_CONFIG_DIR;
-      else process.env.AGENTS_CONFIG_DIR = saved;
+    if (opts.agentsMainRoot) {
+      if (saved === undefined) delete process.env.AGENTS_MAIN_ROOT;
+      else process.env.AGENTS_MAIN_ROOT = saved;
     }
   }
 }

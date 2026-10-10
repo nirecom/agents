@@ -16,14 +16,14 @@ set -uo pipefail
 # TL3 gap: the real codex CLI wording, and a ledger written by a pre-#2434 build
 # (the seeded row mirrors schema v2 as documented in bin/lib/concern-ledger.sh).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/bin/feature-2434-review-loop/fixture.sh
-. "$AGENTS_DIR/tests/bin/feature-2434-review-loop/fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2434-review-loop/fixture.sh"
 
 for f in bin/workflow-control-dir hooks/workflow-state/state-io/control-dir.js hooks/lib/plans-artifact-registry.js; do
-    [ -f "$AGENTS_DIR/$f" ] || fail "implementation missing: $f"
+    [ -f "$SCRIPT_CHECKOUT_ROOT/$f" ] || fail "implementation missing: $f"
 done
 
 case_begin "format-table-drift-guard" "bin/run-codex-review-loop"
@@ -31,7 +31,7 @@ case_begin "format-table-drift-guard" "bin/run-codex-review-loop"
 # loop's own per-format parameters and the registry's format tokens, so a sixth
 # review-loop format cannot ship without legacy-continuation coverage here.
 WANT_SKILLS=""
-for w in "$AGENTS_DIR"/skills/*/scripts/run-codex-review-loop.sh; do
+for w in "$SCRIPT_CHECKOUT_ROOT"/skills/*/scripts/run-codex-review-loop.sh; do
     [ -f "$w" ] || continue
     s="${w%/scripts/run-codex-review-loop.sh}"
     WANT_SKILLS="$WANT_SKILLS ${s##*/}"
@@ -40,7 +40,7 @@ WANT_SKILLS="$(printf '%s\n' $WANT_SKILLS | sort | tr '\n' ' ')"
 GOT_SKILLS="$(printf '%s\n' "$FORMATS" | cut -d'|' -f2 | sort | tr '\n' ' ')"
 assert_eq "FORMATS covers exactly the stage wrappers on disk" "$WANT_SKILLS" "$GOT_SKILLS"
 # shellcheck source=bin/lib/codex-review-loop/format-params.sh
-. "$AGENTS_DIR/bin/lib/codex-review-loop/format-params.sh"
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-review-loop/format-params.sh"
 while IFS='|' read -r NAME SKILL FMT LFMT PROD; do
     FP_REVIEWER=""; FP_LEDGER_FORMAT=""
     if fp_resolve "$FMT"; then
@@ -51,11 +51,11 @@ while IFS='|' read -r NAME SKILL FMT LFMT PROD; do
     assert_eq "$NAME: ledger format matches the loop" "$LFMT" "$FP_LEDGER_FORMAT"
     assert_eq "$NAME: producer matches the loop" "$PROD" "$FP_REVIEWER"
     assert_contains "$NAME: the wrapper passes --format $FMT" "--format $FMT" \
-        "$(cat "$AGENTS_DIR/skills/$SKILL/scripts/run-codex-review-loop.sh")"
+        "$(cat "$SCRIPT_CHECKOUT_ROOT/skills/$SKILL/scripts/run-codex-review-loop.sh")"
 done <<EOF
 $FORMATS
 EOF
-REG="$AGENTS_DIR/hooks/lib/plans-artifact-registry.js"
+REG="$SCRIPT_CHECKOUT_ROOT/hooks/lib/plans-artifact-registry.js"
 if [ -f "$REG" ]; then
     GOT_TOKENS="$(node -e 'const r=require(process.argv[1]);console.log([...(r.FORMAT_TOKENS||[])].sort().join(","))' "$(np "$REG")" 2>/dev/null)"
     WANT_TOKENS="$(printf '%s\n' "$FORMATS" | cut -d'|' -f3,4 | tr '|' '\n' | sort -u | tr '\n' ',')"

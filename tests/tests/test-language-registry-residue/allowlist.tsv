@@ -15,3 +15,15 @@ bin/mutation-probe.sh	bname_noext	maps a tests/lib helper to its node unit test 
 bin/sweep-issues.sh	referenced tests/*.sh paths	--help prose describing tier 2; not discovery
 tests/lib/test-command-ir.js	for f in tests/*.sh; do head	test data: a sample command string for the parser under test
 bin/check-plans-dir-isolation/main.js	const TESTS_RE = /^tests\/.*\.sh$/;	the isolation audit parses shell exports and harness_isolate calls, so its scope is shell tests by design; not a launch per language
+bin/check-root-names/env-name.js	found = node(line, v.bare[i]);	picks the env-write parser for the source language of the file the root-names gate scans; not a launch per test language
+bin/check-root-names/line-scan.js	({ code, bare } = jsLines(raw));	picks the comment and string stripper for the source language of a scanned file; not a launch per test language
+bin/check-root-names/script-root-form.js	v.lang !== "sh" && v.lang !== "js" && v.lang !== "ps"	limits the root-form check to the source languages it can parse, for every tracked file; not test discovery
+bin/check-root-names/script-root-form.js	checkNode(file, v, say);	picks the root-form parser for the source language of a scanned file; not a launch per test language
+bin/check-root-names/structural.js	view(file).lang === "js" && file.text.includes(c.token)	asks whether a payload-key reader is JavaScript source before parsing it; not a launch per test language
+bin/check-root-names/structural.js	v.lang !== "sh" && v.lang !== "js" && v.lang !== "ps"	limits the structural check to the source languages it can parse, for every tracked file; not test discovery
+bin/check-root-names/structural.js	JS_ENV_WRITE.test(line) || JS_ENV_KEY.test(line)	picks the env-handover pattern for the source language of a scanned file; not a launch per test language
+bin/check-root-names/structural.js	if (v.lang === "js") {	applies the JavaScript-only parameter and carrier checks to a scanned source file; not a launch per test language
+tests/lib/root-decoy-build.js	if (ext === ".js" || ext === ".cjs") return "node";	maps a tracked file's extension to the stub body the decoy tree writes for it; every tracked file, not test discovery
+tests/lib/root-decoy-build.js	if (ext === ".sh" || ext === ".bash") return "bash";	maps a tracked file's extension to the stub body the decoy tree writes for it; every tracked file, not test discovery
+tests/lib/root-decoy-build.js	if (ext === ".py") return "python";	maps a tracked file's extension to the stub body the decoy tree writes for it; every tracked file, not test discovery
+tests/lib/root-decoy-build.js	if (kind === "bash") {	selects the stub body template for a decoy file already classified by stubKind; not a launch per test language

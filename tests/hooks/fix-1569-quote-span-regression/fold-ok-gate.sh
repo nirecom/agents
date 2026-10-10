@@ -1,33 +1,19 @@
 # tests/hooks/fix-1569-quote-span-regression/fold-ok-gate.sh
 # Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/lib/quote-spans/fold.js
 # Tags: worktree, enforce, hook, quote-spans, arg-tail, security, classifier, scope:issue-specific
-#
-# STATUS: FOLDOK-src RED; the FOLDOK-verdict / FOLDOK-fold rows are GREEN today
-# and must stay green. Sourced by tests/hooks/fix-1569-quote-span-regression.sh —
-# uses its pass/fail, run_with_timeout, ACD, DISPATCH, MAIN_WT, AGENTS_DIR and
-# _AGENTS_DIR_NODE.
-#
-# Defect: worker-script.js reads `foldNewlinesInSpans(argTail, ["dq"]).out` and
-# never looks at the accompanying `.ok`. The fold's contract is that `.ok:false`
-# means "this string could not be parsed, the returned `out` is not a trustworthy
-# rendering of it" — consuming `.out` regardless is exactly the fail-OPEN shape
-# the rest of this module avoids.
-#
-# The rows below pin the required END STATE from both sides: the verdict must
-# land on the reject side whenever the fold failed (behaviour), and the caller
-# must stop consuming `.out` blind (structure). Today the behaviour rows already
-# hold — but only by accident: on `.ok:false` the fold happens to return the
-# input unchanged, and rejectsUnsafeArgTail then re-scans, fails again and
-# rejects. That is a second predicate's fail-closed default standing in for a
-# missing check here; it is not a property this call site owns, and any change
-# to the fold's failure payload (returning a best-effort partial render, say)
-# silently turns these ALLOW/BLOCK rows over. Hence the structural row.
+# Sourced by tests/hooks/fix-1569-quote-span-regression.sh — uses its pass/fail,
+# run_with_timeout, FAKE_SCRIPT_CHECKOUT_ROOT, DISPATCH, MAIN_WT, SCRIPT_CHECKOUT_ROOT.
+# Defect pinned: worker-script.js must not consume foldNewlinesInSpans(...).out
+# while ignoring `.ok` (`.ok:false` = unparseable, `out` untrustworthy; using it
+# anyway is fail-OPEN). Behaviour rows: a fold-failing tail rejects. Structural
+# row: the call site owns that decision instead of relying on
+# rejectsUnsafeArgTail re-scanning and failing closed by accident.
 
 run_fold_ok_gate_cases() {
 
 # ── Behaviour: a fold-failing arg tail must reject ──────────────────────────
 fold_probe() {
-    run_with_timeout 30 env "AGENTS_CONFIG_DIR=$ACD" node -e '
+    run_with_timeout 30 env "AGENTS_MAIN_ROOT=$FAKE_SCRIPT_CHECKOUT_ROOT" node -e '
       const path = require("path");
       const root = process.argv[1];
       const op = process.argv[2], tail = process.argv[3];
@@ -48,7 +34,7 @@ fold_probe() {
           console.log("ERROR: unknown op " + op);
         }
       } catch (e) { console.log("ERROR: threw " + e.message); }
-    ' "$_AGENTS_DIR_NODE" "$1" "$2" "$MAIN_WT" 2>&1
+    ' "$FAKE_SCRIPT_CHECKOUT_ROOT" "$1" "$2" "$MAIN_WT" 2>&1
 }
 
 assert_fold() {
@@ -78,7 +64,7 @@ assert_fold "FOLDOK-verdict balanced twin accepted"    allowed "bash \"$DISPATCH
 
 # ── Structure: the call site must own its fail-closed decision ──────────────
 # RED today: line 97 is `const scanTail = foldNewlinesInSpans(argTail, ["dq"]).out;`.
-WORKER_SRC_FOLDOK="$AGENTS_DIR/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
+WORKER_SRC_FOLDOK="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
 
 assert_foldok_src() {
     local label="$1" pattern="$2" want="$3" got=false

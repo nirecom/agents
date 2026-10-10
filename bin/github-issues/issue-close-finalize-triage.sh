@@ -31,11 +31,6 @@ if ! printf '%s' "$N" | grep -qE '^[0-9]+$'; then
     exit 1
 fi
 
-if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
-    echo "Error: AGENTS_CONFIG_DIR not set" >&2
-    exit 1
-fi
-
 # shellcheck source=./issue-close-triage-lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/issue-close-triage-lib.sh"
 

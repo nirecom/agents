@@ -1,30 +1,30 @@
 #!/bin/bash
 # tests/hooks/fix-389-load-env-default-fallback.sh
-# Tests: hooks/lib/load-env.js
+# Tests: hooks/lib/load-env.js, hooks/lib/script-checkout-root.js
 # Tags: env, load-env, worktree, scope:issue-specific
-# RED for #389. STATUS: T389-1..7 GREEN (T389-7 pins the C4 short-circuit; see config-dir-cases.sh);
-# T389-8 RED until C4 (SKIP off win32); CV-1..5 (#2100) RED until resolveConfigVar lands.
+# T389-1..6 live here; T389-7/8 (load-env's own AGENTS_MAIN_ROOT read) in agents-main-root-cases.sh;
+# CV-1..5 (#2100, resolveConfigVar) in resolve-config-var-cases.sh. T389-8 skips off win32.
 # TL3 gap (what this TL2 test does NOT catch): live ~\.claude\ → C:\git\agents\ symlink
-# resolution, ENOLINK / unusual NTFS symlink types, a hook whose AGENTS_CONFIG_DIR a subagent spawn dropped.
+# resolution, ENOLINK / unusual NTFS symlink types, a hook whose AGENTS_MAIN_ROOT a subagent spawn dropped.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-LOAD_ENV="$AGENTS_DIR/hooks/lib/load-env.js"
-LOAD_ENV_NODE="$_AGENTS_DIR_NODE/hooks/lib/load-env.js"
+LOAD_ENV="$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.js"
+LOAD_ENV_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/load-env.js"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -38,13 +38,13 @@ require_source() {
     return 0
 }
 
-# T389-1: AGENTS_CONFIG_DIR is set to a temp dir containing .env → loaded.
+# T389-1: AGENTS_MAIN_ROOT is set to a temp dir containing .env → loaded.
 run_t389_1() {
-    require_source "$LOAD_ENV" "T389-1: AGENTS_CONFIG_DIR points to temp dir with .env -> loaded" || return
+    require_source "$LOAD_ENV" "T389-1: AGENTS_MAIN_ROOT points to temp dir with .env -> loaded" || return
     local tmp out rc
-    tmp="$(mktemp -d)"
+    tmp="$(mktemp -d "$_ISOLATION_TMP_ROOT/t389.XXXXXX")"
     printf 'TEST_T389_1_KEY=loaded_value\n' > "$tmp/.env"
-    out=$(AGENTS_CONFIG_DIR="$tmp" run_with_timeout 5 node -e "
+    out=$(AGENTS_MAIN_ROOT="$tmp" run_with_timeout 5 node -e "
 const {loadDefaultEnv} = require('$LOAD_ENV_NODE');
 const ok = loadDefaultEnv();
 process.stdout.write(JSON.stringify({ok, val: process.env.TEST_T389_1_KEY || ''}));
@@ -52,29 +52,29 @@ process.stdout.write(JSON.stringify({ok, val: process.env.TEST_T389_1_KEY || ''}
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && echo "$out" | grep -q '"val":"loaded_value"' && echo "$out" | grep -q '"ok":true'; then
-        pass "T389-1: AGENTS_CONFIG_DIR points to temp dir with .env -> loaded"
+        pass "T389-1: AGENTS_MAIN_ROOT points to temp dir with .env -> loaded"
     else
-        fail "T389-1: AGENTS_CONFIG_DIR points to temp dir with .env -> loaded (rc=$rc, out=$out)"
+        fail "T389-1: AGENTS_MAIN_ROOT points to temp dir with .env -> loaded (rc=$rc, out=$out)"
     fi
 }
 
 # T389-2: the realpath fallback (~/.claude/hooks/lib/... → real C:/git/agents/...)
-# still exists and is still USED. Behavioural on agents-config-dir.js (C4 moved
+# still exists and is still USED. Behavioural on script-checkout-root.js (C4 moved
 # realpathSync there; a load-env.js grep would pass on a comment):
-#   (a) enumeration — AGENTS_CONFIG_DIR unset yields a `realpath`-sourced candidate.
+#   (a) enumeration — AGENTS_MAIN_ROOT unset yields a `realpath`-sourced candidate.
 #   (b) selection — when the module anchor does NOT validate, the realpath
 #       candidate is adopted (the symlinked-install case).
 # Real symlink resolution on a live ~/.claude install stays the TL3 gap.
 run_t389_2() {
-    local label="T389-2: realpath candidate is enumerated and adopted (agents-config-dir.js)"
-    require_source "$AGENTS_DIR/hooks/lib/agents-config-dir.js" "$label" || return
+    local label="T389-2: realpath candidate is enumerated and adopted (script-checkout-root.js)"
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/script-checkout-root.js" "$label" || return
     local out rc
-    out=$(run_with_timeout 5 env -u AGENTS_CONFIG_DIR node -e "
-const acd = require('$_AGENTS_DIR_NODE/hooks/lib/agents-config-dir.js');
-const sources = acd.configDirCandidates().map((c) => c.source);
-const real = '$_AGENTS_DIR_NODE';
+    out=$(run_with_timeout 5 env -u AGENTS_MAIN_ROOT node -e "
+const script_checkout_root = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/script-checkout-root.js');
+const sources = script_checkout_root.scriptCheckoutRootCandidates().map((c) => c.source);
+const real = '$_SCRIPT_CHECKOUT_ROOT_NODE';
 // module candidate deliberately unresolvable -> only the realpath one can win.
-const picked = acd._resolveFromCandidates([
+const picked = script_checkout_root._resolveFromCandidates([
   { dir: real + '/no-such-module-anchor', source: 'module' },
   { dir: real, source: 'realpath' },
 ]);
@@ -89,39 +89,61 @@ process.stdout.write(JSON.stringify({ sources, picked }));
         fail "$label (no realpath-sourced candidate enumerated: $out)"
         return
     fi
-    if echo "$out" | grep -q "\"picked\":\"$_AGENTS_DIR_NODE\""; then
+    if echo "$out" | grep -q "\"picked\":\"$_SCRIPT_CHECKOUT_ROOT_NODE\""; then
         pass "$label"
     else
         fail "$label (realpath candidate not adopted when the module anchor fails: $out)"
     fi
 }
 
-# T389-3: AGENTS_CONFIG_DIR unset and realpath fallback path has no .env →
-# falls through gracefully (no crash, no env loaded).
-run_t389_3() {
-    require_source "$LOAD_ENV" "T389-3: no AGENTS_CONFIG_DIR and no .env -> graceful no-op" || return
-    local tmp out rc
-    tmp="$(mktemp -d)"
-    # Run from a directory with no .env anywhere reachable. Unset
-    # AGENTS_CONFIG_DIR so loadDefaultEnv falls into the fallback chain. The
-    # function must not throw; existing repo .env may still be picked up via
-    # the file-relative fallback, so we only assert rc=0.
-    out=$(cd "$tmp" && run_with_timeout 5 env -u AGENTS_CONFIG_DIR node -e "
-const {loadDefaultEnv} = require('$LOAD_ENV_NODE');
-try {
-  loadDefaultEnv();
-  process.stdout.write('ok');
-} catch (e) {
-  process.stdout.write('THREW: ' + e.message);
+# _t389_3_probe <cwd> <load-env.js path> — loads with AGENTS_MAIN_ROOT unset from a neutral
+# directory; prints {ok, canary} or THREW.
+_t389_3_probe() {
+    local cwd="$1" module="$2"
+    cd "$cwd" || return 1
+    run_with_timeout 5 env -u AGENTS_MAIN_ROOT -u CLAUDE_PROJECT_DIR node -e "
+const {loadDefaultEnv} = require('$module');
+let ok;
+try { ok = loadDefaultEnv(); } catch (e) { process.stdout.write('THREW: ' + e.message); process.exit(0); }
+process.stdout.write(JSON.stringify({ok, canary: process.env.T389_3_CANARY || ''}));
+" 2>/dev/null
 }
-" 2>/dev/null)
-    rc=$?
-    rm -rf "$tmp"
-    if [ $rc -eq 0 ] && [ "$out" = "ok" ]; then
-        pass "T389-3: no AGENTS_CONFIG_DIR and no .env -> graceful no-op"
-    else
-        fail "T389-3: no AGENTS_CONFIG_DIR and no .env -> graceful no-op (rc=$rc, out=$out)"
+
+# T389-3: AGENTS_MAIN_ROOT unset and no .env at the checkout the reader runs from → a
+# graceful no-op that REPORTS it loaded nothing. load-env.js runs from a throwaway copy
+# of hooks/lib whose root has no .env: the root of this checkout may carry one, and then
+# the state under test would never be reached. T389-3b is the control: the same copy
+# with a .env answers true, so ok=false above is the absence and not a broken copy.
+run_t389_3() {
+    local label="T389-3: no AGENTS_MAIN_ROOT and no .env -> graceful no-op, loadDefaultEnv returns false"
+    require_source "$LOAD_ENV" "$label" || return
+    local root cwd copied_node out rc
+    root="$(mktemp -d "$_ISOLATION_TMP_ROOT/t389-3-module.XXXXXX")"
+    cwd="$(mktemp -d "$_ISOLATION_TMP_ROOT/t389-3-cwd.XXXXXX")"
+    mkdir -p "$root/hooks/lib"
+    if ! cp -r "$(dirname "$LOAD_ENV")/." "$root/hooks/lib/"; then
+        fail "$label (fixture: could not copy hooks/lib)"
+        return
     fi
+    if [ -e "$root/.env" ]; then
+        fail "$label (fixture: the copied root already has a .env)"
+        return
+    fi
+    copied_node="$(np "$root")/hooks/lib/load-env.js"
+    out="$(_t389_3_probe "$cwd" "$copied_node")"; rc=$?
+    if [ $rc -eq 0 ] && [ "$out" = '{"ok":false,"canary":""}' ]; then
+        pass "$label"
+    else
+        fail "$label (rc=$rc, out=$out)"
+    fi
+    printf 'T389_3_CANARY=present\n' > "$root/.env"
+    out="$(_t389_3_probe "$cwd" "$copied_node")"; rc=$?
+    if [ $rc -eq 0 ] && [ "$out" = '{"ok":true,"canary":"present"}' ]; then
+        pass "T389-3b: control — the same copy with a .env loads it and returns true"
+    else
+        fail "T389-3b: control — the same copy with a .env loads it and returns true (rc=$rc, out=$out)"
+    fi
+    rm -rf "$root" "$cwd"
 }
 
 # T389-4: When KEY="" (empty string) exists in process.env, loadDefaultEnv
@@ -132,9 +154,9 @@ try {
 run_t389_4() {
     require_source "$LOAD_ENV" "T389-4: empty-string process.env does NOT shadow .env value" || return
     local tmp out rc
-    tmp="$(mktemp -d)"
+    tmp="$(mktemp -d "$_ISOLATION_TMP_ROOT/t389.XXXXXX")"
     printf 'LOAD_ENV_TEST_KEY=fromfile\n' > "$tmp/.env"
-    out=$(AGENTS_CONFIG_DIR="$tmp" LOAD_ENV_TEST_KEY="" run_with_timeout 5 node -e "
+    out=$(AGENTS_MAIN_ROOT="$tmp" LOAD_ENV_TEST_KEY="" run_with_timeout 5 node -e "
 const {loadDefaultEnv} = require('$LOAD_ENV_NODE');
 loadDefaultEnv();
 process.stdout.write(process.env.LOAD_ENV_TEST_KEY || '');
@@ -154,9 +176,9 @@ process.stdout.write(process.env.LOAD_ENV_TEST_KEY || '');
 run_t389_5() {
     require_source "$LOAD_ENV" "T389-5: non-empty process.env wins over .env value" || return
     local tmp out rc
-    tmp="$(mktemp -d)"
+    tmp="$(mktemp -d "$_ISOLATION_TMP_ROOT/t389.XXXXXX")"
     printf 'LOAD_ENV_TEST_KEY=fromfile\n' > "$tmp/.env"
-    out=$(AGENTS_CONFIG_DIR="$tmp" LOAD_ENV_TEST_KEY="fromenv" run_with_timeout 5 node -e "
+    out=$(AGENTS_MAIN_ROOT="$tmp" LOAD_ENV_TEST_KEY="fromenv" run_with_timeout 5 node -e "
 const {loadDefaultEnv} = require('$LOAD_ENV_NODE');
 loadDefaultEnv();
 process.stdout.write(process.env.LOAD_ENV_TEST_KEY || '');
@@ -176,9 +198,9 @@ process.stdout.write(process.env.LOAD_ENV_TEST_KEY || '');
 run_t389_6() {
     require_source "$LOAD_ENV" "T389-6: debug message includes key name, not secret value" || return
     local tmp out_stderr rc
-    tmp="$(mktemp -d)"
+    tmp="$(mktemp -d "$_ISOLATION_TMP_ROOT/t389.XXXXXX")"
     printf 'LOAD_ENV_TEST_SECRET=fromfile\n' > "$tmp/.env"
-    out_stderr=$(AGENTS_CONFIG_DIR="$tmp" AGENTS_HOOK_DEBUG=1 LOAD_ENV_TEST_SECRET="supersecret" \
+    out_stderr=$(AGENTS_MAIN_ROOT="$tmp" AGENTS_HOOK_DEBUG=1 LOAD_ENV_TEST_SECRET="supersecret" \
         run_with_timeout 5 node -e "
 const {loadDefaultEnv} = require('$LOAD_ENV_NODE');
 loadDefaultEnv();
@@ -189,32 +211,29 @@ loadDefaultEnv();
         fail "T389-6: node exited with rc=$rc"
         return
     fi
+    # Two separate claims: the line naming the key must EXIST (silence would make the
+    # leak check below vacuous), and neither value may appear anywhere on stderr.
     if echo "$out_stderr" | grep -q "LOAD_ENV_TEST_SECRET"; then
-        if echo "$out_stderr" | grep -q "supersecret"; then
-            fail "T389-6: stderr contains secret value 'supersecret' (must not leak): $out_stderr"
-        else
-            pass "T389-6: debug message includes key name, not secret value"
-        fi
+        pass "T389-6: the debug output has a line naming the shadowed key"
     else
-        # Debug output may be absent when key is skipped without logging — only
-        # fail if the secret itself appears.
-        if echo "$out_stderr" | grep -q "supersecret"; then
-            fail "T389-6: stderr contains secret value 'supersecret' (must not leak): $out_stderr"
-        else
-            pass "T389-6: debug message includes key name, not secret value (no debug output — key skipped silently)"
-        fi
+        fail "T389-6: the debug output has a line naming the shadowed key (stderr: $out_stderr)"
+    fi
+    if echo "$out_stderr" | grep -q -e "supersecret" -e "fromfile"; then
+        fail "T389-6: stderr carries a value of the shadowed key (must not leak): $out_stderr"
+    else
+        pass "T389-6: the debug output carries neither the exported nor the .env value"
     fi
 }
 
-# shellcheck source=./fix-389-load-env-default-fallback/config-dir-cases.sh
-. "$(dirname "${BASH_SOURCE[0]}")/fix-389-load-env-default-fallback/config-dir-cases.sh"
+# shellcheck source=./fix-389-load-env-default-fallback/agents-main-root-cases.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fix-389-load-env-default-fallback/agents-main-root-cases.sh"
 # shellcheck source=./fix-389-load-env-default-fallback/resolve-config-var-cases.sh
 . "$(dirname "${BASH_SOURCE[0]}")/fix-389-load-env-default-fallback/resolve-config-var-cases.sh"
 
-case_begin "t389-1-agents-config-dir-env-loaded" "hooks/lib/load-env.js"
+case_begin "t389-1-agents-main-root-env-loaded" "hooks/lib/load-env.js"
 run_t389_1
 case_end
-case_begin "t389-2-realpath-candidate-adopted" "hooks/lib/load-env.js"
+case_begin "t389-2-realpath-candidate-adopted" "hooks/lib/script-checkout-root.js"
 run_t389_2
 case_end
 case_begin "t389-3-no-env-graceful-noop" "hooks/lib/load-env.js"
@@ -229,10 +248,10 @@ case_end
 case_begin "t389-6-debug-logs-key-not-value" "hooks/lib/load-env.js"
 run_t389_6
 case_end
-case_begin "t389-7-explicit-config-dir-no-fallthrough" "hooks/lib/load-env.js"
+case_begin "t389-7-explicit-agents-main-root-no-fallthrough" "hooks/lib/load-env.js"
 run_t389_7
 case_end
-case_begin "t389-8-windows-posix-config-dir-normalized" "hooks/lib/load-env.js"
+case_begin "t389-8-windows-posix-agents-main-root-normalized" "hooks/lib/load-env.js"
 run_t389_8
 case_end
 case_begin "cv-1-process-env-beats-dotenv" "hooks/lib/load-env.js"

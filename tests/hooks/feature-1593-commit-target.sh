@@ -9,13 +9,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 harness_isolate
 
-STAGED_JS="$(np "$AGENTS_DIR/hooks/lib/bash-write-targets/staged.js")"
-COMMIT_JS="$(np "$AGENTS_DIR/hooks/lib/commit-target.js")"
+STAGED_JS="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/bash-write-targets/staged.js")"
+COMMIT_JS="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/commit-target.js")"
 
 # Normalize a path for comparison: backslash → slash, drop trailing slash, lowercase.
 norm_path() {

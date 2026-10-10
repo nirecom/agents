@@ -10,9 +10,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
-SCRIPT="$AGENTS_DIR/skills/workflow-init/scripts/path-a-label-and-board.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/path-a-label-and-board.sh"
 
 PASS=0
 FAIL=0

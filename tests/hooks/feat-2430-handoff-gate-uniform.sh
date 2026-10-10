@@ -10,8 +10,8 @@
 # TDD (write_code has not run): the inactive "records nothing" cases, the procedure-point origin, the auto-record helper and the flush mark are expected to FAIL until the gate (hooks/lib/handoff-gated-append.js), the renamed origin and recordFlushMark exist; the gate-block exception and the supervisor finding cases already hold.
 
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
@@ -20,7 +20,7 @@ export WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
 export WORKFLOW_PLANS_DIR="$WORKFLOW_STATE_DIR"
 export HOME="$(np "$TMP/home")" USERPROFILE="$(np "$TMP/home")"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/transcripts")"
-export AGENTS="$(np "$AGENTS_DIR")"
+export AGENTS="$(np "$SCRIPT_CHECKOUT_ROOT")"
 cd "$TMP" || exit 1
 
 cat > "$TMP/seed.js" <<'JS'
@@ -80,11 +80,11 @@ expect() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$3 got=${2:0
 # append <sid> <origin> <key> — the flush-rule argv; prints "<stdout>|rc=<n>".
 append() {
     local out rc
-    out="$(run_with_timeout 60 node "$AGENTS_DIR/bin/workflow/handoff-append" --session "$1" --class D --step - --key "$3" --summary 'a workaround the fixture took' --pointer - --origin "$2" 2>/dev/null)"; rc=$?
+    out="$(run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/handoff-append" --session "$1" --class D --step - --key "$3" --summary 'a workaround the fixture took' --pointer - --origin "$2" 2>/dev/null)"; rc=$?
     printf '%s|rc=%s' "$out" "$rc"
 }
 report() {
-    run_with_timeout 60 node "$AGENTS_DIR/bin/supervisor-report" --session-id "$1" --categories workflow --severity warning --detail 'fixture finding' --reporter write-tests >/dev/null 2>&1
+    run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-report" --session-id "$1" --categories workflow --severity warning --detail 'fixture finding' --reporter write-tests >/dev/null 2>&1
 }
 # transcript <sid> — plant the session transcript; prints its size in bytes.
 transcript() {
@@ -169,7 +169,7 @@ expect "G6: a flush without a transcript still writes" "$OUT" "WRITTEN=1 REASON=
 expect "G6: a flush without a transcript marks bytes null" "$(nj mark.js "$sid" null "$T")" "OK"
 sid="gu-mark-rejected"
 seed "$sid" active; transcript "$sid" >/dev/null
-run_with_timeout 60 node "$AGENTS_DIR/bin/workflow/handoff-append" --session "$sid" --class Z --step - --key rej --summary s --pointer - --origin flush >/dev/null 2>&1; RC=$?
+run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/handoff-append" --session "$sid" --class Z --step - --key rej --summary s --pointer - --origin flush >/dev/null 2>&1; RC=$?
 expect "G6: a flush with an invalid class is rejected (exit 2)" "$RC" "2"
 expect "G6: a rejected flush leaves no flush mark" "$(nj mark.js "$sid" 0 0)" "NONE"
 cat > "$TMP/badmark.js" <<'JS'
@@ -207,7 +207,7 @@ nudge() {
     local tp
     tp="$(np "$TMP/transcripts/c--fixture-project/$1.jsonl")"
     printf '{"session_id":"%s","transcript_path":"%s","cwd":"%s","hook_event_name":"UserPromptSubmit","prompt":"go"}' "$1" "$tp" "$(np "$TMP")" \
-        | run_with_timeout 60 node "$AGENTS_DIR/hooks/handoff-pressure-nudge.js" 2>/dev/null
+        | run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/handoff-pressure-nudge.js" 2>/dev/null
 }
 
 case_begin "paused-mode-is-a-live-step-scoped-pause" "hooks/lib/handoff-gated-append.js"

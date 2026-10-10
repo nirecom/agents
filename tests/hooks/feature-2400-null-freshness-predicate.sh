@@ -10,9 +10,9 @@
 # tests/hooks/feature-2256-tr5-user-verified-hold/.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
@@ -22,11 +22,11 @@ harness_isolate "$TMPD"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 cd "$TMPD" || exit 1
 
-LIB_NODE="$(np "$AGENTS_DIR")/hooks/lib/null-freshness.js"
+LIB_NODE="$(np "$SCRIPT_CHECKOUT_ROOT")/hooks/lib/null-freshness.js"
 DRV="$(np "$TMPD")/pred.js"
-UVA="$AGENTS_DIR/hooks/workflow-gate/user-verified-audit.js"
-ARM="$AGENTS_DIR/hooks/supervisor-guard/audit-arm.js"
-SUPC="$AGENTS_DIR/hooks/workflow-gate/supervisor-check.js"
+UVA="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/user-verified-audit.js"
+ARM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard/audit-arm.js"
+SUPC="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/supervisor-check.js"
 
 # pred.js <mode> — PIN (env) is a case spec over a fully-passing baseline:
 # kind artifact|code, freshness (verbatim override), fSet/fDel, runNull, runSet/runDel

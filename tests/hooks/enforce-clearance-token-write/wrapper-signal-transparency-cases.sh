@@ -15,12 +15,12 @@ set -u
 # the shim: status, on-disk residue, and descendant fate must all match the direct minter.
 
 SEC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SEC_DIR/../../.." && pwd)"
-MINTER_ABS="$AGENTS_DIR/bin/request-off-clearance"
-WRAPPER_ABS="$AGENTS_DIR/bin/request-off-mode-clearance"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+MINTER_ABS="$SCRIPT_CHECKOUT_ROOT/bin/request-off-clearance"
+WRAPPER_ABS="$SCRIPT_CHECKOUT_ROOT/bin/request-off-mode-clearance"
 
 # shellcheck source=tests/lib/request-off-clearance-harness.sh
-. "$AGENTS_DIR/tests/lib/request-off-clearance-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/request-off-clearance-harness.sh"
 
 if [ -x "$WRAPPER_ABS" ] && [ -x "$MINTER_ABS" ]; then
     pass "S0 both entrypoints exist and are executable"
@@ -45,10 +45,10 @@ run_signalled() {
     stubbin=$(make_tmp); hb="$stubbin/hb"
     blocking_stub "$hb" > "$stubbin/codex"; chmod +x "$stubbin/codex"
     ( cd "$stubbin" && env -u SESSION_ID -u CLAUDE_CODE_SESSION_ID \
-        -u WORKTREE_PATH -u AGENTS_CONFIG_DIR \
+        -u WORKTREE_PATH -u AGENTS_MAIN_ROOT \
         "PATH=$stubbin:$OFFCLR_CLEAN_PATH" \
         "WORKFLOW_PLANS_DIR=$tn" "WORKFLOW_STATE_DIR=$tn" \
-        "AGENTS_CONFIG_DIR=$OFFCLR_AGENTS_NODE" "SESSION_ID=sigsid" \
+        "AGENTS_MAIN_ROOT=$OFFCLR_AGENTS_NODE" "SESSION_ID=sigsid" \
         bash "$bin" --target workflow --category trivial-change --detail "signal transparency probe" \
     ) >"$stubbin/.stdout" 2>"$stubbin/.stderr" &
     pid=$!
