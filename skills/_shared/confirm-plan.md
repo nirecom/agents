@@ -7,12 +7,10 @@ The gate check of CPA-3 alone is also used by `write-tests` (CONFIRM_TESTS), `wr
 
 ## Steps
 
-CPA-1 through CPA-3 always run. `CONFIRM_<STEP>` (default `on`) gates CPA-1's diff preview
-and CPA-3's prompt; CPA-2's breadcrumb is unconditional.
+CPA-1 through CPA-3 always run. `CONFIRM_<STEP>` (default `on`) gates CPA-3's prompt only;
+CPA-1's write and CPA-2's breadcrumb are unconditional.
 
-**CPA-1 — Write the artifact.** Use the Write tool. The `show-diff.js` PreToolUse
-hook emits the diff as a `systemMessage`. When `CONFIRM_<STEP>=off`, the hook
-suppresses the preview — CPA-3's prose summary substitutes.
+**CPA-1 — Write the artifact.** Use the Write tool. No diff is shown in chat; CPA-2's breadcrumb is the only plan surface.
 
 **CPA-2 — Breadcrumb.** `show-plan-link.js` PostToolUse syncs the artifact through
 plan-sync and emits the breadcrumb after the Write returns:
@@ -50,7 +48,7 @@ Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different val
 ## Notes
 
 - Revise loop has no explicit cap — trust the user to say "Proceed".
-- Do not paste the full artifact in chat — diff + breadcrumb are sufficient.
+- Do not paste the full artifact in chat — the breadcrumb is sufficient.
 - Each skill defines what "Revise" means concretely.
 - `CONFIRM_*` sentinels are for plan-stage review only. The sole user gate before the final publish action (merge in on-mode; commit+push in off-mode) is `WORKFLOW_USER_VERIFIED` — see `skills/_shared/user-verified.md`. Do not add upstream CONFIRM gates for post-action notifications.
 - The CPA-3 `--gate` procedure is shared by all seven confirm gates; the step→gate map lives in `hooks/lib/confirm-gate/step-gate-map.js`.

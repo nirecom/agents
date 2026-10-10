@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2431-run-tests-baseline.sh
-# Tests: bin/run-tests-baseline, bin/lib/run-tests-baseline-ledger.sh, bin/lib/run-tests-baseline-worktree.sh, bin/lib/run-tests-baseline-exec.sh, hooks/lib/baseline-checkout-marker.js
+# Tests: bin/run-tests-baseline, bin/lib/run-tests-baseline-ledger.sh, bin/lib/run-tests-baseline-worktree.sh, bin/lib/run-tests-baseline-exec.sh, bin/lib/run-tests-baseline-homeref.sh, hooks/lib/baseline-checkout-marker.js
 # Tags: run-tests, baseline, ledger, worktree, exec, root-names, scope:issue-specific, pwsh-not-required, TL2
 #
 # Dispatcher: case groups in feature-2431-run-tests-baseline/ part files.
@@ -45,6 +45,10 @@ SUBDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2431-run-tests-bas
 . "$SUBDIR/root-names.sh"
 # shellcheck source=./feature-2431-run-tests-baseline/cli-decoy-hit.sh
 . "$SUBDIR/cli-decoy-hit.sh"
+# shellcheck source=./feature-2431-run-tests-baseline/homeref.sh
+. "$SUBDIR/homeref.sh"
+# shellcheck source=./feature-2431-run-tests-baseline/cli-homeref.sh
+. "$SUBDIR/cli-homeref.sh"
 
 case_begin "baseline-ledger" "bin/lib/run-tests-baseline-ledger.sh"
 run_ledger_cases
@@ -136,6 +140,14 @@ case_end
 
 case_begin "baseline-cli-root-decoy-hit-at-base" "bin/run-tests-baseline"
 run_cli_decoy_hit_cases
+case_end
+
+case_begin "baseline-homeref" "bin/lib/run-tests-baseline-homeref.sh"
+run_homeref_unit_cases
+case_end
+
+case_begin "baseline-cli-homeref" "bin/run-tests-baseline"
+run_cli_homeref_cases
 case_end
 
 echo ""
