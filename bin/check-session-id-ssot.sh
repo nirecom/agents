@@ -28,8 +28,9 @@ WAIVER_RE="session-id-ssot: waived \\([^)]*\\)[[:space:]]*—[[:space:]]*[^[:spa
 
 # Tombstone: the names are retired, so no use is legitimate and no waiver applies. The exempt
 # files must still spell them: this guard, its test, the one-shot purge migration and its test,
-# the doc that records the retirement, and the two test-isolation points that unset the retired
-# names so a leftover CLAUDE_ENV_FILE cannot reach the purge and rewrite a real env file.
+# the doc that records the retirement, and the test-isolation points that unset the retired
+# names so a leftover CLAUDE_ENV_FILE cannot reach the purge and rewrite a real env file
+# (the two shared ones, then the tests and the fixture that unset them on their own).
 TOMBSTONE_RE='(^|[^A-Za-z0-9_])(CLAUDE_SESSION_ID|CLAUDE_ENV_FILE)([^A-Za-z0-9_]|$)'
 TOMBSTONE_EXEMPT=(
   "bin/check-session-id-ssot.sh"
@@ -39,6 +40,11 @@ TOMBSTONE_EXEMPT=(
   "docs/architecture/claude-code/session-id-resolution.md"
   "tests/lib/harness.sh"
   "bin/lib/run-tests-baseline-exec.sh"
+  "tests/bin/feature-step-durations.sh"
+  "tests/hooks/feat-2511-session-relocation.sh"
+  "tests/hooks/feature-confirm-checkpoint.sh"
+  "tests/hooks/fix-524-confirm-plan-guard.sh"
+  "tests/lib/plan-sync-fixture.sh"
 )
 
 usage() {
