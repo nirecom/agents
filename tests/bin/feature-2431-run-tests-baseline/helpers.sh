@@ -14,6 +14,8 @@ np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$
 LEDGER_LIB="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-ledger.sh"
 WORKTREE_LIB="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-worktree.sh"
 EXEC_LIB="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-exec.sh"
+HOMEREF_LIB="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-homeref.sh"
+TLR_LIB="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh"
 MARKER_JS="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/lib/baseline-checkout-marker.js"
 BASELINE_CLI="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/run-tests-baseline"
 EVIDENCE_CLI="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/workflow/run-tests-baseline-evidence"
@@ -53,6 +55,14 @@ run_with_timeout() { bash "$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.s
 rtb_call() {
   local t="$1" lib="$2"; shift 2
   run_with_timeout "$t" bash -c '. "$1" || exit 98; shift; "$@"' rtb_call "$lib" "$@"
+}
+
+# homeref_call <path...> — rtb_has_home_ref in a child bash with the registry loaded; returns its rc
+# (0 = reference or undeterminable, 1 = none outside comment lines; 98 = a lib could not be sourced).
+# HOMEREF_PATH_PREFIX, when set, is put on PATH only after the registry loads, so a stub shadows
+# awk/find for the helper alone and never for run-with-timeout or tlr_load.
+homeref_call() {
+  run_with_timeout 60 bash -c '. "$1" || exit 98; . "$2" || exit 98; tlr_load || exit 97; shift 2; [ -z "${HOMEREF_PATH_PREFIX:-}" ] || PATH="$HOMEREF_PATH_PREFIX:$PATH"; rtb_has_home_ref "$@"' homeref_call "$TLR_LIB" "$HOMEREF_LIB" "$@"
 }
 
 # ledger_call <cache-dir> <cwd> <fn> [args...] — ledger lib call with a pinned cache dir.

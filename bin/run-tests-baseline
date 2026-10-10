@@ -19,11 +19,11 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-worktree.sh"
 # shellcheck source=bin/lib/run-tests-baseline-exec.sh
 . "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-exec.sh"
+# shellcheck source=bin/lib/run-tests-baseline-homeref.sh
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-homeref.sh"
 
 RTB_EVIDENCE="$SCRIPT_CHECKOUT_ROOT/bin/workflow/run-tests-baseline-evidence"
 RTB_RESOLVE="$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh"
-# shellcheck disable=SC2016,SC2088  # literal grep patterns, never expanded
-RTB_HOME_REFS=('$HOME/.claude' '${HOME}/.claude' '~/.claude' '$env:USERPROFILE' '$env:HOME' 'Path.home()' 'expanduser("~')
 
 die() { printf 'run-tests-baseline: %s\n' "$2" >&2; exit "$1"; }
 
@@ -136,11 +136,9 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
     if ! git -C "$ROOT" cat-file -e "$B2:$t" 2>/dev/null; then
       CLS[i]="undetermined"; DET[i]="missing-at-base"; continue
     fi
-    ref_args=()
-    for r in "${RTB_HOME_REFS[@]}"; do ref_args+=(-e "$r"); done
     targets=("$WT/$t")
     [ -d "$WT/$d" ] && targets+=("$WT/$d")
-    if grep -rqF "${ref_args[@]}" -- "${targets[@]}" 2>/dev/null; then
+    if rtb_has_home_ref "${targets[@]}"; then
       CLS[i]="undetermined"; DET[i]="home-claude-ref"; continue
     fi
     if ! rtb_exec_one "$WT" "$t" "$PER_TEST_TIMEOUT" "$LOGDIR"; then

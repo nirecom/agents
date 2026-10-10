@@ -2,12 +2,9 @@
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-state/effective-state.js, bin/workflow/lib/next-step/steps.js
 # Tags: TL1, workflow, write-code, vocabulary, scope:issue-specific, pwsh-not-required
 #
-# Case group A (TL1): the step vocabulary itself. write_code must be a real
-# VALID_STEPS member at index 8 (between review_tests and run_tests), must NOT be
-# skippable (the implementation body cannot be opted out of), must be auto-skipped
-# in wf-meta sessions, and must carry an entry in every next-step lookup table —
-# STEP_TO_SKILL / STEP_DESC are enforced by steps.js assertInvariants(), which
-# process.exit(1)s at require() time when either is missing.
+# Case group A (TL1): write_code is a VALID_STEPS member at index 8, not skippable,
+# auto-skipped in wf-meta, and present in every next-step lookup table
+# (steps.js assertInvariants() exits at require() time otherwise).
 
 # dump_field <dump> <key> — value of "<key>=..." in a key=value dump.
 dump_field() {
@@ -33,7 +30,7 @@ process.stdout.write([
 ].join("\n") + "\n");
 ' 2>&1 || true)"
 
-  check "A1: VALID_STEPS has 16 members" "16" "$(dump_field "$core_dump" len)"
+  check "A1: VALID_STEPS has 17 members" "17" "$(dump_field "$core_dump" len)"
   check "A2: write_code sits at VALID_STEPS index 8" "8" "$(dump_field "$core_dump" idx)"
   check "A3: index 7 is review_tests (write_code's predecessor)" "review_tests" "$(dump_field "$core_dump" at7)"
   check "A4: index 9 is run_tests (write_code's successor)" "run_tests" "$(dump_field "$core_dump" at9)"

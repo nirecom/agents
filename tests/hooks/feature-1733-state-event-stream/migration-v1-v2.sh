@@ -35,7 +35,7 @@ console.log("version=" + st.version + " sorted=" + sorted + " order=" + order);
     # `sorted` still holds. The v2->v3 stage owns its own cases in
     # tests/hooks/feature-1665-write-code-step/f-v2-to-v3.sh; here it is only the chain tail.
     assert_eq "V1/sorted-by-at" \
-        "version=3 sorted=true order=docs>workflow_init>clarify_intent>detail>write_code" "$NODE_OUT"
+        "version=$EXPECT_STATE_VERSION sorted=true order=docs>workflow_init>clarify_intent>detail>write_code" "$NODE_OUT"
 fi
 
 echo "== V2: an empty pending entry is dropped; a non-pending null-timestamp entry is backfilled =="
@@ -171,7 +171,7 @@ console.log("changed_from_v1=" + (v1raw !== first) +
             " version=" + JSON.parse(first).version +
             " second_read_identical=" + (first === second));
 '
-    assert_eq "V8/lazy-persist-idempotent" "changed_from_v1=true version=3 second_read_identical=true" "$NODE_OUT"
+    assert_eq "V8/lazy-persist-idempotent" "changed_from_v1=true version=$EXPECT_STATE_VERSION second_read_identical=true" "$NODE_OUT"
 fi
 
 echo "== V9: migrateV1ToV2 is a pure function — two calls give identical output =="
@@ -210,7 +210,7 @@ console.log("version=" + st.version + " steps=" + steps + " workflow_type=" + st
             " retired_present=" + /"step":"(verify|branching_decision)"/.test(JSON.stringify(st.events)));
 '
     assert_eq "V10/field-backfill-then-v2" \
-        "version=3 steps=branching_complete,run_tests,write_code workflow_type=wf-meta retired_present=false" "$NODE_OUT"
+        "version=$EXPECT_STATE_VERSION steps=branching_complete,run_tests,write_code workflow_type=wf-meta retired_present=false" "$NODE_OUT"
 fi
 
 echo "== V11: an already-current file is not re-migrated (no event churn) =="
@@ -240,7 +240,7 @@ console.log("raw_version=" + rawState.version +
             " file_untouched=" + (before === raw()));
 '
     assert_eq "V12/readRawState-unchanged" \
-        "raw_version=1 raw_has_steps=true norm_version=3 norm_has_events=true file_untouched=true" "$NODE_OUT"
+        "raw_version=1 raw_has_steps=true norm_version=$EXPECT_STATE_VERSION norm_has_events=true file_untouched=true" "$NODE_OUT"
 fi
 
 echo "== V13: a corrupt state file still fails open (readState -> null, no throw) =="
@@ -278,7 +278,7 @@ console.log([
 ].join(" "));
 '
     assert_eq "V14/unversioned-v1-migrates" \
-        "version=3 steps=workflow_init=complete,research=complete token=tok-unversioned docs_projects=pending no_toplevel_steps=true persisted_version=3" \
+        "version=$EXPECT_STATE_VERSION steps=workflow_init=complete,research=complete token=tok-unversioned docs_projects=pending no_toplevel_steps=true persisted_version=$EXPECT_STATE_VERSION" \
         "$NODE_OUT"
 fi
 
@@ -355,7 +355,7 @@ console.log("version=" + st.version + " byte_identical=" + (first === raw()) +
             " events=" + st.events.length + " no_started_at=" + (first.indexOf("started_at") === -1));
 '
     assert_eq "V17/unversioned-persist-idempotent" \
-        "version=3 byte_identical=true events=3 no_started_at=true" "$NODE_OUT"
+        "version=$EXPECT_STATE_VERSION byte_identical=true events=3 no_started_at=true" "$NODE_OUT"
 fi
 
 echo "== V18: readState never writes — only a writer brings a v1 file forward =="
@@ -375,7 +375,7 @@ S.markStep(sid, "docs", "complete");
 const after = JSON.parse(raw());
 console.log("projected=" + st.steps.workflow_init.status +
             " read_left_bytes_untouched=" + readOnly +
-            " writer_migrated=" + (after.version === 3) +
+            " writer_migrated=" + (after.version === require("./hooks/workflow-state/state-io/core").CURRENT_STATE_VERSION) +
             " write_survived=" + (after.current.steps.docs.status === "complete"));
 '
     assert_eq "V18/read-does-not-persist" \
