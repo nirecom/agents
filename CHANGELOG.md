@@ -691,3 +691,7 @@ Changes: `/run-tests` now offers to calibrate test parallelism on hosts that wer
 ### FEATURE: PR #2560 (2026-10-07)
 Background: Isolate tests from the live state dir and relocate state to ~/.workflow-state (#2512, #1884, #2511)
 Changes: Workflow state now lives in `~/.workflow-state/`; the env pin is renamed from `CLAUDE_WORKFLOW_DIR` to `WORKFLOW_STATE_DIR` (no compatibility alias). Sessions already running keep the old dir until session close moves them.;The test suite no longer writes fixture files into your live workflow state dir.
+
+### FEATURE: PR #2595 (2026-10-10)
+Background: refactor(#2561): replace AGENTS_CONFIG_DIR and AGENTS_DIR with four root names
+Changes: Breaking: the environment variables `AGENTS_CONFIG_DIR` and `AGENTS_DIR` are retired. Set `AGENTS_MAIN_ROOT` instead; re-run the installer so shell profiles and hooks pick up the new name.;Scripts now locate their own code from the file's path, so tools and tests run from a linked worktree use that worktree's code.;Added `bin/check-root-names.sh`, a pre-commit gate for how repository roots are named and assigned; see `docs/architecture/claude-code/root-names.md`.;Tools that work on another repository take that repository's root as a command-line argument instead of reading an environment variable.
