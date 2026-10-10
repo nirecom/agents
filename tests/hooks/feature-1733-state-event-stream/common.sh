@@ -3,32 +3,10 @@
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js
 # Tags: workflow-state, event-stream, state-io, harness, scope:issue-specific, pwsh-not-required, TL2
 #
-# Shared harness for the #1733 append-only event-stream suite. SOURCED, never run
-# standalone (it has no cases of its own).
-#
-# ISOLATION CONTRACT (identical across every case file):
-#   WORKFLOW_STATE_DIR -> per-file temp dir, so no real session state is touched.
-#   AGENTS_MAIN_ROOT   -> fixture agents main root whose .env carries no workflow toggles,
-#                          so env-dependent branches resolve from a known file rather
-#                          than the developer's real .env (test-design.md
-#                          "Config-dependent branches").
-#   HOME / USERPROFILE  -> temp dir, so getWorkflowDir()'s homedir fallback and
-#                          zombie cleanup cannot reach the real ~/.claude.
-#   WORKFLOW_PLANS_DIR  -> empty temp dir, so the plan-artifact predicates
-#                          (hasPlanArtifact) answer from a known-empty directory
-#                          instead of the developer's real ~/.workflow-plans.
-#
-# PRE-IMPLEMENTATION CONTRACT — THERE IS NO SKIP PATH.
-# This suite is written test-first, so before the #1733 implementation lands every case
-# FAILS (module-not-found / missing export / wrong shape) and every file exits non-zero.
-# That is the intended signal: a suite that reported SKIP instead would go green while
-# nothing was implemented, which is indistinguishable from a passing implementation.
-#   * run_case is unconditional — it exists only to name the case being run.
-#   * report_totals turns any SKIP into a FAIL: this suite must never report one.
-#   * finish() exits 1 on any failure and NEVER exits 77 (the dispatcher reads 77 as
-#     "node is absent", so a file with exactly 77 failures must not collide with it).
-# The only 77 in this harness is the `command -v node` gate below, which is an
-# environment fact, not a feature probe.
+# Shared harness for the #1733 event-stream suite. SOURCED, never run standalone.
+# ISOLATION: state dir, agents main root, HOME and plans dir all point at per-file temp dirs.
+# NO SKIP PATH: a missing module must surface as a FAILING assertion; report_totals turns
+# any SKIP into a FAIL and finish() exits 0 or 1 only (77 is the dispatcher's node-absent code).
 
 set -uo pipefail
 
@@ -92,6 +70,9 @@ CFG_NATIVE="$(native_path "$CFG")"
 ISO_HOME_NATIVE="$(native_path "$ISO_HOME")"
 PLANS_NATIVE="$(native_path "$PLANS")"
 
+# Pin the state/plans pair once at top level, before the first exec below.
+export WORKFLOW_STATE_DIR="$WF_NATIVE" WORKFLOW_PLANS_DIR="$PLANS_NATIVE"
+
 # node_env — the isolation env prefix shared by every node invocation below.
 node_env() {
     printf '%s' "WORKFLOW_STATE_DIR=$WF_NATIVE AGENTS_MAIN_ROOT=$CFG_NATIVE WORKFLOW_PLANS_DIR=$PLANS_NATIVE"
@@ -136,6 +117,10 @@ fs_snapshot() { # <root> <exclude-dir>
         printf '%s %s\n' "$f" "$(cksum < "$f" 2>/dev/null | tr -s ' ' '-')"
     done
 }
+
+# EXPECT_STATE_VERSION — the current state schema version, read once from its owner so
+# no case hard-codes a literal that the next schema bump would stale.
+EXPECT_STATE_VERSION="$(cd "$_COMMON_SCRIPT_CHECKOUT_ROOT" && node -p 'require("./hooks/workflow-state/state-io/core").CURRENT_STATE_VERSION' 2>/dev/null)"
 
 SID_N=0
 # Assigns a fresh session id into $SID. NOT a command substitution — `SID=$(next_sid)`
@@ -235,40 +220,23 @@ const evs = (kind) => rd().events.filter((e) => !kind || e.kind === kind);
 const cur = () => rd().current;
 '
 
-# genuine(sid) — observes the genuine-recorded-complete predicate through a REAL public
-# entry point, `effective-state.evaluateInheritance(state)`.
-#
-# hasGenuineRecordedComplete is module-private and stays that way; asserting on a direct
-# export would invent API surface that no consumer uses, and passing it a hand-built
-# `{ session_id }` stub would test the stub, not the state file. evaluateInheritance is
-# the one live consumer: its S3 rule fires exactly when clarify_intent is genuinely
-# recorded complete AND its plan artifact is gone —
-#
-#     genuine && !hasPlanArtifact  ->  { eligible: false, scan: "stop" }
-#     otherwise                    ->  { eligible: true,  scan: null }
-#
-# The harness pins the second conjunct: WORKFLOW_PLANS_DIR is an empty temp dir, so the
-# artifact never exists unless a case creates it deliberately (see plan_artifact below).
-# Under that pin, scan === "stop" IS the predicate's verdict. Every case therefore drives
-# the real reader, reads a real state file, and would still fail if evaluateInheritance
-# stopped consulting provenance at all.
-#
-# `subject` is always clarify_intent — the only step S3 examines. Cases that need a
-# different step assert on the projected events directly instead.
-#
-# CONFOUNDER (do not break): evaluateInheritance also stops on S1 (user_verification
-# complete) and S2 (review_security complete). No case below may complete either step,
-# or scan === "stop" would no longer be attributable to the predicate.
+# genuine(sid) observes the module-private hasGenuineRecordedComplete through the public
+# effective-state.evaluateResumability(state): its S3 rule yields
+# { eligible: false, reason: "intent-artifact-missing" } exactly when clarify_intent is
+# genuinely recorded complete AND its plan artifact is gone. WORKFLOW_PLANS_DIR is an
+# empty temp dir, so the artifact is absent unless a case creates it (plan_artifact below).
+# CONFOUNDER (do not break): S0 (no recorded progress) and S1 (user_verification
+# complete) also refuse, with other reasons; no case may complete user_verification.
 GENUINE_JS='const ES = require("./hooks/workflow-state/effective-state");
 const GENUINE_SUBJECT = "clarify_intent";
 const inheritance = (s) => {
   const st = S.readState(s);
-  try { return ES.evaluateInheritance(st); } catch (e) { return { threw: e && e.name }; }
+  try { return ES.evaluateResumability(st); } catch (e) { return { threw: e && e.name }; }
 };
 const genuine = (s) => {
   const v = inheritance(s);
   if (v && v.threw) return "THREW:" + v.threw;
-  return !!(v && v.scan === "stop" && v.eligible === false);
+  return !!(v && v.eligible === false && v.reason === "intent-artifact-missing");
 };
 // Creates/removes the clarify_intent plan artifact that S3 requires to be ABSENT.
 const plan_artifact = (s, present) => {

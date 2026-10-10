@@ -2,20 +2,11 @@
 # tests/hooks/feature-1733-state-event-stream/migration-concurrency.sh
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/state-lock.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js
 # Tags: workflow-state, event-stream, migration, concurrency, locking, fail-open, scope:issue-specific, pwsh-not-required, TL2
-#
-# readState now WRITES (lazy v1->v2 persistence). That opens a window: process A reads a
-# v1 file, process B migrates it and appends new events, then A persists its own stale
-# v1 snapshot and B's events vanish. The design closes the window with a single
-# checkpoint — persistMigratedState re-reads INSIDE the lock and returns early when the
-# file is already version 2. These cases drive both orderings of that race with real
-# processes and a real file, so a regression in that early return is observable.
-#
-# TL3 gap (what this test does NOT catch):
-# - the race as it actually occurs in Claude Code, where A and B are a PreToolUse gate
-#   and a PostToolUse recorder for the same tool call rather than two `node -e` processes.
-# - a filesystem where O_EXCL is not atomic (network-mounted ~/.claude).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+
+# Lazy v1 persistence race: A reads v1, B migrates and appends, A must not clobber B.
+# persistMigratedState re-reads INSIDE the lock; both orderings run with real processes.
+# TL3 gap: the real PreToolUse/PostToolUse race and non-atomic O_EXCL filesystems;
+# checked at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh).
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="migconc"
@@ -60,9 +51,9 @@ console.log("A:DONE");
 
     nodejs "$SID_1" "$PRE"'
 S.markStep(sid, "review_security", "complete", { marker: "from-B" });
-console.log("B:" + (rd().version === 3 ? "v3" : "v" + rd().version));
+console.log("B:v" + rd().version);
 '
-    assert_eq "M1/B-migrated-and-appended" "B:v3" "$NODE_OUT"
+    assert_eq "M1/B-migrated-and-appended" "B:v$EXPECT_STATE_VERSION" "$NODE_OUT"
     : > "$TMPROOT/bar-b"
     wait "$A_PID" || true
     A_OUT="$(cat "$TMPROOT/m1-a.out")"
@@ -76,7 +67,7 @@ console.log("version=" + st.version +
             " B_event_present=" + marker +
             " review_security=" + cur().steps.review_security.status);
 '
-    assert_eq "M1/no-clobber" "version=3 B_event_present=true review_security=complete" "$NODE_OUT"
+    assert_eq "M1/no-clobber" "version=$EXPECT_STATE_VERSION B_event_present=true review_security=complete" "$NODE_OUT"
 fi
 
 echo "== M2: reverse order (A persists first, then B appends) is equally lossless =="
@@ -93,7 +84,7 @@ const st = rd();
 console.log("after_persist=v" + v + " version=" + st.version +
             " B_event_present=" + st.events.some((e) => e.key === "marker"));
 '
-    assert_eq "M2/persist-then-append" "after_persist=v3 version=3 B_event_present=true" "$NODE_OUT"
+    assert_eq "M2/persist-then-append" "after_persist=v$EXPECT_STATE_VERSION version=$EXPECT_STATE_VERSION B_event_present=true" "$NODE_OUT"
 fi
 
 echo "== M3: migration is deterministic — both orderings agree on the migrated prefix =="
