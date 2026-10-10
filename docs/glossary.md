@@ -327,7 +327,7 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Full name**: Run-tests outcome source
 - **Level**: 2
 - **Definition**: A field in the `run_tests` state entry that records the stem, payload SHA-256 (`payload_sha256`), and outcome SHA-256 (`outcome_sha256`) of the worker outcome file from which the state was last written. `bin/workflow/lib/run-tests-baseline-evidence.js` reads it to verify that the recorded outcome bytes have not been replaced before accepting a failing baseline as pre-existing.
-- **Related**: [hooks/workflow-run-tests/dispatch-outcome.js](../hooks/workflow-run-tests/dispatch-outcome.js), [bin/workflow/lib/run-tests-baseline-evidence.js](../../bin/workflow/lib/run-tests-baseline-evidence.js), #2544
+- **Related**: [hooks/workflow-run-tests/dispatch-outcome.js](../hooks/workflow-run-tests/dispatch-outcome.js), [bin/workflow/lib/run-tests-baseline-evidence.js](../bin/workflow/lib/run-tests-baseline-evidence.js), #2544
 
 ## Test retirement
 
