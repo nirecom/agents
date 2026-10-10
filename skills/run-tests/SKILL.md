@@ -63,7 +63,7 @@ RNT-6a. **Calibration offer.**
    - `source=measured` with `os_match=yes` -> say the run uses the measured `max_jobs=`, then go to RNT-7 with the payload unchanged.
    - Otherwise -> report the actual `source=` and `os_match=` (an OS-mismatched record stays `measured`), say the run continues at that effective value, never retry, and go to RNT-7 with the payload unchanged.
 
-RNT-7. **Dispatch the `test-runner` worker** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list, or `["--all"]` on explicit opt-in), `jobs` (optional 1..1024 parallelism; omit to leave the suite's own `-j auto` in force, `1` restores the sequential run), `timeout_seconds` (omit for the 120s default; pass `min(600 + 60 × <selected count>, 21600)` explicitly when the selection exceeds 10 tests or `RUN_TL3=on`).
+RNT-7. **Dispatch the `test-runner` worker** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list; omit it for a full run on explicit opt-in — the registry refuses `--all`), `jobs` (optional 1..1024 parallelism; omit to leave the suite's own `-j auto` in force, `1` restores the sequential run), `timeout_seconds` (omit for the 120s default; pass `min(600 + 60 × <selected count>, 21600)` explicitly when the selection exceeds 10 tests or `RUN_TL3=on`); above 600 seconds follow WD-BG in `skills/_shared/worker-dispatch.md` and read the RNT-8 YAML from its display.
 
 RNT-8. **Parse the YAML** the dispatch call printed on stdout. A leading `RUN_CONTRACT: PASS=.. FAIL=.. SKIP=.. EXECUTED=..` line may precede `status:` — it is the suite's own verdict, and RNT-9's fallback branch reads it.
 

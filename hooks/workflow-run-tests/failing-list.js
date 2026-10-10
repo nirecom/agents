@@ -78,17 +78,27 @@ function emitterRoot(emitterPath, cwd) {
   return path.resolve(base, normalizeCwd(emitterPath) || emitterPath, "..", "..");
 }
 
-function extractFailingTests({ stdout, isWorker, worktreeRoot, contract } = {}) {
-  if (typeof stdout !== "string" || !contract || typeof contract.fail !== "number") return null;
-  const names = isWorker ? workerNames(stdout) : runAllNames(stdout);
+const SENTINEL_RE = /<<\s*WORKFLOW/i;
+
+// The whole list, or null when its count disagrees with the contract or any one
+// entry is not a test path under root (a sentinel-like name included).
+function validateFailingNames(names, root, contract) {
+  if (!Array.isArray(names) || !contract || typeof contract.fail !== "number") return null;
   if (names.length !== contract.fail) return null;
   const out = [];
   for (const n of names) {
-    const rel = normalizeTestPath(n, worktreeRoot);
+    if (typeof n !== "string" || SENTINEL_RE.test(n)) return null;
+    const rel = normalizeTestPath(n, root);
     if (rel === null) return null;
     out.push(rel);
   }
   return out;
 }
 
-module.exports = { extractFailingTests, classifyTestKind, normalizeTestPath, emitterRoot };
+function extractFailingTests({ stdout, isWorker, worktreeRoot, contract } = {}) {
+  if (typeof stdout !== "string") return null;
+  const names = isWorker ? workerNames(stdout) : runAllNames(stdout);
+  return validateFailingNames(names, worktreeRoot, contract);
+}
+
+module.exports = { extractFailingTests, validateFailingNames, classifyTestKind, normalizeTestPath, emitterRoot };

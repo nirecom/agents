@@ -37,6 +37,22 @@ function failingPrecondition(entry) {
   return null;
 }
 
+function settlement() {
+  return require(path.join(__dirname, "..", "..", "..", "hooks", "workflow-state", "dispatch-settlement"));
+}
+
+// #2544: the failing list may come from a dispatch outcome. It stands only while no
+// newer test-runner dispatch is unsettled and the outcome it came from is unchanged.
+function dispatchPrecondition(sessionId, entry) {
+  const s = settlement();
+  const { unsettled, reason } = s.listUnsettled({ sessionId });
+  if (reason) return reason;
+  if (unsettled.some((u) => u.worker === "test-runner")) return "a newer test-runner dispatch has not settled";
+  const source = entry.outcome_source;
+  if (source === null || source === undefined) return null;
+  return s.outcomeSourceStatus({ sessionId, source }) === "match" ? null : "outcome source changed or missing";
+}
+
 function failing(sessionId) {
   let entry;
   try {
@@ -45,7 +61,7 @@ function failing(sessionId) {
   } catch (e) {
     return { code: EXIT.STATE, stderr: `cannot read state: ${e.message}` };
   }
-  const why = failingPrecondition(entry);
+  const why = failingPrecondition(entry) || dispatchPrecondition(sessionId, entry);
   if (why !== null) return { code: EXIT.STATE, stderr: why };
   const seq = entry.updated_seq;
   if (!Number.isInteger(seq)) return { code: EXIT.STATE, stderr: "run_tests has no updated_seq" };
@@ -85,7 +101,7 @@ function record(sessionId, seq, entries, base) {
       verdict.reason = "run_tests changed since `failing` was read (seq mismatch)";
       return [];
     }
-    const why = failingPrecondition(entry);
+    const why = failingPrecondition(entry) || dispatchPrecondition(sessionId, entry);
     if (why !== null) {
       verdict.reason = why;
       return [];

@@ -2,10 +2,10 @@
 // bin/worker-dispatch/workers/test-runner.js
 //
 // Stage 1 canary: the first worker moved from an LLM subagent to a plain script,
-// chosen because it is the only one that writes nothing at all — its registry
-// entry declares an empty writeScopes set, so fsguard.js refuses any write it
-// might attempt, which makes "the dispatcher caused no side effects" a checkable
-// property rather than a claim.
+// chosen because it writes nothing at all. Its only declared scope is the
+// control-outcome file, which fsguard.js admits for the dispatcher's own outcome
+// record and never for this worker's writeCtx (#2544), so "the worker caused no
+// side effects" stays a checkable property rather than a claim.
 //
 // Output shape is agents/test-runner.md's `## Output contract`, rendered by
 // emit.js (this module never touches stdout).

@@ -2,7 +2,7 @@
 # tests/bin/feature-1643-worker-dispatch-canary-no-side-effect.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/fsguard.js, bin/worker-dispatch/registry.js, bin/worker-dispatch/workers/test-runner.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, canary, side-effect, fsguard, write-scope, containment, security, TL2, scope:issue-specific
-# #1643 canary: test-runner (writeScopes={}) leaves target/adjacent repos (status, HEAD, whole-tree fingerprint) and PLANS_DIR untouched.
+# #1643 canary: test-runner (writeScopes = its own outcome file only, written by the dispatcher, #2544) leaves target/adjacent repos (status, HEAD, whole-tree fingerprint) and PLANS_DIR untouched.
 # TL3 gap: writes by the real suite (run-all.sh is stubbed; see TL3-worker-dispatch-run-tests.sh) and outside both fixtures; mitigated at WORKFLOW_USER_VERIFIED via bin/check-verification-gate.sh (hook-registration).
 
 set -u
@@ -152,6 +152,7 @@ group_canary_dispatch() {
         fail "canary/adjacent-head-unchanged — implementation missing: bin/worker-dispatch.js"
         fail "canary/adjacent-tree-unchanged — implementation missing: bin/worker-dispatch.js"
         fail "canary/plans-dir-only-payload — implementation missing: bin/worker-dispatch.js"
+        fail "canary/control-dir-gains-marker-and-outcome-only — implementation missing: bin/worker-dispatch.js"
         return
     fi
     local out rc=0
@@ -170,13 +171,18 @@ group_canary_dispatch() {
     assert_eq "canary/adjacent-head-unchanged"   "$A_HEAD_BEFORE"   "$(git -C "$ADJ_RAW" rev-parse HEAD)"
     assert_eq "canary/adjacent-tree-unchanged"   "$A_FP_BEFORE"     "$(fingerprint "$ADJ_RAW")"
     assert_eq "canary/plans-dir-only-payload"    "$P_LIST_BEFORE"   "$(plans_listing)"
+    # #2544: the dispatch adds its claim marker and its one outcome to the control dir,
+    # and nothing else is written there.
+    assert_eq "canary/control-dir-gains-marker-and-outcome-only" \
+        "worker-test-runner.dispatched worker-test-runner.json worker-test-runner.outcome.json " \
+        "$(cd "$WF_RAW/canary.control" && find . -mindepth 1 | sed 's|^\./||' | LC_ALL=C sort | tr '\n' ' ')"
 }
 
 # ===========================================================================
-# Group 2 — declared containment: writeScopes for test-runner is the empty set
+# Group 2 — declared containment: test-runner declares the outcome-file scope and no other
 # ===========================================================================
 group_write_scopes() {
-    if impl_missing "writescopes/test-runner-empty" "$REGISTRY_JS" "hooks/lib/worker-dispatch-registry.js"; then
+    if impl_missing "writescopes/test-runner-outcome-only" "$REGISTRY_JS" "hooks/lib/worker-dispatch-registry.js"; then
         return
     fi
     local n
@@ -187,9 +193,9 @@ group_write_scopes() {
       if (!w) { process.stdout.write("NO_ENTRY"); process.exit(0); }
       const s = w.writeScopes;
       if (s === undefined) { process.stdout.write("NO_FIELD"); process.exit(0); }
-      process.stdout.write(String(Array.isArray(s) ? s.length : Object.keys(s).length));
+      process.stdout.write((Array.isArray(s) ? s : Object.keys(s)).slice().sort().join(","));
     ' "$(nodepath "$REGISTRY_JS")" 2>&1)"
-    assert_eq "writescopes/test-runner-empty" "0" "$n"
+    assert_eq "writescopes/test-runner-outcome-only" "control-outcome" "$n"
 }
 
 # ===========================================================================
@@ -218,6 +224,17 @@ group_fsguard() {
       process.stdout.write(allowed.length ? "ALLOWED:" + allowed.join(",") : "NONE");
     ' "$(nodepath "$FSGUARD_JS")" "$TARGET" "$PLANS" "$ADJ" 2>&1)"
     assert_eq "fsguard/test-runner-rejects-all" "NONE" "$res"
+
+    # #2544: the context the worker's own run() receives carries the control dir but no
+    # outcomeStem, so even its own outcome file and the control dir stay closed to it.
+    res="$(node -e '
+      const g = require(process.argv[1]);
+      const ctl = process.argv[2];
+      const paths = [ctl + "/worker-test-runner.outcome.json", ctl + "/worker-test-runner.dispatched", ctl + "/x.txt"];
+      const allowed = paths.filter((p) => { try { g.assertWritable("test-runner", p, { controlDir: ctl }); return true; } catch { return false; } });
+      process.stdout.write(allowed.length ? "ALLOWED:" + allowed.join(",") : "NONE");
+    ' "$(nodepath "$FSGUARD_JS")" "$WF/canary.control" 2>&1)"
+    assert_eq "fsguard/test-runner-worker-context-rejects-control-dir" "NONE" "$res"
 
     # Both-direction coverage: a worker that DOES declare plans-dir must be able
     # to write there, or "rejects all" would be trivially true for everyone.

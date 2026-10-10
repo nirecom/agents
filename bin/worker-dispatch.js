@@ -20,6 +20,8 @@ const { locatePayload, loadPayload, validateStructure } = require("./worker-disp
 const { validate } = require("./worker-dispatch/capability");
 const fsguard = require("./worker-dispatch/fsguard");
 const emit = require("./worker-dispatch/emit");
+const { recordOutcome } = require("./worker-dispatch/outcome-record");
+const { recordsOutcome } = require("../hooks/lib/worker-dispatch-registry");
 const {
   controlPath,
   getSessionControlDir,
@@ -147,18 +149,38 @@ function main() {
   // PLANS_DIR payload without a <sid>-worker- name has no session to mark (temporary shim).
   if (located.sid !== null && !claimDispatch(entry, located)) return;
 
+  // Every exit after the claim goes through finish(): a recording worker's outcome is
+  // written first, and a result no outcome backs is never printed as one (#2544).
+  const records = located.sid !== null && recordsOutcome(workerName);
+  let payloadBytes = null;
+  try {
+    if (records) payloadBytes = fs.readFileSync(located.abs);
+  } catch (_e) {
+    payloadBytes = null;
+  }
+  const finish = (result) => {
+    let shown = result;
+    if (records) {
+      const rec = payloadBytes === null
+        ? { ok: false, reason: "payload bytes could not be re-read" }
+        : recordOutcome({ workerName, entry, located, payloadBytes, rawCwd: payload.cwd, result });
+      if (!rec.ok) shown = emit.failureResult(entry, `outcome record could not be written: ${rec.reason}`);
+    }
+    emit.write(entry, shown);
+  };
+
   // Step 6 — capability validation: what the payload is allowed to cause.
   const payloadAnchors = Object.assign({}, anchors, { payloadSid: located.sid });
   const capability = validate(payload, entry, payloadAnchors);
   if (!capability.ok) {
-    emit.failure(entry, `capability: ${capability.errors.join("; ")}`);
+    finish(emit.failureResult(entry, `capability: ${capability.errors.join("; ")}`));
     return;
   }
 
   // Step 7 — dispatch.
   const mod = registry.loadModule(workerName);
   if (mod === null) {
-    emit.failure(entry, `worker '${workerName}' is not implemented yet in this dispatcher`);
+    finish(emit.failureResult(entry, `worker '${workerName}' is not implemented yet in this dispatcher`));
     return;
   }
 
@@ -180,11 +202,11 @@ function main() {
       path,
     });
   } catch (e) {
-    emit.failure(entry, `worker error: ${errText(e, "unknown error")}`);
+    finish(emit.failureResult(entry, `worker error: ${errText(e, "unknown error")}`));
     return;
   }
 
-  emit.write(entry, result);
+  finish(result);
 }
 
 main();

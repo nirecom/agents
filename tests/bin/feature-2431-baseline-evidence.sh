@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2431-baseline-evidence.sh
 # Tests: bin/workflow/run-tests-baseline-evidence, bin/workflow/lib/run-tests-baseline-evidence.js
-# Tags: run-tests, baseline, evidence, workflow, scope:issue-specific, pwsh-not-required, TL2
+# Tags: run-tests, baseline, evidence, workflow, dispatch-outcome, scope:issue-specific, pwsh-not-required, TL2
 #
 # TDD — tests are RED until bin/workflow/run-tests-baseline-evidence and
 # bin/workflow/lib/run-tests-baseline-evidence.js are implemented (stage 6-5 / 7-2).
@@ -298,6 +298,102 @@ if [ "$CLI_EXISTS" = "1" ]; then
 else
   fail "record-missing-seq-arg: CLI missing"
 fi
+case_end
+
+# ---------------------------------------------------------------------------
+# #2544 — the failing list may come from a dispatch outcome. The comparison must refuse
+# while a newer test-runner dispatch is unsettled, and when the outcome file that state
+# names was replaced or removed since it was ingested.
+# ---------------------------------------------------------------------------
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPROOT/transcripts"
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
+# shellcheck source=tests/lib/dispatch-outcome-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/dispatch-outcome-fixture.sh"
+
+BOS_TOOL_JS="$AGENTS_WIN/tests/lib/workflow-state-tool.js"
+BOS_FAILING='["tests/bin/alpha.sh"]'
+BOS_CLS="$TMPROOT/bos-cls.txt"
+printf 'tests/bin/alpha.sh\tpreexisting\tbase-fail\n' > "$BOS_CLS"
+BOS_CLS_N="$(np "$BOS_CLS")"
+BOS_EV_RT='{"kind":"step_annotation","step":"run_tests","key":'
+
+bos_tool() { run_with_timeout 30 node "$BOS_TOOL_JS" "$AGENTS_WIN" "$@" 2>/dev/null || echo "ERR:tool-crashed"; }
+bos_ck() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$(printf '%q' "$2") got=$(printf '%q' "$3")"; fi; }
+bos_sid() { printf 'bos-%s-%s' "$1" "$$"; }
+bos_seq_of() { bos_tool field "$1" run_tests updated_seq; }
+
+# bos_seed_ingested <sid> — one settled failing dispatch whose outcome state recorded, the
+# way the hook leaves it: pending, fail, failing_tests, outcome_source, .ingested.
+bos_seed_ingested() {
+  local stem psha osha
+  stem="$(dispatch_outcome_place "$1" 1 fail 0 1 0 "$AGENTS_WIN" "$BOS_FAILING")"
+  bos_ck "fixture: stem ($1)" "worker-test-runner-1" "$stem"
+  bos_ck "fixture: ingested marker ($1)" "ok" "$(bos_tool ctl "$1" "$stem.ingested" '')"
+  psha="$(bos_tool sha "$1" "$stem.json")"
+  osha="$(bos_tool sha "$1" "$stem.outcome.json")"
+  bos_ck "fixture: state seeded ($1)" "" "$(bos_tool seed "$1" "[{\"kind\":\"step_status\",\"step\":\"run_tests\",\"status\":\"pending\"},$BOS_EV_RT\"run_outcome\",\"value\":\"fail\"},$BOS_EV_RT\"failing_tests\",\"value\":$BOS_FAILING},$BOS_EV_RT\"outcome_source\",\"value\":{\"stem\":\"$stem\",\"payload_sha256\":\"$psha\",\"outcome_sha256\":\"$osha\"}}]")"
+}
+# bos_failing <sid> — sets BOS_RC and BOS_OUT; runs from a neutral directory.
+bos_failing() {
+  BOS_RC=0
+  BOS_OUT="$(cd "$TMPROOT" && run_with_timeout 30 "$EVIDENCE_CLI" failing --session "$1" 2>/dev/null)" || BOS_RC=$?
+  BOS_OUT="$(printf '%s' "$BOS_OUT" | tr -d '\r')"
+}
+# bos_record <sid> <seq> — sets BOS_RC.
+bos_record() {
+  BOS_RC=0
+  (cd "$TMPROOT" && run_with_timeout 30 "$EVIDENCE_CLI" record --session "$1" --seq "$2" --classification "$BOS_CLS_N" >/dev/null 2>&1) || BOS_RC=$?
+}
+# bos_refused <label> <sid> — failing and record both exit 3 and run_tests is left alone.
+bos_refused() {
+  local seq
+  seq="$(bos_seq_of "$2")"
+  bos_failing "$2"
+  bos_ck "$1: failing exits 3" "3" "$BOS_RC"
+  bos_ck "$1: failing prints no SEQ" "" "$(printf '%s\n' "$BOS_OUT" | grep '^SEQ=')"
+  bos_record "$2" "$seq"
+  bos_ck "$1: record exits 3" "3" "$BOS_RC"
+  bos_ck "$1: run_tests stays pending" "pending" "$(bos_tool field "$2" run_tests status)"
+  bos_ck "$1: no completion_basis" "(absent)" "$(bos_tool field "$2" run_tests completion_basis)"
+}
+
+case_begin "matching-outcome-source-keeps-the-classification-path" "bin/workflow/run-tests-baseline-evidence"
+SID="$(bos_sid match)"; bos_seed_ingested "$SID"
+bos_failing "$SID"
+bos_ck "match: failing exits 0" "0" "$BOS_RC"
+bos_ck "match: SEQ is the state seq" "SEQ=$(bos_seq_of "$SID")" "$(printf '%s\n' "$BOS_OUT" | sed -n 1p)"
+bos_ck "match: failing path listed" "tests/bin/alpha.sh" "$(printf '%s\n' "$BOS_OUT" | sed -n 2p)"
+bos_record "$SID" "$(bos_seq_of "$SID")"
+bos_ck "match: record exits 0" "0" "$BOS_RC"
+bos_ck "match: run_tests complete" "complete" "$(bos_tool field "$SID" run_tests status)"
+bos_ck "match: completion_basis kept" "baseline-preexisting" "$(bos_tool field "$SID" run_tests completion_basis)"
+SID="$(bos_sid stdout)"
+bos_ck "fixture: stdout-path state" "" "$(bos_tool seed "$SID" "[{\"kind\":\"step_status\",\"step\":\"run_tests\",\"status\":\"pending\"},$BOS_EV_RT\"run_outcome\",\"value\":\"fail\"},$BOS_EV_RT\"failing_tests\",\"value\":$BOS_FAILING}]")"
+bos_failing "$SID"
+bos_ck "no outcome_source and no dispatch: failing exits 0" "0" "$BOS_RC"
+case_end
+
+case_begin "unsettled-newer-dispatch-refuses" "bin/workflow/lib/run-tests-baseline-evidence.js"
+SID="$(bos_sid unsettled)"; bos_seed_ingested "$SID"
+bos_failing "$SID"
+bos_ck "control: classifiable before the newer dispatch" "0" "$BOS_RC"
+STEM2="$(dispatch_outcome_place "$SID" 2 pass 1 0 0 "$AGENTS_WIN")"
+bos_ck "fixture: newer dispatch placed" "worker-test-runner-2" "$STEM2"
+bos_refused "unsettled-with-outcome" "$SID"
+SID="$(bos_sid unsettled-bare)"; bos_seed_ingested "$SID"
+STEM2="$(dispatch_outcome_place "$SID" 2 pass 1 0 0 "$AGENTS_WIN")"
+bos_ck "fixture: newer outcome removed" "ok" "$(bos_tool ctlrm "$SID" "$STEM2.outcome.json")"
+bos_refused "unsettled-without-outcome" "$SID"
+case_end
+
+case_begin "replaced-or-missing-outcome-refuses" "bin/workflow/lib/run-tests-baseline-evidence.js"
+SID="$(bos_sid replaced)"; bos_seed_ingested "$SID"
+bos_ck "fixture: outcome bytes replaced" "ok" "$(bos_tool ctl "$SID" "worker-test-runner-1.outcome.json" '{"schema_version":1}')"
+bos_refused "replaced-outcome" "$SID"
+SID="$(bos_sid missing)"; bos_seed_ingested "$SID"
+bos_ck "fixture: outcome removed" "ok" "$(bos_tool ctlrm "$SID" "worker-test-runner-1.outcome.json")"
+bos_refused "missing-outcome" "$SID"
 case_end
 
 echo ""

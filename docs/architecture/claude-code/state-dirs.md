@@ -75,6 +75,8 @@ guard refuse every model write there without touching the artifact workflow.
 | `{security-code,review-plan-security,review-tests}-exit6-accepted.txt` | `bin/accept-exit6-residual` | The three security/test wrappers |
 | `{outline,detail}-risk-signal.txt` | `bin/record-risk-signal` | make-{outline,detail}-plan wrappers |
 | `worker-<name>[-<seq>].json`, `.dispatched` | `bin/worker-dispatch-payload`; the dispatcher writes `.dispatched` | worker-dispatch |
+| `worker-<name>[-<seq>].outcome.json` | The worker-dispatch dispatcher (test-runner only, exclusive create) | `hooks/workflow-run-tests.js`, `run-tests-baseline-evidence`, `show-dispatch-outcome.sh` |
+| `worker-<name>[-<seq>].ingested` | `hooks/workflow-run-tests.js` after it recorded that outcome | `dispatch-settlement.js`, the run_tests hook |
 | `codex-context.md`, `codex-context.<fmt>.built`, `plan.jsonl`, `changed-files.txt` | `build-codex-context`, `run-codex-review-loop`, `review-plan-codex` | Wrappers, show-diff |
 | `{complexity,outline,detail,write-tests,write-code}-signals.txt` | `normalize-judge-signals` | `derive-complexity-level`, handoff-record |
 | `finalize-state-<N>.json`, `finalize-binding-<N>.json`, `issue-close-outcome.json`, `session-close-gate.json`, `final-report-env.json` | Workers, `issue-close-write-outcome.js`, `capture-env.sh` | Close-family skills, stop-final-report-guard, session-close-build-env |
@@ -91,6 +93,8 @@ Named exceptions:
 - Never moved: `*.lock`, `*.tmp`, `*.migrating.*.tmp`, `.sg-*`, `.prev-*`.
   `guard-attempt.tmp` is a short-lived marker that expires in place
   (`MIGRATABLE_KINDS` excludes it).
+- Never migrated from the plans dir: `worker-outcome` and `worker-ingested`, so a
+  forged outcome placed there cannot be carried into the control dir (#2544).
 
 ## Resolving the state root
 
@@ -98,7 +102,7 @@ Named exceptions:
 prompts use `bin/workflow-state-dir --session <sid> | --global | --roots`.
 
 - `WORKFLOW_STATE_DIR` set (the pin) → every session uses it. It must be
-  absolute (an MSYS `/c/...` spelling is converted); a relative value is
+  absolute (an MSYS-style path such as `/C/...` is converted); a relative value is
   refused, as for `WORKFLOW_PLANS_DIR`, since it would follow each reader's cwd.
 - Unset → `~/.workflow-state/`. `getStateRoot()` is the root for sid-less
   files (`cache/`); `getSessionStateDir(sid)` is the root for one session;

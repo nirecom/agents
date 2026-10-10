@@ -313,6 +313,20 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Definition**: The one table that decides, for every test language, which files are tests, how their headers are read and how they are launched. Test tools consult it instead of checking file extensions themselves.
 - **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md)
 
+## Run tests recording
+
+### dispatch settlement
+
+- **Full name**: Dispatch settlement
+- **Definition**: The process, run on every Bash call, of finding the latest test-runner dispatch for the current session and checking whether its outcome has already been ingested. The result is `settled` (outcome ingested or no dispatch exists) or `unsettled` (a `.dispatched` marker exists with no corresponding `.ingested` marker); while unsettled, a stale `run_tests` complete or fail result is demoted to `pending` on non-test calls.
+- **Related**: [hooks/workflow-state/dispatch-settlement.js](../hooks/workflow-state/dispatch-settlement.js), [hooks/workflow-run-tests/dispatch-outcome.js](../hooks/workflow-run-tests/dispatch-outcome.js), #2544
+
+### outcome_source
+
+- **Full name**: Run-tests outcome source
+- **Definition**: A field in the `run_tests` state entry that records the stem, payload SHA-256 (`payload_sha256`), and outcome SHA-256 (`outcome_sha256`) of the worker outcome file from which the state was last written. `bin/run-tests-baseline-evidence` reads it to verify that the recorded outcome bytes have not been replaced before accepting a failing baseline as pre-existing.
+- **Related**: [hooks/workflow-run-tests/dispatch-outcome.js](../hooks/workflow-run-tests/dispatch-outcome.js), [bin/workflow/lib/run-tests-baseline-evidence.js](../bin/workflow/lib/run-tests-baseline-evidence.js), #2544
+
 ## Test retirement
 
 ### case marker

@@ -148,6 +148,18 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   options) excluded. Any unrelated Bash call observed between an explicit completion sentinel and the next
   workflow-state read can retrigger this demotion (continuous re-verification, not a bug) — re-emit the
   completion sentinel immediately before checking workflow state if this happens.
+  **Two recording routes (#2544).** Besides the stdout route above, a test-runner dispatch leaves
+  `<stem>.outcome.json` in the session control dir (written only by the dispatcher, exclusive create).
+  Every Bash call, whatever its command, first settles the latest test-runner dispatch
+  (`hooks/workflow-run-tests/dispatch-outcome.js`): a trusted outcome is recorded through the same
+  judgement as stdout (`record-run.js`, the hook's only run_tests writer) and then marked
+  `<stem>.ingested`; a replay of the same outcome bytes records nothing. Trust requires a regular file,
+  a valid shape, matching worker/stem/session, the payload's SHA-256 and `cwd`, and a `.dispatched`
+  marker; `failing_tests` is kept only when every name exists under that `cwd`. While the latest dispatch
+  is unsettled, a non-test call demotes a stale complete or failing record to `pending`, and a test
+  call's stdout may demote but never complete. `outcome_source` records which outcome bytes a state
+  write came from; `bin/run-tests-baseline-evidence` refuses (exit 3) when a newer dispatch is unsettled
+  or those bytes changed.
 - `detect-worktree-conflict.js` (PostToolUse, matcher: `Bash|runInTerminal|runCommands`) — when a
   failed terminal command's stderr matches `fatal: '<branch>' is already used by worktree`, emits a
   single `additionalContext` guidance message (locate via `git worktree list`, finish with
@@ -206,7 +218,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   segments, `*` = any non-separator chars, case-insensitive on Windows); a plain path entry
   matches via path-boundary prefix (the target equals the entry or is under its subtree).
   Honored by both `enforce-worktree.js` (repo-granularity) and `pre-commit` (file-granularity).
-  Example: `ENFORCE_WORKTREE_EXCLUDE=C:\git\**\todo.md;C:\git\repo-a`
+  Example: `ENFORCE_WORKTREE_EXCLUDE=C:\projects\**\todo.md;C:\projects\repo-a`
   Built-in (non-overridable): `.worktree-backup/**` is always excluded so `/worktree-end` Step 5 can copy gitignored files to `.worktree-backup/` even when Bash CWD has reset to the main worktree.
   **gh command classification** — Bash write-detection uses `hooks/lib/bash-write-patterns.js`:
   - **Classified "write" (session-scope check applies)**: `gh pr merge`, `gh issue create/delete`,
@@ -331,6 +343,8 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   with the registry's per-worker capability contracts (`payloadSpec`, `binaries`,
   `envPassthrough`, `writeScopes`) it is the **sole** guard layer for worker-dispatch write
   operations — there is no second, worker-specific overlay, by design (CPR-ORTH).
+  test-runner also holds a control-outcome scope: per file, not per root, it lets only the
+  dispatcher create that dispatch's own `<stem>.outcome.json` once (#2544).
   **Retired: `finalize-worker-overlay.js` (#1600 → #1673)** — the finalize scripts
   (`run-initial.sh`, `run-loop-step.js`, `run-finalize-terminal.sh`) used to be invoked as a
   Bash-tool `eval` from the main worktree, and that one shape needed an overlay of its own to
