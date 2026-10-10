@@ -3,7 +3,7 @@
 # Bash guard, the minimal project settings.json that registers them alongside the
 # real consumer, and the environment the live `claude -p` turns run under.
 # Sourced by ../TL3-hook-record-off-skill-invocation.sh; relies on that file's
-# BASE/REPO/WFDIR/PLANSDIR/MOCKBIN/HOOK/AGENTS_DIR and node_path().
+# BASE/REPO/WFDIR/PLANSDIR/MOCKBIN/HOOK/SCRIPT_CHECKOUT_ROOT and node_path().
 
 # A marker alone cannot say WHAT the hook was handed, so it cannot separate "the
 # runtime delivered the typed command" from "something else happened to match".
@@ -125,7 +125,7 @@ cat > "$REPO/.claude/settings.json" <<SETTINGS_EOF
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$(node_path "$AGENTS_DIR/hooks/workflow-mark.js")\"",
+            "command": "node \"$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js")\"",
             "timeout": 30
           }
         ]
@@ -154,7 +154,6 @@ unset CLAUDECODE CLAUDE_CODE_SESSION_ID
 # for a reason that has nothing to do with provenance.
 export WORKFLOW_STATE_DIR="$(node_path "$WFDIR")"
 export WORKFLOW_PLANS_DIR="$(node_path "$PLANSDIR")"
-export AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")"
 export PATH="$MOCKBIN:$PATH"
 # Without these, MSYS/Git Bash rewrites an argument that begins with `/` into a
 # Windows path before claude ever sees it, so `/enforce-workflow-off ...` arrives

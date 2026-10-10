@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ensure-board-card.sh [--repo <owner/repo|repo>] <N>
 # Idempotent: ensures issue #N has a Projects v2 board card with Content Date.
-# Standalone: derives its own paths via BASH_SOURCE (no AGENTS_CONFIG_DIR dependency).
+# Standalone: derives its own paths via BASH_SOURCE (no root variable dependency).
 # Best-effort: warns and exits 0 on non-fatal gh failures.
 # Exit codes: 0 success/non-fatal warn; 2 usage error.
 #
@@ -48,8 +48,7 @@ N="${1:-}"
 
 # Forge detection (#2308). GitLab Free has no Projects v2 board — status labels
 # are the board and wip-state.sh owns them. Nothing here applies, so exit 0.
-AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
-FORGE="$(node "$AGENTS_CONFIG_DIR/bin/detect-forge-type" --repo-dir . --field type 2>/dev/null)"
+FORGE="$(node "$SCRIPT_DIR/../../bin/detect-forge-type" --repo-dir . --field type 2>/dev/null)"
 [ -z "$FORGE" ] && FORGE="unknown"
 if [ "$FORGE" = "gitlab" ]; then
     echo "info: ensure-board-card: GitLab has no Projects v2 board — status labels are managed by wip-state.sh; skipping (exit 0)" >&2

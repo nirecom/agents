@@ -10,6 +10,7 @@
 # Parent: tests/hooks/feature-2256-tr5-user-verified-hold.sh
 
 set -uo pipefail
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # TL3 gap (what this test does NOT catch):
 # - a real outline-skipped session (outline.md never written) merging via a real
 #   `gh pr merge` intercepted by the registered Bash PreToolUse hook — payloads here
@@ -43,7 +44,7 @@ mk_null_repo() {
     nrm "$dir"
 }
 gate_at() {
-    CMDTEXT="$1" RCWD="$2" SESS="$SID" node 2>/dev/null <<'JS' | bash "$RWT" 60 node "$AGENTS_DIR/hooks/workflow-gate.js" 2>/dev/null
+    CMDTEXT="$1" RCWD="$2" SESS="$SID" node 2>/dev/null <<'JS' | bash "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js" 2>/dev/null
 process.stdout.write(JSON.stringify({
   tool_name: 'Bash',
   tool_input: { command: process.env.CMDTEXT, cwd: process.env.RCWD },

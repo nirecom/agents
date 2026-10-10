@@ -26,8 +26,8 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUBJECT="$AGENTS_DIR/tests/skills/feature-confirm-flags-static.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SUBJECT="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-confirm-flags-static.sh"
 EXPECTED_XFAIL=7
 
 PASS=0
@@ -58,7 +58,7 @@ fi
 # skills/ next to itself and report every check as a missing file. Re-pin it at the real
 # tree: the copy must differ from the original in that ONE line and nothing else.
 BASE="$TMP/base.sh"
-sed -e "s#^REPO_ROOT=.*#REPO_ROOT='$AGENTS_DIR'#" "$SUBJECT" > "$BASE"
+sed -e "s#^REPO_ROOT=.*#REPO_ROOT='$SCRIPT_CHECKOUT_ROOT'#" "$SUBJECT" > "$BASE"
 check "L0a: the temp copy re-pins REPO_ROOT at the real tree (one line)" \
   "1" "$(grep -c "^REPO_ROOT='" "$BASE" || true)"
 

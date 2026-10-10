@@ -10,12 +10,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 harness_isolate
 
-AUDIT="$AGENTS_DIR/bin/audit-hookspath-neutralization.sh"
+AUDIT="$SCRIPT_CHECKOUT_ROOT/bin/audit-hookspath-neutralization.sh"
 
 BROOT="$(make_tmp)"
 trap 'rm -rf "$BROOT"' EXIT INT TERM HUP

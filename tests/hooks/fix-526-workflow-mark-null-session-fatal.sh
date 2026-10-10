@@ -9,8 +9,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HOOK_NODE="$AGENTS_DIR/hooks/workflow-mark.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK_NODE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 TMPDIR_BASE="${TMPDIR:-/tmp}/fix-526-$$"
 mkdir -p "$TMPDIR_BASE"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT

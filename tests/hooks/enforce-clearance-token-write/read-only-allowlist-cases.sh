@@ -18,16 +18,16 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # Counters, run_hook, the input builders and the strict verdict classifier come from the
 # shared harness — this file's private copy of them also skipped the WORKFLOW_PLANS_DIR
 # dual-pin that rules/test/fixture-isolation.md requires (#1821 cycle-2 C9).
 # shellcheck source=tests/lib/clearance-hook-harness.sh
-. "$AGENTS_DIR/tests/lib/clearance-hook-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/clearance-hook-harness.sh"
 
 TMP=$(make_tmp); TN=$(node_path "$TMP")
 TOKEN="$TN/wsid.off-clearance"
@@ -278,7 +278,7 @@ assert_block "WR-1816d printf program piped into python3 -E -" \
 # --encoded-command, so dropping that spelling from LONG_FLAG reddens something.
 # ---------------------------------------------------------------------------
 B64="UwBlAHQALQBDAG8AbgB0AGUAbgB0AA=="
-EXTRACT="$("$RWT" 10 node -e "const {extractAllInterpreterBodies}=require(process.argv[1]+'/hooks/block-clearance-token-write/interpreter-scan.js');const r=extractAllInterpreterBodies('pwsh --encoded-command \"'+process.argv[2]+'\"');process.stdout.write(JSON.stringify({b:r.bodies,f:r.flagCount}))" "$_AGENTS_DIR_NODE" "$B64" 2>/dev/null)"
+EXTRACT="$("$RWT" 10 node -e "const {extractAllInterpreterBodies}=require(process.argv[1]+'/hooks/block-clearance-token-write/interpreter-scan.js');const r=extractAllInterpreterBodies('pwsh --encoded-command \"'+process.argv[2]+'\"');process.stdout.write(JSON.stringify({b:r.bodies,f:r.flagCount}))" "$_SCRIPT_CHECKOUT_ROOT_NODE" "$B64" 2>/dev/null)"
 if [ "$EXTRACT" = "{\"b\":[\"$B64\"],\"f\":1}" ]; then
     pass "WR-1816-encoded-extract --encoded-command yields exactly the quoted body (flagCount 1)"
 else

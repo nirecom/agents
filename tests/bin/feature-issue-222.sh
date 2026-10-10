@@ -3,31 +3,20 @@
 # Tags: issue-close, stage, workflow, finalize, triage, scope:common
 # Serial: shell-injection guards assert the fixed paths /tmp/T8_INJECT and /tmp/P3_INJECT stay absent
 # Tests for issue #222 — /issue-close skill refactor + backfill script.
-#
-# After the refactor:
-#   - State routing moved from SKILL.md prose into bin/github-issues/issue-close-triage.sh
-#   - Step G moved into bin/github-issues/parent-body-update.sh
-#   - Step J moved into bin/github-issues/post-close-sentinels.sh
-#   - bin/github-issues/backfill-commit-comments.sh handles retroactive migration
-
-# Suites:
-#   M-series — gh-mock infrastructure smoke checks
-#   T-series — issue-close-triage.sh routing for each (state × sentinel)
-#   J-series — post-close-sentinels.sh (resolved-by + appended sentinel)
-#   P-series — parent-body-update.sh (parent → no-op vs. edit)
-#   R-series — backfill-commit-comments.sh
-#   D-series — minimal SKILL.md regression guards on the new prose
+# Suites: M gh-mock smoke checks; T triage routing per (state × sentinel);
+# J post-close-sentinels.sh; P parent-body-update.sh; R backfill-commit-comments.sh;
+# D minimal SKILL.md regression guards on the new prose.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL_FILE="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
-STAGE_TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-stage-triage.sh"
-TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-finalize-triage.sh"
-PARENT_SCRIPT="$AGENTS_DIR/bin/github-issues/parent-body-update.sh"
-SENTINELS_SCRIPT="$AGENTS_DIR/bin/github-issues/post-close-sentinels.sh"
-BACKFILL_SCRIPT="$AGENTS_DIR/bin/github-issues/backfill-commit-comments.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL_FILE="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/SKILL.md"
+STAGE_TRIAGE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-stage-triage.sh"
+TRIAGE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-finalize-triage.sh"
+PARENT_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/parent-body-update.sh"
+SENTINELS_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/post-close-sentinels.sh"
+BACKFILL_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/backfill-commit-comments.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -73,7 +62,6 @@ setup_tmp() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/docs/history"
     : > "$TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"
@@ -83,7 +71,6 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR
     unset GH_MOCK_COMMENT_LOG
 }
 
@@ -271,15 +258,17 @@ else
 fi
 teardown_tmp
 
-# --- T9: AGENTS_CONFIG_DIR unset → non-zero exit
+# --- T9: triage reads no root variable — routing is identical with both unset
 setup_tmp
-unset AGENTS_CONFIG_DIR
-GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$TRIAGE_SCRIPT" 42 >/dev/null 2>&1
-RC=$?
-if [ "$RC" -ne 0 ]; then
-    pass "T9: AGENTS_CONFIG_DIR unset → non-zero exit"
+T9_SET=$(AGENTS_MAIN_ROOT="$TMP" GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$TRIAGE_SCRIPT" 42 2>/dev/null)
+T9_SET_RC=$?
+T9_UNSET=$(GH_MOCK_SCENARIO=issue_task run_with_timeout 15 \
+    env -u AGENTS_MAIN_ROOT bash "$TRIAGE_SCRIPT" 42 2>/dev/null)
+T9_UNSET_RC=$?
+if [ "$T9_SET_RC" -eq "$T9_UNSET_RC" ] && [ "$T9_SET" = "$T9_UNSET" ]; then
+    pass "T9: AGENTS_MAIN_ROOT unset → triage routing unchanged"
 else
-    fail "T9: AGENTS_CONFIG_DIR unset should fail (rc=$RC)"
+    fail "T9: root variables changed triage (set rc=$T9_SET_RC unset rc=$T9_UNSET_RC)"
 fi
 teardown_tmp
 
@@ -440,7 +429,7 @@ Background: closed via PR
 Changes: feature shipped
 EOF
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 0 ] && ! grep -qE "(resolved-by|issue-close-sentinel)" "$GH_MOCK_COMMENT_LOG" 2>/dev/null; then
     pass "R2: --dry-run does not post comments"
@@ -458,7 +447,7 @@ Background: x
 Changes: y
 EOF
 GH_MOCK_SCENARIO=closed_with_appended_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 0 ] && ! grep -qE "(resolved-by|issue-close-sentinel)" "$GH_MOCK_COMMENT_LOG" 2>/dev/null; then
     pass "R3: existing appended sentinel → skipped"
@@ -471,7 +460,7 @@ teardown_tmp
 setup_tmp
 # history.md intentionally empty; GIT_MOCK_LOG_FOR_42 not set → no-hash class.
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 0 ] \
    && grep -q "issue-close-sentinel: appended (resolved-by: backfill-no-hash)" \
@@ -491,7 +480,7 @@ Background: closed via PR
 Changes: feature shipped
 EOF
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 if [ "$RC" -eq 0 ] \
@@ -513,7 +502,7 @@ Background: closed via PR
 Changes: feature shipped
 EOF
 OUT=$(GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run 2>&1)
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run 2>&1)
 RC=$?
 if [ "$RC" -eq 0 ] \
    && echo "$OUT" | grep -q "\[dry-run class=hash-from-history\]" \
@@ -533,7 +522,7 @@ Background: x
 Changes: y
 EOF
 GH_MOCK_SCENARIO=closed_with_resolved_comment \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 # J-1 must NOT be re-posted (no new "Resolved by commit" line)
@@ -559,7 +548,7 @@ EOF
 GIT_MOCK_LOG_FOR_42=deadbee \
 GIT_MOCK_LOG_FOR_420=wronghash \
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 if [ "$RC" -eq 0 ] \
@@ -582,7 +571,7 @@ Changes: y
 EOF
 # GIT_MOCK_LOG_FOR_42 intentionally NOT set
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 J1_POSTED=$(echo "$LOG" | grep -c "Resolved by commit" || true)
@@ -616,7 +605,7 @@ export GH_MOCK_ISSUE_NUMBERS="42
 44"
 export GIT_MOCK_LOG_FOR_43=deadbee
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --canary >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --canary >/dev/null 2>&1
 RC=$?
 unset GH_MOCK_ISSUE_NUMBERS GIT_MOCK_LOG_FOR_43
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
@@ -628,13 +617,13 @@ else
 fi
 teardown_tmp
 
-# --- R11: AGENTS_CONFIG_DIR unset → non-zero exit
-(unset AGENTS_CONFIG_DIR; bash "$BACKFILL_SCRIPT" >/dev/null 2>&1)
+# --- R11: no --target-checkout-root and AGENTS_MAIN_ROOT unset → non-zero exit
+(unset AGENTS_MAIN_ROOT; bash "$BACKFILL_SCRIPT" >/dev/null 2>&1)
 RC=$?
 if [ "$RC" -ne 0 ]; then
-    pass "R11: AGENTS_CONFIG_DIR unset → non-zero exit"
+    pass "R11: no --target-checkout-root and AGENTS_MAIN_ROOT unset → non-zero exit"
 else
-    fail "R11: AGENTS_CONFIG_DIR unset should fail (rc=$RC)"
+    fail "R11: unset root variables should fail (rc=$RC)"
 fi
 
 # --- R12: unknown flag → non-zero exit
@@ -657,7 +646,7 @@ Cause: x
 Fix: y
 EOF
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 if [ "$RC" -eq 0 ] \
@@ -679,7 +668,7 @@ Cause: old cause
 Fix: old fix
 EOF
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 if [ "$RC" -eq 0 ] \
@@ -702,7 +691,7 @@ Background: hash appears before issue number
 Changes: shipped
 EOF
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 if [ "$RC" -eq 0 ] \
@@ -718,7 +707,7 @@ teardown_tmp
 setup_tmp
 export GH_MOCK_PR_MERGE_COMMIT_FOR_42="cafe1234"
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 unset GH_MOCK_PR_MERGE_COMMIT_FOR_42
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
@@ -735,7 +724,7 @@ teardown_tmp
 setup_tmp
 export GH_MOCK_BODY_FOR_42="Resolved upstream in deadb0de — see thread."
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 unset GH_MOCK_BODY_FOR_42
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
@@ -754,7 +743,7 @@ export GIT_MOCK_ARGV_LOG="$TMP/git-argv-r18.log"
 export GH_MOCK_TITLE_FOR_42="feat: backfill hash discovery extension"
 export GIT_MOCK_LOG_S_RESULT="beef5678 docs(history): record backfill tier expansion"
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
@@ -788,7 +777,7 @@ export GH_MOCK_TITLE_FOR_42="Priority test header"
 export GIT_MOCK_LOG_S_RESULT="beef5678 docs(history): record priority test"
 export GIT_MOCK_LOG_FOR_42="feedface"
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 unset GH_MOCK_PR_MERGE_COMMIT_FOR_42 GH_MOCK_BODY_FOR_42 GH_MOCK_TITLE_FOR_42 \
       GIT_MOCK_LOG_S_RESULT GIT_MOCK_LOG_FOR_42
@@ -811,7 +800,7 @@ setup_tmp
 # 41 chars: truncating to 40 would be syntactically valid but semantically bogus.
 export GH_MOCK_BODY_FOR_42="Spurious hex: 0123456789abcdef0123456789abcdef0123456789a"
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r20.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r20.out" 2>&1
 RC=$?
 unset GH_MOCK_BODY_FOR_42
 if [ "$RC" -eq 0 ] \
@@ -845,7 +834,7 @@ export GIT_MOCK_LOG_FOR_109="eeee111"
 export GIT_MOCK_LOG_FOR_110="eeee222"
 
 GH_MOCK_SCENARIO=canary_six_class \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --canary --dry-run >"$TMP/r21.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --canary --dry-run >"$TMP/r21.out" 2>&1
 RC=$?
 unset GH_MOCK_PR_MERGE_COMMIT_FOR_103 GH_MOCK_PR_MERGE_COMMIT_FOR_104 \
       GH_MOCK_BODY_FOR_105 GH_MOCK_BODY_FOR_106 \
@@ -890,7 +879,7 @@ fi
 setup_tmp
 export GH_MOCK_PR_MERGE_COMMIT_FOR_42=""
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r23.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r23.out" 2>&1
 RC=$?
 unset GH_MOCK_PR_MERGE_COMMIT_FOR_42
 if [ "$RC" -eq 0 ] \
@@ -905,7 +894,7 @@ teardown_tmp
 setup_tmp
 export GH_MOCK_BODY_FOR_42="deadbee"
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 unset GH_MOCK_BODY_FOR_42
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
@@ -922,7 +911,7 @@ teardown_tmp
 setup_tmp
 export GH_MOCK_BODY_FOR_42="deadbe"
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r25.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r25.out" 2>&1
 RC=$?
 unset GH_MOCK_BODY_FOR_42
 if [ "$RC" -eq 0 ] \
@@ -939,7 +928,7 @@ export GH_MOCK_TITLE_FOR_42="bulk import candidate title"
 export GIT_MOCK_LOG_S_RESULT="3969773 feat(agents-split): add 39 tests from dotfiles (step 11)"
 export GIT_MOCK_SHOW_HEADINGS_FOR_3969773=39
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r26.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r26.out" 2>&1
 RC=$?
 unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_SHOW_HEADINGS_FOR_3969773
 if [ "$RC" -eq 0 ] \
@@ -956,7 +945,7 @@ setup_tmp
 export GIT_MOCK_ARGV_LOG="$TMP/git-argv-r27.log"
 export GH_MOCK_TITLE_FOR_42="short"
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r27.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r27.out" 2>&1
 RC=$?
 unset GH_MOCK_TITLE_FOR_42
 ARGV_R27=$(cat "$GIT_MOCK_ARGV_LOG" 2>/dev/null)
@@ -975,7 +964,7 @@ setup_tmp
 export GIT_MOCK_ARGV_LOG="$TMP/git-argv-r28.log"
 export GH_MOCK_TITLE_FOR_42=""
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r28.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r28.out" 2>&1
 RC=$?
 unset GH_MOCK_TITLE_FOR_42
 ARGV_R28=$(cat "$GIT_MOCK_ARGV_LOG" 2>/dev/null)
@@ -996,7 +985,7 @@ export GIT_MOCK_LOG_S_RESULT="3969773 feat(agents-split): add 39 tests from dotf
 export GIT_MOCK_SHOW_HEADINGS_FOR_3969773=39
 export GIT_MOCK_LOG_FOR_42="deadbee"
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r29.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r29.out" 2>&1
 RC=$?
 unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_LOG_FOR_42 GIT_MOCK_SHOW_HEADINGS_FOR_3969773
 if [ "$RC" -eq 0 ] \
@@ -1018,7 +1007,7 @@ Background: closed via PR
 Changes: feature shipped
 EOF
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 COMMENT_COUNT=$(echo "$LOG" | grep -c '^---COMMENT---$' 2>/dev/null || echo 0)
@@ -1037,7 +1026,7 @@ teardown_tmp
 setup_tmp
 # history.md empty, no git-log match → no-hash class
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 COMMENT_COUNT=$(echo "$LOG" | grep -c '^---COMMENT---$' || true)
@@ -1056,7 +1045,7 @@ teardown_tmp
 # The mock returns the sentinel for merged-format when the jq expression uses (^|\n) prefix.
 setup_tmp
 GH_MOCK_SCENARIO=closed_with_merged_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" >/dev/null 2>&1
 RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 COMMENT_COUNT=$(echo "$LOG" | grep -c '^---COMMENT---$' || true)
@@ -1082,7 +1071,7 @@ export GH_MOCK_TITLE_FOR_42="bulk import candidate title with hex cafe0011"
 export GIT_MOCK_LOG_S_RESULT="cafe0011 feat(bulk): import 5 entries"
 export GIT_MOCK_SHOW_HEADINGS_FOR_cafe0011=5
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r34.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r34.out" 2>&1
 RC=$?
 unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_SHOW_HEADINGS_FOR_cafe0011
 if [ "$RC" -eq 0 ] \
@@ -1100,7 +1089,7 @@ export GH_MOCK_TITLE_FOR_42="non-bulk introducer title with hex beef5678"
 export GIT_MOCK_LOG_S_RESULT="beef5678 docs(history): record single entry"
 export GIT_MOCK_SHOW_HEADINGS_FOR_beef5678=2
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r35.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r35.out" 2>&1
 RC=$?
 unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_SHOW_HEADINGS_FOR_beef5678
 if [ "$RC" -eq 0 ] \
@@ -1119,7 +1108,7 @@ export GH_MOCK_TITLE_FOR_42="threshold boundary title with hex c0ffee0"
 export GIT_MOCK_LOG_S_RESULT="c0ffee0 docs(history): record three entries"
 export GIT_MOCK_SHOW_HEADINGS_FOR_c0ffee0=3
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r36.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r36.out" 2>&1
 RC=$?
 unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_SHOW_HEADINGS_FOR_c0ffee0
 if [ "$RC" -eq 0 ] \
@@ -1138,7 +1127,7 @@ export GH_MOCK_TITLE_FOR_42="argv validation title with hex deadcafe"
 export GIT_MOCK_LOG_S_RESULT="deadcafe docs(history): record argv check"
 export GIT_MOCK_SHOW_HEADINGS_FOR_deadcafe=2
 GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r37.out" 2>&1
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --target-checkout-root "$TMP" --dry-run >"$TMP/r37.out" 2>&1
 RC=$?
 unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_SHOW_HEADINGS_FOR_deadcafe
 ARGV_R37=$(cat "$GIT_MOCK_ARGV_LOG" 2>/dev/null)

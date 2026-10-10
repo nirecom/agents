@@ -17,13 +17,13 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-HOOK="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+HOOK="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -91,10 +91,10 @@ fi
 
 # --- C3: main-worktree write still blocked ---
 # Resolve the actual main worktree (git-common-dir == git-dir).
-# AGENTS_DIR may itself be a linked worktree, so we cannot use it directly.
+# SCRIPT_CHECKOUT_ROOT may itself be a linked worktree, so we cannot use it directly.
 _main_worktree_dir=""
 if command -v git >/dev/null 2>&1; then
-    _wt_list=$(git -C "$AGENTS_DIR" worktree list --porcelain 2>/dev/null)
+    _wt_list=$(git -C "$SCRIPT_CHECKOUT_ROOT" worktree list --porcelain 2>/dev/null)
     # The first 'worktree <path>' line is the main worktree.
     _main_worktree_dir=$(echo "$_wt_list" | awk '/^worktree /{print substr($0,10); exit}')
 fi
@@ -122,7 +122,7 @@ fi
 # --- C4: deterministic test of fs.existsSync=false branch (unit-backstop) ---
 mock_dir="$(mktemp -d 2>/dev/null || mktemp -d -t c4_mock)"
 if [ -z "$mock_dir" ] || [ ! -d "$mock_dir" ]; then
-    mock_dir="$AGENTS_DIR/.tmp-c4-mock-$$"
+    mock_dir="$SCRIPT_CHECKOUT_ROOT/.tmp-c4-mock-$$"
     mkdir -p "$mock_dir"
 fi
 trap 'rm -rf "$mock_dir" 2>/dev/null; rm -f /tmp/.c4_err.$$ 2>/dev/null' EXIT INT TERM HUP
@@ -148,7 +148,7 @@ else
 fi
 
 payload='{"tool_name":"Edit","tool_input":{"file_path":"/tmp/whatever.txt","new_string":"x"}}'
-OUT=$(cd "$AGENTS_DIR" && echo "$payload" | ENFORCE_WORKTREE=on run_with_timeout 30 node --require "$_mock_file_node" "$HOOK" 2>/tmp/.c4_err.$$)
+OUT=$(cd "$SCRIPT_CHECKOUT_ROOT" && echo "$payload" | ENFORCE_WORKTREE=on run_with_timeout 30 node --require "$_mock_file_node" "$HOOK" 2>/tmp/.c4_err.$$)
 RC=$?
 ERR=$(cat /tmp/.c4_err.$$ 2>/dev/null)
 rm -f /tmp/.c4_err.$$
@@ -164,7 +164,7 @@ else
 fi
 
 # --- C5: enforce-issue-close.js does not call process.cwd() ---
-ICC_HOOK="${_AGENTS_DIR_NODE}/hooks/enforce-issue-close.js"
+ICC_HOOK="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-issue-close.js"
 if [ ! -f "$ICC_HOOK" ]; then
     fail "C5: enforce-issue-close.js not found at $ICC_HOOK"
 elif grep -q "process\.cwd" "$ICC_HOOK"; then

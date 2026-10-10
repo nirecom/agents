@@ -41,11 +41,11 @@ set -u
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-AGENTS_WIN="$(nodepath "$AGENTS_DIR")"
+AGENTS_WIN="$(nodepath "$SCRIPT_CHECKOUT_ROOT")"
 EMIT_JS="$AGENTS_WIN/bin/worker-dispatch/emit.js"
-RUN_TESTS_HOOK="$AGENTS_DIR/hooks/workflow-run-tests.js"
+RUN_TESTS_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js"
 
 PASS=0
 FAIL=0
@@ -169,7 +169,7 @@ contract_line_count() {
     printf '%s\n' "$1" | grep -c -E '^[[:space:]]*RUN_CONTRACT: PASS=[0-9]+ FAIL=[0-9]+ SKIP=[0-9]+ EXECUTED=[0-9]+' | tr -d ' '
 }
 
-if [ ! -f "$AGENTS_DIR/bin/worker-dispatch/emit.js" ] || [ ! -f "$RUN_TESTS_HOOK" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/emit.js" ] || [ ! -f "$RUN_TESTS_HOOK" ]; then
     fail "0/prerequisites" "emit.js or workflow-run-tests.js missing"
     echo ""
     echo "Total: PASS=$PASS FAIL=$FAIL"

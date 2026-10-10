@@ -15,7 +15,7 @@ const { checkoutRootOf, samePath, realpathOrNull } = require("../lib/checkout-id
 const { isBaselineCheckout } = require("../lib/baseline-checkout-marker");
 
 // <root>/hooks/workflow-run-tests/provenance-identity.js → <root>
-const MODULE_REPO_ROOT = path.resolve(__dirname, "..", "..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 
 // emitter token (as returned by resolveTestProvenance) → its location in a repo.
 const CANONICAL_RELPATH = new Map([
@@ -30,7 +30,7 @@ function toFsPath(value) {
 }
 
 // Nearest ancestor of `startDir` that is a checkout of THIS repository, or null.
-const findRepoRoot = (startDir) => checkoutRootOf(startDir, MODULE_REPO_ROOT);
+const findRepoRoot = (startDir) => checkoutRootOf(startDir, SCRIPT_CHECKOUT_ROOT);
 
 /**
  * Is `claimedPath` really this repo's `emitter`?
@@ -70,7 +70,7 @@ function verifyEmitterIdentity(emitter, claimedPath, cwd) {
   const real = realpathOrNull(resolved);
   if (real === null) return false; // nothing there: unverified, so not trusted
 
-  const roots = [MODULE_REPO_ROOT];
+  const roots = [SCRIPT_CHECKOUT_ROOT];
   const cwdRoot = findRepoRoot(baseCwd);
   if (cwdRoot !== null) roots.push(cwdRoot);
 
@@ -84,5 +84,5 @@ function verifyEmitterIdentity(emitter, claimedPath, cwd) {
 
 module.exports = {
   verifyEmitterIdentity,
-  MODULE_REPO_ROOT,
+  SCRIPT_CHECKOUT_ROOT,
 };

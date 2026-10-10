@@ -69,7 +69,7 @@ fi
 # bash layer's quoting as well, not just Node's. "skipped absent" rules out a
 # fail-open (e.g. a quoting error crashing the module) masquerading as success.
 _x25c_out="$(run_precommit "$_x25_repo" \
-    "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+    "ENFORCE_WORKTREE=off" \
     "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_x25_root")"
 _x25c_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 _x25c_v="rc:nonzero"; [ "$_x25c_rc" -eq 0 ] && _x25c_v="rc:zero"

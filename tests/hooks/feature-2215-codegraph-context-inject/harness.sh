@@ -9,10 +9,10 @@
 # Setup / fixture isolation (rules/test/fixture-isolation.md)
 # ---------------------------------------------------------------------------
 
-HOOK="$AGENTS_DIR/hooks/codegraph-context-inject.js"
-BOUNDARY="$AGENTS_DIR/hooks/lib/codegraph-boundary.js"
-SETTINGS_JSON="$AGENTS_DIR/settings.json"
-CONSTANTS_FILE="$AGENTS_DIR/install/codegraph-constants.txt"
+HOOK="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/codegraph-context-inject.js"
+BOUNDARY="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/codegraph-boundary.js"
+SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT_NATIVE/settings.json"
+CONSTANTS_FILE="$SCRIPT_CHECKOUT_ROOT_NATIVE/install/codegraph-constants.txt"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -184,7 +184,7 @@ run_hook() {
         cd "$dir" || exit 99
         printf '%s' "$payload" | run_with_timeout 15 env -u CLAUDE_CODE_SESSION_ID \
             "$@" \
-            AGENTS_CONFIG_DIR="$CFG_ON_N" \
+            AGENTS_MAIN_ROOT="$CFG_ON_N" \
             PATH="$BIN:$PATH" \
             WORKFLOW_STATE_DIR="$WF_DIR_N" WORKFLOW_PLANS_DIR="$WF_DIR_N" \
             HOME="$FAKE_HOME_N" USERPROFILE="$FAKE_HOME_N" \

@@ -11,16 +11,16 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-CLI="$AGENTS_DIR/bin/supervisor-write-layer3"
-CLI_NODE="$_AGENTS_DIR_NODE/bin/supervisor-write-layer3"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-layer3"
+CLI_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/bin/supervisor-write-layer3"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -203,8 +203,8 @@ run_r6() {
 # --- #2475: --set-transcript-cursor on the audit writer ---------------------
 # AUDIT_CLI targets the live bin/supervisor-write-audit (CLI above names the
 # retired supervisor-write-layer3 path, so R1-R6 SKIP; that is pre-existing).
-AUDIT_CLI="$AGENTS_DIR/bin/supervisor-write-audit"
-AUDIT_CLI_NODE="$_AGENTS_DIR_NODE/bin/supervisor-write-audit"
+AUDIT_CLI="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit"
+AUDIT_CLI_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/bin/supervisor-write-audit"
 T_CURSOR_JSON='{"transcript_path":"/t/a.jsonl","line":5,"last_uuid":"u5","updated_at":"2026-01-01T00:00:00Z"}'
 
 read_state_field() {

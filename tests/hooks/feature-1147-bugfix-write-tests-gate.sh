@@ -10,14 +10,14 @@
 # via bin/check-verification-gate.sh category: skill-orchestration
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SUITE_DIR="$(cd "$(dirname "$0")/feature-1147-bugfix-write-tests-gate" && pwd)"
 TOTAL_ERRORS=0
 
 run_suite() {
     local script="$1"
     local errors
-    bash "$SUITE_DIR/$script" "$AGENTS_DIR" || errors=$?
+    bash "$SUITE_DIR/$script" "$SCRIPT_CHECKOUT_ROOT" || errors=$?
     TOTAL_ERRORS=$((TOTAL_ERRORS + ${errors:-0}))
 }
 

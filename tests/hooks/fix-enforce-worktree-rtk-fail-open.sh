@@ -9,17 +9,17 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/lib/ew-runner.sh
-. "$AGENTS_DIR/tests/lib/ew-runner.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/ew-runner.sh"
 
 T="$(make_tmp)"
 trap 'rm -rf "$T"' EXIT
 harness_isolate "$T/iso"
 
-HOOKS_N="$(np "$AGENTS_DIR/hooks")"
+HOOKS_N="$(np "$SCRIPT_CHECKOUT_ROOT/hooks")"
 
 # BATCHED UNIT CASES (speed only; every assertion still runs one by one). A cold node per
 # rtk_eval costs ~1s, so `rtk_batched <fn>` runs <fn> twice: a silent RECORD pass in which
@@ -275,7 +275,7 @@ MAIN="$(np "$T/main")"
 LINKED="$(np "$T/wt-linked")"
 ew_make_repo "$MAIN"
 git -C "$MAIN" worktree add -q -b feature/rtk "$LINKED"
-EW_CONFIG_DIR="$MAIN"
+EW_CFG_ROOT="$MAIN"
 run() { ew_run "$1" "$(ew_bash_payload test "$2")"; }
 
 case_begin "rtk-hook-enforce-worktree" "hooks/enforce-worktree.js"

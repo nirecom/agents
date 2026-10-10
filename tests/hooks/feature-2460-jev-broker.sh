@@ -11,10 +11,10 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # Pattern A dispatcher: fragments are sourced in order into this process (one mock, one BP_JEV, one total).
-SUITE_DIR="$AGENTS_DIR/tests/hooks/feature-2460-jev-broker"
+SUITE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2460-jev-broker"
 . "$SUITE_DIR/_lib.sh"
 
 case_begin "broker-a-normalize" "hooks/lib/jev/registry.js"

@@ -99,7 +99,7 @@ _rs_hook() {
     (
         cd "$RS_CWD" || exit 1
         unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
-        export AGENTS_CONFIG_DIR="$RS_CFG"
+        export AGENTS_MAIN_ROOT="$RS_CFG"
         export WORKFLOW_STATE_DIR="$RS_WF" WORKFLOW_PLANS_DIR="$RS_WF"
         export RS_MODULE="$RS_SIDMOD_NODE" RS_FAULT_MODE="$mode" RS_GHOST_ID="$RS_GHOST"
         # NATIVE preload path: run_hook_capture sets MSYS_NO_PATHCONV=1.
@@ -154,7 +154,7 @@ run_C16_resolve_sid_fault() {
 
     _rs_setup
 
-    if [ -f "$AGENTS_DIR/hooks/workflow-state/session-id.js" ]; then
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/session-id.js" ]; then
         pass "C16-0 workflow-state/session-id.js present"
     else
         fail "C16-0 hooks/workflow-state/session-id.js MISSING - Section C16 would be vacuous"

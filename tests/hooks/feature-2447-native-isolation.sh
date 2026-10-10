@@ -9,9 +9,9 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
@@ -20,7 +20,7 @@ trap 'rm -rf "$T"' EXIT
 harness_isolate "$T/iso"
 cd "$T"
 
-NI_MOD="$(np "$AGENTS_DIR/hooks/lib/native-isolation.js")"
+NI_MOD="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/native-isolation.js")"
 ENTERED="2026-09-29T00:00:00.000Z"
 EXITED="2026-09-29T01:00:00.000Z"
 

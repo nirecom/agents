@@ -65,8 +65,8 @@ case_end
 case_begin "interlock-status-matches-early-gate" "hooks/workflow-gate/early-gate.js"
 i4_early() {
     local sid="$1"
-    printf '%s' "{\"session_id\":\"$sid\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$AGENTS_DIR/README.md\",\"content\":\"x\"}}" \
-        | run_with_timeout 30 node "$(node_path "$AGENTS_DIR/hooks/workflow-gate.js")" 2>/dev/null \
+    printf '%s' "{\"session_id\":\"$sid\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$SCRIPT_CHECKOUT_ROOT/README.md\",\"content\":\"x\"}}" \
+        | run_with_timeout 30 node "$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js")" 2>/dev/null \
         | grep -c 'block' || true
 }
 ROWS=$((ROWS + 1))
@@ -106,7 +106,7 @@ bg_write_state "$BG_SID_ARMED_SELF" "pending"
 ROWS=$((ROWS + 1))
 assert_eq "I6: an armed gate defers a bash -c self-script wrapper to the interlock, not allow" \
     "passThrough|BG-INTERLOCK-QUIET" \
-    "$(verdict_code_of 'bash -c '\''cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on'\''' "$BG_SID_ARMED_SELF")"
+    "$(verdict_code_of 'bash -c '\''cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" X on'\''' "$BG_SID_ARMED_SELF")"
 case_end
 
 # SKIPPED: the pendingTier=Tier2/Tier3 variants of I1.

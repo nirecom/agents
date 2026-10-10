@@ -271,7 +271,7 @@ fi
 # WF-META-DOC2: driver meta-classify.js contains the sub_issues API call
 #               (#2087 moved the guard out of route-decision into its own phase)
 # ---------------------------------------------------------------------------
-META_CLASSIFY_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/meta-classify.js"
+META_CLASSIFY_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/meta-classify.js"
 if [ ! -f "$META_CLASSIFY_JS" ]; then
     fail "WF-META-DOC2: driver meta-classify.js missing at $META_CLASSIFY_JS"
 elif grep -q "sub_issues" "$META_CLASSIFY_JS"; then

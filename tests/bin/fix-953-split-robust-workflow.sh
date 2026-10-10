@@ -7,8 +7,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLI="$AGENTS_DIR/bin/compute-review-scope-fingerprint.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/compute-review-scope-fingerprint.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -26,8 +26,7 @@ TEST_ROOT="$TMP_ROOT/compute-review-scope-fingerprint-$$"
 mkdir -p "$TEST_ROOT"
 trap 'rm -rf "$TEST_ROOT" 2>/dev/null || true' EXIT
 
-# Set AGENTS_CONFIG_DIR so the CLI can require() review-tests-evidence.js.
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
+# The CLI require()s review-tests-evidence.js relative to its own location; no root env is set.
 
 # ── CLI existence check (TDD gate) ────────────────────────────────────────
 if [ ! -f "$CLI" ]; then

@@ -114,7 +114,7 @@ function run(payload, ctx) {
         "--limit", String(limit),
         "--json", JSON_FIELDS,
       ],
-      cwd: anchors.mainRoot,
+      cwd: anchors.targetMainRoot,
       timeoutMs: GH_TIMEOUT_MS,
     });
   } catch (e) {

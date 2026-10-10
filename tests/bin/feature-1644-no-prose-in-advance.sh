@@ -10,8 +10,8 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$AGENTS_DIR" || exit 1
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$SCRIPT_CHECKOUT_ROOT" || exit 1
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -90,13 +90,13 @@ NO_NEXT_FILES=(
   "skills/make-outline-plan/SKILL.md"
 )
 NO_NEXT_TEXT=(
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/set-workflow-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step workflow_init --complete'
+  'node "$AGENTS_MAIN_ROOT/bin/workflow/set-workflow-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete'
+  'node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step workflow_init --complete'
   '--target outline --advance --so-c1 <true|false> --so-c2 <true|false> | tail -1)`'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 true --c2 true'
+  'node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 true --c2 true'
   '--target outline --advance --so-c1 <true|false> --so-c2 <true|false> | tail -1)`'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 <true|false> --c2 <true|false>`'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target detail --advance --c1 <true|false> --c2 <true|false> --c3 <true|false>`'
+  'node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 <true|false> --c2 <true|false>`'
+  'node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target detail --advance --c1 <true|false> --c2 <true|false> --c3 <true|false>`'
 )
 
 for i in "${!NO_NEXT_FILES[@]}"; do
@@ -124,10 +124,10 @@ WITH_NEXT_FILES=(
   "skills/run-tests/SKILL.md"
 )
 WITH_NEXT_TEXT=(
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step outline --complete --next'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step detail --complete --next'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --complete --next'
-  'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --advance --step run_tests --skipped --skip-reason "<reason>" --next'
+  'node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step outline --complete --next'
+  'node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step detail --complete --next'
+  'node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step run_tests --complete --next'
+  'node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step run_tests --skipped --skip-reason "<reason>" --next'
 )
 
 for i in "${!WITH_NEXT_FILES[@]}"; do

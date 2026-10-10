@@ -5,27 +5,16 @@
 # N/A: secret-leakage — created field IDs are project-structure identifiers, not secrets; gh owns token handling.
 # N/A (C5 option-repair): Status-exists-but-options-missing/malformed — plan defines create-if-missing only, not option repair; out of scope.
 # N/A (C1/C5 failure perms): deep per-mutation failure matrix (createProjectV2 board-create + updateProjectV2Field option-update permutations) deferred — core create + idempotency + partial-retry covered by TEP-1/6/7; one project-list hard-fail representative kept (TEP-9).
-#
-# Tests for ensure-project-ready.sh (new lib, step 2 of #1340).
-# L2: project exists + Status field missing → createProjectV2Field + updateProjectV2Field called;
-#     project exists + Status field present → create mutations NOT called (idempotent);
-#     fingerprint field missing → createProjectV2Field (TEXT) called;
-#     partial-failure idempotency-retry (TEXT fails then retried, Status created once);
-#     gh auth missing project scope → error + hint + rc=1.
-#
-# L3 gap (what this test does NOT catch):
-# - Whether GitHub Projects API actually creates fields with the correct options
-#   (real network, live GraphQL mutations).
-# - Whether the returned option IDs are stable after creation.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# L2: Status field missing → create + update mutations; present → none (idempotent);
+#     fingerprint missing → TEXT create; partial-failure retry; no project scope → rc=1 + hint.
+# L3 gap: live Projects API field/option creation and option-ID stability.
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 # shellcheck source=_mock-ensure-project-ready.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_mock-ensure-project-ready.sh"
 
-TARGET="$AGENTS_DIR/bin/github-issues/lib/ensure-project-ready.sh"
+TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/ensure-project-ready.sh"
 export TARGET
 
 # Early-exit: file does not exist yet (RED-clean)
@@ -92,7 +81,7 @@ run_ensure() {
     " 2>"$stderr_file"
 }
 
-# get_field / pass / fail / AGENTS_DIR provided by _lib.sh.
+# get_field / pass / fail / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
 
 # ===========================================================================
 # TEP-1: project exists + Status field MISSING → createProjectV2Field + updateProjectV2Field called

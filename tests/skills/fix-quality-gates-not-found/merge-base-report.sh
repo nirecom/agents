@@ -43,7 +43,7 @@ STUB
   chmod +x "$1/$2" 2>/dev/null || true
 }
 
-make_cfg_recording() { # <log-file> ; prints the config dir
+make_cfg_recording() { # <log-file> ; prints the agents root
   local cfg g
   cfg="$(mktemp -d "$TMPROOT/cfg.XXXXXX")"
   mkdir -p "$cfg/bin" "$cfg/rules"
@@ -310,8 +310,8 @@ g6_unresolved_is_distinct_from_fallback() {
   g6_recorded_bases_all_equal "G6m-base" "$log" "HEAD"
 }
 
-# The helper is a separate file under $AGENTS_CONFIG_DIR/bin, so "it is not there" is a real
-# state of the world — a partial install, an older checkout, a config dir assembled by hand.
+# The helper is a separate file under the checkout's bin/, so "it is not there" is a real
+# state of the world — a partial install, an older checkout, a agents root assembled by hand.
 # The runner must degrade to the safe scope rather than to a guessed range, and must not
 # treat the missing helper as a failure.
 g6_missing_helper_degrades_safely() {
@@ -336,7 +336,7 @@ g6_missing_helper_degrades_safely() {
 # than a guess, so it must beat both merge-base candidates — including on the stale-origin
 # fixture, where the guess is demonstrably wrong. The two sibling scripts the helper consults
 # are stubbed here (a real session id and a real state file are not available inside a
-# throwaway config dir), and the bridge stub is written in node because the real one is a
+# throwaway agents root), and the bridge stub is written in node because the real one is a
 # node script and the helper may invoke it either way.
 g6_recorded_baseline_wins() {
   local cfg repo log base head

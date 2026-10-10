@@ -117,15 +117,15 @@ build_probe() {
     PROBE_JS="$TMPD/push-probe.js"
     cat > "$PROBE_JS" <<'PROBEEOF'
 "use strict";
-// argv: agentsDir mainRoot worktreePath branch
+// argv: agentsDir targetMainRoot worktreePath branch
 const path = require("path");
-const [agentsDir, mainRoot, wt, branch] = process.argv.slice(2);
+const [agentsDir, targetMainRoot, wt, branch] = process.argv.slice(2);
 const pushMod = require(path.join(agentsDir, "bin/worker-dispatch/workers/commit-push/push.js"));
 const anchorMod = require(path.join(agentsDir, "bin/worker-dispatch/anchor.js"));
 const registry = require(path.join(agentsDir, "hooks/lib/worker-dispatch-registry.js"));
 
 const out = (k, v) => process.stdout.write(k + "=" + String(v) + "\n");
-const anchors = anchorMod.resolveAnchors(mainRoot);
+const anchors = anchorMod.resolveAnchors(targetMainRoot);
 if (anchors.error) {
   out("probe_error", "anchors: " + anchors.error);
   process.exit(0);

@@ -5,5 +5,5 @@
 # Modes and labels: bin/check-plans-dir-isolation/main.js. Contract: rules/test/fixture-isolation.md.
 # Usage: bin/check-plans-dir-isolation.sh [--staged | --root <dir> | <file>...]
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec node "$REPO_ROOT/bin/check-plans-dir-isolation/main.js" "$@"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec node "$SCRIPT_CHECKOUT_ROOT/bin/check-plans-dir-isolation/main.js" "$@"

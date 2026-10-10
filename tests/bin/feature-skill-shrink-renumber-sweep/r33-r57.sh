@@ -7,7 +7,7 @@ check_absent_regex() {
     local label="$1"
     local pattern="$2"
     local rel="$3"
-    local path="$AGENTS_DIR/$rel"
+    local path="$SCRIPT_CHECKOUT_ROOT/$rel"
     if [ ! -f "$path" ]; then
         fail "$label: $rel missing"
         return

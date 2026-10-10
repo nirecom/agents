@@ -5,23 +5,15 @@
 # N/A: secret-leakage — label names/colors are public repo metadata, not secrets; gh owns token handling.
 # N/A (C8): adversarial labels.yml names/descriptions — .github/labels.yml is trusted committed config (not attacker input) and its YAML parse is unchanged by #1340 (only --repo added).
 # N/A (C5): --repo=VALUE GNU-equals form + flexible flag ordering — the script uses space-separated flags; equals-form is not a supported surface.
-#
-# Tests for sync-labels.sh --repo OWNER/REPO flag (step 1 of #1340).
-# L2: --repo threaded into gh label list, gh label create (CREATE/UPDATE);
-#     no-repo backward compat; injection-payload matrix (--repo never reaches gh).
-# L1: valid --repo parsed; invalid --repo format rejected.
-#
-# L3 gap (what this test does NOT catch):
-# - Whether --repo actually targets the correct remote repo against a live
-#   GitHub API (real network, real label objects).
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# L2: --repo threaded into gh label list / create (CREATE/UPDATE); no-repo backward
+#     compat; injection-payload matrix (--repo never reaches gh). L1: --repo parse/reject.
+# L3 gap: whether --repo targets the correct remote against a live GitHub API.
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# pass / fail / assert_eq / AGENTS_DIR provided by _lib.sh.
-TARGET="$AGENTS_DIR/bin/github-issues/sync-labels.sh"
+# pass / fail / assert_eq / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
+TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
 
 TMP=""
 

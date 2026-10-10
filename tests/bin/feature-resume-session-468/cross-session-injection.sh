@@ -30,7 +30,7 @@ const fs = require('fs');
 const path = require('path');
 const NL = String.fromCharCode(10);
 const { writeState, createInitialState, markStep } = require('$SIO_NODE');
-const { appendHandoffEntry } = require('$AGENTS_DIR_NODE/hooks/lib/handoff-artifact.js');
+const { appendHandoffEntry } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/handoff-artifact.js');
 writeState('injdonor-t23', createInitialState('injdonor-t23', { cwd: '$T23_CWD', git_branch: 'feature/donor' }));
 markStep('injdonor-t23', 'workflow_init', 'complete');
 markStep('injdonor-t23', 'clarify_intent', 'complete');
@@ -43,7 +43,7 @@ appendHandoffEntry('injdonor-t23', {
 });
 // Same encoder the locator composes with, so the fixture lands at the address
 // captureTranscriptTail actually looks up (path.resolve is platform-dependent).
-const enc = require('$AGENTS_DIR_NODE/hooks/lib/session-title.js')._encodeCwd('$T23_CWD');
+const enc = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title.js')._encodeCwd('$T23_CWD');
 const tdir = path.join('$T23_ROOT_NODE/transcripts', enc);
 fs.mkdirSync(tdir, { recursive: true });
 fs.writeFileSync(path.join(tdir, 'injdonor-t23.jsonl'), [
@@ -51,7 +51,7 @@ fs.writeFileSync(path.join(tdir, 'injdonor-t23.jsonl'), [
 ].join(NL) + NL);
 " >/dev/null 2>&1
 
-( cd "$AGENTS_DIR" && CLAUDE_CODE_SESSION_ID="injheir-t23" WORKFLOW_STATE_DIR="$T23_ROOT/state" \
+( cd "$SCRIPT_CHECKOUT_ROOT" && CLAUDE_CODE_SESSION_ID="injheir-t23" WORKFLOW_STATE_DIR="$T23_ROOT/state" \
     WORKFLOW_PLANS_DIR="$T23_ROOT/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$T23_ROOT/transcripts" \
     run_with_timeout node "$CLI" --from injdonor-t23 >"$T23_ROOT/stdout" 2>"$T23_ROOT/stderr" ) \
     && LAST_EXIT=0 || LAST_EXIT=$?

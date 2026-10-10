@@ -24,11 +24,11 @@ cpr_section_b() {
         $0 ~ "^## CPR-" code "([ \t]|$)" { inside = 1; next }
         inside && /^## / { inside = 0 }
         inside { print }
-    ' "$AGENTS_DIR/rules/core-principles.md"
+    ' "$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
 }
 
 test_B1_core_principles_exists() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ -f "$f" ]; then
         pass "B1: rules/core-principles.md exists"
     else
@@ -37,7 +37,7 @@ test_B1_core_principles_exists() {
 }
 
 test_B2_elevate_to_the_class_header() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B2: rules/core-principles.md not found (prerequisite)"
         return
@@ -50,7 +50,7 @@ test_B2_elevate_to_the_class_header() {
 }
 
 test_B3_orthogonality_header() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B3: rules/core-principles.md not found (prerequisite)"
         return
@@ -63,7 +63,7 @@ test_B3_orthogonality_header() {
 }
 
 test_B4_name_reflects_substance_header() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B4: rules/core-principles.md not found (prerequisite)"
         return
@@ -76,7 +76,7 @@ test_B4_name_reflects_substance_header() {
 }
 
 test_B5_orthogonality_md_removed() {
-    local f="$AGENTS_DIR/rules/orthogonality.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/orthogonality.md"
     if [ ! -f "$f" ]; then
         pass "B5: rules/orthogonality.md does not exist (correctly removed)"
     else
@@ -85,7 +85,7 @@ test_B5_orthogonality_md_removed() {
 }
 
 test_B6_make_detail_plan_references_core_principles() {
-    local f="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md"
     if [ ! -f "$f" ]; then
         fail "B6: skills/make-detail-plan/SKILL.md not found"
         return
@@ -98,7 +98,7 @@ test_B6_make_detail_plan_references_core_principles() {
 }
 
 test_B7_survey_code_references_core_principles() {
-    local f="$AGENTS_DIR/skills/survey-code/SKILL.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/skills/survey-code/SKILL.md"
     if [ ! -f "$f" ]; then
         fail "B7: skills/survey-code/SKILL.md not found"
         return
@@ -112,7 +112,7 @@ test_B7_survey_code_references_core_principles() {
 
 test_B8_no_residual_plan_principles_references() {
     local hits
-    hits=$(cd "$AGENTS_DIR" && git ls-files -z \
+    hits=$(cd "$SCRIPT_CHECKOUT_ROOT" && git ls-files -z \
            | xargs -0 grep -l 'plan-principles' 2>/dev/null \
            | grep -v '^docs/history' \
            | grep -v '^tests/' || true)
@@ -124,7 +124,7 @@ test_B8_no_residual_plan_principles_references() {
 }
 
 test_B9_ssot_section_header() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B9: rules/core-principles.md not found (prerequisite)"
         return
@@ -137,7 +137,7 @@ test_B9_ssot_section_header() {
 }
 
 test_B10_elevate_to_the_class_per_class_wording() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B10: rules/core-principles.md not found (prerequisite)"
         return
@@ -153,7 +153,7 @@ test_B10_elevate_to_the_class_per_class_wording() {
 }
 
 test_B11_outline_reviewer_references_core_principles() {
-    local f="$AGENTS_DIR/agents/outline-reviewer.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/agents/outline-reviewer.md"
     if [ ! -f "$f" ]; then
         fail "B11: agents/outline-reviewer.md not found"
         return
@@ -166,7 +166,7 @@ test_B11_outline_reviewer_references_core_principles() {
 }
 
 test_B12_detail_reviewer_references_core_principles() {
-    local f="$AGENTS_DIR/agents/detail-reviewer.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/agents/detail-reviewer.md"
     if [ ! -f "$f" ]; then
         fail "B12: agents/detail-reviewer.md not found"
         return
@@ -179,7 +179,7 @@ test_B12_detail_reviewer_references_core_principles() {
 }
 
 test_B13_plan_principles_old_path_removed() {
-    local f="$AGENTS_DIR/rules/plan-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/plan-principles.md"
     if [ ! -f "$f" ]; then
         pass "B13: rules/plan-principles.md does not exist (correctly renamed)"
     else
@@ -188,7 +188,7 @@ test_B13_plan_principles_old_path_removed() {
 }
 
 test_B14_user_obsessed_header() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B14: rules/core-principles.md not found (prerequisite)"
         return
@@ -201,7 +201,7 @@ test_B14_user_obsessed_header() {
 }
 
 test_B15_separate_concerns_header() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B15: rules/core-principles.md not found (prerequisite)"
         return
@@ -214,7 +214,7 @@ test_B15_separate_concerns_header() {
 }
 
 test_B16_all_cpr_headers_present() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B16: rules/core-principles.md not found (prerequisite)"
         return
@@ -244,7 +244,7 @@ test_B16_all_cpr_headers_present() {
 }
 
 test_B17_no_legacy_numbered_headers() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B17: rules/core-principles.md not found (prerequisite)"
         return
@@ -269,7 +269,7 @@ test_B17_no_legacy_numbered_headers() {
 # a principle body, intro paragraph, or cross-reference — none of which any heading
 # assertion looks at.
 test_B18_no_universality_first() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B18: rules/core-principles.md not found (prerequisite)"
         return
@@ -292,7 +292,7 @@ test_B18_no_universality_first() {
 # may be added) is documented at CPR_LEGACY_ID_MARKER in
 # tests/bin/refactor-1364-cpr-principles/mapping.sh.
 test_B19_orth_references_e2c() {
-    local f="$AGENTS_DIR/rules/core-principles.md"
+    local f="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
     if [ ! -f "$f" ]; then
         fail "B19: rules/core-principles.md not found (prerequisite)"
         return

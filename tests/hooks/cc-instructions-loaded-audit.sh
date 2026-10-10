@@ -28,11 +28,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")/cc-instructions-loaded-audit"
-HOOK="$AGENTS_DIR/hooks/instructions-loaded-audit.js"
-RECEIPT_LIB="$AGENTS_DIR/hooks/lib/instructions-loaded-receipt.js"
-POLICY="$AGENTS_DIR/hooks/lib/rules-injection-policy.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/instructions-loaded-audit.js"
+RECEIPT_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/instructions-loaded-receipt.js"
+POLICY="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-injection-policy.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

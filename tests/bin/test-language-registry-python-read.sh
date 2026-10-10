@@ -7,9 +7,9 @@
 # whole file needs uv (exit 77 without it).
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 for tool in uv node; do
   if ! command -v "$tool" >/dev/null 2>&1; then
@@ -22,7 +22,7 @@ TMPBASE="$(make_tmp)"
 trap 'rm -rf "$TMPBASE"' EXIT
 harness_isolate "$TMPBASE/iso"
 # shellcheck source=test-language-registry/_lib.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/_lib.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/_lib.sh"
 cd "$TMPBASE" || exit 1
 
 # nhp <checkout> — the checkout's normalizer in dry-run over all multi-path tests.
@@ -38,8 +38,8 @@ while IFS= read -r f; do
   if head -n 10 "$f" | awk '/^# Tests:/ { sub(/^# Tests:/, ""); n = split($0, a, ","); print (n >= 2 ? "y" : "n"); exit }' | grep -q y; then
     want=$((want + 1))
   fi
-done < <(find "$AGENTS_DIR/tests" -name '?*.sh' -type f -not -path '*/_archive/*')
-nhp "$AGENTS_DIR"
+done < <(find "$SCRIPT_CHECKOUT_ROOT/tests" -name '?*.sh' -type f -not -path '*/_archive/*')
+nhp "$SCRIPT_CHECKOUT_ROOT"
 assert_eq "real repo rc=$NHP_RC" "real repo rc=0"
 has_line "real repo target count" "$NHP_OUT" "Found $want multi-path test files"
 case_end

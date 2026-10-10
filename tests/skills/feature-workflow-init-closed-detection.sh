@@ -12,8 +12,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
 
 PASS=0
 FAIL=0

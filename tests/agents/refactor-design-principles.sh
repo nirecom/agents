@@ -11,14 +11,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # shellcheck source=tests/agents/refactor-design-principles/helpers.sh
-. "$AGENTS_DIR/tests/agents/refactor-design-principles/helpers.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/agents/refactor-design-principles/helpers.sh"
 # shellcheck source=tests/agents/refactor-design-principles/section-a.sh
-. "$AGENTS_DIR/tests/agents/refactor-design-principles/section-a.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/agents/refactor-design-principles/section-a.sh"
 # shellcheck source=tests/agents/refactor-design-principles/section-b.sh
-. "$AGENTS_DIR/tests/agents/refactor-design-principles/section-b.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/agents/refactor-design-principles/section-b.sh"
 
 # ============================================================================
 # Run all (wrap in 120s wall-clock timeout if available)

@@ -4,8 +4,8 @@
 # Phase 2 must not break the pre-flight checks or final report line.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL="$AGENTS_DIR/skills/issue-close-stage/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-stage/SKILL.md"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
@@ -20,7 +20,7 @@ else
 fi
 
 # bin/github-issues scripts must exist (issue-close-stage uses them)
-if [ -d "$AGENTS_DIR/bin/github-issues" ]; then
+if [ -d "$SCRIPT_CHECKOUT_ROOT/bin/github-issues" ]; then
   pass "bin/github-issues/ exists"
 else
   fail "bin/github-issues/ missing"

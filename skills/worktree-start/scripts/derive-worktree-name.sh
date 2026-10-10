@@ -6,9 +6,10 @@
 # set -e not used: fallback branches catch non-zero exits from optional helpers.
 set -u
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 INTENT_ARG=""
 HEADLESS_LABEL=""
-REPO_DIR=""
+TARGET_CHECKOUT_ROOT=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -20,16 +21,11 @@ while [ $# -gt 0 ]; do
             HEADLESS_LABEL="$2"; shift 2 ;;
         --repo-dir)
             [ $# -ge 2 ] || { printf 'derive-worktree-name: --repo-dir requires a value\n' >&2; exit 64; }
-            REPO_DIR="$2"; shift 2 ;;
+            TARGET_CHECKOUT_ROOT="$2"; shift 2 ;;
         *)
             printf 'derive-worktree-name: unrecognized argument; accepted flags are --intent, --headless, --repo-dir\n' >&2; exit 64 ;;
     esac
 done
-
-if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
-    printf 'derive-worktree-name: AGENTS_CONFIG_DIR is unset\n' >&2
-    exit 64
-fi
 
 # --- private-repo-name cache (one gh round-trip per run) --------------------
 # Resolved once; handed to scan_clean()'s consumer via stdin, never exported —
@@ -41,12 +37,12 @@ fi
 # re-add `export` here for the outbound side — see hooks/lib/is-private-repo.js
 # for why exporting only one of the pair is worse than exporting neither.
 if [ "${PRIVATE_REPO_NAMES_CACHE_SET:-}" != "1" ]; then
-    PRIVATE_REPO_NAMES_CACHE="$(node "$AGENTS_CONFIG_DIR/bin/list-private-repo-names.js" 2>/dev/null)"
+    PRIVATE_REPO_NAMES_CACHE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/list-private-repo-names.js" 2>/dev/null)"
     PRIVATE_REPO_NAMES_CACHE_SET=1
 fi
 
-[ -n "$REPO_DIR" ] || REPO_DIR="$(git rev-parse --show-toplevel 2>/dev/null)"
-[ -n "$REPO_DIR" ] || REPO_DIR="$PWD"
+[ -n "$TARGET_CHECKOUT_ROOT" ] || TARGET_CHECKOUT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+[ -n "$TARGET_CHECKOUT_ROOT" ] || TARGET_CHECKOUT_ROOT="$PWD"
 
 # --- D3: slugify --------------------------------------------------------
 # Lowercase -> non-[a-z0-9] runs to '-' -> first 5 tokens -> cap 40 chars.
@@ -73,8 +69,8 @@ slugify() {
 # cache). Use `${2-...}`, not `${2:-...}` — a caller-supplied empty list
 # means "checked, nothing to match", and must not fall back to the cache.
 scan_clean() {
-    printf '%s\n' "$1" | bash "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh" --stdin worktree-name >/dev/null 2>&1 || return 1
-    printf '%s\n' "${2-${PRIVATE_REPO_NAMES_CACHE:-}}" | PRIVATE_REPO_NAMES_STDIN=1 node "$AGENTS_CONFIG_DIR/bin/check-private-repo-name.js" "$1" >/dev/null 2>&1
+    printf '%s\n' "$1" | bash "$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" --stdin worktree-name >/dev/null 2>&1 || return 1
+    printf '%s\n' "${2-${PRIVATE_REPO_NAMES_CACHE:-}}" | PRIVATE_REPO_NAMES_STDIN=1 node "$SCRIPT_CHECKOUT_ROOT/bin/check-private-repo-name.js" "$1" >/dev/null 2>&1
 }
 
 # --- D3a2: path-component guard ------------------------------------------
@@ -130,10 +126,10 @@ title_has_word() {
 # point at a non-repo directory, so falls back to its own basename.
 # Emitted on stdout, so it passes the same outbound scan as any other
 # emitted value — a value that fails the scan is never echoed raw.
-REPO_NAME="$(basename -- "$(git -C "$REPO_DIR" rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null)"
+REPO_NAME="$(basename -- "$(git -C "$TARGET_CHECKOUT_ROOT" rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null)"
 if [ -z "$REPO_NAME" ]; then
     printf "derive-worktree-name: could not resolve a git toplevel for --repo-dir; falling back to the directory's own basename\n" >&2
-    REPO_NAME="$(basename -- "$REPO_DIR" 2>/dev/null)"
+    REPO_NAME="$(basename -- "$TARGET_CHECKOUT_ROOT" 2>/dev/null)"
 fi
 if ! safe_component "$REPO_NAME"; then
     printf 'derive-worktree-name: the repository directory name is unusable as a path component; refusing to emit it; the checkout directory name must start with [a-zA-Z0-9] and otherwise match [a-zA-Z0-9._-] with no other characters — rename the checkout directory or pass --repo-dir pointing at a differently-named copy\n' >&2
@@ -141,25 +137,18 @@ if ! safe_component "$REPO_NAME"; then
 fi
 
 # --- D0a: exclude this checkout's own remote identity from the private gate --
-# When this repo is itself private, its own name is in PRIVATE_REPO_NAMES_CACHE,
-# so scanning REPO_NAME against it would self-match and fail closed on every
-# invocation. That one name is not a leak — everyone with access to this
-# repo's own remote already knows it. Keyed on the REMOTE identity (parsed
-# like hooks/lib/is-private-repo.js extractRepoId()), not REPO_NAME, since
-# the local checkout directory name is user-chosen and can collide with an
-# unrelated private repo. No resolvable origin -> filter skipped, fail closed
-# (the "already known to the remote's audience" premise doesn't hold).
-# Bare-name matching (matches the consumer's own matching) also drops a
-# different owner's private repo sharing the same bare name — accepted,
-# inherent residual.
-# Scope: filtered list lives in its own variable, never exported, never
-# assigned over the script-level cache — passed only as scan_clean()'s
-# second argument at the two callsites checking this repo's own name (D0,
-# D2's repo-name fallback). TITLE/TASK_NAME keep seeing the unfiltered list
-# (task names are shared across repos — rules/worktree.md).
+# A private repo's own name is in PRIVATE_REPO_NAMES_CACHE, so scanning REPO_NAME
+# against it would self-match and fail closed every time; that one name is no leak.
+# Keyed on the REMOTE identity (parsed like hooks/lib/is-private-repo.js
+# extractRepoId()), not REPO_NAME: the checkout directory name is user-chosen and can
+# collide with an unrelated private repo. No resolvable origin -> filter skipped, fail
+# closed. Bare-name matching also drops another owner's same-named private repo —
+# accepted residual. Scope: the filtered list is never exported nor assigned over the
+# cache; only the two callsites checking this repo's own name (D0, D2 fallback) get it.
+# TITLE/TASK_NAME keep the unfiltered list (rules/worktree.md).
 SELF_EXCLUDED_PRIVATE_NAMES="${PRIVATE_REPO_NAMES_CACHE:-}"
 if [ "${PRIVATE_REPO_NAMES_CACHE_SET:-}" = "1" ] && [ -n "${PRIVATE_REPO_NAMES_CACHE:-}" ]; then
-    SELF_REMOTE_URL="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null | tr -d '\r' | head -1)"
+    SELF_REMOTE_URL="$(git -C "$TARGET_CHECKOUT_ROOT" remote get-url origin 2>/dev/null | tr -d '\r' | head -1)"
     SELF_REMOTE_NAME="$(
         export LC_ALL=C
         printf '%s\n' "${SELF_REMOTE_URL%.git}" \
@@ -195,10 +184,10 @@ fi
 INTENT=""
 INTENT_PATH="$INTENT_ARG"
 if [ -z "$INTENT_PATH" ]; then
-    PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null)" \
+    PLANS_DIR="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir" 2>/dev/null)" \
         || PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
     [ -n "$PLANS_DIR" ] || PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
-    SID="$(bash "$AGENTS_CONFIG_DIR/bin/resolve-session-id" 2>/dev/null)" || SID=""
+    SID="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/resolve-session-id" 2>/dev/null)" || SID=""
     if [ -n "$SID" ]; then
         INTENT_PATH="$PLANS_DIR/$SID-intent.md"
     fi
@@ -215,7 +204,7 @@ TASK_NAME=""
 
 if [ -n "$INTENT" ]; then
     TITLE="$(sed -n 's/^\*\*Title:\*\*[[:space:]]*//p' -- "$INTENT" | head -1)"
-    ISSUE_JSON="$(node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" "$INTENT" 2>/dev/null)" || ISSUE_JSON="[]"
+    ISSUE_JSON="$(node "$SCRIPT_CHECKOUT_ROOT/bin/parse-closes-issues" "$INTENT" 2>/dev/null)" || ISSUE_JSON="[]"
     [ -n "$ISSUE_JSON" ] || ISSUE_JSON="[]"
     ISSUE="$(printf '%s' "$ISSUE_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(String(JSON.parse(s)[0]?.number??""))}catch(e){}})' 2>/dev/null)"
     case "$ISSUE" in
@@ -279,10 +268,10 @@ fi
 BRANCH_TYPE=""
 
 if [ -n "$ISSUE" ] && [ -z "$ISSUE_REPO" ] && command -v gh >/dev/null 2>&1; then
-    bash "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote" "$REPO_DIR" >/dev/null 2>&1
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" "$TARGET_CHECKOUT_ROOT" >/dev/null 2>&1
     REMOTE_RC=$?
     if [ "$REMOTE_RC" -eq 0 ]; then
-        LABELS="$(cd "$REPO_DIR" && bash "$AGENTS_CONFIG_DIR/bin/run-with-timeout.sh" 20 gh issue view "$ISSUE" --json labels --jq '.labels[].name' 2>/dev/null)"
+        LABELS="$(cd "$TARGET_CHECKOUT_ROOT" && bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 20 gh issue view "$ISSUE" --json labels --jq '.labels[].name' 2>/dev/null)"
         GH_RC=$?
         # Lookup failure and "no incident label" both fall through to keyword
         # inference; only the diagnostic tells them apart. Fixed literal:

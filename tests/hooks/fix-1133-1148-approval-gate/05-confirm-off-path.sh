@@ -20,10 +20,10 @@ write_state "$SID" "$(gen_state '{"workflow_init":"complete","clarify_intent":"c
 touch "$PLANS_DIR/${SID}-outline.md"
 
 # The waiver is read from the config FILE (isConfirmOffForStageFromFile), never
-# from process.env — see G14. CONFIG_DIR_OFF is the scratch config whose
+# from process.env — see G14. CFG_ROOT_OFF is the scratch config whose
 # contents carry CONFIRM_OUTLINE=off.
 WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-  AGENTS_CONFIG_DIR="$CONFIG_DIR_OFF" \
+  AGENTS_MAIN_ROOT="$CFG_ROOT_OFF" \
   run_with_timeout node "$NEXT_STEP" --session "$SID" >/dev/null 2>&1 || true
 
 check "G05a. outline completes under CONFIRM_OUTLINE=off" "complete" "$(read_state_status "$SID" outline)"

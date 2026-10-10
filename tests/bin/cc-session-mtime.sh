@@ -12,10 +12,9 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CC_SESSION_MTIME="$REPO_DIR/bin/cc-session-mtime"
-CC_SESSION_MTIME_PS1="$REPO_DIR/bin/cc-session-mtime.ps1"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CC_SESSION_MTIME="$SCRIPT_CHECKOUT_ROOT/bin/cc-session-mtime"
+CC_SESSION_MTIME_PS1="$SCRIPT_CHECKOUT_ROOT/bin/cc-session-mtime.ps1"
 PASS=0
 FAIL=0
 
@@ -165,20 +164,15 @@ else
 fi
 
 # --- Edge: dash-leading timestamp values (#1218 hardening regression guard) ---
-#
-# Scope note (read before changing these assertions):
-#   The `touch -d "$ts" "$f"` call here was reported as an option-injection
-#   sink. Investigated empirically first: with GNU coreutils touch, the argument
-#   after `-d` is bound positionally by getopt, so `--reference=<file>`,
-#   `-r<file>`, `-t202001010000` and `--date=@0` are all consumed as the *date
-#   operand*, rejected with "invalid date format", and leave the file's mtime
-#   unchanged. No option injection was demonstrated. The `case "$ts" in -*)`
-#   guard is therefore defense-in-depth, not a vulnerability fix, and the
-#   assertions below are a REGRESSION GUARD for the new rejection behavior —
-#   they do not claim to demonstrate a blocked exploit.
-#
-#   Verified against GNU coreutils touch only (Windows Git Bash / MSYS2).
-#   BSD/macOS touch was not exercised; see the L3 gap block at the top.
+# Scope note: `touch -d "$ts" "$f"` was reported as an option-injection sink.
+#   With GNU coreutils touch the argument after `-d` is bound positionally, so
+#   `--reference=<file>`, `-r<file>`, `-t202001010000` and `--date=@0` are read
+#   as the date operand, rejected ("invalid date format"), and leave the mtime
+#   unchanged: no injection was demonstrated. The `case "$ts" in -*)` guard is
+#   defense-in-depth, and the assertions below are a REGRESSION GUARD for the
+#   rejection behavior, not proof of a blocked exploit.
+#   Verified against GNU touch only (Git Bash / MSYS2); BSD/macOS touch was not
+#   exercised, see the L3 gap block at the top.
 echo "[bash] Edge: dash-leading timestamp values are rejected, not passed to touch"
 DASH_MARKER="$TMPDIR_BASE/dash-marker"
 : > "$DASH_MARKER"

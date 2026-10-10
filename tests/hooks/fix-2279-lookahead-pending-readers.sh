@@ -22,13 +22,13 @@ set -u
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    N="$(cygpath -m "$AGENTS_DIR")"
+    N="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    N="$AGENTS_DIR"
+    N="$SCRIPT_CHECKOUT_ROOT"
 fi
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 SIO="$N/hooks/workflow-state/state-io.js"
 LIFECYCLE="$N/hooks/workflow-state/lifecycle.js"
 ADOPT="$N/hooks/workflow-state/inheritance/adopt.js"
@@ -203,8 +203,8 @@ run_L5() {
 # ---------------------------------------------------------------------------
 run_L6() {
     local f problems="" label
-    for f in "$AGENTS_DIR/hooks/workflow-state/inheritance/adopt.js" \
-             "$AGENTS_DIR/bin/resume-session-detect"; do
+    for f in "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/inheritance/adopt.js" \
+             "$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect"; do
         label="$(basename "$f")"
         if [ ! -f "$f" ]; then
             problems="$problems [$label: not found]"
@@ -276,7 +276,7 @@ run_L8() {
 # make_tmp/np, the module path variables and the pass/fail counters, so it is
 # sourced here rather than at the top of the file.
 # shellcheck source=/dev/null
-. "$AGENTS_DIR/tests/hooks/fix-2279-lookahead-pending-readers/allowlist-matrix.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-2279-lookahead-pending-readers/allowlist-matrix.sh"
 
 run_L1
 run_L2

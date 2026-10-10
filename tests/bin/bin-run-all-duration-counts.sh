@@ -7,8 +7,8 @@
 # - an awk other than this host's (the POSIX subset is assumed, not proven)
 # Closest-to-action mitigation: none needed — a read-only ordering heuristic, no risk category.
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 ROOT="$(make_tmp)"
 trap 'rm -rf "$ROOT"' EXIT
@@ -16,12 +16,12 @@ harness_isolate "$ROOT/iso"
 export HOME="$ROOT/home" NO_LOG=true RUN_ALL_CACHE_DIR="$ROOT/cache"
 mkdir -p "$HOME" "$RUN_ALL_CACHE_DIR"
 
-PAR_LIB="$AGENTS_DIR/bin/lib/run-all-parallelism.sh"
-DUR_LIB="$AGENTS_DIR/bin/lib/run-all-durations.sh"
+PAR_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-parallelism.sh"
+DUR_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-durations.sh"
 CNT_REL="bin/lib/run-all-duration-counts.sh"
 . "$PAR_LIB"
 . "$DUR_LIB"
-[ -f "$AGENTS_DIR/$CNT_REL" ] && . "$AGENTS_DIR/$CNT_REL"
+[ -f "$SCRIPT_CHECKOUT_ROOT/$CNT_REL" ] && . "$SCRIPT_CHECKOUT_ROOT/$CNT_REL"
 
 REPO="$ROOT/repo"
 harness_git_init "$REPO"

@@ -21,10 +21,10 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # lang-check: ignore (the literal CJK/multibyte rows below are test INPUT, not prose)
 
 SEC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SEC_DIR/../../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-PB="$AGENTS_DIR/hooks/lib/protected-basenames.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+PB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/protected-basenames.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -80,7 +80,7 @@ for (const s of sufs) {
 // itself advertises (#1821 comment 5); the rest are the general class.
 const negs = [
   ["the minter, bare",        "bash bin/request-off-clearance --target workflow"],
-  ["the minter, quoted var",  "bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --category x"],
+  ["the minter, quoted var",  "bash \"$AGENTS_MAIN_ROOT/bin/request-off-clearance\" --category x"],
   ["re-spelled minter",       "bash bin/request-off-mode-clearance --target workflow"],
   ["issue-ref suffix",        "see off-clearance-1780 for the history"],
   ["old hook filename",       "hooks/block-off-clearance-write.js"],
@@ -236,7 +236,7 @@ for (const [label, text] of invRows) {
 }
 if (invChecked !== invRows.length) process.stdout.write("NG|MGB invariant table did not run in full\n");
 process.stdout.write("DONE|" + rows.length + "\n");
-' "$_AGENTS_DIR_NODE" 2>&1)"
+' "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>&1)"
 
 echo "=== MGB: TOKEN_MENTION_RE boundary matrix (suffix x context + negatives + consume-claim + classifier invariant) ==="
 MGB_DONE=no

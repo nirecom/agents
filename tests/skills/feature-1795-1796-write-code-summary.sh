@@ -11,8 +11,8 @@
 # input and produces non-empty, structured stdout without crashing.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$AGENTS_DIR" || exit 1
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$SCRIPT_CHECKOUT_ROOT" || exit 1
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
 

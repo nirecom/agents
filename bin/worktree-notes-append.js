@@ -72,8 +72,8 @@ function isMainWorktree(notesDir) {
   const resolvedCommonDir = path.resolve(notesDir, raw);
   // Both main and linked worktrees report the main repo's `.git` directory
   // (resolved absolute). The main worktree path is its parent.
-  const mainWorktreePath = path.dirname(resolvedCommonDir);
-  return path.resolve(notesDir) === path.resolve(mainWorktreePath);
+  const targetMainRoot = path.dirname(resolvedCommonDir);
+  return path.resolve(notesDir) === path.resolve(targetMainRoot);
 }
 
 function targetSectionForLabels(labels) {

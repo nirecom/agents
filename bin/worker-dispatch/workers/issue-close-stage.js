@@ -131,12 +131,12 @@ function run(payload, ctx) {
   });
 
   // Echo-only field. capability.js already refuses any value that is not the
-  // resolved ACD anchor; re-checking here keeps the worker's own assumption
-  // explicit rather than inherited, and the child's AGENTS_CONFIG_DIR is set
-  // from the anchor by spawn.js either way — never from this value.
-  if (payload.agents_config_dir !== undefined && payload.agents_config_dir !== null) {
-    if (!samePath(payload.agents_config_dir, ctx.anchors.acd)) {
-      return finish("error", "agents_config_dir does not match the resolved agents config dir");
+  // resolved script checkout root anchor; re-checking here keeps the worker's own assumption
+  // explicit rather than inherited. The child's settings root is resolved
+  // by spawn.js on its own either way — never from this value.
+  if (payload.script_checkout_root !== undefined && payload.script_checkout_root !== null) {
+    if (!samePath(payload.script_checkout_root, ctx.anchors.scriptCheckoutRoot)) {
+      return finish("error", "script_checkout_root does not match the resolved script checkout root");
     }
   }
 

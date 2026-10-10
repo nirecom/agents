@@ -21,7 +21,6 @@ else
     OUT=$(bash -c "
         export CLAUDE_CODE_SESSION_ID='own-sid-b15'
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-        export AGENTS_CONFIG_DIR='$AGENTS_DIR'
         cd '$FAKE_CWD'
         source '$WIP_SID_HELPER'
         resolve_session_id
@@ -50,7 +49,6 @@ else
     OUT=$(bash -c "
         export CLAUDE_CODE_SESSION_ID='own-codex-b17'
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-        export AGENTS_CONFIG_DIR='$AGENTS_DIR'
         export NO_LOG=true
         cd '$FAKE_CWD'
         source '$CODEX_CORE'
@@ -80,7 +78,6 @@ else
     OUT=$(bash -c "
         export CLAUDE_CODE_SESSION_ID='own-gemini-b18'
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-        export AGENTS_CONFIG_DIR='$AGENTS_DIR'
         export NO_LOG=true
         cd '$FAKE_CWD'
         source '$GEMINI_CORE'
@@ -109,7 +106,6 @@ touch -t 202701010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-b19.jsonl"
 OUT1=$(bash -c "
     export CLAUDE_CODE_SESSION_ID='own-sid-b19'
     export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-    export AGENTS_CONFIG_DIR='$AGENTS_DIR'
     cd '$FAKE_CWD'
     bash '$BRIDGE'
 " 2>/dev/null)
@@ -117,7 +113,6 @@ RC1=$?
 OUT2=$(bash -c "
     export CLAUDE_CODE_SESSION_ID='own-sid-b19'
     export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-    export AGENTS_CONFIG_DIR='$AGENTS_DIR'
     cd '$FAKE_CWD'
     bash '$BRIDGE'
 " 2>/dev/null)
@@ -132,11 +127,11 @@ teardown
 # ===========================================================================
 # B-21: driver wip-check phase SID injection.
 # The driver resolves session-id from CLAUDE_CODE_SESSION_ID env (primary) or
-# by spawning resolve-session-id. The fake AGENTS_CONFIG_DIR tree intercepts
-# the wip-state.sh dispatch (env-based by design). A full driver fixture is
-# needed (gh mock + issue fixture + filter-init-candidates.sh passthrough).
+# by spawning resolve-session-id. The driver finds wip-state.sh from its own
+# location, so a copy of it runs inside the fake script checkout holding the mock.
+# A full driver fixture is needed (gh mock + issue fixture + filter passthrough).
 # ===========================================================================
-DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
+DRIVER="$SCRIPT_CHECKOUT_ROOT/bin/workflow/workflow-init-driver"
 if [ ! -f "$DRIVER" ]; then
     fail "B-21a: bin/workflow/workflow-init-driver not found"
 else
@@ -191,8 +186,8 @@ WIPEOF
     printf '#!/bin/bash\necho "${CLAUDE_CODE_SESSION_ID:-}"\n' > "$B21_CFG/bin/resolve-session-id"
     chmod +x "$B21_CFG/bin/resolve-session-id"
     # parse-issue-tokens
-    cp "$AGENTS_DIR/bin/parse-issue-tokens" "$B21_CFG/bin/parse-issue-tokens"
-    cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$B21_CFG/hooks/lib/parse-closes-issues.js"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/parse-issue-tokens" "$B21_CFG/bin/parse-issue-tokens"
+    cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-closes-issues.js" "$B21_CFG/hooks/lib/parse-closes-issues.js"
     # filter-init-candidates passthrough
     cat > "$B21_CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
 #!/bin/bash
@@ -203,6 +198,7 @@ exit 0
 FEOF
     chmod +x "$B21_CFG/bin/parse-issue-tokens" \
         "$B21_CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
+    script_checkout_fixture_copy "$B21_CFG" bin hooks
 
     : > "$CAPTURE_FILE_CHECK"
     ORIG_PATH_B21="$PATH"
@@ -210,8 +206,7 @@ FEOF
     B21_OUT=$(bash -c "
         export CLAUDE_CODE_SESSION_ID='own-sid-b21'
         export WORKFLOW_PLANS_DIR='$B21_PLANS'
-        export AGENTS_CONFIG_DIR='$B21_CFG'
-        node '$DRIVER' '#42'
+        node '$B21_CFG/bin/workflow/workflow-init-driver' '#42'
     " 2>/dev/null)
     export PATH="$ORIG_PATH_B21"
     # wip-state.sh receives --session-id own-sid-b21 from the driver

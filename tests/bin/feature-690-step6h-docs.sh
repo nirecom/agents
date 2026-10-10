@@ -9,7 +9,7 @@
 #
 # No subprocess spawning — tests use grep/stat on source files only.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PASS=0
 FAIL=0
@@ -36,7 +36,7 @@ run() {
 # T1: issue-close-finalize-triage.sh must not reference Step E in NEXT_STEPS
 # After Step E removal, no NEXT_STEPS assignment should contain "E,"
 test_t1_triage_no_step_e_in_next_steps() {
-    local f="$AGENTS_DIR/bin/github-issues/issue-close-finalize-triage.sh"
+    local f="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-finalize-triage.sh"
     if [ ! -f "$f" ]; then
         echo "file not found: $f"
         return 1
@@ -52,7 +52,7 @@ test_t1_triage_no_step_e_in_next_steps() {
 
 # T2: write-env-json.js must include MERGE_SHA in its FIELDS array
 test_t2_write_env_json_has_merge_sha() {
-    local f="$AGENTS_DIR/skills/worktree-end/scripts/write-env-json.js"
+    local f="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/write-env-json.js"
     if [ ! -f "$f" ]; then
         echo "file not found: $f"
         return 1
@@ -66,7 +66,7 @@ test_t2_write_env_json_has_merge_sha() {
 
 # T3: capture-env.sh must NOT contain a git rev-parse HEAD assignment for MERGE_SHA
 test_t3_capture_env_no_rev_parse_fallback() {
-    local f="$AGENTS_DIR/skills/worktree-end/scripts/capture-env.sh"
+    local f="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/capture-env.sh"
     if [ ! -f "$f" ]; then
         echo "file not found: $f"
         return 1
@@ -83,7 +83,7 @@ test_t3_capture_env_no_rev_parse_fallback() {
 # T4: issue-to-history.sh must exist AND contain a comment indicating it is used standalone
 # (called directly, not as a sub-step of issue-close-finalize step-e.sh)
 test_t4_issue_to_history_standalone_annotation() {
-    local f="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
+    local f="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-to-history.sh"
     if [ ! -f "$f" ]; then
         echo "file not found: $f"
         return 1
@@ -102,7 +102,7 @@ test_t4_issue_to_history_standalone_annotation() {
 # dispatcher module, but the constant was never in the prompt's own branch table:
 # it is set by run-finalize-terminal.sh, which the worker spawns via the registry.
 test_t5_worker_md_has_written_by_step_6h() {
-    local f="$AGENTS_DIR/skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
+    local f="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
     if [ ! -f "$f" ]; then
         echo "file not found: $f"
         return 1
@@ -116,7 +116,7 @@ test_t5_worker_md_has_written_by_step_6h() {
 
 # T6: bin/compose-doc-append-entry must NOT contain --skip-history as a recognized flag
 test_t6_compose_no_skip_history_flag() {
-    local f="$AGENTS_DIR/bin/compose-doc-append-entry"
+    local f="$SCRIPT_CHECKOUT_ROOT/bin/compose-doc-append-entry"
     if [ ! -f "$f" ]; then
         echo "file not found: $f"
         return 1
@@ -131,7 +131,7 @@ test_t6_compose_no_skip_history_flag() {
 
 # T7: hooks/lib/lint-worktree-notes-lang.js must NOT contain skipHistory option
 test_t7_lint_no_skip_history_option() {
-    local f="$AGENTS_DIR/hooks/lib/lint-worktree-notes-lang.js"
+    local f="$SCRIPT_CHECKOUT_ROOT/hooks/lib/lint-worktree-notes-lang.js"
     if [ ! -f "$f" ]; then
         echo "file not found: $f"
         return 1
@@ -146,7 +146,7 @@ test_t7_lint_no_skip_history_option() {
 
 # T8: skills/issue-close-finalize/scripts/step-e.sh must NOT exist (deleted)
 test_t8_step_e_sh_deleted() {
-    local f="$AGENTS_DIR/skills/issue-close-finalize/scripts/step-e.sh"
+    local f="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts/step-e.sh"
     if [ -f "$f" ]; then
         echo "file still exists (should be deleted): $f"
         return 1

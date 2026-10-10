@@ -17,8 +17,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILLS_DIR="${AGENTS_DIR}/skills"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILLS_DIR="${SCRIPT_CHECKOUT_ROOT}/skills"
 
 PASS=0
 FAIL=0

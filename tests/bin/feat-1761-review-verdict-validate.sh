@@ -18,11 +18,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-VALIDATOR="$AGENTS_DIR/bin/github-issues/lib/validate-review-verdict.js"
-LASTJSON="$AGENTS_DIR/bin/lib/last-json-object.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+VALIDATOR="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/validate-review-verdict.js"
+LASTJSON="$SCRIPT_CHECKOUT_ROOT/bin/lib/last-json-object.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

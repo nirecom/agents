@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Core copy logic for .worktreeinclude file-transfer on worktree-start.
-// Enumerates gitignored files in mainRoot, filters via .worktreeinclude,
+// Enumerates gitignored files in targetMainRoot, filters via .worktreeinclude,
 // checks denylist in .worktree-copyignore, and copies matched files.
 
 "use strict";
@@ -23,15 +23,15 @@ function readPatternFile(filePath) {
   }
 }
 
-function copyInclude({ mainRoot, worktreePath, includeFile }) {
+function copyInclude({ targetMainRoot, worktreePath, includeFile }) {
   const result = { copied: [], skipped: [], denied: [], errors: [] };
 
-  const mainDir = mainRoot.replace(/\\/g, "/");
+  const mainDir = targetMainRoot.replace(/\\/g, "/");
   const wtDir = worktreePath.replace(/\\/g, "/");
 
   // Validate mainDir exists
   if (!fs.existsSync(mainDir) || !fs.statSync(mainDir).isDirectory()) {
-    result.errors.push(`mainRoot does not exist or is not a directory: ${mainDir}`);
+    result.errors.push(`targetMainRoot does not exist or is not a directory: ${mainDir}`);
     return result;
   }
 

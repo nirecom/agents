@@ -1,6 +1,6 @@
 # tests/hooks/fix-1630-overlay-cross-validation/path-edges.sh
 # Tests: hooks/enforce-worktree/arg-value-guard.js
-# Tags: worktree, enforce, hook, config-dir, overlay, unit, path, scope:issue-specific
+# Tags: worktree, enforce, hook, agents-main-root, overlay, unit, path, scope:issue-specific
 #
 # STATUS: RED until C5 lands (stripRelSuffix is not exported yet, so every row
 # reports `ERROR: stripRelSuffix is not exported`).
@@ -133,11 +133,11 @@ run_posix_root_rows() {
 # separator on every host. On win32 that is correct. On macOS/Linux it is not:
 # `\` is an ordinary filename character there, so
 #
-#     /trusted/acd\skills/issue-close-finalize/scripts/run-initial.sh
+#     /trusted/script checkout root\skills/issue-close-finalize/scripts/run-initial.sh
 #
-# is ONE directory literally named `acd\skills` — a path an attacker can create
-# inside any directory they can write to, entirely outside /trusted/acd. Reading
-# it as a separator makes the function report `/trusted/acd` as the implied
+# is ONE directory literally named `script checkout root\skills` — a path an attacker can create
+# inside any directory they can write to, entirely outside /trusted/script checkout root. Reading
+# it as a separator makes the function report `/trusted/script checkout root` as the implied
 # root, so the three-way cross-validation compares a trusted root against a
 # script that does not live under it, and the overlay's identity check is
 # defeated by a filename.
@@ -165,21 +165,21 @@ run_separator_platform_rows() {
     # Control (both platforms): the identical path with a real `/` separator
     # must still derive the root. Pairs with every row below.
     assert_eq "STRIP-sep-control a genuine separator still derives the root" \
-        "$(posix_probe strip "/trusted/acd/$rel" "$rel")" "$(norm_root /trusted/acd)"
+        "$(posix_probe strip "/trusted/script_checkout_root/$rel" "$rel")" "$(norm_root /trusted/script_checkout_root)"
 
     case "$uname_s" in
         MINGW*|MSYS*|CYGWIN*|Windows_NT)
             assert_eq "STRIP-sep-win32 backslash IS a separator on win32, so the root is derived" \
-                "$(posix_probe strip "/trusted/acd${bs}$rel" "$rel")" "$(norm_root /trusted/acd)"
+                "$(posix_probe strip "/trusted/script_checkout_root${bs}$rel" "$rel")" "$(norm_root /trusted/script_checkout_root)"
             assert_eq "STRIP-sep-win32-deep an interior backslash segment resolves on win32" \
-                "$(posix_probe strip "/trusted/acd${bs}sub/$rel" "$rel")" "$(norm_root "/trusted/acd/sub")"
+                "$(posix_probe strip "/trusted/script_checkout_root${bs}sub/$rel" "$rel")" "$(norm_root "/trusted/script_checkout_root/sub")"
             ;;
         *)
             assert_eq "STRIP-sep-posix backslash is a FILENAME character on POSIX, not a separator" \
-                "$(posix_probe strip "/trusted/acd${bs}$rel" "$rel")" "null"
+                "$(posix_probe strip "/trusted/script_checkout_root${bs}$rel" "$rel")" "null"
             assert_eq "STRIP-sep-posix-deep a backslash-bearing directory name is not a root boundary" \
-                "$(posix_probe strip "/trusted/acd${bs}sub/$rel" "$rel")" \
-                "$(norm_root "/trusted/acd${bs}sub")"
+                "$(posix_probe strip "/trusted/script_checkout_root${bs}sub/$rel" "$rel")" \
+                "$(norm_root "/trusted/script_checkout_root${bs}sub")"
             ;;
     esac
 }

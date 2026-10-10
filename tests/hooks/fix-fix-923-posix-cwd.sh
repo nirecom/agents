@@ -25,8 +25,8 @@ if ! command -v cygpath >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-AGENTS_WIN="$(cygpath -m "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+AGENTS_WIN="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 GUARD_JS="${AGENTS_WIN}/hooks/enforce-worktree.js"
 
 PASS=0; FAIL=0

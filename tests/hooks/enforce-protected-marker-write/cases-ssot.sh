@@ -175,8 +175,8 @@ PROBE_EOF
         esac
         # marker-gate.js must keep re-exporting the SSOT rather than owning a
         # second copy of the regex (CPR-SSOT defence in depth, not a fork).
-        if [ -f "$AGENTS_DIR/hooks/enforce-worktree/bash-write-scope/marker-gate.js" ]; then
-            if grep -q 'protected-basenames' "$AGENTS_DIR/hooks/enforce-worktree/bash-write-scope/marker-gate.js"; then
+        if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/bash-write-scope/marker-gate.js" ]; then
+            if grep -q 'protected-basenames' "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/bash-write-scope/marker-gate.js"; then
                 pass "X11 marker-gate.js sources its marker set from the SSOT"
             else
                 fail "X11 marker-gate.js no longer references hooks/lib/protected-basenames - marker set has forked"

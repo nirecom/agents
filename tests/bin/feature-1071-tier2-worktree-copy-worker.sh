@@ -16,12 +16,12 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-WORKER_JS="${AGENTS_DIR}/bin/worker-dispatch/workers/worktree-copy.js"
-REGISTRY_JS="${AGENTS_DIR}/hooks/lib/worker-dispatch-registry.js"
-EMIT_JS="${AGENTS_DIR}/bin/worker-dispatch/emit.js"
-WS_MD="${AGENTS_DIR}/skills/worktree-start/SKILL.md"
+WORKER_JS="${SCRIPT_CHECKOUT_ROOT}/bin/worker-dispatch/workers/worktree-copy.js"
+REGISTRY_JS="${SCRIPT_CHECKOUT_ROOT}/hooks/lib/worker-dispatch-registry.js"
+EMIT_JS="${SCRIPT_CHECKOUT_ROOT}/bin/worker-dispatch/emit.js"
+WS_MD="${SCRIPT_CHECKOUT_ROOT}/skills/worktree-start/SKILL.md"
 SHARED_MD="skills/_shared/worker-dispatch.md"
 
 PASS=0
@@ -130,7 +130,7 @@ test_input_contract_fields() {
       const reg = require(process.argv[1]);
       const entry = reg.workers["worktree-copy"];
       const spec = (entry && entry.payloadSpec) || {};
-      const want = ["main_root","worktree_path","branch","session_id","agents_config_dir","artifact_dir"];
+      const want = ["target_main_root","worktree_path","branch","session_id","script_checkout_root","artifact_dir"];
       process.stdout.write(want.filter((f) => !Object.prototype.hasOwnProperty.call(spec, f)).join(" "));
     ' "$(nodepath "$REGISTRY_JS")" 2>&1)
     if [ -z "$missing" ]; then
@@ -211,7 +211,7 @@ test_ws_confirm_worktree_ask() {
 # actually produce OFF, ON and ERROR. ON is the fail-safe default, so it is
 # driven with the flag explicitly `on` rather than left ambient.
 test_confirm_worktree_resolver() {
-    local co="$AGENTS_DIR/bin/confirm-off" want out rc
+    local co="$SCRIPT_CHECKOUT_ROOT/bin/confirm-off" want out rc
     if [ ! -f "$co" ]; then
         fail "7f: bin/confirm-off missing"
         return
@@ -227,10 +227,21 @@ test_confirm_worktree_resolver() {
             fail "$label" "out='$out' rc=$rc want='$want'"
         fi
     done <<TABLE
-7f: CONFIRM_WORKTREE=off resolves to OFF|AGENTS_CONFIG_DIR=$AGENTS_DIR CONFIRM_WORKTREE=off|OFF,0
-7g: CONFIRM_WORKTREE=on resolves to ON|AGENTS_CONFIG_DIR=$AGENTS_DIR CONFIRM_WORKTREE=on|ON,1
-7h: an unresolvable config resolves to ERROR, never OFF|-u AGENTS_CONFIG_DIR CONFIRM_WORKTREE=off|ERROR,2
+7f: CONFIRM_WORKTREE=off resolves to OFF|CONFIRM_WORKTREE=off|OFF,0
+7g: CONFIRM_WORKTREE=on resolves to ON|CONFIRM_WORKTREE=on|ON,1
 TABLE
+    # 7h: confirm-off finds get-config-var in its own checkout. From a fixture checkout holding
+    # confirm-off alone the config is unresolvable: the answer must be ERROR though the flag says off.
+    local nocv="$_ISOLATION_TMP_ROOT/checkout-without-get-config-var"
+    # shellcheck source=../lib/script-checkout-fixture.sh
+    . "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+    script_checkout_fixture_copy "$nocv" bin/confirm-off
+    rc=0; out="$(run_with_timeout 30 env CONFIRM_WORKTREE=off bash "$nocv/bin/confirm-off" CONFIRM_WORKTREE on 2>/dev/null)" || rc=$?
+    if [ -f "$nocv/bin/confirm-off" ] && [ ! -e "$nocv/bin/get-config-var" ] && [ "$out" = "ERROR" ] && [ "$rc" -eq 2 ]; then
+        pass "7h: an unresolvable config resolves to ERROR, never OFF"
+    else
+        fail "7h: an unresolvable config resolves to ERROR, never OFF" "out='$out' rc=$rc want='ERROR,2'"
+    fi
 }
 
 # ── Test 8: WS-10 and WS-11 step labels no longer both present (renumbered) ──
@@ -266,34 +277,34 @@ test_ws_inline_copy_replaced
 
 # ── Tests 9-10: worktree-copy-include.js argv form + legacy stdin backward-compat ──
 # Added for #1102: bin/worktree-copy-include.js gained a new argv form
-# (--main-root / --worktree-path / --include-file) while keeping legacy stdin JSON.
+# (--target-main-root / --worktree-path / --include-file) while keeping legacy stdin JSON.
 # Both forms must produce a JSON object with {copied, skipped, denied, errors}.
 
-COPY_INCLUDE_SCRIPT="${AGENTS_DIR}/bin/worktree-copy-include.js"
+COPY_INCLUDE_SCRIPT="${SCRIPT_CHECKOUT_ROOT}/bin/worktree-copy-include.js"
 
 _TMPDIR_1071="$(mktemp -d)"
 trap 'rm -rf "$_TMPDIR_1071"' EXIT
 
 # Create a minimal git-repo fixture (main worktree) with a .worktreeinclude file
 # and a gitignored file that should be copied.
-_MAIN_ROOT="$_TMPDIR_1071/main"
+_TARGET_MAIN_ROOT="$_TMPDIR_1071/main"
 _WORKTREE_PATH="$_TMPDIR_1071/wt"
-mkdir -p "$_MAIN_ROOT" "$_WORKTREE_PATH"
-git -C "$_MAIN_ROOT" -c init.defaultBranch=main init --quiet
-git -C "$_MAIN_ROOT" config user.email "test@example.com"
-git -C "$_MAIN_ROOT" config user.name "Test"
-git -C "$_MAIN_ROOT" config core.hooksPath /dev/null
+mkdir -p "$_TARGET_MAIN_ROOT" "$_WORKTREE_PATH"
+git -C "$_TARGET_MAIN_ROOT" -c init.defaultBranch=main init --quiet
+git -C "$_TARGET_MAIN_ROOT" config user.email "test@example.com"
+git -C "$_TARGET_MAIN_ROOT" config user.name "Test"
+git -C "$_TARGET_MAIN_ROOT" config core.hooksPath /dev/null
 # Track a source file.
-printf 'tracked\n' > "$_MAIN_ROOT/tracked.md"
-git -C "$_MAIN_ROOT" add tracked.md
-git -C "$_MAIN_ROOT" commit --quiet -m "init"
+printf 'tracked\n' > "$_TARGET_MAIN_ROOT/tracked.md"
+git -C "$_TARGET_MAIN_ROOT" add tracked.md
+git -C "$_TARGET_MAIN_ROOT" commit --quiet -m "init"
 # Create a gitignored file by adding it to .gitignore.
-printf '*.secret\n' > "$_MAIN_ROOT/.gitignore"
-printf 'secret content\n' > "$_MAIN_ROOT/config.secret"
-git -C "$_MAIN_ROOT" add .gitignore
-git -C "$_MAIN_ROOT" commit --quiet -m "add gitignore"
+printf '*.secret\n' > "$_TARGET_MAIN_ROOT/.gitignore"
+printf 'secret content\n' > "$_TARGET_MAIN_ROOT/config.secret"
+git -C "$_TARGET_MAIN_ROOT" add .gitignore
+git -C "$_TARGET_MAIN_ROOT" commit --quiet -m "add gitignore"
 # Write .worktreeinclude to include *.secret files.
-printf '*.secret\n' > "$_MAIN_ROOT/.worktreeinclude"
+printf '*.secret\n' > "$_TARGET_MAIN_ROOT/.worktreeinclude"
 
 # Helper: check JSON output has the four expected keys.
 _has_result_keys() {
@@ -313,9 +324,7 @@ test_argv_form() {
         return
     fi
     local out rc
-    out=$(run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" \
-        --main-root "$_MAIN_ROOT" \
-        --worktree-path "$_WORKTREE_PATH" 2>/dev/null)
+    out=$(run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" --target-main-root "$_TARGET_MAIN_ROOT" --worktree-path "$_WORKTREE_PATH" 2>/dev/null)
     rc=$?
     local has_keys
     has_keys=$(_has_result_keys "$out")
@@ -355,9 +364,7 @@ test_legacy_stdin_form() {
     # Use a fresh destination to avoid interference from test 9.
     local wt2="$_TMPDIR_1071/wt2"
     mkdir -p "$wt2"
-    local json_input
-    json_input=$(node -e "process.stdout.write(JSON.stringify({mainRoot: process.argv[1], worktreePath: process.argv[2], includeFile: null}))" \
-        "$_MAIN_ROOT" "$wt2" 2>/dev/null)
+    local json_input; json_input=$(node -e "process.stdout.write(JSON.stringify({targetMainRoot: process.argv[1], worktreePath: process.argv[2], includeFile: null}))" "$_TARGET_MAIN_ROOT" "$wt2" 2>/dev/null)
     local out rc
     out=$(printf '%s' "$json_input" | run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" 2>/dev/null)
     rc=$?
@@ -438,10 +445,10 @@ assert_canary_intact() {
 # bin/worktree-copy-include.js rejects any path field whose normalized form
 # contains a `..` segment (lines: hasTraversal + exit 1). Each test supplies a
 # `..` segment in one field and asserts rc != 0. The argv branch is only taken
-# when --main-root is present, so the worktree-path and include-file cases keep a
-# valid --main-root and inject the traversal into the field under test.
+# when --target-main-root is present, so the worktree-path and include-file cases keep a
+# valid --target-main-root and inject the traversal into the field under test.
 
-# ── Test 11: --main-root with `..` traversal → exit non-zero ──────────────────
+# ── Test 11: --target-main-root with `..` traversal → exit non-zero ──────────────────
 test_traversal_main_root() {
     if [ ! -f "$COPY_INCLUDE_SCRIPT" ]; then
         fail "11: bin/worktree-copy-include.js missing"
@@ -449,11 +456,9 @@ test_traversal_main_root() {
     fi
     local rc before
     before="$(_canary_fingerprint)"
-    run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" \
-        --main-root "$_MAIN_ROOT/../canary-zone" \
-        --worktree-path "$_WORKTREE_PATH" >/dev/null 2>&1
+    run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" --target-main-root "$_TARGET_MAIN_ROOT/../canary-zone" --worktree-path "$_WORKTREE_PATH" >/dev/null 2>&1
     rc=$?
-    assert_canary_intact "11: SECURITY — --main-root with '..' traversal rejected" "$rc" "$before"
+    assert_canary_intact "11: SECURITY — --target-main-root with '..' traversal rejected" "$rc" "$before"
 }
 
 # ── Test 12: --worktree-path with `..` traversal → exit non-zero ──────────────
@@ -464,9 +469,7 @@ test_traversal_worktree_path() {
     fi
     local rc before
     before="$(_canary_fingerprint)"
-    run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" \
-        --main-root "$_MAIN_ROOT" \
-        --worktree-path "$_MAIN_ROOT/../canary-zone/wt" >/dev/null 2>&1
+    run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" --target-main-root "$_TARGET_MAIN_ROOT" --worktree-path "$_TARGET_MAIN_ROOT/../canary-zone/wt" >/dev/null 2>&1
     rc=$?
     assert_canary_intact "12: SECURITY — --worktree-path with '..' traversal rejected" "$rc" "$before"
 }
@@ -480,10 +483,8 @@ test_traversal_include_file() {
     fi
     local rc before
     before="$(_canary_fingerprint)"
-    run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" \
-        --main-root "$_MAIN_ROOT" \
-        --worktree-path "$_WORKTREE_PATH" \
-        --include-file "$_MAIN_ROOT/../canary-zone/.worktreeinclude" >/dev/null 2>&1
+    run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" --target-main-root "$_TARGET_MAIN_ROOT" --worktree-path "$_WORKTREE_PATH" \
+        --include-file "$_TARGET_MAIN_ROOT/../canary-zone/.worktreeinclude" >/dev/null 2>&1
     rc=$?
     assert_canary_intact "13: SECURITY — --include-file with '..' traversal rejected" "$rc" "$before"
 }

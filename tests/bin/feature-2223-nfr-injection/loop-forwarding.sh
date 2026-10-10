@@ -27,6 +27,10 @@ printf '%s\n' '#!/usr/bin/env bash' 'out=""' \
     > "$CFG_LOOP/bin/build-codex-context"
 chmod +x "$CFG_LOOP/bin/build-codex-context"
 export LOOP_ARGS_CAPTURE="$ARGS_CAPTURE"
+# The loop resolves its reviewer and builder from its own script checkout, so it is
+# launched from a copy placed beside the two stand-ins.
+LOOP_BIN="$CFG_LOOP/bin/run-codex-review-loop"
+cp "$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "$SCRIPT_CHECKOUT_ROOT/bin/concern-ledger" "$CFG_LOOP/bin/"
 
 LOOP_PLANS="$TMP_ROOT/loop-plans"
 LOOP_DRAFT="$TMP_ROOT/loop-draft.md"
@@ -40,8 +44,8 @@ REPO_LOOP="$(make_repo loop)"
 run_loop() {
     local sid="$1"; shift
     rm -f "$ARGS_CAPTURE"
-    (cd "$REPO_LOOP" && AGENTS_CONFIG_DIR="$CFG_LOOP" PATH="$MOCK_BIN:$PATH" \
-        run_with_timeout 60 bash "$AGENTS_DIR/bin/run-codex-review-loop" \
+    (cd "$REPO_LOOP" && AGENTS_MAIN_ROOT="$CFG_LOOP" PATH="$MOCK_BIN:$PATH" \
+        run_with_timeout 60 bash "$LOOP_BIN" \
         --format detail-plan --session-id "$sid" --plans-dir "$LOOP_PLANS" \
         --draft-file "$LOOP_DRAFT" --cap 3 --max-extensions 1 \
         --accepted-tradeoffs "$LOOP_TRADEOFFS" "$@" >/dev/null 2>&1) || true
@@ -63,8 +67,8 @@ assert_eq "T2223D-loop-forwards-project-root-value" "$REPO_LOOP" \
 # CODEX_MCP_FS=off suppresses --repo-root; --project-root is a different concern
 # and must still be forwarded, or NFR silently vanishes for MCP-off users.
 rm -f "$ARGS_CAPTURE"
-(cd "$REPO_LOOP" && AGENTS_CONFIG_DIR="$CFG_LOOP" PATH="$MOCK_BIN:$PATH" CODEX_MCP_FS=off \
-    run_with_timeout 60 bash "$AGENTS_DIR/bin/run-codex-review-loop" \
+(cd "$REPO_LOOP" && AGENTS_MAIN_ROOT="$CFG_LOOP" PATH="$MOCK_BIN:$PATH" CODEX_MCP_FS=off \
+    run_with_timeout 60 bash "$LOOP_BIN" \
     --format detail-plan --session-id loopB --plans-dir "$LOOP_PLANS" \
     --draft-file "$LOOP_DRAFT" --cap 3 --max-extensions 1 \
     --accepted-tradeoffs "$LOOP_TRADEOFFS" --repo-root "$REPO_LOOP" >/dev/null 2>&1) || true

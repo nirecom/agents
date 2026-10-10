@@ -257,7 +257,8 @@ if [ -z "$PP_BIG" ] || [ ! -d "$PP_BIG" ]; then
 fi
 
 pp_write_resolver_stub "$PP_STUB_DIR" "post-session-head"
-PP_ENV=(AGENTS_CONFIG_DIR="$PP_STUB_DIR")
+script_checkout_fixture_copy "$PP_STUB_DIR" bin hooks
+PP_SCRIPT="$PP_STUB_DIR/bin/review-code-codex"
 PP_OUT="$(pp_run "$PP_BIG" --base main --base-state RECORDED --no-log)"
 if pp_has "$PP_OUT" "^## Codex Review Scope: PRIORITY-UNTRUSTED"; then
     pass "P8a: a contaminated recorded baseline plus a truncated review declares PRIORITY-UNTRUSTED"
@@ -302,6 +303,7 @@ else
     fail "P8d: the in-budget contaminated-baseline run produced no PERFORMED verdict, so its silence proves nothing. Output: $PP_OUT"
 fi
 PP_ENV=()
+PP_SCRIPT=""
 
 # ---------------------------------------------------------------------------
 # P9 — the pins the rewrite must not move. X1/X2 and the exact-boundary Y rows are re-read

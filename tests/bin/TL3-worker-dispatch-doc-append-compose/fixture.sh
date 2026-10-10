@@ -58,7 +58,7 @@ run_worker() {
              -u CLAUDE_CODE_SESSION_ID \
             "GH_CONFIG_DIR=$EMPTY_GH_CONFIG" \
             "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
-            node "$(nodepath "$AGENTS_DIR/bin/worker-dispatch.js")" \
+            node "$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js")" \
             doc-append "$MAIN" "$(nodepath "$p")" 2>&1
     )"
     WORKER_RC=$?

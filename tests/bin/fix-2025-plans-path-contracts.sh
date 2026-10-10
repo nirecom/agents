@@ -86,7 +86,7 @@ ROOT="$TMPDIR_BASE/root"
 mk_root "$ROOT"
 rm -f "$ROOT/bin/lib/safe-state-path.sh"
 
-# The loop resolves its reviewer from AGENTS_CONFIG_DIR, so a copied root can
+# The loop resolves its reviewer from its own checkout, so a copied root can
 # replace it. Stubbed in both roots with an APPROVED verdict: a test must never
 # reach the real codex CLI, and a loop that dies over its dependency has to die
 # on a path that would otherwise have succeeded.
@@ -119,26 +119,19 @@ ctl_dir() {
     printf '%s' "$d"
 }
 
-# rc_of <command...> — the exit status, run with the crippled tree as the root.
+# rc_of <command...> — the exit status of a crippled-tree run. Every entrypoint
+# resolves its library from its own location, so the tree is the one the script
+# path names ("$ROOT/bin/..."), never an environment variable.
 rc_of() {
-    (
-        export AGENTS_CONFIG_DIR="$ROOT"
-        "$@" >/dev/null 2>&1
-    )
+    ( "$@" >/dev/null 2>&1 )
     printf '%s' "$?"
 }
 
-# rc_ok <command...> — the same, against the intact tree. Every missing-library
-# assertion is paired with one of these: without the pair, a run that fails for
-# an unrelated reason (a bad flag, an unmet required argument) reads as the
-# library check firing.
-rc_ok() {
-    (
-        export AGENTS_CONFIG_DIR="$ROOT_OK"
-        "$@" >/dev/null 2>&1
-    )
-    printf '%s' "$?"
-}
+# rc_ok <command...> — the same status, named for an intact-tree run. Every
+# missing-library assertion is paired with one of these: without the pair, a run
+# that fails for an unrelated reason (a bad flag, an unmet required argument)
+# reads as the library check firing.
+rc_ok() { rc_of "$@"; }
 
 case_begin "contracts-0-roots-differ" "bin/lib/safe-state-path.sh"
 echo ""
@@ -182,8 +175,7 @@ echo "--- contracts 1: the gate fails closed when its library is missing ---"
     L_ARGS=(--format detail-plan --session-id "$SID" --plans-dir "$PLANS"
             --draft-file "$REPORT" --accepted-tradeoffs "$REPORT"
             --cap 1 --max-extensions 0)
-    L_ERR="$( (export AGENTS_CONFIG_DIR="$ROOT"; \
-        bash "$ROOT/bin/run-codex-review-loop" "${L_ARGS[@]}" 2>&1 >/dev/null) )"
+    L_ERR="$(bash "$ROOT/bin/run-codex-review-loop" "${L_ARGS[@]}" 2>&1 >/dev/null)"
     assert_eq_nz "1: the review loop stops instead of running an unrecordable round" \
         "4" "$(rc_of bash "$ROOT/bin/run-codex-review-loop" "${L_ARGS[@]}")"
     assert_contains "1: naming the dependency it could not load" \
@@ -207,9 +199,8 @@ echo "--- contracts 1: the gate fails closed when its library is missing ---"
         "written" "$([ -s "$B_OUT" ] && printf written || printf missing)"
 
     rm -f "$B_OUT"
-    B_ERR="$( (export AGENTS_CONFIG_DIR="$ROOT"; \
-        bash "$ROOT/bin/build-codex-context" --plans-dir "$PLANS" \
-            --session-id "$SID" --output "$B_OUT" 2>&1 >/dev/null) )"
+    B_ERR="$(bash "$ROOT/bin/build-codex-context" --plans-dir "$PLANS" \
+        --session-id "$SID" --output "$B_OUT" 2>&1 >/dev/null)"
     assert_eq "1: and refuses the identical call with its own failure code" \
         "nonzero" \
         "$([ "$(rc_of bash "$ROOT/bin/build-codex-context" --plans-dir "$PLANS" \
@@ -224,7 +215,7 @@ case_end
 
 case_begin "contracts-2-security-code-loop" "bin/run-codex-review-loop"
 # Reviewer and merge-base stubs for the security-code path, in both roots: the
-# loop resolves both out of AGENTS_CONFIG_DIR, a test must never reach the real
+# loop resolves both out of its own checkout, a test must never reach the real
 # codex CLI, and the crippled-root run has to die on its library rather than on
 # a missing reviewer.
 for _r in "$ROOT" "$ROOT_OK"; do
@@ -257,9 +248,8 @@ echo "--- contracts 2: the security-code loop fails closed on the same library -
     W_PLANS="$TMPDIR_BASE/plans-w"
     W_SID="c2025-w"
     mkdir -p "$W_PLANS"
-    W_ERR="$( (export AGENTS_CONFIG_DIR="$ROOT"; \
-        bash "$ROOT/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
-            --session-id "$W_SID" --plans-dir "$W_PLANS" 2>&1 >/dev/null) )"
+    W_ERR="$(bash "$ROOT/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
+        --session-id "$W_SID" --plans-dir "$W_PLANS" 2>&1 >/dev/null)"
     assert_eq_nz "2: the security-code loop stops with the loop's config-failure code" \
         "4" "$(rc_of bash "$ROOT/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
             --session-id "$W_SID" --plans-dir "$W_PLANS")"
@@ -281,9 +271,8 @@ echo "--- contracts 2: the security-code loop fails closed on the same library -
     WOK_PLANS="$TMPDIR_BASE/plans-w-ok"
     WOK_SID="c2025-w-ok"
     mkdir -p "$WOK_PLANS"
-    WOK_ERR="$( (export AGENTS_CONFIG_DIR="$ROOT_OK"; \
-        bash "$ROOT_OK/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
-            --session-id "$WOK_SID" --plans-dir "$WOK_PLANS" 2>&1 >/dev/null) )"
+    WOK_ERR="$(bash "$ROOT_OK/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
+        --session-id "$WOK_SID" --plans-dir "$WOK_PLANS" 2>&1 >/dev/null)"
     assert_eq "2: (precondition) the complete tree gets past the library check" \
         "clean" \
         "$(printf '%s' "$WOK_ERR" | grep -Fq 'safe-state-path.sh' && printf 'halted-on-load' \
@@ -351,11 +340,8 @@ link_at() {
 
 # run_secloop_ok <plans> <sid>
 run_secloop_ok() {
-    (
-        export AGENTS_CONFIG_DIR="$ROOT_OK"
-        bash "$ROOT_OK/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
-            --session-id "$2" --plans-dir "$1" >/dev/null 2>&1
-    )
+    bash "$ROOT_OK/bin/run-codex-review-loop" "${SEC_ARGS[@]}" \
+        --session-id "$2" --plans-dir "$1" >/dev/null 2>&1
 }
 
 # The round file lives in the control dir since #2434, so that is where the

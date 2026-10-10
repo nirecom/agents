@@ -12,17 +12,17 @@ set -uo pipefail
 # CLAUDE_CODE_SESSION_ID, as it does for a flow that only knows the old arguments.
 # Worker payload fields are pinned in feature-2434-worker-payload-cli.sh.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # shellcheck source=tests/bin/feature-2434-review-loop/fixture.sh
-. "$AGENTS_DIR/tests/bin/feature-2434-review-loop/fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2434-review-loop/fixture.sh"
 
-NJS="$AGENTS_DIR/bin/workflow/normalize-judge-signals"
-DCL="$AGENTS_DIR/bin/workflow/derive-complexity-level"
+NJS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/normalize-judge-signals"
+DCL="$SCRIPT_CHECKOUT_ROOT/bin/workflow/derive-complexity-level"
 
 # cli <sid> <cmd...> — one call under CLAUDE_CODE_SESSION_ID=<sid>. Sets C_RC / C_OUT.
 cli() {
@@ -79,12 +79,12 @@ case_begin "precheck-output-file-accepts-the-legacy-basename" "skills/clarify-in
 # companion-search.sh is mocked beside a copy of the script (it shells out to gh).
 SC="$ROOT/skills/clarify-intent/scripts"
 mkdir -p "$SC"
-cp "$AGENTS_DIR/skills/clarify-intent/scripts/precheck-companions.sh" "$SC/"
+cp "$SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/scripts/precheck-companions.sh" "$SC/"
 printf '#!/usr/bin/env bash\nprintf "201\\tSome title\\tident:x\\tOPEN\\n"\nexit 0\n' > "$SC/companion-search.sh"
 chmod +x "$SC/companion-search.sh"
 pre() {
     C_RC=0
-    CLAUDE_CODE_SESSION_ID="$1" AGENTS_CONFIG_DIR="$ROOT" bash "$SC/precheck-companions.sh" \
+    CLAUDE_CODE_SESSION_ID="$1" bash "$SC/precheck-companions.sh" \
         --seed 100 --exclude 100 --output-file "$2" >/dev/null 2>&1 || C_RC=$?
 }
 SID="sh-pre"
@@ -105,12 +105,12 @@ SID="sh-ledger"
 REPORT="$TMP/report.md"
 printf '## Codex Review: PERFORMED\n\n## Concern Delta\n\n## HIGH\n- [HIGH] - | reviewed.txt#check_input | correctness | unchecked input reaches the shell\n\n## MEDIUM\n(none)\n\n## LOW\n(none)\n' > "$REPORT"
 L_RC=0
-bash "$AGENTS_DIR/bin/concern-ledger" stage --plans-dir "$P" --session-id "$SID" \
+bash "$SCRIPT_CHECKOUT_ROOT/bin/concern-ledger" stage --plans-dir "$P" --session-id "$SID" \
     --format review-security-shared --round 1 --producer review-code-codex \
     --from-report "$REPORT" >/dev/null 2>&1 || L_RC=$?
 assert_eq "stage with --plans-dir exits 0" "0" "$L_RC"
 L_RC=0
-bash "$AGENTS_DIR/bin/concern-ledger" reduce --plans-dir "$P" --session-id "$SID" \
+bash "$SCRIPT_CHECKOUT_ROOT/bin/concern-ledger" reduce --plans-dir "$P" --session-id "$SID" \
     --format review-security-shared --round 1 >/dev/null 2>&1 || L_RC=$?
 assert_eq "reduce with --plans-dir exits 0" "0" "$L_RC"
 assert_eq "ledger in <sid>.control/" "present" \

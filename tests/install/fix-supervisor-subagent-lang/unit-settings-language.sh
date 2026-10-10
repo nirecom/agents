@@ -71,7 +71,7 @@ fi
 # T3 [Regression] settings-extension.json language override wins (when present);
 # else verify base language field is present in assembled file.
 # ---------------------------------------------------------------------------
-EXT_PATH="$AGENTS_DIR/settings-extension.json"
+EXT_PATH="$_HELPERS_SCRIPT_CHECKOUT_ROOT/settings-extension.json"
 if [ ! -f "$ASSEMBLE_SETTINGS" ]; then
     skip "T3: install/assemble-settings.js missing — cannot verify override"
 elif [ "$T1_LANG" = "__absent__" ]; then

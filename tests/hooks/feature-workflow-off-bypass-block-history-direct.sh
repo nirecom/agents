@@ -12,13 +12,13 @@
 
 set -uo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    REPO_DIR_NODE="$(cygpath -m "$REPO_DIR")"
+    SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    REPO_DIR_NODE="$REPO_DIR"
+    SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-HOOK="$REPO_DIR_NODE/hooks/block-history-direct.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/block-history-direct.js"
 
 PASS=0
 FAIL=0
@@ -28,8 +28,8 @@ fail() { echo "FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }
 
 run_with_timeout() {
     local secs="$1"; shift
-    if [ -x "$REPO_DIR/bin/run-with-timeout.sh" ]; then
-        "$REPO_DIR/bin/run-with-timeout.sh" "$secs" "$@"
+    if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" ]; then
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$secs" "$@"
     elif command -v timeout >/dev/null 2>&1; then
         timeout "$secs" "$@"
     elif command -v perl >/dev/null 2>&1; then
@@ -45,8 +45,8 @@ assert_eq() {
     else fail "$name" "want=$want got=$got"; fi
 }
 
-if [ ! -f "$REPO_DIR/hooks/block-history-direct.js" ]; then
-    fail "precondition" "hook not found at $REPO_DIR/hooks/block-history-direct.js"
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/block-history-direct.js" ]; then
+    fail "precondition" "hook not found at $SCRIPT_CHECKOUT_ROOT/hooks/block-history-direct.js"
     echo ""
     echo "Results: $PASS passed, $FAIL failed"
     exit 1
@@ -114,7 +114,7 @@ run_hook() {
     HOOK_RC=0
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
-        "AGENTS_CONFIG_DIR=$REPO_DIR" \
+        "AGENTS_MAIN_ROOT=$SCRIPT_CHECKOUT_ROOT" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK" 2>"$errfile")" || HOOK_RC=$?

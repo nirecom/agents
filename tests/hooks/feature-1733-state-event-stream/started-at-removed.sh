@@ -18,6 +18,7 @@
 #   process env var here (which is how load-env surfaces it anyway).
 # Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="noSA"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
@@ -106,10 +107,10 @@ if run_case "T6/module-and-export-removed"; then
     # writing a field the schema no longer allows, and the allowlist would reject the write
     # at runtime rather than at review time.
     T6_MOD="present"
-    [ -f "$AGENTS_DIR/hooks/workflow-state/step-timestamps.js" ] || T6_MOD="absent"
+    [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/step-timestamps.js" ] || T6_MOD="absent"
     T6_EXPORT="present"
     exports_have "./hooks/workflow-state/state-io" "recordStepTimestampsEnabled" || T6_EXPORT="absent"
-    T6_REFS="$(cd "$AGENTS_DIR" && grep -rl "step-timestamps\|recordStepTimestampsEnabled\|applyStartedAt" \
+    T6_REFS="$(cd "$SCRIPT_CHECKOUT_ROOT" && grep -rl "step-timestamps\|recordStepTimestampsEnabled\|applyStartedAt" \
         hooks bin skills 2>/dev/null | wc -l | tr -d ' ')"
     assert_eq "T6/module-removed" "absent" "$T6_MOD"
     assert_eq "T6/barrel-export-removed" "absent" "$T6_EXPORT"

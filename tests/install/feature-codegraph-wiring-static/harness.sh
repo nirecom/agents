@@ -22,7 +22,7 @@ first_line_of() { grep -nF -m1 -e "$2" "$1" 2>/dev/null | head -1 | cut -d: -f1;
 
 # assert_contains <name> <rel> <needle> — the file must exist AND carry the text.
 assert_contains() {
-    local name="$1" rel="$2" needle="$3" abs="$AGENTS_DIR/$2"
+    local name="$1" rel="$2" needle="$3" abs="$SCRIPT_CHECKOUT_ROOT/$2"
     if [ ! -f "$abs" ]; then
         fail "$name: $rel is absent" "the wiring it must carry ('$needle') cannot exist yet"
         return
@@ -38,7 +38,7 @@ assert_contains() {
 # once the file that would carry the forbidden text exists, so a missing anchor
 # fails rather than passing silently.
 assert_absent() {
-    local name="$1" rel="$2" needle="$3" why="$4" abs="$AGENTS_DIR/$2"
+    local name="$1" rel="$2" needle="$3" why="$4" abs="$SCRIPT_CHECKOUT_ROOT/$2"
     if [ ! -f "$abs" ]; then
         fail "$name: $rel is absent, so its absence-guard cannot be evaluated" "$why"
         return
@@ -57,7 +57,7 @@ assert_absent() {
 # two sync blocks, two tools: entries or two flag assignments each behave wrongly
 # while every presence assertion in this suite stays green.
 assert_count() {
-    local name="$1" rel="$2" needle="$3" want="$4" why="$5" abs="$AGENTS_DIR/$2"
+    local name="$1" rel="$2" needle="$3" want="$4" why="$5" abs="$SCRIPT_CHECKOUT_ROOT/$2"
     if [ ! -f "$abs" ]; then
         fail "$name: $rel is absent" "cannot count '$needle' — $why"
         return
@@ -75,7 +75,7 @@ assert_count() {
 # assert_count_re <name> <rel> <ERE> <want> <why> — assert_count for anchored forms
 # (an assignment line, not a mention of the name in prose).
 assert_count_re() {
-    local name="$1" rel="$2" re="$3" want="$4" why="$5" abs="$AGENTS_DIR/$2"
+    local name="$1" rel="$2" re="$3" want="$4" why="$5" abs="$SCRIPT_CHECKOUT_ROOT/$2"
     if [ ! -f "$abs" ]; then
         fail "$name: $rel is absent" "cannot count /$re/ — $why"
         return
@@ -94,7 +94,7 @@ assert_count_re() {
 # anchors must be found: a missing anchor means the step numbering moved and the
 # order claim can no longer be evaluated, which is a failure, not a pass.
 assert_before() {
-    local name="$1" rel="$2" early="$3" late="$4" why="$5" abs="$AGENTS_DIR/$2"
+    local name="$1" rel="$2" early="$3" late="$4" why="$5" abs="$SCRIPT_CHECKOUT_ROOT/$2"
     if [ ! -f "$abs" ]; then
         fail "$name: $rel is absent" "$why"
         return

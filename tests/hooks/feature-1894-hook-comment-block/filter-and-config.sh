@@ -7,7 +7,7 @@
 # questions sharing a code path (CPR-SC): Scope — extensions/excluded dirs,
 # a hot-path filter run on every Edit, deliberately first; failure direction
 # is "scanned something it shouldn't" (latency, false blocks in vendored
-# trees). Control — numbers come from the config dir's .env and NOWHERE
+# trees). Control — numbers come from the agents main root's .env and NOWHERE
 # else; process.env is never consulted, since `COMMENT_BLOCK_MAX_LINES=999999
 # claude` could otherwise disable the feature silently for the session. The
 # spoof rows are the point: each has a matched .env/ambient pair with
@@ -230,7 +230,7 @@ c6_obsolete_names_are_inert() {
 }
 
 # ============================================================================
-# C7 — a missing config dir is not a bypass
+# C7 — a missing agents main root is not a bypass
 #
 # If .env cannot be read, the built-in defaults apply. Failing OPEN on config
 # resolution would mean deleting one file disables the gate.
@@ -245,9 +245,9 @@ c7_missing_env_uses_defaults() {
     assert_decision "C7/no-env-file-still-blocks" "block"
 
     _hk_env 0
-    HK_ENVS+=("AGENTS_CONFIG_DIR=$(mpath "$TMPDIR_BASE/no-such-config-dir")")
+    HK_ENVS+=("AGENTS_MAIN_ROOT=$(mpath "$TMPDIR_BASE/no-such-agents-main-root")")
     _hk_exec
-    assert_decision "C7/missing-config-dir-still-blocks" "block"
+    assert_decision "C7/missing-agents-main-root-still-blocks" "block"
     assert_clean_exit "C7/hook-exits-0"
 
     # Paired negative so the two rows above are not just "always blocks".

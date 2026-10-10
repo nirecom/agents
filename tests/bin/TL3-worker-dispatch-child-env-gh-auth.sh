@@ -2,25 +2,17 @@
 # tests/bin/TL3-worker-dispatch-child-env-gh-auth.sh
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, child-env, config-path, gh-cli, auth-resolution, real-environment, TL3, scope:common
-#
-# TL3: fences #1719 — buildEnv() copied the right SET of env vars but the
-# WRONG members, breaking gh's config-dir resolution in a way invisible below
-# the real gh binary. Split from TL3-worker-dispatch-gh-contract.sh (gh's flag
-# surface, gated only on "gh exists") because sharing would drag that looser
-# gate down to this file's stricter auth-reachability requirement.
-# Gate is a DIRECT spawnSync of gh, never dispatched, so a broken dispatcher
-# can't masquerade as "not ready" and skip instead of report. gh's output is
-# classified in-memory inside the probe and never written to disk.
-# Both a SYNTHETIC arm (isolates the config path) and a REAL registry arm
-# (issue-reconcile) are required — the synthetic one alone could go green
-# while every actually-registered gh worker was broken.
-# Exit contract (exit_verdict, self-checked in stage 1): FAIL>0 -> 1;
-# INCONCLUSIVE!=0 or PROVEN<REQUIRED -> 77; else 0. Required-arm table and
-# platform applicability live as data in ARM_TABLE (arms.sh).
+# TL3: fences #1719 — buildEnv() copied the wrong env members, breaking gh's
+# config directory resolution, visible only with the real gh binary. Kept apart
+# from TL3-worker-dispatch-gh-contract.sh, whose gate ("gh exists") is looser.
+# Gate is a DIRECT spawnSync of gh, so a broken dispatcher reports, never skips;
+# gh's output is classified in-memory in the probe and never written to disk.
+# Exit contract (exit_verdict): FAIL>0 -> 1; INCONCLUSIVE!=0 or PROVEN<REQUIRED
+# -> 77; else 0. Arms (synthetic + real registry) are data in ARM_TABLE (arms.sh).
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Environment gate — EVALUATED here, ACTED ON only after stage 1. Exiting 77
 # before stage 1 would let a broken classify()/exit_verdict()/expect_class()
@@ -30,8 +22,8 @@ GATE_OK=1
 GATE_REASON=""
 gate_unmet() { GATE_OK=0; [ -n "$GATE_REASON" ] || GATE_REASON="$1"; }
 
-if [ -x "$AGENTS_DIR/bin/get-config-var" ]; then
-    if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
+    if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
         gate_unmet "RUN_TL3 is off"
     fi
 else

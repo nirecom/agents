@@ -130,7 +130,7 @@ HOSTILE
 }
 
 d2099_live_judge_resists_injection() {
-    local gate_bin="$AGENTS_DIR/bin/get-config-var"
+    local gate_bin="$SCRIPT_CHECKOUT_ROOT/bin/get-config-var"
     if [ ! -x "$gate_bin" ]; then
         gated_skip "PI-5 live-agent injection: gate binary $gate_bin is absent/not executable, so RUN_TL3 cannot be read"
         return

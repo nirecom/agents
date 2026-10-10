@@ -1,7 +1,8 @@
 "use strict";
 // bin/worker-dispatch/anchor.js — trust anchors + shared path canonicalization.
-// Anchors: ACD (from THIS module's realpath, never the env), MAIN_ROOT (argv[3],
-// main worktree only), FAMILY (git-registered worktrees of MAIN_ROOT), PLANS_DIR
+// Anchors: script checkout root (from THIS module's realpath, never the env),
+// TARGET_MAIN_ROOT (argv[3], main worktree only), FAMILY (git-registered worktrees
+// of TARGET_MAIN_ROOT), PLANS_DIR
 // (artifacts) and STATE_ROOTS (each may hold <sid>.control/, docs/architecture/claude-code/state-dirs.md).
 // Never reads the process cwd or asks git for a toplevel; the caller's location
 // must not influence any anchor (tests/bin/feature-1643-worker-dispatch-anchor.sh).
@@ -11,7 +12,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const { normalizeCwd } = require("../../hooks/lib/path-normalize");
-const { configDirCandidates, _resolveFromCandidates } = require("../../hooks/lib/agents-config-dir");
+const { scriptCheckoutRootCandidates, _resolveFromCandidates } = require("../../hooks/lib/script-checkout-root");
 const { getWorkflowPlansDir } = require("../../hooks/lib/workflow-plans-dir");
 const { listStateRoots } = require("../../hooks/workflow-state/state-io/state-root");
 
@@ -103,15 +104,36 @@ function isUnder(childInput, parentInput, allowEqual) {
 // worker module takes over; the capability suite asserts nothing else appears)
 // ---------------------------------------------------------------------------
 
+// Inherited repository-selecting variables (set inside a git hook, for one)
+// would make `git -C <dir>` answer for another repository.
+const GIT_REPO_ENV = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR"];
+
+// The probe passes no `env` option: an explicit environment is what marks a
+// worker-started child (tests/bin/feature-2561-worker-child-roots.sh), so the
+// variables are lifted out of this process only while the synchronous call runs.
+function withoutGitRepoEnv(run) {
+  const held = {};
+  for (const name of GIT_REPO_ENV) {
+    if (!Object.prototype.hasOwnProperty.call(process.env, name)) continue;
+    held[name] = process.env[name];
+    delete process.env[name];
+  }
+  try {
+    return run();
+  } finally {
+    Object.assign(process.env, held);
+  }
+}
+
 function git(args, workDir) {
-  const res = spawnSync("git", args, {
+  const res = withoutGitRepoEnv(() => spawnSync("git", args, {
     cwd: workDir,
     shell: false,
     encoding: "utf8",
     timeout: GIT_TIMEOUT_MS,
     windowsHide: true,
     maxBuffer: 8 * 1024 * 1024,
-  });
+  }));
   if (res.error || res.status !== 0) return null;
   return String(res.stdout === null || res.stdout === undefined ? "" : res.stdout).trim();
 }
@@ -120,38 +142,59 @@ function git(args, workDir) {
 // Anchor derivation
 // ---------------------------------------------------------------------------
 
-function resolveAcd() {
-  const candidates = configDirCandidates().filter((c) => c && c.source !== "env");
-  const resolved = _resolveFromCandidates(candidates, { silent: true });
+function resolveScriptCheckoutRootAnchor() {
+  const resolved = _resolveFromCandidates(scriptCheckoutRootCandidates());
   if (!resolved) return null;
   return realAbs(resolved);
 }
 
-function resolveMainRoot(mainRootArg) {
-  const abs = absPath(mainRootArg);
-  if (abs === null) return { error: "main-root must be an absolute path" };
+// The agents main worktree a worker child reads its settings from. Derived from
+// this checkout's own git common dir, never from the parent environment: the
+// dispatcher may run from a linked worktree, and a child must not inherit a
+// caller-chosen settings location. Both answers are memoised — the checkout a
+// process runs from cannot change while it lives.
+let agentsMainRootMemo;
+function resolveAgentsMainRoot() {
+  if (agentsMainRootMemo !== undefined) return agentsMainRootMemo;
+  agentsMainRootMemo = null;
+  const own = resolveScriptCheckoutRootAnchor();
+  if (own === null) return null;
+  const commonDir = git(["-C", own, "rev-parse", "--path-format=absolute", "--git-common-dir"], own);
+  const commonAbs = commonDir === null ? null : absPath(commonDir);
+  if (commonAbs === null) return null;
+  const owner = realAbs(path.dirname(commonAbs));
+  if (owner === null) return null;
+  // Same two-marker check as the script checkout root: a main worktree that is
+  // not an agents repository must not be handed on as one.
+  agentsMainRootMemo = _resolveFromCandidates([{ dir: owner, source: "git-common-dir" }]);
+  return agentsMainRootMemo;
+}
+
+function resolveTargetMainRoot(targetMainRootArg) {
+  const abs = absPath(targetMainRootArg);
+  if (abs === null) return { error: "target-main-root must be an absolute path" };
   let stat = null;
   try {
     stat = fs.statSync(abs);
   } catch (_e) {
-    return { error: "main-root does not exist" };
+    return { error: "target-main-root does not exist" };
   }
-  if (!stat.isDirectory()) return { error: "main-root is not a directory" };
+  if (!stat.isDirectory()) return { error: "target-main-root is not a directory" };
 
   const root = realAbs(abs);
   const commonDir = git(["-C", root, "rev-parse", "--path-format=absolute", "--git-common-dir"], root);
-  if (commonDir === null) return { error: "main-root is not a git repository" };
+  if (commonDir === null) return { error: "target-main-root is not a git repository" };
   const commonAbs = absPath(commonDir);
-  if (commonAbs === null) return { error: "main-root git common dir is not absolute" };
+  if (commonAbs === null) return { error: "target-main-root git common dir is not absolute" };
   const owner = realAbs(path.dirname(commonAbs));
   if (owner === null || !sameString(stripTrailingSep(owner), stripTrailingSep(root))) {
-    return { error: "main-root is not a main worktree" };
+    return { error: "target-main-root is not a main worktree" };
   }
   return { value: root };
 }
 
-function resolveFamily(mainRoot) {
-  const listing = git(["-C", mainRoot, "worktree", "list", "--porcelain"], mainRoot);
+function resolveFamily(targetMainRoot) {
+  const listing = git(["-C", targetMainRoot, "worktree", "list", "--porcelain"], targetMainRoot);
   if (listing === null) return null;
   const family = [];
   for (const line of listing.split(/\r?\n/)) {
@@ -161,31 +204,31 @@ function resolveFamily(mainRoot) {
     if (wt === null) continue;
     if (!family.some((f) => sameString(f, wt))) family.push(wt);
   }
-  if (!family.some((f) => sameString(f, mainRoot))) family.unshift(mainRoot);
+  if (!family.some((f) => sameString(f, targetMainRoot))) family.unshift(targetMainRoot);
   return family;
 }
 
 // Never throws: callers (including the anchor probe in the test suite) rely on
 // getting a structured result back rather than an exception.
-function resolveAnchors(mainRootArg) {
-  const out = { acd: null, mainRoot: null, family: [], plansDir: null, stateRoots: [], error: null };
+function resolveAnchors(targetMainRootArg) {
+  const out = { scriptCheckoutRoot: null, targetMainRoot: null, family: [], plansDir: null, stateRoots: [], error: null };
 
-  out.acd = resolveAcd();
-  if (out.acd === null) {
-    out.error = "cannot resolve the agents config dir from this module's location";
+  out.scriptCheckoutRoot = resolveScriptCheckoutRootAnchor();
+  if (out.scriptCheckoutRoot === null) {
+    out.error = "cannot resolve the script checkout root from this module's location";
     return out;
   }
 
-  const main = resolveMainRoot(mainRootArg);
+  const main = resolveTargetMainRoot(targetMainRootArg);
   if (main.error) {
     out.error = main.error;
     return out;
   }
-  out.mainRoot = main.value;
+  out.targetMainRoot = main.value;
 
-  const family = resolveFamily(out.mainRoot);
+  const family = resolveFamily(out.targetMainRoot);
   if (family === null) {
-    out.error = "cannot enumerate the worktree family of main-root";
+    out.error = "cannot enumerate the worktree family of target-main-root";
     return out;
   }
   out.family = family;
@@ -214,6 +257,7 @@ function resolveAnchors(mainRootArg) {
 
 module.exports = {
   resolveAnchors,
+  resolveAgentsMainRoot,
   absPath,
   realAbs,
   isUnder,

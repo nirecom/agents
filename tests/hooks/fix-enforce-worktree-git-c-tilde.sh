@@ -10,11 +10,11 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/lib/ew-runner.sh
-. "$AGENTS_DIR/tests/lib/ew-runner.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/ew-runner.sh"
 
 T="$(make_tmp)"
 trap 'rm -rf "$T"' EXIT
@@ -29,7 +29,7 @@ ew_make_repo "$MAIN"
 ew_make_repo "$EXT_STATE"
 ew_make_repo "$EXT_ABS"
 mkdir -p "$EXT_STATE/plans"
-EW_CONFIG_DIR="$MAIN"
+EW_CFG_ROOT="$MAIN"
 
 run() { ew_run "$MAIN" "$(ew_bash_payload test "$1")" "HOME=$FAKE_HOME" "USERPROFILE=$FAKE_HOME"; }
 

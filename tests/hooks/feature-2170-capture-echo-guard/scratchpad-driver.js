@@ -11,11 +11,11 @@
 
 const path = require("path");
 
-const AGENTS_DIR = process.env.AGENTS_DIR || "";
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
 const mode = process.argv[2];
 
 function baseModule() {
-  return require(path.join(AGENTS_DIR, "hooks", "lib", "claude-scratchpad-base.js"));
+  return require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "claude-scratchpad-base.js"));
 }
 
 if (mode === "--lexical-under") {
@@ -62,7 +62,7 @@ if (mode === "--root") {
 // --invoke / --invoke-exec
 let mod;
 try {
-  mod = require(path.join(AGENTS_DIR, "hooks", "preuse-auto-approve", "scratchpad-script.js"));
+  mod = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "preuse-auto-approve", "scratchpad-script.js"));
 } catch (_e) {
   console.log("MODULE_MISSING");
   process.exit(0);

@@ -5,12 +5,12 @@
 "use strict";
 
 const path = require("path");
-const agentsDir = process.env.AGENTS_DIR || path.join(__dirname, "..", "..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
 const sid = process.argv[2] || "";
 
 let markers;
 try {
-  markers = require(path.join(agentsDir, "hooks", "lib", "session-markers.js"));
+  markers = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "session-markers.js"));
 } catch (e) {
   process.stdout.write("MODULE_MISSING\n");
   process.exit(0);

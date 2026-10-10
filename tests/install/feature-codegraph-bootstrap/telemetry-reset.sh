@@ -125,7 +125,7 @@ M12_DIR="$CASE_DIR"
     export PATHEXT="$PINNED_PATHEXT"
     export NVM_DIR="$M12_DIR/nvm"
     export NPM_STUB_RC=0 CLAUDE_STUB_RC=0
-    AGENTS_CONFIG_DIR="$(node_path "$M12_DIR/cfg")"; export AGENTS_CONFIG_DIR
+    export AGENTS_MAIN_ROOT="$(node_path "$M12_DIR/cfg")"
     NPM_STUB_LOG="$(node_path "$M12_DIR/npm.log")"; export NPM_STUB_LOG
     CG_STUB_LOG="$(node_path "$M12_DIR/codegraph.log")"; export CG_STUB_LOG
     CLAUDE_STUB_LOG="$(node_path "$M12_DIR/claude.log")"; export CLAUDE_STUB_LOG

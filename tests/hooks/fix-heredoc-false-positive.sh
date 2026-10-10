@@ -23,14 +23,14 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Convert to Windows-native path for Node.js require() on Windows (cygpath -m gives C:/... form)
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-MODULE="${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns.js"
+MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-patterns.js"
 
 PASS=0
 FAIL=0
@@ -53,9 +53,9 @@ pred_ir() {
     local pred="$1" cmd="$2"
     run_with_timeout 30 node -e "
       try {
-        const t = require('$_AGENTS_DIR_NODE/hooks/lib/bash-write-targets');
-        const p = require('$_AGENTS_DIR_NODE/hooks/lib/bash-write-patterns/patterns');
-        const {parse} = require('$_AGENTS_DIR_NODE/hooks/lib/command-ir');
+        const t = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/bash-write-targets');
+        const p = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/bash-write-patterns/patterns');
+        const {parse} = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/command-ir');
         const fn = t[process.argv[1]] || p[process.argv[1]];
         if (typeof fn !== 'function') { console.log('ERROR:not-exported'); process.exit(0); }
         console.log(fn(parse(process.argv[2])) ? 'true' : 'false');
@@ -158,7 +158,7 @@ test_fp_cases() {
     # FP1679-A: here-doc token quoted inside a --detail argument
     assert_classify \
         "FP1679-A: node bin/supervisor-report --detail \"used <<'EOF' heredoc…\"" \
-        'node "$ACD/bin/supervisor-report" --detail "used <<'"'"'EOF'"'"' heredoc in the script" --reporter x' \
+        'node "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/supervisor-report" --detail "used <<'"'"'EOF'"'"' heredoc in the script" --reporter x' \
         "read"
 
     # FP1679-B: here-string operator named in prose

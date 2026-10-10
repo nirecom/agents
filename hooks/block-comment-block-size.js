@@ -5,7 +5,7 @@
 // file in absolute terms, not diff-relative (commit-time layer is baseline-
 // relative instead, CPR-SC). Never bypassable — no session escape-hatch state
 // read (tests/hooks/feature-1894-hook-comment-block/no-bypass.sh); config comes only
-// from the config dir's .env, never process.env. Fails open on any unreadable
+// from the settings root's .env, never process.env. Fails open on any unreadable
 // file, unreconstructable payload, or unexpected shape.
 "use strict";
 
@@ -93,7 +93,7 @@ function main() {
   const absPath = resolveTargetPath(input, toolInput.file_path);
   if (!absPath) approve();
 
-  // Config from the config dir's .env and nowhere else — see the header.
+  // Config from the settings root's .env and nowhere else — see the header.
   const env = readDefaultEnvFile() || {};
   if (env.COMMENT_BLOCK_ENFORCE === "off") approve();
   const threshold = parseMaxLines(env.COMMENT_BLOCK_MAX_LINES);

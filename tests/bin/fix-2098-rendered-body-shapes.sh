@@ -2,10 +2,10 @@
 # Tests: bin/github-issues/lib/extract-field.sh, bin/github-issues/issue-to-history.sh
 # Tags: history, github, issues, issue-forms, extract-field, scope:common, layer:TL2
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB="$AGENTS_DIR/bin/github-issues/lib/extract-field.sh"
-SCRIPT="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/extract-field.sh"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-to-history.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 # Documented marker recipe (SSOT: extract-field.sh, extract_field_or_marker()).
 MARKER_ERE='\(no (Background|Changes|Cause|Fix) recorded\)'
@@ -141,13 +141,12 @@ setup_ith_tmp() {
     ITH_TMP=$(mktemp -d)
     mkdir -p "$ITH_TMP/docs/history"
     touch "$ITH_TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$ITH_TMP"
     export PATH="$MOCK_DIR:$PATH"
 }
 
 teardown_ith_tmp() {
     [ -n "${ITH_TMP:-}" ] && rm -rf "$ITH_TMP"
-    unset AGENTS_CONFIG_DIR ITH_TMP
+    unset ITH_TMP
 }
 
 # scenario | label | expected line 1 | expected line 2
@@ -159,7 +158,7 @@ run_post_fix_case() {
     # the script print and exit 0 before doc-append, and every assertion below
     # would then be checking an untouched file (#1133 class of false green).
     out=$(DRY_RUN= GH_MOCK_SCENARIO="$scenario" run_with_timeout 30 bash "$SCRIPT" 42 \
-        --commit abc1234 2>&1)
+        --commit abc1234 --target-checkout-root "$ITH_TMP" 2>&1)
     rc=$?
     content=$(cat "$ITH_TMP/docs/history.md" 2>/dev/null)
     # B3 — pin that the empty-DRY_RUN branch really took the gh/doc-append path.
@@ -195,10 +194,10 @@ if [ -f "$SCRIPT" ]; then
     # no-op: the `### #N` guard fires and nothing is appended twice.
     setup_ith_tmp
     DRY_RUN= GH_MOCK_SCENARIO=issue_task_post_fix run_with_timeout 30 \
-        bash "$SCRIPT" 42 --commit abc1234 >/dev/null 2>&1
+        bash "$SCRIPT" 42 --commit abc1234 --target-checkout-root "$ITH_TMP" >/dev/null 2>&1
     IDEM_CK1="$(cksum <"$ITH_TMP/docs/history.md")"
     IDEM_OUT="$(DRY_RUN= GH_MOCK_SCENARIO=issue_task_post_fix run_with_timeout 30 \
-        bash "$SCRIPT" 42 --commit abc1234 2>&1)"
+        bash "$SCRIPT" 42 --commit abc1234 --target-checkout-root "$ITH_TMP" 2>&1)"
     assert_eq "I1 re-run leaves history.md byte-identical" \
         "$IDEM_CK1" "$(cksum <"$ITH_TMP/docs/history.md")"
     case "$IDEM_OUT" in

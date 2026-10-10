@@ -23,6 +23,7 @@
 # Closest-to-action mitigation: bin/check-verification-gate.sh category: skill-orchestration
 
 set -uo pipefail
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # isolation (#2512): pin state and plans dirs once for this file
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT

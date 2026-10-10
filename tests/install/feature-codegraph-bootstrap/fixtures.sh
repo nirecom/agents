@@ -18,7 +18,7 @@ JSON_SENTINEL='cg-json-secret-f6a7b8c9d0'
 # version pin to read (#2254): the installer always asks npm for @latest.
 # A missing or empty value would make every derived assertion compare "" with ""
 # — the false green this block refuses to ship.
-CONSTANTS_FILE="$AGENTS_DIR/install/codegraph-constants.txt"
+CONSTANTS_FILE="$SCRIPT_CHECKOUT_ROOT/install/codegraph-constants.txt"
 read_constant() { sed -n "s/^$1=//p" "$CONSTANTS_FILE" 2>/dev/null | head -1; }
 CG_TELEMETRY="$(read_constant CODEGRAPH_TELEMETRY)"
 CG_DNT="$(read_constant DO_NOT_TRACK)"
@@ -148,7 +148,7 @@ make_constants_tree() {
     local root="$BASE/$name"
     rm -rf "$root"
     mkdir -p "$root/hooks/lib" "$root/install"
-    cp -R "$AGENTS_DIR/hooks/lib/." "$root/hooks/lib/"
+    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib/." "$root/hooks/lib/"
     cp "$CODEGRAPH_MCP_JS" "$root/install/codegraph-mcp.js"
     if [ "$body" = "none" ]; then
         rm -f "$root/install/codegraph-constants.txt"

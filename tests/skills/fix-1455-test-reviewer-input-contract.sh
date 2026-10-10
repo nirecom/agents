@@ -5,17 +5,22 @@
 # #1455: test-reviewer input contract — contract file, prompt injection, INPUT_ERROR exit 4.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+# shellcheck source=tests/lib/script-checkout-fixture.sh
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
-CONTRACT_MD="$AGENTS_DIR/skills/_shared/test-review-input-contract.md"
-REVIEW_PLAN_CODEX="$AGENTS_DIR/bin/review-plan-codex"
-TEST_REVIEWER_MD="$AGENTS_DIR/agents/test-reviewer.md"
-LOOP_SH="$AGENTS_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"
-SKILL_MD="$AGENTS_DIR/skills/review-tests/SKILL.md"
-DETECT_SH="$AGENTS_DIR/skills/review-tests/scripts/detect-input-error.sh"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+CONTRACT_MD="$SCRIPT_CHECKOUT_ROOT/skills/_shared/test-review-input-contract.md"
+REVIEW_PLAN_CODEX="$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex"
+TEST_REVIEWER_MD="$SCRIPT_CHECKOUT_ROOT/agents/test-reviewer.md"
+# The loop finds its siblings from its own location, so the RL cases launch a copy
+# of it placed inside the fake checkout that holds the stubs.
+LOOP_REL="skills/review-tests/scripts/run-codex-review-loop.sh"
+LOOP_SH="$SCRIPT_CHECKOUT_ROOT/$LOOP_REL"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/review-tests/SKILL.md"
+DETECT_SH="$SCRIPT_CHECKOUT_ROOT/skills/review-tests/scripts/detect-input-error.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 _TMPROOT=""
 _cleanup() { [ -n "$_TMPROOT" ] && rm -rf "$_TMPROOT"; }
@@ -172,10 +177,11 @@ case_end
 # ─────────────────────────────────────────────────────────
 case_begin "review-loop-input-error-exit" "skills/review-tests/scripts/run-codex-review-loop.sh"
 
-# Helper: build a fake AGENTS_CONFIG_DIR with stubs
+# Helper: build a fake checkout — the real loop + bin/lib, with stubs for what it shells out to
 _build_fake_input_error() {
   local fake
   fake="$(mktemp -d 2>/dev/null || mktemp -d -t fake1455ie)"
+  script_checkout_fixture_copy "$fake" bin/lib skills/review-tests/scripts >&2 || return 1
   mkdir -p "$fake/bin" "$fake/hooks/workflow-gate"
   cat > "$fake/bin/run-codex-review-loop" << 'STUB'
 #!/usr/bin/env bash
@@ -203,6 +209,7 @@ STUB
 _build_fake_approved() {
   local fake
   fake="$(mktemp -d 2>/dev/null || mktemp -d -t fake1455ap)"
+  script_checkout_fixture_copy "$fake" bin/lib skills/review-tests/scripts >&2 || return 1
   mkdir -p "$fake/bin" "$fake/hooks/workflow-gate"
   cat > "$fake/bin/run-codex-review-loop" << 'STUB'
 #!/usr/bin/env bash
@@ -243,9 +250,9 @@ _build_git_repo_1455() {
 _run_loop_1455() {
   local plans="$1" fake="$2" repo="$3" ec=0
   # Capture the loop's exit code; `|| true` here would always yield 0.
-  ( cd "$repo" && AGENTS_CONFIG_DIR="$fake" SESSION_ID="sid1455" PLANS_DIR="$plans" \
+  ( cd "$repo" && AGENTS_MAIN_ROOT="$fake" SESSION_ID="sid1455" PLANS_DIR="$plans" \
       CLAUDE_CODE_SESSION_ID="sid1455" \
-      EXTENSIONS_USED=0 "$RWT" 40 bash "$LOOP_SH" >/dev/null 2>&1 ) || ec=$?
+      EXTENSIONS_USED=0 "$RWT" 40 bash "$fake/$LOOP_REL" >/dev/null 2>&1 ) || ec=$?
   printf '%s' "$ec"
 }
 
@@ -276,9 +283,9 @@ printf '# outline\n' > "$PLANS_RL2/sid1455-outline.md"
 FAKE_RL2="$(_build_fake_input_error)"
 REPO_RL2="$(_build_git_repo_1455)"
 STDERR_RL2="$_TMPROOT/stderr_rl2.txt"
-( cd "$REPO_RL2" && AGENTS_CONFIG_DIR="$FAKE_RL2" SESSION_ID="sid1455" PLANS_DIR="$PLANS_RL2" \
+( cd "$REPO_RL2" && AGENTS_MAIN_ROOT="$FAKE_RL2" SESSION_ID="sid1455" PLANS_DIR="$PLANS_RL2" \
     CLAUDE_CODE_SESSION_ID="sid1455" \
-    EXTENSIONS_USED=0 "$RWT" 40 bash "$LOOP_SH" >/dev/null 2>"$STDERR_RL2" ) || true
+    EXTENSIONS_USED=0 "$RWT" 40 bash "$FAKE_RL2/$LOOP_REL" >/dev/null 2>"$STDERR_RL2" ) || true
 if [ -f "$STDERR_RL2" ] && grep -qiE "INPUT_ERROR|/some/path" "$STDERR_RL2"; then
   pass "RL-2 INPUT_ERROR path appears on stderr"
 else

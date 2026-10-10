@@ -17,7 +17,7 @@ VERDICT_BIN="$AGENTS_ROOT/bin/review-loop-verdict"
 TIMEOUT_SH="$AGENTS_ROOT/bin/run-with-timeout.sh"
 ERRORS=0
 
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_ROOT/tests/lib/harness.sh"
 
@@ -152,7 +152,7 @@ B_SID="feature-1734-sid"
 B_OUT="$TMPDIR_BASE/case-b-combined.txt"
 
 B_EXIT=0
-AGENTS_CONFIG_DIR="$B_CFG" PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" \
+PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" \
   bash "$TIMEOUT_SH" 120 bash "$B_CFG/bin/run-codex-review-loop" \
     --format detail-plan --session-id "$B_SID" --plans-dir "$B_PLANS" \
     --draft-file "$BIG_PLAN" --cap 2 --max-extensions 2 \

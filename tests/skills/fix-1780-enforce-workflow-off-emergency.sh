@@ -8,13 +8,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-SP_NODE="$_AGENTS_DIR_NODE/hooks/lib/sentinel-patterns.js"
-SKILL="$AGENTS_DIR/skills/enforce-workflow-off/SKILL.md"
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-HANDLER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+SP_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/sentinel-patterns.js"
+SKILL="$SCRIPT_CHECKOUT_ROOT/skills/enforce-workflow-off/SKILL.md"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+HANDLER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-mark/enforce-override-handlers.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 assert_eq() {
@@ -75,7 +75,7 @@ fi
 # the plain WORKFLOW_ENFORCE_WORKFLOW_ON sentinel. There is no _EMERGENCY variant of the
 # ON side (restoring enforcement is always safe and auto-approved), so the S-7 edit must
 # NOT be mirrored onto the ON path.
-ON_SKILL="$AGENTS_DIR/skills/enforce-workflow-on/SKILL.md"
+ON_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/enforce-workflow-on/SKILL.md"
 if [ -f "$ON_SKILL" ]; then
     got=no
     grep -q 'WORKFLOW_ENFORCE_WORKFLOW_ON_EMERGENCY' "$ON_SKILL" && got=yes
@@ -119,7 +119,7 @@ process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1]
 run_shim() {
     local tn="$1" sid="$2" cmd="$3" hi out rc
     hi=$(mk_input "$sid" "$cmd")
-    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$tn" \
+    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_MAIN_ROOT="$tn" \
         "$RWT" 12 node "$SHIM" <<< "$hi" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$out"
@@ -159,7 +159,7 @@ fi
 # E4/E5 - workflow-mark side: the EMERGENCY sentinel must actually ACTIVATE the OFF
 # marker and leave an audit entry. This is the half of the runtime that makes the S-7
 # prompt change useful; a bypass that activates nothing would be a dead slash-command.
-if [ ! -f "$AGENTS_DIR/hooks/workflow-mark/enforce-override-handlers.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark/enforce-override-handlers.js" ]; then
     echo "SKIP: E4-E5 workflow-mark integration - enforce-override-handlers.js not present"; SKIP=$((SKIP + 2))
 else
     TMP4=$(make_tmp); TN4=$(node_path "$TMP4")

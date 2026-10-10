@@ -8,9 +8,9 @@
 # exceeds 2MB is not reproduced; exit 127 is simulated by a mock that exits 127.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 CEG_TMP="$(make_tmp)"
 trap 'rm -rf "$CEG_TMP"' EXIT
@@ -21,7 +21,7 @@ export NO_LOG=true
 export CLAUDE_TRANSCRIPT_BASE_DIR="$CEG_TMP/transcripts"
 unset CODEX_TIMEOUT_SECS
 
-GUARD_LIB="$AGENTS_DIR/bin/lib/cli-exec-guard.sh"
+GUARD_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/cli-exec-guard.sh"
 FIX="$CEG_TMP/fix"
 OUT="$CEG_TMP/out.txt"
 PATHS_FILE="$CEG_TMP/paths.txt"
@@ -100,13 +100,13 @@ guard() {
 core() {
   rm -f "$MOCK_CALLED" "$PATHS_FILE"
   PATH="$MOCK_PATH" MOCK_EXIT="$2" CEG_CHILD_PATH="${3:-}" \
-    run_with_timeout 60 bash "$CEG_TMP/run-core.sh" "$AGENTS_DIR" "$1" "$PATHS_FILE" > "$OUT" 2>&1
+    run_with_timeout 60 bash "$CEG_TMP/run-core.sh" "$SCRIPT_CHECKOUT_ROOT" "$1" "$PATHS_FILE" > "$OUT" 2>&1
 }
 # gem <prompt-file> <mock-exit> [child-path] [override-guard]
 gem() {
   rm -f "$MOCK_CALLED" "$GUARD_CALLED"
   PATH="$MOCK_PATH" MOCK_EXIT="$2" CEG_CHILD_PATH="${3:-}" CEG_OVERRIDE_GUARD="${4:-}" \
-    run_with_timeout 60 bash "$CEG_TMP/run-gemini.sh" "$AGENTS_DIR" "$1" > "$OUT" 2>&1 </dev/null
+    run_with_timeout 60 bash "$CEG_TMP/run-gemini.sh" "$SCRIPT_CHECKOUT_ROOT" "$1" > "$OUT" 2>&1 </dev/null
 }
 has() { # <label> <needle>
   if grep -qF -- "$2" "$OUT"; then pass "$1"; else fail "$1" "missing '$2' in: $(head -c 400 "$OUT")"; fi
@@ -193,14 +193,14 @@ case_end
 
 RPC_DIR="$CEG_TMP/rpc"
 mkdir -p "$RPC_DIR/bin/lib" "$CEG_TMP/rpc-log"
-cp "$AGENTS_DIR/bin/review-plan-codex" "$RPC_DIR/bin/review-plan-codex"
+cp "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" "$RPC_DIR/bin/review-plan-codex"
 for _lib in codex-core.sh codex-timeout.sh cli-exec-guard.sh; do
-  if [ -f "$AGENTS_DIR/bin/lib/$_lib" ]; then cp "$AGENTS_DIR/bin/lib/$_lib" "$RPC_DIR/bin/lib/$_lib"; fi
+  if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/lib/$_lib" ]; then cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/$_lib" "$RPC_DIR/bin/lib/$_lib"; fi
 done
 # rpc <sid> <input> <mock-exit>
 rpc() {
   rm -f "$MOCK_CALLED"
-  PATH="$MOCK_PATH" MOCK_EXIT="$3" AGENTS_CONFIG_DIR="$RPC_DIR" \
+  PATH="$MOCK_PATH" MOCK_EXIT="$3" \
     run_with_timeout 120 bash "$RPC_DIR/bin/review-plan-codex" --format detail-plan \
     --session-id "$1" --log-dir "$CEG_TMP/rpc-log" --input "$2" --round 1 > "$OUT" 2>&1
 }

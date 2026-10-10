@@ -1,7 +1,7 @@
 # Scope, failure and disk cases for hooks/block-case-markers.js (#2388).
 # Sourced by tests/hooks/feature-2388-block-case-markers.sh; shares its helpers.
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 echo ""
 echo "=== scope ==="
@@ -14,7 +14,7 @@ assert_decision "existing-head-file-approves" approve
 case_end
 
 case_begin "env-file-off-still-blocks" "hooks/block-case-markers.js"
-# The gate has no disable switch: an off value in the config dir .env is ignored.
+# The gate has no disable switch: an off value in the agents main root .env is ignored.
 printf 'CASE_MARKERS_ENFORCE=off\n' > "$CFG_DIR/.env"
 mkpayload Write "$REPO_M" "$REPO_M/tests/hooks/new-env-off.sh" "content=@$BODIES/missing.sh"
 hk_run
@@ -58,7 +58,7 @@ case_begin "checker-missing-approves" "hooks/block-case-markers.js"
 # A copy of the hook whose sibling bin/check-case-markers.sh does not exist.
 NOCHK="$TMPBASE/nochk"
 mkdir -p "$NOCHK/hooks"
-cp -R "$AGENTS_DIR/hooks/lib" "$NOCHK/hooks/lib"
+cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$NOCHK/hooks/lib"
 if [ -f "$HOOK" ]; then
   cp "$HOOK" "$NOCHK/hooks/block-case-markers.js"
 fi
@@ -75,12 +75,12 @@ case_begin "registry-unreadable-approves" "hooks/block-case-markers.js"
 # the control run (table present: blocks) and the probe (table removed: fails open).
 NOREG="$TMPBASE/noreg"
 mkdir -p "$NOREG/hooks" "$NOREG/bin"
-cp -R "$AGENTS_DIR/hooks/lib" "$NOREG/hooks/lib"
-cp -R "$AGENTS_DIR/bin/lib" "$NOREG/bin/lib"
-cp "$AGENTS_DIR/bin/check-case-markers.sh" "$NOREG/bin/check-case-markers.sh"
+cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$NOREG/hooks/lib"
+cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$NOREG/bin/lib"
+cp "$SCRIPT_CHECKOUT_ROOT/bin/check-case-markers.sh" "$NOREG/bin/check-case-markers.sh"
 # shellcheck source=../../lib/test-language-registry-fixture.sh
-. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
-install_test_language_registry "$NOREG" "$AGENTS_DIR"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
+install_test_language_registry "$NOREG" "$SCRIPT_CHECKOUT_ROOT"
 [ -f "$HOOK" ] && cp "$HOOK" "$NOREG/hooks/block-case-markers.js"
 HK_HOOK="$NOREG/hooks/block-case-markers.js"
 mkpayload Write "$REPO_M" "$REPO_M/tests/hooks/new-noreg.sh" "content=@$BODIES/missing.sh"

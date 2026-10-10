@@ -1,7 +1,7 @@
 
 # ===========================================================================
 # #1340: the `setup` verb is DEPRECATED. It no longer discovers field/option
-# IDs via createProjectV2Field mutations, no longer writes $AGENTS_CONFIG_DIR/.env,
+# IDs via createProjectV2Field mutations, no longer writes $AGENTS_MAIN_ROOT/.env,
 # and always exits 0 after emitting deprecation warnings to stderr. Field IDs are
 # resolved on demand by resolve-project.sh. The T-new-1..5 cases below now assert
 # the deprecation contract instead of the retired discovery/mutation behavior.
@@ -13,7 +13,7 @@
 #          stdout. exit 0 unconditionally.
 # ===========================================================================
 setup_mock
-ENV_FILE="$AGENTS_CONFIG_DIR/.env"
+ENV_FILE="$AGENTS_MAIN_ROOT/.env"
 : > "$ENV_FILE"
 # Ensure no .env WIP_STATE_* migration noise: setup must derive IDs from resolver.
 unset WIP_STATE_STATUS_FIELD_ID WIP_STATE_IN_PROGRESS_OPTION_ID \
@@ -77,7 +77,7 @@ teardown_mock
 #          consecutive runs; .env stays empty (deprecated verb never persists).
 # ===========================================================================
 setup_mock
-ENV_FILE="$AGENTS_CONFIG_DIR/.env"
+ENV_FILE="$AGENTS_MAIN_ROOT/.env"
 : > "$ENV_FILE"
 run_with_timeout 60 bash "$TARGET" setup >/dev/null 2>&1; RC1=$?
 MUT1=$(grep -c "createProjectV2Field" "$GH_MOCK_ARGS_LOG" 2>/dev/null | head -1 || echo 0)

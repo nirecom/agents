@@ -9,8 +9,7 @@
 
 set -uo pipefail
 
-AGENTS_DIR="${1:-$(cd "$(dirname "$0")/../.." && pwd)}"
-export AGENTS_DIR
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HERE="$(cd "$(dirname "$0")/feature-2170-lib-extractions" && pwd)"
 SIB="$(cd "$(dirname "$0")/feature-2170-capture-echo-guard" && pwd)"
 DRIVER="$HERE/lib-driver.js"
@@ -81,7 +80,7 @@ OUT="$TMPROOT_RAW/out.json"
 
 hook_verdict() {
     node "$SIB/mk-event.js" Bash "$2" >"$EV"
-    node "$AGENTS_DIR/hooks/$1" <"$EV" >"$OUT" 2>/dev/null
+    node "$SCRIPT_CHECKOUT_ROOT/hooks/$1" <"$EV" >"$OUT" 2>/dev/null
     node "$SIB/hook-out.js" "$OUT"
 }
 # "block"/"deny-partial" are both a denial; the dual-field contract is the

@@ -6,8 +6,12 @@
 # Sourced helpers come from _lib.sh. Runnable standalone:
 #   bash tests/bin/feature-sweep-branches/no-pr.sh
 
+# isolation (#2512): harness before _lib.sh so _lib's pass/fail/run_with_timeout override harness's.
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+# Always pin under _lib.sh's TMPDIR_BASE (its EXIT trap removes it); never keep an inherited value.
+harness_isolate "$TMPDIR_BASE/isolation"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T2 — local branch present, stub gh returns [] (no PR at all) → no_pr_candidates>=1
@@ -19,7 +23,7 @@ T2_unmerged_branch_skipped() {
     local stubdir="$TMPDIR_BASE/t2-stub"
     local stale_epoch="1577836800"  # 2020-01-01 00:00:00 UTC
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     # Must be reachable from origin/main so the reachability gate (now at
     # classification time) doesn't filter this branch out before the no-PR check.
     make_branch_reachable_from_origin_main "$repo" "feature/unmerged-t2" "$stale_epoch"
@@ -45,9 +49,8 @@ GHSTUB
 
     # SWEEP_AGE_DAYS=1 so the stale 2020-01-01 branch passes the no-PR age gate.
     local out exit_code
-    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" \
-        SWEEP_AGE_DAYS=1 \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode 2>&1)"
+    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" SWEEP_AGE_DAYS=1 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -74,7 +77,7 @@ T12_no_pr_dry_run_candidate() {
     local stubdir="$TMPDIR_BASE/t12-stub"
     local stale_epoch="1577836800"  # 2020-01-01 00:00:00 UTC
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     make_branch_reachable_from_origin_main "$repo" "feature/no-pr-t12" "$stale_epoch"
 
     if [ ! -x "$SWEEP" ]; then
@@ -97,9 +100,8 @@ GHSTUB
     chmod +x "$ghstubdir/gh"
 
     local out exit_code
-    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" \
-        SWEEP_AGE_DAYS=1 \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode 2>&1)"
+    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" SWEEP_AGE_DAYS=1 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -131,7 +133,7 @@ T13_apply_without_delete_no_pr_preserves() {
     local stubdir="$TMPDIR_BASE/t13-stub"
     local stale_epoch="1577836800"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     make_branch_reachable_from_origin_main "$repo" "feature/no-pr-t13" "$stale_epoch"
 
     if [ ! -x "$SWEEP" ]; then
@@ -153,9 +155,8 @@ GHSTUB
     chmod +x "$ghstubdir/gh"
 
     local out exit_code
-    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" \
-        SWEEP_AGE_DAYS=1 \
-        run_with_timeout bash "$SWEEP" --apply --ci-mode 2>&1)"
+    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" SWEEP_AGE_DAYS=1 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --apply --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -184,7 +185,7 @@ T14_apply_delete_no_pr_removes() {
     local stubdir="$TMPDIR_BASE/t14-stub"
     local stale_epoch="1577836800"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     # Branch must be reachable from origin/main for the safety gate to allow
     # deletion. T18 covers the unreachable-skip path.
     make_branch_reachable_from_origin_main "$repo" "feature/no-pr-t14" "$stale_epoch"
@@ -208,9 +209,8 @@ GHSTUB
     chmod +x "$ghstubdir/gh"
 
     local out exit_code
-    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" \
-        SWEEP_AGE_DAYS=1 \
-        run_with_timeout bash "$SWEEP" --apply --delete-no-pr --ci-mode 2>&1)"
+    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" SWEEP_AGE_DAYS=1 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --apply --delete-no-pr --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -240,7 +240,7 @@ T15_no_pr_branch_too_young_skipped() {
     local fresh_epoch
     fresh_epoch="$(date +%s)"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     make_branch_with_date "$repo" "feature/fresh-t15" "$fresh_epoch"
 
     if [ ! -x "$SWEEP" ]; then
@@ -262,9 +262,8 @@ GHSTUB
     chmod +x "$ghstubdir/gh"
 
     local out exit_code
-    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" \
-        SWEEP_AGE_DAYS=1 \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode 2>&1)"
+    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" SWEEP_AGE_DAYS=1 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -293,7 +292,7 @@ T18_no_pr_unreachable_skipped() {
     local stubdir="$TMPDIR_BASE/t18-stub"
     local stale_epoch="1577836800"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     # Branch is created with no origin remote → unreachable from default ref.
     make_branch_with_date "$repo" "feature/no-pr-t18" "$stale_epoch"
 
@@ -311,9 +310,8 @@ GHSTUB
     chmod +x "$ghstubdir/gh"
 
     local out exit_code
-    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" \
-        SWEEP_AGE_DAYS=1 \
-        run_with_timeout bash "$SWEEP" --apply --delete-no-pr --ci-mode 2>&1)"
+    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" SWEEP_AGE_DAYS=1 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --apply --delete-no-pr --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then

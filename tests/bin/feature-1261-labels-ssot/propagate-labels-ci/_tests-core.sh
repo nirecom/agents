@@ -90,13 +90,13 @@ teardown_mock
 
 # ===========================================================================
 # T-propagate-4: no diff → git commit NOT logged
-# Use real AGENTS_DIR so sync-labels.sh (invoked after git diff) can run
+# Use the real script checkout so sync-labels.sh (invoked after git diff) can run
 # against mock gh, keeping the overall exit code clean.
 # ===========================================================================
 setup_mock
 export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
 export GIT_DIFF_RC=0  # no changes
-export AGENTS_WORKSPACE="$AGENTS_DIR"
+export AGENTS_WORKSPACE="$__LIB_SCRIPT_CHECKOUT_ROOT"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
 export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
@@ -113,12 +113,12 @@ teardown_mock
 
 # ===========================================================================
 # T-propagate-5: diff present → git commit AND git push logged
-# Use real AGENTS_DIR so sync-labels.sh can run against mock gh cleanly.
+# Use the real script checkout so sync-labels.sh can run against mock gh cleanly.
 # ===========================================================================
 setup_mock
 export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
 export GIT_DIFF_RC=1  # has changes
-export AGENTS_WORKSPACE="$AGENTS_DIR"
+export AGENTS_WORKSPACE="$__LIB_SCRIPT_CHECKOUT_ROOT"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
 export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
@@ -136,12 +136,12 @@ teardown_mock
 
 # ===========================================================================
 # T-propagate-6: sync-labels.sh --repo invoked per sibling → gh label in log
-# Use real AGENTS_DIR so real sync-labels.sh runs against mock gh.
+# Use the real script checkout so real sync-labels.sh runs against mock gh.
 # ===========================================================================
 setup_mock
 export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
 export GIT_DIFF_RC=0
-export AGENTS_WORKSPACE="$AGENTS_DIR"
+export AGENTS_WORKSPACE="$__LIB_SCRIPT_CHECKOUT_ROOT"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
 export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"

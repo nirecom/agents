@@ -1,31 +1,21 @@
 #!/bin/bash
 # tests/bin/feature-sweep-branches/_lib.sh
 # Shared helpers and fixtures for feature-sweep-branches test groups.
-#
-# Sourced by:
-#   - tests/bin/feature-sweep-branches/core.sh
-#   - tests/bin/feature-sweep-branches/no-pr.sh
-#   - tests/bin/feature-sweep-branches/pr-state.sh
-#
-# Each group script sources this file so it can run standalone, e.g.:
-#   bash tests/bin/feature-sweep-branches/core.sh
-#
-# This library:
-#   - sets `set -uo pipefail`
-#   - resolves AGENTS_DIR / SWEEP / GUARD_JS
-#   - initializes PASS / FAIL counters
-#   - creates TMPDIR_BASE and registers a cleanup trap
-#   - defines pass / fail / run_with_timeout / init_repo /
-#     make_branch_with_date / make_branch_reachable_from_origin_main /
-#     make_stub_agents_dir / ci_field helpers
+# Sourced by each group script (core.sh / no-pr.sh / pr-state.sh / remote.sh /
+# validation.sh) so the group can also run standalone.
+# Provides: `set -uo pipefail`, SWEEP / GUARD_JS paths, PASS / FAIL counters,
+# TMPDIR_BASE + cleanup trap, and the pass / fail / run_with_timeout / init_repo /
+# make_branch_with_date / make_branch_reachable_from_origin_main /
+# copy_sweep_into / make_stub_checkout / ci_field helpers.
 
 set -uo pipefail
 
-# Resolve AGENTS_DIR relative to this library file (tests/bin/feature-sweep-branches/_lib.sh
-# → repo root is two levels up).
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SWEEP="$AGENTS_DIR/bin/sweep-branches.sh"
-GUARD_JS="$AGENTS_DIR/hooks/enforce-worktree/branch-delete-guard.js"
+# The checkout holding this lib file (three levels up from its directory).
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SWEEP="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/sweep-branches.sh"
+GUARD_JS="$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/branch-delete-guard.js"
+# shellcheck source=../../lib/script-checkout-fixture.sh
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -86,9 +76,18 @@ make_branch_reachable_from_origin_main() {
         git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main)
 }
 
-# Create a stub AGENTS_CONFIG_DIR at $1 with is-github-dotcom-remote (exits 0).
-make_stub_agents_dir() {
+# Copy the sweep entrypoint and the modules it sources into the checkout fixture $1.
+# The sweep finds bin/is-github-dotcom-remote from its own path, so a stubbed guard
+# is reached only when the sweep is launched from this copy ($1/bin/sweep-branches.sh).
+copy_sweep_into() {
+    script_checkout_fixture_copy "$1" \
+        bin/sweep-branches.sh bin/sweep-branches bin/lib/sweep-write-mode.sh
+}
+
+# Create a stub checkout at $1: the sweep copy plus is-github-dotcom-remote (exits 0).
+make_stub_checkout() {
     local stubdir="$1"
+    copy_sweep_into "$stubdir"
     mkdir -p "$stubdir/bin"
     cat > "$stubdir/bin/is-github-dotcom-remote" <<'STUB'
 #!/bin/bash

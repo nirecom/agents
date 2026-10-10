@@ -12,13 +12,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-MEV="$AGENTS_DIR/skills/issue-create/scripts/make-empty-verdict.sh"
-RS="$AGENTS_DIR/bin/github-issues/review-survey-verdict-codex.sh"
-WORKER_MD="$AGENTS_DIR/agents/issue-create-survey-worker.md"
-CASCADE_MD="$AGENTS_DIR/skills/_shared/issue-verdict-cascade.md"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+MEV="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/scripts/make-empty-verdict.sh"
+RS="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/review-survey-verdict-codex.sh"
+WORKER_MD="$SCRIPT_CHECKOUT_ROOT/agents/issue-create-survey-worker.md"
+CASCADE_MD="$SCRIPT_CHECKOUT_ROOT/skills/_shared/issue-verdict-cascade.md"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

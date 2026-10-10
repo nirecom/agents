@@ -20,7 +20,7 @@ set -u
 # - The pre-push hook, which inherits the socket by construction (see arms.sh).
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BRANCH="feature/tl3-ssh-transport-probe"
 
 # Exit contract: FAIL>0 -> 1; INCONCLUSIVE!=0 or PROVEN<REQUIRED -> 77; else 0.
@@ -56,8 +56,8 @@ nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else e
 GATE_OK=1; GATE_REASON=""
 gate_unmet() { GATE_OK=0; [ -n "$GATE_REASON" ] || GATE_REASON="$1"; }
 
-if [ -x "$AGENTS_DIR/bin/get-config-var" ]; then
-    if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then gate_unmet "RUN_TL3 is off"; fi
+if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
+    if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then gate_unmet "RUN_TL3 is off"; fi
 else
     gate_unmet "bin/get-config-var is not executable"
 fi

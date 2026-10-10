@@ -8,7 +8,7 @@ B1_all_scripts_accept_dry_run() {
         [[ -z "${name// /}" || "$name" =~ ^[[:space:]]*# ]] && continue
         name="${name//[[:space:]]/}"
         relpath="${relpath//[[:space:]]/}"
-        script="$AGENTS_DIR/$relpath"
+        script="$SCRIPT_CHECKOUT_ROOT/$relpath"
         if [ ! -f "$script" ]; then
             fail "B1 $name: $relpath not found"
             continue
@@ -36,7 +36,7 @@ TABLE
 # tests/bin/fix-1576-audit-tests-apply.sh TC5.
 B1b_audit_tests_common_accepts_apply() {
     local out rc
-    out="$(run_with_timeout bash "$AGENTS_DIR/bin/audit-tests-common.sh" --apply --help 2>&1)"
+    out="$(run_with_timeout bash "$SCRIPT_CHECKOUT_ROOT/bin/audit-tests-common.sh" --apply --help 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ] && ! echo "$out" | grep -qi 'apply is not supported'; then
         pass "B1b audit-tests-common accepts --apply (write-mode class member)"
@@ -52,7 +52,7 @@ B1b_audit_tests_common_accepts_apply() {
 B2_sweep_plans_footer_follows_mode() {
     local plans_dir="$TMPDIR_BASE/b2-plans"
     mkdir -p "$plans_dir"
-    local sweep="$AGENTS_DIR/bin/sweep-plans.sh"
+    local sweep="$SCRIPT_CHECKOUT_ROOT/bin/sweep-plans.sh"
 
     local out_default out_dry
     out_default="$(WORKFLOW_PLANS_DIR="$plans_dir" run_with_timeout bash "$sweep" 2>&1)"
@@ -81,10 +81,10 @@ B3_audit_tests_dry_run_writes_nothing() {
     git -C "$repo" config user.email t@example.com
     git -C "$repo" config user.name t
     git -C "$repo" config core.autocrlf false
-    cp "$AGENTS_DIR/bin/audit-tests.sh" "$repo/bin/audit-tests.sh"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/audit-tests.sh" "$repo/bin/audit-tests.sh"
     mkdir -p "$repo/bin/lib"
-    cp "$AGENTS_DIR"/bin/lib/*.sh "$repo/bin/lib/"
-    cp -r "$AGENTS_DIR/bin/lib/test-retire-predicate" "$repo/bin/lib/"
+    cp "$SCRIPT_CHECKOUT_ROOT"/bin/lib/*.sh "$repo/bin/lib/"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-retire-predicate" "$repo/bin/lib/"
     printf '#!/bin/bash\n' > "$repo/tests/feature-100-stale.sh"
     git -C "$repo" add -A
     GIT_AUTHOR_DATE="2020-01-01T00:00:00Z" GIT_COMMITTER_DATE="2020-01-01T00:00:00Z" \
@@ -110,13 +110,13 @@ _b4_run() {
     # $1 fixture tag, $2... extra flags → echoes the sweep stdout
     local tag="$1"; shift
     local repo="$TMPDIR_BASE/b4-$tag"
-    local stubdir="$TMPDIR_BASE/b4-$tag-agents"
+    local fake_script_checkout_root="$TMPDIR_BASE/b4-$tag-agents"
     local ghdir="$TMPDIR_BASE/b4-$tag-gh"
     local origin="$repo.origin.git"
     local stale_epoch="1577836800"   # 2020-01-01 UTC
 
     mkdir -p "$repo" "$ghdir"
-    make_stub_agents_dir "$stubdir"
+    make_fake_script_checkout "$fake_script_checkout_root"
     git -c init.defaultBranch=main init -q "$repo"
     git -C "$repo" config user.email t@example.com
     git -C "$repo" config user.name t
@@ -142,8 +142,8 @@ esac
 GHSTUB
     chmod +x "$ghdir/gh"
 
-    (cd "$repo" && PATH="$ghdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" SWEEP_AGE_DAYS=1 \
-        run_with_timeout bash "$AGENTS_DIR/bin/sweep-branches.sh" --delete-no-pr --ci-mode "$@" 2>&1)
+    (cd "$repo" && PATH="$ghdir:$PATH" SWEEP_AGE_DAYS=1 \
+        run_with_timeout bash "$fake_script_checkout_root/bin/sweep-branches.sh" --delete-no-pr --ci-mode "$@" 2>&1)
 }
 
 B4_delete_no_pr_alone_is_destructive() {
@@ -170,7 +170,7 @@ B4_delete_no_pr_alone_is_destructive() {
 # B5. sweep-worktrees.sh run to completion (CPR-ORTH: same standard as its
 #     siblings in B2/B3/B4) — a --help-only smoke check cannot observe the
 #     write/no-write asymmetry, which is the entire point of the inversion.
-#     WORKTREE_BASE_DIR and AGENTS_CONFIG_DIR both point at throwaway temp dirs
+#     WORKTREE_BASE_DIR points at a throwaway temp dir
 #     and --skip-gh-check drops the network dependency, so the real
 #     ~/git/worktrees registry can never be an input.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -199,11 +199,8 @@ _b5_fixture() {
 # _b5_run <repo> <wtbase> [extra flags] — echoes the CI-mode JSON summary.
 _b5_run() {
     local repo="$1" wtbase="$2"; shift 2
-    local stubdir="$wtbase/../agents-stub"
-    mkdir -p "$stubdir"
-    make_stub_agents_dir "$stubdir"
-    (cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" WORKTREE_BASE_DIR="$wtbase" \
-        run_with_timeout bash "$AGENTS_DIR/bin/sweep-worktrees.sh" \
+    (cd "$repo" && WORKTREE_BASE_DIR="$wtbase" \
+        run_with_timeout bash "$SCRIPT_CHECKOUT_ROOT/bin/sweep-worktrees.sh" \
         --ci-mode --skip-gh-check --min-age-hours 0 "$@" 2>&1)
 }
 

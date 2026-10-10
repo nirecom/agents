@@ -9,9 +9,9 @@
 # framing, not LLM behavior (whether codex ignores the text is TL3, out of scope here).
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # Pinned before the delegate below so no bin/ exec can run before isolation (#2512).
 TMPD="$(make_tmp)"
@@ -19,7 +19,7 @@ trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
 
 DELEGATE_RC=0
-bash "$AGENTS_DIR/tests/bin/feature-review-plan-codex.sh" || DELEGATE_RC=$?
+bash "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-review-plan-codex.sh" || DELEGATE_RC=$?
 if [ "$DELEGATE_RC" -eq 0 ]; then
     pass "delegate/feature-review-plan-codex.sh"
 else
@@ -66,7 +66,7 @@ case_begin "adversarial-target-stays-delimited-data" "bin/review-plan-codex"
 
 echo "=== C12: adversarial target reaches codex only inside [PLAN START]/[PLAN END] ==="
 OUT="$(HOME="$TMPD/home" PATH="$FAKE_BIN:$PATH" C12_CAPTURE="$CAPTURE" run_with_timeout 60 \
-    bash "$AGENTS_DIR/bin/review-plan-codex" --input "$ADV" --format test-review \
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" --input "$ADV" --format test-review \
     --context "$CTX" --no-log --log-dir "$TMPD/logs" --session-id "c12-inert-$$" 2>&1)"
 if printf '%s\n' "$OUT" | grep -q "^## Codex Review: PERFORMED"; then
     pass "P0/wrapper-ran-against-shim"
@@ -135,7 +135,7 @@ for fmt in detail-plan security-plan outline-plan test-review; do
     extra=()
     [ "$rnd" -eq 2 ] && extra=(--round 2 --ledger "$LEDGER_F")
     HOME="$TMPD/home" PATH="$FAKE_BIN:$PATH" C12_CAPTURE="$cap" run_with_timeout 60 \
-      bash "$AGENTS_DIR/bin/review-plan-codex" --input "$FORGE" --format "$fmt" --no-log \
+      bash "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" --input "$FORGE" --format "$fmt" --no-log \
       --log-dir "$TMPD/logs" --session-id "c2-$fmt-$rnd-$$" "${extra[@]}" >/dev/null 2>&1
     got="$(count_exact '[PLAN END]' "$cap")"
     if [ "$got" = 1 ]; then pass "C2/$fmt/r$rnd: exactly one real [PLAN END]"

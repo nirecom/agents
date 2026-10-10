@@ -21,12 +21,12 @@
 # SKILL.md, and the schema arrays are require()d from the module (agents-owned code, not
 # contributor-editable data, so require is the honest reader here). Nothing is restated as a
 # literal, which is why adding a value to either side turns this red instead of silently
-# widening the gap. Assumes AGENTS_DIR, TMPDIR_BASE, SR_SKILL, pass(), fail() from the entry.
+# widening the gap. Assumes SCRIPT_CHECKOUT_ROOT, TMPDIR_BASE, SR_SKILL, pass(), fail() from the entry.
 
 echo ""
 echo "=== S12: the SKILL.md enum tables and the schema arrays are the same set ==="
 
-EC_SCHEMA="$AGENTS_DIR/hooks/lib/supervisor-state-schema.js"
+EC_SCHEMA="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-schema.js"
 
 if [ ! -f "$SR_SKILL" ] || [ ! -f "$EC_SCHEMA" ]; then
     fail "S12: IMPLEMENTATION MISSING: ${SR_SKILL:-<unset>} or hooks/lib/supervisor-state-schema.js"

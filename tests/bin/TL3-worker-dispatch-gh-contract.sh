@@ -19,9 +19,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v gh >/dev/null 2>&1 || exit 77
 
 PASS=0
@@ -92,7 +92,7 @@ fi
 # ---------------------------------------------------------------------------
 # (d) the source of truth must not have reintroduced --page
 # ---------------------------------------------------------------------------
-WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/issue-reconcile.js"
+WORKER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-reconcile.js"
 if [ ! -f "$WORKER_JS" ]; then
     fail "gh/source-no-page-flag — implementation missing: bin/worker-dispatch/workers/issue-reconcile.js"
 else

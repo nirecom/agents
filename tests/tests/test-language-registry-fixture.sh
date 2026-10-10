@@ -8,11 +8,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=../lib/test-language-registry-fixture.sh
-. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
 
 WORK="$(make_tmp)"
 trap 'rm -rf "$WORK"' EXIT
@@ -38,7 +38,7 @@ case_begin "registered-part-outside-parts-dir-copied" "tests/lib/test-language-r
 missing=""
 while IFS= read -r rel; do
   [ -f "$DEF/$rel" ] || missing="$missing $rel"
-done < <(grep -o '"file"[[:space:]]*:[[:space:]]*"[^"]*"' "$AGENTS_DIR/hooks/lib/test-language-registry.json" \
+done < <(grep -o '"file"[[:space:]]*:[[:space:]]*"[^"]*"' "$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.json" \
   | sed 's/.*"\([^"]*\)"$/\1/')
 assert_eq "missing=[${missing# }]" "missing=[]"
 case_end

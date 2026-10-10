@@ -54,12 +54,12 @@
 
 # ── 7 historical false positives (#1568 #1533 #1457 #1449 #1385 #1191, PR #1612)
 "gh issue create --title T --body \"line1\nline2\nline3\""
-"ISSUE_CREATE_SKILL=1 bash \"/acd/bin/github-issues/dispatch.sh\" --body \"line1\nline2\""
+"ISSUE_CREATE_SKILL=1 bash \"/script-checkout-root/bin/github-issues/dispatch.sh\" --body \"line1\nline2\""
 "gh issue create --body $'it'\\''s fine'"
 "bash skills/review-code-security/scripts/run-quality-gates.sh"
 "bash -c 'node bin/workflow/read-complexity-evaluation --session sid'"
 "ISSUE_CREATE_SKILL=1 bash \"dispatch.sh\""
-"eval \"$(AGENTS_CONFIG_DIR=\"/acd\" FINALIZE_SCRIPTS_DIR=\"/acd/skills/issue-close-finalize/scripts\" node \"/acd/skills/issue-close-finalize/scripts/run-loop-step.js\" \"/plans/s.json\" \"accept|evil\")\""
+"eval \"$(AGENTS_MAIN_ROOT=\"/script-checkout-root\" FINALIZE_SCRIPTS_DIR=\"/script-checkout-root/skills/issue-close-finalize/scripts\" node \"/script-checkout-root/skills/issue-close-finalize/scripts/run-loop-step.js\" \"/plans/s.json\" \"accept|evil\")\""
 
 # ── the mandatory 14-case span table (tests/unit-quote-spans/structure.sh) ──
 "$(printf ')'; rm -rf x)"

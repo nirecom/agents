@@ -2,28 +2,19 @@
 # tests/bin/feat-1761-reopen-note-guard/dispatch-routing.sh
 # Tests: bin/github-issues/issue-create-dispatch.sh, bin/github-issues/reopen-with-update.sh
 # Tags: issue-create, verdict, dispatch, reopen-note, routing, table-driven, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - The real GitHub comment body after a live reopen (needs a token + network).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-#
-# Split out of tests/bin/feat-1761-reopen-note-guard.sh (rules/coding/file-split.md
-# Pattern A). That file asserts what reopen-with-update.sh DOES with a note. This file
-# asserts how the note GETS there — the dispatcher's routing.
-#
-# Why executing beats grepping: the sibling file pins the routing with a source grep
-# for `--note` and a `reopen-with-update.sh "$TARGET"` pattern. A grep cannot tell
-# whether the flag is parsed, whether the value survives quoting, or — the case that
-# actually matters — whether the note also leaks into a branch it has no business
-# reaching. `--note` is only meaningful for `reopen`: it explains why an already-closed
-# issue is being brought back. Attached to sub-of or make-parent it would post an
-# explanation for a decision that was never made, on an issue someone else owns.
+# TL3 gap: the real GitHub comment body after a live reopen (token + network).
+# Mitigation: WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
+# Split out of tests/bin/feat-1761-reopen-note-guard.sh, which asserts what
+# reopen-with-update.sh DOES with a note; this file asserts the dispatcher's routing.
+# Executed, not grepped: a source grep cannot tell whether `--note` is parsed, survives
+# quoting, or leaks into a branch other than `reopen` — on sub-of / make-parent it
+# would post an explanation for a decision never made, on someone else's issue.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-DISPATCH="$AGENTS_DIR/bin/github-issues/issue-create-dispatch.sh"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+DISPATCH="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-dispatch.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -36,8 +27,8 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 MOCKDIR="$WORK/bin"; mkdir -p "$MOCKDIR"
 
-# The dispatcher resolves reopen-with-update.sh (and parent-ancestor-reopen.sh) from
-# `dirname "${BASH_SOURCE[0]}"`, and issue-create.sh from $AGENTS_CONFIG_DIR. So the
+# The dispatcher resolves reopen-with-update.sh, parent-ancestor-reopen.sh and
+# issue-create.sh from its own directory (`dirname "${BASH_SOURCE[0]}"`). So the
 # script under test is run from a mirror tree: a byte-identical copy of the real
 # dispatcher, surrounded by recording shims instead of the real downstream scripts.
 # Nothing about the dispatcher itself is stubbed — only what it hands off to.
@@ -76,7 +67,6 @@ run_dispatch() {
     : > "$LOG"
     [ "$DISPATCH_PRESENT" = "yes" ] || { DRC=127; return; }
     ARGV_LOG="$LOG" PATH="$MOCKDIR:$PATH" \
-    AGENTS_CONFIG_DIR="$WORK/root" \
         "$RWT" 30 bash "$DISPATCH_COPY" "$@" >"$WORK/$case.out" 2>"$WORK/$case.err"
     DRC=$?
 }

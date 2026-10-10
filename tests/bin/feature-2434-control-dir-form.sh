@@ -10,18 +10,18 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-WCD_CLI="$AGENTS_DIR/bin/workflow-control-dir"
-SAFE_LIB="$AGENTS_DIR/bin/lib/safe-state-path.sh"
+WCD_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir"
+SAFE_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/safe-state-path.sh"
 SID="aabbccdd-1111-2222-3333-444455556666"
 RND="detail-plan-round-number.txt"
 LEDGER="review-security-shared-concern-ledger.txt"
 
-unset CONTROL_MIGRATION_FAULT AGENTS_CONFIG_DIR CLAUDE_TRANSCRIPT_BASE_DIR 2>/dev/null || true
+unset CONTROL_MIGRATION_FAULT AGENTS_MAIN_ROOT CLAUDE_TRANSCRIPT_BASE_DIR 2>/dev/null || true
 ROOT_TMP="$(make_tmp)"
 trap 'rm -rf "$ROOT_TMP"' EXIT
 cd "$ROOT_TMP" || exit 1

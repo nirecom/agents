@@ -6,8 +6,8 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PROFILE="$AGENTS_DIR/profile-snippet.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PROFILE="$SCRIPT_CHECKOUT_ROOT/profile-snippet.sh"
 PASS=0
 FAIL=0
 

@@ -280,7 +280,7 @@ To confirm hooks fire in Copilot, add a diagnostic tee to one hook temporarily:
 ```json
 {
   "type": "command",
-  "command": "node \"$AGENTS_CONFIG_DIR/hooks/scan-outbound.js\" | tee /tmp/hook-input.log"
+  "command": "node \"$AGENTS_MAIN_ROOT/hooks/scan-outbound.js\" | tee /tmp/hook-input.log"
 }
 ```
 

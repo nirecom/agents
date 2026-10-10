@@ -25,16 +25,16 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 #   OUTFILE generation and end-to-end ingest; agents/supervisor.md single-shot protocol in
 #   a live claude -p session. Mitigation: WORKFLOW_USER_VERIFIED preflight (hook-registration).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-FINDINGS_CODEX="$AGENTS_DIR/bin/supervisor-findings-codex"
-WRITE_ALERT="$AGENTS_DIR/bin/supervisor-write-alert"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
+FINDINGS_CODEX="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-findings-codex"
+WRITE_ALERT="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-alert"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -84,7 +84,7 @@ run_alert_status_skipped() {
     sid="cg-alert-$$"
 
     # Force codex-unavailable via a PATH that has no 'codex'.
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" PATH="/usr/bin:/bin" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" PATH="/usr/bin:/bin" \
         run_with_timeout 20 bash "$FINDINGS_CODEX" --mode alert --sid "$sid" --wsid UNAVAILABLE 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -123,7 +123,7 @@ run_audit_status_skipped() {
     tmp=$(make_tmp); tmp_node="$(to_node_path "$tmp")"
     sid="cg-audit-$$"
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" PATH="/usr/bin:/bin" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" PATH="/usr/bin:/bin" \
         run_with_timeout 20 bash "$FINDINGS_CODEX" --mode audit --sid "$sid" --wsid UNAVAILABLE 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -166,7 +166,7 @@ run_integration_no_outfile_no_ingest() {
 
     WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const s = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
+const s = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert.findings = [{ categories:['workflow'], severity:'notice', detail:'pre-existing', reporter:'test', timestamp:new Date().toISOString() }];
@@ -175,7 +175,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(st))
 
     before=$(alert_findings_len "$tmp_node" "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" PATH="/usr/bin:/bin" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" PATH="/usr/bin:/bin" \
         run_with_timeout 20 bash "$FINDINGS_CODEX" --mode alert --sid "$sid" --wsid UNAVAILABLE 2>/dev/null)
 
     # Orchestrator linkage: ingest ONLY when an OUTFILE line was printed.
@@ -218,7 +218,7 @@ run_ingest_happy() {
 
     WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const s = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
+const s = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js');
 const fs = require('fs');
 fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(s.createEmptyState('$sid')));
 " >/dev/null 2>&1
@@ -284,7 +284,7 @@ run_ingest_zero_record() {
 
     WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const s = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
+const s = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert.findings = [{ categories:['workflow'], severity:'notice', detail:'pre-existing', reporter:'test', timestamp:new Date().toISOString() }];
@@ -334,7 +334,7 @@ run_ingest_malformed() {
 
     WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const s = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
+const s = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js');
 const fs = require('fs');
 fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }), JSON.stringify(s.createEmptyState('$sid')));
 " >/dev/null 2>&1
@@ -386,7 +386,7 @@ run_ingest_mutual_exclusion() {
 
     WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const s = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
+const s = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
 st.alert.findings = [{ categories:['workflow'], severity:'warning', detail:'pre', reporter:'test', status:'draft', idx:0, timestamp:new Date().toISOString() }];

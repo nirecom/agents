@@ -12,7 +12,7 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
@@ -27,7 +27,7 @@ run_with_timeout() {
 # The operational doc must reference the primitive, never restate this rule (C4).
 GUIDANCE_SENTINEL="does not suppress"
 
-CALIB_DOC="$AGENTS_DIR/agents/lib/nfr-severity-calibration.md"
+CALIB_DOC="$SCRIPT_CHECKOUT_ROOT/agents/lib/nfr-severity-calibration.md"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -82,25 +82,25 @@ assert_lacks "T2223CO-4-calib-doc-does-not-restate-guidance" "$CALIB_DOC" "$GUID
 
 # --- Reviewers: reference + Bash (CPR-ORTH over the 4 read-only reviewers) ------
 for reviewer in outline-reviewer detail-reviewer plan-security-reviewer test-reviewer; do
-    f="$AGENTS_DIR/agents/$reviewer.md"
+    f="$SCRIPT_CHECKOUT_ROOT/agents/$reviewer.md"
     assert_has        "T2223CO-5-$reviewer-refs-calib-doc" "$f" "nfr-severity-calibration.md"
     assert_tools_has  "T2223CO-6-$reviewer-tools-has-bash" "$f" "Bash"
 done
 
 # --- security-scanner: reference added; Bash was already present (regression) ---
-SCANNER="$AGENTS_DIR/agents/security-scanner.md"
+SCANNER="$SCRIPT_CHECKOUT_ROOT/agents/security-scanner.md"
 assert_has       "T2223CO-7-security-scanner-refs-calib-doc" "$SCANNER" "nfr-severity-calibration.md"
 assert_tools_has "T2223CO-8-security-scanner-tools-has-bash" "$SCANNER" "Bash"
 
 # --- Planners: reference the shared doc -----------------------------------------
 for planner in outline-planner detail-planner; do
-    f="$AGENTS_DIR/agents/$planner.md"
+    f="$SCRIPT_CHECKOUT_ROOT/agents/$planner.md"
     assert_has "T2223CO-9-$planner-refs-calib-doc" "$f" "nfr-severity-calibration.md"
 done
 
 # --- write-code / write-tests SKILLs: OPTIONAL NFR bullet -----------------------
-assert_has "T2223CO-10-write-code-optional-nfr" "$AGENTS_DIR/skills/write-code/SKILL.md" "nfr-severity-calibration"
-assert_has "T2223CO-11-write-tests-optional-nfr" "$AGENTS_DIR/skills/write-tests/SKILL.md" "nfr-severity-calibration"
+assert_has "T2223CO-10-write-code-optional-nfr" "$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md" "nfr-severity-calibration"
+assert_has "T2223CO-11-write-tests-optional-nfr" "$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md" "nfr-severity-calibration"
 
 # --- C5: the shared primitive every consumer depends on must be callable --------
 # The reference checks above prove each consumer POINTS at the doc; this proves the
@@ -108,16 +108,16 @@ assert_has "T2223CO-11-write-tests-optional-nfr" "$AGENTS_DIR/skills/write-tests
 # whose .env.local declares PROJECT_NFR, must emit that NFR (RED until it exists).
 CO_CFG="$TMP_ROOT/cfg"
 mkdir -p "$CO_CFG/bin"
-cp -R "$AGENTS_DIR/bin/lib" "$CO_CFG/bin/lib" 2>/dev/null || true
+cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$CO_CFG/bin/lib" 2>/dev/null || true
 : > "$CO_CFG/.env"
 CO_PROJ="$TMP_ROOT/proj"
 mkdir -p "$CO_PROJ/.git"
 CO_NFR="NFRSENTINEL2223CONSUMERS"
 printf 'PROJECT_NFR=%s consumer-callability\n' "$CO_NFR" > "$CO_PROJ/.env"".local"
 CO_OUT="$TMP_ROOT/cli-out.txt"
-AGENTS_CONFIG_DIR="$CO_CFG" run_with_timeout 30 \
-    bash "$AGENTS_DIR/bin/project-nfr-block" "$CO_PROJ" > "$CO_OUT" 2>/dev/null || true
-if [[ -f "$AGENTS_DIR/bin/project-nfr-block" ]]; then pass "T2223CO-12-cli-exists"
+AGENTS_MAIN_ROOT="$CO_CFG" run_with_timeout 30 \
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/project-nfr-block" "$CO_PROJ" > "$CO_OUT" 2>/dev/null || true
+if [[ -f "$SCRIPT_CHECKOUT_ROOT/bin/project-nfr-block" ]]; then pass "T2223CO-12-cli-exists"
 else fail "T2223CO-12-cli-exists — bin/project-nfr-block does not exist"; fi
 assert_has "T2223CO-13-cli-emits-nfr" "$CO_OUT" "$CO_NFR"
 

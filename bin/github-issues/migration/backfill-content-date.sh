@@ -15,17 +15,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/state.sh"
 
-REPO_DIR="${1:?usage: backfill-content-date.sh <repo_dir>}"
-REPO_DIR="$(cd "$REPO_DIR" && pwd)"
+TARGET_CHECKOUT_ROOT="${1:?usage: backfill-content-date.sh <repo_dir>}"
+TARGET_CHECKOUT_ROOT="$(cd "$TARGET_CHECKOUT_ROOT" && pwd)"
 
 : "${MIGRATE_PROJECT_ID:?MIGRATE_PROJECT_ID must be set (Projects v2 node id)}"
 : "${MIGRATE_FIELD_ID:?MIGRATE_FIELD_ID must be set (Content Date field id)}"
 : "${MIGRATE_PROJECT_NUM:?MIGRATE_PROJECT_NUM must be set (project number)}"
 
-state_load "$REPO_DIR"
+state_load "$TARGET_CHECKOUT_ROOT"
 
-OWNER=$(cd "$REPO_DIR" && gh repo view --json owner --jq .owner.login)
-REPO_NAME=$(cd "$REPO_DIR" && gh repo view --json name --jq .name)
+OWNER=$(cd "$TARGET_CHECKOUT_ROOT" && gh repo view --json owner --jq .owner.login)
+REPO_NAME=$(cd "$TARGET_CHECKOUT_ROOT" && gh repo view --json name --jq .name)
 REPO_SLUG="${OWNER}/${REPO_NAME}"
 
 migrated_numbers=$(jq_text '.history.migrated[].issue_number' "$STATE_FILE")

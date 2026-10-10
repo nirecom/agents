@@ -2,16 +2,11 @@
 # tests/bin/fix-1899-origin-repo-resolver/resolver-contract.sh
 # Tests: bin/github-issues/lib/origin-repo.sh, bin/github-issues/lib/resolve-project.sh
 # Tags: origin-resolution, github-issues, resolve-project, module-contract, TL2, scope:issue-specific
-#
 # Group C of the fix-1899-origin-repo-resolver split suite — the module-level
 # contract of origin-repo.sh, independent of any single URL shape.
-#
-# Why: the resolver is SOURCED by several callers and invoked repeatedly within
-# one skill run, so it must be side-effect free (same answer on every call),
-# default its <dir> argument to the current working directory, and stay free of
-# the two implementation choices #1899 rejected — shelling out to `sed` for
-# extraction, and consulting `gh repo view` for identity.
-#
+# Why: the resolver is SOURCED by several callers and invoked repeatedly in one
+# skill run, so it must be side-effect free, default <dir> to the cwd, and stay
+# free of the two choices #1899 rejected — `sed` extraction and `gh repo view`.
 # TL2 (real git fixtures, real bash). TL3 gap: no real GitHub API round-trip.
 # Mitigated at WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh).
 
@@ -71,7 +66,7 @@ group_resolver_properties() {
     # "gh repo view failed" rc=1 branch, and a stale doc string must not
     # masquerade as a live call.
     local resolve_project_lib
-    resolve_project_lib="$AGENTS_DIR/bin/github-issues/lib/resolve-project.sh"
+    resolve_project_lib="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh"
     if [ ! -f "$resolve_project_lib" ]; then
         fail "resolve-project/no-gh-repo-view — cannot check, $resolve_project_lib missing"
     elif grep -v '^[[:space:]]*#' "$resolve_project_lib" | grep -q 'gh repo view'; then
@@ -84,21 +79,12 @@ group_resolver_properties() {
 # ===========================================================================
 # Group C2 — the ERROR side of the contract: every way the resolver can be
 #   handed something that is not a resolvable github.com checkout.
-#
-#   Why this is its own group: resolve-origin.sh's table drives the resolver
-#   through fixtures that are always REAL git repositories with a REAL origin
-#   URL, so the failure modes that come from the ENVIRONMENT rather than from the
-#   URL — a directory that is not a git repo, a directory that does not exist,
-#   a repo with no HEAD — were never exercised. Each of them makes
-#   `git remote get-url origin` itself fail, and the resolver must answer rc 1
-#   with EMPTY stdout rather than printing a partial or stale value.
-#
-#   Every case additionally asserts that NO `gh` process was started. The
-#   resolver is the layer #1899 introduced specifically so identity stops being
-#   an API question; a future edit that "falls back to `gh repo view` when git
-#   cannot answer" would restore the defect on exactly these paths, where it is
-#   least likely to be noticed. A recording stub ahead of the real `gh` on PATH
-#   makes that observable.
+#   resolve-origin.sh's table only uses REAL repos with a REAL origin URL, so the
+#   ENVIRONMENT failures — not a git repo, a missing directory, a repo with no
+#   HEAD — were never exercised. Each makes `git remote get-url origin` fail, and
+#   the resolver must answer rc 1 with EMPTY stdout, never a partial or stale value.
+#   Every case also asserts NO `gh` process started (recording stub first on PATH):
+#   a "fall back to `gh repo view`" edit would restore #1899 on exactly these paths.
 # ===========================================================================
 mk_recording_gh() {
     local bindir="$TMP/gh-recorder"
@@ -192,31 +178,16 @@ group_resolver_guards() {
 }
 
 # ===========================================================================
-# Group C3 — the resolver reads `origin` EXACTLY ONCE, so the bytes it parses
-#   and the bytes it classifies are provably the same bytes.
-#
-#   Why: resolve_origin_owner_repo() used to run `git -C "$dir" remote get-url
-#   origin` itself (for the owner/repo parse) and then hand the DIRECTORY to
-#   bin/is-github-dotcom-remote, which performed its OWN independent
-#   `git -C "$DIR" remote get-url origin` to classify the host. Two subprocesses,
-#   two reads, no guarantee they agree — a credential helper, an `insteadOf`
-#   rewrite, or an interleaved `git remote set-url` can make the second answer
-#   differ from the first, and the owner/repo that reaches
-#   `gh api repos/<owner>/<repo>` would then be one no host check ever validated
-#   (#1899). The resolver now reads once and passes the value on via the
-#   classifier's `--url` mode, which closes that window structurally.
-#
-#   The stub below is stateful: it counts `remote get-url origin` invocations and
-#   would answer a 2nd call DIFFERENTLY from the 1st, delegating every other git
-#   subcommand to the real binary. A second read is therefore not merely counted,
-#   it is loaded — if one ever reappears it changes the answer, so these cases
-#   fail loudly rather than drifting.
+# Group C3 — the resolver reads `origin` EXACTLY ONCE, so the bytes it parses and
+#   classifies are provably the same. It used to parse its own read and let
+#   bin/is-github-dotcom-remote read AGAIN to classify; a credential helper,
+#   `insteadOf` rewrite or racing `git remote set-url` could make them differ and
+#   send an unvalidated owner/repo to `gh api` (#1899). Now: one read, `--url` mode.
 # ===========================================================================
 
-# mk_stateful_git -> echoes a bindir holding a `git` that answers
-#   `remote get-url origin` from $GIT_URL_1 (first call) and $GIT_URL_2
-#   (every later call, which post-fix must never occur), counting calls in
-#   $GIT_CALL_COUNT.
+# mk_stateful_git -> echoes a bindir whose `git` answers `remote get-url origin` from
+#   $GIT_URL_1 (first call) and $GIT_URL_2 (any later call — so a second read changes
+#   the answer, not just the count), counting calls in $GIT_CALL_COUNT; rest -> real git.
 mk_stateful_git() {
     local bindir="$TMP/git-stateful"
     local realgit

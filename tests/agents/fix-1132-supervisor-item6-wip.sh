@@ -11,10 +11,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
-SUPERVISOR_MD="$AGENTS_DIR/agents/supervisor.md"
-RUBRIC="$AGENTS_DIR/skills/_shared/off-legitimacy-rubric.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+SUPERVISOR_MD="$SCRIPT_CHECKOUT_ROOT/agents/supervisor.md"
+RUBRIC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/off-legitimacy-rubric.md"
 
 has() { grep -qiE "$2" "$1" 2>/dev/null; }
 

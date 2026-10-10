@@ -16,11 +16,11 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_FORGE2307_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-LIB_M="$(nodepath "$AGENTS_DIR/hooks/lib")"
+LIB_M="$(nodepath "$SCRIPT_CHECKOUT_ROOT/hooks/lib")"
 # harness.sh supplies case_begin/case_end; the local pass/fail below still win.
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 PASS=0
 FAIL=0
@@ -154,7 +154,7 @@ TABLE
 #   always null. gh is a PATH stub (tests/lib/cli-stub.sh); the real gh is never reached.
 echo ""
 echo "=== V1-V12: codehost repoVisibility (github + stub) ==="
-. "$AGENTS_DIR/tests/lib/cli-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/cli-stub.sh"
 VIS_LOG="$TMPBASE/gh-stub.log"
 VIS_EXPR='(function(){var u=process.env.VIS_URL;return r.resolveCodehostDescriptor(u).repoVisibility(u);})()'
 VIS_GH="https://github.com/test-owner/test-repo.git"

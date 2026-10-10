@@ -68,7 +68,7 @@ else
 fi
 case_end
 
-# C1e: NON-agents repo no-op — a repo whose common-dir does NOT match AGENTS_CONFIG_DIR
+# C1e: NON-agents repo no-op — a repo whose common-dir does NOT match the gates' checkout
 # must have ALL gates skipped even with content that WOULD trip a gate. The whole
 # function shares this guard, so the on-demand gate's no-op is transitively covered
 # here (and directly in cc-pre-commit-on-demand-rules.sh W6); one case suffices.
@@ -84,7 +84,7 @@ run_agents_gates "$OTHER" "$CFG"
 if [ "$GRC" -ne 0 ]; then
     fail "C1e: non-agents no-op" "want rc 0, got $GRC — out: $(printf '%s' "$GOUT" | tr '\n' ' ')"
 elif printf '%s' "$GOUT" | grep -qF "$SID_MSG"; then
-    fail "C1e: non-agents no-op" "a gate fired in a repo whose common-dir does not match AGENTS_CONFIG_DIR"
+    fail "C1e: non-agents no-op" "a gate fired in a repo whose common-dir does not match the gates' checkout"
 else
     pass "C1e: gates are skipped in a non-agents repo even with gate-tripping content"
 fi

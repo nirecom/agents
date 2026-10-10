@@ -5,7 +5,7 @@
 // interpreter body that does. Suffixes are taken from the SSOT
 // (hooks/lib/protected-basenames.js) at runtime, never hardcoded.
 //
-// Modes (argv[2]); AGENTS_DIR comes from argv[3] in every mode:
+// Modes (argv[2]); SCRIPT_CHECKOUT_ROOT comes from argv[3] in every mode:
 //   contract  <agents> <dir>                  deterministic consumeExactFile table
 //   mktoken   <agents> <dir> <sid> <target> <category>   mint a valid bare token
 //   mkmarker  <agents> <dir> <sid> [ageMs]    write an EMERGENCY provenance marker

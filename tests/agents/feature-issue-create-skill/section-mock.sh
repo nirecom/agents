@@ -6,6 +6,14 @@
 # per test so each test gets its own args log and env vars.
 # ---------------------------------------------------------------------------
 
+# Settings root: a fixture with empty private-info lists, so the outbound scan reaches its verdict.
+SETTINGS_FIXTURE="$(mktemp -d)"; readonly SETTINGS_FIXTURE
+trap 'rm -rf "$SETTINGS_FIXTURE"' EXIT
+mkdir -p "$SETTINGS_FIXTURE/agents-main"
+: > "$SETTINGS_FIXTURE/agents-main/.private-info-blocklist"
+: > "$SETTINGS_FIXTURE/agents-main/.private-info-allowlist"
+export AGENTS_MAIN_ROOT="$SETTINGS_FIXTURE/agents-main"
+
 TMP=""
 
 setup_mock() {

@@ -10,6 +10,7 @@
 # TL3 gap (what this test does NOT catch): a change in the real Agent tool_response shape
 # after fixtures/agent-post-payload.json was captured by TL3-hook-agent-jev-shadow.sh.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 fx_new d-adapter
 SID="jev2460-d-sid"
@@ -56,7 +57,7 @@ check "instructions come from the rubric's ### <id> section" "true" "$(row quest
 case_end
 case_begin "d-rubric-has-every-signal" "skills/_shared/judge-task-complexity.md"
 MISSING=""
-for id in ${SIGNAL_CSV//,/ }; do grep -qx "### $id" "$AGENTS_DIR/skills/_shared/judge-task-complexity.md" || MISSING="$MISSING $id"; done
+for id in ${SIGNAL_CSV//,/ }; do grep -qx "### $id" "$SCRIPT_CHECKOUT_ROOT/skills/_shared/judge-task-complexity.md" || MISSING="$MISSING $id"; done
 check "the rubric has a ### section for every signal id" "" "$MISSING"
 case_end
 

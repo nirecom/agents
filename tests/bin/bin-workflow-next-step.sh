@@ -10,8 +10,6 @@
 
 set -euo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
-
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
   exit 77
@@ -28,7 +26,7 @@ mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
 
 # Derive next-step path from the test file's own location so worktree runs
-# test the worktree's next-step rather than the one in $AGENTS_CONFIG_DIR.
+# test the worktree's next-step rather than the one in the main worktree.
 NEXT_STEP_AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin-workflow-next-step"

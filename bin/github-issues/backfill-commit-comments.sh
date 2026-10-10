@@ -1,44 +1,36 @@
 #!/bin/bash
-# backfill-commit-comments.sh [--dry-run] [--canary]
-#
+# backfill-commit-comments.sh [--dry-run] [--canary] [--target-checkout-root <dir>]
 # Retroactive migration: for each closed GitHub issue that lacks an
 # `<!-- issue-close-sentinel: appended -->` comment, post J-1 + J-2 comments
 # to match the format produced by `/issue-close-finalize` in real time.
-#
-# 6-tier hash discovery (priority high → low):
-#   Tier 0a — gh closedByPullRequestsReferences → mergeCommit.oid (single query)
-#   Tier 0b — issue body 内の最初の [0-9a-f]{7,40}（41文字以上の連続 hex は棄却）
-#   Tier 1  — history.md / history/*.md heading bracket hex (7-40 chars)
-#   Tier 1.5 — git log --all --reverse -S "<title>" -- docs/history.md docs/history/
-#   Tier 2  — git log --grep "#N([^0-9]|$)" boundary-safe search
-#   Tier 3  — no-hash (J-2 only, no J-1)
-#
-# --canary: post at most 1 issue per class (max 6 total). Review posted
-#           comments on GitHub, then run without --canary for the full batch.
-#
-# Uses `gh --jq` (built into the gh CLI) — no external jq dependency.
-#
-# Note: -e (errexit) is intentionally omitted so that `grep` no-match exit
-# does not abort the script. Failing commands are guarded individually.
-
+# Hash discovery, high → low: 0a PR merge commit, 0b first hex in the issue body,
+# 1 history heading bracket, 1.5 git log -S "<title>", 2 git log --grep "#N", 3 no hash (J-2 only).
+# --canary: post at most 1 issue per class (max 6 total), then run without it for the full batch.
+# --target-checkout-root: the repository to work on; omitted, the agents main root.
+# -e (errexit) is intentionally omitted so that a `grep` no-match exit does not
+# abort the script; failing commands are guarded individually. Uses `gh --jq`, no jq.
 set -uo pipefail
 
 DRY_RUN=0
 CANARY=0
+TARGET_CHECKOUT_ROOT=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
         --canary)  CANARY=1; shift ;;
+        --target-checkout-root)
+            [ -n "${2:-}" ] || { echo "Error: --target-checkout-root needs a directory" >&2; exit 1; }
+            TARGET_CHECKOUT_ROOT="$2"; shift 2 ;;
         *) echo "Error: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
 
-REPO_DIR="${REPO_DIR:-${AGENTS_CONFIG_DIR:?REPO_DIR or AGENTS_CONFIG_DIR must be set}}"
-REPO_DIR="$(cd "$REPO_DIR" && pwd)"
-HISTORY_FILE="${REPO_DIR}/docs/history.md"
-HISTORY_DIR="${REPO_DIR}/docs/history"
+TARGET_CHECKOUT_ROOT="${TARGET_CHECKOUT_ROOT:-${AGENTS_MAIN_ROOT:?give --target-checkout-root <dir> or set AGENTS_MAIN_ROOT}}"
+TARGET_CHECKOUT_ROOT="$(cd "$TARGET_CHECKOUT_ROOT" && pwd)" || { echo "Error: cannot enter the target checkout root" >&2; exit 1; }
+HISTORY_FILE="${TARGET_CHECKOUT_ROOT}/docs/history.md"
+HISTORY_DIR="${TARGET_CHECKOUT_ROOT}/docs/history"
 # Ensure gh CLI targets the correct repo via the working directory's remote.
-cd "$REPO_DIR"
+cd "$TARGET_CHECKOUT_ROOT"
 
 # Tier 1.5: auto-detect bulk-import commits by counting +### headings added to
 # docs/history.md in a single commit. When the count meets the threshold,
@@ -47,7 +39,7 @@ TIER15_BULK_THRESHOLD="${TIER15_BULK_THRESHOLD:-3}"
 
 is_bulk_history_commit() {
     local h="$1" added
-    added=$(git -C "$REPO_DIR" show --unified=0 --pretty=format: -m "$h" \
+    added=$(git -C "$TARGET_CHECKOUT_ROOT" show --unified=0 --pretty=format: -m "$h" \
         -- docs/history.md docs/history/ 2>/dev/null \
         | grep -c '^+### ' || true)
     [ -z "$added" ] && added=0
@@ -109,7 +101,7 @@ discover_hash_from_history_introducer() {
     title=$(gh issue view "$n" --json title --jq '.title // ""' 2>/dev/null || true)
     [ -z "$title" ] && return 1
     [ "${#title}" -lt 8 ] && return 1
-    line=$(git -C "$REPO_DIR" log --all --reverse --oneline \
+    line=$(git -C "$TARGET_CHECKOUT_ROOT" log --all --reverse --oneline \
         -S "$title" -- docs/history.md docs/history/ 2>/dev/null | head -n 1 || true)
     [ -z "$line" ] && return 1
     hash=$(printf '%s' "$line" | awk '{print $1}')
@@ -121,7 +113,7 @@ discover_hash_from_history_introducer() {
 # Tier 2: boundary-safe git log search. -E + ([^0-9]|$) prevents #42 matching #420.
 discover_hash_from_gitlog() {
     local n="$1" line hash
-    line=$(git -C "$REPO_DIR" log --all --oneline -E \
+    line=$(git -C "$TARGET_CHECKOUT_ROOT" log --all --oneline -E \
         --grep="#${n}([^0-9]|\$)" 2>/dev/null | head -n 1 || true)
     [ -z "$line" ] && return 0
     hash=$(printf '%s' "$line" | awk '{print $1}')

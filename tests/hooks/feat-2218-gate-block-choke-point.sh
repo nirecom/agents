@@ -11,9 +11,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-GATE="$AGENTS_DIR/hooks/workflow-gate.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+GATE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -21,7 +21,7 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 # isolation (#2512): pin state and plans dirs file-wide; the per-call pins below still override them.
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
@@ -32,7 +32,7 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 RECORDER="hooks/workflow-gate/handoff-record.js"
 
 require_module() {
-    if [ -f "$AGENTS_DIR/$1" ]; then return 0; fi
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
     fail "MODULE NOT FOUND: $1 — expected per issue #2218 Step 10, not yet implemented (write_code has not run)"
     return 1
 }
@@ -55,7 +55,7 @@ seed_state() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 writeState('$sid', createInitialState('$sid', { cwd: '/gate/fixture', git_branch: 'feature/gate' }));
 markStep('$sid', 'workflow_init', 'complete');
 " >/dev/null 2>&1
@@ -116,7 +116,7 @@ run_C2() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const { readHandoff, renderHandoffForResume } = require('$AGENTS_DIR_NODE/hooks/lib/handoff-artifact');
+const { readHandoff, renderHandoffForResume } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/handoff-artifact');
 const problems = [];
 const doc = readHandoff('two-sid');
 const all = [].concat.apply([], Object.values(doc.entriesByClass || {})).filter((e) => e.key === 'gate:block');

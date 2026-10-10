@@ -17,7 +17,7 @@ test_N6_run_happy_path() {
     local out
     out="$(lib_eval "
         const r = lib.run({
-            mainRoot: process.argv[1],
+            targetMainRoot: process.argv[1],
             worktreePath: process.argv[2],
             branch: 'feature/n6',
             createdDate: '2024-01-15',
@@ -39,7 +39,7 @@ test_N6_run_happy_path() {
     fi
 }
 
-# ---- N6b: run() writes Main repo line matching mainRoot (forward-slash normalized) ----
+# ---- N6b: run() writes Main repo line matching targetMainRoot (forward-slash normalized) ----
 test_N6b_run_writes_main_repo_line() {
     require_lib "test_N6b_run_writes_main_repo_line" || return
     local main; main="$(setup_main_repo "n6b-main")"
@@ -48,7 +48,7 @@ test_N6b_run_writes_main_repo_line() {
 
     lib_eval "
         lib.run({
-            mainRoot: process.argv[1],
+            targetMainRoot: process.argv[1],
             worktreePath: process.argv[2],
             branch: 'feature/n6b',
             createdDate: '2024-01-15',
@@ -69,7 +69,7 @@ test_N6b_run_writes_main_repo_line() {
     expected_main="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$main_node" 2>/dev/null)"
     if grep -q "^Main repo: ${expected_main}$" "$notes_file" \
        && grep -q "^Session-ID: sess-abc-123$" "$notes_file"; then
-        pass "N6b: run() writes 'Main repo: <forward-slash normalized mainRoot>' and 'Session-ID: sess-abc-123'"
+        pass "N6b: run() writes 'Main repo: <forward-slash normalized targetMainRoot>' and 'Session-ID: sess-abc-123'"
     else
         fail "N6b: expected 'Main repo: ${expected_main}' in $notes_file
 content:
@@ -87,7 +87,7 @@ test_I3_run_idempotent() {
     local out1 out2
     out1="$(lib_eval "
         const r = lib.run({
-            mainRoot: process.argv[1],
+            targetMainRoot: process.argv[1],
             worktreePath: process.argv[2],
             branch: 'feature/i3',
             createdDate: '2024-01-15',
@@ -105,7 +105,7 @@ test_I3_run_idempotent() {
 
     out2="$(lib_eval "
         const r = lib.run({
-            mainRoot: process.argv[1],
+            targetMainRoot: process.argv[1],
             worktreePath: process.argv[2],
             branch: 'feature/i3',
             createdDate: '2024-01-15',

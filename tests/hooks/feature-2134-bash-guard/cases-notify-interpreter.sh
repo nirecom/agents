@@ -26,8 +26,8 @@ l1_interpreter_rows() {
 # Positives: a separator in cmd0 AND (an allow-list entry OR a script extension).
 case_begin "notify-interpreter-allow-list-entry" "install/settings-allow-commands.txt"
 bg_batched_stdin l1_interpreter_rows <<'TABLE'
-agents-config-exec ~ "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
-braced-config-exec ~ "${AGENTS_CONFIG_DIR}/bin/confirm-off" RUN_TL4 on  ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
+agents-config-exec ~ "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
+braced-config-exec ~ "${AGENTS_MAIN_ROOT}/bin/confirm-off" RUN_TL4 on  ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
 TABLE
 case_end
 
@@ -56,7 +56,7 @@ case_end
 # L2: the same relative form WITH a cwd. It resolves to an entry only when the cwd is the
 # agents root -- another repo's `bin/workflow/next-step` is not ours to comment on.
 case_begin "notify-interpreter-cwd" "hooks/lib/allow-command-list.js"
-BG_AGENTS_CWD_JSON="\"$(node_path "$AGENTS_DIR")\""
+BG_AGENTS_CWD_JSON="\"$(node_path "$SCRIPT_CHECKOUT_ROOT")\""
 BG_OTHER_CWD_JSON="\"$(node_path "$TMPROOT")\""
 ROWS=$((ROWS + 1))
 assert_eq "L2a: rel no-ext form with tool_input.cwd = agents root is an L3 notify" \

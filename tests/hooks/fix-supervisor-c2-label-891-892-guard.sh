@@ -6,15 +6,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-WRITER_MODULE="$AGENTS_DIR/hooks/lib/supervisor-state-writer.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
+WRITER_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
 
 # #2434: the final-report-env.json anchor is a control file — <tmp>/wf/<sid>.control/final-report-env.json.
 touch_anchor() { mkdir -p "$1/wf/$2.control"; touch "$1/wf/$2.control/final-report-env.json"; }

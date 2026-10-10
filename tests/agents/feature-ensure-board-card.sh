@@ -1,25 +1,18 @@
 #!/bin/bash
 # Tests: agents/issues/42, bin/gh, bin/github-issues/ensure-board-card.sh, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/origin-repo.sh
 # Tags: github, issues, agent, bin, tests, scope:issue-specific
-# Tests for bin/github-issues/ensure-board-card.sh — Issue #548
-# Ensures a GitHub issue is on Projects v2 board with Content Date set.
-#
-# Inline gh-mock pattern from tests/agents/feature-wip-state.sh.
-#
+# Tests for bin/github-issues/ensure-board-card.sh — Issue #548: ensures a GitHub issue is on
+# the Projects v2 board with Content Date set. Inline gh-mock pattern from tests/agents/feature-wip-state.sh.
 # RED: this suite fails clean while bin/github-issues/ensure-board-card.sh is missing.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the real Projects v2 GraphQL API accepts the Content Date field
-#   mutation this script issues.
-# - Whether a live `gh` invocation resolves origin-derived owner/repo the same
-#   way the inline gh-mock stub does.
+# TL3 gap (what this test does NOT catch): whether the real Projects v2 GraphQL API accepts the
+# Content Date mutation, and whether a live `gh` resolves origin-derived owner/repo as the stub does.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TARGET="$AGENTS_DIR/bin/github-issues/ensure-board-card.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TARGET="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/ensure-board-card.sh"
 
 PASS=0
 FAIL=0
@@ -44,25 +37,16 @@ if [ ! -f "$TARGET" ]; then
     exit 1
 fi
 
-# ---------------------------------------------------------------------------
-# Inline gh mock factory. Mock supports:
-#   - auth status (configurable project scope)
-#   - project item-add (records args; can fail per GH_MOCK_FAIL value)
-#   - project item-edit (records args; can fail per GH_MOCK_FAIL value)
-#   - issue view --json url (URL resolve)
-#   - api graphql (returns mock projectItems id for membership check)
-#
+# Inline gh mock factory: auth status (configurable project scope), project item-add / item-edit
+# (record args; fail per GH_MOCK_FAIL), issue view --json url, api graphql (mock projectItems id).
 # Env knobs:
-#   GH_MOCK_PROJECT_ITEM_ID    item id returned by resolve_item_id graphql query
-#                              (when set: simulates "already in project")
-#                              (when empty/unset: simulates "not in project")
+#   GH_MOCK_PROJECT_ITEM_ID    resolve_item_id result (set: already in project; empty: not in project)
 #   GH_MOCK_ITEM_ADD_ID        item id returned by item-add (default: PVTI_added)
 #   GH_MOCK_FAIL               one of: item-add|item-add-already|item-edit|issue-view
 #   GH_MOCK_ISSUE_URL          URL returned by `gh issue view --json url`
 #   GH_MOCK_MISSING_PROJECT_SCOPE  if "1", auth status omits 'project' scope
 #   GH_MOCK_RESOLVE_AFTER_ADD  item id returned by 2nd resolve_item_id call
 #   GH_MOCK_ARGS_LOG           append-only call log
-# ---------------------------------------------------------------------------
 
 TMP=""
 
@@ -153,8 +137,8 @@ MOCK_EOF
     echo 0 > "$GH_MOCK_RESOLVE_COUNTER_FILE"
 
     # Required env vars (mirrors issue-create.sh / wip-state.sh conventions).
-    export AGENTS_CONFIG_DIR="$TMP/agents-config"
-    mkdir -p "$AGENTS_CONFIG_DIR"
+    export AGENTS_MAIN_ROOT="$TMP/agents-config"
+    mkdir -p "$AGENTS_MAIN_ROOT"
     export ISSUE_CREATE_PROJECT_ID="PVT_kwHOAMF_jc4BXf9E"
     export ISSUE_CREATE_PROJECT_NUM="1"
     export ISSUE_CREATE_OWNER="nirecom"
@@ -172,7 +156,7 @@ teardown_mock() {
           GH_MOCK_RESOLVE_AFTER_ADD GH_MOCK_RESOLVE_COUNTER_FILE \
           GH_MOCK_OWNER_REPO GH_MOCK_CARD_STATUS GH_MOCK_FAIL_STATUS_READ \
           GH_MOCK_STATUS_FIELD_ID 2>/dev/null || true
-    unset AGENTS_CONFIG_DIR ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM \
+    unset AGENTS_MAIN_ROOT ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM \
           ISSUE_CREATE_OWNER EBC_FIELD_ID \
           EBC_PROJECT_NUM 2>/dev/null || true
 }
@@ -205,27 +189,28 @@ fi
 teardown_mock
 
 # ===========================================================================
-# Test 3: Standalone invocation — env -i, no AGENTS_CONFIG_DIR. Must not error
-# on missing AGENTS_CONFIG_DIR (the helper has no .env dependency).
+# Test 3: Standalone invocation — env -i, no AGENTS_MAIN_ROOT. Must not error
+# on missing AGENTS_MAIN_ROOT (the helper has no .env dependency).
 # We expect a non-fatal outcome (exit 0 or exit 1 from gh missing, but not 2).
 # ===========================================================================
 setup_mock
 # Capture variables we need to forward.
 SAVED_PATH="$PATH"
-# Run with a minimal env. Helper must not abort with "AGENTS_CONFIG_DIR unset".
+# Run with a minimal env. Helper must not abort with "AGENTS_MAIN_ROOT unset".
 STDERR_FILE="$TMP/standalone-stderr.log"
-env -i PATH="$SAVED_PATH" HOME="$HOME" \
+# run_with_timeout is a shell function, so it wraps `env -i` (env cannot exec a function).
+run_with_timeout 30 env -i PATH="$SAVED_PATH" HOME="$HOME" \
     ISSUE_CREATE_PROJECT_ID="PVT_kwHOAMF_jc4BXf9E" \
     ISSUE_CREATE_PROJECT_NUM="1" \
     ISSUE_CREATE_OWNER="nirecom" \
     EBC_FIELD_ID="PVTF_contentdate" \
     GH_MOCK_PROJECT_ITEM_ID="PVTI_existing" \
     GH_MOCK_ARGS_LOG="$GH_MOCK_ARGS_LOG" \
-    run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>"$STDERR_FILE"
+    bash "$TARGET" 42 >/dev/null 2>"$STDERR_FILE"
 RC=$?
-# Helper must not exit 2 (preflight-style failure) on missing AGENTS_CONFIG_DIR.
-if [ "$RC" -ne 2 ] && ! grep -qi "AGENTS_CONFIG_DIR" "$STDERR_FILE" 2>/dev/null; then
-    pass "T3: standalone (no AGENTS_CONFIG_DIR) → no preflight failure"
+# Helper must not exit 2 (preflight-style failure) on missing AGENTS_MAIN_ROOT.
+if [ "$RC" -ne 2 ] && ! grep -qi "AGENTS_MAIN_ROOT" "$STDERR_FILE" 2>/dev/null; then
+    pass "T3: standalone (no AGENTS_MAIN_ROOT) → no preflight failure"
 else
     fail "T3: rc=$RC stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
 fi

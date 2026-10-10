@@ -12,13 +12,13 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-_AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
-EMIT_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-emit.js"
-LOADENV_NODE="$_AGENTS_DIR_NODE/hooks/lib/load-env.js"
-CLASSIFIER="$AGENTS_DIR/bin/check-plans-dir-isolation.sh"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+_SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
+EMIT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-emit.js"
+LOADENV_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/load-env.js"
+CLASSIFIER="$SCRIPT_CHECKOUT_ROOT/bin/check-plans-dir-isolation.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -32,7 +32,7 @@ SID="s1799iso"
 
 # ── Fixture builders ────────────────────────────────────────────────────────
 # Every case gets its own sandbox: a pinned plans dir, a decoy "real" plans dir
-# reachable only via HOME/USERPROFILE, and an empty AGENTS_CONFIG_DIR so that
+# reachable only via HOME/USERPROFILE, and an empty AGENTS_MAIN_ROOT so that
 # loadDefaultEnv() can never reach the real repo .env and inject a live path.
 # (os.homedir() reads USERPROFILE on win32 and HOME elsewhere — both are set.)
 new_sandbox() {  # <tag> → echoes "<pinned>|<decoyhome>|<cfgdir>"
@@ -58,7 +58,7 @@ run_emit() {
     local plansval="$1" wfval="$2" home="$3" cfg="$4" js="$5"
     # env(1) requires all options before any NAME=VALUE assignment.
     local -a unsets=() assigns=()
-    assigns+=("HOME=$home" "USERPROFILE=$home" "AGENTS_CONFIG_DIR=$cfg")
+    assigns+=("HOME=$home" "USERPROFILE=$home" "AGENTS_MAIN_ROOT=$cfg")
     if [ "$plansval" = "UNSET" ]; then unsets+=("-u" "WORKFLOW_PLANS_DIR"); else assigns+=("WORKFLOW_PLANS_DIR=$plansval"); fi
     if [ "$wfval" = "UNSET" ]; then unsets+=("-u" "WORKFLOW_STATE_DIR"); else assigns+=("WORKFLOW_STATE_DIR=$wfval"); fi
     env ${unsets[@]+"${unsets[@]}"} "${assigns[@]}" "$RWT" 15 node -e "$js" 2>&1 >/dev/null
@@ -200,7 +200,7 @@ G5_empty_string_is_unset() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# G6 — .env injection. AGENTS_CONFIG_DIR/.env supplies WORKFLOW_PLANS_DIR; neither var is
+# G6 — .env injection. AGENTS_MAIN_ROOT/.env supplies WORKFLOW_PLANS_DIR; neither var is
 #      exported by the caller. The pristine snapshot is empty on both axes → both-unset →
 #      write succeeds. A guard reading live process.env sees PLANS set / WFDIR unset and
 #      wrongly refuses. This is the case a naive implementation fails.
@@ -235,7 +235,7 @@ G6c_pristine_api_shape() {
     local root cfg out
     root="$TMPDIR_BASE/g6c"; cfg="$root/cfg"; mkdir -p "$cfg"
     # WORKFLOW_STATE_DIR="   " (whitespace-only) — must normalize to null.
-    out="$(env -u WORKFLOW_PLANS_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_STATE_DIR=   " \
+    out="$(env -u WORKFLOW_PLANS_DIR "AGENTS_MAIN_ROOT=$cfg" "WORKFLOW_STATE_DIR=   " \
         "$RWT" 15 node -e "
 const m = require('$LOADENV_NODE');
 if (typeof m.getPristineIsolationEnv !== 'function') { process.stdout.write('NOFN'); process.exit(0); }
@@ -253,7 +253,7 @@ process.stdout.write((frozen?'F':'f') + (ws?'W':'w') + (unset?'U':'u'));
 
     # WORKFLOW_PLANS_DIR="   " (whitespace-only) — must normalize to null (CPR-ORTH symmetric).
     root="$TMPDIR_BASE/g6c2"; cfg="$root/cfg"; mkdir -p "$cfg"
-    out="$(env -u WORKFLOW_STATE_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_PLANS_DIR=   " \
+    out="$(env -u WORKFLOW_STATE_DIR "AGENTS_MAIN_ROOT=$cfg" "WORKFLOW_PLANS_DIR=   " \
         "$RWT" 15 node -e "
 const m = require('$LOADENV_NODE');
 if (typeof m.getPristineIsolationEnv !== 'function') { process.stdout.write('NOFN'); process.exit(0); }
@@ -327,7 +327,7 @@ G8e_guard_never_throws() {
     local pinned home cfg pn out
     IFS='|' read -r pinned home cfg <<< "$(new_sandbox g8e)"
     pn="$(node_path "$pinned")"
-    out="$(env -u WORKFLOW_PLANS_DIR "HOME=$home" "USERPROFILE=$home" "AGENTS_CONFIG_DIR=$cfg" \
+    out="$(env -u WORKFLOW_PLANS_DIR "HOME=$home" "USERPROFILE=$home" "AGENTS_MAIN_ROOT=$cfg" \
         "WORKFLOW_STATE_DIR=$pn" \
         "$RWT" 15 node -e "
 const em=require('$EMIT_NODE');
@@ -353,10 +353,10 @@ G8f_isolation_contradiction_exported() {
 if (typeof em.isolationContradiction !== 'function') { process.stdout.write('NOFN'); process.exit(0); }
 process.stdout.write(String(em.isolationContradiction()));"
 
-    both="$(env "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_STATE_DIR=$pn" "WORKFLOW_PLANS_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
-    neither="$(env -u WORKFLOW_STATE_DIR -u WORKFLOW_PLANS_DIR "AGENTS_CONFIG_DIR=$cfg" "$RWT" 15 node -e "$probe" 2>/dev/null)"
-    xor1="$(env -u WORKFLOW_PLANS_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_STATE_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
-    xor2="$(env -u WORKFLOW_STATE_DIR "AGENTS_CONFIG_DIR=$cfg" "WORKFLOW_PLANS_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
+    both="$(env "AGENTS_MAIN_ROOT=$cfg" "WORKFLOW_STATE_DIR=$pn" "WORKFLOW_PLANS_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
+    neither="$(env -u WORKFLOW_STATE_DIR -u WORKFLOW_PLANS_DIR "AGENTS_MAIN_ROOT=$cfg" "$RWT" 15 node -e "$probe" 2>/dev/null)"
+    xor1="$(env -u WORKFLOW_PLANS_DIR "AGENTS_MAIN_ROOT=$cfg" "WORKFLOW_STATE_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
+    xor2="$(env -u WORKFLOW_STATE_DIR "AGENTS_MAIN_ROOT=$cfg" "WORKFLOW_PLANS_DIR=$pn" "$RWT" 15 node -e "$probe" 2>/dev/null)"
 
     if [ "$both:$neither:$xor1:$xor2" = "false:false:true:true" ]; then
         pass "G8f isolationContradiction() truth table: both=false neither=false xor=true"
@@ -399,14 +399,14 @@ G9_classifier_verdicts() {
     mkdir -p "$g9a_dir"
     printf '#!/usr/bin/env bash\n# Tests: hooks/block-history-direct.js\nexport WORKFLOW_STATE_DIR=/tmp/pin\nnode hooks/block-history-direct.js\n' > "$g9a_n"
     printf '#!/usr/bin/env bash\n# Tests: hooks/workflow-gate.js\nexport WORKFLOW_STATE_DIR=/tmp/pin\nnode hooks/workflow-gate.js\n' > "$g9a_w"
-    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$g9a_n" 2>&1)"
+    out="$(cd "$SCRIPT_CHECKOUT_ROOT" && "$RWT" 60 bash "$CLASSIFIER" "$g9a_n" 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ]; then
         pass "G9a N-candidate-only fixture exits 0"
     else
         fail "G9a N-candidate-only fixture exited $rc, want 0: $out"
     fi
-    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$g9a_w" 2>&1)"
+    out="$(cd "$SCRIPT_CHECKOUT_ROOT" && "$RWT" 60 bash "$CLASSIFIER" "$g9a_w" 2>&1)"
     rc=$?
     if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q 'W-candidate'; then
         pass "G9a W-candidate fixture exits 1 with a W-candidate line"
@@ -425,14 +425,14 @@ G9_classifier_verdicts() {
     mkdir -p "$fixture_dir"
     printf '#!/usr/bin/env bash\n# Tests: hooks/workflow-gate.js\nWORKFLOW_STATE_DIR=/tmp/pin WORKFLOW_PLANS_DIR=/tmp/pin node hooks/workflow-gate.js\n' > "$fixture_file"
     printf '#!/usr/bin/env bash\n# Tests: hooks/workflow-gate.js\n%s=/tmp/pin node hooks/workflow-gate.js\n' "$old_tok" > "$old_file"
-    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$fixture_file" 2>&1)"
+    out="$(cd "$SCRIPT_CHECKOUT_ROOT" && "$RWT" 60 bash "$CLASSIFIER" "$fixture_file" 2>&1)"
     rc=$?
     if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -E '^STATE-INLINE-ONLY:' | grep -qF "$(basename "$fixture_file")"; then
         pass "G9b inline-only new-name pins -> rc=1 + STATE-INLINE-ONLY naming the fixture"
     else
         fail "G9b inline-only fixture: want rc=1 + STATE-INLINE-ONLY, got rc=$rc: $out"
     fi
-    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$old_file" 2>&1)"
+    out="$(cd "$SCRIPT_CHECKOUT_ROOT" && "$RWT" 60 bash "$CLASSIFIER" "$old_file" 2>&1)"
     rc=$?
     if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -E '^STATE-UNPINNED:' | grep -qF "$(basename "$old_file")"; then
         pass "G9b a retired-name inline pin is no pin -> rc=1 + STATE-UNPINNED"
@@ -442,7 +442,7 @@ G9_classifier_verdicts() {
 
     # G9c — the fixture launches only hooks/block-history-direct.js, which READS the plans dir
     # (helpers.js tryResolveEnvUnderPlansDir) but never calls appendFinding → N-candidate, rc 0.
-    out="$(cd "$AGENTS_DIR" && "$RWT" 60 bash "$CLASSIFIER" "$n_fixture" 2>&1)"
+    out="$(cd "$SCRIPT_CHECKOUT_ROOT" && "$RWT" 60 bash "$CLASSIFIER" "$n_fixture" 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ] && echo "$out" | grep -F "$(basename "$n_fixture")" | grep -q 'N-candidate'; then
         pass "G9c fixture read-only half-pinned suite classified N-candidate with rc=0"
@@ -455,7 +455,7 @@ G9_classifier_verdicts() {
     # audit has rotted — a new or reverted suite is contaminating the live plans dir again.
     # #2512: the full scan is a gate — exit 0 AND zero violation lines of any label.
     local full full_rc violations
-    full="$(cd "$AGENTS_DIR" && "$RWT" 300 bash "$CLASSIFIER" 2>&1)"
+    full="$(cd "$SCRIPT_CHECKOUT_ROOT" && "$RWT" 300 bash "$CLASSIFIER" 2>&1)"
     full_rc=$?
     violations="$(printf '%s\n' "$full" | grep -E '^(STATE-UNPINNED|STATE-INLINE-ONLY|STATE-PIN-LATE|HALF-PIN-REVERSE|W-candidate|RESIDUAL-TOKEN):' || true)"
     if [ "$full_rc" -eq 0 ] && [ -z "$violations" ]; then

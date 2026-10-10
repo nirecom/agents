@@ -1,6 +1,6 @@
 # tests/hooks/fix-1630-overlay-cross-validation/xv-families.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
-# Tags: worktree, enforce, hook, config-dir, overlay, security, scope:issue-specific
+# Tags: worktree, enforce, hook, agents-main-root, overlay, security, scope:issue-specific
 #
 # #1673 deleted finalize-worker-overlay.js along with the Bash-tool `eval` path
 # it guarded, so the whole file is now BLOCK-only: the XV-* mismatch families
@@ -16,7 +16,7 @@
 #
 # Sourced by tests/hooks/fix-1630-overlay-cross-validation.sh.
 #
-# Fixture variables (XV_REPO / XV_ACD / XV_PLANS / XV_OTHER / XV_SIBLING /
+# Fixture variables (XV_REPO / XV_SCRIPT_CHECKOUT_ROOT / XV_PLANS / XV_OTHER / XV_SIBLING /
 # XV_SCRIPTS / XV_STATE / XV_OUTCOME) are assigned as GLOBALS on purpose:
 # strip-units.sh and mutation.sh reuse them.
 
@@ -27,15 +27,15 @@ run_xv_family_cases() {
     # All three must BLOCK before AND after C5 (protection-fix negative assertions).
     # ============================================================================
     XV_REPO="$(setup_main_worktree "xv")"
-    XV_ACD="$(setup_fake_acd "xv")"
+    XV_SCRIPT_CHECKOUT_ROOT="$(setup_fake_script_checkout_root "xv")"
     XV_PLANS="$(setup_plans_dir "xv")"
-    XV_SCRIPTS="$XV_ACD/skills/issue-close-finalize/scripts"
+    XV_SCRIPTS="$XV_SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts"
     XV_STATE="$XV_PLANS/sid-finalize-state-1234.json"
     XV_OUTCOME="$XV_PLANS/sid-issue-close-outcome.json"
 
-    # Family 1 — sibling-prefix root: "<acd>-evil" shares a string prefix with the
+    # Family 1 — sibling-prefix root: "<script-checkout-root>-evil" shares a string prefix with the
     # real candidate but is a different directory.
-    XV_SIBLING_RAW="$TMPDIR_BASE/fake-acd-xv-evil"
+    XV_SIBLING_RAW="$TMPDIR_BASE/fake-script-checkout-root-xv-evil"
     mkdir -p "$XV_SIBLING_RAW/skills/issue-close-finalize/scripts" "$XV_SIBLING_RAW/bin" "$XV_SIBLING_RAW/hooks"
     touch "$XV_SIBLING_RAW/hooks/enforce-worktree.js" \
           "$XV_SIBLING_RAW/skills/issue-close-finalize/scripts/run-initial.sh"
@@ -43,19 +43,19 @@ run_xv_family_cases() {
 
     rc=0
     run_guard "$(build_bash_payload "$(build_initial "$XV_SIBLING" "$XV_SIBLING/skills/issue-close-finalize/scripts" "$XV_REPO" "$XV_SIBLING/skills/issue-close-finalize/scripts")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
-    assert_block "XV-1 sibling-prefix root (<acd>-evil) is not a resolver candidate" "$rc"
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    assert_block "XV-1 sibling-prefix root (<script-checkout-root>-evil) is not a resolver candidate" "$rc"
 
     # Family 2 — path-traversal root: textually contains the real candidate but
     # resolves elsewhere.
     rc=0
-    run_guard "$(build_bash_payload "$(build_initial "$XV_ACD/../fake-acd-xv-evil" "$XV_ACD/../fake-acd-xv-evil/skills/issue-close-finalize/scripts" "$XV_REPO" "$XV_ACD/../fake-acd-xv-evil/skills/issue-close-finalize/scripts")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
-    assert_block "XV-2 path-traversal root (<acd>/../evil) is not a resolver candidate" "$rc"
+    run_guard "$(build_bash_payload "$(build_initial "$XV_SCRIPT_CHECKOUT_ROOT/../fake-script-checkout-root-xv-evil" "$XV_SCRIPT_CHECKOUT_ROOT/../fake-script-checkout-root-xv-evil/skills/issue-close-finalize/scripts" "$XV_REPO" "$XV_SCRIPT_CHECKOUT_ROOT/../fake-script-checkout-root-xv-evil/skills/issue-close-finalize/scripts")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    assert_block "XV-2 path-traversal root (<script-checkout-root>/../evil) is not a resolver candidate" "$rc"
 
     # Family 3 — unrelated marker-valid root: the attacker dir carries both markers
     # but is named by nothing the resolver would produce.
-    XV_OTHER_RAW="$TMPDIR_BASE/unrelated-acd"
+    XV_OTHER_RAW="$TMPDIR_BASE/unrelated-script-checkout-root"
     mkdir -p "$XV_OTHER_RAW/skills/issue-close-finalize/scripts" "$XV_OTHER_RAW/bin" "$XV_OTHER_RAW/hooks"
     touch "$XV_OTHER_RAW/hooks/enforce-worktree.js" \
           "$XV_OTHER_RAW/skills/issue-close-finalize/scripts/run-loop-step.js"
@@ -63,15 +63,15 @@ run_xv_family_cases() {
 
     rc=0
     run_guard "$(build_bash_payload "$(build_loop_step "$XV_OTHER" "$XV_OTHER/skills/issue-close-finalize/scripts" "$XV_OTHER/skills/issue-close-finalize/scripts" "$XV_STATE" "accept")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
     assert_block "XV-3 unrelated marker-valid root is not a resolver candidate" "$rc"
 
     # Mixed-root variant: the inline env values name the real candidate while the
     # script path is rooted at the attacker dir — the three-way check must catch the
     # disagreement rather than trusting the env prefix alone.
     rc=0
-    run_guard "$(build_bash_payload "$(build_finalize_terminal "$XV_ACD" "$XV_OTHER/skills/issue-close-finalize/scripts" "$XV_STATE" "1234" "$XV_OUTCOME")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    run_guard "$(build_bash_payload "$(build_finalize_terminal "$XV_SCRIPT_CHECKOUT_ROOT" "$XV_OTHER/skills/issue-close-finalize/scripts" "$XV_STATE" "1234" "$XV_OUTCOME")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
     assert_block "XV-4 inline env names the real root but the script path does not" "$rc"
 
     # ============================================================================
@@ -83,25 +83,25 @@ run_xv_family_cases() {
     # legitimate caller once used must not be re-opened by accident either.
     # ============================================================================
     rc=0
-    run_guard "$(build_bash_payload "$(build_initial "$XV_ACD/" "$XV_SCRIPTS" "$XV_REPO" "$XV_SCRIPTS")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
-    assert_block "VALUE-1 trailing slash on the inline AGENTS_CONFIG_DIR value — eval path retired (#1673)" "$rc"
+    run_guard "$(build_bash_payload "$(build_initial "$XV_SCRIPT_CHECKOUT_ROOT/" "$XV_SCRIPTS" "$XV_REPO" "$XV_SCRIPTS")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    assert_block "VALUE-1 trailing slash on the inline AGENTS_MAIN_ROOT value — eval path retired (#1673)" "$rc"
 
     rc=0
-    run_guard "$(build_bash_payload "$(build_initial "$XV_ACD/./" "$XV_SCRIPTS" "$XV_REPO" "$XV_SCRIPTS")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
-    assert_block "VALUE-2 '/./' segment in the inline AGENTS_CONFIG_DIR value — eval path retired (#1673)" "$rc"
+    run_guard "$(build_bash_payload "$(build_initial "$XV_SCRIPT_CHECKOUT_ROOT/./" "$XV_SCRIPTS" "$XV_REPO" "$XV_SCRIPTS")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    assert_block "VALUE-2 '/./' segment in the inline AGENTS_MAIN_ROOT value — eval path retired (#1673)" "$rc"
 
     rc=0
-    run_guard "$(build_bash_payload "$(build_initial "$XV_ACD" "$XV_SCRIPTS" "$XV_REPO/" "$XV_SCRIPTS")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
-    assert_block "VALUE-3 trailing slash on the inline MAIN_WORKTREE_PATH value — eval path retired (#1673)" "$rc"
+    run_guard "$(build_bash_payload "$(build_initial "$XV_SCRIPT_CHECKOUT_ROOT" "$XV_SCRIPTS" "$XV_REPO/" "$XV_SCRIPTS")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    assert_block "VALUE-3 trailing slash on the inline TARGET_MAIN_ROOT value — eval path retired (#1673)" "$rc"
 
     # Negative side of the same axis: value semantics must not degrade into prefix
     # matching — a longer path that merely STARTS with the candidate is not equal.
     rc=0
-    run_guard "$(build_bash_payload "$(build_initial "$XV_ACD/skills" "$XV_SCRIPTS" "$XV_REPO" "$XV_SCRIPTS")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+    run_guard "$(build_bash_payload "$(build_initial "$XV_SCRIPT_CHECKOUT_ROOT/skills" "$XV_SCRIPTS" "$XV_REPO" "$XV_SCRIPTS")")" \
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
     assert_block "VALUE-4 a sub-path of the candidate is not an equal value" "$rc"
 
 
@@ -124,12 +124,12 @@ run_xv_family_cases() {
 
     rc=0
     run_guard "$(build_bash_payload "$(build_initial "$XV_SIBLING" "$XV_SIBLING/skills/issue-close-finalize/scripts" "$XV_REPO" "$XV_SIBLING/skills/issue-close-finalize/scripts") > \"$CANARY_NODE\"")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
     assert_block "XV-canary overlay mismatch with a redirect onto a protected file stays blocked" "$rc"
 
     rc=0
     run_guard "$(build_bash_payload "$(build_loop_step "$XV_OTHER" "$XV_OTHER/skills/issue-close-finalize/scripts" "$XV_OTHER/skills/issue-close-finalize/scripts" "$XV_STATE" "accept\"; : > \"$CANARY_NODE")")" \
-        "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
+        "$XV_REPO" "AGENTS_MAIN_ROOT=$XV_SCRIPT_CHECKOUT_ROOT" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
     assert_block "XV-canary overlay mismatch with chaining onto a protected file stays blocked" "$rc"
 
     if [ -f "$CANARY" ] && [ "$(cat "$CANARY")" = "$CANARY_BEFORE" ]; then

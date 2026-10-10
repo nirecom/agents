@@ -57,13 +57,13 @@ run_production_command_fidelity() {
 # The registered PRODUCTION command string, replayed on turn A's real payload:
 # P9 only checks that string is present in settings.json and the wrapper above
 # spawns the hook by argv, so neither one ever runs it - a quoting, timeout or
-# $AGENTS_CONFIG_DIR-expansion regression would pass both suites silently.
+# $AGENTS_MAIN_ROOT-expansion regression would pass both suites silently.
 PROD_CMD=$(run_with_timeout 20 node -e '
 const s = require(process.argv[1]);
 const hooks = ((s.hooks || {}).UserPromptSubmit || []);
 const cmds = hooks.flatMap((h) => (h.hooks || []).map((x) => String(x.command || "")));
 process.stdout.write(cmds.find((c) => c.includes("record-off-skill-invocation.js")) || "");
-' "$(node_path "$AGENTS_DIR/settings.json")" 2>/dev/null)
+' "$(node_path "$SCRIPT_CHECKOUT_ROOT/settings.json")" 2>/dev/null)
 # FRESH dir, never $WFDIR: the wrapper already wrote a marker there, so reusing it
 # would let this assertion pass with the production command entirely broken.
 PROD_WFDIR="$BASE/prod-workflow"; mkdir -p "$PROD_WFDIR"
@@ -78,7 +78,6 @@ elif [ ! -s "$PROD_PAYLOAD" ]; then
 else
     ( WORKFLOW_STATE_DIR="$(node_path "$PROD_WFDIR")" \
       WORKFLOW_PLANS_DIR="$(node_path "$PLANSDIR")" \
-      AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
       run_with_timeout 20 bash -c "$PROD_CMD" <"$PROD_PAYLOAD" >"$PROD_OUT" 2>&1 )
     PROD_STATUS=$?
     if [ "$PROD_STATUS" -eq 0 ]; then

@@ -9,11 +9,11 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/lib/ew-runner.sh
-. "$AGENTS_DIR/tests/lib/ew-runner.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/ew-runner.sh"
 
 T="$(make_tmp)"
 trap 'rm -rf "$T"' EXIT
@@ -26,7 +26,7 @@ ew_make_repo "$OTHER"
 # Both URL shapes the slug normaliser must accept (https + scp-style ssh).
 git -C "$MAIN" remote add origin "https://github.com/example-owner/session-repo.git"
 git -C "$OTHER" remote add origin "git@github.com:example-owner/other-repo.git"
-EW_CONFIG_DIR="$MAIN"
+EW_CFG_ROOT="$MAIN"
 ADD="ENFORCE_WORKTREE_ADDITIONAL_REPOS=$OTHER"
 
 run() { ew_run "$MAIN" "$(ew_bash_payload test "$1")" "${@:2}"; }

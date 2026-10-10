@@ -10,7 +10,7 @@
 # S4/S6/S7 keep the abort and the empty-but-fine case from collapsing together.
 # #1689 (S10-S12): the TL3 append asks bin/is-docs-only, and appends anyway when it can't answer.
 
-IS_DOCS_ONLY="${AGENTS_DIR}/bin/is-docs-only"
+IS_DOCS_ONLY="${SCRIPT_CHECKOUT_ROOT}/bin/is-docs-only"
 FAKE=""
 
 # One fake agents tree, reused by every S row. `bin/` and `hooks/` are copied whole because
@@ -21,8 +21,8 @@ FAKE=""
 make_fake_agents() {
     FAKE="$TMPDIR_BASE/fake-agents"
     mkdir -p "$FAKE"
-    cp -r "$AGENTS_DIR/bin" "$FAKE/bin"
-    cp -r "$AGENTS_DIR/hooks" "$FAKE/hooks"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$FAKE/bin"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$FAKE/hooks"
     mkdir -p "$FAKE/tests/bin"
     : > "$FAKE/tests/bin/feature-689-select-tests.sh"
     # #1779's second stem. A non-TL3 name is required: the zero-commit rows below assert on a
@@ -104,7 +104,7 @@ run_auto() { # <repo> <state|-> <stub-rc> [BASE_IS_HEAD=<v>] [VAR=VAL...]
     # subshell rather than handed to `env`, which would try to exec it as a binary.
     (
         cd "$repo" || exit 1
-        export MB_STUB_OUT="$kvfile" MB_STUB_RC="$rc" AGENTS_CONFIG_DIR="$AGENTS_DIR"
+        export MB_STUB_OUT="$kvfile" MB_STUB_RC="$rc"
         local_kv=""
         for local_kv in "$@"; do export "${local_kv?}"; done
         run_with_timeout 120 bash "$FAKE/bin/select-tests.sh" --auto
@@ -330,7 +330,7 @@ test_S13_post_session_head_notes_and_proceeds() {
     SA_RC=0
     (
         cd "$repo" || exit 1
-        export MB_STUB_OUT="$kvfile" MB_STUB_RC=0 AGENTS_CONFIG_DIR="$AGENTS_DIR"
+        export MB_STUB_OUT="$kvfile" MB_STUB_RC=0
         run_with_timeout 120 bash "$FAKE/bin/select-tests.sh" --auto
     ) >"$o" 2>"$e" || SA_RC=$?
     SA_OUT="$(cat "$o")"

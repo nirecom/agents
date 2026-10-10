@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # Workflow session id (plan-artifact prefix), NOT the CC session UUID. The wsid has no
 # bash bridge yet, so this stays a manual input box — see session-id-resolution.md.
 : "${SESSION_ID:?SESSION_ID not set}"
@@ -18,7 +18,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-rev
 # so a containment refusal is never read as ESCALATE or as codex-unavailable. The precedence
 # detail outline intent mirrors review-tests (CPR-ORTH): the reviewed code is downstream of
 # all three settled decisions.
-ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
+ACCEPTED_TRADEOFFS_FILE="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
 rwc_resolve security-code review-code-security
 
 # Fingerprint of exactly what review-code-codex reviews: the committed tip plus every
@@ -92,7 +92,7 @@ if [[ -n "$REPO_ROOT_VAL" ]]; then args+=(--repo-root "$REPO_ROOT_VAL"); fi
 # real failure we warn on but do not fail the review for.
 unset CTX_CONCERNS_LOG
 clog_rc=0
-CLOG_PATH="$("$AGENTS_CONFIG_DIR/bin/concern-ledger" render-concerns-log \
+CLOG_PATH="$("$SCRIPT_CHECKOUT_ROOT/bin/concern-ledger" render-concerns-log \
   --plans-dir "$PLANS_DIR" --session-id "$SESSION_ID" --format review-security-shared)" || clog_rc=$?
 if (( clog_rc == 0 )) && [[ -n "$CLOG_PATH" && -s "$CLOG_PATH" ]]; then
   export CTX_CONCERNS_LOG="$CLOG_PATH"
@@ -107,6 +107,6 @@ done
 # Extra flags (--prestaged-report / --prestaged-producer / --prestaged-exec on the
 # security-scanner fallback re-run) are forwarded verbatim; the loop owns their semantics.
 RC=0
-"$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" "$@" || RC=$?
+"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" "$@" || RC=$?
 arm_terminal_guard "$RC" || true
 exit "$RC"

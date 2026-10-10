@@ -7,9 +7,9 @@
 
 # Sourced by each section, never run as one: the parent lists sections explicitly.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+__COMMON_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
-AGENTS_NODE="$(nrm "$AGENTS_DIR")"
+AGENTS_NODE="$(nrm "$__COMMON_SCRIPT_CHECKOUT_ROOT")"
 HOOKS_NODE="$AGENTS_NODE/hooks"
 TCT_NODE="$HOOKS_NODE/lib/tool-command-text.js"
 FP_NODE="$HOOKS_NODE/lib/diff-fingerprint.js"
@@ -17,8 +17,8 @@ WRITER_NODE="$HOOKS_NODE/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$HOOKS_NODE/lib/supervisor-state-schema.js"
 WFSTATE_MODULE="$HOOKS_NODE/workflow-state"
 export WFSTATE_MODULE
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-MKPAYLOAD="$AGENTS_DIR/tests/hooks/feature-2256-command-tool-coverage/mkpayload.js"
+RWT="$__COMMON_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+MKPAYLOAD="$__COMMON_SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2256-command-tool-coverage/mkpayload.js"
 PROBE="$AGENTS_NODE/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 PASS=0
@@ -43,7 +43,7 @@ mkdir -p "$WORK/plans" "$WORK/wf" "$WORK/transcripts" "$WORK/cfg"
 export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
-export AGENTS_CONFIG_DIR="$WORK_NODE/cfg"
+export AGENTS_MAIN_ROOT="$WORK_NODE/cfg"
 unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
@@ -60,7 +60,7 @@ payload() {
 
 # run_hook <hook-relative-path> <payload-json> — stdout of the hook, stderr dropped.
 run_hook() {
-    printf '%s' "$2" | bash "$RWT" 60 node "$AGENTS_DIR/hooks/$1" 2>/dev/null
+    printf '%s' "$2" | bash "$RWT" 60 node "$__COMMON_SCRIPT_CHECKOUT_ROOT/hooks/$1" 2>/dev/null
 }
 
 # jfield <json> <dotted-path> — the field's value, or 'none' when absent.

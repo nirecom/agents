@@ -6,6 +6,8 @@
 # timeout; RTB_EXEC_TIMEDOUT comes from <logdir>/<i>.timedout, never from the exit code.
 # RTB_EXEC_UNSUPPORTED=1 when run_all_exec did not launch (78 with RUN_ALL_EXEC_LAUNCHED=0),
 # flagged via <logdir>/<i>.unsupported so a test that itself exits 78 is not mistaken for it.
+# RTB_EXEC_DECOY=1 when the run reached the root decoy (<logdir>/<i>.decoyhit): its exit
+# code then says nothing about the base, whatever it is.
 
 case "${BASH_SOURCE[0]}" in
   */*) RTB_EXEC_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
@@ -15,11 +17,23 @@ esac
 RTB_EXEC_RC=""
 RTB_EXEC_TIMEDOUT=""
 RTB_EXEC_UNSUPPORTED=""
+RTB_EXEC_DECOY=""
 RTB_EXEC_SEQ=0
 
 # rtb_exec_kill_group <pid> <signal> — the job's process group first, the pid as fallback.
 rtb_exec_kill_group() {
     kill "-$2" -- "-$1" 2>/dev/null || kill "-$2" "$1" 2>/dev/null || true
+}
+
+# rtb_base_predates_root_names <root> <commit> — 0 when <commit> carries a top-level
+# profile-snippet.sh that does not name AGENTS_MAIN_ROOT (its tests cannot run under
+# today's root names); 1 otherwise, including when the commit has no such file.
+rtb_base_predates_root_names() {
+    local root="${1:-}" commit="${2:-}" body
+    [ -n "$root" ] && [ -n "$commit" ] || return 1
+    body="$(git -C "$root" show "$commit:profile-snippet.sh" 2>/dev/null)" || return 1
+    case "$body" in *AGENTS_MAIN_ROOT*) return 1 ;; esac
+    return 0
 }
 
 rtb_exec_one() {
@@ -28,6 +42,7 @@ rtb_exec_one() {
     RTB_EXEC_RC=""
     RTB_EXEC_TIMEDOUT=""
     RTB_EXEC_UNSUPPORTED=""
+    RTB_EXEC_DECOY=""
     [ -n "$wt" ] && [ -n "$rel" ] && [ -n "$logdir" ] || return 2
     case "$timeout" in ''|*[!0-9]*) timeout=300 ;; esac
     mkdir -p "$logdir" 2>/dev/null || return 2
@@ -43,7 +58,7 @@ rtb_exec_one() {
 
     RTB_EXEC_SEQ=$((RTB_EXEC_SEQ + 1))
     i="$RTB_EXEC_SEQ"
-    rm -f "$logdir/$i.timedout" "$logdir/$i.nolaunch" "$logdir/$i.unsupported"
+    rm -f "$logdir/$i.timedout" "$logdir/$i.nolaunch" "$logdir/$i.unsupported" "$logdir/$i.decoyhit"
 
     # Job control gives each background job its own process group, so the watchdog
     # can take down the whole test tree, not just the launching subshell.
@@ -55,11 +70,20 @@ rtb_exec_one() {
         . "$launcher" || { : >"$logdir/$i.nolaunch"; exit 2; }
         cd "$wt" || { : >"$logdir/$i.nolaunch"; exit 2; }
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
-        export AGENTS_CONFIG_DIR="$wt" WORKFLOW_STATE_DIR="$iso/workflow" \
+        export WORKFLOW_STATE_DIR="$iso/workflow" \
             WORKFLOW_PLANS_DIR="$iso/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$iso/transcripts"
+        # The base test finds its tools from its own checkout; the launcher's decoy pin
+        # makes any reach through a root variable visible instead of silently working.
+        if declare -F run_all_pin_root_decoy >/dev/null 2>&1; then
+            run_all_pin_root_decoy || { : >"$logdir/$i.nolaunch"; exit 2; }
+        fi
         run_all_exec "$wt/$rel" "$logdir/$i.out" "$logdir/$i.err"
         rc=$?
         [ "$rc" = 78 ] && [ "${RUN_ALL_EXEC_LAUNCHED:-1}" = 0 ] && : >"$logdir/$i.unsupported"
+        # A base test that reached the decoy is not a valid green, as in tests/run-all.sh.
+        if declare -F run_all_root_decoy_report >/dev/null 2>&1; then
+            run_all_root_decoy_report 2>>"$logdir/$i.err" || { : >"$logdir/$i.decoyhit"; [ "$rc" = 0 ] && rc=1; }
+        fi
         exit "$rc"
     )</dev/null >/dev/null 2>&1 &
     cpid=$!
@@ -86,5 +110,7 @@ rtb_exec_one() {
     if [ -e "$logdir/$i.timedout" ]; then RTB_EXEC_TIMEDOUT=1; else RTB_EXEC_TIMEDOUT=0; fi
     # shellcheck disable=SC2034
     if [ -e "$logdir/$i.unsupported" ]; then RTB_EXEC_UNSUPPORTED=1; else RTB_EXEC_UNSUPPORTED=0; fi
+    # shellcheck disable=SC2034
+    if [ -e "$logdir/$i.decoyhit" ]; then RTB_EXEC_DECOY=1; else RTB_EXEC_DECOY=0; fi
     return 0
 }

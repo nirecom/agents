@@ -1,19 +1,11 @@
 #!/bin/bash
 # tests/bin/feature-920-companion-issues/_lib.sh
-# Shared helpers for the feature-920-companion-issues split test suite.
-#
-# Sourced by each split file (a-series.sh / b-series.sh / c-d-series.sh) so
-# they can also run standalone.
-#
-# Provides:
-#   - AGENTS_DIR / FIND_SCRIPT / WORKFLOW_INIT_SKILL / CLARIFY_INTENT_SKILL /
-#     ENV_EXAMPLE path constants
-#   - PASS / FAIL counters and pass / fail helpers
-#   - run_with_timeout wrapper (10s)
-#   - setup_mock / teardown_mock — gh dispatcher mock + identifier-namespace
-#     fixture for find-companion-issues.sh
-#   - reason_col3 — extract reason from first TSV stdout line
-#
+# Shared helpers for the feature-920-companion-issues split suite; sourced by each
+# split file (a-series.sh / b-series.sh / c-d-series.sh) so they also run standalone.
+# Provides: __LIB_SCRIPT_CHECKOUT_ROOT / FIND_SCRIPT / WORKFLOW_INIT_SKILL /
+#   CLARIFY_INTENT_SKILL / ENV_EXAMPLE path constants; PASS / FAIL counters and helpers;
+#   run_with_timeout; setup_mock / teardown_mock (gh dispatcher mock + identifier-namespace
+#   fixture for find-companion-issues.sh); reason_col3 (reason from the first TSV line).
 # Idempotent — guarded so multiple sources do not redefine state.
 
 if [ -n "${_COMPANION_LIB_SOURCED:-}" ]; then
@@ -23,11 +15,12 @@ _COMPANION_LIB_SOURCED=1
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-FIND_SCRIPT="$AGENTS_DIR/bin/github-issues/find-companion-issues.sh"
-WORKFLOW_INIT_SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
-CLARIFY_INTENT_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
-ENV_EXAMPLE="$AGENTS_DIR/.env.example"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+REAL_FIND_SCRIPT="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/find-companion-issues.sh"
+FIND_SCRIPT="$REAL_FIND_SCRIPT"
+WORKFLOW_INIT_SKILL="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
+CLARIFY_INTENT_SKILL="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
+ENV_EXAMPLE="$__LIB_SCRIPT_CHECKOUT_ROOT/.env.example"
 
 PASS=0
 FAIL=0
@@ -197,7 +190,7 @@ MOCKREMOTE
 
     export PATH="$TMP/mock-bin:$PATH"
 
-    # Identifier-namespace fixture (Pass B): a small AGENTS_CONFIG_DIR layout
+    # Identifier-namespace fixture (Pass B): a small target-checkout layout
     # whose file/dir basenames serve as the identifier namespace.
     mkdir -p "$TMP/agents-root/skills/worktree-end"
     mkdir -p "$TMP/agents-root/skills/supervisor"
@@ -209,13 +202,22 @@ MOCKREMOTE
     touch "$TMP/agents-root/bin/supervisor-report"
     touch "$TMP/agents-root/agents/detail-planner.md"
     touch "$TMP/agents-root/rules/test.md"
-    export AGENTS_CONFIG_DIR="$TMP/agents-root"
 
     # wip-state.sh mock (Pass-C 3-axis WIP filter, #1117 Step 3). `check <N>`
     # prints MOCK_WIP_STATE_GET_RESULT (default "none") and exits
     # MOCK_WIP_STATE_GET_RC (default 0). RC!=0 lets tests exercise the
     # fail-open branch (candidate included when WIP probe errors).
-    mkdir -p "$TMP/agents-root/bin/github-issues"
+    # The script calls the wip-state.sh of its own checkout, so the script and
+    # its two libs are copied beside the mock and launched from there.
+    mkdir -p "$TMP/agents-root/bin/github-issues/lib"
+    cp "$REAL_FIND_SCRIPT" "$TMP/agents-root/bin/github-issues/find-companion-issues.sh"
+    cp "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/companion-passes.sh" "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/parent-number.sh" "$TMP/agents-root/bin/github-issues/lib/"
+    chmod +x "$TMP/agents-root/bin/github-issues/find-companion-issues.sh"
+    # The callers launch "$FIND_SCRIPT" bare, so a launcher names the fixture as the
+    # target checkout (the identifier namespace) by flag; a caller's own flag comes later and wins.
+    FIND_SCRIPT="$TMP/find-companion-issues-launcher.sh"
+    printf '#!/bin/bash\nexec bash %q --target-checkout-root %q "$@"\n' "$TMP/agents-root/bin/github-issues/find-companion-issues.sh" "$TMP/agents-root" > "$FIND_SCRIPT"
+    chmod +x "$FIND_SCRIPT"
     cat > "$TMP/agents-root/bin/github-issues/wip-state.sh" <<'MOCKWIPSTATE'
 #!/bin/bash
 # args: check <N>  → print same|other|none, exit MOCK_WIP_STATE_GET_RC.
@@ -239,8 +241,8 @@ teardown_mock() {
     done
     unset GH_MOCK_LIST GH_MOCK_REPO MOCK_REMOTE_RC 2>/dev/null || true
     unset MOCK_WIP_STATE_GET_RESULT MOCK_WIP_STATE_GET_RC 2>/dev/null || true
-    # Restore AGENTS_CONFIG_DIR to repo root for non-mock tests.
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
+    # Non-mock tests run the real script with no namespace fixture.
+    FIND_SCRIPT="$REAL_FIND_SCRIPT"
 }
 
 # Helper: extract column 3 (reason) from first stdout line.

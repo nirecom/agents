@@ -19,7 +19,7 @@
 
 const path = require("path");
 
-const AGENTS = process.env.AGENTS_DIR_NODE;
+const AGENTS = process.env.SCRIPT_CHECKOUT_ROOT_NODE;
 const args = JSON.parse(process.argv[2]);
 
 function out(kv) {

@@ -15,6 +15,8 @@ const path = require("path");
 const crypto = require("crypto");
 const os = require("os");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
+
 const RECEIPT_DIR_SUFFIX = ".instructions-loaded";
 const UNKNOWN_SESSION = "unknown";
 const MAX_SESSION_SEGMENT = 96;
@@ -120,7 +122,7 @@ function rulesRoots(env) {
   };
   add(source.CLAUDE_PROJECT_DIR, "rules");
   add(source.CLAUDE_PROJECT_DIR, ".claude", "rules");
-  add(source.AGENTS_CONFIG_DIR, "rules");
+  add(SCRIPT_CHECKOUT_ROOT, "rules");
   add(source.CLAUDE_CONFIG_DIR, "rules");
   // HOME and os.homedir() disagree on win32 (USERPROFILE wins there, and a
   // Git Bash HOME can differ), so both spellings of the home root are honoured.

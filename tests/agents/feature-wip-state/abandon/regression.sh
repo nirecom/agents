@@ -128,11 +128,6 @@ mint_abandon_mock
 SPACE_PLANS="$TMP/plans with spaces"
 mkdir -p "$SPACE_PLANS"
 export WORKFLOW_PLANS_DIR="$SPACE_PLANS"
-cat > "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" <<WPDEOF
-#!/bin/bash
-echo "\${WORKFLOW_PLANS_DIR:-$PLANS_DIR}"
-WPDEOF
-chmod +x "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
 LOCKFILE_32="$SPACE_PLANS/wip-lock-42.md"
 echo "stale lock" > "$LOCKFILE_32"
 run_with_timeout 60 bash "$TARGET" abandon 42 >/dev/null 2>&1

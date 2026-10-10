@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Allow override for testing
 if [ -n "${VSCODE_USER_SETTINGS_DIR:-}" ]; then

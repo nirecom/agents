@@ -17,7 +17,7 @@ paths:
 
 ## Comments
 
-- Resolve the limit before the first comment: `bash "$AGENTS_CONFIG_DIR/bin/get-config-var" COMMENT_BLOCK_MAX_LINES 10` — the printed value is a HARD limit no comment block may exceed, for any reason.
+- Resolve the limit before the first comment: `bash "$AGENTS_MAIN_ROOT/bin/get-config-var" COMMENT_BLOCK_MAX_LINES 10` — the printed value is a HARD limit no comment block may exceed, for any reason.
 - Fitting under the limit is not permission to reach it: write no comment by default, and add one only where a rule below grants it.
 - File header: the comment block a reader needs before reading the file may be written there.
 - Mid-file: write a comment **only when the intent is undecipherable without it**, in 1–2 lines.
@@ -52,6 +52,8 @@ This records mode 100755 in the git index regardless of `core.fileMode` setting,
 - Never name a script variable after an identifier the OS or shell exports by default; the SSOT list is `RESERVED` in `tests/bin/feature-shell-reserved-identifiers.sh`.
 - Use a tool-specific prefix instead (`CODEX_PROMPT`, not `PROMPT`; `TMP_OUT`, not `TMP`).
 - Sole exception: appending or prepending to the existing `PATH` (`PATH="$PATH:..."`).
+
+See also `docs/architecture/claude-code/root-names.md` for naming and deriving a repository root in code.
 
 ## File Naming Conventions
 

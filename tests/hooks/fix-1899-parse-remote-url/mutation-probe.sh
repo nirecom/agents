@@ -29,6 +29,7 @@
 # it asserts a property of the TEST SUITE, not of a live environment.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -39,7 +40,7 @@ trap _fix1899_pru_mut_cleanup EXIT
 
 # Pristine module text, read ONCE — every mutant is derived from this, never from
 # another mutant, so the mutations cannot compound.
-PRU_SRC="$(cat "$AGENTS_DIR/hooks/lib/parse-remote-url.js")"
+PRU_SRC="$(cat "$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-remote-url.js")"
 
 # ---------------------------------------------------------------------------
 # Case list — reused verbatim from owner-repo-charset.sh (F rejects, G accepts).

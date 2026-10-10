@@ -18,12 +18,12 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
 SSOT_REL="hooks/lib/off-clearance-invocation.js"
-SSOT_ABS="$AGENTS_DIR/$SSOT_REL"
+SSOT_ABS="$SCRIPT_CHECKOUT_ROOT/$SSOT_REL"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -34,7 +34,7 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 # assert_requires <label> <repo-relative file> — a bare grep for the module name passes on
 # a comment alone, which is the false-green this replaces: require the actual import.
 assert_requires() {
-    local label="$1" rel="$2" abs="$AGENTS_DIR/$2"
+    local label="$1" rel="$2" abs="$SCRIPT_CHECKOUT_ROOT/$2"
     if [ ! -f "$abs" ]; then fail "$label: $rel does not exist"; return; fi
     if grep -qE "require\(.*off-clearance-invocation" "$abs" 2>/dev/null; then
         pass "$label: $rel require()s the SSOT module"
@@ -49,7 +49,7 @@ echo "=== S: the OFF-clearance invitation has exactly one owner ==="
 # failure rather than an empty needle that every grep would then match for free.
 SSOT_VALUE=""
 if [ -f "$SSOT_ABS" ]; then
-    SSOT_VALUE="$("$RWT" 10 node -e "const m=require(process.argv[1]+'/hooks/lib/off-clearance-invocation.js');process.stdout.write(String(m.OFF_CLEARANCE_INVOCATION||''))" "$_AGENTS_DIR_NODE" 2>/dev/null)"
+    SSOT_VALUE="$("$RWT" 10 node -e "const m=require(process.argv[1]+'/hooks/lib/off-clearance-invocation.js');process.stdout.write(String(m.OFF_CLEARANCE_INVOCATION||''))" "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>/dev/null)"
 fi
 if [ -n "$SSOT_VALUE" ]; then
     pass "S0 $SSOT_REL exports OFF_CLEARANCE_INVOCATION ($SSOT_VALUE)"
@@ -66,7 +66,7 @@ fi
 # commit as hooks/lib/off-clearance-invocation.js, and re-check S4 (the new spelling must
 # still not arm a bare mention gate) and the wrapper cases in wrapper-equivalence-cases.sh
 # (the new spelling must still name a program that exists and IS the minter).
-S0B_EXPECTED='bash "$AGENTS_CONFIG_DIR/bin/request-off-mode-clearance"'
+S0B_EXPECTED='bash "$AGENTS_MAIN_ROOT/bin/request-off-mode-clearance"'
 if [ "$SSOT_VALUE" = "$S0B_EXPECTED" ]; then
     pass "S0b OFF_CLEARANCE_INVOCATION is byte-for-byte the advertised invocation"
 else
@@ -86,7 +86,7 @@ assert_requires "S2 supervisor-off-proposal-shim.js reads the SSOT" "hooks/super
 # hits_protected <cwd> <text> -> the classifier's verdict for that text ("null" when clear)
 hits_protected() {
     "$RWT" 12 node -e "const {bashHitsProtected}=require(process.argv[1]+'/hooks/block-clearance-token-write/bash-scan.js');process.stdout.write(String(bashHitsProtected(process.argv[2],{cwd:process.argv[3]})))" \
-        "$_AGENTS_DIR_NODE" "$2" "$1" 2>/dev/null
+        "$_SCRIPT_CHECKOUT_ROOT_NODE" "$2" "$1" 2>/dev/null
 }
 
 # consume_kv <node output> — reads the OK|/NG| protocol the derived blocks below emit,
@@ -158,7 +158,7 @@ for (const [name, msg] of entries) {
 if (quoting >= 3) out("OK|S1b-ssot " + quoting + " emitted messages quote the SSOT invitation");
 else out("NG|S1b-ssot only " + quoting + " emitted message(s) quote the SSOT invitation; dispatch.js declares at least three");
 out("DONE|");
-' "$_AGENTS_DIR_NODE" "$TN" 2>&1)"
+' "$_SCRIPT_CHECKOUT_ROOT_NODE" "$TN" 2>&1)"
 consume_kv "S1b-run the derived block-message matrix" "$S1B_OUT"
 
 echo ""
@@ -168,7 +168,7 @@ echo "=== S2b: the block message supervisor-off-proposal-shim.js actually emits 
 SHIM_TMP=$(make_tmp); SHIM_TN=$(node_path "$SHIM_TMP")
 OFF_CMD='echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: [workflow-bug] cannot proceed>>"'
 SHIM_IN="$("$RWT" 8 node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'s2bsid',tool_input:{command:process.argv[1]}}))" "$OFF_CMD")"
-SHIM_OUT="$(WORKFLOW_PLANS_DIR="$SHIM_TN" WORKFLOW_STATE_DIR="$SHIM_TN" AGENTS_CONFIG_DIR="$SHIM_TN" "$RWT" 15 node "$SHIM" <<< "$SHIM_IN" 2>/dev/null)"
+SHIM_OUT="$(WORKFLOW_PLANS_DIR="$SHIM_TN" WORKFLOW_STATE_DIR="$SHIM_TN" AGENTS_MAIN_ROOT="$SHIM_TN" "$RWT" 15 node "$SHIM" <<< "$SHIM_IN" 2>/dev/null)"
 SHIM_RC=$?
 SHIM_REASON="$("$RWT" 8 node -e "let o={};try{o=JSON.parse(process.argv[1]);}catch(e){}process.stdout.write(String(o.reason||''))" "$SHIM_OUT" 2>/dev/null)"
 if [ "$SHIM_RC" != "2" ] || [ -z "$SHIM_REASON" ]; then
@@ -202,13 +202,13 @@ echo "=== S3: SKILL.md has not drifted from the SSOT ==="
 # proper (bin/request-off-clearance) while describing the category spelling, and that
 # unrelated mention keeps a file-wide grep passing even after the SSOT is reverted to
 # the old spelling. So S3 first isolates the INVITATION line — the one line that tells
-# the reader to run the command through $AGENTS_CONFIG_DIR — and compares only that.
-SKILL_MD="$AGENTS_DIR/skills/enforce-workflow-off/SKILL.md"
+# the reader to run the command through $AGENTS_MAIN_ROOT — and compares only that.
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/enforce-workflow-off/SKILL.md"
 INVITE_LINE=""
 INVITE_N=0
 if [ -f "$SKILL_MD" ]; then
-    INVITE_LINE="$(grep -E 'AGENTS_CONFIG_DIR[^`]*bin/' "$SKILL_MD" 2>/dev/null | head -n 1)"
-    INVITE_N="$(grep -cE 'AGENTS_CONFIG_DIR[^`]*bin/' "$SKILL_MD" 2>/dev/null || echo 0)"
+    INVITE_LINE="$(grep -E 'AGENTS_MAIN_ROOT[^`]*bin/' "$SKILL_MD" 2>/dev/null | head -n 1)"
+    INVITE_N="$(grep -cE 'AGENTS_MAIN_ROOT[^`]*bin/' "$SKILL_MD" 2>/dev/null || echo 0)"
 fi
 if [ ! -f "$SKILL_MD" ]; then
     fail "S3-line skills/enforce-workflow-off/SKILL.md does not exist"

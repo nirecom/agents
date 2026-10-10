@@ -2,9 +2,9 @@
 # Tests: bin/github-issues/issue-to-history.sh, bin/github-issues/lib/extract-field.sh
 # Tags: history, docs, github, issues, bin, scope:issue-specific
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
-LIB="$AGENTS_DIR/bin/github-issues/lib/extract-field.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+LIB="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/extract-field.sh"
 
 case_begin "extract-field-lib" "bin/github-issues/lib/extract-field.sh"
 # Smoke 1: lib itself is sourceable and extract_field works end-to-end via lib
@@ -19,7 +19,7 @@ case_end
 
 # Smoke 2: execute issue-to-history.sh end-to-end with a synthetic H2-header issue body
 case_begin "issue-to-history-smoke" "bin/github-issues/issue-to-history.sh"
-SCRIPT="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-to-history.sh"
 if [ -x "$SCRIPT" ]; then
     smoke_body=$'## Background\n\nsmoke-exec-bg\n\n## Changes\n\nsmoke-exec-ch'
     smoke_out="$(ISSUE_BODY="$smoke_body" ISSUE_CATEGORY=FEATURE \

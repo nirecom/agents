@@ -10,7 +10,7 @@
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const { resolveAgentsConfigDir } = require("../lib/agents-config-dir");
+const { resolveScriptCheckoutRoot } = require("../lib/script-checkout-root");
 const { normalizeForWindows } = require("./path-normalize");
 
 const BYPASS_LINE =
@@ -35,7 +35,7 @@ function infraBlock(causeLine, resolveLines) {
 }
 
 const RESOLVE_CONFIG =
-  "  - Confirm AGENTS_CONFIG_DIR points at a valid agents checkout and bin/check-prompt-extraction is installed.";
+  "  - Confirm the hook runs from a valid agents checkout and bin/check-prompt-extraction is installed.";
 const RESOLVE_BASH =
   "  - Confirm bash is on PATH (required on Windows via Git Bash).";
 const RESOLVE_RAW =
@@ -55,16 +55,16 @@ function checkPromptExtraction(rawRepoDir) {
     return { action: "ok" };
   }
 
-  const agentsDir = resolveAgentsConfigDir();
-  if (!agentsDir) {
-    return infraBlock("as expected: AGENTS_CONFIG_DIR could not be resolved.", [
-      "  - Confirm AGENTS_CONFIG_DIR points at a valid agents checkout.",
+  const SCRIPT_CHECKOUT_ROOT = resolveScriptCheckoutRoot();
+  if (!SCRIPT_CHECKOUT_ROOT) {
+    return infraBlock("as expected: the checkout this hook runs from could not be resolved.", [
+      "  - Confirm the hook runs from a valid agents checkout.",
       RESOLVE_RAW,
     ]);
   }
 
   const scriptPath = path
-    .join(agentsDir, "bin", "check-prompt-extraction")
+    .join(SCRIPT_CHECKOUT_ROOT, "bin", "check-prompt-extraction")
     .replace(/\\/g, "/");
 
   if (!fs.existsSync(scriptPath)) {

@@ -10,8 +10,8 @@
 # Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
@@ -21,7 +21,7 @@ harness_isolate "$T/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$T/transcripts"
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
 
-LINT="$AGENTS_DIR/bin/check-plans-artifacts"
+LINT="$SCRIPT_CHECKOUT_ROOT/bin/check-plans-artifacts"
 
 make_tree() { mkdir -p "$1/bin" "$1/skills" "$1/hooks" "$1/agents" "$1/rules" "$1/docs"; }
 
@@ -62,7 +62,7 @@ REGSCRIPT
 # control|artifact|unregistered|no-sid|ambiguous, as a string or .verdict;
 # parsePlansEntry's optional 2nd arg is the injected {controlKinds, artifactKinds}
 # table; *_KINDS entries are RegExps or objects holding one as .re/.regex/.pattern.
-REG_JS="$AGENTS_DIR/hooks/lib/plans-artifact-registry.js"
+REG_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/plans-artifact-registry.js"
 REG_N="$(np "$REG_JS")"
 PLANS_N="$(np "$WORKFLOW_PLANS_DIR")"
 WF_N="$(np "$WORKFLOW_STATE_DIR")"
@@ -196,7 +196,7 @@ MATRIX
 case_end
 
 case_begin "static-registry-exceptions-have-reason" "hooks/lib/plans-artifact-registry.js"
-REG="$(np "$AGENTS_DIR/hooks/lib/plans-artifact-registry.js")"
+REG="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/plans-artifact-registry.js")"
 REG_RC=0
 REG_OUT="$(run_with_timeout 15 node "$T/check-reg.js" "$REG" 2>&1)" || REG_RC=$?
 if [ "$REG_RC" = "0" ]; then
@@ -252,7 +252,7 @@ if [ ! -f "$LINT" ]; then
   fail "repo-source-clean" "implementation absent"
 else
   R_RC=0
-  R_OUT="$(cd "$AGENTS_DIR" && run_with_timeout 60 node "$(np "$LINT")" --source 2>&1)" || R_RC=$?
+  R_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && run_with_timeout 60 node "$(np "$LINT")" --source 2>&1)" || R_RC=$?
   if [ "$R_RC" = "0" ]; then
     pass "repo-source-clean"
   else
@@ -262,7 +262,7 @@ fi
 case_end
 
 case_begin "static-migration-blocks-audit-has-lint" ".github/workflows/migration-blocks-audit.yml"
-YML="$AGENTS_DIR/.github/workflows/migration-blocks-audit.yml"
+YML="$SCRIPT_CHECKOUT_ROOT/.github/workflows/migration-blocks-audit.yml"
 FOUND_CALL=0
 grep -qF "check-plans-artifacts --source" "$YML" 2>/dev/null && FOUND_CALL=1
 HAS_OR_TRUE=0
@@ -275,7 +275,7 @@ fi
 case_end
 
 case_begin "static-precommit-gates-has-lint" "hooks/lib/precommit-agents-repo-gates.sh"
-GATES="$AGENTS_DIR/hooks/lib/precommit-agents-repo-gates.sh"
+GATES="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-agents-repo-gates.sh"
 GATES_OK=0
 grep -qF "check-plans-artifacts --source" "$GATES" 2>/dev/null && GATES_OK=1
 if [ "$GATES_OK" = "1" ]; then
@@ -452,9 +452,9 @@ CONS="$T/consumer-repo"
 CONS_BAD='new-state.json'
 make_tree "$CONS"
 [ -f "$LINT" ] && cp "$LINT" "$CONS/bin/check-plans-artifacts"
-[ -d "$AGENTS_DIR/bin/lib" ] && cp -r "$AGENTS_DIR/bin/lib" "$CONS/bin/lib"
-cp -r "$AGENTS_DIR/hooks/lib" "$CONS/hooks/lib"
-[ -d "$AGENTS_DIR/hooks/workflow-state" ] && cp -r "$AGENTS_DIR/hooks/workflow-state" "$CONS/hooks/workflow-state"
+[ -d "$SCRIPT_CHECKOUT_ROOT/bin/lib" ] && cp -r "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$CONS/bin/lib"
+cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$CONS/hooks/lib"
+[ -d "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state" ] && cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state" "$CONS/hooks/workflow-state"
 printf '%s\n' '#!/usr/bin/env bash' "cat \"\$PLANS_DIR/\$SID-$CONS_BAD\"" > "$CONS/bin/consumer-probe.sh"
 git -C "$CONS" init -q
 git -C "$CONS" config core.hooksPath /dev/null
@@ -465,7 +465,7 @@ git -C "$CONS" add -A
 
 case_begin "precommit-gate-surfaces-unregistered" "hooks/lib/precommit-agents-repo-gates.sh"
 PC_RC=0
-PC_OUT="$(cd "$CONS" && export _cfg_dir="$CONS" AGENTS_CONFIG_DIR="$CONS" && run_with_timeout 60 bash -c '. "$1"; _precommit_agents_repo_gates' _ "$AGENTS_DIR/hooks/lib/precommit-agents-repo-gates.sh" 2>&1)" || PC_RC=$?
+PC_OUT="$(cd "$CONS" && export _cfg_dir="$CONS" && run_with_timeout 60 bash -c '. "$1"; _precommit_agents_repo_gates' _ "$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-agents-repo-gates.sh" 2>&1)" || PC_RC=$?
 check "pre-commit: an unregistered PLANS name in source blocks the commit (exit 1)" "1" "$PC_RC"
 check "pre-commit: the blocked commit shows the lint's diagnostic naming the file" "yes" \
   "$(printf '%s\n' "$PC_OUT" | grep -qF "$CONS_BAD" && printf yes || printf no)"
@@ -475,14 +475,14 @@ case_end
 
 case_begin "ci-audit-step-surfaces-unregistered" ".github/workflows/migration-blocks-audit.yml"
 # Run the workflow's own run: line (not a copy of it) the way the job does: from
-# the checkout root with AGENTS_CONFIG_DIR set to the workspace.
-YML="$AGENTS_DIR/.github/workflows/migration-blocks-audit.yml"
+# the checkout root with AGENTS_MAIN_ROOT set to the workspace.
+YML="$SCRIPT_CHECKOUT_ROOT/.github/workflows/migration-blocks-audit.yml"
 CI_CMD="$(grep -E '^[[:space:]]*run:[[:space:]]*[^|>].*check-plans-artifacts' "$YML" 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*run:[[:space:]]*//')"
 if [ -z "$CI_CMD" ]; then
   fail "ci-audit: migration-blocks-audit.yml has a one-line run: step calling check-plans-artifacts" "implementation missing"
 else
   CI_RC=0
-  CI_OUT="$(cd "$CONS" && export AGENTS_CONFIG_DIR="$CONS" && run_with_timeout 60 bash -c "$CI_CMD" 2>&1)" || CI_RC=$?
+  CI_OUT="$(cd "$CONS" && export AGENTS_MAIN_ROOT="$CONS" && run_with_timeout 60 bash -c "$CI_CMD" 2>&1)" || CI_RC=$?
   check "ci-audit: the lint step fails on an unregistered PLANS name" "1" "$CI_RC"
   check "ci-audit: the job log shows the diagnostic naming the file" "yes" \
     "$(printf '%s\n' "$CI_OUT" | grep -qF "$CONS_BAD" && printf yes || printf no)"

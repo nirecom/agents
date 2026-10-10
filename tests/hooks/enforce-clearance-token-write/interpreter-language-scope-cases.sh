@@ -18,13 +18,13 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # shellcheck source=tests/lib/clearance-hook-harness.sh
-. "$AGENTS_DIR/tests/lib/clearance-hook-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/clearance-hook-harness.sh"
 
 TMP=$(make_tmp); TN=$(node_path "$TMP")
 TOKEN="$TN/wsid.off-clearance"
@@ -199,7 +199,7 @@ for (const [want, lang, label, body] of rows) {
   else process.stdout.write("NG|LSU " + label + " (as " + lang + ") want=" + want + " got=" + got + "\n");
 }
 process.stdout.write("DONE|" + rows.length + "\n");
-' "$_AGENTS_DIR_NODE" 2>&1)"
+' "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>&1)"
 
 LSU_DONE=no
 while IFS= read -r line; do

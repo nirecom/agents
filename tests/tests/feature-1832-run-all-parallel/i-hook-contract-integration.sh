@@ -20,11 +20,11 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-AGENTS_WIN="$(nodepath "$AGENTS_DIR")"
-RUNNER="$AGENTS_DIR/tests/run-all.sh"
-HOOK="$AGENTS_DIR/hooks/workflow-run-tests.js"
+AGENTS_WIN="$(nodepath "$SCRIPT_CHECKOUT_ROOT")"
+RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js"
 STATE_MOD="$AGENTS_WIN/hooks/workflow-state"
 
 PASS=0
@@ -36,7 +36,7 @@ assert_eq() {
     if [ "$want" = "$got" ]; then pass "$name"
     else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
-run_with_timeout() { local s="$1"; shift; bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
+run_with_timeout() { local s="$1"; shift; bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$s" "$@"; }
 
 if [ ! -f "$HOOK" ] || [ ! -f "$RUNNER" ]; then
     fail "i-hook/prerequisites" "hook=$HOOK runner=$RUNNER"
@@ -181,8 +181,8 @@ case_neutralization_disabled() {
     f="$TMPD/noneut-stdout.txt"
     rc=0
     run_with_timeout 120 env "TESTS_DIR=$FX" "RUN_ALL_CACHE_DIR=$RUN_ALL_CACHE_DIR" \
-        "RUN_ALL_PARALLELISM_LIB=$AGENTS_DIR/bin/lib/run-all-parallelism.sh" \
-        "RUN_ALL_REGISTRY_LIB=$AGENTS_DIR/bin/lib/test-language-registry.sh" \
+        "RUN_ALL_PARALLELISM_LIB=$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-parallelism.sh" \
+        "RUN_ALL_REGISTRY_LIB=$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh" \
         bash "$doctored" -j 4 "$FX/t1.sh" "$FX/t2.sh" "$FX/t3.sh" "$FX/t4.sh" \
         > "$f" 2>"$TMPD/noneut-stderr.txt" || rc=$?
     out="$(cat "$f")"

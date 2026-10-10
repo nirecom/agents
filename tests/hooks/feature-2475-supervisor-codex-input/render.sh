@@ -135,7 +135,7 @@ sci_run "$(np "$RD_OUT")" --mode alert --sid rdsid --wsid sidA --transcript "$RD
 sci_eq "handoff candidates: wsid == transcript sid rendered once" "$(grep -c -F 'handoff-sidA-body' "$RD_OUT" 2>/dev/null)" "1"
 
 echo "--- render: defang parity with review-plan-codex neutralize_delimiters ---"
-sed -n '/^neutralize_delimiters() {/,/^}/p' "$AGENTS_DIR/bin/review-plan-codex" > "$SCI_TMP/nd.sh"
+sed -n '/^neutralize_delimiters() {/,/^}/p' "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" > "$SCI_TMP/nd.sh"
 if grep -q 'sed -E' "$SCI_TMP/nd.sh"; then
   # shellcheck source=/dev/null
   . "$SCI_TMP/nd.sh"

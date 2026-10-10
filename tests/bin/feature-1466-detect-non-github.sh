@@ -15,8 +15,8 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
-DETECT_SCRIPT="$AGENTS_CONFIG_DIR/bin/detect-non-github.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DETECT_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/detect-non-github.sh"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -59,10 +59,10 @@ run_with_mock() {
     cp "$DETECT_SCRIPT" "$tmpdir/bin/detect-non-github.sh"
     chmod +x "$tmpdir/bin/detect-non-github.sh"
 
-    # Run with patched AGENTS_CONFIG_DIR
-    MOCK_STDOUT=$(AGENTS_CONFIG_DIR="$tmpdir" bash "$tmpdir/bin/detect-non-github.sh" "$@" 2>/dev/null)
+    # The copy finds the mock beside itself (it derives its checkout from its own path).
+    MOCK_STDOUT=$(bash "$tmpdir/bin/detect-non-github.sh" "$@" 2>/dev/null)
     MOCK_RC=$?
-    MOCK_STDERR=$(AGENTS_CONFIG_DIR="$tmpdir" bash "$tmpdir/bin/detect-non-github.sh" "$@" 2>&1 1>/dev/null)
+    MOCK_STDERR=$(bash "$tmpdir/bin/detect-non-github.sh" "$@" 2>&1 1>/dev/null)
 }
 
 # ---------------------------------------------------------------------------
@@ -136,15 +136,26 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Test 6: AGENTS_CONFIG_DIR unset → exits non-zero with error
+# Test 6: AGENTS_MAIN_ROOT does not steer the lookup — a decoy root whose
+# is-github-dotcom-remote says "GitHub" (rc=0) must not override the sibling mock (rc=1).
 # ---------------------------------------------------------------------------
-echo "=== Test 6: AGENTS_CONFIG_DIR unset ==="
-unset_rc=0
-unset_out=$(unset AGENTS_CONFIG_DIR; bash "$DETECT_SCRIPT" "label" 2>&1) || unset_rc=$?
-if [ "$unset_rc" -ne 0 ]; then
-    pass "exits non-zero when AGENTS_CONFIG_DIR is unset"
+echo "=== Test 6: AGENTS_MAIN_ROOT does not change which is-github-dotcom-remote runs ==="
+decoy_root="$(mktemp -d "$TMPDIR_BASE/decoy.XXXXXX")"
+mkdir -p "$decoy_root/bin"
+printf '#!/bin/bash\necho hit >> "%s/hit.log"\nexit 0\n' "$decoy_root" > "$decoy_root/bin/is-github-dotcom-remote"
+chmod +x "$decoy_root/bin/is-github-dotcom-remote"
+export AGENTS_MAIN_ROOT="$decoy_root"
+run_with_mock 1 "label"
+unset AGENTS_MAIN_ROOT
+if [ "$MOCK_RC" -eq 1 ]; then
+    pass "the sibling mock decides (exit 1) even with AGENTS_MAIN_ROOT set to a decoy"
 else
-    fail "expected non-zero exit when AGENTS_CONFIG_DIR unset, got 0"
+    fail "expected exit 1 from the sibling mock, got $MOCK_RC (AGENTS_MAIN_ROOT steered the lookup)"
+fi
+if [ ! -e "$decoy_root/hit.log" ]; then
+    pass "the decoy root's is-github-dotcom-remote was never run"
+else
+    fail "the decoy root's is-github-dotcom-remote was run"
 fi
 
 # ---------------------------------------------------------------------------

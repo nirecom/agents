@@ -210,7 +210,7 @@ run_C1d_cross_session() {
     # C1d-3 — the residual risk must be DOCUMENTED, not just accepted in a plan that
     # disappears when the session ends. Pattern 3: recorded as a skip while the S5
     # doc work is still pending, so the gap is visible instead of silently absent.
-    docs_hit="$(grep -rl 'isClearanceBearingStem' "$AGENTS_DIR/docs" 2>/dev/null | head -1)"
+    docs_hit="$(grep -rl 'isClearanceBearingStem' "$SCRIPT_CHECKOUT_ROOT/docs" 2>/dev/null | head -1)"
     if [ -n "$docs_hit" ]; then
         pass "C1d-3 stem predicate and its residual risk are documented ($docs_hit)"
     else

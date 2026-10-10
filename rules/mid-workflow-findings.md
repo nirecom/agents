@@ -21,7 +21,7 @@ Do not write agents-repo improvements or findings to `~/.claude/projects/c--git-
 
 Fallback recovery: `/worktree-end` Step WE-11 promotes unconverted `WORKTREE_NOTES.md` entries to issues, per `skills/_shared/notes-promotion.md`. **Cutoff: Step WE-8** — findings after that go directly to `/issue-create`.
 
-**Append via the CLI** (primary path for every `WORKTREE_NOTES.md` write): `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-append.js" --notes-path "<worktree>/WORKTREE_NOTES.md" --section <Section> --title "<one-line finding>" [--severity high|low|none]`.
+**Append via the CLI** (primary path for every `WORKTREE_NOTES.md` write): `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-append.js" --notes-path "<worktree>/WORKTREE_NOTES.md" --section <Section> --title "<one-line finding>" [--severity high|low|none]`.
 
 The CLI owns section routing, `- (none)` replacement, idempotency, and marker generation — do not hand-assemble an entry line.
 

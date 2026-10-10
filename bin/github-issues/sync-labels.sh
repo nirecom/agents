@@ -12,10 +12,18 @@
 
 set -uo pipefail
 
-# Derive AGENTS_CONFIG_DIR from this script's own path when unset (#2308). CI
-# workflows set only GH_TOKEN, so detect-forge-type must resolve without it.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# This file is also carried byte-identical by repositories that do not ship
+# detect-forge-type; only there is the agents main worktree asked for it. CI sets
+# only GH_TOKEN, so the own-checkout path must work with no variable set (#2308).
+if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js" ] && [ -d "$SCRIPT_CHECKOUT_ROOT/bin" ]; then
+    DETECT_FORGE_TYPE="$SCRIPT_CHECKOUT_ROOT/bin/detect-forge-type"
+elif [ -n "${AGENTS_MAIN_ROOT:-}" ]; then
+    DETECT_FORGE_TYPE="$AGENTS_MAIN_ROOT/bin/detect-forge-type"
+else
+    DETECT_FORGE_TYPE="$SCRIPT_CHECKOUT_ROOT/bin/detect-forge-type"
+fi
 
 # URL-encode a string via node (available: detect-forge-type already needs node).
 urlenc() { node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$1"; }
@@ -66,7 +74,7 @@ if [ ! -f "$LABELS_FILE" ]; then
 fi
 
 # Forge detection (#2308). No silent github fallback: gh runs only for FORGE=github.
-FORGE=$(node "$AGENTS_CONFIG_DIR/bin/detect-forge-type" --repo-dir . --field type 2>/dev/null)
+FORGE=$(node "$DETECT_FORGE_TYPE" --repo-dir . --field type 2>/dev/null)
 GL_PROJECT=""
 GL_PROJECT_ENC=""
 
@@ -84,7 +92,7 @@ if [ "$FORGE" = "github" ]; then
         exit 1
     fi
 elif [ "$FORGE" = "gitlab" ]; then
-    GL_PROJECT=$(node "$AGENTS_CONFIG_DIR/bin/detect-forge-type" --repo-dir . --field project 2>/dev/null)
+    GL_PROJECT=$(node "$DETECT_FORGE_TYPE" --repo-dir . --field project 2>/dev/null)
     if [ -z "$GL_PROJECT" ]; then
         echo "Error: could not resolve GitLab project path from origin" >&2; exit 1
     fi

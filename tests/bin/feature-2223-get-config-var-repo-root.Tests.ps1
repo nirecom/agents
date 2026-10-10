@@ -70,10 +70,10 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
         }
     }
 
-    # Fixture isolation: pin the config dir and both halves of the plans-dir
+    # Fixture isolation: pin the agents main root and both halves of the plans-dir
     # pair, and drop inherited session ids so no child resolves live state.
     BeforeEach {
-        [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $script:cfgDir, 'Process')
+        [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $script:cfgDir, 'Process')
         [System.Environment]::SetEnvironmentVariable('WORKFLOW_STATE_DIR', (Join-Path $script:tmp 'workflow'), 'Process')
         [System.Environment]::SetEnvironmentVariable('WORKFLOW_PLANS_DIR', (Join-Path $script:tmp 'plans'), 'Process')
         [System.Environment]::SetEnvironmentVariable('CLAUDE_CODE_SESSION_ID', $null, 'Process')
@@ -169,7 +169,7 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
             Set-Content -Path (Join-Path $overridable '.env') -Value @(
                 'SOME_TOGGLE=on'
             )
-            [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $overridable, 'Process')
+            [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $overridable, 'Process')
             $proj = Join-Path $script:tmp 'proj-overridable'
             New-Item -ItemType Directory -Path (Join-Path $proj '.git') -Force | Out-Null
             Set-Content -Path (Join-Path $proj $script:localName) -Value 'SOME_TOGGLE=off'
@@ -184,7 +184,7 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
             Set-Content -Path (Join-Path $cfg '.env') -Value @(
                 'SECRET_TOGGLE=on'
             )
-            [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $cfg, 'Process')
+            [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $cfg, 'Process')
             [System.Environment]::SetEnvironmentVariable('SECRET_TOGGLE', $null, 'Process')
             $proj = Join-Path $script:tmp 'proj-secret'
             New-Item -ItemType Directory -Path (Join-Path $proj '.git') -Force | Out-Null
@@ -202,9 +202,14 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
             New-Item -ItemType Directory -Path (Join-Path $broken 'hooks/lib') -Force | Out-Null
             Set-Content -Path (Join-Path $broken 'hooks/lib/load-env.js') -Value 'throw new Error("deliberately broken");'
             Set-Content -Path (Join-Path $broken '.env') -Value 'SOME_TOGGLE=off'
-            [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $broken, 'Process')
+            # The helper loads the load-env.js beside itself, so the broken module is
+            # reached only by a copy of the helper launched from the same fake checkout.
+            New-Item -ItemType Directory -Path (Join-Path $broken 'bin') -Force | Out-Null
+            $brokenHelper = Join-Path $broken 'bin\get-config-var.ps1'
+            Copy-Item -Path $script:helper -Destination $brokenHelper -Force
+            [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $broken, 'Process')
             [System.Environment]::SetEnvironmentVariable('SOME_TOGGLE', $null, 'Process')
-            $out = (& pwsh -NoProfile -File $script:helper -IsOff -RepoRoot $script:projDir SOME_TOGGLE 2>&1) -join ''
+            $out = (& pwsh -NoProfile -File $brokenHelper -IsOff -RepoRoot $script:projDir SOME_TOGGLE 2>&1) -join ''
             Assert-ScriptWasEntered $out
             $LASTEXITCODE | Should -Be 4
         }

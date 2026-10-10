@@ -1,13 +1,13 @@
 #!/bin/bash
 # tests/hooks/fix-1630-overlay-cross-validation.sh
-# Tests: hooks/enforce-worktree/arg-value-guard.js, hooks/lib/agents-config-dir.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
-# Tags: worktree, enforce, hook, config-dir, overlay, security, scope:issue-specific
+# Tests: hooks/enforce-worktree/arg-value-guard.js, hooks/lib/script-checkout-root.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
+# Tags: worktree, enforce, hook, agents-main-root, overlay, security, scope:issue-specific
 #
 # #1630 built a three-way candidate cross-validation inside
 # matchFinalizeWorkerOverlay: strip the registry's relative suffix off the
 # invoked script path (stripRelSuffix) to derive the root it implies, then
 # require that derived root to match a resolver candidate AND to agree with the
-# inline AGENTS_CONFIG_DIR / FINALIZE_SCRIPTS_DIR / MAIN_WORKTREE_PATH values.
+# inline AGENTS_MAIN_ROOT / FINALIZE_SCRIPTS_DIR / TARGET_MAIN_ROOT values.
 #
 # #1673 deleted the overlay together with the Bash-tool `eval` path it guarded,
 # and the suite split accordingly:
@@ -42,14 +42,14 @@ set -u
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 command -v git  >/dev/null 2>&1 || { echo "SKIP: git not found";  exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
-OVERLAY_PROBE="${_AGENTS_DIR_NODE}/tests/fixtures/finalize-overlay-probe.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
+OVERLAY_PROBE="${_SCRIPT_CHECKOUT_ROOT_NODE}/tests/fixtures/finalize-overlay-probe.js"
 
 PASS=0
 FAIL=0
@@ -145,9 +145,9 @@ setup_main_worktree() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$repo"; else echo "$repo"; fi
 }
 
-setup_fake_acd() {
+setup_fake_script_checkout_root() {
     local name="$1"
-    local d="$TMPDIR_BASE/fake-acd-$name"
+    local d="$TMPDIR_BASE/fake-script-checkout-root-$name"
     mkdir -p "$d/bin/github-issues" "$d/hooks" "$d/skills/issue-close-finalize/scripts"
     touch "$d/bin/check-unstaged-tracked.sh" \
           "$d/bin/probe-remote-bootstrap.sh" \
@@ -170,21 +170,21 @@ setup_plans_dir() {
 }
 
 build_initial() {
-    local acd_val="$1" fsd_val="$2" mwt_val="$3" scripts="$4"
-    printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" bash "%s/run-initial.sh" "1234" "1234" "")"' \
-        "$acd_val" "$fsd_val" "$mwt_val" "$scripts"
+    local script_checkout_root_val="$1" fsd_val="$2" mwt_val="$3" scripts="$4"
+    printf 'eval "$(AGENTS_MAIN_ROOT="%s" FINALIZE_SCRIPTS_DIR="%s" TARGET_MAIN_ROOT="%s" bash "%s/run-initial.sh" "1234" "1234" "")"' \
+        "$script_checkout_root_val" "$fsd_val" "$mwt_val" "$scripts"
 }
 
 build_loop_step() {
-    local acd_val="$1" fsd_val="$2" scripts="$3" statefile="$4" decision="$5"
-    printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" node "%s/run-loop-step.js" "%s" "%s")"' \
-        "$acd_val" "$fsd_val" "$scripts" "$statefile" "$decision"
+    local script_checkout_root_val="$1" fsd_val="$2" scripts="$3" statefile="$4" decision="$5"
+    printf 'eval "$(AGENTS_MAIN_ROOT="%s" FINALIZE_SCRIPTS_DIR="%s" node "%s/run-loop-step.js" "%s" "%s")"' \
+        "$script_checkout_root_val" "$fsd_val" "$scripts" "$statefile" "$decision"
 }
 
 build_finalize_terminal() {
-    local acd_val="$1" scripts="$2" statefile="$3" sid="$4" outcome="$5"
-    printf 'eval "$(AGENTS_CONFIG_DIR="%s" bash "%s/run-finalize-terminal.sh" "%s" "%s" "%s")"' \
-        "$acd_val" "$scripts" "$statefile" "$sid" "$outcome"
+    local script_checkout_root_val="$1" scripts="$2" statefile="$3" sid="$4" outcome="$5"
+    printf 'eval "$(AGENTS_MAIN_ROOT="%s" bash "%s/run-finalize-terminal.sh" "%s" "%s" "%s")"' \
+        "$script_checkout_root_val" "$scripts" "$statefile" "$sid" "$outcome"
 }
 
 # ============================================================================
@@ -193,7 +193,7 @@ build_finalize_terminal() {
 # suites cannot drift on what the retired shapes look like.
 # ============================================================================
 # shellcheck source=./fix-1600-finalize-worker-overlay/allow-cases.sh
-. "$AGENTS_DIR/tests/hooks/fix-1600-finalize-worker-overlay/allow-cases.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1600-finalize-worker-overlay/allow-cases.sh"
 
 test_allow_initial
 test_allow_loop_step_enum "accept"
@@ -202,18 +202,18 @@ test_allow_finalize_terminal
 test_allow_initial_env_order_swapped
 
 # shellcheck source=./fix-1630-overlay-cross-validation/xv-families.sh
-. "$AGENTS_DIR/tests/hooks/fix-1630-overlay-cross-validation/xv-families.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1630-overlay-cross-validation/xv-families.sh"
 run_xv_family_cases
 
 
 # shellcheck source=./fix-1630-overlay-cross-validation/strip-units.sh
-. "$AGENTS_DIR/tests/hooks/fix-1630-overlay-cross-validation/strip-units.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1630-overlay-cross-validation/strip-units.sh"
 # shellcheck source=./fix-1630-overlay-cross-validation/path-edges.sh
-. "$AGENTS_DIR/tests/hooks/fix-1630-overlay-cross-validation/path-edges.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1630-overlay-cross-validation/path-edges.sh"
 # shellcheck source=./fix-1630-overlay-cross-validation/mutation.sh
-. "$AGENTS_DIR/tests/hooks/fix-1630-overlay-cross-validation/mutation.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1630-overlay-cross-validation/mutation.sh"
 # shellcheck source=./fix-1630-overlay-cross-validation/metachar-args.sh
-. "$AGENTS_DIR/tests/hooks/fix-1630-overlay-cross-validation/metachar-args.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1630-overlay-cross-validation/metachar-args.sh"
 
 run_strip_unit_cases
 run_path_edge_cases

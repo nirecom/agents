@@ -17,12 +17,13 @@ TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toStri
 run_gate_wsid() {
     local plans_dir="$1" repo_cwd="$2" json="$3"
     local common_dir main_dir=""
+    session_repo_fixture_attach "$GATE_CHECKOUT" "$repo_cwd" 2>/dev/null
     common_dir="$(git -C "$repo_cwd" rev-parse --git-common-dir 2>/dev/null)" || common_dir=""
     if [ -n "$common_dir" ]; then
         main_dir="$(node -e "const p=require('path');process.stdout.write(p.dirname(p.resolve(process.argv[1],process.argv[2])))" -- "$repo_cwd" "$common_dir" 2>/dev/null)" || main_dir=""
     fi
     local env_args=("CLAUDE_PROJECT_DIR=$repo_cwd" "WORKFLOW_STATE_DIR=$WORKFLOW_DIR" "WORKFLOW_PLANS_DIR=$plans_dir")
-    [ -n "$main_dir" ] && env_args+=("AGENTS_CONFIG_DIR=$main_dir")
+    [ -n "$main_dir" ] && env_args+=("AGENTS_MAIN_ROOT=$main_dir")
     echo "$json" | (cd "$plans_dir" && run_with_timeout 30 env "${env_args[@]}" node "$GATE_HOOK") 2>/dev/null
 }
 

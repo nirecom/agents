@@ -73,8 +73,8 @@ write_e2e_test_for_hook() {
 #!/bin/bash
 # Tests: hooks/${hook_stem}.js
 # Tags: scope:issue-specific, e2e
-[ -x "\$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"\$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+[ -x "\$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"\$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 unset CLAUDECODE
 # Reference: hooks/${hook_stem}.js

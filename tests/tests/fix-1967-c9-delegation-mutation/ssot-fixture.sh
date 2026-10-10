@@ -16,7 +16,7 @@
 # and must stay green, so a fixture wiring bug cannot make the three reds vacuous.
 
 # THE ROUTE TAKEN, AND WHY. tests/install/install-path-exposed-commands.sh hardcodes
-# SSOT="$AGENTS_DIR/$SSOT_REL" and exposes no env or argument seam for it. Adding one
+# SSOT="$SCRIPT_CHECKOUT_ROOT/$SSOT_REL" and exposes no env or argument seam for it. Adding one
 # would be a source change to the owner test purely to make it testable, so the route is
 # the one M5 already established: build_focused() lifts the owner's own function bodies
 # verbatim out of the copy (CPR-SSOT -- no predicate is transcribed here) and emits a
@@ -27,7 +27,7 @@
 
 M6_DIR="$TMP/m6"
 mkdir -p "$M6_DIR"
-M6_REAL_SSOT="$AGENTS_DIR/install/path-exposed-commands.txt"
+M6_REAL_SSOT="$SCRIPT_CHECKOUT_ROOT/install/path-exposed-commands.txt"
 M6_ROWS=0
 M6_ROWS_EXPECTED=4   # rows in M6_CASES; a dropped row is a silent loss of a RED proof
 

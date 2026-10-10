@@ -75,7 +75,7 @@ u6_both_sites_updated() {
     while IFS='#' read -r id file label; do
         [ -n "$id" ] || continue
         ROWS=$((ROWS + 1))
-        assert_eq "U6[$id]: $label" "yes" "$(dispatch_timing_updated "$AGENTS_DIR/$file")"
+        assert_eq "U6[$id]: $label" "yes" "$(dispatch_timing_updated "$SCRIPT_CHECKOUT_ROOT/$file")"
     done <<'U6_CASES'
 write-code#skills/write-code/SKILL.md#WCD-4 orders the Read before the first Bash command AND before writing a file
 write-tests#skills/write-tests/SKILL.md#WT-7 orders the same Read on the same two triggers (CPR-ORTH)
@@ -163,13 +163,13 @@ dispatch_block_reads_rule() { # <skill-file> <rule-path> -> yes|no
 
 u6cdef_wcd4_wt7_rule_reads() {
     assert_eq "U6c: WCD-4 orders a Read of rules/ops.md inside the dispatch block" \
-        "yes" "$(dispatch_block_reads_rule "$AGENTS_DIR/skills/write-code/SKILL.md" "rules/ops.md")"
+        "yes" "$(dispatch_block_reads_rule "$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md" "rules/ops.md")"
     assert_eq "U6d: WT-7 orders a Read of rules/coding.md inside the dispatch block" \
-        "yes" "$(dispatch_block_reads_rule "$AGENTS_DIR/skills/write-tests/SKILL.md" "rules/coding.md")"
+        "yes" "$(dispatch_block_reads_rule "$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md" "rules/coding.md")"
     assert_eq "U6e: WT-7 orders a Read of rules/test.md inside the dispatch block" \
-        "yes" "$(dispatch_block_reads_rule "$AGENTS_DIR/skills/write-tests/SKILL.md" "rules/test.md")"
+        "yes" "$(dispatch_block_reads_rule "$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md" "rules/test.md")"
     assert_eq "U6f: WT-7 carries NO rules/ops.md reference (pins the deliberate C4 omission)" \
-        "no" "$(dispatch_block_reads_rule "$AGENTS_DIR/skills/write-tests/SKILL.md" "rules/ops.md")"
+        "no" "$(dispatch_block_reads_rule "$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md" "rules/ops.md")"
 }
 
 # U6g -- NEGATIVE CONTROL for dispatch_block_reads_rule: the SAME predicate must answer "no"
@@ -283,7 +283,7 @@ u_al_a_layer_directive_pin() {
         ROWS=$((ROWS + 1))
         if [ "$pos" = "real" ]; then
             assert_eq "UAL[$id]: WT-7 dispatch block carries the A-layer applicability+heading+timing reference" \
-                "$want" "$(dispatch_block_has_a_layer_ref "$AGENTS_DIR/skills/write-tests/SKILL.md")"
+                "$want" "$(dispatch_block_has_a_layer_ref "$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md")"
             continue
         fi
         file="$FIXROOT/ual/$id.md"
@@ -303,7 +303,7 @@ UAL_CASES
     # heading_lineno() matches a WHOLE line (grep -Fx), so the literal here must be the exact
     # heading text in skills/write-code/SKILL.md, not merely a prefix of it.
     assert_eq "UAL[heading]: write-code/SKILL.md still carries the referenced A-layer language essence heading" \
-        "yes" "$([ "$(heading_lineno "$AGENTS_DIR/skills/write-code/SKILL.md" '## A-layer language essence (complement of B-layer — zero overlap with `rules/coding/*.md`)')" != "0" ] && echo yes || echo no)"
+        "yes" "$([ "$(heading_lineno "$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md" '## A-layer language essence (complement of B-layer — zero overlap with `rules/coding/*.md`)')" != "0" ] && echo yes || echo no)"
 }
 
 # U6i (#2140/#2141 review finding C2): TIMING/ORDERING for dispatch_block_reads_rule. Presence +
@@ -350,7 +350,7 @@ u6i_dispatch_reads_rule_ordering() {
         [ -n "$id" ] || continue
         ROWS=$((ROWS + 1))
         assert_eq "U6i[$id]: real dispatch site timing for $rule" \
-            "$want" "$(dispatch_block_reads_rule_ordered "$AGENTS_DIR/$file" "$rule" "$timing")"
+            "$want" "$(dispatch_block_reads_rule_ordered "$SCRIPT_CHECKOUT_ROOT/$file" "$rule" "$timing")"
     done <<U6I_REAL_CASES
 wcd4-ops#skills/write-code/SKILL.md#rules/ops.md#$OPS_TIMING_ERE#yes
 wcd4-coding#skills/write-code/SKILL.md#rules/coding.md#$CODING_TIMING_ERE#yes

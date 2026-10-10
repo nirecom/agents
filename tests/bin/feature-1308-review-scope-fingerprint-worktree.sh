@@ -91,7 +91,7 @@ EVIDENCE_MODULE="$AGENTS_WORKTREE_NODE/hooks/workflow-gate/review-tests-evidence
 
 oracle_fingerprint() {
   local wt_node_path="$1"
-  AGENTS_CONFIG_DIR="$AGENTS_WORKTREE_NODE" node -e "
+  node -e "
     try {
       const { computeReviewScopeFingerprint } = require('$EVIDENCE_MODULE');
       const result = computeReviewScopeFingerprint(process.argv[1]);
@@ -130,10 +130,10 @@ run_script_cwd() {
   local cwd="$1"
   local explicit="${2:-}"
   if [[ -n "$explicit" ]]; then
-    (cd "$cwd" && AGENTS_CONFIG_DIR="$AGENTS_WORKTREE_NODE" bash "$RUN_TIMEOUT" 30 \
+    (cd "$cwd" && bash "$RUN_TIMEOUT" 30 \
       node "$AGENTS_WORKTREE_NODE/bin/compute-review-scope-fingerprint.js" "$explicit" 2>/dev/null)
   else
-    (cd "$cwd" && AGENTS_CONFIG_DIR="$AGENTS_WORKTREE_NODE" bash "$RUN_TIMEOUT" 30 \
+    (cd "$cwd" && bash "$RUN_TIMEOUT" 30 \
       node "$AGENTS_WORKTREE_NODE/bin/compute-review-scope-fingerprint.js" 2>/dev/null)
   fi
 }

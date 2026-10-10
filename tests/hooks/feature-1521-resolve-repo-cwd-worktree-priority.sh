@@ -16,11 +16,12 @@ set -u
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL='*'
 
-# AGENTS_DIR must be a native (Windows) path so node.exe can require modules from
+# SCRIPT_CHECKOUT_ROOT_NATIVE must be a native (Windows) path so node.exe can require modules from
 # it once MSYS argv conversion is disabled. `pwd -W` yields the Windows form on
 # Git Bash; on POSIX it is unsupported, so fall back to plain `pwd`.
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && { pwd -W 2>/dev/null || pwd; })"
-PATH_NORMALIZE="$AGENTS_DIR/hooks/lib/path-normalize.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
+PATH_NORMALIZE="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/path-normalize.js"
 
 PASS=0
 FAIL=0

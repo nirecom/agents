@@ -10,9 +10,9 @@
 # the first band is embedded in a later PR; here every input is a small fixture.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
@@ -25,15 +25,15 @@ export HOME="$TMPBASE/home"
 mkdir -p "$HOME"
 export NO_LOG=true
 # shellcheck source=../../bin/lib/run-all-launch.sh
-. "$AGENTS_DIR/bin/lib/run-all-launch.sh"
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-launch.sh"
 run_all_pin_state_dirs "$TMPBASE/state" || { echo "FAIL: cannot pin state dirs"; exit 1; }
 export RUN_ALL_DURATIONS_LIB=/nonexistent RUN_ALL_PROGRESS=off
 
 # fx_checkout / fx_table_edit: the registry suite's fixture-checkout helpers (one owner).
 # shellcheck source=test-language-registry/_lib.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/_lib.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/_lib.sh"
 
-CRR_CASES="$AGENTS_DIR/tests/bin/bin-case-record-reader"
+CRR_CASES="$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-case-record-reader"
 FXD="$TMPBASE/fx"
 mkdir -p "$FXD"
 T=$'\t'
@@ -63,12 +63,12 @@ file_line() {
 }
 
 case_begin "reader-library-present" "bin/lib/case-record-reader.sh"
-got="$(bash -c '. "$1" || exit 97; declare -F crr_read >/dev/null && echo defined' _ "$AGENTS_DIR/bin/lib/case-record-reader.sh" 2>/dev/null)"
+got="$(bash -c '. "$1" || exit 97; declare -F crr_read >/dev/null && echo defined' _ "$SCRIPT_CHECKOUT_ROOT/bin/lib/case-record-reader.sh" 2>/dev/null)"
 assert_eq "crr_read: ${got:-missing}" "crr_read: defined"
 case_end
 
 case_begin "embed-part-registered-for-bash" "bin/lib/test-language-parts/bash-case-embed.sh"
-got="$(bash -c '. "$1/bin/lib/test-language-registry.sh"; tlr_load || exit 96; tlr_field bash caseEmbedRules.file; tlr_field bash caseEmbedRules.function' _ "$AGENTS_DIR" 2>/dev/null | tr '\n' ' ')"
+got="$(bash -c '. "$1/bin/lib/test-language-registry.sh"; tlr_load || exit 96; tlr_field bash caseEmbedRules.file; tlr_field bash caseEmbedRules.function' _ "$SCRIPT_CHECKOUT_ROOT" 2>/dev/null | tr '\n' ' ')"
 assert_eq "$got" "bin/lib/test-language-parts/bash-case-embed.sh bash_case_embed "
 case_end
 

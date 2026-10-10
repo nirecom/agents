@@ -46,22 +46,10 @@ for (let i = 0; i < argv.length; i += 1) {
   }
 }
 
-// Resolve the library the same way bin/env-effective-kv does: an explicit
-// AGENTS_CONFIG_DIR wins, otherwise walk back to this file's real location so a
-// PATH shim symlinked into ~/.local/bin still finds the repo it points at.
-// The two modules are one unit — local-env.js is load-env.js's own dependency —
-// so the probe demands both. A config dir carrying only the older half is a
-// checkout that predates this layer, and falling back to this script's own tree
-// is the honest reading of it.
+// Resolve the library the same way bin/env-effective-kv does: walk back to this
+// file's real location so a PATH shim symlinked into ~/.local/bin still finds the
+// repo it points at.
 function libDir() {
-  const configured = process.env.AGENTS_CONFIG_DIR;
-  if (configured) {
-    const candidate = path.join(configured, "hooks", "lib");
-    const complete = ["load-env.js", "local-env.js"].every((f) =>
-      fs.existsSync(path.join(candidate, f)),
-    );
-    if (complete) return candidate;
-  }
   let self = __filename;
   try {
     self = fs.realpathSync(__filename);

@@ -23,7 +23,7 @@ Describe 'get-config-var.ps1 --IsOff exit code matrix' {
 
     BeforeEach {
         [System.Environment]::SetEnvironmentVariable('GETCFG_TESTVAR', $null, 'Process')
-        [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $script:tmp, 'Process')
+        [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $script:tmp, 'Process')
     }
 
     Context 'OFF values exit 0 (vocabulary: off only, case-insensitive)' {
@@ -77,7 +77,7 @@ Describe 'get-config-var.ps1 --IsOff exit code matrix' {
             New-Item -ItemType Directory -Path $isoDir -Force | Out-Null
             $copy = Join-Path $isoDir 'get-config-var.ps1'
             Copy-Item -Path $script:helper -Destination $copy -Force
-            [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $null, 'Process')
+            [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $null, 'Process')
             $null = & pwsh -NoProfile -File $copy -IsOff GETCFG_TESTVAR on 2>&1
             $LASTEXITCODE | Should -Be 4
         }
@@ -88,7 +88,7 @@ Describe 'get-config-var.ps1 --IsOff exit code matrix' {
             $envDir = Join-Path $script:tmp 'c8'
             New-Item -ItemType Directory -Path $envDir -Force | Out-Null
             Set-Content -Path (Join-Path $envDir '.env') -Value 'CONFIRM_DETAIL=off' -NoNewline
-            [System.Environment]::SetEnvironmentVariable('AGENTS_CONFIG_DIR', $envDir, 'Process')
+            [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $envDir, 'Process')
             $out = (& pwsh -NoProfile -File $script:helper CONFIRM_DETAIL on 2>&1) -join ''
             $LASTEXITCODE | Should -Be 0
             $out | Should -Be 'off'

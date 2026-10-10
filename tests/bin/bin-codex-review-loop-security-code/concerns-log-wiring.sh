@@ -2,8 +2,8 @@
 # Tests: skills/review-code-security/scripts/run-codex-review-loop.sh, skills/make-detail-plan/scripts/run-codex-review-loop.sh, skills/make-outline-plan/scripts/run-codex-review-loop.sh, skills/review-plan-security/scripts/run-codex-review-loop.sh, skills/review-tests/scripts/run-codex-review-loop.sh
 # Tags: CTX_CONCERNS_LOG, render-concerns-log, concerns-log, wiring, TL2, scope:issue-specific
 # Sourced by tests/bin/bin-codex-review-loop-security-code.sh.
-# TL3 gap: real loop/codex/concern-ledger not exercised; skill wrappers driven with
-# stubs via AGENTS_CONFIG_DIR. Mitigation: full-chain-integration.sh + manual runs.
+# TL3 gap: real loop/codex/concern-ledger not exercised; copies of the skill wrappers
+# run from a stub checkout. Mitigation: full-chain-integration.sh + manual runs.
 
 echo ""
 echo "--- E: skill wrapper concerns-log wiring (change 6) ---"
@@ -23,6 +23,17 @@ for _ewf in "$_EW_DETAIL_WRAPPER" "$_EW_SEC_WRAPPER" \
     fi
 done
 
+# A wrapper calls bin/* by an absolute path under the checkout it lives in, so the
+# stubs are reached only by a copy of the wrapper launched from the stub checkout.
+# The wrappers and the libs they source are copied once; each case clones that.
+_EW_WRAPPER_TREE="$TMPDIR_BASE/ew-wrapper-tree"
+# shellcheck source=tests/lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+script_checkout_fixture_copy "$_EW_WRAPPER_TREE" \
+    skills/make-detail-plan/scripts skills/review-code-security/scripts \
+    skills/make-outline-plan/scripts skills/review-plan-security/scripts \
+    skills/review-tests/scripts bin/lib/codex-review-loop bin/lib/safe-state-path.sh
+
 # _ew_setup <render-exit> <carrier-path-or-empty> — initialises per-case stub dirs.
 # render-exit: 0 carrier, 3 no-ledger, 5 write-error.
 # Outputs: EW_SDIR EW_PLANS EW_SID EW_CAP EW_CL_LOG EW_ERR
@@ -35,6 +46,7 @@ _ew_setup() {
     EW_CAP="$TMPDIR_BASE/ew-cap-$_EW_SEQ.txt"
     EW_CL_LOG="$TMPDIR_BASE/ew-cl-$_EW_SEQ.txt"
     EW_ERR="$TMPDIR_BASE/ew-err-$_EW_SEQ.txt"
+    cp -r "$_EW_WRAPPER_TREE" "$EW_SDIR"
     mkdir -p "$EW_SDIR/bin" "$EW_PLANS"
     printf 'none\n' > "$EW_PLANS/tradeoffs.md"
 
@@ -75,14 +87,14 @@ _ew_setup() {
     chmod +x "$EW_SDIR/bin/concern-ledger"
 }
 
-# _ew_run <wrapper-path> [<stale-ctx-path>] — runs wrapper in isolated subshell.
+# _ew_run <wrapper-path> [<stale-ctx-path>] — runs the stub checkout's copy of the
+# wrapper in an isolated subshell.
 # Outputs: EW_RC EW_STDERR EW_ARGS EW_CL_ARGS
 _ew_run() {
     local wrap="$1" stale="${2:-}"
     : > "$EW_CAP"; : > "$EW_CL_LOG"; : > "$EW_ERR"
     EW_RC=0
     (
-        export AGENTS_CONFIG_DIR="$EW_SDIR"
         export SESSION_ID="$EW_SID"
         export PLANS_DIR="$EW_PLANS"
         export EXTENSIONS_USED="0"
@@ -91,7 +103,7 @@ _ew_run() {
         unset CTX_SURVEY_CODE CTX_SURVEY_HISTORY CTX_CONCERNS_LOG 2>/dev/null || true
         if [ -n "$stale" ]; then export CTX_CONCERNS_LOG="$stale"; fi
         cd "$TMPDIR_BASE"
-        bash "$wrap"
+        bash "$EW_SDIR/${wrap#"$AGENTS_ROOT/"}"
     ) 2>"$EW_ERR" || EW_RC=$?
     EW_STDERR="$(cat "$EW_ERR" 2>/dev/null || true)"
     EW_ARGS="$(cat "$EW_CAP" 2>/dev/null || true)"

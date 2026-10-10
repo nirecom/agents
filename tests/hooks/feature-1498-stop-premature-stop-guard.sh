@@ -18,17 +18,17 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK="$AGENTS_DIR/hooks/stop-premature-stop-guard.js"
-HOOK_NODE="$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/stop-premature-stop-guard.js"
+HOOK_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/stop-premature-stop-guard.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
 
 PASS=0; FAIL=0; SKIP=0
 
@@ -48,8 +48,10 @@ require_source() {
     return 0
 }
 
-SCRIPT_DIR="$AGENTS_DIR/tests/hooks/feature-1498-stop-premature-stop-guard"
+SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1498-stop-premature-stop-guard"
 
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 # shellcheck source=./feature-1498-stop-premature-stop-guard/state-seeds.sh
 . "$SCRIPT_DIR/state-seeds.sh"
 # shellcheck source=./feature-1498-stop-premature-stop-guard/t-hook-integration.sh

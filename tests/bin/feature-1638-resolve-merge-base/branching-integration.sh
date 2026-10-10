@@ -1,34 +1,15 @@
 # Part of tests/bin/feature-1638-resolve-merge-base.sh (sourced, not standalone).
 # Tests: hooks/workflow-mark/branching-handler.js, hooks/workflow-state/merge-base-baseline.js
 # Tags: merge-base, baseline, branching-handler, workflow-mark, integration, scope:issue-specific, pwsh-not-required, TL2
-#
-# B — the WRITER'S ONLY CALLER, exercised through a real sentinel dispatch.
-#
-# R14-R17 pin the module contract by calling recordMergeBaseBaseline directly. That leaves the
-# single most likely failure untested: the module is correct and nothing ever calls it. There
-# is exactly one automatic writer — branching-handler.js on BRANCHING_COMPLETE — so the wiring
-# is a cross-module seam (skills/_shared/test-design.md: subprocess boundaries and cross-module
-# wiring are mandatory integration triggers), and these rows drive the real hook entrypoint
-# with a real JSON payload rather than requiring the handler and calling handle() by hand.
-#
+# B — the WRITER'S ONLY CALLER, exercised through a real sentinel dispatch. R14-R17 pin the module contract by calling recordMergeBaseBaseline directly. That leaves the single most likely failure untested: the module is correct and nothing ever calls it.
+# There is exactly one automatic writer — branching-handler.js on BRANCHING_COMPLETE — so the wiring is a cross-module seam (skills/_shared/test-design.md: subprocess boundaries and cross-module wiring are mandatory integration triggers), and these rows drive the real hook entrypoint with a real JSON payload rather than requiring the handler and calling handle() by hand.
 # THREE THINGS ARE PINNED, and they fail independently:
-#   B1  WHICH REPOSITORY the base is recorded for. The session's state.cwd is the MAIN
-#       worktree; the branch point that matters is in the LINKED worktree named by the
-#       decision's `worktree:` segment. Recording the main worktree's HEAD would produce a
-#       baseline that is a real sha, adopted by layer 1 forever, and wrong — the #1638 shape
-#       exactly. The fixture gives the two worktrees DIFFERENT HEADs so the two answers are
-#       distinguishable.
-#   B2  WRITE-ONCE through the real dispatch. R14 proves the module refuses a second write;
-#       this proves a second sentinel (a re-emitted BRANCHING_COMPLETE, which happens) does
-#       not route around it.
-#   B3  A RECORDING FAILURE IS A WARNING, NEVER FATAL. signalFatal makes workflow-mark exit 2,
-#       which aborts the step the user was in the middle of. A merge-base baseline is an
-#       optimisation over guessing; losing it must degrade to guessing, not stop the workflow.
-#   B4  The main-worktree session — no `worktree:` segment — still gets a baseline, recorded
-#       for state.cwd. Without this row an implementation that only handles the linked-worktree
-#       case satisfies B1 and silently records nothing for every main-worktree session.
+#   B1  WHICH REPOSITORY the base is recorded for. The session's state.cwd is the MAIN worktree; the branch point that matters is in the LINKED worktree named by the decision's `worktree:` segment. Recording the main worktree's HEAD would produce a baseline that is a real sha, adopted by layer 1 forever, and wrong — the #1638 shape exactly. The fixture gives the two worktrees DIFFERENT HEADs so the two answers are distinguishable.
+#   B2  WRITE-ONCE through the real dispatch. R14 proves the module refuses a second write; this proves a second sentinel (a re-emitted BRANCHING_COMPLETE, which happens) does not route around it.
+#   B3  A RECORDING FAILURE IS A WARNING, NEVER FATAL. signalFatal makes workflow-mark exit 2, which aborts the step the user was in the middle of. A merge-base baseline is an optimisation over guessing; losing it must degrade to guessing, not stop the workflow.
+#   B4  The main-worktree session — no `worktree:` segment — still gets a baseline, recorded for state.cwd. Without this row an implementation that only handles the linked-worktree case satisfies B1 and silently records nothing for every main-worktree session.
 
-MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
+MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 
 # node on Git Bash needs forward-slash paths; on POSIX this is the identity.
 to_node_path() { # <path>
@@ -52,7 +33,7 @@ dispatch_branching() { # <sid> <decision>
   BI_RC=0
   printf '%s' "$payload" | env \
     "WORKFLOW_STATE_DIR=$(to_node_path "$WFDIR")" \
-    "AGENTS_CONFIG_DIR=$(to_node_path "$AGENTS_DIR")" \
+    "AGENTS_MAIN_ROOT=$(to_node_path "$SCRIPT_CHECKOUT_ROOT")" \
     node "$MARK_HOOK" >"$o" 2>"$e" || BI_RC=$?
   BI_OUT="$(cat "$o")"
   BI_ERR="$(cat "$e")"
@@ -60,7 +41,7 @@ dispatch_branching() { # <sid> <decision>
 }
 
 baseline_field() { # <sid> <field>
-  env "AGENTS_DIR=$(to_node_path "$AGENTS_DIR")" "WORKFLOW_STATE_DIR=$(to_node_path "$WFDIR")" \
+  env "SCRIPT_CHECKOUT_ROOT_NODE=$(to_node_path "$SCRIPT_CHECKOUT_ROOT")" "WORKFLOW_STATE_DIR=$(to_node_path "$WFDIR")" \
     node "$STATE_JS" field "$1" "$2" 2>/dev/null
 }
 
@@ -148,8 +129,8 @@ b3_recording_failure_is_not_fatal() {
   # The step itself must still be recorded: the baseline is an optimisation, branching_complete
   # is the fact the workflow depends on.
   check "B3-step: and branching_complete is still marked" "complete" \
-    "$(env "AGENTS_DIR=$(to_node_path "$AGENTS_DIR")" "WORKFLOW_STATE_DIR=$(to_node_path "$WFDIR")" \
-      node -e 'const path=require("path");let ws;try{ws=require(path.join(process.env.AGENTS_DIR,"hooks","workflow-state"));const st=ws.readState("'"$sid"'");process.stdout.write(String(st.steps.branching_complete.status));}catch(e){process.stdout.write("READ_ERROR");}' 2>/dev/null)"
+    "$(env "SCRIPT_CHECKOUT_ROOT_NODE=$(to_node_path "$SCRIPT_CHECKOUT_ROOT")" "WORKFLOW_STATE_DIR=$(to_node_path "$WFDIR")" \
+      node -e 'const path=require("path");let ws;try{ws=require(path.join(process.env.SCRIPT_CHECKOUT_ROOT_NODE,"hooks","workflow-state"));const st=ws.readState("'"$sid"'");process.stdout.write(String(st.steps.branching_complete.status));}catch(e){process.stdout.write("READ_ERROR");}' 2>/dev/null)"
   # And the failure is not silent. Whichever stream workflow-mark uses, the reason has to be
   # somewhere a reader can find it.
   if printf '%s\n%s\n' "$BI_OUT" "$BI_ERR" | grep -qiE "merge.?base|baseline"; then

@@ -53,8 +53,9 @@ if [[ -z "$WSID" ]]; then
 fi
 
 if [[ -z "$PLANS_DIR" ]]; then
-  if [[ -n "${AGENTS_CONFIG_DIR:-}" ]] && [[ -x "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir" ]]; then
-    PLANS_DIR="$(bash "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir")"
+  _scsa_resolver="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/workflow-plans-dir"
+  if [[ -x "$_scsa_resolver" ]]; then
+    PLANS_DIR="$(bash "$_scsa_resolver")"
   else
     PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
   fi

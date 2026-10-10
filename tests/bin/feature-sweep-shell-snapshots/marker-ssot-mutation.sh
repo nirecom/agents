@@ -6,7 +6,7 @@
 # literals stays green. T20 mirrors sweep + lib, gives the lib unique marker
 # values, and reads the classifier's own reason strings back.
 
-MARKERS_LIB_SRC="$AGENTS_DIR/bin/lib/session-sync-markers.sh"
+MARKERS_LIB_SRC="$SCRIPT_CHECKOUT_ROOT/bin/lib/session-sync-markers.sh"
 REAL_FETCH_MARKER='git fetch Claude session sync ...'
 REAL_REPAIR_MARKER='Repairing agents symlink(s)...'
 

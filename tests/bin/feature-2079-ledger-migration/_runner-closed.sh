@@ -8,7 +8,8 @@
 # Prints `R21 <name>=<value>` lines; the dispatcher asserts them. Real uname/host on purpose.
 
 set -uo pipefail
-. "$AGENTS_DIR/tests/tests/feature-1832-run-all-parallel/_lib.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-1832-run-all-parallel/_lib.sh"
 
 fx_init "n21-runner-closed" >/dev/null
 r21() { printf 'R21 %s=%s\n' "$1" "$2"; }

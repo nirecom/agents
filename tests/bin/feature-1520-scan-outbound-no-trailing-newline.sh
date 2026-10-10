@@ -9,14 +9,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_DIR_TEST="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REAL_SCRIPT="$SCRIPT_DIR_TEST/../../bin/scan-outbound.sh"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 if [ ! -f "$REAL_SCRIPT" ]; then
     echo "SKIP: bin/scan-outbound.sh not found at $REAL_SCRIPT"
@@ -43,7 +43,7 @@ make_sandbox() {
 
 run_scan() {
     local sandbox="$1" content="$2"
-    printf '%s' "$content" | env -u AGENTS_CONFIG_DIR "$sandbox/bin/scan-outbound.sh" --stdin test-label >/dev/null 2>&1
+    printf '%s' "$content" | env -u AGENTS_MAIN_ROOT "$sandbox/bin/scan-outbound.sh" --stdin test-label >/dev/null 2>&1
     echo $?
 }
 

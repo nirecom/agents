@@ -14,7 +14,7 @@
 #   commit-migration-artifacts.sh <repo_dir> [--dry-run] [--no-push]
 set -euo pipefail
 
-REPO_DIR="${1:?usage: commit-migration-artifacts.sh <repo_dir> [--dry-run] [--no-push]}"
+TARGET_CHECKOUT_ROOT="${1:?usage: commit-migration-artifacts.sh <repo_dir> [--dry-run] [--no-push]}"
 DRY_RUN=0
 NO_PUSH=0
 shift
@@ -26,7 +26,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-REPO_DIR="$(cd "$REPO_DIR" && pwd)"
+TARGET_CHECKOUT_ROOT="$(cd "$TARGET_CHECKOUT_ROOT" && pwd)"
 
 # This script always runs in the context of a migration cleanup commit.
 # The pre-commit hook reads ENFORCE_WORKTREE; set it off so the hook permits
@@ -50,12 +50,12 @@ ALLOWLIST=(
 resolve_external_docs_repo() {
   DOCS_REPO_DIR=""
   DOCS_PREFIX=""
-  local docs_link="$REPO_DIR/docs"
+  local docs_link="$TARGET_CHECKOUT_ROOT/docs"
   [ -L "$docs_link" ] || return 1
   local docs_target
   docs_target=$(cd "$docs_link" && git rev-parse --show-toplevel 2>/dev/null) || return 1
   local primary_top
-  primary_top=$(git -C "$REPO_DIR" rev-parse --show-toplevel 2>/dev/null) || return 1
+  primary_top=$(git -C "$TARGET_CHECKOUT_ROOT" rev-parse --show-toplevel 2>/dev/null) || return 1
   [ "$docs_target" != "$primary_top" ] || return 1
   DOCS_REPO_DIR="$docs_target"
   local prefix
@@ -67,10 +67,10 @@ resolve_external_docs_repo() {
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "[dry-run] would stage:"
   for p in "${ALLOWLIST[@]}"; do
-    if [ -e "$REPO_DIR/$p" ]; then echo "  - $p"; fi
+    if [ -e "$TARGET_CHECKOUT_ROOT/$p" ]; then echo "  - $p"; fi
   done
   echo "[dry-run] would commit: $COMMIT_MSG_SUBJECT"
-  echo "[dry-run] would push: origin $(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '<branch>')"
+  echo "[dry-run] would push: origin $(git -C "$TARGET_CHECKOUT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '<branch>')"
   if resolve_external_docs_repo; then
     echo "[dry-run] docs/ is an external symlink → would also commit docs entries to: $DOCS_REPO_DIR"
   fi
@@ -86,7 +86,7 @@ else
 fi
 
 for entry in "${ALLOWLIST[@]}"; do
-  if [ -e "$REPO_DIR/$entry" ]; then
+  if [ -e "$TARGET_CHECKOUT_ROOT/$entry" ]; then
     case "$entry" in
       docs/*)
         if [ "$HAS_EXTERNAL_DOCS" -eq 1 ]; then
@@ -94,7 +94,7 @@ for entry in "${ALLOWLIST[@]}"; do
         fi
         ;;
     esac
-    git -C "$REPO_DIR" -c core.autocrlf=false add -- "$entry"
+    git -C "$TARGET_CHECKOUT_ROOT" -c core.autocrlf=false add -- "$entry"
   fi
 done
 
@@ -105,13 +105,13 @@ while IFS= read -r f; do
   [ -z "$f" ] && continue
   case "$f" in
     *.sh)
-      mode=$(git -C "$REPO_DIR" ls-files -s -- "$f" 2>/dev/null | awk '{print $1}')
+      mode=$(git -C "$TARGET_CHECKOUT_ROOT" ls-files -s -- "$f" 2>/dev/null | awk '{print $1}')
       if [ "$mode" = "100644" ]; then
-        git -C "$REPO_DIR" update-index --chmod=+x -- "$f" >/dev/null 2>&1 || true
+        git -C "$TARGET_CHECKOUT_ROOT" update-index --chmod=+x -- "$f" >/dev/null 2>&1 || true
       fi
       ;;
   esac
-done < <(git -C "$REPO_DIR" diff --cached --name-only 2>/dev/null | tr -d '\r')
+done < <(git -C "$TARGET_CHECKOUT_ROOT" diff --cached --name-only 2>/dev/null | tr -d '\r')
 
 # Unstage any files that git auto-staged beyond the allowlist (e.g. CRLF normalisation).
 while IFS= read -r f; do
@@ -121,18 +121,18 @@ while IFS= read -r f; do
     case "$f" in "$entry"|"${entry}/"*) in_allowlist=1; break ;; esac
   done
   if [ "$in_allowlist" -eq 0 ]; then
-    git -C "$REPO_DIR" reset HEAD -- "$f" >/dev/null 2>&1 || true
+    git -C "$TARGET_CHECKOUT_ROOT" reset HEAD -- "$f" >/dev/null 2>&1 || true
   fi
-done < <(git -C "$REPO_DIR" diff --cached --name-only 2>/dev/null | tr -d '\r')
+done < <(git -C "$TARGET_CHECKOUT_ROOT" diff --cached --name-only 2>/dev/null | tr -d '\r')
 
-if git -C "$REPO_DIR" diff --cached --quiet; then
+if git -C "$TARGET_CHECKOUT_ROOT" diff --cached --quiet; then
   echo "commit-migration-artifacts: nothing to commit (allowlist already tracked / unchanged) — skipping"
   exit 0
 fi
 
-staged_list=$(git -C "$REPO_DIR" diff --cached --name-only | tr -d '\r' | sed 's/^/- /')
+staged_list=$(git -C "$TARGET_CHECKOUT_ROOT" diff --cached --name-only | tr -d '\r' | sed 's/^/- /')
 
-state_file="$REPO_DIR/.migration-state.json"
+state_file="$TARGET_CHECKOUT_ROOT/.migration-state.json"
 issue_range_line=""
 if [ -f "$state_file" ] && command -v jq >/dev/null 2>&1; then
   hist_min=$(jq -r '[.history.migrated[].issue_number] | min // empty' "$state_file" 2>/dev/null | tr -d '\r')
@@ -160,7 +160,7 @@ if [ -n "$issue_range_line" ]; then
 $issue_range_line"
 fi
 
-git -C "$REPO_DIR" commit -m "$COMMIT_MSG_SUBJECT" -m "$body_buf"
+git -C "$TARGET_CHECKOUT_ROOT" commit -m "$COMMIT_MSG_SUBJECT" -m "$body_buf"
 
 # If docs/ is a symlink to an external git repo, commit docs/ entries there separately.
 if [ "$HAS_EXTERNAL_DOCS" -eq 1 ]; then
@@ -168,7 +168,7 @@ if [ "$HAS_EXTERNAL_DOCS" -eq 1 ]; then
   for entry in "${ALLOWLIST[@]}"; do
     case "$entry" in
       docs/*)
-        local_path="$REPO_DIR/$entry"
+        local_path="$TARGET_CHECKOUT_ROOT/$entry"
         if [ -e "$local_path" ]; then
           rel="${entry#docs/}"
           docs_path="${DOCS_PREFIX}${rel}"
@@ -192,6 +192,6 @@ fi
 if [ "$NO_PUSH" -eq 1 ]; then
   echo "commit-migration-artifacts: --no-push specified, skipping push"
 else
-  branch=$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)
-  git -C "$REPO_DIR" push origin "$branch"
+  branch=$(git -C "$TARGET_CHECKOUT_ROOT" rev-parse --abbrev-ref HEAD)
+  git -C "$TARGET_CHECKOUT_ROOT" push origin "$branch"
 fi

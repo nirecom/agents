@@ -15,13 +15,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-SHARED_JS="${AGENTS_DIR}/hooks/enforce-worktree/shared-cmd-utils.js"
+SHARED_JS="${SCRIPT_CHECKOUT_ROOT}/hooks/enforce-worktree/shared-cmd-utils.js"
 
 if [ ! -f "$SHARED_JS" ]; then
     echo "SKIP: hooks/enforce-worktree/shared-cmd-utils.js not present"
@@ -62,7 +62,7 @@ run_with_timeout() {
 node_case() {
     local label="$1" code="$2"
     local out rc=0
-    out="$(cd "$AGENTS_DIR" && run_with_timeout 30 node -e "$code" 2>&1)" || rc=$?
+    out="$(cd "$SCRIPT_CHECKOUT_ROOT" && run_with_timeout 30 node -e "$code" 2>&1)" || rc=$?
     if [ "$rc" = "0" ]; then
         pass "$label"
     else
@@ -70,7 +70,7 @@ node_case() {
     fi
 }
 
-SHARED_REQ="require('${_AGENTS_DIR_NODE}/hooks/enforce-worktree/shared-cmd-utils.js')"
+SHARED_REQ="require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree/shared-cmd-utils.js')"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Case 1: BUILTIN appears when env is unset

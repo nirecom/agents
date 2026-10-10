@@ -8,8 +8,12 @@
 # Sourced helpers come from _lib.sh. Runnable standalone:
 #   bash tests/bin/feature-sweep-branches/validation.sh
 
+# isolation (#2512): harness before _lib.sh so _lib's pass/fail/run_with_timeout override harness's.
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+# Always pin under _lib.sh's TMPDIR_BASE (its EXIT trap removes it); never keep an inherited value.
+harness_isolate "$TMPDIR_BASE/isolation"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T17 — SWEEP_AGE_DAYS=0 env var → exit non-zero, validation error on stderr
@@ -19,7 +23,7 @@ T17_sweep_age_days_zero_rejected() {
     local repo="$TMPDIR_BASE/t17-repo"
     local stubdir="$TMPDIR_BASE/t17-stub"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
 
     if [ ! -x "$SWEEP" ]; then
         fail "T17 sweep_age_days_zero_rejected: $SWEEP not found / not executable"
@@ -29,8 +33,8 @@ T17_sweep_age_days_zero_rejected() {
     local stdout_file="$TMPDIR_BASE/t17.out"
     local stderr_file="$TMPDIR_BASE/t17.err"
     local exit_code=0
-    (cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" SWEEP_AGE_DAYS=0 \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode \
+    (cd "$repo" && SWEEP_AGE_DAYS=0 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode \
         >"$stdout_file" 2>"$stderr_file") || exit_code=$?
     local err
     err="$(cat "$stderr_file" 2>/dev/null || true)"
@@ -47,7 +51,7 @@ T18_sweep_age_days_leading_zero_rejected() {
     local repo="$TMPDIR_BASE/t18-repo"
     local stubdir="$TMPDIR_BASE/t18-stub"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
 
     if [ ! -x "$SWEEP" ]; then
         fail "T18 sweep_age_days_leading_zero_rejected: $SWEEP not found / not executable"
@@ -57,8 +61,8 @@ T18_sweep_age_days_leading_zero_rejected() {
     local stdout_file="$TMPDIR_BASE/t18.out"
     local stderr_file="$TMPDIR_BASE/t18.err"
     local exit_code=0
-    (cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" SWEEP_AGE_DAYS=010 \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode \
+    (cd "$repo" && SWEEP_AGE_DAYS=010 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode \
         >"$stdout_file" 2>"$stderr_file") || exit_code=$?
     local err
     err="$(cat "$stderr_file" 2>/dev/null || true)"
@@ -75,7 +79,7 @@ T19_sweep_age_days_overflow_rejected() {
     local repo="$TMPDIR_BASE/t19-repo"
     local stubdir="$TMPDIR_BASE/t19-stub"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
 
     if [ ! -x "$SWEEP" ]; then
         fail "T19 sweep_age_days_overflow_rejected: $SWEEP not found / not executable"
@@ -85,8 +89,8 @@ T19_sweep_age_days_overflow_rejected() {
     local stdout_file="$TMPDIR_BASE/t19.out"
     local stderr_file="$TMPDIR_BASE/t19.err"
     local exit_code=0
-    (cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" SWEEP_AGE_DAYS=9999999999999999 \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode \
+    (cd "$repo" && SWEEP_AGE_DAYS=9999999999999999 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode \
         >"$stdout_file" 2>"$stderr_file") || exit_code=$?
     local err
     err="$(cat "$stderr_file" 2>/dev/null || true)"
@@ -104,7 +108,7 @@ T20_sweep_age_days_safe_max_boundary_rejected() {
     local repo="$TMPDIR_BASE/t20-repo"
     local stubdir="$TMPDIR_BASE/t20-stub"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
 
     if [ ! -x "$SWEEP" ]; then
         fail "T20 sweep_age_days_safe_max_boundary_rejected: $SWEEP not found / not executable"
@@ -114,8 +118,8 @@ T20_sweep_age_days_safe_max_boundary_rejected() {
     local stdout_file="$TMPDIR_BASE/t20.out"
     local stderr_file="$TMPDIR_BASE/t20.err"
     local exit_code=0
-    (cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" SWEEP_AGE_DAYS=106751991167301 \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode \
+    (cd "$repo" && SWEEP_AGE_DAYS=106751991167301 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode \
         >"$stdout_file" 2>"$stderr_file") || exit_code=$?
     local err
     err="$(cat "$stderr_file" 2>/dev/null || true)"
@@ -132,7 +136,7 @@ T21_min_age_hours_leading_zero_rejected() {
     local repo="$TMPDIR_BASE/t21-repo"
     local stubdir="$TMPDIR_BASE/t21-stub"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
 
     if [ ! -x "$SWEEP" ]; then
         fail "T21 min_age_hours_leading_zero_rejected: $SWEEP not found / not executable"
@@ -142,8 +146,7 @@ T21_min_age_hours_leading_zero_rejected() {
     local stdout_file="$TMPDIR_BASE/t21.out"
     local stderr_file="$TMPDIR_BASE/t21.err"
     local exit_code=0
-    (cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --min-age-hours 010 \
+    (cd "$repo" && run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode --min-age-hours 010 \
         >"$stdout_file" 2>"$stderr_file") || exit_code=$?
     local err
     err="$(cat "$stderr_file" 2>/dev/null || true)"
@@ -160,7 +163,7 @@ T22_min_age_hours_overflow_rejected() {
     local repo="$TMPDIR_BASE/t22-repo"
     local stubdir="$TMPDIR_BASE/t22-stub"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
 
     if [ ! -x "$SWEEP" ]; then
         fail "T22 min_age_hours_overflow_rejected: $SWEEP not found / not executable"
@@ -170,8 +173,7 @@ T22_min_age_hours_overflow_rejected() {
     local stdout_file="$TMPDIR_BASE/t22.out"
     local stderr_file="$TMPDIR_BASE/t22.err"
     local exit_code=0
-    (cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --min-age-hours 2562047788015216 \
+    (cd "$repo" && run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode --min-age-hours 2562047788015216 \
         >"$stdout_file" 2>"$stderr_file") || exit_code=$?
     local err
     err="$(cat "$stderr_file" 2>/dev/null || true)"

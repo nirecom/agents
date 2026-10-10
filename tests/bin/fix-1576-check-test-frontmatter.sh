@@ -367,8 +367,8 @@ echo '# harness stub' > "$R/tests/lib/harness.sh"
   echo '#!/usr/bin/env bash'
   echo '# Tests: bin/foo.sh'
   echo "$DEFAULT_TAGS"
-  echo 'AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"'
-  echo 'source "$AGENTS_DIR/tests/lib/harness.sh"'
+  echo 'SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"'
+  echo 'source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"'
   echo 'echo hi'
 } > "$R/tests/hooks/good-test.sh"
 run_staged "$R" "tests/hooks/good-test.sh"

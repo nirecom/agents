@@ -1,6 +1,6 @@
 # tests/hooks/fix-1630-overlay-cross-validation/strip-units.sh
 # Tests: hooks/enforce-worktree/arg-value-guard.js
-# Tags: worktree, enforce, hook, config-dir, overlay, unit, scope:issue-specific
+# Tags: worktree, enforce, hook, agents-main-root, overlay, unit, scope:issue-specific
 #
 # Sourced by tests/hooks/fix-1630-overlay-cross-validation.sh.
 #

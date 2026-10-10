@@ -14,14 +14,14 @@ _WI_ROUTING_LIB_SOURCED=1
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
-STATE_LIB="$AGENTS_DIR/hooks/workflow-state.js"
-WORKFLOW_INIT_MD="$AGENTS_DIR/skills/workflow-init/SKILL.md"
-CLARIFY_INTENT_MD="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
-AGENTS_CLAUDE_MD="$AGENTS_DIR/CLAUDE.md"
-LABELS_YML="$AGENTS_DIR/.github/labels.yml"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+GATE_HOOK="$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+MARK_HOOK="$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
+STATE_LIB="$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/workflow-state.js"
+WORKFLOW_INIT_MD="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
+CLARIFY_INTENT_MD="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
+AGENTS_CLAUDE_MD="$__LIB_SCRIPT_CHECKOUT_ROOT/CLAUDE.md"
+LABELS_YML="$__LIB_SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
 
 PASS=0
 FAIL=0
@@ -105,10 +105,10 @@ state_wi_ci() {
 }
 
 # Read workflow_init.status via readState() (applies migration).
-# Run node from AGENTS_DIR so relative require paths work on Windows.
+# Run node from __LIB_SCRIPT_CHECKOUT_ROOT so relative require paths work on Windows.
 read_wi_status() {
     local sid="$1"
-    (cd "$AGENTS_DIR" && node -e "
+    (cd "$__LIB_SCRIPT_CHECKOUT_ROOT" && node -e "
 const { readState } = require('./hooks/workflow-state.js');
 const s = readState('$sid');
 const wi = s && s.steps && s.steps.workflow_init;

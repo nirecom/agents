@@ -4,7 +4,7 @@
 # Sourced by tests/bin/bin-concern-ledger-finalize.sh.
 # Detail-plan TL2 cases 6(e), 10, 11: wrapper exit-7 propagation, terminal-finalize
 # trigger symmetry across formats, and re-entry after a terminal finalize.
-# Exercised via a mock AGENTS_CONFIG_DIR (idiom of tests/bin/feature-603-run-codex-review-loop.sh):
+# Exercised via a mock script checkout root (idiom of tests/bin/feature-603-run-codex-review-loop.sh):
 # the reviewer is stubbed; the loop/verdict/ledger scripts under test are real.
 
 echo ""
@@ -20,7 +20,7 @@ fi
 
 MOCK_SEQ=0
 
-# mk_loop_env — a mock AGENTS_CONFIG_DIR plus a plans dir. Sets MOCKD / LPLANS.
+# mk_loop_env — a mock script checkout root plus a plans dir. Sets MOCKD / LPLANS.
 mk_loop_env() {
     MOCK_SEQ=$((MOCK_SEQ + 1))
     MOCKD="$TMPDIR_BASE/loop-$MOCK_SEQ/agents"
@@ -86,7 +86,7 @@ run_loop() {
     : > "$LOOP_ERR"
     LOOP_RC=0
     LOOP_OUT="$(
-        AGENTS_CONFIG_DIR="$MOCKD" bash "$MOCKD/bin/run-codex-review-loop" \
+        bash "$MOCKD/bin/run-codex-review-loop" \
             --format "$1" --session-id "$2" --plans-dir "$LPLANS" \
             --draft-file "$LPLANS/draft.md" --cap "$3" --max-extensions "$4" \
             --extensions-used 0 --accepted-tradeoffs "$LPLANS/tradeoffs.md" \

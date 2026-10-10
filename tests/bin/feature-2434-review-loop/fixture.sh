@@ -3,17 +3,19 @@
 # Tests: tests/bin/feature-2434-review-loop/fixture.sh
 # Tags: feature-2434, test-infrastructure, codex-review-loop, control-dir, scope:issue-specific
 #
-# The real stage wrappers and bin/run-codex-review-loop run in a throwaway
-# AGENTS_CONFIG_DIR; only the reviewers are stubbed. One wrapper run costs
+# The real stage wrappers and bin/run-codex-review-loop run from a throwaway
+# copy of the checkout; only the reviewers are stubbed. One wrapper run costs
 # ten to twenty seconds, so each suite keeps to about five runs (120 s timeout).
-# The caller sets AGENTS_DIR and sources tests/lib/harness.sh first.
+# The caller sets SCRIPT_CHECKOUT_ROOT and sources tests/lib/harness.sh first.
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${AGENTS_DIR:-}" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${SCRIPT_CHECKOUT_ROOT:-}" ]; then
     echo "fixture.sh is sourced by tests/bin/feature-2434-*.sh; nothing to run on its own"
     exit 0
 fi
 # shellcheck source=tests/lib/codex-loop-fixture.sh
-. "$AGENTS_DIR/tests/lib/codex-loop-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/codex-loop-fixture.sh"
+# shellcheck source=tests/lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 PASS=0; FAIL=0; SKIP=0
 
 TMP="$(make_tmp)"
@@ -26,8 +28,10 @@ cd "$TMP" || exit 1
 
 P="$WORKFLOW_PLANS_DIR"
 ROOT="$TMP/agents"
-clf_make_root "$ROOT" "$AGENTS_DIR"
-cp -r "$AGENTS_DIR/hooks" "$ROOT/hooks"
+clf_make_root "$ROOT" "$SCRIPT_CHECKOUT_ROOT"
+cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$ROOT/hooks"
+# The stage wrappers find bin/ from their own location, so they run from the copy.
+script_checkout_fixture_copy "$ROOT" skills
 clf_stub_reviewer "$ROOT"
 # review-code-codex stub: one open HIGH in the anchored Concern Delta shape.
 printf '%s\n' '#!/usr/bin/env bash' \
@@ -75,8 +79,8 @@ wrap() {
     local errf="$TMP/wrap-$2.err"
     W_RC=0
     ( cd "$REPO" || exit 1
-      AGENTS_CONFIG_DIR="$ROOT" SESSION_ID="$2" PLANS_DIR="$P" EXTENSIONS_USED="${3:-0}" \
-          bash "$AGENTS_DIR/skills/$1/scripts/run-codex-review-loop.sh" ) >/dev/null 2>"$errf" || W_RC=$?
+      SESSION_ID="$2" PLANS_DIR="$P" EXTENSIONS_USED="${3:-0}" \
+          bash "$ROOT/skills/$1/scripts/run-codex-review-loop.sh" ) >/dev/null 2>"$errf" || W_RC=$?
     W_ERR="$(cat "$errf" 2>/dev/null)"
 }
 
@@ -115,7 +119,7 @@ check_exit9_accept() {
     assert_eq "$fmt: exit-6 terminal, content changed, not accepted -> exit 9" "9" "$W_RC"
     assert_not_contains "$fmt: the exit-9 hint does not tell the model to touch a file" "touch" "$W_ERR"
     assert_contains "$fmt: the exit-9 hint names the accept CLI" "accept-exit6-residual" "$W_ERR"
-    run_bin "$AGENTS_DIR/bin/accept-exit6-residual" --session "$sid" --format "$fmt" \
+    run_bin "$SCRIPT_CHECKOUT_ROOT/bin/accept-exit6-residual" --session "$sid" --format "$fmt" \
         --reason "user accepted residual HIGH" >/dev/null 2>&1 || arc=$?
     assert_eq "$fmt: the accept CLI exits 0" "0" "$arc"
     wrap "$skill" "$sid"

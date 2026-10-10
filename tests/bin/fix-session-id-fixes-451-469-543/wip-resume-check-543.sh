@@ -4,18 +4,18 @@
 # Sourced by fix-session-id-fixes-451-469-543.sh; inherits globals and helpers.
 
 # Helper: build a minimal driver fixture under a temp dir.
-# Sets B543_PLANS, B543_CFG, B543_MOCKBIN, B543_RESP, B543_WIPD, B543_TMP.
+# Sets B543_PLANS, B543_FAKE_SCRIPT_CHECKOUT_ROOT, B543_MOCKBIN, B543_RESP, B543_WIPD, B543_TMP.
 setup_drv_mock() {
     B543_TMP="$(mktemp -d 2>/dev/null || mktemp -d -t wipfix543drv)"
     B543_PLANS="$B543_TMP/plans"
-    B543_CFG="$B543_TMP/cfg"
+    B543_FAKE_SCRIPT_CHECKOUT_ROOT="$B543_TMP/fake-script-checkout-root"
     B543_MOCKBIN="$B543_TMP/bin"
     B543_RESP="$B543_TMP/resp"
     B543_WIPD="$B543_TMP/wip"
     B543_WIP_LOG="$B543_TMP/wip-state-args.log"
     mkdir -p "$B543_PLANS" "$B543_MOCKBIN" "$B543_RESP" "$B543_WIPD" \
-        "$B543_CFG/bin/github-issues" "$B543_CFG/hooks/lib" \
-        "$B543_CFG/skills/workflow-init/scripts"
+        "$B543_FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues" "$B543_FAKE_SCRIPT_CHECKOUT_ROOT/hooks/lib" \
+        "$B543_FAKE_SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts"
 
     cat > "$B543_MOCKBIN/gh" <<GHEOF
 #!/bin/bash
@@ -44,7 +44,7 @@ GHEOF
     printf '{"number":42,"title":"Issue 42","body":"Body","labels":[{"name":"intent:clarified","name":"type:task"}],"state":"OPEN","createdAt":"2026-01-01T00:00:00Z"}\n' \
         > "$B543_RESP/issue-view-42.json"
 
-    cat > "$B543_CFG/bin/github-issues/wip-state.sh" <<WIPEOF
+    cat > "$B543_FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh" <<WIPEOF
 #!/bin/bash
 printf '%s\n' "\$*" >> '$B543_WIP_LOG'
 CMD="\$1"; shift
@@ -54,19 +54,19 @@ case "\$CMD" in
     *)     exit 0 ;;
 esac
 WIPEOF
-    chmod +x "$B543_CFG/bin/github-issues/wip-state.sh"
+    chmod +x "$B543_FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh"
 
-    cp "$AGENTS_DIR/bin/parse-issue-tokens" "$B543_CFG/bin/parse-issue-tokens"
-    cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$B543_CFG/hooks/lib/parse-closes-issues.js"
-    cat > "$B543_CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
+    cat > "$B543_FAKE_SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
 #!/bin/bash
 while [ $# -gt 0 ]; do
     case "$1" in --repo-map) shift 2 ;; -*) shift ;; *) echo "#${1#\#}"; shift ;; esac
 done
 exit 0
 FEOF
-    chmod +x "$B543_CFG/bin/parse-issue-tokens" \
-        "$B543_CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
+    chmod +x "$B543_FAKE_SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/filter-init-candidates.sh"
+    # The driver finds its siblings from its own path: launch it from a copy
+    # that holds the stubs above (the copy never overwrites an existing file).
+    script_checkout_fixture_copy "$B543_FAKE_SCRIPT_CHECKOUT_ROOT" bin hooks skills
 
     : > "$B543_WIP_LOG"
 }
@@ -89,8 +89,7 @@ else
     run_with_timeout 30 bash -c "
         export CLAUDE_CODE_SESSION_ID='testSID'
         export WORKFLOW_PLANS_DIR='$B543_PLANS'
-        export AGENTS_CONFIG_DIR='$B543_CFG'
-        node '$DRIVER' '#42'
+        node '$B543_FAKE_SCRIPT_CHECKOUT_ROOT/bin/workflow/workflow-init-driver' '#42'
     " >/dev/null 2>&1
     RC=$?
     export PATH="$ORIG_PATH_F1"

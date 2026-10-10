@@ -5,7 +5,7 @@
 # TL3 gap (what this test does NOT catch):
 # - Whether the survey worker's Read of the path actually succeeds at runtime (it runs as
 #   a Claude subagent). What is pinned here is that the path it is handed resolves, under
-#   the same config dir, to the very bytes the reviewer is handed.
+#   the same agents root, to the very bytes the reviewer is handed.
 # - Whether the DEPLOYED $HOME/.claude copy matches the worktree copy.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
@@ -22,13 +22,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-CASCADE="$AGENTS_DIR/skills/_shared/issue-verdict-cascade.md"
-WORKER_MD="$AGENTS_DIR/agents/issue-create-survey-worker.md"
-CODEX_SH="$AGENTS_DIR/bin/github-issues/review-survey-verdict-codex.sh"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+CASCADE="$SCRIPT_CHECKOUT_ROOT/skills/_shared/issue-verdict-cascade.md"
+WORKER_MD="$SCRIPT_CHECKOUT_ROOT/agents/issue-create-survey-worker.md"
+CODEX_SH="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/review-survey-verdict-codex.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -113,7 +113,7 @@ echo ""
 echo "=== W: the worker is pointed at the SAME file the reviewer was handed ==="
 
 # The worker receives a path, not text, so the comparable artifact is what that path
-# resolves to. `$agents_config_dir` is the worker's name for $AGENTS_DIR (the caller
+# resolves to. `$agents_main_root` is the worker's name for the agents root (the caller
 # passes it in), so it is substituted rather than left unresolvable.
 WPATH_RAW=""
 if [ -f "$WORKER_MD" ]; then
@@ -121,9 +121,9 @@ if [ -f "$WORKER_MD" ]; then
 fi
 WPATH=""
 if [ -n "$WPATH_RAW" ]; then
-    WPATH="${WPATH_RAW/\$agents_config_dir/$AGENTS_DIR}"
-    WPATH="${WPATH/\$\{agents_config_dir\}/$AGENTS_DIR}"
-    WPATH="${WPATH/\$AGENTS_CONFIG_DIR/$AGENTS_DIR}"
+    WPATH="${WPATH_RAW/\$agents_main_root/$SCRIPT_CHECKOUT_ROOT}"
+    WPATH="${WPATH/\$\{agents_main_root\}/$SCRIPT_CHECKOUT_ROOT}"
+    WPATH="${WPATH/\$AGENTS_MAIN_ROOT/$SCRIPT_CHECKOUT_ROOT}"
 fi
 
 if [ -n "$WPATH_RAW" ]; then
@@ -135,7 +135,7 @@ fi
 if [ -n "$WPATH" ] && [ -f "$WPATH" ]; then
     pass "W2-worker-path-resolves-to-a-real-file"
 else
-    fail "W2-worker-path-resolves-to-a-real-file" "the worker's cascade path does not resolve under the agents config dir (raw: '${WPATH_RAW:-<none>}' → '${WPATH:-<none>}') — the worker would Read nothing and decide with no cascade at all"
+    fail "W2-worker-path-resolves-to-a-real-file" "the worker's cascade path does not resolve under the agents root (raw: '${WPATH_RAW:-<none>}' → '${WPATH:-<none>}') — the worker would Read nothing and decide with no cascade at all"
 fi
 
 # The parity itself. Compared against the INJECTED copy, not $CASCADE, so it also fails

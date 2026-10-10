@@ -21,8 +21,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IC_SKILL_MD="$AGENTS_DIR/skills/issue-create/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+IC_SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -297,7 +297,7 @@ fi
 # REG-661: regression guard — re-runs feature-661 suite
 # Expected RED before SKILL.md edits (IC-FALLBACK-2/-3/-4 currently fail).
 # ---------------------------------------------------------------------------
-bash "$AGENTS_DIR/tests/skills/feature-661-survey-symptom-fallback.sh" > /tmp/reg661-output.txt 2>&1
+bash "$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-661-survey-symptom-fallback.sh" > /tmp/reg661-output.txt 2>&1
 RC=$?
 if [ $RC -eq 0 ]; then
     pass "REG-661: feature-661 suite all passed"

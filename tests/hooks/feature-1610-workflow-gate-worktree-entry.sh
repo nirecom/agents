@@ -19,11 +19,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-EW_HOOK="$AGENTS_DIR/hooks/enforce-worktree.js"
-ENTRY_GATE="$AGENTS_DIR/hooks/workflow-gate/worktree-entry-gate.js"
-REMEDY="$AGENTS_DIR/hooks/enforce-worktree/worktree-remedy.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+EW_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
+ENTRY_GATE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/worktree-entry-gate.js"
+REMEDY="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/worktree-remedy.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -92,7 +92,7 @@ fi
 
 # P0/self-test — proves the mechanism, not just its happy path. A path that is never
 # created stands in for a deleted source file.
-P0_ABSENT="$AGENTS_DIR/hooks/__t1610-source-presence-selftest-absent__.js"
+P0_ABSENT="$SCRIPT_CHECKOUT_ROOT/hooks/__t1610-source-presence-selftest-absent__.js"
 P0_PROBE="$(
     PASS=0; FAIL=0; SKIP=0
     report_source_presence "$P0_ABSENT" >/dev/null

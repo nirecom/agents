@@ -5,9 +5,8 @@
 # Naming: main direct work → tests/main-<name>.sh
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-TRANSLATE_CMD="uv run python $REPO_DIR/bin/translate-history.py"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TRANSLATE_CMD="uv run python $SCRIPT_CHECKOUT_ROOT/bin/translate-history.py"
 
 PASS=0
 FAIL=0

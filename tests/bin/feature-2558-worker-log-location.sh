@@ -15,13 +15,13 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD2558_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 for tool in git node; do
     if ! command -v "$tool" >/dev/null 2>&1; then echo "SKIP: $tool is not on PATH"; exit 77; fi
 done
 
-CASE_DIR="$AGENTS_DIR/tests/bin/feature-2558-worker-log-location"
+CASE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2558-worker-log-location"
 . "$CASE_DIR/setup.sh"
 . "$CASE_DIR/matrix.sh"
 . "$CASE_DIR/symlink.sh"

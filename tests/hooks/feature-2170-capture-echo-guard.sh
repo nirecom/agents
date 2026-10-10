@@ -22,14 +22,14 @@ set -uo pipefail
 # Later run_tests must ALSO re-run: refactor-1294 c6-resolve-effective-command.sh plus
 # the existing claude-scratchpad-base.js and preuse-auto-approve.js suites.
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SUITE_DIR="$(cd "$(dirname "$0")/feature-2170-capture-echo-guard" && pwd)"
 TOTAL_FAIL=0
 
 run_suite() {
   local script="$1"
   local rc=0
-  bash "$SUITE_DIR/$script" "$AGENTS_DIR" || rc=$?
+  bash "$SUITE_DIR/$script" "$SCRIPT_CHECKOUT_ROOT" || rc=$?
   if [ "$rc" -eq 77 ]; then
     echo "SKIP: $script — node not found"
     exit 77

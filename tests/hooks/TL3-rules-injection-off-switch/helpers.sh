@@ -3,7 +3,7 @@
 # Tags: rules-injection, on-demand-rules, off-switch, instructions-loaded, fixtures, claude-e2e, TL3, scope:common
 #
 # Helpers for TL3-rules-injection-off-switch. Sourced by ../TL3-rules-injection-off-switch.sh
-# (assumes AGENTS_DIR, pass(), fail() defined) and by tests/hooks/cc-tl3-rules-injection-gate.sh,
+# (assumes SCRIPT_CHECKOUT_ROOT, pass(), fail() defined) and by tests/hooks/cc-tl3-rules-injection-gate.sh,
 # which exercises ril_gate_verdict() at TL2 without spawning claude.
 # WSL-via-Windows bridge: CLAUDECODE is not propagated and user settings are read from
 # the Windows profile, so a green run here does not prove the macOS-native behaviour.
@@ -11,7 +11,7 @@
 # Portable timeout: bin/run-with-timeout.sh works on macOS (no `timeout` there).
 run_with_timeout() {
     local secs="$1"; shift
-    "$AGENTS_DIR/bin/run-with-timeout.sh" "$secs" "$@"
+    "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$secs" "$@"
 }
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
@@ -27,7 +27,7 @@ console.log(fs.mkdtempSync(path.join(os.tmpdir(),'ril-')).replace(/\\\\/g,'/'));
 }
 
 # isolation (#2512): both sourcing tests pin via harness_isolate before sourcing this file.
-declare -F harness_assert_isolated >/dev/null || . "$AGENTS_DIR/tests/lib/harness.sh"
+declare -F harness_assert_isolated >/dev/null || . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 harness_assert_isolated
 
 RIL_TOKEN='.on-demand-only/never-match'
@@ -60,7 +60,7 @@ ril_build_repo() {
     git -C "$repo" config core.hooksPath /dev/null
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
-    local hook_js; hook_js="$(node_path "$AGENTS_DIR/hooks/instructions-loaded-audit.js")"
+    local hook_js; hook_js="$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/instructions-loaded-audit.js")"
     cat > "$repo/.claude/settings.json" <<SETTINGS_EOF
 {
   "hooks": {
@@ -260,6 +260,6 @@ try {
 } catch (e) { console.log('STATUS=THREW COUNT=0 (' + e.message + ')'); process.exit(0); }
 const entries = (res && Array.isArray(res.entries)) ? res.entries : [];
 console.log('STATUS=' + (res && res.status !== undefined ? res.status : 'NO_STATUS') + ' COUNT=' + entries.length);
-" "$(node_path "$AGENTS_DIR/hooks/lib/instructions-loaded-receipt.js")" \
+" "$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/lib/instructions-loaded-receipt.js")" \
   "$(node_path "$1")" "$2" "$3" "$4" 2>&1
 }

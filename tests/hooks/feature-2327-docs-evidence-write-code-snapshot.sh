@@ -10,9 +10,9 @@
 # TDD: FAILs until the writeCodeSnapshot exclusion lands.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
@@ -24,7 +24,7 @@ export WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR 2>/dev/null || true
 cd "$TMPD" || exit 1
 
-AGENTS_N="$(np "$AGENTS_DIR")"
+AGENTS_N="$(np "$SCRIPT_CHECKOUT_ROOT")"
 
 REPO="$TMPD/repo"
 harness_git_init "$REPO"

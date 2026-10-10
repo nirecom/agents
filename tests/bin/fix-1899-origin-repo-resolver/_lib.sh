@@ -7,7 +7,6 @@
 #
 # Tests: bin/github-issues/lib/origin-repo.sh, bin/github-issues/lib/board-card.sh, skills/issue-close-finalize/scripts/pre-flight.sh
 # Tags: origin-resolution, github-issues, board-card, pre-flight, table-driven, security, path-traversal, authority-anchoring, TL2, scope:issue-specific
-#
 # NOT a test file (no frontmatter in first 10 lines; excluded from
 # dispatcher's SPLIT_GROUPS). Idempotent — guarded against re-sourcing.
 
@@ -19,11 +18,10 @@ _FIX1899_ORIGIN_LIB_SOURCED=1
 set -u
 
 # Repo root, resolved relative to this lib (tests/bin/fix-1899-origin-repo-resolver/).
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
-ORIGIN_LIB="$AGENTS_DIR/bin/github-issues/lib/origin-repo.sh"
-BOARD_CARD_LIB="$AGENTS_DIR/bin/github-issues/lib/board-card.sh"
-PRE_FLIGHT="$AGENTS_DIR/skills/issue-close-finalize/scripts/pre-flight.sh"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+ORIGIN_LIB="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/origin-repo.sh"
+BOARD_CARD_LIB="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/board-card.sh"
+PRE_FLIGHT="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts/pre-flight.sh"
 
 PASS=0
 FAIL=0

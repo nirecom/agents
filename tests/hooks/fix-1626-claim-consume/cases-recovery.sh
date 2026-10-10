@@ -108,7 +108,7 @@ run_C9() {
     # --- (4) recovery: re-mint resets the stale .claimed -------------------
     stubbin=$(make_tmp)
     write_examiner_stub "$stubbin/codex" ALLOW "legit workflow bug"
-    PATH="$stubbin:$PATH" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" WORKFLOW_PLANS_DIR="$tn" \
+    PATH="$stubbin:$PATH" WORKFLOW_PLANS_DIR="$tn" \
         WORKFLOW_STATE_DIR="$tn" SESSION_ID="c9sid" CLAUDE_CODE_SESSION_ID="c9sid" \
         "$RWT" 40 bash "$REQ" --target workflow --category workflow-bug --detail "next-step bug" >/dev/null 2>&1
     rm -r -f "$stubbin" 2>/dev/null || true

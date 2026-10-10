@@ -24,14 +24,14 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # session instead of the one the case names.
 unset CLAUDE_CODE_SESSION_ID
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
 
-RECORDER="$AGENTS_DIR/hooks/record-off-skill-invocation.js"
-HANDLER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
-BLOCK_HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-SETTINGS="$AGENTS_DIR/settings.json"
+RECORDER="$SCRIPT_CHECKOUT_ROOT/hooks/record-off-skill-invocation.js"
+HANDLER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-mark/enforce-override-handlers/off-clearance.js"
+BLOCK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -72,7 +72,7 @@ if [ ! -f "$RECORDER" ]; then
     fail "P0 hooks/record-off-skill-invocation.js missing at $RECORDER - provenance is unrecorded"
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
 fi
-if [ ! -f "$AGENTS_DIR/hooks/workflow-mark/enforce-override-handlers/off-clearance.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark/enforce-override-handlers/off-clearance.js" ]; then
     fail "P0 enforce-override-handlers/off-clearance.js missing - nothing consumes provenance"
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
 fi
@@ -89,7 +89,7 @@ fi
 WF=$(node_path "$TMP")
 MARKER_KIND=$("$RWT" 10 node -e \
     "process.stdout.write(require(process.argv[1]).EMERGENCY_PROVENANCE_MARKER_KIND)" \
-    "$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js" 2>/dev/null)
+    "$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/protected-basenames.js" 2>/dev/null)
 if [ -z "$MARKER_KIND" ]; then
     fail "P0 EMERGENCY_PROVENANCE_MARKER_KIND not exported by hooks/lib/protected-basenames.js"
     rm -rf "$TMP"; echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
@@ -125,7 +125,7 @@ _run_recorder() {
     local label="$1" payload="$2" var="${3:-}" val="${4:-}"
     printf '%s' "$payload" | \
         (cd "$TMP" && if [ -n "$var" ]; then export "$var=$val"; fi
-            WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+            WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" \
                 "$RWT" 15 node "$RECORDER" >"$CAP_OUT" 2>"$CAP_ERR")
     LAST_RECORDER_STATUS=$?
     LAST_RECORDER_OUT=$(cat "$CAP_OUT" 2>/dev/null)
@@ -195,7 +195,7 @@ iso_at() { "$RWT" 10 node -e "process.stdout.write(new Date(Date.now()+($1)).toI
 # set, the fixture froze the pre-M-4 shape and asserted a downgrade the reader
 # was RIGHT to apply, so a green freshness case meant nothing. P11 below pins
 # the short-shape downgrade DELIBERATELY instead.
-PROVENANCE_SSOT="$_AGENTS_DIR_NODE/hooks/lib/off-emergency-provenance.js"
+PROVENANCE_SSOT="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/off-emergency-provenance.js"
 # mk_marker <sid> <delta-ms>: a current-contract provenance marker dated relative
 # to now. The delta travels by ENV, never argv - see iso_at's note on `-600000`.
 mk_marker() {
@@ -239,13 +239,13 @@ process.stdout.write(JSON.stringify({ handled, msgs, fatal, err }));
 DRIVER_EOF
 
 run_emergency() { # <sid> <cmd> -> driver JSON on stdout
-    (cd "$TMP" && WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    (cd "$TMP" && WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" \
         "$RWT" 20 node "$DRIVER" "$HANDLER_NODE" "$2" "$1" 2>/dev/null)
 }
 # provenance_in <file>: the provenance value recorded in a marker/audit JSON.
 provenance_in() { grep -o '"provenance":"[a-z_]*"' "$1" 2>/dev/null | head -1 | sed 's/.*:"//; s/"$//'; }
 
-PARTS_DIR="$AGENTS_DIR/tests/hooks/enforce-off-emergency-provenance"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/enforce-off-emergency-provenance"
 # shellcheck source=./enforce-off-emergency-provenance/cases-p1-invocation.sh
 . "$PARTS_DIR/cases-p1-invocation.sh"
 # shellcheck source=./enforce-off-emergency-provenance/cases-p2-p8-lifecycle.sh

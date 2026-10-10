@@ -25,8 +25,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLI="$AGENTS_DIR/bin/check-prompt-extraction"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/check-prompt-extraction"
 
 # --- Pre-implementation skip gate -------------------------------------------
 if [ ! -f "$CLI" ]; then

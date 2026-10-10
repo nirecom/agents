@@ -5,7 +5,7 @@
 # Every spelling the retired #2421 generator or the #2451 static rules allowed must still get
 # its pinned verdict from the classifier, judged against the fixture main checkout.
 
-CORPUS_FILE="$AGENTS_DIR/tests/hooks/feature-2265-allow-regression-corpus/corpus.jsonl"
+CORPUS_FILE="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2265-allow-regression-corpus/corpus.jsonl"
 CORPUS_OUT="$(fx_run --corpus "$CORPUS_FILE")"
 printf '%s\n' "$CORPUS_OUT" | grep -E '^(ROW|FAMILY|SOURCE|RESULT)' | head -n 120
 
@@ -51,7 +51,7 @@ fx_check "corpus: no family outside the pinned manifest" "$(wc -w <<< "$CORPUS_P
 case_end
 
 case_begin "corpus-interpreter-spellings" "hooks/lib/allow-command-list.js"
-# <I> "$AGENTS_CONFIG_DIR/<P>", relative <I> <P> (cwd MAIN and WT), absolute <R>/<P> quoted and
+# <I> "$AGENTS_MAIN_ROOT/<P>", relative <I> <P> (cwd MAIN and WT), absolute <R>/<P> quoted and
 # unquoted, and both <R2W> forms, each against the MAIN root and the linked-worktree root.
 corpus_family_clean env rel abs abs-q win-q win-unq
 case_end

@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUT="$AGENTS_DIR/bin/build-codex-context"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SUT="$SCRIPT_CHECKOUT_ROOT/bin/build-codex-context"
 
 PASS=0
 FAIL=0

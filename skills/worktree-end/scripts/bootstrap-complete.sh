@@ -10,6 +10,7 @@
 #   1 argument / environment error; 2 re-probe disagrees (remote no longer empty); 3 git push failed.
 set -uo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 WORKTREE_PATH=""
 BRANCH=""
 OWNER_REPO=""
@@ -57,17 +58,9 @@ if [ -n "${BOOTSTRAP_REPROBE_RESULT:-}" ]; then
         PRE_BOOTSTRAP="false"
     fi
 else
-    # Resolve bootstrap-state.js: prefer the worktree-local copy (so dev/test
-    # against an in-progress branch hits the current code), then fall back to
-    # AGENTS_CONFIG_DIR (the original SKILL.md contract).
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    LOCAL_LIB="$SCRIPT_DIR/../../../hooks/lib/bootstrap-state.js"
-    if [ -f "$LOCAL_LIB" ]; then
-        PROBE_LIB="$LOCAL_LIB"
-    elif [ -n "${AGENTS_CONFIG_DIR:-}" ] && [ -f "$AGENTS_CONFIG_DIR/hooks/lib/bootstrap-state.js" ]; then
-        PROBE_LIB="$AGENTS_CONFIG_DIR/hooks/lib/bootstrap-state.js"
-    else
-        printf 'bootstrap-complete: cannot find hooks/lib/bootstrap-state.js (set AGENTS_CONFIG_DIR)\n' >&2
+    PROBE_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/bootstrap-state.js"
+    if [ ! -f "$PROBE_LIB" ]; then
+        printf 'bootstrap-complete: cannot find %s\n' "$PROBE_LIB" >&2
         exit 1
     fi
 

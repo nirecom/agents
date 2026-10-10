@@ -9,12 +9,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-REOPEN="$AGENTS_DIR/bin/github-issues/reopen-with-update.sh"
-CONTENTS="$AGENTS_DIR/bin/lib/github-contents-write.sh"
-GITDATA="$AGENTS_DIR/bin/lib/github-git-data-write.sh"
-GUARD_LIB="$AGENTS_DIR/bin/lib/gh-outbound-guard.sh"
-REAL_SCANNER="$AGENTS_DIR/bin/scan-outbound.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REOPEN="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/reopen-with-update.sh"
+CONTENTS="$SCRIPT_CHECKOUT_ROOT/bin/lib/github-contents-write.sh"
+GITDATA="$SCRIPT_CHECKOUT_ROOT/bin/lib/github-git-data-write.sh"
+GUARD_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh"
+REAL_SCANNER="$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh"
 
 PASS=0
 FAIL=0
@@ -37,11 +37,11 @@ BLOCKED_IP="10.0.0.1"   # RFC 1918 private IP — hard-block under a non-tests l
 setup() {
     TMP="$(mktemp -d)"
     export MOCK_LOG_DIR="$TMP"
-    mkdir -p "$TMP/mock-bin" "$TMP/acd/bin"
-    cp "$REAL_SCANNER" "$TMP/acd/bin/scan-outbound.sh"
-    chmod +x "$TMP/acd/bin/scan-outbound.sh"
-    : > "$TMP/acd/.private-info-allowlist"
-    : > "$TMP/acd/.private-info-blocklist"
+    mkdir -p "$TMP/mock-bin" "$TMP/fake_main_root/bin"
+    cp "$REAL_SCANNER" "$TMP/fake_main_root/bin/scan-outbound.sh"
+    chmod +x "$TMP/fake_main_root/bin/scan-outbound.sh"
+    : > "$TMP/fake_main_root/.private-info-allowlist"
+    : > "$TMP/fake_main_root/.private-info-blocklist"
     # gh mock — logs every call. Returns a body containing $BLOCKED_IP for
     # `issue view` so reopen's composed body carries the blocked pattern.
     cat > "$TMP/mock-bin/gh" <<'MOCKGH'
@@ -58,13 +58,12 @@ exit 0
 MOCKGH
     chmod +x "$TMP/mock-bin/gh"
     export PATH="$TMP/mock-bin:$PATH"
-    export AGENTS_CONFIG_DIR="$TMP/acd"
+    export AGENTS_MAIN_ROOT="$TMP/fake_main_root"
 }
 
 teardown() {
     [ -n "${TMP:-}" ] && [ -d "$TMP" ] && rm -rf "$TMP" 2>/dev/null || true
     unset MOCK_LOG_DIR MOCK_VIEW_IP 2>/dev/null || true
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
 

@@ -11,9 +11,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-GUARD="$AGENTS_DIR/bin/check-session-id-ssot.sh"
-RUN_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GUARD="$SCRIPT_CHECKOUT_ROOT/bin/check-session-id-ssot.sh"
+RUN_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # Whole-file exemption is for RESOLVERS only — the canonical implementations of
 # the two id families plus the worktree resolver that feeds them, where every
@@ -77,7 +77,6 @@ run_guard() {
   local out
   out="$(cd "${1:-$FIXTURE}" && \
     env -u SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE \
-      AGENTS_CONFIG_DIR="$AGENTS_DIR" \
       bash "$RUN_TIMEOUT" 60 bash "$GUARD" "${@:2}" 2>&1)"
   GUARD_RC=$?
   GUARD_OUT="$out"
@@ -248,7 +247,7 @@ expect_rc "G16 (waiver with empty reason still flagged)" 1
 # ---------------------------------------------------------------------------
 g17_bad=""
 for p in "${ALLOWLIST_PATHS[@]}"; do
-  [[ -e "$AGENTS_DIR/$p" ]] || g17_bad="$g17_bad $p(missing-in-repo)"
+  [[ -e "$SCRIPT_CHECKOUT_ROOT/$p" ]] || g17_bad="$g17_bad $p(missing-in-repo)"
   if [[ -f "$GUARD" ]] && ! grep -qF "$p" "$GUARD"; then
     g17_bad="$g17_bad $p(absent-from-guard)"
   fi
@@ -264,7 +263,7 @@ fi
 # G18: the whole point — the real repo is clean under the guard. RED until C1
 # and C4 route every remaining direct read through resolveSessionId().
 # ---------------------------------------------------------------------------
-run_guard "$AGENTS_DIR"
+run_guard "$SCRIPT_CHECKOUT_ROOT"
 expect_rc "G18 (real repo has no unwaived direct reads)" 0
 
 # ---------------------------------------------------------------------------
@@ -392,7 +391,7 @@ expect_rc "T12b (tombstone positional file: limits scan to clean file, bad file 
 
 # T9: the real tree carries no retired name outside the exempt set. RED until
 # the #1091 cleanup commits land, like G18.
-run_guard "$AGENTS_DIR"
+run_guard "$SCRIPT_CHECKOUT_ROOT"
 if echo "$GUARD_OUT" | grep -qi "retired"; then
   fail "T9 (real repo has no retired names): $(echo "$GUARD_OUT" | grep -i "retired" | head -5 | tr '\n' ' ')"
 else

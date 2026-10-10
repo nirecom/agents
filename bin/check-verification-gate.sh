@@ -191,9 +191,6 @@ resolve_settings() {
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     repo_root="$(cd "$script_dir/.." && pwd)"
     local candidates=()
-    if [[ -n "${AGENTS_CONFIG_DIR:-}" ]]; then
-        candidates+=("$AGENTS_CONFIG_DIR/settings.json")
-    fi
     candidates+=("$repo_root/settings.json")
     candidates+=("$repo_root/.claude/settings.json")
     local c

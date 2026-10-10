@@ -24,9 +24,9 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
-RECONCILE="$AGENTS_DIR/bin/workflow/reconcile-state"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
+RECONCILE="$SCRIPT_CHECKOUT_ROOT/bin/workflow/reconcile-state"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -46,16 +46,16 @@ export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 # The gate decision is resolved from the CONFIG FILE only
 # (plan-confirm-flag.js → isConfirmOffForStageFromFile → load-env.js
 # readDefaultEnvFile), which never consults process.env. So process.env exports
-# alone CANNOT isolate this suite — it must point AGENTS_CONFIG_DIR at a scratch
-# config dir whose .env contents are known. Every case here needs the gates-ON
+# alone CANNOT isolate this suite — it must point AGENTS_MAIN_ROOT at a scratch
+# agents main root whose .env contents are known. Every case here needs the gates-ON
 # baseline only, so a single scratch config is enough (the gates-OFF branch is
 # covered by tests/hooks/fix-1133-1148-approval-gate/14-f1-env-file-only-gate.sh).
 # Exported BEFORE any sub-file is sourced, so every child `node` invocation in
 # the sub-files inherits it.
-CONFIG_DIR_ON="$TMPDIR_BASE/config-on"
-mkdir -p "$CONFIG_DIR_ON"
-printf 'CONFIRM_INTENT=on\nCONFIRM_OUTLINE=on\nCONFIRM_DETAIL=on\n' > "$CONFIG_DIR_ON/.env"
-export AGENTS_CONFIG_DIR="$CONFIG_DIR_ON"
+CFG_ROOT_ON="$TMPDIR_BASE/config-on"
+mkdir -p "$CFG_ROOT_ON"
+printf 'CONFIRM_INTENT=on\nCONFIRM_OUTLINE=on\nCONFIRM_DETAIL=on\n' > "$CFG_ROOT_ON/.env"
+export AGENTS_MAIN_ROOT="$CFG_ROOT_ON"
 # Kept alongside the file-sourced pin: hook-process code paths (and any helper
 # still on isConfirmOffForStage) read process.env.
 export CONFIRM_OUTLINE=on

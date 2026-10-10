@@ -23,10 +23,10 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_RC_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/issue-reconcile.js"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
+WORKER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-reconcile.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -130,7 +130,7 @@ PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
 WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 MAIN="$(nodepath "$MAIN_RAW")"; PLANS="$(nodepath "$PLANS_RAW")"
 
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 CANNED="$TMPD/canned.json"
 CALLLOG="$TMPD/gh-calls.jsonl"
 if [ ! -f "$PRELOAD" ]; then
@@ -151,7 +151,7 @@ dispatch_reconcile() {
     : > "$CALLLOG"
     DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
-        "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
+        "WD_SPAWN_MODULE=$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" issue-reconcile "$MAIN" "$1" 2>/dev/null)" || DRC=$?

@@ -14,7 +14,7 @@ test_SWSec1_newline_in_repo_name_rejected() {
     local wt;   wt="$(setup_worktree_dest "swsec1-wt")"
     local mn; mn="$(node_path "$main")"
     local stderr
-    stderr="$(lib_eval "try{lib.run({mainRoot:process.argv[1],worktreePath:process.argv[2],branch:'feature/swsec1',createdDate:'2024-01-15',resolvedPath:process.argv[2],baseDir:null,copiedFiles:[],excludePattern:'WORKTREE_NOTES.md',siblingWorktrees:[{repo:'owner/\nrepo',worktree_path:'/tmp/wt'}]});process.stdout.write('NOTHROW');}catch(e){process.stderr.write('THROW:'+e.message);}" "$mn" "$wt" 2>&1 >/dev/null)"
+    stderr="$(lib_eval "try{lib.run({targetMainRoot:process.argv[1],worktreePath:process.argv[2],branch:'feature/swsec1',createdDate:'2024-01-15',resolvedPath:process.argv[2],baseDir:null,copiedFiles:[],excludePattern:'WORKTREE_NOTES.md',siblingWorktrees:[{repo:'owner/\nrepo',worktree_path:'/tmp/wt'}]});process.stdout.write('NOTHROW');}catch(e){process.stderr.write('THROW:'+e.message);}" "$mn" "$wt" 2>&1 >/dev/null)"
     if echo "$stderr" | grep -q "^THROW:"; then
         pass "SW-Sec1: run() rejects newline in siblingWorktrees repo name (throws)"
     else
@@ -28,7 +28,7 @@ test_SWSec2_path_traversal_in_sibling_path_rejected() {
     local wt;   wt="$(setup_worktree_dest "swsec2-wt")"
     local mn; mn="$(node_path "$main")"
     local stderr
-    stderr="$(lib_eval "try{lib.run({mainRoot:process.argv[1],worktreePath:process.argv[2],branch:'feature/swsec2',createdDate:'2024-01-15',resolvedPath:process.argv[2],baseDir:null,copiedFiles:[],excludePattern:'WORKTREE_NOTES.md',siblingWorktrees:[{repo:'owner/repo',worktree_path:'../../../etc'}]});process.stdout.write('NOTHROW');}catch(e){process.stderr.write('THROW:'+e.message);}" "$mn" "$wt" 2>&1 >/dev/null)"
+    stderr="$(lib_eval "try{lib.run({targetMainRoot:process.argv[1],worktreePath:process.argv[2],branch:'feature/swsec2',createdDate:'2024-01-15',resolvedPath:process.argv[2],baseDir:null,copiedFiles:[],excludePattern:'WORKTREE_NOTES.md',siblingWorktrees:[{repo:'owner/repo',worktree_path:'../../../etc'}]});process.stdout.write('NOTHROW');}catch(e){process.stderr.write('THROW:'+e.message);}" "$mn" "$wt" 2>&1 >/dev/null)"
     if echo "$stderr" | grep -q "^THROW:"; then
         pass "SW-Sec2: run() rejects path traversal in siblingWorktrees worktree_path (throws)"
     else
@@ -45,7 +45,7 @@ test_SWSec3_shell_injection_in_repo_field_rejected() {
     local all_passed=1
     for bad_repo in 'owner/$(rm -rf /tmp/injected)' 'owner/repo && evil' 'owner/repo|cat /etc/passwd' 'owner/repo;evil' 'owner/`id`'; do
         local stderr
-        stderr="$(lib_eval "try{lib.run({mainRoot:process.argv[1],worktreePath:process.argv[2],branch:'feature/swsec3',createdDate:'2024-01-15',resolvedPath:process.argv[2],baseDir:null,copiedFiles:[],excludePattern:'WORKTREE_NOTES.md',siblingWorktrees:[{repo:process.argv[3],worktree_path:process.argv[2]}]});process.stdout.write('NOTHROW');}catch(e){process.stderr.write('THROW:'+e.message);}" "$mn" "$wt" "$bad_repo" 2>&1 >/dev/null)"
+        stderr="$(lib_eval "try{lib.run({targetMainRoot:process.argv[1],worktreePath:process.argv[2],branch:'feature/swsec3',createdDate:'2024-01-15',resolvedPath:process.argv[2],baseDir:null,copiedFiles:[],excludePattern:'WORKTREE_NOTES.md',siblingWorktrees:[{repo:process.argv[3],worktree_path:process.argv[2]}]});process.stdout.write('NOTHROW');}catch(e){process.stderr.write('THROW:'+e.message);}" "$mn" "$wt" "$bad_repo" 2>&1 >/dev/null)"
         if ! echo "$stderr" | grep -q "^THROW:"; then
             all_passed=0
             fail "SW-Sec3: run() did NOT throw for shell metacharacters in repo='$bad_repo' (got: $stderr)"
@@ -63,7 +63,7 @@ test_SWSec4_newline_in_worktree_path_rejected() {
     local wt;   wt="$(setup_worktree_dest "swsec4-wt")"
     local mn; mn="$(node_path "$main")"
     local stderr
-    stderr="$(lib_eval "try{lib.run({mainRoot:process.argv[1],worktreePath:process.argv[2],branch:'feature/swsec4',createdDate:'2024-01-15',resolvedPath:process.argv[2],baseDir:null,copiedFiles:[],excludePattern:'WORKTREE_NOTES.md',siblingWorktrees:[{repo:'owner/repo',worktree_path:'/tmp/wt\nmalicious'}]});process.stdout.write('NOTHROW');}catch(e){process.stderr.write('THROW:'+e.message);}" "$mn" "$wt" 2>&1 >/dev/null)"
+    stderr="$(lib_eval "try{lib.run({targetMainRoot:process.argv[1],worktreePath:process.argv[2],branch:'feature/swsec4',createdDate:'2024-01-15',resolvedPath:process.argv[2],baseDir:null,copiedFiles:[],excludePattern:'WORKTREE_NOTES.md',siblingWorktrees:[{repo:'owner/repo',worktree_path:'/tmp/wt\nmalicious'}]});process.stdout.write('NOTHROW');}catch(e){process.stderr.write('THROW:'+e.message);}" "$mn" "$wt" 2>&1 >/dev/null)"
     if echo "$stderr" | grep -q "^THROW:"; then
         pass "SW-Sec4: run() rejects newline in siblingWorktrees worktree_path (throws)"
     else
@@ -105,7 +105,7 @@ test_SWSec7_shell_injection_in_worktree_path_rejected() {
     local all_passed=1
     for bad_path in '/tmp/wt; rm -rf /' '/tmp/wt && evil' '/tmp/wt|cat /etc/passwd' '/tmp/wt`id`'; do
         local stderr
-        stderr="$(lib_eval "try{lib.run({mainRoot:process.argv[1],worktreePath:process.argv[2],branch:'feature/swsec7',createdDate:'2024-01-15',resolvedPath:process.argv[2],baseDir:null,copiedFiles:[],excludePattern:'WORKTREE_NOTES.md',siblingWorktrees:[{repo:'owner/repo',worktree_path:process.argv[3]}]});process.stdout.write('NOTHROW');}catch(e){process.stderr.write('THROW:'+e.message);}" "$mn" "$wt" "$bad_path" 2>&1 >/dev/null)"
+        stderr="$(lib_eval "try{lib.run({targetMainRoot:process.argv[1],worktreePath:process.argv[2],branch:'feature/swsec7',createdDate:'2024-01-15',resolvedPath:process.argv[2],baseDir:null,copiedFiles:[],excludePattern:'WORKTREE_NOTES.md',siblingWorktrees:[{repo:'owner/repo',worktree_path:process.argv[3]}]});process.stdout.write('NOTHROW');}catch(e){process.stderr.write('THROW:'+e.message);}" "$mn" "$wt" "$bad_path" 2>&1 >/dev/null)"
         if ! echo "$stderr" | grep -q "^THROW:"; then
             all_passed=0
             fail "SW-Sec7: run() did NOT throw for shell metacharacters in worktree_path='$bad_path' (got: $stderr)"
@@ -129,7 +129,7 @@ test_SWErr1_non_object_entry_in_siblingWorktrees() {
     result="$(lib_eval "
         try {
             const r = lib.run({
-                mainRoot: process.argv[1],
+                targetMainRoot: process.argv[1],
                 worktreePath: process.argv[2],
                 branch: 'feature/swerr1',
                 createdDate: '2024-01-15',
@@ -170,7 +170,7 @@ test_SWErr2_null_entry_in_siblingWorktrees() {
     result="$(lib_eval "
         try {
             const r = lib.run({
-                mainRoot: process.argv[1],
+                targetMainRoot: process.argv[1],
                 worktreePath: process.argv[2],
                 branch: 'feature/swerr2',
                 createdDate: '2024-01-15',
@@ -213,7 +213,7 @@ test_SWEdge1_empty_string_repo_field() {
     result="$(lib_eval "
         try {
             const r = lib.run({
-                mainRoot: process.argv[1],
+                targetMainRoot: process.argv[1],
                 worktreePath: process.argv[2],
                 branch: 'feature/swedge1',
                 createdDate: '2024-01-15',
@@ -254,7 +254,7 @@ test_SWSec8_combined_newline_in_repo_and_path() {
     result="$(lib_eval "
         try {
             const r = lib.run({
-                mainRoot: process.argv[1],
+                targetMainRoot: process.argv[1],
                 worktreePath: process.argv[2],
                 branch: 'feature/swsec8',
                 createdDate: '2024-01-15',

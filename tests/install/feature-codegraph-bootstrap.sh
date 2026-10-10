@@ -18,16 +18,16 @@ set -u
 # - CLAUDE.md file-type preservation where the shell cannot make a real symlink.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: installer.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-codegraph-bootstrap"
 
 # install/win/codegraph.ps1 is named in `# Tests:` but NOT executed: this repo has no
 # PowerShell test harness. The registration logic both OSes share lives in
 # install/codegraph-mcp.js and IS executed here; PowerShell-only are fnm resolution,
 # the get-config-var.ps1 call shape and the npm call.
-CODEGRAPH_SH="$AGENTS_DIR/install/linux/codegraph.sh"
-CODEGRAPH_MCP_JS="$AGENTS_DIR/install/codegraph-mcp.js"
-RUN_WITH_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
+CODEGRAPH_SH="$SCRIPT_CHECKOUT_ROOT/install/linux/codegraph.sh"
+CODEGRAPH_MCP_JS="$SCRIPT_CHECKOUT_ROOT/install/codegraph-mcp.js"
+RUN_WITH_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 CASE_TIMEOUT=60
 
 # TL3 gap, continued — win32 shim resolution (#2150):
@@ -37,7 +37,7 @@ CASE_TIMEOUT=60
 #   cases) — WORKFLOW_USER_VERIFIED preflight, category: installer.
 
 # No `# Serial:` header: every write lands under a per-run mktemp -d (redirected HOME,
-# stub PATH, private AGENTS_CONFIG_DIR). Nothing touches the repo tree, the real home,
+# stub PATH, private AGENTS_MAIN_ROOT). Nothing touches the repo tree, the real home,
 # global git config or a shared port, and no case depends on another case's leftovers.
 PASS=0; FAIL=0; SKIP_ENV=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -53,7 +53,7 @@ assert_eq() {
 # 127 from a missing script is a real failure of the contract under test; skipping the
 # run would also skip the proof that this harness is sound.
 for f in "$CODEGRAPH_SH" "$CODEGRAPH_MCP_JS"; do
-    [ -f "$f" ] || fail "IMPLEMENTATION MISSING: ${f#"$AGENTS_DIR"/} (detail plan ST-2 / ST-4)"
+    [ -f "$f" ] || fail "IMPLEMENTATION MISSING: ${f#"$SCRIPT_CHECKOUT_ROOT"/} (detail plan ST-2 / ST-4)"
 done
 [ -f "$RUN_WITH_TIMEOUT" ] || { echo "FAIL: harness missing bin/run-with-timeout.sh"; exit 1; }
 
@@ -63,10 +63,10 @@ done
 # real installer cannot run. git's recorded mode is the contract, not the working-tree
 # bit: core.fileMode is false on Windows checkouts, so only the index carries it
 # (rules/coding.md, "bin/ Script Execute Bit").
-B0_MODE="$(git -C "$AGENTS_DIR" ls-files -s -- install/linux/codegraph.sh 2>/dev/null | cut -d' ' -f1)"
+B0_MODE="$(git -C "$SCRIPT_CHECKOUT_ROOT" ls-files -s -- install/linux/codegraph.sh 2>/dev/null | cut -d' ' -f1)"
 assert_eq "B0-a: install/linux/codegraph.sh is tracked with mode 100755 (else: git update-index --chmod=+x install/linux/codegraph.sh)" \
     "100755" "${B0_MODE:-UNTRACKED}"
-B0_CALL="$(grep -c '^[[:space:]]*"\$AGENTS_ROOT/install/linux/codegraph\.sh"' "$AGENTS_DIR/install.sh" 2>/dev/null || true)"
+B0_CALL="$(grep -c '^[[:space:]]*"\$AGENTS_ROOT/install/linux/codegraph\.sh"' "$SCRIPT_CHECKOUT_ROOT/install.sh" 2>/dev/null || true)"
 assert_eq "B0-b: install.sh invokes install/linux/codegraph.sh directly, so B0-a is the reachability contract" \
     "1" "${B0_CALL:-0}"
 

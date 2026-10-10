@@ -1,16 +1,19 @@
 # E-series sourced fragment — split from fix-issue-724-sync-labels-status.sh (Pattern A).
-# Globals required from parent: PASS, FAIL, pass(), fail(), run_with_timeout(), SYNC_SCRIPT, MOCK_DIR, REAL_GIT, AGENTS_DIR, ONE_LABEL_YML.
+# Globals required from parent: PASS, FAIL, pass(), fail(), run_with_timeout(), decoy_hits(), SYNC_SCRIPT, MOCK_DIR, REAL_GIT, S_ROOT, ROOT_DECOY_DIR, ONE_LABEL_YML.
 
 # ============================================================================
 # E-series — GitLab forge routing (issue #2308)
 # ============================================================================
-# sync-labels.sh must route label ops by the CWD repo's forge: a gitlab origin
-# goes through glab, a github origin stays on gh. RED now — the script is
-# gh-only and detects no forge, so a gitlab repo still hits gh. gh comes from
+# sync-labels.sh routes label ops by the CWD repo's forge: a gitlab origin
+# goes through glab, a github origin stays on gh. gh comes from
 # the existing fixture mock (copied so real git is not shadowed); glab is an
 # inline mock logging its argv. Both log; assertions compare which was used.
 
-E_TMP="$(mktemp -d)"
+[ -n "${S_ROOT:-}" ] && [ -d "$S_ROOT" ] || { echo "e-series: the parent's S_ROOT is missing" >&2; exit 1; }
+E_TMP="$(mktemp -d "$S_ROOT/e-series.XXXXXX")"
+[ -n "$E_TMP" ] && [ -d "$E_TMP" ] || { echo "e-series: cannot create a temp dir" >&2; exit 1; }
+readonly E_TMP
+E_DECOY_MAIN_ROOT="${ROOT_DECOY_DIR:?e-series: the parent must build the root decoy first}/main"
 E_LABELS="$E_TMP/labels.yml"
 printf '%s' "$ONE_LABEL_YML" > "$E_LABELS"
 
@@ -59,14 +62,15 @@ case "$*" in
 esac
 GLABEOF
 chmod +x "$E_MOCK/glab"
-cp "$MOCK_DIR/gh" "$E_MOCK/gh" 2>/dev/null || true
-chmod +x "$E_MOCK/gh" 2>/dev/null || true
+cp "$MOCK_DIR/gh" "$E_MOCK/gh" || { echo "e-series: cannot copy the gh mock" >&2; exit 1; }
+chmod +x "$E_MOCK/gh" || exit 1
 unset GH_MOCK_LABEL_LIST GH_MOCK_LABEL_LIST_FAIL GLAB_MOCK_LABEL_LIST GLAB_MOCK_LABEL_LIST_FAIL
 
 make_forge_repo() {
     local url="$1"
-    local repo="$E_TMP/repo-$RANDOM$RANDOM"
-    mkdir -p "$repo"
+    local repo
+    repo="$(mktemp -d "$E_TMP/repo.XXXXXX")"
+    [ -n "$repo" ] && [ -d "$repo" ] || { echo "e-series: cannot create a repo dir" >&2; return 1; }
     "$REAL_GIT" -C "$repo" init -q
     "$REAL_GIT" -C "$repo" config core.hooksPath /dev/null 2>/dev/null || true
     "$REAL_GIT" -C "$repo" config user.email "test@example.com"
@@ -85,30 +89,30 @@ e_glab_delete_of() { grep -c "label delete.*$1" "$GLAB_MOCK_LABEL_LOG" 2>/dev/nu
 e_gh_created() { grep -c 'label create' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true; }
 e_gh_used() { grep -c 'label' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true; }
 
-REPO_GL_E="$(make_forge_repo 'git@gitlab.com:acme/widgets.git')"
-REPO_GH_E="$(make_forge_repo 'git@github.com:acme/widgets.git')"
-REPO_UNK_E="$(make_forge_repo 'git@bitbucket.org:acme/widgets.git')"
+REPO_GL_E="$(make_forge_repo 'git@gitlab.com:acme/widgets.git')" || exit 1
+REPO_GH_E="$(make_forge_repo 'git@github.com:acme/widgets.git')" || exit 1
+REPO_UNK_E="$(make_forge_repo 'git@bitbucket.org:acme/widgets.git')" || exit 1
 
-# --- E1: gitlab repo with AGENTS_CONFIG_DIR UNSET → glab path via SCRIPT_DIR
-# fallback. Empty remote (no GLAB_MOCK_LABEL_LIST) → type:task is CREATED via a
+# --- E1: gitlab repo with AGENTS_MAIN_ROOT UNSET → glab path, the forge tool
+# coming from the script's own checkout. Empty remote (no GLAB_MOCK_LABEL_LIST) → type:task is CREATED via a
 # `glab label create`, `glab label list` is queried first, gh is untouched, and
-# the script exits 0. RED now. Verifying exit status + exact subcommands closes
+# the script exits 0. Verifying exit status + exact subcommands closes
 # the C11 gap (a bare "label" token would pass on a no-op list alone).
 e_reset
-( cd "$REPO_GL_E" && unset AGENTS_CONFIG_DIR GLAB_MOCK_LABEL_LIST
+( cd "$REPO_GL_E" && unset AGENTS_MAIN_ROOT GLAB_MOCK_LABEL_LIST
   PATH="$E_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E_LABELS" ) >/dev/null 2>&1
 E1_RC=$?
 if [ "$E1_RC" -eq 0 ] && [ "$(e_glab_list)" -ge 1 ] && [ "$(e_glab_create)" -ge 1 ] \
    && [ "$(e_gh_used)" -eq 0 ]; then
-    pass "E1: gitlab repo, AGENTS_CONFIG_DIR unset → glab list+create, no gh, exit 0"
+    pass "E1: gitlab repo, AGENTS_MAIN_ROOT unset → glab list+create, no gh, exit 0"
 else
     fail "E1: expected exit 0 + glab list>=1 + glab create>=1 + no gh (rc=$E1_RC glab_list=$(e_glab_list) glab_create=$(e_glab_create) gh_used=$(e_gh_used))"
 fi
 
-# --- E2: gitlab repo with AGENTS_CONFIG_DIR set → glab create for type:task,
-# gh label create NOT called, exit 0. RED now (gh-only script).
+# --- E2: gitlab repo with AGENTS_MAIN_ROOT at the decoy → glab create for type:task,
+# gh label create NOT called, exit 0.
 e_reset
-( cd "$REPO_GL_E" && export AGENTS_CONFIG_DIR="$AGENTS_DIR" && unset GLAB_MOCK_LABEL_LIST
+( cd "$REPO_GL_E" && export AGENTS_MAIN_ROOT="$E_DECOY_MAIN_ROOT" && unset GLAB_MOCK_LABEL_LIST
   PATH="$E_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E_LABELS" ) >/dev/null 2>&1
 E2_RC=$?
 if [ "$E2_RC" -eq 0 ] && [ "$(e_glab_create)" -ge 1 ] && [ "$(e_gh_created)" -eq 0 ]; then
@@ -121,9 +125,9 @@ fi
 # → the three-way UPDATE arm fires on the glab path via `glab label edit` (the
 # glab analogue of gh's `label create --force`). glab create must NOT be used for
 # an existing label, and gh must stay untouched. This is the GitLab twin of S3;
-# without it a regression in the glab update path goes undetected. RED now.
+# without it a regression in the glab update path goes undetected.
 e_reset
-( cd "$REPO_GL_E" && export AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+( cd "$REPO_GL_E" && export AGENTS_MAIN_ROOT="$E_DECOY_MAIN_ROOT" \
     GLAB_MOCK_LABEL_LIST=$'type:task\tff0000\tNormal work item.'
   PATH="$E_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E_LABELS" ) >/dev/null 2>&1
 EUP_RC=$?
@@ -137,9 +141,9 @@ fi
 # --- E-unchanged (C11): gitlab repo, remote matches labels.yml EXACTLY → no-op.
 # `glab label list` is queried (to compute the diff) but NO mutating call fires:
 # no create, no edit, no delete. gh stays untouched. GitLab twin of S2; guards
-# against a glab path that re-writes labels on every run. RED now.
+# against a glab path that re-writes labels on every run.
 e_reset
-( cd "$REPO_GL_E" && export AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+( cd "$REPO_GL_E" && export AGENTS_MAIN_ROOT="$E_DECOY_MAIN_ROOT" \
     GLAB_MOCK_LABEL_LIST=$'type:task\t0e8a16\tNormal work item.'
   PATH="$E_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E_LABELS" ) >/dev/null 2>&1
 EUN_RC=$?
@@ -152,9 +156,8 @@ else
 fi
 
 # --- E3: CONTROL — github repo → gh label path unchanged, glab NOT called.
-# GREEN now and after #2308 (regression pin).
 e_reset
-( cd "$REPO_GH_E" && export AGENTS_CONFIG_DIR="$AGENTS_DIR"
+( cd "$REPO_GH_E" && export AGENTS_MAIN_ROOT="$E_DECOY_MAIN_ROOT"
   PATH="$E_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E_LABELS" ) >/dev/null 2>&1
 E3_RC=$?
 if [ "$E3_RC" -eq 0 ] && [ "$(e_gh_created)" -ge 1 ] && [ "$(e_glab_create)" -eq 0 ] \
@@ -168,7 +171,7 @@ fi
 # protected label ('bug') plus an orphan ('old:stale') must NOT delete the
 # protected one; the orphan may be deleted. Proves the protected guard is honored
 # on the glab path (not a false-green from an empty remote where no delete would
-# ever fire). RED now.
+# ever fire).
 E4_LABELS="$E_TMP/labels-protected.yml"
 printf '%s' '- name: "type:task"
   color: "0e8a16"
@@ -178,7 +181,7 @@ protected:
   - bug
 ' > "$E4_LABELS"
 e_reset
-( cd "$REPO_GL_E" && export AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+( cd "$REPO_GL_E" && export AGENTS_MAIN_ROOT="$E_DECOY_MAIN_ROOT" \
     GLAB_MOCK_LABEL_LIST=$'type:task\t0e8a16\tNormal work item.\nbug\tee0701\tSomething is not working.\nold:stale\taaaaaa\tStale label.'
   PATH="$E_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E4_LABELS" ) >/dev/null 2>&1
 E4_RC=$?
@@ -190,17 +193,21 @@ else
 fi
 
 # --- E5 (C13): unknown-forge guard. A bitbucket (unknown) origin must be
-# rejected safely — NEITHER gh NOR glab called, exit non-zero. RED now: the
-# gh-only script detects no forge and still hits `gh label list`. GREEN once
-# #2308 classifies the forge up front and rejects an unknown one.
+# rejected safely — NEITHER gh NOR glab called, exit 1 with the refusal on
+# stderr (any other failure exits non-zero too), and no decoy stub reached.
 e_reset
-( cd "$REPO_UNK_E" && export AGENTS_CONFIG_DIR="$AGENTS_DIR"
-  PATH="$E_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E_LABELS" ) >/dev/null 2>&1
+E5_ERR="$E_TMP/e5.err"
+E5_HITS_BEFORE="$(decoy_hits)"
+( cd "$REPO_UNK_E" && export AGENTS_MAIN_ROOT="$E_DECOY_MAIN_ROOT"
+  PATH="$E_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E_LABELS" ) >/dev/null 2>"$E5_ERR"
 E5_RC=$?
-if [ "$E5_RC" -ne 0 ] && [ "$(e_gh_used)" -eq 0 ] && [ ! -s "$GLAB_MOCK_LABEL_LOG" ]; then
-    pass "E5: unknown-forge repo → rejected (rc!=0), neither gh nor glab called"
+E5_REFUSED=$(grep -c 'unsupported or undetected forge (type=unknown)' "$E5_ERR" 2>/dev/null; true)
+E5_HITS_AFTER="$(decoy_hits)"
+if [ "$E5_RC" -eq 1 ] && [ "$E5_REFUSED" -eq 1 ] && [ "$(e_gh_used)" -eq 0 ] && [ ! -s "$GLAB_MOCK_LABEL_LOG" ] \
+   && [ "$E5_HITS_AFTER" = "$E5_HITS_BEFORE" ]; then
+    pass "E5: unknown-forge repo → refused (rc=1, refusal on stderr), neither gh nor glab called, no decoy hit"
 else
-    fail "E5: expected rc!=0 + no gh + no glab (rc=$E5_RC gh_used=$(e_gh_used) glab-log=[$(cat "$GLAB_MOCK_LABEL_LOG" 2>/dev/null | tr '\n' ';')])"
+    fail "E5: expected rc=1 + the refusal on stderr + no gh + no glab + no new decoy hit (rc=$E5_RC refused=$E5_REFUSED gh_used=$(e_gh_used) hits=$E5_HITS_BEFORE→$E5_HITS_AFTER stderr=[$(tr '\n' ';' < "$E5_ERR" 2>/dev/null)] glab-log=[$(cat "$GLAB_MOCK_LABEL_LOG" 2>/dev/null | tr '\n' ';')])"
 fi
 
 # E-sub series (C11): subgroup/subpath namespace %2F-encoding asserted here.
@@ -225,16 +232,16 @@ case "$*" in
 esac
 GLABRAW
 chmod +x "$ES_MOCK/glab"
-cp "$MOCK_DIR/gh" "$ES_MOCK/gh" 2>/dev/null || true
-chmod +x "$ES_MOCK/gh" 2>/dev/null || true
+cp "$MOCK_DIR/gh" "$ES_MOCK/gh" || { echo "e-series: cannot copy the gh mock" >&2; exit 1; }
+chmod +x "$ES_MOCK/gh" || exit 1
 
-REPO_SUB="$(make_forge_repo 'git@gitlab.com:group/sub/proj.git')"
-REPO_SUB_DEEP="$(make_forge_repo 'git@gitlab.com:group/team/sub/proj.git')"
+REPO_SUB="$(make_forge_repo 'git@gitlab.com:group/sub/proj.git')" || exit 1
+REPO_SUB_DEEP="$(make_forge_repo 'git@gitlab.com:group/team/sub/proj.git')" || exit 1
 es_grep() { grep -c "$1" "$GLAB_RAW_LOG" 2>/dev/null; true; }
 
 # --- E-sub1: 3-level namespace create → project path fully %2F-encoded, never a bare slash.
 : > "$GLAB_RAW_LOG"
-( cd "$REPO_SUB" && export AGENTS_CONFIG_DIR="$AGENTS_DIR" && unset GLAB_SUB_LIST
+( cd "$REPO_SUB" && export AGENTS_MAIN_ROOT="$E_DECOY_MAIN_ROOT" && unset GLAB_SUB_LIST
   PATH="$ES_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E_LABELS" ) >/dev/null 2>&1
 ES1_RC=$?
 if [ "$ES1_RC" -eq 0 ] && [ "$(es_grep 'projects/group%2Fsub%2Fproj/labels')" -ge 1 ] \
@@ -246,7 +253,7 @@ fi
 
 # --- E-sub2: subgroup UPDATE → PUT url encodes BOTH the project path (%2F) and the label name (%3A).
 : > "$GLAB_RAW_LOG"
-( cd "$REPO_SUB" && export AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+( cd "$REPO_SUB" && export AGENTS_MAIN_ROOT="$E_DECOY_MAIN_ROOT" \
     GLAB_SUB_LIST=$'type:task\tff0000\tNormal work item.'
   PATH="$ES_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E_LABELS" ) >/dev/null 2>&1
 ES2_RC=$?
@@ -258,7 +265,7 @@ fi
 
 # --- E-sub3: deeper 4-level namespace → every separator encoded.
 : > "$GLAB_RAW_LOG"
-( cd "$REPO_SUB_DEEP" && export AGENTS_CONFIG_DIR="$AGENTS_DIR" && unset GLAB_SUB_LIST
+( cd "$REPO_SUB_DEEP" && export AGENTS_MAIN_ROOT="$E_DECOY_MAIN_ROOT" && unset GLAB_SUB_LIST
   PATH="$ES_MOCK:$PATH" run_with_timeout 30 bash "$SYNC_SCRIPT" "$E_LABELS" ) >/dev/null 2>&1
 ES3_RC=$?
 if [ "$ES3_RC" -eq 0 ] && [ "$(es_grep 'projects/group%2Fteam%2Fsub%2Fproj/labels')" -ge 1 ] \
@@ -269,6 +276,13 @@ else
 fi
 
 unset GLAB_RAW_LOG GLAB_SUB_LIST
+
+E_HITS="$(decoy_hits)"
+if [ "$E_HITS" = "main=0 old=0" ]; then
+    pass "E-series: no case reached a decoy stub"
+else
+    fail "E-series: a case followed AGENTS_MAIN_ROOT or a retired root name ($E_HITS)"
+fi
 
 rm -rf "$E_TMP" 2>/dev/null || true
 unset GLAB_MOCK_LABEL_LOG GH_MOCK_LABEL_LOG GLAB_MOCK_LABEL_LIST GLAB_MOCK_LABEL_LIST_FAIL

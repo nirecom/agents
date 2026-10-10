@@ -3,7 +3,7 @@
 # Tags: rules-injection, instructions-loaded, fixtures, TL2, scope:common
 #
 # Fixture tree, environment pinning, and the fire()/read_field() drivers for
-# ../cc-instructions-loaded-audit.sh. Assumes AGENTS_DIR, HOOK, pass(), fail(),
+# ../cc-instructions-loaded-audit.sh. Assumes SCRIPT_CHECKOUT_ROOT, HOOK, pass(), fail(),
 # and node_path() are already defined by the dispatcher.
 
 TOKEN='.on-demand-only/never-match'

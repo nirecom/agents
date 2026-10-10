@@ -17,11 +17,11 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_CB_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -91,7 +91,7 @@ dispatch_stubbed() {
     : > "$CALLLOG"
     DRC=0
     DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF" \
-        "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
+        "WD_SPAWN_MODULE=$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" worktree-copy "$MAIN" "$2" 2>/dev/null)" || DRC=$?
@@ -242,13 +242,13 @@ group_copyinclude_directory_candidate() {
     git -C "$WC_MAIN/statedir" config core.hooksPath /dev/null
     printf 'INNER\n' > "$WC_MAIN/statedir/inner.txt"
 
-    local WC_LIB="$AGENTS_DIR/hooks/lib/worktree-copy.js"
+    local WC_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worktree-copy.js"
     if [ ! -f "$WC_LIB" ]; then fail "wc-dir/lib-present" "missing $WC_LIB"; return; fi
     local RES="$WC_ROOT/result.json"
     node -e '
 const {copyInclude}=require(process.argv[1]);
 const fs=require("fs");
-const r=copyInclude({mainRoot:process.argv[2], worktreePath:process.argv[3]});
+const r=copyInclude({targetMainRoot:process.argv[2], worktreePath:process.argv[3]});
 fs.writeFileSync(process.argv[4], JSON.stringify(r||{}));
 ' "$(nodepath "$WC_LIB")" "$(nodepath "$WC_MAIN")" "$(nodepath "$WC_LINKED")" "$(nodepath "$RES")" 2>/dev/null
 

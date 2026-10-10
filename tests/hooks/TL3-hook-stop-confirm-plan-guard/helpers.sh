@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Helpers for TL3-hook-stop-confirm-plan-guard.
-# Sourced by ../TL3-hook-stop-confirm-plan-guard.sh — assumes AGENTS_DIR, pass(), fail() defined.
+# Sourced by ../TL3-hook-stop-confirm-plan-guard.sh — assumes SCRIPT_CHECKOUT_ROOT, pass(), fail() defined.
 
 # WSL-via-Windows bridge: CLAUDECODE not propagated, global settings read from Windows profile — test may pass on WSL but fail on macOS native
 

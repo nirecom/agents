@@ -15,15 +15,15 @@ set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-NS="$AGENTS_DIR_N/bin/workflow/next-step"
-RSJ="$AGENTS_DIR_N/bin/workflow/record-skip-judgment"
-SWT="$AGENTS_DIR_N/bin/workflow/set-workflow-type"
-RCAS="$AGENTS_DIR/bin/workflow/record-complexity-and-skip"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
-PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+NS="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+RSJ="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment"
+SWT="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/set-workflow-type"
+RCAS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
+PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -35,7 +35,7 @@ export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1
@@ -217,20 +217,20 @@ echo "=== C10-5: record-complexity-and-skip argument handling ==="
 # so a value-less --session immediately followed by another flag is rejected
 # as a missing value (exit 2), not treated as swallowing that flag's token.
 expect_reject "C10-5a: --session immediately followed by another flag is a missing value" 2 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session --target outline --signals ""
+  env bash "$RCAS" --session --target outline --signals ""
 check_contains "C10-5a: the diagnostic names the missing value" "--session requires a value" "$ERR"
 expect_reject "C10-5b: empty --session" 1 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session "" --signals "" --target outline
+  env bash "$RCAS" --session "" --signals "" --target outline
 expect_reject "C10-5c: missing --session entirely" 1 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --signals "" --target outline
+  env bash "$RCAS" --signals "" --target outline
 expect_reject "C10-5d: missing --signals is a usage error, not a default" 2 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session guard --target outline
+  env bash "$RCAS" --session guard --target outline
 expect_reject "C10-5d2: the retired --verdict flag is rejected the same way" 2 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session guard --verdict low --signals "" --target outline
+  env bash "$RCAS" --session guard --verdict low --signals "" --target outline
 expect_reject "C10-5e: unknown flag on the advance path still exits 2, not 3" 2 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session guard --signals "" --target outline --advance --bogus
+  env bash "$RCAS" --session guard --signals "" --target outline --advance --bogus
 expect_reject "C10-5f: path-traversal --session" 1 -- \
-  env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session "../evil" --signals "" --target outline
+  env bash "$RCAS" --session "../evil" --signals "" --target outline
 
 echo ""
 echo "=== C10-6: boundary values that are REJECTED ==="

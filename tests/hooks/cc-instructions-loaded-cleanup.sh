@@ -11,13 +11,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLEANUP_LIB="$AGENTS_DIR/hooks/workflow-state/state-io/zombie-cleanup.js"
-RECEIPT_LIB="$AGENTS_DIR/hooks/lib/instructions-loaded-receipt.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CLEANUP_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/zombie-cleanup.js"
+RECEIPT_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/instructions-loaded-receipt.js"
 
 PASS=0; FAIL=0
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"   # provides the per-case marker helpers
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"   # provides the per-case marker helpers
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 

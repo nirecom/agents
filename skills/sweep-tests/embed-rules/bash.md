@@ -14,7 +14,7 @@ Marker grammar is owned by `skills/_shared/test-design/case-markers.md` — foll
 
 ## Harness
 
-- Source `tests/lib/harness.sh` once near the top, with the path form the file already uses for `AGENTS_DIR` (V).
+- Source `tests/lib/harness.sh` once near the top, with the path form the file already uses for `SCRIPT_CHECKOUT_ROOT` (V).
 - Delete every self-implemented harness piece and use the harness one instead: `pass`/`fail`/`skip`/`assert_eq` definitions, `PASS=0`/`FAIL=0` counters, local `case_begin`/`case_end` (V).
 - Keep the trailer `echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"` and the final `exit` on the fail count; the harness has no replacement for them.
 - A file that already sources another `tests/lib/*harness*.sh` never reaches you (it is skipped as `narrow-harness`).

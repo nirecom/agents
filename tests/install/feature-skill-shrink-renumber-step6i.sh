@@ -5,14 +5,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 check_absent() {
     local label="$1"
     local literal="$2"
     local rel="$3"
-    local path="$AGENTS_DIR/$rel"
+    local path="$SCRIPT_CHECKOUT_ROOT/$rel"
     if [ ! -f "$path" ]; then
         fail "$label: $rel missing"
         return
@@ -43,7 +43,7 @@ case_begin "github-issues-we20" "rules/github-issues.md"
 # C4: "WE-20" appears >= 3 times total across the four files combined
 total=0
 for rel in "CLAUDE.md" "rules/docs/history.md" "rules/docs/changelog.md" "rules/github-issues.md"; do
-    path="$AGENTS_DIR/$rel"
+    path="$SCRIPT_CHECKOUT_ROOT/$rel"
     if [ -f "$path" ]; then
         count=$(grep -cF "WE-20" "$path" 2>/dev/null)
         if [ -z "$count" ]; then count=0; fi

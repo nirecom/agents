@@ -10,6 +10,12 @@ _F1465_LIB_SOURCED=1
 
 PASS=${PASS:-0}; FAIL=${FAIL:-0}; SKIP=${SKIP:-0}
 
+# The scripts under test find their tooling from their own location, so
+# setup_test_dir places a copy of them in TEST_DIR next to the mocks and every
+# case runs that copy.
+F1465_SUT_REL_DIR="skills/clarify-intent/scripts"
+_F1465_SUT_SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../$F1465_SUT_REL_DIR" && pwd)"
+
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
@@ -47,6 +53,8 @@ setup_test_dir() {
     mkdir -p "$TEST_DIR/bin/workflow"
     mkdir -p "$TEST_DIR/bin"
     mkdir -p "$TEST_DIR/hooks/lib"
+    mkdir -p "$TEST_DIR/$F1465_SUT_REL_DIR"
+    cp "$_F1465_SUT_SRC_DIR"/*.sh "$TEST_DIR/$F1465_SUT_REL_DIR/" 2>/dev/null || true
 }
 
 cleanup_test_dir() {

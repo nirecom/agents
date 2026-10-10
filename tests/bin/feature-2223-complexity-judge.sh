@@ -13,9 +13,9 @@
 # end-to-end. That live seam is tests/skills/TL3-complexity-stage-routing-live-judge.sh.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-JUDGE_DOC="$AGENTS_DIR/agents/complexity-judge.md"
-NORMALIZE_CLI="$AGENTS_DIR/bin/workflow/normalize-judge-signals"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+JUDGE_DOC="$SCRIPT_CHECKOUT_ROOT/agents/complexity-judge.md"
+NORMALIZE_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/normalize-judge-signals"
 ROUTING_JS="hooks/workflow-state/complexity-routing.js"
 
 TMP_ROOT="$(mktemp -d)"
@@ -121,10 +121,10 @@ assert_has "T2223CJ-7-judge-output-single-signals-line" "$JUDGE_DOC" "SIGNALS:"
 # Part B — dispatch wiring (static). All four self-judgment sites must spawn the
 # judge AND normalize its output within the same block (C4).
 # ---------------------------------------------------------------------------
-SKIP_DOC="$AGENTS_DIR/skills/_shared/complexity-and-outline-skip.md"
-MDP_DOC="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
-WCODE_DOC="$AGENTS_DIR/skills/write-code/SKILL.md"
-WTESTS_DOC="$AGENTS_DIR/skills/write-tests/SKILL.md"
+SKIP_DOC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/complexity-and-outline-skip.md"
+MDP_DOC="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md"
+WCODE_DOC="$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md"
+WTESTS_DOC="$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md"
 assert_cooccur "T2223CJ-8-skip-doc-judge-and-normalize"   "$SKIP_DOC"   "complexity-judge" "normalize-judge-signals" 40
 assert_cooccur "T2223CJ-9-mdp-judge-and-normalize"        "$MDP_DOC"    "complexity-judge" "normalize-judge-signals" 40
 assert_cooccur "T2223CJ-10-write-code-judge-and-normalize" "$WCODE_DOC"  "complexity-judge" "normalize-judge-signals" 40
@@ -261,7 +261,7 @@ fi
 # the shared signal vocabulary, which must survive that edit. Assert the
 # structural invariants (SSOT contract) rather than byte-equality vs a base.
 # ---------------------------------------------------------------------------
-if grep -qF 'UNDECIDABLE_SIGNAL = "S0-undecidable"' "$AGENTS_DIR/$ROUTING_JS" 2>/dev/null; then
+if grep -qF 'UNDECIDABLE_SIGNAL = "S0-undecidable"' "$SCRIPT_CHECKOUT_ROOT/$ROUTING_JS" 2>/dev/null; then
     pass "T2223CJ-R1a-routing-undecidable-token-intact"
 else
     fail "T2223CJ-R1a-routing-undecidable-token-intact — S0-undecidable SSOT token missing from $ROUTING_JS"
@@ -272,7 +272,7 @@ const cr = require(process.argv[1]);
 const ok = Array.isArray(cr.SIGNAL_IDS) && cr.SIGNAL_IDS.length === 7
   && ["S1-multi-file","S1b-wide-change","S2-architecture","S3-security","S4-installer","S5-breaking","S6-long-plan"].every(s => cr.SIGNAL_IDS.includes(s));
 process.stdout.write(ok ? "ok" : "bad:" + JSON.stringify(cr.SIGNAL_IDS));
-' "$AGENTS_DIR/$ROUTING_JS" 2>&1 || true)"
+' "$SCRIPT_CHECKOUT_ROOT/$ROUTING_JS" 2>&1 || true)"
 if [[ "$r1_ids" == "ok" ]]; then
     pass "T2223CJ-R1b-routing-signal-vocabulary-intact"
 else

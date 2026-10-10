@@ -439,8 +439,8 @@ run_f_recipe_1() {
     require_recipe_block "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block" || return
     local out
     out=$(format_l2_armed "sentinel-hang" "frec1-sid" "'frec1-wsid'" "agents/supervisor.md" "/tmp/state-frec1.json")
-    # #2434: the recipe is anchored at $AGENTS_CONFIG_DIR so it runs from any cwd.
-    if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -qF 'Run: $AGENTS_CONFIG_DIR/bin/supervisor-write-alert'; then
+    # #2434: the recipe is anchored at $AGENTS_MAIN_ROOT so it runs from any cwd.
+    if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -qF 'Run: $AGENTS_MAIN_ROOT/bin/supervisor-write-alert'; then
         pass "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block"
     else
         fail "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block (out=$out)"
@@ -453,7 +453,7 @@ run_f_recipe_2() {
     require_recipe_block "F-recipe-2: formatCumSevErrorReason output contains fallback-recipe block" || return
     local out
     out=$(format_cumsev_error "$FINDINGS_TWO" "frec2-sid" "'frec2-wsid'" "agents/supervisor.md" "/tmp/state-frec2.json")
-    if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -qF 'Run: $AGENTS_CONFIG_DIR/bin/supervisor-write-alert'; then
+    if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -qF 'Run: $AGENTS_MAIN_ROOT/bin/supervisor-write-alert'; then
         pass "F-recipe-2: formatCumSevErrorReason output contains fallback-recipe block"
     else
         fail "F-recipe-2: formatCumSevErrorReason output contains fallback-recipe block (out=$out)"
@@ -466,7 +466,7 @@ run_f_recipe_3() {
     require_recipe_block "F-recipe-3: fallback recipe includes correct sid and stateFilePath substitution" || return
     local out
     out=$(format_cumsev_error "$FINDINGS_ONE" "frec3-sid" "'frec3-wsid'" "agents/supervisor.md" "/tmp/state-frec3.json")
-    if echo "$out" | grep -qF '$AGENTS_CONFIG_DIR/bin/supervisor-write-alert --clear-l2-armed-at' \
+    if echo "$out" | grep -qF '$AGENTS_MAIN_ROOT/bin/supervisor-write-alert --clear-l2-armed-at' \
        && echo "$out" | grep -q "\-\-clear-l2-armed-at" \
        && echo "$out" | grep -q "\-\-set-l2-phase paused" \
        && echo "$out" | grep -q "\-\-session-id frec3-sid" \

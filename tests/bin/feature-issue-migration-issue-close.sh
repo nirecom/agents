@@ -9,9 +9,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TARGET="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TARGET="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-to-history.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -47,7 +47,6 @@ setup_tmp() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/docs/history"
     : > "$TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
 }
 
@@ -55,12 +54,15 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR
 }
+
+# The script appends to docs/history.md under --target-checkout-root; hand it the
+# fixture per call. The flag goes last because the issue number is positional $1.
+run_target() { run_with_timeout "$@" --target-checkout-root "$TMP"; }
 
 # --- N1: type:task → FEATURE entry with #42: ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 if grep -qE "^### FEATURE: .+ \(.+, #42\)$" "$TMP/docs/history.md"; then
     pass "N1: type:task label produces FEATURE entry with #N in parenthetical"
 else
@@ -70,7 +72,7 @@ teardown_tmp
 
 # --- N2: type:incident → INCIDENT entry ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_incident run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_incident run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 if grep -q "INCIDENT" "$TMP/docs/history.md"; then
     pass "N2: type:incident label produces INCIDENT entry"
 else
@@ -80,7 +82,7 @@ teardown_tmp
 
 # --- N3: no labels → FEATURE (default) ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_no_labels run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_no_labels run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 if grep -q "FEATURE" "$TMP/docs/history.md"; then
     pass "N3: no labels defaults to FEATURE"
 else
@@ -90,7 +92,7 @@ teardown_tmp
 
 # --- N4: --commit abc1234 → commit hash in entry ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 --commit abc1234 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 --commit abc1234 >/dev/null 2>&1
 if grep -q "abc1234" "$TMP/docs/history.md"; then
     pass "N4: --commit hash appears in entry"
 else
@@ -100,8 +102,8 @@ teardown_tmp
 
 # --- I1: idempotency — second run does not duplicate ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
 COUNT=$(grep -cE "^### FEATURE: .+ \(.+, #42\)$" "$TMP/docs/history.md" 2>/dev/null; true)
 if [ "$RC" -eq 0 ] && [ "$COUNT" -eq 1 ]; then
@@ -114,7 +116,7 @@ teardown_tmp
 # --- I2: entry already in rotated archive ---
 setup_tmp
 echo "### FEATURE: Old archived entry (2025-01-01, #42)" > "$TMP/docs/history/2025.md"
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
 NEW_COUNT=$(grep -cE "^### " "$TMP/docs/history.md" 2>/dev/null; true)
 if [ "$RC" -eq 0 ] && [ "$NEW_COUNT" -eq 0 ]; then
@@ -135,21 +137,23 @@ else
 fi
 teardown_tmp
 
-# --- E2: AGENTS_CONFIG_DIR unset → non-zero exit ---
+# --- E2: neither --target-checkout-root nor AGENTS_MAIN_ROOT given → non-zero exit ---
+# AGENTS_MAIN_ROOT is cleared: the script falls back to it, and an inherited
+# value would send the append to a real docs/history.md.
 setup_tmp
-unset AGENTS_CONFIG_DIR
-ERR=$(GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 2>&1 >/dev/null)
+ERR=$(GH_MOCK_SCENARIO=issue_task run_with_timeout 30 \
+    env -u AGENTS_MAIN_ROOT bash "$TARGET" 42 2>&1 >/dev/null)
 RC=$?
-if [ "$RC" -ne 0 ]; then
-    pass "E2: missing AGENTS_CONFIG_DIR fails"
+if [ "$RC" -ne 0 ] && [ "${ERR#*neither --target-checkout-root nor AGENTS_MAIN_ROOT is given}" != "$ERR" ]; then
+    pass "E2: neither --target-checkout-root nor AGENTS_MAIN_ROOT given fails with the root diagnostic"
 else
-    fail "E2: missing AGENTS_CONFIG_DIR fails (rc=$RC)"
+    fail "E2: neither --target-checkout-root nor AGENTS_MAIN_ROOT given fails (rc=$RC err='$ERR')"
 fi
 teardown_tmp
 
 # --- E3: gh issue view returns exit 1 → script fails ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_view_fail run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_view_fail run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
 if [ "$RC" -ne 0 ]; then
     pass "E3: gh failure propagates"
@@ -163,7 +167,7 @@ setup_tmp
 INJECTED_FILE="$TMP/INJECTED.flag"
 # If the implementation passes "$1" through eval/sh -c, the side-effect file
 # would appear. A safe implementation never executes the embedded `echo`.
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" "42; touch $INJECTED_FILE" >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" "42; touch $INJECTED_FILE" >/dev/null 2>&1
 RC=$?
 if [ ! -f "$INJECTED_FILE" ] && [ "$RC" -ne 0 ]; then
     pass "S1: shell-injected issue number is rejected, no side effect"
@@ -174,7 +178,7 @@ teardown_tmp
 
 # --- N5: FEATURE header conforms to '### FEATURE: Subject (DATE, #N)' ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 if grep -qE "^### FEATURE: .+ \([0-9]{4}-[0-9]{2}-[0-9]{2}, #42\)$" "$TMP/docs/history.md"; then
     pass "N5: FEATURE header format (DATE, #N)"
 else
@@ -184,7 +188,7 @@ teardown_tmp
 
 # --- N6: --commit produces 'date, commit, #N' ordering ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 --commit abc1234 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 --commit abc1234 >/dev/null 2>&1
 if grep -qE "^### FEATURE: .+ \([0-9]{4}-[0-9]{2}-[0-9]{2}, abc1234, #42\)$" "$TMP/docs/history.md"; then
     pass "N6: commit+issue order (date, commit, #N)"
 else
@@ -194,7 +198,7 @@ teardown_tmp
 
 # --- N7: date derived from closedAt, not today ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 EXPECTED_DATE=$(grep -oE '"closedAt":"[0-9]{4}-[0-9]{2}-[0-9]{2}' "$MOCK_DIR/gh" | head -1 | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
 if [ -n "$EXPECTED_DATE" ] && grep -qE "\(${EXPECTED_DATE}[,)]" "$TMP/docs/history.md"; then
     pass "N7: date derived from closedAt (${EXPECTED_DATE})"
@@ -205,7 +209,7 @@ teardown_tmp
 
 # --- N8: subject must not contain '(closes #N)' ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_task run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 if grep -q "closes #42" "$TMP/docs/history.md"; then
     fail "N8: subject must not contain (closes #N)"
 else
@@ -215,7 +219,7 @@ teardown_tmp
 
 # --- N9: INCIDENT header carries #N in date parenthetical ---
 setup_tmp
-GH_MOCK_SCENARIO=issue_incident run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+GH_MOCK_SCENARIO=issue_incident run_target 30 bash "$TARGET" 42 >/dev/null 2>&1
 if grep -qE "^### INCIDENT: .+ \(.+, #42\)$" "$TMP/docs/history.md"; then
     pass "N9: INCIDENT header carries #N in parenthetical"
 else

@@ -8,9 +8,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="${1:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-HOOK="$AGENTS_DIR/hooks/block-capture-echo.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-capture-echo.js"
 command -v node >/dev/null 2>&1 || exit 77
 
 PASS=0
@@ -97,7 +97,7 @@ run_hook
 assert_eq "B-7-true-negative-passthrough" "passthrough" "$VERDICT"
 
 # Classifier both-direction (Pattern 4): an ordinary sanctioned command is untouched.
-node "$HERE/mk-event.js" Bash 'bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"' >"$EV"
+node "$HERE/mk-event.js" Bash 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"' >"$EV"
 run_hook
 assert_eq "B-9-bare-command-passthrough" "passthrough" "$VERDICT"
 
@@ -109,7 +109,7 @@ assert_eq "B-10-runcommands-elem2-block" "block" "$VERDICT"
 assert_eq "B-10b-elem2-exit-zero" "0" "$LAST_RC"
 
 # Both-direction: an all-clean array must not be blocked by the same loop.
-node "$HERE/mk-event.js" runCommands 'ls' 'pwd' 'bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"' >"$EV"
+node "$HERE/mk-event.js" runCommands 'ls' 'pwd' 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"' >"$EV"
 run_hook
 assert_eq "B-11-runcommands-all-clean-passthrough" "passthrough" "$VERDICT"
 
@@ -123,7 +123,7 @@ assert_eq "B-12-runinterminal-multi-assign-block" "block" "$VERDICT"
 # stdout and its diagnostics to stderr; a naive "here is what you ran" remedy would
 # copy the whole invocation into the transcript, turning a guard into a leak.
 # Attack scenario (protection-fix-tests.md Pattern 2): the secret must appear in no
-# output channel, in BOTH the normal path and the AGENTS_CONFIG_DIR-absent
+# output channel, in BOTH the normal path and the AGENTS_MAIN_ROOT-absent
 # degradation path, and the command must still be blocked in both.
 SECRET='ghp_TESTFIXTUREAAAABBBBCCCCDDDDEEEE1234'
 node "$HERE/mk-event.js" Bash "TOK=\$(printf '%s' $SECRET); echo \"\$TOK\"" >"$EV"
@@ -141,11 +141,11 @@ VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
 assert_eq "B-13-secret-command-still-blocked" "block" "$VERDICT"
 assert_no_secret "B-14-secret-absent-from-hook-output" "$OUT" "$TMPDIR_B/err.txt"
 
-# Degradation path: with no AGENTS_CONFIG_DIR the remedy cannot consult the allow
+# Degradation path: with no AGENTS_MAIN_ROOT the remedy cannot consult the allow
 # list, so it falls back to generic guidance — which must also stay secret-free.
-env -u AGENTS_CONFIG_DIR node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
+env -u AGENTS_MAIN_ROOT node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
 VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
-assert_eq "B-15-secret-blocked-without-config-dir" "block" "$VERDICT"
+assert_eq "B-15-secret-blocked-without-agents-main-root" "block" "$VERDICT"
 assert_no_secret "B-16-secret-absent-in-degraded-remedy" "$OUT" "$TMPDIR_B/err.txt"
 
 # --- B-17..B-21: the MATCHED path, and what it refuses to reproduce ------------
@@ -159,8 +159,8 @@ assert_no_secret "B-16-secret-absent-in-degraded-remedy" "$OUT" "$TMPDIR_B/err.t
 # verdict must stay "block" — a leak concern must not soften it.
 CFGTOK='--token=supersecret123unique'
 node "$HERE/mk-event.js" Bash \
-    "X=\$(bash \"\$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip\" $CFGTOK); echo \"\$X\"" >"$EV"
-env AGENTS_CONFIG_DIR="$AGENTS_DIR" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
+    "X=\$(bash \"\$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip\" $CFGTOK); echo \"\$X\"" >"$EV"
+env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
 VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
 assert_eq "B-17-matched-secret-arg-still-blocked" "block" "$VERDICT"
 grep -qF -e "$CFGTOK" "$OUT" && TOK_IN_OUT=yes || TOK_IN_OUT=no
@@ -171,8 +171,8 @@ assert_eq "B-18-matched-secret-arg-not-reproduced" "no" "$TOK_IN_OUT"
 # arguments altogether — or if the entry simply stopped matching.
 CFGARG='--target outline'
 node "$HERE/mk-event.js" Bash \
-    "X=\$(bash \"\$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip\" $CFGARG); echo \"\$X\"" >"$EV"
-env AGENTS_CONFIG_DIR="$AGENTS_DIR" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err2.txt"
+    "X=\$(bash \"\$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip\" $CFGARG); echo \"\$X\"" >"$EV"
+env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err2.txt"
 VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
 assert_eq "B-18b-matched-plain-arg-still-blocked" "block" "$VERDICT"
 grep -qF -e "$CFGARG" "$OUT" && ARG_IN_OUT=yes || ARG_IN_OUT=no
@@ -183,7 +183,7 @@ assert_eq "B-19-stderr-never-carries-the-command" "no" "$TOK_IN_ERR"
 # guidance, so verbatim reproduction is scoped to a recipe the SSOT already sanctions.
 node "$HERE/mk-event.js" Bash \
     "X=\$(bash /tmp/not-registered $CFGTOK); echo \"\$X\"" >"$EV"
-env AGENTS_CONFIG_DIR="$AGENTS_DIR" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
+env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
 grep -qF -e "$CFGTOK" "$OUT" && TOK_IN_OUT=yes || TOK_IN_OUT=no
 assert_eq "B-20-unmatched-entry-does-not-reproduce-arg" "no" "$TOK_IN_OUT"
 

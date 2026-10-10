@@ -23,11 +23,11 @@ SKIP=0
 # for .github/ISSUE_TEMPLATE/*.yml, so no preflight ask fires; the residue closes
 # at the manual post-merge render check on github.com.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TEMPLATE_DIR="$AGENTS_DIR/.github/ISSUE_TEMPLATE"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TEMPLATE_DIR="$SCRIPT_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE"
 TASK_YML="$TEMPLATE_DIR/task.yml"
-SCHEMA_SIB="$AGENTS_DIR/tests/bin/fix-2098-issue-template-schema.sh"
-NOPREFILL_SIB="$AGENTS_DIR/tests/bin/fix-2098-issue-template-no-prefill.sh"
+SCHEMA_SIB="$SCRIPT_CHECKOUT_ROOT/tests/bin/fix-2098-issue-template-schema.sh"
+NOPREFILL_SIB="$SCRIPT_CHECKOUT_ROOT/tests/bin/fix-2098-issue-template-no-prefill.sh"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }

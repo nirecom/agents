@@ -10,12 +10,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-AGENTS_N="$(np "$AGENTS_DIR")"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+AGENTS_N="$(np "$SCRIPT_CHECKOUT_ROOT")"
 
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
@@ -24,9 +24,9 @@ TRANS_TMP="$(make_tmp)"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TRANS_TMP"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-GUARD_JS="$AGENTS_DIR/hooks/block-clearance-token-write/placement-guard.js"
-DISPATCH_JS="$AGENTS_DIR/hooks/block-clearance-token-write/dispatch.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+GUARD_JS="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write/placement-guard.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write/dispatch.js"
 
 HOOK_PRESENT=no;  [ -f "$HOOK" ]     && HOOK_PRESENT=yes
 GUARD_PRESENT=no; [ -f "$GUARD_JS" ] && GUARD_PRESENT=yes
@@ -47,7 +47,7 @@ mkdir -p "$WORKFLOW_STATE_DIR/$SID.control"
 local_run_hook() {
     local tn="$1" input="$2" out rc
     [ "$HOOK_PRESENT" = "yes" ] || { printf 'absent|'; return; }
-    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$PLDN" AGENTS_CONFIG_DIR="$AGENTS_N" \
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$PLDN" \
         "$RWT" 12 node "$HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"

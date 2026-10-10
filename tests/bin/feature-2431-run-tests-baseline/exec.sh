@@ -122,6 +122,6 @@ EOF
   else
     fail "E9-dirs: iso=${iso:-none} exists=$([ -n "$iso" ] && [ -e "$iso" ] && echo yes || echo no) dump=$(tr '\n' '|' < "$dump" 2>/dev/null)"
   fi
-  grep -qxF "HOME=$HOME" "$dump" && pass "E9-home: HOME is passed through unchanged" \
+  grep -qxF "HOME=$HOME" "$dump" && pass "E9-home: HOME is passed through unchanged (the temp home of this test)" \
     || fail "E9-home: HOME changed; dump HOME=$(grep '^HOME=' "$dump" 2>/dev/null)"
 }

@@ -33,8 +33,11 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 # a --claude-dir that does not resolve inside $HOME, and every fixture here
 # lives under $TMPDIR_BASE. Relocating once is the class-level fix — later cases
 # inherit it. GIT_CONFIG_GLOBAL/WORKFLOW_PLANS_DIR are pinned explicitly below,
-# so nothing else in the suite depends on the original $HOME.
-export HOME="$TMPDIR_BASE"
+# so nothing else in the suite depends on the original $HOME. USERPROFILE moves
+# with it: Node on Windows resolves the home directory from that one.
+# shellcheck source=tests/lib/home-userprofile-pin.sh
+. "$DOTFILES_DIR/tests/lib/home-userprofile-pin.sh"
+pin_home_and_userprofile "$TMPDIR_BASE"
 
 # Suite-wide environment fixtures (#1564): bin/workflow-plans-dir falls back to
 # the developer's real ~/.workflow-plans when WORKFLOW_PLANS_DIR is unset, which
@@ -46,11 +49,6 @@ mkdir -p "$WORKFLOW_PLANS_DIR"
 # isolation (#2512): the state dir is pinned file-wide too, alongside the plans dir.
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_STATE_DIR"
-
-# bin/session-sync.sh locates bin/workflow-plans-dir relative to AGENTS_CONFIG_DIR.
-# Pin it to this checkout so the resolver under test is this one, not whichever
-# agents config the developer happens to have installed.
-export AGENTS_CONFIG_DIR="$DOTFILES_DIR"
 
 # ---------------------------------------------------------------------------
 # Deterministic git environment.

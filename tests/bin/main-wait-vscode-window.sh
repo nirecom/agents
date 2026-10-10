@@ -6,8 +6,8 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-WAIT_SCRIPT="$AGENTS_DIR/bin/wait-vscode-window.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+WAIT_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/wait-vscode-window.sh"
 PASS=0
 FAIL=0
 

@@ -9,8 +9,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL_MD="$AGENTS_DIR/skills/refactor-prompts/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/refactor-prompts/SKILL.md"
 
 PASS=0
 FAIL=0

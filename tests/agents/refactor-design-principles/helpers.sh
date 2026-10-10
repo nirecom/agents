@@ -1,12 +1,12 @@
 # helpers.sh — sourced by tests/agents/refactor-design-principles.sh
-# Requires: AGENTS_DIR set by the caller before sourcing.
+# Requires: SCRIPT_CHECKOUT_ROOT set by the caller before sourcing.
 
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-MARK_JS="${_AGENTS_DIR_NODE}/hooks/workflow-mark.js"
+MARK_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/workflow-mark.js"
 
 PASS=0
 FAIL=0
@@ -85,7 +85,6 @@ run_workflow_mark() {
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         node "$MARK_JS" 2>&1)" || rc=$?
     return $rc

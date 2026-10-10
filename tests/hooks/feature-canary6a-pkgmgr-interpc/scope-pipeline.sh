@@ -41,7 +41,7 @@ hook_decision() {
   local cmd="$1" cwd="$2"
   local p out
   p="$(_make_payload "$cmd")"
-  out="$( cd "$cwd" && ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )"
+  out="$( cd "$cwd" && ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT="$MAIN_REPO_NODE" MSYS_NO_PATHCONV=1 run_with_timeout 20 node "$GUARD_JS" <<< "$p" 2>/dev/null )"
   echo "$out" | grep -q '"decision":"block"' && { echo block; return; }
   echo allow
 }

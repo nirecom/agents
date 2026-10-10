@@ -11,8 +11,8 @@
 #     && cd tail handling) — pre-existing L2 gap not addressed in this PR (#1024 scope:
 #     only isAllowedMainWorktreeCleanup wtCount fix). File a follow-up issue to add coverage.
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$AGENTS_DIR")"; else _A="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _A="$SCRIPT_CHECKOUT_ROOT"; fi
 GUARD_JS="${_A}/hooks/enforce-worktree.js"
 ALLOWS_JS="${_A}/hooks/enforce-worktree/main-worktree-allows.js"
 PASS=0; FAIL=0

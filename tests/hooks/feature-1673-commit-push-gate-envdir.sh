@@ -28,15 +28,15 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_CP1673_ENVDIR_INNER:-}" ]; the
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
-SPAWN_JS="$AGENTS_DIR/bin/worker-dispatch/spawn.js"
-ANCHOR_JS="$AGENTS_DIR/bin/worker-dispatch/anchor.js"
-GATE_JS="$AGENTS_DIR/hooks/workflow-gate.js"
-WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
+SPAWN_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js"
+ANCHOR_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/anchor.js"
+GATE_JS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+WORKER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/commit-push.js"
 # commit-push.js is dispatch-only (rules/coding/file-split.md Pattern A); the D1
 # gate env is assembled in the sibling gate.js, so Group 3 scans both.
-WORKER_GATE_JS="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push/gate.js"
+WORKER_GATE_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/commit-push/gate.js"
 
 PASS=0
 FAIL=0

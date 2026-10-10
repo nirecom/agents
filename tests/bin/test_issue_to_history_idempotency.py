@@ -58,11 +58,11 @@ requires_bash = pytest.mark.skipif(
 )
 
 
-def _run_script(agents_dir: Path, issue_num: str) -> subprocess.CompletedProcess:
-    """Run issue-to-history.sh under bash with AGENTS_CONFIG_DIR=agents_dir.
+def _run_script(target_checkout_root: Path, issue_num: str) -> subprocess.CompletedProcess:
+    """Run issue-to-history.sh under bash with --target-checkout-root target_checkout_root.
 
     The script will:
-      1. cd into AGENTS_CONFIG_DIR
+      1. cd into the target checkout root
       2. Check docs/history.md + docs/history/ for the idempotency pattern
       3. If found → print "Already in history..." and exit 0
       4. If NOT found → continue to `gh issue view`, which fails outside CI →
@@ -72,16 +72,13 @@ def _run_script(agents_dir: Path, issue_num: str) -> subprocess.CompletedProcess
     `"Already in history" in result.stdout` (not on returncode for non-detect
     cases — gh failure produces a non-zero exit that's expected).
     """
-    env = {
-        "AGENTS_CONFIG_DIR": str(agents_dir),
-        "PATH": os.environ.get("PATH", ""),
-    }
+    env = {"PATH": os.environ.get("PATH", "")}
     # Inherit SYSTEMROOT/USERPROFILE/etc. on Windows for bash to function
     for key in ("SYSTEMROOT", "USERPROFILE", "HOME", "TMP", "TEMP", "LANG", "LC_ALL"):
         if key in os.environ:
             env[key] = os.environ[key]
     return subprocess.run(
-        [BASH, str(SCRIPT_PATH), issue_num],
+        [BASH, str(SCRIPT_PATH), issue_num, "--target-checkout-root", str(target_checkout_root)],
         env=env,
         capture_output=True,
         text=True,

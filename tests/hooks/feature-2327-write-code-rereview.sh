@@ -12,12 +12,12 @@ set -uo pipefail
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 command -v git  >/dev/null 2>&1 || { echo "SKIP: git not available";  exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 np() { cygpath -m "$1" 2>/dev/null || printf '%s\n' "$1"; }
-AGENTS_DIR_N="$(np "$AGENTS_DIR")"
-NEXT_STEP_N="$AGENTS_DIR_N/bin/workflow/next-step"
-WORKFLOW_MARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
+SCRIPT_CHECKOUT_ROOT_N="$(np "$SCRIPT_CHECKOUT_ROOT")"
+NEXT_STEP_N="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+WORKFLOW_MARK_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-mark.js"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -31,12 +31,12 @@ unset CLAUDE_CODE_SESSION_ID
 CONFIG_EMPTY="$TMPDIR_BASE/cfg"
 mkdir -p "$CONFIG_EMPTY"
 : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(np "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(np "$CONFIG_EMPTY")"
 
-export NEXT_STEP_N WORKFLOW_MARK_N AGENTS_DIR_N TMPDIR_BASE
+export NEXT_STEP_N WORKFLOW_MARK_N SCRIPT_CHECKOUT_ROOT_N TMPDIR_BASE
 
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -113,7 +113,7 @@ try {
   }));
 }
 catch (e) { process.stdout.write("VIEW_ERROR:" + e.message); }
-' "$AGENTS_DIR_N" "$1" 2>/dev/null
+' "$SCRIPT_CHECKOUT_ROOT_N" "$1" 2>/dev/null
 }
 
 # rr_notice <kind> <detail>: formatReviewTestsReopenNotice output, or a marker
@@ -126,10 +126,10 @@ try {
   process.stdout.write(typeof n === "string" && n ? n : "NOTICE_EMPTY");
 }
 catch (e) { process.stdout.write("NOTICE_UNAVAILABLE"); }
-' "$AGENTS_DIR_N" "$1" "$2" 2>/dev/null
+' "$SCRIPT_CHECKOUT_ROOT_N" "$1" "$2" 2>/dev/null
 }
 
-SCRIPT_DIR="$AGENTS_DIR/tests/hooks/feature-2327-write-code-rereview"
+SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2327-write-code-rereview"
 
 case_begin "state-io-rereview" "hooks/workflow-state/state-io/review-tests.js"
 # shellcheck source=./feature-2327-write-code-rereview/p1-state-io.sh

@@ -14,18 +14,18 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TARGET="$AGENTS_DIR/hooks/workflow-state.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TARGET="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state.js"
 # Normalize to Windows-style path for Node when running under MSYS/Cygwin.
 if command -v cygpath >/dev/null 2>&1; then
     TARGET_NODE="$(cygpath -w "$TARGET" | sed 's|\\|/|g')"
     # Un-slashed: encode_path() below must see the same path form node's
     # process.cwd() reports, so the removed JSONL tier's directory name can be
     # reproduced exactly (section-supply-tier.sh JS-26).
-    AGENTS_DIR_NODE="$(cygpath -w "$AGENTS_DIR")"
+    SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -w "$SCRIPT_CHECKOUT_ROOT")"
 else
     TARGET_NODE="$TARGET"
-    AGENTS_DIR_NODE="$AGENTS_DIR"
+    SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
 PASS=0

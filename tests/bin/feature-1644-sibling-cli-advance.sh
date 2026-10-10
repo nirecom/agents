@@ -14,14 +14,14 @@ set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-RSJ="$AGENTS_DIR_N/bin/workflow/record-skip-judgment"
-SWT="$AGENTS_DIR_N/bin/workflow/set-workflow-type"
-RCAS="$AGENTS_DIR/bin/workflow/record-complexity-and-skip"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
-PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+RSJ="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment"
+SWT="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/set-workflow-type"
+RCAS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
+PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -196,42 +196,44 @@ check "S8: workflow_type is still recorded" '"wf-meta"' "$(top_field s8)"
 
 echo ""
 echo "=== S9: record-complexity-and-skip WITHOUT --advance keeps its bare token ==="
-# This script resolves its siblings through AGENTS_CONFIG_DIR, so the real repo
-# is the only meaningful value for the pass-through cases. No CONFIRM_* branch is
+# This script resolves its siblings from its own location, so the real repo's copy
+# is the only meaningful one for the pass-through cases. No CONFIRM_* branch is
 # reachable from this path, so the repo .env cannot influence the result.
 make_state s9a ""
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session s9a --signals "" --target outline
+run_cli env bash "$RCAS" --session s9a --signals "" --target outline
 check "S9a: exit 0" 0 "$RC"
 check "S9a: stdout is exactly the bare token" "auto" "$OUT"
 check "S9a: no step is settled without --advance" '"pending"' "$(step_status s9a outline)"
 
 make_state s9b ""
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" --session s9b --signals "S2-architecture" --target outline
+run_cli env bash "$RCAS" --session s9b --signals "S2-architecture" --target outline
 check "S9b: high verdict yields the judgment token" "judgment" "$OUT"
 
 echo ""
 echo "=== S10: record-complexity-and-skip --advance normalizes child failures to exit 3 ==="
-# Fixture config dir: step 1 is a no-op, the resolver forces the auto branch, and
+# Fixture checkout: step 1 is a no-op, the resolver forces the auto branch, and
 # record-skip-judgment fails with exit 2. SKIP_MODE is therefore already known
-# when the failure happens, which is the unambiguous half of the contract.
-FAKE="$TMPDIR_BASE/fakecfg"
+# when the failure happens, which is the unambiguous half of the contract. The
+# script finds those siblings from its own location, so a copy of it runs from there.
+FAKE="$TMPDIR_BASE/fake-checkout"
 mkdir -p "$FAKE/bin/workflow" "$FAKE/hooks/workflow-state"
+FAKE_RCAS="$FAKE/bin/workflow/record-complexity-and-skip"
+cp "$RCAS" "$FAKE_RCAS"
 printf '#!/usr/bin/env node\nprocess.exit(0);\n' > "$FAKE/bin/workflow/record-complexity-evaluation"
 printf 'module.exports={resolveSkipConditionsFromComplexity:()=>({so_c1:true,so_c2:true})};\n' \
   > "$FAKE/hooks/workflow-state/skip-signal-resolver.js"
 printf '#!/usr/bin/env node\nprocess.stderr.write("stub: forced failure\\n");\nprocess.exit(2);\n' \
   > "$FAKE/bin/workflow/record-skip-judgment"
-FAKE_N="$(nrm "$FAKE")"
 
 make_state s10a ""
-run_cli env AGENTS_CONFIG_DIR="$FAKE_N" bash "$RCAS" --session s10a --signals "" --target outline --advance
+run_cli env bash "$FAKE_RCAS" --session s10a --signals "" --target outline --advance
 check "S10a: the child's exit 2 is NOT propagated" 3 "$RC"
 check "S10a: no ACTION line is emitted on the failure path" 0 "$(action_lines)"
 check_contains "S10a: stdout still carries the resolved skip mode" "auto" "$OUT"
 
 # Symmetric control: without --advance the current exit-2 propagation is untouched.
 make_state s10b ""
-run_cli env AGENTS_CONFIG_DIR="$FAKE_N" bash "$RCAS" --session s10b --signals "" --target outline
+run_cli env bash "$FAKE_RCAS" --session s10b --signals "" --target outline
 check "S10b: without --advance the child exit code still propagates" 2 "$RC"
 
 echo ""
@@ -249,7 +251,7 @@ NAMED_EXCEPTIONS="record-skip-verdict"
 # it must carry no --advance token at all.
 NON_MEMBERS="adopt-session-state derive-complexity-level read-complexity-evaluation read-merge-base-baseline read-step-status reconcile-state record-complexity-evaluation record-merge-base-baseline workflow-init-driver"
 
-ACTUAL="$(ls "$AGENTS_DIR/bin/workflow" | grep -v '^lib$' | sort | tr '\n' ' ')"
+ACTUAL="$(ls "$SCRIPT_CHECKOUT_ROOT/bin/workflow" | grep -v '^lib$' | sort | tr '\n' ' ')"
 EXPECTED="$(printf '%s %s %s' "$ADVANCE_MEMBERS" "$NAMED_EXCEPTIONS" "$NON_MEMBERS" \
   | tr ' ' '\n' | grep -v '^$' | sort | tr '\n' ' ')"
 check "S11a: bin/workflow/ minus lib is exactly the direct sum of the 3 registries" \
@@ -259,9 +261,9 @@ check "S11a: bin/workflow/ minus lib is exactly the direct sum of the 3 registri
 # bin/workflow/lib/next-step/, so its search scope includes that directory.
 for m in $ADVANCE_MEMBERS; do
   if [ "$m" = "next-step" ]; then
-    scope="$AGENTS_DIR/bin/workflow/next-step $AGENTS_DIR/bin/workflow/lib"
+    scope="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step $SCRIPT_CHECKOUT_ROOT/bin/workflow/lib"
   else
-    scope="$AGENTS_DIR/bin/workflow/$m"
+    scope="$SCRIPT_CHECKOUT_ROOT/bin/workflow/$m"
   fi
   # shellcheck disable=SC2086
   if grep -rqF -- '--advance' $scope 2>/dev/null; then
@@ -278,11 +280,11 @@ for m in $NON_MEMBERS; do
   # A missing file makes grep exit non-zero, which would otherwise be read as
   # "declares no --advance" — a registered non-member that does not exist yet
   # must fail here, not pass vacuously.
-  if [ ! -f "$AGENTS_DIR/bin/workflow/$m" ]; then
+  if [ ! -f "$SCRIPT_CHECKOUT_ROOT/bin/workflow/$m" ]; then
     fail "S11c: $m is registered as a non-member but bin/workflow/$m does not exist"
     continue
   fi
-  if grep -qF -- '--advance' "$AGENTS_DIR/bin/workflow/$m"; then
+  if grep -qF -- '--advance' "$SCRIPT_CHECKOUT_ROOT/bin/workflow/$m"; then
     fail "S11c: $m must NOT accept --advance -- found an --advance token"
   else
     pass "S11c: $m does not accept --advance"
@@ -296,14 +298,14 @@ echo "=== S12: record-complexity-and-skip --advance settles the target step ==="
 # (RCAS --advance -> record-skip-judgment --advance -> recordStepVerdict) could be
 # missing and every existing RCAS case would still pass.
 #
-# The real config dir is required: RCAS resolves its siblings through
-# AGENTS_CONFIG_DIR and a stub would defeat the purpose of a happy path. The repo's
+# The real checkout's RCAS is required: it resolves its siblings from its own
+# location and a stub tree would defeat the purpose of a happy path. The repo's
 # own .env cannot decide this case either way — the CLI door's only config-file
 # branch is CONFIRM_TESTS for write_tests (plan line 183), and the target here is
 # outline, which the plan admits unconditionally (line 182).
 make_state s12 "workflow_init clarify_intent research"
 printf '# intent\n' > "$PLANS_DIR/s12-intent.md"
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
+run_cli env bash "$RCAS" \
   --session s12 --signals "" --target outline --advance
 check "S12a: exit 0" 0 "$RC"
 check "S12a: outline is settled as skipped" '"skipped"' "$(step_status s12 outline)"
@@ -321,7 +323,7 @@ check "S12a: exactly one SKIP_DISPATCH line" 1 "$(printf '%s\n' "$OUT" | grep -c
 # Symmetric control: the judgment branch must NOT settle the step, so S12a cannot
 # be passing because --advance settles unconditionally.
 make_state s12b "workflow_init clarify_intent research"
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
+run_cli env bash "$RCAS" \
   --session s12b --signals "S2-architecture" --target outline --advance
 check "S12b: the judgment branch still exits 0" 0 "$RC"
 check "S12b: the judgment branch leaves outline pending" '"pending"' "$(step_status s12b outline)"
@@ -349,13 +351,13 @@ check "S13b: the judgment is not recorded either" '"pending"' "$(step_status s13
 # outline in the current CLI and the plan does not make it mandatory under
 # --advance, so requiring it would be inventing a contract.
 make_state s13c "workflow_init clarify_intent research"
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
+run_cli env bash "$RCAS" \
   --session s13c --target outline --advance
 check "S13c: record-complexity-and-skip --advance without --signals exits 2" 2 "$RC"
 check "S13c: nothing is settled" '"pending"' "$(step_status s13c outline)"
 
 make_state s13d "workflow_init clarify_intent research"
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
+run_cli env bash "$RCAS" \
   --session s13d --signals "" --target outline --advance --bogus
 check "S13d: an unknown flag still exits 2, not the advance-path 3" 2 "$RC"
 
@@ -404,11 +406,11 @@ check "S15b: workflow_type survives the repeat" '"wf-meta"' "$(top_field s15b)"
 
 make_state s15c "workflow_init clarify_intent research"
 printf '# intent\n' > "$PLANS_DIR/s15c-intent.md"
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
+run_cli env bash "$RCAS" \
   --session s15c --signals "" --target outline --advance
 check "S15c: the first record-complexity-and-skip --advance exits 0" 0 "$RC"
 S15C_ENTRY="$(step_entry s15c outline)"
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
+run_cli env bash "$RCAS" \
   --session s15c --signals "" --target outline --advance
 check "S15c: the repeat exits 0" 0 "$RC"
 check "S15c: outline is still skipped after the repeat" '"skipped"' "$(step_status s15c outline)"

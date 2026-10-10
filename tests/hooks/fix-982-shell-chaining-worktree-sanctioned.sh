@@ -8,13 +8,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-MODULE="${_AGENTS_DIR_NODE}/hooks/enforce-worktree/main-worktree-allows/standard.js"
+MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree/main-worktree-allows/standard.js"
 
 PASS=0
 FAIL=0
@@ -70,16 +70,16 @@ test_worktree_chaining() {
         'true'
 
     # git -C path worktree prune followed by `&& cd <path>` → allowed (NEW).
-    # Use _AGENTS_DIR_NODE so the path is consistent across shell and node argv
+    # Use _SCRIPT_CHECKOUT_ROOT_NODE so the path is consistent across shell and node argv
     # (POSIX fake paths like /main get Git Bash-converted when passed as shell args
     # to node.exe on Windows, causing a path-mismatch in the -C validation).
     assert_fn_result '"git -C <repo> worktree prune && cd <repo>" → true (with -C)' \
-        "$(call_worktree_cmd "git -C ${_AGENTS_DIR_NODE} worktree prune && cd ${_AGENTS_DIR_NODE}" "${_AGENTS_DIR_NODE}")" \
+        "$(call_worktree_cmd "git -C ${_SCRIPT_CHECKOUT_ROOT_NODE} worktree prune && cd ${_SCRIPT_CHECKOUT_ROOT_NODE}" "${_SCRIPT_CHECKOUT_ROOT_NODE}")" \
         'true'
 
     # git -C path worktree remove followed by `&& cd <path>` → allowed (NEW).
     assert_fn_result '"git -C <repo> worktree remove /tmp/old && cd <repo>" → true (with -C)' \
-        "$(call_worktree_cmd "git -C ${_AGENTS_DIR_NODE} worktree remove /tmp/old && cd ${_AGENTS_DIR_NODE}" "${_AGENTS_DIR_NODE}")" \
+        "$(call_worktree_cmd "git -C ${_SCRIPT_CHECKOUT_ROOT_NODE} worktree remove /tmp/old && cd ${_SCRIPT_CHECKOUT_ROOT_NODE}" "${_SCRIPT_CHECKOUT_ROOT_NODE}")" \
         'true'
 
     # FAIL-CLOSED: dangerous tail (rm -rf) after sanctioned command → false.
@@ -186,21 +186,21 @@ call_supervisor_bin() {
 #   guard are GREEN now (the pattern already covers write-alert) — CPR-ORTH.
 test_supervisor_findings_codex_allowlist() {
     # New engine allowed from main worktree, no redirect → true (RED).
-    assert_fn_result '"bash $AGENTS_CONFIG_DIR/bin/supervisor-findings-codex --mode alert" → true' \
-        "$(call_supervisor_bin 'bash $AGENTS_CONFIG_DIR/bin/supervisor-findings-codex --mode alert')" \
+    assert_fn_result '"bash $AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode alert" → true' \
+        "$(call_supervisor_bin 'bash $AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode alert')" \
         'true'
-    assert_fn_result '"bash $AGENTS_CONFIG_DIR/bin/supervisor-findings-codex --mode audit" → true' \
-        "$(call_supervisor_bin 'bash $AGENTS_CONFIG_DIR/bin/supervisor-findings-codex --mode audit')" \
+    assert_fn_result '"bash $AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode audit" → true' \
+        "$(call_supervisor_bin 'bash $AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode audit')" \
         'true'
 
     # Regression (GREEN): existing supervisor-write-alert stays allowed, no redirect.
-    assert_fn_result '"bash $AGENTS_CONFIG_DIR/bin/supervisor-write-alert --ingest-generated-jsonl ..." → true' \
-        "$(call_supervisor_bin 'bash $AGENTS_CONFIG_DIR/bin/supervisor-write-alert --ingest-generated-jsonl /tmp/x.jsonl')" \
+    assert_fn_result '"bash $AGENTS_MAIN_ROOT/bin/supervisor-write-alert --ingest-generated-jsonl ..." → true' \
+        "$(call_supervisor_bin 'bash $AGENTS_MAIN_ROOT/bin/supervisor-write-alert --ingest-generated-jsonl /tmp/x.jsonl')" \
         'true'
 
     # Guard stays armed (GREEN): a redirect to a non-/tmp target is refused.
     assert_fn_result '"...supervisor-write-alert ... > /home/x" (non-/tmp redirect) → false' \
-        "$(call_supervisor_bin 'bash $AGENTS_CONFIG_DIR/bin/supervisor-write-alert --json > /home/x')" \
+        "$(call_supervisor_bin 'bash $AGENTS_MAIN_ROOT/bin/supervisor-write-alert --json > /home/x')" \
         'false'
 }
 

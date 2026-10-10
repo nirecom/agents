@@ -9,10 +9,10 @@
 # Read the state file directly: state_load runs only in live mode, so a dry-run
 # would otherwise have no current_step to compare against.
 #
-# Expects REPO_DIR, FROM_STEP, ACK_SKIPPED to be set by the sourcing script.
+# Expects TARGET_CHECKOUT_ROOT, FROM_STEP, ACK_SKIPPED to be set by the sourcing script.
 
 _recorded_current_step() {
-  local sf="$REPO_DIR/.migration-state.json" n
+  local sf="$TARGET_CHECKOUT_ROOT/.migration-state.json" n
   [ -f "$sf" ] || { echo 0; return 0; }
   n="$(tr -d ' \n' < "$sf" | sed -n 's/.*"current_step":\([0-9][0-9]*\).*/\1/p')"
   [ -n "$n" ] || n=0

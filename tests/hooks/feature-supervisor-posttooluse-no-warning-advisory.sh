@@ -17,16 +17,16 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK="$AGENTS_DIR/hooks/supervisor-trigger.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-trigger.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -78,7 +78,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo hello"},"tool_response":{"output":"hello"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_MAIN_ROOT="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -122,7 +122,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo hello"},"tool_response":{"output":"hello"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_MAIN_ROOT="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -165,7 +165,7 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
     local hook_input
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo hello"},"tool_response":{"output":"hello"}}' "$sid")
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_MAIN_ROOT="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     rc=$?
 
@@ -214,10 +214,10 @@ fs.writeFileSync(w.getStatePath('$sid', { forWrite: true }),JSON.stringify(st));
     hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"echo \\"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>\\""},"tool_response":{"output":""}}' "$sid")
 
     # Snapshot state before hook invocation (C3: no-mutation baseline)
-    state_path="$(WORKFLOW_STATE_DIR="$tmp_node/workflow" node "$AGENTS_DIR/bin/workflow-control-dir" --session "$sid" --file supervisor-state.json)"
+    state_path="$(WORKFLOW_STATE_DIR="$tmp_node/workflow" node "$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir" --session "$sid" --file supervisor-state.json)"
     state_before=$(cat "$state_path" 2>/dev/null || echo "{}")
 
-    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_CONFIG_DIR="$tmp_node" \
+    WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/workflow" AGENTS_MAIN_ROOT="$tmp_node" \
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" >/dev/null 2>&1
 
     state_after=$(cat "$state_path" 2>/dev/null || echo "{}")

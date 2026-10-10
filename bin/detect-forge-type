@@ -4,7 +4,7 @@
 // Node workers require the pure resolver in-process instead). Reads
 // GITLAB_HOSTNAME (and GITLAB_SSH_HOSTNAME) from .env (SSOT) and folds them
 // into resolveForgeTarget to classify the origin URL.
-// Relative require keeps it AGENTS_CONFIG_DIR-independent.
+// Relative require keeps it independent of any root variable.
 const { execFileSync } = require("child_process");
 const { resolveForgeTarget } = require("../hooks/lib/parse-remote-url");
 const { readGitlabHostConfig, readGitlabSshHostConfig } = require("../hooks/lib/forge-router");

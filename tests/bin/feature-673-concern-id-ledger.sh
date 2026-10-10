@@ -7,7 +7,7 @@ set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 WRAPPER_SRC="$AGENTS_WORKTREE/bin/run-codex-review-loop"
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$AGENTS_WORKTREE/tests/lib/harness.sh"
 ERRORS=0
 
@@ -43,7 +43,7 @@ export WORKFLOW_PLANS_DIR="$STATE_ROOT/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 # ---------------------------------------------------------------------------
-# Test scaffolding — sets up an isolated AGENTS_CONFIG_DIR with mocked
+# Test scaffolding — sets up an isolated fake script checkout with mocked
 # build-codex-context and review-plan-codex.
 # ---------------------------------------------------------------------------
 setup_mock_env() {
@@ -123,7 +123,7 @@ EOF
 
 invoke() {
     local agents_dir="$1"; shift
-    AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
+    run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
 }
 
 # Cases entering at round 2 use --force-round 2, not --round 2: a fresh fixture

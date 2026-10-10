@@ -17,7 +17,7 @@ chmod +x "$PQ/fakebin/pwsh"
 # pq_run <tag> [PATH prefix] — the real runner on the file from $PQ; sets PQ_RC, keeps $PQ/<tag>.out.
 pq_run() {
   PQ_RC=0
-  (cd "$PQ" && PATH="${2:+$2:}$PATH" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 180 bash "$RUN_ALL" "$PQ/$PQ_NAME") \
+  (cd "$PQ" && PATH="${2:+$2:}$PATH" bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 bash "$RUN_ALL" "$PQ/$PQ_NAME") \
     >"$PQ/$1.out" 2>&1 || PQ_RC=$?
 }
 pq_no_sentinel() {

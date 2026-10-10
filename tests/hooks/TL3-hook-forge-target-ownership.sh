@@ -16,13 +16,13 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # --- skip gates (claude-e2e.md acceptance criteria) --------------------------
-if [ ! -x "$AGENTS_DIR/bin/get-config-var" ]; then
+if [ ! -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
     echo "SKIP: bin/get-config-var not found or not executable" >&2; exit 77
 fi
-if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
     echo "SKIP: requires RUN_TL3=on in .env" >&2; exit 77
 fi
 if ! command -v claude >/dev/null 2>&1; then
@@ -76,7 +76,7 @@ BRANCH="fix/2053-tl3-probe"
 # These run against the REAL settings.json, before any process is spawned. Every
 # live assertion below is downstream of them: an unregistered guard cannot be
 # dispatched, so reporting the registration first names the actual defect.
-SETTINGS_REAL="$AGENTS_DIR/settings.json"
+SETTINGS_REAL="$SCRIPT_CHECKOUT_ROOT/settings.json"
 REG_MATCHER="$(node -e '
     const s = require(process.argv[1]);
     const hit = (s.hooks && s.hooks.PreToolUse || []).filter(e =>
@@ -210,7 +210,7 @@ case "$STUB_USER" in
              "got JSON: $STUB_USER" ;;
     *)  pass "C4-2 the stub does not emit a JSON object where TL2 models plain text" ;;
 esac
-TL2_FILE="$AGENTS_DIR/tests/hooks/feature-2053-forge-target-ownership.sh"
+TL2_FILE="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2053-forge-target-ownership.sh"
 if grep -q '\*"api user"\*).*GH_STUB_LOGIN' "$TL2_FILE" 2>/dev/null \
    && ! grep -q '\*"api user"\*).*{"login"' "$TL2_FILE" 2>/dev/null; then
     pass "C4-3 the TL2 stub still models the same plain-login contract"
@@ -241,7 +241,7 @@ chmod +x "$MOCKBIN/hookwrap.sh"
 
 # Generate the fixture chain from production. Only Bash-matching entries are kept
 # (the others cannot fire for a Bash tool call anyway), in production order, each
-# command rewritten to run under the shim with $AGENTS_CONFIG_DIR already resolved.
+# command rewritten to run under the shim with $AGENTS_MAIN_ROOT already resolved.
 node -e '
     const fs = require("fs");
     const [settingsPath, agentsDir, wrapSh, outPath] = process.argv.slice(1);
@@ -252,14 +252,14 @@ node -e '
     const wrapped = entries.map(e => ({
         matcher: e.matcher,
         hooks: (e.hooks || []).map(h => {
-            const real = String(h.command).split("$AGENTS_CONFIG_DIR").join(agentsDir);
+            const real = String(h.command).split("$AGENTS_MAIN_ROOT").join(agentsDir);
             const name = (real.match(/([\w.-]+\.js)/) || [, real])[1];
             return { type: "command", timeout: h.timeout || 20,
                      command: "bash " + q(wrapSh) + " " + q(name) + " " + q(real) };
         })
     }));
     fs.writeFileSync(outPath, JSON.stringify({ hooks: { PreToolUse: wrapped } }, null, 2));
-' "$(node_path "$SETTINGS_REAL")" "$(node_path "$AGENTS_DIR")" \
+' "$(node_path "$SETTINGS_REAL")" "$(node_path "$SCRIPT_CHECKOUT_ROOT")" \
   "$(node_path "$MOCKBIN/hookwrap.sh")" "$REPO/.claude/settings.json"
 
 if grep -qF "$GUARD" "$REPO/.claude/settings.json" 2>/dev/null; then
@@ -281,14 +281,14 @@ CMD_OWNED="gh issue create --title TOKEN --body TOKEN"
 # reach the guard and every ask/allow verdict below would be vacuous — which is
 # exactly the defect round-2 C1 reported. Note the gate signals a block through
 # stdout JSON while still exiting 0, so rc alone would miss it.
-EW_HOOK="$AGENTS_DIR/hooks/enforce-worktree.js"
+EW_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
 gate_verdict() { # <command> -> "block" | "permit" | "crash:<rc>" | "absent"
     [ -f "$EW_HOOK" ] || { printf 'absent'; return; }
     local out rc
     out="$(cd "$REPO" && printf '{"tool_name":"Bash","session_id":"tl3gate","cwd":"%s","tool_input":{"command":"%s"}}' \
              "$(node_path "$REPO")" "$1" \
            | WORKFLOW_STATE_DIR="$WFDIR" WORKFLOW_PLANS_DIR="$PLANSDIR" \
-             AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" PATH="$TURN_PATH" \
+             PATH="$TURN_PATH" \
              run_with_timeout 20 node "$EW_HOOK" 2>/dev/null)"
     rc=$?
     [ "$rc" -ne 0 ] && { printf 'crash:%s' "$rc"; return; }
@@ -310,7 +310,7 @@ else
          "gate verdict=$GATE_O — turn B (the control) would prove nothing"
 fi
 
-HOOK="$AGENTS_DIR/hooks/$GUARD"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/$GUARD"
 if [ -f "$HOOK" ] && [ -n "$REG_MATCHER" ]; then
     pass "C1-3 the guard exists and is registered, so the live turns can run"
 else
@@ -327,15 +327,14 @@ fi
 run_turn() {
     TURN_LOG="$BASE/hooks-$2.log"; : > "$TURN_LOG"
     ( cd "$REPO" && \
-      env -u GH_TOKEN -u GITHUB_TOKEN -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN \
+      run_with_timeout 180 env -u GH_TOKEN -u GITHUB_TOKEN -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN \
           -u GH_HOST -u GH_REPO -u GH_PATH -u GH_FORCE_TTY \
       PATH="$TURN_PATH" \
       GH_CONFIG_DIR="$GHCONFIG" \
       WORKFLOW_STATE_DIR="$WFDIR" \
       WORKFLOW_PLANS_DIR="$PLANSDIR" \
       TL3_HOOK_LOG="$TURN_LOG" \
-      AGENTS_CONFIG_DIR="$(node_path "$AGENTS_DIR")" \
-      run_with_timeout 180 claude -p "$3" \
+      claude -p "$3" \
         --session-id "$1" \
         --setting-sources project \
         --dangerously-skip-permissions \

@@ -18,8 +18,8 @@
 
 const path = require("path");
 
-const AGENTS_DIR = path.resolve(__dirname, "..", "..", "..");
-const STRIP_PATH = path.join(AGENTS_DIR, "hooks", "lib", "strip-quoted-args.js");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
+const STRIP_PATH = path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "strip-quoted-args.js");
 
 // The marker is a WRITE, so "did the transform lose it?" and "is the surviving
 // text on the danger side?" are the same question.

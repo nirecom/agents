@@ -65,25 +65,25 @@ function extractDenyLiteral(s) {
 
 /**
  * Resolves the absolute path to the agents repository root.
- * Prefers AGENTS_CONFIG_DIR env var; falls back to git rev-parse with a warning.
+ * Prefers AGENTS_MAIN_ROOT env var; falls back to git rev-parse with a warning.
  *
  * @returns {string} absolute path (forward slashes on all platforms)
  */
 function resolveAgentsRoot() {
-  if (process.env.AGENTS_CONFIG_DIR) {
-    return path.resolve(process.env.AGENTS_CONFIG_DIR).replace(/\\/g, "/");
+  if (process.env.AGENTS_MAIN_ROOT) {
+    return path.resolve(process.env.AGENTS_MAIN_ROOT).replace(/\\/g, "/");
   }
   try {
     const root = execSync("git rev-parse --show-toplevel", { encoding: "utf8" })
       .trim()
       .replace(/\\/g, "/");
     process.stderr.write(
-      `refactor-prompts: AGENTS_CONFIG_DIR not set; falling back to git toplevel: ${root}\n`
+      `refactor-prompts: AGENTS_MAIN_ROOT not set; falling back to git toplevel: ${root}\n`
     );
     return root;
   } catch {
     throw new Error(
-      "refactor-prompts: cannot locate agents repo (AGENTS_CONFIG_DIR unset and not in a git repo)"
+      "refactor-prompts: cannot locate agents repo (AGENTS_MAIN_ROOT unset and not in a git repo)"
     );
   }
 }

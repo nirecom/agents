@@ -8,7 +8,7 @@ CCP_PS_ROOT="${NODE_TMPDIR}/ccp-ps-$$"
 PUB="$CCP_PS_ROOT/plans"
 PUB_ABS="$PUB/sess-pub-intent.md"
 PUB_BARE="$CCP_PS_ROOT/bare.git"
-CCP_CLI="$(psf_np "$AGENTS_DIR/bin/plan-sync-init")"
+CCP_CLI="$(psf_np "$SCRIPT_CHECKOUT_ROOT_NATIVE/bin/plan-sync-init")"
 CCP_BLOB="https://github.com/test-owner/test-repo/blob/main/sess-pub-intent.md"
 mkdir -p "$PUB" "$CCP_PS_ROOT/neutral"
 printf '[core]\n\thooksPath = /dev/null\n[user]\n\tname = ccp-test\n\temail = ccp-test@example.invalid\n' \

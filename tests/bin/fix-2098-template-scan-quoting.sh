@@ -27,11 +27,11 @@ SKIP=0
 # for .github/ISSUE_TEMPLATE/*.yml, so no preflight ask fires; the residue
 # closes at the manual post-merge render check on github.com.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TEMPLATE_DIR="$AGENTS_DIR/.github/ISSUE_TEMPLATE"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TEMPLATE_DIR="$SCRIPT_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE"
 TASK_YML="$TEMPLATE_DIR/task.yml"
 INCIDENT_YML="$TEMPLATE_DIR/incident.yml"
-SIBLING="$AGENTS_DIR/tests/bin/fix-2098-issue-template-schema.sh"
+SIBLING="$SCRIPT_CHECKOUT_ROOT/tests/bin/fix-2098-issue-template-schema.sh"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -333,8 +333,8 @@ fi
 block_mutant s-metachars.yml '"textarea"' 'true' '      value: "$(touch PWNED-SCAN) `touch PWNED-TICK`; rm -rf ."'
 assert_eq "S1-metachars a metacharacter value is reported as an inert finding" \
     "1" "$(cd "$TMP" && count_findings scan_hardened "$MUT/s-metachars.yml")"
-if compgen -G "$TMP/PWNED*" >/dev/null 2>&1 || compgen -G "$AGENTS_DIR/PWNED*" >/dev/null 2>&1; then
-    fail "S2-no-execution — the injected payload EXECUTED: $(ls -d "$TMP"/PWNED* "$AGENTS_DIR"/PWNED* 2>/dev/null)"
+if compgen -G "$TMP/PWNED*" >/dev/null 2>&1 || compgen -G "$SCRIPT_CHECKOUT_ROOT/PWNED*" >/dev/null 2>&1; then
+    fail "S2-no-execution — the injected payload EXECUTED: $(ls -d "$TMP"/PWNED* "$SCRIPT_CHECKOUT_ROOT"/PWNED* 2>/dev/null)"
 else
     pass "S2-no-execution no artefact from the injected payload exists"
 fi

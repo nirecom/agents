@@ -7,14 +7,14 @@
 # regardless of the actual home directory path.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-HOOK="$AGENTS_DIR/hooks/show-plan-link.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/show-plan-link.js"
 ERRORS=0
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 SPL_NI=""
-[ -f "$AGENTS_DIR/hooks/lib/plan-sync.js" ] || SPL_NI=" [not implemented: #2513 breadcrumb, hooks/lib/plan-sync.js absent]"
+[ -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/plan-sync.js" ] || SPL_NI=" [not implemented: #2513 breadcrumb, hooks/lib/plan-sync.js absent]"
 fail() { echo "FAIL: $1$SPL_NI"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
 
@@ -40,9 +40,9 @@ PLANS_DIR="$WORKFLOW_PLANS_DIR"
 WORKFLOW_DIR_TEST="$WORKFLOW_STATE_DIR"
 CFG_DIR_TEST="$_ISOLATION_TMP_ROOT/cfg"
 mkdir -p "$CFG_DIR_TEST"
-# #2513: plan-sync off (empty export + empty config dir .env), so every
+# #2513: plan-sync off (empty export + empty agents main root .env), so every
 # breadcrumb is the local path plus the "not configured" line.
-export AGENTS_CONFIG_DIR="$CFG_DIR_TEST"
+export AGENTS_MAIN_ROOT="$CFG_DIR_TEST"
 export PLAN_SYNC_REMOTE_URL=""
 OFF_LINE="[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
@@ -55,7 +55,7 @@ unset SHOW_PLAN_LINK_NO_AUTO_OPEN SHOW_PLAN_LINK_NO_SPAWN SHOW_PLAN_LINK_MARKER_
 # #2513 safety net: a `code` stub is first on PATH for the whole file, so no case
 # (e.g. T21 sets CLAUDE_CODE_ENTRYPOINT) can ever launch the real editor.
 # shellcheck source=../lib/code-stub.sh
-. "$AGENTS_DIR/tests/lib/code-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/code-stub.sh"
 setup_code_stub "$WORKFLOW_DIR_TEST/code-stub" || { echo "FAIL: code stub setup"; exit 1; }
 code_stub_probe || { echo "FAIL: code stub is not first on PATH; refusing to run (real editor could launch)"; exit 1; }
 

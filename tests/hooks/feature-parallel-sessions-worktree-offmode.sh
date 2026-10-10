@@ -11,15 +11,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
-GUARD_FALLBACK="${_AGENTS_DIR_NODE}/hooks/auto-branch-guard.js"
-PRE_COMMIT="$AGENTS_DIR/hooks/pre-commit"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
+GUARD_FALLBACK="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/auto-branch-guard.js"
+PRE_COMMIT="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit"
 
 PASS=0
 FAIL=0
@@ -85,9 +85,9 @@ run_with_value() {
     command -v cygpath >/dev/null 2>&1 && posix_repo="$(cygpath -u "$repo")"
     local out
     if [ "$value" = "__UNSET__" ]; then
-        out="$(cd "$posix_repo" && echo "$payload" | run_with_timeout 30 env -u ENFORCE_WORKTREE "AGENTS_CONFIG_DIR=$repo" node "$GUARD_JS" 2>/dev/null)"
+        out="$(cd "$posix_repo" && echo "$payload" | run_with_timeout 30 env -u ENFORCE_WORKTREE "AGENTS_MAIN_ROOT=$repo" node "$GUARD_JS" 2>/dev/null)"
     else
-        out="$(cd "$posix_repo" && echo "$payload" | run_with_timeout 30 env "ENFORCE_WORKTREE=$value" "AGENTS_CONFIG_DIR=$repo" node "$GUARD_JS" 2>/dev/null)"
+        out="$(cd "$posix_repo" && echo "$payload" | run_with_timeout 30 env "ENFORCE_WORKTREE=$value" "AGENTS_MAIN_ROOT=$repo" node "$GUARD_JS" 2>/dev/null)"
     fi
     if guard_decision "$out"; then
         echo "allow"

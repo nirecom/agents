@@ -19,8 +19,8 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 # tests/hooks/feature-2013-step-in-flight-automark/d-skill-dispatch.sh. It is
 # RUN_TL3-gated and Anthropic-billable, so CI normally skips it; R1 below
 # always runs so the field-name agreement is checked on every invocation.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HOOK_SRC="$AGENTS_DIR/hooks/postuse-step-in-flight-mark.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/postuse-step-in-flight-mark.js"
 SKILL_FIELD_PATH='tool_input.skill'
 
 PASS=0; FAIL=0; SKIP=0
@@ -61,8 +61,8 @@ run_R1() {
 run_R1
 
 # --- TL3 gates -------------------------------------------------------------
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || { skip "R2/P3/R4: bin/get-config-var not executable"; finish; }
-if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || { skip "R2/P3/R4: bin/get-config-var not executable"; finish; }
+if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
     skip "R2/P3/R4: requires RUN_TL3=on in .env (Anthropic-billable)"
     finish
 fi
@@ -104,7 +104,7 @@ unset CLAUDECODE
 
 export TL3_RECORD_FILE="$RECORD_FILE"
 RESPONSE_FILE="$FIXTURE_DIR/response.json"
-if ! (cd "$FIXTURE_DIR" && "$AGENTS_DIR/bin/run-with-timeout.sh" 180 claude -p "Invoke the tl3-payload-probe skill, then stop." \
+if ! (cd "$FIXTURE_DIR" && "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 claude -p "Invoke the tl3-payload-probe skill, then stop." \
         --output-format json \
         --session-id "9f2c1d3e-2279-4a7b-9c5d-0e1f2a3b4c5d" \
         --settings "$FIXTURE_DIR/settings.json" \
@@ -154,7 +154,7 @@ P3_DIR="$FIXTURE_DIR/p3"
 P3_WF="$P3_DIR/wf"
 P3_TRANSCRIPTS="$P3_DIR/transcripts"
 HOOK_SRC_NODE="$(p3_node_path "$HOOK_SRC")"
-STATEIO_NODE="$(p3_node_path "$AGENTS_DIR/hooks/workflow-state/state-io.js")"
+STATEIO_NODE="$(p3_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js")"
 
 # Fixture isolation (rules/test/fixture-isolation.md): the two dirs are pinned as
 # a pair, the inherited CLAUDE_CODE_SESSION_ID is cleared,
@@ -165,8 +165,7 @@ p3_env() {
     env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$P3_WF" WORKFLOW_PLANS_DIR="$P3_WF" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$P3_TRANSCRIPTS" \
-        AGENTS_CONFIG_DIR="$(p3_node_path "$AGENTS_DIR")" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 25 "$@"
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 25 "$@"
 }
 
 # p3_replay <payload-file> — the real hook, fed on stdin the way Claude Code does.
@@ -262,7 +261,7 @@ R4_RECORD="$R4_DIR/dispatch.jsonl"
 R4_SETTINGS="$R4_DIR/settings.json"
 R4_HEIR="7c4e5b62-2279-4f18-9a3c-1b2d3e4f5a6b"
 R4_DONOR="tl3donor2279"
-AGENTS_NODE="$(p3_node_path "$AGENTS_DIR")"
+AGENTS_NODE="$(p3_node_path "$SCRIPT_CHECKOUT_ROOT")"
 R4_STORE_NODE=""
 
 # SKIP is reserved for environmental absence (the gates above, or claude -p
@@ -273,8 +272,8 @@ R4_STORE_NODE=""
 # entry that runs postuse-step-in-flight-mark.js AND matches tool_name Skill.
 # Empty when the host would never fire the hook #2279 is about.
 r4_registration() {
-    "$AGENTS_DIR/bin/run-with-timeout.sh" 15 node -e "
-const s = require('$(p3_node_path "$AGENTS_DIR/settings.json")');
+    "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 15 node -e "
+const s = require('$(p3_node_path "$SCRIPT_CHECKOUT_ROOT/settings.json")');
 const DOLLAR = String.fromCharCode(36);
 const NL = String.fromCharCode(10);
 const pick = () => {
@@ -296,19 +295,18 @@ if (hit) process.stdout.write(hit[0] + NL + hit[1] + NL);" 2>/dev/null
 
 # r4_env <node-body> — one node run from the fixture repo with the fixture store
 # pinned (rules/test/fixture-isolation.md): both plans-dir variables, cleared
-# session ids, and AGENTS_CONFIG_DIR pointing at this worktree.
+# session ids, and AGENTS_MAIN_ROOT pointing at this worktree.
 r4_env() {
     ( cd "$R4_REPO" && env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
-        AGENTS_CONFIG_DIR="$AGENTS_NODE" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node -e "$1" ) 2>/dev/null
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node -e "$1" ) 2>/dev/null
 }
 
 # r4_digest <sid> — every recorded step's status, joined; `<no-state>` when the
 # file is unreadable, so "no state" is never mistaken for "nothing recorded".
 r4_digest() {
     R4_SID="$1" R4_STATE="$(p3_node_path "$R4_STORE/$1.json")" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 15 node -e "
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 15 node -e "
 const fs = require('fs');
 let s;
 try { s = JSON.parse(fs.readFileSync(process.env.R4_STATE, 'utf8')); } catch (e) { process.stdout.write('<no-state>'); process.exit(0); }
@@ -340,7 +338,7 @@ require('$STATEIO_NODE').markStep(process.env.R4_SID, 'research', 'pending');" >
 # JSON.stringify so the registered command's own quoting survives verbatim.
 r4_write_settings() {
     R4_M="$1" R4_CMD="$2" R4_REC="$(p3_node_path "$FIXTURE_DIR/record.js")" R4_OUT="$(p3_node_path "$R4_SETTINGS")" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 15 node -e "
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 15 node -e "
 const fs = require('fs');
 const Q = String.fromCharCode(34);
 fs.writeFileSync(process.env.R4_OUT, JSON.stringify({ hooks: { PostToolUse: [ { matcher: process.env.R4_M, hooks: [
@@ -389,8 +387,8 @@ run_R4() {
     # The live host. Only the launch itself may SKIP.
     if ! ( cd "$R4_REPO" && env -u CLAUDE_CODE_SESSION_ID \
             WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
-            AGENTS_CONFIG_DIR="$AGENTS_NODE" TL3_RECORD_FILE="$R4_RECORD" \
-            "$AGENTS_DIR/bin/run-with-timeout.sh" 180 claude -p \
+            TL3_RECORD_FILE="$R4_RECORD" \
+            "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 claude -p \
             "Invoke the resume-session skill with the argument --from $R4_DONOR. It will refuse because this is a non-interactive session; that refusal is expected. Do not retry it, do not use any other tool, and stop." \
             --output-format json \
             --session-id "$R4_HEIR" \
@@ -421,8 +419,8 @@ run_R4() {
     #     through the real CLI (the S1-S10 assertion, on the live-host path).
     ok=$( ( cd "$R4_REPO" && env \
         WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
-        AGENTS_CONFIG_DIR="$AGENTS_NODE" CLAUDE_CODE_SESSION_ID="$R4_HEIR" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node "$AGENTS_DIR/bin/resume-session-detect" --from "$R4_DONOR" ) 2>/dev/null \
+        CLAUDE_CODE_SESSION_ID="$R4_HEIR" \
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect" --from "$R4_DONOR" ) 2>/dev/null \
         | jq -r '.inherit_result.ok // empty' 2>/dev/null )
     [ "$ok" = "true" ] ||
         problems="$problems [--from returned inherit_result.ok='${ok:-<none>}' after the live dispatch — the resume is a no-op for the user]"

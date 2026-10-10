@@ -12,9 +12,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLI="$AGENTS_DIR/bin/scan-offensive"
-BLOCKLIST="$AGENTS_DIR/.offensive-content-blocklist"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/scan-offensive"
+BLOCKLIST="$SCRIPT_CHECKOUT_ROOT/.offensive-content-blocklist"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

@@ -21,16 +21,16 @@ CFG_TRIM="$(make_cfg utf8trim "CODE_LANG=english")"
 # trim and print the surviving bytes as lowercase hex. Hex rather than the raw
 # text because a failure message about invalid UTF-8 must itself be readable.
 utf8_trim_hex() {
-    printf "$1" | AGENTS_CONFIG_DIR="$CFG_TRIM" run_with_timeout 20 bash -c '
+    printf "$1" | AGENTS_MAIN_ROOT="$CFG_TRIM" run_with_timeout 20 bash -c '
       source "$1/bin/lib/codex-core.sh" >/dev/null 2>&1 || exit 3
       declare -F _codex_core_utf8_trim_incomplete_tail >/dev/null || exit 4
       _codex_core_utf8_trim_incomplete_tail
-    ' _ "$AGENTS_DIR" 2>/dev/null | od -An -tx1 | tr -d ' \n'
+    ' _ "$SCRIPT_CHECKOUT_ROOT" 2>/dev/null | od -An -tx1 | tr -d ' \n'
 }
 
 # The function must exist before any claim about its behaviour is evidence:
 # a missing function returns empty, which several rows below would accept.
-if grep -q '_codex_core_utf8_trim_incomplete_tail' "$AGENTS_DIR/bin/lib/codex-core.sh" 2>/dev/null; then
+if grep -q '_codex_core_utf8_trim_incomplete_tail' "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-core.sh" 2>/dev/null; then
     pass "T2223E4-trim-function-defined"
 else
     fail "T2223E4-trim-function-defined — _codex_core_utf8_trim_incomplete_tail absent"

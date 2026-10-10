@@ -15,10 +15,10 @@
 # tests/skills/feature-worktree-start-non-interactive.sh (the daily runner).
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 
 ERRORS=0
@@ -26,11 +26,11 @@ pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
 # shellcheck source=tests/skills/TL3-skill-worktree-start-auto-naming/helpers.sh
-. "$AGENTS_DIR/tests/skills/TL3-skill-worktree-start-auto-naming/helpers.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/skills/TL3-skill-worktree-start-auto-naming/helpers.sh"
 # shellcheck source=tests/skills/TL3-skill-worktree-start-auto-naming/case-session.sh
-. "$AGENTS_DIR/tests/skills/TL3-skill-worktree-start-auto-naming/case-session.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/skills/TL3-skill-worktree-start-auto-naming/case-session.sh"
 # shellcheck source=tests/skills/TL3-skill-worktree-start-auto-naming/case-headless.sh
-. "$AGENTS_DIR/tests/skills/TL3-skill-worktree-start-auto-naming/case-headless.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/skills/TL3-skill-worktree-start-auto-naming/case-headless.sh"
 
 echo ""
 echo "=== Results ==="

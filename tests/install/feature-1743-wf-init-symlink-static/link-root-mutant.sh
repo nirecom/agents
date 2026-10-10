@@ -2,7 +2,7 @@
 
 # --- L4c: mutation probe — a wrong-root Dest must be detected, not silently green ---
 _mut_root="$TMP_DIR/dotfileslink-wrong-root.ps1"
-sed 's|\$AgentsRoot\\skills\\wf-init|$ClaudeDir\\skills\\wf-init|' "$PS_FILE" > "$_mut_root"
+sed 's|\$SCRIPT_CHECKOUT_ROOT\\skills\\wf-init|$ClaudeDir\\skills\\wf-init|' "$PS_FILE" > "$_mut_root"
 _mut_anchor=0; _mut_wrong=0
 has_win_dest_under_agents_root "$_mut_root" && _mut_anchor=1
 has_win_dest_under_claude_dir "$_mut_root" && _mut_wrong=1

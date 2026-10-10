@@ -14,17 +14,17 @@ set -uo pipefail
 # - a real concurrent lstat->open race (TOC-2 / TOC-3 simulate it by patching fs.lstatSync / fs.openSync in-process)
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=../lib/plan-sync-fixture.sh
-. "$AGENTS_DIR/tests/lib/plan-sync-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-sync-fixture.sh"
 
 psf_setup || { fail "setup" "psf_setup failed"; exit 1; }
 psf_tag_unimplemented_fails
 trap psf_cleanup EXIT
 PLANS="$WORKFLOW_PLANS_DIR"
-URL_TABLE="$(psf_np "$AGENTS_DIR/tests/fixtures/session-sync-remote-url-table.txt")"
+URL_TABLE="$(psf_np "$SCRIPT_CHECKOUT_ROOT/tests/fixtures/session-sync-remote-url-table.txt")"
 
 # expect_eq <name> <got> <want> — reports "not implemented" for a missing module.
 expect_eq() {
@@ -158,8 +158,8 @@ for (const k of ["intent", "outline", "detail", "context", "issue-prefill", "tes
 }
 process.stdout.write([...synced].sort().join(",") + "|" + (out.join(",") || "agree"));
 JS
-OUT="$(PSF_REG="$(psf_np "$AGENTS_DIR/hooks/lib/plans-artifact-registry.js")" \
-  PSF_PCF="$(psf_np "$AGENTS_DIR/hooks/lib/plan-confirm-flag.js")" psf_timeout 30 node -e "$REG_JS" 2>&1)"
+OUT="$(PSF_REG="$(psf_np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/plans-artifact-registry.js")" \
+  PSF_PCF="$(psf_np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/plan-confirm-flag.js")" psf_timeout 30 node -e "$REG_JS" 2>&1)"
 expect_eq "SYNCED_PLAN_ARTIFACT_KINDS == getSuffix accepted set (both directions)" "$OUT" "detail,intent,outline|agree"
 case_end
 
@@ -260,7 +260,7 @@ case_end
 
 case_begin "no-ssh-layer-in-production" "hooks/lib/plan-sync.js"
 SRCS=()
-for f in "$AGENTS_DIR/hooks/lib/plan-sync.js" "$AGENTS_DIR/hooks/lib/plan-sync"; do
+for f in "$SCRIPT_CHECKOUT_ROOT/hooks/lib/plan-sync.js" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/plan-sync"; do
   [ -e "$f" ] && SRCS+=("$f")
 done
 if [ "${#SRCS[@]}" -ne 2 ]; then
@@ -273,7 +273,7 @@ fi
 case_end
 
 # Flow sections share state in order: provision -> sync -> nonff.
-LIB_DIR="$AGENTS_DIR/tests/hooks/feature-2513-plan-sync-lib"
+LIB_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-plan-sync-lib"
 . "$LIB_DIR/flow-helpers.sh"
 case_begin "flow-provision-repo" "hooks/lib/plan-sync.js"
 . "$LIB_DIR/provision.sh"

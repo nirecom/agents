@@ -27,7 +27,7 @@ fi
 # (tests/feature-1673-commit-push-lib/gate-spawn-stub.js,
 # tests/feature-1643-worker-dispatch-lib/spawn-stub.js) record opts.envScope per
 # intercepted spawn — so each assertion is on what the worker really asked for.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # TL3 gap (what this TL2 test does NOT catch):
 #   - Whether a real `git push` child still reaches a real ssh-agent through the
@@ -37,10 +37,10 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 #     (tests/bin/TL3-worker-dispatch-child-env-gh-doc-append/).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-SPAWN_JS="$AGENTS_DIR/bin/worker-dispatch/spawn.js"
-CP_PRELOAD="$AGENTS_DIR/tests/feature-1673-commit-push-lib/gate-spawn-stub.js"
-DA_PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+SPAWN_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js"
+CP_PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1673-commit-push-lib/gate-spawn-stub.js"
+DA_PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 
 PASS=0
 FAIL=0

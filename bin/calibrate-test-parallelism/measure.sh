@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bin/calibrate-test-parallelism/measure.sh — one child run and its verdict (SOURCE ONLY).
-# Needs AGENTS_DIR, RUNNER, bin/lib/run-all-parallelism.sh, bin/lib/run-all-durations.sh
+# Needs SCRIPT_CHECKOUT_ROOT, RUNNER, bin/lib/run-all-parallelism.sh, bin/lib/run-all-durations.sh
 # and TEST_LANES=off. Design: #2079 S3 ("one child run", seam, overrun, time limit).
 
 # A report is a line file: source= rc= ms= [width=] [inflight=] segments=
@@ -69,10 +69,10 @@ cal_report_records() {
             p="${p%$'\r'}"; [ -n "$p" ] && paths+=("$p")
         done < "$list"
         for ((i = 0; i < ${#paths[@]}; i++)); do
-            run_all_dur_key_into "${paths[$i]}" "$AGENTS_DIR" || continue
+            run_all_dur_key_into "${paths[$i]}" "$SCRIPT_CHECKOUT_ROOT" || continue
             printf '%s\t%s\n' "$i" "$RUN_ALL_DUR_KEY_OUT"
         done > "$dir.keys"
-        run_all_dur_lookup "$AGENTS_DIR" "$dir.keys" "$dir.secs"
+        run_all_dur_lookup "$SCRIPT_CHECKOUT_ROOT" "$dir.keys" "$dir.secs"
         printf 'segments=%s\n' "$RUN_ALL_DUR_SEGMENTS_READ"
         while IFS="$(printf '\t')" read -r id secs; do
             if ! is_uint "$id" || ! is_uint "$secs"; then continue; fi
@@ -109,12 +109,12 @@ cal_child_run() {
         cal_report_records "$dir" "$list"
     } > "$report"
     while IFS= read -r p; do
-        case "$p" in recorded=*) p="${p#recorded=}"; run_all_dur_key_into "${p%	*}" "$AGENTS_DIR" && rec["$RUN_ALL_DUR_KEY_OUT"]=1 ;; esac
+        case "$p" in recorded=*) p="${p#recorded=}"; run_all_dur_key_into "${p%	*}" "$SCRIPT_CHECKOUT_ROOT" && rec["$RUN_ALL_DUR_KEY_OUT"]=1 ;; esac
     done < "$report"
     while IFS= read -r p; do
         case "$p" in submitted=*) ;; *) continue ;; esac
         p="${p#submitted=}"
-        run_all_dur_key_into "$p" "$AGENTS_DIR" || continue
+        run_all_dur_key_into "$p" "$SCRIPT_CHECKOUT_ROOT" || continue
         key="$RUN_ALL_DUR_KEY_OUT"
         [ -n "${rec[$key]:-}" ] || printf 'unrecorded=%s\n' "$p" >> "$report"
     done < "$parsed"

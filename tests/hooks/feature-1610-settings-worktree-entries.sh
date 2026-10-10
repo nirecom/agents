@@ -19,10 +19,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-STOP_HOOK="$AGENTS_DIR/hooks/stop-exit-worktree-warn.js"
-RECORDER="$AGENTS_DIR/hooks/postuse-native-worktree-record.js"
-SETTINGS="$AGENTS_DIR/settings.json"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+STOP_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/stop-exit-worktree-warn.js"
+RECORDER="$SCRIPT_CHECKOUT_ROOT/hooks/postuse-native-worktree-record.js"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

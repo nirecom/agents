@@ -16,21 +16,21 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-CLI="$AGENTS_DIR/bin/supervisor-report"
-CLI_NODE="$_AGENTS_DIR_NODE/bin/supervisor-report"
-HOOK="$AGENTS_DIR/hooks/supervisor-guard.js"
-RESOLVE_WSID="$AGENTS_DIR/hooks/lib/resolve-workflow-session-id.js"
-RESOLVE_WSID_NODE="$_AGENTS_DIR_NODE/hooks/lib/resolve-workflow-session-id.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-FORMAT_SRC="$AGENTS_DIR/hooks/lib/supervisor-report-format.js"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-report"
+CLI_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/bin/supervisor-report"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard.js"
+RESOLVE_WSID="$SCRIPT_CHECKOUT_ROOT/hooks/lib/resolve-workflow-session-id.js"
+RESOLVE_WSID_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/resolve-workflow-session-id.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
+FORMAT_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-report-format.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -418,7 +418,7 @@ run_c13() {
     require_source "$FORMAT_SRC" "C13: formatL2ArmedReason includes 'Effective state session ID:'" || return
     local out
     out=$(run_with_timeout 5 node -e "
-const f = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format');
+const f = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-report-format');
 const s = f.formatL2ArmedReason('C2', 'ccuuid', 'wsid', '/sup.md', '/state.json', 'effective-sid');
 process.stdout.write(s);
 " 2>/dev/null)
@@ -434,15 +434,15 @@ run_c14() {
     require_source "$FORMAT_SRC" "C14: all 3 format functions include the line" || return
     local out_armed out_cumsev out_wtoff
     out_armed=$(run_with_timeout 5 node -e "
-const f = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format');
+const f = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-report-format');
 process.stdout.write(f.formatL2ArmedReason('C2', 'ccuuid', 'wsid', '/sup.md', '/state.json', 'eff-sid'));
 " 2>/dev/null)
     out_cumsev=$(run_with_timeout 5 node -e "
-const f = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format');
+const f = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-report-format');
 process.stdout.write(f.formatCumSevErrorReason([], 'ccuuid', 'wsid', '/sup.md', '/state.json', 'eff-sid'));
 " 2>/dev/null)
     out_wtoff=$(run_with_timeout 5 node -e "
-const f = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format');
+const f = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-report-format');
 process.stdout.write(f.formatWorktreeOffProposalReason('ccuuid', 'wsid', '/sup.md', '/state.json', 'eff-sid'));
 " 2>/dev/null)
     local missing=""

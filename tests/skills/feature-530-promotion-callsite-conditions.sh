@@ -25,13 +25,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
-WE_MD="$AGENTS_DIR/skills/worktree-end/SKILL.md"
-SC_MD="$AGENTS_DIR/skills/session-close/SKILL.md"
-ICF_MD="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
-RESOLVE_JS="$AGENTS_DIR/bin/worktree-notes-triage/resolve.js"
+WE_MD="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/SKILL.md"
+SC_MD="$SCRIPT_CHECKOUT_ROOT/skills/session-close/SKILL.md"
+ICF_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/SKILL.md"
+RESOLVE_JS="$SCRIPT_CHECKOUT_ROOT/bin/worktree-notes-triage/resolve.js"
 
 # The accepted --caller enum. Group E cross-checks this against resolve.js once
 # that file exists; groups A–C use it as the per-callsite expectation.
@@ -85,11 +85,11 @@ load_block() {
     local label="$1" path="$2" caller="$3" lines
     BLOCK=""
     if [ ! -f "$path" ]; then
-        fail "$label: ${path#"$AGENTS_DIR/"} missing"
+        fail "$label: ${path#"$SCRIPT_CHECKOUT_ROOT/"} missing"
         return 1
     fi
     if ! BLOCK="$(extract_section_containing "$path" "--caller $caller")"; then
-        fail "$label: no block containing '--caller $caller' in ${path#"$AGENTS_DIR/"}"
+        fail "$label: no block containing '--caller $caller' in ${path#"$SCRIPT_CHECKOUT_ROOT/"}"
         return 1
     fi
     lines="$(printf '%s\n' "$BLOCK" | wc -l | tr -d '[:space:]')"

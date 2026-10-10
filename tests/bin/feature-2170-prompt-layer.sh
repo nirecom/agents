@@ -17,9 +17,8 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-export AGENTS_DIR
-SCAN="$AGENTS_DIR/tests/bin/feature-2170-prompt-layer/scan-docs.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCAN="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2170-prompt-layer/scan-docs.js"
 command -v node >/dev/null 2>&1 || exit 77
 
 PASS=0
@@ -45,12 +44,12 @@ docs/ops.md
 
 abs_changed() {
     local rel
-    for rel in $CHANGED_DOCS; do printf '%s\n' "$AGENTS_DIR/$rel"; done
+    for rel in $CHANGED_DOCS; do printf '%s\n' "$SCRIPT_CHECKOUT_ROOT/$rel"; done
 }
 
 # --- PL-0: every named document exists (guards against a silent rename) -----------
 for rel in $CHANGED_DOCS; do
-    [ -f "$AGENTS_DIR/$rel" ] && got=present || got=MISSING
+    [ -f "$SCRIPT_CHECKOUT_ROOT/$rel" ] && got=present || got=MISSING
     assert_eq "PL-0-doc-present-[$rel]" "present" "$got"
 done
 
@@ -65,7 +64,7 @@ examined="$(abs_changed | xargs node "$SCAN" count)"
 assert_eq "PL-1b-scanner-examined-real-snippets" "enough" "$got"
 
 FIXTURE="$(mktemp -d)/bad-doc.md"
-printf '%s\n' '```bash' 'PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")' 'echo "$PLANS_DIR"' '```' >"$FIXTURE"
+printf '%s\n' '```bash' 'PLANS_DIR=$(bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir")' 'echo "$PLANS_DIR"' '```' >"$FIXTURE"
 probe="$(node "$SCAN" hits "$FIXTURE")"
 case "$probe" in
     bad-doc.md#1:*) got=detected ;;
@@ -78,10 +77,10 @@ rm -f "$FIXTURE"
 # id|file|must-contain|must-not-contain (regex; empty field = skip that direction)
 # The bare form is one exact literal, so it is matched with grep -F; the forbidden
 # capture form varies in quoting, so its side stays a regex.
-BARE_FORM='bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"'
+BARE_FORM='bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"'
 while IFS='|' read -r id rel unwanted; do
     [ -z "$id" ] && continue
-    f="$AGENTS_DIR/$rel"
+    f="$SCRIPT_CHECKOUT_ROOT/$rel"
     grep -qF -- "$BARE_FORM" "$f" && got=yes || got=no
     assert_eq "$id-uses-bare-resolver" "yes" "$got"
     grep -qE -- "$unwanted" "$f" && got=yes || got=no
@@ -97,12 +96,12 @@ TABLE
 # --- PL-3: no caller-side `||` fallback duplicating the bridge's own chain ---------
 # resolve-plans-dir.md "Fallback chain" forbids it; it also forces the capture form.
 for rel in $CHANGED_DOCS; do
-    hitn="$(grep -c -E 'workflow-plans-dir"? *2?>?[^|]*\|\|' "$AGENTS_DIR/$rel" || true)"
+    hitn="$(grep -c -E 'workflow-plans-dir"? *2?>?[^|]*\|\|' "$SCRIPT_CHECKOUT_ROOT/$rel" || true)"
     assert_eq "PL-3-no-caller-side-fallback-[$rel]" "0" "$hitn"
 done
 
 # --- PL-4: the issuance rule still names the capture-then-echo prohibition ---------
-RULE="$AGENTS_DIR/rules/shell-commands.md"
+RULE="$SCRIPT_CHECKOUT_ROOT/rules/shell-commands.md"
 for token in '$(...)' 'scratchpad script' 'Write tool'; do
     grep -qF -- "$token" "$RULE" && got=yes || got=no
     assert_eq "PL-4-shell-commands-mentions-[$token]" "yes" "$got"

@@ -16,13 +16,13 @@
 echo ""
 echo "=== G14 (F1): CONFIRM_<STAGE>=off waiver comes from the .env file, not process.env ==="
 
-# mark_probe <config-dir> <CONFIRM_OUTLINE> <CONFIRM_DETAIL> <sid> <step>
+# mark_probe <agents-main-root> <CONFIRM_OUTLINE> <CONFIRM_DETAIL> <sid> <step>
 # Calls markStep(<sid>, <step>, "complete") in a child node process with the
 # given process.env CONFIRM_* values. Prints NOERROR or THREW:<code>.
 mark_probe() {
   local cfg="$1" co="$2" cd_="$3" sid="$4" step="$5"
   WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-    AGENTS_CONFIG_DIR="$cfg" CONFIRM_OUTLINE="$co" CONFIRM_DETAIL="$cd_" \
+    AGENTS_MAIN_ROOT="$cfg" CONFIRM_OUTLINE="$co" CONFIRM_DETAIL="$cd_" \
     run_with_timeout node -e '
       const { markStep } = require(process.argv[1]);
       try { markStep(process.argv[2], process.argv[3], "complete"); console.log("NOERROR"); }
@@ -37,7 +37,7 @@ write_state "$SID" "$(gen_state '{"workflow_init":"complete","clarify_intent":"c
 touch "$PLANS_DIR/${SID}-outline.md"
 
 WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-  AGENTS_CONFIG_DIR="$CONFIG_DIR_ON" CONFIRM_OUTLINE=off \
+  AGENTS_MAIN_ROOT="$CFG_ROOT_ON" CONFIRM_OUTLINE=off \
   run_with_timeout node "$NEXT_STEP" --session "$SID" >/dev/null 2>&1 || true
 
 check "G14a. inline process.env CONFIRM_OUTLINE=off does NOT complete outline" \
@@ -48,7 +48,7 @@ check "G14a2. no confirm-flag-off record minted from process.env" \
 SID_D="g14b-$$"
 write_state "$SID_D" "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete"}' wf-code '{"plan_approvals":{"outline":{"source":"reset-sentinel","artifact_sha256":null,"artifact_hash_status":"not-applicable"}}}')"
 
-OUT="$(mark_probe "$CONFIG_DIR_ON" on off "$SID_D" detail)"
+OUT="$(mark_probe "$CFG_ROOT_ON" on off "$SID_D" detail)"
 check_contains "G14b. inline process.env CONFIRM_DETAIL=off still throws on detail completion" \
   "THREW:no-approval-record" "$OUT"
 check "G14b2. detail not persisted complete by the refused markStep" \
@@ -63,7 +63,7 @@ write_state "$SID_C" "$(gen_state '{"workflow_init":"complete","clarify_intent":
 touch "$PLANS_DIR/${SID_C}-outline.md"
 
 WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-  AGENTS_CONFIG_DIR="$CONFIG_DIR_OFF" CONFIRM_OUTLINE=on \
+  AGENTS_MAIN_ROOT="$CFG_ROOT_OFF" CONFIRM_OUTLINE=on \
   run_with_timeout node "$NEXT_STEP" --session "$SID_C" >/dev/null 2>&1 || true
 
 check "G14c. config-file CONFIRM_OUTLINE=off waives the gate (outline completes)" \
@@ -74,7 +74,7 @@ check "G14c2. waiver is stamped as a confirm-flag-off audit record" \
 SID_CD="g14d-$$"
 write_state "$SID_CD" "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete"}' wf-code '{"plan_approvals":{"outline":{"source":"reset-sentinel","artifact_sha256":null,"artifact_hash_status":"not-applicable"}}}')"
 
-OUT_CD="$(mark_probe "$CONFIG_DIR_OFF" on on "$SID_CD" detail)"
+OUT_CD="$(mark_probe "$CFG_ROOT_OFF" on on "$SID_CD" detail)"
 check "G14d. config-file CONFIRM_DETAIL=off waives the detail gate (no throw)" \
   "NOERROR" "$OUT_CD"
 check "G14d2. detail persisted complete under the file-sourced waiver" \

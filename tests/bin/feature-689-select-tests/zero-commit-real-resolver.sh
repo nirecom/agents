@@ -38,7 +38,7 @@ test_S20_real_resolver_end_to_end() {
     # Premise 1: the real resolver really does answer with HEAD here. Without this the row could
     # go green on a repository that simply had an ordinary base, proving nothing about #1779.
     local resolved head
-    resolved="$(cd "$repo" && WORKFLOW_STATE_DIR="$wfdir" run_with_timeout 120 bash "$AGENTS_DIR/bin/resolve-merge-base.sh" -C . --no-fetch --format base 2>/dev/null)"
+    resolved="$(cd "$repo" && WORKFLOW_STATE_DIR="$wfdir" run_with_timeout 120 bash "$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh" -C . --no-fetch --format base 2>/dev/null)"
     head="$(git -C "$repo" rev-parse HEAD)"
     if [ -z "$resolved" ]; then
         fail "S20_real_resolver_end_to_end: the real resolver produced no base, so the wiring cannot be exercised"
@@ -59,8 +59,8 @@ test_S20_real_resolver_end_to_end() {
     o="$TMPDIR_BASE/s20-out"; e="$TMPDIR_BASE/s20-err"
     (
         cd "$repo" || exit 1
-        export WORKFLOW_STATE_DIR="$wfdir" AGENTS_CONFIG_DIR="$AGENTS_DIR" RUN_TL3=off
-        run_with_timeout 120 bash "$AGENTS_DIR/bin/select-tests.sh" --auto
+        export WORKFLOW_STATE_DIR="$wfdir" RUN_TL3=off
+        run_with_timeout 120 bash "$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh" --auto
     ) >"$o" 2>"$e" || rc=$?
     out="$(cat "$o")"; err="$(cat "$e")"
     rm -f "$o" "$e"
@@ -116,7 +116,7 @@ test_S28_real_resolver_recorded_state_end_to_end() {
 
     # The recovery RNT-1 documents, run for real: the user confirms the only base there is.
     if ! WORKFLOW_STATE_DIR="$wfdir" run_with_timeout 120 node \
-            "$AGENTS_DIR/bin/workflow/record-merge-base-baseline" \
+            "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-merge-base-baseline" \
             --session "$sid" --base "$head" --reason "S28 fixture: zero-commit branch, base confirmed as HEAD" \
             --repo "$repo" >/dev/null 2>&1; then
         fail "S28_real_resolver_recorded_state_end_to_end: the baseline CLI refused to record, so the RECORDED path cannot be reached"
@@ -128,7 +128,7 @@ test_S28_real_resolver_recorded_state_end_to_end() {
     # it is not the zero-commit case.
     local kv state base
     kv="$(cd "$repo" && WORKFLOW_STATE_DIR="$wfdir" CLAUDE_CODE_SESSION_ID="$sid" \
-        run_with_timeout 120 bash "$AGENTS_DIR/bin/resolve-merge-base.sh" -C . --no-fetch --format kv 2>/dev/null)"
+        run_with_timeout 120 bash "$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh" -C . --no-fetch --format kv 2>/dev/null)"
     state="$(printf '%s\n' "$kv" | sed -n 's/^state=//p')"
     base="$(printf '%s\n' "$kv" | sed -n 's/^base=//p')"
     if [ "$state" != "RECORDED" ]; then
@@ -151,8 +151,8 @@ $kv"
     (
         cd "$repo" || exit 1
         export WORKFLOW_STATE_DIR="$wfdir" CLAUDE_CODE_SESSION_ID="$sid" \
-               AGENTS_CONFIG_DIR="$AGENTS_DIR" RUN_TL3=off
-        run_with_timeout 120 bash "$AGENTS_DIR/bin/select-tests.sh" --auto
+               RUN_TL3=off
+        run_with_timeout 120 bash "$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh" --auto
     ) >"$o" 2>"$e" || rc=$?
     out="$(cat "$o")"; err="$(cat "$e")"
     rm -f "$o" "$e"

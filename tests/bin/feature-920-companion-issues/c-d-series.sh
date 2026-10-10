@@ -2,17 +2,12 @@
 # tests/bin/feature-920-companion-issues/c-d-series.sh
 # Tests: skills/clarify-intent/SKILL.md, .env.example
 # Tags: companion-issues, clarify-intent, env-example, scope:issue-specific
-#
 # C-series: prefill #N regex preservation + WI-5 stale-pointer scrub.
 # D-series: CONFIRM_COMPANION_ISSUES fully removed from .env.example,
 # companion-search.sh, and CI-2b (no auto-accept mode).
-#
-# L3 gap (what these tests do NOT catch):
-# - Whether the updated .env.example comment causes any runtime behaviour change
-#   (it is documentation only; any breakage would be in the consuming code).
-# - Whether CI-2b's AskUserQuestion text renders correctly in a live session.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# L3 gap: runtime effect of the .env.example comment (documentation only) and the
+# live rendering of CI-2b's AskUserQuestion text; mitigated at WORKFLOW_USER_VERIFIED
+# preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
@@ -65,7 +60,7 @@ else
 fi
 
 # D2: companion-search.sh has no CONFIRM_COMPANION_ISSUES reference.
-COMPANION_SCRIPT="$AGENTS_DIR/skills/clarify-intent/scripts/companion-search.sh"
+COMPANION_SCRIPT="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/scripts/companion-search.sh"
 if [ -f "$COMPANION_SCRIPT" ]; then
     if grep -q "CONFIRM_COMPANION_ISSUES" "$COMPANION_SCRIPT"; then
         fail "D2: companion-search.sh still references CONFIRM_COMPANION_ISSUES"
@@ -107,9 +102,9 @@ else
     fail "D4: clarify-intent SKILL.md not found"
 fi
 
-# D5: filter-init-candidates.sh exists (WI-3 candidate filter script retained for
-# AGENTS_CONFIG_DIR injection; absorbed into driver detect-issues phase).
-FILTER_INIT_SCRIPT="$AGENTS_DIR/skills/workflow-init/scripts/filter-init-candidates.sh"
+# D5: filter-init-candidates.sh exists (WI-3 candidate filter script retained;
+# absorbed into driver detect-issues phase).
+FILTER_INIT_SCRIPT="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/workflow-init/scripts/filter-init-candidates.sh"
 if [ -f "$FILTER_INIT_SCRIPT" ]; then
     pass "D5: filter-init-candidates.sh exists (WI-3 init-candidate filter retained)"
 else
@@ -120,7 +115,7 @@ fi
 # (wip-set-resume.sh absorbed; no separate WI-5 bullet in SKILL.md). Verify
 # that SKILL.md does NOT contain the old "skip WIP" text and that the driver
 # wip-check phase exists as evidence of correct handling.
-WIP_CHECK_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/wip-check.js"
+WIP_CHECK_JS="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/wip-check.js"
 if [ ! -f "$WORKFLOW_INIT_SKILL" ]; then
     fail "D6: workflow-init SKILL.md not found"
 elif grep -qi "skip WIP" "$WORKFLOW_INIT_SKILL"; then

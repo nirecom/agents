@@ -11,7 +11,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const registryData = require("../../hooks/lib/worker-dispatch-registry");
-const { realAbs, samePath } = require("./anchor");
+const { realAbs, samePath, resolveAgentsMainRoot } = require("./anchor");
 
 const DEFAULT_TIMEOUT_MS = 120000;
 const MAX_BUFFER = 32 * 1024 * 1024;
@@ -21,8 +21,8 @@ const MAX_BUFFER = 32 * 1024 * 1024;
 // only one that can serve a worker whose job IS to run the branch under review.
 // Why that widening is safe and bounded: see spawn.md "Anchors".
 function anchorRoot(anchorName, anchors, familyCwd) {
-  if (anchorName === "acd") return anchors.acd;
-  if (anchorName === "main-root") return anchors.mainRoot;
+  if (anchorName === "script-checkout-root") return anchors.scriptCheckoutRoot;
+  if (anchorName === "target-main-root") return anchors.targetMainRoot;
   if (anchorName === "family-worktree") return familyCwd || null;
   return null;
 }
@@ -78,7 +78,10 @@ function buildEnv(entry, anchors, extraEnv, envScope) {
       env[name] = String(extraEnv[name]);
     }
   }
-  env.AGENTS_CONFIG_DIR = anchors.acd;
+  // Absent rather than guessed when no agents main worktree can be proven: the
+  // child then falls back to its own script checkout for settings.
+  const agentsMain = resolveAgentsMainRoot();
+  if (agentsMain !== null) env.AGENTS_MAIN_ROOT = agentsMain;
   return env;
 }
 
@@ -86,7 +89,7 @@ function assertCwdInFamily(cwd, anchors) {
   const abs = realAbs(cwd);
   if (abs === null) throw new Error("child working directory must be an absolute path");
   const ok = (anchors.family || []).some((f) => samePath(f, abs));
-  if (!ok) throw new Error("child working directory is not a worktree of the main-root family");
+  if (!ok) throw new Error("child working directory is not a worktree of the target-main-root family");
   return abs;
 }
 

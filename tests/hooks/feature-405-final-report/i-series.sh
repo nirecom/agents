@@ -74,13 +74,13 @@ test_I6_backup_vars_defined_in_step5() {
 
 # detect-restart.sh failsafe + rules-reason — still relevant; not touched by #771
 test_I12_detect_restart_failsafe() {
-    local detect_sh="$AGENTS_DIR/skills/worktree-end/scripts/detect-restart.sh"
+    local detect_sh="$_HELPERS_SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/detect-restart.sh"
     if [ ! -f "$detect_sh" ]; then
         skip "I12_detect_restart_failsafe (detect-restart.sh not found)"
         return
     fi
     local out
-    out="$(run_with_timeout 30 bash -c 'unset AGENTS_CONFIG_DIR; PR_NUMBER="" bash "$1" ""' _ "$detect_sh" 2>/dev/null)"
+    out="$(run_with_timeout 30 bash -c 'unset AGENTS_MAIN_ROOT; PR_NUMBER="" bash "$1" ""' _ "$detect_sh" 2>/dev/null)"
     local lines; lines="$(printf '%s\n' "$out" | grep -cE '^(cc_restart|vscode_reload|installer_rerun|os_reboot)=not_required\|$')"
     if [ "$lines" = "4" ]; then
         pass "I12: detect-restart.sh fail-safe outputs all 4 categories as not_required|"
@@ -103,7 +103,7 @@ _make_mock_gh() {
 }
 
 test_I13_detect_restart_rules_reason() {
-    local detect_sh="$AGENTS_DIR/skills/worktree-end/scripts/detect-restart.sh"
+    local detect_sh="$_HELPERS_SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/detect-restart.sh"
     if [ ! -f "$detect_sh" ]; then
         skip "I13_detect_restart_rules_reason (detect-restart.sh not found)"
         return
@@ -113,7 +113,7 @@ test_I13_detect_restart_rules_reason() {
 
     local out
     out="$(run_with_timeout 30 \
-           env PATH="$mock_posix:$PATH" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+           env PATH="$mock_posix:$PATH" \
            bash "$detect_sh" "999" 2>/dev/null)"
 
     if printf '%s\n' "$out" | grep -qF 'cc_restart=required|rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)'; then
@@ -125,7 +125,7 @@ $out"
 }
 
 test_I13b_detect_restart_rules_and_claude_priority() {
-    local detect_sh="$AGENTS_DIR/skills/worktree-end/scripts/detect-restart.sh"
+    local detect_sh="$_HELPERS_SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/detect-restart.sh"
     if [ ! -f "$detect_sh" ]; then
         skip "I13b_detect_restart_rules_and_claude_priority (detect-restart.sh not found)"
         return
@@ -135,7 +135,7 @@ test_I13b_detect_restart_rules_and_claude_priority() {
 
     local out
     out="$(run_with_timeout 30 \
-           env PATH="$mock_posix:$PATH" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+           env PATH="$mock_posix:$PATH" \
            bash "$detect_sh" "999" 2>/dev/null)"
 
     if printf '%s\n' "$out" | grep -qF 'cc_restart=required|CLAUDE.md modified in PR'; then
@@ -147,7 +147,7 @@ $out"
 }
 
 test_I14_dispatcher_propagates_crashed_child_exit_code() {
-    local dispatcher="$AGENTS_DIR/tests/hooks/feature-405-final-report.sh"
+    local dispatcher="$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-405-final-report.sh"
     if [ ! -f "$dispatcher" ]; then
         skip "I14_dispatcher_propagates_crashed_child_exit_code (dispatcher not found)"
         return

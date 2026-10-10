@@ -9,13 +9,13 @@ Retires test files whose `# Tests:` targets are gone. A flagless run deletes; `-
 
 ## Procedure
 
-STE-1. Run `bash "$AGENTS_CONFIG_DIR/bin/audit-tests.sh" [--dry-run] [--apply] [--stale-months N] [--offline] [--format text|json] [--fix-headers]` — issue-specific scope.
-STE-2. Run `bash "$AGENTS_CONFIG_DIR/bin/audit-tests-common.sh" [--dry-run] [--apply] [--stale-months N] [--offline] [--format text|json] [--fix-headers]` — scope:common.
-STE-3. Run `bash "$AGENTS_CONFIG_DIR/bin/audit-tests.sh" --dup-groups` — corpus-wide `# Tests:` duplicate-group inventory. Pass no other flag.
+STE-1. Run `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" [--dry-run] [--apply] [--stale-months N] [--offline] [--format text|json] [--fix-headers]` — issue-specific scope.
+STE-2. Run `bash "$AGENTS_MAIN_ROOT/bin/audit-tests-common.sh" [--dry-run] [--apply] [--stale-months N] [--offline] [--format text|json] [--fix-headers]` — scope:common.
+STE-3. Run `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" --dup-groups` — corpus-wide `# Tests:` duplicate-group inventory. Pass no other flag.
 
 ## Case-marker embedding (on request only)
 
-STE-4. Only when case-marker embedding is requested: run `bash "$AGENTS_CONFIG_DIR/bin/audit-tests.sh" --embed-cases [--band-size N] [--order frequency|priority] [--dry-run]`, dispatch one subagent per `ITEM` row of the `<<<EMBED-GATE-STE4` block, then run `bash "$AGENTS_CONFIG_DIR/bin/audit-tests.sh" --embed-apply <EMBED_WORKDIR>`.
+STE-4. Only when case-marker embedding is requested: run `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" --embed-cases [--band-size N] [--order frequency|priority] [--dry-run]`, dispatch one subagent per `ITEM` row of the `<<<EMBED-GATE-STE4` block, then run `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" --embed-apply <EMBED_WORKDIR>`.
 
 ## Rules
 

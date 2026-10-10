@@ -10,9 +10,9 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-FINALIZE_TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-finalize-triage.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+FINALIZE_TRIAGE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-finalize-triage.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0; FAIL=0
 
@@ -38,7 +38,6 @@ setup_tmp() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/docs/history"
     : > "$TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"
@@ -46,7 +45,7 @@ setup_tmp() {
 
 teardown_tmp() {
     [ -n "${TMP:-}" ] && [ -d "$TMP" ] && rm -rf "$TMP"
-    unset AGENTS_CONFIG_DIR GH_MOCK_COMMENT_LOG
+    unset GH_MOCK_COMMENT_LOG
 }
 
 # MC1: triage returns admin_close_path (distinct from auto_close_path)
@@ -67,7 +66,7 @@ teardown_tmp
 # MC2: SKILL.md has admin_close_path guard on find-pr-by-marker (RED until implementation)
 # The G.5 / J step requires PR/SHA lookup, which is skipped on admin_close_path
 # because the meta issue is admin-closed without a PR.
-SKILL_FILE="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
+SKILL_FILE="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/SKILL.md"
 if grep -q "admin_close_path" "$SKILL_FILE" && grep -q "find-pr-by-marker" "$SKILL_FILE"; then
     pass "MC2: SKILL.md has admin_close_path guard near find-pr-by-marker"
 else
@@ -79,7 +78,7 @@ fi
 # implementation can pass through a new literal without code changes.
 TMP_MC3="$(mktemp -d)"
 OUT_FILE="$TMP_MC3/out.json"
-node "$AGENTS_DIR/bin/issue-close-write-outcome.js" \
+node "$SCRIPT_CHECKOUT_ROOT/bin/issue-close-write-outcome.js" \
     --session-id test123 \
     --out-file "$OUT_FILE" \
     42 succeeded skipped_admin_close succeeded succeeded succeeded 2>/dev/null
@@ -101,7 +100,7 @@ rm -rf "$TMP_MC3"
 # branch table: admin_close_path must map to skipped_admin_close. #1673 replaced
 # agents/issue-close-finalize-worker.md with a dispatcher module that spawns this
 # script by registry key, so the branch table lives here, not in the module.
-WORKER_FILE="$AGENTS_DIR/skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
+WORKER_FILE="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
 if [ -f "$WORKER_FILE" ] && grep -q "skipped_admin_close" "$WORKER_FILE"; then
     pass "MC4: finalize terminal script has skipped_admin_close in historyEntry decision"
 else

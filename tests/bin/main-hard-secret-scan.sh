@@ -41,6 +41,9 @@ SCANNER="$FAKE_DOTFILES/bin/scan-outbound.sh"
 
 # Empty local allowlist (scanner expects it)
 : > "$FAKE_DOTFILES/.private-info-allowlist"
+# The scanner reads both lists from its settings root: pin that to the fake tree.
+: > "$FAKE_DOTFILES/.private-info-blocklist"
+export AGENTS_MAIN_ROOT="$FAKE_DOTFILES"
 
 # Helper: scanner output for a given input. Always succeeds (captures stderr+stdout).
 scan_output() {

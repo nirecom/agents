@@ -52,23 +52,17 @@ gh_outbound_guard() {
     local label="${1:-stdin}"
     local scanner=""
 
-    # AGENTS_CONFIG_DIR, when set, is authoritative — a missing scanner there is
+    # Only this library's sibling scanner is trusted — a missing scanner there is
     # a block (fail-closed), not a reason to reach for another copy.
-    if [ -n "${AGENTS_CONFIG_DIR:-}" ]; then
-        if [ -x "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh" ]; then
-            scanner="$AGENTS_CONFIG_DIR/bin/scan-outbound.sh"
-        fi
-    else
-        local _ghog_libdir
-        _ghog_libdir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
-        if [ -n "$_ghog_libdir" ] && [ -x "$_ghog_libdir/scan-outbound.sh" ]; then
-            scanner="$_ghog_libdir/scan-outbound.sh"
-        fi
+    local _ghog_libdir
+    _ghog_libdir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+    if [ -n "$_ghog_libdir" ] && [ -x "$_ghog_libdir/scan-outbound.sh" ]; then
+        scanner="$_ghog_libdir/scan-outbound.sh"
     fi
 
     if [ -z "$scanner" ]; then
-        GH_OUTBOUND_GUARD_MESSAGE="gh_outbound_guard: BLOCKED outbound write for '${label}' — scan-outbound.sh could not be resolved (checked \$AGENTS_CONFIG_DIR/bin and this library's sibling bin/). Fail-closed: unscanned content is never sent.
-Fix the scanner path (set AGENTS_CONFIG_DIR to the agents repo) and retry.
+        GH_OUTBOUND_GUARD_MESSAGE="gh_outbound_guard: BLOCKED outbound write for '${label}' — scan-outbound.sh could not be resolved (checked this library's sibling bin/). Fail-closed: unscanned content is never sent.
+Fix the scanner path (repair this agents checkout) and retry.
 Bypassing this guard by other means is prohibited — see feedback_no_security_gap_exploit."
         printf '%s\n' "$GH_OUTBOUND_GUARD_MESSAGE" >&2
         return 1

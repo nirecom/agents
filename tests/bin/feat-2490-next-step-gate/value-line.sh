@@ -10,10 +10,10 @@
 # category: skill-orchestration.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # shellcheck source=common.sh
-. "$AGENTS_DIR/tests/bin/feat-2490-next-step-gate/common.sh"
-STEPS_MOD="$(np "$AGENTS_DIR/bin/workflow/lib/next-step/steps.js")"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feat-2490-next-step-gate/common.sh"
+STEPS_MOD="$(np "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/next-step/steps.js")"
 skill_of() { node -e 'process.stdout.write(require(process.argv[1]).STEP_TO_SKILL[process.argv[2]])' "$STEPS_MOD" "$1"; }
 
 echo "=== (a) every gate step: one value line, last, keyed to NEXT_SKILL ==="
@@ -87,7 +87,7 @@ check "line 6 is the value line" "GATE_CONFIRM_OUTLINE=ON" "$(printf '%s\n' "$OU
 case_end
 
 case_begin "parser-accepts-value-line" "bin/workflow/lib/parse-next-step-output.js"
-PARSED="$(PARSER="$(np "$AGENTS_DIR/bin/workflow/lib/parse-next-step-output.js")" run_with_timeout node - 2>/dev/null <<'EOF'
+PARSED="$(PARSER="$(np "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/parse-next-step-output.js")" run_with_timeout node - 2>/dev/null <<'EOF'
 const { parseNextStepOutput } = require(process.env.PARSER);
 const text = "ACTION=invoke\nNEXT_SKILL=make-outline-plan\nNEXT_HINT='Run /make-outline-plan via the Skill tool.'\n" +
   "REASON='outline'\nSKIP_HINT=WORKFLOW_OUTLINE_NOT_NEEDED\nGATE_CONFIRM_OUTLINE=OFF\n";
@@ -119,45 +119,46 @@ check "env on beats .env off -> ON" "GATE_CONFIRM_TESTS=ON" "$(last_line "$OUT")
 : > "$CFG/.env"
 case_end
 
-CFG_NOGCV="$GT_BASE/cfg-nogcv"; mk_cfg "$CFG_NOGCV"; rm -f "$CFG_NOGCV/bin/get-config-var"
-CFG_E4="$GT_BASE/cfg-e4"; mk_cfg "$CFG_E4"; printf '#!/usr/bin/env bash\nexit 4\n' > "$CFG_E4/bin/get-config-var"
-CFG_BARE="$GT_BASE/cfg-bare"; mkdir -p "$CFG_BARE"
-CFG_SLOW="$GT_BASE/cfg-slow"; mk_cfg "$CFG_SLOW"; printf '#!/usr/bin/env bash\nsleep 5\necho OFF\n' > "$CFG_SLOW/bin/confirm-off"
+CFG_NOGCV="$GT_BASE/cfg-nogcv"; mk_tree "$CFG_NOGCV"; rm -f "$CFG_NOGCV/bin/get-config-var"
+CFG_E4="$GT_BASE/cfg-e4"; mk_tree "$CFG_E4"; printf '#!/usr/bin/env bash\nexit 4\n' > "$CFG_E4/bin/get-config-var"
+CFG_NOCO="$GT_BASE/cfg-noco"; mk_tree "$CFG_NOCO"; rm -f "$CFG_NOCO/bin/confirm-off" "$CFG_NOCO/bin/get-config-var"
+CFG_SLOW="$GT_BASE/cfg-slow"; mk_tree "$CFG_SLOW"; printf '#!/usr/bin/env bash\nsleep 5\necho OFF\n' > "$CFG_SLOW/bin/confirm-off"
+probe_of() { np "$1/hooks/lib/confirm-gate/probe.js"; }
 
-case_begin "config-error-variants" "hooks/lib/confirm-gate/probe.js"
-for row in "no get-config-var|$CFG_NOGCV" "get-config-var exits 4|$CFG_E4" "bare config dir|$CFG_BARE"; do
-  OUT="$(AGENTS_CONFIG_DIR="$(np "${row#*|}")" run_next_step --session vl-val 2>/dev/null || true)"
+case_begin "broken-checkout-error-variants" "hooks/lib/confirm-gate/probe.js"
+for row in "no get-config-var|$CFG_NOGCV" "get-config-var exits 4|$CFG_E4" "no confirm-off|$CFG_NOCO"; do
+  OUT="$(run_next_step_in "${row#*|}" --session vl-val 2>/dev/null || true)"
   check "${row%%|*} -> ERROR" "GATE_CONFIRM_TESTS=ERROR" "$(last_line "$OUT")"
 done
 case_end
 
-# One node drives both probe flavours over the same inputs (CPR-ORTH) plus the
-# AGENTS_CONFIG_DIR-unset fallback; each row prints name=token.
-PROBE_OUT="$(PROBE_MOD="$(np "$AGENTS_DIR/hooks/lib/confirm-gate/probe.js")" CFG_OK="$(np "$CFG")" \
-  CFG_E4N="$(np "$CFG_E4")" CFG_SLOWN="$(np "$CFG_SLOW")" CFG_NOGCVN="$(np "$CFG_NOGCV")" \
-  CFG_BAREN="$(np "$CFG_BARE")" run_with_timeout node - 2>/dev/null <<'EOF'
+# One node drives both probe flavours over the same inputs (CPR-ORTH); a broken row loads
+# the probe of its own tree, because the probe runs the confirm-off of the checkout it
+# lives in. Each row prints name=token.
+PROBE_OUT="$(PROBE_MOD="$(probe_of "$SCRIPT_CHECKOUT_ROOT")" PROBE_E4="$(probe_of "$CFG_E4")" \
+  PROBE_SLOW="$(probe_of "$CFG_SLOW")" PROBE_NOGCV="$(probe_of "$CFG_NOGCV")" \
+  PROBE_NOCO="$(probe_of "$CFG_NOCO")" run_with_timeout node - 2>/dev/null <<'EOF'
 const e = process.env;
 const out = (k, v) => process.stdout.write(k + "=" + v + "\n");
 (async () => {
   let m;
   try { m = require(e.PROBE_MOD); } catch (err) { out("LOAD", "FAILED"); return; }
-  const rows = [["off", e.CFG_OK, "off", 5000], ["on", e.CFG_OK, "on", 5000], ["err", e.CFG_E4N, "on", 5000]];
-  for (const [name, dir, v, t] of rows) {
+  const rows = [["off", e.PROBE_MOD, "off", 5000], ["on", e.PROBE_MOD, "on", 5000], ["err", e.PROBE_E4, "on", 5000]];
+  for (const [name, mod, v, t] of rows) {
     process.env.CONFIRM_TESTS = v;
     let s, a;
-    try { s = m.probeConfirmGateSync(dir, "CONFIRM_TESTS", t); } catch (x) { s = "THREW"; }
-    try { a = await m.probeConfirmGate(dir, "CONFIRM_TESTS", t); } catch (x) { a = "THREW"; }
+    try { s = require(mod).probeConfirmGateSync("CONFIRM_TESTS", t); } catch (x) { s = "THREW"; }
+    try { a = await require(mod).probeConfirmGate("CONFIRM_TESTS", t); } catch (x) { a = "THREW"; }
     out("sync_" + name, s); out("async_" + name, a);
   }
   process.env.CONFIRM_TESTS = "off";
   const one = (k, f) => { try { out(k, f()); } catch (x) { out(k, "THREW"); } };
-  one("sync_timeout", () => m.probeConfirmGateSync(e.CFG_SLOWN, "CONFIRM_TESTS", 300));
-  one("sync_nogcv", () => m.probeConfirmGateSync(e.CFG_NOGCVN, "CONFIRM_TESTS", 5000));
-  one("sync_bare", () => m.probeConfirmGateSync(e.CFG_BAREN, "CONFIRM_TESTS", 5000));
-  one("sync_empty", () => m.probeConfirmGateSync("", "CONFIRM_TESTS", 5000));
-  delete process.env.AGENTS_CONFIG_DIR;
-  one("root", () => String(m.resolveConfigDir()).replace(/\\/g, "/").replace(/\/$/, "").toLowerCase());
-  one("root_off", () => m.probeConfirmGateSync(m.resolveConfigDir(), "CONFIRM_TESTS", 5000));
+  one("sync_timeout", () => require(e.PROBE_SLOW).probeConfirmGateSync("CONFIRM_TESTS", 300));
+  one("sync_nogcv", () => require(e.PROBE_NOGCV).probeConfirmGateSync("CONFIRM_TESTS", 5000));
+  one("sync_noco", () => require(e.PROBE_NOCO).probeConfirmGateSync("CONFIRM_TESTS", 5000));
+  delete process.env.AGENTS_MAIN_ROOT;
+  one("own", () => String(m.buildProbeInvocation("CONFIRM_TESTS", 5000).args[0]).toLowerCase());
+  one("own_off", () => m.probeConfirmGateSync("CONFIRM_TESTS", 5000));
 })();
 EOF
 )"
@@ -170,8 +171,7 @@ check "sync: exit 1 + stdout ON -> ON, never ERROR" "ON" "$(pv sync_on)"
 check "sync: confirm-off exit 2 -> ERROR" "ERROR" "$(pv sync_err)"
 check "sync: unresponsive confirm-off past the timeout -> ERROR" "ERROR" "$(pv sync_timeout)"
 check "sync: no get-config-var -> ERROR" "ERROR" "$(pv sync_nogcv)"
-check "sync: bare config dir -> ERROR" "ERROR" "$(pv sync_bare)"
-check "sync: empty configDir -> ERROR" "ERROR" "$(pv sync_empty)"
+check "sync: no confirm-off -> ERROR" "ERROR" "$(pv sync_noco)"
 case_end
 
 case_begin "async-sync-same-token" "hooks/lib/confirm-gate/probe.js"
@@ -181,17 +181,17 @@ for row in off:OFF on:ON err:ERROR; do
 done
 case_end
 
-case_begin "config-dir-falls-back-to-repo-root" "hooks/lib/confirm-gate/probe.js"
-check "resolveConfigDir() without AGENTS_CONFIG_DIR is the repo root" \
-  "$(np "$AGENTS_DIR" | tr 'A-Z' 'a-z')" "$(pv root)"
-check "the repo-root fallback still resolves a value" "OFF" "$(pv root_off)"
-OUT="$(unset AGENTS_CONFIG_DIR; CONFIRM_TESTS=off run_next_step --session vl-val 2>/dev/null || true)"
-check "next-step without AGENTS_CONFIG_DIR still emits the value" "GATE_CONFIRM_TESTS=OFF" "$(last_line "$OUT")"
+case_begin "probe-runs-its-own-checkout-confirm-off" "hooks/lib/confirm-gate/probe.js"
+check "the probe invokes the confirm-off of the checkout probe.js lives in" \
+  "$(np "$SCRIPT_CHECKOUT_ROOT" | tr 'A-Z' 'a-z')/bin/confirm-off" "$(pv own)"
+check "the probe without AGENTS_MAIN_ROOT still resolves a value" "OFF" "$(pv own_off)"
+OUT="$(unset AGENTS_MAIN_ROOT; CONFIRM_TESTS=off run_next_step --session vl-val 2>/dev/null || true)"
+check "next-step without AGENTS_MAIN_ROOT still emits the value" "GATE_CONFIRM_TESTS=OFF" "$(last_line "$OUT")"
 case_end
 
 case_begin "step-gate-map-table" "hooks/lib/confirm-gate/step-gate-map.js"
-MAP_OUT="$(MAP_MOD="$(np "$AGENTS_DIR/hooks/lib/confirm-gate/step-gate-map.js")" \
-  LINE_MOD="$(np "$AGENTS_DIR/bin/workflow/lib/next-step/gate-line.js")" run_with_timeout node - 2>/dev/null <<'EOF'
+MAP_OUT="$(MAP_MOD="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/confirm-gate/step-gate-map.js")" \
+  LINE_MOD="$(np "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/next-step/gate-line.js")" run_with_timeout node - 2>/dev/null <<'EOF'
 const e = process.env;
 try {
   const m = require(e.MAP_MOD);

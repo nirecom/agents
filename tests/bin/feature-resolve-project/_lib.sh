@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/bin/feature-resolve-project/_lib.sh — shared scaffolding
-# Sourced by each split file (BASH_SOURCE-relative) so they also run standalone. Provides AGENTS_DIR/TARGET,
+# Sourced by each split file (BASH_SOURCE-relative) so they also run standalone. Provides __LIB_SCRIPT_CHECKOUT_ROOT/TARGET,
 # PASS/FAIL + pass/fail, run_with_timeout, get_field, setup_mock/teardown_mock/run_resolver, finish().
 # Tests: bin/github-issues/lib/resolve-project.sh
 # Tags: workflow, github, issues, plans, bin, scope:issue-specific
@@ -14,8 +14,8 @@ _RESOLVE_PROJECT_LIB_SOURCED=1
 set -u
 
 # Repo root, resolved relative to this lib (tests/bin/feature-resolve-project/).
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-TARGET="$AGENTS_DIR/bin/github-issues/lib/resolve-project.sh"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh"
 # Inner bash subshells need TARGET to expand `source '$TARGET'`.
 export TARGET
 

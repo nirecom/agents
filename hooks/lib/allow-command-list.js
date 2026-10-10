@@ -19,7 +19,7 @@ const ALLOW_LIST_REL = path.join("install", "settings-allow-commands.txt");
 const PATH_LIST_REL = path.join("install", "path-exposed-commands.txt");
 const ENTRY_RE = /^[A-Za-z0-9._/-]+$/;
 const INTERPRETERS = Object.freeze(["bash", "node"]);
-const ENV_PREFIX_RE = /^(?:\$AGENTS_CONFIG_DIR|\$\{AGENTS_CONFIG_DIR\})\//;
+const ENV_PREFIX_RE = /^(?:\$AGENTS_MAIN_ROOT|\$\{AGENTS_MAIN_ROOT\})\//;
 const SHEBANG_READ_BYTES = 512;
 
 const cache = new Map();
@@ -123,7 +123,7 @@ function checkoutAt(dir, root) {
   return wt !== null && foldCase(canonAbs(wt)) === foldCase(dirAbs) ? wt : null;
 }
 
-// $AGENTS_CONFIG_DIR spellings name the agents root whatever the cwd. An absolute spelling is
+// $AGENTS_MAIN_ROOT spellings name the agents root whatever the cwd. An absolute spelling is
 // stripped on a path boundary of the agents root, else of the linked worktree it lies in; a
 // relative one resolves only against a cwd that is a checkout root (see checkoutAt).
 function locate(spelling, root, cwd) {
@@ -179,7 +179,7 @@ function resolveEntry(spellings, root, cwd) {
 
 // The cooked token loses the backslashes of a double-quoted Windows path, so the raw token
 // (outer quotes stripped) is a second candidate. A single-quoted or escaped `$` never expands,
-// so such a raw token cannot stand for $AGENTS_CONFIG_DIR.
+// so such a raw token cannot stand for $AGENTS_MAIN_ROOT.
 function spellingsOf(cooked, raw) {
   const out = [];
   const literalDollar = typeof raw === "string" && (raw.includes("'") || raw.includes("\\$"));

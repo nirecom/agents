@@ -9,9 +9,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLARIFY="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
-WFINIT="$AGENTS_DIR/skills/workflow-init/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CLARIFY="$SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
+WFINIT="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
 
 PASS=0
 FAIL=0

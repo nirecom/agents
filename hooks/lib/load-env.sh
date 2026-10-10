@@ -4,22 +4,21 @@
 # Bash-side .env loader shared by git hooks. Mirrors hooks/lib/load-env.js.
 # Source-only; defines exactly one function so a test can exercise it without
 # entrypoint side effects. Usage: `. "$(dirname "$0")/lib/load-env.sh"; _load_env_file`.
-# Config dir resolution: $AGENTS_CONFIG_DIR, else $_cfg_dir when the sourcing
-# entrypoint already resolved one, else this file's grandparent directory.
+# Settings root: $AGENTS_MAIN_ROOT when set, else the checkout this file lives in.
 # Existing environment values always win over .env.
 
+_LOAD_ENV_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
 _load_env_cfg_dir() {
-    if [ -n "${AGENTS_CONFIG_DIR:-}" ]; then
-        printf '%s' "$AGENTS_CONFIG_DIR"
-    elif [ -n "${_cfg_dir:-}" ]; then
-        printf '%s' "$_cfg_dir"
+    if [ -n "${AGENTS_MAIN_ROOT:-}" ]; then
+        printf '%s' "$AGENTS_MAIN_ROOT"
     else
-        (cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+        printf '%s' "$_LOAD_ENV_SCRIPT_CHECKOUT_ROOT"
     fi
 }
 
 # _load_env_only_value <KEY[:-DEFAULT]> — print the value KEY carries in the
-# config dir's .env, or DEFAULT when the file, the key, or its value is absent.
+# settings root's .env, or DEFAULT when the file, the key, or its value is absent.
 #
 # Why a second reader instead of `_load_env_file` + "${KEY:-default}": the
 # ambient process environment must NOT be able to answer. _load_env_file
@@ -66,7 +65,7 @@ _load_env_only_value() {
     if [ -r "$envfile" ]; then
         filter="$cfgdir/bin/env-os-filter"
         if [ ! -x "$filter" ]; then
-            filter="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/bin/env-os-filter"
+            filter="$_LOAD_ENV_SCRIPT_CHECKOUT_ROOT/bin/env-os-filter"
         fi
         out="$(_load_env_only_scan "$envfile" "$key" "$filter")"
     fi
@@ -79,12 +78,12 @@ _load_env_file() {
     cfgdir="$(_load_env_cfg_dir)"
     local envfile="$cfgdir/.env"
     [ -r "$envfile" ] || return 0
-    # The .env belongs to the config dir; the filter binary belongs to the
-    # installed agents repo. Prefer the config dir's copy, fall back to this
-    # file's own repo so an alternate config dir still gets OS filtering.
+    # The .env belongs to the settings root; the filter binary belongs to an
+    # agents checkout. Prefer the settings root's copy, fall back to the checkout
+    # this file lives in so a settings root without bin/ still gets OS filtering.
     ENV_OS_FILTER="$cfgdir/bin/env-os-filter"
     if [ ! -x "$ENV_OS_FILTER" ]; then
-        ENV_OS_FILTER="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/bin/env-os-filter"
+        ENV_OS_FILTER="$_LOAD_ENV_SCRIPT_CHECKOUT_ROOT/bin/env-os-filter"
     fi
     local line key val
     local _parse_body

@@ -4,11 +4,11 @@
 # Tags: scope:issue-specific
 
 NOW_ISO="$(node -e "console.log(new Date().toISOString())")"
-PROBE_JS="$AGENTS_DIR/tests/hooks/feature-1305-inheritance-lineage/probe.js"
+PROBE_JS="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1305-inheritance-lineage/probe.js"
 
 to_node_path() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 
-AGENTS_DIR_NODE="$(to_node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(to_node_path "$SCRIPT_CHECKOUT_ROOT")"
 WORKFLOW_DIR_NODE="$(to_node_path "$WORKFLOW_DIR")"
 PLANS_DIR_NODE="$(to_node_path "$PLANS_DIR")"
 TBASE_NODE="$(to_node_path "$TBASE")"
@@ -109,7 +109,7 @@ write_announce_transcript() {
 
 # probe '<json-args>' → key=value lines (neutral CWD; fixture-pinned env only)
 probe() {
-    (cd "$TMPDIR_BASE" && AGENTS_DIR_NODE="$AGENTS_DIR_NODE" \
+    (cd "$TMPDIR_BASE" && SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT_NODE" \
         WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" \
         WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TBASE_NODE" \

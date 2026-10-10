@@ -39,9 +39,9 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-EXEC_MODEL_JS="$(nodepath "$AGENTS_DIR")/hooks/workflow-run-tests/exec-model.js"
+EXEC_MODEL_JS="$(nodepath "$SCRIPT_CHECKOUT_ROOT")/hooks/workflow-run-tests/exec-model.js"
 
 PASS=0
 FAIL=0
@@ -60,7 +60,7 @@ run_with_timeout() {
 
 # The module is the subject; its absence is a FAIL, never a skip — a skip here
 # would let the whole fix land unverified.
-if [ ! -f "$AGENTS_DIR/hooks/workflow-run-tests/exec-model.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests/exec-model.js" ]; then
     fail "0/module-present — implementation missing: hooks/workflow-run-tests/exec-model.js"
 fi
 
@@ -91,7 +91,7 @@ try {
   }
   process.stdout.write("(none)");
 } catch (e) { process.stdout.write("ERR"); }
-' "$EXEC_MODEL_JS" "$1" "$(nodepath "$AGENTS_DIR")/hooks/lib/command-ir.js" 2>/dev/null
+' "$EXEC_MODEL_JS" "$1" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")/hooks/lib/command-ir.js" 2>/dev/null
 }
 
 # ===========================================================================

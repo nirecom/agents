@@ -26,10 +26,10 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_CP1673_GATE_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-SPAWN_JS="$AGENTS_DIR/bin/worker-dispatch/spawn.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1673-commit-push-lib/gate-spawn-stub.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+SPAWN_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1673-commit-push-lib/gate-spawn-stub.js"
 
 PASS=0
 FAIL=0

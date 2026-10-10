@@ -9,15 +9,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -90,7 +90,7 @@ try {
 # ─── Schema tests (G20–G23) ──────────────────────────────────────────────────
 
 run_g20() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G20: createEmptyState includes alert_phase null" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-schema.js" "G20: createEmptyState includes alert_phase null" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
@@ -105,7 +105,7 @@ process.stdout.write(st.alert && ('alert_phase' in st.alert) ? String(st.alert.a
 }
 
 run_g21() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G21: validate rejects invalid alert_phase value" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-schema.js" "G21: validate rejects invalid alert_phase value" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
@@ -122,7 +122,7 @@ process.stdout.write(r.ok ? 'ok' : 'rejected');
 }
 
 run_g22() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G22: validate accepts all valid alert_phase values" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-schema.js" "G22: validate accepts all valid alert_phase values" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
@@ -144,7 +144,7 @@ process.stdout.write(failed ? ('failed:' + failed) : 'ok');
 }
 
 run_g23() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G23: validate accepts state missing alert_phase (backward compat)" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-schema.js" "G23: validate accepts state missing alert_phase (backward compat)" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
@@ -163,7 +163,7 @@ process.stdout.write(r.ok ? 'ok' : 'rejected:' + r.errors.join(','));
 # ─── Writer tests (G24–G33) ──────────────────────────────────────────────────
 
 run_g24() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G24: alert_phase=done -> ensureAlertScheduled early-returns, alert_armed_at stays null" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G24: alert_phase=done -> ensureAlertScheduled early-returns, alert_armed_at stays null" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
@@ -184,7 +184,7 @@ process.stdout.write(state.alert.alert_armed_at === null ? 'null' : String(state
 }
 
 run_g25() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G25: alert_phase=paused -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending)" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G25: alert_phase=paused -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending)" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
@@ -204,7 +204,7 @@ process.stdout.write((armedOk && phaseOk && retryOk) ? 'ok' : ('armed=' + state.
 }
 
 run_g26() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G26: alert_phase=null -> ensureAlertScheduled sets alert_armed_at + alert_phase=pending" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G26: alert_phase=null -> ensureAlertScheduled sets alert_armed_at + alert_phase=pending" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
@@ -223,7 +223,7 @@ process.stdout.write((ncOk && phOk) ? 'ok' : ('nc=' + state.alert.alert_armed_at
 }
 
 run_g27() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G27: alert_phase=pending + alert_armed_at already set -> ensureAlertScheduled no-op" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G27: alert_phase=pending + alert_armed_at already set -> ensureAlertScheduled no-op" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
@@ -241,7 +241,7 @@ process.stdout.write(state.alert.alert_armed_at === before ? 'noop' : ('changed:
 }
 
 run_g28() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G28: appendFinding with alert_phase=done -> finding appended, alert_armed_at stays null" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G28: appendFinding with alert_phase=done -> finding appended, alert_armed_at stays null" || return
     local tmp out
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g28-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
@@ -261,7 +261,7 @@ process.stdout.write(ok ? 'ok' : 'fail');
 }
 
 run_g29() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G29: writeAlertState paused->done -> rejected" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G29: writeAlertState paused->done -> rejected" || return
     local tmp out
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g29-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
@@ -279,7 +279,7 @@ process.stdout.write(ok ? 'accepted' : 'rejected');
 }
 
 run_g30() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G30: writeAlertState done->pending -> rejected" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G30: writeAlertState done->pending -> rejected" || return
     local tmp out
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g30-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
@@ -299,7 +299,7 @@ process.stdout.write(ok ? 'accepted' : 'rejected');
 run_g31() {
     # #1166: done is a permanent terminal phase, so done->* is now rejected; the old
     # done->frozen path no longer exists. Assert the valid non-terminal->closed transition instead.
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G31: writeAlertState pending->closed -> accepted" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G31: writeAlertState pending->closed -> accepted" || return
     local tmp out phase
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g31-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending' }"
@@ -318,7 +318,7 @@ process.stdout.write(ok ? 'accepted' : 'rejected');
 }
 
 run_g32() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G32: writeAlertState paused->paused -> accepted (idempotent)" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G32: writeAlertState paused->paused -> accepted (idempotent)" || return
     local tmp out phase
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g32-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
@@ -337,7 +337,7 @@ process.stdout.write(ok ? 'accepted' : 'rejected');
 }
 
 run_g33() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G33: writeAlertState paused + alert_armed_at set -> rejected" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G33: writeAlertState paused + alert_armed_at set -> rejected" || return
     local tmp out
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g33-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null }"

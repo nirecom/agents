@@ -12,11 +12,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HOOK="$AGENTS_DIR/hooks/rtk-rewrite.js"
-# AGENTS_CONFIG_DIR is needed by isAgentsEmit() in rtk-rewrite.js; pin it for
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/rtk-rewrite.js"
+# AGENTS_MAIN_ROOT is needed by isAgentsEmit() in rtk-rewrite.js; pin it for
 # test isolation so INJ-INACTIVE-AGENTS cases are not environment-dependent.
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 
 PASS=0
 FAIL=0
@@ -68,7 +67,7 @@ PAYLOAD='{"tool_name":"Bash","tool_input":{"command":"git status"}}'
 # cd into FAKE_DIR (in a subshell, leaving the test's own cwd untouched) so the
 # hook's child resolves "hook" to our delegate; run-with-timeout does not alter cwd.
 OUT="$(cd "$FAKE_DIR"; printf '%s' "$PAYLOAD" | RTK=on RTK_BIN="$NODE_BIN" \
-    "$AGENTS_DIR/bin/run-with-timeout.sh" 180 node "$HOOK" 2>/dev/null)"
+    "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 node "$HOOK" 2>/dev/null)"
 
 echo "hook output: $OUT"
 
@@ -117,7 +116,7 @@ run_sid() {
     local payload
     payload="$(node -e 'process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:"Bash",tool_input:{command:process.argv[2]}}))' "$1" "$2")"
     (cd "$FAKE_DIR" || exit 1; printf '%s' "$payload" | RTK=on RTK_BIN="$NODE_BIN" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 180 node "$HOOK" 2>/dev/null | tr -d '\r\n')
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 node "$HOOK" 2>/dev/null | tr -d '\r\n')
 }
 # kind <raw> → passthrough | wrap | other:<raw>
 kind() {
@@ -209,7 +208,7 @@ process.stdout.write(k + " spawns=" + spawns + " reads=" + reads.join(","));
 # each firstRejectingGuard verdict must still fire and return passthrough — the pre-guard
 # must not inadvertently suppress the guards when isolation is off.
 expect_kind "passthrough spawns=0 reads=sid-y" "#2447 INJ-INACTIVE-AGENTS: nullState+agentsEmit → passthrough (guards still active)" \
-    "$(inject_cmd nullState sid-y "$AGENTS_CONFIG_DIR/bin/foo")"
+    "$(inject_cmd nullState sid-y "$AGENTS_MAIN_ROOT/bin/foo")"
 expect_kind "passthrough spawns=0 reads=sid-y" "#2447 INJ-INACTIVE-BUILTIN: nullState+shellBuiltin (echo) → passthrough (guards still active)" \
     "$(inject_cmd nullState sid-y 'echo hello')"
 expect_kind "passthrough spawns=0 reads=sid-y" "#2447 INJ-INACTIVE-COMPOSITE: nullState+composite (&&) → passthrough (guards still active)" \

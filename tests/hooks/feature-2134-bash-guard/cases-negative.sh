@@ -52,7 +52,7 @@ case_end
 # `bash -c` wrapper is re-judged by the self-script allow, so it is allowed, not passed through.
 case_begin "negative-bash-c-quoted-chain" "hooks/bash-guard/judge.js"
 assert_eq "N2: an && inside single quotes is not a separator" \
-    "allow" "$(verdict_of "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" RUN_TL4 on'")"
+    "allow" "$(verdict_of "bash -c 'cd \"\$AGENTS_MAIN_ROOT\" && bash \"\$AGENTS_MAIN_ROOT/bin/confirm-off\" RUN_TL4 on'")"
 case_end
 
 # N3: an escaped separator in unquoted context. The pre-#2121 lexer mis-split this, which is

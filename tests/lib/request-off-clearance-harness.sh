@@ -93,12 +93,12 @@ trap 'rm -r -f "$OFFCLR_SHIM_DIR" 2>/dev/null || true' EXIT
 # the next. REQ_SID is the value for CLAUDE_CODE_SESSION_ID — after #2270 the
 # id reaches the tool only through bin/resolve-session-id's canonical variable
 # — and empty means the var is left UNSET. REQ_ENV adds raw `env` arguments;
-# REQ_CWD sets the working directory; REQ_NO_CONFIG_DIR=1 omits
-# AGENTS_CONFIG_DIR entirely and REQ_CONFIG_DIR overrides its value (this is
-# the seam a shadow config dir uses); REQ_NO_EXAMINER=1 installs no codex stub;
+# REQ_CWD sets the working directory; REQ_NO_CFG_ROOT=1 omits
+# AGENTS_MAIN_ROOT entirely and REQ_CFG_ROOT overrides its value (this is
+# the seam a shadow agents root uses); REQ_NO_EXAMINER=1 installs no codex stub;
 # REQ_TIMEOUT is the outer run-with-timeout budget.
 # run_req <tmp_node> <stub-body> <args...> -> sets RC, OUT (stdout), ERR (stderr)
-REQ_SID=""; REQ_ENV=(); REQ_CWD=""; REQ_NO_CONFIG_DIR=0; REQ_CONFIG_DIR=""; REQ_NO_EXAMINER=0; REQ_TIMEOUT=60
+REQ_SID=""; REQ_ENV=(); REQ_CWD=""; REQ_NO_CFG_ROOT=0; REQ_CFG_ROOT=""; REQ_NO_EXAMINER=0; REQ_TIMEOUT=60
 run_req() {
     local tn="$1" body="$2"; shift 2
     local stubbin outf errf cwd
@@ -114,13 +114,13 @@ run_req() {
 
     # Every inherited session-id spelling is dropped first; the case then opts
     # back in to exactly the ones it is testing.
-    # AGENTS_CONFIG_DIR is unset first as well: it is exported by the developer's
+    # AGENTS_MAIN_ROOT is unset first as well: it is exported by the developer's
     # live session, so "do not pass it" is not the same as "it is not there".
     envargs=(-u SESSION_ID -u CLAUDE_CODE_SESSION_ID -u WORKTREE_PATH
-             -u AGENTS_CONFIG_DIR
+             -u AGENTS_MAIN_ROOT
              "PATH=$stubbin:$OFFCLR_CLEAN_PATH"
              "WORKFLOW_PLANS_DIR=$tn" "WORKFLOW_STATE_DIR=$tn")
-    [ "$REQ_NO_CONFIG_DIR" = "1" ] || envargs+=("AGENTS_CONFIG_DIR=${REQ_CONFIG_DIR:-$OFFCLR_AGENTS_NODE}")
+    [ "$REQ_NO_CFG_ROOT" = "1" ] || envargs+=("AGENTS_MAIN_ROOT=${REQ_CFG_ROOT:-$OFFCLR_AGENTS_NODE}")
     [ -z "$REQ_SID" ] || envargs+=("CLAUDE_CODE_SESSION_ID=$REQ_SID")
     [ "${#REQ_ENV[@]}" -eq 0 ] || envargs+=("${REQ_ENV[@]}")
 
@@ -131,7 +131,7 @@ run_req() {
     ERR="$(cat "$errf" 2>/dev/null)"
 
     rm -r -f "$stubbin" 2>/dev/null || true
-    REQ_SID=""; REQ_ENV=(); REQ_CWD=""; REQ_NO_CONFIG_DIR=0; REQ_CONFIG_DIR=""; REQ_NO_EXAMINER=0; REQ_TIMEOUT=60
+    REQ_SID=""; REQ_ENV=(); REQ_CWD=""; REQ_NO_CFG_ROOT=0; REQ_CFG_ROOT=""; REQ_NO_EXAMINER=0; REQ_TIMEOUT=60
 }
 
 # allow_stub / reject_stub — the two everyday authentic examiners.

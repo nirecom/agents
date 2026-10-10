@@ -1,16 +1,13 @@
 #!/bin/bash
 # tests/bin/feature-sweep-worktrees/orphan.sh
 # Orphan-dir-sweep tests: T8, T8b, T8c, T9, T9b, T9c, T10, T11.
-#
 # Orphan-dir-sweep gates:
 #   1. dir not in `git worktree list --porcelain`
 #   2. no .git entry (file or directory) inside
 #   3. mtime older than --min-age-hours
 #   4. dir name matches the main repo's basename
-#   5. WORKTREE_NOTES.md `Main repo:` line matches current MAIN_ROOT
-# Setup: WORKTREE_BASE_DIR=<base>; orphan dir at <base>/<task>/<repo-name>.
-#
-# Standalone-runnable; sourced helpers live in _lib.sh.
+#   5. WORKTREE_NOTES.md `Main repo:` line matches current TARGET_MAIN_ROOT
+# Setup: WORKTREE_BASE_DIR=<base>; orphan dir at <base>/<task>/<repo-name>. Standalone-runnable.
 
 # shellcheck source=./_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
@@ -29,7 +26,7 @@ T8_orphan_dir_removed_when_all_gates_pass() {
     local orphan="$wbase/orphan-task/$repo_name"
     mkdir -p "$orphan"
     # Gate 4 (contents) accepts: WORKTREE_NOTES.md only — no other files/dirs.
-    # Gate 5 (cross-repo): notes' `Main repo:` line matches current MAIN_ROOT
+    # Gate 5 (cross-repo): notes' `Main repo:` line matches current TARGET_MAIN_ROOT
     # (forward-slash-normalized form of the source repo path).
     local repo_fwd
     repo_fwd="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$repo" 2>/dev/null)"
@@ -200,7 +197,7 @@ T9_orphan_dir_skipped_when_has_git() {
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T9b (Gate 5) — orphan dir's WORKTREE_NOTES.md has a `Main repo:` line
-#                that does NOT match the current MAIN_ROOT → SKIPPED;
+#                that does NOT match the current TARGET_MAIN_ROOT → SKIPPED;
 #                counter orphan_dirs_skipped_repo_mismatch == 1.
 # ─────────────────────────────────────────────────────────────────────────────
 

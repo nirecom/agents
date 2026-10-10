@@ -3,26 +3,18 @@
 # Tests: skills/issue-setup/scripts/run-issue-setup.sh
 # Tags: issue-setup, run-issue-setup, github-issues, scope:issue-specific
 # N/A: prompt-injection/AskUserQuestion — repo-confirm prompt is interactive (SKILL.md orchestration), covered by the skill-orchestration verification-gate at user_verification, not L2-testable.
-#
-# Tests for skills/issue-setup/scripts/run-issue-setup.sh (new, step 5 of #1340).
-# L2: --step labels dispatches to sync-labels (with --repo threaded);
-#     --step check-project dispatches to preflight --check-project;
-#     --step ensure-project invokes ensure-project-ready; --repo injection matrix.
+# L2: --step labels → sync-labels (--repo threaded); --step check-project → preflight
+#     --check-project; --step ensure-project → ensure-project-ready; --repo injection matrix.
 # L1: arg parse (--step value validation, --repo format).
-#
-# L3 gap (what this test does NOT catch):
-# - Whether /issue-setup skill correctly invokes run-issue-setup.sh in a live
-#   Claude Code session, or whether the AskUserQuestion for repo confirmation
-#   fires and resolves correctly.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# L3 gap: the live /issue-setup skill invocation and its repo-confirm AskUserQuestion.
+# Mitigation: WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# pass / fail / AGENTS_DIR provided by _lib.sh.
-TARGET="$AGENTS_DIR/skills/issue-setup/scripts/run-issue-setup.sh"
-export TARGET AGENTS_DIR
+# pass / fail / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
+TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/issue-setup/scripts/run-issue-setup.sh"
+export TARGET
 
 # Early-exit: file does not exist yet (RED-clean)
 if [ ! -f "$TARGET" ]; then
@@ -38,12 +30,17 @@ setup_mock() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/mock-bin"
 
-    # Mock sync-labels.sh in agents config
-    export AGENTS_CONFIG_DIR="$TMP/agents-config"
-    mkdir -p "$AGENTS_CONFIG_DIR/bin/github-issues" \
-             "$AGENTS_CONFIG_DIR/bin/github-issues/lib" \
-             "$AGENTS_CONFIG_DIR/.github"
-    touch "$AGENTS_CONFIG_DIR/.github/labels.yml"
+    # run-issue-setup.sh resolves its siblings from its own location, so the
+    # script under test runs as a copy inside a fake checkout holding the mocks.
+    FAKE_SCRIPT_CHECKOUT_ROOT="$TMP/fake-script-checkout-root"
+    mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib" \
+             "$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-setup/scripts" \
+             "$FAKE_SCRIPT_CHECKOUT_ROOT/.github"
+    touch "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
+    RUN_TARGET="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-setup/scripts/run-issue-setup.sh"
+    cp "$TARGET" "$RUN_TARGET"
+    cp "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh" \
+       "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh"
 
     cat > "$TMP/mock-bin/sync-labels-dispatch" <<'SYNC_EOF'
 #!/bin/bash
@@ -55,17 +52,17 @@ SYNC_EOF
     chmod +x "$TMP/mock-bin/sync-labels-dispatch"
 
     # Create mock sync-labels.sh at the expected location
-    cat > "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh" <<'SYNC_EOF'
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" <<'SYNC_EOF'
 #!/bin/bash
 if [ -n "${MOCK_LOG:-}" ]; then
     printf 'sync-labels: %s\n' "$*" >> "$MOCK_LOG"
 fi
 exit "${GH_MOCK_SYNC_FAIL:-0}"
 SYNC_EOF
-    chmod +x "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh"
+    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
 
     # Create mock issue-create-preflight.sh
-    cat > "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-preflight.sh" <<'PREFLIGHT_EOF'
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh" <<'PREFLIGHT_EOF'
 #!/bin/bash
 if [ -n "${MOCK_LOG:-}" ]; then
     printf 'preflight: %s\n' "$*" >> "$MOCK_LOG"
@@ -82,10 +79,10 @@ case "$*" in
     ;;
 esac
 PREFLIGHT_EOF
-    chmod +x "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-preflight.sh"
+    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
 
     # Create mock ensure-project-ready.sh lib
-    cat > "$AGENTS_CONFIG_DIR/bin/github-issues/lib/ensure-project-ready.sh" <<'EPR_EOF'
+    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/ensure-project-ready.sh" <<'EPR_EOF'
 #!/bin/bash
 # Sourced lib — define ensure_project_ready function
 ensure_project_ready() {
@@ -139,7 +136,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR \
+    unset MOCK_LOG WORKFLOW_PLANS_DIR FAKE_SCRIPT_CHECKOUT_ROOT RUN_TARGET \
           GH_MOCK_SYNC_FAIL GH_MOCK_PROJECT_RC GH_MOCK_LABELS_RC \
           GH_MOCK_EPR_RC 2>/dev/null || true
 }
@@ -150,7 +147,7 @@ teardown_mock() {
 setup_mock
 export GH_MOCK_SYNC_FAIL=0
 RC=0
-bash "$TARGET" --step labels --repo "myorg/myrepo" 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step labels --repo "myorg/myrepo" 2>/dev/null || RC=$?
 SYNC_CALLED=0
 grep -q "sync-labels:.*--repo myorg/myrepo\|sync-labels: --repo myorg/myrepo" "$MOCK_LOG" 2>/dev/null && SYNC_CALLED=1
 if [ "$RC" = "0" ] && [ "$SYNC_CALLED" = "1" ]; then
@@ -166,7 +163,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_PROJECT_RC=0
 RC=0
-bash "$TARGET" --step check-project --repo "myorg/myrepo" 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step check-project --repo "myorg/myrepo" 2>/dev/null || RC=$?
 PREFLIGHT_CALLED=0
 grep -q "preflight:.*--check-project" "$MOCK_LOG" 2>/dev/null && PREFLIGHT_CALLED=1
 if [ "$RC" = "0" ] && [ "$PREFLIGHT_CALLED" = "1" ]; then
@@ -182,7 +179,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_PROJECT_RC=1
 RC=0
-bash "$TARGET" --step check-project --repo "myorg/myrepo" 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step check-project --repo "myorg/myrepo" 2>/dev/null || RC=$?
 if [ "$RC" = "1" ]; then
     pass "TRIS-3 (L2): --step check-project → rc=1 when no project found"
 else
@@ -196,7 +193,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_EPR_RC=0
 RC=0
-bash "$TARGET" --step ensure-project --repo "myorg/myrepo" 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step ensure-project --repo "myorg/myrepo" 2>/dev/null || RC=$?
 EPR_CALLED=0
 grep -q "ensure-project-ready: myorg/myrepo" "$MOCK_LOG" 2>/dev/null && EPR_CALLED=1
 if [ "$RC" = "0" ] && [ "$EPR_CALLED" = "1" ]; then
@@ -213,7 +210,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_SYNC_FAIL=3
 RC=0
-bash "$TARGET" --step labels --repo "myorg/myrepo" 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step labels --repo "myorg/myrepo" 2>/dev/null || RC=$?
 if [ "$RC" = "3" ]; then
     pass "TRIS-4b (C6): --step labels → sync-labels rc=3 propagated (exact rc)"
 elif [ "$RC" != "0" ]; then
@@ -230,7 +227,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_EPR_RC=1
 RC=0
-bash "$TARGET" --step ensure-project --repo "myorg/myrepo" 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step ensure-project --repo "myorg/myrepo" 2>/dev/null || RC=$?
 if [ "$RC" != "0" ]; then
     pass "TRIS-4c (C6): --step ensure-project → ensure_project_ready failure propagated (rc=$RC)"
 else
@@ -244,7 +241,7 @@ teardown_mock
 # ===========================================================================
 setup_mock
 RC=0
-bash "$TARGET" --step invalid-step --repo "myorg/myrepo" 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step invalid-step --repo "myorg/myrepo" 2>/dev/null || RC=$?
 DISPATCHED=0
 [ -s "$MOCK_LOG" ] && grep -qE "^sync-labels:|^preflight:|^ensure-project-ready:" "$MOCK_LOG" 2>/dev/null && DISPATCHED=1
 if [ "$RC" != "0" ] && [ "$DISPATCHED" = "0" ]; then
@@ -259,7 +256,7 @@ teardown_mock
 # ===========================================================================
 setup_mock
 RC=0
-bash "$TARGET" --step 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step 2>/dev/null || RC=$?
 DISPATCHED=0
 [ -s "$MOCK_LOG" ] && grep -qE "^sync-labels:|^preflight:|^ensure-project-ready:" "$MOCK_LOG" 2>/dev/null && DISPATCHED=1
 if [ "$RC" != "0" ] && [ "$DISPATCHED" = "0" ]; then
@@ -274,7 +271,7 @@ teardown_mock
 # ===========================================================================
 setup_mock
 RC=0
-bash "$TARGET" --step labels --repo 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step labels --repo 2>/dev/null || RC=$?
 DISPATCHED=0
 [ -s "$MOCK_LOG" ] && grep -qE "^sync-labels:|^preflight:|^ensure-project-ready:" "$MOCK_LOG" 2>/dev/null && DISPATCHED=1
 if [ "$RC" != "0" ] && [ "$DISPATCHED" = "0" ]; then
@@ -289,7 +286,7 @@ teardown_mock
 # ===========================================================================
 setup_mock
 RC=0
-bash "$TARGET" --repo "myorg/myrepo" 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --repo "myorg/myrepo" 2>/dev/null || RC=$?
 if [ "$RC" != "0" ]; then
     pass "TRIS-6 (L1): missing --step → exit non-zero"
 else
@@ -302,7 +299,7 @@ teardown_mock
 # ===========================================================================
 setup_mock
 RC=0
-bash "$TARGET" --step labels --repo "no-slash-here" 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step labels --repo "no-slash-here" 2>/dev/null || RC=$?
 if [ "$RC" != "0" ]; then
     pass "TRIS-7 (L1): invalid --repo format (no slash) → exit non-zero"
 else
@@ -315,7 +312,7 @@ teardown_mock
 # ===========================================================================
 setup_mock
 RC=0
-bash "$TARGET" --step labels 2>/dev/null || RC=$?
+bash "$RUN_TARGET" --step labels 2>/dev/null || RC=$?
 if [ "$RC" != "0" ]; then
     pass "TRIS-8 (L1): missing --repo → exit non-zero"
 else
@@ -334,7 +331,7 @@ run_setup_repo_case() {
     # $1=payload → sets RC, PAYLOAD_IN_LOG, DISPATCHED
     local payload="$1"
     RC=0
-    bash "$TARGET" --step labels --repo "$payload" >/dev/null 2>&1 || RC=$?
+    bash "$RUN_TARGET" --step labels --repo "$payload" >/dev/null 2>&1 || RC=$?
     DISPATCHED=0
     [ -s "$MOCK_LOG" ] && grep -q "^sync-labels:" "$MOCK_LOG" 2>/dev/null && DISPATCHED=1
     PAYLOAD_IN_LOG=0
@@ -386,7 +383,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_SYNC_FAIL=0
 RC=0
-bash "$TARGET" --step labels --repo "" >/dev/null 2>&1 || RC=$?
+bash "$RUN_TARGET" --step labels --repo "" >/dev/null 2>&1 || RC=$?
 DISPATCHED=0
 [ -s "$MOCK_LOG" ] && grep -q "^sync-labels:" "$MOCK_LOG" 2>/dev/null && DISPATCHED=1
 if [ "$RC" != "0" ] && [ "$DISPATCHED" = "0" ]; then

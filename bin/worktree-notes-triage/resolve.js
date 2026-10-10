@@ -23,7 +23,7 @@ const BACKUP_DIR_NAME = ".worktree-backup";
 
 // --session-id is interpolated into plans-dir file names.
 const SESSION_ID_RE = /^[A-Za-z0-9._-]+$/;
-// --pr-branch is interpolated into <main-root>/.worktree-backup/<branch>/.
+// --pr-branch is interpolated into <target-main-root>/.worktree-backup/<branch>/.
 const BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const ISSUE_RE = /^[1-9][0-9]*$/;
 
@@ -63,7 +63,7 @@ function parseArgs(argv) {
       case "--session-id": opts.sessionId = argv[++i]; break;
       case "--issue": opts.issue = argv[++i]; break;
       case "--pr-branch": opts.prBranch = argv[++i]; break;
-      case "--main-root": opts.mainRoot = argv[++i]; break;
+      case "--target-main-root": opts.targetMainRoot = argv[++i]; break;
       case "--plans-dir": opts.plansDir = argv[++i]; break;
       case "--from-session": opts.fromSession = true; break;
       default: break;
@@ -130,10 +130,10 @@ function viaNotesBackupDir(opts, plansDir) {
   return notesIn(path.join(plansDir, `${opts.sessionId}-notes-backup`));
 }
 
-// --- branch 4: <main-root>/.worktree-backup/<branch>/ ---------------------
+// --- branch 4: <target-main-root>/.worktree-backup/<branch>/ ---------------------
 function viaBackupBranchDir(opts) {
   if (!isSafeBranch(opts.prBranch)) return null;
-  const root = opts.mainRoot === undefined ? process.cwd() : opts.mainRoot;
+  const root = opts.targetMainRoot === undefined ? process.cwd() : opts.targetMainRoot;
   if (!isSafeAnchor(root)) return null;
   return notesIn(path.join(path.resolve(root), BACKUP_DIR_NAME, opts.prBranch));
 }

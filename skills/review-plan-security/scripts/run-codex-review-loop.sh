@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 : "${SESSION_ID:?SESSION_ID not set}"
 : "${PLANS_DIR:?PLANS_DIR not set}"
 : "${EXTENSIONS_USED:?EXTENSIONS_USED not set}"
@@ -13,7 +13,7 @@ set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-review-loop/review-wrapper-control.sh" || exit 4
 # The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
 # so a containment refusal is never read as ESCALATE or as codex-unavailable.
-ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" outline intent)" || exit 4
+ACCEPTED_TRADEOFFS_FILE="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" outline intent)" || exit 4
 rwc_resolve security-plan review-plan-security
 
 DRAFT_FILE="${PLANS_DIR}/${SESSION_ID}-detail.md"
@@ -64,7 +64,7 @@ if [[ -n "$REPO_ROOT_VAL" ]]; then args+=(--repo-root "$REPO_ROOT_VAL"); fi
 # (nothing to carry), rc 5 is a real failure we warn about but do not fail on.
 unset CTX_CONCERNS_LOG
 clog_rc=0
-CLOG_PATH="$("$AGENTS_CONFIG_DIR/bin/concern-ledger" render-concerns-log \
+CLOG_PATH="$("$SCRIPT_CHECKOUT_ROOT/bin/concern-ledger" render-concerns-log \
   --plans-dir "$PLANS_DIR" --session-id "$SESSION_ID" --format security-plan)" || clog_rc=$?
 if (( clog_rc == 0 )) && [[ -n "$CLOG_PATH" && -s "$CLOG_PATH" ]]; then
   export CTX_CONCERNS_LOG="$CLOG_PATH"
@@ -78,6 +78,6 @@ done
 # No risk signal: security-plan has no writer for one, and reading one would let
 # a model-written file turn HIGH_UNRESOLVED into ESCALATE past the exit-6 accept (#2434).
 RC=0
-"$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" || RC=$?
+"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" || RC=$?
 arm_terminal_guard "$RC" || true
 exit "$RC"

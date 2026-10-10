@@ -40,7 +40,7 @@ fx_tree_probe() { # <unchanged|detector> -> verdict
 
 # THE FOURTH EXCLUSION CLASS IS EXCLUDED BY CONVENTION, NOT BY SWEEP LOGIC. A documentary path
 # citation after a noun-phrase label is now written repo-relative -- `bin/foo`, no
-# $AGENTS_CONFIG_DIR/ prefix -- per the calling convention recorded in
+# $AGENTS_MAIN_ROOT/ prefix -- per the calling convention recorded in
 # docs/architecture/claude-code/settings.md, so it never matches an SSOT entry path and the
 # sweep never sees it as an occurrence. exec-position-sweep.js itself is unchanged.
 # T52[boundary-doc-run] is the proof that the carve-out is that spelling distinction and not
@@ -68,8 +68,8 @@ T52[exclusion-argument]|main|file-summary|rules/fx-exclusion-argument.md|1:ok@7|
 T52[exclusion-allow-rule]|main|file-summary|rules/fx-exclusion-allow-rule.md|1:ok@7|EXCLUSION CLASS: the Bash(...) allow-rule strings this repo quotes verbatim are not command lines, so only the line 7 sentinel is reported
 T52[exclusion-total]|main|set-count|rules/fx-exclusion-prose.md,rules/fx-exclusion-argument.md,rules/fx-exclusion-allow-rule.md|3|the three exclusion files together contribute exactly their three sentinels -- one occurrence each, so no excluded form slipped in
 T52[exclusion-statuses]|main|set-statuses|rules/fx-exclusion-prose.md,rules/fx-exclusion-argument.md,rules/fx-exclusion-allow-rule.md|ok|and not one of those three files produces a deviant verdict of any kind
-T52[exclusion-doc-label]|doc|file-summary|rules/fx-doc-label-mention.md|1:ok@5|EXCLUSION CLASS, BY CONVENTION: a documentary citation naming where a file lives is written repo-relative (no $AGENTS_CONFIG_DIR/ prefix), so it never matches an SSOT entry path and drops out of the occurrence list entirely -- only the line 5 sentinel is reported
-T52[boundary-doc-run]|doc|file-summary|rules/fx-doc-run-instruction.md|2:no-interpreter@3,ok@5|BOUNDARY, UNCHANGED: a span that still carries the $AGENTS_CONFIG_DIR/ prefix stays deviant even after a label and a colon introduce it, so the row above is the prefix-based spelling distinction and not "any bare-path span is excluded" -- Run: ends in a colon too
+T52[exclusion-doc-label]|doc|file-summary|rules/fx-doc-label-mention.md|1:ok@5|EXCLUSION CLASS, BY CONVENTION: a documentary citation naming where a file lives is written repo-relative (no $AGENTS_MAIN_ROOT/ prefix), so it never matches an SSOT entry path and drops out of the occurrence list entirely -- only the line 5 sentinel is reported
+T52[boundary-doc-run]|doc|file-summary|rules/fx-doc-run-instruction.md|2:no-interpreter@3,ok@5|BOUNDARY, UNCHANGED: a span that still carries the $AGENTS_MAIN_ROOT/ prefix stays deviant even after a label and a colon introduce it, so the row above is the prefix-based spelling distinction and not "any bare-path span is excluded" -- Run: ends in a colon too
 T53[overlap-nonok-files]|main|nonok-files|-|rules/fx-deviant-no-interpreter.md,rules/fx-deviant-unexpected-prefix.md,rules/fx-deviant-wrong-interpreter.md|ZERO OVERLAP: the files reported with a deviant verdict are exactly the three deviant fixtures, named rather than counted
 T53[overlap-exclusion-clean]|main|nonok-among|rules/fx-exclusion-prose.md,rules/fx-exclusion-argument.md,rules/fx-exclusion-allow-rule.md|none|no exclusion fixture appears in the deviant set, so the carve-out is not over-narrow
 T53[overlap-deviants-all-reported]|main|nonok-covers|rules/fx-deviant-no-interpreter.md,rules/fx-deviant-unexpected-prefix.md,rules/fx-deviant-wrong-interpreter.md|3/3|and every deviant fixture is still reported, so the carve-out is not over-wide either -- the two rows together are what stops it swallowing a real defect

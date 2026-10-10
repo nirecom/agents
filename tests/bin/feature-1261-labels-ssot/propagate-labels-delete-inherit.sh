@@ -2,18 +2,16 @@
 # tests/bin/feature-1261-labels-ssot/propagate-labels-delete-inherit.sh
 # Tests: bin/github-issues/propagate-labels.sh (DELETE inheritance from sync-labels.sh)
 # Tags: labels-ssot, propagation, delete, scope:issue-specific
-#
-# L3 gap (what this test does NOT catch):
-# - Real GitHub API calls and PAT authentication not covered — mock gh intercepts
-#   all network calls; no actual HTTPS connection is made.
-# - Real sync-labels.sh against live gh API not covered — mock gh is used.
+# L3 gap (what this test does NOT catch) — mock gh intercepts every call:
+# - Real GitHub API calls and PAT authentication (no HTTPS connection is made).
+# - Real sync-labels.sh against the live gh API.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-TARGET="${PROPAGATE_LABELS_SH:-$AGENTS_DIR/bin/github-issues/propagate-labels.sh}"
+TARGET="${PROPAGATE_LABELS_SH:-$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/propagate-labels.sh}"
 TMP=""
 
 setup_mock() {
@@ -184,7 +182,7 @@ MOCK_EOF
 chmod +x "$TMP/mock-bin/git"
 export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
 export GIT_DIFF_RC=0
-export AGENTS_WORKSPACE="$AGENTS_DIR"
+export AGENTS_WORKSPACE="$__LIB_SCRIPT_CHECKOUT_ROOT"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
 # Directory-path entry: propagate-labels.sh -d branch resolves it via
@@ -283,7 +281,7 @@ MOCK_EOF
     chmod +x "$TMP/mock-bin/git"
     export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
     export GIT_DIFF_RC=0
-    export AGENTS_WORKSPACE="$AGENTS_DIR"
+    export AGENTS_WORKSPACE="$__LIB_SCRIPT_CHECKOUT_ROOT"
     export GIT_WORK_DIR="$TMP/workdir"
     export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
     # Directory-path entry: propagate-labels.sh -d branch resolves it via

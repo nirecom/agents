@@ -10,16 +10,16 @@ set -uo pipefail
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 command -v git  >/dev/null 2>&1 || { echo "SKIP: git not available";  exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 TMPDIR_BASE="$(make_tmp)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 harness_isolate "$TMPDIR_BASE"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-SCRIPT_DIR="$AGENTS_DIR/tests/hooks/feature-2327-review-tests-handler-fingerprint"
+SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2327-review-tests-handler-fingerprint"
 
 case_begin "fingerprint-handler" "hooks/workflow-mark/review-tests-handler.js"
 # shellcheck source=./feature-2327-review-tests-handler-fingerprint/p1-fingerprint.sh

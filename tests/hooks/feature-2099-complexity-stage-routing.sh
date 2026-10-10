@@ -17,11 +17,11 @@ set -uo pipefail
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Sourced first: the local helpers below keep their own semantics (ERRORS counter,
 # <desc> <want> <got> assert_eq, fixed-120s run_with_timeout) and override harness's.
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -65,8 +65,8 @@ export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
-
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
+# The skills' documented commands spell their CLI through this root: pin it to the checkout under test.
+export AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT"
 
 # Model-producer aliases used by #2100 model= line tests. Exported so every
 # child node process (BIN_DERIVE, BIN_READ) inherits them regardless of what
@@ -78,17 +78,17 @@ export PRODUCER_LOW_MODEL=sonnet
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 # --- module / CLI paths -----------------------------------------------------
-CR_MOD_N="$(to_node_path "$AGENTS_DIR/hooks/workflow-state/complexity-routing.js")"
-BARREL_N="$(to_node_path "$AGENTS_DIR/hooks/workflow-state.js")"
-RESOLVER_N="$(to_node_path "$AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js")"
-SESSION_FIELDS_N="$(to_node_path "$AGENTS_DIR/hooks/workflow-state/state-io/session-fields.js")"
+CR_MOD_N="$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/complexity-routing.js")"
+BARREL_N="$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state.js")"
+RESOLVER_N="$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/skip-signal-resolver.js")"
+SESSION_FIELDS_N="$(to_node_path "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/session-fields.js")"
 export CR_MOD_N BARREL_N RESOLVER_N SESSION_FIELDS_N
 
-BIN_RECORD="$AGENTS_DIR/bin/workflow/record-complexity-evaluation"
-BIN_READ="$AGENTS_DIR/bin/workflow/read-complexity-evaluation"
-BIN_DERIVE="$AGENTS_DIR/bin/workflow/derive-complexity-level"
-BIN_RECORD_SKIP="$AGENTS_DIR/bin/workflow/record-complexity-and-skip"
-RUBRIC="$AGENTS_DIR/skills/_shared/judge-task-complexity.md"
+BIN_RECORD="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-evaluation"
+BIN_READ="$SCRIPT_CHECKOUT_ROOT/bin/workflow/read-complexity-evaluation"
+BIN_DERIVE="$SCRIPT_CHECKOUT_ROOT/bin/workflow/derive-complexity-level"
+BIN_RECORD_SKIP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
+RUBRIC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/judge-task-complexity.md"
 
 # --- assertion helpers ------------------------------------------------------
 # `want` comes from the case table; `got` always from a real invocation — never

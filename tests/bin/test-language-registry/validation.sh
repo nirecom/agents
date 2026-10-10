@@ -90,7 +90,7 @@ case_end
 case_begin "try-load-registry-corrupt" "hooks/lib/test-language-registry.js"
 # A reader copy with its default table beside it: valid (control), then corrupt.
 TRY_LIB="$VAL_DIR/try/hooks/lib"
-install_test_language_registry "$VAL_DIR/try" "$AGENTS_DIR"
+install_test_language_registry "$VAL_DIR/try" "$SCRIPT_CHECKOUT_ROOT"
 got="$(drv tryload "$TRY_LIB/test-language-registry.js" 2>"$VAL_DIR/try.err")"
 assert_eq "valid table: tryLoadRegistry=$got" "valid table: tryLoadRegistry=OBJECT"
 printf '{ "schema": 1, "entries": [' >"$TRY_LIB/test-language-registry.json"

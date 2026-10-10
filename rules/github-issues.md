@@ -107,7 +107,7 @@ An issue that already carries implementation work is not a meta parent, and labe
 ## Environment
 
 - `gh` must have `project` scope for Projects v2 (`/issue-create`).
-- `AGENTS_CONFIG_DIR` must be set for `/issue-close-stage` and `/issue-close-finalize` (skills abort with clear error if unset).
+- `AGENTS_MAIN_ROOT` must be set for `/issue-close-stage` and `/issue-close-finalize` (skills abort with clear error if unset).
 - `gh issue close` from bash scripts (`close-completed.sh`, `close-not-planned.sh`) is invisible to `enforce-issue-close.js` — PreToolUse fires on the Bash-tool command head only, not subprocesses.
 - `ISSUE_CLOSE_SKILL=1` is effective only in the hook's Node.js process (set at session launch). Bash-tool inline or `export` forms do not reach the hook process.
 - `history.md` entries: English regardless of repo visibility. Issue body language is author's choice.

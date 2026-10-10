@@ -3,30 +3,21 @@
 # Tests: bin/issue-close-write-outcome.js, hooks/workflow-state/session-facts.js
 # Tags: tl2, workflow, issue-close, outcome-json, idempotency, error-handling, scope:issue-specific, pwsh-not-required
 #
-# #1644 review gap C11 (MEDIUM) — bin/issue-close-write-outcome.js --wf-meta.
-#   Usage: issue-close-write-outcome.js --wf-meta <issues-json-array> <outcome-file>
-# It writes one `skipped_wf_meta` record per issue into the outcome bag,
-# upserting on issueNumber. This file pins the collection edges (empty,
-# singleton, duplicates), the rerun/idempotency contract, preservation of
-# unrelated pre-existing records, and the two malformed-input paths.
+# #1644 review gap C11 (MEDIUM) — `issue-close-write-outcome.js --wf-meta <issues-json-array> <outcome-file>`
+# writes one `skipped_wf_meta` record per issue, upserting on issueNumber. Pins the collection edges (empty,
+# singleton, duplicates), rerun idempotency, preservation of unrelated records, and the two malformed-input paths.
 #
-# TL3 gap (what this test does NOT catch):
-# - Whether /worktree-end's WF-META branch invokes --wf-meta with the argv used
-#   here, and whether the outcome file it names is the one the Final Report
-#   renderer later reads.
-# - Real concurrent writers racing on the same outcome file (the writer does a
-#   read-modify-write with no lock).
-# Closest-to-action mitigation: the CLI is spawned as a real subprocess against
-# real files, so only the skill-side argv wiring is left to a TL3 run.
+# TL3 gap (NOT caught): whether /worktree-end's WF-META branch passes this argv and names the outcome file the
+# Final Report renderer reads; real concurrent writers on one outcome file (read-modify-write, no lock). Mitigation: CLI spawned as a real subprocess.
 
 set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-OUTCOME_CLI_N="$AGENTS_DIR_N/bin/issue-close-write-outcome.js"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+OUTCOME_CLI_N="$SCRIPT_CHECKOUT_ROOT_N/bin/issue-close-write-outcome.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -50,9 +41,8 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
-# The CLI requires session-facts.js under AGENTS_CONFIG_DIR (only reached by
-# --fallback / --session-id, but resolved from this var in all modes).
-export AGENTS_CONFIG_DIR="$AGENTS_DIR_N"
+# The CLI requires session-facts.js from its own script checkout (only reached
+# by --fallback / --session-id), so no root env var is handed to it.
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1

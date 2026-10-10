@@ -9,8 +9,8 @@
 
 set -uo pipefail
 
-AGENTS_DIR="${1:-$(cd "$(dirname "$0")/../.." && pwd)}"
-PROBE="$AGENTS_DIR/tests/lib/tl3-turn-transcript.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PROBE="$SCRIPT_CHECKOUT_ROOT/tests/lib/tl3-turn-transcript.js"
 command -v node >/dev/null 2>&1 || exit 77
 [ -f "$PROBE" ] || { echo "SKIP: tests/lib/tl3-turn-transcript.js not found" >&2; exit 77; }
 

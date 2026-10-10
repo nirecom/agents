@@ -12,6 +12,7 @@
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 
 # isolation (#2512): pin state and plans dirs once for this file
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
@@ -252,7 +253,7 @@ try {
   const v = require(process.argv[1]).CHECKPOINT_VERSION;
   process.stdout.write(typeof v === "number" ? String(v) : "<not-a-number>");
 } catch (e) { process.stdout.write("<unreadable>"); }
-' "$AGENTS_DIR/bin/workflow/lib/workflow-init/checkpoint.js")"
+' "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/checkpoint.js")"
 case "$C19_VERSION" in
     ''|*[!0-9]*) fail "C19: checkpoint.js names no numeric CHECKPOINT_VERSION ('$C19_VERSION') — a current-version checkpoint cannot be staged" ;;
     *) pass "C19: checkpoint.js names its current schema version ($C19_VERSION) — the fixture can match it" ;;

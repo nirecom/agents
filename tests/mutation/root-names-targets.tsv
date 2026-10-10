@@ -1,0 +1,18 @@
+# tests/mutation/root-names-targets.tsv — input of tests/mutation/root-names.sh.
+# Columns (TAB): mistake kind, target file, dynamic tests (empty = bin/find-tests-for-source.sh).
+# A target may end in #<n>: rewrite the n-th line holding a site instead of the first.
+# Targets name the files as they read AFTER the rename of this issue.
+script-to-main	bin/select-tests.sh
+script-to-main	hooks/scan-outbound.js
+main-to-script	hooks/lib/load-env.sh	tests/hooks/feature-2561-agents-main-root-unset-fallback.sh
+main-to-script	bin/scan-outbound.sh	tests/hooks/feature-2561-agents-main-root-unset-fallback.sh
+main-to-script	hooks/lib/load-env.js#2	tests/hooks/feature-2561-agents-main-root-unset-fallback.sh
+main-to-script	hooks/block-capture-echo/remedy.js	tests/hooks/feature-2170-capture-echo-guard.sh
+target-checkout-to-script	bin/github-issues/issue-to-history.sh	tests/bin/feature-2561-issue-to-history-target-root.sh
+target-checkout-to-script	bin/check-unstaged-tracked.sh	tests/bin/feature-check-unstaged-tracked-cli.sh
+target-main-to-target-checkout	bin/is-linked-worktree.sh	tests/bin/feature-is-linked-worktree.sh
+target-main-to-target-checkout	bin/worker-dispatch/anchor.js	tests/bin/feature-1643-worker-dispatch-anchor.sh
+bare-main-assign	tests/tests/feature-2561-test-fixture-libs.sh	tests/tests/feature-2561-test-fixture-libs.sh
+bare-main-assign	bin/select-tests.sh
+export-script-root	tests/tests/feature-2561-test-fixture-libs.sh	tests/tests/feature-2561-test-fixture-libs.sh
+export-script-root	bin/calibrate-test-parallelism.sh

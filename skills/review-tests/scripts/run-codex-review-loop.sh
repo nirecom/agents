@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # Workflow session id (plan-artifact prefix), NOT the CC session UUID resolved below
 # via bin/resolve-session-id. The wsid has no bash bridge yet, so this stays a manual
 # input box until a future session replaces it — see session-id-resolution.md.
@@ -16,7 +16,7 @@ set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-review-loop/review-wrapper-control.sh" || exit 4
 # The resolver's own 2/3 statuses sit outside the 0-7 review-loop protocol; remap to 4 (HALT)
 # so a containment refusal is never read as ESCALATE or as codex-unavailable.
-ACCEPTED_TRADEOFFS_FILE="$("$AGENTS_CONFIG_DIR/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
+ACCEPTED_TRADEOFFS_FILE="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
 rwc_resolve test-review review-tests
 EXIT_REINVOKE_AFTER_TERMINAL=8
 
@@ -25,7 +25,7 @@ EXIT_REINVOKE_AFTER_TERMINAL=8
 # them. Never allowed to change the review's own verdict.
 record_codex_exit() {
   local rc="$1" path_taken="$2"
-  node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append" \
+  node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/handoff-append" \
     --session "$SESSION_ID" --class D --step review_tests --key review-tests:codex-exit \
     --summary "codex test review ended at exit $rc via $path_taken, before the completion sentinel" \
     --pointer "$PLANS_DIR/$SESSION_ID-test-review.md" --origin procedure-point >/dev/null 2>&1 || true
@@ -36,7 +36,7 @@ record_codex_exit() {
 # empty scope, so the guard below stays fail-closed.
 compute_review_scope_fingerprint() {
   local repo_root="$1" fp rc=0
-  fp="$(node -e 'const {computeReviewScopeFingerprint}=require(process.env.AGENTS_CONFIG_DIR+"/hooks/workflow-gate/review-tests-evidence.js"); const r=computeReviewScopeFingerprint(process.argv[1]); if(!r.ok){process.stderr.write("review-scope fingerprint unavailable: "+r.error+"\n"); process.exit(4);} process.stdout.write(r.fingerprint||"")' "$repo_root" 2>/dev/null)" || rc=$?
+  fp="$(node -e 'const {computeReviewScopeFingerprint}=require(process.argv[2]+"/hooks/workflow-gate/review-tests-evidence.js"); const r=computeReviewScopeFingerprint(process.argv[1]); if(!r.ok){process.stderr.write("review-scope fingerprint unavailable: "+r.error+"\n"); process.exit(4);} process.stdout.write(r.fingerprint||"")' "$repo_root" "$SCRIPT_CHECKOUT_ROOT" 2>/dev/null)" || rc=$?
   if (( rc == 4 )); then return 4; fi
   (( rc == 0 )) || return 1
   [[ -n "$fp" ]] || return 1
@@ -49,13 +49,13 @@ compute_review_scope_fingerprint() {
 # handed on via --session. Only rc 2 means "no session"; any other rc is a bridge
 # fault and takes this script's existing exit 4 HALT path, never the exit 3 skip.
 BRIDGE_RC=0
-CC_SID="$("$AGENTS_CONFIG_DIR/bin/resolve-session-id")" || BRIDGE_RC=$?
+CC_SID="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-session-id")" || BRIDGE_RC=$?
 case "$BRIDGE_RC" in
   0) ;;
   2) CC_SID="" ;;
   *) echo "[review-tests] ERROR: bin/resolve-session-id failed (rc $BRIDGE_RC)" >&2; exit 4 ;;
 esac
-COMMIT_TARGET="$("$AGENTS_CONFIG_DIR/bin/resolve-worktree-path" ${CC_SID:+--session "$CC_SID"})"
+COMMIT_TARGET="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-worktree-path" ${CC_SID:+--session "$CC_SID"})"
 # NOSTATE (session resolved, no state file) and "" (no session resolved at all) are
 # both legitimate bin/resolve-worktree-path outcomes -- neither is an error, so both
 # fall back to CWD identically (#2270: previously only NOSTATE fell back, which masked
@@ -143,7 +143,7 @@ fi
 # (nothing to carry), rc 5 is a real failure we warn about but do not fail on.
 unset CTX_CONCERNS_LOG
 clog_rc=0
-CLOG_PATH="$("$AGENTS_CONFIG_DIR/bin/concern-ledger" render-concerns-log \
+CLOG_PATH="$("$SCRIPT_CHECKOUT_ROOT/bin/concern-ledger" render-concerns-log \
   --plans-dir "$PLANS_DIR" --session-id "$SESSION_ID" --format test-review)" || clog_rc=$?
 if (( clog_rc == 0 )) && [[ -n "$CLOG_PATH" && -s "$CLOG_PATH" ]]; then
   export CTX_CONCERNS_LOG="$CLOG_PATH"
@@ -154,11 +154,11 @@ for v in CTX_SURVEY_CODE CTX_SURVEY_HISTORY CTX_CONCERNS_LOG; do
   p="${!v:-}"
   if [[ -n "$p" && -s "$p" ]]; then args+=(--context "$p"); fi
 done
-TEST_DESIGN="$AGENTS_CONFIG_DIR/skills/_shared/test-design.md"
+TEST_DESIGN="$SCRIPT_CHECKOUT_ROOT/skills/_shared/test-design.md"
 if [[ -s "$TEST_DESIGN" ]]; then args+=(--context "$TEST_DESIGN"); fi
-PARSER_TESTS="$AGENTS_CONFIG_DIR/skills/_shared/test-design/parser-regex-tests.md"
+PARSER_TESTS="$SCRIPT_CHECKOUT_ROOT/skills/_shared/test-design/parser-regex-tests.md"
 if [[ -s "$PARSER_TESTS" ]]; then args+=(--context "$PARSER_TESTS"); fi
-PROTECTION_TESTS="$AGENTS_CONFIG_DIR/skills/_shared/test-design/protection-fix-tests.md"
+PROTECTION_TESTS="$SCRIPT_CHECKOUT_ROOT/skills/_shared/test-design/protection-fix-tests.md"
 if [[ -s "$PROTECTION_TESTS" ]]; then args+=(--context "$PROTECTION_TESTS"); fi
 if [[ -n "$CHANGED_FILES_CTX" ]]; then args+=(--context "$CHANGED_FILES_CTX"); fi
 RC=0
@@ -166,7 +166,7 @@ RC=0
 # INPUT_ERROR <path> can HALT via the same detector the CC fallback uses.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REVIEW_OUT="$(mktemp "${PLANS_DIR}/.rt-out-XXXXXX")" || exit 4
-"$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" | tee "$REVIEW_OUT" || RC=${PIPESTATUS[0]}
+"$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" | tee "$REVIEW_OUT" || RC=${PIPESTATUS[0]}
 DETECT_RC=0
 bash "$SCRIPT_DIR/detect-input-error.sh" "$REVIEW_OUT" || DETECT_RC=$?
 rm -f "$REVIEW_OUT"

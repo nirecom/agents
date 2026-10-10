@@ -11,10 +11,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-GUARD="$_AGENTS_DIR_NODE/hooks/enforce-worktree.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+GUARD="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/enforce-worktree.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 SID="wtclearsid"
 
 PASS=0; FAIL=0; SKIP=0
@@ -27,7 +27,7 @@ assert_eq() {
     if [ "$want" = "$got" ]; then pass "$name"; else fail "$name - want=$want got=$got"; fi
 }
 
-if [ ! -f "$AGENTS_DIR/hooks/enforce-worktree.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js" ]; then
     fail "H0 hooks/enforce-worktree.js missing - every case below is vacuous"
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
 fi
@@ -99,7 +99,6 @@ run_guard() {
     out=$(cd "$dir" && printf '%s' "$payload" | \
         env -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
         ENFORCE_WORKTREE="$mode" WORKFLOW_STATE_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
-        AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
     rc=$?
     case "$rc" in

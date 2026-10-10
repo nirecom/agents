@@ -9,7 +9,7 @@
 # `require(POLICY)`: the policy file is contributor-editable, so require()-ing it would run a
 # pull request's module body just because a reviewer ran this suite. Contract + canaries:
 # tests/hooks/cc-on-demand-skill-ownership/cases-require-safety.sh (A2/A3) -- CPR-ORTH sibling.
-POLICY_READER="$AGENTS_DIR/hooks/lib/rules-policy-reader.js"
+POLICY_READER="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-policy-reader.js"
 
 policy_field() { # <includes-in-expected|listed-in-on-demand> -> yes|no|ERROR
     node -e '
@@ -40,14 +40,14 @@ u4_unconditional_injection() {
 # `dispatch_timing_updated` answers `no` on a missing file exactly as it does on a stale one.
 u8_dispatch_sites() {
     local n rel label got
-    n="$(grep -rhoE 'mode: *"default"' "$AGENTS_DIR/skills" --include='SKILL.md' 2>/dev/null | grep -c . || true)"
+    n="$(grep -rhoE 'mode: *"default"' "$SCRIPT_CHECKOUT_ROOT/skills" --include='SKILL.md' 2>/dev/null | grep -c . || true)"
     assert_eq "U8a: skills/**/SKILL.md declares exactly 2 general-purpose dispatch sites" \
         "2" "${n:-0}"
     while IFS='#' read -r rel label; do
         [ -n "$rel" ] || continue
         ROWS=$((ROWS + 1))
         got="absent"
-        grep -qE 'mode: *"default"' "$AGENTS_DIR/$rel" 2>/dev/null && got="present"
+        grep -qE 'mode: *"default"' "$SCRIPT_CHECKOUT_ROOT/$rel" 2>/dev/null && got="present"
         assert_eq "U8b[$rel]: $label" "present" "$got"
     done <<'U8_CASES'
 skills/write-code/SKILL.md#WCD-4 is one of the two expected general-purpose dispatch sites
@@ -85,7 +85,7 @@ u10_write_tests_coding_row_promotion() {
 # U11 STATIC GUARD: the two readers above must never regress to `require(POLICY)`. A canary
 # fixture would only catch the spelling actually exercised, so the source is asserted directly
 # (same shape as cases-require-safety.sh A3, and U11b proves the grep can still fire).
-SELF="$AGENTS_DIR/tests/bin/feature-2124-tool-selection-priority/injection-policy.sh"
+SELF="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2124-tool-selection-priority/injection-policy.sh"
 
 # Scanning the whole file would count the guard's OWN pattern and mutation literals, so the scan
 # stops at this marker -- everything above it is the predicate region where the node -e programs

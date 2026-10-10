@@ -4,7 +4,7 @@
 #
 # G1-G4 — the original incident: how each gate is NAMED, and what is said when one is not
 # there. G1/G2 are static (the script's own text), G3/G4 drive the real script against a
-# fake config dir under a PATH from which no bare name can resolve.
+# fake agents root under a PATH from which no bare name can resolve.
 
 # ---- G1: every invocation goes through a full path --------------------------
 
@@ -83,9 +83,9 @@ g3_absent_gate_is_reported() {
       pass "G3d[$g]: a gate that exists is not reported NOT FOUND"
     fi
     if grep -qF -- "## STUB $g: PERFORMED" <<< "$RQG_OUT"; then
-      pass "G3e[$g]: the gate under \$AGENTS_CONFIG_DIR/bin actually ran"
+      pass "G3e[$g]: the gate under the runner's own checkout actually ran"
     else
-      fail "G3e[$g]: the gate under \$AGENTS_CONFIG_DIR/bin actually ran -- no stub output in: $RQG_OUT"
+      fail "G3e[$g]: the gate under the runner's own checkout actually ran -- no stub output in: $RQG_OUT"
     fi
   done
 }

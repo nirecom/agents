@@ -17,16 +17,16 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-HOOK_JS="${_AGENTS_DIR_NODE}/hooks/workflow-gate.js"
-GATE_MODULE="${AGENTS_DIR}/hooks/workflow-gate/prompt-extraction-gate.js"
-GATE_MODULE_NODE="${_AGENTS_DIR_NODE}/hooks/workflow-gate/prompt-extraction-gate.js"
-CLI="${AGENTS_DIR}/bin/check-prompt-extraction"
+HOOK_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/workflow-gate.js"
+GATE_MODULE="${SCRIPT_CHECKOUT_ROOT}/hooks/workflow-gate/prompt-extraction-gate.js"
+GATE_MODULE_NODE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/workflow-gate/prompt-extraction-gate.js"
+CLI="${SCRIPT_CHECKOUT_ROOT}/bin/check-prompt-extraction"
 
 # --- Pre-implementation skip gate -------------------------------------------
 if [ ! -f "$GATE_MODULE" ]; then
@@ -88,7 +88,7 @@ write_complete_state() {
     node -e "
 const fs = require('fs');
 const path = require('path');
-const { VALID_STEPS } = require('$_AGENTS_DIR_NODE/hooks/workflow-state.js');
+const { VALID_STEPS } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state.js');
 const steps = {};
 const now = new Date().toISOString();
 for (const s of VALID_STEPS) steps[s] = { status: 'complete', updated_at: now };
@@ -102,22 +102,38 @@ write_workflow_off_marker() {
     printf '{"set_at":"2026-01-01T00:00:00Z"}\n' > "$wfdir/$sid.workflow-off"
 }
 
-# Plain config dir: no markers -> resolveAgentsConfigDir() falls through to the
-# real agents checkout, so the REAL bin/check-prompt-extraction is exercised.
-# Also non-git -> isAgentsSessionRepo() fails closed (true), keeping Gate 3 armed.
-make_plain_config_dir() {
+# The gate arms only for the repo its own checkout belongs to and runs the CLI of that checkout:
+# the hook is launched from a copy of this checkout attached to the repo under test.
+# shellcheck source=tests/lib/session-repo-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
+# setup_repo runs in a command substitution, so the repo under test is handed over in a file.
+REPO_UNDER_TEST_FILE="$TMPDIR_BASE/repo-under-test"
+
+# Plain dir: the unmodified copy (real bin/check-prompt-extraction) is used, Gate 3 armed.
+make_plain_cfg_root() {
     local d="$TMPDIR_BASE/cfg-$1"
     mkdir -p "$d"
     to_node_path "$d"
 }
 
-# Marker config dir: adopted by resolveAgentsConfigDir(); the fixture owns
-# whatever bin/check-prompt-extraction it wants (or none at all).
-make_marker_config_dir() {
+# Checkout copy of its own: the fixture owns whatever bin/check-prompt-extraction it wants
+# (or none at all); run_hook / run_gate_module launch the gate from this copy.
+make_marker_cfg_root() {
     local d="$TMPDIR_BASE/cfg-$1"
-    mkdir -p "$d/hooks" "$d/bin"
-    echo "// stub marker" > "$d/hooks/enforce-worktree.js"
+    session_repo_fixture_create "$d" || return 1
+    rm -f "$d/bin/check-prompt-extraction"
     to_node_path "$d"
+}
+
+# gate_checkout_for <cfg> -> attaches the checkout that serves this cfg to the repo under test
+# and prints its path.
+gate_checkout_for() {
+    local checkout="$GATE_CHECKOUT"
+    [ -f "$1/hooks/workflow-gate.js" ] && checkout="$1"
+    session_repo_fixture_attach "$checkout" "$(cat "$REPO_UNDER_TEST_FILE")" || return 1
+    printf '%s' "$checkout"
 }
 
 emit_fence() {
@@ -146,6 +162,7 @@ setup_repo() {
     fi
     git -C "$repo" add README.md docs/notes.md
     git -C "$repo" commit -q -m "initial"
+    to_node_path "$repo" > "$REPO_UNDER_TEST_FILE"
     to_node_path "$repo"
 }
 
@@ -176,17 +193,20 @@ build_commit_payload() {
 HOOK_OUT=""
 HOOK_RC=0
 run_hook() {
-    local payload="$1" wfdir="$2" cfg="$3"; shift 3
+    local payload="$1" wfdir="$2" cfg="$3" checkout; shift 3
     HOOK_RC=0
-    # env(1) is last-wins: AGENTS_CONFIG_DIR is an overridable parameter so it
+    if ! checkout="$(gate_checkout_for "$cfg")"; then
+        HOOK_RC=1; HOOK_OUT="fixture: cannot attach the gate checkout"; return
+    fi
+    # env(1) is last-wins: AGENTS_MAIN_ROOT is an overridable parameter so it
     # precedes "$@"; the isolation pins follow "$@" so callers cannot unpin them.
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 60 \
         env \
-        "AGENTS_CONFIG_DIR=$cfg" \
+        "AGENTS_MAIN_ROOT=$cfg" \
         "$@" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
-        node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
+        node "$(session_repo_fixture_path "$checkout" hooks/workflow-gate.js)" 2>&1)" || HOOK_RC=$?
 }
 
 # ---------------------------------------------------------------------------
@@ -200,12 +220,16 @@ run_hook() {
 MOD_OUT=""
 MOD_RC=0
 run_gate_module() {
-    local repo="$1" cfg="$2"; shift 2
+    local repo="$1" cfg="$2" checkout module; shift 2
     MOD_RC=0
+    if ! checkout="$(gate_checkout_for "$cfg")"; then
+        MOD_RC=1; MOD_OUT="fixture: cannot attach the gate checkout"; return
+    fi
+    module="$(session_repo_fixture_path "$checkout" hooks/workflow-gate/prompt-extraction-gate.js)"
     MOD_OUT="$(run_with_timeout 60 \
-        env "AGENTS_CONFIG_DIR=$cfg" "$@" \
+        env "AGENTS_MAIN_ROOT=$cfg" "$@" \
         node -e "
-const mod = require('$GATE_MODULE_NODE');
+const mod = require('$module');
 const key = Object.keys(mod).find((k) => typeof mod[k] === 'function');
 if (!key) { console.log(JSON.stringify({error:'no exported function'})); process.exit(0); }
 let r;
@@ -263,7 +287,7 @@ assert_mod_ok() {
 # T01: gate module, staged violation -> block with a HARD: line in the reason.
 t01_module_blocks_violation() {
     local repo; repo="$(setup_repo r1)"
-    local cfg; cfg="$(make_plain_config_dir c1)"
+    local cfg; cfg="$(make_plain_cfg_root c1)"
     stage_violation "$repo"
     run_gate_module "$repo" "$cfg"
     assert_mod_block "T01: gate module blocks a staged extraction violation"
@@ -277,7 +301,7 @@ t01_module_blocks_violation() {
 # T02: gate module, clean staged set -> ok.
 t02_module_ok_when_clean() {
     local repo; repo="$(setup_repo r2)"
-    local cfg; cfg="$(make_plain_config_dir c2)"
+    local cfg; cfg="$(make_plain_cfg_root c2)"
     stage_clean "$repo"
     run_gate_module "$repo" "$cfg"
     assert_mod_ok "T02: gate module returns ok for a clean staged set"
@@ -288,7 +312,7 @@ t03_hook_blocks_violation() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate3003"
     local repo; repo="$(setup_repo r3)"
-    local cfg; cfg="$(make_plain_config_dir c3)"
+    local cfg; cfg="$(make_plain_cfg_root c3)"
     write_complete_state "$wfdir" "$sid"
     stage_violation "$repo"
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
@@ -301,7 +325,7 @@ t04_hard_line_unindented() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate3004"
     local repo; repo="$(setup_repo r4)"
-    local cfg; cfg="$(make_plain_config_dir c4)"
+    local cfg; cfg="$(make_plain_cfg_root c4)"
     write_complete_state "$wfdir" "$sid"
     stage_violation "$repo"
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
@@ -317,17 +341,17 @@ t04_hard_line_unindented() {
     fi
 }
 
-# T05: CLI binary missing in the adopted config dir -> fail closed (block).
+# T05: CLI binary missing in the adopted agents main root -> fail closed (block).
 t05_cli_missing_blocks() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate3005"
     local repo; repo="$(setup_repo r5)"
-    local cfg; cfg="$(make_marker_config_dir c5)"   # markers, no bin/check-prompt-extraction
+    local cfg; cfg="$(make_marker_cfg_root c5)"   # markers, no bin/check-prompt-extraction
     write_complete_state "$wfdir" "$sid"
     stage_clean "$repo"
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
     assert_block "T05: missing check-prompt-extraction -> fail-closed block" "check-prompt-extraction" || return
-    if printf '%s\n' "$HOOK_OUT" | grep -qiE "install|recover|resolve|AGENTS_CONFIG_DIR"; then
+    if printf '%s\n' "$HOOK_OUT" | grep -qiE "install|recover|resolve|AGENTS_MAIN_ROOT"; then
         pass "T05: block reason carries recovery guidance"
     else
         fail "T05: block reason lacks recovery guidance" "$HOOK_OUT"
@@ -360,7 +384,7 @@ process.stdout.write(r.error?String(r.error.code):'FOUND');
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate3006"
     local repo; repo="$(setup_repo r6)"
-    local cfg; cfg="$(make_plain_config_dir c6)"
+    local cfg; cfg="$(make_plain_cfg_root c6)"
     write_complete_state "$wfdir" "$sid"
     stage_clean "$repo"
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg" "PATH=$restricted"
@@ -370,7 +394,7 @@ process.stdout.write(r.error?String(r.error.code):'FOUND');
 # T07: CLI timeout is the ONLY fail-open path -> ok / approve.
 t07_timeout_fail_open() {
     local repo; repo="$(setup_repo r7)"
-    local cfg; cfg="$(make_marker_config_dir c7)"
+    local cfg; cfg="$(make_marker_cfg_root c7)"
     printf '#!/usr/bin/env bash\nsleep 30\nexit 1\n' > "$TMPDIR_BASE/cfg-c7/bin/check-prompt-extraction"
     chmod +x "$TMPDIR_BASE/cfg-c7/bin/check-prompt-extraction"
     stage_violation "$repo"
@@ -383,7 +407,7 @@ t08_workflow_off_bypass() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate3008"
     local repo; repo="$(setup_repo r8)"
-    local cfg; cfg="$(make_plain_config_dir c8)"
+    local cfg; cfg="$(make_plain_cfg_root c8)"
     write_workflow_off_marker "$wfdir" "$sid"
     stage_violation "$repo"
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
@@ -395,7 +419,7 @@ t09_non_agents_repo_skipped() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate3009"
     local repo; repo="$(setup_repo r9 no)"   # no .prompt-extraction-allowlist
-    local cfg; cfg="$(make_plain_config_dir c9)"
+    local cfg; cfg="$(make_plain_cfg_root c9)"
     write_complete_state "$wfdir" "$sid"
     stage_violation "$repo"
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"

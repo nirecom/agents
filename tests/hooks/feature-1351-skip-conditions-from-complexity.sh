@@ -11,6 +11,7 @@
 # L3 gap: no real orchestrator run; WORKFLOW_USER_VERIFIED preflight covers the wiring.
 
 set -uo pipefail
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 if ! command -v node >/dev/null 2>&1; then
     echo "SKIP: node not available"
@@ -57,8 +58,8 @@ fi
 # ==========================================================================
 echo ""
 echo "=== SC-W2: make-outline-plan scripts reference resolver (static) ==="
-MOP_OUTLINE_SKIP="$AGENTS_DIR/skills/make-outline-plan/scripts/check-outline-skip.sh"
-MOP_DETAIL_SKIP="$AGENTS_DIR/skills/make-outline-plan/scripts/check-detail-skip.sh"
+MOP_OUTLINE_SKIP="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/scripts/check-outline-skip.sh"
+MOP_DETAIL_SKIP="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/scripts/check-detail-skip.sh"
 if [ -f "$MOP_OUTLINE_SKIP" ] && grep -q 'resolveSkipConditionsFromComplexity' "$MOP_OUTLINE_SKIP" \
    && [ -f "$MOP_DETAIL_SKIP" ] && grep -q 'resolveSkipConditionsFromComplexity' "$MOP_DETAIL_SKIP"; then
     pass "SC-W2. make-outline-plan scripts reference resolveSkipConditionsFromComplexity"
@@ -82,7 +83,7 @@ fi
 # ==========================================================================
 echo ""
 echo "=== SC-W4: check-outline-skip.sh uses 'outline' (static) ==="
-MOP_OUTLINE_SKIP="$AGENTS_DIR/skills/make-outline-plan/scripts/check-outline-skip.sh"
+MOP_OUTLINE_SKIP="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/scripts/check-outline-skip.sh"
 if [ -f "$MOP_OUTLINE_SKIP" ] && grep -qE 'resolveSkipConditionsFromComplexity.*outline|"outline".*resolveSkipConditionsFromComplexity' "$MOP_OUTLINE_SKIP"; then
     pass "SC-W4. check-outline-skip.sh passes 'outline' to resolveSkipConditionsFromComplexity"
 else
@@ -94,7 +95,7 @@ fi
 # ==========================================================================
 echo ""
 echo "=== SC-W5: check-detail-skip.sh uses 'detail' (static) ==="
-MOP_DETAIL_SKIP="$AGENTS_DIR/skills/make-outline-plan/scripts/check-detail-skip.sh"
+MOP_DETAIL_SKIP="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/scripts/check-detail-skip.sh"
 if [ -f "$MOP_DETAIL_SKIP" ] && grep -qE 'resolveSkipConditionsFromComplexity.*detail|"detail".*resolveSkipConditionsFromComplexity' "$MOP_DETAIL_SKIP"; then
     pass "SC-W5. check-detail-skip.sh passes 'detail' to resolveSkipConditionsFromComplexity"
 else

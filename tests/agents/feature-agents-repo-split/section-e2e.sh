@@ -4,11 +4,11 @@
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
-# E2E-1: bash / agents only (dotfiles absent) — AGENTS_CONFIG_DIR set by profile-snippet.sh
+# E2E-1: bash / agents only (dotfiles absent) — AGENTS_MAIN_ROOT set by profile-snippet.sh
 # NOTE: Requires profile-snippet.sh to exist — FAIL expected until file is created
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== E2E-1: bash / agents only — AGENTS_CONFIG_DIR set by profile-snippet.sh ==="
+echo "=== E2E-1: bash / agents only — AGENTS_MAIN_ROOT set by profile-snippet.sh ==="
 
 if [ ! -f "$SNIPPET_SH" ]; then
     skip "E2E-1. profile-snippet.sh not found (will be created in source code step)"
@@ -28,16 +28,16 @@ else
     else
         _e2e1_result=$(HOME="$_e2e1_td/home" bash --norc --noprofile -c "
             source '$_e2e1_agents/profile-snippet.sh' 2>/dev/null
-            echo \"\$AGENTS_CONFIG_DIR\"
+            echo \"\$AGENTS_MAIN_ROOT\"
         " 2>/dev/null | tail -1 || true)
 
         trap - EXIT
         rm -rf "$_e2e1_td"
 
         if [ "$_e2e1_result" = "$_e2e1_agents" ]; then
-            pass "E2E-1. sourcing profile-snippet.sh sets AGENTS_CONFIG_DIR to agents dir"
+            pass "E2E-1. sourcing profile-snippet.sh sets AGENTS_MAIN_ROOT to agents dir"
         else
-            fail "E2E-1. expected AGENTS_CONFIG_DIR='$_e2e1_agents', got '$_e2e1_result'"
+            fail "E2E-1. expected AGENTS_MAIN_ROOT='$_e2e1_agents', got '$_e2e1_result'"
         fi
     fi
 fi
@@ -65,9 +65,9 @@ _agents_dir="$(dirname "$_dotfiles_dir")/agents"
 if [ -f "$_agents_dir/profile-snippet.sh" ]; then
     . "$_agents_dir/profile-snippet.sh"
 fi
-echo "${AGENTS_CONFIG_DIR:-UNSET}"
+echo "${AGENTS_MAIN_ROOT:-UNSET}"
 '
-    _e2e2_result=$(env -u AGENTS_CONFIG_DIR bash -c "
+    _e2e2_result=$(env -u AGENTS_MAIN_ROOT bash -c "
         _dotfiles_dir='$_e2e2_dotfiles'
         $_e2e2_script
     " 2>/dev/null || true)
@@ -76,18 +76,18 @@ echo "${AGENTS_CONFIG_DIR:-UNSET}"
     rm -rf "$_e2e2_td"
 
     if [ "$_e2e2_result" = "UNSET" ]; then
-        pass "E2E-2. no error and AGENTS_CONFIG_DIR unset when agents absent"
+        pass "E2E-2. no error and AGENTS_MAIN_ROOT unset when agents absent"
     else
-        fail "E2E-2. expected AGENTS_CONFIG_DIR=UNSET, got '$_e2e2_result'"
+        fail "E2E-2. expected AGENTS_MAIN_ROOT=UNSET, got '$_e2e2_result'"
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# E2E-3: bash / dotfiles + agents — sibling detection sets AGENTS_CONFIG_DIR
+# E2E-3: bash / dotfiles + agents — sibling detection sets AGENTS_MAIN_ROOT
 # NOTE: Requires profile-snippet.sh to exist — FAIL expected until file is created
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== E2E-3: bash / dotfiles + agents — sibling detection sets AGENTS_CONFIG_DIR ==="
+echo "=== E2E-3: bash / dotfiles + agents — sibling detection sets AGENTS_MAIN_ROOT ==="
 
 if [ ! -f "$SNIPPET_SH" ]; then
     skip "E2E-3. profile-snippet.sh not found (will be created in source code step)"
@@ -106,32 +106,32 @@ else
         skip "E2E-3. unexpected dirs in temp root: $_e2e3_extra"
         trap - EXIT; rm -rf "$_e2e3_td"
     else
-        _e2e3_result=$(HOME="$_e2e3_td/home" env -u AGENTS_CONFIG_DIR bash --norc --noprofile -c "
+        _e2e3_result=$(HOME="$_e2e3_td/home" env -u AGENTS_MAIN_ROOT bash --norc --noprofile -c "
             _dotfiles_dir='$_e2e3_dotfiles'
             _agents_dir=\"\$(dirname \"\$_dotfiles_dir\")/agents\"
             if [ -f \"\$_agents_dir/profile-snippet.sh\" ]; then
                 source \"\$_agents_dir/profile-snippet.sh\" 2>/dev/null
             fi
-            echo \"\${AGENTS_CONFIG_DIR:-UNSET}\"
+            echo \"\${AGENTS_MAIN_ROOT:-UNSET}\"
         " 2>/dev/null | tail -1 || true)
 
         trap - EXIT
         rm -rf "$_e2e3_td"
 
         if [ "$_e2e3_result" = "$_e2e3_agents" ]; then
-            pass "E2E-3. sibling detection sets AGENTS_CONFIG_DIR to agents dir"
+            pass "E2E-3. sibling detection sets AGENTS_MAIN_ROOT to agents dir"
         else
-            fail "E2E-3. expected AGENTS_CONFIG_DIR='$_e2e3_agents', got '$_e2e3_result'"
+            fail "E2E-3. expected AGENTS_MAIN_ROOT='$_e2e3_agents', got '$_e2e3_result'"
         fi
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# E2E-4: pwsh / agents only — profile-snippet.ps1 sets AGENTS_CONFIG_DIR
+# E2E-4: pwsh / agents only — profile-snippet.ps1 sets AGENTS_MAIN_ROOT
 # NOTE: Requires profile-snippet.ps1 to exist — FAIL expected until file is created
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== E2E-4: pwsh / agents only — profile-snippet.ps1 sets AGENTS_CONFIG_DIR ==="
+echo "=== E2E-4: pwsh / agents only — profile-snippet.ps1 sets AGENTS_MAIN_ROOT ==="
 
 if ! command -v pwsh >/dev/null 2>&1; then
     skip "E2E-4. pwsh not available"
@@ -146,8 +146,8 @@ else
     fi
 
     _e2e4_result=$(SNIPPET_SRC="$_e2e4_snippet_win" pwsh -NoProfile -Command '
-        $env:AGENTS_CONFIG_DIR = $null
-        $env:AGENTS_DIR = $null
+        $env:AGENTS_MAIN_ROOT = $null
+        $env:SCRIPT_CHECKOUT_ROOT = $null
         $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
         $agentsDir = Join-Path $tmpRoot "agents"
         New-Item -ItemType Directory -Force $agentsDir | Out-Null
@@ -164,7 +164,7 @@ else
         . (Join-Path $agentsDir "profile-snippet.ps1") *> $null
         # Emit expected and actual on two lines so the bash side can parse.
         "EXPECTED=$agentsDir"
-        "GOT=$($env:AGENTS_CONFIG_DIR)"
+        "GOT=$($env:AGENTS_MAIN_ROOT)"
         Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue
     ' 2>/dev/null || true)
 
@@ -174,9 +174,9 @@ else
         _e2e4_expected=$(echo "$_e2e4_result" | grep '^EXPECTED=' | head -1 | sed 's/^EXPECTED=//' | tr '\\' '/' | tr -d '\r')
         _e2e4_got=$(echo "$_e2e4_result" | grep '^GOT=' | head -1 | sed 's/^GOT=//' | tr '\\' '/' | tr -d '\r')
         if [ -n "$_e2e4_expected" ] && [ "$_e2e4_got" = "$_e2e4_expected" ]; then
-            pass "E2E-4. pwsh profile-snippet.ps1 sets AGENTS_CONFIG_DIR to agents dir"
+            pass "E2E-4. pwsh profile-snippet.ps1 sets AGENTS_MAIN_ROOT to agents dir"
         else
-            fail "E2E-4. expected AGENTS_CONFIG_DIR='$_e2e4_expected', got '$_e2e4_got'"
+            fail "E2E-4. expected AGENTS_MAIN_ROOT='$_e2e4_expected', got '$_e2e4_got'"
         fi
     fi
 fi
@@ -202,32 +202,32 @@ else
         trap - EXIT; rm -rf "$_e2e5_td"
     else
         _e2e5_result=$(pwsh -NoProfile -Command "
-            Remove-Item Env:AGENTS_CONFIG_DIR -ErrorAction SilentlyContinue
+            Remove-Item Env:AGENTS_MAIN_ROOT -ErrorAction SilentlyContinue
             \$DotfilesDir = '$_e2e5_dotfiles'
             \$AgentsDir = (Split-Path \$DotfilesDir -Parent) + [IO.Path]::DirectorySeparatorChar + 'agents'
             if (Test-Path \"\$AgentsDir\profile-snippet.ps1\") {
                 . \"\$AgentsDir\profile-snippet.ps1\"
             }
-            if (\$env:AGENTS_CONFIG_DIR) { \$env:AGENTS_CONFIG_DIR } else { 'UNSET' }
+            if (\$env:AGENTS_MAIN_ROOT) { \$env:AGENTS_MAIN_ROOT } else { 'UNSET' }
         " 2>/dev/null || true)
 
         trap - EXIT
         rm -rf "$_e2e5_td"
 
         if [ "$_e2e5_result" = "UNSET" ]; then
-            pass "E2E-5. pwsh no error and AGENTS_CONFIG_DIR unset when agents absent"
+            pass "E2E-5. pwsh no error and AGENTS_MAIN_ROOT unset when agents absent"
         else
-            fail "E2E-5. expected AGENTS_CONFIG_DIR=UNSET, got '$_e2e5_result'"
+            fail "E2E-5. expected AGENTS_MAIN_ROOT=UNSET, got '$_e2e5_result'"
         fi
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# E2E-6: pwsh / dotfiles + agents — sibling detection sets AGENTS_CONFIG_DIR
+# E2E-6: pwsh / dotfiles + agents — sibling detection sets AGENTS_MAIN_ROOT
 # NOTE: Requires profile-snippet.ps1 to exist — FAIL expected until file is created
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== E2E-6: pwsh / dotfiles + agents — sibling detection sets AGENTS_CONFIG_DIR ==="
+echo "=== E2E-6: pwsh / dotfiles + agents — sibling detection sets AGENTS_MAIN_ROOT ==="
 
 if ! command -v pwsh >/dev/null 2>&1; then
     skip "E2E-6. pwsh not available"
@@ -240,8 +240,8 @@ else
     fi
 
     _e2e6_result=$(SNIPPET_SRC="$_e2e6_snippet_win" pwsh -NoProfile -Command '
-        $env:AGENTS_CONFIG_DIR = $null
-        $env:AGENTS_DIR = $null
+        $env:AGENTS_MAIN_ROOT = $null
+        $env:SCRIPT_CHECKOUT_ROOT = $null
         $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
         $dotfilesDir = Join-Path $tmpRoot "dotfiles"
         $agentsDir   = Join-Path $tmpRoot "agents"
@@ -265,7 +265,7 @@ else
             . (Join-Path $SiblingAgents "profile-snippet.ps1") *> $null
         }
         "EXPECTED=$agentsDir"
-        "GOT=$($env:AGENTS_CONFIG_DIR)"
+        "GOT=$($env:AGENTS_MAIN_ROOT)"
         Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue
     ' 2>/dev/null || true)
 
@@ -275,9 +275,9 @@ else
         _e2e6_expected=$(echo "$_e2e6_result" | grep '^EXPECTED=' | head -1 | sed 's/^EXPECTED=//' | tr '\\' '/' | tr -d '\r')
         _e2e6_got=$(echo "$_e2e6_result" | grep '^GOT=' | head -1 | sed 's/^GOT=//' | tr '\\' '/' | tr -d '\r')
         if [ -n "$_e2e6_expected" ] && [ "$_e2e6_got" = "$_e2e6_expected" ]; then
-            pass "E2E-6. pwsh sibling detection sets AGENTS_CONFIG_DIR to agents dir"
+            pass "E2E-6. pwsh sibling detection sets AGENTS_MAIN_ROOT to agents dir"
         else
-            fail "E2E-6. expected AGENTS_CONFIG_DIR='$_e2e6_expected', got '$_e2e6_got'"
+            fail "E2E-6. expected AGENTS_MAIN_ROOT='$_e2e6_expected', got '$_e2e6_got'"
         fi
     fi
 fi

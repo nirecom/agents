@@ -9,10 +9,10 @@
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUBDIR="$AGENTS_DIR/tests/bin/feat-2490-next-step-gate"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SUBDIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feat-2490-next-step-gate"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 RC_ALL=0
 FAILED=""

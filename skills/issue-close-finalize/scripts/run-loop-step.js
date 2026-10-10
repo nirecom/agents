@@ -2,38 +2,27 @@
 "use strict";
 // run-loop-step.js — phase=loop_step state mutations for the issue-close-finalize worker
 // Usage: node run-loop-step.js <state_file_path> <g5_decision> [expected_state_token]
-// Env:   AGENTS_CONFIG_DIR  FINALIZE_SCRIPTS_DIR
-// Stdout: STATUS=<value>\nSUMMARY=<value>
-// Exit 0 always; check STATUS.
-//
-// COMPARE-AND-SWAP. This script read-modify-writes a file that the calling
-// worker validated in another process, and one G.5 pass posts a GitHub comment
-// on the way. Without a swap check, two passes racing on the same state file
-// each write a full document built from their own stale read: the later write
-// wins outright, silently discarding the earlier pass's g5_3a_completed flag or
-// counters — and a cleared flag re-posts the proposal comment on the next pass.
-// The token is a digest of the exact bytes read; the file's own fields cannot
-// serve, since schema_version is fixed and g5_loop_iteration advances on one
-// branch only. It is verified immediately before every write and before the
-// irreversible step-g5-loop.sh call, and against the caller's token on entry so
-// the worker's validation binds this write too.
-//
-// MUTUAL EXCLUSION. The swap check alone is a CHECK followed by an ACT: the
-// re-read in conflictReason() and the rename that publishes the new document are
-// two separate syscalls, and two passes can both clear the check inside the
-// window between them. The later rename then wins outright — exactly the loss the
-// token exists to prevent. An exclusive lock file (`wx`, so creation fails when it
-// already exists) serializes the whole read-modify-write, closing that window;
-// the token still covers writers that never took the lock, so the two are
-// complementary rather than redundant.
+// Env:   FINALIZE_SCRIPTS_DIR
+// Stdout: STATUS=<value>\nSUMMARY=<value> — exit 0 always; check STATUS.
+// COMPARE-AND-SWAP: the caller validated the state file in another process and one G.5
+// pass posts a GitHub comment on the way, so a stale read-modify-write would drop
+// g5_3a_completed and re-post it. The token is a digest of the exact bytes read, checked
+// on entry against the caller's token, before every write, and before step-g5-loop.sh.
+// MUTUAL EXCLUSION: check-then-rename is two syscalls, so an exclusive `wx` lock file
+// serializes the whole pass; the token still covers writers that never took the lock.
 
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { spawnSync } = require("child_process");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
+// The writer of the state file owns its schema version; this reader accepts exactly that one.
+const { SCHEMA_VERSION } = require(
+  path.join(SCRIPT_CHECKOUT_ROOT, "bin", "worker-dispatch", "workers", "issue-close-finalize", "state.js"),
+);
+
 const [, , stateFilePath, g5Decision, expectedToken] = process.argv;
-const agentsConfigDir = process.env.AGENTS_CONFIG_DIR;
 const finalizeScriptsDir = process.env.FINALIZE_SCRIPTS_DIR;
 
 function out(status, summary) {
@@ -48,7 +37,9 @@ function readState(p) {
   try {
     const raw = fs.readFileSync(p, "utf8");
     const s = JSON.parse(raw);
-    if (s.schema_version !== 3) throw new Error(`schema_version must be 3, got ${s.schema_version}`);
+    if (s.schema_version !== SCHEMA_VERSION) {
+      throw new Error(`schema_version must be ${SCHEMA_VERSION}, got ${s.schema_version}`);
+    }
     return { state: s, token: tokenOf(raw) };
   } catch (e) {
     out("failed", `state file read/parse error: ${e.message}`);
@@ -224,7 +215,7 @@ if (g5Decision === "decline" || g5Decision === "llm_declined") {
     assertUnchanged(stateFilePath, stateToken);
     const res = runBash(
       [path.join(finalizeScriptsDir, "step-g5-loop.sh"), "execute", String(last.proposal_parent), "accept"],
-      { AGENTS_CONFIG_DIR: agentsConfigDir, OWNER_REPO: state.owner_repo }
+      { OWNER_REPO: state.owner_repo }
     );
     if (res.rc !== 0) {
       out("failed", `step-g5-loop.sh execute failed: ${res.stderr.trim()}`);
@@ -249,7 +240,7 @@ if (g5Decision === "decline" || g5Decision === "llm_declined") {
   // Run G.5-1 for new current_issue_number
   const res = runBash(
     [path.join(finalizeScriptsDir, "step-g5-loop.sh"), "prepare", String(state.current_issue_number)],
-    { AGENTS_CONFIG_DIR: agentsConfigDir, OWNER_REPO: state.owner_repo }
+    { OWNER_REPO: state.owner_repo }
   );
   const kv = parseKV(res.stdout);
   const newEntry = {

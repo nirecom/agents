@@ -16,8 +16,8 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RECONCILE="$AGENTS_DIR/bin/workflow/reconcile-state"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RECONCILE="$SCRIPT_CHECKOUT_ROOT/bin/workflow/reconcile-state"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -62,7 +62,7 @@ read_state_status() {
   if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
   # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
   # on-disk event stream, not a persisted top-level key.
-  (cd "$AGENTS_DIR" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
+  (cd "$SCRIPT_CHECKOUT_ROOT" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node -e "
     try {
       const s = require('./hooks/workflow-state').readState(process.argv[1]);
       const step = s && s.steps && s.steps['$step'];

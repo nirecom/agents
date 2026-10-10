@@ -14,10 +14,10 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const AGENTS_DIR = process.env.AGENTS_DIR || path.join(__dirname, "..", "..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
 const [relPath, fragment, predicate, input] = process.argv.slice(2);
 
-const srcPath = path.join(AGENTS_DIR, relPath);
+const srcPath = path.join(SCRIPT_CHECKOUT_ROOT, relPath);
 let src;
 try {
   src = fs.readFileSync(srcPath, "utf8");
@@ -55,7 +55,7 @@ try {
   if (predicate === "egress") say(mod.commandIsEgressTool(input));
   if (predicate === "mask") say(mod.maskDisplayOnlySegments(input) !== input);
   if (predicate === "shape") {
-    const { parse } = require(path.join(AGENTS_DIR, "hooks", "lib", "command-ir.js"));
+    const { parse } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "command-ir.js"));
     const ir = parse(input, { preserveSubstitutionSpans: true });
     say(Boolean(mod.detectCaptureEcho(ir)));
   }

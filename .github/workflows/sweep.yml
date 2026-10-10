@@ -17,19 +17,19 @@ jobs:
       - name: Run sweep-worktrees
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+          AGENTS_MAIN_ROOT: ${{ github.workspace }}
         run: bash bin/sweep-worktrees.sh --ci-mode --min-age-hours 24
 
       - name: Run audit-tests (issue-specific staleness)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+          AGENTS_MAIN_ROOT: ${{ github.workspace }}
         run: bash bin/audit-tests.sh --dry-run --format text || true
 
       - name: Run audit-tests-common (scope:common orphan detection)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+          AGENTS_MAIN_ROOT: ${{ github.workspace }}
         run: bash bin/audit-tests-common.sh --dry-run --format text || true
 
   # Opens one issue for temporary migration blocks older than 90 days. Deliberately
@@ -45,5 +45,5 @@ jobs:
       - name: Open stale migration-block issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+          AGENTS_MAIN_ROOT: ${{ github.workspace }}
         run: bash bin/open-stale-migration-issue.sh

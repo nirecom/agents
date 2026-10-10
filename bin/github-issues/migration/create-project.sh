@@ -13,7 +13,7 @@ source "$SCRIPT_DIR/state.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/link-project.sh"
 
-REPO_DIR="${1:?usage: create-project.sh <repo_dir> [--dry-run]}"
+TARGET_CHECKOUT_ROOT="${1:?usage: create-project.sh <repo_dir> [--dry-run]}"
 DRY_RUN=0
 shift
 while [ $# -gt 0 ]; do
@@ -22,17 +22,17 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
-REPO_DIR="$(cd "$REPO_DIR" && pwd)"
+TARGET_CHECKOUT_ROOT="$(cd "$TARGET_CHECKOUT_ROOT" && pwd)"
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "[dry-run] would create Projects v2 board for target repo"
   exit 0
 fi
 
-state_load "$REPO_DIR"
+state_load "$TARGET_CHECKOUT_ROOT"
 
-OWNER=$(cd "$REPO_DIR" && gh repo view --json owner --jq .owner.login)
-REPO_NAME=$(cd "$REPO_DIR" && gh repo view --json name --jq .name)
+OWNER=$(cd "$TARGET_CHECKOUT_ROOT" && gh repo view --json owner --jq .owner.login)
+REPO_NAME=$(cd "$TARGET_CHECKOUT_ROOT" && gh repo view --json name --jq .name)
 PROJECT_TITLE="$REPO_NAME — Issue Timeline"
 
 gh auth status --hostname github.com 2>&1 | grep -q 'project' || {

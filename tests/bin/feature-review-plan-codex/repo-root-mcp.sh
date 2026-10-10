@@ -156,7 +156,7 @@ fi
 # ---------------------------------------------------------------------------
 # A3 — CODEX_MCP_FS=off suppresses --repo-root forwarding through the loop
 # ---------------------------------------------------------------------------
-# Set up a mock AGENTS_CONFIG_DIR with required structure.
+# Set up a mock agents checkout with required structure.
 A_CFG="$A_TMP/agents"
 mkdir -p "$A_CFG/bin" "$A_CFG/rules"
 echo "# core principles stub" > "$A_CFG/rules/core-principles.md"
@@ -174,7 +174,7 @@ fi
 # path-parse, ref-kind-input, verdict-dispatch) plus bin/lib/safe-state-path.sh,
 # and run-codex-review-loop now resolves the concern-ledger CLI (bin/concern-ledger
 # + bin/lib/concern-ledger.sh + bin/lib/concern-ledger/) unconditionally at
-# startup. The copied loop resolves all of these under AGENTS_CONFIG_DIR, so the
+# startup. The copied loop resolves all of these under its own checkout, so the
 # fixture must mirror the real bin/lib tree and the ledger CLI or the loop dies at
 # its first `die "required library missing"` before the mock reviewer is ever
 # invoked (leaving $A_RPC_ARGS absent — the A3/A4 failure mode).
@@ -221,7 +221,7 @@ A_TRADEOFFS="$A_PLANS/tradeoffs.txt"
 
 # A3 — kill switch: CODEX_MCP_FS=off → no --repo-root passed to review-plan-codex
 A_EXIT=0
-AGENTS_CONFIG_DIR="$A_CFG" CODEX_MCP_FS=off _timeout bash "$A_CFG/bin/run-codex-review-loop" \
+CODEX_MCP_FS=off _timeout bash "$A_CFG/bin/run-codex-review-loop" \
   --format detail-plan \
   --session-id "a3-session" \
   --plans-dir "$A_PLANS" \
@@ -252,7 +252,7 @@ fi
 
 A_EXIT=0
 ( cd "$A_REPO" && \
-  AGENTS_CONFIG_DIR="$A_CFG" _timeout bash "$A_CFG/bin/run-codex-review-loop" \
+  _timeout bash "$A_CFG/bin/run-codex-review-loop" \
     --format detail-plan \
     --session-id "a4-session" \
     --plans-dir "$A_PLANS" \

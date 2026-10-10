@@ -47,11 +47,11 @@ W12_NEG_TABLE
 
 # #2254 pin abolition, repo-wide: a surviving pin variable or version gate anywhere
 # in the shipped code would reintroduce the frozen/mismatch behaviour.
-W12_PIN_HITS="$(grep -rlF -e "CODEGRAPH_VERSION" "$AGENTS_DIR/install" "$AGENTS_DIR/hooks" "$AGENTS_DIR/bin" 2>/dev/null \
-    | sed "s|^$AGENTS_DIR/||" | tr '\n' ' ' || true)"
+W12_PIN_HITS="$(grep -rlF -e "CODEGRAPH_VERSION" "$SCRIPT_CHECKOUT_ROOT/install" "$SCRIPT_CHECKOUT_ROOT/hooks" "$SCRIPT_CHECKOUT_ROOT/bin" 2>/dev/null \
+    | sed "s|^$SCRIPT_CHECKOUT_ROOT/||" | tr '\n' ' ' || true)"
 assert_eq "W12-23: CODEGRAPH_VERSION appears nowhere under install/, hooks/, bin/" "" "$(trim "$W12_PIN_HITS")"
-W12_GATE_HITS="$(grep -rlF -e "verifyPinnedCliVersion" "$AGENTS_DIR/install" "$AGENTS_DIR/hooks" "$AGENTS_DIR/bin" 2>/dev/null \
-    | sed "s|^$AGENTS_DIR/||" | tr '\n' ' ' || true)"
+W12_GATE_HITS="$(grep -rlF -e "verifyPinnedCliVersion" "$SCRIPT_CHECKOUT_ROOT/install" "$SCRIPT_CHECKOUT_ROOT/hooks" "$SCRIPT_CHECKOUT_ROOT/bin" 2>/dev/null \
+    | sed "s|^$SCRIPT_CHECKOUT_ROOT/||" | tr '\n' ' ' || true)"
 assert_eq "W12-24: verifyPinnedCliVersion appears nowhere under install/, hooks/, bin/" "" "$(trim "$W12_GATE_HITS")"
 
 # Exactly one global install call per script: a second, unhardened one would run

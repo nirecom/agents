@@ -12,8 +12,9 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && (pwd -W 2>/dev/null || pwd))"
-HOOK="$AGENTS_DIR/hooks/pr-created-open.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
+HOOK="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/pr-created-open.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -38,7 +39,7 @@ fi
 NODE_TMPDIR="$(run_with_timeout node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
 ISOLATED_CFG_DIR="${NODE_TMPDIR}/prco-cfg-$$"
 mkdir -p "$ISOLATED_CFG_DIR"
-export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
 trap 'rm -rf "$ISOLATED_CFG_DIR"' EXIT
 
 # Test mode: don't actually open browser
@@ -182,7 +183,7 @@ run_with_timeout node -e "
   process.env.SHOW_USER_VERIFIED_NO_SPAWN = '1';
   process.env.SHOW_USER_VERIFIED_MARKER_FILE = '$MARKER_T7';
   delete process.env.SHOW_USER_VERIFIED_NO_BROWSER;
-  require('$AGENTS_DIR/hooks/lib/open-external').openInBrowser('javascript:alert(1)');
+  require('$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/open-external').openInBrowser('javascript:alert(1)');
 " 2>/dev/null
 if [ ! -f "$MARKER_T7" ]; then
   pass "T7 non-http URL rejected — openInBrowser did not spawn for javascript: URL"

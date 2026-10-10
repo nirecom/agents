@@ -19,7 +19,7 @@ const {
 } = require("./workflow-state");
 const { resolveRepoCwd } = require("./lib/path-normalize");
 
-// Load $AGENTS_CONFIG_DIR/.env into process.env (existing env wins)
+// Load the settings .env into process.env (existing env wins)
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");

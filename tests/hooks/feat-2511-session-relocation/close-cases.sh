@@ -39,7 +39,7 @@ close_tree() {
   STUB_LOG="$(np "$T/stub-$1.log")"
   mkdir -p "$CFG/bin" "$CFG/skills/session-close/scripts"
   : >"$STUB_LOG"
-  cp "$AGENTS_DIR/skills/session-close/scripts/relocate-session-state.sh" \
+  cp "$SCRIPT_CHECKOUT_ROOT/skills/session-close/scripts/relocate-session-state.sh" \
     "$CFG/skills/session-close/scripts/" 2>/dev/null || true
   printf '%s\n' '#!/usr/bin/env node' \
     "\":\" //; exec node \"$A/bin/state-dir-relocation\" \"\$@\"" \
@@ -56,7 +56,7 @@ close_tree() {
 close_run() {
   MV_RC=0
   MV_OUT="$(cd "$T/cwd" && run_with_timeout 60 "${DENV[@]}" HOME="$H" USERPROFILE="$H" \
-    AGENTS_CONFIG_DIR="$(np "$CFG")" STUB_LOG="$STUB_LOG" ${FAULT:+"STATE_RELOCATION_FAULT=$FAULT"} \
+    AGENTS_MAIN_ROOT="$(np "$CFG")" STUB_LOG="$STUB_LOG" ${FAULT:+"STATE_RELOCATION_FAULT=$FAULT"} \
     bash "$CFG/skills/session-close/scripts/relocate-session-state.sh" "$1" 2>/dev/null)" || MV_RC=$?
   MV_OUT="${MV_OUT//$'\r'/}"
 }
@@ -96,7 +96,7 @@ c_m10b_success_quiet() {
 
 c_m11_skill() {
   local md sc8 sc9 last body
-  md="$AGENTS_DIR/skills/session-close/SKILL.md"
+  md="$SCRIPT_CHECKOUT_ROOT/skills/session-close/SKILL.md"
   sc8="$(grep -n '^## SC-8' "$md" | head -1 | cut -d: -f1 || true)"
   sc9="$(grep -n '^## SC-9' "$md" | head -1 | cut -d: -f1 || true)"
   last="$(grep -n '^## SC-' "$md" | tail -1 | cut -d: -f1 || true)"
@@ -104,18 +104,18 @@ c_m11_skill() {
   eq "M11 SC-9 comes after SC-8" "$(test -n "$sc9" && test -n "$sc8" && test "$sc9" -gt "$sc8" && echo after)" "after"
   eq "M11 SC-9 is the last SC section" "$last" "$sc9"
   body="$(awk '/^## SC-9/ { on = 1; next } /^## / { on = 0 } on' "$md")"
-  like "M11 SC-9 runs relocate-session-state.sh from AGENTS_CONFIG_DIR" "$body" \
-    '*"$AGENTS_CONFIG_DIR/skills/session-close/scripts/relocate-session-state.sh"*'
+  like "M11 SC-9 runs relocate-session-state.sh from AGENTS_MAIN_ROOT" "$body" \
+    '*"$AGENTS_MAIN_ROOT/skills/session-close/scripts/relocate-session-state.sh"*'
 }
 
 c_m12_blocks() {
   local rc=0
-  (cd "$AGENTS_DIR" && run_with_timeout 120 bash bin/check-migration-blocks.sh --all >/dev/null 2>&1) || rc=$?
+  (cd "$SCRIPT_CHECKOUT_ROOT" && run_with_timeout 120 bash bin/check-migration-blocks.sh --all >/dev/null 2>&1) || rc=$?
   eq "M12 check-migration-blocks --all passes" "$rc" "0"
   eq "M12 bin/state-dir-relocation is wrapped in a temporary block" \
-    "$(grep -c 'BEGIN temporary:' "$AGENTS_DIR/bin/state-dir-relocation" 2>/dev/null || true)" "1"
+    "$(grep -c 'BEGIN temporary:' "$SCRIPT_CHECKOUT_ROOT/bin/state-dir-relocation" 2>/dev/null || true)" "1"
   eq "M12 relocate-session-state.sh is wrapped in a temporary block" \
-    "$(grep -c 'BEGIN temporary:' "$AGENTS_DIR/skills/session-close/scripts/relocate-session-state.sh" 2>/dev/null || true)" "1"
+    "$(grep -c 'BEGIN temporary:' "$SCRIPT_CHECKOUT_ROOT/skills/session-close/scripts/relocate-session-state.sh" 2>/dev/null || true)" "1"
 }
 
 # deny_list <dir> / allow_list <dir> — take away / give back the right to list <dir>.

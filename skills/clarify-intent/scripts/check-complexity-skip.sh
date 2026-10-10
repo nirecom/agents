@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check-complexity-skip.sh — outline-skip sentinel dispatch for clarify-intent (#1465)
-# Env: AGENTS_CONFIG_DIR (required), SKIP_MODE (auto|judgment; --skip-mode wins)
+# Env: SKIP_MODE (auto|judgment; --skip-mode wins)
 # Args: --session <sid> [--skip-mode <auto|judgment>] [--so-c1 <t|f>] [--so-c2 <t|f>]
 # --skip-mode exists so a prompt can issue this without an env prefix (#2132).
 # Stdout:
@@ -9,7 +9,7 @@
 # Exit: 0 success / 1 invalid args/env
 set -uo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SKIP_MODE="${SKIP_MODE:-}"
 
 SESSION_ID=""
@@ -34,7 +34,7 @@ case "$SKIP_MODE" in
 esac
 
 if [[ "$SKIP_MODE" == "auto" ]]; then
-    node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+    node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-judgment" \
         --session "$SESSION_ID" \
         --target outline \
         --advance \
@@ -48,7 +48,7 @@ fi
 
 # judgment mode
 if [[ "$SO_C1" == "true" && "$SO_C2" == "true" ]]; then
-    node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+    node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-judgment" \
         --session "$SESSION_ID" \
         --target outline \
         --advance \

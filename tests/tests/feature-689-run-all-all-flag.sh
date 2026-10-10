@@ -19,9 +19,9 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SELF="${BASH_SOURCE[0]}"
-AGENTS_DIR="$(cd "$(dirname "$SELF")/../.." && pwd)"
-RUN_ALL="$AGENTS_DIR/tests/run-all.sh"
+RUN_ALL="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
 
 # Belt-and-braces for the recursion contract: if the suite ever re-enters this
 # file, stop instead of forking another level.
@@ -41,7 +41,7 @@ skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
 # The runner and the wrapper are part of this checkout: a missing one is a broken root, not a skip.
 [ -f "$RUN_ALL" ] || { echo "FAIL: tests/run-all.sh not found at $RUN_ALL"; exit 1; }
-[ -f "$AGENTS_DIR/bin/run-with-timeout.sh" ] || { echo "FAIL: bin/run-with-timeout.sh not found under $AGENTS_DIR"; exit 1; }
+[ -f "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" ] || { echo "FAIL: bin/run-with-timeout.sh not found under $SCRIPT_CHECKOUT_ROOT"; exit 1; }
 
 # --- helpers ---------------------------------------------------------------
 
@@ -63,7 +63,7 @@ unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATU
 # Canonical portable timeout wrapper (2-tier: timeout -> perl alarm), and the
 # single funnel every child launch goes through — so sanitizing it here covers
 # every case below without repeating the flag list per call site.
-run_with_timeout() { senv bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$@"; }
+run_with_timeout() { senv bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$@"; }
 
 # Neutralise a captured child contract line. This file's stdout is scanned by
 # hooks/workflow-run-tests.js and bin/worker-dispatch/workers/test-runner.js,
@@ -88,9 +88,9 @@ export WORKFLOW_STATE_DIR="$TMPROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMPROOT/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
-export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
+export RUN_ALL_REGISTRY_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh"
 # shellcheck source=../lib/test-language-registry-fixture.sh
-. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
 
 # make_fixture_tests <dir> — 4 fixture tests in the bin/ category (2 pass / 1 fail
 # / 1 skip; the runner discovers category dirs only) plus an _archive/ sentinel.
@@ -98,7 +98,7 @@ export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
 make_fixture_tests() {
     local dir="$1"
     case "$dir" in
-        "$AGENTS_DIR"|"$AGENTS_DIR"/*)
+        "$SCRIPT_CHECKOUT_ROOT"|"$SCRIPT_CHECKOUT_ROOT"/*)
             echo "FATAL: refusing to build a fixture inside the repository tree: $dir" >&2
             exit 1 ;;
     esac
@@ -112,7 +112,7 @@ make_fixture_tests() {
 }
 
 # make_fixture_repo <dir> — fixture tests plus a copy of the REAL runner placed
-# so its AGENTS_DIR resolves to <dir>. The copy is deliberately extensionless
+# so its SCRIPT_CHECKOUT_ROOT resolves to <dir>. The copy is deliberately extensionless
 # (<dir>/tests/run-all): the runner globs "$TESTS_DIR"/*.sh and would otherwise
 # match and re-exec itself, recursing until the timeout fires.
 make_fixture_repo() {
@@ -210,7 +210,7 @@ test_C4a_missing_tests_dir() {
 }
 
 # C4(b): default resolution — with TESTS_DIR empty and with it unset, the
-# copied runner must resolve its tests dir from its own AGENTS_DIR. Exercised
+# copied runner must resolve its tests dir from its own SCRIPT_CHECKOUT_ROOT. Exercised
 # only against the fixture copy; the real tests/ tree is never launched.
 test_C4b_default_from_agents_dir() {
     local out rc unset_out unset_rc ok=1
@@ -225,8 +225,8 @@ test_C4b_default_from_agents_dir() {
     has_line 'MARKER_T1' "$unset_out" || ok=0
     [ "$unset_rc" = "1" ] || ok=0
     # Mechanical proof that the repository's own suite was not swept.
-    ! has_fixed "$AGENTS_DIR/tests/" "$out" || ok=0
-    ! has_fixed "$AGENTS_DIR/tests/" "$unset_out" || ok=0
+    ! has_fixed "$SCRIPT_CHECKOUT_ROOT/tests/" "$out" || ok=0
+    ! has_fixed "$SCRIPT_CHECKOUT_ROOT/tests/" "$unset_out" || ok=0
     if [ "$ok" = "1" ]; then
         pass "C4b_default_from_agents_dir: empty and unset TESTS_DIR both fall back to the fixture repo's own tests dir"
     else
@@ -395,20 +395,29 @@ test_C7_ambient_sanitized() {
 # UNSUPPORTED path (recognized-only / unmatched) is U1-U5 in feature-2007-run-all-ps1-dispatch.sh.
 # The runner and launcher load a fixture checkout's table, never the repo's.
 test_C8_not_launched_unsupported_not_counted() {
-    local co="$TMPROOT/co-unsup" lone x78 okt out rc ctl_out ctl_rc ok=1
-    mkdir -p "$co/bin" "$co/hooks/lib" "$co/tests/lone" "$co/tests/bin"
-    cp -R "$AGENTS_DIR/bin/lib" "$co/bin/lib"
-    cp "$AGENTS_DIR/bin/run-with-timeout.sh" "$co/bin/"
-    install_test_language_registry "$co" "$AGENTS_DIR"
-    cp "$AGENTS_DIR/tests/bin/test-language-registry/fixtures/fake-suite.json" "$co/hooks/lib/test-language-registry.json"
+    local co="$TMPROOT/co-unsup" lone x78 okt out rc ctl_out ctl_rc ok=1 f decoy
+    mkdir -p "$co/bin" "$co/hooks/lib" "$co/tests/lone" "$co/tests/bin" "$co/tests/lib"
+    cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$co/bin/lib"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$co/bin/"
+    # The fixture launcher refuses to run without its own root decoy: the library, its builder
+    # and the file the builder reads the retired names from. The builder lists the checkout's
+    # tracked files, so the checkout is a git repo; a run with no inherited decoy builds in TMPROOT.
+    for f in tests/lib/root-decoy.sh tests/lib/root-decoy-build.js tests/bin/feature-2561-root-names-residue.sh; do
+        cp "$SCRIPT_CHECKOUT_ROOT/$f" "$co/$f"
+    done
+    git init -q "$co" >/dev/null 2>&1
+    git -C "$co" config core.hooksPath /dev/null
+    decoy="${ROOT_DECOY_DIR:-$TMPROOT/co-unsup-decoy}"
+    install_test_language_registry "$co" "$SCRIPT_CHECKOUT_ROOT"
+    cp "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/fixtures/fake-suite.json" "$co/hooks/lib/test-language-registry.json"
     lone="$co/tests/lone/c.fakesuite"; x78="$co/tests/bin/x78.sh"; okt="$co/tests/bin/ok.sh"
     printf '# t\n' > "$lone"
     printf '#!/bin/bash\nexit 78\n' > "$x78"
     printf '#!/bin/bash\nexit 0\n' > "$okt"
-    out="$(RUN_ALL_REGISTRY_LIB="$co/bin/lib/test-language-registry.sh" RUN_ALL_LAUNCH_LIB="$co/bin/lib/run-all-launch.sh" \
+    out="$(ROOT_DECOY_DIR="$decoy" RUN_ALL_REGISTRY_LIB="$co/bin/lib/test-language-registry.sh" RUN_ALL_LAUNCH_LIB="$co/bin/lib/run-all-launch.sh" \
         run_with_timeout 120 bash "$RUN_ALL" "$lone" "$x78" "$okt" 2>/dev/null)"
     rc=$?
-    ctl_out="$(RUN_ALL_REGISTRY_LIB="$co/bin/lib/test-language-registry.sh" RUN_ALL_LAUNCH_LIB="$co/bin/lib/run-all-launch.sh" \
+    ctl_out="$(ROOT_DECOY_DIR="$decoy" RUN_ALL_REGISTRY_LIB="$co/bin/lib/test-language-registry.sh" RUN_ALL_LAUNCH_LIB="$co/bin/lib/run-all-launch.sh" \
         run_with_timeout 120 bash "$RUN_ALL" "$lone" "$okt" 2>/dev/null)"
     ctl_rc=$?
     [ "$(count_lines '^UNSUPPORTED: ' "$out")" = "1" ] || ok=0

@@ -4,8 +4,8 @@
 # Tags: scope:issue-specific
 
 NOW_ISO="$(node -e "console.log(new Date().toISOString())")"
-ADOPT_CLI="$AGENTS_DIR/bin/workflow/adopt-session-state"
-DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
+ADOPT_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/adopt-session-state"
+DRIVER="$SCRIPT_CHECKOUT_ROOT/bin/workflow/workflow-init-driver"
 
 to_node_path() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 WORKFLOW_DIR_NODE="$(to_node_path "$WORKFLOW_DIR")"
@@ -68,7 +68,7 @@ adopt() {
     set +e
     ADOPT_OUT="$( (cd "$TMPDIR_BASE" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" \
         WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" CLAUDE_TRANSCRIPT_BASE_DIR="$TBASE_NODE" \
-        CLAUDE_PROJECT_DIR="$cwd" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+        CLAUDE_PROJECT_DIR="$cwd" \
         run_with_timeout node "$ADOPT_CLI" --session "$heir" "$@" 2>&1) )"
     ADOPT_RC=$?
     set -e
@@ -89,7 +89,6 @@ run_driver() {
     DRIVER_OUT="$( (cd "$TMPDIR_BASE" && CLAUDE_CODE_SESSION_ID="$heir" \
         WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TBASE_NODE" CLAUDE_PROJECT_DIR="$cwd" \
-        AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         run_with_timeout node "$DRIVER" "$@" 2>&1) )"
     DRIVER_RC=$?
     set -e
@@ -115,7 +114,7 @@ get_kv() {
 
 # step_status <sid> <step> — read through the canonical projection API
 step_status() {
-    (cd "$AGENTS_DIR" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
+    (cd "$SCRIPT_CHECKOUT_ROOT" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
         run_with_timeout node -e '
           try {
             const s = require("./hooks/workflow-state").readState(process.argv[1]);

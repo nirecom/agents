@@ -4,12 +4,12 @@
 #
 # State seeding, detector/reporter drivers and ledger readers for the #1997
 # mechanism-failure suite. Sourced by tests/hooks/feature-1997-mechanism-failure.sh;
-# expects AGENTS_DIR, _AGENTS_DIR_NODE, RWT and the pass/fail/skip counters.
+# expects SCRIPT_CHECKOUT_ROOT, _SCRIPT_CHECKOUT_ROOT_NODE, RWT and the pass/fail/skip counters.
 
-MF_NODE="$_AGENTS_DIR_NODE/hooks/lib/mechanism-failure.js"
-STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
-BASENAMES_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
-GUARD_C4="$AGENTS_DIR/hooks/stop-premature-stop-guard.js"
+MF_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/mechanism-failure.js"
+STATEIO_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io.js"
+BASENAMES_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/protected-basenames.js"
+GUARD_C4="$SCRIPT_CHECKOUT_ROOT/hooks/stop-premature-stop-guard.js"
 TTL_MS=$((4 * 60 * 60 * 1000))
 
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'mechfail1997'; }
@@ -106,7 +106,7 @@ sup_state_path() { printf '%s/%s.control/supervisor-state.json' "$1" "$2"; }
 # Sets C4_OUT / C4_RC (rc 0 = silent, rc 2 = blocked).
 run_c4() {
     C4_OUT=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$2\",\"transcript_path\":\"\"}" \
-        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
           "$RWT" 25 node "$(node_path "$GUARD_C4")" 2>/dev/null)
     C4_RC=$?
 }

@@ -10,8 +10,6 @@
 
 set -euo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
-
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
   exit 77

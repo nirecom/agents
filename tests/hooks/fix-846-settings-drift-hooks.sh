@@ -20,10 +20,10 @@ set -u
 # assembler's own diagnostic through -- is covered at TL2 in
 # tests/install/feature-2119-settings-allow-ssot/hook-callers.sh (T37). Neither file needs a real machine.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-POST_MERGE="$AGENTS_DIR/hooks/post-merge"
-POST_CHECKOUT="$AGENTS_DIR/hooks/post-checkout"
+POST_MERGE="$SCRIPT_CHECKOUT_ROOT/hooks/post-merge"
+POST_CHECKOUT="$SCRIPT_CHECKOUT_ROOT/hooks/post-checkout"
 
 # TL3 gap -- exactly two things, both needing a real machine. (1) The installer entry points:
 # whether install/linux/dotfileslink.sh and install/win/dotfileslink.ps1 still install these two

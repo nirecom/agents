@@ -11,10 +11,10 @@ set -uo pipefail
 # skips the prompt, so every failure here must mean "no allow targets" -- never a throw
 # (the hook would fail open to passThrough anyway) and never a widened target set.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && cd .. && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-PROBE="$(np "$AGENTS_DIR/tests/hooks/feature-2265-allow-command-list/probe.js")"
+PROBE="$(np "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2265-allow-command-list/probe.js")"
 TMPROOT="$(make_tmp)" || { echo "FAIL: harness -- mktemp -d failed"; exit 1; }
 trap 'rm -rf "$TMPROOT"' EXIT
 harness_isolate "$TMPROOT/iso"
@@ -174,7 +174,7 @@ case_end
 # G1: the real lists. Smoke only -- which entries exist is the lists' business, but the entries
 # the calling-convention docs name must resolve, and review-code-codex is the one real bare name.
 case_begin "real-lists-smoke" "install/settings-allow-commands.txt"
-REAL="$(probe load "$(np "$AGENTS_DIR")")"
+REAL="$(probe load "$(np "$SCRIPT_CHECKOUT_ROOT")")"
 case "$REAL" in
     *"bin/workflow/next-step"*) pass "G1: the real allow list includes bin/workflow/next-step" ;;
     *) fail "G1: the real allow list includes bin/workflow/next-step" "$REAL" ;;
@@ -183,13 +183,13 @@ case "$REAL" in
     *";bare="*"review-code-codex"*) pass "G1: review-code-codex is a real exposed bare name" ;;
     *) fail "G1: review-code-codex is a real exposed bare name" "$REAL" ;;
 esac
-check "G1: next-step resolves to node" "node" "$(probe interp "$(np "$AGENTS_DIR")" bin/workflow/next-step)"
-check "G1: confirm-off resolves to bash" "bash" "$(probe interp "$(np "$AGENTS_DIR")" bin/confirm-off)"
+check "G1: next-step resolves to node" "node" "$(probe interp "$(np "$SCRIPT_CHECKOUT_ROOT")" bin/workflow/next-step)"
+check "G1: confirm-off resolves to bash" "bash" "$(probe interp "$(np "$SCRIPT_CHECKOUT_ROOT")" bin/confirm-off)"
 case_end
 
 # G2: the logic's SSOT moved here; the retired generator must not be what this module wraps.
 case_begin "ssot-owner" "hooks/lib/allow-command-list.js"
-G2_MOD="$AGENTS_DIR/hooks/lib/allow-command-list.js"
+G2_MOD="$SCRIPT_CHECKOUT_ROOT/hooks/lib/allow-command-list.js"
 if [ ! -f "$G2_MOD" ]; then
     fail "G2: hooks/lib/allow-command-list.js exists" "missing"
 elif grep -q "settings-allow-rules" "$G2_MOD"; then

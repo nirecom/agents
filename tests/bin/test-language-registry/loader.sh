@@ -9,14 +9,14 @@ LD_DIR="$TMPBASE/loader"
 mkdir -p "$LD_DIR"
 
 case_begin "loader-locations-and-header-lines" "bin/lib/test-language-registry.sh"
-got="$(tlr_bash "$AGENTS_DIR" 'tlr_load || exit 96; printf "%s|%s|%s|%s" "$TLR_HEADER_MAX_LINES" "$(cd "$TLR_REPO_ROOT" && pwd -P)" "$(cd "$TLR_REGISTRY_DIR" && pwd -P)" "${_TLR_SELF_CLI##*/}"')"
-assert_eq "$got" "10|$(cd "$AGENTS_DIR" && pwd -P)|$(cd "$AGENTS_DIR/hooks/lib" && pwd -P)|test-language-registry"
+got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; printf "%s|%s|%s|%s" "$TLR_HEADER_MAX_LINES" "$(cd "$TLR_REPO_ROOT" && pwd -P)" "$(cd "$TLR_REGISTRY_DIR" && pwd -P)" "${_TLR_SELF_CLI##*/}"')"
+assert_eq "$got" "10|$(cd "$SCRIPT_CHECKOUT_ROOT" && pwd -P)|$(cd "$SCRIPT_CHECKOUT_ROOT/hooks/lib" && pwd -P)|test-language-registry"
 case_end
 
 case_begin "loader-cache-key" "bin/lib/test-language-registry.sh"
 # Another table changes the key and the answers; the same key is not re-read (works without node).
 JT_TABLE="$(np "$FIXTURES/java-terraform.json")"
-got="$(tlr_bash "$AGENTS_DIR" '
+got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" '
 tlr_load || exit 96; k1="$TLR_LOADED_KEY"
 tlr_match FooTest.java; r1=$?
 tlr_load "$1" || exit 95; k2="$TLR_LOADED_KEY"
@@ -30,13 +30,13 @@ node_dir="$(dirname "$(command -v node)")"
 if [ "$node_dir" = "$(dirname "$(command -v bash)")" ]; then
   skip "cached load without node (node shares its directory with bash)"
 else
-  got="$(tlr_bash "$AGENTS_DIR" 'tlr_load || exit 96; PATH="$1"; tlr_load; s=$?; tlr_load "$2"; printf "same=%s other=%s" "$s" "$?"' "$(path_without node)" "$JT_TABLE")"
+  got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; PATH="$1"; tlr_load; s=$?; tlr_load "$2"; printf "same=%s other=%s" "$s" "$?"' "$(path_without node)" "$JT_TABLE")"
   assert_eq "$got" "same=0 other=1"
 fi
 case_end
 
 case_begin "loader-field-and-stem" "bin/lib/test-language-registry.sh"
-got="$(tlr_bash "$AGENTS_DIR" 'tlr_load || exit 96
+got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96
 for q in "bash launch.unit" "pester launch.requires" "pytest launch.requires" "pytest nameStrip.suffix" "bash caseMarkerReader.file" "js tableDrivenDetector.function" "pester caseMarkerReader.file"; do
   printf "[%s]" "$(tlr_field $q)"
 done
@@ -60,7 +60,7 @@ process.stdout.write(p.map((x) => x + " ").join("") + "|" + p.map((x) => x.repla
 }
 : >"$LD_DIR/conds"
 for cond in supported recognized-only case-marker table-driven helper-library; do
-  got="$(tlr_bash "$AGENTS_DIR" 'tlr_load || exit 96; tlr_patterns "$1" | tr "\n" " "; printf "|"; tlr_globs "$1" | tr "\n" " "' "$cond")"
+  got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; tlr_patterns "$1" | tr "\n" " "; printf "|"; tlr_globs "$1" | tr "\n" " "' "$cond")"
   assert_eq "$cond: $got" "$cond: $(cond_oracle "$cond")"
   printf '%s\n' "$cond=$got" >>"$LD_DIR/conds"
 done
@@ -81,11 +81,11 @@ case_begin "loader-list-dir-order" "bin/lib/test-language-registry.sh"
 mkdir -p "$LD_DIR/sup/dir.sh" "$LD_DIR/rec"
 for f in z.sh a.sh b.Tests.ps1 a.Tests.ps1 test_b.py test_a.py x.js README.md .sh; do : >"$LD_DIR/sup/$f"; done
 for f in x.js a.test.js foo_test.rb test_q.txt README.md; do : >"$LD_DIR/rec/$f"; done
-list_names() { tlr_bash "$AGENTS_DIR" 'tlr_load || exit 96; tlr_list_dir "$1" "$2"' "$1" "$2" | sed 's#.*/##' | tr '\n' ' '; }
+list_names() { tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; tlr_list_dir "$1" "$2"' "$1" "$2" | sed 's#.*/##' | tr '\n' ' '; }
 assert_eq "supported: $(list_names "$LD_DIR/sup" supported)" "supported: a.sh z.sh a.Tests.ps1 b.Tests.ps1 test_a.py test_b.py "
 assert_eq "recognized-only: $(list_names "$LD_DIR/rec" recognized-only)" "recognized-only: a.test.js x.js foo_test.rb test_q.txt "
 mkdir -p "$LD_DIR/empty"
-got="$(tlr_bash "$AGENTS_DIR" 'tlr_load || exit 96; tlr_list_dir "$1" supported; echo "rc=$?"' "$LD_DIR/empty")"
+got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; tlr_list_dir "$1" supported; echo "rc=$?"' "$LD_DIR/empty")"
 assert_eq "empty dir: [$got]" "empty dir: [rc=0]"
 case_end
 
@@ -96,7 +96,7 @@ nparts=0
 while IFS=$'\t' read -r pid pfield pfile pfn; do
   [ -n "$pid" ] || continue
   nparts=$((nparts + 1))
-  if [ -f "$AGENTS_DIR/$pfile" ] && grep -Eq "^(function[[:space:]]+)?${pfn}[[:space:]]*\(\)" "$AGENTS_DIR/$pfile"; then
+  if [ -f "$SCRIPT_CHECKOUT_ROOT/$pfile" ] && grep -Eq "^(function[[:space:]]+)?${pfn}[[:space:]]*\(\)" "$SCRIPT_CHECKOUT_ROOT/$pfile"; then
     pass "$pid.$pfield -> $pfile defines $pfn"
   else
     fail "$pid.$pfield -> $pfile defines $pfn" "file missing or function not defined"
@@ -112,6 +112,6 @@ case_end
 case_begin "call-part-real-detector" "bin/lib/test-language-registry.sh"
 printf '%s\n' "while IFS='|' read -r a b; do :; done" >"$LD_DIR/td.sh"
 printf '%s\n' 'echo plain' >"$LD_DIR/plain.sh"
-got="$(tlr_bash "$AGENTS_DIR" 'tlr_load || exit 96; tlr_call_part bash tableDrivenDetector "$1"; a=$?; tlr_call_part bash tableDrivenDetector "$2"; printf "%s %s" "$a" "$?"' "$LD_DIR/td.sh" "$LD_DIR/plain.sh")"
+got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; tlr_call_part bash tableDrivenDetector "$1"; a=$?; tlr_call_part bash tableDrivenDetector "$2"; printf "%s %s" "$a" "$?"' "$LD_DIR/td.sh" "$LD_DIR/plain.sh")"
 assert_eq "table-driven / plain: $got" "table-driven / plain: 0 1"
 case_end

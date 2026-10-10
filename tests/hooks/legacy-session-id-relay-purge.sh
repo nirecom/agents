@@ -11,12 +11,12 @@
 
 set -euo pipefail
 
-# Pin to this checkout: an inherited AGENTS_DIR would point the harness at another tree.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Pin to this checkout: an inherited SCRIPT_CHECKOUT_ROOT would point the harness at another tree.
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$(dirname "$0")/../lib/harness.sh"
 
-MODULE_NODE="$(np "$AGENTS_DIR/hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js")"
-SESSION_START_NODE="$(np "$AGENTS_DIR/hooks/session-start.js")"
+MODULE_NODE="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js")"
+SESSION_START_NODE="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js")"
 
 TMP_BASE="$(make_tmp)"
 trap 'chmod -R u+w "$TMP_BASE" 2>/dev/null || true; rm -rf "$TMP_BASE"' EXIT

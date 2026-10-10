@@ -43,7 +43,6 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
 
 if [ ! -f "$CLI" ]; then
@@ -225,7 +224,7 @@ else
     : > "$SCAN_ANCHOR/.private-info-blocklist"
     : > "$SCAN_ANCHOR/.private-info-allowlist"
     SCAN_RC=0
-    SCAN_OUT="$(AGENTS_CONFIG_DIR="$SCAN_ANCHOR" bash "$SCANNER" "$LEAKED" 2>&1)" || SCAN_RC=$?
+    SCAN_OUT="$(AGENTS_MAIN_ROOT="$SCAN_ANCHOR" bash "$SCANNER" "$LEAKED" 2>&1)" || SCAN_RC=$?
 
     assert_eq "4: the scanner rejects the ledger the CLI just wrote" \
         "flagged" "$([ "$SCAN_RC" -eq 1 ] && printf flagged || printf "rc=$SCAN_RC")"

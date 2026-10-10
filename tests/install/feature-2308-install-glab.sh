@@ -11,11 +11,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/home-userprofile-pin.sh"
 
-INSTALL_SH="$AGENTS_DIR/install.sh"
-GLAB_SH="$AGENTS_DIR/install/linux/glab.sh"
+INSTALL_SH="$SCRIPT_CHECKOUT_ROOT/install.sh"
+GLAB_SH="$SCRIPT_CHECKOUT_ROOT/install/linux/glab.sh"
 
 # ---------------------------------------------------------------------------
 # Detect Windows bash: install.sh / glab.sh (Sections 1–4) skip there;
@@ -48,7 +49,7 @@ GLAB_SH_OK=0
 # ---------------------------------------------------------------------------
 # Sections 1–4: Linux/macOS tests (install.sh / install/linux/glab.sh)
 # ---------------------------------------------------------------------------
-_SUBDIR="$AGENTS_DIR/tests/install/feature-2308-install-glab"
+_SUBDIR="$SCRIPT_CHECKOUT_ROOT/tests/install/feature-2308-install-glab"
 source "$_SUBDIR/linux-lib.sh"
 
 case_begin "glab-sh-flag-gate-install-and-auth" "install/linux/glab.sh"

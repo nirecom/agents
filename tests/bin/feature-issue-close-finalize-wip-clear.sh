@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # Tests: bin/github-issues/wip-state.sh, skills/issue-close-finalize/SKILL.md, skills/issue-close-finalize/SKILL.md.
 # Tags: issue-close, finalize, workflow, github, issues, scope:issue-specific
-# Static-text contract tests for issue #362 Step K in
-# skills/issue-close-finalize/SKILL.md.
+# Static-text contract tests for issue #362 Step K in skills/issue-close-finalize/SKILL.md.
 #
-# Step K calls `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" clear <N>`
+# Step K calls `bash "$AGENTS_MAIN_ROOT/bin/github-issues/wip-state.sh" clear <N>`
 # to set Projects v2 Status=Done, clear the session-fingerprint text field, and
 # delete the local $PLANS_DIR/wip-lock-<N>.md registry artifact. Step K is the
 # last step in the finalize chain (runs after Step J).
-#
 # RED: fails until issue-close-finalize/SKILL.md gains the Step K section.
 
 # Timeout guard
@@ -21,8 +19,8 @@ if [ -z "${_TIMEOUT_WRAPPED:-}" ]; then
     fi
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL_MD="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -57,9 +55,9 @@ assert_contains "$SKILL_MD" "ICF-J.*[Ww][Ii][Pp]|ICF-J.*wip-state" \
 assert_contains "$SKILL_MD" "wip-state\.sh.*clear" \
     "K3: Step K invokes wip-state.sh clear <N>"
 
-# K4: Step K explicitly invokes via $AGENTS_CONFIG_DIR path (matches workflow rules).
-assert_contains "$SKILL_MD" "AGENTS_CONFIG_DIR.*wip-state\.sh|wip-state\.sh.*AGENTS_CONFIG_DIR" \
-    "K4: Step K invokes wip-state.sh via \$AGENTS_CONFIG_DIR"
+# K4: Step K explicitly invokes via $AGENTS_MAIN_ROOT path (matches workflow rules).
+assert_contains "$SKILL_MD" "AGENTS_MAIN_ROOT.*wip-state\.sh|wip-state\.sh.*AGENTS_MAIN_ROOT" \
+    "K4: Step K invokes wip-state.sh via \$AGENTS_MAIN_ROOT"
 
 # K5: ICF-J appears AFTER ICF-I (ordering — both as inline 'ICF-N:' entries).
 if [ ! -f "$SKILL_MD" ]; then

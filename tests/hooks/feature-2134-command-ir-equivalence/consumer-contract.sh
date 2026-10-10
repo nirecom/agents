@@ -17,7 +17,7 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$DIR/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
@@ -26,8 +26,8 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 unset CLAUDE_CODE_SESSION_ID
 
 npath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-AGENTS_N="$(npath "$AGENTS_DIR")"
-RUNNER="$AGENTS_DIR/bin/run-with-timeout.sh"
+AGENTS_N="$(npath "$SCRIPT_CHECKOUT_ROOT")"
+RUNNER="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; ROWS=0
 assert_eq() {

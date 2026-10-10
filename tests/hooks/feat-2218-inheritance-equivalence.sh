@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -20,13 +20,20 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 # isolation (#2512): pin state and plans dirs file-wide; the per-call pins below still override them.
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+
+# The CONFIRM_DETAIL waiver is read from the settings root's file only, so the fixture owns one.
+CFG_FIXTURE="$_ISOLATION_TMP_ROOT/cfg"
+mkdir -p "$CFG_FIXTURE"
+printf 'CONFIRM_DETAIL=off\n' > "$CFG_FIXTURE/.env"
+CFG_FIXTURE_NODE="$(node_path "$CFG_FIXTURE")"
+export AGENTS_MAIN_ROOT="$CFG_FIXTURE_NODE"
 
 # Pre-change event stream for the fixture donor: 13 session-inherit events,
 # sha256 over the normalized projection joined by newline.
@@ -38,7 +45,7 @@ GOLDEN_COUNT="13"
 require_granularity() {
     local out
     out=$(env -u CLAUDE_CODE_SESSION_ID "$RWT" 30 node -e "
-const apply = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/apply');
+const apply = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/apply');
 const missing = [];
 if (typeof apply.applyInheritance !== 'function' || apply.applyInheritance.length < 4) missing.push('applyInheritance(sessionId,createdAt,donor,opts)');
 if (typeof apply.describeGranularInheritance !== 'function') missing.push('describeGranularInheritance');
@@ -59,8 +66,8 @@ project_stream() {
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
 const crypto = require('crypto');
-const { readState, writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { applyInheritance } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance');
+const { readState, writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
 const donorSid = 'donor-2218-eq';
 writeState(donorSid, createInitialState(donorSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
 markStep(donorSid, 'workflow_init', 'complete');
@@ -140,8 +147,8 @@ run_E3() {
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
-const { writeState, createInitialState, markStep, readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { adoptState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance/adopt');
+const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { adoptState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/adopt');
 const problems = [];
 writeState('donor-e3', createInitialState('donor-e3', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
 markStep('donor-e3', 'workflow_init', 'complete');
@@ -175,8 +182,8 @@ run_E4() {
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
         "$RWT" 60 node -e "
-const { writeState, createInitialState, markStep, readState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { applyInheritance } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance');
+const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
 const problems = [];
 writeState('donor-e4', createInitialState('donor-e4', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
 markStep('donor-e4', 'workflow_init', 'complete');

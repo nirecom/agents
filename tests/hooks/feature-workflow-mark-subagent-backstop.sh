@@ -9,8 +9,8 @@
 # Task subagent; these L2 tests inject agent_id directly.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 ERRORS=0
 PASS_COUNT=0
 
@@ -57,7 +57,7 @@ read_status() {
     local sid="$1" step="$2"
     # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
     # on-disk event stream, not a persisted top-level key.
-    (cd "$AGENTS_DIR" && node -e "
+    (cd "$SCRIPT_CHECKOUT_ROOT" && node -e "
         try {
             const s=require('./hooks/workflow-state').readState(process.argv[1]);
             process.stdout.write(((s&&s.steps&&s.steps[process.argv[2]])||{}).status||'MISSING');

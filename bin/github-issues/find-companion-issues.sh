@@ -1,29 +1,22 @@
 #!/usr/bin/env bash
 # find-companion-issues.sh --primary <N> [--exclude <N>[,<N>...]] [--max-candidates <int>]
-#
-# Discover open GitHub issues related to <primary> via three explicit signals:
-# (A) cross-reference (#M in primary body+comments), (B) identifier overlap
-# (token shared in both titles AND in $AGENTS_CONFIG_DIR/{skills,hooks,bin,agents,rules}
-# code-identifier namespace), and (C) sub-issue siblings (only when Pass B fires).
-#
-# stdout (TSV, one candidate per line; no header):
-#   <issue-number>\t<title>\t<reason>\t<state>
-# reason: comma-separated tag list: xref | ident:<tok> | sibling-of:#<P>
-# Sorted by tag-count desc, then issue-number asc. Empty stdout = no candidates.
-#
-# stderr: human-readable diagnostics only.
-#
-# Exit codes:
-#   0 — search completed (zero or more candidates emitted)
-#   1 — gh failure / non-GitHub remote / unreachable primary issue
-#   2 — bad arguments
+#                          [--target-checkout-root <dir>]
+# Discover open GitHub issues related to <primary>: (A) cross-reference (#M in primary
+# body+comments), (B) identifier overlap (token in both titles AND in the target checkout's
+# {skills,hooks,bin,agents,rules} names; omitted, the agents main root), (C) sub-issue
+# siblings (only when Pass B fires).
+# stdout (TSV, no header): <issue-number>\t<title>\t<reason>\t<state>, sorted by tag count
+# desc then issue number asc; reason = xref | ident:<tok> | sibling-of:#<P>, comma-joined.
+# Exit: 0 search completed; 1 gh failure / non-GitHub remote / unreachable primary;
+#       2 bad arguments.
 set -euo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PRIMARY=""
 EXCLUDE_CSV=""
 MAX_CANDIDATES=5
+TARGET_CHECKOUT_ROOT=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -39,9 +32,14 @@ while [[ $# -gt 0 ]]; do
             MAX_CANDIDATES="${2:-}"
             shift 2
             ;;
+        --target-checkout-root)
+            [[ -n "${2:-}" ]] || { echo "[find-companion-issues] --target-checkout-root needs a directory" >&2; exit 2; }
+            TARGET_CHECKOUT_ROOT="$2"
+            shift 2
+            ;;
         *)
             echo "[find-companion-issues] unknown argument: $1" >&2
-            echo "Usage: find-companion-issues.sh --primary <N> [--exclude <N>[,<N>...]] [--max-candidates <int>]" >&2
+            echo "Usage: find-companion-issues.sh --primary <N> [--exclude <N>[,<N>...]] [--max-candidates <int>] [--target-checkout-root <dir>]" >&2
             exit 2
             ;;
     esac
@@ -61,7 +59,7 @@ fi
 if command -v is-github-dotcom-remote >/dev/null 2>&1; then
     _NGH_CMD=is-github-dotcom-remote
 else
-    _NGH_CMD="${AGENTS_CONFIG_DIR}/bin/is-github-dotcom-remote"
+    _NGH_CMD="${SCRIPT_CHECKOUT_ROOT}/bin/is-github-dotcom-remote"
 fi
 if ! "${_NGH_CMD}" >/dev/null 2>&1; then
     echo "[find-companion-issues] non-GitHub remote — skipping" >&2
@@ -92,7 +90,7 @@ if [[ -n "$EXCLUDE_CSV" ]]; then
 fi
 
 companion_pass_a "$PRIMARY"
-companion_pass_b_identifiers
+companion_pass_b_identifiers "$TARGET_CHECKOUT_ROOT"
 companion_pass_b_candidates "$PRIMARY_TITLE"
 companion_pass_c "$PRIMARY"
 
@@ -130,7 +128,7 @@ for n in "${CANDIDATES[@]}"; do
     # 3-axis filter axis 3: WIP filter — skip if owned by another session
     _wip_check_result=""
     _wip_rc=0
-    _wip_check_result=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" check "$n" 2>/dev/null) || _wip_rc=$?
+    _wip_check_result=$(bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh" check "$n" 2>/dev/null) || _wip_rc=$?
     if [[ $_wip_rc -eq 0 ]] && [[ "$_wip_check_result" = "other" ]]; then continue; fi
 
     reasons=""

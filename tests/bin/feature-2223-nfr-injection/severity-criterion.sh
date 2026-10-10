@@ -36,19 +36,19 @@ post_end_region() {
 # bin/project-nfr-block wrapper is specified to emit (Step 2).
 nfr_block_direct() {
     local cfg="$1" root="$2"
-    AGENTS_CONFIG_DIR="$cfg" run_with_timeout 30 bash -c '
+    AGENTS_MAIN_ROOT="$cfg" run_with_timeout 30 bash -c '
       source "$1/bin/lib/codex-core.sh" >/dev/null 2>&1 || exit 3
       declare -F codex_core_project_nfr_block >/dev/null || exit 4
       codex_core_project_nfr_block "$2"
-    ' _ "$AGENTS_DIR" "$root" 2>/dev/null
+    ' _ "$SCRIPT_CHECKOUT_ROOT" "$root" 2>/dev/null
 }
 
 # nfr_block_cli <cfg-dir> <project-root> — the CC/planner path (the new thin CLI
 # calling the same bash function). Absent on a feature branch → empty (RED).
 nfr_block_cli() {
     local cfg="$1" root="$2"
-    AGENTS_CONFIG_DIR="$cfg" run_with_timeout 30 \
-        bash "$AGENTS_DIR/bin/project-nfr-block" "$root" 2>/dev/null
+    AGENTS_MAIN_ROOT="$cfg" run_with_timeout 30 \
+        bash "$SCRIPT_CHECKOUT_ROOT/bin/project-nfr-block" "$root" 2>/dev/null
 }
 
 # --- SC-1: instruction present in the POST-END region when an NFR is declared --

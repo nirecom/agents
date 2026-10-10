@@ -9,6 +9,7 @@
 # TL3 gap (what this test does NOT catch): log growth over weeks of real use; rotation
 # itself is covered by tests/hooks/feature-2460-jsonl-rotating-log.sh.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 mock_start
 
@@ -56,7 +57,7 @@ mkpayload "$FX/io/post.json" post "$SID" toolu_g_model --model haiku
 run_hook pre "$FX/io/pre.json"; run_hook post "$FX/io/post.json"
 check "executor is complexity-judge; tool_input.model wins" "complexity-judge|haiku" \
   "$(rq toolu_g_model 'r && [r.llm.executor, r.llm.executor_model].join("|")')"
-FM_MODEL="$(sed -n 's/^model:[[:space:]]*//p' "$AGENTS_DIR/agents/complexity-judge.md" | head -n 1 | tr -d '\r')"
+FM_MODEL="$(sed -n 's/^model:[[:space:]]*//p' "$SCRIPT_CHECKOUT_ROOT/agents/complexity-judge.md" | head -n 1 | tr -d '\r')"
 pair "$SID" toolu_g_fmmodel
 check "without tool_input.model, the agent frontmatter model is used" "$FM_MODEL" \
   "$(rq toolu_g_fmmodel 'r && r.llm.executor_model')"

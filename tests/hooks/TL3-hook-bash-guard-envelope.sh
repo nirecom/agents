@@ -13,15 +13,15 @@ set -uo pipefail
 # `ask` is observed as the -p refusal it turns into), and hook ordering on hosts that run
 # PreToolUse hooks differently from this CLI build. The day-to-day runners are the TL2
 # suites tests/hooks/feature-2134-bash-guard.sh and feature-2265-allow-command-list.sh.
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # --- skip gates (rules/test/claude-e2e.md acceptance criteria) ----------------
-if [ ! -x "$AGENTS_DIR/bin/get-config-var" ]; then
+if [ ! -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]; then
     echo "SKIP: bin/get-config-var not found or not executable" >&2; exit 77
 fi
-if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
     echo "SKIP: requires RUN_TL3=on in .env" >&2; exit 77
 fi
 if ! command -v claude >/dev/null 2>&1; then
@@ -40,10 +40,10 @@ run_with_timeout() {
 }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-STUBS="$AGENTS_DIR/tests/hooks/TL3-hook-bash-guard-envelope"
-GUARD="$AGENTS_DIR/hooks/bash-guard.js"
-PROBE="$AGENTS_DIR/tests/lib/tl3-turn-transcript.js"
-AGENTS_M="$(node_path "$AGENTS_DIR")"
+STUBS="$SCRIPT_CHECKOUT_ROOT/tests/hooks/TL3-hook-bash-guard-envelope"
+GUARD="$SCRIPT_CHECKOUT_ROOT/hooks/bash-guard.js"
+PROBE="$SCRIPT_CHECKOUT_ROOT/tests/lib/tl3-turn-transcript.js"
+AGENTS_M="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 BASE="$(mktemp -d)"
 trap 'rm -rf "$BASE"' EXIT
@@ -80,7 +80,6 @@ run_turn() {
       unset CLAUDE_CODE_SESSION_ID; \
       PATH="$MOCKBIN:$PATH" \
       WORKFLOW_STATE_DIR="$WFDIR" WORKFLOW_PLANS_DIR="$PLANSDIR" \
-      AGENTS_CONFIG_DIR="$AGENTS_M" \
       run_with_timeout 180 claude -p "$2" \
         --session-id "$1" \
         --setting-sources project \
@@ -192,7 +191,7 @@ C_CMD="bash $AGENTS_M/bin/workflow-plans-dir $MARK"
 C1="cccccccc-2264-4000-8000-0000000000c1"
 C2="cccccccc-2264-4000-8000-0000000000c2"
 C3="cccccccc-2264-4000-8000-0000000000c3"
-if [ ! -f "$AGENTS_DIR/hooks/lib/allow-command-list.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/allow-command-list.js" ]; then
     fail "C-precondition" "RED-EXPECTED -- hooks/lib/allow-command-list.js not found; the allow path is not implemented yet"
 fi
 write_settings "$GUARD"

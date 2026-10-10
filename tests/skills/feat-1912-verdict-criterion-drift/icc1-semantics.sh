@@ -23,8 +23,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-CASCADE="$AGENTS_DIR/skills/_shared/issue-verdict-cascade.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+CASCADE="$SCRIPT_CHECKOUT_ROOT/skills/_shared/issue-verdict-cascade.md"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

@@ -35,7 +35,7 @@ Never flush the same fact twice: the writer skips a byte-identical repeat, so a 
 
 ## How to flush
 
-Run `node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append" --class <C|D|F> --step <workflow step or -> --key <stable-id> --summary <what a fresh session needs> --pointer <path or -> --origin flush`.
+Run `node "$AGENTS_MAIN_ROOT/bin/workflow/handoff-append" --class <C|D|F> --step <workflow step or -> --key <stable-id> --summary <what a fresh session needs> --pointer <path or -> --origin flush`.
 
 One entry per distinct fact; `--key` is the dedup identity, so reuse the same key when re-recording the same fact and pick a new key for a new one.
 

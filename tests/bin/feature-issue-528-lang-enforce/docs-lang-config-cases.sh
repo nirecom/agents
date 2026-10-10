@@ -8,7 +8,7 @@
 # Group 1' — lang-config.js loadDocsLangConfig() .env-only loader (post-#619)
 # ============================================================================
 # Replaces the old fenced-block parser tests. After #619, loadDocsLangConfig()
-# is zero-arg and reads ONLY from $AGENTS_CONFIG_DIR/.env via loadDefaultEnv().
+# is zero-arg and reads ONLY from $AGENTS_MAIN_ROOT/.env via loadDefaultEnv().
 
 echo "=== Group 1': lang-config.js loadDocsLangConfig() .env-only ==="
 

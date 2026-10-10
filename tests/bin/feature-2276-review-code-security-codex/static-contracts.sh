@@ -27,7 +27,7 @@ assert_eq "S: the loop sources the extracted format table" \
 assert_eq "S: the loop no longer hardcodes the format allowlist" \
     "0" "$(grep -c 'detail-plan|outline-plan|security-plan|test-review)' "$LOOP_BIN" 2>/dev/null || true)"
 assert_eq "S: the loop no longer hardcodes review-plan-codex as THE reviewer" \
-    "0" "$(grep -c 'REVIEWER="\$AGENTS_CONFIG_DIR/bin/review-plan-codex"' "$LOOP_BIN" 2>/dev/null || true)"
+    "0" "$(grep -c 'REVIEWER="\$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex"' "$LOOP_BIN" 2>/dev/null || true)"
 
 LOOP_LINES="$(wc -l < "$LOOP_BIN" 2>/dev/null | tr -d ' ')"
 LOOP_SHRANK=no

@@ -13,9 +13,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CHECK_SCRIPT="$AGENTS_DIR/bin/check-verification-gate.sh"
-FIXTURE_DIR="$AGENTS_DIR/tests/fixtures/check-verification-gate"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CHECK_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/check-verification-gate.sh"
+FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/check-verification-gate"
 SETTINGS_WITH_FOO="$FIXTURE_DIR/settings-with-foo.json"
 SETTINGS_EMPTY="$FIXTURE_DIR/settings-empty.json"
 
@@ -642,7 +642,7 @@ VBIN=""
 setup_v_bin() {
     VBIN="$TMP/fakebin"
     mkdir -p "$VBIN"
-    cp -r "$AGENTS_DIR/bin/." "$VBIN/"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/bin/." "$VBIN/"
     cat > "$VBIN/resolve-merge-base.sh" <<'VSTUB'
 #!/usr/bin/env bash
 [ -n "${MB_STUB_MARKER:-}" ] && : > "$MB_STUB_MARKER"
@@ -828,7 +828,7 @@ teardown_tmp
 # The rest of the merge-base state table lives in a sourced part: this file is already past the
 # 500-line hard split limit, and the W rows share every V helper above.
 # shellcheck source=./feature-833-check-verification-gate/merge-base-states.sh
-. "$AGENTS_DIR/tests/bin/feature-833-check-verification-gate/merge-base-states.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-833-check-verification-gate/merge-base-states.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

@@ -9,13 +9,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-MODULE="${_AGENTS_DIR_NODE}/hooks/lib/bash-write-targets.js"
+MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-targets.js"
 
 # isolation (#2512): pin both dirs, so the plans-dir resolved below is a throwaway one.
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
@@ -82,7 +82,7 @@ call_rm() {
     # extractRmTargets only ALLOWs a $VAR under getWorkflowPlansDir() (helpers.js
     # tryResolveEnvUnderPlansDir), so the fixtures are built under the resolved (pinned) plans-dir.
     PLANS_DIR="$(run_with_timeout 30 node -e "
-      try { process.stdout.write(require('${_AGENTS_DIR_NODE}/hooks/lib/workflow-plans-dir').getWorkflowPlansDir().replace(/\\\\/g,'/')); }
+      try { process.stdout.write(require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/workflow-plans-dir').getWorkflowPlansDir().replace(/\\\\/g,'/')); }
       catch (e) { process.stdout.write(''); }
     " 2>/dev/null)"
 

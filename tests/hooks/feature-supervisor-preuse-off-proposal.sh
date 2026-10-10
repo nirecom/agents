@@ -22,17 +22,17 @@ set -u
 #   - expired token → block.
 #   - look-alike (non-genuine) → exit 0 (real OFF never activates).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -82,7 +82,7 @@ run_shim() {
     local tmp_node="$1" sid="$2" cmd="$3" hook_input out rc
     hook_input=$("$RWT" 10 node -e "
 process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'$sid',tool_input:{command:process.argv[1]}}));" "$cmd")
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" AGENTS_MAIN_ROOT="$tmp_node" \
         "$RWT" 15 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$out"
@@ -96,7 +96,7 @@ run_shim_in_dir() {
     local run_cwd="$1" tmp_node="$2" sid="$3" cmd="$4" hook_input out rc
     hook_input=$("$RWT" 10 node -e "
 process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'$sid',tool_input:{command:process.argv[1]}}));" "$cmd")
-    out=$(cd "$run_cwd" && WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(cd "$run_cwd" && WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node" AGENTS_MAIN_ROOT="$tmp_node" \
         "$RWT" 15 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$out"

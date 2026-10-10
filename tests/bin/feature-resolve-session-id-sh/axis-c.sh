@@ -13,7 +13,6 @@ B23_ERR="$TMP/b23.err"
 STDOUT_OUT=$(bash -c "
     unset CLAUDE_CODE_SESSION_ID
     export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-    export AGENTS_CONFIG_DIR='$AGENTS_DIR'
     cd '$NONGIT_CWD'
     bash '$BRIDGE'
 " 2>"$B23_ERR")
@@ -46,7 +45,6 @@ B23B_ERR="$TMP/b23b.err"
 B23B_OUT=$(bash -c "
     unset CLAUDE_CODE_SESSION_ID
     export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-    export AGENTS_CONFIG_DIR='$AGENTS_DIR'
     bash '$B23B/bin/resolve-session-id'
 " 2>"$B23B_ERR")
 RC=$?
@@ -73,7 +71,6 @@ else
     OUT=$(bash -c "
         unset CLAUDE_CODE_SESSION_ID
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-        export AGENTS_CONFIG_DIR='$AGENTS_DIR'
         export NO_LOG=true
         cd '$NONGIT_CWD'
         source '$CODEX_CORE'
@@ -93,7 +90,6 @@ else
     OUT=$(bash -c "
         unset CLAUDE_CODE_SESSION_ID
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-        export AGENTS_CONFIG_DIR='$AGENTS_DIR'
         export NO_LOG=true
         cd '$NONGIT_CWD'
         source '$GEMINI_CORE'
@@ -115,7 +111,7 @@ teardown
 # spawning resolve-session-id but must not abort. The driver should proceed
 # without --session-id in the wip-state.sh call.
 # ===========================================================================
-DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
+DRIVER="$SCRIPT_CHECKOUT_ROOT/bin/workflow/workflow-init-driver"
 if [ ! -f "$DRIVER" ]; then
     fail "B-25: bin/workflow/workflow-init-driver not found"
 else
@@ -169,8 +165,8 @@ WIPEOF
     printf '#!/bin/bash\necho "SID unresolvable" >&2\nexit 2\n' > "$B25_CFG/bin/resolve-session-id"
     chmod +x "$B25_CFG/bin/resolve-session-id"
     # parse-issue-tokens
-    cp "$AGENTS_DIR/bin/parse-issue-tokens" "$B25_CFG/bin/parse-issue-tokens"
-    cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$B25_CFG/hooks/lib/parse-closes-issues.js"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/parse-issue-tokens" "$B25_CFG/bin/parse-issue-tokens"
+    cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-closes-issues.js" "$B25_CFG/hooks/lib/parse-closes-issues.js"
     # filter-init-candidates passthrough
     cat > "$B25_CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
 #!/bin/bash
@@ -181,6 +177,8 @@ exit 0
 FEOF
     chmod +x "$B25_CFG/bin/parse-issue-tokens" \
         "$B25_CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
+    # The driver finds its siblings from its own location: run a copy beside the stubs.
+    script_checkout_fixture_copy "$B25_CFG" bin hooks
 
     : > "$B25_CAPTURE"
     B25_NONGIT="$B25_TMP/nongit"
@@ -190,11 +188,10 @@ FEOF
     B25_OUT=$(bash -c "
         unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
         export WORKFLOW_PLANS_DIR='$B25_PLANS'
-        export AGENTS_CONFIG_DIR='$B25_CFG'
         export CLAUDE_TRANSCRIPT_BASE_DIR='$B25_TMP/transcripts'
         mkdir -p '$B25_TMP/transcripts'
         cd '$B25_NONGIT'
-        node '$DRIVER' '#99'
+        node '$B25_CFG/bin/workflow/workflow-init-driver' '#99'
     " 2>/dev/null)
     B25_RC=$?
     export PATH="$ORIG_PATH_B25"

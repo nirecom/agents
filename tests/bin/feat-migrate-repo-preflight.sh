@@ -2,25 +2,19 @@
 # Tests: bin/github-issues/migration/orchestrate.sh
 # Tags: migration, repo, github, issues, bin, scope:issue-specific
 # Tests for feat/migrate-repo — pre-flight existing-issues check in orchestrate.sh.
-#
-# Before any state mutation, orchestrate.sh detects whether the target repo
-# already has issues via `gh issue list --state all --limit 1`.
-#   - Dry-run + existing issues: print WARNING about early-number invariant; continue.
-#   - Live mode + existing issues, NO MIGRATE_ACK_EXISTING_ISSUES=1: print WARNING +
-#     ERROR with MIGRATE_ACK_EXISTING_ISSUES=1 re-run hint, exit 1 BEFORE Step 1.
-#     The user-facing acknowledgement gate lives in skills/migrate-repo/SKILL.md
-#     as an AskUserQuestion; on "proceed" the skill prepends MIGRATE_ACK_EXISTING_ISSUES=1
-#     to subsequent orchestrate.sh invocations (#679). orchestrate.sh itself does
-#     not read stdin and cannot be bypassed by `yes y |` piping (Incident #2 / #415).
-#   - Live mode + existing issues + MIGRATE_ACK_EXISTING_ISSUES=1: print WARNING +
-#     "acknowledged by caller" message; continue past pre-flight into Step 1.
+# Before any state mutation it detects existing issues (`gh issue list --state all --limit 1`):
+#   - Dry-run + existing issues: WARNING about the early-number invariant; continue.
+#   - Live + existing issues, NO MIGRATE_ACK_EXISTING_ISSUES=1: WARNING + ERROR with the
+#     re-run hint, exit 1 BEFORE Step 1. The ack gate is an AskUserQuestion in the
+#     migrate-repo skill (#679); no stdin read, so `yes y |` cannot bypass it (#415).
+#   - Live + existing issues + ack: WARNING + "acknowledged by caller"; continue into Step 1.
 #   - No existing issues: no WARNING; proceed.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ORCH_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/orchestrate.sh"
-FIXTURE_DIR="$AGENTS_DIR/tests/fixtures/migration"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
+FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration"
 
 PASS=0
 FAIL=0
@@ -76,14 +70,13 @@ EOF
 
     export MOCK_LOG MOCK_COUNTER
     export PATH="$MOCK_DIR:$PATH"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 }
 
 teardown_fixture() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset MOCK_LOG MOCK_COUNTER AGENTS_CONFIG_DIR MOCK_HAS_ISSUES
+    unset MOCK_LOG MOCK_COUNTER MOCK_HAS_ISSUES
 }
 
 # ---------------------------------------------------------------------------

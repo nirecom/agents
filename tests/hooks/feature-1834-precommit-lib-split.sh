@@ -10,9 +10,9 @@ set -u
 # Part C: _precommit_agents_repo_gates (session-id/migration gates C1) + frontmatter
 # security/codes (C2/C3). Part D: staged case-marker gate (#2388). This dispatcher owns shared harness+module sourcing and ALL
 # fixture helpers/globals; per-part cases live in feature-1834-precommit-lib-split/*.sh.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 
@@ -22,8 +22,8 @@ harness_isolate "$_ISOLATION_TMP_ROOT"
 #   called directly here); exercised by tests/hooks/cc-pre-commit-on-demand-rules.sh.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
-PRECOMMIT="$AGENTS_DIR/hooks/pre-commit"
-LIB_FM="$AGENTS_DIR/hooks/lib/precommit-tests-frontmatter.sh"
+PRECOMMIT="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit"
+LIB_FM="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-tests-frontmatter.sh"
 
 # Tier 1: implementation-missing guard, ahead of any fixture work.
 MISSING=0
@@ -37,7 +37,7 @@ fi
 
 # _cfg_dir is the ambient contract var the extracted function reads. Point it at the REAL
 # worktree so the function invokes the real bin/check-test-frontmatter.sh.
-_cfg_dir="$AGENTS_DIR"
+_cfg_dir="$SCRIPT_CHECKOUT_ROOT"
 # shellcheck source=hooks/lib/precommit-tests-frontmatter.sh
 . "$LIB_FM"
 
@@ -49,9 +49,9 @@ if ! declare -f _precommit_check_tests_frontmatter >/dev/null 2>&1; then
 fi
 
 # Part C also drives the second extracted module. _cfg_dir (above) is the ambient
-# fallback; each Part C case overrides it via AGENTS_CONFIG_DIR to point the gates
+# fallback; each Part C case overrides it inside run_agents_gates to point the gates
 # at a fixture repo. The module only defines a function, so sourcing is side-effect-free.
-LIB_AR="$AGENTS_DIR/hooks/lib/precommit-agents-repo-gates.sh"
+LIB_AR="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-agents-repo-gates.sh"
 [ -f "$LIB_AR" ] || { echo "FAIL: IMPLEMENTATION MISSING: $LIB_AR"; echo ""; echo "Results: 0 passed, 1 failed (target not yet implemented — #1834 file split)"; exit 1; }
 # shellcheck source=hooks/lib/precommit-agents-repo-gates.sh
 . "$LIB_AR"
@@ -114,12 +114,12 @@ run_fm_check() {
 write_valid_flat() {
     local repo="$1"
     mkdir -p "$repo/tests"
-    # shellcheck disable=SC2016  # $AGENTS_DIR must be written literally into the fixture.
+    # shellcheck disable=SC2016  # $SCRIPT_CHECKOUT_ROOT must be written literally into the fixture.
     printf '%s\n' '#!/usr/bin/env bash' \
         '# tests/flat_new.sh' \
         '# Tests: hooks/pre-commit' \
         '# Tags: scope:common' \
-        '. "$AGENTS_DIR/tests/lib/harness.sh"' > "$repo/tests/flat_new.sh"
+        '. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"' > "$repo/tests/flat_new.sh"
     git -C "$repo" add --chmod=+x -- tests/flat_new.sh >/dev/null 2>&1
 }
 write_broken_categorized() {
@@ -174,9 +174,9 @@ mk_agents_fixture() {
     mkdir -p "$dir/bin" "$dir/hooks"
     printf '#!/usr/bin/env bash\nexit 0\n' > "$dir/bin/check-on-demand-rules.sh"
     chmod +x "$dir/bin/check-on-demand-rules.sh"
-    printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-session-id-ssot.sh" "$@"\n' "$AGENTS_DIR" > "$dir/bin/check-session-id-ssot.sh"
+    printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-session-id-ssot.sh" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" > "$dir/bin/check-session-id-ssot.sh"
     chmod +x "$dir/bin/check-session-id-ssot.sh"
-    printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-migration-blocks.sh" "$@"\n' "$AGENTS_DIR" > "$dir/bin/check-migration-blocks.sh"
+    printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-migration-blocks.sh" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" > "$dir/bin/check-migration-blocks.sh"
     chmod +x "$dir/bin/check-migration-blocks.sh"
     printf 'init\n' > "$dir/README.md"
     git -C "$dir" add -A >/dev/null 2>&1
@@ -216,12 +216,12 @@ mk_agents_fixture_rc() {
 }
 
 # run_agents_gates <repo> <cfg-dir> — the function calls `exit 1` on a violation, so it
-# must run in a subshell (else it would kill the test). AGENTS_CONFIG_DIR sets the
-# _od_cfg_dir the gates resolve; CWD is the repo under commit.
+# must run in a subshell (else it would kill the test). _cfg_dir is the only input the
+# gates resolve their checkout from; CWD is the repo under commit.
 GOUT=""; GRC=0
 run_agents_gates() {
     local repo="$1" cfg="$2"
-    GOUT="$( ( cd "$repo" && export AGENTS_CONFIG_DIR="$cfg" && _precommit_agents_repo_gates ) 2>&1 )"
+    GOUT="$( ( cd "$repo" && _cfg_dir="$cfg" && _precommit_agents_repo_gates ) 2>&1 )"
     GRC=$?
 }
 

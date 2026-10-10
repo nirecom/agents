@@ -25,7 +25,7 @@
 # ===========================================================================
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CASE_DIR="$(dirname "$0")/feature-1305-adopt-session-state"
 ERRORS=0
 

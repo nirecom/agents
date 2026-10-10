@@ -13,13 +13,13 @@ set -uo pipefail
 # the hint text. TL2 — the wrapper-side exit 9 (all three formats) and the
 # security-plan risk-signal guard run the real wrappers at the end of this file.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/bin/feature-2434-review-loop/fixture.sh
-. "$AGENTS_DIR/tests/bin/feature-2434-review-loop/fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2434-review-loop/fixture.sh"
 
-CLI="$AGENTS_DIR/bin/accept-exit6-residual"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/accept-exit6-residual"
 [ -f "$CLI" ] || fail "implementation missing: bin/accept-exit6-residual"
 
 # accept <args...> — one CLI call. Sets A_RC / A_ERR.
@@ -88,9 +88,9 @@ case_end
 
 case_begin "no-touch-instruction-left" "skills/review-tests/SKILL.md"
 for S in review-plan-security review-code-security review-tests; do
-    W="$AGENTS_DIR/skills/$S/scripts/run-codex-review-loop.sh"
+    W="$SCRIPT_CHECKOUT_ROOT/skills/$S/scripts/run-codex-review-loop.sh"
     assert_eq "$S wrapper: no 'Create it: touch' hint" "0" "$(grep -c 'Create it: touch' "$W")"
-    K="$AGENTS_DIR/skills/$S/SKILL.md"
+    K="$SCRIPT_CHECKOUT_ROOT/skills/$S/SKILL.md"
     assert_eq "$S SKILL.md: no accept-marker file name spelled out" "0" "$(grep -c 'exit6-accepted' "$K")"
     assert_contains "$S SKILL.md: refers to the escalation table" "Escalation by format" "$(cat "$K")"
 done
@@ -126,7 +126,7 @@ assert_eq "round 1 continues" "1" "$W_RC"
 wrap review-plan-security "$SID" 1
 assert_eq "round 2 at cap stays HIGH_UNRESOLVED (exit 6), not ESCALATE" "6" "$W_RC"
 assert_eq "the wrapper source no longer reads a risk-signal file" "0" \
-    "$(grep -c 'risk-signal' "$AGENTS_DIR/skills/review-plan-security/scripts/run-codex-review-loop.sh")"
+    "$(grep -c 'risk-signal' "$SCRIPT_CHECKOUT_ROOT/skills/review-plan-security/scripts/run-codex-review-loop.sh")"
 case_end
 
 finish

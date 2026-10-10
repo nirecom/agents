@@ -14,11 +14,11 @@ set -uo pipefail
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 command -v git  >/dev/null 2>&1 || { echo "SKIP: git not available";  exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-EVIDENCE_CLI="$AGENTS_DIR/bin/workflow/run-tests-baseline-evidence"
+EVIDENCE_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/run-tests-baseline-evidence"
 
 TMPROOT="$(make_tmp)"
 trap 'rm -rf "$TMPROOT"' EXIT
@@ -27,7 +27,7 @@ harness_isolate "$TMPROOT/iso"
 export RUN_ALL_CACHE_DIR="$TMPROOT/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
-AGENTS_WIN="$(np "$AGENTS_DIR")"
+AGENTS_WIN="$(np "$SCRIPT_CHECKOUT_ROOT")"
 
 # ---------------------------------------------------------------------------
 # Helpers (JS in heredoc files so no multi-line inline script precedes a case)

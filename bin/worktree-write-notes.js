@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Generate WORKTREE_NOTES.md and register it in <mainRoot>/.git/info/exclude.
+// Generate WORKTREE_NOTES.md and register it in <targetMainRoot>/.git/info/exclude.
 //
 // Usage:
 //   COPIED_JSON='<step-9-stdout>' node bin/worktree-write-notes.js \
-//     <mainRoot> <worktreePath> <branch> [<baseDir>] [<sessionId>]
+//     <targetMainRoot> <worktreePath> <branch> [<baseDir>] [<sessionId>]
 //
 // COPIED_JSON: full stdout JSON from worktree-copy-include.js (we read .copied).
 //              Empty / unset → treated as []. Invalid JSON → exit 1.
@@ -24,10 +24,10 @@ function normalizePath(p) {
   return String(p).replace(/\\/g, "/");
 }
 
-const [, , mainRootRaw, worktreePathRaw, branch, baseDirRaw, sessionIdRaw] = process.argv;
+const [, , targetMainRootRaw, worktreePathRaw, branch, baseDirRaw, sessionIdRaw] = process.argv;
 
-if (!mainRootRaw || !worktreePathRaw || !branch) {
-  die("Usage: worktree-write-notes.js <mainRoot> <worktreePath> <branch> [<baseDir>] [<sessionId>]");
+if (!targetMainRootRaw || !worktreePathRaw || !branch) {
+  die("Usage: worktree-write-notes.js <targetMainRoot> <worktreePath> <branch> [<baseDir>] [<sessionId>]");
 }
 
 const copiedRaw = process.env.COPIED_JSON || "";
@@ -57,7 +57,7 @@ if (siblingRaw.trim().length > 0) {
   }
 }
 
-const mainRoot = normalizePath(mainRootRaw);
+const targetMainRoot = normalizePath(targetMainRootRaw);
 const worktreePath = normalizePath(worktreePathRaw);
 const baseDir =
   baseDirRaw && baseDirRaw.length > 0
@@ -68,7 +68,7 @@ const sessionId = sessionIdRaw && sessionIdRaw.length > 0 ? sessionIdRaw : null;
 let result;
 try {
   result = lib.run({
-    mainRoot,
+    targetMainRoot,
     worktreePath,
     branch,
     createdDate: new Date().toISOString().slice(0, 10),

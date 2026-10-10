@@ -8,8 +8,8 @@
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
-# The wrapper is installed in AGENTS_CONFIG_DIR/bin — mocked per-test
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+# The wrapper resolves its siblings from its own checkout — a mock checkout is built per test
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$AGENTS_WORKTREE/tests/lib/harness.sh"
 ERRORS=0
 
@@ -25,7 +25,7 @@ run_with_timeout() {
 }
 
 # ---------------------------------------------------------------------------
-# Per-test setup helper: creates a mock AGENTS_CONFIG_DIR with binaries
+# Per-test setup helper: creates a mock script checkout with binaries
 # ---------------------------------------------------------------------------
 setup_mock_env() {
   local test_tmp="$1"
@@ -46,7 +46,7 @@ exit 0
 EOF
   chmod +x "$agents_dir/bin/build-codex-context"
 
-  # Copy the wrapper under test into AGENTS_CONFIG_DIR/bin
+  # Copy the wrapper under test into the mock checkout's bin/
   # (wrapper won't exist yet — that's intentional pre-implementation)
   if [[ -f "$AGENTS_WORKTREE/bin/run-codex-review-loop" ]]; then
     cp "$AGENTS_WORKTREE/bin/run-codex-review-loop" "$agents_dir/bin/run-codex-review-loop"
@@ -54,7 +54,7 @@ EOF
   fi
 
   # Copy concern-ledger: since #2025 C5 the wrapper resolves the ledger CLI only
-  # under AGENTS_CONFIG_DIR or beside itself — the repo-under-review and
+  # in its own checkout or beside itself — the repo-under-review and
   # `git rev-parse --show-toplevel` are no longer candidates, so the mock must
   # carry its own copy.
   if [[ -f "$AGENTS_WORKTREE/bin/concern-ledger" ]]; then
@@ -123,7 +123,7 @@ EOF
 invoke_wrapper() {
   local agents_dir="$1"
   shift
-  AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
+  run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
 }
 
 # ---------------------------------------------------------------------------

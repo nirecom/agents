@@ -24,19 +24,19 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # rules/ may be a symlink owned by another repo, or absent from a linked
 # worktree. Resolve worktree-first, then the deployed agents config.
-RULES_DIR="$AGENTS_DIR/rules"
+RULES_DIR="$SCRIPT_CHECKOUT_ROOT/rules"
 if [ ! -f "$RULES_DIR/stop-guard-exemptions.md" ]; then
-    RULES_DIR="${AGENTS_CONFIG_DIR:-$HOME/.claude}/rules"
+    RULES_DIR="${AGENTS_MAIN_ROOT:-$HOME/.claude}/rules"
 fi
 
 # Fixture isolation (rules/test/fixture-isolation.md): never let a spawned node
@@ -55,19 +55,19 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
-POLICY_NODE="$_AGENTS_DIR_NODE/hooks/lib/stop-exemption-policy.js"
-GUARD_NODE="$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js"
-BASENAMES_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
-MARKERS_NODE="$_AGENTS_DIR_NODE/hooks/lib/session-markers.js"
-PATTERNS_NODE="$_AGENTS_DIR_NODE/hooks/lib/sentinel-patterns.js"
-STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
+POLICY_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/stop-exemption-policy.js"
+GUARD_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/stop-premature-stop-guard.js"
+BASENAMES_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/protected-basenames.js"
+MARKERS_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-markers.js"
+PATTERNS_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/sentinel-patterns.js"
+STATEIO_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io.js"
 
 # scan_targets — every source tree the removal must reach. tests/ and docs/ are
 # deliberately out of scope: docs/history.md records the primitive's life and
 # must keep saying so.
 scan_targets() {
-    printf '%s\n' "$AGENTS_DIR/hooks" "$AGENTS_DIR/bin" "$AGENTS_DIR/settings.json" \
-        "$RULES_DIR" "$AGENTS_DIR/skills"
+    printf '%s\n' "$SCRIPT_CHECKOUT_ROOT/hooks" "$SCRIPT_CHECKOUT_ROOT/bin" "$SCRIPT_CHECKOUT_ROOT/settings.json" \
+        "$RULES_DIR" "$SCRIPT_CHECKOUT_ROOT/skills"
 }
 
 # scan_for <extended-regex> — case-insensitive recursive scan over scan_targets,
@@ -286,13 +286,13 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');" 2
 # ---------------------------------------------------------------------------
 run_P1() {
     local problems=""
-    grep -q 'WORKFLOW_BACKGROUND_WORK_START' "$AGENTS_DIR/settings.json" &&
+    grep -q 'WORKFLOW_BACKGROUND_WORK_START' "$SCRIPT_CHECKOUT_ROOT/settings.json" &&
         problems="$problems [START permission entry survives]"
-    grep -q 'WORKFLOW_BACKGROUND_WORK_END' "$AGENTS_DIR/settings.json" &&
+    grep -q 'WORKFLOW_BACKGROUND_WORK_END' "$SCRIPT_CHECKOUT_ROOT/settings.json" &&
         problems="$problems [END permission entry survives]"
-    grep -q 'WORKFLOW_NEXT_STEP_PAUSE' "$AGENTS_DIR/settings.json" ||
+    grep -q 'WORKFLOW_NEXT_STEP_PAUSE' "$SCRIPT_CHECKOUT_ROOT/settings.json" ||
         problems="$problems [NEXT_STEP_PAUSE permission entry missing]"
-    grep -q 'WORKFLOW_NEXT_STEP_RESUME' "$AGENTS_DIR/settings.json" ||
+    grep -q 'WORKFLOW_NEXT_STEP_RESUME' "$SCRIPT_CHECKOUT_ROOT/settings.json" ||
         problems="$problems [NEXT_STEP_RESUME permission entry missing]"
     if [ -z "$problems" ]; then
         pass "P1: settings.json drops both BACKGROUND_WORK permissions and keeps the NEXT_STEP_PAUSE/RESUME pair"

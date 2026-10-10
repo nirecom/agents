@@ -86,8 +86,8 @@ make_w1_10f_tree() {
     local name="$1" body_mode="$2" root="$TMPDIR_LOCAL/$name"
     rm -rf "$root"
     mkdir -p "$root/hooks/lib" "$root/install"
-    if [ -d "$AGENTS_DIR/hooks/lib" ]; then
-        cp -R "$AGENTS_DIR/hooks/lib/." "$root/hooks/lib/"
+    if [ -d "$SCRIPT_CHECKOUT_ROOT/hooks/lib" ]; then
+        cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib/." "$root/hooks/lib/"
     fi
     case "$body_mode" in
         missing) : ;; # no install/codegraph-constants.txt at all (ENOENT)

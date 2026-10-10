@@ -58,13 +58,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-GUARD_JS="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -190,7 +190,7 @@ guard_decision() {
 
 # Precondition gate for cases that depend on the new universal-target-allow.js.
 # Fails loud (records FAIL) when the file doesn't exist yet (pre-implementation).
-UNIVERSAL_JS="$AGENTS_DIR/hooks/enforce-worktree/universal-target-allow.js"
+UNIVERSAL_JS="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/universal-target-allow.js"
 require_impl() {
     local label="$1"
     if [ ! -f "$UNIVERSAL_JS" ]; then
@@ -201,7 +201,7 @@ require_impl() {
 }
 
 # Export all shared helpers and globals so sourced sibling scripts can use them.
-export AGENTS_DIR _AGENTS_DIR_NODE GUARD_JS TMPDIR_BASE PLANS_DIR_FIXTURE PLANS_DIR_FIXTURE_N UNIVERSAL_JS
+export _SCRIPT_CHECKOUT_ROOT_NODE GUARD_JS TMPDIR_BASE PLANS_DIR_FIXTURE PLANS_DIR_FIXTURE_N UNIVERSAL_JS
 export -f pass fail skip run_with_timeout setup_main_checkout setup_linked_worktree
 export -f run_bash_guard run_edit_guard guard_decision require_impl
 

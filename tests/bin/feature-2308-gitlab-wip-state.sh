@@ -13,21 +13,21 @@ set -u
 #   - Real `glab` label create/update against live GitLab (auth, label
 #     idempotency, issue-not-found) is not exercised here.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-TARGET="$AGENTS_DIR/bin/github-issues/wip-state.sh"
+TARGET="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh"
 
 TMPROOT="$(mktemp -d)"
 trap 'rm -rf "$TMPROOT"' EXIT
 
-# Isolated fixture config dir (no .env → no host-config contamination). Derived
+# Isolated fake agents main root (no .env → no host-config contamination). Derived
 # under the temp root, never a hardcoded path. Plans dir dual-pinned per
 # rules/test/fixture-isolation.md; inherited session ids cleared so the helper
 # resolves the fixture, never this live session.
-FIX_CFG="$TMPROOT/config"
-mkdir -p "$FIX_CFG"
-export AGENTS_CONFIG_DIR="$FIX_CFG"
+FAKE_MAIN_ROOT="$TMPROOT/fake-main-root"
+mkdir -p "$FAKE_MAIN_ROOT"
+export AGENTS_MAIN_ROOT="$FAKE_MAIN_ROOT"
 export WORKFLOW_PLANS_DIR="$TMPROOT/plans"
 export WORKFLOW_STATE_DIR="$TMPROOT/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"

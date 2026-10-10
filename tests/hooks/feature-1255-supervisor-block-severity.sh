@@ -9,19 +9,19 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-EMIT="$AGENTS_DIR/hooks/lib/supervisor-emit.js"
-EMIT_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-emit.js"
-WRITER="$AGENTS_DIR/hooks/lib/supervisor-state-writer.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-COLLECT="$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js"
-COLLECT_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
+EMIT="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-emit.js"
+EMIT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-emit.js"
+WRITER="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+COLLECT="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard/collect-audit-triggers.js"
+COLLECT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/supervisor-guard/collect-audit-triggers.js"
 
 PASS=0
 FAIL=0
@@ -121,8 +121,8 @@ console.log('OK');
 # warning-severity findings. reportFallback emits severity:"warning" →
 # ensureAlertScheduled arms alert_armed_at.
 run_node "AC-D: reportFallback (warning) → alert_armed_at !== null (warning still arms)" "
-emit.reportFallback('skillA', 'worktree-notes', 'sid-acd');
-const st = w.readState('sid-acd');
+emit.reportFallback('skillA', 'worktree-notes', 'sid-script-checkout-root');
+const st = w.readState('sid-script-checkout-root');
 if (!st) { console.error('no state written'); process.exit(2); }
 if (st.alert.alert_armed_at === null) { console.error('expected non-null armed_at for warning, got null'); process.exit(2); }
 console.log('OK');

@@ -21,7 +21,7 @@ if [[ "$_uname_s" == MINGW* || "$_uname_s" == MSYS* || "$_uname_s" == CYGWIN* ]]
 fi
 unset _uname_s
 
-AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 printf "${C_CYAN}=== agents installer ===${C_RESET}\n"
 
@@ -45,21 +45,21 @@ fi
 unset WAIT_CC_RESULT
 echo ""
 printf -- "${C_BOLD}--- Waiting for Claude Code to exit ---${C_RESET}\n"
-if bash "${AGENTS_ROOT}/install/lib/wait-cc-exit.sh"; then WAIT_CC_RESULT=clear; else WAIT_CC_RESULT=timeout; fi
+if bash "${SCRIPT_CHECKOUT_ROOT}/install/lib/wait-cc-exit.sh"; then WAIT_CC_RESULT=clear; else WAIT_CC_RESULT=timeout; fi
 export WAIT_CC_RESULT
 
 echo ""
 printf -- "${C_BOLD}--- Creating symlinks ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/dotfileslink.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/dotfileslink.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Installing Claude Code ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/claude-code.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/claude-code.sh"
 export PATH="$HOME/.local/bin:$PATH"
 
 echo ""
 printf -- "${C_BOLD}--- Installing Codex ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/codex.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/codex.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Initializing Claude Code session sync ---${C_RESET}\n"
@@ -71,7 +71,7 @@ printf -- "${C_BOLD}--- Initializing Claude Code session sync ---${C_RESET}\n"
 if ! type claude >/dev/null 2>&1; then
     printf "${C_YELLOW}Claude Code not found. Session sync skipped.${C_RESET}\n"
 else
-    "$AGENTS_ROOT/install/linux/session-sync-init.sh"
+    "$SCRIPT_CHECKOUT_ROOT/install/linux/session-sync-init.sh"
 fi
 # --- END session-sync gate ---
 
@@ -80,7 +80,7 @@ printf -- "${C_BOLD}--- Initializing plan sync ---${C_RESET}\n"
 # An empty PLAN_SYNC_REMOTE_URL is a no-op inside the CLI; a failure never stops install.
 if ! type node >/dev/null 2>&1; then
     printf "${C_YELLOW}node not found. Plan sync skipped.${C_RESET}\n"
-elif ! node "$AGENTS_ROOT/bin/plan-sync-init"; then
+elif ! node "$SCRIPT_CHECKOUT_ROOT/bin/plan-sync-init"; then
     printf "${C_YELLOW}Plan sync init failed; re-run bin/plan-sync-init later.${C_RESET}\n"
 fi
 
@@ -91,7 +91,7 @@ case "${SHELL##*/}" in
     bash) _rc_file="${HOME}/.bashrc" ;;
     *)    _rc_file="${HOME}/.profile" ;;
 esac
-_snippet_path="$AGENTS_ROOT/profile-snippet.sh"
+_snippet_path="$SCRIPT_CHECKOUT_ROOT/profile-snippet.sh"
 _marker="# --- BEGIN agents profile sourcing ---"
 _need_restart=false
 if ! grep -qF "$_marker" "$_rc_file" 2>/dev/null; then
@@ -108,39 +108,39 @@ unset _rc_file _snippet_path _marker
 
 echo ""
 printf -- "${C_BOLD}--- Configuring VS Code settings (GitHub Copilot / Claude Code) ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/vscode-settings.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/vscode-settings.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Setting up global gitignore (WORKTREE_NOTES.md) ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/global-gitignore.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/global-gitignore.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Installing gh (GitHub CLI) ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/gh.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/gh.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Installing glab (GitLab CLI) [GITLAB=on to enable] ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/glab.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/glab.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Installing jq ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/jq.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/jq.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Installing shellcheck ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/shellcheck.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/shellcheck.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Installing pwsh (PowerShell) and Pester ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/pwsh.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/pwsh.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Configuring CodeGraph ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/codegraph.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/codegraph.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Configuring RTK ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/rtk.sh"
+"$SCRIPT_CHECKOUT_ROOT/install/linux/rtk.sh"
 
 echo ""
 printf "${C_GREEN}=== Done ===${C_RESET}\n"

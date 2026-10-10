@@ -5,7 +5,7 @@
 run_gate() {
   local cons="$1"
   PC_RC=0
-  PC_OUT="$(cd "$cons" && export _cfg_dir="$cons" AGENTS_CONFIG_DIR="$cons" && run_with_timeout 60 bash -c '. "$1"; _precommit_agents_repo_gates' _ "$AGENTS_DIR/hooks/lib/precommit-agents-repo-gates.sh" 2>&1)" || PC_RC=$?
+  PC_OUT="$(cd "$cons" && export _cfg_dir="$cons" &&run_with_timeout 60 bash -c '. "$1"; _precommit_agents_repo_gates' _ "$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-agents-repo-gates.sh" 2>&1)" || PC_RC=$?
 }
 
 c_i13_precommit_gate() {
@@ -48,7 +48,7 @@ c_i13_precommit_gate() {
 }
 
 c_i14_ci_step() {
-  local yml="$AGENTS_DIR/.github/workflows/migration-blocks-audit.yml" step
+  local yml="$SCRIPT_CHECKOUT_ROOT/.github/workflows/migration-blocks-audit.yml" step
   expect "I14 the CI yml runs the classifier" grep -qE '^[[:space:]]*run:[[:space:]]*bash bin/check-plans-dir-isolation\.sh[[:space:]]*$' "$yml"
   step="$(grep -E 'check-plans-dir-isolation' "$yml" || true)"
   expect "I14 the CI step does not swallow failures with ||" test "${step#*||}" = "$step"

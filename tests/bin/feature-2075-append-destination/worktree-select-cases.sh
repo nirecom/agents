@@ -76,7 +76,6 @@ else
             CLAUDE_TRANSCRIPT_BASE_DIR="$(w_node "$W_TRANSCRIPTS")" \
             WORKFLOW_STATE_DIR="$(w_node "$W_WF")" \
             WORKFLOW_PLANS_DIR="$(w_node "$W_PLANS")" \
-            AGENTS_CONFIG_DIR="$(w_node "$AGENTS_ROOT")" \
                 bash "$RUN_TIMEOUT" 60 bash "$SELECT_SH" "$@"
         ) >"$outf" 2>"$errf"
         WSEL_RC=$?

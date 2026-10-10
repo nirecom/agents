@@ -6,8 +6,7 @@
 #   session id; rc=0 success, rc=2 + stderr unresolvable, rc=3 + stderr resolver threw.
 # L3 gap: no live ~/.claude/projects JSONL, no CLAUDE_CODE_SESSION_ID set by the
 #   real CC binary, no native-Windows node path
-#   round-trip, no live gh for wip-set-resume.sh, no AGENTS_CONFIG_DIR-unset
-#   catch-fallback in issue-close-write-outcome.js. Closest-to-action mitigation:
+#   round-trip, no live gh for wip-set-resume.sh. Closest-to-action mitigation:
 #   skill-orchestration gate at WORKFLOW_USER_VERIFIED preflight.
 
 set -u
@@ -18,11 +17,12 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BRIDGE="$AGENTS_DIR/bin/resolve-session-id"
-CODEX_CORE="$AGENTS_DIR/bin/lib/codex-core.sh"
-GEMINI_CORE="$AGENTS_DIR/bin/lib/gemini-core.sh"
-WIP_SID_HELPER="$AGENTS_DIR/bin/github-issues/wip-state/session-id.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+BRIDGE="$SCRIPT_CHECKOUT_ROOT/bin/resolve-session-id"
+CODEX_CORE="$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-core.sh"
+GEMINI_CORE="$SCRIPT_CHECKOUT_ROOT/bin/lib/gemini-core.sh"
+WIP_SID_HELPER="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state/session-id.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -69,8 +69,8 @@ enc() {
 }
 
 # run_bridge <cwd> [KEY=VALUE ...] — run the bridge from <cwd> with the given
-# SID env vars exported (all other SID env unset; AGENTS_CONFIG_DIR + transcript
-# base injected). Sets BRIDGE_OUT / BRIDGE_RC. Values must not contain "'".
+# SID env vars exported (all other SID env unset; transcript base injected).
+# Sets BRIDGE_OUT / BRIDGE_RC. Values must not contain "'".
 run_bridge() {
     local cwd="$1"; shift
     local exports="" kv
@@ -80,7 +80,6 @@ run_bridge() {
     BRIDGE_OUT=$(bash -c "
         unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-        export AGENTS_CONFIG_DIR='$AGENTS_DIR'
         $exports
         cd '$cwd'
         bash '$BRIDGE'

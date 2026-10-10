@@ -9,14 +9,14 @@
 # via bin/check-verification-gate.sh category: migration
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+_BASIC_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "$_BASIC_SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/_mtime.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-IDX_MOD="$(np "$AGENTS_DIR/hooks/lib/temporary-migrations/control-dir-split/index.js")"
-MIGRATE_CLI="$AGENTS_DIR/bin/migrate-control-dir"
+IDX_MOD="$(np "$_BASIC_SCRIPT_CHECKOUT_ROOT/hooks/lib/temporary-migrations/control-dir-split/index.js")"
+MIGRATE_CLI="$_BASIC_SCRIPT_CHECKOUT_ROOT/bin/migrate-control-dir"
 
 # Helper: run migrateSession via node, returns "OK:<count>" or "ERR:<msg>"
 run_migrate_session() {

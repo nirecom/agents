@@ -18,7 +18,7 @@ test_Sec1_run_traversal_in_copiedFiles() {
     stderr="$(lib_eval "
         try {
             const r = lib.run({
-                mainRoot: process.argv[1],
+                targetMainRoot: process.argv[1],
                 worktreePath: process.argv[2],
                 branch: 'feature/sec1',
                 createdDate: '2024-01-15',
@@ -40,16 +40,16 @@ test_Sec1_run_traversal_in_copiedFiles() {
     fi
 }
 
-# ---- Sec2: run() traversal guard — mainRoot has .. ----
-test_Sec2_run_traversal_in_mainRoot() {
-    require_lib "test_Sec2_run_traversal_in_mainRoot" || return
+# ---- Sec2: run() traversal guard — targetMainRoot has .. ----
+test_Sec2_run_traversal_in_targetMainRoot() {
+    require_lib "test_Sec2_run_traversal_in_targetMainRoot" || return
     local wt; wt="$(setup_worktree_dest "sec2-wt")"
 
     local stderr
     stderr="$(lib_eval "
         try {
             const r = lib.run({
-                mainRoot: process.argv[1],
+                targetMainRoot: process.argv[1],
                 worktreePath: process.argv[2],
                 branch: 'feature/sec2',
                 createdDate: '2024-01-15',
@@ -65,7 +65,7 @@ test_Sec2_run_traversal_in_mainRoot() {
     " "$TMPDIR_BASE/../bad/main" "$wt" 2>&1 >/dev/null)"
 
     if echo "$stderr" | grep -q "^THROW:"; then
-        pass "Sec2: run() traversal guard — mainRoot with '..' throws"
+        pass "Sec2: run() traversal guard — targetMainRoot with '..' throws"
     else
         fail "Sec2: expected throw, got: $stderr"
     fi
@@ -82,7 +82,7 @@ test_Sec3_run_traversal_in_resolvedPath() {
     stderr="$(lib_eval "
         try {
             const r = lib.run({
-                mainRoot: process.argv[1],
+                targetMainRoot: process.argv[1],
                 worktreePath: process.argv[2],
                 branch: 'feature/sec3',
                 createdDate: '2024-01-15',
@@ -116,7 +116,7 @@ test_Sec4_run_newline_in_branch() {
     result="$(lib_eval "
         try {
             const r = lib.run({
-                mainRoot: process.argv[1],
+                targetMainRoot: process.argv[1],
                 worktreePath: process.argv[2],
                 branch: 'feature/test\nmalicious',
                 createdDate: '2024-01-15',
@@ -143,17 +143,17 @@ test_Sec4_run_newline_in_branch() {
     fi
 }
 
-# ---- Sec8: run() rejects newline in mainRoot param ----
-# NOTE: expected to FAIL until implementation validates mainRoot for newlines.
-test_Sec8_run_newline_in_mainRoot() {
-    require_lib "test_Sec8_run_newline_in_mainRoot" || return
+# ---- Sec8: run() rejects newline in targetMainRoot param ----
+# NOTE: expected to FAIL until implementation validates targetMainRoot for newlines.
+test_Sec8_run_newline_in_targetMainRoot() {
+    require_lib "test_Sec8_run_newline_in_targetMainRoot" || return
     local wt; wt="$(setup_worktree_dest "sec8-wt")"
 
     local result
     result="$(lib_eval "
         try {
             const r = lib.run({
-                mainRoot: '/tmp/main\nmalicious',
+                targetMainRoot: '/tmp/main\nmalicious',
                 worktreePath: process.argv[1],
                 branch: 'feature/sec8',
                 createdDate: '2024-01-15',
@@ -169,12 +169,12 @@ test_Sec8_run_newline_in_mainRoot() {
     " "$wt" 2>&1)"
 
     if echo "$result" | grep -q "^THROW:"; then
-        pass "Sec8: run() rejects newline in mainRoot param (throws)"
+        pass "Sec8: run() rejects newline in targetMainRoot param (throws)"
         return
     fi
     local notes_file="$TMPDIR_BASE/sec8-wt/WORKTREE_NOTES.md"
     if grep -q "^malicious$" "$notes_file" 2>/dev/null; then
-        fail "Sec8: newline injection in mainRoot leaked into notes as bare 'malicious' line"
+        fail "Sec8: newline injection in targetMainRoot leaked into notes as bare 'malicious' line"
     else
         fail "Sec8: run() did not throw (result: $result)"
     fi
@@ -192,7 +192,7 @@ test_Sec11_run_non_string_in_copiedFiles() {
     result="$(lib_eval "
         try {
             const r = lib.run({
-                mainRoot: process.argv[1],
+                targetMainRoot: process.argv[1],
                 worktreePath: process.argv[2],
                 branch: 'feature/sec11',
                 createdDate: '2024-01-15',
@@ -222,10 +222,10 @@ test_Sec11_run_non_string_in_copiedFiles() {
 # ============ Run all ============
 
 test_Sec1_run_traversal_in_copiedFiles
-test_Sec2_run_traversal_in_mainRoot
+test_Sec2_run_traversal_in_targetMainRoot
 test_Sec3_run_traversal_in_resolvedPath
 test_Sec4_run_newline_in_branch
-test_Sec8_run_newline_in_mainRoot
+test_Sec8_run_newline_in_targetMainRoot
 test_Sec11_run_non_string_in_copiedFiles
 
 echo ""

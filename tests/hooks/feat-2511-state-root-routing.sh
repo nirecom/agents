@@ -10,7 +10,7 @@
 # hook process racing a real /session-close move is what only a live session shows.
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$(dirname "$0")/../lib/harness.sh"
 T="$(make_tmp)"
 readonly T
@@ -21,9 +21,8 @@ trap 'rm -rf "$T"' EXIT
 # The retired variable name, assembled so this file never carries the literal.
 OLD_TOKEN="CLAUDE_""WORKFLOW_DIR"
 # Every helper runs from a neutral cwd, so the repo path must be absolute.
-AGENTS_DIR="$(cd "$AGENTS_DIR" && pwd)"
-A="$(np "$AGENTS_DIR")"
-PROBE="$(np "$AGENTS_DIR/tests/hooks/feat-2511-state-root-routing/probe.js")"
+A="$(np "$SCRIPT_CHECKOUT_ROOT")"
+PROBE="$(np "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2511-state-root-routing/probe.js")"
 NOTX="$(np "$T/no-transcripts")"
 mkdir -p "$T/cwd" "$T/no-transcripts" "$T/pins"
 FIXTURE_REPO="$T/fixture-repo"

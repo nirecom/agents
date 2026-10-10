@@ -9,12 +9,13 @@
 # TL3 gap: real v1 files from earlier releases (fixtures are synthesised); checked at
 # WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh hook-registration.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="migann"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"
-seed_v1() { (cd "$AGENTS_DIR" && "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node "$MKV1" "$2") > "$WF/$1.json"; }
+seed_v1() { (cd "$SCRIPT_CHECKOUT_ROOT" && "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$MKV1" "$2") > "$WF/$1.json"; }
 
 # The v1 fixture's keys include retired ones (token, invalidate_reason); they must
 # still survive migration as step_annotation events (unknown keys pass through).

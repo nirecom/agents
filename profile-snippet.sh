@@ -8,8 +8,7 @@ if [ -n "${ZSH_VERSION-}" ]; then
 else
     _agents_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
-export AGENTS_CONFIG_DIR="$_agents_root"
-export AGENTS_DIR="$_agents_root"
+export AGENTS_MAIN_ROOT="$_agents_root"
 
 # Startup progress wording, shared with bin/sweep-shell-snapshots.sh (issue #2160).
 # The inline fallback covers a checkout missing the lib; keep the two literals
@@ -137,7 +136,7 @@ fi
 # sourced function, its edits take effect in already-open shells immediately, with
 # no need to re-source the profile or open a new shell.
 codes() {
-    "$AGENTS_DIR/bin/codes-launch.sh" "$@"
+    "$AGENTS_MAIN_ROOT/bin/codes-launch.sh" "$@"
 }
 
 unset _agents_root _agent_broken _f AGENTS_SESSION_SYNC_FETCH_MARKER AGENTS_SYMLINK_REPAIR_MARKER

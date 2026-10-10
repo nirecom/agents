@@ -19,7 +19,7 @@ WS-1. Verify the task fits the worktree criteria in `rules/worktree.md` (fit tab
    and work on main directly instead.
 
 WS-2. Derive the task name and branch type — always automatic, never asked of the user:
-   Run `bash "$AGENTS_CONFIG_DIR/skills/worktree-start/scripts/derive-worktree-name.sh"`, adding `--headless <label>` when the caller cannot present `AskUserQuestion` (running as a subagent or forked execution context) or when no workflow session hosts this run.
+   Run `bash "$AGENTS_MAIN_ROOT/skills/worktree-start/scripts/derive-worktree-name.sh"`, adding `--headless <label>` when the caller cannot present `AskUserQuestion` (running as a subagent or forked execution context) or when no workflow session hosts this run.
    Read `TASK_NAME=`, `BRANCH_TYPE=`, and `REPO_NAME=` from its stdout — `REPO_NAME` is the validated `<REPO_NAME>` path component; never infer it yourself. Non-zero exit → surface its stderr and stop; never substitute a name of your own and never ask the user for one.
    **Reuse-safety check**: run `git worktree list --porcelain` and find the entry whose `worktree` line equals `<WORKTREE_BASE_DIR>/<TASK_NAME>/<REPO_NAME>` — normalize both sides before comparing: convert every backslash to a forward slash and every MSYS-style `/c/<rest>` path to its `C:/<rest>` form (or vice versa), then strip any trailing slash, then lowercase both sides when the filesystem is case-insensitive (Windows, and default macOS). No entry → continue to WS-3. An entry exists → an existing path is not proof it is safe to attach to, so reuse only when all three hold:
    - Its `branch` line equals `refs/heads/<BRANCH_TYPE>/<TASK_NAME>`; a different branch is a naming collision, not a reusable worktree — surface both paths and branches to the user and stop.
@@ -69,7 +69,7 @@ WS-7. Dispatch the `worktree-copy` worker per `skills/_shared/worker-dispatch.md
    - `status: failed` → surface error and stop.
 
 WS-7a. Build the CodeGraph index for the new worktree — one Bash call:
-   `node "$AGENTS_CONFIG_DIR/bin/codegraph-lifecycle.js" init --path "<WS-3 path>"`
+   `node "$AGENTS_MAIN_ROOT/bin/codegraph-lifecycle.js" init --path "<WS-3 path>"`
    Always exits 0. Silent no-op when the flag is off or a healthy index is already
    there; it rebuilds an index that exists but is empty, truncated, or corrupt, and
    emits a one-line stderr warning when the tool is missing or a rebuild did not

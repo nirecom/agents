@@ -37,16 +37,12 @@ run_docs_only_mode() { # <mode> <stdin-content> ; sets DO_RC
             printf '%s' "$content" | run_with_timeout 60 bash "$IS_DOCS_ONLY" >/dev/null 2>&1 || DO_RC=$?
             ;;
         nomodule)
-            # run_with_timeout is a shell FUNCTION, so `env VAR=VAL run_with_timeout ...` would
-            # try to exec it as a binary and every row here would be exit 127 — the same trap
-            # documented in auto-merge-base.sh. Export inside a subshell instead.
+            # The helper finds hooks/ from its own location, so a lone copy needs no
+            # environment at all to be cut off from the allowlist SSOT.
             local lone="$TMPDIR_BASE/docs-only-lone"
             mkdir -p "$lone/bin"
             cp "$IS_DOCS_ONLY" "$lone/bin/is-docs-only"
-            printf '%s' "$content" | (
-                export AGENTS_CONFIG_DIR="$lone"
-                run_with_timeout 60 bash "$lone/bin/is-docs-only"
-            ) >/dev/null 2>&1 || DO_RC=$?
+            printf '%s' "$content" | run_with_timeout 60 bash "$lone/bin/is-docs-only" >/dev/null 2>&1 || DO_RC=$?
             ;;
         nonode)
             # /usr/bin:/bin only, minus any node that lives there. A version manager (fnm/nvm)

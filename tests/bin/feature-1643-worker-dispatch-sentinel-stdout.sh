@@ -19,10 +19,10 @@ set -u
 # against /<<\s*WORKFLOW/i, and isStrictSentinel() false. The line checker is
 # self-tested on a dirty fixture first (false-green fence).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-EMIT_JS="$AGENTS_DIR/bin/worker-dispatch/emit.js"
-SENTINEL_JS="$AGENTS_DIR/hooks/lib/sentinel-patterns.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+EMIT_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/emit.js"
+SENTINEL_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/sentinel-patterns.js"
 
 PASS=0
 FAIL=0
@@ -162,7 +162,7 @@ write_stub() {
 }
 
 # Real-output fixture: sentinel-bearing lines taken from the repo's own tests/.
-grep -rhoE '<<[[:space:]]*WORKFLOW_[A-Za-z0-9_]+[^"]*>>' "$AGENTS_DIR/tests" 2>/dev/null \
+grep -rhoE '<<[[:space:]]*WORKFLOW_[A-Za-z0-9_]+[^"]*>>' "$SCRIPT_CHECKOUT_ROOT/tests" 2>/dev/null \
     | head -12 > "$TMPD/real-fixture.txt"
 if [ ! -s "$TMPD/real-fixture.txt" ]; then
     printf '%s\n%s\n' "$MARK" "$UVER" > "$TMPD/real-fixture.txt"
@@ -291,13 +291,13 @@ group_fallback_status_enum() {
 # Group 3 — emit.js must be the only stdout writer
 # ===========================================================================
 group_emit_sole_writer() {
-    if [ ! -d "$AGENTS_DIR/bin/worker-dispatch" ]; then
+    if [ ! -d "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch" ]; then
         fail "emit/sole-stdout-writer — implementation missing: bin/worker-dispatch/"
         return
     fi
     local hits
     hits="$(grep -rn 'process\.stdout\.write\|console\.log' \
-        "$AGENTS_DIR/bin/worker-dispatch" "$DISPATCH_JS" 2>/dev/null \
+        "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch" "$DISPATCH_JS" 2>/dev/null \
         | grep -v '/emit\.js:' | wc -l | tr -d ' ')"
     assert_eq "emit/sole-stdout-writer" "0" "$hits"
     if impl_missing "emit/sanitize-export" "$EMIT_JS" "bin/worker-dispatch/emit.js"; then
@@ -387,7 +387,7 @@ FSG_OUT="$TMPD/fsguard-out.tsv"
 fsg_col() { awk -F'\t' -v n="$1" -v c="$2" '$1==n{print $c; exit}' "$FSG_OUT"; }
 
 group_fsguard_artifact() {
-    local fsguard_js="$AGENTS_DIR/bin/worker-dispatch/fsguard.js"
+    local fsguard_js="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/fsguard.js"
     if impl_missing "fsguard/probe" "$fsguard_js" "bin/worker-dispatch/fsguard.js"; then return; fi
 
     # PLANS_DIR is the write scope AND the sanctioned place for probe artifacts.
@@ -426,7 +426,7 @@ plain-json            | {\"status\": \"clean\", \"files\": []}                  
 japanese-body         | 背景: テスト実行の記録です。                                        | unchanged | inert
 TABLE
 
-    if ! run_with_timeout 90 node "$FSG_PROBE" "$(nodepath "$AGENTS_DIR")" \
+    if ! run_with_timeout 90 node "$FSG_PROBE" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" \
             "$(nodepath "$plans_probe_raw")" "$(nodepath "$FSG_ROWS")" "$(nodepath "$FSG_OUT")" \
             >/dev/null 2>"$TMPD/fsguard-probe.err"; then
         fail "fsguard/probe — probe failed: $(cat "$TMPD/fsguard-probe.err" 2>/dev/null)"

@@ -159,7 +159,7 @@ run_migrate_line_shape_cases() {
 # (14) a real runner: old-format measurements still drive longest-first after the next run.
 run_migrate_runner_lpt_cases() {
   local out r tiers
-  out="$(run_with_timeout 280 env -u RUN_ALL_DUR_REPO_ID -u RUN_ALL_DUR_HOST_TOKEN AGENTS_DIR="$AGENTS_DIR" \
+  out="$(run_with_timeout 280 env -u RUN_ALL_DUR_REPO_ID -u RUN_ALL_DUR_HOST_TOKEN \
     bash "$LM_PARTS/_runner-lpt.sh" 2>/dev/null)"
   r="$(printf '%s\n' "$out" | sed -n 's/^R14 //p')"
   ck "n17/14/fixture-warm-run-measured" "3" "$(lm_v "$r" warm)"

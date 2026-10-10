@@ -60,18 +60,18 @@ EOF
         fi
     }
 
-    # Build a self-contained AGENTS_CONFIG_DIR for G4 so the language lint can
-    # find its libs and a .env with enforcement enabled — without depending on
-    # the user's real my-private-repo .env being present.
+    # Build a self-contained AGENTS_MAIN_ROOT for G4 so the language lint reads
+    # a .env with enforcement enabled — without depending on the user's real
+    # my-private-repo .env being present.
     # Post-#619: configuration lives in .env (DOCS_LANG_*), not rules/language.md.
     setup_g4_agents_dir() {
         local tmp; tmp=$(mktemp -d)
         TEST_TMPS+=("$tmp")
         mkdir -p "$tmp/hooks/lib" "$tmp/bin"
         # Copy all lib files — is-private-repo.js has transitive deps (parse-git-args, etc.)
-        cp "$AGENTS_DIR"/hooks/lib/*.js "$tmp/hooks/lib/"
+        cp "$SCRIPT_CHECKOUT_ROOT"/hooks/lib/*.js "$tmp/hooks/lib/"
         # workflow-plans-dir is required by compose-doc-append-entry for staging dir setup.
-        cp "$AGENTS_DIR/bin/workflow-plans-dir" "$tmp/bin/"
+        cp "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir" "$tmp/bin/"
         printf '%s\n' \
             'DOCS_LANG_PUBLIC=english' \
             'DOCS_LANG_PRIVATE=english' > "$tmp/.env"
@@ -88,7 +88,7 @@ EOF
         (
             cd "$repo"
             export COMPOSE_DOC_APPEND_SKILL=1
-            export AGENTS_CONFIG_DIR="$_g4_agents_dir"
+            export AGENTS_MAIN_ROOT="$_g4_agents_dir"
             # Unset DOCS_LANG_* in subshell env to prevent shell leakage (#619 .env-only).
             # Must unset via shell builtin (not `env -u`) so run_with_timeout (a bash
             # function) is still in scope.
@@ -144,19 +144,19 @@ EOF
         (
             cd "$repo"
             export COMPOSE_DOC_APPEND_SKILL=1
-            export AGENTS_CONFIG_DIR="$agents_dir"
+            export AGENTS_MAIN_ROOT="$agents_dir"
             export DOCS_LANG_PUBLIC="$ambient"
             run_with_timeout 30 bash "$CLI" "$@"
         )
     }
 
-    # A second config dir whose public policy is OFF, for the T26 direction.
+    # A second agents main root whose public policy is OFF, for the T26 direction.
     setup_g4_agents_dir_any() {
         local tmp; tmp=$(mktemp -d)
         TEST_TMPS+=("$tmp")
         mkdir -p "$tmp/hooks/lib" "$tmp/bin"
-        cp "$AGENTS_DIR"/hooks/lib/*.js "$tmp/hooks/lib/"
-        cp "$AGENTS_DIR/bin/workflow-plans-dir" "$tmp/bin/"
+        cp "$SCRIPT_CHECKOUT_ROOT"/hooks/lib/*.js "$tmp/hooks/lib/"
+        cp "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir" "$tmp/bin/"
         printf '%s\n' 'DOCS_LANG_PUBLIC=any' 'DOCS_LANG_PRIVATE=any' > "$tmp/.env"
         cygpath -m "$tmp" 2>/dev/null || echo "$tmp"
     }

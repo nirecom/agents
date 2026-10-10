@@ -10,6 +10,7 @@
 # TL3 gap (what this test does NOT catch): that the host actually fires these groups for
 # a real Agent dispatch; TL3-hook-agent-jev-shadow.sh T1/T3 observes that.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 SETTINGS="$REPO_N/settings.json"
@@ -30,22 +31,22 @@ groups() {
 echo "=== settings.json registration ==="
 case_begin "j-settings-pre-group" "settings.json"
 check "PreToolUse: one dedicated Agent|Task group for jev-shadow-pre.js, timeout 15" \
-  'Agent|Task|node "$AGENTS_CONFIG_DIR/hooks/jev-shadow-pre.js"|15|1' "$(groups PreToolUse jev-shadow-pre.js)"
+  'Agent|Task|node "$AGENTS_MAIN_ROOT/hooks/jev-shadow-pre.js"|15|1' "$(groups PreToolUse jev-shadow-pre.js)"
 case_end
 case_begin "j-settings-post-group" "settings.json"
 check "PostToolUse: one dedicated Agent|Task group for jev-shadow-post.js, timeout 15" \
-  'Agent|Task|node "$AGENTS_CONFIG_DIR/hooks/jev-shadow-post.js"|15|1' "$(groups PostToolUse jev-shadow-post.js)"
+  'Agent|Task|node "$AGENTS_MAIN_ROOT/hooks/jev-shadow-post.js"|15|1' "$(groups PostToolUse jev-shadow-post.js)"
 case_end
 case_begin "j-settings-existing-agent-group-unchanged" "settings.json"
 check "the existing Agent|Task|Skill step-in-flight group is unchanged (regression)" \
-  'Agent|Task|Skill|node "$AGENTS_CONFIG_DIR/hooks/postuse-step-in-flight-mark.js"|5|1' \
+  'Agent|Task|Skill|node "$AGENTS_MAIN_ROOT/hooks/postuse-step-in-flight-mark.js"|5|1' \
   "$(groups PostToolUse postuse-step-in-flight-mark.js)"
 check "neither jev hook is attached to the Skill matcher" "" \
   "$( { groups PreToolUse jev-shadow; groups PostToolUse jev-shadow; } | grep -F 'Skill')"
 case_end
 case_begin "j-registered-hooks-exist" "settings.json"
 check "both registered hook scripts exist" "present|present" \
-  "$([ -f "$AGENTS_DIR/hooks/jev-shadow-pre.js" ] && echo present || echo absent)|$([ -f "$AGENTS_DIR/hooks/jev-shadow-post.js" ] && echo present || echo absent)"
+  "$([ -f "$SCRIPT_CHECKOUT_ROOT/hooks/jev-shadow-pre.js" ] && echo present || echo absent)|$([ -f "$SCRIPT_CHECKOUT_ROOT/hooks/jev-shadow-post.js" ] && echo present || echo absent)"
 case_end
 
 echo "=== registry entry ==="

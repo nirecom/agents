@@ -120,7 +120,7 @@ module.exports = [
   { id: "l05-chained-python", label: "python3 after &&", cmd: "git pull && python3 script.py" },
   { id: "l06-xargs-pipe", label: "xargs pipeline (bash-guard exemption shape)", cmd: "find . -name '*.tmp' | xargs rm" },
   { id: "l07-xargs-pipe-redirect", label: "xargs pipeline plus redirect", cmd: "find . -name '*.tmp' | xargs rm > out.log" },
-  { id: "l08-allow-rule-form", label: "allow-rule form: && lives inside single quotes", cmd: "bash -c 'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on'" },
+  { id: "l08-allow-rule-form", label: "allow-rule form: && lives inside single quotes", cmd: "bash -c 'cd \"$AGENTS_MAIN_ROOT\" && bash \"$AGENTS_MAIN_ROOT/bin/confirm-off\" FLAG on'" },
   { id: "l09-plain-text", label: "plain text, no shell metacharacters", cmd: "normal text" },
   { id: "l10-tee-write", label: "tee write target", cmd: "echo x | tee /tmp/out" },
 ];

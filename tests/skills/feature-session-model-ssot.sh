@@ -18,16 +18,16 @@ if [ -z "${_TIMEOUT_WRAPPED:-}" ]; then
     fi
 fi
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-GITHUB_ISSUES_MD="$AGENTS_DIR/rules/github-issues.md"
-WORKFLOW_INIT_MD="$AGENTS_DIR/skills/workflow-init/SKILL.md"
-CLARIFY_INTENT_MD="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
-COMMIT_PUSH_MD="$AGENTS_DIR/skills/commit-push/SKILL.md"
-ISSUE_CLOSE_STAGE_MD="$AGENTS_DIR/skills/issue-close-stage/SKILL.md"
-ISSUE_CLOSE_FINALIZE_MD="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GITHUB_ISSUES_MD="$SCRIPT_CHECKOUT_ROOT/rules/github-issues.md"
+WORKFLOW_INIT_MD="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
+CLARIFY_INTENT_MD="$SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
+COMMIT_PUSH_MD="$SCRIPT_CHECKOUT_ROOT/skills/commit-push/SKILL.md"
+ISSUE_CLOSE_STAGE_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-stage/SKILL.md"
+ISSUE_CLOSE_FINALIZE_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/SKILL.md"
 ISSUE_CREATE_MD="$HOME/.claude/skills/issue-create/SKILL.md"
-OPS_MD="$AGENTS_DIR/docs/ops.md"
-AGENTS_CLAUDE_MD="$AGENTS_DIR/CLAUDE.md"
+OPS_MD="$SCRIPT_CHECKOUT_ROOT/docs/ops.md"
+AGENTS_CLAUDE_MD="$SCRIPT_CHECKOUT_ROOT/CLAUDE.md"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }

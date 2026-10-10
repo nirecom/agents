@@ -10,12 +10,12 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-CHECKER="$AGENTS_DIR/hooks/workflow-gate/review-tests-checker.js"
-EVIDENCE="$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js"
+CHECKER="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-checker.js"
+EVIDENCE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-evidence.js"
 CHECKER_N="$(np "$CHECKER")"
 EVIDENCE_N="$(np "$EVIDENCE")"
 

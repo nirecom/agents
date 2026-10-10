@@ -7,9 +7,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-SENTINEL_PATTERNS="$AGENTS_DIR/hooks/lib/sentinel-patterns.js"
-REVIEW_TESTS_EVIDENCE="$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SENTINEL_PATTERNS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/sentinel-patterns.js"
+REVIEW_TESTS_EVIDENCE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-evidence.js"
 
 PASS=0
 FAIL=0
@@ -383,8 +383,8 @@ assert_eq "T15.isStrictSentinel(reason-with->)" "NO" "$got15_strict"
 # Case 17 — mutation probe (SKIPPED): sentinel-patterns.js uses multi-line const forms;
 # bin/mutation-probe.sh instruments single-line only. L3 gap: [^>]+ constraint verified
 # by T15/T16a table-driven cases instead. Run via bin/run-with-timeout.sh.
-MUTATION_PROBE="$AGENTS_DIR/bin/mutation-probe.sh"
-RWT17="$AGENTS_DIR/bin/run-with-timeout.sh"
+MUTATION_PROBE="$SCRIPT_CHECKOUT_ROOT/bin/mutation-probe.sh"
+RWT17="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 if [[ -f "$MUTATION_PROBE" ]]; then
     probe_out=""
     probe_rc=0

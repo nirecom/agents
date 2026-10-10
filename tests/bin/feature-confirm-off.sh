@@ -4,15 +4,9 @@
 # L2 tests for bin/confirm-off — thin OFF/ON/ERROR helper wrapping
 # get-config-var --is-off, used as the canonical call-site for plan-confirm
 # skip checks in skills/.
-#
-# L3 gap (what this test does NOT catch):
-# - real symlink from ~/.local/bin/confirm-off reading the actual user .env
-# - pwsh variant behavior (covered by tests/feature-confirm-off.Tests.ps1)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: pwsh-required
-#
-# Pre-implementation: bin/confirm-off does not exist yet — the fixture cp
-# below will fail at runtime until /write-code lands bin/confirm-off.
+# L3 gap: the real ~/.local/bin/confirm-off symlink reading the actual user .env, and
+# the pwsh variant (tests/feature-confirm-off.Tests.ps1); checked at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh (pwsh-required).
 
 set -u
 
@@ -49,9 +43,10 @@ trap 'rm -rf "$FIX"' EXIT
 cp "$REPO_ROOT/bin/get-config-var" "$FIX/bin/" || { echo "FAIL: cannot copy get-config-var"; exit 1; }
 cp "$REPO_ROOT/bin/confirm-off" "$FIX/bin/" || { echo "FAIL: cannot copy confirm-off (expected pre-implementation)"; exit 1; }
 cp "$REPO_ROOT/hooks/lib/load-env.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy load-env.js"; exit 1; }
-# Transitive requires of load-env.js: ./agents-config-dir -> ./path-normalize
-cp "$REPO_ROOT/hooks/lib/agents-config-dir.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy agents-config-dir.js"; exit 1; }
+# Requires of load-env.js: ./local-env, and ./script-checkout-root -> ./path-normalize
+cp "$REPO_ROOT/hooks/lib/script-checkout-root.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy script-checkout-root.js"; exit 1; }
 cp "$REPO_ROOT/hooks/lib/path-normalize.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy path-normalize.js"; exit 1; }
+cp "$REPO_ROOT/hooks/lib/local-env.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy local-env.js"; exit 1; }
 
 chmod +x "$FIX/bin/get-config-var" "$FIX/bin/confirm-off" 2>/dev/null || true
 
@@ -66,18 +61,18 @@ write_env() {
 }
 
 # Helper: run confirm-off and capture stdout, stderr, exit. Args after the
-# function name are forwarded to confirm-off. AGENTS_CONFIG_DIR defaults to
-# the fixture; override via OVERRIDE_AGENTS_CONFIG_DIR= for unset/typo cases.
+# function name are forwarded to confirm-off. AGENTS_MAIN_ROOT defaults to
+# the fixture; override via OVERRIDE_AGENTS_MAIN_ROOT= for unset/typo cases.
 run_co() {
     local desc_unused="$1"; shift
-    local cfg="${OVERRIDE_AGENTS_CONFIG_DIR-$FIX}"
+    local cfg="${OVERRIDE_AGENTS_MAIN_ROOT-$FIX}"
     local out_file err_file rc
     out_file="$(mktemp)"; err_file="$(mktemp)"
     if [ "${UNSET_CFG:-0}" = "1" ]; then
-        ( unset AGENTS_CONFIG_DIR; run_with_timeout bash "$FIX/bin/confirm-off" "$@" >"$out_file" 2>"$err_file" )
+        ( unset AGENTS_MAIN_ROOT; run_with_timeout bash "$FIX/bin/confirm-off" "$@" >"$out_file" 2>"$err_file" )
         rc=$?
     else
-        AGENTS_CONFIG_DIR="$cfg" run_with_timeout bash "$FIX/bin/confirm-off" "$@" >"$out_file" 2>"$err_file"
+        AGENTS_MAIN_ROOT="$cfg" run_with_timeout bash "$FIX/bin/confirm-off" "$@" >"$out_file" 2>"$err_file"
         rc=$?
     fi
     CO_OUT="$(cat "$out_file")"; CO_ERR="$(cat "$err_file")"; CO_RC=$rc
@@ -123,7 +118,7 @@ assert_rc  "T01 .env=off → exit 0" "0"
 # ════════════════════════════════════════════════════════════════════════════
 write_env "off"
 T01B_OUT="$(mktemp)"; T01B_ERR="$(mktemp)"
-( export CONFIRM_X=""; AGENTS_CONFIG_DIR="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on >"$T01B_OUT" 2>"$T01B_ERR" )
+( export CONFIRM_X=""; AGENTS_MAIN_ROOT="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on >"$T01B_OUT" 2>"$T01B_ERR" )
 T01B_RC=$?
 CO_OUT="$(cat "$T01B_OUT")"; CO_ERR="$(cat "$T01B_ERR")"; CO_RC=$T01B_RC
 rm -f "$T01B_OUT" "$T01B_ERR"
@@ -164,7 +159,7 @@ assert_rc  "T05 unrecognized → exit 1" "1"
 assert_stderr_nonempty "T05 unrecognized → stderr warning"
 
 # ════════════════════════════════════════════════════════════════════════════
-# T06 — AGENTS_CONFIG_DIR unset entirely → stdout 'ERROR', exit 2 + stderr
+# T06 — AGENTS_MAIN_ROOT unset entirely → stdout 'ERROR', exit 2 + stderr
 # ════════════════════════════════════════════════════════════════════════════
 # Use a temp HOME with no agents installation; copy confirm-off to an
 # isolated dir so the SCRIPT_DIR fallback in get-config-var also fails.
@@ -174,16 +169,16 @@ cp "$REPO_ROOT/bin/get-config-var" "$ISO_DIR/bin/"
 cp "$REPO_ROOT/bin/confirm-off" "$ISO_DIR/bin/" 2>/dev/null || true
 chmod +x "$ISO_DIR/bin/get-config-var" "$ISO_DIR/bin/confirm-off" 2>/dev/null || true
 T06_OUT="$(mktemp)"; T06_ERR="$(mktemp)"
-( unset AGENTS_CONFIG_DIR; run_with_timeout bash "$ISO_DIR/bin/confirm-off" CONFIRM_X on >"$T06_OUT" 2>"$T06_ERR" )
+( unset AGENTS_MAIN_ROOT; run_with_timeout bash "$ISO_DIR/bin/confirm-off" CONFIRM_X on >"$T06_OUT" 2>"$T06_ERR" )
 T06_RC=$?
 CO_OUT="$(cat "$T06_OUT")"; CO_ERR="$(cat "$T06_ERR")"; CO_RC=$T06_RC
 rm -f "$T06_OUT" "$T06_ERR"; rm -rf "$ISO_DIR"
-assert_out "T06 AGENTS_CONFIG_DIR unset → ERROR" "ERROR"
-assert_rc  "T06 AGENTS_CONFIG_DIR unset → exit 2" "2"
-assert_stderr_nonempty "T06 AGENTS_CONFIG_DIR unset → stderr diagnostic"
+assert_out "T06 AGENTS_MAIN_ROOT unset → ERROR" "ERROR"
+assert_rc  "T06 AGENTS_MAIN_ROOT unset → exit 2" "2"
+assert_stderr_nonempty "T06 AGENTS_MAIN_ROOT unset → stderr diagnostic"
 
 # ════════════════════════════════════════════════════════════════════════════
-# T6b — AGENTS_CONFIG_DIR exists but bin/get-config-var missing → ERROR, exit 2
+# T6b — get-config-var missing beside confirm-off (AGENTS_MAIN_ROOT set) → ERROR, exit 2
 # ════════════════════════════════════════════════════════════════════════════
 # Create a fresh temp dir with no bin/ subdirectory inside (no get-config-var).
 # confirm-off must detect the missing binary and output ERROR + exit 2.
@@ -194,15 +189,15 @@ mkdir -p "$T6B_ISO/bin"
 cp "$REPO_ROOT/bin/confirm-off" "$T6B_ISO/bin/" 2>/dev/null || true
 chmod +x "$T6B_ISO/bin/confirm-off" 2>/dev/null || true
 T6B_OUT="$(mktemp)"; T6B_ERR="$(mktemp)"
-AGENTS_CONFIG_DIR="$T6B_DIR" run_with_timeout bash "$T6B_ISO/bin/confirm-off" CONFIRM_X on >"$T6B_OUT" 2>"$T6B_ERR"
+AGENTS_MAIN_ROOT="$T6B_DIR" run_with_timeout bash "$T6B_ISO/bin/confirm-off" CONFIRM_X on >"$T6B_OUT" 2>"$T6B_ERR"
 T6B_RC=$?
 CO_OUT="$(cat "$T6B_OUT")"; CO_ERR="$(cat "$T6B_ERR")"; CO_RC=$T6B_RC
 rm -f "$T6B_OUT" "$T6B_ERR"; rm -rf "$T6B_DIR" "$T6B_ISO"
-assert_out "T6b AGENTS_CONFIG_DIR exists, get-config-var missing → ERROR" "ERROR"
-assert_rc  "T6b AGENTS_CONFIG_DIR exists, get-config-var missing → exit 2" "2"
+assert_out "T6b AGENTS_MAIN_ROOT exists, get-config-var missing → ERROR" "ERROR"
+assert_rc  "T6b AGENTS_MAIN_ROOT exists, get-config-var missing → exit 2" "2"
 
 # ════════════════════════════════════════════════════════════════════════════
-# T07 — AGENTS_CONFIG_DIR set to nonexistent path → stdout 'ERROR', exit 2
+# T07 — AGENTS_MAIN_ROOT set to nonexistent path → stdout 'ERROR', exit 2
 # ════════════════════════════════════════════════════════════════════════════
 # Run confirm-off from an isolated dir so SCRIPT_DIR fallback ALSO fails.
 ISO2_DIR="$(mktemp -d)"
@@ -211,18 +206,18 @@ cp "$REPO_ROOT/bin/get-config-var" "$ISO2_DIR/bin/"
 cp "$REPO_ROOT/bin/confirm-off" "$ISO2_DIR/bin/" 2>/dev/null || true
 chmod +x "$ISO2_DIR/bin/get-config-var" "$ISO2_DIR/bin/confirm-off" 2>/dev/null || true
 T07_OUT="$(mktemp)"; T07_ERR="$(mktemp)"
-AGENTS_CONFIG_DIR="/nonexistent/path/$$" run_with_timeout bash "$ISO2_DIR/bin/confirm-off" CONFIRM_X on >"$T07_OUT" 2>"$T07_ERR"
+AGENTS_MAIN_ROOT="/nonexistent/path/$$" run_with_timeout bash "$ISO2_DIR/bin/confirm-off" CONFIRM_X on >"$T07_OUT" 2>"$T07_ERR"
 T07_RC=$?
 CO_OUT="$(cat "$T07_OUT")"; CO_ERR="$(cat "$T07_ERR")"; CO_RC=$T07_RC
 rm -f "$T07_OUT" "$T07_ERR"; rm -rf "$ISO2_DIR"
-assert_out "T07 AGENTS_CONFIG_DIR nonexistent → ERROR" "ERROR"
-assert_rc  "T07 AGENTS_CONFIG_DIR nonexistent → exit 2" "2"
+assert_out "T07 AGENTS_MAIN_ROOT nonexistent → ERROR" "ERROR"
+assert_rc  "T07 AGENTS_MAIN_ROOT nonexistent → exit 2" "2"
 
 # ════════════════════════════════════════════════════════════════════════════
 # T08 — no args → exit 64, usage to stderr
 # ════════════════════════════════════════════════════════════════════════════
 T08_OUT="$(mktemp)"; T08_ERR="$(mktemp)"
-AGENTS_CONFIG_DIR="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" >"$T08_OUT" 2>"$T08_ERR"
+AGENTS_MAIN_ROOT="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" >"$T08_OUT" 2>"$T08_ERR"
 T08_RC=$?
 CO_OUT="$(cat "$T08_OUT")"; CO_ERR="$(cat "$T08_ERR")"; CO_RC=$T08_RC
 rm -f "$T08_OUT" "$T08_ERR"
@@ -234,7 +229,7 @@ assert_stderr_nonempty "T08 no args → usage to stderr"
 # ════════════════════════════════════════════════════════════════════════════
 write_env "on"
 T09_OUT="$(mktemp)"; T09_ERR="$(mktemp)"
-( export CONFIRM_X=off; AGENTS_CONFIG_DIR="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on >"$T09_OUT" 2>"$T09_ERR" )
+( export CONFIRM_X=off; AGENTS_MAIN_ROOT="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on >"$T09_OUT" 2>"$T09_ERR" )
 T09_RC=$?
 CO_OUT="$(cat "$T09_OUT")"; CO_ERR="$(cat "$T09_ERR")"; CO_RC=$T09_RC
 rm -f "$T09_OUT" "$T09_ERR"
@@ -259,7 +254,7 @@ done
 
 # T14: .env=off → OUT=OFF, parent exit 0
 write_env "off"
-OUT="$(AGENTS_CONFIG_DIR="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on 2>/dev/null)" || true
+OUT="$(AGENTS_MAIN_ROOT="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on 2>/dev/null)" || true
 T14_RC=$?
 if [ "$OUT" = "OFF" ]; then
     pass "T14 caller idiom .env=off → OUT=OFF"
@@ -274,7 +269,7 @@ fi
 
 # T15: .env=on → OUT=ON, parent exit 0 (|| true consumed exit 1)
 write_env "on"
-OUT="$(AGENTS_CONFIG_DIR="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on 2>/dev/null)" || true
+OUT="$(AGENTS_MAIN_ROOT="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on 2>/dev/null)" || true
 T15_RC=$?
 if [ "$OUT" = "ON" ]; then
     pass "T15 caller idiom .env=on → OUT=ON"
@@ -287,13 +282,13 @@ else
     fail "T15 caller idiom — expected parent exit 0, got $T15_RC"
 fi
 
-# T16: AGENTS_CONFIG_DIR unset → OUT=ERROR, parent exit 0 (|| true consumed exit 2)
+# T16: AGENTS_MAIN_ROOT unset → OUT=ERROR, parent exit 0 (|| true consumed exit 2)
 ISO3_DIR="$(mktemp -d)"
 mkdir -p "$ISO3_DIR/bin"
 cp "$REPO_ROOT/bin/get-config-var" "$ISO3_DIR/bin/"
 cp "$REPO_ROOT/bin/confirm-off" "$ISO3_DIR/bin/" 2>/dev/null || true
 chmod +x "$ISO3_DIR/bin/get-config-var" "$ISO3_DIR/bin/confirm-off" 2>/dev/null || true
-OUT="$( ( unset AGENTS_CONFIG_DIR; run_with_timeout bash "$ISO3_DIR/bin/confirm-off" CONFIRM_X on 2>/dev/null ) )" || true
+OUT="$( ( unset AGENTS_MAIN_ROOT; run_with_timeout bash "$ISO3_DIR/bin/confirm-off" CONFIRM_X on 2>/dev/null ) )" || true
 T16_RC=$?
 rm -rf "$ISO3_DIR"
 if [ "$OUT" = "ERROR" ]; then
@@ -324,9 +319,9 @@ fi
 # T18 — Idempotency: running twice with same .env returns same stdout+exit
 # ════════════════════════════════════════════════════════════════════════════
 write_env "off"
-T18A_OUT="$(AGENTS_CONFIG_DIR="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on 2>/dev/null)" || true
+T18A_OUT="$(AGENTS_MAIN_ROOT="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on 2>/dev/null)" || true
 T18A_RC=$?
-T18B_OUT="$(AGENTS_CONFIG_DIR="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on 2>/dev/null)" || true
+T18B_OUT="$(AGENTS_MAIN_ROOT="$FIX" run_with_timeout bash "$FIX/bin/confirm-off" CONFIRM_X on 2>/dev/null)" || true
 T18B_RC=$?
 if [ "$T18A_OUT" = "$T18B_OUT" ] && [ "$T18A_RC" = "$T18B_RC" ]; then
     pass "T18 idempotency: both runs returned '$T18A_OUT' / exit $T18A_RC"

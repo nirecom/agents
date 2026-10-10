@@ -11,15 +11,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-PATTERNS_NODE="$_AGENTS_DIR_NODE/hooks/lib/sentinel-patterns.js"
-HANDLER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-DETECT_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard/detect.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+PATTERNS_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/sentinel-patterns.js"
+HANDLER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-mark/enforce-override-handlers.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+DETECT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/supervisor-guard/detect.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -85,7 +85,7 @@ st.layer1.findings=[{categories:['code'],severity:'error',detail:'blocking',repo
 fs.writeFileSync(w.getStatePath('emsid',{forWrite:true}),JSON.stringify(st));" >/dev/null 2>&1 || fail "E4 seed: supervisor-state seed write failed"
     local hook_input
     hook_input=$("$RWT" 8 node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'emsid',tool_input:{command:process.argv[1]}}))" "$EMERG_WF")
-    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$tn" "$RWT" 12 node "$SHIM" <<< "$hook_input" 2>/dev/null)
+    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_MAIN_ROOT="$tn" "$RWT" 12 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$rc" = "0" ] && ! echo "$out" | grep -q '"decision":"block"'; then
@@ -120,7 +120,7 @@ h.handle({cmd:process.argv[1],sessionId:'emsid',pushMessage:()=>{},signalFatal:(
 run_E6() {
     local out
     out=$("$RWT" 10 node -e "
-const s=require('$_AGENTS_DIR_NODE/settings.json');
+const s=require('$_SCRIPT_CHECKOUT_ROOT_NODE/settings.json');
 const ask=(s.permissions&&s.permissions.ask)||[];
 process.stdout.write(ask.some(x=>/ENFORCE_WORKFLOW_OFF_EMERGENCY/.test(x))&&ask.some(x=>/ENFORCE_WORKTREE_OFF_EMERGENCY/.test(x))?'YES':'NO');" 2>/dev/null)
     if [ "$out" = "YES" ]; then

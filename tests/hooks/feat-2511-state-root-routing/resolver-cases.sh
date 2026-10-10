@@ -63,7 +63,7 @@ c_r8_r9_roots() {
 c_r10_cli() {
   local cli sid out rc
   new_home r10
-  cli="$AGENTS_DIR/bin/workflow-state-dir"
+  cli="$SCRIPT_CHECKOUT_ROOT/bin/workflow-state-dir"
   sid="$(sid_of 10)"
   probe_seed "$LEG" "$sid"
   out="$(dcli "$cli" --session "$sid" || true)"

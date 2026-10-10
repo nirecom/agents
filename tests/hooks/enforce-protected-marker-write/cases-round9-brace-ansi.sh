@@ -71,7 +71,7 @@ run_R9_brace_ansi_unit() {
         return
     fi
     local out
-    out="$("$RWT" 20 node "$(node_path "$probe")" "$_AGENTS_DIR_NODE" 2>/dev/null)"
+    out="$("$RWT" 20 node "$(node_path "$probe")" "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>/dev/null)"
     if [ -z "$out" ]; then
         fail "R9-U probe produced no output (brace-ansi-expand.js / protected-basenames.js not loadable)"
         return

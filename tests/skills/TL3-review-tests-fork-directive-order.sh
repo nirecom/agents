@@ -9,12 +9,12 @@
 # this gate is the live-model counterpart.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 IMPL_MISSING=0
-for f in "$AGENTS_DIR/skills/review-tests/SKILL.md" \
-         "$AGENTS_DIR/rules/shell-commands.md" \
-         "$AGENTS_DIR/bin/run-with-timeout.sh"; do
+for f in "$SCRIPT_CHECKOUT_ROOT/skills/review-tests/SKILL.md" \
+         "$SCRIPT_CHECKOUT_ROOT/rules/shell-commands.md" \
+         "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"; do
     [ -f "$f" ] || { echo "FAIL: IMPLEMENTATION MISSING: $f"; IMPL_MISSING=1; }
 done
 if [ "$IMPL_MISSING" -eq 1 ]; then
@@ -23,8 +23,8 @@ if [ "$IMPL_MISSING" -eq 1 ]; then
     exit 1
 fi
 
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 command -v jq >/dev/null 2>&1 || exit 77
 
@@ -34,9 +34,9 @@ fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 skip() { echo "SKIP: $1" >&2; }
 
 # shellcheck source=tests/skills/TL3-review-tests-fork-directive-order/helpers.sh
-. "$AGENTS_DIR/tests/skills/TL3-review-tests-fork-directive-order/helpers.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/skills/TL3-review-tests-fork-directive-order/helpers.sh"
 # shellcheck source=tests/skills/TL3-review-tests-fork-directive-order/main.sh
-. "$AGENTS_DIR/tests/skills/TL3-review-tests-fork-directive-order/main.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/skills/TL3-review-tests-fork-directive-order/main.sh"
 
 echo ""
 echo "=== Results ==="

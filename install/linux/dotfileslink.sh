@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 if [ -z "${C_RESET+x}" ]; then
     if [ -t 1 ]; then
@@ -139,10 +139,10 @@ else
     fi
     # Track per-link failures; aggregate non-zero exit signals install.sh failure.
     _link_failed=0
-    _link_one "$AGENTS_ROOT/CLAUDE.md"  "$HOME/.claude/CLAUDE.md"   || _link_failed=$((_link_failed+1))
-    _link_one "$AGENTS_ROOT/skills"     "$HOME/.claude/skills"      || _link_failed=$((_link_failed+1))
-    _link_one "$AGENTS_ROOT/rules"      "$HOME/.claude/rules"       || _link_failed=$((_link_failed+1))
-    _link_one "$AGENTS_ROOT/agents"     "$HOME/.claude/agents"      || _link_failed=$((_link_failed+1))
+    _link_one "$SCRIPT_CHECKOUT_ROOT/CLAUDE.md"  "$HOME/.claude/CLAUDE.md"   || _link_failed=$((_link_failed+1))
+    _link_one "$SCRIPT_CHECKOUT_ROOT/skills"     "$HOME/.claude/skills"      || _link_failed=$((_link_failed+1))
+    _link_one "$SCRIPT_CHECKOUT_ROOT/rules"      "$HOME/.claude/rules"       || _link_failed=$((_link_failed+1))
+    _link_one "$SCRIPT_CHECKOUT_ROOT/agents"     "$HOME/.claude/agents"      || _link_failed=$((_link_failed+1))
     # Remove stale settings.json symlink that used to point directly into agents/
     if [ -L ~/.claude/settings.json ]; then
         printf "${C_YELLOW}Removing stale symlink: ~/.claude/settings.json${C_RESET}\n"
@@ -160,8 +160,8 @@ fi
 # wins the `/wor` completion. Not a native Skill alias field (none exists);
 # this is a second directory name resolving to the same SKILL.md. Placed
 # outside the ~/.claude/.git guard above since this link stays within
-# $AGENTS_ROOT and is unrelated to the ~/.claude destination tree.
-_link_one "$AGENTS_ROOT/skills/workflow-init" "$AGENTS_ROOT/skills/wf-init" \
+# $SCRIPT_CHECKOUT_ROOT and is unrelated to the ~/.claude destination tree.
+_link_one "$SCRIPT_CHECKOUT_ROOT/skills/workflow-init" "$SCRIPT_CHECKOUT_ROOT/skills/wf-init" \
     || printf "${C_YELLOW}Symlink failure: skills/wf-init${C_RESET}\n" >&2
 
 # Test affordance — see tests/install/feature-697-dotfileslink-link-one.sh
@@ -177,13 +177,13 @@ if ! type node >/dev/null 2>&1; then
     printf "${C_YELLOW}Error: node not found. Run: nvm install --lts${C_RESET}\n" >&2
     exit 1
 fi
-if bash "${AGENTS_ROOT}/install/lib/wait-cc-exit.sh"; then
-    node "$AGENTS_ROOT/install/assemble-settings.js"
+if bash "${SCRIPT_CHECKOUT_ROOT}/install/lib/wait-cc-exit.sh"; then
+    node "$SCRIPT_CHECKOUT_ROOT/install/assemble-settings.js"
 fi
 
 # --- git core.hooksPath ---
-git config --file "$HOME/.gitconfig" core.hooksPath "$AGENTS_ROOT/hooks"
-printf "${C_GREEN}core.hooksPath -> $AGENTS_ROOT/hooks${C_RESET}\n"
+git config --file "$HOME/.gitconfig" core.hooksPath "$SCRIPT_CHECKOUT_ROOT/hooks"
+printf "${C_GREEN}core.hooksPath -> $SCRIPT_CHECKOUT_ROOT/hooks${C_RESET}\n"
 
 # --- ~/.local/bin/doc-append launcher ---
 mkdir -p ~/.local/bin
@@ -191,7 +191,7 @@ cat > ~/.local/bin/doc-append << 'LAUNCHER_EOF'
 #!/usr/bin/env bash
 export MSYS_NO_PATHCONV=1
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-AGENTS_ROOT_RESOLVED="${AGENTS_CONFIG_DIR:-}"
+AGENTS_ROOT_RESOLVED="${AGENTS_MAIN_ROOT:-}"
 if [ -z "$AGENTS_ROOT_RESOLVED" ] && [ -f "$SCRIPT_DIR/../agents/bin/doc-append.py" ]; then
     AGENTS_ROOT_RESOLVED="$SCRIPT_DIR/.."
 fi
@@ -201,14 +201,14 @@ else
     exec uv run "${AGENTS_ROOT_RESOLVED}/bin/doc-append.py" "$@"
 fi
 LAUNCHER_EOF
-# Rewrite with the actual path now that we know AGENTS_ROOT
+# Rewrite with the actual path now that we know SCRIPT_CHECKOUT_ROOT
 cat > ~/.local/bin/doc-append << EOF
 #!/usr/bin/env bash
 export MSYS_NO_PATHCONV=1
 if [[ -z "\${1:-}" || "\${1:-}" == --* ]]; then
-  exec uv run "$AGENTS_ROOT/bin/doc-append.py" "docs/history.md" "\$@"
+  exec uv run "$SCRIPT_CHECKOUT_ROOT/bin/doc-append.py" "docs/history.md" "\$@"
 else
-  exec uv run "$AGENTS_ROOT/bin/doc-append.py" "\$@"
+  exec uv run "$SCRIPT_CHECKOUT_ROOT/bin/doc-append.py" "\$@"
 fi
 EOF
 chmod +x ~/.local/bin/doc-append
@@ -217,7 +217,7 @@ printf "${C_GREEN}Generated: ~/.local/bin/doc-append${C_RESET}\n"
 # --- ~/.local/bin/doc-append-plain launcher ---
 cat > ~/.local/bin/doc-append-plain << EOF
 #!/usr/bin/env bash
-exec uv run "$AGENTS_ROOT/bin/doc-append-plain.py" "\$@"
+exec uv run "$SCRIPT_CHECKOUT_ROOT/bin/doc-append-plain.py" "\$@"
 EOF
 chmod +x ~/.local/bin/doc-append-plain
 printf "${C_GREEN}Generated: ~/.local/bin/doc-append-plain${C_RESET}\n"
@@ -225,7 +225,7 @@ printf "${C_GREEN}Generated: ~/.local/bin/doc-append-plain${C_RESET}\n"
 # --- ~/.local/bin/repo-visibility launcher ---
 cat > ~/.local/bin/repo-visibility << EOF
 #!/usr/bin/env bash
-exec uv run "$AGENTS_ROOT/bin/repo-visibility.py" "\$@"
+exec uv run "$SCRIPT_CHECKOUT_ROOT/bin/repo-visibility.py" "\$@"
 EOF
 chmod +x ~/.local/bin/repo-visibility
 printf "${C_GREEN}Generated: ~/.local/bin/repo-visibility${C_RESET}\n"
@@ -235,7 +235,7 @@ printf "${C_GREEN}Generated: ~/.local/bin/repo-visibility${C_RESET}\n"
 # here; install/win/dotfileslink.ps1 consumes the same file (CPR-SSOT single source of truth,
 # CPR-ORTH both platforms expose the same set). Do NOT hand-write an `ln -sf` below —
 # add the command name to the list file instead.
-_path_exposed_list="$AGENTS_ROOT/install/path-exposed-commands.txt"
+_path_exposed_list="$SCRIPT_CHECKOUT_ROOT/install/path-exposed-commands.txt"
 if [[ ! -f "$_path_exposed_list" ]]; then
     printf "${C_YELLOW}Command list not found: %s (skipping)${C_RESET}\n" "$_path_exposed_list" >&2
     _path_exposed_list=/dev/null
@@ -246,7 +246,7 @@ while IFS= read -r _cmd || [[ -n "$_cmd" ]]; do
     _cmd="${_cmd%"${_cmd##*[![:space:]]}"}"
     [[ -n "$_cmd" ]] || continue
     [[ "$_cmd" == \#* ]] && continue
-    ln -sf "$AGENTS_ROOT/bin/$_cmd" "$HOME/.local/bin/$_cmd"
+    ln -sf "$SCRIPT_CHECKOUT_ROOT/bin/$_cmd" "$HOME/.local/bin/$_cmd"
     printf "${C_GREEN}Symlinked: ~/.local/bin/%s${C_RESET}\n" "$_cmd"
 done < "$_path_exposed_list"
 unset _cmd _path_exposed_list

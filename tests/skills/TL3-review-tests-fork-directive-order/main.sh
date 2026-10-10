@@ -7,7 +7,7 @@
 echo ""
 echo "=== TL3: review-tests fork directive order (Read before Bash) ==="
 
-RFDO_DIRECTIVE="$(rfdo_extract_directive "$AGENTS_DIR/skills/review-tests/SKILL.md")"
+RFDO_DIRECTIVE="$(rfdo_extract_directive "$SCRIPT_CHECKOUT_ROOT/skills/review-tests/SKILL.md")"
 if [ -z "$RFDO_DIRECTIVE" ]; then
     fail "D0. review-tests/SKILL.md carries no extractable Read-before-Bash directive -- cannot build the positive fixture"
     return 0

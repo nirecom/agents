@@ -12,9 +12,9 @@
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# pass / fail / AGENTS_DIR provided by _lib.sh.
-TARGET="$AGENTS_DIR/bin/github-issues/issue-create-preflight.sh"
-export TARGET AGENTS_DIR
+# pass / fail / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
+TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
+export TARGET
 
 # Early-exit: file does not exist yet (RED-clean)
 if [ ! -f "$TARGET" ]; then
@@ -92,8 +92,6 @@ MOCK_EOF
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
     export WORKFLOW_STATE_DIR="$TMP/workflow"
-    export AGENTS_CONFIG_DIR="$TMP/agents-config"
-    mkdir -p "$AGENTS_CONFIG_DIR"
 }
 
 teardown_mock() {
@@ -101,7 +99,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR AGENTS_CONFIG_DIR \
+    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR \
           GH_MOCK_LABELS_HAVE_TASK GH_MOCK_RESOLVER_FAIL \
           GH_MOCK_LABEL_LIST_FAIL GH_MOCK_OWNER_REPO 2>/dev/null || true
 }

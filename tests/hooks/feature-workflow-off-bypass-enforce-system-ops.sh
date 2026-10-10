@@ -11,13 +11,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-HOOK_JS="${_AGENTS_DIR_NODE}/hooks/enforce-system-ops.js"
+HOOK_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-system-ops.js"
 
 PASS=0
 FAIL=0
@@ -97,7 +97,6 @@ run_hook() {
     local errfile="$TMPDIR_BASE/.err.$$"
     HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u SYSTEM_OPS_APPROVED \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK_JS" 2>"$errfile")" || HOOK_RC=$?

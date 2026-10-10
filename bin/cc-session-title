@@ -18,14 +18,14 @@
 "use strict";
 
 const path = require("path");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
 
 try {
-  const agentsDir = path.join(__dirname, "..");
   const { writeSetIssue, writeAddPr, writeMarkComplete } = require(
-    path.join(agentsDir, "hooks", "lib", "session-title")
+    path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "session-title")
   );
   const { resolveSessionId } = require(
-    path.join(agentsDir, "hooks", "workflow-state", "session-id")
+    path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "session-id")
   );
 
   // When invoked from Claude Code's Bash tool, CLAUDE_CODE_CHILD_SESSION=1 is

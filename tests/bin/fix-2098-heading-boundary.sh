@@ -25,9 +25,9 @@ FAIL=0
 # covering bin/github-issues/** or .github/ISSUE_TEMPLATE/**, so no preflight ask
 # fires; the residue closes at the plan's manual render check before merge.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB="$AGENTS_DIR/bin/github-issues/lib/extract-field.sh"
-SCRIPT="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/extract-field.sh"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-to-history.sh"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -365,8 +365,8 @@ assert_eq "S2-value-metachars metacharacters in the value pass through verbatim"
     '$(touch PWNED-VALUE); ## not a heading mid-value' \
     "$(cd "$TMP" && BODY="$SEC_VALUE_BODY" extract_field Background)"
 
-if compgen -G "$TMP/PWNED*" >/dev/null 2>&1 || compgen -G "$AGENTS_DIR/PWNED*" >/dev/null 2>&1; then
-    fail "S3-no-execution — the injected payload EXECUTED: $(ls -d "$TMP"/PWNED* "$AGENTS_DIR"/PWNED* 2>/dev/null)"
+if compgen -G "$TMP/PWNED*" >/dev/null 2>&1 || compgen -G "$SCRIPT_CHECKOUT_ROOT/PWNED*" >/dev/null 2>&1; then
+    fail "S3-no-execution — the injected payload EXECUTED: $(ls -d "$TMP"/PWNED* "$SCRIPT_CHECKOUT_ROOT"/PWNED* 2>/dev/null)"
 else
     pass "S3-no-execution no artefact from the injected payload exists"
 fi

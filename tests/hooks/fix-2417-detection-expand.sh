@@ -5,12 +5,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-AGENTS_N="$(np "$AGENTS_DIR")"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+AGENTS_N="$(np "$SCRIPT_CHECKOUT_ROOT")"
 
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
@@ -20,11 +20,11 @@ export CLAUDE_TRANSCRIPT_BASE_DIR="$TRANS_TMP"
 
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-DETECT_JS="$AGENTS_DIR/hooks/lib/bash-write-targets/detection-expand.js"
-MARKER_GATE_JS="$AGENTS_DIR/hooks/enforce-worktree/bash-write-scope/marker-gate.js"
-CP_MV_JS="$AGENTS_DIR/hooks/lib/bash-write-targets/cp-mv.js"
-PWSH_JS="$AGENTS_DIR/hooks/lib/bash-write-targets/pwsh.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+DETECT_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/bash-write-targets/detection-expand.js"
+MARKER_GATE_JS="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/bash-write-scope/marker-gate.js"
+CP_MV_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/bash-write-targets/cp-mv.js"
+PWSH_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/bash-write-targets/pwsh.js"
 
 DETECT_PRESENT=no; [ -f "$DETECT_JS" ] && DETECT_PRESENT=yes
 
@@ -37,7 +37,7 @@ printf '{}' > "$WORKFLOW_STATE_DIR/$SID.json"
 local_run_hook() {
     local tn="$1" input="$2" out rc
     [ -f "$HOOK" ] || { printf 'absent|'; return; }
-    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")" AGENTS_CONFIG_DIR="$AGENTS_N" \
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")" \
         "$RWT" 12 node "$HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"

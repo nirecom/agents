@@ -9,17 +9,16 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CHECKER_JS="$AGENTS_DIR/hooks/workflow-gate/review-tests-checker.js"
-STATE_IO_JS="$AGENTS_DIR/hooks/workflow-state/state-io.js"
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CHECKER_JS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-checker.js"
+STATE_IO_JS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js"
 
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # ---------------------------------------------------------------------------
 # Precondition gates
@@ -250,7 +249,7 @@ fi
 # warnings cleared. EXPECTED: FAIL until REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ
 # added, reviewTestsHandler handles it, clearReviewTestsWarnings() implemented.
 # ---------------------------------------------------------------------------
-WORKFLOW_MARK_JS="$AGENTS_DIR/hooks/workflow-mark.js"
+WORKFLOW_MARK_JS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 SID22="test-sid-1207-22"
 write_review_tests_state "$SID22" "complete" "$FAKE_MANIFEST" "fingerprint=tok22abc warnings=3"
 

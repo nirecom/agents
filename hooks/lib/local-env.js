@@ -29,12 +29,12 @@ const ENV_ENTRY_BLOCKLIST_EXACT = new Set([
   // them together as ISOLATION_ENV_KEYS — and a local value for either relocates
   // the workflow-state root holding gate state and off-clearance tokens.
   // AGENTS_STATE_DIR is their sibling: the state/log root retention deletes under.
-  // AGENTS_CONFIG_DIR names the very directory this layer resolves the global
+  // AGENTS_MAIN_ROOT names the very directory this layer resolves the global
   // .env from, so a local value would redirect the layer that reads it.
   "WORKFLOW_STATE_DIR",
   "WORKFLOW_PLANS_DIR",
   "AGENTS_STATE_DIR",
-  "AGENTS_CONFIG_DIR",
+  "AGENTS_MAIN_ROOT",
   "WORKTREE_BASE_DIR",
   "ENFORCE_WORKTREE",
   "ENFORCE_WORKTREE_EXCLUDE",

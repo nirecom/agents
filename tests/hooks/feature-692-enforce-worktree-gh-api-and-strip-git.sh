@@ -6,13 +6,13 @@
 # Regression tests for issue #692:
 #   Bug A — `gh api -X PUT repos/o/r/contents/...` from main worktree must be allowed when cwd is in session scope
 #           (required by /worktree-end Step 6h's COMPOSE_DOC_APPEND_SKILL=1 → bin/compose-doc-append-entry call,
-#           which runs `gh api -X PUT` from MAIN_ROOT).
+#           which runs `gh api -X PUT` from the main worktree).
 #   Bug B — kind:"git" classify() patterns must scan the stripped (quote-removed) command so `grep -n "git push" file`
 #           is not misclassified as a write. Achieved by adding "git" to STRIP_KINDS.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TMPDIR_BASE="$(mktemp -d)/feature-692-$$"
 mkdir -p "$TMPDIR_BASE"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -39,7 +39,7 @@ NODE_HELPER
 
 classify() {
     local cmd="$1"
-    node "$CLASSIFY_HELPER" "$AGENTS_DIR" "$cmd"
+    node "$CLASSIFY_HELPER" "$SCRIPT_CHECKOUT_ROOT" "$cmd"
 }
 
 # isGitWriteIR helper: post-canary5-6git the git-write SSOT moved OUT of
@@ -52,7 +52,7 @@ const path = require("path");
 const { isGitWriteIR } = require(path.join(process.argv[1], "hooks", "lib", "bash-write-patterns", "patterns"));
 const { parse } = require(path.join(process.argv[1], "hooks", "lib", "command-ir"));
 process.stdout.write(String(isGitWriteIR(parse(process.argv[2]))));
-' "$AGENTS_DIR" "$cmd"
+' "$SCRIPT_CHECKOUT_ROOT" "$cmd"
 }
 
 assert_classify() {
@@ -142,7 +142,7 @@ process.stdout.write(JSON.stringify(data));
 ' -- "$cmd" "$cwd")"
     ( cd "$cwd" && env -i PATH="$PATH" HOME="${HOME:-$TMPDIR_BASE}" \
         "${env_args[@]}" \
-        node "$AGENTS_DIR/hooks/enforce-worktree.js" <<< "$payload" )
+        node "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js" <<< "$payload" )
 }
 
 guard_allows() {

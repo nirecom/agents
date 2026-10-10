@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # bin/lib/codex-review-loop/ledger-verdict.sh — ledger resolution, CLI wrapper,
 # and finalize helper sourced by bin/run-codex-review-loop. Caller-scope globals:
-# PLANS_DIR SID LEDGER_FORMAT LEDGER AGENTS_CONFIG_DIR ROUND CAP MAX_EXT EXT_USED TMP_OUT.
+# PLANS_DIR SID LEDGER_FORMAT LEDGER SCRIPT_CHECKOUT_ROOT ROUND CAP MAX_EXT EXT_USED TMP_OUT.
 
-# Locate the CLI + library pair under AGENTS_CONFIG_DIR, then the wrapper's own
+# Locate the CLI + library pair under SCRIPT_CHECKOUT_ROOT, then the wrapper's own
 # repo; all three parts must exist, so a partial root loses (#1992).
 # REPO_ROOT_ARG and `git rev-parse --show-toplevel` stopped being candidates at
 # #2025 C5: they name the repository *under review*, whose contents are
 # untrusted, and ledger_cli runs its pick with `bash` — a planted
-# bin/concern-ledger there was code execution. On "not found", point
-# AGENTS_CONFIG_DIR at the agents checkout; do not put those roots back.
+# bin/concern-ledger there was code execution. On "not found", repair
+# this agents checkout; do not put those roots back.
 resolve_concern_ledger() {
   local root
-  for root in "${AGENTS_CONFIG_DIR}" \
+  for root in "${SCRIPT_CHECKOUT_ROOT}" \
               "$(dirname "$(dirname "$(realpath "$0" 2>/dev/null || printf '%s' "$0")")")"; do
     [[ -n "$root" ]] || continue
     if [[ -f "$root/bin/concern-ledger" && -f "$root/bin/lib/concern-ledger.sh" \

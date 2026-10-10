@@ -68,8 +68,8 @@ echo "--- L6c: telemetry env reaches every spawned codegraph subprocess ---"
 # Expected values are read from the SSOT (install/codegraph-constants.txt)
 # rather than hardcoded, so a future flip of the pair cannot silently drift
 # from what this test asserts.
-L6C_EXPECTED_TELEMETRY="$(sed -n 's/^CODEGRAPH_TELEMETRY=//p' "$AGENTS_DIR/install/codegraph-constants.txt" | head -1)"
-L6C_EXPECTED_DNT="$(sed -n 's/^DO_NOT_TRACK=//p' "$AGENTS_DIR/install/codegraph-constants.txt" | head -1)"
+L6C_EXPECTED_TELEMETRY="$(sed -n 's/^CODEGRAPH_TELEMETRY=//p' "$SCRIPT_CHECKOUT_ROOT/install/codegraph-constants.txt" | head -1)"
+L6C_EXPECTED_DNT="$(sed -n 's/^DO_NOT_TRACK=//p' "$SCRIPT_CHECKOUT_ROOT/install/codegraph-constants.txt" | head -1)"
 reset_env
 root="$(mkroot "l6c")"
 if make_db "$root" healthy; then

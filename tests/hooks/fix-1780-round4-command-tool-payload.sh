@@ -18,13 +18,13 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-TCT_NODE="$_AGENTS_DIR_NODE/hooks/lib/tool-command-text.js"
-SP_NODE="$_AGENTS_DIR_NODE/hooks/lib/sentinel-patterns.js"
-BLOCK_HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+TCT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/tool-command-text.js"
+SP_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/sentinel-patterns.js"
+BLOCK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -175,7 +175,7 @@ classify() {
 run_block_hook() { # <tmp_node> <input-json> -> "<rc>|<stdout>"
     local tn="$1" input="$2" out rc
     [ -f "$BLOCK_HOOK" ] || { printf 'absent|'; return; }
-    out=$(WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    out=$(WORKFLOW_STATE_DIR="$tn" \
         "$RWT" 15 node "$BLOCK_HOOK" <<< "$input" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
@@ -284,7 +284,7 @@ EDRV_EOF
     run_shim() { # <tool> <sid> <cmd...> -> "<rc>|<blocked yes/no>"
         local hi out rc
         hi=$("$RWT" 10 node "$EDRV" "$@" 2>/dev/null)
-        out=$(WORKFLOW_PLANS_DIR="$TNE" WORKFLOW_STATE_DIR="$TNE" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        out=$(WORKFLOW_PLANS_DIR="$TNE" WORKFLOW_STATE_DIR="$TNE" \
             "$RWT" 15 node "$SHIM" <<< "$hi" 2>/dev/null)
         rc=$?
         if printf '%s' "$out" | grep -q '"decision":"block"'; then printf '%s|yes' "$rc"; else printf '%s|no' "$rc"; fi

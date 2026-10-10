@@ -8,6 +8,9 @@ PP_CAPTURE="$TMPDIR_BASE/captured-path-priority.txt"
 PP_STDOUT="$TMPDIR_BASE/pp-stdout.txt"
 PP_STDERR="$TMPDIR_BASE/pp-stderr.txt"
 PP_ENV=()
+# Non-empty: pp_run/pp_exec launch this copy of the reviewer instead of $SCRIPT. The reviewer
+# finds its siblings beside itself, so a row that stubs one runs a copy placed beside the stub.
+PP_SCRIPT=""
 PP_RC=0
 PP_OUT_TEXT=""
 PP_ERR_TEXT=""
@@ -51,7 +54,7 @@ pp_run() { # <repo> [args...] ; prints stdout, leaves the prompt in $PP_CAPTURE
     shift
     rm -f "$PP_CAPTURE"
     (cd "$repo" && _timeout env -u CODEX_REVIEW_MAX_DIFF_LINES PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" \
-        ${PP_ENV[@]+"${PP_ENV[@]}"} bash "$SCRIPT" "$@" 2>/dev/null) || true
+        ${PP_ENV[@]+"${PP_ENV[@]}"} bash "${PP_SCRIPT:-$SCRIPT}" "$@" 2>/dev/null) || true
 }
 
 # The status-preserving twin. pp_run discards the exit code by design (most rows read only
@@ -66,7 +69,7 @@ pp_exec() { # <repo> [args...] ; sets PP_RC / PP_OUT_TEXT / PP_ERR_TEXT
     # Same C2 rationale as pp_run: strip the ambient CODEX_REVIEW_MAX_DIFF_LINES before PP_ENV
     # is applied, so callers that assume the default/pinned budget are deterministic.
     (cd "$repo" && _timeout env -u CODEX_REVIEW_MAX_DIFF_LINES PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" \
-        ${PP_ENV[@]+"${PP_ENV[@]}"} bash "$SCRIPT" "$@") >"$PP_STDOUT" 2>"$PP_STDERR" || PP_RC=$?
+        ${PP_ENV[@]+"${PP_ENV[@]}"} bash "${PP_SCRIPT:-$SCRIPT}" "$@") >"$PP_STDOUT" 2>"$PP_STDERR" || PP_RC=$?
     PP_OUT_TEXT="$(cat "$PP_STDOUT")"
     PP_ERR_TEXT="$(cat "$PP_STDERR")"
 }
@@ -181,7 +184,7 @@ STUB_EOF
     chmod +x "$1/bin/resolve-merge-base.sh"
 }
 
-# A throwaway AGENTS_CONFIG_DIR carrying a REAL .env and the real load-env.js, so the config
+# A throwaway AGENTS_MAIN_ROOT carrying a REAL .env, so the config
 # rows exercise bin/get-config-var's actual resolution chain rather than asserting that a
 # process-level export reaches a shell variable — which would still pass if .env were never
 # read at all.
@@ -189,8 +192,7 @@ pp_make_cfg_dir() { # <dir> [<KEY=VALUE> ...] ; prints the dir
     local dir="$1"
     shift
     rm -rf "$dir"
-    mkdir -p "$dir/hooks" "$dir/bin"
-    cp -R "$AGENTS_ROOT/hooks/lib" "$dir/hooks/lib"
+    mkdir -p "$dir"
     : > "$dir/.env"
     local line
     for line in "$@"; do printf '%s\n' "$line" >> "$dir/.env"; done

@@ -14,7 +14,7 @@
 echo ""
 echo "=== Group 10: check-plan-lang.js integration ==="
 
-CHECK_PLAN_HOOK="$AGENTS_DIR/hooks/check-plan-lang.js"
+CHECK_PLAN_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/check-plan-lang.js"
 if [ "$(src_present "$CHECK_PLAN_HOOK")" != "ok" ]; then
     echo "SKIP G10: hooks/check-plan-lang.js not yet implemented (RED phase)"
 else
@@ -28,8 +28,8 @@ else
     run_plan_hook() {
         local json="$1"
         (export WORKFLOW_PLANS_DIR="$_g10_plans_dir"
-         export AGENTS_CONFIG_DIR="$_g10_agents_dir"
-         echo "$json" | run_with_timeout 10 node "$AGENTS_DIR/hooks/check-plan-lang.js" 2>/dev/null)
+         export AGENTS_MAIN_ROOT="$_g10_agents_dir"
+         echo "$json" | run_with_timeout 10 node "$SCRIPT_CHECKOUT_ROOT/hooks/check-plan-lang.js" 2>/dev/null)
     }
 
     # T39: CJK content in intent.md → block

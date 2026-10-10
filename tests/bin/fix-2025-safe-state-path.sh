@@ -28,7 +28,7 @@ SPLIB="$AGENTS_ROOT/bin/lib/safe-state-path.sh"
 
 # harness.sh supplies the case markers only; this suite keeps its own
 # name-first reporters, defined after the source so they take precedence.
-AGENTS_DIR="$AGENTS_ROOT"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_ROOT/tests/lib/harness.sh"
 
@@ -67,7 +67,6 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 cd "$TMPDIR_BASE" || exit 1
 
 if [ ! -f "$SPLIB" ]; then

@@ -4,7 +4,7 @@
 #
 # STATUS: RED on the CASE-* rows. Sourced by
 # tests/hooks/fix-1569-quote-span-regression.sh — uses its pass/fail, run_with_timeout
-# and _AGENTS_DIR_NODE.
+# and _SCRIPT_CHECKOUT_ROOT_NODE.
 #
 # Defect: the scanner closes a `$(` command substitution at the FIRST `)` it
 # meets, but `)` is also the pattern terminator inside a `case` statement, and a
@@ -77,7 +77,7 @@ case_probe() {
           console.log("ERROR: unknown op " + op);
         }
       } catch (e) { console.log("ERROR: threw " + e.message); }
-    ' "$_AGENTS_DIR_NODE" "$1" "$2" "$3" 2>&1
+    ' "$_SCRIPT_CHECKOUT_ROOT_NODE" "$1" "$2" "$3" 2>&1
 }
 
 assert_case_probe() {

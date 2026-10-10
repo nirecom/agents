@@ -8,6 +8,7 @@
 # S-series: workflow-mark sentinel (S9)
 
 set -uo pipefail
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # isolation (#2512): pin state and plans dirs once for this file
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
@@ -92,7 +93,7 @@ write_state "$SID" "$(state_wi_ci "$SID" "pending" "pending")"
 MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"' "$SID")
 MARK_OUTPUT=$(echo "$MARK_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
 
-actual_after=$( (cd "$AGENTS_DIR" && node -e "
+actual_after=$( (cd "$SCRIPT_CHECKOUT_ROOT" && node -e "
 const { readState } = require('./hooks/workflow-state.js');
 const s = readState('$SID');
 const wi = s && s.steps && s.steps.workflow_init;

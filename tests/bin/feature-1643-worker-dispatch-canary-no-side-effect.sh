@@ -12,11 +12,11 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1643_CANARY_INNER:-}" ]; the
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-FSGUARD_JS="$AGENTS_DIR/bin/worker-dispatch/fsguard.js"
-REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+FSGUARD_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/fsguard.js"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
 
 PASS=0
 FAIL=0
@@ -211,7 +211,7 @@ group_fsguard() {
       const allowed = [];
       for (const p of paths) {
         let ok = false;
-        try { const r = check("test-runner", p, { mainRoot: main, plansDir: plans }); ok = (r === true || r === undefined); }
+        try { const r = check("test-runner", p, { targetMainRoot: main, plansDir: plans }); ok = (r === true || r === undefined); }
         catch { ok = false; }
         if (ok) allowed.push(p);
       }
@@ -226,7 +226,7 @@ group_fsguard() {
       const check = g.assertWritable || g.checkWrite || g.isWritable || g.default;
       if (typeof check !== "function") { process.stdout.write("NO_EXPORT"); process.exit(0); }
       let ok = false;
-      try { const r = check("issue-reconcile", process.argv[3] + "/out.jsonl", { mainRoot: process.argv[2], plansDir: process.argv[3] }); ok = (r === true || r === undefined); }
+      try { const r = check("issue-reconcile", process.argv[3] + "/out.jsonl", { targetMainRoot: process.argv[2], plansDir: process.argv[3] }); ok = (r === true || r === undefined); }
       catch (e) { ok = false; }
       process.stdout.write(ok ? "ALLOWED" : "REJECTED");
     ' "$(nodepath "$FSGUARD_JS")" "$TARGET" "$PLANS" 2>&1)"

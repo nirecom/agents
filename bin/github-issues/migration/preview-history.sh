@@ -7,7 +7,7 @@
 #   bin/github-issues/migration/preview-history.sh <repo_dir>
 set -euo pipefail
 
-REPO_DIR="${1:?usage: preview-history.sh <repo_dir> [--history-files <list>]}"
+TARGET_CHECKOUT_ROOT="${1:?usage: preview-history.sh <repo_dir> [--history-files <list>]}"
 shift
 HISTORY_FILES_ARG=""
 while [ $# -gt 0 ]; do
@@ -16,9 +16,9 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
-REPO_DIR="$(cd "$REPO_DIR" && pwd)"
-HISTORY_FILE="$REPO_DIR/docs/history.md"
-HISTORY_DIR="$REPO_DIR/docs/history"
+TARGET_CHECKOUT_ROOT="$(cd "$TARGET_CHECKOUT_ROOT" && pwd)"
+HISTORY_FILE="$TARGET_CHECKOUT_ROOT/docs/history.md"
+HISTORY_DIR="$TARGET_CHECKOUT_ROOT/docs/history"
 
 # extract_headings <file>
 # Prints one line per ### entry: "<type:task|type:incident>\t<clean title>"
@@ -37,7 +37,7 @@ extract_headings() {
 }
 
 echo "=== History migration preview ==="
-echo "Repo: $REPO_DIR"
+echo "Repo: $TARGET_CHECKOUT_ROOT"
 echo ""
 
 n=0
@@ -70,7 +70,7 @@ fi
 for _f in "${ALL_PREVIEW_FILES[@]+${ALL_PREVIEW_FILES[@]}}"; do
   [ -z "$_f" ] && continue
   [ -f "$_f" ] || continue
-  rel="${_f#"$REPO_DIR/"}"
+  rel="${_f#"$TARGET_CHECKOUT_ROOT/"}"
   echo "--- $rel ---"
   file_count=0
   while IFS=$'\t' read -r label title; do

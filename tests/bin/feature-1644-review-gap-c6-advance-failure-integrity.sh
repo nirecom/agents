@@ -1,47 +1,30 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/lib/next-step/advance.js, bin/workflow/record-skip-judgment, bin/workflow/set-workflow-type, bin/workflow/record-complexity-and-skip, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, advance, failure-injection, transaction-integrity, fail-closed, scope:issue-specific, pwsh-not-required
-#
-# #1644 review gap C6 (HIGH) — transaction integrity of the forward operation
-# under an INJECTED record failure.
-#
-# Why: runAdvance is fail-CLOSED by construction — a failed record must return no
-# next action, so a caller can never mistake "not recorded" for "recorded,
-# proceed". A2 / S5 / S10a / S14 each pin one CLI against one injection; this file
-# makes the statement uniform across all four members and two independent
-# injections, and adds the half none of them assert: that the failure leaves NO
-# half-applied state behind. Injection portability: chmod is a no-op on
-# Windows/Git-Bash, so permission stripping is never used. Both injections are
-# structural, behave identically on every platform, and are each proven to
-# actually fail (a control assertion on the same call without the injection):
-#   I1  WORKFLOW_STATE_DIR points at an existing REGULAR FILE (and at a
-#       nonexistent deep path underneath it) -> every mkdir/open fails ENOTDIR.
-#   I2  the session's state file contains unparseable JSON -> every locked
-#       read-modify-write fails CorruptStateFileError.
-#
-# TL3 gap (what this test does NOT catch):
-# - A genuinely read-only filesystem or a POSIX permission denial (chmod 0500),
-#   which only a real POSIX CI host can produce.
-# - A write that fails midway through the OS-level rename (torn write), which
-#   needs fault injection at the filesystem layer.
-# - Whether a live session surfaces the nonzero exit to the model rather than
-#   swallowing it in the Bash tool wrapper.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+
+# #1644 review gap C6 (HIGH) — the forward operation under an INJECTED record
+# failure: all four advance-class CLIs must return no next action AND leave no
+# half-applied state. Two structural, platform-independent injections (chmod is a
+# no-op on Git-Bash), each proven to fail by a control call (C6-0):
+#   I1  WORKFLOW_STATE_DIR is a REGULAR FILE (or a deep path under it) -> ENOTDIR.
+#   I2  the session's state file is unparseable JSON -> CorruptStateFileError.
+
+# TL3 gap: a read-only filesystem or POSIX permission denial, a torn write, and a
+# live session swallowing the nonzero exit (WORKFLOW_USER_VERIFIED preflight).
 
 set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-NS="$AGENTS_DIR_N/bin/workflow/next-step"
-RSJ="$AGENTS_DIR_N/bin/workflow/record-skip-judgment"
-SWT="$AGENTS_DIR_N/bin/workflow/set-workflow-type"
-RCAS="$AGENTS_DIR/bin/workflow/record-complexity-and-skip"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
-PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+NS="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+RSJ="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment"
+SWT="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/set-workflow-type"
+RCAS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
+PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -53,7 +36,7 @@ export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1
@@ -161,7 +144,7 @@ run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$SWT" --session c61swt --type wf
 check "C6-1c: WITHOUT --advance the same failure keeps the frozen exit 1" 1 "$RC"
 
 # record-complexity-and-skip normalizes EVERY advance-path child failure to 3.
-run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" AGENTS_CONFIG_DIR="$AGENTS_DIR_N" \
+run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" \
   bash "$RCAS" --session c61rcas --signals "" --target outline --advance
 check "C6-1d: record-complexity-and-skip exits 3" 3 "$RC"
 check "C6-1d: zero ACTION lines" 0 "$(action_lines)"
@@ -186,7 +169,7 @@ run_cli env WORKFLOW_STATE_DIR="$DEEP_N" node "$SWT" --session c62swt \
   --type wf-meta --advance --step workflow_init --status complete --next
 check "C6-2b: set-workflow-type exits 2" 2 "$RC"
 check "C6-2b: zero ADVANCED lines" 0 "$(advanced_lines)"
-run_cli env WORKFLOW_STATE_DIR="$DEEP_N" AGENTS_CONFIG_DIR="$AGENTS_DIR_N" \
+run_cli env WORKFLOW_STATE_DIR="$DEEP_N" \
   bash "$RCAS" --session c62rcas --signals "" --target outline --advance
 check "C6-2c: record-complexity-and-skip exits 3" 3 "$RC"
 check "C6-2c: zero ADVANCED lines" 0 "$(advanced_lines)"
@@ -220,7 +203,7 @@ check "C6-3c: zero ADVANCED lines" 0 "$(advanced_lines)"
 check "C6-3c: the corrupt file is byte-for-byte unchanged" \
   "$C63_BEFORE" "$(file_snapshot "$WORKFLOW_DIR/c63swt.json")"
 
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
+run_cli env bash "$RCAS" \
   --session c63rcas --signals "" --target outline --advance
 check "C6-3d: record-complexity-and-skip exits 3" 3 "$RC"
 check "C6-3d: zero ADVANCED lines" 0 "$(advanced_lines)"
@@ -230,10 +213,15 @@ check "C6-3d: the corrupt file is byte-for-byte unchanged" \
 echo ""
 echo "=== C6-4: record-complexity-and-skip normalizes a failure in EACH delegated step ==="
 # Three delegated steps, three injection points: without per-step coverage the
-# exit-3 normalization could be implemented on one branch only.
+# exit-3 normalization could be implemented on one branch only. The script finds
+# its delegates from its own location, so each stub tree runs its own copy of it.
 NOOP='#!/usr/bin/env node
 process.exit(0);
 '
+fake_rcas() {  # <fake-tree> — copies the script under test beside the tree's stubs
+  cp "$RCAS" "$1/bin/workflow/record-complexity-and-skip"
+  printf '%s' "$1/bin/workflow/record-complexity-and-skip"
+}
 # Step 1 fails: the complexity evaluation itself refuses.
 mkdir -p "$TMPDIR_BASE/fake1/bin/workflow" "$TMPDIR_BASE/fake1/hooks/workflow-state"
 printf '#!/usr/bin/env node\nprocess.stderr.write("stub: step1 refused\\n");\nprocess.exit(7);\n' \
@@ -242,7 +230,7 @@ printf 'module.exports={resolveSkipConditionsFromComplexity:()=>true};\n' \
   > "$TMPDIR_BASE/fake1/hooks/workflow-state/skip-signal-resolver.js"
 printf '%s' "$NOOP" > "$TMPDIR_BASE/fake1/bin/workflow/record-skip-judgment"
 at_outline c64a
-run_cli env AGENTS_CONFIG_DIR="$(nrm "$TMPDIR_BASE/fake1")" bash "$RCAS" \
+run_cli env bash "$(fake_rcas "$TMPDIR_BASE/fake1")" \
   --session c64a --signals "" --target outline --advance
 check "C6-4a: a step-1 failure is normalized to 3 (not the child's 7)" 3 "$RC"
 check "C6-4a: zero ADVANCED lines" 0 "$(advanced_lines)"
@@ -257,7 +245,7 @@ printf 'throw new Error("stub: resolver unavailable");\n' \
   > "$TMPDIR_BASE/fake2/hooks/workflow-state/skip-signal-resolver.js"
 printf '%s' "$NOOP" > "$TMPDIR_BASE/fake2/bin/workflow/record-skip-judgment"
 at_outline c64b
-run_cli env AGENTS_CONFIG_DIR="$(nrm "$TMPDIR_BASE/fake2")" bash "$RCAS" \
+run_cli env bash "$(fake_rcas "$TMPDIR_BASE/fake2")" \
   --session c64b --signals "" --target outline --advance
 check "C6-4b: a step-2 failure is normalized to 3" 3 "$RC"
 check "C6-4b: zero ADVANCED lines" 0 "$(advanced_lines)"
@@ -276,7 +264,7 @@ printf '#!/usr/bin/env node\nrequire(%s);\n' "\"$RSJ\"" \
   > "$TMPDIR_BASE/fake3/bin/workflow/record-skip-judgment"
 printf '%s' "$CORRUPT_BYTES" > "$WORKFLOW_DIR/c64c.json"
 C64C_BEFORE="$(file_snapshot "$WORKFLOW_DIR/c64c.json")"
-run_cli env AGENTS_CONFIG_DIR="$(nrm "$TMPDIR_BASE/fake3")" bash "$RCAS" \
+run_cli env bash "$(fake_rcas "$TMPDIR_BASE/fake3")" \
   --session c64c --signals "" --target outline --advance
 check "C6-4c: a step-3 failure is normalized to 3 (the delegate's own 2 is swallowed)" 3 "$RC"
 check "C6-4c: zero ADVANCED lines" 0 "$(advanced_lines)"

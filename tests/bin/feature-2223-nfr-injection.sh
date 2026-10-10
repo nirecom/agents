@@ -11,7 +11,7 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 NFR_SENTINEL="NFRSENTINEL7QX"
 
 TMP_ROOT="$(mktemp -d)"
@@ -90,21 +90,21 @@ printf '%s\n' '#!/usr/bin/env bash' 'cat > "$CODEX_CAPTURE"' 'echo "APPROVED"' \
 chmod +x "$MOCK_BIN/codex"
 export CODEX_CAPTURE="$CAPTURE"
 
-# make_cfg <name> [<KEY=VALUE> ...] — a config dir whose .env carries the given
+# make_cfg <name> [<KEY=VALUE> ...] — a fake agents main root whose .env carries the given
 # lines. Prints the dir. rules/ and bin/lib/ are copied so the loop wrapper's
 # pre-flight finds what it requires.
 make_cfg() {
     local name="$1"; shift
     local dir="$TMP_ROOT/cfg-$name"
     rm -rf "$dir"; mkdir -p "$dir/rules" "$dir/bin"
-    cp -R "$AGENTS_DIR/bin/lib" "$dir/bin/lib" 2>/dev/null || true
-    cp "$AGENTS_DIR/bin/review-code-codex" "$dir/bin/review-code-codex" 2>/dev/null || true
+    cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$dir/bin/lib" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/review-code-codex" "$dir/bin/review-code-codex" 2>/dev/null || true
     chmod +x "$dir/bin/review-code-codex" 2>/dev/null || true
-    cp "$AGENTS_DIR/bin/resolve-accepted-tradeoffs-file" "$dir/bin/resolve-accepted-tradeoffs-file" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/resolve-accepted-tradeoffs-file" "$dir/bin/resolve-accepted-tradeoffs-file" 2>/dev/null || true
     chmod +x "$dir/bin/resolve-accepted-tradeoffs-file" 2>/dev/null || true
-    cp "$AGENTS_DIR/bin/resolve-merge-base.sh" "$dir/bin/resolve-merge-base.sh" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh" "$dir/bin/resolve-merge-base.sh" 2>/dev/null || true
     chmod +x "$dir/bin/resolve-merge-base.sh" 2>/dev/null || true
-    cp "$AGENTS_DIR/rules/core-principles.md" "$dir/rules/core-principles.md" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md" "$dir/rules/core-principles.md" 2>/dev/null || true
     : > "$dir/.env"
     local line
     for line in "$@"; do printf '%s\n' "$line" >> "$dir/.env"; done
@@ -125,15 +125,15 @@ LOCAL_ENV_BASENAME=".env"".local"
 # nfr_block <cfg-dir> <project-root> — the block the review scripts embed.
 nfr_block() {
     local cfg="$1" root="$2"
-    AGENTS_CONFIG_DIR="$cfg" run_with_timeout 30 bash -c '
+    AGENTS_MAIN_ROOT="$cfg" run_with_timeout 30 bash -c '
       source "$1/bin/lib/codex-core.sh" >/dev/null 2>&1 || exit 3
       codex_core_init "Probe" >/dev/null 2>&1
       declare -F codex_core_project_nfr_block >/dev/null || exit 4
       codex_core_project_nfr_block "$2"
-    ' _ "$AGENTS_DIR" "$root" 2>/dev/null
+    ' _ "$SCRIPT_CHECKOUT_ROOT" "$root" 2>/dev/null
 }
 
-if ! grep -q 'codex_core_project_nfr_block' "$AGENTS_DIR/bin/lib/codex-core.sh" 2>/dev/null; then
+if ! grep -q 'codex_core_project_nfr_block' "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-core.sh" 2>/dev/null; then
     echo "NOTE: codex_core_project_nfr_block absent from bin/lib/codex-core.sh — NFR cases are expected RED."
 fi
 
@@ -291,8 +291,8 @@ run_plan() {
                 --project-root "$PROJ_PLAN" --log-dir "$PLAN_LOG_DIR" --no-log
                 --accepted-tradeoffs "$TRADEOFFS_FILE")
     if [ "$round" -ge 2 ]; then args+=(--ledger "$LEDGER_FILE"); fi
-    (cd "$TMP_ROOT" && AGENTS_CONFIG_DIR="$CFG_PLAN" PATH="$MOCK_BIN:$PATH" \
-        run_with_timeout 60 bash "$AGENTS_DIR/bin/review-plan-codex" "${args[@]}" "$@" \
+    (cd "$TMP_ROOT" && AGENTS_MAIN_ROOT="$CFG_PLAN" PATH="$MOCK_BIN:$PATH" \
+        run_with_timeout 60 bash "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" "${args[@]}" "$@" \
         >/dev/null 2>&1) || true
 }
 
@@ -343,8 +343,8 @@ assert_file_has "T2223P-noregress-verdict-format" "$CAPTURE" "NEEDS_REVISION"
 # Without a --project-root there is no project to read an NFR from, and the run
 # must still produce a normal prompt rather than failing.
 rm -f "$CAPTURE"
-(cd "$TMP_ROOT" && AGENTS_CONFIG_DIR="$CFG_PLAN" PATH="$MOCK_BIN:$PATH" \
-    run_with_timeout 60 bash "$AGENTS_DIR/bin/review-plan-codex" \
+(cd "$TMP_ROOT" && AGENTS_MAIN_ROOT="$CFG_PLAN" PATH="$MOCK_BIN:$PATH" \
+    run_with_timeout 60 bash "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" \
     --input "$PLAN_INPUT" --format detail-plan --round 1 --no-log >/dev/null 2>&1) || true
 assert_file_has "T2223P-no-project-root-still-runs" "$CAPTURE" "[PLAN START]"
 assert_file_lacks "T2223P-no-project-root-no-nfr" "$CAPTURE" "$NFR_SENTINEL"
@@ -354,8 +354,8 @@ assert_file_lacks "T2223P-no-project-root-no-nfr-delimiter" "$CAPTURE" "[PROJECT
 rm -f "$CAPTURE"
 CFG_NOENV="$(make_cfg noenv "CODE_LANG=english")"
 PROJ_NOENV="$(make_project noenv)"
-(cd "$TMP_ROOT" && AGENTS_CONFIG_DIR="$CFG_NOENV" PATH="$MOCK_BIN:$PATH" \
-    PROJECT_NFR="PLANINJECTEDENV" run_with_timeout 60 bash "$AGENTS_DIR/bin/review-plan-codex" \
+(cd "$TMP_ROOT" && AGENTS_MAIN_ROOT="$CFG_NOENV" PATH="$MOCK_BIN:$PATH" \
+    PROJECT_NFR="PLANINJECTEDENV" run_with_timeout 60 bash "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" \
     --input "$PLAN_INPUT" --format detail-plan --round 1 --project-root "$PROJ_NOENV" \
     --no-log >/dev/null 2>&1) || true
 assert_file_lacks "T2223P-plan-process-env-injection-blocked" "$CAPTURE" "PLANINJECTEDENV"
@@ -386,8 +386,8 @@ run_code() {
     local repo="$1"; shift
     rm -f "$CAPTURE"
     (cd "$repo" && run_with_timeout 60 env -u CODEX_REVIEW_MAX_DIFF_LINES \
-        AGENTS_CONFIG_DIR="$CFG_CODE" PATH="$MOCK_BIN:$PATH" \
-        bash "$AGENTS_DIR/bin/review-code-codex" "$@" >/dev/null 2>&1) || true
+        AGENTS_MAIN_ROOT="$CFG_CODE" PATH="$MOCK_BIN:$PATH" \
+        bash "$SCRIPT_CHECKOUT_ROOT/bin/review-code-codex" "$@" >/dev/null 2>&1) || true
 }
 
 CFG_CODE="$(make_cfg code "PROJECT_NFR=$NFR_SENTINEL must hold" "CODE_LANG=japanese")"
@@ -412,8 +412,8 @@ CFG_CODE="$(make_cfg codenoenv "CODE_LANG=english")"
 REPO_ENV="$(make_repo codeenv)"
 rm -f "$CAPTURE"
 (cd "$REPO_ENV" && run_with_timeout 60 env -u CODEX_REVIEW_MAX_DIFF_LINES \
-    AGENTS_CONFIG_DIR="$CFG_CODE" PATH="$MOCK_BIN:$PATH" PROJECT_NFR="CODEINJECTEDENV" \
-    bash "$AGENTS_DIR/bin/review-code-codex" \
+    AGENTS_MAIN_ROOT="$CFG_CODE" PATH="$MOCK_BIN:$PATH" PROJECT_NFR="CODEINJECTEDENV" \
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/review-code-codex" \
     --base main --project-root "$REPO_ENV" >/dev/null 2>&1) || true
 assert_file_lacks "T2223C-code-process-env-injection-blocked" "$CAPTURE" "CODEINJECTEDENV"
 
@@ -428,8 +428,8 @@ mkdir -p "$SECLOOP_PLANS"
 printf 'none\n' > "$SECLOOP_TRADEOFFS"
 rm -f "$CAPTURE"
 (cd "$REPO_SECLOOP" && run_with_timeout 90 env -u CODEX_REVIEW_MAX_DIFF_LINES \
-    AGENTS_CONFIG_DIR="$CFG_CODE" PATH="$MOCK_BIN:$PATH" \
-    bash "$AGENTS_DIR/bin/run-codex-review-loop" --format security-code \
+    AGENTS_MAIN_ROOT="$CFG_CODE" PATH="$MOCK_BIN:$PATH" \
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" --format security-code \
     --session-id nfrsecloop --plans-dir "$SECLOOP_PLANS" \
     --cap 2 --max-extensions 1 --extensions-used 0 \
     --accepted-tradeoffs "$SECLOOP_TRADEOFFS" --repo-root "$REPO_SECLOOP" \
@@ -445,7 +445,7 @@ assert_file_has "T2223C-security-code-loop-nfr-present" "$CAPTURE" "$NFR_SENTINE
 for _case in loop-forwarding cli-guards-and-caps utf8-tail-trim \
              prompt-tmpfile-cleanup env-file-access production-entry-point \
              severity-criterion; do
-    _case_file="$AGENTS_DIR/tests/bin/feature-2223-nfr-injection/$_case.sh"
+    _case_file="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2223-nfr-injection/$_case.sh"
     if [ -f "$_case_file" ]; then
         . "$_case_file"
     else

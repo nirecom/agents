@@ -24,7 +24,7 @@ SV-3. Evaluate whether the speculative skip is safe:
    - `confirm`: The skip does not cause loss of coverage; the skipped stage can be inferred from available artifacts without design gaps.
    - `veto`: The skip would cause a design gap, missing class-member coverage, or unresolved multi-layer decision.
 SV-4. Record the verdict via CLI (separate Bash call — not chained):
-   `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-verdict" --session "${session_id}" --target "${target}" --verdict <confirm|veto> --reason "<one-line rationale>"`
+   `node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-verdict" --session "${session_id}" --target "${target}" --verdict <confirm|veto> --reason "<one-line rationale>"`
 SV-5. Return result: `VERDICT=<confirm|veto> TARGET=<target>`.
 
 ## Rules

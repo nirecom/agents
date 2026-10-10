@@ -7,10 +7,11 @@
 # terminal TR5; every other verdict/state stays fail-closed. Scenarios 1 & 3(i) FAIL
 # before the fix (fail-before-fix); the rest are fail-closed regressions.
 # Parent: tests/hooks/feature-2256-tr5-user-verified-hold.sh
-# TL3 gap (not caught here): a real stale AGENTS_CONFIG_DIR against a live origin on a
+# TL3 gap (not caught here): a real stale AGENTS_MAIN_ROOT against a live origin on a
 # CI host — fixtures reach null freshness via a fixture repo with no merge base instead.
 
 set -uo pipefail
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # isolation (#2512): pin state and plans dirs once for this file
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
@@ -48,7 +49,7 @@ process.stdout.write(JSON.stringify({
   tool_input: { command: process.env.CMDTEXT, cwd: process.env.RCWD },
   session_id: process.env.SESS,
 }));
-" 2>/dev/null | bash "$RWT" 60 node "$AGENTS_DIR/hooks/workflow-gate.js" 2>/dev/null
+" 2>/dev/null | bash "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js" 2>/dev/null
 }
 
 fresh_key_at() {
@@ -322,7 +323,7 @@ assert_eq "19: (v) after a fresh TR5 terminal run is recorded, the merge is perm
     "$(decision_of "$(gate_at "$MERGE_CMD" "$REPO3")")" "approve"
 
 # --- 20-22: #2323 main real-world scenario — prior CONTINUE terminal stored with a
-# non-null freshness_key (recorded when repo was healthy) + null code side (AGENTS_CONFIG_DIR
+# non-null freshness_key (recorded when repo was healthy) + null code side (AGENTS_MAIN_ROOT
 # became stale: merge base gone) → selfRecovering=true → approveFn, no arm, no loop.
 # FAIL-BEFORE-FIX: Stage 2 (!currentFk) arms on a stale-now-null code side even though
 # the terminal was settled against a valid key in a prior healthy state.
@@ -336,7 +337,7 @@ process.stdout.write(JSON.stringify(o));
 PRIOR_FK="abc123def456abc1abc123def456abc1abc123def456abc1abc123def456abc1"
 seed_state "$(terminal_run_with_artifacts CONTINUE "$PRIOR_FK")" >/dev/null
 out20="$(gate_at "$SENTINEL_UV" "$REPO_NULL")"
-assert_eq "20: prior CONTINUE (non-null stored key) + null code side (stale AGENTS_CONFIG_DIR) is approved" \
+assert_eq "20: prior CONTINUE (non-null stored key) + null code side (stale AGENTS_MAIN_ROOT) is approved" \
     "$(decision_of "$out20")" "approve"
 assert_eq "21: the self-recovering approve arms no audit run" \
     "$(state_field audit.audit_phase)" "null"

@@ -14,7 +14,7 @@
 #   node bin/worktree-notes-triage.js resolve \
 #        --caller <worktree-end|session-close|issue-close-finalize> \
 #        [--from-session] [--worktree <dir>] [--session-id <sid>] \
-#        [--issue <N>] [--pr-branch <branch>] [--main-root <dir>]
+#        [--issue <N>] [--pr-branch <branch>] [--target-main-root <dir>]
 #
 #   stdout: exactly one line of JSON — { action, skipReason?, resolvedVia?, notesPath? }
 #   exit 0 for both "promote" and "skip"; exit 1 only for an unusable invocation.
@@ -32,7 +32,7 @@
 #   feature-530-notes-promotion-triage-flow/injection.sh        P1-P3 (entries as
 #                                                               untrusted, inert data)
 #   feature-530-notes-promotion-triage-flow/security-anchors.sh A1-A4 (--worktree /
-#                                                               --main-root absolute
+#                                                               --target-main-root absolute
 #                                                               paths and shell metachars)
 #   feature-530-notes-promotion-triage-flow/promotion-loop.sh   L1-L3, I1, E1-E6, G7
 #   feature-530-notes-promotion-triage-flow/protocol-order.sh   O1-O2, N1-N2 (traced

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Batch migration: create GitHub Issues from <REPO_DIR>/docs/history.md and
-# any archive files in <REPO_DIR>/docs/history/*.md (excluding index.md).
+# Batch migration: create GitHub Issues from <TARGET_CHECKOUT_ROOT>/docs/history.md and
+# any archive files in <TARGET_CHECKOUT_ROOT>/docs/history/*.md (excluding index.md).
 # Each entry is created with type:task (or type:incident) + status:migrated
 # labels, then immediately closed (historical record — not an active task).
 #
@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/state.sh"
 
-REPO_DIR="${1:?usage: migrate-history.sh <repo_dir> [--dry-run] [--canary N]}"
+TARGET_CHECKOUT_ROOT="${1:?usage: migrate-history.sh <repo_dir> [--dry-run] [--canary N]}"
 shift
 DRY_RUN=0
 CANARY_LIMIT=""
@@ -30,9 +30,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-REPO_DIR="$(cd "$REPO_DIR" && pwd)"
-HISTORY_FILE="$REPO_DIR/docs/history.md"
-HISTORY_DIR="$REPO_DIR/docs/history"
+TARGET_CHECKOUT_ROOT="$(cd "$TARGET_CHECKOUT_ROOT" && pwd)"
+HISTORY_FILE="$TARGET_CHECKOUT_ROOT/docs/history.md"
+HISTORY_DIR="$TARGET_CHECKOUT_ROOT/docs/history"
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "[dry-run] No GitHub API calls will be made"
@@ -40,8 +40,8 @@ fi
 
 # State load (non-dry-run only).
 if [ "$DRY_RUN" -eq 0 ]; then
-  state_init "$REPO_DIR"
-  state_load "$REPO_DIR"
+  state_init "$TARGET_CHECKOUT_ROOT"
+  state_load "$TARGET_CHECKOUT_ROOT"
 fi
 
 TMPDIR_ENTRIES=$(mktemp -d)
@@ -152,7 +152,7 @@ for title_file in $(find "$TMPDIR_ENTRIES" -name "*.title" | sort); do
     continue
   fi
 
-  issue_url=$(cd "$REPO_DIR" && gh issue create \
+  issue_url=$(cd "$TARGET_CHECKOUT_ROOT" && gh issue create \
     --title "$title" \
     --label "$label" \
     --label "status:migrated" \
@@ -164,7 +164,7 @@ for title_file in $(find "$TMPDIR_ENTRIES" -name "*.title" | sort); do
   fi
   echo "  -> created #$issue_num"
 
-  (cd "$REPO_DIR" && ISSUE_CLOSE_SKILL=1 gh issue close "$issue_num" --reason completed) || true
+  (cd "$TARGET_CHECKOUT_ROOT" && ISSUE_CLOSE_SKILL=1 gh issue close "$issue_num" --reason completed) || true
   echo "  -> closed  #$issue_num"
 
   state_record_migrated history "$entry_id" "$issue_num" "$title"

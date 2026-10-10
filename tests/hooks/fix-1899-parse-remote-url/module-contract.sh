@@ -13,6 +13,7 @@
 # bin/check-verification-gate.sh category: hook-registration.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -21,14 +22,14 @@ set -u
 # Group D — purity: parse-remote-url.js must not touch the process or the disk
 # ===========================================================================
 group_purity() {
-    if [ ! -f "$AGENTS_DIR/hooks/lib/parse-remote-url.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-remote-url.js" ]; then
         fail "purity/module-present — hooks/lib/parse-remote-url.js missing"
         return
     fi
     local pat label
     for pat in 'child_process' 'require\("fs"\)' "require\\('fs'\\)" 'execSync' 'spawnSync'; do
         label="${pat//[^A-Za-z_]/}"
-        if grep -qE "$pat" "$AGENTS_DIR/hooks/lib/parse-remote-url.js"; then
+        if grep -qE "$pat" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-remote-url.js"; then
             fail "purity/absent-$label — parse-remote-url.js references $pat"
         else
             pass "purity/absent-$label"

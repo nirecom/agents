@@ -7,7 +7,7 @@
 # command) and keeps the PostToolUse checkers as backstops.
 # SET-T4..T5: the registration LINE itself is executed — the command literal is
 # parsed out of settings.json (never hardcoded) and spawned through a shell so
-# `$AGENTS_CONFIG_DIR` expands exactly as Claude Code's hook runner expands it,
+# `$AGENTS_MAIN_ROOT` expands exactly as Claude Code's hook runner expands it,
 # with a hook-runner-shaped payload on stdin.
 
 echo ""
@@ -20,7 +20,7 @@ SET_EXPECTED_MATCHER='Write|Edit|MultiEdit|editFiles'
 # settings_hook_exact <event> <script basename> <expected command literal>
 # Prints "<entries matching>|<matchers>|<types>|<exact-command matches>" where the
 # last field counts hook objects whose command string EQUALS the literal (the
-# `$AGENTS_CONFIG_DIR` dollar sign is part of the literal, no shell expansion).
+# `$AGENTS_MAIN_ROOT` dollar sign is part of the literal, no shell expansion).
 settings_hook_exact() {
     run_with_timeout 10 node -e '
 const fs = require("fs");
@@ -48,7 +48,7 @@ for _gate in gate-plan-lang.js gate-worktree-notes-lang.js; do
         gate-plan-lang.js) _id="SET-T1" ;;
         *) _id="SET-T2" ;;
     esac
-    _cmd='node "$AGENTS_CONFIG_DIR/hooks/'"$_gate"'"'
+    _cmd='node "$AGENTS_MAIN_ROOT/hooks/'"$_gate"'"'
     _rep="$(settings_hook_exact PreToolUse "$_gate" "$_cmd")"
     if [ "$_rep" = "1|$SET_EXPECTED_MATCHER|command|1" ]; then
         pass "$_id: settings.json PreToolUse registers $_gate exactly once — matcher $SET_EXPECTED_MATCHER, type command, command == $_cmd"
@@ -61,7 +61,7 @@ done
 _set3_ok=1
 _set3_report=""
 for _chk in check-plan-lang.js check-worktree-notes-lang.js; do
-    _cmd='node "$AGENTS_CONFIG_DIR/hooks/'"$_chk"'"'
+    _cmd='node "$AGENTS_MAIN_ROOT/hooks/'"$_chk"'"'
     _rep="$(settings_hook_exact PostToolUse "$_chk" "$_cmd")"
     [ "$_rep" = "1|$SET_EXPECTED_MATCHER|command|1" ] || { _set3_ok=0; _set3_report+=" $_chk='$_rep'"; }
 done
@@ -74,7 +74,7 @@ fi
 # ── SET-T4/T5 (C6): execute the registration line, do not merely inspect it ──
 # SET-T1..T3 read settings.json as data; PLG/WNG invoke the hook script by an
 # absolute path this test file chose. Neither can fail when the registered
-# command string itself is wrong (bad `$AGENTS_CONFIG_DIR` spelling, wrong
+# command string itself is wrong (bad `$AGENTS_MAIN_ROOT` spelling, wrong
 # script name, a matcher that does not select the write tools). These two cases
 # close that seam: the matcher and the command come out of settings.json, the
 # command is expanded by a shell exactly as the hook runner expands it, and the
@@ -118,8 +118,8 @@ try {
 }
 
 # run_registered <event> <script> <payload> <cwd> [KEY=VAL ...]
-# Spawns the settings.json command literal via `bash -c` with AGENTS_CONFIG_DIR
-# pointed at the repo under test, so the registered `$AGENTS_CONFIG_DIR/hooks/...`
+# Spawns the settings.json command literal via `bash -c` with AGENTS_MAIN_ROOT
+# pointed at the repo under test, so the registered `$AGENTS_MAIN_ROOT/hooks/...`
 # spelling is what resolves the script. Policy keys are passed as real exports —
 # hooks/lib/load-env.js lets a non-empty process.env win over .env, so the case
 # controls the policy without writing into the repo's own .env.
@@ -141,7 +141,7 @@ run_registered() {
         unset DOCS_LANG_HISTORY_PUBLIC DOCS_LANG_HISTORY_PRIVATE
         unset DOCS_LANG_CHANGELOG_PUBLIC DOCS_LANG_CHANGELOG_PRIVATE
         unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR
-        export AGENTS_CONFIG_DIR="$AGENTS_DIR_NODE"
+        export AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT_NODE"
         for _kv in "$@"; do export "${_kv?}"; done
         printf '%s' "$payload" | run_with_timeout 20 bash -c "$cmd" 2>"$errf"
     )"

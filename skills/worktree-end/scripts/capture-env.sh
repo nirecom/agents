@@ -25,9 +25,9 @@ if [[ -z "$SESSION_ID" ]]; then
 fi
 [[ "$SESSION_ID" =~ ^[a-zA-Z0-9_-]+$ ]] || { printf "ERROR: invalid SESSION_ID '%s'\n" "$SESSION_ID" >&2; exit 1; }
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 : "${PLANS_DIR:?PLANS_DIR must be set}"
-if ! CONTROL_DIR="$(node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session "$SESSION_ID" --for-write)"; then
+if ! CONTROL_DIR="$(node "$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir" --session "$SESSION_ID" --for-write)"; then
   printf "ERROR: session control directory unresolved for '%s'\n" "$SESSION_ID" >&2
   exit 1
 fi

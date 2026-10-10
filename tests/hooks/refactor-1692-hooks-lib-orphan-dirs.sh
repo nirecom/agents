@@ -24,8 +24,8 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 SELF_BASENAME="$(basename "${BASH_SOURCE[0]}")"
 
 PASS=0; FAIL=0; SKIP=0
@@ -42,8 +42,8 @@ OLD_DIR_REF="hooks/lib/""supervisor-guard"
 #     lib/ tree does NOT (moved, not copied)
 # ---------------------------------------------------------------------------
 run_C1() {
-    local new_dir="$AGENTS_DIR/hooks/supervisor-guard"
-    local old_dir="$AGENTS_DIR/$OLD_DIR_REF"
+    local new_dir="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard"
+    local old_dir="$SCRIPT_CHECKOUT_ROOT/$OLD_DIR_REF"
     if [ -d "$new_dir" ] && [ ! -e "$old_dir" ]; then
         pass "C1: hooks/supervisor-guard/ exists and the pre-move lib/ directory is gone"
     else
@@ -57,7 +57,7 @@ run_C1() {
 # ---------------------------------------------------------------------------
 run_C2() {
     local out
-    out=$(cd "$AGENTS_DIR" && "$RWT" 15 node -e "
+    out=$(cd "$SCRIPT_CHECKOUT_ROOT" && "$RWT" 15 node -e "
 require('./hooks/supervisor-guard/arbitrate');
 require('./hooks/supervisor-guard/collect-audit-triggers');
 require('./hooks/supervisor-guard/format-integrated');
@@ -75,7 +75,7 @@ process.stdout.write('OK');" 2>&1)
 # ---------------------------------------------------------------------------
 run_C3() {
     local out src
-    src="$AGENTS_DIR/hooks/supervisor-guard/collect-audit-triggers.js"
+    src="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard/collect-audit-triggers.js"
     if [ ! -f "$src" ]; then
         fail "C3: hooks/supervisor-guard/collect-audit-triggers.js not found"
         return
@@ -87,7 +87,7 @@ run_C3() {
         fail "C3a: expected require(\"../lib/supervisor-state-schema\") in $src"
     fi
     # b) the require actually resolves and yields the expected exports
-    out=$(cd "$AGENTS_DIR" && "$RWT" 15 node -e "
+    out=$(cd "$SCRIPT_CHECKOUT_ROOT" && "$RWT" 15 node -e "
 const s = require('./hooks/supervisor-guard/collect-audit-triggers');
 const sc = require('./hooks/lib/supervisor-state-schema');
 const ok = typeof s.collectAuditCandidates === 'function' &&
@@ -117,7 +117,7 @@ process.stdout.write(ok ? 'OK' : 'BAD');" 2>&1)
 # ---------------------------------------------------------------------------
 run_C4() {
     local hits rc
-    hits=$(cd "$AGENTS_DIR" && git grep -nF -e "$OLD_DIR_REF" -- \
+    hits=$(cd "$SCRIPT_CHECKOUT_ROOT" && git grep -nF -e "$OLD_DIR_REF" -- \
         ":(exclude,glob)**/$SELF_BASENAME" 2>&1)
     rc=$?
     case "$rc" in
@@ -134,7 +134,7 @@ $hits" ;;
 # ---------------------------------------------------------------------------
 run_C5() {
     local out
-    out=$(cd "$AGENTS_DIR" && "$RWT" 15 node -e "
+    out=$(cd "$SCRIPT_CHECKOUT_ROOT" && "$RWT" 15 node -e "
 require('./hooks/supervisor-guard');
 process.stdout.write('OK');" </dev/null 2>&1)
     if [ "$out" = "OK" ]; then

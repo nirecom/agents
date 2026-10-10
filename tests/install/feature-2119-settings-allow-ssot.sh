@@ -11,8 +11,8 @@ set -uo pipefail
 # front of it -- so `Bash(node bin/workflow/next-step *)` never matched the argument-less
 # `node bin/workflow/next-step` the model actually issues. Measured denials confirmed it.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # THE ROOT CAUSE has two halves. (1) Each spelling family had only its argument-bearing form,
 # so the argument-less invocation had no rule at all. (2) The rules lived in the repository's
@@ -21,9 +21,9 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # the fact; CPR-ORTH: a treatment one family needs, every sibling family needs).
 
 SSOT_REL="install/settings-allow-commands.txt"
-SSOT="$AGENTS_DIR/$SSOT_REL"
+SSOT="$SCRIPT_CHECKOUT_ROOT/$SSOT_REL"
 PATH_SSOT_REL="install/path-exposed-commands.txt"
-PATH_SSOT="$AGENTS_DIR/$PATH_SSOT_REL"
+PATH_SSOT="$SCRIPT_CHECKOUT_ROOT/$PATH_SSOT_REL"
 
 # THE CONTRACT UNDER TEST. One declarative file names the commands and nothing else -- no
 # interpreter (read from the shebang), no rule strings, no bare-form flag (decided by
@@ -33,10 +33,10 @@ PATH_SSOT="$AGENTS_DIR/$PATH_SSOT_REL"
 # extension ONLY; install/lib/settings-deploy.js is the single writer of ~/.claude/settings.json.
 
 ASSEMBLE_REL="install/assemble-settings.js"
-ASSEMBLE="$AGENTS_DIR/$ASSEMBLE_REL"
+ASSEMBLE="$SCRIPT_CHECKOUT_ROOT/$ASSEMBLE_REL"
 SETTINGS_REL="settings.json"
-SETTINGS="$AGENTS_DIR/$SETTINGS_REL"
-LIB_DIR="$AGENTS_DIR/install/lib"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/$SETTINGS_REL"
+LIB_DIR="$SCRIPT_CHECKOUT_ROOT/install/lib"
 LIB_REL_LIST="install/lib/settings-assembly.js, settings-deploy.js"
 
 # OUT OF SCOPE: install/path-exposed-commands.txt itself (read to decide bare forms, never
@@ -83,7 +83,7 @@ ROWS=0
 # EXECUTED-ROW BUDGET. Every table-driven loop in the part files increments ROWS; T10 asserts
 # the exact total. An empty table, a drifted heredoc delimiter or an early return in front of
 # a loop otherwise leaves a file that counts only its failures reporting green.
-ROWS_EXPECTED=233 # ssot-structure 43 (T3a 4 + T3b 29 + T46 10) + write-and-drift 4 (T6 3 + T7 1)
+ROWS_EXPECTED=264 # 233 below + deploy-home-agreement 13 + cc-running-probe 18 (#2561); ssot-structure 43 (T3a 4 + T3b 29 + T46 10) + write-and-drift 4 (T6 3 + T7 1)
                    # + settings-preservation 7 + merger-contract 14 + input-validation 15
                    # + provider-purity 14 + assembler-failclosed 18 (T29 12 + T36 6)
                    # + deploy-preconditions 17 (T40 8 + T41 9) + deploy-symlink-policy 29
@@ -152,7 +152,7 @@ have_lib() {
     [ -f "$LIB_DIR/settings-deploy.js" ]
 }
 
-PART_DIR="$AGENTS_DIR/tests/install/feature-2119-settings-allow-ssot"
+PART_DIR="$SCRIPT_CHECKOUT_ROOT/tests/install/feature-2119-settings-allow-ssot"
 
 # home-canary.sh is sourced FIRST and only defines functions: canary_setup repoints HOME and
 # every home-shaped variable at a seeded fixture BEFORE any other part spawns a subprocess, so
@@ -178,6 +178,8 @@ canary_setup
 . "$PART_DIR/assembly-ownership.sh"
 . "$PART_DIR/no-generated-spellings.sh"  # T51 (one synthetic entry)
 . "$PART_DIR/real-spellings-gone.sh"     # T52 (every real SSOT entry) + T53 (real deployment); not ROWS-counted
+. "$PART_DIR/deploy-home-agreement.sh"   # T54-T56 (#2561 S4-7): 13 rows
+. "$PART_DIR/cc-running-probe.sh"        # T57-T58 (#2561 S4-7): 18 rows
 
 case_begin "t22-home-canary" "install/lib/settings-deploy.js"
 t22_home_canary

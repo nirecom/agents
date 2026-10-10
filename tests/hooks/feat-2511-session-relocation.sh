@@ -9,7 +9,7 @@
 # or a Windows EPERM held by an antivirus scanner is what only a live host shows.
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$(dirname "$0")/../lib/harness.sh"
 T="$(make_tmp)"
 readonly T
@@ -19,8 +19,7 @@ trap 'rm -rf "$T"' EXIT
 
 # The retired variable name, assembled so this file never carries the literal.
 OLD_TOKEN="CLAUDE_""WORKFLOW_DIR"
-AGENTS_DIR="$(cd "$AGENTS_DIR" && pwd)"
-A="$(np "$AGENTS_DIR")"
+A="$(np "$SCRIPT_CHECKOUT_ROOT")"
 mkdir -p "$T/cwd" "$T/pins"
 DENV=(env -u WORKFLOW_STATE_DIR -u "$OLD_TOKEN" -u STATE_RELOCATION_FAULT -u CLAUDE_SESSION_ID
   -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE)

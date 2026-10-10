@@ -22,7 +22,7 @@ fi
 NODE_REAL="$("$NODE_EXE" -e 'process.stdout.write(process.execPath)')"
 NODE_REAL_SH="$(cygpath -u "$NODE_REAL" 2>/dev/null || printf '%s' "$NODE_REAL")"
 
-RUN_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RUN_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 if [ ! -f "$RUN_TIMEOUT" ]; then
     echo "FAIL: bin/run-with-timeout.sh is missing — no guarded invocation is possible"
     exit 1
@@ -67,7 +67,7 @@ PINNED_PATHEXT=".COM;.EXE;.BAT;.CMD"
 # A host PATHEXT that omits .CMD — the shape WS-6 uses to show what the pin is
 # protecting the suite from.
 HOSTILE_PATHEXT=".EXE"
-SHIM_REF_N="$(to_native "$AGENTS_DIR/tests/lib/shim-resolve-reference.js")"
+SHIM_REF_N="$(to_native "$SCRIPT_CHECKOUT_ROOT/tests/lib/shim-resolve-reference.js")"
 LIFECYCLE_N="$(to_native "$LIFECYCLE_SRC")"
 IDENTITY_N="$(to_native "$IDENTITY_SRC")"
 RC=0
@@ -131,7 +131,7 @@ run_cli() {
     local child_path; child_path="$(path_for_mode)"
     local flag_env=(-u CODEGRAPH)
     [ "${CG_ENV_OVERRIDE:-__unset__}" = "__unset__" ] || flag_env=("CODEGRAPH=$CG_ENV_OVERRIDE")
-    NODE_OPTIONS="--require \"$RECORDER_N\"" AGENTS_CONFIG_DIR="$CONFIG_N" \
+    NODE_OPTIONS="--require \"$RECORDER_N\"" AGENTS_MAIN_ROOT="$CONFIG_N" \
         bash "$RUN_TIMEOUT" "$CASE_TIMEOUT" \
         env -u CLAUDE_CODE_SESSION_ID "${flag_env[@]}" \
         CG_RECORD_LOGIC_N="$RECORD_LOGIC_N" PATHEXT="$PINNED_PATHEXT" \

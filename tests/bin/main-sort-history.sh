@@ -5,9 +5,8 @@
 # Naming: main direct work → tests/main-<name>.sh
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-SORT_CMD="uv run python $REPO_DIR/bin/sort-history.py"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SORT_CMD="uv run python $SCRIPT_CHECKOUT_ROOT/bin/sort-history.py"
 
 PASS=0
 FAIL=0

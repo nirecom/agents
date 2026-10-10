@@ -6,9 +6,9 @@
 # RED until write-code creates the module; assumed API is listed in each fragment.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 SCI_FRAG="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2475-supervisor-codex-input"
 SCI_TMP="$(make_tmp)"
@@ -19,11 +19,11 @@ export CLAUDE_TRANSCRIPT_BASE_DIR="$SCI_TMP/transcripts-empty"
 PLANS="$WORKFLOW_PLANS_DIR"
 cd "$SCI_TMP" || exit 1
 
-SCI_CLI="$(np "$AGENTS_DIR/hooks/lib/supervisor-codex-input.js")"
-SCI_RULES="$(np "$AGENTS_DIR/hooks/lib/supervisor-codex-input/rules.js")"
-SCI_ASSEMBLE="$(np "$AGENTS_DIR/hooks/lib/supervisor-codex-input/assemble.js")"
-SCI_SCHEMA="$(np "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js")"
-SCI_WRITER="$(np "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js")"
+SCI_CLI="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-codex-input.js")"
+SCI_RULES="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-codex-input/rules.js")"
+SCI_ASSEMBLE="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-codex-input/assemble.js")"
+SCI_SCHEMA="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-schema.js")"
+SCI_WRITER="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js")"
 
 cat > "$SCI_TMP/jfield.js" <<'JS'
 'use strict';

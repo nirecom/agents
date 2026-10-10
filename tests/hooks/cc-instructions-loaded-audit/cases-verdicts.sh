@@ -122,14 +122,14 @@ fi
 # is `ok` only while the policy that ships names it. Swapping the policy pin (and restoring it) is
 # the whole setup: the hook reads it from the environment. ---
 UF3_SID="uf3flush"
-UF3_FP="$(node_path "$AGENTS_DIR/rules/handoff-emergency-flush.md")"
+UF3_FP="$(node_path "$SCRIPT_CHECKOUT_ROOT/rules/handoff-emergency-flush.md")"
 UF3_SAVED_POLICY="$RULES_INJECTION_POLICY"
 UF3_SAVED_PROJECT="$CLAUDE_PROJECT_DIR"
-RULES_INJECTION_POLICY="$(node_path "$AGENTS_DIR/hooks/lib/rules-injection-policy.js")"
+RULES_INJECTION_POLICY="$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-injection-policy.js")"
 # The project dir moves with the policy: toRulesKey() derives the rules root from
 # it, so leaving it on the fixture tree would classify the real path as "not a
 # rules file" and return a vacuous ok.
-CLAUDE_PROJECT_DIR="$(node_path "$AGENTS_DIR")"
+CLAUDE_PROJECT_DIR="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 fire "$UF3_SID" "$UF3_FP" OMIT >/dev/null
 uf3="$(read_field "$UF3_SID" "$UF3_FP" verdict)"
 RULES_INJECTION_POLICY="$UF3_SAVED_POLICY"
@@ -148,11 +148,11 @@ fi
 # fire against it — meaning the hook reports it loaded anyway — must classify S-LEAK. Only a
 # verdict other than "ok"/"unreadable" here proves the real rules tree, not a fixture, was read. ---
 UF4_SID="uf4realondemand"
-UF4_FP="$(node_path "$AGENTS_DIR/rules/test.md")"
+UF4_FP="$(node_path "$SCRIPT_CHECKOUT_ROOT/rules/test.md")"
 UF4_SAVED_POLICY="$RULES_INJECTION_POLICY"
 UF4_SAVED_PROJECT="$CLAUDE_PROJECT_DIR"
-RULES_INJECTION_POLICY="$(node_path "$AGENTS_DIR/hooks/lib/rules-injection-policy.js")"
-CLAUDE_PROJECT_DIR="$(node_path "$AGENTS_DIR")"
+RULES_INJECTION_POLICY="$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-injection-policy.js")"
+CLAUDE_PROJECT_DIR="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 fire "$UF4_SID" "$UF4_FP" OMIT >/dev/null
 uf4="$(read_field "$UF4_SID" "$UF4_FP" verdict)"
 RULES_INJECTION_POLICY="$UF4_SAVED_POLICY"

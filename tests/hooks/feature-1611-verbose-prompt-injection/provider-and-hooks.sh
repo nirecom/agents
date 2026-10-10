@@ -77,7 +77,7 @@ hook_out() {
         -u VERBOSE_PROMPT_MODELS \
         WORKFLOW_STATE_DIR="$WFDIR_N" \
         WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
-        AGENTS_CONFIG_DIR="$CFGDIR_N" \
+        AGENTS_MAIN_ROOT="$CFGDIR_N" \
         CLAUDE_PROJECT_DIR="$PROJDIR_N" \
         "$@" \
         node "$hook" 2>/dev/null

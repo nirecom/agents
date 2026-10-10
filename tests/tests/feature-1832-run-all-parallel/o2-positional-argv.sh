@@ -12,9 +12,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-REAL_RUNNER="$AGENTS_DIR/tests/run-all.sh"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+REAL_RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 PASS=0
@@ -36,7 +36,7 @@ export WORKFLOW_STATE_DIR="$TMPD/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPD/workflow-plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
-export RUN_ALL_REGISTRY_LIB="$AGENTS_DIR/bin/lib/test-language-registry.sh"
+export RUN_ALL_REGISTRY_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh"
 export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 
@@ -133,7 +133,7 @@ argv[0]=$p
     printf '%s' "$out"
 }
 
-sentinels() { find "$TMPD" "$AGENTS_DIR" -maxdepth 3 -name 'INJ_ARG_*' 2>/dev/null | tr '\n' ' '; }
+sentinels() { find "$TMPD" "$SCRIPT_CHECKOUT_ROOT" -maxdepth 3 -name 'INJ_ARG_*' 2>/dev/null | tr '\n' ' '; }
 
 case_ambient_sanitized() {
     local probe="$TMPD/ambient-probe.sh" got want v

@@ -18,7 +18,7 @@ git -C "$SCP_REPO" init -q
 git -C "$SCP_REPO" config user.email "test@example.com"
 git -C "$SCP_REPO" config user.name "Test"
 
-HOOK_JS="$(node_path "$AGENTS_DIR/hooks/stop-confirm-plan-guard.js")"
+HOOK_JS="$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/stop-confirm-plan-guard.js")"
 
 # Minimal settings.json: only the Stop hook; no disableBypassPermissionsMode.
 cat > "$SCP_REPO/.claude/settings.json" <<SETTINGS_EOF

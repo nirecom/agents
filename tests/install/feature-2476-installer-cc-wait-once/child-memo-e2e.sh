@@ -3,7 +3,7 @@
 # unlike feature-2284 exec-integration.sh which mocks the helper) honor the parent memo.
 # The process probe contradicts the memo so only a honored memo passes.
 
-_CC_SH="$AGENTS_DIR/install/linux/claude-code.sh"
+_CC_SH="$SCRIPT_CHECKOUT_ROOT/install/linux/claude-code.sh"
 
 # _g_sh <label> <memo> <pgrep-exit> -> G_RC, G_LOG, G_SECS
 _g_sh() {
@@ -17,9 +17,10 @@ _g_sh() {
     printf '#!/bin/bash\n[ "%s" = "0" ] && echo 4242\nexit %s\n' "$pexit" "$pexit" > "$stub/pgrep"
     chmod +x "$stub/claude" "$stub/pgrep"
     G_RC=0
-    env -i PATH="$stub:/usr/bin:/bin" HOME="$TMP/g-home" AGENTS_ROOT="$root" \
+    ( pin_home_and_userprofile "$TMP/g-home"
+      env -i PATH="$stub:/usr/bin:/bin" HOME="$HOME" USERPROFILE="$USERPROFILE" AGENTS_ROOT="$root" \
         WAIT_CC_RESULT="$memo" WAIT_CC_POLL_INTERVAL=1 WAIT_CC_MAX_POLLS=2 \
-        bash "$root/install/linux/claude-code.sh" > "$TMP/g-$label.out" 2>&1 || G_RC=$?
+        bash "$root/install/linux/claude-code.sh" > "$TMP/g-$label.out" 2>&1 ) || G_RC=$?
     G_SECS=$((SECONDS - start))
 }
 

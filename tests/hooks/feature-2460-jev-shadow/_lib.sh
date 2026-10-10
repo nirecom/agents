@@ -12,14 +12,14 @@ _FEAT2460_JEV_LIB_SOURCED=1
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-LIBDIR="$AGENTS_DIR/tests/hooks/feature-2460-jev-shadow"
+LIBDIR="$__LIB_SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2460-jev-shadow"
 HELPERS="$(np "$LIBDIR/helpers.js")"
 MOCK_JS="$(np "$LIBDIR/mock-jev-server.js")"
-REPO_N="$(np "$AGENTS_DIR")"
+REPO_N="$(np "$__LIB_SCRIPT_CHECKOUT_ROOT")"
 PRE_HOOK="$REPO_N/hooks/jev-shadow-pre.js"
 POST_HOOK="$REPO_N/hooks/jev-shadow-post.js"
 ADAPTER_JS="$REPO_N/bin/workflow/lib/jev-complexity-adapter.js"
@@ -55,7 +55,7 @@ fx_new() {
   export AGENTS_STATE_DIR; AGENTS_STATE_DIR="$(np "$FX/state")"
   export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR="$(np "$FX/wf")"
   export WORKFLOW_PLANS_DIR; WORKFLOW_PLANS_DIR="$(np "$FX/plans")"
-  export AGENTS_CONFIG_DIR; AGENTS_CONFIG_DIR="$(np "$FX/cfg")"
+  export AGENTS_MAIN_ROOT="$(np "$FX/cfg")"
   export CLAUDE_PROJECT_DIR; CLAUDE_PROJECT_DIR="$(np "$FX/proj")"
   export CLAUDE_TRANSCRIPT_BASE_DIR; CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$FX/transcripts")"
   LOG="$FX/state/logs/jev-decisions.log"

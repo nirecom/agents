@@ -14,7 +14,7 @@ T_BASH_1_JSON=$(run_with_timeout node -e "
   var plans = process.argv[1];
   process.stdout.write(JSON.stringify({
     tool_name: 'Bash',
-    tool_input: { command: '\"' + '\$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh' + '\" --source-kind intent /a/intent.md /a/draft.md ' + plans + '/test-outline.md' },
+    tool_input: { command: '\"' + '\$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh' + '\" --source-kind intent /a/intent.md /a/draft.md ' + plans + '/test-outline.md' },
     tool_response: { exit_code: 0 },
     session_id: 'test-sid-bash-1'
   }));
@@ -127,7 +127,7 @@ fi
 # ── T-BASH-8: literal multi-line backslash-LF form from SKILL.md ──────────
 # Target is placed under PLANS_DIR so isFinalPlanArtifact accepts it.
 echo "=== T-BASH-8: Bash + multi-line backslash-LF form ==="
-T_BASH_8_CMD=$(printf '"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/20260527-intent.md" \\\n  "%s/20260527-outline.md" \\\n  "%s/20260527-outline.md"' "$PLANS_DIR" "$PLANS_DIR" "$PLANS_DIR")
+T_BASH_8_CMD=$(printf '"$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/20260527-intent.md" \\\n  "%s/20260527-outline.md" \\\n  "%s/20260527-outline.md"' "$PLANS_DIR" "$PLANS_DIR" "$PLANS_DIR")
 T_BASH_8_JSON=$(run_with_timeout node -e "
   process.stdout.write(JSON.stringify({
     tool_name: 'Bash',
@@ -149,7 +149,7 @@ T_BASH_9_JSON=$(run_with_timeout node -e "
   var sid = '20260617-002151';
   process.stdout.write(JSON.stringify({
     tool_name: 'Bash',
-    tool_input: { command: '\"' + '\$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh' + '\" --source-kind intent ' + plans + '/' + sid + '-intent.md ' + plans + '/' + sid + '-outline.md ' + plans + '/' + sid + '-outline.md' },
+    tool_input: { command: '\"' + '\$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh' + '\" --source-kind intent ' + plans + '/' + sid + '-intent.md ' + plans + '/' + sid + '-outline.md ' + plans + '/' + sid + '-outline.md' },
     tool_response: { exit_code: 0 },
     session_id: 'test-sid-bash-9'
   }));
@@ -164,7 +164,7 @@ expect_message "T-BASH-9 new SKILL.md _shared direct form — systemMessage with
 a7_json() {
   run_with_timeout node -e "
     const [tool, field, dest, rc] = process.argv.slice(1);
-    const cmd = 'bash \"\$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh\" --source-kind intent /a/intent.md ' + dest + ' ' + dest;
+    const cmd = 'bash \"\$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh\" --source-kind intent /a/intent.md ' + dest + ' ' + dest;
     const input = field === 'commands' ? { commands: ['echo prelude', cmd] } : { command: cmd };
     process.stdout.write(JSON.stringify({ tool_name: tool, tool_input: input,
       tool_response: { exit_code: Number(rc || 0) }, session_id: 'test-sid-a7' }));

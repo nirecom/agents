@@ -53,7 +53,7 @@ _r5_try_symlink() {
 }
 
 run_R5_containment() {
-    local probe="$AGENTS_DIR/tests/hooks/enforce-protected-marker-write/round5-containment-probe.js"
+    local probe="$SCRIPT_CHECKOUT_ROOT/tests/hooks/enforce-protected-marker-write/round5-containment-probe.js"
     if [ ! -f "$probe" ]; then
         fail "R5-C probe helper missing at $probe - containment section is vacuous"
         return
@@ -71,8 +71,8 @@ run_R5_containment() {
     wf_n=$(node_path "$root_wf"); alias_n=$(node_path "$alias_dir"); out_n=$(node_path "$outside")
 
     _R5_PROBE_OUT=$(WORKFLOW_STATE_DIR="$wf_n" WORKFLOW_PLANS_DIR="$wf_n" \
-        AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 20 node "$probe" \
-        "$_AGENTS_DIR_NODE" "$wf_n" "$alias_n" "$out_n" 2>/dev/null)
+        "$RWT" 20 node "$probe" \
+        "$_SCRIPT_CHECKOUT_ROOT_NODE" "$wf_n" "$alias_n" "$out_n" 2>/dev/null)
     if [ -z "$_R5_PROBE_OUT" ]; then
         fail "R5-C containment probe produced no output (crash/timeout) - section vacuous"
         cleanup_tmp "$root"

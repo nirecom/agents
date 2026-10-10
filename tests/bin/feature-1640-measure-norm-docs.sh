@@ -31,8 +31,8 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$AGENTS_DIR/bin/measure-norm-docs"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/measure-norm-docs"
 
 TMPROOT="$(mktemp -d)"
 trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT"' EXIT
@@ -49,7 +49,7 @@ assert_eq() {
 
 skip_case() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
-run_with_timeout() { "$AGENTS_DIR/bin/run-with-timeout.sh" "$@"; }
+run_with_timeout() { "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$@"; }
 
 # Native path spelling: on Windows `pwd -W` yields C:/... which is the only form Node's
 # fs and path.isAbsolute() agree on. Never a hardcoded path.

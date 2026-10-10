@@ -14,7 +14,7 @@ detection failures.
 Canonical detector: `bin/is-github-dotcom-remote`. Since #2307 it classifies the
 host through the shared `detectForgeType()` in `hooks/lib/parse-remote-url.js`
 (SSOT), via the sibling `bin/is-github-dotcom-remote.js`. The wrapper stays a pure
-URL classifier — it never consults `AGENTS_CONFIG_DIR`.
+URL classifier — it never consults `AGENTS_MAIN_ROOT`.
 
 Shared detection wrapper: `bin/detect-non-github.sh` — wraps the canonical detector with a context-specific skip message and normalized exit codes (0 = proceed, 1 = skip). Use this wrapper in SKILL.md consumers instead of inlining the case block.
 
@@ -45,7 +45,7 @@ codehost skips `gh`, independent of which tracker is configured.
 
 Consumers that have migrated to the shared wrapper use a 1-line call:
 
-`bash "$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "<context-label>" || <skip-action>`
+`bash "$AGENTS_MAIN_ROOT/bin/detect-non-github.sh" "<context-label>" || <skip-action>`
 
 Where `<skip-action>` is either `NON_GITHUB=1` (when the skill continues after
 skipping gh work) or `exit 0` (when the skill should terminate immediately).

@@ -58,7 +58,7 @@ function formatMessage(violations) {
     .join("\n");
   const footer =
     "Rewrite the offending bullets to match the policy before saving.\n" +
-    "Policy comes from $AGENTS_CONFIG_DIR/.env (DOCS_LANG_PUBLIC / DOCS_LANG_PRIVATE).";
+    "Policy comes from $AGENTS_MAIN_ROOT/.env (DOCS_LANG_PUBLIC / DOCS_LANG_PRIVATE).";
   return `${header}\n${body}\n${footer}`;
 }
 

@@ -14,7 +14,7 @@ group_a() {
         return
     fi
     assert_eq "registry/script-anchors-exported" "array" "$(pv exported)"
-    assert_eq "registry/script-anchors-exact-set" "acd,family-worktree,main-root" "$(pv sorted)"
+    assert_eq "registry/script-anchors-exact-set" "family-worktree,script-checkout-root,target-main-root" "$(pv sorted)"
     assert_eq "registry/script-anchors-count" "3" "$(pv count)"
     # Table-driven guard: a future worker declaring an unlisted anchor fails here
     # instead of failing silently at dispatch time with an unresolvable anchor.
@@ -26,9 +26,9 @@ group_a() {
         fail "registry/anchor-scan-non-vacuous — scanned=$(pv scanned)"
     fi
     assert_eq "registry/test-runner-runall-family-anchored" "family-worktree" "$(pv tr_runall_anchor)"
-    # Regression fence: "main-root" is the value that made a linked-worktree
+    # Regression fence: "target-main-root" is the value that made a linked-worktree
     # dispatch run MAIN's tests/run-all.sh while reporting success.
-    assert_ne "registry/test-runner-runall-not-main-root" "main-root" "$(pv tr_runall_anchor)"
+    assert_ne "registry/test-runner-runall-not-target-main-root" "target-main-root" "$(pv tr_runall_anchor)"
 }
 
 # Group B / D — resolveScript anchoring and anchorRoot's null verdict
@@ -70,11 +70,11 @@ group_c() {
     assert_eq "contain/exists-alt-repo-null" "NULL" "$(pv exists_alt)"
     assert_eq "contain/exists-relative-null" "NULL" "$(pv exists_relative)"
     case "$(pv run_outside_err)" in
-        *not\ a\ worktree\ of\ the\ main-root\ family*) pass "contain/run-rejects-outside" ;;
+        *not\ a\ worktree\ of\ the\ target-main-root\ family*) pass "contain/run-rejects-outside" ;;
         *) fail "contain/run-rejects-outside — got: $(pv run_outside_err)" ;;
     esac
     case "$(pv run_alt_err)" in
-        *not\ a\ worktree\ of\ the\ main-root\ family*) pass "contain/run-rejects-alt-repo" ;;
+        *not\ a\ worktree\ of\ the\ target-main-root\ family*) pass "contain/run-rejects-alt-repo" ;;
         *) fail "contain/run-rejects-alt-repo — got: $(pv run_alt_err)" ;;
     esac
     # Ordering: runAll is family-anchored, so if run() resolved the script before
@@ -103,7 +103,7 @@ group_e() {
 
 # Group F — end-to-end: a dispatch targeting the LINKED worktree must run the
 # LINKED tests/run-all.sh. Main prints MAIN-SUITE, linked prints LINKED-SUITE;
-# under the pre-fix main-root anchor this run reported success while
+# under the pre-fix target-main-root anchor this run reported success while
 # executing MAIN's suite.
 group_f() {
     if impl_missing "e2e/runs-linked-suite" "$DISPATCH_JS" "bin/worker-dispatch.js"; then

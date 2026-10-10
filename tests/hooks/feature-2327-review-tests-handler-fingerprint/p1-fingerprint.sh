@@ -10,10 +10,10 @@
 #
 # TDD: tests FAIL until plan-2327 stage-2 implementation lands.
 
-MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
-STATE_IO="$AGENTS_DIR/hooks/workflow-state/state-io.js"
-EVIDENCE="$AGENTS_DIR/hooks/workflow-gate/review-tests-evidence.js"
-AGENTS_N="$(np "$AGENTS_DIR")"
+MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
+STATE_IO="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js"
+EVIDENCE="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-tests-evidence.js"
+AGENTS_N="$(np "$SCRIPT_CHECKOUT_ROOT")"
 EVIDENCE_N="$(np "$EVIDENCE")"
 
 setup_repo() {
@@ -78,7 +78,6 @@ run_mark() {
     echo "$json" | run_with_timeout 30 env \
         CLAUDE_PROJECT_DIR="$repo_n" \
         WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" \
-        AGENTS_CONFIG_DIR="$AGENTS_N" \
         node "$MARK_HOOK" 2>/dev/null
 }
 
@@ -88,7 +87,6 @@ run_mark_rc() {
     echo "$json" | run_with_timeout 30 env \
         CLAUDE_PROJECT_DIR="$repo_n" \
         WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" \
-        AGENTS_CONFIG_DIR="$AGENTS_N" \
         node "$MARK_HOOK" >/dev/null 2>/dev/null
     echo $?
 }

@@ -2,35 +2,23 @@
 # tests/bin/feature-codex-timeout-ssot.sh
 # Tests: bin/lib/codex-timeout.sh, bin/lib/codex-core.sh, bin/review-plan-codex, bin/github-issues/review-survey-verdict-codex.sh
 # Tags: scope:common, codex, timeout, ssot, config-resolution, regression-guard, pwsh-not-required, TL2
-#
-# WHY: three codex call sites each hardcoded a 300 s default and resolved
-# CODEX_TIMEOUT_SECS independently. One measured test-review round finished in
-# 184 s while three other rounds of the same payload were killed at 300 s, so the
-# default was raised to 900 s and folded into ONE owner, bin/lib/codex-timeout.sh.
-# The constant deliberately does NOT live in bin/lib/codex-core.sh: that library
-# runs `export SYSTEM_OPS_APPROVED=1` at source time, and the issue-dedupe path
-# (bin/github-issues/review-survey-verdict-codex.sh) must not inherit it.
-# This file tests timeout RESOLUTION only. It never invokes the codex CLI.
-#
+# WHY: three codex call sites each hardcoded a 300 s default and resolved CODEX_TIMEOUT_SECS independently. One measured test-review round finished in 184 s while three other rounds of the same payload were killed at 300 s, so the default was raised to 900 s and folded into ONE owner, bin/lib/codex-timeout.sh.
+# The constant deliberately does NOT live in bin/lib/codex-core.sh: that library runs `export SYSTEM_OPS_APPROVED=1` at source time, and the issue-dedupe path (bin/github-issues/review-survey-verdict-codex.sh) must not inherit it. This file tests timeout RESOLUTION only. It never invokes the codex CLI.
 # TL3 gap (what this test does NOT catch):
-# - Whether the real `timeout` / bin/run-with-timeout.sh wrapper actually kills a
-#   live codex process at the resolved value (here only the resolved number is read)
-# - Whether the developer's real $AGENTS_CONFIG_DIR/.env is picked up by an
-#   unpinned invocation — every case here pins AGENTS_CONFIG_DIR at a fixture
-# - Whether sourcing codex-core.sh inside a real reviewer script has no other
-#   side effect than the SYSTEM_OPS_APPROVED export
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# - Whether the real `timeout` / bin/run-with-timeout.sh wrapper actually kills a live codex process at the resolved value (here only the resolved number is read)
+# - Whether the developer's real $AGENTS_MAIN_ROOT/.env is picked up by an unpinned invocation — every case here pins AGENTS_MAIN_ROOT at a fixture
+# - Whether sourcing codex-core.sh inside a real reviewer script has no other side effect than the SYSTEM_OPS_APPROVED export
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BASH_BIN="$(command -v bash)"
 
-LIB_TIMEOUT="$AGENTS_DIR/bin/lib/codex-timeout.sh"
-LIB_CORE="$AGENTS_DIR/bin/lib/codex-core.sh"
-SRC_PLAN="$AGENTS_DIR/bin/review-plan-codex"
-SRC_SURVEY="$AGENTS_DIR/bin/github-issues/review-survey-verdict-codex.sh"
+LIB_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-timeout.sh"
+LIB_CORE="$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-core.sh"
+SRC_PLAN="$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex"
+SRC_SURVEY="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/review-survey-verdict-codex.sh"
 SOURCES=("$LIB_TIMEOUT" "$LIB_CORE" "$SRC_PLAN" "$SRC_SURVEY")
 
 # Fixture isolation (rules/test/fixture-isolation.md): never resolve the live
@@ -58,23 +46,23 @@ assert_eq() {
     else echo "FAIL: $name — want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; FAIL=$((FAIL + 1)); fi
 }
 
-# resolve <lib> <config-dir> [value] — sources the library in a fresh bash and echoes
+# resolve <lib> <main-worktree> [value] — sources the library in a fresh bash and echoes
 # codex_timeout_resolve's answer. Omitting [value] leaves CODEX_TIMEOUT_SECS unset
 # in the child (env -u), so "unset" and "set" rows differ only in that variable.
 resolve() {
-    local lib="$1" cfg="$2" val="${3-__UNSET__}"
+    local lib="$1" fake_agents_root="$2" val="${3-__UNSET__}"
     if [ "$val" = "__UNSET__" ]; then
-        env -u CODEX_TIMEOUT_SECS AGENTS_CONFIG_DIR="$cfg" \
+        env -u CODEX_TIMEOUT_SECS AGENTS_MAIN_ROOT="$fake_agents_root" \
             "$BASH_BIN" -c 'source "$0"; codex_timeout_resolve' "$lib"
     else
-        env CODEX_TIMEOUT_SECS="$val" AGENTS_CONFIG_DIR="$cfg" \
+        env CODEX_TIMEOUT_SECS="$val" AGENTS_MAIN_ROOT="$fake_agents_root" \
             "$BASH_BIN" -c 'source "$0"; codex_timeout_resolve' "$lib"
     fi
 }
 
-# const <lib> <config-dir> — echoes the constant the library publishes.
+# const <lib> <main-worktree> — echoes the constant the library publishes.
 const() {
-    env -u CODEX_TIMEOUT_SECS AGENTS_CONFIG_DIR="$2" \
+    env -u CODEX_TIMEOUT_SECS AGENTS_MAIN_ROOT="$2" \
         "$BASH_BIN" -c 'source "$0"; printf %s "$CODEX_TIMEOUT_SECS_DEFAULT"' "$1"
 }
 
@@ -91,9 +79,9 @@ assert_eq "N1: CODEX_TIMEOUT_SECS_DEFAULT published by codex-timeout.sh" \
     "900" "$(const "$LIB_TIMEOUT" "$FIX_NOENV")"
 
 # ---------------------------------------------------------------------------
-# N2: no process env, config dir without a .env → the default.
+# N2: no process env, main worktree without a .env → the default.
 # ---------------------------------------------------------------------------
-assert_eq "N2: unset env + config dir with no .env resolves to the default" \
+assert_eq "N2: unset env + main worktree with no .env resolves to the default" \
     "900" "$(resolve "$LIB_TIMEOUT" "$FIX_NOENV")"
 
 # ---------------------------------------------------------------------------

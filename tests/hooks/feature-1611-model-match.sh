@@ -22,9 +22,9 @@
 
 set -uo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MODULE="$REPO_DIR/hooks/lib/model-match.js"
-CLI="$REPO_DIR/bin/model-match.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/model-match.js"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/model-match.js"
 
 if command -v cygpath >/dev/null 2>&1; then
     MM_MOD="$(cygpath -m "$MODULE")"

@@ -14,8 +14,8 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -40,7 +40,6 @@ done
 
 setup_tmp() {
     TMP="$(mktemp -d)"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"
@@ -50,7 +49,7 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR GH_MOCK_COMMENT_LOG
+    unset GH_MOCK_COMMENT_LOG
 }
 
 # ============================================================================
@@ -69,7 +68,7 @@ cat > "$TMP/intent.md" <<'EOF'
 - nirecom/my-private-repo#42
 EOF
 GH_MOCK_SCENARIO=issue_task \
-    run_with_timeout 30 bash "$AGENTS_DIR/bin/github-issues/check-closes-issues-nonempty.sh" "$TMP/intent.md"
+    run_with_timeout 30 bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/check-closes-issues-nonempty.sh" "$TMP/intent.md"
 RC=$?
 if [ "$RC" -eq 0 ]; then
     pass "C1: check-closes-issues-nonempty.sh with cross-repo entry → exit 0"
@@ -95,7 +94,7 @@ cat > "$TMP/intent.md" <<'EOF'
 - #1
 - nirecom/my-private-repo#2
 EOF
-OUT=$(run_with_timeout 30 node "$AGENTS_DIR/bin/parse-closes-issues" "$TMP/intent.md" 2>/dev/null)
+OUT=$(run_with_timeout 30 node "$SCRIPT_CHECKOUT_ROOT/bin/parse-closes-issues" "$TMP/intent.md" 2>/dev/null)
 RC=$?
 LEN=$(node -e "try{const a=JSON.parse(process.argv[1]);process.stdout.write(String(a.length));}catch(e){process.stdout.write('0');}" "$OUT" 2>/dev/null)
 if [ "$RC" -eq 0 ] && [ "$LEN" = "2" ] && ! printf '%s' "$OUT" | grep -q '\[object Object\]'; then
@@ -114,7 +113,7 @@ teardown_tmp
 # RED: current wip-set-single.sh does not accept --repo; exits with usage error.
 # ============================================================================
 setup_tmp
-WIP_SCRIPT="$AGENTS_DIR/bin/github-issues/wip-set-single.sh"
+WIP_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-set-single.sh"
 if [ ! -f "$WIP_SCRIPT" ]; then
     fail "C3: precondition missing — bin/github-issues/wip-set-single.sh"
 else
@@ -128,9 +127,10 @@ exit 0
 STUB
     chmod +x "$TMP/bin/github-issues/wip-state.sh"
 
-    # Patch: override AGENTS_CONFIG_DIR to the tmp dir so wip-set-single finds our stub wip-state.sh
-    GH_MOCK_SCENARIO=issue_task AGENTS_CONFIG_DIR="$TMP" \
-        run_with_timeout 30 bash "$WIP_SCRIPT" --repo nirecom/my-private-repo 42
+    # wip-set-single finds wip-state.sh beside itself, so launch a copy that sits next to the stub.
+    cp "$WIP_SCRIPT" "$TMP/bin/github-issues/wip-set-single.sh"
+    GH_MOCK_SCENARIO=issue_task \
+        run_with_timeout 30 bash "$TMP/bin/github-issues/wip-set-single.sh" --repo nirecom/my-private-repo 42
     RC=$?
     if [ "$RC" -eq 0 ]; then
         pass "C3: wip-set-single.sh --repo nirecom/my-private-repo 42 → exit 0"
@@ -149,7 +149,7 @@ teardown_tmp
 # RED: current issue-state-check.sh does not accept --repo; exits with usage error.
 # ============================================================================
 setup_tmp
-STATE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-state-check.sh"
+STATE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-state-check.sh"
 if [ ! -f "$STATE_SCRIPT" ]; then
     fail "C4: precondition missing — bin/github-issues/issue-state-check.sh"
 else

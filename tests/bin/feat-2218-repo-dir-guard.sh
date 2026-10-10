@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # isolation (#2512): pin state and plans dirs once for this file
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
@@ -27,14 +27,14 @@ skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 TARGET="bin/workflow/lib/next-step/repo-dir-guard.js"
 
 # RED gate: the module under test does not exist yet. Name the expected path
 # instead of skipping — a silent skip would read as green.
 require_module() {
-    if [ -f "$AGENTS_DIR/$1" ]; then return 0; fi
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
     fail "MODULE NOT FOUND: $1 — expected per issue #2218 Step 9, not yet implemented (write_code has not run)"
     return 1
 }
@@ -44,7 +44,7 @@ require_module() {
 # possible refusal shapes (throw, or a falsy/ok:false return) to one word, so a
 # case asserts the DECISION rather than the implementation's error style.
 PRELUDE="
-const guard = require('$AGENTS_DIR_NODE/$TARGET');
+const guard = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 function verdictOf(v) { return (v && typeof v === 'object') ? (v.verdict || v.result || JSON.stringify(v)) : String(v); }
 function outcome(fn) {
   try { const r = fn(); if (r && r.ok === false) return 'fail-fast'; return 'continue'; }
@@ -160,7 +160,7 @@ run_R3() {
     local out
     out="$(run_node "
 $PRELUDE
-const { writeState, createInitialState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const problems = [];
 writeState('sid-r3', createInitialState('sid-r3', {}));
 const v = verdictOf(guard.compareRepoIdentity(null, '/anywhere'));
@@ -182,7 +182,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
     local warn
     warn="$(run_node "
 $PRELUDE
-const { writeState, createInitialState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 writeState('sid-r3w', createInitialState('sid-r3w', {}));
 try { guard.assertRepoDirMatchesSession('sid-r3w', '/anywhere', { isExplicitSessionOverride: false }); } catch (e) {}
 ")"
@@ -206,7 +206,7 @@ run_R4() {
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node -e "
 $PRELUDE
-const { writeState, createInitialState } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const problems = [];
 const a = '$(node_path "$tmp/plain-a")';
 const b = '$(node_path "$tmp/plain-b")';
@@ -234,7 +234,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 run_R5_static() {
     require_module "$TARGET" || return 0
     local vfile out
-    vfile="$AGENTS_DIR/bin/workflow/lib/next-step/verdict.js"
+    vfile="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/next-step/verdict.js"
     if [ ! -f "$vfile" ]; then
         fail "R5-static: bin/workflow/lib/next-step/verdict.js not found"
         return 0
@@ -292,7 +292,7 @@ run_R5_cli() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const { writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const own = createInitialState('$own', { cwd: '$(node_path "$repo")' });
 own.closes_issues = [2218];
 writeState('$own', own);
@@ -313,13 +313,13 @@ markStep('$ownmain', 'workflow_init', 'complete');
             o=$(env CLAUDE_CODE_SESSION_ID="$env_sid" \
                 WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
                 CLAUDE_PROJECT_DIR="$repo" HOME="$tmp/home" USERPROFILE="$tmp/home" \
-                "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" 2>&1)
+                "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step" 2>&1)
             r=$?
         else
             o=$(env CLAUDE_CODE_SESSION_ID="$env_sid" \
                 WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
                 CLAUDE_PROJECT_DIR="$repo" HOME="$tmp/home" USERPROFILE="$tmp/home" \
-                "$RWT" 60 node "$AGENTS_DIR/bin/workflow/next-step" --session "$args_sid" 2>&1)
+                "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step" --session "$args_sid" 2>&1)
             r=$?
         fi
         if [ "$r" -ne 0 ]; then printf 'fail-fast'; return 0; fi

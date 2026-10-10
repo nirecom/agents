@@ -9,8 +9,8 @@
 # actual home directory path.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-HOOK="$AGENTS_DIR/hooks/show-diff.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/show-diff.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -36,7 +36,7 @@ export WORKFLOW_PLANS_DIR="$NODE_HOME/.workflow-plans"
 NODE_TMPDIR="$(run_with_timeout node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
 ISOLATED_CFG_DIR="${NODE_TMPDIR}/show-diff-plan-cfg-$$"
 mkdir -p "$ISOLATED_CFG_DIR"
-export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
 cleanup_isolated() { rm -rf "$ISOLATED_CFG_DIR"; }
 trap cleanup_isolated EXIT
 # isolation (#2512): the state dir is pinned file-wide too; the plans dir above stays home-anchored on purpose.
@@ -167,7 +167,7 @@ expect_empty_with_env() {
   local result
   result=$(
     export WORKFLOW_PLANS_DIR="$CONF_PLANS_DIR"
-    export AGENTS_CONFIG_DIR="$CONF_EMPTY_CFG_DIR"
+    export AGENTS_MAIN_ROOT="$CONF_EMPTY_CFG_DIR"
     for assignment in "$@"; do
       key="${assignment%%=*}"
       val="${assignment#*=}"
@@ -189,7 +189,7 @@ expect_nonempty_with_env() {
   local result
   result=$(
     export WORKFLOW_PLANS_DIR="$CONF_PLANS_DIR"
-    export AGENTS_CONFIG_DIR="$CONF_EMPTY_CFG_DIR"
+    export AGENTS_MAIN_ROOT="$CONF_EMPTY_CFG_DIR"
     for assignment in "$@"; do
       key="${assignment%%=*}"
       val="${assignment#*=}"
@@ -242,7 +242,7 @@ printf 'CONFIRM_DETAIL=off\n' > "$CONF_CFG_DIR/.env"
 
 T_CONF6_RESULT=$(
   export WORKFLOW_PLANS_DIR="$CONF_PLANS_DIR"
-  export AGENTS_CONFIG_DIR="$CONF_CFG_DIR"
+  export AGENTS_MAIN_ROOT="$CONF_CFG_DIR"
   unset CONFIRM_DETAIL
   echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$CONF_PLANS_DIR/foo-detail.md\",\"content\":\"new content\"}}" \
     | run_with_timeout node "$HOOK" 2>/dev/null

@@ -3,8 +3,8 @@
 # Pins the existence and basic structure of worktree-end Step 5 backup mechanism.
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL="$AGENTS_DIR/skills/worktree-end/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/SKILL.md"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
@@ -19,7 +19,7 @@ else
 fi
 
 # capture-env.sh must exist (Step 5.5)
-if [ -f "$AGENTS_DIR/skills/worktree-end/scripts/capture-env.sh" ]; then
+if [ -f "$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/capture-env.sh" ]; then
   pass "capture-env.sh exists"
 else
   fail "capture-env.sh missing"

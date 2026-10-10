@@ -36,7 +36,7 @@ P12B_GRANDPARENT="$(cd "$P12B_LEAF/../.." && pwd)"
 # but run from the nested leaf so a `../` payload resolves inside the fixture.
 submit_prompt_p12b() {
     printf '%s' "$(printf '{"session_id":"%s","prompt":"%s"}' "$(json_escape "$1")" "$(json_escape "/enforce-workflow-off traversal attempt")")" | \
-        (cd "$P12B_LEAF" && WORKFLOW_STATE_DIR="$P12B_WF" WORKFLOW_PLANS_DIR="$P12B_WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        (cd "$P12B_LEAF" && WORKFLOW_STATE_DIR="$P12B_WF" WORKFLOW_PLANS_DIR="$P12B_WF" \
             "$RWT" 15 node "$RECORDER" >"$CAP_OUT" 2>"$CAP_ERR")
     LAST_RECORDER_STATUS=$?
 }

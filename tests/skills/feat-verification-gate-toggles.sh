@@ -7,17 +7,16 @@ set -u
 
 # Resolve repo root from this test's own location so it works in any worktree.
 _TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(git -C "$_TEST_DIR" rev-parse --show-toplevel 2>/dev/null)"
-[ -n "$AGENTS_DIR" ] || AGENTS_DIR="$(cd "$_TEST_DIR/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-USER_VERIFIED="$AGENTS_DIR/skills/_shared/user-verified.md"
-ENV_EXAMPLE="$AGENTS_DIR/.env.example"
-OPS_MD="$AGENTS_DIR/docs/ops.md"
-TEST_MD="$AGENTS_DIR/rules/test.md"
-CLASSIFIER="$AGENTS_DIR/bin/check-verification-gate.sh"
-SELECT_TESTS="$AGENTS_DIR/bin/select-tests.sh"
-REVIEW_ENV_EXAMPLE="$AGENTS_DIR/bin/review-env-example"
-RUN_WITH_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
+USER_VERIFIED="$SCRIPT_CHECKOUT_ROOT/skills/_shared/user-verified.md"
+ENV_EXAMPLE="$SCRIPT_CHECKOUT_ROOT/.env.example"
+OPS_MD="$SCRIPT_CHECKOUT_ROOT/docs/ops.md"
+TEST_MD="$SCRIPT_CHECKOUT_ROOT/rules/test.md"
+CLASSIFIER="$SCRIPT_CHECKOUT_ROOT/bin/check-verification-gate.sh"
+SELECT_TESTS="$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh"
+REVIEW_ENV_EXAMPLE="$SCRIPT_CHECKOUT_ROOT/bin/review-env-example"
+RUN_WITH_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -294,7 +293,7 @@ if [ ! -f "$REVIEW_ENV_EXAMPLE" ]; then
     fail "13. review-env-example not found at $REVIEW_ENV_EXAMPLE"
 else
     # cd to repo root: collect_all_targets uses `find .` and is CWD-dependent.
-    rev_out="$(cd "$AGENTS_DIR" && bash "$RUN_WITH_TIMEOUT" 60 bash "$REVIEW_ENV_EXAMPLE" --all 2>&1)"
+    rev_out="$(cd "$SCRIPT_CHECKOUT_ROOT" && bash "$RUN_WITH_TIMEOUT" 60 bash "$REVIEW_ENV_EXAMPLE" --all 2>&1)"
     rev_rc=$?
     hard_lines="$(printf '%s\n' "$rev_out" | grep -cE '^HARD: \./\.env\.example:')"
     if ! printf '%s\n' "$rev_out" | grep -qF '## Env-example Review: PERFORMED (all-scan mode)'; then
@@ -439,7 +438,7 @@ fi
 
 # Case 19 — T17 regression: zero `get-config-var --is-off` matches under skills/
 echo "=== Case 19: T17 zero-match in skills/ ==="
-matches="$(grep -rlnE 'get-config-var[[:space:]]+--is-off' "$AGENTS_DIR/skills/" 2>/dev/null || true)"
+matches="$(grep -rlnE 'get-config-var[[:space:]]+--is-off' "$SCRIPT_CHECKOUT_ROOT/skills/" 2>/dev/null || true)"
 if [ -z "$matches" ]; then
     pass "19. zero 'get-config-var --is-off' matches under skills/"
 else

@@ -19,12 +19,12 @@
 #       rc from is-github-dotcom-remote does not abort this wrapper.
 set -u
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 LABEL="${1:-issue routing}"
 
 rc=0
-"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote" || rc=$?
+"$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" || rc=$?
 
 if [ "$rc" = "1" ]; then
     echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping ${LABEL}]"

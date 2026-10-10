@@ -2,20 +2,17 @@
 # Tests: bin/github-issues, bin/github-issues/bootstrap-labels.sh, bin/github-issues/bootstrap-labels.sh., bin/github-issues/sync-labels.sh
 # Tags: workflow, github, issues, labels, sync, scope:issue-specific
 # Tests for issue #283 — bin/github-issues/bootstrap-labels.sh.
-#
 # bootstrap-labels.sh copies the label-sync skeleton (labels.yml, sync-labels.sh,
-# sync-labels.yml workflow) from AGENTS_CONFIG_DIR into a target repo, then runs
+# sync-labels.yml workflow) from its own checkout into a target repo, then runs
 # the initial `gh label create --force` sync unless --no-sync is given.
-#
-# RED: this entire suite fails until bin/github-issues/bootstrap-labels.sh is
-# created. Each test is structured so it will pass automatically once the
-# source script lands.
+# Each case launches a copy of the script from a fake checkout that holds the stubs.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BOOTSTRAP_SCRIPT="$AGENTS_DIR/bin/github-issues/bootstrap-labels.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REAL_BOOTSTRAP_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/bootstrap-labels.sh"
+BOOTSTRAP_SCRIPT="$REAL_BOOTSTRAP_SCRIPT"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -49,7 +46,7 @@ setup_tmp() {
     REPO="$TMP/repo"
     mkdir -p "$FAKE_AGENTS/bin/github-issues" "$FAKE_AGENTS/.github/workflows"
     mkdir -p "$REPO"
-    # Source artifacts in fake AGENTS_CONFIG_DIR.
+    # Source artifacts in the fake script checkout.
     cat > "$FAKE_AGENTS/.github/labels.yml" <<'EOF'
 - name: type:task
   color: "0e8a16"
@@ -84,7 +81,9 @@ done
 EOF
     chmod +x "$FAKE_AGENTS/bin/github-issues/sync-labels.sh"
 
-    export AGENTS_CONFIG_DIR="$FAKE_AGENTS"
+    cp "$REAL_BOOTSTRAP_SCRIPT" "$FAKE_AGENTS/bin/github-issues/bootstrap-labels.sh"
+    chmod +x "$FAKE_AGENTS/bin/github-issues/bootstrap-labels.sh"
+    BOOTSTRAP_SCRIPT="$FAKE_AGENTS/bin/github-issues/bootstrap-labels.sh"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_LABEL_LOG="$TMP/labels.log"
     : > "$GH_MOCK_LABEL_LOG"
@@ -94,7 +93,8 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP" 2>/dev/null || true
     fi
-    unset AGENTS_CONFIG_DIR GH_MOCK_LABEL_LOG TMP FAKE_AGENTS REPO
+    unset GH_MOCK_LABEL_LOG TMP FAKE_AGENTS REPO
+    BOOTSTRAP_SCRIPT="$REAL_BOOTSTRAP_SCRIPT"
 }
 
 # Cross-platform sha256 helper.
@@ -249,15 +249,16 @@ else
 fi
 teardown_tmp
 
-# --- B10: AGENTS_CONFIG_DIR unset → non-zero exit.
+# --- B10: AGENTS_MAIN_ROOT pointing at an empty decoy does not move the copy source.
 setup_tmp
-unset AGENTS_CONFIG_DIR
-run_with_timeout 15 bash "$BOOTSTRAP_SCRIPT" "$REPO" >/dev/null 2>&1
+mkdir -p "$TMP/decoy-main-root"
+AGENTS_MAIN_ROOT="$TMP/decoy-main-root" \
+    run_with_timeout 15 bash "$BOOTSTRAP_SCRIPT" "$REPO" --no-sync >/dev/null 2>&1
 RC=$?
-if [ "$RC" -ne 0 ]; then
-    pass "B10: AGENTS_CONFIG_DIR unset → non-zero exit"
+if [ "$RC" -eq 0 ] && cmp -s "$FAKE_AGENTS/.github/labels.yml" "$REPO/.github/labels.yml"; then
+    pass "B10: decoy AGENTS_MAIN_ROOT ignored — skeleton copied from the script's checkout"
 else
-    fail "B10: AGENTS_CONFIG_DIR unset should fail (rc=$RC)"
+    fail "B10: decoy AGENTS_MAIN_ROOT changed the copy source (rc=$RC)"
 fi
 teardown_tmp
 

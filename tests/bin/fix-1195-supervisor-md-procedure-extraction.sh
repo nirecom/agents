@@ -7,21 +7,21 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
     _TMPCONV() { cygpath -m "$1"; }
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
     _TMPCONV() { printf '%s' "$1"; }
 fi
 
-CHECK_SESSION="$AGENTS_DIR/bin/supervisor-check-session-active"
-FINALIZE_VERIFY="$AGENTS_DIR/bin/supervisor-finalize-verify"
-PARSE_CODEX="$AGENTS_DIR/bin/supervisor-parse-codex"
-SUPERVISOR_MD="$AGENTS_DIR/agents/supervisor.md"
-PARSE_CLOSES_ISSUES_NODE="$_AGENTS_DIR_NODE/hooks/lib/parse-closes-issues.js"
-CODEX_PARSE_NODE="$_AGENTS_DIR_NODE/hooks/lib/codex-review-parse.js"
+CHECK_SESSION="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-check-session-active"
+FINALIZE_VERIFY="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-finalize-verify"
+PARSE_CODEX="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-parse-codex"
+SUPERVISOR_MD="$SCRIPT_CHECKOUT_ROOT/agents/supervisor.md"
+PARSE_CLOSES_ISSUES_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/parse-closes-issues.js"
+CODEX_PARSE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/codex-review-parse.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

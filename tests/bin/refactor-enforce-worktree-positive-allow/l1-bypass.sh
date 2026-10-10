@@ -51,7 +51,7 @@ test_l1_3_compose_doc_append_skill_inline_blocked_in_main() {
 test_l1_3b_compose_doc_append_no_prefix_via_bash_allowed_from_main() {
     require_file "$GUARD_JS" "test_l1_3b_compose_doc_append_no_prefix_via_bash_allowed_from_main" || return
     local repo; repo="$(setup_main_checkout "l1-3b-main")"
-    local bin; bin="${_AGENTS_DIR_NODE}/bin/compose-doc-append-entry"
+    local bin; bin="${_SETUP_SCRIPT_CHECKOUT_ROOT_NODE}/bin/compose-doc-append-entry"
     local cmd; cmd="bash \"$bin\" --notes /dev/null --branch x --pr 1 --merge-commit abc --background x --closes-issues-count 0"
     local out
     out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on)"

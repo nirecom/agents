@@ -7,19 +7,17 @@
 #   - the real installed home-relative extension roots: root discovery runs through an injected fixture HOME/USERPROFILE, so the machine's actual ~/.vscode*/extensions tree is never read or written; POSIX extension roots (.vscode-server*, WSL/remote layouts) are fixture-only by an accepted tradeoff — only the Windows host is exercised for real path normalization;
 #   - the two pre-rename concurrency branches (`raced` -> exit 0, `changed-during-patch` -> exit 1): only a real concurrent writer (VS Code auto-update, a second patch run) can land inside the re-read/rename window, and runtime filesystem faults on the write path (.bak write, tmp write, rename, post-rename verify) — see the Skipped-Because block in tests/bin/bin-vscode-cc-repair/failclosed-paths.sh.
 # Documented SKIP categories (each increments SKIP and prints why): win32 case-insensitive root dedup (T5d-2): not Windows_NT; symlink root dedup (T5d-3): `ln -s` yields a copy, not a link, on this host;
-#   directory-alias cases (C5-a*, C9-d*): neither `ln -s` nor `mklink /J` usable; git index mode (C3-e02): AGENTS_DIR not a git repo, or the script not tracked yet; direct shebang execution (C3-e03): host cannot exec an extensionless `#!` file.
+#   directory-alias cases (C5-a*, C9-d*): neither `ln -s` nor `mklink /J` usable; git index mode (C3-e02): this checkout not a git repo, or the script not tracked yet; direct shebang execution (C3-e03): host cannot exec an extensionless `#!` file.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: installer.
 
 set -euo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
-
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$AGENTS_DIR/bin/vscode-cc-repair/index.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/vscode-cc-repair/index.js"
 REQUIRE_PATH="./bin/vscode-cc-repair/index.js"
-PARTS_DIR="$AGENTS_DIR/tests/bin/bin-vscode-cc-repair"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-vscode-cc-repair"
 
 if [ ! -f "$SCRIPT" ]; then
   echo "SKIP (RED): $SCRIPT not yet implemented — TDD RED phase"
@@ -38,7 +36,7 @@ SKIP=0
 
 # ---- helpers ---------------------------------------------------------------
 
-run_with_timeout() { "$AGENTS_DIR/bin/run-with-timeout.sh" "$@"; }
+run_with_timeout() { "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$@"; }
 
 check() {
   local desc="$1" want="$2" got="$3"
@@ -143,7 +141,7 @@ run_cli_home() { # <fixture-home> [args...] ; sets CLI_RC / CLI_OUT
 
 node_m() { # <js> ; sets NODE_RC / NODE_OUT
   NODE_RC=0
-  NODE_OUT="$(cd "$AGENTS_DIR" && run_with_timeout 30 node -e "$1" 2>&1)" || NODE_RC=$?
+  NODE_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && run_with_timeout 30 node -e "$1" 2>&1)" || NODE_RC=$?
 }
 
 # First per-directory report line (state token in column 1). Used to prove those

@@ -16,7 +16,7 @@ else
     _x15_root="$(git -C "$_x15_repo" rev-parse --show-toplevel)"
     _x15_bs="$(printf '%s' "$_x15_root" | tr '/' '\\')"
     _x15_out="$(run_precommit "$_x15_repo" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+        "ENFORCE_WORKTREE=off" \
         "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_x15_bs")"
     _x15_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     _x15_v="rc:nonzero"; [ "$_x15_rc" -eq 0 ] && _x15_v="rc:zero"
@@ -48,7 +48,7 @@ else
     # (a) native backslash subtree glob anchored at the parent
     _x16_a="$(printf '%s' "$_x16_parent" | tr '/' '\\')\\**"
     _x16a_out="$(run_precommit "$_x16_repo" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+        "ENFORCE_WORKTREE=off" \
         "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_x16_a")"
     _x16a_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     _x16a_v="rc:nonzero"; [ "$_x16a_rc" -eq 0 ] && _x16a_v="rc:zero"
@@ -62,7 +62,7 @@ else
     _x16_drive="$(printf '%s' "${_x16_parent%%:*}" | tr 'A-Z' 'a-z')"
     _x16_b="/$_x16_drive${_x16_parent#*:}/**"
     _x16b_out="$(run_precommit "$_x16_repo" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+        "ENFORCE_WORKTREE=off" \
         "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_x16_b")"
     _x16b_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     _x16b_v="rc:zero"; [ "$_x16b_rc" -ne 0 ] && _x16b_v="rc:nonzero"
@@ -91,7 +91,7 @@ else
     _x23_drive="$(printf '%s' "${_x23_root%%:*}" | tr 'A-Z' 'a-z')"
     _x23_gb="/$_x23_drive${_x23_root#*:}"
     _x23_out="$(run_precommit "$_x23_repo" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" \
+        "ENFORCE_WORKTREE=off" \
         "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_x23_gb")"
     _x23_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
     _x23_v="rc:nonzero"; [ "$_x23_rc" -eq 0 ] && _x23_v="rc:zero"

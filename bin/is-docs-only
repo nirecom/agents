@@ -21,10 +21,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-ROOT="${AGENTS_CONFIG_DIR:-}"
-if [[ -z "$ROOT" ]]; then
-  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-fi
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 command -v node >/dev/null 2>&1 || exit 3
 

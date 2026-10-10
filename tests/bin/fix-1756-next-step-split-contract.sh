@@ -11,9 +11,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
-LIB_DIR="$AGENTS_DIR/bin/workflow/lib/next-step"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
+LIB_DIR="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/next-step"
 
 PASS=0
 FAIL=0
@@ -126,7 +126,7 @@ raw_step_field() {
     local sid="$1" step="$2" field="$3"
     # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
     # on-disk event stream, not a persisted top-level key.
-    (cd "$AGENTS_DIR" && node -e '
+    (cd "$SCRIPT_CHECKOUT_ROOT" && node -e '
 const [sid, step, field] = process.argv.slice(1);
 try {
   const s = require("./hooks/workflow-state").readState(sid);
@@ -142,7 +142,7 @@ run_next_step() { run_with_timeout 120 node "$NEXT_STEP" "$@" 2>/dev/null || tru
 # excluded: a re-run may refresh the timestamp without changing the state).
 steps_status_map() {
     local sid="$1"
-    (cd "$AGENTS_DIR" && node -e '
+    (cd "$SCRIPT_CHECKOUT_ROOT" && node -e '
 try {
   const s = require("./hooks/workflow-state").readState(process.argv[1]);
   const steps = (s && s.steps) || {};
@@ -209,7 +209,7 @@ if [ -z "$EP_OUT" ]; then
     fail "C3: ENTRYPOINT_PATH is an absolute path -- got empty (entrypoint-path.js missing or not exporting it)"
     fail "C4: ENTRYPOINT_PATH points at an existing file -- got empty"
     fail "C5: ENTRYPOINT_PATH basename is next-step -- got empty"
-    fail "C6: ENTRYPOINT_PATH equals AGENTS_DIR/bin/workflow/next-step -- got empty"
+    fail "C6: ENTRYPOINT_PATH equals SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step -- got empty"
 else
     if printf '%s' "$EP_OUT" | grep -qE '^([A-Za-z]:[\\/]|/)'; then
         pass "C3: ENTRYPOINT_PATH is an absolute path"
@@ -226,7 +226,7 @@ else
 
     check_eq "C5: ENTRYPOINT_PATH basename is next-step" "next-step" "$(basename "$EP_SLASH")"
 
-    check_eq "C6: ENTRYPOINT_PATH equals AGENTS_DIR/bin/workflow/next-step" \
+    check_eq "C6: ENTRYPOINT_PATH equals SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step" \
         "$(norm_path "$(to_node_path "$NEXT_STEP")")" "$(norm_path "$EP_OUT")"
 fi
 

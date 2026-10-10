@@ -34,7 +34,7 @@ fi
 # driver rewrite). Protected concept unchanged: the aggregate classification
 # (any_other → conflict ask / ALL_NONE → fresh claim + Path B force) exists,
 # and SKILL.md WI-2 names "Aggregate WIP check" as the WIP entry point.
-WIP_PHASE="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/wip-check.js"
+WIP_PHASE="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/wip-check.js"
 if [ -f "$WIP_PHASE" ] && [ -f "$WORKFLOW_INIT_SKILL" ]; then
     a=0; b=0; c=0; d=0
     grep -qF "Aggregate WIP check" "$WORKFLOW_INIT_SKILL" && a=1
@@ -97,7 +97,7 @@ fi
 # B6: companion-search.sh handles GitHub gate; CI-2b has no CONFIRM_COMPANION_ISSUES reference.
 if [ -f "$CLARIFY_INTENT_SKILL" ]; then
     CI2B_BLOCK=$(awk '/CI-2b\./{flag=1} flag && /^CI-[0-9]+[a-z]?\./ && !/CI-2b\./{flag=0} flag' "$CLARIFY_INTENT_SKILL" 2>/dev/null || true)
-    COMPANION_SCRIPT="$AGENTS_DIR/skills/clarify-intent/scripts/companion-search.sh"
+    COMPANION_SCRIPT="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/scripts/companion-search.sh"
     a=0; b=0
     { [ -f "$COMPANION_SCRIPT" ] && grep -qE "is-github-dotcom-remote|NON_GITHUB" "$COMPANION_SCRIPT"; } && a=1
     echo "$CI2B_BLOCK" | grep -q "CONFIRM_COMPANION_ISSUES" || b=1
@@ -153,7 +153,7 @@ fi
 # concept unchanged: NON_GITHUB=1 short-circuits the gh-dependent phases but
 # still writes context.md and emits done/Path C; SKILL.md documents the
 # NON_GITHUB=1 → Path C routing.
-DRIVER_BIN="$AGENTS_DIR/bin/workflow/workflow-init-driver"
+DRIVER_BIN="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/workflow-init-driver"
 if [ -f "$DRIVER_BIN" ] && [ -f "$WORKFLOW_INIT_SKILL" ]; then
     a=0; b=0; c=0
     grep -qF 'process.env.NON_GITHUB === "1"' "$DRIVER_BIN" && a=1

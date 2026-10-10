@@ -11,7 +11,7 @@ const NL = "\n";
 const BS = String.fromCharCode(92);
 const GT = ">";
 
-const DISPATCH = 'bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh"';
+const DISPATCH = 'bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-create-dispatch.sh"';
 const EVIL     = 'bash /tmp/evil.sh';
 const TRAV     = 'bash "../../bin/github-issues/issue-create-dispatch.sh"';
 const OSTMP    = 'bash "/tmp/bin/github-issues/issue-create-dispatch.sh"';

@@ -11,6 +11,7 @@
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
 
 # --- P17 (security, prompt injection): natural-language instructions stay inert --
@@ -53,7 +54,7 @@ assert_out_has "P18: the three bodies survive the hostile headers" '> harmless t
 
 
 # --- SKILL.md Path B extraction (shared by P19) ---------------------------------
-SKILL_MD="$AGENTS_DIR/skills/workflow-init/SKILL.md"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
 skill_b1_cmd() {  # the backtick span on the `- **B1.**` line naming the CLI
     node -e '
 const fs = require("fs");
@@ -77,9 +78,9 @@ subst_b1() {  # <template> <ckpt-path> <issue-N>
     printf '%s' "$tpl"
 }
 B1_OUT=""; B1_ERR=""; B1_RC=0
-run_b1() {  # <command-string> — runs it with the REAL repo as AGENTS_CONFIG_DIR
+run_b1() {  # <command-string> — runs it with the REAL repo as AGENTS_MAIN_ROOT
     B1_RC=0
-    B1_OUT="$(AGENTS_CONFIG_DIR="$AGENTS_DIR" bash -c "$1" 2>"$WORK/b1.err")" || B1_RC=$?
+    B1_OUT="$(AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" bash -c "$1" 2>"$WORK/b1.err")" || B1_RC=$?
     B1_ERR="$(cat "$WORK/b1.err" 2>/dev/null || true)"
     return 0
 }
@@ -132,7 +133,7 @@ fi
 # copy is what CPR-SSOT forbids: the next format change would land in one of them.
 # (a) is the static requirement, (b) is the behavioral proof — one edit inside the
 # shared unit must be visible on BOTH paths at once.
-WC_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/write-context.js"
+WC_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/write-context.js"
 if [ -f "$WC_JS" ] && grep -qE 'require\(.*issue-comments' "$WC_JS"; then
     pass "P20(a): write-context.js requires the shared issue-comments unit"
 else
@@ -150,9 +151,10 @@ else
 fi
 
 SANDBOX="$ROOT_TMP/mutant"
-mkdir -p "$SANDBOX/bin" "$SANDBOX/hooks"
-cp -R "$AGENTS_DIR/bin/workflow" "$SANDBOX/bin/workflow" 2>/dev/null || true
-cp -R "$AGENTS_DIR/hooks/lib" "$SANDBOX/hooks/lib" 2>/dev/null || true
+# The driver finds its siblings from its own location, so the sandbox is a second copy
+# of the harness's mock checkout; the per-case wip mock is added after setup_case.
+mkdir -p "$SANDBOX"
+cp -R "$CFG/." "$SANDBOX/" 2>/dev/null || true
 MUT_JS="$SANDBOX/bin/workflow/lib/workflow-init/issue-comments.js"
 MUT_DRIVER="$SANDBOX/bin/workflow/workflow-init-driver"
 MUT_CLI="$SANDBOX/bin/workflow/render-issue-comments"
@@ -174,6 +176,7 @@ if [ "$MUT_OK" = "1" ] && [ -f "$MUT_DRIVER" ] && [ -f "$MUT_CLI" ]; then
     mock_issue 4023 OPEN "type:task"
     mock_issue_comments 4023 "$TWO_COMMENTS"
     set_wip 4023 same
+    cp "$CFG/bin/github-issues/wip-state.sh" "$SANDBOX/bin/github-issues/wip-state.sh"
     _SAVED_DRIVER="$DRIVER"
     DRIVER="$MUT_DRIVER"
     run_driver '#4023'
@@ -209,7 +212,7 @@ fi
 # published form deletes ALL whitespace from `want`, which would make the
 # space-preservation cases — the whole point of a substitution regex — unassertable).
 # `\n` and `\x20` in a field are expanded, so newlines and edge spaces stay writable.
-IC_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/issue-comments.js"
+IC_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/issue-comments.js"
 strip_subject() {  # <input> — prints stripSentinels(input), or a distinguishable marker
     node -e '
 const p = process.argv[1];

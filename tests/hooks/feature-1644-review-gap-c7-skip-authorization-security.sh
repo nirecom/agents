@@ -42,7 +42,7 @@
 # - Whether a live Claude Code session's permission layer would even let the
 #   model type an inline `CONFIRM_TESTS=off node ...` prefix into the Bash tool.
 # - Whether the real agents .env on a developer machine resolves through the
-#   same configDirCandidates order that AGENTS_CONFIG_DIR pins here.
+#   same scriptCheckoutRootCandidates order that AGENTS_MAIN_ROOT pins here.
 # Closest-to-action mitigation: surfaced at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 

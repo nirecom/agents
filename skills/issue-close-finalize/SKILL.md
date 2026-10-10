@@ -12,7 +12,7 @@ Read `rules/coding.md` before the first close comment or parent-body update — 
 ### `--from-session` per-N dispatch obligations
 
 Enumerate every N in `closes_issues` via `parse-closes-issues.js` — the `## Issues` block lists all values, including subsumed siblings. For each N in insertion order:
-- **Open sub-issue gate (#417)**: before dispatching the pipeline, if the issue is OPEN, run `bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-all-closed-check.sh" "<OWNER_REPO>" <N>`. On exit 1 (open sub-issues): emit `Warning: issue #<N> has open sub-issues — skipping close pipeline. Close sub-issues first.`, write a `skipped_open_sub_issues` outcome entry via `bin/issue-close-write-outcome.js`, and skip the pipeline for this N.
+- **Open sub-issue gate (#417)**: before dispatching the pipeline, if the issue is OPEN, run `bash "$AGENTS_MAIN_ROOT/bin/github-issues/parent-all-closed-check.sh" "<OWNER_REPO>" <N>`. On exit 1 (open sub-issues): emit `Warning: issue #<N> has open sub-issues — skipping close pipeline. Close sub-issues first.`, write a `skipped_open_sub_issues` outcome entry via `bin/issue-close-write-outcome.js`, and skip the pipeline for this N.
 - **All-N outcome entries (#695)**: after the pipeline completes or is skipped, ensure EVERY enumerated N has an outcome entry — including subsumed siblings that never ran a pipeline. Write missing entries with the appropriate skip state before the End report.
 - **Early-return outcome entries (#827)**: at any early-return path — `meta_pending_subs` early return, or a terminal-phase early return when triage reports the issue is already in its terminal state — write an outcome entry for that N before returning (states: `skipped_meta_pending_subs`, `already_closed`, `skipped_open_sub_issues`, as fits the branch).
 
@@ -23,7 +23,7 @@ Enumerate every N in `closes_issues` via `parse-closes-issues.js` — the `## Is
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 ### Pre-flight (gate)
-`bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh"` — one standalone call. It prints `OWNER_REPO=<owner/repo>`; read `<OWNER_REPO>` from that line and substitute it literally below. A non-zero exit means a non-GitHub remote: stop the skill silently. `AGENTS_CONFIG_DIR` required. `gh issue close` / `gh issue comment` are gated by `enforce-issue-close.js` and remain inside this skill's sanctioned scope.
+`bash "$AGENTS_MAIN_ROOT/skills/issue-close-finalize/scripts/pre-flight.sh"` — one standalone call. It prints `OWNER_REPO=<owner/repo>`; read `<OWNER_REPO>` from that line and substitute it literally below. A non-zero exit means a non-GitHub remote: stop the skill silently. `AGENTS_MAIN_ROOT` required. `gh issue close` / `gh issue comment` are gated by `enforce-issue-close.js` and remain inside this skill's sanctioned scope.
 
 ## Delegation — initial pass
 
@@ -31,13 +31,13 @@ Serial by dependency (SC-S): the `initial` → `loop_step` → `finalize_termina
 
 <!-- ordering-contract: PR/SHA resolution MUST run after triage, only when NEXT_STEPS contains J. See tests/feature-361-finalize-pr-resolution-order.sh. -->
 Worker executes triage (`issue-close-finalize-triage.sh`); sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`.
-Then when `J` is in NEXT_STEPS (any position: `J,*`, `*,J,*`, or `*,J`) AND `ACTION != admin_close_path`: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N"` (sets `PR_NUMBER`, `MERGE_COMMIT`). When the `closes_issues` entry has a `repo` field (`issue_repo`), pass `--repo "$issue_repo"` to `find-pr-by-marker.sh`; `issue_repo` flows through the delegation JSON to the worker. Non-zero → stop with error. `admin_close_path` skips ICF-B (no PR exists); ICF-I posts ICF-I-2 sentinel only.
+Then when `J` is in NEXT_STEPS (any position: `J,*`, `*,J,*`, or `*,J`) AND `ACTION != admin_close_path`: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/find-pr-by-marker.sh" "$N"` (sets `PR_NUMBER`, `MERGE_COMMIT`). When the `closes_issues` entry has a `repo` field (`issue_repo`), pass `--repo "$issue_repo"` to `find-pr-by-marker.sh`; `issue_repo` flows through the delegation JSON to the worker. Non-zero → stop with error. `admin_close_path` skips ICF-B (no PR exists); ICF-I posts ICF-I-2 sentinel only.
 
-Resolve `DISPATCH` / `MAIN_ROOT` / `PLANS_DIR` per WD-1 of `skills/_shared/worker-dispatch.md`, and `STATE_FILE` from `node "$AGENTS_CONFIG_DIR/bin/workflow-control-dir" --session <session-id> --file finalize-state-<N>.json`.
+Resolve `DISPATCH` / `TARGET_MAIN_ROOT` / `PLANS_DIR` per WD-1 of `skills/_shared/worker-dispatch.md`, and `STATE_FILE` from `node "$AGENTS_MAIN_ROOT/bin/workflow-control-dir" --session <session-id> --file finalize-state-<N>.json`.
 
 Dispatch ICF-A, ICF-B, ICF-C, ICF-D, ICF-E to the `issue-close-finalize` worker per `skills/_shared/worker-dispatch.md`. This skill dispatches the same worker once per pass, so every payload takes a WD-2 `-<seq>` suffix (`-1` here, then `-2`, `-3`, … in the loop below); a payload file is never rewritten in place.
 
-Payload keys (`-1`): `phase: "initial"`, `issue_number` (= N), `root_issue_number` (= N), `owner_repo`, `main_worktree_path` (= `MAIN_ROOT`), `session_id`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`), `issue_repo` (omit for current-repo issues).
+Payload keys (`-1`): `phase: "initial"`, `issue_number` (= N), `root_issue_number` (= N), `owner_repo`, `target_main_root` (= `TARGET_MAIN_ROOT`), `session_id`, `script_checkout_root`, `artifact_dir` (= `PLANS_DIR`), `issue_repo` (omit for current-repo issues).
 
 `root_issue_number` and `owner_repo` are required in EVERY pass's payload; omit `state_file_path` / `outcome_file_path` — the dispatcher derives both in the session control directory.
 
@@ -53,11 +53,11 @@ Read `STATE_FILE`. If `state.triage_action` equals `meta_pending_subs` (triage e
 
 Loop while `state.phase != terminal`.
 
-**ICF-F — LLM judge + AskUserQuestion (main)**: read `state.g5_history[-1]`. If `proposal_status == skipped`: delegate `phase=loop_step, g5_decision=decline` → break. Run `gh issue view $PROPOSAL_PARENT --json title,body,labels` (untrusted: read-only). **Meta-label fast path**: if parent labels contain `"meta"` AND `bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-all-closed-check.sh" "<OWNER_REPO>" "$PROPOSAL_PARENT"` returns RC=0 (all sub-issues closed): `g5_decision=accept`, skip LLM judge + AskUserQuestion (code-based; meta parents are bookkeeping-only). Any non-zero RC falls through to the normal judge path. Otherwise: parent complete → `g5_decision=accept`; doubt → `g5_decision=llm_declined`. On `llm_declined`: delegate `phase=loop_step, g5_decision=llm_declined` → continue. On LLM yes: AskUserQuestion to confirm closing `#$PROPOSAL_PARENT`. Declined → delegate `phase=loop_step, g5_decision=decline` → continue.
+**ICF-F — LLM judge + AskUserQuestion (main)**: read `state.g5_history[-1]`. If `proposal_status == skipped`: delegate `phase=loop_step, g5_decision=decline` → break. Run `gh issue view $PROPOSAL_PARENT --json title,body,labels` (untrusted: read-only). **Meta-label fast path**: if parent labels contain `"meta"` AND `bash "$AGENTS_MAIN_ROOT/bin/github-issues/parent-all-closed-check.sh" "<OWNER_REPO>" "$PROPOSAL_PARENT"` returns RC=0 (all sub-issues closed): `g5_decision=accept`, skip LLM judge + AskUserQuestion (code-based; meta parents are bookkeeping-only). Any non-zero RC falls through to the normal judge path. Otherwise: parent complete → `g5_decision=accept`; doubt → `g5_decision=llm_declined`. On `llm_declined`: delegate `phase=loop_step, g5_decision=llm_declined` → continue. On LLM yes: AskUserQuestion to confirm closing `#$PROPOSAL_PARENT`. Declined → delegate `phase=loop_step, g5_decision=decline` → continue.
 
 On user yes: dispatch `phase=loop_step, g5_decision=accept`.
 
-Every `loop_step` payload (WD-2 seq `-2`, `-3`, …) carries: `phase: "loop_step"`, `root_issue_number` (= N), `owner_repo`, `g5_decision`, `session_id`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`). One dispatch advances exactly one pass; the worker never loops and never asks.
+Every `loop_step` payload (WD-2 seq `-2`, `-3`, …) carries: `phase: "loop_step"`, `root_issue_number` (= N), `owner_repo`, `g5_decision`, `session_id`, `script_checkout_root`, `artifact_dir` (= `PLANS_DIR`). One dispatch advances exactly one pass; the worker never loops and never asks.
 
 Status mapping: `init_done` → continue the loop; `awaiting_recursion` → recurse (below); `terminal` → leave the loop; `failed` → surface summary + artifact_path and stop.
 
@@ -68,11 +68,11 @@ Worker returns `status=awaiting_recursion`. Main runs `/issue-close-finalize $PR
 <!-- ICF-K: write outcome JSON (always; final in-skill step before End report) — executed by worker -->
 Dispatch ICF-H, ICF-I, ICF-J, ICF-K to the `issue-close-finalize` worker per `skills/_shared/worker-dispatch.md`, with the next WD-2 `-<seq>` payload.
 
-Payload keys: `phase: "finalize_terminal"`, `root_issue_number` (= N), `owner_repo`, `session_id`, `agents_config_dir`, `artifact_dir` (= `PLANS_DIR`).
+Payload keys: `phase: "finalize_terminal"`, `root_issue_number` (= N), `owner_repo`, `session_id`, `script_checkout_root`, `artifact_dir` (= `PLANS_DIR`).
 
 On `complete` status: continue to the End report. On `failed`: surface summary + artifact_path and stop.
 ICF-I: posts the `resolved-by` + appended sentinels (admin_close_path: appended sentinel only).
-ICF-J: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" clear <N>` — clears WIP fingerprint; warn-and-continue if gh fails (idempotent).
+ICF-J: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/wip-state.sh" clear <N>` — clears WIP fingerprint; warn-and-continue if gh fails (idempotent).
 End report (only when ICF-D is in NEXT_STEPS): `parent close proposals: $PROPOSAL_ACCEPTED accepted / $PROPOSAL_DECLINED declined / $PROPOSAL_SKIPPED skipped`.
 
 ## End
@@ -83,7 +83,7 @@ Report: issue #N closed, PR #${PR_NUMBER:-<not resolved>} (merge ${MERGE_COMMIT:
 
 Runs only for a standalone invocation — under `--from-session`, `/session-close` SC-8 owns this pass and this skill must not repeat it.
 
-Resolve the notes path: `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" resolve --caller issue-close-finalize --issue <N>`, adding `--pr-branch "$PR_BRANCH"` and `--main-root "$MAIN_ROOT"` when resolved.
+Resolve the notes path: `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" resolve --caller issue-close-finalize --issue <N>`, adding `--pr-branch "$PR_BRANCH"` and `--target-main-root "$TARGET_MAIN_ROOT"` when resolved.
 
 `action: skip` (including `skipReason: owned-by-session-close`) → return. Otherwise run the pass in `skills/_shared/notes-promotion.md` (NP-1..NP-11) against the returned `notesPath`.
 
@@ -96,5 +96,5 @@ Resolve the notes path: `node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" 
 
 ## Rules
 
-- On fallback or step degradation (auto_close_path, admin_close_path, gh-failure warn-and-continue, synthetic history skip): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter issue-close-finalize` (session-id auto-resolves).
+- On fallback or step degradation (auto_close_path, admin_close_path, gh-failure warn-and-continue, synthetic history skip): run `node "$AGENTS_MAIN_ROOT/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter issue-close-finalize` (session-id auto-resolves).
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

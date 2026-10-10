@@ -11,12 +11,8 @@ set -euo pipefail
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SCRIPT="$AGENTS_ROOT/bin/review-plan-codex"
 ERRORS=0
-AGENTS_DIR="$AGENTS_ROOT"
-# shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
 
 # Shared harness for the case markers the sub-files use; the local reporters below override it.
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_ROOT/tests/lib/harness.sh"
 

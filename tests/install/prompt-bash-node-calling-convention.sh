@@ -7,20 +7,20 @@ set -uo pipefail
 
 # THE SUBJECT. bash-guard's self-script allow path admits a listed command only with a LITERAL
 # interpreter token in execution position -- `bash "<path>"`, never `"<path>"` on its own. So a
-# prompt asset that tells the model to run `"$AGENTS_CONFIG_DIR/bin/foo"` directly instructs a
+# prompt asset that tells the model to run `"$AGENTS_MAIN_ROOT/bin/foo"` directly instructs a
 # command line the guard cannot admit, and the step falls back to `ask`. WHICH commands are in
 # scope is owned by install/settings-allow-commands.txt (CPR-SSOT); the interpreter each resolves
 # to by hooks/lib/allow-command-list.js; the calling convention the model is told to use, by the
 # prompt assets themselves. This suite holds the three in agreement.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # WHY scope:common AND NOT feature-<N>: the invariant is class-level -- every entry in the
 # SSOT, in every prompt asset, forever. Filed under an issue number it would be retired the
 # day that issue closed, taking the only enforcement of the calling convention with it.
 
 SSOT_REL="install/settings-allow-commands.txt"
-SSOT="$AGENTS_DIR/$SSOT_REL"
+SSOT="$SCRIPT_CHECKOUT_ROOT/$SSOT_REL"
 
 PASS=0
 FAIL=0
@@ -78,7 +78,7 @@ run_with_timeout() {
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-PART_DIR="$AGENTS_DIR/tests/install/prompt-bash-node-calling-convention"
+PART_DIR="$SCRIPT_CHECKOUT_ROOT/tests/install/prompt-bash-node-calling-convention"
 
 # home-canary.sh is sourced FIRST and only defines functions: canary_setup repoints HOME and
 # every home-shaped variable at a seeded fixture BEFORE any other part spawns a subprocess.

@@ -2,14 +2,11 @@
 # tests/hooks/feature-1611-verbose-prompt-injection/unit-model-identity.sh
 # Tests: hooks/lib/model-identity.js, hooks/workflow-state/state-io.js
 # Tags: hook, model-detection, session-state, prompt-injection, scope:issue-specific, TL2
-#
 # Fragment of tests/hooks/feature-1611-verbose-prompt-injection.sh — sourced by the
-# parent, not run directly; the cases run at source time, so the parent's source
-# order IS the execution order. Owns the module preconditions and groups A
-# (extractModelIdFromHookInput shape tolerance), B (resolveModelId layer①) and
-# C (recordSessionModel write-once + verbose_prompt decision).
-#
-# Depends on the parent for: REPO_DIR, MODEL_IDENTITY_JS, VERBOSE_PROMPT_JS,
+# parent, not run directly; cases run at source time, in the parent's source order.
+# Owns the module preconditions and groups A (extractModelIdFromHookInput shape
+# tolerance), B (resolveModelId layer①), C (recordSessionModel write-once + verbose_prompt).
+# Depends on the parent for: SCRIPT_CHECKOUT_ROOT, MODEL_IDENTITY_JS, VERBOSE_PROMPT_JS,
 # jsn, seed_state, state_file, state_field, assert_eq, assert_ne, pass, fail.
 
 # ---------------------------------------------------------------------------
@@ -17,7 +14,7 @@ echo "=== preconditions (new modules) ==="
 # ---------------------------------------------------------------------------
 
 for f in "$MODEL_IDENTITY_JS" "$VERBOSE_PROMPT_JS"; do
-    rel="${f#$REPO_DIR/}"
+    rel="${f#$SCRIPT_CHECKOUT_ROOT/}"
     if [ -f "$f" ]; then pass "X-exists-$rel"
     else fail "X-exists-$rel" "not implemented yet"; fi
 done

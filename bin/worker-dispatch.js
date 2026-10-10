@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // bin/worker-dispatch.js — single entry point for every plain-script worker (#1643).
-//   node bin/worker-dispatch.js <worker-name> <main-root> <payload-json-path>
+//   node bin/worker-dispatch.js <worker-name> <target-main-root> <payload-json-path>
 // One entry point gives the main-worktree guard ONE sanctioned identifier. argv carries
 // no free text: the payload is a JSON file published by bin/worker-dispatch-payload into
 // <workflowDir>/<sid>.control/ (docs/architecture/claude-code/state-dirs.md).
@@ -27,7 +27,7 @@ const {
   assertRealControlDir,
 } = require("../hooks/workflow-state/state-io/control-dir");
 
-const USAGE = "usage: worker-dispatch.js <worker-name> <main-root> <payload-json-path>";
+const USAGE = "usage: worker-dispatch.js <worker-name> <target-main-root> <payload-json-path>";
 
 function fatal(message) {
   process.stderr.write(`worker-dispatch: ${message}\n${USAGE}\n`);
@@ -112,14 +112,14 @@ function main() {
 
   // Step 1 — argv arity. Fixed at three; a worker never gets a variadic tail.
   if (argv.length !== 3) fatal(`expected 3 arguments, got ${argv.length}`);
-  const [workerName, mainRootArg, payloadPathArg] = argv;
+  const [workerName, targetMainRootArg, payloadPathArg] = argv;
 
   // Step 2 — worker-name enum, own-property lookup only (`__proto__` is not a worker).
   const entry = registry.get(workerName);
   if (entry === null) fatal(`unknown worker (expected one of: ${registry.names.join(", ")})`);
 
   // Step 3 — trust anchors, from this module's location and git, never the environment.
-  const anchors = resolveAnchors(mainRootArg);
+  const anchors = resolveAnchors(targetMainRootArg);
   if (anchors.error !== null) fatal(anchors.error);
 
   // Step 4 — payload location, then load. Residency is checked before the file is read.

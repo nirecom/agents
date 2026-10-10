@@ -17,18 +17,18 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-WFSTATE_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state.js"
-FINGERPRINT_NODE="$_AGENTS_DIR_NODE/hooks/lib/diff-fingerprint.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
+WFSTATE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state.js"
+FINGERPRINT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/diff-fingerprint.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -150,7 +150,7 @@ drive_merge() {
     (
         cd "$plans_node" || exit 1
         CLAUDE_CODE_SESSION_ID="$sid" \
-        WORKFLOW_PLANS_DIR="$plans_node" WORKFLOW_STATE_DIR="$(wf_of "$plans_node")" AGENTS_CONFIG_DIR="$plans_node" \
+        WORKFLOW_PLANS_DIR="$plans_node" WORKFLOW_STATE_DIR="$(wf_of "$plans_node")" AGENTS_MAIN_ROOT="$plans_node" \
             run_with_timeout 20 node "$HOOK" <<< "$hook_input" 2>/dev/null
     )
 }

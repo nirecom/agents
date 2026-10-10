@@ -28,7 +28,7 @@ stage_readme() {
 run_group_b() {
   # B1: SSOT existence — rules/docs/readme.md carries a well-formed
   # readme-section-order block, the source-of-truth the tool parses.
-  local ssot="$AGENTS_DIR/rules/docs/readme.md"
+  local ssot="$SCRIPT_CHECKOUT_ROOT/rules/docs/readme.md"
   if grep -qF -- "<!-- readme-section-order:start -->" "$ssot" 2>/dev/null \
      && grep -qF -- "<!-- readme-section-order:end -->" "$ssot" 2>/dev/null; then
     pass "B1: rules/docs/readme.md declares a readme-section-order SSOT block"

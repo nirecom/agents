@@ -6,7 +6,7 @@
 # fail-closed branches, no-tests, and session-worktree resolution when repoDir
 # is absent. Fixtures come from the parent file (rr_repo / rr_state / rr_view).
 
-REOPEN_MOD="$AGENTS_DIR_N/hooks/workflow-state/review-tests-reopen.js"
+REOPEN_MOD="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/review-tests-reopen.js"
 export REOPEN_MOD
 
 echo "=== P2: review-tests-reopen module ==="
@@ -111,7 +111,7 @@ try {
   const res = require(mod).reopenReviewTestsAfterWriteCode(sid, repo, "advance");
   process.stdout.write(JSON.stringify({kind: res && res.kind, detail: res && res.detail}));
 } catch (e) { process.stdout.write("THROWN:" + e.message); }
-' "$AGENTS_DIR_N/hooks/workflow-state/state-io/review-tests.js" "$REOPEN_MOD" r8rere "$R_REPO_N" 2>/dev/null)"
+' "$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/review-tests.js" "$REOPEN_MOD" r8rere "$R_REPO_N" 2>/dev/null)"
 check "R8: write failure → review-tests-reopen-failed diagnostic" '{"kind":"review-tests-reopen-failed","detail":"simulated-write-failure"}' "$R8_OUT"
 
 echo ""

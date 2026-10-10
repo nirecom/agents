@@ -1,12 +1,15 @@
 # Tests: install.sh, install.ps1, install/linux/session-sync-init.sh, install/win/session-sync-init.ps1, bin/get-config-var, bin/get-config-var.ps1
 # Tags: install, installer, session-sync, toggle, pwsh-required, scope:common
-# Part of tests/bin/main-session-sync-toggle.sh — sourced by that dispatcher; uses its AGENTS_DIR / TMPDIR_BASE / RUN_TIMEOUT / pass / fail.
+# Part of tests/bin/main-session-sync-toggle.sh — sourced by that dispatcher; uses its SCRIPT_CHECKOUT_ROOT / TMPDIR_BASE / RUN_TIMEOUT / pass / fail.
 # Why over the static T17-T19 greps: a correct gate, an inverted gate, a bare
 # mention and an unconditional call all share one source signature, so each
 # installer is *run* in an all-stub sandbox with the session-sync init stub as
 # the observable — the same matrix for both installers (CPR-ORTH).
 # TL3 gap: no clean-machine install, no real .env, and each installer refuses the
 # other platform. Mitigation: bin/check-verification-gate.sh category: installer.
+
+# shellcheck source=/dev/null
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/home-userprofile-pin.sh"
 
 # _winpath <posix-path> — Windows form when cygpath is available, else unchanged.
 _winpath() { cygpath -w "$1" 2>/dev/null || printf '%s' "$1"; }
@@ -32,11 +35,11 @@ make_install_sh_sandbox() {
     mkdir -p "$sb/agents/install/linux" "$sb/agents/bin" "$sb/agents/hooks" \
              "$sb/bin" "$sb/nonode" "$sb/home" "$sb/calls" "$sb/nvm"
 
-    cp "$AGENTS_DIR/install.sh" "$sb/agents/install.sh"
-    cp "$AGENTS_DIR/profile-snippet.sh" "$sb/agents/profile-snippet.sh"
-    cp -R "$AGENTS_DIR/hooks/lib" "$sb/agents/hooks/lib"
+    cp "$SCRIPT_CHECKOUT_ROOT/install.sh" "$sb/agents/install.sh"
+    cp "$SCRIPT_CHECKOUT_ROOT/profile-snippet.sh" "$sb/agents/profile-snippet.sh"
+    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$sb/agents/hooks/lib"
     if [ "$resolver" = "present" ]; then
-        cp "$AGENTS_DIR/bin/get-config-var" "$sb/agents/bin/get-config-var"
+        cp "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" "$sb/agents/bin/get-config-var"
         chmod +x "$sb/agents/bin/get-config-var"
     fi
 
@@ -69,15 +72,19 @@ run_install_sh() {
     local sb="$1" ss="$2" node_mode="$3"
     local path="$sb/bin:$PATH"
     [ "$node_mode" = "no-node" ] && path="$sb/nonode:$sb/bin:$PATH"
+    # Subshell: the pin (HOME + USERPROFILE, inherited by env) must not outlive this run.
+    (
+    pin_home_and_userprofile "$sb/home"
     if [ "$ss" = "UNSET" ]; then
-        env -u SESSION_SYNC HOME="$sb/home" SHELL=/bin/bash NVM_DIR="$sb/nvm" \
-            AGENTS_CONFIG_DIR="$sb/agents" PATH="$path" \
+        env -u SESSION_SYNC SHELL=/bin/bash NVM_DIR="$sb/nvm" \
+            AGENTS_MAIN_ROOT="$sb/agents" PATH="$path" \
             bash "$RUN_TIMEOUT" 120 bash "$sb/agents/install.sh" 2>&1
     else
-        env SESSION_SYNC="$ss" HOME="$sb/home" SHELL=/bin/bash NVM_DIR="$sb/nvm" \
-            AGENTS_CONFIG_DIR="$sb/agents" PATH="$path" \
+        env SESSION_SYNC="$ss" SHELL=/bin/bash NVM_DIR="$sb/nvm" \
+            AGENTS_MAIN_ROOT="$sb/agents" PATH="$path" \
             bash "$RUN_TIMEOUT" 120 bash "$sb/agents/install.sh" 2>&1
     fi
+    )
 }
 
 # tc_install_sh_gate <label> <SESSION_SYNC|UNSET> <with-node|no-node> <present|removed> <expect> <why>
@@ -125,12 +132,12 @@ make_install_ps1_sandbox() {
     mkdir -p "$sb/agents/install/win" "$sb/agents/bin" "$sb/agents/hooks" \
              "$sb/winbin" "$sb/nonode" "$sb/calls" "$sb/profile"
 
-    cp "$AGENTS_DIR/install.ps1" "$sb/agents/install.ps1"
-    cp "$AGENTS_DIR/profile-snippet.ps1" "$sb/agents/profile-snippet.ps1"
-    cp -R "$AGENTS_DIR/hooks/lib" "$sb/agents/hooks/lib"
+    cp "$SCRIPT_CHECKOUT_ROOT/install.ps1" "$sb/agents/install.ps1"
+    cp "$SCRIPT_CHECKOUT_ROOT/profile-snippet.ps1" "$sb/agents/profile-snippet.ps1"
+    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$sb/agents/hooks/lib"
     if [ "$resolver" = "present" ]; then
-        cp "$AGENTS_DIR/bin/get-config-var.ps1" "$sb/agents/bin/get-config-var.ps1"
-        cp "$AGENTS_DIR/bin/get-config-var" "$sb/agents/bin/get-config-var"
+        cp "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var.ps1" "$sb/agents/bin/get-config-var.ps1"
+        cp "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" "$sb/agents/bin/get-config-var"
         chmod +x "$sb/agents/bin/get-config-var"
     fi
 
@@ -162,10 +169,10 @@ run_install_ps1() {
     local drv; drv="$(_winpath "$sb/driver.ps1")"
     local cfg; cfg="$(_winpath "$sb/agents")"
     if [ "$ss" = "UNSET" ]; then
-        env -u SESSION_SYNC AGENTS_CONFIG_DIR="$cfg" PATH="$path" \
+        env -u SESSION_SYNC AGENTS_MAIN_ROOT="$cfg" PATH="$path" \
             bash "$RUN_TIMEOUT" 180 pwsh -NoProfile -NonInteractive -File "$drv" 2>&1
     else
-        env SESSION_SYNC="$ss" AGENTS_CONFIG_DIR="$cfg" PATH="$path" \
+        env SESSION_SYNC="$ss" AGENTS_MAIN_ROOT="$cfg" PATH="$path" \
             bash "$RUN_TIMEOUT" 180 pwsh -NoProfile -NonInteractive -File "$drv" 2>&1
     fi
 }

@@ -9,9 +9,9 @@
 # stage-3 run are only met when the first band is applied in a later PR.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
@@ -24,19 +24,19 @@ export HOME="$TMPBASE/home"
 mkdir -p "$HOME"
 export NO_LOG=true
 # shellcheck source=../../bin/lib/run-all-launch.sh
-. "$AGENTS_DIR/bin/lib/run-all-launch.sh"
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-launch.sh"
 harness_isolate "$TMPBASE/state"
 export RUN_ALL_DURATIONS_LIB=/nonexistent RUN_ALL_PROGRESS=off
 
 # fx_table_edit / has_line: the registry suite's helpers (one owner).
 # shellcheck source=test-language-registry/_lib.sh
-. "$AGENTS_DIR/tests/bin/test-language-registry/_lib.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/_lib.sh"
 
-VCE_CASES="$AGENTS_DIR/tests/bin/bin-verify-case-embed"
+VCE_CASES="$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-verify-case-embed"
 WD="$TMPBASE/work"
 mkdir -p "$WD"
 T=$'\t'
-REAL_TABLE="$AGENTS_DIR/hooks/lib/test-language-registry.json"
+REAL_TABLE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.json"
 
 # vce_checkout <dir> [<table.json>] — a git checkout holding the whole bin/, the registry
 # (optionally replaced by <table.json>), the shared harness, the sweep-tests skill docs,
@@ -45,13 +45,14 @@ REAL_TABLE="$AGENTS_DIR/hooks/lib/test-language-registry.json"
 vce_checkout() {
   local d="$1" t="${2:-}" n
   mkdir -p "$d/tests/lib" "$d/tests/bin"
-  cp -R "$AGENTS_DIR/bin" "$d/bin"
-  install_test_language_registry "$d" "$AGENTS_DIR"
+  cp -R "$SCRIPT_CHECKOUT_ROOT/bin" "$d/bin"
+  install_test_language_registry "$d" "$SCRIPT_CHECKOUT_ROOT"
   if [ -n "$t" ]; then cp "$t" "$d/hooks/lib/test-language-registry.json"; fi
-  cp "$AGENTS_DIR/tests/lib/harness.sh" "$d/tests/lib/harness.sh"
-  if [ -d "$AGENTS_DIR/skills/sweep-tests" ]; then
+  cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh" "$d/tests/lib/harness.sh"
+  fx_root_decoy "$d"
+  if [ -d "$SCRIPT_CHECKOUT_ROOT/skills/sweep-tests" ]; then
     mkdir -p "$d/skills"
-    cp -R "$AGENTS_DIR/skills/sweep-tests" "$d/skills/sweep-tests"
+    cp -R "$SCRIPT_CHECKOUT_ROOT/skills/sweep-tests" "$d/skills/sweep-tests"
   fi
   for n in a b c; do printf '#!/usr/bin/env bash\necho %s\n' "$n" >"$d/bin/$n.sh"; done
   cp "$WD/before.sh" "$d/tests/bin/sample.sh"
@@ -120,7 +121,7 @@ vce_checkout "$VCO"
 
 case_begin "verifier-entrypoint-present" "bin/verify-case-embed.sh"
 for f in bin/verify-case-embed.sh bin/verify-case-embed/checks.sh bin/verify-case-embed/run-compare.sh; do
-  if [ -f "$AGENTS_DIR/$f" ]; then pass "present: $f"; else fail "present: $f" "missing"; fi
+  if [ -f "$SCRIPT_CHECKOUT_ROOT/$f" ]; then pass "present: $f"; else fail "present: $f" "missing"; fi
 done
 case_end
 

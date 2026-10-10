@@ -2,60 +2,20 @@
 # tests/bin/feature-1643-worker-dispatch-script-anchor.sh
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, script-anchor, family-worktree, spawn, registry, regression, TL2, scope:issue-specific
-#
-# Issue #1643 — the SCRIPT anchor vocabulary (which root a declared script
-# resolves against), distinct from the TRUST anchors in
-# tests/bin/feature-1643-worker-dispatch-anchor.sh (ACD/MAIN_ROOT cannot be moved
-# by caller input; this file asserts which root a given script is measured
-# from, and that cwd is proven before it can act as a root).
-#
-# Regression fenced: tests/run-all.sh derives its dir from BASH_SOURCE, not
-# cwd. While test-runner's runAll script carried anchor "main-root", a
-# dispatch from a LINKED worktree ran MAIN's suite while reporting success —
-# i.e. verified the wrong tree. Fix: move that script to "family-worktree",
-# which resolves against cwd only AFTER assertCwdInFamily proves membership.
-#
-# This file is a DISPATCHER (shared helpers/fixtures/counters); groups live in
-# the sibling dir of the same name, sourced below (rules/coding/file-split.md
-# Pattern A — passed the 500-line HARD limit once #1719's buildEnv groups
-# arrived). Each part runs in this shell so state is shared, not re-derived.
-#
-#   probe-harness.sh       node probe (all modes) + parent-env runners
-#   groups-anchor.sh       A registry / B+D resolveScript / C cwd containment /
-#                          E timeout bound / F end-to-end discriminator
-#   group-env-scope.sh     G buildEnv membership, both directions
-#   group-env-branches.sh  H missing-value branch / I value edge cases / J idempotency
-#   group-child-env.sh     K real-subprocess child env (leak sentinel)
-#   group-env-longvalue.sh L value-length extremes across the real subprocess boundary
-#
-# Groups (one line each — full rationale lives with each group's code):
-#   A registry: SCRIPT_ANCHORS is the exported vocabulary; test-runner/runAll is family-worktree, NOT main-root.
-#   B resolveScript: family-worktree resolves under passed cwd, main-root under main-root; they differ for a linked worktree.
-#   C cwd containment: scriptExists/run() reject an out-of-family cwd BEFORE resolving the script.
-#   D anchorRoot: unknown token or family-worktree with no cwd both yield null (unresolvable-anchor).
-#   E timeout_seconds bound: 21600 accepted, 21601 rejected, default 120.
-#   F end-to-end: a real dispatch must run the LINKED worktree's tests/run-all.sh, not main's.
-#   G buildEnv scope: GH_TOKEN/GITHUB_TOKEN reach only sanctioned forge workers; config-location vars reach EVERY worker (#1719).
-#   H buildEnv missing-value: an allowlisted var the parent lacks must be ABSENT from the child env, never "undefined"/"".
-#   I config-path edge cases: empty/1-char/nonexistent/spaced/non-ASCII/metacharacter/8192-char values survive byte-for-byte, unexpanded, unrun.
-#   J buildEnv idempotency: two identical calls agree; allowlist and envPassthrough are never mutated.
-#   K real-subprocess child env: G-J assert only buildEnv's RETURN VALUE — K dispatches a REAL child and asks what it can actually see, catching a regression to `env: process.env`.
-#   L value-length extremes at that same real boundary (Windows caps a var near 32767 chars); child rebuilds expected bytes from a rule, not from what it received.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - A real /run-tests skill invocation writing the payload and dispatching in
-#     one turn against the operator's real agents checkout.
-#   - Real linked worktrees behind NTFS junctions or bind mounts, where realpath
-#     canonicalization of the family list behaves differently from temp fixtures.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1643 — the SCRIPT anchor vocabulary: which root a declared script is measured from, and that cwd is proven before it acts as a root (trust anchors: feature-1643-worker-dispatch-anchor.sh).
+# Regression fenced: test-runner's runAll was anchored at the target main worktree, so a dispatch from a LINKED worktree ran MAIN's suite and reported success; "family-worktree" resolves against cwd only after assertCwdInFamily.
+# DISPATCHER only (rules/coding/file-split.md Pattern A): groups live in the sibling dir, sourced below, sharing this shell's state; each group's rationale lives with its code.
+#   probe-harness.sh node probe; groups-anchor.sh A registry / B+D resolveScript / C cwd containment / E timeout / F end-to-end;
+#   group-env-scope.sh G membership; group-env-branches.sh H/I/J values; group-child-env.sh K real child env; group-env-longvalue.sh L value length.
+# TL3 gap: a real /run-tests dispatch against the operator's checkout, and worktrees behind NTFS junctions or bind mounts.
+# Mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-SPAWN_JS="$AGENTS_DIR/bin/worker-dispatch/spawn.js"
-REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+SPAWN_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
 
 PASS=0
 FAIL=0

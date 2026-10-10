@@ -77,7 +77,7 @@ try {
     # real repo, and only the output is redirected — the real ~/.claude/settings.json
     # is never touched. In RED this fails because the source settings.json lacks the
     # UserPromptSubmit lang-inject.js entry yet (assemble only concats existing hooks).
-    ASSEMBLE_SETTINGS="$AGENTS_DIR/install/assemble-settings.js"
+    ASSEMBLE_SETTINGS="$SCRIPT_CHECKOUT_ROOT_NATIVE/install/assemble-settings.js"
     if [ ! -f "$ASSEMBLE_SETTINGS" ]; then
         skip "G3-T4: install/assemble-settings.js not found"
     else

@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TESTS_DIR="$AGENTS_DIR/tests"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TESTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests"
 
 PASS=0
 FAIL=0

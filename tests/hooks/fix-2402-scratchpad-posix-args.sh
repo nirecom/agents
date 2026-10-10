@@ -58,7 +58,7 @@ printf 'echo hi\n' >"$SP/probe.sh"
 drv() {
     local sp="$1"; shift
     run_with_timeout 30 env -u CLAUDE_CODE_SESSION_ID -u SESSION_ID \
-        MSYS_NO_PATHCONV=1 AGENTS_DIR="$AGENTS_NODE" SCRATCHPAD="$sp" \
+        MSYS_NO_PATHCONV=1 SCRATCHPAD="$sp" \
         node "$DRIVER" "$@" 2>&1
 }
 

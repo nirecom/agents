@@ -31,11 +31,11 @@ if [ -f "$BLOCK_HOOK" ]; then
     for shape in "bare" "tmp"; do
         target="$WF/forgesid.$MARKER_KIND"; [ "$shape" = "tmp" ] && target="$target.tmp"
         verdict=$(printf '{"tool_name":"Write","session_id":"forgesid","cwd":"%s","tool_input":{"file_path":"%s"}}' "$WF" "$target" | \
-            (cd "$TMP" && WORKFLOW_STATE_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$BLOCK_HOOK" 2>/dev/null))
+            (cd "$TMP" && WORKFLOW_STATE_DIR="$WF" "$RWT" 15 node "$BLOCK_HOOK" 2>/dev/null))
         assert_contains "P10 forging the provenance marker via Write is blocked [$shape]" '"decision":"block"' "$verdict"
     done
     verdict=$(printf '{"tool_name":"Bash","session_id":"forgesid","cwd":"%s","tool_input":{"command":"printf x > %s/forgesid.%s"}}' "$WF" "$WF" "$MARKER_KIND" | \
-        (cd "$TMP" && WORKFLOW_STATE_DIR="$WF" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$BLOCK_HOOK" 2>/dev/null))
+        (cd "$TMP" && WORKFLOW_STATE_DIR="$WF" "$RWT" 15 node "$BLOCK_HOOK" 2>/dev/null))
     assert_contains "P10 forging the provenance marker via Bash is blocked" '"decision":"block"' "$verdict"
 else
     skip "P10 hooks/block-clearance-token-write.js not found"

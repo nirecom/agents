@@ -74,7 +74,7 @@ fi
 # computeReviewScopeFingerprint uses execFileSync (no shell), so injection must not fire.
 REPO_META="$TMPDIR_BASE/repo-meta"
 MARKER_NAME="pwned.marker"
-rm -f "$TMPDIR_BASE/$MARKER_NAME" "$REPO_META/$MARKER_NAME" "$AGENTS_DIR/$MARKER_NAME"
+rm -f "$TMPDIR_BASE/$MARKER_NAME" "$REPO_META/$MARKER_NAME" "$SCRIPT_CHECKOUT_ROOT/$MARKER_NAME"
 init_repo "$REPO_META"
 mkdir -p "$REPO_META/tests"
 printf 'delete me\n' > "$REPO_META/tests/deleted.sh"
@@ -93,7 +93,7 @@ else
     fail "T14. shell-metacharacter filename + deletion: expected valid hex fingerprint, got: $TOKEN_META"
 fi
 
-if [ ! -e "$TMPDIR_BASE/$MARKER_NAME" ] && [ ! -e "$REPO_META/$MARKER_NAME" ] && [ ! -e "$AGENTS_DIR/$MARKER_NAME" ]; then
+if [ ! -e "$TMPDIR_BASE/$MARKER_NAME" ] && [ ! -e "$REPO_META/$MARKER_NAME" ] && [ ! -e "$SCRIPT_CHECKOUT_ROOT/$MARKER_NAME" ]; then
     pass "T14b. shell-metacharacter filename does not trigger command injection (marker file never created)"
 else
     fail "T14b. shell-metacharacter filename triggered command injection — marker file was created"

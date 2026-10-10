@@ -29,10 +29,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WORKER_SCRIPT_JS="${AGENTS_DIR}/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
-OVERLAY_JS="${AGENTS_DIR}/hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js"
-ARG_VALUE_GUARD_JS="${AGENTS_DIR}/hooks/enforce-worktree/arg-value-guard.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+WORKER_SCRIPT_JS="${SCRIPT_CHECKOUT_ROOT}/hooks/enforce-worktree/main-worktree-allows/worker-script.js"
+OVERLAY_JS="${SCRIPT_CHECKOUT_ROOT}/hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js"
+ARG_VALUE_GUARD_JS="${SCRIPT_CHECKOUT_ROOT}/hooks/enforce-worktree/arg-value-guard.js"
 
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
@@ -161,7 +161,7 @@ test_no_bash_tool_call_sites() {
         # a prompt file. A prose mention in docs/history/*.md is a record of past
         # work, not an instruction, and must not trip the audit.
         hits="$(grep -rlnE "bash[[:space:]]+\"?[^\"[:space:]]*${rel//\//\\/}" \
-            --include='*.md' "$AGENTS_DIR/skills" "$AGENTS_DIR/docs" 2>/dev/null)"
+            --include='*.md' "$SCRIPT_CHECKOUT_ROOT/skills" "$SCRIPT_CHECKOUT_ROOT/docs" 2>/dev/null)"
         if [ -n "$hits" ]; then
             errs="$errs $rel->$(printf '%s' "$hits" | tr '\n' ',')"
         fi
@@ -180,7 +180,7 @@ test_bash_tool_detector_probe() {
     tmpd="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/fix1600audit-$$")"
     mkdir -p "$tmpd"
     probe="$tmpd/synthetic-skill.md"
-    printf '%s\n' 'XX-1. Run `bash "$AGENTS_CONFIG_DIR/bin/issue-close-gate.sh" "$OWNER_REPO" "$N"`.' > "$probe"
+    printf '%s\n' 'XX-1. Run `bash "$AGENTS_MAIN_ROOT/bin/issue-close-gate.sh" "$OWNER_REPO" "$N"`.' > "$probe"
     if grep -rqE 'bash[[:space:]]+"?[^"[:space:]]*bin\/issue-close-gate\.sh' --include='*.md' "$tmpd" 2>/dev/null; then
         pass "b2: the b1 detector fires on a synthetic prompt-file call site (mutation probe)"
     else

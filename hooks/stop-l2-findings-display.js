@@ -5,7 +5,10 @@
 // Fires only when findings_surfaced_at is null and alert mode has completed (or is
 // in the #961 stale-pending state). Emits additionalContext only — never blocks.
 
+const path = require("path");
 const { readHookInput } = require("./lib/read-stdin");
+
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
 
 if (require.main === module) {
   const r = readHookInput();
@@ -63,8 +66,7 @@ if (require.main === module) {
     if (!isCompleted) process.exit(0);
 
     // Gate 3: renderer has content
-    const agentsConfigDir = process.env.AGENTS_CONFIG_DIR || "";
-    const supervisorPath = agentsConfigDir ? `${agentsConfigDir}/agents/supervisor.md` : "agents/supervisor.md";
+    const supervisorPath = path.join(SCRIPT_CHECKOUT_ROOT, "agents", "supervisor.md");
     const stateFilePath = getStatePath(effectiveSid);
 
     const rendered = formatLayer2Findings(al.findings, {

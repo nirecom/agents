@@ -20,7 +20,7 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1812_AGENTPID_INNER:-}" ]; t
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BRANCH="feature/1812-agentpid-probe"
 
 PASS=0
@@ -119,7 +119,7 @@ POUT="$(run_with_timeout 240 env \
     "SSH_AUTH_SOCK=$FAKE_SSH_SOCK" "SSH_AGENT_PID=$FAKE_AGENT_PID" \
     "WORKFLOW_PLANS_DIR=$(nodepath "$PLANS_RAW")" \
     "WORKFLOW_STATE_DIR=$(nodepath "$WFDIR_RAW")" \
-    node "$(nodepath "$PROBE_JS")" "$(nodepath "$AGENTS_DIR")" \
+    node "$(nodepath "$PROBE_JS")" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" \
     "$(nodepath "$MAIN_RAW")" "$(nodepath "$WT_RAW")" "$BRANCH" 2>&1)" || true
 pv() { printf '%s\n' "$POUT" | sed -n "s|^$1=||p" | head -1; }
 

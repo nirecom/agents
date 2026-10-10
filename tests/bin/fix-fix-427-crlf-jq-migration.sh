@@ -9,9 +9,9 @@
 # subset relevant to this fix (scalar -r captures).
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-STATE_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/state.sh"
-BACKFILL_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/backfill-content-date.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+STATE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/state.sh"
+BACKFILL_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/backfill-content-date.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

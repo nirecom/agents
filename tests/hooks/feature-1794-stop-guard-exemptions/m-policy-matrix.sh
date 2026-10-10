@@ -11,7 +11,7 @@ run_M1a() {
     local out
     out=$("$RWT" 20 node -e "
 const { EXEMPTION_MATRIX } = require('$POLICY_NODE');
-const { C4_EXEMPTIONS } = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js');
+const { C4_EXEMPTIONS } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/stop-premature-stop-guard.js');
 const matrix = Object.keys(EXEMPTION_MATRIX);
 const table = C4_EXEMPTIONS.map((e) => e.id);
 const expected = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight','delegated-reason'];
@@ -143,7 +143,7 @@ process.stdout.write(String(require('$POLICY_NODE').EXEMPTION_MATRIX['$id'].next
 run_M1d() {
     local out
     out=$("$RWT" 20 node -e "
-const g = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js');
+const g = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/stop-premature-stop-guard.js');
 const byId = Object.fromEntries(g.C4_EXEMPTIONS.map((e) => [e.id, e]));
 const problems = [];
 const sessionRows = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight'];
@@ -217,7 +217,7 @@ process.stdout.write(String(require('$POLICY_NODE').EXEMPTION_MATRIX['step-in-fl
 run_M2() {
     local out
     out=$("$RWT" 20 node -e "
-const { firstExemption } = require('$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js');
+const { firstExemption } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/stop-premature-stop-guard.js');
 const problems = [];
 const none = {
   isWorkflowOff: () => false, isNextStepPaused: () => false, isWorkflowStarted: () => true,

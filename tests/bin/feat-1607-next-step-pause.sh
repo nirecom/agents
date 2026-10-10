@@ -10,20 +10,20 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
-PATTERNS_NODE="$_AGENTS_DIR_NODE/hooks/lib/sentinel-patterns.js"
-HANDLER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
-STATEIO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+if command -v cygpath >/dev/null 2>&1; then _CHECKOUT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _CHECKOUT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
+PATTERNS_NODE="$_CHECKOUT_NODE/hooks/lib/sentinel-patterns.js"
+HANDLER_NODE="$_CHECKOUT_NODE/hooks/workflow-mark/enforce-override-handlers.js"
+STATEIO_NODE="$_CHECKOUT_NODE/hooks/workflow-state/state-io.js"
+WRITER_NODE="$_CHECKOUT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_CHECKOUT_NODE/hooks/lib/supervisor-state-schema.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'pause1607'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
@@ -67,7 +67,7 @@ const resume='echo \"<<WORKFLOW_NEXT_STEP_RESUME: back to work>>\"';
 const dq=p.NEXT_STEP_PAUSE_RE_DQ, rdq=p.NEXT_STEP_RESUME_RE_DQ;
 if(!dq||!rdq) return 'MISSING';
 return (dq.test(pause)&&rdq.test(resume)&&p.isSentinel(pause)&&p.isSentinel(resume))?'OK':'BAD';});
-const p6=t(()=>{const s=require('$_AGENTS_DIR_NODE/settings.json');
+const p6=t(()=>{const s=require('$_CHECKOUT_NODE/settings.json');
 const ask=(s.permissions&&s.permissions.ask)||[], allow=(s.permissions&&s.permissions.allow)||[];
 const pauseAsk=ask.some(x=>/NEXT_STEP_PAUSE/.test(x));
 const resumeAllow=allow.some(x=>/NEXT_STEP_RESUME/.test(x));
@@ -184,8 +184,8 @@ run_P8() {
     local tmp tn out
     tmp=${TMPD[P8]}; tn=${TND[P8]}   # pre-seeded by seed_batch
     touch_marker "$tmp" "n8sid.next-step-paused"
-    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
-        "$RWT" 20 node "$AGENTS_DIR/hooks/stop-premature-stop-guard.js" <<< '{"session_id":"n8sid","transcript_path":""}' 2>/dev/null)
+    out=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
+        "$RWT" 20 node "$SCRIPT_CHECKOUT_ROOT/hooks/stop-premature-stop-guard.js" <<< '{"session_id":"n8sid","transcript_path":""}' 2>/dev/null)
     if ! echo "$out" | grep -q '"decision":"block"'; then pass "P8: stop-premature-stop-guard does NOT auto-resume during pause"
     else fail "P8: RED-EXPECTED: premature-stop guard still blocks during pause; out=$out"; fi
     rm -rf "$tmp" 2>/dev/null || true
@@ -199,8 +199,8 @@ run_P9() {
     local tmp tn rc
     tmp=${TMPD[P9]}; tn=${TND[P9]}   # pre-seeded by seed_batch
     touch_marker "$tmp" "n9sid.next-step-paused"
-    WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
-        "$RWT" 20 node "$AGENTS_DIR/hooks/supervisor-guard.js" <<< '{"session_id":"n9sid","transcript_path":""}' >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" \
+        "$RWT" 20 node "$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard.js" <<< '{"session_id":"n9sid","transcript_path":""}' >/dev/null 2>&1
     rc=$?
     if [ "$rc" = "0" ]; then pass "P9: supervisor-guard exits 0 during pause despite cumSev=error"
     else fail "P9: RED-EXPECTED: supervisor-guard still blocks (rc=$rc) during pause"; fi
@@ -216,7 +216,7 @@ run_P10() {
     tmp=${TMPD[P10]}; tn=${TND[P10]}   # pre-seeded by seed_batch
     touch_marker "$tmp" "n10sid.next-step-paused"
     out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" \
-        "$RWT" 15 node "$AGENTS_DIR/hooks/supervisor-trigger.js" <<< '{"tool_name":"Bash","session_id":"n10sid","transcript_path":""}' 2>/dev/null)
+        "$RWT" 15 node "$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-trigger.js" <<< '{"tool_name":"Bash","session_id":"n10sid","transcript_path":""}' 2>/dev/null)
     if ! echo "$out" | grep -q 'additionalContext'; then pass "P10: supervisor-trigger emits no error advisory during pause (non-consuming)"
     else fail "P10: RED-EXPECTED: supervisor-trigger still surfaces advisory during pause; out=$out"; fi
     rm -rf "$tmp" 2>/dev/null || true
@@ -230,8 +230,8 @@ run_P11() {
     local tmp tn ctrl outp surfaced
     tmp=${TMPD[P11]}; tn=${TND[P11]}   # pre-seeded (sup_alertdone) by seed_batch
     # control: WITHOUT pause marker, confirm the hook actually surfaces (else skip)
-    ctrl=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
-        "$RWT" 15 node "$AGENTS_DIR/hooks/stop-l2-findings-display.js" <<< '{"session_id":"n11sid","transcript_path":""}' 2>/dev/null)
+    ctrl=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" \
+        "$RWT" 15 node "$SCRIPT_CHECKOUT_ROOT/hooks/stop-l2-findings-display.js" <<< '{"session_id":"n11sid","transcript_path":""}' 2>/dev/null)
     if ! echo "$ctrl" | grep -q 'additionalContext'; then
         skip "P11: findings did not render in control (renderer gate) — cannot isolate pause suppression"
         rm -rf "$tmp" 2>/dev/null || true
@@ -240,8 +240,8 @@ run_P11() {
     # pause case: fresh state (surfaced_at reset) + pause marker → must NOT surface
     seed_batch sup_alertdone "$tn" n11sid
     touch_marker "$tmp" "n11sid.next-step-paused"
-    outp=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
-        "$RWT" 15 node "$AGENTS_DIR/hooks/stop-l2-findings-display.js" <<< '{"session_id":"n11sid","transcript_path":""}' 2>/dev/null)
+    outp=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" \
+        "$RWT" 15 node "$SCRIPT_CHECKOUT_ROOT/hooks/stop-l2-findings-display.js" <<< '{"session_id":"n11sid","transcript_path":""}' 2>/dev/null)
     if ! echo "$outp" | grep -q 'additionalContext'; then pass "P11a: stop-l2-findings-display does not re-surface findings during pause"
     else fail "P11a: RED-EXPECTED: findings still surfaced during pause; out=$outp"; fi
     surfaced=$(grep -o '"findings_surfaced_at":[^,}]*' "$tmp"/n11sid.control/supervisor-state.json 2>/dev/null | head -1)
@@ -255,7 +255,7 @@ case_end
 # ============ P12: CLAUDE.md action-contract lists `paused` ============
 case_begin "P12-claude-md-paused-action" "CLAUDE.md"
 run_P12() {
-    if grep -qE "\bpaused\b" "$AGENTS_DIR/CLAUDE.md" 2>/dev/null; then
+    if grep -qE "\bpaused\b" "$SCRIPT_CHECKOUT_ROOT/CLAUDE.md" 2>/dev/null; then
         pass "P12: CLAUDE.md next-step action-contract documents the paused action"
     else
         fail "P12: RED-EXPECTED: CLAUDE.md action-contract does not mention 'paused'"

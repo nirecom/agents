@@ -33,16 +33,16 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-TRIAGE_BIN="${_AGENTS_DIR_NODE}/bin/worktree-notes-triage.js"
-LIB_JS="${_AGENTS_DIR_NODE}/hooks/lib/worktree-notes-sections.js"
+TRIAGE_BIN="${_SCRIPT_CHECKOUT_ROOT_NODE}/bin/worktree-notes-triage.js"
+LIB_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/worktree-notes-sections.js"
 
-FIXTURE_NOTES="${_AGENTS_DIR_NODE}/tests/fixtures/worktree-notes-sample.md"
+FIXTURE_NOTES="${_SCRIPT_CHECKOUT_ROOT_NODE}/tests/fixtures/worktree-notes-sample.md"
 
 PASS=0; FAIL=0; SKIP=0
 
@@ -129,7 +129,7 @@ EOF
 
 # ---- R1 (post-#771): renderer binary must be absent ----
 test_R1_renderer_bin_absent() {
-    local f="$AGENTS_DIR/bin/worktree-final-report.js"
+    local f="$SCRIPT_CHECKOUT_ROOT/bin/worktree-final-report.js"
     if [ ! -f "$f" ]; then
         pass "R1_renderer_bin_absent: bin/worktree-final-report.js is absent (renderer abolished in #771)"
     else

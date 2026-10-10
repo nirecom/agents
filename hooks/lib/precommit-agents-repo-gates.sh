@@ -2,8 +2,8 @@
 # Sourced by hooks/pre-commit. Runs the agents-repo-only commit gates: the
 # on-demand rules-injection notation gate (#2270 companion), the session-id SSOT
 # gate (#2270), the migration-blocks gate (#1987), the plans-dir artifact-name
-# gate (#2434) and the plans-dir isolation gate (#2512). All are skipped unless
-# the repo under commit IS the agents repo.
+# gate (#2434), the plans-dir isolation gate (#2512) and the root-names gate
+# (#2561). All are skipped unless the repo under commit IS the agents repo.
 
 # _precommit_agents_repo_gates — reads $_cfg_dir (ambient). Exits the hook with 1
 # on a violation; returns 0 otherwise. No-op in a non-agents repo.
@@ -12,10 +12,11 @@ _precommit_agents_repo_gates() {
     local _od_agents_abs _od_repo_abs _od_f _od_checker _od_rc _od_out
     local _si_checker _si_rc _si_out _mb_f _mb_checker _mb_rc _mb_out
     local _od_staged _mb_staged _pa_checker _pa_rc _pa_out _pi_checker _pi_rc _pi_out
+    local _rn_checker _rn_rc _rn_out
 
     _od_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
     [ -n "$_od_repo_top" ] || return 0
-    _od_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
+    _od_cfg_dir="$_cfg_dir"
     _od_is_agents_repo=0
     # -u GIT_DIR/GIT_WORK_TREE/GIT_PREFIX: git invokes this hook with those set for the
     # repo being committed to, and an inherited GIT_DIR silently overrides -C's target
@@ -177,6 +178,29 @@ _precommit_agents_repo_gates() {
                 ;;
             *)
                 echo "pre-commit: check-plans-dir-isolation.sh rc=$_pi_rc — plans-dir isolation gate skipped" >&2
+                ;;
+        esac
+    fi
+
+    # ---------- root-names gate (issue #2561) ----------
+    # Staged files only; the retired-name list and the classification table are read from the index.
+    _rn_checker="$_od_cfg_dir/bin/check-root-names.sh"
+    if [ ! -f "$_rn_checker" ]; then
+        echo "pre-commit: check-root-names.sh missing at $_rn_checker — root-names gate skipped" >&2
+    else
+        _rn_rc=0
+        _rn_out="$(cd "$_od_repo_top" && bash "$_rn_checker" --staged 2>&1)" || _rn_rc=$?
+        case "$_rn_rc" in
+            0) : ;;
+            1|2)
+                printf '%s\n' "$_rn_out"
+                echo ""
+                echo "Commit blocked: root-name violations (checker rc=$_rn_rc)."
+                echo "See docs/architecture/claude-code/root-names.md."
+                exit 1
+                ;;
+            *)
+                echo "pre-commit: check-root-names.sh rc=$_rn_rc — root-names gate skipped" >&2
                 ;;
         esac
     fi

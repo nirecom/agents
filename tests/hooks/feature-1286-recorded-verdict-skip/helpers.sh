@@ -11,25 +11,25 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 if command -v cygpath >/dev/null 2>&1; then
-  AGENTS_DIR_N="$(cygpath -m "$AGENTS_DIR")"
+  SCRIPT_CHECKOUT_ROOT_N="$(cygpath -m "$_HELPERS_SCRIPT_CHECKOUT_ROOT")"
 else
-  AGENTS_DIR_N="$AGENTS_DIR"
+  SCRIPT_CHECKOUT_ROOT_N="$_HELPERS_SCRIPT_CHECKOUT_ROOT"
 fi
 
-SKIP_RESOLVER="$AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js"
-GATE_HOOK="$AGENTS_DIR/hooks/gate-plan-skip-sentinel.js"
-RECORD_CLI="$AGENTS_DIR/bin/workflow/record-skip-judgment"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
+SKIP_RESOLVER="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/skip-signal-resolver.js"
+GATE_HOOK="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/gate-plan-skip-sentinel.js"
+RECORD_CLI="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-judgment"
+NEXT_STEP="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
 
 RESOLVER_N="$(cygpath -m "$SKIP_RESOLVER" 2>/dev/null || echo "$SKIP_RESOLVER")"
 RECORD_CLI_N="$(cygpath -m "$RECORD_CLI" 2>/dev/null || echo "$RECORD_CLI")"
 SKIP_JUDGMENT_RESOLVER_N="$RESOLVER_N"
 
 # shellcheck source=../lib/skip-judgment.sh
-. "$AGENTS_DIR/tests/lib/skip-judgment.sh"
+. "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/lib/skip-judgment.sh"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -46,12 +46,12 @@ mkdir -p "$PLANS_GLOBAL_DIR"
 PLANS_GLOBAL_DIR_N="$(cygpath -m "$PLANS_GLOBAL_DIR" 2>/dev/null || echo "$PLANS_GLOBAL_DIR")"
 export WORKFLOW_PLANS_DIR="$PLANS_GLOBAL_DIR_N"
 
-# Empty config dir so the gate hook's load-env.js finds no .env — CONFIRM_* env
+# Empty agents main root so the gate hook's load-env.js finds no .env — CONFIRM_* env
 # vars then reflect only what the test explicitly sets (load-env.js treats the
 # parent repo's .env CONFIRM_DETAIL=off as authoritative otherwise). Mirrors the
 # T14 isolation pattern in tests/hooks/feature-gate-plan-skip-sentinel.sh.
-EMPTY_CONFIG_DIR="$TMPDIR_BASE/empty-config"
-mkdir -p "$EMPTY_CONFIG_DIR"
+EMPTY_CFG_ROOT="$TMPDIR_BASE/empty-config"
+mkdir -p "$EMPTY_CFG_ROOT"
 
 PASS=0
 FAIL=0

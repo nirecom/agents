@@ -10,10 +10,10 @@ set -uo pipefail
 # sessions. #2132's Revision retired the L3 lint (a prompt string cannot be classified as
 # "issue this" vs "quote this" by regex). Only L4 stops a compound command physically.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PART_DIR="$AGENTS_DIR/tests/hooks/feature-2134-bash-guard"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PART_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2134-bash-guard"
 PROBE_JS="$PART_DIR/judge-probe.js"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # THE CONTRACT UNDER TEST. bash-guard is a PRESENTATION guard, not a safety guard.
 # judgeBashCommand(input) returns one of four verdicts, deny > notify > allow > passThrough:

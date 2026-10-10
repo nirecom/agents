@@ -8,6 +8,9 @@
 # case_begin/case_end targets are for STATIC grep (catalog input),
 # not runtime aggregation.
 
+# This file's own checkout; the sourcing test assigns its own root itself.
+_HARNESS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
 # 1a. Re-entry guard counters — only initialize when unset.
 : "${PASS:=0}"
 : "${FAIL:=0}"
@@ -97,20 +100,6 @@ case_end() {
 
 # 1e. Fixture helpers.
 
-# AGENTS_DIR resolution: only when caller has not already defined it.
-# Uses parameter expansion (no dirname) so it works under filtered PATH (np() tests).
-# BASH_SOURCE[1] = sourcing test file → go up 1 from tests/.
-# BASH_SOURCE[1] empty (bash -c context) → fall back to BASH_SOURCE[0] (this file,
-# tests/lib/harness.sh) and go up 2 from tests/lib/.
-: "${AGENTS_DIR:=$(
-  _bhs="${BASH_SOURCE[1]:-}";
-  if [ -n "$_bhs" ]; then
-    cd "${_bhs%/*}/.." && pwd
-  else
-    cd "${BASH_SOURCE[0]%/*}/../.." && pwd
-  fi
-)}"
-
 # np() — normalize path for node: cygpath -m on Windows, passthrough elsewhere.
 np() {
   if command -v cygpath >/dev/null 2>&1; then
@@ -125,8 +114,18 @@ np() {
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t harness; }
 
 # run_with_timeout <seconds> <command...> — per rules/test/macos-timeout.md.
-RWT="${RWT:-$AGENTS_DIR/bin/run-with-timeout.sh}"
+RWT="${RWT:-$_HARNESS_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh}"
 run_with_timeout() { bash "$RWT" "$@"; }
+
+# Root decoy default: the launcher's ROOT_DECOY_DIR when given, else one built for this test.
+# Fails closed — a test must not run with the root names pointing at a real checkout.
+case "${BASH_SOURCE[0]}" in
+  */*) _HARNESS_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
+  *)   _HARNESS_LIB_DIR="." ;;
+esac
+# shellcheck source=tests/lib/root-decoy.sh
+. "$_HARNESS_LIB_DIR/root-decoy.sh" || exit 1
+root_decoy_ensure || exit 1
 
 # harness_isolate [<tmpdir>] — dual-pin per rules/test/fixture-isolation.md,
 # so tests never write the developer's real ~/.workflow-plans. Idempotent.
@@ -175,10 +174,13 @@ harness_assert_isolated() {
 }
 
 # harness_git_init <dir> — git repo with core.hooksPath=/dev/null so the
-# installed pre-commit hook never fires inside the fixture.
+# installed pre-commit hook never fires inside the fixture, and without the
+# developer's own ignore file, so the fixture tracks the same files on every machine.
 harness_git_init() {
   git init -q "$1"
   git -C "$1" config core.hooksPath /dev/null
+  # The repo's own (empty) exclude file: git on Windows refuses /dev/null here.
+  git -C "$1" config core.excludesFile "$1/.git/info/exclude"
 }
 
 # Unset inherited session IDs unconditionally (per fixture-isolation.md).

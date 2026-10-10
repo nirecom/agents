@@ -5,15 +5,18 @@
 // GATE_ACTION (proceed | ask | present-and-stop | none). Skills obey it verbatim.
 // GATE_HINT / REASON never carry a single quote (same invariant as STEP_HINT).
 
+const path = require("path");
 const { spawnSync } = require("child_process");
 const { resolveSessionId } = require("../../../../hooks/workflow-state");
 const { resolveCurrentEffectiveStep } = require("../../../../hooks/workflow-state/current-step");
 const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
 const { confirmGateForStep } = require("../../../../hooks/lib/confirm-gate/step-gate-map");
 const {
-  probeConfirmGateSync, resolveConfigDir, posixJoin,
+  probeConfirmGateSync, posixJoin,
 } = require("../../../../hooks/lib/confirm-gate/probe");
 const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("./gate-line");
+
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
 
 const SCOPE_CHANGE_TIMEOUT_MS = 5000;
 
@@ -43,13 +46,13 @@ function print(action, gateLine, hint, reason) {
 }
 
 // { changed, line, failed }: exit 0 = change (stdout line), 1 = none, anything else = check failed.
-function detectScopeChange(configDir, sid) {
+function detectScopeChange(sid) {
   try {
     const plans = getWorkflowPlansDir();
     const outline = posixJoin(plans, sid + "-outline.md");
     const detail = posixJoin(plans, sid + "-detail.md");
-    const r = spawnSync("bash", [posixJoin(configDir, "bin", "detect-scope-change.sh"), outline, detail], {
-      cwd: configDir,
+    const r = spawnSync("bash", [posixJoin(SCRIPT_CHECKOUT_ROOT, "bin", "detect-scope-change.sh"), outline, detail], {
+      cwd: SCRIPT_CHECKOUT_ROOT,
       encoding: "utf8",
       timeout: SCOPE_CHANGE_TIMEOUT_MS,
       windowsHide: true,
@@ -72,15 +75,14 @@ function runGate(rawSession, opts) {
   const key = step ? confirmGateForStep(step) : null;
   if (!key) return print("none", "", HINTS.none, "no-confirm-gate-for-step:" + step);
 
-  const configDir = resolveConfigDir();
-  const value = probeConfirmGateSync(configDir, key, NEXT_STEP_GATE_PROBE_TIMEOUT_MS);
+  const value = probeConfirmGateSync(key, NEXT_STEP_GATE_PROBE_TIMEOUT_MS);
   const gateLine = "GATE_" + key + "=" + value;
   const reasons = [step + ": " + key + "=" + value];
   let action = value === "OFF" ? "proceed" : "ask";
   let hint = HINTS[action];
 
   if (step === "detail") {
-    const sc = detectScopeChange(configDir, sid);
+    const sc = detectScopeChange(sid);
     if (sc.failed) {
       reasons.push("scope-change-check-failed");
       hint += " The scope-change check failed: warn the user that it could not run.";

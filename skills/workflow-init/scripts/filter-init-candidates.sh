@@ -17,13 +17,12 @@
 #   - Without repo context: "#N"
 #
 # Usage: filter-init-candidates.sh [--repo-map IDX:owner/repo ...] [N...]
-# Env:   AGENTS_CONFIG_DIR (required)
 
 set -uo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
-ISSUE_STATE_CHECK="$AGENTS_CONFIG_DIR/bin/github-issues/issue-state-check.sh"
+ISSUE_STATE_CHECK="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-state-check.sh"
 
 # Parse --repo-map options (repeatable). Build associative array keyed by 0-based index.
 declare -A REPO_OF

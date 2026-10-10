@@ -2,25 +2,12 @@
 # tests/bin/feature-1470-check-inline-procedures.sh
 # Tests: bin/check-inline-procedures
 # Tags: prompt, bin, quality-gate, inline-procedure, adapter, scope:issue-specific, scope:feature-1642, layer:TL2
-#
-# Detection semantics moved to tests/bin/feature-1642-check-prompt-extraction.sh.
-#
-# After issue #1642, bin/check-inline-procedures is a THIN ADAPTER over
-# bin/check-prompt-extraction (the single decision CLI). It owns no detection
-# logic of its own — only the advisory presentation contract that
-# skills/review-code-security/scripts/run-quality-gates.sh depends on:
-#
-#   * header line `## Inline Procedure Review: <STATE>`
-#   * advisory `WARN:` prefix (never `HARD:` — the adapter is non-blocking)
-#   * always exits 0, whatever the engine reports
-#   * degrades to `SKIPPED — engine not found` when the engine is unavailable
-#
-# Anything about WHICH content counts as an inline procedure belongs in the
-# #1642 file, not here (CPR-SSOT: one owner per fact).
-#
-# TL3 gap (what this test does NOT catch):
-# - bin/check-inline-procedures firing from run-quality-gates.sh in a real WF-CODE-6 session
-# - run-quality-gates.sh PATH resolution ($AGENTS_CONFIG_DIR/bin on PATH) confirmed live
+# Since #1642 this CLI is a thin adapter over bin/check-prompt-extraction; detection semantics
+# live in tests/bin/feature-1642-check-prompt-extraction.sh (CPR-SSOT). This file owns only the
+# advisory contract run-quality-gates.sh depends on: the `## Inline Procedure Review: <STATE>`
+# header, the `WARN:` prefix (never `HARD:`), exit 0 always, `SKIPPED — engine not found`.
+# TL3 gap: the adapter firing from run-quality-gates.sh in a real WF-CODE-6 session, and that
+# script's PATH resolution (its checkout's bin/ on PATH) confirmed live.
 # Closest-to-action mitigation: bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
@@ -218,7 +205,7 @@ t08_engine_missing() {
     local repo; repo="$(make_repo r8)"
     add_violation "$repo"
     RC=0
-    OUT="$( (cd "$repo" && run_with_timeout 60 env "AGENTS_CONFIG_DIR=$fakecfg" \
+    OUT="$( (cd "$repo" && run_with_timeout 60 \
         bash "$fakecfg/bin/check-inline-procedures" --base main) 2>&1 )" || RC=$?
     assert_exit0 "T08: missing engine still exits 0"
     assert_contains "T08: SKIPPED — engine not found" "SKIPPED — engine not found"

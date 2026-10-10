@@ -48,7 +48,10 @@ exit "${GH_MOCK_WIP_RC:-0}"
 MOCKWIP
     chmod +x "$TMP/bin/github-issues/wip-state.sh"
 
-    export AGENTS_CONFIG_DIR="$TMP"
+    # The SUT finds wip-state.sh in its own script checkout, so it is launched
+    # from a copy placed next to the mock inside the fake tree.
+    RUN_SUT="$TMP/bin/github-issues/wip-set-single.sh"
+    cp "$SUT" "$RUN_SUT"
     export PATH="$TMP/mock-bin:$PATH"
 }
 
@@ -66,7 +69,7 @@ teardown_tmp() {
 setup_tmp
 export GH_MOCK_LABELS='["type:task","intent:clarified"]'
 export GH_MOCK_WIP_RC=0
-OUT=$(run_with_timeout 10 bash "$SUT" 123 2>/dev/null)
+OUT=$(run_with_timeout 10 bash "$RUN_SUT" 123 2>/dev/null)
 RC=$?
 if [ "$RC" -eq 0 ] && [ "$OUT" = "SET_OK" ]; then
     pass "T1: non-meta + rc=0 → SET_OK, exit 0"
@@ -81,7 +84,7 @@ teardown_tmp
 setup_tmp
 export GH_MOCK_LABELS='["meta","type:task"]'
 export GH_MOCK_WIP_RC=0
-OUT=$(run_with_timeout 10 bash "$SUT" 123 2>/dev/null)
+OUT=$(run_with_timeout 10 bash "$RUN_SUT" 123 2>/dev/null)
 RC=$?
 if [ "$RC" -eq 0 ] && [ "$OUT" = "META_SKIP" ]; then
     pass "T2: meta → META_SKIP, exit 0"
@@ -96,7 +99,7 @@ teardown_tmp
 setup_tmp
 export GH_MOCK_LABELS="fail"
 export GH_MOCK_WIP_RC=0
-OUT=$(run_with_timeout 10 bash "$SUT" 123 2>/dev/null)
+OUT=$(run_with_timeout 10 bash "$RUN_SUT" 123 2>/dev/null)
 RC=$?
 if [ "$RC" -eq 0 ] && [ "$OUT" = "SET_OK" ]; then
     pass "T3: label probe fail → fail-open SET_OK, exit 0"
@@ -111,7 +114,7 @@ teardown_tmp
 setup_tmp
 export GH_MOCK_LABELS='["type:task"]'
 export GH_MOCK_WIP_RC=1
-OUT=$(run_with_timeout 10 bash "$SUT" 123 2>/dev/null)
+OUT=$(run_with_timeout 10 bash "$RUN_SUT" 123 2>/dev/null)
 RC=$?
 if [ "$RC" -eq 1 ]; then
     pass "T4: non-meta + rc=1 → exit 1"
@@ -126,7 +129,7 @@ teardown_tmp
 setup_tmp
 export GH_MOCK_LABELS='["type:task"]'
 export GH_MOCK_WIP_RC=2
-OUT=$(run_with_timeout 10 bash "$SUT" 123 2>/dev/null)
+OUT=$(run_with_timeout 10 bash "$RUN_SUT" 123 2>/dev/null)
 RC=$?
 if [ "$RC" -eq 2 ] && [ "$OUT" = "RC2" ]; then
     pass "T5: non-meta + rc=2 → RC2, exit 2"
@@ -141,7 +144,7 @@ teardown_tmp
 setup_tmp
 export GH_MOCK_LABELS='["meta"]'
 export GH_MOCK_WIP_RC=2
-OUT=$(run_with_timeout 10 bash "$SUT" 123 2>/dev/null)
+OUT=$(run_with_timeout 10 bash "$RUN_SUT" 123 2>/dev/null)
 RC=$?
 if [ "$RC" -eq 0 ] && [ "$OUT" = "META_SKIP" ]; then
     pass "T6: meta + rc=2 unused → META_SKIP, exit 0"

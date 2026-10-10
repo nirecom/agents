@@ -8,7 +8,7 @@
 run_cleanup_node() {
     local wfdir="$1"
     local days="${2:-7}"
-    (cd "$AGENTS_DIR" && WORKFLOW_STATE_DIR="$wfdir" node -e "
+    (cd "$SCRIPT_CHECKOUT_ROOT" && WORKFLOW_STATE_DIR="$wfdir" node -e "
 const wf = require('./hooks/workflow-state/state-io.js');
 wf.cleanupZombies($days);
 " 2>/dev/null) || true
@@ -28,7 +28,7 @@ mtime_age_ms() {
 }
 
 # B1
-B1_DIR="$AGENTS_DIR/tests/.tmp-b1-$$"
+B1_DIR="$SCRIPT_CHECKOUT_ROOT/tests/.tmp-b1-$$"
 mkdir -p "$B1_DIR"
 B1_FILE="$B1_DIR/sid-stale.workflow-off"
 echo "stale" > "$B1_FILE"
@@ -47,7 +47,7 @@ fi
 rm -rf "$B1_DIR" 2>/dev/null || true
 
 # B2
-B2_DIR="$AGENTS_DIR/tests/.tmp-b2-$$"
+B2_DIR="$SCRIPT_CHECKOUT_ROOT/tests/.tmp-b2-$$"
 mkdir -p "$B2_DIR"
 B2_FILE="$B2_DIR/sid-stale.worktree-off"
 echo "stale" > "$B2_FILE"
@@ -66,7 +66,7 @@ fi
 rm -rf "$B2_DIR" 2>/dev/null || true
 
 # B3
-B3_DIR="$AGENTS_DIR/tests/.tmp-b3-$$"
+B3_DIR="$SCRIPT_CHECKOUT_ROOT/tests/.tmp-b3-$$"
 mkdir -p "$B3_DIR"
 B3_FILE="$B3_DIR/sid-fresh.workflow-off"
 echo "fresh" > "$B3_FILE"
@@ -79,7 +79,7 @@ fi
 rm -rf "$B3_DIR" 2>/dev/null || true
 
 # B4
-B4_DIR="$AGENTS_DIR/tests/.tmp-b4-$$"
+B4_DIR="$SCRIPT_CHECKOUT_ROOT/tests/.tmp-b4-$$"
 mkdir -p "$B4_DIR"
 B4_FILE="$B4_DIR/sid-fresh.worktree-off"
 echo "fresh" > "$B4_FILE"
@@ -92,7 +92,7 @@ fi
 rm -rf "$B4_DIR" 2>/dev/null || true
 
 # B5
-B5_DIR="$AGENTS_DIR/tests/.tmp-b5-$$"
+B5_DIR="$SCRIPT_CHECKOUT_ROOT/tests/.tmp-b5-$$"
 mkdir -p "$B5_DIR"
 B5_FILE="$B5_DIR/stale-sid.json"
 cat > "$B5_FILE" <<'JSON'
@@ -114,7 +114,7 @@ fi
 rm -rf "$B5_DIR" 2>/dev/null || true
 
 # B6
-B6_DIR="$AGENTS_DIR/tests/.tmp-b6-$$"
+B6_DIR="$SCRIPT_CHECKOUT_ROOT/tests/.tmp-b6-$$"
 mkdir -p "$B6_DIR"
 B6_FILE="$B6_DIR/stale.json.tmp"
 touch "$B6_FILE"
@@ -140,7 +140,7 @@ backdate_node() {
 }
 
 # B7: stale .next-step-paused deleted (RED until cleanupZombies suffix set is extended)
-B7_DIR="$AGENTS_DIR/tests/.tmp-b7-$$"
+B7_DIR="$SCRIPT_CHECKOUT_ROOT/tests/.tmp-b7-$$"
 mkdir -p "$B7_DIR"
 B7_FILE="$B7_DIR/sid-stale.next-step-paused"
 echo "stale" > "$B7_FILE"
@@ -154,7 +154,7 @@ fi
 rm -rf "$B7_DIR" 2>/dev/null || true
 
 # B8: stale .off-clearance deleted (RED until cleanupZombies suffix set is extended)
-B8_DIR="$AGENTS_DIR/tests/.tmp-b8-$$"
+B8_DIR="$SCRIPT_CHECKOUT_ROOT/tests/.tmp-b8-$$"
 mkdir -p "$B8_DIR"
 B8_FILE="$B8_DIR/sid-stale.off-clearance"
 echo "stale" > "$B8_FILE"
@@ -168,7 +168,7 @@ fi
 rm -rf "$B8_DIR" 2>/dev/null || true
 
 # B9: fresh .next-step-paused preserved (CPR-ORTH counterpart — must not over-reap)
-B9_DIR="$AGENTS_DIR/tests/.tmp-b9-$$"
+B9_DIR="$SCRIPT_CHECKOUT_ROOT/tests/.tmp-b9-$$"
 mkdir -p "$B9_DIR"
 B9_FILE="$B9_DIR/sid-fresh.next-step-paused"
 echo "fresh" > "$B9_FILE"
@@ -181,7 +181,7 @@ fi
 rm -rf "$B9_DIR" 2>/dev/null || true
 
 # B10: fresh .off-clearance preserved (CPR-ORTH counterpart — must not over-reap)
-B10_DIR="$AGENTS_DIR/tests/.tmp-b10-$$"
+B10_DIR="$SCRIPT_CHECKOUT_ROOT/tests/.tmp-b10-$$"
 mkdir -p "$B10_DIR"
 B10_FILE="$B10_DIR/sid-fresh.off-clearance"
 echo "fresh" > "$B10_FILE"

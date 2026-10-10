@@ -16,7 +16,7 @@ enabled, delegates eligible commands to `rtk hook claude` so RTK's output
 compression and native audit both apply.
 
 Agents repo internal commands are always excluded: any command headed by a
-`bin/` script or referencing `$AGENTS_CONFIG_DIR` bypasses RTK wrapping
+`bin/` script or referencing `$AGENTS_MAIN_ROOT` bypasses RTK wrapping
 unconditionally (`isAgentsEmit` guard). This ensures workflow-critical plumbing
 runs at full fidelity regardless of RTK being on or off.
 

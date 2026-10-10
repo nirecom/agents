@@ -16,8 +16,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PARSER_CLI="$AGENTS_DIR/bin/parse-worktrees"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PARSER_CLI="$SCRIPT_CHECKOUT_ROOT/bin/parse-worktrees"
 
 PASS=0
 FAIL=0

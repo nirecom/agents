@@ -2,8 +2,8 @@
 # bin/lib/codex-review-loop/review-wrapper-control.sh — sourced by the five stage
 # wrappers skills/*/scripts/run-codex-review-loop.sh (#2434). Resolves <sid>.control
 # once (a legacy PLANS_DIR terminal is migrated first) and owns the terminal guard.
-# Caller globals: AGENTS_CONFIG_DIR SESSION_ID. Sets CONTROL_DIR TERMINAL_FILE.
-# Loaded from the wrapper's own tree, so a stub AGENTS_CONFIG_DIR without bin/lib still works.
+# Caller globals: SESSION_ID. Sets CONTROL_DIR TERMINAL_FILE.
+# Loaded from the wrapper's own tree, so a stub checkout without bin/lib still works.
 # Escalation per format and exit code: skills/_shared/codex-review-loop/exit-codes.md.
 
 _RWC_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/safe-state-path.sh"

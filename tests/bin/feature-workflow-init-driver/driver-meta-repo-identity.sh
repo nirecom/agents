@@ -13,10 +13,11 @@
 # skill-orchestration.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 require_sut
 
-MC_MOD="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/meta-classify.js"
+MC_MOD="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases/meta-classify.js"
 
 # probe(): mirrors driver-meta-classify.sh — see that file for the base pattern.
 probe() {  # <module-path> [extra argv...]; snippet on stdin → PROBE_OUT/PROBE_RC/PROBE_ERR

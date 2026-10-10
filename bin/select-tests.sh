@@ -17,8 +17,8 @@ if [[ $# -lt 1 ]]; then
   exit 1
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TESTS_DIR="${AGENTS_DIR}/tests"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TESTS_DIR="${SCRIPT_CHECKOUT_ROOT}/tests"
 
 # Initialised for BOTH invocation forms: the positional form is defined as "the caller already
 # resolved the range", so it never degrades, but it reaches the same reference below under `set -u`.
@@ -29,9 +29,9 @@ MB_ZERO_COMMIT=0
 # the whole point of #1638 is that "resolved" and "resolved to something implausible" used to
 # be the same value here.
 if [[ "$1" == "--auto" ]]; then
-  resolver="${AGENTS_DIR}/bin/resolve-merge-base.sh"
+  resolver="${SCRIPT_CHECKOUT_ROOT}/bin/resolve-merge-base.sh"
   if [[ ! -r "$resolver" ]]; then
-    # basename only — $resolver is rooted at $AGENTS_DIR, an absolute host filesystem path,
+    # basename only — $resolver is rooted at $SCRIPT_CHECKOUT_ROOT, an absolute host filesystem path,
     # and this message reaches operator-visible output.
     echo "[select-tests] the merge-base resolver is missing at bin/$(basename "$resolver"); test selection aborted." >&2
     echo "[select-tests] this is a broken install, not an empty diff — reinstall, then re-run." >&2
@@ -148,7 +148,7 @@ else
 fi
 
 # shellcheck source=bin/lib/select-tests-stem.sh
-. "${AGENTS_DIR}/bin/lib/select-tests-stem.sh"
+. "${SCRIPT_CHECKOUT_ROOT}/bin/lib/select-tests-stem.sh"
 stems=()
 while IFS= read -r path; do
   [[ -z "${path}" ]] && continue
@@ -173,7 +173,7 @@ _emit_if_new() {
 _REGISTRY_LOADED=0
 _load_registry() {
   [[ "${_REGISTRY_LOADED}" -eq 1 ]] && return 0
-  local lib="${AGENTS_DIR}/bin/lib/test-language-registry.sh"
+  local lib="${SCRIPT_CHECKOUT_ROOT}/bin/lib/test-language-registry.sh"
   # shellcheck source=bin/lib/test-language-registry.sh
   if [[ ! -f "${lib}" ]] || ! . "${lib}" || ! tlr_load; then
     echo "[select-tests] the test language registry is not readable (bin/lib/test-language-registry.sh); test selection aborted." >&2
@@ -210,7 +210,7 @@ fi
 # form rather than only to the new path.
 _tl3_wanted() {
   [[ -n "${changed}" ]] || return 1   # empty diff: nothing to break
-  local helper="${AGENTS_DIR}/bin/is-docs-only" rc=0
+  local helper="${SCRIPT_CHECKOUT_ROOT}/bin/is-docs-only" rc=0
   [[ -r "${helper}" ]] || return 0    # cannot ask: run it (see below)
   printf '%s\n' "${changed}" | bash "${helper}" || rc=$?
   case "${rc}" in
@@ -223,8 +223,8 @@ _tl3_wanted() {
   esac
 }
 
-if [[ -x "${AGENTS_DIR}/bin/get-config-var" ]]; then
-  if ! "${AGENTS_DIR}/bin/get-config-var" --is-off RUN_TL3 off 2>/dev/null; then
+if [[ -x "${SCRIPT_CHECKOUT_ROOT}/bin/get-config-var" ]]; then
+  if ! "${SCRIPT_CHECKOUT_ROOT}/bin/get-config-var" --is-off RUN_TL3 off 2>/dev/null; then
     if _tl3_wanted; then
       _load_registry
       while IFS= read -r tl3; do

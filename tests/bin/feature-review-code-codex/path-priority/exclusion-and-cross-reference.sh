@@ -132,26 +132,26 @@ PP_ENV=()
 #       report, where both lines still live: a caveat after the finding reads as an
 #       afterthought.
 PP_GATE_DIR="$TMPDIR_BASE/pp-gates-agents"
-# Unlike the direct-reviewer rows (pp_run runs the REAL bin/review-code-codex and uses
-# AGENTS_CONFIG_DIR only for the resolver stub), run-codex-review-loop resolves its ENTIRE
-# toolchain — the reviewer, build-codex-context, the ledger CLI, the merge-base resolver, and
-# every library each of them sources — through $AGENTS_CONFIG_DIR/bin. A curated subset always
+# run-codex-review-loop and run-quality-gates.sh resolve their ENTIRE toolchain — the reviewer,
+# build-codex-context, the ledger CLI, the merge-base resolver, and every library each of them
+# sources — from the script checkout they themselves live in. A curated subset always
 # leaves one more dependency missing (the loop dies at a pre-flight `source` or a tool lookup
 # before review-code-codex is ever reached, and P12/P13 see an empty report), so the fixture
-# config dir mirrors bin/ wholesale. The resolver stub written per-iteration below then overlays
-# bin/resolve-merge-base.sh on top of this mirror to drive the merge-base warn value.
-mkdir -p "$PP_GATE_DIR/bin" "$PP_GATE_DIR/rules"
-cp -R "$AGENTS_ROOT/bin/." "$PP_GATE_DIR/bin/"
-# run-codex-review-loop pre-flight requires $AGENTS_CONFIG_DIR/rules/core-principles.md as
+# is a wholesale fake script checkout and both entrypoints are launched from inside it. The
+# resolver stub written per-iteration below then overlays bin/resolve-merge-base.sh on top of
+# this copy to drive the merge-base warn value.
+mkdir -p "$PP_GATE_DIR/rules"
+script_checkout_fixture_copy "$PP_GATE_DIR"
+# run-codex-review-loop pre-flight requires rules/core-principles.md in its script checkout as
 # mandatory context (bin/run-codex-review-loop:39-40); build-codex-context reads it too.
 cp "$AGENTS_ROOT/rules/core-principles.md" "$PP_GATE_DIR/rules/core-principles.md"
-PP_GATES="$AGENTS_ROOT/skills/review-code-security/scripts/run-quality-gates.sh"
-PP_SECLOOP="$AGENTS_ROOT/bin/run-codex-review-loop"
+PP_GATES="$PP_GATE_DIR/skills/review-code-security/scripts/run-quality-gates.sh"
+PP_SECLOOP="$PP_GATE_DIR/bin/run-codex-review-loop"
 PP_SECLOOP_SEQ=0
 
 pp_run_gates() { # <repo> ; prints the combined gate-runner output
     (cd "$1" && _timeout env PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" \
-        AGENTS_CONFIG_DIR="$PP_GATE_DIR" bash "$PP_GATES" 2>/dev/null) || true
+        bash "$PP_GATES" 2>/dev/null) || true
 }
 
 pp_run_secloop() { # <repo> ; prints the security-code loop's reviewer report
@@ -161,7 +161,7 @@ pp_run_secloop() { # <repo> ; prints the security-code loop's reviewer report
     mkdir -p "$plans"
     printf 'none\n' > "$tradeoffs"
     (cd "$1" && _timeout env PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" \
-        AGENTS_CONFIG_DIR="$PP_GATE_DIR" bash "$PP_SECLOOP" --format security-code \
+        bash "$PP_SECLOOP" --format security-code \
         --session-id "ppsec$PP_SECLOOP_SEQ" --plans-dir "$plans" \
         --cap 2 --max-extensions 1 --extensions-used 0 \
         --accepted-tradeoffs "$tradeoffs" --repo-root "$1" 2>/dev/null) || true

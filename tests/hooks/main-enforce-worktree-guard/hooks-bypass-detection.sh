@@ -8,7 +8,7 @@
 # that disables hooks must be caught and blocked even from a linked worktree.
 
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # Returns "bypass", "clean", or "UNDEFINED" if the export is missing.
 # The guard path travels as an argument, never spliced into the program text.

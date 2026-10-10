@@ -34,17 +34,17 @@ run_forged_cases() {
   check "C7-4c: write_tests is still skipped" '"skipped"' "$(step_status w4c write_tests)"
 
   echo ""
-  echo "=== C7-5: AGENTS_CONFIG_DIR is a different question from the VALUE ==="
-  # Pointing AGENTS_CONFIG_DIR at an attacker-written .env DOES open the gate: the
+  echo "=== C7-5: AGENTS_MAIN_ROOT is a different question from the VALUE ==="
+  # Pointing AGENTS_MAIN_ROOT at an attacker-written .env DOES open the gate: the
   # variable names WHICH config file is canonical, and the CLI has no second
   # source to cross-check it against. Recorded here so the boundary's actual shape
   # is unambiguous — the hardening is about the VALUE being forgeable inline, not
   # about the config location being authenticated. Every other case in this file
-  # pins AGENTS_CONFIG_DIR itself, so this is the assumption they all rest on.
+  # pins AGENTS_MAIN_ROOT itself, so this is the assumption they all rest on.
   at_write_tests w5
   run_ns "$REPO_CODE" "$CFG_OFF" "$REPO_CODE_N" -- \
     --session w5 --advance --step write_tests --status skipped --skip-reason "$REASON"
-  check "C7-5: AGENTS_CONFIG_DIR selects the config file that decides" 0 "$RC"
+  check "C7-5: AGENTS_MAIN_ROOT selects the config file that decides" 0 "$RC"
   check "C7-5: write_tests is skipped from the pointed-at config" '"skipped"' "$(step_status w5 write_tests)"
 
   echo ""

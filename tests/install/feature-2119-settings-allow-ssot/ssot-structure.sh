@@ -28,7 +28,7 @@ t1a_entries_exist() {
     local missing="" e
     while IFS= read -r e; do
         [ -n "$e" ] || continue
-        [ -f "$AGENTS_DIR/$e" ] || missing="$missing $e"
+        [ -f "$SCRIPT_CHECKOUT_ROOT/$e" ] || missing="$missing $e"
     done <<< "$SSOT_LIST"
     assert_eq "T1a: every SSOT entry resolves to a real file under the agents root" "" "$missing"
 }
@@ -63,7 +63,7 @@ t1b_shebangs_resolve() {
     local bad="" e r
     while IFS= read -r e; do
         [ -n "$e" ] || continue
-        r="$(resolve_shebang "$AGENTS_DIR/$e")"
+        r="$(resolve_shebang "$SCRIPT_CHECKOUT_ROOT/$e")"
         [ "$r" = "bash" ] || [ "$r" = "node" ] || bad="$bad $e:$r"
     done <<< "$SSOT_LIST"
     assert_eq "T1b: every SSOT entry's shebang resolves to bash or node (anything else is fail-closed)" "" "$bad"

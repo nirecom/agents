@@ -13,7 +13,7 @@ fi
 # ===========================================================================
 group_wi10_no_inline_text() {
     local bf
-    block_to_file "D1-WI-10" "$AGENTS_DIR/skills/workflow-init/SKILL.md" \
+    block_to_file "D1-WI-10" "$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md" \
         '### WI-10' '### WI-11' 30 || return
     bf="$BLOCK_FILE"
     if grep -qF 'single assistant message' "$bf"; then
@@ -35,7 +35,7 @@ NA_SKILLS="write-tests review-tests make-outline-plan make-detail-plan clarify-i
 group_na_skills_scan() {
     local s path list="${*:-$NA_SKILLS}"
     for s in $list; do
-        path="$AGENTS_DIR/skills/$s/SKILL.md"
+        path="$SCRIPT_CHECKOUT_ROOT/skills/$s/SKILL.md"
         if [ ! -f "$path" ]; then
             NA_SCP_MISSING="$NA_SCP_MISSING $s"
             continue
@@ -86,7 +86,7 @@ group_wait_annotation() {
     while IFS='|' read -r rel label start end maxl; do
         [ -z "${rel// /}" ] && continue
         [ -n "$only" ] && [ "$rel" != "$only" ] && continue
-        path="$AGENTS_DIR/$rel"
+        path="$SCRIPT_CHECKOUT_ROOT/$rel"
         if [ "$start" = "-" ]; then
             if [ ! -f "$path" ]; then
                 fail "$label: file missing: $rel"

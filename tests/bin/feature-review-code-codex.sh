@@ -4,7 +4,7 @@
 # Serial: injection guards assert the fixed paths /tmp/codex-injection-marker and /tmp/codex-injection-marker2 stay absent
 # Verifies: SKIPPED/PERFORMED/FAILED labels, JSONL logging, exit-0 guarantee, security, idempotency.
 # TL3 gap: real codex CLI is mocked (arg/stdin/exit-code contract unverified), real
-#   AGENTS_CONFIG_DIR precedence vs ~/.claude .env is untested, and host filesystem path
+#   AGENTS_MAIN_ROOT precedence vs ~/.claude .env is untested, and host filesystem path
 #   rules are not exercised. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 set -euo pipefail
 
@@ -24,20 +24,21 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # Fixture isolation (rules/test/fixture-isolation.md). The cap-threshold rows below assert
 # behaviour against the built-in CODEX_REVIEW_MAX_DIFF_LINES default of 5000. Without isolation
-# they inherit the developer's real AGENTS_CONFIG_DIR, whose load-env.js loads the real .env; a
+# they inherit the developer's real AGENTS_MAIN_ROOT, whose .env load-env.js loads; a
 # relaxed cap there (e.g. 10000) silently lets an over-cap diff through, so every TRUNCATED row
-# fails on that machine while passing on a clean one. Pin a clean config fixture (empty .env plus
-# the real hooks/lib, so get-config-var still resolves through load-env.js) as the inherited
+# fails on that machine while passing on a clean one. Pin a clean main-worktree fixture (an empty
+# .env; get-config-var uses the load-env.js beside itself) as the inherited
 # default: any row that does not set its own cap now resolves to the 5000 built-in. The G-series
-# overrides AGENTS_CONFIG_DIR per row via PP_ENV, so this default never reaches it. The bare unset
+# overrides AGENTS_MAIN_ROOT per row via PP_ENV, so this default never reaches it. The bare unset
 # closes the same leak for the raw subshell rows, which do not strip the ambient key the way
 # pp_run's `env -u` does.
 unset CODEX_REVIEW_MAX_DIFF_LINES
 CLEAN_CFG="$TMPDIR_BASE/clean-cfg"
-mkdir -p "$CLEAN_CFG/hooks"
-cp -R "$AGENTS_ROOT/hooks/lib" "$CLEAN_CFG/hooks/lib"
+mkdir -p "$CLEAN_CFG"
 : > "$CLEAN_CFG/.env"
-export AGENTS_CONFIG_DIR="$CLEAN_CFG"
+export AGENTS_MAIN_ROOT="$CLEAN_CFG"
+# shellcheck source=../lib/script-checkout-fixture.sh
+source "$AGENTS_ROOT/tests/lib/script-checkout-fixture.sh"
 
 REPO="$TMPDIR_BASE/repo"
 mkdir -p "$REPO"

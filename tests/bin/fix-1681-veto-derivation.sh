@@ -11,10 +11,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-SESSION_START="$AGENTS_DIR/hooks/session-start.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
+SESSION_START="$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -133,11 +133,14 @@ try {
 
 run_next_step() { run_with_timeout 120 node "$NEXT_STEP" "$@" 2>/dev/null || true; }
 
+# The gate enforces only in the repo its own file lives in, so each fixture repo runs
+# its own (untracked) copy of the hook tree and of the size check the gate spawns.
 run_gate() {
     local repo="$1" sid="$2"
     local json="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $repo commit -m test\",\"cwd\":\"$repo\"},\"session_id\":\"$sid\"}"
-    echo "$json" | CLAUDE_PROJECT_DIR="$repo" AGENTS_CONFIG_DIR="$repo" \
-        run_with_timeout 120 node "$GATE_HOOK" 2>/dev/null || true
+    script_checkout_fixture_copy "$repo" hooks bin/review-code-size
+    echo "$json" | CLAUDE_PROJECT_DIR="$repo" AGENTS_MAIN_ROOT="$repo" \
+        run_with_timeout 120 node "$repo/hooks/workflow-gate.js" 2>/dev/null || true
 }
 
 # Steps before outline, all cleared.

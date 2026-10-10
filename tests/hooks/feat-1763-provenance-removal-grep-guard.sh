@@ -21,7 +21,7 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -65,16 +65,16 @@ fi
 
 # The real tree must actually contain the roots, or the scan below is scanning nothing.
 FOUND_ROOTS=0
-for r in $ROOTS; do [ -e "$AGENTS_DIR/$r" ] && FOUND_ROOTS=$((FOUND_ROOTS + 1)); done
+for r in $ROOTS; do [ -e "$SCRIPT_CHECKOUT_ROOT/$r" ] && FOUND_ROOTS=$((FOUND_ROOTS + 1)); done
 if [ "$FOUND_ROOTS" -ge 5 ]; then
     pass "G0-roots-present ($FOUND_ROOTS roots)"
 else
-    fatal "only $FOUND_ROOTS of the scanned roots exist under $AGENTS_DIR — the scan would be degenerate"
+    fatal "only $FOUND_ROOTS of the scanned roots exist under $SCRIPT_CHECKOUT_ROOT — the scan would be degenerate"
 fi
 
 echo ""
 echo "=== G1: no executable reference to the provenance mechanism survives ==="
-HITS="$(scan "$AGENTS_DIR")"
+HITS="$(scan "$SCRIPT_CHECKOUT_ROOT")"
 if [ -z "$HITS" ]; then
     pass "G1-no-provenance-references"
 else
@@ -93,7 +93,7 @@ for f in \
     hooks/lib/issue-request-patterns.js \
     bin/github-issues/issue-provenance
 do
-    if [ -e "$AGENTS_DIR/$f" ]; then
+    if [ -e "$SCRIPT_CHECKOUT_ROOT/$f" ]; then
         fail "G2-deleted:$f" "still present"
     else
         pass "G2-deleted:$f"
@@ -102,9 +102,9 @@ done
 
 echo ""
 echo "=== G3: settings.json no longer registers the mint hook ==="
-if [ ! -f "$AGENTS_DIR/settings.json" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/settings.json" ]; then
     fail "G3-settings-registration-removed" "settings.json is missing — cannot verify the registration was removed"
-elif grep -qF 'issue-provenance-mint' "$AGENTS_DIR/settings.json"; then
+elif grep -qF 'issue-provenance-mint' "$SCRIPT_CHECKOUT_ROOT/settings.json"; then
     fail "G3-settings-registration-removed" "settings.json still registers issue-provenance-mint.js, which would fire a deleted hook on every UserPromptSubmit"
 else
     pass "G3-settings-registration-removed"
@@ -112,10 +112,10 @@ fi
 
 echo ""
 echo "=== G4: .env.example no longer advertises the removed switches ==="
-if [ ! -f "$AGENTS_DIR/.env.example" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/.env.example" ]; then
     fail "G4-env-example-switches-removed" ".env.example is missing — cannot verify the switches were removed"
-elif grep -qE 'ISSUE_PROVENANCE|ISSUE_VERDICT_REVIEW' "$AGENTS_DIR/.env.example"; then
-    fail "G4-env-example-switches-removed" ".env.example still documents a switch that nothing reads: $(grep -nE 'ISSUE_PROVENANCE|ISSUE_VERDICT_REVIEW' "$AGENTS_DIR/.env.example" | head -n 3 | tr '\n' ' ')"
+elif grep -qE 'ISSUE_PROVENANCE|ISSUE_VERDICT_REVIEW' "$SCRIPT_CHECKOUT_ROOT/.env.example"; then
+    fail "G4-env-example-switches-removed" ".env.example still documents a switch that nothing reads: $(grep -nE 'ISSUE_PROVENANCE|ISSUE_VERDICT_REVIEW' "$SCRIPT_CHECKOUT_ROOT/.env.example" | head -n 3 | tr '\n' ' ')"
 else
     pass "G4-env-example-switches-removed"
 fi

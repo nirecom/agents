@@ -7,9 +7,9 @@
 # TL3 gap: real worktree add/remove; no real claude -p session.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 command -v git  >/dev/null 2>&1 || { echo "SKIP: git not found";  exit 77; }
@@ -19,8 +19,8 @@ trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-AGENTS_WIN="$(np "$AGENTS_DIR")"
-MARKER_JS="$AGENTS_DIR/hooks/lib/baseline-checkout-marker.js"
+AGENTS_WIN="$(np "$SCRIPT_CHECKOUT_ROOT")"
+MARKER_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/baseline-checkout-marker.js"
 PROVENANCE_JS="$AGENTS_WIN/hooks/workflow-run-tests/provenance-identity.js"
 
 # Create a real git repo with two commits so we can add a worktree.
@@ -174,8 +174,8 @@ harness_git_init "$PROV_MAIN"
 git -C "$PROV_MAIN" config user.email test@example.com
 git -C "$PROV_MAIN" config user.name "Test"
 mkdir -p "$PROV_MAIN/hooks/lib" "$PROV_MAIN/hooks/workflow-run-tests" "$PROV_MAIN/tests"
-cp "$AGENTS_DIR/hooks/workflow-run-tests/provenance-identity.js" "$PROV_MAIN/hooks/workflow-run-tests/"
-cp "$AGENTS_DIR/hooks/lib/baseline-checkout-marker.js" "$AGENTS_DIR/hooks/lib/checkout-identity.js" "$AGENTS_DIR/hooks/lib/path-normalize.js" "$PROV_MAIN/hooks/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests/provenance-identity.js" "$PROV_MAIN/hooks/workflow-run-tests/"
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/baseline-checkout-marker.js" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/checkout-identity.js" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/path-normalize.js" "$PROV_MAIN/hooks/lib/"
 printf '#!/usr/bin/env bash\n' > "$PROV_MAIN/tests/run-all.sh"
 git -C "$PROV_MAIN" add -A
 git -C "$PROV_MAIN" commit -q -m "prov fixture"

@@ -11,16 +11,16 @@
 REALCHILD="$TMPD/real-child-probe.js"
 cat > "$REALCHILD" <<'RCJS'
 "use strict";
-// argv: agentsDir childCwd mainRoot
+// argv: agentsDir childCwd targetMainRoot
 const path = require("path");
-const [agentsDir, childCwd, mainRoot] = process.argv.slice(2);
+const [agentsDir, childCwd, targetMainRoot] = process.argv.slice(2);
 const spawnMod = require(path.join(agentsDir, "bin/worker-dispatch/spawn.js"));
 const anchorMod = require(path.join(agentsDir, "bin/worker-dispatch/anchor.js"));
 const registry = require(path.join(agentsDir, "hooks/lib/worker-dispatch-registry.js"));
 
 const out = (k, v) => process.stdout.write(k + "=" + String(v) + "\n");
 const entry = registry.workers["commit-push"];
-const anchors = anchorMod.resolveAnchors(mainRoot);
+const anchors = anchorMod.resolveAnchors(targetMainRoot);
 if (anchors.error) {
   out("probe_error", "anchors: " + anchors.error);
   process.exit(0);
@@ -94,9 +94,9 @@ function report(tag, envScope) {
       .sort()
       .join(",") || "(all-verbatim)"
   );
-  out(tag + "__acd", env.AGENTS_CONFIG_DIR === anchors.acd ? "forced" : "got:" + env.AGENTS_CONFIG_DIR);
+  out(tag + "__agents_main_root", env.AGENTS_MAIN_ROOT === anchorMod.resolveAgentsMainRoot() ? "forced" : "got:" + env.AGENTS_MAIN_ROOT);
   out(tag + "__path", has("PATH") || has("Path") ? "present" : "absent");
-  const budget = parentAllowlisted.concat(["AGENTS_CONFIG_DIR"]).concat(
+  const budget = parentAllowlisted.concat(["AGENTS_MAIN_ROOT"]).concat(
     Array.isArray(envScope) ? envScope : entry.envPassthrough
   );
   // Windows spawn injects `=C:`-shaped drive-cursor entries; Node hides them
@@ -153,7 +153,7 @@ group_d() {
         "GH_TOKEN=$FAKE_GH_TOKEN" "GITHUB_TOKEN=$FAKE_GITHUB_TOKEN" \
         "ENFORCE_WORKTREE=on" \
         "SOME_UNRELATED_SECRET=$FAKE_AWS_SECRET" \
-        node "$(nodepath "$REALCHILD")" "$(nodepath "$AGENTS_DIR")" "$CWD" "$MAIN" 2>&1)" || {
+        node "$(nodepath "$REALCHILD")" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$CWD" "$MAIN" 2>&1)" || {
         fail "D/probe-ran-to-completion" "$o"
         return
     }
@@ -172,7 +172,7 @@ group_d() {
     assert_eq "D1/singleton-scope-value-copied-verbatim" "(all-verbatim)" "$(rv singleton__verbatim)"
     assert_eq "D1/singleton-scope-no-name-beyond-the-budget" "(none)" "$(rv singleton__extra)"
     assert_eq "D1/singleton-scope-no-credential-under-another-name" "(none)" "$(rv singleton__valueleak)"
-    assert_eq "D1/singleton-scope-anchor-is-forced" "forced" "$(rv singleton__acd)"
+    assert_eq "D1/singleton-scope-anchor-is-forced" "forced" "$(rv singleton__agents_main_root)"
     assert_eq "D1/singleton-scope-child-is-still-runnable" "present" "$(rv singleton__path)"
 
     # D2 — the empty scope. `git commit`, the rebase replay and every shell
@@ -181,7 +181,7 @@ group_d() {
     assert_eq "D2/empty-scope-child-holds-no-declared-credential" "" "$(rv empty__present)"
     assert_eq "D2/empty-scope-no-name-beyond-the-budget" "(none)" "$(rv empty__extra)"
     assert_eq "D2/empty-scope-no-credential-under-another-name" "(none)" "$(rv empty__valueleak)"
-    assert_eq "D2/empty-scope-anchor-is-forced" "forced" "$(rv empty__acd)"
+    assert_eq "D2/empty-scope-anchor-is-forced" "forced" "$(rv empty__agents_main_root)"
     assert_eq "D2/empty-scope-child-is-still-runnable" "present" "$(rv empty__path)"
 
     # D3 — omitted scope: the unchanged pre-#1812 behaviour, kept as the

@@ -27,7 +27,7 @@ STUB
   chmod +x "$1/$2" 2>/dev/null || true
 }
 
-make_cfg_argv() { # <log-dir> ; prints the config dir
+make_cfg_argv() { # <log-dir> ; prints the agents root
   local cfg g
   cfg="$(mktemp -d "$TMPROOT/cfg.XXXXXX")"
   mkdir -p "$cfg/bin" "$cfg/rules"
@@ -80,7 +80,7 @@ expect_gate_scoping() { # <row-id> <log-dir> [<want-base>]
     "" "$leaked"
 }
 
-# A read-merge-base-baseline bridge stub for the config dir, so the RECORDED and post-session-head
+# A read-merge-base-baseline bridge stub for the agents root, so the RECORDED and post-session-head
 # rows can control the record without a real session. Written in node because the real bridge is
 # a node script and the helper may invoke it either way.
 install_baseline_stub() { # <cfg> <repo> <base> <branch> <branch-head> <post-session-head> <alt-base>
@@ -235,7 +235,7 @@ g11_no_note_when_nothing_to_note() {
 # in which nobody does, so the obligation is followed to its new owner: the loop's ref-kind
 # input builder, which asks the resolver and hands the reviewer both halves.
 g10_state_moved_to_the_review_loop() {
-  local refkind="$AGENTS_DIR/bin/lib/codex-review-loop/ref-kind-input.sh"
+  local refkind="$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-review-loop/ref-kind-input.sh"
   check "G10g: the runner no longer mentions the flag it stopped owning" "0" \
     "$(grep -c -F -- '--base-state' "$RUNNER" | tr -d ' ')"
   check "G10g-new-home: the loop's ref-kind input builder hands it to the reviewer instead" \

@@ -28,11 +28,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-REMEDY="$AGENTS_DIR/hooks/enforce-worktree/worktree-remedy.js"
-EW_HOOK="$AGENTS_DIR/hooks/enforce-worktree.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REMEDY="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/worktree-remedy.js"
+EW_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
 # Second, independent buildWorktreeRemedy() call site — see R9b.
-EW_EDIT="$AGENTS_DIR/hooks/enforce-worktree/handle-edit-write.js"
+EW_EDIT="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/handle-edit-write.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

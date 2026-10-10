@@ -5,9 +5,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=./lib/request-off-clearance-harness.sh
-. "$AGENTS_DIR/tests/lib/request-off-clearance-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/request-off-clearance-harness.sh"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 # TL3 gap (what this test does NOT catch):
 # - Real /dev/tty interactive approval (TTY unavailable in Claude Code Bash tool)
@@ -221,21 +223,13 @@ run_FB_fallback
 # unavailable fallback with the guard's message; exit 127 names its cause.
 # ============================================================================
 
-# gd_shadow_config <dir> <rubric-chars> — AGENTS_CONFIG_DIR whose rubric is <n>
-# chars (the rubric is cat-ed into PROMPT_FILE unsliced, unlike argv-bound
-# --detail); every other module/bridge is the real one re-exported unchanged.
-gd_shadow_config() {
-    local dir="$1" n="$2" real="$OFFCLR_AGENTS_NODE" m
-    mkdir -p "$dir/bin" "$dir/hooks/lib" "$dir/hooks/workflow-state/state-io" "$dir/skills/_shared"
-    for m in hooks/workflow-state/index.js hooks/workflow-state/state-io/core.js \
-             hooks/lib/supervisor-state-writer.js hooks/lib/off-clearance-mint-lock.js \
-             hooks/lib/consume-exact-file.js; do
-        printf 'module.exports = require("%s/%s");\n' "$real" "$m" > "$dir/$m"
-    done
-    printf '#!/usr/bin/env bash\nexec bash %s "$@"\n' "$(printf '%q' "$OFFCLR_AGENTS_DIR/bin/resolve-session-id")" > "$dir/bin/resolve-session-id"
-    chmod +x "$dir/bin/resolve-session-id"
-    printf '#!/usr/bin/env node\n":" //; exec node "$0" "$@"\nrequire("%s/bin/workflow-state-dir");\n' "$real" > "$dir/bin/workflow-state-dir"
-    chmod +x "$dir/bin/workflow-state-dir"
+# gd_fake_checkout <dir> <rubric-chars> — a fake script checkout (a copy of bin
+# hooks skills) whose rubric is <n> chars (the rubric is cat-ed into PROMPT_FILE
+# unsliced, unlike argv-bound --detail); every other file is the real one. The
+# script finds the rubric from its own path, so the caller launches the copy.
+gd_fake_checkout() {
+    local dir="$1" n="$2"
+    script_checkout_fixture_copy "$dir" || return 1
     node -e 'require("fs").writeFileSync(process.argv[1], "r".repeat(Number(process.argv[2])))' \
         "$(node_path "$dir/skills/_shared/off-legitimacy-rubric.md")" "$n"
 }
@@ -246,14 +240,15 @@ codex_marker_stub() {
 }
 
 run_GD_guard() {
-    local tmp tn ok shadow marker
+    local tmp tn ok fake_script_checkout_root marker saved_req="$OFFCLR_REQ"
 
     # GD-1 prompt > 1048576 chars -> codex NOT spawned, "input too large" surfaced
     # (stderr or audit), UNAVAILABLE fallback, no token.
-    tmp=$(make_tmp); tn=$(node_path "$tmp"); shadow="$tmp/shadow-big"; marker="$tmp/codex-ran"
-    gd_shadow_config "$shadow" 1100000
-    REQ_SID="gd1sid"; REQ_CONFIG_DIR="$(node_path "$shadow")"
+    tmp=$(make_tmp); tn=$(node_path "$tmp"); fake_script_checkout_root="$tmp/checkout-big"; marker="$tmp/codex-ran"
+    gd_fake_checkout "$fake_script_checkout_root" 1100000
+    REQ_SID="gd1sid"; OFFCLR_REQ="$fake_script_checkout_root/bin/request-off-clearance"
     run_req "$tn" "$(codex_marker_stub "$marker" 1)" --target workflow --category workflow-bug --detail "bug"
+    OFFCLR_REQ="$saved_req"
     ok=1
     [ "$RC" -eq 1 ] || ok=0
     [ ! -e "$marker" ] || ok=0
@@ -267,12 +262,13 @@ run_GD_guard() {
     fi
     rm -r -f "$tmp" 2>/dev/null || true
 
-    # GD-2 (CPR-ORTH) the same shadow seam with a normal-size rubric -> codex IS
+    # GD-2 (CPR-ORTH) the same fake-checkout seam with a normal-size rubric -> codex IS
     # spawned and no guard message appears: the guard must not over-block.
-    tmp=$(make_tmp); tn=$(node_path "$tmp"); shadow="$tmp/shadow-small"; marker="$tmp/codex-ran"
-    gd_shadow_config "$shadow" 2000
-    REQ_SID="gd2sid"; REQ_CONFIG_DIR="$(node_path "$shadow")"
+    tmp=$(make_tmp); tn=$(node_path "$tmp"); fake_script_checkout_root="$tmp/checkout-small"; marker="$tmp/codex-ran"
+    gd_fake_checkout "$fake_script_checkout_root" 2000
+    REQ_SID="gd2sid"; OFFCLR_REQ="$fake_script_checkout_root/bin/request-off-clearance"
     run_req "$tn" "$(codex_marker_stub "$marker" 1)" --target workflow --category workflow-bug --detail "bug"
+    OFFCLR_REQ="$saved_req"
     ok=1
     [ -e "$marker" ] || ok=0
     echo "$OUT$ERR" | grep -qF "input too large" && ok=0

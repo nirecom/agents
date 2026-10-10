@@ -2,33 +2,18 @@
 # tests/bin/fix-1616-clarify-commit-scope-stdout.sh
 # Tests: bin/github-issues/clarify-commit-scope.sh
 # Tags: clarify-intent, github, issues, stdout-contract, gh-cli, scope:common, pwsh-not-required
-#
-# Issue #1616 — `gh` side-effect call sites suppress only stderr (`2>/dev/null`).
-# On success `gh issue edit` prints the issue URL to stdout, so that URL leaks
-# into clarify-commit-scope.sh's OWN stdout, whose documented contract is
-# exactly one of: CREATED:<N> | CLOSED:<N> | RC2 | SCAN_BLOCKED (or nothing).
-# Callers branch on "is stdout non-empty" / parse it as a token, so the leak is
-# a behavioral defect, not cosmetic.
-#
-# Fixed state asserted here: the two loop-body side-effect calls
-#   site1: gh issue edit <N> --add-label "intent:clarified"   (~line 158)
-#   site2: ensure-board-card.sh <N>                            (~line 166)
-# are fully silenced with `>/dev/null 2>&1`.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the REAL `gh` binary prints the issue URL on stdout for
-#   `issue edit --add-label` in the installed gh version (the mock asserts the
-#   documented behavior, not the binary's).
-# - Whether the real GitHub API path emits additional stdout (rate-limit
-#   notices, upgrade banners) that would leak past the same redirection.
-# - Whether the real ensure-board-card.sh is stdout-silent in production.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# Issue #1616 — the loop-body side-effect calls (site1: gh issue edit <N>
+# --add-label, site2: ensure-board-card.sh <N>) must be silenced on BOTH
+# streams, or their stdout leaks into the script's own stdout token contract
+# (CREATED:<N> | CLOSED:<N> | RC2 | SCAN_BLOCKED | nothing).
+# TL3 gap: what the REAL gh / GitHub API / ensure-board-card.sh print on stdout
+# (the mocks assert the documented behavior). Mitigation: WORKFLOW_USER_VERIFIED
+# preflight (category: skill-orchestration).
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CCS="$AGENTS_DIR/bin/github-issues/clarify-commit-scope.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CCS="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/clarify-commit-scope.sh"
 
 PASS=0
 FAIL=0
@@ -61,8 +46,8 @@ TMP=""
 # stdout assertion below would pass vacuously.
 setup_mock() {
     TMP="$(mktemp -d)"
-    FAKE_ACD="$TMP/agents-root"
-    mkdir -p "$TMP/mock-bin" "$TMP/plans" "$FAKE_ACD/bin/github-issues"
+    FAKE_AGENTS_MAIN_ROOT="$TMP/agents-main-root"
+    mkdir -p "$TMP/mock-bin" "$TMP/plans" "$FAKE_AGENTS_MAIN_ROOT/bin/github-issues"
     export MOCK_LOG_DIR="$TMP"
 
     cat > "$TMP/mock-bin/gh" <<'MOCKGH'
@@ -140,7 +125,7 @@ MOCKBOARD
     cp "$TMP/mock-bin/issue-state-check.sh" \
        "$TMP/mock-bin/wip-set-single.sh" \
        "$TMP/mock-bin/ensure-board-card.sh" \
-       "$FAKE_ACD/bin/github-issues/"
+       "$FAKE_AGENTS_MAIN_ROOT/bin/github-issues/"
 
     cat > "$TMP/plans/test-sid-intent.md" <<'INTENTMD'
 # Agreed Requirements — test-sid
@@ -153,14 +138,14 @@ Placeholder background text.
 Placeholder scope text.
 INTENTMD
 
-    mkdir -p "$FAKE_ACD/bin"
-    cp "$AGENTS_DIR/bin/scan-outbound.sh" "$FAKE_ACD/bin/scan-outbound.sh"
-    chmod +x "$FAKE_ACD/bin/scan-outbound.sh"
-    : > "$FAKE_ACD/.private-info-allowlist"
-    : > "$FAKE_ACD/.private-info-blocklist"
+    mkdir -p "$FAKE_AGENTS_MAIN_ROOT/bin"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" "$FAKE_AGENTS_MAIN_ROOT/bin/scan-outbound.sh"
+    chmod +x "$FAKE_AGENTS_MAIN_ROOT/bin/scan-outbound.sh"
+    : > "$FAKE_AGENTS_MAIN_ROOT/.private-info-allowlist"
+    : > "$FAKE_AGENTS_MAIN_ROOT/.private-info-blocklist"
 
     export PATH="$TMP/mock-bin:$PATH"
-    export AGENTS_CONFIG_DIR="$FAKE_ACD"
+    export AGENTS_MAIN_ROOT="$FAKE_AGENTS_MAIN_ROOT"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
 }
 
@@ -171,7 +156,6 @@ teardown_mock() {
     fi
     unset GH_MOCK_STATE GH_MOCK_STATE_101 MOCK_WIP_RC MOCK_BOARD_RC \
           MOCK_GH_LABEL_RC MOCK_LOG_DIR WORKFLOW_PLANS_DIR 2>/dev/null || true
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
 

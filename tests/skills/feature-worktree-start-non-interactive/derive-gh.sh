@@ -17,7 +17,7 @@ ensure_stubdir
 # onto PATH for the duration of the call under test only.
 
 # --- gh-path fixture repo (B8/B9) ------------------------------------------
-# The label lookup only runs when bin/is-github-dotcom-remote "$REPO_DIR" exits 0,
+# The label lookup only runs when bin/is-github-dotcom-remote "$TARGET_CHECKOUT_ROOT" exits 0,
 # so the fixture repo needs a github.com origin. A placeholder org/repo is used —
 # the stub answers, nothing ever reaches the network.
 GH_REPO="$FIXTURE/gh-repo"
@@ -28,7 +28,7 @@ git -C "$GH_REPO" remote add origin https://github.com/example-org/example-repo.
 GH_REPO_REAL="$(cd "$GH_REPO" && pwd -P)"
 
 # --- B8: type:incident label beats the title keyword -----------------------
-# Also pins the repo-scoping contract: the lookup must run with CWD == $REPO_DIR,
+# Also pins the repo-scoping contract: the lookup must run with CWD == $TARGET_CHECKOUT_ROOT,
 # otherwise it silently queries whatever repo the caller happened to be sitting in.
 B8_CAPTURE="$FIXTURE/b8-gh-capture.txt"
 : > "$B8_CAPTURE"
@@ -64,7 +64,7 @@ else
     fail "B8/quiet: expected empty stderr on a successful gh label lookup (err='$ERR')"
 fi
 if [ -n "$B8_CWD" ] && [ "$B8_CWD" = "$GH_REPO_REAL" ]; then
-    pass "B8/cwd: gh ran scoped to \$REPO_DIR ($B8_CWD)"
+    pass "B8/cwd: gh ran scoped to \$TARGET_CHECKOUT_ROOT ($B8_CWD)"
 else
     fail "B8/cwd: expected gh CWD='$GH_REPO_REAL' (got '$B8_CWD')"
 fi

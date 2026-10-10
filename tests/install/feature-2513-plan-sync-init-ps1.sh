@@ -12,9 +12,9 @@ set -uo pipefail
 # - the real node binary executing bin/plan-sync-init (covered by tests/hooks/feature-2513-plan-sync-e2e.sh)
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: pwsh-required.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 
 PWSH_BIN="$(command -v pwsh 2>/dev/null || true)"
@@ -38,7 +38,7 @@ psi_host_path() {
   if [[ "$PSI_IS_WIN" == 1 ]]; then cygpath -w "$1"; else printf '%s\n' "$1"; fi
 }
 
-WRAPPER="$AGENTS_DIR/install/win/plan-sync-init.ps1"
+WRAPPER="$SCRIPT_CHECKOUT_ROOT/install/win/plan-sync-init.ps1"
 DRIVER="$PSI_ROOT/driver.ps1"
 printf '%s\n' \
   'param([string]$Wrapper)' \
@@ -85,7 +85,7 @@ expect_no_throw() {
   if [[ "$OUT" == *"THREW="* ]]; then fail "$1" "out=$OUT"; else pass "$1"; fi
 }
 
-EXPECTED_CLI="$(np "$AGENTS_DIR")/bin/plan-sync-init"
+EXPECTED_CLI="$(np "$SCRIPT_CHECKOUT_ROOT")/bin/plan-sync-init"
 
 case_begin "node-present-invokes-cli" "install/win/plan-sync-init.ps1"
 run_wrapper "$STUB_PATH" 0 "$WRAPPER"

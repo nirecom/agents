@@ -27,7 +27,7 @@ _probe_kv() { printf '%s\n' "$1" | grep -m1 "^$2=" | sed "s/^$2=//"; }
 run_C_consume_contract() {
     local tmp tn out
     tmp=$(make_tmp); tn=$(node_path "$tmp")
-    out=$("$RWT" 20 node "$PROBE" contract "$_AGENTS_DIR_NODE" "$tn" 2>/dev/null)
+    out=$("$RWT" 20 node "$PROBE" contract "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" 2>/dev/null)
     if [ -z "$out" ]; then
         fail "C1 consumeExactFile contract probe produced no output (crash/timeout) - section vacuous"
         rm -r -f "$tmp" 2>/dev/null; return
@@ -61,7 +61,7 @@ run_C_consume_race() {
     printf 'RECORD-BYTES' > "$tmp/record"
     printf 'RECORD-BYTES' > "$tmp/expected"
     for i in $(seq 1 "$n"); do
-        "$RWT" 25 node "$PROBE" race-consume "$_AGENTS_DIR_NODE" \
+        "$RWT" 25 node "$PROBE" race-consume "$_SCRIPT_CHECKOUT_ROOT_NODE" \
             "$tn/record" "$tn/expected" "$tn/out.$i" >/dev/null 2>&1 &
     done
     wait
@@ -92,9 +92,9 @@ run_P_provenance() {
     # P1 - sequential single-use: the second read of the same marker attributes
     #      nothing, because the first call consumed it.
     tmp=$(make_tmp); tn=$(node_path "$tmp"); sid="lifep1"
-    "$RWT" 15 node "$PROBE" mkmarker "$_AGENTS_DIR_NODE" "$tn" "$sid" 0 >/dev/null 2>&1
-    v1=$(cd "$tmp" && "$RWT" 15 node "$PROBE" prov-once "$_AGENTS_DIR_NODE" "$tn" "$sid" workflow 2>/dev/null | tr -d '\r\n')
-    v2=$(cd "$tmp" && "$RWT" 15 node "$PROBE" prov-once "$_AGENTS_DIR_NODE" "$tn" "$sid" workflow 2>/dev/null | tr -d '\r\n')
+    "$RWT" 15 node "$PROBE" mkmarker "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "$sid" 0 >/dev/null 2>&1
+    v1=$(cd "$tmp" && "$RWT" 15 node "$PROBE" prov-once "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "$sid" workflow 2>/dev/null | tr -d '\r\n')
+    v2=$(cd "$tmp" && "$RWT" 15 node "$PROBE" prov-once "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "$sid" workflow 2>/dev/null | tr -d '\r\n')
     assert_eq "P1 fresh marker attributes the activation" "user_skill_invocation" "$v1"
     assert_eq "P1 the SAME marker cannot attribute a second activation" "unattributed" "$v2"
     assert_eq "P1 marker file consumed" "no" \
@@ -105,16 +105,16 @@ run_P_provenance() {
     # P2 - CPR-ORTH counterpart on the target axis: the skill covers both overrides,
     #      so a worktree-target emergency is attributed from the same marker shape.
     tmp=$(make_tmp); tn=$(node_path "$tmp"); sid="lifep2"
-    "$RWT" 15 node "$PROBE" mkmarker "$_AGENTS_DIR_NODE" "$tn" "$sid" 0 >/dev/null 2>&1
-    v1=$(cd "$tmp" && "$RWT" 15 node "$PROBE" prov-once "$_AGENTS_DIR_NODE" "$tn" "$sid" worktree 2>/dev/null | tr -d '\r\n')
+    "$RWT" 15 node "$PROBE" mkmarker "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "$sid" 0 >/dev/null 2>&1
+    v1=$(cd "$tmp" && "$RWT" 15 node "$PROBE" prov-once "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "$sid" worktree 2>/dev/null | tr -d '\r\n')
     assert_eq "P2 worktree-target emergency attributes from the same marker" "user_skill_invocation" "$v1"
     rm -r -f "$tmp" 2>/dev/null
 
     # P3 - a stale marker vouches for nothing, and is still consumed so it cannot
     #      linger to be re-examined.
     tmp=$(make_tmp); tn=$(node_path "$tmp"); sid="lifep3"
-    "$RWT" 15 node "$PROBE" mkmarker "$_AGENTS_DIR_NODE" "$tn" "$sid" 3600000 >/dev/null 2>&1
-    v1=$(cd "$tmp" && "$RWT" 15 node "$PROBE" prov-once "$_AGENTS_DIR_NODE" "$tn" "$sid" workflow 2>/dev/null | tr -d '\r\n')
+    "$RWT" 15 node "$PROBE" mkmarker "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "$sid" 3600000 >/dev/null 2>&1
+    v1=$(cd "$tmp" && "$RWT" 15 node "$PROBE" prov-once "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "$sid" workflow 2>/dev/null | tr -d '\r\n')
     assert_eq "P3 stale marker does not attribute" "unattributed" "$v1"
     assert_eq "P3 stale marker is still consumed (cannot linger)" "no" \
         "$([ -f "$tmp/$sid$MARKER_SUF" ] && echo yes || echo no)"
@@ -123,7 +123,7 @@ run_P_provenance() {
     # P4 - no marker at all: the ordinary case, and the one that must never be
     #      mistaken for "already consumed by me".
     tmp=$(make_tmp); tn=$(node_path "$tmp"); sid="lifep4"
-    v1=$(cd "$tmp" && "$RWT" 15 node "$PROBE" prov-once "$_AGENTS_DIR_NODE" "$tn" "$sid" workflow 2>/dev/null | tr -d '\r\n')
+    v1=$(cd "$tmp" && "$RWT" 15 node "$PROBE" prov-once "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "$sid" workflow 2>/dev/null | tr -d '\r\n')
     assert_eq "P4 absent marker -> unattributed" "unattributed" "$v1"
     rm -r -f "$tmp" 2>/dev/null
 
@@ -131,9 +131,9 @@ run_P_provenance() {
     #      The invariant holds under every interleaving: at most one caller can
     #      remove the exact bytes, so at most one may attribute.
     tmp=$(make_tmp); tn=$(node_path "$tmp"); sid="lifep5"
-    "$RWT" 15 node "$PROBE" mkmarker "$_AGENTS_DIR_NODE" "$tn" "$sid" 0 >/dev/null 2>&1
+    "$RWT" 15 node "$PROBE" mkmarker "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "$sid" 0 >/dev/null 2>&1
     for i in $(seq 1 "$n"); do
-        (cd "$tmp" && "$RWT" 25 node "$PROBE" race-prov "$_AGENTS_DIR_NODE" "$tn" "$sid" workflow "$tn/p.$i" >/dev/null 2>&1) &
+        (cd "$tmp" && "$RWT" 25 node "$PROBE" race-prov "$_SCRIPT_CHECKOUT_ROOT_NODE" "$tn" "$sid" workflow "$tn/p.$i" >/dev/null 2>&1) &
     done
     wait
     for i in $(seq 1 "$n"); do

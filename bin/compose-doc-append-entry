@@ -8,6 +8,8 @@
 # Replaces the prior COMPOSE_DOC_APPEND_SKILL=1 env-var bypass (removed in #672).
 set -euo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- Argument parsing ---
@@ -105,11 +107,7 @@ if [[ ! -f "$NOTES_PATH" ]]; then
 fi
 
 # --- Staging directory ---
-if [[ -z "${AGENTS_CONFIG_DIR:-}" ]]; then
-    echo "compose-doc-append-entry: AGENTS_CONFIG_DIR is required" >&2
-    exit 1
-fi
-STAGING_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")
+STAGING_DIR=$(bash "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir")
 mkdir -p "$STAGING_DIR" "$STAGING_DIR/markers"
 
 # --- Extract section helper ---
@@ -182,17 +180,16 @@ write_changelog_marker() {
 # --- Language lint (WORKTREE_NOTES.md sections) ---
 LANG_VIOLATIONS="$(
     NOTES_PATH="$NOTES_PATH" \
-    AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" \
     env -u DOCS_LANG_PUBLIC -u DOCS_LANG_PRIVATE node -e '
         const fs = require("fs");
         const path = require("path");
-        const agentsDir = process.env.AGENTS_CONFIG_DIR;
+        const hooksLib = path.join(process.argv[1], "hooks", "lib");
         const notesPath = process.env.NOTES_PATH;
         let cfgMod, lintMod, privMod;
         try {
-            cfgMod = require(path.join(agentsDir, "hooks/lib/lang-config.js"));
-            lintMod = require(path.join(agentsDir, "hooks/lib/lint-worktree-notes-lang.js"));
-            privMod = require(path.join(agentsDir, "hooks/lib/is-private-repo.js"));
+            cfgMod = require(path.join(hooksLib, "lang-config.js"));
+            lintMod = require(path.join(hooksLib, "lint-worktree-notes-lang.js"));
+            privMod = require(path.join(hooksLib, "is-private-repo.js"));
         } catch (e) { process.exit(0); }
         let content;
         try { content = fs.readFileSync(notesPath, "utf8"); } catch (e) { process.exit(0); }
@@ -205,7 +202,7 @@ LANG_VIOLATIONS="$(
         if (violations.length > 0) {
             process.stdout.write(JSON.stringify(violations));
         }
-    ' 2>/dev/null || true
+    ' "$SCRIPT_CHECKOUT_ROOT" 2>/dev/null || true
 )"
 if [[ -n "$LANG_VIOLATIONS" ]]; then
     echo "compose-doc-append-entry: language lint failed — WORKTREE_NOTES.md content does not match the configured language policy:" >&2
@@ -372,7 +369,7 @@ if [[ "$WANT_HISTORY" -eq 1 ]]; then
     else
         HIST_COMMIT_SUBJECT="docs(history): record PR #${PR_NUMBER}"
     fi
-    if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-validate.sh" \
+    if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/lib/github-contents-validate.sh" \
             --path "docs/history.md" \
             --file "$HISTORY_STAGING" \
             --commit-subject "$HIST_COMMIT_SUBJECT"; then
@@ -405,7 +402,7 @@ if [[ "$WANT_CHANGELOG" -eq 1 ]]; then
             echo "compose-doc-append-entry: doc-append.py failed for changelog staging" >&2
             exit 1
         fi
-        if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-validate.sh" \
+        if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/lib/github-contents-validate.sh" \
                 --path "CHANGELOG.md" \
                 --file "$CHANGELOG_STAGING" \
                 --commit-subject "$CHLOG_COMMIT_SUBJECT"; then
@@ -424,7 +421,7 @@ HISTORY_FILES_ARGS=()
 if [[ "$WANT_HISTORY" -eq 1 ]]; then
     H_LINES=$(wc -l < "$HISTORY_STAGING")
     if (( H_LINES >= 500 )); then
-        if ! uv run --no-project "$AGENTS_CONFIG_DIR/bin/doc-rotate.py" "$HISTORY_STAGING" --threshold-warn 500 >&2; then
+        if ! uv run --no-project "$SCRIPT_CHECKOUT_ROOT/bin/doc-rotate.py" "$HISTORY_STAGING" --threshold-warn 500 >&2; then
             echo "compose-doc-append-entry: doc-rotate.py failed" >&2
             exit 1
         fi
@@ -464,7 +461,7 @@ if [[ "$WANT_HISTORY" -eq 1 ]] && [[ "$WANT_CHANGELOG" -eq 1 ]]; then
         FILES_ARGS=(--file "docs/history.md=$HISTORY_STAGING")
     fi
     FILES_ARGS+=(--file "CHANGELOG.md=$CHANGELOG_STAGING")
-    if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-git-data-write.sh" \
+    if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/lib/github-git-data-write.sh" \
             --owner "$OWNER" --repo "$REPO" --branch "$DEF" \
             --message "$MSG_BOTH" \
             "${FILES_ARGS[@]}"; then
@@ -475,7 +472,7 @@ if [[ "$WANT_HISTORY" -eq 1 ]] && [[ "$WANT_CHANGELOG" -eq 1 ]]; then
     write_changelog_marker
 elif [[ "$WANT_HISTORY" -eq 1 ]]; then
     if [[ "$HISTORY_ROTATED" -eq 1 ]]; then
-        if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-git-data-write.sh" \
+        if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/lib/github-git-data-write.sh" \
                 --owner "$OWNER" --repo "$REPO" --branch "$DEF" \
                 --message "$MSG_HISTORY" \
                 "${HISTORY_FILES_ARGS[@]}"; then
@@ -483,7 +480,7 @@ elif [[ "$WANT_HISTORY" -eq 1 ]]; then
             exit 1
         fi
     else
-        if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-write.sh" \
+        if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/lib/github-contents-write.sh" \
                 --owner "$OWNER" --repo "$REPO" \
                 --path "docs/history.md" \
                 --file "$HISTORY_STAGING" \
@@ -495,7 +492,7 @@ elif [[ "$WANT_HISTORY" -eq 1 ]]; then
     fi
     write_history_marker
 elif [[ "$WANT_CHANGELOG" -eq 1 ]]; then
-    if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-write.sh" \
+    if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/lib/github-contents-write.sh" \
             --owner "$OWNER" --repo "$REPO" \
             --path "CHANGELOG.md" \
             --file "$CHANGELOG_STAGING" \

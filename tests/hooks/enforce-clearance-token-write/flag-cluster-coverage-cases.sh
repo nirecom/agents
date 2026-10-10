@@ -11,13 +11,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # shellcheck source=tests/lib/clearance-hook-harness.sh
-. "$AGENTS_DIR/tests/lib/clearance-hook-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/clearance-hook-harness.sh"
 
 TMP=$(make_tmp); TN=$(node_path "$TMP")
 TOKEN="$TN/wsid.off-clearance"
@@ -96,7 +96,7 @@ TABLE
 # character reddens its row; pin_charset catches the reverse drift.
 PY_CHARSET_PIN='BbdEhiIOPqsSuvVx'
 PERL_CHARSET_PIN='aCcDdFfgIilMmnpSsTtUuVvWwXx'
-SCAN_SRC="$AGENTS_DIR/hooks/block-clearance-token-write/interpreter-scan.js"
+SCAN_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write/interpreter-scan.js"
 FC_REP=5
 
 pin_charset() {  # <const-name> <expected>

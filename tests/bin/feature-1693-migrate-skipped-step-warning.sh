@@ -24,8 +24,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ORCH_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/orchestrate.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
 
 PASS=0
 FAIL=0
@@ -51,13 +51,12 @@ trap 'rm -rf "$TMP"' EXIT
 
 MOCK_DIR="$TMP/mock"
 mkdir -p "$MOCK_DIR"
-cp "$AGENTS_DIR/tests/fixtures/migration/gh-mock.sh" "$MOCK_DIR/gh"
+cp "$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration/gh-mock.sh" "$MOCK_DIR/gh"
 chmod +x "$MOCK_DIR/gh"
 MOCK_LOG="$TMP/mock.log"
 : > "$MOCK_LOG"
 export MOCK_LOG
 export PATH="$MOCK_DIR:$PATH"
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 
 # make_fixture <name> <current_step> -> echoes the fixture repo path
 make_fixture() {

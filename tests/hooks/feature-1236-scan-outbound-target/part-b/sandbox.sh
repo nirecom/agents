@@ -3,7 +3,7 @@
 # Tags: hook, scan, github, security, scope:issue-specific, pwsh-not-required
 # Part B helpers — sandbox builder + hook-invocation utilities.
 # Sourced by ../part-b.sh (not standalone); relies on variables set by
-# helpers.sh (HOOK_SRC, AGENTS_DIR, TMPBASE, pass/fail/skip, run_with_timeout)
+# helpers.sh (HOOK_SRC, _HELPERS_SCRIPT_CHECKOUT_ROOT, TMPBASE, pass/fail/skip, run_with_timeout)
 # which is sourced by the parent part-b.sh before this file.
 
 # ── Sandbox builder ──────────────────────────────────────────────────────────
@@ -22,12 +22,12 @@ build_sandbox() {
 
     # Copy hook + all lib deps
     cp "$HOOK_SRC" "$sbox/hooks/scan-outbound.js"
-    cp -r "$AGENTS_DIR/hooks/lib/." "$sbox/hooks/lib/" 2>/dev/null || true
+    cp -r "$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/lib/." "$sbox/hooks/lib/" 2>/dev/null || true
     # Copy workflow-state barrel + folder (moved out of hooks/lib/ — must be copied explicitly)
-    cp "$AGENTS_DIR/hooks/workflow-state.js" "$sbox/hooks/workflow-state.js" 2>/dev/null || true
-    cp -r "$AGENTS_DIR/hooks/workflow-state/." "$sbox/hooks/workflow-state/" 2>/dev/null || true
+    cp "$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/workflow-state.js" "$sbox/hooks/workflow-state.js" 2>/dev/null || true
+    cp -r "$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/." "$sbox/hooks/workflow-state/" 2>/dev/null || true
     # Copy workflow-gate (required by hooks/workflow-state/evidence-resolver.js)
-    cp -r "$AGENTS_DIR/hooks/workflow-gate/." "$sbox/hooks/workflow-gate/" 2>/dev/null || true
+    cp -r "$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/." "$sbox/hooks/workflow-gate/" 2>/dev/null || true
     # Stub session-markers.js to avoid deep dependency chain for sandbox isolation
     cat > "$sbox/hooks/lib/session-markers.js" <<'SESSIONSTUB'
 "use strict";

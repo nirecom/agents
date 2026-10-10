@@ -6,7 +6,7 @@
 # newlines; if any layer shells it, reporting a bad command executes it. Per payload:
 # nothing executes (canary dir stays empty) AND the detail round-trips byte for byte with
 # severity/categories untouched (argv-splitting via an embedded `--severity error`).
-# Assumes AGENTS_DIR, TMPDIR_BASE, SR_CLI, WORKFLOW_PLANS_DIR,
+# Assumes SCRIPT_CHECKOUT_ROOT, TMPDIR_BASE, SR_CLI, WORKFLOW_PLANS_DIR,
 # fresh_workflow_dir(), run_with_timeout(), pass(), fail() from the entry file.
 
 echo ""
@@ -60,7 +60,6 @@ DI_READ_EOF
         wf="$(fresh_workflow_dir)"
         payload="$(di_payload "$variant")"
         out="$(run_with_timeout 60 env \
-            "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "WORKFLOW_STATE_DIR=$wf" \
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
             node "$SR_CLI" --categories other --severity notice \
@@ -107,7 +106,6 @@ DI_READ_EOF
     DI_MISS_WF="$(fresh_workflow_dir)"
     DI_MISS_RC=0
     DI_MISS_OUT="$(run_with_timeout 60 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$DI_MISS_WF" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$SR_CLI" --categories other --severity notice \

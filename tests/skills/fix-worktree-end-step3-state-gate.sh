@@ -8,7 +8,7 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PASS=0
 FAIL=0
 
@@ -19,7 +19,7 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 # RED before commit 2: none of these strings exist in current SKILL.md Step 3
 # GREEN after commit 2: Step 3 state gate is added
 D11_step3_state_gate_contract() {
-    local skill="$AGENTS_DIR/skills/worktree-end/SKILL.md"
+    local skill="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/SKILL.md"
 
     # D11a: exact gh command for state gate
     # (Step 3a uses `gh pr view "$PR_NUMBER" --json state` without --jq .state)

@@ -254,7 +254,7 @@ None changes the shadow-mode contract.
 ## Rollout
 
 Shadow mode is opt-in per machine, not per checkout. The hooks run from the
-agents config directory (`$AGENTS_CONFIG_DIR`), and `JEV` is read from a
+agents config directory (`$AGENTS_MAIN_ROOT`), and `JEV` is read from a
 non-empty value already in the hook's process environment, else from that
 config directory's `.env`; a project's `.env.local` is never consulted for it.
 The flag ships off, so merging the feature changes nothing for any session

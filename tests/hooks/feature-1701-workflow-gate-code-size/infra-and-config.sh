@@ -10,7 +10,7 @@
 # ignored, no .env at all).
 #
 # Depends on the parent for: TMPDIR_BASE, fresh_workflow_dir, setup_repo,
-# make_plain_config_dir, make_marker_config_dir, write_complete_state,
+# make_plain_cfg_root, make_marker_cfg_root, write_complete_state,
 # make_lines, build_commit_payload, run_hook, assert_approve, assert_block,
 # HOOK_OUT, pass, fail, skip.
 
@@ -42,7 +42,7 @@ process.stdout.write(r.error?String(r.error.code):'FOUND');
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2008"
     local repo; repo="$(setup_repo "r8")"
-    local cfg; cfg="$(make_plain_config_dir "c8")"
+    local cfg; cfg="$(make_plain_cfg_root "c8")"
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 100 > "$repo/bin/small.js"
@@ -56,12 +56,12 @@ process.stdout.write(r.error?String(r.error.code):'FOUND');
     fi
 }
 
-# 9. bin/review-code-size missing in the adopted config dir -> block.
+# 9. bin/review-code-size missing in the adopted agents main root -> block.
 test_9_script_missing_blocks() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2009"
     local repo; repo="$(setup_repo "r9")"
-    local cfg; cfg="$(make_marker_config_dir "c9")"   # markers present, no bin/review-code-size
+    local cfg; cfg="$(make_marker_cfg_root "c9")"   # markers present, no bin/review-code-size
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 100 > "$repo/bin/small.js"
@@ -80,7 +80,7 @@ test_10_unexpected_exit_blocks() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2010"
     local repo; repo="$(setup_repo "r10")"
-    local cfg; cfg="$(make_marker_config_dir "c10")"
+    local cfg; cfg="$(make_marker_cfg_root "c10")"
     printf '#!/usr/bin/env bash\necho "boom" >&2\nexit 2\n' > "$TMPDIR_BASE/cfg-c10/bin/review-code-size"
     chmod +x "$TMPDIR_BASE/cfg-c10/bin/review-code-size"
     write_complete_state "$wfdir" "$sid"
@@ -96,7 +96,7 @@ test_11_timeout_fail_open() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2011"
     local repo; repo="$(setup_repo "r11")"
-    local cfg; cfg="$(make_marker_config_dir "c11")"
+    local cfg; cfg="$(make_marker_cfg_root "c11")"
     printf '#!/usr/bin/env bash\nsleep 30\nexit 1\n' > "$TMPDIR_BASE/cfg-c11/bin/review-code-size"
     chmod +x "$TMPDIR_BASE/cfg-c11/bin/review-code-size"
     write_complete_state "$wfdir" "$sid"
@@ -112,7 +112,7 @@ test_12_env_var_ignored() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2012"
     local repo; repo="$(setup_repo "r12")"
-    local cfg; cfg="$(make_plain_config_dir "c12")"
+    local cfg; cfg="$(make_plain_cfg_root "c12")"
     printf 'CODE_FILE_EXTENSIONS=js;sh;py\n' > "$TMPDIR_BASE/cfg-c12/.env"
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/src"
@@ -127,7 +127,7 @@ test_13_env_from_dotenv() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2013"
     local repo; repo="$(setup_repo "r13")"
-    local cfg; cfg="$(make_plain_config_dir "c13")"
+    local cfg; cfg="$(make_plain_cfg_root "c13")"
     printf 'CODE_FILE_EXTENSIONS=js;sh;py;ts\n' > "$TMPDIR_BASE/cfg-c13/.env"
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/src"
@@ -137,12 +137,12 @@ test_13_env_from_dotenv() {
     assert_block "13: CODE_FILE_EXTENSIONS from .env only -> block" "big.ts"
 }
 
-# 14. No .env in the config dir -> defaults apply, no crash.
+# 14. No .env in the agents main root -> defaults apply, no crash.
 test_14_no_dotenv() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2014"
     local repo; repo="$(setup_repo "r14")"
-    local cfg; cfg="$(make_plain_config_dir "c14")"   # deliberately no .env
+    local cfg; cfg="$(make_plain_cfg_root "c14")"   # deliberately no .env
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 501 > "$repo/bin/big.js"

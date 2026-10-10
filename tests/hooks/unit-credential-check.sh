@@ -12,11 +12,11 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 topath() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
 }
-MODULE="$(topath "$AGENTS_DIR/hooks/lib/credential-check.js")"
+MODULE="$(topath "$SCRIPT_CHECKOUT_ROOT/hooks/lib/credential-check.js")"
 
 command -v node >/dev/null 2>&1 || exit 77
 

@@ -83,8 +83,8 @@ done
 if ! command -v node >/dev/null 2>&1; then
     fail "W7-00: node is not on PATH" "the nine agent files must be parsed as frontmatter, not grepped; this environment cannot run the check"
 else
-    bash "$AGENTS_DIR/bin/run-with-timeout.sh" 120 node -e "$AGENT_FM_JS" \
-        "$(nodepath "$AGENTS_DIR")" "${W7_ARGS[@]}" > "$AGENT_FM_OUT" 2> "$TMPDIR_LOCAL/w7.err" || true
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 120 node -e "$AGENT_FM_JS" \
+        "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "${W7_ARGS[@]}" > "$AGENT_FM_OUT" 2> "$TMPDIR_LOCAL/w7.err" || true
     if [ -s "$TMPDIR_LOCAL/w7.err" ]; then
         fail "W7-00: the frontmatter parser itself failed" "$(head -1 "$TMPDIR_LOCAL/w7.err")"
     fi
@@ -114,7 +114,7 @@ done
 echo "=== W10: agents/lib/codegraph-usage.md exists and carries its three requirements ==="
 
 USAGE_REL="agents/lib/codegraph-usage.md"
-USAGE_ABS="$AGENTS_DIR/$USAGE_REL"
+USAGE_ABS="$SCRIPT_CHECKOUT_ROOT/$USAGE_REL"
 if [ ! -f "$USAGE_ABS" ]; then
     fail "W10-00: $USAGE_REL does not exist" "nine agents point at it; a dangling pointer is exposure without adoption"
 elif [ ! -s "$USAGE_ABS" ]; then
@@ -138,7 +138,7 @@ assert_contains "W10-01" "$USAGE_REL" "mcp__codegraph__codegraph_explore"
 # assert_policy_section <name> <rel> <why> <re1> <re2> [re3] [re4]
 assert_policy_section() {
     local name="$1" rel="$2" why="$3"; shift 3
-    local abs="$AGENTS_DIR/$rel"
+    local abs="$SCRIPT_CHECKOUT_ROOT/$rel"
     if [ ! -f "$abs" ]; then
         fail "$name: $rel is absent" "$why"
         return

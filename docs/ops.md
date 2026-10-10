@@ -202,7 +202,7 @@ Run **once** after the PR for this change is merged. Idempotent.
 
 **Setup (resolve the active plans directory once per shell):**
 ```bash
-bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
+bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"
 ```
 It prints the active plans directory — defaults to `~/.workflow-plans`, and respects a
 `WORKFLOW_PLANS_DIR` override from `.env`. Read the printed path and use it literally below.
@@ -288,7 +288,7 @@ answer is always the one used. Default is off.
 
 Enable (after release):
 
-1. In the global agents `.env` (under the agents config dir), set `JEV=on` and `TYPESAFE_API_KEY=<key>`. A project `.env.local` cannot set either key (they are refused there). See `.env.example`.
+1. In the global agents `.env` (under the agents main root), set `JEV=on` and `TYPESAFE_API_KEY=<key>`. A project `.env.local` cannot set either key (they are refused there). See `.env.example`.
 2. Verify in a linked worktree first. The main worktree stays off until the rollout decision.
 
 Disable: set `JEV=off` in the same `.env`, or remove the line. The feature is

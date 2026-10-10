@@ -11,13 +11,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
 SHARED_REL="skills/_shared/worker-dispatch.md"
-SHARED_MD="$AGENTS_DIR/$SHARED_REL"
+SHARED_MD="$SCRIPT_CHECKOUT_ROOT/$SHARED_REL"
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -96,7 +96,7 @@ group_caller_rows() {
     local rel worker label start end path block blockfile lines
     while IFS='|' read -r rel worker label start end; do
         [ -z "${rel// /}" ] && continue
-        path="$AGENTS_DIR/$rel"
+        path="$SCRIPT_CHECKOUT_ROOT/$rel"
         if [ ! -f "$path" ]; then
             fail "B/$label: caller $rel missing"
             continue
@@ -170,7 +170,7 @@ group_no_legacy_agent_files() {
     found=""
     while IFS= read -r n; do
         [ -z "$n" ] && continue
-        [ -e "$AGENTS_DIR/agents/$n" ] && found="$found agents/$n"
+        [ -e "$SCRIPT_CHECKOUT_ROOT/agents/$n" ] && found="$found agents/$n"
     done <<< "$names"
     if [ -z "$found" ]; then
         pass "C1: no worker subagent .md file exists under agents/ (derived from the registry)"
@@ -184,7 +184,7 @@ group_explicit_six_deleted() {
     six="test-runner.md worktree-copy-worker.md worktree-backup-worker.md doc-append-worker.md issue-reconcile-worker.md session-close-worker.md"
     found=""
     for n in $six; do
-        [ -e "$AGENTS_DIR/agents/$n" ] && found="$found agents/$n"
+        [ -e "$SCRIPT_CHECKOUT_ROOT/agents/$n" ] && found="$found agents/$n"
     done
     if [ -z "$found" ]; then
         pass "C2: all six #1643-deleted agents/*.md files are absent"
@@ -201,9 +201,9 @@ group_explicit_three_deleted() {
     three="commit-push-worker.md issue-close-stage-worker.md issue-close-finalize-worker.md"
     found=""
     for n in $three; do
-        [ -e "$AGENTS_DIR/agents/$n" ] && found="$found agents/$n"
+        [ -e "$SCRIPT_CHECKOUT_ROOT/agents/$n" ] && found="$found agents/$n"
     done
-    [ -e "$AGENTS_DIR/agents/issue-close-finalize-worker" ] && found="$found agents/issue-close-finalize-worker/"
+    [ -e "$SCRIPT_CHECKOUT_ROOT/agents/issue-close-finalize-worker" ] && found="$found agents/issue-close-finalize-worker/"
     if [ -z "$found" ]; then
         pass "C2b: all three #1673-deleted agents/*.md files (and the state-schema split dir) are absent"
     else
@@ -221,7 +221,7 @@ group_no_caller_references_legacy() {
     hits=""
     while IFS='|' read -r rel _worker _label _start _end; do
         [ -z "${rel// /}" ] && continue
-        path="$AGENTS_DIR/$rel"
+        path="$SCRIPT_CHECKOUT_ROOT/$rel"
         [ -f "$path" ] || continue
         while IFS= read -r n; do
             [ -z "$n" ] && continue
@@ -242,7 +242,7 @@ group_no_task_tool_dispatch() {
     hits=""
     while IFS='|' read -r rel _worker _label _start _end; do
         [ -z "${rel// /}" ] && continue
-        path="$AGENTS_DIR/$rel"
+        path="$SCRIPT_CHECKOUT_ROOT/$rel"
         [ -f "$path" ] || continue
         if grep -qE 'subagent_type|Task tool|Agent tool' "$path"; then
             hits="$hits $rel"

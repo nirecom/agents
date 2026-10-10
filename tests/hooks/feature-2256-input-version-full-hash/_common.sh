@@ -5,15 +5,15 @@
 # Shared fixture + assertion preamble for the feature-2256-input-version-full-hash sections.
 # Sourced, never run as a section: the parent lists section files explicitly.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+__COMMON_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_NODE="$(cygpath -m "$AGENTS_DIR")"
+    AGENTS_NODE="$(cygpath -m "$__COMMON_SCRIPT_CHECKOUT_ROOT")"
 else
-    AGENTS_NODE="$AGENTS_DIR"
+    AGENTS_NODE="$__COMMON_SCRIPT_CHECKOUT_ROOT"
 fi
 FP_NODE="$AGENTS_NODE/hooks/lib/diff-fingerprint.js"
 BD_NODE="$AGENTS_NODE/hooks/lib/branch-diff.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$__COMMON_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -37,7 +37,6 @@ mkdir -p "$WORK/plans" "$WORK/wf" "$WORK/transcripts"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
-export AGENTS_CONFIG_DIR="$AGENTS_NODE"
 unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 

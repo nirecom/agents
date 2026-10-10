@@ -23,14 +23,15 @@ const WORKER_NAMES = [
 
 // Canonical argv shape shared by every worker today. Spread per entry so that a
 // future worker can declare a different shape without mutating the others.
-const STANDARD_ARG_SPEC = ["enum-worker", "anchor-main-root", "path-plansdir"];
+const STANDARD_ARG_SPEC = ["enum-worker", "anchor-target-main-root", "path-plansdir"];
 
 // Every external command any worker may ever run. A worker's own `binaries.external`
 // must be a subset of this list; bin/worker-dispatch/spawn.js enforces both layers.
 const EXTERNAL_COMMANDS = ["git", "gh", "glab", "docker", "bash", "node", "uv"];
 
-// Child-process env allowlist. AGENTS_CONFIG_DIR is NOT here on purpose: it is set
-// explicitly from the resolved ACD anchor and never inherited.
+// Child-process env allowlist. The agents settings root variable is NOT here on
+// purpose: spawn.js resolves it from the dispatcher's own checkout and it is
+// never inherited.
 //
 // Credentials are NOT here either. GH_TOKEN / GITHUB_TOKEN are declared per worker
 // by each entry that authenticates against GitHub (issue-reconcile, commit-push,
@@ -57,7 +58,7 @@ const CHILD_ENV_ALLOWLIST = [
   // tests/feature-1643-worker-dispatch-{schema,script-anchor}.sh and
   // tests/bin/TL3-worker-dispatch-child-env-gh-auth.sh — add a member here => also add it there.
 
-  // Windows gh CLI needs APPDATA to locate its config dir (hosts.yml) even when
+  // Windows gh CLI needs APPDATA to locate its configuration directory (hosts.yml) even when
   // the OAuth token itself lives in the OS keyring rather than GH_TOKEN.
   "APPDATA",
   // Windows OpenSSH.exe expands %ProgramData% internally for its default
@@ -66,11 +67,11 @@ const CHILD_ENV_ALLOWLIST = [
   // ssh fails as "Could not read from remote repository" for every worker.
   "ProgramData",
   "PROGRAMDATA",
-  // gh resolves its config dir in a fixed order: GH_CONFIG_DIR, then
+  // gh resolves its configuration directory in a fixed order: GH_CONFIG_DIR, then
   // XDG_CONFIG_HOME (<val>/gh, every OS), then APPDATA (<val>/GitHub CLI,
   // Windows). A parent that moved gh's config with either of the two
   // higher-priority vars and a child that inherits only APPDATA do not read the
-  // same hosts.yml: the child silently lands in a different config dir and fails
+  // same hosts.yml: the child silently lands in a different configuration directory and fails
   // auth exactly the way the missing APPDATA did. XDG_CONFIG_HOME is not
   // gh-specific — passing it also makes a child's git/uv read the same XDG tree
   // the parent does, which is the faithful behaviour, not a widening.
@@ -78,20 +79,20 @@ const CHILD_ENV_ALLOWLIST = [
   // one worker's envPassthrough.
   "XDG_CONFIG_HOME",
   "GH_CONFIG_DIR",
-  // #2308: glab's config dir, same config-location-var class as GH_CONFIG_DIR —
+  // #2308: glab's configuration directory, same config-location-var class as GH_CONFIG_DIR —
   // names a directory (glab reads hosts config there), never a secret. Its token
   // is GITLAB_TOKEN, declared per-worker in envPassthrough, not here.
   "GLAB_CONFIG_DIR",
 ];
 
 // Write-scope tokens understood by bin/worker-dispatch/fsguard.js.
-const WRITE_SCOPES = ["plans-dir", "control-dir", "family-worktree", "backup-dir", "main-root-docs", "log-dir"];
+const WRITE_SCOPES = ["plans-dir", "control-dir", "family-worktree", "backup-dir", "target-main-root-docs", "log-dir"];
 
-// Script-anchor tokens understood by bin/worker-dispatch/spawn.js. `acd` and
-// `main-root` resolve into reviewed, merged code. `family-worktree` resolves into
+// Script-anchor tokens understood by bin/worker-dispatch/spawn.js. `script-checkout-root` and
+// `target-main-root` resolve into reviewed, merged code. `family-worktree` resolves into
 // the payload's target worktree — unreviewed by definition — and is therefore
 // reserved for workers whose purpose is to execute the branch under review.
-const SCRIPT_ANCHORS = ["acd", "main-root", "family-worktree"];
+const SCRIPT_ANCHORS = ["script-checkout-root", "target-main-root", "family-worktree"];
 
 const workers = {
   // -----------------------------------------------------------------------
@@ -119,8 +120,8 @@ const workers = {
     },
     binaries: {
       external: ["bash"],
-      // family-worktree, not main-root: run-all.sh derives its test directory from
-      // its own location, so a main-root anchor would run main's suite regardless
+      // family-worktree, not target-main-root: run-all.sh derives its test directory from
+      // its own location, so a target-main-root anchor would run main's suite regardless
       // of `cwd` — verifying the wrong tree while reporting success.
       scripts: { runAll: { anchor: "family-worktree", rel: "tests/run-all.sh" } },
     },
@@ -143,22 +144,22 @@ const workers = {
     name: "worktree-copy",
     argSpec: [...STANDARD_ARG_SPEC],
     payloadSpec: {
-      main_root: { type: "anchor-main-root", required: false },
+      target_main_root: { type: "anchor-target-main-root", required: false },
       worktree_path: { type: "family-worktree", required: true },
       branch: { type: "branch", required: true },
       // Optional to match the agent contract this replaces: /worktree-start passes
       // an empty session id when it cannot resolve one, and the notes CLI degrades
       // by omitting the Session-ID line rather than failing.
       session_id: { type: "session-id", required: false },
-      agents_config_dir: { type: "anchor-acd", required: false },
+      script_checkout_root: { type: "anchor-script-checkout-root", required: false },
       artifact_dir: { type: "path-under-plansdir", required: false },
     },
     binaries: {
       external: ["git", "node"],
       scripts: {
-        includeFilter: { anchor: "acd", rel: "bin/worktree-copy-include.js" },
-        parseWorktrees: { anchor: "acd", rel: "bin/parse-worktrees" },
-        writeNotes: { anchor: "acd", rel: "bin/worktree-write-notes.js" },
+        includeFilter: { anchor: "script-checkout-root", rel: "bin/worktree-copy-include.js" },
+        parseWorktrees: { anchor: "script-checkout-root", rel: "bin/parse-worktrees" },
+        writeNotes: { anchor: "script-checkout-root", rel: "bin/worktree-write-notes.js" },
       },
     },
     envPassthrough: ["COPIED_JSON", "SIBLING_WORKTREES_JSON", "WORKTREE_BASE_DIR"],
@@ -214,8 +215,8 @@ const workers = {
     binaries: {
       external: ["uv", "bash"],
       scripts: {
-        docAppend: { anchor: "acd", rel: "bin/doc-append.py" },
-        composeEntry: { anchor: "acd", rel: "bin/compose-doc-append-entry" },
+        docAppend: { anchor: "script-checkout-root", rel: "bin/doc-append.py" },
+        composeEntry: { anchor: "script-checkout-root", rel: "bin/compose-doc-append-entry" },
       },
     },
     // composeEntry shells out to `gh` for issue/PR metadata lookups — without a
@@ -258,9 +259,9 @@ const workers = {
     binaries: {
       external: ["node"],
       scripts: {
-        report: { anchor: "acd", rel: "bin/supervisor-report" },
-        writeAlert: { anchor: "acd", rel: "bin/supervisor-write-alert" },
-        writeAudit: { anchor: "acd", rel: "bin/supervisor-write-audit" },
+        report: { anchor: "script-checkout-root", rel: "bin/supervisor-report" },
+        writeAlert: { anchor: "script-checkout-root", rel: "bin/supervisor-write-alert" },
+        writeAudit: { anchor: "script-checkout-root", rel: "bin/supervisor-write-audit" },
       },
     },
     envPassthrough: [],
@@ -296,7 +297,7 @@ const workers = {
       pr_body_template: { type: "text", required: false, max: 60000 },
       wip_mode: { type: "bool", required: false, default: false },
       enforce_worktree: { type: "enum:on|off", required: false, default: "on" },
-      agents_config_dir: { type: "anchor-acd", required: false },
+      script_checkout_root: { type: "anchor-script-checkout-root", required: false },
       artifact_dir: { type: "path-under-plansdir", required: false },
       // Deviation #3: the dispatcher can only accept a child cwd as a
       // family-validated explicit path.
@@ -308,8 +309,8 @@ const workers = {
     binaries: {
       external: ["git", "gh", "glab", "bash", "node"],
       scripts: {
-        unstagedCheck: { anchor: "acd", rel: "bin/check-unstaged-tracked.sh" },
-        bootstrapProbe: { anchor: "acd", rel: "bin/probe-remote-bootstrap.sh" },
+        unstagedCheck: { anchor: "script-checkout-root", rel: "bin/check-unstaged-tracked.sh" },
+        bootstrapProbe: { anchor: "script-checkout-root", rel: "bin/probe-remote-bootstrap.sh" },
         // #2308: no isGithubRemote script — forge is resolved in-process via
         // pr.js resolveForgeForWorktree (runScript is bash-fixed, cannot launch a
         // Node shebang). glab is declared in `external` for pr.js's MR path.
@@ -317,12 +318,12 @@ const workers = {
         // hooks/scan-outbound.js (PreToolUse) read them first. A dispatched `gh`
         // child is not a Bash-tool command, so that hook no longer sees them and
         // the worker runs the same scanner itself before `gh pr create`.
-        // acd for the same reason as workflowGate: the scanner that clears
+        // script-checkout-root for the same reason as workflowGate: the scanner that clears
         // outbound text must be the reviewed copy, not the branch's own.
-        scanOutbound: { anchor: "acd", rel: "bin/scan-outbound.sh" },
-        // acd, never family-worktree: the gate that authorizes a push must be
+        scanOutbound: { anchor: "script-checkout-root", rel: "bin/scan-outbound.sh" },
+        // script-checkout-root, never family-worktree: the gate that authorizes a push must be
         // the reviewed, merged copy — not the one on the branch being pushed.
-        workflowGate: { anchor: "acd", rel: "hooks/workflow-gate.js" },
+        workflowGate: { anchor: "script-checkout-root", rel: "hooks/workflow-gate.js" },
       },
     },
     // This entry declares the union every child of this worker MAY see; the
@@ -375,8 +376,8 @@ const workers = {
       issue_number: { type: "int", required: true, min: 1 },
       worktree_path: { type: "family-worktree", required: true },
       owner_repo: { type: "owner-repo", required: true },
-      // Echo-only: accepted for readability, but only as the exact resolved ACD.
-      agents_config_dir: { type: "anchor-acd", required: false },
+      // Echo-only: accepted for readability, but only as the exact resolved script checkout root.
+      script_checkout_root: { type: "anchor-script-checkout-root", required: false },
       artifact_dir: { type: "path-under-plansdir", required: false },
       // repo-ref, not owner-repo: the stage chain's cross-repo argument keeps the
       // documented `<owner/repo>` OR bare `<repo>` form.
@@ -385,7 +386,7 @@ const workers = {
     binaries: {
       external: ["bash", "gh", "git"],
       scripts: {
-        stageChain: { anchor: "acd", rel: "skills/issue-close-stage/scripts/run-stage-chain.sh" },
+        stageChain: { anchor: "script-checkout-root", rel: "skills/issue-close-stage/scripts/run-stage-chain.sh" },
       },
     },
     envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN"],
@@ -396,7 +397,7 @@ const workers = {
   // payloadSpec is FLAT — capability.js has no "required only when phase=X" notion, so
   // the per-phase required-field table lives in the worker module's checkRequired
   // (doc-append's mode check is the precedent): initial needs issue_number,
-  // root_issue_number, owner_repo, state_file_path, main_worktree_path; loop_step needs
+  // root_issue_number, owner_repo, state_file_path, target_main_root; loop_step needs
   // root_issue_number, owner_repo, state_file_path, g5_decision; finalize_terminal needs
   // root_issue_number, owner_repo, state_file_path, session_id, outcome_file_path.
   // `merge_commit` is deliberately NOT a field: it comes out of run-initial.sh's stdout
@@ -410,7 +411,7 @@ const workers = {
       root_issue_number: { type: "int", required: false, min: 1 },
       owner_repo: { type: "owner-repo", required: false },
       state_file_path: { type: "derived-control-file", control: "finalize-state-{root}.json", required: false },
-      main_worktree_path: { type: "anchor-main-root", required: false },
+      target_main_root: { type: "anchor-target-main-root", required: false },
       issue_repo: { type: "repo-ref", required: false },
       g5_decision: {
         type: "enum:accept|decline|llm_declined|recurse_done",
@@ -418,24 +419,24 @@ const workers = {
       },
       session_id: { type: "session-id", required: false },
       outcome_file_path: { type: "derived-control-file", control: "issue-close-outcome.json", required: false },
-      agents_config_dir: { type: "anchor-acd", required: false },
+      script_checkout_root: { type: "anchor-script-checkout-root", required: false },
       finalize_scripts_dir: { type: "derived-finalize-scripts-dir", required: false },
       artifact_dir: { type: "path-under-plansdir", required: false },
     },
     binaries: {
       external: ["bash", "node", "gh"],
       scripts: {
-        runInitial: { anchor: "acd", rel: "skills/issue-close-finalize/scripts/run-initial.sh" },
-        runLoopStep: { anchor: "acd", rel: "skills/issue-close-finalize/scripts/run-loop-step.js" },
+        runInitial: { anchor: "script-checkout-root", rel: "skills/issue-close-finalize/scripts/run-initial.sh" },
+        runLoopStep: { anchor: "script-checkout-root", rel: "skills/issue-close-finalize/scripts/run-loop-step.js" },
         runTerminal: {
-          anchor: "acd",
+          anchor: "script-checkout-root",
           rel: "skills/issue-close-finalize/scripts/run-finalize-terminal.sh",
         },
       },
     },
-    // Both non-token names are derived from anchors and set explicitly via
-    // extraEnv; declaring them here only makes that assignment legal.
-    envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN", "FINALIZE_SCRIPTS_DIR", "MAIN_WORKTREE_PATH"],
+    // The non-token name is derived from anchors and set explicitly via
+    // extraEnv; declaring it here only makes that assignment legal.
+    envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN", "FINALIZE_SCRIPTS_DIR"],
     writeScopes: ["control-dir", "log-dir"],
     renderer: "status-triple-quoted",
   },

@@ -10,14 +10,14 @@
 const fs = require("fs");
 const path = require("path");
 
-const AGENTS_DIR = process.env.AGENTS_DIR || path.join(__dirname, "..", "..");
-const NATIVE_DIR = AGENTS_DIR.replace(/\\/g, "/");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
+const NATIVE_DIR = SCRIPT_CHECKOUT_ROOT.replace(/\\/g, "/");
 const mode = process.argv[2];
 const needle = process.argv[3] || "";
 
 let settings;
 try {
-  settings = JSON.parse(fs.readFileSync(path.join(AGENTS_DIR, "settings.json"), "utf8"));
+  settings = JSON.parse(fs.readFileSync(path.join(SCRIPT_CHECKOUT_ROOT, "settings.json"), "utf8"));
 } catch (e) {
   console.log("SETTINGS_UNREADABLE:" + (e && e.message ? e.message : String(e)));
   process.exit(0);
@@ -37,8 +37,8 @@ function resolvePlaceholders(cmd) {
   return cmd
     .split("$CLAUDE_PROJECT_DIR").join(NATIVE_DIR)
     .split("${CLAUDE_PROJECT_DIR}").join(NATIVE_DIR)
-    .split("$AGENTS_CONFIG_DIR").join(NATIVE_DIR)
-    .split("${AGENTS_CONFIG_DIR}").join(NATIVE_DIR);
+    .split("$AGENTS_MAIN_ROOT").join(NATIVE_DIR)
+    .split("${AGENTS_MAIN_ROOT}").join(NATIVE_DIR);
 }
 
 if (mode === "--matcher") {

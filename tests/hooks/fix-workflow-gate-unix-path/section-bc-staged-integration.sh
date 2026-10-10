@@ -18,11 +18,11 @@ echo "# test" > "$REPO1/tests/foo.sh"
 git -C "$REPO1" add "tests/foo.sh"
 REPO1_WIN="$(to_win_path "$REPO1")"
 
-result=$(HOOK_PATH="$HOOK_WIN" REPO_DIR="$REPO1_WIN" run_with_timeout node --input-type=module <<'EOF'
+result=$(HOOK_PATH="$HOOK_WIN" REPO_PATH="$REPO1_WIN" run_with_timeout node --input-type=module <<'EOF'
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { hasStagedTestChanges } = require(process.env.HOOK_PATH);
-process.stdout.write(String(hasStagedTestChanges(process.env.REPO_DIR)));
+process.stdout.write(String(hasStagedTestChanges(process.env.REPO_PATH)));
 EOF
 )
 assert_true "I1: tests/foo.sh staged -> hasStagedTestChanges=true" "$result"
@@ -36,11 +36,11 @@ echo "# ops" > "$REPO2/docs/ops.md"
 git -C "$REPO2" add "docs/ops.md"
 REPO2_WIN="$(to_win_path "$REPO2")"
 
-result=$(HOOK_PATH="$HOOK_WIN" REPO_DIR="$REPO2_WIN" run_with_timeout node --input-type=module <<'EOF'
+result=$(HOOK_PATH="$HOOK_WIN" REPO_PATH="$REPO2_WIN" run_with_timeout node --input-type=module <<'EOF'
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { hasStagedDocChanges } = require(process.env.HOOK_PATH);
-process.stdout.write(String(hasStagedDocChanges(process.env.REPO_DIR)));
+process.stdout.write(String(hasStagedDocChanges(process.env.REPO_PATH)));
 EOF
 )
 assert_true "I2: docs/ops.md staged -> hasStagedDocChanges=true" "$result"
@@ -54,18 +54,18 @@ echo "// main" > "$REPO3/src/main.js"
 git -C "$REPO3" add "src/main.js"
 REPO3_WIN="$(to_win_path "$REPO3")"
 
-result_test=$(HOOK_PATH="$HOOK_WIN" REPO_DIR="$REPO3_WIN" run_with_timeout node --input-type=module <<'EOF'
+result_test=$(HOOK_PATH="$HOOK_WIN" REPO_PATH="$REPO3_WIN" run_with_timeout node --input-type=module <<'EOF'
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { hasStagedTestChanges } = require(process.env.HOOK_PATH);
-process.stdout.write(String(hasStagedTestChanges(process.env.REPO_DIR)));
+process.stdout.write(String(hasStagedTestChanges(process.env.REPO_PATH)));
 EOF
 )
-result_doc=$(HOOK_PATH="$HOOK_WIN" REPO_DIR="$REPO3_WIN" run_with_timeout node --input-type=module <<'EOF'
+result_doc=$(HOOK_PATH="$HOOK_WIN" REPO_PATH="$REPO3_WIN" run_with_timeout node --input-type=module <<'EOF'
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { hasStagedDocChanges } = require(process.env.HOOK_PATH);
-process.stdout.write(String(hasStagedDocChanges(process.env.REPO_DIR)));
+process.stdout.write(String(hasStagedDocChanges(process.env.REPO_PATH)));
 EOF
 )
 assert_false "I3: src/main.js only -> hasStagedTestChanges=false" "$result_test"
@@ -79,12 +79,12 @@ echo "=== C. error handling tests ==="
 
 # Er1: nonexistent cwd -> false + stderr warning
 STDERR_TMP="$TMPDIR_BASE/stderr_er1.txt"
-result=$(HOOK_PATH="$HOOK_WIN" REPO_DIR="/nonexistent/path/that/does/not/exist" \
+result=$(HOOK_PATH="$HOOK_WIN" REPO_PATH="/nonexistent/path/that/does/not/exist" \
   run_with_timeout node --input-type=module 2>"$STDERR_TMP" <<'EOF'
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { hasStagedTestChanges } = require(process.env.HOOK_PATH);
-process.stdout.write(String(hasStagedTestChanges(process.env.REPO_DIR)));
+process.stdout.write(String(hasStagedTestChanges(process.env.REPO_PATH)));
 EOF
 )
 stderr_out=$(cat "$STDERR_TMP")

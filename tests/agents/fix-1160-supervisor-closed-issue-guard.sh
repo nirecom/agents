@@ -21,10 +21,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-SUPERVISOR_MD="$AGENTS_DIR/agents/supervisor.md"
-BIN_CHECK_SESSION="$AGENTS_DIR/bin/supervisor-check-session-active"
+SUPERVISOR_MD="$SCRIPT_CHECKOUT_ROOT/agents/supervisor.md"
+BIN_CHECK_SESSION="$SCRIPT_CHECKOUT_ROOT/bin/supervisor-check-session-active"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

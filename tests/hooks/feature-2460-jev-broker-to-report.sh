@@ -10,9 +10,9 @@
 # TL3 gap (what this test does NOT catch): a real Jev endpoint's response time and the
 # host's real Agent tool_use_id pairing; TL3-hook-agent-jev-shadow.sh covers the pairing.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
-. "$AGENTS_DIR/tests/hooks/feature-2460-jev-shadow/_lib.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2460-jev-shadow/_lib.sh"
 mock_start
 REPORT="$REPO_N/bin/jev-report"
 P='((o && o.points && o.points["complexity-judge"]) || {})'

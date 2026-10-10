@@ -2,10 +2,10 @@
 # Tests: agents/install/linux/dotfileslink.sh, agents/install/win/dotfileslink.ps1, agents/profile-snippet.ps1, agents/profile-snippet.sh, bin/scan-outbound, bin/scan-outbound.sh, bin/session-sync, bin/session-sync.sh, bin/split-history.py, hooks/commit-msg, hooks/pre-commit
 # Tags: scan, filter, outbound, hook, git, scope:issue-specific
 # Smoke tests for agents repo split (steps 2, 8, 16).
-# Verifies: settings.json hook path uses $AGENTS_CONFIG_DIR/hooks/,
+# Verifies: settings.json hook path uses $AGENTS_MAIN_ROOT/hooks/,
 #           dotfiles → agents compat blocks removed,
 #           .agents_profile sourcing added on both shells,
-#           dotfileslink scripts write profile snippet with AGENTS_CONFIG_DIR
+#           dotfileslink scripts write profile snippet with AGENTS_MAIN_ROOT
 #           and CLAUDE.md/settings.json symlink repair logic.
 set -euo pipefail
 
@@ -33,6 +33,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUB_DIR="$SCRIPT_DIR/feature-agents-repo-split"
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/../lib/home-userprofile-pin.sh"
 # shellcheck source=/dev/null
 . "$SUB_DIR/section-n1-n15.sh"
 # shellcheck source=/dev/null

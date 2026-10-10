@@ -7,9 +7,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-CHECK="$AGENTS_DIR/bin/check-private-repo-name.js"
-LIST="$AGENTS_DIR/bin/list-private-repo-names.js"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+CHECK="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/check-private-repo-name.js"
+LIST="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/list-private-repo-names.js"
 
 PASS=0
 FAIL=0

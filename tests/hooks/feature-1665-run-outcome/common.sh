@@ -38,12 +38,12 @@ run_with_timeout() {
     else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
 }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_COMMON_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # Node on Windows cannot require() a Git Bash /c/... path (it maps to C:\c\...).
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-AGENTS_WIN="$(nodepath "$AGENTS_DIR")"
+AGENTS_WIN="$(nodepath "$_COMMON_SCRIPT_CHECKOUT_ROOT")"
 
-RUN_TESTS_HOOK="$AGENTS_DIR/hooks/workflow-run-tests.js"
+RUN_TESTS_HOOK="$_COMMON_SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js"
 OUTCOME_JS="$AGENTS_WIN/hooks/workflow-run-tests/outcome.js"
 EXEC_MODEL_JS="$AGENTS_WIN/hooks/workflow-run-tests/exec-model.js"
 WD_WRITE_JS="$AGENTS_WIN/hooks/enforce-worktree/worker-dispatch-write.js"

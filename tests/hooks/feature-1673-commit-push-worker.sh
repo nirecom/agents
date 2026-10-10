@@ -17,18 +17,18 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_CP1673_TL1_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
-CAPABILITY_JS="$AGENTS_DIR/bin/worker-dispatch/capability.js"
-ANCHOR_JS="$AGENTS_DIR/bin/worker-dispatch/anchor.js"
-WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
+CAPABILITY_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/capability.js"
+ANCHOR_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/anchor.js"
+WORKER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/commit-push.js"
 # commit-push.js is dispatch + re-export only (rules/coding/file-split.md
 # Pattern A); the literals groups D and E scan live in the sibling folder, so
 # both groups read the WHOLE implementation and a literal moving between these
 # files is not a behaviour change.
-WORKER_DIR="$AGENTS_DIR/bin/worker-dispatch/workers/commit-push"
+WORKER_DIR="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/commit-push"
 WORKER_SRCS=("$WORKER_JS" "$WORKER_DIR/gate.js" "$WORKER_DIR/procedure.js" "$WORKER_DIR/push.js" "$WORKER_DIR/pr.js")
-SKILL_MD="$AGENTS_DIR/skills/commit-push/SKILL.md"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/commit-push/SKILL.md"
 
 # A shrunken file list would report an absent literal as a missing feature and,
 # worse, turn the ISSUE_CLOSE_SKILL row green because the file that could hold
@@ -36,7 +36,7 @@ SKILL_MD="$AGENTS_DIR/skills/commit-push/SKILL.md"
 worker_srcs_missing() {
     local f out=""
     for f in "${WORKER_SRCS[@]}"; do
-        [ -f "$f" ] || out="$out ${f#"$AGENTS_DIR/"}"
+        [ -f "$f" ] || out="$out ${f#"$SCRIPT_CHECKOUT_ROOT/"}"
     done
     echo "$out" | xargs
 }
@@ -136,13 +136,13 @@ group_a() {
       const t = (k) => (spec[k] ? String(spec[k].type) : "(absent)");
       const r = (k) => (spec[k] ? (spec[k].required === true ? "req" : "opt") : "(absent)");
       for (const k of ["commit_message","branch","closes_issues","pr_body_template","wip_mode",
-                       "enforce_worktree","agents_config_dir","artifact_dir","worktree_path","session_id"]) {
+                       "enforce_worktree","script_checkout_root","artifact_dir","worktree_path","session_id"]) {
         p("type_" + k, t(k));
         p("req_" + k, r(k));
       }
       p("unknown_fields", Object.keys(spec).filter((k) => ![
         "commit_message","branch","closes_issues","pr_body_template","wip_mode",
-        "enforce_worktree","agents_config_dir","artifact_dir","worktree_path","session_id",
+        "enforce_worktree","script_checkout_root","artifact_dir","worktree_path","session_id",
       ].includes(k)).sort().join(","));
       p("write_scopes", (w.writeScopes || []).slice().sort().join(","));
       p("external", ((w.binaries || {}).external || []).slice().sort().join(","));
@@ -178,7 +178,7 @@ group_a() {
     assert_eq "spec/pr_body_template-optional" "opt" "$(ev req_pr_body_template)"
     assert_eq "spec/wip_mode-type" "bool" "$(ev type_wip_mode)"
     assert_eq "spec/enforce_worktree-type" "enum:on|off" "$(ev type_enforce_worktree)"
-    assert_eq "spec/agents_config_dir-type" "anchor-acd" "$(ev type_agents_config_dir)"
+    assert_eq "spec/script_checkout_root-type" "anchor-script-checkout-root" "$(ev type_script_checkout_root)"
     assert_eq "spec/artifact_dir-type" "path-under-plansdir" "$(ev type_artifact_dir)"
     assert_eq "spec/no-invented-fields" "" "$(ev unknown_fields)"
 
@@ -192,7 +192,7 @@ group_a() {
     assert_eq "registry/script-keys" "bootstrapProbe,scanOutbound,unstagedCheck,workflowGate" "$(ev scripts)"
     # D1: the gate must be the reviewed, merged copy — never the branch's own.
     assert_eq "registry/gate-script-rel" "hooks/workflow-gate.js" "$(ev gate_script_rel)"
-    assert_eq "registry/gate-script-anchor" "acd" "$(ev gate_script_anchor)"
+    assert_eq "registry/gate-script-anchor" "script-checkout-root" "$(ev gate_script_anchor)"
 }
 
 # ===========================================================================
@@ -457,7 +457,7 @@ const payload = {
 };
 const ctx = {
   entry: { name: "commit-push", binaries: { external: [], scripts: {} } },
-  anchors: { acd: path.join(tmp, "acd-none"), plansDir: tmp },
+  anchors: { scriptCheckoutRoot: path.join(tmp, "script-checkout-root-none"), plansDir: tmp },
   path: path,
   fsguard: { writeFile: (t) => t },
 };
@@ -469,7 +469,7 @@ NODE
         local ftmp="$TMPD/f-$RANDOM"; mkdir -p "$ftmp"
         run_with_timeout 40 env "F_TMP=$(nodepath "$ftmp")" "F_PR_EXISTS=${2:-0}" \
             "F_MR_EXISTS=${3:-0}" "F_ENFORCE=${4:-on}" \
-            node "$(nodepath "$F_DRIVER")" "$(nodepath "$AGENTS_DIR")" "$1" 2>/dev/null
+            node "$(nodepath "$F_DRIVER")" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$1" 2>/dev/null
     }
     assert_eq "run-status/github no PR -> pr_created" "pr_created" \
         "$(run_status 'https://github.com/acme/widgets.git' 0 0 on)"

@@ -145,7 +145,7 @@ TAIL_EOF
 
 invoke() {
     local agents_dir="$1"; shift
-    AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
+    run_with_timeout "$agents_dir/bin/run-codex-review-loop" "$@"
 }
 
 # --force-round 2: a fresh fixture has no round counter, so a bare --round 2 is

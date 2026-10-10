@@ -3,19 +3,19 @@
 # Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/capability.js, skills/issue-close-stage/SKILL.md
 # Tags: worker-dispatch, issue-close-stage, registry, capability, payload, status-vocabulary, TL1, scope:issue-specific
 # #1673: the issue-close-stage subagent became a dispatcher worker; its six payload
-# fields, its status vocabulary, repo-ref `issue_repo`, and echo-only ACD are pinned.
+# fields, its status vocabulary, repo-ref `issue_repo`, and echo-only script checkout root are pinned.
 # TL3 gap: a real /issue-close-stage turn — tests/bin/TL3-issue-close-stage-dispatch.sh
 # (RUN_TL3-gated). Mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
-CAPABILITY_JS="$AGENTS_DIR/bin/worker-dispatch/capability.js"
-SKILL_MD="$AGENTS_DIR/skills/issue-close-stage/SKILL.md"
-CHAIN_SH="$AGENTS_DIR/skills/issue-close-stage/scripts/run-stage-chain.sh"
-AGENT_MD="$AGENTS_DIR/agents/issue-close-stage-worker.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
+CAPABILITY_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/capability.js"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-stage/SKILL.md"
+CHAIN_SH="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-stage/scripts/run-stage-chain.sh"
+AGENT_MD="$SCRIPT_CHECKOUT_ROOT/agents/issue-close-stage-worker.md"
 
 PASS=0
 FAIL=0
@@ -76,23 +76,23 @@ group_registry() {
     assert_eq "registry/entry-present" "1" "$(rv entry)"
     # The six fields of agents/issue-close-stage-worker.md — no more, no fewer.
     assert_eq "registry/payload-field-set" \
-        "agents_config_dir,artifact_dir,issue_number,issue_repo,owner_repo,worktree_path" \
+        "artifact_dir,issue_number,issue_repo,owner_repo,script_checkout_root,worktree_path" \
         "$(rv fields)"
     assert_eq "registry/issue_number" "int:req" "$(rv f.issue_number)"
     assert_eq "registry/issue_number-min-1" "1" "$(rv issue_number_min)"
     assert_eq "registry/worktree_path" "family-worktree:req" "$(rv f.worktree_path)"
     assert_eq "registry/owner_repo" "owner-repo:req" "$(rv f.owner_repo)"
-    assert_eq "registry/agents_config_dir" "anchor-acd:opt" "$(rv f.agents_config_dir)"
+    assert_eq "registry/script_checkout_root" "anchor-script-checkout-root:opt" "$(rv f.script_checkout_root)"
     assert_eq "registry/artifact_dir" "path-under-plansdir:opt" "$(rv f.artifact_dir)"
     assert_eq "registry/issue_repo" "repo-ref:opt" "$(rv f.issue_repo)"
-    assert_eq "registry/argspec-standard" "enum-worker,anchor-main-root,path-plansdir" "$(rv argspec)"
+    assert_eq "registry/argspec-standard" "enum-worker,anchor-target-main-root,path-plansdir" "$(rv argspec)"
     # #1899: repo identity is resolved with `git remote get-url origin` instead of
     # `gh repo view`, so `git` joins the declared external binaries. The registry
     # is the SSOT the dispatcher allow-lists against — an undeclared `git` would
     # be refused at spawn time.
     assert_eq "registry/external-binaries" "bash,gh,git" "$(rv external)"
     assert_eq "registry/script-keys" "stageChain" "$(rv script_keys)"
-    assert_eq "registry/chain-anchor-acd" "acd" "$(rv chain_anchor)"
+    assert_eq "registry/chain-anchor-script-checkout-root" "script-checkout-root" "$(rv chain_anchor)"
     assert_eq "registry/chain-rel" "skills/issue-close-stage/scripts/run-stage-chain.sh" "$(rv chain_rel)"
     assert_eq "registry/envpassthrough-tokens-only" "GH_TOKEN,GITHUB_TOKEN" "$(rv envpass)"
     # run-stage-chain.sh exports ISSUE_CLOSE_SKILL=1 itself; the dispatcher must
@@ -104,14 +104,14 @@ group_registry() {
 }
 
 # ===========================================================================
-# Group B — capability edges: repo-ref and the echo-only ACD
+# Group B — capability edges: repo-ref and the echo-only script checkout root
 # ===========================================================================
 group_capability() {
     if [ ! -f "$CAPABILITY_JS" ]; then
         fail "capability/module-present" "missing $CAPABILITY_JS"
         return
     fi
-    local probe="$AGENTS_DIR/tests/feature-1673-issue-close-stage-lib/checkfield-probe.js"
+    local probe="$SCRIPT_CHECKOUT_ROOT/tests/feature-1673-issue-close-stage-lib/checkfield-probe.js"
     if [ ! -f "$probe" ]; then
         fail "capability/probe-present" "missing $probe"
         return
@@ -133,11 +133,11 @@ repo-ref-empty           | repo-ref  |                            | reject
 repo-ref-dotdot          | repo-ref  | ../etc                     | reject
 repo-ref-shell-meta      | repo-ref  | owner/repo;id              | reject
 repo-ref-space           | repo-ref  | owner repo                 | reject
-acd-exact                | anchor-acd | @ACD@                     | ok
-acd-parent               | anchor-acd | @ACD_PARENT@              | reject
-acd-sibling-lookalike    | anchor-acd | @ACD@-other                | reject
-acd-empty                | anchor-acd |                            | reject
-acd-non-string           | anchor-acd | @NUMBER@                   | reject
+script-checkout-root-exact             | anchor-script-checkout-root | @SCR@         | ok
+script-checkout-root-parent            | anchor-script-checkout-root | @SCR_PARENT@  | reject
+script-checkout-root-sibling-lookalike | anchor-script-checkout-root | @SCR@-other   | reject
+script-checkout-root-empty             | anchor-script-checkout-root |               | reject
+script-checkout-root-non-string        | anchor-script-checkout-root | @NUMBER@      | reject
 TABLE
 }
 
@@ -177,7 +177,7 @@ group_status_vocabulary() {
     # Every payload field name the registry declares must be visible in the SKILL
     # that builds the payload — a rename on one side alone is the failure mode.
     local f
-    for f in issue_number worktree_path owner_repo agents_config_dir artifact_dir issue_repo; do
+    for f in issue_number worktree_path owner_repo script_checkout_root artifact_dir issue_repo; do
         if grep -q "$f" "$SKILL_MD"; then
             pass "skill/payload-field-$f"
         else

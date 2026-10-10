@@ -4,8 +4,8 @@
 # Static validation: settings.json permission rules for doc-append wrapper
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-SETTINGS="$AGENTS_DIR/settings.json"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }

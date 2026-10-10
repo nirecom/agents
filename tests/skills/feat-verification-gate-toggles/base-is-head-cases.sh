@@ -5,11 +5,10 @@
 set -u
 
 _TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(git -C "$_TEST_DIR" rev-parse --show-toplevel 2>/dev/null)"
-[ -n "$AGENTS_DIR" ] || AGENTS_DIR="$(cd "$_TEST_DIR/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
-GATE_SRC="$AGENTS_DIR/bin/check-verification-gate.sh"
-BIH_RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+GATE_SRC="$SCRIPT_CHECKOUT_ROOT/bin/check-verification-gate.sh"
+BIH_RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -38,7 +37,7 @@ trap 'rm -rf "$tmp"' EXIT
 export WORKFLOW_STATE_DIR="$tmp/wf"; mkdir -p "$WORKFLOW_STATE_DIR"
 export WORKFLOW_PLANS_DIR="$tmp/plans"; mkdir -p "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-unset AGENTS_CONFIG_DIR 2>/dev/null || true
+unset AGENTS_MAIN_ROOT 2>/dev/null || true
 
 # The gate resolves its sibling via BASH_SOURCE, so a copy (not symlink) is required.
 make_gate_bin() {

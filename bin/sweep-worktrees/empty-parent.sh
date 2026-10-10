@@ -8,7 +8,7 @@
 #     Populates the REGISTERED_WT_PARENTS associative array with
 #     WORKTREE_BASE_DIR/<task-name> parent directories referenced by any
 #     discovered main repo's `git worktree list`. Inputs: $WORKTREE_BASE_DIR,
-#     $MAIN_ROOT. Mutates: REGISTERED_WT_PARENTS, DISCOVERED_MAIN_ROOTS.
+#     $TARGET_MAIN_ROOT. Mutates: REGISTERED_WT_PARENTS, DISCOVERED_TARGET_MAIN_ROOTS.
 #
 #   sweep_empty_parents
 #     Reclaims depth-1 task-name parent directories under WORKTREE_BASE_DIR
@@ -25,14 +25,14 @@ discover_registered_wt_parents() {
   if [[ -z "${WORKTREE_BASE_DIR:-}" ]] || [[ ! -d "$WORKTREE_BASE_DIR" ]]; then
     return 0
   fi
-  DISCOVERED_MAIN_ROOTS["$MAIN_ROOT"]=1
-  local wt_leaf common_dir main_root_cand
+  DISCOVERED_TARGET_MAIN_ROOTS["$TARGET_MAIN_ROOT"]=1
+  local wt_leaf common_dir target_main_root_cand
   while IFS= read -r -d '' wt_leaf; do
     common_dir="$(git -C "$wt_leaf" rev-parse --git-common-dir 2>/dev/null || true)"
     if [[ -n "$common_dir" ]]; then
-      main_root_cand="$(cd "$common_dir/.." 2>/dev/null && pwd || true)"
-      if [[ -n "$main_root_cand" ]]; then
-        DISCOVERED_MAIN_ROOTS["$main_root_cand"]=1
+      target_main_root_cand="$(cd "$common_dir/.." 2>/dev/null && pwd || true)"
+      if [[ -n "$target_main_root_cand" ]]; then
+        DISCOVERED_TARGET_MAIN_ROOTS["$target_main_root_cand"]=1
       fi
     fi
   done < <(find "$WORKTREE_BASE_DIR" -mindepth 2 -maxdepth 2 -type d -print0 2>/dev/null)
@@ -42,7 +42,7 @@ discover_registered_wt_parents() {
   local wt_base_norm
   wt_base_norm="$(norm_path "$WORKTREE_BASE_DIR")"
   local repo_root line wt_path wt_path_norm rel task_seg
-  for repo_root in "${!DISCOVERED_MAIN_ROOTS[@]}"; do
+  for repo_root in "${!DISCOVERED_TARGET_MAIN_ROOTS[@]}"; do
     while IFS= read -r line; do
       case "$line" in
         worktree\ *)

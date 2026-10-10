@@ -20,7 +20,7 @@
 # sentinel-looking string" simplification would break.
 
 # _mint <tmp_node> <sid>: a valid, reason-bound, workflow-target clearance token.
-_mint() { "$RWT" 15 node "$PROBE" mktoken "$_AGENTS_DIR_NODE" "$1" "$2" workflow workflow-bug >/dev/null 2>&1; }
+_mint() { "$RWT" 15 node "$PROBE" mktoken "$_SCRIPT_CHECKOUT_ROOT_NODE" "$1" "$2" workflow workflow-bug >/dev/null 2>&1; }
 _count_glob() { local n; n=$(ls -1 $1 2>/dev/null | wc -l); printf '%s' "$(printf '%s' "$n" | tr -d ' ')"; }
 
 run_M_multi_sentinel() {

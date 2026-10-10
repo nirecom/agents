@@ -17,9 +17,9 @@ d2099_has_re() {
 
 # CS-1..: each reader passes --stage with its own stage name and no other.
 d2099_stage_wiring() {
-    local mdp="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
-    local wt="$AGENTS_DIR/skills/write-tests/SKILL.md"
-    local wcd="$AGENTS_DIR/skills/write-code/SKILL.md"
+    local mdp="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md"
+    local wt="$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md"
+    local wcd="$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md"
 
     assert_eq "CS-1 MDP-3 reads with --stage detail" "yes" \
         "$(d2099_has_re "$mdp" 'read-complexity-evaluation.*--stage detail')"
@@ -64,9 +64,9 @@ d2099_stage_wiring() {
 # four-way reinterpretation #2099 exists to remove.
 d2099_no_thresholds() {
     local f label
-    for f in "$AGENTS_DIR/skills/make-detail-plan/SKILL.md" \
-             "$AGENTS_DIR/skills/write-tests/SKILL.md" \
-             "$AGENTS_DIR/skills/write-code/SKILL.md"; do
+    for f in "$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md" \
+             "$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md" \
+             "$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md"; do
         label="$(basename "$(dirname "$f")")"
         assert_eq "CS-12 $label states no file-count threshold" "no" \
             "$(d2099_has_re "$f" '[0-9]+ (or more|\+) *(files|ファイル)')"
@@ -86,8 +86,8 @@ d2099_step_has() {
 
 # CS-15..: the two write points are symmetric — signals only, never a verdict.
 d2099_write_points() {
-    local ci="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
-    local wi="$AGENTS_DIR/skills/workflow-init/SKILL.md"
+    local ci="$SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
+    local wi="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
 
     assert_eq "CS-15 clarify-intent CI-C1b still drives record-complexity-and-skip" "yes" \
         "$(d2099_step_has "$ci" CI-C1b "record-complexity-and-skip")"
@@ -125,9 +125,9 @@ d2099_write_points() {
 # what proves the pattern is anchored on the argument and not on some other
 # token that happens to sit on the line.
 d2099_stage_pattern_teeth() {
-    local mdp="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
-    local wt="$AGENTS_DIR/skills/write-tests/SKILL.md"
-    local wcd="$AGENTS_DIR/skills/write-code/SKILL.md"
+    local mdp="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md"
+    local wt="$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md"
+    local wcd="$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md"
 
     local n=22
     local row file stage cli
@@ -182,7 +182,7 @@ d2099_consumer_fallback_rules() {
     local row name step f
     for row in "make-detail-plan|MDP-3" "write-tests|WT-6" "write-code|WCD-3"; do
         name="${row%%|*}"; step="${row##*|}"
-        f="$AGENTS_DIR/skills/$name/SKILL.md"
+        f="$SCRIPT_CHECKOUT_ROOT/skills/$name/SKILL.md"
         assert_eq "CS-28 $step substitutes S0-undecidable for an unparseable or unsafe judged csv" "yes" \
             "$(d2099_step_has "$f" "$step" "S0-undecidable")"
         assert_eq "CS-29 $step writes that csv with the Write tool, never Bash" "yes" \

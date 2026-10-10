@@ -10,9 +10,9 @@
 # category: skill-orchestration.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # shellcheck source=common.sh
-. "$AGENTS_DIR/tests/bin/feat-2490-next-step-gate/common.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feat-2490-next-step-gate/common.sh"
 
 ALL_GATE=""; NCALL=0
 gate() {
@@ -33,15 +33,15 @@ done
 put_plan gm-sc detail "$(printf "## Adopted approach: B, don't reuse A\nReplace the helper.")"
 put_plan gm-same detail "$(printf '## Adopted approach: A\nKeep the helper.')"
 # Stub detectors: one prints a line carrying an apostrophe (exit 0), one fails (exit 2).
-CFG_APOS="$GT_BASE/cfg-apos"; mk_cfg "$CFG_APOS"
+CFG_APOS="$GT_BASE/cfg-apos"; mk_tree "$CFG_APOS"
 printf "#!/usr/bin/env bash\necho \"approach changed: don't reuse A\"\nexit 0\n" > "$CFG_APOS/bin/detect-scope-change.sh"
-CFG_S2="$GT_BASE/cfg-s2"; mk_cfg "$CFG_S2"
+CFG_S2="$GT_BASE/cfg-s2"; mk_tree "$CFG_S2"
 printf '#!/usr/bin/env bash\nexit 2\n' > "$CFG_S2/bin/detect-scope-change.sh"
-CFG_E4="$GT_BASE/cfg-e4"; mk_cfg "$CFG_E4"; printf '#!/usr/bin/env bash\nexit 4\n' > "$CFG_E4/bin/get-config-var"
+CFG_E4="$GT_BASE/cfg-e4"; mk_tree "$CFG_E4"; printf '#!/usr/bin/env bash\nexit 4\n' > "$CFG_E4/bin/get-config-var"
 
 case_begin "relocated-detector-exists" "bin/detect-scope-change.sh"
-check "bin/detect-scope-change.sh exists" "yes" "$([ -f "$AGENTS_DIR/bin/detect-scope-change.sh" ] && echo yes || echo no)"
-check "the skill-local copy is gone" "no" "$([ -f "$AGENTS_DIR/skills/make-detail-plan/scripts/detect-scope-change.sh" ] && echo yes || echo no)"
+check "bin/detect-scope-change.sh exists" "yes" "$([ -f "$SCRIPT_CHECKOUT_ROOT/bin/detect-scope-change.sh" ] && echo yes || echo no)"
+check "the skill-local copy is gone" "no" "$([ -f "$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/scripts/detect-scope-change.sh" ] && echo yes || echo no)"
 case_end
 
 echo "=== detail scope change ==="
@@ -72,7 +72,7 @@ gate --session gm-sc --scope-change-approved
 check "ON + change + flag: still ask" "ask" "$(val GATE_ACTION)"
 gate --session gm-same
 check "ON, no change: ask" "ask" "$(val GATE_ACTION)"
-OUT="$(AGENTS_CONFIG_DIR="$(np "$CFG_E4")" run_next_step --gate --session gm-same 2>/dev/null || true)"
+OUT="$(run_next_step_in "$CFG_E4" --gate --session gm-same 2>/dev/null || true)"
 ALL_GATE="$ALL_GATE"$'\n'"$OUT"; NCALL=$((NCALL + 1))
 check "ERROR: ask" "ask" "$(val GATE_ACTION)"
 check "ERROR: value line" "ERROR" "$(val GATE_CONFIRM_DETAIL)"
@@ -85,14 +85,14 @@ check "OFF, no change: proceed" "proceed" "$(val GATE_ACTION)"
 gate --session gm-nodet
 check "OFF, detail.md absent: proceed" "proceed" "$(val GATE_ACTION)"
 check "detail.md absent is not a check failure" no "$(has scope-change-check-failed "$(reason)")"
-OUT="$(AGENTS_CONFIG_DIR="$(np "$CFG_S2")" run_next_step --gate --session gm-sc 2>/dev/null || true)"
+OUT="$(run_next_step_in "$CFG_S2" --gate --session gm-sc 2>/dev/null || true)"
 ALL_GATE="$ALL_GATE"$'\n'"$OUT"; NCALL=$((NCALL + 1))
 check "detector status 2: proceed" "proceed" "$(val GATE_ACTION)"
 check "detector status 2: REASON flags the failure" yes "$(has scope-change-check-failed "$(reason)")"
 case_end
 
 case_begin "apostrophe-stripped-from-change-line" "bin/workflow/lib/next-step/gate-mode.js"
-OUT="$(AGENTS_CONFIG_DIR="$(np "$CFG_APOS")" run_next_step --gate --session gm-sc 2>/dev/null || true)"
+OUT="$(run_next_step_in "$CFG_APOS" --gate --session gm-sc 2>/dev/null || true)"
 ALL_GATE="$ALL_GATE"$'\n'"$OUT"; NCALL=$((NCALL + 1))
 check "apostrophe line: present-and-stop" "present-and-stop" "$(val GATE_ACTION)"
 check "apostrophe line: embedded with the quote removed" yes "$(has "approach changed: dont reuse A" "$(hint)")"
@@ -192,7 +192,7 @@ echo "=== detector failure warning reaches GATE_HINT ==="
 case_begin "detector-failure-warns-in-hint" "bin/workflow/lib/next-step/gate-mode.js"
 for row in off:proceed on:ask; do
   export CONFIRM_DETAIL="${row%%:*}"
-  OUT="$(AGENTS_CONFIG_DIR="$(np "$CFG_S2")" run_next_step --gate --session gm-same 2>/dev/null || true)"
+  OUT="$(run_next_step_in "$CFG_S2" --gate --session gm-same 2>/dev/null || true)"
   ALL_GATE="$ALL_GATE"$'\n'"$OUT"; NCALL=$((NCALL + 1))
   check "detector exit 2, ${row%%:*}: ${row#*:}" "${row#*:}" "$(val GATE_ACTION)"
   check "detector exit 2, ${row%%:*}: HINT says the check failed" yes "$(has "scope-change check failed" "$(hint)")"

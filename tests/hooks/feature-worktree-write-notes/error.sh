@@ -18,7 +18,7 @@ test_Err1_appendExclude_git_is_file() {
     local stderr
     stderr="$(lib_eval "
         try {
-            lib.appendExclude({mainRoot: process.argv[1], pattern: 'WORKTREE_NOTES.md'});
+            lib.appendExclude({targetMainRoot: process.argv[1], pattern: 'WORKTREE_NOTES.md'});
             process.stdout.write('NOTHROW');
         } catch (e) {
             process.stderr.write(e.message);
@@ -42,7 +42,7 @@ test_Err2_appendExclude_no_git_dir() {
     local stderr
     stderr="$(lib_eval "
         try {
-            lib.appendExclude({mainRoot: process.argv[1], pattern: 'WORKTREE_NOTES.md'});
+            lib.appendExclude({targetMainRoot: process.argv[1], pattern: 'WORKTREE_NOTES.md'});
             process.stdout.write('NOTHROW');
         } catch (e) {
             process.stderr.write(e.message);

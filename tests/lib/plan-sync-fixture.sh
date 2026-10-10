@@ -3,10 +3,10 @@
 # Tests: tests/lib/plan-sync-fixture.sh
 # Tags: scope:issue-specific, shared-lib, plan-sync, fixture
 # Shared #2513 plan-sync fixture; rules: detail.md "テストの構成" (fixture helper).
-# Needs AGENTS_DIR. Defines only psf_* helpers + setup_ssh_stub, never pass/fail
+# Needs SCRIPT_CHECKOUT_ROOT. Defines only psf_* helpers + setup_ssh_stub, never pass/fail
 # (psf_tag_unimplemented_fails wraps the caller's fail only on request). Caller owns EXIT trap.
 
-PSF_AGENTS_DIR="${AGENTS_DIR:?plan-sync-fixture.sh: set AGENTS_DIR before sourcing}"
+PSF_AGENTS_DIR="${SCRIPT_CHECKOUT_ROOT:?plan-sync-fixture.sh: set SCRIPT_CHECKOUT_ROOT before sourcing}"
 PSF_LIB="$PSF_AGENTS_DIR/hooks/lib/plan-sync.js"
 PSF_ORIGIN_GH="git@github.com:test-owner/test-repo.git"
 PSF_ORIGIN_E2E="ssh://git@github.com/test-owner/test-repo.git"
@@ -30,14 +30,14 @@ psf_git_version_ok() {
   (( major > 2 || (major == 2 && minor >= 32) ))
 }
 
-# psf_setup — temp root, dual-pin, empty config dir, isolated git config, neutral cwd.
+# psf_setup — temp root, dual-pin, empty agents root, isolated git config, neutral cwd.
 psf_setup() {
   PSF_ROOT="$(psf_np "$(mktemp -d 2>/dev/null || mktemp -d -t psf)")"
   mkdir -p "$PSF_ROOT/workflow-state" "$PSF_ROOT/plans" "$PSF_ROOT/cfg" \
     "$PSF_ROOT/neutral" "$PSF_ROOT/transcripts"
   export WORKFLOW_STATE_DIR="$PSF_ROOT/workflow-state"
   export WORKFLOW_PLANS_DIR="$PSF_ROOT/plans"
-  export AGENTS_CONFIG_DIR="$PSF_ROOT/cfg"
+  export AGENTS_MAIN_ROOT="$PSF_ROOT/cfg"
   export CLAUDE_TRANSCRIPT_BASE_DIR="$PSF_ROOT/transcripts"
   export PLAN_SYNC_REMOTE_URL=""
   export PSF_LIB_PATH; PSF_LIB_PATH="$(psf_np "$PSF_LIB")"

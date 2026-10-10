@@ -10,7 +10,7 @@
 # behaviours (reset, worktree, inheritance, intervals, provenance, final_report).
 #
 # Each sub-script is self-contained: its own temp WORKFLOW_STATE_DIR, its own fixture
-# AGENTS_CONFIG_DIR, and its own temp WORKFLOW_PLANS_DIR / HOME.
+# AGENTS_MAIN_ROOT, and its own temp WORKFLOW_PLANS_DIR / HOME.
 #
 # NO SKIP PATH: this suite is written test-first, so until the #1733 implementation
 # lands every sub-suite is EXPECTED to fail and this dispatcher is expected to exit 1.
@@ -24,6 +24,7 @@
 # Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUITE="$SCRIPT_DIR/feature-1733-state-event-stream"

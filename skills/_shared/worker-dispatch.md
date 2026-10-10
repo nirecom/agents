@@ -2,15 +2,15 @@
 
 Shared by every caller of a plain-script worker. Worker names, payload fields, defaults, and stdout shape: `hooks/lib/worker-dispatch-registry.js` (SSOT).
 
-WD-1. Resolve the invocation paths: `node "$AGENTS_CONFIG_DIR/bin/worker-dispatch-paths"` (pass the target repo directory as the sole argument when the worker acts on a sibling repository). Read `DISPATCH` / `MAIN_ROOT` / `PLANS_DIR` from its output.
+WD-1. Resolve the invocation paths: `node "$AGENTS_MAIN_ROOT/bin/worker-dispatch-paths"` (pass the target repo directory as the sole argument when the worker acts on a sibling repository). Read `DISPATCH` / `TARGET_MAIN_ROOT` / `PLANS_DIR` from its output.
 
-WD-2. Write the draft (Write tool) to `<PLANS_DIR>/<session-id>-worker-<worker-name>[-<seq>].draft.json` (`-<seq>` when one skill dispatches the same worker more than once; unresolvable session id → `unknown-session`), then publish it in one standalone call: `node "$AGENTS_CONFIG_DIR/bin/worker-dispatch-payload" --session <session-id> --worker <worker-name> [--seq <n>] --draft <draft-path>`. Its stdout `PAYLOAD=<path>` is the WD-3 `<payload-path>`. Never put a control path (state/outcome file) in the payload — the dispatcher derives it.
+WD-2. Write the draft (Write tool) to `<PLANS_DIR>/<session-id>-worker-<worker-name>[-<seq>].draft.json` (`-<seq>` when one skill dispatches the same worker more than once; unresolvable session id → `unknown-session`), then publish it in one standalone call: `node "$AGENTS_MAIN_ROOT/bin/worker-dispatch-payload" --session <session-id> --worker <worker-name> [--seq <n>] --draft <draft-path>`. Its stdout `PAYLOAD=<path>` is the WD-3 `<payload-path>`. Never put a control path (state/outcome file) in the payload — the dispatcher derives it.
 
 WD-3. Dispatch (Bash) — this is the ENTIRE command, with the paths from WD-1 and WD-2 as literal absolute paths:
 
-    node "<DISPATCH>" <worker-name> "<MAIN_ROOT>" "<payload-path>"
+    node "<DISPATCH>" <worker-name> "<TARGET_MAIN_ROOT>" "<payload-path>"
 
-WD-4. Read the rendered contract from the command's stdout. Exit 0 always accompanies it, including for validation failures (`status: failed`); a payload that was already dispatched also exits 1 — publish a new `--seq` instead. Exit 2 means the invocation itself was unusable — wrong arity, unknown worker name, or a `<MAIN_ROOT>` that is not a main worktree — and no worker ran.
+WD-4. Read the rendered contract from the command's stdout. Exit 0 always accompanies it, including for validation failures (`status: failed`); a payload that was already dispatched also exits 1 — publish a new `--seq` instead. Exit 2 means the invocation itself was unusable — wrong arity, unknown worker name, or a `<TARGET_MAIN_ROOT>` that is not a main worktree — and no worker ran.
 
 WD-5. One dispatch call acts on exactly one repository. For a sibling repo, re-run WD-1 against that repo and dispatch again.
 

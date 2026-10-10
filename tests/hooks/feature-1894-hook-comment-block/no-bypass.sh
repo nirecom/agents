@@ -63,7 +63,7 @@ b2_static_no_marker_reference() {
 b2b_static_control() {
     # Without this, B2 passes trivially the moment the marker helpers are
     # renamed, and the rename is exactly when the guarantee needs re-checking.
-    local ref="$AGENTS_DIR/hooks/enforce-worktree.js"
+    local ref="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js"
     if [ ! -f "$ref" ]; then
         skip "B2b: hooks/enforce-worktree.js not found — cannot control the marker-name grep"
         return
@@ -108,7 +108,7 @@ b3_no_ad_hoc_env_escape() {
 # is the one that gets acted on.
 # ============================================================================
 b4_documented_as_non_honoring() {
-    local doc="$AGENTS_DIR/docs/architecture/claude-code/marker-bypass-contract.md"
+    local doc="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/marker-bypass-contract.md"
     if [ ! -f "$doc" ]; then
         skip "B4: $doc not found — bypass contract table unavailable"
         return

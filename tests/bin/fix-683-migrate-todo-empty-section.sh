@@ -8,11 +8,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TODO_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/migrate-todo.sh"
-ORCH_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/orchestrate.sh"
-STATE_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/state.sh"
-FIXTURE_DIR="$AGENTS_DIR/tests/fixtures/migration"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TODO_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/migrate-todo.sh"
+ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
+STATE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/state.sh"
+FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration"
 
 PASS=0
 FAIL=0
@@ -64,14 +64,13 @@ setup_repo() {
     : > "$MOCK_LOG"
 
     export PATH="$MOCK_DIR:$PATH"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 }
 
 teardown_repo() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset MOCK_LOG MOCK_COUNTER AGENTS_CONFIG_DIR
+    unset MOCK_LOG MOCK_COUNTER
 }
 
 count_create_calls() {
@@ -214,7 +213,6 @@ teardown_repo
 # After the fix, orchestrate.sh's todo_entries_total() must exclude empty
 # sections. We replicate the fixed awk logic inline to test the expected
 # behavior — this tests the fixed semantics rather than the exact implementation.
-#
 # Fixed awk pattern (expected after fix): count ## sections that have at least
 # one non-blank body line before the next ## header or EOF.
 # ---------------------------------------------------------------------------

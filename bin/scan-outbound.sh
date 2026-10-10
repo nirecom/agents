@@ -58,10 +58,10 @@ fi
 unset _hs_entry _hs_label _hs_rest _hs_group _hs_re
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# Anchor: AGENTS_CONFIG_DIR when set (handles linked worktrees where gitignored
+# Anchor: AGENTS_MAIN_ROOT when set (handles linked worktrees where gitignored
 # dotfiles exist only in the main repo root, not the worktree root); falls back
 # to SCRIPT_DIR/.. for direct invocation and test sandboxes that unset it.
-_anchor="${AGENTS_CONFIG_DIR:-$SCRIPT_DIR/..}"; ALLOWLIST="$_anchor/.private-info-allowlist"; BLOCKLIST="$_anchor/.private-info-blocklist"
+_anchor="${AGENTS_MAIN_ROOT:-$SCRIPT_DIR/..}"; ALLOWLIST="$_anchor/.private-info-allowlist"; BLOCKLIST="$_anchor/.private-info-blocklist"
 
 VIOLATIONS=0
 WARNINGS=0
@@ -105,7 +105,7 @@ fi
 BLOCK_HARD_PATTERNS=()
 BLOCK_WARN_PATTERNS=()
 if [ ! -f "$BLOCKLIST" ]; then
-    printf 'Error: blocklist not found at expected path (AGENTS_CONFIG_DIR resolution) — cannot scan\n' >&2
+    printf 'Error: blocklist not found at expected path (AGENTS_MAIN_ROOT resolution) — cannot scan\n' >&2
     exit 4
 elif [ -f "$BLOCKLIST" ]; then
     _bl_lineno=0

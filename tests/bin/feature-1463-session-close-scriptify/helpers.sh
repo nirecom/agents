@@ -6,7 +6,7 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 node_path() {
     if command -v cygpath >/dev/null 2>&1; then
         cygpath -m "$1"
@@ -14,18 +14,18 @@ node_path() {
         echo "$1"
     fi
 }
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$_HELPERS_SCRIPT_CHECKOUT_ROOT")"
 
-RENDER_JS="${AGENTS_DIR}/bin/render-final-report.js"
-DETECT_JS="${AGENTS_DIR}/bin/session-close-detect-wf-meta.js"
-SC7_JS="${AGENTS_DIR}/bin/session-close-render-sc7.js"
-SKILL_MD="${AGENTS_DIR}/skills/session-close/SKILL.md"
-GUARD_JS="${AGENTS_DIR}/hooks/stop-final-report-guard.js"
+RENDER_JS="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/bin/render-final-report.js"
+DETECT_JS="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/bin/session-close-detect-wf-meta.js"
+SC7_JS="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/bin/session-close-render-sc7.js"
+SKILL_MD="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/skills/session-close/SKILL.md"
+GUARD_JS="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/hooks/stop-final-report-guard.js"
 
 PASS=0
 FAIL=0
 SKIP=0
-unset AGENTS_CONFIG_DIR
+unset AGENTS_MAIN_ROOT
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }

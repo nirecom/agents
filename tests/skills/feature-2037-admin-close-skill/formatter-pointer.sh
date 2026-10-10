@@ -7,13 +7,13 @@
 # where "Sanctioned-command false-block recovery" now lives (skills/enforce-workflow-off/
 # SKILL.md after #2037), not the stale rules/workflow-off.md that still exists but no longer
 # carries the section. Output is produced by CALLING formatL2ArmedReason (not grep), and P4
-# opens the named path to confirm the heading resolves. Assumes AGENTS_DIR, _AGENTS_DIR_NODE,
+# opens the named path to confirm the heading resolves. Assumes SCRIPT_CHECKOUT_ROOT, _SCRIPT_CHECKOUT_ROOT_NODE,
 # pass(), fail() from the entry file.
 
 echo ""
 echo "=== S13: the C3 alert's verify-pointer resolves to where the procedure actually lives ==="
 
-FP_FORMATTER="$AGENTS_DIR/hooks/lib/supervisor-report-format.js"
+FP_FORMATTER="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-report-format.js"
 FP_LIVE="skills/enforce-workflow-off/SKILL.md"
 FP_STALE="rules/workflow-off.md"
 FP_SECTION="Sanctioned-command false-block recovery"
@@ -29,7 +29,7 @@ process.stdout.write(f.formatL2ArmedReason(
   process.argv[2], "fpsid-2037", null,
   "/tmp/agents/agents/supervisor.md", "/tmp/plans/fpsid-2037-supervisor-state.json"
 ));
-' "$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format.js" "$1" 2>&1
+' "$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-report-format.js" "$1" 2>&1
     }
 
     # NOTE: RED until write-code renames the cause labels (#929): the guard now passes
@@ -73,9 +73,9 @@ process.stdout.write(f.formatL2ArmedReason(
 
     # P4: the pointer must RESOLVE. A live-looking path whose named section has moved on
     # again is indistinguishable from a correct one by string comparison alone.
-    if [ ! -f "$AGENTS_DIR/$FP_LIVE" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/$FP_LIVE" ]; then
         fail "S13-P4: the alert names $FP_LIVE and no such file exists in the tree — the reviewer is sent to a dead address"
-    elif grep -qF "$FP_SECTION" "$AGENTS_DIR/$FP_LIVE"; then
+    elif grep -qF "$FP_SECTION" "$SCRIPT_CHECKOUT_ROOT/$FP_LIVE"; then
         pass "S13-P4: $FP_LIVE exists and carries the '$FP_SECTION' section the alert quotes"
     else
         fail "S13-P4: $FP_LIVE exists but no longer carries the '$FP_SECTION' section the alert quotes by name — the procedure has moved again and the pointer was not updated with it"
@@ -84,7 +84,7 @@ process.stdout.write(f.formatL2ArmedReason(
     # P4-ctl: the migration is only complete if the section is NOT also still at the old
     # address. Two copies of a procedure is the CPR-SSOT failure #2037 set out to remove,
     # and it would make P4 pass no matter which address the alert named.
-    if [ -f "$AGENTS_DIR/$FP_STALE" ] && grep -qF "$FP_SECTION" "$AGENTS_DIR/$FP_STALE"; then
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$FP_STALE" ] && grep -qF "$FP_SECTION" "$SCRIPT_CHECKOUT_ROOT/$FP_STALE"; then
         fail "S13-P4-ctl: '$FP_SECTION' is present in BOTH $FP_LIVE and $FP_STALE — the fact has two homes, so the pointer assertions above cannot tell a migrated tree from an un-migrated one"
     else
         pass "S13-P4-ctl: the section lives at exactly one address — so P1/P2 distinguish a migrated pointer from a stale one"

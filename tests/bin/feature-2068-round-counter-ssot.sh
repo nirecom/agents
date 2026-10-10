@@ -11,7 +11,7 @@
 set -uo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$AGENTS_ROOT/tests/lib/harness.sh"
 PASS=0
 FAIL=0
@@ -30,7 +30,10 @@ cd "$TMPDIR_BASE" || exit 1
 ROOT="$TMPDIR_BASE/agents"
 clf_make_root "$ROOT" "$AGENTS_ROOT"
 clf_stub_reviewer "$ROOT"
-STAGE_DETAIL="$AGENTS_ROOT/skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+# The stage wrapper takes its checkout from its own path, so it runs as a copy inside $ROOT.
+STAGE_DETAIL="$ROOT/skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+mkdir -p "${STAGE_DETAIL%/*}"
+cp "$AGENTS_ROOT/skills/make-detail-plan/scripts/run-codex-review-loop.sh" "$STAGE_DETAIL"
 FORMAT="detail-plan"
 
 # rcs_env <name> — a plans dir named the way the detail stage wrapper expects,
@@ -53,7 +56,7 @@ rcs_stage() {
     local errf="$TMPDIR_BASE/rcs-stage-err.txt"
     RCS_RC=0
     RCS_OUT="$(
-        AGENTS_CONFIG_DIR="$ROOT" SESSION_ID="$RCS_SID" PLANS_DIR="$RCS_P" \
+        SESSION_ID="$RCS_SID" PLANS_DIR="$RCS_P" \
             EXTENSIONS_USED="${1:-0}" bash "$STAGE_DETAIL" 2>"$errf"
     )" || RCS_RC=$?
     RCS_ERR="$(cat "$errf" 2>/dev/null)"
@@ -65,7 +68,7 @@ rcs_direct() {
     local errf="$TMPDIR_BASE/rcs-direct-err.txt"
     RCS_RC=0
     RCS_OUT="$(
-        AGENTS_CONFIG_DIR="$ROOT" bash "$ROOT/bin/run-codex-review-loop" \
+        bash "$ROOT/bin/run-codex-review-loop" \
             --format "$FORMAT" --session-id "$RCS_SID" --plans-dir "$RCS_P" \
             --draft-file "$RCS_P/$RCS_SID-detail.md" \
             --accepted-tradeoffs "$RCS_P/$RCS_SID-outline.md" \
@@ -109,13 +112,17 @@ case_end
 # marker) when PREV_RC==6 and no accept marker exists; an accept marker sanctions it.
 echo ""
 echo "--- ssot-P: #2357 exit-9 gate on review-plan-security ---"
-SCRIPT_PLAN="$AGENTS_ROOT/skills/review-plan-security/scripts/run-codex-review-loop.sh"
+SCRIPT_PLAN_REL="skills/review-plan-security/scripts/run-codex-review-loop.sh"
 RWT_PLAN="$AGENTS_ROOT/bin/run-with-timeout.sh"
 
-# rps_fake — a config dir with only the two bin scripts the plan wrapper shells to.
+# rps_fake — a fake checkout holding a copy of the plan wrapper (with the libs it
+# sources) and stubs for the two bin scripts it shells to.
 rps_fake() {
     local fake; fake="$(mktemp -d)"
-    mkdir -p "$fake/bin"
+    mkdir -p "$fake/bin/lib/codex-review-loop" "$fake/${SCRIPT_PLAN_REL%/*}"
+    cp "$AGENTS_ROOT/$SCRIPT_PLAN_REL" "$fake/$SCRIPT_PLAN_REL"
+    cp "$AGENTS_ROOT/bin/lib/codex-review-loop/review-wrapper-control.sh" "$fake/bin/lib/codex-review-loop/"
+    cp "$AGENTS_ROOT/bin/lib/safe-state-path.sh" "$fake/bin/lib/"
     printf '#!/usr/bin/env bash\nexit "${STUB_RC:-0}"\n' > "$fake/bin/run-codex-review-loop"
     printf '#!/usr/bin/env bash\necho /dev/null\nexit 0\n' > "$fake/bin/resolve-accepted-tradeoffs-file"
     chmod +x "$fake/bin/run-codex-review-loop" "$fake/bin/resolve-accepted-tradeoffs-file"
@@ -132,8 +139,8 @@ rps_plans() {
 # run_loop_plan <plans> <fake> <stub_rc> → prints exit code (git hash-object needs no git CWD)
 run_loop_plan() {
     local plans="$1" fake="$2" rc="$3" ec
-    ( AGENTS_CONFIG_DIR="$fake" SESSION_ID="sid1361" PLANS_DIR="$plans" \
-        EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT_PLAN" 40 bash "$SCRIPT_PLAN" >/dev/null 2>&1 )
+    ( SESSION_ID="sid1361" PLANS_DIR="$plans" \
+        EXTENSIONS_USED=0 STUB_RC="$rc" "$RWT_PLAN" 40 bash "$fake/$SCRIPT_PLAN_REL" >/dev/null 2>&1 )
     ec=$?
     printf '%s' "$ec"
 }

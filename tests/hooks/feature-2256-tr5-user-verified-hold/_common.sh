@@ -7,19 +7,19 @@
 # Sourced by each section, never run as one: the parent lists sections explicitly.
 
 # The shared harness supplies the per-case marker functions; it is sourced first
-# so the reporters, counters, AGENTS_DIR and RWT defined below override its own.
+# so the reporters, counters, __COMMON_SCRIPT_CHECKOUT_ROOT and RWT defined below override its own.
 # shellcheck source=../../lib/harness.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" && pwd)/harness.sh"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+__COMMON_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
-AGENTS_NODE="$(nrm "$AGENTS_DIR")"
+AGENTS_NODE="$(nrm "$__COMMON_SCRIPT_CHECKOUT_ROOT")"
 HOOKS_NODE="$AGENTS_NODE/hooks"
 FP_NODE="$HOOKS_NODE/lib/diff-fingerprint.js"
 WRITER_NODE="$HOOKS_NODE/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$HOOKS_NODE/lib/supervisor-state-schema.js"
-OVERRIDE_BIN="$AGENTS_DIR/bin/supervisor-record-block-override"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+OVERRIDE_BIN="$__COMMON_SCRIPT_CHECKOUT_ROOT/bin/supervisor-record-block-override"
+RWT="$__COMMON_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -42,7 +42,7 @@ mkdir -p "$WORK/plans" "$WORK/wf" "$WORK/transcripts" "$WORK/cfg"
 export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
-export AGENTS_CONFIG_DIR="$WORK_NODE/cfg"
+export AGENTS_MAIN_ROOT="$WORK_NODE/cfg"
 unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
@@ -142,7 +142,7 @@ process.stdout.write(JSON.stringify({
   tool_input: { command: process.env.CMDTEXT, cwd: process.env.RCWD },
   session_id: process.env.SESS,
 }));
-" 2>/dev/null | bash "$RWT" 60 node "$AGENTS_DIR/hooks/workflow-gate.js" 2>/dev/null
+" 2>/dev/null | bash "$RWT" 60 node "$__COMMON_SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js" 2>/dev/null
 }
 decision_of() {
     JBODY="$1" node -e "

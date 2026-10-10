@@ -8,6 +8,8 @@ const fs = require("fs");
 const { spawnSync } = require("child_process");
 const path = require("path");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
+
 // Steps whose ACTION=invoke is handled by a dedicated Stop hook. Emitting a
 // second generic block in the same turn would surface two competing messages,
 // so this guard stays silent for them (CPR-SC — one owner per condition).
@@ -195,10 +197,7 @@ if (require.main === module) {
     if (sessionExemption === "pre-workflow-init") process.exit(0);
 
     // Locate next-step binary.
-    const agentsDir = process.env.AGENTS_CONFIG_DIR
-      ? process.env.AGENTS_CONFIG_DIR
-      : path.join(__dirname, "..");
-    const nextStepPath = path.join(agentsDir, "bin", "workflow", "next-step");
+    const nextStepPath = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "next-step");
     if (!fs.existsSync(nextStepPath)) process.exit(0);
 
     // Run next-step with CC session ID to check current ACTION.

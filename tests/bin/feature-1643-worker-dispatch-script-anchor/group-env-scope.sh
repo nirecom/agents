@@ -1,23 +1,13 @@
 # Part of tests/bin/feature-1643-worker-dispatch-script-anchor.sh — sourced, not run.
 # Tests: bin/worker-dispatch/spawn.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/capability.js
 # Tags: worker-dispatch, script-anchor, family-worktree, spawn, registry, regression, TL2, scope:issue-specific
-#
-# Group G: WHICH NAMES reach a child env. Companion part group-env-branches.sh
-# covers the branches that are about VALUES rather than membership.
-#
-# Group G — buildEnv credential scope (behavioural counterpart of the static
-# registry rows in tests/bin/feature-1643-worker-dispatch-schema.sh Group E).
-# GH_TOKEN/GITHUB_TOKEN used to sit in the global CHILD_ENV_ALLOWLIST applied
-# to every worker — combined with Group A's family-worktree anchor, that put
-# both credentials into tests/run-all.sh, a script from the unreviewed branch
-# under review. Moving them to issue-reconcile's envPassthrough is only a fix
-# if buildEnv actually distinguishes workers, so this asserts the real env
-# buildEnv returns, per worker, with both vars really set in the parent.
-# Runs in BOTH directions since the same allowlist decides both: a
-# config-location var must REACH every worker (#1719 was the mirror-image
-# leak — the dispatched `gh` inherited none, landed in a different config
-# dir, and failed auth). Admission-rule SSOT is the comment block above
-# CHILD_ENV_ALLOWLIST in the registry, not restated here.
+# Group G: WHICH NAMES reach a child env (group-env-branches.sh covers VALUES).
+# buildEnv credential scope, the behavioural counterpart of Group E in
+# tests/bin/feature-1643-worker-dispatch-schema.sh: GH_TOKEN/GITHUB_TOKEN must
+# reach only the workers that declare them, never tests/run-all.sh from the
+# branch under review. Runs in BOTH directions: a config-location var must
+# REACH every worker (#1719 — the dispatched `gh` inherited none and failed
+# auth). Admission-rule SSOT: the comment above CHILD_ENV_ALLOWLIST.
 group_g() {
     local name tok want v
     if impl_missing "env/token-reaches-issue-reconcile" "$SPAWN_JS" "bin/worker-dispatch/spawn.js"; then return; fi
@@ -47,7 +37,7 @@ group_g() {
         done
         # Non-vacuity: the env is populated, just not with credentials.
         assert_eq "env/$name/path-still-present" "1" "$(pv "PATHOK__${name}")"
-        assert_eq "env/$name/acd-pinned-to-anchor" "1" "$(pv "ACDOK__${name}")"
+        assert_eq "env/$name/agents-main-root-derived" "1" "$(pv "ROOTOK__${name}")"
         # Positive half, every worker: buildEnv applies the allowlist
         # unconditionally, so a config-location var reaches all nine or none.
         for v in APPDATA ProgramData PROGRAMDATA XDG_CONFIG_HOME GH_CONFIG_DIR; do

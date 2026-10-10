@@ -11,6 +11,7 @@
 # still passes) and a real `git commit` being refused by the harness (the gate only prints a verdict; Claude Code enforces it).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="fr"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
@@ -88,7 +89,7 @@ fi
 
 echo "== F5: final_report is a non-gate step, so it cannot block a commit =="
 if run_case "F5/non-gate-steps-exempt"; then
-    GATE_SRC="$AGENTS_DIR/hooks/workflow-gate.js"
+    GATE_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
     NG_LINE="$(grep -n 'NON_GATE_STEPS = ' "$GATE_SRC" | head -1)"
     HAS_FR="no"; case "$NG_LINE" in *'"final_report"'*) HAS_FR="yes";; esac
     HAS_RESEARCH="no"; case "$NG_LINE" in *'"research"'*) HAS_RESEARCH="yes";; esac
@@ -139,11 +140,11 @@ fi
 run_next_step() {
     local sid="$1"; shift
     NS_RC=0
-    NS_OUT="$(cd "$AGENTS_DIR" && env \
-        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+    NS_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && env \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node "$AGENTS_DIR/bin/workflow/next-step" \
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step" \
         --session "$sid" "$@" 2>&1)" || NS_RC=$?
 }
 
@@ -249,12 +250,12 @@ fi
 # everything". F11 below closes that by driving both verdicts through the real binary.
 run_gate() { # <payload-file>
     GATE_RC=0
-    GATE_OUT="$(cd "$AGENTS_DIR" && env \
-        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+    GATE_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && env \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
         ENFORCE_WORKTREE=off \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node "$AGENTS_DIR/hooks/workflow-gate.js" \
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node "$F11_GATE_HOOK" \
         < "$1" 2>/dev/null)" || GATE_RC=$?
 }
 
@@ -275,7 +276,14 @@ if run_case "F11/gate-live-verdicts"; then
     GATE_REPO="$TMPROOT/gate-repo"
     if ! mk_git_repo "$GATE_REPO" "feature/1733-gate-fixture"; then
         fail "F11/fixture-repo" "mk_git_repo failed for $GATE_REPO"
+    elif ! . "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh" \
+         || ! session_repo_fixture_create "$TMPROOT/gate-checkout" \
+         || ! session_repo_fixture_attach "$TMPROOT/gate-checkout" "$GATE_REPO"; then
+        fail "F11/fixture-gate-checkout" "cannot copy the checkout for the gate"
     else
+        # The gate arms only for the repo its own checkout belongs to, so it runs from a
+        # copy of this checkout attached to the fixture repo.
+        F11_GATE_HOOK="$(session_repo_fixture_path "$TMPROOT/gate-checkout" hooks/workflow-gate.js)"
         # A NON-docs staged file: a docs-only staging set short-circuits every step except
         # user_verification, which would make the negative control approve for the wrong
         # reason. Kept tiny so the #1701 file-size gate has nothing to say about it.

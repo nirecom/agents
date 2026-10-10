@@ -1,39 +1,13 @@
 #!/usr/bin/env bash
 # Tests: bin/get-config-var, .env.example, install.sh, install.ps1
 # Tags: bin, install, installer, session-sync, toggle, scope:common
-#
-# Contract under test — the SESSION_SYNC toggle itself, separated from the two
-# profile-snippet call sites (those live in
-# tests/install/fix-1225-profile-snippet-guards/session-sync-gate.sh and
-# tests/main-profile-codes.Tests.ps1):
-#
-#   1. the resolver contract — which exit code bin/get-config-var --is-off
-#      produces for every point in the SESSION_SYNC value domain, including the
-#      degraded case where node cannot run at all;
-#   2. the shipped-default contract — .env.example must document the variable
-#      and ship it off.
-#
-# Manual `bin/session-sync.sh` / `bin/session-sync.ps1` subcommands, and the
-# installers' one-time `session-sync-init` bootstrap step in install.sh /
-# install.ps1, are deliberately NOT gated; SESSION_SYNC governs only the two
-# *automatic* profile-snippet call sites (startup auto-fetch, `codes()`
-# auto-push). Without an unconditional bootstrap the manual subcommands would
-# have no repo/remote/attributes to act on. That contract is pinned in
-# tests/bin/main-session-sync/session-sync-independence.sh,
-# tests/main-session-sync.Tests.ps1, and T20/T21 below.
-#
-# TL3 gap (what this test does NOT catch):
-# - A real `install.sh` / `install.ps1` run on a clean machine: the executed
-#   matrix in tests/bin/main-session-sync-toggle/installer-exec.sh stubs every
-#   install step except the gate under test, so a step whose real behaviour
-#   re-execs or reorders the installer is still unexercised.
-# - The resolver reading the user's real `.env`: it is exercised against a
-#   mirror config directory, so a malformed or OS-conditional real `.env` that
-#   changes how SESSION_SYNC parses is not covered.
-# - The pwsh resolver (`bin/get-config-var.ps1`) under a real Windows profile;
-#   only the bash side's exit codes are pinned here.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: installer.
+# The SESSION_SYNC toggle itself: (1) the exit code bin/get-config-var --is-off gives for
+# every value, node-absent included; (2) .env.example documents it and ships it off. The two
+# profile-snippet call sites live in tests/install/fix-1225-profile-snippet-guards/session-sync-gate.sh.
+# Manual session-sync subcommands and the installers' session-sync-init bootstrap are NOT gated
+# (pinned in tests/bin/main-session-sync/session-sync-independence.sh and T20/T21 below).
+# TL3 gap: no real installer run on a clean machine, no real user .env, no pwsh resolver under
+# a real Windows profile. Mitigation: bin/check-verification-gate.sh category: installer.
 
 set -uo pipefail
 
@@ -42,8 +16,8 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RUN_TIMEOUT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RUN_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
 FAIL=0
@@ -55,24 +29,20 @@ TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # ---------------------------------------------------------------------------
-# Mirror config sandbox.
-#
-# bin/get-config-var resolves hooks/lib/load-env.js through AGENTS_CONFIG_DIR,
-# and load-env.js short-circuits on that same variable, so pointing both at a
-# throwaway directory makes the sandbox the single source of config. Without
-# it the developer's own repo .env would leak into every expectation.
-#
-# $1 (optional): body written to the sandbox .env. Omitted → no .env at all,
-# which is the "fresh checkout" shape (a missing .env is a silent no-op, so the
-# resolver still reports a loaded config).
+# Mirror config sandbox. bin/get-config-var loads the hooks/lib/load-env.js beside
+# itself, so the resolver is copied in and launched from there; load-env.js takes an
+# explicit AGENTS_MAIN_ROOT as the sole settings source, so pointing it at the same
+# throwaway directory keeps the developer's own .env out of every expectation.
+# $1 (optional): body of the sandbox .env. Omitted → no .env at all, the "fresh
+# checkout" shape (a missing .env is a silent no-op; the config still counts as loaded).
 # ---------------------------------------------------------------------------
 make_config_sandbox() {
     local env_body="${1:-}"
     local sb
     sb="$(mktemp -d "$TMPDIR_BASE/cfg.XXXXXX")"
     mkdir -p "$sb/hooks" "$sb/bin" "$sb/nonode"
-    cp -R "$AGENTS_DIR/hooks/lib" "$sb/hooks/lib"
-    cp "$AGENTS_DIR/bin/get-config-var" "$sb/bin/get-config-var"
+    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$sb/hooks/lib"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" "$sb/bin/get-config-var"
     if [ -n "$env_body" ]; then
         printf '%s\n' "$env_body" > "$sb/.env"
     fi
@@ -91,11 +61,11 @@ run_gcv() {
     [ "$node_mode" = "no-node" ] && path="$sb/nonode:$PATH"
     local rc=0
     if [ "$ss" = "UNSET" ]; then
-        env -u SESSION_SYNC AGENTS_CONFIG_DIR="$sb" PATH="$path" \
+        env -u SESSION_SYNC AGENTS_MAIN_ROOT="$sb" PATH="$path" \
             bash "$RUN_TIMEOUT" 30 bash "$sb/bin/get-config-var" "$@" \
             > "$TMPDIR_BASE/gcv.out" 2> "$TMPDIR_BASE/gcv.err" || rc=$?
     else
-        env SESSION_SYNC="$ss" AGENTS_CONFIG_DIR="$sb" PATH="$path" \
+        env SESSION_SYNC="$ss" AGENTS_MAIN_ROOT="$sb" PATH="$path" \
             bash "$RUN_TIMEOUT" 30 bash "$sb/bin/get-config-var" "$@" \
             > "$TMPDIR_BASE/gcv.out" 2> "$TMPDIR_BASE/gcv.err" || rc=$?
     fi
@@ -255,7 +225,7 @@ tc_value_mode
 # 3. Shipped default — .env.example must document the toggle and ship it off.
 # ---------------------------------------------------------------------------
 tc_env_example_entry() {
-    local f="$AGENTS_DIR/.env.example"
+    local f="$SCRIPT_CHECKOUT_ROOT/.env.example"
     if grep -qE '^SESSION_SYNC=off[[:space:]]*$' "$f"; then
         pass "T15: .env.example ships SESSION_SYNC=off"
     else
@@ -270,7 +240,7 @@ tc_env_example_entry
 # directly above each variable. A bare SESSION_SYNC=off with no explanation
 # would pass T15 but leave users with an undocumented switch.
 tc_env_example_comment_block() {
-    local f="$AGENTS_DIR/.env.example"
+    local f="$SCRIPT_CHECKOUT_ROOT/.env.example"
     local line
     line="$(grep -nE '^SESSION_SYNC=' "$f" | head -1 | cut -d: -f1)"
     if [ -z "$line" ]; then
@@ -294,22 +264,15 @@ tc_env_example_comment_block() {
 }
 tc_env_example_comment_block
 
-# T16b — the comment block must say the right thing, not merely exist.
-#
-# T16 above only counts lines, so a placeholder comment ("# session sync") would
-# satisfy it while leaving the two facts a user actually needs undocumented:
-#   1. the toggle governs AUTOMATIC sync only — `bin/session-sync.sh push|pull|
-#      reset` keep working when it is off, which is the whole reason the manual
-#      subcommands are ungated (pinned in
-#      tests/bin/main-session-sync/session-sync-independence.sh);
-#   2. the value domain, in the same `Format: off (default) | on.` shape every
-#      other boolean entry uses (RUN_TL3, ENFORCE_WORKTREE), so the shipped
-#      default is legible without reading the resolver.
-# Fact 1 is asserted on substance, not on layout: it may sit on either the
-# "What you can do" or the "What you can't do" line, but it must name the manual
-# commands AND say they are unaffected — a bare mention of "push" would not.
+# T16b — the comment block must say the right thing, not merely exist (T16 only
+# counts lines, so a placeholder would pass). Two facts a user needs:
+#   1. the toggle governs AUTOMATIC sync only — the manual `bin/session-sync.sh
+#      push|pull|reset` keep working when it is off. Asserted on substance, not
+#      layout: the comment must name the manual commands AND say they are unaffected.
+#   2. the value domain, in the `Format: off (default) | on.` shape every other
+#      boolean entry uses (RUN_TL3, ENFORCE_WORKTREE).
 tc_env_example_comment_wording() {
-    local f="$AGENTS_DIR/.env.example"
+    local f="$SCRIPT_CHECKOUT_ROOT/.env.example"
     local line
     line="$(grep -nE '^SESSION_SYNC=' "$f" | head -1 | cut -d: -f1)"
     if [ -z "$line" ]; then
@@ -358,24 +321,15 @@ $block"; i=$((i - 1)) ;;
 tc_env_example_comment_wording
 
 # ---------------------------------------------------------------------------
-# 4. Installer bootstrap — both installers' `session-sync-init` call is
-#    unconditional bootstrap infrastructure, required for the manual sync
-#    subcommands to have a repo/remote/attributes to act on at all. It is
-#    symmetric across both shells (CPR-ORTH): neither installer may gate it
-#    without the other. Proven here by execution (T20/T21 below), not by
-#    static grep — a grep cannot distinguish a real gate from a comment that
-#    merely mentions the variable, which is exactly the shape of the code
-#    today (a nearby explanatory comment names SESSION_SYNC without gating
-#    anything).
+# 4. Installer bootstrap — both installers' `session-sync-init` call is unconditional
+#    bootstrap, symmetric across both shells (CPR-ORTH). T20/T21 prove it by execution:
+#    each installer runs as a real subprocess against a fully stubbed install/ tree,
+#    with the init step's stub as the observable. A static grep cannot tell a real
+#    gate from a comment that merely names SESSION_SYNC; see
+#    tests/bin/main-session-sync-toggle/installer-exec.sh.
 # ---------------------------------------------------------------------------
-
-# T20/T21 — the same installer contract proven by execution rather than by
-# source text: both installers are run as real subprocesses against a fully
-# stubbed install/ tree, and the session-sync init step's own stub is the
-# observable. See tests/bin/main-session-sync-toggle/installer-exec.sh for why the
-# static T17/T18 assertions above cannot stand alone.
 # shellcheck source=main-session-sync-toggle/installer-exec.sh
-. "$AGENTS_DIR/tests/bin/main-session-sync-toggle/installer-exec.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/main-session-sync-toggle/installer-exec.sh"
 
 printf '\nPASS: %d FAIL: %d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

@@ -2,23 +2,20 @@
 # tests/bin/fix-1591-issue-body-append.sh
 # Tests: bin/github-issues/issue-body-append.sh
 # Tags: github, issues, scan-outbound, security, scope:issue-specific, layer:TL2
-#
 # Issue #1591 — issue-body-append.sh appends a `### Revision (<UTC ISO8601>)` entry
 # inside a single <!-- BEGIN intent-revisions --> ... <!-- END intent-revisions -->
-# block (created if absent; appended to if present, without touching prior entries
-# or the body outside the block), guards the composed body with label
+# block (created if absent; appended to if present, prior entries and the body
+# outside the block untouched), guards the composed body with label
 # issue-body-append:#<N>, then gh issue edit --body-file.
-#
-# The gh mock is stateful: `issue view` reads a body store, `issue edit --body-file`
-# writes it back, so a second invocation sees the first append. RED until
-# /write-code creates the script + gh-outbound-guard.sh.
+# The gh mock is stateful (`issue view` reads a body store, `issue edit --body-file`
+# writes it back), so a second invocation sees the first append.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IBA="$AGENTS_DIR/bin/github-issues/issue-body-append.sh"
-GUARD_LIB="$AGENTS_DIR/bin/lib/gh-outbound-guard.sh"
-REAL_SCANNER="$AGENTS_DIR/bin/scan-outbound.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+IBA="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-body-append.sh"
+GUARD_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh"
+REAL_SCANNER="$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh"
 
 PASS=0
 FAIL=0
@@ -42,11 +39,11 @@ setup() {
     export MOCK_LOG_DIR="$TMP"
     export BODY_STORE="$TMP/body-store.txt"
     printf 'ORIGINAL_BODY_MARKER first line of the issue body.\n' > "$BODY_STORE"
-    mkdir -p "$TMP/mock-bin" "$TMP/acd/bin"
-    cp "$REAL_SCANNER" "$TMP/acd/bin/scan-outbound.sh"
-    chmod +x "$TMP/acd/bin/scan-outbound.sh"
-    : > "$TMP/acd/.private-info-allowlist"
-    : > "$TMP/acd/.private-info-blocklist"
+    mkdir -p "$TMP/mock-bin" "$TMP/fake_main_root/bin"
+    cp "$REAL_SCANNER" "$TMP/fake_main_root/bin/scan-outbound.sh"
+    chmod +x "$TMP/fake_main_root/bin/scan-outbound.sh"
+    : > "$TMP/fake_main_root/.private-info-allowlist"
+    : > "$TMP/fake_main_root/.private-info-blocklist"
     # Stateful gh mock: view reads store, edit --body-file writes store back.
     cat > "$TMP/mock-bin/gh" <<'MOCKGH'
 #!/usr/bin/env bash
@@ -68,13 +65,12 @@ exit 0
 MOCKGH
     chmod +x "$TMP/mock-bin/gh"
     export PATH="$TMP/mock-bin:$PATH"
-    export AGENTS_CONFIG_DIR="$TMP/acd"
+    export AGENTS_MAIN_ROOT="$TMP/fake_main_root"
 }
 
 teardown() {
     [ -n "${TMP:-}" ] && [ -d "$TMP" ] && rm -rf "$TMP" 2>/dev/null || true
     unset MOCK_LOG_DIR BODY_STORE 2>/dev/null || true
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     TMP=""
 }
 

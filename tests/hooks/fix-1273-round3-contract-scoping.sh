@@ -52,11 +52,11 @@ set -u
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
-AGENTS_WIN="$(nodepath "$AGENTS_DIR")"
-RUN_TESTS_HOOK="$AGENTS_DIR/hooks/workflow-run-tests.js"
-EMIT_JS="$AGENTS_DIR/bin/worker-dispatch/emit.js"
+AGENTS_WIN="$(nodepath "$SCRIPT_CHECKOUT_ROOT")"
+RUN_TESTS_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js"
+EMIT_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/emit.js"
 
 PASS=0
 FAIL=0
@@ -235,7 +235,7 @@ occurrences() {
     grep -c 'promoteContractFromTail' "$1" 2>/dev/null || echo 0
 }
 
-EXTERNAL_HITS="$(grep -rl 'promoteContractFromTail' "$AGENTS_DIR/bin" "$AGENTS_DIR/hooks" 2>/dev/null \
+EXTERNAL_HITS="$(grep -rl 'promoteContractFromTail' "$SCRIPT_CHECKOUT_ROOT/bin" "$SCRIPT_CHECKOUT_ROOT/hooks" 2>/dev/null \
     | grep -v 'bin/worker-dispatch/emit.js' | tr '\n' ' ' | sed 's/ $//')"
 assert_eq "L1/no-caller-outside-emit-js" "" "$EXTERNAL_HITS"
 

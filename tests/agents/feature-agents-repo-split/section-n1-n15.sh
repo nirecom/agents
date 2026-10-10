@@ -13,16 +13,16 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# N2: settings.json has exactly 11 occurrences of $AGENTS_CONFIG_DIR/hooks/
+# N2: settings.json has exactly 11 occurrences of $AGENTS_MAIN_ROOT/hooks/
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== N2: settings.json — new path count ==="
 
-NEW_COUNT=$(grep -o '\$AGENTS_CONFIG_DIR/hooks/' "$SETTINGS" 2>/dev/null | wc -l || true)
+NEW_COUNT=$(grep -o '\$AGENTS_MAIN_ROOT/hooks/' "$SETTINGS" 2>/dev/null | wc -l || true)
 if [ "$NEW_COUNT" -ge 1 ]; then
-    pass "N2. settings.json contains at least 1 occurrence of \$AGENTS_CONFIG_DIR/hooks/ (migration to new path complete)"
+    pass "N2. settings.json contains at least 1 occurrence of \$AGENTS_MAIN_ROOT/hooks/ (migration to new path complete)"
 else
-    fail "N2. settings.json contains 0 occurrences of \$AGENTS_CONFIG_DIR/hooks/ (expected at least 1)"
+    fail "N2. settings.json contains 0 occurrences of \$AGENTS_MAIN_ROOT/hooks/ (expected at least 1)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -40,17 +40,17 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# N4: .profile_common — no remaining export AGENTS_CONFIG_DIR= line
+# N4: .profile_common — no remaining export AGENTS_MAIN_ROOT= line
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== N4: .profile_common — AGENTS_CONFIG_DIR export removed ==="
+echo "=== N4: .profile_common — AGENTS_MAIN_ROOT export removed ==="
 
 if [ -z "$PROFILE_COMMON" ] || [ ! -f "$PROFILE_COMMON" ]; then
     skip "N4. .profile_common not available (dotfiles repo not adjacent)"
-elif grep -qE '^[[:space:]]*export[[:space:]]+AGENTS_CONFIG_DIR=' "$PROFILE_COMMON"; then
-    fail "N4. .profile_common still defines 'export AGENTS_CONFIG_DIR=' (compat block not removed)"
+elif grep -qE '^[[:space:]]*export[[:space:]]+AGENTS_MAIN_ROOT=' "$PROFILE_COMMON"; then
+    fail "N4. .profile_common still defines 'export AGENTS_MAIN_ROOT=' (compat block not removed)"
 else
-    pass "N4. .profile_common no longer defines export AGENTS_CONFIG_DIR="
+    pass "N4. .profile_common no longer defines export AGENTS_MAIN_ROOT="
 fi
 
 # ---------------------------------------------------------------------------
@@ -68,17 +68,17 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# N6: profile.ps1 — no remaining $env:AGENTS_CONFIG_DIR assignment
+# N6: profile.ps1 — no remaining $env:AGENTS_MAIN_ROOT assignment
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== N6: profile.ps1 — \$env:AGENTS_CONFIG_DIR removed ==="
+echo "=== N6: profile.ps1 — \$env:AGENTS_MAIN_ROOT removed ==="
 
 if [ -z "$PROFILE_PS1" ] || [ ! -f "$PROFILE_PS1" ]; then
     skip "N6. profile.ps1 not available (dotfiles repo not adjacent)"
-elif grep -qE '\$env:AGENTS_CONFIG_DIR' "$PROFILE_PS1"; then
-    fail "N6. profile.ps1 still references \$env:AGENTS_CONFIG_DIR (compat block not removed)"
+elif grep -qE '\$env:AGENTS_MAIN_ROOT' "$PROFILE_PS1"; then
+    fail "N6. profile.ps1 still references \$env:AGENTS_MAIN_ROOT (compat block not removed)"
 else
-    pass "N6. profile.ps1 no longer references \$env:AGENTS_CONFIG_DIR"
+    pass "N6. profile.ps1 no longer references \$env:AGENTS_MAIN_ROOT"
 fi
 
 # ---------------------------------------------------------------------------
@@ -124,10 +124,10 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# N7: pre-commit uses AGENTS_CONFIG_DIR to locate scanner (no old DOTFILES_DIR path)
+# N7: pre-commit uses AGENTS_MAIN_ROOT to locate scanner (no old DOTFILES_DIR path)
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== N7: pre-commit — scanner path uses AGENTS_CONFIG_DIR ==="
+echo "=== N7: pre-commit — scanner path uses AGENTS_MAIN_ROOT ==="
 
 PRE_COMMIT="$AGENTS_ROOT/hooks/pre-commit"
 if [ ! -f "$PRE_COMMIT" ]; then
@@ -139,10 +139,10 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# N8: commit-msg uses AGENTS_CONFIG_DIR to locate scanner
+# N8: commit-msg uses AGENTS_MAIN_ROOT to locate scanner
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== N8: commit-msg — scanner path uses AGENTS_CONFIG_DIR ==="
+echo "=== N8: commit-msg — scanner path uses AGENTS_MAIN_ROOT ==="
 
 COMMIT_MSG="$AGENTS_ROOT/hooks/commit-msg"
 if [ ! -f "$COMMIT_MSG" ]; then
@@ -169,15 +169,15 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# N10: .profile_common session-sync uses AGENTS_DIR fallback
+# N10: .profile_common session-sync uses SCRIPT_CHECKOUT_ROOT fallback
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== N10: .profile_common — session-sync uses AGENTS_DIR ==="
+echo "=== N10: .profile_common — session-sync uses SCRIPT_CHECKOUT_ROOT ==="
 
 if [ -z "$PROFILE_COMMON" ] || [ ! -f "$PROFILE_COMMON" ]; then
     skip "N10. .profile_common not available (dotfiles repo not adjacent)"
-elif grep -q 'AGENTS_DIR.*DOTFILES_DIR.*bin/session-sync' "$PROFILE_COMMON"; then
-    pass "N10. .profile_common session-sync uses \${AGENTS_DIR:-\$DOTFILES_DIR}/bin/session-sync.sh"
+elif grep -q 'SCRIPT_CHECKOUT_ROOT.*DOTFILES_DIR.*bin/session-sync' "$PROFILE_COMMON"; then
+    pass "N10. .profile_common session-sync uses \${SCRIPT_CHECKOUT_ROOT:-\$DOTFILES_DIR}/bin/session-sync.sh"
 else
-    fail "N10. .profile_common session-sync does not use AGENTS_DIR fallback"
+    fail "N10. .profile_common session-sync does not use SCRIPT_CHECKOUT_ROOT fallback"
 fi

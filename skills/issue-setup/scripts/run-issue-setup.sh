@@ -9,7 +9,7 @@
 # an injection payload never reaches a downstream command.
 set -uo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 STEP=""
 STEP_SET=0
@@ -55,11 +55,11 @@ if ! [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
     echo "Error: invalid --repo value: $REPO" >&2; exit 2
 fi
 
-GH_ISSUES_DIR="$AGENTS_CONFIG_DIR/bin/github-issues"
+GH_ISSUES_DIR="$SCRIPT_CHECKOUT_ROOT/bin/github-issues"
 
 case "$STEP" in
     labels)
-        bash "$GH_ISSUES_DIR/sync-labels.sh" --repo "$REPO" "$AGENTS_CONFIG_DIR/.github/labels.yml"
+        bash "$GH_ISSUES_DIR/sync-labels.sh" --repo "$REPO" "$SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
         exit $?
         ;;
     check-project)

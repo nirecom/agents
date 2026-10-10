@@ -17,7 +17,7 @@ process.stdout.write(String(hasStagedDocChanges(process.env.D_REPO)));
 
 run_group_d() {
   require_module "D" "hooks/lib/staged-doc-changes.js" || return 0
-  export MOD_N="$AGENTS_DIR_N/hooks/lib/staged-doc-changes.js"
+  export MOD_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/lib/staged-doc-changes.js"
   local repo out
 
   # D1: a staged .md → true.

@@ -30,7 +30,7 @@ cfb_env() {
 }
 cfb_json() { json_file "$PLANS" "$SID"; }
 cfb_check() {
-    AGENTS_CONFIG_DIR="$FC_ROOT" bash "$CLI" check-finalized --plans-dir "$PLANS" \
+    bash "$CLI" check-finalized --plans-dir "$PLANS" \
         --session-id "$SID" --format "$LEDGER_FORMAT" --round "$1" >/dev/null 2>&1
     printf '%s' "$?"
 }
@@ -165,7 +165,7 @@ while IFS='|' read -r E4_TAG E4_CODEX E4_EXTRA E4_WHY; do
     case "$E4_TAG" in
         a) : ;;
         b) printf '## Codex Review: SKIPPED\n' > "$TMPDIR_BASE/cfb-e4-$E4_TAG.txt"
-           AGENTS_CONFIG_DIR="$FC_ROOT" bash "$CLI" stage --plans-dir "$PLANS" \
+           bash "$CLI" stage --plans-dir "$PLANS" \
                --session-id "$SID" --format "$LEDGER_FORMAT" --round 1 \
                --producer review-code-codex --exec SKIPPED \
                --from-report "$TMPDIR_BASE/cfb-e4-$E4_TAG.txt" >/dev/null 2>&1 || true ;;
@@ -230,7 +230,7 @@ INCOMPLETE
         E3_ERRF="$TMPDIR_BASE/cfb-e3-$fmt-err.txt"
         E3_RC=0
         E3_OUT="$(
-            AGENTS_CONFIG_DIR="$FC_ROOT" bash "$FC_ROOT/bin/run-codex-review-loop" \
+            bash "$FC_ROOT/bin/run-codex-review-loop" \
                 --format "$fmt" --session-id "$sid" --plans-dir "$plans" \
                 --draft-file "$plans/draft.md" --cap 1 --max-extensions 0 \
                 --extensions-used 0 --accepted-tradeoffs "$plans/tradeoffs.md" \

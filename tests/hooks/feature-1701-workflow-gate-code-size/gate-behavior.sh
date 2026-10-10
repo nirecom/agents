@@ -9,7 +9,7 @@
 # WORKFLOW_OFF bypass, WIP non-bypass, cross-repo bypass, post-split approve).
 #
 # Depends on the parent for: TMPDIR_BASE, fresh_workflow_dir, setup_repo,
-# make_plain_config_dir, make_foreign_git_config_dir, write_complete_state,
+# make_plain_cfg_root, make_foreign_git_cfg_root, write_complete_state,
 # write_workflow_off_marker, make_lines, build_commit_payload, run_hook,
 # assert_approve, assert_block, HOOK_OUT, pass, fail, skip.
 
@@ -18,7 +18,7 @@ test_1_hard_limit_block() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2001"
     local repo; repo="$(setup_repo "r1")"
-    local cfg; cfg="$(make_plain_config_dir "c1")"
+    local cfg; cfg="$(make_plain_cfg_root "c1")"
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 501 > "$repo/bin/big.js"
@@ -37,7 +37,7 @@ test_2_ok_300_lines() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2002"
     local repo; repo="$(setup_repo "r2")"
-    local cfg; cfg="$(make_plain_config_dir "c2")"
+    local cfg; cfg="$(make_plain_cfg_root "c2")"
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 300 > "$repo/bin/ok.js"
@@ -52,7 +52,7 @@ test_3_untracked_only_approves() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2003"
     local repo; repo="$(setup_repo "r3")"
-    local cfg; cfg="$(make_plain_config_dir "c3")"
+    local cfg; cfg="$(make_plain_cfg_root "c3")"
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 501 > "$repo/bin/untracked-big.js"   # never staged
@@ -67,7 +67,7 @@ test_4_workflow_off_bypass() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2004"
     local repo; repo="$(setup_repo "r4")"
-    local cfg; cfg="$(make_plain_config_dir "c4")"
+    local cfg; cfg="$(make_plain_cfg_root "c4")"
     write_workflow_off_marker "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 501 > "$repo/bin/big.js"
@@ -81,7 +81,7 @@ test_5_wip_does_not_bypass() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2005"
     local repo; repo="$(setup_repo "r5")"
-    local cfg; cfg="$(make_plain_config_dir "c5")"
+    local cfg; cfg="$(make_plain_cfg_root "c5")"
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 501 > "$repo/bin/big.js"
@@ -97,7 +97,7 @@ test_6_cross_repo_bypass() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2006"
     local repo; repo="$(setup_repo "r6")"
-    local cfg; cfg="$(make_foreign_git_config_dir "c6")"
+    local cfg; cfg="$(make_foreign_git_cfg_root "c6")"
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 501 > "$repo/bin/big.js"
@@ -111,7 +111,7 @@ test_7_split_passes() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2007"
     local repo; repo="$(setup_repo "r7")"
-    local cfg; cfg="$(make_plain_config_dir "c7")"
+    local cfg; cfg="$(make_plain_cfg_root "c7")"
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 501 > "$repo/bin/big.js"

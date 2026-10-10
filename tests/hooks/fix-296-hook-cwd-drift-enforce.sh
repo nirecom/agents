@@ -10,18 +10,18 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-HOOK="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+HOOK="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -32,7 +32,7 @@ run_with_timeout() {
     fi
 }
 
-if [ ! -f "$AGENTS_DIR/hooks/enforce-worktree.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js" ]; then
     echo "FAIL: hooks/enforce-worktree.js not found"
     echo ""
     echo "Results: 0 passed, 1 failed"

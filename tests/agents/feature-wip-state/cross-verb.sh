@@ -5,7 +5,7 @@
 # .env stays empty across repeated invocations.
 # ===========================================================================
 setup_mock
-ENV_FILE="$AGENTS_CONFIG_DIR/.env"
+ENV_FILE="$AGENTS_MAIN_ROOT/.env"
 : > "$ENV_FILE"
 OUT1=$(run_with_timeout 60 bash "$TARGET" setup 2>/dev/null)
 RC1=$?
@@ -48,17 +48,11 @@ teardown_mock
 
 # ===========================================================================
 # Test 26: PLANS_DIR resolution honors WORKFLOW_PLANS_DIR override.
-# bin/workflow-plans-dir in our stub prints $PLANS_DIR — override $PLANS_DIR.
+# The real bin/workflow-plans-dir honors the override.
 # ===========================================================================
 setup_mock
 ALT_PLANS="$TMP/alternative-plans"
 mkdir -p "$ALT_PLANS"
-# Rewrite stub to use WORKFLOW_PLANS_DIR override.
-cat > "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" <<EOF
-#!/bin/bash
-echo "\${WORKFLOW_PLANS_DIR:-$PLANS_DIR}"
-EOF
-chmod +x "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
 export WORKFLOW_PLANS_DIR="$ALT_PLANS"
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 # Short-circuit the resolver so it skips GraphQL. T26 tests lock-file path
@@ -77,20 +71,20 @@ unset WORKFLOW_PLANS_DIR
 teardown_mock
 
 # ===========================================================================
-# Test 27: .env auto-source — preflight passes when var lives only in $AGENTS_CONFIG_DIR/.env.
+# Test 27: .env auto-source — preflight passes when var lives only in $AGENTS_MAIN_ROOT/.env.
 # ===========================================================================
 setup_mock
 # Move STATUS_FIELD_ID from env into .env.
 ORIG_STATUS="$WIP_STATE_STATUS_FIELD_ID"
 unset WIP_STATE_STATUS_FIELD_ID
-cat > "$AGENTS_CONFIG_DIR/.env" <<EOF
+cat > "$AGENTS_MAIN_ROOT/.env" <<EOF
 WIP_STATE_STATUS_FIELD_ID=$ORIG_STATUS
 EOF
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 0 ]; then
-    pass "T27: .env auto-source — preflight passes via $AGENTS_CONFIG_DIR/.env"
+    pass "T27: .env auto-source — preflight passes via $AGENTS_MAIN_ROOT/.env"
 else
     fail "T27: expected exit 0 with .env-sourced var, got rc=$RC"
 fi
@@ -102,7 +96,7 @@ teardown_mock
 setup_mock
 # Wipe required env var; ensure no .env exists.
 unset WIP_STATE_STATUS_FIELD_ID
-rm -f "$AGENTS_CONFIG_DIR/.env" 2>/dev/null || true
+rm -f "$AGENTS_MAIN_ROOT/.env" 2>/dev/null || true
 # #1340: force resolver miss so the missing STATUS id cannot be backfilled and
 # the preflight-missing path is exercised.
 export GH_MOCK_LINKED_COUNT=0

@@ -15,12 +15,12 @@ set -euo pipefail
 # - how the live Bash tool expands these spellings (verdicts come from the
 #   production functions fed literal command text).
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-AGENTS_N="$(np "$AGENTS_DIR")"
-CLASSIFY_JS="$AGENTS_DIR/hooks/block-clearance-token-write/bash-target-context/classify.js"
+AGENTS_N="$(np "$SCRIPT_CHECKOUT_ROOT")"
+CLASSIFY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write/bash-target-context/classify.js"
 
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
@@ -30,7 +30,6 @@ if command -v cygpath >/dev/null 2>&1; then export USERPROFILE; USERPROFILE="$(c
 export WORKFLOW_STATE_DIR; WORKFLOW_STATE_DIR="$(np "$TMP/home/wf")"
 export WORKFLOW_PLANS_DIR; WORKFLOW_PLANS_DIR="$(np "$TMP/plans")"
 export CLAUDE_TRANSCRIPT_BASE_DIR; CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/tx")"
-export AGENTS_CONFIG_DIR="$AGENTS_N"
 unset CLAUDE_CODE_SESSION_ID CLAUDECODE 2>/dev/null || true
 cd "$TMP"
 

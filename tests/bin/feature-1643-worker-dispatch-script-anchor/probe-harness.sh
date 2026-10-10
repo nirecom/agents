@@ -13,7 +13,7 @@ PROBE="$TMPD/probe.js"
 cat > "$PROBE" <<'PROBEJS'
 const fs = require("fs");
 const path = require("path");
-const [agentsDir, mode, mainRoot, linked, outside, alt] = process.argv.slice(2);
+const [agentsDir, mode, targetMainRoot, linked, outside, alt] = process.argv.slice(2);
 const spawnMod = require(path.join(agentsDir, "bin/worker-dispatch/spawn.js"));
 const anchorMod = require(path.join(agentsDir, "bin/worker-dispatch/anchor.js"));
 const capMod = require(path.join(agentsDir, "bin/worker-dispatch/capability.js"));
@@ -30,7 +30,7 @@ const probeEntry = {
   binaries: {
     scripts: {
       fam: { anchor: "family-worktree", rel: "tests/run-all.sh" },
-      main: { anchor: "main-root", rel: "tests/run-all.sh" },
+      main: { anchor: "target-main-root", rel: "tests/run-all.sh" },
       bogus: { anchor: "no-such-anchor", rel: "tests/run-all.sh" },
     },
   },
@@ -59,15 +59,15 @@ if (mode === "registry") {
   process.exit(0);
 }
 
-const anchors = anchorMod.resolveAnchors(mainRoot);
+const anchors = anchorMod.resolveAnchors(targetMainRoot);
 if (anchors.error) { out("anchors_error", anchors.error); process.exit(9); }
 
 if (mode === "resolve") {
   const fam = spawnMod.resolveScript(probeEntry, "fam", anchors, linked);
   const mn = spawnMod.resolveScript(probeEntry, "main", anchors, linked);
   out("fam_under_cwd", anchorMod.isUnder(fam, linked, false) ? 1 : 0);
-  out("main_under_mainroot", anchorMod.isUnder(mn, mainRoot, false) ? 1 : 0);
-  out("fam_under_mainroot", anchorMod.isUnder(fam, mainRoot, false) ? 1 : 0);
+  out("main_under_mainroot", anchorMod.isUnder(mn, targetMainRoot, false) ? 1 : 0);
+  out("fam_under_mainroot", anchorMod.isUnder(fam, targetMainRoot, false) ? 1 : 0);
   out("differ", anchorMod.samePath(fam, mn) ? 0 : 1);
   out("bogus_err", errOf(() => spawnMod.resolveScript(probeEntry, "bogus", anchors, linked)));
   out("fam_nocwd_err", errOf(() => spawnMod.resolveScript(probeEntry, "fam", anchors, null)));
@@ -77,7 +77,7 @@ if (mode === "resolve") {
 if (mode === "contain") {
   const ex = (cwd) => { const r = spawnMod.scriptExists(trEntry, "runAll", anchors, cwd); return r === null ? "NULL" : "PATH"; };
   out("exists_family", ex(linked));
-  out("exists_mainroot", ex(mainRoot));
+  out("exists_mainroot", ex(targetMainRoot));
   out("exists_outside", ex(outside));
   out("exists_alt", ex(alt));
   out("exists_relative", ex("tests"));
@@ -128,9 +128,9 @@ if (mode === "env") {
     // Non-vacuity per worker: an allowlisted var really did come through, so a
     // buildEnv that returned {} could not make the assertions above pass.
     out("PATHOK__" + wname, typeof (env.PATH || env.Path) === "string" ? 1 : 0);
-    out("ACDOK__" + wname, env.AGENTS_CONFIG_DIR === anchors.acd ? 1 : 0);
+    out("ROOTOK__" + wname, env.AGENTS_MAIN_ROOT === anchorMod.resolveAgentsMainRoot() ? 1 : 0);
     // Value identity, not mere key presence: an entry that arrives empty or
-    // rewritten would not resolve a config dir any better than an absent one.
+    // rewritten would not resolve a config directory any better than an absent one.
     for (const v of CONFIG_PATH_VARS) {
       out("CFG__" + v + "__" + wname, env[v] === process.env[v] ? 1 : 0);
     }
@@ -147,7 +147,7 @@ if (mode === "env-missing") {
   // The missing-value branch of buildEnv. The parent deliberately does NOT hold
   // the two higher-priority config vars while it DOES hold the lower-priority
   // ones. What must not happen is the absent names arriving as the four-letter
-  // string "undefined" or as "": a child gh would then resolve its config dir
+  // string "undefined" or as "": a child gh would then resolve its config directory
   // against a directory literally named `undefined` instead of falling through to
   // APPDATA, which is strictly worse than the variable being absent.
   //
@@ -175,27 +175,15 @@ if (mode === "env-missing") {
 }
 
 if (mode === "env-edge") {
-  // Byte-level passthrough of config-path VALUES.
-  //
-  // The vehicle is APPDATA — a variable that is ALREADY on the allowlist. Running
-  // these rows on GH_CONFIG_DIR / XDG_CONFIG_HOME would make every one of them
-  // red purely because those two are not admitted yet, drowning the single
-  // membership signal the #1719 groups exist to give in one copy per row.
-  // Value handling in buildEnv is one code path for every member of the list, so
-  // the vehicle choice costs no coverage.
-  //
-  // Values are constructed HERE and assigned into process.env rather than planted
-  // by the shell: an empty string, a non-ASCII path and a metacharacter string all
-  // cross a shell -> OS-env -> node boundary differently on Windows and POSIX, and
-  // the claim under test is about buildEnv, not about that boundary. (The shell
-  // DOES plant real config-path values for group G, which is where the OS-env
-  // transport is exercised.)
-  // The two length extremes are named constants because group L re-derives the
-  // SAME long value independently, on the far side of a real subprocess.
-  // Windows caps a single environment variable near 32767 characters and the
-  // whole child environment block draws on the same budget, so 8192 is
-  // deliberately large while leaving ample room for the ~15 other names
-  // buildEnv copies. A value at the hard cap would test the OS, not buildEnv.
+  // Byte-level passthrough of config-path VALUES. The vehicle is APPDATA, which
+  // is ALREADY allowlisted, so these rows carry no membership signal (group G
+  // owns that); buildEnv handles every member's value on one code path.
+  // Values are assigned into process.env HERE, not planted by the shell: an
+  // empty, non-ASCII or metacharacter string crosses shell -> OS-env -> node
+  // differently per platform, and the claim under test is about buildEnv.
+  // The length extremes are named constants because group L re-derives the SAME
+  // long value across a real subprocess; 8192 stays far under the Windows cap
+  // (~32767) so the row tests buildEnv, not the OS.
   const LONG_PREFIX = "C:\\gh-cfg-";
   const LONG_LEN = 8192;
   const LONG_VALUE = LONG_PREFIX + "d".repeat(LONG_LEN - LONG_PREFIX.length);
@@ -280,7 +268,7 @@ PROBE_OUT=""
 # probe <mode>
 probe() {
     PROBE_OUT="$(run_with_timeout 60 env "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
-        node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$1" "$MAIN" "$LINKED" "$OUTSIDE" "$ALT" 2>&1)" || return 1
+        node "$PROBE" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$1" "$MAIN" "$LINKED" "$OUTSIDE" "$ALT" 2>&1)" || return 1
     return 0
 }
 
@@ -310,7 +298,7 @@ probe_with_planted_env() {
         "GH_TOKEN=$FAKE_GH_TOKEN" "GITHUB_TOKEN=$FAKE_GITHUB_TOKEN" \
         "APPDATA=$CFG_APPDATA" "ProgramData=$CFG_PROGDATA" "PROGRAMDATA=$CFG_PROGDATA" \
         "XDG_CONFIG_HOME=$CFG_XDG" "GH_CONFIG_DIR=$CFG_GHDIR" \
-        node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$1" "$MAIN" "$LINKED" "$OUTSIDE" "$ALT" 2>&1)" || return 1
+        node "$PROBE" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$1" "$MAIN" "$LINKED" "$OUTSIDE" "$ALT" 2>&1)" || return 1
     return 0
 }
 
@@ -321,7 +309,7 @@ probe_with_missing_cfg_env() {
     PROBE_OUT="$(run_with_timeout 60 env -u GH_CONFIG_DIR -u XDG_CONFIG_HOME \
         "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "APPDATA=$CFG_APPDATA" "ProgramData=$CFG_PROGDATA" "PROGRAMDATA=$CFG_PROGDATA" \
-        node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$1" "$MAIN" "$LINKED" "$OUTSIDE" "$ALT" 2>&1)" || return 1
+        node "$PROBE" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$1" "$MAIN" "$LINKED" "$OUTSIDE" "$ALT" 2>&1)" || return 1
     return 0
 }
 

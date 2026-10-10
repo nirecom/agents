@@ -44,9 +44,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUBJECT="$AGENTS_DIR/tests/skills/feature-confirm-flags-static.sh"
-OWNER="$AGENTS_DIR/tests/install/install-path-exposed-commands.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SUBJECT="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-confirm-flags-static.sh"
+OWNER="$SCRIPT_CHECKOUT_ROOT/tests/install/install-path-exposed-commands.sh"
 
 PASS=0
 FAIL=0
@@ -394,14 +394,14 @@ extract_fn() { # <file> <name>
 # The focused runner: the copy's own harness (pass/fail/check), the copy's own list reader,
 # the copy's own counter declarations, then the three functions and their run list. What is
 # supplied from outside is only the fixture wiring -- the SSOT path and SSOT_PRESENT -- which
-# the copy normally derives from $AGENTS_DIR.
+# the copy normally derives from $SCRIPT_CHECKOUT_ROOT.
 #
 # <ssot-path> defaults to the REAL install/path-exposed-commands.txt (which is only ever
 # READ). The M6 group in the sibling module passes a throwaway fixture list instead --
 # that argument is the whole reason a mutation of the SSOT *data* is expressible here.
 build_focused() { # <owner-copy> <dst> [ssot-path]
   local src="$1"
-  local ssot="${3:-$AGENTS_DIR/install/path-exposed-commands.txt}"
+  local ssot="${3:-$SCRIPT_CHECKOUT_ROOT/install/path-exposed-commands.txt}"
   {
     echo 'set -uo pipefail'
     echo 'PASS=0; FAIL=0; SKIP=0'
@@ -470,6 +470,6 @@ m5_focused_execution
 
 # M6/M7 mutate the SSOT DATA rather than the test source (rules/coding/file-split.md:
 # a sibling module, because this file is already past the 300-line WARN threshold).
-. "$AGENTS_DIR/tests/tests/fix-1967-c9-delegation-mutation/ssot-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/tests/fix-1967-c9-delegation-mutation/ssot-fixture.sh"
 
 finish

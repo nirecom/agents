@@ -10,6 +10,6 @@
 // command it just told the caller to run.
 "use strict";
 
-const OFF_CLEARANCE_INVOCATION = 'bash "$AGENTS_CONFIG_DIR/bin/request-off-mode-clearance"';
+const OFF_CLEARANCE_INVOCATION = 'bash "$AGENTS_MAIN_ROOT/bin/request-off-mode-clearance"';
 
 module.exports = { OFF_CLEARANCE_INVOCATION };

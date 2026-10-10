@@ -8,15 +8,17 @@
 # M4-2 / AM-1..3 are RED until Step 6 lands; M4-1 / M4-3 / AM-4 are GREEN today.
 
 set -u
-# Anchor to THIS checkout: an inherited AGENTS_DIR would otherwise win in harness.sh.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Anchor to THIS checkout: an inherited SCRIPT_CHECKOUT_ROOT would otherwise win in harness.sh.
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 WORK="$(make_tmp)"
 trap 'rm -rf "$WORK"' EXIT
 
 SPAWN_ERE='agents/supervisor(-audit)?[.]md'
+# The path-assembly-only files join the agent path from segments, so M4-1 scans for both.
+ASSEMBLY_ERE='"agents", "supervisor(-audit)?[.]md"'
 TRIPWIRE_HINT="classify it in the #2100 detail-plan Step 6 table (H1-H10) and add formatAgentModelLine(<role>) after each spawn line, or mark it path-assembly-only here"
 
 # Classified hit set (Background of the #2100 detail plan): spawn instruction + path assembly only.
@@ -37,9 +39,10 @@ unfollowed_spawn_lines() {
     ' "$1"
 }
 
-# check_spawn_file <label> <rel> <ERE> — pass when <rel> has >=1 spawn line and all are followed.
+# check_spawn_file <label> <rel> <ERE> [root] — pass when <rel> has >=1 spawn line and all
+# are followed. <rel> is read under [root], which defaults to this checkout.
 check_spawn_file() {
-    local label="$1" rel="$2" re="$3" f="$AGENTS_DIR/$2" bad n
+    local label="$1" rel="$2" re="$3" f="${4:-$SCRIPT_CHECKOUT_ROOT}/$2" bad n
     if [ ! -f "$f" ]; then
         fail "$label" "$rel missing"
         return
@@ -57,7 +60,7 @@ check_spawn_file() {
 
 # --- M4-1: the set of files naming a supervisor agent is exactly the classified one
 case_begin "M4-1 supervisor path hit set" "hooks/supervisor-guard.js"
-got_hits="$(cd "$AGENTS_DIR" || exit 1; grep -rlE --exclude-dir=node_modules "$SPAWN_ERE" hooks bin | tr '\\' '/' | LC_ALL=C sort)"
+got_hits="$(cd "$SCRIPT_CHECKOUT_ROOT" || exit 1; grep -rlE --exclude-dir=node_modules "$SPAWN_ERE|$ASSEMBLY_ERE" hooks bin | tr '\\' '/' | LC_ALL=C sort)"
 want_hits="$(printf '%s\n' "$EXPECTED_HITS" | LC_ALL=C sort)"
 if [ -z "$got_hits" ]; then
     fail "M4-1 hit set" "grep found no file at all — vacuous scan"
@@ -92,7 +95,7 @@ printf '%s\n' '  lines.push("Action: invoke agents/supervisor.md as a subagent."
 assert_eq "$(unfollowed_spawn_lines "$WORK/bare.js" "$SPAWN_ERE")|$(unfollowed_spawn_lines "$WORK/followed.js" "$SPAWN_ERE")|$(unfollowed_spawn_lines "$WORK/last.js" "$SPAWN_ERE")" "2||1"
 # check_spawn_file itself must FAIL on the bare fixture; the subshell keeps that
 # expected FAIL out of this file's counters.
-sub="$( (AGENTS_DIR="$WORK"; PASS=0; FAIL=0; check_spawn_file "probe" "bare.js" "$SPAWN_ERE"; echo "F=$FAIL") | tail -1)"
+sub="$( (PASS=0; FAIL=0; check_spawn_file "probe" "bare.js" "$SPAWN_ERE" "$WORK"; echo "F=$FAIL") | tail -1)"
 assert_eq "$sub" "F=1"
 case_end
 
@@ -100,7 +103,7 @@ case_end
 # reviewer model line right after "  Agent file:". RED until Step 6 (AM-4 GREEN).
 harness_isolate "$WORK/iso"
 NEUTRAL="$WORK/neutral"; mkdir -p "$NEUTRAL"
-AUDIT_ARM_NODE="$(np "$AGENTS_DIR")/hooks/supervisor-guard/audit-arm.js"
+AUDIT_ARM_NODE="$(np "$SCRIPT_CHECKOUT_ROOT")/hooks/supervisor-guard/audit-arm.js"
 AM_JS="const a = require('$AUDIT_ARM_NODE');
 process.stdout.write(a.formatAuditArmReason(
   { run_id: 'run-am', cause: 'pre-merge', sub_checks: ['S1', 'S2'] },
@@ -113,7 +116,7 @@ am_render() {
     printf '%b' "$1" > "$cfg/.env"
     (cd "$NEUTRAL" || exit 1
      env -u REVIEWER_MODEL -u ALERT_MODEL -u PRODUCER_HIGH_MODEL -u PRODUCER_LOW_MODEL \
-        -u CLAUDE_PROJECT_DIR -u CLAUDE_CODE_SUBAGENT_MODEL AGENTS_CONFIG_DIR="$(np "$cfg")" \
+        -u CLAUDE_PROJECT_DIR -u CLAUDE_CODE_SUBAGENT_MODEL AGENTS_MAIN_ROOT="$(np "$cfg")" \
         bash "$RWT" 10 node -e "$AM_JS" >"$WORK/out" 2>"$WORK/err")
     AM_RC=$?
     AM_OUT="$(cat "$WORK/out")"; AM_ERR="$(cat "$WORK/err")"

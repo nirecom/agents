@@ -59,17 +59,17 @@ process.stdout.write(r === null ? '<null>' : String(r));
 # Mutation probe: that tier only considered a cwd inside the agents repo, and
 # derived its directory as resolve(cwd).toLowerCase() with every non-alphanumeric
 # replaced by '-' under CLAUDE_TRANSCRIPT_BASE_DIR. Both conditions are reproduced
-# here — hence the deliberately non-neutral cwd ($AGENTS_DIR). Safe despite
+# here — hence the deliberately non-neutral cwd ($SCRIPT_CHECKOUT_ROOT). Safe despite
 # rules/test/fixture-isolation.md's neutral-CWD guidance: resolveSessionId only
 # reads, and CLAUDE_TRANSCRIPT_BASE_DIR is pinned to the fixture, so the real
 # ~/.claude/projects is never reached.
-JSONL_DIR="$CLAUDE_TRANSCRIPT_BASE_DIR/$(encode_path "$AGENTS_DIR_NODE")"
+JSONL_DIR="$CLAUDE_TRANSCRIPT_BASE_DIR/$(encode_path "$SCRIPT_CHECKOUT_ROOT_NODE")"
 mkdir -p "$JSONL_DIR"
 printf '{}\n' > "$JSONL_DIR/jsonl-bait-sid.jsonl"
 run_supply_tier "JS-26: JSONL mtime-scan bait ignored (P1-P3 all absent)" "<null>" "
 const { resolveSessionId } = require('$TARGET_NODE');
 const r = resolveSessionId({});
 process.stdout.write(r === null ? '<null>' : String(r));
-" "$AGENTS_DIR"
+" "$SCRIPT_CHECKOUT_ROOT"
 
 teardown

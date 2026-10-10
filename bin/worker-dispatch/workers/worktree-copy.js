@@ -3,7 +3,7 @@
 // Three CLIs in sequence: enumerate, copy, write notes. The agent's classification step is
 // dropped: .worktreeinclude, applied by bin/worktree-copy-include.js, is the one mechanism
 // that decides what is copied, so secret-file protection stays the include filter's job.
-// main_root and agents_config_dir may appear in the payload for contract parity only; the
+// The two root fields may appear in the payload for contract parity only; the
 // resolved anchors win, so a caller path never redirects which agents repo the CLIs come from.
 
 const path = require("path");
@@ -26,7 +26,7 @@ function firstLine(text) {
 }
 
 // Step 1 — inventory. Its only remaining consumer is the log and this
-// precondition check: a main-root git cannot enumerate its own ignored files
+// precondition check: a target-main-root git cannot enumerate its own ignored files
 // means nothing downstream is trustworthy either.
 function inventory(ctx) {
   const counts = {};
@@ -35,7 +35,7 @@ function inventory(ctx) {
       anchors: ctx.anchors,
       command: "git",
       args: ["ls-files", "--others", ...extra, "--exclude-standard", "-z"],
-      cwd: ctx.anchors.mainRoot,
+      cwd: ctx.anchors.targetMainRoot,
       timeoutMs: GIT_TIMEOUT_MS,
     });
     if (res.timedOut) return { error: `git ls-files (${key}) exceeded its budget` };
@@ -56,8 +56,8 @@ function copyInclude(ctx, worktreePath) {
       anchors: ctx.anchors,
       command: "node",
       script: "includeFilter",
-      args: ["--main-root", ctx.anchors.mainRoot, "--worktree-path", worktreePath],
-      cwd: ctx.anchors.mainRoot,
+      args: ["--target-main-root", ctx.anchors.targetMainRoot, "--worktree-path", worktreePath],
+      cwd: ctx.anchors.targetMainRoot,
       timeoutMs: COPY_TIMEOUT_MS,
     });
   } catch (e) {
@@ -99,7 +99,7 @@ function siblingWorktrees(ctx, sessionId) {
       command: "node",
       script: "parseWorktrees",
       args: [intentPath],
-      cwd: ctx.anchors.mainRoot,
+      cwd: ctx.anchors.targetMainRoot,
       timeoutMs: NOTES_TIMEOUT_MS,
     });
     const out = String(res.stdout || "").trim();
@@ -119,8 +119,8 @@ function writeNotes(ctx, worktreePath, branch, sessionId, copiedJson, siblingJso
       anchors: ctx.anchors,
       command: "node",
       script: "writeNotes",
-      args: [ctx.anchors.mainRoot, worktreePath, branch, "", sessionId],
-      cwd: ctx.anchors.mainRoot,
+      args: [ctx.anchors.targetMainRoot, worktreePath, branch, "", sessionId],
+      cwd: ctx.anchors.targetMainRoot,
       timeoutMs: NOTES_TIMEOUT_MS,
       extraEnv: { COPIED_JSON: copiedJson, SIBLING_WORKTREES_JSON: siblingJson },
     });
@@ -175,7 +175,7 @@ function run(payload, ctx) {
     ctx,
     "worktree-copy-worker.log",
     [
-      `main-root: ${anchors.mainRoot}`,
+      `target-main-root: ${anchors.targetMainRoot}`,
       `worktree: ${worktreePath}`,
       `branch: ${branch}`,
       `session-id: ${sessionId === "" ? "(none)" : sessionId}`,

@@ -2,7 +2,6 @@
 # bin/github-issues/wip-set-single.sh — probe meta label + set WIP for one issue.
 #
 # Usage: wip-set-single.sh [--repo <owner/repo|repo>] [--session-id <SID>] <issue-number>
-# Env:   AGENTS_CONFIG_DIR (required)
 #
 # --repo: optional repository slug (short form "repo" or full "owner/repo").
 #         Propagated to `gh issue view` for the label probe AND to wip-state.sh
@@ -17,7 +16,7 @@
 
 set -uo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 N=""
 SID_ARG=""
@@ -73,7 +72,7 @@ if [[ -n "$REPO_ARG" ]] && [[ "$REPO_ARG" != *"/"* ]]; then
     }
 fi
 
-WIP_SCRIPT="$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh"
+WIP_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh"
 
 LABELS_JSON=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json labels --jq '[.labels[].name]' 2>/dev/null) || LABELS_JSON=""
 

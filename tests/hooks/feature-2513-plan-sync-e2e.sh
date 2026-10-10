@@ -12,18 +12,18 @@ set -uo pipefail
 # - installer wiring (install.sh / install.ps1 invoking bin/plan-sync-init)
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=../lib/plan-sync-fixture.sh
-. "$AGENTS_DIR/tests/lib/plan-sync-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-sync-fixture.sh"
 
 psf_setup || { fail "setup" "psf_setup failed"; exit 1; }
 psf_tag_unimplemented_fails
 trap psf_cleanup EXIT
-CLI="$(psf_np "$AGENTS_DIR/bin/plan-sync-init")"
-SPL="$(psf_np "$AGENTS_DIR/hooks/show-plan-link.js")"
-CCP="$(psf_np "$AGENTS_DIR/hooks/confirm-checkpoint.js")"
+CLI="$(psf_np "$SCRIPT_CHECKOUT_ROOT/bin/plan-sync-init")"
+SPL="$(psf_np "$SCRIPT_CHECKOUT_ROOT/hooks/show-plan-link.js")"
+CCP="$(psf_np "$SCRIPT_CHECKOUT_ROOT/hooks/confirm-checkpoint.js")"
 PLANS="$WORKFLOW_PLANS_DIR"
 BARE="$PSF_ROOT/bare.git"
 BLOB="https://github.com/test-owner/test-repo/blob/main"
@@ -190,7 +190,7 @@ case_end
 
 case_begin "cli-env-example-placeholder-not-provisioned" "bin/plan-sync-init"
 # A copied .env.example must not provision its placeholder remote; the value is read at runtime.
-CL6_URL="$(grep -m1 '^PLAN_SYNC_REMOTE_URL=' "$AGENTS_DIR/.env.example" 2>/dev/null)"
+CL6_URL="$(grep -m1 '^PLAN_SYNC_REMOTE_URL=' "$SCRIPT_CHECKOUT_ROOT/.env.example" 2>/dev/null)"
 CL6_URL="${CL6_URL#PLAN_SYNC_REMOTE_URL=}"
 CL6="$PSF_ROOT/cl6-plans"; mkdir -p "$CL6"
 : > "$GIT_SSH_STUB_LOG"
@@ -205,13 +205,13 @@ fi
 case_end
 
 case_begin "cli-env-example-copied-config-load" "bin/plan-sync-init"
-# .env.example copied verbatim as the fixture config dir's .env; the env var stays unset so the
-# real AGENTS_CONFIG_DIR load path is the only source. CLI9b rewrites the line to prove it is read.
+# .env.example copied verbatim as the fixture agents main root's .env; the env var stays unset so the
+# real AGENTS_MAIN_ROOT load path is the only source. CLI9b rewrites the line to prove it is read.
 CL9_SAVED_URL="$PLAN_SYNC_REMOTE_URL"; unset PLAN_SYNC_REMOTE_URL
 CL9_CFG="$PSF_ROOT/cl9-cfg"; CL9="$PSF_ROOT/cl9-plans"; mkdir -p "$CL9_CFG" "$CL9"
-cp "$AGENTS_DIR/.env.example" "$CL9_CFG/.env"
+cp "$SCRIPT_CHECKOUT_ROOT/.env.example" "$CL9_CFG/.env"
 : > "$GIT_SSH_STUB_LOG"
-AGENTS_CONFIG_DIR="$CL9_CFG" WORKFLOW_PLANS_DIR="$CL9" run_cli
+AGENTS_MAIN_ROOT="$CL9_CFG" WORKFLOW_PLANS_DIR="$CL9" run_cli
 expect_rc "CLI9a copied placeholder -> exit 1" 1
 expect_has "CLI9a refusal names the placeholder read from the file" "$CLI_OUT" "url-placeholder"
 if [ "$CLI_RC" = "NI" ]; then fail "CLI9a nothing written, remote never contacted" "not implemented ($CLI_OUT)"
@@ -219,8 +219,8 @@ elif [ -e "$CL9/.git" ] || [ -e "$CL9/.gitignore" ]; then fail "CLI9a nothing wr
 elif [ -s "$GIT_SSH_STUB_LOG" ]; then fail "CLI9a nothing written, remote never contacted" "ssh contacted: $(tr '\n' ' ' < "$GIT_SSH_STUB_LOG")"
 else pass "CLI9a nothing written, remote never contacted"; fi
 CL9B="$PSF_ROOT/cl9b-plans"; mkdir -p "$CL9B"
-sed "s#^PLAN_SYNC_REMOTE_URL=.*#PLAN_SYNC_REMOTE_URL=$PSF_ORIGIN_E2E#" "$AGENTS_DIR/.env.example" > "$CL9_CFG/.env"
-AGENTS_CONFIG_DIR="$CL9_CFG" WORKFLOW_PLANS_DIR="$CL9B" run_cli
+sed "s#^PLAN_SYNC_REMOTE_URL=.*#PLAN_SYNC_REMOTE_URL=$PSF_ORIGIN_E2E#" "$SCRIPT_CHECKOUT_ROOT/.env.example" > "$CL9_CFG/.env"
+AGENTS_MAIN_ROOT="$CL9_CFG" WORKFLOW_PLANS_DIR="$CL9B" run_cli
 expect_rc "CLI9b non-placeholder value in the same file provisions -> exit 0" 0
 if [ -d "$CL9B/.git" ]; then pass "CLI9b .git created from the file's URL"; else fail "CLI9b .git created from the file's URL" "out=$CLI_OUT"; fi
 stub_log_ok "CLI9b ssh request targets the file's /test-owner/test-repo.git"
@@ -230,7 +230,7 @@ case_end
 case_begin "cli-remote-url-differs-from-env-warns" "bin/plan-sync-init"
 # A successful --remote-url run whose value differs from the .env-resolved PLAN_SYNC_REMOTE_URL
 # (empty / unset included) prints one stdout warning line; exit stays 0. Equal values, or no
-# --remote-url, print none. The env var is unset so the fixture config dir's .env is the source.
+# --remote-url, print none. The env var is unset so the fixture agents main root's .env is the source.
 # The warning is matched loosely: a stdout line starting "plan-sync:" naming PLAN_SYNC_REMOTE_URL and .env.
 CLW_SAVED_URL="$PLAN_SYNC_REMOTE_URL"; unset PLAN_SYNC_REMOTE_URL
 CLW_CFG="$PSF_ROOT/clw-cfg"; mkdir -p "$CLW_CFG"
@@ -245,7 +245,7 @@ has_env_warning() { printf '%s\n' "$1" | grep '^plan-sync:' | grep -F 'PLAN_SYNC
 clw_case() {
   local id="$1" body="$2" want="$3" d="$PSF_ROOT/clw-$1-plans"; shift 3
   mkdir -p "$d"; printf '%s' "$body" > "$CLW_CFG/.env"; setup_ssh_stub "$BARE"
-  AGENTS_CONFIG_DIR="$CLW_CFG" WORKFLOW_PLANS_DIR="$d" run_cli_stdout "$@"
+  AGENTS_MAIN_ROOT="$CLW_CFG" WORKFLOW_PLANS_DIR="$d" run_cli_stdout "$@"
   expect_rc "CLIW-$id exit 0" 0
   if [ -n "$(git -C "$d" config --get plansync.version 2>/dev/null)" ]; then pass "CLIW-$id provisioned"
   else fail "CLIW-$id provisioned" "out=$CLI_OUT"; fi
@@ -265,7 +265,7 @@ clw_case c "PLAN_SYNC_REMOTE_URL=$PSF_ORIGIN_E2E
 " none
 # e: differing --remote-url but provisioning fails (unreachable) -> exit 1, no mismatch warning.
 CLWE="$PSF_ROOT/clw-e-plans"; mkdir -p "$CLWE"; printf 'PLAN_SYNC_REMOTE_URL=\n' > "$CLW_CFG/.env"
-AGENTS_CONFIG_DIR="$CLW_CFG" WORKFLOW_PLANS_DIR="$CLWE" GIT_SSH_COMMAND=false run_cli_stdout --remote-url "$PSF_ORIGIN_DEAD"
+AGENTS_MAIN_ROOT="$CLW_CFG" WORKFLOW_PLANS_DIR="$CLWE" GIT_SSH_COMMAND=false run_cli_stdout --remote-url "$PSF_ORIGIN_DEAD"
 expect_rc "CLIW-e unreachable remote -> exit 1" 1
 if [ "$CLI_RC" = "NI" ]; then fail "CLIW-e no mismatch warning when provisioning fails" "not implemented ($CLI_OUT)"
 elif has_env_warning "$CLI_OUT"; then fail "CLIW-e no mismatch warning when provisioning fails" "stdout=$CLI_OUT"

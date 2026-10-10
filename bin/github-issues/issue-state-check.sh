@@ -11,7 +11,7 @@
 # --repo: optional repository slug (short form "repo" or full "owner/repo").
 #         Short form is normalized via `gh repo view` to full owner/repo.
 #
-# Dependencies: `gh` CLI only. Does NOT require AGENTS_CONFIG_DIR.
+# Dependencies: `gh` CLI only. Needs no root variable.
 set -euo pipefail
 
 REPO_ARG=""

@@ -17,22 +17,22 @@ if ! command -v node >/dev/null 2>&1; then
   exit 77
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BARREL="$AGENTS_DIR/hooks/workflow-state.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+BARREL="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state.js"
 BARREL_N="$(cygpath -m "$BARREL" 2>/dev/null || echo "$BARREL")"
-STATEIO="$AGENTS_DIR/hooks/workflow-state/state-io.js"
+STATEIO="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js"
 STATEIO_N="$(cygpath -m "$STATEIO" 2>/dev/null || echo "$STATEIO")"
-COMPLETION_APPROVAL="$AGENTS_DIR/hooks/workflow-state/completion-approval.js"
+COMPLETION_APPROVAL="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/completion-approval.js"
 COMPLETION_APPROVAL_N="$(cygpath -m "$COMPLETION_APPROVAL" 2>/dev/null || echo "$COMPLETION_APPROVAL")"
-HANDLERS="$AGENTS_DIR/hooks/workflow-mark/not-needed-handlers.js"
+HANDLERS="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark/not-needed-handlers.js"
 HANDLERS_N="$(cygpath -m "$HANDLERS" 2>/dev/null || echo "$HANDLERS")"
-NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
-RECORD_CLI="$AGENTS_DIR/bin/workflow/record-skip-verdict"
+NEXT_STEP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
+RECORD_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-verdict"
 
-CI_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
-MOP_SKILL="$AGENTS_DIR/skills/make-outline-plan/SKILL.md"
-SKIP_VERIFIER="$AGENTS_DIR/agents/skip-verifier.md"
-SETTINGS="$AGENTS_DIR/settings.json"
+CI_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
+MOP_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/SKILL.md"
+SKIP_VERIFIER="$SCRIPT_CHECKOUT_ROOT/agents/skip-verifier.md"
+SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
 SETTINGS_N="$(cygpath -m "$SETTINGS" 2>/dev/null || echo "$SETTINGS")"
 
 PASS=0
@@ -187,8 +187,8 @@ else
 fi
 
 # S2: check-outline-skip.sh and check-detail-skip.sh each contain 'judgment' (≥1 each, C2 gap)
-MOP_OUTLINE_SKIP_S2="$AGENTS_DIR/skills/make-outline-plan/scripts/check-outline-skip.sh"
-MOP_DETAIL_SKIP_S2="$AGENTS_DIR/skills/make-outline-plan/scripts/check-detail-skip.sh"
+MOP_OUTLINE_SKIP_S2="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/scripts/check-outline-skip.sh"
+MOP_DETAIL_SKIP_S2="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/scripts/check-detail-skip.sh"
 S2_OUTLINE_COUNT="$(grep -cF 'process.stdout.write(v ? "auto" : "judgment")' "$MOP_OUTLINE_SKIP_S2" 2>/dev/null || echo 0)"
 S2_DETAIL_COUNT="$(grep -cF 'process.stdout.write(v ? "auto" : "judgment")' "$MOP_DETAIL_SKIP_S2" 2>/dev/null || echo 0)"
 if [ -f "$MOP_OUTLINE_SKIP_S2" ] && [ -f "$MOP_DETAIL_SKIP_S2" ] \
@@ -273,7 +273,7 @@ else
 fi
 
 # S10: A-5 detect-scope-change.sh exists (C5 gap)
-DETECT_SCOPE="$AGENTS_DIR/bin/detect-scope-change.sh"
+DETECT_SCOPE="$SCRIPT_CHECKOUT_ROOT/bin/detect-scope-change.sh"
 if [ -f "$DETECT_SCOPE" ]; then
   pass "S10. detect-scope-change.sh exists (A-5)"
 else

@@ -18,13 +18,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TARGET="$AGENTS_DIR/bin/github-issues/issue-create.sh"
-DISPATCH="$AGENTS_DIR/bin/github-issues/issue-create-dispatch.sh"
-SKILL_MD="$AGENTS_DIR/skills/issue-create/SKILL.md"
-WORKFLOW_INIT_MD="$AGENTS_DIR/skills/workflow-init/SKILL.md"
-RULES_GH="$AGENTS_DIR/rules/github-issues.md"
-CLAUDE_MD="$AGENTS_DIR/CLAUDE.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TARGET="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create.sh"
+DISPATCH="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-dispatch.sh"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/SKILL.md"
+WORKFLOW_INIT_MD="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
+RULES_GH="$SCRIPT_CHECKOUT_ROOT/rules/github-issues.md"
+CLAUDE_MD="$SCRIPT_CHECKOUT_ROOT/CLAUDE.md"
 
 PASS=0
 FAIL=0

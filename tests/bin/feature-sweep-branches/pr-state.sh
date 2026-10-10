@@ -6,8 +6,12 @@
 # Sourced helpers come from _lib.sh. Runnable standalone:
 #   bash tests/bin/feature-sweep-branches/pr-state.sh
 
+# isolation (#2512): harness before _lib.sh so _lib's pass/fail/run_with_timeout override harness's.
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+# Always pin under _lib.sh's TMPDIR_BASE (its EXIT trap removes it); never keep an inherited value.
+harness_isolate "$TMPDIR_BASE/isolation"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T16 — open-unmerged-PR branch: --state all returns "1", --state merged "0"
@@ -19,7 +23,7 @@ T16_open_unmerged_pr_branch_preserved() {
     local stubdir="$TMPDIR_BASE/t16-stub"
     local stale_epoch="1577836800"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     make_branch_with_date "$repo" "feature/open-t16" "$stale_epoch"
 
     if [ ! -x "$SWEEP" ]; then
@@ -41,9 +45,8 @@ GHSTUB
     chmod +x "$ghstubdir/gh"
 
     local out exit_code
-    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" \
-        SWEEP_AGE_DAYS=1 \
-        run_with_timeout bash "$SWEEP" --apply --delete-no-pr --ci-mode 2>&1)"
+    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" SWEEP_AGE_DAYS=1 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --apply --delete-no-pr --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -73,7 +76,7 @@ T19_pr_state_unknown_skipped() {
     local stubdir="$TMPDIR_BASE/t19-stub"
     local stale_epoch="1577836800"
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
     make_branch_with_date "$repo" "feature/unknown-t19" "$stale_epoch"
 
     # Stub gh exits non-zero so classify_pr_state must return "unknown".
@@ -89,9 +92,8 @@ GHSTUB
     chmod +x "$ghstubdir/gh"
 
     local out exit_code
-    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" \
-        SWEEP_AGE_DAYS=1 \
-        run_with_timeout bash "$SWEEP" --apply --delete-no-pr --ci-mode 2>&1)"
+    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" SWEEP_AGE_DAYS=1 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --apply --delete-no-pr --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then

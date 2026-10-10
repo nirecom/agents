@@ -14,6 +14,8 @@ const { resolveCommitRepoDir, extractInlineBashWriteContent } = require("./lib/c
 const { extractStagedFilesRelative } = require("./lib/bash-write-targets/staged");
 const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
+
 const HOOK_NAME = "scan-outbound";
 
 function approve() {
@@ -47,10 +49,8 @@ function normalizePath(fp) {
   return fp;
 }
 
-// This script lives in agents/hooks/; scanner is at agents/bin/
-const AGENTS_DIR = path.resolve(__dirname, "..");
-const SCANNER = path.join(AGENTS_DIR, "bin", "scan-outbound.sh");
-const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
+const SCANNER = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "scan-outbound.sh");
+const OFFENSIVE_SCANNER = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "scan-offensive");
 
 // Main async logic wrapped in an IIFE to allow await on Promise-returning stubs
 (async function main() {
@@ -192,7 +192,6 @@ const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
               const mRes = spawnSync("bash", [shellPath(SCANNER), "--manifest"], {
                 input: Buffer.concat(frames),
                 timeout: 10000,
-                env: { ...process.env, AGENTS_CONFIG_DIR: process.env.AGENTS_CONFIG_DIR || AGENTS_DIR },
               });
               if (mRes.error || mRes.status === null) {
                 block("Staged manifest scanner failed: " + (mRes.error ? mRes.error.message : "no status"));
@@ -255,7 +254,6 @@ const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
         input: content,
         encoding: "utf8",
         timeout: 10000,
-        env: { ...process.env, AGENTS_CONFIG_DIR: process.env.AGENTS_CONFIG_DIR || AGENTS_DIR },
       });
     }
     const offensiveResult = spawnSync("node", [shellPath(OFFENSIVE_SCANNER), "--stdin", shellPath(label)], {

@@ -9,8 +9,8 @@
 # TDD (write_code has not run): the vocabulary and rejection cases are expected to FAIL until HANDOFF_ORIGINS is renamed; the legacy read-back cases already hold and pin the compatibility contract.
 
 set -u
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 TMP="$(make_tmp)"
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
@@ -19,7 +19,7 @@ export WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
 export WORKFLOW_PLANS_DIR="$WORKFLOW_STATE_DIR"
 export HOME="$(np "$TMP/home")" USERPROFILE="$(np "$TMP/home")"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/transcripts")"
-export AGENTS="$(np "$AGENTS_DIR")"
+export AGENTS="$(np "$SCRIPT_CHECKOUT_ROOT")"
 cd "$TMP" || exit 1
 
 nj() { run_with_timeout 60 node "$(np "$TMP/$1")" "${@:2}" 2>&1; }
@@ -59,7 +59,7 @@ expect "O1: HANDOFF_ORIGINS is the four renamed values; the writer refuses step-
 case_end
 
 case_begin "cli-refuses-the-retired-origin" "bin/workflow/handoff-append"
-run_with_timeout 60 node "$AGENTS_DIR/bin/workflow/handoff-append" --session cli-sid --class D --step - --key retired --summary s --pointer - --origin step-end >/dev/null 2>"$TMP/cli.err"
+run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/handoff-append" --session cli-sid --class D --step - --key retired --summary s --pointer - --origin step-end >/dev/null 2>"$TMP/cli.err"
 RC=$?
 expect "O2: --origin step-end exits 2" "$RC" "2"
 expect "O2: the usage names procedure-point as a valid origin" "$(grep -q 'procedure-point' "$TMP/cli.err" && echo yes || echo no)" "yes"

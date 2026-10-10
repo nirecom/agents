@@ -2,6 +2,7 @@
 # Tests: hooks/lib/forge/gitlab.js, hooks/lib/forge-router.js
 # Tags: scope:issue-specific, gitlab, forge, security, visibility, glab-stub, TL2, private-repo-list
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # Issue #2513 — codehostGitlab.repoVisibility(remoteUrl) -> "public" | "private" |
 #   "internal" | null via `glab api projects/<url-encoded path> --jq .visibility`.
@@ -13,9 +14,9 @@ set -u
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 # shellcheck source=../../lib/cli-stub.sh
-. "$AGENTS_DIR/tests/lib/cli-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/cli-stub.sh"
 
-FORGE_ROUTER_JS="$(nodepath "$AGENTS_DIR/hooks/lib/forge-router.js")"
+FORGE_ROUTER_JS="$(nodepath "$SCRIPT_CHECKOUT_ROOT/hooks/lib/forge-router.js")"
 GL_LOG="$TMPROOT/glab-stub.log"
 GL_URL="https://gitlab.com/acme/widgets.git"
 GL_DRIVER="$TMPROOT/gl-visibility-driver.js"
@@ -196,7 +197,7 @@ process.stdout.write(JSON.stringify(r));
 NODE
 HG_LOG="$(nodepath "$TMPROOT/gl-hostname.log")"
 HG_CWD="$TMPROOT/hg-neutral"; mkdir -p "$HG_CWD"
-# AGENTS_CONFIG_DIR/.env wins over process.env, so each fixture cfg pins the host exactly.
+# AGENTS_MAIN_ROOT/.env wins over process.env, so each fixture cfg pins the host exactly.
 HG_CFG_SELF="$TMPROOT/hg-cfg-self"; mkdir -p "$HG_CFG_SELF"
 printf 'GITLAB_HOSTNAME=gitlab.example.com\n' > "$HG_CFG_SELF/.env"
 HG_CFG_NONE="$TMPROOT/hg-cfg-none"; mkdir -p "$HG_CFG_NONE"
@@ -205,7 +206,7 @@ printf '# no forge host declared here\n' > "$HG_CFG_NONE/.env"
 hg_run() {
     : > "$HG_LOG"
     (cd "$HG_CWD" && unset GITLAB_HOSTNAME GITLAB_SSH_HOSTNAME \
-        && AGENTS_CONFIG_DIR="$(nodepath "$1")" HG_LOG="$HG_LOG" HG_OUT="$2" HG_RC="$3" HG_MODE="$4" \
+        && AGENTS_MAIN_ROOT="$(nodepath "$1")" HG_LOG="$HG_LOG" HG_OUT="$2" HG_RC="$3" HG_MODE="$4" \
         run_with_timeout 20 node "$HG_DRIVER" "$GITLAB_JS" "$5" "${6:-}" 2>/dev/null)
 }
 hg_log() { cat "$HG_LOG" 2>/dev/null; }

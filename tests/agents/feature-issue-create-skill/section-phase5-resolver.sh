@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # F-622-1: run-phase5-record.sh mentions worktree-notes-append.js
 # ---------------------------------------------------------------------------
-_PHASE5_SCRIPT="$AGENTS_DIR/skills/issue-create/scripts/run-phase5-record.sh"
+_PHASE5_SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/scripts/run-phase5-record.sh"
 if [ ! -f "$_PHASE5_SCRIPT" ]; then
     fail "F-622-1: run-phase5-record.sh missing"
 elif grep -q "worktree-notes-append.js" "$_PHASE5_SCRIPT"; then

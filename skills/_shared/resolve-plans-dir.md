@@ -16,7 +16,7 @@ Non-Node callers go through `bin/workflow-plans-dir` (Bash bridge).
 
 ## Protocol (inlined into each consuming SKILL.md)
 
-At the start of Procedure, before the first plans-dir tool call, run `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` as one bare command and read its stdout — an absolute path.
+At the start of Procedure, before the first plans-dir tool call, run `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` as one bare command and read its stdout — an absolute path.
 
 Never assign that command to a variable and echo it back: the bare command already prints the answer, and each Bash call has fresh shell state anyway, so the consumer is you, not the shell.
 
@@ -33,5 +33,5 @@ Substitute the printed path for every `<PLANS_DIR>` placeholder in the SKILL.md.
 
 Never wrap the call in a caller-side `||` fallback: it duplicates the bridge's own contract and forces the prohibited capture-then-echo form.
 
-`AGENTS_CONFIG_DIR` is set in every Claude Code session; helper
+`AGENTS_MAIN_ROOT` is set in every Claude Code session; helper
 unreachability is a configuration error.

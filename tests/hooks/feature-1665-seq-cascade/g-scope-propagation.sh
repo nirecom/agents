@@ -17,10 +17,8 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 # subprocesses and asserts they agree, with each assertion paired (CPR-ORTH)
 # against a run_outcome=pass control so over-blocking fails as loudly as
 # under-blocking.
-
-# TL3 gap: whether workflow-gate.js is actually registered as a PreToolUse hook
-# in the deployed settings.json (this case spawns the hook script directly) is
-# not checked here — see WORKFLOW_USER_VERIFIED preflight (hook-registration).
+# TL3 gap: whether workflow-gate.js is registered as a PreToolUse hook in the deployed
+# settings.json is not checked here — see WORKFLOW_USER_VERIFIED preflight (hook-registration).
 
 CASE_TAG=g
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -29,6 +27,14 @@ REPO="$TMPROOT/repo-g"
 mk_repo "$REPO"
 REPO_N="$(nrm "$REPO")"
 export CLAUDE_PROJECT_DIR="$REPO_N"
+
+# The gate enforces only in the repo its own checkout belongs to: launch it from a copy of this
+# checkout attached to REPO.
+. "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+GATE_CHECKOUT="$TMPROOT/gate-checkout"
+session_repo_fixture_create "$GATE_CHECKOUT" || { fail "G cannot copy the checkout for the gate"; finish; exit; }
+session_repo_fixture_attach "$GATE_CHECKOUT" "$REPO" || { fail "G cannot attach the gate checkout"; finish; exit; }
+GATE_HOOK="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
 
 SID_FAIL="seq1665-g-fail"
 SID_PASS="seq1665-g-pass"

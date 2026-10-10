@@ -7,12 +7,12 @@
 # condition now ends in exit 5 with a fixed token (or a replacement from the reserve), and the
 # real cache area is never written except for the final published record.
 # Invented interface (TDD): cal_parse_start_lines / cal_child_run in calibrate-test-parallelism/
-# measure.sh; sourcing needs AGENTS_DIR, RUNNER, both run-all libs and TEST_LANES=off.
+# measure.sh; sourcing needs SCRIPT_CHECKOUT_ROOT, RUNNER, both run-all libs and TEST_LANES=off.
 # TL3 gap: real contention on a busy host is not reproduced; stubs and instant tests stand in.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 . "$(dirname "${BASH_SOURCE[0]}")/_cal-fixture.sh"
 cf_init
 
@@ -106,8 +106,8 @@ conf_absent "$R" "g5/reserve-exhausted/no-record"
 
 # (7) the stderr parser: submitted tests and width values; verdict seconds never matter
 parse() {
-    ( AGENTS_DIR="$CF_REPO"; RUNNER="$CF_REPO/tests/run-all.sh"; TEST_LANES=off
-      export AGENTS_DIR RUNNER TEST_LANES
+    ( SCRIPT_CHECKOUT_ROOT="$CF_REPO"; RUNNER="$CF_REPO/tests/run-all.sh"; TEST_LANES=off
+      export RUNNER TEST_LANES
       . "$CF_LIB_PAR" >/dev/null 2>&1; . "$CF_LIB_DUR" >/dev/null 2>&1
       . "$MEASURE_MOD" >/dev/null 2>&1 || exit 9
       cal_parse_start_lines "$1" ) 2>/dev/null
@@ -238,8 +238,8 @@ else fail "g5/real-area/legacy-segment-not-migrated" "the calibrator migrated or
 
 # (15)(16) one child run through the REAL runner (seconds, not minutes)
 child() {
-    ( AGENTS_DIR="$CF_REPO"; RUNNER="$CF_REPO/tests/run-all.sh"; TEST_LANES=off
-      export AGENTS_DIR RUNNER TEST_LANES
+    ( SCRIPT_CHECKOUT_ROOT="$CF_REPO"; RUNNER="$CF_REPO/tests/run-all.sh"; TEST_LANES=off
+      export RUNNER TEST_LANES
       . "$CF_LIB_PAR" >/dev/null 2>&1; . "$CF_LIB_DUR" >/dev/null 2>&1
       . "$MEASURE_MOD" >/dev/null 2>&1 || exit 9
       cal_child_run "$@" ) >/dev/null 2>&1

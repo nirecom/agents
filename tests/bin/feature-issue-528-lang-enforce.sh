@@ -15,18 +15,18 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-CONFIG_LIB="$AGENTS_DIR/hooks/lib/lang-config.js"
-LINT_LIB="$AGENTS_DIR/hooks/lib/lint-worktree-notes-lang.js"
-HOOK="$AGENTS_DIR/hooks/check-worktree-notes-lang.js"
-CLI="$AGENTS_DIR/bin/compose-doc-append-entry"
-SETTINGS_JSON="$AGENTS_DIR/settings.json"
+CONFIG_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/lang-config.js"
+LINT_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/lint-worktree-notes-lang.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/check-worktree-notes-lang.js"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/compose-doc-append-entry"
+SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT/settings.json"
 
 if command -v cygpath >/dev/null 2>&1; then
     CONFIG_LIB_NODE="$(cygpath -m "$CONFIG_LIB")"
@@ -64,7 +64,7 @@ src_present() {
     if [ -f "$1" ]; then echo "ok"; else echo "missing"; fi
 }
 
-# Write a .env file in a fresh temp AGENTS_CONFIG_DIR and load the docs-lang
+# Write a .env file in a fresh temp AGENTS_MAIN_ROOT and load the docs-lang
 # config via the zero-arg loadDocsLangConfig() (post-#619 .env-only API).
 # Args: $1=.env body (as written verbatim; may be empty for default)
 #       $2 (optional)="no_env" to omit creating .env at all (missing-file case)
@@ -80,7 +80,7 @@ load_config_json_env() {
         -u DOCS_LANG_PUBLIC -u DOCS_LANG_PRIVATE \
         -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE \
         -u DOCS_LANG_CHANGELOG_PUBLIC -u DOCS_LANG_CHANGELOG_PRIVATE \
-        AGENTS_CONFIG_DIR="$_iso_node" \
+        AGENTS_MAIN_ROOT="$_iso_node" \
         node -e "
         const m = require('$CONFIG_LIB_NODE');
         const cfg = m.loadDocsLangConfig();
@@ -116,14 +116,14 @@ run_config_load() {
             -u DOCS_LANG_PUBLIC -u DOCS_LANG_PRIVATE \
             -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE \
             -u DOCS_LANG_CHANGELOG_PUBLIC -u DOCS_LANG_CHANGELOG_PRIVATE \
-            AGENTS_CONFIG_DIR="$_iso_node" "$@" \
+            AGENTS_MAIN_ROOT="$_iso_node" "$@" \
             node -e "$_script" 2>&1 >/dev/null
     else
         run_with_timeout 15 env \
             -u DOCS_LANG_PUBLIC -u DOCS_LANG_PRIVATE \
             -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE \
             -u DOCS_LANG_CHANGELOG_PUBLIC -u DOCS_LANG_CHANGELOG_PRIVATE \
-            AGENTS_CONFIG_DIR="$_iso_node" "$@" \
+            AGENTS_MAIN_ROOT="$_iso_node" "$@" \
             node -e "$_script" 2>/dev/null
     fi
 }
@@ -179,16 +179,16 @@ lint_json() {
 }
 
 # Run the hook with a JSON input; print stdout.
-# Args: $1=json, $2=optional AGENTS_CONFIG_DIR override
+# Args: $1=json, $2=optional AGENTS_MAIN_ROOT override
 run_hook() {
-    local json="$1" agents_dir="${2:-$AGENTS_CONFIG_DIR}"
+    local json="$1" agents_dir="${2:-$AGENTS_MAIN_ROOT}"
     # Prevent shell DOCS_LANG_* leakage (#619 .env-only). Use a subshell with
     # unset so run_with_timeout (a bash function) remains in scope.
     (
         unset DOCS_LANG_PUBLIC DOCS_LANG_PRIVATE
         unset DOCS_LANG_HISTORY_PUBLIC DOCS_LANG_HISTORY_PRIVATE
         unset DOCS_LANG_CHANGELOG_PUBLIC DOCS_LANG_CHANGELOG_PRIVATE
-        export AGENTS_CONFIG_DIR="$agents_dir"
+        export AGENTS_MAIN_ROOT="$agents_dir"
         echo "$json" | run_with_timeout 15 node "$HOOK" 2>/dev/null
     )
 }

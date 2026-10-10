@@ -9,10 +9,10 @@
 # Layer: TL3 (live claude -p session, real Stop firing, real env-file fixture).
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 
 ERRORS=0
@@ -20,9 +20,9 @@ pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
 # shellcheck source=tests/hooks/TL3-hook-stop-final-report-guard/helpers.sh
-. "$AGENTS_DIR/tests/hooks/TL3-hook-stop-final-report-guard/helpers.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/TL3-hook-stop-final-report-guard/helpers.sh"
 # shellcheck source=tests/hooks/TL3-hook-stop-final-report-guard/main.sh
-. "$AGENTS_DIR/tests/hooks/TL3-hook-stop-final-report-guard/main.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/TL3-hook-stop-final-report-guard/main.sh"
 
 echo ""
 echo "=== Results ==="

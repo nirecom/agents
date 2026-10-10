@@ -14,23 +14,23 @@ set -uo pipefail
 # Anthropic-billable, so CI normally skips it; R1 always runs so the field names the hooks
 # read are checked on every invocation. The real Jev API is never contacted here.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
-. "$AGENTS_DIR/tests/hooks/feature-2460-jev-shadow/_lib.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2460-jev-shadow/_lib.sh"
 SESSION_UUID="3c2a9e71-2460-4b6f-9d1e-7a5b3c2d1e0f"
 
 # R1: the payload fields T1-T3 rely on must be the fields the shipped sources read.
 case_begin "R1-sources-read-the-asserted-fields" "hooks/jev-shadow-pre.js"
-R1_SRCS=("$AGENTS_DIR/hooks/jev-shadow-pre.js" "$AGENTS_DIR/hooks/jev-shadow-post.js" "$AGENTS_DIR/bin/workflow/lib/jev-complexity-adapter.js")
+R1_SRCS=("$SCRIPT_CHECKOUT_ROOT/hooks/jev-shadow-pre.js" "$SCRIPT_CHECKOUT_ROOT/hooks/jev-shadow-post.js" "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/jev-complexity-adapter.js")
 R1_MISSING=""
-for f in "${R1_SRCS[@]}"; do [ -f "$f" ] || R1_MISSING="$R1_MISSING ${f#"$AGENTS_DIR"/}"; done
+for f in "${R1_SRCS[@]}"; do [ -f "$f" ] || R1_MISSING="$R1_MISSING ${f#"$SCRIPT_CHECKOUT_ROOT"/}"; done
 if [ -n "$R1_MISSING" ]; then
   fail "R1: source files missing:$R1_MISSING"
 else
   R1_PROBLEMS=""
   for field in subagent_type tool_use_id; do
     for f in "${R1_SRCS[@]:0:2}"; do
-      grep -qF "$field" "$f" || R1_PROBLEMS="$R1_PROBLEMS [${f#"$AGENTS_DIR"/} never reads $field]"
+      grep -qF "$field" "$f" || R1_PROBLEMS="$R1_PROBLEMS [${f#"$SCRIPT_CHECKOUT_ROOT"/} never reads $field]"
     done
   done
   grep -qF tool_response "${R1_SRCS[2]}" || R1_PROBLEMS="$R1_PROBLEMS [the adapter never reads tool_response]"
@@ -40,8 +40,8 @@ fi
 case_end
 
 # --- TL3 gates (environmental absence only) ---
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || { skip "T1-T5: bin/get-config-var not executable"; finish; exit; }
-if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off; then
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || { skip "T1-T5: bin/get-config-var not executable"; finish; exit; }
+if "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off; then
   skip "T1-T5: requires RUN_TL3=on in .env (Anthropic-billable)"; finish; exit
 fi
 command -v claude >/dev/null 2>&1 || { skip "T1-T5: claude CLI not found"; finish; exit; }
@@ -94,9 +94,9 @@ case_end
 
 unset CLAUDECODE
 ( cd "$REPO_FX" && env -u CLAUDE_CODE_SESSION_ID \
-    -u JEV_HTTP_TIMEOUT_MS -u JEV_PENDING_TTL_MS AGENTS_CONFIG_DIR="$REPO_N" JEV=on TYPESAFE_API_KEY="$SENTINEL_KEY" JEV_BASE_URL="$MOCK_URL" \
+    -u JEV_HTTP_TIMEOUT_MS -u JEV_PENDING_TTL_MS AGENTS_MAIN_ROOT="$REPO_N" JEV=on TYPESAFE_API_KEY="$SENTINEL_KEY" JEV_BASE_URL="$MOCK_URL" \
     TL3_RECORD_FILE="$(np "$RECORD")" \
-    "$AGENTS_DIR/bin/run-with-timeout.sh" 180 claude -p \
+    "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 claude -p \
     "Use the Agent tool once with subagent_type complexity-judge and prompt 'classify this task', then stop." \
     --output-format json --session-id "$SESSION_UUID" --settings "$(np "$SETTINGS_FX")" \
     > "$FX/io/response.json" 2> "$FX/io/claude.err" )

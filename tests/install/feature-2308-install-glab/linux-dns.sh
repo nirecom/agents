@@ -3,7 +3,7 @@
 # (linux-lib.sh) fakes that seam; T10/T11 use the real timeout and /dev/tcp instead.
 
 # Helper (T8/T9): glab stub touching MARKER when `auth <SUB>` runs; else exit 0.
-# AGENTS_CONFIG_DIR is pinned to the (dot-env-less) fake bin dir so the developer's
+# AGENTS_MAIN_ROOT is pinned to the (dot-env-less) fake bin dir so the developer's
 # real .env cannot leak GITLAB_HOSTNAME/TOKEN into the no-cred paths (fixture isolation).
 make_glab_stub() {  # $1=path  $2=auth-subcmd  $3=marker
     printf '#!/usr/bin/env bash\nif [ "$1" = "--version" ]; then echo "glab version 1.0.0"; exit 0; fi\nif [ "$1" = "auth" ] && [ "$2" = "%s" ]; then touch "%s"; exit 0; fi\nexit 0\n' "$2" "$3" > "$1"
@@ -17,9 +17,9 @@ make_glab_stub "$T8_BIN/glab" login "$T8_LOGIN_MARKER"
 make_probe_timeout "$T8_BIN/timeout" 1 "$TMP/t8-probe-args.txt"
 if [ "$GLAB_SH_OK" = "1" ]; then
     T8_OUT="$TMP/t8.log"
-    run_with_timeout 15 env -i PATH="$T8_BIN:$PATH" HOME="$TMP/home-t8" AGENTS_CONFIG_DIR="$T8_BIN" \
+    run_glab_sh 15 "$TMP/home-t8" "$T8_BIN" AGENTS_MAIN_ROOT="$T8_BIN" \
         GITLAB=on GITLAB_HOSTNAME=example.com GITLAB_TOKEN=glpat-test \
-        bash "$GLAB_SH" >"$T8_OUT" 2>&1 </dev/null
+        >"$T8_OUT" 2>&1 </dev/null
     RC=$?
     if [ "$RC" -eq 0 ] && [ ! -f "$T8_LOGIN_MARKER" ] && grep -q "Cannot connect to example.com:443" "$T8_OUT"; then
         pass "T8: glab.sh — probe failure -> auth login skipped, 'Cannot connect to' warning, exit 0"
@@ -36,8 +36,8 @@ T9_STATUS_MARKER="$TMP/t9-auth-status-marker"
 make_glab_stub "$T9_BIN/glab" status "$T9_STATUS_MARKER"
 if [ "$GLAB_SH_OK" = "1" ]; then
     T9_OUT="$TMP/t9.log"
-    run_with_timeout 15 env -i PATH="$T9_BIN:$PATH" HOME="$TMP/home-t9" AGENTS_CONFIG_DIR="$T9_BIN" GITLAB=on \
-        bash "$GLAB_SH" >"$T9_OUT" 2>&1 </dev/null
+    run_glab_sh 15 "$TMP/home-t9" "$T9_BIN" AGENTS_MAIN_ROOT="$T9_BIN" GITLAB=on \
+        >"$T9_OUT" 2>&1 </dev/null
     RC=$?
     if [ "$RC" -eq 0 ] && [ ! -f "$T9_STATUS_MARKER" ] && grep -qi "manual\|GITLAB_HOSTNAME" "$T9_OUT"; then
         pass "T9: glab.sh — no HOSTNAME -> manual auth message, auth status not called"
@@ -56,9 +56,9 @@ make_glab_stub "$T10_BIN/glab" login "$T10_LOGIN_MARKER"
 if [ "$GLAB_SH_OK" = "1" ]; then
     T10_OUT="$TMP/t10.log"
     _t10_start=$SECONDS
-    run_with_timeout 8 env -i PATH="$T10_BIN:$PATH" HOME="$TMP/home-t10" AGENTS_CONFIG_DIR="$T10_BIN" \
+    run_glab_sh 8 "$TMP/home-t10" "$T10_BIN" AGENTS_MAIN_ROOT="$T10_BIN" \
         GITLAB=on GITLAB_HOSTNAME=192.0.2.1 GITLAB_TOKEN=glpat-test \
-        bash "$GLAB_SH" >"$T10_OUT" 2>&1 </dev/null
+        >"$T10_OUT" 2>&1 </dev/null
     RC=$?
     _t10_secs=$((SECONDS - _t10_start))
     if [ "$RC" -eq 0 ] && [ ! -f "$T10_LOGIN_MARKER" ] && [ "$_t10_secs" -lt 8 ]; then
@@ -85,9 +85,9 @@ TA_HOST="ta-host.example.com"
 _make_login_recorder "$TA_BIN/glab" "$TA_AUTH_ARGS"
 make_probe_timeout "$TA_BIN/timeout" 0 "$TA_PROBE_ARGS"
 if [ "$GLAB_SH_OK" = "1" ]; then
-    run_with_timeout 15 env -i PATH="$TA_BIN:$PATH" HOME="$TMP/home-ta" AGENTS_CONFIG_DIR="$TA_BIN" \
+    run_glab_sh 15 "$TMP/home-ta" "$TA_BIN" AGENTS_MAIN_ROOT="$TA_BIN" \
         GITLAB=on GITLAB_HOSTNAME="$TA_HOST" GITLAB_TOKEN=glpat-test \
-        bash "$GLAB_SH" >/dev/null 2>/dev/null </dev/null
+        >/dev/null 2>/dev/null </dev/null
     RC=$?
     AUTH_ARGS="$(cat "$TA_AUTH_ARGS" 2>/dev/null || echo "")"
     AUTH_STDIN="$(cat "$TA_AUTH_ARGS.stdin" 2>/dev/null || echo "")"
@@ -120,9 +120,9 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$TA_MAC_BIN/brew"
 chmod +x "$TA_MAC_BIN/uname" "$TA_MAC_BIN/host" "$TA_MAC_BIN/getent" "$TA_MAC_BIN/brew"
 make_probe_timeout "$TA_MAC_BIN/timeout" 0 "$TA_MAC_PROBE_ARGS"
 if [ "$GLAB_SH_OK" = "1" ]; then
-    run_with_timeout 15 env -i PATH="$TA_MAC_BIN:$PATH" HOME="$TMP/home-ta-mac" AGENTS_CONFIG_DIR="$TA_MAC_BIN" \
+    run_glab_sh 15 "$TMP/home-ta-mac" "$TA_MAC_BIN" AGENTS_MAIN_ROOT="$TA_MAC_BIN" \
         GITLAB=on GITLAB_HOSTNAME="$TA_MAC_HOST" GITLAB_TOKEN=glpat-test \
-        bash "$GLAB_SH" >/dev/null 2>/dev/null </dev/null
+        >/dev/null 2>/dev/null </dev/null
     RC=$?
     MAC_AUTH_ARGS="$(cat "$TA_MAC_AUTH_ARGS" 2>/dev/null || echo "")"
     MAC_PROBE_ARGS="$(cat "$TA_MAC_PROBE_ARGS" 2>/dev/null || echo "")"
@@ -151,7 +151,7 @@ _make_probe_markers() {  # $1=bin dir  $2=marker
 }
 
 # TB: GITLAB=on + HOSTNAME but NO TOKEN -> auth status NOT called, manual message, no probe, exit 0.
-# AGENTS_CONFIG_DIR pinned to the (dot-env-less) fake bin dir so the real .env cannot leak GITLAB_TOKEN.
+# AGENTS_MAIN_ROOT pinned to the (dot-env-less) fake bin dir so the real .env cannot leak GITLAB_TOKEN.
 TB_BIN="$TMP/tb-bin"; mkdir -p "$TB_BIN"
 TB_STATUS_MARKER="$TMP/tb-auth-status-marker"
 TB_PROBE_MARKER="$TMP/tb-probe-called"
@@ -159,9 +159,9 @@ make_glab_stub "$TB_BIN/glab" status "$TB_STATUS_MARKER"
 _make_probe_markers "$TB_BIN" "$TB_PROBE_MARKER"
 if [ "$GLAB_SH_OK" = "1" ]; then
     TB_OUT="$TMP/tb.log"
-    run_with_timeout 15 env -i PATH="$TB_BIN:$PATH" HOME="$TMP/home-tb" AGENTS_CONFIG_DIR="$TB_BIN" \
+    run_glab_sh 15 "$TMP/home-tb" "$TB_BIN" AGENTS_MAIN_ROOT="$TB_BIN" \
         GITLAB=on GITLAB_HOSTNAME=example.com \
-        bash "$GLAB_SH" >"$TB_OUT" 2>&1 </dev/null
+        >"$TB_OUT" 2>&1 </dev/null
     RC=$?
     if [ "$RC" -eq 0 ] && [ ! -f "$TB_STATUS_MARKER" ] && [ ! -f "$TB_PROBE_MARKER" ] && grep -qi "manual\|GITLAB_HOSTNAME\|GITLAB_TOKEN" "$TB_OUT"; then
         pass "TB: glab.sh — HOSTNAME without TOKEN -> manual auth message, auth status + probe not called"
@@ -173,7 +173,7 @@ else
 fi
 
 # TC: GITLAB=on + NO HOSTNAME + TOKEN -> auth status NOT called, manual message, no probe, exit 0.
-# AGENTS_CONFIG_DIR pinned to the fake bin dir so the real .env cannot leak GITLAB_HOSTNAME.
+# AGENTS_MAIN_ROOT pinned to the fake bin dir so the real .env cannot leak GITLAB_HOSTNAME.
 TC_BIN="$TMP/tc-bin"; mkdir -p "$TC_BIN"
 TC_STATUS_MARKER="$TMP/tc-auth-status-marker"
 TC_PROBE_MARKER="$TMP/tc-probe-called"
@@ -181,9 +181,9 @@ make_glab_stub "$TC_BIN/glab" status "$TC_STATUS_MARKER"
 _make_probe_markers "$TC_BIN" "$TC_PROBE_MARKER"
 if [ "$GLAB_SH_OK" = "1" ]; then
     TC_OUT="$TMP/tc.log"
-    run_with_timeout 15 env -i PATH="$TC_BIN:$PATH" HOME="$TMP/home-tc" AGENTS_CONFIG_DIR="$TC_BIN" \
+    run_glab_sh 15 "$TMP/home-tc" "$TC_BIN" AGENTS_MAIN_ROOT="$TC_BIN" \
         GITLAB=on GITLAB_TOKEN=glpat-test \
-        bash "$GLAB_SH" >"$TC_OUT" 2>&1 </dev/null
+        >"$TC_OUT" 2>&1 </dev/null
     RC=$?
     if [ "$RC" -eq 0 ] && [ ! -f "$TC_STATUS_MARKER" ] && [ ! -f "$TC_PROBE_MARKER" ] && grep -qi "manual\|GITLAB_HOSTNAME\|GITLAB_TOKEN" "$TC_OUT"; then
         pass "TC: glab.sh — TOKEN without HOSTNAME -> manual auth message, auth status + probe not called"
@@ -204,9 +204,9 @@ T11_PORT="$(node -e "const s=require('net').createServer().listen(0,'127.0.0.1',
 [ -n "$T11_PORT" ] || T11_PORT=1
 if [ "$GLAB_SH_OK" = "1" ]; then
     T11_OUT="$TMP/t11.log"
-    run_with_timeout 15 env -i PATH="$T11_BIN:$PATH" HOME="$TMP/home-t11" AGENTS_CONFIG_DIR="$T11_BIN" \
+    run_glab_sh 15 "$TMP/home-t11" "$T11_BIN" AGENTS_MAIN_ROOT="$T11_BIN" \
         GITLAB=on GITLAB_HOSTNAME=127.0.0.1 GITLAB_TOKEN=glpat-test GLAB_PROBE_PORT="$T11_PORT" \
-        bash "$GLAB_SH" >"$T11_OUT" 2>&1 </dev/null
+        >"$T11_OUT" 2>&1 </dev/null
     RC=$?
     if [ "$RC" -eq 0 ] && [ ! -f "$T11_LOGIN_MARKER" ] && grep -q "Cannot connect to 127.0.0.1:$T11_PORT" "$T11_OUT" \
        && ! grep -qi "connection refused" "$T11_OUT"; then

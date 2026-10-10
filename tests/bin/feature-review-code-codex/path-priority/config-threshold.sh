@@ -20,7 +20,7 @@ G_CFG="$TMPDIR_BASE/pp-g-cfg"
 # G1 — the .env branch, exercised with the process environment deliberately empty of the key.
 # ---------------------------------------------------------------------------
 pp_make_cfg_dir "$G_CFG" "CODEX_REVIEW_MAX_DIFF_LINES=50" >/dev/null
-PP_ENV=(AGENTS_CONFIG_DIR="$G_CFG")
+PP_ENV=("AGENTS_MAIN_ROOT=$G_CFG")
 PP_OUT="$(pp_run "$G_MID" --base main --no-log)"
 if printf '%s\n' "$PP_OUT" | grep -E "^## Codex Review Scope: TRUNCATED" | grep -q "50"; then
     pass "G1: a cap of 50 set only in a real .env is read through get-config-var and applied"
@@ -38,7 +38,7 @@ fi
 # G2 — precedence. A caller who exports the variable for one run must not be overruled by the
 #      file, or the per-run override is unusable.
 # ---------------------------------------------------------------------------
-PP_ENV=(AGENTS_CONFIG_DIR="$G_CFG" CODEX_REVIEW_MAX_DIFF_LINES=6000)
+PP_ENV=("AGENTS_MAIN_ROOT=$G_CFG" CODEX_REVIEW_MAX_DIFF_LINES=6000)
 PP_OUT="$(pp_run "$G_MID" --base main --no-log)"
 if pp_has "$PP_OUT" "^## Codex Review Scope: TRUNCATED"; then
     fail "G2: the .env value of 50 overruled the process environment's 6000 and truncated a 200-line diff. Output: $PP_OUT"
@@ -53,7 +53,7 @@ fi
 #      ambient environment the suite happens to run in.
 # ---------------------------------------------------------------------------
 pp_make_cfg_dir "$G_CFG" >/dev/null
-PP_ENV=(AGENTS_CONFIG_DIR="$G_CFG")
+PP_ENV=("AGENTS_MAIN_ROOT=$G_CFG")
 PP_OUT="$(pp_run "$G_MID" --base main --no-log)"
 if pp_has "$PP_OUT" "^## Codex Review Scope: TRUNCATED"; then
     fail "G3: a 200-line diff was truncated with no cap configured anywhere. Output: $PP_OUT"
@@ -72,7 +72,7 @@ fi
 #      a repo that wants its 6000-line diff reviewed whole must be able to ask for that. A
 #      residual `head -n 5000` anywhere in the path fails here and nowhere else.
 # ---------------------------------------------------------------------------
-PP_ENV=(AGENTS_CONFIG_DIR="$G_CFG" CODEX_REVIEW_MAX_DIFF_LINES=8000)
+PP_ENV=("AGENTS_MAIN_ROOT=$G_CFG" CODEX_REVIEW_MAX_DIFF_LINES=8000)
 PP_OUT="$(pp_run "$G_BIG" --base main --no-log)"
 if pp_has "$PP_OUT" "^## Codex Review Scope: TRUNCATED"; then
     fail "G4: a 6000-line diff was still truncated under a cap of 8000 — 5000 is still hardcoded somewhere. Output: $PP_OUT"
@@ -92,7 +92,7 @@ fi
 #      to no limit at all" look identical.
 # ---------------------------------------------------------------------------
 for g_bad in abc "5000; rm -rf /" "0" "-1"; do
-    PP_ENV=(AGENTS_CONFIG_DIR="$G_CFG" CODEX_REVIEW_MAX_DIFF_LINES="$g_bad")
+    PP_ENV=("AGENTS_MAIN_ROOT=$G_CFG" CODEX_REVIEW_MAX_DIFF_LINES="$g_bad")
     PP_OUT="$(pp_run "$G_BIG" --base main --no-log)"
     g_n="$(pp_diff_body_lines "$PP_CAPTURE")"
     if ! printf '%s\n' "$PP_OUT" | grep -E "^## Codex Review Scope: TRUNCATED" | grep -q "5000"; then
@@ -110,7 +110,7 @@ done
 # (TRUNCATED) are distinguishable; use pp_exec (not pp_run) so stderr is captured, not discarded.
 G_LONG="$(awk 'BEGIN { s = "9"; for (i = 0; i < 999; i++) s = s "9"; print s }')"
 for g_edge in "" "   " "12.5" "+50" "1e4" "0x1F" "9223372036854775807" "99999999999999999999" "$G_LONG"; do
-    PP_ENV=(AGENTS_CONFIG_DIR="$G_CFG" CODEX_REVIEW_MAX_DIFF_LINES="$g_edge")
+    PP_ENV=("AGENTS_MAIN_ROOT=$G_CFG" CODEX_REVIEW_MAX_DIFF_LINES="$g_edge")
     pp_exec "$G_BIG" --base main --no-log
     PP_ENV=()
     g_n="$(pp_diff_body_lines "$PP_CAPTURE")"
@@ -144,7 +144,7 @@ G8_CANARY="$TMPDIR_BASE/pp-g8-canary-marker"
 rm -f "$G8_CANARY"
 for g8_bad in "0" "-1" "99999999999999999999" "5000; rm -rf /" '$(whoami)' "0; touch $G8_CANARY" "abc"; do
     pp_make_cfg_dir "$G_CFG" "CODEX_REVIEW_MAX_DIFF_LINES=$g8_bad" >/dev/null
-    PP_ENV=(AGENTS_CONFIG_DIR="$G_CFG")
+    PP_ENV=("AGENTS_MAIN_ROOT=$G_CFG")
     pp_exec "$G_BIG" --base main --no-log
     PP_ENV=()
     g8_label="$g8_bad"

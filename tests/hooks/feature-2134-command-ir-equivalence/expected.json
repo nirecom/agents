@@ -2970,27 +2970,27 @@
   "l08-allow-rule-form": {
     "argv": [
       "-c",
-      "cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on"
+      "cd \"$AGENTS_MAIN_ROOT\" && bash \"$AGENTS_MAIN_ROOT/bin/confirm-off\" FLAG on"
     ],
     "cmd0": "bash",
     "kind": "simple",
     "parseFailure": false,
-    "rawText": "bash -c 'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on'",
+    "rawText": "bash -c 'cd \"$AGENTS_MAIN_ROOT\" && bash \"$AGENTS_MAIN_ROOT/bin/confirm-off\" FLAG on'",
     "redirects": [],
     "segments": [
       {
         "argv": [
           "-c",
-          "cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on"
+          "cd \"$AGENTS_MAIN_ROOT\" && bash \"$AGENTS_MAIN_ROOT/bin/confirm-off\" FLAG on"
         ],
         "argvRaw": [
           "-c",
-          "'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on'"
+          "'cd \"$AGENTS_MAIN_ROOT\" && bash \"$AGENTS_MAIN_ROOT/bin/confirm-off\" FLAG on'"
         ],
         "cmd0": "bash",
         "cmd0Raw": "bash",
         "kind": "simple",
-        "rawText": "bash -c 'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" FLAG on'",
+        "rawText": "bash -c 'cd \"$AGENTS_MAIN_ROOT\" && bash \"$AGENTS_MAIN_ROOT/bin/confirm-off\" FLAG on'",
         "redirects": []
       }
     ],

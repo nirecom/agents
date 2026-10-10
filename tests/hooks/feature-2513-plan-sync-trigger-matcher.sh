@@ -7,13 +7,13 @@
 # that tool never reaches the plan remote.
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 
-SETTINGS="$(np "$AGENTS_DIR/settings.json")"
-WRITE_TOOLS="$(np "$AGENTS_DIR/hooks/lib/write-tools.js")"
+SETTINGS="$(np "$SCRIPT_CHECKOUT_ROOT/settings.json")"
+WRITE_TOOLS="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/write-tools.js")"
 
 # spl_matchers — prints "<count>|<missing names, comma-separated>" for the PostToolUse
 # entries whose hooks run show-plan-link.js; exits 1 when settings.json does not parse.
@@ -34,7 +34,7 @@ process.stdout.write(entries.length + "|" + want.filter((n) => !covered.has(n)).
 }
 
 case_begin "B0-show-plan-link-registered-posttooluse" "hooks/show-plan-link.js"
-if [[ -f "$AGENTS_DIR/hooks/show-plan-link.js" ]]; then pass "B0 hooks/show-plan-link.js exists"
+if [[ -f "$SCRIPT_CHECKOUT_ROOT/hooks/show-plan-link.js" ]]; then pass "B0 hooks/show-plan-link.js exists"
 else fail "B0 hooks/show-plan-link.js exists"; fi
 B_OUT="$(spl_matchers)" || B_OUT="ERROR: ${B_OUT:-node failed}"
 B_COUNT="${B_OUT%%|*}"
@@ -56,7 +56,7 @@ case_end
 # systemMessage string; sync(absPath, { budgetMs }) is faked here, now() is a fake clock.
 # Multi-plan end-to-end wiring (real hook subprocess, 2-plan editFiles) is covered by
 # tests/hooks/feature-show-plan-link/plan-sync-breadcrumb.sh A3b/A3c.
-SPL_JS="$(np "$AGENTS_DIR/hooks/show-plan-link.js")"
+SPL_JS="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/show-plan-link.js")"
 SPL_TMP="$(make_tmp)"
 trap 'rm -rf "$SPL_TMP"' EXIT
 harness_isolate "$SPL_TMP/iso"

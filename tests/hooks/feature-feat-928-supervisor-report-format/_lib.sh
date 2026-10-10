@@ -5,20 +5,20 @@
 
 set -u
 
-# Resolve AGENTS_DIR relative to this library file
+# Resolve __LIB_SCRIPT_CHECKOUT_ROOT relative to this library file
 # (tests/hooks/feature-feat-928-supervisor-report-format/_lib.sh → repo root is two levels up)
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$__LIB_SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$__LIB_SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK="$AGENTS_DIR/hooks/supervisor-guard.js"
-FORMATTER="$AGENTS_DIR/hooks/lib/supervisor-report-format.js"
-FORMATTER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-report-format.js"
-WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
+HOOK="$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard.js"
+FORMATTER="$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-report-format.js"
+FORMATTER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-report-format.js"
+WRITER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-schema.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

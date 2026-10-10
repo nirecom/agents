@@ -4,7 +4,7 @@
 # Tags: worker-dispatch, issue-close-finalize, registry, capability, payload-spec, phase-required, TL1, scope:issue-specific
 # Issue #1673 — issue-close-finalize registry entry + per-phase required fields (checkRequired);
 # a refusal must happen BEFORE any child starts (spawn counter makes it observable).
-# TL3 gap: SKILL.md payload shape per call site and real PLANS_DIR/ACD resolution; mitigated at
+# TL3 gap: SKILL.md payload shape per call site and real PLANS_DIR/script checkout root resolution; mitigated at
 # WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh category: skill-orchestration).
 
 set -u
@@ -14,12 +14,12 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_F1673_SCHEMA_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-REGISTRY_JS="$AGENTS_DIR/hooks/lib/worker-dispatch-registry.js"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/issue-close-finalize.js"
-STATE_JS="$AGENTS_DIR/bin/worker-dispatch/workers/issue-close-finalize/state.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+WORKER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-close-finalize.js"
+STATE_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-close-finalize/state.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
 
 PASS=0
 FAIL=0
@@ -67,14 +67,14 @@ group_registry() {
       const s = e.payloadSpec || {};
       const t = (k) => (s[k] ? s[k].type : "(absent)");
       for (const k of ["phase","issue_number","root_issue_number","owner_repo","state_file_path",
-                       "main_worktree_path","issue_repo","g5_decision","session_id",
-                       "outcome_file_path","agents_config_dir","finalize_scripts_dir","artifact_dir"]) {
+                       "target_main_root","issue_repo","g5_decision","session_id",
+                       "outcome_file_path","script_checkout_root","finalize_scripts_dir","artifact_dir"]) {
         o("type_" + k, t(k));
       }
       for (const k of ["state_file_path", "outcome_file_path"]) o("control_" + k, s[k] ? s[k].control : "(absent)");
       o("unknown_fields", Object.keys(s).filter((k) => ![
-        "phase","issue_number","root_issue_number","owner_repo","state_file_path","main_worktree_path",
-        "issue_repo","g5_decision","session_id","outcome_file_path","agents_config_dir",
+        "phase","issue_number","root_issue_number","owner_repo","state_file_path","target_main_root",
+        "issue_repo","g5_decision","session_id","outcome_file_path","script_checkout_root",
         "finalize_scripts_dir","artifact_dir"].includes(k)).sort().join(","));
       o("renderer", e.renderer);
       o("write_scopes", (e.writeScopes || []).slice().sort().join(","));
@@ -98,12 +98,12 @@ group_registry() {
     assert_eq "registry/type-state-file-path" "derived-control-file" "$(ev type_state_file_path)"
     assert_eq "registry/control-state-file-path" "finalize-state-{root}.json" "$(ev control_state_file_path)"
     assert_eq "registry/control-outcome-file-path" "issue-close-outcome.json" "$(ev control_outcome_file_path)"
-    assert_eq "registry/type-main-worktree-path" "anchor-main-root" "$(ev type_main_worktree_path)"
+    assert_eq "registry/type-main-worktree-path" "anchor-target-main-root" "$(ev type_target_main_root)"
     assert_eq "registry/type-issue-repo" "repo-ref" "$(ev type_issue_repo)"
     assert_eq "registry/type-g5-decision" "enum:accept|decline|llm_declined|recurse_done" "$(ev type_g5_decision)"
     assert_eq "registry/type-session-id" "session-id" "$(ev type_session_id)"
     assert_eq "registry/type-outcome-file-path" "derived-control-file" "$(ev type_outcome_file_path)"
-    assert_eq "registry/type-agents-config-dir" "anchor-acd" "$(ev type_agents_config_dir)"
+    assert_eq "registry/type-script-checkout-root" "anchor-script-checkout-root" "$(ev type_script_checkout_root)"
     assert_eq "registry/type-finalize-scripts-dir" "derived-finalize-scripts-dir" "$(ev type_finalize_scripts_dir)"
     assert_eq "registry/type-artifact-dir" "path-under-plansdir" "$(ev type_artifact_dir)"
     assert_eq "registry/no-invented-fields" "" "$(ev unknown_fields)"
@@ -112,11 +112,12 @@ group_registry() {
     assert_eq "registry/write-scopes" "control-dir,log-dir" "$(ev write_scopes)"
     assert_eq "registry/external-binaries" "bash,gh,node" "$(ev external)"
     assert_eq "registry/script-keys" "runInitial,runLoopStep,runTerminal" "$(ev scripts)"
-    assert_eq "registry/script-anchor-is-acd" "acd" "$(ev script_anchors)"
+    assert_eq "registry/script-anchor-is-script-checkout-root" "script-checkout-root" "$(ev script_anchors)"
     assert_has "registry/script-run-initial" "skills/issue-close-finalize/scripts/run-initial.sh" "$(ev script_rels)"
     assert_has "registry/script-run-loop-step" "skills/issue-close-finalize/scripts/run-loop-step.js" "$(ev script_rels)"
     assert_has "registry/script-run-terminal" "skills/issue-close-finalize/scripts/run-finalize-terminal.sh" "$(ev script_rels)"
-    assert_eq "registry/envpass" "FINALIZE_SCRIPTS_DIR,GH_TOKEN,GITHUB_TOKEN,MAIN_WORKTREE_PATH" "$(ev envpass)"
+    # #2561: the target main root reaches the child as an argument, never as a variable.
+    assert_eq "registry/envpass" "FINALIZE_SCRIPTS_DIR,GH_TOKEN,GITHUB_TOKEN" "$(ev envpass)"
     # ISSUE_CLOSE_SKILL is exported by run-finalize-terminal.sh itself; passing it
     # through the dispatcher would widen the bypass to every child of this worker.
     assert_eq "registry/no-issue-close-skill-passthrough" "0" "$(ev envpass_has_issue_close_skill)"
@@ -143,7 +144,7 @@ group_source() {
           process.stdout.write(Array.from(found).sort().join(","));
         ' "$WORKER_JS" 2>/dev/null)"
         assert_has "source/extraenv-finalize-scripts-dir" "FINALIZE_SCRIPTS_DIR" "$keys"
-        assert_has "source/extraenv-main-worktree-path" "MAIN_WORKTREE_PATH" "$keys"
+        assert_eq "source/extraenv-is-only-finalize-scripts-dir" "FINALIZE_SCRIPTS_DIR" "$keys"
         case "$keys" in
             *ISSUE_CLOSE_SKILL*) fail "source/extraenv-no-issue-close-skill" "keys=$keys" ;;
             *) pass "source/extraenv-no-issue-close-skill" ;;
@@ -208,7 +209,7 @@ dispatch_icf() {
     : > "$CALLLOG"
     DRC=0
     DOUT="$(run_with_timeout 90 env "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF" \
-        "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
+        "WD_SPAWN_MODULE=$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" \
@@ -234,8 +235,8 @@ group_required() {
         assert_eq "required/$name/no-child-spawned" "0" "$(call_count)"
         assert_eq "required/$name/exit0" "0" "$DRC"
     done <<TABLE
-initial-missing-issue-number     | {"phase":"initial","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","main_worktree_path":"$MAIN","session_id":"$SID"}                                    | issue_number
-initial-missing-main-worktree    | {"phase":"initial","issue_number":1673,"root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","session_id":"$SID"}                                            | main_worktree_path
+initial-missing-issue-number     | {"phase":"initial","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","target_main_root":"$MAIN","session_id":"$SID"}                                    | issue_number
+initial-missing-main-worktree    | {"phase":"initial","issue_number":1673,"root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","session_id":"$SID"}                                            | target_main_root
 loop-missing-g5-decision         | {"phase":"loop_step","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","session_id":"$SID"}                                                                     | g5_decision
 loop-missing-owner-repo          | {"phase":"loop_step","root_issue_number":1673,"state_file_path":"$STATE","g5_decision":"accept","session_id":"$SID"}                                                                      | owner_repo
 loop-missing-root-issue-number   | {"phase":"loop_step","owner_repo":"nirecom/agents","state_file_path":"$STATE","g5_decision":"accept","session_id":"$SID"}                                                                 | root_issue_number
@@ -244,7 +245,7 @@ phase-unknown-value              | {"phase":"cleanup","root_issue_number":1673,"
 g5-decision-unknown-value        | {"phase":"loop_step","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","g5_decision":"maybe","session_id":"$SID"}                                          | g5_decision
 state-file-other-session         | {"phase":"loop_step","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$PLANS/othersession-finalize-state-1673.json","g5_decision":"accept","session_id":"$SID"}   | state_file_path
 state-file-other-root            | {"phase":"loop_step","root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$PLANS/$SID-finalize-state-99.json","g5_decision":"accept","session_id":"$SID"}             | state_file_path
-scripts-dir-mismatch             | {"phase":"initial","issue_number":1673,"root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","main_worktree_path":"$MAIN","session_id":"$SID","finalize_scripts_dir":"$MAIN/skills/issue-close-finalize/scripts"} | finalize_scripts_dir
+scripts-dir-mismatch             | {"phase":"initial","issue_number":1673,"root_issue_number":1673,"owner_repo":"nirecom/agents","state_file_path":"$STATE","target_main_root":"$MAIN","session_id":"$SID","finalize_scripts_dir":"$MAIN/skills/issue-close-finalize/scripts"} | finalize_scripts_dir
 TABLE
 }
 
@@ -259,9 +260,19 @@ call_has_arg_suffix() {
       process.stdout.write(hit ? "1" : "0");
     ' "$(nodepath "$CALLLOG")" "$1" 2>/dev/null || printf '0'
 }
+# First recorded call: `args` joined with "|", or the sorted key names of `extraEnv`.
+call_field() {
+    node -e '
+      const fs = require("fs");
+      const first = JSON.parse(fs.readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean)[0]);
+      const v = first[process.argv[2]];
+      const out = Array.isArray(v) ? v.map((a) => String(a).replace(/\\/g, "/")) : Object.keys(v || {}).sort();
+      process.stdout.write(out.join(Array.isArray(v) ? "|" : ","));
+    ' "$(nodepath "$CALLLOG")" "$1" 2>/dev/null || printf 'UNREADABLE'
+}
 group_derived() {
     local p
-    p="$(write_payload "drv-initial" "{\"phase\":\"initial\",\"issue_number\":1673,\"root_issue_number\":1673,\"owner_repo\":\"nirecom/agents\",\"main_worktree_path\":\"$MAIN\",\"session_id\":\"$SID\"}")"
+    p="$(write_payload "drv-initial" "{\"phase\":\"initial\",\"issue_number\":1673,\"root_issue_number\":1673,\"owner_repo\":\"nirecom/agents\",\"target_main_root\":\"$MAIN\",\"session_id\":\"$SID\"}")"
     dispatch_icf "$p"
     assert_eq "derived/initial-omitted-state-file/child-spawned" "1" "$(call_count)"
     assert_eq "derived/initial-omitted-state-file/status" "init_done" "$(field_of status)"
@@ -270,6 +281,10 @@ group_derived() {
     assert_eq "derived/initial-omitted-state-file/not-in-plans" "0" \
         "$([ -f "$PLANS_RAW/$SID-finalize-state-1673.json" ] && echo 1 || echo 0)"
     assert_eq "derived/initial-omitted-state-file/exit0" "0" "$DRC"
+    # #2561: run-initial.sh gets the target main root as a leading flag pair, and the
+    # child's extra environment carries the scripts dir alone.
+    assert_eq "derived/initial/argv-leads-with-target-main-root-flag" "--target-main-root|$MAIN|1673|1673" "$(call_field args)"
+    assert_eq "derived/initial/extraenv-keys" "FINALIZE_SCRIPTS_DIR" "$(call_field extraEnv)"
     p="$(write_payload "drv-terminal" "{\"phase\":\"finalize_terminal\",\"root_issue_number\":1673,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"session_id\":\"$SID\"}")"
     dispatch_icf "$p"
     assert_eq "derived/terminal-omitted-outcome-file/child-spawned" "1" "$(call_count)"
@@ -283,7 +298,7 @@ group_derived() {
 # The loop, the LLM judgement and the AskUserQuestion stay in main.
 # ===========================================================================
 group_caller() {
-    local skill="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
+    local skill="$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/SKILL.md"
     if [ ! -f "$skill" ]; then
         fail "caller/skill-present" "missing: skills/issue-close-finalize/SKILL.md"
         return
@@ -304,12 +319,12 @@ group_caller() {
     else
         pass "caller/no-llm-subagent-reference"
     fi
-    if [ -e "$AGENTS_DIR/agents/issue-close-finalize-worker.md" ]; then
+    if [ -e "$SCRIPT_CHECKOUT_ROOT/agents/issue-close-finalize-worker.md" ]; then
         fail "caller/agent-md-retired" "agents/issue-close-finalize-worker.md still exists"
     else
         pass "caller/agent-md-retired"
     fi
-    if [ -e "$AGENTS_DIR/agents/issue-close-finalize-worker" ]; then
+    if [ -e "$SCRIPT_CHECKOUT_ROOT/agents/issue-close-finalize-worker" ]; then
         fail "caller/state-schema-md-relocated" "agents/issue-close-finalize-worker/ still exists"
     else
         pass "caller/state-schema-md-relocated"

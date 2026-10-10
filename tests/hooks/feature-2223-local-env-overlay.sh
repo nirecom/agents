@@ -16,13 +16,13 @@ set -u
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    AGENTS_DIR_NODE="$AGENTS_DIR"
+    SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-export AGENTS_DIR_NODE
+export SCRIPT_CHECKOUT_ROOT_NODE
 
 # Never named as a whole path literal: hooks/block-dotenv.js blocks that (DD-1).
 LOCAL_ENV_BASENAME=".env"".local"
@@ -31,13 +31,13 @@ TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
 # Isolation: pin both halves of the plans-dir pair, drop inherited session ids,
-# and let no ambient AGENTS_CONFIG_DIR, project dir, or tested key reach a child.
+# and let no ambient AGENTS_MAIN_ROOT, project dir, or tested key reach a child.
 export WORKFLOW_STATE_DIR="$TMP_ROOT/workflow"
 export WORKFLOW_PLANS_DIR="$TMP_ROOT/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID
 unset CLAUDE_PROJECT_DIR
-unset AGENTS_CONFIG_DIR
+unset AGENTS_MAIN_ROOT
 unset CODE_LANG
 unset PROJECT_NFR
 
@@ -109,7 +109,7 @@ PROBE="$TMP_ROOT/probe.js"
 cat > "$PROBE" <<'PROBE_EOF'
 "use strict";
 const path = require("path");
-const libDir = path.join(process.env.AGENTS_DIR_NODE, "hooks", "lib");
+const libDir = path.join(process.env.SCRIPT_CHECKOUT_ROOT_NODE, "hooks", "lib");
 const out = (s) => process.stdout.write(String(s));
 const enc = (v) => (v === undefined ? "__ABSENT__" : JSON.stringify(v));
 const loadEnvMod = () => require(path.join(libDir, "load-env.js"));
@@ -186,10 +186,10 @@ new_case() {
 }
 
 probe() {
-    AGENTS_CONFIG_DIR="$CASE_CFG" run_with_timeout 20 node "$PROBE_NODE" "$@" 2>/dev/null
+    AGENTS_MAIN_ROOT="$CASE_CFG" run_with_timeout 20 node "$PROBE_NODE" "$@" 2>/dev/null
 }
 
-LOCAL_ENV_JS="$AGENTS_DIR/hooks/lib/local-env.js"
+LOCAL_ENV_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/local-env.js"
 if [ ! -f "$LOCAL_ENV_JS" ]; then
     echo "NOTE: hooks/lib/local-env.js absent — every case below is expected RED."
 fi
@@ -237,7 +237,7 @@ TABLE
 # because this one exceeded the 500-line HARD limit of rules/coding/file-split.md.
 # Sourced (not executed) so the cases share the helpers, fixtures and counters
 # defined above.
-CASES_FILE="$AGENTS_DIR/tests/hooks/feature-2223-local-env-overlay/blocklist-coverage.sh"
+CASES_FILE="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2223-local-env-overlay/blocklist-coverage.sh"
 if [ -f "$CASES_FILE" ]; then
     . "$CASES_FILE"
 else
@@ -371,8 +371,8 @@ assert_contains "T2223-overlay-pure-local"         "$overlay_json" '"localUnmuta
 # a degenerate override file must degrade to the global layer, not to a crash.
 # Paths go through to_node_path first: MSYS rewrites a POSIX-looking env value on
 # its way to native node.exe — a harness artefact, not behaviour under test.
-eek() { AGENTS_CONFIG_DIR="$(to_node_path "$CASE_CFG")" run_with_timeout 20 bash "$AGENTS_DIR/bin/env-effective-kv" --repo-root "$(to_node_path "$1")" --key "$2" 2>/dev/null; }
-gcv() { AGENTS_CONFIG_DIR="$(to_node_path "$CASE_CFG")" run_with_timeout 20 bash "$AGENTS_DIR/bin/get-config-var" --repo-root "$(to_node_path "$1")" "$2" 2>/dev/null; }
+eek() { AGENTS_MAIN_ROOT="$(to_node_path "$CASE_CFG")" run_with_timeout 20 bash "$SCRIPT_CHECKOUT_ROOT/bin/env-effective-kv" --repo-root "$(to_node_path "$1")" --key "$2" 2>/dev/null; }
+gcv() { AGENTS_MAIN_ROOT="$(to_node_path "$CASE_CFG")" run_with_timeout 20 bash "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --repo-root "$(to_node_path "$1")" "$2" 2>/dev/null; }
 
 # The issue-#2223 outcome, end to end through both shipped readers: PROJECT_NFR
 # from a project's own file with no declaration anywhere.
@@ -416,7 +416,7 @@ assert_eq "T2223R-meta-path-blocklist-still-wins" "on" "$(eek "$META_ROOT" ENFOR
 
 # The Bash-tool door in front of env-effective-kv --allow-dump. Same sibling-file
 # form as the blocklist cases above; sourced last because it uses to_node_path.
-DUMP_CASES_FILE="$AGENTS_DIR/tests/hooks/feature-2223-local-env-overlay/allow-dump-guard.sh"
+DUMP_CASES_FILE="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2223-local-env-overlay/allow-dump-guard.sh"
 if [ -f "$DUMP_CASES_FILE" ]; then
     . "$DUMP_CASES_FILE"
 else

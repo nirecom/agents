@@ -25,7 +25,7 @@ run_resolver_js_noarg() {
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-    AGENTS_CONFIG_DIR="$AGENTS_NODE" \
+    AGENTS_MAIN_ROOT="$AGENTS_NODE" \
       bash "$RUN_TIMEOUT" 30 node -e "
 const { resolveSessionWorktreePath } = require('$AGENTS_NODE/hooks/workflow-state/resolve-worktree-path.js');
 const r = resolveSessionWorktreePath();
@@ -45,7 +45,7 @@ run_compute_no_argv() {
     CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_NODE" \
     WORKFLOW_STATE_DIR="$WF_DIR_NODE" \
     WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
-    AGENTS_CONFIG_DIR="$AGENTS_NODE" \
+    AGENTS_MAIN_ROOT="$AGENTS_NODE" \
       bash "$RUN_TIMEOUT" 30 node "$COMPUTE_JS"
   ) 2>/dev/null
 }

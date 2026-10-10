@@ -22,8 +22,6 @@ if [ "${AGENTS_BASH_MAJOR_OVERRIDE:-${BASH_VERSINFO:-0}}" -lt 4 ]; then
   exit 1
 fi
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=../lib/gh-outbound-guard.sh
 source "$SCRIPT_DIR/../lib/gh-outbound-guard.sh"

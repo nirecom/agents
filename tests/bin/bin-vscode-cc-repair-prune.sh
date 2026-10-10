@@ -15,12 +15,10 @@
 
 set -euo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
-
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$AGENTS_DIR/bin/vscode-cc-repair/index.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/vscode-cc-repair/index.js"
 REQUIRE_PATH="./bin/vscode-cc-repair/index.js"
 # The record-grammar module, required directly: the shape predicates are the SSOT both
 # the classifier and the verifier read a line with, and a rename that left the old
@@ -30,9 +28,9 @@ PRUNE_REQUIRE="./bin/vscode-cc-repair/prune"
 # The acting half, required directly: isCounterpartPath and TALLY_KEY are the two guards a
 # forged plan meets, and neither is observable through the entrypoint's report alone.
 EXECUTE_REQUIRE="./bin/vscode-cc-repair/prune/execute"
-LIB_DIR="$AGENTS_DIR/bin/vscode-cc-repair"
+LIB_DIR="$SCRIPT_CHECKOUT_ROOT/bin/vscode-cc-repair"
 LIB_REL="bin/vscode-cc-repair"
-PARTS_DIR="$AGENTS_DIR/tests/bin/bin-vscode-cc-repair-prune"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-vscode-cc-repair-prune"
 
 if [ ! -f "$SCRIPT" ]; then
   echo "SKIP (RED): $SCRIPT not yet implemented — TDD RED phase"
@@ -52,7 +50,7 @@ SKIP=0
 
 # ---- helpers ---------------------------------------------------------------
 
-run_with_timeout() { "$AGENTS_DIR/bin/run-with-timeout.sh" "$@"; }
+run_with_timeout() { "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$@"; }
 
 check() {
   local desc="$1" want="$2" got="$3"
@@ -311,7 +309,7 @@ ISO_HOME_NATIVE="$(native_path "$ISO_HOME")"
 # able to reach the real ~/.claude/projects.
 node_m() { # <js> ; sets NODE_RC / NODE_OUT
   NODE_RC=0
-  NODE_OUT="$(cd "$AGENTS_DIR" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
+  NODE_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
     run_with_timeout 120 node -e "$1" 2>&1)" || NODE_RC=$?
 }
 

@@ -17,13 +17,13 @@
 # PreToolUse hook. Nothing is reconstructed: what a reader is told to type is what runs.
 # Pattern follows tests/hooks/feature-1077-issue-close-verified.sh (blocked=exit 2, allowed=exit 0).
 
-# Assumes AGENTS_DIR, _AGENTS_DIR_NODE, TMPDIR_BASE, HANDLERS_JS, ICV_ON_CMD, ICV_END_CMD,
+# Assumes SCRIPT_CHECKOUT_ROOT, _SCRIPT_CHECKOUT_ROOT_NODE, TMPDIR_BASE, HANDLERS_JS, ICV_ON_CMD, ICV_END_CMD,
 # WORKFLOW_PLANS_DIR, fresh_workflow_dir(), run_with_timeout(), pass(), fail() from the entry file.
 
 echo ""
 echo "=== S9: end-to-end — gh issue close is blocked, then allowed inside the window, then blocked again ==="
 
-S9_HOOK="${_AGENTS_DIR_NODE}/hooks/enforce-issue-close.js"
+S9_HOOK="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-issue-close.js"
 
 # s9_close_rc <sid> <wfdir> -> prints the hook's exit code for a bare `gh issue close`.
 s9_close_rc() {
@@ -31,7 +31,6 @@ s9_close_rc() {
     payload="$(node -e 'process.stdout.write(JSON.stringify({session_id:process.argv[1],tool_name:"Bash",tool_input:{command:"gh issue close "+process.argv[2]}}))' "$sid" 4242)"
     printf '%s' "$payload" | run_with_timeout 30 \
         env -u ISSUE_CLOSE_SKILL \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$S9_HOOK" >/dev/null 2>&1 || rc=$?
@@ -42,7 +41,6 @@ s9_close_rc() {
 s9_emit() {
     local sid="$1" wfdir="$2" cmd="$3"
     run_with_timeout 30 env \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node -e '
@@ -57,7 +55,7 @@ handlers.handle({
 ' "$HANDLERS_JS" "$sid" "$wfdir" "$cmd" >/dev/null 2>&1 || true
 }
 
-if [ ! -f "$AGENTS_DIR/hooks/enforce-issue-close.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-issue-close.js" ]; then
     fail "S9: IMPLEMENTATION MISSING: hooks/enforce-issue-close.js — the guard this skill exists to open a window in"
 elif [ -z "${ICV_ON_CMD:-}" ] || [ -z "${ICV_END_CMD:-}" ]; then
     fail "S9: the skill's sentinel commands could not be extracted (see S2), so the sequence cannot be driven from the document"
@@ -104,7 +102,7 @@ fi
 # S9e/S9f depend on the guard alone, never on the skill document, so they sit outside the
 # sentinel-extraction branch above — a missing skill must not take the always-allowed
 # controls down with it.
-if [ ! -f "$AGENTS_DIR/hooks/enforce-issue-close.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-issue-close.js" ]; then
     fail "S9e/S9f: IMPLEMENTATION MISSING: hooks/enforce-issue-close.js"
 else
     # The guard has two other doors, and neither belongs to this skill. A hook
@@ -117,7 +115,6 @@ else
     printf '%s' "$(node -e 'process.stdout.write(JSON.stringify({session_id:"s9esid2037",tool_name:"Bash",tool_input:{command:"gh issue close 4242"}}))')" \
         | run_with_timeout 30 env \
             "ISSUE_CLOSE_SKILL=1" \
-            "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "WORKFLOW_STATE_DIR=$S9_CLEAN_WF" \
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
             node "$S9_HOOK" >/dev/null 2>&1 || S9_SKILL_RC=$?
@@ -130,7 +127,6 @@ else
     S9_UNREL_RC=0
     printf '%s' "$(node -e 'process.stdout.write(JSON.stringify({session_id:"s9fsid2037",tool_name:"Bash",tool_input:{command:"gh issue list --state open"}}))')" \
         | run_with_timeout 30 env -u ISSUE_CLOSE_SKILL \
-            "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "WORKFLOW_STATE_DIR=$S9_CLEAN_WF" \
             "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
             node "$S9_HOOK" >/dev/null 2>&1 || S9_UNREL_RC=$?

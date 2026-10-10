@@ -272,7 +272,7 @@ const scopes = (r.errors || []).map((e) => e.scope).join("+");
 console.log("files=" + (r.files || []).length + " errors=" + (r.errors || []).length + " scope=" + scopes);
 '
 NODE_RC=0
-NODE_OUT="$(cd "$AGENTS_DIR" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
+NODE_OUT="$(cd "$_LIB_SCRIPT_CHECKOUT_ROOT" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
     DIR="$(native_path "$TMPROOT")/no-such-dir-1640" run_with_timeout 60 node -e "$STRICT_DIR_JS" 2>&1)" || NODE_RC=$?
 assert_eq "C3-b2/dir-error" "files=0 errors=1 scope=dir" "$NODE_OUT"
 
@@ -318,18 +318,18 @@ fs.lstatSync = function (p, ...a) {
 console.log(JSON.stringify(m._listJsonlByMtime(process.env.DIR)));
 '
 NODE_RC=0
-NODE_OUT="$(cd "$AGENTS_DIR" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
+NODE_OUT="$(cd "$_LIB_SCRIPT_CHECKOUT_ROOT" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
     DIR="$R11_SLUG" BAD_NAME="$SID_B" run_with_timeout 60 node -e "$LEGACY_JS" 2>&1)" || NODE_RC=$?
 assert_eq "C3-d/file-stat-failure-empty" "[]" "$NODE_OUT"
 
 NODE_RC=0
-NODE_OUT="$(cd "$AGENTS_DIR" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
+NODE_OUT="$(cd "$_LIB_SCRIPT_CHECKOUT_ROOT" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
     DIR="$(native_path "$TMPROOT")/no-such-dir-1640" BAD_NAME="" run_with_timeout 60 node -e "$LEGACY_JS" 2>&1)" || NODE_RC=$?
 assert_eq "C3-d/dir-failure-empty" "[]" "$NODE_OUT"
 
 # Non-regression counterpart (CPR-ORTH): the healthy path must still return entries.
 NODE_RC=0
-NODE_OUT="$(cd "$AGENTS_DIR" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
+NODE_OUT="$(cd "$_LIB_SCRIPT_CHECKOUT_ROOT" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
     DIR="$R11_SLUG" BAD_NAME="" run_with_timeout 60 node -e '
 const m = require("./hooks/workflow-state/session-id");
 console.log(String(m._listJsonlByMtime(process.env.DIR).length));

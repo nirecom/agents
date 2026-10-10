@@ -15,6 +15,8 @@
 
 set -uo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
 NON_GITHUB_FLAG=0
 POSITIONAL=()
 while [ $# -gt 0 ]; do
@@ -42,13 +44,11 @@ if [ ! -f "$INTENT_PATH" ]; then
     exit 1
 fi
 
-: "${AGENTS_CONFIG_DIR:?Error: AGENTS_CONFIG_DIR not set}"
-
 ISSUE_NUMS=$(node -e '
-  const { parseClosesIssues } = require(process.env.AGENTS_CONFIG_DIR + "/hooks/lib/parse-closes-issues.js");
+  const { parseClosesIssues } = require(process.argv[2]);
   const entries = parseClosesIssues(process.argv[1]);
   console.log(entries.map(e => e.repo ? e.repo + "#" + e.number : String(e.number)).join(" "));
-' "$INTENT_PATH") || { echo "Error: parser invocation failed" >&2; exit 1; }
+' "$INTENT_PATH" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-closes-issues.js") || { echo "Error: parser invocation failed" >&2; exit 1; }
 
 if [ -z "$ISSUE_NUMS" ]; then
     echo "Error: closes_issues is empty — Run /issue-create to create a tracking issue, then re-run /clarify-intent Completion from the Reconcile-with-GitHub step." >&2

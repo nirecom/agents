@@ -11,18 +11,18 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
-GROUP_DIR="$AGENTS_DIR/tests/skills/feature-2079-run-tests-calibration-offer"
-SCRIPTS_DIR="$AGENTS_DIR/skills/run-tests/scripts"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+GROUP_DIR="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-2079-run-tests-calibration-offer"
+SCRIPTS_DIR="$SCRIPT_CHECKOUT_ROOT/skills/run-tests/scripts"
 PROBE="$SCRIPTS_DIR/probe-calibration.sh"
 MARK="$SCRIPTS_DIR/mark-calibration-asked.sh"
 ANSWER="$SCRIPTS_DIR/answer-calibration.sh"
 CO_LIB="$SCRIPTS_DIR/lib/calibration-offer.sh"
-SKILL_MD="$AGENTS_DIR/skills/run-tests/SKILL.md"
-ALLOW_TXT="$AGENTS_DIR/install/settings-allow-commands.txt"
-PAR_LIB="$AGENTS_DIR/bin/lib/run-all-parallelism.sh"
+SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/run-tests/SKILL.md"
+ALLOW_TXT="$SCRIPT_CHECKOUT_ROOT/install/settings-allow-commands.txt"
+PAR_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-parallelism.sh"
 
 TMPROOT="$(make_tmp)"
 TMPROOT="$(cd "$TMPROOT" && pwd -P)"

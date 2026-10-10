@@ -9,6 +9,8 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 const now = Date.now();
 // mint_nonce identifies THIS grant; the shim copies it into the claim it writes, so a
 // claim is attributable back to the exact grant it belongs to.
@@ -33,7 +35,7 @@ const p = process.env.TOKEN_PATH;
 // Lock basename ends in ".tmp" so the existing 24h zombie sweep reaps an orphaned lock
 // after a hard crash; protected-basenames.js blocks tool-issued writes/deletes of it too.
 const { acquireMintLock, releaseMintLock } = require(
-  process.env.AGENTS_CONFIG_DIR + "/hooks/lib/off-clearance-mint-lock.js"
+  path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "off-clearance-mint-lock.js")
 );
 const LOCK_WAIT_BUDGET_MS = 5000;
 const LOCK_POLL_MS = 25;
@@ -61,7 +63,7 @@ try {
   // nonce is removed via consumeExactFile(), which re-verifies content under an
   // exclusive window before deleting (a plain read-then-unlink raced a second remover).
   const { consumeExactFile } = require(
-    process.env.AGENTS_CONFIG_DIR + "/hooks/lib/consume-exact-file.js"
+    path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "consume-exact-file.js")
   );
   const claimed = p + ".claimed";
   let priorRaw = null;

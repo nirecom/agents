@@ -15,7 +15,7 @@ A_CFG="$A_TMP/cfg"
 A_SID="fix1532abs"
 mkdir -p "$A_TMP" "$A_CFG"
 
-# The fixture config dir is a real AGENTS_CONFIG_DIR: bin/ and hooks/ point at the
+# The fixture agents root is a real AGENTS_MAIN_ROOT: bin/ and hooks/ point at the
 # tree under test, and .env holds keys that exist nowhere else, so the expected
 # values below are properties of the code and not of the developer's own .env.
 a_setup_config() {
@@ -41,7 +41,7 @@ a_run() { # <row> <want-rc> <want-stdout> <cmd> [args...]
 a_get_config_var() {
   local t
   t="$(target_path get-config-var)"
-  export AGENTS_CONFIG_DIR="$A_CFG"
+  export AGENTS_MAIN_ROOT="$A_CFG"
   # The row C1 asked for: a value only .env knows can be produced ONLY by the
   # internal `node -e` block running and load-env.js being reachable. If the
   # envelope swallowed that block, this row reports an empty string.
@@ -50,17 +50,17 @@ a_get_config_var() {
   a_run "get-config-var/is-off-off" 0 "" bash "$t" --is-off FIX1532_ABS_OFF
   a_run "get-config-var/is-off-on" 1 "" bash "$t" --is-off FIX1532_ABS_ON
   a_run "get-config-var/is-off-unset" 2 "" bash "$t" --is-off FIX1532_ABS_ABSENT
-  unset AGENTS_CONFIG_DIR
+  unset AGENTS_MAIN_ROOT
 }
 
 a_confirm_off() {
   local t
   t="$(target_path confirm-off)"
-  export AGENTS_CONFIG_DIR="$A_CFG"
+  export AGENTS_MAIN_ROOT="$A_CFG"
   a_run "confirm-off/off" 0 "OFF" bash "$t" FIX1532_ABS_OFF
   a_run "confirm-off/on" 1 "ON" bash "$t" FIX1532_ABS_ON
   a_run "confirm-off/default-on" 1 "ON" bash "$t" FIX1532_ABS_ABSENT on
-  unset AGENTS_CONFIG_DIR
+  unset AGENTS_MAIN_ROOT
 }
 
 # The positive path, which the B cases cannot reach: they only ever ask about a
@@ -113,7 +113,7 @@ a_is_github_dotcom_remote() {
 
 a_main() {
   if ! a_setup_config; then
-    fail "A[$GUARD_TARGET]: the fixture AGENTS_CONFIG_DIR could not be built (no symlink, no copy), so no absolute value can be asserted"
+    fail "A[$GUARD_TARGET]: the fixture AGENTS_MAIN_ROOT could not be built (no symlink, no copy), so no absolute value can be asserted"
     return 0
   fi
   case "$GUARD_TARGET" in

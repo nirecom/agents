@@ -8,8 +8,8 @@
 # classification is purely lexical, so the host rules are all that is asserted.
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-HELPER="$AGENTS_DIR/bin/is-github-dotcom-remote"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HELPER="$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }

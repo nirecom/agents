@@ -12,7 +12,7 @@
 # _p_run_hook <stdin-json> → "block" | "approve" | "other:<raw>"
 _p_run_hook() {
     local out rc
-    out=$(WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+    out=$(WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" \
         "$RWT" 15 node "$BLOCK_HOOK" <<< "$2" 2>/dev/null)
     rc=$?
     out=$(printf '%s' "$out" | tr -d '\r\n')

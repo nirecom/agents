@@ -2,7 +2,7 @@
 # Tests: bin/codegraph-lifecycle.js, bin/codegraph-lifecycle/index-health.js, bin/codegraph-lifecycle/process-identity.js
 # Tags: codegraph, lifecycle, installer, env-flag, daemon, sqlite, process-identity, TL2, scope:issue-specific
 # Detail plan ST-18, cases L1-L30. Layer TL2: spawns the real CLI as a process
-# against synthetic roots, a synthetic AGENTS_CONFIG_DIR/.env and a PATH-injected
+# against synthetic roots, a synthetic AGENTS_MAIN_ROOT/.env and a PATH-injected
 # recording `codegraph` stub. Every side effect stays inside this file's own
 # mktemp -d tree; the real HOME, .codegraph/ and repo tree are never touched.
 
@@ -18,10 +18,10 @@ set -u
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: installer.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIFECYCLE_SRC="$AGENTS_DIR/bin/codegraph-lifecycle.js"
-INDEX_HEALTH_SRC="$AGENTS_DIR/bin/codegraph-lifecycle/index-health.js"
-IDENTITY_SRC="$AGENTS_DIR/bin/codegraph-lifecycle/process-identity.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIFECYCLE_SRC="$SCRIPT_CHECKOUT_ROOT/bin/codegraph-lifecycle.js"
+INDEX_HEALTH_SRC="$SCRIPT_CHECKOUT_ROOT/bin/codegraph-lifecycle/index-health.js"
+IDENTITY_SRC="$SCRIPT_CHECKOUT_ROOT/bin/codegraph-lifecycle/process-identity.js"
 
 # TL3 gap, continued — win32 shim resolution (#2150):
 # - whether a real `npm install -g` on THIS host writes byte-identical shim
@@ -51,7 +51,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-codegraph-life
 . "$SCRIPT_DIR/harness.sh"
 
 for src in "$LIFECYCLE_SRC" "$INDEX_HEALTH_SRC" "$IDENTITY_SRC"; do
-    [ -f "$src" ] || fail "IMPLEMENTATION MISSING: ${src#"$AGENTS_DIR"/}"
+    [ -f "$src" ] || fail "IMPLEMENTATION MISSING: ${src#"$SCRIPT_CHECKOUT_ROOT"/}"
 done
 
 # shellcheck source=./feature-codegraph-lifecycle/env-silence.sh

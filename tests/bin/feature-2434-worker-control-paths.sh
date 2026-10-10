@@ -12,8 +12,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # harness.sh assert_eq is 2-arg (actual, expected); override with 3-arg (name, expected, actual).
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -21,10 +21,10 @@ assert_eq() {
     else fail "$name" "want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; fi
 }
 
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
-FSGUARD_JS="$AGENTS_DIR/bin/worker-dispatch/fsguard.js"
-HOOK_JS="$AGENTS_DIR/hooks/stop-final-report-guard.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+FSGUARD_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/fsguard.js"
+HOOK_JS="$SCRIPT_CHECKOUT_ROOT/hooks/stop-final-report-guard.js"
 
 TMPD="$(make_tmp)"
 trap 'rm -rf "$TMPD"' EXIT
@@ -58,7 +58,7 @@ dispatch() {
     DOUT=""
     DRC=0
     DOUT="$(env "WORKFLOW_PLANS_DIR=$(np "$P_DIR")" \
-        "WD_SPAWN_MODULE=$(np "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
+        "WD_SPAWN_MODULE=$(np "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(np "$CANNED")" \
         "WD_CALL_LOG=$(np "$CALLLOG")" \
         node -r "$(np "$PRELOAD")" "$(np "$DISPATCH_JS")" \
@@ -74,7 +74,7 @@ SID_CD="test2434cd"
 CTRL_CD="$W_DIR/$SID_CD.control"
 mkdir -p "$CTRL_CD"
 CD_PAYLOAD="$CTRL_CD/worker-issue-close-finalize-1.json"
-printf '%s' "{\"phase\":\"initial\",\"issue_number\":1,\"root_issue_number\":1,\"owner_repo\":\"o/r\",\"main_worktree_path\":\"$MAIN\",\"session_id\":\"$SID_CD\",\"artifact_dir\":\"$(np "$P_DIR")\"}" > "$CD_PAYLOAD"
+printf '%s' "{\"phase\":\"initial\",\"issue_number\":1,\"root_issue_number\":1,\"owner_repo\":\"o/r\",\"target_main_root\":\"$MAIN\",\"session_id\":\"$SID_CD\",\"artifact_dir\":\"$(np "$P_DIR")\"}" > "$CD_PAYLOAD"
 if [ -f "$DISPATCH_JS" ] && [ -f "$PRELOAD" ]; then
     dispatch "$(np "$CD_PAYLOAD")" "$INIT_CANNED"
     assert_eq "control-dir-dispatch/exit-0" "0" "$DRC"
@@ -93,7 +93,7 @@ case_begin "legacy-plans-dispatch" "bin/worker-dispatch.js"
 # Passes today and must keep passing after the fix.
 SID_LP="test2434lp"
 LP_PAYLOAD="$P_DIR/$SID_LP-worker-issue-close-finalize-1.json"
-printf '%s' "{\"phase\":\"initial\",\"issue_number\":1,\"root_issue_number\":1,\"owner_repo\":\"o/r\",\"main_worktree_path\":\"$MAIN\",\"session_id\":\"$SID_LP\",\"artifact_dir\":\"$(np "$P_DIR")\"}" > "$LP_PAYLOAD"
+printf '%s' "{\"phase\":\"initial\",\"issue_number\":1,\"root_issue_number\":1,\"owner_repo\":\"o/r\",\"target_main_root\":\"$MAIN\",\"session_id\":\"$SID_LP\",\"artifact_dir\":\"$(np "$P_DIR")\"}" > "$LP_PAYLOAD"
 if [ -f "$DISPATCH_JS" ] && [ -f "$PRELOAD" ]; then
     dispatch "$(np "$LP_PAYLOAD")" "$INIT_CANNED"
     assert_eq "legacy-plans-dispatch/exit-0" "0" "$DRC"
@@ -129,7 +129,7 @@ SID_DBR="test2434dbr"
 CTRL_DBR="$W_DIR/$SID_DBR.control"
 mkdir -p "$CTRL_DBR"
 DBR_PAYLOAD="$CTRL_DBR/worker-issue-close-finalize-1.json"
-printf '%s' "{\"phase\":\"initial\",\"issue_number\":1,\"root_issue_number\":1,\"owner_repo\":\"o/r\",\"main_worktree_path\":\"$MAIN\",\"session_id\":\"$SID_DBR\",\"artifact_dir\":\"$(np "$P_DIR")\"}" > "$DBR_PAYLOAD"
+printf '%s' "{\"phase\":\"initial\",\"issue_number\":1,\"root_issue_number\":1,\"owner_repo\":\"o/r\",\"target_main_root\":\"$MAIN\",\"session_id\":\"$SID_DBR\",\"artifact_dir\":\"$(np "$P_DIR")\"}" > "$DBR_PAYLOAD"
 touch "$CTRL_DBR/worker-issue-close-finalize-1.dispatched"
 if [ -f "$DISPATCH_JS" ] && [ -f "$PRELOAD" ]; then
     dispatch "$(np "$DBR_PAYLOAD")" "$INIT_CANNED"
@@ -151,16 +151,19 @@ CTRL_SG="$W_DIR/$SID_SG.control"
 mkdir -p "$CTRL_SG"
 printf '%s' '{"gate_action":"yield","reason":"test"}' > "$CTRL_SG/session-close-gate.json"
 
-# Fake next-step: returns block condition (so pre-fix behaviour is detectable)
-FAKE_ACD="$TMPD/fake-acd"
-mkdir -p "$FAKE_ACD/bin/workflow"
+# Fake next-step: returns block condition (so pre-fix behaviour is detectable).
+# The hook finds next-step from its own location, so it runs from a copied hooks tree.
+FAKE_SCRIPT_CHECKOUT_ROOT="$TMPD/fake-checkout"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+script_checkout_fixture_copy "$FAKE_SCRIPT_CHECKOUT_ROOT" hooks
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/workflow"
 printf '%s\n' \
     '#!/usr/bin/env node' \
     "process.stdout.write(\"ACTION=invoke\\nNEXT_SKILL=session-close\\nREASON='pre_final_report_gate'\\n\");" \
-    'process.exit(0);' > "$FAKE_ACD/bin/workflow/next-step"
+    'process.exit(0);' > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
 
 if [ -f "$HOOK_JS" ]; then
-    SG_OUT="$(printf '{"session_id":"%s"}' "$SID_SG" | AGENTS_CONFIG_DIR="$FAKE_ACD" node "$(np "$HOOK_JS")" 2>/dev/null)" ; SG_RC=$?
+    SG_OUT="$(printf '{"session_id":"%s"}' "$SID_SG" | node "$(np "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks/stop-final-report-guard.js")" 2>/dev/null)" ; SG_RC=$?
     assert_eq "stop-guard/gate-in-control-yields-exit-0" "0" "$SG_RC"
 else
     fail "stop-guard/gate-in-control-yields-exit-0" "not implemented: stop-final-report-guard absent"

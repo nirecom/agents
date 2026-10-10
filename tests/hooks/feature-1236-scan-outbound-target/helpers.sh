@@ -4,15 +4,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_HELPERS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _AGENTS_NODE="$(cygpath -m "$_HELPERS_SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_NODE="$AGENTS_DIR"
+    _AGENTS_NODE="$_HELPERS_SCRIPT_CHECKOUT_ROOT"
 fi
 
-HOOK_SRC="$AGENTS_DIR/hooks/scan-outbound.js"
-FORGE_EXTRACT_SRC="$AGENTS_DIR/hooks/lib/forge-write-extract.js"
+HOOK_SRC="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/scan-outbound.js"
+FORGE_EXTRACT_SRC="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/lib/forge-write-extract.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

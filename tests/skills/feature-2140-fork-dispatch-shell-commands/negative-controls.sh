@@ -42,19 +42,19 @@ CHAIN_OUT_OF_ORDER_BODY='   Read the scan output referenced by `<PLANS_DIR>` bef
    Write a scratchpad script that runs the scanner.'
 # G16 (#2140/#2141 review finding C5): the two-trigger directive sits AFTER the scratchpad-
 # creation action line instead of before it -- f1c must reject the reversed order.
-REVERSED_ORDER_BODY='   Write a scratchpad script that runs `bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh"`.
+REVERSED_ORDER_BODY='   Write a scratchpad script that runs `bash "$AGENTS_MAIN_ROOT/bin/refactor-prompts/index.sh"`.
    Read `rules/shell-commands.md` before the first Bash command, or before writing a file.'
 # G17a (#2140/#2141 review cycle3 finding C4): every OLD vocabulary token is present, but the
 # tool is renamed from "Write" to "Create" -- the strengthened chain check must reject this
 # (the old check never required an affirmative "Write" mention at all).
-NO_WRITE_MENTION_BODY='   Create a scratchpad script that runs `bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh"` and saves its stdout to `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json`; invoke it as a single `bash <absolute-path>` call.
+NO_WRITE_MENTION_BODY='   Create a scratchpad script that runs `bash "$AGENTS_MAIN_ROOT/bin/refactor-prompts/index.sh"` and saves its stdout to `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json`; invoke it as a single `bash <absolute-path>` call.
    Read the resulting file (Read tool) -- its content is the scan JSON for steps 3-6 below.'
 # G17b (#2140/#2141 review cycle3 finding C4): the action line itself is untouched (still passes
 # the chain check), but a heredoc-based rewrite is reintroduced a line below it -- the OLD check
 # never scanned for banned heredoc (`<<`)/redirect (`>`) syntax anywhere else in the block.
-HEREDOC_REINTRODUCED_BODY='   Write a scratchpad script that runs `bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh"` and saves its stdout to `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json`; invoke it as a single `bash <absolute-path>` call.
+HEREDOC_REINTRODUCED_BODY='   Write a scratchpad script that runs `bash "$AGENTS_MAIN_ROOT/bin/refactor-prompts/index.sh"` and saves its stdout to `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json`; invoke it as a single `bash <absolute-path>` call.
    cat <<EOF > script.sh
-   bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh" > scan.json
+   bash "$AGENTS_MAIN_ROOT/bin/refactor-prompts/index.sh" > scan.json
    EOF
    Read the resulting file (Read tool) -- its content is the scan JSON for steps 3-6 below.'
 
@@ -62,19 +62,19 @@ HEREDOC_REINTRODUCED_BODY='   Write a scratchpad script that runs `bash "$AGENTS
 # vocabulary token is present on one line, but "write" itself is negated -- the strengthened
 # chain check's own new negation branch (line_negates_verb ... 'write') must reject this, not
 # just fall through to a false PASS via an untested code path.
-NEGATED_WRITE_BODY='   Do not write a scratchpad script that runs `bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh"` and saves its stdout to `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json`; invoke it as a single `bash <absolute-path>` call.
+NEGATED_WRITE_BODY='   Do not write a scratchpad script that runs `bash "$AGENTS_MAIN_ROOT/bin/refactor-prompts/index.sh"` and saves its stdout to `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json`; invoke it as a single `bash <absolute-path>` call.
    Read the resulting file (Read tool) -- its content is the scan JSON for steps 3-6 below.'
 
 # G18 (review-security C1, HIGH): a review-tests fixture whose RT-2 body reintroduces the exact
 # `VAR=$(...)` command-substitution form -- the R6 regression guard must say "yes" (violation
 # present), proving it can actually fail, not just vacuously pass the real (already-fixed) file.
-COMMAND_SUBSTITUTION_RT2_BODY='FINGERPRINT=$(node "$AGENTS_CONFIG_DIR/bin/compute-review-scope-fingerprint.js" "${WORKTREE:-}")'
+COMMAND_SUBSTITUTION_RT2_BODY='FINGERPRINT=$(node "$AGENTS_MAIN_ROOT/bin/compute-review-scope-fingerprint.js" "${WORKTREE:-}")'
 
 # GOOD_ACTION_LINE: the fixed step-2 wording (a scratchpad script, no command substitution on
 # the Bash tool's own line). BUGGY_ACTION_LINE: the original #2140 bug pattern -- proves the F2
 # regression guard in refactor-prompts-checks.sh still says yes to a reintroduced violation.
-GOOD_ACTION_LINE='Write a scratchpad script that runs `bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh"` and saves its stdout to a file; invoke it as a single `bash <absolute-path>` call.'
-BUGGY_ACTION_LINE='`SCAN_JSON=$(bash "$AGENTS_CONFIG_DIR/bin/refactor-prompts/index.sh")`'
+GOOD_ACTION_LINE='Write a scratchpad script that runs `bash "$AGENTS_MAIN_ROOT/bin/refactor-prompts/index.sh"` and saves its stdout to a file; invoke it as a single `bash <absolute-path>` call.'
+BUGGY_ACTION_LINE='`SCAN_JSON=$(bash "$AGENTS_MAIN_ROOT/bin/refactor-prompts/index.sh")`'
 
 # <path> <directive-text-or-empty> <position: before-rt0|after-rt0> <rt2-body-text>
 make_review_tests_fixture() {

@@ -18,14 +18,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-SCRIPT="${_AGENTS_DIR_NODE}/bin/issue-close-write-outcome.js"
+SCRIPT="${_SCRIPT_CHECKOUT_ROOT_NODE}/bin/issue-close-write-outcome.js"
 
 PASS=0
 FAIL=0
@@ -65,7 +65,7 @@ node_path() {
 
 require_script() {
     local label="$1"
-    if [ ! -f "$AGENTS_DIR/bin/issue-close-write-outcome.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/bin/issue-close-write-outcome.js" ]; then
         skip "$label (bin/issue-close-write-outcome.js missing)"
         return 1
     fi

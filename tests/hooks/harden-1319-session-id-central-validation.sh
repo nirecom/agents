@@ -18,11 +18,11 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-CORE_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io/core.js"
-SESSION_ID_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/session-id.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+CORE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io/core.js"
+SESSION_ID_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/session-id.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -122,11 +122,11 @@ run_U4() {
 # ---------------------------------------------------------------------------
 run_consumer_case() {
     local id="$1" rel="$2" tmp tn rc out hook
-    hook="$AGENTS_DIR/$rel"
+    hook="$SCRIPT_CHECKOUT_ROOT/$rel"
     if [ ! -f "$hook" ]; then skip "$id: $rel not present"; return; fi
     tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
     out=$(echo '{"stop_hook_active":false,"session_id":"../../etc/passwd","transcript_path":""}' \
-        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
+        | WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" \
           "$RWT" 20 node "$(node_path "$hook")" 2>&1)
     rc=$?
     rm -rf "$tmp" 2>/dev/null || true
@@ -217,7 +217,7 @@ run_U6() {
     printf '{}' > "$tmp/outside.next-step-paused"
     out=$(TMPD="$tnode" WORKFLOW_STATE_DIR="$tnode/wf" WORKFLOW_PLANS_DIR="$tnode/wf" "$RWT" 20 node -e "
 const fs = require('fs'), path = require('path');
-const sm = require('$_AGENTS_DIR_NODE/hooks/lib/session-markers.js');
+const sm = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-markers.js');
 const dir = process.env.TMPD;
 const hostile = ['../outside', '..\\\\outside', '/outside', 'a/b', '..', '', '   ', 'x\\u0000y', '*'];
 const readers = [

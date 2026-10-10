@@ -85,7 +85,7 @@ function reportFinding(ctx, sessionId, finding) {
         "--reporter", "session-close-gate",
         "--session-id", sessionId,
       ],
-      cwd: ctx.anchors.mainRoot,
+      cwd: ctx.anchors.targetMainRoot,
       timeoutMs: REPORT_TIMEOUT_MS,
     });
     return res.status === 0;
@@ -188,7 +188,7 @@ function applyRepair(ctx, sessionId, which) {
       command: "node",
       script,
       args: ["--session-id", sessionId, setFlag, "done", clearFlag],
-      cwd: ctx.anchors.mainRoot,
+      cwd: ctx.anchors.targetMainRoot,
       timeoutMs: REPORT_TIMEOUT_MS,
     });
     return res.status === 0;

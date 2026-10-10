@@ -14,6 +14,10 @@ Do not write or edit test files directly in the main conversation.
 
 See [test/fixture-isolation.md](test/fixture-isolation.md) for keeping a test's side effects inside its own temp directory.
 
+## Repository Root Names in Tests
+
+See [root-names.md](../docs/architecture/claude-code/root-names.md) for the repository root names a test may use and the decoy tree it runs against.
+
 ## Test Coverage Review
 
 After writing test code, run `/review-tests`. WF-CODE-5 (`/write-code`) is blocked until both `write_tests` and `review_tests` are complete or both are skipped.

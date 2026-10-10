@@ -13,10 +13,11 @@
 # skill-orchestration. Injection seams: ../HARNESS-CONTRACT.md
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 require_sut
 
-CKPT_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/checkpoint.js"
+CKPT_JS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/checkpoint.js"
 
 # Force the failure by pre-creating the checkpoint's own path as a DIRECTORY:
 # writeCheckpoint's mkdirSync of the parent still succeeds and its writeFileSync

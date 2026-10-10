@@ -7,8 +7,8 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SWEEP="$AGENTS_DIR/bin/sweep-plans.sh"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SWEEP="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/sweep-plans.sh"
 
 PASS=0
 FAIL=0

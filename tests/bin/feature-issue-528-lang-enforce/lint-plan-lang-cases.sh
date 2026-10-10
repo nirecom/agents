@@ -12,13 +12,13 @@
 echo ""
 echo "=== Group 9: lint-plan-lang.js unit tests ==="
 
-LINT_PLAN_LIB="$AGENTS_DIR/hooks/lib/lint-plan-lang.js"
+LINT_PLAN_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/lint-plan-lang.js"
 if [ "$(src_present "$LINT_PLAN_LIB")" != "ok" ]; then
     echo "SKIP G9: hooks/lib/lint-plan-lang.js not yet implemented (RED phase)"
 else
     # T31: blank line → 0 violations
     _t31_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const v = lintPlanLang('', 'english');
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
@@ -26,7 +26,7 @@ else
 
     # T32: heading exempt
     _t32_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const v = lintPlanLang('# Heading', 'english');
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
@@ -34,7 +34,7 @@ else
 
     # T33: CJK + english → 1
     _t33_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const v = lintPlanLang('日本語テスト', 'english');
       if (v.length !== 1) { process.stderr.write('expected 1, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
@@ -42,7 +42,7 @@ else
 
     # T34: CJK + any → 0
     _t34_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const v = lintPlanLang('日本語テスト', 'any');
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
@@ -50,7 +50,7 @@ else
 
     # T35: 3 words + japanese → 0 (under threshold)
     _t35_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const v = lintPlanLang('Use the API', 'japanese');
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
@@ -58,7 +58,7 @@ else
 
     # T36: 5 words + japanese → 1
     _t36_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const v = lintPlanLang('Use the new PR API', 'japanese');
       if (v.length !== 1) { process.stderr.write('expected 1, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
@@ -66,7 +66,7 @@ else
 
     # T37: fenced CJK stripped
     _t37_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const content = '\`\`\`\n日本語テスト\n\`\`\`';
       const v = lintPlanLang(content, 'english');
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
@@ -75,7 +75,7 @@ else
 
     # T38: inline backtick CJK stripped
     _t38_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const v = lintPlanLang('use \`日本語\` here', 'english');
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
@@ -83,7 +83,7 @@ else
 
     # T54: issue title prefix stripped → 0 violations (japanese policy, 4-word title)
     _t54_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const v = lintPlanLang('- #629: check-plan-lang issue title excluded', 'japanese');
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
@@ -91,7 +91,7 @@ else
 
     # T55: issue title prefix stripped → 0 violations (japanese policy, 7-word title)
     _t55_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const v = lintPlanLang('- #100: auto-resolve Projects v2 config from git remote', 'japanese');
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
@@ -99,7 +99,7 @@ else
 
     # T56: issue ref with no title → 0 violations (japanese policy, edge case)
     _t56_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const v = lintPlanLang('- #629:', 'japanese');
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
@@ -109,7 +109,7 @@ else
     # The sentinel uses an em-dash (U+2014), NOT ASCII hyphen-minus.
     # Current source has no exemption for this line → test is RED.
     _t57_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const sentinel = '(none — pending issue creation or NON_GITHUB)';
       const v = lintPlanLang(sentinel, 'japanese');
       if (v.length !== 0) { process.stderr.write('expected 0 violations for NON_GITHUB sentinel, got ' + v.length + ': ' + JSON.stringify(v) + '\n'); process.exit(1); }

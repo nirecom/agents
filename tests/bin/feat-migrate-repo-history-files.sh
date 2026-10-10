@@ -4,18 +4,18 @@
 # Tests for feat/migrate-repo — --history-files flag on migrate-history.sh and preview-history.sh.
 #
 # The flag allows callers to bypass auto-discovery and specify history archive files
-# in an explicit order (relative to REPO_DIR). This is important when alphabetical
+# in an explicit order (relative to the target checkout root). This is important when alphabetical
 # sort order does not match chronological order.
 #
 # RED: fails clean while --history-files is not yet implemented.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HIST_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/migrate-history.sh"
-PREVIEW_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/preview-history.sh"
-STATE_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/state.sh"
-FIXTURE_DIR="$AGENTS_DIR/tests/fixtures/migration"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HIST_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/migrate-history.sh"
+PREVIEW_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/preview-history.sh"
+STATE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/state.sh"
+FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration"
 
 PASS=0
 FAIL=0
@@ -101,7 +101,6 @@ export MOCK_COUNTER="$TMP_HF1/counter"
 echo 101 > "$MOCK_COUNTER"
 : > "$MOCK_LOG"
 export PATH="$TMP_HF1/mock:$PATH"
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 
 # shellcheck disable=SC1090
 source "$STATE_SCRIPT"

@@ -16,8 +16,8 @@
 # old shape will be followed, so both claims are pinned — including the retired wording,
 # in the negative.
 
-DOC_RULES="$AGENTS_DIR/rules/github-issues.md"
-DOC_SKILL="$AGENTS_DIR/skills/issue-create/SKILL.md"
+DOC_RULES="$SCRIPT_CHECKOUT_ROOT/rules/github-issues.md"
+DOC_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/SKILL.md"
 
 # doc_assert <label> <file> <grep-flags…> — passes when the pattern matches; a missing
 # file is reported as such rather than as an absent pattern.

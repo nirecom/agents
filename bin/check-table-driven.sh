@@ -8,9 +8,9 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/test-language-registry.sh
-. "$REPO_ROOT/bin/lib/test-language-registry.sh"
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh"
 tlr_load || { echo "ERROR: test language registry not readable" >&2; exit 2; }
 
 # Parser/regex/allowlist target files (repo-relative paths or basenames)
@@ -50,7 +50,7 @@ done
 if [[ $STAGED -eq 1 ]]; then
     while IFS= read -r f; do
         [[ -n "$f" ]] && FILES+=("$f")
-    done < <(git -C "$REPO_ROOT" diff --cached --name-only 2>/dev/null || true)
+    done < <(git -C "$SCRIPT_CHECKOUT_ROOT" diff --cached --name-only 2>/dev/null || true)
 fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -70,7 +70,7 @@ is_parser_target() {
             return 0
         fi
         # Also match by repo-relative path
-        local rel="${file#"$REPO_ROOT/"}"
+        local rel="${file#"$SCRIPT_CHECKOUT_ROOT/"}"
         if [[ "$rel" == "$target" ]]; then
             return 0
         fi
@@ -138,7 +138,7 @@ find_and_check_tests() {
             found=1
             check_test_file "$test_file"
         fi
-    done < <(tlr_find "$REPO_ROOT/tests" table-driven | grep -v '_archive' || true)
+    done < <(tlr_find "$SCRIPT_CHECKOUT_ROOT/tests" table-driven | grep -v '_archive' || true)
 
     # If no test file found for a parser target, that's not a violation of this check
     # (audit-tests.sh handles missing test coverage separately)
@@ -147,9 +147,9 @@ find_and_check_tests() {
 
 # Main loop
 for file in "${FILES[@]}"; do
-    # Normalize: strip REPO_ROOT prefix if present
-    rel_file="${file#"$REPO_ROOT/"}"
-    abs_file="$REPO_ROOT/$rel_file"
+    # Normalize: strip SCRIPT_CHECKOUT_ROOT prefix if present
+    rel_file="${file#"$SCRIPT_CHECKOUT_ROOT/"}"
+    abs_file="$SCRIPT_CHECKOUT_ROOT/$rel_file"
 
     if [[ ! -f "$abs_file" ]]; then
         # Try treating as absolute path as-is

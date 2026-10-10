@@ -8,7 +8,7 @@
 # the real-git-wiring gap is already covered by the `# L3 gap` block below.
 #
 # L3 gap (what this test does NOT catch):
-# - Real Windows git-bash pre-commit execution with real `node` PATH + AGENTS_CONFIG_DIR symlink resolution
+# - Real Windows git-bash pre-commit execution with real `node` PATH + AGENTS_MAIN_ROOT symlink resolution
 # - Interaction with the real settings.json effortLevel auto-unstage block ordering
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 #
@@ -23,6 +23,7 @@
 # (HARD 500-line limit) for why the cases live in sibling files.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1180-commit-lang-check"
 

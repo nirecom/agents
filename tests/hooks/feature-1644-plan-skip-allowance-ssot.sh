@@ -26,12 +26,12 @@ set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 MODULE="hooks/workflow-state/plan-skip-allowance.js"
-MODULE_N="$AGENTS_DIR_N/$MODULE"
-GATE_N="$AGENTS_DIR_N/hooks/gate-plan-skip-sentinel.js"
+MODULE_N="$SCRIPT_CHECKOUT_ROOT_N/$MODULE"
+GATE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/gate-plan-skip-sentinel.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -53,11 +53,11 @@ export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
-# Empty config dir: no CONFIRM_* is inherited from the repo's own .env.
+# Empty agents main root: no CONFIRM_* is inherited from the repo's own .env.
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
 CONFIG_TESTS_OFF="$TMPDIR_BASE/cfg-tests-off"; mkdir -p "$CONFIG_TESTS_OFF"
 printf 'CONFIRM_TESTS=off\n' > "$CONFIG_TESTS_OFF/.env"
-export AGENTS_CONFIG_DIR="$(nrm "$CONFIG_EMPTY")"
+export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1
@@ -77,10 +77,10 @@ make_state() {
 }
 
 echo "=== P1: both doors require the same allowance module ==="
-if [ -f "$AGENTS_DIR/$MODULE" ]; then pass "P1a: $MODULE exists"
+if [ -f "$SCRIPT_CHECKOUT_ROOT/$MODULE" ]; then pass "P1a: $MODULE exists"
 else fail "P1a: $MODULE exists -- file not found"; fi
 
-if grep -qF 'plan-skip-allowance' "$AGENTS_DIR/hooks/gate-plan-skip-sentinel.js"; then pass "P1b: the sentinel gate requires plan-skip-allowance"
+if grep -qF 'plan-skip-allowance' "$SCRIPT_CHECKOUT_ROOT/hooks/gate-plan-skip-sentinel.js"; then pass "P1b: the sentinel gate requires plan-skip-allowance"
 else fail "P1b: the sentinel gate requires plan-skip-allowance -- no reference found"; fi
 
 # The advance path's require may sit in advance.js or in record-step-verdict.js
@@ -89,7 +89,7 @@ else fail "P1b: the sentinel gate requires plan-skip-allowance -- no reference f
 # and no third copy of the policy may exist.
 ADV_HOLDERS=0
 for f in bin/workflow/lib/next-step/advance.js hooks/workflow-state/record-step-verdict.js; do
-  if [ -f "$AGENTS_DIR/$f" ] && grep -qF 'plan-skip-allowance' "$AGENTS_DIR/$f"; then
+  if [ -f "$SCRIPT_CHECKOUT_ROOT/$f" ] && grep -qF 'plan-skip-allowance' "$SCRIPT_CHECKOUT_ROOT/$f"; then
     ADV_HOLDERS=$((ADV_HOLDERS + 1))
   fi
 done
@@ -98,8 +98,8 @@ else fail "P1c: the advance path requires plan-skip-allowance -- neither advance
 
 echo ""
 echo "=== P2: isSkipAllowedForCliPath never consults process.env ==="
-if [ -f "$AGENTS_DIR/$MODULE" ]; then
-  BODY="$(awk '/function isSkipAllowedForCliPath/,/^}/' "$AGENTS_DIR/$MODULE")"
+if [ -f "$SCRIPT_CHECKOUT_ROOT/$MODULE" ]; then
+  BODY="$(awk '/function isSkipAllowedForCliPath/,/^}/' "$SCRIPT_CHECKOUT_ROOT/$MODULE")"
   if [ -z "$BODY" ]; then
     fail "P2a: isSkipAllowedForCliPath is defined in $MODULE -- function not found"
   elif printf '%s' "$BODY" | grep -qF 'process.env'; then
@@ -109,7 +109,7 @@ if [ -f "$AGENTS_DIR/$MODULE" ]; then
   fi
   # Symmetric control: the sentinel-path function is SUPPOSED to read process.env.
   # Without this, P2a would also pass on a module where both functions vanished.
-  SBODY="$(awk '/function isSkipAllowedForSentinelPath/,/^}/' "$AGENTS_DIR/$MODULE")"
+  SBODY="$(awk '/function isSkipAllowedForSentinelPath/,/^}/' "$SCRIPT_CHECKOUT_ROOT/$MODULE")"
   if printf '%s' "$SBODY" | grep -qF 'process.env'; then
     pass "P2b: isSkipAllowedForSentinelPath does read process.env (asymmetry is intended)"
   else
@@ -135,7 +135,7 @@ OUT="$(PSA_MODULE="$MODULE_N" PSA_SID=p3 PSA_STEP=write_tests CONFIRM_TESTS=off 
 check "P3a: env-only CONFIRM_TESTS=off does NOT allow the CLI skip" "false" "$OUT"
 RC=0
 OUT="$(PSA_MODULE="$MODULE_N" PSA_SID=p3 PSA_STEP=write_tests \
-  AGENTS_CONFIG_DIR="$(nrm "$CONFIG_TESTS_OFF")" run_with_timeout node "$CLI_PROBE" 2>/dev/null)" || RC=$?
+  AGENTS_MAIN_ROOT="$(nrm "$CONFIG_TESTS_OFF")" run_with_timeout node "$CLI_PROBE" 2>/dev/null)" || RC=$?
 check "P3b: config-file CONFIRM_TESTS=off DOES allow the CLI skip" "true" "$OUT"
 
 echo ""
@@ -186,7 +186,7 @@ make_state p4b "workflow_init clarify_intent research outline"
 # than the recording (a stale verdict must not authorize a skip), so the artifact
 # has to be in place BEFORE the judgment is written.
 printf '# outline\n' > "$PLANS_DIR/p4b-outline.md"
-run_with_timeout node "$AGENTS_DIR_N/bin/workflow/record-skip-judgment" \
+run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment" \
   --session p4b --target detail --c1 true --c2 true --c3 true >/dev/null 2>&1
 H="$(hook_verdict p4b 'echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: recorded verdict satisfied>>\"')"
 M="$(module_verdict p4b detail)"
@@ -219,7 +219,7 @@ cli_verdict() {
 # Case 1 — detail WITH a recorded orchestrator verdict.
 make_state p5a "workflow_init clarify_intent research outline"
 printf '# outline\n' > "$PLANS_DIR/p5a-outline.md"
-run_with_timeout node "$AGENTS_DIR_N/bin/workflow/record-skip-judgment" \
+run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment" \
   --session p5a --target detail --c1 true --c2 true --c3 true >/dev/null 2>&1
 C="$(cli_verdict p5a detail)"
 check "P5a: detail with a recorded verdict -- the CLI door allows the skip" "true" "$C"

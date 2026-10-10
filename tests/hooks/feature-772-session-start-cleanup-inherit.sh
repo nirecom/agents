@@ -9,10 +9,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SESSION_START="$AGENTS_DIR/hooks/session-start.js"
-GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
-WORKFLOW_STATE_LIB="$AGENTS_DIR/hooks/workflow-state.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SESSION_START="$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js"
+GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
+WORKFLOW_STATE_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state.js"
 
 PASS=0
 FAIL=0

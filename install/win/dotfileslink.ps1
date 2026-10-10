@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 # test affordance — do not set DOTFILESLINK_HOME_OVERRIDE / DOTFILESLINK_SKIP_PRIV_CHECK / DOTFILESLINK_FAIL_AT_INDEX in production
 $EffectiveHome = if ($env:DOTFILESLINK_HOME_OVERRIDE) { $env:DOTFILESLINK_HOME_OVERRIDE } else { $HOME }
 
-$AgentsRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
+$SCRIPT_CHECKOUT_ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 # Check Developer Mode / Admin for symlink capability
 $regKey = Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock -ErrorAction SilentlyContinue
@@ -56,7 +56,7 @@ $links = @(
     # picks up a short name — /workflow-launch-exec (an unowned built-in) otherwise
     # wins the `/wor` completion. Not a native Skill alias field (none exists);
     # this is a second directory name resolving to the same SKILL.md.
-    @{ Source = "skills\workflow-init"; Dest = "$AgentsRoot\skills\wf-init";       IsDir = $true }
+    @{ Source = "skills\workflow-init"; Dest = "$SCRIPT_CHECKOUT_ROOT\skills\wf-init";       IsDir = $true }
 )
 
 # Transactional symlink loop. Per-link failure logged + counted; loop continues to next link.
@@ -65,7 +65,7 @@ $linkFailed = 0
 $_failAfterN = if ($env:DOTFILESLINK_FAIL_AT_INDEX -match '^\d+$') { [int]$env:DOTFILESLINK_FAIL_AT_INDEX } else { -1 }
 $_linkIdx = 0
 foreach ($link in $links) {
-    $source = Join-Path $AgentsRoot $link.Source
+    $source = Join-Path $SCRIPT_CHECKOUT_ROOT $link.Source
     $dest = $link.Dest
     if (-not (Test-Path $source)) { Write-Warning "Source not found: $source (skipping)"; continue }
     $rollback = "none"   # none | restore-symlink | restore-file
@@ -146,16 +146,16 @@ if ($staleItem -and ($staleItem.Attributes -band [IO.FileAttributes]::ReparsePoi
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     throw "node not found. Install fnm and run: fnm install --lts"
 }
-& pwsh -NoProfile -File (Join-Path $AgentsRoot "install\lib\wait-cc-exit.ps1")
+& pwsh -NoProfile -File (Join-Path $SCRIPT_CHECKOUT_ROOT "install\lib\wait-cc-exit.ps1")
 if ($LASTEXITCODE -eq 0) {
-    & node (Join-Path $AgentsRoot "install\assemble-settings.js")
+    & node (Join-Path $SCRIPT_CHECKOUT_ROOT "install\assemble-settings.js")
     if ($LASTEXITCODE -ne 0) { throw "assemble-settings.js failed (exit $LASTEXITCODE)" }
 } else {
     Write-Warning "Claude Code still running — skipping settings.json write."
 }
 
 # --- git core.hooksPath ---
-$_hooksPath = "$AgentsRoot\hooks"
+$_hooksPath = "$SCRIPT_CHECKOUT_ROOT\hooks"
 $_currentHooksPath = git config --file "$EffectiveHome\.gitconfig" core.hooksPath 2>$null
 if ($_currentHooksPath -eq $_hooksPath) {
     Write-Host "core.hooksPath already set: $_hooksPath" -ForegroundColor DarkGray
@@ -174,25 +174,25 @@ if "%~1"=="" goto nopath
 if "%_ARG1:~0,1%"=="-" goto nopath
 goto haspath
 :nopath
-uv run "$AgentsRoot\bin\doc-append.py" docs/history.md %*
+uv run "$SCRIPT_CHECKOUT_ROOT\bin\doc-append.py" docs/history.md %*
 goto end
 :haspath
-uv run "$AgentsRoot\bin\doc-append.py" %*
+uv run "$SCRIPT_CHECKOUT_ROOT\bin\doc-append.py" %*
 :end
 "@
 Write-Launcher "$LocalBin\doc-append.cmd" $cmdContent "doc-append.cmd"
 
 # --- ~/.local/bin/doc-append-plain.cmd launcher ---
-$dapCmdContent = "@echo off`r`nuv run `"$AgentsRoot\bin\doc-append-plain.py`" %*`r`n"
+$dapCmdContent = "@echo off`r`nuv run `"$SCRIPT_CHECKOUT_ROOT\bin\doc-append-plain.py`" %*`r`n"
 Write-Launcher "$LocalBin\doc-append-plain.cmd" $dapCmdContent "doc-append-plain.cmd"
 
 # --- ~/.local/bin/repo-visibility.cmd launcher ---
-$rvCmdContent = "@echo off`r`nuv run `"$AgentsRoot\bin\repo-visibility.py`" %*`r`n"
+$rvCmdContent = "@echo off`r`nuv run `"$SCRIPT_CHECKOUT_ROOT\bin\repo-visibility.py`" %*`r`n"
 Write-Launcher "$LocalBin\repo-visibility.cmd" $rvCmdContent "repo-visibility.cmd"
 
-# Convert AgentsRoot Windows path to bash-compatible Unix path
-$agentsDrive = $AgentsRoot[0].ToString().ToLower()
-$agentsUnixPath = "/$agentsDrive" + $AgentsRoot.Substring(2).Replace('\', '/')
+# Convert SCRIPT_CHECKOUT_ROOT Windows path to bash-compatible Unix path
+$agentsDrive = $SCRIPT_CHECKOUT_ROOT[0].ToString().ToLower()
+$agentsUnixPath = "/$agentsDrive" + $SCRIPT_CHECKOUT_ROOT.Substring(2).Replace('\', '/')
 
 # --- PATH-exposed bin/ commands (cmd + bash shim) ---
 # Command set: install/path-exposed-commands.txt (CPR-SSOT; install/linux/dotfileslink.sh
@@ -201,7 +201,7 @@ $agentsUnixPath = "/$agentsDrive" + $AgentsRoot.Substring(2).Replace('\', '/')
 # in hooks/lib/allow-command-list.js (canonical bash/node detection).
 function Resolve-PathExposedInterpreter {
     param([string]$Command)
-    $scriptPath = Join-Path $AgentsRoot "bin\$Command"
+    $scriptPath = Join-Path $SCRIPT_CHECKOUT_ROOT "bin\$Command"
     if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
         throw "install/path-exposed-commands.txt: entry `"$Command`" is not a file ($scriptPath)"
     }
@@ -221,7 +221,7 @@ function Resolve-PathExposedInterpreter {
     return $name
 }
 
-$PathExposedList = Join-Path $AgentsRoot "install\path-exposed-commands.txt"
+$PathExposedList = Join-Path $SCRIPT_CHECKOUT_ROOT "install\path-exposed-commands.txt"
 $pathExposedCommands = @()
 if (Test-Path -LiteralPath $PathExposedList) {
     $pathExposedCommands = @(

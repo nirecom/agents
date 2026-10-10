@@ -6,16 +6,16 @@
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight category: migration.
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/_mtime.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-CTRL_DIR_MOD="$(np "$AGENTS_DIR/hooks/workflow-state/state-io/control-dir.js")"
-IDX_MOD="$(np "$AGENTS_DIR/hooks/lib/temporary-migrations/control-dir-split/index.js")"
-EVID_MOD="$(np "$AGENTS_DIR/hooks/workflow-state/evidence-resolver.js")"
-WCD_CLI="$AGENTS_DIR/bin/workflow-control-dir"
+CTRL_DIR_MOD="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io/control-dir.js")"
+IDX_MOD="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/temporary-migrations/control-dir-split/index.js")"
+EVID_MOD="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/evidence-resolver.js")"
+WCD_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir"
 UUID="aabbccdd-1111-2222-3333-444455556666"
 
 # Helper: run workflow-control-dir, capture exit code and stderr
@@ -102,7 +102,7 @@ case_begin "fault-link-fail-round-number-not-reset" "hooks/workflow-state/state-
 T=$(make_tmp)
 harness_isolate "$T"
 SID="$UUID"
-WRAPPER="$AGENTS_DIR/skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+WRAPPER="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/scripts/run-codex-review-loop.sh"
 printf 'terminal\n' > "$T/plans/${SID}-detail-plan-terminal.txt"
 printf '2\n' > "$T/plans/${SID}-detail-plan-round-number.txt"
 printf '# detail\n' > "$T/plans/${SID}-detail.md"
@@ -110,12 +110,16 @@ if [ ! -f "$WRAPPER" ]; then
   fail "fault-link-fail-round-number-not-reset" "wrapper script not found"
 else
   TMPROOT=$(make_tmp)
+  # The wrapper finds bin/ from its own location: copy the tree, then place the stubs.
+  source "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+  script_checkout_fixture_copy "$TMPROOT" bin hooks skills/make-detail-plan
   mkdir -p "$TMPROOT/bin"
   for b in resolve-accepted-tradeoffs-file concern-ledger run-codex-review-loop; do
     printf '#!/bin/bash\nexit 0\n' > "$TMPROOT/bin/$b"
     chmod +x "$TMPROOT/bin/$b"
   done
-  RESULT=$(AGENTS_CONFIG_DIR="$TMPROOT" SESSION_ID="$SID" \
+  WRAPPER="$TMPROOT/skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+  RESULT=$(SESSION_ID="$SID" \
            PLANS_DIR="$(np "$T/plans")" EXTENSIONS_USED="0" \
            WORKFLOW_STATE_DIR="$(np "$T/workflow-state")" \
            WORKFLOW_PLANS_DIR="$(np "$T/plans")" \

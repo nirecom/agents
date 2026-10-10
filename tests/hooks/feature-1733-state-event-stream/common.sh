@@ -8,7 +8,7 @@
 #
 # ISOLATION CONTRACT (identical across every case file):
 #   WORKFLOW_STATE_DIR -> per-file temp dir, so no real session state is touched.
-#   AGENTS_CONFIG_DIR   -> fixture config dir whose .env carries no workflow toggles,
+#   AGENTS_MAIN_ROOT   -> fixture agents main root whose .env carries no workflow toggles,
 #                          so env-dependent branches resolve from a known file rather
 #                          than the developer's real .env (test-design.md
 #                          "Config-dependent branches").
@@ -34,7 +34,7 @@ set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_COMMON_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 TMPROOT="$(mktemp -d)"
 trap 'chmod -R u+rwx "$TMPROOT" >/dev/null 2>&1 || true; rm -rf "$TMPROOT"' EXIT
@@ -94,7 +94,7 @@ PLANS_NATIVE="$(native_path "$PLANS")"
 
 # node_env — the isolation env prefix shared by every node invocation below.
 node_env() {
-    printf '%s' "WORKFLOW_STATE_DIR=$WF_NATIVE AGENTS_CONFIG_DIR=$CFG_NATIVE WORKFLOW_PLANS_DIR=$PLANS_NATIVE"
+    printf '%s' "WORKFLOW_STATE_DIR=$WF_NATIVE AGENTS_MAIN_ROOT=$CFG_NATIVE WORKFLOW_PLANS_DIR=$PLANS_NATIVE"
 }
 
 # mk_git_repo <dir> <branch> — a REAL git repository with one commit, checked out on
@@ -147,11 +147,11 @@ next_sid() { SID_N=$((SID_N + 1)); printf -v SID "sid1733-%s-%02d" "${CASE_TAG:-
 nodejs() {
     local sid="$1" js="$2"
     NODE_RC=0
-    NODE_OUT="$(cd "$AGENTS_DIR" && env \
-        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+    NODE_OUT="$(cd "$_COMMON_SCRIPT_CHECKOUT_ROOT" && env \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$sid" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node -e "$js" 2>&1)" || NODE_RC=$?
+        "$_COMMON_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node -e "$js" 2>&1)" || NODE_RC=$?
 }
 
 # nodejs_env <extra-env-assignments> <sid> <js> — as nodejs, plus extra env vars.
@@ -159,21 +159,21 @@ nodejs_env() {
     local extra="$1" sid="$2" js="$3"
     NODE_RC=0
     # shellcheck disable=SC2086
-    NODE_OUT="$(cd "$AGENTS_DIR" && env \
-        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+    NODE_OUT="$(cd "$_COMMON_SCRIPT_CHECKOUT_ROOT" && env \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$sid" $extra \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node -e "$js" 2>&1)" || NODE_RC=$?
+        "$_COMMON_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node -e "$js" 2>&1)" || NODE_RC=$?
 }
 
 # nodejs_bg <sid> <js> <stdout-file> — same, detached. Used by concurrency.sh.
 nodejs_bg() {
     local sid="$1" js="$2" outfile="$3"
-    (cd "$AGENTS_DIR" && env \
-        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+    (cd "$_COMMON_SCRIPT_CHECKOUT_ROOT" && env \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$sid" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node -e "$js" >"$outfile" 2>&1) &
+        "$_COMMON_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node -e "$js" >"$outfile" 2>&1) &
 }
 
 # ── case entry ───────────────────────────────────────────────────────────────
@@ -193,16 +193,16 @@ run_case() { # <label>
 
 # ── capability probes (diagnostics only — they must never gate a case) ───────
 
-mod_exists() { [ -f "$AGENTS_DIR/$1" ]; }
+mod_exists() { [ -f "$_COMMON_SCRIPT_CHECKOUT_ROOT/$1" ]; }
 
 # exports_have <require-path-relative-to-repo-root> <export-name>
 exports_have() {
     local out
-    out="$(cd "$AGENTS_DIR" && env \
-        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+    out="$(cd "$_COMMON_SCRIPT_CHECKOUT_ROOT" && env \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 30 node -e \
+        "$_COMMON_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node -e \
         "try{const m=require('$1');console.log(m['$2']===undefined?'NO':'YES');}catch(e){console.log('NO');}" \
         2>/dev/null)" || out="NO"
     [ "$out" = "YES" ]

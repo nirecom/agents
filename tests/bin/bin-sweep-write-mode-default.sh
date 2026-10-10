@@ -20,11 +20,11 @@ set -uo pipefail
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WRITE_MODE_LIB="$AGENTS_DIR/bin/lib/sweep-write-mode.sh"
-SWEEP_YML="$AGENTS_DIR/.github/workflows/sweep.yml"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+WRITE_MODE_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/sweep-write-mode.sh"
+SWEEP_YML="$SCRIPT_CHECKOUT_ROOT/.github/workflows/sweep.yml"
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 PASS=0
@@ -60,12 +60,16 @@ ci_field() {
     " -- "$2" 2>/dev/null
 }
 
-# Stub AGENTS_CONFIG_DIR whose is-github-dotcom-remote always succeeds.
-make_stub_agents_dir() {
-    local stubdir="$1"
-    mkdir -p "$stubdir/bin"
-    printf '#!/bin/bash\nexit 0\n' > "$stubdir/bin/is-github-dotcom-remote"
-    chmod +x "$stubdir/bin/is-github-dotcom-remote"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+
+# Fake script checkout: a copy of bin/ whose is-github-dotcom-remote always succeeds.
+# sweep-branches.sh finds that helper beside itself, so the copy is what gets launched.
+make_fake_script_checkout() {
+    local fake_script_checkout_root="$1"
+    script_checkout_fixture_copy "$fake_script_checkout_root" bin || return 1
+    printf '#!/bin/bash\nexit 0\n' > "$fake_script_checkout_root/bin/is-github-dotcom-remote"
+    chmod +x "$fake_script_checkout_root/bin/is-github-dotcom-remote"
 }
 
 SCRIPT_DIR="$(dirname "$0")/bin-sweep-write-mode-default"

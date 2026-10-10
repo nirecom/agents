@@ -15,10 +15,10 @@ set -u
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not found"; exit 77; }
 command -v git >/dev/null 2>&1 || { echo "SKIP: git not found"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-REAL_RUNNER="$AGENTS_DIR/tests/run-all.sh"
-REAL_LIB="$AGENTS_DIR/bin/lib/run-all-parallelism.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+REAL_RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
+REAL_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-parallelism.sh"
 
 PASS=0
 FAIL=0
@@ -51,7 +51,7 @@ export RUN_ALL_CACHE_DIR="$TMPD/cache"
 mkdir -p "$RUN_ALL_CACHE_DIR"
 FIX_HOME="$TMPD/home"; mkdir -p "$FIX_HOME/.claude"
 # Defined after the pins above so no bin/ exec can run before isolation (#2512).
-run_with_timeout() { local s="$1"; shift; bash "$AGENTS_DIR/bin/run-with-timeout.sh" "$s" "$@"; }
+run_with_timeout() { local s="$1"; shift; bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" "$s" "$@"; }
 
 # --- git family fixture -----------------------------------------------------
 MAIN_RAW="$TMPD/mainrepo"
@@ -85,8 +85,8 @@ mkdir -p "$LINKED_RAW/tests" "$LINKED_RAW/bin/lib"
 cp "$REAL_RUNNER" "$LINKED_RAW/tests/.real-run-all.sh"
 [ -f "$REAL_LIB" ] && cp "$REAL_LIB" "$LINKED_RAW/bin/lib/run-all-parallelism.sh"
 # shellcheck source=../../lib/test-language-registry-fixture.sh
-. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
-install_test_language_registry "$LINKED_RAW" "$AGENTS_DIR"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
+install_test_language_registry "$LINKED_RAW" "$SCRIPT_CHECKOUT_ROOT"
 {
     printf '#!/usr/bin/env bash\n'
     printf 'printf "%%s\\n" "$*" >> %s\n' "\"$ARGV_LOG\""

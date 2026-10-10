@@ -17,13 +17,13 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # shellcheck source=tests/lib/clearance-hook-harness.sh
-. "$AGENTS_DIR/tests/lib/clearance-hook-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/clearance-hook-harness.sh"
 
 TMP=$(make_tmp); TN=$(node_path "$TMP")
 # Approve rows write to $OUT: #2434's strict placement guard blocks any write under $TN
@@ -57,7 +57,7 @@ const pb = require(process.argv[1] + "/hooks/lib/protected-basenames.js");
 const out = [];
 for (const t of process.argv.slice(2)) out.push(String(pb.classifyProtectedPath(t, {})));
 process.stdout.write(out.join(" "));
-' "$_AGENTS_DIR_NODE" "$SID.off-clearance" "$B_ACUTE" "$B_COMB" "$B_CJK" "$B_FW1" "$B_UNREL" "$B_WORD" "$B_HYPH" 2>&1)"
+' "$_SCRIPT_CHECKOUT_ROOT_NODE" "$SID.off-clearance" "$B_ACUTE" "$B_COMB" "$B_CJK" "$B_FW1" "$B_UNREL" "$B_WORD" "$B_HYPH" 2>&1)"
 if [ "$probe" = "token null null null null null null null" ]; then
     pass "UB0 the classifier owns the bare stem and disowns every continuation (approve is the correct contract)"
 else
@@ -137,7 +137,7 @@ const ip = require(process.argv[1] + "/hooks/block-clearance-token-write/interpr
 const out = [];
 for (const g of process.argv.slice(3)) out.push(String(ip.bodyDerefsProtectedViaAssignment(process.argv[2], g)));
 process.stdout.write(out.join(" "));
-' "$_AGENTS_DIR_NODE" "process.env.P" "P=$Z_CONT node <<< \"$Z_DEREF\"" "P=$Z_CLEAN node <<< \"$Z_DEREF\"" 2>&1)"
+' "$_SCRIPT_CHECKOUT_ROOT_NODE" "process.env.P" "P=$Z_CONT node <<< \"$Z_DEREF\"" "P=$Z_CLEAN node <<< \"$Z_DEREF\"" 2>&1)"
 if [ "$unitz" = "false true" ]; then
     pass "UBZ0 bodyDerefsProtectedViaAssignment rejects the continuation, accepts the exact suffix"
 else

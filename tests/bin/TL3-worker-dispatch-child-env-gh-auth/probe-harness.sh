@@ -39,7 +39,7 @@ childProcess.spawnSync = function (cmd, args, opts) {
 };
 const spawnSync = childProcess.spawnSync;
 
-const [agentsDir, mode, mainRoot, host, entryKind] = process.argv.slice(2);
+const [agentsDir, mode, targetMainRoot, host, entryKind] = process.argv.slice(2);
 const spawnMod = require(path.join(agentsDir, "bin/worker-dispatch/spawn.js"));
 const anchorMod = require(path.join(agentsDir, "bin/worker-dispatch/anchor.js"));
 const registry = require(path.join(agentsDir, "hooks/lib/worker-dispatch-registry.js"));
@@ -143,7 +143,7 @@ if (mode === "direct") {
 }
 
 if (mode === "dispatch") {
-  const anchors = anchorMod.resolveAnchors(mainRoot);
+  const anchors = anchorMod.resolveAnchors(targetMainRoot);
   if (anchors.error) { out("anchors_error", anchors.error); process.exit(9); }
   // envPassthrough: [] on purpose — a parent holding GH_TOKEN must not be able
   // to authenticate this child; the config directory must do the work, which
@@ -159,7 +159,7 @@ if (mode === "dispatch") {
   let res;
   spawnSite = "dispatch";
   try {
-    res = spawnMod.run(entry, { anchors, command: "gh", args: GH_ARGS, cwd: mainRoot, timeoutMs: TIMEOUT_MS });
+    res = spawnMod.run(entry, { anchors, command: "gh", args: GH_ARGS, cwd: targetMainRoot, timeoutMs: TIMEOUT_MS });
   } catch (e) {
     // spawnMod.run() can throw before ever reaching spawnSync — no child env
     // then, and outEnvFacts() says so rather than guessing.
@@ -191,7 +191,7 @@ run_probe() {
          -u CLAUDE_CODE_SESSION_ID "${STRIP_CREDS[@]}" "$@" \
         "GH_HOST=$TARGET_HOST" \
         "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
-        node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$mode" "$MAIN" "$TARGET_HOST" "$kind" 2>&1)" || return 1
+        node "$PROBE" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$mode" "$MAIN" "$TARGET_HOST" "$kind" 2>&1)" || return 1
     return 0
 }
 

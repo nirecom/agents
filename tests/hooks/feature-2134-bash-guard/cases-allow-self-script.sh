@@ -34,7 +34,7 @@ bg_root_forms() {
 }
 bg_root_forms "$(node_path "$FX_ROOT")"
 FX_M="$BG_M"; FX_MSYS="$BG_MSYS"; FX_WIN="$BG_WIN"
-bg_root_forms "$(node_path "$AGENTS_DIR")"
+bg_root_forms "$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 RL_M="$BG_M"; RL_MSYS="$BG_MSYS"; RL_WIN="$BG_WIN"
 
 # bg_subst <text> <M> <MSYS> <WIN> -> text with @ROOT@ / @MSYS@ / @WIN@ replaced.
@@ -80,20 +80,20 @@ w1_fixture_rows() {
 # Positives are allow codes; `null` rows are permission prompts that must survive.
 case_begin "self-script-fixture-interpreter" "hooks/bash-guard/allow.js"
 bg_batched_stdin w1_fixture_rows <<'TABLE'
-env-form        ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" --x          ~ -     ~ BG-ALLOW-SELF-SCRIPT
-env-braced      ~ bash "${AGENTS_CONFIG_DIR}/bin/fx-bash"            ~ -     ~ BG-ALLOW-SELF-SCRIPT
-node-entry      ~ node "$AGENTS_CONFIG_DIR/bin/fx-node.js" a b       ~ -     ~ BG-ALLOW-SELF-SCRIPT
-subdir-bin-bash ~ bash "$AGENTS_CONFIG_DIR/bin/tool/fx-sub"          ~ -     ~ BG-ALLOW-SELF-SCRIPT
-bash-exe        ~ bash.exe "$AGENTS_CONFIG_DIR/bin/fx-bash"          ~ -     ~ BG-ALLOW-SELF-SCRIPT
-abs-interp      ~ /usr/bin/bash "$AGENTS_CONFIG_DIR/bin/fx-bash"     ~ -     ~ BG-ALLOW-SELF-SCRIPT
-interp-mismatch ~ node "$AGENTS_CONFIG_DIR/bin/fx-bash"              ~ -     ~ null
-interp-mismatch2 ~ bash "$AGENTS_CONFIG_DIR/bin/fx-node.js"          ~ -     ~ null
-other-interp    ~ sh "$AGENTS_CONFIG_DIR/bin/fx-bash"                ~ -     ~ null
-or-suffix       ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" || true      ~ -     ~ null
-bg-suffix       ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" &            ~ -     ~ null
-redirect-in     ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" < in.txt     ~ -     ~ null
-exec-position   ~ "$AGENTS_CONFIG_DIR/bin/fx-bash"                   ~ -     ~ null
-env-args-quoted ~ bash "$AGENTS_CONFIG_DIR/bin/fx-bash" --summary "a (b) c" --p "$HOME" ~ - ~ BG-ALLOW-SELF-SCRIPT
+env-form        ~ bash "$AGENTS_MAIN_ROOT/bin/fx-bash" --x          ~ -     ~ BG-ALLOW-SELF-SCRIPT
+env-braced      ~ bash "${AGENTS_MAIN_ROOT}/bin/fx-bash"            ~ -     ~ BG-ALLOW-SELF-SCRIPT
+node-entry      ~ node "$AGENTS_MAIN_ROOT/bin/fx-node.js" a b       ~ -     ~ BG-ALLOW-SELF-SCRIPT
+subdir-bin-bash ~ bash "$AGENTS_MAIN_ROOT/bin/tool/fx-sub"          ~ -     ~ BG-ALLOW-SELF-SCRIPT
+bash-exe        ~ bash.exe "$AGENTS_MAIN_ROOT/bin/fx-bash"          ~ -     ~ BG-ALLOW-SELF-SCRIPT
+abs-interp      ~ /usr/bin/bash "$AGENTS_MAIN_ROOT/bin/fx-bash"     ~ -     ~ BG-ALLOW-SELF-SCRIPT
+interp-mismatch ~ node "$AGENTS_MAIN_ROOT/bin/fx-bash"              ~ -     ~ null
+interp-mismatch2 ~ bash "$AGENTS_MAIN_ROOT/bin/fx-node.js"          ~ -     ~ null
+other-interp    ~ sh "$AGENTS_MAIN_ROOT/bin/fx-bash"                ~ -     ~ null
+or-suffix       ~ bash "$AGENTS_MAIN_ROOT/bin/fx-bash" || true      ~ -     ~ null
+bg-suffix       ~ bash "$AGENTS_MAIN_ROOT/bin/fx-bash" &            ~ -     ~ null
+redirect-in     ~ bash "$AGENTS_MAIN_ROOT/bin/fx-bash" < in.txt     ~ -     ~ null
+exec-position   ~ "$AGENTS_MAIN_ROOT/bin/fx-bash"                   ~ -     ~ null
+env-args-quoted ~ bash "$AGENTS_MAIN_ROOT/bin/fx-bash" --summary "a (b) c" --p "$HOME" ~ - ~ BG-ALLOW-SELF-SCRIPT
 TABLE
 case_end
 
@@ -101,34 +101,34 @@ case_end
 # `cd <root> && <command>`; any other shape inside it keeps the prompt.
 case_begin "self-script-fixture-bash-c" "hooks/bash-guard/allow.js"
 bg_batched_stdin w1_fixture_rows <<'TABLE'
-bash-c-wrapper  ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/fx-bash"'    ~ -     ~ BG-ALLOW-SELF-SCRIPT
-bashc-cd-env    ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/fx-bash"' ~ - ~ BG-ALLOW-SELF-SCRIPT
-bashc-cd-rel    ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash bin/fx-bash' ~ -  ~ BG-ALLOW-SELF-SCRIPT
+bash-c-wrapper  ~ bash -c 'bash "$AGENTS_MAIN_ROOT/bin/fx-bash"'    ~ -     ~ BG-ALLOW-SELF-SCRIPT
+bashc-cd-env    ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/fx-bash"' ~ - ~ BG-ALLOW-SELF-SCRIPT
+bashc-cd-rel    ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && bash bin/fx-bash' ~ -  ~ BG-ALLOW-SELF-SCRIPT
 bashc-cd-root   ~ bash -c 'cd "@ROOT@" && node bin/fx-node.js'       ~ -     ~ BG-ALLOW-SELF-SCRIPT
 bashc-bare      ~ bash -c 'fx-bare --x'                              ~ -     ~ BG-ALLOW-SELF-BARE
-bashc-cd-bare   ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && fx-bare'       ~ -     ~ BG-ALLOW-SELF-BARE
+bashc-cd-bare   ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && fx-bare'       ~ -     ~ BG-ALLOW-SELF-BARE
 bashc-rel-root  ~ bash -c 'bash bin/fx-bash'                         ~ ROOT  ~ BG-ALLOW-SELF-SCRIPT
 bashc-nested    ~ bash -c 'bash -c fx-bare'                          ~ -     ~ null
-bashc-two-seps  ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && fx-bare && fx-bare' ~ - ~ null
-bashc-semicolon ~ bash -c 'cd "$AGENTS_CONFIG_DIR"; fx-bare'         ~ -     ~ null
+bashc-two-seps  ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && fx-bare && fx-bare' ~ - ~ null
+bashc-semicolon ~ bash -c 'cd "$AGENTS_MAIN_ROOT"; fx-bare'         ~ -     ~ null
 bashc-pipe      ~ bash -c 'fx-bare | cat'                            ~ -     ~ null
 bashc-redirect  ~ bash -c 'fx-bare > out.txt'                        ~ -     ~ null
 bashc-subst     ~ bash -c 'bash "$(echo x)/bin/fx-bash"'             ~ -     ~ null
 bashc-env-pfx   ~ bash -c 'FOO=1 fx-bare'                            ~ -     ~ null
 bashc-cd-other  ~ bash -c 'cd /usr && bash bin/fx-bash'              ~ -     ~ null
 bashc-cd-dot    ~ bash -c 'cd . && bash bin/fx-bash'                 ~ ROOT  ~ null
-bashc-cd-last   ~ bash -c 'fx-bare && cd "$AGENTS_CONFIG_DIR"'       ~ -     ~ null
+bashc-cd-last   ~ bash -c 'fx-bare && cd "$AGENTS_MAIN_ROOT"'       ~ -     ~ null
 bashc-extra-arg ~ bash -c 'fx-bare' extra                            ~ -     ~ null
 bashc-dquoted   ~ bash -c "fx-bare"                                  ~ -     ~ null
-bashc-exec-pos  ~ bash -c '"$AGENTS_CONFIG_DIR/bin/fx-bash"'         ~ -     ~ null
-bashc-unlisted  ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/fx-notlisted"' ~ -   ~ null
+bashc-exec-pos  ~ bash -c '"$AGENTS_MAIN_ROOT/bin/fx-bash"'         ~ -     ~ null
+bashc-unlisted  ~ bash -c 'bash "$AGENTS_MAIN_ROOT/bin/fx-notlisted"' ~ -   ~ null
 sh-c-wrapper    ~ sh -c 'fx-bare'                                    ~ -     ~ null
 bashc-cd-lookalike ~ bash -c 'cd "@ROOT@-evil" && bash bin/fx-bash'  ~ -     ~ null
 TABLE
 case_end
 
 # root-lookalike: the root must be stripped on a path BOUNDARY, or `<root>-evil/bin/x` would
-# normalize to an entry. abs-bad-cwd: an absolute or $AGENTS_CONFIG_DIR form never reads cwd.
+# normalize to an entry. abs-bad-cwd: an absolute or $AGENTS_MAIN_ROOT form never reads cwd.
 case_begin "self-script-fixture-path-forms" "hooks/lib/path-normalize.js"
 bg_batched_stdin w1_fixture_rows <<'TABLE'
 abs-root        ~ bash "@ROOT@/bin/fx-bash"                          ~ -     ~ BG-ALLOW-SELF-SCRIPT
@@ -136,7 +136,7 @@ win-root        ~ bash "@WIN@\bin\fx-bash"                           ~ -     ~ B
 msys-root       ~ bash "@MSYS@/bin/fx-bash"                          ~ -     ~ BG-ALLOW-SELF-SCRIPT
 rel-at-root     ~ bash bin/fx-bash                                   ~ ROOT  ~ BG-ALLOW-SELF-SCRIPT
 abs-bad-cwd     ~ bash "@ROOT@/bin/fx-bash"                          ~ OTHER ~ BG-ALLOW-SELF-SCRIPT
-dotdot          ~ bash "$AGENTS_CONFIG_DIR/bin/../bin/fx-bash"       ~ -     ~ null
+dotdot          ~ bash "$AGENTS_MAIN_ROOT/bin/../bin/fx-bash"       ~ -     ~ null
 rel-other-cwd   ~ bash bin/fx-bash                                   ~ OTHER ~ null
 rel-no-cwd      ~ bash bin/fx-bash                                   ~ -     ~ null
 root-lookalike  ~ bash "@ROOT@-evil/bin/fx-bash"                     ~ -     ~ null
@@ -146,7 +146,7 @@ case_end
 case_begin "self-script-fixture-list-membership" "hooks/lib/allow-command-list.js"
 bg_batched_stdin w1_fixture_rows <<'TABLE'
 bare-exposed    ~ fx-bare --x                                        ~ -     ~ BG-ALLOW-SELF-BARE
-not-listed      ~ bash "$AGENTS_CONFIG_DIR/bin/fx-notlisted"         ~ -     ~ null
+not-listed      ~ bash "$AGENTS_MAIN_ROOT/bin/fx-notlisted"         ~ -     ~ null
 bare-unexposed  ~ fx-bash                                            ~ -     ~ null
 bare-unlisted   ~ fx-unlisted                                        ~ -     ~ null
 TABLE
@@ -172,10 +172,10 @@ w2_real_rows() {
 
 case_begin "self-script-real-settings-list" "install/settings-allow-commands.txt"
 bg_batched_stdin w2_real_rows <<'TABLE'
-node-next-step     ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ -       ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
-bash-confirm-off   ~ bash "$AGENTS_CONFIG_DIR/bin/confirm-off" RUN_TL4 on    ~ -       ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
-real-mismatch      ~ bash "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ -       ~ -    ~ passThrough|BG-NO-HIT
-handoff-append     ~ node "$AGENTS_CONFIG_DIR/bin/workflow/handoff-append" --class A --summary "a (b) c" ~ - ~ - ~ allow|BG-ALLOW-SELF-SCRIPT
+node-next-step     ~ node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list ~ -       ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
+bash-confirm-off   ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" RUN_TL4 on    ~ -       ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
+real-mismatch      ~ bash "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list ~ -       ~ -    ~ passThrough|BG-NO-HIT
+handoff-append     ~ node "$AGENTS_MAIN_ROOT/bin/workflow/handoff-append" --class A --summary "a (b) c" ~ - ~ - ~ allow|BG-ALLOW-SELF-SCRIPT
 TABLE
 case_end
 
@@ -199,7 +199,7 @@ rel-no-cwd         ~ node bin/workflow/next-step --list                      ~ -
 rel-numeric-cwd    ~ node bin/workflow/next-step --list                      ~ 42      ~ -    ~ passThrough|BG-NO-HIT
 rel-object-cwd     ~ node bin/workflow/next-step --list                      ~ {"p":"x"} ~ -  ~ passThrough|BG-NO-HIT
 rel-relative-cwd   ~ node bin/workflow/next-step --list                      ~ "bin"   ~ -    ~ passThrough|BG-NO-HIT
-env-bad-cwd        ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ 42      ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
+env-bad-cwd        ~ node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list ~ 42      ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
 abs-bad-cwd        ~ node "@ROOT@/bin/workflow/next-step" --list             ~ "bin"   ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
 TABLE
 case_end
@@ -211,35 +211,35 @@ case_end
 # bashc-git-*: a read-only body that is not a self-script is not unwrapped for the read-only allow.
 case_begin "self-script-real-bash-c-and-args" "hooks/bash-guard/judge.js"
 bg_batched_stdin w2_real_rows <<'TABLE'
-bashc-cd-real      ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_X on' ~ - ~ - ~ allow|BG-ALLOW-SELF-SCRIPT
+bashc-cd-real      ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" CONFIRM_X on' ~ - ~ - ~ allow|BG-ALLOW-SELF-SCRIPT
 bashc-inner-pipe   ~ bash -c 'review-code-codex --help | cat'                ~ -       ~ -    ~ passThrough|BG-NO-HIT
-bashc-inner-exec   ~ bash -c '"$AGENTS_CONFIG_DIR/bin/confirm-off" X on'     ~ -       ~ -    ~ passThrough|BG-NO-HIT
+bashc-inner-exec   ~ bash -c '"$AGENTS_MAIN_ROOT/bin/confirm-off" X on'     ~ -       ~ -    ~ passThrough|BG-NO-HIT
 bashc-outer-and    ~ bash -c 'review-code-codex' && true                     ~ -       ~ -    ~ deny|BG-CHAIN-AND
-arg-subst          ~ bash "$AGENTS_CONFIG_DIR/bin/confirm-off" "$(echo x)" on ~ -      ~ -    ~ deny|BG-CMD-SUBST
-arg-subst-bashc    ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/confirm-off" "$(echo x)" on' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-subst-bashc-cd ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" "$(echo x)" on' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-btick          ~ bash "$AGENTS_CONFIG_DIR/bin/confirm-off" "`echo x`" on ~ -       ~ -    ~ deny|BG-BACKTICK
-arg-btick-bashc    ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/confirm-off" "`echo x`" on' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-btick-bashc-cd ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" "`echo x`" on' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-qnl            ~ bash "$AGENTS_CONFIG_DIR/bin/confirm-off" "a\nb" on     ~ -       ~ -    ~ passThrough|BG-NO-HIT
-arg-qnl-bashc      ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/confirm-off" "a\nb" on' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-qnl-bashc-cd   ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" "a\nb" on' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-nlsep          ~ bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on\nrm -f x ~ -       ~ -    ~ passThrough|BG-NO-HIT
-arg-nlsep-bashc    ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on\nrm -f x' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-nlsep-bashc-cd ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on\nrm -f x' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-heredoc        ~ bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on <<EOF\nx\nEOF ~ -  ~ -    ~ deny|BG-HEREDOC
-arg-heredoc-bashc  ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on <<EOF\nx\nEOF' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-heredoc-bashc-cd ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on <<EOF\nx\nEOF' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-redir-in       ~ bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on < in.txt ~ -       ~ -    ~ passThrough|BG-NO-HIT
-arg-redir-in-bashc ~ bash -c 'bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on < in.txt' ~ - ~ - ~ passThrough|BG-NO-HIT
-arg-redir-in-bashc-cd ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" X on < in.txt' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-subst          ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" "$(echo x)" on ~ -      ~ -    ~ deny|BG-CMD-SUBST
+arg-subst-bashc    ~ bash -c 'bash "$AGENTS_MAIN_ROOT/bin/confirm-off" "$(echo x)" on' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-subst-bashc-cd ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" "$(echo x)" on' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-btick          ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" "`echo x`" on ~ -       ~ -    ~ deny|BG-BACKTICK
+arg-btick-bashc    ~ bash -c 'bash "$AGENTS_MAIN_ROOT/bin/confirm-off" "`echo x`" on' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-btick-bashc-cd ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" "`echo x`" on' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-qnl            ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" "a\nb" on     ~ -       ~ -    ~ passThrough|BG-NO-HIT
+arg-qnl-bashc      ~ bash -c 'bash "$AGENTS_MAIN_ROOT/bin/confirm-off" "a\nb" on' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-qnl-bashc-cd   ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" "a\nb" on' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-nlsep          ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" X on\nrm -f x ~ -       ~ -    ~ passThrough|BG-NO-HIT
+arg-nlsep-bashc    ~ bash -c 'bash "$AGENTS_MAIN_ROOT/bin/confirm-off" X on\nrm -f x' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-nlsep-bashc-cd ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" X on\nrm -f x' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-heredoc        ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" X on <<EOF\nx\nEOF ~ -  ~ -    ~ deny|BG-HEREDOC
+arg-heredoc-bashc  ~ bash -c 'bash "$AGENTS_MAIN_ROOT/bin/confirm-off" X on <<EOF\nx\nEOF' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-heredoc-bashc-cd ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" X on <<EOF\nx\nEOF' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-redir-in       ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" X on < in.txt ~ -       ~ -    ~ passThrough|BG-NO-HIT
+arg-redir-in-bashc ~ bash -c 'bash "$AGENTS_MAIN_ROOT/bin/confirm-off" X on < in.txt' ~ - ~ - ~ passThrough|BG-NO-HIT
+arg-redir-in-bashc-cd ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" X on < in.txt' ~ - ~ - ~ passThrough|BG-NO-HIT
 bashc-git-status   ~ bash -c 'git status'                                    ~ -       ~ -    ~ passThrough|BG-NO-HIT
-bashc-cd-git-log   ~ bash -c 'cd "$AGENTS_CONFIG_DIR" && git log --oneline -5' ~ -    ~ -    ~ passThrough|BG-NO-HIT
+bashc-cd-git-log   ~ bash -c 'cd "$AGENTS_MAIN_ROOT" && git log --oneline -5' ~ -    ~ -    ~ passThrough|BG-NO-HIT
 TABLE
 # arg-crsep-bashc: a CR in the body keeps the prompt like a newline; mkcmd cannot carry \r, so
 # off-table. Built outside $(...): Git Bash drops a $'\r' written inside a command substitution.
 BG_CR=$'\r'
-BG_CRSEP_CMD="bash -c 'bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" X on${BG_CR}rm -f x'"
+BG_CRSEP_CMD="bash -c 'bash \"\$AGENTS_MAIN_ROOT/bin/confirm-off\" X on${BG_CR}rm -f x'"
 ROWS=$((ROWS + 1))
 assert_eq "W2/arg-crsep-bashc: the command text really carries a CR (vacuity guard)" \
     "yes" "$([[ "${#BG_CR}" == 1 && "$BG_CRSEP_CMD" == *"$BG_CR"* ]] && echo yes || echo no)"
@@ -255,7 +255,7 @@ mkdir -p "$FG_ROOT/install" "$FG_ROOT/bin"
 printf '%s\n' '# forged allow list' 'bin/fg-x' > "$FG_ROOT/install/settings-allow-commands.txt"
 : > "$FG_ROOT/install/path-exposed-commands.txt"
 printf '%s\n' '#!/usr/bin/env bash' 'true' > "$FG_ROOT/bin/fg-x"
-FG_COMMON="$(git -C "$AGENTS_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+FG_COMMON="$(git -C "$SCRIPT_CHECKOUT_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
 FG_GHOST="$(node_path "${FG_COMMON:-/nonexistent}")/worktrees/bg-f1-ghost-${TMPROOT##*.}"
 printf 'gitdir: %s\n' "$FG_GHOST" > "$FG_ROOT/.git"
 FG_M="$(node_path "$FG_ROOT")"

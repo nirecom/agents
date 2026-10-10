@@ -23,16 +23,16 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
 
-SHIM="$AGENTS_DIR/hooks/supervisor-off-proposal-shim.js"
-HANDLER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-mark/enforce-override-handlers.js"
-STATE_IO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
-REQ="$AGENTS_DIR/bin/request-off-clearance"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SHIM="$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-off-proposal-shim.js"
+HANDLER_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-mark/enforce-override-handlers.js"
+STATE_IO_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io.js"
+REQ="$SCRIPT_CHECKOUT_ROOT/bin/request-off-clearance"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 # shellcheck source=./lib/examiner-stub.sh
-. "$AGENTS_DIR/tests/lib/examiner-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/examiner-stub.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -80,7 +80,7 @@ process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1]
 run_shim() {
     local tn="$1" sid="$2" cmd="$3" hi out rc
     hi=$(mk_input "$sid" "$cmd")
-    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_CONFIG_DIR="$tn" \
+    out=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" AGENTS_MAIN_ROOT="$tn" \
         "$RWT" 12 node "$SHIM" <<< "$hi" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$out"
@@ -95,7 +95,7 @@ catch(e){process.stdout.write('ABSENT');}" "$1" 2>/dev/null; }
 
 # ---- case parts ------------------------------------------------------------
 
-PARTS_DIR="$AGENTS_DIR/tests/hooks/fix-1626-claim-consume"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1626-claim-consume"
 
 # shellcheck source=./fix-1626-claim-consume/cases-claim.sh
 . "$PARTS_DIR/cases-claim.sh"

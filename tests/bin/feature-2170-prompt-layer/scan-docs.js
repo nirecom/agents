@@ -11,15 +11,15 @@
 const fs = require("fs");
 const path = require("path");
 
-const AGENTS_DIR = process.env.AGENTS_DIR || path.join(__dirname, "..", "..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
 const mode = process.argv[2];
 const files = process.argv.slice(3);
 
 let shape;
 let parse;
 try {
-  shape = require(path.join(AGENTS_DIR, "hooks", "block-capture-echo", "shape.js"));
-  ({ parse } = require(path.join(AGENTS_DIR, "hooks", "lib", "command-ir.js")));
+  shape = require(path.join(SCRIPT_CHECKOUT_ROOT,"hooks", "block-capture-echo", "shape.js"));
+  ({ parse } = require(path.join(SCRIPT_CHECKOUT_ROOT,"hooks", "lib", "command-ir.js")));
 } catch (_e) {
   process.stdout.write("MODULE_MISSING\n");
   process.exit(0);

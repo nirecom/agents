@@ -8,9 +8,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 # WHY (#2403): settings.json globs (`git diff *`, `find *`) cannot bound argv; bash-guard reads
 # the IR, so every positive gets a near-miss twin that must NOT allow (write, side effect,
@@ -52,7 +52,7 @@ rj_write_state() {
 }
 rj_write_state "sid-bg-armed" "complete"
 
-WIN_PROBE="$(np "$AGENTS_DIR/tests/hooks/feature-2134-bash-guard/judge-probe.js")"
+WIN_PROBE="$(np "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2134-bash-guard/judge-probe.js")"
 CMDFILE="$TMPROOT/cmd.txt"
 
 # probe <mode> <command-text> [sessionId]: one line from judge-probe.js. The command text goes
@@ -409,7 +409,7 @@ env-ext-diff     ~ GIT_EXTERNAL_DIFF=x git diff          ~ deny|BG-ENV-PREFIX
 pipe             ~ ls | head                             ~ deny|BG-PIPE
 redirect         ~ ls > f                                ~ deny|BG-REDIRECT-OUT
 newline-git      ~ git status\nrm -rf x                  ~ passThrough|BG-NO-HIT
-newline-self     ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list\nrm x ~ passThrough|BG-NO-HIT
+newline-self     ~ node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list\nrm x ~ passThrough|BG-NO-HIT
 settings-find    ~ find . -exec rm -rf {} \;             ~ passThrough|BG-NO-HIT
 settings-push    ~ git push --force                      ~ passThrough|BG-NO-HIT
 settings-noverif ~ git commit --no-verify                ~ passThrough|BG-NO-HIT
@@ -422,7 +422,7 @@ check "R7/cr-git: a CR inside the command skips the allow path" \
 # Vacuity guard for newline-self: the same self-script without the newline IS allowed.
 ROWS=$((ROWS + 1))
 check "R7/self-script-baseline: the one-line self-script still allows" \
-    "allow|BG-ALLOW-SELF-SCRIPT" "$(verdict_code_of 'node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list')"
+    "allow|BG-ALLOW-SELF-SCRIPT" "$(verdict_code_of 'node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list')"
 case_end
 
 case_begin "readonly-interlock" "hooks/bash-guard/judge.js"
@@ -440,7 +440,7 @@ ls               ~ ls -la                                ~ allow|BG-ALLOW-READON
 gh-pr-view       ~ gh pr view 1                          ~ allow|BG-ALLOW-READONLY-GH
 compound        ~ git status && ls                      ~ passThrough|BG-INTERLOCK-QUIET
 write            ~ git add .                             ~ passThrough|BG-INTERLOCK-QUIET
-self-script      ~ node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" --list ~ passThrough|BG-INTERLOCK-QUIET
+self-script      ~ node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list ~ passThrough|BG-INTERLOCK-QUIET
 parse-failure    ~ ls "unterminated                      ~ passThrough|BG-INTERLOCK-QUIET
 newline          ~ git status\nls                        ~ passThrough|BG-INTERLOCK-QUIET
 TABLE

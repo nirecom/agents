@@ -111,9 +111,9 @@ else
         fail "N23a. profile-snippet.ps1 does not use \$PSScriptRoot (hardcoded path risk)"
         _n23_ok=0
     fi
-    # Must set AGENTS_CONFIG_DIR
-    if ! grep -q 'AGENTS_CONFIG_DIR' "$SNIPPET_PS1"; then
-        fail "N23b. profile-snippet.ps1 does not set AGENTS_CONFIG_DIR"
+    # Must set AGENTS_MAIN_ROOT
+    if ! grep -q 'AGENTS_MAIN_ROOT' "$SNIPPET_PS1"; then
+        fail "N23b. profile-snippet.ps1 does not set AGENTS_MAIN_ROOT"
         _n23_ok=0
     fi
     # Must reference CLAUDE.md (repair logic)
@@ -127,7 +127,55 @@ else
         _n23_ok=0
     fi
     if [ "$_n23_ok" -eq 1 ]; then
-        pass "N23. profile-snippet.ps1 exists with PSScriptRoot, AGENTS_CONFIG_DIR, and repair logic"
+        pass "N23. profile-snippet.ps1 exists with PSScriptRoot, AGENTS_MAIN_ROOT, and repair logic"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# N36: agents/profile-snippet.ps1 leaves no root variable in the session (#2561)
+# The snippet is dot-sourced into the interactive shell: `codes` must read
+# $env:AGENTS_MAIN_ROOT at call time (as bash codes() does), and the temporary
+# root variable must be gone once the snippet ends. PowerShell variable names
+# are case-insensitive, hence grep -i (-E, not -F: Git Bash grep aborts on -iF).
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N36: agents/profile-snippet.ps1 — no session root variable left behind ==="
+
+if [ ! -f "$SNIPPET_PS1" ]; then
+    skip "N36. profile-snippet.ps1 not found"
+else
+    _n36_ok=1
+    # (a) the former session variable $AgentsRoot is gone ($_agentsRoot does not match)
+    if grep -qiE '\$\{?((script|global|local|private):)?AgentsRoot\b' "$SNIPPET_PS1"; then
+        fail "N36a. profile-snippet.ps1 still references \$AgentsRoot"
+        _n36_ok=0
+    fi
+    # (b) codes body: reads $env:AGENTS_MAIN_ROOT, and every other variable is $args/@args
+    _n36_body="$(awk '/^function[[:space:]]+codes[[:space:]]*\{/{f=1} f{print} f && /^\}/{exit}' "$SNIPPET_PS1")"
+    _n36_other="$(printf '%s\n' "$_n36_body" | grep -v '^[[:space:]]*#' \
+        | grep -oiE '\$\{?[A-Za-z_][A-Za-z0-9_:]*' | grep -viE '^\$\{?(env:[A-Za-z0-9_]+|args)$' || true)"
+    if [ -z "$_n36_body" ]; then
+        fail "N36b. profile-snippet.ps1 has no 'function codes {' block"
+        _n36_ok=0
+    elif ! printf '%s\n' "$_n36_body" | grep -v '^[[:space:]]*#' | grep -qiE '\$env:AGENTS_MAIN_ROOT\b'; then
+        fail "N36b. codes does not read \$env:AGENTS_MAIN_ROOT at call time"
+        _n36_ok=0
+    elif [ -n "$_n36_other" ]; then
+        fail "N36b. codes references a session variable: $(printf '%s' "$_n36_other" | tr '\r\n' '  ')"
+        _n36_ok=0
+    fi
+    # (c) a top-level Remove-Variable drops _agentsRoot after its last use
+    _n36_use="$(grep -niE '\$_agentsRoot\b' "$SNIPPET_PS1" | tail -1 | cut -d: -f1 || true)"
+    _n36_rm="$(grep -niE '^Remove-Variable[[:space:]].*\b_agentsRoot\b' "$SNIPPET_PS1" | tail -1 | cut -d: -f1 || true)"
+    if [ -z "$_n36_use" ]; then
+        fail "N36c. profile-snippet.ps1 has no \$_agentsRoot temporary (fixture drift)"
+        _n36_ok=0
+    elif [ -z "$_n36_rm" ] || [ "$_n36_rm" -le "$_n36_use" ]; then
+        fail "N36c. _agentsRoot is not removed by a top-level Remove-Variable after its last use (last use: line $_n36_use, removal: line ${_n36_rm:-none})"
+        _n36_ok=0
+    fi
+    if [ "$_n36_ok" -eq 1 ]; then
+        pass "N36. profile-snippet.ps1 has no \$AgentsRoot, codes reads \$env:AGENTS_MAIN_ROOT, and _agentsRoot is removed after last use"
     fi
 fi
 
@@ -164,9 +212,9 @@ else
         fail "N25a. profile-snippet.sh does not use BASH_SOURCE (hardcoded path risk)"
         _n25_ok=0
     fi
-    # Must export AGENTS_CONFIG_DIR
-    if ! grep -qE 'export\s+AGENTS_CONFIG_DIR' "$SNIPPET_SH"; then
-        fail "N25b. profile-snippet.sh does not export AGENTS_CONFIG_DIR"
+    # Must export AGENTS_MAIN_ROOT
+    if ! grep -qE 'export\s+AGENTS_MAIN_ROOT' "$SNIPPET_SH"; then
+        fail "N25b. profile-snippet.sh does not export AGENTS_MAIN_ROOT"
         _n25_ok=0
     fi
     # Must reference CLAUDE.md (repair logic)
@@ -180,7 +228,7 @@ else
         _n25_ok=0
     fi
     if [ "$_n25_ok" -eq 1 ]; then
-        pass "N25. profile-snippet.sh exists with BASH_SOURCE, AGENTS_CONFIG_DIR export, CLAUDE.md repair, and no settings.json watch"
+        pass "N25. profile-snippet.sh exists with BASH_SOURCE, AGENTS_MAIN_ROOT export, CLAUDE.md repair, and no settings.json watch"
     fi
 fi
 
@@ -278,7 +326,7 @@ else
     _n34_ok=1
     mkdir -p "$_n34_td/home/.claude"
     printf 'fake content\n' > "$_n34_td/home/.claude/CLAUDE.md"
-    HOME="$_n34_td/home" bash "$DOTFILESLINK_SH" >/dev/null 2>&1 || true
+    ( pin_home_and_userprofile "$_n34_td/home"; bash "$DOTFILESLINK_SH" >/dev/null 2>&1 ) || true
     if [ ! -f "$_n34_td/home/.claude/CLAUDE.md.bak" ]; then
         fail "N34a. dotfileslink.sh did not create CLAUDE.md.bak for fake-file"
         _n34_ok=0
@@ -349,8 +397,8 @@ else
     touch "$_n27_fake_bashrc"
 
     # Run install.sh twice in a subshell with fake HOME and AGENTS_ROOT
-    (export HOME="$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; export SHELL=/bin/bash; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
-    (export HOME="$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; export SHELL=/bin/bash; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
+    (pin_home_and_userprofile "$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; export SHELL=/bin/bash; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
+    (pin_home_and_userprofile "$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; export SHELL=/bin/bash; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
 
     _n27_marker_count=$(grep -c 'BEGIN agents profile sourcing' "$_n27_fake_bashrc" 2>/dev/null; true)
     _n27_marker_count="${_n27_marker_count:-0}"

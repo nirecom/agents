@@ -5,7 +5,6 @@
 #
 # G1 ownership gate, G2 the five resolution branches, G3 priority, G4 unresolved,
 # G5 output contract, G8 intent-scan exact issue matching.
-#
 # Every G2 branch asserts the full tuple — action, resolvedVia, the exact
 # canonical notesPath, and exit code — plus, where a lower-priority candidate
 # exists, that the branch under test wins over it. Asserting resolvedVia alone
@@ -107,12 +106,12 @@ g2_branch_worktree() {
     node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({NOTES_BACKUP_PATH: process.argv[2]}), "utf8");' \
         -- "$PLANS_DIR/$sid-final-report-env.json" "$(nodepath "$decoy/WORKTREE_NOTES.md")"
     write_notes "$PLANS_DIR/$sid-notes-backup" "$sid" >/dev/null
-    write_notes "$MAIN_ROOT/.worktree-backup/feature/g2a" "$sid" >/dev/null
+    write_notes "$TARGET_MAIN_ROOT/.worktree-backup/feature/g2a" "$sid" >/dev/null
     printf '%s\n' '# Intent' '' '## Issues' '- #2001' > "$PLANS_DIR/$sid-intent.md"
 
     resolve --caller worktree-end --worktree "$(nodepath "$wt")" \
             --session-id "$sid" --issue 2001 --pr-branch "feature/g2a" \
-            --main-root "$(nodepath "$MAIN_ROOT")"
+            --target-main-root "$(nodepath "$TARGET_MAIN_ROOT")"
     assert_resolution "G2.1: --worktree resolves via 'worktree' and beats all four lower candidates" \
         "worktree" "$notes"
 }
@@ -139,10 +138,10 @@ g2_branch_notes_backup_dir() {
     # Env JSON deliberately corrupt: the chain must fall through, not abort.
     printf '%s' '{not json' > "$PLANS_DIR/$sid-final-report-env.json"
     # Lower-priority decoy.
-    write_notes "$MAIN_ROOT/.worktree-backup/feature/g2c" "$sid" >/dev/null
+    write_notes "$TARGET_MAIN_ROOT/.worktree-backup/feature/g2c" "$sid" >/dev/null
 
     resolve --caller session-close --session-id "$sid" \
-            --pr-branch "feature/g2c" --main-root "$(nodepath "$MAIN_ROOT")"
+            --pr-branch "feature/g2c" --target-main-root "$(nodepath "$TARGET_MAIN_ROOT")"
     assert_resolution "G2.3: corrupt env JSON falls through to 'notes-backup-dir', which beats backup-branch-dir" \
         "notes-backup-dir" "$notes"
 }
@@ -150,14 +149,14 @@ g2_branch_notes_backup_dir() {
 # 4. backup-branch-dir — the standalone issue-close-finalize main route; beats intent-scan.
 g2_branch_backup_branch_dir() {
     local branch="feature/np-g2d" sid="sess-g2d" notes
-    notes="$(write_notes "$MAIN_ROOT/.worktree-backup/$branch" "$sid")"
+    notes="$(write_notes "$TARGET_MAIN_ROOT/.worktree-backup/$branch" "$sid")"
     # Lower-priority decoy: an intent that also points at issue 77.
     printf '%s\n' '# Intent' '' '## Issues' '- #77' > "$PLANS_DIR/$sid-intent.md"
     write_notes "$PLANS_DIR/$sid-notes-backup" "$sid" >/dev/null
 
     resolve --caller issue-close-finalize --issue 77 \
-            --pr-branch "$branch" --main-root "$(nodepath "$MAIN_ROOT")"
-    assert_resolution "G2.4: <main-root>/.worktree-backup/<branch>/ resolves via 'backup-branch-dir' and beats intent-scan" \
+            --pr-branch "$branch" --target-main-root "$(nodepath "$TARGET_MAIN_ROOT")"
+    assert_resolution "G2.4: <target-main-root>/.worktree-backup/<branch>/ resolves via 'backup-branch-dir' and beats intent-scan" \
         "backup-branch-dir" "$notes"
 }
 

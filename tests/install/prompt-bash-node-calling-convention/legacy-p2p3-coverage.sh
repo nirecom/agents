@@ -8,7 +8,7 @@
 # dispatcher, which owns PASS/FAIL/ROWS and assert_eq.
 
 JP_PROBE_REL="tests/install/prompt-bash-node-calling-convention/judge-verdict-probe.js"
-JP_PROBE="$AGENTS_DIR/$JP_PROBE_REL"
+JP_PROBE="$SCRIPT_CHECKOUT_ROOT/$JP_PROBE_REL"
 
 # T58 -- WHAT THE SWEEP CANNOT ANSWER. The sweep reads prompt text and judges the token in
 # execution position; it never asks whether the WHOLE command line a fixed site now instructs
@@ -19,30 +19,30 @@ JP_PROBE="$AGENTS_DIR/$JP_PROBE_REL"
 jp_command() { # <key> -> the command literal
     case "$1" in
         detect-non-github-stage)
-            printf '%s' 'bash "$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "issue-close-stage" || exit 0' ;;
+            printf '%s' 'bash "$AGENTS_MAIN_ROOT/bin/detect-non-github.sh" "issue-close-stage" || exit 0' ;;
         detect-non-github-commit)
-            printf '%s' 'bash "$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "Phase 1 pre-flight" || NON_GITHUB=1' ;;
+            printf '%s' 'bash "$AGENTS_MAIN_ROOT/bin/detect-non-github.sh" "Phase 1 pre-flight" || NON_GITHUB=1' ;;
         concern-ledger)
-            printf '%s' 'bash "$AGENTS_CONFIG_DIR/bin/concern-ledger" check-finalized --plans-dir /tmp/plans --session-id s-1 --format detail-plan' ;;
+            printf '%s' 'bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir /tmp/plans --session-id s-1 --format detail-plan' ;;
         assemble-mandatory)
-            printf '%s' 'bash "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"' ;;
+            printf '%s' 'bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"' ;;
         check-issues-class-coverage)
-            printf '%s' 'bash "$AGENTS_CONFIG_DIR/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"' ;;
+            printf '%s' 'bash "$AGENTS_MAIN_ROOT/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"' ;;
         detect-scope-change)
-            printf '%s' 'bash "$AGENTS_CONFIG_DIR/bin/detect-scope-change.sh" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md"' ;;
+            printf '%s' 'bash "$AGENTS_MAIN_ROOT/bin/detect-scope-change.sh" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md"' ;;
         resolve-worktree-path)
-            printf '%s' 'bash "$AGENTS_CONFIG_DIR/bin/resolve-worktree-path"' ;;
+            printf '%s' 'bash "$AGENTS_MAIN_ROOT/bin/resolve-worktree-path"' ;;
         select-staged-files)
-            printf '%s' 'bash "$AGENTS_CONFIG_DIR/skills/review-tests/scripts/select-staged-files.sh"' ;;
+            printf '%s' 'bash "$AGENTS_MAIN_ROOT/skills/review-tests/scripts/select-staged-files.sh"' ;;
         control-chain)
-            printf '%s' 'bash "$AGENTS_CONFIG_DIR/bin/resolve-worktree-path" && echo done' ;;
+            printf '%s' 'bash "$AGENTS_MAIN_ROOT/bin/resolve-worktree-path" && echo done' ;;
         *)  printf 'UNKNOWN-COMMAND-KEY' ;;
     esac
 }
 
 jp_verdict() { # <command> -> allow | deny | notify | passThrough | <sentinel>
     [ -f "$JP_PROBE" ] || { printf '<MISSING:%s>' "$JP_PROBE_REL"; return; }
-    run_with_timeout 30 node "$JP_PROBE" "$(node_path "$AGENTS_DIR")" "$1" 2>&1
+    run_with_timeout 30 node "$JP_PROBE" "$(node_path "$SCRIPT_CHECKOUT_ROOT")" "$1" 2>&1
 }
 
 t58_judge_table() {
@@ -101,7 +101,7 @@ p3_live() { # <count> -> live | DEAD:<count> | NOT-A-NUMBER:<value>
 p3_probe() { # <key> <control|skills> -> live-verdict | hit count
     case "$2" in
         control) p3_live "$(p3_pattern_scan "$1" "$P3_CONTROL")" ;;
-        skills)  p3_pattern_scan "$1" "$AGENTS_DIR/skills" ;;
+        skills)  p3_pattern_scan "$1" "$SCRIPT_CHECKOUT_ROOT/skills" ;;
         *)       printf 'UNKNOWN-TARGET' ;;
     esac
 }

@@ -2,19 +2,13 @@
 # tests/bin/fix-1899-origin-repo-resolver/callers.sh
 # Tests: bin/github-issues/lib/board-card.sh, bin/github-issues/lib/resolve-project.sh, skills/issue-close-finalize/scripts/pre-flight.sh
 # Tags: origin-resolution, github-issues, board-card, resolve-project, pre-flight, TL2, scope:issue-specific
-#
 # Groups D, E and F of the fix-1899-origin-repo-resolver split suite — the bash
 # CALLERS that used to derive repository identity from `gh repo view`.
-#
-# Why: a resolver that is correct in isolation buys nothing while its callers keep
-# asking the API. Each group installs a `gh` stub that answers with the UPSTREAM
-# identity while the git fixture's origin says something else, so any caller still
-# routing through `gh repo view` returns the upstream answer and fails here —
-# exactly the #1899 defect, pinned at the seam where it does damage.
-#
-# TL2 (real git fixtures, real bash, stubbed `gh`). TL3 gap: no real GitHub API
-# and no real multi-remote clone. Mitigated at WORKFLOW_USER_VERIFIED preflight
-# (bin/check-verification-gate.sh) since the change is skill-orchestration class.
+# Why: a correct resolver buys nothing while its callers keep asking the API. Each
+# group's `gh` stub answers with the UPSTREAM identity while the fixture's origin
+# says something else, so a caller still routing through `gh repo view` fails here.
+# TL2 (real git fixtures, real bash, stubbed `gh`). TL3 gap: no real GitHub API, no
+# real multi-remote clone; mitigated at preflight (bin/check-verification-gate.sh).
 
 set -u
 
@@ -22,8 +16,8 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 # Group F's target. Declared here rather than in _lib.sh: the other split groups
-# never touch resolve-project.sh, and AGENTS_DIR is already exported by _lib.sh.
-RESOLVE_PROJECT_LIB="$AGENTS_DIR/bin/github-issues/lib/resolve-project.sh"
+# never touch resolve-project.sh, and __LIB_SCRIPT_CHECKOUT_ROOT is already set by _lib.sh.
+RESOLVE_PROJECT_LIB="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh"
 
 # ===========================================================================
 # Group D — board-card.sh::resolve_owner_repo delegates to origin
@@ -143,19 +137,13 @@ group_pre_flight() {
 
 # ===========================================================================
 # Group F — resolve-project.sh::resolve_project_for_repo queries the ORIGIN repo
-#
-#   board-card.sh is only the first hop: resolve_project_for_repo takes the
-#   owner/repo it hands back and interpolates it into `gh api graphql -F owner=
-#   -F repo=`, which is what actually decides WHICH repository's Projects v2
-#   board the session reads and writes. Group D pins the hop; this group pins
-#   the destination, so an upstream-flavoured identity re-entering anywhere
-#   between the two is caught at the API boundary where the damage happens.
-#
-#   Same fixture shape as Group D (origin and upstream point at different
-#   owner/repo pairs, and the `gh` stub answers `gh repo view` with the UPSTREAM
-#   identity). The stub additionally records every `-F owner=` / `-F repo=` pair
-#   it is handed, plus any `gh repo view` invocation, so both the value used and
-#   the route taken to it are assertable.
+#   board-card.sh is only the first hop: resolve_project_for_repo interpolates the
+#   owner/repo it gets back into `gh api graphql -F owner= -F repo=`, which decides
+#   WHICH repository's Projects v2 board is read and written. Group D pins the hop;
+#   this group pins the destination, at the API boundary where the damage happens.
+#   Same fixture shape as Group D (origin != upstream; `gh repo view` answers with
+#   the UPSTREAM identity). The stub also records every `-F owner=`/`-F repo=` pair
+#   and any `gh repo view` call, so both the value and the route are assertable.
 # ===========================================================================
 mk_gh_recording_stub() {
     local bindir="$TMP/stubbin-gql"
@@ -270,20 +258,13 @@ group_resolve_project() {
 
 # ===========================================================================
 # Group D2 — board-card.sh::resolve_item_id addresses the ORIGIN repository
-#
-#   Group D pins the first hop (resolve_owner_repo). This group pins the
-#   DESTINATION inside the same file: resolve_item_id takes that owner/repo,
-#   splits it, and hands the halves to `gh api graphql -F owner= -F repo=`. That
-#   call decides WHICH repository's Projects v2 card the caller reads and later
-#   edits, so an upstream-flavoured identity re-entering between the split and
-#   the call is the #1899 defect at the point where it does damage.
-#
-#   It is also the CWD-isolation half of the coverage: tests/agents/feature-ensure-board-card.sh
-#   drives the board-card path with an inline `gh` mock but from the AMBIENT
-#   checkout, so its owner/repo comes from whatever repository the suite happens
-#   to run in. Every case here runs with cwd pinned to a purpose-built fixture
-#   carrying origin and upstream that point at DIFFERENT repositories, so the
-#   assertion cannot be satisfied by the developer's own remote.
+#   Group D pins the first hop (resolve_owner_repo); this pins the DESTINATION in
+#   the same file: resolve_item_id splits that owner/repo into `gh api graphql
+#   -F owner= -F repo=`, which decides WHICH repository's Projects v2 card is read
+#   and later edited — the #1899 defect at the point where it does damage.
+#   Also the CWD-isolation half: tests/agents/feature-ensure-board-card.sh runs from
+#   the AMBIENT checkout, whereas every case here pins cwd to a fixture whose origin
+#   and upstream differ, so the developer's own remote cannot satisfy the assertion.
 # ===========================================================================
 mk_gh_gql_recorder() {
     local bindir="$TMP/stubbin-bc-gql"
@@ -373,19 +354,12 @@ group_board_card_item_id() {
 # ===========================================================================
 # Group E2 — pre-flight.sh: the remaining rejection paths, and the guarantee
 #   that a rejection never reaches an API call.
-#
-#   Group E covers origin-vs-upstream, non-GitHub origin and missing origin. The
-#   two arms left uncovered are the ones a caller is most likely to hit by
-#   accident and least likely to notice: a github.com origin whose PATH is
-#   malformed (rc 3 from the resolver), and a run from a directory that is not a
-#   git checkout at all. Both must produce exit 1, EMPTY stdout — the caller runs
-#   `eval "$(bash pre-flight.sh)"`, so any stray stdout line becomes shell input —
-#   and a diagnostic on stderr.
-#
-#   The recording `gh` stub is the downstream-action assertion the direct-subprocess
-#   test owes: /issue-close-finalize's later steps are all `gh` calls, and this
-#   script is the gate in front of them. Zero invocations on every rejection path
-#   is the observable form of "the close/comment action was never reached".
+#   Left uncovered by Group E: a github.com origin whose PATH is malformed (resolver
+#   rc 3), and a run from a directory that is not a git checkout. Both must give
+#   exit 1, a stderr diagnostic and EMPTY stdout — the caller runs
+#   `eval "$(bash pre-flight.sh)"`, so any stray stdout line becomes shell input.
+#   /issue-close-finalize's later steps are all `gh` calls behind this gate, so zero
+#   recorded `gh` invocations means "the close/comment action was never reached".
 # ===========================================================================
 group_pre_flight_rejections() {
     local dir stub log out rc err
@@ -435,19 +409,25 @@ group_pre_flight_rejections() {
         fail "pre-flight/rejections-invoke-no-gh — $(wc -l <"$log") invocation(s)"
     fi
 
-    # Required-env contract: AGENTS_CONFIG_DIR is how the script finds the
-    # resolver library. Unset, it must abort loudly rather than source nothing and
-    # fall through to an empty OWNER_REPO.
-    dir="$(mk_repo "pf-noacd" "https://github.com/origin-owner/origin-repo.git")"
-    out=$(PATH="$stub:$PATH" run_with_timeout 30 env -u AGENTS_CONFIG_DIR bash -c '
+    # Fail-closed contract: the script finds the resolver library in its own
+    # checkout. Launched from a checkout that lacks the library, it must abort loudly
+    # rather than source nothing and fall through to an empty OWNER_REPO.
+    local nolib="$TMP/pf-nolib-checkout" nolib_pf
+    # shellcheck source=../../lib/script-checkout-fixture.sh
+    . "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+    script_checkout_fixture_copy "$nolib" skills/issue-close-finalize
+    nolib_pf="$nolib/skills/issue-close-finalize/scripts/pre-flight.sh"
+    dir="$(mk_repo "pf-nolib" "https://github.com/origin-owner/origin-repo.git")"
+    out=$(PATH="$stub:$PATH" run_with_timeout 30 bash -c '
         cd "$2" || exit 92
         bash "$1"
-    ' _ "$PRE_FLIGHT" "$dir" 2>/dev/null)
+    ' _ "$nolib_pf" "$dir" 2>/dev/null)
     rc=$?
-    if [ "$rc" -ne 0 ] && [ -z "$out" ]; then
-        pass "pre-flight/unset-agents-config-dir-aborts"
+    if [ -f "$nolib_pf" ] && [ ! -e "$nolib/bin/github-issues/lib/origin-repo.sh" ] \
+       && [ "$rc" -ne 0 ] && [ "$rc" -ne 92 ] && [ -z "$out" ]; then
+        pass "pre-flight/checkout-without-resolver-lib-aborts"
     else
-        fail "pre-flight/unset-agents-config-dir-aborts — rc=$rc out=$(printf '%q' "$out")"
+        fail "pre-flight/checkout-without-resolver-lib-aborts — rc=$rc out=$(printf '%q' "$out") copy=$([ -f "$nolib_pf" ] && echo yes || echo no)"
     fi
 
     # Positive control for the two "no gh call" assertions above: the stub does

@@ -12,8 +12,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/home-userprofile-pin.sh"
 
 # A value left behind by an interrupted install.ps1 must not steer the helpers under test.
 unset WAIT_CC_RESULT WAIT_CC_PROCESS_OVERRIDE MOCK_PGREP_MODE WAIT_CC_POLL_INTERVAL WAIT_CC_MAX_POLLS
@@ -26,8 +27,8 @@ ON_WINDOWS_BASH=0
 case "$_uname_s" in MINGW*|MSYS*|CYGWIN*) ON_WINDOWS_BASH=1 ;; esac
 unset _uname_s
 
-WAIT_SH="$AGENTS_DIR/install/lib/wait-cc-exit.sh"
-_SUBDIR="$AGENTS_DIR/tests/install/feature-2476-installer-cc-wait-once"
+WAIT_SH="$SCRIPT_CHECKOUT_ROOT/install/lib/wait-cc-exit.sh"
+_SUBDIR="$SCRIPT_CHECKOUT_ROOT/tests/install/feature-2476-installer-cc-wait-once"
 source "$_SUBDIR/parent-placement-lib.sh"
 
 case_begin "result-memo-short-circuits-helpers" "install/lib/wait-cc-exit.sh"

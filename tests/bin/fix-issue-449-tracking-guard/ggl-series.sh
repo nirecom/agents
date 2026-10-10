@@ -2,24 +2,11 @@
 # tests/bin/fix-issue-449-tracking-guard/ggl-series.sh
 # Tests: bin/github-issues/clarify-guard-loop.sh, bin/github-issues/check-closes-issues-nonempty.sh
 # Tags: workflow, clarify-intent, guard-loop, github, issues, scope:issue-specific
-#
 # GGL-series — clarify-guard-loop.sh (#1198): CI-C0 tracking-issue guard wrapper.
-#
-# Pre-implementation RED: each case FAILs with a clear "not yet present"
-# message while bin/github-issues/clarify-guard-loop.sh is missing. They turn
-# GREEN once /write-code lands the script.
-#
-# Contract: --session-id <sid> --plans-dir <dir> [--non-github]; requires
-# AGENTS_CONFIG_DIR; plans-dir hard-validated against the expected base
-# ($WORKFLOW_PLANS_DIR or $HOME/.workflow-plans) — outside base → exit 2;
-# wraps check-closes-issues-nonempty.sh (SSOT — no closes_issues re-parse);
-# owns the GUARD_ATTEMPT counter file <plans-dir>/<sid>-guard-attempt.tmp;
-# stdout is a single decision token:
-#   PROCEED | NEED_ISSUE | RETRY_EXHAUSTED | CLOSED_ENTRY
-#
-# Tests export WORKFLOW_PLANS_DIR="$TMP" so the temp plans dir IS the expected
-# base (the prefix check passes); intent.md is written to the contract path
-# <plans-dir>/<sid>-intent.md.
+# Contract: the header of bin/github-issues/clarify-guard-loop.sh owns it; stdout
+# is one decision token: PROCEED | NEED_ISSUE | RETRY_EXHAUSTED | CLOSED_ENTRY.
+# Tests set WORKFLOW_PLANS_DIR="$TMP" so the temp plans dir IS the expected
+# base; intent.md is written to <plans-dir>/<sid>-intent.md.
 
 set -u
 
@@ -156,19 +143,24 @@ else
     fail "GGL-6: clarify-guard-loop.sh not yet present (expected RED before /write-code)"
 fi
 
-# GGL-7: missing AGENTS_CONFIG_DIR env → stderr error + non-zero exit
+# GGL-7: the guard loop derives its checkout from its own location and reads no
+# root variable — with AGENTS_MAIN_ROOT unset the decision is still PROCEED.
 if [ -x "$GUARD_LOOP" ]; then
     setup_tmp
+    mk_state_check_mock
+    export GH_MOCK_STATE="OPEN"
     printf '## closes_issues\n- 1234\n' > "$TMP/test-sid-intent.md"
-    STDERR=$(env -u AGENTS_CONFIG_DIR WORKFLOW_PLANS_DIR="$TMP" run_with_timeout 15 bash "$GUARD_LOOP" \
+    # run_with_timeout is a shell function: unset in the $( ) subshell, not via `env -u`.
+    OUT=$(unset AGENTS_MAIN_ROOT; WORKFLOW_PLANS_DIR="$TMP" run_with_timeout 15 bash "$GUARD_LOOP" \
         --session-id "test-sid" \
-        --plans-dir "$TMP" 2>&1 >/dev/null)
+        --plans-dir "$TMP" 2>/dev/null)
     RC=$?
-    if [ "$RC" -ne 0 ] && [ -n "$STDERR" ]; then
-        pass "GGL-7: missing AGENTS_CONFIG_DIR → stderr error, non-zero exit"
+    if [ "$RC" -eq 0 ] && [ "$OUT" = "PROCEED" ]; then
+        pass "GGL-7: AGENTS_MAIN_ROOT unset → stdout=PROCEED, exit 0"
     else
-        fail "GGL-7: expected non-zero exit with stderr; got rc=$RC stderr='$STDERR'"
+        fail "GGL-7: expected stdout=PROCEED exit=0 with AGENTS_MAIN_ROOT unset; got rc=$RC out='$OUT'"
     fi
+    rm_state_check_mock
     teardown_tmp
 else
     fail "GGL-7: clarify-guard-loop.sh not yet present (expected RED before /write-code)"

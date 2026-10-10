@@ -23,7 +23,7 @@ run_C2_shared_predicate() {
     # single-sourced if the uuid/timestamp bodies live in protected-basenames.js alone.
     # is-plan-artifact.js is excluded by name: it matches PLAN FILE names, has no part
     # in the clearance decision, and predates #2108. Narrow, named exception (CPR-UNV).
-    reimpl="$(grep -rlE '\[0-9a-fA-F\]\{8\}-|\[0-9\]\{8\}-\[0-9\]\{6\}' "$AGENTS_DIR/hooks" 2>/dev/null | grep -v 'protected-basenames.js' | grep -v 'session-id' | grep -v 'is-plan-artifact.js' | head -5)"
+    reimpl="$(grep -rlE '\[0-9a-fA-F\]\{8\}-|\[0-9\]\{8\}-\[0-9\]\{6\}' "$SCRIPT_CHECKOUT_ROOT/hooks" 2>/dev/null | grep -v 'protected-basenames.js' | grep -v 'session-id' | grep -v 'is-plan-artifact.js' | head -5)"
     if [ -z "$reimpl" ]; then
         pass "C2-2 no hook re-implements the session-id shape outside the SSOT"
     else
@@ -33,7 +33,7 @@ run_C2_shared_predicate() {
     # C2-3 — R13 one-way dependency edge. protected-basenames.js may consume the
     # observation module; the observation module must NOT reach back, or the two form
     # a require cycle whose resolution order decides whether the narrowing applies.
-    cycle="$(grep -cE "require\(.*protected-basenames" "$AGENTS_DIR/hooks/lib/active-session-ids.js" 2>/dev/null)"
+    cycle="$(grep -cE "require\(.*protected-basenames" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/active-session-ids.js" 2>/dev/null)"
     assert_eq "C2-3 active-session-ids.js does not require protected-basenames (R13)" "0" "$cycle"
 
     # C2-4 — and the module actually loads standalone. A require cycle or a missing
@@ -92,7 +92,7 @@ PROBE_EOF
 # _c4_run <hook-path> <stdin-json> -> approve | block | unrecognized
 # Every verdict-affecting input is pinned here rather than inherited: session-id env is
 # unset (the stdin sid is the wiring under test), ENFORCE_WORKTREE is forced on, and
-# AGENTS_CONFIG_DIR points at an EMPTY dir — hooks/lib/load-env.js overrides any var
+# AGENTS_MAIN_ROOT points at an EMPTY dir — hooks/lib/load-env.js overrides any var
 # whose current value is falsy, so exporting "" would not shield these from a real .env
 # and an unpinned exclude pattern could turn any route below into a silent approve.
 _c4_run() {
@@ -104,7 +104,7 @@ _c4_run() {
         unset ENFORCE_WORKTREE_ADDITIONAL_REPOS ENFORCE_WORKTREE_EXTRA_REPOS
         export ENFORCE_WORKTREE=on
         export DEFAULT_BRANCHES=main
-        export AGENTS_CONFIG_DIR="$C4_CONFIG"
+        export AGENTS_MAIN_ROOT="$C4_CONFIG"
         export CLAUDE_PROJECT_DIR="$FIX_REPO_NODE"
         export WORKFLOW_STATE_DIR="$C4_WFDIR"
         # run_hook_capture carries the subprocess EXIT STATUS out as a token, so a crash
@@ -164,7 +164,7 @@ run_C4_session_ctx_trace() {
     on="$(
         cd "$FIX_REPO" || exit 1
         unset ENFORCE_WORKTREE_EXCLUDE ENFORCE_WORKTREE_EXCLUDE_REPOS
-        export ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$C4_CONFIG"
+        export ENFORCE_WORKTREE=on AGENTS_MAIN_ROOT="$C4_CONFIG"
         run_probe -e "process.stdout.write(String(require(process.argv[1]).isEnforceWorktreeOn()))" \
             "$AGENTS_NODE/hooks/enforce-worktree/config.js"
     )"

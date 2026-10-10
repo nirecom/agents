@@ -2,34 +2,26 @@
 # Tests: bin/github-issues/issue-close-finalize-triage.sh, bin/github-issues/issue-close-triage-lib.sh, bin/github-issues/issue-close-finalize-triage.sh
 # Tags: issue-close, stage, workflow, finalize, triage, scope:issue-specific
 # Serial: shell-injection guard asserts the fixed path /tmp/FT8_INJECT stays absent
-# Tests for issue #325 — /issue-close-finalize skill triage script.
-#
-# Phase 2 (`/issue-close-finalize`) runs from main worktree AFTER PR merge.
-# Steps H,J. API-only (no docs writes; doc-append happened in Phase 1).
-
-# This script is a rename of bin/github-issues/issue-close-triage.sh with
-# one key behavior change: OPEN:(none) is now an ERROR (Phase 1 must run
-# first), instead of "proceed".
-
-# Routing scenarios for issue-close-finalize-triage.sh:
-#   FT1: OPEN + no sentinel    → error (mentions /issue-close-stage) ← NEW
-#   FT2: OPEN + pending        → resume_e, E,F,G,H,J  (recovery for stuck)
-#   FT3: OPEN + appended       → resume_h, G,H,J
-#   FT4: CLOSED + appended     → resume_j, E,J,K    (E added: #412 History Notes write)
-#   FT5: CLOSED + no sentinel  → auto_close_path, E,G,J
-#   FT6: CLOSED + pending + hist → stuck_sentinel_only, J
-#   FT7: CLOSED + pending + no hist → stuck_append_sentinel, E,J
-#   FT8: non-numeric N         → error
-#   FT9: AGENTS_CONFIG_DIR unset → error
-
-# RED: this suite fails clean while the script + shared lib are missing.
+# Issue #325 — /issue-close-finalize triage. Phase 2 runs from the main worktree AFTER PR merge (steps H,J; API-only).
+# Renamed from issue-close-triage.sh with one change: OPEN:(none) is an ERROR (Phase 1 must run first). Routing:
+#   FT1 OPEN + no sentinel → error (mentions /issue-close-stage) | FT2 OPEN + pending → resume_e, E,F,G,H,J (stuck recovery)
+#   FT3 OPEN + appended → resume_h, G,H,J | FT4 CLOSED + appended → resume_j, E,J,K (E: #412 History Notes write)
+#   FT5 CLOSED + no sentinel → auto_close_path, E,G,J | FT6 CLOSED + pending + hist → stuck_sentinel_only, J
+#   FT7 CLOSED + pending + no hist → stuck_append_sentinel, E,J | FT8 non-numeric N → error
+#   FT9: no root env var at all → routing unchanged; RED while the script + shared lib are missing.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-triage-lib.sh"
-FINALIZE_TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-finalize-triage.sh"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-triage-lib.sh"
+FINALIZE_TRIAGE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-finalize-triage.sh"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
+
+# Top-level dual pin (rules/test/fixture-isolation.md) for every triage run below.
+_ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
+trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
+mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
 PASS=0
 FAIL=0
@@ -69,7 +61,6 @@ setup_tmp() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/docs/history"
     : > "$TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$TMP"
     export PATH="$MOCK_DIR:$PATH"
     export GH_MOCK_COMMENT_LOG="$TMP/comments.log"
     : > "$GH_MOCK_COMMENT_LOG"
@@ -79,7 +70,6 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR
     unset GH_MOCK_COMMENT_LOG
 }
 
@@ -224,15 +214,24 @@ else
 fi
 teardown_tmp
 
-# --- FT9: AGENTS_CONFIG_DIR unset → non-zero
+# --- FT9: no root env var at all → routing is unchanged
+# The script finds its lib beside its own path, so AGENTS_MAIN_ROOT and every
+# retired root name can be absent. Asserted on the routing output, not on rc alone.
 setup_tmp
-unset AGENTS_CONFIG_DIR
-GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$FINALIZE_TRIAGE_SCRIPT" 42 >/dev/null 2>&1
+FT9_UNSET=(-u AGENTS_MAIN_ROOT)
+while IFS= read -r FT9_NAME; do
+    FT9_NAME="${FT9_NAME%$'\r'}"
+    [ -n "$FT9_NAME" ] && FT9_UNSET+=(-u "$FT9_NAME")
+done < <(node "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js" --print-retired-env-names 2>/dev/null)
+FT9_OUT=$(cd "$TMP" && GH_MOCK_SCENARIO=open_with_pending \
+    run_with_timeout 15 env "${FT9_UNSET[@]}" bash "$FINALIZE_TRIAGE_SCRIPT" 42 2>/dev/null)
 RC=$?
-if [ "$RC" -ne 0 ]; then
-    pass "FT9: AGENTS_CONFIG_DIR unset → non-zero"
+if [ "${#FT9_UNSET[@]}" -gt 2 ] && [ "$RC" -eq 0 ] \
+   && echo "$FT9_OUT" | grep -qx "ACTION=resume_e" \
+   && echo "$FT9_OUT" | grep -qx "NEXT_STEPS=F,G,H,J,K"; then
+    pass "FT9: no root env var → still routes OPEN:pending to resume_e (F,G,H,J,K)"
 else
-    fail "FT9: rc=$RC"
+    fail "FT9: rc=$RC unset-args=${#FT9_UNSET[@]} out=$(printf '%q' "$FT9_OUT")"
 fi
 teardown_tmp
 

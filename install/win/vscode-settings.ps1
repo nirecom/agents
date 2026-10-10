@@ -4,7 +4,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$AgentsRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$SCRIPT_CHECKOUT_ROOT = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
 # Allow override for testing
 if ($env:VSCODE_USER_SETTINGS_DIR) {

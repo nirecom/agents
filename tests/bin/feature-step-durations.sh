@@ -6,10 +6,10 @@
 # - transcripts written by a real Claude Code session (record shapes beyond the fixture's subset)
 # Closest-to-action mitigation: none needed — the CLI is read-only and has no risk category.
 set -u
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-SD="$(np "$AGENTS_DIR/bin/step-durations.js")"
+SD="$(np "$SCRIPT_CHECKOUT_ROOT/bin/step-durations.js")"
 ROOT="$(make_tmp)"
 trap 'rm -rf "$ROOT"' EXIT
 ROOT="$(np "$ROOT")"

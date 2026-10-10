@@ -20,10 +20,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Allow override for fixture-based pre-edit verification.
-TARGET_FILE="${TARGET_FILE:-${AGENTS_DIR}/skills/worktree-end/SKILL.md}"
+TARGET_FILE="${TARGET_FILE:-${SCRIPT_CHECKOUT_ROOT}/skills/worktree-end/SKILL.md}"
 
 PASS=0
 FAIL=0

@@ -12,6 +12,8 @@
 const fs = require("fs");
 const path = require("path");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
+
 const { resolveControlFile } = require(path.join(__dirname, "lib", "session-control-file"));
 
 const USAGE = "Usage: session-close-render-sc7.js --session <session-id>\n";
@@ -62,7 +64,7 @@ const { formatLayer2Findings } = require(path.resolve(__dirname, "../hooks/lib/s
 const result = formatLayer2Findings(st.alert ? (st.alert.findings || []) : [], {
   sessionId,
   workflowSessionId: null,
-  supervisorPath: process.env.AGENTS_CONFIG_DIR ? process.env.AGENTS_CONFIG_DIR + "/agents/supervisor.md" : null,
+  supervisorPath: path.join(SCRIPT_CHECKOUT_ROOT, "agents", "supervisor.md"),
   stateFilePath: statePath,
   summaryOnly: true,
 });

@@ -68,7 +68,6 @@ test_A4_env_file_fallback() {
     # Payload carries no session_id; the CLAUDE_CODE_SESSION_ID env tier supplies it.
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env "CLAUDE_CODE_SESSION_ID=$sid" \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || true
@@ -87,7 +86,6 @@ test_A5_no_session_id_hard_blocks() {
     # No payload session_id and no CLAUDE_CODE_SESSION_ID → no session ID resolvable. Must hard-block (rc=2).
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
@@ -298,7 +296,6 @@ test_A14_transcript_path_fallback() {
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?
@@ -322,7 +319,6 @@ test_A15_transcript_path_invalid_chars() {
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_CODE_SESSION_ID \
-        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$FIXTURE_PLANS_DIR" \
         node "$MARK_JS" 2>&1)" || rc=$?

@@ -1,7 +1,7 @@
 # Registration (G1-G5) and JS/bash entrypoint-predicate parity (#2388).
 # Sourced by tests/hooks/feature-2388-block-case-markers.sh; shares its helpers.
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 echo ""
 echo "=== registration ==="
@@ -48,7 +48,7 @@ case_end
 
 case_begin "invocation-shape-and-timeout" "settings.json"
 assert_eq "$(f_of "$MINE" 4)" "command"
-assert_eq "$(f_of "$MINE" 5)" "node \"\$AGENTS_CONFIG_DIR/hooks/block-case-markers.js\""
+assert_eq "$(f_of "$MINE" 5)" "node \"\$AGENTS_MAIN_ROOT/hooks/block-case-markers.js\""
 TO="$(f_of "$MINE" 3)"
 if [ -n "$TO" ] && [ "$TO" -le 10 ] 2>/dev/null; then
   pass "timeout-bounded: $TO"
@@ -72,21 +72,21 @@ case_end
 
 case_begin "registered-command-runs" "settings.json"
 # Run the settings.json command string verbatim through bash -c, with only
-# $AGENTS_CONFIG_DIR expanded to this worktree; exit 0 + protocol JSON.
+# $AGENTS_MAIN_ROOT expanded to this worktree; exit 0 + protocol JSON.
 CMD="$(f_of "$MINE" 5)"
-AGENTS_M="$(np "$AGENTS_DIR")"
-CMD="${CMD//\$AGENTS_CONFIG_DIR/$AGENTS_M}"
+AGENTS_M="$(np "$SCRIPT_CHECKOUT_ROOT")"
+CMD="${CMD//\$AGENTS_MAIN_ROOT/$AGENTS_M}"
 E2E_OUT="$TMPBASE/e2e.out"
 mkpayload Write "$REPO_M" "$REPO_M/tests/hooks/e2e-missing.sh" "content=@$BODIES/missing.sh"
 E2E_RC=0
-(cd "$NEUTRAL_CWD" || exit 99; run_with_timeout 10 env "${HK_ENV_RESET[@]}" "AGENTS_CONFIG_DIR=$CFG_DIR_M" bash -c "$CMD" < "$PAYLOAD_FILE" > "$E2E_OUT" 2>/dev/null) || E2E_RC=$?
+(cd "$NEUTRAL_CWD" || exit 99; run_with_timeout 10 env "${HK_ENV_RESET[@]}" "AGENTS_MAIN_ROOT=$CFG_DIR_M" bash -c "$CMD" < "$PAYLOAD_FILE" > "$E2E_OUT" 2>/dev/null) || E2E_RC=$?
 assert_eq "$E2E_RC" "0"
 HK_OUT="$(cat "$E2E_OUT")"
 HK_REASON="$(node "$REASON_JS_M" "$(np "$E2E_OUT")")"
 assert_reason_has "registered-command-runs block half" "[block-case-markers]"
 mkpayload Write "$REPO_M" "$REPO_M/tests/hooks/e2e-ok.sh" "content=@$BODIES/conforming.sh"
 E2E_RC=0
-(cd "$NEUTRAL_CWD" || exit 99; run_with_timeout 10 env "${HK_ENV_RESET[@]}" "AGENTS_CONFIG_DIR=$CFG_DIR_M" bash -c "$CMD" < "$PAYLOAD_FILE" > "$E2E_OUT" 2>/dev/null) || E2E_RC=$?
+(cd "$NEUTRAL_CWD" || exit 99; run_with_timeout 10 env "${HK_ENV_RESET[@]}" "AGENTS_MAIN_ROOT=$CFG_DIR_M" bash -c "$CMD" < "$PAYLOAD_FILE" > "$E2E_OUT" 2>/dev/null) || E2E_RC=$?
 assert_eq "$E2E_RC" "0"
 E2E_SQ="$(tr -d '[:space:]' < "$E2E_OUT")"
 assert_eq "${E2E_SQ#*\"decision\":}" "\"approve\"}"
@@ -165,7 +165,7 @@ parity_bash() {
 }
 
 PARITY_HOOK="$(np "$HOOK")"
-PARITY_REGISTRY="$(np "$AGENTS_DIR/hooks/lib/test-language-registry.js")"
+PARITY_REGISTRY="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.js")"
 export PARITY_HOOK PARITY_REGISTRY
 BASH_OK=0
 if [ -f "$PRECOMMIT_LIB" ]; then
@@ -173,7 +173,7 @@ if [ -f "$PRECOMMIT_LIB" ]; then
   . "$PRECOMMIT_LIB"
   declare -F _precommit_is_case_marker_target >/dev/null 2>&1 && BASH_OK=1
 fi
-_cfg_dir="$AGENTS_DIR"
+_cfg_dir="$SCRIPT_CHECKOUT_ROOT"
 
 case_begin "entrypoint-predicate-parity" "hooks/lib/precommit-tests-frontmatter.sh"
 PARITY_LIST="$TMPBASE/parity-rows.txt"
@@ -206,7 +206,7 @@ case_end
 case_begin "entrypoint-predicate-parity-tracked-tests" "hooks/block-case-markers.js"
 # Every tracked tests/ path: Node and bash agree with each other and the derivation.
 PARITY_ALL="$TMPBASE/parity-all.txt"
-git -C "$AGENTS_DIR" ls-files tests > "$PARITY_ALL" 2>/dev/null
+git -C "$SCRIPT_CHECKOUT_ROOT" ls-files tests > "$PARITY_ALL" 2>/dev/null
 ALL_JS="$(parity_run hook "$PARITY_ALL")"
 ALL_REG="$(parity_run registry "$PARITY_ALL")"
 _derived=""

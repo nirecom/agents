@@ -9,10 +9,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 tmp="$(mktemp -d 2>/dev/null || mktemp -d -t 'wf2218gen')"
 tn="$(node_path "$tmp")"
@@ -27,8 +27,8 @@ out=$(env -u CLAUDE_CODE_SESSION_ID \
     HOME="$tn/home" USERPROFILE="$tn/home" \
     "$RWT" 60 node -e "
 const crypto = require('crypto');
-const { readState, writeState, createInitialState, markStep } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
-const { applyInheritance } = require('$AGENTS_DIR_NODE/hooks/workflow-state/inheritance');
+const { readState, writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
 const donorSid = 'donor-2218-eq';
 writeState(donorSid, createInitialState(donorSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
 markStep(donorSid, 'workflow_init', 'complete');

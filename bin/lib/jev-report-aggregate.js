@@ -11,11 +11,11 @@
 
 const fs = require("fs");
 const path = require("path");
-const REPO_ROOT = path.resolve(__dirname, "..", "..");
-const { SIGNAL_IDS, UNDECIDABLE_SIGNAL } = require(path.join(REPO_ROOT, "hooks", "workflow-state", "complexity-routing.js"));
-const { violatesS1Implication, agreeSets, csvToSet, compare } = require(path.join(REPO_ROOT, "hooks", "lib", "jev", "decision-record.js"));
-const { sanitizeEnum, sanitizeAnswerIds } = require(path.join(REPO_ROOT, "hooks", "lib", "jev", "sanitize.js"));
-const { isValidId } = require(path.join(REPO_ROOT, "hooks", "lib", "jev", "state-paths.js"));
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
+const { SIGNAL_IDS, UNDECIDABLE_SIGNAL } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "complexity-routing.js"));
+const { violatesS1Implication, agreeSets, csvToSet, compare } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "jev", "decision-record.js"));
+const { sanitizeEnum, sanitizeAnswerIds } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "jev", "sanitize.js"));
+const { isValidId } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "jev", "state-paths.js"));
 
 const GENERATIONS = [".3", ".2", ".1", ""];
 const ISO_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;

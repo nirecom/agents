@@ -21,10 +21,10 @@
 # no agents-config toggle — its whole input is the parsed state object — so there
 # is no configuration axis for a case to pin.
 
-SIO_N="$AGENTS_DIR_N/hooks/workflow-state/state-io"
-CORE_N="$AGENTS_DIR_N/hooks/workflow-state/state-io/core.js"
-PROJ_N="$AGENTS_DIR_N/hooks/workflow-state/state-io/projection.js"
-MIGV3_N="$AGENTS_DIR_N/hooks/workflow-state/state-io/migrations/v2-to-v3.js"
+SIO_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io"
+CORE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/core.js"
+PROJ_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/projection.js"
+MIGV3_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/state-io/migrations/v2-to-v3.js"
 
 # Shared JS preamble: everything a case needs to reach the fixture it just wrote.
 V3PRE='const S = require(process.env.SIO_N);

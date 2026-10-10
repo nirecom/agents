@@ -5,22 +5,18 @@
 # Tests for issue #827 (with #1395) — an already-CLOSED issue on the resume_j
 # path must reach finalize_terminal and write a new-session-ID outcome entry.
 #
-# The resume_j path (CLOSED + appended sentinel) only reaches finalize_terminal
-# once triage carries Step G (#1395); without G the cascade short-circuits and
-# no terminal outcome is recorded for the already-closed issue. This suite is
-# RED against current source: triage still emits NEXT_STEPS="J,K" (no G).
-#
-# L3 gap (what this test does NOT catch):
-# - real GitHub API calls and actual issue state transitions
+# resume_j (CLOSED + appended sentinel) only reaches finalize_terminal once triage carries Step G (#1395);
+# without G the cascade short-circuits and no terminal outcome is recorded. Written RED (NEXT_STEPS="J,K", no G).
+# L3 gap (NOT caught): real GitHub API calls and actual issue state transitions.
 # Closest-to-action mitigation: manual verification at WORKFLOW_USER_VERIFIED preflight
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LIB_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-triage-lib.sh"
-FINALIZE_TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-finalize-triage.sh"
-WRITE_OUTCOME="$AGENTS_DIR/bin/issue-close-write-outcome.js"
-MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LIB_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-triage-lib.sh"
+FINALIZE_TRIAGE_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-finalize-triage.sh"
+WRITE_OUTCOME="$SCRIPT_CHECKOUT_ROOT/bin/issue-close-write-outcome.js"
+MOCK_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/gh-mock"
 
 PASS=0
 FAIL=0
@@ -61,7 +57,6 @@ setup_tmp() {
     TMP="$(mktemp -d)"
     mkdir -p "$TMP/docs/history"
     : > "$TMP/docs/history.md"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PATH="$MOCK_DIR:$PATH"
     OUTCOME="$TMP/session-issue-close-outcome.json"
 }
@@ -70,14 +65,13 @@ teardown_tmp() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
     fi
-    unset AGENTS_CONFIG_DIR
 }
 
 run_triage() {
     local scenario="$1"
     unset STATE SENTINEL ACTION NEXT_STEPS
     local out
-    if out=$(cd "$TMP" && AGENTS_CONFIG_DIR="$AGENTS_DIR" GH_MOCK_SCENARIO="$scenario" \
+    if out=$(cd "$TMP" && GH_MOCK_SCENARIO="$scenario" \
             run_with_timeout 15 bash "$FINALIZE_TRIAGE_SCRIPT" 42 2>/dev/null); then
         T_RC=0
     else

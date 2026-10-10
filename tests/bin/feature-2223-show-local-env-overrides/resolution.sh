@@ -8,29 +8,34 @@
 # which hooks/lib it loads, which project root it inspects — plus how that
 # report relates to what the real loader injects into a live process.
 # TL3 gap: same as the parent's — a PATH shim symlinked into ~/.local/bin is out
-# of reach here; only the AGENTS_CONFIG_DIR half of libDir() is TL2-testable.
+# of reach here; only the copied-checkout half of libDir() is TL2-testable.
 SHOW_LOCAL_ENV_RESOLUTION_CASES_LOADED=1
 
 # ---------------------------------------------------------------------------
-# G1: libDir(). Every other case leaves AGENTS_CONFIG_DIR without a hooks/lib,
-# so the configured branch and its two-file completeness probe never run. The
-# production install path is exactly the one that does carry hooks/lib.
+# G1: libDir(). The CLI loads the hooks/lib of the checkout it was launched
+# from and nothing else: a hooks/lib under AGENTS_MAIN_ROOT is never a
+# candidate. Every other case launches the real CLI, so only its own library
+# ever answers; the cases here put a second, patched library in play.
 # ---------------------------------------------------------------------------
 
-# install_lib_copy — copy the whole hooks/lib into the case config dir, so
-# agents-config-dir.js and every other sibling require() comes along.
+# install_lib_copy — copy the whole hooks/lib into the case fixture root, so
+# script-checkout-root.js and every other sibling require() comes along.
 install_lib_copy() {
     mkdir -p "$CASE_CFG/hooks"
-    cp -r "$AGENTS_DIR/hooks/lib" "$CASE_CFG/hooks/"
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$CASE_CFG/hooks/"
 }
 
 # A key the real blocklist does not name, added to the COPY only: it can be
-# refused only if the configured library is the one that loaded.
+# refused only if the patched library is the one that loaded.
 LIB_MARK='  "PROJECT_TAGLINE",'
 
+# The CLI is copied beside the patched library and that copy is launched: the
+# library a launched CLI loads is the one in its own tree.
 new_case lib-configured-wins 'CODE_LANG=english' \
   'PROJECT_TAGLINE=SENT2223-libcfg-2a71ff@NL@PROJECT_NFR=SENT2223-libnfr-84c0d3'
 install_lib_copy
+mkdir -p "$CASE_CFG/bin"
+cp "$CLI" "$CASE_CFG/bin/show-local-env-overrides"
 sed -i '/ENV_ENTRY_BLOCKLIST_EXACT = new Set(\[/a\  "PROJECT_TAGLINE",' \
   "$CASE_CFG/hooks/lib/local-env.js"
 if grep -qF "$LIB_MARK" "$CASE_CFG/hooks/lib/local-env.js"; then
@@ -38,15 +43,18 @@ if grep -qF "$LIB_MARK" "$CASE_CFG/hooks/lib/local-env.js"; then
 else
     fail "T2223S-lib-configured-fixture-patched — the copy was not edited; the case below would be vacuous"
 fi
+REAL_CLI_NODE="$CLI_NODE"
+CLI_NODE="$(to_node_path "$CASE_CFG/bin/show-local-env-overrides")"
 run_cli --repo-root "$CASE_ROOT_NODE"
+CLI_NODE="$REAL_CLI_NODE"
 assert_eq "T2223S-lib-configured-exit-0" "0" "$CLI_RC"
 assert_eq "T2223S-lib-configured-refused" "PROJECT_TAGLINE" \
   "$(section_keys "$CLI_OUT" "refused by blocklist")"
 assert_eq "T2223S-lib-configured-applied" "PROJECT_NFR" "$(section_keys "$CLI_OUT" applied)"
 assert_report_lacks "T2223S-lib-configured-no-value-leak" "$CLI_OUT" "SENT2223-"
 
-# Half-populated config dir: the completeness probe rejects it, and the fallback
-# tree answers instead — no broken require() takes the CLI down.
+# Half-populated hooks/lib under AGENTS_MAIN_ROOT: the real CLI never looks
+# there, so its own tree answers — no broken require() takes the CLI down.
 new_case lib-incomplete-falls-back 'CODE_LANG=english' \
   'PROJECT_TAGLINE=SENT2223-libhalf-6d92ab@NL@PROJECT_NFR=SENT2223-libhalf-nfr-1fe407'
 install_lib_copy
@@ -60,9 +68,9 @@ assert_eq "T2223S-lib-incomplete-applied" "$(printf 'PROJECT_NFR\nPROJECT_TAGLIN
 assert_eq "T2223S-lib-incomplete-refused-count" "0" \
   "$(section_count "$CLI_OUT" "refused by blocklist")"
 
-# CPR-ORTH: the other half of the two-file probe. A config dir missing load-env.js
-# must be rejected exactly as one missing local-env.js is — and the patched copy
-# left behind proves the fallback, not the copy, is what answered.
+# CPR-ORTH: the other half of the pair. A fixture root missing load-env.js is
+# ignored exactly as one missing local-env.js is — and the patched copy left
+# behind proves the CLI's own tree, not the copy, is what answered.
 new_case lib-incomplete-loadenv 'CODE_LANG=english' \
   'PROJECT_TAGLINE=SENT2223-libhalf2-c40e8b@NL@PROJECT_NFR=SENT2223-libhalf2-nfr-72a5d1'
 install_lib_copy
@@ -83,7 +91,7 @@ assert_eq "T2223S-lib-incomplete-loadenv-refused-count" "0" \
 assert_report_lacks "T2223S-lib-incomplete-loadenv-no-value-leak" "$CLI_OUT" "SENT2223-"
 
 # The status quo every other case rides on, stated once by name rather than
-# depended on by accident: no hooks/ under the config dir at all.
+# depended on by accident: no hooks/ under AGENTS_MAIN_ROOT at all.
 new_case lib-no-hooks-dir 'CODE_LANG=english' \
   'PROJECT_TAGLINE=SENT2223-libnone-b7d155@NL@PROJECT_NFR=SENT2223-libnone-nfr-30ca6e'
 run_cli --repo-root "$CASE_ROOT_NODE"
@@ -209,16 +217,16 @@ const v = process.env[process.argv[2]];
 process.stdout.write(v === undefined ? "__ABSENT__" : JSON.stringify(v));
 RUNTIME_PROBE_EOF
 RUNTIME_PROBE_NODE="$(to_node_path "$RUNTIME_PROBE")"
-RUNTIME_PROBE_LIB="$(to_node_path "$AGENTS_DIR")"
+RUNTIME_PROBE_LIB="$(to_node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 # rvr_probe <exported-CODE_LANG|__NONE__> — the real loader over the same fixture.
 rvr_probe() {
     if [ "$1" = "__NONE__" ]; then
-        RUNTIME_PROBE_LIB="$RUNTIME_PROBE_LIB" AGENTS_CONFIG_DIR="$(to_node_path "$CASE_CFG")" \
+        RUNTIME_PROBE_LIB="$RUNTIME_PROBE_LIB" AGENTS_MAIN_ROOT="$(to_node_path "$CASE_CFG")" \
             CLAUDE_PROJECT_DIR="$CASE_ROOT_NODE" \
             run_with_timeout 20 node "$RUNTIME_PROBE_NODE" CODE_LANG 2>/dev/null
     else
-        RUNTIME_PROBE_LIB="$RUNTIME_PROBE_LIB" AGENTS_CONFIG_DIR="$(to_node_path "$CASE_CFG")" \
+        RUNTIME_PROBE_LIB="$RUNTIME_PROBE_LIB" AGENTS_MAIN_ROOT="$(to_node_path "$CASE_CFG")" \
             CLAUDE_PROJECT_DIR="$CASE_ROOT_NODE" CODE_LANG="$1" \
             run_with_timeout 20 node "$RUNTIME_PROBE_NODE" CODE_LANG 2>/dev/null
     fi

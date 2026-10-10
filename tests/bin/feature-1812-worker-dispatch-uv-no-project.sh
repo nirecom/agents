@@ -17,8 +17,8 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_WD1812_UVNP_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLI="$AGENTS_DIR/bin/compose-doc-append-entry"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/compose-doc-append-entry"
 
 PASS=0
 FAIL=0

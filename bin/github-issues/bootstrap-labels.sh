@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bootstrap-labels.sh — bootstrap label auto-management for a target repo.
 #
-# Copies the label-sync skeleton from AGENTS_CONFIG_DIR into <repo-dir>:
+# Copies the label-sync skeleton from this checkout into <repo-dir>:
 #   1. .github/labels.yml
 #   2. bin/github-issues/sync-labels.sh
 #   3. .github/workflows/sync-labels.yml
@@ -13,17 +13,16 @@
 #
 # Options:
 #   --no-sync     Skip initial sync-labels.sh invocation
-#
-# Required env:
-#   AGENTS_CONFIG_DIR  Path to the agents repo (source of master files)
 set -euo pipefail
+
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 usage() {
   cat <<'EOF'
 Usage: bootstrap-labels.sh <repo-dir> [--no-sync]
 
 Bootstrap label auto-management for a target repo:
-  1. Copy .github/labels.yml from AGENTS_CONFIG_DIR
+  1. Copy .github/labels.yml from this checkout
   2. Copy bin/github-issues/sync-labels.sh
   3. Copy .github/workflows/sync-labels.yml
   4. Run initial sync-labels.sh inside <repo-dir> (skip with --no-sync)
@@ -31,13 +30,10 @@ Bootstrap label auto-management for a target repo:
 Options:
   --no-sync     Skip initial sync-labels.sh invocation
   --help        Show this help and exit
-
-Required env:
-  AGENTS_CONFIG_DIR  Path to the agents repo (source of master files)
 EOF
 }
 
-REPO_DIR=""
+TARGET_CHECKOUT_ROOT=""
 NO_SYNC=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -55,8 +51,8 @@ while [[ $# -gt 0 ]]; do
       exit 1
       ;;
     *)
-      if [[ -z "$REPO_DIR" ]]; then
-        REPO_DIR="$1"
+      if [[ -z "$TARGET_CHECKOUT_ROOT" ]]; then
+        TARGET_CHECKOUT_ROOT="$1"
       else
         echo "Error: unexpected argument: $1" >&2
         usage >&2
@@ -67,19 +63,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$REPO_DIR" ]]; then
+if [[ -z "$TARGET_CHECKOUT_ROOT" ]]; then
   echo "Error: <repo-dir> is required" >&2
   usage >&2
   exit 1
 fi
 
-if [[ -z "${AGENTS_CONFIG_DIR:-}" ]]; then
-  echo "Error: AGENTS_CONFIG_DIR must be set" >&2
-  exit 1
-fi
-
-if [[ ! -d "$REPO_DIR" ]]; then
-  echo "Error: directory not found: $REPO_DIR" >&2
+if [[ ! -d "$TARGET_CHECKOUT_ROOT" ]]; then
+  echo "Error: directory not found: $TARGET_CHECKOUT_ROOT" >&2
   exit 1
 fi
 
@@ -93,8 +84,8 @@ SRC_PATHS=(
 copied=0
 total=${#SRC_PATHS[@]}
 for rel in "${SRC_PATHS[@]}"; do
-  src="$AGENTS_CONFIG_DIR/$rel"
-  dst="$REPO_DIR/$rel"
+  src="$SCRIPT_CHECKOUT_ROOT/$rel"
+  dst="$TARGET_CHECKOUT_ROOT/$rel"
   if [[ ! -f "$src" ]]; then
     echo "Warning: source missing, skipping: $src" >&2
     continue
@@ -109,17 +100,17 @@ for rel in "${SRC_PATHS[@]}"; do
 done
 
 # Preserve executable bit for sync-labels.sh when freshly copied.
-if [[ -f "$REPO_DIR/bin/github-issues/sync-labels.sh" ]]; then
-  chmod +x "$REPO_DIR/bin/github-issues/sync-labels.sh" 2>/dev/null || true
+if [[ -f "$TARGET_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" ]]; then
+  chmod +x "$TARGET_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" 2>/dev/null || true
 fi
 
-echo "bootstrap-labels: copied $copied/$total files to $REPO_DIR"
+echo "bootstrap-labels: copied $copied/$total files to $TARGET_CHECKOUT_ROOT"
 
 if [[ "$NO_SYNC" -eq 0 ]]; then
-  # Run the trusted sync-labels.sh from AGENTS_CONFIG_DIR (not the copy in REPO_DIR)
+  # Run the trusted sync-labels.sh from this checkout (not the copy in TARGET_CHECKOUT_ROOT)
   # so pre-existing or divergent target copies cannot execute arbitrary code under
-  # the operator's credentials. CWD is REPO_DIR so sync-labels.sh resolves
+  # the operator's credentials. CWD is TARGET_CHECKOUT_ROOT so sync-labels.sh resolves
   # .github/labels.yml relative to the target repo.
-  (cd "$REPO_DIR" && bash "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh") || \
+  (cd "$TARGET_CHECKOUT_ROOT" && bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh") || \
     echo "bootstrap-labels: sync-labels.sh exited non-zero (labels may need manual sync)" >&2
 fi

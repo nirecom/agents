@@ -12,13 +12,13 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
-SWEEP="$AGENTS_DIR/bin/sweep-supervisor-state.sh"
-SCHEMA_NODE="$(node_path "$AGENTS_DIR")/hooks/lib/supervisor-state-schema.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SWEEP="$SCRIPT_CHECKOUT_ROOT/bin/sweep-supervisor-state.sh"
+SCHEMA_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")/hooks/lib/supervisor-state-schema.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 PASS=0
@@ -110,7 +110,7 @@ RC=0
 run_sweep() {
     local dir="$1"; shift
     local out
-    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
+    out="$(env -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
@@ -125,7 +125,7 @@ run_sweep() {
 run_sweep_as_session() {
     local dir="$1" sid="$2"; shift 2
     local out
-    out="$(env -u AGENTS_CONFIG_DIR \
+    out="$(env \
         "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" "CLAUDE_CODE_SESSION_ID=$sid" \
         "$RWT" 90 bash "$SWEEP" "$@" 2>&1)"
     RC=$?
@@ -135,26 +135,26 @@ run_sweep_as_session() {
 
 # run_sweep_stubbed <plansdir> <stub-rc> [flags...] — a copy of the tool whose
 # SIBLING resolve-session-id is a stub exiting <stub-rc>. The fault has to be
-# injected on the path the tool itself uses ($SCRIPT_DIR), because these runs
-# deliberately leave AGENTS_CONFIG_DIR unset.
+# injected on the path the tool itself uses ($SCRIPT_DIR), because the tool
+# resolves its helpers from its own location and from nowhere else.
 run_sweep_stubbed() {
     local dir="$1" stub_rc="$2"; shift 2
     local bin="$TMPDIR_BASE/stubbin-$stub_rc"
     if [ ! -d "$bin" ]; then
         mkdir -p "$bin/lib"
         cp "$SWEEP" "$bin/"
-        cp -r "$AGENTS_DIR/bin/sweep-supervisor-state" "$bin/"
-        cp "$AGENTS_DIR/bin/lib/sweep-write-mode.sh" "$bin/lib/"
+        cp -r "$SCRIPT_CHECKOUT_ROOT/bin/sweep-supervisor-state" "$bin/"
+        cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/sweep-write-mode.sh" "$bin/lib/"
         # The state-root lister resolves hooks/ from its own location, so the stub
         # delegates to the real one instead of copying it (#2511).
-        printf 'require(%s);\n' "\"$(node_path "$AGENTS_DIR/bin/workflow-state-dir")\"" \
+        printf 'require(%s);\n' "\"$(node_path "$SCRIPT_CHECKOUT_ROOT/bin/workflow-state-dir")\"" \
             > "$bin/workflow-state-dir"
         printf '#!/usr/bin/env bash\nprintf "resolve-session-id: resolver failed: boom\\n" >&2\nexit %s\n' \
             "$stub_rc" > "$bin/resolve-session-id"
         chmod +x "$bin/resolve-session-id"
     fi
     local out
-    out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
+    out="$(env -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$bin/sweep-supervisor-state.sh" "$@" 2>&1)"
     RC=$?
@@ -604,7 +604,7 @@ S10_no_live_override() {
     # S10c: capture exit code directly (run_sweep sets RC inside a command substitution
     # subshell — the update does not propagate to the caller's shell).
     local incl_out incl_rc
-    incl_out="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
+    incl_out="$(env -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" \
         "$RWT" 90 bash "$SWEEP" --apply --include-live 2>&1)"
     incl_rc=$?
@@ -729,7 +729,7 @@ S14_ci_mode_and_list_signatures() {
     fi
 
     local sig rc n
-    sig="$(env -u AGENTS_CONFIG_DIR -u CLAUDE_CODE_SESSION_ID \
+    sig="$(env -u CLAUDE_CODE_SESSION_ID \
         "WORKFLOW_PLANS_DIR=$(node_path "$dir")" "WORKFLOW_STATE_DIR=$(node_path "$dir")" "$RWT" 30 bash "$SWEEP" --list-signatures 2>&1)"
     rc=$?
     if [ "$rc" -eq 0 ]; then

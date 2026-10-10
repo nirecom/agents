@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Lightweight .env loader for Claude Code hooks. Reads $AGENTS_CONFIG_DIR/.env
+// Lightweight .env loader for Claude Code hooks. Reads $AGENTS_MAIN_ROOT/.env
 // (or a given path) into a KEY→value map, and optionally into process.env where
 // a non-empty process.env value always wins.
 // Grammar: KEY=VALUE per line; `#` and blank lines skipped; optional single or
@@ -10,7 +10,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { configDirCandidates } = require("./agents-config-dir");
+const { scriptCheckoutRootCandidates, normDir } = require("./script-checkout-root");
 const localEnv = require("./local-env");
 
 // --- Pristine isolation-env snapshot -------------------------------------
@@ -182,9 +182,9 @@ function readEnvFile(envPath) {
 // Global-only door (DD-6): the project-local overlay is deliberately invisible
 // here. Returns {} when no .env can be found ("absent" reads as "unset").
 function readDefaultEnvFile() {
-  // (a) Honor AGENTS_CONFIG_DIR if set
-  if (process.env.AGENTS_CONFIG_DIR) {
-    return readEnvFile(path.join(process.env.AGENTS_CONFIG_DIR, ".env")) || {};
+  // (a) Honor AGENTS_MAIN_ROOT if set
+  if (process.env.AGENTS_MAIN_ROOT) {
+    return readEnvFile(path.join(process.env.AGENTS_MAIN_ROOT, ".env")) || {};
   }
   // (b) __dirname two levels up (direct install path)
   const dirFallback = path.resolve(__dirname, "..", "..");
@@ -265,10 +265,10 @@ function applyLocalOverlayToProcessEnv(before) {
 }
 
 // loadDefaultEnv injects the effective config into process.env.
-// Candidate ENUMERATION is shared with hooks/lib/agents-config-dir.js. The
-// SELECTION POLICY is not (CPR-SC): an explicit AGENTS_CONFIG_DIR is the sole
-// settings source and never falls through, or a child pointed at a test config
-// dir would get the real repo's .env injected.
+// Fallback enumeration is shared with hooks/lib/script-checkout-root.js. The
+// SELECTION POLICY is not (CPR-SC): an explicit AGENTS_MAIN_ROOT is the sole
+// settings source and never falls through, or a child pointed at a fixture
+// settings directory would get this checkout's .env injected.
 // Pinned by tests/hooks/fix-389-load-env-default-fallback T389-7.
 function loadDefaultEnv() {
   const before = Object.assign({}, process.env);
@@ -278,18 +278,17 @@ function loadDefaultEnv() {
 }
 
 function loadDefaultEnvGlobal() {
-  const candidates = configDirCandidates();
-  // (a) Honor AGENTS_CONFIG_DIR if set
-  const envCandidate = candidates.find((c) => c.source === "env");
-  if (envCandidate) {
-    return loadEnv(path.join(envCandidate.dir, ".env"));
+  // (a) Honor AGENTS_MAIN_ROOT if set
+  const agentsMainRoot = normDir(process.env.AGENTS_MAIN_ROOT);
+  if (agentsMainRoot) {
+    return loadEnv(path.join(agentsMainRoot, ".env"));
   }
   // (b) module-relative, then (c) realpath-resolved
-  for (const c of candidates) {
+  for (const c of scriptCheckoutRootCandidates()) {
     if (loadEnv(path.join(c.dir, ".env"))) return true;
   }
   if (process.env.AGENTS_HOOK_DEBUG === "1") {
-    process.stderr.write("[load-env] loadDefaultEnv: .env not found via AGENTS_CONFIG_DIR, __dirname, or realpathSync\n");
+    process.stderr.write("[load-env] loadDefaultEnv: .env not found via AGENTS_MAIN_ROOT, __dirname, or realpathSync\n");
   }
   return false;
 }

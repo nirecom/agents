@@ -19,7 +19,7 @@
 
 # Two ABSENCE properties get their own cases: no bypass — WORKFLOW_OFF /
 # WORKTREE_OFF never suspend this hook because it never reads marker state
-# (no-bypass.sh); config comes from the config dir's .env, never
+# (no-bypass.sh); config comes from the agents main root's .env, never
 # process.env, so an inline COMMENT_BLOCK_MAX_LINES can't lift the bar
 # (filter-and-config.sh). Dispatcher: harness here, cases in
 # tests/hooks/feature-1894-hook-comment-block/*.sh.
@@ -32,13 +32,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # The worktree copies are the state under test — never the deployed ~/.claude.
-HOOK="$AGENTS_DIR/hooks/block-comment-block-size.js"
-SCAN_MODULE="$AGENTS_DIR/hooks/lib/comment-block-scan.js"
-SETTINGS_JSON="$AGENTS_DIR/settings.json"
-SCANNER_SH="$AGENTS_DIR/bin/review-comment-block-size.d/scan.sh"
-SCANNER_CLI="$AGENTS_DIR/bin/review-comment-block-size"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-comment-block-size.js"
+SCAN_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-scan.js"
+SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT/settings.json"
+SCANNER_SH="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size.d/scan.sh"
+SCANNER_CLI="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size"
 CASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1894-hook-comment-block"
 
 PASS=0
@@ -149,7 +149,7 @@ mkpayload() {
 
 # ---------------------------------------------------------------------------
 # Config routing. The hook resolves COMMENT_BLOCK_* and CODE_FILE_EXTENSIONS
-# from the config dir's .env ONLY. Tests therefore write .env and, by default,
+# from the agents main root's .env ONLY. Tests therefore write .env and, by default,
 # scrub those names from the child environment; hk_run_ambient exports them too,
 # which is the spoof the .env-only rule exists to defeat.
 # ---------------------------------------------------------------------------
@@ -196,7 +196,7 @@ _hk_env() {
     for ((i = 0; i < ${#dot_keys[@]}; i++)); do
         printf '%s=%s\n' "${dot_keys[$i]}" "${dot_vals[$i]}" >> "$CFG_DIR/.env"
     done
-    HK_ENVS+=("AGENTS_CONFIG_DIR=$(mpath "$CFG_DIR")")
+    HK_ENVS+=("AGENTS_MAIN_ROOT=$(mpath "$CFG_DIR")")
 }
 
 HK_OUT=""

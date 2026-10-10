@@ -2,33 +2,21 @@
 # tests/bin/feature-1226-env-os-filter.sh
 # Tests: bin/env-os-filter, hooks/pre-commit, bin/github-issues/wip-state.sh
 # Tags: scope:issue-specific, env-os-blocks, os-conditional, env-os-filter, pre-commit, wip-state, pwsh-not-required
-# RED for issue #1226 — bin/env-os-filter OS-conditional .env preprocessor.
-# L3 gap (what this test does NOT catch):
-# - Non-running OS block selection: TF-1 only verifies the RUNNING OS's block
-#   survives and the other-OS block is excluded. Verifying the other-OS path
-#   requires a real machine (Windows or POSIX) running this test. env-os-filter
-#   delegates to filterOsBlocks(text, process.platform) which uses the live
-#   process.platform — there is no platform-override seam by design.
-# - A shared .env symlinked across both OSes simultaneously: only a two-machine
-#   run of this test would exercise that real-world scenario.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: pwsh-required
-#
-# Non-regression: tests/agents/fix-pre-commit-dotenv-order.sh must still pass after
-# write-code modifies hooks/pre-commit _load_env_file to route through
-# bin/env-os-filter. That file's existing cases are not duplicated here.
-# (Validated by the run-tests step, not here.)
-#
-# Sibling test: tests/hooks/feature-1226-load-env-os-blocks.sh covers T1226-1..13
-# (filterOsBlocks unit cases). Those cases are NOT duplicated here.
+# Issue #1226 — bin/env-os-filter OS-conditional .env preprocessor.
+# L3 gap: only the RUNNING OS's block is verified (filterOsBlocks uses the live
+#   process.platform, no override seam by design); the other-OS path and a .env
+#   symlinked across both OSes need a second real machine. Checked at
+#   WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, pwsh-required).
+# Not duplicated here: tests/agents/fix-pre-commit-dotenv-order.sh (non-regression of
+#   the pre-commit loader) and tests/hooks/feature-1226-load-env-os-blocks.sh (T1226-1..13).
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-ENV_OS_FILTER="$AGENTS_DIR/bin/env-os-filter"
-PRECOMMIT="$AGENTS_DIR/hooks/pre-commit"
-WIP_STATE="$AGENTS_DIR/bin/github-issues/wip-state.sh"
+ENV_OS_FILTER="$SCRIPT_CHECKOUT_ROOT/bin/env-os-filter"
+PRECOMMIT="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit"
+WIP_STATE="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -238,7 +226,7 @@ run_tf6() {
 # ---------------------------------------------------------------------------
 run_tf7() {
     local name="TF-7: hooks/lib/load-env.sh _load_env_file sources only running-OS block"
-    local LOADENV_SH="$AGENTS_DIR/hooks/lib/load-env.sh"
+    local LOADENV_SH="$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.sh"
     # Guard 1: bin/env-os-filter must exist
     if [ "$HAS_FILTER" != "1" ]; then
         skip "$name (bin/env-os-filter not yet created — pending write-code)"; return
@@ -261,7 +249,7 @@ run_tf7() {
     printf '#@if windows\nENFORCE_WORKTREE_EXCLUDE=docs/*.md\n\n#@endif\n#@if posix\nENFORCE_WORKTREE_EXCLUDE=LICENSE\n\n#@endif\n' \
         > "$tmpdir/.env"
     # Source _load_env_file in a subshell, then print the resolved var
-    out=$(AGENTS_CONFIG_DIR="$tmpdir" run_with_timeout 15 bash -c "
+    out=$(AGENTS_MAIN_ROOT="$tmpdir" run_with_timeout 15 bash -c "
 source '$LOADENV_SH' 2>/dev/null || true
 _load_env_file
 echo \"\$ENFORCE_WORKTREE_EXCLUDE\"
@@ -303,7 +291,7 @@ run_tf8() {
     printf 'WIP_STATE_STATUS_FIELD_ID=SFID_TEST\n#@if windows\nWIPS_OS_VAR=win-val\n\n#@endif\n#@if posix\nWIPS_OS_VAR=posix-val\n\n#@endif\n' \
         > "$tmpdir/.env"
     # Extract and call load_env_file in a subshell; print the two vars
-    out=$(AGENTS_CONFIG_DIR="$tmpdir" run_with_timeout 15 bash -c "
+    out=$(AGENTS_MAIN_ROOT="$tmpdir" run_with_timeout 15 bash -c "
 source '$WIP_STATE' 2>/dev/null || true
 load_env_file
 printf 'WIP_STATE_STATUS_FIELD_ID=%s\n' \"\${WIP_STATE_STATUS_FIELD_ID:-}\"

@@ -10,15 +10,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    AGENTS_DIR_NODE="$AGENTS_DIR"
+    SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-LOAD_ENV="$AGENTS_DIR/hooks/lib/load-env.js"
-LOAD_ENV_NODE="$AGENTS_DIR_NODE/hooks/lib/load-env.js"
+LOAD_ENV="$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.js"
+LOAD_ENV_NODE="$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/load-env.js"
 
 # Fixture isolation: pin both halves of the plans-dir pair and drop inherited
 # session ids so no child node touches live workflow state.
@@ -311,14 +311,14 @@ fi
 # hooks/lib/load-env.sh — no multi-line quote grammar, so the concern's stricter
 # expectation holds here: the offending key alone is dropped and the very next
 # quoted assignment still exports.
-LOAD_ENV_SH="$AGENTS_DIR/hooks/lib/load-env.sh"
+LOAD_ENV_SH="$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.sh"
 SH_CFG="$TMP_ROOT/sh-cfg"
 mkdir -p "$SH_CFG"
 printf 'PRIOR=ok\nBADKEY="%s\nGOODKEY="goodvalue"\nTAIL=t\n' "$U_SECRET" > "$SH_CFG/.env"
 SH_OUT="$TMP_ROOT/sh-out.txt"
 SH_ERR="$TMP_ROOT/sh-err.txt"
 unset PRIOR BADKEY GOODKEY TAIL
-AGENTS_CONFIG_DIR="$SH_CFG" run_with_timeout 20 bash -c '
+AGENTS_MAIN_ROOT="$SH_CFG" run_with_timeout 20 bash -c '
   . "$1" || exit 3
   _load_env_file
   printf "PRIOR=%s|BADKEY=%s|GOODKEY=%s|TAIL=%s" "${PRIOR:-__ABSENT__}" "${BADKEY:-__ABSENT__}" "${GOODKEY:-__ABSENT__}" "${TAIL:-__ABSENT__}"
@@ -350,7 +350,7 @@ printf '%s\n' 'CODE_LANG=japanese' 'ENFORCE_WORKTREE=off' > "$I_PROJ/.env"".loca
 I_PROJ_NODE="$I_PROJ"
 if command -v cygpath >/dev/null 2>&1; then I_PROJ_NODE="$(cygpath -m "$I_PROJ")"; fi
 unset CODE_LANG ENFORCE_WORKTREE
-idem_got="$(AGENTS_CONFIG_DIR="$I_CFG" CLAUDE_PROJECT_DIR="$I_PROJ_NODE" run_with_timeout 20 node -e '
+idem_got="$(AGENTS_MAIN_ROOT="$I_CFG" CLAUDE_PROJECT_DIR="$I_PROJ_NODE" run_with_timeout 20 node -e '
 const m = require(process.argv[1]);
 const snap = () => ({ CODE_LANG: process.env.CODE_LANG, ENFORCE_WORKTREE: process.env.ENFORCE_WORKTREE });
 m.loadDefaultEnv();

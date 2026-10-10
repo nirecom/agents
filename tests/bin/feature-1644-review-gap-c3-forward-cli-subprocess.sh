@@ -3,32 +3,29 @@
 # Tags: tl2, workflow, advance, forward-cli, subprocess, idempotency, event-stream, scope:issue-specific, pwsh-not-required
 
 # Observes the forward operation through a REAL subprocess boundary on all four
-# advance-class CLIs. Existing cases assert only the folded PROJECTION, which is
-# identical whether a repeat call appended a duplicate event or nothing at all --
-# idempotency is a statement about the raw append-only event stream, so these
-# cases read it directly via the shared state-probe `eventcount` mode. Already
-# covered elsewhere and deliberately not repeated here: ADVANCE_SCOPE verdicts
-# (feature-1644-advance-transaction/projection.sh A15), same-CLI already=true
-# (.../basic.sh A5), sibling-CLI already=true (feature-1644-sibling-cli-advance.sh S15).
+# advance-class CLIs. Idempotency is a statement about the raw append-only event
+# stream (the folded projection hides a duplicate event), so these cases read it
+# via the shared state-probe `eventcount` mode. Not repeated here: ADVANCE_SCOPE
+# (advance-transaction/projection.sh A15), same-CLI already=true (.../basic.sh A5),
+# sibling-CLI already=true (feature-1644-sibling-cli-advance.sh S15).
 
 # TL3 gap: live settings.json permission-dialog admission, the migrated SKILL.md
-# steps' actual call shape, and concurrent-session convergence are not checked
-# here -- see WORKFLOW_USER_VERIFIED preflight (skill-orchestration category).
+# call shape, concurrent-session convergence (WORKFLOW_USER_VERIFIED preflight).
 
 set -uo pipefail
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
-AGENTS_DIR_N="$(nrm "$AGENTS_DIR")"
-NS="$AGENTS_DIR_N/bin/workflow/next-step"
-RSJ="$AGENTS_DIR_N/bin/workflow/record-skip-judgment"
-SWT="$AGENTS_DIR_N/bin/workflow/set-workflow-type"
-RSV="$AGENTS_DIR_N/bin/workflow/record-skip-verdict"
-RCAS="$AGENTS_DIR/bin/workflow/record-complexity-and-skip"
-WFSTATE_MODULE="$AGENTS_DIR_N/hooks/workflow-state"; export WFSTATE_MODULE
-PROBE="$AGENTS_DIR_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
+SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
+NS="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+RSJ="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment"
+SWT="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/set-workflow-type"
+RSV="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-verdict"
+RCAS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
+WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
+PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -39,11 +36,11 @@ export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
 unset CLAUDE_CODE_SESSION_ID
 
-# Empty fixture config dir: no CONFIRM_* is inherited from the repo's own .env,
+# Empty fixture settings root: no CONFIRM_* is inherited from the repo's own .env,
 # so every approval-gated branch under test is armed rather than accidentally off.
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
 CONFIG_EMPTY_N="$(nrm "$CONFIG_EMPTY")"
-export AGENTS_CONFIG_DIR="$CONFIG_EMPTY_N"
+export AGENTS_MAIN_ROOT="$CONFIG_EMPTY_N"
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1
@@ -212,15 +209,15 @@ check "C3-3c: the repeat exits 0" 0 "$RC"
 check "C3-3c: the repeat appended NO second step_status event" "$C33C_N" "$(ev_count c33c workflow_init step_status)"
 
 # record-complexity-and-skip arm (delegates to record-skip-judgment --advance).
-# The real config dir is required: RCAS resolves its siblings through AGENTS_CONFIG_DIR.
+# RCAS finds its siblings from its own location, so the real checkout's copy is launched.
 make_state c33d "workflow_init clarify_intent research"
 printf '# intent\n' > "$PLANS_DIR/c33d-intent.md"
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
+run_cli env bash "$RCAS" \
   --session c33d --signals "" --target outline --advance
 check "C3-3d: first record-complexity-and-skip --advance exits 0" 0 "$RC"
 C33D_N="$(ev_count c33d outline step_status)"
 check "C3-3d: exactly one step_status event after the first call" 1 "$C33D_N"
-run_cli env AGENTS_CONFIG_DIR="$AGENTS_DIR_N" bash "$RCAS" \
+run_cli env bash "$RCAS" \
   --session c33d --signals "" --target outline --advance
 check "C3-3d: the repeat exits 0" 0 "$RC"
 check "C3-3d: the repeat appended NO second step_status event" "$C33D_N" "$(ev_count c33d outline step_status)"

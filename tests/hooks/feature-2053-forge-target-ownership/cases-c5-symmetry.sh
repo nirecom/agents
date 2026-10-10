@@ -68,7 +68,7 @@ TABLE
     # Runs the real hooks/enforce-issue-close.js over the same payload. It exits
     # 2 (a hard block); the new guard passing the command through is what keeps
     # that outcome reachable by the user.
-    local close_hook="$AGENTS_DIR/hooks/enforce-issue-close.js"
+    local close_hook="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-issue-close.js"
     if [ ! -f "$close_hook" ]; then
         fail "C5-4 close guard present" "hooks/enforce-issue-close.js is missing"
         return

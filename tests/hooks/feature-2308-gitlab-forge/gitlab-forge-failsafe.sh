@@ -2,6 +2,7 @@
 # Tests: hooks/lib/forge/gitlab.js, hooks/lib/is-private-repo.js, hooks/lib/forge-router.js
 # Tags: scope:issue-specific, gitlab, forge, security, fail-safe, TL2
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # Issue #2308 — fail-safe / routing group of the split gitlab-forge suite.
 #   C7 [HIGH, security]: codehostGitlab methods fail CLOSED (name-protecting) on
@@ -17,7 +18,7 @@ set -u
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-FORGE_ROUTER_JS="$(nodepath "$AGENTS_DIR/hooks/lib/forge-router.js")"
+FORGE_ROUTER_JS="$(nodepath "$SCRIPT_CHECKOUT_ROOT/hooks/lib/forge-router.js")"
 
 # ============================================================================
 # C7: codehostGitlab fail-safe returns (forge/gitlab.js)
@@ -172,16 +173,16 @@ process.stdout.write(r === null || r === undefined ? "null" : String(r));
 NODE
 
 C6_NEUTRAL="$TMPROOT/c6-neutral"; mkdir -p "$C6_NEUTRAL"
-# Config dir whose .env declares a host; a DIFFERENT host is exported in process.env.
+# Agents main root whose .env declares a host; a DIFFERENT host is exported in process.env.
 C6_CFG="$TMPROOT/c6-cfg"; mkdir -p "$C6_CFG"
 printf 'GITLAB_HOSTNAME=gitlab.fromenvfile.example.com\n' > "$C6_CFG/.env"
-# Control config dir whose .env omits the key (process.env is then the only source).
+# Control agents main root whose .env omits the key (process.env is then the only source).
 C6_CFG_EMPTY="$TMPROOT/c6-cfg-empty"; mkdir -p "$C6_CFG_EMPTY"
 printf '# no forge host declared here\n' > "$C6_CFG_EMPTY/.env"
 
 case_begin "read-gitlab-host-config-env-conflict" "hooks/lib/forge-router.js"
 # Both sources set, different values -> .env wins (value is lowercased by the impl).
-C6_CONFLICT="$(cd "$C6_NEUTRAL" && GITLAB_HOSTNAME=gitlab.fromprocessenv.example.com AGENTS_CONFIG_DIR="$(nodepath "$C6_CFG")" \
+C6_CONFLICT="$(cd "$C6_NEUTRAL" && GITLAB_HOSTNAME=gitlab.fromprocessenv.example.com AGENTS_MAIN_ROOT="$(nodepath "$C6_CFG")" \
     run_with_timeout 20 node "$C6_DRIVER" "$FORGE_ROUTER_JS" 2>/dev/null)"
 assert_eq "C6/readGitlabHostConfig .env wins over process.env on conflict" \
     "gitlab.fromenvfile.example.com" "$C6_CONFLICT"
@@ -189,7 +190,7 @@ case_end
 
 case_begin "read-gitlab-host-config-env-fallback" "hooks/lib/forge-router.js"
 # Control: .env has no key, process.env set -> process.env value is the fallback.
-C6_FALLBACK="$(cd "$C6_NEUTRAL" && GITLAB_HOSTNAME=gitlab.fromprocessenv.example.com AGENTS_CONFIG_DIR="$(nodepath "$C6_CFG_EMPTY")" \
+C6_FALLBACK="$(cd "$C6_NEUTRAL" && GITLAB_HOSTNAME=gitlab.fromprocessenv.example.com AGENTS_MAIN_ROOT="$(nodepath "$C6_CFG_EMPTY")" \
     run_with_timeout 20 node "$C6_DRIVER" "$FORGE_ROUTER_JS" 2>/dev/null)"
 assert_eq "C6b/readGitlabHostConfig falls back to process.env when .env omits the key" \
     "gitlab.fromprocessenv.example.com" "$C6_FALLBACK"

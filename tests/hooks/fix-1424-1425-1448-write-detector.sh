@@ -28,16 +28,16 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-PATTERNS_JS="${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns/patterns.js"
-TARGETS_JS="${_AGENTS_DIR_NODE}/hooks/lib/bash-write-targets.js"
-HOOK_SCRIPT="${_AGENTS_DIR_NODE}/hooks/enforce-worktree.js"
+PATTERNS_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-patterns/patterns.js"
+TARGETS_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/bash-write-targets.js"
+HOOK_SCRIPT="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 
 PASS=0
 FAIL=0
@@ -87,7 +87,7 @@ hook_payload_bash() {
 is_gh_write() {
     local cmd="$1"
     node -e "
-      const {parse} = require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+      const {parse} = require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
       const {isGhWriteIR} = require('${PATTERNS_JS}');
       const ir = parse(process.argv[1]);
       console.log(isGhWriteIR(ir) ? 'true' : 'false');
@@ -175,7 +175,7 @@ echo "=== Section 2: #1425 isNewlineInjectedWriteIR backslash fold ==="
 got="$(node -e "
 const nl = '\n';
 const cmd = 'echo clean' + nl + 'rm /tmp/testfile';
-const {parse} = require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+const {parse} = require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
 const {isNewlineInjectedWriteIR} = require('${TARGETS_JS}');
 const ir = parse(cmd);
 console.log(isNewlineInjectedWriteIR(ir) ? 'true' : 'false');
@@ -200,7 +200,7 @@ const cmd =
   'node bin/supervisor-report ' + bs + nl +
   '  --detail ' + bs + nl +
   \"  bash -c 'git status'\";
-const {parse} = require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+const {parse} = require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
 const {isNewlineInjectedWriteIR} = require('${TARGETS_JS}');
 const ir = parse(cmd);
 console.log(isNewlineInjectedWriteIR(ir) ? 'true' : 'false');
@@ -215,7 +215,7 @@ fi
 got="$(node -e "
 const nl = '\n';
 const cmd = 'git status' + nl + 'git log --oneline -5';
-const {parse} = require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+const {parse} = require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
 const {isNewlineInjectedWriteIR} = require('${TARGETS_JS}');
 const ir = parse(cmd);
 console.log(isNewlineInjectedWriteIR(ir) ? 'true' : 'false');
@@ -231,7 +231,7 @@ fi
 got="$(node -e "
 const nl = '\n';
 const cmd = 'git status' + nl + 'rm /tmp/test-1425-file';
-const {parse} = require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+const {parse} = require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
 const {isNewlineInjectedWriteIR} = require('${TARGETS_JS}');
 const ir = parse(cmd);
 console.log(isNewlineInjectedWriteIR(ir) ? 'true' : 'false');
@@ -255,7 +255,7 @@ const nl = '\n';
 // The body text contains real newlines but is wrapped in double quotes.
 const body = 'line1' + nl + 'rm -rf /' + nl + 'line3';
 const cmd = 'gh issue create --body \"' + body + '\"';
-const {parse} = require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+const {parse} = require('${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/command-ir');
 const {isNewlineInjectedWriteIR} = require('${TARGETS_JS}');
 const ir = parse(cmd);
 console.log(isNewlineInjectedWriteIR(ir) ? 'true' : 'false');

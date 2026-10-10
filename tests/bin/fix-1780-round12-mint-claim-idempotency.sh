@@ -2,51 +2,20 @@
 # tests/bin/fix-1780-round12-mint-claim-idempotency.sh
 # Tests: bin/request-off-clearance, hooks/lib/consume-exact-file.js
 # Tags: off-clearance, mint, claim, mint-nonce, idempotency, replay, single-use, concurrency, race, filesystem, security, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - The REAL claimant. The racing claim in R1 is a node poller, not
-#   hooks/supervisor-off-proposal-shim.js firing as a PreToolUse hook inside a
-#   live claude -p turn, and it COPIES the bare token into .claimed instead of
-#   consuming it (so the final token stays readable for the assertion).
-# - A real mid-syscall crash between the mint's rename and its claim sweep. M6
-#   simulates the mint failing by making the destination unwritable instead.
-# - Real 0600 mode on the .claimed file (Git Bash emulates permissions).
-# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: hook-registration.
-#
-# ---------------------------------------------------------------------------
-# WHAT THIS FILE DEFENDS (#1626 + #1780 M-3 / round-5 M-2)
-#
-# The `.claimed` file is what makes an OFF-clearance grant SINGLE-USE. Minting
-# is therefore not a pure write: it must also decide the fate of whatever claim
-# is already sitting at that pathname. Both possible mistakes are severe and
-# they point in opposite directions, which is why the mint's clear step is
-# IDENTITY-BOUND rather than an `rm -f`:
-#
-#   clearing too little  -> a declined approval dialog deadlocks the sid until
-#                           the 7-day zombie sweep
-#   clearing too much    -> a claim written microseconds earlier for the token
-#                           just minted is destroyed, which erases the
-#                           single-use record of a LIVE grant (and the audit
-#                           trail's only evidence that it was claimed)
-#
-# THE GUARANTEE, restated as the invariant every case here checks:
-#   a claim is removed if and only if its CONTENTS prove it belongs to a
-#   DIFFERENT grant than the one just minted (different mint_nonce, or none at
-#   all). A claim carrying this grant's nonce is never removed.
-#
-# Two further properties are load-bearing and asserted separately (CPR-SC):
-#   ORDER   the claim is cleared only AFTER the new bare token is durably
-#           minted — so a failed mint leaves the old single-use lock INTACT
-#           rather than leaving an already-spent grant replayable (M6).
-#   REPLAY  re-minting never resurrects a spent grant: the new token is a new
-#           identity, and the old bytes are gone (M7).
-# ---------------------------------------------------------------------------
+# TL3 gap: the REAL claimant (R1's racer is a node poller that COPIES the token into .claimed, not the shim hook in a live claude -p turn); a real mid-syscall crash between the mint's rename and its sweep (M6 makes the destination unwritable instead); real 0600 on .claimed (Git Bash emulates).
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
+# WHAT THIS FILE DEFENDS (#1626 + #1780 M-3 / round-5 M-2): `.claimed` makes a grant SINGLE-USE, so the mint's clear step is IDENTITY-BOUND, not an `rm -f`.
+# Clearing too little deadlocks the sid until the 7-day zombie sweep; clearing too much erases the single-use record of a LIVE grant.
+# INVARIANT every case checks: a claim is removed iff its CONTENTS prove it belongs to a DIFFERENT grant (different mint_nonce, or none at all).
+# ORDER (M6): the claim is cleared only AFTER the new bare token is durably minted. REPLAY (M7): re-minting never resurrects a spent grant.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=./lib/request-off-clearance-harness.sh
-. "$AGENTS_DIR/tests/lib/request-off-clearance-harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/request-off-clearance-harness.sh"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 
 offclr_require_script
 
@@ -278,54 +247,23 @@ run_M7() {
 }
 
 # ===========================================================================
-# THE RACE (#1780 M-3). A claim written for the token minted microseconds
-# earlier must SURVIVE the same mint's clear step.
-#
-# The window under attack is inside ONE node process, between
-#     fs.renameSync(p + ".mint.tmp", p)        // the grant becomes visible
-# and
-#     priorRaw = fs.readFileSync(p + ".claimed")   // the sweep inspects the claim
-#
-# A claimant that writes .claimed inside that window is claiming the grant that
-# was just minted; the sweep must recognise its own mint_nonce and leave it
-# alone. A claimant that writes AFTER the read is not in the race at all (the
-# sweep already saw an empty pathname), which is why a naive "spin and hope"
-# poller proves nothing: measured on this platform it lands after the read
-# essentially every time, and the pre-#1780 unconditional `rm -f` passes such a
-# test unharmed. Both cases below were validated by mutation — R1 fails against
-# an `rm -f` mint, R2 does not.
-#
-# R1 (deterministic) therefore WIDENS the window instead of racing for it. The
-# only thing between the rename and the read is
-#     require(AGENTS_CONFIG_DIR + "/hooks/lib/consume-exact-file.js")
-# and AGENTS_CONFIG_DIR is the caller's to choose. R1 points it at a shadow
-# config dir whose modules are one-line re-exports of the REAL ones, except that
-# consume-exact-file.js blocks for 400ms at module load before re-exporting the
-# real consumeExactFile. Nothing about the logic under test changes — the sweep
-# code, the nonce comparison and the consumption primitive are the untouched
-# originals — only the DURATION of the window does, which is what makes the
-# claimant's arrival deterministic rather than lucky.
-#
-# R2 keeps the natural-timing poller as an unwidened probe. It can only ever
-# report "landed" or "did not land"; it is not the case that proves the rule.
-#
-# The poller COPIES the bare token into .claimed rather than consuming it, so
-# the assertion can still read the grant's identity afterwards. The sweep's
-# decision depends only on the CLAIM's contents, so the copy does not weaken it.
-# ===========================================================================
+# THE RACE (#1780 M-3). A claim written for the token minted microseconds earlier must
+# SURVIVE the same mint's clear step. The window is inside ONE node process, between
+# fs.renameSync(p + ".mint.tmp", p) and fs.readFileSync(p + ".claimed"); a claimant that
+# writes AFTER the read is not in the race, so a natural-timing poller proves nothing
+# (validated by mutation: R1 fails against an `rm -f` mint, R2 does not). R1 therefore
+# WIDENS the window instead of racing for it: only
+# require(SCRIPT_CHECKOUT_ROOT + "/hooks/lib/consume-exact-file.js") sits in it. R2 keeps
+# the natural-timing poller as an unwidened probe. The poller COPIES the bare token into
+# .claimed, so the grant's identity stays readable; the sweep reads only the CLAIM.
 
-# offclr_shadow_config <dir> <delay-ms> — a minimal AGENTS_CONFIG_DIR that
-# re-exports the real modules, with a load-time stall in the one module the mint
-# requires between minting the token and inspecting the claim.
-offclr_shadow_config() {
-    local dir="$1" delay="$2" real="$OFFCLR_AGENTS_NODE"
-    mkdir -p "$dir/hooks/lib" "$dir/hooks/workflow-state/state-io"
-    printf 'module.exports = require(%s);\n' "\"$real/hooks/workflow-state/state-io/core.js\"" \
-        > "$dir/hooks/workflow-state/state-io/core.js"
-    printf 'module.exports = require(%s);\n' "\"$real/hooks/lib/supervisor-state-writer.js\"" \
-        > "$dir/hooks/lib/supervisor-state-writer.js"
-    printf 'module.exports = require(%s);\n' "\"$real/hooks/lib/off-clearance-mint-lock.js\"" \
-        > "$dir/hooks/lib/off-clearance-mint-lock.js"
+offclr_fake_checkout_stall() {
+    # <dir> <delay-ms> — the mint derives its root from its own path, so the stall is
+    # planted in a fake script checkout (a copy of bin hooks skills) the mint is launched
+    # from. Only the DURATION of the window changes: the module re-exports the REAL one.
+    local dir="$1" delay="$2" real
+    real="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
+    script_checkout_fixture_copy "$dir" || return 1
     {
         printf '// TEST SHADOW: stalls %sms at load to widen the mint window, then\n' "$delay"
         printf '// re-exports the REAL primitive unchanged.\n'
@@ -336,10 +274,10 @@ offclr_shadow_config() {
 }
 
 run_R1() {
-    local racer shadow tmp tn nf nw log ok=1
+    local racer fake_script_checkout_root tmp tn nf nw log ok=1 saved_req="$OFFCLR_REQ"
     racer="$(make_tmp)/racer.js"
-    shadow="$(make_tmp)/shadow-config"
-    offclr_shadow_config "$shadow" 400
+    fake_script_checkout_root="$(make_tmp)/stall-checkout"
+    offclr_fake_checkout_stall "$fake_script_checkout_root" 400
     cat > "$racer" <<'RACER'
 "use strict";
 const fs = require("fs");
@@ -375,8 +313,9 @@ RACER
     log="$tmp/racer.log"
     node "$racer" "$(node_path "$(token_file "$tmp")")" "$(node_path "$log")" >/dev/null 2>&1 &
     local racer_pid=$!
-    REQ_SID="$SID"; REQ_CONFIG_DIR="$(node_path "$shadow")"
+    REQ_SID="$SID"; OFFCLR_REQ="$fake_script_checkout_root/bin/request-off-clearance"
     run_req "$tn" "$(allow_stub 'raced grant')" --target workflow --category workflow-bug --detail "bug"
+    OFFCLR_REQ="$saved_req"
     wait "$racer_pid" 2>/dev/null || true
 
     nw="$(cat "$log" 2>/dev/null | tr -d '\r\n')"
@@ -391,7 +330,7 @@ RACER
     else
         fail "R1 RED-EXPECTED (#1780 M-3 unconditional rm -f): rc=$RC claimant_wrote=$nw grant=$nf claim_left=$([ -f "$(claim_file "$tmp")" ] && echo yes || echo NO) residue=$(tmpres_count "$tmp")"
     fi
-    rm -r -f "$tmp" "$(dirname "$racer")" "$(dirname "$shadow")" 2>/dev/null || true
+    rm -r -f "$tmp" "$(dirname "$racer")" "$(dirname "$fake_script_checkout_root")" 2>/dev/null || true
 }
 
 # R2 - the same scenario at NATURAL timing, as an unwidened probe. It reports

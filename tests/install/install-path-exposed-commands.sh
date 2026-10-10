@@ -51,11 +51,11 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SSOT_REL="install/path-exposed-commands.txt"
-SSOT="$AGENTS_DIR/$SSOT_REL"
-WIN="$AGENTS_DIR/install/win/dotfileslink.ps1"
-LINUX="$AGENTS_DIR/install/linux/dotfileslink.sh"
+SSOT="$SCRIPT_CHECKOUT_ROOT/$SSOT_REL"
+WIN="$SCRIPT_CHECKOUT_ROOT/install/win/dotfileslink.ps1"
+LINUX="$SCRIPT_CHECKOUT_ROOT/install/linux/dotfileslink.sh"
 
 PASS=0
 FAIL=0
@@ -74,7 +74,7 @@ check() { # <desc> <want> <got>
 # would go stale in exactly the way the two installers did.
 #
 # "Bare name" means command position: line start, or straight after `;`, `&`, `|`, `(`,
-# `&&`, `||`. A name preceded by `/` is a full-path invocation (`"$AGENTS_CONFIG_DIR/bin/x"`)
+# `&&`, `||`. A name preceded by `/` is a full-path invocation (`"$AGENTS_MAIN_ROOT/bin/x"`)
 # and is deliberately NOT counted — those already work and need no shim. Full-line comments
 # are stripped first. The rule is conservative: `then foo` and `do foo` are not matched, so
 # the derived set can be too small but never too large, and a false accusation is impossible.
@@ -88,12 +88,12 @@ skill_scripts() { # <root>
   find "$root/skills" -path '*/scripts/*.sh' -type f 2>/dev/null | sort
 }
 
-# Scan root is parameterized (arg 1, defaulting to $AGENTS_DIR) so the T7 canary below can
+# Scan root is parameterized (arg 1, defaulting to $SCRIPT_CHECKOUT_ROOT) so the T7 canary below can
 # point the same, unmodified regex/extraction logic at a throwaway fixture tree instead of
 # the real repo -- a positive control that ran different code than production would prove
 # nothing. Nothing past this line changed.
-derive_bare_invocations() { # <root=AGENTS_DIR>
-  local root="${1:-$AGENTS_DIR}"
+derive_bare_invocations() { # <root=SCRIPT_CHECKOUT_ROOT>
+  local root="${1:-$SCRIPT_CHECKOUT_ROOT}"
   local scripts b s
   scripts="$(skill_scripts "$root")"
   [ -n "$scripts" ] || return 0
@@ -171,7 +171,7 @@ t2_entries_are_executable() {
   bad_modes=""
   while IFS= read -r e; do
     [ -n "$e" ] || continue
-    if [ ! -f "$AGENTS_DIR/bin/$e" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/bin/$e" ]; then
       missing_files="$missing_files $e"
       continue
     fi
@@ -179,7 +179,7 @@ t2_entries_are_executable() {
     # Windows and regardless of core.fileMode. A shim pointing at a non-executable file
     # fails at run time with a permission error, which `|| true` would swallow just as
     # quietly as `command not found`.
-    mode="$(git -C "$AGENTS_DIR" ls-files -s -- "bin/$e" 2>/dev/null | awk '{print $1}')"
+    mode="$(git -C "$SCRIPT_CHECKOUT_ROOT" ls-files -s -- "bin/$e" 2>/dev/null | awk '{print $1}')"
     [ "$mode" = "100755" ] || bad_modes="$bad_modes $e:${mode:-untracked}"
   done <<< "$ENTRIES"
   check "T2a: every list entry names a file under bin/" "" "${missing_files# }"
@@ -320,7 +320,7 @@ t7_parser_canary() {
 #!/usr/bin/env bash
 set -uo pipefail
 ${bare_name} --base "\$MERGE_BASE" || true
-"\${AGENTS_CONFIG_DIR}/bin/${full_name}" --base "\$MERGE_BASE" || true
+"\${AGENTS_MAIN_ROOT}/bin/${full_name}" --base "\$MERGE_BASE" || true
 EOF
   got="$(derive_bare_invocations "$fixture")"
   check "T7a canary-positive: a bare-name bin/ invocation is detected" \

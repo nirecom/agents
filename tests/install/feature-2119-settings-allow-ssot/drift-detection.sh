@@ -20,7 +20,7 @@ T30_SESSION=""
 t30_build() { # <fixture> -- the healthy root every slot starts from (see tpl_fixture)
     local d="$1"
     mkdir -p "$d/hooks/lib"
-    cp "$AGENTS_DIR/$DRIFT_MODULE_REL" "$d/hooks/lib/" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT/$DRIFT_MODULE_REL" "$d/hooks/lib/" 2>/dev/null || true
     mk_tool "$d" bin/fx-tool env-bash
     write_ssot "$d" bin/fx-tool
     printf '%s\n' 'Bash(base-hand-written *)' > "$d/pre.txt"
@@ -119,7 +119,7 @@ t30_setup() {
 
     d="$TMPROOT/t30-fake-root"
     mkdir -p "$d/hooks/lib" "$d/home/.claude"
-    cp "$AGENTS_DIR/$DRIFT_MODULE_REL" "$d/hooks/lib/" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT/$DRIFT_MODULE_REL" "$d/hooks/lib/" 2>/dev/null || true
     printf '%s\n' '{}' > "$d/home/.claude/settings.json"
     T30_D="$(t30_detect "$d")"
 }
@@ -220,8 +220,8 @@ case_begin "t30-session-start-quiet" "hooks/session-start.js"
 t30_session_setup() {
     local d="$TMPROOT/t30-session"
     mkdir -p "$d/home/.claude" "$d/install"
-    cp -R "$AGENTS_DIR/hooks" "$d/" 2>/dev/null || true
-    cp -R "$AGENTS_DIR/install" "$d/" 2>/dev/null || true
+    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks" "$d/" 2>/dev/null || true
+    cp -R "$SCRIPT_CHECKOUT_ROOT/install" "$d/" 2>/dev/null || true
     rm -rf "$d/install/settings-allow-commands.txt"
     mkdir -p "$d/install/settings-allow-commands.txt"
     printf '%s\n' '{ "permissions": { "allow": ["Bash(base-hand-written *)"] } }' > "$d/settings.json"

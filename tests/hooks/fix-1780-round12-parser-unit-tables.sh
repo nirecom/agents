@@ -68,14 +68,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
 
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-PARTS_DIR="$AGENTS_DIR/tests/hooks/fix-1780-round12-parser-unit-tables"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/fix-1780-round12-parser-unit-tables"
 PROBE="$PARTS_DIR/probe.js"
 MUTATE="$PARTS_DIR/mutate.js"
-PB_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
+PB_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/protected-basenames.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -146,7 +146,7 @@ run_table() {
     local section="$1" tbl res
     tbl="$SANDBOX/$section.tbl"
     _expand "$(cat)" > "$tbl"
-    res=$("$RWT" 30 node "$(node_path "$PROBE")" "$_AGENTS_DIR_NODE" < "$tbl" 2>&1)
+    res=$("$RWT" 30 node "$(node_path "$PROBE")" "$_SCRIPT_CHECKOUT_ROOT_NODE" < "$tbl" 2>&1)
     if [ -z "$res" ]; then
         fail "$section probe produced no output - the whole section is vacuous"
         return

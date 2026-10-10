@@ -12,7 +12,7 @@
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-TARGET="${PROPAGATE_LABELS_SH:-$AGENTS_DIR/bin/github-issues/propagate-labels.sh}"
+TARGET="${PROPAGATE_LABELS_SH:-$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/propagate-labels.sh}"
 
 TMP=""
 
@@ -119,7 +119,7 @@ teardown_mock() {
 setup_mock
 export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
 export GIT_DIFF_RC=0
-export AGENTS_WORKSPACE="$AGENTS_DIR"
+export AGENTS_WORKSPACE="$__LIB_SCRIPT_CHECKOUT_ROOT"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
 export PROPAGATE_LABELS_REPOS=" $TMP/repos/myorg/myrepo ; $TMP/repos/nirecom/dotfiles "
@@ -182,7 +182,7 @@ teardown_mock
 setup_mock
 export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
 export GIT_DIFF_RC=0
-export AGENTS_WORKSPACE="$AGENTS_DIR"
+export AGENTS_WORKSPACE="$__LIB_SCRIPT_CHECKOUT_ROOT"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
 export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo;"

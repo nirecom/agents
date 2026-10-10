@@ -62,14 +62,14 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
 
-HOOK="$AGENTS_DIR/hooks/block-clearance-token-write.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-PB_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
-WT_NODE="$_AGENTS_DIR_NODE/hooks/lib/write-tools.js"
-TCT_NODE="$_AGENTS_DIR_NODE/hooks/lib/tool-command-text.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-clearance-token-write.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+PB_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/protected-basenames.js"
+WT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/write-tools.js"
+TCT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/tool-command-text.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -131,7 +131,7 @@ run_hook() {
         "$tool" "$ti" "$WF" 2>/dev/null)
     [ -z "$input" ] && { printf 'nopayload|'; return; }
     out=$(printf '%s' "$input" | WORKFLOW_STATE_DIR="$WF" WORKFLOW_PLANS_DIR="$WF" \
-        AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" "$RWT" 15 node "$HOOK" 2>/dev/null)
+        "$RWT" 15 node "$HOOK" 2>/dev/null)
     rc=$?
     printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr -d '\r\n')"
 }

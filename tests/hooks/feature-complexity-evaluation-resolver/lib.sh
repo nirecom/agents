@@ -9,14 +9,14 @@
 # Split from the entrypoint per rules/coding/file-split.md Pattern A (>500 lines):
 # the entrypoint keeps the test cases; mechanics live here.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-RESOLVER="$AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js"
+_LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+RESOLVER="$_LIB_SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/skip-signal-resolver.js"
 RESOLVER_N="$(cygpath -m "$RESOLVER" 2>/dev/null || echo "$RESOLVER")"
-STATEIO="$AGENTS_DIR/hooks/workflow-state/state-io.js"
+STATEIO="$_LIB_SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js"
 STATEIO_N="$(cygpath -m "$STATEIO" 2>/dev/null || echo "$STATEIO")"
 
-RECORD_CLI="$AGENTS_DIR/bin/workflow/record-complexity-evaluation"
-READ_CLI="$AGENTS_DIR/bin/workflow/read-complexity-evaluation"
+RECORD_CLI="$_LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-evaluation"
+READ_CLI="$_LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/read-complexity-evaluation"
 RECORD_CLI_N="$(cygpath -m "$RECORD_CLI" 2>/dev/null || echo "$RECORD_CLI")"
 READ_CLI_N="$(cygpath -m "$READ_CLI" 2>/dev/null || echo "$READ_CLI")"
 
@@ -54,7 +54,7 @@ API_READY_REPORT="$(node -e "
 
 CLI_PRESENT_REPORT="record=$([ -f "$RECORD_CLI" ] && echo yes || echo no)"
 CLI_PRESENT_REPORT="$CLI_PRESENT_REPORT read=$([ -f "$READ_CLI" ] && echo yes || echo no)"
-CLI_PRESENT_REPORT="$CLI_PRESENT_REPORT derive=$([ -f "$AGENTS_DIR/bin/workflow/derive-complexity-level" ] && echo yes || echo no)"
+CLI_PRESENT_REPORT="$CLI_PRESENT_REPORT derive=$([ -f "$_LIB_SCRIPT_CHECKOUT_ROOT/bin/workflow/derive-complexity-level" ] && echo yes || echo no)"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT

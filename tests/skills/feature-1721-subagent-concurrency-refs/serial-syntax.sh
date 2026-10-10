@@ -29,7 +29,7 @@ group_serial_syntax_drift() {
     # straight into the filters would mask a scan failure (bad path, permission
     # error, timeout) as "no hits" and report a silent PASS.
     raw="$TMPD/drift-raw.txt"
-    run_with_timeout 60 grep -rnF "$SC_S_LOOSE" "$AGENTS_DIR" \
+    run_with_timeout 60 grep -rnF "$SC_S_LOOSE" "$SCRIPT_CHECKOUT_ROOT" \
         --include='*.md' --include='*.sh' --include='*.js' \
         --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=_archive \
         > "$raw" 2>"$TMPD/drift-err.txt"

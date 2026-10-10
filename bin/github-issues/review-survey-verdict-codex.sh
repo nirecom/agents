@@ -12,14 +12,14 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 VALIDATOR="$SCRIPT_DIR/lib/validate-review-verdict.js"
-CASCADE_SSOT="$AGENTS_DIR/skills/_shared/issue-verdict-cascade.md"
+CASCADE_SSOT="$SCRIPT_CHECKOUT_ROOT/skills/_shared/issue-verdict-cascade.md"
 # shellcheck source=../lib/codex-timeout.sh
-source "$AGENTS_DIR/bin/lib/codex-timeout.sh"
+source "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-timeout.sh"
 # shellcheck source=../lib/cli-exec-guard.sh
-source "$AGENTS_DIR/bin/lib/cli-exec-guard.sh"
+source "$SCRIPT_CHECKOUT_ROOT/bin/lib/cli-exec-guard.sh"
 
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
@@ -200,8 +200,8 @@ CODEX_BIN="$(command -v codex)"
 # not one this script can enforce. See the file header for the full rationale. Resolved
 # here, before prompt assembly, so both the prompt text and the codex invocation agree.
 WEB_SEARCH_RAW="${ISSUE_VERDICT_WEB_SEARCH:-}"
-if [[ -z "$WEB_SEARCH_RAW" && -x "$AGENTS_DIR/bin/get-config-var" ]]; then
-    WEB_SEARCH_RAW="$("$AGENTS_DIR/bin/get-config-var" ISSUE_VERDICT_WEB_SEARCH off 2>/dev/null || true)"
+if [[ -z "$WEB_SEARCH_RAW" && -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ]]; then
+    WEB_SEARCH_RAW="$("$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ISSUE_VERDICT_WEB_SEARCH off 2>/dev/null || true)"
 fi
 WEB_SEARCH_ENABLED=0
 [[ "$WEB_SEARCH_RAW" == "on" || "$WEB_SEARCH_RAW" == "1" || "$WEB_SEARCH_RAW" == "true" ]] && WEB_SEARCH_ENABLED=1

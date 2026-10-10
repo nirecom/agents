@@ -11,6 +11,8 @@
 
 set -euo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/sweep-write-mode.sh
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
@@ -159,8 +161,6 @@ done
 
 # ─── Required environment ───────────────────────────────────────────────────
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
-
 # Sanity check: git in path
 if ! command -v git >/dev/null 2>&1; then
   printf 'ERROR: git not found in PATH\n' >&2
@@ -168,13 +168,18 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 # Non-GitHub guard: skip gracefully on non-GitHub remotes.
-if ! "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote" >/dev/null 2>&1; then
+if ! "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" >/dev/null 2>&1; then
   printf 'INFO: not a GitHub.com remote; sweep-branches skipped\n'
   exit 0
 fi
 
-# Resolve main worktree root.
-if ! MAIN_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+# Resolve main worktree root: the parent of the shared .git, whichever checkout the cwd is in.
+TARGET_MAIN_ROOT="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || TARGET_MAIN_ROOT=""
+case "$TARGET_MAIN_ROOT" in
+  */.git) TARGET_MAIN_ROOT="${TARGET_MAIN_ROOT%/.git}" ;;
+  *) TARGET_MAIN_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || TARGET_MAIN_ROOT="" ;;
+esac
+if [[ -z "$TARGET_MAIN_ROOT" ]]; then
   printf 'ERROR: not inside a git repository\n' >&2
   exit 1
 fi
@@ -257,7 +262,7 @@ while IFS= read -r branch; do
       printf 'WARN: PR state unknown for %s; skipping (no deletion)\n' "$branch" >&2
       ;;
   esac
-done < <(git -C "$MAIN_ROOT" branch --format='%(refname:short)' 2>/dev/null)
+done < <(git -C "$TARGET_MAIN_ROOT" branch --format='%(refname:short)' 2>/dev/null)
 
 # Remote branches (no age gate — document: remote branches are only PR-merged checked)
 while IFS= read -r branch; do

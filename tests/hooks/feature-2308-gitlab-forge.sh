@@ -18,8 +18,8 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_FEAT2308_FORGE_INNER:-}" ]; th
 fi
 
 SPLIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2308-gitlab-forge"
-AGENTS_DIR_DISPATCH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR_DISPATCH/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT_DISPATCH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT_DISPATCH/tests/lib/harness.sh"
 
 SPLIT_GROUPS=(
     "gitlab-forge-abc.sh"
@@ -60,7 +60,7 @@ for group in "${SPLIT_GROUPS[@]}"; do
 done
 
 # C4-env (C4): readGitlabHostConfig() reading GITLAB_HOSTNAME from a real .env
-# FILE via AGENTS_CONFIG_DIR — the SSOT path gitlab-forge-abc.sh's C4/C4b never
+# FILE via AGENTS_MAIN_ROOT — the SSOT path gitlab-forge-abc.sh's C4/C4b never
 # hit (they export process.env instead). detect-forge-type must classify a
 # gitlab.mycompany.com origin as gitlab when ONLY a .env declares the host
 # (env var unset); the control (.env omits the key) falls back to unknown for
@@ -74,8 +74,8 @@ c4_fail() { echo "FAIL: $1"; C4_FAIL=$((C4_FAIL + 1)); }
 c4_np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 c4_rt() { if command -v timeout >/dev/null 2>&1; then timeout "$1" "${@:2}"; else "${@:2}"; fi; }
 
-C4_AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-C4_DETECT_CLI="$C4_AGENTS_DIR/bin/detect-forge-type"
+C4_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+C4_DETECT_CLI="$C4_SCRIPT_CHECKOUT_ROOT/bin/detect-forge-type"
 C4_TMP="$(mktemp -d)"
 C4_CFG="$C4_TMP/cfg"; mkdir -p "$C4_CFG"
 printf 'GITLAB_HOSTNAME=gitlab.mycompany.com\n' > "$C4_CFG/.env"
@@ -93,7 +93,7 @@ git -C "$C4_REPO" remote add origin "git@gitlab.mycompany.com:team/app.git"
 c4_type() {
     local cfg="$1" out
     if [ ! -f "$C4_DETECT_CLI" ]; then printf 'ERR:no-cli'; return 0; fi
-    out=$(cd "$C4_REPO" && unset GITLAB_HOSTNAME && export AGENTS_CONFIG_DIR="$cfg" && c4_rt 20 node "$C4_DETECT_CLI" 2>/dev/null)
+    out=$(cd "$C4_REPO" && unset GITLAB_HOSTNAME && export AGENTS_MAIN_ROOT="$cfg" && c4_rt 20 node "$C4_DETECT_CLI" 2>/dev/null)
     printf '%s' "$out" | c4_rt 20 node -e '
 let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
   try { process.stdout.write(String(JSON.parse(s).type)); } catch(e){ process.stdout.write("ERR:unparsable"); }

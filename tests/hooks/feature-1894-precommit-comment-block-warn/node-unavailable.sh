@@ -160,7 +160,7 @@ n4_cli_skips_at_rc_zero_without_node() {
     local out rc=0
     out="$( (cd "$repo" \
         && run_with_timeout 60 env "${CB_ENV_RESET[@]}" \
-            "PATH=$NO_NODE_PATH" "AGENTS_CONFIG_DIR=$repo" \
+            "PATH=$NO_NODE_PATH" "AGENTS_MAIN_ROOT=$repo" \
             bash "$LOCAL_SCANNER" --staged) 2>&1 )" || rc=$?
     assert_eq "N4/rc-is-0-not-3" "0" "$rc"
     assert_contains "N4/skipped-header" "SKIPPED" "$out"

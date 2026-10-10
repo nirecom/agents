@@ -146,7 +146,7 @@ run_R8_operand_unit() {
         return
     fi
     local out
-    out="$("$RWT" 20 node "$(node_path "$probe")" "$_AGENTS_DIR_NODE" 2>/dev/null)"
+    out="$("$RWT" 20 node "$(node_path "$probe")" "$_SCRIPT_CHECKOUT_ROOT_NODE" 2>/dev/null)"
     if [ -z "$out" ]; then
         fail "R8-U probe produced no output (bash-scan.js / interpreter-scan.js not loadable)"
         return

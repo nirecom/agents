@@ -11,13 +11,14 @@ const { hasStagedChanges } = require("./staged-evidence");
 const { parseGitCArg, parseCdCommand } = require("../lib/parse-git-args");
 const { getGitCommonDir } = require("../lib/git-common-dir");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
+
 // Read additionalDirectories from the assembled ~/.claude/settings.json, falling back
 // to agents/settings.json so the hook works before the first install run.
 function findAdditionalDirectories() {
   try {
-    const agentsRoot = path.resolve(__dirname, "..", "..");
     const claudePath = path.join(os.homedir(), ".claude", "settings.json");
-    const agentsPath = path.join(agentsRoot, "settings.json");
+    const agentsPath = path.join(SCRIPT_CHECKOUT_ROOT, "settings.json");
     const settingsPath = fs.existsSync(claudePath) ? claudePath : agentsPath;
     const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
     const dirs = (settings.permissions || settings).additionalDirectories || [];
@@ -26,7 +27,7 @@ function findAdditionalDirectories() {
     // Tier 4 to return the worktree (with staged WIP) instead of the test's temp
     // repo. Linked worktrees are already handled by Tier 3 (payload-cwd gate).
     return dirs
-      .map((d) => path.isAbsolute(d) ? d : path.resolve(agentsRoot, d))
+      .map((d) => path.isAbsolute(d) ? d : path.resolve(SCRIPT_CHECKOUT_ROOT, d))
       .filter((d) => !isLinkedWorktree(d));
   } catch (e) {
     return [];
@@ -76,9 +77,8 @@ function resolveRepoDir(command, input) {
 function isAgentsSessionRepo(repoDir) {
   if (!repoDir) return true;
   try {
-    const agentsRoot = process.env.AGENTS_CONFIG_DIR || path.resolve(__dirname, "..", "..");
     const targetCommonDir = getGitCommonDir(repoDir);
-    const agentsCommonDir = getGitCommonDir(agentsRoot);
+    const agentsCommonDir = getGitCommonDir(SCRIPT_CHECKOUT_ROOT);
     if (!targetCommonDir || !agentsCommonDir) return true;
     const norm = (p) => p.replace(/\\/g, "/").toLowerCase();
     return norm(targetCommonDir) === norm(agentsCommonDir);

@@ -12,7 +12,7 @@
 D2099P_PRODUCERS="clarify-intent|CI-C1b|outline
 workflow-init|A3a|outline"
 
-d2099p_skill_file() { echo "$AGENTS_DIR/skills/$1/SKILL.md"; }
+d2099p_skill_file() { echo "$SCRIPT_CHECKOUT_ROOT/skills/$1/SKILL.md"; }
 
 # The write point's own line, bounded to the CI-C1b / A3a section it must live in.
 # A whole-file grep would take the first `record-complexity-and-skip` mention
@@ -38,7 +38,7 @@ d2099p_extract_assignment() {
 d2099p_extract_cmd() {
     local f="$1" line
     line=$(d2099p_section_line "$f" \
-        | grep -oE 'bash "\$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip"[^`]*' | head -1)
+        | grep -oE 'bash "\$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip"[^`]*' | head -1)
     [ -n "$line" ] || { echo ""; return; }
     line="${line%% | tail*}"
     line="${line%)}"
@@ -111,7 +111,7 @@ d2099p_run_producer() {
     # does not fill would be read by the shell as a redirect and drop stray files
     # in $PWD (rules/test/fixture-isolation.md).
     mkdir -p "$TMPDIR_BASE/producer-cwd"
-    (cd "$TMPDIR_BASE/producer-cwd" && AGENTS_CONFIG_DIR="$AGENTS_DIR" SESSION_ID="$sid" \
+    (cd "$TMPDIR_BASE/producer-cwd" && SESSION_ID="$sid" \
         run_with_timeout bash -c "$cmd"'
 printf "%s" "$SKIP_DISPATCH"' 2>/dev/null)
 }
@@ -128,7 +128,7 @@ d2099p_run_dispatch_branch() {
     d2099p_write_signals_file "$sid" "$signals"
     cmd=$(d2099p_fill_cmd "$cmd" "$c1" "$c2")
     mkdir -p "$TMPDIR_BASE/producer-cwd"
-    (cd "$TMPDIR_BASE/producer-cwd" && AGENTS_CONFIG_DIR="$AGENTS_DIR" SESSION_ID="$sid" \
+    (cd "$TMPDIR_BASE/producer-cwd" && SESSION_ID="$sid" \
         run_with_timeout bash -c "$cmd"'
 case "$SKIP_DISPATCH" in
   no-skip)        printf "branch:no-skip" ;;
@@ -355,7 +355,7 @@ d2099p_run_injection() {
     cmd=$(d2099p_fill_cmd "$cmd" true true)
     dir="$TMPDIR_BASE/producer-injection-cwd"
     mkdir -p "$dir"
-    (cd "$dir" && AGENTS_CONFIG_DIR="$AGENTS_DIR" SESSION_ID="$sid" \
+    (cd "$dir" && SESSION_ID="$sid" \
         run_with_timeout bash -c "$cmd"'
 printf "%s" "$SKIP_DISPATCH"' 2>&1)
 }
@@ -433,7 +433,7 @@ d2099p_signals_flag_arity() {
 
     sid=$(new_session "prodarity-both-w")
     rc=0
-    out=$(AGENTS_CONFIG_DIR="$AGENTS_DIR" run_with_timeout bash "$BIN_RECORD_SKIP" \
+    out=$(run_with_timeout bash "$BIN_RECORD_SKIP" \
         --session "$sid" --signals "S1-multi-file" --signals-file "$f" --target outline 2>&1) || rc=$?
     assert_eq "PO-INJ-4 the wrapper rejects --signals and --signals-file together (exit 2)" "2" "$rc"
     assert_contains "PO-INJ-4a ... with the documented mutual-exclusion message" \
@@ -449,7 +449,7 @@ d2099p_signals_flag_arity() {
 
     sid=$(new_session "prodarity-none-w")
     rc=0
-    out=$(AGENTS_CONFIG_DIR="$AGENTS_DIR" run_with_timeout bash "$BIN_RECORD_SKIP" \
+    out=$(run_with_timeout bash "$BIN_RECORD_SKIP" \
         --session "$sid" --target outline 2>&1) || rc=$?
     assert_eq "PO-INJ-5 the wrapper rejects neither flag being passed (exit 2)" "2" "$rc"
     assert_contains "PO-INJ-5a ... with the documented required-flag message" \

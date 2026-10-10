@@ -13,7 +13,7 @@ process.exitCode = 70;
 AGENTS_NODE_GUARD
 # Usage:
 #   confirm-off <KEY> [<default>]
-#       Resolves <KEY> via $AGENTS_CONFIG_DIR/bin/get-config-var --is-off
+#       Resolves <KEY> via this checkout's bin/get-config-var --is-off
 #       and prints exactly one of:
 #         OFF   — KEY is explicitly off
 #         ON    — KEY is explicitly on, unset (no default), or holds an
@@ -23,7 +23,7 @@ AGENTS_NODE_GUARD
 #       Exit: 0 (OFF) | 1 (ON) | 2 (ERROR) | 64 (usage).
 #
 #   Canonical caller idiom (absolute path — resolves #677 WSL/PATH issue):
-#     OUT=$(bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_X on) || true
+#     OUT=$(bash "<agents-root>/bin/confirm-off" CONFIRM_X on) || true
 #     case "$OUT" in
 #       OFF)   ... ;;
 #       ON)    ... ;;
@@ -33,6 +33,8 @@ AGENTS_NODE_GUARD
 
 set -u
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 CO_KEY="${1:-}"
 CO_DEFAULT="${2:-}"
 
@@ -41,13 +43,7 @@ if [ -z "$CO_KEY" ]; then
   exit 64
 fi
 
-if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
-  printf 'ERROR\n'
-  printf 'confirm-off: AGENTS_CONFIG_DIR not set\n' >&2
-  exit 2
-fi
-
-GETCV="$AGENTS_CONFIG_DIR/bin/get-config-var"
+GETCV="$SCRIPT_CHECKOUT_ROOT/bin/get-config-var"
 if [ ! -f "$GETCV" ]; then
   printf 'ERROR\n'
   printf 'confirm-off: get-config-var not found at %s\n' "$GETCV" >&2

@@ -16,9 +16,9 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IC_SKILL_MD="$AGENTS_DIR/skills/issue-create/SKILL.md"
-SH_SKILL_MD="$AGENTS_DIR/skills/survey-history/SKILL.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+IC_SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/issue-create/SKILL.md"
+SH_SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/survey-history/SKILL.md"
 
 PASS=0
 FAIL=0

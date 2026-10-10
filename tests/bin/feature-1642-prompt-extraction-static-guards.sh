@@ -12,13 +12,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ALLOWLIST_REL=".prompt-extraction-allowlist"
-ALLOWLIST="$AGENTS_DIR/$ALLOWLIST_REL"
-CLI="$AGENTS_DIR/bin/check-prompt-extraction"
-MERGE_BASE_HELPER="$AGENTS_DIR/bin/resolve-merge-base.sh"
-PATH_COMMANDS="$AGENTS_DIR/install/path-exposed-commands.txt"
-BYPASS_DOC="$AGENTS_DIR/docs/architecture/claude-code/marker-bypass-contract.md"
+ALLOWLIST="$SCRIPT_CHECKOUT_ROOT/$ALLOWLIST_REL"
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/check-prompt-extraction"
+MERGE_BASE_HELPER="$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh"
+PATH_COMMANDS="$SCRIPT_CHECKOUT_ROOT/install/path-exposed-commands.txt"
+BYPASS_DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/marker-bypass-contract.md"
 
 PASS=0
 FAIL=0
@@ -72,11 +72,11 @@ allowlist_field() {
 
 resolve_merge_base() {
     if [ -x "$MERGE_BASE_HELPER" ]; then
-        bash "$MERGE_BASE_HELPER" -C "$AGENTS_DIR" --format base --no-fetch 2>/dev/null | head -n1
+        bash "$MERGE_BASE_HELPER" -C "$SCRIPT_CHECKOUT_ROOT" --format base --no-fetch 2>/dev/null | head -n1
         return 0
     fi
-    git -C "$AGENTS_DIR" merge-base HEAD origin/main 2>/dev/null \
-        || git -C "$AGENTS_DIR" merge-base HEAD main 2>/dev/null \
+    git -C "$SCRIPT_CHECKOUT_ROOT" merge-base HEAD origin/main 2>/dev/null \
+        || git -C "$SCRIPT_CHECKOUT_ROOT" merge-base HEAD main 2>/dev/null \
         || true
 }
 
@@ -85,7 +85,7 @@ resolve_merge_base() {
 allowlist_at_base() {
     local base="$1"
     [ -n "$base" ] || return 1
-    git -C "$AGENTS_DIR" show "$base:$ALLOWLIST_REL" 2>/dev/null
+    git -C "$SCRIPT_CHECKOUT_ROOT" show "$base:$ALLOWLIST_REL" 2>/dev/null
 }
 
 # ============================================================================
@@ -202,7 +202,7 @@ t05_cli_mode_100755() {
         return
     fi
     local entry mode
-    entry="$(git -C "$AGENTS_DIR" ls-files -s bin/check-prompt-extraction 2>/dev/null)"
+    entry="$(git -C "$SCRIPT_CHECKOUT_ROOT" ls-files -s bin/check-prompt-extraction 2>/dev/null)"
     if [ -z "$entry" ]; then
         fail "T05: bin/check-prompt-extraction is not tracked by git" \
              "Run: git add bin/check-prompt-extraction && git update-index --chmod=+x bin/check-prompt-extraction"

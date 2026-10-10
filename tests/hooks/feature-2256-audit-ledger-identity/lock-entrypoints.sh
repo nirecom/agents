@@ -7,15 +7,15 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    AGENTS_NODE="$(cygpath -m "$AGENTS_DIR")"
+    AGENTS_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    AGENTS_NODE="$AGENTS_DIR"
+    AGENTS_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 WRITER_NODE="$AGENTS_NODE/hooks/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$AGENTS_NODE/hooks/lib/supervisor-state-schema.js"
-SW_DIR="$AGENTS_DIR/hooks/lib/supervisor-state-writer"
+SW_DIR="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer"
 # Windows-native node resolves an msys "/c/..." path against the drive root, so
 # every path handed to node (as opposed to msys grep) must use the cygpath -m form.
 SW_NODE="$AGENTS_NODE/hooks/lib/supervisor-state-writer"
@@ -39,11 +39,10 @@ mkdir -p "$WORK/plans" "$WORK/wf" "$WORK/transcripts"
 export WORKFLOW_PLANS_DIR="$WORK_NODE/plans"
 export WORKFLOW_STATE_DIR="$WORK_NODE/wf"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$WORK_NODE/transcripts"
-export AGENTS_CONFIG_DIR="$AGENTS_NODE"
 unset CLAUDE_CODE_SESSION_ID
 cd "$WORK" || exit 1
 
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 drive() {
     local name="$1" body="$2"
     local js="$WORK/drv-$name.js"

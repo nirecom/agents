@@ -11,9 +11,9 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HARNESS="$AGENTS_DIR/tests/lib/harness.sh"
-CHECKER="$AGENTS_DIR/bin/check-test-frontmatter.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HARNESS="$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+CHECKER="$SCRIPT_CHECKOUT_ROOT/bin/check-test-frontmatter.sh"
 
 # Fail-before-fix: harness.sh is created by write-code; fail explicitly until then.
 if [ ! -f "$HARNESS" ]; then
@@ -38,7 +38,7 @@ t_eq()   { # $1=label $2=actual $3=expected
 # own MISSING_HARNESS_SOURCE pattern; $HARNESS (variable form) is reserved for the
 # A2 re-source case, which the checker never inspects.
 # shellcheck source=/dev/null
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
@@ -82,7 +82,10 @@ group_a_np_function() {
     filtered_path="${filtered_path:+$filtered_path:}$np_dir"
   done <<< "$(printf '%s\n' "$PATH" | tr ':' '\n')"
   [ -z "$filtered_path" ] && filtered_path="/usr/bin:/bin"
-  out="$(PATH="$filtered_path" "$bash_bin" -euo pipefail -c "source '$HARNESS'; np '/a/b/c'" 2>/dev/null || true)"
+  # The filter drops coreutils along with cygpath where they share a directory, so the one
+  # external the harness needs while being sourced (dirname) is supplied as a function.
+  local dirname_fn='dirname() { case "$1" in */*) printf "%s\n" "${1%/*}" ;; *) printf ".\n" ;; esac; }'
+  out="$(PATH="$filtered_path" "$bash_bin" -euo pipefail -c "$dirname_fn; source '$HARNESS'; np '/a/b/c'" 2>/dev/null || true)"
   if [ -n "$out" ]; then
     t_eq "A1b np() passthrough (no cygpath) returns input unchanged" "$out" "/a/b/c"
   else
@@ -90,10 +93,21 @@ group_a_np_function() {
   fi
 
   # cygpath branch: inject a stub that echoes "WIN:<path>" for `cygpath -m <path>`.
-  # np() calls `cygpath -m "$1"`, so stub receives args: -m  <path>.
+  # np() calls `cygpath -m "$1"`, so stub receives args: -m  <path>. Every other path (the
+  # harness converts its own while being sourced) goes to the real cygpath, or passes through.
+  local real_cygpath
+  real_cygpath="$(command -v cygpath 2>/dev/null || true)"
   tmpdir="$(make_tmp)"
   stub="$tmpdir/cygpath"
-  printf '#!/usr/bin/env bash\nprintf "WIN:%%s\\n" "$2"\n' >"$stub"
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf 'if [ "$1" = "-m" ] && [ "$2" = "/a/b/c" ]; then printf "WIN:%%s\\n" "$2"; exit 0; fi\n'
+    if [ -n "$real_cygpath" ]; then
+      printf 'exec "%s" "$@"\n' "$real_cygpath"
+    else
+      printf 'printf "%%s\\n" "$2"\n'
+    fi
+  } >"$stub"
   chmod +x "$stub"
   out="$(PATH="$tmpdir:$PATH" bash -euo pipefail -c "source '$HARNESS'; np '/a/b/c'" 2>/dev/null || true)"
   t_eq "A1b np() cygpath branch uses cygpath -m (stub echo)" "$out" "WIN:/a/b/c"
@@ -260,20 +274,21 @@ group_a_harness_isolate() {
     *)
       t_bad "A4 harness_git_init sets core.hooksPath=/dev/null (got='$hooks_path')" ;;
   esac
-  # C4: AGENTS_DIR resolves to the parent of tests/ (the repo root the harness
+  # C4: SCRIPT_CHECKOUT_ROOT resolves to the parent of tests/ (the repo root the harness
   # is sourced from), so fixtures and helpers resolve repo-relative paths.
   local expected_agents_dir
   expected_agents_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-  t_eq "A4 AGENTS_DIR resolves to parent of tests/" "$AGENTS_DIR" "$expected_agents_dir"
-  # C2: AGENTS_DIR auto-resolves in a fresh shell where it was not pre-set.
-  # harness.sh must derive it from BASH_SOURCE relative to tests/lib/harness.sh.
+  t_eq "A4 SCRIPT_CHECKOUT_ROOT resolves to parent of tests/" "$SCRIPT_CHECKOUT_ROOT" "$expected_agents_dir"
+  # C2: in a fresh shell the harness derives its OWN root from BASH_SOURCE relative to
+  # tests/lib/harness.sh under its prefixed name, and leaves the caller's name unset — the
+  # sourcing test assigns that one itself.
   local resolved
   resolved="$(bash -euo pipefail -c "
-    unset AGENTS_DIR
+    unset SCRIPT_CHECKOUT_ROOT
     source '$HARNESS'
-    echo \"\$AGENTS_DIR\"
+    echo \"caller:\${SCRIPT_CHECKOUT_ROOT+set}|own:\$_HARNESS_SCRIPT_CHECKOUT_ROOT\"
   " 2>/dev/null || true)"
-  t_eq "A4 AGENTS_DIR auto-resolves when not pre-set" "$resolved" "$expected_agents_dir"
+  t_eq "A4 harness resolves its own root and leaves the caller's SCRIPT_CHECKOUT_ROOT unset" "$resolved" "caller:|own:$expected_agents_dir"
 }
 
 # A-rwt: run_with_timeout wrapper forwards exit status of the wrapped command.
@@ -414,7 +429,7 @@ run_checker() { # $1=repo dir
   CK_OUT="$(
     cd "$1" || exit 99
     harness_isolate >/dev/null 2>&1 || true
-    bash "$AGENTS_DIR/bin/run-with-timeout.sh" 30 bash "$CHECKER" --staged "${staged_args[@]}" 2>&1
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 bash "$CHECKER" --staged "${staged_args[@]}" 2>&1
   )" || CK_RC=$?
 }
 
@@ -575,11 +590,11 @@ group_b_variable_source() {
 
 # B-prefix: a path-suffix form (…/tests/lib/harness.sh) matches the checker
 # pattern via its optional leading segment → passes. The ref line carries the
-# real expanded AGENTS_DIR path, double-quoted, so the suffix is literal.
+# real expanded SCRIPT_CHECKOUT_ROOT path, double-quoted, so the suffix is literal.
 group_b_path_prefix_source() {
   local repo
   repo="$(setup_repo)"
-  make_fixture "$repo/tests/bin/foo.sh" "source \"$AGENTS_DIR/tests/lib/harness.sh\""
+  make_fixture "$repo/tests/bin/foo.sh" "source \"$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh\""
   git -C "$repo" add tests/bin/foo.sh >/dev/null 2>&1 || true
   expect_pass "B path-prefix source (…/tests/lib/harness.sh) → passes" "$repo"
 }
@@ -612,7 +627,7 @@ group_b_all_mode_legacy() {
   ck_out="$(
     cd "$repo" || exit 99
     harness_isolate >/dev/null 2>&1 || true
-    bash "$AGENTS_DIR/bin/run-with-timeout.sh" 30 bash "$CHECKER" --all 2>&1
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 bash "$CHECKER" --all 2>&1
   )" || rc=$?
   if [ "$rc" -eq 0 ]; then
     t_ok "B-all-legacy --all passes existing file lacking harness source (gradual-migration tradeoff)"

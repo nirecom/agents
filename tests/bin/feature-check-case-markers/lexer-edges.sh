@@ -2,7 +2,7 @@
 # comments, heredoc delimiters, and openers closed by an inner group.
 # Sourced by tests/bin/feature-check-case-markers.sh; shares chk/expect_* and $TMP.
 # shellcheck source=tests/lib/harness.sh
-source "$AGENTS_DIR/tests/lib/harness.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 case_begin "one-line-function-before-marker" "bin/check-case-markers.sh"
 # A function opened and closed on one line leaves depth at 0.

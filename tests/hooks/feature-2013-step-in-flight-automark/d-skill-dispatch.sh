@@ -175,8 +175,8 @@ EOF
 #      RUN_TL3 host is needed; the TL3 file proves the host sends that shape.
 run_B20() {
     local settings guard problems=""
-    settings="$AGENTS_DIR/settings.json"
-    guard="$AGENTS_DIR/hooks/stop-confirm-plan-guard.js"
+    settings="$SCRIPT_CHECKOUT_ROOT/settings.json"
+    guard="$SCRIPT_CHECKOUT_ROOT/hooks/stop-confirm-plan-guard.js"
     if [ ! -f "$settings" ]; then
         fail "B20: settings.json not found at $settings"
         return

@@ -86,8 +86,8 @@ fi
 
 # Check (e): PLAN_LANG=english warning (non-fatal)
 PLAN_LANG_VAL="${PLAN_LANG:-}"
-if [[ -z "$PLAN_LANG_VAL" ]] && [[ -n "${AGENTS_CONFIG_DIR:-}" ]] && [[ -r "$AGENTS_CONFIG_DIR/.env" ]]; then
-    PLAN_LANG_VAL=$(grep -E '^[[:space:]]*PLAN_LANG[[:space:]]*=' "$AGENTS_CONFIG_DIR/.env" 2>/dev/null \
+if [[ -z "$PLAN_LANG_VAL" ]] && [[ -n "${AGENTS_MAIN_ROOT:-}" ]] && [[ -r "$AGENTS_MAIN_ROOT/.env" ]]; then
+    PLAN_LANG_VAL=$(grep -E '^[[:space:]]*PLAN_LANG[[:space:]]*=' "$AGENTS_MAIN_ROOT/.env" 2>/dev/null \
         | tail -n 1 | sed -E 's/^[[:space:]]*PLAN_LANG[[:space:]]*=[[:space:]]*//; s/^["'\'']//; s/["'\'']$//' || true)
 fi
 if [[ "$(printf '%s' "$PLAN_LANG_VAL" | tr '[:upper:]' '[:lower:]')" == "english" ]]; then

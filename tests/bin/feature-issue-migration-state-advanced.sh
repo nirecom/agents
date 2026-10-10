@@ -13,8 +13,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-STATE_SH="$AGENTS_DIR/bin/github-issues/migration/state.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+STATE_SH="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/state.sh"
 
 PASS=0
 FAIL=0

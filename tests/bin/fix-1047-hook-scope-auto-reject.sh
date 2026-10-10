@@ -17,8 +17,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-VALIDATOR="$AGENTS_DIR/bin/validate-hook-scope-concern"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+VALIDATOR="$SCRIPT_CHECKOUT_ROOT/bin/validate-hook-scope-concern"
 
 PASS=0
 FAIL=0

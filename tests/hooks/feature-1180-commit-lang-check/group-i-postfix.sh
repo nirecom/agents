@@ -24,7 +24,7 @@
 _i8_repo="$(make_git_repo i8)"
 printf 'const msg = "日本語テスト";\n' > "$_i8_repo/my file.js"
 git -C "$_i8_repo" add "$_i8_repo/my file.js"
-_i8_out="$(run_precommit "$_i8_repo" "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
+_i8_out="$(run_precommit "$_i8_repo" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
 PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 # The violation path may be quoted by git on some platforms (e.g. "my file.js")
 # so we match loosely for the filename fragment.
@@ -60,7 +60,7 @@ if [ "$_i9_uname" = "Linux" ]; then
     _i9_name="$(printf 'tab\tname.js')"
     if printf 'const msg = "日本語テスト";\n' > "$_i9_repo/$_i9_name" 2>/dev/null \
         && git -C "$_i9_repo" add "$_i9_name" 2>/dev/null; then
-        _i9_out="$(run_precommit "$_i9_repo" "AGENTS_CONFIG_DIR=$AGENTS_DIR" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
+        _i9_out="$(run_precommit "$_i9_repo" "ENFORCE_WORKTREE=off" "CODE_LANG=english")"
         PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
         # Match loosely on the 'name.js' fragment; git may quote/escape the path.
         if [ "$PC_RC" -ne 0 ] && echo "$_i9_out" | grep -qF "$LANG_BLOCK_MARKER" && echo "$_i9_out" | grep -q 'name\.js'; then
@@ -76,36 +76,36 @@ else
 fi
 
 # CL-I10: CODE_LANG delivered via .env file (not direct env var)
-# The pre-commit hook sources $AGENTS_CONFIG_DIR/.env early via _load_env_file().
+# The pre-commit hook sources $AGENTS_MAIN_ROOT/.env early via _load_env_file().
 # This case verifies that the .env sourcing path works end-to-end: when CODE_LANG
 # is NOT in the environment but IS present in .env, the hook picks it up and applies
-# the policy. AGENTS_CONFIG_DIR points to a temp dir containing both .env and the
-# hook modules (node require() resolves them from AGENTS_CONFIG_DIR/hooks/lib/).
+# the policy. AGENTS_MAIN_ROOT points to a temp dir containing both .env and the
+# hook modules (node require() resolves them from AGENTS_MAIN_ROOT/hooks/lib/).
 _i10_cfg="$TMPDIR_BASE/cfg-i10"
 mkdir -p "$_i10_cfg/hooks/lib"
 # Write stub .env — CODE_LANG=english only (no other vars needed)
 printf 'CODE_LANG=english\n' > "$_i10_cfg/.env"
 # Copy all required hook modules (node resolves relative requires from the file location)
-cp "$AGENTS_DIR/hooks/lib/lint-commit-lang.js" "$_i10_cfg/hooks/lib/"
-cp "$AGENTS_DIR/hooks/lib/detect-cjk.js"       "$_i10_cfg/hooks/lib/"
-cp "$AGENTS_DIR/hooks/lib/lang-config.js"       "$_i10_cfg/hooks/lib/"
-cp "$AGENTS_DIR/hooks/lib/lint-plan-lang.js"    "$_i10_cfg/hooks/lib/"
-cp "$AGENTS_DIR/hooks/lib/load-env.js"          "$_i10_cfg/hooks/lib/"
-# load-env.js -> agents-config-dir.js -> path-normalize.js (transitive requires)
-cp "$AGENTS_DIR/hooks/lib/agents-config-dir.js" "$_i10_cfg/hooks/lib/"
-cp "$AGENTS_DIR/hooks/lib/path-normalize.js"    "$_i10_cfg/hooks/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/lint-commit-lang.js" "$_i10_cfg/hooks/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/detect-cjk.js"       "$_i10_cfg/hooks/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/lang-config.js"       "$_i10_cfg/hooks/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/lint-plan-lang.js"    "$_i10_cfg/hooks/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.js"          "$_i10_cfg/hooks/lib/"
+# load-env.js -> script-checkout-root.js -> path-normalize.js (transitive requires)
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/script-checkout-root.js" "$_i10_cfg/hooks/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/path-normalize.js"    "$_i10_cfg/hooks/lib/"
 # CODE_LANG_EXCLUDE exclude gate (lazily required) -> path-coverage-match.js / glob-match.js
-cp "$AGENTS_DIR/hooks/lib/path-coverage-match.js" "$_i10_cfg/hooks/lib/"
-cp "$AGENTS_DIR/hooks/lib/glob-match.js"          "$_i10_cfg/hooks/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/path-coverage-match.js" "$_i10_cfg/hooks/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/glob-match.js"          "$_i10_cfg/hooks/lib/"
 
 # Create a temp repo with a staged file containing CJK content
 _i10_repo="$(make_git_repo i10)"
 printf 'const msg = "日本語テスト";\n' > "$_i10_repo/test.js"
 git -C "$_i10_repo" add test.js
 
-# Run pre-commit: AGENTS_CONFIG_DIR points to our temp cfg (has .env + modules),
+# Run pre-commit: AGENTS_MAIN_ROOT points to our temp cfg (has .env + modules),
 # NO CODE_LANG env var — the hook must pick it up from .env
-_i10_out="$(run_precommit "$_i10_repo" "AGENTS_CONFIG_DIR=$_i10_cfg" "ENFORCE_WORKTREE=off")"
+_i10_out="$(run_precommit "$_i10_repo" "AGENTS_MAIN_ROOT=$_i10_cfg" "ENFORCE_WORKTREE=off")"
 PC_RC="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
 
 if [ "$PC_RC" -ne 0 ] && echo "$_i10_out" | grep -qF "$LANG_BLOCK_MARKER"; then

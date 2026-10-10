@@ -61,7 +61,7 @@ A fail-open facade over `appendFinding()` with typed emitters:
 Skills and agents submit findings via CLI (`--session-id` auto-resolves when omitted):
 
 ```
-node "$AGENTS_CONFIG_DIR/bin/supervisor-report" \
+node "$AGENTS_MAIN_ROOT/bin/supervisor-report" \
   --categories <cat1,cat2> --severity <error|warning|notice> \
   --detail "<description>" --reporter "<skill-name>"
 ```

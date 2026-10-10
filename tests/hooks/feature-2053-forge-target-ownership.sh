@@ -14,12 +14,12 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # harness_assert_isolated for the case files; this file's pass/fail below override harness's.
-. "$AGENTS_DIR/tests/lib/harness.sh"
-PARTS_DIR="$AGENTS_DIR/tests/hooks/feature-2053-forge-target-ownership"
-HOOK="$AGENTS_DIR/hooks/confirm-forge-target-ownership.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+PARTS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2053-forge-target-ownership"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/confirm-forge-target-ownership.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

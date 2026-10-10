@@ -22,8 +22,8 @@ set -u
 # scope here. Closest-to-action mitigation: the seam-level write-visibility
 # consequence is covered by tests/feature-2120-...-heredoc.sh Section M7.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then AN="$(cygpath -m "$AGENTS_DIR")"; else AN="$AGENTS_DIR"; fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then AN="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else AN="$SCRIPT_CHECKOUT_ROOT"; fi
 SQA="$AN/hooks/lib/strip-quoted-args.js"
 
 # isolation (#2512): pin state and plans dirs once here so every case file inherits them.

@@ -46,7 +46,7 @@ c_i6_env_u_default_path() {
 c_i7_static_only() {
   local r
   r="$(new_root i7)"
-  fx "$r/hooks/static.sh" '#!/usr/bin/env bash' 'grep -q getStateRoot "$AGENTS_DIR/hooks/lib/x.js" || exit 1'
+  fx "$r/hooks/static.sh" '#!/usr/bin/env bash' 'grep -q getStateRoot "$SCRIPT_CHECKOUT_ROOT/hooks/lib/x.js" || exit 1'
   run_cls --root "$r"
   expect "I7 rc=0 for a grep-only test" rc_is 0
   expect "I7 no violation for static.sh" no_violation_for "static.sh"
@@ -235,7 +235,7 @@ sig-script       | node "$SCRIPT"                         | violation
 sig-script-js    | node "$SCRIPT_JS" arg                  | violation
 rej-grep         | grep -q x "$HOOK"                      | none
 rej-comment      | # runs node "$HOOK" later              | none
-rej-assign       | HOOK="$AGENTS_DIR/hooks/x.js"          | none
+rej-assign       | HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/x.js"          | none
 rej-version      | node --version                         | none
 rej-other-var    | node "$FIXTURE_JS"                     | none
 TABLE
@@ -278,8 +278,8 @@ c_quoted_literal_vs_substitution() {
   fx "$r/hooks/sq-literal.sh" '#!/usr/bin/env bash' "msg='run node hooks/x.js later'"
   fx "$r/hooks/printf-fixture.sh" '#!/usr/bin/env bash' \
     "printf 'node hooks/workflow-gate.js\\n' > \"\$f\""
-  fx "$r/hooks/dq-subst.sh" '#!/usr/bin/env bash' 'out="$(bash "$AGENTS_DIR/bin/workflow-control-dir" --session s1)"'
-  fx "$r/hooks/dq-backtick.sh" '#!/usr/bin/env bash' 'out="`node "$AGENTS_DIR/hooks/x.js"`"'
+  fx "$r/hooks/dq-subst.sh" '#!/usr/bin/env bash' 'out="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir" --session s1)"'
+  fx "$r/hooks/dq-backtick.sh" '#!/usr/bin/env bash' 'out="`node "$SCRIPT_CHECKOUT_ROOT/hooks/x.js"`"'
   fx "$r/hooks/sq-in-subst.sh" '#!/usr/bin/env bash' "cmd=\"\$(printf 'bash \"%s/bin/evil.sh\"' \"\$D\")\""
   run_cls --root "$r"
   expect "quoted: an exec hint inside an echo string is not an exec" no_violation_for "hooks/echo-hint.sh"

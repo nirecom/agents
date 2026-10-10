@@ -7,9 +7,9 @@
 # Event shapes match real state-io writes (events.js, review-tests.js).
 
 set -uo pipefail
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
@@ -17,7 +17,7 @@ TMPDIR_BASE="$(make_tmp)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 harness_isolate "$TMPDIR_BASE"
 
-DELTA_JS="$(np "$AGENTS_DIR/hooks/workflow-gate/review-scope-delta.js")"
+DELTA_JS="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/review-scope-delta.js")"
 
 # Write the JS test runner to a temp file at runtime
 cat > "$TMPDIR_BASE/runner.js" << 'JSEOF'

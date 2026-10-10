@@ -11,24 +11,24 @@
 
 set -u
 # Issue #1673 — TL3, one real seam: a real `phase=initial` dispatch from the real main
-# worktree with the real ACD / main-root anchors and the real run-initial.sh child;
+# worktree with the real script-checkout / target-main anchors and the real run-initial.sh child;
 # anchor derivation and real KEY=VALUE stdout crossing the boundary run for real.
 # Safety: the issue number is deliberately unresolvable, so run-initial.sh stops at
 # pre-flight/triage; the mutating Steps 4-6 are never reached.
 # Gate: RUN_TL3=on, a real `gh` on PATH, and a resolvable main worktree; else 77.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+[ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
+"$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v gh >/dev/null 2>&1 || exit 77
 command -v git >/dev/null 2>&1 || exit 77
 
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
 [ -f "$DISPATCH_JS" ] || exit 77
 
-MAIN_ROOT="$(git -C "$AGENTS_DIR" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' | head -1)"
-[ -n "$MAIN_ROOT" ] || exit 77
-[ -d "$MAIN_ROOT" ] || exit 77
+TARGET_MAIN_ROOT="$(git -C "$SCRIPT_CHECKOUT_ROOT" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' | head -1)"
+[ -n "$TARGET_MAIN_ROOT" ] || exit 77
+[ -d "$TARGET_MAIN_ROOT" ] || exit 77
 
 PASS=0
 FAIL=0
@@ -51,7 +51,7 @@ trap 'rm -rf "$TMPD"' EXIT
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
 WF_PIN="$(nodepath "$TMPD/wf")"; mkdir -p "$TMPD/wf"   # #2558: worker logs live under the workflow dir
 PLANS="$(nodepath "$PLANS_RAW")"
-MAIN="$(nodepath "$MAIN_ROOT")"
+MAIN="$(nodepath "$TARGET_MAIN_ROOT")"
 
 SID="tl3icf"
 # Out of any plausible issue range: triage cannot resolve it, so run-initial.sh
@@ -62,7 +62,7 @@ STATE="$(nodepath "$STATE_RAW")"
 BIND_RAW="$PLANS_RAW/$SID-finalize-binding-$UNRESOLVABLE.json"
 PAYLOAD_RAW="$PLANS_RAW/$SID-worker-issue-close-finalize-1.json"
 
-printf '%s' "{\"phase\":\"initial\",\"issue_number\":$UNRESOLVABLE,\"root_issue_number\":$UNRESOLVABLE,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"main_worktree_path\":\"$MAIN\",\"session_id\":\"$SID\",\"artifact_dir\":\"$PLANS\"}" > "$PAYLOAD_RAW"
+printf '%s' "{\"phase\":\"initial\",\"issue_number\":$UNRESOLVABLE,\"root_issue_number\":$UNRESOLVABLE,\"owner_repo\":\"nirecom/agents\",\"state_file_path\":\"$STATE\",\"target_main_root\":\"$MAIN\",\"session_id\":\"$SID\",\"artifact_dir\":\"$PLANS\"}" > "$PAYLOAD_RAW"
 
 DRC=0
 DOUT="$(run_with_timeout 180 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \

@@ -39,9 +39,9 @@ d2099_dispatch_model() {
 # and MUST reference the model= line from read-complexity-evaluation.
 d2099_documented_mapping() {
     local f label has_table has_model_ref
-    for f in "$AGENTS_DIR/skills/make-detail-plan/SKILL.md" \
-             "$AGENTS_DIR/skills/write-tests/SKILL.md" \
-             "$AGENTS_DIR/skills/write-code/SKILL.md"; do
+    for f in "$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md" \
+             "$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md" \
+             "$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md"; do
         label="$(basename "$(dirname "$f")")"
         has_table=$(grep -qE '→ (opus|sonnet)' "$f" 2>/dev/null && echo yes || echo no)
         has_model_ref=$(grep -q 'model=' "$f" 2>/dev/null && echo yes || echo no)
@@ -56,9 +56,9 @@ d2099_documented_mapping() {
 # routing row implies — including the case #2099 exists for, where ONE signal set
 # lands sonnet on two stages and opus on the third.
 d2099_recorded_verdict_selects_model() {
-    local mdp="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
-    local wt="$AGENTS_DIR/skills/write-tests/SKILL.md"
-    local wcd="$AGENTS_DIR/skills/write-code/SKILL.md"
+    local mdp="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md"
+    local wt="$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md"
+    local wcd="$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md"
 
     # detail/write_tests: S1-multi-file escalates neither (D2). write_code has no
     # low-with-signals input at all — every id escalates it — so its low case is
@@ -111,9 +111,9 @@ d2099_recorded_verdict_selects_model() {
 # which is the ONLY thing that routes a consumer into its inline-evaluation
 # fallback. A CLI that guessed a level here would silently retire that branch.
 d2099_none_selects_fallback() {
-    local mdp="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
-    local wt="$AGENTS_DIR/skills/write-tests/SKILL.md"
-    local wcd="$AGENTS_DIR/skills/write-code/SKILL.md"
+    local mdp="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md"
+    local wt="$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md"
+    local wcd="$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md"
 
     local sid rc out row f stage label
     sid=$(new_session cdnone)   # created, never recorded into
@@ -155,7 +155,7 @@ d2099_none_selects_fallback() {
 # a low-level dispatch must resolve to that alias, not the hard-coded default.
 d2099_env_override_selects_model() {
     local mdp sid
-    mdp="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
+    mdp="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md"
     sid=$(new_session cdhaiku)
     run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "" >/dev/null 2>&1
     assert_eq "CD-17 PRODUCER_LOW_MODEL=haiku routes low dispatch to haiku" \
@@ -168,7 +168,7 @@ d2099_env_override_selects_model() {
 # (CD-18..21, CLI side), and MOP-2 hands that model= to outline-planner (CD-22..24).
 d2099_outline_stage_selects_model() {
     local mop sid_lo sid_hi
-    mop="$AGENTS_DIR/skills/make-outline-plan/SKILL.md"
+    mop="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/SKILL.md"
     sid_lo=$(new_session cdoutlo)
     run_with_timeout node "$BIN_RECORD" --session "$sid_lo" --signals "S1-multi-file" >/dev/null 2>&1
     assert_eq "CD-18 MOP-2's read (stage outline) answers model=haiku for a recorded low (PRODUCER_LOW_MODEL=haiku)" \

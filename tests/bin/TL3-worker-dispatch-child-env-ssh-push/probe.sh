@@ -9,7 +9,7 @@ PROBE="$TMPD/ssh-probe.js"
 cat > "$PROBE" <<'PROBEJS'
 const path = require("path");
 
-const [agentsDir, mode, mainRoot, entryName, script] = process.argv.slice(2);
+const [agentsDir, mode, targetMainRoot, entryName, script] = process.argv.slice(2);
 const spawnMod = require(path.join(agentsDir, "bin/worker-dispatch/spawn.js"));
 const anchorMod = require(path.join(agentsDir, "bin/worker-dispatch/anchor.js"));
 const registry = require(path.join(agentsDir, "hooks/lib/worker-dispatch-registry.js"));
@@ -23,10 +23,10 @@ const entryOf = (n) => {
 };
 
 if (mode === "unit") {
-  // Anchor fixture: buildEnv() consults only `acd`, and it must OVERWRITE any
-  // inherited AGENTS_CONFIG_DIR rather than copy one through.
-  const ACD = "/fixture-acd-root";
-  const anchors = { acd: ACD };
+  // Anchor fixture: buildEnv() derives the child's AGENTS_MAIN_ROOT from its own
+  // checkout, so an inherited value must never be copied through.
+  const PLANTED = "/planted-checkout";
+  const anchors = { scriptCheckoutRoot: "/fixture-script-checkout-root" };
   const FAKE = process.env.PROBE_FAKE_SECRET || "unrelated-fake";
   const SOCK = "/fixture/agent.sock";
 
@@ -91,8 +91,8 @@ if (mode === "unit") {
         const leaked = ["SSH_AUTH_SOCK", "SSH_AGENT_PID"].filter((n) => list.includes(n));
         return leaked.length === 0 ? "ok" : "got:" + leaked.join(",");
       }],
-    ["commit-push/agents-config-dir-is-forced-not-inherited",
-      () => eq(built("commit-push", { AGENTS_CONFIG_DIR: "/planted-checkout" }).AGENTS_CONFIG_DIR, ACD)],
+    ["commit-push/script-checkout-root-is-forced-not-inherited",
+      () => (built("commit-push", { AGENTS_MAIN_ROOT: PLANTED }).AGENTS_MAIN_ROOT === PLANTED ? "got:inherited" : "ok")],
     ["commit-push/buildenv-is-idempotent-and-non-mutating",
       () => {
         const before = entryOf("commit-push").envPassthrough.length;
@@ -127,7 +127,7 @@ if (mode === "unit") {
 }
 
 if (mode === "dispatch") {
-  const anchors = anchorMod.resolveAnchors(mainRoot);
+  const anchors = anchorMod.resolveAnchors(targetMainRoot);
   if (anchors.error) {
     out("dispatch_error", 1);
     out("dispatch_message", "anchors: " + anchors.error);
@@ -136,7 +136,7 @@ if (mode === "dispatch") {
   let res;
   try {
     res = spawnMod.run(entryOf(entryName), {
-      anchors, command: "bash", args: ["-c", script], cwd: mainRoot, timeoutMs: 30000,
+      anchors, command: "bash", args: ["-c", script], cwd: targetMainRoot, timeoutMs: 30000,
     });
   } catch (e) {
     out("dispatch_error", 1);
@@ -174,7 +174,7 @@ run_probe() {
         -u SSH_AUTH_SOCK -u SSH_AGENT_PID -u SOME_UNRELATED_SECRET "$@" \
         "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WFDIR" \
         "PROBE_FAKE_SECRET=$FAKE_SECRET" \
-        node "$PROBE" "$(nodepath "$AGENTS_DIR")" "$mode" "$MAIN" "$entry" "$CHILD_SCRIPT" 2>&1)" || return 1
+        node "$PROBE" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" "$mode" "$MAIN" "$entry" "$CHILD_SCRIPT" 2>&1)" || return 1
     return 0
 }
 

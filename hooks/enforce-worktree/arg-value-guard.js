@@ -90,9 +90,9 @@ function normLower(p) {
 // Separator semantics are PLATFORM-dependent, and the assumption is named here
 // rather than branched implicitly at each split (CPR-UNV). On win32 both `/` and
 // `\` delimit segments. On macOS/Linux `\` is an ordinary FILENAME character, so
-// `/trusted/acd\skills/issue-close-finalize/...` is ONE directory literally named
-// `acd\skills` — a name any writable directory can host. Treating it as a
-// boundary would make stripRelSuffix report `/trusted/acd` as the implied root
+// `/trusted/root\skills/issue-close-finalize/...` is ONE directory literally named
+// `root\skills` — a name any writable directory can host. Treating it as a
+// boundary would make stripRelSuffix report `/trusted/root` as the implied root
 // for a script that does not live under it, and the three-way cross-validation
 // would then compare a trusted anchor against an untrusted script.
 const IS_WIN32 = process.platform === "win32";

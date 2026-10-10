@@ -9,15 +9,15 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-MODULE="$AGENTS_DIR/hooks/enforce-worktree/git-repo-detection.js"
-MODULE_NODE="$_AGENTS_DIR_NODE/hooks/enforce-worktree/git-repo-detection.js"
+MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree/git-repo-detection.js"
+MODULE_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/enforce-worktree/git-repo-detection.js"
 
 PASS=0
 FAIL=0
@@ -44,7 +44,7 @@ if [ ! -f "$MODULE" ]; then
 fi
 
 # --- G1: main worktree path → true ------------------------------------------
-MAIN_REPO="$(cd "$AGENTS_DIR" && git rev-parse --git-common-dir 2>/dev/null)"
+MAIN_REPO="$(cd "$SCRIPT_CHECKOUT_ROOT" && git rev-parse --git-common-dir 2>/dev/null)"
 MAIN_TOP=""
 if [ -n "$MAIN_REPO" ]; then
     # The main worktree contains .git as a directory (not file).
@@ -77,7 +77,7 @@ console.log('OK');
 fi
 
 # --- G2: linked worktree path → false ---------------------------------------
-LINKED_TOP="$AGENTS_DIR"
+LINKED_TOP="$SCRIPT_CHECKOUT_ROOT"
 LINKED_TOP="$(cd "$LINKED_TOP" 2>/dev/null && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     LINKED_TOP_NODE="$(cygpath -m "$LINKED_TOP")"
@@ -85,8 +85,8 @@ else
     LINKED_TOP_NODE="$LINKED_TOP"
 fi
 # Verify this IS a linked worktree (else skip).
-common=$(git -C "$AGENTS_DIR" rev-parse --git-common-dir 2>/dev/null)
-gitdir=$(git -C "$AGENTS_DIR" rev-parse --git-dir 2>/dev/null)
+common=$(git -C "$SCRIPT_CHECKOUT_ROOT" rev-parse --git-common-dir 2>/dev/null)
+gitdir=$(git -C "$SCRIPT_CHECKOUT_ROOT" rev-parse --git-dir 2>/dev/null)
 if [ "$common" = "$gitdir" ]; then
     skip "G2: agents repo is not a linked worktree in this environment"
 else

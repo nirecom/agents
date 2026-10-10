@@ -10,8 +10,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$AGENTS_DIR/skills/worktree-end/scripts/capture-env.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/capture-env.sh"
 
 PASS=0
 FAIL=0
@@ -108,7 +108,7 @@ process.stdin.on("end", () => {
 });
 EPFEOF
     # REAL sibling-repos-json.js — capture-env.sh invokes it via LIB_DIR.
-    cp "$AGENTS_DIR/skills/worktree-end/scripts/sibling-repos-json.js" "$envdir/scripts/sibling-repos-json.js"
+    cp "$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/sibling-repos-json.js" "$envdir/scripts/sibling-repos-json.js"
 }
 
 # Run capture-env.sh with a mock environment
@@ -123,11 +123,11 @@ run_capture_env() {
     setup_mock_env "$envdir"
 
     local script_copy="$TMPDIR_BASE/capture-env-test.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
 
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans"
     export WORKFLOW_PLANS_DIR="$PLANS_DIR"
     export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
@@ -178,10 +178,10 @@ test_F2a_no_notes_no_arg_errors() {
     local envdir="$TMPDIR_BASE/mockenv_f2a"
     setup_mock_env "$envdir"
     local script_copy="$TMPDIR_BASE/capture-env-f2a.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans_f2a"
     mkdir -p "$PLANS_DIR" "$backup"
 
@@ -210,10 +210,10 @@ test_F2b_notes_without_session_id_errors() {
     local envdir="$TMPDIR_BASE/mockenv_f2b"
     setup_mock_env "$envdir"
     local script_copy="$TMPDIR_BASE/capture-env-f2b.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans_f2b"
     mkdir -p "$PLANS_DIR" "$backup"
 
@@ -268,10 +268,10 @@ test_F4_invalid_session_id_in_notes_rejected() {
     local envdir="$TMPDIR_BASE/mockenv_f4"
     setup_mock_env "$envdir"
     local script_copy="$TMPDIR_BASE/capture-env-f4.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans_f4"
     mkdir -p "$PLANS_DIR" "$backup"
 

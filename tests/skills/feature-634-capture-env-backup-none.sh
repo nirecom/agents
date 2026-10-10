@@ -12,8 +12,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$AGENTS_DIR/skills/worktree-end/scripts/capture-env.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT="$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/capture-env.sh"
 
 PASS=0
 FAIL=0
@@ -79,9 +79,9 @@ DREOF
     chmod +x "$envdir/scripts/detect-restart.sh"
 
     # REAL write-env-json.js — copy from source so we can assert output JSON.
-    cp "$AGENTS_DIR/skills/worktree-end/scripts/write-env-json.js" "$envdir/scripts/write-env-json.js"
+    cp "$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/write-env-json.js" "$envdir/scripts/write-env-json.js"
     # REAL sibling-repos-json.js — capture-env.sh invokes it via LIB_DIR.
-    cp "$AGENTS_DIR/skills/worktree-end/scripts/sibling-repos-json.js" "$envdir/scripts/sibling-repos-json.js"
+    cp "$SCRIPT_CHECKOUT_ROOT/skills/worktree-end/scripts/sibling-repos-json.js" "$envdir/scripts/sibling-repos-json.js"
 
     # Fake extract-pr-fields.js — parses JSON and emits key=value lines.
     cat > "$envdir/scripts/extract-pr-fields.js" << 'EPFEOF'
@@ -117,11 +117,11 @@ run_capture_env_real_dir() {
     setup_mock_env "$envdir"
 
     local script_copy="$TMPDIR_BASE/capture-env-$suffix.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
 
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans-$suffix"
     export WORKFLOW_PLANS_DIR="$PLANS_DIR"
     export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-$suffix"
@@ -147,11 +147,11 @@ run_capture_env_raw() {
     setup_mock_env "$envdir"
 
     local script_copy="$TMPDIR_BASE/capture-env-$suffix.sh"
-    sed "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$SCRIPT_CHECKOUT_ROOT\"|" \
         "$SCRIPT" > "$script_copy"
     chmod +x "$script_copy"
 
-    export AGENTS_CONFIG_DIR="$AGENTS_DIR"
     export PLANS_DIR="$TMPDIR_BASE/plans-$suffix"
     export WORKFLOW_PLANS_DIR="$PLANS_DIR"
     export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-$suffix"

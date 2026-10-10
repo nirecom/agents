@@ -2,7 +2,7 @@
 # codegraph.sh - Reconcile CodeGraph to the state CODEGRAPH asks for (install+register / unregister)
 export SYSTEM_OPS_APPROVED=1
 
-AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 if [ -z "${C_RESET+x}" ]; then
     if [ -t 1 ]; then
@@ -28,11 +28,11 @@ fi
 # CODEGRAPH is opt-in (default off): exit 1 means explicit ON; every other exit
 # (off / unset / unrecognized / internal failure) resolves to OFF.
 _cg_rc=0
-bash "$AGENTS_ROOT/bin/get-config-var" --is-off CODEGRAPH off >/dev/null 2>&1 || _cg_rc=$?
+bash "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off CODEGRAPH off >/dev/null 2>&1 || _cg_rc=$?
 
 if [ "$_cg_rc" -ne 1 ]; then
     printf "${C_GRAY}CODEGRAPH is off (default).${C_RESET}\n"
-    node "$AGENTS_ROOT/install/codegraph-mcp.js" unregister </dev/null
+    node "$SCRIPT_CHECKOUT_ROOT/install/codegraph-mcp.js" unregister </dev/null
     exit 0
 fi
 
@@ -57,5 +57,5 @@ if [ "$_cg_updated" -ne 1 ]; then
     printf "${C_YELLOW}CodeGraph could not be updated (npm missing or failed); keeping the installed version.${C_RESET}\n" >&2
 fi
 
-node "$AGENTS_ROOT/install/codegraph-mcp.js" register </dev/null
+node "$SCRIPT_CHECKOUT_ROOT/install/codegraph-mcp.js" register </dev/null
 exit 0

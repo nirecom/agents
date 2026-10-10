@@ -7,7 +7,7 @@ cat > "$_mut_early_ps" << 'EARLY_PS_EOF'
 & pwsh -NoProfile -File "$PSScriptRoot/../../install/lib/wait-cc-exit.ps1"
 if ($LASTEXITCODE -ne 0) { Write-Warning "CC running; skipping."; exit 0 }
 if ($env:DOTFILESLINK_LINKS_ONLY -eq "1") { exit 0 }
-$links = @(@{ Source = "skills/workflow-init"; Dest = "$AgentsRoot\skills\wf-init" })
+$links = @(@{ Source = "skills/workflow-init"; Dest = "$SCRIPT_CHECKOUT_ROOT\skills\wf-init" })
 foreach ($link in $links) { }
 node "$PSScriptRoot/../../install/assemble-settings.js"
 EARLY_PS_EOF
@@ -42,9 +42,9 @@ _skip_probe B5e "$_mut_noskip_ps" 0 "PS guard exit code not checked"
 # B5i: PS narrow skip (#2476 dotfileslink.ps1 shape) — assemble inside `-eq 0` → green.
 _mut_narrow_ps="$TMP_DIR/dotfileslink-narrow.ps1"
 cat > "$_mut_narrow_ps" << 'NARROW_PS_EOF'
-& pwsh -NoProfile -File (Join-Path $AgentsRoot "install\lib\wait-cc-exit.ps1")
+& pwsh -NoProfile -File (Join-Path $SCRIPT_CHECKOUT_ROOT "install\lib\wait-cc-exit.ps1")
 if ($LASTEXITCODE -eq 0) {
-    & node (Join-Path $AgentsRoot "install\assemble-settings.js")
+    & node (Join-Path $SCRIPT_CHECKOUT_ROOT "install\assemble-settings.js")
     if ($LASTEXITCODE -ne 0) { throw "assemble-settings.js failed (exit $LASTEXITCODE)" }
 } else {
     Write-Warning "Claude Code still running — skipping settings.json write."

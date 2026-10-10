@@ -12,8 +12,7 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-export AGENTS_DIR
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 _LIB_DIR="$(dirname "${BASH_SOURCE[0]}")/fix-propagate-labels-fixes"
 # shellcheck source=fix-propagate-labels-fixes/_lib.sh

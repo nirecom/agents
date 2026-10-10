@@ -21,8 +21,7 @@ export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_D
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
-AGENTS_DIR="${1:-$(cd "$(dirname "$0")/../../.." && pwd)}"
-export AGENTS_DIR
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 DRIVER="$(cd "$(dirname "$0")" && pwd)/remedy-driver.js"
 command -v node >/dev/null 2>&1 || exit 77
 
@@ -70,19 +69,19 @@ has_substr() {
     esac
 }
 
-# run_remedy <config-dir | --unset> <innerCommandText>
+# run_remedy <agents-main-root | --unset> <innerCommandText>
 run_remedy() {
     if [ "$1" = "--unset" ]; then
-        env -u AGENTS_CONFIG_DIR node "$DRIVER" "$2" 2>&1
+        env -u AGENTS_MAIN_ROOT node "$DRIVER" "$2" 2>&1
     else
-        env AGENTS_CONFIG_DIR="$1" node "$DRIVER" "$2" 2>&1
+        env AGENTS_MAIN_ROOT="$1" node "$DRIVER" "$2" 2>&1
     fi
 }
 
-CONFIG_REAL="$AGENTS_DIR"
+CONFIG_REAL="$SCRIPT_CHECKOUT_ROOT"
 
 # --- C-1: absolute-path SSOT hit with interpreter agreement (branch a) --------
-OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"')"
+OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"')"
 assert_eq "C-1a-ssot-hit-branch" "bare-only" "$(classify "$OUT")"
 assert_eq "C-1b-names-matched-entry" "yes" "$(has_substr "$OUT" "workflow-plans-dir")"
 
@@ -107,35 +106,35 @@ run_classify_table() {
 }
 run_classify_table "$CONFIG_REAL" <<'TABLE'
 C-2-basename-collision-tmp     | bash /tmp/workflow-plans-dir                                 | scratchpad-only
-C-3-dotdot-disguise            | bash "$AGENTS_CONFIG_DIR/bin/../../tmp/workflow-plans-dir"   | scratchpad-only
+C-3-dotdot-disguise            | bash "$AGENTS_MAIN_ROOT/bin/../../tmp/workflow-plans-dir"   | scratchpad-only
 C-4-relative-never-cwd-resolved | bash workflow-plans-dir                                     | scratchpad-only
-C-5-interpreter-mismatch       | node "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"             | scratchpad-only
+C-5-interpreter-mismatch       | node "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"             | scratchpad-only
 C-6a-absent-relative           | bash bin/compute-review-scope-fingerprint.js                       | scratchpad-only
-C-6b-absent-absolute           | node "$AGENTS_CONFIG_DIR/bin/compute-review-scope-fingerprint.js"  | scratchpad-only
+C-6b-absent-absolute           | node "$AGENTS_MAIN_ROOT/bin/compute-review-scope-fingerprint.js"  | scratchpad-only
 TABLE
 
 # --- C-7..C-10: degradation to generic combined guidance (branch c) ----------
-OUT="$(run_remedy --unset 'bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"')"
-assert_eq "C-7-config-dir-unset" "both" "$(classify "$OUT")"
+OUT="$(run_remedy --unset 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"')"
+assert_eq "C-7-agents-main-root-unset" "both" "$(classify "$OUT")"
 
 MISSING_CFG="$TMPDIR_C/cfg-missing"
 mkdir -p "$MISSING_CFG/install"
-OUT="$(run_remedy "$MISSING_CFG" 'bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"')"
+OUT="$(run_remedy "$MISSING_CFG" 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"')"
 assert_eq "C-8-ssot-file-missing" "both" "$(classify "$OUT")"
 
 CORRUPT_CFG="$TMPDIR_C/cfg-corrupt"
 mkdir -p "$CORRUPT_CFG/install" "$CORRUPT_CFG/bin"
 printf '\x00\x01\x02 not a path list \xfe' >"$CORRUPT_CFG/install/settings-allow-commands.txt"
-OUT="$(run_remedy "$CORRUPT_CFG" 'bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"')"
+OUT="$(run_remedy "$CORRUPT_CFG" 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"')"
 assert_eq "C-9-ssot-file-corrupt" "both" "$(classify "$OUT")"
 
 NOT_A_DIR="$TMPDIR_C/not-a-dir"
 printf 'x' >"$NOT_A_DIR"
-OUT="$(run_remedy "$NOT_A_DIR" 'bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"')"
-assert_eq "C-10-config-dir-not-a-directory" "both" "$(classify "$OUT")"
+OUT="$(run_remedy "$NOT_A_DIR" 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"')"
+assert_eq "C-10-agents-main-root-not-a-directory" "both" "$(classify "$OUT")"
 
 # --- C-11: buildRemedy never throws (fail-open to generic wording) -----------
-OUT="$(env AGENTS_CONFIG_DIR="$CONFIG_REAL" MALFORMED_HIT=1 node "$DRIVER" '' 2>&1)"
+OUT="$(env AGENTS_MAIN_ROOT="$CONFIG_REAL" MALFORMED_HIT=1 node "$DRIVER" '' 2>&1)"
 throw_token() {
     case "$1" in
         THREW:*) printf 'threw' ;;
@@ -156,7 +155,7 @@ guided_token() {
 assert_eq "C-12-unresolvable-inner" "guided" "$(guided_token "$OUT")"
 
 # --- C-13..C-15: SSOT entries are untrusted input (C7) -----------------------
-# branchA pastes the matched entry into `bash "$AGENTS_CONFIG_DIR/<entry>"`, a template
+# branchA pastes the matched entry into `bash "$AGENTS_MAIN_ROOT/<entry>"`, a template
 # only sound for plain, contained, relative entries. An absolute or traversing entry
 # makes the guidance name a DIFFERENT file than the SSOT list sanctions, so none of
 # them may reach branchA.
@@ -164,7 +163,7 @@ RECIPE='Reissue it as a single bare command:'
 
 # A POSIX-style absolute entry ("/tmp/evil") is spelled entirely from the ENTRY_RE
 # charset, so the whole list survives the gate and the entry is dropped INDIVIDUALLY by
-# isContainedEntry (path.resolve puts it outside configDir on POSIX and Windows alike).
+# isContainedEntry (path.resolve puts it outside agentsMainRoot on POSIX and Windows alike).
 # No entry matches, so the remedy falls to branch b.
 ABS_CFG="$TMPDIR_C/cfg-abs-entry"
 mkdir -p "$ABS_CFG/install" "$ABS_CFG/bin"
@@ -176,7 +175,7 @@ assert_eq "C-13b-absolute-entry-falls-back" "scratchpad-only" "$(classify "$OUT"
 # Positive control for the PER-ENTRY drop: the contained sibling sharing the list with
 # "/tmp/evil" still reaches branch a, so the rejection above is that one entry and not
 # a silently emptied list.
-OUT="$(run_remedy "$ABS_CFG" 'bash "$AGENTS_CONFIG_DIR/bin/good"')"
+OUT="$(run_remedy "$ABS_CFG" 'bash "$AGENTS_MAIN_ROOT/bin/good"')"
 assert_eq "C-13c-contained-sibling-still-matches" "bare-only" "$(classify "$OUT")"
 assert_eq "C-13d-contained-sibling-names-itself" "yes" "$(has_substr "$OUT" "bin/good")"
 
@@ -195,11 +194,11 @@ assert_eq "C-14b-host-absolute-entry-degrades" "both" "$(classify "$OUT")"
 # Contrast control against C-13c: the SAME contained sibling, on a list carrying an
 # off-charset entry, loses its recipe too. That is what "whole-list discard" means, and
 # it is the observable that separates this branch from C-13's per-entry drop.
-OUT="$(run_remedy "$WABS_CFG" 'bash "$AGENTS_CONFIG_DIR/bin/good"')"
+OUT="$(run_remedy "$WABS_CFG" 'bash "$AGENTS_MAIN_ROOT/bin/good"')"
 assert_eq "C-14c-whole-list-discarded-sibling-degrades" "both" "$(classify "$OUT")"
 
 # ENTRY_RE is a charset gate that admits "..", so isContainedEntry is what keeps a
-# traversing entry out of branchA: "../evilhome/evil" resolves outside configDir and
+# traversing entry out of branchA: "../evilhome/evil" resolves outside agentsMainRoot and
 # is dropped per-entry, leaving no match and degrading to branch b.
 TRAV_CFG="$TMPDIR_C/cfg-traversal-entry"
 mkdir -p "$TRAV_CFG/install" "$TMPDIR_C/evilhome"
@@ -214,35 +213,35 @@ assert_eq "C-15a-traversal-entry-no-bare-recipe" "no" "$(has_substr "$OUT" "$REC
 assert_eq "C-15b-traversal-entry-degrades" "scratchpad-only" "$(classify "$OUT")"
 # Containment is filtered PER ENTRY, not by discarding the whole list: the contained
 # sibling on the very same list must still resolve to branch a.
-OUT="$(run_remedy "$TRAV_CFG" 'bash "$AGENTS_CONFIG_DIR/bin/good"')"
+OUT="$(run_remedy "$TRAV_CFG" 'bash "$AGENTS_MAIN_ROOT/bin/good"')"
 assert_eq "C-15c-contained-sibling-still-matches" "bare-only" "$(classify "$OUT")"
 
 # --- C-16: the recipe reproduces the invocation, arguments included (C1) ------
 # branchA renders the hit's remaining argv after the entry, so the author is told to
 # reissue the command that was actually blocked. Only bare shell words the shell
 # cannot rewrite (SAFE_ARG_RE) may be pasted verbatim; anything else degrades.
-OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --target outline --advance')"
+OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip" --target outline --advance')"
 assert_eq "C-16a-registered-with-safe-args-branch-a" "bare-only" "$(classify "$OUT")"
 assert_eq "C-16b-recipe-keeps-arguments" "yes" "$(has_substr "$OUT" "--target outline --advance")"
 # An argument carrying an expansion would be re-expanded (or mis-expanded) if pasted,
 # so the whole invocation degrades rather than handing back a misleading recipe.
-OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance')"
+OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance')"
 assert_eq "C-16c-unsafe-arg-degrades" "scratchpad-only" "$(classify "$OUT")"
 assert_eq "C-16d-unsafe-arg-no-bare-recipe" "no" "$(has_substr "$OUT" "$RECIPE")"
 
 # --- C-17: a compound inner command resolves to no single entry point ---------
 # resolveInner requires ir.segments.length === 1, so "entry || fallback" no longer
 # collapses to segments[0] and hands back a recipe for one half of what was run.
-OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" || printf fallback')"
+OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir" || printf fallback')"
 assert_eq "C-17a-compound-or-degrades" "scratchpad-only" "$(classify "$OUT")"
 assert_eq "C-17b-compound-or-no-bare-recipe" "no" "$(has_substr "$OUT" "$RECIPE")"
 assert_eq "C-17c-fallback-branch-not-echoed" "no" "$(has_substr "$OUT" "fallback")"
 # A `;` compound degrades the same way (CPR-ORTH: the separator is not the point).
-OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"; printf tail')"
+OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"; printf tail')"
 assert_eq "C-17d-compound-semicolon-degrades" "scratchpad-only" "$(classify "$OUT")"
 # Control: the single-segment form of the very same entry still reaches branch a, so
 # the degradation above is the compound and not the entry.
-OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"')"
+OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"')"
 assert_eq "C-17e-single-segment-still-branch-a" "bare-only" "$(classify "$OUT")"
 
 # --- C-18: an SSOT entry that is a SYMLINK out of the config tree -------------
@@ -260,13 +259,13 @@ if node "$(cd "$(dirname "$0")" && pwd)/mk-symlink.js" "$TMPDIR_C/outside-exec/e
     # The containment verdict now holds through the link: no bare recipe is printed and
     # the remedy degrades to the scratchpad-only branch.
     # TL3 gap: whether an author actually follows the printed recipe.
-    OUT="$(run_remedy "$SYM_CFG" 'bash "$AGENTS_CONFIG_DIR/bin/linked"')"
+    OUT="$(run_remedy "$SYM_CFG" 'bash "$AGENTS_MAIN_ROOT/bin/linked"')"
     assert_eq "C-18a-symlinked-entry-no-bare-recipe" "no" "$(has_substr "$OUT" "$RECIPE")"
     assert_eq "C-18b-symlinked-entry-degrades" "scratchpad-only" "$(classify "$OUT")"
     assert_eq "C-18c-escape-target-untouched" "echo pwned" "$(tail -n 1 "$TMPDIR_C/outside-exec/evil")"
     # Paired control: a genuinely contained sibling on the same list gets the normal
     # recipe, so a later fix must keep answering this row exactly as it does now.
-    OUT="$(run_remedy "$SYM_CFG" 'bash "$AGENTS_CONFIG_DIR/bin/good"')"
+    OUT="$(run_remedy "$SYM_CFG" 'bash "$AGENTS_MAIN_ROOT/bin/good"')"
     assert_eq "C-18d-contained-entry-normal-recipe" "bare-only" "$(classify "$OUT")"
     assert_eq "C-18e-contained-entry-names-itself" "yes" "$(has_substr "$OUT" "bin/good")"
 else

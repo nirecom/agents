@@ -3,7 +3,7 @@
 # Tags: install, settings, permissions, ssot, scope:issue-specific, pwsh-not-required, TL2
 
 SETTINGS_DOC_REL="docs/architecture/claude-code/settings.md"
-SETTINGS_DOC="$AGENTS_DIR/$SETTINGS_DOC_REL"
+SETTINGS_DOC="$SCRIPT_CHECKOUT_ROOT/$SETTINGS_DOC_REL"
 
 # T23 -- THE DOCUMENT IS PART OF THE DELIVERABLE. Since #2264 the agents' own commands are no
 # longer allow-listed through generated settings.json rules: bash-guard answers them with

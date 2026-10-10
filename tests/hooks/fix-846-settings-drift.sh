@@ -11,16 +11,16 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
 
-DRIFT_MODULE="$AGENTS_DIR/hooks/lib/settings-drift.js"
-SESSION_START="$AGENTS_DIR/hooks/session-start.js"
-BASE_SETTINGS="$AGENTS_DIR/settings.json"
+DRIFT_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/settings-drift.js"
+SESSION_START="$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js"
+BASE_SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
 
 # isolation (#2512): pin state and plans dirs once for this file
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
@@ -85,7 +85,7 @@ process.env.USERPROFILE = process.argv[1];
 const os = require('os');
 os.homedir = () => process.argv[1];
 require(process.argv[2]);
-" -- "$home_node" "$(to_node_path "$AGENTS_DIR/install/assemble-settings.js")" >/dev/null 2>&1
+" -- "$home_node" "$(to_node_path "$SCRIPT_CHECKOUT_ROOT/install/assemble-settings.js")" >/dev/null 2>&1
 }
 
 # --- T1: assembled missing → drifted true, missing true -----------------------
@@ -414,7 +414,7 @@ run_t17() {
     local out
     out=$(printf '{"session_id":"test-846-drift-t17"}' \
         | HOME="$_tmp_home" USERPROFILE="$_tmp_home" \
-        run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/session-start.js" 2>&1)
+        run_with_timeout 10 node "$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/session-start.js" 2>&1)
     echo "$out" | run_with_timeout 5 node -e "
 let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
   let parsed;
@@ -441,7 +441,7 @@ run_t18() {
     local out
     out=$(printf '{"session_id":"test-846-drift-t18"}' \
         | HOME="$_tmp_home" USERPROFILE="$_tmp_home" \
-        run_with_timeout 10 node "$_AGENTS_DIR_NODE/hooks/session-start.js" 2>&1)
+        run_with_timeout 10 node "$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/session-start.js" 2>&1)
     echo "$out" | run_with_timeout 5 node -e "
 let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
   let parsed;
@@ -459,7 +459,7 @@ let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
 
 # --- T19: assembler idempotency — called twice → same output ------------------
 run_t19() {
-    if [ ! -f "$AGENTS_DIR/install/assemble-settings.js" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/install/assemble-settings.js" ]; then
         skip "T19: assembler idempotency (assemble-settings.js missing)"; return
     fi
     local _tmp_home; _tmp_home="$(mktemp -d)"; trap 'rm -rf "$_tmp_home"' RETURN

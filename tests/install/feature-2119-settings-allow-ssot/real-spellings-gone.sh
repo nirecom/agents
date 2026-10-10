@@ -22,11 +22,11 @@ t52_setup() {
     while IFS= read -r e; do
         [ -n "$e" ] || continue
         mkdir -p "$(dirname "$T52_FIXTURE/$e")"
-        cp "$AGENTS_DIR/$e" "$T52_FIXTURE/$e" 2>/dev/null || mk_tool "$T52_FIXTURE" "$e" env-node
+        cp "$SCRIPT_CHECKOUT_ROOT/$e" "$T52_FIXTURE/$e" 2>/dev/null || mk_tool "$T52_FIXTURE" "$e" env-node
     done <<< "$T52_ENTRIES"
     while IFS= read -r e; do
         [ -n "$e" ] || continue
-        cp "$AGENTS_DIR/bin/$e" "$T52_FIXTURE/bin/$e" 2>/dev/null || mk_tool "$T52_FIXTURE" "bin/$e" env-bash
+        cp "$SCRIPT_CHECKOUT_ROOT/bin/$e" "$T52_FIXTURE/bin/$e" 2>/dev/null || mk_tool "$T52_FIXTURE" "bin/$e" env-bash
     done <<< "$T52_PATH_ENTRIES"
     printf '%s\n' "$T52_ENTRIES" > "$T52_FIXTURE/install/settings-allow-commands.txt"
     printf '%s\n' "$T52_PATH_ENTRIES" > "$T52_FIXTURE/install/path-exposed-commands.txt"
@@ -98,7 +98,7 @@ t52_deploy() {
 
 # T53: the developer's REAL deployed settings.json, located by the module's own
 # deployedSettingsPath() under the home the canary replaced, and READ only. The real deployment
-# is built from the $AGENTS_CONFIG_DIR checkout, so from any other checkout (a worktree before
+# is built from the $AGENTS_MAIN_ROOT checkout, so from any other checkout (a worktree before
 # merge) its contents say nothing about this revision and the case skips. Hand-written
 # `Bash(<cmd> *)` rules from base/extension are legitimate; only ones the checkout does not own
 # count. Prints: absent | foreign-checkout | present <count>.
@@ -113,14 +113,14 @@ t53_probe_real_deploy() { # <dump-file>
       if (!fs.existsSync(deployed)) { process.stdout.write("absent"); process.exit(0); }
       const real = (p) => { try { return fs.realpathSync(p); } catch (_e) { return null; } };
       const norm = (p) => (p && process.platform === "win32" ? p.toLowerCase() : p);
-      const owner = norm(real(process.env.AGENTS_CONFIG_DIR || ""));
+      const owner = norm(real(process.env.AGENTS_MAIN_ROOT || ""));
       if (!owner || owner !== norm(real(root))) { process.stdout.write("foreign-checkout"); process.exit(0); }
       const allow = (JSON.parse(fs.readFileSync(deployed, "utf8")).permissions || {}).allow || [];
       fs.writeFileSync(dump, allow.join("\n") + (allow.length ? "\n" : ""));
       const own = new Set(((a.buildAssembledSettings({ agentsRoot: root }).settings || {}).permissions || {}).allow || []);
       const extra = allow.filter((e) => /^Bash\(.*\s\*\)$/.test(e) && !own.has(e));
       process.stdout.write("present " + extra.length);
-    ' "$(node_path "$CANARY_REAL_HOME")" "$CANARY_REAL_USERPROFILE" "$(node_path "$AGENTS_DIR")" \
+    ' "$(node_path "$CANARY_REAL_HOME")" "$CANARY_REAL_USERPROFILE" "$(node_path "$SCRIPT_CHECKOUT_ROOT")" \
       "$(node_path "$1")" 2>/dev/null || printf '<PROBE-FAILED>'
 }
 
@@ -132,7 +132,7 @@ t53_real_deploy() {
             skip "T53[real-deploy]: real settings.json not found"
             return ;;
         foreign-checkout)
-            skip "T53[real-deploy]: real settings.json was deployed from \$AGENTS_CONFIG_DIR, not this checkout"
+            skip "T53[real-deploy]: real settings.json was deployed from \$AGENTS_MAIN_ROOT, not this checkout"
             return ;;
     esac
     assert_eq "T53[real-deploy]: real deployed allow list has zero \`Bash(<cmd> *)\` entries the checkout's base/extension do not own" \

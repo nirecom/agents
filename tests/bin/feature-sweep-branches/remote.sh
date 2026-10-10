@@ -6,8 +6,12 @@
 # Sourced helpers come from _lib.sh. Runnable standalone:
 #   bash tests/bin/feature-sweep-branches/remote.sh
 
+# isolation (#2512): harness before _lib.sh so _lib's pass/fail/run_with_timeout override harness's.
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/harness.sh"
 # shellcheck source=_lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+# Always pin under _lib.sh's TMPDIR_BASE (its EXIT trap removes it); never keep an inherited value.
+harness_isolate "$TMPDIR_BASE/isolation"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T5 — remote-only branch; stub gh api -X DELETE exits 0; stub gh pr list
@@ -19,7 +23,7 @@ T5_remote_branch_deleted_when_merged() {
     local stubdir="$TMPDIR_BASE/t5-stub"
     local stale_epoch="1577836800"  # 2020-01-01 00:00:00 UTC
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
 
     # Create a fake remote repo and add it as origin
     local remote="$TMPDIR_BASE/t5-remote"
@@ -62,8 +66,8 @@ GHSTUB
     chmod +x "$ghstubdir/gh"
 
     local out exit_code
-    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" \
-        run_with_timeout bash "$SWEEP" --apply --ci-mode 2>&1)"
+    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --apply --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -94,8 +98,9 @@ T6_non_github_remote_exits_zero_no_deletes() {
     local stale_epoch="1577836800"  # 2020-01-01 00:00:00 UTC
     init_repo "$repo"
 
-    # Create a stub AGENTS_CONFIG_DIR where is-github-dotcom-remote exits 1
+    # Create a stub checkout where is-github-dotcom-remote exits 1
     # (non-GitHub remote) — do NOT stub it as exits 0
+    copy_sweep_into "$stubdir"
     mkdir -p "$stubdir/bin"
     cat > "$stubdir/bin/is-github-dotcom-remote" <<'STUB'
 #!/bin/bash
@@ -114,8 +119,7 @@ STUB
     fi
 
     local out exit_code
-    out="$(cd "$repo" && AGENTS_CONFIG_DIR="$stubdir" \
-        run_with_timeout bash "$SWEEP" --apply --ci-mode 2>&1)"
+    out="$(cd "$repo" && run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --apply --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then
@@ -144,7 +148,7 @@ T9_remote_delete_failure_non_fatal() {
     local stubdir="$TMPDIR_BASE/t9-stub"
     local stale_epoch="1577836800"  # 2020-01-01 00:00:00 UTC
     init_repo "$repo"
-    make_stub_agents_dir "$stubdir"
+    make_stub_checkout "$stubdir"
 
     # Create a fake remote and push a branch
     local remote="$TMPDIR_BASE/t9-remote"
@@ -186,8 +190,8 @@ GHSTUB
     chmod +x "$ghstubdir/gh"
 
     local out exit_code
-    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" AGENTS_CONFIG_DIR="$stubdir" \
-        run_with_timeout bash "$SWEEP" --apply --ci-mode 2>&1)"
+    out="$(cd "$repo" && PATH="$ghstubdir:$PATH" \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --apply --ci-mode 2>&1)"
     exit_code=$?
 
     if [ "$exit_code" -ne 0 ]; then

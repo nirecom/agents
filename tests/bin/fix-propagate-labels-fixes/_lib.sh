@@ -1,8 +1,8 @@
 # Shared test infrastructure for fix-propagate-labels-fixes tests.
 # Sourced by tests/bin/fix-propagate-labels-fixes.sh — not run standalone.
 
-AGENTS_DIR="${AGENTS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
-TARGET="${PROPAGATE_LABELS_SH:-$AGENTS_DIR/bin/github-issues/propagate-labels.sh}"
+# SCRIPT_CHECKOUT_ROOT is set by the entrypoint that sources this file.
+TARGET="${PROPAGATE_LABELS_SH:-$SCRIPT_CHECKOUT_ROOT/bin/github-issues/propagate-labels.sh}"
 
 PASS=0
 FAIL=0
@@ -102,7 +102,7 @@ MOCK_EOF
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export GIT_DIFF_RC=0
-    export AGENTS_WORKSPACE="$AGENTS_DIR"
+    export AGENTS_WORKSPACE="$SCRIPT_CHECKOUT_ROOT"
     export GIT_WORK_DIR="$TMP/workdir"
     export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
 }

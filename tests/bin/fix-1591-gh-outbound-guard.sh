@@ -2,25 +2,19 @@
 # tests/bin/fix-1591-gh-outbound-guard.sh
 # Tests: bin/lib/gh-outbound-guard.sh
 # Tags: scan-outbound, security, gh, guard, scope:issue-specific, layer:TL1
-#
-# Issue #1591 — shared fail-closed outbound-scan guard for scripts that call gh
-# with free-text. gh_outbound_guard <label> reads content from STDIN, scans via
-# $AGENTS_CONFIG_DIR/bin/scan-outbound.sh --stdin <label>, and RETURNS (not exits):
-#   scanner rc 0 -> return 0 (clean)
-#   scanner rc 1 -> return 1, GH_OUTBOUND_GUARD_MESSAGE contains "hard violation"
-#   scanner rc 2 -> return 1, message "warn-tier" + "treated as block" (fail-closed)
-#   scanner rc 3 -> return 1, message "usage error"
-#   scanner unresolvable -> return 1 (fail-closed)
-# CRITICAL: caller MUST use input redirection (guard < file); piping runs it in a
-# subshell so GH_OUTBOUND_GUARD_MESSAGE never reaches the parent shell.
-#
-# TL1: fake scan-outbound.sh returns a scripted rc so rc->return mapping is tested
-# in isolation. This test is RED until /write-code creates gh-outbound-guard.sh.
+# Issue #1591 — shared fail-closed outbound-scan guard for scripts that call gh with
+# free-text. gh_outbound_guard <label> reads STDIN, scans via the bin/scan-outbound.sh
+# beside it (--stdin <label>), and RETURNS (not exits): scanner rc 0 -> 0; rc 1/2/3 or an
+# unresolvable scanner -> 1 with GH_OUTBOUND_GUARD_MESSAGE naming "hard violation" /
+# "warn-tier" + "treated as block" / "usage error" (contract: the library's own header).
+# Callers MUST use input redirection: a pipe runs the guard in a subshell, losing the message.
+# TL1: a fake scan-outbound.sh returns a scripted rc, isolating the rc->return mapping.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-GUARD_LIB="$AGENTS_DIR/bin/lib/gh-outbound-guard.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REAL_GUARD_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh"
+GUARD_LIB="$REAL_GUARD_LIB"
 
 PASS=0
 FAIL=0
@@ -39,15 +33,18 @@ run_with_timeout() {
 
 TMP=""
 
-# Build a fake AGENTS_CONFIG_DIR whose bin/scan-outbound.sh drains stdin and exits
+# Build a fake script checkout whose bin/scan-outbound.sh drains stdin and exits
 # with the scripted rc from $MOCK_SCAN_RC. When $NO_SCANNER=1, no scanner is placed
-# (exercises the unresolvable fail-closed path).
+# (exercises the unresolvable fail-closed path). The guard trusts only the scanner
+# beside itself, so a copy of the guard is placed there and GUARD_LIB points at it.
 setup() {
     TMP="$(mktemp -d)"
-    export AGENTS_CONFIG_DIR="$TMP/acd"
-    mkdir -p "$AGENTS_CONFIG_DIR/bin"
+    local fake_script_checkout_root="$TMP/fake_script_checkout_root"
+    mkdir -p "$fake_script_checkout_root/bin/lib"
+    cp "$REAL_GUARD_LIB" "$fake_script_checkout_root/bin/lib/gh-outbound-guard.sh"
+    GUARD_LIB="$fake_script_checkout_root/bin/lib/gh-outbound-guard.sh"
     if [ "${NO_SCANNER:-0}" != "1" ]; then
-        cat > "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh" <<'MOCK'
+        cat > "$fake_script_checkout_root/bin/scan-outbound.sh" <<'MOCK'
 #!/usr/bin/env bash
 # Drain stdin fully (avoid SIGPIPE on large input), then emit a fake match line
 # and exit with the scripted rc.
@@ -55,7 +52,7 @@ cat >/dev/null
 echo "${2:-stdin}:1: [mock] SCRIPTED-MATCH"
 exit "${MOCK_SCAN_RC:-0}"
 MOCK
-        chmod +x "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh"
+        chmod +x "$fake_script_checkout_root/bin/scan-outbound.sh"
     fi
 }
 

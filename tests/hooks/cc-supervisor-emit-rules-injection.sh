@@ -8,8 +8,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-EMIT="$AGENTS_DIR/hooks/lib/supervisor-emit.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+EMIT="$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-emit.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -68,7 +68,7 @@ const f = findings[Number(process.argv[3])];
 if (!f) { console.log('NO_FINDING'); process.exit(0); }
 const v = eval('f.' + process.argv[4]);
 console.log(v === undefined ? 'ABSENT' : (Array.isArray(v) ? JSON.stringify(v) : String(v)));
-" "$(node_path "$AGENTS_DIR")" "$1" "$2" "$3" 2>&1
+" "$(node_path "$SCRIPT_CHECKOUT_ROOT")" "$1" "$2" "$3" 2>&1
 }
 
 # --- R1/R2: severity is carried through, not hardcoded (table-driven over verdicts) ---

@@ -85,11 +85,11 @@ test_A4_no_session_id_not_recorded() {
     # Block all resolveSessionId fallback paths: unset CLAUDE_CODE_SESSION_ID,
     # run node from TMPDIR_BASE, and point CLAUDE_TRANSCRIPT_BASE_DIR at an
     # empty dir (no JSONL files).
-    local _mark_js="$MARK_JS" _agents_dir="$AGENTS_DIR" _tmpbase="$TMPDIR_BASE"
+    local _mark_js="$MARK_JS" _agents_dir="$SCRIPT_CHECKOUT_ROOT" _tmpbase="$TMPDIR_BASE"
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env \
         -u CLAUDE_CODE_SESSION_ID \
-        "AGENTS_CONFIG_DIR=$_agents_dir" \
+        "AGENTS_MAIN_ROOT=$_agents_dir" \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "CLAUDE_TRANSCRIPT_BASE_DIR=$_tmpbase/no-transcripts" \
         bash -c 'cd "$1" && node "$2"' -- "$_tmpbase" "$_mark_js" 2>&1)" || rc=$?

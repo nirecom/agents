@@ -19,9 +19,8 @@ bash -c "
     export CLAUDE_CODE_SESSION_ID='own-sid-b29'
     export WORKFLOW_PLANS_DIR='$PLANS_DIR'
     export WORKFLOW_STATE_DIR='$WF_DIR'
-    export AGENTS_CONFIG_DIR='$AGENTS_DIR'
     cd '$NONGIT_CWD'
-    node '$AGENTS_DIR/bin/issue-close-write-outcome.js' 999 completed appended closed posted cleared
+    node '$SCRIPT_CHECKOUT_ROOT/bin/issue-close-write-outcome.js' 999 completed appended closed posted cleared
 " 2>/dev/null
 # Verification passes the file as argv — MSYS converts path-like arguments but
 # not paths embedded in program text (same technique as the enc() helper).

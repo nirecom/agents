@@ -10,16 +10,15 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LOOP_SH="$AGENTS_DIR/skills/review-tests/scripts/run-codex-review-loop.sh"
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOOP_SH="$SCRIPT_CHECKOUT_ROOT/skills/review-tests/scripts/run-codex-review-loop.sh"
 
 PASS=0
 FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 # ---------------------------------------------------------------------------
 # Precondition gate
@@ -76,16 +75,16 @@ echo "# Outline"            > "$PLANS_DIR/$SID-outline.md"
 
 # ---------------------------------------------------------------------------
 # Stub bin/run-codex-review-loop to record every --context arg passed.
-# The loop script calls "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop".
-# We create a fake AGENTS_CONFIG_DIR that intercepts the call.
+# The loop script calls "$AGENTS_MAIN_ROOT/bin/run-codex-review-loop".
+# We create a fake AGENTS_MAIN_ROOT that intercepts the call.
 # ---------------------------------------------------------------------------
-FAKE_ACD="$TMPDIR_BASE/fake-acd"
-mkdir -p "$FAKE_ACD/bin" "$FAKE_ACD/rules"
-[[ -d "$AGENTS_DIR/rules" ]] && cp -r "$AGENTS_DIR/rules" "$FAKE_ACD/" 2>/dev/null || true
+FAKE_AGENTS_ROOT="$TMPDIR_BASE/fake-agents-root"
+mkdir -p "$FAKE_AGENTS_ROOT/bin" "$FAKE_AGENTS_ROOT/rules"
+[[ -d "$SCRIPT_CHECKOUT_ROOT/rules" ]] && cp -r "$SCRIPT_CHECKOUT_ROOT/rules" "$FAKE_AGENTS_ROOT/" 2>/dev/null || true
 
 CONTEXT_LOG="$TMPDIR_BASE/context-args.log"
 
-cat > "$FAKE_ACD/bin/run-codex-review-loop" <<STUBEOF
+cat > "$FAKE_AGENTS_ROOT/bin/run-codex-review-loop" <<STUBEOF
 #!/bin/bash
 # Stub: log every --context argument value, then exit 3 (SKIPPED).
 while [[ \$# -gt 0 ]]; do
@@ -97,16 +96,16 @@ done
 echo "## Codex Review: SKIPPED -- stub"
 exit 3
 STUBEOF
-chmod +x "$FAKE_ACD/bin/run-codex-review-loop"
+chmod +x "$FAKE_AGENTS_ROOT/bin/run-codex-review-loop"
 
-cat > "$FAKE_ACD/bin/build-codex-context" <<'BSTUB'
+cat > "$FAKE_AGENTS_ROOT/bin/build-codex-context" <<'BSTUB'
 #!/bin/bash
 while [[ $# -gt 0 ]]; do
     if [[ "$1" == "--output" && -n "${2:-}" ]]; then
         echo "stub-context" > "$2"; break; fi
     shift; done; exit 0
 BSTUB
-chmod +x "$FAKE_ACD/bin/build-codex-context"
+chmod +x "$FAKE_AGENTS_ROOT/bin/build-codex-context"
 
 # ---------------------------------------------------------------------------
 # Helper: read the context log and find a file whose content matches expected
@@ -133,7 +132,7 @@ context_contains_changed_files() {
 rm -f "$CONTEXT_LOG"
 
 ( cd "$FIXTURE_REPO" && \
-    AGENTS_CONFIG_DIR="$FAKE_ACD" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
+    AGENTS_MAIN_ROOT="$FAKE_AGENTS_ROOT" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
     PLANS_DIR="$PLANS_DIR" EXTENSIONS_USED=0 \
     "$RWT" 120 bash "$LOOP_SH" >/dev/null 2>&1 || true )
 
@@ -155,7 +154,7 @@ rm -f "$CONTEXT_LOG"
 CHANGED_FILE_LOG="$TMPDIR_BASE/changed-files.txt"
 
 ( cd "$FIXTURE_REPO" && \
-    AGENTS_CONFIG_DIR="$FAKE_ACD" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
+    AGENTS_MAIN_ROOT="$FAKE_AGENTS_ROOT" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
     PLANS_DIR="$PLANS_DIR" EXTENSIONS_USED=0 \
     REVIEW_TESTS_FULL_SCAN=1 \
     "$RWT" 120 bash "$LOOP_SH" >/dev/null 2>&1 || true )
@@ -178,7 +177,7 @@ fi
 rm -f "$CONTEXT_LOG"
 
 ( cd "$FIXTURE_REPO" && \
-    AGENTS_CONFIG_DIR="$FAKE_ACD" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
+    AGENTS_MAIN_ROOT="$FAKE_AGENTS_ROOT" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
     PLANS_DIR="$PLANS_DIR" EXTENSIONS_USED=0 \
     "$RWT" 120 bash "$LOOP_SH" >/dev/null 2>&1 || true )
 
@@ -202,7 +201,7 @@ fi
 rm -f "$CONTEXT_LOG"
 
 ( cd "$FIXTURE_REPO" && \
-    AGENTS_CONFIG_DIR="$FAKE_ACD" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
+    AGENTS_MAIN_ROOT="$FAKE_AGENTS_ROOT" SESSION_ID="$SID" CLAUDE_CODE_SESSION_ID="$SID" \
     PLANS_DIR="$PLANS_DIR" EXTENSIONS_USED=0 \
     "$RWT" 120 bash "$LOOP_SH" >/dev/null 2>&1 || true )
 

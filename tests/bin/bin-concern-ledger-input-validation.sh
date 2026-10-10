@@ -59,7 +59,6 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
-export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 
 # A neutral CWD that is also the canary directory: anything a metacharacter
 # manages to execute has to leave its droppings somewhere, and this is the

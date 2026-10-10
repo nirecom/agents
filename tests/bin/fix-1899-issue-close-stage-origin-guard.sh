@@ -26,10 +26,10 @@ if command -v timeout >/dev/null 2>&1 && [ -z "${_FIX1899_ICS_INNER:-}" ]; then
     exit $?
 fi
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DISPATCH_JS="$AGENTS_DIR/bin/worker-dispatch.js"
-PRELOAD="$AGENTS_DIR/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
-WORKER_JS="$AGENTS_DIR/bin/worker-dispatch/workers/issue-close-stage.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+PRELOAD="$SCRIPT_CHECKOUT_ROOT/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+WORKER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-close-stage.js"
 
 PASS=0
 FAIL=0
@@ -70,7 +70,7 @@ trap 'rm -rf "$TMPD"' EXIT
 # ---------------------------------------------------------------------------
 # Fixture: a real main repo + a real linked worktree. The dispatcher's anchor and
 # payload walls are real, so worktree_path must genuinely be a member of the
-# main-root family or the run is rejected before the worker is ever entered.
+# target-main-root family or the run is rejected before the worker is ever entered.
 # ---------------------------------------------------------------------------
 MAIN_RAW="$TMPD/mainrepo"
 mkdir -p "$MAIN_RAW"
@@ -127,7 +127,7 @@ dispatch_stage() {
     DRC=0
     : > "$CALLLOG"
     DOUT="$(run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
-        "WD_SPAWN_MODULE=$(nodepath "$AGENTS_DIR/bin/worker-dispatch/spawn.js")" \
+        "WD_SPAWN_MODULE=$(nodepath "$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/spawn.js")" \
         "WD_CANNED=$(nodepath "$CANNED")" \
         "WD_CALL_LOG=$(nodepath "$CALLLOG")" \
         node -r "$(nodepath "$PRELOAD")" "$(nodepath "$DISPATCH_JS")" \

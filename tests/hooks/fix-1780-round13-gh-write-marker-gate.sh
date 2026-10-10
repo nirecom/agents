@@ -11,11 +11,11 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if command -v cygpath >/dev/null 2>&1; then _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"; else _AGENTS_DIR_NODE="$AGENTS_DIR"; fi
-GUARD="$_AGENTS_DIR_NODE/hooks/enforce-worktree.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
-PB_NODE="$_AGENTS_DIR_NODE/hooks/lib/protected-basenames.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"; fi
+GUARD="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/enforce-worktree.js"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+PB_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/protected-basenames.js"
 SID="ghgatesid"
 
 PASS=0; FAIL=0; SKIP=0
@@ -28,7 +28,7 @@ assert_eq() {
     if [ "$want" = "$got" ]; then pass "$name"; else fail "$name - want=$want got=$got"; fi
 }
 
-if [ ! -f "$AGENTS_DIR/hooks/enforce-worktree.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/enforce-worktree.js" ]; then
     fail "H0 hooks/enforce-worktree.js missing - every case below is vacuous"
     echo ""; echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"; exit 1
 fi
@@ -117,7 +117,7 @@ const { parse } = require(agents + "/hooks/lib/command-ir.js");
 const { isGhWriteIR } = require(agents + "/hooks/lib/bash-write-patterns.js");
 process.stdout.write(process.argv.slice(3).map((c) => (isGhWriteIR(parse(c)) ? "1" : "0")).join(""));
 GH_EOF
-GH_CLASS=$("$RWT" 10 node "$GH_PROBE" "$_AGENTS_DIR_NODE" \
+GH_CLASS=$("$RWT" 10 node "$GH_PROBE" "$_SCRIPT_CHECKOUT_ROOT_NODE" \
     "$GHW" "$GHW_REL" "$GHW_DEL" "$GHW_API" "gh issue view 1" 2>/dev/null)
 assert_eq "H3 non-vacuity: the four gh commands used below are Group B gh writes, a read-only gh is not" \
     "11110" "$GH_CLASS"
@@ -151,7 +151,6 @@ run_guard() {
         env -u CLAUDE_CODE_SESSION_ID -u SCRATCHPAD -u DEFAULT_BRANCHES \
             -u ENFORCE_WORKTREE_ADDITIONAL_REPOS -u ENFORCE_WORKTREE_EXTRA_REPOS \
         ENFORCE_WORKTREE=on WORKFLOW_STATE_DIR="$WF_N" WORKFLOW_PLANS_DIR="$PLANS_N" \
-        AGENTS_CONFIG_DIR="$_AGENTS_DIR_NODE" \
         "$RWT" 25 node "$GUARD" 2>/dev/null)
     rc=$?
     case "$rc" in

@@ -20,11 +20,11 @@ Read `rules/github-issues.md` first — on-demand-only, never auto-injected.
 2. Verify issue `N` is OPEN: `gh issue view N --json state --jq .state`. Not OPEN → report and exit 0.
 3. For `--type migrated`: verify issue `INTO` is OPEN. Not OPEN → report and exit 0.
 
-Run: `bash "$AGENTS_CONFIG_DIR/skills/issue-close-migrated/scripts/pre-flight.sh" "$N" "$TYPE" "$INTO" || { echo "Pre-flight failed — check issue state"; exit 0; }`
+Run: `bash "$AGENTS_MAIN_ROOT/skills/issue-close-migrated/scripts/pre-flight.sh" "$N" "$TYPE" "$INTO" || { echo "Pre-flight failed — check issue state"; exit 0; }`
 
 ## Procedure
 
-Run `bin/github-issues/close-not-planned.sh` as one standalone call: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/close-not-planned.sh" --type "<TYPE>" "<N>"`.
+Run `bin/github-issues/close-not-planned.sh` as one standalone call: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/close-not-planned.sh" --type "<TYPE>" "<N>"`.
 Only when `<TYPE>` is `migrated`, write `--into <INTO>` into the argument list yourself, before `<N>` — do not build that argument with a shell conditional.
 
 The `gh issue close` inside `close-not-planned.sh` is a subprocess of the Bash tool command — `enforce-issue-close.js` (PreToolUse) fires only on the Bash tool command head, not on subprocess calls. No bypass marker is required.

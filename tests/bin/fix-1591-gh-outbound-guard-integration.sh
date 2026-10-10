@@ -6,18 +6,14 @@
 # Issue #1591 — end-to-end guard behavior over the real scanner: hard patterns
 # block (rc1), warn patterns block fail-closed (rc2), clean input passes (rc0),
 # and per-file allowlist entries are honored under the exact label only.
-#
-# The scanner+lists are isolated inside a fake AGENTS_CONFIG_DIR (a copy of the
-# real scan-outbound.sh plus controlled .private-info-allowlist/.blocklist) so the
+# The lists are isolated inside a fake AGENTS_MAIN_ROOT (controlled
+# .private-info-allowlist/.blocklist, read by the real scan-outbound.sh) so the
 # test never depends on the developer's private gitignored lists.
-#
-# RED until /write-code creates bin/lib/gh-outbound-guard.sh.
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-GUARD_LIB="$AGENTS_DIR/bin/lib/gh-outbound-guard.sh"
-REAL_SCANNER="$AGENTS_DIR/bin/scan-outbound.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GUARD_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh"
 
 PASS=0
 FAIL=0
@@ -36,17 +32,15 @@ run_with_timeout() {
 
 TMP=""
 
-# Build fake AGENTS_CONFIG_DIR: real scanner copy + controlled empty allowlist +
-# blocklist carrying one warn-tier pattern. $EXTRA_ALLOW lines are appended to the
-# allowlist before each case.
+# Build fake AGENTS_MAIN_ROOT: controlled empty allowlist + blocklist carrying one
+# warn-tier pattern, read by the real scanner beside the guard. $EXTRA_ALLOW lines
+# are appended to the allowlist before each case.
 setup() {
     TMP="$(mktemp -d)"
-    export AGENTS_CONFIG_DIR="$TMP/acd"
-    mkdir -p "$AGENTS_CONFIG_DIR/bin"
-    cp "$REAL_SCANNER" "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh"
-    chmod +x "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh"
-    : > "$AGENTS_CONFIG_DIR/.private-info-allowlist"
-    printf 'warn:WIDGET-INTERNAL-CODENAME\n' > "$AGENTS_CONFIG_DIR/.private-info-blocklist"
+    export AGENTS_MAIN_ROOT="$TMP/fake_main_root"
+    mkdir -p "$AGENTS_MAIN_ROOT"
+    : > "$AGENTS_MAIN_ROOT/.private-info-allowlist"
+    printf 'warn:WIDGET-INTERNAL-CODENAME\n' > "$AGENTS_MAIN_ROOT/.private-info-blocklist"
 }
 
 teardown() {
@@ -107,7 +101,7 @@ teardown
 # I-4: per-file allowlist — an entry '<label>:<pattern>' allowlists a match ONLY
 # under that exact label. Here 10.0.0.1 is allowed under label 'allow-me.md'.
 setup
-printf 'allow-me.md:10\\.0\\.0\\.1\n' >> "$AGENTS_CONFIG_DIR/.private-info-allowlist"
+printf 'allow-me.md:10\\.0\\.0\\.1\n' >> "$AGENTS_MAIN_ROOT/.private-info-allowlist"
 C="$TMP/c.txt"; printf 'host 10.0.0.1 here\n' > "$C"
 run_guard "allow-me.md" "$C"
 if [ "$GUARD_RC" -eq 0 ]; then
@@ -120,7 +114,7 @@ teardown
 # I-5: allowlist scoping regression — the SAME pattern under a DIFFERENT label is
 # still blocked (allowlist entry is label-scoped, not global).
 setup
-printf 'allow-me.md:10\\.0\\.0\\.1\n' >> "$AGENTS_CONFIG_DIR/.private-info-allowlist"
+printf 'allow-me.md:10\\.0\\.0\\.1\n' >> "$AGENTS_MAIN_ROOT/.private-info-allowlist"
 C="$TMP/c.txt"; printf 'host 10.0.0.1 here\n' > "$C"
 run_guard "other-file.md" "$C"
 if [ "$GUARD_RC" -eq 1 ]; then

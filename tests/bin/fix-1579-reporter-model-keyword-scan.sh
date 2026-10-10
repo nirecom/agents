@@ -29,8 +29,14 @@ mkdir -p "$MOCKDIR"
 
 cat > "$MOCKDIR/gh" <<'MOCK'
 #!/usr/bin/env bash
-# Mock gh: capture --label args from `issue create`; everything else exits 1
-# (non-fatal in issue-create.sh: auth-status warn / resolver skip).
+# Mock gh: capture --label args from `issue create`; answer the one question
+# Phase 0a asks (`label list` — type:task exists, so no label repair runs);
+# everything else exits 1 (non-fatal in issue-create.sh: auth-status warn /
+# resolver skip).
+if [ "${1:-}" = "label" ] && [ "${2:-}" = "list" ]; then
+    printf 'type:task\n'
+    exit 0
+fi
 if [ "${1:-}" = "issue" ] && [ "${2:-}" = "create" ]; then
     printf 'created\n' >> "${GH_CREATE_LOG:-/dev/null}"
     while [ $# -gt 0 ]; do
@@ -47,6 +53,14 @@ chmod +x "$MOCKDIR/gh"
 CAP="$WORK/labels.txt"
 CREATED="$WORK/created.txt"
 
+# The outbound scan reads its block/allow lists from the agents main root and fails
+# closed without a blocklist; a fixture root with empty lists keeps the developer's
+# real lists (absent in a linked worktree anyway) out of the run.
+MAIN_FIXTURE="$WORK/agents-main"
+mkdir -p "$MAIN_FIXTURE"
+: > "$MAIN_FIXTURE/.private-info-blocklist"
+: > "$MAIN_FIXTURE/.private-info-allowlist"
+
 # run_ic <args...> → runs issue-create.sh with mock gh; captures labels into $CAP and
 # one 'created' line per `gh issue create` invocation into $CREATED.
 # Sets $IC_RC to issue-create.sh's exit code (and also returns it).
@@ -55,9 +69,8 @@ run_ic() {
     GH_LABEL_CAPTURE="$CAP" \
     GH_CREATE_LOG="$CREATED" \
     PATH="$MOCKDIR:$PATH" \
-    AGENTS_CONFIG_DIR="" \
     ISSUE_CREATE_SKIP_SCHEMA=1 \
-        bash "$IC" "$@" >/dev/null 2>"$WORK/stderr.txt"
+        env "AGENTS_MAIN_ROOT=$MAIN_FIXTURE" bash "$IC" "$@" >/dev/null 2>"$WORK/stderr.txt"
     IC_RC=$?
     return $IC_RC
 }
@@ -192,9 +205,8 @@ chmod +x "$BROKEN_NODE_DIR/node"
 GH_LABEL_CAPTURE="$CAP" \
 GH_CREATE_LOG="$CREATED" \
 PATH="$BROKEN_NODE_DIR:$MOCKDIR:$PATH" \
-AGENTS_CONFIG_DIR="" \
 ISSUE_CREATE_SKIP_SCHEMA=1 \
-    bash "$IC" --title t --body "b" \
+    env "AGENTS_MAIN_ROOT=$MAIN_FIXTURE" bash "$IC" --title t --body "b" \
         --reporter-model-text "You are powered by the model named DS4 Flash. The exact model ID is deepseek-v4-flash." \
         >/dev/null 2>>"$WORK/stderr.txt"
 IC_RC=$?

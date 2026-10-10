@@ -7,13 +7,13 @@
 
 const path = require("path");
 
-const agentsConfigDir = process.env.AGENTS_CONFIG_DIR || path.resolve(__dirname, "../..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 const { adoptState, listAdoptCandidates } =
-  require(path.join(agentsConfigDir, "hooks", "workflow-state", "inheritance", "adopt.js"));
+  require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "inheritance", "adopt.js"));
 const { describeGranularInheritance } =
-  require(path.join(agentsConfigDir, "hooks", "workflow-state", "inheritance", "apply.js"));
+  require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "inheritance", "apply.js"));
 const { resolveSessionId } =
-  require(path.join(agentsConfigDir, "hooks", "workflow-state", "session-id.js"));
+  require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "session-id.js"));
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 const GRANULARITIES = ["full", "context-independent-only"];

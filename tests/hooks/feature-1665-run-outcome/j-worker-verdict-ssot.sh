@@ -26,8 +26,8 @@ run_j_worker_verdict_ssot_cases() {
     echo ""
     echo "=== j-worker-verdict-ssot (TL1: one parse site) ==="
 
-    local hook_src="$AGENTS_DIR/hooks/workflow-run-tests.js"
-    local outcome_src="$AGENTS_DIR/hooks/workflow-run-tests/outcome.js"
+    local hook_src="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js"
+    local outcome_src="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests/outcome.js"
 
     # --- J1: the module exists and owns the parse --------------------------
     if [ -f "$outcome_src" ]; then pass "J1/outcome.js-exists"

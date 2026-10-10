@@ -24,7 +24,7 @@ const { ALLOW_CODES } = require("./reasons");
 
 const PATH_SEP_RE = /[\\/]/;
 const NEWLINE_RE = /[\r\n]/;
-const ENV_ROOT_RE = /^(?:\$AGENTS_CONFIG_DIR|\$\{AGENTS_CONFIG_DIR\})$/;
+const ENV_ROOT_RE = /^(?:\$AGENTS_MAIN_ROOT|\$\{AGENTS_MAIN_ROOT\})$/;
 const ABS_RE = /^(?:[A-Za-z]:[\\/]|[\\/])/;
 
 function interpreterName(cmd0) {
@@ -69,7 +69,7 @@ function bashCBody(seg) {
   return body.includes("'") || body !== argv[1] ? null : body;
 }
 
-// `cd` target -> the checkout root it names, or null: $AGENTS_CONFIG_DIR (not single-quoted or
+// `cd` target -> the checkout root it names, or null: $AGENTS_MAIN_ROOT (not single-quoted or
 // escaped), or an absolute path that IS the agents root or a linked worktree root of it.
 function cdTarget(seg, root) {
   const argv = Array.isArray(seg.argv) ? seg.argv : [];

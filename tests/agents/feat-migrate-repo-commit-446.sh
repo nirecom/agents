@@ -7,10 +7,10 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COMMIT_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/commit-migration-artifacts.sh"
-ORCH_SCRIPT="$AGENTS_DIR/bin/github-issues/migration/orchestrate.sh"
-FIXTURE_DIR="$AGENTS_DIR/tests/fixtures/migration"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+COMMIT_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/commit-migration-artifacts.sh"
+ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
+FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration"
 
 PASS=0
 FAIL=0
@@ -63,7 +63,6 @@ chmod +x "$MOCK_DIR/gh"
 export MOCK_LOG="$TMP/mock.log"
 : > "$MOCK_LOG"
 export PATH="$MOCK_DIR:$PATH"
-export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 
 # Helper — build a fresh fixture repo at $1 with allowlist files populated.
 # If $2 is "with-remote", creates bare remote at $TMP/<basename>-remote.git and

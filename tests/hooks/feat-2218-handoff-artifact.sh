@@ -11,8 +11,8 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -20,7 +20,7 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-AGENTS_DIR_NODE="$(node_path "$AGENTS_DIR")"
+SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
 # isolation (#2512): pin state and plans dirs file-wide; the per-call pins below still override them.
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
@@ -32,7 +32,7 @@ TARGET="hooks/lib/handoff-artifact.js"
 CLI="bin/workflow/handoff-append"
 
 require_module() {
-    if [ -f "$AGENTS_DIR/$1" ]; then return 0; fi
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
     fail "MODULE NOT FOUND: $1 — expected per issue #2218, not yet implemented (write_code has not run)"
     return 1
 }
@@ -56,7 +56,7 @@ seed_active() {
     env -u CLAUDE_CODE_SESSION_ID \
         WORKFLOW_STATE_DIR="$1/wf" WORKFLOW_PLANS_DIR="$1/wf" HOME="$1/home" USERPROFILE="$1/home" \
         "$RWT" 30 node -e "
-const S = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io');
+const S = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 S.writeState('$2', S.createInitialState('$2', { cwd: '/work/fixture', git_branch: 'feature/h' }));
 S.markStep('$2', 'workflow_init', 'complete');
 " >/dev/null 2>&1
@@ -69,8 +69,8 @@ run_H1() {
     local out
     out="$(run_node "
 const path = require('path');
-const { getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
-const { getSessionStateDir } = require('$AGENTS_DIR_NODE/hooks/workflow-state/state-io/state-root');
+const { getHandoffPath } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
+const { getSessionStateDir } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io/state-root');
 const problems = [];
 const got = getHandoffPath('sess-h1');
 const want = path.join(getSessionStateDir('sess-h1'), 'sess-h1.control', 'handoff.md');
@@ -96,7 +96,7 @@ run_H2() {
     local out
     out="$(run_node "
 const fs = require('fs');
-const { appendHandoffEntry, getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
+const { appendHandoffEntry, getHandoffPath } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const sid = 'sess-h2';
 const problems = [];
 const origins = ['procedure-point', 'gate-block', 'auto-record', 'flush'];
@@ -136,7 +136,7 @@ run_H3() {
     local out
     out="$(run_node "
 const fs = require('fs');
-const { appendHandoffEntry, readHandoff, renderHandoffForResume, getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
+const { appendHandoffEntry, readHandoff, renderHandoffForResume, getHandoffPath } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const sid = 'sess-h3';
 const problems = [];
 const base = { cls: 'D', step: 'run_tests', key: 'run-tests:flaky', pointer: '-', origin: 'procedure-point' };
@@ -183,7 +183,7 @@ run_H4() {
     local out
     out="$(run_node "
 const fs = require('fs');
-const { appendHandoffEntry, getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
+const { appendHandoffEntry, getHandoffPath } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const sid = 'sess-h4';
 const problems = [];
 const e = { cls: 'C', step: 'review_tests', key: 'gate:block', summary: 'same reason', pointer: '-', origin: 'gate-block' };
@@ -213,7 +213,7 @@ run_H5() {
     local out
     out="$(run_node "
 const fs = require('fs');
-const { appendHandoffEntry, getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
+const { appendHandoffEntry, getHandoffPath } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const sid = 'sess-h5';
 const problems = [];
 let overflowSeen = 0;
@@ -254,7 +254,7 @@ run_H6() {
     local out
     out="$(run_node "
 const fs = require('fs');
-const { appendHandoffEntry, readHandoff, getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
+const { appendHandoffEntry, readHandoff, getHandoffPath } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const BS = String.fromCharCode(92);
 const NL = String.fromCharCode(10);
 const CR = String.fromCharCode(13);
@@ -306,7 +306,7 @@ run_H7() {
     out="$(run_node "
 const fs = require('fs');
 const path = require('path');
-const { readHandoff, renderHandoffForResume, getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
+const { readHandoff, renderHandoffForResume, getHandoffPath } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const sid = 'sess-h7';
 const problems = [];
 const p = getHandoffPath(sid);
@@ -340,7 +340,7 @@ run_H8() {
     out="$(run_node "
 const fs = require('fs');
 const path = require('path');
-const { readHandoff, appendHandoffEntry, getHandoffPath } = require('$AGENTS_DIR_NODE/$TARGET');
+const { readHandoff, appendHandoffEntry, getHandoffPath } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$TARGET');
 const problems = [];
 let missing;
 try { missing = readHandoff('sess-h8-absent'); } catch (e) { process.stdout.write('BAD:reader-threw-on-absent:' + e.message); return; }
@@ -401,7 +401,7 @@ run_H9() {
     out=$(env CLAUDE_CODE_SESSION_ID="cli-sid-h9" \
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
-        "$RWT" 60 node "$AGENTS_DIR/$CLI" --class E --step write_tests --key write-tests:not-needed --summary "no test surface" --pointer - --origin procedure-point 2>&1)
+        "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/$CLI" --class E --step write_tests --key write-tests:not-needed --summary "no test surface" --pointer - --origin procedure-point 2>&1)
     rc=$?
     if [ "$rc" -ne 0 ]; then
         fail "H9: CLI exited $rc (expected 0). Output: ${out:-<empty>}"
@@ -427,7 +427,7 @@ run_H10() {
     out=$(env CLAUDE_CODE_SESSION_ID="cli-sid-h10" \
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
-        "$RWT" 60 node "$AGENTS_DIR/$CLI" --class E --step write_tests --key k --summary s --pointer - --origin bogus-origin 2>&1)
+        "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/$CLI" --class E --step write_tests --key k --summary s --pointer - --origin bogus-origin 2>&1)
     rc=$?
     if [ "$rc" -eq 0 ]; then
         fail "H10: CLI accepted --origin bogus-origin (expected non-zero exit). Output: ${out:-<empty>}"
@@ -451,7 +451,7 @@ run_H11() {
     out=$(env CLAUDE_CODE_SESSION_ID="unused-h11" \
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
-        "$RWT" 60 node "$AGENTS_DIR/$CLI" --session "../../evil" --class E --step write_tests --key k --summary s --pointer - --origin procedure-point 2>&1)
+        "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/$CLI" --session "../../evil" --class E --step write_tests --key k --summary s --pointer - --origin procedure-point 2>&1)
     rc=$?
     if [ "$rc" -eq 0 ]; then
         fail "H11: CLI accepted a path-traversal --session (expected non-zero exit). Output: ${out:-<empty>}"
@@ -468,7 +468,7 @@ run_H11() {
 # H12-H17 (CLI UX) live in a sibling fragment: this file is already near the
 # 500-line HARD limit (rules/coding/file-split.md Pattern A).
 # shellcheck source=/dev/null
-. "$AGENTS_DIR/tests/hooks/feat-2218-handoff-artifact/cli-ux.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2218-handoff-artifact/cli-ux.sh"
 
 run_H1
 run_H2

@@ -38,7 +38,7 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FRAGMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/refactor-1364-cpr-principles"
 
 PASS=0
@@ -57,7 +57,7 @@ run_with_timeout() {
     fi
 }
 
-CORE="$AGENTS_DIR/rules/core-principles.md"
+CORE="$SCRIPT_CHECKOUT_ROOT/rules/core-principles.md"
 
 # ----------------------------------------------------------------------------
 # Shared helpers — used by BOTH fragments, so they live here, not in either one.

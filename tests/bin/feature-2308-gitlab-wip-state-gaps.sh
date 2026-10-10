@@ -11,19 +11,19 @@ set -u
 # sibling glab mock does not answer. glab/gh mocked as PATH scripts, no real API.
 # # TL3 gap — real glab label/state calls vs live GitLab not exercised here.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-TARGET="$AGENTS_DIR/bin/github-issues/wip-state.sh"
+TARGET="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh"
 
 TMPROOT="$(mktemp -d)"
 trap 'rm -rf "$TMPROOT"' EXIT
 
-# Isolated fixture config dir (no .env). Plans dir dual-pinned per
+# Isolated fake agents main root (no .env). Plans dir dual-pinned per
 # rules/test/fixture-isolation.md; inherited session ids cleared.
-FIX_CFG="$TMPROOT/config"
-mkdir -p "$FIX_CFG"
-export AGENTS_CONFIG_DIR="$FIX_CFG"
+FAKE_MAIN_ROOT="$TMPROOT/fake-main-root"
+mkdir -p "$FAKE_MAIN_ROOT"
+export AGENTS_MAIN_ROOT="$FAKE_MAIN_ROOT"
 export WORKFLOW_PLANS_DIR="$TMPROOT/plans"
 export WORKFLOW_STATE_DIR="$TMPROOT/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"

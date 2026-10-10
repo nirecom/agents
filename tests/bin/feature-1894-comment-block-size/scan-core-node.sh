@@ -17,8 +17,8 @@
 echo ""
 echo "=== N0: module contract ==="
 
-NS_MOD="$AGENTS_DIR/hooks/lib/comment-block-scan.js"
-NS_CLI="$AGENTS_DIR/bin/review-comment-block-size.d/scan-cli.js"
+NS_MOD="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-scan.js"
+NS_CLI="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size.d/scan-cli.js"
 NS_DIR="$TMPDIR_BASE/nodescan"
 mkdir -p "$NS_DIR"
 
@@ -152,7 +152,7 @@ if [ "$NS_HAVE_NODE" = "1" ]; then
 
     # C3: every scanText call site passes the threshold explicitly — a defaulted
     # call re-opens the ambient-config bypass, invisibly to behavioural tests.
-    for _f in "$NS_CLI" "$AGENTS_DIR/hooks/block-comment-block-size.js"; do
+    for _f in "$NS_CLI" "$SCRIPT_CHECKOUT_ROOT/hooks/block-comment-block-size.js"; do
         if [ -f "$_f" ]; then
             if grep -n 'scanText(' "$_f" | grep -qv ','; then
                 fail "N0/threshold-always-explicit-in-$(basename "$_f")" \

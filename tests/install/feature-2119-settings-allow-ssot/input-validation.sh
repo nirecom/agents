@@ -13,7 +13,7 @@ T13_PROBE=""
 T13_ABS=""
 T13_DRIVE=""
 T13_BACKSLASH=""
-T13_LIST_PROBE="$AGENTS_DIR/tests/hooks/feature-2265-allow-command-list/probe.js"
+T13_LIST_PROBE="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2265-allow-command-list/probe.js"
 
 # EVERY HOSTILE ROW MUST FAIL FOR THE CHARSET REASON. An entry naming a file that does not
 # exist, or one with no shebang, could be dropped by an existence or shebang check before any

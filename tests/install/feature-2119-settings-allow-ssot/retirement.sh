@@ -5,9 +5,9 @@
 # tests/install/feature-2119-settings-allow-ssot.sh, which owns PASS/FAIL/ROWS and assert_eq.
 
 RETIRED_REVIEWER_REL="bin/review-settings-allow"
-RETIRED_REVIEWER="$AGENTS_DIR/$RETIRED_REVIEWER_REL"
+RETIRED_REVIEWER="$SCRIPT_CHECKOUT_ROOT/$RETIRED_REVIEWER_REL"
 PRECOMMIT_REL="hooks/pre-commit"
-PRECOMMIT="$AGENTS_DIR/$PRECOMMIT_REL"
+PRECOMMIT="$SCRIPT_CHECKOUT_ROOT/$PRECOMMIT_REL"
 
 # WHY A TEST FOR A DELETION. The reviewer existed to nag a human into re-syncing hand-typed
 # allow rules; once they are generated there is no mirror to review, so its only remaining
@@ -79,8 +79,8 @@ t39_sandbox() { # <dir> <absent|finding>
     git -C "$d" config commit.gpgsign false
     cp "$PRECOMMIT" "$d/hooks/pre-commit"
     # Every lib the hook sources at load time, or it dies before any gate runs.
-    cp "$AGENTS_DIR/hooks/lib/load-env.sh" "$AGENTS_DIR/hooks/lib/precommit-tests-frontmatter.sh" \
-       "$AGENTS_DIR/hooks/lib/precommit-agents-repo-gates.sh" "$d/hooks/lib/"
+    cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.sh" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-tests-frontmatter.sh" \
+       "$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-agents-repo-gates.sh" "$d/hooks/lib/"
     printf '%s\n' '# fixture SSOT' 'bin/fx-tool' > "$d/install/settings-allow-commands.txt"
     printf '%s\n' '{}' > "$d/settings.json"
     git -C "$d" add -A
@@ -118,7 +118,7 @@ t39_probe() { # <absent|finding> -> "<retired>/<control>" | sentinel
     out="$( ( cd "$d" || exit 127
               # CODE_LANG is unset with the rest: its gate sits between the arming block and the
               # control, so an inherited value would decide the verdict from outside the fixture.
-              unset CLAUDE_CODE_SESSION_ID AGENTS_CONFIG_DIR CODE_LANG
+              unset CLAUDE_CODE_SESSION_ID AGENTS_MAIN_ROOT CODE_LANG
               ENFORCE_WORKTREE=off; export ENFORCE_WORKTREE
               run_with_timeout 60 bash hooks/pre-commit ) 2>&1 )" || rc=$?
     if printf '%s\n' "$out" | grep -q 'review-settings-allow'; then retired="RETIRED-GATE-FIRED"; else retired="silent"; fi

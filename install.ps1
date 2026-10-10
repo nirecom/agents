@@ -9,7 +9,7 @@ if ($IsWindows -eq $false) {
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$AgentsRoot = $PSScriptRoot
+$SCRIPT_CHECKOUT_ROOT = $PSScriptRoot
 
 $script:FailedSteps = @()
 
@@ -87,17 +87,17 @@ try {
     Write-Host "--- Waiting for Claude Code to exit ---"
     try {
         $PSNativeCommandUseErrorActionPreference = $false
-        & pwsh -NoProfile -File (Join-Path $AgentsRoot "install\lib\wait-cc-exit.ps1")
+        & pwsh -NoProfile -File (Join-Path $SCRIPT_CHECKOUT_ROOT "install\lib\wait-cc-exit.ps1")
         $env:WAIT_CC_RESULT = if ($LASTEXITCODE -eq 0) { 'clear' } else { 'timeout' }
     } catch {
         Write-Warning "Claude Code wait check could not start: $($_.Exception.Message) — each step will wait on its own."
     }
 
-    Invoke-InstallStep "Creating symlinks" "$AgentsRoot\install\win\dotfileslink.ps1"
+    Invoke-InstallStep "Creating symlinks" "$SCRIPT_CHECKOUT_ROOT\install\win\dotfileslink.ps1"
 
-    Invoke-InstallStep "Installing Claude Code" "$AgentsRoot\install\win\claude-code.ps1"
+    Invoke-InstallStep "Installing Claude Code" "$SCRIPT_CHECKOUT_ROOT\install\win\claude-code.ps1"
 
-    Invoke-InstallStep "Installing Codex" "$AgentsRoot\install\win\codex.ps1"
+    Invoke-InstallStep "Installing Codex" "$SCRIPT_CHECKOUT_ROOT\install\win\codex.ps1"
 
     # --- BEGIN session-sync gate ---
     # One-time idempotent bootstrap (git init, .gitattributes/.gitignore write, remote
@@ -108,18 +108,18 @@ try {
         Write-Host ""
         Write-Host "Claude Code not found. Session sync skipped." -ForegroundColor Yellow
     } else {
-        Invoke-InstallStep "Initializing Claude Code session sync" "$AgentsRoot\install\win\session-sync-init.ps1"
+        Invoke-InstallStep "Initializing Claude Code session sync" "$SCRIPT_CHECKOUT_ROOT\install\win\session-sync-init.ps1"
     }
     # --- END session-sync gate ---
 
     # plan-sync bootstrap: an empty PLAN_SYNC_REMOTE_URL is a no-op inside the CLI.
-    Invoke-InstallStep "Initializing plan sync" "$AgentsRoot\install\win\plan-sync-init.ps1"
+    Invoke-InstallStep "Initializing plan sync" "$SCRIPT_CHECKOUT_ROOT\install\win\plan-sync-init.ps1"
 
     Write-Host ""
     Write-Host "--- Adding profile sourcing ---"
     $_needRestart = $false
     try {
-        $_snippetPath = "$AgentsRoot\profile-snippet.ps1"
+        $_snippetPath = "$SCRIPT_CHECKOUT_ROOT\profile-snippet.ps1"
         $_marker = "# --- BEGIN agents profile sourcing ---"
         $_profileContent = if (Test-Path $PROFILE) { Get-Content $PROFILE -Raw } else { "" }
         if ($_profileContent -notlike "*$_marker*") {
@@ -138,23 +138,23 @@ try {
     }
     Remove-Variable _snippetPath, _marker, _profileContent, _updated -ErrorAction SilentlyContinue
 
-    Invoke-InstallStep "Configuring VS Code settings (GitHub Copilot / Claude Code)" "$AgentsRoot\install\win\vscode-settings.ps1"
+    Invoke-InstallStep "Configuring VS Code settings (GitHub Copilot / Claude Code)" "$SCRIPT_CHECKOUT_ROOT\install\win\vscode-settings.ps1"
 
-    Invoke-InstallStep "Setting up global gitignore (WORKTREE_NOTES.md)" "$AgentsRoot\install\win\global-gitignore.ps1"
+    Invoke-InstallStep "Setting up global gitignore (WORKTREE_NOTES.md)" "$SCRIPT_CHECKOUT_ROOT\install\win\global-gitignore.ps1"
 
-    Invoke-InstallStep "Installing gh (GitHub CLI)" "$AgentsRoot\install\win\gh.ps1"
+    Invoke-InstallStep "Installing gh (GitHub CLI)" "$SCRIPT_CHECKOUT_ROOT\install\win\gh.ps1"
 
-    Invoke-InstallStep "Installing glab (GitLab CLI) [GITLAB=on to enable]" "$AgentsRoot\install\win\glab.ps1"
+    Invoke-InstallStep "Installing glab (GitLab CLI) [GITLAB=on to enable]" "$SCRIPT_CHECKOUT_ROOT\install\win\glab.ps1"
 
-    Invoke-InstallStep "Installing jq" "$AgentsRoot\install\win\jq.ps1"
+    Invoke-InstallStep "Installing jq" "$SCRIPT_CHECKOUT_ROOT\install\win\jq.ps1"
 
-    Invoke-InstallStep "Installing shellcheck" "$AgentsRoot\install\win\shellcheck.ps1"
+    Invoke-InstallStep "Installing shellcheck" "$SCRIPT_CHECKOUT_ROOT\install\win\shellcheck.ps1"
 
-    Invoke-InstallStep "Installing pwsh (PowerShell) and Pester" "$AgentsRoot\install\win\pwsh.ps1"
+    Invoke-InstallStep "Installing pwsh (PowerShell) and Pester" "$SCRIPT_CHECKOUT_ROOT\install\win\pwsh.ps1"
 
-    Invoke-InstallStep "Configuring CodeGraph" "$AgentsRoot\install\win\codegraph.ps1"
+    Invoke-InstallStep "Configuring CodeGraph" "$SCRIPT_CHECKOUT_ROOT\install\win\codegraph.ps1"
 
-    Invoke-InstallStep "Configuring RTK" "$AgentsRoot\install\win\rtk.ps1"
+    Invoke-InstallStep "Configuring RTK" "$SCRIPT_CHECKOUT_ROOT\install\win\rtk.ps1"
 } finally {
     if ($null -eq $_priorSystemOpsApproved) {
         Remove-Item Env:SYSTEM_OPS_APPROVED -ErrorAction SilentlyContinue

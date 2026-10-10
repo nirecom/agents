@@ -22,12 +22,12 @@ fi
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL="*"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LOAD_ENV_SRC="$AGENTS_DIR/hooks/lib/load-env.js"
-# load-env.js requires ./agents-config-dir, which requires ./path-normalize —
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOAD_ENV_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.js"
+# load-env.js requires ./script-checkout-root, which requires ./path-normalize —
 # both must be copied alongside it or the fixture dies with MODULE_NOT_FOUND.
-ACD_SRC="$AGENTS_DIR/hooks/lib/agents-config-dir.js"
-PATH_NORMALIZE_SRC="$AGENTS_DIR/hooks/lib/path-normalize.js"
+CHECKOUT_ROOT_MODULE_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/script-checkout-root.js"
+PATH_NORMALIZE_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/path-normalize.js"
 
 PASS=0
 FAIL=0
@@ -70,7 +70,7 @@ make_fixture() {
     local node_lib_dir="$TMPDIR_NODE/$name/hooks/lib"
     mkdir -p "$bash_home" "$bash_bin_dir" "$bash_lib_dir"
     cp "$LOAD_ENV_SRC" "$bash_lib_dir/load-env.js"
-    cp "$ACD_SRC" "$bash_lib_dir/agents-config-dir.js"
+    cp "$CHECKOUT_ROOT_MODULE_SRC" "$bash_lib_dir/script-checkout-root.js"
     cp "$PATH_NORMALIZE_SRC" "$bash_lib_dir/path-normalize.js"
     # Helper module — fixture copy of hooks/lib/workflow-plans-dir.js
     cat > "$bash_lib_dir/workflow-plans-dir.js" <<'EOF'

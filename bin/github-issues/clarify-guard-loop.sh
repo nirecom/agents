@@ -8,7 +8,7 @@
 # Manages GUARD_ATTEMPT counter file: <session control dir>/guard-attempt.tmp
 set -uo pipefail
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 SESSION_ID=""
 PLANS_DIR_ARG=""
@@ -65,7 +65,7 @@ fi
 
 INTENT_FILE="${REAL_PLANS_DIR}/${SESSION_ID}-intent.md"
 CHECK_RC=0
-bash "$AGENTS_CONFIG_DIR/bin/github-issues/check-closes-issues-nonempty.sh" \
+bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/check-closes-issues-nonempty.sh" \
     "$INTENT_FILE" $GUARD_FLAG >/dev/null 2>&1 || CHECK_RC=$?
 
 if [[ "$CHECK_RC" -eq 0 ]]; then

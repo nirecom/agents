@@ -11,6 +11,7 @@
 # TL3 gap: a real SessionStart firing inside Claude Code (the hook is fed stdin JSON from a real cwd/branch; settings.json registration is not exercised).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="si"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
@@ -28,10 +29,10 @@ TRANSCRIPTS_BASE_NATIVE="$(native_path "$TRANSCRIPTS_BASE")"
 
 # The directory name the transcript lookup derives from ctx.cwd is
 # ctx.cwd.toLowerCase().replace(/[^a-zA-Z0-9]/g, "-") — computed by asking node
-# itself, in the same cwd ($AGENTS_DIR, no CLAUDE_PROJECT_DIR override) that
+# itself, in the same cwd ($SCRIPT_CHECKOUT_ROOT, no CLAUDE_PROJECT_DIR override) that
 # session-start.js runs from below, rather than reimplemented in bash, so it can
 # never drift from the source's own algorithm across platforms.
-ENCODED_CWD="$(cd "$AGENTS_DIR" && node -e 'console.log(require("path").resolve(process.cwd()).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-"))')"
+ENCODED_CWD="$(cd "$SCRIPT_CHECKOUT_ROOT" && node -e 'console.log(require("path").resolve(process.cwd()).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-"))')"
 TRANSCRIPT_DIR="$TRANSCRIPTS_BASE/$ENCODED_CWD"; mkdir -p "$TRANSCRIPT_DIR"
 
 # announce_donor <donor-sid> — makes <donor-sid> resolvable once the heir names it:
@@ -65,12 +66,12 @@ seed_heir_lineage() {
 start_session() {
     local sid="$1" src="${2:-resume}"
     HOOK_RC=0
-    HOOK_OUT="$(cd "$AGENTS_DIR" && printf '{"session_id":"%s","source":"%s","transcript_path":"%s"}' \
+    HOOK_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && printf '{"session_id":"%s","source":"%s","transcript_path":"%s"}' \
         "$sid" "$src" "$TRANSCRIPTS_BASE_NATIVE/$ENCODED_CWD/$sid.jsonl" | env \
-        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         WORKFLOW_PLANS_DIR="$PLANS_NATIVE" CLAUDE_TRANSCRIPT_BASE_DIR="$TRANSCRIPTS_BASE_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node hooks/session-start.js 2>&1)" || HOOK_RC=$?
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node hooks/session-start.js 2>&1)" || HOOK_RC=$?
 }
 
 # Seeds the DONOR session: created with the current cwd+branch so
@@ -317,15 +318,15 @@ if run_case "SI11/no-donor-plain-init"; then
     EMPTY_WF_NATIVE="$(native_path "$EMPTY_WF")"
     # Same realistic SessionStart payload as start_session; the heir simply has no
     # ancestor to name, which is what "no donor in range" means after #1305.
-    (cd "$AGENTS_DIR" && printf '{"session_id":"%s","source":"resume","transcript_path":"%s"}' \
+    (cd "$SCRIPT_CHECKOUT_ROOT" && printf '{"session_id":"%s","source":"resume","transcript_path":"%s"}' \
         "$SID" "$TRANSCRIPTS_BASE_NATIVE/$ENCODED_CWD/$SID.jsonl" | env \
-        WORKFLOW_STATE_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        WORKFLOW_STATE_DIR="$EMPTY_WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node hooks/session-start.js >/dev/null 2>&1) || true
-    NODE_OUT="$(cd "$AGENTS_DIR" && env \
-        WORKFLOW_STATE_DIR="$EMPTY_WF_NATIVE" AGENTS_CONFIG_DIR="$CFG_NATIVE" \
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node hooks/session-start.js >/dev/null 2>&1) || true
+    NODE_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && env \
+        WORKFLOW_STATE_DIR="$EMPTY_WF_NATIVE" AGENTS_MAIN_ROOT="$CFG_NATIVE" \
         HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" SID="$SID" \
-        "$AGENTS_DIR/bin/run-with-timeout.sh" 60 node -e "$PRE"'
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node -e "$PRE"'
 const st = S.readState(sid);
 const nonPending = S.VALID_STEPS.filter((s) => st.steps[s].status !== "pending");
 console.log("inherit_events=" + rd().events.filter((e) => e.origin === "session-inherit").length +

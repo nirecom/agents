@@ -20,9 +20,9 @@ ALLOW_SSOT="$REPO_ROOT/install/settings-allow-commands.txt"
 CLI_REL="bin/workflow/read-session-facts"
 CLI="$REPO_ROOT/$CLI_REL"
 
-AGENTS_DIR="$REPO_ROOT"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1 -- expected [$2] got [$3]"; fi; }
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
@@ -84,13 +84,13 @@ bg_judge_batch() {
     });
   ' "$@" 2>/dev/null
 }
-BG_OUT="$(bg_judge_batch "node \"\$AGENTS_CONFIG_DIR/$CLI_REL\" --session x" \
-  "node \"\$AGENTS_CONFIG_DIR/$CLI_REL-fake\" --session x")"
+BG_OUT="$(bg_judge_batch "node \"\$AGENTS_MAIN_ROOT/$CLI_REL\" --session x" \
+  "node \"\$AGENTS_MAIN_ROOT/$CLI_REL-fake\" --session x")"
 bg_row() { printf '%s\n' "$BG_OUT" | sed -n "s/^$1	//p"; }
 BG_N="$(printf '%s\n' "$BG_OUT" | grep -c '^[0-9]	' || true)"
 [ "$BG_N" = 2 ] || fail "V1-batch: the batched judge returned $BG_N result lines for 2 rows (vacuity guard)"
 case_begin "V1f-bash-guard-self-script-allow" "hooks/bash-guard/allow.js"
-check "V1f: node \"\$AGENTS_CONFIG_DIR/$CLI_REL\" is allowed as a self script" \
+check "V1f: node \"\$AGENTS_MAIN_ROOT/$CLI_REL\" is allowed as a self script" \
   "allow	BG-ALLOW-SELF-SCRIPT" "$(bg_row 0)"
 case_end
 case_begin "V1g-lookalike-not-in-list" "hooks/lib/allow-command-list.js"

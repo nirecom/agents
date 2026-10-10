@@ -57,7 +57,7 @@ fc_plan_json() { printf '%s/%s.control/detail-plan-unresolved-concerns.json' "$W
 fc_plan_run() {
     FC_PRC=0
     FC_PERR="$TMPDIR_BASE/fcp-err-$FC_PSID.txt"
-    AGENTS_CONFIG_DIR="$FC_ROOT" bash "$FC_ROOT/bin/run-codex-review-loop" \
+    bash "$FC_ROOT/bin/run-codex-review-loop" \
         --format detail-plan --session-id "$FC_PSID" --plans-dir "$FC_PP" \
         --draft-file "$FC_PP/draft.md" --cap 2 --max-extensions 0 --extensions-used 0 \
         --accepted-tradeoffs "$FC_PP/tradeoffs.md" --round 2 \
@@ -165,7 +165,7 @@ fc_no_sid_run() {
     local errf="$TMPDIR_BASE/fc-nosid-err.txt"
     FC_NOUT="$(
         cd "$REPO" || exit 1
-        export PATH="$FULL_PATH" HOME="$TMPDIR_BASE" AGENTS_CONFIG_DIR="$1"
+        export PATH="$FULL_PATH" HOME="$TMPDIR_BASE"
         export CODEX_MOCK_PROMPT="$TMPDIR_BASE/fc-nosid-prompt.txt" \
                CODEX_MOCK_BODY="$NONE_BODY" CODEX_MOCK_EXIT=0
         env -u SESSION_ID -u CLAUDE_CODE_SESSION_ID \

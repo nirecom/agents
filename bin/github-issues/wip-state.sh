@@ -78,10 +78,8 @@ if [ "$CMD" = "abandon" ] && [ "$SID_SET" -eq 1 ]; then
 fi
 
 # Forge detection (#2308). Derive the detect-forge-type path from SCRIPT_DIR so
-# it is reachable even when AGENTS_CONFIG_DIR is overridden (e.g. by tests that
-# point it at an isolated fixture dir). FORGE steers the whole verb path below.
+# every helper comes from this script's own checkout. FORGE steers the whole verb path below.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 FORGE="$(node "$SCRIPT_DIR/../../bin/detect-forge-type" --repo-dir . --field type 2>/dev/null)"
 [ -z "$FORGE" ] && FORGE="unknown"
 
@@ -100,11 +98,6 @@ export BOARD_CARD_REPO_OVERRIDE
 
 # shellcheck source=lib/board-card.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/board-card.sh"
-
-if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
-    echo "Error: AGENTS_CONFIG_DIR not set" >&2
-    exit 2
-fi
 
 # Projects v2 config: auto-resolved from git remote (#641).
 # shellcheck source=lib/resolve-project.sh
@@ -184,8 +177,8 @@ validate_n() {
 }
 
 resolve_plans_dir() {
-    if [ -x "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" ]; then
-        bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+    if [ -x "$SCRIPT_DIR/../workflow-plans-dir" ]; then
+        bash "$SCRIPT_DIR/../workflow-plans-dir" 2>/dev/null \
             || printf '%s' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
     else
         printf '%s' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"

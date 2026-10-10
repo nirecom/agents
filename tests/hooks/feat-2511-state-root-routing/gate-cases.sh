@@ -10,38 +10,38 @@ gate_val() {
 }
 
 c_r20_gate_routes_session() {
-  local acd old fresh out
+  local script_checkout_root old fresh out
   new_home r20
-  acd="$(np "$T/r20-acd")"
-  mkdir -p "$acd"
-  : >"$acd/.env"
+  script_checkout_root="$(np "$T/r20-script-checkout-root")"
+  mkdir -p "$script_checkout_root"
+  : >"$script_checkout_root/.env"
   old="$(sid_of 2001)"
   fresh="$(sid_of 2002)"
   probe_seed "$LEG" "$old"
-  out="$(dprobe gateenv "$acd" "$old")"
+  out="$(dprobe gateenv "$script_checkout_root" "$old")"
   eq "R20 the gate child gets the legacy dir for a legacy session" "$(gate_val "$out")" "$LEG"
-  out="$(dprobe gateenv "$acd" "$fresh")"
+  out="$(dprobe gateenv "$script_checkout_root" "$fresh")"
   eq "R20 the gate child gets the new dir for a fresh session" "$(gate_val "$out")" "$NEW"
   eq "R20 the retired key is no longer passed to the gate child" "$(grep -c "\"$OLD_TOKEN\"" <<<"$out" || true)" "0"
 }
 
 c_r20b_gate_ignores_parent_env() {
-  local acd sid other cfg out
+  local script_checkout_root sid other cfg out
   new_home r20b
-  acd="$(np "$T/r20b-acd")"
-  mkdir -p "$acd"
-  : >"$acd/.env"
+  script_checkout_root="$(np "$T/r20b-script-checkout-root")"
+  mkdir -p "$script_checkout_root"
+  : >"$script_checkout_root/.env"
   sid="$(sid_of 2003)"
   other="$(np "$T/pins/r20b-other")"
   cfg="$(np "$T/pins/r20b-cfg")"
   mkdir -p "$other" "$cfg"
   probe_seed "$LEG" "$sid"
-  out="$(pprobe "$other" gateenv "$acd" "$sid")"
+  out="$(pprobe "$other" gateenv "$script_checkout_root" "$sid")"
   eq "R20b a parent-env pin is ignored; the home-routed dir is passed" "$(gate_val "$out")" "$LEG"
-  out="$(pprobe "$other" gateenv "$acd" "$(sid_of 2004)")"
+  out="$(pprobe "$other" gateenv "$script_checkout_root" "$(sid_of 2004)")"
   eq "R20b a parent-env pin is ignored for a fresh session too" "$(gate_val "$out")" "$NEW"
-  printf 'WORKFLOW_STATE_DIR=%s\n' "$cfg" >"$acd/.env"
-  out="$(pprobe "$other" gateenv "$acd" "$sid")"
+  printf 'WORKFLOW_STATE_DIR=%s\n' "$cfg" >"$script_checkout_root/.env"
+  out="$(pprobe "$other" gateenv "$script_checkout_root" "$sid")"
   eq "R20b an .env value is passed as-is" "$(gate_val "$out")" "$cfg"
 }
 
@@ -58,10 +58,10 @@ c_r23_project_cache() {
   out="$(cd "$T/cwd" && PATH="$stub:$PATH" BOARD_CARD_REPO_OVERRIDE=acme/demo run_with_timeout 30 \
     env -u WORKFLOW_STATE_DIR -u "$OLD_TOKEN" HOME="$H" USERPROFILE="$H" \
     bash -c '. "$1"; resolve_project_for_repo >/dev/null 2>&1; printf "%s" "$RESOLVED_PROJECT_ID"' _ \
-    "$AGENTS_DIR/bin/github-issues/lib/resolve-project.sh" 2>/dev/null || true)"
+    "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh" 2>/dev/null || true)"
   eq "R23 resolve-project reads the new-root cache/" "$out" "PVT_new"
   eq "R23 run-issue-setup no longer defaults the cache to the legacy dir" \
-    "$(grep -c 'projects/workflow' "$AGENTS_DIR/skills/issue-setup/scripts/run-issue-setup.sh" || true)" "0"
+    "$(grep -c 'projects/workflow' "$SCRIPT_CHECKOUT_ROOT/skills/issue-setup/scripts/run-issue-setup.sh" || true)" "0"
   eq "R23 resolve-project no longer defaults the cache to the legacy dir" \
-    "$(grep -c 'projects/workflow' "$AGENTS_DIR/bin/github-issues/lib/resolve-project.sh" || true)" "0"
+    "$(grep -c 'projects/workflow' "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh" || true)" "0"
 }

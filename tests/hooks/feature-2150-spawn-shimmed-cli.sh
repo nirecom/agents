@@ -18,10 +18,10 @@ set -u
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: installer.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PARTS="$AGENTS_DIR/tests/hooks/feature-2150-spawn-shimmed-cli"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PARTS="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2150-spawn-shimmed-cli"
 PROBE="$PARTS/probe.js"
-RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
+RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 MODULE_REL="hooks/lib/spawn-shimmed-cli.js"
 
 PASS=0; FAIL=0; SKIP=0
@@ -42,7 +42,7 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 SANDBOX="$(mktemp -d)"
 export WORKFLOW_STATE_DIR="$SANDBOX/wf" WORKFLOW_PLANS_DIR="$SANDBOX/plans"
 trap 'chmod -R u+rwX "$SANDBOX" 2>/dev/null; rm -rf "$SANDBOX"' EXIT
-ROOT_N="$(node_path "$AGENTS_DIR")"
+ROOT_N="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 PROBE_N="$(node_path "$PROBE")"
 
 [ -f "$PROBE" ] || { echo "FAIL: probe missing at $PROBE — every table would be vacuous"; exit 1; }
@@ -51,7 +51,7 @@ PROBE_N="$(node_path "$PROBE")"
 # The module lands in the write-code stage. Named once, loudly, so the
 # real-module rows read as one diagnosable cause rather than N unrelated
 # failures — and the rows still run, and still fail, until it exists.
-if [ -f "$AGENTS_DIR/$MODULE_REL" ]; then
+if [ -f "$SCRIPT_CHECKOUT_ROOT/$MODULE_REL" ]; then
     pass "H0 $MODULE_REL is present"
 else
     fail "IMPLEMENTATION MISSING: $MODULE_REL — every real-module row below reports load-failed"

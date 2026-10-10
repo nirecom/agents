@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
 # scan-repo.sh — scan a GitHub repo's issues and comments for offensive content.
-#
 # Usage:
 #   scan-repo.sh <owner>/<repo> [--dry-run] [--apply --manifest-path FILE --confirm-ids IDs]
-#                [--since YYYY-MM-DD] [--until YYYY-MM-DD]
-#                [--from-issue N] [--to-issue N]
-#                [--limit N] [--include-private]
-#                [--manifest-out PATH]
-#                [--canary-skip]
-#
+#                [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--from-issue N] [--to-issue N]
+#                [--limit N] [--include-private] [--manifest-out PATH] [--canary-skip]
 # Default mode is dry-run: produces a JSONL manifest (preamble record + item records).
 # --apply requires --manifest-path (previously produced manifest) and --confirm-ids.
 # Stale-content check: SHA-256 of live body vs manifest; exits 5 on mismatch (STALE).
@@ -16,6 +11,7 @@
 
 set -euo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 REPO=""
 APPLY=0
 SINCE=""
@@ -79,10 +75,9 @@ if [ -z "$REPO" ]; then
   exit 3
 fi
 
-# Always resolve scanner relative to this script so tests in worktrees find
-# the worktree's scanner rather than whatever AGENTS_CONFIG_DIR points to.
-CFG_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
-SCANNER="$CFG_DIR/bin/scan-offensive"
+# The scanner is the one in this script's own checkout, so a run from a worktree
+# exercises that worktree's scanner.
+SCANNER="$SCRIPT_CHECKOUT_ROOT/bin/scan-offensive"
 if [ ! -x "$SCANNER" ] && [ ! -f "$SCANNER" ]; then
   echo "scan-repo: scanner not found: $SCANNER" >&2
   exit 3

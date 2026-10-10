@@ -12,13 +12,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
-    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 else
-    _AGENTS_DIR_NODE="$AGENTS_DIR"
+    _SCRIPT_CHECKOUT_ROOT_NODE="$SCRIPT_CHECKOUT_ROOT"
 fi
-MODULE="${_AGENTS_DIR_NODE}/hooks/lib/parse-git-args.js"
+MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/parse-git-args.js"
 
 PASS=0
 FAIL=0
@@ -35,7 +35,7 @@ run_with_timeout() {
     fi
 }
 
-if [ ! -f "$AGENTS_DIR/hooks/lib/parse-git-args.js" ]; then
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-git-args.js" ]; then
     echo "FAIL: hooks/lib/parse-git-args.js not found"
     echo ""
     echo "Results: 0 passed, 1 failed"
@@ -168,7 +168,7 @@ test_p17
 # pre-merge backstop in its fail-closed catch (#2319 symptom 2).
 # ─────────────────────────────────────────────────────────────────────────────
 
-RESOLVE_MODULE="${_AGENTS_DIR_NODE}/hooks/workflow-gate/repo-resolution.js"
+RESOLVE_MODULE="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/workflow-gate/repo-resolution.js"
 
 # call_gitc <command-string> — JSON-encoded parseGitCArg(arg), or NOT_EXPORTED / ERROR.
 call_gitc() {
@@ -223,7 +223,7 @@ esac
 # unblocks (#2319 symptom 2). Asserted as "no throw + non-empty return", which is
 # stable regardless of which Tier4 candidate (CLAUDE_PROJECT_DIR / process.cwd() /
 # an additionalDirectory) actually wins.
-if [ -f "$AGENTS_DIR/hooks/workflow-gate/repo-resolution.js" ]; then
+if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/repo-resolution.js" ]; then
     TIER4_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t wf296t)"
     TIER4_NODE="$(if command -v cygpath >/dev/null 2>&1; then cygpath -m "$TIER4_DIR"; else printf '%s' "$TIER4_DIR"; fi)"
     r="$(

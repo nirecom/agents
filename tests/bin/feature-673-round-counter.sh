@@ -10,7 +10,7 @@ set -uo pipefail
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/../.." && pwd)"
 DETAIL_WRAPPER="$AGENTS_WORKTREE/skills/make-detail-plan/scripts/run-codex-review-loop.sh"
 OUTLINE_WRAPPER="$AGENTS_WORKTREE/skills/make-outline-plan/scripts/run-codex-review-loop.sh"
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_WORKTREE}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$AGENTS_WORKTREE/tests/lib/harness.sh"
 ERRORS=0
 
@@ -89,7 +89,7 @@ fi
 case_end
 
 # ---------------------------------------------------------------------------
-# Fixture: a mock AGENTS_CONFIG_DIR holding the REAL shared loop and its libs,
+# Fixture: a mock checkout holding the REAL stage wrappers, shared loop and libs,
 # with only the codex-facing reviewer stubbed. The stub records the argv it was
 # handed, which is how the round the loop minted becomes observable.
 # ---------------------------------------------------------------------------
@@ -141,6 +141,13 @@ STUB
     done
     [[ -d "$AGENTS_WORKTREE/bin/lib/concern-ledger" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$MOCK/bin/lib/"
     [[ -d "$AGENTS_WORKTREE/bin/lib/codex-review-loop" ]] && cp -r "$AGENTS_WORKTREE/bin/lib/codex-review-loop" "$MOCK/bin/lib/"
+    # A stage wrapper takes its checkout from its own path, so each runs as a copy inside $MOCK.
+    for f in "$DETAIL_WRAPPER" "$OUTLINE_WRAPPER"; do
+        [[ -f "$f" ]] || continue
+        f="${f#"$AGENTS_WORKTREE/"}"
+        mkdir -p "$MOCK/${f%/*}"
+        cp "$AGENTS_WORKTREE/$f" "$MOCK/$f"
+    done
     return 0
 }
 
@@ -166,9 +173,9 @@ seed_drafts() {
 # invoke_detail <sid> <extensions-used> → prints the wrapper's exit code
 invoke_detail() {
     local rc=0
-    AGENTS_CONFIG_DIR="$MOCK" SESSION_ID="$1" PLANS_DIR="$PLANS" \
+    SESSION_ID="$1" PLANS_DIR="$PLANS" \
         EXTENSIONS_USED="$2" \
-        run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || rc=$?
+        run_with_timeout bash "$MOCK/${DETAIL_WRAPPER#"$AGENTS_WORKTREE/"}" >/dev/null 2>&1 || rc=$?
     echo "$rc"
 }
 
@@ -330,8 +337,8 @@ case_begin "extensions-budget-and-counter-address" "bin/run-codex-review-loop"
 
     if [[ -f "$OUTLINE_WRAPPER" ]]; then
         set_body mysid "MISSING_ALTERNATIVE: a third approach was never considered" "1. [HIGH] $CONCERN"
-        AGENTS_CONFIG_DIR="$MOCK" SESSION_ID="mysid" PLANS_DIR="$PLANS" EXTENSIONS_USED="0" \
-            run_with_timeout bash "$OUTLINE_WRAPPER" >/dev/null 2>&1 || true
+        SESSION_ID="mysid" PLANS_DIR="$PLANS" EXTENSIONS_USED="0" \
+            run_with_timeout bash "$MOCK/${OUTLINE_WRAPPER#"$AGENTS_WORKTREE/"}" >/dev/null 2>&1 || true
         OEXPECTED="$WORKFLOW_STATE_DIR/mysid.control/outline-plan-round-number.txt"
         DVAL="$(counter_value "$EXPECTED")"
         if [[ -f "$OEXPECTED" || "$DVAL" == "1" ]]; then

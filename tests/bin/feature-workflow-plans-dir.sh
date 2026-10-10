@@ -25,16 +25,16 @@ fi
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL="*"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LOAD_ENV_SRC="$AGENTS_DIR/hooks/lib/load-env.js"
-PATH_MATCH_SRC="$AGENTS_DIR/hooks/lib/path-match.js"
-# load-env.js requires ./agents-config-dir, which in turn requires
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOAD_ENV_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.js"
+PATH_MATCH_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/path-match.js"
+# load-env.js requires ./script-checkout-root, which in turn requires
 # ./path-normalize — both must land in the fixture lib/ or the fixture copy of
 # load-env.js dies with MODULE_NOT_FOUND before any assertion runs.
-ACD_SRC="$AGENTS_DIR/hooks/lib/agents-config-dir.js"
-PATH_NORMALIZE_SRC="$AGENTS_DIR/hooks/lib/path-normalize.js"
-REAL_HELPER="$AGENTS_DIR/hooks/lib/workflow-plans-dir.js"
-REAL_BRIDGE="$AGENTS_DIR/bin/workflow-plans-dir"
+CHECKOUT_ROOT_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/script-checkout-root.js"
+PATH_NORMALIZE_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/lib/path-normalize.js"
+REAL_HELPER="$SCRIPT_CHECKOUT_ROOT/hooks/lib/workflow-plans-dir.js"
+REAL_BRIDGE="$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir"
 
 PASS=0
 FAIL=0
@@ -80,8 +80,8 @@ make_fixture() {
     if [ -f "$PATH_MATCH_SRC" ]; then
         cp "$PATH_MATCH_SRC" "$dir/lib/path-match.js"
     fi
-    if [ -f "$ACD_SRC" ]; then
-        cp "$ACD_SRC" "$dir/lib/agents-config-dir.js"
+    if [ -f "$CHECKOUT_ROOT_SRC" ]; then
+        cp "$CHECKOUT_ROOT_SRC" "$dir/lib/script-checkout-root.js"
     fi
     if [ -f "$PATH_NORMALIZE_SRC" ]; then
         cp "$PATH_NORMALIZE_SRC" "$dir/lib/path-normalize.js"
@@ -141,8 +141,8 @@ test_n1() {
     local bash_dir="$TMPDIR_BASE/n1" node_dir="$TMPDIR_NODE/n1"
     make_fixture "$bash_dir"
     local r
-    # AGENTS_CONFIG_DIR points to a dir without a .env so load-env is a no-op.
-    r="$(AGENTS_CONFIG_DIR="$node_dir" run_with_timeout node -e "
+    # AGENTS_MAIN_ROOT points to a dir without a .env so load-env is a no-op.
+    r="$(AGENTS_MAIN_ROOT="$node_dir" run_with_timeout node -e "
         delete process.env.WORKFLOW_PLANS_DIR;
         const m = require('$node_dir/lib/workflow-plans-dir.js');
         try { process.stdout.write('OK:' + m.getWorkflowPlansDir()); }
@@ -167,7 +167,7 @@ test_n2() {
     local bash_dir="$TMPDIR_BASE/n2" node_dir="$TMPDIR_NODE/n2"
     make_fixture "$bash_dir"
     local r
-    r="$(AGENTS_CONFIG_DIR="$node_dir" WORKFLOW_PLANS_DIR=/tmp/test-my-plans run_with_timeout node -e "
+    r="$(AGENTS_MAIN_ROOT="$node_dir" WORKFLOW_PLANS_DIR=/tmp/test-my-plans run_with_timeout node -e "
         const m = require('$node_dir/lib/workflow-plans-dir.js');
         try { process.stdout.write('OK:' + m.getWorkflowPlansDir()); }
         catch(e) { process.stdout.write('ERR:' + e.message); }
@@ -190,7 +190,7 @@ test_e1() {
     # WORKFLOW_PLANS_DIR=""  — empty string. The helper's check `raw && raw.length`
     # rejects falsy/empty strings and falls back to default.
     local r
-    r="$(AGENTS_CONFIG_DIR="$node_dir" WORKFLOW_PLANS_DIR="" run_with_timeout node -e "
+    r="$(AGENTS_MAIN_ROOT="$node_dir" WORKFLOW_PLANS_DIR="" run_with_timeout node -e "
         const m = require('$node_dir/lib/workflow-plans-dir.js');
         try { process.stdout.write('OK:' + m.getWorkflowPlansDir()); }
         catch(e) { process.stdout.write('ERR:' + e.message); }
@@ -214,7 +214,7 @@ test_e2() {
     local bash_dir="$TMPDIR_BASE/e2" node_dir="$TMPDIR_NODE/e2"
     make_fixture "$bash_dir"
     local r
-    r="$(AGENTS_CONFIG_DIR="$node_dir" WORKFLOW_PLANS_DIR=foo/bar run_with_timeout node -e "
+    r="$(AGENTS_MAIN_ROOT="$node_dir" WORKFLOW_PLANS_DIR=foo/bar run_with_timeout node -e "
         const m = require('$node_dir/lib/workflow-plans-dir.js');
         try { process.stdout.write('OK:' + m.getWorkflowPlansDir()); }
         catch(e) { process.stdout.write('ERR:' + e.message); }
@@ -235,7 +235,7 @@ test_e3() {
     local bash_dir="$TMPDIR_BASE/e3" node_dir="$TMPDIR_NODE/e3"
     make_fixture "$bash_dir"
     local r
-    r="$(AGENTS_CONFIG_DIR="$node_dir" WORKFLOW_PLANS_DIR=./plans run_with_timeout node -e "
+    r="$(AGENTS_MAIN_ROOT="$node_dir" WORKFLOW_PLANS_DIR=./plans run_with_timeout node -e "
         const m = require('$node_dir/lib/workflow-plans-dir.js');
         try { process.stdout.write('OK:' + m.getWorkflowPlansDir()); }
         catch(e) { process.stdout.write('ERR:' + e.message); }
@@ -256,7 +256,7 @@ test_e4() {
     local bash_dir="$TMPDIR_BASE/e4" node_dir="$TMPDIR_NODE/e4"
     make_fixture "$bash_dir"
     local r
-    r="$(AGENTS_CONFIG_DIR="$node_dir" WORKFLOW_PLANS_DIR='~/foo' run_with_timeout node -e "
+    r="$(AGENTS_MAIN_ROOT="$node_dir" WORKFLOW_PLANS_DIR='~/foo' run_with_timeout node -e "
         const m = require('$node_dir/lib/workflow-plans-dir.js');
         try { process.stdout.write('OK:' + m.getWorkflowPlansDir()); }
         catch(e) { process.stdout.write('ERR:' + e.message); }
@@ -270,10 +270,10 @@ test_e4() {
 test_e4
 
 # ---------------------------------------------------------------------------
-# I1: .env loading via AGENTS_CONFIG_DIR — helper invokes loadDefaultEnv()
+# I1: .env loading via AGENTS_MAIN_ROOT — helper invokes loadDefaultEnv()
 # transparently. Caller never calls it directly.
 # ---------------------------------------------------------------------------
-echo "--- I1: .env loading via AGENTS_CONFIG_DIR ---"
+echo "--- I1: .env loading via AGENTS_MAIN_ROOT ---"
 test_i1() {
     local bash_dir="$TMPDIR_BASE/i1" node_dir="$TMPDIR_NODE/i1"
     make_fixture "$bash_dir"
@@ -285,7 +285,7 @@ test_i1() {
 WORKFLOW_PLANS_DIR=/tmp/env-override-test
 EOF
     local r
-    r="$(AGENTS_CONFIG_DIR="$node_dir" run_with_timeout node -e "
+    r="$(AGENTS_MAIN_ROOT="$node_dir" run_with_timeout node -e "
         delete process.env.WORKFLOW_PLANS_DIR;
         const m = require('$node_dir/lib/workflow-plans-dir.js');
         try { process.stdout.write('OK:' + m.getWorkflowPlansDir()); }
@@ -344,14 +344,14 @@ test_i3() {
     local bash_dir="$TMPDIR_BASE/i3" node_dir="$TMPDIR_NODE/i3"
     make_fixture "$bash_dir"
     local r1
-    r1="$(AGENTS_CONFIG_DIR="$node_dir" WORKFLOW_PLANS_DIR=/tmp/test-plans run_with_timeout node -e "
+    r1="$(AGENTS_MAIN_ROOT="$node_dir" WORKFLOW_PLANS_DIR=/tmp/test-plans run_with_timeout node -e "
         const pm = require('$node_dir/lib/path-match.js');
         const m = require('$node_dir/lib/workflow-plans-dir.js');
         const dir = m.getWorkflowPlansDir();
         process.stdout.write(String(pm.isUnderPath('/tmp/test-plans/foo.md', dir)));
     " 2>&1)"
     local r2
-    r2="$(AGENTS_CONFIG_DIR="$node_dir" WORKFLOW_PLANS_DIR=/tmp/test-plans run_with_timeout node -e "
+    r2="$(AGENTS_MAIN_ROOT="$node_dir" WORKFLOW_PLANS_DIR=/tmp/test-plans run_with_timeout node -e "
         const pm = require('$node_dir/lib/path-match.js');
         const m = require('$node_dir/lib/workflow-plans-dir.js');
         const dir = m.getWorkflowPlansDir();
@@ -366,23 +366,23 @@ test_i3() {
 test_i3
 
 # ---------------------------------------------------------------------------
-# I4: bridge resolves correctly when AGENTS_CONFIG_DIR is unset.
+# I4: bridge resolves correctly when AGENTS_MAIN_ROOT is unset.
 # The bridge derives its own location via $SCRIPT_DIR / pwd -P and never
-# consults AGENTS_CONFIG_DIR for that resolution, so an absolute-path
+# consults AGENTS_MAIN_ROOT for that resolution, so an absolute-path
 # invocation must still return the default $HOME/.workflow-plans.
 # ---------------------------------------------------------------------------
-echo "--- I4: bridge resolves without AGENTS_CONFIG_DIR ---"
+echo "--- I4: bridge resolves without AGENTS_MAIN_ROOT ---"
 test_i4() {
     if [ ! -f "$REAL_BRIDGE" ]; then
         skip "I4 bin/workflow-plans-dir not yet created"
         return
     fi
     local result result_norm expected
-    result="$(run_with_timeout env -u AGENTS_CONFIG_DIR -u WORKFLOW_PLANS_DIR "$REAL_BRIDGE" 2>&1 || true)"
+    result="$(run_with_timeout env -u AGENTS_MAIN_ROOT -u WORKFLOW_PLANS_DIR "$REAL_BRIDGE" 2>&1 || true)"
     result_norm=$(printf '%s' "$result" | sed 's#\\#/#g')
     expected="$NODE_HOME/.workflow-plans"
     if [ "$result_norm" = "$expected" ]; then
-        pass "I4 bridge resolves correctly without AGENTS_CONFIG_DIR (got $result_norm)"
+        pass "I4 bridge resolves correctly without AGENTS_MAIN_ROOT (got $result_norm)"
     else
         fail "I4 expected '$expected', got '$result_norm'"
     fi
@@ -420,9 +420,9 @@ test_i5
 
 # ---------------------------------------------------------------------------
 # I6: the inlined Step 0 fallback chain that SKILL.md files will carry —
-#     bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+#     bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir" 2>/dev/null \
 #       || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
-# When the helper is unreachable (bad AGENTS_CONFIG_DIR) but the user has
+# When the helper is unreachable (bad AGENTS_MAIN_ROOT) but the user has
 # exported WORKFLOW_PLANS_DIR, the fallback must honour that override
 # rather than silently dropping to the home default.
 # ---------------------------------------------------------------------------

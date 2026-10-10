@@ -11,12 +11,12 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # commit-push.js is now dispatch-only (rules/coding/file-split.md Pattern A); the
 # run() spine that owns Gate 3 lives in the sibling procedure.js, so tests 1-3
 # scan that single file — test 2's line-number ordering needs one source.
-WORKER_MD="${AGENTS_DIR}/bin/worker-dispatch/workers/commit-push/procedure.js"
-CP_SKILL_MD="${AGENTS_DIR}/skills/commit-push/SKILL.md"
+WORKER_MD="${SCRIPT_CHECKOUT_ROOT}/bin/worker-dispatch/workers/commit-push/procedure.js"
+CP_SKILL_MD="${SCRIPT_CHECKOUT_ROOT}/skills/commit-push/SKILL.md"
 
 PASS=0
 FAIL=0

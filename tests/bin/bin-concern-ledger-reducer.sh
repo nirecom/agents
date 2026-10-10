@@ -21,7 +21,7 @@ CLI="$AGENTS_ROOT/bin/concern-ledger"
 
 # Shared harness first for the case markers the sub-files use; the counters and
 # reporters below are reset/redefined afterwards, so this narrow harness wins.
-AGENTS_DIR="${AGENTS_DIR:-$AGENTS_ROOT}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_ROOT/tests/lib/harness.sh"
 
@@ -100,7 +100,6 @@ export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 export WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
 
 WORK="$TMPDIR_BASE/work"
 mkdir -p "$WORK"

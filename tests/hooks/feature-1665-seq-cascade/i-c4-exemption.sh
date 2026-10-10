@@ -31,12 +31,12 @@ mk_repo "$REPO"
 REPO_N="$(nrm "$REPO")"
 export CLAUDE_PROJECT_DIR="$REPO_N"
 
-# The guard resolves bin/workflow/next-step relative to AGENTS_CONFIG_DIR; point
-# it at the real repo for this case only (an empty config dir makes the guard
+# The guard resolves bin/workflow/next-step relative to AGENTS_MAIN_ROOT; point
+# it at the real repo for this case only (an empty agents main root makes the guard
 # exit 0 unconditionally, which would make every block assertion vacuous).
 run_c4() { # env: C4_SID
     printf '%s' "{\"session_id\":\"$C4_SID\",\"cwd\":\"$REPO_N\",\"stop_hook_active\":false}" \
-        | AGENTS_CONFIG_DIR="$AGENTS_DIR_N" "$RWT" 120 node "$M_GUARD" 2>&1
+        | "$RWT" 120 node "$M_GUARD" 2>&1
     return 0
 }
 

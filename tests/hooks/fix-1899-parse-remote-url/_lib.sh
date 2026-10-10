@@ -3,7 +3,7 @@
 #
 # Sourced by each split file (via a BASH_SOURCE-relative path) so they can also
 # run standalone. Provides the scaffolding common to all split files:
-#   - AGENTS_DIR + PRU_JS / IPR_JS module paths (cygpath-normalized)
+#   - __LIB_SCRIPT_CHECKOUT_ROOT + PRU_JS / IPR_JS module paths (cygpath-normalized)
 #   - PASS / FAIL counters and pass / fail / assert_eq helpers
 #   - run_with_timeout wrapper
 #   - call_fn / call_fail_message / call_redact_expr node harnesses
@@ -25,11 +25,11 @@ _FIX1899_PRU_LIB_SOURCED=1
 set -u
 
 # Repo root, resolved relative to this lib (tests/hooks/fix-1899-parse-remote-url/).
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
-PRU_JS="$(nodepath "$AGENTS_DIR/hooks/lib/parse-remote-url.js")"
-IPR_JS="$(nodepath "$AGENTS_DIR/hooks/lib/is-private-repo.js")"
+PRU_JS="$(nodepath "$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/lib/parse-remote-url.js")"
+IPR_JS="$(nodepath "$__LIB_SCRIPT_CHECKOUT_ROOT/hooks/lib/is-private-repo.js")"
 
 PASS=0
 FAIL=0

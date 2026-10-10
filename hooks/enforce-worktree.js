@@ -27,7 +27,7 @@ const { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots } =
 const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
 const { findFirstUnquotedAnd, hasCommandSequencing, hasCommandSequencingOutsideHeredoc, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
-const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkerScriptInvocation, isAllowedSupervisorBinTool, isAllowedClarifyGuardLoop, isAllowedReadOnlyWorkflowCli } = require("./enforce-worktree/main-worktree-allows");
+const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkerScriptInvocation, describeVariableScriptPath, isAllowedSupervisorBinTool, isAllowedClarifyGuardLoop, isAllowedReadOnlyWorkflowCli } = require("./enforce-worktree/main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllWriteSegmentsUnderWorkflowDir, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, areAllBashTargetsUnderWorkflowDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand, bashTargetsHitProtectedMarker } = require("./enforce-worktree/bash-write-scope");
 const { checkUniversalTargetAllow } = require("./enforce-worktree/universal-target-allow");
 const { buildWorktreeRemedy } = require("./enforce-worktree/worktree-remedy");
@@ -292,7 +292,8 @@ if (mainCheckout !== false) {
       "Main worktree is reserved for merge/pull only. Work from a linked worktree.\n" +
       _remedy +
       buildAltTargetRemedy() + "\n" +
-      "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work." + (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
+      "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work." +
+      (isCommandTool(toolName) ? describeVariableScriptPath(_cmdText) : "") + (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
   });
 }
 

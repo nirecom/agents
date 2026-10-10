@@ -78,7 +78,7 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
   WORKFLOW_OFF → approve (early-return; all checks bypassed for this session)
   cross-repo bypass (#1138): resolves the target repo from `git -C <path>` in the command;
     compares git common-dir of the target repo against the agents session repo
-    (identified via AGENTS_CONFIG_DIR env or __dirname/../..); if they differ,
+    (identified via AGENTS_MAIN_ROOT env or __dirname/../..); if they differ,
     the commit is to a foreign repo — approve without checking agents workflow state.
     Fail-closed: any git error or missing path → treat as same repo → enforce.
   Gate 1 (unstaged-tracked, #269): blocks when tracked files have unstaged working-tree
@@ -92,7 +92,7 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     (`git show :<file>`), not the working tree, so the commit that performs a split passes.
     Not skipped by the docs-only short-circuit, `workflow.wip=1`, or WORKTREE_OFF —
     only WORKFLOW_OFF bypasses it (early return). Fails closed on infrastructure errors
-    (AGENTS_CONFIG_DIR unresolved, script missing, bash not on PATH, unexpected exit code);
+    (AGENTS_MAIN_ROOT unresolved, script missing, bash not on PATH, unexpected exit code);
     fails open only on the 3s spawn timeout.
     Implementation: checkCodeSizeHardLimit() in hooks/workflow-gate/code-size-gate.js.
   loads ~/.workflow-state/<session_id>.json
@@ -141,7 +141,7 @@ and the repo-manufactured relay tier — #1091). Bash callers reach it via the
 session" code; rc 3 = the resolver itself faulted, a distinct condition callers must not
 conflate with "no session" — full rc table: [session-id-resolution.md](session-id-resolution.md#the-bridge-rc-contract));
 Node CLIs `require()` it directly. Callers locate the bridge relative to their own file
-(`BASH_SOURCE` / `__dirname`), never via `$AGENTS_CONFIG_DIR`, so every checkout uses its own
+(`BASH_SOURCE` / `__dirname`), never via `$AGENTS_MAIN_ROOT`, so every checkout uses its own
 resolver even when that env var points at a different checkout. Why one SSOT: eight independent
 resolver implementations diverged over time and produced concurrent-session misattribution
 (#1082); consolidation (#1251) removes the divergence class instead of patching members one at
@@ -264,7 +264,7 @@ in `enforce-worktree.js` adds a narrow exemption for the exact probe shape used
 by planning skills to read `CONFIRM_*` flags:
 
 ```
-bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off KEY on && echo OFF [|| echo ON]'
+bash -c 'cd "$AGENTS_MAIN_ROOT" && get-config-var --is-off KEY on && echo OFF [|| echo ON]'
 ```
 
 The matcher structurally validates each of the three `&&`-separated clauses and

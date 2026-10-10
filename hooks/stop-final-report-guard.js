@@ -13,6 +13,8 @@ const schema = require("./lib/final-report-schema");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
+
 function controlFile(sid, name) {
   return require("./workflow-state/state-io/control-dir").controlPath(sid, name);
 }
@@ -50,10 +52,7 @@ function runCloseProcedureLane(sid) {
       if (gate && gate.gate_action === "yield") return;
     } catch (e) { diagnoseControlFile(e); /* absent or malformed = no gate = keep evaluating */ }
 
-    const agentsDir = process.env.AGENTS_CONFIG_DIR
-      ? process.env.AGENTS_CONFIG_DIR
-      : path.join(__dirname, "..");
-    const nextStepPath = path.join(agentsDir, "bin", "workflow", "next-step");
+    const nextStepPath = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "next-step");
     if (!fs.existsSync(nextStepPath)) return;
 
     // The current environment MUST be inherited: WORKFLOW_STATE_DIR decides

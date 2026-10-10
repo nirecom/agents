@@ -14,9 +14,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SKILL="$AGENTS_DIR/skills/run-tests/SKILL.md"
-TEST_RULES="$AGENTS_DIR/rules/test.md"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SKILL="$SCRIPT_CHECKOUT_ROOT/skills/run-tests/SKILL.md"
+TEST_RULES="$SCRIPT_CHECKOUT_ROOT/rules/test.md"
 
 PASS=0
 FAIL=0
@@ -25,7 +25,7 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 # Harness only for case_begin/case_end markers; its counter guard keeps PASS/FAIL above.
 # shellcheck source=tests/lib/harness.sh
-. "$AGENTS_DIR/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 if [ ! -f "$SKILL" ]; then
   echo "FAIL: precondition — $SKILL does not exist"
@@ -357,7 +357,7 @@ case_end
 
 # S2431-c/i only prove the name is written; a renamed or deleted CLI leaves a dead command.
 case_begin "named-baseline-cli-exists" "skills/run-tests/SKILL.md"
-if [ -f "$AGENTS_DIR/bin/run-tests-baseline" ]; then
+if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/run-tests-baseline" ]; then
   pass "S2431-l: the named CLI bin/run-tests-baseline exists"
 else
   fail "S2431-l: bin/run-tests-baseline does not exist — SKILL.md names a dead command"

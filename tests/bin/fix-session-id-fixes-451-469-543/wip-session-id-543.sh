@@ -43,15 +43,8 @@ MOCK_EOF
     export GH_MOCK_ARGS_LOG="$WIP_TMP/gh-args.log"
     : > "$GH_MOCK_ARGS_LOG"
 
-    export AGENTS_CONFIG_DIR="$WIP_TMP/agents-config"
-    mkdir -p "$AGENTS_CONFIG_DIR/bin"
-    export PLANS_DIR="$WIP_TMP/plans"
-    mkdir -p "$PLANS_DIR"
-    cat > "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" <<EOF
-#!/bin/bash
-echo "$PLANS_DIR"
-EOF
-    chmod +x "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"
+    # Plans dir: wip-state.sh asks its own sibling bin/workflow-plans-dir, which
+    # honours the WORKFLOW_PLANS_DIR pin made by the dispatcher.
 
     export WIP_STATE_STATUS_FIELD_ID="PVTSSF_status"
     export WIP_STATE_IN_PROGRESS_OPTION_ID="OPT_inprog"
@@ -73,7 +66,6 @@ teardown_wip_mock() {
     WIP_TMP=""
     PATH="${PATH#*mock-bin:}"
     unset GH_MOCK_ARGS_LOG GH_MOCK_PROJECT_ITEM_ID GH_MOCK_STATUS GH_MOCK_FINGERPRINT \
-          AGENTS_CONFIG_DIR PLANS_DIR \
           WIP_STATE_STATUS_FIELD_ID WIP_STATE_IN_PROGRESS_OPTION_ID \
           WIP_STATE_DONE_OPTION_ID WIP_STATE_TODO_OPTION_ID \
           WIP_STATE_FINGERPRINT_FIELD_ID \
@@ -151,7 +143,8 @@ D_TMP=""
 
 setup_d_mock() {
     D_TMP="$(mktemp -d 2>/dev/null || mktemp -d -t wipfix543d)"
-    mkdir -p "$D_TMP/mock-bin" "$D_TMP/agents-config/bin/github-issues"
+    D_FAKE_SCRIPT_CHECKOUT_ROOT="$D_TMP/fake-script-checkout-root"
+    mkdir -p "$D_TMP/mock-bin" "$D_FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues"
 
     cat > "$D_TMP/mock-bin/gh" <<'MOCKGH'
 #!/bin/bash
@@ -162,14 +155,17 @@ esac
 MOCKGH
     chmod +x "$D_TMP/mock-bin/gh"
 
-    cat > "$D_TMP/agents-config/bin/github-issues/wip-state.sh" <<'MOCKWIP'
+    cat > "$D_FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh" <<'MOCKWIP'
 #!/bin/bash
 printf '%s\n' "$*" >> "${WIP_STATE_ARGS_LOG:-/dev/null}"
 exit "${GH_MOCK_WIP_RC:-0}"
 MOCKWIP
-    chmod +x "$D_TMP/agents-config/bin/github-issues/wip-state.sh"
+    chmod +x "$D_FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-state.sh"
+    # wip-set-single.sh finds wip-state.sh from its own path: run it from a copy
+    # that sits beside the mock.
+    D_WIP_SET_SINGLE="$D_FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/wip-set-single.sh"
+    cp "$WIP_SET_SINGLE" "$D_WIP_SET_SINGLE"
 
-    export AGENTS_CONFIG_DIR="$D_TMP/agents-config"
     export PATH="$D_TMP/mock-bin:$PATH"
     export WIP_STATE_ARGS_LOG="$D_TMP/wip-state-args.log"
     : > "$WIP_STATE_ARGS_LOG"
@@ -181,12 +177,12 @@ teardown_d_mock() {
     fi
     D_TMP=""
     PATH="${PATH#*mock-bin:}"
-    unset AGENTS_CONFIG_DIR WIP_STATE_ARGS_LOG GH_MOCK_WIP_RC 2>/dev/null || true
+    unset WIP_STATE_ARGS_LOG GH_MOCK_WIP_RC 2>/dev/null || true
 }
 
 # D1
 setup_d_mock
-run_with_timeout 30 bash "$WIP_SET_SINGLE" --session-id testSID 42 >/dev/null 2>&1
+run_with_timeout 30 bash "$D_WIP_SET_SINGLE" --session-id testSID 42 >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 0 ] && grep -q -- "--session-id testSID" "$WIP_STATE_ARGS_LOG" 2>/dev/null; then
     pass "D1: wip-set-single.sh --session-id passes through to wip-state.sh"
@@ -197,7 +193,7 @@ teardown_d_mock
 
 # D2
 setup_d_mock
-run_with_timeout 30 bash "$WIP_SET_SINGLE" 42 >/dev/null 2>&1
+run_with_timeout 30 bash "$D_WIP_SET_SINGLE" 42 >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 0 ] && grep -q "^set 42" "$WIP_STATE_ARGS_LOG" 2>/dev/null; then
     pass "D2: wip-set-single.sh <N> without --session-id still calls 'set <N>'"

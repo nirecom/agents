@@ -16,9 +16,9 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-POLICY="$AGENTS_DIR/hooks/lib/rules-injection-policy.js"
-READER="$AGENTS_DIR/hooks/lib/rules-policy-reader.js"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+POLICY="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-injection-policy.js"
+READER="$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-policy-reader.js"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -143,7 +143,7 @@ echo "=== E3: each minimized rule keeps a trigger section and its pointer ==="
 # recognized as relevant; one that lost the pointer is a dead end.
 while IFS='|' read -r _tag rule ptr; do
     [ "$_tag" = "MIN" ] || continue
-    abs="$AGENTS_DIR/$rule"
+    abs="$SCRIPT_CHECKOUT_ROOT/$rule"
     if [ ! -f "$abs" ]; then
         fail "E3 [$rule]: declared minimized but the file does not exist"
         continue
@@ -183,7 +183,7 @@ while IFS='|' read -r _tag rule ptr; do
         fail "E3-pointer [$rule]: body names neither '$ptr'${slash:+ nor '$slash'} — the moved procedure is unreachable from the rule"
     fi
 
-    if [ -e "$AGENTS_DIR/$ptr" ]; then
+    if [ -e "$SCRIPT_CHECKOUT_ROOT/$ptr" ]; then
         pass "E3-target [$rule]: the pointer target $ptr exists"
     else
         fail "E3-target [$rule]: the pointer target $ptr does not exist in the tree"
@@ -198,11 +198,11 @@ echo "=== E4: relocation round-trip — content moved, not deleted ==="
 # has_at <label> <file> <fixed-string> <present|absent>
 has_at() {
     local label="$1" f="$2" needle="$3" want="$4"
-    if [ ! -f "$AGENTS_DIR/$f" ]; then
+    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/$f" ]; then
         fail "$label: $f does not exist"
         return
     fi
-    if grep -qF "$needle" "$AGENTS_DIR/$f"; then
+    if grep -qF "$needle" "$SCRIPT_CHECKOUT_ROOT/$f"; then
         if [ "$want" = "present" ]; then pass "$label: '$needle' is present in $f"
         else fail "$label: '$needle' is STILL in $f — the move left a copy behind, so the fact now has two owners (CPR-SSOT)"; fi
     else
@@ -247,7 +247,7 @@ echo "=== E5: the new skills declare user-invocable explicitly ==="
 E5_EXPECT="$EWO:true $SRS:false"
 for row in $E5_EXPECT; do
     s="${row%:*}"; want="${row##*:}"
-    abs="$AGENTS_DIR/$s"
+    abs="$SCRIPT_CHECKOUT_ROOT/$s"
     if [ ! -f "$abs" ]; then
         fail "E5 [$s]: file does not exist"
         continue
@@ -297,7 +297,7 @@ else
 fi
 
 for gone in $E6_EXPECT_DELETED; do
-    if [ -e "$AGENTS_DIR/$gone" ]; then
+    if [ -e "$SCRIPT_CHECKOUT_ROOT/$gone" ]; then
         fail "E6c [$gone]: still present — its content was supposed to move into a skill, and while the file exists the rule and the skill are two owners of one procedure (CPR-SSOT)"
     else
         pass "E6c [$gone]: deleted"
@@ -324,7 +324,7 @@ echo "=== E7: the real CLAUDE.md still routes the reader to every de-injected ru
 # does exist and is the actual entry point — the property deserves a direct assertion.
 # The expected list is the declaration's key column, not a copy: adding a reader row and
 # forgetting the pointer must turn this red without anyone editing this file.
-E7_CLAUDE="$AGENTS_DIR/CLAUDE.md"
+E7_CLAUDE="$SCRIPT_CHECKOUT_ROOT/CLAUDE.md"
 if [ ! -f "$E7_CLAUDE" ]; then
     fail "E7: CLAUDE.md does not exist in the repo root — nothing points at any de-injected rule"
 else
@@ -362,7 +362,7 @@ echo "=== E8: the relocated WORKFLOW_OFF procedure is a procedure, not a word li
 # enforcement session-wide and the ON sentinel is the only thing that restores it, so a
 # destination that documents OFF before ON, or documents OFF without insisting on ON,
 # leaves a reader with a working way to disable the guards and no stated way back.
-EWO_ABS="$AGENTS_DIR/$EWO"
+EWO_ABS="$SCRIPT_CHECKOUT_ROOT/$EWO"
 if [ ! -f "$EWO_ABS" ]; then
     fail "E8: $EWO does not exist"
 else
@@ -401,7 +401,7 @@ echo "=== E9: the WORKTREE_OFF hatch is still reachable from what a session alwa
 # situation the hatch exists for: a session blocked by enforce-worktree, which is the state
 # in which it is least able to go Read an on-demand rule to discover its own way out.
 # So the surviving unconditional rule must (a) name the trigger and (b) route somewhere.
-E9_WFO="$AGENTS_DIR/rules/workflow-off.md"
+E9_WFO="$SCRIPT_CHECKOUT_ROOT/rules/workflow-off.md"
 if [ ! -f "$E9_WFO" ]; then
     fail "E9: rules/workflow-off.md does not exist — the minimized class has no unconditional member left to carry the trigger"
 else
@@ -439,7 +439,7 @@ fi
 # because this one crossed the 300-line WARN (rules/coding/file-split.md Pattern A); the
 # axis is document-vs-behaviour, and it is sourced from here so EWO_ABS and the helpers
 # above stay in scope. ---
-E10_CASES="$AGENTS_DIR/tests/hooks/feature-2037-minimized-escape-hatches/marker-sequence.sh"
+E10_CASES="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2037-minimized-escape-hatches/marker-sequence.sh"
 if [ -f "$E10_CASES" ]; then
     # shellcheck source=/dev/null
     . "$E10_CASES"

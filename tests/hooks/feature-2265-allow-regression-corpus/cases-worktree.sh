@@ -28,7 +28,7 @@ neg-plain-abs         ~ node "@PLAIN@/bin/workflow/next-step"              ~ -  
 neg-plain-rel         ~ node bin/workflow/next-step                        ~ PLAIN ~ passThrough|BG-NO-HIT
 neg-fakewt-abs        ~ bash "@FAKEWT@/bin/fx-wt-only"                     ~ -    ~ passThrough|BG-NO-HIT
 neg-fakewt-rel        ~ node bin/workflow/next-step                        ~ FAKEWT ~ passThrough|BG-NO-HIT
-neg-env-form-wt-cwd   ~ bash "$AGENTS_CONFIG_DIR/bin/fx-wt-only"           ~ WT   ~ passThrough|BG-NO-HIT
+neg-env-form-wt-cwd   ~ bash "$AGENTS_MAIN_ROOT/bin/fx-wt-only"           ~ WT   ~ passThrough|BG-NO-HIT
 notify-wt-abs-exec    ~ "@WT@/bin/workflow/next-step"                      ~ -    ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
 notify-wt-rel-exec    ~ bin/workflow/next-step                             ~ WT   ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
 notify-wt-only-exec   ~ "@WT@/bin/fx-wt-only"                              ~ -    ~ notify|BG-NOTIFY-SCRIPT-NO-INTERPRETER
@@ -67,7 +67,7 @@ case_end
 
 case_begin "worktree-resolution-negatives" "hooks/lib/allow-command-list.js"
 # A worktree subdirectory cwd, a foreign repo, a plain copy, a worktree of a foreign repo, and
-# the $AGENTS_CONFIG_DIR form (always the main root, whatever the cwd) all stay passThrough.
+# the $AGENTS_MAIN_ROOT form (always the main root, whatever the cwd) all stay passThrough.
 wt_rows neg-wt-subdir-rel neg-foreign-rel neg-foreign-abs neg-foreign-abs-ssot neg-plain-abs \
   neg-plain-rel neg-fakewt-abs neg-fakewt-rel neg-env-form-wt-cwd
 case_end

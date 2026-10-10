@@ -3,6 +3,8 @@
 const { spawnSync } = require("child_process");
 const path = require("path");
 
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..", "..", "..");
+
 /**
  * Phase: detect-issues
  * Parse positional CLI args (raw issue tokens like #123, repo#N, owner/repo#N)
@@ -10,7 +12,7 @@ const path = require("path");
  *
  * Returns: { done: false } always (no ask/block from this phase).
  */
-function detectIssues(state, tokens, agentsConfigDir) {
+function detectIssues(state, tokens) {
   if (!tokens || tokens.length === 0) {
     state.issues = [];
     state.repo_map = {};
@@ -18,7 +20,7 @@ function detectIssues(state, tokens, agentsConfigDir) {
   }
 
   // Use parse-issue-tokens (Node script) to safely parse the tokens without shell injection
-  const parseScript = path.join(agentsConfigDir, "bin", "parse-issue-tokens");
+  const parseScript = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "parse-issue-tokens");
   const result = spawnSync(process.execPath, [parseScript, ...tokens], {
     encoding: "utf8",
     env: process.env,

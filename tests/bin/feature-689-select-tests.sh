@@ -17,10 +17,10 @@ _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
 mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SELECT_SH="${AGENTS_DIR}/bin/select-tests.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SELECT_SH="${SCRIPT_CHECKOUT_ROOT}/bin/select-tests.sh"
 # shellcheck source=../lib/test-language-registry-fixture.sh
-. "$AGENTS_DIR/tests/lib/test-language-registry-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -184,8 +184,8 @@ make_fake_selector() {
     local fake="$1"
     mkdir -p "$fake/bin/lib" "$fake/hooks/lib" "$fake/tests/bin"
     cp "$SELECT_SH" "$fake/bin/select-tests.sh"
-    cp "$AGENTS_DIR/bin/lib/select-tests-stem.sh" "$fake/bin/lib/select-tests-stem.sh"
-    install_test_language_registry "$fake" "$AGENTS_DIR"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/select-tests-stem.sh" "$fake/bin/lib/select-tests-stem.sh"
+    install_test_language_registry "$fake" "$SCRIPT_CHECKOUT_ROOT"
 }
 
 # has_suffix_line <text> <suffix> — rc 0 when some line of <text> ends with <suffix> (literal).
@@ -381,21 +381,21 @@ $out"
 }
 
 # shellcheck source=./feature-689-select-tests/auto-merge-base.sh
-. "$AGENTS_DIR/tests/bin/feature-689-select-tests/auto-merge-base.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-689-select-tests/auto-merge-base.sh"
 # shellcheck source=./feature-689-select-tests/docs-only-table.sh
-. "$AGENTS_DIR/tests/bin/feature-689-select-tests/docs-only-table.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-689-select-tests/docs-only-table.sh"
 # shellcheck source=./feature-689-select-tests/zero-commit.sh
-. "$AGENTS_DIR/tests/bin/feature-689-select-tests/zero-commit.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-689-select-tests/zero-commit.sh"
 # shellcheck source=./feature-689-select-tests/zero-commit-boundaries.sh
-. "$AGENTS_DIR/tests/bin/feature-689-select-tests/zero-commit-boundaries.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-689-select-tests/zero-commit-boundaries.sh"
 # shellcheck source=./feature-689-select-tests/zero-commit-real-resolver.sh
-. "$AGENTS_DIR/tests/bin/feature-689-select-tests/zero-commit-real-resolver.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-689-select-tests/zero-commit-real-resolver.sh"
 # shellcheck source=./feature-689-select-tests/zero-commit-trust-and-faults.sh
-. "$AGENTS_DIR/tests/bin/feature-689-select-tests/zero-commit-trust-and-faults.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-689-select-tests/zero-commit-trust-and-faults.sh"
 # shellcheck source=./feature-689-select-tests/zero-commit-hostile-paths.sh
-. "$AGENTS_DIR/tests/bin/feature-689-select-tests/zero-commit-hostile-paths.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-689-select-tests/zero-commit-hostile-paths.sh"
 # shellcheck source=./feature-689-select-tests/registry-unreadable.sh
-. "$AGENTS_DIR/tests/bin/feature-689-select-tests/registry-unreadable.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-689-select-tests/registry-unreadable.sh"
 
 
 test_C1_stem_match_skill_md

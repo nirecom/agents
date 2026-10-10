@@ -12,21 +12,21 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
-AGENTS_DIR_N="$(np "$AGENTS_DIR")"
-NEXT_STEP_N="$AGENTS_DIR_N/bin/workflow/next-step"
-WFMARK_N="$AGENTS_DIR_N/hooks/workflow-mark.js"
-WFSTATE_N="$AGENTS_DIR_N/hooks/workflow-state"
-EVIDENCE_N="$AGENTS_DIR_N/hooks/workflow-gate/review-tests-evidence.js"
+SCRIPT_CHECKOUT_ROOT_N="$(np "$SCRIPT_CHECKOUT_ROOT")"
+NEXT_STEP_N="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
+WFMARK_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-mark.js"
+WFSTATE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"
+EVIDENCE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-gate/review-tests-evidence.js"
 
 export WORKFLOW_STATE_DIR="$(np "$WORKFLOW_STATE_DIR")"
 export WORKFLOW_PLANS_DIR="$(np "$WORKFLOW_PLANS_DIR")"
 unset CLAUDE_PROJECT_DIR
 mkdir -p "$TMPDIR_BASE/cfg" "$TMPDIR_BASE/neutral" "$TMPDIR_BASE/p2-nogit"
 : > "$TMPDIR_BASE/cfg/.env"
-export AGENTS_CONFIG_DIR="$(np "$TMPDIR_BASE/cfg")"
+export AGENTS_MAIN_ROOT="$(np "$TMPDIR_BASE/cfg")"
 NEUTRAL_N="$(np "$TMPDIR_BASE/neutral")"
 P2_NOGIT_N="$(np "$TMPDIR_BASE/p2-nogit")"
-export AGENTS_DIR_N WFMARK_N WFSTATE_N EVIDENCE_N NEUTRAL_N
+export SCRIPT_CHECKOUT_ROOT_N WFMARK_N WFSTATE_N EVIDENCE_N NEUTRAL_N
 
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1" "expected [$2] got [$3]"; fi; }
 check_contains() { if printf '%s' "$3" | grep -qF -- "$2"; then pass "$1"; else fail "$1" "expected [$2] in: $3"; fi; }

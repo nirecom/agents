@@ -21,8 +21,8 @@ else
     _t47_tmp=$(mktemp -d); TEST_TMPS+=("$_t47_tmp")
     printf 'PLAN_LANG=french\n' > "$_t47_tmp/.env"
     _t47_dir="$(cygpath -m "$_t47_tmp" 2>/dev/null || echo "$_t47_tmp")"
-    _t47_out="$(env -u PLAN_LANG AGENTS_CONFIG_DIR="$_t47_dir" node -e "
-      const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
+    _t47_out="$(env -u PLAN_LANG AGENTS_MAIN_ROOT="$_t47_dir" node -e "
+      const { loadLangConfig } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lang-config');
       const v = loadLangConfig('plan');
       if (v !== 'french') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
     " 2>&1)"
@@ -30,8 +30,8 @@ else
 
     # T48: empty PLAN_LANG → 'any' (fail-open)
     printf 'PLAN_LANG=\n' > "$_t47_tmp/.env"
-    _t48_out="$(env -u PLAN_LANG AGENTS_CONFIG_DIR="$_t47_dir" node -e "
-      const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
+    _t48_out="$(env -u PLAN_LANG AGENTS_MAIN_ROOT="$_t47_dir" node -e "
+      const { loadLangConfig } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lang-config');
       const v = loadLangConfig('plan');
       if (v !== 'any') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
     " 2>&1)"
@@ -39,7 +39,7 @@ else
 
     # T49: lintPlanLang hint-tier vs strict-tier symmetry
     _t49_out="$(node -e "
-      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const { lintPlanLang } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/lint-plan-lang');
       const content = 'plain english long sentence here please';
       const hintViolations = lintPlanLang(content, 'french');
       const strictViolations = lintPlanLang(content, 'japanese');
@@ -62,7 +62,7 @@ else
     _t50_agents_dir="$(cygpath -m "$_t50_agents_tmp" 2>/dev/null || echo "$_t50_agents_tmp")"
     _t50_file="$_t50_plans_dir/20260526-223459-intent.md"
     _t50_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_t50_file\",\"content\":\"日本語\"},\"tool_response\":{}}"
-    _t50_out="$(export WORKFLOW_PLANS_DIR="$_t50_plans_dir"; export AGENTS_CONFIG_DIR="$_t50_agents_dir"; echo "$_t50_json" | run_with_timeout 10 node "$CHECK_PLAN_HOOK" 2>/dev/null)"
+    _t50_out="$(export WORKFLOW_PLANS_DIR="$_t50_plans_dir"; export AGENTS_MAIN_ROOT="$_t50_agents_dir"; echo "$_t50_json" | run_with_timeout 10 node "$CHECK_PLAN_HOOK" 2>/dev/null)"
     _t50_ok=1
     echo "$_t50_out" | grep -q '"approve"' || _t50_ok=0
     echo "$_t50_out" | grep -q 'PLAN_LANG=french' || _t50_ok=0

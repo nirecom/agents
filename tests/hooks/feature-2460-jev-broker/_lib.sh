@@ -12,9 +12,9 @@ _FEAT2460_JEV_BROKER_LIB_SOURCED=1
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
-. "$AGENTS_DIR/tests/hooks/feature-2460-jev-shadow/_lib.sh"
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2460-jev-shadow/_lib.sh"
 mock_start
 
 PROBE="$TMPROOT/broker-probe.js"

@@ -15,14 +15,14 @@ set -u
 # - $LASTEXITCODE propagation out of get-config-var.ps1 to a PowerShell caller.
 # - Write-Error stream shape for the exit-3 diagnostic — a value leak could
 #   survive on the pwsh side while this bash file stays green.
-# - node resolution via $env:AGENTS_CONFIG_DIR vs $PSScriptRoot under pwsh.
+# - load-env.js resolution from the script's own checkout ($PSScriptRoot) under pwsh.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh, category pwsh-required.
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-GCV="$AGENTS_DIR/bin/get-config-var"
-EEK="$AGENTS_DIR/bin/env-effective-kv"
-LOAD_ENV_SH="$AGENTS_DIR/hooks/lib/load-env.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GCV="$SCRIPT_CHECKOUT_ROOT/bin/get-config-var"
+EEK="$SCRIPT_CHECKOUT_ROOT/bin/env-effective-kv"
+LOAD_ENV_SH="$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.sh"
 
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
@@ -109,10 +109,10 @@ printf '%s\n' \
     'CONFIRM_DETAIL=off' \
     'PLAIN_KEY=localplain' > "$PROJ/$LOCAL_ENV_BASENAME"
 
-gcv() { AGENTS_CONFIG_DIR="$CFG" run_with_timeout 25 bash "$GCV" "$@" 2>/dev/null; }
+gcv() { AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$GCV" "$@" 2>/dev/null; }
 
 gcv_rc() {
-    AGENTS_CONFIG_DIR="$CFG" run_with_timeout 25 bash "$GCV" "$@" >/dev/null 2>&1
+    AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$GCV" "$@" >/dev/null 2>&1
     printf '%s' "$?"
 }
 
@@ -169,7 +169,7 @@ assert_eq "T2223V-gcv-process-env-still-wins" "exported" \
 # ---------------------------------------------------------------------------
 # Table 2 — bin/env-effective-kv. Columns: name | args | want
 # ---------------------------------------------------------------------------
-eek() { AGENTS_CONFIG_DIR="$CFG" run_with_timeout 25 bash "$EEK" "$@" 2>/dev/null; }
+eek() { AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$EEK" "$@" 2>/dev/null; }
 
 # A missing binary makes bash exit 127 with empty stdout, which would satisfy
 # several of the expectations below by accident. Every such case goes through
@@ -201,7 +201,7 @@ TABLE
 # the whole map: dump output is opt-in only, so a plain values secret sitting
 # in the global .env is never one unmarked invocation away from a transcript.
 noarg_out="$TMP_ROOT/eek-noarg.bin"
-AGENTS_CONFIG_DIR="$CFG" run_with_timeout 25 bash "$EEK" > "$noarg_out" 2>/dev/null
+AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$EEK" > "$noarg_out" 2>/dev/null
 noarg_rc="$?"
 assert_eek_eq "T2223E-eek-no-arg-usage-error" "64" "$noarg_rc"
 assert_eek_eq "T2223E-eek-no-arg-empty-stdout" "0" "$(wc -c < "$noarg_out" | tr -d ' ')"
@@ -209,15 +209,15 @@ assert_eek_eq "T2223E-eek-no-arg-empty-stdout" "0" "$(wc -c < "$noarg_out" | tr 
 # --global-only alone (dump implied but not acknowledged) must also refuse —
 # --allow-dump is mandatory for whole-map output regardless of selector.
 selector_only_rc_out="$TMP_ROOT/eek-selector-only.bin"
-AGENTS_CONFIG_DIR="$CFG" run_with_timeout 25 bash "$EEK" --global-only > "$selector_only_rc_out" 2>/dev/null
+AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$EEK" --global-only > "$selector_only_rc_out" 2>/dev/null
 assert_eek_eq "T2223E-eek-global-only-without-allow-dump-usage-error" "64" "$?"
 
 # --global-only --allow-dump and --allow-dump (default selector) are two
 # spellings of one behaviour that must not drift apart silently.
 global_out="$TMP_ROOT/eek-global.bin"
 default_dump_out="$TMP_ROOT/eek-default-dump.bin"
-AGENTS_CONFIG_DIR="$CFG" run_with_timeout 25 bash "$EEK" --global-only --allow-dump > "$global_out" 2>/dev/null
-AGENTS_CONFIG_DIR="$CFG" run_with_timeout 25 bash "$EEK" --allow-dump > "$default_dump_out" 2>/dev/null
+AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$EEK" --global-only --allow-dump > "$global_out" 2>/dev/null
+AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$EEK" --allow-dump > "$default_dump_out" 2>/dev/null
 if [ -s "$default_dump_out" ] && cmp -s "$default_dump_out" "$global_out"; then
     pass "T2223E-eek-default-selector-equals-global-only"
 else
@@ -244,7 +244,7 @@ env_dump="$(PLAIN_KEY=exported-dump eek --global-only --allow-dump)"
 assert_lacks_nonempty "T2223E-eek-dump-never-reads-process-env" "$env_dump" "exported-dump"
 
 # Mutually exclusive selectors must be rejected rather than silently ranked.
-AGENTS_CONFIG_DIR="$CFG" run_with_timeout 25 bash "$EEK" --repo-root "$PROJ" --global-only >/dev/null 2>&1
+AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$EEK" --repo-root "$PROJ" --global-only >/dev/null 2>&1
 conflict_rc="$?"
 if [ ! -f "$EEK" ]; then
     fail "T2223E-eek-conflicting-selectors-rejected — bin/env-effective-kv does not exist"
@@ -267,7 +267,7 @@ NONODE_OUT="$TMP_ROOT/nonode-out.txt"
 NONODE_ERR="$TMP_ROOT/nonode-err.txt"
 REAL_BASH="$(command -v bash)"
 (
-    export AGENTS_CONFIG_DIR="$CFG"
+    export AGENTS_MAIN_ROOT="$CFG"
     export PATH="$NONODE_BIN"
     "$REAL_BASH" "$EEK" --global-only --allow-dump
 ) > "$NONODE_OUT" 2> "$NONODE_ERR"
@@ -287,7 +287,7 @@ fi
 # readDefaultEnvFile(), so the local layer must be invisible to it.
 # ---------------------------------------------------------------------------
 les() {
-    AGENTS_CONFIG_DIR="$CFG" CLAUDE_PROJECT_DIR="$PROJ" run_with_timeout 25 bash -c '
+    AGENTS_MAIN_ROOT="$CFG" CLAUDE_PROJECT_DIR="$PROJ" run_with_timeout 25 bash -c '
       . "$1" || exit 3
       _load_env_only_value "$2"
     ' _ "$LOAD_ENV_SH" "$1" 2>/dev/null
@@ -309,7 +309,7 @@ assert_eq "T2223S-load-env-sh-forbidden-key-global" "on" "$(les ENFORCE_WORKTREE
 eek_usage_case() {
     local name="$1"; shift
     local out="$TMP_ROOT/eeku-out.bin" err="$TMP_ROOT/eeku-err.txt" rc
-    AGENTS_CONFIG_DIR="$CFG" run_with_timeout 25 bash "$EEK" "$@" > "$out" 2> "$err"
+    AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$EEK" "$@" > "$out" 2> "$err"
     rc="$?"
     assert_eek_eq "T2223E-$name-exit-64" "64" "$rc"
     assert_eek_eq "T2223E-$name-empty-stdout" "0" "$(wc -c < "$out" | tr -d ' ')"
@@ -331,7 +331,7 @@ eek_usage_case eek-unknown-flag --global-only --bogus --key CODE_LANG
 # consequence — one value out, never the whole map. Tightening this pair into a
 # usage error is a source change and out of scope for this test-only pass.
 both_out="$TMP_ROOT/eek-both.bin"
-AGENTS_CONFIG_DIR="$CFG" run_with_timeout 25 bash "$EEK" --global-only --key CODE_LANG --allow-dump > "$both_out" 2>/dev/null
+AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$EEK" --global-only --key CODE_LANG --allow-dump > "$both_out" 2>/dev/null
 assert_eek_eq "T2223E-eek-key-plus-allow-dump-single-value" "english" "$(cat "$both_out")"
 assert_lacks_nonempty "T2223E-eek-key-plus-allow-dump-no-whole-map" "$(cat "$both_out")" "globalplain"
 
@@ -358,7 +358,7 @@ printf '%s\n' \
     "GCV_SECRET_TOGGLE=$GCV_SECRET_LITERAL" > "$PROJ2/$LOCAL_ENV_BASENAME"
 
 gcv2_rc() {
-    AGENTS_CONFIG_DIR="$CFG2" run_with_timeout 25 bash "$GCV" "$@" >/dev/null 2>&1
+    AGENTS_MAIN_ROOT="$CFG2" run_with_timeout 25 bash "$GCV" "$@" >/dev/null 2>&1
     printf '%s' "$?"
 }
 
@@ -368,11 +368,14 @@ assert_eq "T2223X-is-off-exit-2-unset" "2" "$(gcv2_rc --is-off --repo-root "$PRO
 assert_eq "T2223X-is-off-exit-3-unrecognized" "3" "$(gcv2_rc --is-off --repo-root "$PROJ2" GCV_TOGGLE_C)"
 
 # Exit 4 is the internal-failure code: load-env.js present but unrequirable.
-BROKENCFG="$TMP_ROOT/cfg-broken"
-mkdir -p "$BROKENCFG/hooks/lib"
-printf '%s\n' 'throw new Error("load-env deliberately broken for T2223X");' > "$BROKENCFG/hooks/lib/load-env.js"
-printf '%s\n' 'GCV_TOGGLE_A=off' > "$BROKENCFG/.env"
-AGENTS_CONFIG_DIR="$BROKENCFG" run_with_timeout 25 bash "$GCV" --is-off --repo-root "$PROJ2" GCV_TOGGLE_A >/dev/null 2>&1
+# The CLI loads the load-env.js beside itself, so the broken module is reached only by a copy
+# of the CLI launched from the same fake checkout.
+FAKE_SCRIPT_CHECKOUT_ROOT="$TMP_ROOT/fake-script-checkout-root-broken"
+mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks/lib" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin"
+printf '%s\n' 'throw new Error("load-env deliberately broken for T2223X");' > "$FAKE_SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.js"
+printf '%s\n' 'GCV_TOGGLE_A=off' > "$FAKE_SCRIPT_CHECKOUT_ROOT/.env"
+cp "$GCV" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/get-config-var"
+AGENTS_MAIN_ROOT="$FAKE_SCRIPT_CHECKOUT_ROOT" run_with_timeout 25 bash "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off --repo-root "$PROJ2" GCV_TOGGLE_A >/dev/null 2>&1
 assert_eq "T2223X-is-off-exit-4-internal-failure" "4" "$?"
 
 # Regression: the exit-3 diagnostic must not echo the value it rejected. With
@@ -380,7 +383,7 @@ assert_eq "T2223X-is-off-exit-4-internal-failure" "4" "$?"
 # so printing it would put a secret-shaped config value on stderr.
 LEAK_OUT="$TMP_ROOT/gcv-leak-out.txt"
 LEAK_ERR="$TMP_ROOT/gcv-leak-err.txt"
-AGENTS_CONFIG_DIR="$CFG2" run_with_timeout 25 bash "$GCV" --is-off --repo-root "$PROJ2" GCV_SECRET_TOGGLE > "$LEAK_OUT" 2> "$LEAK_ERR"
+AGENTS_MAIN_ROOT="$CFG2" run_with_timeout 25 bash "$GCV" --is-off --repo-root "$PROJ2" GCV_SECRET_TOGGLE > "$LEAK_OUT" 2> "$LEAK_ERR"
 leak_rc="$?"
 assert_eq "T2223X-secret-toggle-exit-3" "3" "$leak_rc"
 assert_lacks_nonempty "T2223X-secret-not-on-stderr" "$(cat "$LEAK_ERR")" "$GCV_SECRET_LITERAL"

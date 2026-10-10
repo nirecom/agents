@@ -17,7 +17,7 @@ _hoff() {
     HO_OUT=$(env CLAUDE_CODE_SESSION_ID="h-cli" \
         WORKFLOW_STATE_DIR="$tn/wf" WORKFLOW_PLANS_DIR="$tn/wf" \
         HOME="$tn/home" USERPROFILE="$tn/home" \
-        "$RWT" 60 node "$AGENTS_DIR/$CLI" "$@" 2>"$tmp/err")
+        "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/$CLI" "$@" 2>"$tmp/err")
     HO_RC=$?
     HO_ERR=$(cat "$tmp/err" 2>/dev/null || true)
     rm -rf "$tmp" 2>/dev/null || true

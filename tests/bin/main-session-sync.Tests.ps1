@@ -21,7 +21,6 @@ BeforeAll {
         GIT_CONFIG_NOSYSTEM = $env:GIT_CONFIG_NOSYSTEM
         GIT_CONFIG_GLOBAL   = $env:GIT_CONFIG_GLOBAL
         WORKFLOW_PLANS_DIR  = $env:WORKFLOW_PLANS_DIR
-        AGENTS_CONFIG_DIR   = $env:AGENTS_CONFIG_DIR
         USERPROFILE         = $env:USERPROFILE
     }
     # Suite-wide profile relocation (#1773): session-sync-init.ps1 fail-closed
@@ -47,9 +46,6 @@ BeforeAll {
     $script:SuitePlansDir = Join-Path $script:SuiteTmp "workflow-plans"
     New-Item -ItemType Directory -Path $script:SuitePlansDir -Force | Out-Null
     $env:WORKFLOW_PLANS_DIR = $script:SuitePlansDir
-    # Resolve the plans helper from this checkout, not whichever agents config
-    # happens to be installed on the machine.
-    $env:AGENTS_CONFIG_DIR = $DotfilesDir
 
     # Make a freshly created/cloned *fixture* repo safe to commit in regardless
     # of machine config. Redundant with the global-config isolation above by

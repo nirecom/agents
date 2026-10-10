@@ -21,7 +21,7 @@ const path = require("path");
 const { loadGolden, frozenMismatch } = require("./quote-spans-differential/golden.js");
 const { checkRelation } = require("./quote-spans-differential/relation.js");
 
-const AGENTS_DIR = path.resolve(__dirname, "..", "..");
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 const FROZEN = path.join(__dirname, "quote-spans-frozen");
 const GOLDEN = path.join(__dirname, "quote-spans-golden.jsonl");
 
@@ -76,7 +76,7 @@ const oldFold = require(path.join(FROZEN, "fold-dq-newlines.js")).foldDqNewlines
 let spans = null;
 let spansErr = null;
 try {
-  spans = require(path.join(AGENTS_DIR, "hooks", "lib", "quote-spans.js"));
+  spans = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "quote-spans.js"));
 } catch (e) {
   spansErr = e.message;
 }
@@ -84,7 +84,7 @@ try {
 let newStrip = null;
 let newStripErr = null;
 try {
-  newStrip = require(path.join(AGENTS_DIR, "hooks", "lib", "strip-quoted-args.js"));
+  newStrip = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "strip-quoted-args.js"));
 } catch (e) {
   newStripErr = e.message;
 }

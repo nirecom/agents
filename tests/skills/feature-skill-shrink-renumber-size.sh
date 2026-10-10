@@ -5,13 +5,13 @@
 
 set -u
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "$AGENTS_DIR/tests/lib/harness.sh"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 check_size() {
     local label="$1"
     local rel="$2"
-    local path="$AGENTS_DIR/$rel"
+    local path="$SCRIPT_CHECKOUT_ROOT/$rel"
     if [ ! -f "$path" ]; then
         fail "$label: file missing ($rel)"
         return
@@ -28,7 +28,7 @@ check_size() {
 check_exists() {
     local label="$1"
     local rel="$2"
-    if [ -f "$AGENTS_DIR/$rel" ]; then
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/$rel" ]; then
         pass "$label: $rel exists"
     else
         fail "$label: $rel missing"

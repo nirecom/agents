@@ -5,14 +5,9 @@
 # Sourced by each split file (registry.sh / orphan.sh / gh-stub.sh /
 # empty-parent.sh / validation.sh) so the file can also run standalone.
 #
-# Provides:
-#   - SWEEP path
-#   - PASS / FAIL counters and pass / fail helpers
-#   - run_with_timeout wrapper
-#   - TMPDIR_BASE + cleanup trap
-#   - init_repo / add_worktree / make_stale repo setup helpers
-#   - ci_field JSON field extractor
-#
+# Provides: SWEEP path, PASS / FAIL counters and pass / fail helpers,
+# run_with_timeout wrapper, TMPDIR_BASE + cleanup trap, init_repo / add_worktree /
+# make_stale repo setup helpers, ci_field JSON field extractor.
 # Idempotent — guarded so multiple sources do not redefine state.
 
 if [ -n "${_SWEEP_LIB_SOURCED:-}" ]; then
@@ -22,9 +17,9 @@ _SWEEP_LIB_SOURCED=1
 
 set -uo pipefail
 
-# AGENTS_DIR resolves to the agents repo root (two levels up from this lib file).
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SWEEP="$AGENTS_DIR/bin/sweep-worktrees.sh"
+# The checkout holding this lib file (three levels up from its directory).
+__LIB_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SWEEP="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/sweep-worktrees.sh"
 
 PASS=0
 FAIL=0

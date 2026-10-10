@@ -56,7 +56,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   eligible Bash commands to pipe their output through the RTK binary before it reaches
   the model, compressing repeated tokens to reduce LLM input size. Default OFF
   (`RTK=off`). Four passthrough guards (all returning `{}` — no modification): G-a
-  (`isAgentsEmit`) passes framework scripts under `AGENTS_CONFIG_DIR` unchanged; G-b
+  (`isAgentsEmit`) passes framework scripts under `AGENTS_MAIN_ROOT` unchanged; G-b
   (`isMachineReadable`) passes commands producing porcelain/structured output (e.g.
   `git status --porcelain`, `git log --format=…`) unchanged; G-c (`isComposite`)
   passes compound commands (pipes, redirects, newlines, command substitution)
@@ -296,25 +296,25 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   plus a fail reason, and every consumer maps `ok:false` to the write/block side. The transform
   boundaries return their input unchanged instead of throwing, so a pathological command cannot
   crash the hook into emitting no verdict at all (a crash would be fail-open).
-  **`AGENTS_CONFIG_DIR` trust anchor** — predicates that recognize a sanctioned script by
-  `<agents-config-dir>/<relative-path>` resolve that directory through
-  `hooks/lib/agents-config-dir.js` rather than reading `process.env.AGENTS_CONFIG_DIR`. The env
+  **Script checkout root trust anchor** — predicates that recognize a sanctioned script by
+  `<script-checkout-root>/<relative-path>` resolve that directory through
+  `hooks/lib/script-checkout-root.js` rather than reading `process.env.AGENTS_MAIN_ROOT`. The env
   var is absent in subagent- and Bash-tool-spawned hook processes (which false-BLOCKed the
   sanctioned finalize-worker overlay, #1630) and attacker-supplied in the hostile case. The
-  resolver falls through env → module anchor (`__dirname`) → realpath and accepts a candidate
-  only when it carries both markers (`hooks/enforce-worktree.js` and `bin/`); a candidate
-  matching one marker is ambiguous and rejected. `hooks/lib/load-env.js` deliberately does not
-  share the fall-through — an explicit `AGENTS_CONFIG_DIR` must remain the sole source of
-  settings, or an alternate config dir would silently be injected with the real repo's `.env`
-  (CPR-SC). The two share only the candidate enumeration.
+  resolver falls through module anchor (`__dirname`) → realpath, with no env candidate, and
+  accepts a candidate only when it carries both markers (`hooks/enforce-worktree.js` and `bin/`);
+  a candidate matching one marker is ambiguous and rejected. `hooks/lib/load-env.js` deliberately
+  does not share the fall-through — an explicit `AGENTS_MAIN_ROOT` must remain the sole source of
+  settings, or an alternate settings directory would silently be injected with the real repo's
+  `.env` (CPR-SC). The two share only the candidate enumeration.
   **Worker-dispatch sanction (#1643, #1673)** — `main-worktree-allows/worker-dispatch-overlay.js`
   sanctions exactly one command shape from the main worktree:
-  `node "<acd>/bin/worker-dispatch.js" <worker> <main-root> <payload-json>`. It deliberately
+  `node "<script-checkout-root>/bin/worker-dispatch.js" <worker> <target-main-root> <payload-json>`. It deliberately
   does **not** call the quote-spans scanner: rather than parse arbitrary quoting, it accepts
   only two token shapes (a bare word free of quote characters, or a fully double-quoted word)
   and rejects everything else, so no env prefix, redirect, pipe, `&&`, or `$VAR` can ride
   along. Three locks must all hold: the script path's derived root equals the marker-validated
-  `AGENTS_CONFIG_DIR`; the `<main-root>` argument equals the repo under judgement; and that
+  script checkout root; the `<target-main-root>` argument equals the repo under judgement; and that
   same argument is one of `getSessionRepoRoots()`'s trusted main worktrees. The payload must
   live under the plans dir. Argument values are screened against the reject set exported by
   `hooks/enforce-worktree/arg-value-guard.js` (`UNSAFE_ARG_VALUE_RE`, `hasControlChar`,

@@ -12,10 +12,11 @@
 # via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 require_sut
 
-PHASES_DIR="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases"
+PHASES_DIR="$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/workflow-init/phases"
 MC_MOD="$PHASES_DIR/meta-classify.js"
 RD_MOD="$PHASES_DIR/route-decision.js"
 

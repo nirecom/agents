@@ -9,9 +9,9 @@
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TESTS_DIR="${TESTS_DIR:-$AGENTS_DIR/tests}"
-REGISTRY_LIB="${RUN_ALL_REGISTRY_LIB:-$AGENTS_DIR/bin/lib/test-language-registry.sh}"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TESTS_DIR="${TESTS_DIR:-$SCRIPT_CHECKOUT_ROOT/tests}"
+REGISTRY_LIB="${RUN_ALL_REGISTRY_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh}"
 # shellcheck source=/dev/null
 { [ -f "$REGISTRY_LIB" ] && . "$REGISTRY_LIB" && tlr_load; } || { echo "[run-all] test language registry not readable: $REGISTRY_LIB (RUN_ALL_REGISTRY_LIB)" >&2; exit 5; }
 
@@ -194,13 +194,13 @@ PARALLELISM_LIB_OK=0; DUR_LIB_OK=0; LANES_LIB_OK=0; LEDGER_INITED=0
 UNMEASURED=99
 
 load_run_all_libs() {
-  local plib="${RUN_ALL_PARALLELISM_LIB:-$AGENTS_DIR/bin/lib/run-all-parallelism.sh}"
-  local dlib="${RUN_ALL_DURATIONS_LIB:-$AGENTS_DIR/bin/lib/run-all-durations.sh}"
+  local plib="${RUN_ALL_PARALLELISM_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-parallelism.sh}"
+  local dlib="${RUN_ALL_DURATIONS_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-durations.sh}"
   # shellcheck source=/dev/null
   [ -f "$plib" ] && . "$plib" 2>/dev/null &&
     command -v run_all_cache_dir >/dev/null 2>&1 && PARALLELISM_LIB_OK=1
   [ "$PARALLELISM_LIB_OK" -eq 1 ] || return 0
-  local llib="${RUN_ALL_LANES_LIB:-$AGENTS_DIR/bin/lib/test-host-lanes.sh}"
+  local llib="${RUN_ALL_LANES_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/test-host-lanes.sh}"
   # shellcheck source=/dev/null
   [ -f "$llib" ] && . "$llib" 2>/dev/null && command -v thl_run_all_lease >/dev/null 2>&1 && LANES_LIB_OK=1
   # shellcheck source=/dev/null
@@ -218,12 +218,12 @@ init_tiers() {
   for ((i = 0; i < TOTAL; i++)); do TIER[$i]="$UNMEASURED"; KEY[$i]=""; done
   { [ "$DUR_LIB_OK" -eq 1 ] && [ "$TOTAL" -gt 0 ]; } || return 0
   for ((i = 0; i < TOTAL; i++)); do
-    run_all_dur_key_into "${WORK[$i]}" "$AGENTS_DIR" || true
+    run_all_dur_key_into "${WORK[$i]}" "$SCRIPT_CHECKOUT_ROOT" || true
     KEY[$i]="$RUN_ALL_DUR_KEY_OUT"
     printf '%s\t%s\n' "$i" "$RUN_ALL_DUR_KEY_OUT"
   done >"$WORKDIR/dur.keys" 2>/dev/null
   [ -f "$WORKDIR/dur.keys" ] || return 0
-  run_all_dur_lookup "$AGENTS_DIR" "$WORKDIR/dur.keys" "$WORKDIR/dur.secs"
+  run_all_dur_lookup "$SCRIPT_CHECKOUT_ROOT" "$WORKDIR/dur.keys" "$WORKDIR/dur.secs"
   [ -f "$WORKDIR/dur.secs" ] || return 0
   while IFS="$(printf '\t')" read -r id secs; do
     case "$id" in ''|*[!0-9]*) continue ;; esac
@@ -289,7 +289,7 @@ ledger_record() {
   case "$secs" in ''|*[!0-9]*) return 0 ;; esac
   if [ "$LEDGER_INITED" -eq 0 ]; then
     LEDGER_INITED=1
-    run_all_dur_writer_init "$AGENTS_DIR"
+    run_all_dur_writer_init "$SCRIPT_CHECKOUT_ROOT"
   fi
   run_all_dur_append "${KEY[$i]}" "$secs"
   return 0
@@ -364,11 +364,11 @@ neutralize_stream() {
   return 0
 }
 
-LAUNCH_LIB="${RUN_ALL_LAUNCH_LIB:-$AGENTS_DIR/bin/lib/run-all-launch.sh}"
+LAUNCH_LIB="${RUN_ALL_LAUNCH_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-launch.sh}"
 # shellcheck source=/dev/null
 [ -f "$LAUNCH_LIB" ] && . "$LAUNCH_LIB"
 command -v run_all_exec >/dev/null 2>&1 || run_all_exec() { tlr_exec_plain "$@"; }
-if command -v run_all_pin_state_dirs >/dev/null 2>&1; then run_all_pin_state_dirs "$WORKDIR" || usage_error "cannot pin the per-run state directories"; fi
+if command -v run_all_pin_test_env >/dev/null 2>&1; then run_all_pin_test_env "$WORKDIR" || usage_error "cannot pin the per-run test environment"; elif command -v run_all_pin_state_dirs >/dev/null 2>&1; then run_all_pin_state_dirs "$WORKDIR" || usage_error "cannot pin the per-run state directories"; fi
 
 launch() {
   local i="$1" script="${WORK[$1]}"
@@ -493,8 +493,8 @@ fi
 
 for f in ${UNSUP[@]+"${UNSUP[@]}"}; do tlr_match "$f"; printf 'UNSUPPORTED: %s (language: %s; not run)\n' "$f" "${TLR_ID:-unknown}"; done
 echo ""
+if declare -F run_all_root_decoy_report >/dev/null 2>&1; then run_all_root_decoy_report || FAIL=$((FAIL + 1)); fi # counted before the counts print
 echo "Results: PASS=$PASS  FAIL=$FAIL  SKIP=$SKIP"
-EXECUTED=$((PASS + FAIL + SKIP))
-echo "RUN_CONTRACT: PASS=$PASS FAIL=$FAIL SKIP=$SKIP EXECUTED=$EXECUTED"
+echo "RUN_CONTRACT: PASS=$PASS FAIL=$FAIL SKIP=$SKIP EXECUTED=$((PASS + FAIL + SKIP))"
 cleanup_all
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

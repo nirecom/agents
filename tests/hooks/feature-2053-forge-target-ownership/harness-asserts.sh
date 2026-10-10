@@ -5,7 +5,7 @@
 # The assertion vocabulary and the unit-probe seam, shared by every case block.
 
 # Sourced by the dispatcher after the fixtures exist — it reads BASE, RWT,
-# AGENTS_DIR, GH_LOG, DECISION and REASON from there.
+# SCRIPT_CHECKOUT_ROOT, GH_LOG, DECISION and REASON from there.
 # --- assertions ---------------------------------------------------------------
 # `ask` and `silent` are the two observable hook decisions. passThrough is also
 # `silent`, so wherever the plan distinguishes "silent allow" from "not my
@@ -54,7 +54,7 @@ catch (e) { process.stdout.write("THREW:" + (e && e.message ? e.message : String
 process.stdout.write(v === undefined ? "undefined" : JSON.stringify(v));
 UNIT
 
-GUARD_DIR="$AGENTS_DIR/hooks/confirm-forge-target-ownership"
+GUARD_DIR="$SCRIPT_CHECKOUT_ROOT/hooks/confirm-forge-target-ownership"
 unit_expr() { # <id> <want-json> <module-file.js> <expression over m>
     local got
     got="$("$RWT" 15 node "$BASE/unit.js" "$(npath "$GUARD_DIR/$3")" "$4" 2>&1)"
