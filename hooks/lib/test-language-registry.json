@@ -81,7 +81,7 @@
       "tableDrivenDetector": null,
       "helperLibrary": null,
       "diagnostics": {},
-      "note": "Naming conventions that mark a file as a test by name alone in any language (show-diff skips previews for them). Never launched."
+      "note": "Naming conventions that mark a file as a test by name alone in any language. Never launched."
     }
   ]
 }

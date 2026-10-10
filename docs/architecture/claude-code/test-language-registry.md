@@ -158,7 +158,6 @@ Tools that select, run or audit tests fail closed (an exit code of their own or 
 | `trp_enumerate_cases` | marks the file malformed with reason `reader` |
 | pre-commit frontmatter / case-marker gates | one stderr line, gate skipped, commit continues |
 | `hooks/block-case-markers.js` | one stderr line, fail open (approve) |
-| `hooks/show-diff.js` | one stderr line, directory-name rule only |
 | parallelism corpus count | count 0, cache key falls back |
 
 ## Adding a language

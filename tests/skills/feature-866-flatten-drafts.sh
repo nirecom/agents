@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Tests: skills/_shared/assemble-mandatory.sh, hooks/show-diff.js, bin/run-codex-review-loop, skills/_shared/codex-review-loop.md
+# Tests: skills/_shared/assemble-mandatory.sh, bin/run-codex-review-loop, skills/_shared/codex-review-loop.md
 # Tags: workflow, plans, hook, bin, env, scope:issue-specific
-# Issue #866 — plan intermediates live flat under PLANS_DIR, told apart by filename suffix; contract: assemble-mandatory.sh header and INTERMEDIATE_PATTERNS in hooks/show-diff.js.
-# L3 gap (real planner orchestration, live hook firing): bin/check-verification-gate.sh category skill-orchestration.
+# Issue #866 — plan intermediates live flat under PLANS_DIR, told apart by filename suffix; contract: assemble-mandatory.sh header.
+# L3 gap (real planner orchestration): bin/check-verification-gate.sh category skill-orchestration.
 set -uo pipefail
 
 # isolation (#2512): pin state and plans dirs once for this file
@@ -11,7 +11,6 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/show-diff.js"
 ASSEMBLE="$SCRIPT_CHECKOUT_ROOT/skills/_shared/assemble-mandatory.sh"
 ERRORS=0
 
@@ -33,43 +32,11 @@ NODE_TMPDIR="$(run_with_timeout node -e "process.stdout.write(require('os').tmpd
 ISOLATED_CFG_DIR="${NODE_TMPDIR}/f866-cfg-$$"
 mkdir -p "$ISOLATED_CFG_DIR"
 
-# Per-test PLANS_DIR (sandboxed under tmpdir; the hook resolves WORKFLOW_PLANS_DIR)
-PLANS_DIR="${NODE_TMPDIR}/f866-plans-$$"
-mkdir -p "$PLANS_DIR"
-
-cleanup() { rm -rf "$ISOLATED_CFG_DIR" "$PLANS_DIR"; }
+cleanup() { rm -rf "$ISOLATED_CFG_DIR"; }
 trap cleanup EXIT
 
-export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 export AGENTS_MAIN_ROOT="$ISOLATED_CFG_DIR"
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
-
-run_hook() {
-  local json="$1"
-  echo "$json" | run_with_timeout node "$HOOK" 2>/dev/null
-}
-
-expect_empty() {
-  local desc="$1" json="$2"
-  local result
-  result=$(run_hook "$json")
-  if [ -z "$result" ]; then
-    pass "$desc"
-  else
-    fail "$desc — expected empty stdout, got: $result"
-  fi
-}
-
-expect_nonempty() {
-  local desc="$1" json="$2"
-  local result
-  result=$(run_hook "$json")
-  if [ -n "$result" ]; then
-    pass "$desc"
-  else
-    fail "$desc — expected non-empty stdout (diff), got empty"
-  fi
-}
 
 # T1 — assemble-mandatory.sh in-place mode (intent → outline overwrite)
 T1_PLANS="${NODE_TMPDIR}/f866-t1-$$"
@@ -119,9 +86,9 @@ else
 fi
 
 if grep -qF "## Issues" "$T1_PLANS/20260620-TEST-outline.md" \
-   && grep -qF "## Class members" "$T1_PLANS/20260620-TEST-outline.md" \
+   && ! grep -qF "## Class members" "$T1_PLANS/20260620-TEST-outline.md" \
    && grep -qF "## Accepted Tradeoffs" "$T1_PLANS/20260620-TEST-outline.md"; then
-  pass "T1 output contains all 3 mandatory sections from intent"
+  pass "T1 output contains Issues and Accepted Tradeoffs from intent; Class members is not injected (#2228)"
 else
   fail "T1 mandatory sections missing from output"
 fi
@@ -216,41 +183,7 @@ fi
 
 rm -rf "$T3_PLANS"
 
-# T4 — show-diff.js suppresses all intermediate suffix patterns (PLANS_DIR-root flat paths)
-INTERMEDIATE_PATTERNS=(
-  "20260620-TEST-outline-draft.md"
-  "20260620-TEST-detail-draft.md"
-  "20260620-TEST-codex-round-1-raw.md"
-  "20260620-TEST-outline-codex-round-1-raw.md"
-  "20260620-TEST-concerns-log.md"
-  "20260620-TEST-outline-concerns-log.md"
-  "20260620-TEST-debug.log"
-  "20260620-TEST-outline-plan-round-number.txt"
-  "20260620-TEST-detail-plan-round-number.txt"
-  "20260620-TEST-outline-plan-concern-ledger.txt"
-  "20260620-TEST-detail-plan-concern-ledger.txt"
-  "20260620-TEST-outline-plan-concern-ledger-cap-snapshot.txt"
-  "20260620-TEST-codex-context.md"
-  "20260620-TEST-codex-context.outline-plan.built"
-  "20260620-TEST-codex-context.detail-plan.built"
-  "20260620-TEST-plan.jsonl"
-  "20260620-TEST-issue-prefill.md"
-  "20260620-TEST-workflow-init-aborted-pathA-multiN-label-failure.md"
-  "20260620-TEST-guard-attempt.tmp"
-)
-
-for pat in "${INTERMEDIATE_PATTERNS[@]}"; do
-  expect_empty "T4 intermediate pattern suppressed: $pat" \
-    "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/$pat\",\"content\":\"x\"}}"
-done
-
-# T5 — show-diff.js does NOT suppress <sid>-context.md (WI-9 session-context)
-expect_nonempty "T5 <sid>-context.md NOT suppressed (session-context final artifact)" \
-  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/20260620-TEST-context.md\",\"content\":\"x\"}}"
-
-# T6 — show-diff.js does NOT suppress final artifact (outline.md)
-expect_nonempty "T6 final outline.md artifact NOT suppressed" \
-  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/20260620-TEST-outline.md\",\"content\":\"x\"}}"
+# T4-T6 removed in #2592
 
 # T7 — no drafts/ directory created by assemble-mandatory in-place mode
 T7_PLANS="${NODE_TMPDIR}/f866-t7-$$"
@@ -275,16 +208,21 @@ EOF
 cat > "$T7_PLANS/20260620-TEST-outline.md" << 'EOF'
 # Planner Outline
 
+## Adopted approach
+
 Body.
 EOF
 
+T7_RC=0
 bash "$ASSEMBLE" --source-kind intent \
   "$T7_PLANS/20260620-TEST-intent.md" \
   "$T7_PLANS/20260620-TEST-outline.md" \
   "$T7_PLANS/20260620-TEST-outline.md" \
-  >/dev/null 2>&1 || true
+  >/dev/null 2>&1 || T7_RC=$?
 
-if [[ ! -d "$T7_PLANS/drafts" ]]; then
+if [[ $T7_RC -ne 0 ]]; then
+  fail "T7 assemble-mandatory in-place exited non-zero ($T7_RC)"
+elif [[ ! -d "$T7_PLANS/drafts" ]]; then
   pass "T7 assemble-mandatory in-place did NOT create $T7_PLANS/drafts/"
 else
   fail "T7 assemble-mandatory created drafts/ dir unexpectedly"
