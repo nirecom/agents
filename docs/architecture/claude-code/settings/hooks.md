@@ -76,10 +76,6 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   is next-step-driven: the model queries `bin/workflow/next-step` after each completion rather than
   receiving a static prose hint
 - `show-plan-link.js` — PostToolUse on Write. Always emits a breadcrumb when a final plan artifact (`*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written, regardless of `CONFIRM_<STEP>`. It first publishes the file through plan-sync: on success against a GitHub remote the breadcrumb is `Plan file: <blob URL>` (readable from mobile apps or a browser); otherwise it is `Plan file: <local path>` plus a `[plan-sync]` status line. Fail-open: a sync failure never aborts the hook or the workflow. The hook no longer spawns VS Code. Design and setup: [../plan-sync.md](../plan-sync.md).
-- `show-diff.js` (PreToolUse, matcher: `Write`) — shows an inline diff in chat for any final
-  plan artifact written under `~/.workflow-plans/` (non-draft direct children:
-  `*-(intent|outline|detail).md`). When the corresponding `CONFIRM_<STEP>` flag is off, the
-  diff is suppressed (#445). Draft artifacts (`drafts/` subdirectory) are always suppressed.
 - `gate-plan-lang.js` (PreToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — rejects a write
   to a final plan artifact under the plans directory whose submitted text violates a strict
   `PLAN_LANG` (`english` / `japanese`) BEFORE the file changes (#2278). The unit of analysis is
@@ -206,7 +202,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   segments, `*` = any non-separator chars, case-insensitive on Windows); a plain path entry
   matches via path-boundary prefix (the target equals the entry or is under its subtree).
   Honored by both `enforce-worktree.js` (repo-granularity) and `pre-commit` (file-granularity).
-  Example: `ENFORCE_WORKTREE_EXCLUDE=C:\git\**\todo.md;C:\git\repo-a`
+  Example: `ENFORCE_WORKTREE_EXCLUDE=C:\work\**\todo.md;C:\work\repo-a`
   Built-in (non-overridable): `.worktree-backup/**` is always excluded so `/worktree-end` Step 5 can copy gitignored files to `.worktree-backup/` even when Bash CWD has reset to the main worktree.
   **gh command classification** — Bash write-detection uses `hooks/lib/bash-write-patterns.js`:
   - **Classified "write" (session-scope check applies)**: `gh pr merge`, `gh issue create/delete`,

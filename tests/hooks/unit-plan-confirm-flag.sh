@@ -3,7 +3,7 @@
 # Tags: workflow, plans, hook, bin, windows, scope:common
 # Unit tests for hooks/lib/plan-confirm-flag.js
 #
-# Tests getSuffix, getConfirmFlagName, and isConfirmOff in isolation by
+# Tests getSuffix and getConfirmFlagName in isolation by
 # requiring the module via `node -e` with WORKFLOW_PLANS_DIR set to a
 # per-run temp directory.
 set -uo pipefail
@@ -140,74 +140,15 @@ expect_result "T13 getConfirmFlagName 'bogus' → null" "null" \
   "lib.getConfirmFlagName('bogus')"
 
 # ══════════════════════════════════════════════════════════════════════════
-# isConfirmOff tests
+# export surface (isConfirmOff / isConfirmOffForStage removed in #2592)
 # ══════════════════════════════════════════════════════════════════════════
 
-echo "=== isConfirmOff tests ==="
+echo "=== export surface tests ==="
 
-# T14: CONFIRM_DETAIL=off → true
-expect_result "T14 isConfirmOff CONFIRM_DETAIL=off detail.md → true" "true" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
-  CONFIRM_DETAIL=off
-
-# T15: CONFIRM_DETAIL=OFF → true (case-insensitive)
-expect_result "T15 isConfirmOff CONFIRM_DETAIL=OFF detail.md → true" "true" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
-  CONFIRM_DETAIL=OFF
-
-# T16: CONFIRM_DETAIL=Off → true
-expect_result "T16 isConfirmOff CONFIRM_DETAIL=Off detail.md → true" "true" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
-  CONFIRM_DETAIL=Off
-
-# T17: CONFIRM_DETAIL=0 → false (vocabulary narrowed — only 'off' recognized)
-expect_result "T17 isConfirmOff CONFIRM_DETAIL=0 detail.md → false (vocabulary narrowed)" "false" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
-  CONFIRM_DETAIL=0
-
-# T18: CONFIRM_DETAIL=false → false (vocabulary narrowed)
-expect_result "T18 isConfirmOff CONFIRM_DETAIL=false detail.md → false (vocabulary narrowed)" "false" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
-  CONFIRM_DETAIL=false
-
-# T19: CONFIRM_DETAIL=no → false (vocabulary narrowed)
-expect_result "T19 isConfirmOff CONFIRM_DETAIL=no detail.md → false (vocabulary narrowed)" "false" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
-  CONFIRM_DETAIL=no
-
-# T20: CONFIRM_DETAIL=disabled → false (vocabulary narrowed)
-expect_result "T20 isConfirmOff CONFIRM_DETAIL=disabled detail.md → false (vocabulary narrowed)" "false" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
-  CONFIRM_DETAIL=disabled
-
-# T21: CONFIRM_DETAIL=on → false
-expect_result "T21 isConfirmOff CONFIRM_DETAIL=on detail.md → false" "false" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
-  CONFIRM_DETAIL=on
-
-# T22: CONFIRM_DETAIL unset → false
-expect_result "T22 isConfirmOff CONFIRM_DETAIL unset detail.md → false" "false" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')"
-
-# T23: CONFIRM_DETAIL=off on context.md → false (not a plan suffix)
-expect_result "T23 isConfirmOff CONFIRM_DETAIL=off context.md → false" "false" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-context.md')" \
-  CONFIRM_DETAIL=off
-
-# T24: CONFIRM_DETAIL=off on drafts/ child → false (not direct child)
-expect_result "T24 isConfirmOff CONFIRM_DETAIL=off drafts/detail.md → false" "false" \
-  "lib.isConfirmOff('$PLANS_DIR/drafts/abc-detail.md')" \
-  CONFIRM_DETAIL=off
-
-# T25: CONFIRM_DETAIL="  off" (padded) → false (fail-safe: whitespace → ON)
-expect_result "T25 isConfirmOff CONFIRM_DETAIL='  off' detail.md → false" "false" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
-  "CONFIRM_DETAIL=  off"
-
-# T26: CONFIRM_INTENT=off on detail.md → false (cross-suffix non-leakage)
-expect_result "T26 isConfirmOff CONFIRM_INTENT=off detail.md → false" "false" \
-  "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
-  CONFIRM_INTENT=off
+# T14: exports are exactly the three surviving functions
+expect_result "T14 exports are exactly getSuffix, getConfirmFlagName, isConfirmOffForStageFromFile" \
+  "getConfirmFlagName,getSuffix,isConfirmOffForStageFromFile" \
+  "Object.keys(lib).sort().join(',')"
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""
