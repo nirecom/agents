@@ -6,7 +6,7 @@
 
 # Reached only via GIT_SSH_COMMAND="sh <abs>/git-ssh-stub.sh" + GIT_SSH_VARIANT=ssh.
 # Host/options are ignored; only the last arg "<cmd> '<path>'" is parsed.
-# Serves exactly /test-owner/test-repo.git -> $GIT_SSH_STUB_BARE; others exit 128.
+# Serves exactly /test-owner/test-repo.git (or $GIT_SSH_STUB_REPO) -> $GIT_SSH_STUB_BARE; others exit 128.
 # Every requested path is appended to $GIT_SSH_STUB_LOG, one per line.
 
 last=""
@@ -23,7 +23,13 @@ if [ -n "${GIT_SSH_STUB_LOG:-}" ]; then
   printf '%s\n' "$repo_path" >> "$GIT_SSH_STUB_LOG"
 fi
 
-if [ "$repo_path" != "/test-owner/test-repo.git" ]; then
+# GIT_SSH_STUB_REPO (optional) names another single repo to serve; the leading "/" is
+# ignored on both sides so the scp form (owner/repo.git) and ssh:// form (/owner/repo.git) match.
+want_repo="${GIT_SSH_STUB_REPO:-/test-owner/test-repo.git}"
+if [ -n "${GIT_SSH_STUB_REPO:-}" ]; then
+  [ "${repo_path#/}" = "${want_repo#/}" ] && repo_path="$want_repo"
+fi
+if [ "$repo_path" != "$want_repo" ]; then
   echo "git-ssh-stub: unknown repository: $repo_path" >&2
   exit 128
 fi

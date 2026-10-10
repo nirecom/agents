@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/assemble-cmd-parse.js, hooks/show-plan-link.js, skills/_shared/assemble-mandatory.sh
-# Tags: plan, vscode, hook, workflow, plans, scope:issue-specific, plan-sync, breadcrumb, edit-write-tools, command-tools
+# Tags: plan, vscode, hook, workflow, plans, scope:issue-specific, plan-sync, breadcrumb, edit-write-tools, command-tools, additional-context
 # Tests for isFinalPlanArtifact detection and systemMessage output in hooks/show-plan-link.js.
 #
 # Uses WORKFLOW_PLANS_DIR to control the resolved plans directory so tests work
@@ -51,7 +51,6 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 unset TERM_PROGRAM 2>/dev/null || true
 unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
-unset SHOW_PLAN_LINK_NO_AUTO_OPEN SHOW_PLAN_LINK_NO_SPAWN SHOW_PLAN_LINK_MARKER_FILE 2>/dev/null || true
 # #2513 safety net: a `code` stub is first on PATH for the whole file, so no case
 # (e.g. T21 sets CLAUDE_CODE_ENTRYPOINT) can ever launch the real editor.
 # shellcheck source=../lib/code-stub.sh

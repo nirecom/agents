@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/stop-confirm-plan-guard.js
-# Tags: stop-confirm-plan-guard, hook, TL3, run-e2e, scope:common
+# Tags: stop-confirm-plan-guard, hook, TL3, run-e2e, scope:common, plan-url, fail-open
 #
 # Issue #943 — per-hook seam TL3 test: stop-confirm-plan-guard.js (Stop).
 # A per-turn marker fixture is placed in the sandbox that the runner pins via the

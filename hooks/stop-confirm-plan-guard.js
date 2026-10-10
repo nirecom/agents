@@ -5,6 +5,7 @@
 // Layer 2 (every Stop, #2278): when CONFIRM_<STAGE> appears in the last assistant
 // turn, block unless the confirmed artifact passes PLAN_LANG re-lint AND a
 // stage-valid follow-up tool_use appears after the sentinel.
+// Layer 3 (#2513): a turn that wrote or CONFIRMed a plan stage must show its blob URL.
 // Reason prefixes and the marker contract: docs/architecture/claude-code/settings.md.
 "use strict";
 
@@ -55,9 +56,10 @@ if (require.main === module) {
   // Capture both the joined text (Layer 1) and the full content array (Layer 2).
   let lastAssistantText = "";
   let lastAssistantContent = null;
+  let lines = [];
   try {
     const raw = fs.readFileSync(input.transcript_path, "utf8");
-    const lines = raw.split("\n");
+    lines = raw.split("\n");
     const tail = lines.slice(Math.max(0, lines.length - 50));
     for (let i = tail.length - 1; i >= 0; i--) {
       const line = tail[i];
@@ -113,7 +115,7 @@ if (require.main === module) {
       if (lastAssistantText.includes(pat)) {
         process.stdout.write(JSON.stringify({
           decision: "block",
-          reason: "[confirm-plan] Step 2 violation: orchestrator emitted a local `~/.workflow-plans/` path representation. The `show-plan-link.js` breadcrumb is the sole plan surface; re-stating its GitHub blob URL is fine, a local path is not. Re-issue the response without the path. (Hook: stop-confirm-plan-guard.js)",
+          reason: "[confirm-plan] Step 2 violation: orchestrator emitted a local `~/.workflow-plans/` path representation. Show a plan only by its GitHub blob URL (`$AGENTS_CONFIG_DIR/bin/plan-link` prints it); re-stating that blob URL is fine, a local path is not. Re-issue the response without the path. (Hook: stop-confirm-plan-guard.js)",
         }));
         process.exit(2);
       }
@@ -176,6 +178,42 @@ if (require.main === module) {
             reason: "[confirm-plan] Layer 2/follow-up: stage-valid follow-up Skill not found after CONFIRM_" + stage.toUpperCase() + nextSkillHint,
           }));
           process.exit(2);
+        }
+      }
+    }
+  } catch (_) {
+    process.exit(0);
+  }
+
+  // Layer 3: a turn that wrote or CONFIRMed a plan stage must show that stage's blob URL
+  // in its assistant text (hooks/lib/plan-link-turn-check.js). No URL -> nothing to check.
+  try {
+    const tc = require("./lib/plan-link-turn-check");
+    const entries = tc.turnEntriesFromLines(lines);
+    const stages = tc.stagesToCheck({ markers, turnEntries: entries });
+    if (stages.length > 0) {
+      const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
+      const { resolvePlanLink } = require("./lib/plan-link");
+      const plansDir = getWorkflowPlansDir();
+      // A written artifact may carry another session's id (cross-session carry-in), and one call
+      // may write several files of a stage: check every file a marker names, not only <sid>-<stage>.md.
+      const markerPaths = {};
+      for (const m of markers) {
+        if (!m || typeof m.suffix !== "string" || typeof m.absPath !== "string") continue;
+        (markerPaths[m.suffix] = markerPaths[m.suffix] || []).push(m.absPath);
+      }
+      const turnText = tc.collectTurnAssistantText(entries);
+      for (const st of stages) {
+        for (const absPath of markerPaths[st] || [undefined]) {
+          const verdict = tc.checkPlanUrlInTurn({
+            stages: [st],
+            turnText,
+            resolve: (s) => resolvePlanLink(sid, s, { plansDir, absPath }),
+          });
+          if (verdict.block) {
+            process.stdout.write(JSON.stringify({ decision: "block", reason: verdict.reason }));
+            process.exit(2);
+          }
         }
       }
     }

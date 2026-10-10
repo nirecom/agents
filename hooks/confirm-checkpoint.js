@@ -2,8 +2,9 @@
 // PreToolUse hook: when Bash emits a <<WORKFLOW_CONFIRM_{INTENT|OUTLINE|DETAIL}>>
 // sentinel, surface the relevant plan/PR context above the permission dialog so the
 // user can Allow or Deny inline. Sentinel patterns: hooks/lib/sentinel-patterns.js.
-// Output protocol: emits { "systemMessage": "..." } only, always exit 0 (fail-open —
-// we never block the user's approval flow).
+// Output protocol: always a { "systemMessage" } for the user, plus a PreToolUse
+// additionalContext carrying the plan's blob URL or reason (hooks/lib/plan-link.js) for the
+// model. Always exit 0 (fail-open — we never block the user's approval flow).
 "use strict";
 
 const fs = require("fs");
@@ -116,15 +117,21 @@ if (require.main === module) {
     process.exit(0);
   }
 
+  // The user-facing systemMessage may name the local path (only the user sees it); the
+  // model-facing additionalContext carries the blob URL or a reason code, never a path.
   let url = null;
-  if (absPath && plansDir) {
-    try {
-      const { publishedBlobUrl } = require("./lib/plan-sync");
-      url = publishedBlobUrl(plansDir, absPath);
-    } catch (_) { /* fail-open: the local path is shown */ }
-  }
-  const msg = renderMessage(stage, absPath, url);
-  process.stdout.write(JSON.stringify({ systemMessage: msg }));
+  let hso = null;
+  try {
+    const { resolvePlanLink, renderModelContext } = require("./lib/plan-link");
+    const opts = { plansDir };
+    if (absPath) opts.absPath = absPath;
+    const link = resolvePlanLink(sid, stage, opts);
+    if (link.url) url = link.url;
+    hso = { hookEventName: "PreToolUse", additionalContext: renderModelContext([{ stage, ...link }], { when: "confirm" }) };
+  } catch (_) { /* fail-open: the systemMessage alone is shown */ }
+  const out = { systemMessage: renderMessage(stage, absPath, url) };
+  if (hso) out.hookSpecificOutput = hso;
+  process.stdout.write(JSON.stringify(out));
   process.exit(0);
 }
 

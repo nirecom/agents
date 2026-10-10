@@ -250,7 +250,7 @@ echo "=== T-NOCODE-1: TERM_PROGRAM=vscode — no editor launch from plan display
 : > "$CODE_STUB_LOG"
 NOCODE_OUT=$(
   export TERM_PROGRAM=vscode
-  unset CLAUDE_CODE_ENTRYPOINT SHOW_PLAN_LINK_NO_AUTO_OPEN SHOW_PLAN_LINK_NO_SPAWN SHOW_PLAN_LINK_MARKER_FILE 2>/dev/null || true
+  unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
   run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}" >/dev/null
   sleep 1
   printf 'count=%s' "$(code_stub_count)"

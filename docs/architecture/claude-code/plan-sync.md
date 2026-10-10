@@ -10,7 +10,8 @@ The plan confirmation steps (`CONFIRM_INTENT` / `CONFIRM_OUTLINE` / `CONFIRM_DET
 ask the user to read a plan before approving it. A bare local path is useless away from
 the desktop. The earlier answer was to auto-open the file in a VS Code window; that
 needed a VS Code session on the same machine and was removed. A forge blob URL works on
-every device that can sign in to the forge, so the breadcrumb now carries that URL.
+every device that can sign in to the forge, so the model now writes that URL in the
+conversation body.
 
 Plan sync is a sibling of [session-sync](session-sync.md) and uses the same remote-URL
 format, but it is a different mechanism: session-sync moves whole session history on
@@ -19,8 +20,9 @@ at the moment it is written.
 
 ## Setup
 
-1. Create an empty **private** (or internal) repository yourself — no README needed.
-   Init does not create it; it pushes the first commit to the empty repo.
+1. Create an empty **private** (or internal) repository yourself — no README needed — or
+   let the interactive setup create it (see below). Init pushes the first commit to the
+   empty repo.
 2. Set it in `agents/.env` (gitignored; template in `.env.example`):
 
    ```
@@ -29,11 +31,21 @@ at the moment it is written.
 
    SSH (`git@github.com:…`) or HTTPS (`https://github.com/…`) both work. HTTPS needs
    credentials that never prompt (Git Credential Manager, `gh auth setup-git`); never put
-   a token inside the URL. Empty (the default) turns plan sync off; the breadcrumb keeps
-   the local path.
+   a token inside the URL. Empty (the default) turns plan sync off; the model is told
+   the plan is not published and no URL is shown.
 3. Provision once with `bin/plan-sync-init` (Windows wrapper
    `install/win/plan-sync-init.ps1`; `install.sh` / `install.ps1` call it too). It is
    idempotent and safe to re-run, and must be re-run after changing the URL.
+
+**Interactive setup.** When no remote is configured (empty or the `.env.example`
+placeholder), no `--remote-url` is given, and stdin is a TTY, init runs
+`hooks/lib/plan-sync/init-interactive.js` instead of stopping. It uses `gh`: the signed-in
+login proposes `<login>/agent-plans`. An existing private repo is offered for reuse; a
+public or internal one aborts; an absent one is created `--private` after a y/N prompt.
+Init then provisions, and asks y/N before writing `PLAN_SYNC_REMOTE_URL` into the agents
+`.env` (atomic temp-file + rename, replacing every existing `PLAN_SYNC_REMOTE_URL` line).
+If SSH provisioning fails it prints a hint (`ssh -T git@github.com`, or the HTTPS URL after
+`gh auth setup-git`). Non-interactive runs behave as before.
 
 `PLAN_SYNC_REMOTE_URL` is on the `.env.local` overlay blocklist (see
 [local-env-overrides.md](local-env-overrides.md)): a project must not redirect where
@@ -78,18 +90,33 @@ reason, with a hint to run `bin/plan-sync-init`.
   trusted only after that attempt fetched the tip, so a stale `origin/main` cannot hide a
   revision that never reached the remote. Remote content is only ever added or
   overwritten, never deleted.
-- **Breadcrumb.** On success against a GitHub remote the hook emits
-  `Plan file: <blob URL>`, produced only when `origin/main` holds byte-identical content
-  to the local file. Otherwise it emits `Plan file: <absolute local path>` plus a
-  `[plan-sync]` status line (not configured, not provisioned, failed, or pushed to a
-  non-GitHub remote with no URL).
-- **Never blocks.** Every failure degrades to path plus warning; the workflow continues.
+- **Plan link in the main conversation.** `systemMessage` is shown faintly on the PC only;
+  only body text reaches the iOS/Android Remote Control apps. So the hooks hand the model
+  the plan link as `hookSpecificOutput.additionalContext` (`[plan-link]`): the blob URL, or
+  a reason code when there is none (never a local path). `show-plan-link.js` does this
+  after a write and `confirm-checkpoint.js` before a CONFIRM. The URL exists only when
+  `origin/main` holds byte-identical content to the local file. The model must write it in
+  its response text (`skills/_shared/confirm-plan.md` CPA-2 / CPA-3 own that obligation),
+  and the Stop guard's Layer 3 enforces it ([settings/hooks.md](settings/hooks.md)).
+- **Breadcrumb `systemMessage`.** `show-plan-link.js` emits the `Plan file:` breadcrumb
+  plus a `[plan-sync]` status line only when sync produced no URL (not configured, not
+  provisioned, failed, or a non-GitHub remote). On success it is suppressed. A failed sync
+  of a file already published unchanged still recovers the URL for the model but keeps the
+  breadcrumb. `confirm-checkpoint.js` always emits its `systemMessage` with the context.
+- **`bin/plan-link`.** `bin/plan-link [--session <id>] [--stage intent|outline|detail]` is a
+  read-only, network-free lookup printing `<stage>: <blob URL>` or
+  `<stage>: (unavailable: <reason>)`; the session defaults to `CLAUDE_CODE_SESSION_ID`. Use
+  it to answer "where is the plan". Reason codes and resolution live in
+  `hooks/lib/plan-link.js`, shared by the hooks and the CLI.
+- **No file sends.** `hooks/block-send-user-file.js` denies `SendUserFile`, so a plan is
+  never delivered as a file.
+- **Never blocks.** Every failure degrades to a reason plus warning; the workflow continues.
   The per-turn marker used by the Stop guard is written regardless
   ([settings/hooks.md](settings/hooks.md)).
 
 Code: `hooks/lib/plan-sync.js` (dispatch) and `hooks/lib/plan-sync/{remote-url,
-allowlist,provision,git,commit-push,local-file}.js`. Skill-side wording of the breadcrumb:
-`skills/_shared/confirm-plan.md`.
+allowlist,provision,git,commit-push,local-file,init-interactive}.js`; link resolution
+`hooks/lib/plan-link.js`.
 
 ## Visibility policy
 
@@ -106,8 +133,8 @@ For a GitLab remote the query passes `glab --hostname <host>`, so a self-hosted 
 asked about its own project. The host must match `^[a-z0-9.-]+$` before `glab` is spawned;
 anything else is treated as unknown.
 
-A non-GitHub remote is accepted but cannot produce a blob URL, so breadcrumbs fall back
-to the local path.
+A non-GitHub remote is accepted but cannot produce a blob URL, so the plan link reports
+reason `non-github` and the breadcrumb keeps the local path.
 
 Init also prints a `.private-info-blocklist` note unless the remote's owner/repo appears
 in the forge's `listPrivateRepoNames`. That list now returns private **and internal**

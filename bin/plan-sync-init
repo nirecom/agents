@@ -5,6 +5,8 @@
 // whenever a breadcrumb names a reason. Thin wrapper over provisionRepo.
 // Hooks read PLAN_SYNC_REMOTE_URL from the environment / .env only, so a successful
 // --remote-url run whose value differs from that prints a stdout warning (exit stays 0).
+// With no URL (or the .env.example placeholder) on a TTY and no --remote-url, an interactive
+// gh-based setup runs instead (hooks/lib/plan-sync/init-interactive.js).
 // Exit: 0 provisioned, or not configured (empty URL); 1 refused / failed;
 // 2 usage (unknown argument, missing value, --remote-url given more than once).
 "use strict";
@@ -42,7 +44,10 @@ if (url === undefined) {
   const r = PS.resolveRemoteUrl();
   hookUrl = r.loadFailed ? "" : r.value || "";
 }
-if (!url) {
+const II = require(path.join(__dirname, "..", "hooks", "lib", "plan-sync", "init-interactive.js"));
+const { isPlaceholderUrl } = require(path.join(__dirname, "..", "hooks", "lib", "plan-sync", "remote-url.js"));
+const interactive = II.shouldRunInteractive({ remoteUrlArg: args.remoteUrl, url, isPlaceholder: isPlaceholderUrl(url) });
+if (!url && !interactive) {
   process.stdout.write("plan-sync: not configured (PLAN_SYNC_REMOTE_URL empty)\n");
   process.exit(0);
 }
@@ -52,6 +57,15 @@ try {
   plansDir = getWorkflowPlansDir();
 } catch (e) {
   die(1, `cannot resolve WORKFLOW_PLANS_DIR: ${e && e.message}`);
+}
+
+if (interactive) {
+  process.exit(II.runInteractive({
+    PS,
+    plansDir,
+    out: (s) => process.stdout.write(s),
+    err: (s) => process.stderr.write(s),
+  }));
 }
 
 let result;

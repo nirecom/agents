@@ -200,6 +200,37 @@ let d; try { d = JSON.parse(require('fs').readFileSync(0, 'utf8')); } catch (e) 
 process.stdout.write(d.systemMessage || '');" 2>/dev/null
 }
 
+# psf_hso <hook-stdout> <field> — prints .hookSpecificOutput.<field> (empty if none).
+# Exit 1 when stdout is not JSON, 0 otherwise.
+psf_hso() {
+  printf '%s' "$1" | psf_timeout 30 node -e "
+let d; try { d = JSON.parse(require('fs').readFileSync(0, 'utf8')); } catch (e) { process.exit(1); }
+const h = d && d.hookSpecificOutput;
+process.stdout.write(h && h[process.argv[1]] != null ? String(h[process.argv[1]]) : '');" "$2" 2>/dev/null
+}
+
+# psf_has_hso <hook-stdout> — exit 0 when the JSON output carries a hookSpecificOutput object.
+psf_has_hso() {
+  printf '%s' "$1" | psf_timeout 30 node -e "
+let d; try { d = JSON.parse(require('fs').readFileSync(0, 'utf8')); } catch (e) { process.exit(1); }
+process.exit(d && d.hookSpecificOutput ? 0 : 1);" 2>/dev/null
+}
+
+# psf_path_leak <text> <plans-dir> — prints the first local-path form found in <text>
+# (raw, forward-slash, POSIX, the ~/.workflow-plans default, or "workflow-plans"); empty when clean.
+psf_path_leak() {
+  local text="$1" dir="$2" form
+  local -a forms=("~/.workflow-plans" ".workflow-plans")
+  if [ -n "$dir" ]; then
+    forms+=("$dir" "${dir//\\//}" "${dir//\//\\}" "$(psf_up "$dir")")
+  fi
+  for form in "${forms[@]}"; do
+    [ -z "$form" ] && continue
+    case "$text" in *"$form"*) printf '%s' "$form"; return 0 ;; esac
+  done
+  return 0
+}
+
 # psf_write_json <file_path> [session_id] — PostToolUse Write payload.
 psf_write_json() {
   psf_timeout 30 node -e "

@@ -29,5 +29,6 @@ After each skill completes, run: `node bin/workflow/next-step --session $CLAUDE_
 - `rules/mid-workflow-findings.md` is not auto-injected — Read it for bugs, follow-ups, or next-task findings discovered mid-workflow.
 - When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
 - When you encounter an issue, concern, or unexpected outcome that core-principles + workflow don't resolve, report it: [rules/supervisor-reporting.md](rules/supervisor-reporting.md) says when, `/supervisor-report` does it.
+- When asked where a plan is, run `node "$AGENTS_CONFIG_DIR/bin/plan-link"` and write the printed blob URL in your reply — never a local path.
 - `write-code` is not a tracked `next-step` step — invoke it manually once `write_tests`/`review_tests` complete, before `/run-tests`.
 - For keeping the Stop guard quiet during long-running work — automatic while a delegated step is in flight, `NEXT_STEP_PAUSE` otherwise — see [rules/stop-guard-exemptions.md](rules/stop-guard-exemptions.md).

@@ -75,7 +75,8 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing
   is next-step-driven: the model queries `bin/workflow/next-step` after each completion rather than
   receiving a static prose hint
-- `show-plan-link.js` — PostToolUse on Write. Always emits a breadcrumb when a final plan artifact (`*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written, regardless of `CONFIRM_<STEP>`. It first publishes the file through plan-sync: on success against a GitHub remote the breadcrumb is `Plan file: <blob URL>` (readable from mobile apps or a browser); otherwise it is `Plan file: <local path>` plus a `[plan-sync]` status line. Fail-open: a sync failure never aborts the hook or the workflow. The hook no longer spawns VS Code. Design and setup: [../plan-sync.md](../plan-sync.md).
+- `show-plan-link.js` — PostToolUse on the edit-write tool class and `assemble-mandatory.sh` commands. Runs when a final plan artifact (`*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written, regardless of `CONFIRM_<STEP>`. It first publishes the file through plan-sync, then always emits `hookSpecificOutput.additionalContext` (`[plan-link]`) carrying the blob URL, or a reason code (never a local path), for the model to write in its response text. The breadcrumb `systemMessage` (`Plan file: <local path>` plus a `[plan-sync]` status line) is emitted only when sync produced no URL; a failed sync of an already-published unchanged file recovers the URL but keeps the breadcrumb. Fail-open: a sync failure never aborts the hook or the workflow. The hook no longer spawns VS Code. Design and setup: [../plan-sync.md](../plan-sync.md).
+- `block-send-user-file.js` (PreToolUse, matcher: `SendUserFile`) — denies the tool so a plan is shown by its blob URL in the response text, never sent as a file. Any other tool or unreadable stdin passes with no output.
 - `show-diff.js` (PreToolUse, matcher: `Write`) — shows an inline diff in chat for any final
   plan artifact written under `~/.workflow-plans/` (non-draft direct children:
   `*-(intent|outline|detail).md`). When the corresponding `CONFIRM_<STEP>` flag is off, the
@@ -115,7 +116,8 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   post-write backstop for `WORKTREE_NOTES.md`; reads the file as written and lints the two
   target sections with the same routing (`safeIsPrivateRepo` from `hooks/lib/is-private-repo.js`)
   as the PreToolUse gate.
-- `stop-confirm-plan-guard.js` (Stop) — two layers with distinct reason prefixes. Layer 1
+- `confirm-checkpoint.js` (PreToolUse, Bash CONFIRM sentinel) — always emits a user-facing `systemMessage` with the plan context, plus `hookSpecificOutput.additionalContext` (`[plan-link]`) with the stage's blob URL or reason for the model (CPA-3: the URL goes in body text, not the CONFIRM echo). Always exit 0.
+- `stop-confirm-plan-guard.js` (Stop) — three layers with distinct reason prefixes. Layer 1
   (`[confirm-plan] Step 2 violation:`) is marker-gated: it fires only when `show-plan-link.js`
   dropped a per-turn marker, and blocks a last assistant message that spells out a plans-directory
   path. Layer 2 runs on EVERY Stop (#2278 removed the marker precondition): when a
@@ -123,7 +125,12 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   artifact against a strict `PLAN_LANG` (`[confirm-plan] Layer 2/plan-lang:`) and then requires a
   stage-valid follow-up tool_use after the sentinel (`[confirm-plan] Layer 2/follow-up:`). The
   re-lint resolves `<sid>-<stage>.md` only for UUID or timestamp session ids; any other id, an
-  absent or unreadable artifact, or a non-strict policy skips it. Fail-open throughout.
+  absent or unreadable artifact, or a non-strict policy skips it. Layer 3 (#2513): a turn that
+  wrote a plan artifact (turn marker) or CONFIRMed a plan stage (detected with
+  `confirm-checkpoint.js`'s own `parseSentinel` across Bash/runInTerminal/runCommands) must
+  contain that stage's blob URL in its assistant text. It checks every marker path, parses
+  only the current turn (`hooks/lib/plan-link-turn-check.js`), and is one-shot (stands down on
+  `stop_hook_active`). Obligations: `skills/_shared/confirm-plan.md` CPA-2 / CPA-3. Fail-open throughout.
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — marks `run_tests` from the machine-readable
   `RUN_CONTRACT` line emitted by `tests/run-all.sh`, never from a raw exit code (#1242, contract-trust).
   Detects test runner commands over the shared command IR (`hooks/lib/command-ir.js` `parse()` +
