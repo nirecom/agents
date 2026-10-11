@@ -1,5 +1,4 @@
 # History (agents)
-<!-- lang-check: ignore -->
 
 ## Archived
 - [2026](1790000180-147063-pr2358-history-staging/2026.md) — 104 entries
@@ -57,7 +56,7 @@ Background: fix(#2319,#2316): null cwd fallback + repo-dir-guard INDETERMINATE f
 Changes: #2319 (BUGFIX): VS Code extension sends `toolInput.cwd` as null. The workflow-gate freshness check and its sibling hooks (show-user-verified-context, supervisor-check, user-verified-audit) now resolve cwd through a shared `resolveInputCwd` (process.cwd() fallback, `hooks/lib/resolve-cwd.js`) instead of infinite-arming the #2256 TR5 gate or fail-closed stopping. The oversized `hooks/workflow-gate.js` was split under the 500-line HARD limit by extracting `hooks/workflow-gate/incomplete-steps-message.js` (behavior-preserving).;#2316 (BUGFIX): `next-step` aborted at the worktree-end → session-close boundary when the worktree directory had been deleted (repo-dir-guard INDETERMINATE verdict). It now fails open for a self-call so session-close proceeds, while an explicit cross-session override still fails fast. <!-- compose-doc-append-sentinel: branch=feature/2319-vs-code-extension-null-cwd pr=#2322 -->
 
 ### FEATURE: PR #2312 — feature/1987-migration-code-blocks-19 (2026-09-20, bad454a7dd84afbb4adbf9623a0655b793dff243, #2312)
-Background: feat(#1987): 一時 migration code blocks の断捨離（クラスタ A/B/D/E/F、15 ブロック削除 + リンタ追加）
+Background: feat(#1987): Temporary migration code blocks cleanup (clusters A/B/D/E/F, 15 blocks removed + linter added)
 Changes: Removed 15 temporary migration code blocks across clusters A/B/D/E/F; added check-migration-blocks.sh linter and migration-blocks-audit.yml GitHub Actions workflow to prevent future accumulation. Fixes null-cwd supervisor-audit arm loop (hookCwd fallback to process.cwd() per #2319). <!-- compose-doc-append-sentinel: branch=feature/1987-migration-code-blocks-19 pr=#2312 -->
 
 ### FEATURE: PR #2330 — feature/2323-agents-config-dir-stale-null (2026-09-20, 091fd0ad0bc46a150c4a347f6cd36d9a633780d6, #2330)
