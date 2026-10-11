@@ -27,6 +27,7 @@ SPLIT_GROUPS=(
     "gitlab-forge-f.sh"
     "gitlab-forge-failsafe.sh"
     "gitlab-forge-visibility.sh"
+    "gitlab-forge-ssh-alias.sh"
 )
 
 TOTAL_PASS=0
