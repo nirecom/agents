@@ -100,7 +100,7 @@ TABLE
 }
 
 # A shell file that reads the name without assigning it would take the value from the
-# environment; only a sourced library may read its caller's value.
+# environment; only a sourced library under tests may read its caller's value.
 c_read_without_assignment() {
   tree unassigned
   fx "$REPO/bin/g-assigned.sh" "${SH_HEAD[@]}" "$(std_sh ..)" "echo \"$V_SCR\"" "ls \"\${$N_SCR}/bin\""
@@ -108,9 +108,10 @@ c_read_without_assignment() {
   fx "$REPO/bin/g-longer.sh" "${SH_HEAD[@]}" "echo \"${V_SCR}_X\"" "echo \"\$_FOO_$N_SCR\"" "echo \"\${${N_SCR}_X}\""
   fx "$REPO/bin/g-word.sh" "${SH_HEAD[@]}" "echo $N_SCR"
   fx "$REPO/bin/g-comment.sh" "${SH_HEAD[@]}" "# needs $V_SCR" "echo ok # from $V_SCR"
-  fx "$REPO/bin/sourced/g-caller.sh" '# a sourced library' "echo \"$V_SCR\"" "ls \"\${$N_SCR}/bin\""
+  fx "$REPO/tests/sourced/g-caller.sh" '# a sourced test library' "echo \"$V_SCR\"" "ls \"\${$N_SCR}/bin\""
   scan
-  expect "unassigned: quoted, longer and sourced mentions exit 0" rc_is 0
+  expect "unassigned: quoted, longer and sourced-test mentions exit 0" rc_is 0
+  fx "$REPO/bin/sourced/x-caller.sh" '# a sourced library' "echo \"$V_SCR\"" "ls \"\${$N_SCR}/bin\""
   fx "$REPO/bin/x-reads.sh" "${SH_HEAD[@]}" 'echo start' "echo \"$V_SCR\"" "echo \"\${$N_SCR}\""
   fx "$REPO/bin/x-braced.sh" "${SH_HEAD[@]}" "ls \"\${$N_SCR}/bin\""
   fx "$REPO/bin/x-expansion.sh" "${SH_HEAD[@]}" "echo \"\${$N_SCR:-/opt/checkout}\""
@@ -133,7 +134,8 @@ bin/g-quoted.sh|accepted
 bin/g-longer.sh|accepted
 bin/g-word.sh|accepted
 bin/g-comment.sh|accepted
-bin/sourced/g-caller.sh|accepted
+bin/sourced/x-caller.sh|outside@2
+tests/sourced/g-caller.sh|accepted
 TABLE
   expect "unassigned: only the first reading line is reported" test "$(lines_for bin/x-reads.sh)" = 1
   expect "unassigned: a file that assigns in another form gets the form message only" \
@@ -172,5 +174,22 @@ g-root.js|accepted
 g-root.ps1|accepted
 install/g-split.ps1|accepted
 install/win/g-two.ps1|accepted
+TABLE
+}
+
+# An assignment before a command word is that command's environment, not the file's own root,
+# and it hands the root to the child through the environment, so it is reported on its own.
+c_env_prefix() {
+  tree envprefix
+  fx "$REPO/bin/x-prefix-std.sh" "${SH_HEAD[@]}" "$(std_sh ..)" "$N_SCR=/tmp bash child.sh"
+  fx "$REPO/bin/x-prefix-only.sh" "${SH_HEAD[@]}" "$N_SCR=/tmp bash child.sh"
+  fx "$REPO/bin/x-prefix-read.sh" "${SH_HEAD[@]}" "$N_SCR=/tmp bash child.sh" "echo \"$V_SCR\""
+  scan
+  expect "env prefix: a prefix is reported with or without the standard assignment (exit 1)" rc_is 1
+  expect_rows "env prefix" script-root-form <<'TABLE'
+bin/x-prefix-std.sh|envprefix@5
+bin/x-prefix-only.sh|envprefix@4
+bin/x-prefix-read.sh|unassigned@5
+bin/x-prefix-read.sh|envprefix@4
 TABLE
 }

@@ -1,6 +1,5 @@
 #!/bin/bash
 # codegraph.sh - Reconcile CodeGraph to the state CODEGRAPH asks for (install+register / unregister)
-export SYSTEM_OPS_APPROVED=1
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 

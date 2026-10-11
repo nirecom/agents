@@ -27,15 +27,6 @@ ARTIFACT=""
 OUT=""
 LOG_DIR=""
 NO_LOG=0
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --artifact) ARTIFACT="${2:-}"; shift 2 ;;
-        --out)      OUT="${2:-}"; shift 2 ;;
-        --log-dir)  LOG_DIR="${2:-}"; shift 2 ;;
-        --no-log)   NO_LOG=1; shift ;;
-        *)          shift ;;
-    esac
-done
 
 HEADER=""
 RESULT="invalid"
@@ -75,6 +66,22 @@ finish_written() {  # <header> <review_result>
     fi
     finish "$1" "$2"
 }
+
+# A usage error is reported through the same frame, so the exit-always-0 contract holds.
+usage_fail() {  # <detail>
+    echo "ERROR: $1" >&2
+    finish "## Issue Verdict Review: FAILED — usage error: $1" "invalid"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --artifact) [[ $# -ge 2 ]] || usage_fail "$1 needs a value"; ARTIFACT="${2:-}"; shift 2 ;;
+        --out)      [[ $# -ge 2 ]] || usage_fail "$1 needs a value"; OUT="${2:-}"; shift 2 ;;
+        --log-dir)  [[ $# -ge 2 ]] || usage_fail "$1 needs a value"; LOG_DIR="${2:-}"; shift 2 ;;
+        --no-log)   NO_LOG=1; shift ;;
+        *)          usage_fail "unknown argument: $1" ;;
+    esac
+done
 
 log() { [[ "$NO_LOG" -eq 1 ]] || printf '%s\n' "$*" >&2; }
 

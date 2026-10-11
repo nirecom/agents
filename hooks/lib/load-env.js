@@ -182,15 +182,12 @@ function readEnvFile(envPath) {
 }
 
 // defaultEnvFilePathCandidates — the config .env candidates in read order:
-// AGENTS_MAIN_ROOT/.env alone when it is set, else __dirname two levels up,
-// then the same resolved through symlinks (e.g. ~/.claude/hooks/lib -> real repo).
+// a trimmed, normalized AGENTS_MAIN_ROOT/.env alone when it is set, else the
+// module-relative checkout, then the realpath-resolved one (e.g. ~/.claude/hooks/lib -> real repo).
 function defaultEnvFilePathCandidates() {
-  if (process.env.AGENTS_MAIN_ROOT) return [path.join(process.env.AGENTS_MAIN_ROOT, ".env")];
-  const out = [path.join(path.resolve(__dirname, "..", ".."), ".env")];
-  try {
-    out.push(path.join(path.resolve(path.dirname(fs.realpathSync(__filename)), "..", ".."), ".env"));
-  } catch (_) {}
-  return out;
+  const agentsMainRoot = normDir(process.env.AGENTS_MAIN_ROOT);
+  if (agentsMainRoot) return [path.join(agentsMainRoot, ".env")];
+  return scriptCheckoutRootCandidates().map((c) => path.join(c.dir, ".env"));
 }
 
 // defaultEnvFilePath — the one config .env readDefaultEnvFile reads (and plan-sync-init
@@ -208,7 +205,8 @@ function defaultEnvFilePath() {
 // Global-only door (DD-6): the project-local overlay is deliberately invisible
 // here. Returns {} when no .env can be found ("absent" reads as "unset").
 function readDefaultEnvFile() {
-  return readEnvFile(defaultEnvFilePath()) || {};
+  const file = defaultEnvFilePath();
+  return (file && readEnvFile(file)) || {};
 }
 
 // resolveLocalLayer returns {globalMap, localMap} for a project root.

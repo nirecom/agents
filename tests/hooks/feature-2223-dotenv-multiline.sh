@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2223-dotenv-multiline.sh
 # Tests: hooks/lib/load-env.js, hooks/lib/load-env.sh
-# Tags: scope:issue-specific, TL1, load-env, dotenv, parser, pwsh-not-required
+# Tags: scope:issue-specific, TL1, load-env, dotenv, parser, pwsh-not-required, TL2, parity, security
 # RED for issue #2223 — parseEnv() multi-line quoted value grammar.
 # Table encoding: input column uses @NL@ / @CR@ for a real LF / CR so a case fits
 # one row (every backslash stays literal); want column is JSON.stringify() of the
@@ -286,7 +286,7 @@ assert_eq "T2223U-js-prior-survives" '"ok"' "$(parse_key_json "$U_TEXT" PRIOR)"
 
 # js: the grammar's multi-line rule absorbs every following line until a matching
 # quote appears, so GOODKEY is data inside the discarded value, not an entry.
-# The bash loader has no such rule — its half below is the contrasting case.
+# The bash loader follows the same quote span; its half below pins that.
 assert_eq "T2223U-js-following-key-absorbed" "__ABSENT__" \
   "$(parse_key_json "$U_TEXT" GOODKEY)"
 
@@ -308,9 +308,9 @@ else
     pass "T2223U-js-diagnostic-unconditional (names BADKEY, withholds the value)"
 fi
 
-# hooks/lib/load-env.sh — no multi-line quote grammar, so the concern's stricter
-# expectation holds here: the offending key alone is dropped and the very next
-# quoted assignment still exports.
+# hooks/lib/load-env.sh — follows the js quote span but never exports a multi-line
+# value: BADKEY's quote closes at GOODKEY's first quote, so BADKEY is dropped with a
+# warning, the rest of that closing line (GOODKEY's text) goes with it, and TAIL exports.
 LOAD_ENV_SH="$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.sh"
 SH_CFG="$TMP_ROOT/sh-cfg"
 mkdir -p "$SH_CFG"
@@ -324,8 +324,8 @@ AGENTS_MAIN_ROOT="$SH_CFG" run_with_timeout 20 bash -c '
   printf "PRIOR=%s|BADKEY=%s|GOODKEY=%s|TAIL=%s" "${PRIOR:-__ABSENT__}" "${BADKEY:-__ABSENT__}" "${GOODKEY:-__ABSENT__}" "${TAIL:-__ABSENT__}"
 ' _ "$LOAD_ENV_SH" >"$SH_OUT" 2>"$SH_ERR"
 
-assert_eq "T2223U-sh-only-bad-key-dropped" \
-  "PRIOR=ok|BADKEY=__ABSENT__|GOODKEY=goodvalue|TAIL=t" "$(cat "$SH_OUT")"
+assert_eq "T2223U-sh-quote-span-dropped" \
+  "PRIOR=ok|BADKEY=__ABSENT__|GOODKEY=__ABSENT__|TAIL=t" "$(cat "$SH_OUT")"
 
 if [ ! -s "$SH_ERR" ]; then
     fail "T2223U-sh-diagnostic — nothing on stderr; the discard is silent"
@@ -363,6 +363,25 @@ process.stdout.write(JSON.stringify({ first, second, same: JSON.stringify(first)
 assert_eq "T2223I-loadDefaultEnv-idempotent" \
   '{"first":{"CODE_LANG":"japanese","ENFORCE_WORKTREE":"on"},"second":{"CODE_LANG":"japanese","ENFORCE_WORKTREE":"on"},"same":true}' \
   "$idem_got"
+
+# ---------------------------------------------------------------------------
+# T2223P — js/sh loader parity (load-env.js is the reference). The part keeps its
+# own harness counters, so it runs as a child; its exit status is one verdict here.
+# The shared harness keeps the PASS/FAIL already counted above (it only fills unset ones).
+# ---------------------------------------------------------------------------
+# shellcheck source=tests/lib/harness.sh
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+case_begin "T2223P-js-sh-parity" "hooks/lib/load-env.sh"
+P_PART="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2223-dotenv-multiline/js-sh-parity.sh"
+P_OUT="$(run_with_timeout 110 bash "$P_PART" 2>&1)"
+P_RC=$?
+printf '%s\n' "$P_OUT"
+if [ "$P_RC" -eq 0 ]; then
+    pass "T2223P-js-sh-parity (every parity row agrees)"
+else
+    fail "T2223P-js-sh-parity — part exited $P_RC: $(printf '%s\n' "$P_OUT" | grep -c '^FAIL') failing assertion(s) above"
+fi
+case_end
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

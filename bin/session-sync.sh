@@ -8,6 +8,12 @@
 
 set -euo pipefail
 
+# Run from the link target so the checkout root below is the real checkout, not the link's directory.
+if [ -L "${BASH_SOURCE[0]}" ] && _ss_real="$(readlink -f -- "${BASH_SOURCE[0]}" 2>/dev/null)" && [ -n "$_ss_real" ]; then
+    exec bash "$_ss_real" "$@"
+fi
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 ACTION="${1:-}"
 CLAUDE_DIR="$HOME/.claude"
 _QUIET=0
@@ -17,15 +23,22 @@ _TOAST=0
 shift || true
 while [ $# -gt 0 ]; do
     case "$1" in
-        --claude-dir) CLAUDE_DIR="$2"; shift 2 ;;
+        --claude-dir) [ $# -ge 2 ] || { echo "$1 needs a value" >&2; exit 2; }; CLAUDE_DIR="$2"; shift 2 ;;
         --quiet) _QUIET=1; shift ;;
         --toast) _TOAST=1; shift ;;
-        *) shift ;;
+        *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
 
 PROJECTS_DIR="$CLAUDE_DIR/projects"
-PLANS_DIR="$("$(dirname "$0")/workflow-plans-dir" 2>/dev/null || echo "$HOME/.workflow-plans")"
+PLANS_DIR=""
+if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir" ]; then
+    PLANS_DIR="$("$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir")" || PLANS_DIR=""
+fi
+if [ -z "$PLANS_DIR" ]; then
+    PLANS_DIR="$HOME/.workflow-plans"
+    echo "session-sync: $SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir unavailable; using $PLANS_DIR" >&2
+fi
 
 if [ ! -d "$PROJECTS_DIR/.git" ]; then
     echo "Session sync not initialized. Run install.sh or install/linux/session-sync-init.sh first." >&2

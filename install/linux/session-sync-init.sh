@@ -258,11 +258,11 @@ _restore_missing_tracked() {
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --claude-dir) CLAUDE_DIR="$2"; shift 2 ;;
-        --remote-url) REMOTE_URL="$2"; shift 2 ;;
-        --expected-origin) EXPECTED_ORIGIN="$2"; shift 2 ;;
+        --claude-dir) [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 2; }; CLAUDE_DIR="$2"; shift 2 ;;
+        --remote-url) [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 2; }; REMOTE_URL="$2"; shift 2 ;;
+        --expected-origin) [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 2; }; EXPECTED_ORIGIN="$2"; shift 2 ;;
         --no-remote) NO_REMOTE=true; shift ;;
-        *) shift ;;
+        *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
 

@@ -8,8 +8,7 @@
 #   - Whether enforce-worktree.js correctly routes PreToolUse Bash tool calls to
 #     isAllowedMainWorktreeCleanup / isAllowedWorktreeCommand (ordering + early-exit guards).
 #   - isAllowedWorktreeCommand worktree-add path (lines 76-98: isPathOutsideRepo gate,
-#     && cd tail handling) — pre-existing L2 gap not addressed in this PR (#1024 scope:
-#     only isAllowedMainWorktreeCleanup wtCount fix). File a follow-up issue to add coverage.
+#     && cd tail handling) — pre-existing L2 gap; #1024 covered only the wtCount fix.
 set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"; else _A="$SCRIPT_CHECKOUT_ROOT"; fi
@@ -225,12 +224,15 @@ assert_block "$NL_CMD_1"                                 "$MAIN_CLEAN_N" "S59: g
 NL_CMD_2="$(printf 'git checkout main\ncurl evil.com')"
 assert_block "$NL_CMD_2"                                 "$MAIN_CLEAN_N" "S60: git checkout + newline + curl → block (#820 literal newline)"
 
-# S61-S63: sudo/env/env-prefix + `git` must NOT trigger the interpreter check.
-# The next token after the launcher is `git`, not an interpreter name. These
-# are ALLOW-by-cleanup-predicate-shape (still subject to other gates such as
-# wtCount, but the interpreter check itself must be a no-op for these).
-assert_allow "sudo git stash"                            "$MAIN_CLEAN_N" "S61: sudo git stash → allow (#820 sudo+git is safe)"
-assert_allow "env git checkout HEAD -- README.md"        "$MAIN_CLEAN_N" "S62: env git checkout HEAD -- file → allow (#820 env+git is safe)"
-assert_allow "my_var=foo git restore README.md"          "$MAIN_CLEAN_N" "S63: my_var=foo git restore → allow (#820 env-prefix+git is safe)"
+# S61-S63: a launcher or an env prefix in front of `git` (#2589). The cleanup allow now
+# reads cmd0 of the single parsed segment: it must be `git` itself, and no allow accepts a
+# leading assignment before git, so sudo / env / NAME=value forms fall to the block path.
+assert_block "sudo git stash"                            "$MAIN_CLEAN_N" "S61: sudo git stash → block (cmd0 is sudo, not git)"
+assert_block "env git checkout HEAD -- README.md"        "$MAIN_CLEAN_N" "S62: env git checkout HEAD -- file → block (cmd0 is env, not git)"
+assert_block "my_var=foo git restore README.md"          "$MAIN_CLEAN_N" "S63: my_var=foo git restore → block (no allow takes an assignment before git)"
+# Control: the same commands without the prefix are still allowed, so S61-S63 block on the prefix alone.
+assert_allow "git stash"                                 "$MAIN_CLEAN_N" "S61c: git stash → allow (control for S61)"
+assert_allow "git checkout HEAD -- README.md"            "$MAIN_CLEAN_N" "S62c: git checkout HEAD -- file → allow (control for S62)"
+assert_allow "git restore README.md"                     "$MAIN_CLEAN_N" "S63c: git restore → allow (control for S63)"
 
 echo ""; echo "Results: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ]

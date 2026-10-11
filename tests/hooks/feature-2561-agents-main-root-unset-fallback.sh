@@ -29,7 +29,7 @@ readonly GONE="$TMP_ROOT/missing root"
 readonly OTHER="$TMP_ROOT/retired root"
 readonly NEUTRAL="$TMP_ROOT/neutral"
 mkdir -p "$CFG" "$BARE" "$OTHER" "$NEUTRAL"
-if ! script_checkout_fixture_copy "$FAKE" hooks/lib bin/scan-outbound.sh bin/env-os-filter; then
+if ! script_checkout_fixture_copy "$FAKE" hooks/lib bin/scan-outbound.sh bin/lib/main-worktree.sh bin/env-os-filter; then
   echo "FAIL: fixture checkout copy — script_checkout_fixture_copy failed; no case can run"
   exit 1
 fi
@@ -141,18 +141,17 @@ expect_has "the resolver still answers from its own checkout" "$OUT" "VAR=<check
 expect_lacks "nothing is read through a retired name" "$OUT" "retired"
 case_end
 
-# The three cases below pin CURRENT behaviour: the two entry points of this module read the
-# variable differently (raw truthiness for the file reader, a trimmed and resolved directory
-# for the variable resolver), so they disagree on a whitespace-only and on a /c/... value.
+# Both entry points of this module read the variable the same way (a trimmed and resolved
+# directory), so they agree on an empty, a whitespace-only and a /c/... value.
 case_begin "js-reader-empty-main-root-reads-as-unset" "hooks/lib/load-env.js"
 OUT="$(js "$EMPTY" -)"
 expect_has "an empty value makes the file reader use its own checkout" "$OUT" "FILE=<checkout>"
 expect_has "an empty value makes the resolver use its own checkout" "$OUT" "VAR=<checkout>"
 case_end
 
-case_begin "js-reader-whitespace-main-root-splits-the-two-entry-points" "hooks/lib/load-env.js"
+case_begin "js-reader-whitespace-main-root-reads-as-unset" "hooks/lib/load-env.js"
 OUT="$(js "$BLANK" -)"
-expect_has "the file reader takes a whitespace-only value as a directory and finds nothing" "$OUT" "FILE=<>"
+expect_has "the file reader treats a whitespace-only value as unset" "$OUT" "FILE=<checkout>"
 expect_has "the resolver treats a whitespace-only value as unset" "$OUT" "VAR=<checkout>"
 case_end
 
@@ -168,7 +167,7 @@ OUT="$(js_posix "$CFG")"
 if [[ "$OUT" == *NOT-WIN32* ]]; then
   skip "POSIX drive-letter main root (the /c/... form only exists on win32)"
 else
-  expect_has "the file reader does not normalize a /c/... value and finds nothing" "$OUT" "FILE=<>"
+  expect_has "the file reader normalizes a /c/... value and reads the main root" "$OUT" "FILE=<configured>"
   expect_has "the resolver normalizes a /c/... value and reads the main root" "$OUT" "VAR=<configured>"
 fi
 case_end
@@ -210,10 +209,10 @@ expect_has "an empty value makes the file-only reader use its own checkout" "$OU
 expect_has "an empty value makes the loader export the checkout value" "$OUT" "LOADED=<checkout>"
 case_end
 
-case_begin "sh-reader-whitespace-main-root-is-taken-as-a-directory" "hooks/lib/load-env.sh"
+case_begin "sh-reader-whitespace-main-root-reads-as-unset" "hooks/lib/load-env.sh"
 OUT="$(sh_ "$BLANK" -)"
-expect_has "a whitespace-only value yields the default, not the checkout value" "$OUT" "ONLY=<dflt>"
-expect_has "a whitespace-only value exports nothing" "$OUT" "LOADED=<>"
+expect_has "a whitespace-only value makes the file-only reader use its own checkout" "$OUT" "ONLY=<checkout>"
+expect_has "a whitespace-only value makes the loader export the checkout value" "$OUT" "LOADED=<checkout>"
 case_end
 
 case_begin "sh-reader-relative-main-root-resolves-from-the-working-directory" "hooks/lib/load-env.sh"
@@ -282,20 +281,21 @@ expect_lacks "the main root blocklist is not applied" "$OUT" "[blocklist] CONFIG
 expect_has "the hard match fails the scan" "$OUT" "RC=<1>"
 case_end
 
-case_begin "scan-set-main-root-is-the-only-blocklist" "bin/scan-outbound.sh"
+# #2589: the scanner takes its lists from its own checkout; AGENTS_MAIN_ROOT never moves them.
+case_begin "scan-set-main-root-does-not-move-the-blocklist" "bin/scan-outbound.sh"
 OUT="$(scan "$CFG" -)"
-expect_has "the main root blocklist is applied" "$OUT" "[blocklist] CONFIGUREDSECRET"
-expect_lacks "the checkout blocklist is not applied" "$OUT" "[blocklist] CHECKOUTSECRET"
+expect_has "the checkout blocklist is still applied" "$OUT" "[blocklist] CHECKOUTSECRET"
+expect_lacks "a blocklist named by the main root is not applied" "$OUT" "[blocklist] CONFIGUREDSECRET"
 expect_has "the hard match fails the scan" "$OUT" "RC=<1>"
 case_end
 
-case_begin "scan-set-main-root-without-a-blocklist-fails-closed" "bin/scan-outbound.sh"
+case_begin "scan-main-root-without-a-blocklist-keeps-the-checkout-list" "bin/scan-outbound.sh"
 OUT="$(scan "$BARE" -)"
-expect_has "a main root without a blocklist stops the scan" "$OUT" "RC=<4>"
-expect_lacks "the checkout blocklist is not used as a substitute" "$OUT" "[blocklist]"
+expect_has "a main root without a blocklist does not disable the checkout list" "$OUT" "[blocklist] CHECKOUTSECRET"
+expect_has "the hard match fails the scan" "$OUT" "RC=<1>"
 OUT="$(scan "$GONE" -)"
-expect_has "a missing main root stops the scan" "$OUT" "RC=<4>"
-expect_lacks "nothing is scanned against another blocklist" "$OUT" "[blocklist]"
+expect_has "a missing main root does not disable the checkout list" "$OUT" "[blocklist] CHECKOUTSECRET"
+expect_has "the hard match fails the scan" "$OUT" "RC=<1>"
 case_end
 
 case_begin "scan-ignores-the-retired-names" "bin/scan-outbound.sh"
@@ -311,16 +311,16 @@ expect_has "an empty value applies the checkout blocklist" "$OUT" "[blocklist] C
 expect_has "the hard match fails the scan" "$OUT" "RC=<1>"
 case_end
 
-case_begin "scan-whitespace-main-root-fails-closed" "bin/scan-outbound.sh"
+case_begin "scan-whitespace-main-root-keeps-the-checkout-list" "bin/scan-outbound.sh"
 OUT="$(scan "$BLANK" -)"
-expect_has "a whitespace-only value stops the scan" "$OUT" "RC=<4>"
-expect_lacks "the checkout blocklist is not used as a substitute" "$OUT" "[blocklist]"
+expect_has "a whitespace-only value leaves the checkout blocklist applied" "$OUT" "[blocklist] CHECKOUTSECRET"
+expect_has "the hard match fails the scan" "$OUT" "RC=<1>"
 case_end
 
-case_begin "scan-relative-main-root-resolves-from-the-working-directory" "bin/scan-outbound.sh"
+case_begin "scan-relative-main-root-does-not-move-the-blocklist" "bin/scan-outbound.sh"
 OUT="$(scan "$REL" -)"
-expect_has "the blocklist found through a relative value is applied" "$OUT" "[blocklist] RELATIVESECRET"
-expect_lacks "the checkout blocklist is not applied" "$OUT" "[blocklist] CHECKOUTSECRET"
+expect_has "the checkout blocklist is still applied" "$OUT" "[blocklist] CHECKOUTSECRET"
+expect_lacks "a blocklist found through a relative value is not applied" "$OUT" "[blocklist] RELATIVESECRET"
 expect_has "the hard match fails the scan" "$OUT" "RC=<1>"
 case_end
 

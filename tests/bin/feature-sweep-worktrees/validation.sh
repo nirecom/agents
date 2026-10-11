@@ -262,6 +262,41 @@ T28_min_age_hours_non_numeric_rejected() {
     fi
 }
 
+# T29 — #2589: from the linked worktree of a `--separate-git-dir` repo, git's
+# porcelain names the git dir (branch main) first and nothing names the real
+# main worktree. The sweep must stop with an error — never adopt the linked
+# checkout as TARGET_MAIN_ROOT and offer the main entry as a removal candidate.
+T29_separate_git_dir_linked_fails_closed() {
+    local base="$TMPDIR_BASE/t29"
+    local main="$base/main" wbase="$base/wbase"
+    local linked="$wbase/feat-t29/main"
+    mkdir -p "$base"
+    git init -q -b main --separate-git-dir "$base/gitdir" "$main"
+    git -C "$main" config core.hooksPath /dev/null
+    git -C "$main" -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init
+    git -C "$main" worktree add -q -b feat-t29 "$linked" 2>/dev/null
+
+    local stdout_file="$base/t29.out" stderr_file="$base/t29.err" exit_code=0
+    (cd "$linked" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --dry-run --ci-mode --skip-gh-check --min-age-hours 0 \
+        >"$stdout_file" 2>"$stderr_file") || exit_code=$?
+    local out err
+    out="$(cat "$stdout_file" 2>/dev/null || true)"
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    case "$out" in
+        *"candidate worktree="*)
+            fail "T29 separate_git_dir_linked_fails_closed: main entry offered as a removal candidate; stdout=[$out]"
+            return
+            ;;
+    esac
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ]; then
+        pass "T29 separate_git_dir_linked_fails_closed (exit=$exit_code, no candidate)"
+    else
+        fail "T29 separate_git_dir_linked_fails_closed: expected error exit; exit=$exit_code stderr=[$err] stdout=[$out]"
+    fi
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Run all tests in this group
 # ─────────────────────────────────────────────────────────────────────────────
@@ -274,6 +309,7 @@ T25_sweep_age_days_safe_max_boundary_rejected
 T26_min_age_hours_leading_zero_rejected
 T27_min_age_hours_overflow_rejected
 T28_min_age_hours_non_numeric_rejected
+T29_separate_git_dir_linked_fails_closed
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

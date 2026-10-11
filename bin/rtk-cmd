@@ -7,11 +7,13 @@ set -euo pipefail
 
 [ $# -ge 1 ] || { printf 'usage: rtk-cmd <command> [args...]\n' >&2; exit 2; }
 
-# get-config-var: this script's own sibling first, then PATH (a shim install).
-# Neither reachable → fail-safe-OFF: pass through.
+# get-config-var: this script's own sibling only — a PATH copy may belong to another
+# checkout. Not reachable → one warning, then fail-safe-OFF: pass through.
 _gcv="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/get-config-var"
-[ -x "$_gcv" ] || _gcv="$(command -v get-config-var 2>/dev/null || true)"
-[ -n "$_gcv" ] || exec "$@"
+if [ ! -x "$_gcv" ]; then
+  printf 'rtk-cmd: %s not found; RTK treated as off\n' "$_gcv" >&2
+  exec "$@"
+fi
 
 # RTK on/off probe — fail-safe-OFF: only exit 1 means ON; 2/3/4 treated as OFF.
 # Symmetric with hooks/rtk-rewrite.js loadDefaultEnv() "e.status === 1 → ON".

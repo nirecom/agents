@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# bin/main-worktree-root [dir] — prints the main worktree of the repository holding <dir>
+# (default: the current directory); exits 1 with no output when none can be proven.
+set -euo pipefail
+
+_MAIN_WORKTREE_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/main-worktree.sh
+. "$_MAIN_WORKTREE_ROOT_DIR/lib/main-worktree.sh"
+
+if [[ "$#" -gt 1 ]]; then
+  printf 'usage: main-worktree-root [dir]\n' >&2
+  exit 2
+fi
+
+main_worktree_of "${1:-$PWD}"

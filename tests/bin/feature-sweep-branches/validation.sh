@@ -185,6 +185,34 @@ T22_min_age_hours_overflow_rejected() {
     fi
 }
 
+# T23 — #2589: run from the linked worktree of a `--separate-git-dir` repo, whose
+# main worktree git cannot name, the sweep stops with an error instead of
+# adopting the linked checkout as TARGET_MAIN_ROOT.
+T23_separate_git_dir_linked_fails_closed() {
+    local base="$TMPDIR_BASE/t23"
+    local main="$base/main" linked="$base/linked" stubdir="$base/stub"
+    mkdir -p "$base"
+    git init -q -b main --separate-git-dir "$base/gitdir" "$main"
+    git -C "$main" config core.hooksPath /dev/null
+    git -C "$main" -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init
+    git -C "$main" worktree add -q -b feat-t23 "$linked" 2>/dev/null
+    make_stub_checkout "$stubdir"
+
+    local stdout_file="$base/t23.out" stderr_file="$base/t23.err" exit_code=0
+    (cd "$linked" && SWEEP_SKIP_GH=1 \
+        run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode --skip-gh-check \
+        >"$stdout_file" 2>"$stderr_file") || exit_code=$?
+    local out err
+    out="$(cat "$stdout_file" 2>/dev/null || true)"
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -ne 0 ] && [ -n "$err" ] && [ -z "$(ci_field "$out" scanned)" ]; then
+        pass "T23 separate_git_dir_linked_fails_closed (exit=$exit_code, no scan)"
+    else
+        fail "T23 separate_git_dir_linked_fails_closed: linked checkout adopted as main; exit=$exit_code stdout=[$out] stderr=[$err]"
+    fi
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Run all tests in this group
 # ─────────────────────────────────────────────────────────────────────────────
@@ -195,6 +223,7 @@ T19_sweep_age_days_overflow_rejected
 T20_sweep_age_days_safe_max_boundary_rejected
 T21_min_age_hours_leading_zero_rejected
 T22_min_age_hours_overflow_rejected
+T23_separate_git_dir_linked_fails_closed
 
 echo ""
 echo "─────────────────────────────────────────"

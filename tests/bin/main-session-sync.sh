@@ -132,6 +132,8 @@ git init --bare "$FAKE_REMOTE" >/dev/null 2>&1
 . "$PARTS_DIR/plans.sh"
 # shellcheck source=tests/bin/main-session-sync/session-sync-independence.sh
 . "$PARTS_DIR/session-sync-independence.sh"
+# shellcheck source=tests/bin/main-session-sync/plans-resolver-path.sh
+. "$PARTS_DIR/plans-resolver-path.sh"
 # The security-* parts reuse the helpers security.sh defines, so it comes first.
 # shellcheck source=tests/bin/main-session-sync/security.sh
 . "$PARTS_DIR/security.sh"

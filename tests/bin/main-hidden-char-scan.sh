@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests: bin/scan-outbound.sh
 # Tags: scan, filter, outbound, hook, bin, script-checkout-root, fail-closed, manifest, scope:issue-specific
+# lang-check: ignore -- Japanese fixture text proves non-ASCII text is not flagged as hidden characters.
 # Test suite for Trojan Source / hidden-char detection in scan-outbound.sh
 # Zero-width chars (U+200B/C/D, U+FEFF) → [zero-width]
 # Bidi override chars (U+202D/E, U+2066-2069) → [bidi-override]
@@ -118,29 +119,34 @@ expect_label "non-allowlisted bidi still detected when zwsp is allowlisted" \
 : > "$FAKE_DOTFILES/.private-info-allowlist"
 
 echo ""
-echo "=== Group A (#1593): AGENTS_MAIN_ROOT anchor + fail-closed + --manifest ==="
-# These cases target POST-implementation behavior of bin/scan-outbound.sh:
-#   - blocklist resolved via AGENTS_MAIN_ROOT (new anchor), fail-closed with rc=4
-#     when the blocklist cannot be resolved (was: silent skip → rc=0)
-#   - allowlist absence is non-fatal: stderr warning, processing continues
-#   - --manifest mode: RS-delimited, length-prefixed multi-file framing with
-#     per-file allowlist labels (a.txt:<pattern> scopes the suppression to a.txt)
-# Against CURRENT code these FAIL (fail-before-fix for this security branch):
-#   the scanner ignores AGENTS_MAIN_ROOT, treats a missing blocklist as clean,
-#   and has no --manifest mode (it tries to scan a file literally named --manifest).
+echo "=== Group A (#1593, #2589): own-checkout lists + fail-closed + --manifest ==="
+# The scanner reads its lists from the main worktree of its own checkout, or from
+# SCRIPT_DIR/.. outside git; AGENTS_MAIN_ROOT never moves them (#2589). Each fixture
+# dir is a checkout of its own (bin/scan-outbound.sh copied in) and every run pins
+# AGENTS_MAIN_ROOT at a decoy, so a scanner that still followed it would be caught.
+# A missing blocklist fails closed (rc=4); a missing allowlist only warns.
 
 A_RC=0; A_OUT=""; A_ERR=""
 
-# run_anchor <cfg|__unset__> <stdin-content> — invoke scanner in --stdin mode with
-# AGENTS_MAIN_ROOT pinned (or unset). Captures A_RC / A_OUT / A_ERR.
+# a_checkout <dir> — make <dir> a scanner checkout (lists are written by the caller).
+a_checkout() {
+    mkdir -p "$1/bin"
+    cp "$SCANNER_SRC" "$1/bin/scan-outbound.sh"
+    chmod +x "$1/bin/scan-outbound.sh"
+}
+
+# run_anchor <checkout|__unset__> <stdin-content> [agents-main-root] — run the scanner
+# of <checkout> (or $SCANNER with AGENTS_MAIN_ROOT unset) in --stdin mode, with
+# AGENTS_MAIN_ROOT pinned at the decoy. Captures A_RC / A_OUT / A_ERR.
 run_anchor() {
-    local cfg="$1" content="$2"
-    local ofile efile
+    local cfg="$1" content="$2" amr="${3:-$A_CFG_DECOY}"
+    local ofile efile scanner
     ofile="$(mktemp)"; efile="$(mktemp)"
     set +e
     (
-        if [ "$cfg" = "__unset__" ]; then unset AGENTS_MAIN_ROOT; else export AGENTS_MAIN_ROOT="$cfg"; fi
-        printf '%s' "$content" | run_with_timeout "$SCANNER" --stdin "test.txt"
+        if [ "$cfg" = "__unset__" ]; then unset AGENTS_MAIN_ROOT; scanner="$SCANNER"
+        else export AGENTS_MAIN_ROOT="$amr"; scanner="$cfg/bin/scan-outbound.sh"; fi
+        printf '%s' "$content" | run_with_timeout "$scanner" --stdin "test.txt"
     ) >"$ofile" 2>"$efile"
     A_RC=$?
     set -e
@@ -155,8 +161,8 @@ run_manifest() {
     ofile="$(mktemp)"; efile="$(mktemp)"
     set +e
     (
-        export AGENTS_MAIN_ROOT="$cfg"
-        printf '%s' "$manifest" | run_with_timeout "$SCANNER" --manifest
+        export AGENTS_MAIN_ROOT="$A_CFG_DECOY"
+        printf '%s' "$manifest" | run_with_timeout "$cfg/bin/scan-outbound.sh" --manifest
     ) >"$ofile" 2>"$efile"
     A_RC=$?
     set -e
@@ -201,22 +207,28 @@ a_rec() {
     printf '%s%s%s%s\n%s' "$A_RS" "$p" "$A_RS" "$len" "$c"
 }
 
-# ── Fixtures: separate anchor dirs so each case controls its own blocklist. ──
-A_CFG_WITH="$TMPBASE/a-cfg-with"; mkdir -p "$A_CFG_WITH"
+# ── Fixtures: separate checkouts so each case controls its own blocklist. ──
+# The decoy AGENTS_MAIN_ROOT allowlists every forbiddenword and blocks decoyword, so
+# reading its lists would both hide real matches and invent new ones.
+A_CFG_DECOY="$TMPBASE/a-cfg-decoy"; mkdir -p "$A_CFG_DECOY"
+printf 'decoyword[0-9]+\n' > "$A_CFG_DECOY/.private-info-blocklist"
+printf 'forbiddenword[0-9]+\n' > "$A_CFG_DECOY/.private-info-allowlist"
+
+A_CFG_WITH="$TMPBASE/a-cfg-with"; a_checkout "$A_CFG_WITH"
 printf 'forbiddenword[0-9]+\n' > "$A_CFG_WITH/.private-info-blocklist"
 : > "$A_CFG_WITH/.private-info-allowlist"
 
-A_CFG_EMPTY="$TMPBASE/a-cfg-empty"; mkdir -p "$A_CFG_EMPTY"   # allowlist only, NO blocklist
+A_CFG_EMPTY="$TMPBASE/a-cfg-empty"; a_checkout "$A_CFG_EMPTY"   # allowlist only, NO blocklist
 : > "$A_CFG_EMPTY/.private-info-allowlist"
 
-A_CFG_ZERO="$TMPBASE/a-cfg-zero"; mkdir -p "$A_CFG_ZERO"      # blocklist present, 0 valid lines
+A_CFG_ZERO="$TMPBASE/a-cfg-zero"; a_checkout "$A_CFG_ZERO"      # blocklist present, 0 valid lines
 printf '# only a comment\n\n' > "$A_CFG_ZERO/.private-info-blocklist"
 : > "$A_CFG_ZERO/.private-info-allowlist"
 
-A_CFG_NOALLOW="$TMPBASE/a-cfg-noallow"; mkdir -p "$A_CFG_NOALLOW"  # blocklist present, NO allowlist
+A_CFG_NOALLOW="$TMPBASE/a-cfg-noallow"; a_checkout "$A_CFG_NOALLOW"  # blocklist present, NO allowlist
 printf 'forbiddenword[0-9]+\n' > "$A_CFG_NOALLOW/.private-info-blocklist"
 
-A_CFG_M="$TMPBASE/a-cfg-manifest"; mkdir -p "$A_CFG_M"
+A_CFG_M="$TMPBASE/a-cfg-manifest"; a_checkout "$A_CFG_M"
 printf 'forbiddenword[0-9]+\n' > "$A_CFG_M/.private-info-blocklist"
 printf 'a.txt:forbiddenword5\n' > "$A_CFG_M/.private-info-allowlist"
 
@@ -243,14 +255,18 @@ run_anchor "$A_CFG_NOALLOW" "see forbiddenword42 here"
 a_expect_rc "A3b: missing allowlist + blocklist match → rc=1" 1
 a_out_has "A3b: missing allowlist does not suppress blocklist match" "[blocklist]"
 
-# A4: AGENTS_MAIN_ROOT points at a dir with a real blocklist → resolves + scans.
+# A4: the checkout's own blocklist is read even with AGENTS_MAIN_ROOT at the decoy.
 run_anchor "$A_CFG_WITH" "see forbiddenword42 here"
-a_expect_rc "A4: anchored blocklist hard match → rc=1" 1
+a_expect_rc "A4: own-checkout blocklist hard match → rc=1" 1
 a_out_has "A4: hard match labelled [blocklist]" "[blocklist]"
 
-# A5: AGENTS_MAIN_ROOT set but that dir has no blocklist → rc=4 (fail-closed).
-run_anchor "$A_CFG_EMPTY" "totally clean text"
-a_expect_rc "A5: anchor set but blocklist missing → rc=4" 4
+# A4b: the decoy's blocklist is never read (decoyword is not a match).
+run_anchor "$A_CFG_ZERO" "see decoyword42 here"
+a_expect_rc "A4b: AGENTS_MAIN_ROOT blocklist ignored → rc=0" 0
+
+# A5: the checkout has no blocklist → rc=4, even though AGENTS_MAIN_ROOT names one.
+run_anchor "$A_CFG_EMPTY" "totally clean text" "$A_CFG_WITH"
+a_expect_rc "A5: own checkout lacks a blocklist, AGENTS_MAIN_ROOT has one → rc=4" 4
 
 # A6: AGENTS_MAIN_ROOT unset → falls back to SCRIPT_DIR/.. (backward compat).
 #     Give the fallback (FAKE_DOTFILES) a blocklist for this case only.

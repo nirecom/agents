@@ -65,6 +65,7 @@ write_table() {
     "    {\"repo\":\"agents\",\"glob\":\"docs/**\",\"allow\":[\"$N_AMR\"],\"sourced\":false,\"reason\":\"fixture\"}," \
     "    {\"repo\":\"agents\",\"glob\":\"install/**\",\"allow\":[\"$N_SCR\"],\"sourced\":false,\"reason\":\"fixture\"}," \
     "    {\"repo\":\"agents\",\"glob\":\"profile-snippet.*\",\"allow\":[\"$N_AMR\"],\"sourced\":false,\"reason\":\"fixture\"}," \
+    "    {\"repo\":\"agents\",\"glob\":\"tests/sourced/**\",\"allow\":[$all],\"sourced\":true,\"reason\":\"fixture: sourced test libraries\"}," \
     "    {\"repo\":\"agents\",\"glob\":\"tests/**\",\"allow\":[$all],\"sourced\":false,\"reason\":\"fixture\"}," \
     '    {"repo":"agents","glob":"plain/**","allow":[],"sourced":false,"reason":"fixture: no root name"},' \
     "    {\"repo\":\"dotfiles\",\"glob\":\"dot/**\",\"allow\":[\"$N_AMR\"],\"sourced\":false,\"reason\":\"fixture\"}" \

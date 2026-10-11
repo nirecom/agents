@@ -4,11 +4,8 @@
 // and PowerShell New-Item/ni (dispatched to ./new-item) from the main worktree.
 // Extracted from standard.js (file-split per rules/coding/file-split.md Pattern A).
 
-const path = require("path");
-const { normalizeCwd } = require("../../lib/path-normalize");
-const { stripQuotedArgs } = require("../../lib/strip-quoted-args");
-const { hasShellChaining, isPathOutsideRepo, rejectInterpreterAndChaining, findFirstUnquotedAnd } = require("../shared-cmd-utils");
-const { parseGitCPath } = require("../git-repo-detection");
+const { isPathOutsideRepo, rejectRceGitFlags, findFirstUnquotedAnd } = require("../shared-cmd-utils");
+const { singleInvocation, cdTailInvocation, withoutWorktreeEndSkillPrefix, gitSubcommand, gitCDirIsRepo, redirectsUnderTmp } = require("./command-shape");
 const { isAllowedNewItemCommand } = require("./new-item");
 
 // Returns true if cmd is `git worktree remove` with --force or -f (short form).
@@ -20,97 +17,57 @@ function hasWorktreeRemoveForceFlag(cmd) {
   const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
   let mm;
   while ((mm = re.exec(m[1])) !== null) tokens.push(mm[1] || mm[2] || mm[3]);
-  for (const tok of tokens) {
-    if (tok === "--force") return true;
-    if (/^-[a-zA-Z]+$/.test(tok) && tok.slice(1).includes("f")) return true;
+  return isForceRemove(tokens);
+}
+
+function isForceRemove(tokens) {
+  return tokens.some((tok) => tok === "--force" || (/^-[a-zA-Z]+$/.test(tok) && tok.slice(1).includes("f")));
+}
+
+const ADD_FLAGS_WITH_VALUE = new Set(["-b", "-B", "--orphan", "--reason"]);
+
+// First non-flag token of `worktree add`; `--` counts as a flag (--orphan=<b> is one token).
+function addTargetPath(tokens) {
+  for (let i = 0; i < tokens.length; i++) {
+    if (!tokens[i].startsWith("-")) return tokens[i];
+    if (ADD_FLAGS_WITH_VALUE.has(tokens[i])) i++;
   }
-  return false;
+  return null;
 }
 
 /**
- * Returns true if cmd is an isolated `git worktree add/remove/prune` command
- * whose add-target path (when parseable) is outside repoRoot.
- *
- * Flags for `git worktree add` that consume the next space-separated token:
- *   -b <branch>  -B <branch>  --orphan <branch>
- * (--orphan=<branch> uses = syntax and is a single token — handled correctly.)
- * `--` (end-of-options) is treated as a flag and skipped; the next token is path.
+ * True if cmd is one `git worktree add/remove/prune` invocation whose add-target
+ * path (when present) is outside repoRoot, or a New-Item/ni call ./new-item allows.
+ * The only accepted second segment is the #982 worktree-start tail `&& cd <path>`
+ * (cdTailInvocation), and the only accepted prefix is WORKTREE_END_SKILL=1 on git;
+ * any other separator, nesting or prefix is rejected.
  */
 function isAllowedWorktreeCommand(cmd, repoRoot) {
-  // Split off a trailing `&& cd <path>` (the sanctioned worktree-start shape)
-  // before the chaining guards, then evaluate the guards against `head` only.
-  // The cd tail must be a bare `cd <single-path>` — no further chaining,
-  // interpreter invocation, or command substitution (#982, #838).
-  const andIdx = findFirstUnquotedAnd(cmd);
-  let head = cmd;
-  if (andIdx !== -1) {
-    head = cmd.slice(0, andIdx).trim();
-    const tail = cmd.slice(andIdx + 2).trim();
-    if (tail !== "") {
-      if (!/^cd\s+(?:"[^"$`]+"|'[^']+'|[^\s$`;|&<>()]+)\s*$/.test(tail)) return false;
-      if (hasShellChaining(tail)) return false;
-      if (rejectInterpreterAndChaining(tail)) return false;
-    }
-  }
+  const first = singleInvocation(cmd) || cdTailInvocation(cmd);
+  const split = first && withoutWorktreeEndSkillPrefix(first);
+  if (!split) return false;
+  const { seg } = split;
 
-  if (rejectInterpreterAndChaining(head)) return false;
-  if (hasShellChaining(head)) return false;
-
-  const stripped = stripQuotedArgs(head);
-
-  // Head-first dispatch: git worktree branch vs New-Item/ni branch vs reject.
-  if (/\bgit\b/.test(stripped) && /\bworktree\s+(?:add|remove|prune)\b/.test(stripped)) {
-    // ── git worktree branch ──────────────────────────────────────────────────
-    // Multiple -C flags → reject (parseGitCPath only reads the first).
-    if ((head.match(/\s-C\s/g) || []).length > 1) return false;
-    if (/\s-C\s/.test(stripped)) {
-      const cArg = parseGitCPath(head);
-      if (!cArg) return false;
-      try {
-        const normC    = normalizeCwd(cArg)    || cArg;
-        const normBase = normalizeCwd(repoRoot) || repoRoot;
-        if (path.resolve(normC).toLowerCase() !== path.resolve(normBase).toLowerCase()) return false;
-      } catch (e) { return false; }
-    }
-
-    // remove/prune do not create new checkout paths — always allow from main worktree
-    if (/\bworktree\s+remove\b/.test(stripped) && hasWorktreeRemoveForceFlag(head)) return false;
-    if (/\bworktree\s+(?:remove|prune)\b/.test(stripped)) return true;
-
-    // For 'add': parse target path (first non-flag arg after 'add')
-    const addMatch = head.match(/\bworktree\s+add\s+([\s\S]*)/);
-    if (!addMatch) return true; // can't parse — fail-open
-
-    const tokens = [];
-    const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
-    let m;
-    while ((m = re.exec(addMatch[1])) !== null) tokens.push(m[1] || m[2] || m[3]);
-
-    const flagsWithNextValue = new Set(["-b", "-B", "--orphan"]);
-    let skipNext = false;
-    let targetPath = null;
-    for (const tok of tokens) {
-      if (skipNext) { skipNext = false; continue; }
-      if (tok.startsWith("-")) {
-        if (flagsWithNextValue.has(tok)) skipNext = true;
-        continue;
-      }
-      targetPath = tok;
-      break;
-    }
-
+  if (seg.cmd0 === "git") {
+    if (rejectRceGitFlags(cmd) || !redirectsUnderTmp(seg)) return false;
+    const git = gitSubcommand(seg);
+    if (!git || git.sub !== "worktree" || !gitCDirIsRepo(git.cDirs, repoRoot)) return false;
+    const action = git.rest[0];
+    const args = git.rest.slice(1);
+    if (action === "prune") return true;
+    if (action === "remove") return !isForceRemove(args);
+    if (action !== "add") return false;
     // Fail-open when path is absent (e.g. git worktree add -b foo — path omitted)
-    return targetPath ? isPathOutsideRepo(targetPath, repoRoot) : true;
-
-  } else if (/^\s*(?:new-item|ni)\b/i.test(stripped)) {
-    // ── New-Item / ni branch: delegate to dedicated module (file-split per rules/coding/file-split.md).
-    // Head-anchored (F2): only dispatch when New-Item/ni is the command head, not embedded
-    // anywhere in the command (e.g. `somecmd ni -ItemType Directory ...` must NOT reach here).
-    return isAllowedNewItemCommand(head, repoRoot);
-
-  } else {
-    return false;
+    const target = addTargetPath(args);
+    return target ? isPathOutsideRepo(target, repoRoot) : true;
   }
+
+  if (!split.skillPrefixed && /^(?:new-item|ni)$/i.test(seg.cmd0) && seg.cmd0Raw === seg.cmd0) {
+    const andIdx = findFirstUnquotedAnd(cmd);
+    const head = andIdx === -1 ? cmd : cmd.slice(0, andIdx).trim();
+    return isAllowedNewItemCommand(head, repoRoot);
+  }
+  return false;
 }
 
 module.exports = { isAllowedWorktreeCommand, hasWorktreeRemoveForceFlag };

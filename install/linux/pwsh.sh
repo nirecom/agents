@@ -1,6 +1,5 @@
 #!/bin/bash
 # pwsh.sh - Install PowerShell (pwsh) and Pester 5
-export SYSTEM_OPS_APPROVED=1
 
 # Color fallback (no dotfiles dependency — standalone-safe pattern from claude-code.sh)
 if [ -z "${C_RESET+x}" ]; then

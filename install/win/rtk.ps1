@@ -3,7 +3,6 @@
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$env:SYSTEM_OPS_APPROVED = "1"
 
 $SCRIPT_CHECKOUT_ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 

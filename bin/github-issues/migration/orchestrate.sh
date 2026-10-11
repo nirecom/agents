@@ -41,8 +41,10 @@ esac
 
 TARGET_CHECKOUT_ROOT="$(cd "$TARGET_CHECKOUT_ROOT" && pwd)"
 
-# Self-repo identity guard (#1234): detect a target that is this agents checkout.
-if [ "$TARGET_CHECKOUT_ROOT" = "$SCRIPT_CHECKOUT_ROOT" ]; then
+# Self-repo identity guard (#1234): detect a target that is this agents checkout or another worktree of it.
+# shellcheck source=bin/lib/main-worktree.sh
+source "$SCRIPT_CHECKOUT_ROOT/bin/lib/main-worktree.sh"
+if same_repository "$TARGET_CHECKOUT_ROOT" "$SCRIPT_CHECKOUT_ROOT"; then
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "WARNING: SELF_REPO_DETECTED: target repo equals this agents checkout (dry-run)."
     echo "         Continuing dry-run; sentinels still emitted below."
@@ -52,7 +54,7 @@ if [ "$TARGET_CHECKOUT_ROOT" = "$SCRIPT_CHECKOUT_ROOT" ]; then
   else
     echo "ERROR: TARGET_CHECKOUT_ROOT equals this agents checkout ($SCRIPT_CHECKOUT_ROOT)." >&2
     echo "       Refusing live migration into the agents repo itself." >&2
-    echo "       This is likely a misidentification (取り違えの可能性)." >&2
+    echo "       This is likely a misidentification." >&2
     echo "       Re-run via the /migrate-repo skill (sets MIGRATE_ACK_EXISTING_ISSUES=1) if this is an intentional Phase 3 self-migration." >&2
     exit 1
   fi
@@ -181,7 +183,7 @@ if [ "$_existing_n" -gt 0 ]; then
   echo "         land at #${_existing_n}+1 onwards. The chronological"
   echo "         'early numbers = history' invariant cannot be preserved post-hoc."
   echo "         Confirm TARGET_CHECKOUT_ROOT is the correct migration target"
-  echo "         (misidentification possible — 取り違えの可能性)."
+  echo "         (misidentification possible)."
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "[dry-run] proceeding despite existing issues"
   elif [ "${MIGRATE_ACK_EXISTING_ISSUES:-0}" != "1" ]; then

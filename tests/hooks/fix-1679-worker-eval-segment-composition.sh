@@ -205,6 +205,8 @@ SCRIPT_DIR_1679="$(dirname "${BASH_SOURCE[0]}")/fix-1679-worker-eval-segment-com
 . "$SCRIPT_DIR_1679/in-ad-cases.sh"
 # shellcheck source=./fix-1679-worker-eval-segment-composition/e2e-tl1-cases.sh
 . "$SCRIPT_DIR_1679/e2e-tl1-cases.sh"
+# shellcheck source=./fix-1679-worker-eval-segment-composition/skill-preflight-form.sh
+. "$SCRIPT_DIR_1679/skill-preflight-form.sh"
 
 # ============================================================================
 # Run all
@@ -214,6 +216,7 @@ test_in_cases
 test_ad_cases
 test_e2e_cases
 test_tl1_cases
+test_skill_form_cases
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

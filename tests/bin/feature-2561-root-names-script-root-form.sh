@@ -47,7 +47,9 @@ msg_of() {
     depth) printf 'level(s) but this file sits' ;;
     late) printf 'too far from the top of the file' ;;
     prefix) printf 'under its own prefixed name only' ;;
+    envprefix) printf 'through an environment prefix' ;;
     unassigned) printf 'read but not assigned in this file' ;;
+    outside) printf 'sourced library outside tests derives its own prefixed' ;;
     *) printf 'unknown message key %s' "$1" ;;
   esac
 }
@@ -299,6 +301,10 @@ case_end
 
 case_begin "read-without-an-assignment-is-reported" "bin/check-root-names/script-root-form.js"
 c_read_without_assignment
+case_end
+
+case_begin "env-prefix-is-not-the-root-assignment" "bin/check-root-names/script-root-form.js"
+c_env_prefix
 case_end
 
 case_begin "rerun-is-stable-and-read-only" "bin/check-root-names.sh"

@@ -138,6 +138,13 @@ function checkCounters(v) {
   return null;
 }
 
+// One message for both readers (this validator and run-finalize-terminal.sh), so the
+// recovery step cannot drift between them.
+function schemaVersionMismatchMessage(found) {
+  return `state file field 'schema_version' must be ${SCHEMA_VERSION} (found ${found}). `
+    + "To recover, delete the state file and rerun the initial phase.";
+}
+
 // Returns null when the object satisfies the whole table, else one message.
 // First failure wins: the caller reports it and refuses, so enumerating the
 // rest would only widen what an untrusted file learns about the validator.
@@ -171,11 +178,11 @@ function validateState(state, anchors) {
       if (err) return `state file ${err}`;
       continue;
     }
+    if (key === "schema_version" && Number.isInteger(v) && v !== SCHEMA_VERSION) {
+      return schemaVersionMismatchMessage(v);
+    }
     const res = checkField(v, spec, anchors, {});
     if (res.error) return `state file field '${key}' ${res.error}`;
-    if (key === "schema_version" && v !== SCHEMA_VERSION) {
-      return `state file field 'schema_version' must be ${SCHEMA_VERSION}`;
-    }
     if (key === "triage_action" && !TRIAGE_FIXED.includes(v) && !TRIAGE_STUCK_RE.test(v)) {
       return `state file field 'triage_action' is not a recognized triage action`;
     }
@@ -421,6 +428,7 @@ module.exports = {
   BINDING_FIELDS,
   ALREADY_INITIALIZED,
   alreadyInitialized,
+  schemaVersionMismatchMessage,
   validateState,
   checkBinding,
   loadValidated,

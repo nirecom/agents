@@ -2,10 +2,10 @@
 # run-finalize-terminal.sh — phase=finalize_terminal for the issue-close-finalize worker
 # Runs ICF-H (close), ICF-I (sentinels), ICF-J (wip clear), ICF-K (outcome), then the terminal state write.
 # Usage: bash run-finalize-terminal.sh <state_file_path> <session_id> <outcome_file_path> [expected_token]
-# Stdout (eval-able KEY=VALUE): STATUS  SUMMARY. Exit 0 always; check STATUS.
+# Stdout (KEY=VALUE lines): STATUS  SUMMARY. Exit 0 always; check STATUS.
 # COMPARE-AND-SWAP: <expected_token> is the sha256 of the state file's raw bytes as the caller
-# validated them (run-loop-step.js 3rd-argument protocol). This script re-reads and EVALS the file, so
-# a replacement written in between would bring live shell syntax — re-check the digest BEFORE the eval.
+# validated them (run-loop-step.js 3rd-argument protocol). This script re-reads the file, so a
+# replacement written in between would bring unvalidated values — re-check the digest BEFORE the read.
 # Optional so a manual invocation still works; the worker always supplies it.
 set -euo pipefail
 
@@ -14,6 +14,8 @@ SESSION_ID="${2:?session_id required}"
 OUTCOME_FILE_PATH="${3:?outcome_file_path required}"
 EXPECTED_TOKEN="${4:-}"
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=lib/kv-read.sh
+. "$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts/lib/kv-read.sh"
 
 export ISSUE_CLOSE_SKILL=1
 
@@ -42,30 +44,36 @@ if [[ -n "$EXPECTED_TOKEN" ]]; then
     fi
 fi
 
-# Read required fields from state file. The accepted schema version is the writer's own
-# constant (state.js), so a version bump there cannot leave this reader behind.
+# Read required fields from state file. The accepted schema version and its mismatch message
+# are the writer's own (state.js), so a version bump there cannot leave this reader behind.
+# Exit 3 = schema-version mismatch; stdout then carries the one-line message.
 STATE_WRITER="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/issue-close-finalize/state.js"
 read_state() {
     node -e "
 const path = require('path');
-const want = require(path.resolve(process.argv[2])).SCHEMA_VERSION;
+const w = require(path.resolve(process.argv[2]));
 const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-if (s.schema_version !== want) { process.stderr.write('schema_version must be ' + want + '\n'); process.exit(1); }
-console.log('CURRENT_ISSUE_NUMBER=' + s.current_issue_number);
-console.log('OWNER_REPO=' + s.owner_repo);
-console.log('TRIAGE_ACTION=' + s.triage_action);
-console.log('MERGE_COMMIT=' + (s.merge_commit || ''));
+if (s.schema_version !== w.SCHEMA_VERSION) { console.log(w.schemaVersionMismatchMessage(s.schema_version)); process.exit(3); }
+// One line per key: a value is cut at its first line break, so it cannot emit another KEY= line.
+const one = (v) => String(v).split(/[\r\n]/)[0];
+console.log('CURRENT_ISSUE_NUMBER=' + one(s.current_issue_number));
+console.log('OWNER_REPO=' + one(s.owner_repo));
+console.log('TRIAGE_ACTION=' + one(s.triage_action));
+console.log('MERGE_COMMIT=' + one(s.merge_commit || ''));
 " "$STATE_FILE_PATH" "$STATE_WRITER"
 }
 
-# Captured before the eval: `eval "$(read_state)" || rc=$?` reports eval's status, not node's.
 rc=0
 STATE_KV="$(read_state)" || rc=$?
-if [[ "$rc" -ne 0 ]]; then
+if [[ "$rc" -eq 3 ]]; then
+    printf 'STATUS=failed\nSUMMARY=%s\n' "${STATE_KV//$'\n'/ }"
+    exit 0
+elif [[ "$rc" -ne 0 ]]; then
     printf 'STATUS=failed\nSUMMARY=state file read failed\n'
     exit 0
 fi
-eval "$STATE_KV"
+CURRENT_ISSUE_NUMBER="" OWNER_REPO="" TRIAGE_ACTION="" MERGE_COMMIT=""
+kv_read "$STATE_KV" CURRENT_ISSUE_NUMBER OWNER_REPO TRIAGE_ACTION MERGE_COMMIT
 
 # ICF-H: close issue (skipped when triage_action=resume_j — issue already closed)
 ICF_H_STATUS=succeeded

@@ -41,12 +41,21 @@ export WORKFLOW_PLANS_DIR
 # isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_STATE_DIR"
-# Settings root for the A/B cases: a fixture with empty lists, so a block is the
-# scanner's verdict on the content and never its fail-closed "no blocklist" answer.
-mkdir -p "$TMPDIR_BASE/agents-main"
-: > "$TMPDIR_BASE/agents-main/.private-info-blocklist"
-: > "$TMPDIR_BASE/agents-main/.private-info-allowlist"
-export AGENTS_MAIN_ROOT="$TMPDIR_BASE/agents-main"
+# Scanner fixture (#2589): hook + scanner run from a linked-worktree copy; the lists
+# live in that repo's main worktree, the only place the scanner may read them from.
+# A block is then the scanner's verdict on the content, never its "no blocklist" answer.
+SO_MAIN="$TMPDIR_BASE/so-main"
+SO_LINKED="$TMPDIR_BASE/so-linked"
+so_build_fixture() {
+    git init -q -b main "$SO_MAIN"
+    git -C "$SO_MAIN" config core.hooksPath /dev/null
+    git -C "$SO_MAIN" -c user.email=t@example.com -c user.name=t commit -q --allow-empty --no-verify -m init
+    git -C "$SO_MAIN" worktree add -q -b so-linked "$SO_LINKED" >/dev/null 2>&1
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$SCRIPT_CHECKOUT_ROOT/bin" "$SO_LINKED/"
+    printf 'forbiddenword[0-9]+\n' > "$SO_MAIN/.private-info-blocklist"
+    : > "$SO_MAIN/.private-info-allowlist"
+    HOOK_JS="$(c_np "$SO_LINKED")/hooks/scan-outbound.js"
+}
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -215,13 +224,11 @@ C_CLEAN='Just an ordinary log line with nothing sensitive.'
 
 c_np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
 
-# Agents main root WITH a resolvable blocklist+allowlist so the scanner never hits rc=4.
-C_CFG="$TMPDIR_BASE/c-cfg"; mkdir -p "$C_CFG"
-printf 'forbiddenword[0-9]+\n' > "$C_CFG/.private-info-blocklist"
-: > "$C_CFG/.private-info-allowlist"
-# Agents main root WITHOUT a blocklist → forces rc=4 fail-closed after the fix.
-C_CFG_NOBL="$TMPDIR_BASE/c-cfg-nobl"; mkdir -p "$C_CFG_NOBL"
-: > "$C_CFG_NOBL/.private-info-allowlist"
+# A complete list pair OUTSIDE the scanner's repo: AGENTS_MAIN_ROOT aimed here must not
+# rescue a missing blocklist in the main worktree (C10, R4-1).
+C_DECOY_CFG="$TMPDIR_BASE/c-decoy-cfg"; mkdir -p "$C_DECOY_CFG"
+: > "$C_DECOY_CFG/.private-info-blocklist"
+: > "$C_DECOY_CFG/.private-info-allowlist"
 # Neutral no-remote CWD so listPrivateRepoNames() resolves to [] deterministically.
 C_NEUTRAL="$TMPDIR_BASE/c-neutral"; mkdir -p "$C_NEUTRAL"
 
@@ -241,14 +248,14 @@ c_build_bash_payload() {
         -- "$1" "$2" 2>/dev/null
 }
 
-# c_run_hook <payload> <cfgdir> <cwd> — pins AGENTS_MAIN_ROOT at the fixture cfg
-# (not $SCRIPT_CHECKOUT_ROOT) and runs node from <cwd>. Captures HOOK_OUT / HOOK_RC.
+# c_run_hook <payload> <cwd> [VAR=value...] — runs the fixture hook from <cwd> with
+# any extra environment given. Captures HOOK_OUT / HOOK_RC.
 c_run_hook() {
-    local payload="$1" cfg="$2" cwd="$3"
+    local payload="$1" cwd="$2"
+    shift 2
     HOOK_RC=0
     HOOK_OUT="$( ( cd "$cwd" && printf '%s' "$payload" | run_with_timeout 30 \
-        env \
-        "AGENTS_MAIN_ROOT=$cfg" \
+        env "$@" \
         "WORKFLOW_STATE_DIR=$(fresh_workflow_dir)" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         node "$HOOK_JS" 2>&1 ) )" || HOOK_RC=$?
@@ -263,7 +270,7 @@ test_C1_inline_heredoc_write_blocks() {
 $C_PRIVATE
 EOF"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$C_NEUTRAL")")"
-    c_run_hook "$payload" "$C_CFG" "$C_NEUTRAL"
+    c_run_hook "$payload" "$C_NEUTRAL"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C1: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then pass "C1: heredoc file-write with private IP → block (fail-before-fix)"
     else fail "C1: expected block on inline heredoc private content: $HOOK_OUT"; fi
@@ -278,7 +285,7 @@ test_C2_inline_echo_redirect_blocks() {
     local f="$C_NEUTRAL/note2.txt" cmd payload
     cmd="echo '$C_PRIVATE' > $(c_np "$f")"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$C_NEUTRAL")")"
-    c_run_hook "$payload" "$C_CFG" "$C_NEUTRAL"
+    c_run_hook "$payload" "$C_NEUTRAL"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C2: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then pass "C2: echo-redirect file-write with private IP → block (fail-before-fix)"
     else fail "C2: expected block on inline echo-redirect private content: $HOOK_OUT"; fi
@@ -293,7 +300,7 @@ test_C3_inline_clean_write_approves() {
     local f="$C_NEUTRAL/note3.txt" cmd payload
     cmd="echo '$C_CLEAN' > $(c_np "$f")"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$C_NEUTRAL")")"
-    c_run_hook "$payload" "$C_CFG" "$C_NEUTRAL"
+    c_run_hook "$payload" "$C_NEUTRAL"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C3: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then fail "C3: clean file-write wrongly blocked: $HOOK_OUT"
     else pass "C3: clean file-write → approve (inline scan not an unconditional blocker)"; fi
@@ -305,7 +312,7 @@ test_C4_non_write_not_scanned() {
     local cmd payload
     cmd="echo '$C_PRIVATE'"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$C_NEUTRAL")")"
-    c_run_hook "$payload" "$C_CFG" "$C_NEUTRAL"
+    c_run_hook "$payload" "$C_NEUTRAL"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C4: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then fail "C4: non-write (echo to stdout) wrongly scanned+blocked: $HOOK_OUT"
     else pass "C4: non-write command → approve (inline scan scoped to file-writes)"; fi
@@ -317,7 +324,7 @@ test_C5_runtime_side_effect_out_of_scope() {
     local cmd payload
     cmd="python3 $(c_np "$C_NEUTRAL")/app.py"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$C_NEUTRAL")")"
-    c_run_hook "$payload" "$C_CFG" "$C_NEUTRAL"
+    c_run_hook "$payload" "$C_NEUTRAL"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C5: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then fail "C5: runtime side-effect (python app.py) wrongly blocked: $HOOK_OUT"
     else pass "C5: runtime side-effect → approve (only inline literals scanned)"; fi
@@ -331,7 +338,7 @@ test_C6_staged_private_blocks() {
     local cmd payload
     cmd="git -C $(c_np "$repo") commit -m 'chore: routine update'"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$repo")")"
-    c_run_hook "$payload" "$C_CFG" "$repo"
+    c_run_hook "$payload" "$repo"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C6: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then pass "C6: private staged content (clean message) → block (fail-before-fix)"
     else fail "C6: staged private content not scanned — expected block: $HOOK_OUT"; fi
@@ -345,7 +352,7 @@ test_C7_staged_clean_approves() {
     local cmd payload
     cmd="git -C $(c_np "$repo") commit -m 'chore: routine update'"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$repo")")"
-    c_run_hook "$payload" "$C_CFG" "$repo"
+    c_run_hook "$payload" "$repo"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C7: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then fail "C7: clean staged content wrongly blocked: $HOOK_OUT"
     else pass "C7: clean staged content → approve (staged scan not an unconditional blocker)"; fi
@@ -360,7 +367,7 @@ test_C8_amend_message_independent_blocks() {
     local cmd payload
     cmd="git -C $(c_np "$repo") commit --amend --no-edit"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$repo")")"
-    c_run_hook "$payload" "$C_CFG" "$repo"
+    c_run_hook "$payload" "$repo"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C8: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then pass "C8: --amend (no -m) private staged → block (message-independent, fail-before-fix)"
     else fail "C8: --amend staged private not scanned — expected block: $HOOK_OUT"; fi
@@ -375,22 +382,25 @@ test_C9_cd_form_recognized_blocks() {
     local cmd payload
     cmd="cd $(c_np "$repo") && git commit -m 'wip'"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$C_NEUTRAL")")"
-    c_run_hook "$payload" "$C_CFG" "$C_NEUTRAL"
+    c_run_hook "$payload" "$C_NEUTRAL"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C9: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then pass "C9: 'cd repo && git commit' recognized → staged scan → block (fail-before-fix)"
     else fail "C9: cd-form commit not recognized as staged-scan target: $HOOK_OUT"; fi
 }
 
-# C10: scanner rc=4 (blocklist unresolvable via AGENTS_MAIN_ROOT) maps to block,
-#      even for clean content (fail-closed). Uses Edit so no new commit/inline path.
+# C10: scanner rc=4 (no blocklist in the scanner's main worktree) maps to block,
+#      even for clean content (fail-closed) — and AGENTS_MAIN_ROOT aimed at a
+#      complete list pair elsewhere must not rescue it. Uses Edit (no commit path).
 test_C10_rc4_fail_closed_blocks() {
     require_hook "C10" || return
     local payload
     payload="$(build_edit_payload "csid" "$C_NEUTRAL/x.txt" "$C_CLEAN")"
-    c_run_hook "$payload" "$C_CFG_NOBL" "$C_NEUTRAL"
+    mv "$SO_MAIN/.private-info-blocklist" "$SO_MAIN/.private-info-blocklist.off"
+    c_run_hook "$payload" "$C_NEUTRAL" "AGENTS_MAIN_ROOT=$C_DECOY_CFG"
+    mv "$SO_MAIN/.private-info-blocklist.off" "$SO_MAIN/.private-info-blocklist"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C10: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
-    if c_is_block; then pass "C10: blocklist unresolvable → scanner rc=4 → block (fail-before-fix)"
-    else fail "C10: rc=4 not mapped to block (silent degrade): $HOOK_OUT"; fi
+    if c_is_block; then pass "C10: no blocklist in main worktree → scanner rc=4 → block (env cannot rescue)"
+    else fail "C10: rc=4 not mapped to block, or AGENTS_MAIN_ROOT moved the list anchor: $HOOK_OUT"; fi
 }
 
 # C11: a deletion + a private modification staged in one commit — the deletion is
@@ -407,7 +417,7 @@ test_C11_deleted_excluded_modified_scanned() {
     local cmd payload
     cmd="git -C $(c_np "$repo") commit -m 'prune + edit'"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$repo")")"
-    c_run_hook "$payload" "$C_CFG" "$repo"
+    c_run_hook "$payload" "$repo"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C11: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then pass "C11: deletion excluded (ACM), modified private scanned → block (fail-before-fix)"
     else fail "C11: staged deletion+modification not scanned correctly: $HOOK_OUT"; fi
@@ -425,7 +435,7 @@ test_C12_staged_index_not_wt() {
     local cmd payload
     cmd="git -C $(c_np "$repo") commit -m 'should read index not wt'"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$repo")")"
-    c_run_hook "$payload" "$C_CFG" "$repo"
+    c_run_hook "$payload" "$repo"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C12: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then pass "C12: staged index has private (wt is clean) → block (reads index, fail-before-fix)"
     else fail "C12: staged scan read working tree instead of index — expected block: $HOOK_OUT"; fi
@@ -441,7 +451,7 @@ test_C13_two_staged_one_private() {
     local cmd payload
     cmd="git -C $(c_np "$repo") commit -m 'two files commit'"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$repo")")"
-    c_run_hook "$payload" "$C_CFG" "$repo"
+    c_run_hook "$payload" "$repo"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C13: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if c_is_block; then pass "C13: 2 staged files (clean+private) → block (private file detected, fail-before-fix)"
     else fail "C13: 2-file commit with private file not blocked: $HOOK_OUT"; fi
@@ -455,7 +465,7 @@ test_C14_no_secret_leakage_in_output() {
     local cmd payload
     cmd="git -C $(c_np "$repo") commit -m 'sensitive update'"
     payload="$(c_build_bash_payload "$cmd" "$(c_np "$repo")")"
-    c_run_hook "$payload" "$C_CFG" "$repo"
+    c_run_hook "$payload" "$repo"
     if [ "$HOOK_RC" -ne 0 ]; then fail "C14: hook crashed rc=$HOOK_RC ($HOOK_OUT)"; return; fi
     if ! c_is_block; then fail "C14: expected block on private staged content (setup issue): $HOOK_OUT"; return; fi
     if echo "$HOOK_OUT" | grep -qF "$C_PRIVATE"; then
@@ -476,6 +486,7 @@ test_C14_no_secret_leakage_in_output() {
 #   docs/architecture/claude-code/e2e-testing.md for the hook coverage map.
 
 run_all() {
+    so_build_fixture
     test_A_no_marker_blocks_private_info
     test_B_marker_still_scans_private_info
     test_B2_marker_approves_benign_content

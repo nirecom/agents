@@ -16,6 +16,8 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/sweep-write-mode.sh
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
+# shellcheck source=lib/main-worktree.sh
+source "$SCRIPT_DIR/lib/main-worktree.sh"
 # shellcheck source=./sweep-branches/pr-state.sh
 source "$SCRIPT_DIR/sweep-branches/pr-state.sh"
 # shellcheck source=./sweep-branches/gates.sh
@@ -173,14 +175,9 @@ if ! "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" >/dev/null 2>&1; then
   exit 0
 fi
 
-# Resolve main worktree root: the parent of the shared .git, whichever checkout the cwd is in.
-TARGET_MAIN_ROOT="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || TARGET_MAIN_ROOT=""
-case "$TARGET_MAIN_ROOT" in
-  */.git) TARGET_MAIN_ROOT="${TARGET_MAIN_ROOT%/.git}" ;;
-  *) TARGET_MAIN_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || TARGET_MAIN_ROOT="" ;;
-esac
+TARGET_MAIN_ROOT="$(main_worktree_of "$PWD")" || TARGET_MAIN_ROOT=""
 if [[ -z "$TARGET_MAIN_ROOT" ]]; then
-  printf 'ERROR: not inside a git repository\n' >&2
+  printf 'ERROR: cannot resolve the main worktree (not a git repository, or a bare or --separate-git-dir repository)\n' >&2
   exit 1
 fi
 

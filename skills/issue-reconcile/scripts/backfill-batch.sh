@@ -18,8 +18,8 @@ DRY_RUN=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --repo-dir) TARGET_CHECKOUT_ROOT="${2:-}"; shift 2 ;;
-        --numbers-file) NUMBERS_FILE="${2:-}"; shift 2 ;;
+        --repo-dir) [ $# -ge 2 ] || { echo "Error: $1 needs a value" >&2; exit 1; }; TARGET_CHECKOUT_ROOT="$2"; shift 2 ;;
+        --numbers-file) [ $# -ge 2 ] || { echo "Error: $1 needs a value" >&2; exit 1; }; NUMBERS_FILE="$2"; shift 2 ;;
         --dry-run) DRY_RUN=1; shift ;;
         *) echo "Error: unknown argument: $1" >&2; exit 1 ;;
     esac
@@ -63,7 +63,7 @@ OK=0
 
 for N in $NUMS; do
     if bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-to-history.sh" "$N" \
-        --target "$HISTORY" --allow-backdate --no-auto-rotate; then
+        --target "$HISTORY" --target-checkout-root "$TARGET_CHECKOUT_ROOT" --allow-backdate --no-auto-rotate; then
         echo "$N" >> "$APPENDED_FILE"
         OK=$((OK + 1))
     else

@@ -36,11 +36,11 @@ declare -A REPO_OF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --session-id)  SESSION_ID="${2:-}"; shift 2 ;;
-        --plans-dir)   PLANS_DIR_ARG="${2:-}"; shift 2 ;;
-        --issues)      ISSUES_CSV="${2:-}"; ISSUES_SET=1; shift 2 ;;
+        --session-id)  [[ $# -ge 2 ]] || { echo "[clarify-commit-scope] $1 needs a value" >&2; exit 2; }; SESSION_ID="${2:-}"; shift 2 ;;
+        --plans-dir)   [[ $# -ge 2 ]] || { echo "[clarify-commit-scope] $1 needs a value" >&2; exit 2; }; PLANS_DIR_ARG="${2:-}"; shift 2 ;;
+        --issues)      [[ $# -ge 2 ]] || { echo "[clarify-commit-scope] $1 needs a value" >&2; exit 2; }; ISSUES_CSV="${2:-}"; ISSUES_SET=1; shift 2 ;;
         --non-github)  NON_GITHUB=1; shift ;;
-        --repo)        REPO_SLUG="${2:-}"; shift 2 ;;
+        --repo)        [[ $# -ge 2 ]] || { echo "[clarify-commit-scope] $1 needs a value" >&2; exit 2; }; REPO_SLUG="${2:-}"; shift 2 ;;
         --repo-map)
             [ $# -lt 2 ] && { echo "[clarify-commit-scope] --repo-map requires a value" >&2; exit 2; }
             KEY="${2%%:*}"; VAL="${2#*:}"; REPO_OF["$KEY"]="$VAL"; shift 2

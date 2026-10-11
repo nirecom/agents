@@ -19,8 +19,8 @@ N=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --type) TYPE="$2"; shift 2 ;;
-        --into) INTO="$2"; shift 2 ;;
+        --type) [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 1; }; TYPE="$2"; shift 2 ;;
+        --into) [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 1; }; INTO="$2"; shift 2 ;;
         --)     shift; N="${1:?issue number required}"; shift ;;
         -*)     echo "Unknown flag: $1" >&2; exit 1 ;;
         *)      N="$1"; shift ;;

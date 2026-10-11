@@ -41,10 +41,10 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --target)   TARGET="${2:-}"; shift 2 ;;
-    --category) CATEGORY="${2:-}"; shift 2 ;;
-    --urgency)  URGENCY="${2:-}"; shift 2 ;;
-    --detail)   DETAIL="${2:-}"; shift 2 ;;
+    --target)   [[ $# -ge 2 ]] || { echo "ERROR: $1 needs a value" >&2; exit 2; }; TARGET="${2:-}"; shift 2 ;;
+    --category) [[ $# -ge 2 ]] || { echo "ERROR: $1 needs a value" >&2; exit 2; }; CATEGORY="${2:-}"; shift 2 ;;
+    --urgency)  [[ $# -ge 2 ]] || { echo "ERROR: $1 needs a value" >&2; exit 2; }; URGENCY="${2:-}"; shift 2 ;;
+    --detail)   [[ $# -ge 2 ]] || { echo "ERROR: $1 needs a value" >&2; exit 2; }; DETAIL="${2:-}"; shift 2 ;;
     -h|--help)  usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 2 ;;
   esac

@@ -119,7 +119,8 @@ neither-root-leaves-the-set-empty|-|-|
 a-missing-argument-root-does-not-fall-back|absent|main|"
 
 # shellcheck disable=SC2016  # the snippet is expanded by the child shell
-readonly IDENT_SNIPPET='source "$1"; shift; companion_pass_b_identifiers "$@"; printf "%s" "$IDENTIFIER_SET"'
+# stderr is dropped: a root that is not a directory now earns a warning, asserted in the strict case below.
+readonly IDENT_SNIPPET='source "$1"; shift; companion_pass_b_identifiers "$@" 2>/dev/null; printf "%s" "$IDENTIFIER_SET"'
 
 case_begin "the-identifier-namespace-is-read-from-the-root-argument" "bin/github-issues/lib/companion-passes.sh"
 while IFS='|' read -r name arg amr want; do
@@ -129,6 +130,37 @@ while IFS='|' read -r name arg amr want; do
   expect_eq "$name: exit code" "$RC" "0"
   expect_eq "$name: identifier set" "$(printf '%s' "$OUT" | tr '\n' ',')" "$want"
 done <<<"$IDENT_ROWS"
+case_end
+
+# A caller under `set -euo pipefail` (find-companion-issues.sh is one) must survive a root that
+# lacks some of the five dirs; the set comes from the dirs that remain. Pruned copies of "target".
+# Columns: case | dirs removed from the root (comma-joined) | identifier set, comma-joined.
+readonly PRUNE_ROWS="a-root-without-rules|rules|tgt-agent,tgt-hook,tgt-skill,tgt-tool
+a-root-without-skills|skills|tgt-agent,tgt-hook,tgt-rule,tgt-tool
+a-root-with-rules-only|skills,hooks,bin,agents|tgt-rule
+a-root-with-none-of-the-dirs|skills,hooks,bin,agents,rules|"
+
+# shellcheck disable=SC2016  # the snippet is expanded by the child shell
+readonly STRICT_SNIPPET='set -euo pipefail; source "$1"; shift; companion_pass_b_identifiers "$@"; printf "%s" "$IDENTIFIER_SET" | tr "\n" ","; printf "|survived"'
+
+case_begin "a-strict-caller-survives-a-root-missing-some-dirs" "bin/github-issues/lib/companion-passes.sh"
+while IFS='|' read -r name removed want; do
+  rm -rf "$TMP_ROOT/pruned"
+  cp -R "$TMP_ROOT/target" "$TMP_ROOT/pruned"
+  for d in ${removed//,/ }; do rm -rf "${TMP_ROOT:?}/pruned/$d"; done
+  OUT="$(cd "$TMP_ROOT/cwd" && env -u AGENTS_MAIN_ROOT bash "$RWT" 60 bash -c "$STRICT_SNIPPET" _ "$PASSES_LIB" "$TMP_ROOT/pruned" 2>"$TMP_ROOT/strict.err")"
+  RC=$?
+  expect_eq "$name: exit code" "$RC" "0"
+  expect_eq "$name: identifier set, and the caller goes on" "$OUT" "$want|survived"
+  expect_eq "$name: nothing on stderr" "$(cat "$TMP_ROOT/strict.err")" ""
+done <<<"$PRUNE_ROWS"
+# A root that is not a directory: the set stays empty and one stderr line names the root.
+OUT="$(cd "$TMP_ROOT/cwd" && env -u AGENTS_MAIN_ROOT bash "$RWT" 60 bash -c "$STRICT_SNIPPET" _ "$PASSES_LIB" "$TMP_ROOT/absent-root" 2>"$TMP_ROOT/strict.err")"
+RC=$?
+expect_eq "a-root-that-is-not-a-directory: exit code" "$RC" "0"
+expect_eq "a-root-that-is-not-a-directory: empty set, and the caller goes on" "$OUT" "|survived"
+expect_eq "a-root-that-is-not-a-directory: one stderr line" "$(grep -c . "$TMP_ROOT/strict.err")" "1"
+expect_has "a-root-that-is-not-a-directory: the warning names the root" "$(cat "$TMP_ROOT/strict.err")" "absent-root"
 case_end
 
 # Three roots, one name each: the script copy's own checkout knows supervisor-report, the

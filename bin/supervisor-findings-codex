@@ -19,16 +19,18 @@ ARTIFACT=""
 SNAPSHOT=""
 SUBCHECKS=()
 
+usage_fail() { echo "STATUS: FAILED"; echo "reason: $1"; exit 0; }
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --mode)           MODE="${2:-}"; shift 2 ;;
-    --sid)            SID="${2:-}"; shift 2 ;;
-    --wsid)           WSID="${2:-}"; shift 2 ;;
-    --transcript)     TRANSCRIPT="${2:-}"; shift 2 ;;
-    --artifact)       ARTIFACT="${2:-}"; shift 2 ;;
-    --subcheck)       SUBCHECKS+=("${2:-}"); shift 2 ;;
-    --state-snapshot) SNAPSHOT="${2:-}"; shift 2 ;;
-    *)                shift ;;
+    --mode)           [[ $# -ge 2 ]] || usage_fail "$1 needs a value"; MODE="${2:-}"; shift 2 ;;
+    --sid)            [[ $# -ge 2 ]] || usage_fail "$1 needs a value"; SID="${2:-}"; shift 2 ;;
+    --wsid)           [[ $# -ge 2 ]] || usage_fail "$1 needs a value"; WSID="${2:-}"; shift 2 ;;
+    --transcript)     [[ $# -ge 2 ]] || usage_fail "$1 needs a value"; TRANSCRIPT="${2:-}"; shift 2 ;;
+    --artifact)       [[ $# -ge 2 ]] || usage_fail "$1 needs a value"; ARTIFACT="${2:-}"; shift 2 ;;
+    --subcheck)       [[ $# -ge 2 ]] || usage_fail "$1 needs a value"; SUBCHECKS+=("${2:-}"); shift 2 ;;
+    --state-snapshot) [[ $# -ge 2 ]] || usage_fail "$1 needs a value"; SNAPSHOT="${2:-}"; shift 2 ;;
+    *)                usage_fail "unknown argument: $1" ;;
   esac
 done
 

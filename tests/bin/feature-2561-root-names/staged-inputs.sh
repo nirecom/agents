@@ -141,19 +141,23 @@ TABLE
   expect "inputs: a file is judged once it is tracked" reports "bin/t-untracked.sh" residue 1
 }
 
-# The staged flag reads the index of the gate's own checkout, wherever it is called from.
+# The staged flag reads the index of the repository at the current directory (the
+# worktree being committed, #2589), not the gate's own checkout; outside git it exits 2.
 c_staged_from_another_directory() {
+  local other
+  staged_kit cwd-other
+  other="$KIT"
+  fx "$other/bin/s-other.sh" "$OLD_LINE"
+  git -C "$other" add bin/s-other.sh
   staged_kit cwd
   fx "$KIT/bin/s-k.sh" "$OLD_LINE"
   git -C "$KIT" add bin/s-k.sh
-  new_repo elsewhere
-  fx "$REPO/bin/s-other.sh" "$OLD_LINE"
-  git -C "$REPO" add -A
-  run_gate_at "$REPO" "$KIT" --staged --only residue
-  expect "cwd: from another repository the gate's own index is judged" reports "bin/s-k.sh" residue 1
-  expect "cwd: the index of the calling directory is not" clean_for "bin/s-other.sh"
+  run_gate_at "$other" "$KIT" --staged --only residue
+  expect "cwd: from another repository its index is judged" reports "bin/s-other.sh" residue 1
+  expect "cwd: the index of the gate's own checkout is not" clean_for "bin/s-k.sh"
   run_gate_at "$T" "$KIT" --staged --only residue
-  expect "cwd: from a directory outside git the verdict is the same" reports "bin/s-k.sh" residue 1
+  expect "cwd: from a directory outside git the run exits 2" rc_is 2
+  expect "cwd: it says a git repository is needed" says 'needs a git repository'
 }
 
 says() { [[ "$GATE_OUT" == *"$1"* ]]; }
@@ -169,7 +173,7 @@ c_staged_fails_closed() {
   expect "closed: the copy outside git passes a tree run (exit 0)" rc_is 0
   staged --only residue
   expect "closed: the staged flag outside git exits 2" rc_is 2
-  expect "closed: it says the index cannot be read" says 'cannot read the index'
+  expect "closed: it says a git repository is needed" says 'needs a git repository'
   # Columns: kit name|check that needs the file|the gate's own data file.
   while IFS='|' read -r name check rel <&3; do
     staged_kit "$name"

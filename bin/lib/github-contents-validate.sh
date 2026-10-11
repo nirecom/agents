@@ -31,9 +31,9 @@ COMMIT_SUBJECT=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --path)           PATH_ARG="${2:-}";        shift 2 ;;
-        --file)           FILE="${2:-}";             shift 2 ;;
-        --commit-subject) COMMIT_SUBJECT="${2:-}";   shift 2 ;;
+        --path)           [[ $# -ge 2 ]] || { echo "github-contents-validate: $1 needs a value" >&2; exit 3; }; PATH_ARG="${2:-}";        shift 2 ;;
+        --file)           [[ $# -ge 2 ]] || { echo "github-contents-validate: $1 needs a value" >&2; exit 3; }; FILE="${2:-}";             shift 2 ;;
+        --commit-subject) [[ $# -ge 2 ]] || { echo "github-contents-validate: $1 needs a value" >&2; exit 3; }; COMMIT_SUBJECT="${2:-}";   shift 2 ;;
         *) echo "github-contents-validate: unknown argument: $1" >&2; exit 3 ;;
     esac
 done

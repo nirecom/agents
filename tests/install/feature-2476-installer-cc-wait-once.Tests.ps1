@@ -282,10 +282,18 @@ Describe 'ps-parent-waits-once-before-children' {
         $r.Output   | Should -Match 'PP_EXEC_OK'
     }
 
-    It 'PP-ps-env-restore: exit inside the try restores SYSTEM_OPS_APPROVED (unset/prior) and clears WAIT_CC_RESULT' -Skip:(-not $IsWindows) {
-        # .\install.ps1 runs in the caller's session, so SYSTEM_OPS_APPROVED and WAIT_CC_RESULT
-        # must not outlive it. PATH without fnm/winget takes the fnm-check `exit 1` (the earliest
-        # exit inside the try); a stub git keeps core.longpaths off the real config.
+    It 'PP-ps-env-untouched: install.ps1 never sets, removes, or restores SYSTEM_OPS_APPROVED' {
+        # #2200: .\install.ps1 runs in the caller's session, so any assignment leaks the
+        # system-ops bypass into that shell; the guard only honours the operator's own export.
+        $code = @($script:InstallLines | Where-Object { $_ -notmatch '^\s*#' })
+        @($code | Where-Object { $_ -imatch 'SYSTEM_OPS_APPROVED' }) | Should -BeNullOrEmpty
+        @($script:InstallLines | Where-Object { $_ -imatch '_priorSystemOpsApproved' }) | Should -BeNullOrEmpty
+    }
+
+    It 'PP-ps-env-restore: exit inside the try leaves SYSTEM_OPS_APPROVED as found (unset/prior) and clears WAIT_CC_RESULT' -Skip:(-not $IsWindows) {
+        # Runtime counterpart of PP-ps-env-untouched: the caller's value survives an early exit and
+        # WAIT_CC_RESULT does not outlive the run. PATH without fnm/winget takes the fnm-check `exit 1`
+        # (the earliest exit inside the try); a stub git keeps core.longpaths off the real config.
         $stubDir = Join-Path $TestDrive 'pp-env-bin'
         New-CmdStub -Directory $stubDir -Name 'git' -Line @('@echo off', 'exit /b 0') | Out-Null
         $driver = Join-Path $TestDrive 'pp-env.ps1'
@@ -360,7 +368,8 @@ Describe 'dotfileslink-ps-skips-only-settings-write' {
 Describe 'children-honor-parent-memo' {
     # Group G: the real claude-code child + the REAL wait helper (copied into a mock root,
     # unlike feature-2284 which mocks the helper) honor the parent memo. The process
-    # override contradicts the memo so only a honored memo passes.
+    # override contradicts the memo so only a honored memo passes. The copy finds the
+    # helper from its own $PSScriptRoot; AGENTS_ROOT and the script seam stay unset.
     BeforeAll {
         function Invoke-ClaudeCodeChild([string]$Label, [string]$Memo, [string]$Override) {
             $root = Join-Path $TestDrive "g-root-$Label"
@@ -379,7 +388,8 @@ Describe 'children-honor-parent-memo' {
             }
             $r = Invoke-PwshChild -File (Join-Path $root 'install/win/claude-code.ps1') -TimeoutSec 60 -Environment @{
                 PATH                     = $stub + [IO.Path]::PathSeparator + $env:PATH
-                AGENTS_ROOT              = $root
+                AGENTS_ROOT              = $null
+                WAIT_CC_EXIT_SCRIPT_OVERRIDE = $null
                 WAIT_CC_RESULT           = $Memo
                 WAIT_CC_PROCESS_OVERRIDE = $Override
                 WAIT_CC_POLL_INTERVAL    = '1'

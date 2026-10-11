@@ -1,7 +1,6 @@
 #!/bin/bash
 # jq.sh - Install jq (JSON processor)
 # jq is required by bin/compose-doc-append-entry, github-contents-write.sh, github-git-data-write.sh
-export SYSTEM_OPS_APPROVED=1
 
 # Color fallback (no dotfiles dependency — standalone-safe pattern from claude-code.sh)
 if [ -z "${C_RESET+x}" ]; then

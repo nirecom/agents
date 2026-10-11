@@ -14,8 +14,11 @@ const { foldNewlinesInSpans } = require("../../lib/quote-spans");
 const { resolveScriptCheckoutRoot } = require("../../lib/script-checkout-root");
 const { rejectsUnsafeArgTail } = require("../arg-tail-guard");
 const { splitShellCommands } = require("../../lib/shell-segments");
-const { parse } = require("../../lib/command-ir");
+const { parse, analysisOf } = require("../../lib/command-ir");
+const { ASSIGN_RE } = require("../../lib/command-ir/effective");
 const { detectWritePredicate } = require("../write-detector");
+const { leadingAssignments } = require("./command-shape");
+const { SUPERVISOR_BIN_TOOLS } = require("./supervisor-bin");
 
 // Companion-segment env-mutation guard (#1679):
 // Blocks companion segments whose cmd0 is a shell env-mutation keyword.
@@ -27,8 +30,6 @@ const ENV_MUTATION_CMDS = new Set([
   "export", "unset", "declare", "typeset", "readonly",
   "set", "source", "eval", "alias", "env",
 ]);
-// Bare IDENT=value at cmd0 position signals an env-assignment segment.
-const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 // Sanctioned worker scripts. Any new worker script that must write inside a
 // linked worktree must be listed here (SSOT for the legacy SANCTIONED path).
@@ -47,6 +48,23 @@ const SANCTIONED = [
   "skills/issue-close-finalize/scripts/pre-flight.sh",
   "skills/review-code-security/scripts/run-quality-gates.sh",
 ];
+
+// `bash "<path>" [args]` read from the first parsed segment: no leading assignment,
+// no input redirect, and the regex path must be the parsed argv[0]. The first
+// segment, not singleInvocation, because command-ir splits `&>` (#959 log form)
+// into `&` + `> f`; the argTail scan and the write-scope tail judge the rest.
+function bashScriptSegment(seg) {
+  let ir;
+  try { ir = parse(seg); } catch (_) { return null; }
+  if (!ir || ir.parseFailure === true || !Array.isArray(ir.segments) || ir.segments.length === 0) return null;
+  const s = ir.segments[0];
+  const split = leadingAssignments(s);
+  if (!split || split.assignments.length !== 0) return null;
+  if (s.cmd0 !== "bash" || s.cmd0Raw !== "bash" || !/^"/.test((s.argvRaw && s.argvRaw[0]) || "")) return null;
+  if (s.redirects.some((r) => String(r.op).startsWith("<"))) return null;
+  const m = seg.match(/^\s*bash\s+"([^"]+)"(\s[\s\S]*)?$/);
+  return m && m[1] === s.argv[0] ? m : null;
+}
 
 /**
  * True when `seg` (a single split segment with no &&/||/; separators) matches
@@ -79,7 +97,7 @@ function isSanctionedSingleInvocation(seg, repoRoot) {
     // shell expands it after this hook, so the file judged and the file run could
     // differ (#2561). It fails the SANCTIONED comparison below and is blocked.
   } else {
-    const m = seg.match(/^\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s'"]*\s+)*bash\s+"([^"]+)"(\s[\s\S]*)?$/);
+    const m = bashScriptSegment(seg);
     if (!m) return false;
     scriptPath = m[1];
     argTail = m[2] || "";
@@ -150,6 +168,11 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
   // path, so no environment value can redirect it. null keeps the fail-closed contract.
   if (!resolveScriptCheckoutRoot()) return false;
   if (!repoRoot) return false;
+  let ir;
+  try { ir = parse(cmd); } catch (_) { return false; }
+  if (!ir || ir.parseFailure === true) return false;
+  const nesting = analysisOf(ir);
+  if (nesting.heredocs.length > 0 || nesting.groups.length > 0) return false;
 
   // Split by shell operators (&&/||/;) to detect companion segments.
   // Single-segment commands take the same path as before — no performance cost.
@@ -225,24 +248,25 @@ function writeTargetsAllInLinkedWorktrees(cmd, repoRoot) {
   } catch (e) { return false; }
 }
 
-const VARIABLE_SCRIPT_PATH_RE = /\bbash\s+"(\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)[\\/]([^"]+)"/;
+const VARIABLE_SCRIPT_PATH_RE = /\b(bash|node)\s+"(\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)[\\/]([^"]+)"/;
+const LITERAL_PATH_TOOLS = [...SANCTIONED, ...SUPERVISOR_BIN_TOOLS];
 
 /**
- * Block-message hint for a command that names a sanctioned script through an
- * unexpanded variable. "" when the command has no such path.
+ * Block-message hint for a command that names a sanctioned script or a
+ * supervisor bin tool through an unexpanded variable. "" when it has no such path.
  */
 function describeVariableScriptPath(cmd) {
   if (!cmd || typeof cmd !== "string") return "";
   const m = cmd.match(VARIABLE_SCRIPT_PATH_RE);
   if (!m) return "";
-  const rel = m[2].replace(/\\/g, "/");
-  if (!SANCTIONED.includes(rel)) return "";
+  const rel = m[3].replace(/\\/g, "/");
+  if (!LITERAL_PATH_TOOLS.includes(rel)) return "";
   const root = resolveScriptCheckoutRoot();
   const literal = root ? path.join(root, rel).replace(/\\/g, "/") : `<absolute path>/${rel}`;
   return (
-    `\nHint: ${rel} is allowed from the main worktree, but this command names it through ${m[1]}.\n` +
+    `\nHint: ${rel} is allowed from the main worktree, but this command names it through ${m[2]}.\n` +
     "This hook reads the command before the shell expands variables, so it cannot confirm which file will run.\n" +
-    `Write the path literally instead: bash "${literal}"`
+    `Write the path literally instead: ${m[1]} "${literal}"`
   );
 }
 

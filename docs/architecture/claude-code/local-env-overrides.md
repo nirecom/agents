@@ -26,7 +26,12 @@ unfamiliar. It is not a general-purpose config surface.
 `hooks/lib/local-env.js` is the pure resolver (blocklist plus `overlay()`);
 `hooks/lib/load-env.js` wires it into `process.env` and into the
 `readEffectiveEnvFile` read door. `hooks/lib/load-env.sh` deliberately has no
-local layer at all — see "half-applied" below.
+local layer at all — an intended difference from the Node loader, which is
+otherwise its reference grammar (pinned by
+`tests/hooks/feature-2223-dotenv-multiline/js-sh-parity.sh`); see "half-applied"
+below. The bash loader also never exports a multi-line quoted value: it drops
+that key with a warning naming the key only, and the `KEY=` lines inside the
+value are never read as settings.
 
 ## Why a blocklist, not an allowlist
 
@@ -62,7 +67,7 @@ each entry there. Two criteria put a key on it:
    [plan-sync.md](plan-sync.md)).
 2. **Half-applied.** Keys whose consumers do not all read the same layer.
    `hooks/pre-commit` reads `ENFORCE_WORKTREE` through `load-env.sh`, which has
-   no local overlay, while the Node reader of the same name does — a local
+   no local overlay by design, while the Node reader of the same name does — a local
    override would silence one guard and leave its sibling armed. A split-brain
    guard is worse than either answer, so the local value is refused outright.
 

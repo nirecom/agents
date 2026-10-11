@@ -4,8 +4,9 @@
 # #2276 S8-b/S8-d). review-code-codex diffs the tree directly; the raw output is
 # the anchored round delta; the scanner fallback re-enters via --prestaged-report.
 # Caller globals: TMP_OUT DELTA_SRC ROUND CONTEXT_OUT CORE_PRINCIPLES EXTRA_CTX
-# REPO_ROOT_ARG SCRIPT_CHECKOUT_ROOT PRESTAGED_REPORT VERDICT ARGS BASE_STATE_ARG.
-SAFE_PATH_LIB="${SCRIPT_CHECKOUT_ROOT:-}/bin/lib/safe-state-path.sh"
+# REPO_ROOT_ARG PRESTAGED_REPORT VERDICT ARGS BASE_STATE_ARG.
+_REF_KIND_INPUT_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SAFE_PATH_LIB="$_REF_KIND_INPUT_SCRIPT_CHECKOUT_ROOT/bin/lib/safe-state-path.sh"
 [[ -f "$SAFE_PATH_LIB" ]] || die "the safe-path library is missing: $SAFE_PATH_LIB"
 source "$SAFE_PATH_LIB" || die "the safe-path library failed to load: $SAFE_PATH_LIB"
 
@@ -16,7 +17,7 @@ source "$SAFE_PATH_LIB" || die "the safe-path library failed to load: $SAFE_PATH
 rk_build_args() {
   ARGS=()
   local RMB base="" state="" key val mbout ctx priortmp prior
-  RMB="$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh"
+  RMB="$_REF_KIND_INPUT_SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh"
   if [[ -x "$RMB" ]]; then
     mbout="$(bash "$RMB" --format kv 2>/dev/null || true)"
     while IFS='=' read -r key val; do

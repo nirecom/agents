@@ -135,6 +135,39 @@ while IFS='|' read -r name holder rc gh_calls; do
 done <<<"$READ_ROWS"
 case_end
 
+# run_short [args...] — like run_tool with the target root set, but a 10s limit:
+# a valueless flag used to loop forever on `shift 2`, and 124 here is that hang.
+run_short() {
+  OUT="$(cd "$TMP_ROOT/cwd" && env -u AGENTS_MAIN_ROOT bash "$RWT" 10 bash "$TOOL" "$@" 2>&1)"
+  RC=$?
+}
+
+# Each value flag, given last with no value, is refused at once; nothing is written or called.
+readonly VALUE_FLAGS='--commit --history-notes-file --title --body-file --closed-date --target'
+
+case_begin "a-value-flag-without-a-value-is-refused-before-the-timeout" "bin/github-issues/issue-to-history.sh"
+for flag in $VALUE_FLAGS; do
+  fresh_roots
+  run_short 4242 --non-github-mode --target-checkout-root "$TMP_ROOT/target" "$flag"
+  if [[ "$RC" -eq 124 ]]; then fail "$flag: the run ends by itself" "timed out"; else pass "$flag: the run ends by itself"; fi
+  expect_eq "$flag: exit code" "$RC" "1"
+  expect_has "$flag: the refusal names the flag" "$OUT" "$flag"
+  expect_eq "$flag: nothing is written or called" "$(called doc-append)$(called gh)$(marks target)$(marks main)" "00"
+done
+case_end
+
+# An unknown flag is an error, not silently dropped: a typo must not reach the write.
+case_begin "an-unknown-flag-is-refused" "bin/github-issues/issue-to-history.sh"
+for flag in --titel --no-such-flag; do
+  fresh_roots
+  run_short 4242 --non-github-mode --title "fixture entry" --body-file "$BODY_FILE" --closed-date 2026-01-02 --target-checkout-root "$TMP_ROOT/target" "$flag"
+  if [[ "$RC" -eq 124 ]]; then fail "$flag: the run ends by itself" "timed out"; else pass "$flag: the run ends by itself"; fi
+  expect_eq "$flag: exit code" "$RC" "1"
+  expect_has "$flag: the refusal names the flag" "$OUT" "$flag"
+  expect_eq "$flag: nothing is written or called" "$(called doc-append)$(called gh)$(marks target)$(marks main)" "00"
+done
+case_end
+
 echo ""
 echo "Results: PASS=$PASS  FAIL=$FAIL  SKIP=$SKIP"
 [[ "$FAIL" -eq 0 ]]

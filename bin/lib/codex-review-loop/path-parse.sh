@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # bin/lib/codex-review-loop/path-parse.sh — the path-kind (planner-format)
 # reviewer-output parsers for bin/run-codex-review-loop. Sourced by the loop;
-# caller-scope globals: TMP_OUT DELTA_SRC LEDGER ROUND SCRIPT_CHECKOUT_ROOT.
+# caller-scope globals: TMP_OUT DELTA_SRC LEDGER ROUND.
 # Each function writes the round's delta records into $DELTA_SRC, rewrites
 # $TMP_OUT to the transformed content, sets $PARSER, and exits nonzero on a
 # structural fault (fail-closed) rather than returning.
+_PATH_PARSE_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # Round 1: the reviewer numbers its own findings; this loop assigns the concern
 # IDs the later rounds refer back to. Sets PARSER=numbered.
@@ -29,7 +30,7 @@ parse_round1_numbered() {
        [[ "$line" =~ ^(C[0-9]+|[0-9]+)\.[[:space:]]\[(HIGH|MEDIUM|LOW)\][[:space:]](.+)$ ]]; then
       SEV="${BASH_REMATCH[2]}"
       TEXT="${BASH_REMATCH[3]}"
-      VALIDATOR="${SCRIPT_CHECKOUT_ROOT}/bin/validate-hook-scope-concern"
+      VALIDATOR="${_PATH_PARSE_SCRIPT_CHECKOUT_ROOT}/bin/validate-hook-scope-concern"
       if [[ -x "$VALIDATOR" ]]; then
         REJECT_REASON=""
         if ! REJECT_REASON="$("$VALIDATOR" "$TEXT" 2>&1)"; then

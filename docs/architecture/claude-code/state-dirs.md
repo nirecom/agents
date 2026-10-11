@@ -285,6 +285,23 @@ pre-commit gate.
 - `--dir <path>` classifies a real directory for investigation: control and
   ambiguous entries are errors, unregistered ones warnings. CI never runs it.
 
+## Schema-version field names
+
+A persisted file's version field is part of its on-disk data contract, so
+renaming it needs a migration. Rule:
+
+- A new persisted file names its version field `schema_version`.
+- An existing file keeps its current field name; rename it to `schema_version`
+  only inside a migration that already rewrites that file.
+
+| File | Field |
+|---|---|
+| `bin/worker-dispatch/workers/issue-close-finalize/state.js` | `schema_version` |
+| `bin/github-issues/migration/state.sh` | `schema_version` |
+| `hooks/lib/handoff-artifact.js` | `handoff_schema_version` |
+| `hooks/lib/mechanism-failure.js` | `version` |
+| `hooks/workflow-state/state-io/core.js` | `version` |
+
 ## Cleanup
 
 - `zombie-cleanup` removes `<wf>/<sid>.control/` when `<sid>.json` is gone and

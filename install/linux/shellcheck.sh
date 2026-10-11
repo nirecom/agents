@@ -1,7 +1,6 @@
 #!/bin/bash
 # Install the ShellCheck shell-script linter.
 # Required by skills/write-code/SKILL.md's bash-file lint step.
-export SYSTEM_OPS_APPROVED=1
 
 # Color fallback (no dotfiles dependency — standalone-safe pattern from claude-code.sh)
 if [ -z "${C_RESET+x}" ]; then

@@ -98,7 +98,7 @@ if (table) {
   const few = (list) => (list.length ? ` (${list.slice(0, 5).join(", ")})` : "");
   const gone = named.filter((e) => mine(e) && !fs.existsSync(path.join(root, String(e.file)))).map((e) => e.file);
   say(gone.length === 0, `every file named by an agents exception exists${few(gone)}`);
-  const known = ["set-agents-root", "own-script-root-form", "agents-root-subpath", "leave-decoy"];
+  const known = ["set-agents-root", "own-script-root-form", "agents-root-subpath", "leave-decoy", "config-from-script-checkout"];
   const odd = named.filter((e) => !Array.isArray(e.forms) || e.forms.some((f) => !known.includes(f))).map((e) => e.file);
   say(odd.length === 0, `every exception frees only known forms${few(odd)}`);
   const listed = require("child_process")

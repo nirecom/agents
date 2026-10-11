@@ -35,18 +35,21 @@ companion_pass_a() {
 companion_pass_b_identifiers() {
     IDENTIFIER_SET=""
     local root="${1:-${AGENTS_MAIN_ROOT:-}}"
-    if [ -z "$root" ] || [ ! -d "$root" ]; then return 0; fi
+    if [ -z "$root" ] || [ ! -d "$root" ]; then
+        echo "companion-passes: identifier root is not a directory: '$root'" >&2
+        return 0
+    fi
     IDENTIFIER_SET=$(
         {
-            [ -d "$root/skills" ] && _find_basenames "$root/skills" -mindepth 1 -maxdepth 1 -type d
-            [ -d "$root/hooks" ] && _find_basenames "$root/hooks" -maxdepth 1 -type f -name '*.js' \
-                | sed 's/\.js$//'
-            [ -d "$root/bin" ] && _find_basenames "$root/bin" -maxdepth 1 -type f \
-                | sed 's/\.\(sh\|js\|py\)$//'
-            [ -d "$root/agents" ] && _find_basenames "$root/agents" -maxdepth 1 -type f -name '*.md' \
-                | sed 's/\.md$//'
-            [ -d "$root/rules" ] && _find_basenames "$root/rules" -maxdepth 1 -type f -name '*.md' \
-                | sed 's/\.md$//'
+            if [ -d "$root/skills" ]; then _find_basenames "$root/skills" -mindepth 1 -maxdepth 1 -type d; fi
+            if [ -d "$root/hooks" ]; then _find_basenames "$root/hooks" -maxdepth 1 -type f -name '*.js' \
+                | sed 's/\.js$//'; fi
+            if [ -d "$root/bin" ]; then _find_basenames "$root/bin" -maxdepth 1 -type f \
+                | sed 's/\.\(sh\|js\|py\)$//'; fi
+            if [ -d "$root/agents" ]; then _find_basenames "$root/agents" -maxdepth 1 -type f -name '*.md' \
+                | sed 's/\.md$//'; fi
+            if [ -d "$root/rules" ]; then _find_basenames "$root/rules" -maxdepth 1 -type f -name '*.md' \
+                | sed 's/\.md$//'; fi
         } 2>/dev/null \
         | tr '[:upper:]' '[:lower:]' \
         | awk 'length($0) >= 4' \

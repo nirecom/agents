@@ -160,6 +160,22 @@ fi
 
 case_end
 
+case_begin "contract-pins-outside-git-refuses" "skills/write-code/scripts/detect-contract-pins.sh"
+echo ""
+echo "--- G (#2561): outside any git checkout the script refuses (rc 2) instead of using the CWD ---"
+NOGIT_DIR="$(mktemp -d)"
+mkdir -p "$NOGIT_DIR/tests"
+echo "some-file.sh" > "$NOGIT_DIR/tests/pin.txt"
+RC_G1=0
+OUT_G1="$(cd "$NOGIT_DIR" && GIT_CEILING_DIRECTORIES="$(dirname "$NOGIT_DIR")" bash "$SCRIPT_CHECKOUT_ROOT/$CONTRACT_SCRIPT" some-file.sh 2>&1)" || RC_G1=$?
+if [ "$RC_G1" -eq 2 ] && printf '%s' "$OUT_G1" | grep -qF "run it from a git checkout"; then
+  pass "G1 outside git -> rc 2 with the 'run it from a git checkout' message"
+else
+  fail "G1 outside git: rc=$RC_G1 out=$(printf '%s' "$OUT_G1" | head -2)"
+fi
+rm -rf "$NOGIT_DIR"
+case_end
+
 case_begin "wcd7-skill-md" "skills/write-code/SKILL.md"
 echo ""
 echo "--- F: WCD-7 static checks (bin/stage-review-scope-files.js staging step) ---"

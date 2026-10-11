@@ -3,7 +3,6 @@
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$env:SYSTEM_OPS_APPROVED = "1"
 
 if (Get-Command shellcheck -ErrorAction SilentlyContinue) {
     Write-Host "shellcheck is already installed: $(shellcheck --version | Select-String 'version:')" -ForegroundColor DarkGray

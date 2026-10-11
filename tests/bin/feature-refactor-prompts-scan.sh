@@ -316,6 +316,58 @@ fi
 rm -f "$TC9_OUT"
 rm -rf "$ROOT9"
 
+# ============================================================================
+# TC10: --target-checkout-root names the corpus; AGENTS_MAIN_ROOT (a decoy with
+# no prompt files) is only the fallback when the flag is absent (#2561).
+# ============================================================================
+TARGET10="$(setup_temp_root)"
+DECOY10="$(setup_temp_root)"
+cp "$FIX_DIR/redundant-rule.md" "$TARGET10/rules/redundant-rule.md"
+TC10_OUT="$(mktemp -t scan-tc10.XXXXXX.json)"
+run_scan "$DECOY10" "$KW_RM_JSON" --target-checkout-root "$TARGET10" >"$TC10_OUT" 2>/dev/null
+TC10_RC=$?
+TC10_FILES=$(node -e "
+    const d = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
+    const files = (d.hot_regions || []).map(h => h.file);
+    console.log(d.scanned_files + ':' + files.filter(f => f.startsWith(process.argv[2])).length);
+" "$TC10_OUT" "$TARGET10" 2>/dev/null || echo NA)
+if [ "$TC10_RC" -eq 0 ] && [ "${TC10_FILES%%:*}" = "1" ] && [ "${TC10_FILES#*:}" != "0" ]; then
+    pass "TC10: --target-checkout-root is scanned instead of AGENTS_MAIN_ROOT"
+else
+    fail "TC10: rc=$TC10_RC scanned:hits-under-target=$TC10_FILES (expected 1:>0)"
+fi
+rm -f "$TC10_OUT"
+
+# ============================================================================
+# TC11: a valueless --target-checkout-root is a usage error, never a silent
+# fall back to AGENTS_MAIN_ROOT (here a root that does hold a hit).
+# ============================================================================
+cp "$FIX_DIR/redundant-rule.md" "$DECOY10/rules/redundant-rule.md"
+TC11_OUT="$(mktemp -t scan-tc11.XXXXXX.json)"
+TC11_ERR="$(mktemp -t scan-tc11.XXXXXX.log)"
+run_scan "$DECOY10" "$KW_RM_JSON" --target-checkout-root >"$TC11_OUT" 2>"$TC11_ERR"
+TC11_RC=$?
+if [ "$TC11_RC" -ne 0 ] && [ ! -s "$TC11_OUT" ] && grep -q -- '--target-checkout-root' "$TC11_ERR"; then
+    pass "TC11: valueless --target-checkout-root exits non-zero and names the flag"
+else
+    fail "TC11: rc=$TC11_RC stdout_bytes=$(wc -c <"$TC11_OUT") stderr=$(cat "$TC11_ERR")"
+fi
+rm -f "$TC11_OUT" "$TC11_ERR"
+rm -rf "$TARGET10" "$DECOY10"
+
+# ============================================================================
+# TC12: the resolver carries the name of what it resolves (the target checkout).
+# ============================================================================
+TC12_KIND=$(node -e "
+    const m = require(process.argv[1]);
+    console.log(typeof m.resolveTargetCheckoutRoot + ':' + typeof m.resolveAgentsRoot);
+" "$FILTER_LIB" 2>/dev/null || echo NA)
+if [ "$TC12_KIND" = "function:undefined" ]; then
+    pass "TC12: filter-kinds exports resolveTargetCheckoutRoot (old name gone)"
+else
+    fail "TC12: typeof resolveTargetCheckoutRoot:resolveAgentsRoot = $TC12_KIND"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

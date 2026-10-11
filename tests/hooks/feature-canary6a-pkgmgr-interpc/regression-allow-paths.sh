@@ -79,5 +79,15 @@ assert_allow "RG-worktree-remove: git worktree remove <ext>" \
 assert_allow "RG-worktree-prune: git worktree prune" \
   "$(run_hook "git worktree prune")"
 
+echo "=== RG-supervisor: sanctioned supervisor bin calls stay allowed (#2589) ==="
+# 4) The single-invocation rewrite of isAllowedSupervisorBinTool must keep the
+# literal-root call with fd duplication and /tmp/ redirects allowed.
+assert_allow "RG-supervisor-write-alert: node <root>/bin/supervisor-write-alert 2>&1" \
+  "$(run_hook "node \"${WT_NODE}/bin/supervisor-write-alert\" --session s 2>&1")"
+assert_allow "RG-supervisor-write-alert: node <root>/bin/supervisor-write-alert 2>> /tmp/err" \
+  "$(run_hook "node \"${WT_NODE}/bin/supervisor-write-alert\" --session s 2>> /tmp/err")"
+assert_allow "RG-supervisor-findings-codex: bash <root>/bin/supervisor-findings-codex > /tmp/x 2>&1" \
+  "$(run_hook "bash \"${WT_NODE}/bin/supervisor-findings-codex\" --session s > /tmp/x 2>&1")"
+
 report_totals
 exit "$FAIL"

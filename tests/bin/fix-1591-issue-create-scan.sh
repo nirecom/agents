@@ -16,6 +16,13 @@ IC="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create.sh"
 GUARD_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh"
 REAL_SCANNER="$SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh"
 
+# Keep workflow state and plans inside a throwaway dir, never the live ~/.workflow-*.
+ISO_ROOT="$(mktemp -d)"
+readonly ISO_ROOT
+trap 'rm -rf "$ISO_ROOT"' EXIT
+export WORKFLOW_STATE_DIR="$ISO_ROOT/state" WORKFLOW_PLANS_DIR="$ISO_ROOT/plans"
+unset CLAUDE_CODE_SESSION_ID
+
 PASS=0
 FAIL=0
 
@@ -124,6 +131,61 @@ else
     fail "IC-4: expected gh issue create reached; got rc=$RC gh='$(cat "$TMP/gh-calls.log" 2>/dev/null)'"
 fi
 teardown
+
+# IC-5/IC-6 (#2561) run a copy of the checkout whose bin/is-github-dotcom-remote is a stub
+# (exit $1); a PATH-first is-github-dotcom-remote leaves a marker and must never run.
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+setup_checkout() {
+    CO="$TMP/co"
+    mkdir -p "$CO/bin" "$TMP/path-fake"
+    printf '#!/usr/bin/env bash\nexit %s\n' "$1" > "$CO/bin/is-github-dotcom-remote"
+    chmod +x "$CO/bin/is-github-dotcom-remote"
+    script_checkout_fixture_copy "$CO" bin || return 1
+    # The copy is outside git, so its scanner reads the lists of the copy itself (never
+    # AGENTS_MAIN_ROOT); without a blocklist there it fail-closes with rc 4 (#2589).
+    : > "$CO/.private-info-allowlist"
+    : > "$CO/.private-info-blocklist"
+    printf '#!/usr/bin/env bash\ntouch "%s/path-remote-called"\nexit 0\n' "$TMP" > "$TMP/path-fake/is-github-dotcom-remote"
+    chmod +x "$TMP/path-fake/is-github-dotcom-remote"
+    # gh: label list reports type:task (preflight rc 0); everything else goes to the mock.
+    printf '#!/usr/bin/env bash\ncase "$*" in label\\ list*) echo "gh $*" >> "%s/gh-calls.log"; echo type:task; exit 0 ;; esac\nexec "%s/mock-bin/gh" "$@"\n' "$TMP" "$TMP" > "$TMP/path-fake/gh"
+    chmod +x "$TMP/path-fake/gh"
+    export PATH="$TMP/path-fake:$PATH"
+}
+
+# IC-5: the checkout's is-github-dotcom-remote decides Phase 0a, never the PATH one.
+setup
+setup_checkout 1
+RC=0
+run_with_timeout 30 bash "$CO/bin/github-issues/issue-create.sh" --title "clean title" --body "ordinary body" >/dev/null 2>"$TMP/err" || RC=$?
+if [ ! -e "$TMP/path-remote-called" ] && grep -q 'skipping label auto-repair' "$TMP/err"; then
+    pass "IC-5: the checkout's is-github-dotcom-remote is used; the PATH one is not called"
+else
+    fail "IC-5: rc=$RC path_called=$([ -e "$TMP/path-remote-called" ] && echo y || echo n) stderr=$(head -3 "$TMP/err")"
+fi
+teardown
+
+# IC-6: a REPO_OVERRIDE not shaped owner/repo is refused (rc 2) before any gh write;
+# a well-formed one is named on stderr when used.
+for row in 'not-a-repo|2' 'a/b/c|2' 'a/b;touch x|2' '/repo|2' 'owner/|2' 'owner/repo|ok'; do
+    ov="${row%|*}"; want="${row##*|}"
+    setup
+    setup_checkout 0
+    RC=0
+    REPO_OVERRIDE="$ov" run_with_timeout 30 bash "$CO/bin/github-issues/issue-create.sh" --title "clean title" --body "ordinary body" >/dev/null 2>"$TMP/err" || RC=$?
+    if [ "$want" = 2 ]; then
+        if [ "$RC" -eq 2 ] && ! gh_created && grep -q 'REPO_OVERRIDE' "$TMP/err"; then
+            pass "IC-6[$ov]: malformed REPO_OVERRIDE -> rc 2, named on stderr, no issue created"
+        else
+            fail "IC-6[$ov]: rc=$RC created=$(gh_created && echo y || echo n) stderr=$(head -3 "$TMP/err")"
+        fi
+    elif grep -qF "$ov" "$TMP/err" && gh_created; then
+        pass "IC-6[$ov]: well-formed REPO_OVERRIDE is named on stderr and used"
+    else
+        fail "IC-6[$ov]: rc=$RC created=$(gh_created && echo y || echo n) stderr=$(head -5 "$TMP/err")"
+    fi
+    teardown
+done
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

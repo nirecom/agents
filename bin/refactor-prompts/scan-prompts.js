@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { resolveAgentsRoot } = require("./lib/filter-kinds");
+const { resolveTargetCheckoutRoot, readTargetCheckoutRootFlag } = require("./lib/filter-kinds");
 const { readStdinText } = require("../../hooks/lib/read-stdin");
 
 // ---------------------------------------------------------------------------
@@ -19,6 +19,12 @@ for (let i = 0; i < args.length; i++) {
     const n = parseInt(args[++i], 10);
     if (!isNaN(n) && n >= 0) contextLines = n;
   }
+}
+
+const targetFlag = readTargetCheckoutRootFlag(args);
+if (targetFlag.error) {
+  process.stderr.write(`scan-prompts: ${targetFlag.error}\n`);
+  process.exit(2);
 }
 
 if (keywordsArg !== "-") {
@@ -83,7 +89,7 @@ const compiled = keywords
 // ---------------------------------------------------------------------------
 // Discover target files (fixed scope, unconditional tests/ exclusion)
 // ---------------------------------------------------------------------------
-const root = resolveAgentsRoot();
+const root = resolveTargetCheckoutRoot(targetFlag.value);
 
 function globSync(base, pattern) {
   const results = [];

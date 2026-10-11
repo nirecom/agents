@@ -342,14 +342,16 @@ else
     pending "WORKFLOW_PLANS_DIR support not yet implemented in bin/session-sync.sh"
 fi
 
-# --- Error: relative WORKFLOW_PLANS_DIR is rejected by the resolver ---
-# Boundary case for the resolver contract: a non-absolute value must not be
-# silently accepted (it would resolve against an arbitrary CWD).
-echo "[plans] Relative WORKFLOW_PLANS_DIR is rejected"
+# --- Error: relative WORKFLOW_PLANS_DIR is rejected by the resolver, absorbed by the bridge ---
+# The resolver refuses a non-absolute value and says so on stderr; the bridge then
+# prints the env fallback and exits 0 (#2132, same contract as
+# tests/bin/feature-workflow-plans-dir.sh I5), so the rejection is never silent.
+echo "[plans] Relative WORKFLOW_PLANS_DIR: warned on stderr, env fallback on stdout"
 rel_exit=0
-WORKFLOW_PLANS_DIR="relative/plans" "$DOTFILES_DIR/bin/workflow-plans-dir" >/dev/null 2>&1 || rel_exit=$?
-if [ "$rel_exit" -ne 0 ]; then
-    pass "workflow-plans-dir rejects a relative WORKFLOW_PLANS_DIR (exit $rel_exit)"
+WORKFLOW_PLANS_DIR="relative/plans" "$DOTFILES_DIR/bin/workflow-plans-dir" >"$TMPDIR_BASE/rel-out" 2>"$TMPDIR_BASE/rel-err" || rel_exit=$?
+if [ "$rel_exit" -eq 0 ] && [ "$(cat "$TMPDIR_BASE/rel-out")" = "relative/plans" ] \
+    && grep -q 'workflow-plans-dir:' "$TMPDIR_BASE/rel-err"; then
+    pass "workflow-plans-dir warns about a relative WORKFLOW_PLANS_DIR and prints the env fallback"
 else
-    fail "workflow-plans-dir accepted a relative WORKFLOW_PLANS_DIR"
+    fail "workflow-plans-dir relative WORKFLOW_PLANS_DIR: exit=$rel_exit out=$(cat "$TMPDIR_BASE/rel-out") err=$(head -2 "$TMPDIR_BASE/rel-err")"
 fi

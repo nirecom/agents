@@ -37,7 +37,7 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --issue) ISSUE="${2:?--issue requires an argument}"; shift 2 ;;
-    --tokens) TOKENS="${2:-}"; shift 2 ;;
+    --tokens) [[ $# -ge 2 ]] || { echo "ERROR: $1 needs a value" >&2; exit 2; }; TOKENS="${2:-}"; shift 2 ;;
     --repo-root) REPO_ROOT="${2:?--repo-root requires an argument}"; shift 2 ;;
     --timeout-seconds) TIMEOUT_SECONDS="${2:?--timeout-seconds requires an argument}"; shift 2 ;;
     --dry-run) sweep_write_mode_dry_run; shift ;;

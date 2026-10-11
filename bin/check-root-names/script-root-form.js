@@ -3,7 +3,7 @@
 // Script-root-form check (#2561): a file assigns its own checkout root at most once,
 // unconditionally, at the top, in the one standard form for its language and depth.
 
-const { view, splitCommand, declared, escapeRe } = require("./line-scan");
+const { view, splitCommand, declared, escapeRe, isTest } = require("./line-scan");
 const { SCR } = require("./table-match");
 
 // The assignment belongs to the head of the file: at most this many lines of code before it.
@@ -97,10 +97,18 @@ function checkShell(file, v, sourced, say) {
       if (name === want) at.push(i);
       else if (sourced && (name === SCR || prefixed.test(name))) say(i, "a sourced library assigns the checkout root under its own prefixed name only");
     }
+    // An assignment ahead of a command word hands the root to that child through its
+    // environment; a child derives its own root from its location instead.
+    for (const words of v.cmds[i]) {
+      const { assigns, word } = splitCommand(words);
+      if (word !== null && assigns.includes(SCR)) say(i, "the checkout root is passed to a command through an environment prefix");
+    }
   }
-  // A sourced library may read its caller's value; any other file that reads the name
-  // without assigning it would take the value from the environment.
-  if (!sourced && read >= 0 && at.length === 0) say(read, "the checkout root is read but not assigned in this file");
+  // Only a sourced test library may read its caller's value (the tests/lib harness hands it
+  // over); a sourced library elsewhere derives its own prefixed name, and any other file
+  // that reads the name without assigning it would take the value from the environment.
+  if (read >= 0 && sourced && !isTest(file.rel)) say(read, "a sourced library outside tests derives its own prefixed checkout root instead of reading its caller's");
+  else if (read >= 0 && !sourced && at.length === 0) say(read, "the checkout root is read but not assigned in this file");
   judge(file, v, at, say, (i) => {
     const m = shStandard(want).exec(v.raw[i]);
     if (!m || shNested(v, i)) return null;

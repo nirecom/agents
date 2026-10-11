@@ -2,7 +2,6 @@
 # gh.sh - Install GitHub CLI and configure authentication
 # Sibling: dotfiles/install/linux/gh.sh (same pattern; kept separate for self-sufficiency)
 # Usage: Called by install.sh or run independently
-export SYSTEM_OPS_APPROVED=1
 
 # Color fallback (no dotfiles dependency — standalone-safe pattern from claude-code.sh)
 if [ -z "${C_RESET+x}" ]; then

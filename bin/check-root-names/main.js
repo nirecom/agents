@@ -3,7 +3,7 @@
 // CLI for bin/check-root-names.sh (#2561): the root-name gate.
 // Exit 0 = clean, 1 = violation, 2 = usage error or unreadable input (never "clean").
 //   (no args)      every check over the tracked files of this checkout
-//   --staged       the staged files, the retired-name list and the table, all from the index
+//   --staged       the staged files (ACMRT) of the cwd repository; list and table from its index
 //   --root <dir>   the tracked files of <dir> (working-tree content)
 //   <file>...      the named files only
 //   --repo agents|dotfiles   which rule set classifies the files (default agents)
@@ -27,13 +27,14 @@ const CHECKS = {
   structural: require("./structural"),
   "script-root-form": require("./script-root-form"),
   "env-name": require("./env-name"),
+  "reference-role": require("./reference-role"),
 };
 const REPOS = ["agents", "dotfiles"];
 const VALUE_FLAGS = { "--root": "root", "--repo": "repo", "--only": "only", "--scope": "scope", "--retired-names-from": "listFile" };
 
 class UsageError extends Error {}
 
-// Git Bash may hand over /c/... paths; Node's fs needs C:/... on Windows.
+// Git Bash may hand over MSYS drive-letter paths; Node's fs needs the C:/ spelling on Windows.
 function nativePath(p) {
   const m = process.platform === "win32" && /^\/([A-Za-z])(\/.*)?$/.exec(p);
   return m ? `${m[1].toUpperCase()}:${m[2] || "/"}` : p;
@@ -84,33 +85,50 @@ function walk(root, dir, out) {
   return out;
 }
 
-// treeFiles(root) → the tracked files of the tree (every file when it is not a git tree).
+// treeFiles(root) → the tracked entries of the tree (every file when it is not a git tree),
+// named from the repository root. A tracked entry that is not a regular file (a symlink, a
+// gitlink) keeps its path judged and has no content.
 function treeFiles(root) {
-  const listed = git(root, ["rev-parse", "--show-prefix"]) === null ? null : git(root, ["ls-files", "-z"]);
+  const prefix = git(root, ["rev-parse", "--show-prefix"]);
+  const listed = prefix === null ? null : git(root, ["ls-files", "-z"]);
+  const head = prefix === null ? "" : prefix.toString("utf8").trim();
   const rels = listed === null ? walk(root, "", []) : nulList(listed);
   const files = [];
   for (const rel of rels) {
     const abs = path.join(root, rel);
-    if (fs.lstatSync(abs, { throwIfNoEntry: false })?.isFile()) files.push({ rel, text: textOf(fs.readFileSync(abs)) });
+    const regular = fs.lstatSync(abs, { throwIfNoEntry: false })?.isFile();
+    files.push({ rel: head + rel, text: regular ? textOf(fs.readFileSync(abs)) : null });
   }
   return files;
 }
 
-function stagedFiles(root) {
-  const listed = git(root, ["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"]);
+// stagedFiles() → the staged changes (ACMRT) of the repository at the current directory,
+// read from its index — the index git hands the hook, which in a linked worktree is that
+// worktree's. Only a regular file's blob is content; a symlink or gitlink keeps its path.
+function stagedFiles() {
+  const top = git(process.cwd(), ["rev-parse", "--show-toplevel"]);
+  if (top === null) throw new UsageError("--staged needs a git repository at the current directory");
+  const root = top.toString("utf8").trim();
+  const listed = git(root, ["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMRT"]);
   if (listed === null) throw new UsageError("cannot read the index");
   const entries = git(root, ["ls-files", "-s", "-z"]);
   if (entries === null) throw new UsageError("cannot read the index");
-  // A gitlink (mode 160000) has no blob; every other staged path must be readable.
-  const gitlinks = new Set(nulList(entries).filter((e) => e.startsWith("160000 ")).map((e) => e.slice(e.indexOf("\t") + 1)));
+  const special = new Set(
+    nulList(entries)
+      .filter((e) => e.startsWith("160000 ") || e.startsWith("120000 "))
+      .map((e) => e.slice(e.indexOf("\t") + 1)),
+  );
   const files = [];
   for (const rel of nulList(listed)) {
-    if (gitlinks.has(rel)) continue;
+    if (special.has(rel)) {
+      files.push({ rel, text: null });
+      continue;
+    }
     const blob = git(root, ["show", `:${rel}`]);
     if (blob === null) throw new UsageError(`cannot read the staged content of ${rel}`);
     files.push({ rel, text: textOf(blob) });
   }
-  return files;
+  return { root, files };
 }
 
 function namedFiles(names) {
@@ -122,10 +140,11 @@ function namedFiles(names) {
   });
 }
 
-// ownInput(rel, staged) → the gate's own data file, from the index when judging the index.
-function ownInput(rel, staged) {
-  if (staged) {
-    const blob = git(SCRIPT_CHECKOUT_ROOT, ["show", `:${rel}`]);
+// ownInput(rel, indexRoot) → the gate's own data file, from that repository's index when
+// judging an index, else from this checkout.
+function ownInput(rel, indexRoot) {
+  if (indexRoot !== null) {
+    const blob = git(indexRoot, ["show", `:${rel}`]);
     if (blob === null) throw new UsageError(`the index does not hold ${rel}`);
     return blob.toString("utf8");
   }
@@ -147,7 +166,8 @@ function inScope(rel, scope) {
 
 function run(opts) {
   let files;
-  if (opts.staged) files = stagedFiles(SCRIPT_CHECKOUT_ROOT);
+  let indexRoot = null;
+  if (opts.staged) ({ root: indexRoot, files } = stagedFiles());
   else if (opts.files.length > 0) files = namedFiles(opts.files);
   else files = treeFiles(opts.root === null ? SCRIPT_CHECKOUT_ROOT : path.resolve(nativePath(opts.root)));
   if (opts.scope !== null) files = files.filter((f) => inScope(f.rel, opts.scope));
@@ -160,13 +180,13 @@ function run(opts) {
     repo: opts.repo,
     list: () => {
       if (list === null) {
-        const text = opts.listFile === null ? ownInput(LIST_REL, opts.staged) : readInput(path.resolve(nativePath(opts.listFile)), "the retired-name list");
+        const text = opts.listFile === null ? ownInput(LIST_REL, indexRoot) : readInput(path.resolve(nativePath(opts.listFile)), "the retired-name list");
         list = residue.parseList(text, LIST_REL);
       }
       return list;
     },
     table: () => {
-      if (table === null) table = tableMatch.parseTable(ownInput(TABLE_REL, opts.staged));
+      if (table === null) table = tableMatch.parseTable(ownInput(TABLE_REL, indexRoot));
       return table;
     },
   };
