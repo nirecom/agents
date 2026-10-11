@@ -719,3 +719,7 @@ Changes: run-tests-baseline no longer times out long-running suites at a fixed 3
 ### FEATURE: PR #2614 (2026-10-11)
 Background: feat(#2513): show the plan blob URL in the main conversation
 Changes: Plan blob URLs are shown in the main conversation so plans can be opened from the Claude mobile app; SendUserFile is no longer used for plans
+
+### FEATURE: PR #2618 (2026-10-11)
+Background: test(#2572): make the feature-2099 complexity-stage-routing suite green with secret-shape regressions visible
+Changes: Test suite for #2434 complexity stage routing (#2572): fixed the feature-2099 test suite (181 → 0 failures), adding coverage for the normalize-judge-signals → derive-complexity-level chain, S0-undecidable canonicalization, shared-procedure injection paths, and TL3 gate lane selection.
