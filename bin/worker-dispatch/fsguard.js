@@ -12,6 +12,7 @@ const path = require("path");
 
 const registryData = require("../../hooks/lib/worker-dispatch-registry");
 const { parsePlansEntry, CONTROL_KINDS } = require("../../hooks/lib/plans-artifact-registry");
+const { outcomeFileName } = require("../../hooks/lib/worker-outcome-contract");
 const { realAbs, isUnder, samePath } = require("./anchor");
 const { redactSentinels } = require("./emit");
 
@@ -25,20 +26,40 @@ const SCOPE_ROOTS = {
   "log-dir": (ctx) => (ctx.logDir ? [ctx.logDir] : []),
 };
 
-function scopeRootsFor(workerName, ctx) {
+// scope token -> the exact files it admits. Only the dispatcher's outcome context
+// carries outcomeStem; a worker's writeCtx never does, so it anchors nothing (#2544).
+const SCOPE_FILES = {
+  "control-outcome": (ctx) =>
+    (ctx.controlDir && ctx.outcomeStem ? [path.join(ctx.controlDir, outcomeFileName(ctx.outcomeStem))] : []),
+};
+
+const own = (table, scope) => Object.prototype.hasOwnProperty.call(table, scope);
+
+function scopesOf(workerName) {
   const entry = registryData.workers[workerName];
   if (!entry) throw new Error(`unknown worker '${workerName}'`);
   const scopes = Array.isArray(entry.writeScopes) ? entry.writeScopes : [];
-  const roots = [];
   for (const scope of scopes) {
-    const resolver = SCOPE_ROOTS[scope];
-    if (!resolver) throw new Error(`worker '${workerName}' declares an unknown write scope '${scope}'`);
-    for (const root of resolver(ctx || {})) {
-      if (root) roots.push(root);
+    if (!own(SCOPE_ROOTS, scope) && !own(SCOPE_FILES, scope)) {
+      throw new Error(`worker '${workerName}' declares an unknown write scope '${scope}'`);
     }
   }
-  return roots;
+  return scopes;
 }
+
+function expand(workerName, ctx, table) {
+  const out = [];
+  for (const scope of scopesOf(workerName)) {
+    if (!own(table, scope)) continue;
+    for (const p of table[scope](ctx || {})) {
+      if (p) out.push(p);
+    }
+  }
+  return out;
+}
+
+const scopeRootsFor = (workerName, ctx) => expand(workerName, ctx, SCOPE_ROOTS);
+const scopeFilesFor = (workerName, ctx) => expand(workerName, ctx, SCOPE_FILES);
 
 // A control-file name directly under PLANS_DIR, bare or sid-prefixed, is refused even
 // though plans-dir is a declared scope: the artifacts directory holds prose only.
@@ -65,10 +86,12 @@ function assertWritable(workerName, targetPath, ctx) {
   }
 
   const roots = scopeRootsFor(workerName, ctx);
-  if (roots.length === 0) {
+  const files = scopeFilesFor(workerName, ctx);
+  if (roots.length === 0 && files.length === 0) {
     throw new Error(`no write scope of worker '${workerName}' could be anchored for this invocation`);
   }
-  const permitted = roots.some((root) => isUnder(abs, root, false));
+  const permitted = roots.some((root) => isUnder(abs, root, false))
+    || files.some((file) => samePath(abs, realAbs(file)));
   if (!permitted) {
     throw new Error(`write target is outside every declared write scope of '${workerName}'`);
   }
@@ -109,11 +132,26 @@ function renameWithin(workerName, tmpPath, dstPath, ctx) {
   return absDst;
 }
 
+// A directory lands only under a root: a file scope admits one file, never a directory.
 function mkdir(workerName, targetPath, ctx) {
   assertWritable(workerName, targetPath, ctx);
   const abs = realAbs(targetPath);
+  if (!scopeRootsFor(workerName, ctx).some((root) => isUnder(abs, root, false))) {
+    throw new Error(`directory target is outside every directory write scope of '${workerName}'`);
+  }
   fs.mkdirSync(abs, { recursive: true });
   return abs;
 }
 
-module.exports = { assertWritable, writeFile, mkdir, renameWithin, scopeRootsFor };
+// One create, never an overwrite: `wx` fails on any existing entry, a symlink included.
+function createExclusive(workerName, targetPath, data, ctx) {
+  assertWritable(workerName, targetPath, ctx);
+  const abs = realAbs(targetPath);
+  let existing = null;
+  try { existing = fs.lstatSync(abs); } catch (e) { if (e.code !== "ENOENT") throw e; }
+  if (existing !== null) throw new Error("exclusive create target already exists");
+  fs.writeFileSync(abs, typeof data === "string" ? redactSentinels(data) : data, { flag: "wx" });
+  return abs;
+}
+
+module.exports = { assertWritable, writeFile, mkdir, renameWithin, createExclusive, scopeRootsFor, scopeFilesFor };

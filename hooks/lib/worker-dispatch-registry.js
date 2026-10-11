@@ -86,7 +86,11 @@ const CHILD_ENV_ALLOWLIST = [
 ];
 
 // Write-scope tokens understood by bin/worker-dispatch/fsguard.js.
-const WRITE_SCOPES = ["plans-dir", "control-dir", "family-worktree", "backup-dir", "target-main-root-docs", "log-dir"];
+// `control-outcome` is a file scope: the dispatcher's own outcome record, never a worker write (#2544).
+const OUTCOME_SCOPE = "control-outcome";
+const WRITE_SCOPES = [
+  "plans-dir", "control-dir", "family-worktree", "backup-dir", "target-main-root-docs", "log-dir", OUTCOME_SCOPE,
+];
 
 // Script-anchor tokens understood by bin/worker-dispatch/spawn.js. `script-checkout-root` and
 // `target-main-root` resolve into reviewed, merged code. `family-worktree` resolves into
@@ -96,8 +100,9 @@ const SCRIPT_ANCHORS = ["script-checkout-root", "target-main-root", "family-work
 
 const workers = {
   // -----------------------------------------------------------------------
-  // Stage 1 canary. Side-effect-free by construction: writeScopes is EMPTY,
-  // so fsguard.js refuses every write this worker could attempt.
+  // Stage 1 canary. The worker itself writes nothing: its only scope is the
+  // control-outcome file, which fsguard.js admits only for the dispatcher's
+  // outcome context (ctx.outcomeStem), never for the worker's writeCtx.
   // -----------------------------------------------------------------------
   "test-runner": {
     name: "test-runner",
@@ -126,7 +131,7 @@ const workers = {
       scripts: { runAll: { anchor: "family-worktree", rel: "tests/run-all.sh" } },
     },
     envPassthrough: [],
-    writeScopes: [],
+    writeScopes: [OUTCOME_SCOPE],
     renderer: "test-runner-yaml",
   },
 
@@ -442,12 +447,21 @@ const workers = {
   },
 };
 
+// True only for a registered worker whose dispatches leave an outcome record.
+function recordsOutcome(name) {
+  if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(workers, name)) return false;
+  const scopes = workers[name].writeScopes;
+  return Array.isArray(scopes) && scopes.includes(OUTCOME_SCOPE);
+}
+
 module.exports = {
   WORKER_NAMES,
   workers,
   EXTERNAL_COMMANDS,
   CHILD_ENV_ALLOWLIST,
   WRITE_SCOPES,
+  OUTCOME_SCOPE,
+  recordsOutcome,
   SCRIPT_ANCHORS,
   STANDARD_ARG_SPEC,
 };

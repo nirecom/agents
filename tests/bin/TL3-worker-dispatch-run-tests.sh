@@ -2,17 +2,11 @@
 # tests/bin/TL3-worker-dispatch-run-tests.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/workers/test-runner.js, bin/worker-dispatch/emit.js, bin/worker-dispatch/spawn.js, tests/run-all.sh
 # Tags: worker-dispatch, test-runner, real-environment, yaml, log-tail, sentinel, TL3, scope:common
-#
 # TL3 — single real seam: the real bin/worker-dispatch.js drives the real
 # tests/run-all.sh through the real bash, against the real PLANS_DIR. Nothing is
-# stubbed. This is what the sibling TL2 files cannot do:
-#   - real run-all.sh output format feeding the failing_tests parser
-#   - real PLANS_DIR resolution (bin/get-config-var / WORKFLOW_PLANS_DIR)
-#   - real spawnSync env allowlist against a real PATH
-#
-# Deliberately NOT TL4: only the test-runner seam runs here. The full
-# workflow-init → Final Report pipeline is out of scope (roadmap #1543).
-#
+# stubbed; the sibling TL2 files cannot cover the real run-all.sh output format,
+# real PLANS_DIR resolution, or the real spawnSync env allowlist against a real PATH.
+# Deliberately NOT TL4: the workflow-init → Final Report pipeline is out of scope (#1543).
 # Gate: RUN_TL3=on. Exits 77 (SKIP in tests/run-all.sh) otherwise.
 
 set -u
@@ -136,16 +130,11 @@ fi
 
 # ===========================================================================
 # Group D — the real generator against the real detector (#1378 / #1798)
-#
-# Groups A and B prove the worker's output is well-formed. That is not the same
-# as it being READABLE by hooks/workflow-run-tests.js, and #1378 was exactly that
-# difference: both sides passed their own suites while the contract crossed the
-# seam in a shape the parser's anchor rejected. Here the REAL YAML produced above
-# is fed to the REAL hook, paired with the REAL dispatch command string — the two
-# artefacts the TL2 round trip can only synthesise.
-#
-# The command string is built from the same values the dispatcher was invoked
-# with, so it cannot drift from what /run-tests RNT-1 actually issues.
+# Well-formed worker output (Groups A/B) is not the same as output READABLE by the
+# hook: #1378 was both sides passing their own suites while the contract crossed the
+# seam in a shape the parser's anchor rejected. Here the REAL YAML is fed to the REAL
+# hook with the REAL dispatch command string, built from the values the dispatcher
+# was invoked with so it cannot drift from what /run-tests RNT-1 actually issues.
 # ===========================================================================
 D_STATE="$TMPD/hook-state"
 D_PLANS="$TMPD/hook-plans"
@@ -195,6 +184,63 @@ else
 fi
 
 # ===========================================================================
+# Group E — the outcome file agrees with the stdout YAML (#2544)
+# A background dispatch is read back from the outcome file, not from stdout, so both
+# must carry the same verdict. The payload sits in a session control dir (no outcome
+# is written for a legacy PLANS_DIR payload); duration_seconds is rounded, so skipped.
+# ===========================================================================
+E_STATE="$TMPD/outcome-state"
+E_SID="tl3oc-$$"
+E_STEM="worker-test-runner-1"
+mkdir -p "$E_STATE/$E_SID.control"
+E_PAYLOAD="$E_STATE/$E_SID.control/$E_STEM.json"
+printf '{"test_args":["%s"],"cwd":"%s","timeout_seconds":300}' "$(nodepath "$FIXTURE_FAIL")" "$(nodepath "$SCRIPT_CHECKOUT_ROOT")" > "$E_PAYLOAD"
+OUT3="$TMPD/outcome.yaml"
+RC3=0
+(
+    export WORKFLOW_STATE_DIR="$(nodepath "$E_STATE")"
+    export WORKFLOW_PLANS_DIR="$(nodepath "$D_PLANS")"
+    unset CLAUDE_CODE_SESSION_ID
+    run_with_timeout 420 node "$(nodepath "$DISPATCH_JS")" test-runner "$TARGET_MAIN_ROOT" "$(nodepath "$E_PAYLOAD")" > "$OUT3" 2>"$OUT3.err"
+) || RC3=$?
+assert_eq "tl3/outcome/exit-0" "0" "$RC3"
+assert_eq "tl3/outcome/yaml-status-fail" "fail" "$(yaml_field "$OUT3" status)"
+E_OUTCOME="$E_STATE/$E_SID.control/$E_STEM.outcome.json"
+if [ -f "$E_OUTCOME" ]; then
+    pass "tl3/outcome/file-written"
+    E_CMP="$(node -e '
+const fs = require("fs");
+const yaml = fs.readFileSync(process.argv[1], "utf8").replace(/\r/g, "").split("\n");
+const o = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const w = o.worker_result || {};
+const field = (k) => { const l = yaml.find((x) => x.startsWith(k + ": ")); return l === undefined ? "(none)" : l.slice(k.length + 2); };
+const unq = (s) => s.replace(/^\x27|\x27$/g, "").replace(/\x27\x27/g, "\x27");
+const contract = yaml.find((x) => x.startsWith("RUN_CONTRACT: "));
+const rc = w.run_contract;
+const yFailing = [];
+let on = false;
+for (const l of yaml) {
+  if (l === "failing_tests:") { on = true; continue; }
+  if (on && l.startsWith("  - ")) { yFailing.push(unq(l.slice(4))); continue; }
+  on = false;
+}
+const rows = [
+  ["status", field("status"), String(o.status)],
+  ["exit_code", field("exit_code"), String(o.exit_code)],
+  ["summary", unq(field("summary")), String(w.summary)],
+  ["run_contract", contract ? contract.slice(14) : "(none)", rc ? `PASS=${rc.pass} FAIL=${rc.fail} SKIP=${rc.skip} EXECUTED=${rc.executed}` : "(none)"],
+  ["failing_tests", JSON.stringify(yFailing), JSON.stringify(w.failing_tests)],
+];
+process.stdout.write(rows.map((r) => r[0] + "=" + (r[1] === r[2] ? "same" : "yaml:" + r[1] + " outcome:" + r[2])).join("\n"));
+' "$(nodepath "$OUT3")" "$(nodepath "$E_OUTCOME")" 2>&1)"
+    for k in status exit_code summary run_contract failing_tests; do
+        assert_eq "tl3/outcome/$k-agrees-with-yaml" "same" "$(printf '%s\n' "$E_CMP" | sed -n "s/^$k=//p")"
+    done
+else
+    fail "tl3/outcome/file-written — no $E_STEM.outcome.json in the control dir"
+fi
+
+# ===========================================================================
 # Group C — containment: no log files written, no sentinel leakage
 # ===========================================================================
 PLANS_AFTER="$(cd "$PLANS_RAW" && find . -type f | LC_ALL=C sort)"
@@ -202,7 +248,7 @@ EXTRA="$(comm -13 <(printf '%s\n' "$PLANS_BEFORE") <(printf '%s\n' "$PLANS_AFTER
 assert_eq "tl3/containment/no-new-plans-files" "" "$EXTRA"
 
 LEAK=0
-for f in "$OUT" "$OUT2" "$OUT.err" "$OUT2.err"; do
+for f in "$OUT" "$OUT2" "$OUT.err" "$OUT2.err" "$OUT3" "$OUT3.err"; do
     [ -f "$f" ] || continue
     if grep -qiE '<<[[:space:]]*WORKFLOW' "$f"; then LEAK=1; fi
 done

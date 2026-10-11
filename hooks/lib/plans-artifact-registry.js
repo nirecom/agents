@@ -28,6 +28,8 @@ const CONTROL_KINDS = Object.freeze([
   k("risk-signal", "(?:outline|detail)-risk-signal\\.txt"),
   k("worker-payload", `${WORKER}\\.json`),
   k("worker-dispatched", `${WORKER}\\.dispatched`),
+  k("worker-outcome", `${WORKER}\\.outcome\\.json`),
+  k("worker-ingested", `${WORKER}\\.ingested`),
   k("codex-context", "codex-context\\.md"),
   k("codex-context-built", `codex-context\\.${F}\\.built`),
   k("plan-log", "plan\\.jsonl"),
@@ -50,7 +52,11 @@ const CONTROL_KINDS = Object.freeze([
 ]);
 
 const SHORT_LIVED = new Set(["guard-attempt"]);
-const MIGRATABLE_KINDS = Object.freeze(CONTROL_KINDS.filter((c) => !SHORT_LIVED.has(c.kind)));
+// Born in the control dir only (#2544): a PLANS_DIR copy is planted, never migrated into trust.
+const NEVER_IN_PLANS_DIR = new Set(["worker-outcome", "worker-ingested"]);
+const MIGRATABLE_KINDS = Object.freeze(
+  CONTROL_KINDS.filter((c) => !SHORT_LIVED.has(c.kind) && !NEVER_IN_PLANS_DIR.has(c.kind)),
+);
 
 const ARTIFACT_KINDS = Object.freeze([
   k("plan-artifact", "(?:intent|outline|detail|context)\\.md"),
