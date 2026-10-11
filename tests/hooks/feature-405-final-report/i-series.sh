@@ -23,52 +23,52 @@ test_I3_skill_md_grep_invariant() {
 
 test_I4_skill_md_has_step_5_5() {
     require_skill_md "I4_skill_md_has_step_5_5" || return
-    local ln8 ln9 ln10
-    ln8="$(grep -n '^### WE-8' "$SKILL_MD" | head -1 | cut -d: -f1)"
-    ln9="$(grep -n '^### WE-9' "$SKILL_MD" | head -1 | cut -d: -f1)"
-    ln10="$(grep -n '^### WE-10' "$SKILL_MD" | head -1 | cut -d: -f1)"
-    if [ -n "$ln8" ] && [ -n "$ln9" ] && [ -n "$ln10" ] \
-       && [ "$ln8" -lt "$ln9" ] && [ "$ln9" -lt "$ln10" ]; then
-        pass "I4: WE-9 (capture) sits between WE-8 (line $ln8) and WE-10 (line $ln10) at line $ln9"
+    local ln7 ln8 ln9
+    ln7="$(grep -n '^### WE-7 ' "$SKILL_MD" | head -1 | cut -d: -f1)"
+    ln8="$(grep -n '^### WE-8 ' "$SKILL_MD" | head -1 | cut -d: -f1)"
+    ln9="$(grep -n '^### WE-9 ' "$SKILL_MD" | head -1 | cut -d: -f1)"
+    if [ -n "$ln7" ] && [ -n "$ln8" ] && [ -n "$ln9" ] \
+       && [ "$ln7" -lt "$ln8" ] && [ "$ln8" -lt "$ln9" ]; then
+        pass "I4: WE-8 (capture) sits between WE-7 (line $ln7) and WE-9 (line $ln9) at line $ln8"
     else
-        fail "I4: ordering wrong (WE-8=$ln8 WE-9=$ln9 WE-10=$ln10)"
+        fail "I4: ordering wrong (WE-7=$ln7 WE-8=$ln8 WE-9=$ln9)"
     fi
 }
 
 test_I5_no_eval_in_skill_md() {
     require_skill_md "I5_no_eval_in_skill_md" || return
-    local ln9 ln10
-    ln9="$(grep -n '^### WE-9'  "$SKILL_MD" | head -1 | cut -d: -f1)"
-    ln10="$(grep -n '^### WE-10' "$SKILL_MD" | head -1 | cut -d: -f1)"
-    if [ -z "$ln9" ] || [ -z "$ln10" ]; then
-        fail "I5: could not locate WE-9 or WE-10 in SKILL.md"
+    local ln8 ln9
+    ln8="$(grep -n '^### WE-8 ' "$SKILL_MD" | head -1 | cut -d: -f1)"
+    ln9="$(grep -n '^### WE-9 ' "$SKILL_MD" | head -1 | cut -d: -f1)"
+    if [ -z "$ln8" ] || [ -z "$ln9" ]; then
+        fail "I5: could not locate WE-8 or WE-9 in SKILL.md"
         return
     fi
     local region
-    region="$(awk -v a="$ln9" -v b="$ln10" 'NR>=a && NR<b' "$SKILL_MD")"
+    region="$(awk -v a="$ln8" -v b="$ln9" 'NR>=a && NR<b' "$SKILL_MD")"
     if echo "$region" | grep -qE '\beval\b'; then
-        fail "I5: WE-9 region contains 'eval' (unsafe pattern)"
+        fail "I5: WE-8 region contains 'eval' (unsafe pattern)"
     else
-        pass "I5: no 'eval' in WE-9 region"
+        pass "I5: no 'eval' in WE-8 region"
     fi
 }
 
 test_I6_backup_vars_defined_in_step5() {
     require_skill_md "I6_backup_vars_defined_in_step5" || return
-    local ln8 ln9
-    ln8="$(grep -n '^### WE-8' "$SKILL_MD" | head -1 | cut -d: -f1)"
-    ln9="$(grep -n '^### WE-9' "$SKILL_MD" | head -1 | cut -d: -f1)"
-    if [ -z "$ln8" ] || [ -z "$ln9" ]; then
-        fail "I6: could not locate WE-8 or WE-9 in SKILL.md"
+    local ln5 ln6
+    ln5="$(grep -n '^### WE-5 ' "$SKILL_MD" | head -1 | cut -d: -f1)"
+    ln6="$(grep -n '^### WE-6 ' "$SKILL_MD" | head -1 | cut -d: -f1)"
+    if [ -z "$ln5" ] || [ -z "$ln6" ]; then
+        fail "I6: could not locate WE-5 or WE-6 in SKILL.md"
         return
     fi
     local region
-    region="$(awk -v a="$ln8" -v b="$ln9" 'NR>=a && NR<b' "$SKILL_MD")"
-    if echo "$region" | grep -qF "BACKUP_DIR=" \
-       && echo "$region" | grep -qF "BACKUP_MANIFEST_PATH="; then
-        pass "I6: WE-8 region defines BACKUP_DIR= and BACKUP_MANIFEST_PATH="
+    region="$(awk -v a="$ln5" -v b="$ln6" 'NR>=a && NR<b' "$SKILL_MD")"
+    if echo "$region" | grep -qF ".worktree-backup/" \
+       && echo "$region" | grep -qF "BACKUP_MANIFEST_PATH"; then
+        pass "I6: WE-5 region derives the backup dir and sets BACKUP_MANIFEST_PATH"
     else
-        fail "I6: BACKUP_DIR= and/or BACKUP_MANIFEST_PATH= missing from WE-8 region"
+        fail "I6: backup dir derivation and/or BACKUP_MANIFEST_PATH missing from WE-5 region"
     fi
 }
 
@@ -194,18 +194,18 @@ $out"
 test_I11_skill_md_step5_5_node_json_write() {
     require_skill_md "I11_skill_md_step5_5_node_json_write" || return
     local region
-    region="$(awk '/^### .*WE-11/{found=1;next} found{if(/^### /){exit}print}' "$SKILL_MD")"
+    region="$(awk '/^### WE-8 /{found=1;next} found{if(/^### /){exit}print}' "$SKILL_MD")"
     if [ -z "$region" ]; then
-        skip "I11_skill_md_step5_5_node_json_write (WE-11 region not found)"
+        fail "I11: WE-8 region not found in SKILL.md"
         return
     fi
     local has_capture=0 has_json=0
     if echo "$region" | grep -qF "capture-env.sh"; then has_capture=1; fi
     if echo "$region" | grep -qF "final-report-env.json"; then has_json=1; fi
     if [ "$has_capture" = "1" ] && [ "$has_json" = "1" ]; then
-        pass "I11: SKILL.md WE-11 invokes capture-env.sh and references final-report-env.json"
+        pass "I11: SKILL.md WE-8 invokes capture-env.sh and references final-report-env.json"
     else
-        fail "I11: WE-11 missing capture-env.sh(=$has_capture) or final-report-env.json(=$has_json)"
+        fail "I11: WE-8 missing capture-env.sh(=$has_capture) or final-report-env.json(=$has_json)"
     fi
 }
 

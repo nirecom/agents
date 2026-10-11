@@ -39,7 +39,7 @@ Backup dir is derived by the worker as `<target_main_root>/.worktree-backup/<bra
 Resolve `dir_expand` once via `node "$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/resolve-dir-expand.js"` (prints `true`/`false`) and pass its output to both passes.
 Both passes dispatch the `worktree-backup` worker per `skills/_shared/worker-dispatch.md` with payload `worktree_path` / `branch` / `docker_check: true` / `dir_expand` / `artifact_dir`, differing only in `mode`. Use payload sequence suffixes `-1` and `-2` so Pass 1's file is not overwritten.
 
-Serial (SC-S): both passes write the same backup directory. Pass 1 is an advisory preview; Pass 2 independently re-inventories live state at deletion time — it does not reuse Pass 1's file set. See `skills/_shared/subagent-concurrency.md`.
+Serial by dependency (SC-S): both passes write the same backup directory. Pass 1 is an advisory preview; Pass 2 independently re-inventories live state at deletion time — it does not reuse Pass 1's file set. See `skills/_shared/subagent-concurrency.md`.
 
 **Pass 1 — `mode: "dry_run"`**: `status: failed` → stop. Otherwise always proceed to Pass 2 (even when file count is 0, issues may require a partial manifest).
 

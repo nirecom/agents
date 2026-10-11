@@ -3,30 +3,12 @@
 # Tests: hooks/detect-worktree-conflict.js, skills/worktree-end/SKILL.md, settings.json
 # Tags: worktree-end, worktree-context, hook-registration, scope:issue-specific, pwsh-not-required
 #
-# Issue #1443 / #1442 — keep CWD in the linked worktree until WE-13, detect
-# `git worktree add`-style "already used by worktree" conflicts. The sibling
-# session-id scan (Sections B/C) lives in tests/hooks/fix-1443-1442-session-id-resolvers.sh.
-#
-# FAIL-BEFORE-FIX (BUGFIX session): the implementation does NOT exist yet.
-#   - hooks/detect-worktree-conflict.js is a NEW file — Section A cases FAIL with
-#     "hook file missing (expected pre-implementation)".
-#   - WE-7/WE-8/Rules text and the settings.json PostToolUse entry do not exist —
-#     Sections D/E FAIL on the missing grep target / JSON entry.
-# Every FAIL below must be attributable to a missing implementation, never to a
-# harness bug.
-#
-# HIGH-1 own-worktree exclusion (codex review) — fix cases in this file:
-#   - A8 (FAIL now): tool_name "runInTerminal" reaches the hook once the matcher/guard
-#     widen to Bash|runInTerminal|runCommands; today only "Bash" is admitted -> noop.
-#   - E2 (FAIL now): settings.json matcher must be "Bash|runInTerminal|runCommands".
-#
-# L3 gap (what this L2 test does NOT catch):
-# - Real `claude -p` session CWD switching: whether Claude actually stays in the
-#   linked worktree through WE-12 is only observable in a live session.
-# - Whether detect-worktree-conflict.js actually fires in the real host process
-#   requires the settings.json PostToolUse wiring that only a live CC session confirms.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
+# Issue #1443 / #1442 — keep CWD in the linked worktree until the WE-9 switch, and detect
+# `git worktree add`-style "already used by worktree" conflicts. Session-id scan
+# (Sections B/C): tests/hooks/fix-1443-1442-session-id-resolvers.sh.
+# TL3 gap: live-session CWD switching and the real PostToolUse wiring of
+# detect-worktree-conflict.js; mitigated at WORKFLOW_USER_VERIFIED preflight
+# (bin/check-verification-gate.sh category: hook-registration).
 
 set -uo pipefail
 
@@ -241,21 +223,28 @@ assert_conflict_noop "A9" "runInTerminal + exit_code 1 + unrelated stderr -> noo
 echo ""
 echo "=== Section D — worktree-end SKILL.md text ==="
 
-D_NEEDLE="do not switch to main worktree before WE-13"
+D_NEEDLE="switch to main worktree only at WE-9"
 
-# D1: the WE-13 guidance sentence is present at least once.
+# D1: the CWD-switch guidance sentence is present.
 if grep -qF "$D_NEEDLE" "$SKILL_MD"; then
-    pass "D1. WE-7/WE-8 carries '$D_NEEDLE'"
+    pass "D1. SKILL.md carries '$D_NEEDLE'"
 else
-    fail "D1. missing '$D_NEEDLE' in $SKILL_MD (WE-7/WE-8 addition not implemented)"
+    fail "D1. missing '$D_NEEDLE' in $SKILL_MD"
 fi
 
-# D2: the sentence appears >=2 times (WE-7 + WE-8).
-d2_count="$(grep -cF "$D_NEEDLE" "$SKILL_MD")"
-if [ "${d2_count:-0}" -ge 2 ]; then
-    pass "D2. WE-13 guidance appears >=2 times (count=$d2_count)"
+# D2: the main-worktree cd lives only inside WE-9 (merge-path repeats moved to /deliver, #2527).
+d2_cd_lines="$(grep -nF 'cd "<main-worktree-root>"' "$SKILL_MD" | cut -d: -f1)"
+d2_we9="$(grep -n '^### WE-9 ' "$SKILL_MD" | head -1 | cut -d: -f1)"
+d2_next="$(awk -v a="${d2_we9:-0}" 'NR>a && /^### /{print NR; exit}' "$SKILL_MD")"
+d2_ok=1
+[ -n "$d2_cd_lines" ] && [ -n "$d2_we9" ] && [ -n "$d2_next" ] || d2_ok=0
+for ln in $d2_cd_lines; do
+    if [ "$ln" -le "$d2_we9" ] || [ "$ln" -ge "$d2_next" ]; then d2_ok=0; fi
+done
+if [ "$d2_ok" = "1" ]; then
+    pass "D2. main-worktree cd appears only in WE-9 (lines: $(echo $d2_cd_lines))"
 else
-    fail "D2. WE-13 guidance must appear >=2 times (WE-7 + WE-8) — count=${d2_count:-0}"
+    fail "D2. main-worktree cd must appear only in WE-9 (cd lines: $(echo $d2_cd_lines); WE-9=$d2_we9 next=$d2_next)"
 fi
 
 # D3: the Rules bullet is present.
