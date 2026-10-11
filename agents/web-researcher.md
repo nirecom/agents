@@ -14,6 +14,7 @@ Receive a JSON object with:
 - `topic`: search topic (string)
 - `context`: additional background (string)
 - `artifact_dir`: directory to write report to
+- `dispatch_directive` (optional): a directive from the dispatcher — follow it; your Output contract still fixes the reply.
 
 ## Procedure
 

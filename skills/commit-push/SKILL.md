@@ -76,7 +76,7 @@ CP-2b. **Open the PR URL:** run `node "$AGENTS_MAIN_ROOT/bin/open-pr-url.js" "<p
 CP-3. **Merge prompt:**
 
    Check `ENFORCE_WORKTREE`:
-   `bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" ENFORCE_WORKTREE on'`
+   `bash "$AGENTS_MAIN_ROOT/bin/confirm-off" ENFORCE_WORKTREE on`
 
    **(a) stdout `ON` or `ERROR` (ENFORCE_WORKTREE=on):**
    - Output `PR #<N> is open: [<url>](<url>)`.

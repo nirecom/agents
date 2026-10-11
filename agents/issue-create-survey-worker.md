@@ -16,6 +16,7 @@ Receive a JSON object with:
 - `changes`: description of changes
 - `agents_main_root`: absolute path to the agents main worktree
 - `artifact_dir`: absolute path to `PLANS_DIR` resolved by the caller via `bin/workflow-plans-dir`; write all output files here
+- `dispatch_directive` (optional): a directive from the dispatcher — follow it; your Output contract still fixes the reply.
 
 ## Procedure
 

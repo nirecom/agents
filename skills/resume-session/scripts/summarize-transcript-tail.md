@@ -3,6 +3,7 @@
 Subagent brief used by `/resume-session` RSM-2 when `transcript_tail.available` is `true`.
 
 The CLI never reads the tail into this conversation — it writes a capped file and returns only the path, so the raw transcript stays out of the resuming session's context. Launch a `general-purpose` subagent with the brief below, substituting `<path>` with `transcript_tail.path`.
+Add the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section to the brief as a standalone line.
 
 ## Brief
 

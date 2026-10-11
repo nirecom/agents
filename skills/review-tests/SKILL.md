@@ -12,6 +12,7 @@ Review test case completeness against source code via Codex (round-continuing un
 Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
 Read `rules/shell-commands.md` before the first Bash command, or before writing a file — defensive measure: RT-2's incident showed the rule content was not effectively available at Bash-issuance time in this `context: fork` execution.
+Follow the `rules/shell-commands.md` Subagent Dispatch Prompts section as if this fork were a dispatched subagent, including its `Command-form deviations` report.
 
 RT-0. Resolve the session-bound linked worktree path in two separate standalone Bash commands — never combined with variable-capture syntax on the Bash tool's own command line, per `rules/shell-commands.md`.
   RT-0 session-id call: run `bash "$AGENTS_MAIN_ROOT/bin/resolve-session-id"`; its stdout is the CC session id.
@@ -64,6 +65,7 @@ RT-3. Invoke `"$AGENTS_MAIN_ROOT/skills/review-tests/scripts/run-codex-review-lo
 - exit 8 → terminal guard was previously armed (review scope unchanged since last terminal); HALT.
 - exit 9 → HALT; accept per exit-codes.md "Escalation by format" (sentinel = write-code unblock + guard clear + in_progress terminal record restored to complete; `bin/accept-exit6-residual` = guard clear only), then re-run.
 - exit 3 → silently launch `test-reviewer` subagent with `model:` = the `model=` line of `node "$AGENTS_MAIN_ROOT/bin/resolve-role-model" --role reviewer`; its dispatch prompt says: Read and follow `rules/shell-commands.md` before the first Bash command. APPROVED → RT-5 COMPLETE; NEEDS_REVISION → RT-5 WARNINGS.
+  That prompt also carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
   Save the subagent output via the Write tool to `<PLANS_DIR>/<session-id>-test-review-fallback-raw.md`, then run `bash "$AGENTS_MAIN_ROOT/skills/review-tests/scripts/detect-input-error.sh" <that file>` as one standalone command; exit 4 (`INPUT_ERROR <path>`) → HALT like exit 4, emit no sentinel.
 - exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback; do NOT emit sentinel.
 - exit 5 AUTO_EXTEND → same as exit 1 (gaps remain within the extension budget): present gaps → RT-5 WARNINGS; address and re-run.

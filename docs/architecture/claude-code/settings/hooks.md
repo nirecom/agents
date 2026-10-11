@@ -70,6 +70,13 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   classifier alongside a `complexity-judge` dispatch and record both answers for comparison.
   Shadow mode: the LLM judge's result is always adopted, and both hooks always exit 0.
   Default OFF (`JEV=off`). Contract and module map: [jev.md](../../jev.md).
+- `subagent-dispatch-prompt.js` (PreToolUse, matcher: `Agent|Task`, own group) — backstop for the
+  `rules/shell-commands.md` Subagent Dispatch Prompts canonical line: appends it (absolute rule path)
+  unless one trimmed prompt line fully matches it; a JSON-object prompt gets it under `dispatch_directive`.
+  Named agents whose `tools:` line has none of Bash/Write/Edit are skipped. Returns only `updatedInput`
+  (all original fields carried forward), never a permission verdict; fail-open. Whether the host replaces
+  or merges `updatedInput` is unverified (the TL3 spike is pending). Do not add another hook that returns `updatedInput`
+  on the same matcher: the result of combining two such outputs is undefined.
 - `workflow-mark.js` (PostToolUse) — intercepts `echo "<<WORKFLOW_MARK_STEP_step_status>>"` and
   `echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing

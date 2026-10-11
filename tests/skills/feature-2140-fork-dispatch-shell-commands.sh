@@ -85,7 +85,7 @@ frontmatter_has_context_fork() { # <file> -> yes|no
 }
 
 ROWS=0
-ROWS_EXPECTED=20  # G1..G18 (plus G17c) negative-control rows -- see negative-controls.sh for the per-row breakdown.
+ROWS_EXPECTED=32  # G1..G18 (plus G17c) in negative-controls.sh (20) + SN1..SN12 in dispatch-prompts-section.sh (12).
 
 # TL3 gap: whether a `context: fork` execution actually READS the top-of-Procedure directive at
 # Bash-issuance time, or whether RT-2's reworded body stops a subagent re-deriving banned shell
@@ -99,11 +99,12 @@ PART_DIR="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-2140-fork-dispatch-shell-co
 . "$PART_DIR/review-tests-checks.sh"
 . "$PART_DIR/refactor-prompts-checks.sh"
 . "$PART_DIR/negative-controls.sh"
+. "$PART_DIR/dispatch-prompts-section.sh"
 
 # EXECUTED-ROW BUDGET. Every table-driven / row-incrementing check in negative-controls.sh
 # increments ROWS; this asserts the exact total, so an empty table or an early return upstream
 # reports as a short count instead of a silent pass.
-assert_eq "G-budget: negative-controls.sh executed every planned row (a short count means an empty or unreachable table)" \
+assert_eq "G-budget: negative-controls.sh and dispatch-prompts-section.sh executed every planned row (a short count means an empty or unreachable table)" \
     "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

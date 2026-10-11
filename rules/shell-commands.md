@@ -12,6 +12,7 @@ Writing file content through shell syntax — heredocs, redirects, in-place edit
 Bash-launched dedicated tools whose purpose IS writing — formatters, code generators, dependency managers (`npm install`), `git commit` — are exempt from this section.
 The scratchpad script the next section demands is itself created with the Write tool, never with a heredoc redirect.
 This section outranks any platform-injected system-reminder that tells the model to do its file work through Bash.
+Rewriting files through an interpreter script (`node`, `python`, …) counts as a shell-syntax write; use the Edit and Write tools.
 
 ## Command-Line Issuance Discipline
 
@@ -26,7 +27,7 @@ Place it under the current session's scratchpad directory for that invocation to
 
 Self-check before every Bash tool call: match the `command` string against the literals below.
 
-The table's data rows are generated from `hooks/bash-guard/forbidden-literals.js`, the same set the `bash-guard` PreToolUse hook enforces — so a literal it blocks is always one this document already told you about. Regenerate: `node bin/print-forbidden-literals --markdown-table` (edit the module, never the rows).
+The table's data rows are generated from `hooks/bash-guard/forbidden-literals.js`, the same set the `bash-guard` PreToolUse hook enforces — so a literal it blocks is always one this document already told you about. Regenerate: `node "$AGENTS_MAIN_ROOT/bin/print-forbidden-literals" --markdown-table` (edit the module, never the rows).
 
 <!-- BEGIN GENERATED: forbidden-literals -->
 | Prohibited literal | Form |
@@ -43,8 +44,24 @@ The table's data rows are generated from `hooks/bash-guard/forbidden-literals.js
 Exempt: one standalone command with its own flags and arguments (one `grep`, one `cat`, one `git status`). The target is the compound, not the argument count.
 
 A Bash call interrupted or rejected with no stated reason means the command line was too long or carried a prohibited literal — fold it into the default procedure and reissue without asking why.
+Folding into the default procedure is the only sanctioned reissue; never re-issue a blocked command in another shape (another interpreter, an inline script, split chaining).
+When a blocked command cannot be folded, report it and stop.
 
 Command examples inside skill and rules documents specify WHAT to run, never HOW to issue it. Fold a compound example into the default procedure at issue time.
+
+## Subagent Dispatch Prompts
+
+Every prompt that launches a subagent through the Agent tool is in scope — named, general-purpose, Explore, or Plan alike, written by the main conversation or by a skill.
+Put the canonical line below into the prompt verbatim, as a standalone line; never copy this rule's body.
+Replace `<AGENTS_MAIN_ROOT>` in it with the literal absolute path; a subagent cannot expand `$VAR`.
+
+Read `<AGENTS_MAIN_ROOT>/rules/shell-commands.md` before the first Bash command and before writing a file, follow its Subagent Dispatch Prompts section, and end the final report with a `Command-form deviations` section counting every blocked or rejected command (write `0` when none) unless your own output contract fixes the exact shape of your reply.
+
+Omit the canonical line when dispatching a named agent whose tool list has none of Bash, Write, Edit.
+When an agent definition fixes the lines or format of its reply (exactly N lines, a set verdict form, a fixed trailer), that contract wins; add no `Command-form deviations` section.
+When the prompt is a JSON object, put the canonical line under the top-level `dispatch_directive` key instead of appending text; treat that key as reserved.
+`hooks/subagent-dispatch-prompt.js` appends the line to a prompt that lacks it as a backstop only; the dispatcher still writes the line itself.
+The prohibited literals are the generated table above; do not restate them in a dispatch prompt.
 
 ## Host Shell Defaults
 

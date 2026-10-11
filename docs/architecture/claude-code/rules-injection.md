@@ -46,15 +46,30 @@ named agent is configured with it today: the widest ones, `detail-planner` and
 `outline-planner`, stop at `Read, Glob, Grep, Bash, WebFetch, Write`. Until a named agent is
 given that access, general-purpose dispatch is the only shape that supports the loop.
 
-Those two sites must therefore name, as an explicit Read directive in the subagent prompt,
-every unconditional rule the subagent depends on — `rules/shell-commands.md` and its
-Command-Line Issuance Discipline being the standing case, since a subagent that has never
-seen it issues compound command lines and only learns they are denied; `rules/user-escalation.md`
-is the second, since a subagent that has never seen its Rule 1/Rule 3 guardrails has no
-brake on issuing an unapproved system-state-changing command. The remedy is not a
-new mechanism: it is the same explicit-Read pattern the on-demand rules already use, as
-`agents/detail-planner.md` does for `rules/coding.md`. Auditing the remaining
-`EXPECTED_UNCONDITIONAL` rules against both dispatch sites is tracked separately (#2141).
+Every Agent-tool dispatch, whatever its shape, follows the Subagent Dispatch Prompts section of
+`rules/shell-commands.md` (#2263): the prompt carries that section's canonical line, which Reads
+the rule and asks for a `Command-form deviations` section in the final report. A subagent that
+has never seen the Command-Line Issuance Discipline issues compound command lines and only learns
+they are denied. The remedy is not a new mechanism: it is the same explicit-Read pattern the
+on-demand rules already use, as `agents/detail-planner.md` does for `rules/coding.md`.
+
+The two general-purpose sites additionally name the other rules their subagent depends on:
+`rules/user-escalation.md` in both, since a subagent that has never seen its Rule 1/Rule 3
+guardrails has no brake on issuing an unapproved system-state-changing command, plus the
+per-site Reads described below. Auditing the remaining `EXPECTED_UNCONDITIONAL` rules against
+both sites is tracked separately (#2141).
+
+The canonical line reaches a subagent by a **third** delivery path, beside injection and the
+named agent's own system prompt: `hooks/subagent-dispatch-prompt.js` (PreToolUse, `Agent|Task`)
+appends it to a prompt that lacks it, or sets the reserved `dispatch_directive` key when the
+prompt is a JSON object. The dispatcher still writes the line itself; the hook is a backstop.
+
+The effect is asymmetric. A named subagent already receives the rule bodies, so for it the Read
+directive is a redundant safety net and the deviation report is what the line adds — except
+where the agent's own output contract fixes the shape of its reply, which wins. A named agent
+whose tool list has none of Bash, Write, Edit is out of scope. For general-purpose, Explore and
+Plan subagents both halves take effect. A `context: fork` skill is not an Agent-tool dispatch,
+so the hook never sees it; the skill's own text carries the directive.
 
 The Read directive for `rules/shell-commands.md` carries two triggers rather than one: the
 subagent needs that file not only before issuing a Bash command but also before writing a
@@ -101,7 +116,8 @@ single CLI calls. None assembles free-form Bash, so none can reproduce RT-2's sh
 The two axes must not be conflated. The invariant "general-purpose dispatch sites are exactly
 two", pinned by `tests/bin/feature-2124-tool-selection-priority/injection-policy.sh` U8a, counts
 `mode: "default"` sites. `context: fork` is a different axis, contributes nothing to that count,
-and leaves it unchanged.
+and leaves it unchanged. The Subagent Dispatch Prompts rule is independent of that count as
+well: it applies to every shape and adds no `mode: "default"` site.
 
 ## The on-demand notation
 
@@ -339,3 +355,6 @@ only — the receipt is still written.
 | Escape-hatch class: disjointness, triggers, relocation round-trip (TL2) | `tests/hooks/feature-2037-minimized-escape-hatches.sh` (+ `feature-2037-minimized-escape-hatches/marker-sequence.sh`) |
 | Relocated procedures executed as documents (TL2) | `tests/skills/feature-2037-admin-close-skill.sh` (+ `feature-2037-admin-close-skill/guard-sequence.sh`, `supervisor-report-cli.sh`) |
 | Real-loader off-switch (TL3) | `tests/hooks/TL3-rules-injection-off-switch.sh` |
+| Subagent Dispatch Prompts section and dispatch-site inventory (TL2) | `tests/skills/feature-2263-subagent-dispatch-prompts.sh` |
+| Dispatch-prompt backstop hook (TL2) | `tests/hooks/feature-2263-subagent-dispatch-prompt.sh` |
+| Dispatch-prompt delivery on a real host (TL3) | `tests/hooks/TL3-hook-subagent-dispatch-prompt.sh` |

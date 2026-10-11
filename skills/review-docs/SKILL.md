@@ -12,7 +12,7 @@ Use after `/update-docs`, once doc/changelog edits are staged, before commit.
 
 ## Rules
 
-- The commit gate re-runs `bin/review-doc-gates --staged` on every commit (TOCTOU-safe); a passing review now does not exempt a later staged edit.
+- The commit gate re-runs `bash "$AGENTS_MAIN_ROOT/bin/review-doc-gates" --staged` on every commit (TOCTOU-safe); a passing review now does not exempt a later staged edit.
 - Line limits: SSOT is `rules/coding/file-split.md` Pattern C (WARN 300, HARD 500). History/archive/CHANGELOG files are exempt.
 - README section order: SSOT is the parseable block in `rules/docs/readme.md`.
 - Fix every HARD (blocking) failure before emitting the completion sentinel; WARN findings are advisory.

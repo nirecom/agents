@@ -7,6 +7,7 @@ context: fork
 1. `/worktree-start --headless refactor-prompts`
 2. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`.
    Read `rules/shell-commands.md` before the first Bash command, or before writing a file — defensive measure, same reasoning as review-tests (see `docs/architecture/claude-code/rules-injection.md`).
+   Follow its Subagent Dispatch Prompts section as if this fork were a dispatched subagent, including its `Command-form deviations` report.
    Write a scratchpad script that runs `bash "$AGENTS_MAIN_ROOT/bin/refactor-prompts/index.sh"` and saves its stdout to `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json`; invoke it as a single `bash <absolute-path>` call — command substitution and redirects on the Bash tool's own command line are the pattern `rules/shell-commands.md` prohibits.
    Abort with clear error if exit code is non-zero.
    Read `<PLANS_DIR>/<session-id>-refactor-prompts-scan.json` (Read tool) — its content is the scan JSON for the inspect / judge / parse / apply items below.

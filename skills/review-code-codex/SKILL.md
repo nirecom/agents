@@ -36,7 +36,7 @@ The codex output is wrapped in `<!-- begin-codex-output --> ... <!-- end-codex-o
 
 ## Concern Ledger
 
-Launched directly as the reviewer of `bin/run-codex-review-loop --format security-code` (the `/review-code-security` path). It is the **primary** producer for that session's shared concern ledger; the `security-scanner` subagent runs only as the fallback when codex is unavailable.
+Launched directly as the reviewer of `bash "$AGENTS_MAIN_ROOT/bin/run-codex-review-loop" --format security-code` (the `/review-code-security` path). It is the **primary** producer for that session's shared concern ledger; the `security-scanner` subagent runs only as the fallback when codex is unavailable.
 
 - Input: `--concerns-file <path>` carries the concerns still open from earlier rounds — re-report a still-valid one under the `C<N>` it already has, never as a new finding.
 - Output: a `## Concern Delta` section, one line per finding — `[<SEV>] <ref> | <repo-relative-path>#<anchor> | <category> | <text>`, `-` in the ref column for a new concern, the single line `(none)` when there are none.

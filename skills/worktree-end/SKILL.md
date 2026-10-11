@@ -39,7 +39,7 @@ For a gitlab remote, use `glab mr view` (reuse if OPEN) / `glab mr create --fill
 ### WE-5 — Merge decision
 `gh pr view "$PR_NUMBER" --json state --jq .state`: `MERGED` → WE-7 (the merge happened outside this session's WE-8 — Web UI or another client — so WE-7 is the detection path for it). `CLOSED` → error and stop. `OPEN` → continue. other/error/empty → error and stop.
 
-Check `AUTO_MERGE_PR`: `bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" AUTO_MERGE_PR on'`. `ON`/`ERROR` → announce and proceed to WE-8. `OFF` → `AskUserQuestion` "PR #<N> — merge, wait-for-web-merge, or abort?" → WE-8 / WE-6 / stop. Default **wait-for-web-merge** when AskUserQuestion unavailable.
+Check `AUTO_MERGE_PR`: `bash "$AGENTS_MAIN_ROOT/bin/confirm-off" AUTO_MERGE_PR on`. `ON`/`ERROR` → announce and proceed to WE-8. `OFF` → `AskUserQuestion` "PR #<N> — merge, wait-for-web-merge, or abort?" → WE-8 / WE-6 / stop. Default **wait-for-web-merge** when AskUserQuestion unavailable.
 
 ### WE-6 — Web-merge wait
 Display URL; stop. On reply: `gh pr view "$PR_NUMBER" --json state` — `MERGED` → WE-7; else re-display and stop.

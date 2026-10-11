@@ -104,6 +104,7 @@ Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub 
 
 2a. Pre-resolve in main: `session_id` (from `$CLAUDE_CODE_SESSION_ID`), `agents_main_root` (absolute), `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from IC-1).
 2b. Invoke the `issue-create-survey-worker` subagent via the Agent tool (`subagent_type`) with `title`, `background`, `changes` from Phase 1 input.
+    Set the JSON prompt's `dispatch_directive` key to the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
 2c. `status: failed` → stop and report error.
 2d. `status: no_candidates` → write the artifact with `make-empty-verdict.sh <out> none` and proceed to Phase 3 with `verdict: none`.
 2e. `status: complete` → read verdict JSON from `artifact_path`.

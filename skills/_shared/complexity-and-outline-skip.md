@@ -43,6 +43,7 @@ The wrapper records the complexity evaluation and, when its internal
   tool (`run_in_background: true`) with `subagent_type=skip-verifier`,
   `session_id=<SESSION_ID>`, `target=outline`,
   `intent_path=<PLANS_DIR>/<SESSION_ID>-intent.md`, then continue.
+  The prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
 - `need-judgment` (internal `SKIP_MODE=judgment` with so_c1/so_c2 both true) →
   issue `bash "$AGENTS_MAIN_ROOT/skills/clarify-intent/scripts/check-complexity-skip.sh" --skip-mode judgment --session "<SESSION_ID>" --so-c1 true --so-c2 true`
   (settles `outline` as skipped via `--advance` internally and emits

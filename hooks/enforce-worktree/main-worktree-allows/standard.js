@@ -39,14 +39,14 @@ function isAllowedFastForwardMerge(cmd) {
 }
 
 /**
- * True if cmd is an isolated `bash -c '...'` matching exactly the
- * read-only CONFIRM_* probe shape used by planning skills:
+ * True if cmd is an isolated `bash -c '...'` matching exactly the legacy
+ * read-only CONFIRM_* probe shape:
  *   bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" KEY [on|off]'
  *
  * Does NOT call hasShellChaining() — the probe body intentionally uses
  * && as control flow. Safety is enforced by structural clause matching.
- * Coupling: if the skill probe string changes, update this matcher in sync.
- * See docs/architecture/claude-code/workflow.md for the contract.
+ * Kept for compatibility: skills now issue the standalone confirm-off form,
+ * which needs no exemption. See docs/architecture/claude-code/workflow-runtime.md.
  */
 function isAllowedReadOnlyConfigCheck(cmd) {
   if (!cmd || typeof cmd !== "string") return false;

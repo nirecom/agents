@@ -45,7 +45,7 @@ The context does not permit a signal judgment at all (unreadable artifacts, empt
 - `S0-undecidable` (reserved: judge could not decide)
 <!-- END GENERATED: signal-ids -->
 
-Regenerate: `node bin/workflow/derive-complexity-level --print-signal-ids`
+Regenerate: `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --print-signal-ids`
 
 ## Stage Routing (reference only — the code is authoritative)
 
@@ -58,7 +58,7 @@ Regenerate: `node bin/workflow/derive-complexity-level --print-signal-ids`
 | `write_code` | low | `S3-security` | `S1-multi-file`<br>`S1b-wide-change`<br>`S2-architecture`<br>`S4-installer`<br>`S5-breaking`<br>`S6-long-plan` | — | high |
 <!-- END GENERATED: stage-routing -->
 
-Regenerate: `node bin/workflow/derive-complexity-level --print-markdown-table`
+Regenerate: `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --print-markdown-table`
 
 ## Output Format
 

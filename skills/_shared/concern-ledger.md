@@ -149,7 +149,7 @@ Callers treat a failed finalize as terminal: `bin/run-codex-review-loop` returns
 
 ## CLI
 
-`bin/concern-ledger <subcommand>` — every subcommand addresses the ledger by `--plans-dir`, `--session-id`, `--format`.
+`bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" <subcommand>` — every subcommand addresses the ledger by `--plans-dir`, `--session-id`, `--format`.
 
 | Subcommand | Role |
 |---|---|

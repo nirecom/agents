@@ -176,6 +176,10 @@ node-next-step     ~ node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list ~ - 
 bash-confirm-off   ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" RUN_TL4 on    ~ -       ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
 real-mismatch      ~ bash "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list ~ -       ~ -    ~ passThrough|BG-NO-HIT
 handoff-append     ~ node "$AGENTS_MAIN_ROOT/bin/workflow/handoff-append" --class A --summary "a (b) c" ~ - ~ - ~ allow|BG-ALLOW-SELF-SCRIPT
+next-step-session  ~ node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session $CLAUDE_CODE_SESSION_ID ~ - ~ - ~ allow|BG-ALLOW-SELF-SCRIPT
+confirm-outline    ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" CONFIRM_OUTLINE on ~ -    ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
+confirm-worktree   ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" ENFORCE_WORKTREE on ~ -   ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
+confirm-auto-merge ~ bash "$AGENTS_MAIN_ROOT/bin/confirm-off" AUTO_MERGE_PR on ~ -      ~ -    ~ allow|BG-ALLOW-SELF-SCRIPT
 TABLE
 case_end
 

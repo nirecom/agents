@@ -40,7 +40,7 @@ Run:
 ## SC-1b — Detect ENFORCE_WORKTREE mode
 
 Check via Bash:
-`bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" ENFORCE_WORKTREE on'`
+`bash "$AGENTS_MAIN_ROOT/bin/confirm-off" ENFORCE_WORKTREE on`
 
 - stdout `ON` or `ERROR` → worktree path (SC-2A).
 - stdout `OFF` → branch/main path (SC-2B).

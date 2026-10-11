@@ -79,7 +79,7 @@ done
 # ---- #1638: RNT-1 delegates, and no longer carries its own chain ------------
 
 expect_match "S1" "RNT-1 delegates merge-base resolution to select-tests.sh --auto" \
-  'select-tests\.sh[[:space:]]+--auto' "$RNT1"
+  'select-tests\.sh"?[[:space:]]+--auto' "$RNT1"
 expect_match "S2" "and names the resolver that owns the chain" \
   'resolve-merge-base\.sh' "$RNT1"
 
@@ -110,7 +110,7 @@ expect_match "S8" "aborting is an option, and it leaves the step pending" \
 
 # RNT-2 must consume the same one-liner, with no variable left over from the deleted chain.
 expect_match "S9" "RNT-2 calls select-tests.sh --auto" \
-  'select-tests\.sh[[:space:]]+--auto' "$RNT2"
+  'select-tests\.sh"?[[:space:]]+--auto' "$RNT2"
 expect_no_match "S9b" "and no longer passes the deleted \$merge_base variable" \
   'select-tests\.sh[[:space:]]+"?\$\{?merge_base' "$RNT2"
 

@@ -185,15 +185,15 @@ u3_precedes_discipline() {
     assert_eq "U3: '$NEW_HEADING' (line $a) appears before '$NEXT_HEADING' (line $b)" "yes" "$got"
 }
 
-# rules/coding/file-split.md Pattern B WARNs above 100 lines, and this file is loaded into
-# EVERY session -- the cost of the new section is paid on every turn of every conversation.
+# The budget is rules/coding/file-split.md Pattern B's HARD limit (200), the SSOT for when a rule
+# file must split. Its WARN (>100) is advisory and #2263 chose not to split, so a WARN is no FAIL.
 u5_line_budget() {
     local n got
     n="$(wc -l < "$RULES" 2>/dev/null | tr -d ' ')"
     n="${n:-0}"
     got="over"
     [ "$n" -le "$RULES_LINE_BUDGET" ] && got="within"
-    assert_eq "U5: $RULES_REL is $n lines, within the ${RULES_LINE_BUDGET}-line Pattern B budget" \
+    assert_eq "U5: $RULES_REL is $n lines, within the ${RULES_LINE_BUDGET}-line Pattern B HARD limit" \
         "within" "$got"
 }
 

@@ -52,7 +52,7 @@ NEXT_HEADING='## Command-Line Issuance Discipline'
 # dispatched, or executed as a prompt. The negative controls run the SAME predicates over
 # throwaway fixture files under $FIXROOT — never over rules/shell-commands.md or a real SKILL.md.
 
-RULES_LINE_BUDGET=100
+RULES_LINE_BUDGET=200  # rules/coding/file-split.md Pattern B HARD; see u5_line_budget in section-contract.sh
 
 # SKIPPED: driving a real session with auto mode on and observing whether the section arrives
 #          and whether the model follows it over the platform reminder.
