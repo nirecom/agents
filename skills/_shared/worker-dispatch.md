@@ -14,6 +14,14 @@ WD-4. Read the rendered contract from the command's stdout. Exit 0 always accomp
 
 WD-5. One dispatch call acts on exactly one repository. For a sibling repo, re-run WD-1 against that repo and dispatch again.
 
+WD-BG. Background dispatch — `test-runner` only (no other worker writes an outcome), used when `timeout_seconds` exceeds 570:
+
+- Emit `<<WORKFLOW_NEXT_STEP_PAUSE: {reason}>>`, then run the WD-3 command with `run_in_background`, wait for its completion notice, then emit `<<WORKFLOW_NEXT_STEP_RESUME: {reason}>>`.
+- Then run once, in the foreground: `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/show-dispatch-outcome.sh" --session <session-id>`.
+- `OUTCOME=present`: the YAML after `---` stands in for the WD-4 stdout; continue with the caller's result handling.
+- `OUTCOME=absent` or `OUTCOME=untrusted`: surface `OUTCOME_REASON` and treat the run as `status: runner-error`; a re-run publishes a new `--seq` payload.
+- Never use the background task's output file as evidence of the result — only the display above counts.
+
 ## Naming
 
 Name the form on every dispatch line — the three kinds are spawned by different mechanisms, and an unmarked name leaves the reader guessing which one runs.

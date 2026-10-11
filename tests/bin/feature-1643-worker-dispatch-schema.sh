@@ -2,6 +2,7 @@
 # tests/bin/feature-1643-worker-dispatch-schema.sh
 # Tests: bin/worker-dispatch.js, bin/worker-dispatch/payload.js, bin/worker-dispatch/registry.js, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, dispatcher, payload, schema, argv, free-text, TL1, scope:issue-specific
+# lang-check: ignore
 
 # Issue #1643: worker-dispatch argv/schema/payload contract (byte-identical free-text, PLANS_DIR file path).
 # TL3 gap: real skill round-trips and PLANS_DIR resolution. Mitigation: bin/check-verification-gate.sh.
@@ -12,6 +13,7 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
 PAYLOAD_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/payload.js"
 REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
+FSGUARD_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/fsguard.js"
 
 PASS=0
 FAIL=0
@@ -265,6 +267,42 @@ group_d() {
       process.stdout.write(want.filter(w => !names.includes(w)).join(","));
     ' "$REGISTRY_JS" 2>/dev/null)" || missing="REQUIRE_FAILED"
     assert_eq "registry/worker-enum-complete" "" "$missing"
+
+    # #2544: the scope vocabulary carries the outcome-file scope, test-runner declares
+    # exactly that, and no worker declares a scope outside the vocabulary.
+    local scopes
+    scopes="$(node -e '
+      const reg = require(process.argv[1]);
+      const vocab = reg.WRITE_SCOPES || [];
+      const stray = Object.keys(reg.workers).flatMap((n) => (reg.workers[n].writeScopes || []).filter((s) => !vocab.includes(s)).map((s) => n + ":" + s));
+      process.stdout.write([vocab.includes("control-outcome") ? "in-vocab" : "not-in-vocab",
+        JSON.stringify(reg.workers["test-runner"].writeScopes), "stray=" + stray.join(",")].join(" "));
+    ' "$REGISTRY_JS" 2>/dev/null)" || scopes="REQUIRE_FAILED"
+    assert_eq "registry/outcome-scope-vocabulary-and-test-runner-declaration" 'in-vocab ["control-outcome"] stray=' "$scopes"
+
+    # Each vocabulary scope anchors as a directory root or as a single file, never both
+    # and never neither: a probe worker declaring that one scope, under a context that
+    # fills every anchor, must get roots from exactly one of the two fsguard expansions.
+    local split
+    split="$(node -e '
+      const path = require("path");
+      const gPath = require.resolve(process.argv[2]);
+      const g = require(gPath);
+      // The registry instance fsguard itself loaded, so the probe entry is visible to it.
+      const reg = require(path.resolve(path.dirname(gPath), "..", "..", "hooks", "lib", "worker-dispatch-registry.js"));
+      const ctx = { plansDir: "/p", controlDir: "/c", family: ["/f"], backupDir: "/b", targetMainRoot: "/t", logDir: "/l", outcomeStem: "worker-test-runner-1" };
+      const bad = [];
+      for (const scope of reg.WRITE_SCOPES) {
+        reg.workers.__scope_probe__ = { writeScopes: [scope] };
+        let roots = 0, files = 0;
+        try { roots = g.scopeRootsFor("__scope_probe__", ctx).length; } catch (e) { roots = -1; }
+        try { files = typeof g.scopeFilesFor === "function" ? g.scopeFilesFor("__scope_probe__", ctx).length : -2; } catch (e) { files = -1; }
+        if (!((roots > 0) !== (files > 0)) || roots < 0 || files < 0) bad.push(scope + ":roots=" + roots + ",files=" + files);
+      }
+      delete reg.workers.__scope_probe__;
+      process.stdout.write(bad.join(" "));
+    ' _ "$FSGUARD_JS" 2>/dev/null)" || split="REQUIRE_FAILED"
+    assert_eq "registry/each-write-scope-is-a-root-or-a-file-scope" "" "$split"
 }
 
 # Group E: credential scope (CHILD_ENV_ALLOWLIST) and typed test_args.

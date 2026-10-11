@@ -26,7 +26,7 @@ hooks/workflow-mark/branching-handler.js 1
 hooks/workflow-mark/clarify-intent-complete-handler.js 1
 hooks/workflow-mark/review-tests-handler.js 1
 hooks/workflow-mark/user-verified-handler.js 1
-hooks/workflow-run-tests.js 3
+hooks/workflow-run-tests/record-run.js 3
 hooks/workflow-state/state-io/review-tests.js 1
 "
 # Class D sites must hold ZERO direct calls once they delegate. verdict.js keeps
