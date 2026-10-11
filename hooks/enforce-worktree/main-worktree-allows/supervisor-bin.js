@@ -12,8 +12,13 @@ const { singleInvocation, leadingAssignments, redirectsUnderTmp } = require("./c
 const SUPERVISOR_BIN_TOOLS = Object.freeze(["bin/supervisor-findings-codex", "bin/supervisor-write-alert"]);
 const SUPERVISOR_INTERPRETERS = new Set(["bash", "node"]);
 
-function comparablePath(p) {
-  return path.resolve(normalizeCwd(p) || p).replace(/\\/g, "/").toLowerCase();
+// Case is folded only where the filesystem folds it: on a case-sensitive one,
+// bin/SUPERVISOR-WRITE-ALERT is a different file from the allow-listed script.
+const CASE_INSENSITIVE_FS = process.platform === "win32" || process.platform === "darwin";
+
+function comparablePath(p, foldCase = CASE_INSENSITIVE_FS) {
+  const resolved = path.resolve(normalizeCwd(p) || p).replace(/\\/g, "/");
+  return foldCase ? resolved.toLowerCase() : resolved;
 }
 
 function isAllowedSupervisorBinTool(cmd) {
@@ -39,4 +44,4 @@ function isAllowedSupervisorBinTool(cmd) {
   return redirectsUnderTmp(seg);
 }
 
-module.exports = { isAllowedSupervisorBinTool, SUPERVISOR_BIN_TOOLS };
+module.exports = { isAllowedSupervisorBinTool, SUPERVISOR_BIN_TOOLS, comparablePath };

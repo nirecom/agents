@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/enforce-worktree-allow-single-invocation.sh
-# Tests: hooks/enforce-worktree/main-worktree-allows/command-shape.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/enforce-worktree/main-worktree-allows/worktree-command.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree.js
+# Tests: hooks/enforce-worktree/main-worktree-allows/command-shape.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/enforce-worktree/main-worktree-allows/worktree-command.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/supervisor-bin.js, hooks/enforce-worktree.js
 # Tags: hook, worktree, enforce, security, allow-predicate, command-ir, scope:issue-specific
 # Every main-worktree allow predicate accepts one invocation only (#2589, commit 2):
 # a canonical shape passes, and the same shape with chaining, substitution, process
@@ -283,6 +283,15 @@ if [ "${probe_count:-0}" -ge 1 ]; then
 else
     fail "S2-1b anti-vacuity" "no confirm-off probe found under skills/ — the inventory grep is looking at nothing"
 fi
+case_end
+
+# ── supervisor-bin path identity: case is folded only on case-insensitive filesystems ──
+case_begin "supervisor-bin-path-case" "hooks/enforce-worktree/main-worktree-allows/supervisor-bin.js"
+CASE_JS='const { comparablePath: c } = require(process.argv[1] + "/hooks/enforce-worktree/main-worktree-allows/supervisor-bin.js"); const a = "/repo/bin/supervisor-write-alert", b = "/repo/bin/SUPERVISOR-WRITE-ALERT"; process.stdout.write([c(a, false) === c(b, false), c(a, true) === c(b, true), c(a, false) === c("/repo/bin/../bin/supervisor-write-alert", false)].join(","))'
+expect_eq "case-sensitive FS: differently cased script is a different file; same path matches" "$(node -e "$CASE_JS" "$ROOT_NODE")" "false,true,true"
+# SKIPPED: the recased-script expectation on darwin. Because: macOS volumes can be case-sensitive or not and the implementation assumes folding; the expectation is pinned per platform here (win32 folds, linux does not) instead of mirroring the implementation's own platform expression. L3 gap: a case-sensitive macOS volume is only catchable on a real macOS host.
+PRED_JS='const root = process.argv[1], { isAllowedSupervisorBinTool: ok } = require(root + "/hooks/enforce-worktree/main-worktree-allows/supervisor-bin.js"); const expected = { win32: true, linux: false }[process.platform]; const run = (name) => ok("node \"" + root + "/bin/" + name + "\" --session s"); process.stdout.write([run("supervisor-write-alert"), expected === undefined || run("SUPERVISOR-WRITE-ALERT") === expected].join(","))'
+expect_eq "default fold: canonical script allowed; recased script allowed only where the filesystem folds case" "$(node -e "$PRED_JS" "$ROOT_NODE")" "true,true"
 case_end
 
 # ── End-to-end: the real hook on the security-relevant rows ─────────────────
