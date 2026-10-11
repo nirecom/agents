@@ -715,6 +715,16 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/subagent-dispatch-prompt.js\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [

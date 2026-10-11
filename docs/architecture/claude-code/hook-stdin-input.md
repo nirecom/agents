@@ -31,7 +31,7 @@ The two failure states are kept apart because they mean different things: `json-
   - Known limit: the IR tokenizer does not decode backslash escapes outside quotes, so the `'\''` idiom can mis-tokenize a body nested two levels deep.
   - Known limit: pwsh abbreviations (`-Comm`, `-command:x`, `/Command`), a positional `powershell.exe` body, and `-EncodedCommand` are not extracted.
 - **Env bypass first**: `enforce-system-ops.js` evaluates `SYSTEM_OPS_APPROVED=1` before reading, so the bypass still works when stdin is unreadable.
-- **Permission and rewrite hooks** (preuse-auto-approve, gate-plan-skip-sentinel, rtk-rewrite): abstain on both states; abstaining is their default path.
+- **Permission and rewrite hooks** (preuse-auto-approve, gate-plan-skip-sentinel, rtk-rewrite, subagent-dispatch-prompt): abstain on both states; abstaining is their default path.
 - **State-recording, Stop, and display/inject hooks**: fail open on both states, so a broken read never wedges a session.
   - The Jev shadow hooks (`jev-shadow-pre.js`, `jev-shadow-post.js`) belong here, with two additions: a payload that parses but is not an object counts as `json-invalid`, and the diagnostic below is written only when `JEV=on`, so a disabled feature stays silent.
 - **`bin/scan-offensive`**: `read-error` exits 3, which `scan-outbound.js` already treats as block.

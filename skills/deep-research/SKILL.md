@@ -15,6 +15,7 @@ DR-1. **Delegate to web-researcher**:
      artifact_dir: PLANS_DIR
    }) })
    ```
+   Also set the `dispatch_directive` key to the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
    On `failed` status: surface summary to user and stop.
 
 DR-2. Read the report from `artifact_path` (one read, at the end).

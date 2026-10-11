@@ -130,6 +130,7 @@ The orchestrator (make-detail-plan / make-outline-plan) should:
 3. On fallback, emit to user **before** launching reviewer subagent:
    - SKIPPED/FAILED: `> codex unavailable (<reason from status line>) — falling back to Claude reviewer for this round.`
    - Malformed: `> codex output malformed (could not parse verdict) — falling back to Claude reviewer for this round.`
+   - The reviewer prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
 
 ## Logs
 
