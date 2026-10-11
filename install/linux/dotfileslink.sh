@@ -230,6 +230,13 @@ EOF
 chmod +x ~/.local/bin/repo-visibility
 printf "${C_GREEN}Generated: ~/.local/bin/repo-visibility${C_RESET}\n"
 
+# --- pytest pre-fetch into uv's cache ---
+# The test launcher runs pytest through `uv run --with pytest`; warming the cache here means a
+# failing pytest run is a test failure, not uv being unable to supply pytest.
+if ! uv run --no-project --with pytest python -c "import pytest"; then
+    printf '%sWARNING: pytest pre-fetch via uv failed; pytest tests will try to fetch it on first run%s\n' "$C_YELLOW" "$C_RESET" >&2
+fi
+
 # --- PATH-exposed bin/ command symlinks ---
 # The command set is declared once in install/path-exposed-commands.txt and looped over
 # here; install/win/dotfileslink.ps1 consumes the same file (CPR-SSOT single source of truth,

@@ -18,7 +18,7 @@ TABLE
   done
   f2544_eq "A/schema version is 1" "$(f2544_probe value "$F2544_M_CONTRACT" SCHEMA_VERSION)" "1"
   f2544_eq "A/status vocabulary is the dispatcher's" "$(f2544_probe value "$F2544_M_CONTRACT" OUTCOME_STATUSES)" \
-    '["pass","fail","timeout","runner-error"]'
+    '["pass","fail","timeout","runner-error","unrunnable","skip"]'
   f2544_eq "A/digest is sha256 hex of the payload bytes" "$(f2544_probe digest abc)" \
     "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 }

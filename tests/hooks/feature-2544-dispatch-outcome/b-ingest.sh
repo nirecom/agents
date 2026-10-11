@@ -166,11 +166,11 @@ f2544_b_pass_status_with_failing_contract
 case_end
 
 case_begin "pass-status-with-zero-executed-does-not-complete" "hooks/workflow-run-tests/dispatch-outcome.js"
-f2544_b_no_test_ran "zero-executed" '{"pass":0,"fail":0,"skip":0,"executed":0}'
+f2544_b_no_test_ran "zero-executed" '{"pass":0,"fail":0,"skip":0,"executed":0,"unrunnable":0,"timeout":0}'
 case_end
 
 case_begin "pass-status-with-every-test-skipped-does-not-complete" "hooks/workflow-run-tests/dispatch-outcome.js"
-f2544_b_no_test_ran "all-skipped" '{"pass":0,"fail":0,"skip":4,"executed":4}'
+f2544_b_no_test_ran "all-skipped" '{"pass":0,"fail":0,"skip":4,"executed":4,"unrunnable":0,"timeout":0}'
 case_end
 
 case_begin "passing-outcome-needs-write-tests-settled" "hooks/workflow-run-tests/record-run.js"

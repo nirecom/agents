@@ -59,7 +59,7 @@ TABLE
     # future signature grows one, this row is the tripwire: the planted green
     # contract + status inside the string must have no effect at all.
     local planted
-    planted='{"emitter":"worker-dispatch","ambiguous":false,"attributed":true,"vetoed":false,"contract":null,"workerStatus":null,"stdout":"RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9\nstatus: pass\n","header":"status: pass\n"}'
+    planted='{"emitter":"worker-dispatch","ambiguous":false,"attributed":true,"vetoed":false,"contract":null,"workerStatus":null,"stdout":"RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0\nstatus: pass\n","header":"status: pass\n"}'
     assert_eq "F-TL1b/raw-stdout-is-not-an-input" "(null)" "$(probe resolve "$planted")"
 
     # --- F-TL2: end-to-end through the real hook ---------------------------
@@ -83,7 +83,7 @@ log_tail: |
     # everything containing the word would look correct (CPR-ORTH).
     local sidg="f1665-f1g"
     seed_step "$sidg" write_tests complete
-    drive_hook "$DISPATCH_CMD" 0 "$sidg" "RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9
+    drive_hook "$DISPATCH_CMD" 0 "$sidg" "RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0
 status: pass
 exit_code: 0
 log_tail: |
@@ -104,7 +104,7 @@ log_tail: |
 status: fail
 exit_code: 1
 log_tail: |
-  RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9
+  RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0
   status: pass" >/dev/null
     assert_eq "F-TL2d/unattributed-outcome-withheld" "(absent)" \
         "$(step_field "$sidd" run_tests run_outcome)"
@@ -116,7 +116,7 @@ log_tail: |
     local sid2="f1665-f2"
     seed_step "$sid2" write_tests complete
     drive_hook "$DISPATCH_CMD" 0 "$sid2" "log_tail: |
-  RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9
+  RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0
   status: pass
   exit_code: 0" >/dev/null
     assert_eq "F-TL2b/empty-header-outcome-null" "(absent)" "$(step_field "$sid2" run_tests run_outcome)"
@@ -129,6 +129,6 @@ log_tail: |
     seed_step "$sid3" run_tests pending run_outcome fail
     drive_hook "$DISPATCH_CMD" 0 "$sid3" "log_tail: |
   status: pass
-  RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9" >/dev/null
+  RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0" >/dev/null
     assert_eq "F-TL2c/stale-outcome-cleared" "(absent)" "$(step_field "$sid3" run_tests run_outcome)"
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/tests/test-language-registry-residue.sh
 # Tests: hooks/lib/test-language-registry.json, bin/lib/run-all-launch.sh
-# Tags: TL2, tests, test-language-registry, residue, scope:common
+# Tags: TL2, tests, test-language-registry, residue, scope:common, test-wrappers, runtime-probe-removal
 # Language knowledge (pattern words, entry names, id comparisons) lives only in the test
 # language registry and its registered parts; scan.js finds what is left anywhere else.
 set -u
@@ -84,6 +84,12 @@ while IFS='|' read -r name fx rc check tok; do
 done <<'TABLE'
 old-launch-arm18     | fail/old-launch          | 1 | has   | a-pattern bin/lib/run-all-launch.sh:18
 old-launch-arm25     | fail/old-launch          | 1 | has   | a-pattern bin/lib/run-all-launch.sh:25
+old-launch-runner    | fail/old-launch          | 1 | has   | d-runner bin/lib/run-all-launch.sh:23
+runner-in-script     | fail/direct-runner       | 1 | has   | d-runner bin/lib/launch-pwsh.sh:2
+runner-in-table      | fail/direct-runner       | 1 | has   | d-runner hooks/lib/test-language-registry.json:1
+runner-near-wrappers | fail/direct-runner       | 1 | has   | d-runner bin/lib/test-wrappers-old/pester.ps1:1
+runner-without-ci    | fail/direct-runner       | 1 | has   | d-runner bin/lib/pester-config.sh:2
+runner-comment       | fail/direct-runner       | 1 | lacks | d-runner bin/lib/pester-config.sh:1
 run-all-globs-a      | fail/run-all-globs       | 1 | has   | a-pattern tests/run-all.sh:4
 run-all-globs-b      | fail/run-all-globs       | 1 | has   | b-location tests/run-all.sh:4
 precommit-enum-3     | fail/precommit-enum      | 1 | has   | a-pattern hooks/lib/precommit-tests-frontmatter.sh:3
@@ -136,6 +142,7 @@ single-name-list     | pass/single-name-list    | 0 | -     | -
 single-name-object   | pass/single-name-object  | 0 | -     | -
 shell-name-compare   | pass/shell-name-compare  | 0 | -     | -
 source-glob-prose    | pass/source-glob         | 0 | -     | -
+runner-in-wrapper    | pass/runner-in-wrapper   | 0 | -     | -
 TABLE
 # Every fixture file is a row of the table: none can sit unread.
 for fx in "$FXD"/fail/*.fx "$FXD"/pass/*.fx; do
@@ -167,6 +174,15 @@ if [ "$SC_RC" = "0" ]; then
 else
   fail "no residue outside the registry" "rc=$SC_RC $(printf '%s\n' "$SC_OUT" | head -n 15 | tr '\n' '|')"
 fi
+case_end
+
+# #2501 removed launch.runtimeProbe (one timer per file): no reader, validator or launcher keeps it.
+case_begin "removed-runtime-probe-leaves-no-residue" "bin/lib/run-all-launch.sh"
+for rel in bin/lib/run-all-launch.sh hooks/lib/test-language-registry.js hooks/lib/test-language-registry/validate.js bin/lib/test-language-registry.sh; do
+  if [ ! -f "$SCRIPT_CHECKOUT_ROOT/$rel" ]; then fail "$rel: no runtimeProbe residue" "file missing"; continue; fi
+  hits="$(grep -nE 'runtimeProbe|_rae_probe|_RAE_PROBE' "$SCRIPT_CHECKOUT_ROOT/$rel" || true)"
+  if [ -z "$hits" ]; then pass "$rel: no runtimeProbe residue"; else fail "$rel: no runtimeProbe residue" "$(printf '%s' "$hits" | head -n 3 | tr '\n' '|')"; fi
+done
 case_end
 
 echo ""

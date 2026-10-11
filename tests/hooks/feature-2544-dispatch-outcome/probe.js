@@ -57,7 +57,7 @@ function buildOutcome(sid, stem, status, pass, fail, failing) {
     exit_code: status === "pass" ? 0 : 1,
     duration_ms: 1200,
     worker_result: {
-      run_contract: { pass, fail, skip: 0, executed: pass + fail },
+      run_contract: { pass, fail, skip: 0, executed: pass + fail, unrunnable: 0, timeout: 0 },
       failing_tests: failing,
       log_tail: ["PASS: alpha"],
       summary: `${status}: ${pass} passed, ${fail} failed`,

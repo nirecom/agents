@@ -24,7 +24,7 @@ E_GREEN_STDOUT="Running tests/alpha.sh
 PASS: alpha
 
 Results: PASS=5  FAIL=0  SKIP=0
-RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5"
+RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0"
 
 run_e_write_tests_guard_cases() {
     echo ""

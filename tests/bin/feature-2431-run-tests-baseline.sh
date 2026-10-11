@@ -53,6 +53,10 @@ SUBDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2431-run-tests-bas
 . "$SUBDIR/derive-timeout.sh"
 # shellcheck source=./feature-2431-run-tests-baseline/derive-timeout-cli.sh
 . "$SUBDIR/derive-timeout-cli.sh"
+# shellcheck source=./feature-2431-run-tests-baseline/exec-state.sh
+. "$SUBDIR/exec-state.sh"
+# shellcheck source=./feature-2431-run-tests-baseline/cli-state.sh
+. "$SUBDIR/cli-state.sh"
 
 case_begin "baseline-ledger" "bin/lib/run-tests-baseline-ledger.sh"
 run_ledger_cases
@@ -90,6 +94,18 @@ case_begin "baseline-exec-isolation" "bin/lib/run-tests-baseline-exec.sh"
 run_exec_isolation_cases
 case_end
 
+case_begin "baseline-exec-state" "bin/lib/run-tests-baseline-exec.sh"
+run_exec_state_cases
+case_end
+
+case_begin "baseline-exec-grandchild" "bin/lib/run-tests-baseline-exec.sh"
+run_exec_grandchild_cases
+case_end
+
+case_begin "baseline-exec-unrunnable" "bin/lib/run-tests-baseline-exec.sh"
+run_exec_unrunnable_cases
+case_end
+
 case_begin "baseline-cli" "bin/run-tests-baseline"
 run_cli_cases
 case_end
@@ -106,8 +122,28 @@ case_begin "baseline-cli-ambiguous-exit" "bin/run-tests-baseline"
 run_cli_ambiguous_exit_cases
 case_end
 
+case_begin "baseline-cli-legacy-launcher" "bin/run-tests-baseline"
+run_cli_legacy_launcher_cases
+case_end
+
+case_begin "baseline-cli-unrunnable-at-base" "bin/run-tests-baseline"
+run_cli_unrunnable_at_base_cases
+case_end
+
+case_begin "baseline-cli-legacy-launcher-wrapper" "bin/run-tests-baseline"
+run_cli_legacy_launcher_wrapper_cases
+case_end
+
+case_begin "baseline-cli-evidence-unmet" "bin/run-tests-baseline"
+run_cli_evidence_unmet_cases
+case_end
+
 case_begin "baseline-cli-exec-setup-failed" "bin/run-tests-baseline"
 run_cli_exec_setup_failed_cases
+case_end
+
+case_begin "baseline-cli-launcher-setup-failed" "bin/lib/run-tests-baseline-exec.sh"
+run_cli_launcher_setup_failed_cases
 case_end
 
 case_begin "baseline-cli-unsupported-at-base" "bin/run-tests-baseline"

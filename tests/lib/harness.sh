@@ -5,8 +5,9 @@
 # Shared harness. Do NOT mix-source with a narrow harness
 # (tests/bin/bin-concern-ledger-reducer.sh, tests/lib/clearance-hook-harness.sh):
 # those set PASS=0/FAIL=0 unguarded and overwrite this harness's counts.
-# case_begin/case_end targets are for STATIC grep (catalog input),
-# not runtime aggregation.
+# case_begin/case_end targets feed the static catalog; when tests/run-all.sh launched this very
+# file (RUN_ALL_RESULT_OWNER == $0), each case also lands in <RUN_ALL_RESULT_DIR>/cases.tsv
+# (format: docs/architecture/claude-code/test-result-contract.md).
 
 # This file's own checkout; the sourcing test assigns its own root itself.
 _HARNESS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -15,6 +16,17 @@ _HARNESS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pw
 : "${PASS:=0}"
 : "${FAIL:=0}"
 : "${SKIP:=0}"
+
+# The result env belongs to the launched file alone: never to a nested test or a child process.
+if [ -z "${_HARNESS_CASES_FILE+x}" ]; then
+  _HARNESS_CASES_FILE=""
+  _HARNESS_CASE_SEQ=0
+  _HARNESS_CASE_OPEN=""
+  if [ -n "${RUN_ALL_RESULT_DIR:-}" ] && [ "${RUN_ALL_RESULT_OWNER-}" = "$0" ]; then
+    _HARNESS_CASES_FILE="$RUN_ALL_RESULT_DIR/cases.tsv"
+  fi
+fi
+unset RUN_ALL_RESULT_DIR RUN_ALL_RESULT_OWNER
 
 # 1b. Result reporters.
 pass() {
@@ -29,6 +41,15 @@ fail() {
     echo "FAIL: $1"
   fi
   FAIL=$((FAIL + 1))
+  _harness_case_failed
+}
+
+# _harness_case_failed — the open case's FAIL record, written at once and only once: a file that
+# exits before case_end must not leave the case merely OPEN. xfail.sh's XPASS calls it too.
+_harness_case_failed() {
+  [ -n "${_HARNESS_CASE_OPEN:-}" ] && [ -z "${_HARNESS_CASE_FAILED:-}" ] || return 0
+  _HARNESS_CASE_FAILED=1
+  _harness_case_record FAIL
 }
 
 skip() {
@@ -46,7 +67,14 @@ assert_eq() {
   fi
 }
 
-# 1d. case_begin / case_end — targets are for static grep, not runtime use.
+# _harness_case_record <STATE> — one cases.tsv line for the current case; a no-op without a result dir.
+_harness_case_record() {
+  [ -n "${_HARNESS_CASES_FILE:-}" ] || return 0
+  printf '%s\t%s\t%s\t%s\n' "$_HARNESS_CASE_SEQ" "$1" "$_HARNESS_CASE_NAME" "$_HARNESS_CASE_TARGET" \
+    >>"$_HARNESS_CASES_FILE" 2>/dev/null || true
+}
+
+# 1d. case_begin / case_end — the target is a static catalog key; run-all also reads the records.
 case_begin() {
   local name="$1" target="$2"
   if [ -z "$name" ]; then
@@ -87,15 +115,41 @@ case_begin() {
       return 1
       ;;
   esac
+  [ -z "${_HARNESS_CASE_OPEN:-}" ] || case_end
   CURRENT_CASE="$name"
   CURRENT_CASE_TARGET="$target"
   echo "--- case: $name ($target) ---"
+  _HARNESS_CASE_SEQ=$((${_HARNESS_CASE_SEQ:-0} + 1))
+  _HARNESS_CASE_OPEN=1
+  _HARNESS_CASE_FAILED=""
+  _HARNESS_CASE_NAME="${name//[$'\t\n']/ }"
+  _HARNESS_CASE_TARGET="${target//[$'\t\n']/ }"
+  _HARNESS_CASE_AT="${PASS:-0} ${FAIL:-0} ${SKIP:-0} ${XFAIL_N:-0} ${XPASS_N:-0}"
+  _harness_case_record OPEN
 }
 
+# The final state follows the counters this case moved: an XPASS also raises FAIL, so only
+# failures beyond the XPASS count make it FAIL.
 # shellcheck disable=SC2034  # CURRENT_CASE* are consumed by test callers, not here.
 case_end() {
+  local p f s xf xp st
   CURRENT_CASE=""
   CURRENT_CASE_TARGET=""
+  [ -n "${_HARNESS_CASE_OPEN:-}" ] || return 0
+  _HARNESS_CASE_OPEN=""
+  read -r p f s xf xp <<<"$_HARNESS_CASE_AT"
+  p=$((${PASS:-0} - p)) f=$((${FAIL:-0} - f)) s=$((${SKIP:-0} - s))
+  xf=$((${XFAIL_N:-0} - xf)) xp=$((${XPASS_N:-0} - xp))
+  if [ $((f - xp)) -gt 0 ]; then st=FAIL
+  elif [ "$xp" -gt 0 ]; then st=XPASS
+  elif [ "$xf" -gt 0 ]; then st=XFAIL
+  elif [ "$p" -gt 0 ]; then st=PASS
+  elif [ "$s" -gt 0 ]; then st=SKIP
+  else st=UNOBSERVED
+  fi
+  # A FAIL already written by fail() is the final record; an XPASS still gets its own line.
+  if [ "$st" = FAIL ] && [ -n "${_HARNESS_CASE_FAILED:-}" ]; then return 0; fi
+  _harness_case_record "$st"
 }
 
 # 1e. Fixture helpers.
@@ -123,9 +177,16 @@ case "${BASH_SOURCE[0]}" in
   */*) _HARNESS_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
   *)   _HARNESS_LIB_DIR="." ;;
 esac
-# shellcheck source=tests/lib/root-decoy.sh
-. "$_HARNESS_LIB_DIR/root-decoy.sh" || exit 1
-root_decoy_ensure || exit 1
+# Exception: a harness copied without root-decoy.sh (a fixture checkout) keeps the decoy its
+# launcher already pinned, as run_all_pin_root_decoy does; anything else still fails closed.
+if [[ ! -f "$_HARNESS_LIB_DIR/root-decoy.sh" && -n "${ROOT_DECOY_DIR:-}" && -d "$ROOT_DECOY_DIR/main" &&
+  "${AGENTS_MAIN_ROOT:-}" == "$ROOT_DECOY_DIR/main" ]]; then
+  :
+else
+  # shellcheck source=tests/lib/root-decoy.sh
+  . "$_HARNESS_LIB_DIR/root-decoy.sh" || exit 1
+  root_decoy_ensure || exit 1
+fi
 
 # harness_isolate [<tmpdir>] — dual-pin per rules/test/fixture-isolation.md,
 # so tests never write the developer's real ~/.workflow-plans. Idempotent.
