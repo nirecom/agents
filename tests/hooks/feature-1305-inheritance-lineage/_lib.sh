@@ -181,7 +181,8 @@ assert_ne() {
 # Steps fixture shorthands ---------------------------------------------------
 STEPS_INHERITABLE='{"workflow_init":"complete","research":"complete","outline":"complete","detail":"complete"}'
 STEPS_ALL_PENDING='{}'
-STEPS_USER_VERIFIED='{"research":"complete","user_verification":"complete"}'
+STEPS_DELIVERED='{"research":"complete","user_verification":"complete","deliver":"complete"}'
+STEPS_APPROVED_NOT_DELIVERED='{"research":"complete","user_verification":"complete"}'
 STEPS_SECURITY_DONE='{"research":"complete","outline":"complete","review_security":"complete"}'
 STEPS_INTENT_DONE='{"workflow_init":"complete","clarify_intent":"complete","research":"complete"}'
 
