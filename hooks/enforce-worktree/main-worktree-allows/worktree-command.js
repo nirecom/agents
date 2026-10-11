@@ -24,7 +24,7 @@ function isForceRemove(tokens) {
   return tokens.some((tok) => tok === "--force" || (/^-[a-zA-Z]+$/.test(tok) && tok.slice(1).includes("f")));
 }
 
-const ADD_FLAGS_WITH_VALUE = new Set(["-b", "-B", "--orphan"]);
+const ADD_FLAGS_WITH_VALUE = new Set(["-b", "-B", "--orphan", "--reason"]);
 
 // First non-flag token of `worktree add`; `--` counts as a flag (--orphan=<b> is one token).
 function addTargetPath(tokens) {

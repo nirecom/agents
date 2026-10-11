@@ -245,6 +245,10 @@ false :: isAllowedWorktreeCommand :: REPO :: git worktree add "@EXT@" -b feat-x 
 false :: isAllowedWorktreeCommand :: REPO :: rm -rf x git worktree prune
 false :: isAllowedWorktreeCommand :: REPO :: git worktree remove --force "@EXT@"
 false :: isAllowedWorktreeCommand :: REPO :: git worktree add "@REPO@/inside" -b feat-y
+# --reason takes a value: it must not be read as the destination (an in-repo target stays rejected).
+false :: isAllowedWorktreeCommand :: REPO :: git worktree add -b feat-y --lock --reason /tmp/lock-reason "@REPO@/inside"
+true  :: isAllowedWorktreeCommand :: REPO :: git worktree add -b feat-y --lock --reason why "@EXT@"
+false :: isAllowedWorktreeCommand :: REPO :: git worktree add -b feat-y --lock --reason "why this worktree is locked" "@REPO@/inside"
 TABLE
 case_end
 
@@ -310,6 +314,9 @@ assert_guard "E2E control: git pull --ff-only is allowed"                allow "
 assert_guard "E2E control: git stash is allowed (no linked worktree)"    allow "$SOLO_RAW" "git stash"
 assert_guard "E2E control: git worktree prune is allowed"                allow "$REPO_RAW" "git worktree prune"
 assert_guard "E2E control: CONV_LANG=ja confirm-off probe is allowed"    allow "$REPO_RAW" "CONV_LANG=ja $PROBE"
+assert_guard "E2E worktree add --reason value is not the destination: in-repo target is blocked" block "$REPO_RAW" "git worktree add -b feat-y --lock --reason /tmp/lock-reason \"$REPO/inside\""
+assert_guard "E2E worktree add --reason value is not the destination: external target is allowed" allow "$REPO_RAW" "git worktree add -b feat-y --lock --reason why \"$EXT\""
+assert_guard "E2E worktree add quoted multi-word --reason: in-repo target is blocked" block "$REPO_RAW" "git worktree add -b feat-y --lock --reason \"why this worktree is locked\" \"$REPO/inside\""
 case_end
 
 echo ""
