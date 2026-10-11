@@ -711,3 +711,7 @@ Changes: feat: `/run-tests` can now record test suites that run longer than 600 
 ### FEATURE: PR #2609 (2026-10-11)
 Background: feat(#2263,#2452): remove ask-inducing command forms and propagate shell-issuance discipline to subagents
 Changes: Prompt assets no longer show compound command forms that trigger approval prompts, and subagent dispatch prompts now carry the shell-issuance rule through a PreToolUse hook backstop.;Skills and rules invoke bin/ tools by absolute path ("$AGENTS_MAIN_ROOT/bin/...") instead of relative paths.
+
+### FEATURE: PR #2611 (2026-10-11)
+Background: feat(#2547): derive run-tests-baseline per-test timeout from the duration ledger
+Changes: run-tests-baseline no longer times out long-running suites at a fixed 300 s: the per-test timeout now follows the measured duration (x2, 300-540 s) within a 600 s overall budget.
