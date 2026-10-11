@@ -1,18 +1,10 @@
 #!/bin/bash
 # Tests: skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, hooks/stop-confirm-plan-guard.js, hooks/lib/sentinel-patterns.js, skills/commit-push/SKILL.md
 # Tags: confirm-plan, sentinel, outline, detail, intent, structural-fallback, stop-guard, scope:common
-# Static grep-based checks verifying structural wiring: make-outline-plan
-# Completion emits WORKFLOW_MARK_STEP_outline_complete before calling
-# make-detail-plan; make-detail-plan's ON path emits
-# WORKFLOW_MARK_STEP_detail_complete after confirm; each caller invokes the
-# skills/_shared/confirm-plan.md protocol; stop-confirm-plan-guard.js Layer 2
-# references CONFIRM_<STAGE>_RE_DQ for all three stages; sentinel-patterns.js
-# no longer carries the legacy "workflow-mark.js injects" comment.
-
-# L3 gap: whether the CONFIRM_<STAGE> sentinel + co-emitted Skill actually
-# prevents a stall in a live session (hook registration wiring) is only
-# verifiable via a live `claude -p` run — see WORKFLOW_USER_VERIFIED preflight
-# (hook-registration category).
+# Static wiring: outline/detail mark-step emission order, the shared confirm-plan.md
+# protocol, stop-confirm-plan-guard.js CONFIRM_<STAGE>_RE_DQ for all three stages,
+# and the retired PR-created confirmation in commit-push.
+# L3 gap: a live stall-prevention run; mitigation: hook-registration preflight.
 set -u
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -159,15 +151,16 @@ if require_file "$COMMIT_PUSH_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
-# Case B: commit-push/SKILL.md Step 7(a) on-mode references /worktree-end
-#         (documents that WF-CODE-11 owns worktree-end invocation, not CONFIRM)
+# Case B: commit-push/SKILL.md hands off through next-step, not a CONFIRM sentinel
+#         (#2527 release split: the merge and worktree teardown belong to /deliver)
 # ---------------------------------------------------------------------------
-echo "=== Case B: commit-push/SKILL.md on-mode references /worktree-end ==="
+echo "=== Case B: commit-push/SKILL.md hands off via next-step ACTION and defers merge to /deliver ==="
 if require_file "$COMMIT_PUSH_SKILL"; then
-    if has_fixed "worktree-end" "$COMMIT_PUSH_SKILL"; then
-        pass "commit-push/SKILL.md references /worktree-end in on-mode step"
+    if has_fixed "next-step\" --advance --step push_branch --complete --next" "$COMMIT_PUSH_SKILL" \
+        && has_fixed "the merge belongs to \`/deliver\`" "$COMMIT_PUSH_SKILL"; then
+        pass "commit-push/SKILL.md completes push_branch via next-step and defers the merge to /deliver"
     else
-        fail "commit-push/SKILL.md missing /worktree-end reference"
+        fail "commit-push/SKILL.md missing the next-step push_branch hand-off or the /deliver merge deferral"
     fi
 fi
 

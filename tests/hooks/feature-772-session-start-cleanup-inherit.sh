@@ -6,6 +6,9 @@
 # asserted here; C6 is the TL2 runner (live firing: docs/architecture/claude-code/e2e-testing.md).
 # #772 regression: an inheriting session must not copy `cleanup` verbatim; it marks
 # cleanup=skipped with skip_reason="inherited-from-prior-session".
+# #2527: a donor with cleanup=complete is a delivered session (the v4-to-v5 migration
+# backfills deliver=complete), so it is not inherited at all (C1); the #772 invariant
+# still holds: cleanup never inherits as complete.
 
 set -u
 
@@ -195,15 +198,19 @@ setup_prior_and_new() {
 # Normal cases — TDD: will fail until session-start.js is modified
 # ============================================================================
 
-# C1: Prior cleanup=complete → new session cleanup=skipped, skip_reason="inherited-from-prior-session"
+# C1: Prior cleanup=complete is a delivered session (migration backfills deliver) →
+# not inherited: new cleanup stays pending (never complete, #772) and
+# research/outline/detail are not inherited either.
 setup_prior_and_new "c1" "complete"
 run_session_start_new "$REPO" "$NEW_SID" "$FAKE_HOME"
 CLEANUP_STATUS="$(read_step_field "$NEW_SID" "cleanup" "status")"
-SKIP_REASON="$(read_step_field "$NEW_SID" "cleanup" "skip_reason")"
-if [ "$CLEANUP_STATUS" = "skipped" ] && [ "$SKIP_REASON" = "inherited-from-prior-session" ]; then
-    pass "C1: prior cleanup=complete → new cleanup=skipped + skip_reason=inherited-from-prior-session"
+RESEARCH="$(read_step_field "$NEW_SID" "research" "status")"
+OUTLINE="$(read_step_field "$NEW_SID" "outline" "status")"
+DETAIL="$(read_step_field "$NEW_SID" "detail" "status")"
+if [ "$CLEANUP_STATUS" = "pending" ] && [ "$RESEARCH" = "pending" ] && [ "$OUTLINE" = "pending" ] && [ "$DETAIL" = "pending" ]; then
+    pass "C1: prior cleanup=complete (delivered) → not inherited: cleanup=pending (never complete), research/outline/detail=pending"
 else
-    fail "C1: expected cleanup=skipped + skip_reason=inherited-from-prior-session, got status=$CLEANUP_STATUS skip_reason=$SKIP_REASON"
+    fail "C1: expected cleanup=pending and research=outline=detail=pending, got cleanup=$CLEANUP_STATUS research=$RESEARCH outline=$OUTLINE detail=$DETAIL"
 fi
 
 # C2: Prior cleanup=pending (the original bug — pending must be flipped to skipped too)
@@ -231,7 +238,7 @@ else
 fi
 
 # C4: Other steps (research/outline/detail) inherited unchanged
-setup_prior_and_new "c4" "complete"
+setup_prior_and_new "c4" "pending"
 run_session_start_new "$REPO" "$NEW_SID" "$FAKE_HOME"
 RESEARCH="$(read_step_field "$NEW_SID" "research" "status")"
 OUTLINE="$(read_step_field "$NEW_SID" "outline" "status")"

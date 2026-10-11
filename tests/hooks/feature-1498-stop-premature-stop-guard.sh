@@ -56,6 +56,8 @@ SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1498-stop-premature-stop-g
 . "$SCRIPT_DIR/state-seeds.sh"
 # shellcheck source=./feature-1498-stop-premature-stop-guard/t-hook-integration.sh
 . "$SCRIPT_DIR/t-hook-integration.sh"
+# shellcheck source=./feature-1498-stop-premature-stop-guard/t-recovery-wording.sh
+. "$SCRIPT_DIR/t-recovery-wording.sh"
 # ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
@@ -75,6 +77,8 @@ run_t13
 run_t14
 run_t15
 run_t16
+run_t17
+run_t18
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

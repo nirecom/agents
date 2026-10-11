@@ -5,7 +5,7 @@
 const fs = require("fs");
 const { validateSkipReason } = require("./skip-reason");
 const {
-  markStep, recordSessionWorktree, readState, recordMergeBaseBaseline,
+  markStep, recordSessionWorktree, readState, recordMergeBaseBaseline, setDeliveryPath,
 } = require("../workflow-state");
 const { isMainWorktree } = require("../workflow-state/resolve-worktree-path");
 const {
@@ -54,6 +54,13 @@ function handle(ctx) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. branching_complete NOT recorded.`
       );
+    }
+    // #2527: the delivery path is fixed here, from the live config at branching time.
+    try {
+      const { resolveLiveDeliveryPath } = require("../lib/delivery-path");
+      setDeliveryPath(sessionId, resolveLiveDeliveryPath(sessionId, ctx.repoCwd), "branching-handler");
+    } catch (e) {
+      pushMessage(`workflow-mark: warning — failed to record delivery_path: ${e.message}`);
     }
     try {
       const wtMatch = v.reason.match(/\bworktree:\s*([^\s|]+)/);

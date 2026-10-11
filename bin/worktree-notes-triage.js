@@ -2,19 +2,13 @@
 "use strict";
 
 // CLI for triaging WORKTREE_NOTES.md entries before worktree cleanup.
-//
-// Usage:
-//   node bin/worktree-notes-triage.js list <absolute-path>
-//   node bin/worktree-notes-triage.js annotate <absolute-path> <lineNumber> <issueNumber>
-//   node bin/worktree-notes-triage.js resolve --caller <callsite> [...]
-//
-// `list`     — prints a JSON array of unpromoted entries from BugsFound /
-//              RelatedTasks / NextTasks (entries without the `<!-- promoted: #N -->`
-//              marker). Empty array when nothing is pending.
-// `annotate` — appends ` <!-- promoted: #<issueNumber> -->` to the given line,
-//              writing the file atomically (tmp + rename).
-// `resolve`  — decides, per callsite, which WORKTREE_NOTES.md (if any) the
-//              promotion protocol should act on. See bin/worktree-notes-triage/resolve.js.
+// Usage: node bin/worktree-notes-triage.js <list|annotate|resolve> ...
+//   list <absolute-path> — JSON array of unpromoted BugsFound / RelatedTasks / NextTasks
+//     entries (no `<!-- promoted: #N -->` marker); [] when nothing is pending.
+//   annotate <absolute-path> <lineNumber> <issueNumber> — appends
+//     ` <!-- promoted: #<issueNumber> -->` to that line atomically (tmp + rename).
+//   resolve --caller <callsite> [...] — decides which WORKTREE_NOTES.md (if any) the
+//     promotion protocol acts on; see bin/worktree-notes-triage/resolve.js.
 
 const fs = require("fs");
 const path = require("path");
@@ -98,7 +92,7 @@ function cmdList(rawPath) {
     for (const entry of entries) {
       // Filter out already-promoted entries — they are no longer triage
       // candidates. The marker is appended by `annotate` (worktree-end Step
-      // WE-11) or pre-applied by `bin/worktree-notes-append.js` (issue #622).
+      // WE-7) or pre-applied by `bin/worktree-notes-append.js` (issue #622).
       if (entry.hasMarker) continue;
       out.push({
         section,

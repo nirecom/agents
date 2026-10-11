@@ -144,6 +144,40 @@ function recordSessionWorktree(sessionId, worktreePath) {
   });
 }
 
+// Session-profile writers (#2527): one recorded fact each, read back by
+// hooks/workflow-state/session-profile.js. Unlike the writers above they create
+// the state file when absent — the deliverable type is set at workflow_init.
+// Rewritable, not write-once: workflow-init and clarify-intent are both sanctioned determination points.
+function setDeliverableType(sessionId, type) {
+  updateTopLevel(sessionId, (record) => {
+    record.deliverable_type = type;
+  });
+  return true;
+}
+
+// Write-once, decided inside updateTopLevel's lock (same reason as recordSessionModel).
+// Returns false when a value is already recorded.
+function setProjectManagementType(sessionId, pmType) {
+  let written = false;
+  updateTopLevel(sessionId, (record) => {
+    if (record.project_management_type != null) return;
+    record.project_management_type = pmType;
+    written = true;
+  });
+  return written;
+}
+
+function setDeliveryPath(sessionId, deliveryPath, origin) {
+  let written = false;
+  updateTopLevel(sessionId, (record) => {
+    if (record.delivery_path != null) return;
+    record.delivery_path = deliveryPath;
+    record.delivery_path_origin = typeof origin === "string" && origin ? origin : null;
+    written = true;
+  });
+  return written;
+}
+
 // Returns the effective skippable steps for the given session.
 // BUGFIX sessions exclude write_tests and review_tests (T0-A gate).
 // Lazy require avoids circular dependency with is-bugfix-session.js.
@@ -164,5 +198,8 @@ module.exports = {
   setLastPushedSha,
   clearLastPushedSha,
   recordSessionWorktree,
+  setDeliverableType,
+  setProjectManagementType,
+  setDeliveryPath,
   getSkippableSteps,
 };

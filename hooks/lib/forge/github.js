@@ -12,6 +12,14 @@ const GH_API_WRITE_REGEX =
   /\bgh\b\s+api\b.*?(?:-X\s+(?:POST|PATCH|PUT|DELETE)|--method(?:\s+|=)(?:POST|PATCH|PUT|DELETE))/i;
 const GH_REPO_WRITE_REGEX = /\bgh\b\s+repo\s+(?:create|edit)\b/;
 const VISIBILITY_VALUES = new Set(["public", "private", "internal"]);
+const PR_STATES = new Set(["OPEN", "MERGED", "CLOSED"]);
+const { isPrPresentOrUnknown } = require("./pr-state");
+
+// gh exits 1 both for "no pull requests found" and for network/auth failures, so
+// only the no-PR message reads as NONE; any other failure is UNKNOWN (fail-closed).
+function isNoPrResult(r) {
+  return Boolean(r) && r.status === 1 && /no pull requests? found/i.test(String(r.stderr || ""));
+}
 
 const codehostGithub = {
   isPrivateRepo(remoteUrl) {
@@ -71,7 +79,9 @@ const codehostGithub = {
     return listVisibilityTagged("gh", ["repo", "list", "--limit", "1000", "--json", "nameWithOwner,visibility",
       "--jq", ".[]|[.visibility,.nameWithOwner]|@tsv"]);
   },
-  hasOpenPrForBranch(repoDir) {
+  // PR state of the current branch: OPEN | MERGED | CLOSED | NONE (no PR) |
+  // UNKNOWN (gh unavailable or failed). Callers choose their own fail direction.
+  prStateForBranch(repoDir) {
     // Lazy require breaks the cycle: gh-detect requires forge-router at top level,
     // forge-router requires this module at top level.
     const { findGhInPath, toMsys2Path } = require("../../workflow-gate/gh-detect");
@@ -86,14 +96,40 @@ const codehostGithub = {
         timeout: 8000,
       });
     } catch (e) {
-      return true;
+      return "UNKNOWN";
     }
     if (r && r.status === 0) {
-      const state = (r.stdout || "").trim();
-      return state === "OPEN" || state === "MERGED";
+      const state = (r.stdout || "").trim().toUpperCase();
+      return PR_STATES.has(state) ? state : "UNKNOWN";
     }
-    if (r && r.status === 1) return false;
-    return true;
+    if (isNoPrResult(r)) return "NONE";
+    return "UNKNOWN";
+  },
+  hasOpenPrForBranch(repoDir) {
+    return isPrPresentOrUnknown(codehostGithub.prStateForBranch(repoDir));
+  },
+  // { state, number } of the current branch's PR (bin/workflow/pr-state); number "" when none.
+  prForBranch(repoDir) {
+    const { findGhInPath, toMsys2Path } = require("../../workflow-gate/gh-detect");
+    const { spawnSync } = require("child_process");
+    const ghPath = findGhInPath();
+    let r;
+    try {
+      r = spawnSync("bash", ["-c", '"$1" pr view --json state,number', "--", ghPath ? toMsys2Path(ghPath) : "gh"], {
+        cwd: repoDir, encoding: "utf8", timeout: 8000,
+      });
+    } catch (e) {
+      return { state: "UNKNOWN", number: "" };
+    }
+    if (isNoPrResult(r)) return { state: "NONE", number: "" };
+    if (!r || r.status !== 0) return { state: "UNKNOWN", number: "" };
+    try {
+      const pr = JSON.parse(String(r.stdout || "").trim());
+      const state = String(pr.state || "").toUpperCase();
+      return { state: PR_STATES.has(state) ? state : "UNKNOWN", number: Number.isInteger(pr.number) ? String(pr.number) : "" };
+    } catch (e) {
+      return { state: "UNKNOWN", number: "" };
+    }
   },
 };
 

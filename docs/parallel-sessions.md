@@ -34,12 +34,12 @@ All worktrees follow a two-level layout:
 
 **Windows example** (set in `.env`):
 ```
-WORKTREE_BASE_DIR=C:\git\worktrees
+WORKTREE_BASE_DIR=C:\src\worktrees
 ```
 
 With two repos sharing one task:
 ```
-C:\git\worktrees\
+C:\src\worktrees\
   auth-refactor\
     agents\          ← worktree for agents repo
     dotfiles\        ← worktree for dotfiles repo
@@ -57,15 +57,19 @@ C:\git\worktrees\
 │
 │  ← work happens here (multiple sessions OK) →
 │
-/commit-push              (from inside the worktree)
+/commit-push              (push_branch; from inside the worktree)
 │  git add / commit / push
-│  gh pr create --fill (if no open PR)
-│  AskUserQuestion: merge / wait / abort
+│  gh pr create --fill (if no open PR); never merges
 │
-/worktree-end             (after work is done)
-   gh pr view → reuse or create PR
-   AskUserQuestion: merge / wait / abort
-   merge → gh pr merge --squash --delete-branch
+/get-release-approval     (user_verification)
+│  preflight (PR mergeable, verification gate)
+│  USER_VERIFIED dialog — the one user confirmation
+│
+/deliver                  (deliver)
+│  gh pr merge <PR number> --squash --delete-branch
+│
+/worktree-end             (cleanup; never merges)
+   gh pr view → PR number, bootstrap check
    cleanup:
      git worktree remove <path>
      git worktree prune
@@ -130,7 +134,7 @@ The hook blocks when:
 | Writes from main worktree | Blocked — `enforce-worktree.js` (PreToolUse) + `pre-commit` | Allowed |
 | Protected-branch commits | Blocked — `pre-commit` | Allowed |
 | Merge gate (`gh pr merge` / `git push origin main`) | Blocks until `user_verification` complete — **unconditional** in both modes | Same — unconditional |
-| PR flow in `/commit-push` | PR created; `AskUserQuestion`: merge / wait / abort | PR step skipped — commit goes direct |
+| Delivery path | `pull_request`: `/commit-push` opens the PR (`push_branch`), `/deliver` merges it | `direct`: `push_branch` and `cleanup` are skipped; `/deliver` commits and pushes to main |
 | Worktree setup required | Yes — `/worktree-start` before work begins | No |
 | Intended use | Parallel features, multi-session work | Single trivial commits (typo, lockfile-only) |
 
@@ -144,7 +148,7 @@ enforcement. An entry with a glob metachar (`*` / `**`) matches file paths via g
 path entry matches via path-boundary prefix (covering that path and its whole subtree). Both
 `enforce-worktree.js` and `pre-commit` honor it. Glob and plain entries may be mixed:
 ```
-ENFORCE_WORKTREE_EXCLUDE=C:\git\repo-a;C:\git\**\todo.md   # POSIX: /home/<user>/repo-a;/home/<user>/agents/docs/**/*.md
+ENFORCE_WORKTREE_EXCLUDE=C:\src\repo-a;C:\src\**\todo.md   # POSIX: /home/<user>/repo-a;/home/<user>/agents/docs/**/*.md
 ```
 
 > **Migration:** `ENFORCE_WORKTREE_EXCLUDE_REPOS` is deprecated. Move the same entries to
@@ -167,24 +171,25 @@ commands. The CWD repo is always included.
 - `network` / `auth` / `not-found` / `timeout` / `spawn-error` / `unknown` → bootstrap mode does NOT activate; the error surfaces in the normal push/PR step.
 
 **What happens automatically:**
-- `/commit-push` runs the probe before pushing. On `empty-repo` it returns `status: bootstrap_pending` and tells the user to run `/worktree-end`. No push, no PR, no user-verified sentinel.
-- `/worktree-end` Step WE-4 re-runs the probe (because the remote may have been bootstrapped externally between the two calls). On `empty-repo` it routes to Step WE-4b, which calls `skills/worktree-end/scripts/bootstrap-complete.sh`. That script:
+- `/commit-push` runs the probe before pushing. On `empty-repo` it returns `status: bootstrap_pending` and completes `push_branch` with no push and no PR; the next steps carry the session on.
+- `/get-release-approval` runs next and is the only place the `<<WORKFLOW_USER_VERIFIED: ...>>` sentinel is issued — the one user confirmation, exactly as on a normal delivery.
+- `/deliver` finds no PR (`bin/workflow/pr-state` prints `PR_STATE=NONE`), re-runs the probe (the remote may have been bootstrapped externally in between), and on `empty-repo` routes to Step DL-3b, which calls `skills/deliver/scripts/bootstrap-complete.sh <worktree> <branch> <owner/repo> <session-id>`. The fourth argument lets the script check that `user_verification` is complete (exit 4 otherwise). The script:
   1. Re-probes once more (refuses to push if the remote is no longer empty).
   2. `git push -u origin <branch>:main`.
   3. `gh repo edit --default-branch main` (warn-only).
-  4. Prints JSON with the bootstrap commit SHA and `default_branch_set` flag.
-- Step WE-4b then emits `<<WORKFLOW_USER_VERIFIED: bootstrap initial commit pushed to main>>` and proceeds to Step WE-9 (inventory) and Step WE-15 (cleanup). Steps WE-5 through WE-8 (PR resolution and merge) are skipped — there is no PR.
-- `capture-env.sh` (Step WE-12) takes a `BOOTSTRAP_MODE=1` shortcut: it skips the `gh pr view` / `mergeCommit` retry and synthesizes `PR_STATE="BOOTSTRAP"`, `MERGE_SHA=<bootstrap commit SHA>`, empty `PR_NUMBER`/`PR_URL`.
-- Step WE-21 (compose-doc-append) reads `BOOTSTRAP_MODE` from the env JSON and dispatches `compose-doc-append-entry --bootstrap --merge-commit <sha>` instead of `--pr <N>`. The resulting `docs/history.md` and `CHANGELOG.md` entries use `bootstrap initial commit, <sha-short>` instead of `(PR #N)`.
+  4. Prints JSON with the bootstrap commit SHA, `default_branch_set` flag, and pushed ref.
+- `/worktree-end` Step WE-4 sees `PR_STATE=NONE`, sets `BOOTSTRAP_MODE=1` with the commit SHA from `git rev-parse HEAD`, and carries on with inventory and cleanup. It never pushes or creates a PR.
+- `capture-env.sh` (Step WE-8) takes the `BOOTSTRAP_MODE=1` shortcut: it skips the `gh pr view` / `mergeCommit` retry and synthesizes `PR_STATE="BOOTSTRAP"`, `MERGE_SHA=<bootstrap commit SHA>`, empty `PR_NUMBER`/`PR_URL`.
+- The history/changelog append (`compose-doc-append-entry`) reads `BOOTSTRAP_MODE` from the env JSON and dispatches `--bootstrap --merge-commit <sha>` instead of `--pr <N>`. The resulting `docs/history.md` and `CHANGELOG.md` entries use `bootstrap initial commit, <sha-short>` instead of `(PR #N)`.
 
 **What the user sees:**
-- In `/commit-push`: "Remote has no default branch yet (new repo). Run `/worktree-end` to push the first commit as `main` and set the default branch — this is the bootstrap path, not a normal push."
-- In `/worktree-end`: a single user-verified sentinel emission, then the normal inventory + cleanup output. The Final Report shows `BOOTSTRAP` as the PR state and lists the bootstrap commit SHA in place of a PR number.
+- In `/commit-push`: "Remote has no default branch yet (new repo) — `/deliver` pushes the first commit as `main`."
+- At `/get-release-approval`: the single USER_VERIFIED dialog. `/deliver` and `/worktree-end` then run without further prompts. The Final Report shows `BOOTSTRAP` as the PR state and lists the bootstrap commit SHA in place of a PR number.
 
 **Troubleshooting:**
-- **Probe misfires due to network/auth issues:** the probe classifies these as `network` / `auth` / `not-found` and lets the normal Step 2 path surface the error. The bootstrap routing only activates on `empty-repo`. If you genuinely have an empty remote but the probe keeps returning `auth`, fix credentials first.
-- **`gh repo edit --default-branch main` fails:** Step 2b treats this as warn-only and continues — the push still completes. Manual recovery: `gh repo edit --default-branch main` (or set it via the GitHub web UI under Settings → General → Default branch).
-- **Bootstrap push fails (exit 3 from `bootstrap-complete.sh`):** no cleanup runs; investigate the push error (auth, branch protection, etc.), fix, and re-run `/worktree-end`.
+- **Probe misfires due to network/auth issues:** the probe classifies these as `network` / `auth` / `not-found` and lets the normal push path surface the error. The bootstrap routing only activates on `empty-repo`. If you genuinely have an empty remote but the probe keeps returning `auth`, fix credentials first.
+- **`gh repo edit --default-branch main` fails:** treated as warn-only — the push still completes. Manual recovery: `gh repo edit --default-branch main` (or set it via the GitHub web UI under Settings → General → Default branch).
+- **Bootstrap push fails (exit 1 or 3 from `bootstrap-complete.sh`):** `deliver` stays incomplete and no cleanup runs; investigate the push error (auth, branch protection, etc.), fix, and re-run `/deliver`. Exit 2 means the remote is no longer empty — re-run `/commit-push`. Exit 4 means approval is missing — run `/get-release-approval`.
 
 ## Migration Code Block Format
 
@@ -215,8 +220,8 @@ restores that state. Run `bin/vscode-cc-repair/index.js` (see README.md), then
 `Developer: Reload Window`.
 
 **`gh pr create` fails — PR already exists:**
-`/worktree-end` is idempotent: it calls `gh pr view` first and reuses an open PR.
-If the PR was closed manually, re-open it on GitHub before running `/worktree-end`.
+`/commit-push` is idempotent: it calls `gh pr view` first and reuses an open PR.
+If the PR was closed manually, re-open it on GitHub before running `/deliver`.
 
 **`git worktree remove` fails with dirty working tree:**
 Do not use `--force`. Review uncommitted changes first:

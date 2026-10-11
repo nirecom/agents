@@ -7,17 +7,21 @@
 // they must stay side-effect-free and never touch the repo.
 const { VALID_STEPS, TERMINAL_STEPS, isSettledStatus, readState } = require("./state-io");
 const { effectiveStatus } = require("./effective-state");
+const { navigateBoundaryStatus } = require("./effective-state/delivery-boundary");
 
 // resolveCurrentStep(state, opts): the first non-terminal step whose EFFECTIVE
 // status is not settled, or null when every step is settled. Pure.
+// opts.profile is the caller-resolved session profile; absent → no table-skip.
 function resolveCurrentStep(state, opts) {
-  const isWfMeta = !!(opts && opts.isWfMeta);
+  const profile = (opts && opts.profile) || null;
   const steps = (state && state.steps) || {};
   for (const step of VALID_STEPS) {
     if (TERMINAL_STEPS.indexOf(step) !== -1) continue;
     const entry = steps[step];
     const raw = (entry && entry.status) || "pending";
-    if (!isSettledStatus(effectiveStatus(step, raw, isWfMeta))) return step;
+    const eff = effectiveStatus(step, raw, profile);
+    // #2527: a navigation caller — a delivery-boundary reset reads as settled.
+    if (!isSettledStatus(navigateBoundaryStatus(step, eff, state) || eff)) return step;
   }
   return null;
 }
@@ -29,7 +33,8 @@ function resolveCurrentEffectiveStep(sid) {
   try {
     const state = readState(sid);
     if (!state || !state.steps) return null;
-    return resolveCurrentStep(state, { isWfMeta: state.workflow_type === "wf-meta" });
+    const { resolveSessionProfile } = require("./session-profile");
+    return resolveCurrentStep(state, { profile: resolveSessionProfile(state, sid) });
   } catch (_e) {
     return null;
   }

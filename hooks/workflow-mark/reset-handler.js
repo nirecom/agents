@@ -5,7 +5,7 @@
 // Since #1733 the rollback is an APPEND, not a rewrite: the reset is recorded as
 // a `reset` anchor followed by the declared statuses it implies. Nothing before
 // the anchor is touched, so the pre-reset history stays readable — and the
-// top-level session settings (closes_issues, workflow_type, session_model,
+// top-level session settings (closes_issues, deliverable_type, session_model,
 // last_pushed_sha) can no longer be dropped, because they are never rebuilt.
 
 const { validateSkipReason } = require("./skip-reason");

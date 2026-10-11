@@ -2,8 +2,7 @@
 // bin/worker-dispatch/workers/commit-push/procedure.js
 //
 // The commit-push run() spine — steps 0-6, 8 and 10 — with step 7 in ./push.js,
-// step 9 in ./pr.js and the D1 gate seam in ./gate.js. Split out of the parent
-// module per rules/coding/file-split.md Pattern A.
+// step 9 in ./pr.js, the empty-stage resume in ./resume.js, the D1 gate in ./gate.js.
 //
 // The step numbers are those of the agent prompt this worker replaced (#1673),
 // so a reader of either document is looking at the same procedure. What each
@@ -13,6 +12,7 @@
 const { ensurePullRequest, resolveForgeForWorktree } = require("./pr");
 const { firstLine, isProtectedBranch, resolveGateEnv, runGate, runGit, runScript } = require("./gate");
 const { pushToRemote } = require("./push");
+const { resumeFromEmptyStage } = require("./resume");
 const { tryWriteLog } = require("../../worker-log");
 
 const MAX_LISTED_FILES = 5;
@@ -56,9 +56,8 @@ function run(payload, ctx) {
   if (staged.status !== 0) {
     return finish("staging_check_failed", `git diff --cached exited ${staged.status}`);
   }
-  if (String(staged.stdout || "").trim() === "") {
-    return finish("staging_incomplete", "nothing is staged — refusing to commit");
-  }
+  // An empty stage is not a refusal on its own: after Gate 3 it resumes (./resume.js).
+  const stageEmpty = String(staged.stdout || "").trim() === "";
 
   // Step 2 (agent step 1.5) — Gate 3 staging verification via
   // bin/check-unstaged-tracked.sh. wip_mode is the workflow.wip=1 bypass parity;
@@ -88,6 +87,15 @@ function run(payload, ctx) {
     }
   }
 
+  if (stageEmpty) {
+    return resumeFromEmptyStage(payload, ctx, gateEnv, log, {
+      finish,
+      probeBootstrap: () => isEmptyRemote(ctx, payload, log),
+      pushTail: (prefix) => pushTail(payload, ctx, gateEnv, log, finish, prefix),
+      ensurePr: () => (prPathApplies(payload, ctx, log) ? ensurePullRequest(payload, ctx, log) : null),
+    });
+  }
+
   // Step 3 (D1-a) — the gate sees the exact commit argv assembled below.
   // `-c workflow.wip=1` must precede the subcommand, and `-F -` rather than
   // `-m <message>` keeps author-controlled text out of the string the gate
@@ -110,22 +118,45 @@ function run(payload, ctx) {
     );
   }
 
-  // Step 5 — an empty remote has no default branch to push against; that
-  // bootstrap belongs to /worktree-end, not here.
+  return pushTail(payload, ctx, gateEnv, log, finish, "");
+}
+
+// Step 5 probe: true only when the remote is a confirmed empty repo.
+function isEmptyRemote(ctx, payload, log) {
   const probe = runScript(ctx, payload, "bootstrapProbe", [payload.worktree_path], log, ["SSH_AUTH_SOCK"]);
-  if (probe !== null && probe.status === 0) {
-    let info = null;
-    try {
-      info = JSON.parse(String(probe.stdout || "").trim());
-    } catch (_e) {
-      info = null;
-    }
-    if (info && info.preBootstrap === true && info.classification === "empty-repo") {
-      return finish(
-        "bootstrap_pending",
-        "committed; remote has no default branch — run /worktree-end to complete bootstrap",
-      );
-    }
+  if (probe === null || probe.status !== 0) return false;
+  let info = null;
+  try {
+    info = JSON.parse(String(probe.stdout || "").trim());
+  } catch (_e) {
+    info = null;
+  }
+  return !!(info && info.preBootstrap === true && info.classification === "empty-repo");
+}
+
+// Step 8 — no PR on the direct-main flow, and none against a non-GitHub/GitLab
+// remote. Forge is resolved in-process via the shared pr.js helper (C1):
+// runScript is bash-fixed and cannot launch the Node detect-forge-type shebang.
+// No silent github fallback — unknown/unreadable origin skips the PR.
+function prPathApplies(payload, ctx, log) {
+  if (payload.enforce_worktree === "off") return false;
+  const { type: forge } = resolveForgeForWorktree(payload, ctx, log);
+  return forge === "github" || forge === "gitlab";
+}
+
+// Steps 5-9 — shared by a fresh commit ("") and an empty-stage resume ("resumed: push").
+function pushTail(payload, ctx, gateEnv, log, finish, resumePrefix) {
+  const branch = payload.branch;
+  const done = (status, summary) => finish(status, resumePrefix ? `${resumePrefix} — ${summary}` : summary);
+  const what = resumePrefix ? "unpushed commit(s) found" : "commit created";
+
+  // Step 5 — an empty remote has no default branch to push against; that
+  // bootstrap push belongs to /deliver, not here.
+  if (isEmptyRemote(ctx, payload, log)) {
+    return done(
+      "bootstrap_pending",
+      `${resumePrefix ? "unpushed commit(s)" : "committed"}; remote has no default branch — /deliver completes the bootstrap push`,
+    );
   }
 
   // Steps 6-7 — the push argv is decided BEFORE the gate, because the gate is
@@ -147,32 +178,26 @@ function run(payload, ctx) {
     const target = isProtectedBranch(branch, gateEnv.DEFAULT_BRANCHES)
       ? ` (protected branch '${branch}')`
       : "";
-    return finish(
+    return done(
       "gate_blocked",
-      `commit created, push refused by workflow-gate${target}: ${pushGate.reason}`,
+      `${what}, push refused by workflow-gate${target}: ${pushGate.reason}`,
     );
   }
 
   const pushed = pushToRemote(ctx, payload, branch, pushArgs, log);
-  if (pushed.status !== "ok") return finish(pushed.status, pushed.summary);
+  if (pushed.status !== "ok") return done(pushed.status, pushed.summary);
 
-  // Step 8 — no PR on the direct-main flow, and none against a non-GitHub/GitLab
-  // remote. Forge is resolved in-process via the shared pr.js helper (C1):
-  // runScript is bash-fixed and cannot launch the Node detect-forge-type shebang,
-  // and sharing one helper with pr.js makes the two verdicts unable to diverge.
-  // No silent github fallback — unknown/unreadable origin skips the PR.
   if (payload.enforce_worktree === "off") {
-    return finish("pushed", `${branch} pushed; PR skipped (ENFORCE_WORKTREE=off)`);
+    return done("pushed", `${branch} pushed; PR skipped (ENFORCE_WORKTREE=off)`);
   }
-  const { type: forge } = resolveForgeForWorktree(payload, ctx, log);
-  if (forge !== "github" && forge !== "gitlab") {
-    return finish("pushed", `${branch} pushed; PR skipped (non-GitHub/GitLab remote)`);
+  if (!prPathApplies(payload, ctx, log)) {
+    return done("pushed", `${branch} pushed; PR skipped (non-GitHub/GitLab remote)`);
   }
 
   // Step 9 — idempotent PR step: pr_reused when one is already OPEN, otherwise
   // pr_created. CP-2b in the calling skill opens the browser for pr_created only.
   const pr = ensurePullRequest(payload, ctx, log);
-  return finish(pr.status, pr.summary);
+  return done(pr.status, pr.summary);
 }
 
 // Step 10. Best-effort: a refused log write must not turn a completed push into a

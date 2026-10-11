@@ -18,14 +18,38 @@ time by a PreToolUse hook. In order, they are the standard **WF-CODE** plan that
 11  review_security     Adversarial security review and code quality gates
 12  docs                Update docs and changelog
 13  review_docs         Review doc line limits and README section order
-14  user_verification   User verifies the implementation
-15  cleanup             Remove worktree and merge branch
-16  pre_final_report_gate  Final report and session close
-17  final_report        Final report delivered (terminal)
+14  push_branch         Model commits, pushes the branch, and opens the PR
+15  user_verification   Model runs /get-release-approval to obtain the user release approval
+16  deliver             Model performs the delivery operation (PR merge or direct push)
+17  cleanup             Model removes the worktree and the merged branch
+18  pre_final_report_gate  Final report and session close
+19  final_report        Final report delivered (terminal)
 ```
 
-**WF-META** sessions (meta-label issues — planning only) auto-skip the implementation steps 7–15;
-the per-mode rendering is under [Workflow types](#workflow-types-in-next-step---list) below.
+Steps 14–18 are the **release phase**: one step, one skill, each skill completes only its own step
+(`push_branch` → `/commit-push`, `user_verification` → `/get-release-approval`, `deliver` → `/deliver`,
+`cleanup` → `/worktree-end`, `pre_final_report_gate` → `/session-close`). Which steps a session owes
+is read from the [step table](#the-step-table-deliverable-type-x-pm-type), not from per-consumer checks;
+the per-type rendering is under [Deliverable types](#deliverable-types-in-next-step---list) below.
+
+## The step table (deliverable type x PM type)
+
+Terms: [glossary.md](../../glossary.md#deliverable-type). A session is described by three facts
+(its **session profile**, `hooks/workflow-state/session-profile.js`):
+
+| Fact | Question | Values | State field |
+|---|---|---|---|
+| deliverable type | what is built | `wf-code`, `wf-meta` | `deliverable_type` |
+| PM type | how it proceeds | `waterfall` (order enforced), `off` (`WORKFLOW_OFF` marker); `agile` is not implemented yet (#2565) | `project_management_type` |
+| delivery path | where it ships | `pull_request` (`ENFORCE_WORKTREE=on`), `direct` (off) | `delivery_path` |
+
+`hooks/workflow-state/step-table.js` is the SSOT of the step order (`VALID_STEPS` derives from it), of
+which steps each deliverable type requires, of the delivery path that drops a step (`direct` drops
+`push_branch` and `cleanup`; the order never changes), and of each step's commit-gate attribute
+(`required`, `exempt`, or `deferred-in-worktree`, consumed by `hooks/workflow-gate/commit-gate-steps.js`).
+`effective-state.js` reads the table once per entrypoint instead of each consumer computing its own
+wf-meta check. A recorded state field outranks the live config, so flipping `ENFORCE_WORKTREE`
+mid-session never changes what the session owes; only the `WORKFLOW_OFF` marker overrides the PM type.
 
 ## State file
 
@@ -40,11 +64,11 @@ which a keyed map that overwrote `updated_at` in place could never reconstruct.
 
 ```json
 {
-  "version": 2,
+  "version": 5,
   "session_id": "abc123",
   "created_at": "2026-04-12T10:00:00.000Z",
   "session_start_context": { "cwd": "/path/to/project", "git_branch": "main" },
-  "workflow_type": "wf-code",
+  "deliverable_type": "wf-code",
   "events": [
     { "seq": 1, "kind": "step_status", "step": "workflow_init", "status": "complete",
       "at": "2026-04-12T10:00:03.000Z", "provenance": "observed", "origin": "workflow-mark" },
@@ -124,6 +148,23 @@ at least one step after it in `VALID_STEPS` is settled, it appends a single
 `step_status: write_code=complete` with `provenance: "backfilled"`. Sessions that never got that
 far gain nothing, and a `write_code` recorded pending on purpose (`RESET_FROM`, `--reset`) is left
 untouched — so the `next-step` abort branch still fires for a genuine inconsistency.
+
+### Migration from v4 (schema v5, #2527)
+
+`migrateV4ToV5` (`state-io/migrations/v4-to-v5.js`) is likewise a pure function of the stream. It
+renames `workflow_type` to `deliverable_type`; records `delivery_path` for a `wf-code` session that is
+past branching (`pull_request` when the stream or `session_worktree` proves a worktree, else `direct`);
+and backfills the two new release steps, `push_branch` and `deliver`, as `complete` with
+`provenance: "backfilled"` only when the old flow's later steps prove that work happened. A session that
+had not reached that point keeps them `pending`. Reads stay in-memory, so a v4 session still running an
+older release is never rewritten by a reader.
+
+A **delivery operation** (merge or protected-branch push) resets `user_verification` to `pending` with a
+`reset_reason` of `post-merge` or `post-push`. Navigation (`next-step`, via
+`effective-state/delivery-boundary.js`) reads that pending as settled and moves on to `deliver`; gates
+never do, so the next commit or merge needs a fresh approval. `push_branch` and `deliver` can also
+resolve from forge or remote-ref evidence (PR exists, PR merged, or a clean pushed HEAD) in the one
+step `next-step` evaluates.
 
 `CURRENT_STATE_VERSION` (`state-io/core.js`) is the SSOT for "the newest form this release
 writes"; `MAX_KNOWN_STATE_VERSION`, `createInitialState`, and `serializeStateForPersist` all
@@ -349,8 +390,10 @@ The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core
 | `review_security` | `/review-code-security` skill (emits marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {reason}>>"` |
 | `docs` | `/update-docs` skill (emits marker) **or** staged `docs/*.md` / `*.md` files detected by `workflow-gate.js` |
 | `review_docs` | `/review-docs` skill (emits `WORKFLOW_MARK_STEP_review_docs_complete`) **or** skipped via `echo "<<WORKFLOW_MARK_STEP_review_docs_skipped>>"` (no approval-gated NOT_NEEDED sentinel — the gates are objective). Evidence-bound: `workflow-gate.js` re-runs `bin/review-doc-gates --staged` on the staged doc blobs every commit and blocks on a HARD failure, even in a docs-only commit |
-| `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"` — triggers `ask` permission dialog; reason mandatory |
-| `cleanup` | `/worktree-end` skill (worktree path), branch deletion after PR merge (branch path), or `echo "<<WORKFLOW_MARK_STEP_cleanup_skipped>>"` (main path) |
+| `push_branch` | `/commit-push` skill — commits, pushes the worktree branch, opens the PR; stops there (no merge). Skipped on the `direct` delivery path. Idempotent; also resolves from an existing PR |
+| `user_verification` | `/get-release-approval` skill — runs the preflight (verification gate; PR mergeable state on the `pull_request` path, #2362), then is the single issuer of `echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"` — triggers `ask` permission dialog; reason mandatory. The one user confirmation before the delivery operation (#1000) |
+| `deliver` | `/deliver` skill — the approved delivery operation: PR merge (`pull_request`), bootstrap push (empty remote), or commit and push to the default branch (`direct`). Idempotent; never emits the sentinel |
+| `cleanup` | `/worktree-end` skill (inventory + worktree removal after `deliver` settled; never merges or pushes). Skipped on the `direct` delivery path |
 | `pre_final_report_gate` | `/session-close` skill (emits `WORKFLOW_MARK_STEP_pre_final_report_gate_complete`) |
 | `final_report` | `echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"` after the Final Report is rendered — the sole `TERMINAL_STEPS` member, and the only step the commit gate never enforces |
 
@@ -364,7 +407,7 @@ the gate, not in the file.
 
 **Effective state derivation (Approach B):** Every consumer — `workflow-gate.js`, `bin/workflow/next-step`, `session-start.js` — reads the *effective* (derived) step status via `reconcileEffectiveState(state, sessionId, opts)` in `hooks/lib/workflow-state/effective-state.js`, not the raw JSON record directly. The function applies four derivation stages without writing anything back to disk:
 
-1. **wf-meta auto-skip** — non-applicable WF-CODE steps are treated as `skipped`.
+1. **Table skip** — a `pending` step the session profile does not owe (per the step table) is treated as `skipped`.
 2. **skip_verdict gate** — outline/detail steps with a pending or vetoed `skip_verdict` are held at `pending`/`skipped` accordingly (see `skip_verdict` field above).
 3. **Post-veto reset** — when outline or detail is veto-de-skipped, downstream steps that were `complete` in the raw record are treated as `pending` until the plan is re-approved.
 4. **Evidence + approval resolution** — for `pending` steps in `EVIDENCE_STEPS`, `hasCompletionEvidence()` is checked; for approval-gated steps (`outline`, `detail`), `evaluateCompletionApproval()` is also checked. Only when both pass is the effective status `complete`. This derivation is read-only and does not mutate the state file.
@@ -375,34 +418,28 @@ the gate, not in the file.
 their respective `NOT_NEEDED` sentinels (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"`)
 when CLAUDE.md skip conditions are met.
 
-### Workflow types in `next-step --list`
+### Deliverable types in `next-step --list`
 
-`bin/workflow/next-step --list` renders the full step plan for the session's workflow type.
-The standard **WF-CODE** rendering has every step active — the ordered list at the
+`bin/workflow/next-step --list` renders the full step plan for the session's deliverable type.
+The standard **WF-CODE** rendering has every step active (a `direct` delivery path additionally
+skips `push_branch` and `cleanup`) — the ordered list at the
 [top of this document](#workflow-state-machine).
 
-**WF-META** sessions (meta-label issues — planning only) auto-skip the implementation steps
-7–15 per the wf-meta auto-skip stage above:
+**WF-META** sessions (meta-label issues — planning only) keep steps 1–4 and 18–19; the step table
+skips `detail`, `branching_complete`, and every implementation and release step in between:
 
 ```
  1  workflow_init       Initialize session state and GitHub issue
  2  clarify_intent      Interview and write intent.md
  3  research            Run survey-code and/or deep-research
  4  outline             Propose high-level approaches
- 5  detail              File-level implementation plan
- 6  branching_complete  Create feature branch and worktree
-[-] 7  write_tests      (auto-skipped)
-[-] 8  review_tests     (auto-skipped)
-[-] 9  write_code       (auto-skipped)
-[-]10  run_tests        (auto-skipped)
-[-]11  review_security  (auto-skipped)
-[-]12  docs             (auto-skipped)
-[-]13  review_docs      (auto-skipped)
-[-]14  user_verification  (auto-skipped)
-[-]15  cleanup          (auto-skipped)
-16  pre_final_report_gate  Final report and session close
-17  final_report        Final report delivered (terminal)
+[-] 5  detail .. 17  cleanup   (table-skipped)
+18  pre_final_report_gate  Final report and session close
+19  final_report        Final report delivered (terminal)
 ```
+
+The deliverable type is recorded with `bin/workflow/set-deliverable-type` (`bin/workflow/set-workflow-type`
+remains as a pass-through shim for old callers).
 
 Each skill's `## Completion` section runs `echo "<<WORKFLOW_MARK_STEP_<step>_complete>>"` as
 the sole Bash command (no pipes, no `&&`, no redirection). The PostToolUse hook

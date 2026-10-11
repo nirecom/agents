@@ -222,25 +222,28 @@ if (require.main === module) {
     // Extract NEXT_SKILL for the continuation message.
     const skillLine = lines.find((l) => l.startsWith("NEXT_SKILL="));
     const nextSkill = skillLine ? skillLine.replace("NEXT_SKILL=", "").trim() : "";
+    // A skill-less step (e.g. branching_complete) carries its recovery in NEXT_HINT (#2527 4-2).
+    const hintLine = lines.find((l) => l.startsWith("NEXT_HINT="));
+    const nextHint = hintLine ? hintLine.slice("NEXT_HINT=".length).trim().replace(/^'|'$/g, "") : "";
 
     // Record warning/workflow finding (fail-open — do not suppress continuation on error).
     try {
       appendFinding(sessionId, {
         categories: ["workflow"],
         severity: "warning",
-        detail: `premature-stop: ACTION=invoke ignored (skill: ${nextSkill || "(unknown)"})`,
+        detail: `premature-stop: ACTION=invoke ignored (${nextSkill ? "skill: " + nextSkill : "no skill; hint: " + (nextHint || "-")})`,
         reporter: "stop-premature-stop-guard",
       });
     } catch (_) {}
 
-    // Output decision:block to auto-resume Claude with the pending skill.
-    const skillNote = nextSkill
-      ? `Run /${nextSkill} now via the Skill tool to continue the workflow.`
-      : "Re-run next-step to determine the pending workflow skill.";
+    // Output decision:block to auto-resume Claude with the pending skill or recovery.
+    const pendingNote = nextSkill
+      ? `ACTION=invoke was pending (NEXT_SKILL=${nextSkill}). Run /${nextSkill} now via the Skill tool to continue the workflow.`
+      : `ACTION=invoke was pending for a step with no skill. Recovery: ${nextHint || "see bin/workflow/next-step --list for the pending step."}`;
     const degradedNote = degraded.length
       ? ` [warning: exemption predicate(s) failed: ${degraded.join(",")}]`
       : "";
-    const reason = `[C4 premature-stop] ACTION=invoke was pending (NEXT_SKILL=${nextSkill || "(unknown)"}). ${skillNote} (Hook: stop-premature-stop-guard.js)${degradedNote}`;
+    const reason = `[C4 premature-stop] ${pendingNote} (Hook: stop-premature-stop-guard.js)${degradedNote}`;
     if (degraded.length) {
       try {
         process.stderr.write(`stop-premature-stop-guard: exemption predicate(s) failed: ${degraded.join(",")}\n`);

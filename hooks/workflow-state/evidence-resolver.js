@@ -15,6 +15,11 @@ const { controlPath, diagnoseControlMigration } = require("./state-io/control-di
 const { SESSION_ID_VALID_RE } = require("./state-io");
 const { hasStagedDocChanges, hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
 const { hasWorktreeNotesDocEvidence } = require("../workflow-gate/worktree-context");
+const {
+  RELEASE_EVIDENCE_STEPS,
+  hasReleaseEvidence,
+  describeReleaseEvidence,
+} = require("./evidence-resolver/release-evidence");
 
 // Post-merge fallback: checks whether any committed file under tests/ or test/
 // differs from the default branch (origin/HEAD). Returns false on any failure
@@ -144,6 +149,11 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
       if (hasStagedTestChanges(repoDir)) return true;
       return hasCommittedTestChanges(repoDir);
     }
+    if (RELEASE_EVIDENCE_STEPS.indexOf(step) !== -1) {
+      const repoDir = resolveRepoDir(opts);
+      if (!repoDir) return false;
+      return hasReleaseEvidence(step, sessionId, Object.assign({}, opts, { repoDir }));
+    }
     // run_tests: sentinel-only — no evidence-based predicate here.
     // Completion is owned by workflow-run-tests.js (run-all.sh contract-trust)
     // or the run_tests sentinel — never by staged-test evidence.
@@ -205,6 +215,7 @@ function describeEvidence(step) {
         + "docs-only grants explicability, never completion authority",
     ];
   }
+  if (RELEASE_EVIDENCE_STEPS.indexOf(step) !== -1) return describeReleaseEvidence(step);
   return [];
 }
 

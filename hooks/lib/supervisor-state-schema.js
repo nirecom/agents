@@ -45,7 +45,7 @@ const AUDIT_RETRY_THRESHOLD = 2;
 const AUDIT_SEVERITY_THRESHOLD = "warning";
 
 // Self-recovering short-circuit (#2323/#2400): terminal verdicts for which a null freshness_key
-// (code-side or artifact-side) may be certified by the last TR5 run — at the WE-8 sentinel and the
+// (code-side or artifact-side) may be certified by the last TR5 run — at the USER_VERIFIED sentinel and the
 // pre-merge backstop alike (hooks/lib/null-freshness.js owns the predicate). Only CONTINUE —
 // WARN, BLOCK, missing/malformed verdicts remain fail-closed. To widen this set,
 // define the justification and add the verdict explicitly; never derive by filtering

@@ -5,7 +5,6 @@
 const path = require("path");
 const { readHookInput, readFailureReason } = require("./lib/read-stdin");
 const {
-  VALID_STEPS,
   SKIPPABLE_STEPS,
   readState,
   getSkippableSteps,
@@ -22,11 +21,7 @@ const { scannableCommandListOf } = require("./lib/scannable-command-list");
 const { analyzeSentinelCommand } = require("./lib/sentinel-command");
 const { isBaselineEvidenceRecordCommand } = require("./lib/workflow-driver-commands");
 
-// Steps tracked by the workflow but not enforced at commit time.
-// `final_report` is a TERMINAL step (SSOT: state-io TERMINAL_STEPS) recorded
-// AFTER the commit it would otherwise gate — demanding it here would make every
-// commit unreachable.
-const NON_GATE_STEPS = ["research", "pre_final_report_gate", "final_report"];
+// Which steps the commit gate checks: workflow-gate/commit-gate-steps.js (SSOT: step-table.js).
 const { parseGitConfigValues } = require("./lib/parse-git-args");
 const { resolveInputCwd } = require("./lib/resolve-cwd");
 
@@ -39,7 +34,7 @@ const {
   hasStagedChanges,
   hasUnstagedTrackedChanges,
 } = require("./workflow-gate/staged-evidence");
-const { hasOpenPrForBranch, isBranchDirectlyMerged } = require("./workflow-gate/gh-detect");
+const { hasOpenPrForBranch, isBranchDirectlyMerged, isRemoteDefaultBranchAbsent } = require("./workflow-gate/gh-detect");
 const {
   isWorktreeContext,
   isLinkedWorktree,
@@ -180,26 +175,30 @@ if (require.main === module) {
 
     // A clean sentinel emission carrying <<WORKFLOW_USER_VERIFIED>>.
     if (sentinelAnalysis.uvHit) {
-      // PREMATURE USER_VERIFIED GUARD: block emission when ENFORCE_WORKTREE=on and
-      // no OPEN/MERGED PR exists for the branch (before /worktree-end Step WE-7).
-      // Requires an explicit Bash cwd; without it fail-open (real Claude Code
-      // always supplies cwd). See issue #577.
+      // PREMATURE USER_VERIFIED GUARD (#577, #2527 3-5): in a worktree with
+      // ENFORCE_WORKTREE=on, block emission until an OPEN/MERGED PR exists. Bootstrap
+      // (remote default branch absent) is exempt: no PR can exist yet. No Bash cwd -> fail-open.
       const rawSentinelCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : null;
+      const sentinelDir = rawSentinelCwd ? normalizeForWindows(rawSentinelCwd) : null;
       if (
-        rawSentinelCwd &&
+        sentinelDir &&
         process.env.ENFORCE_WORKTREE !== "off" &&
-        isWorktreeContext(normalizeForWindows(rawSentinelCwd)) &&
-        !hasOpenPrForBranch(normalizeForWindows(rawSentinelCwd)) &&
-        !isBranchDirectlyMerged(normalizeForWindows(rawSentinelCwd))
+        isWorktreeContext(sentinelDir) &&
+        !hasOpenPrForBranch(sentinelDir) &&
+        !isBranchDirectlyMerged(sentinelDir)
       ) {
-        block(
-          "workflow-gate: premature <<WORKFLOW_USER_VERIFIED>> emission blocked.\n\n" +
-          "Under ENFORCE_WORKTREE=on, emit this sentinel only at /worktree-end Step WE-7 (local merge)\n" +
-          "(after the PR is open and merge is imminent).\n\n" +
-          "Defer: proceed to /worktree-end which emits the sentinel at the correct point.\n" +
-          "Emergency bypass: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>\"\n" +
-          "See issue #577."
-        );
+        if (isRemoteDefaultBranchAbsent(sentinelDir)) {
+          process.stderr.write("[workflow-gate] origin has no default-branch head; premature-UV exemption applied\n");
+        } else {
+          block(
+            "workflow-gate: premature <<WORKFLOW_USER_VERIFIED>> emission blocked.\n\n" +
+            "Under ENFORCE_WORKTREE=on, this sentinel is emitted by /get-release-approval,\n" +
+            "after /commit-push has pushed the branch and opened its PR.\n\n" +
+            "Defer: run /commit-push, then /get-release-approval emits the sentinel at the correct point.\n" +
+            "Emergency bypass: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>\"\n" +
+            "See issues #577, #2527."
+          );
+        }
       }
 
       // Block if a merge command co-appears in this runCommands: the merge gate
@@ -373,99 +372,22 @@ if (require.main === module) {
   // Fail-open: on snapshot failure fall back to the raw record.
   let commitSnapshot = null;
   try {
+    const { resolveSessionProfile } = require("./workflow-state/session-profile");
     commitSnapshot = reconcileEffectiveState(state, sessionId, {
       repoDir,
-      isWfMeta: state.workflow_type === "wf-meta",
+      profile: resolveSessionProfile(state, sessionId, { repoDir }),
       resolveAll: true,
       evidencePolicy: "staged-only",
     });
   } catch (e) { commitSnapshot = null; }
 
-  // Check all steps
-  const incomplete = [];
-  // Annotates entries pushed to `incomplete` — currently used for review_tests
-  // stale-fingerprint / fingerprint-missing / fingerprint-unavailable messaging (#833, #2327).
-  const incompleteReasons = {};
-  // Session-specific skippable steps: BUGFIX sessions exclude write_tests/review_tests (#1147).
-  const skippable = getSkippableSteps(sessionId);
-  // Tracks whether write_tests was bypassed by evidence (staged tests/) in this
-  // gate evaluation. Used to allow symmetric review_tests bypass (issue #833).
-  // Case 1: snapshot resolved write_tests from staged evidence (pending → evidenced).
-  // Case 2: BUGFIX+skipped — write_tests excluded from skippable but staged tests/
-  //         exist; staged evidence bypasses the block symmetrically (#1147 C11).
-  const writeTestsEvidenceBypassed = (function () {
-    const snapshotWt = commitSnapshot && commitSnapshot.steps && commitSnapshot.steps.write_tests;
-    if (snapshotWt && snapshotWt.resolved_from === "evidence") return true;
-    if (
-      snapshotWt && snapshotWt.status === "skipped" &&
-      !skippable.includes("write_tests") &&
-      hasStagedTestChanges(repoDir)
-    ) return true;
-    return false;
-  }());
-  for (const step of VALID_STEPS) {
-    if (NON_GATE_STEPS.includes(step)) continue;
-    const stepState = state.steps && state.steps[step];
-    const status = (commitSnapshot && commitSnapshot.steps && commitSnapshot.steps[step])
-      ? commitSnapshot.steps[step].status
-      : (stepState ? stepState.status : "pending");
-
-    // --- review_tests special-case (delegated to review-tests-checker.js) ---
-    if (step === "review_tests") {
-      const { checkReviewTests } = require("./workflow-gate/review-tests-checker");
-      const rt = checkReviewTests(step, stepState, { docsOnly, writeTestsEvidenceBypassed, repoDir, sessionId });
-      if (rt.action === "skip") continue;
-      if (rt.action === "block") {
-        if (rt.reason) incompleteReasons[step] = rt.reason;
-        incomplete.push(step);
-        continue;
-      }
-    }
-
-    // --- review_docs special-case (delegated to review-docs-checker.js) ---
-    // Runs BEFORE the docs-only short-circuit below: review_docs is the one step
-    // a docs-only commit must still satisfy. Evidence-bound — recorded status is
-    // not trusted; the gates re-run against staged blobs every commit (TOCTOU-safe).
-    if (step === "review_docs") {
-      const { checkReviewDocs } = require("./workflow-gate/review-docs-checker");
-      const rd = checkReviewDocs(step, stepState, { repoDir });
-      if (rd.action === "skip") continue;
-      if (rd.action === "block") {
-        if (rd.reason) incompleteReasons[step] = rd.reason;
-        incomplete.push(step);
-        continue;
-      }
-    }
-
-    if (status === "complete") continue;
-    if (status === "skipped" && skippable.includes(step)) {
-      // H1 (TOCTOU hardening): a recorded run_tests=skipped was only proven
-      // docs-only at the moment the skip sentinel/advance was emitted. Nothing
-      // demotes it if the staged set later grows to include non-docs files, so
-      // re-verify the CURRENT staged set (docsOnly, computed above from the
-      // same repoDir) before honoring the skip here. Scoped to run_tests only —
-      // the other SKIPPABLE_STEPS have no staged-set-dependent legitimacy
-      // condition (CPR-UNV: isolate the special case, don't widen the general path).
-      if (step !== "run_tests" || docsOnly) continue;
-      // else: fall through — treated the same as an unmet run_tests requirement.
-    }
-    // BUGFIX: write_tests skipped (excluded from skippable) but bypassed by staged tests/ evidence.
-    if (step === "write_tests" && writeTestsEvidenceBypassed) continue;
-    // docs-only short-circuit: skip all steps except user_verification
-    if (docsOnly && step !== "user_verification") continue;
-    // Worktree context: defer user_verification to merge-time gate.
-    // Feature-branch commits/pushes are intermediate; verification fires
-    // at gh pr merge / git push :main instead (see merge gate above).
-    if (step === "user_verification" && isWorktreeContext(repoDir)) continue;
-    if (step === "user_verification" && isWip) continue;
-    // #1112: defer cleanup to /worktree-end boundary; intermediate worktree
-    // commits must not be blocked by a pending cleanup step.
-    if (step === "cleanup" && isWorktreeContext(repoDir)) continue;
-    // Evidence-based overrides for write_tests are no longer inline: the snapshot
-    // above already resolves pending write_tests (evidencePolicy "staged-only").
-    // The skipped+BUGFIX case is handled by the writeTestsEvidenceBypassed check above.
-    incomplete.push(step);
-  }
+  // Step scan (#2527 3-4): commitGateOf() decides exempt / deferred-in-worktree /
+  // required per step. BUGFIX sessions exclude write_tests/review_tests (#1147).
+  const { collectIncompleteSteps } = require("./workflow-gate/commit-gate-steps");
+  const { incomplete, incompleteReasons } = collectIncompleteSteps({
+    state, commitSnapshot, sessionId, repoDir, docsOnly, isWip,
+    skippable: getSkippableSteps(sessionId),
+  });
 
   if (incomplete.length === 0) approve();
 

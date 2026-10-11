@@ -21,9 +21,11 @@ const STEP_TO_SKILL = Object.freeze({
   review_security: "review-code-security",
   docs: "update-docs",
   review_docs: "review-docs",
-  user_verification: "",
-  cleanup: "",
-  pre_final_report_gate: "",
+  push_branch: "commit-push",
+  user_verification: "get-release-approval",
+  deliver: "deliver",
+  cleanup: "worktree-end",
+  pre_final_report_gate: "session-close",
   // Terminal step: recorded, never advised. See isTerminalStep below.
   final_report: "",
 });
@@ -42,24 +44,24 @@ const STEP_DESC = Object.freeze({
   review_security: "Adversarial security review and code quality gates",
   docs: "Update docs and changelog",
   review_docs: "Review doc line limits and README section order",
-  user_verification: "User verifies the implementation",
-  cleanup: "Remove worktree and merge branch",
+  push_branch: "Model commits, pushes the branch, and opens the PR",
+  user_verification: "Model runs /get-release-approval to obtain the user release approval",
+  deliver: "Model performs the delivery operation (PR merge or direct push)",
+  cleanup: "Model removes the worktree and the merged branch",
   pre_final_report_gate: "Final report and session close",
   final_report: "Final report delivered (terminal)",
 });
 
 const STEP_HINT = Object.freeze({
   branching_complete: "Emit WORKFLOW_BRANCHING_COMPLETE sentinel. Run /worktree-start first if needed, then enter the worktree (EnterWorktree tool, or cd) before any Edit/Write — see skills/_shared/worktree-transition.md.",
-  user_verification: "ENFORCE_WORKTREE=on: do NOT emit here — defer to /worktree-end WE-8. ENFORCE_WORKTREE=off: emit just before /commit-push. See skills/_shared/user-verified.md for preflight and protocol. If you have already emitted the sentinel and then ran gh pr merge, the step is already complete — do not emit again.",
-  cleanup: "Run /worktree-end (worktree path), delete branch + git push origin --delete (branch path), or echo WORKFLOW_MARK_STEP_cleanup_skipped (main/no-worktree path).",
-  pre_final_report_gate: "Run /session-close from the main worktree.",
 });
+// Skill-backed steps carry no STEP_HINT: verdict.js builds their hint from STEP_TO_SKILL.
 
 // #2327: NEXT_HINT when review_tests was reopened by a write_code completion.
 const REVIEW_TESTS_REOPEN_HINT = "Run /review-tests via the Skill tool: write_code changed the review scope after the first review. When it completes, run next-step again and follow its ACTION; do not re-run /write-code.";
 
-// WF_META_AUTO_SKIP / effectiveStatus now live in
-// hooks/workflow-state/effective-state.js (SSOT).
+// Which steps a session owes is the step table (hooks/workflow-state/step-table.js);
+// effectiveStatus applies its table-skip in hooks/workflow-state/effective-state.js.
 
 // A terminal step (SSOT: state-io TERMINAL_STEPS) is a boundary marker in the
 // event stream, not work to be advised: nothing comes after it, and no skill

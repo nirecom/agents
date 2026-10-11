@@ -25,6 +25,7 @@ const {
   effectiveStatus,
   reconcileEffectiveState,
 } = require("../../../../hooks/workflow-state/effective-state");
+const { resolveSessionProfile } = require("../../../../hooks/workflow-state/session-profile");
 const {
   APPROVAL_GATED_STEPS,
   isApprovalGatedStep,
@@ -42,6 +43,8 @@ const { REVIEW_TESTS_REOPEN_REASONS } = require("../../../../hooks/workflow-stat
 const { resolveRepoDir } = require("./repo-dir");
 const { ENTRYPOINT_PATH } = require("./entrypoint-path");
 const { resolveGateLine } = require("./gate-line");
+const { deliveryPathNoteLine } = require("./delivery-path-note");
+const { settleDeliver, deliveryKindFor } = require("../../../../hooks/workflow-state/delivery-settle");
 
 function emit(action, skill, hint, reason, skipHint, gateLine) {
   let out =
@@ -56,13 +59,18 @@ function emit(action, skill, hint, reason, skipHint, gateLine) {
     out += "SKIP_HINT=" + skipHint + "\n";
   }
   if (gateLine) out += gateLine + "\n";
+  if (noteLine) out += noteLine + "\n";
   process.stdout.write(out);
   process.exit(0);
 }
 
 // ---- Verdict computation --------------------------------------------------
 
+// #2527: the DELIVERY_PATH_MISMATCH advisory line, set once the profile is known.
+let noteLine = "";
+
 function computeVerdict(rawSid, _didAutoRepair) {
+  noteLine = "";
   const sid = resolveSessionId({ sessionIdFromInput: rawSid });
   if (!sid) {
     emit("blocked", "", "", "session-id-unresolved");
@@ -111,8 +119,9 @@ function computeVerdict(rawSid, _didAutoRepair) {
     return;
   }
 
-  const isWfMeta = (state.workflow_type === "wf-meta");
   const repoDir = resolveRepoDir();
+  const profile = resolveSessionProfile(state, sid, { repoDir });
+  noteLine = deliveryPathNoteLine(profile, sid, repoDir);
 
   // repoDir belongs to THIS process, not to `sid`. A presence check on
   // `--session` would mislabel hooks/session-start.js, which passes
@@ -143,7 +152,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
     for (const step of VALID_STEPS) {
       if (isTerminalStep(step)) continue;
       const raw = (state.steps[step] || {}).status || "pending";
-      const status = effectiveStatus(step, raw, isWfMeta);
+      const status = effectiveStatus(step, raw, profile);
       if (!isSettledStatus(status)) { rawCurrent = step; break; }
     }
     if (rawCurrent === "clarify_intent") {
@@ -159,7 +168,10 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // so a step that on-disk evidence already resolves cannot false-abort the scan.
   // Gated steps (outline/detail) resolve here only when the approval invariant
   // is already satisfied (#1133) — the same predicate writeState enforces.
-  const snapshot = reconcileEffectiveState(state, sid, { repoDir, isWfMeta });
+  // #2527: navigation settles delivery-boundary resets; the evaluated release step may query the forge.
+  const snapshot = reconcileEffectiveState(state, sid, {
+    repoDir, profile, deliveryBoundary: "navigate", evidencePolicy: { network: true },
+  });
   const snapStatus = (step) => (snapshot.steps[step] || {}).status;
 
   // A-4 speculative-skip gate (#1681): an unresolved verdict blocks the whole
@@ -197,6 +209,11 @@ function computeVerdict(rawSid, _didAutoRepair) {
   function persistResolutions() {
     for (const r of snapshot.resolutions) {
       try {
+        if (r.step === "deliver") {
+          // #2527 3-2b: deliver complete and the uv boundary reset are one write.
+          settleDeliver(sid, { kind: deliveryKindFor(profile.deliveryPath), origin: "next-step-evidence-resolution" });
+          continue;
+        }
         markStep(sid, r.step, "complete", {}, { origin: "next-step-evidence-resolution" });
       } catch (e) {
         if (e instanceof UnapprovedCompletionError) {
@@ -217,15 +234,6 @@ function computeVerdict(rawSid, _didAutoRepair) {
     if (isTerminalStep(step)) continue;
     const status = snapStatus(step);
     if (!isSettledStatus(status)) {
-      // post-merge guard: treat user_verification reset by gh pr merge as complete.
-      // Mirrors post-compact.js lines 66-70 (same reset_reason predicate).
-      if (
-        step === "user_verification" &&
-        status === "pending" &&
-        (state.steps["user_verification"] || {}).reset_reason === "post-merge"
-      ) {
-        continue;
-      }
       currentIdx = i;
       currentStep = step;
       break;

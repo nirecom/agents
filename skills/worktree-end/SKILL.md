@@ -1,18 +1,21 @@
 ---
 name: worktree-end
-description: Inventory gitignored state, merge PR, and clean up a git worktree after task completion
+description: Inventory gitignored state and clean up a git worktree after the delivery is complete
 user-invocable: false
 ---
 
-Inventory gitignored state, merge the PR, then remove the worktree safely.
+Inventory gitignored state, then remove the worktree safely once `/deliver` has delivered the change.
 
 ## Procedure
 
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
-Read `rules/github-issues.md` before WE-4 — on-demand-only, never auto-injected; WE-4..WE-8 and WE-11 depend on it.
-Read `rules/mid-workflow-findings.md` before WE-10 — on-demand-only, never auto-injected; WE-10 depends on its append CLI and severity tagging.
-Read `rules/coding.md` before WE-4 — on-demand-only, never auto-injected; its Public GitHub Rules govern the PR body, issue comments, and history entries written from here on.
+Read `rules/github-issues.md` before WE-4 — on-demand-only, never auto-injected; WE-4 and WE-7 depend on it.
+Read `rules/mid-workflow-findings.md` before WE-6 — on-demand-only, never auto-injected; WE-6 depends on its append CLI and severity tagging.
+Read `rules/coding.md` before WE-4 — on-demand-only, never auto-injected; its Public GitHub Rules govern the issue comments and history entries written from here on.
+
+### Precondition — delivery settled
+Run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "<session-id>"`. `REASON=` other than `cleanup` (deliver not settled) → stop and follow its `ACTION`; never merge or push from this skill.
 
 ### WE-1 — Resolve <PLANS_DIR>
 Run `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` once as one bare command and reuse its printed path — never assign it to a shell variable, which does not survive to the next Bash call. Canonical: `skills/_shared/resolve-plans-dir.md`.
@@ -24,34 +27,13 @@ Run `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` once as one bare command a
 ### WE-3 — Unstaged tracked-file check
 Run `bash "$AGENTS_MAIN_ROOT/bin/check-unstaged-tracked.sh" "$WORKTREE_PATH"`. rc=0 → continue. rc=1 → display stdout and abort (`git add` / `git stash push -u` / `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>` to bypass). rc=2/3 → surface stderr and abort. Skip when WORKFLOW_OFF or WORKTREE_OFF session marker is active.
 
-### WE-4 — PR resolution
-Bootstrap probe: `bash "$AGENTS_MAIN_ROOT/bin/probe-remote-bootstrap.sh" "<WORKTREE_PATH>"` — one standalone call; read the JSON from its stdout. `preBootstrap === true` AND `classification === "empty-repo"` → WE-4b. Any other classification → normal flow.
+### WE-4 — PR number resolution
+Run `node "$AGENTS_MAIN_ROOT/bin/workflow/pr-state"` (read-only, any forge); read `PR_STATE=` and `<PR_NUMBER>` from `PR_NUMBER=`.
+`PR_STATE=NONE` → bootstrap delivery (`/deliver` DL-3b pushed the branch as the default branch): set `BOOTSTRAP_MODE=1` and `BOOTSTRAP_COMMIT_SHA` from `git rev-parse HEAD` for WE-8.
+`PR_STATE=UNKNOWN` (lookup failed) → stop and surface its stderr; never treat it as bootstrap.
+Never push or create a PR here.
 
-Push (`git push -u origin <branch>`), then `gh pr view --json state,url` — reuse if `OPEN`, else `gh pr create --fill`. Display URL. Read `<PR_NUMBER>` from the stdout of `gh pr view --json number --jq .number`; abort if empty.
-For a gitlab remote, use `glab mr view` (reuse if OPEN) / `glab mr create --fill` and read `<PR_NUMBER>` from `glab mr view --output json` `.iid`.
-
-### WE-4b — Bootstrap mode (empty-repo only)
-1. `bash "$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/bootstrap-complete.sh" "$WORKTREE_PATH" "$BRANCH" "$OWNER_REPO"` — parse `BOOTSTRAP_COMMIT_SHA` and `DEFAULT_BRANCH_SET`. Non-zero → stop.
-2. Set `BOOTSTRAP_MODE=1`, `PR_NUMBER=""`, `PR_STATE="BOOTSTRAP"`.
-3. Emit `<<WORKFLOW_USER_VERIFIED: bootstrap initial commit pushed to main>>` via `skills/_shared/user-verified.md`.
-4. Skip WE-5 through WE-8; continue at WE-9, WE-12 (with `BOOTSTRAP_MODE=1` and `BOOTSTRAP_COMMIT_SHA`), WE-15.
-
-### WE-5 — Merge decision
-`gh pr view "$PR_NUMBER" --json state --jq .state`: `MERGED` → WE-7 (the merge happened outside this session's WE-8 — Web UI or another client — so WE-7 is the detection path for it). `CLOSED` → error and stop. `OPEN` → continue. other/error/empty → error and stop.
-
-Check `AUTO_MERGE_PR`: `bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" AUTO_MERGE_PR on'`. `ON`/`ERROR` → announce and proceed to WE-8. `OFF` → `AskUserQuestion` "PR #<N> — merge, wait-for-web-merge, or abort?" → WE-8 / WE-6 / stop. Default **wait-for-web-merge** when AskUserQuestion unavailable.
-
-### WE-6 — Web-merge wait
-Display URL; stop. On reply: `gh pr view "$PR_NUMBER" --json state` — `MERGED` → WE-7; else re-display and stop.
-
-### WE-7 — Post-web-merge sync
-`git fetch --prune origin`, then emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"User confirmed PR #<N> merged via web UI"`) → WE-9.
-Skip the sentinel and go straight to WE-9 when this session already recorded `user_verification` as complete for this merge — check `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "$SID"` and treat a `REASON=` other than `user_verification` as already-recorded. Keep CWD in the linked worktree throughout WE-7; do not switch to main worktree before WE-13.
-
-### WE-8 — Local merge
-Emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch` (gitlab remote: `glab mr merge --squash --remove-source-branch`). Failure → surface error and stop. Keep CWD in the linked worktree throughout WE-8; do not switch to main worktree before WE-13.
-
-### WE-9 — Gitignored state inventory
+### WE-5 — Gitignored state inventory
 Backup dir is derived by the worker as `<target_main_root>/.worktree-backup/<branch>/` — never passed in.
 
 Resolve `dir_expand` once via `node "$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/resolve-dir-expand.js"` (prints `true`/`false`) and pass its output to both passes.
@@ -64,48 +46,47 @@ Serial (SC-S): both passes write the same backup directory. Pass 1 is an advisor
 **Pass 2 — `mode: "execute"`**: `status: failed` → stop. `status: partial` → warn and continue. `status: copied` → set `BACKUP_MANIFEST_PATH` from `artifact_path`.
 If the summary contains `NOT preserved`, emit an explicit data-loss warning to the user and prompt manual rescue before the cleanup cascade.
 
-### WE-10 — Last-chance findings
-Append any outstanding BugsFound / RelatedTasks / NextTasks to `<worktree>/WORKTREE_NOTES.md`. **Capture cutoff** — findings after WE-10 are excluded from the Final Report.
+### WE-6 — Last-chance findings
+Append any outstanding BugsFound / RelatedTasks / NextTasks to `<worktree>/WORKTREE_NOTES.md`. **Capture cutoff** — findings after WE-6 are excluded from the Final Report.
 Use the append CLI and severity tagging per `rules/mid-workflow-findings.md`.
 
-### WE-11 — Promote WORKTREE_NOTES entries to issues
-Run the pass in `skills/_shared/notes-promotion.md` unconditionally in WE-11 — the worktree and its notes are deleted later in this skill, so no downstream callsite can reach them.
+### WE-7 — Promote WORKTREE_NOTES entries to issues
+Run the pass in `skills/_shared/notes-promotion.md` unconditionally in WE-7 — the worktree and its notes are deleted later in this skill, so no downstream callsite can reach them.
 
 Resolve the path with `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" resolve --caller worktree-end --worktree "$WORKTREE_PATH"`, then follow NP-1..NP-11 as written.
 
-`## History Notes` / `## Changelog Notes` are excluded from the pass. Continue to WE-12 in every outcome.
+`## History Notes` / `## Changelog Notes` are excluded from the pass. Continue to WE-8 in every outcome.
 
-### WE-12 — Env collection + JSON persist
+### WE-8 — Env collection + JSON persist
 Resolve `SID`: `awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' "$WORKTREE_PATH/WORKTREE_NOTES.md"` → fallback `$CLAUDE_CODE_SESSION_ID`.
-Run as **one Bash call**: `bash "$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/capture-env.sh" "<worktree>" "<owner>/<repo>" "<backup-dir>" "$SID"` → output: `<CONTROL_DIR>/final-report-env.json` (its last stdout line names the path).
+Run as **one Bash call**: `bash "$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/capture-env.sh" "<worktree>" "<owner>/<repo>" "<backup-dir>" "$SID"` (with `BOOTSTRAP_MODE` and `BOOTSTRAP_COMMIT_SHA` from WE-4 on a bootstrap delivery) → output: `<CONTROL_DIR>/final-report-env.json` (its last stdout line names the path).
 Run: `node "$AGENTS_MAIN_ROOT/bin/supervisor-write-alert" --session-id "$SID" --set-alert-eligible-phase post_final_report_window`.
 
-### WE-13 — Switch CWD to main worktree
+### WE-9 — Switch CWD to main worktree
 Resolve main root from the worktree's `.git` file. `cd "<main-worktree-root>"` as its own Bash call (releases Windows CWD lock).
 
-### WE-13a — Release the session worktree binding
-Call the native `ExitWorktree` tool after the WE-13 `cd` to release the extension host's session worktree binding; skip silently when that tool is unavailable.
+### WE-9a — Release the session worktree binding
+Call the native `ExitWorktree` tool after the WE-9 `cd` to release the extension host's session worktree binding; skip silently when that tool is unavailable.
 Protocol: `skills/_shared/worktree-transition.md`
 
-### WE-15..WE-22 — Cleanup cascade
+### WE-11..WE-18 — Cleanup cascade
 Read `rules/ops.md` before the first destructive step (it is on-demand-only and never auto-injected): it owns the recovery-options-first decision path every deletion here must pass through.
-Read `$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/cleanup-cascade.md` (spec) and issue each command separately. Run only after confirmed merge and inventory.
-If WE-15 is blocked (CWD lock / busy), WORKTREE_OFF is NOT needed — /sweep-worktrees auto-reclaims; follow WE-16 and continue to WE-20.
-Cleanup-active marker (WE-14b create → WE-22a delete) brackets the window so the
-supervisor OFF-block adaptive message fires only during WE-15..WE-22 — see cleanup-cascade.md.
-WE-14c releases the CodeGraph index lock immediately before WE-15 — see cleanup-cascade.md.
+Read `$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/cleanup-cascade.md` (spec) and issue each command separately. Run only after the settled delivery and inventory.
+If WE-11 is blocked (CWD lock / busy), WORKTREE_OFF is NOT needed — /sweep-worktrees auto-reclaims; follow WE-12 and continue to WE-16.
+Cleanup-active marker (WE-10b create → WE-18a delete) brackets the window so the
+supervisor OFF-block adaptive message fires only during WE-11..WE-18 — see cleanup-cascade.md.
+WE-10c releases the CodeGraph index lock immediately before WE-11 — see cleanup-cascade.md.
 
 ## Rules
-- Cleanup runs only after confirmed merge (or bootstrap-complete.sh exit 0 in WE-4b). No destructive steps on wait/abort/error paths.
+- Cleanup runs only after `deliver` is settled (Precondition). No destructive steps on wait/abort/error paths.
+- Never merge, push, or emit the release-approval sentinel here — `/get-release-approval` and `/deliver` own them.
 - `git worktree remove --force` is prohibited; blocked at the `settings.json` deny layer, not by prose in `rules/ops.md`.
-- The worktree/workflow escape-hatch sentinels must NOT be emitted to unblock WE-15; /sweep-worktrees reclaims — proceed to WE-20 (WE-16 fallback).
-- `ExitWorktree` is called only at WE-13a — never before the WE-13 `cd`.
-- `git branch -D` (WE-19 only) requires inline `WORKTREE_END_SKILL=1` env prefix.
-- `<<WORKFLOW_USER_VERIFIED>>` emitted in WE-8 (before merge), WE-7 (post-web-merge), or WE-4b (bootstrap). Never on abort or while polling. Protocol: `skills/_shared/user-verified.md`.
-- CWD must remain in the linked worktree from WE-7/WE-8 through WE-12; switch to main worktree only at WE-13.
-- `AUTO_MERGE_PR=on` skips AskUserQuestion in WE-5 (worktree mode only).
+- The worktree/workflow escape-hatch sentinels must NOT be emitted to unblock WE-11; /sweep-worktrees reclaims — proceed to WE-16 (WE-12 fallback).
+- `ExitWorktree` is called only at WE-9a — never before the WE-9 `cd`.
+- `git branch -D` (WE-15 only) requires inline `WORKTREE_END_SKILL=1` env prefix.
+- CWD must remain in the linked worktree through WE-8; switch to main worktree only at WE-9.
 - Secret values must not appear in the backup manifest.
 - Use `hooks/cleanup-orphan-dir.js` for orphan directory cleanup — never `rm -rf`.
-- WE-12 must execute as one Bash tool call; do not split.
+- WE-8 must execute as one Bash tool call; do not split.
 - WE-3 honors WORKFLOW_OFF / WORKTREE_OFF session markers.
 - On fallback or step degradation: `node "$AGENTS_MAIN_ROOT/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter worktree-end`.

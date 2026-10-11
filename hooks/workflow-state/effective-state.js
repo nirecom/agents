@@ -1,12 +1,12 @@
 "use strict";
 // Read-only reconciled effective-state snapshot (#1148/#1133/#1305/#1681).
-// Answers "status of every step once wf-meta auto-skips, speculative-skip
+// Answers "status of every step once step-table skips, speculative-skip
 // verdicts, and on-disk evidence are applied" — computed BEFORE the
 // inconsistency scan so it cannot false-abort (#1148). NEVER writes state
 // (Approach B: read-time derivation); the caller persists only evidence
 // resolutions, and only after the scan passes. ORDERING (do not reorder):
 // 1 effectiveStatus input-gate → 2 veto de-skip → 3 post-veto reset →
-// 4 evidence(+approval) resolution → 5 write_code resume mask (second pass,
+// 3b delivery boundary (navigate only) → 4 evidence(+approval) resolution → 5 write_code resume mask (second pass,
 // overrides 4). Detail: effective-state/write-code-resume.js and the #1681/
 // #1665 suites. Resolution stops at the first unsettled step unless opts.resolveAll.
 
@@ -14,6 +14,8 @@ const { VALID_STEPS, normalizeStateVersion, isGenuineProvenance } = require("./s
 const { hasCompletionEvidence, hasPlanArtifact } = require("./evidence-resolver");
 const { readSkipVerdict } = require("./skip-verdict");
 const { applyWriteCodeResume } = require("./effective-state/write-code-resume");
+const { navigateBoundaryStatus } = require("./effective-state/delivery-boundary");
+const { isStepRequired } = require("./step-table");
 const { hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
 const {
   APPROVAL_GATED_STEPS,
@@ -26,20 +28,15 @@ const {
 const EVIDENCE_STEPS = Object.freeze([
   "clarify_intent", "outline", "detail", "write_tests", "docs",
 ]);
+// Release steps whose evidence is a forge / remote-ref query (#2527 3-3). Kept
+// apart from EVIDENCE_STEPS, which reconcile-state walks offline.
+const NETWORK_EVIDENCE_STEPS = Object.freeze(["push_branch", "deliver"]);
 
-// Steps auto-skipped in a wf-meta (planning-only) workflow.
-//
-// `final_report` is deliberately NOT a member: it is a TERMINAL step for wf-code
-// and wf-meta alike (SSOT: state-io TERMINAL_STEPS), and auto-skipping it would
-// silently erase the boundary the interval calculation folds against.
-// `pre_final_report_gate` is likewise excluded — a meta session still closes.
-const WF_META_AUTO_SKIP = new Set([
-  "branching_complete", "detail", "write_tests", "review_tests", "write_code", "run_tests",
-  "review_security", "docs", "review_docs", "user_verification", "cleanup",
-]);
-
-function effectiveStatus(step, raw, isWfMeta) {
-  if (isWfMeta && WF_META_AUTO_SKIP.has(step) && raw === "pending") return "skipped";
+// Table-skip (#2527): a pending step the session profile does not owe reads as
+// skipped. Which steps are owed is the step table (SSOT: ./step-table.js); the
+// profile comes from ./session-profile.js, resolved once per entrypoint.
+function effectiveStatus(step, raw, profile) {
+  if (raw === "pending" && !isStepRequired(profile || null, step)) return "skipped";
   return raw;
 }
 
@@ -143,9 +140,10 @@ function evaluateResumability(state) {
     // nothing but those three synthetic completions.
     if (!hasRecordedProgress(state)) return { eligible: false, reason: "all-pending" };
 
-    // S1: the session was finalized by the user.
-    if (steps.user_verification && steps.user_verification.status === "complete") {
-      return { eligible: false, reason: "user-verified" };
+    // S1: the session's change was delivered (#2527: approval alone no longer
+    // finishes a session — deliver is the step after it).
+    if (steps.deliver && steps.deliver.status === "complete") {
+      return { eligible: false, reason: "delivered" };
     }
 
     // S3: clarify_intent genuinely recorded complete but its intent.md is gone —
@@ -178,16 +176,18 @@ function evaluateInheritance(state) {
 }
 
 // reconcileEffectiveState(state, sessionId, opts)
-//   opts.isWfMeta       : caller-resolved (state.workflow_type === "wf-meta")
+//   opts.profile        : caller-resolved session profile (resolveSessionProfile);
+//                         absent → every step is owed (no table-skip)
 //   opts.repoDir        : git root, forwarded to the evidence predicates
-//   opts.resolveAll     : resolve evidence for every step instead of stopping at
-//                         the current step (default false)
-//   opts.evidencePolicy : "default" | "staged-only" (see canResolveFromEvidence)
-// → { steps: { <step>: { status, resolved_from, [skip_verdict_state] } },
-//     resolutions: [{ step, source }] }
+//   opts.resolveAll     : resolve evidence for every step, not just to the current
+//   opts.evidencePolicy : "default" | "staged-only" | { network: true } (release steps)
+//   opts.deliveryBoundary: "navigate" enables stage 3b (navigation callers only)
+// → { steps: { <step>: { status, resolved_from, [skip_verdict_state] } }, resolutions: [{ step, source }] }
 function reconcileEffectiveState(state, sessionId, opts = {}) {
-  const isWfMeta = !!(opts && opts.isWfMeta);
+  const profile = (opts && opts.profile) || null;
   const resolveAll = !!(opts && opts.resolveAll);
+  const navigate = !!(opts && opts.deliveryBoundary === "navigate");
+  const network = !!(opts && opts.evidencePolicy && opts.evidencePolicy.network === true);
   const steps = {};
   const resolutions = [];
   let reachedCurrent = false;
@@ -199,8 +199,8 @@ function reconcileEffectiveState(state, sessionId, opts = {}) {
     const raw = (entry && entry.status) || "pending";
 
     // 1. input gate
-    let status = effectiveStatus(step, raw, isWfMeta);
-    let resolvedFrom = status === raw ? "state" : "wf-meta-auto-skip";
+    let status = effectiveStatus(step, raw, profile);
+    let resolvedFrom = status === raw ? "state" : "table-skip";
     let derived = false;
 
     // The skip verdict is surfaced for every gated step so callers never have to
@@ -228,13 +228,22 @@ function reconcileEffectiveState(state, sessionId, opts = {}) {
       derived = true;
     }
 
-    // 4. evidence (+ approval) resolution — skipped for derived steps.
-    if (
-      !derived &&
-      (resolveAll || !reachedCurrent) &&
-      status === "pending" &&
-      EVIDENCE_STEPS.indexOf(step) !== -1
-    ) {
+    // 3b. delivery boundary — navigation callers only (./effective-state/delivery-boundary.js).
+    if (!derived && navigate) {
+      const settledTo = navigateBoundaryStatus(step, status, state);
+      if (settledTo) {
+        status = settledTo;
+        resolvedFrom = "delivery-boundary";
+        derived = true;
+      }
+    }
+
+    // 4. evidence (+ approval) resolution — skipped for derived steps. The
+    //    release steps query the forge, so only the evaluated step of a
+    //    network-enabled caller reaches them (never resolveAll / hooks).
+    const offlineEvidence = (resolveAll || !reachedCurrent) && EVIDENCE_STEPS.indexOf(step) !== -1;
+    const networkEvidence = network && !reachedCurrent && NETWORK_EVIDENCE_STEPS.indexOf(step) !== -1;
+    if (!derived && status === "pending" && (offlineEvidence || networkEvidence)) {
       let resolvable = false;
       try {
         resolvable = canResolveFromEvidence(step, state, sessionId, opts);
@@ -263,7 +272,7 @@ function reconcileEffectiveState(state, sessionId, opts = {}) {
 
 module.exports = {
   EVIDENCE_STEPS,
-  WF_META_AUTO_SKIP,
+  NETWORK_EVIDENCE_STEPS,
   APPROVAL_GATED_STEPS,
   effectiveStatus,
   reconcileEffectiveState,

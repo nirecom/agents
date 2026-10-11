@@ -27,6 +27,8 @@ function encodePath(p) {
 }
 
 const VISIBILITY_VALUES = new Set(["public", "private", "internal"]);
+const { isPrPresentOrUnknown } = require("./pr-state");
+const GLAB_MR_STATES = Object.freeze({ opened: "OPEN", merged: "MERGED", closed: "CLOSED", locked: "CLOSED" });
 // Defense-in-depth: only a plain hostname may become glab's --hostname argument.
 const GLAB_HOSTNAME_SHAPE = /^[a-z0-9.-]+$/;
 
@@ -90,19 +92,41 @@ const codehostGitlab = {
     return listVisibilityTagged("glab", ["api", "projects?membership=true&per_page=100", "--paginate",
       "--jq", ".[]|[.visibility,.path_with_namespace]|@tsv"]);
   },
-  hasOpenPrForBranch(repoDir) {
+  // MR state mapped onto the shared PR vocabulary (./pr-state.js).
+  prStateForBranch(repoDir) {
     const { spawnSync } = require("child_process");
     try {
       const r = spawnSync("glab", ["mr", "view", "--json", "state", "--jq", ".state"],
         { cwd: repoDir, encoding: "utf8", timeout: 8000 });
-      if (r.error) return true; // fail-safe: glab not found
+      if (r.error) return "UNKNOWN"; // glab not found
       if (r.status === 0) {
-        const state = (r.stdout || "").trim();
-        return state === "opened" || state === "merged";
+        const state = (r.stdout || "").trim().toLowerCase();
+        if (state === "") return "UNKNOWN"; // exit 0 with no state is unexplained: fail closed
+        return GLAB_MR_STATES[state] || "UNKNOWN";
       }
-      return false; // status 1 = no MR for current branch
+      // glab exits 1 both for "no MR" and for an API failure, so only the no-MR
+      // message reads as NONE; any other failure is UNKNOWN (fail-closed).
+      return /no open merge request|merge request not found|no merge requests? found/i
+        .test(String(r.stderr || "")) ? "NONE" : "UNKNOWN";
     } catch (e) {
-      return true;
+      return "UNKNOWN";
+    }
+  },
+  hasOpenPrForBranch(repoDir) {
+    return isPrPresentOrUnknown(codehostGitlab.prStateForBranch(repoDir));
+  },
+  // { state, number } of the current branch's MR (bin/workflow/pr-state); number is the MR iid.
+  prForBranch(repoDir) {
+    const state = codehostGitlab.prStateForBranch(repoDir);
+    if (state === "NONE" || state === "UNKNOWN") return { state, number: "" };
+    const { spawnSync } = require("child_process");
+    try {
+      const r = spawnSync("glab", ["mr", "view", "--json", "iid", "--jq", ".iid"],
+        { cwd: repoDir, encoding: "utf8", timeout: 8000 });
+      const n = r.status === 0 ? String(r.stdout || "").trim() : "";
+      return { state, number: /^\d+$/.test(n) ? n : "" };
+    } catch (e) {
+      return { state, number: "" };
     }
   },
 };

@@ -6,20 +6,21 @@ Referenced by CI-4. Format rules for `<PLANS_DIR>/<session-id>-intent.md`.
 
 1. H1 title
 2. `**Title:** <human-readable one-line title>` — data contract read by Path C for `gh issue create --title`.
-3. `## Issues` (mandatory — see rules below)
-4. Background/Motivation
-5. Scope
-6. Constraints
-7. Interview Log (optional)
-8. `## Class members` (mandatory — see schema below)
-9. `## Accepted Tradeoffs` (`### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`) — captures design decisions already settled, used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
-10. `## worktrees` (optional — omit for single-repo sessions; include when CI-3b collected sibling worktree paths)
+3. `**PM type:** waterfall` — the project-management type recorded when clarify_intent completes; only `waterfall` is accepted (`agile` is reserved for #2565).
+4. `## Issues` (mandatory — see rules below)
+5. Background/Motivation
+6. Scope
+7. Constraints
+8. Interview Log (optional)
+9. `## Class members` (mandatory — see schema below)
+10. `## Accepted Tradeoffs` (`### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`) — captures design decisions already settled, used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
+11. `## worktrees` (optional — omit for single-repo sessions; include when CI-3b collected sibling worktree paths)
 
 Language: write body text in `PLAN_LANG` (`$AGENTS_MAIN_ROOT/.env`) when it is a concrete non-English language; schema H2 heading lines always use their canonical English names regardless of `PLAN_LANG`. `PLAN_LANG` unset/`any`/`english` → write body text in English.
 
 ## `## Issues` schema (mandatory)
 
-Immediately after the `**Title:**` line, before Background/Motivation. Single SSOT for `closes_issues` — no separate `## closes_issues` section.
+Immediately after the `**PM type:**` line, before Background/Motivation. Single SSOT for `closes_issues` — no separate `## closes_issues` section.
 
 - One entry line per issue in `closes_issues`, in order. Current-repo: `- #<N>: <title>`. Cross-repo: `- repo#<N>: <title>` (short form) or `- owner/repo#<N>: <title>` (full form, preferred when owner known).
 - **Path B**: read the first entry's title from `context.md ## Issue metadata - title:`; additional issues fetch via `gh issue view <N> --json title --jq .title` (pass `--repo <owner/repo>` for cross-repo). Fetch failure → `- #<N>: (title unavailable)`.

@@ -17,7 +17,8 @@ node_path() {
 SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$_HELPERS_SCRIPT_CHECKOUT_ROOT")"
 
 RENDER_JS="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/bin/render-final-report.js"
-DETECT_JS="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/bin/session-close-detect-wf-meta.js"
+# #2527: session-close-detect-wf-meta.js was absorbed into the route CLI (ROUTE=wf-meta|pull_request|direct).
+DETECT_JS="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/bin/session-close-detect-route.js"
 SC7_JS="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/bin/session-close-render-sc7.js"
 SKILL_MD="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/skills/session-close/SKILL.md"
 GUARD_JS="${_HELPERS_SCRIPT_CHECKOUT_ROOT}/hooks/stop-final-report-guard.js"

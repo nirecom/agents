@@ -87,6 +87,73 @@ definition, and related links.
   "in-skill step" when the ID needs a noun.
 - **Related**: [rules/prompt.md](../rules/prompt.md) §4
 
+### deliverable type
+
+- **Full name**: Deliverable type (state field `deliverable_type`; renamed from `workflow_type` in schema v5)
+- **Definition**: What a session builds: `wf-code` or `wf-meta`. It picks the column of the step table
+  that says which workflow steps are required or skipped. Recorded by
+  `bin/workflow/set-deliverable-type`; `bin/workflow/set-workflow-type` is a pass-through shim.
+- **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md#the-step-table-deliverable-type-x-pm-type), #2527
+
+### PM type
+
+- **Full name**: Project management type (state field `project_management_type`)
+- **Definition**: How a session proceeds: `waterfall` (step order enforced), `off` (the `WORKFLOW_OFF`
+  marker; nothing enforced), or `agile` (planned, not implemented). Chosen in intent (`**PM type:**`);
+  never switched mid-session. Orthogonal to the deliverable type.
+- **Related**: [hooks/workflow-state/session-profile.js](../hooks/workflow-state/session-profile.js), #2565
+
+### delivery path
+
+- **Full name**: Delivery path (state field `delivery_path`)
+- **Definition**: Where a session ships, set by the environment rather than chosen: `pull_request`
+  (`ENFORCE_WORKTREE=on`; the worktree branch is merged through a PR) or `direct`
+  (off; commit and push to the default branch). It only drops steps (`push_branch`, `cleanup` on
+  `direct`); it never reorders them.
+- **Related**: [hooks/lib/delivery-path.js](../hooks/lib/delivery-path.js)
+
+### delivery operation
+
+- **Full name**: Delivery operation
+- **Definition**: The hard-to-undo act of landing the change on the default branch: a PR merge
+  (`pull_request`) or a commit and push (`direct`). `/deliver` performs it; the user confirms once,
+  immediately before it, through the USER_VERIFIED dialog.
+- **Related**: [skills/deliver/SKILL.md](../skills/deliver/SKILL.md)
+
+### step table
+
+- **Full name**: Step table
+- **Definition**: The SSOT (`hooks/workflow-state/step-table.js`) of the step order, which steps each
+  deliverable type requires, which delivery path drops a step, and each step's commit-gate attribute.
+  `VALID_STEPS` derives from it.
+- **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md#the-step-table-deliverable-type-x-pm-type)
+
+### release phase
+
+- **Full name**: Release phase
+- **Definition**: The workflow steps after `review_docs`, one skill each: `push_branch`
+  (`/commit-push`: commit, push the branch, open the PR), `user_verification` (`/get-release-approval`:
+  preflight, then the sole USER_VERIFIED sentinel), `deliver` (`/deliver`: the delivery operation),
+  `cleanup` (`/worktree-end`: remove the worktree), and `pre_final_report_gate` (`/session-close`).
+  Every step has a skill, so `next-step` never returns an empty `NEXT_SKILL` here.
+- **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md), #2527
+
+### delivery boundary
+
+- **Full name**: Delivery boundary (`reset_reason` `post-merge` / `post-push`)
+- **Definition**: The reset a delivery operation applies to `user_verification` (back to `pending`). For
+  navigation it counts as settled, so `next-step` moves on to `deliver`; gates ignore it, so the next
+  commit or merge needs a fresh approval.
+- **Related**: [hooks/workflow-state/effective-state/delivery-boundary.js](../hooks/workflow-state/effective-state/delivery-boundary.js)
+
+### pr-state
+
+- **Full name**: `bin/workflow/pr-state`
+- **Definition**: Read-only CLI printing `PR_STATE=OPEN|MERGED|CLOSED|NONE|UNKNOWN` and `PR_NUMBER=` for
+  the current branch on any forge. `/deliver` and `/worktree-end` branch on it (`NONE` means a bootstrap
+  delivery, `UNKNOWN` stops); it never merges.
+- **Related**: [bin/workflow/pr-state](../bin/workflow/pr-state)
+
 ### workflow state dir
 
 - **Full name**: Workflow state directory (env pin: `WORKFLOW_STATE_DIR`)

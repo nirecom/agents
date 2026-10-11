@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# worktree-end WE-4b: bootstrap a brand-new GitHub repo whose remote has no default branch yet —
+# deliver DL-3b: bootstrap a brand-new GitHub repo whose remote has no default branch yet —
 # push the current feature branch as `main`, then best-effort set the default branch on GitHub.
-# Usage: positional (SKILL.md callers): bash bootstrap-complete.sh <WORKTREE_PATH> <BRANCH> <OWNER_REPO>
-#   flag style (tests): bash bootstrap-complete.sh --repo <PATH> --remote <NAME> \
-#     [--default-branch <NAME>] [--branch <BRANCH>] [--owner-repo <O/R>]
+# Usage: positional (SKILL.md callers): bash bootstrap-complete.sh <WORKTREE_PATH> <BRANCH> <OWNER_REPO> <SESSION_ID>
+#   flag style (tests): bash bootstrap-complete.sh --repo <PATH> --remote <NAME> --session <SID> \
+#     [--default-branch <NAME>] [--branch <BRANCH>] [--owner-repo <O/R>]  (session id required, no env fallback)
 # Env: BOOTSTRAP_REPROBE_RESULT=<classification> skips the live bootstrap-state.js probe (E2E tests);
 #   accepts empty-repo, ok, network, auth, not-found, timeout, spawn-error.
 # Exit: 0 done — stdout is one JSON line (bootstrap_commit_sha, default_branch_set, pushed_ref);
-#   1 argument / environment error; 2 re-probe disagrees (remote no longer empty); 3 git push failed.
+#   1 argument / environment error; 2 re-probe disagrees (remote no longer empty); 3 git push failed;
+#   4 user_verification is not complete for the session.
 set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -16,6 +17,7 @@ BRANCH=""
 OWNER_REPO=""
 REMOTE="origin"
 DEFAULT_BRANCH="main"
+SID=""
 
 # Detect invocation style: if first arg starts with "--", flag style; otherwise positional.
 if [[ $# -ge 1 && "${1:-}" == --* ]]; then
@@ -26,6 +28,7 @@ if [[ $# -ge 1 && "${1:-}" == --* ]]; then
             --owner-repo) OWNER_REPO="${2:?--owner-repo value required}"; shift 2;;
             --remote) REMOTE="${2:?--remote value required}"; shift 2;;
             --default-branch) DEFAULT_BRANCH="${2:?--default-branch value required}"; shift 2;;
+            --session) SID="${2:?--session value required}"; shift 2;;
             *) printf 'bootstrap-complete: unknown flag %s\n' "$1" >&2; exit 1;;
         esac
     done
@@ -33,11 +36,26 @@ else
     WORKTREE_PATH="${1:?WORKTREE_PATH required}"
     BRANCH="${2:?BRANCH required}"
     OWNER_REPO="${3:?OWNER_REPO required}"
+    SID="${4:?SESSION_ID required}"
 fi
 
 if [ -z "$WORKTREE_PATH" ]; then
     printf 'bootstrap-complete: missing --repo / WORKTREE_PATH\n' >&2
     exit 1
+fi
+
+if [[ ! "$SID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    printf 'bootstrap-complete: missing or malformed session id (--session <SID> / SESSION_ID)\n' >&2
+    exit 1
+fi
+
+# The push below happens inside this script, so the merge-detect user_verification gate never
+# sees it; the script therefore checks the approval itself, before any remote is touched.
+UV_STATUS="$(node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/read-step-status" --session "$SID" --step user_verification 2>/dev/null || true)"
+if [[ "$UV_STATUS" != "status=complete" ]]; then
+    printf 'bootstrap-complete: user_verification is not complete for session %s (got: %s); refusing to push.\n' \
+        "$SID" "${UV_STATUS:-<none>}" >&2
+    exit 4
 fi
 
 # Derive BRANCH from HEAD if not supplied (flag style typically omits it).
@@ -103,6 +121,6 @@ fi
 # Phase 4: Record the bootstrap commit SHA.
 BOOTSTRAP_COMMIT_SHA="$(git -C "$WORKTREE_PATH" rev-parse HEAD)"
 
-# Phase 5: Emit JSON for the caller (worktree-end SKILL.md WE-4b).
+# Phase 5: Emit JSON for the caller (deliver SKILL.md DL-3b).
 printf '{"bootstrap_commit_sha":"%s","default_branch_set":%s,"pushed_ref":"refs/heads/%s"}\n' \
     "$BOOTSTRAP_COMMIT_SHA" "$DEFAULT_BRANCH_SET" "$DEFAULT_BRANCH"

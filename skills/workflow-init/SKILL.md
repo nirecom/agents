@@ -67,7 +67,7 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 
 #### Path META — meta label issue
 WI-8 open sub-issue guard ensures all `ISSUES[@]` have no open sub-issues before reaching this path.
-- PM1. `node "$AGENTS_MAIN_ROOT/bin/workflow/set-workflow-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete` (single Bash call — records `workflow_type` and completes `workflow_init` together; no `--next` since the next action is fixed at PM2).
+- PM1. `node "$AGENTS_MAIN_ROOT/bin/workflow/set-deliverable-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete` (single Bash call — records `deliverable_type` and completes `workflow_init` together; no `--next` since the next action is fixed at PM2).
 - PM2. `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: meta issue — WF-META type; intent confirmed from issue body>>"`.
 - PM3. Use `/issue-create --skip-survey` with `--verdict bulk-sub-of --parent <meta-N> --manifest <file>` to create all planned sub-issues under the meta parent in a single bulk pass.
 - PM4. Invoke `make-outline-plan`. (next-step auto-skips `detail` and 8 other non-applicable WF-CODE steps after outline completes — `make-detail-plan` is never invoked in WF-META.)

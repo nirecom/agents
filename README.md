@@ -84,12 +84,13 @@ flowchart TD
 
     S6a & S6b & SR --> S7["12 · docs"]
     S7 --> S7d["13 · review-docs<br/>skippable"]
-    S7d --> Gate["pre-merge audit"]
-    Gate --> UV["14 · user verify"]
-    UV --> Push["commit & push"]
+    S7d --> PB["14 · commit-push<br/>push_branch"]
+    PB --> Gate["pre-merge audit"]
+    Gate --> UV["15 · get-release-approval<br/>user verify"]
+    UV --> Push["16 · deliver<br/>merge PR / direct push"]
 
     Push --> Clean{worktree or main?}
-    Clean -- worktree --> WE["worktree-end"]
+    Clean -- worktree --> WE["17 · worktree-end"]
     Clean -- main     --> IC["issue-close"]
     WE --> IC
     IC --> Done([Done])
@@ -106,7 +107,7 @@ flowchart TD
     class Gate,SR audit
     class S1,P2a,S4 skippable
     class S0_SC,S0_SH,P2b_R,P2c_R,S6a,S6b parallel
-    class S0_R,P2b_L,P2c_L,S5,S7,UV,Push,WE,IC required
+    class S0_R,P2b_L,P2c_L,S5,S7,PB,UV,Push,WE,IC required
 ```
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically
@@ -267,7 +268,7 @@ See [docs/architecture/gitlab-support.md](docs/architecture/gitlab-support.md) f
 
 ### Cross-machine session continuity
 
-Normalizes Claude Code project paths to drive-root form (`C:\git\`, `/git/`) and syncs
+Normalizes Claude Code project paths to drive-root form (`C:\<dir>\`, `/<dir>/`) and syncs
 `~/.claude/projects/` through a private GitHub repo — conversations started on Windows can
 be resumed on macOS/Linux, and vice versa.
 

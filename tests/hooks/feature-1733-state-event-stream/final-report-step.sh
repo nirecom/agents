@@ -3,7 +3,7 @@
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-mark/mark-step-handler.js, hooks/lib/sentinel-patterns.js, hooks/workflow-gate.js
 # Tags: workflow-state, event-stream, final-report, valid-steps, terminal-steps, sentinel-parsing, scope:issue-specific, pwsh-not-required, TL2
 
-# final_report is VALID_STEPS' terminal boundary and also the commit gate's list: NON_GATE_STEPS / TERMINAL_STEPS guard it.
+# final_report is VALID_STEPS' terminal boundary and also the commit gate's list: the step-table commitGate column (#2527) / TERMINAL_STEPS guard it.
 # The MARK_STEP regex yields final_report only by backtracking and shares a prefix with pre_final_report_gate; both are parsed.
 # TL3 gap: hook registration and a real `git commit` refusal are unverified (F11 spawns the gate directly).
 # Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration.
@@ -86,14 +86,15 @@ fi
 
 echo "== F5: final_report is a non-gate step, so it cannot block a commit =="
 if run_case "F5/non-gate-steps-exempt"; then
-    GATE_SRC="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
-    NG_LINE="$(grep -n 'NON_GATE_STEPS = ' "$GATE_SRC" | head -1)"
-    HAS_FR="no"; case "$NG_LINE" in *'"final_report"'*) HAS_FR="yes";; esac
-    HAS_RESEARCH="no"; case "$NG_LINE" in *'"research"'*) HAS_RESEARCH="yes";; esac
-    # Structural check on purpose: VALID_STEPS is what the gate loop iterates, so adding
-    # a step there without exempting it here turns every commit into a hard block.
-    assert_eq "F5/non-gate-steps-exempt" "final_report=yes research=yes" \
-        "final_report=$HAS_FR research=$HAS_RESEARCH"
+    next_sid
+    # The step table's commitGate column replaced NON_GATE_STEPS (#2527): a step added to
+    # VALID_STEPS without "exempt" turns every commit into a hard block. run_tests is the
+    # "required" control so an all-exempt table cannot pass.
+    nodejs "$SID" '
+const T = require("./hooks/workflow-state/step-table");
+console.log(["final_report", "research", "run_tests"].map((s) => s + "=" + T.commitGateOf(s)).join(" "));
+'
+    assert_eq "F5/non-gate-steps-exempt" "final_report=exempt research=exempt run_tests=required" "$NODE_OUT"
 fi
 
 echo "== F6: final_report closes the stream — nothing is appended for it by default =="
@@ -148,11 +149,11 @@ run_next_step() {
 # Drives a session to the state the dispatcher treats as finished: every gate step
 # complete, every skippable step skipped, final_report untouched.
 SEED_DONE_JS='
-S.updateTopLevel(sid, (st) => { st.workflow_type = "wf-code"; st.closes_issues = [1733]; });
+S.updateTopLevel(sid, (st) => { st.deliverable_type = "wf-code"; st.closes_issues = [1733]; });
 ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests",
- "review_security", "review_docs", "cleanup"].forEach((s) => S.markStep(sid, s, "skipped", { skip_reason: "fixture" }));
-["workflow_init", "branching_complete", "write_code", "run_tests", "docs", "user_verification",
- "pre_final_report_gate"].forEach((s) => S.markStep(sid, s, "complete"));
+ "review_security", "cleanup"].forEach((s) => S.markStep(sid, s, "skipped", { skip_reason: "fixture" }));
+["workflow_init", "branching_complete", "write_code", "run_tests", "docs", "review_docs",
+ "push_branch", "user_verification", "deliver", "pre_final_report_gate"].forEach((s) => S.markStep(sid, s, "complete"));
 console.log("SEEDED " + S.readState(sid).steps.final_report.status);
 '
 
@@ -241,10 +242,10 @@ fi
 # process: JSON on stdin, always exit 0, verdict on stdout as
 # {"decision":"approve"} / {"decision":"block","reason":...}.
 #
-# F5 above reads the NON_GATE_STEPS constant out of the source text. That is a static
-# check: it cannot fail when the constant is correct but the loop that consumes it is
-# not, and it cannot distinguish "final_report is exempt" from "the gate approves
-# everything". F11 below closes that by driving both verdicts through the real binary.
+# F5 above reads the step table's commitGate column. That is a static check: it cannot
+# fail when the column is correct but the loop that consumes it is not, and it cannot
+# distinguish "final_report is exempt" from "the gate approves everything". F11 below
+# closes that by driving both verdicts through the real binary.
 run_gate() { # <payload-file>
     GATE_RC=0
     GATE_OUT="$(cd "$SCRIPT_CHECKOUT_ROOT" && env \
@@ -291,7 +292,7 @@ if run_case "F11/gate-live-verdicts"; then
         GATE_PAYLOAD="$TMPROOT/gate-payload.json"
 
         # (a) POSITIVE CONTROL — every enforceable step satisfied, final_report still
-        #     pending. NON_GATE_STEPS must exempt it, so the gate approves.
+        #     pending. its "exempt" commitGate lets the gate approve.
         next_sid
         SID_F11A="$SID"
         nodejs "$SID_F11A" "$PRE$SEED_DONE_JS"

@@ -23,7 +23,7 @@ S.markStep(sid, "detail", "complete");
 S.markStep(sid, "review_tests", "complete", { review_scope_manifest: {v:1,files:{"tests/f.sh":"tok-1"}}, wsid: "wsid-1" });
 S.recordSessionModel(sid, { id: "claude-opus-5", source: "transcript" });
 S.setLastPushedSha(sid, "0".repeat(40));
-{ const st = S.readState(sid); st.closes_issues = [1733]; st.workflow_type = "wf-code"; S.writeState(sid, st); }
+{ const st = S.readState(sid); st.closes_issues = [1733]; st.deliverable_type = "wf-code"; S.writeState(sid, st); }
 '
 
 # Block-scoped on purpose: R8 concatenates this snippet twice into one script, so a
@@ -104,14 +104,14 @@ if run_case "R5/toplevel-survives"; then
 const st = S.readState(sid);
 console.log([
   "closes_issues=" + JSON.stringify(st.closes_issues),
-  "workflow_type=" + st.workflow_type,
+  "deliverable_type=" + st.deliverable_type,
   "last_pushed_sha=" + (st.last_pushed_sha ? "kept" : "LOST"),
   "session_model=" + (st.session_model && st.session_model.id),
   "created_at_stable=" + (st.created_at === JSON.parse(raw()).created_at),
 ].join(" "));
 '
     assert_eq "R5/toplevel-survives" \
-        "closes_issues=[1733] workflow_type=wf-code last_pushed_sha=kept session_model=claude-opus-5 created_at_stable=true" \
+        "closes_issues=[1733] deliverable_type=wf-code last_pushed_sha=kept session_model=claude-opus-5 created_at_stable=true" \
         "$NODE_OUT"
 fi
 
@@ -234,7 +234,7 @@ console.log([
   "prefix_identical=" + (JSON.stringify(after.slice(0, before.length)) === beforeJson),
   "reset_event=" + after.filter((e) => e.kind === "reset" && e.from_step === "workflow_init").length,
   "still_complete=" + (anyComplete.join(",") || "-"),
-  "settings_kept=" + (st.workflow_type === "wf-code" && JSON.stringify(st.closes_issues) === "[1733]"),
+  "settings_kept=" + (st.deliverable_type === "wf-code" && JSON.stringify(st.closes_issues) === "[1733]"),
   "seq_contiguous=" + after.every((e, i) => e.seq === i + 1),
 ].join(" "));
 '
@@ -411,7 +411,7 @@ console.log([
   "reasons=" + resets.map((e) => e.reason).sort().join(","),
   "contiguous=" + ev.every((e, i) => e.seq === i + 1),
   "unique_seq=" + (new Set(ev.map((e) => e.seq)).size === ev.length),
-  "settings_kept=" + (st.workflow_type === "wf-code" && JSON.stringify(st.closes_issues) === "[1733]"),
+  "settings_kept=" + (st.deliverable_type === "wf-code" && JSON.stringify(st.closes_issues) === "[1733]"),
 ].join(" "));
 '
     assert_eq "R17/concurrent-reset" \

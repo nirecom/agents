@@ -1,6 +1,6 @@
 #!/bin/bash
-# detect-sc7-tests.sh: bin/session-close-detect-wf-meta.js + bin/session-close-render-sc7.js
-# Tests: bin/session-close-detect-wf-meta.js, bin/session-close-render-sc7.js
+# detect-sc7-tests.sh: bin/session-close-detect-route.js + bin/session-close-render-sc7.js
+# Tests: bin/session-close-detect-route.js, bin/session-close-render-sc7.js
 # Tags: scope:issue-specific, feature-2434, control-dir
 #
 # Sourced helpers: feature-1463-session-close-scriptify/helpers.sh
@@ -31,23 +31,33 @@ test_T12_sc7_absent_path_empty() {
     fi
 }
 
+# #2527: the detector prints ROUTE=wf-meta|pull_request|direct. A missing step set
+# (branching not settled) has no recorded delivery path, so the live provisional value
+# decides: ENFORCE_WORKTREE is pinned per call so the developer's env cannot leak in.
+detect_route() {  # <sid> <enforce_worktree> -> stdout of the detector
+    run_with_timeout 120 env WORKFLOW_STATE_DIR="$(node_path "${TMPDIR_BASE}/wf-state")" ENFORCE_WORKTREE="$2" ENFORCE_WORKTREE_EXCLUDE= node "$DETECT_JS" --session "$1" 2>/dev/null
+}
 test_T13_detect_wf_meta_yes() {
-    if [ ! -f "$DETECT_JS" ]; then skip "T13_detect_wf_meta_yes (bin/session-close-detect-wf-meta.js missing)"; return; fi
+    if [ ! -f "$DETECT_JS" ]; then skip "T13_detect_wf_meta_yes (bin/session-close-detect-route.js missing)"; return; fi
     mkdir -p "${TMPDIR_BASE}/wf-state"
     printf '{"workflow_type":"wf-meta","steps":{}}\n' > "${TMPDIR_BASE}/wf-state/t13.json"
-    local out; out="$(run_with_timeout 120 env WORKFLOW_STATE_DIR="$(node_path "${TMPDIR_BASE}/wf-state")" node "$DETECT_JS" t13 2>/dev/null)"
-    if [ "$out" = "yes" ]; then pass "T13_detect_wf_meta_yes: wf-meta state -> 'yes'"; else fail "T13_detect_wf_meta_yes: expected 'yes', got '$out'"; fi
+    local out; out="$(detect_route t13 on)"
+    if [ "$out" = "ROUTE=wf-meta" ]; then pass "T13_detect_wf_meta_yes: wf-meta state -> ROUTE=wf-meta"; else fail "T13_detect_wf_meta_yes: expected 'ROUTE=wf-meta', got '$out'"; fi
 }
 test_T14_detect_wf_meta_no() {
-    if [ ! -f "$DETECT_JS" ]; then skip "T14_detect_wf_meta_no (bin/session-close-detect-wf-meta.js missing)"; return; fi
+    if [ ! -f "$DETECT_JS" ]; then skip "T14_detect_wf_meta_no (bin/session-close-detect-route.js missing)"; return; fi
+    mkdir -p "${TMPDIR_BASE}/wf-state"
     printf '{"workflow_type":"wf-code","steps":{}}\n' > "${TMPDIR_BASE}/wf-state/t14.json"
-    local out; out="$(run_with_timeout 120 env WORKFLOW_STATE_DIR="$(node_path "${TMPDIR_BASE}/wf-state")" node "$DETECT_JS" t14 2>/dev/null)"
-    if [ "$out" = "no" ]; then pass "T14_detect_wf_meta_no: wf-code state -> 'no'"; else fail "T14_detect_wf_meta_no: expected 'no', got '$out'"; fi
+    local out; out="$(detect_route t14 on)"
+    if [ "$out" = "ROUTE=pull_request" ]; then pass "T14_detect_wf_meta_no: wf-code state, provisional on -> ROUTE=pull_request"; else fail "T14_detect_wf_meta_no: expected 'ROUTE=pull_request', got '$out'"; fi
+    out="$(detect_route t14 off)"
+    if [ "$out" = "ROUTE=direct" ]; then pass "T14_detect_wf_meta_no: wf-code state, provisional off -> ROUTE=direct"; else fail "T14_detect_wf_meta_no: expected 'ROUTE=direct', got '$out'"; fi
 }
 test_T17_detect_no_state() {
-    if [ ! -f "$DETECT_JS" ]; then skip "T17_detect_no_state (bin/session-close-detect-wf-meta.js missing)"; return; fi
-    local out code; out="$(run_with_timeout 120 env WORKFLOW_STATE_DIR="$(node_path "${TMPDIR_BASE}/wf-state")" node "$DETECT_JS" no-state-t17 2>/dev/null)"; code=$?
-    if [ "$out" = "no" ] && [ "$code" = "0" ]; then pass "T17_detect_no_state: missing state -> 'no', exit 0"; else fail "T17_detect_no_state: expected 'no'/exit 0, got '$out'/exit $code"; fi
+    if [ ! -f "$DETECT_JS" ]; then skip "T17_detect_no_state (bin/session-close-detect-route.js missing)"; return; fi
+    mkdir -p "${TMPDIR_BASE}/wf-state"
+    local out code; out="$(detect_route no-state-t17 off)"; code=$?
+    if [ "$out" = "ROUTE=direct" ] && [ "$code" = "0" ]; then pass "T17_detect_no_state: missing state -> provisional ROUTE=direct, exit 0"; else fail "T17_detect_no_state: expected 'ROUTE=direct'/exit 0, got '$out'/exit $code"; fi
 }
 test_T15_T18_sc7_variants() {
     if [ ! -f "$SC7_JS" ]; then skip "T15_T18_sc7_variants (bin/session-close-render-sc7.js missing)"; return; fi

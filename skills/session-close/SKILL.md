@@ -1,6 +1,6 @@
 ---
 name: session-close
-description: Orchestrate session close — Phase 2 issue close + Final Report. Replaces CLAUDE.md WF-CODE-12. Handles both ENFORCE_WORKTREE on (worktree path) and off (branch/main path).
+description: Orchestrate session close — Phase 2 issue close + Final Report. Replaces CLAUDE.md WF-CODE-12. Routes by the recorded delivery path (pull_request, direct) and the WF-META deliverable type.
 user-invocable: true
 ---
 
@@ -13,9 +13,9 @@ reflects every terminal action.
 ## Pre-flight
 
 - `AGENTS_MAIN_ROOT` must be set.
-- Caller context (under `ENFORCE_WORKTREE=on`): `/worktree-end` WE-1..WE-22 have
-  already completed (worktree merged and removed; `<CONTROL_DIR>/final-report-env.json` exists).
-- Caller context (under `ENFORCE_WORKTREE=off`): the PR is merged. No worktree-end
+- Caller context (pull_request path): `/worktree-end` WE-1..WE-18a have
+  already completed (PR merged, worktree removed; `<CONTROL_DIR>/final-report-env.json` exists).
+- Caller context (direct: deliver is complete): `/deliver` pushed to the default branch. No worktree-end
   ran; the env file does not yet exist.
 
 ## SC-0 — Resolve PLANS_DIR and session id
@@ -29,21 +29,14 @@ Resolve `<session-id>` from `$CLAUDE_CODE_SESSION_ID` with the fallback chain us
 `<PLANS_DIR>`, `<CONTROL_DIR>` and `<session-id>` are **LLM-substituted literals** — shell variables
 do not persist between Bash tool calls.
 
-## SC-1a — Detect WF-META session
+## SC-1 — Detect the route
 
 Run:
-  node "$AGENTS_MAIN_ROOT/bin/session-close-detect-wf-meta.js" "<session-id>"
+  node "$AGENTS_MAIN_ROOT"/bin/session-close-detect-route.js --session "<session-id>"
 
-- stdout `yes` → WF-META session. Record `IS_WF_META=yes` as an LLM-tracked state literal (not a shell variable — every Bash call is self-contained). Proceed to SC-2C.
-- stdout `no` → proceed to SC-1b (ENFORCE_WORKTREE detection).
-
-## SC-1b — Detect ENFORCE_WORKTREE mode
-
-Check via Bash:
-`bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" ENFORCE_WORKTREE on'`
-
-- stdout `ON` or `ERROR` → worktree path (SC-2A).
-- stdout `OFF` → branch/main path (SC-2B).
+- `ROUTE=wf-meta` → WF-META session. Record `IS_WF_META=yes` as an LLM-tracked state literal (not a shell variable — every Bash call is self-contained). Proceed to SC-2C.
+- `ROUTE=pull_request` → worktree path (SC-2A).
+- `ROUTE=direct` → direct delivery path (SC-2B).
 
 ## SC-2A — Worktree path: reuse existing env JSON
 
@@ -56,15 +49,13 @@ Then write the late-finding alert eligibility flag (#997):
   node "$AGENTS_MAIN_ROOT/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
 Proceed to SC-3.
 
-## SC-2B — Branch/main path: build minimal env JSON
+## SC-2B — Direct path: build minimal env JSON
 
-```bash
-node "$AGENTS_MAIN_ROOT/bin/session-close-build-env.js" --session "<session-id>"
-```
+Run: `node "$AGENTS_MAIN_ROOT/bin/session-close-build-env.js" --direct --session "<session-id>"` — a missing PR is expected on this path.
 
 Exit 0 → write the late-finding alert eligibility flag (#997):
   node "$AGENTS_MAIN_ROOT/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
-Then proceed to SC-3. Non-zero → abort (PR unresolvable).
+Then proceed to SC-3. Non-zero → surface stderr and abort.
 
 ## SC-2C — WF-META path: write PR-less env JSON
 
@@ -173,7 +164,7 @@ Mark surfaced and complete:
 
 ## SC-8 — Promote residual WORKTREE_NOTES entries (post-Final-Report)
 
-- Runs after the Final Report is emitted, only when unpromoted entries remain (`/worktree-end` WE-11 normally clears them): resolve the notes path via `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" resolve --caller session-close --session-id "<session-id>"`; on `action: skip` return, otherwise run `skills/_shared/notes-promotion.md` (NP-1..NP-11) against the returned `notesPath`.
+- Runs after the Final Report is emitted, only when unpromoted entries remain (`/worktree-end` WE-7 normally clears them): resolve the notes path via `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" resolve --caller session-close --session-id "<session-id>"`; on `action: skip` return, otherwise run `skills/_shared/notes-promotion.md` (NP-1..NP-11) against the returned `notesPath`.
 
 ## SC-9 — Relocate legacy session state (temporary, #2511)
 
@@ -189,4 +180,4 @@ Run last, once: `bash "$AGENTS_MAIN_ROOT/skills/session-close/scripts/relocate-s
 - Every Bash call is self-contained — no shell variable crosses call boundaries.
 - On fallback or step degradation (synthetic outcome fallback, non-GitHub skip path): run `node "$AGENTS_MAIN_ROOT/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter session-close` (session-id auto-resolves).
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
-- WF-META session (`workflow_type: wf-meta`) → never invoke `/issue-close-finalize`; SC-3 writes `skipped_wf_meta` outcome directly and skips to SC-6.
+- WF-META session (`deliverable_type: wf-meta`) → never invoke `/issue-close-finalize`; SC-3 writes `skipped_wf_meta` outcome directly and skips to SC-6.

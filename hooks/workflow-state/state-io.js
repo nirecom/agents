@@ -75,4 +75,7 @@ module.exports = {
   readSkipVerdict: skipVerdict.readSkipVerdict,
   hasSpeculativeSkipPending: skipVerdict.hasSpeculativeSkipPending,
   recordSessionWorktree: sessionFields.recordSessionWorktree,
+  setDeliverableType: sessionFields.setDeliverableType,
+  setProjectManagementType: sessionFields.setProjectManagementType,
+  setDeliveryPath: sessionFields.setDeliveryPath,
 };

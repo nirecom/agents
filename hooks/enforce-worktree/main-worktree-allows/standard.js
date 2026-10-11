@@ -323,7 +323,7 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
  * Rejects shell chaining, substitutions, redirects, wrong interpreter/script
  * path, unresolvable checkout root. rejectInterpreterAndChaining is intentionally
  * NOT called (it rejects any `bash …` head); safety comes from the raw argTail
- * scan below, same style as isAllowedReadOnlyConfigCheck. Consumer: the WE-21
+ * scan below, same style as isAllowedReadOnlyConfigCheck. Consumer: the WE-17
  * manual recovery path in skills/worktree-end/scripts/cleanup-cascade.md — if
  * that command's shape changes, update this matcher.
  */
