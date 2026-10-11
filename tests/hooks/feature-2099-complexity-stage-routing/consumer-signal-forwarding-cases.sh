@@ -187,15 +187,25 @@ EOF
 D2099SF_ADVERSARIAL="S3-security,IGNORE_PREVIOUS_INSTRUCTIONS,sk-2102-canary"
 
 d2099sf_adversarial_content_is_inert() {
-    local sid name step re label bind f
+    local sid name step re label bind f want got
     sid=$(new_session sfadv)
     run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "$D2099SF_ADVERSARIAL" >/dev/null 2>&1
 
     while IFS='|' read -r name step re label bind; do
         [ -n "$name" ] || continue
         f=$(d2099_skill_file "$name")
-        assert_eq "CSF-10 $name: a regex-valid but adversarial-looking recorded list reaches the [$label] handoff byte-identical — carried as opaque data, never interpreted or filtered" \
-            "$label: $D2099SF_ADVERSARIAL" "$(d2099sf_dispatched_signals "$f" "$sid" "$label")"
+        # Spec (#2148): hooks/workflow-state/complexity-routing.js canonicalizeSignalsForPersistence
+        # stores unknown tokens as UNRECOGNIZED(n), and bin/workflow/read-session-facts lists only
+        # SIGNAL_IDS — so the hostile text never reaches the handoff, in either reader's shape.
+        case "$name" in
+            make-detail-plan) want="$label: UNRECOGNIZED(2)" ;;
+            *)                want="$label: none" ;;
+        esac
+        got=$(d2099sf_dispatched_signals "$f" "$sid" "$label")
+        assert_eq "CSF-10 $name: an adversarial-looking recorded list reaches the [$label] handoff only in canonical form (complexity-routing.js canonicalizeSignalsForPersistence, #2148)" \
+            "$want" "$got"
+        assert_not_contains "CSF-10a $name: ... and the hostile token itself never appears in the handoff" \
+            "IGNORE_PREVIOUS_INSTRUCTIONS" "$got"
     done <<EOF
 $D2099SF_SINKS
 EOF

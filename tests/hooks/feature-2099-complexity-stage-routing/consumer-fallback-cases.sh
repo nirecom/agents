@@ -11,45 +11,18 @@ d2099cf_label() {
     grep -oE 'SIGNALS:' "$RUBRIC" 2>/dev/null | head -1
 }
 
-# The text step itself: a judgment's LAST label line, reduced to a csv.
-d2099cf_extract() {
-    local label="$1"
-    grep -E "^[[:space:]]*$label" | tail -1 | sed -E "s/^[[:space:]]*$label[[:space:]]*//" | tr -d ' '
-}
-
-# What the skill says to do when no label line parses out of its own judgment.
-# Documenting nothing means malformed judgment output has no defined behaviour.
-d2099cf_unparseable_token() {
-    grep -oE 'S0-undecidable' "$1" 2>/dev/null | head -1
-}
-
 # One consumer's whole fallback, driven by the documents under test:
-#   judgment prose -> extraction -> the skill's own derive command -> level
-# The sibling suites hand signal ids straight to each documented command, so the
-# half of MDP-3 / WT-6 / WCD-3 that runs when nothing was persisted stays untested:
-# the ids the skill wrote as PROSE must become a `--signals` argument. Running
-# that text step for real is what stops an unparseable judgment from reading as
+#   judgment text -> skill's normalize command -> skill's derive command -> level
+# Running the real text step is what stops an unparseable judgment from reading as
 # "zero signals" — which routes LOW, the cheap model on a job nobody sized.
 d2099cf_level() {
-    local f="$1" sid="$2" judgment="$3" label csv cmd out
+    local f="$1" sid="$2" judgment="$3" label out
     label=$(d2099cf_label)
     [ -n "$label" ] || { echo "NO_OUTPUT_LABEL_IN_RUBRIC"; return; }
-    csv=$(printf '%s\n' "$judgment" | d2099cf_extract "$label")
-    if [ -z "$csv" ]; then
-        # Nothing parseable: falling through with an empty csv would mean "zero
-        # signals" = low, so the skill must document an answer for this. The
-        # reserved token is a real signal id, so it is NOT translated below.
-        csv=$(d2099cf_unparseable_token "$f")
-        [ -n "$csv" ] || { echo "NO_UNPARSEABLE_RULE_IN_SKILL"; return; }
-    else
-        # The judge's zero-signal MARKER becomes the CLI's zero-signal VALUE.
-        # Handing `none` through verbatim would route undecidable-high — see
-        # d2099_csv_for_cli in the runner (round-9 C1).
-        csv=$(d2099_csv_for_cli "$csv")
-    fi
-    cmd=$(d2099_extract_cmd "$f" "derive-complexity-level")
-    [ -n "$cmd" ] || { echo "NO_DERIVE_COMMAND_IN_SKILL"; return; }
-    out=$(d2099_run_skill_cmd "$cmd" "$sid" "$csv" | head -1)
+    # normalize-judge-signals owns the text step (label parse, `none` -> empty csv,
+    # malformed/unknown -> S0-undecidable); derive reads its control-dir file (#2434).
+    out=$(d2099n_run_chain "$f" "$sid" "$judgment" | head -1)
+    [ "$out" = "$D2099N_NONE" ] && { echo "NO_FALLBACK_CHAIN_IN_SKILL"; return; }
     case "$out" in
         level=*) printf '%s' "${out#level=}" ;;
         *) printf 'UNPARSEABLE:%s' "$out" ;;
@@ -66,7 +39,7 @@ d2099cf_judgment() {
 
 # CF-1: the extraction must have teeth before anything downstream means much.
 d2099cf_extraction_is_real() {
-    local label got
+    local label got sid f="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md" cf
     label=$(d2099cf_label)
     if [ -z "$label" ]; then
         fail "CF-1 the rubric states no 'SIGNALS:' output label, so the fallback has no format to parse and every case below is unattributable"
@@ -74,13 +47,15 @@ d2099cf_extraction_is_real() {
     fi
     pass "CF-1 the rubric states the judge's output label ($label)"
 
-    got=$(d2099cf_judgment "SIGNALS: S1-multi-file, S2-architecture" | d2099cf_extract "$label")
-    assert_eq "CF-1a the text step pulls the ids out of judgment prose, whitespace and all" \
-        "S1-multi-file,S2-architecture" "$got"
-    got=$(d2099cf_judgment "SIGNALS: none" | d2099cf_extract "$label")
-    assert_eq "CF-1b ... and reports a zero-signal judgment as the rubric spells it" "none" "$got"
-    got=$(d2099cf_judgment "The signals are listed above." | d2099cf_extract "$label")
-    assert_eq "CF-1c ... and yields nothing at all when there is no label line" "" "$got"
+    sid=$(new_session cf1)
+    cf=$(d2099n_control_path "$sid" "detail")
+    d2099n_run_chain "$f" "$sid" "$(d2099cf_judgment "SIGNALS: S1-multi-file, S2-architecture")" >/dev/null
+    assert_eq "CF-1a normalize pulls the ids out of judgment prose, whitespace and all (bin/workflow/normalize-judge-signals)" \
+        "S1-multi-file,S2-architecture" "$(tr -d '[:space:]' < "$cf" 2>/dev/null)"
+    d2099n_run_chain "$f" "$sid" "$(d2099cf_judgment "SIGNALS: none")" >/dev/null
+    assert_eq "CF-1b ... and writes a zero-signal judgment as the empty csv" "" "$(tr -d '[:space:]' < "$cf" 2>/dev/null)"
+    d2099n_run_chain "$f" "$sid" "$(d2099cf_judgment "The signals are listed above.")" >/dev/null
+    assert_eq "CF-1c ... and writes S0-undecidable when there is no label line" "S0-undecidable" "$(tr -d '[:space:]' < "$cf" 2>/dev/null)"
 }
 
 # --- CF-9: the zero-signal marker -> CLI argument translation -----------------
@@ -119,12 +94,11 @@ d2099cf_untranslated_marker_is_high() {
     while IFS='|' read -r name stage step _; do
         [ -n "$name" ] || continue
         f=$(d2099_skill_file "$name")
-        cmd=$(d2099_extract_cmd "$f" "derive-complexity-level")
-        if [ -z "$cmd" ]; then
+        got=$(d2099n_run_derive_signals "$f" "none" | head -1)
+        if [ "$got" = "$D2099N_NONE" ]; then
             fail "CF-10 $step: unattributable — no derive command to hand the untranslated marker to"
             continue
         fi
-        got=$(d2099_run_skill_cmd "$cmd" "$sid" "none" | head -1)
         case "$got" in
             level=high) pass "CF-10 $step: the UNtranslated literal 'none' routes undecidable-high, so the translation is what produces CF-4's low" ;;
             level=low)  fail "CF-10 $step: the literal 'none' routed LOW — it is being treated as a signal id the routing table knows, so CF-4 would pass with or without the translation" ;;
@@ -211,8 +185,8 @@ d2099cf_malformed_fails_high() {
                     pass "CF-5 [$label] $step fails HIGH on a judgment it cannot parse" ;;
                 low)
                     fail "CF-5 [$label] $step read an UNPARSEABLE judgment as zero signals and routed LOW — the cheap model gets a task nobody sized. Judgment: [$raw]" ;;
-                NO_UNPARSEABLE_RULE_IN_SKILL)
-                    fail "CF-5 [$label] $step documents no rule for a judgment with no parseable signal line, so a malformed judgment falls through as zero signals -> low" ;;
+                NO_FALLBACK_CHAIN_IN_SKILL)
+                    fail "CF-5 [$label] $step documents no runnable normalize -> derive chain (skills/$step SKILL.md), so a malformed judgment has no defined routing" ;;
                 *)
                     fail "CF-5 [$label] $step neither routed high nor low on an unparseable judgment: got [$got]" ;;
             esac

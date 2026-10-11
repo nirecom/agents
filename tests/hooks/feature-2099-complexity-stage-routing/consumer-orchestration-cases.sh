@@ -14,23 +14,7 @@ D2099_CONSUMERS="make-detail-plan|detail|MDP-3|MDP-4
 write-tests|write_tests|WT-6|WT-7
 write-code|write_code|WCD-3|WCD-4"
 
-d2099_skill_file() { echo "$SCRIPT_CHECKOUT_ROOT/skills/$1/SKILL.md"; }
-
-# Pull the shell command the skill tells the orchestrator to run. The skills wrap
-# it as `bash -c '<cmd>'`; the inner command uses double quotes only, so the
-# single quotes delimit it unambiguously.
-#
-# Bounded to the REQUIRED step's own section (d2099_section_cli_line): a whole-file
-# grep would take the first mention anywhere — an example, a stale duplicate, or
-# prose — and validate that instead of MDP-3/WT-6/WCD-3 (round-10 C1). A section
-# holding zero or several such lines yields "" here and is reported by name in
-# CO-0 below, never resolved to an arbitrary pick.
-d2099_extract_cmd() {
-    local f="$1" cli="$2" line
-    line=$(d2099_section_cli_line "$f" "$cli" | grep -oE "bash -c '[^']*'" | head -1)
-    [ -n "$line" ] || { echo ""; return; }
-    printf '%s' "$line" | sed -E "s/^bash -c '//; s/'$//"
-}
+# d2099_skill_file and the fallback-chain extraction (normalize -> derive): consumer-normalize-chain.sh.
 
 # Which CLI each consumer reads its stored evaluation through, how to extract that
 # command, and how to normalize its answer: consumer-read-cli.sh (sourced first).
@@ -43,81 +27,6 @@ d2099_launch_step() {
         WCD-3) echo "WCD-4" ;;
         *) echo "" ;;
     esac
-}
-
-# --- the signals FILE, the only channel the judged csv now travels on ----------
-# MDP-3 / WT-6 / WCD-3 no longer carry a `--signals <csv-or-empty>` splice slot.
-# The orchestrator Writes the judged csv (Write tool, never Bash) to
-# `<PLANS_DIR>/<session-id>-<stage>-signals.txt` and the documented line carries
-# only `--signals-file "<that path>"` — a constant shape no judge text reaches.
-# These helpers simulate exactly that Write step, mirroring the producer side's
-# d2099p_plans_dir / d2099p_write_signals_file (CPR-ORTH: one mechanism, two
-# boundaries), so every case below runs the skill's line VERBATIM apart from the
-# `<PLANS_DIR>` / `<session-id>` slots the skill itself marks as fill-in.
-D2099_CONSUMER_PLANS=""
-d2099_plans_dir() {
-    if [ -z "$D2099_CONSUMER_PLANS" ]; then
-        D2099_CONSUMER_PLANS="$TMPDIR_BASE/consumer-plans"
-        mkdir -p "$D2099_CONSUMER_PLANS"
-    fi
-    printf '%s' "$D2099_CONSUMER_PLANS"
-}
-
-# Fill ONLY the two slots the skill marks as fill-in. The csv is never
-# substituted into the command, so no payload can be re-quoted into something
-# the skill never wrote — which is what makes CF-8 a test of the DESIGN rather
-# than of this harness's quoting.
-d2099_fill_signals_file_cmd() {
-    local cmd="$1" sid="$2" dir
-    dir=$(d2099_plans_dir)
-    printf '%s' "$cmd" | sed -E -e "s#<PLANS_DIR>#$dir#g" -e "s#<session-id>#$sid#g"
-}
-
-# The path the FILLED command will read, taken out of that command instead of
-# rebuilt here (CPR-SSOT): the file this fixture writes and the file the CLI
-# opens cannot drift apart, and a renamed path in a SKILL.md moves both at once.
-d2099_signals_file_path() {
-    printf '%s' "$1" | grep -oE -- '--signals-file "[^"]*"' | head -1 \
-        | sed -E 's/^--signals-file "//; s/"$//'
-}
-
-# Run an extracted command exactly as written, with only the environment the
-# skill assumes. Two documented line shapes, DETECTED rather than assumed (a
-# sibling fixture or a future skill may still document the older one):
-#   `--signals-file "<PLANS_DIR>/<session-id>-...">` — the csv goes into the FILE
-#     at the resolved path, by a plain write, never into the command text the
-#     shell parses. That is the whole point of the redesign.
-#   `<placeholder>` — the pre-#2099 splice slot: the csv is substituted into the
-#     command line, escaped for sed.
-# Anything else (the read command) runs untouched.
-d2099_run_skill_cmd() {
-    local cmd="$1" sid="$2" signals="${3:-}" escaped_signals path
-    [ -n "$cmd" ] || { echo "__NO_COMMAND__"; return; }
-    case "$cmd" in
-        *--signals-file*)
-            cmd=$(d2099_fill_signals_file_cmd "$cmd" "$sid")
-            path=$(d2099_signals_file_path "$cmd")
-            # A slot this fixture cannot resolve must be a NAMED token, never a
-            # corrupted path that measures the CLI's ENOENT instead of routing.
-            [ -n "$path" ] || { echo "__NO_SIGNALS_FILE_PATH__"; return; }
-            case "$path" in
-                *'<'*|*'>'*) echo "__UNFILLED_SLOT_IN_SIGNALS_FILE_PATH__"; return ;;
-            esac
-            mkdir -p "$(dirname "$path")"
-            printf '%s' "$signals" > "$path"
-            ;;
-        *'<'*)
-            # `signals` is untrusted (CF-8 feeds it hostile payloads containing
-            # `/` and `&`), and both are special inside a sed replacement: `/`
-            # closes the s/// expression early (the char-N "unknown option to
-            # `s'" failure) and `&` expands to the whole match. Escape both
-            # before splicing into the s///.
-            escaped_signals=$(printf '%s' "$signals" | sed -e 's/[\/&]/\\&/g')
-            cmd=$(printf '%s' "$cmd" | sed -E "s/<[^>]*>/$escaped_signals/g")
-            ;;
-    esac
-    SESSION_ID="$sid" \
-        run_with_timeout bash -c "$cmd" 2>/dev/null
 }
 
 # d2099_orch_model_for — reads model= from BIN_DERIVE for the given level.
@@ -172,19 +81,14 @@ d2099_orch_commands_are_real() {
         fi
         assert_contains "CO-1b $rstep's command passes the session through" \
             '--session "$SESSION_ID"' "$cmd"
-        cmd=$(d2099_extract_cmd "$f" "derive-complexity-level")
+        cmd=$(d2099n_extract_node_cmd "$f" "derive-complexity-level")
         assert_contains "CO-2 $step's NONE fallback carries a runnable derive command for its stage" \
             "--stage $stage" "$cmd"
-        # CO-2a/CO-2b are the consumer-side twin of PO-1b/PO-1b1: the judged csv
-        # reaches the CLI by FILE at a slot-shaped path, and the splice slot every
-        # CF-8 payload used to travel through is gone. Without CO-2b the runner
-        # above would silently take its legacy `<placeholder>` branch again.
-        assert_contains "CO-2a $step's fallback passes the judged csv by file" \
-            "--signals-file" "$cmd"
+        # The judged csv reaches derive via normalize's control-dir file (CN-2*), never a splice slot.
+        assert_contains "CO-2a $step's fallback derive reads the normalized csv through the session (#2434)" \
+            '--session "<session-id>"' "$cmd"
         assert_not_contains "CO-2b $step's fallback carries no --signals <csv> splice slot" \
-            "--signals <" "$cmd"
-        assert_contains "CO-2c $step's fallback names the documented per-stage signals-file path" \
-            '--signals-file "<PLANS_DIR>/<session-id>-' "$cmd"
+            "--signals" "$cmd"
     done <<EOF
 $D2099_CONSUMERS
 EOF
@@ -263,8 +167,7 @@ d2099_orch_none_fallback() {
             write_code) want="opus"; want_level="high" ;;
             *) want="sonnet"; want_level="low" ;;
         esac
-        out=$(d2099_run_skill_cmd "$(d2099_extract_cmd "$f" "derive-complexity-level")" \
-            "$sid" "S1-multi-file" | head -1)
+        out=$(d2099n_run_chain_csv "$f" "$sid" "S1-multi-file" | head -1)
         case "$out" in level=*) ;; *) out="UNPARSEABLE:$out" ;; esac
         assert_eq "CO-7 $step: the fallback's own command answers with a level for its stage" \
             "level=$want_level" "$out"
@@ -331,7 +234,7 @@ d2099_orch_dispatched_model() {
     first=$(printf '%s\n' "$out" | head -1)
     [ "$first" = "__NO_COMMAND__" ] && { echo "NO_READ_COMMAND_IN_SKILL"; return; }
     if [ "$first" = "NONE" ]; then
-        out=$(d2099_run_skill_cmd "$(d2099_extract_cmd "$f" "derive-complexity-level")" "$sid" "$fb_signals")
+        out=$(d2099n_run_chain_csv "$f" "$sid" "$fb_signals")
         first=$(printf '%s\n' "$out" | head -1)
         [ "$first" = "__NO_COMMAND__" ] && { echo "NO_DERIVE_COMMAND_IN_SKILL"; return; }
     fi

@@ -212,6 +212,10 @@ d2099_section_step() {
         write-code:read-session-facts) echo "WCD-0" ;;
         write-tests:derive-complexity-level) echo "WT-6" ;;
         write-code:derive-complexity-level) echo "WCD-3" ;;
+        # #2434: the NONE fallback is a normalize-judge-signals -> derive chain in the same step.
+        make-detail-plan:normalize-judge-signals) echo "MDP-3" ;;
+        write-tests:normalize-judge-signals) echo "WT-6" ;;
+        write-code:normalize-judge-signals) echo "WCD-3" ;;
         clarify-intent:record-complexity-and-skip) echo "CI-C1b" ;;
         workflow-init:record-complexity-and-skip) echo "A3a" ;;
         *) echo "" ;;
@@ -394,6 +398,9 @@ case_begin "dispatch-case-files" "hooks/workflow-state/complexity-routing.js"
 # normalize its answer to the one level=/signals= shape the cases parse.
 # shellcheck source=./feature-2099-complexity-stage-routing/consumer-read-cli.sh
 . "$CASE_DIR/consumer-read-cli.sh"
+# Helper-only: the normalize -> derive fallback chain extracted from the skills (#2434).
+# shellcheck source=./feature-2099-complexity-stage-routing/consumer-normalize-chain.sh
+. "$CASE_DIR/consumer-normalize-chain.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/consumer-orchestration-cases.sh
 . "$CASE_DIR/consumer-orchestration-cases.sh"
 # Sourced after it: reuses its command-extraction and model-mapping helpers.
@@ -409,6 +416,8 @@ case_begin "dispatch-case-files" "hooks/workflow-state/complexity-routing.js"
 . "$CASE_DIR/consumer-fallback-forwarding-cases.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/producer-orchestration-cases.sh
 . "$CASE_DIR/producer-orchestration-cases.sh"
+# shellcheck source=./feature-2099-complexity-stage-routing/producer-shared-procedure-cases.sh
+. "$CASE_DIR/producer-shared-procedure-cases.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/legacy-record-cases.sh
 . "$CASE_DIR/legacy-record-cases.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/prompt-injection-cases.sh

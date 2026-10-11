@@ -20,7 +20,7 @@ write-code|write_code"
 # read as a passing comparison against another empty string.
 d2099ff_derive() {
     local f="$1" sid="$2" csv="$3" out first
-    out=$(d2099_run_skill_cmd "$(d2099_extract_cmd "$f" "derive-complexity-level")" "$sid" "$csv")
+    out=$(d2099n_run_chain_csv "$f" "$sid" "$csv")
     first=$(printf '%s\n' "$out" | sed -n 1p)
     case "$first" in
         level=*) printf '%s' "$first" ;;
@@ -29,13 +29,13 @@ d2099ff_derive() {
     esac
 }
 
-# The FILE that command opens, taken out of the command itself (CPR-SSOT with
-# the runner), so a renamed path in a SKILL.md moves the assertion with it.
+# The control-dir FILE that normalize writes and derive reads, with the stage taken
+# out of the skill's own normalize command (CPR-SSOT), so a renamed stage moves it.
 d2099ff_path() {
-    local f="$1" sid="$2" cmd
-    cmd=$(d2099_extract_cmd "$f" "derive-complexity-level")
-    [ -n "$cmd" ] || { printf 'NO_DERIVE_COMMAND_IN_SKILL'; return; }
-    d2099_signals_file_path "$(d2099_fill_signals_file_cmd "$cmd" "$sid")"
+    local f="$1" sid="$2" ncmd
+    ncmd=$(d2099n_extract_node_cmd "$f" "normalize-judge-signals")
+    [ "$ncmd" = "$D2099N_NONE" ] && { printf 'NO_NORMALIZE_COMMAND_IN_SKILL'; return; }
+    d2099n_control_path "$sid" "$(d2099n_stage_of "$ncmd")"
 }
 
 # CFF-1/CFF-2: the fallback is only reachable when the reader says NONE, and the
@@ -50,7 +50,7 @@ d2099ff_fallback_entry_gate() {
         assert_eq "CFF-1 $name: an unrecorded session reads NONE, which is what routes it to the signals-file fallback" \
             "NONE" "$(d2099sf_read "$f" "$sid")"
         assert_not_contains "CFF-2 $name: the fallback's own command answers with a level only — no signals= line comes back out of it" \
-            "signals=" "$(d2099_run_skill_cmd "$(d2099_extract_cmd "$f" "derive-complexity-level")" "$sid" "S3-security")"
+            "signals=" "$(d2099n_run_chain_csv "$f" "$sid" "S3-security")"
     done <<EOF
 $D2099FF_CONSUMERS
 EOF
@@ -70,11 +70,11 @@ d2099ff_paths_are_stage_distinct() {
     done <<EOF
 $D2099FF_CONSUMERS
 EOF
-    assert_block "CFF-3 each consumer's fallback names its own per-stage signals file under the session id" \
+    assert_block "CFF-3 each consumer's fallback names its own per-stage signals file in the session control dir (#2434)" \
         "$(printf '%s' "$out")" <<EOF
-make-detail-plan -> $sid-detail-signals.txt
-write-tests -> $sid-write-tests-signals.txt
-write-code -> $sid-write-code-signals.txt
+make-detail-plan -> detail-signals.txt
+write-tests -> write-tests-signals.txt
+write-code -> write-code-signals.txt
 EOF
     seen=$(printf '%s' "$out" | grep -c 'signals.txt')
     assert_eq "CFF-4 ... and all three resolved to a real filename rather than an unfilled slot" "3" "$seen"

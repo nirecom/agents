@@ -91,21 +91,24 @@ d2099_write_points() {
 
     assert_eq "CS-15 clarify-intent CI-C1b still drives record-complexity-and-skip" "yes" \
         "$(d2099_step_has "$ci" CI-C1b "record-complexity-and-skip")"
-    # --signals-file, not --signals: a bare `--signals <csv>` would be the #2099
-    # PO-INJ splice slot back. `--signals` alone would match either, so the
-    # negative half is what carries the contract.
-    assert_eq "CS-16 CI-C1b passes the judged csv by file" "yes" \
-        "$(d2099_step_has "$ci" CI-C1b "--signals-file")"
-    assert_eq "CS-16a CI-C1b carries no --signals <csv> splice slot (PO-INJ)" "no" \
-        "$(d2099_step_has "$ci" CI-C1b "--signals <")"
+    # The command line lives in the shared COS procedure (skills/_shared/complexity-and-outline-skip.md,
+    # COS-3); each producer step delegates to it. --signals-file, not --signals: a bare
+    # `--signals <csv>` would be the #2099 PO-INJ splice slot back, so the negative half carries the contract.
+    local cos="$SCRIPT_CHECKOUT_ROOT/skills/_shared/complexity-and-outline-skip.md"
+    assert_eq "CS-16 CI-C1b delegates the judged-csv hand-off to the shared COS procedure" "yes" \
+        "$(d2099_step_has "$ci" CI-C1b "skills/_shared/complexity-and-outline-skip.md")"
+    assert_eq "CS-16b the shared COS procedure passes the judged csv by file (COS-3)" "yes" \
+        "$(d2099_has "$cos" "--signals-file")"
+    assert_eq "CS-16a the shared COS procedure carries no --signals <csv> splice slot (PO-INJ)" "no" \
+        "$(d2099_has "$cos" "--signals <")"
     assert_eq "CS-17 CI-C1b no longer passes --verdict" "no" \
         "$(d2099_step_has "$ci" CI-C1b "--verdict")"
 
     assert_eq "CS-18 workflow-init A3a still drives record-complexity-and-skip" "yes" \
         "$(d2099_step_has "$wi" A3a "record-complexity-and-skip")"
-    assert_eq "CS-19 A3a passes the judged csv by file (CPR-ORTH with CI-C1b)" "yes" \
-        "$(d2099_step_has "$wi" A3a "--signals-file")"
-    assert_eq "CS-19a A3a carries no --signals <csv> splice slot (PO-INJ)" "no" \
+    assert_eq "CS-19 A3a delegates the judged-csv hand-off to the shared COS procedure (CPR-ORTH with CI-C1b)" "yes" \
+        "$(d2099_step_has "$wi" A3a "skills/_shared/complexity-and-outline-skip.md")"
+    assert_eq "CS-19a A3a itself carries no --signals <csv> splice slot (PO-INJ)" "no" \
         "$(d2099_step_has "$wi" A3a "--signals <")"
     assert_eq "CS-20 A3a no longer passes --verdict (CPR-ORTH with CI-C1b)" "no" \
         "$(d2099_step_has "$wi" A3a "--verdict")"
@@ -183,8 +186,10 @@ d2099_consumer_fallback_rules() {
     for row in "make-detail-plan|MDP-3" "write-tests|WT-6" "write-code|WCD-3"; do
         name="${row%%|*}"; step="${row##*|}"
         f="$SCRIPT_CHECKOUT_ROOT/skills/$name/SKILL.md"
-        assert_eq "CS-28 $step substitutes S0-undecidable for an unparseable or unsafe judged csv" "yes" \
-            "$(d2099_step_has "$f" "$step" "S0-undecidable")"
+        # #2434: the S0-undecidable substitution moved into bin/workflow/normalize-judge-signals;
+        # the step's duty is to route the raw judge text through it (CF-5 executes the outcome).
+        assert_eq "CS-28 $step routes the raw judgment through normalize-judge-signals (owner of the S0-undecidable substitution)" "yes" \
+            "$(d2099_step_has "$f" "$step" "normalize-judge-signals")"
         assert_eq "CS-29 $step writes that csv with the Write tool, never Bash" "yes" \
             "$(d2099_step_has "$f" "$step" "Write tool")"
     done
