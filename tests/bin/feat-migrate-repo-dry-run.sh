@@ -131,6 +131,43 @@ fi
 
 teardown_fixture
 
+# --- D7: the self-repo guard sees the same repo through its other worktree.
+# A main and a linked worktree of one repo, each holding orchestrate.sh; run from
+# one with the other as the target, both directions. A path-string compare misses it.
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+ORCH_REL="bin/github-issues/migration/orchestrate.sh"
+setup_fixture
+PAIR_MAIN="$TMP/pair-main"
+mkdir -p "$PAIR_MAIN/docs"
+cp "$FIXTURE/docs/history.md" "$FIXTURE/docs/todo.md" "$PAIR_MAIN/docs/"
+pair_ok=0
+if script_checkout_fixture_copy "$PAIR_MAIN" bin \
+    && git init -q "$PAIR_MAIN" \
+    && git -C "$PAIR_MAIN" config core.hooksPath /dev/null \
+    && git -C "$PAIR_MAIN" config core.autocrlf false \
+    && git -C "$PAIR_MAIN" add -A \
+    && git -C "$PAIR_MAIN" -c user.name=fixture -c user.email=fixture@example.invalid commit -q -m fixture \
+    && git -C "$PAIR_MAIN" worktree add -q -b pair "$TMP/pair-linked"; then
+    pair_ok=1
+fi
+if [ "$pair_ok" -eq 1 ]; then
+    PAIR_MAIN="$(cd "$PAIR_MAIN" && pwd -P)"
+    PAIR_LINKED="$(cd "$TMP/pair-linked" && pwd -P)"
+    for dir in linked-to-main main-to-linked; do
+        if [ "$dir" = linked-to-main ]; then from="$PAIR_LINKED"; to="$PAIR_MAIN"; else from="$PAIR_MAIN"; to="$PAIR_LINKED"; fi
+        OUT7=$(run_with_timeout 60 bash "$from/$ORCH_REL" "$to" --dry-run 2>&1)
+        RC7=$?
+        if [ "$RC7" -eq 0 ] && printf '%s\n' "$OUT7" | grep -q "SELF_REPO_DETECTED"; then
+            pass "D7[$dir]: the other worktree of the same repo is reported as SELF_REPO_DETECTED"
+        else
+            fail "D7[$dir]: rc=$RC7, no SELF_REPO_DETECTED in: $(printf '%s\n' "$OUT7" | head -3)"
+        fi
+    done
+else
+    fail "D7: worktree pair fixture could not be built"
+fi
+teardown_fixture
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

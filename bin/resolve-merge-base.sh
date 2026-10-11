@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# bin/resolve-merge-base.sh
 # Tests: bin/resolve-merge-base.sh
 # Tags: merge-base, ssot, baseline, anomaly-detection, scope:common, pwsh-not-required
-#
 # Single source of truth for "which commit is this branch's base, and can it be trusted?".
 #
 # Two layers, in order:
@@ -55,6 +53,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --format)
+      [[ $# -ge 2 ]] || { echo "[resolve-merge-base] $1 needs a value" >&2; exit 2; }
       FORMAT="${2:-}"
       shift 2
       ;;
@@ -248,7 +247,7 @@ if [[ -n "$SESSION_ID" && -f "$READ_CLI" ]]; then
         alt_base)          REC_ALT="$rv" ;;
         # repo_root is INFORMATIONAL ONLY and must not take part in the decision below. The
         # same session legitimately resolves against a path spelled differently (drive-letter
-        # case, /c/... vs C:\..., a symlinked worktree), and comparing paths would demote a
+        # case, MSYS vs Windows drive spelling, a symlinked worktree), and comparing paths would demote a
         # correct baseline over a cosmetic mismatch.
         *) : ;;
       esac

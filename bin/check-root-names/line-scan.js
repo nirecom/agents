@@ -7,17 +7,19 @@ const JS_EXT = /\.(?:js|cjs|mjs|jsx|ts|tsx)$/;
 const PS_EXT = /\.(?:ps1|psm1|psd1)$/;
 const PROSE_EXT = /\.(?:md|markdown|txt|rst)$/;
 const YAML_EXT = /\.ya?ml$/;
-const OTHER_EXT = /\.(?:py|rb|toml|ini|cfg|html|css|svg|tsv|csv|lock|xml)$/;
+const PY_EXT = /\.py$/;
+const OTHER_EXT = /\.(?:rb|toml|ini|cfg|html|css|svg|tsv|csv|lock|xml)$/;
 
 // A file of an unknown kind is read as shell: a renamed copy of a script stays covered.
 function langOf(rel, text) {
   const first = text.slice(0, 200).split("\n", 1)[0];
   if (/^#!.*\bnode\b/.test(first)) return "js";
   if (/^#!.*\bpwsh\b/.test(first)) return "ps";
-  if (/^#!.*\bpython/.test(first)) return "other";
+  if (/^#!.*\bpython/.test(first)) return "py";
   if (/^#!.*\b(?:ba|z|da)?sh\b/.test(first)) return "sh";
   if (JS_EXT.test(rel)) return "js";
   if (PS_EXT.test(rel)) return "ps";
+  if (PY_EXT.test(rel)) return "py";
   if (PROSE_EXT.test(rel)) return "prose";
   if (YAML_EXT.test(rel)) return "yaml";
   if (/\.json$/.test(rel)) return "json";
@@ -66,6 +68,22 @@ function jsLines(raw) {
     bare.push(b);
   }
   return { code, bare };
+}
+
+// pyLines(raw) → the lines without their `#` comments (a `#` inside a quote is kept).
+function pyLines(raw) {
+  return raw.map((line) => {
+    let quote = "";
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (quote) {
+        if (ch === "\\") i++;
+        else if (ch === quote) quote = "";
+      } else if (ch === '"' || ch === "'") quote = ch;
+      else if (ch === "#") return line.slice(0, i);
+    }
+    return line;
+  });
 }
 
 function psLines(raw) {
@@ -275,6 +293,7 @@ function view(file) {
   let marks = null;
   if (lang === "js") ({ code, bare } = jsLines(raw));
   else if (lang === "ps") bare = code = psLines(raw);
+  else if (lang === "py") bare = code = pyLines(raw);
   else if (lang === "sh") {
     const scanned = raw.map(shLine);
     bare = code = scanned.map((s) => s.code);

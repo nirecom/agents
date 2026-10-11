@@ -24,6 +24,13 @@ const JS_NEVER_KEY = objectKey(TARGETS);
 // A target name bound from, or spread next to, process.env is an environment read or hand-over.
 const JS_NEVER_BOUND = new RegExp(`\\{[^}]*(?<!${W})${any(TARGETS)}(?!${W})[^}]*\\}\\s*=\\s*process\\.env(?!${W})`);
 const JS_NEVER_SPREAD = new RegExp(`\\{[^}]*\\.\\.\\.process\\.env(?!${W})[^}]*(?<!${W})${any(TARGETS)}\\s*[,}]`);
+// A write through any env-named object (`env.NAME = x`, `childEnv["NAME"] = x`) is an env write too.
+const memberWrite = (names) => new RegExp(`(?<![\\w$])[\\w$]*[Ee][Nn][Vv][\\w$]*(?:\\.${any(names)}(?!${W})|\\[["']${any(names)}["']\\])\\s*=(?![=>])`);
+const JS_MEMBER_SET = memberWrite([AMR]);
+const JS_MEMBER_NEVER = memberWrite(NEVER_ENV);
+const pyWrite = (names) => new RegExp(`(?<![\\w.])(?:os\\.)?environ(?:\\[["']${any(names)}["']\\]\\s*=(?!=)|\\.setdefault\\(\\s*["']${any(names)}["'])`);
+const PY_SET = pyWrite([AMR]);
+const PY_NEVER = pyWrite(NEVER_ENV);
 const unquoted = (word) => word.replace(/^["']/, "");
 const PS_LOCAL = new RegExp(`(?<![\\w:])\\$${AMR}\\s*=(?!=)`, "i");
 const PS_SET = new RegExp(`\\$env:${AMR}\\s*=(?!=)|SetEnvironmentVariable\\(\\s*["']${AMR}["']`, "i");
@@ -79,10 +86,17 @@ function node(code, bare) {
   const found = [];
   if (JS_LOCAL.test(bare) || JS_DESTRUCTURED.test(bare)) found.push("local");
   const key = JS_KEY.exec(code);
-  if (JS_SET.test(code) || (key && !inDestructuring(code, key.index))) found.push("set");
+  if (JS_SET.test(code) || JS_MEMBER_SET.test(code) || (key && !inDestructuring(code, key.index))) found.push("set");
   const neverKey = JS_NEVER_KEY.exec(code);
-  const neverRead = JS_NEVER_REF.test(code) || JS_NEVER_BOUND.test(code) || JS_NEVER_SPREAD.test(code);
+  const neverRead = JS_NEVER_REF.test(code) || JS_NEVER_BOUND.test(code) || JS_NEVER_SPREAD.test(code) || JS_MEMBER_NEVER.test(code);
   if (neverRead || (neverKey && !inDestructuring(code, neverKey.index))) found.push("never");
+  return found;
+}
+
+function python(code) {
+  const found = [];
+  if (PY_SET.test(code)) found.push("set");
+  if (PY_NEVER.test(code)) found.push("never");
   return found;
 }
 
@@ -108,6 +122,7 @@ function check(ctx) {
       if (v.lang === "sh") found = shell(v.cmds[i]);
       else if (v.lang === "js") found = node(line, v.bare[i]);
       else if (v.lang === "ps") found = powershell(line);
+      else if (v.lang === "py") found = python(line);
       else if (v.lang === "yaml" ? YAML_KEY.test(line) : JSON_KEY.test(line)) found = ["set"];
       const at = `${file.rel}:${i + 1}: env-name:`;
       if (found.includes("local")) out.push(`${at} ${LOCAL}`);

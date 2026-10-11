@@ -49,10 +49,12 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         --test-cmd)
+            [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 2; }
             TEST_CMD="$2"
             shift 2
             ;;
         --threshold)
+            [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 2; }
             THRESHOLD="$2"
             shift 2
             ;;

@@ -31,13 +31,13 @@ MAX_RETRIES="${MAX_RETRIES:-3}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --owner)        OWNER="${2:-}";        shift 2 ;;
-        --repo)         REPO="${2:-}";         shift 2 ;;
-        --path)         FILE_PATH="${2:-}";    shift 2 ;;
-        --file)         FILE="${2:-}";         shift 2 ;;
-        --message)      MESSAGE="${2:-}";      shift 2 ;;
-        --branch)       BRANCH="${2:-}";       shift 2 ;;
-        --max-retries)  MAX_RETRIES="${2:-3}"; shift 2 ;;
+        --owner)        [[ $# -ge 2 ]] || { echo "github-contents-write: $1 needs a value" >&2; exit 1; }; OWNER="${2:-}";        shift 2 ;;
+        --repo)         [[ $# -ge 2 ]] || { echo "github-contents-write: $1 needs a value" >&2; exit 1; }; REPO="${2:-}";         shift 2 ;;
+        --path)         [[ $# -ge 2 ]] || { echo "github-contents-write: $1 needs a value" >&2; exit 1; }; FILE_PATH="${2:-}";    shift 2 ;;
+        --file)         [[ $# -ge 2 ]] || { echo "github-contents-write: $1 needs a value" >&2; exit 1; }; FILE="${2:-}";         shift 2 ;;
+        --message)      [[ $# -ge 2 ]] || { echo "github-contents-write: $1 needs a value" >&2; exit 1; }; MESSAGE="${2:-}";      shift 2 ;;
+        --branch)       [[ $# -ge 2 ]] || { echo "github-contents-write: $1 needs a value" >&2; exit 1; }; BRANCH="${2:-}";       shift 2 ;;
+        --max-retries)  [[ $# -ge 2 ]] || { echo "github-contents-write: $1 needs a value" >&2; exit 1; }; MAX_RETRIES="${2:-3}"; shift 2 ;;
         *) echo "github-contents-write: unknown argument: $1" >&2; exit 1 ;;
     esac
 done

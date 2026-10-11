@@ -12,8 +12,8 @@ PLANS_DIR=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --session-id)  SESSION_ID="${2:-}"; shift 2 ;;
-        --plans-dir)   PLANS_DIR="${2:-}"; shift 2 ;;
+        --session-id)  [[ $# -ge 2 ]] || { echo "[run-completion] $1 needs a value" >&2; exit 1; }; SESSION_ID="${2:-}"; shift 2 ;;
+        --plans-dir)   [[ $# -ge 2 ]] || { echo "[run-completion] $1 needs a value" >&2; exit 1; }; PLANS_DIR="${2:-}"; shift 2 ;;
         --non-github)  shift ;;  # silently ignored — gate is internal
         *) echo "[run-completion] unknown argument: $1" >&2; exit 1 ;;
     esac

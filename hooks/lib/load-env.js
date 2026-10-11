@@ -182,20 +182,16 @@ function readEnvFile(envPath) {
 // Global-only door (DD-6): the project-local overlay is deliberately invisible
 // here. Returns {} when no .env can be found ("absent" reads as "unset").
 function readDefaultEnvFile() {
-  // (a) Honor AGENTS_MAIN_ROOT if set
-  if (process.env.AGENTS_MAIN_ROOT) {
-    return readEnvFile(path.join(process.env.AGENTS_MAIN_ROOT, ".env")) || {};
+  // Same root selection as loadDefaultEnvGlobal: a trimmed, normalized AGENTS_MAIN_ROOT
+  // is the sole source; otherwise the module-relative, then the realpath-resolved checkout.
+  const agentsMainRoot = normDir(process.env.AGENTS_MAIN_ROOT);
+  if (agentsMainRoot) {
+    return readEnvFile(path.join(agentsMainRoot, ".env")) || {};
   }
-  // (b) __dirname two levels up (direct install path)
-  const dirFallback = path.resolve(__dirname, "..", "..");
-  const direct = readEnvFile(path.join(dirFallback, ".env"));
-  if (direct) return direct;
-  // (c) Resolve __filename through symlinks (e.g. ~/.claude/hooks/lib -> real repo)
-  try {
-    const realCfgDir = path.resolve(path.dirname(fs.realpathSync(__filename)), "..", "..");
-    const viaReal = readEnvFile(path.join(realCfgDir, ".env"));
-    if (viaReal) return viaReal;
-  } catch (_) {}
+  for (const c of scriptCheckoutRootCandidates()) {
+    const map = readEnvFile(path.join(c.dir, ".env"));
+    if (map) return map;
+  }
   return {};
 }
 

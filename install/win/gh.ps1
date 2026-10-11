@@ -4,7 +4,6 @@
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$env:SYSTEM_OPS_APPROVED = "1"
 
 if (Get-Command gh -ErrorAction SilentlyContinue) {
     Write-Host "gh is already installed: $(gh --version | Select-Object -First 1)" -ForegroundColor DarkGray

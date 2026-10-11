@@ -123,5 +123,15 @@ else
   skip "RG-FP-encoded: encoded.js not yet available (RED-pending)"
 fi
 
+echo "=== RG-supervisor: sanctioned supervisor bin calls stay allowed (#2589) ==="
+# The single-invocation rewrite of isAllowedSupervisorBinTool must keep the literal-root
+# call with fd duplication and /tmp/ redirects allowed from the main worktree.
+assert_allow "RG-supervisor-write-alert: node <root>/bin/supervisor-write-alert 2>&1" \
+  "$(run_hook "node \"${WT_NODE}/bin/supervisor-write-alert\" --session s 2>&1")"
+assert_allow "RG-supervisor-write-alert: node <root>/bin/supervisor-write-alert >&2" \
+  "$(run_hook "node \"${WT_NODE}/bin/supervisor-write-alert\" --session s >&2")"
+assert_allow "RG-supervisor-findings-codex: bash <root>/bin/supervisor-findings-codex > /tmp/x 2>&1" \
+  "$(run_hook "bash \"${WT_NODE}/bin/supervisor-findings-codex\" --session s > /tmp/x 2>&1")"
+
 report_totals
 exit "$FAIL"

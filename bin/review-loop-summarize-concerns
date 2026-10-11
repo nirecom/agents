@@ -17,10 +17,10 @@ LABEL=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --ledger)           LEDGER="$2";           shift 2 ;;
-    --raw)              RAW="$2";              shift 2 ;;
-    --budget-remaining) BUDGET_REMAINING="$2"; shift 2 ;;
-    --label)            LABEL="$2";            shift 2 ;;
+    --ledger)           [[ $# -ge 2 ]] || { echo "review-loop-summarize-concerns: $1 needs a value" >&2; exit 2; }; LEDGER="$2";           shift 2 ;;
+    --raw)              [[ $# -ge 2 ]] || { echo "review-loop-summarize-concerns: $1 needs a value" >&2; exit 2; }; RAW="$2";              shift 2 ;;
+    --budget-remaining) [[ $# -ge 2 ]] || { echo "review-loop-summarize-concerns: $1 needs a value" >&2; exit 2; }; BUDGET_REMAINING="$2"; shift 2 ;;
+    --label)            [[ $# -ge 2 ]] || { echo "review-loop-summarize-concerns: $1 needs a value" >&2; exit 2; }; LABEL="$2";            shift 2 ;;
     *) echo "review-loop-summarize-concerns: unknown argument: $1" >&2; exit 2 ;;
   esac
 done

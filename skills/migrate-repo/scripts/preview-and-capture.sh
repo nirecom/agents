@@ -9,10 +9,11 @@ set -euo pipefail
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 REPO_PATH="${1:?usage: preview-and-capture.sh <repo_path>}"
 
-# Self-repo identity guard (#1234): detect REPO_PATH == SCRIPT_CHECKOUT_ROOT.
-_resolved_repo="$(cd "$REPO_PATH" && pwd)"
+# Self-repo identity guard (#1234): detect REPO_PATH as SCRIPT_CHECKOUT_ROOT or another worktree of it.
+# shellcheck source=bin/lib/main-worktree.sh
+source "$SCRIPT_CHECKOUT_ROOT/bin/lib/main-worktree.sh"
 _self_repo_detected=0
-if [ "$_resolved_repo" = "$SCRIPT_CHECKOUT_ROOT" ]; then
+if same_repository "$REPO_PATH" "$SCRIPT_CHECKOUT_ROOT"; then
   _self_repo_detected=1
   echo "WARNING: SELF_REPO_DETECTED: REPO_PATH equals SCRIPT_CHECKOUT_ROOT ($SCRIPT_CHECKOUT_ROOT)." >&2
   echo "         Continuing dry-run to emit sentinels." >&2

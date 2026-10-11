@@ -58,10 +58,26 @@ fi
 unset _hs_entry _hs_label _hs_rest _hs_group _hs_re
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# Anchor: AGENTS_MAIN_ROOT when set (handles linked worktrees where gitignored
-# dotfiles exist only in the main repo root, not the worktree root); falls back
-# to SCRIPT_DIR/.. for direct invocation and test sandboxes that unset it.
-_anchor="${AGENTS_MAIN_ROOT:-$SCRIPT_DIR/..}"; ALLOWLIST="$_anchor/.private-info-allowlist"; BLOCKLIST="$_anchor/.private-info-blocklist"
+# Anchor: the main worktree of the repository holding this scanner (the gitignored lists
+# exist only there, not in a linked worktree), never an environment variable. A copy
+# outside any git repository (sandbox, or a copy without the helper) reads its own tree;
+# a git repository whose main worktree cannot be proven yields no lists (exit 4 below).
+_anchor=""
+if [[ -f "$SCRIPT_DIR/lib/main-worktree.sh" ]]; then
+    # shellcheck source=lib/main-worktree.sh
+    . "$SCRIPT_DIR/lib/main-worktree.sh"
+    _anchor="$(main_worktree_of "$SCRIPT_DIR/..")" || _anchor=""
+    if [[ -z "$_anchor" ]] && ! (unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR; git -C "$SCRIPT_DIR/.." rev-parse --git-dir >/dev/null 2>&1); then
+        _anchor="$SCRIPT_DIR/.."
+    fi
+else
+    _anchor="$SCRIPT_DIR/.."
+fi
+if [[ -n "$_anchor" ]]; then
+    ALLOWLIST="$_anchor/.private-info-allowlist"; BLOCKLIST="$_anchor/.private-info-blocklist"
+else
+    ALLOWLIST=""; BLOCKLIST=""
+fi
 
 VIOLATIONS=0
 WARNINGS=0
@@ -90,7 +106,9 @@ fi
 
 # Load allowlist patterns (skip comments and empty lines)
 ALLOW_PATTERNS=()
-if [ ! -f "$ALLOWLIST" ]; then
+if [[ -z "$ALLOWLIST" ]]; then
+    :
+elif [ ! -f "$ALLOWLIST" ]; then
     printf 'Warning: allowlist not found at %s — proceeding without allowlist\n' "$ALLOWLIST" >&2
 elif [ -f "$ALLOWLIST" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
@@ -104,8 +122,8 @@ fi
 # Lines starting with `warn:` are soft-block patterns; others are hard.
 BLOCK_HARD_PATTERNS=()
 BLOCK_WARN_PATTERNS=()
-if [ ! -f "$BLOCKLIST" ]; then
-    printf 'Error: blocklist not found at expected path (AGENTS_MAIN_ROOT resolution) — cannot scan\n' >&2
+if [[ -z "$BLOCKLIST" || ! -f "$BLOCKLIST" ]]; then
+    printf 'Error: blocklist not found in the main worktree of the scanner'"'"'s repository (or that main worktree cannot be resolved) — cannot scan\n' >&2
     exit 4
 elif [ -f "$BLOCKLIST" ]; then
     _bl_lineno=0

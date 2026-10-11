@@ -52,7 +52,6 @@ SELF_REL="tests/bin/feature-2561-root-names-residue.sh"
 : "names, flags and labels"
 # name --main-root
 # name resolveMainRoot
-# name mainWorktreeOf
 # name trustedMainWorktrees
 # name main-root-mismatch
 # name main-root-anchored

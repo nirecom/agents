@@ -8,6 +8,7 @@
 //   { action: "skip", skipReason }
 // Exit 0 for both outcomes. Exit 1 only for an unusable invocation (bad
 // --caller), because "no notes to promote" is a normal session, not an error.
+// Exit 2 for a usage error: an unknown flag or a value flag with no value.
 
 const fs = require("fs");
 const path = require("path");
@@ -53,20 +54,27 @@ function isSafeBranch(raw) {
   return BRANCH_RE.test(raw);
 }
 
+const VALUE_FLAGS = {
+  "--caller": "caller",
+  "--worktree": "worktree",
+  "--session-id": "sessionId",
+  "--issue": "issue",
+  "--pr-branch": "prBranch",
+  "--target-main-root": "targetMainRoot",
+  "--plans-dir": "plansDir",
+};
+
 function parseArgs(argv) {
   const opts = { fromSession: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
-    switch (a) {
-      case "--caller": opts.caller = argv[++i]; break;
-      case "--worktree": opts.worktree = argv[++i]; break;
-      case "--session-id": opts.sessionId = argv[++i]; break;
-      case "--issue": opts.issue = argv[++i]; break;
-      case "--pr-branch": opts.prBranch = argv[++i]; break;
-      case "--target-main-root": opts.targetMainRoot = argv[++i]; break;
-      case "--plans-dir": opts.plansDir = argv[++i]; break;
-      case "--from-session": opts.fromSession = true; break;
-      default: break;
+    if (a === "--from-session") {
+      opts.fromSession = true;
+    } else if (Object.prototype.hasOwnProperty.call(VALUE_FLAGS, a)) {
+      if (i + 1 >= argv.length) return { error: `${a} needs a value` };
+      opts[VALUE_FLAGS[a]] = argv[++i];
+    } else {
+      return { error: `unknown argument: ${a}` };
     }
   }
   return opts;
@@ -220,6 +228,10 @@ function decide(opts) {
 
 function runResolve(argv) {
   const opts = parseArgs(argv);
+  if (opts.error) {
+    process.stderr.write(`worktree-notes-triage resolve: ${opts.error}\n`);
+    return 2;
+  }
   if (!CALLERS.includes(opts.caller)) {
     process.stderr.write(
       `worktree-notes-triage resolve: --caller must be one of ${CALLERS.join("|")}\n`,

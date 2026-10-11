@@ -2,12 +2,11 @@
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$env:SYSTEM_OPS_APPROVED = "1"
 
 if (Get-Command codex -ErrorAction SilentlyContinue) {
     Write-Host "Codex is already installed." -ForegroundColor DarkGray
-    $_ar = if ($env:AGENTS_ROOT) { $env:AGENTS_ROOT } else { Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
-    & pwsh -NoProfile -File (Join-Path $_ar "install\lib\wait-cc-exit.ps1")
+    $_waitScript = if ($env:WAIT_CC_EXIT_SCRIPT_OVERRIDE) { $env:WAIT_CC_EXIT_SCRIPT_OVERRIDE } else { Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) "install\lib\wait-cc-exit.ps1" }
+    & pwsh -NoProfile -File $_waitScript
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "Claude Code still running — skipping update."
         exit 0

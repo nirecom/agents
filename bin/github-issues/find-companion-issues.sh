@@ -21,14 +21,17 @@ TARGET_CHECKOUT_ROOT=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --primary)
+            [[ $# -ge 2 ]] || { echo "[find-companion-issues] $1 needs a value" >&2; exit 2; }
             PRIMARY="${2:-}"
             shift 2
             ;;
         --exclude)
+            [[ $# -ge 2 ]] || { echo "[find-companion-issues] $1 needs a value" >&2; exit 2; }
             EXCLUDE_CSV="${2:-}"
             shift 2
             ;;
         --max-candidates)
+            [[ $# -ge 2 ]] || { echo "[find-companion-issues] $1 needs a value" >&2; exit 2; }
             MAX_CANDIDATES="${2:-}"
             shift 2
             ;;

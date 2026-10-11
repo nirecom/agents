@@ -3,8 +3,9 @@
 # bin/run-codex-review-loop (SSOT: skills/_shared/codex-review-loop.md). Holds
 # the reviewer-pass verdict dispatch, the prestaged/fallback-pass completeness
 # gate, and the prestaged verdict+finalize. Caller globals: ROUND HIGH_N MED_N
-# LOW_N CAP MAX_EXT EXT_USED RISK_SIGNAL SCRIPT_CHECKOUT_ROOT FINAL_EXIT FINAL_RC
+# LOW_N CAP MAX_EXT EXT_USED RISK_SIGNAL FINAL_EXIT FINAL_RC
 # LEDGER_FORMAT PLANS_DIR SID TMP_OUT CL_CLI.
+_VERDICT_DISPATCH_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # cl_allowed_producers_list — the closed producer set for $LEDGER_FORMAT, read
 # from the ledger library itself (CPR-SSOT: the mapping lives in core.sh) in a
@@ -25,7 +26,7 @@ cl_allowed_producers_list() {
 # only place a reviewer pass writes an artifact.
 dispatch_codex_verdict() {
   local VERDICT_BIN BUDGET_REMAINING VERDICT_DECISION VERDICT_RC
-  VERDICT_BIN="${SCRIPT_CHECKOUT_ROOT}/bin/review-loop-verdict"
+  VERDICT_BIN="${_VERDICT_DISPATCH_SCRIPT_CHECKOUT_ROOT}/bin/review-loop-verdict"
   [[ -x "$VERDICT_BIN" ]] || {
     echo "run-codex-review-loop: review-loop-verdict not found or not executable: $VERDICT_BIN" >&2
     exit 4
@@ -110,7 +111,7 @@ dispatch_codex_verdict() {
 # ledger, so the round persists for the next pass; a refused finalize exits 7.
 dispatch_prestaged_verdict() {
   local VERDICT_BIN BUDGET_REMAINING VERDICT_RC
-  VERDICT_BIN="${SCRIPT_CHECKOUT_ROOT}/bin/review-loop-verdict"
+  VERDICT_BIN="${_VERDICT_DISPATCH_SCRIPT_CHECKOUT_ROOT}/bin/review-loop-verdict"
   [[ -x "$VERDICT_BIN" ]] || {
     echo "run-codex-review-loop: review-loop-verdict not found or not executable: $VERDICT_BIN" >&2
     exit 4
