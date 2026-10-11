@@ -723,3 +723,7 @@ Changes: Plan blob URLs are shown in the main conversation so plans can be opene
 ### FEATURE: PR #2618 (2026-10-11)
 Background: test(#2572): make the feature-2099 complexity-stage-routing suite green with secret-shape regressions visible
 Changes: Test suite for #2434 complexity stage routing (#2572): fixed the feature-2099 test suite (181 → 0 failures), adding coverage for the normalize-judge-signals → derive-complexity-level chain, S0-undecidable canonicalization, shared-procedure injection paths, and TL3 gate lane selection.
+
+### FEATURE: PR #2616 (2026-10-12)
+Background: fix(#2589): finish the root-name replacement in hooks, CLIs and installers
+Changes: Fixed: an inline SYSTEM_OPS_APPROVED=1 typed by the assistant can no longer approve system-state-changing commands; only the operator exporting it before launching Claude Code does.
