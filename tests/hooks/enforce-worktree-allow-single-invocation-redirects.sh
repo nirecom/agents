@@ -258,6 +258,9 @@ false :: isAllowedFastForwardMerge    :: git --git-dir=/tmp/other/.git merge --f
 true  :: isAllowedFastForwardMerge    :: git -C @REPO@ pull --ff-only
 false :: isAllowedFastForwardMerge    :: git -C /a -C /b pull --ff-only
 false :: isAllowedFastForwardMerge    :: git -C /a -C /b merge --ff-only origin/main
+# A single -C must name the judged repository; a foreign one acts elsewhere.
+false :: isAllowedFastForwardMerge    :: git -C /tmp/other/repo pull --ff-only
+false :: isAllowedFastForwardMerge    :: git -C /tmp/other/repo merge --ff-only origin/main
 true  :: isAllowedMainWorktreeCleanup :: git stash
 true  :: isAllowedMainWorktreeCleanup :: git checkout -- README.md
 false :: isAllowedMainWorktreeCleanup :: git --git-dir /tmp/other/.git stash
@@ -279,9 +282,9 @@ case_end
 # ── End-to-end on the real hook ─────────────────────────────────────────────
 GUARD_ERR="$TMPDIR_BASE/guard.stderr"
 assert_guard() {
-    local label="$1" want="$2" cmd="$3" payload out rc=0 got
+    local label="$1" want="$2" cmd="$3" run_dir="${4:-$REPO_RAW}" payload out rc=0 got
     payload="$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.argv[1]}}))' "$cmd")"
-    out="$(cd "$REPO_RAW" && printf '%s' "$payload" | run_with_timeout 30 env -u AGENTS_MAIN_ROOT -u AGENTS_HOOK_DEBUG \
+    out="$(cd "$run_dir" && printf '%s' "$payload" | run_with_timeout 30 env -u AGENTS_MAIN_ROOT -u AGENTS_HOOK_DEBUG \
         -u CLAUDE_CODE_SESSION_ID ENFORCE_WORKTREE=on "CLAUDE_PROJECT_DIR=$REPO" \
         "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$REPO" node "$GUARD_JS" 2>"$GUARD_ERR")" || rc=$?
     if [ "$rc" -ne 0 ]; then got="crash rc=$rc err=$(head -c 200 "$GUARD_ERR")"
@@ -335,6 +338,25 @@ assert_guard "E2E wiring twin: literal-root call with a non-/tmp/ target is bloc
     "node \"$ROOT_NODE/bin/supervisor-write-alert\" $HD_ARG > ~/x"
 assert_guard "E2E wiring twin: literal-root non-supervisor bin is blocked" block \
     "node \"$ROOT_NODE/bin/supervisor-evil\" $HD_ARG > /tmp/a"
+case_end
+
+# Wiring: enforce-worktree.js must hand the judged repo root to isAllowedFastForwardMerge.
+# Only the predicate allows a write in the judged checkout, and it compares -C with the
+# root it is given: dropping that argument makes this allow row flip to block.
+# No foreign-repo twin here: a git -C into a repository outside the judged scope never
+# reaches the predicate (the hook lets writes elsewhere through), so a block there would
+# only prove the repo lookup; the foreign -C rejection is pinned by the predicate table.
+case_begin "e2e-ff-merge-judged-repo-wiring" "hooks/enforce-worktree.js"
+assert_guard "E2E ff wiring: git -C <judged repo> pull --ff-only is allowed" allow \
+    "git -C \"$REPO\" pull --ff-only"
+assert_guard "E2E ff wiring twin: ff-only chained after an in-repo write is blocked" block \
+    "echo x > README.md; git -C \"$REPO\" pull --ff-only"
+# The hook runs from a directory that is not the judged repo: the root handed to the predicate
+# must be the judged repo, not process.cwd(), or this -C would read as naming another repository.
+OTHER_CWD="$TMPDIR_BASE/other-cwd"
+mkdir -p "$OTHER_CWD"
+assert_guard "E2E ff wiring: git -C <judged repo> pull --ff-only from another cwd is allowed" allow \
+    "git -C \"$REPO\" pull --ff-only" "$OTHER_CWD"
 case_end
 
 echo ""

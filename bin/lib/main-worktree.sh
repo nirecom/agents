@@ -61,16 +61,34 @@ main_worktree_of() {
   )
 }
 
+# _common_dir_real <dir>: prints the physical git common dir of <dir>; returns 1 when <dir>
+# is not in a git repository. Unlike main_worktree_of it also resolves a --separate-git-dir
+# or bare layout, so an unusual layout never reads as "a different repository".
+_common_dir_real() {
+  local dir="${1:-}"
+  [[ -n "$dir" && -d "$dir" ]] || return 1
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
+    cd "$dir" 2>/dev/null || exit 1
+    common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || exit 1
+    common="${common%$'\r'}"
+    cd -P "${common//\\//}" 2>/dev/null || exit 1
+    printf '%s\n' "$PWD"
+  )
+}
+
 # same_repository <a> <b>: returns 0 when the two dirs are one physical path, or two
-# worktrees of one repository (the same main worktree); 1 otherwise.
+# worktrees of one repository (the same git common dir); 1 otherwise, including when
+# either dir is not in a git repository.
 same_repository() {
-  local a b ma mb
+  local a b ca cb
   a="$(cd "${1:-}" 2>/dev/null && pwd -P)" || return 1
   b="$(cd "${2:-}" 2>/dev/null && pwd -P)" || return 1
   [[ "$a" == "$b" ]] && return 0
-  ma="$(main_worktree_of "$a")" || return 1
-  mb="$(main_worktree_of "$b")" || return 1
-  ma="$(cd "$ma" 2>/dev/null && pwd -P)" || return 1
-  mb="$(cd "$mb" 2>/dev/null && pwd -P)" || return 1
-  [[ "$ma" == "$mb" ]]
+  ca="$(_common_dir_real "$a")" || return 1
+  cb="$(_common_dir_real "$b")" || return 1
+  case "${OSTYPE:-}" in
+    msys*|cygwin*|win*) ca="${ca,,}"; cb="${cb,,}" ;;
+  esac
+  [[ "$ca" == "$cb" ]]
 }

@@ -35,10 +35,11 @@ function bashQuotedScript(cmd) {
  * Allows the merge step from the main worktree — the one operation main is
  * reserved for. `--no-ff` overrides the ff-only intent and is rejected.
  */
-function isAllowedFastForwardMerge(cmd) {
+function isAllowedFastForwardMerge(cmd, repoRoot) {
   const git = singleGitInvocation(cmd);
   if (!git || (git.sub !== "pull" && git.sub !== "merge")) return false;
-  if (git.cDirs.length > 1) return false; // repeated -C: git acts in a repository the hook did not judge
+  // A -C must name the repository the hook judged; a repeated or foreign -C acts elsewhere.
+  if (!gitCDirIsRepo(git.cDirs, repoRoot)) return false;
   if (git.rest.includes("--no-ff")) return false;
   return git.rest.includes("--ff-only");
 }

@@ -187,6 +187,37 @@ assert_eq "$(probe_cli_cwd "$A_LINKED")" "$A_MAIN_N"
 assert_eq "$(probe_cli_cwd "$D_PLAIN")" "$NULL_MARK"
 case_end
 
+# same_repository decides by the physical git common dir, so a layout main_worktree_of refuses
+# (separate-git-dir, bare) still reads as one repository; a refused layout never reads as "different".
+same_rc() {
+  (cd "$_TMP_ROOT" && run_with_timeout 30 bash -c '. "$1" || exit 99; same_repository "$2" "$3"; echo $?' _ "$MW_SH" "$1" "$2" 2>/dev/null | tail -n 1)
+}
+
+case_begin "MW-E same_repository: worktrees of one repository are the same, even for layouts main_worktree_of refuses" "bin/lib/main-worktree.sh"
+assert_eq "$(same_rc "$A_MAIN" "$A_LINKED")" "0"
+assert_eq "$(same_rc "$B_MAIN" "$B_LINKED")" "0"
+assert_eq "$(same_rc "$C_BARE" "$C_LINKED")" "0"
+case_end
+
+case_begin "MW-F same_repository: distinct repositories and non-git directories are different" "bin/lib/main-worktree.sh"
+assert_eq "$(same_rc "$A_MAIN" "$B_MAIN")" "1"
+assert_eq "$(same_rc "$A_LINKED" "$B_LINKED")" "1"
+assert_eq "$(same_rc "$A_MAIN" "$D_PLAIN")" "1"
+assert_eq "$(same_rc "$A_MAIN" "$FX/d/does-not-exist")" "1"
+case_end
+
+# A symlinked path reaches the same physical common dir; the comparison must not read it as another repository.
+case_begin "MW-G same_repository: a symlinked worktree path is the same repository as its target's siblings" "bin/lib/main-worktree.sh"
+A_LINK="$FX/a-main-link"
+ln -s "$A_MAIN" "$A_LINK" 2>/dev/null || true
+if [ -L "$A_LINK" ]; then
+  assert_eq "$(same_rc "$A_LINK" "$A_LINKED")" "0"
+  assert_eq "$(same_rc "$A_LINK" "$B_MAIN")" "1"
+else
+  skip "symlinks cannot be created on this host"
+fi
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
