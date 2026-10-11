@@ -3,8 +3,8 @@
 //
 // show-plan-link.js (PostToolUse) writes a marker for every final plan
 // artifact, just before emitting the breadcrumb. stop-confirm-plan-guard.js (Stop) reads
-// and deletes any markers for the current session, then scans the last
-// assistant message for forbidden path representations.
+// and deletes any markers for the current session, then checks that the turn's response
+// text shows each marked plan's plan-link line (URL, else the local path).
 //
 // File naming: <workflowDir>/<sid>.confirm-plan-turn-<rand>.json
 // The glob is namespaced under `<sid>.confirm-plan-turn-*` so future readers

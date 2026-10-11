@@ -49,6 +49,7 @@ toc3_reset() {
 toc3_reset "control"
 expect_eq "TOC-3 control: no swap -> readVerifiedRegularFile returns the benign bytes" \
   "$(toc3_patched read none "$HLD" "$TOC3_REL")" "buffer:toc3 benign|swapped=no"
+flow_match "$HLD" "$TOC3_REL"
 TOC3_BEFORE="$(git -C "$HL_BARE" rev-parse --verify -q refs/heads/main || echo missing)"
 
 echo "=== TOC-3a: swapped for a hard link (nlink 2) to a secret ==="
@@ -59,7 +60,7 @@ else
     toc3_reset "3a-$toc3_mode"
     rm -f "$TOC3_SEC/swap-hl"
     if hl_link "$TOC3_SEC/secret.txt" "$TOC3_SEC/swap-hl"; then
-      OUT="$(export PLAN_SYNC_REMOTE_URL="$HL_BARE"; toc3_patched "$toc3_mode" rename "$HLD" "$TOC3_REL" "$TOC3_SEC/swap-hl")"
+      OUT="$(flow_bare "$HL_BARE"; toc3_patched "$toc3_mode" rename "$HLD" "$TOC3_REL" "$TOC3_SEC/swap-hl")"
       if [ "$toc3_mode" = read ]; then
         expect_eq "TOC-3a readVerifiedRegularFile(hard link swapped in at open) -> null" "$OUT" "null|swapped=yes"
       else
@@ -76,7 +77,7 @@ for toc3_mode in read sync; do
   toc3_reset "3b-$toc3_mode"
   rm -f "$TOC3_SEC/swap-other"
   cp "$TOC3_SEC/secret.txt" "$TOC3_SEC/swap-other"
-  OUT="$(export PLAN_SYNC_REMOTE_URL="$HL_BARE"; toc3_patched "$toc3_mode" rename "$HLD" "$TOC3_REL" "$TOC3_SEC/swap-other")"
+  OUT="$(flow_bare "$HL_BARE"; toc3_patched "$toc3_mode" rename "$HLD" "$TOC3_REL" "$TOC3_SEC/swap-other")"
   if [ "$toc3_mode" = read ]; then
     expect_eq "TOC-3b readVerifiedRegularFile(other nlink-1 file swapped in at open) -> null" "$OUT" "null|swapped=yes"
   else
@@ -90,7 +91,7 @@ if [ "$SL_CAN" != yes ]; then
 else
   for toc3_mode in read sync; do
     toc3_reset "3c-$toc3_mode"
-    OUT="$(export PLAN_SYNC_REMOTE_URL="$HL_BARE"; toc3_patched "$toc3_mode" symlink "$HLD" "$TOC3_REL" "$TOC3_SEC/secret.txt")"
+    OUT="$(flow_bare "$HL_BARE"; toc3_patched "$toc3_mode" symlink "$HLD" "$TOC3_REL" "$TOC3_SEC/secret.txt")"
     if [ "$toc3_mode" = read ]; then
       expect_eq "TOC-3c readVerifiedRegularFile(symlink swapped in at open) -> null" "$OUT" "null|swapped=yes"
     else

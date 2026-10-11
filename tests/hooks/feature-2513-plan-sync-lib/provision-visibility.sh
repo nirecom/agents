@@ -83,6 +83,7 @@ TABLE
 echo "=== V8: checkProvisioned / syncPlanFile never check visibility ==="
 VD="$PSF_ROOT/vis-private"; setup_ssh_stub "$PSF_ROOT/vis-private-bare.git"
 printf 'vis intent\n' > "$VD/svis-intent.md"
+psf_record "$VD" svis-intent.md github.com
 OUT="$(PLAN_SYNC_REMOTE_URL="$VIS_URL" psf_node 'const calls = [];
 const deps = { repoVisibility: (url) => { calls.push(url); return "public"; } };
 Promise.resolve(ps.checkProvisioned(process.argv[1], process.argv[2], deps)).then((cp) =>
@@ -105,3 +106,47 @@ split_vis "$(provision_vis "$VD" "$VB" default)"
 expect_eq "V9 local bare (stub codehost): provisionRepo ok" "$VS" "ok"
 if has_vis_note "$VN"; then pass "V9 local bare (stub codehost): visibility warning note"
 else fail "V9 local bare (stub codehost): visibility warning note" "notes=$VN"; fi
+
+echo "=== V10: GitLab destination — an unverified visibility stops the bulk publish ==="
+# The real glab (network) leaves PATH here, so the default seam cannot answer for GitLab.
+psf_drop_cli_from_path glab
+expect_eq "V10 precondition: Node finds no glab" "$(psf_node_finds_cli glab)" "ENOENT"
+VIS_GL="ssh://git@gitlab.com/test-owner/test-repo.git"
+VIS_GL_SELF="ssh://git@gitlab.example.com/test-owner/test-repo.git"
+V10=0
+while IFS='|' read -r name url gl_host mode want want_note; do
+  [ -z "$name" ] && continue
+  V10=$((V10 + 1))
+  VB="$PSF_ROOT/vis-gl-$V10-bare.git"; psf_make_bare "$VB"; setup_ssh_stub "$VB"
+  VD="$PSF_ROOT/vis-gl-$V10"; mkdir -p "$VD"
+  split_vis "$(export GITLAB_HOSTNAME="$gl_host" GITLAB_SSH_HOSTNAME=""; provision_vis "$VD" "$url" "$mode")"
+  expect_eq "V10 $name: provisionRepo -> $want" "$VS" "$want"
+  [ "$mode" = default ] || expect_eq "V10 $name: repoVisibility called once with the remote URL" "$VC" "$url"
+  if [ "$want" = ok ]; then
+    expect_eq "V10 $name: bare main holds only .gitignore" "$(tree_of "$VB")" ".gitignore "
+    expect_eq "V10 $name: checkProvisioned ok" \
+      "$(export GITLAB_HOSTNAME="$gl_host" GITLAB_SSH_HOSTNAME=""; check_prov "$VD" "$url")" "ok:$url"
+    if has_vis_note "$VN"; then got=note; else got=no-note; fi
+    expect_eq "V10 $name: visibility note -> $want_note" "$got" "$want_note"
+  else
+    if [ ! -e "$VD/.git" ] && [ ! -e "$VD/.gitignore" ]; then pass "V10 $name: no .git, no .gitignore"
+    else fail "V10 $name: no .git, no .gitignore" "plansDir: $(ls -A "$VD" | tr '\n' ' ')"; fi
+    expect_eq "V10 $name: bare remote stays empty" "$(git -C "$VB" for-each-ref --format='%(refname)')" ""
+    if [ ! -s "$GIT_SSH_STUB_LOG" ]; then pass "V10 $name: remote never contacted"
+    else fail "V10 $name: remote never contacted" "ssh stub log: $(tr '\n' ' ' < "$GIT_SSH_STUB_LOG")"; fi
+  fi
+done <<TABLE
+gitlab.com private|$VIS_GL||private|ok|no-note
+gitlab.com internal|$VIS_GL||internal|ok|no-note
+gitlab.com public|$VIS_GL||public|ng:remote-public|-
+gitlab.com unverifiable|$VIS_GL||null|ng:visibility-unverified|-
+gitlab.com default seam, glab absent|$VIS_GL||default|ng:visibility-unverified|-
+self-hosted private|$VIS_GL_SELF|gitlab.example.com|private|ok|no-note
+self-hosted internal|$VIS_GL_SELF|gitlab.example.com|internal|ok|no-note
+self-hosted public|$VIS_GL_SELF|gitlab.example.com|public|ng:remote-public|-
+self-hosted unverifiable|$VIS_GL_SELF|gitlab.example.com|null|ng:visibility-unverified|-
+self-hosted default seam, glab absent|$VIS_GL_SELF|gitlab.example.com|default|ng:visibility-unverified|-
+host not declared as GitLab, unverifiable|$VIS_GL_SELF||null|ok|note
+host on no known forge, unverifiable|$PSF_ORIGIN_PLAIN||null|ok|note
+TABLE
+setup_ssh_stub "$BARE"

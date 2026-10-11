@@ -11,7 +11,6 @@
 
 L2_FOLLOWUP_PREFIX='[confirm-plan] Layer 2/follow-up:'
 L2_PLANLANG_PREFIX='[confirm-plan] Layer 2/plan-lang:'
-L1_PREFIX='[confirm-plan] Step 2 violation:'
 L2_EN_PROSE='This artifact body is written entirely in English prose here.'
 L2_JA_PROSE='この計画書は日本語で書かれています。'
 
@@ -72,9 +71,12 @@ catch (e) { process.stdout.write(""); }
 # l2_case <plan_lang|-> <label> <sid> <stage|-> <followup|-> <text|-> <expected rc> <expected reason prefix|-> [reason must contain]
 # PLAN_LANG is (re)written per case (C6) — no case inherits a sibling's .env state.
 # No marker is written unless the caller did so beforehand.
+# text "@path": the reply names the stage's own plan file by its local path — what the
+# turn-end plan-link check asks of a turn whose plan has no blob URL (plan-sync is off here).
 l2_case() {
   local plan_lang="$1" label="$2" sid="$3" stage="$4" skill="$5" text="$6" exp_rc="$7" exp_prefix="$8" must_have="${9:-}"
   local tpath="$TRANSCRIPT_DIR/${sid}.jsonl" reason ok=1
+  if [ "$text" = "@path" ]; then text="Plan: $PLANS_DIR/$sid-$stage.md"; fi
   set_plan_lang "$plan_lang"
   write_transcript "$tpath" "$(l2_transcript "$stage" "$skill" "$text")"
   run_stop_hook_l2 "{\"session_id\":\"$sid\",\"transcript_path\":\"$tpath\"}"
@@ -136,20 +138,20 @@ done
 echo "=== T19: PLAN_LANG=french (hint), English artifact, follow-up present ==="
 write_artifact "a1b2c3d4-e5f6-7890-abcd-ef1234560019" detail "$L2_EN_PROSE"
 l2_case french "T19 PLAN_LANG=french + English detail.md + write-tests — exit 0, empty stdout (hint tier)" \
-  "a1b2c3d4-e5f6-7890-abcd-ef1234560019" detail write-tests - 0 -
+  "a1b2c3d4-e5f6-7890-abcd-ef1234560019" detail write-tests @path 0 -
 
 # ── T20: compliant artifact passes ───────────────────────────────────────
 echo "=== T20: PLAN_LANG=japanese, Japanese artifact ==="
 write_artifact "a1b2c3d4-e5f6-7890-abcd-ef1234560020" detail "$L2_JA_PROSE"
 l2_case japanese "T20 PLAN_LANG=japanese + Japanese detail.md + write-tests — exit 0, empty stdout" \
-  "a1b2c3d4-e5f6-7890-abcd-ef1234560020" detail write-tests - 0 -
+  "a1b2c3d4-e5f6-7890-abcd-ef1234560020" detail write-tests @path 0 -
 
-# ── T21: Layer 1 precedes Layer 2 (ordering contract) ────────────────────
-echo "=== T21: marker + path leak + CONFIRM_DETAIL without follow-up → Step 2 violation ==="
+# ── T21: a local plan path in the reply does not pre-empt Layer 2 (#2513) ─
+echo "=== T21: marker + local plan path + CONFIRM_DETAIL without follow-up → Layer 2/follow-up ==="
 SID_T21="a1b2c3d4-e5f6-7890-abcd-ef1234560021"
 write_marker "$SID_T21" detail >/dev/null
-l2_case japanese "T21 marker + leaked path + CONFIRM_DETAIL (no follow-up) — Layer 1 'Step 2 violation' wins" \
-  "$SID_T21" detail - "see $PLANS_DIR/abc-detail.md for details" 2 "$L1_PREFIX"
+l2_case japanese "T21 marker + local plan path + CONFIRM_DETAIL (no follow-up) — exit 2, Layer 2/follow-up" \
+  "$SID_T21" detail - "see $PLANS_DIR/abc-detail.md for details" 2 "$L2_FOLLOWUP_PREFIX"
 rm -f "$WORKFLOW_DIR/${SID_T21}".confirm-plan-turn-*.json 2>/dev/null || true
 
 # ── T22 (C5): PLAN_LANG=english, Japanese artifact, follow-up present → plan-lang block ──
@@ -169,14 +171,14 @@ echo "=== T24: PLAN_LANG=japanese, artifact path is a directory, follow-up prese
 SID_T24="a1b2c3d4-e5f6-7890-abcd-ef1234560024"
 mkdir -p "$PLANS_DIR/$SID_T24-intent.md"
 l2_case japanese "T24 PLAN_LANG=japanese, intent.md is a directory + make-outline-plan — exit 0, empty stdout (unreadable → fail-open)" \
-  "$SID_T24" intent make-outline-plan - 0 -
+  "$SID_T24" intent make-outline-plan @path 0 -
 rmdir "$PLANS_DIR/$SID_T24-intent.md" 2>/dev/null || true
 
 # ── T25 (C3): strict-English allow path ──────────────────────────────────
 echo "=== T25: PLAN_LANG=english, English detail.md + write-tests → exit 0 ==="
 write_artifact "a1b2c3d4-e5f6-7890-abcd-ef1234560025" detail "$L2_EN_PROSE"
 l2_case english "T25 PLAN_LANG=english + English detail.md + write-tests — exit 0, empty stdout" \
-  "a1b2c3d4-e5f6-7890-abcd-ef1234560025" detail write-tests - 0 -
+  "a1b2c3d4-e5f6-7890-abcd-ef1234560025" detail write-tests @path 0 -
 
 # ── T26 (C5): plan-lang re-lint precedes the follow-up check (ordering pin) ──
 echo "=== T26: PLAN_LANG=japanese, English detail.md, CONFIRM_DETAIL with NO follow-up → plan-lang wins ==="
@@ -206,14 +208,14 @@ for _row in "${L2_FOLLOWUP_ROWS[@]}"; do
   IFS='|' read -r _t _sid _stage _fu _rc _pfx <<< "$_row"
   write_artifact "$_sid" "$_stage" "$L2_JA_PROSE"
   l2_case japanese "$_t PLAN_LANG=japanese, CONFIRM_${_stage^^} + follow-up '$_fu' — exit $_rc, prefix '$_pfx'" \
-    "$_sid" "$_stage" "$_fu" - "$_rc" "$_pfx"
+    "$_sid" "$_stage" "$_fu" @path "$_rc" "$_pfx"
 done
 
 # ── T32 (C4): non-artifact-class sid is never re-linted ──────────────────
 echo "=== T32: sid=sid-t13-123, English detail.md present, valid follow-up → exit 0 ==="
 write_artifact "sid-t13-123" detail "$L2_EN_PROSE"
 l2_case japanese "T32 PLAN_LANG=japanese, sid-t13-123 (non-artifact class) + English detail.md + write-tests — exit 0, empty stdout" \
-  "sid-t13-123" detail write-tests - 0 -
+  "sid-t13-123" detail write-tests @path 0 -
 rm -f "$PLANS_DIR/sid-t13-123-detail.md"
 
 # ── T33 (C7): the re-lint is idempotent and read-only ────────────────────
@@ -239,19 +241,19 @@ else
   fail "T33d artifact modified by the guard — before=$_t33_before after=$_t33_after"
 fi
 
-# ── T34 (C3): Layer 1 stays marker-dependent — no marker, leaked plans path, no CONFIRM ──
+# ── T34 (C3): no marker, plans-dir path in the reply, no CONFIRM → nothing to check ──
 echo "=== T34: no marker, plans-dir path in assistant text, no CONFIRM sentinel → exit 0 ==="
 SID_T34="a1b2c3d4-e5f6-7890-abcd-ef1234560034"
 rm -f "$WORKFLOW_DIR/${SID_T34}".confirm-plan-turn-*.json 2>/dev/null || true
-l2_case japanese "T34 PLAN_LANG=japanese, no marker, text 'see $PLANS_DIR/<uuid>-detail.md', no CONFIRM — exit 0, empty stdout (Layer 1 needs a marker)" \
+l2_case japanese "T34 PLAN_LANG=japanese, no marker, text 'see $PLANS_DIR/<uuid>-detail.md', no CONFIRM — exit 0, empty stdout (no stage to check)" \
   "$SID_T34" - - "see $PLANS_DIR/$SID_T34-detail.md for details" 0 -
 
 # ── T35 (C3): Layer 2 inherits lintPlanLang's heading / closed-fence exclusions ──
 echo "=== T35: English only in a heading / inside a closed fence, Japanese body → exit 0 ==="
 write_artifact "a1b2c3d4-e5f6-7890-abcd-ef1234560035" detail $'# This Heading Is Written In English\n'"$L2_JA_PROSE"
 l2_case japanese "T35a PLAN_LANG=japanese, English heading + Japanese body + write-tests — exit 0, empty stdout (heading excluded)" \
-  "a1b2c3d4-e5f6-7890-abcd-ef1234560035" detail write-tests - 0 -
+  "a1b2c3d4-e5f6-7890-abcd-ef1234560035" detail write-tests @path 0 -
 write_artifact "a1b2c3d4-e5f6-7890-abcd-ef1234560036" detail "$L2_JA_PROSE"$'\n```\nEnglish words inside a closed code fence here\n```\n'"$L2_JA_PROSE"
 l2_case japanese "T35b PLAN_LANG=japanese, English inside a closed fence + Japanese body + write-tests — exit 0, empty stdout (fence excluded)" \
-  "a1b2c3d4-e5f6-7890-abcd-ef1234560036" detail write-tests - 0 -
+  "a1b2c3d4-e5f6-7890-abcd-ef1234560036" detail write-tests @path 0 -
 set_plan_lang -
