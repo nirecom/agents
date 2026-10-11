@@ -282,6 +282,16 @@ run_t1226_11
 run_t1226_12
 run_t1226_13
 
+# CV-6, DP-1..3 (#2513: resolveConfigVar source, defaultEnvFilePath) FAIL until implemented.
+_DP_TMP_ROOT="$(mktemp -d)"; readonly _DP_TMP_ROOT
+trap 'rm -rf "$_DP_TMP_ROOT"' EXIT
+# shellcheck source=./feature-1226-load-env-os-blocks/default-env-file-path-cases.sh
+. "$(dirname "${BASH_SOURCE[0]}")/feature-1226-load-env-os-blocks/default-env-file-path-cases.sh"
+run_cv_6
+run_dp_1
+run_dp_2
+run_dp_3
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -gt 0 ] && exit 1

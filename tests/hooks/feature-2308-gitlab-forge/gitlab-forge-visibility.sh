@@ -5,9 +5,9 @@ set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # Issue #2513 — codehostGitlab.repoVisibility(remoteUrl) -> "public" | "private" |
-#   "internal" | null via `glab api projects/<url-encoded path> --jq .visibility`.
-#   A glab failure, a timeout, an unknown value or an unresolvable path is null, and an
-#   unresolvable path never reaches glab. glab is a PATH stub (tests/lib/cli-stub.sh).
+#   "internal" | null from the JSON of `glab api --hostname <web host> projects/<encoded path>`
+#   (glab api has no --jq: the stubs reject it). A glab failure, a timeout, unparsable JSON,
+#   an unknown value or an unresolvable path is null; an unresolvable path never reaches glab.
 
 # TL3 gap: a real `glab api` round trip (auth, self-hosted host, 5xx) is not exercised.
 
@@ -39,9 +39,11 @@ NODE
 # gl_run <stdout> <rc> <sleep-ms> <mode> <url> <secs>
 gl_run() {
     : > "$GL_LOG"
-    CLI_STUB_OUT="$1" CLI_STUB_RC="$2" CLI_STUB_SLEEP_MS="$3" CLI_STUB_LOG="$GL_LOG" \
+    CLI_STUB_OUT="$1" CLI_STUB_RC="$2" CLI_STUB_SLEEP_MS="$3" CLI_STUB_LOG="$GL_LOG" CLI_STUB_REJECT_FLAGS="--jq" \
         cli_stub_run run_with_timeout "$6" node "$GL_DRIVER" "$FORGE_ROUTER_JS" "$4" "$5" 2>/dev/null
 }
+# gl_json <visibility> -> the project JSON glab api prints
+gl_json() { printf '{"id":7,"path_with_namespace":"acme/widgets","visibility":"%s"}\n' "$1"; }
 # gl_case <name> <want> <stdout> <rc> <sleep-ms> <url> [secs]
 gl_case() {
     if [ -z "${GL_STUB_OK:-}" ]; then fail "$1 — glab stub unreachable; not run so the real glab stays untouched"; return; fi
@@ -60,23 +62,32 @@ fi
 case_end
 
 case_begin "gitlab-visibility-answers" "hooks/lib/forge/gitlab.js"
-gl_case "V-GL1 glab says public -> public" 'gitlab:"public"' $'public\n' 0 0 "$GL_URL"
-assert_eq "V-GL2 glab argv is api --hostname gitlab.com projects/acme%2Fwidgets --jq .visibility" \
-    "glab api --hostname gitlab.com projects/acme%2Fwidgets --jq .visibility" "$(cat "$GL_LOG" 2>/dev/null)"
-gl_case "V-GL3 glab says private -> private" 'gitlab:"private"' $'private\n' 0 0 "$GL_URL"
-gl_case "V-GL4 glab says internal -> internal" 'gitlab:"internal"' $'internal\n' 0 0 "$GL_URL"
-gl_case "V-GL5 nested namespace, glab says private -> private" 'gitlab:"private"' $'private\n' 0 0 \
+gl_case "V-GL1 glab project JSON public -> public" 'gitlab:"public"' "$(gl_json public)" 0 0 "$GL_URL"
+assert_eq "V-GL2 glab argv is api --hostname gitlab.com projects/acme%2Fwidgets (no --jq)" \
+    "glab api --hostname gitlab.com projects/acme%2Fwidgets" "$(cat "$GL_LOG" 2>/dev/null)"
+gl_case "V-GL3 glab project JSON private -> private" 'gitlab:"private"' "$(gl_json private)" 0 0 "$GL_URL"
+gl_case "V-GL4 glab project JSON internal -> internal" 'gitlab:"internal"' "$(gl_json internal)" 0 0 "$GL_URL"
+gl_case "V-GL5 nested namespace, project JSON private -> private" 'gitlab:"private"' "$(gl_json private)" 0 0 \
     "https://gitlab.com/acme/sub/widgets.git"
 assert_eq "V-GL5 nested namespace argv URL-encodes every separator" \
-    "glab api --hostname gitlab.com projects/acme%2Fsub%2Fwidgets --jq .visibility" "$(cat "$GL_LOG" 2>/dev/null)"
+    "glab api --hostname gitlab.com projects/acme%2Fsub%2Fwidgets" "$(cat "$GL_LOG" 2>/dev/null)"
 case_end
 
 case_begin "gitlab-visibility-failures-null" "hooks/lib/forge/gitlab.js"
-gl_case "V-GL6 glab exits nonzero (stdout public) -> null" 'gitlab:null' $'public\n' 1 0 "$GL_URL"
-gl_case "V-GL7 glab prints an unknown value -> null" 'gitlab:null' $'secret\n' 0 0 "$GL_URL"
+gl_case "V-GL6 glab exits nonzero (stdout public JSON) -> null" 'gitlab:null' "$(gl_json public)" 1 0 "$GL_URL"
+gl_case "V-GL7 project JSON with an unknown visibility -> null" 'gitlab:null' "$(gl_json secret)" 0 0 "$GL_URL"
 gl_case "V-GL8 glab prints nothing -> null" 'gitlab:null' '' 0 0 "$GL_URL"
-# The stub answers "public" only after 17s, past the 15s descriptor timeout.
-gl_case "V-GL9 glab exceeds the timeout -> null (late public ignored)" 'gitlab:null' $'public\n' 0 17000 "$GL_URL" 45
+# The stub answers only after 17s, past the 15s descriptor timeout.
+gl_case "V-GL9 glab exceeds the timeout -> null (late public ignored)" 'gitlab:null' "$(gl_json public)" 0 17000 "$GL_URL" 45
+gl_case "V-GL11 bare word (the old --jq output shape) is not JSON -> null" 'gitlab:null' $'private\n' 0 0 "$GL_URL"
+gl_case "V-GL12 JSON without a visibility field -> null" 'gitlab:null' $'{"message":"404 Project Not Found"}\n' 0 0 "$GL_URL"
+case_end
+
+# V-GL13: the PATH stub fails any argv carrying --jq ("Unknown flag", exit 1), as glab 1.121 does.
+case_begin "gitlab-visibility-no-jq-flag" "hooks/lib/forge/gitlab.js"
+gl_case "V-GL13 private project reached through a stub that rejects --jq -> private" \
+    'gitlab:"private"' "$(gl_json private)" 0 0 "$GL_URL"
+assert_not_contains "V-GL13 repoVisibility argv carries no --jq" "--jq" "$(cat "$GL_LOG" 2>/dev/null)"
 case_end
 
 case_begin "gitlab-visibility-traversal-null" "hooks/lib/forge/gitlab.js"
@@ -175,7 +186,7 @@ fi
 case_end
 
 # H-GL contract (#2513): repoVisibility asks the plan remote's own GitLab instance, so its
-#   glab argv carries `--hostname <host>` (lowercased, no userinfo/port) right before
+#   glab argv carries `--hostname <host>[:<https port>]` (lowercased, no userinfo) right before
 #   projects/<path>. Sibling methods keep their host-less argv (isPrivateRepo gap: follow-up).
 HG_DRIVER="$TMPROOT/gl-hostname-driver.js"
 cat > "$HG_DRIVER" <<'NODE'
@@ -188,6 +199,7 @@ cp.spawnSync = function (cmd, args, opts) {
   if (!/glab/.test(String(cmd))) return realSpawn(cmd, args, opts);
   fs.appendFileSync(env.HG_LOG, JSON.stringify(args || []) + "\n");
   if (env.HG_MODE === "spawn-error") return { status: null, stdout: "", stderr: "", error: new Error("ENOENT") };
+  if (env.HG_REJECT_JQ && (args || []).includes("--jq")) return { status: 1, stdout: "", stderr: "Unknown flag: --jq\n", error: null };
   return { status: Number(env.HG_RC || 0), stdout: env.HG_OUT || "", stderr: "", error: null };
 };
 const gl = require(process.argv[2]).codehostGitlab, m = process.argv[3], a = process.argv[4];
@@ -202,37 +214,43 @@ HG_CFG_SELF="$TMPROOT/hg-cfg-self"; mkdir -p "$HG_CFG_SELF"
 printf 'GITLAB_HOSTNAME=gitlab.example.com\n' > "$HG_CFG_SELF/.env"
 HG_CFG_NONE="$TMPROOT/hg-cfg-none"; mkdir -p "$HG_CFG_NONE"
 printf '# no forge host declared here\n' > "$HG_CFG_NONE/.env"
-# hg_run <cfgdir> <stdout> <rc> <mode> <method> [arg]
+# hg_run <cfgdir> <stdout> <rc> <mode> <method> [arg] — repoVisibility runs against a glab
+# that rejects --jq; the sibling methods keep their --jq argv (#2575) and are not rejected.
 hg_run() {
+    local rej=""
+    [ "$5" = repoVisibility ] && rej=1
     : > "$HG_LOG"
     (cd "$HG_CWD" && unset GITLAB_HOSTNAME GITLAB_SSH_HOSTNAME \
-        && AGENTS_MAIN_ROOT="$(nodepath "$1")" HG_LOG="$HG_LOG" HG_OUT="$2" HG_RC="$3" HG_MODE="$4" \
+        && AGENTS_MAIN_ROOT="$(nodepath "$1")" HG_LOG="$HG_LOG" HG_OUT="$2" HG_RC="$3" HG_MODE="$4" HG_REJECT_JQ="$rej" \
         run_with_timeout 20 node "$HG_DRIVER" "$GITLAB_JS" "$5" "${6:-}" 2>/dev/null)
 }
 hg_log() { cat "$HG_LOG" 2>/dev/null; }
+hg_json() { printf '{"path_with_namespace":"team/plans","visibility":"%s"}\n' "$1"; }
+hg_argv() { printf '["api","--hostname","%s","projects/team%%2Fplans"]' "$1"; }
 
 echo "=== H-GL: repoVisibility targets the remote's own host (--hostname) ==="
-# id|cfg|remote|expected --hostname value
+# id|cfg|remote|expected --hostname value. An HTTPS web port other than 443 rides on
+# --hostname as <host>:<port>; an SSH port is never a web port and is dropped.
 HG_ROWS=(
     "H-GL1 self-hosted ssh remote|$HG_CFG_SELF|git@gitlab.example.com:team/plans.git|gitlab.example.com"
     "H-GL2 gitlab.com https remote|$HG_CFG_NONE|https://gitlab.com/team/plans.git|gitlab.com"
-    "H-GL3 https userinfo+port stripped|$HG_CFG_SELF|https://user:tok@gitlab.example.com:8443/team/plans.git|gitlab.example.com"
+    "H-GL3 https userinfo stripped, non-default port kept|$HG_CFG_SELF|https://user:tok@gitlab.example.com:8443/team/plans.git|gitlab.example.com:8443"
     "H-GL4 uppercase host lowercased|$HG_CFG_SELF|git@GitLab.Example.com:team/plans.git|gitlab.example.com"
+    "H-GL8 https default port 443 dropped|$HG_CFG_SELF|https://gitlab.example.com:443/team/plans.git|gitlab.example.com"
+    "H-GL9 ssh:// port is not a web port|$HG_CFG_SELF|ssh://git@gitlab.example.com:2222/team/plans.git|gitlab.example.com"
 )
 case_begin "gitlab-visibility-hostname-argv" "hooks/lib/forge/gitlab.js"
 for row in "${HG_ROWS[@]}"; do
     IFS='|' read -r hg_id hg_cfg hg_url hg_host <<< "$row"
-    assert_eq "$hg_id: glab internal -> internal" '"internal"' \
-        "$(hg_run "$hg_cfg" $'internal\n' 0 "" repoVisibility "$hg_url")"
-    assert_eq "$hg_id: argv is api --hostname $hg_host projects/team%2Fplans --jq .visibility" \
-        "[\"api\",\"--hostname\",\"$hg_host\",\"projects/team%2Fplans\",\"--jq\",\".visibility\"]" "$(hg_log)"
+    assert_eq "$hg_id: project JSON internal -> internal" '"internal"' \
+        "$(hg_run "$hg_cfg" "$(hg_json internal)" 0 "" repoVisibility "$hg_url")"
+    assert_eq "$hg_id: argv is api --hostname $hg_host projects/team%2Fplans" "$(hg_argv "$hg_host")" "$(hg_log)"
 done
-# Re-run H-GL3 so the log under inspection is its own: no credential or port reaches glab.
-hg_run "$HG_CFG_SELF" $'internal\n' 0 "" repoVisibility \
+# Re-run H-GL3 so the log under inspection is its own: no credential reaches glab.
+hg_run "$HG_CFG_SELF" "$(hg_json internal)" 0 "" repoVisibility \
     "https://user:tok@gitlab.example.com:8443/team/plans.git" >/dev/null
 assert_not_contains "H-GL3 token never in argv" "tok" "$(hg_log)"
 assert_not_contains "H-GL3 userinfo never in argv" "user" "$(hg_log)"
-assert_not_contains "H-GL3 port never in argv" "8443" "$(hg_log)"
 case_end
 
 case_begin "gitlab-visibility-hostname-unresolvable" "hooks/lib/forge/gitlab.js"
@@ -246,11 +264,15 @@ case_end
 
 case_begin "gitlab-visibility-hostname-mapping-regression" "hooks/lib/forge/gitlab.js"
 HG_URL="https://gitlab.com/team/plans.git"
-assert_eq "H-GL6 glab PUBLIC -> public" '"public"' "$(hg_run "$HG_CFG_NONE" $'PUBLIC\n' 0 "" repoVisibility "$HG_URL")"
-assert_eq "H-GL6 unknown value -> null" 'null' "$(hg_run "$HG_CFG_NONE" $'secret\n' 0 "" repoVisibility "$HG_URL")"
-assert_eq "H-GL6 nonzero exit -> null" 'null' "$(hg_run "$HG_CFG_NONE" $'public\n' 1 "" repoVisibility "$HG_URL")"
+assert_eq "H-GL6 JSON PUBLIC -> public" '"public"' "$(hg_run "$HG_CFG_NONE" "$(hg_json PUBLIC)" 0 "" repoVisibility "$HG_URL")"
+assert_eq "H-GL6 unknown value -> null" 'null' "$(hg_run "$HG_CFG_NONE" "$(hg_json secret)" 0 "" repoVisibility "$HG_URL")"
+assert_eq "H-GL6 nonzero exit -> null" 'null' "$(hg_run "$HG_CFG_NONE" "$(hg_json public)" 1 "" repoVisibility "$HG_URL")"
 assert_eq "H-GL6 spawn error -> null" 'null' \
-    "$(hg_run "$HG_CFG_NONE" $'public\n' 0 spawn-error repoVisibility "$HG_URL")"
+    "$(hg_run "$HG_CFG_NONE" "$(hg_json public)" 0 spawn-error repoVisibility "$HG_URL")"
+assert_eq "H-GL6 JSON array instead of a project -> null" 'null' \
+    "$(hg_run "$HG_CFG_NONE" '[{"visibility":"private"}]' 0 "" repoVisibility "$HG_URL")"
+assert_eq "H-GL6 visibility not a string -> null" 'null' \
+    "$(hg_run "$HG_CFG_NONE" '{"visibility":null}' 0 "" repoVisibility "$HG_URL")"
 case_end
 
 case_begin "gitlab-siblings-no-hostname" "hooks/lib/forge/gitlab.js"
@@ -318,9 +340,8 @@ while IFS='|' read -r hs_id hs_cfg_host hs_url_host hs_want; do
     hs_n=$((hs_n + 1))
     hs_dir="$(hs_cfg "pos$hs_n" "$hs_cfg_host")"
     assert_eq "$hs_id: glab private passes through" '"private"' \
-        "$(hg_run "$hs_dir" $'private\n' 0 "" repoVisibility "$(hs_url https "$hs_url_host")" < /dev/null)"
-    assert_eq "$hs_id: one spawn, argv --hostname $hs_want" \
-        "[\"api\",\"--hostname\",\"$hs_want\",\"projects/team%2Fplans\",\"--jq\",\".visibility\"]" "$(hg_log)"
+        "$(hg_run "$hs_dir" "$(hg_json private)" 0 "" repoVisibility "$(hs_url https "$hs_url_host")" < /dev/null)"
+    assert_eq "$hs_id: one spawn, argv --hostname $hs_want" "$(hg_argv "$hs_want")" "$(hg_log)"
 done <<'TABLE'
 HS-GL16 dotted dns host|gitlab.example.com|gitlab.example.com|gitlab.example.com
 HS-GL17 hyphenated multi-label host|git-lab.example.co.jp|git-lab.example.co.jp|git-lab.example.co.jp

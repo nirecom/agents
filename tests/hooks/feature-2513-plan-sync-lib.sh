@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-plan-sync-lib.sh
 # Tests: hooks/lib/plan-sync.js, hooks/lib/plans-artifact-registry.js
-# Tags: plan-sync, plans, git, lib, registry, TL2, scope:issue-specific, flow, provision, non-ff, visibility, gh-stub, symlink, security, hardlink, toctou, stale-tip
+# Tags: plan-sync, plans, git, lib, registry, TL2, scope:issue-specific, flow, provision, non-ff, visibility, gh-stub, symlink, security, hardlink, toctou, stale-tip, gitlab, host-equivalence
 # #2513 plan-sync lib unit tests (detail.md S1-6): URL helpers, allowlist, .gitignore,
-# registry contract, checkProvisioned verdicts, syncPlanFile non-push statuses.
+# registry contract, checkProvisioned verdicts, syncPlanFile non-push statuses, provision /
+# sync / non-ff / visibility / non-regular-target / stale-tip flows.
 set -uo pipefail
 
 # TL3 gap (what this test does NOT catch):
@@ -61,30 +62,12 @@ OUT="$(psf_node 'process.stdout.write(ps.isAllowedRemoteUrl("C:\\plans\\bare.git
 expect_eq "allowlist: windows backslash path" "$OUT" "DENY"
 case_end
 
-case_begin "parse-github-remote" "hooks/lib/plan-sync.js"
-while IFS='|' read -r name url want; do
-  [ -z "$name" ] && continue
-  OUT="$(psf_node 'const r = ps.parseGitHubRemote(process.argv[1]);
-process.stdout.write(r ? r.owner + "/" + r.repo : "null");' "$url")"
-  expect_eq "parseGitHubRemote: $name" "$OUT" "$want"
-done <<'TABLE'
-scp-dotgit|git@github.com:test-owner/test-repo.git|test-owner/test-repo
-scp-bare|git@github.com:test-owner/test-repo|test-owner/test-repo
-ssh-dotgit|ssh://git@github.com/test-owner/test-repo.git|test-owner/test-repo
-ssh-bare|ssh://git@github.com/test-owner/test-repo|test-owner/test-repo
-https-dotgit|https://github.com/test-owner/test-repo.git|test-owner/test-repo
-https-userinfo|https://test-user:s3cr3t@github.com/test-owner/test-repo.git|test-owner/test-repo
-non-github-https|https://gitlab.example.com/test-owner/test-repo.git|null
-non-github-scp|git@example.com:test-owner/test-repo.git|null
-local-path|/tmp/plan-sync/bare.git|null
-repo-dot|git@github.com:test-owner/.|null
-repo-dotdot|git@github.com:test-owner/..|null
-owner-underscore|git@github.com:test_owner/test-repo.git|null
-owner-dot|https://github.com/test.owner/test-repo.git|null
-deeper-path|git@github.com:test-owner/test-repo/x.git|null
-lookalike-host|https://github.com.evil.com/test-owner/test-repo.git|null
-ssh-port-22|ssh://git@github.com:22/test-owner/test-repo.git|test-owner/test-repo
-TABLE
+LIB_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-plan-sync-lib"
+case_begin "remote-target-and-host-equivalence" "hooks/lib/plan-sync.js"
+. "$LIB_DIR/host-equivalence.sh"
+case_end
+
+case_begin "redact-url" "hooks/lib/plan-sync.js"
 OUT="$(psf_node 'process.stdout.write(ps.redactUrl("https://test-user:s3cr3t@github.com/test-owner/test-repo.git"));')"
 case "$OUT" in
   NOT_IMPLEMENTED:*) fail "redactUrl: userinfo hidden" "not implemented ($OUT)" ;;
@@ -94,13 +77,6 @@ case "$OUT" in
 esac
 OUT="$(psf_node 'process.stdout.write(ps.redactUrl(process.argv[1]));' "$PSF_ORIGIN_E2E")"
 expect_eq "redactUrl: URL without userinfo unchanged" "$OUT" "$PSF_ORIGIN_E2E"
-case_end
-
-case_begin "blob-url-for" "hooks/lib/plan-sync.js"
-OUT="$(psf_node 'process.stdout.write(ps.blobUrlFor({ owner: "test-owner", repo: "test-repo" }, "main", process.argv[1]));' 's 1#x-intent.md')"
-expect_eq "blobUrlFor: space and hash encoded" "$OUT" "https://github.com/test-owner/test-repo/blob/main/s%201%23x-intent.md"
-OUT="$(psf_node 'process.stdout.write(ps.blobUrlFor({ owner: "test-owner", repo: "test-repo" }, "main", process.argv[1]));' 'd ir/a?b.md')"
-expect_eq "blobUrlFor: per-segment encoding keeps separators" "$OUT" "https://github.com/test-owner/test-repo/blob/main/d%20ir/a%3Fb.md"
 case_end
 
 case_begin "render-gitignore" "hooks/lib/plan-sync.js"
@@ -228,6 +204,7 @@ sync_status() {
 
 case_begin "sync-plan-file-non-push-statuses" "hooks/lib/plan-sync.js"
 printf 'plan\n' > "$PLANS/s2513-intent.md"
+psf_record "$PLANS" s2513-intent.md github.com
 expect_eq "syncPlanFile: empty URL -> off" "$(PLAN_SYNC_REMOTE_URL="" sync_status "$PLANS" "$PLANS/s2513-intent.md")" "off||"
 printf 'ctx\n' > "$PLANS/s2513-context.md"
 OUT="$(PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sync_status "$PLANS" "$PLANS/s2513-context.md")"
@@ -237,6 +214,7 @@ expect_eq "syncPlanFile: unprovisioned -> not-provisioned/no-repo" \
 BR="$PSF_ROOT/branch-plans"
 if psf_make_provisioned "$BR" "$PSF_ORIGIN_GH" >/dev/null 2>&1; then
   git -C "$BR" symbolic-ref HEAD refs/heads/other; printf 'p\n' > "$BR/s2513-intent.md"
+  psf_record "$BR" s2513-intent.md github.com
   OUT="$(PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" WORKFLOW_PLANS_DIR="$BR" sync_status "$BR" "$BR/s2513-intent.md")"
 else OUT="NOT_IMPLEMENTED: fixture"; fi
 expect_eq "syncPlanFile: HEAD not main -> not-provisioned/detached-or-branch" "$OUT" "not-provisioned|detached-or-branch|"
@@ -247,6 +225,7 @@ OV="$PSF_ROOT/overlay-plans"
 if psf_make_provisioned "$OV" "$PSF_ORIGIN_DEAD" >/dev/null 2>&1; then
   printf 'a\n' > "$OV/s2513a-intent.md"; psf_commit_file "$OV" s2513a-intent.md refs/remotes/origin/main
   rm -f "$OV/s2513a-intent.md"; printf 'b\n' > "$OV/s2513b-intent.md"
+  psf_record "$OV" s2513b-intent.md "$PSF_HOST_DEAD"
   OUT="$(PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_DEAD" GIT_SSH_COMMAND=false WORKFLOW_PLANS_DIR="$OV" sync_status "$OV" "$OV/s2513b-intent.md")"
   expect_eq "syncPlanFile: unreachable remote -> failed" "${OUT%%|*}" "failed"
   TREE="$(git -C "$OV" ls-tree -r --name-only refs/heads/main 2>&1 | tr '\n' ' ')"
@@ -273,8 +252,8 @@ fi
 case_end
 
 # Flow sections share state in order: provision -> sync -> nonff.
-LIB_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-plan-sync-lib"
-. "$LIB_DIR/flow-helpers.sh"
+# shellcheck source=../lib/plan-sync-flow.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-sync-flow.sh"
 case_begin "flow-provision-repo" "hooks/lib/plan-sync.js"
 . "$LIB_DIR/provision.sh"
 case_end

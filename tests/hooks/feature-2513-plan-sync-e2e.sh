@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-plan-sync-e2e.sh
 # Tests: hooks/show-plan-link.js, bin/plan-sync-init, hooks/confirm-checkpoint.js
-# Tags: plan-sync, e2e, ssh-stub, show-plan-link, confirm-checkpoint, TL2, scope:issue-specific, cli, init, redact, visibility, gh-stub, remote-url-mismatch, cli-args
-# #2513 end-to-end (detail.md "テストの構成" 4, S3-5): real CLI + real hooks over the
+# Tags: plan-sync, e2e, ssh-stub, show-plan-link, confirm-checkpoint, TL2, scope:issue-specific, cli, init, redact, visibility, gh-stub, remote-url-mismatch, cli-args, interactive, additional-context, env-write
+# #2513 end-to-end (detail.md "Test composition" section 4, S3-5): real CLI + real hooks over the
 # test-only ssh stub (tests/lib/git-ssh-stub.sh) into a local bare repo. No network.
 set -uo pipefail
 
@@ -19,6 +19,9 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-sync-fixture.sh"
 
 psf_setup || { fail "setup" "psf_setup failed"; exit 1; }
+# psf_setup pins both dirs inside a function; the top-level re-export is the pin the
+# isolation gate (bin/check-plans-dir-isolation.sh) sees before the first exec.
+export WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
 psf_tag_unimplemented_fails
 trap psf_cleanup EXIT
 CLI="$(psf_np "$SCRIPT_CHECKOUT_ROOT/bin/plan-sync-init")"
@@ -33,11 +36,40 @@ export PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_E2E"
 # The real CLI probes visibility with the real gh (network): keep it off PATH throughout.
 psf_drop_gh_from_path
 
-# hook_msg <hook.js> <json> [plansDir] — prints the hook's .systemMessage.
-hook_msg() {
-  local out
-  out="$(printf '%s' "$2" | WORKFLOW_PLANS_DIR="${3:-$PLANS}" psf_timeout 60 node "$1" 2>/dev/null)"
-  psf_sysmsg "$out"
+# The project the plans are written from: same host as the plans remote, so plans are sent.
+PSF_PROJECT="$PSF_ROOT/e2e-project"
+psf_make_project "$PSF_PROJECT" "$PSF_ORIGIN_GH" || fail "setup" "project fixture"
+PSF_PROJECT="$(psf_np "$PSF_PROJECT")"
+
+# hook_run <hook.js> <json> [plansDir] [project-dir|-] — sets H_MSG, H_CTX, H_EVT from one hook
+# run. CLAUDE_PROJECT_DIR is pinned to the project dir (default $PSF_PROJECT), or unset for "-".
+hook_run() {
+  local out proj="${4:-$PSF_PROJECT}"
+  if [ "$proj" = "-" ]; then
+    out="$(printf '%s' "$2" | WORKFLOW_PLANS_DIR="${3:-$PLANS}" env -u CLAUDE_PROJECT_DIR bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node "$1" 2>/dev/null)"
+  else
+    out="$(printf '%s' "$2" | WORKFLOW_PLANS_DIR="${3:-$PLANS}" CLAUDE_PROJECT_DIR="$proj" psf_timeout 60 node "$1" 2>/dev/null)"
+  fi
+  H_MSG="$(psf_sysmsg "$out")"
+  H_CTX="$(psf_hso "$out" additionalContext)"
+  H_EVT="$(psf_hso "$out" hookEventName)"
+}
+
+# ctx_has_plan_path <plansDir> <file> — H_CTX holds the plan's absolute path, native or forward-slash.
+ctx_has_plan_path() {
+  local d
+  for d in "$1" "${1//\\//}" "${1//\//\\}" "$(psf_np "$1")"; do
+    case "$H_CTX" in *"$d/$2"*|*"$d\\$2"*) return 0 ;; esac
+  done
+  return 1
+}
+
+# expect_ctx_url <name> <event> <url> <plansDir> — the URL and the plan's local path ride additionalContext.
+expect_ctx_url() {
+  if [ "$H_EVT" != "$2" ]; then fail "$1" "hookEventName=$(printf '%q' "$H_EVT") want $2"
+  elif [[ "$H_CTX" != *"$3"* ]]; then fail "$1" "ctx lacks $3: $(printf '%q' "$H_CTX")"
+  elif ! ctx_has_plan_path "$4" "${3##*/}"; then fail "$1" "ctx lacks the plan's local path: $(printf '%q' "$H_CTX")"
+  else pass "$1"; fi
 }
 
 # init_cli <plansDir> — prints the CLI rc; "NI" when the CLI is absent.
@@ -86,8 +118,10 @@ else fail "E1 plan-sync-init exit 0" "rc=$RC out=$(cat "$PSF_ROOT/init.out" 2>/d
 if grep -qi 'visibility' "$PSF_ROOT/init.out" 2>/dev/null; then pass "E1 init warns that visibility was not verified"
 else fail "E1 init warns that visibility was not verified" "out=$(cat "$PSF_ROOT/init.out" 2>/dev/null)"; fi
 printf 'e2e intent\n' > "$PLANS/s2513e2e-intent.md"
-MSG="$(hook_msg "$SPL" "$(psf_write_json "$PLANS/s2513e2e-intent.md" test-sid-e2e)")"
-expect_has "E1 breadcrumb shows the GitHub blob URL" "$MSG" "Plan file: $BLOB/s2513e2e-intent.md"
+hook_run "$SPL" "$(psf_write_json "$PLANS/s2513e2e-intent.md" test-sid-e2e "$PSF_PROJECT")"
+expect_ctx_url "E1 additionalContext carries the GitHub blob URL" PostToolUse "$BLOB/s2513e2e-intent.md" "$PLANS"
+if [ -z "$H_MSG" ]; then pass "E1 success emits no systemMessage (D2)"
+else fail "E1 success emits no systemMessage (D2)" "msg=$(printf '%q' "$H_MSG")"; fi
 expect_has "E1 bare main holds the written content" "$(git -C "$BARE" show refs/heads/main:s2513e2e-intent.md 2>&1)" "e2e intent"
 BM="$(git -C "$BARE" rev-parse --verify -q refs/heads/main)"
 expect_has "E1 local origin/main == bare main" "$(git -C "$PLANS" rev-parse --verify -q refs/remotes/origin/main 2>&1)/" "${BM:-no-bare-main}/"
@@ -97,8 +131,9 @@ case_end
 case_begin "confirm-checkpoint-same-url" "hooks/confirm-checkpoint.js"
 CCP_JSON="$(psf_timeout 30 node -e 'process.stdout.write(JSON.stringify({ tool_name: "Bash",
   tool_input: { command: "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"" }, session_id: "test-sid-e2e" }));')"
-MSG="$(hook_msg "$CCP" "$CCP_JSON")"
-expect_has "E2 confirm-checkpoint shows the same blob URL" "$MSG" "$BLOB/s2513e2e-intent.md"
+hook_run "$CCP" "$CCP_JSON"
+expect_has "E2 confirm-checkpoint shows the same blob URL" "$H_MSG" "$BLOB/s2513e2e-intent.md"
+expect_ctx_url "E2 confirm-checkpoint additionalContext carries the same blob URL" PreToolUse "$BLOB/s2513e2e-intent.md" "$PLANS"
 case_end
 
 case_begin "non-ff-through-stub" "hooks/show-plan-link.js"
@@ -107,11 +142,11 @@ P2="$PSF_ROOT/plans-2"; mkdir -p "$P2"
 RC="$(init_cli "$P2")"
 if [ "$RC" = 0 ]; then pass "E3 second machine init exit 0"; else fail "E3 second machine init exit 0" "rc=$RC"; fi
 printf 'other machine\n' > "$P2/s2513other-intent.md"
-MSG="$(hook_msg "$SPL" "$(psf_write_json "$P2/s2513other-intent.md" test-sid-e2e2)" "$P2")"
-expect_has "E3 second machine pushes first" "$MSG" "Plan file: $BLOB/s2513other-intent.md"
+hook_run "$SPL" "$(psf_write_json "$P2/s2513other-intent.md" test-sid-e2e2 "$PSF_PROJECT")" "$P2"
+expect_ctx_url "E3 second machine pushes first" PostToolUse "$BLOB/s2513other-intent.md" "$P2"
 printf 'e2e outline\n' > "$PLANS/s2513e2e-outline.md"
-MSG="$(hook_msg "$SPL" "$(psf_write_json "$PLANS/s2513e2e-outline.md" test-sid-e2e)")"
-expect_has "E3 behind machine still gets the blob URL" "$MSG" "Plan file: $BLOB/s2513e2e-outline.md"
+hook_run "$SPL" "$(psf_write_json "$PLANS/s2513e2e-outline.md" test-sid-e2e "$PSF_PROJECT")"
+expect_ctx_url "E3 behind machine still gets the blob URL" PostToolUse "$BLOB/s2513e2e-outline.md" "$PLANS"
 TREE="$(git -C "$BARE" ls-tree -r --name-only refs/heads/main 2>/dev/null | tr '\n' ' ')"
 expect_has "E3 remote keeps the earlier push and both local files" "$TREE" \
   ".gitignore s2513e2e-intent.md s2513e2e-outline.md s2513other-intent.md "
@@ -122,6 +157,10 @@ elif [ -z "$BM" ]; then fail "E3 remote-only file not checked out" "bare main mi
 else pass "E3 remote-only file not checked out"; fi
 stub_log_ok "E3 every ssh request targets /test-owner/test-repo.git"
 case_end
+
+# Plans written from a project on another host, or with no cwd, never leave the machine.
+# shellcheck source=feature-2513-plan-sync-e2e/project-host-not-sent.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-plan-sync-e2e/project-host-not-sent.sh"
 
 # CLI refusal paths (merged from the former tests/bin/feature-2513-plan-sync-init.sh):
 # each case gets its own plans dir so the provisioned $PLANS above is never touched.
@@ -338,6 +377,22 @@ for cla_row in "${CLA_ROWS[@]}"; do
   cla_case "$cla_id" "$cla_needle" "${cla_args[@]}"
 done
 case_end
+
+# Interactive mode (#2513 G5): own fragments to keep this file under the split threshold.
+# shellcheck source=feature-2513-plan-sync-e2e/plan-sync-init-interactive.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-plan-sync-e2e/plan-sync-init-interactive.sh"
+
+# GitLab template flow runs standalone (own fixture); fold its Results line into the totals.
+E2E_GLAB_OUT="$(bash "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-plan-sync-e2e/plan-sync-init-glab.sh" 2>&1)"
+printf '%s\n' "$E2E_GLAB_OUT" | grep -E '^(FAIL|PASS)' || true
+E2E_GLAB_RES="$(printf '%s\n' "$E2E_GLAB_OUT" | grep -E '^Results: [0-9]+ passed, [0-9]+ failed' | tail -1)"
+if [ -n "$E2E_GLAB_RES" ]; then
+  E2E_GLAB_P="${E2E_GLAB_RES#Results: }"; E2E_GLAB_P="${E2E_GLAB_P%% *}"
+  E2E_GLAB_F="${E2E_GLAB_RES#*passed, }"; E2E_GLAB_F="${E2E_GLAB_F%% *}"
+  PASS=$((PASS + E2E_GLAB_P)); FAIL=$((FAIL + E2E_GLAB_F))
+else
+  fail "plan-sync-init-glab.sh produced a Results line" "$(printf '%s' "$E2E_GLAB_OUT" | tail -5)"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

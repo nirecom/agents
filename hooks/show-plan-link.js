@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 // PostToolUse hook: for any final plan artifact written under the plans dir
-// (basename *-(intent|outline|detail).md; drafts/ excluded), publish it through
-// plan-sync and emit a breadcrumb systemMessage — the blob URL when the push landed
-// on a GitHub remote, otherwise the absolute local path plus a [plan-sync] status line.
-// Always emits regardless of CONFIRM_<STEP>: the breadcrumb is the sole plan surface.
-// Triggers on the whole write-tool class (hooks/lib/write-tools.js): every edit-write tool,
-// because a plan revised by Edit/MultiEdit/editFiles must reach the remote like a Write, and
-// every command tool running skills/_shared/assemble-mandatory.sh (final-plan assembly).
-// All plans of one invocation share one sync budget, so the message lands before the hook timeout.
-// Emits { "systemMessage": "..." } only (siblings use `additionalContext`). Design: docs/architecture/claude-code/plan-sync.md.
+// (basename *-(intent|outline|detail).md; drafts/ excluded), record the project's host beside
+// it (from the hook input's cwd only), then publish it through plan-sync. A failed record
+// write sends nothing. Triggers on the whole write-tool class (hooks/lib/write-tools.js) and
+// on command tools running skills/_shared/assemble-mandatory.sh (final-plan assembly).
+// Output: PostToolUse additionalContext always carries one plan-link line per plan
+// (hooks/lib/plan-link.js); the systemMessage breadcrumb is added only when the user should
+// see a problem (no URL for a reason other than the project-host verdict).
+// All plans of one invocation share one sync budget. Design: docs/architecture/claude-code/plan-sync.md.
 "use strict";
 
+const fs = require("fs");
 const path = require("path");
 const { normalizeSlashes } = require("./lib/path-match");
 const { getSuffix } = require("./lib/plan-confirm-flag");
@@ -22,6 +22,8 @@ const { readHookInput } = require("./lib/read-stdin");
 const RUN_HINT = '— run node "$AGENTS_MAIN_ROOT/bin/plan-sync-init"';
 // One budget per invocation, kept below the 30 s hook timeout in settings.json.
 const SHARED_SYNC_BUDGET_MS = 20000;
+// Skip reasons that are the project-host verdict itself: shown to the model, not the user.
+const QUIET_SKIP_REASONS = new Set(["host-mismatch", "no-project-host"]);
 
 function noopExit() {
   process.stdout.write("");
@@ -37,7 +39,7 @@ function formatBreadcrumb(result, absPath) {
   const r = result || {};
   if (r.status === "pushed" && r.url) return `Plan file: ${r.url}`;
   const lines = [`Plan file: ${absPath}`];
-  if (r.status === "pushed") lines.push("[plan-sync] pushed (non-GitHub remote; no URL)");
+  if (r.status === "pushed") lines.push("[plan-sync] pushed (no blob URL for this remote)");
   else if (r.status === "off") lines.push("[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)");
   else if (r.status === "not-provisioned" || r.status === "failed") {
     lines.push(`[plan-sync] ${r.reason || r.status} ${RUN_HINT}`);
@@ -45,6 +47,8 @@ function formatBreadcrumb(result, absPath) {
     lines.push("[plan-sync] skipped: not a regular file (symlink, directory, or missing)");
   } else if (r.status === "skipped" && r.reason === "budget-exhausted") {
     lines.push("[plan-sync] skipped: shared sync budget exhausted (retry by re-saving the plan)");
+  } else if (r.status === "skipped" && QUIET_SKIP_REASONS.has(r.reason)) {
+    lines.push(`[plan-sync] not sent: ${r.reason}`);
   }
   return lines.join("\n");
 }
@@ -53,6 +57,13 @@ function defaultSync(absPath, opts) {
   const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
   const { syncPlanFile } = require("./lib/plan-sync");
   return syncPlanFile(getWorkflowPlansDir(), absPath, { budgetMs: opts.budgetMs });
+}
+
+// The project is the hook input's cwd alone: CLAUDE_PROJECT_DIR, the process cwd and the cwd
+// saved in the session state may name another project than the one the plan was written for.
+function recordHost(absPath, input) {
+  const { recordProjectHost } = require("./lib/plan-sync");
+  return recordProjectHost(absPath, typeof input.cwd === "string" ? input.cwd : null);
 }
 
 // Windows: native backslash absolute path (Explorer/cmd.exe compatible).
@@ -108,26 +119,76 @@ function markTurn(filePath, absPath, input) {
   } catch (_) { /* fail-open */ }
 }
 
-// breadcrumbsForArtifacts(filePaths, input, { sync, now, budgetMs }) -> joined systemMessage.
+function pathExists(absPath) {
+  try { fs.lstatSync(absPath); return true; } catch (_) { return false; }
+}
+
+// runArtifacts(filePaths, input, opts) -> [{filePath, absPath, result}] — per plan: record the
+// project host, drop the turn marker, then sync. A failed record write never reaches sync.
+// An absent plan gets no record: there is nothing to send, and sync reports it as absent.
 // Never calls sync with budgetMs <= 0: commit-push treats a falsy budget as its 20 s default.
-function breadcrumbsForArtifacts(filePaths, input, { sync = defaultSync, now = Date.now, budgetMs = SHARED_SYNC_BUDGET_MS } = {}) {
+function runArtifacts(filePaths, input, { sync = defaultSync, now = Date.now, budgetMs = SHARED_SYNC_BUDGET_MS } = {}) {
   const deadline = now() + budgetMs;
   return filePaths.map((filePath) => {
     const absPath = toAbsPath(filePath);
-    markTurn(filePath, absPath, input);
+    let recorded = !pathExists(absPath);
+    if (!recorded) {
+      try { recorded = Boolean(recordHost(absPath, input || {}).ok); } catch (_) { recorded = false; }
+    }
+    markTurn(filePath, absPath, input || {});
     const remaining = deadline - now();
     let result;
-    if (remaining <= 0) result = { status: "skipped", reason: "budget-exhausted" };
+    if (!recorded) result = { status: "failed", reason: "internal-error" };
+    else if (remaining <= 0) result = { status: "skipped", reason: "budget-exhausted" };
     else {
       try { result = sync(absPath, { budgetMs: remaining }); } catch (_) { result = { status: "failed", reason: "internal-error" }; }
     }
-    return formatBreadcrumb(result, absPath);
-  }).join("\n");
+    return { filePath, absPath, result };
+  });
+}
+
+// breadcrumbsForArtifacts(filePaths, input, { sync, now, budgetMs }) -> joined breadcrumb text.
+function breadcrumbsForArtifacts(filePaths, input, opts) {
+  return runArtifacts(filePaths, input, opts).map((r) => formatBreadcrumb(r.result, r.absPath)).join("\n");
+}
+
+// The user sees a breadcrumb unless the plan got its URL or the project-host verdict held it back.
+function showsMessage(result) {
+  const r = result || {};
+  if (r.status === "pushed" && r.url) return false;
+  return !(r.status === "skipped" && QUIET_SKIP_REASONS.has(r.reason));
+}
+
+// entryFor(run) -> {stage, url?, path?, reason?} — the plan-link row of one written plan.
+function entryFor(run) {
+  const PL = require("./lib/plan-link");
+  const stage = getSuffix(run.filePath);
+  const r = run.result || {};
+  // Not a regular file: the path may name what a link points at, so only the stage is shown.
+  if (r.status === "skipped" && r.reason === "not-regular-file") return { stage, reason: PL.REASONS.NOT_PUBLISHED };
+  const fromSync = PL.linkFromSyncResult(r);
+  if (fromSync.url) return { stage, url: fromSync.url, path: run.absPath };
+  if (fromSync.reason !== PL.REASONS.NOT_PUBLISHED) return { stage, path: run.absPath, reason: fromSync.reason };
+  // Not pushed now: the plan may still be at the destination unchanged from an earlier write.
+  let link = {};
+  try { link = PL.linkForFile(run.absPath); } catch (_) { link = {}; }
+  if (link.url) return { stage, url: link.url, path: run.absPath };
+  return { stage, path: run.absPath, reason: fromSync.reason };
 }
 
 function emitForArtifacts(filePaths, input) {
-  const msg = breadcrumbsForArtifacts(filePaths, input);
-  process.stdout.write(JSON.stringify({ systemMessage: msg }));
+  const runs = runArtifacts(filePaths, input);
+  const out = {};
+  try {
+    const { renderModelContext } = require("./lib/plan-link");
+    out.hookSpecificOutput = {
+      hookEventName: "PostToolUse",
+      additionalContext: renderModelContext(runs.map(entryFor), { when: "after-write" }),
+    };
+  } catch (_) { /* fail-open: the breadcrumb below still reaches the user */ }
+  const shown = runs.filter((r) => !out.hookSpecificOutput || showsMessage(r.result));
+  if (shown.length > 0) out.systemMessage = shown.map((r) => formatBreadcrumb(r.result, r.absPath)).join("\n");
+  process.stdout.write(JSON.stringify(out));
   process.exit(0);
 }
 

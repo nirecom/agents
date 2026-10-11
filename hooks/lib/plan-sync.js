@@ -6,13 +6,19 @@ const remoteUrl = require("./plan-sync/remote-url");
 const allowlist = require("./plan-sync/allowlist");
 const provision = require("./plan-sync/provision");
 const commitPush = require("./plan-sync/commit-push");
+const projectHost = require("./plan-sync/project-host");
 
 module.exports = {
   isAllowedRemoteUrl: remoteUrl.isAllowedRemoteUrl,
+  isPlaceholderUrl: remoteUrl.isPlaceholderUrl,
   redactUrl: remoteUrl.redactUrl,
   redactText: remoteUrl.redactText,
-  parseGitHubRemote: remoteUrl.parseGitHubRemote,
+  gitlabSettings: remoteUrl.gitlabSettings,
+  resolveRemoteTarget: remoteUrl.resolveRemoteTarget,
+  sameRemoteHost: remoteUrl.sameRemoteHost,
   blobUrlFor: remoteUrl.blobUrlFor,
+  recordProjectHost: projectHost.recordProjectHost,
+  readProjectHostState: projectHost.readProjectHostState,
   renderGitignore: allowlist.renderGitignore,
   isSyncTarget: allowlist.isSyncTarget,
   INIT_VERSION: provision.INIT_VERSION,

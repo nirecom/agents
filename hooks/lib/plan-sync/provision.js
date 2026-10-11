@@ -8,8 +8,9 @@
 const fs = require("fs");
 const path = require("path");
 const remoteUrl = require("./remote-url");
-const { renderGitignore, isSyncTargetName } = require("./allowlist");
+const { renderGitignore } = require("./allowlist");
 const { readVerifiedRegularFile } = require("./local-file");
+const { sendPredicate } = require("./project-host");
 const G = require("./git");
 
 const INIT_VERSION = 1;
@@ -26,9 +27,17 @@ function allowFn(deps) {
   return deps && typeof deps.isAllowedRemoteUrl === "function" ? deps.isAllowedRemoteUrl : remoteUrl.isAllowedRemoteUrl;
 }
 
+// The default seam judges the forge with the same agents settings as the rest of plan-sync
+// (never forge-router's cwd-based reader) and hands GitLab those settings too.
 function visFn(deps) {
   if (deps && typeof deps.repoVisibility === "function") return deps.repoVisibility;
-  return (u) => require("../forge-router").resolveCodehostDescriptor(u).repoVisibility(u);
+  return (u) => {
+    const s = remoteUrl.gitlabSettings();
+    const t = remoteUrl.resolveRemoteTarget(u, s);
+    if (t.type === "gitlab") return require("../forge/gitlab").codehostGitlab.repoVisibility(u, s);
+    if (t.type === "github") return require("../forge/github").codehostGithub.repoVisibility(`https://github.com/${t.project}`);
+    return null;
+  };
 }
 
 function remoteVisibility(url, deps) {
@@ -130,11 +139,11 @@ function ensureOrigin(plansDir, url) {
 // so init publishes the plans written before sync was set up, not only those written after.
 // Each file is read once through a verified descriptor; its blob is kept only when the id git
 // wrote for the path equals the id of those verified bytes, so a link or a swap is skipped.
-function workingTreeEntries(plansDir, opts) {
+function workingTreeEntries(plansDir, pred, opts) {
   let names;
   try { names = fs.readdirSync(plansDir); } catch (e) { return { ok: false, error: String(e && e.message) }; }
   const files = [];
-  for (const rel of names.filter(isSyncTargetName).sort()) {
+  for (const rel of names.filter(pred.isSendable).sort()) {
     const bytes = readVerifiedRegularFile(path.join(plansDir, rel));
     if (bytes) files.push({ rel, id: G.blobIdOf(bytes) });
   }
@@ -143,20 +152,21 @@ function workingTreeEntries(plansDir, opts) {
   return { ok: true, entries: files.filter((f, i) => shas[i] === f.id).map((f) => ({ rel: f.rel, blob: f.id })) };
 }
 
-// converge(plansDir) -> {ok, commit, push, error?} — the commit to publish, always a fresh
-// root or the remote tip plus allowlist-filtered local entries; a local ref is never pushed as-is.
-// Plan files on disk are added only under names the remote does not hold yet: init never
-// overwrites a plan another machine published.
-function converge(plansDir, opts) {
+// converge(plansDir, url) -> {ok, commit, push, error?} — the commit to publish, always a fresh
+// root or the remote tip plus local entries that pass the send predicate for url; a local ref
+// is never pushed as-is. Plan files on disk are added only under names the remote does not
+// hold yet: init never overwrites a plan another machine published.
+function converge(plansDir, url, opts) {
   const ls = G.runGit(plansDir, ["ls-remote", "--heads", "origin", G.MAIN_REF], opts);
   if (ls.status !== 0) return { ok: false, reason: G.classifyFailure(ls) === "auth" ? "auth" : "remote-unreachable", error: ls.stderr };
+  const pred = sendPredicate(plansDir, url);
   const L = G.revParse(plansDir, G.MAIN_REF);
-  const W = workingTreeEntries(plansDir, opts);
+  const W = workingTreeEntries(plansDir, pred, opts);
   if (!W.ok) return { ok: false, reason: "commit-failed", error: W.error };
   if (ls.stdout.trim() === "") {
     const gi = G.hashBytes(plansDir, renderGitignore());
     if (!gi) return { ok: false, reason: "commit-failed", error: "hash-object failed" };
-    const carried = L ? G.treeEntries(plansDir, L, isSyncTargetName) : [];
+    const carried = L ? pred.keepCarried(G.treeEntries(plansDir, L, pred.isSendable)) : [];
     const c = G.overlayCommit(plansDir, null,
       G.mergeEntries([{ rel: ".gitignore", blob: gi }], G.mergeEntries(W.entries, carried)),
       Object.assign({ message: "plan-sync: initial" }, opts));
@@ -169,7 +179,7 @@ function converge(plansDir, opts) {
   if (!R) return { ok: false, reason: "fetch-failed", error: "origin/main missing after fetch" };
   const onRemote = new Set(G.treeEntries(plansDir, R, () => true).map((e) => e.rel));
   const absent = W.entries.filter((e) => !onRemote.has(e.rel));
-  const entries = G.mergeEntries(absent, G.carriedEntries(plansDir, R, L, isSyncTargetName));
+  const entries = G.mergeEntries(absent, pred.keepCarried(G.carriedEntries(plansDir, R, L, pred.isSendable)));
   const c = G.overlayCommit(plansDir, R, entries, Object.assign({ message: "plan-sync: rebuild onto origin/main" }, opts));
   if (!c.ok) return { ok: false, reason: "commit-failed", error: c.error };
   return { ok: true, commit: c.commit, push: c.commit !== R, local: L };
@@ -198,13 +208,18 @@ function provisionRepo(plansDir, url, deps) {
   const shown = remoteUrl.redactUrl(String(url || ""));
   if (!url || !allowFn(deps)(url)) return fail("url-denied", notes, `remote URL refused by the allowlist: ${shown}`);
   if (remoteUrl.isPlaceholderUrl(url)) return fail("url-placeholder", notes, `replace the YOUR_USERNAME placeholder in ${shown}`);
-  const gh = remoteUrl.parseGitHubRemote(url);
-  if (!gh) notes.push("non-GitHub remote: no blob URL can be shown; breadcrumbs fall back to the local path");
+  const target = remoteUrl.resolveRemoteTarget(url);
+  if (target.type === "unknown") notes.push("remote is on no known forge: no blob URL can be shown; plan links carry the local path only");
   const vis = remoteVisibility(url, deps);
   if (vis === "public") {
     return fail("remote-public", notes, `remote repository is public; PLAN_SYNC_REMOTE_URL must point at a private repo: ${shown}`);
   }
   if (vis !== "private" && vis !== "internal") {
+    // GitLab stops here (nothing written, remote never contacted); GitHub and unknown forges go on.
+    if (target.type === "gitlab") {
+      return fail("visibility-unverified", notes,
+        `GitLab remote visibility could not be verified (check glab install and auth for ${target.host}); nothing was published: ${shown}`);
+    }
     notes.push("remote visibility could not be verified (check gh/glab install and auth); confirm the repo is private yourself");
   }
   if (dotGitKind(plansDir) === "other") return fail("git-not-directory", notes, `${path.join(plansDir, ".git")} is a file or symlink; refusing to touch it`);
@@ -220,7 +235,7 @@ function provisionRepo(plansDir, url, deps) {
       "git rewrites this URL (insteadOf / pushInsteadOf / pushurl); put the rewritten form in PLAN_SYNC_REMOTE_URL");
   }
 
-  const cv = converge(plansDir, opts);
+  const cv = converge(plansDir, url, opts);
   if (!cv.ok) return fail(cv.reason, notes, cv.error);
   const gi = fixGitignore(plansDir, cv.commit, opts);
   if (!gi.ok) return fail("commit-failed", notes, gi.error);
@@ -237,8 +252,9 @@ function provisionRepo(plansDir, url, deps) {
   if (v.status !== 0) return fail("init-failed", notes, v.stderr);
   const post = checkProvisioned(plansDir, url, deps);
   if (!post.ok) return fail(post.reason, notes, "post-init check failed");
-  const id = gh ? `${gh.owner}/${gh.repo}` : "the remote's repo identifier";
-  if (!gh || !listedAsPrivate(url, id, deps)) {
+  const known = target.type !== "unknown" && target.project;
+  const id = known ? target.project : "the remote's repo identifier";
+  if (!known || !listedAsPrivate(url, id, deps)) {
     notes.push(`add ${id} to .private-info-blocklist so public outbound (commits, PRs, issues) blocks it mechanically`);
   }
   return { ok: true, notes };

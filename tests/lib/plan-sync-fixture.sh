@@ -2,7 +2,7 @@
 # tests/lib/plan-sync-fixture.sh
 # Tests: tests/lib/plan-sync-fixture.sh
 # Tags: scope:issue-specific, shared-lib, plan-sync, fixture
-# Shared #2513 plan-sync fixture; rules: detail.md "テストの構成" (fixture helper).
+# Shared #2513 plan-sync fixture; rules: detail.md "Test composition" section (fixture helper).
 # Needs SCRIPT_CHECKOUT_ROOT. Defines only psf_* helpers + setup_ssh_stub, never pass/fail
 # (psf_tag_unimplemented_fails wraps the caller's fail only on request). Caller owns EXIT trap.
 
@@ -11,6 +11,12 @@ PSF_LIB="$PSF_AGENTS_DIR/hooks/lib/plan-sync.js"
 PSF_ORIGIN_GH="git@github.com:test-owner/test-repo.git"
 PSF_ORIGIN_E2E="ssh://git@github.com/test-owner/test-repo.git"
 PSF_ORIGIN_DEAD="ssh://git@127.0.0.1:1/o/r.git"
+PSF_HOST_DEAD="127.0.0.1"
+PSF_ORIGIN_GL="git@gitlab.com:test-group/test-project.git"
+PSF_ORIGIN_GL_SELF="git@gitlab.example.com:test-group/test-project.git"
+# A destination with a host but no known forge; the ssh stub serves its repo path.
+PSF_ORIGIN_PLAIN="ssh://git@plans.example.com/test-owner/test-repo.git"
+PSF_HOST_PLAIN="plans.example.com"
 
 psf_np() {
   if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi
@@ -40,6 +46,8 @@ psf_setup() {
   export AGENTS_MAIN_ROOT="$PSF_ROOT/cfg"
   export CLAUDE_TRANSCRIPT_BASE_DIR="$PSF_ROOT/transcripts"
   export PLAN_SYNC_REMOTE_URL=""
+  # Host verdicts never inherit the developer's GitLab settings or project dir.
+  unset GITLAB_HOSTNAME GITLAB_SSH_HOSTNAME CLAUDE_PROJECT_DIR PLAN_SYNC_INIT_ASSUME_TTY 2>/dev/null || true
   export PSF_LIB_PATH; PSF_LIB_PATH="$(psf_np "$PSF_LIB")"
   unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
   unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL TERM_PROGRAM CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
@@ -147,22 +155,22 @@ psf_up() {
   if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"; else printf '%s\n' "$1"; fi
 }
 
-# psf_drop_gh_from_path — exports PATH without any directory holding a gh executable, so
-# no test reaches the real GitHub CLI (network). Such a directory that also holds git /
-# node / sh / bash (e.g. /usr/bin) becomes a shim dir linking everything except gh.
-psf_drop_gh_from_path() {
-  local kept="" dir f t shim n=0 essential
+# psf_drop_cli_from_path <cli> — exports PATH without any directory holding a <cli> executable,
+# so no test reaches the real forge CLI (network). Such a directory that also holds git /
+# node / sh / bash (e.g. /usr/bin) becomes a shim dir linking everything except <cli>.
+psf_drop_cli_from_path() {
+  local cli="$1" kept="" dir f t shim n=0 essential
   local -a dirs
   IFS=: read -r -a dirs <<< "$PATH"
   for dir in "${dirs[@]}"; do
     [ -z "$dir" ] && continue
-    if [ -e "$dir/gh" ] || [ -e "$dir/gh.exe" ] || [ -e "$dir/gh.cmd" ] || [ -e "$dir/gh.bat" ]; then
+    if [ -e "$dir/$cli" ] || [ -e "$dir/$cli.exe" ] || [ -e "$dir/$cli.cmd" ] || [ -e "$dir/$cli.bat" ]; then
       essential=""
       for t in git node sh bash; do [ -e "$dir/$t" ] || [ -e "$dir/$t.exe" ] && essential=1; done
       [ -z "$essential" ] && continue
-      n=$((n + 1)); shim="$(psf_up "$PSF_ROOT/path-shim-$n")"; mkdir -p "$shim"
+      n=$((n + 1)); shim="$(psf_up "$PSF_ROOT/path-shim-$cli-$n")"; mkdir -p "$shim"
       for f in "$dir"/*; do
-        case "${f##*/}" in gh|gh.exe|gh.cmd|gh.bat) continue ;; esac
+        case "${f##*/}" in "$cli"|"$cli.exe"|"$cli.cmd"|"$cli.bat") continue ;; esac
         ln -s "$f" "$shim/${f##*/}" 2>/dev/null || true
       done
       dir="$shim"
@@ -170,6 +178,15 @@ psf_drop_gh_from_path() {
     kept="${kept:+$kept:}$dir"
   done
   export PATH="$kept"
+}
+
+psf_drop_gh_from_path() { psf_drop_cli_from_path gh; }
+
+# psf_node_finds_cli <cli> — what Node's shell-less spawnSync sees for <cli>: ENOENT when absent.
+psf_node_finds_cli() {
+  psf_timeout 30 node -e '
+const r = require("child_process").spawnSync(process.argv[1], ["--version"], { windowsHide: true });
+process.stdout.write(r.error ? String(r.error.code) : "found:" + r.status);' "$1"
 }
 
 # psf_node_finds_gh — prints what Node's shell-less spawnSync sees for "gh": ENOENT when absent.
@@ -200,9 +217,163 @@ let d; try { d = JSON.parse(require('fs').readFileSync(0, 'utf8')); } catch (e) 
 process.stdout.write(d.systemMessage || '');" 2>/dev/null
 }
 
-# psf_write_json <file_path> [session_id] — PostToolUse Write payload.
+# psf_write_json <file_path> [session_id] [cwd] [cwd-json] — PostToolUse Write payload; no cwd
+# field when [cwd] is omitted or empty. [cwd-json] is a JSON literal ('""', 'null') that
+# becomes the cwd value as is, instead of [cwd].
 psf_write_json() {
   psf_timeout 30 node -e "
 process.stdout.write(JSON.stringify({ tool_name: 'Write', tool_input: { file_path: process.argv[1] },
-  tool_response: { success: true }, session_id: process.argv[2] || undefined }));" "$1" "${2:-}"
+  tool_response: { success: true }, session_id: process.argv[2] || undefined,
+  cwd: process.argv[4] ? JSON.parse(process.argv[4]) : process.argv[3] || undefined }));" \
+    "$1" "${2:-}" "${3:-}" "${4:-}"
+}
+
+# psf_hso <hook-stdout> <field> — prints .hookSpecificOutput.<field> (empty if none).
+psf_hso() {
+  printf '%s' "$1" | psf_timeout 30 node -e "
+let d; try { d = JSON.parse(require('fs').readFileSync(0, 'utf8')); } catch (e) { process.exit(1); }
+const h = d && d.hookSpecificOutput; const v = h ? h[process.argv[1]] : undefined;
+process.stdout.write(v === undefined || v === null ? '' : String(v));" "$2" 2>/dev/null
+}
+
+# psf_has_hso <hook-stdout> — exit 0 when the JSON output carries a hookSpecificOutput object.
+psf_has_hso() {
+  printf '%s' "$1" | psf_timeout 30 node -e "
+let d; try { d = JSON.parse(require('fs').readFileSync(0, 'utf8')); } catch (e) { process.exit(1); }
+process.exit(d && d.hookSpecificOutput ? 0 : 1);" 2>/dev/null
+}
+
+# psf_path_leak <text> <dir> — prints the first spelling of <dir> found in <text> (native,
+# forward-slash, backslash, tilde, file URI); prints nothing when none is present.
+psf_path_leak() {
+  psf_timeout 30 node -e '
+const [text, dir, home] = process.argv.slice(1);
+const fwd = dir.replace(/\\/g, "/"); const back = fwd.replace(/\//g, "\\");
+const forms = [dir, fwd, back, "file:///" + fwd.replace(/^\//, ""), encodeURI("file:///" + fwd.replace(/^\//, ""))];
+const h = (home || "").replace(/\\/g, "/");
+if (h && fwd.toLowerCase().startsWith(h.toLowerCase() + "/")) forms.push("~" + fwd.slice(h.length));
+const low = text.toLowerCase();
+const hit = forms.find((f) => f && low.includes(f.toLowerCase()));
+process.stdout.write(hit || "");' "$1" "$(psf_np "$2")" "$(psf_np "${HOME:-}")"
+}
+
+# psf_make_project <dir> [origin-url] — throwaway project repo; no origin when the URL is omitted.
+psf_make_project() {
+  mkdir -p "$1"
+  git init -q "$1" || return 1
+  git -C "$1" symbolic-ref HEAD refs/heads/main
+  git -C "$1" config core.hooksPath /dev/null
+  git -C "$1" commit -q --allow-empty -m "project fixture" || return 1
+  [ -z "${2:-}" ] || git -C "$1" remote add origin "$2"
+}
+
+# psf_add_worktree <project> <dir> — linked worktree of <project> on a new branch.
+psf_add_worktree() { git -C "$1" worktree add -q -b "wt-${2##*/}" "$2" >/dev/null 2>&1; }
+
+# psf_add_worktree_origin <project> <dir> <only|extra> <url> [main-url] — linked worktree whose
+# origin comes from per-worktree config (extensions.worktreeConfig).
+#   only:  the common config has no origin; <url> lives in <dir>'s worktree config and
+#          [main-url] in the main worktree's.
+#   extra: the common-config origin stays and <url> is added in <dir>'s worktree config.
+psf_add_worktree_origin() {
+  local p="$1" d="$2" shape="$3" url="$4" main_url="${5:-}"
+  psf_add_worktree "$p" "$d" || return 1
+  git -C "$p" config extensions.worktreeConfig true || return 1
+  case "$shape" in
+    only)
+      git -C "$d" config --worktree remote.origin.url "$url" || return 1
+      [ -z "$main_url" ] || git -C "$p" config --worktree remote.origin.url "$main_url"
+      ;;
+    extra) git -C "$d" config --worktree --add remote.origin.url "$url" ;;
+    *) return 1 ;;
+  esac
+}
+
+# psf_project_env_local <dir> <KEY=VAL...> — a project .env.local in <dir> (a per-project override
+# that plan-sync must never read).
+psf_project_env_local() {
+  local d="$1"
+  shift
+  printf '%s\n' "$@" > "$d/.env.local"
+}
+
+# psf_hook <project-dir|-> <hook-file> <json> — runs hooks/<hook-file> on <json> with
+# CLAUDE_PROJECT_DIR pinned to <project-dir>, or unset for "-". The caller's cwd is kept.
+psf_hook() {
+  local proj="$1" hook="$PSF_AGENTS_DIR/hooks/$2" json="$3"
+  if [ "$proj" = "-" ]; then
+    printf '%s' "$json" | env -u CLAUDE_PROJECT_DIR bash "$PSF_AGENTS_DIR/bin/run-with-timeout.sh" 60 node "$hook"
+  else
+    printf '%s' "$json" | CLAUDE_PROJECT_DIR="$proj" bash "$PSF_AGENTS_DIR/bin/run-with-timeout.sh" 60 node "$hook"
+  fi
+}
+
+# psf_record_path <plansDir> <plan-file> — the project-host record of <plan-file>
+# (<sid>-<stage>.md -> <sid>-note-project-host-<stage>.json).
+psf_record_path() {
+  local base="${2##*/}"
+  base="${base%.md}"
+  printf '%s/%s-note-project-host-%s.json\n' "$1" "${base%-*}" "${base##*-}"
+}
+
+# psf_origin_project <origin-url> — a cached project repo whose origin is <origin-url>.
+psf_origin_project() {
+  local p="$PSF_ROOT/origin-projects/${1//[^A-Za-z0-9]/_}"
+  [ -d "$p/.git" ] || psf_make_project "$p" "$1" >/dev/null 2>&1 || return 1
+  psf_np "$p"
+}
+
+# psf_record_origin <plansDir> <plan-file> <origin-url|none> — writes the record through the
+# library (recordProjectHost), observing a project whose origin is <origin-url>; "none" = no
+# project dir (a no-host record). The record format stays the library's own.
+psf_record_origin() {
+  local f cwd=""
+  f="$(psf_record_path "$1" "$2")"
+  rm -rf "$f"
+  if [ "$3" != "none" ]; then cwd="$(psf_origin_project "$3")" || return 1; fi
+  psf_node 'if (typeof ps.recordProjectHost !== "function") process.exit(0);
+Promise.resolve(ps.recordProjectHost(process.argv[1], process.argv[2] || null))
+  .then(() => process.stdout.write("ok"), (e) => { process.stdout.write("ERR " + (e && e.message)); process.exit(1); });' \
+    "$(psf_np "$1/$2")" "$cwd" >/dev/null
+}
+
+# psf_record <plansDir> <plan-file> <host|none> — a record for a project on <host> (ssh origin).
+psf_record() {
+  if [ "$3" = "none" ]; then psf_record_origin "$1" "$2" none
+  else psf_record_origin "$1" "$2" "ssh://git@$3/test-owner/test-repo.git"; fi
+}
+
+psf_record_remove() { rm -rf "$(psf_record_path "$1" "$2")"; }
+
+# psf_record_block <plansDir> <plan-file> — a non-empty directory at the record's name, so any
+# write of that record fails.
+psf_record_block() {
+  local f
+  f="$(psf_record_path "$1" "$2")"
+  rm -rf "$f"
+  mkdir -p "$f/keep"
+}
+
+# psf_record_state <plansDir> <plan-file> <dest-url> — readProjectHostState verdict:
+# match | host-mismatch | no-project-host | missing (or NOT_IMPLEMENTED: ...).
+psf_record_state() {
+  psf_node 'if (typeof ps.readProjectHostState !== "function") { process.stdout.write("NOT_IMPLEMENTED: readProjectHostState"); process.exit(0); }
+Promise.resolve(ps.readProjectHostState(process.argv[1], process.argv[2])).then((s) => process.stdout.write(String(s)));' \
+    "$(psf_np "$1/$2")" "$3"
+}
+
+# psf_local_only_plan <plansDir> <rel> <content> — <rel> on disk and on local main only
+# (the state a failed push leaves behind).
+psf_local_only_plan() {
+  printf '%s\n' "$3" > "$1/$2" || return 1
+  psf_commit_file "$1" "$2"
+}
+
+# psf_save_session_cwd <sid> <dir> — session state of <sid> under $WORKFLOW_STATE_DIR whose saved
+# cwd is <dir>, built the way hooks/session-start.js builds it.
+psf_save_session_cwd() {
+  psf_timeout 30 node -e '
+const ws = require(process.argv[1]);
+ws.writeState(process.argv[2], ws.createInitialState(process.argv[2], ws.getCurrentContext(process.argv[3])));' \
+    "$(psf_np "$PSF_AGENTS_DIR/hooks/workflow-state.js")" "$1" "$(psf_np "$2")"
 }

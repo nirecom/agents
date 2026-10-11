@@ -394,7 +394,9 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 ### plan-sync
 
 - **Definition**: The mechanism that pushes each final plan file (`*-intent.md`,
-  `*-outline.md`, `*-detail.md`) from the plans directory to a private remote, so the
-  plan breadcrumb can show a URL readable from mobile apps or a browser. Distinct from
-  session-sync, which syncs session history.
+  `*-outline.md`, `*-detail.md`) from the plans directory to a private GitHub or GitLab
+  remote, so the model can write a blob URL readable from mobile apps or a browser in its
+  response text. A plan is sent only when the project it was written for is hosted on the
+  remote's host. `bin/plan-link` prints a session's plan-link line (the URL, else the local
+  path and a reason). Distinct from session-sync, which syncs session history.
 - **Related**: [architecture/claude-code/plan-sync.md](architecture/claude-code/plan-sync.md), #2513

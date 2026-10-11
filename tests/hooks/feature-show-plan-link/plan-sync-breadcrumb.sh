@@ -10,15 +10,65 @@ trap 'psf_cleanup; rm -rf "$PLANS_DIR" "$WORKFLOW_DIR_TEST" "$CFG_DIR_TEST"' EXI
 SPS_HOOK="$(psf_np "$HOOK")"
 SPS_PLANS="$WORKFLOW_PLANS_DIR"
 SPS_RUN_HINT='— run node "$AGENTS_MAIN_ROOT/bin/plan-sync-init"'
+# #2513: the hook-input cwd names the project; a github.com project matches the destination host.
+PSF_PROJECT="$PSF_ROOT/spl-project"
+psf_make_project "$PSF_PROJECT" "$PSF_ORIGIN_GH" >/dev/null 2>&1 || fail "H setup — project fixture"
+PSF_PROJECT="$(psf_np "$PSF_PROJECT")"
 
-# sps_run_hook <json> — sets HOOK_RC, HOOK_OUT, HOOK_MSG, HOOK_SECS.
+# sps_run_hook <json> — sets HOOK_RC, HOOK_OUT, HOOK_MSG, HOOK_CTX, HOOK_EVT, HOOK_SECS.
+# CLAUDE_PROJECT_DIR is $SPS_PROJECT_DIR when set, otherwise unset.
 sps_run_hook() {
   local t0
   t0="$(date +%s)"
-  HOOK_OUT="$(printf '%s' "$1" | psf_timeout 60 node "$SPS_HOOK" 2>/dev/null)"
+  HOOK_OUT="$(psf_hook "${SPS_PROJECT_DIR:--}" show-plan-link.js "$1" 2>/dev/null)"
   HOOK_RC=$?
   HOOK_SECS=$(( $(date +%s) - t0 ))
   HOOK_MSG="$(psf_sysmsg "$HOOK_OUT")"
+  HOOK_CTX="$(psf_hso "$HOOK_OUT" additionalContext)"
+  HOOK_EVT="$(psf_hso "$HOOK_OUT" hookEventName)"
+}
+
+# sps_ctx_line <needle> — the first additionalContext line holding <needle>.
+sps_ctx_line() { printf '%s\n' "$HOOK_CTX" | grep -F -- "$1" | head -n 1; }
+
+# sps_has_dir <text> <plans-dir> — <text> names the plans dir, forward-slash or native.
+sps_has_dir() {
+  case "$1" in *"$2"*|*"${2//\//\\}"*) return 0 ;; esac
+  return 1
+}
+
+# sps_expect_ctx_url <name> <url> <plans-dir> — sent: the blob URL and the local path ride
+# one line of PostToolUse additionalContext; no systemMessage.
+sps_expect_ctx_url() {
+  local name="$1" url="$2" line
+  line="$(sps_ctx_line "$url")"
+  if [ "$HOOK_EVT" != PostToolUse ]; then
+    fail "$name — hookEventName=$(printf '%q' "$HOOK_EVT") out=$(printf '%q' "$HOOK_OUT")"
+  elif [ -z "$line" ]; then
+    fail "$name — additionalContext lacks $url — ctx=$(printf '%q' "$HOOK_CTX")"
+  elif [ -n "$HOOK_MSG" ]; then
+    fail "$name — success must not emit systemMessage — msg=$(printf '%q' "$HOOK_MSG")"
+  elif ! sps_has_dir "$line" "$3"; then
+    fail "$name — the URL line lacks the local path — ctx=$(printf '%q' "$HOOK_CTX")"
+  else
+    pass "$name"
+  fi
+}
+
+# sps_expect_ctx_reason <name> <reason> <plans-dir> — not sent for a setup or push failure: the
+# reason and the local path ride one additionalContext line and the systemMessage breadcrumb stays.
+sps_expect_ctx_reason() {
+  local name="$1" line
+  line="$(sps_ctx_line "$2")"
+  if [ "$HOOK_EVT" != PostToolUse ] || [ -z "$line" ]; then
+    fail "$name — want PostToolUse ctx containing $2 — evt=$(printf '%q' "$HOOK_EVT") ctx=$(printf '%q' "$HOOK_CTX")"
+  elif [ -z "$HOOK_MSG" ]; then
+    fail "$name — failure must also emit a systemMessage"
+  elif ! sps_has_dir "$line" "$3"; then
+    fail "$name — the reason line lacks the local path — ctx=$(printf '%q' "$HOOK_CTX")"
+  else
+    pass "$name"
+  fi
 }
 
 # sps_expect_msg_has <name> <needle...> — every needle is a fixed substring of HOOK_MSG.
@@ -42,7 +92,6 @@ const abs = "/plans/s2513-intent.md"; const url = "https://github.com/test-owner
 const hint = " — run node \"$AGENTS_MAIN_ROOT/bin/plan-sync-init\"";
 const cases = [
   [{ status: "pushed", url }, ["Plan file: " + url]],
-  [{ status: "pushed", reason: "non-github" }, ["Plan file: " + abs, "[plan-sync] pushed (non-GitHub remote; no URL)"]],
   [{ status: "off" }, ["Plan file: " + abs, "[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)"]],
   [{ status: "not-provisioned", reason: "no-repo" }, ["Plan file: " + abs, "[plan-sync] no-repo" + hint]],
   [{ status: "failed", reason: "offline" }, ["Plan file: " + abs, "[plan-sync] offline" + hint]],
@@ -50,8 +99,16 @@ const cases = [
 const bad = cases.filter(([r, want]) => JSON.stringify(m.formatBreadcrumb(r, abs).split(/\r?\n/)) !== JSON.stringify(want));
 process.stdout.write((bad.map(([r]) => r.status + "/" + (r.reason || r.url ? "x" : "")).join(",") || "all-match")
   + "|" + ("workspaceFolderUriFrom" in m ? "uri-exported" : "uri-removed"));' 2>&1)"
-if [ "$OUT" = "all-match|uri-removed" ]; then pass "H1 formatBreadcrumb 5 results + workspaceFolderUriFrom removed"
-else fail "H1 formatBreadcrumb 5 results + workspaceFolderUriFrom removed — got=$OUT"; fi
+if [ "$OUT" = "all-match|uri-removed" ]; then pass "H1 formatBreadcrumb 4 results + workspaceFolderUriFrom removed"
+else fail "H1 formatBreadcrumb 4 results + workspaceFolderUriFrom removed — got=$OUT"; fi
+OUT="$(PSF_HOOK="$SPS_HOOK" psf_timeout 30 node -e '
+const m = require(process.env.PSF_HOOK);
+process.stdout.write(m.formatBreadcrumb({ status: "pushed" }, "/plans/s2513-intent.md"));' 2>&1)"
+case "$OUT" in
+  *[Gg]it[Hh]ub*) fail "H1 pushed without a URL: wording no longer names GitHub — got=$(printf '%q' "$OUT")" ;;
+  "Plan file: /plans/s2513-intent.md"$'\n'"[plan-sync] pushed"*) pass "H1 pushed without a URL: local path + pushed line, no forge named" ;;
+  *) fail "H1 pushed without a URL: local path + pushed line — got=$(printf '%q' "$OUT")" ;;
+esac
 
 echo "=== H1b: formatBreadcrumb renders skipped/not-regular-file ==="
 OUT="$(PSF_HOOK="$SPS_HOOK" psf_timeout 30 node -e '
@@ -65,23 +122,25 @@ esac
 
 echo "=== H2: unprovisioned PLANS_DIR -> local path + no-repo hint, marker written ==="
 printf 'plan\n' > "$SPS_PLANS/s2513-intent.md"
-PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513-intent.md" test-sid-h2)"
+PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513-intent.md" test-sid-h2 "$PSF_PROJECT")"
 sps_expect_msg_has "H2 Plan file + [plan-sync] no-repo + run hint" "Plan file: " "s2513-intent.md" "[plan-sync] no-repo $SPS_RUN_HINT"
+sps_expect_ctx_reason "H2 additionalContext carries not-provisioned + the local path" not-provisioned "$SPS_PLANS"
 if [ "$HOOK_RC" = 0 ]; then pass "H2 exit 0"; else fail "H2 exit 0 — rc=$HOOK_RC"; fi
 SPS_MARKERS=("$WORKFLOW_STATE_DIR"/test-sid-h2.confirm-plan-turn-*.json)
 if [ -f "${SPS_MARKERS[0]}" ]; then pass "H2 turn marker written before the message"
 else fail "H2 turn marker written before the message — no test-sid-h2.confirm-plan-turn-*.json"; fi
 
 echo "=== H3: empty PLAN_SYNC_REMOTE_URL -> not configured ==="
-PLAN_SYNC_REMOTE_URL="" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513-intent.md" test-sid-h3)"
+PLAN_SYNC_REMOTE_URL="" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513-intent.md" test-sid-h3 "$PSF_PROJECT")"
 sps_expect_msg_has "H3 Plan file + not configured" "Plan file: " "[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)"
+sps_expect_ctx_reason "H3 additionalContext carries plan-sync-off + the local path" plan-sync-off "$SPS_PLANS"
 
 echo "=== H4: provisioned repo + local insteadOf -> url-rewritten, no URL ==="
 SPS_PI="$PSF_ROOT/pi-plans"
 if psf_make_provisioned "$SPS_PI" "$PSF_ORIGIN_GH" >/dev/null 2>&1; then
   git -C "$SPS_PI" config "url.ssh://git@127.0.0.1:1/.insteadOf" "git@github.com:"
   printf 'plan\n' > "$SPS_PI/s2513-outline.md"
-  WORKFLOW_PLANS_DIR="$SPS_PI" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PI/s2513-outline.md" test-sid-h4)"
+  WORKFLOW_PLANS_DIR="$SPS_PI" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PI/s2513-outline.md" test-sid-h4 "$PSF_PROJECT")"
   sps_expect_msg_has "H4 Plan file + [plan-sync] url-rewritten" "Plan file: " "s2513-outline.md" "[plan-sync] url-rewritten"
   case "$HOOK_MSG" in
     *https://github.com*) fail "H4 no blob URL on url-rewritten — msg=$HOOK_MSG" ;;
@@ -94,29 +153,30 @@ fi
 
 echo "=== H5: push failure (dead origin) -> local path + reason, within budget ==="
 SPS_PD="$PSF_ROOT/pd-plans"
-if psf_make_provisioned "$SPS_PD" "$PSF_ORIGIN_DEAD" >/dev/null 2>&1; then
+SPS_DEAD_PROJ="$PSF_ROOT/dead-proj"
+if psf_make_provisioned "$SPS_PD" "$PSF_ORIGIN_DEAD" >/dev/null 2>&1 && psf_make_project "$SPS_DEAD_PROJ" "$PSF_ORIGIN_DEAD" >/dev/null 2>&1; then
   printf 'plan\n' > "$SPS_PD/s2513-detail.md"
   WORKFLOW_PLANS_DIR="$SPS_PD" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_DEAD" GIT_SSH_COMMAND=false \
-    sps_run_hook "$(psf_write_json "$SPS_PD/s2513-detail.md" test-sid-h5)"
+    sps_run_hook "$(psf_write_json "$SPS_PD/s2513-detail.md" test-sid-h5 "$(psf_np "$SPS_DEAD_PROJ")")"
   sps_expect_msg_has "H5 Plan file + [plan-sync] reason" "Plan file: " "s2513-detail.md" "[plan-sync] " "$SPS_RUN_HINT"
   if [ "$HOOK_RC" = 0 ] && [ "$HOOK_SECS" -lt 25 ]; then pass "H5 exit 0 within budget (${HOOK_SECS}s)"
   else fail "H5 exit 0 within budget — rc=$HOOK_RC secs=$HOOK_SECS"; fi
 else
-  fail "H5 push failure — fixture needs renderGitignore/INIT_VERSION"
+  fail "H5 push failure — fixture (provisioned repo / dead-origin project) failed"
 fi
 
 echo "=== H6: Bash assemble destination enters the sync path ==="
 SPS_H6_JSON="$(psf_timeout 30 node -e '
-process.stdout.write(JSON.stringify({ tool_name: "Bash", tool_response: { exit_code: 0 }, session_id: "test-sid-h6",
+process.stdout.write(JSON.stringify({ tool_name: "Bash", tool_response: { exit_code: 0 }, session_id: "test-sid-h6", cwd: process.argv[2],
   tool_input: { command: "assemble-mandatory.sh --source-kind intent /a/i.md " + process.argv[1] + " " + process.argv[1] } }));' \
-  "$SPS_PLANS/s2513-outline.md")"
+  "$SPS_PLANS/s2513-outline.md" "$PSF_PROJECT")"
 printf 'outline\n' > "$SPS_PLANS/s2513-outline.md"
 PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$SPS_H6_JSON"
 sps_expect_msg_has "H6 assemble destination -> no-repo breadcrumb" "Plan file: " "s2513-outline.md" "[plan-sync] no-repo"
 
 echo "=== H7: drafts/ plan -> no breadcrumb, no sync ==="
 mkdir -p "$SPS_PLANS/drafts"; printf 'd\n' > "$SPS_PLANS/drafts/s2513-intent.md"
-PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PLANS/drafts/s2513-intent.md" test-sid-h7)"
+PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PLANS/drafts/s2513-intent.md" test-sid-h7 "$PSF_PROJECT")"
 if [ "$HOOK_RC" = 0 ] && [ -z "$HOOK_OUT" ] && [ ! -e "$SPS_PLANS/.git" ]; then pass "H7 drafts/ -> empty output, no .git"
 else fail "H7 drafts/ -> empty output, no .git — rc=$HOOK_RC out=$HOOK_OUT"; fi
 
@@ -127,7 +187,7 @@ const fs = require("fs");
 try { fs.symlinkSync(process.argv[1], process.argv[2], "file"); } catch (e) { process.exit(1); }
 process.exit(fs.lstatSync(process.argv[2]).isSymbolicLink() ? 0 : 1);' \
   "$PSF_ROOT/h8-outside/secret.txt" "$SPS_PLANS/s2513h8-detail.md" 2>/dev/null; then
-  PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513h8-detail.md" test-sid-h8)"
+  PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513h8-detail.md" test-sid-h8 "$PSF_PROJECT")"
   sps_expect_msg_has "H8 Plan file + [plan-sync] skipped: not a regular file" "Plan file: " "s2513h8-detail.md" "$SPS_NRF_LINE"
   case "$HOOK_MSG" in
     *https://github.com*|*H8-SECRET*) fail "H8 no blob URL / target content — msg=$HOOK_MSG" ;;
@@ -148,10 +208,10 @@ SPS_H9_URL="https://github.com/test-owner/test-repo/blob/main/s2513h9-outline.md
 # sps_h9_json <verb...> — PostToolUse Bash payload "<verb...> <script> --source-kind intent <src> <draft> <dest>".
 sps_h9_json() {
   psf_timeout 30 node -e '
-const [verb, script, plans] = process.argv.slice(1);
+const [verb, script, plans, cwd] = process.argv.slice(1);
 const cmd = [verb, script, "--source-kind intent", plans + "/s2513h9-intent.md", plans + "/s2513h9-outline.md", plans + "/s2513h9-outline.md"].join(" ");
-process.stdout.write(JSON.stringify({ tool_name: "Bash", tool_input: { command: cmd }, tool_response: { exit_code: 0 }, session_id: "test-sid-h9" }));' \
-    "$1" "$SPS_H9_SCRIPT" "$SPS_H9"
+process.stdout.write(JSON.stringify({ tool_name: "Bash", tool_input: { command: cmd }, tool_response: { exit_code: 0 }, session_id: "test-sid-h9", cwd }));' \
+    "$1" "$SPS_H9_SCRIPT" "$SPS_H9" "$PSF_PROJECT"
 }
 if psf_make_provisioned "$SPS_H9" "$PSF_ORIGIN_E2E" >/dev/null 2>&1; then
   printf 'h9 outline\n' > "$SPS_H9/s2513h9-outline.md"
@@ -165,7 +225,7 @@ if psf_make_provisioned "$SPS_H9" "$PSF_ORIGIN_E2E" >/dev/null 2>&1; then
   if [ ! -s "$GIT_SSH_STUB_LOG" ]; then pass "H9 cat form -> remote never contacted"
   else fail "H9 cat form -> remote never contacted — ssh stub log: $(tr '\n' ' ' < "$GIT_SSH_STUB_LOG")"; fi
   WORKFLOW_PLANS_DIR="$SPS_H9" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_E2E" sps_run_hook "$(sps_h9_json bash)"
-  sps_expect_msg_has "H9 positive control: bash <script> ... <dest> -> blob URL breadcrumb" "Plan file: $SPS_H9_URL"
+  sps_expect_ctx_url "H9 positive control: bash <script> ... <dest> -> blob URL in additionalContext" "$SPS_H9_URL" "$SPS_H9"
   SPS_H9_GOT="$(git -C "$SPS_H9_BARE" show refs/heads/main:s2513h9-outline.md 2>&1)"
   if [ "$SPS_H9_GOT" = "h9 outline" ]; then pass "H9 positive control: bare main holds the dest content"
   else fail "H9 positive control: bare main holds the dest content — got=$SPS_H9_GOT"; fi
@@ -193,7 +253,7 @@ process.exit(fs.lstatSync(process.argv[2]).nlink >= 2 ? 0 : 1);' \
 else
   setup_ssh_stub "$SPS_H8B_BARE"
   WORKFLOW_PLANS_DIR="$SPS_H8B" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_E2E" \
-    sps_run_hook "$(psf_write_json "$SPS_H8B/s2513h8b-detail.md" test-sid-h8b)"
+    sps_run_hook "$(psf_write_json "$SPS_H8B/s2513h8b-detail.md" test-sid-h8b "$PSF_PROJECT")"
   sps_expect_msg_has "H8b Plan file + [plan-sync] skipped: not a regular file" "Plan file: " "s2513h8b-detail.md" "$SPS_NRF_LINE"
   case "$HOOK_MSG" in
     *https://github.com*|*"$SPS_H8B_MARK"*) fail "H8b no blob URL / secret content — msg=$HOOK_MSG" ;;
@@ -210,9 +270,9 @@ else
   else fail "H8b no bare object holds the secret"; fi
   rm -f "$SPS_H8B_SECRET"
   WORKFLOW_PLANS_DIR="$SPS_H8B" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_E2E" \
-    sps_run_hook "$(psf_write_json "$SPS_H8B/s2513h8b-detail.md" test-sid-h8b)"
-  sps_expect_msg_has "H8b positive control: extra link removed (nlink 1) -> blob URL breadcrumb" \
-    "Plan file: https://github.com/test-owner/test-repo/blob/main/s2513h8b-detail.md"
+    sps_run_hook "$(psf_write_json "$SPS_H8B/s2513h8b-detail.md" test-sid-h8b "$PSF_PROJECT")"
+  sps_expect_ctx_url "H8b positive control: extra link removed (nlink 1) -> blob URL in additionalContext" \
+    "https://github.com/test-owner/test-repo/blob/main/s2513h8b-detail.md" "$SPS_H8B"
   unset GIT_SSH_COMMAND GIT_SSH_VARIANT GIT_SSH_STUB_BARE GIT_SSH_STUB_LOG
 fi
 
@@ -224,10 +284,10 @@ SPS_EW_BLOB="https://github.com/test-owner/test-repo/blob/main"
 # sps_ew_json <tool_name> <tool_input JSON> [tool_response JSON] — PostToolUse payload.
 sps_ew_json() {
   psf_timeout 30 node -e '
-const [tool, input, resp] = process.argv.slice(1);
+const [tool, input, resp, cwd] = process.argv.slice(1);
 process.stdout.write(JSON.stringify({ tool_name: tool, tool_input: JSON.parse(input),
-  tool_response: JSON.parse(resp || "{\"success\":true}"), session_id: "test-sid-ew" }));' \
-    "$1" "$2" "${3:-}"
+  tool_response: JSON.parse(resp || "{\"success\":true}"), session_id: "test-sid-ew", cwd }));' \
+    "$1" "$2" "${3:-}" "$PSF_PROJECT"
 }
 
 # sps_ew_expect_synced <name> <bare> <rel> <want-content> — bare main:<rel> == want + blob URL breadcrumb.
@@ -236,7 +296,7 @@ sps_ew_expect_synced() {
   got="$(git -C "$bare" show "refs/heads/main:$rel" 2>&1)"
   if [[ "$got" == "$want" ]]; then pass "$name — bare main:$rel holds the post-edit content"
   else fail "$name — bare main:$rel holds the post-edit content — got=$(printf '%q' "$got") msg=$(printf '%q' "$HOOK_MSG")"; fi
-  sps_expect_msg_has "$name — breadcrumb shows the blob URL" "Plan file: $SPS_EW_BLOB/$rel"
+  sps_expect_ctx_url "$name — additionalContext carries the blob URL" "$SPS_EW_BLOB/$rel" "$SPS_EW"
 }
 
 SPS_EW_BARE="$PSF_ROOT/ew-bare.git"; psf_make_bare "$SPS_EW_BARE"
@@ -247,7 +307,7 @@ if psf_make_provisioned "$SPS_EW" "$PSF_ORIGIN_E2E" >/dev/null 2>&1; then
   echo "=== A8: regression — Write and Bash assemble still sync ==="
   printf 'a8 write v1\n' > "$SPS_EW/s2513ew-intent.md"
   WORKFLOW_PLANS_DIR="$SPS_EW" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_E2E" \
-    sps_run_hook "$(psf_write_json "$SPS_EW/s2513ew-intent.md" test-sid-ew)"
+    sps_run_hook "$(psf_write_json "$SPS_EW/s2513ew-intent.md" test-sid-ew "$PSF_PROJECT")"
   sps_ew_expect_synced "A8a Write of a plan file" "$SPS_EW_BARE" "s2513ew-intent.md" "a8 write v1"
   printf 'a8 bash outline\n' > "$SPS_EW/s2513a8-outline.md"
   SPS_A8_CMD="bash $SPS_H9_SCRIPT --source-kind intent $SPS_EW/s2513ew-intent.md $SPS_EW/s2513a8-outline.md $SPS_EW/s2513a8-outline.md"
@@ -339,7 +399,7 @@ fi
 SPS_MX_DRIVER="$PSF_ROOT/mx-driver.js"
 printf '%s\n' '"use strict";' \
   'const path = require("path");' \
-  'const [action, mode, hook, plans] = process.argv.slice(2);' \
+  'const [action, mode, hook, plans, cwd] = process.argv.slice(2);' \
   'const det = plans + "/s2513mx-detail.md", non = plans + "/notes-mx.md", dr = plans + "/drafts/s2513mx-intent.md";' \
   'const bs = (p) => p.replace(/\//g, "\\");' \
   'const inputs = {' \
@@ -350,7 +410,7 @@ printf '%s\n' '"use strict";' \
   '  "c2-slash": { tool_name: "editFiles", tool_input: { path: det, edits: [{ path: bs(det) }] } },' \
   '  "c2-slash-alone": { tool_name: "editFiles", tool_input: { path: bs(det) } },' \
   '};' \
-  'const input = Object.assign({ tool_response: { success: true }, session_id: "test-sid-mx" }, inputs[mode]);' \
+  'const input = Object.assign({ tool_response: { success: true }, session_id: "test-sid-mx", cwd }, inputs[mode]);' \
   'if (action === "payload") { process.stdout.write(JSON.stringify(input)); process.exit(0); }' \
   'const m = require(hook); const calls = [];' \
   'const msg = m.breadcrumbsForArtifacts(m.finalPlanPaths(input), input,' \
@@ -369,7 +429,7 @@ sps_mx_stub() { psf_timeout 30 node "$SPS_MX_DRIVER" stub "$1" "$SPS_HOOK" "$SPS
 # sps_mx_hook <name> <mode> — real hook, sync off: exactly one Plan file line, for the detail plan only.
 sps_mx_hook() {
   local name="$1" n
-  PLAN_SYNC_REMOTE_URL="" sps_run_hook "$(psf_timeout 30 node "$SPS_MX_DRIVER" payload "$2" "$SPS_HOOK" "$SPS_PLANS")"
+  PLAN_SYNC_REMOTE_URL="" sps_run_hook "$(psf_timeout 30 node "$SPS_MX_DRIVER" payload "$2" "$SPS_HOOK" "$SPS_PLANS" "$PSF_PROJECT")"
   n="$(printf '%s\n' "$HOOK_MSG" | grep -c '^Plan file: ')"
   case "$HOOK_MSG" in
     *notes-mx.md*|*drafts*) fail "$name — non-plan / drafts path reached the breadcrumb — msg=$(printf '%q' "$HOOK_MSG")" ;;

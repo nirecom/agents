@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-plan-sync-trigger-matcher.sh
 # Tests: hooks/show-plan-link.js, settings.json
-# Tags: plan-sync, show-plan-link, settings, matcher, hook-registration, static, TL1, scope:issue-specific, edit-write-tools, command-tools, sync-budget, unit, timeout-contract
+# Tags: plan-sync, show-plan-link, settings, matcher, hook-registration, static, TL1, scope:issue-specific, edit-write-tools, command-tools, sync-budget, unit, timeout-contract, additional-context
 # #2513: the PostToolUse registration of show-plan-link.js must fire for every
 # edit-write and command tool (hooks/lib/write-tools.js), or a plan revised by
 # that tool never reaches the plan remote.
@@ -187,6 +187,115 @@ const bad = hooks.filter((h) => !(typeof h.timeout === "number" && budget < h.ti
 process.stdout.write(hooks.length === 0 ? "NO_HOOKS" : bad.length === 0 ? `OK:${hooks.length}` : `BAD:${JSON.stringify(bad)}`);' "$SETTINGS" "$SPL_JS")" || SPL_C7="ERROR: node failed"
 if [[ "$SPL_C7" == OK:* ]]; then pass "C7 SHARED_SYNC_BUDGET_MS < every show-plan-link PostToolUse timeout ($SPL_C7)"
 else fail "C7 SHARED_SYNC_BUDGET_MS < every show-plan-link PostToolUse timeout" "got=$SPL_C7"; fi
+case_end
+
+# ── D2: real hook output shape for one multi-plan call (sync off) ─────────
+# D2: no URL -> the reason rides PostToolUse additionalContext next to the plan's local path
+# AND a systemMessage stays; markTurn still runs for every plan (order unchanged).
+case_begin "D2-multi-plan-sync-off-context-and-message" "hooks/show-plan-link.js"
+SPL_D_PLANS="$(np "$SPL_TMP/iso/plans")"
+mkdir -p "$SPL_D_PLANS" "$SPL_TMP/d-cfg"
+printf 'i\n' > "$SPL_D_PLANS/s2513d-intent.md"; printf 'o\n' > "$SPL_D_PLANS/s2513d-outline.md"
+SPL_D_JSON="$(run_with_timeout 30 node -e '
+const [d] = process.argv.slice(1);
+process.stdout.write(JSON.stringify({ tool_name: "editFiles", session_id: "test-sid-d2", tool_response: { success: true },
+  tool_input: { edits: [{ path: d + "/s2513d-intent.md" }, { path: d + "/s2513d-outline.md" }] } }));' "$SPL_D_PLANS")"
+SPL_D_OUT="$(cd "$SPL_TMP" && printf '%s' "$SPL_D_JSON" \
+  | WORKFLOW_PLANS_DIR="$SPL_D_PLANS" AGENTS_MAIN_ROOT="$(np "$SPL_TMP/d-cfg")" PLAN_SYNC_REMOTE_URL="" run_with_timeout 60 node "$SPL_JS" 2>/dev/null)" || true
+SPL_D_RES="$(printf '%s' "$SPL_D_OUT" | run_with_timeout 30 node -e '
+let d; try { d = JSON.parse(require("fs").readFileSync(0, "utf8")); } catch (e) { process.stdout.write("NOT_JSON"); process.exit(0); }
+const h = d.hookSpecificOutput || {}; const ctx = String(h.additionalContext || "");
+const dir = process.argv[1]; const bs = dir.replace(/\//g, "\\");
+const shown = ["s2513d-intent.md", "s2513d-outline.md"].every((n) =>
+  ctx.split("\n").some((l) => [dir, bs].some((p) => l.includes(p)) && l.includes(n)));
+process.stdout.write([h.hookEventName || "-", ctx.includes("plan-sync-off") ? "reason" : "no-reason",
+  shown ? "paths" : "no-paths", d.systemMessage ? "msg" : "no-msg"].join("|"));' "$SPL_D_PLANS")" || SPL_D_RES="ERROR"
+if [[ "$SPL_D_RES" == "PostToolUse|reason|paths|msg" ]]; then
+  pass "D2 sync off -> PostToolUse additionalContext names plan-sync-off with each plan's local path, systemMessage kept"
+else fail "D2 sync off -> PostToolUse additionalContext names plan-sync-off with each plan's local path, systemMessage kept" "got=$SPL_D_RES out=$SPL_D_OUT"; fi
+SPL_D_MARKS=("$WORKFLOW_STATE_DIR"/test-sid-d2.confirm-plan-turn-*.json)
+if [[ -f "${SPL_D_MARKS[0]}" ]]; then pass "D2 turn marker still written for the plans"
+else fail "D2 turn marker still written for the plans" "no test-sid-d2.confirm-plan-turn-*.json"; fi
+case_end
+
+# ── E1-E2: the project-host record is written before sync; sync-off lines carry the path ──
+# Seam: breadcrumbsForArtifacts(paths, input, { sync }) runs the hook's record -> marker -> sync
+# order with a fake sync; the fake notes whether the record file exists when sync starts, and
+# readProjectHostState (hooks/lib/plan-sync.js) then reads its verdict against a github.com remote.
+SPL_E_PLANS="$(np "$SPL_TMP/e-plans")"
+SPL_E_PROJ="$(np "$SPL_TMP/e-project")"
+mkdir -p "$SPL_E_PLANS" "$SPL_E_PROJ" "$SPL_TMP/e-cfg"
+git init -q "$SPL_E_PROJ"
+git -C "$SPL_E_PROJ" config core.hooksPath /dev/null
+git -C "$SPL_E_PROJ" remote add origin "git@github.com:test-owner/test-project.git"
+SPL_PS_LIB="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/plan-sync.js")"
+
+# spl_record_order — prints "PASS|<name>" / "FAIL|<name>|<detail>" lines.
+spl_record_order() {
+  (cd "$SPL_TMP" && WORKFLOW_PLANS_DIR="$SPL_E_PLANS" AGENTS_MAIN_ROOT="$(np "$SPL_TMP/e-cfg")" PLAN_SYNC_REMOTE_URL="" GITLAB_HOSTNAME="" GITLAB_SSH_HOSTNAME="" \
+    env -u CLAUDE_PROJECT_DIR bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node -e '
+const fs = require("fs"); const path = require("path");
+const [modPath, psPath, dir, proj] = process.argv.slice(1);
+const out = [];
+const ok = (n, c, d) => out.push(c ? "PASS|E1 " + n : "FAIL|E1 " + n + "|" + d);
+const show = (x) => JSON.stringify(x);
+const m = require(modPath);
+let ps = null; try { ps = require(psPath); } catch (e) { ps = null; }
+const DEST = "ssh://git@github.com/test-owner/test-repo.git";
+const rec = (name) => path.join(dir, name.replace(/-(intent|outline|detail)\.md$/, "-note-project-host-$1.json"));
+const isFile = (f) => { try { return fs.statSync(f).isFile(); } catch (e) { return false; } };
+const state = (p) => (ps && typeof ps.readProjectHostState === "function")
+  ? Promise.resolve(ps.readProjectHostState(p, DEST)).then(String, (e) => "threw:" + e.message)
+  : Promise.resolve("NOT_IMPLEMENTED: readProjectHostState");
+const run = (name, input, block) => {
+  const p = path.join(dir, name); fs.writeFileSync(p, "body\n");
+  const seen = [];
+  if (block) fs.mkdirSync(path.join(rec(name), "keep"), { recursive: true });
+  let msg;
+  try { msg = m.breadcrumbsForArtifacts([p], input, { sync: () => { seen.push(isFile(rec(name))); return { status: "off" }; } }); }
+  catch (e) { msg = "threw:" + e.message; }
+  return Promise.resolve(msg).then((v) => state(p).then((st) => ({ seen, msg: String(v), st })));
+};
+(async () => {
+  let r = await run("s2513e1a-intent.md", { session_id: "s2513e1a", cwd: proj });
+  ok("cwd in a github.com project: the record exists when sync starts", r.seen.length === 1 && r.seen[0] === true, show(r));
+  ok("cwd in a github.com project: the record matches a github.com destination", r.st === "match", show(r));
+  r = await run("s2513e1b-intent.md", { session_id: "s2513e1b" });
+  ok("no cwd in the input: a record exists when sync starts", r.seen.length === 1 && r.seen[0] === true, show(r));
+  ok("no cwd in the input: the record reads as no-project-host", r.st === "no-project-host", show(r));
+  r = await run("s2513e1c-intent.md", { session_id: "s2513e1c", cwd: proj }, true);
+  ok("record write fails: sync is not called", r.seen.length === 0, show(r));
+  ok("record write fails: breadcrumb reports internal-error with the local path",
+    /^Plan file: .*s2513e1c-intent\.md$/m.test(r.msg) && /^\[plan-sync\] internal-error/m.test(r.msg), show(r.msg));
+  process.stdout.write(out.join("\n") + "\n");
+})();' "$SPL_JS" "$SPL_PS_LIB" "$SPL_E_PLANS" "$SPL_E_PROJ") || printf 'FAIL|E1 node harness|exit=%s\n' "$?"
+}
+
+case_begin "E1-record-written-before-sync" "hooks/show-plan-link.js"
+SPL_OUT="$(spl_record_order)"
+if [[ -z "$SPL_OUT" ]]; then fail "E1 produced no assertions"; else spl_report "$SPL_OUT"; fi
+case_end
+
+case_begin "E2-multi-plan-sync-off-lines-carry-local-path" "hooks/show-plan-link.js"
+printf 'i\n' > "$SPL_E_PLANS/s2513e2-intent.md"; printf 'o\n' > "$SPL_E_PLANS/s2513e2-outline.md"
+SPL_E_JSON="$(run_with_timeout 30 node -e '
+const [d, cwd] = process.argv.slice(1);
+process.stdout.write(JSON.stringify({ tool_name: "editFiles", session_id: "s2513e2", cwd, tool_response: { success: true },
+  tool_input: { edits: [{ path: d + "/s2513e2-intent.md" }, { path: d + "/s2513e2-outline.md" }] } }));' "$SPL_E_PLANS" "$SPL_E_PROJ")"
+SPL_E_OUT="$(cd "$SPL_TMP" && printf '%s' "$SPL_E_JSON" \
+  | WORKFLOW_PLANS_DIR="$SPL_E_PLANS" AGENTS_MAIN_ROOT="$(np "$SPL_TMP/e-cfg")" PLAN_SYNC_REMOTE_URL="" GITLAB_HOSTNAME="" GITLAB_SSH_HOSTNAME="" \
+    env -u CLAUDE_PROJECT_DIR bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 node "$SPL_JS" 2>/dev/null)" || SPL_E_OUT="HOOK_EXIT_$?"
+SPL_E_RES="$(printf '%s' "$SPL_E_OUT" | run_with_timeout 30 node -e '
+let d; try { d = JSON.parse(require("fs").readFileSync(0, "utf8")); } catch (e) { process.stdout.write("NOT_JSON"); process.exit(0); }
+const h = d.hookSpecificOutput || {}; const ctx = String(h.additionalContext || "");
+const dir = process.argv[1]; const bs = dir.replace(/\//g, "\\");
+const lines = ctx.split(/\r?\n/).filter((l) => l.includes("plan-sync-off"));
+const withPath = lines.filter((l) => ["intent", "outline"].some((st) => [dir, bs].some((f) => l.includes(f) && l.includes("s2513e2-" + st + ".md"))));
+process.stdout.write([h.hookEventName || "-", "reason-lines=" + lines.length, "with-path=" + withPath.length,
+  /never show a local/i.test(ctx) ? "forbids-path" : "path-allowed", d.systemMessage ? "msg" : "no-msg"].join("|"));' "$SPL_E_PLANS")" || SPL_E_RES="ERROR"
+if [[ "$SPL_E_RES" == "PostToolUse|reason-lines=2|with-path=2|path-allowed|msg" ]]; then
+  pass "E2 sync off, two plans -> each plan-sync-off line carries its local path, systemMessage kept"
+else fail "E2 sync off, two plans -> each plan-sync-off line carries its local path, systemMessage kept" "got=$SPL_E_RES out=$SPL_E_OUT"; fi
 case_end
 
 echo ""

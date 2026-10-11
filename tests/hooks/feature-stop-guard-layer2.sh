@@ -1,25 +1,15 @@
 #!/usr/bin/env bash
 # Tests: hooks/stop-confirm-plan-guard.js
 # Tags: stop-guard, hook, sentinel, layer2, workflow, confirm, scope:issue-specific
-# Tests for Layer 2 sentinel-followup detection in hooks/stop-confirm-plan-guard.js.
-#
-# Layer 2 (new contract for #842): for each CONFIRM_<STAGE> sentinel echoed in the
-# LATEST assistant turn, scan the same turn for a stage-valid follow-up tool_use:
-#   - CONFIRM_INTENT  -> Skill(make-outline-plan)
-#   - CONFIRM_OUTLINE -> Skill(make-detail-plan)
-#   - CONFIRM_DETAIL  -> Skill(write-tests) OR Bash(WORKFLOW_BRANCHING_COMPLETE)
-# If the follow-up is missing, Layer 2 emits `decision:block + exit 2` with a
-# reason derived from CONFIRM_NEXT_STEP_HINT (workflow-state.js). Layer 1
-# (path-emission scan) is preserved unchanged.
-#
-# The Layer 2 extension is implemented in a later step. When not yet present,
-# tests SKIP gracefully (detected by absence of "Layer 2" marker in the hook).
-#
-# L3 gap (what this test does NOT catch):
+# Layer 2 (#842): a CONFIRM_<STAGE> in the LATEST assistant turn needs a stage-valid follow-up
+# after it (intent -> make-outline-plan, outline -> make-detail-plan, detail -> write-tests or
+# WORKFLOW_BRANCHING_COMPLETE), else decision:block + exit 2. SKIPs if the hook lacks "Layer 2".
+# #2513: Layer 1 (path-leak block) is retired; pass fixtures carry the plan-link line.
+
+# TL3 gap (what this test does NOT catch):
 # - stop-confirm-plan-guard.js firing as a real Claude Code Stop hook in a live session
-#   (hook registration wiring — only verifiable via live claude -p run)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: hook-registration
 set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -66,7 +56,7 @@ export WORKFLOW_STATE_DIR="$WORKFLOW_DIR_TEST"
 
 trap 'rm -rf "$PLANS_DIR" "$WORKFLOW_DIR_TEST" "$TRANSCRIPT_DIR" "$ISOLATED_CFG_DIR"' EXIT
 
-unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
+unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 SID="sg2-test-$$"
 
@@ -179,12 +169,20 @@ SKILL_CLARIFY_INTENT='{"type":"tool_use","name":"Skill","input":{"skill":"clarif
 
 TEXT_BLOCK='{"type":"text","text":"Some narration."}'
 
+# plan_link_text <suffix> — text item carrying the stage plan's plan-link line (its local
+# path; plan-sync is off here), so the #2513 turn-end plan-link check never masks Layer 2.
+plan_link_text() {
+  run_with_timeout node -e "
+    process.stdout.write(JSON.stringify({ type: 'text', text: 'Plan: ' + process.argv[1] }));
+  " "$PLANS_DIR/$SID-${1:?suffix required}.md"
+}
+
 # ── L2a: CONFIRM_INTENT + Skill(make-outline-plan) after → exit 0 ─────────
 echo "=== L2a: CONFIRM_INTENT + Skill(make-outline-plan) follow-up → pass ==="
 clear_markers
 setup_marker "intent"
 L2A_TPATH="$TRANSCRIPT_DIR/$SID-l2a.jsonl"
-build_transcript_full "$L2A_TPATH" "[$BASH_CONFIRM_INTENT,$SKILL_OUTLINE]"
+build_transcript_full "$L2A_TPATH" "[$(plan_link_text intent),$BASH_CONFIRM_INTENT,$SKILL_OUTLINE]"
 L2A_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2A_TPATH\"}"
 run_hook_with_rc "$L2A_JSON"
 if [ "$HOOK_RC" -eq 0 ]; then
@@ -220,7 +218,7 @@ echo "=== L2c: CONFIRM_DETAIL + WORKFLOW_BRANCHING_COMPLETE after → pass ==="
 clear_markers
 setup_marker "detail"
 L2C_TPATH="$TRANSCRIPT_DIR/$SID-l2c.jsonl"
-build_transcript_full "$L2C_TPATH" "[$BASH_CONFIRM_DETAIL,$BASH_BRANCHING_COMPLETE]"
+build_transcript_full "$L2C_TPATH" "[$(plan_link_text detail),$BASH_CONFIRM_DETAIL,$BASH_BRANCHING_COMPLETE]"
 L2C_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2C_TPATH\"}"
 run_hook_with_rc "$L2C_JSON"
 if [ "$HOOK_RC" -eq 0 ]; then
@@ -276,7 +274,7 @@ setup_marker "intent"
 L2F_TPATH="$TRANSCRIPT_DIR/$SID-l2f.jsonl"
 # Plain text + Skill + a non-CONFIRM Bash echo.
 BASH_REGULAR='{"type":"tool_use","name":"Bash","input":{"command":"ls -la"}}'
-build_transcript_full "$L2F_TPATH" "[$TEXT_BLOCK,$BASH_REGULAR,$SKILL_OUTLINE]"
+build_transcript_full "$L2F_TPATH" "[$TEXT_BLOCK,$(plan_link_text intent),$BASH_REGULAR,$SKILL_OUTLINE]"
 L2F_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2F_TPATH\"}"
 run_hook_with_rc "$L2F_JSON"
 if [ "$HOOK_RC" -eq 0 ]; then
@@ -295,7 +293,7 @@ L2G_TPATH="$TRANSCRIPT_DIR/$SID-l2g.jsonl"
 # latest turn is benign. Layer 2 must scan only the latest turn.
 build_transcript_two_turns "$L2G_TPATH" \
   "[$BASH_CONFIRM_INTENT]" \
-  "[$TEXT_BLOCK]"
+  "[$TEXT_BLOCK,$(plan_link_text intent)]"
 L2G_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2G_TPATH\"}"
 run_hook_with_rc "$L2G_JSON"
 if [ "$HOOK_RC" -eq 0 ]; then
@@ -305,26 +303,23 @@ else
 fi
 clear_markers
 
-# ── Layer 1 regression: marker + assistant text contains WORKFLOW_PLANS_DIR ──
-echo "=== L1-reg: Layer 1 path-emission scan still works ==="
+# ── Layer 1 retired (#2513): marker + WORKFLOW_PLANS_DIR path in the reply → no block ──
+echo "=== L1-reg: Layer 1 retired, a PLANS_DIR path in the reply is not refused ==="
 clear_markers
 setup_marker "intent"
 L1R_TPATH="$TRANSCRIPT_DIR/$SID-l1r.jsonl"
-# Embed the plans dir path inside an assistant text block.
+# The forward-slash plans-dir form Layer 1 used to refuse, here naming the marker's own plan.
 PLANS_DIR_FWD="${PLANS_DIR//\\//}"
 L1R_TEXT_JSON="$(run_with_timeout node -e "
-  process.stdout.write(JSON.stringify({type:'text',text:'See plan at ' + process.argv[1] + '/intent.md'}));
-" "$PLANS_DIR_FWD")"
+  process.stdout.write(JSON.stringify({type:'text',text:'See plan at ' + process.argv[1] + '/' + process.argv[2] + '-intent.md'}));
+" "$PLANS_DIR_FWD" "$SID")"
 build_transcript_full "$L1R_TPATH" "[$L1R_TEXT_JSON]"
 L1R_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L1R_TPATH\"}"
 run_hook_with_rc "$L1R_JSON"
-L1R_DECISION=$(extract_decision "$HOOK_OUT")
-if [ "$HOOK_RC" -ne 2 ]; then
-  fail "L1-reg expected exit 2, got exit $HOOK_RC, out: $HOOK_OUT"
-elif [ "$L1R_DECISION" != "block" ]; then
-  fail "L1-reg expected decision:block, got: '$L1R_DECISION' out: $HOOK_OUT"
+if [ "$HOOK_RC" -eq 0 ] && [ -z "$HOOK_OUT" ]; then
+  pass "L1-reg PLANS_DIR path in the reply — exit 0, empty stdout (Layer 1 retired)"
 else
-  pass "L1-reg Layer 1 path-emission block intact"
+  fail "L1-reg expected exit 0 and empty stdout (Layer 1 retired in #2513), got exit $HOOK_RC, out: $HOOK_OUT"
 fi
 clear_markers
 
@@ -333,7 +328,7 @@ echo "=== L2o: CONFIRM_DETAIL + Skill(write-tests) follow-up → pass ==="
 clear_markers
 setup_marker "detail"
 L2O_TPATH="$TRANSCRIPT_DIR/$SID-l2o.jsonl"
-build_transcript_full "$L2O_TPATH" "[$BASH_CONFIRM_DETAIL,$SKILL_WRITE_TESTS]"
+build_transcript_full "$L2O_TPATH" "[$(plan_link_text detail),$BASH_CONFIRM_DETAIL,$SKILL_WRITE_TESTS]"
 L2O_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2O_TPATH\"}"
 run_hook_with_rc "$L2O_JSON"
 if [ "$HOOK_RC" -eq 0 ]; then

@@ -4,8 +4,8 @@
 # Tags: plan, hook, workflow, plans, plan-sync, TL2, scope:common, table-driven
 # Sourced by ../fix-524-confirm-plan-guard.sh — reuses PLANS_DIR, WORKFLOW_DIR,
 # TRANSCRIPT_DIR, NODE_TMPDIR, write_marker, write_transcript, run_stop_hook, pass/fail.
-# #2513 Layer 1 as a named allow/block table: GitHub blob URLs may be repeated; every
-# local PLANS_DIR form (native, forward-slash, ~, percent-encoded file:/// URI) blocks.
+# #2513 allow table for a marker turn whose plan file does not exist: neither a blob URL nor
+# any local PLANS_DIR form (native, forward-slash, ~, percent-encoded file:/// URI) is refused.
 L1_TABLE_N=0
 
 # TL3 gap (what this test does NOT catch):
@@ -46,7 +46,7 @@ l1_verdict() {
   )
 }
 
-echo "=== T-L1-URL table: blob URLs allowed, local PLANS_DIR forms blocked ==="
+echo "=== T-L1-URL table: blob URLs and local PLANS_DIR forms are both allowed ==="
 while IFS='|' read -r name tpl dirkind want; do
   [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
   name="${name//[[:space:]]/}"; dirkind="${dirkind//[[:space:]]/}"; want="${want//[[:space:]]/}"
@@ -70,21 +70,13 @@ blob-url-only        | Plan: {BLOB}/abc-detail.md                     | native  
 blob-url-md-link     | [abc-detail.md]({BLOB}/abc-detail.md)          | native    | allow
 blob-urls-two-stages | {BLOB}/abc-intent.md then {BLOB}/abc-detail.md | native    | allow
 blob-url-space-dir   | Plan: {BLOB}/abc-detail.md                     | space     | allow
-native-path          | see {P}/abc-detail.md                          | native    | block
-forward-slash-path   | see {F}/abc-detail.md                          | native    | block
-tilde-path           | see ~/.workflow-plans/abc-detail.md            | native    | block
-encoded-file-uri     | open {U}/abc-detail.md please                  | space     | block
-blob-url-plus-path   | {BLOB}/abc-detail.md or {F}/abc-detail.md      | native    | block
+native-path          | see {P}/abc-detail.md                          | native    | allow
+forward-slash-path   | see {F}/abc-detail.md                          | native    | allow
+tilde-path           | see ~/.workflow-plans/abc-detail.md            | native    | allow
+encoded-file-uri     | open {U}/abc-detail.md please                  | space     | allow
+blob-url-plus-path   | {BLOB}/abc-detail.md or {F}/abc-detail.md      | native    | allow
 TABLE
 if [ "$L1_TABLE_N" -eq 9 ]; then pass "T-L1-URL table ran all 9 rows"
 else fail "T-L1-URL table ran $L1_TABLE_N of 9 rows"; fi
-
-# #2513 reason wording (separate from the verdict table): blob URLs may be repeated.
-L1_REASON="$(cat "$TRANSCRIPT_DIR/sid-l1-encoded-file-uri-$$.out" 2>/dev/null)"
-if printf '%s' "$L1_REASON" | grep -qF "blob URL"; then
-  pass "T-L1-URL block reason says the blob URL may be repeated"
-else
-  fail "T-L1-URL block reason lacks the 'blob URL' allowance (new #2513 wording not implemented) — got '$L1_REASON'"
-fi
 rm -rf "$SPACE_PLANS"
 rm -f "$TRANSCRIPT_DIR"/sid-l1-*-"$$".out 2>/dev/null || true

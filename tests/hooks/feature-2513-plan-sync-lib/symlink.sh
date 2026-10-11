@@ -1,13 +1,13 @@
 # Non-regular plan targets (#2513 review_security F2): syncPlanFile / publishedBlobUrl act
 # only on an lstat-regular, non-symlink file; carried local-only entries never publish a
-# symlink (mode 120000) entry or its target's content. Sourced last by
-# ../feature-2513-plan-sync-lib.sh (needs flow-helpers.sh). Symlinks are made with Node's
+# symlink (mode 120000) entry or its target's content. Sourced by
+# ../feature-2513-plan-sync-lib.sh (needs tests/lib/plan-sync-flow.sh). Symlinks are made with Node's
 # fs.symlinkSync (Git Bash `ln -s` silently copies on Windows); cases needing a real
 # symlink are skipped when the host cannot create one; mode-120000 entries are built by
 # plumbing, so SL-4 / SL-4b / SL-6 (local-main part) and SL-0 / SL-3 / SL-5 always run.
 # Also F1/F2: hard-linked plan names (HL), the verified-fd reader (RD), lstat->open swap (TOC), CRLF/UTF-8 (REG).
 
-unset GIT_SSH_COMMAND GIT_SSH_VARIANT
+setup_ssh_stub "$BARE"
 SL_MARK="PLAN-SYNC-SL-SECRET-7f3a"
 SL_SECRET="$PSF_ROOT/sl-secret/secret.txt"
 mkdir -p "$PSF_ROOT/sl-secret"
@@ -88,7 +88,7 @@ if [ "$SL_CAN" != yes ]; then
   skip "SL-1 symlinked plan file: $SL_SKIP_MSG"
 elif sl_symlink "$SL_SECRET" "$SLD/sl1-intent.md"; then
   SL1_BEFORE="$(git -C "$SL_BARE" rev-parse --verify -q refs/heads/main || echo missing)"
-  OUT="$(export PLAN_SYNC_REMOTE_URL="$SL_BARE"; sync_local "$SLD" sl1-intent.md)"
+  OUT="$(flow_bare "$SL_BARE"; sync_local "$SLD" sl1-intent.md)"
   expect_eq "SL-1 syncPlanFile(symlink) -> skipped|not-regular-file" "$OUT" "skipped|not-regular-file|"
   expect_eq "SL-1 bare main SHA unchanged" "$(git -C "$SL_BARE" rev-parse --verify -q refs/heads/main || echo missing)" "$SL1_BEFORE"
   expect_eq "SL-1 bare main tree has no sl1-intent.md" "$(tree_of "$SL_BARE")" ".gitignore "
@@ -104,19 +104,19 @@ SL3_MARK="PLAN-SYNC-SL3-DIR-INNER-91c2"
 SL3_TREE_BEFORE="$(tree_of "$SL_BARE")"
 mkdir -p "$SLD/sl3-outline.md"
 printf '%s\n' "$SL3_MARK" > "$SLD/sl3-outline.md/inner.txt"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$SL_BARE"; sync_local "$SLD" sl3-outline.md)"
+OUT="$(flow_bare "$SL_BARE"; sync_local "$SLD" sl3-outline.md)"
 expect_eq "SL-3 syncPlanFile(directory) -> skipped|not-regular-file" "$OUT" "skipped|not-regular-file|"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$SL_BARE"; sync_local "$SLD" sl3m-detail.md)"
+OUT="$(flow_bare "$SL_BARE"; sync_local "$SLD" sl3m-detail.md)"
 expect_eq "SL-3 syncPlanFile(missing path) -> skipped|not-regular-file" "$OUT" "skipped|not-regular-file|"
 if [ "$SL_CAN" != yes ]; then
   skip "SL-3 dangling symlink / symlink to a directory: $SL_SKIP_MSG"
 else
   if sl_symlink "$PSF_ROOT/sl-secret/no-such-file" "$SLD/sl3g-intent.md"; then
-    OUT="$(export PLAN_SYNC_REMOTE_URL="$SL_BARE"; sync_local "$SLD" sl3g-intent.md)"
+    OUT="$(flow_bare "$SL_BARE"; sync_local "$SLD" sl3g-intent.md)"
     expect_eq "SL-3 syncPlanFile(dangling symlink) -> skipped|not-regular-file" "$OUT" "skipped|not-regular-file|"
   else fail "SL-3 fixture" "dangling symlink not created"; fi
   if sl_symlink "$PSF_ROOT/sl-secret" "$SLD/sl3d-detail.md" dir; then
-    OUT="$(export PLAN_SYNC_REMOTE_URL="$SL_BARE"; sync_local "$SLD" sl3d-detail.md)"
+    OUT="$(flow_bare "$SL_BARE"; sync_local "$SLD" sl3d-detail.md)"
     expect_eq "SL-3 syncPlanFile(symlink to a directory) -> skipped|not-regular-file" "$OUT" "skipped|not-regular-file|"
   else fail "SL-3 fixture" "directory symlink not created"; fi
 fi
@@ -125,8 +125,8 @@ expect_eq "SL-3 no bare object holds the directory's inner content" "$(sl_object
 
 echo "=== SL-5: a regular plan file still pushes (regression) ==="
 printf 'sl5 intent\n' > "$SLD/sl5-intent.md"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$SL_BARE"; sync_local "$SLD" sl5-intent.md)"
-expect_eq "SL-5 syncPlanFile(regular) -> pushed|non-github" "$OUT" "pushed|non-github|"
+OUT="$(flow_bare "$SL_BARE"; sync_local "$SLD" sl5-intent.md)"
+expect_eq "SL-5 syncPlanFile(regular) -> pushed|unknown-forge" "$OUT" "pushed|unknown-forge|"
 expect_eq "SL-5 bare main:sl5-intent.md matches the file" "$(git -C "$SL_BARE" show refs/heads/main:sl5-intent.md 2>&1)" "sl5 intent"
 expect_pos "SL-0 positive control: sl_object_hits finds pushed 'sl5 intent'" "$(sl_object_hits "$SL_BARE" "sl5 intent")"
 
@@ -135,6 +135,8 @@ G2="$PSF_ROOT/sl2-plans"
 if psf_make_provisioned "$G2" "$PSF_ORIGIN_GH" >/dev/null 2>&1; then
   cp "$SL_SECRET" "$G2/sl2-intent.md"
   psf_commit_file "$G2" sl2-intent.md refs/remotes/origin/main
+  # publishedBlobUrl looks at the project-host record first (detail.md); match records here.
+  for r in sl2-intent.md sl2d-outline.md sl2m-detail.md; do psf_record "$G2" "$r" github.com; done
   expect_eq "SL-5 publishedBlobUrl(regular, content on origin/main) -> URL" \
     "$(PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" blob_url "$G2" "$G2/sl2-intent.md")" \
     "https://github.com/test-owner/test-repo/blob/main/sl2-intent.md"
@@ -175,9 +177,12 @@ if [ "$SL_CAN" = yes ]; then
 else
   skip "SL-4 working-tree symlink beside the carried entry: $SL_SKIP_MSG"
 fi
+# A carried entry is sent only with a match record and the same bytes on disk.
+printf '%s' 'sl4 exec' > "$S4/sl4x-outline.md"
+flow_match "$S4" sl4x-outline.md sl4b-detail.md sl4g-intent.md
 printf 'sl4 intent\n' > "$S4/sl4a-intent.md"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$S4_BARE"; sync_local "$S4" sl4a-intent.md)"
-expect_eq "SL-4 regular file sync -> pushed|non-github" "$OUT" "pushed|non-github|"
+OUT="$(flow_bare "$S4_BARE"; sync_local "$S4" sl4a-intent.md)"
+expect_eq "SL-4 regular file sync -> pushed|unknown-forge" "$OUT" "pushed|unknown-forge|"
 expect_eq "SL-4 bare main:sl4a-intent.md matches the file" "$(git -C "$S4_BARE" show refs/heads/main:sl4a-intent.md 2>&1)" "sl4 intent"
 expect_eq "SL-4 no mode-120000 entry anywhere in bare history" "$(sl_symlink_modes "$S4_BARE")" "0"
 expect_eq "SL-4 no bare object holds the symlink target's content" "$(sl_object_hits "$S4_BARE" "$SL_MARK")" "0"
@@ -201,7 +206,9 @@ printf 'sl4n remote\n' > "$SEED4N/sl4n-remote-intent.md"
 git -C "$SEED4N" add .gitignore sl4n-remote-intent.md
 git -C "$SEED4N" commit -q -m "unrelated remote root"
 git -C "$SEED4N" push -q --force "$S4N_BARE" HEAD:refs/heads/main 2>/dev/null
-git -C "$S4N" fetch -q origin +refs/heads/main:refs/remotes/origin/main 2>/dev/null
+(flow_bare "$S4N_BARE"; git -C "$S4N" fetch -q origin +refs/heads/main:refs/remotes/origin/main 2>/dev/null)
+expect_eq "SL-4b precondition: origin/main is the unrelated remote root" \
+  "$(git -C "$S4N" rev-parse --verify -q refs/remotes/origin/main)" "$(git -C "$SEED4N" rev-parse HEAD)"
 sl_link_commit "$S4N" sl4n-link-detail.md "$SL_SECRET" || fail "SL-4b fixture" "sl_link_commit failed"
 sl_entry_commit "$S4N" 100644 sl4n-carry-outline.md "$(sl_blob "$S4N" 'sl4n carry')" || fail "SL-4b fixture" "100644 entry"
 sl_entry_commit "$S4N" 100755 sl4nx-detail.md "$(sl_blob "$S4N" 'sl4n exec')" || fail "SL-4b fixture" "100755 entry"
@@ -210,9 +217,11 @@ if git -C "$S4N" merge-base refs/remotes/origin/main refs/heads/main >/dev/null 
 expect_eq "SL-4b precondition: origin/main and local main share no merge base" "$S4N_MB" "none"
 expect_eq "SL-4b precondition: local main holds the link as mode 120000" \
   "$(git -C "$S4N" ls-tree refs/heads/main sl4n-link-detail.md | cut -c1-6)" "120000"
+printf '%s' 'sl4n carry' > "$S4N/sl4n-carry-outline.md"; printf '%s' 'sl4n exec' > "$S4N/sl4nx-detail.md"
+flow_match "$S4N" sl4n-carry-outline.md sl4nx-detail.md sl4n-link-detail.md sl4ng-intent.md
 printf 'sl4n intent\n' > "$S4N/sl4n-intent.md"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$S4N_BARE"; sync_local "$S4N" sl4n-intent.md)"
-expect_eq "SL-4b regular file sync -> pushed|non-github" "$OUT" "pushed|non-github|"
+OUT="$(flow_bare "$S4N_BARE"; sync_local "$S4N" sl4n-intent.md)"
+expect_eq "SL-4b regular file sync -> pushed|unknown-forge" "$OUT" "pushed|unknown-forge|"
 expect_eq "SL-4b regular entries carried; 120000 link and 160000 gitlink absent" "$(tree_of "$S4N_BARE")" \
   ".gitignore sl4n-carry-outline.md sl4n-intent.md sl4n-remote-intent.md sl4nx-detail.md "
 expect_eq "SL-4b carried 100644 entry: identical content, mode 100644" \
@@ -229,22 +238,22 @@ S6="$PSF_ROOT/sl6-plans"; mkdir -p "$S6"
 OUT="$(provision "$S6" "$S6_BARE")"
 expect_eq "SL-6 precondition: provisionRepo ok" "${OUT%%|*}" "ok"
 printf 's6 original\n' > "$S6/sl6x-intent.md"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$S6_BARE"; sync_local "$S6" sl6x-intent.md)"
-expect_eq "SL-6 precondition: original regular file pushed" "$OUT" "pushed|non-github|"
+OUT="$(flow_bare "$S6_BARE"; sync_local "$S6" sl6x-intent.md)"
+expect_eq "SL-6 precondition: original regular file pushed" "$OUT" "pushed|unknown-forge|"
 if [ "$SL_CAN" != yes ]; then
   skip "SL-6 working-tree symlink replacing a published name: $SL_SKIP_MSG"
 else
   rm -f "$S6/sl6x-intent.md"
   if sl_symlink "$SL_SECRET" "$S6/sl6x-intent.md"; then
     printf 'sl6 outline\n' > "$S6/sl6y-outline.md"
-    OUT="$(export PLAN_SYNC_REMOTE_URL="$S6_BARE"; sync_local "$S6" sl6y-outline.md)"
-    expect_eq "SL-6 sync of another file beside the working-tree symlink -> pushed|non-github" "$OUT" "pushed|non-github|"
+    OUT="$(flow_bare "$S6_BARE"; sync_local "$S6" sl6y-outline.md)"
+    expect_eq "SL-6 sync of another file beside the working-tree symlink -> pushed|unknown-forge" "$OUT" "pushed|unknown-forge|"
   else fail "SL-6 fixture" "working-tree symlink not created"; fi
 fi
 sl_link_commit "$S6" sl6x-intent.md "$SL_SECRET" || fail "SL-6 fixture" "sl_link_commit failed"
 printf 'sl6 detail\n' > "$S6/sl6z-detail.md"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$S6_BARE"; sync_local "$S6" sl6z-detail.md)"
-expect_eq "SL-6 sync after local main type-changed the name to 120000 -> pushed|non-github" "$OUT" "pushed|non-github|"
+OUT="$(flow_bare "$S6_BARE"; sync_local "$S6" sl6z-detail.md)"
+expect_eq "SL-6 sync after local main type-changed the name to 120000 -> pushed|unknown-forge" "$OUT" "pushed|unknown-forge|"
 expect_eq "SL-6 remote keeps the original content" "$(git -C "$S6_BARE" show refs/heads/main:sl6x-intent.md 2>&1)" "s6 original"
 expect_eq "SL-6 remote entry is still mode 100644" "$(git -C "$S6_BARE" ls-tree refs/heads/main sl6x-intent.md | cut -c1-6)" "100644"
 expect_eq "SL-6 no type change (T) anywhere in bare history" "$(git -C "$S6_BARE" log --all --diff-filter=T --format=%H 2>&1)" ""
@@ -368,7 +377,7 @@ if [ "$HL_CAN" != yes ]; then
   skip "HL-2 extra link removed -> syncs: $HL_SKIP_MSG"
 elif hl_link "$HL_SECRET" "$HLD/hl1-intent.md"; then
   HL1_BEFORE="$(git -C "$HL_BARE" rev-parse --verify -q refs/heads/main || echo missing)"
-  OUT="$(export PLAN_SYNC_REMOTE_URL="$HL_BARE"; sync_local "$HLD" hl1-intent.md)"
+  OUT="$(flow_bare "$HL_BARE"; sync_local "$HLD" hl1-intent.md)"
   expect_eq "HL-1 syncPlanFile(hard link, nlink 2) -> skipped|not-regular-file" "$OUT" "skipped|not-regular-file|"
   expect_eq "HL-1 bare main SHA unchanged" "$(git -C "$HL_BARE" rev-parse --verify -q refs/heads/main || echo missing)" "$HL1_BEFORE"
   expect_eq "HL-1 bare main tree has no hl1-intent.md" "$(tree_of "$HL_BARE")" ".gitignore "
@@ -377,8 +386,8 @@ elif hl_link "$HL_SECRET" "$HLD/hl1-intent.md"; then
   echo "=== HL-2: same file after the extra link is removed (nlink 1) -> pushed ==="
   rm -f "$HL_SECRET"
   expect_eq "HL-2 precondition: nlink back to 1" "$(hl_nlink "$HLD/hl1-intent.md")" "1"
-  OUT="$(export PLAN_SYNC_REMOTE_URL="$HL_BARE"; sync_local "$HLD" hl1-intent.md)"
-  expect_eq "HL-2 syncPlanFile(same name, nlink 1) -> pushed|non-github" "$OUT" "pushed|non-github|"
+  OUT="$(flow_bare "$HL_BARE"; sync_local "$HLD" hl1-intent.md)"
+  expect_eq "HL-2 syncPlanFile(same name, nlink 1) -> pushed|unknown-forge" "$OUT" "pushed|unknown-forge|"
   expect_eq "HL-2 bare main:hl1-intent.md matches the file" "$(git -C "$HL_BARE" show refs/heads/main:hl1-intent.md 2>&1)" "$HL_MARK"
 else
   fail "HL-1 fixture" "could not create $HLD/hl1-intent.md as a hard link"
@@ -391,6 +400,7 @@ if psf_make_provisioned "$GHL" "$PSF_ORIGIN_GH" >/dev/null 2>&1; then
   printf '%s\n' "$HL_MARK" > "$HL_SECRET2"
   cp "$HL_SECRET2" "$GHL/hlu-intent.md"
   psf_commit_file "$GHL" hlu-intent.md refs/remotes/origin/main
+  psf_record "$GHL" hlu-intent.md github.com; psf_record "$GHL" reg1-outline.md github.com
   HLU_URL="https://github.com/test-owner/test-repo/blob/main/hlu-intent.md"
   expect_eq "HL positive control: publishedBlobUrl(regular, content on origin/main) -> URL" \
     "$(PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" blob_url "$GHL" "$GHL/hlu-intent.md")" "$HLU_URL"
@@ -416,8 +426,8 @@ fi
 
 echo "=== TOC-1: syncPlanFile hashes the verified bytes, never re-opens the path ==="
 printf 'toc1 intent\n' > "$HLD/toc1-intent.md"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$HL_BARE"; hl_patched sync "$HLD" toc1-intent.md)"
-expect_eq "TOC-1 syncPlanFile -> pushed with no path-based hash-object call" "$OUT" "pushed|non-github|path-hashes=0"
+OUT="$(flow_bare "$HL_BARE"; flow_match "$HLD" toc1-intent.md; hl_patched sync "$HLD" toc1-intent.md)"
+expect_eq "TOC-1 syncPlanFile -> pushed with no path-based hash-object call" "$OUT" "pushed|unknown-forge|path-hashes=0"
 expect_eq "TOC-1 bare main:toc1-intent.md matches the file" "$(git -C "$HL_BARE" show refs/heads/main:toc1-intent.md 2>&1)" "toc1 intent"
 
 echo "=== TOC-2: target swapped for a hard link to a secret right after lstat -> nothing leaks ==="
@@ -430,7 +440,7 @@ else
   printf 'toc2 benign\n' > "$HLD/toc2-outline.md"
   if hl_link "$PSF_ROOT/toc-secret/secret.txt" "$PSF_ROOT/toc-secret/swap-in"; then
     TOC2_BEFORE="$(git -C "$HL_BARE" rev-parse --verify -q refs/heads/main || echo missing)"
-    OUT="$(export PLAN_SYNC_REMOTE_URL="$HL_BARE"; hl_patched swap "$HLD" toc2-outline.md "$PSF_ROOT/toc-secret/swap-in")"
+    OUT="$(flow_bare "$HL_BARE"; flow_match "$HLD" toc2-outline.md; hl_patched swap "$HLD" toc2-outline.md "$PSF_ROOT/toc-secret/swap-in")"
     expect_eq "TOC-2 syncPlanFile(swapped after lstat) -> skipped|not-regular-file" "$OUT" "skipped|not-regular-file|swapped=yes"
     expect_eq "TOC-2 bare main SHA unchanged" "$(git -C "$HL_BARE" rev-parse --verify -q refs/heads/main || echo missing)" "$TOC2_BEFORE"
     expect_eq "TOC-2 no bare object holds the swapped-in secret" "$(sl_object_hits "$HL_BARE" "$TOC_MARK")" "0"
@@ -442,8 +452,8 @@ fi
 
 echo "=== REG-1: CRLF + UTF-8 (Japanese) plan pushes byte-identical (regression) ==="
 printf 'reg1 line one\r\n\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e\xe3\x81\xae\xe8\xa8\x88\xe7\x94\xbb\r\nend\n' > "$HLD/reg1-intent.md"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$HL_BARE"; sync_local "$HLD" reg1-intent.md)"
-expect_eq "REG-1 syncPlanFile(CRLF + UTF-8) -> pushed|non-github" "$OUT" "pushed|non-github|"
+OUT="$(flow_bare "$HL_BARE"; sync_local "$HLD" reg1-intent.md)"
+expect_eq "REG-1 syncPlanFile(CRLF + UTF-8) -> pushed|unknown-forge" "$OUT" "pushed|unknown-forge|"
 REG1_WANT="$(git -C "$HLD" hash-object --no-filters -- "$HLD/reg1-intent.md" 2>&1)"
 expect_eq "REG-1 remote blob id == hash-object --no-filters of the file" \
   "$(git -C "$HL_BARE" rev-parse --verify -q refs/heads/main:reg1-intent.md || echo missing)" "$REG1_WANT"

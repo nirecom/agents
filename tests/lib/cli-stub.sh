@@ -8,7 +8,7 @@
 # <name>(.exe) are links/copies of the node binary; the preload answers as the stub when
 # its own basename is a stub name and stays inert in every other node process.
 # Per-call vars: CLI_STUB_OUT (stdout), CLI_STUB_RC (exit code),
-# CLI_STUB_SLEEP_MS (delay before answering), CLI_STUB_LOG (appends "<name> <args>").
+# CLI_STUB_SLEEP_MS (delay), CLI_STUB_LOG (appends "<name> <args>"), CLI_STUB_REJECT_FLAGS (comma list: "Unknown flag", exit 1).
 
 cli_stub_make() { # <dir> <name>... — sets CLI_STUB_DIR (PATH form) and CLI_STUB_PRELOAD.
   local d="$1" node_bin n names
@@ -28,6 +28,9 @@ cli_stub_make() { # <dir> <name>... — sets CLI_STUB_DIR (PATH form) and CLI_ST
     'if (me) {' \
     '  const a = process.argv.slice(1); if (a.length) a[0] = path.basename(a[0]);' \
     '  if (process.env.CLI_STUB_LOG) fs.appendFileSync(process.env.CLI_STUB_LOG, [me].concat(a).join(" ") + "\n");' \
+    '  const rej = String(process.env.CLI_STUB_REJECT_FLAGS || "").split(",").filter(Boolean)' \
+    '    .find((f) => a.slice(1).some((x) => x === f || x.startsWith(f + "=")));' \
+    '  if (rej) { fs.writeSync(2, "Unknown flag: " + rej + "\n"); process.exit(1); }' \
     '  const ms = Number(process.env.CLI_STUB_SLEEP_MS || 0);' \
     '  if (ms > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);' \
     '  fs.writeSync(1, process.env.CLI_STUB_OUT || "");' \
@@ -43,7 +46,8 @@ cli_stub_make() { # <dir> <name>... — sets CLI_STUB_DIR (PATH form) and CLI_ST
 cli_stub_run() { # <cmd...> — stub first on PATH, preload on, CLI_STUB_* vars exported.
   PATH="$CLI_STUB_DIR:$PATH" NODE_OPTIONS="--require \"$CLI_STUB_PRELOAD\"" \
     CLI_STUB_OUT="${CLI_STUB_OUT:-}" CLI_STUB_RC="${CLI_STUB_RC:-0}" \
-    CLI_STUB_SLEEP_MS="${CLI_STUB_SLEEP_MS:-0}" CLI_STUB_LOG="${CLI_STUB_LOG:-}" "$@"
+    CLI_STUB_SLEEP_MS="${CLI_STUB_SLEEP_MS:-0}" CLI_STUB_LOG="${CLI_STUB_LOG:-}" \
+    CLI_STUB_REJECT_FLAGS="${CLI_STUB_REJECT_FLAGS:-}" "$@"
 }
 
 # cli_stub_bridge_cmd <dir> <name>... — keeps a test's existing <dir>/<name>.cmd mocks reachable

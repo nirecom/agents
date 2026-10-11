@@ -166,7 +166,10 @@ const buildFixture = function (theSid, headingName) {
   const artifact = plans + '/' + theSid + '-outline.md';
   const doc = '# 計画\n\n## ' + headingName + '\n\n' + jaBody + '\n';
   fs.writeFileSync(artifact, doc);
+  // #2513: the reply names the plan's local path (its plan-link line, plan-sync off) so the
+  // turn-end plan-link check never pre-empts the Layer 2 verdict under test.
   const transcript = JSON.stringify({ type: 'assistant', message: { content: [
+    { type: 'text', text: 'Plan: ' + artifact },
     { type: 'tool_use', name: 'Bash', input: { command: 'echo \"<<WORKFLOW_CONFIRM_OUTLINE: ok>>\"' } },
     { type: 'tool_use', name: 'Skill', input: { skill: 'make-detail-plan' } }
   ] } }) + '\n';

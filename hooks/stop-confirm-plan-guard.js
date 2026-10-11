@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Stop hook: structurally enforce the confirm-plan protocol. Fail-open everywhere.
-// Layer 1 (marker-gated): show-plan-link.js drops a per-turn marker; when one exists,
-// block the turn if the last assistant message leaks a WORKFLOW_PLANS_DIR path form.
 // Layer 2 (every Stop, #2278): when CONFIRM_<STAGE> appears in the last assistant
 // turn, block unless the confirmed artifact passes PLAN_LANG re-lint AND a
 // stage-valid follow-up tool_use appears after the sentinel.
+// Plan-link check (after Layer 2): a turn that wrote a plan (show-plan-link.js turn marker)
+// or CONFIRMed a plan stage must show its plan-link output — the blob URL when one
+// exists, otherwise the plan's local path. Blocks once (stop_hook_active passes).
 // Reason prefixes and the marker contract: docs/architecture/claude-code/settings.md.
 "use strict";
 
@@ -17,16 +18,6 @@ const {
 } = require("./lib/sentinel-patterns");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
-
-// encodedFileUriFrom(dir) — the percent-encoded file:/// URI form of a local dir
-// (drive-letter aware), one of the local path forms Layer 1 blocks.
-function encodedFileUriFrom(dir) {
-  if (typeof dir !== "string" || dir.length === 0) return "";
-  const fwd = dir.replace(/\\/g, "/");
-  const enc = (s) => s.split("/").map(encodeURIComponent).join("/");
-  const m = fwd.match(/^([A-Za-z]:)\/(.*)/);
-  return m ? "file:///" + m[1] + "/" + enc(m[2]) : "file:///" + enc(fwd.replace(/^\//, ""));
-}
 
 if (require.main === module) {
   const r = readHookInput();
@@ -48,16 +39,16 @@ if (require.main === module) {
   if (!sid) process.exit(0);
 
   const { readAndDeleteTurnMarkers } = require("./lib/turn-marker");
-  // Markers gate only Layer 1; Layer 2 must run on every Stop (#2278).
+  // Markers feed only the plan-link check; Layer 2 must run on every Stop (#2278).
   const markers = readAndDeleteTurnMarkers(sid);
 
-  // Read transcript and scan backward for the most recent assistant message.
-  // Capture both the joined text (Layer 1) and the full content array (Layer 2).
-  let lastAssistantText = "";
+  // Read the transcript: the lines feed the plan-link check, and the most recent
+  // assistant message's content array feeds Layer 2.
   let lastAssistantContent = null;
+  let lines = [];
   try {
     const raw = fs.readFileSync(input.transcript_path, "utf8");
-    const lines = raw.split("\n");
+    lines = raw.split("\n");
     const tail = lines.slice(Math.max(0, lines.length - 50));
     for (let i = tail.length - 1; i >= 0; i--) {
       const line = tail[i];
@@ -72,52 +63,10 @@ if (require.main === module) {
       const content = entry.message && entry.message.content;
       if (!Array.isArray(content)) process.exit(0);
       lastAssistantContent = content;
-      const texts = [];
-      for (const item of content) {
-        if (item && item.type === "text" && typeof item.text === "string") {
-          texts.push(item.text);
-        }
-      }
-      lastAssistantText = texts.join("\n");
       break;
     }
   } catch (_) {
     process.exit(0);
-  }
-
-  if (markers.length > 0) {
-    const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-    let plansDir;
-    try {
-      plansDir = getWorkflowPlansDir();
-    } catch (_) {
-      process.exit(0);
-    }
-
-    const patternsRaw = [
-      plansDir,
-      plansDir.replace(/\\/g, "/"),
-      "~/.workflow-plans",
-      encodedFileUriFrom(plansDir),
-    ];
-    const seen = new Set();
-    const patterns = [];
-    for (const p of patternsRaw) {
-      if (typeof p !== "string" || p.length === 0) continue;
-      if (seen.has(p)) continue;
-      seen.add(p);
-      patterns.push(p);
-    }
-
-    for (const pat of patterns) {
-      if (lastAssistantText.includes(pat)) {
-        process.stdout.write(JSON.stringify({
-          decision: "block",
-          reason: "[confirm-plan] Step 2 violation: orchestrator emitted a local `~/.workflow-plans/` path representation. The `show-plan-link.js` breadcrumb is the sole plan surface; re-stating its GitHub blob URL is fine, a local path is not. Re-issue the response without the path. (Hook: stop-confirm-plan-guard.js)",
-        }));
-        process.exit(2);
-      }
-    }
   }
 
   // Layer 2: order-aware CONFIRM-continuation guard. Fail-open on any error.
@@ -176,6 +125,42 @@ if (require.main === module) {
             reason: "[confirm-plan] Layer 2/follow-up: stage-valid follow-up Skill not found after CONFIRM_" + stage.toUpperCase() + nextSkillHint,
           }));
           process.exit(2);
+        }
+      }
+    }
+  } catch (_) {
+    process.exit(0);
+  }
+
+  // Plan-link check: a turn that wrote or CONFIRMed a plan stage must show that stage's
+  // plan-link output (hooks/lib/plan-link-turn-check.js). An unresolvable plan passes.
+  try {
+    const tc = require("./lib/plan-link-turn-check");
+    const entries = tc.turnEntriesFromLines(lines);
+    const stages = tc.stagesToCheck({ markers, turnEntries: entries });
+    if (stages.length > 0) {
+      const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
+      const { linkForFile } = require("./lib/plan-link");
+      const plansDir = getWorkflowPlansDir();
+      // A written artifact may carry another session's id, and one call may write several
+      // files of a stage: check every file a marker names, else <sid>-<stage>.md.
+      const markerPaths = {};
+      for (const m of markers) {
+        if (!m || typeof m.suffix !== "string" || typeof m.absPath !== "string" || !m.absPath) continue;
+        (markerPaths[m.suffix] = markerPaths[m.suffix] || []).push(m.absPath);
+      }
+      const turnText = tc.collectTurnAssistantText(entries);
+      for (const stageName of stages) {
+        for (const absPath of markerPaths[stageName] || [path.join(plansDir, `${sid}-${stageName}.md`)]) {
+          const verdict = tc.checkPlanUrlInTurn({
+            stages: [stageName],
+            turnText,
+            resolve: () => linkForFile(absPath, { plansDir }),
+          });
+          if (verdict.block) {
+            process.stdout.write(JSON.stringify({ decision: "block", reason: verdict.reason }));
+            process.exit(2);
+          }
         }
       }
     }

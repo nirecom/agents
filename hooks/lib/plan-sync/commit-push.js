@@ -1,11 +1,12 @@
 "use strict";
 // hooks/lib/plan-sync/commit-push.js
 // syncPlanFile: publish one plan file to origin/main by plumbing + CAS, always building
-// add/overwrite-only on the remote tip from allowlisted entries. publishedBlobUrl: the
-// network-free "is this exact content on origin/main" check behind the blob URL.
+// add/overwrite-only on the remote tip from entries the send predicate keeps (project-host.js).
+// publishedBlobUrl: the network-free "is this exact content on origin/main" check behind the URL.
 const path = require("path");
 const remoteUrl = require("./remote-url");
-const { isSyncTarget, isSyncTargetName } = require("./allowlist");
+const { isSyncTarget } = require("./allowlist");
+const { readProjectHostState, sendPredicate } = require("./project-host");
 const { resolveRemoteUrl, checkProvisioned } = require("./provision");
 const { isRegularFile, readVerifiedRegularFile } = require("./local-file");
 const G = require("./git");
@@ -28,7 +29,11 @@ const MAX_ATTEMPTS = 3;
 // A no-op (overlay == R) is trusted only when R was fetched in that attempt: against an
 // unfetched, possibly stale R it fetches and rebuilds instead (that one local-only pass
 // gets an extra attempt, so the post-fetch retry budget stays MAX_ATTEMPTS - 1).
-function publishOnRemoteTip(plansDir, target, deadline) {
+// pred (required) is sendPredicate(plansDir, destination): carried entries pass it in full.
+function publishOnRemoteTip(plansDir, target, deadline, pred) {
+  if (!pred || typeof pred.isSendable !== "function" || typeof pred.keepCarried !== "function") {
+    throw new Error("publishOnRemoteTip: send predicate required");
+  }
   let last = { status: 1, stderr: "cas-conflict", timedOut: false };
   let maxAttempts = MAX_ATTEMPTS;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -41,7 +46,8 @@ function publishOnRemoteTip(plansDir, target, deadline) {
       if (!R) return { push: { status: 1, stderr: "origin/main missing after fetch", timedOut: false }, commit: null };
     }
     const L = G.revParse(plansDir, G.MAIN_REF, { deadline });
-    const entries = G.mergeEntries([target], G.carriedEntries(plansDir, R, L, isSyncTargetName, { deadline }));
+    const carried = pred.keepCarried(G.carriedEntries(plansDir, R, L, pred.isSendable, { deadline }));
+    const entries = G.mergeEntries([target], carried);
     const c = G.overlayCommit(plansDir, R, entries, { deadline, message: `plan-sync: ${target.rel}` });
     if (!c.ok) return { push: { status: 1, stderr: c.error, timedOut: false }, commit: null, reason: "commit-failed" };
     if (c.commit !== L && !G.casUpdate(plansDir, G.MAIN_REF, c.commit, L, { deadline })) {
@@ -70,6 +76,9 @@ function syncPlanFile(plansDir, absPath, opts) {
   if (!env.value) return { status: "off" };
   if (env.loadFailed) return failed("env-load-failed");
   if (!isSyncTarget(plansDir, absPath)) return { status: "skipped" };
+  const hostState = readProjectHostState(absPath, env.value);
+  if (hostState === "host-mismatch" || hostState === "no-project-host") return { status: "skipped", reason: hostState };
+  if (hostState !== "match") return { status: "skipped" };
   if (!isRegularFile(absPath)) return { status: "skipped", reason: "not-regular-file" };
   const cp = checkProvisioned(plansDir, env.value, o.deps);
   if (!cp.ok) return { status: "not-provisioned", reason: cp.reason };
@@ -84,7 +93,7 @@ function syncPlanFile(plansDir, absPath, opts) {
   if (!blob) return failed("hash-failed");
   const target = { rel, blob };
 
-  const pub = publishOnRemoteTip(plansDir, target, deadline);
+  const pub = publishOnRemoteTip(plansDir, target, deadline, sendPredicate(plansDir, cp.pushUrl));
   const { push, commit } = pub;
   if (pub.reason) return failed(pub.reason, push.stderr);
   if (push.status !== 0 || !commit) {
@@ -94,27 +103,31 @@ function syncPlanFile(plansDir, absPath, opts) {
 
   const url = publishedBlobUrl(plansDir, absPath, o.deps);
   if (url) return { status: "pushed", url };
-  if (!remoteUrl.parseGitHubRemote(cp.pushUrl)) return { status: "pushed", reason: "non-github" };
+  if (remoteUrl.resolveRemoteTarget(cp.pushUrl).type === "unknown") return { status: "pushed", reason: "unknown-forge" };
   return failed("verify-failed", "origin/main does not hold the written content");
 }
 
 // publishedBlobUrl(plansDir, absPath, deps?) -> string | null — no network. A URL only when
-// the provisioned push URL is GitHub's and origin/main:<rel> is byte-identical to the file.
+// the provisioned push URL is a known forge, the project-host record does not rule the plan
+// out (a mismatch or no-host record never gets one), and origin/main:<rel> is byte-identical
+// to the file — so without a record a URL appears only for content already at the destination.
 function publishedBlobUrl(plansDir, absPath, deps) {
   try {
     const env = resolveRemoteUrl();
     if (!env.value || !isSyncTarget(plansDir, absPath) || !isRegularFile(absPath)) return null;
     const cp = checkProvisioned(plansDir, env.value, deps);
     if (!cp.ok) return null;
-    const gh = remoteUrl.parseGitHubRemote(cp.pushUrl);
-    if (!gh) return null;
+    const target = remoteUrl.resolveRemoteTarget(cp.pushUrl);
+    if (target.type === "unknown") return null;
+    const state = readProjectHostState(absPath, cp.pushUrl);
+    if (state !== "match" && state !== "missing") return null;
     const rel = path.basename(path.resolve(absPath));
     const remoteBlob = G.blobAt(plansDir, G.ORIGIN_MAIN_REF, rel);
     const bytes = readVerifiedRegularFile(absPath);
     if (!remoteBlob || !bytes) return null;
     const localBlob = G.hashBytesId(plansDir, bytes);
     if (!localBlob || remoteBlob !== localBlob) return null;
-    return remoteUrl.blobUrlFor(gh, "main", rel);
+    return remoteUrl.blobUrlFor(target, "main", rel);
   } catch (_) {
     return null;
   }

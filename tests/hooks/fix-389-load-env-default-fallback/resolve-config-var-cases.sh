@@ -25,10 +25,14 @@ _cv_node() {
 }
 
 # Prints NOFN when the function is absent, so the RED reason is explicit.
+# out() projects each result to {value, loadFailed}: #2513 adds a `source` key that
+# CV-1..5 do not pin (feature-1226 CV-6 does).
 _cv_prelude() {
     printf '%s' "const le = require('$LOAD_ENV_NODE');
 if (typeof le.resolveConfigVar !== 'function') { process.stdout.write('NOFN'); process.exit(0); }
-const out = (r) => process.stdout.write(JSON.stringify(r));
+const pick = (r) => Array.isArray(r) ? r.map(pick)
+  : (r && typeof r === 'object' && 'loadFailed' in r ? { value: r.value, loadFailed: r.loadFailed } : r);
+const out = (r) => process.stdout.write(JSON.stringify(pick(r)));
 "
 }
 

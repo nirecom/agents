@@ -4,9 +4,9 @@
 # #524 confirm-plan guard: stop-confirm-plan-guard.js (Stop hook), turn-marker.js
 # (marker helpers), show-plan-link.js (marker write integration).
 # Marker files: <WORKFLOW_STATE_DIR>/<sid>.confirm-plan-turn-<rand>.json — written
-# when show-plan-link.js fires a breadcrumb; on Stop the guard reads them, scans the
-# last assistant turn of the JSONL transcript and blocks when a PLANS_DIR path
-# appears in a text block (Layer 1). Layer 2 (#2278) cases: fix-524-confirm-plan-guard/layer2-cases.sh.
+# when show-plan-link.js handles a plan write; on Stop the guard reads and deletes them.
+# #2513: a PLANS_DIR path in the reply is no longer refused (T3, T5-T7 pin the pass).
+# Layer 2 (#2278) cases: fix-524-confirm-plan-guard/layer2-cases.sh.
 set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -161,9 +161,9 @@ fi
 # Cleanup any leftover marker (acceptable per spec — both behaviors allowed).
 rm -f "$WORKFLOW_DIR/${SID_T2}".confirm-plan-turn-*.json 2>/dev/null || true
 
-# ── T3: block — CONFIRM_DETAIL=off + transcript with PLANS_DIR path ──────
-# After #563: guard is always-on; CONFIRM_DETAIL=off no longer suppresses block.
-echo "=== T3: block, CONFIRM_DETAIL=off + dirty transcript ==="
+# ── T3: noop — CONFIRM_DETAIL=off + transcript with PLANS_DIR path ───────
+# #2513: a local plan path in the reply is not refused (no plan file for this sid → pass).
+echo "=== T3: noop, CONFIRM_DETAIL=off + PLANS_DIR path in the reply ==="
 SID_T3="sid-t3-$$"
 write_marker "$SID_T3" detail >/dev/null
 TRANSCRIPT_T3="$TRANSCRIPT_DIR/${SID_T3}.jsonl"
@@ -174,10 +174,10 @@ STOP_STDOUT=$(
     run_with_timeout node "$STOP_HOOK" 2>/dev/null
 )
 STOP_RC=$?
-if [ "$STOP_RC" -eq 2 ] && echo "$STOP_STDOUT" | grep -q '"decision":"block"'; then
-  pass "T3 CONFIRM_DETAIL=off + dirty transcript — STILL blocks (exit 2, decision=block)"
+if [ "$STOP_RC" -eq 0 ] && [ -z "$STOP_STDOUT" ]; then
+  pass "T3 CONFIRM_DETAIL=off + PLANS_DIR path in the reply — exit 0, empty stdout"
 else
-  fail "T3 CONFIRM_DETAIL=off + dirty transcript — expected block, got rc=$STOP_RC stdout='$STOP_STDOUT'"
+  fail "T3 CONFIRM_DETAIL=off + PLANS_DIR path in the reply — expected pass, got rc=$STOP_RC stdout='$STOP_STDOUT'"
 fi
 rm -f "$WORKFLOW_DIR/${SID_T3}".confirm-plan-turn-*.json 2>/dev/null || true
 
@@ -215,44 +215,44 @@ else
 fi
 rm -f "$WORKFLOW_DIR/${SID_T4}".confirm-plan-turn-*.json 2>/dev/null || true
 
-# ── T5: block — absolute PLANS_DIR path in text block ────────────────────
-echo "=== T5: block, absolute path ==="
+# ── T5: noop — absolute PLANS_DIR path in text block ─────────────────────
+echo "=== T5: noop, absolute path ==="
 SID_T5="sid-t5-$$"
 write_marker "$SID_T5" >/dev/null
 TRANSCRIPT_T5="$TRANSCRIPT_DIR/${SID_T5}.jsonl"
 write_transcript "$TRANSCRIPT_T5" "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"see $PLANS_DIR/abc-detail.md for details\"}]}}"
 run_stop_hook "{\"session_id\":\"$SID_T5\",\"transcript_path\":\"$TRANSCRIPT_T5\"}"
 REMAINING_T5=$(count_markers "$SID_T5")
-if [ "$STOP_RC" -eq 2 ] && echo "$STOP_STDOUT" | grep -q '"decision":"block"' && [ "$REMAINING_T5" -eq 0 ]; then
-  pass "T5 absolute path — exit 2, decision=block, marker deleted"
+if [ "$STOP_RC" -eq 0 ] && [ -z "$STOP_STDOUT" ] && [ "$REMAINING_T5" -eq 0 ]; then
+  pass "T5 absolute path — exit 0, empty stdout, marker deleted"
 else
   fail "T5 absolute path — rc=$STOP_RC stdout='$STOP_STDOUT' remaining=$REMAINING_T5"
 fi
 rm -f "$WORKFLOW_DIR/${SID_T5}".confirm-plan-turn-*.json 2>/dev/null || true
 
-# ── T6: block — tilde form ───────────────────────────────────────────────
-echo "=== T6: block, tilde form ==="
+# ── T6: noop — tilde form ────────────────────────────────────────────────
+echo "=== T6: noop, tilde form ==="
 SID_T6="sid-t6-$$"
 write_marker "$SID_T6" >/dev/null
 TRANSCRIPT_T6="$TRANSCRIPT_DIR/${SID_T6}.jsonl"
 write_transcript "$TRANSCRIPT_T6" "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"saved to ~/.workflow-plans/abc-intent.md\"}]}}"
 run_stop_hook "{\"session_id\":\"$SID_T6\",\"transcript_path\":\"$TRANSCRIPT_T6\"}"
-if [ "$STOP_RC" -eq 2 ] && echo "$STOP_STDOUT" | grep -q '"decision":"block"'; then
-  pass "T6 tilde form — exit 2, decision=block"
+if [ "$STOP_RC" -eq 0 ] && [ -z "$STOP_STDOUT" ]; then
+  pass "T6 tilde form — exit 0, empty stdout"
 else
   fail "T6 tilde form — rc=$STOP_RC stdout='$STOP_STDOUT'"
 fi
 rm -f "$WORKFLOW_DIR/${SID_T6}".confirm-plan-turn-*.json 2>/dev/null || true
 
-# ── T7: block — file:/// URI form ────────────────────────────────────────
-echo "=== T7: block, file:/// URI ==="
+# ── T7: noop — file:/// URI form ─────────────────────────────────────────
+echo "=== T7: noop, file:/// URI ==="
 SID_T7="sid-t7-$$"
 write_marker "$SID_T7" >/dev/null
 TRANSCRIPT_T7="$TRANSCRIPT_DIR/${SID_T7}.jsonl"
 write_transcript "$TRANSCRIPT_T7" "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"open ${FILE_URI_PLANS}/abc-detail.md please\"}]}}"
 run_stop_hook "{\"session_id\":\"$SID_T7\",\"transcript_path\":\"$TRANSCRIPT_T7\"}"
-if [ "$STOP_RC" -eq 2 ] && echo "$STOP_STDOUT" | grep -q '"decision":"block"'; then
-  pass "T7 file:/// URI — exit 2, decision=block"
+if [ "$STOP_RC" -eq 0 ] && [ -z "$STOP_STDOUT" ]; then
+  pass "T7 file:/// URI — exit 0, empty stdout"
 else
   fail "T7 file:/// URI — rc=$STOP_RC stdout='$STOP_STDOUT' uri=$FILE_URI_PLANS"
 fi

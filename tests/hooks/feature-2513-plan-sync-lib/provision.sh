@@ -12,7 +12,7 @@ if [ "${OUT%%|*}" = "ok" ]; then
     *) fail "P1 notes recommend .private-info-blocklist (private-repo list empty)" "notes=${OUT#*|}" ;;
   esac
   expect_eq "P1 bare main holds only .gitignore" "$(tree_of "$BARE")" ".gitignore "
-  expect_eq "P1 checkProvisioned ok afterwards" "$(check_prov_local "$M1")" "ok:$BARE"
+  expect_eq "P1 checkProvisioned ok afterwards" "$(check_prov_local "$M1")" "ok:$PSF_ORIGIN_PLAIN"
   expect_eq "P1 HEAD is refs/heads/main" "$(git -C "$M1" symbolic-ref HEAD)" "refs/heads/main"
   no_index_or_checkout "P1 no .git/index after init" "$M1"
 else
@@ -32,21 +32,21 @@ fi
 echo "=== P5: a pre-set remote.origin.pushurl is removed ==="
 M5="$PSF_ROOT/m5"
 harness_git_init "$M5"
-git -C "$M5" remote add origin "$BARE"
+git -C "$M5" remote add origin "$PSF_ORIGIN_PLAIN"
 git -C "$M5" config remote.origin.pushurl "$PSF_ROOT/other-push.git"
 OUT="$(provision "$M5")"
 expect_eq "P5 provisionRepo ok" "${OUT%%|*}" "ok"
 expect_eq "P5 pushurl unset" "$(git -C "$M5" config --get-all remote.origin.pushurl)" ""
-expect_eq "P5 checkProvisioned ok" "$(check_prov_local "$M5")" "ok:$BARE"
+expect_eq "P5 checkProvisioned ok" "$(check_prov_local "$M5")" "ok:$PSF_ORIGIN_PLAIN"
 
 echo "=== P6: local insteadOf -> url-rewritten, version not written ==="
 M6="$PSF_ROOT/m6"
 harness_git_init "$M6"
 # insteadOf is a prefix match, so the value must be a real prefix of the remote URL.
-git -C "$M6" config "url.$PSF_ROOT/rewritten-.insteadOf" "${BARE%.git}"
-P6_EFFECTIVE="$(git -C "$M6" ls-remote --get-url "$BARE" 2>/dev/null)"
-if [ -n "$P6_EFFECTIVE" ] && [ "$P6_EFFECTIVE" != "$BARE" ]; then pass "P6 precondition: insteadOf rewrites the remote URL"
-else fail "P6 precondition: insteadOf rewrites the remote URL" "effective=$P6_EFFECTIVE raw=$BARE"; fi
+git -C "$M6" config "url.$PSF_ROOT/rewritten-.insteadOf" "${PSF_ORIGIN_PLAIN%test-repo.git}"
+P6_EFFECTIVE="$(git -C "$M6" ls-remote --get-url "$PSF_ORIGIN_PLAIN" 2>/dev/null)"
+if [ -n "$P6_EFFECTIVE" ] && [ "$P6_EFFECTIVE" != "$PSF_ORIGIN_PLAIN" ]; then pass "P6 precondition: insteadOf rewrites the remote URL"
+else fail "P6 precondition: insteadOf rewrites the remote URL" "effective=$P6_EFFECTIVE raw=$PSF_ORIGIN_PLAIN"; fi
 OUT="$(provision "$M6")"
 expect_eq "P6 provisionRepo fails with url-rewritten" "${OUT%%|*}" "ng:url-rewritten"
 case "$OUT" in
@@ -81,7 +81,7 @@ expect_eq "P8 precondition: junk is tracked on local main" "$(tree_of "$M8")" \
 OUT="$(provision "$M8" "$BARE8")"
 expect_eq "P8 provisionRepo ok" "${OUT%%|*}" "ok"
 printf 'intent 8\n' > "$M8/s8-intent.md"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$BARE8"; sync_local "$M8" s8-intent.md)"
+OUT="$(flow_bare "$BARE8"; sync_local "$M8" s8-intent.md)"
 expect_eq "P8 sync pushed" "${OUT%%|*}" "pushed"
 expect_eq "P8 bare8 main holds only .gitignore + allowlisted plan" "$(tree_of "$BARE8")" ".gitignore s8-intent.md "
 if [ -f "$M8/s8-terminal.log" ] && [ -f "$M8/notes.md" ]; then pass "P8 junk files left in the working tree"
@@ -115,7 +115,7 @@ expect_eq "P9 precondition: junk tracked on local main" "$(tree_of "$M9")" \
 OUT="$(provision "$M9" "$BARE9")"
 expect_eq "P9 provisionRepo ok" "${OUT%%|*}" "ok"
 printf 'outline 9\n' > "$M9/s9-outline.md"
-OUT="$(export PLAN_SYNC_REMOTE_URL="$BARE9"; sync_local "$M9" s9-outline.md)"
+OUT="$(flow_bare "$BARE9"; sync_local "$M9" s9-outline.md)"
 expect_eq "P9 sync pushed" "${OUT%%|*}" "pushed"
 expect_eq "P9 bare9 main holds only .gitignore + allowlisted plans" "$(tree_of "$BARE9")" \
   ".gitignore s9-intent.md s9-outline.md "
@@ -136,6 +136,7 @@ M10="$PSF_ROOT/m10"; mkdir -p "$M10"
 printf 'i\n' > "$M10/a10-intent.md"; printf 'o\n' > "$M10/a10-outline.md"; printf 'd\n' > "$M10/b10-detail.md"
 printf 'log\n' > "$M10/a10-terminal.log"; printf 'src\n' > "$M10/src10.txt"
 ln "$M10/src10.txt" "$M10/h10-intent.md" 2>/dev/null
+flow_match "$M10" a10-intent.md a10-outline.md b10-detail.md h10-intent.md
 OUT="$(provision "$M10" "$BARE10")"
 expect_eq "P10 provisionRepo ok" "${OUT%%|*}" "ok"
 expect_eq "P10 bare10 holds every on-disk plan, no junk, no hardlink" "$(tree_of "$BARE10")" \
@@ -158,6 +159,7 @@ git -C "$SEED11" commit -q -m "remote plan"
 git -C "$SEED11" push -q "$BARE11" HEAD:refs/heads/main 2>/dev/null
 M11="$PSF_ROOT/m11"; mkdir -p "$M11"
 printf 'local\n' > "$M11/s11-intent.md"; printf 'new\n' > "$M11/t11-outline.md"
+flow_match "$M11" s11-intent.md t11-outline.md
 OUT="$(provision "$M11" "$BARE11")"
 expect_eq "P11 provisionRepo ok" "${OUT%%|*}" "ok"
 expect_eq "P11 bare11 gains the absent plan" "$(tree_of "$BARE11")" ".gitignore s11-intent.md t11-outline.md "
@@ -182,7 +184,7 @@ Promise.resolve(ps.provisionRepo(process.argv[1], process.argv[2], deps)).then((
 BL_BARE="$PSF_ROOT/bl-bare.git"; psf_make_bare "$BL_BARE"; setup_ssh_stub "$BL_BARE"
 while IFS='|' read -r mode url want label; do
   [ -z "$mode" ] && continue
-  [ "$url" = "gh" ] && url="$PSF_ORIGIN_E2E" || url="$BL_BARE"
+  [ "$url" = "gh" ] && url="$PSF_ORIGIN_E2E" || url="$PSF_ORIGIN_PLAIN"
   OUT="$(provision_bl "$PSF_ROOT/bl-$mode" "$url" "$mode")"
   expect_eq "BL $label: provisionRepo ok" "${OUT%%|*}" "ok"
   case "${OUT#*|}" in *.private-info-blocklist*) got=note ;; *) got=no-note ;; esac
@@ -196,6 +198,6 @@ exact|gh|no-note|list holds owner/repo
 case|gh|no-note|list holds a case variant of owner/repo
 throws|gh|note|list function throws
 nonarray|gh|note|list function returns a non-array
-local|local|note|non-GitHub remote, list holds owner/repo and the URL
+local|plain|note|non-GitHub remote, list holds owner/repo and the URL
 TABLE
-unset GIT_SSH_COMMAND GIT_SSH_VARIANT
+setup_ssh_stub "$BARE"
