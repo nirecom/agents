@@ -294,6 +294,12 @@ PRED_JS='const root = process.argv[1], { isAllowedSupervisorBinTool: ok } = requ
 expect_eq "default fold: canonical script allowed; recased script allowed only where the filesystem folds case" "$(node -e "$PRED_JS" "$ROOT_NODE")" "true,true"
 case_end
 
+# ── gitCDirIsRepo: the -C directory is compared case-sensitively unless the filesystem folds case ──
+case_begin "git-c-dir-case" "hooks/enforce-worktree/main-worktree-allows/command-shape.js"
+GITC_JS='const { gitCDirIsRepo: g } = require(process.argv[1] + "/hooks/enforce-worktree/main-worktree-allows/command-shape.js"); process.stdout.write([g(["/repo/work"], "/repo/work", false), g(["/repo/Work"], "/repo/work", false), g(["/repo/Work"], "/repo/work", true), g(["/repo/other/../work"], "/repo/work", false), g([], "/repo/work", false)].join(","))'
+expect_eq "-C directory: exact and dot-dot paths match; a recased path matches only when case is folded" "$(node -e "$GITC_JS" "$ROOT_NODE")" "true,false,true,true,true"
+case_end
+
 # ── End-to-end: the real hook on the security-relevant rows ─────────────────
 # Each attack row carries a separator or an in-repo target so that no earlier
 # allow (universal target allow, Bug 2) answers before the predicates do.

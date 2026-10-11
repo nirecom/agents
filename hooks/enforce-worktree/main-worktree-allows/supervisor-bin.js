@@ -7,15 +7,13 @@ const path = require("path");
 const { normalizeCwd } = require("../../lib/path-normalize");
 const { resolveScriptCheckoutRoot } = require("../../lib/script-checkout-root");
 const { rejectsUnsafeArgTail } = require("../arg-tail-guard");
-const { singleInvocation, leadingAssignments, redirectsUnderTmp } = require("./command-shape");
+const { singleInvocation, leadingAssignments, redirectsUnderTmp, CASE_INSENSITIVE_FS } = require("./command-shape");
 
 const SUPERVISOR_BIN_TOOLS = Object.freeze(["bin/supervisor-findings-codex", "bin/supervisor-write-alert"]);
 const SUPERVISOR_INTERPRETERS = new Set(["bash", "node"]);
 
-// Case is folded only where the filesystem folds it: on a case-sensitive one,
-// bin/SUPERVISOR-WRITE-ALERT is a different file from the allow-listed script.
-const CASE_INSENSITIVE_FS = process.platform === "win32" || process.platform === "darwin";
-
+// On a case-sensitive filesystem bin/SUPERVISOR-WRITE-ALERT is a different file
+// from the allow-listed script; CASE_INSENSITIVE_FS (command-shape) owns the fold.
 function comparablePath(p, foldCase = CASE_INSENSITIVE_FS) {
   const resolved = path.resolve(normalizeCwd(p) || p).replace(/\\/g, "/");
   return foldCase ? resolved.toLowerCase() : resolved;

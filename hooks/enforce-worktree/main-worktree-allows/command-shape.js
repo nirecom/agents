@@ -110,14 +110,18 @@ function gitSubcommand(seg) {
   return { sub: seg.argv[i], index: i, rest: seg.argv.slice(i + 1), cDirs, globalCount: i };
 }
 
+// Case is folded only where the filesystem folds it: on a case-sensitive one,
+// /path/Repo and /path/repo are different directories.
+const CASE_INSENSITIVE_FS = process.platform === "win32" || process.platform === "darwin";
+
 /** True when no `-C` was given, or exactly one that resolves to repoRoot. */
-function gitCDirIsRepo(cDirs, repoRoot) {
+function gitCDirIsRepo(cDirs, repoRoot, foldCase = CASE_INSENSITIVE_FS) {
   if (!Array.isArray(cDirs) || cDirs.length === 0) return true;
   if (cDirs.length > 1 || !repoRoot) return false;
   try {
-    const normC = normalizeCwd(cDirs[0]) || cDirs[0];
-    const normBase = normalizeCwd(repoRoot) || repoRoot;
-    return path.resolve(normC).toLowerCase() === path.resolve(normBase).toLowerCase();
+    const normC = path.resolve(normalizeCwd(cDirs[0]) || cDirs[0]);
+    const normBase = path.resolve(normalizeCwd(repoRoot) || repoRoot);
+    return foldCase ? normC.toLowerCase() === normBase.toLowerCase() : normC === normBase;
   } catch (_) { return false; }
 }
 
@@ -149,4 +153,5 @@ module.exports = {
   gitSubcommand,
   gitCDirIsRepo,
   redirectsUnderTmp,
+  CASE_INSENSITIVE_FS,
 };
