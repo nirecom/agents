@@ -715,3 +715,7 @@ Changes: Prompt assets no longer show compound command forms that trigger approv
 ### FEATURE: PR #2611 (2026-10-11)
 Background: feat(#2547): derive run-tests-baseline per-test timeout from the duration ledger
 Changes: run-tests-baseline no longer times out long-running suites at a fixed 300 s: the per-test timeout now follows the measured duration (x2, 300-540 s) within a 600 s overall budget.
+
+### FEATURE: PR #2614 (2026-10-11)
+Background: feat(#2513): show the plan blob URL in the main conversation
+Changes: Plan blob URLs are shown in the main conversation so plans can be opened from the Claude mobile app; SendUserFile is no longer used for plans
