@@ -699,3 +699,7 @@ Changes: Breaking: the environment variables `AGENTS_CONFIG_DIR` and `AGENTS_DIR
 ### FEATURE: PR #2601 (2026-10-10)
 Background: refactor(#2592): remove the show-diff PreToolUse hook
 Changes: Removed the diff-preview hook that printed a "DIFF PREVIEW" line on every file write; Claude Code now shows file changes only through its own UI, with no extra noise.
+
+### FEATURE: PR #2604 (2026-10-11)
+Background: fix(#2505): ignore comment-only home-claude references in run-tests-baseline
+Changes: `bin/run-tests-baseline` now ignores home-claude paths that appear only in comments, so pre-existing test failures are classified automatically instead of being left undetermined.
