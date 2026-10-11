@@ -1,21 +1,8 @@
 #!/bin/bash
 # Tests: hooks/workflow-state/evidence-resolver.js, bin/workflow/next-step, bin/workflow/reconcile-state, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, mark, outline, detail, auto-repair, scope:issue-specific
-# L3 gap (what this test does NOT catch):
-# - Real Claude Code session where PostCompact fires and next-step is consulted
-# - Actual hook event chain registration
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
-#
-# Covers #1133 (next-step --mark CLI, outline/detail auto-repair, scoped hints):
-#   --mark <step> <status> flag (M1-M6), outline/detail evidence auto-repair (A1-A2),
-#   mid-review guard: same-stage codex round-number/concern-ledger marker suppresses
-#   auto-complete (A3-A5 outline, A7-A8 detail) while an unrelated-stage marker does
-#   not (A6, A9) and a marker owned by another session does not either (A10, A11),
-#   scoped abort hint when outline=pending+detail=complete (H1-H2),
-#   generic hint bifurcation by hasCompletionEvidence (B1-B2),
-#   reconcile-state --dry-run showing outline/detail in EVIDENCE_STEPS (G1),
-#   --mark idempotency (I1), and session-ID path-traversal rejection (S1-S2).
+# L3 gap: a real Claude Code session (PostCompact firing, hook event registration) is not exercised; checked at WORKFLOW_USER_VERIFIED via category skill-orchestration.
+# Covers #1133 (--mark, outline/detail auto-repair and mid-review guard, scoped and generic hints, reconcile dry-run, idempotency, session-ID traversal); case IDs live in the sourced fix-1133-next-step-mark-outline-detail/*.sh files.
 
 set -euo pipefail
 
@@ -39,25 +26,16 @@ PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$PLANS_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 
-# Pin the CONFIRM_* stage gates ON for the whole suite. The developer's ambient
-# .env may carry CONFIRM_OUTLINE=off / CONFIRM_DETAIL=off, which legitimately
-# waives the #1133 approval gate (source "confirm-flag-off") and would mask the
-# gated-step assertions below (M1/M6, A1/A2, I1, G1).
-# The gate decision is resolved from the CONFIG FILE only
-# (plan-confirm-flag.js → isConfirmOffForStageFromFile → load-env.js
-# readDefaultEnvFile), which never consults process.env. So process.env exports
-# alone CANNOT isolate this suite — it must point AGENTS_MAIN_ROOT at a scratch
-# agents main root whose .env contents are known. Every case here needs the gates-ON
-# baseline only, so a single scratch config is enough (the gates-OFF branch is
-# covered by tests/hooks/fix-1133-1148-approval-gate/14-f1-env-file-only-gate.sh).
-# Exported BEFORE any sub-file is sourced, so every child `node` invocation in
-# the sub-files inherits it.
+# Pin CONFIRM_* gates ON: an ambient .env may set them off, which waives the #1133 approval gate and masks gated-step assertions.
+# The gate reads only the config file (plan-confirm-flag.js -> load-env.js), never process.env, so AGENTS_MAIN_ROOT must point at a scratch .env.
+# The gates-OFF branch is covered by tests/hooks/fix-1133-1148-approval-gate/14-f1-env-file-only-gate.sh.
+# Exported before any sub-file is sourced so child node processes inherit it.
 CFG_ROOT_ON="$TMPDIR_BASE/config-on"
 mkdir -p "$CFG_ROOT_ON"
 printf 'CONFIRM_INTENT=on\nCONFIRM_OUTLINE=on\nCONFIRM_DETAIL=on\n' > "$CFG_ROOT_ON/.env"
 export AGENTS_MAIN_ROOT="$CFG_ROOT_ON"
-# Kept alongside the file-sourced pin: hook-process code paths (and any helper
-# still on isConfirmOffForStage) read process.env.
+# Kept alongside the file-sourced pin: hook-process code paths read process.env.
+# The former process.env-based isConfirmOffForStage helper was removed (#2592).
 export CONFIRM_OUTLINE=on
 export CONFIRM_DETAIL=on
 

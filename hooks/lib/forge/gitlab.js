@@ -30,6 +30,25 @@ const VISIBILITY_VALUES = new Set(["public", "private", "internal"]);
 // Defense-in-depth: only a plain hostname may become glab's --hostname argument.
 const GLAB_HOSTNAME_SHAPE = /^[a-z0-9.-]+$/;
 
+// glabHostArg(target) -> glab's --hostname value for a resolved remote target (the web host,
+// plus an HTTP(S) non-default port), or null when the host is not a plain hostname.
+function glabHostArg(t) {
+  if (!t || typeof t.host !== "string" || !GLAB_HOSTNAME_SHAPE.test(t.host)) return null;
+  const webPort = (t.scheme === "https" && t.port !== 443) || (t.scheme === "http" && t.port !== 80);
+  return typeof t.port === "number" && webPort ? `${t.host}:${t.port}` : t.host;
+}
+
+// glabSettings(settings?) ->{gitlabHost, gitlabSshHost}, trimmed and lowercased; without an
+// argument the forge-router readers decide (unchanged for every other caller).
+function glabSettings(settings) {
+  const clean = (v) => (typeof v === "string" ? v.trim().toLowerCase() : "");
+  if (settings && typeof settings === "object") {
+    return { gitlabHost: clean(settings.gitlabHost), gitlabSshHost: clean(settings.gitlabSshHost) };
+  }
+  const fr = require("../forge-router");
+  return { gitlabHost: clean(fr.readGitlabHostConfig()), gitlabSshHost: clean(fr.readGitlabSshHostConfig()) };
+}
+
 // GitLab codehost descriptor (#2308). Same four methods, same signatures as
 // codehostGithub (CPR-ORTH). isPrivateRepo fail-safe returns true (private),
 // intentionally stricter than codehostStub's false, so repo names are never
@@ -54,19 +73,24 @@ const codehostGitlab = {
       return true; // fail-safe
     }
   },
-  repoVisibility(remoteUrl) {
+  // repoVisibility(remoteUrl, settings?) — settings {gitlabHost, gitlabSshHost} replaces the
+  // forge-router reader when given. An SSH-alias URL is asked on the web host; an HTTP(S)
+  // non-default port rides on --hostname. glab api has no --jq, so the JSON is parsed here.
+  repoVisibility(remoteUrl, settings) {
     const { spawnSync } = require("child_process");
     try {
-      const { resolveForgeTarget } = require("../parse-remote-url");
-      const { readGitlabHostConfig } = require("../forge-router");
-      const { type, project, host } = resolveForgeTarget(remoteUrl, { gitlabHost: readGitlabHostConfig() });
-      if (type !== "gitlab" || !project || !host) return null;
-      if (!GLAB_HOSTNAME_SHAPE.test(host)) return null;
+      const { resolveRemoteTarget } = require("../plan-sync/remote-url");
+      const t = resolveRemoteTarget(remoteUrl, glabSettings(settings));
+      if (t.type !== "gitlab" || !t.project) return null;
+      const hostArg = glabHostArg(t);
+      if (!hostArg) return null;
       // Without --hostname glab queries its default host, wrong for a self-hosted plan remote.
-      const r = spawnSync("glab", ["api", "--hostname", host, "projects/" + encodePath(project), "--jq", ".visibility"],
+      const r = spawnSync("glab", ["api", "--hostname", hostArg, "projects/" + encodePath(t.project)],
         { encoding: "utf8", timeout: 15000, windowsHide: true });
       if (r.error || r.status !== 0) return null;
-      const v = (r.stdout || "").trim().toLowerCase();
+      const body = JSON.parse(r.stdout || "");
+      if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.visibility !== "string") return null;
+      const v = body.visibility.trim().toLowerCase();
       return VISIBILITY_VALUES.has(v) ? v : null;
     } catch (e) {
       return null;
@@ -107,4 +131,4 @@ const codehostGitlab = {
   },
 };
 
-module.exports = { trackerGitlab, codehostGitlab, encodePath, GLAB_SCAN_TARGET_REGEX, GLAB_API_WRITE_REGEX };
+module.exports = { trackerGitlab, codehostGitlab, encodePath, glabHostArg, GLAB_SCAN_TARGET_REGEX, GLAB_API_WRITE_REGEX };

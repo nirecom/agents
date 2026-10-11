@@ -52,11 +52,11 @@ const CONFIG_CHECK_PREFIX_VALUE_RE = /^[A-Za-z0-9_.-]*$/;
 
 /**
  * True if cmd is one `bash -c '<body>'` invocation whose body is exactly the
- * read-only CONFIRM_* probe used by planning skills:
+ * legacy read-only CONFIRM_* probe used by planning skills:
  *   bash -c 'cd "$AGENTS_MAIN_ROOT" && bash "$AGENTS_MAIN_ROOT/bin/confirm-off" KEY [on|off]'
  * The body's && is control flow, so safety comes from the clause matching below.
- * Coupling: if the skill probe string changes, update this matcher in sync.
- * See docs/architecture/claude-code/workflow.md for the contract.
+ * Kept for compatibility: skills now issue the standalone confirm-off form,
+ * which needs no exemption. See docs/architecture/claude-code/workflow-runtime.md.
  */
 function isAllowedReadOnlyConfigCheck(cmd) {
   const seg = singleInvocation(cmd);

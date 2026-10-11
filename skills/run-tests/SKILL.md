@@ -15,18 +15,18 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
 RNT-0. **Read `rules/test.md`.** It is on-demand-only and never auto-injected, so this Read is mandatory.
 
 RNT-1. **Resolve merge-base.**
-   `bin/select-tests.sh --auto` resolves it via `bin/resolve-merge-base.sh` -- this skill does not reimplement the chain.
-   exit 4 (SUSPECT / FALLBACK / helper missing) -> stop, show `bin/resolve-merge-base.sh --explain`’s stderr output verbatim, and let the user choose the base (a candidate sha / an arbitrary sha / the safe fallback `HEAD` / abort).
-   Once the user confirms a base, record it with `bin/workflow/record-merge-base-baseline --session <sid> --base <sha> --reason "<confirmation detail>"` and re-run RNT-1 (it now passes as RECORDED).
+   `bash "$AGENTS_MAIN_ROOT/bin/select-tests.sh" --auto` resolves it via `bin/resolve-merge-base.sh` -- this skill does not reimplement the chain.
+   exit 4 (SUSPECT / FALLBACK / helper missing) -> stop, show `bash "$AGENTS_MAIN_ROOT/bin/resolve-merge-base.sh" --explain`’s stderr output verbatim, and let the user choose the base (a candidate sha / an arbitrary sha / the safe fallback `HEAD` / abort).
+   Once the user confirms a base, record it with `node "$AGENTS_MAIN_ROOT/bin/workflow/record-merge-base-baseline" --session <sid> --base <sha> --reason "<confirmation detail>"` and re-run RNT-1 (it now passes as RECORDED).
    If the user chooses abort, emit RNT-9’s pending sentinel and stop.
    exit 0 with empty stdout -> treat as an empty selection and follow the RNT-5 policy.
 
 RNT-2. **Tier 1 — mechanical stem match.**
-   `bin/select-tests.sh --auto` — read the tier-1 test list from its stdout.
+   `bash "$AGENTS_MAIN_ROOT/bin/select-tests.sh" --auto` — read the tier-1 test list from its stdout.
    Filename stem substring match only. No frontmatter reading.
 
 RNT-3. **Tier 2 — LLM semantic match.**
-   `bin/resolve-merge-base.sh --format kv` -- same resolver as RNT-1. Read `base=` and `base_is_head=`; pick ONE range and use only it:
+   `bash "$AGENTS_MAIN_ROOT/bin/resolve-merge-base.sh" --format kv` -- same resolver as RNT-1. Read `base=` and `base_is_head=`; pick ONE range and use only it:
    - `base_is_head=true` -> **working tree**. Files: `git diff HEAD --name-only` + `git ls-files --others --exclude-standard -z` (NUL-delimited). Diff body: `git diff HEAD` (tracked), `git diff --no-index -- /dev/null "<path>"` (untracked -- the `--` is an option terminator stopping a leading-dash filename from injecting a flag). State on stdout that the working-tree range was used, and why.
    - `base_is_head=false` -> **committed range**. Files: `git diff --name-only "<base>...HEAD"`. Diff body: `git diff "<base>...HEAD"`.
    - field absent/`-` (pre-fix resolver) -> compare `git rev-parse --verify --quiet HEAD` vs `"<base>^{commit}"` directly; equal -> working-tree branch, else committed-range branch. Never read absence as `false`.
@@ -63,7 +63,7 @@ RNT-6a. **Calibration offer.**
    - `source=measured` with `os_match=yes` -> say the run uses the measured `max_jobs=`, then go to RNT-7 with the payload unchanged.
    - Otherwise -> report the actual `source=` and `os_match=` (an OS-mismatched record stays `measured`), say the run continues at that effective value, never retry, and go to RNT-7 with the payload unchanged.
 
-RNT-7. **Dispatch the `test-runner` worker** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list, or `["--all"]` on explicit opt-in), `jobs` (optional 1..1024 parallelism; omit to leave the suite's own `-j auto` in force, `1` restores the sequential run), `timeout_seconds` (omit for the 120s default; pass `min(600 + 60 × <selected count>, 21600)` explicitly when the selection exceeds 10 tests or `RUN_TL3=on`).
+RNT-7. **Dispatch the `test-runner` worker** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list; omit it for a full run on explicit opt-in — the registry refuses `--all`), `jobs` (optional 1..1024 parallelism; omit to leave the suite's own `-j auto` in force, `1` restores the sequential run), `timeout_seconds` (omit for the 120s default; pass `min(600 + 60 × <selected count>, 21600)` explicitly when the selection exceeds 10 tests or `RUN_TL3=on`); above 600 seconds follow WD-BG in `skills/_shared/worker-dispatch.md` and read the RNT-8 YAML from its display.
 
 RNT-8. **Parse the YAML** the dispatch call printed on stdout. A leading `RUN_CONTRACT: PASS=.. FAIL=.. SKIP=.. EXECUTED=..` line may precede `status:` — it is the suite's own verdict, and RNT-9's fallback branch reads it.
 
@@ -71,11 +71,11 @@ RNT-9. **Settle the step** as a separate Bash call:
    - `status: pass` → `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step run_tests --complete --next`; follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`.
    - `status: fail | timeout | runner-error` → `echo "<<WORKFLOW_MARK_STEP_run_tests_pending>>"`
      The hook is authoritative for `run_outcome`; this sentinel is a status-only idempotent re-affirmation and writes no outcome.
-   - Pre-existing failures unrelated to this diff: when `status: fail` lists `failing_tests`, run `bash "$AGENTS_MAIN_ROOT/bin/run-tests-baseline" --session <sid> --worktree <cwd>` as its own Bash call (Bash timeout 600000); it re-runs each failing test path at the merge base with main.
+   - Pre-existing failures unrelated to this diff: when `status: fail` lists `failing_tests`, run `bash "$AGENTS_MAIN_ROOT/bin/run-tests-baseline" --session <sid> --worktree <cwd>` as its own Bash call (Bash timeout 600000); it re-runs each failing test path at the merge base with main. The per-test timeout is derived from the duration ledger, and the whole loop stays inside the 600 s Bash budget even with an explicit `--per-test-timeout`; on `undetermined ... budget-exhausted`, re-run the same command (classified results are kept).
      Never run `--advance --step run_tests --complete --next` yourself after a failing run.
      exit 0 → the CLI completed run_tests; run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --next` and follow its `ACTION`. exit 1 → show the `BASELINE:` lines verbatim in the same turn and stay `pending` for the user. exit 3/4/5 → show stderr; exit 4 asks the user to choose the base as in RNT-1; exit 5 (no baseline, rebase needed) stays `pending` until the branch is rebased onto a base that carries the current root names.
      Tell the user which tests were classified by inheriting an earlier base (`preexisting-inherited`). Never use `WORKFLOW_ENFORCE_WORKFLOW_OFF` / EMERGENCY OFF for this purpose.
-   - **Overwritten-sentinel recovery.** After emitting the `complete` sentinel, run `node bin/workflow/read-step-status --session <sid> --step run_tests` (read-only; never `bin/workflow/next-step`, whose `ACTION` / `NEXT_SKILL` would start the next workflow step from inside this skill). The query prints either `status=<value>` (a recorded fact) or the bare marker `NONE` (nothing recorded — no state file, unknown session, corrupt file, or a step this session never touched).
+   - **Overwritten-sentinel recovery.** After emitting the `complete` sentinel, run `node "$AGENTS_MAIN_ROOT/bin/workflow/read-step-status" --session <sid> --step run_tests` (read-only; never `bin/workflow/next-step`, whose `ACTION` / `NEXT_SKILL` would start the next workflow step from inside this skill). The query prints either `status=<value>` (a recorded fact) or the bare marker `NONE` (nothing recorded — no state file, unknown session, corrupt file, or a step this session never touched).
      Re-emit `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` **once only** if all hold: `status: pass`, the RNT-8 `RUN_CONTRACT:` line exists with `FAIL=0` and `EXECUTED>0`, and the query printed exactly `status=pending` — a recorded demotion overwrote the sentinel.
      `NONE` is NOT a demotion and must never be treated as equivalent to `status=pending`: it means the state could not be read, so there is no evidence the sentinel was overwritten and no evidence any of the recovery premises hold. Stop, report the `NONE` result as a blocked/ambiguous state-store condition, and let the user decide — never auto-recover from it.
      Any other recorded status (`skipped`, or a value this skill does not recognise) is likewise outside the recovery path: stop and report it.

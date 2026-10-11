@@ -627,12 +627,12 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit|editFiles",
+        "matcher": "SendUserFile",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/show-diff.js\"",
-            "timeout": 10
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-send-user-file.js\"",
+            "timeout": 5
           }
         ]
       },
@@ -713,6 +713,16 @@
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/jev-shadow-pre.js\"",
             "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/subagent-dispatch-prompt.js\"",
+            "timeout": 10
           }
         ]
       }

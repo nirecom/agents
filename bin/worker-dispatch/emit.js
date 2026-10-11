@@ -191,6 +191,72 @@ function write(entry, result) {
   process.stdout.write(isTainted(rendered) ? fallbackFor(entry) : rendered);
 }
 
+// --- outcome record (#2544) --------------------------------------------------
+// The verdict fields hold the values exactly as the YAML shows them, so a
+// background dispatch re-rendered from its outcome prints what the foreground
+// dispatch would have printed: same sanitizing, same caps, same fallback.
+
+function contractObject(line) {
+  if (line === null) return null;
+  const m = /^PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)$/.exec(line);
+  return { pass: Number(m[1]), fail: Number(m[2]), skip: Number(m[3]), executed: Number(m[4]) };
+}
+
+function renderedFields(result) {
+  const contract = formatRunContract(result.runContract);
+  const summary = sanitizeLine(result.summary, MAX_YAML_SUMMARY).trim();
+  const failing = Array.isArray(result.failingTests) ? result.failingTests : [];
+  const tailSource = Array.isArray(result.logTail) ? result.logTail : [];
+  const d = result.durationSeconds;
+  const seconds = typeof d === "number" && Number.isFinite(d) ? d : 0;
+  return {
+    status: plainValue(result.status, 64, "runner-error"),
+    exit_code: toInt(result.exitCode, -1),
+    duration_ms: Math.max(0, Math.round(seconds * 1000)),
+    worker_result: {
+      run_contract: contractObject(contract),
+      failing_tests: failing.map((n) => {
+        const v = sanitizeLine(n, MAX_LINE).trim();
+        return v === "" ? "(unnamed)" : v;
+      }),
+      log_tail: tailSource
+        .map((l) => sanitizeLine(l, MAX_LINE))
+        .filter((l) => l.trim() !== "")
+        .filter((l) => contract === null || !CONTRACT_LINE_RE.test(l))
+        .slice(-MAX_TAIL_LINES),
+      summary: summary === "" ? "no summary" : summary,
+    },
+  };
+}
+
+// Verdict fields of a test-runner result: status, exit_code, duration_ms, worker_result.
+function outcomeFields(entry, result) {
+  const value = coerce(entry, result);
+  if (isTainted(renderTestRunnerYaml(value))) {
+    return {
+      status: "runner-error",
+      exit_code: -1,
+      duration_ms: 0,
+      worker_result: { run_contract: null, failing_tests: [], log_tail: [FALLBACK_MSG], summary: FALLBACK_MSG },
+    };
+  }
+  return renderedFields(value);
+}
+
+// The renderer's input rebuilt from an outcome record (or from outcomeFields).
+function resultFromOutcome(outcome) {
+  const wr = outcome && outcome.worker_result ? outcome.worker_result : {};
+  return {
+    status: outcome.status,
+    exitCode: outcome.exit_code,
+    durationSeconds: typeof outcome.duration_ms === "number" ? outcome.duration_ms / 1000 : 0,
+    summary: wr.summary,
+    failingTests: Array.isArray(wr.failing_tests) ? wr.failing_tests : [],
+    logTail: Array.isArray(wr.log_tail) ? wr.log_tail : [],
+    runContract: wr.run_contract === undefined ? null : wr.run_contract,
+  };
+}
+
 // A validation / dispatch failure, rendered through the worker's own renderer so
 // callers parse one shape whether the worker ran or never got the chance to.
 function failure(entry, message) {
@@ -208,5 +274,8 @@ module.exports = {
   renderTestRunnerYaml,
   write,
   failure,
+  failureResult,
   isTainted,
+  outcomeFields,
+  resultFromOutcome,
 };

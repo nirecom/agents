@@ -13,6 +13,10 @@ const path = require("path");
 const { scriptCheckoutRootCandidates, normDir } = require("./script-checkout-root");
 const localEnv = require("./local-env");
 
+// Values loadEnv / the local overlay put into process.env, so resolveConfigVar can tell an
+// earlier call's injection apart from a real caller export.
+const _injected = new Map();
+
 // --- Pristine isolation-env snapshot -------------------------------------
 // Captured at module load time, BEFORE loadDefaultEnv() injects any .env
 // values into process.env. Consumers (supervisor-emit.js) need to know what
@@ -177,22 +181,32 @@ function readEnvFile(envPath) {
   return parseEnv(filterOsBlocks(content, process.platform));
 }
 
+// defaultEnvFilePathCandidates — the config .env candidates in read order:
+// a trimmed, normalized AGENTS_MAIN_ROOT/.env alone when it is set, else the
+// module-relative checkout, then the realpath-resolved one (e.g. ~/.claude/hooks/lib -> real repo).
+function defaultEnvFilePathCandidates() {
+  const agentsMainRoot = normDir(process.env.AGENTS_MAIN_ROOT);
+  if (agentsMainRoot) return [path.join(agentsMainRoot, ".env")];
+  return scriptCheckoutRootCandidates().map((c) => path.join(c.dir, ".env"));
+}
+
+// defaultEnvFilePath — the one config .env readDefaultEnvFile reads (and plan-sync-init
+// writes): the first existing candidate, else the first candidate.
+function defaultEnvFilePath() {
+  const candidates = defaultEnvFilePathCandidates();
+  const hit = candidates.find((p) => {
+    try { return fs.statSync(p).isFile(); } catch (_) { return false; }
+  });
+  return hit || candidates[0];
+}
+
 // readDefaultEnvFile resolves the config .env the same way loadDefaultEnv does,
 // but returns its parsed contents instead of injecting them into process.env.
 // Global-only door (DD-6): the project-local overlay is deliberately invisible
 // here. Returns {} when no .env can be found ("absent" reads as "unset").
 function readDefaultEnvFile() {
-  // Same root selection as loadDefaultEnvGlobal: a trimmed, normalized AGENTS_MAIN_ROOT
-  // is the sole source; otherwise the module-relative, then the realpath-resolved checkout.
-  const agentsMainRoot = normDir(process.env.AGENTS_MAIN_ROOT);
-  if (agentsMainRoot) {
-    return readEnvFile(path.join(agentsMainRoot, ".env")) || {};
-  }
-  for (const c of scriptCheckoutRootCandidates()) {
-    const map = readEnvFile(path.join(c.dir, ".env"));
-    if (map) return map;
-  }
-  return {};
+  const file = defaultEnvFilePath();
+  return (file && readEnvFile(file)) || {};
 }
 
 // resolveLocalLayer returns {globalMap, localMap} for a project root.
@@ -234,6 +248,7 @@ function loadEnv(envPath) {
       }
     } else {
       process.env[key] = val;
+      _injected.set(key, val);
     }
   }
   return true;
@@ -257,6 +272,7 @@ function applyLocalOverlayToProcessEnv(before) {
     if (localEnv.isBlocklisted(key)) continue;
     if (beforeUpperTruthy.has(key.toUpperCase())) continue;
     process.env[key] = localMap[key];
+    _injected.set(key, localMap[key]);
   }
 }
 
@@ -293,8 +309,10 @@ function loadDefaultEnvGlobal() {
 // a non-empty caller export wins, then the effective .env (repoRoot overlay when
 // given, else the injected process.env), then defaultValue, then "".
 // The export is captured BEFORE loading so a .env value is never mistaken for it.
+// source names the winning layer: "export", "env-file" (.env or overlay) or "default".
 function resolveConfigVar(name, defaultValue, opts) {
-  const exported = process.env[name];
+  const current = process.env[name];
+  const exported = _injected.has(name) && _injected.get(name) === current ? undefined : current;
   let loadFailed = false;
   try {
     loadDefaultEnv();
@@ -302,15 +320,18 @@ function resolveConfigVar(name, defaultValue, opts) {
     loadFailed = true;
   }
   const repoRoot = opts && opts.repoRoot;
-  let v;
-  if (exported && exported.length) {
-    v = exported;
-  } else if (repoRoot) {
-    v = readEffectiveEnvFile(repoRoot)[name];
-  } else {
-    v = process.env[name];
-  }
-  return { value: v && v.length ? v : defaultValue || "", loadFailed };
+  if (exported && exported.length) return { value: exported, loadFailed, source: "export" };
+  const v = repoRoot ? readEffectiveEnvFile(repoRoot)[name] : process.env[name];
+  if (v && v.length) return { value: v, loadFailed, source: "env-file" };
+  return { value: defaultValue || "", loadFailed, source: "default" };
+}
+
+// Module-load snapshot of the whole caller environment, taken before any loadDefaultEnv()
+// injection, so a reader can tell a real export from an injected .env / .env.local value.
+const _pristineProcessEnv = Object.freeze(Object.assign({}, process.env));
+
+function getPristineProcessEnv() {
+  return _pristineProcessEnv;
 }
 
 module.exports = {
@@ -321,7 +342,9 @@ module.exports = {
   parseEnv,
   readEnvFile,
   readDefaultEnvFile,
+  defaultEnvFilePath,
   resolveLocalLayer,
   readEffectiveEnvFile,
   getPristineIsolationEnv,
+  getPristineProcessEnv,
 };

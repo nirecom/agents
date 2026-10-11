@@ -695,3 +695,31 @@ Changes: Workflow state now lives in `~/.workflow-state/`; the env pin is rename
 ### FEATURE: PR #2595 (2026-10-10)
 Background: refactor(#2561): replace AGENTS_CONFIG_DIR and AGENTS_DIR with four root names
 Changes: Breaking: the environment variables `AGENTS_CONFIG_DIR` and `AGENTS_DIR` are retired. Set `AGENTS_MAIN_ROOT` instead; re-run the installer so shell profiles and hooks pick up the new name.;Scripts now locate their own code from the file's path, so tools and tests run from a linked worktree use that worktree's code.;Added `bin/check-root-names.sh`, a pre-commit gate for how repository roots are named and assigned; see `docs/architecture/claude-code/root-names.md`.;Tools that work on another repository take that repository's root as a command-line argument instead of reading an environment variable.
+
+### FEATURE: PR #2601 (2026-10-10)
+Background: refactor(#2592): remove the show-diff PreToolUse hook
+Changes: Removed the diff-preview hook that printed a "DIFF PREVIEW" line on every file write; Claude Code now shows file changes only through its own UI, with no extra noise.
+
+### FEATURE: PR #2604 (2026-10-11)
+Background: fix(#2505): ignore comment-only home-claude references in run-tests-baseline
+Changes: `bin/run-tests-baseline` now ignores home-claude paths that appear only in comments, so pre-existing test failures are classified automatically instead of being left undetermined.
+
+### FEATURE: PR #2603 (2026-10-11)
+Background: feat(#2544): record run_tests outcome from background test-runner dispatch
+Changes: feat: `/run-tests` can now record test suites that run longer than 600 seconds. Long suites are dispatched as a background worker; the result is picked up automatically on the next Bash call — no extra command needed.
+
+### FEATURE: PR #2609 (2026-10-11)
+Background: feat(#2263,#2452): remove ask-inducing command forms and propagate shell-issuance discipline to subagents
+Changes: Prompt assets no longer show compound command forms that trigger approval prompts, and subagent dispatch prompts now carry the shell-issuance rule through a PreToolUse hook backstop.;Skills and rules invoke bin/ tools by absolute path ("$AGENTS_MAIN_ROOT/bin/...") instead of relative paths.
+
+### FEATURE: PR #2611 (2026-10-11)
+Background: feat(#2547): derive run-tests-baseline per-test timeout from the duration ledger
+Changes: run-tests-baseline no longer times out long-running suites at a fixed 300 s: the per-test timeout now follows the measured duration (x2, 300-540 s) within a 600 s overall budget.
+
+### FEATURE: PR #2614 (2026-10-11)
+Background: feat(#2513): show the plan blob URL in the main conversation
+Changes: Plan blob URLs are shown in the main conversation so plans can be opened from the Claude mobile app; SendUserFile is no longer used for plans
+
+### FEATURE: PR #2618 (2026-10-11)
+Background: test(#2572): make the feature-2099 complexity-stage-routing suite green with secret-shape regressions visible
+Changes: Test suite for #2434 complexity stage routing (#2572): fixed the feature-2099 test suite (181 → 0 failures), adding coverage for the normalize-judge-signals → derive-complexity-level chain, S0-undecidable canonicalization, shared-procedure injection paths, and TL3 gate lane selection.

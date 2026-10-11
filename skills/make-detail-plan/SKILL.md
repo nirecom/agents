@@ -30,6 +30,7 @@ Emit (Claude text, not Bash): `Model selected: **<model= alias>** (signals: [ids
 ### MDP-4 — Initial draft
 
 Delegate to **planner** (Agent tool, `subagent_type: detail-planner`, `model: <model= from MDP-3>`). Pass task context + intent/outline contents.
+Every detail-planner prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
 Every detail-planner launch — here, the MDP-5 CONTINUE re-delegate, the MDP-7 revise and re-prompt, and the research re-prompt — passes the same `model: <model= from MDP-3>`.
 Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
@@ -85,7 +86,7 @@ Issue the standalone call `bash "$AGENTS_MAIN_ROOT/bin/get-config-var" CONV_LANG
 Apply the rest of the confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
 - Re-entering MDP-7 from a Revise loop: rerun the gate check from the trigger line, without `--scope-change-approved`.
-- `GATE_ACTION=proceed`: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3). DO NOT present any local path — `show-plan-link.js`'s `Plan file:` line is the sole breadcrumb (protocol CPA-2).
+- `GATE_ACTION=proceed`: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3) that carries the plan-link line (protocol CPA-2).
 - `GATE_ACTION=present-and-stop`: present the scope change line from `GATE_HINT` and the relevant detail plan section, then end the turn.
 - After `present-and-stop`, on approval run the standalone `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate --scope-change-approved` and follow its `GATE_ACTION` (normally `proceed`); on a change request, loop to MDP-5.
 - `GATE_ACTION=ask`: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation. Do NOT end the response on the CONFIRM echo.
@@ -112,7 +113,7 @@ See `bash "$AGENTS_MAIN_ROOT/skills/make-detail-plan/scripts/skip-conditions.sh"
 
 - Read intent/outline before planning — never plan from assumptions.
 - Outline's Delivery plan must be surfaced in MDP-2 before planner subagent runs (required).
-- Orchestrator chat during discussion loop is restricted to: (a) one status line per round (`Round N: APPROVED|NEEDS_REVISION (proceeding)`); (b) no local path output — the `show-plan-link.js` `Plan file:` breadcrumb is the sole plan surface (protocol CPA-2); (c) the `Delivery plan (...)` summary from MDP-2; (d) the concern summary block rendered by the MDP-6 ESCALATE/HIGH_UNRESOLVED path when exit 2 or exit 6 fires — exactly one block per cap-reach event. No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception). Diagnostics → `<session-id>-detail-debug.log`.
+- Orchestrator chat during discussion loop is restricted to: (a) one status line per round (`Round N: APPROVED|NEEDS_REVISION (proceeding)`); (b) the plan-link line (protocol CPA-2); (c) the `Delivery plan (...)` summary from MDP-2; (d) the concern summary block rendered by the MDP-6 ESCALATE/HIGH_UNRESOLVED path when exit 2 or exit 6 fires — exactly one block per cap-reach event. No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception). Diagnostics → `<session-id>-detail-debug.log`.
 - Write the MDP-7 orchestrator-authored detail.md body in the PLAN_LANG language (see .env.example) from the first draft; do not draft in English and re-translate.
 - Follow `rules/core-principles.md`.
 - **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only.

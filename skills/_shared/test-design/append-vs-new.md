@@ -15,7 +15,7 @@
 ## `dup-group-keep:<reason>` is not an opt-out
 
 - `dup-group-keep:size-hard-limit` is the only value that can justify a new file while an appendable target exists.
-- `dup-group-keep:cross-hook` and `dup-group-keep:distinct-layer` stay valid vocabulary for the post-hoc consolidation judgement of `bin/audit-tests.sh --dup-groups`, but they are **not** a waiver of the append rule and never justify a new file on their own.
+- `dup-group-keep:cross-hook` and `dup-group-keep:distinct-layer` stay valid vocabulary for the post-hoc consolidation judgement of `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" --dup-groups`, but they are **not** a waiver of the append rule and never justify a new file on their own.
 - `size-hard-limit` is a claim, not an indulgence: name it only when an over-limit candidate existed, or when appending the planned cases would exceed the HARD limit.
 - Tagging a file where neither condition applies is a false claim — review-tests disproves it from the helper's `excluded` and `reason` columns.
 - The sole human-discretion exception is the `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` sentinel, set explicitly by the user.

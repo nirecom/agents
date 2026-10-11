@@ -34,6 +34,7 @@ WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model alia
    - A-layer language essence block (see below).
    - Directive: "Read `rules/coding.md` (the hub — on-demand-only, so it does not reach you otherwise) and `rules/coding/<lang>.md` for each language present, before the first Edit."
    - Directive: "Read `rules/shell-commands.md` before the first Bash command, or before writing a file — general-purpose dispatch does not inherit auto-injected rules."
+   - The canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section, verbatim as a standalone line, with `<AGENTS_MAIN_ROOT>` replaced by the literal absolute path.
    - Directive: "Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules."
    - Directive: "Read `rules/ops.md` before any destructive or system-state-changing command inside self-repair — general-purpose dispatch does not inherit auto-injected rules; on-demand-only, so it does not reach you otherwise."
    - (Optional) Follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and use it as an implementation constraint when relevant.

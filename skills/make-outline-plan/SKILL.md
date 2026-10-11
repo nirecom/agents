@@ -40,6 +40,7 @@ MOP-2. **Select the planner model, then delegate.** Run `bash -c 'node "$AGENTS_
    If `NONE`: dispatch `subagent_type: complexity-judge` with the `intent.md` path + task context (rubric: `skills/_shared/judge-task-complexity.md`). Write the raw output to `<PLANS_DIR>/<session-id>-outline-judge-raw.txt` (Write tool — untrusted text via file only). Run `node "$AGENTS_MAIN_ROOT/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-outline-judge-raw.txt" --session "<session-id>" --stage outline`. Run `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --stage outline --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
    Emit (Claude text, not Bash): `Model selected: **<model= alias>** (signals: [ids from the `signals=` line, or "none"])`.
    Delegate to **outline-planner** (Agent tool, `subagent_type: outline-planner`, `model: <model= from MOP-2>`). Pass full contents of `<session-id>-intent.md` and task context.
+   Every outline-planner prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
    Every outline-planner launch — here, the MOP-3 revise re-run, the MOP-4 re-prompt, the MOP-4a re-prompt, the MOP-5 CONTINUE re-delegate, and the MOP-8 revise re-run — passes the same `model: <model= from MOP-2>`.
    Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
 
@@ -115,7 +116,7 @@ MOP-7. On `APPROVED`:
 
    Do NOT write this prose to outline.md. MOP-8 handles the file write.
 
-MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + breadcrumb).
+MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + plan-link line).
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
    - **`GATE_ACTION=proceed`:** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
    - **`GATE_ACTION=ask`:** apply confirm-plan CPA-3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
@@ -140,7 +141,7 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 
 - **Chat output during the discussion loop** is restricted to:
   (a) one status line per round (`Round N: APPROVED` / `Round N: NEEDS_REVISION (proceeding)`)
-  (b) no local path output — the `show-plan-link.js` `Plan file:` breadcrumb is the sole plan surface. See `skills/_shared/confirm-plan.md` CPA-2.
+  (b) the plan-link line — see `skills/_shared/confirm-plan.md` CPA-2.
   (c) the MOP-7 turn-final prose rationale summary
   (d) the concern summary block rendered by the MOP-6 ESCALATE/HIGH_UNRESOLVED path when exit 2 or exit 6 fires — exactly one block per cap-reach event.
   No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception), no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
@@ -155,3 +156,4 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 ## Completion
 
 MOP-C1. Evaluate the skip-detail 3-condition checklist. First run a separate Bash call: `SESSION_ID="$SESSION_ID" bash "$AGENTS_MAIN_ROOT/skills/make-outline-plan/scripts/check-detail-skip.sh"`. If `auto`, no judgment needed — proceed to record. Otherwise evaluate via LLM judgment against outline.md (sd_c1–sd_c3 — criteria: `skills/_shared/judge-plan-skip.md`). Record via a SEPARATE Bash call BEFORE completing outline (no `--next` — this settles `detail`, not `outline`): `node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target detail --advance --c1 <true|false> --c2 <true|false> --c3 <true|false>`. When all conditions are true, also launch `skip-verifier` via the Agent tool (run_in_background: true) with session_id=`$SESSION_ID`, target=`detail`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`, outline_path=`<PLANS_DIR>/$SESSION_ID-outline.md`. Then, as a separate Bash call, complete `outline` and consume its `ACTION=` block: `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step outline --complete --next`; follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`.
+The skip-verifier prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
