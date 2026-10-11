@@ -98,6 +98,17 @@ definition, and related links.
   must never write it; they isolate it with `harness_isolate`.
 - **Related**: [architecture/claude-code/state-dirs.md](architecture/claude-code/state-dirs.md)
 
+### canonical dispatch line
+
+- **Full name**: Canonical line of the Subagent Dispatch Prompts section
+- **Definition**: The single sentence in `rules/shell-commands.md` that tells a
+  subagent to read the shell-issuance rule and report command-form deviations.
+  Dispatch prompts carry it; the PreToolUse `Agent|Task` hook
+  (`hooks/subagent-dispatch-prompt.js`) appends it when a prompt lacks it, except
+  for agents whose tools cannot write or run commands. Whether the host applies
+  the rewrite is unverified (Approach C, #2263).
+- **Related**: [architecture/claude-code/prompt-command-forms.md](architecture/claude-code/prompt-command-forms.md)
+
 ### turn
 
 - **Full name**: Conversational turn
