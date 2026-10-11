@@ -15,6 +15,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --repo)
+      [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 1; }
       REPO="$2"
       shift 2
       ;;

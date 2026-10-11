@@ -21,10 +21,10 @@ NOTE_PROVIDED=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --issue)     ISSUE_NUMBER="${2:-}"; shift 2 ;;
-        --repo)      REPO_SLUG="${2:-}"; shift 2 ;;
-        --note)      NOTE="${2:-}"; NOTE_PROVIDED=1; shift 2 ;;
-        --note-file) NOTE_FILE="${2:-}"; shift 2 ;;
+        --issue)     [[ $# -ge 2 ]] || { echo "Error: $1 needs a value" >&2; exit 2; }; ISSUE_NUMBER="${2:-}"; shift 2 ;;
+        --repo)      [[ $# -ge 2 ]] || { echo "Error: $1 needs a value" >&2; exit 2; }; REPO_SLUG="${2:-}"; shift 2 ;;
+        --note)      [[ $# -ge 2 ]] || { echo "Error: $1 needs a value" >&2; exit 2; }; NOTE="${2:-}"; NOTE_PROVIDED=1; shift 2 ;;
+        --note-file) [[ $# -ge 2 ]] || { echo "Error: $1 needs a value" >&2; exit 2; }; NOTE_FILE="${2:-}"; shift 2 ;;
         -h|--help)   sed -n '2,10p' "$0" >&2; exit 0 ;;
         *) echo "Error: unknown argument: $1" >&2; exit 2 ;;
     esac

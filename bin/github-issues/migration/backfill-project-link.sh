@@ -7,9 +7,9 @@ source "$SCRIPT_DIR/link-project.sh"
 PROJECT_NODE_ID=""; OWNER=""; REPO=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --project-node-id) PROJECT_NODE_ID="$2"; shift 2 ;;
-    --owner)           OWNER="$2"; shift 2 ;;
-    --repo)            REPO="$2"; shift 2 ;;
+    --project-node-id) [ $# -ge 2 ] || { echo "ERROR: $1 needs a value" >&2; exit 2; }; PROJECT_NODE_ID="$2"; shift 2 ;;
+    --owner)           [ $# -ge 2 ] || { echo "ERROR: $1 needs a value" >&2; exit 2; }; OWNER="$2"; shift 2 ;;
+    --repo)            [ $# -ge 2 ] || { echo "ERROR: $1 needs a value" >&2; exit 2; }; REPO="$2"; shift 2 ;;
     -h|--help)
       echo "Usage: backfill-project-link.sh --project-node-id <PVT_...> --owner <owner> --repo <name>" >&2
       exit 0 ;;

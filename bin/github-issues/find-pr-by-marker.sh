@@ -16,7 +16,7 @@ urlenc() { node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "
 REPO_ARG=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --repo) REPO_ARG="$2"; shift 2 ;;
+        --repo) [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 2; }; REPO_ARG="$2"; shift 2 ;;
         --repo=*) REPO_ARG="${1#--repo=}"; shift ;;
         --) shift; break ;;
         *) break ;;

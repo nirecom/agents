@@ -27,7 +27,11 @@ if [ ! -f "$SCRIPT" ]; then
 fi
 
 WORKDIR=$(mktemp -d)
+readonly WORKDIR
 trap 'rm -rf "$WORKDIR"' EXIT
+# Keep workflow state and plans inside the throwaway dir, never the live ~/.workflow-*.
+export WORKFLOW_STATE_DIR="$WORKDIR/wf-state" WORKFLOW_PLANS_DIR="$WORKDIR/wf-plans"
+unset CLAUDE_CODE_SESSION_ID
 
 # make_config <fail_numbers_csv_or_empty> [rotate_exit_code] — builds a fake
 # AGENTS_MAIN_ROOT containing every executable backfill-batch.sh invokes:
@@ -328,6 +332,38 @@ if [ "$RC11" -eq 0 ] && [ "${SORT_CALLS11:-0}" -eq 1 ] && [ "${POISON_HITS11:-0}
 else
     fail "11: rc=$RC11 sort_calls=$SORT_CALLS11 poison_hits=$POISON_HITS11 repo_marker=$([ -e "$REPO11/poisoned.txt" ] && echo yes || echo no) cfg_marker=$([ -e "$CFG11/poisoned.txt" ] && echo yes || echo no)"
 fi
+
+# ---------------------------------------------------------------------------
+# Case 12: with AGENTS_MAIN_ROOT unset, each issue-to-history.sh call carries
+# --target-checkout-root <--repo-dir>, the only root that call then has.
+# ---------------------------------------------------------------------------
+CFG12=$(make_config "")
+REPO12=$(make_repo)
+NUMFILE12="$WORKDIR/numbers12.txt"
+write_numbers "$NUMFILE12" $'1201\n1202\n'
+OUT12=$(env -u AGENTS_MAIN_ROOT bash "$CFG12/$SCRIPT_REL" --repo-dir "$REPO12" --numbers-file "$NUMFILE12" 2>&1)
+RC12=$?
+ROOTED12=$(grep -c -F -- "--target-checkout-root $REPO12" "$CFG12/call.log")
+if [ "$RC12" -eq 0 ] && [ "$ROOTED12" -eq 2 ]; then
+    pass "12: AGENTS_MAIN_ROOT unset -- every issue-to-history.sh call names the --repo-dir root"
+else
+    fail "12: rc=$RC12 rooted_calls=$ROOTED12 calls='$(cat "$CFG12/call.log")' out='$OUT12'"
+fi
+
+# ---------------------------------------------------------------------------
+# Case 13: a value flag given last with no value is refused at once (rc 1),
+# not an endless loop on `shift 2`. 124 is the run-with-timeout hang code.
+# ---------------------------------------------------------------------------
+CFG13=$(make_config "")
+for flag in --repo-dir --numbers-file; do
+    OUT13=$(bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 10 bash "$CFG13/$SCRIPT_REL" "$flag" 2>&1)
+    RC13=$?
+    if [ "$RC13" -eq 1 ] && echo "$OUT13" | grep -q -- "$flag"; then
+        pass "13: $flag without a value -- rc 1 naming the flag, before the timeout"
+    else
+        fail "13: $flag rc=$RC13 (124 = hung) out='$OUT13'"
+    fi
+done
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

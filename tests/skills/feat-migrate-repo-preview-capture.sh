@@ -156,6 +156,49 @@ else
 fi
 teardown_fixture
 
+# ---------------------------------------------------------------------------
+# PF-PC3: the same repo seen from its other worktree is still the self repo.
+#         A main worktree and a linked worktree of one repo, each holding the
+#         scripts; run from one with the other as REPO_PATH. Both directions.
+#         FAIL-BEFORE-FIX: the guard compares path strings, so neither fires.
+# ---------------------------------------------------------------------------
+# build_worktree_pair — sets PAIR_MAIN and PAIR_LINKED (physical paths) under $TMP.
+build_worktree_pair() {
+    PAIR_MAIN="$TMP/pair-main"
+    mkdir -p "$PAIR_MAIN/docs"
+    printf '### Entry 1 (2024-01-01)\nBackground: b\nChanges: c\n' > "$PAIR_MAIN/docs/history.md"
+    script_checkout_fixture_copy "$PAIR_MAIN" bin "${PREVIEW_REL%/*}" || return 1
+    git init -q "$PAIR_MAIN" || return 1
+    git -C "$PAIR_MAIN" config core.hooksPath /dev/null
+    git -C "$PAIR_MAIN" config core.autocrlf false
+    git -C "$PAIR_MAIN" add -A || return 1
+    git -C "$PAIR_MAIN" -c user.name=fixture -c user.email=fixture@example.invalid commit -q -m fixture || return 1
+    git -C "$PAIR_MAIN" worktree add -q -b pair "$TMP/pair-linked" || return 1
+    PAIR_MAIN="$(cd "$PAIR_MAIN" && pwd -P)"
+    PAIR_LINKED="$(cd "$TMP/pair-linked" && pwd -P)"
+}
+
+setup_fixture
+unset MOCK_HAS_ISSUES
+if build_worktree_pair; then
+    for dir in linked-to-main main-to-linked; do
+        if [ "$dir" = linked-to-main ]; then from="$PAIR_LINKED"; to="$PAIR_MAIN"; else from="$PAIR_MAIN"; to="$PAIR_LINKED"; fi
+        run_with_timeout 60 bash "$from/$PREVIEW_REL" "$to" > "$TMP/stdout" 2> "$TMP/stderr"
+        RC=$?
+        B=$(grep -c "MIGRATE_SELF_REPO_DETECTED=1" "$TMP/stdout" 2>/dev/null) || B=0
+        D=$(grep -c "SELF_REPO_DETECTED: REPO_PATH" "$TMP/stderr" 2>/dev/null) || D=0
+        O=$(grep -c "SELF_REPO_DETECTED: target repo" "$TMP/stderr" 2>/dev/null) || O=0
+        if [ "$RC" -eq 0 ] && [ "$B" -gt 0 ] && [ "$D" -gt 0 ] && [ "$O" -gt 0 ]; then
+            pass "PF-PC3[$dir]: the other worktree of the same repo is detected as the self repo by both guards"
+        else
+            fail "PF-PC3[$dir]: rc=$RC self_sentinel=$B preview_guard=$D orchestrate_guard=$O (expected rc=0 and all >0)"
+        fi
+    done
+else
+    fail "PF-PC3: worktree pair fixture could not be built"
+fi
+teardown_fixture
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

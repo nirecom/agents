@@ -59,7 +59,7 @@ A file assigns it at most once, in the standard form for its language, outside a
 
 A shell file that the table marks `sourced` shares its caller's variables, so it assigns `_<STEM>_SCRIPT_CHECKOUT_ROOT` instead, where `<STEM>` is the file name without extension, upper-cased, with every non-alphanumeric character replaced by `_`. `hooks/lib/*`, `bin/**/lib/**` and `tests/lib/**` are marked `sourced` by directory.
 
-A shell file that reads `SCRIPT_CHECKOUT_ROOT` assigns it itself. Only a file marked `sourced` may read the value its caller assigned.
+A shell file that reads `SCRIPT_CHECKOUT_ROOT` assigns it itself. Only a sourced test library (`sourced` and under `tests/`) may read the value its caller assigned, because the test harness hands it over. A sourced library elsewhere derives `_<STEM>_SCRIPT_CHECKOUT_ROOT` from its own location: a caller's value names the caller's checkout, which need not be the library's.
 
 A file that cannot use the standard form carries the form `own-script-root-form` and its reason in the table.
 
@@ -106,16 +106,39 @@ A test that reached a tool through `AGENTS_MAIN_ROOT` would pass against the ins
 | `structural` | the agents root joined to a code directory; the checkout root leaving its process; a carrier written outside its source (test files are exempt); an unlisted exit from the decoy |
 | `script-root-form` | a checkout-root assignment that is repeated, conditional, non-standard, of the wrong depth, or too far from the top |
 | `env-name` | the agents root as a local variable or set outside the permitted files; another root name as an environment variable |
+| `reference-role` | a root name in a role the syntax decides that belongs to another name (see "What the gate guarantees") |
+
+### What the gate guarantees
+
+Two kinds of occurrence are judged per reference; every other occurrence is judged per file, by the table.
+
+| Role (decided by the syntax) | The one name that fits |
+|---|---|
+| a definition from the script's own location (`dirname "${BASH_SOURCE[0]}"`, `dirname "$0"`, `__dirname`, `$PSScriptRoot`) | `SCRIPT_CHECKOUT_ROOT`, or a sourced library's `_<STEM>_SCRIPT_CHECKOUT_ROOT` |
+| a definition from the main worktree (`worktree list`, `--git-common-dir`, `bin/main-worktree-root`, the main-worktree helper of `hooks/lib/main-worktree.js`) | `TARGET_MAIN_ROOT` |
+| a definition from a checkout top (`rev-parse --show-toplevel`) | `TARGET_CHECKOUT_ROOT` |
+| a config read (`<name>/.env`, `<name>/.env.local`, `<name>/docs/private-info`, or the same target as the next argument of a path join) | `AGENTS_MAIN_ROOT` |
+
+A main-worktree marker wins over the script's location, and the script's location wins over a checkout top: the top of the script's own checkout is the script checkout root.
+An occurrence whose role the syntax does not decide — an argument, a flag value, `cd && pwd`, an echo, a join to a code directory — passes this check and stays with the file's table rule.
+A file that reads its configuration from its own checkout by design carries the form `config-from-script-checkout` and its reason in the table.
+
+### Pre-commit gates fail closed
+
+In the agents repository the pre-commit hook runs six checkers, this gate among them (`hooks/lib/precommit-agents-repo-gates.sh`). Only exit 0 lets a commit through.
+Exit 1 or 2 is a violation. A missing checker, a missing interpreter, or any other exit is an outage the gate cannot vouch for, so it blocks as well and says which checker failed.
+The emergency bypass is `git commit --no-verify`.
 
 The retired names are listed between the `retired-names:begin` and `retired-names:end` markers of `tests/bin/feature-2561-root-names-residue.sh`. `docs/history*`, `CHANGELOG.md`, `changelog/` and the list file itself are exempt from `residue`.
 
 | Invocation | Input |
 |---|---|
 | no argument | the tracked files of the gate's own checkout |
-| `--staged` | the staged files (added, copied, modified, renamed), with the retired-name list and the table also read from the index |
-| `--root <dir>` | the tracked files of `<dir>`, or every file when it is not a git tree |
+| `--staged` | the staged files (`--diff-filter=ACMRT`: added, copied, modified, renamed, type-changed) of the repository at the current directory, read from its index — in a linked worktree, that worktree's index — with the retired-name list and the table also read from that index |
+| `--root <dir>` | the tracked files of `<dir>`, or every file when it is not a git tree; paths are reported from the repository root |
 | `<file>...` | the named files only |
 
 `--staged`, `--root` and file arguments exclude each other. `--repo agents|dotfiles` selects the rule set, `--only <check>` runs one check, `--scope <prefix>` keeps the files under a prefix, and `--retired-names-from <file>` reads the list from another file.
 
 An untracked file is not part of the no-argument run; it is judged once it is staged or named.
+A tracked entry that is not a regular file (a symlink, a gitlink) has its path judged and no content.

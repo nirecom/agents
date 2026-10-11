@@ -4,7 +4,8 @@ const fs = require("fs");
 const path = require("path");
 
 const {
-  resolveAgentsRoot,
+  resolveTargetCheckoutRoot,
+  readTargetCheckoutRootFlag,
   shouldIncludePattern,
   extractDenyLiteral,
   PATH_GUARD_TOOLS,
@@ -101,7 +102,12 @@ function extractSysOpsKeywords(src, cap) {
 
 // ---- Main ------------------------------------------------------------------
 
-const root = resolveAgentsRoot();
+const targetFlag = readTargetCheckoutRootFlag(process.argv.slice(2));
+if (targetFlag.error) {
+  process.stderr.write(`refactor-prompts: ${targetFlag.error}\n`);
+  process.exit(2);
+}
+const root = resolveTargetCheckoutRoot(targetFlag.value);
 const sources = [];
 const keywordMap = new Map(); // literal → source (first wins)
 

@@ -9,14 +9,12 @@
 
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
-
 const { normalizeCwd } = require("../../hooks/lib/path-normalize");
+const { mainWorktreeOf, worktreeListOf } = require("../../hooks/lib/main-worktree");
 const { scriptCheckoutRootCandidates, _resolveFromCandidates } = require("../../hooks/lib/script-checkout-root");
 const { getWorkflowPlansDir } = require("../../hooks/lib/workflow-plans-dir");
 const { listStateRoots } = require("../../hooks/workflow-state/state-io/state-root");
 
-const GIT_TIMEOUT_MS = 20000;
 const REALPATH_MAX_DEPTH = 64;
 
 // ---------------------------------------------------------------------------
@@ -100,45 +98,6 @@ function isUnder(childInput, parentInput, allowEqual) {
 }
 
 // ---------------------------------------------------------------------------
-// git probes (the only two git subcommands this dispatcher ever runs before a
-// worker module takes over; the capability suite asserts nothing else appears)
-// ---------------------------------------------------------------------------
-
-// Inherited repository-selecting variables (set inside a git hook, for one)
-// would make `git -C <dir>` answer for another repository.
-const GIT_REPO_ENV = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR"];
-
-// The probe passes no `env` option: an explicit environment is what marks a
-// worker-started child (tests/bin/feature-2561-worker-child-roots.sh), so the
-// variables are lifted out of this process only while the synchronous call runs.
-function withoutGitRepoEnv(run) {
-  const held = {};
-  for (const name of GIT_REPO_ENV) {
-    if (!Object.prototype.hasOwnProperty.call(process.env, name)) continue;
-    held[name] = process.env[name];
-    delete process.env[name];
-  }
-  try {
-    return run();
-  } finally {
-    Object.assign(process.env, held);
-  }
-}
-
-function git(args, workDir) {
-  const res = withoutGitRepoEnv(() => spawnSync("git", args, {
-    cwd: workDir,
-    shell: false,
-    encoding: "utf8",
-    timeout: GIT_TIMEOUT_MS,
-    windowsHide: true,
-    maxBuffer: 8 * 1024 * 1024,
-  }));
-  if (res.error || res.status !== 0) return null;
-  return String(res.stdout === null || res.stdout === undefined ? "" : res.stdout).trim();
-}
-
-// ---------------------------------------------------------------------------
 // Anchor derivation
 // ---------------------------------------------------------------------------
 
@@ -149,7 +108,7 @@ function resolveScriptCheckoutRootAnchor() {
 }
 
 // The agents main worktree a worker child reads its settings from. Derived from
-// this checkout's own git common dir, never from the parent environment: the
+// this checkout's own repository, never from the parent environment: the
 // dispatcher may run from a linked worktree, and a child must not inherit a
 // caller-chosen settings location. Both answers are memoised — the checkout a
 // process runs from cannot change while it lives.
@@ -159,10 +118,8 @@ function resolveAgentsMainRoot() {
   agentsMainRootMemo = null;
   const own = resolveScriptCheckoutRootAnchor();
   if (own === null) return null;
-  const commonDir = git(["-C", own, "rev-parse", "--path-format=absolute", "--git-common-dir"], own);
-  const commonAbs = commonDir === null ? null : absPath(commonDir);
-  if (commonAbs === null) return null;
-  const owner = realAbs(path.dirname(commonAbs));
+  const main = mainWorktreeOf(own);
+  const owner = main === null ? null : realAbs(main);
   if (owner === null) return null;
   // Same two-marker check as the script checkout root: a main worktree that is
   // not an agents repository must not be handed on as one.
@@ -182,11 +139,9 @@ function resolveTargetMainRoot(targetMainRootArg) {
   if (!stat.isDirectory()) return { error: "target-main-root is not a directory" };
 
   const root = realAbs(abs);
-  const commonDir = git(["-C", root, "rev-parse", "--path-format=absolute", "--git-common-dir"], root);
-  if (commonDir === null) return { error: "target-main-root is not a git repository" };
-  const commonAbs = absPath(commonDir);
-  if (commonAbs === null) return { error: "target-main-root git common dir is not absolute" };
-  const owner = realAbs(path.dirname(commonAbs));
+  if (worktreeListOf(root) === null) return { error: "target-main-root is not a git repository" };
+  const main = mainWorktreeOf(root);
+  const owner = main === null ? null : realAbs(main);
   if (owner === null || !sameString(stripTrailingSep(owner), stripTrailingSep(root))) {
     return { error: "target-main-root is not a main worktree" };
   }
@@ -194,13 +149,11 @@ function resolveTargetMainRoot(targetMainRootArg) {
 }
 
 function resolveFamily(targetMainRoot) {
-  const listing = git(["-C", targetMainRoot, "worktree", "list", "--porcelain"], targetMainRoot);
-  if (listing === null) return null;
+  const blocks = worktreeListOf(targetMainRoot);
+  if (blocks === null) return null;
   const family = [];
-  for (const line of listing.split(/\r?\n/)) {
-    const m = /^worktree (.+)$/.exec(line);
-    if (m === null) continue;
-    const wt = realAbs(m[1]);
+  for (const block of blocks) {
+    const wt = realAbs(block.path);
     if (wt === null) continue;
     if (!family.some((f) => sameString(f, wt))) family.push(wt);
   }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1834-precommit-lib-split.sh
 # Tests: hooks/pre-commit, hooks/lib/precommit-tests-frontmatter.sh, hooks/lib/precommit-agents-repo-gates.sh, bin/check-test-frontmatter.sh
-# Tags: pre-commit, tests-frontmatter, cause-messages, refactor, file-split, TL2, scope:issue-specific, agents-repo-gates, session-id-ssot, migration-blocks, security, word-splitting, error-path, fail-open, case-markers
+# Tags: pre-commit, tests-frontmatter, cause-messages, refactor, file-split, TL2, scope:issue-specific, agents-repo-gates, session-id-ssot, migration-blocks, security, word-splitting, error-path, fail-open, case-markers, fail-closed
 set -u
 
 # Protects the #1834 file split of hooks/pre-commit (two gate blocks moved to hooks/lib/).
@@ -18,8 +18,8 @@ harness_isolate "$_ISOLATION_TMP_ROOT"
 
 # Layer: TL2 (real checker + real git fixtures + the real module, not the claude -p host).
 # TL3 gap (what this test does NOT catch):
-# - Whether git invokes hooks/pre-commit via core.hooksPath on this host (the function is
-#   called directly here); exercised by tests/hooks/cc-pre-commit-on-demand-rules.sh.
+# - Parts A-D call the functions directly; Part E commits through a fixture copy of
+#   hooks/pre-commit via core.hooksPath, but not through the installed global hook.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
 PRECOMMIT="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit"
@@ -167,11 +167,21 @@ init_repo_bare() {
     git -C "$dir" config core.hooksPath /dev/null
     git -C "$dir" config core.autocrlf false
 }
+# _install_other_gates_clean <dir> — the three later gates (plans artifacts, plans-dir
+# isolation, root names) as clean stubs: with fail-closed gates (#2589) a missing one blocks,
+# so a fixture aimed at the first three gates must still provide them.
+_install_other_gates_clean() {
+    local dir="$1"
+    printf 'process.exit(0);\n' > "$dir/bin/check-plans-artifacts"
+    _install_gate_shim "$dir/bin/check-plans-dir-isolation.sh" clean
+    _install_gate_shim "$dir/bin/check-root-names.sh" clean
+}
 # shellcheck disable=SC2016  # "$@" is written literally into each shim, not expanded here.
 mk_agents_fixture() {
     local dir="$1"
     init_repo_bare "$dir"
     mkdir -p "$dir/bin" "$dir/hooks"
+    _install_other_gates_clean "$dir"
     printf '#!/usr/bin/env bash\nexit 0\n' > "$dir/bin/check-on-demand-rules.sh"
     chmod +x "$dir/bin/check-on-demand-rules.sh"
     printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-session-id-ssot.sh" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" > "$dir/bin/check-session-id-ssot.sh"
@@ -210,6 +220,7 @@ mk_agents_fixture_rc() {
     _install_gate_shim "$dir/bin/check-on-demand-rules.sh" "$od_mode"
     _install_gate_shim "$dir/bin/check-session-id-ssot.sh" "$si_mode"
     _install_gate_shim "$dir/bin/check-migration-blocks.sh" "$mb_mode"
+    _install_other_gates_clean "$dir"
     printf 'init\n' > "$dir/README.md"
     git -C "$dir" add -A >/dev/null 2>&1
     git -C "$dir" commit -q -m initial >/dev/null 2>&1
@@ -246,6 +257,10 @@ SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")/feature-1834-precommit-lib-split"
 . "$SCRIPT_DIR/part-c-frontmatter.sh"
 # shellcheck source=./feature-1834-precommit-lib-split/part-d-case-markers.sh
 . "$SCRIPT_DIR/part-d-case-markers.sh"
+# shellcheck source=tests/lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+# shellcheck source=./feature-1834-precommit-lib-split/part-e-commit-wiring.sh
+. "$SCRIPT_DIR/part-e-commit-wiring.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

@@ -12,9 +12,9 @@ OUTPUT=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --plans-dir)  PLANS_DIR="$2"; shift 2 ;;
-        --session-id) SID="$2";       shift 2 ;;
-        --output)     OUTPUT="$2";    shift 2 ;;
+        --plans-dir)  [[ $# -ge 2 ]] || { echo "build-codex-context: $1 needs a value" >&2; exit 1; }; PLANS_DIR="$2"; shift 2 ;;
+        --session-id) [[ $# -ge 2 ]] || { echo "build-codex-context: $1 needs a value" >&2; exit 1; }; SID="$2";       shift 2 ;;
+        --output)     [[ $# -ge 2 ]] || { echo "build-codex-context: $1 needs a value" >&2; exit 1; }; OUTPUT="$2";    shift 2 ;;
         *) echo "build-codex-context: unknown argument: $1" >&2; exit 1 ;;
     esac
 done

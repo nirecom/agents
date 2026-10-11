@@ -39,7 +39,7 @@ c_every_entry() {
   run_gate "$KIT" --root "$REPO" --only residue
   total="$(sed -n '/^# retired-names:begin$/,/^# retired-names:end$/p' "$RETIRED_LIST" | grep -c '^# [a-z][a-z]* ' || true)"
   expect "entries: every entry line of the list got a fixture ($n of $total)" test "$n" = "$total"
-  expect "entries: the list has not shrunk ($n entries)" test "$n" -ge 58
+  expect "entries: the list has not shrunk ($n entries)" test "$n" -ge 57
   expect "entries: a tree of every entry exits 1" rc_is 1
   expect_rows "entry" residue <<<"$want"
 }

@@ -13,7 +13,10 @@ set -euo pipefail
 
 # The tests that pin a changed file live in the checkout being edited (the CWD's
 # checkout), which is not necessarily the checkout this script was launched from.
-TARGET_CHECKOUT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+if ! TARGET_CHECKOUT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  echo "detect-contract-pins: not inside a git checkout — run it from a git checkout" >&2
+  exit 2
+fi
 TESTS_DIR="$TARGET_CHECKOUT_ROOT/tests"
 
 if [[ $# -gt 0 ]]; then

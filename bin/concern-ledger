@@ -51,25 +51,25 @@ LEDGER_ARG=""; DELTA_ARG=""; APATH=""; AANCHOR=""; ACAT=""; REJECT_ID=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --plans-dir) PLANS="${2:-}"; shift 2 ;;
-        --session-id) SID="${2:-}"; shift 2 ;;
-        --format) FORMAT="${2:-}"; shift 2 ;;
-        --round) ROUND="${2:-}"; shift 2 ;;
-        --producer) PRODUCER="${2:-}"; shift 2 ;;
-        --from-report) REPORT="${2:-}"; shift 2 ;;
-        --exec) EXEC="${2:-}"; shift 2 ;;
-        --parser) PARSER="${2:-}"; shift 2 ;;
-        --mode) MODE="${2:-}"; shift 2 ;;
-        --reason) REASON="${2:-}"; shift 2 ;;
-        --cap) CAP="${2:-}"; shift 2 ;;
-        --max-extensions) MAXEXT="${2:-}"; shift 2 ;;
-        --extensions-used) USED="${2:-}"; shift 2 ;;
-        --ledger) LEDGER_ARG="${2:-}"; shift 2 ;;
-        --delta) DELTA_ARG="${2:-}"; shift 2 ;;
-        --path) APATH="${2:-}"; shift 2 ;;
-        --anchor) AANCHOR="${2:-}"; shift 2 ;;
-        --category) ACAT="${2:-}"; shift 2 ;;
-        --id) REJECT_ID="${2:-}"; shift 2 ;;
+        --plans-dir) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; PLANS="${2:-}"; shift 2 ;;
+        --session-id) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; SID="${2:-}"; shift 2 ;;
+        --format) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; FORMAT="${2:-}"; shift 2 ;;
+        --round) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; ROUND="${2:-}"; shift 2 ;;
+        --producer) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; PRODUCER="${2:-}"; shift 2 ;;
+        --from-report) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; REPORT="${2:-}"; shift 2 ;;
+        --exec) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; EXEC="${2:-}"; shift 2 ;;
+        --parser) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; PARSER="${2:-}"; shift 2 ;;
+        --mode) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; MODE="${2:-}"; shift 2 ;;
+        --reason) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; REASON="${2:-}"; shift 2 ;;
+        --cap) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; CAP="${2:-}"; shift 2 ;;
+        --max-extensions) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; MAXEXT="${2:-}"; shift 2 ;;
+        --extensions-used) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; USED="${2:-}"; shift 2 ;;
+        --ledger) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; LEDGER_ARG="${2:-}"; shift 2 ;;
+        --delta) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; DELTA_ARG="${2:-}"; shift 2 ;;
+        --path) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; APATH="${2:-}"; shift 2 ;;
+        --anchor) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; AANCHOR="${2:-}"; shift 2 ;;
+        --category) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; ACAT="${2:-}"; shift 2 ;;
+        --id) [ $# -ge 2 ] || { echo "concern-ledger: $1 needs a value" >&2; exit 2; }; REJECT_ID="${2:-}"; shift 2 ;;
         -h|--help) usage ;;
         *) printf 'concern-ledger: unknown option: %s\n' "$1" >&2; usage ;;
     esac

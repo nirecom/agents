@@ -24,8 +24,8 @@ Before presenting any command for the user to run, work through this checklist i
 - Do NOT repeat the same ask. If repetition seems needed, find a different approach — not a re-packaging of the same blocked action.
 - **Exception — system-state-changing commands:** Commands in categories A–F of
   `rules/ops.md` (Read it) are out of scope for Autonomy-First. Always escalate via Rule 2.
-  The `hooks/enforce-system-ops.js` hook enforces this. Inline `SYSTEM_OPS_APPROVED=1`
-  in a model-issued Bash command does NOT bypass the hook.
+  The `hooks/enforce-system-ops.js` hook enforces this; the only bypass is the operator
+  exporting `SYSTEM_OPS_APPROVED=1` before launching Claude Code — no script sets it.
 
 ## Rule 2 — One-Command-at-a-Time
 

@@ -182,6 +182,25 @@ else
     fail "TC10: precondition missing — hooks/lib/bash-write-patterns.js not found"
 fi
 
+# ============================================================================
+# TC11: --target-checkout-root names the sources' repo (#2561). The target holds
+# stub sources with a unique deny literal; AGENTS_MAIN_ROOT is an empty decoy.
+# ============================================================================
+TC11_TMP="$(mktemp -d)"
+TC11_TMP="${TC11_TMP//\\//}"
+mkdir -p "$TC11_TMP/target/hooks/lib" "$TC11_TMP/decoy"
+printf 'module.exports = { WRITE_PATTERNS: [] };\n' >"$TC11_TMP/target/hooks/lib/bash-write-patterns.js"
+printf '{"permissions":{"deny":["Bash(target-only-sentinel *)"]}}\n' >"$TC11_TMP/target/settings.json"
+AGENTS_MAIN_ROOT="$TC11_TMP/decoy" run_with_timeout node "$EXTRACT_CLI" --target-checkout-root "$TC11_TMP/target" \
+    >"$TC11_TMP/out.json" 2>"$TC11_TMP/err.log"
+TC11_RC=$?
+if [ "$TC11_RC" -eq 0 ] && grep -q '"target-only-sentinel"' "$TC11_TMP/out.json"; then
+    pass "TC11: --target-checkout-root sources are read instead of AGENTS_MAIN_ROOT"
+else
+    fail "TC11: rc=$TC11_RC stderr=$(cat "$TC11_TMP/err.log")"
+fi
+rm -rf "$TC11_TMP"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

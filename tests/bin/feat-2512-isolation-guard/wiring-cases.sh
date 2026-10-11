@@ -16,6 +16,9 @@ c_i13_precommit_gate() {
   git -C "$cons" config core.autocrlf false
   git -C "$cons" config user.email test@example.com
   git -C "$cons" config user.name test
+  # The five sibling gates stay clean so every outcome below is the classifier's own (#2589:
+  # a missing sibling would now block). fc_stub_all_clean lives in fail-closed-cases.sh.
+  fc_stub_all_clean "$cons" bin/check-plans-dir-isolation.sh
   fx "$cons/bin/check-plans-dir-isolation.sh" '#!/usr/bin/env bash' \
     'here="$(cd "$(dirname "$0")" && pwd)"' 'printf "%s\n" "$*" >> "$here/../stub-args.log"' \
     'echo "STATE-UNPINNED: tests/hooks/stub-fixture.sh"' 'exit "$(cat "$here/../stub-rc")"'
@@ -32,19 +35,19 @@ c_i13_precommit_gate() {
     printf '%s\n' "$rc" > "$cons/stub-rc"
     run_gate "$cons"
     case "$rc" in
-      2) expect "I13 a classifier rc=2 blocks the commit" test "$PC_RC" = 1 ;;
-      *) expect "I13 a classifier rc=$rc lets the commit through" test "$PC_RC" = 0 ;;
+      0) expect "I13 a classifier rc=0 lets the commit through" test "$PC_RC" = 0 ;;
+      *) expect "I13 a classifier rc=$rc blocks the commit" test "$PC_RC" = 1 ;;
     esac
   done
-  # Skip path (plan: "other rc -> diagnostic and skip"). Assumption: the diagnostic
-  # follows the sibling gates' shape, one line naming the checker and "skipped".
-  expect "I13 an unexpected rc=3 prints a skip diagnostic naming the classifier" \
-    grep -qE 'check-plans-dir-isolation[^ ]* rc=3.*skipped' <<<"$PC_OUT"
+  # Fail-closed (#2589): an unexpected rc blocks, naming the classifier and the rc, never "skipped".
+  expect "I13 an unexpected rc=3 names the classifier and rc=3" \
+    grep -qE 'check-plans-dir-isolation[^ ]* .*rc=3' <<<"$PC_OUT"
+  expect "I13 an unexpected rc=3 prints no skip diagnostic" test "${PC_OUT#*skipped}" = "$PC_OUT"
   rm -f "$cons/bin/check-plans-dir-isolation.sh"
   run_gate "$cons"
-  expect "I13 a missing classifier lets the commit through" test "$PC_RC" = 0
-  expect "I13 a missing classifier prints a skip diagnostic" \
-    grep -qE 'check-plans-dir-isolation.*skipped' <<<"$PC_OUT"
+  expect "I13 a missing classifier blocks the commit" test "$PC_RC" = 1
+  expect "I13 a missing classifier is named" grep -qE 'check-plans-dir-isolation' <<<"$PC_OUT"
+  expect "I13 a missing classifier prints no skip diagnostic" test "${PC_OUT#*skipped}" = "$PC_OUT"
 }
 
 c_i14_ci_step() {

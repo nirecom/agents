@@ -16,8 +16,8 @@ NON_GITHUB=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --session-id)  SESSION_ID="${2:-}"; shift 2 ;;
-        --plans-dir)   PLANS_DIR_ARG="${2:-}"; shift 2 ;;
+        --session-id)  [[ $# -ge 2 ]] || { echo "[clarify-guard-loop] $1 needs a value" >&2; exit 2; }; SESSION_ID="${2:-}"; shift 2 ;;
+        --plans-dir)   [[ $# -ge 2 ]] || { echo "[clarify-guard-loop] $1 needs a value" >&2; exit 2; }; PLANS_DIR_ARG="${2:-}"; shift 2 ;;
         --non-github)  NON_GITHUB=1; shift ;;
         *) echo "[clarify-guard-loop] unknown argument: $1" >&2; exit 2 ;;
     esac

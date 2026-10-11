@@ -319,6 +319,71 @@ case_e() {
     assert_eq "source-scan/no-show-toplevel" "0" "$top_hits"
 }
 
+# ===========================================================================
+# (f) #2589 separate-git-dir repo: dirname(common dir) is the git dir's parent,
+# not a worktree, and git 2.53 porcelain names the git dir itself first — so
+# the only safe answers are the real main worktree or a refusal.
+# ===========================================================================
+# sg_target <anchor.js> <target> — prints "value:<norm path>" or "error:<msg>".
+sg_target() {
+    run_with_timeout 60 node -e '
+      const a = require(process.argv[1]).resolveAnchors(process.argv[2]);
+      const n = (p) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+      process.stdout.write(a.error ? "error:" + a.error : "value:" + n(a.targetMainRoot));
+    ' "$1" "$2" 2>&1
+}
+
+# sg_agents_main <anchor.js> — prints the normalized resolveAgentsMainRoot() or "<null>".
+sg_agents_main() {
+    run_with_timeout 60 node -e '
+      const r = require(process.argv[1]).resolveAgentsMainRoot();
+      const n = (p) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+      process.stdout.write(r === null ? "<null>" : n(r));
+    ' "$1" 2>&1
+}
+
+case_sepgit() {
+    if impl_missing "sepgit/fixture" "$ANCHOR_JS" "bin/worker-dispatch/anchor.js"; then return; fi
+    local sg="$TMPD/sg" got m_c l_c gd_c parent_c
+    git init -q -b main --separate-git-dir "$sg/gitdir" "$sg/main"
+    git -C "$sg/main" config core.hooksPath /dev/null
+    git -C "$sg/main" -c user.email=t@example.com -c user.name=t commit -q --allow-empty --no-verify -m init
+    git -C "$sg/main" worktree add -q -b feature/sg "$sg/linked" >/dev/null 2>&1
+    m_c="$(node "$ANCHOR_PROBE" --canon "$(nodepath "$sg/main")")"
+    l_c="$(node "$ANCHOR_PROBE" --canon "$(nodepath "$sg/linked")")"
+    gd_c="$(node "$ANCHOR_PROBE" --canon "$(nodepath "$sg/gitdir")")"
+    parent_c="$(node "$ANCHOR_PROBE" --canon "$(nodepath "$sg")")"
+
+    # resolveTargetMainRoot: the linked worktree and the git dir are refused.
+    got="$(sg_target "$ANCHOR_JS" "$(nodepath "$sg/linked")")"
+    case "$got" in error:*) pass "sepgit/target-linked-refused" ;; *) fail "sepgit/target-linked-refused — got=$got" ;; esac
+    got="$(sg_target "$ANCHOR_JS" "$(nodepath "$sg/gitdir")")"
+    case "$got" in error:*) pass "sepgit/target-gitdir-refused" ;; *) fail "sepgit/target-gitdir-refused — got=$got" ;; esac
+    # The real main worktree resolves to itself, or is refused — never to another directory.
+    got="$(sg_target "$ANCHOR_JS" "$(nodepath "$sg/main")")"
+    case "$got" in
+        "value:$m_c"|error:*) pass "sepgit/target-main-is-main-or-refused ($got)" ;;
+        *) fail "sepgit/target-main-is-main-or-refused — got=$got" ;;
+    esac
+
+    # resolveAgentsMainRoot from a checkout copy in the linked worktree. Both the
+    # real main and the git dir's parent carry the two trust markers, so a
+    # dirname(common dir) answer is observable as the planted parent.
+    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$SCRIPT_CHECKOUT_ROOT/bin" "$sg/linked/"
+    mkdir -p "$sg/main/hooks" "$sg/main/bin" "$sg/bin" "$sg/hooks"
+    touch "$sg/main/hooks/enforce-worktree.js" "$sg/hooks/enforce-worktree.js"
+    got="$(cd "$TMPD" && sg_agents_main "$(nodepath "$sg/linked/bin/worker-dispatch/anchor.js")")"
+    if [ "$got" = "$parent_c" ]; then
+        fail "sepgit/agents-main-not-gitdir-parent — dirname(common dir) taken for the main worktree: $got"
+    elif [ "$got" = "$l_c" ] || [ "$got" = "$gd_c" ]; then
+        fail "sepgit/agents-main-not-gitdir-parent — non-main directory returned: $got"
+    elif [ "$got" = "$m_c" ] || [ "$got" = "<null>" ]; then
+        pass "sepgit/agents-main-not-gitdir-parent ($got)"
+    else
+        fail "sepgit/agents-main-not-gitdir-parent — unexpected: $got"
+    fi
+}
+
 if command -v timeout >/dev/null 2>&1; then
     if [ -z "${_WD1643_ANCHOR_INNER:-}" ]; then
         _WD1643_ANCHOR_INNER=1 timeout 240 bash "$0" "$@"
@@ -344,6 +409,10 @@ case_end
 
 case_begin "source-scan" "bin/worker-dispatch/anchor.js"
 case_e
+case_end
+
+case_begin "separate-git-dir-main-root" "bin/worker-dispatch/anchor.js"
+case_sepgit
 case_end
 
 echo ""

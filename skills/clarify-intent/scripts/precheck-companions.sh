@@ -19,10 +19,10 @@ OUTPUT_FILE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --seed)        SEED="${2:-}"; shift 2 ;;
-        --exclude)     EXCLUDE_CSV="${2:-}"; shift 2 ;;
-        --session)     SESSION="${2:-}"; shift 2 ;;
-        --output-file) LEGACY_OUTPUT="${2:-}"; shift 2 ;;
+        --seed)        [[ $# -ge 2 ]] || { echo "[precheck-companions] $1 needs a value" >&2; exit 2; }; SEED="${2:-}"; shift 2 ;;
+        --exclude)     [[ $# -ge 2 ]] || { echo "[precheck-companions] $1 needs a value" >&2; exit 2; }; EXCLUDE_CSV="${2:-}"; shift 2 ;;
+        --session)     [[ $# -ge 2 ]] || { echo "[precheck-companions] $1 needs a value" >&2; exit 2; }; SESSION="${2:-}"; shift 2 ;;
+        --output-file) [[ $# -ge 2 ]] || { echo "[precheck-companions] $1 needs a value" >&2; exit 2; }; LEGACY_OUTPUT="${2:-}"; shift 2 ;;
         *) echo "[precheck-companions] unknown argument: $1" >&2; exit 2 ;;
     esac
 done

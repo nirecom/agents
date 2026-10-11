@@ -61,12 +61,21 @@ if ! gh auth status 2>&1 | grep -q "'project'"; then
     echo "warn: Run 'gh auth refresh -s project' to add it (browser-based OAuth)." >&2
 fi
 
+if [ -n "${REPO_OVERRIDE:-}" ]; then
+    if [[ ! "$REPO_OVERRIDE" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+        echo "Error: REPO_OVERRIDE must be owner/repo, got: $REPO_OVERRIDE" >&2
+        exit 2
+    fi
+    echo "note: REPO_OVERRIDE targets $REPO_OVERRIDE" >&2
+fi
+
 # Phase 0a — label auto-repair, GitHub remotes only (skills/issue-create/SKILL.md).
+# Only this checkout's copy decides; a PATH copy may belong to another checkout.
 _ic_is_github=1
-if command -v is-github-dotcom-remote >/dev/null 2>&1; then
-    is-github-dotcom-remote >/dev/null 2>&1 || _ic_is_github=0
-elif [ -x "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" ]; then
+if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" ]; then
     bash "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" >/dev/null 2>&1 || _ic_is_github=0
+else
+    echo "warn: $SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote not found; assuming a GitHub remote" >&2
 fi
 if [ "$_ic_is_github" -eq 1 ]; then
     _ic_preflight_rc=0

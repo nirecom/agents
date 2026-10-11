@@ -14,7 +14,9 @@ const CAMEL = spellings(SCR).camel;
 
 // The agents root followed by a code directory: "$X/bin", `${X}/hooks`, join(X, "skills").
 const SUBPATH_RE = new RegExp(`(?<![A-Za-z0-9_])${AMR}\\}?["']?(?:[\\\\/]|["'\`][\\\\/]|\\s*[,+]\\s*["'\`][\\\\/]?)${CODE_DIRS}(?![\\w-])`);
-const JS_ENV_WRITE = new RegExp(`process\\.env(?:\\.${SCR}|\\[["']${SCR}["']\\])\\s*=(?!=)`);
+// Through process.env or any env-named object (`env.X = v`, `childEnv["X"] = v`).
+const JS_ENV_WRITE = new RegExp(`(?<![\\w$])[\\w$]*[Ee][Nn][Vv][\\w$]*(?:\\.${SCR}(?![\\w$])|\\[["']${SCR}["']\\])\\s*=(?![=>])`);
+const PY_ENV_WRITE = new RegExp(`(?<![\\w.])(?:os\\.)?environ(?:\\[["']${SCR}["']\\]\\s*=(?!=)|\\.setdefault\\(\\s*["']${SCR}["'])`);
 const JS_ENV_KEY = new RegExp(`(?:^\\s*|[{,]\\s*)["']?${SCR}["']?\\s*:(?!:)`);
 const PS_ENV_WRITE = new RegExp(`\\$env:${SCR}\\s*=(?!=)`, "i");
 // A parameter named after the checkout root, with or without a modifier around it.
@@ -104,7 +106,7 @@ function check(ctx) {
   for (const file of ctx.files) {
     if (file.text === null || !IN_SCOPE.test(file.rel)) continue;
     const v = view(file);
-    if (v.lang !== "sh" && v.lang !== "js" && v.lang !== "ps") continue;
+    if (v.lang !== "sh" && v.lang !== "js" && v.lang !== "ps" && v.lang !== "py") continue;
     const forms = table.grantsFor(file.rel, ctx.repo).forms;
     const say = (i, msg) => out.push(`${file.rel}:${i + 1}: structural: ${msg}`);
     for (let i = 0; i < v.code.length; i++) {
@@ -117,6 +119,7 @@ function check(ctx) {
         if (v.lang === "sh") how = shHandover(v.cmds[i]);
         else if (v.lang === "js" && (JS_ENV_WRITE.test(line) || JS_ENV_KEY.test(line))) how = "it is put into an environment";
         else if (v.lang === "ps" && PS_ENV_WRITE.test(line)) how = "it is put into the environment";
+        else if (v.lang === "py" && PY_ENV_WRITE.test(line)) how = "it is put into an environment";
         if (how) say(i, `the checkout root stays inside its own process, but ${how}`);
       }
       if (v.lang === "js") {

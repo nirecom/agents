@@ -180,27 +180,30 @@ call_supervisor_bin() {
 }
 
 # ── #929 (R3-C4): supervisor-findings-codex allowlisted from the main worktree ──
-# NOTE: RED until write-code adds `findings-codex` to the isAllowedSupervisorBinTool
-#   regex in standard.js (#929); alert/audit invocations return false today, so the
-#   two affirmative asserts fail. The write-alert regression + non-/tmp redirect
-#   guard are GREEN now (the pattern already covers write-alert) — CPR-ORTH.
+# #2589: the allow takes only the literal root of the hook's own checkout (supervisor-bin.js);
+# the variable form `$AGENTS_MAIN_ROOT/bin/...` is no longer a literal path and is refused.
 test_supervisor_findings_codex_allowlist() {
-    # New engine allowed from main worktree, no redirect → true (RED).
-    assert_fn_result '"bash $AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode alert" → true' \
+    local sup="$_SCRIPT_CHECKOUT_ROOT_NODE/bin"
+    assert_fn_result '"bash <root>/bin/supervisor-findings-codex --mode alert" → true' \
+        "$(call_supervisor_bin "bash $sup/supervisor-findings-codex --mode alert")" \
+        'true'
+    assert_fn_result '"bash <root>/bin/supervisor-findings-codex --mode audit" → true' \
+        "$(call_supervisor_bin "bash $sup/supervisor-findings-codex --mode audit")" \
+        'true'
+
+    # CPR-ORTH: supervisor-write-alert stays allowed in the same literal-root form.
+    assert_fn_result '"bash <root>/bin/supervisor-write-alert --ingest-generated-jsonl ..." → true' \
+        "$(call_supervisor_bin "bash $sup/supervisor-write-alert --ingest-generated-jsonl /tmp/x.jsonl")" \
+        'true'
+
+    # Guard stays armed: a redirect to a non-/tmp target is refused even with the literal root.
+    assert_fn_result '"bash <root>/bin/supervisor-write-alert ... > /home/x" (non-/tmp redirect) → false' \
+        "$(call_supervisor_bin "bash $sup/supervisor-write-alert --json > /home/x")" \
+        'false'
+
+    # The variable form is refused (argv[0] is not a literal path).
+    assert_fn_result '"bash $AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode alert" → false' \
         "$(call_supervisor_bin 'bash $AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode alert')" \
-        'true'
-    assert_fn_result '"bash $AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode audit" → true' \
-        "$(call_supervisor_bin 'bash $AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode audit')" \
-        'true'
-
-    # Regression (GREEN): existing supervisor-write-alert stays allowed, no redirect.
-    assert_fn_result '"bash $AGENTS_MAIN_ROOT/bin/supervisor-write-alert --ingest-generated-jsonl ..." → true' \
-        "$(call_supervisor_bin 'bash $AGENTS_MAIN_ROOT/bin/supervisor-write-alert --ingest-generated-jsonl /tmp/x.jsonl')" \
-        'true'
-
-    # Guard stays armed (GREEN): a redirect to a non-/tmp target is refused.
-    assert_fn_result '"...supervisor-write-alert ... > /home/x" (non-/tmp redirect) → false' \
-        "$(call_supervisor_bin 'bash $AGENTS_MAIN_ROOT/bin/supervisor-write-alert --json > /home/x')" \
         'false'
 }
 

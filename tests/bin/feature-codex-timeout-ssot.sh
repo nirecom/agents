@@ -3,11 +3,11 @@
 # Tests: bin/lib/codex-timeout.sh, bin/lib/codex-core.sh, bin/review-plan-codex, bin/github-issues/review-survey-verdict-codex.sh
 # Tags: scope:common, codex, timeout, ssot, config-resolution, regression-guard, pwsh-not-required, TL2
 # WHY: three codex call sites each hardcoded a 300 s default and resolved CODEX_TIMEOUT_SECS independently. One measured test-review round finished in 184 s while three other rounds of the same payload were killed at 300 s, so the default was raised to 900 s and folded into ONE owner, bin/lib/codex-timeout.sh.
-# The constant deliberately does NOT live in bin/lib/codex-core.sh: that library runs `export SYSTEM_OPS_APPROVED=1` at source time, and the issue-dedupe path (bin/github-issues/review-survey-verdict-codex.sh) must not inherit it. This file tests timeout RESOLUTION only. It never invokes the codex CLI.
+# The constant deliberately lives in its own narrow library, not in bin/lib/codex-core.sh: the issue-dedupe path (bin/github-issues/review-survey-verdict-codex.sh) needs only the timeout, not codex-core's init/logging/guard surface. This file tests timeout RESOLUTION only. It never invokes the codex CLI.
 # TL3 gap (what this test does NOT catch):
 # - Whether the real `timeout` / bin/run-with-timeout.sh wrapper actually kills a live codex process at the resolved value (here only the resolved number is read)
 # - Whether the developer's real $AGENTS_MAIN_ROOT/.env is picked up by an unpinned invocation — every case here pins AGENTS_MAIN_ROOT at a fixture
-# - Whether sourcing codex-core.sh inside a real reviewer script has no other side effect than the SYSTEM_OPS_APPROVED export
+# - Whether sourcing codex-core.sh inside a real reviewer script has no process-env side effect beyond what G5 scans for statically
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -u
@@ -208,8 +208,8 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# G2: the issue-dedupe path sources the timeout library DIRECTLY and must not
-#     source codex-core.sh (see G5 for why).
+# G2: the issue-dedupe path sources the narrow timeout library DIRECTLY and does
+#     not pull in codex-core.sh's wider init/logging/guard surface.
 # ---------------------------------------------------------------------------
 run_G2() {
     local problems=""
@@ -254,16 +254,26 @@ run_G4() {
 run_G4
 
 # ---------------------------------------------------------------------------
-# G5 (counter-anchor for G2's rationale): codex-core.sh still exports
-#     SYSTEM_OPS_APPROVED=1 at source time. That export is the ONLY reason G2
-#     forbids the dedupe path from sourcing codex-core.sh. If this export is ever
-#     removed, G2's justification is gone and this test must be revisited —
-#     G2 would then be guarding a rule with no remaining reason behind it.
+# G5 (#2200): neither sourced core library sets SYSTEM_OPS_APPROVED. Sourcing
+#     them leaked the system-ops bypass into the caller's shell; codex/gemini read
+#     no such guard, so the export never served its children.
 # ---------------------------------------------------------------------------
-if awk '!/^[[:space:]]*#/ && /^export SYSTEM_OPS_APPROVED=1/' "$LIB_CORE" | grep -q .; then
-    pass "G5: codex-core.sh still exports SYSTEM_OPS_APPROVED=1 at source time (G2's rationale holds)"
+LIB_GEMINI="$SCRIPT_CHECKOUT_ROOT/bin/lib/gemini-core.sh"
+for g5_lib in "$LIB_CORE" "$LIB_GEMINI"; do
+    g5_hits="$(awk '!/^[[:space:]]*#/ && /(^|[^A-Za-z0-9_])(export|declare|typeset)[[:space:]].*SYSTEM_OPS_APPROVED|^[[:space:]]*SYSTEM_OPS_APPROVED=/' "$g5_lib")"
+    if [ -f "$g5_lib" ] && [ -z "$g5_hits" ]; then
+        pass "G5: $(basename "$g5_lib") does not set SYSTEM_OPS_APPROVED at source time"
+    else
+        fail "G5: $(basename "$g5_lib") still sets SYSTEM_OPS_APPROVED (or is missing): $g5_hits"
+    fi
+done
+
+# G5b: with the export gone, codex-timeout.sh must not cite it as the separation
+#      reason any more — a stale rationale would mislead the next reader.
+if grep -q 'SYSTEM_OPS_APPROVED' "$LIB_TIMEOUT"; then
+    fail "G5b: codex-timeout.sh still cites SYSTEM_OPS_APPROVED as the reason it is separate from codex-core.sh"
 else
-    fail "G5: SYSTEM_OPS_APPROVED export is gone from codex-core.sh — revisit G2's separation rule"
+    pass "G5b: codex-timeout.sh no longer cites the removed SYSTEM_OPS_APPROVED export"
 fi
 
 # ---------------------------------------------------------------------------
