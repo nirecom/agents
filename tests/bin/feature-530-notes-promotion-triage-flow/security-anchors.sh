@@ -226,12 +226,50 @@ a4_absolute_traversal_segments() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# A5 — a bad argv is a usage error (exit 2), never a resolution from the cwd
+# ---------------------------------------------------------------------------
+# A valueless --target-main-root left the root undefined, so branch 4 fell back
+# to process.cwd(); an unknown flag was dropped. Notes planted under the cwd's
+# .worktree-backup/<branch>/ make that fallback visible as a promote.
+# Columns: label | args (space-separated, none carry spaces) | flag the error names.
+A5_ROWS='valueless-target-main-root|--caller worktree-end --pr-branch feature/anchor --target-main-root|--target-main-root
+valueless-worktree|--caller worktree-end --pr-branch feature/anchor --worktree|--worktree
+valueless-session-id|--caller session-close --pr-branch feature/anchor --session-id|--session-id
+valueless-issue|--caller issue-close-finalize --pr-branch feature/anchor --issue|--issue
+valueless-pr-branch|--caller worktree-end --pr-branch|--pr-branch
+valueless-plans-dir|--caller worktree-end --pr-branch feature/anchor --plans-dir|--plans-dir
+valueless-caller|--pr-branch feature/anchor --caller|--caller
+unknown-flag-typo|--caller worktree-end --pr-branch feature/anchor --target-main-rot /nowhere|--target-main-rot
+unknown-flag-bare|--caller worktree-end --pr-branch feature/anchor --no-such-flag|--no-such-flag'
+
+a5_argv_usage_errors() {
+    local label args flag missing
+    plant_notes "$NEUTRAL_CWD/.worktree-backup/feature/anchor"
+    while IFS='|' read -r label args flag; do
+        missing=""
+        # shellcheck disable=SC2086  # args is a word list by construction
+        resolve $args
+        [ "$RESOLVE_RC" = "2" ] || missing="$missing rc=$RESOLVE_RC"
+        [ -z "$RESOLVE_OUT" ] || missing="$missing stdout=$RESOLVE_OUT"
+        case "$RESOLVE_ERR" in *"$flag"*) ;; *) missing="$missing stderr-does-not-name-$flag" ;; esac
+        case "$RESOLVE_OUT$RESOLVE_ERR" in *"$A_LEAK"*|*promote*) missing="$missing resolved-from-cwd" ;; esac
+        if [ -z "$missing" ]; then
+            pass "A5[$label]: usage error (exit 2) naming $flag, nothing resolved from the cwd"
+        else
+            fail "A5[$label]: bad argv not refused" "$missing (err=$RESOLVE_ERR)"
+        fi
+    done <<<"$A5_ROWS"
+    rm -rf "$NEUTRAL_CWD/.worktree-backup"
+}
+
 a1_worktree_metachars
 a1c_clean_worktree_promotes
 a2_main_root_metachars
 a2c_clean_main_root_promotes
 a3_main_root_is_anchor_only
 a4_absolute_traversal_segments
+a5_argv_usage_errors
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

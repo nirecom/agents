@@ -38,13 +38,9 @@ function Invoke-InstallStep {
     }
 }
 
-# .\install.ps1 runs in the caller's session, so $env: writes outlive it: a leftover
-# SYSTEM_OPS_APPROVED would let a later `claude` from this terminal bypass
-# enforce-system-ops. The finally restores both variables on exit, throw and Ctrl+C.
-$_priorSystemOpsApproved = $env:SYSTEM_OPS_APPROVED
+# .\install.ps1 runs in the caller's session, so $env: writes outlive it; the finally
+# clears WAIT_CC_RESULT on exit, throw and Ctrl+C.
 try {
-    $env:SYSTEM_OPS_APPROVED = "1"
-
     Write-Host "=== agents installer ===" -ForegroundColor Cyan
 
     Write-Host ""
@@ -156,11 +152,6 @@ try {
 
     Invoke-InstallStep "Configuring RTK" "$SCRIPT_CHECKOUT_ROOT\install\win\rtk.ps1"
 } finally {
-    if ($null -eq $_priorSystemOpsApproved) {
-        Remove-Item Env:SYSTEM_OPS_APPROVED -ErrorAction SilentlyContinue
-    } else {
-        $env:SYSTEM_OPS_APPROVED = $_priorSystemOpsApproved
-    }
     Remove-Item Env:WAIT_CC_RESULT -ErrorAction SilentlyContinue
 }
 

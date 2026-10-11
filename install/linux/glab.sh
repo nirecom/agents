@@ -2,7 +2,6 @@
 # glab.sh - Install GitLab CLI and configure authentication
 # Self-contained installer (no dotfiles sibling; see docs/architecture/gitlab-support.md).
 # Usage: Called by install.sh or run independently
-export SYSTEM_OPS_APPROVED=1
 
 # Color fallback (no dotfiles dependency — standalone-safe pattern from claude-code.sh)
 if [ -z "${C_RESET+x}" ]; then

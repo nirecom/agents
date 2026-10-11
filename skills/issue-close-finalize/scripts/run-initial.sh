@@ -2,8 +2,8 @@
 # run-initial.sh — phase=initial orchestration for the issue-close-finalize worker
 # Phases 1-6 only; caller writes the JSON state file.
 # Usage: bash run-initial.sh --target-main-root <dir> <issue_number> <root_issue_number> [issue_repo]
-# Env:   FINALIZE_SCRIPTS_DIR
-# Stdout (eval-able KEY=VALUE):
+# Env:   FINALIZE_SCRIPTS_DIR — the dispatcher derives it from its own checkout's script anchor and the overlay hook checks it (close-family.md).
+# Stdout (KEY=VALUE lines):
 #   STATUS  SUMMARY  OWNER_REPO  TRIAGE_ACTION  NEXT_STEPS
 #   PR_NUMBER  MERGE_COMMIT  PROPOSAL_STATUS  PROPOSAL_PARENT
 # Exit 0 always; check STATUS.
@@ -20,11 +20,15 @@ ISSUE_REPO="${3:-}"
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 : "${FINALIZE_SCRIPTS_DIR:?FINALIZE_SCRIPTS_DIR not set}"
 : "${TARGET_MAIN_ROOT:?--target-main-root <dir> required}"
+# shellcheck source=lib/kv-read.sh
+. "$SCRIPT_CHECKOUT_ROOT/skills/issue-close-finalize/scripts/lib/kv-read.sh"
 
 cd "$TARGET_MAIN_ROOT"
 
-# Each child's KEY=VALUE output is captured first and evaluated only after its exit code is
-# checked: `eval "$(child)" || rc=$?` reports eval's status, so a failed child read as success.
+# Each child's KEY=VALUE output is captured first and read only after its exit code is
+# checked, and only the keys that child is expected to set are assigned (as literal data).
+OWNER_REPO=""
+ACTION="" NEXT_STEPS=""
 
 # Phase 1: pre-flight — sets OWNER_REPO
 rc=0
@@ -33,16 +37,16 @@ if [[ "$rc" -ne 0 ]]; then
     printf 'STATUS=failed\nSUMMARY=pre-flight failed\n'
     exit 0
 fi
-eval "$PREFLIGHT_KV"
+kv_read "$PREFLIGHT_KV" OWNER_REPO
 
-# Phase 2: ICF-A triage — sets STATE SENTINEL ACTION NEXT_STEPS
+# Phase 2: ICF-A triage — sets ACTION NEXT_STEPS
 rc=0
 TRIAGE_KV="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-close-finalize-triage.sh" "$ISSUE_NUMBER")" || rc=$?
 if [[ "$rc" -ne 0 ]]; then
     printf 'STATUS=failed\nSUMMARY=triage failed for #%s\n' "$ISSUE_NUMBER"
     exit 0
 fi
-eval "$TRIAGE_KV"
+kv_read "$TRIAGE_KV" ACTION NEXT_STEPS
 
 PR_NUMBER=""
 MERGE_COMMIT=""
@@ -60,7 +64,7 @@ if [[ ",${NEXT_STEPS}," == *",J,"* ]] && [[ "$ACTION" != "admin_close_path" ]]; 
         printf 'STATUS=failed\nSUMMARY=PR marker lookup failed for #%s\n' "$ISSUE_NUMBER"
         exit 0
     fi
-    eval "$PR_KV"
+    kv_read "$PR_KV" PR_NUMBER MERGE_COMMIT
 fi
 
 # Phase 4: ICF-C sub-issue gate — when B in NEXT_STEPS
@@ -88,7 +92,7 @@ if [[ ",${NEXT_STEPS}," == *",G,"* ]]; then
         printf 'STATUS=failed\nSUMMARY=ICF-E prepare failed for #%s\n' "$ISSUE_NUMBER"
         exit 0
     fi
-    eval "$PROPOSAL_KV"
+    kv_read "$PROPOSAL_KV" PROPOSAL_STATUS PROPOSAL_PARENT
 fi
 
 printf 'STATUS=init_done\nOWNER_REPO=%s\nTRIAGE_ACTION=%s\nNEXT_STEPS=%s\n' \

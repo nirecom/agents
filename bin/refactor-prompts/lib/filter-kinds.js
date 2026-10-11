@@ -31,15 +31,9 @@ function shouldIncludePattern(pattern) {
 }
 
 /**
- * Extracts a human-readable literal from a settings.json Bash deny entry.
- * Returns null if the entry should be skipped (sentinel, path-guard, or empty).
- *
- * Rules:
- *  1. Strip leading/trailing `*`
- *  2. Strip leading &&/;/|/& separators and spaces
- *  3. Collapse internal `*` sequences → single space
- *  4. Return null if starts with <<WORKFLOW_
- *  5. Return null if empty/whitespace after processing
+ * Extracts a human-readable literal from a settings.json Bash deny entry: strips edge
+ * `*`, leading &&/;/|/& separators, collapses internal `*` runs to one space.
+ * Returns null for a <<WORKFLOW_ sentinel or an empty result.
  *
  * @param {string} s - raw command string from deny entry
  * @returns {string|null}
@@ -64,12 +58,17 @@ function extractDenyLiteral(s) {
 }
 
 /**
- * Resolves the absolute path to the agents repository root.
- * Prefers AGENTS_MAIN_ROOT env var; falls back to git rev-parse with a warning.
+ * Resolves the root of the checkout whose prompts and sources are read.
+ * --target-checkout-root wins; without it the agents main root (AGENTS_MAIN_ROOT);
+ * without that, the git toplevel with a warning.
  *
+ * @param {string|null|undefined} targetCheckoutRoot - the --target-checkout-root value
  * @returns {string} absolute path (forward slashes on all platforms)
  */
-function resolveAgentsRoot() {
+function resolveTargetCheckoutRoot(targetCheckoutRoot) {
+  if (targetCheckoutRoot) {
+    return path.resolve(targetCheckoutRoot).replace(/\\/g, "/");
+  }
   if (process.env.AGENTS_MAIN_ROOT) {
     return path.resolve(process.env.AGENTS_MAIN_ROOT).replace(/\\/g, "/");
   }
@@ -78,14 +77,30 @@ function resolveAgentsRoot() {
       .trim()
       .replace(/\\/g, "/");
     process.stderr.write(
-      `refactor-prompts: AGENTS_MAIN_ROOT not set; falling back to git toplevel: ${root}\n`
+      `refactor-prompts: --target-checkout-root and AGENTS_MAIN_ROOT not set; falling back to git toplevel: ${root}\n`
     );
     return root;
   } catch {
     throw new Error(
-      "refactor-prompts: cannot locate agents repo (AGENTS_MAIN_ROOT unset and not in a git repo)"
+      "refactor-prompts: cannot locate the target checkout (--target-checkout-root and AGENTS_MAIN_ROOT unset, and not in a git repo)"
     );
   }
+}
+
+/**
+ * Reads --target-checkout-root from argv. A flag with no value is a usage error.
+ *
+ * @param {string[]} args
+ * @returns {{ value: string|null, error: string|null }}
+ */
+function readTargetCheckoutRootFlag(args) {
+  const i = args.indexOf("--target-checkout-root");
+  if (i === -1) return { value: null, error: null };
+  const v = args[i + 1];
+  if (v === undefined || v === "" || v.startsWith("--")) {
+    return { value: null, error: "--target-checkout-root needs a value" };
+  }
+  return { value: v, error: null };
 }
 
 module.exports = {
@@ -93,5 +108,6 @@ module.exports = {
   PATH_GUARD_TOOLS,
   shouldIncludePattern,
   extractDenyLiteral,
-  resolveAgentsRoot,
+  resolveTargetCheckoutRoot,
+  readTargetCheckoutRootFlag,
 };

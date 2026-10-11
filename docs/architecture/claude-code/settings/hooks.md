@@ -70,12 +70,21 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   classifier alongside a `complexity-judge` dispatch and record both answers for comparison.
   Shadow mode: the LLM judge's result is always adopted, and both hooks always exit 0.
   Default OFF (`JEV=off`). Contract and module map: [jev.md](../../jev.md).
+- `subagent-dispatch-prompt.js` (PreToolUse, matcher: `Agent|Task`, own group) — backstop for the
+  `rules/shell-commands.md` Subagent Dispatch Prompts canonical line: appends it (absolute rule path)
+  unless one trimmed prompt line fully matches it; a JSON-object prompt gets it under `dispatch_directive`.
+  Named agents whose `tools:` line has none of Bash/Write/Edit are skipped. Returns only `updatedInput`
+  (all original fields carried forward), never a permission verdict; fail-open. Whether the host replaces
+  or merges `updatedInput` is unverified (the TL3 spike is pending). Do not add another hook that returns `updatedInput`
+  on the same matcher: the result of combining two such outputs is undefined.
 - `workflow-mark.js` (PostToolUse) — intercepts `echo "<<WORKFLOW_MARK_STEP_step_status>>"` and
   `echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing
   is next-step-driven: the model queries `bin/workflow/next-step` after each completion rather than
   receiving a static prose hint
-- `show-plan-link.js` — PostToolUse on Write. Always emits a breadcrumb when a final plan artifact (`*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written, regardless of `CONFIRM_<STEP>`. It first publishes the file through plan-sync: on success against a GitHub remote the breadcrumb is `Plan file: <blob URL>` (readable from mobile apps or a browser); otherwise it is `Plan file: <local path>` plus a `[plan-sync]` status line. Fail-open: a sync failure never aborts the hook or the workflow. The hook no longer spawns VS Code. Design and setup: [../plan-sync.md](../plan-sync.md).
+- `show-plan-link.js` — PostToolUse on the edit-write tool class and `assemble-mandatory.sh` commands. Runs when a final plan artifact (`*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written, regardless of `CONFIRM_<STEP>`. It records the project host (from the hook input's `cwd`), publishes the file through plan-sync, then always emits `hookSpecificOutput.additionalContext` (`[plan-link]`): the blob URL plus the local path, or the local path plus a reason, for the model to write in its response text. The `systemMessage` breadcrumb (`Plan file: <local path>` plus a `[plan-sync]` status line) is added only when there is no URL for a reason other than the project-host verdict (`host-mismatch`, `no-project-host`). Fail-open: a sync failure never aborts the hook or the workflow. Design and setup: [../plan-sync.md](../plan-sync.md).
+- `confirm-checkpoint.js` (PreToolUse, CONFIRM sentinel) — always emits a user-facing `systemMessage` with the plan context, plus `additionalContext` (`[plan-link]`) carrying the stage's plan-link line for the model to write in body text before the CONFIRM echo. Always exit 0.
+- `block-send-user-file.js` (PreToolUse, matcher: `SendUserFile`) — denies the tool so a plan is shown by its plan-link line in the response text, never sent as a file. Any other tool or unreadable stdin passes with no output.
 - `gate-plan-lang.js` (PreToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — rejects a write
   to a final plan artifact under the plans directory whose submitted text violates a strict
   `PLAN_LANG` (`english` / `japanese`) BEFORE the file changes (#2278). The unit of analysis is
@@ -111,15 +120,20 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   post-write backstop for `WORKTREE_NOTES.md`; reads the file as written and lints the two
   target sections with the same routing (`safeIsPrivateRepo` from `hooks/lib/is-private-repo.js`)
   as the PreToolUse gate.
-- `stop-confirm-plan-guard.js` (Stop) — two layers with distinct reason prefixes. Layer 1
-  (`[confirm-plan] Step 2 violation:`) is marker-gated: it fires only when `show-plan-link.js`
-  dropped a per-turn marker, and blocks a last assistant message that spells out a plans-directory
-  path. Layer 2 runs on EVERY Stop (#2278 removed the marker precondition): when a
+- `stop-confirm-plan-guard.js` (Stop) — Layer 2 and the plan-link check, with distinct reason
+  prefixes. The former Layer 1, which blocked any plans-directory path in the last message, is
+  removed: the local path is now part of the plan-link line. Layer 2 runs on EVERY Stop (#2278 removed the marker precondition): when a
   `CONFIRM_<STAGE>` sentinel appears in the last assistant turn, it first re-lints the confirmed
   artifact against a strict `PLAN_LANG` (`[confirm-plan] Layer 2/plan-lang:`) and then requires a
   stage-valid follow-up tool_use after the sentinel (`[confirm-plan] Layer 2/follow-up:`). The
   re-lint resolves `<sid>-<stage>.md` only for UUID or timestamp session ids; any other id, an
-  absent or unreadable artifact, or a non-strict policy skips it. Fail-open throughout.
+  absent or unreadable artifact, or a non-strict policy skips it. The plan-link check
+  (`[confirm-plan] plan-link:`) follows: a turn that wrote a plan artifact (per-turn marker) or
+  CONFIRMed a plan stage (detected with `confirm-checkpoint.js`'s own `parseSentinel`) must show
+  that stage's plan-link output in its assistant text — the blob URL when one exists, otherwise
+  the local path in any of its spellings (native, forward-slash, `~`, `file:///`). Only the
+  current turn is parsed (`hooks/lib/plan-link-turn-check.js`); an absent plan passes, and the
+  check blocks once (stands down on `stop_hook_active`). Fail-open throughout.
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — marks `run_tests` from the machine-readable
   `RUN_CONTRACT` line emitted by `tests/run-all.sh`, never from a raw exit code (#1242, contract-trust).
   Detects test runner commands over the shared command IR (`hooks/lib/command-ir.js` `parse()` +

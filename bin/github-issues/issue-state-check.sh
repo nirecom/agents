@@ -17,7 +17,7 @@ set -euo pipefail
 REPO_ARG=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --repo) REPO_ARG="$2"; shift 2 ;;
+        --repo) [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 2; }; REPO_ARG="$2"; shift 2 ;;
         --repo=*)
             REPO_ARG="${1#--repo=}"
             if [[ -z "$REPO_ARG" ]]; then echo "Error: --repo requires a non-empty value" >&2; exit 2; fi

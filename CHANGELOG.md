@@ -707,3 +707,23 @@ Changes: `bin/run-tests-baseline` now ignores home-claude paths that appear only
 ### FEATURE: PR #2603 (2026-10-11)
 Background: feat(#2544): record run_tests outcome from background test-runner dispatch
 Changes: feat: `/run-tests` can now record test suites that run longer than 600 seconds. Long suites are dispatched as a background worker; the result is picked up automatically on the next Bash call — no extra command needed.
+
+### FEATURE: PR #2609 (2026-10-11)
+Background: feat(#2263,#2452): remove ask-inducing command forms and propagate shell-issuance discipline to subagents
+Changes: Prompt assets no longer show compound command forms that trigger approval prompts, and subagent dispatch prompts now carry the shell-issuance rule through a PreToolUse hook backstop.;Skills and rules invoke bin/ tools by absolute path ("$AGENTS_MAIN_ROOT/bin/...") instead of relative paths.
+
+### FEATURE: PR #2611 (2026-10-11)
+Background: feat(#2547): derive run-tests-baseline per-test timeout from the duration ledger
+Changes: run-tests-baseline no longer times out long-running suites at a fixed 300 s: the per-test timeout now follows the measured duration (x2, 300-540 s) within a 600 s overall budget.
+
+### FEATURE: PR #2614 (2026-10-11)
+Background: feat(#2513): show the plan blob URL in the main conversation
+Changes: Plan blob URLs are shown in the main conversation so plans can be opened from the Claude mobile app; SendUserFile is no longer used for plans
+
+### FEATURE: PR #2618 (2026-10-11)
+Background: test(#2572): make the feature-2099 complexity-stage-routing suite green with secret-shape regressions visible
+Changes: Test suite for #2434 complexity stage routing (#2572): fixed the feature-2099 test suite (181 → 0 failures), adding coverage for the normalize-judge-signals → derive-complexity-level chain, S0-undecidable canonicalization, shared-procedure injection paths, and TL3 gate lane selection.
+
+### FEATURE: PR #2616 (2026-10-12)
+Background: fix(#2589): finish the root-name replacement in hooks, CLIs and installers
+Changes: Fixed: an inline SYSTEM_OPS_APPROVED=1 typed by the assistant can no longer approve system-state-changing commands; only the operator exporting it before launching Claude Code does.

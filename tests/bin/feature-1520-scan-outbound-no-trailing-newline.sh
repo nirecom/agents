@@ -35,6 +35,11 @@ make_sandbox() {
     sb="$(mktemp -d)"
     mkdir -p "$sb/bin"
     ln -s "$REAL_SCRIPT" "$sb/bin/scan-outbound.sh"
+    # #2589: carry the main-worktree helper so a scanner that sources it still runs here.
+    if [ -f "$SCRIPT_DIR_TEST/../../bin/lib/main-worktree.sh" ]; then
+        mkdir -p "$sb/bin/lib"
+        cp "$SCRIPT_DIR_TEST/../../bin/lib/main-worktree.sh" "$sb/bin/lib/main-worktree.sh"
+    fi
     # Start with empty lists; caller overwrites as needed
     printf '' > "$sb/.private-info-blocklist"
     printf '' > "$sb/.private-info-allowlist"
@@ -115,6 +120,64 @@ if [ "$RC4" -eq 0 ]; then
     pass "case4 allowlist-with-trailing-newline-control: exit $RC4 (allowed)"
 else
     fail "case4 allowlist-with-trailing-newline-control: expected exit 0 (allowed), got $RC4 — unexpected baseline failure"
+fi
+
+# -----------------------------------------------------------------------
+# Case 5: env-pointer-does-not-move-scan-basis  [#2589 S4-2 — FAILS before fix]
+# The scanner reads the lists of its own checkout. Pointing AGENTS_MAIN_ROOT at
+# a decoy dir whose blocklist is near-empty must not swap in the decoy lists.
+# Expected exit: 1 (blocked by the sandbox blocklist).
+# -----------------------------------------------------------------------
+SB5="$(make_sandbox)"
+DECOY5="$(mktemp -d)"
+cleanup_dirs+=("$SB5" "$DECOY5")
+printf '%s\n' 'UNIQUE_PINNED_QRS456' > "$SB5/.private-info-blocklist"
+printf '' > "$SB5/.private-info-allowlist"
+printf '%s\n' 'NEVER_MATCHES_DECOY_000' > "$DECOY5/.private-info-blocklist"
+printf '' > "$DECOY5/.private-info-allowlist"
+RC5="$(printf '%s' "This content contains UNIQUE_PINNED_QRS456 in it" | env AGENTS_MAIN_ROOT="$DECOY5" "$SB5/bin/scan-outbound.sh" --stdin test-label >/dev/null 2>&1; echo $?)"
+if [ "$RC5" -eq 1 ]; then
+    pass "case5 env-pointer-does-not-move-scan-basis: exit $RC5 (blocked by own checkout list)"
+else
+    fail "case5 env-pointer-does-not-move-scan-basis: expected exit 1 (block), got $RC5 — AGENTS_MAIN_ROOT redirected the blocklist to a decoy"
+fi
+
+# -----------------------------------------------------------------------
+# Case 6/7: env-pointer-does-not-block-own-allow  [#2589 S4-2 allow-side pair — FAILS before fix]
+# Mirror of case 5. The input is allowed by the sandbox's own lists (6: blocklisted
+# but allowlisted; 7: not blocklisted at all), while the decoy blocklist names it with
+# no allowlist entry. The decoy must have no effect. Expected exit: 0 (allowed).
+# -----------------------------------------------------------------------
+DECOY6="$(mktemp -d)"
+cleanup_dirs+=("$DECOY6")
+printf '%s\n' 'UNIQUE_ALLOWED_TUV789' > "$DECOY6/.private-info-blocklist"
+printf '' > "$DECOY6/.private-info-allowlist"
+for pair in "6 allowlisted-in-own-list" "7 absent-from-own-blocklist"; do
+    n="${pair%% *}"; label="${pair#* }"
+    SB="$(make_sandbox)"
+    cleanup_dirs+=("$SB")
+    if [ "$n" = 6 ]; then
+        printf '%s\n' 'UNIQUE_ALLOWED_TUV789' > "$SB/.private-info-blocklist"
+        printf '%s\n' 'UNIQUE_ALLOWED_TUV789' > "$SB/.private-info-allowlist"
+    else
+        printf '%s\n' 'UNRELATED_OWN_PATTERN_111' > "$SB/.private-info-blocklist"
+    fi
+    RC="$(printf '%s' "This content contains UNIQUE_ALLOWED_TUV789 in it" | env AGENTS_MAIN_ROOT="$DECOY6" "$SB/bin/scan-outbound.sh" --stdin test-label >/dev/null 2>&1; echo $?)"
+    if [ "$RC" -eq 0 ]; then
+        pass "case$n env-pointer-does-not-block-own-allow ($label): exit $RC (allowed by own checkout lists)"
+    else
+        fail "case$n env-pointer-does-not-block-own-allow ($label): expected exit 0 (allowed), got $RC — AGENTS_MAIN_ROOT swapped in the decoy blocklist"
+    fi
+done
+# Vacuity guard: the decoy blocklist really blocks this input when it is the scan basis.
+SBV="$(make_sandbox)"
+cleanup_dirs+=("$SBV")
+cp "$DECOY6/.private-info-blocklist" "$SBV/.private-info-blocklist"
+RCV="$(run_scan "$SBV" "This content contains UNIQUE_ALLOWED_TUV789 in it")"
+if [ "$RCV" -eq 1 ]; then
+    pass "case6-7 vacuity: the decoy blocklist blocks the input when used as the own list"
+else
+    fail "case6-7 vacuity: expected exit 1 with the decoy list as own list, got $RCV — the pair proves nothing"
 fi
 
 echo ""

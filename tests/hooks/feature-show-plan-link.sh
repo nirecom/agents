@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/assemble-cmd-parse.js, hooks/show-plan-link.js, skills/_shared/assemble-mandatory.sh
-# Tags: plan, vscode, hook, workflow, plans, scope:issue-specific, plan-sync, breadcrumb, edit-write-tools, command-tools
+# Tags: plan, vscode, hook, workflow, plans, scope:issue-specific, plan-sync, breadcrumb, edit-write-tools, command-tools, additional-context
 # Tests for isFinalPlanArtifact detection and systemMessage output in hooks/show-plan-link.js.
 #
 # Uses WORKFLOW_PLANS_DIR to control the resolved plans directory so tests work
@@ -45,13 +45,13 @@ mkdir -p "$CFG_DIR_TEST"
 export AGENTS_MAIN_ROOT="$CFG_DIR_TEST"
 export PLAN_SYNC_REMOTE_URL=""
 OFF_LINE="[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)"
-unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR 2>/dev/null || true
+export GITLAB_HOSTNAME="" GITLAB_SSH_HOSTNAME=""
 
 # Unset VS Code detection vars by default (restored per-test that needs them).
 unset TERM_PROGRAM 2>/dev/null || true
 unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
-unset SHOW_PLAN_LINK_NO_AUTO_OPEN SHOW_PLAN_LINK_NO_SPAWN SHOW_PLAN_LINK_MARKER_FILE 2>/dev/null || true
 # #2513 safety net: a `code` stub is first on PATH for the whole file, so no case
 # (e.g. T21 sets CLAUDE_CODE_ENTRYPOINT) can ever launch the real editor.
 # shellcheck source=../lib/code-stub.sh
@@ -160,6 +160,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/feature-show-plan-link/bash-tool.sh"
 # shellcheck source=feature-show-plan-link/plan-sync-breadcrumb.sh
 . "$SCRIPT_DIR/feature-show-plan-link/plan-sync-breadcrumb.sh"
+# shellcheck source=feature-show-plan-link/plan-link-rows.sh
+. "$SCRIPT_DIR/feature-show-plan-link/plan-link-rows.sh"
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""

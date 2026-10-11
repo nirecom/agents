@@ -76,6 +76,7 @@ SVC-7. Present findings for user review before proceeding to plan.
   REQUIRED and allowed — `<PLANS_DIR>` lives outside the git repo. See
   `skills/_shared/survey-artifact-valid.md` for the artifact validity contract.
 - Use Explore subagents for broad searches when needed
+  - Each Explore prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
 - Follow `rules/core-principles.md`.
 - Do NOT emit the research-complete sentinel — `make-outline-plan` MOP-0 aggregates
   both survey-code and survey-history before emitting it.

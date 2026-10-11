@@ -6,13 +6,10 @@
 # (#2561). All are skipped unless the repo under commit IS the agents repo.
 
 # _precommit_agents_repo_gates — reads $_cfg_dir (ambient). Exits the hook with 1
-# on a violation; returns 0 otherwise. No-op in a non-agents repo.
+# on a violation or a gate outage; returns 0 otherwise. No-op in a non-agents repo.
 _precommit_agents_repo_gates() {
     local _od_repo_top _od_cfg_dir _od_is_agents_repo _od_agents_common _od_repo_common
-    local _od_agents_abs _od_repo_abs _od_f _od_checker _od_rc _od_out
-    local _si_checker _si_rc _si_out _mb_f _mb_checker _mb_rc _mb_out
-    local _od_staged _mb_staged _pa_checker _pa_rc _pa_out _pi_checker _pi_rc _pi_out
-    local _rn_checker _rn_rc _rn_out
+    local _od_agents_abs _od_repo_abs _od_f _mb_f _od_staged _mb_staged
 
     _od_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
     [ -n "$_od_repo_top" ] || return 0
@@ -28,7 +25,7 @@ _precommit_agents_repo_gates() {
     if [ -n "$_od_agents_common" ] && [ -n "$_od_repo_common" ]; then
         _od_agents_abs="$(cd "$_od_cfg_dir" 2>/dev/null && cd "$_od_agents_common" 2>/dev/null && pwd -P || printf '%s' "$_od_agents_common")"
         _od_repo_abs="$(cd "$_od_repo_top" 2>/dev/null && cd "$_od_repo_common" 2>/dev/null && pwd -P || printf '%s' "$_od_repo_common")"
-        # msys answers pwd -P in the spelling it was entered by (a Temp dir as /tmp or /c/...).
+        # msys answers pwd -P in the spelling it was entered by (a Temp dir as /tmp or a drive-letter path).
         if command -v cygpath >/dev/null 2>&1; then
             _od_agents_abs="$(cygpath -m "$_od_agents_abs" 2>/dev/null || printf '%s' "$_od_agents_abs")"
             _od_repo_abs="$(cygpath -m "$_od_repo_abs" 2>/dev/null || printf '%s' "$_od_repo_abs")"
@@ -56,51 +53,16 @@ _precommit_agents_repo_gates() {
     # edit can break a rule it never touched, and some filenames git cannot even
     # stage on this platform). The staged list is still passed so out-of-root paths
     # are surfaced; an empty list is a valid invocation.
-    _od_checker="$_od_cfg_dir/bin/check-on-demand-rules.sh"
-    if [ ! -x "$_od_checker" ]; then
-        echo "pre-commit: check-on-demand-rules.sh missing or not executable at $_od_checker — on-demand rules notation gate skipped" >&2
-    else
-        _od_rc=0
-        _od_out="$("$_od_checker" --staged ${_od_staged[@]+"${_od_staged[@]}"} 2>&1)" || _od_rc=$?
-        case "$_od_rc" in
-            0) : ;;
-            1|2)
-                printf '%s\n' "$_od_out"
-                echo ""
-                echo "Commit blocked: on-demand rules-injection notation violations (checker rc=$_od_rc)."
-                echo "See docs/architecture/claude-code/rules-injection.md."
-                exit 1
-                ;;
-            *)
-                echo "pre-commit: check-on-demand-rules.sh rc=$_od_rc — on-demand rules notation gate skipped" >&2
-                ;;
-        esac
-    fi
+    _precommit_run_agents_gate "$_od_repo_top" "$_od_cfg_dir/bin/check-on-demand-rules.sh" exec \
+        "on-demand rules-injection notation violations" docs/architecture/claude-code/rules-injection.md \
+        --staged ${_od_staged[@]+"${_od_staged[@]}"}
 
     # ---------- session-id SSOT gate (issue #2270) ----------
     # rc 2 is a caller contract breach (bad flag, rotted allowlist), not an outage,
-    # so a rename cannot silently disarm the gate. Real outages (missing/unrunnable
-    # checker, unexpected rc) leave the commit alone with a diagnostic.
-    _si_checker="$_od_cfg_dir/bin/check-session-id-ssot.sh"
-    if [ ! -x "$_si_checker" ]; then
-        echo "pre-commit: check-session-id-ssot.sh missing or not executable at $_si_checker — session-id SSOT gate skipped" >&2
-    else
-        _si_rc=0
-        _si_out="$(bash "$_si_checker" --staged 2>&1)" || _si_rc=$?
-        case "$_si_rc" in
-            0) : ;;
-            1|2)
-                printf '%s\n' "$_si_out"
-                echo ""
-                echo "Commit blocked: session-id env reads bypassing the SSOT resolver (checker rc=$_si_rc)."
-                echo "See docs/architecture/claude-code/session-id-resolution.md."
-                exit 1
-                ;;
-            *)
-                echo "pre-commit: check-session-id-ssot.sh rc=$_si_rc — session-id SSOT gate skipped" >&2
-                ;;
-        esac
-    fi
+    # so a rename cannot silently disarm the gate.
+    _precommit_run_agents_gate "$_od_repo_top" "$_od_cfg_dir/bin/check-session-id-ssot.sh" bash \
+        "session-id env reads bypassing the SSOT resolver" docs/architecture/claude-code/session-id-resolution.md \
+        --staged
 
     # ---------- migration-blocks gate (issue #1987) ----------
     # _mb_staged: all staged files (excluding rules/*.md and tests/)
@@ -115,93 +77,62 @@ _precommit_agents_repo_gates() {
     done < <(git diff --cached --name-only -z 2>/dev/null || true)
 
     # Blocking on axis-1/2 violations (rc 1 AND rc 2); warnings pass through (rc 0).
-    # Real outages (missing/unrunnable checker, unexpected rc) leave the commit alone.
-    _mb_checker="$_od_cfg_dir/bin/check-migration-blocks.sh"
-    if [ ! -x "$_mb_checker" ]; then
-        echo "pre-commit: check-migration-blocks.sh missing or not executable at $_mb_checker — migration blocks gate skipped" >&2
-    else
-        _mb_rc=0
-        _mb_out="$("$_mb_checker" --staged ${_mb_staged[@]+"${_mb_staged[@]}"} 2>&1)" || _mb_rc=$?
-        case "$_mb_rc" in
-            0) : ;;
-            1|2)
-                printf '%s\n' "$_mb_out"
-                echo ""
-                echo "Commit blocked: migration block format violations (checker rc=$_mb_rc)."
-                exit 1
-                ;;
-            *)
-                echo "pre-commit: check-migration-blocks.sh rc=$_mb_rc — migration blocks gate skipped" >&2
-                ;;
-        esac
-    fi
+    _precommit_run_agents_gate "$_od_repo_top" "$_od_cfg_dir/bin/check-migration-blocks.sh" exec \
+        "migration block format violations" "" \
+        --staged ${_mb_staged[@]+"${_mb_staged[@]}"}
 
     # ---------- plans-dir artifact-name gate (issue #2434) ----------
     # Whole-tree scan: a name assembled under the plans dir must be a registered artifact.
-    _pa_checker="$_od_cfg_dir/bin/check-plans-artifacts"
-    if [ ! -f "$_pa_checker" ] || ! command -v node >/dev/null 2>&1; then
-        echo "pre-commit: check-plans-artifacts or node missing at $_pa_checker — plans-dir artifact gate skipped" >&2
-    else
-        _pa_rc=0
-        _pa_out="$(cd "$_od_repo_top" && node "$_od_cfg_dir"/bin/check-plans-artifacts --source 2>&1)" || _pa_rc=$?
-        case "$_pa_rc" in
-            0) : ;;
-            1|2)
-                printf '%s\n' "$_pa_out"
-                echo ""
-                echo "Commit blocked: plans-dir names that are not registered artifacts (checker rc=$_pa_rc)."
-                echo "See docs/architecture/claude-code/state-dirs.md."
-                exit 1
-                ;;
-            *)
-                echo "pre-commit: check-plans-artifacts rc=$_pa_rc — plans-dir artifact gate skipped" >&2
-                ;;
-        esac
-    fi
+    _precommit_run_agents_gate "$_od_repo_top" "$_od_cfg_dir/bin/check-plans-artifacts" node \
+        "plans-dir names that are not registered artifacts" docs/architecture/claude-code/state-dirs.md \
+        --source
 
     # ---------- plans-dir isolation gate (issue #2512) ----------
     # Staged residual old-name token; the tests/ pin scan runs only when a tests/*.sh is staged.
-    _pi_checker="$_od_cfg_dir/bin/check-plans-dir-isolation.sh"
-    if [ ! -f "$_pi_checker" ]; then
-        echo "pre-commit: check-plans-dir-isolation.sh missing at $_pi_checker — plans-dir isolation gate skipped" >&2
-    else
-        _pi_rc=0
-        _pi_out="$(cd "$_od_repo_top" && bash "$_pi_checker" --staged 2>&1)" || _pi_rc=$?
-        case "$_pi_rc" in
-            0) : ;;
-            1|2)
-                printf '%s\n' "$_pi_out"
-                echo ""
-                echo "Commit blocked: test fixture isolation violations (checker rc=$_pi_rc)."
-                echo "See rules/test/fixture-isolation.md."
-                exit 1
-                ;;
-            *)
-                echo "pre-commit: check-plans-dir-isolation.sh rc=$_pi_rc — plans-dir isolation gate skipped" >&2
-                ;;
-        esac
-    fi
+    _precommit_run_agents_gate "$_od_repo_top" "$_od_cfg_dir/bin/check-plans-dir-isolation.sh" bash \
+        "test fixture isolation violations" rules/test/fixture-isolation.md \
+        --staged
 
     # ---------- root-names gate (issue #2561) ----------
-    # Staged files only; the retired-name list and the classification table are read from the index.
-    _rn_checker="$_od_cfg_dir/bin/check-root-names.sh"
-    if [ ! -f "$_rn_checker" ]; then
-        echo "pre-commit: check-root-names.sh missing at $_rn_checker — root-names gate skipped" >&2
-    else
-        _rn_rc=0
-        _rn_out="$(cd "$_od_repo_top" && bash "$_rn_checker" --staged 2>&1)" || _rn_rc=$?
-        case "$_rn_rc" in
-            0) : ;;
-            1|2)
-                printf '%s\n' "$_rn_out"
-                echo ""
-                echo "Commit blocked: root-name violations (checker rc=$_rn_rc)."
-                echo "See docs/architecture/claude-code/root-names.md."
-                exit 1
-                ;;
-            *)
-                echo "pre-commit: check-root-names.sh rc=$_rn_rc — root-names gate skipped" >&2
-                ;;
-        esac
+    # Staged files of the cwd repo; the retired-name list and the table are read from its index.
+    _precommit_run_agents_gate "$_od_repo_top" "$_od_cfg_dir/bin/check-root-names.sh" bash \
+        "root-name violations" docs/architecture/claude-code/root-names.md \
+        --staged
+}
+
+# _precommit_run_agents_gate <repo-top> <checker> <exec|bash|node> <what> <doc|""> [args...]
+# Runs one checker from <repo-top>. rc 0 passes; every other outcome exits the hook with 1:
+# rc 1|2 is a violation, while a missing checker, a missing interpreter or any other rc is
+# an outage the gate cannot vouch for, so it fails closed (#2589). Emergency bypass:
+# `git commit --no-verify`.
+_precommit_run_agents_gate() {
+    local _g_top="$1" _g_checker="$2" _g_runner="$3" _g_what="$4" _g_doc="$5" _g_name _g_rc=0 _g_out
+    shift 5
+    _g_name="${_g_checker##*/}"
+    if [ ! -f "$_g_checker" ] || { [ "$_g_runner" = exec ] && [ ! -x "$_g_checker" ]; } \
+        || { [ "$_g_runner" != exec ] && ! command -v "$_g_runner" >/dev/null 2>&1; }; then
+        echo "pre-commit: $_g_name missing or not runnable (${_g_runner}) at $_g_checker." >&2
+        echo "Commit blocked: the agents-repo gate fails closed. Emergency bypass: git commit --no-verify" >&2
+        exit 1
     fi
+    if [ "$_g_runner" = exec ]; then
+        _g_out="$(cd "$_g_top" && "$_g_checker" "$@" 2>&1)" || _g_rc=$?
+    else
+        _g_out="$(cd "$_g_top" && "$_g_runner" "$_g_checker" "$@" 2>&1)" || _g_rc=$?
+    fi
+    case "$_g_rc" in
+        0) return 0 ;;
+        1|2)
+            printf '%s\n' "$_g_out"
+            echo ""
+            echo "Commit blocked: $_g_what (checker rc=$_g_rc)."
+            [ -z "$_g_doc" ] || echo "See $_g_doc."
+            ;;
+        *)
+            printf '%s\n' "$_g_out" >&2
+            echo "pre-commit: $_g_name rc=$_g_rc is not a verdict (0 clean, 1 or 2 violation)." >&2
+            echo "Commit blocked: the agents-repo gate fails closed. Emergency bypass: git commit --no-verify" >&2
+            ;;
+    esac
+    exit 1
 }

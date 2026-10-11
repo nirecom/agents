@@ -23,9 +23,9 @@ System-wide package install/uninstall/upgrade requires explicit user approval (R
 this — see the hook source for the exact command set. Per-repo and user-scope variants
 (e.g. `npm install` without `-g`, `pip install --user`, `uv pip install`) pass through.
 
-Legitimate installer scripts under `install/` have a controlled bypass; see those scripts
-for the mechanism. The protection is structural (inherited env only), so model-issued
-inline forms cannot bypass.
+Installer scripts never set `SYSTEM_OPS_APPROVED`; the only bypass is the operator exporting
+it in their own shell before launching Claude Code. The hook reads only the inherited env, so
+model-issued inline forms cannot bypass.
 
 ## Winget Install
 

@@ -49,9 +49,23 @@ d2099_consumer_stage() {
     printf '%s\n' "$D2099_CONSUMERS" | grep -m1 -- "^$1|" | cut -d'|' -f2
 }
 
+# make-detail-plan's read is documented as `bash -c '<cmd>'` (inner command double-quoted
+# only); bounded to the step's own section (d2099_section_cli_line).
+d2099_extract_bashc_cmd() {
+    local f="$1" cli="$2" line
+    line=$(d2099_section_cli_line "$f" "$cli" | grep -oE "bash -c '[^']*'" | head -1)
+    [ -n "$line" ] || { echo ""; return; }
+    printf '%s' "$line" | sed -E "s/^bash -c '//; s/'$//"
+}
+
+# Run a read command exactly as documented, with only the env the skill assumes.
+d2099_run_read_cmd() {
+    [ -n "$1" ] || { echo "__NO_COMMAND__"; return; }
+    SESSION_ID="$2" run_with_timeout bash -c "$1" 2>/dev/null
+}
+
 # read-session-facts is documented as a bare backticked command (nothing is spliced
-# into it, so it needs no `bash -c` wrapper) — different delimiters from
-# d2099_extract_cmd's, same bound: the step's own section.
+# into it, so it needs no `bash -c` wrapper) — same bound: the step's own section.
 d2099_extract_backtick_cmd() {
     local f="$1" cli="$2" line
     line=$(d2099_section_cli_line "$f" "$cli" | grep -oE '`[^`]*'"$cli"'[^`]*`' | head -1)
@@ -65,7 +79,7 @@ d2099_extract_read_cmd() {
     cli=$(d2099_read_cli "$(d2099_skill_dir_name "$f")")
     case "$cli" in
         read-session-facts) d2099_extract_backtick_cmd "$f" "$cli" ;;
-        *) d2099_extract_cmd "$f" "$cli" ;;
+        *) d2099_extract_bashc_cmd "$f" "$cli" ;;
     esac
 }
 
@@ -80,7 +94,7 @@ d2099_consumer_read() {
     skill=$(d2099_skill_dir_name "$f")
     cmd=$(d2099_extract_read_cmd "$f")
     [ -n "$cmd" ] || { echo "__NO_COMMAND__"; return; }
-    out=$(d2099_run_skill_cmd "$cmd" "$sid")
+    out=$(d2099_run_read_cmd "$cmd" "$sid")
     if [ "$(d2099_read_cli "$skill")" = "read-complexity-evaluation" ]; then
         printf '%s\n' "$out"
         return

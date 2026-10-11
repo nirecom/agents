@@ -4,8 +4,8 @@
 //             D (user/group), E (reg/boot), F (disk/FS).
 // Detection lives in hooks/lib/system-ops-categories.js (shared with the
 // scratchpad-script auto-approve content scan).
-// Bypass: set SYSTEM_OPS_APPROVED=1 in the environment BEFORE launching Claude Code.
-// Inline prefix (SYSTEM_OPS_APPROVED=1 cmd) does NOT reach this hook's process.env.
+// Bypass: reads only the env Claude Code inherited at launch — the operator exports
+// SYSTEM_OPS_APPROVED=1 before launching it; no script sets it, an inline prefix never reaches it.
 // lib/load-env.js is intentionally NOT loaded (would allow .env-based bypass).
 // Scope: Bash, runInTerminal, runCommands. Unreadable stdin blocks (exit 2).
 
@@ -26,7 +26,6 @@ const { scannableCommandListOf } = require("./lib/scannable-command-list");
 
 const ALLOWED_TOOLS = new Set(COMMAND_TOOL_NAMES);
 
-// Bypass: inherited env only. Inline VAR=1 prefix does not propagate to this process.
 if (process.env.SYSTEM_OPS_APPROVED === "1") process.exit(0);
 
 const r = readHookInput();
@@ -92,8 +91,8 @@ if (!blockedCategory) process.exit(0);
 process.stderr.write(
   `enforce-system-ops: blocked (${blockedCategory}). System-wide irreversible operations\n` +
     `require explicit user approval — escalate via Rule 2 per rules/user-escalation.md.\n` +
-    `If this is a legitimate installer flow, set SYSTEM_OPS_APPROVED=1 in the\n` +
-    `environment that LAUNCHES Claude Code (inline prefix does NOT bypass this guard).\n` +
+    `The only bypass is the operator exporting SYSTEM_OPS_APPROVED=1 in their own shell\n` +
+    `before launching Claude Code; no script sets it, and an inline prefix does NOT bypass.\n` +
     `Read rules/installer.md and rules/ops.md before proceeding — rules/ops.md is\n` +
     `on-demand-only (never auto-injected), so this Read is the only way it arrives.\n`
 );

@@ -11,13 +11,15 @@
 ff_check() {
     run_with_timeout 30 node -e "
       const { isAllowedFastForwardMerge } = require(process.argv[1]);
-      console.log(isAllowedFastForwardMerge(process.argv[2]) ? 'allow' : 'reject');
-    " -- "$GUARD_JS" "$1" 2>/dev/null
+      console.log(isAllowedFastForwardMerge(process.argv[2], process.argv[3]) ? 'allow' : 'reject');
+    " -- "$GUARD_JS" "$1" "$2" 2>/dev/null
 }
 
+# The judged repo defaults to /judged/repo; pass "-" to hand the predicate an empty root.
 assert_ff() {
-    local desc="$1" cmd="$2" expected="$3"
-    local got; got="$(ff_check "$cmd")"
+    local desc="$1" cmd="$2" expected="$3" repo="${4:-/judged/repo}"
+    [ "$repo" = "-" ] && repo=""
+    local got; got="$(ff_check "$cmd" "$repo")"
     if [ "$got" = "$expected" ]; then pass "$desc -> $expected"
     else fail "$desc: expected '$expected', got '$got' (cmd: $(printf '%q' "$cmd"))"
     fi
@@ -28,7 +30,12 @@ assert_ff "merge --ff-only origin/feature" 'git merge --ff-only origin/feature' 
 assert_ff "merge --ff-only (no upstream arg)" 'git merge --ff-only' "allow"
 assert_ff "pull --ff-only" 'git pull --ff-only' "allow"
 assert_ff "pull --ff-only origin main" 'git pull --ff-only origin main' "allow"
-assert_ff "git -C path merge --ff-only" 'git -C /path merge --ff-only origin/feat' "allow"
+assert_ff "git -C <judged repo> merge --ff-only" 'git -C /judged/repo merge --ff-only origin/feat' "allow"
+# A -C naming another repository acts there, not on the repository the hook judged.
+assert_ff "git -C <foreign repo> merge --ff-only" 'git -C /path merge --ff-only origin/feat' "reject"
+# With no judged root there is nothing a -C can match, so it fails closed.
+assert_ff "git -C <path> merge --ff-only, empty judged root" 'git -C /judged/repo merge --ff-only origin/feat' "reject" "-"
+assert_ff "no -C merge --ff-only, empty judged root" 'git merge --ff-only origin/feat' "allow" "-"
 
 # Rejected
 assert_ff "plain merge" 'git merge feature' "reject"

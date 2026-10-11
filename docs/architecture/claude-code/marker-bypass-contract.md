@@ -50,6 +50,7 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/check-japanese-in-docs.js` | PreToolUse | **No** | **No** |
 | `hooks/show-user-verified-context.js` | PreToolUse | **No** | **No** |
 | `hooks/confirm-checkpoint.js` | PreToolUse | **No** | **No** |
+| `hooks/block-send-user-file.js` | PreToolUse | **No** | **No** |
 | `hooks/block-tests-direct.js` | PreToolUse | **No** | **No** |
 | `hooks/supervisor-off-proposal-shim.js` | PreToolUse | Yes | Yes (only when the OFF proposal's target is `worktree`) |
 | `hooks/workflow-gate.js` | PreToolUse | Yes | Yes (skips the unstaged-tracked Gate 1 check AND makes the Tier 3 worktree-entry early gate return `verdict: "dormant"`) |
@@ -68,6 +69,7 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/user-prompt-submit-mechanism-check.js` | UserPromptSubmit | **No** | **No** |
 | `hooks/jev-shadow-pre.js` | PreToolUse | **No** | **No** |
 | `hooks/jev-shadow-post.js` | PostToolUse | **No** | **No** |
+| `hooks/subagent-dispatch-prompt.js` | PreToolUse | **No** | **No** |
 
 `hooks/pre-commit` honors both markers for **two separate sections**: the worktree-isolation
 gate ("commits from main worktree are blocked" / "commits to protected branch" guard) and
@@ -98,6 +100,9 @@ bypass: see `hooks/lib/protected-basenames.js`.
 `hooks/jev-shadow-pre.js` and `hooks/jev-shadow-post.js` (#2460) are **No/No** for the same
 reason: they record a shadow comparison and never block, so a session override has nothing
 to suspend. Their only switch is `JEV` — see [jev.md](../jev.md).
+
+`hooks/subagent-dispatch-prompt.js` (#2263) is **No/No** as well: it only rewrites a dispatch
+prompt through `updatedInput` and never blocks, so there is no marker for it to read.
 
 `hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info
 scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-ORTH). Users

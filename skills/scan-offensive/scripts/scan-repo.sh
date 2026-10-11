@@ -30,32 +30,36 @@ while [ $# -gt 0 ]; do
     --apply) APPLY=1; shift ;;
     --dry-run) APPLY=0; shift ;;
     --since)
+      [ $# -ge 2 ] || { echo "scan-repo: $1 needs a value" >&2; exit 3; }
       case "$2" in
         [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
         *) echo "scan-repo: --since requires YYYY-MM-DD, got: $2" >&2; exit 3 ;;
       esac
       SINCE="$2"; shift 2 ;;
     --until)
+      [ $# -ge 2 ] || { echo "scan-repo: $1 needs a value" >&2; exit 3; }
       case "$2" in
         [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
         *) echo "scan-repo: --until requires YYYY-MM-DD, got: $2" >&2; exit 3 ;;
       esac
       UNTIL="$2"; shift 2 ;;
     --from-issue)
+      [ $# -ge 2 ] || { echo "scan-repo: $1 needs a value" >&2; exit 3; }
       case "$2" in
         ''|*[!0-9]*) echo "scan-repo: --from-issue requires an integer, got: $2" >&2; exit 3 ;;
       esac
       FROM_ISSUE="$2"; shift 2 ;;
     --to-issue)
+      [ $# -ge 2 ] || { echo "scan-repo: $1 needs a value" >&2; exit 3; }
       case "$2" in
         ''|*[!0-9]*) echo "scan-repo: --to-issue requires an integer, got: $2" >&2; exit 3 ;;
       esac
       TO_ISSUE="$2"; shift 2 ;;
-    --limit) LIMIT="$2"; shift 2 ;;
+    --limit) [ $# -ge 2 ] || { echo "scan-repo: $1 needs a value" >&2; exit 3; }; LIMIT="$2"; shift 2 ;;
     --include-private) INCLUDE_PRIVATE=1; shift ;;
-    --manifest-out) MANIFEST_OUT="$2"; shift 2 ;;
-    --manifest-path) MANIFEST_PATH="$2"; shift 2 ;;
-    --confirm-ids) CONFIRM_IDS="$2"; shift 2 ;;
+    --manifest-out) [ $# -ge 2 ] || { echo "scan-repo: $1 needs a value" >&2; exit 3; }; MANIFEST_OUT="$2"; shift 2 ;;
+    --manifest-path) [ $# -ge 2 ] || { echo "scan-repo: $1 needs a value" >&2; exit 3; }; MANIFEST_PATH="$2"; shift 2 ;;
+    --confirm-ids) [ $# -ge 2 ] || { echo "scan-repo: $1 needs a value" >&2; exit 3; }; CONFIRM_IDS="$2"; shift 2 ;;
     --canary-skip) CANARY_SKIP=1; shift ;;
     -h|--help)
       sed -n '2,15p' "$0"; exit 0 ;;

@@ -12,7 +12,7 @@ Promise.resolve(ps.provisionRepo(process.argv[1], process.argv[2], deps)).then((
   process.stdout.write(r.ok ? "ok" : "ng:" + r.reason));' "$1" "$ST_URL"
 }
 
-st_sync() { (export PLAN_SYNC_REMOTE_URL="$ST_URL"; sync_local "$1" "$2"); }
+st_sync() { (export PLAN_SYNC_REMOTE_URL="$ST_URL"; FLOW_RECORD_HOST="github.com"; sync_local "$1" "$2"); }
 
 # st_pair <tag> — fresh bare served by the ssh stub + two provisioned machines A and B.
 st_pair() {

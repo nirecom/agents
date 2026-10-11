@@ -31,19 +31,19 @@ TEST_GAP=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --notes)       NOTES_PATH="$2";    shift 2 ;;
-        --branch)      BRANCH="$2";        shift 2 ;;
-        --pr)          PR_NUMBER="$2";     shift 2 ;;
-        --merge-commit) MERGE_COMMIT="$2"; shift 2 ;;
-        --background)  BACKGROUND="$2";   shift 2 ;;
-        --category)    CATEGORY="$2";     shift 2 ;;
-        --test-gap)    TEST_GAP="$2";      shift 2 ;;
+        --notes)       [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; NOTES_PATH="$2";    shift 2 ;;
+        --branch)      [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; BRANCH="$2";        shift 2 ;;
+        --pr)          [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; PR_NUMBER="$2";     shift 2 ;;
+        --merge-commit) [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; MERGE_COMMIT="$2"; shift 2 ;;
+        --background)  [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; BACKGROUND="$2";   shift 2 ;;
+        --category)    [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; CATEGORY="$2";     shift 2 ;;
+        --test-gap)    [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; TEST_GAP="$2";      shift 2 ;;
         --dry-run)     DRY_RUN=1;         shift ;;
         --bootstrap)   BOOTSTRAP=1;       shift ;;
-        --closes-issues-count) CLOSES_ISSUES_COUNT="$2"; shift 2 ;;
-        --target-history)   TARGET_HISTORY="$2";   shift 2 ;;
-        --target-changelog) TARGET_CHANGELOG="$2"; shift 2 ;;
-        --repo)        REPO_OVERRIDE="$2"; shift 2 ;;
+        --closes-issues-count) [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; CLOSES_ISSUES_COUNT="$2"; shift 2 ;;
+        --target-history)   [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; TARGET_HISTORY="$2";   shift 2 ;;
+        --target-changelog) [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; TARGET_CHANGELOG="$2"; shift 2 ;;
+        --repo)        [[ $# -ge 2 ]] || { echo "compose-doc-append-entry: $1 needs a value" >&2; exit 1; }; REPO_OVERRIDE="$2"; shift 2 ;;
         --history)     HISTORY_ONLY=1;     shift ;;
         --changelog)   CHANGELOG_ONLY=1;   shift ;;
         *) echo "compose-doc-append-entry: unknown argument: $1" >&2; exit 1 ;;

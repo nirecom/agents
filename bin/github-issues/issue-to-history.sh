@@ -46,6 +46,7 @@ NO_AUTO_ROTATE=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --commit)
+            [ $# -ge 2 ] || { echo "Error: $1 needs a value" >&2; exit 1; }
             COMMIT="${2:-}"
             if [ -n "$COMMIT" ] && ! printf '%s' "$COMMIT" | grep -qE '^[0-9a-fA-F]{7,40}$'; then
                 echo "Error: --commit must be a 7-40 char hex hash, got: $COMMIT" >&2
@@ -54,6 +55,7 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         --history-notes-file)
+            [ $# -ge 2 ] || { echo "Error: $1 needs a value" >&2; exit 1; }
             HISTORY_NOTES_FILE="${2:-}"
             shift 2
             ;;
@@ -62,18 +64,22 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --title)
+            [ $# -ge 2 ] || { echo "Error: $1 needs a value" >&2; exit 1; }
             NG_TITLE="${2:-}"
             shift 2
             ;;
         --body-file)
+            [ $# -ge 2 ] || { echo "Error: $1 needs a value" >&2; exit 1; }
             NG_BODY_FILE="${2:-}"
             shift 2
             ;;
         --closed-date)
+            [ $# -ge 2 ] || { echo "Error: $1 needs a value" >&2; exit 1; }
             NG_CLOSED_DATE="${2:-}"
             shift 2
             ;;
         --target)
+            [ $# -ge 2 ] || { echo "Error: $1 needs a value" >&2; exit 1; }
             TARGET="${2:-}"
             shift 2
             ;;
@@ -90,7 +96,7 @@ while [ $# -gt 0 ]; do
             NO_AUTO_ROTATE=1
             shift
             ;;
-        *) shift ;;
+        *) echo "Error: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
 

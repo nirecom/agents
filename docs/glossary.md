@@ -165,6 +165,17 @@ definition, and related links.
   must never write it; they isolate it with `harness_isolate`.
 - **Related**: [architecture/claude-code/state-dirs.md](architecture/claude-code/state-dirs.md)
 
+### canonical dispatch line
+
+- **Full name**: Canonical line of the Subagent Dispatch Prompts section
+- **Definition**: The single sentence in `rules/shell-commands.md` that tells a
+  subagent to read the shell-issuance rule and report command-form deviations.
+  Dispatch prompts carry it; the PreToolUse `Agent|Task` hook
+  (`hooks/subagent-dispatch-prompt.js`) appends it when a prompt lacks it, except
+  for agents whose tools cannot write or run commands. Whether the host applies
+  the rewrite is unverified (Approach C, #2263).
+- **Related**: [architecture/claude-code/prompt-command-forms.md](architecture/claude-code/prompt-command-forms.md)
+
 ### turn
 
 - **Full name**: Conversational turn
@@ -450,7 +461,9 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 ### plan-sync
 
 - **Definition**: The mechanism that pushes each final plan file (`*-intent.md`,
-  `*-outline.md`, `*-detail.md`) from the plans directory to a private remote, so the
-  plan breadcrumb can show a URL readable from mobile apps or a browser. Distinct from
-  session-sync, which syncs session history.
+  `*-outline.md`, `*-detail.md`) from the plans directory to a private GitHub or GitLab
+  remote, so the model can write a blob URL readable from mobile apps or a browser in its
+  response text. A plan is sent only when the project it was written for is hosted on the
+  remote's host. `bin/plan-link` prints a session's plan-link line (the URL, else the local
+  path and a reason). Distinct from session-sync, which syncs session history.
 - **Related**: [architecture/claude-code/plan-sync.md](architecture/claude-code/plan-sync.md), #2513

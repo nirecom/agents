@@ -16,9 +16,9 @@ SEED=""
 EXCLUDE_CSV=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --seed) SEED="${2:-}"; shift 2 ;;
-        --exclude) EXCLUDE_CSV="${2:-}"; shift 2 ;;
-        *) shift ;;
+        --seed) [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 2; }; SEED="${2:-}"; shift 2 ;;
+        --exclude) [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 2; }; EXCLUDE_CSV="${2:-}"; shift 2 ;;
+        *) echo "companion-search: unknown argument: $1" >&2; exit 2 ;;
     esac
 done
 

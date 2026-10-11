@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # bin/calibrate-test-parallelism/sample.sh — population, ledger candidates, sample and
 # reserve, feasibility (SOURCE ONLY; #2079 S2). Needs the entry point's globals.
+_SAMPLE_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 POP_PATH=(); POP_SECS=(); PLAN_ROWS=0
 CAND_PATH=(); CAND_SECS=(); LEDGER_CANDS=0
@@ -35,10 +36,10 @@ cal_ledger_secs() {
     POP_SECS=()
     for ((i = 0; i < ${#POP_PATH[@]}; i++)); do
         POP_SECS[i]=""
-        run_all_dur_key_into "${POP_PATH[$i]}" "$SCRIPT_CHECKOUT_ROOT" || continue
+        run_all_dur_key_into "${POP_PATH[$i]}" "$_SAMPLE_SCRIPT_CHECKOUT_ROOT" || continue
         printf '%s\t%s\n' "$i" "$RUN_ALL_DUR_KEY_OUT"
     done > "$keys"
-    run_all_dur_lookup "$SCRIPT_CHECKOUT_ROOT" "$keys" "$secs"
+    run_all_dur_lookup "$_SAMPLE_SCRIPT_CHECKOUT_ROOT" "$keys" "$secs"
     while IFS="$(printf '\t')" read -r id s; do
         if ! is_uint "$id" || ! is_uint "$s"; then continue; fi
         [ "$id" -lt "${#POP_PATH[@]}" ] && POP_SECS[id]="$s"

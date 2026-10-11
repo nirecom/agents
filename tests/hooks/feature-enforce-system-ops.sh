@@ -244,6 +244,34 @@ expect_block "BP3: inline 'export SYSTEM_OPS_APPROVED=1 && winget install' still
 expect_block "BP4: inline 'SYSTEM_OPS_APPROVED=1 winget install' still blocked" \
     '{"tool_name":"Bash","tool_input":{"command":"SYSTEM_OPS_APPROVED=1 winget install jq"}}'
 
+# BP5: the flag written into a .env file next to the working directory and the project dir
+# is not an approval; only the hook's own inherited environment is read.
+DOTENV_DIR="$_ISOLATION_TMP_ROOT/dotenv-fixture"
+mkdir -p "$DOTENV_DIR"
+printf 'SYSTEM_OPS_APPROVED=1\n' > "$DOTENV_DIR/.env"
+OUT=$(cd "$DOTENV_DIR" && unset SYSTEM_OPS_APPROVED && echo '{"tool_name":"Bash","tool_input":{"command":"winget install jq"}}' | CLAUDE_PROJECT_DIR="$DOTENV_DIR" run_with_timeout 15 node "$HOOK" 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 2 ]; then
+    pass "BP5: SYSTEM_OPS_APPROVED=1 written in a .env file does not bypass winget install"
+else
+    fail "BP5: .env-based flag — expected exit 2 (rc=$RC out=$OUT)"
+fi
+
+# MSG1 (#2200): the block message must not invite a script/installer to set the flag
+# itself; the only sanctioned bypass is the operator exporting it before launching Claude Code.
+run_hook_block_env '{"tool_name":"Bash","tool_input":{"command":"winget install jq"}}'
+msg1_problems=""
+[ "$RC" -eq 2 ] || msg1_problems="$msg1_problems [rc=$RC, want 2]"
+printf '%s' "$ERR" | grep -qi 'installer flow' && msg1_problems="$msg1_problems [still recommends the flag for an installer flow]"
+printf '%s' "$ERR" | grep -qi 'operator' || msg1_problems="$msg1_problems [does not name the operator as the one who sets it]"
+printf '%s' "$ERR" | grep -qi 'launch' || msg1_problems="$msg1_problems [does not say the export happens before launching Claude Code]"
+printf '%s' "$ERR" | grep -q 'rules/user-escalation.md' || msg1_problems="$msg1_problems [lost the Rule 2 escalation pointer]"
+if [ -z "$msg1_problems" ]; then
+    pass "MSG1: block message points to operator pre-launch export only, never a script self-set"
+else
+    fail "MSG1: block message contract;$msg1_problems — stderr=$ERR"
+fi
+
 # ============================================================================
 # Tool name coverage — runInTerminal and runCommands
 # ============================================================================

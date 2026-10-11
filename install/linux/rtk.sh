@@ -1,7 +1,6 @@
 #!/bin/bash
 # rtk.sh - Install RTK (Rust Token Killer) when RTK is on; validate with rtk config,
 # migrate only invalid config via rtk config --create.
-export SYSTEM_OPS_APPROVED=1
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 

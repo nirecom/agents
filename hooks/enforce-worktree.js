@@ -270,7 +270,7 @@ if (mainCheckout !== false) {
   if (isCommandTool(toolName)) {
     const cmd = _cmdText;
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
-    if (isAllowedFastForwardMerge(cmd)) done();
+    if (isAllowedFastForwardMerge(cmd, repoRoot)) done();
     if (isAllowedReadOnlyConfigCheck(cmd)) done();
     if (isAllowedReadOnlyWorkflowCli(cmd)) done();
     if (isAllowedPushAllExcluded(cmd, repoRoot, getExcludePatterns())) done();

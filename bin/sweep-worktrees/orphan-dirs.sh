@@ -6,8 +6,9 @@
 # delegated to hooks/cleanup-orphan-dir.js and its 4-AND safety gate) and
 # sweep_stale_backups (.worktree-backup/* older than MIN_AGE_HOURS * 7). Must be
 # `source`d, not executed: it reads caller-scope variables ($TARGET_MAIN_ROOT,
-# $WORKTREE_BASE_DIR, $APPLY, $DRY_RUN, $MIN_AGE_HOURS, $SCRIPT_CHECKOUT_ROOT) and
+# $WORKTREE_BASE_DIR, $APPLY, $DRY_RUN, $MIN_AGE_HOURS) and
 # mutates the orphan_dirs_* counters.
+_ORPHAN_DIRS_SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 sweep_orphan_dirs() {
   # ── Pre-pass guard: snapshot the registry to a temp file ──────────────────
@@ -97,11 +98,11 @@ sweep_orphan_dirs() {
     else
       # Release the CodeGraph index lock (Windows file lock) before removal.
       if command -v node >/dev/null 2>&1; then
-        node "$SCRIPT_CHECKOUT_ROOT/bin/codegraph-lifecycle.js" stop --path "$cand_dir" || true
+        node "$_ORPHAN_DIRS_SCRIPT_CHECKOUT_ROOT/bin/codegraph-lifecycle.js" stop --path "$cand_dir" || true
       fi
 
       node_out="$(WORKTREE_BASE_DIR="$WORKTREE_BASE_DIR" \
-        node "$SCRIPT_CHECKOUT_ROOT/hooks/cleanup-orphan-dir.js" \
+        node "$_ORPHAN_DIRS_SCRIPT_CHECKOUT_ROOT/hooks/cleanup-orphan-dir.js" \
         --force-if-not-registered "$cand_dir" 2>&1)"
       node_rc=$?
       if [[ "$node_rc" -eq 0 ]]; then

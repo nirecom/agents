@@ -1,7 +1,7 @@
 # Tests: install/lib/wait-cc-exit.ps1, install/win/claude-code.ps1, install/win/codex.ps1
 # Tags: installer, wait-cc-exit, scope:issue-specific, pwsh-required, TL2
 # TL2: executes the real .ps1 sources in a child pwsh with a per-process environment
-# (WAIT_CC_PROCESS_OVERRIDE seam, PATH stubs for claude/codex, mock AGENTS_ROOT).
+# (WAIT_CC_PROCESS_OVERRIDE / WAIT_CC_EXIT_SCRIPT_OVERRIDE seams, PATH stubs for claude/codex).
 # Migrated from the pwsh-executing cases of tests/install/feature-2284-install-cc-claude-codex-cli.sh
 # (static A9/A10, C4/D4 detectors stay there).
 # TL3 gap: real process detection of a live Claude Code and a real `claude update` /
@@ -24,24 +24,25 @@ BeforeAll {
         }
     }
 
-    # Group F stub factory: a mock AGENTS_ROOT whose wait helper exits $WaitExit, and a
+    # Group F stub factory: a stub wait helper that exits $WaitExit, handed over by the
+    # WAIT_CC_EXIT_SCRIPT_OVERRIDE seam (the root itself comes from $PSScriptRoot), and a
     # PATH-first stub for $Cli that appends its arguments to a call log and exits $CliExit.
-    # The real installer (not a copy) runs, so AGENTS_ROOT is the only redirect seam.
+    # AGENTS_ROOT is left unset so the seam alone redirects the helper.
     function Invoke-InstallerWithStubs([string]$Installer, [string]$Cli, [int]$CliExit, [int]$WaitExit, [string]$Label) {
-        $root = Join-Path $TestDrive "root-$Label"
         $stub = Join-Path $TestDrive "stub-$Label"
         $log  = Join-Path $TestDrive "call-log-$Label.txt"
-        New-Item -ItemType Directory -Path (Join-Path $root 'install\lib') -Force | Out-Null
-        Set-Content -LiteralPath (Join-Path $root 'install\lib\wait-cc-exit.ps1') -Value "exit $WaitExit"
+        $wait = Join-Path $TestDrive "wait-$Label.ps1"
+        Set-Content -LiteralPath $wait -Value "exit $WaitExit"
         if ($IsWindows) {
             New-CmdStub -Directory $stub -Name $Cli -Line @('@echo off', "echo %* >> `"$log`"", "exit /b $CliExit") | Out-Null
         } else {
             New-ShStub -Directory $stub -Name $Cli -Line @("echo `"`$@`" >> '$log'", "exit $CliExit") | Out-Null
         }
         $r = Invoke-PwshChild -File $Installer -TimeoutSec 60 -Environment @{
-            PATH           = $stub + [IO.Path]::PathSeparator + $env:PATH
-            AGENTS_ROOT    = $root
-            WAIT_CC_RESULT = $null
+            PATH                          = $stub + [IO.Path]::PathSeparator + $env:PATH
+            AGENTS_ROOT                   = $null
+            WAIT_CC_EXIT_SCRIPT_OVERRIDE  = $wait
+            WAIT_CC_RESULT                = $null
         }
         $updated = (Test-Path -LiteralPath $log) -and
             [bool](Get-Content -LiteralPath $log | Where-Object { $_ -match '^update' })
@@ -151,5 +152,42 @@ Describe 'codex-ps-exec-update-gated' {
         $r = Invoke-InstallerWithStubs $script:CodexPs 'codex' 1 0 'F4c'
         $r.Updated  | Should -BeTrue -Because 'the failing update must actually have been attempted'
         $r.ExitCode | Should -Be 0
+    }
+}
+
+Describe 'agents-root-env-does-not-redirect-wait-helper' {
+    # #2561: the root comes from $PSScriptRoot, so AGENTS_ROOT pointing at a root whose
+    # helper reports a timeout is ignored; the real helper (no CC) clears and update runs.
+    BeforeAll {
+        function Invoke-WithAgentsRootDecoy([string]$Installer, [string]$Cli, [string]$Label) {
+            $decoy = Join-Path $TestDrive "decoy-$Label"
+            $stub  = Join-Path $TestDrive "decoy-stub-$Label"
+            $log   = Join-Path $TestDrive "decoy-log-$Label.txt"
+            New-Item -ItemType Directory -Path (Join-Path $decoy 'install\lib') -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $decoy 'install\lib\wait-cc-exit.ps1') -Value 'exit 1'
+            if ($IsWindows) {
+                New-CmdStub -Directory $stub -Name $Cli -Line @('@echo off', "echo %* >> `"$log`"", 'exit /b 0') | Out-Null
+            } else {
+                New-ShStub -Directory $stub -Name $Cli -Line @("echo `"`$@`" >> '$log'", 'exit 0') | Out-Null
+            }
+            $r = Invoke-PwshChild -File $Installer -TimeoutSec 60 -Environment @{
+                PATH                         = $stub + [IO.Path]::PathSeparator + $env:PATH
+                AGENTS_ROOT                  = $decoy
+                WAIT_CC_EXIT_SCRIPT_OVERRIDE = $null
+                WAIT_CC_RESULT               = $null
+                WAIT_CC_PROCESS_OVERRIDE     = 'none'
+                WAIT_CC_POLL_INTERVAL        = '1'
+                WAIT_CC_MAX_POLLS            = '1'
+            }
+            (Test-Path -LiteralPath $log) -and [bool](Get-Content -LiteralPath $log | Where-Object { $_ -match '^update' })
+        }
+    }
+
+    It 'R-cc: claude-code.ps1 ignores AGENTS_ROOT for the wait helper' {
+        Invoke-WithAgentsRootDecoy $script:CcPs 'claude' 'cc' | Should -BeTrue -Because 'the decoy helper (exit 1) must not be the one run'
+    }
+
+    It 'R-codex: codex.ps1 ignores AGENTS_ROOT for the wait helper' {
+        Invoke-WithAgentsRootDecoy $script:CodexPs 'codex' 'codex' | Should -BeTrue -Because 'the decoy helper (exit 1) must not be the one run'
     }
 }

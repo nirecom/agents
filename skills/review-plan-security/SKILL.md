@@ -16,6 +16,7 @@ RPS-2. Invoke `"$AGENTS_MAIN_ROOT/skills/review-plan-security/scripts/run-codex-
 - exit 2 ESCALATE → run `review-loop-summarize-concerns --budget-remaining 0`; stop → RPS-3.
 - exit 6 HIGH_UNRESOLVED → save stdout to `<PLANS_DIR>/<session-id>-security-plan-codex-round-<N>-raw.md` (`<N>` from `<CONTROL_DIR>/security-plan-last-round.txt`); run `review-loop-summarize-concerns --budget-remaining 0`; stop → RPS-3. Re-run only after accepting per exit-codes.md "Escalation by format".
 - exit 3 → silently launch `plan-security-reviewer` subagent with `model:` = the `model=` line of `node "$AGENTS_MAIN_ROOT/bin/resolve-role-model" --role reviewer`; its APPROVED verdict → RPS-5; its NEEDS_REVISION verdict → RPS-3.
+  Its prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
 - exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback agent.
 - exit 5 AUTO_EXTEND → same as exit 1 (concerns remain within the extension budget): present via RPS-3, address, re-run.
 - exit 7 FINALIZE_FAILED → `<CONTROL_DIR>/security-plan-unresolved-concerns.json` could not be written; HALT, surface the `## Concern Ledger: FINALIZE-FAILED` line, launch no fallback, emit no sentinel. After an ESCALATE, confirm the artifact with `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format security-plan` first.

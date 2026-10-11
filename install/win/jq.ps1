@@ -3,7 +3,6 @@
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$env:SYSTEM_OPS_APPROVED = "1"
 
 if (Get-Command jq -ErrorAction SilentlyContinue) {
     Write-Host "jq is already installed: $(jq --version)" -ForegroundColor DarkGray

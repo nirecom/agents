@@ -262,20 +262,17 @@ Placeholder notation in sentinel templates uses braces — `{step}`, `{reason}` 
 
 `enforce-worktree.js` blocks all Bash writes from the main worktree, including
 `bash -c '...'` (classified as write by the `interpreter-c` pattern). `isAllowedReadOnlyConfigCheck`
-in `enforce-worktree.js` adds a narrow exemption for the exact probe shape used
-by planning skills to read `CONFIRM_*` flags:
+in `enforce-worktree.js` adds a narrow exemption for the legacy `bash -c 'cd "$AGENTS_MAIN_ROOT" && …'`
+probe shape that planning skills once used to read `CONFIRM_*` flags.
 
-```
-bash -c 'cd "$AGENTS_MAIN_ROOT" && get-config-var --is-off KEY on && echo OFF [|| echo ON]'
-```
+Skills now issue the standalone form `bash "$AGENTS_MAIN_ROOT/bin/confirm-off" KEY on`
+(#2452): it is not a `bash -c` body, so it needs no exemption, and the `cd … &&`
+compound fell to a permission ask. The exemption stays for compatibility with the
+legacy shape only; no shipped skill depends on it.
 
-The matcher structurally validates each of the three `&&`-separated clauses and
-rejects anything outside this exact shape (no `;`, no `|` outside `||`, no `>`,
-no command substitution). **Coupling risk:** the matcher is tied to the literal
-probe string. If the skill probe is changed (different key name, different
-clause order, different interpreter), the matcher silently re-blocks and the
-CONFIRM_* flag is treated as ON. Any future change to the probe string must
-update the matcher in lockstep.
+The matcher structurally validates each `&&`-separated clause and rejects anything
+outside the exact legacy shape (no `;`, no `|` outside `||`, no `>`, no command
+substitution). Command-form guidance for prompts: `prompt-command-forms.md`.
 
 The helper's `--is-off` exit code map carries five distinct values (OFF=0, explicit-ON=1, unset-no-default=2, unrecognized-value=3, internal-failure=4); the `&& echo OFF || echo ON` shell idiom maps exit 0 → OFF and all non-zero → ON, so the regex's binary classification is unchanged.
 

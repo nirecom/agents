@@ -15,7 +15,7 @@ N=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --repo) REPO="$2"; shift 2 ;;
+        --repo) [[ $# -ge 2 ]] || { echo "$1 needs a value" >&2; exit 1; }; REPO="$2"; shift 2 ;;
         --)     shift; N="${1:?issue number required}"; shift ;;
         -*)     echo "Unknown flag: $1" >&2; exit 1 ;;
         *)      N="$1"; shift ;;

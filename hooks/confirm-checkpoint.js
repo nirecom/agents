@@ -2,8 +2,9 @@
 // PreToolUse hook: when Bash emits a <<WORKFLOW_CONFIRM_{INTENT|OUTLINE|DETAIL}>>
 // sentinel, surface the relevant plan/PR context above the permission dialog so the
 // user can Allow or Deny inline. Sentinel patterns: hooks/lib/sentinel-patterns.js.
-// Output protocol: emits { "systemMessage": "..." } only, always exit 0 (fail-open —
-// we never block the user's approval flow).
+// Output protocol: { "systemMessage": "..." } for the user plus PreToolUse additionalContext
+// carrying the plan-link line for the model (hooks/lib/plan-link.js); always exit 0
+// (fail-open — we never block the user's approval flow; no plan-link, systemMessage only).
 "use strict";
 
 const fs = require("fs");
@@ -70,12 +71,22 @@ function resolveArtifact(stage, sid, plansDir) {
   return null;
 }
 
-// url: the published blob URL (plan-sync), shown in place of the local path when present.
+// url: the published blob URL (hooks/lib/plan-link.js), shown together with the local path.
 function renderMessage(stage, absPath, url) {
   if (absPath) {
-    return `[${stage}] Plan file: ${url || absPath}\nClick Allow to proceed, Deny to abort.`;
+    const shown = url ? `${url} (${absPath})` : absPath;
+    return `[${stage}] Plan file: ${shown}\nClick Allow to proceed, Deny to abort.`;
   }
   return `[${stage}] Plan ready (file path unavailable)\nClick Allow to proceed, Deny to abort.`;
+}
+
+// planLinkOutput(stage, absPath, plansDir) -> {url, additionalContext} — the model-facing line of
+// the plan being confirmed. Throws when plan-link is unusable; the caller fails open.
+function planLinkOutput(stage, absPath, plansDir) {
+  const PL = require("./lib/plan-link");
+  const link = absPath ? PL.linkForFile(absPath, plansDir ? { plansDir } : {}) : { reason: PL.REASONS.NO_ARTIFACT };
+  const entry = { stage, url: link.url, path: link.path, reason: link.reason };
+  return { url: link.url || null, additionalContext: PL.renderModelContext([entry], { when: "confirm" }) };
 }
 
 if (require.main === module) {
@@ -116,15 +127,11 @@ if (require.main === module) {
     process.exit(0);
   }
 
-  let url = null;
-  if (absPath && plansDir) {
-    try {
-      const { publishedBlobUrl } = require("./lib/plan-sync");
-      url = publishedBlobUrl(plansDir, absPath);
-    } catch (_) { /* fail-open: the local path is shown */ }
-  }
-  const msg = renderMessage(stage, absPath, url);
-  process.stdout.write(JSON.stringify({ systemMessage: msg }));
+  let link = null;
+  try { link = planLinkOutput(stage, absPath, plansDir); } catch (_) { /* fail-open: the local path is shown */ }
+  const out = { systemMessage: renderMessage(stage, absPath, link && link.url) };
+  if (link) out.hookSpecificOutput = { hookEventName: "PreToolUse", additionalContext: link.additionalContext };
+  process.stdout.write(JSON.stringify(out));
   process.exit(0);
 }
 

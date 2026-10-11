@@ -92,8 +92,9 @@ const WRITE_SCOPES = [
   "plans-dir", "control-dir", "family-worktree", "backup-dir", "target-main-root-docs", "log-dir", OUTCOME_SCOPE,
 ];
 
-// Script-anchor tokens understood by bin/worker-dispatch/spawn.js. `script-checkout-root` and
-// `target-main-root` resolve into reviewed, merged code. `family-worktree` resolves into
+// Script-anchor tokens understood by bin/worker-dispatch/spawn.js. `script-checkout-root` resolves
+// into the dispatcher's own checkout (the copy this hook trusts), `target-main-root` into the
+// target repository's main worktree. `family-worktree` resolves into
 // the payload's target worktree — unreviewed by definition — and is therefore
 // reserved for workers whose purpose is to execute the branch under review.
 const SCRIPT_ANCHORS = ["script-checkout-root", "target-main-root", "family-worktree"];
@@ -324,10 +325,11 @@ const workers = {
         // child is not a Bash-tool command, so that hook no longer sees them and
         // the worker runs the same scanner itself before `gh pr create`.
         // script-checkout-root for the same reason as workflowGate: the scanner that clears
-        // outbound text must be the reviewed copy, not the branch's own.
+        // outbound text must be the dispatcher's own checkout (the copy this hook trusts), not the
+        // pushed branch's copy.
         scanOutbound: { anchor: "script-checkout-root", rel: "bin/scan-outbound.sh" },
         // script-checkout-root, never family-worktree: the gate that authorizes a push must be
-        // the reviewed, merged copy — not the one on the branch being pushed.
+        // the dispatcher's own checkout (the copy this hook trusts), not the pushed branch's copy.
         workflowGate: { anchor: "script-checkout-root", rel: "hooks/workflow-gate.js" },
       },
     },
