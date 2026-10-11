@@ -4,6 +4,7 @@
 # already existed there. The sole recovery path for pre-existing failures.
 #
 # Usage: bin/run-tests-baseline --session <sid> [--worktree <path>] [--per-test-timeout <sec>]
+# Timeout: omitted -> derived from the duration ledger (2x measured, 300-540 s; unmeasured 300); any value is cut by one 600 s budget.
 # Output: `BASELINE: <class> <path> [detail]` lines, then
 #         `BASELINE_SUMMARY: preexisting=N inherited=N broken=N undetermined=N`.
 # Exit:   0 all pre-existing (run_tests completed), 1 otherwise, 2 usage, 3 no hook-recorded failing
@@ -15,6 +16,8 @@ set -uo pipefail
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=bin/lib/run-tests-baseline-ledger.sh
 . "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-ledger.sh"
+# shellcheck source=bin/lib/run-tests-baseline-timeout.sh
+. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-timeout.sh"
 # shellcheck source=bin/lib/run-tests-baseline-worktree.sh
 . "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-worktree.sh"
 # shellcheck source=bin/lib/run-tests-baseline-exec.sh
@@ -27,18 +30,22 @@ RTB_RESOLVE="$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh"
 
 die() { printf 'run-tests-baseline: %s\n' "$2" >&2; exit "$1"; }
 
-SID="" WT_ARG="$PWD" PER_TEST_TIMEOUT=300
+SID="" WT_ARG="$PWD" PER_TEST_TIMEOUT="" PTT_EXPLICIT=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --session) [ "$#" -ge 2 ] || die 2 "--session needs a value"; SID="$2"; shift 2 ;;
     --worktree) [ "$#" -ge 2 ] || die 2 "--worktree needs a value"; WT_ARG="$2"; shift 2 ;;
-    --per-test-timeout) [ "$#" -ge 2 ] || die 2 "--per-test-timeout needs a value"; PER_TEST_TIMEOUT="$2"; shift 2 ;;
-    -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --per-test-timeout) [ "$#" -ge 2 ] || die 2 "--per-test-timeout needs a value"; PER_TEST_TIMEOUT="$2"; PTT_EXPLICIT=1; shift 2 ;;
+    -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) die 2 "unknown argument: $1" ;;
   esac
 done
 [ -n "$SID" ] || die 2 "--session <sid> is required"
-case "$PER_TEST_TIMEOUT" in ''|*[!0-9]*|0) die 2 "--per-test-timeout must be a positive integer" ;; esac
+if [ "$PTT_EXPLICIT" = 1 ]; then
+  case "$PER_TEST_TIMEOUT" in ''|*[!0-9]*|??????????*) die 2 "--per-test-timeout must be a positive integer of at most 9 digits" ;; esac
+  [ $((10#$PER_TEST_TIMEOUT)) -gt 0 ] || die 2 "--per-test-timeout must be a positive integer of at most 9 digits"
+  PER_TEST_TIMEOUT=$((10#$PER_TEST_TIMEOUT))
+fi
 
 # 1. The failing list the run-tests hook recorded, and its causal position.
 FAILING_OUT="$(node "$(rtb_wt_native "$RTB_EVIDENCE")" failing --session "$SID")" \
@@ -127,6 +134,11 @@ LOGDIR="$TMP_BASE/logs-$(date +%s)-$$"
 
 if [ "${#RERUN[@]}" -gt 0 ]; then
   WT="$(rtb_wt_create "$ROOT" "$B2")" || WT=""
+  if [ "$PTT_EXPLICIT" = 0 ]; then
+    ledger_args=()
+    for i in "${RERUN[@]}"; do ledger_args+=("$i:${TESTS[$i]}"); done
+    rtb_timeout_load_ledger "$ROOT" "$TMP_BASE" "${ledger_args[@]}"
+  fi
   for i in "${RERUN[@]}"; do
     t="${TESTS[$i]}"
     d="$(test_dir_of "$t")"
@@ -141,7 +153,21 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
     if rtb_has_home_ref "${targets[@]}"; then
       CLS[i]="undetermined"; DET[i]="home-claude-ref"; continue
     fi
-    if ! rtb_exec_one "$WT" "$t" "$PER_TEST_TIMEOUT" "$LOGDIR"; then
+    if [ "$PTT_EXPLICIT" = 1 ]; then
+      WANT="$PER_TEST_TIMEOUT" SRC="explicit"
+    else
+      rtb_timeout_derive_into "${RTB_TIMEOUT_LEDGER[$i]:-}"
+      WANT="$RTB_TIMEOUT_DERIVED_OUT" SRC="default"
+      [ -z "${RTB_TIMEOUT_LEDGER[$i]:-}" ] || SRC="derived"
+    fi
+    rtb_timeout_budget_into "$WANT" "$SECONDS"
+    if [ "$RTB_TIMEOUT_SLICE_OUT" -eq 0 ]; then
+      CLS[i]="undetermined"; DET[i]="budget-exhausted"; continue
+    fi
+    T_USE="$RTB_TIMEOUT_SLICE_OUT"
+    [ "$T_USE" -ge "$WANT" ] || SRC="$SRC, limited from ${WANT}s by budget"
+    printf 'run-tests-baseline: timeout: %s %ss (%s)\n' "$t" "$T_USE" "$SRC" >&2
+    if ! rtb_exec_one "$WT" "$t" "$T_USE" "$LOGDIR"; then
       CLS[i]="undetermined"; DET[i]="exec-setup-failed"; continue
     fi
     if [ "$RTB_EXEC_TIMEDOUT" = "1" ]; then

@@ -4,6 +4,7 @@
 # checkout's own bin/lib/run-all-launch.sh when present, else this checkout's), so each
 # test kind starts exactly as tests/run-all.sh would start it. A watchdog enforces the
 # timeout; RTB_EXEC_TIMEDOUT comes from <logdir>/<i>.timedout, never from the exit code.
+# The default <timeout> is owned by run-tests-baseline-timeout.sh (RTB_TIMEOUT_DEFAULT).
 # RTB_EXEC_UNSUPPORTED=1 when run_all_exec did not launch (78 with RUN_ALL_EXEC_LAUNCHED=0),
 # flagged via <logdir>/<i>.unsupported so a test that itself exits 78 is not mistaken for it.
 # RTB_EXEC_DECOY=1 when the run reached the root decoy (<logdir>/<i>.decoyhit): its exit
@@ -13,6 +14,8 @@ case "${BASH_SOURCE[0]}" in
   */*) RTB_EXEC_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
   *)   RTB_EXEC_LIB_DIR="." ;;
 esac
+# shellcheck source=bin/lib/run-tests-baseline-timeout.sh
+. "$RTB_EXEC_LIB_DIR/run-tests-baseline-timeout.sh" || return 1
 
 RTB_EXEC_RC=""
 RTB_EXEC_TIMEDOUT=""
@@ -37,14 +40,14 @@ rtb_base_predates_root_names() {
 }
 
 rtb_exec_one() {
-    local wt="${1:-}" rel="${2:-}" timeout="${3:-300}" logdir="${4:-}"
+    local wt="${1:-}" rel="${2:-}" timeout="${3:-$RTB_TIMEOUT_DEFAULT}" logdir="${4:-}"
     local launcher i cpid wpid rc iso restore_m=0
     RTB_EXEC_RC=""
     RTB_EXEC_TIMEDOUT=""
     RTB_EXEC_UNSUPPORTED=""
     RTB_EXEC_DECOY=""
     [ -n "$wt" ] && [ -n "$rel" ] && [ -n "$logdir" ] || return 2
-    case "$timeout" in ''|*[!0-9]*) timeout=300 ;; esac
+    case "$timeout" in ''|*[!0-9]*) timeout="$RTB_TIMEOUT_DEFAULT" ;; esac
     mkdir -p "$logdir" 2>/dev/null || return 2
 
     launcher="$wt/bin/lib/run-all-launch.sh"

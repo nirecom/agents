@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2431-run-tests-baseline.sh
-# Tests: bin/run-tests-baseline, bin/lib/run-tests-baseline-ledger.sh, bin/lib/run-tests-baseline-worktree.sh, bin/lib/run-tests-baseline-exec.sh, bin/lib/run-tests-baseline-homeref.sh, hooks/lib/baseline-checkout-marker.js
+# Tests: bin/run-tests-baseline, bin/lib/run-tests-baseline-ledger.sh, bin/lib/run-tests-baseline-worktree.sh, bin/lib/run-tests-baseline-exec.sh, bin/lib/run-tests-baseline-homeref.sh, bin/lib/run-tests-baseline-timeout.sh, hooks/lib/baseline-checkout-marker.js
 # Tags: run-tests, baseline, ledger, worktree, exec, root-names, scope:issue-specific, pwsh-not-required, TL2
 #
 # Dispatcher: case groups in feature-2431-run-tests-baseline/ part files.
@@ -49,6 +49,10 @@ SUBDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2431-run-tests-bas
 . "$SUBDIR/homeref.sh"
 # shellcheck source=./feature-2431-run-tests-baseline/cli-homeref.sh
 . "$SUBDIR/cli-homeref.sh"
+# shellcheck source=./feature-2431-run-tests-baseline/derive-timeout.sh
+. "$SUBDIR/derive-timeout.sh"
+# shellcheck source=./feature-2431-run-tests-baseline/derive-timeout-cli.sh
+. "$SUBDIR/derive-timeout-cli.sh"
 
 case_begin "baseline-ledger" "bin/lib/run-tests-baseline-ledger.sh"
 run_ledger_cases
@@ -148,6 +152,14 @@ case_end
 
 case_begin "baseline-cli-homeref" "bin/run-tests-baseline"
 run_cli_homeref_cases
+case_end
+
+case_begin "baseline-timeout-derive" "bin/lib/run-tests-baseline-timeout.sh"
+run_timeout_unit_cases
+case_end
+
+case_begin "baseline-cli-timeout-derive" "bin/run-tests-baseline"
+run_timeout_cli_cases
 case_end
 
 echo ""
