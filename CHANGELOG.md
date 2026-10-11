@@ -703,3 +703,7 @@ Changes: Removed the diff-preview hook that printed a "DIFF PREVIEW" line on eve
 ### FEATURE: PR #2604 (2026-10-11)
 Background: fix(#2505): ignore comment-only home-claude references in run-tests-baseline
 Changes: `bin/run-tests-baseline` now ignores home-claude paths that appear only in comments, so pre-existing test failures are classified automatically instead of being left undetermined.
+
+### FEATURE: PR #2603 (2026-10-11)
+Background: feat(#2544): record run_tests outcome from background test-runner dispatch
+Changes: feat: `/run-tests` can now record test suites that run longer than 600 seconds. Long suites are dispatched as a background worker; the result is picked up automatically on the next Bash call — no extra command needed.
