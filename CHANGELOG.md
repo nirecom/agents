@@ -739,3 +739,7 @@ Changes: sweep-plans deletes only non-plan files by default; plan and user-reque
 ### FEATURE: PR #2640 (2026-10-13)
 Background: fix(#2221): repair Windows-form PATH in Claude Code shell snapshots
 Changes: On Windows, when a Claude Code session starts with a broken shell snapshot that makes every Bash command fail with "command not found" (exit 127), the PATH is now repaired automatically and a notice is shown. If it cannot be repaired, restart Claude Code and run `/sweep-shell-snapshots --dry-run` to list stale snapshots. GitHub CLI calls that read the issue or PR body from a temp file now work from Git Bash on Windows.
+
+### FEATURE: PR #2639 (2026-10-13)
+Background: feat(#2501): language-neutral test runs with UNRUNNABLE reporting
+Changes: Test runs now cover every registered language and report tests that could not run (missing runtime or missing test file) as UNRUNNABLE instead of silently passing or failing.
