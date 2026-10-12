@@ -27,10 +27,15 @@ install_test_language_registry() {
     printf 'install_test_language_registry: no parts under %s/bin/lib/test-language-parts\n' "$src" >&2
     return 1
   fi
-  # Parts registered outside the parts dir: read them from the table, not a copied list.
+  # The reader's modules, the plain-exec fallback, the run-all report layer, and the launch wrappers.
+  for part in "$src"/hooks/lib/test-language-registry/*.js "$src"/bin/lib/test-language-registry-plain.sh \
+    "$src"/bin/lib/run-all-report.sh "$src"/bin/lib/test-wrappers/*; do
+    [ -f "$part" ] && files+=("${part#"$src"/}")
+  done
+  # Files registered outside those dirs (parts, wrappers): read them from the table, not a copied list.
   while IFS= read -r rel; do
     case " ${files[*]} " in *" $rel "*) ;; *) files+=("$rel") ;; esac
-  done < <(grep -o '"file"[[:space:]]*:[[:space:]]*"[^"]*"' "$src/hooks/lib/test-language-registry.json" 2>/dev/null \
+  done < <(grep -oE '"(file|wrapper)"[[:space:]]*:[[:space:]]*"[^"]*"' "$src/hooks/lib/test-language-registry.json" 2>/dev/null \
     | sed 's/.*"\([^"]*\)"$/\1/')
   for rel in "${files[@]}"; do
     if [ ! -f "$src/$rel" ]; then

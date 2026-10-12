@@ -126,11 +126,11 @@ rj_batch_run() {
 # (counters restored, output discarded), one node answers the queue, then the real pass asserts
 # row by row from the cache. A row the record pass missed spawns its own node as before.
 rj_batched_stdin() {
-    local buf="" p="$PASS" f="$FAIL" s="$SKIP" r="$ROWS"
+    local buf="" r="$ROWS"
     IFS= read -r -d '' buf || true
     printf '%s' "$buf" > "$RJ_BATCH_STDIN"
-    RJ_PREFETCH=1; "$@" < "$RJ_BATCH_STDIN" > /dev/null 2>&1; RJ_PREFETCH=0
-    PASS="$p"; FAIL="$f"; SKIP="$s"; ROWS="$r"
+    RJ_PREFETCH=1; harness_discard_pass "$@" < "$RJ_BATCH_STDIN"; RJ_PREFETCH=0
+    ROWS="$r"
     rj_batch_run "$2"
     "$@" < "$RJ_BATCH_STDIN"
     RJ_CACHE=()

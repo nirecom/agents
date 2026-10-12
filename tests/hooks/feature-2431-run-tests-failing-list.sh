@@ -106,7 +106,7 @@ var EFT_CASES = [
   ["run-all/zero-failures",          false, "Results: PASS=3 FAIL=0 SKIP=0", 0, []],
   ["run-all/count-over",             false, fl("tests/a.sh"), 99, null],
   ["run-all/count-under",            false, fl("tests/a.sh") + "\n" + fl("tests/b.sh"), 1, null],
-  ["run-all/traversal-abs",          false, fl(R+"../x/tests/e.sh"), 1, null],
+  ["run-all/traversal-abs",          false, fl(R+"../xd/tests/e.sh"), 1, null],
   ["run-all/traversal-rel",          false, fl("tests/../bin/e.sh"), 1, null],
   ["run-all/traversal-backslash",    false, fl("tests\\..\\bin\\e.sh"), 1, null],
   ["run-all/outside-tests-dir",      false, fl(R+"bin/foo.sh"), 1, null],
@@ -123,10 +123,13 @@ var EFT_CASES = [
   ["worker/log-tail-items-ignored",  true,  wk(["tests/real.sh"], ["  - 'tests/in-log.sh'"]), 1, ["tests/real.sh"]],
   ["worker/unquoted-item-ends-list", true,  "failing_tests:\n  - tests/u.sh\nlog_tail: |", 1, null],
   ["worker/count-mismatch",          true,  wk([R+"tests/d.sh", R+"tests/e.sh"]), 99, null],
-  ["worker/traversal",               true,  wk([R+"../x/tests/e.sh"]), 1, null],
+  ["worker/traversal",               true,  wk([R+"../xd/tests/e.sh"]), 1, null],
   ["worker/outside-root",            true,  wk([root+"-other/tests/x.sh"]), 1, null],
   ["worker/outside-tests-dir",       true,  wk([R+"hooks/x.sh"]), 1, null],
-  ["worker/unsupported-kind",        true,  wk(["tests/x.js"]), 1, null],
+  ["worker/unsupported-kind",        true,  wk(["tests/x.txt"]), 1, null],
+  // #2501: js is a supported (launchable) kind, so its failures are baseline-classifiable.
+  ["worker/js-kind",                 true,  wk(["tests/x.test.js"]), 1, ["tests/x.test.js"]],
+  ["run-all/js-kind",                false, fl(R+"tests/y.js"), 1, ["tests/y.js"]],
   ["worker/ignores-run-all-lines",   true,  fl("tests/a.sh"), 1, null],
 ];
 for (var i = 0; i < EFT_CASES.length; i++) {
@@ -149,9 +152,10 @@ GUARD_CASES.forEach(function (g) {
   ok(g[0], JSON.stringify(got) === JSON.stringify(g[2]), "got=" + JSON.stringify(got));
 });
 
-// classifyTestKind matrix mirrors run-all-launch.sh's three dispatch branches.
+// classifyTestKind matrix mirrors run-all-launch.sh's dispatch branches (#2501 adds js).
 [["classify/sh", "tests/a.sh", "bash"], ["classify/ps1", "tests/b.Tests.ps1", "pester"],
  ["classify/py", "tests/test_c.py", "pytest"], ["classify/backslash-dir", "tests\\d\\e.sh", "bash"],
+ ["classify/js", "tests/a.js", "js"], ["classify/js-test", "tests/a.test.js", "js"],
  ["classify/plain-ps1", "tests/x.ps1", null], ["classify/py-no-prefix", "tests/tc.py", null],
  ["classify/txt", "tests/x.txt", null], ["classify/bare-ext-sh", "tests/.sh", null],
  ["classify/non-string", 42, null]].forEach(function (k) {
@@ -306,7 +310,7 @@ if [ "$_prev" = "(absent)" ]; then
 else
     _so_a3=$(printf '%s\n' \
         "Results: PASS=1 FAIL=0 SKIP=0" \
-        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1")
+        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0")
     drive_hook "bash $TRUSTED_WIN/tests/run-all.sh" 0 "$_sid_a3" "$_so_a3" "$TRUSTED_WIN"
     assert_eq "$(step_field "$_sid_a3" run_tests failing_tests)"          "(absent)" "A3/complete-tombstones-failing-tests"
     assert_eq "$(step_field "$_sid_a3" run_tests baseline_classification)" "(absent)" "A3/complete-tombstones-baseline-classification"
@@ -320,6 +324,26 @@ seed_step "$_sid_a4" run_tests complete baseline_classification preexisting
 drive_hook "bash $TRUSTED_WIN/tests/run-all.sh" 1 "$_sid_a4" "no contract" "$TRUSTED_WIN"
 assert_eq "$(step_field "$_sid_a4" run_tests baseline_classification)" "(absent)" "A4/demotion-tombstones-baseline-classification"
 assert_eq "$(step_field "$_sid_a4" run_tests completion_basis)"        "(absent)" "A4/demotion-tombstones-completion-basis"
+
+# A6: the unrunnable count travels with the failing list, so bin/run-tests-baseline can refuse a
+# run that left selected tests unrun. No list -> no count; a later green run clears it.
+assert_eq "$(step_field "$_sid_a1" run_tests unrunnable_count)" "(absent)" "A6/legacy-four-field-failing-run-records-no-count"
+assert_eq "$(step_field "$_sid_a2" run_tests unrunnable_count)" "(absent)" "A6/untrusted-run-records-no-count"
+_sid_a6="f2431-fl-a6-$$"
+seed_step "$_sid_a6" write_tests complete
+_so_a6=$(printf '%s\n' \
+    "FAIL: $TRUSTED_WIN/tests/failing-test.sh (exit 1)" \
+    "UNRUNNABLE: tests/p.Tests.ps1 (missing: Pester>=5.0)" \
+    "UNRUNNABLE: tests/q.Tests.ps1 (missing: Pester>=5.0)" \
+    "Missing runtimes: Pester>=5.0 (2 files)" \
+    "Results: PASS=0  FAIL=1  SKIP=0  UNRUNNABLE=2  TIMEOUT=0" \
+    "RUN_CONTRACT: PASS=0 FAIL=1 SKIP=0 EXECUTED=1 UNRUNNABLE=2 TIMEOUT=0")
+drive_hook "bash $TRUSTED_WIN/tests/run-all.sh" 1 "$_sid_a6" "$_so_a6" "$TRUSTED_WIN"
+assert_eq "$(step_field "$_sid_a6" run_tests failing_tests)" '["tests/failing-test.sh"]' "A6/fail-and-unrunnable-records-failing-tests"
+assert_eq "$(step_field "$_sid_a6" run_tests unrunnable_count)" "2" "A6/fail-and-unrunnable-records-count"
+drive_hook "bash $TRUSTED_WIN/tests/run-all.sh" 0 "$_sid_a6" "$_so_a3" "$TRUSTED_WIN"
+assert_eq "$(step_field "$_sid_a6" run_tests status)" '"complete"' "A6/green-run-completes"
+assert_eq "$(step_field "$_sid_a6" run_tests unrunnable_count)" "(absent)" "A6/green-run-tombstones-count"
 
 case_end
 
@@ -371,6 +395,67 @@ if [ -z "$_w1_missing" ]; then
 else
     fail "W1/worker-route-all-15-paths-persisted" "missing:$_w1_missing; got=$_ft_w1"
 fi
+
+case_end
+
+# #2501 mixed run-all stdout: case-level result lines, a TIMEOUT unit (its file-level
+# `FAIL: … (exit 124)` plus `TIMEOUT:`), an UNRUNNABLE unit and the 6-field contract.
+# Only file-level `FAIL:` lines may name a failure, so names.length === contract.fail.
+_mx_stdout=$(printf '%s\n' \
+    "PASS: tests/a.sh" \
+    "PASS tests/a.sh::c1 target=bin/x.sh" \
+    "FAIL: @R@tests/b.sh (exit 1)" \
+    "FAIL tests/b.sh::c2 target=bin/y.sh" \
+    "FAIL: @R@tests/t.sh (exit 124)" \
+    "TIMEOUT: tests/t.sh (2s)" \
+    "FAIL tests/t.sh::(file) target=tests/t.sh" \
+    "UNRUNNABLE: tests/p.Tests.ps1 (missing: Pester>=5.0)" \
+    "Missing runtimes: Pester>=5.0 (1 file)" \
+    "Results: PASS=1  FAIL=2  SKIP=0  UNRUNNABLE=1  TIMEOUT=1" \
+    "RUN_CONTRACT: PASS=1 FAIL=2 SKIP=0 EXECUTED=3 UNRUNNABLE=1 TIMEOUT=1")
+
+# ============================================================================
+case_begin "mixed-stdout-names-match-contract" "hooks/workflow-run-tests/failing-list.js"
+# ============================================================================
+
+echo ""
+echo "=== mixed-stdout-names-match-contract ==="
+
+_mx_out=$(run_with_timeout 30 node -e '
+var m; try { m = require(process.argv[1]); } catch (e) { process.stdout.write("MODULE_MISSING"); process.exit(0); }
+var root = process.argv[2], so = process.argv[3].split("@R@").join(root + "/");
+var c = /^RUN_CONTRACT: PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)/m.exec(so);
+var contract = { pass: +c[1], fail: +c[2], skip: +c[3], executed: +c[4] };
+var got = m.extractFailingTests({ stdout: so, isWorker: false, worktreeRoot: root, contract: contract });
+process.stdout.write(contract.fail + "|" + JSON.stringify(got));
+' "$FAILING_LIST_JS" "$FIXTURE_WIN" "$_mx_stdout" 2>/dev/null || echo "ERR")
+_mx_fail="${_mx_out%%|*}" _mx_names="${_mx_out#*|}"
+assert_eq "$_mx_fail" "2" "MX1/contract-fail-parsed-from-six-field-line"
+assert_eq "$_mx_names" '["tests/b.sh","tests/t.sh"]' "MX2/names-are-the-file-level-FAIL-paths-only"
+_mx_len=$(run_with_timeout 10 node -e 'try{var v=JSON.parse(process.argv[1]);process.stdout.write(Array.isArray(v)?String(v.length):"not-array");}catch(e){process.stdout.write("unparsable");}' "$_mx_names" 2>/dev/null || echo "err")
+assert_eq "$_mx_len" "$_mx_fail" "MX3/names-count-equals-contract-fail"
+case "$_mx_names" in
+    *"::"*) fail "MX4/no-case-level-names" "got=$_mx_names" ;;
+    '['*) pass "MX4/no-case-level-names" ;;
+    *) fail "MX4/no-case-level-names" "not a list: $_mx_names" ;;
+esac
+
+case_end
+
+# ============================================================================
+case_begin "mixed-stdout-hook-records-file-paths" "hooks/workflow-run-tests.js"
+# ============================================================================
+
+echo ""
+echo "=== mixed-stdout-hook-records-file-paths ==="
+
+# The hook must read the 6-field contract on the run-all route and record exactly
+# the two file-level failures (red until the contract parser accepts the suffix).
+_sid_mx="f2431-fl-mx-$$"
+seed_step "$_sid_mx" write_tests complete
+drive_hook "bash $TRUSTED_WIN/tests/run-all.sh" 1 "$_sid_mx" "${_mx_stdout//@R@/$TRUSTED_WIN/}" "$TRUSTED_WIN"
+assert_eq "$(step_field "$_sid_mx" run_tests failing_tests)" '["tests/b.sh","tests/t.sh"]' \
+    "MX5/hook-records-file-level-failures-from-six-field-run"
 
 case_end
 

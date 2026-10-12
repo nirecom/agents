@@ -1,11 +1,10 @@
 # A *.Tests.ps1 name holding ' $ ; and a backtick reaches Pester as one literal path:
-# {nativePathSq} doubles each ' and nothing in the name runs. Sourced by
+# the wrapper gets it as one -File argv item and nothing in the name runs. Sourced by
 # tests/tests/feature-2007-run-all-ps1-dispatch.sh (uses RUN_ALL, TMPDIR_FX, harness).
 # shellcheck shell=bash
 
 PQ="$TMPDIR_FX/pq"
 PQ_NAME="x'; New-Item -ItemType File pq-sentinel; '\$y\`z.Tests.ps1"
-PQ_NAME_SQ="x''; New-Item -ItemType File pq-sentinel; ''\$y\`z.Tests.ps1"
 mkdir -p "$PQ/fakebin"
 printf 'Describe "q" { It "passes" { $true | Should -BeTrue } }\n' >"$PQ/$PQ_NAME"
 PQ_DIR_NATIVE="$PQ"
@@ -29,14 +28,22 @@ pq_no_sentinel() {
 }
 
 case_begin "pester-path-quoting" "bin/lib/run-all-launch.sh"
-# Q1: the -Command argument is the registry row with {nativePathSq} filled in.
+# Q1 (#2501): pwsh runs the Pester wrapper with -File; the native path reaches it as ONE
+# argv item with ' $ ; and the backtick verbatim (no quoting layer left to double into).
 pq_run q1 "$PQ/fakebin"
-q1_want="$(printf '%s\n' -NoProfile -Command "Invoke-Pester -Path '$PQ_DIR_NATIVE/$PQ_NAME_SQ' -CI")"
-q1_got="$(cat "$PQ/argv" 2>/dev/null)"
-if [ "$PQ_RC" = "0" ] && [ "$q1_got" = "$q1_want" ]; then
-  pass "Q1: pwsh gets -Command with every ' doubled and \$ ; backtick kept literal"
+q1_want="$(printf '%s\n' -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '<wrapper>' \
+  -Path "$PQ_DIR_NATIVE/$PQ_NAME" -MinVersion 5.0)"
+q1_raw="$(cat "$PQ/argv" 2>/dev/null)"
+# The wrapper item may be spelled through bin/lib/../..; compare it by file identity.
+q1_wrap="$(printf '%s\n' "$q1_raw" | sed -n '6p')"
+q1_wrap_posix="$q1_wrap"
+if command -v cygpath >/dev/null 2>&1 && [ -n "$q1_wrap" ]; then q1_wrap_posix="$(cygpath -u "$q1_wrap")"; fi
+q1_got="$(printf '%s\n' "$q1_raw" | sed '6s/.*/<wrapper>/')"
+if [ "$PQ_RC" = "0" ] && [ "$q1_got" = "$q1_want" ] && [ -n "$q1_wrap" ] \
+  && [ "$q1_wrap_posix" -ef "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-wrappers/pester.ps1" ]; then
+  pass "Q1: pwsh gets -File <pester wrapper> -Path <native path verbatim> -MinVersion 5.0"
 else
-  fail "Q1: pwsh argv mismatch — rc=$PQ_RC want=<<$q1_want>> got=<<$q1_got>>"
+  fail "Q1: pwsh argv mismatch — rc=$PQ_RC want=<<$q1_want>> got=<<$q1_got>> wrapper=<<$q1_wrap>>"
 fi
 pq_no_sentinel "Q1"
 

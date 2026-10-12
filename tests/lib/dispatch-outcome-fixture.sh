@@ -53,7 +53,7 @@ const outcome = {
   exit_code: status === "pass" ? 0 : 1,
   duration_ms: 1200,
   worker_result: {
-    run_contract: { pass: n(pass), fail: n(fail), skip: n(skip), executed: n(pass) + n(fail) + n(skip) },
+    run_contract: { pass: n(pass), fail: n(fail), skip: n(skip), executed: n(pass) + n(fail) + n(skip), unrunnable: 0, timeout: 0 },
     failing_tests: JSON.parse(failing),
     log_tail: tail ? JSON.parse(tail) : ["Results: PASS=" + pass + "  FAIL=" + fail + "  SKIP=" + skip],
     summary: "PASS=" + pass + " FAIL=" + fail + " SKIP=" + skip,

@@ -51,7 +51,7 @@ case_end
 fi
 FX
 
-# unsupported — a recognized-only language (js) and a supported one with no reader.
+# unsupported — supported languages with no case reader (js since #2501, Pester).
 printf '%s\n' '// Tests: bin/a.sh' 'test("x", () => {});' >"$FXD/x.test.js"
 printf '%s\n' '# Tests: bin/a.sh' 'Describe "x" { }' >"$FXD/x.Tests.ps1"
 

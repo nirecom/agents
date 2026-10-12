@@ -1,0 +1,16 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/run-tests-unrunnable-note --session <sid>
+//   Prints the UNRUNNABLE-accept line for the PR body (#2501 D5-7), or nothing when run_tests
+//   was not completed by WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED. Exit 0; 2 on usage error.
+
+const path = require("path");
+const { readUnrunnableAcceptNote } = require(path.join(__dirname, "..", "..", "hooks", "lib", "run-tests-unrunnable-note"));
+
+const argv = process.argv.slice(2);
+if (argv.length !== 2 || argv[0] !== "--session" || !/^[A-Za-z0-9_-]+$/.test(argv[1])) {
+  process.stderr.write("usage: run-tests-unrunnable-note --session <sid>\n");
+  process.exit(2);
+}
+const note = readUnrunnableAcceptNote(argv[1]);
+if (note !== null) process.stdout.write(`${note}\n`);

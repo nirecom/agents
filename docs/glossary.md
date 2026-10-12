@@ -324,6 +324,18 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Definition**: The one table that decides, for every test language, which files are tests, how their headers are read and how they are launched. Test tools consult it instead of checking file extensions themselves.
 - **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md)
 
+### UNRUNNABLE
+
+- **Full name**: Unrunnable test state
+- **Definition**: The state of a test file that could not run because its runtime is missing from PATH or older than the registry's minimum version (exit 79 with a validated `unrunnable` marker), or because an explicitly named test path resolves to no regular file (`missing: test file`). It counts as neither pass, fail nor skip, and it keeps the `run_tests` step from completing until the runtime is installed or the user accepts the gap with the `RUN_TESTS_UNRUNNABLE_ACCEPTED` sentinel.
+- **Related**: [architecture/claude-code/test-result-contract.md](architecture/claude-code/test-result-contract.md)
+
+### case-level result line
+
+- **Full name**: Case-level result line
+- **Definition**: The run-all report line `<STATE> <file>::<case> target=<target>` that gives one case's result inside a test file, printed after that file's `PASS:` / `FAIL:` / `SKIP:` line in every test language.
+- **Related**: [architecture/claude-code/test-result-contract.md](architecture/claude-code/test-result-contract.md)
+
 ## Run tests recording
 
 ### dispatch settlement

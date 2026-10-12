@@ -1,13 +1,14 @@
 #!/bin/bash
 # tests/install/feature-1743-wf-init-symlink-static.sh
 # Tests: install/win/dotfileslink.ps1, install/linux/dotfileslink.sh, .gitignore
-# Tags: installer, symlink, wf-init, gitignore, dotfileslink, scope:issue-specific
+# Tags: installer, symlink, wf-init, gitignore, dotfileslink, scope:issue-specific, uv, pytest-prefetch
 #
 # Issue #1743: installer-created directory symlink alias /wf-init -> /workflow-init.
 # Both installers must create skills/wf-init as a symlink to skills/workflow-init
 # (CPR-ORTH symmetry), and the generated path must stay untracked (.gitignore).
 #
-# Layer: TL2 (static/grep over the real installer sources; no installer execution).
+# Layer: TL2 (static/grep over the real installer sources; the installer itself is never run —
+# only its pytest pre-fetch block is cut out and executed against a stand-in uv).
 set -u
 
 # TL3 gap (what this test does NOT catch):
@@ -70,6 +71,46 @@ case_end
 
 case_begin "ps-guard-detectors-reject-mutants" "install/win/dotfileslink.ps1"
 source "$SUITE_DIR/guard-mutants-ps.sh"
+case_end
+
+# Issue #2501: both installers pre-fetch pytest through uv (warning-only), after the launchers.
+# The PREFETCH_* variables below are read by the sourced case files (hence the SC2034 disables).
+source "$SUITE_DIR/prefetch-detectors.sh"
+
+case_begin "sh-pytest-prefetch-after-launchers-warning-only" "install/linux/dotfileslink.sh"
+# shellcheck disable=SC2034
+PREFETCH_FILE="$SH_FILE" PREFETCH_WARN="_prefetch_warn_only_sh"
+source "$SUITE_DIR/prefetch.sh"
+case_end
+
+case_begin "ps-pytest-prefetch-after-launchers-warning-only" "install/win/dotfileslink.ps1"
+# shellcheck disable=SC2034
+PREFETCH_FILE="$PS_FILE" PREFETCH_WARN="_prefetch_warn_only_ps"
+source "$SUITE_DIR/prefetch.sh"
+case_end
+
+case_begin "sh-pytest-prefetch-executed-with-failing-uv" "install/linux/dotfileslink.sh"
+# shellcheck disable=SC2034
+PREFETCH_FILE="$SH_FILE" PREFETCH_EXEC_KIND="sh"
+source "$SUITE_DIR/prefetch-exec.sh"
+case_end
+
+case_begin "ps-pytest-prefetch-executed-with-failing-uv" "install/win/dotfileslink.ps1"
+# shellcheck disable=SC2034
+PREFETCH_FILE="$PS_FILE" PREFETCH_EXEC_KIND="ps"
+source "$SUITE_DIR/prefetch-exec.sh"
+case_end
+
+case_begin "sh-prefetch-detectors-reject-mutants" "install/linux/dotfileslink.sh"
+# shellcheck disable=SC2034
+PREFETCH_MUT_KIND="sh"
+source "$SUITE_DIR/prefetch-mutants.sh"
+case_end
+
+case_begin "ps-prefetch-detectors-reject-mutants" "install/win/dotfileslink.ps1"
+# shellcheck disable=SC2034
+PREFETCH_MUT_KIND="ps"
+source "$SUITE_DIR/prefetch-mutants.sh"
 case_end
 
 echo "---"

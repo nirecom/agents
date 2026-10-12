@@ -53,7 +53,7 @@ CP-1. **Stage changes with `git add`** — explicitly add each file you intend t
 
 CP-2. **Dispatch commit/push/PR to the `commit-push` worker** per `skills/_shared/worker-dispatch.md`.
    Sibling pre-check (non-blocking): `bash "$AGENTS_MAIN_ROOT/bin/check-sibling-uncommitted.sh"` — resolves the repository toplevel itself; warns when a sibling worktree in `## SiblingWorktrees` has uncommitted/unpushed work.
-   Payload keys: `commit_message`, `branch`, `closes_issues`, `pr_body_template`, `wip_mode`, `enforce_worktree`, `script_checkout_root`, `artifact_dir` (= `PLANS_DIR`), `worktree_path` (= `git rev-parse --show-toplevel`), `session_id`.
+   Payload keys: `commit_message`, `branch`, `closes_issues`, `pr_body_template` (append the non-empty stdout of `node "$AGENTS_MAIN_ROOT/bin/workflow/run-tests-unrunnable-note" --session <session-id>` — one line naming UNRUNNABLE-accepted tests), `wip_mode`, `enforce_worktree`, `script_checkout_root`, `artifact_dir` (= `PLANS_DIR`), `worktree_path` (= `git rev-parse --show-toplevel`), `session_id`.
    Pass `closes_issues` as the `hooks/lib/parse-closes-issues.js` records verbatim (`{number, repo?}` objects) — never flatten them to bare numbers.
    Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before dispatching.
    Staging verification (CP-2) is skipped only when `wip_mode: true` — i.e. `--wip`, or a WORKFLOW_OFF / WORKTREE_OFF session marker (parity with the workflow-gate.js bypass). Record the outcome below with `node "$AGENTS_MAIN_ROOT/bin/workflow/handoff-append" --class D --step commit_push --key commit-push:blocked` (`--class E --key commit-push:pushed` for a landed push), per `skills/_shared/handoff-record.md`.
