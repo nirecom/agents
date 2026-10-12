@@ -731,3 +731,7 @@ Changes: Fixed: an inline SYSTEM_OPS_APPROVED=1 typed by the assistant can no lo
 ### FEATURE: PR #2626 (2026-10-12)
 Background: feat(#2513): split plan confirmation into presentation and approval t...
 Changes: Plans now appear as a tappable link in the main conversation, so you can open them from the Claude app on another device before approving.;Denying a plan confirmation (intent, outline or detail) now actually stops the workflow until the plan is approved.;Stop hooks no longer falsely block a turn whose final text had not yet been written to the transcript.
+
+### FEATURE: PR #2637 (2026-10-13)
+Background: feat(#2615): rework sweep-plans retention, approval gate, and flagless output (#2637)
+Changes: sweep-plans deletes only non-plan files by default; plan and user-requested files need --include-plan-and-user-requested and an explicit approval, and the scan is much faster on Windows.;Numeric age and timeout flags of the sweep scripts reject octal-looking and oversized values.
