@@ -139,6 +139,8 @@ fi
 # Outbound scan guard (#1591): title and body content are scanned as one stream.
 # shellcheck source=../lib/gh-outbound-guard.sh
 . "$(cd "$(dirname "$0")" && pwd)/../lib/gh-outbound-guard.sh"
+# shellcheck source=../lib/native-path.sh
+. "$(cd "$(dirname "$0")" && pwd)/../lib/native-path.sh"
 SCAN_TMP=$(mktemp)
 {
     printf '%s\n' "$TITLE"
@@ -168,7 +170,7 @@ GH_ARGS=(issue create --title "$TITLE" --label "type:task")
 if [ "$BODY_PROVIDED" -eq 1 ]; then
     GH_ARGS+=(--body "$BODY")
 else
-    GH_ARGS+=(--body-file "$BODY_FILE")
+    GH_ARGS+=(--body-file "$(native_path "$BODY_FILE")")
 fi
 for L in "${EXTRA_LABELS[@]:-}"; do
     [ -z "$L" ] && continue

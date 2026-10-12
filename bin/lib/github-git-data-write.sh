@@ -1,22 +1,12 @@
 #!/usr/bin/env bash
-# bin/lib/github-git-data-write.sh
-#
-# Writes multiple files atomically to GitHub via the Git Data API.
+# bin/lib/github-git-data-write.sh — write multiple files atomically via the Git Data API.
 # Produces one commit on the target branch containing every file passed in via
 # --file. Replaces local `git add/commit/push` for rotated docs/history.md +
 # CHANGELOG.md updates under the enforce-worktree Positive-Allow redesign (#672).
-#
-# Usage:
-#   bash bin/lib/github-git-data-write.sh \
-#       --owner <o> --repo <r> --branch <b> --message <m> \
-#       --file <repo-path>=<abs-local-path> \
-#       [--file <repo-path>=<abs-local-path> ...] \
-#       [--max-retries <n>]
-#
-# Exit codes:
-#   0   success
-#   1   non-recoverable error
-#   11  retry exhausted (concurrent ref update could not be resolved)
+# Usage: bash bin/lib/github-git-data-write.sh --owner <o> --repo <r> --branch <b> --message <m>
+#          --file <repo-path>=<abs-local-path> [--file <repo-path>=<abs-local-path> ...] [--max-retries <n>]
+# Exit codes: 0 success; 1 non-recoverable error;
+#   11 retry exhausted (concurrent ref update could not be resolved).
 set -euo pipefail
 
 OWNER=""
@@ -89,6 +79,8 @@ done
 # blob is created.
 # shellcheck source=gh-outbound-guard.sh
 . "$(dirname "$0")/gh-outbound-guard.sh"
+# shellcheck source=native-path.sh
+. "$(dirname "$0")/native-path.sh"
 for i in "${!LOCAL_PATHS[@]}"; do
     SCAN_TMP=$(mktemp)
     { printf 'commit-message: %s\n' "$MESSAGE"; cat "${LOCAL_PATHS[$i]}"; } > "$SCAN_TMP"
@@ -126,7 +118,7 @@ for lp in "${LOCAL_PATHS[@]}"; do
     trap 'rm -f "$BLOB_TMP"' EXIT
     printf '{"encoding":"base64","content":"%s"}' "$B64" > "$BLOB_TMP"
     BLOB_OUT=""
-    if ! BLOB_OUT=$(gh api -X POST "repos/$OWNER/$REPO/git/blobs" --input "$BLOB_TMP" --jq '.sha' 2>&1); then
+    if ! BLOB_OUT=$(gh api -X POST "repos/$OWNER/$REPO/git/blobs" --input "$(native_path "$BLOB_TMP")" --jq '.sha' 2>&1); then
         rm -f "$BLOB_TMP"
         trap - EXIT
         echo "github-git-data-write: blob create failed for $lp:" >&2
@@ -174,7 +166,7 @@ while (( attempt <= MAX_RETRIES )); do
     TREE_TMP=$(mktemp)
     printf '%s' "$TREE_JSON" > "$TREE_TMP"
     NEW_TREE_OUT=""
-    if ! NEW_TREE_OUT=$(gh api -X POST "repos/$OWNER/$REPO/git/trees" --input "$TREE_TMP" --jq '.sha' 2>&1); then
+    if ! NEW_TREE_OUT=$(gh api -X POST "repos/$OWNER/$REPO/git/trees" --input "$(native_path "$TREE_TMP")" --jq '.sha' 2>&1); then
         rm -f "$TREE_TMP"
         echo "github-git-data-write: tree create failed:" >&2
         printf '%s\n' "$NEW_TREE_OUT" >&2

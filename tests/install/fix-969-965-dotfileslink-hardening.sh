@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
 # tests/install/fix-969-965-dotfileslink-hardening.sh
 # Tests: install/linux/dotfileslink.sh, profile-snippet.sh
-# Tags: installer, dotfileslink, profile-snippet, scope:issue-specific, pwsh-not-required, bugfix-969, bugfix-965
-#
-# Covers:
-# - T3-1/T3-2: _link_one explicit error handling for rm -f / mv failures
-# - T4-1/T4-2/T4-3: profile-snippet.sh watchlist detects dangling symlinks and replaced files
-# - T5-2/T5-3: stale pending-comment removal (verified by static grep on the sibling test file)
-#
-# L3 gap (what this test does NOT catch):
-# - Real shell-startup interaction (profile-snippet.sh sourced under a live ~/.bashrc)
-# - Real Git Bash without SeCreateSymbolicLinkPrivilege on Windows
-# - Real interaction with assemble-settings.js (stubbed here)
-# Closest-to-action mitigation: install/uninstall smoke run on native Windows / Linux
-# after install.{ps1,sh} changes (manual user verification).
+# Tags: installer, dotfileslink, profile-snippet, scope:issue-specific, pwsh-not-required, bugfix-969, bugfix-965, bugfix-2221
+# Covers: T3 _link_one rm/mv error propagation; T4 watchlist repair triggers (dangling link,
+#   replaced file); T5 stale-comment greps; T6 (#2221) the CC-shell predicate of both gates.
+# TL3 gap (what this test does NOT catch):
+# - Real shell startup under a live ~/.bashrc; Git Bash without SeCreateSymbolicLinkPrivilege.
+# - The real assemble-settings.js (stubbed here).
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: installer.
 
 set -u
 
@@ -270,6 +265,64 @@ t_no_will_fail_until_comment_in_sibling() {
 }
 
 # -------------------------------------------------------------------
+# T6 (#2221): the CC-shell predicate shared by the repair and fetch gates
+# -------------------------------------------------------------------
+# A CC shell is CLAUDECODE non-empty AND stdout not a TTY. The symlink repair now
+# branches on it (WAIT_CC_RESULT=timeout; runtime check is TC-SPLIT9) as the fetch gate did.
+# TL3 gap: the TTY half (stdout on a real terminal -> not a CC shell) needs a pty.
+extract_cc_predicate() {
+    awk '
+        /^_agents_is_cc_shell\(\)/ { capture=1 }
+        capture { print }
+        capture && /\}[[:space:]]*$/ { exit }
+    ' "$PROFILE_SH"
+}
+
+# t6_pred_row <label> <CLAUDECODE value|UNSET> <expected rc> — stdout goes to a file (non-TTY).
+t6_pred_row() {
+    local label="$1" cc="$2" want="$3" drv="$SANDBOX/t61-pred.sh" rc
+    { extract_cc_predicate; printf '\n_agents_is_cc_shell\n'; } > "$drv"
+    if [ "$cc" = "UNSET" ]; then
+        run_with_timeout 10 env -u CLAUDECODE bash "$drv" >"$SANDBOX/t61.out" 2>&1
+    else
+        run_with_timeout 10 env CLAUDECODE="$cc" bash "$drv" >"$SANDBOX/t61.out" 2>&1
+    fi
+    rc=$?
+    if [ "$rc" -eq "$want" ]; then
+        pass "t_cc_predicate[$label] rc=$rc"
+    else
+        fail "t_cc_predicate[$label] (rc=$rc, want $want; extracted=[$(extract_cc_predicate)] out=[$(cat "$SANDBOX/t61.out")])"
+    fi
+}
+
+t_cc_predicate_table() {
+    if [ -z "$(extract_cc_predicate)" ]; then
+        fail "t_cc_predicate_table (_agents_is_cc_shell() not defined at column 0 in profile-snippet.sh)"
+        return
+    fi
+    t6_pred_row "CLAUDECODE=1, non-TTY" 1 0
+    t6_pred_row "CLAUDECODE empty, non-TTY" "" 1
+    t6_pred_row "CLAUDECODE unset, non-TTY" UNSET 1
+}
+
+# T6-2: both gates call the predicate, the inline condition survives only in its
+# definition, and the definition precedes the symlink watchlist that now uses it.
+t_cc_predicate_shared_by_both_gates() {
+    local name="t_cc_predicate_shared_by_both_gates"
+    local uses inline def_line loop_line
+    uses="$(grep -cE '^[[:space:]]*if[[:space:]]+_agents_is_cc_shell;[[:space:]]*then' "$PROFILE_SH")"
+    inline="$(grep -v '^_agents_is_cc_shell()' "$PROFILE_SH" | grep -cE 'CLAUDECODE:-\}"?[[:space:]]*\][[:space:]]*&&[[:space:]]*\[[[:space:]]*!?[[:space:]]*-t[[:space:]]+1')"
+    def_line="$(grep -nE '^_agents_is_cc_shell\(\)' "$PROFILE_SH" | head -1 | cut -d: -f1)"
+    loop_line="$(grep -nE '^for _f in .*\.claude/CLAUDE\.md' "$PROFILE_SH" | head -1 | cut -d: -f1)"
+    if [ "${uses:-0}" -ge 2 ] && [ "${inline:-0}" -eq 0 ] && [ -n "$def_line" ] && [ -n "$loop_line" ] \
+        && [ "$def_line" -lt "$loop_line" ]; then
+        pass "$name"
+    else
+        fail "$name (if-uses=${uses:-0} want>=2, inline-copies=${inline:-0} want 0, def_line=${def_line:-none} < loop_line=${loop_line:-none})"
+    fi
+}
+
+# -------------------------------------------------------------------
 # Run all tests
 # -------------------------------------------------------------------
 t_link_one_rm_failure_propagates
@@ -279,6 +332,8 @@ t_profile_sh_dangling_symlink_triggers_repair
 t_profile_sh_regular_file_triggers_repair
 t_no_stale_pending_comment_in_sibling
 t_no_will_fail_until_comment_in_sibling
+t_cc_predicate_table
+t_cc_predicate_shared_by_both_gates
 
 printf '\n--- Summary ---\n'
 printf 'Passed: %d\n' "$PASS"

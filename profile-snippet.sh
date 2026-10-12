@@ -31,6 +31,10 @@ if [ -x "$_agents_root/bin/get-config-var" ]; then
     unset _acw
 fi
 
+# A Claude Code-launched shell: CLAUDECODE set plus a non-TTY stdout (CC's Bash
+# tool always runs non-interactively). Shared by the symlink repair and fetch gates.
+_agents_is_cc_shell() { [ -n "${CLAUDECODE:-}" ] && [ ! -t 1 ]; }
+
 _agent_broken=0
 for _f in "$HOME/.claude/CLAUDE.md" "$HOME/.claude/skills" "$HOME/.claude/rules" "$HOME/.claude/agents"; do
     if [ -L "$_f" ]; then
@@ -49,7 +53,13 @@ if [ "$_agent_broken" = "1" ]; then
     # ~/.claude/shell-snapshots/*.sh, where any stray line corrupts the snapshot's
     # `export PATH='...'` (issue #2160).
     echo "$AGENTS_SYMLINK_REPAIR_MARKER" >&2
-    "$_agents_root/install/linux/dotfileslink.sh" >&2
+    # In a CC shell, never block snapshot capture waiting on Claude Code (#2221);
+    # the skipped wait is left to the settings-drift warning to surface.
+    if _agents_is_cc_shell; then
+        WAIT_CC_RESULT=timeout "$_agents_root/install/linux/dotfileslink.sh" >&2
+    else
+        "$_agents_root/install/linux/dotfileslink.sh" >&2
+    fi
 fi
 
 # Auto-pull Claude Code session sync repo (~/.claude/projects/) on startup.
@@ -58,7 +68,7 @@ fi
 # No effect when Windows-native Claude Code bridges into WSL2 (CLAUDECODE does not
 # propagate into that shell); WSL-native Claude Code is unaffected. Mirrors the
 # guard in dotfiles' .profile_common (issue #335).
-if [ -n "${CLAUDECODE:-}" ] && [ ! -t 1 ]; then
+if _agents_is_cc_shell; then
     :
 else
 _session_dir="$HOME/.claude/projects"
@@ -140,3 +150,4 @@ codes() {
 }
 
 unset _agents_root _agent_broken _f AGENTS_SESSION_SYNC_FETCH_MARKER AGENTS_SYMLINK_REPAIR_MARKER
+unset -f _agents_is_cc_shell

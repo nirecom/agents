@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # issue-body-append.sh — append an intent-revision note to an existing issue body (#1591)
-#
-# Usage:
-#   issue-body-append.sh --issue <N> [--repo <slug>] (--note <text> | --note-file <path>)
-#
+# Usage: issue-body-append.sh --issue <N> [--repo <slug>] (--note <text> | --note-file <path>)
 # Appends a `### Revision (<UTC ISO8601>)` entry inside a SINGLE
 # <!-- BEGIN intent-revisions --> ... <!-- END intent-revisions --> region
 # (created at the end of the body when absent). Prior revision entries and all
@@ -87,9 +84,11 @@ fi
 
 # shellcheck source=../lib/gh-outbound-guard.sh
 . "$(cd "$(dirname "$0")" && pwd)/../lib/gh-outbound-guard.sh"
+# shellcheck source=../lib/native-path.sh
+. "$(cd "$(dirname "$0")" && pwd)/../lib/native-path.sh"
 gh_outbound_guard "issue-body-append:#$ISSUE_NUMBER" < "$BODY_TMPFILE" || exit 1
 
-if ! MSYS_NO_PATHCONV=1 gh issue edit "$ISSUE_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --body-file "$BODY_TMPFILE" >/dev/null; then
+if ! MSYS_NO_PATHCONV=1 gh issue edit "$ISSUE_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --body-file "$(native_path "$BODY_TMPFILE")" >/dev/null; then
     echo "Error: gh issue edit ${ISSUE_NUMBER} failed" >&2
     exit 1
 fi

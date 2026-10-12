@@ -1,22 +1,11 @@
 #!/usr/bin/env bash
-# bin/lib/github-contents-write.sh
-#
-# Writes a single file to GitHub via the Contents API (PUT).
+# bin/lib/github-contents-write.sh — write a single file to GitHub via the Contents API (PUT).
 # Replaces local `git add/commit/push` for docs/history.md and CHANGELOG.md
 # under the enforce-worktree Positive-Allow redesign (#672).
-#
-# Usage:
-#   bash bin/lib/github-contents-write.sh \
-#       --owner <o> --repo <r> --path <repo-path> \
-#       --file <abs-local-path> \
-#       --message <commit-msg> \
-#       [--branch <b>] [--max-retries <n>]
-#
-# Exit codes:
-#   0   success
-#   1   non-recoverable error (bad request, missing auth, etc.)
-#   11  retry exhausted (concurrent SHA race could not be resolved)
-#
+# Usage: bash bin/lib/github-contents-write.sh --owner <o> --repo <r> --path <repo-path>
+#          --file <abs-local-path> --message <commit-msg> [--branch <b>] [--max-retries <n>]
+# Exit codes: 0 success; 1 non-recoverable error (bad request, missing auth, etc.);
+#   11 retry exhausted (concurrent SHA race could not be resolved).
 # Retries on `does not match` / HTTP 409 / 422 (stale base SHA) by re-fetching
 # the current SHA and re-PUTing. Other failures propagate verbatim.
 set -euo pipefail
@@ -70,6 +59,8 @@ fi
 # scan is enough — the content does not change across retries.
 # shellcheck source=gh-outbound-guard.sh
 . "$(dirname "$0")/gh-outbound-guard.sh"
+# shellcheck source=native-path.sh
+. "$(dirname "$0")/native-path.sh"
 SCAN_TMP=$(mktemp)
 { printf 'commit-message: %s\n' "$MESSAGE"; cat "$FILE"; } > "$SCAN_TMP"
 gh_outbound_guard "$FILE_PATH" < "$SCAN_TMP" || { rm -f "$SCAN_TMP"; exit 1; }
@@ -133,7 +124,7 @@ while (( attempt <= MAX_RETRIES )); do
 
     PUT_OUT=""
     PUT_RC=0
-    PUT_OUT=$(gh api -X PUT "repos/$OWNER/$REPO/contents/$FILE_PATH" --input "$PUT_TMP" 2>&1) || PUT_RC=$?
+    PUT_OUT=$(gh api -X PUT "repos/$OWNER/$REPO/contents/$FILE_PATH" --input "$(native_path "$PUT_TMP")" 2>&1) || PUT_RC=$?
     rm -f "$PUT_TMP"
     trap 'rm -f "$B64_TMP"' EXIT
 

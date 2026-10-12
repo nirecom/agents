@@ -3,7 +3,6 @@
 # any archive files in <TARGET_CHECKOUT_ROOT>/docs/history/*.md (excluding index.md).
 # Each entry is created with type:task (or type:incident) + status:migrated
 # labels, then immediately closed (historical record — not an active task).
-#
 # Usage:
 #   bin/github-issues/migration/migrate-history.sh <repo_dir> [--dry-run] [--canary N]
 #     --dry-run : print titles/labels without calling gh
@@ -15,6 +14,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/state.sh"
+# shellcheck source=../../lib/native-path.sh
+source "$SCRIPT_DIR/../../lib/native-path.sh"
 
 TARGET_CHECKOUT_ROOT="${1:?usage: migrate-history.sh <repo_dir> [--dry-run] [--canary N]}"
 shift
@@ -156,7 +157,7 @@ for title_file in $(find "$TMPDIR_ENTRIES" -name "*.title" | sort); do
     --title "$title" \
     --label "$label" \
     --label "status:migrated" \
-    --body-file "$body_file")
+    --body-file "$(native_path "$body_file")")
   issue_num=$(echo "$issue_url" | sed 's|.*/issues/||' | grep -oE '^[0-9]+')
   if [ -z "$issue_num" ]; then
     echo "ERROR: could not parse issue number from: $issue_url" >&2

@@ -182,6 +182,7 @@ EOF
     cat > "$sb/agents/install/linux/dotfileslink.sh" <<'EOF'
 #!/bin/bash
 printf 'Symlinks created in ~/.claude/\n'
+printf '%s\n' "${WAIT_CC_RESULT-UNSET}" > "$HOME/wait-cc.env"
 exit 0
 EOF
     chmod +x "$sb/agents/install/linux/dotfileslink.sh"

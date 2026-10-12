@@ -41,6 +41,8 @@ trap 'rm -f "$BODY_TMPFILE" "$NOTE_TMPFILE"' EXIT
 # composed body (Step 2).
 # shellcheck source=../lib/gh-outbound-guard.sh
 . "$(dirname "$0")/../lib/gh-outbound-guard.sh"
+# shellcheck source=../lib/native-path.sh
+. "$(dirname "$0")/../lib/native-path.sh"
 
 # --- note sanitization ------------------------------------------------------
 # Only the FIRST physical line survives. Joining the lines instead would keep every
@@ -136,7 +138,7 @@ printf '%s' "$NEW_BODY" > "$BODY_TMPFILE"
 # below: this is a security boundary, not a best-effort cosmetic update.
 gh_outbound_guard "reopen:#$ISSUE_NUMBER" < "$BODY_TMPFILE" || exit 1
 
-if ! ISSUE_CLOSE_SKILL=1 gh issue edit "$ISSUE_NUMBER" --body-file "$BODY_TMPFILE" >/dev/null 2>&1; then
+if ! ISSUE_CLOSE_SKILL=1 gh issue edit "$ISSUE_NUMBER" --body-file "$(native_path "$BODY_TMPFILE")" >/dev/null 2>&1; then
     echo "WARN: body banner update failed for #${ISSUE_NUMBER}" >&2
 fi
 

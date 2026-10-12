@@ -170,6 +170,24 @@ now_epoch="$(date +%s)"
 
 shopt -s nullglob
 
+# One classifier run over the whole dir refines only the reason label; any
+# failure (no node, no CLI, a crash) leaves every label at missing-dir.
+classified=""
+if command -v node >/dev/null 2>&1 && [[ -f "$SCRIPT_DIR/shell-snapshot-path-classify.js" ]]; then
+  sh_names=( *.sh )
+  if [[ ${#sh_names[@]} -gt 0 ]]; then
+    classified="$(node "$SCRIPT_DIR/shell-snapshot-path-classify.js" -- "${sh_names[@]}" 2>/dev/null)" || classified=""
+  fi
+fi
+
+classified_reason() {
+  local label
+  label="$(SNAP_NAME="$1" awk -F'\t' '$2 == ENVIRON["SNAP_NAME"] { print $1 }' <<<"$classified" 2>/dev/null)" || label=""
+  case "${label%%$'\n'*}" in
+    windows-form|windows-unrepairable) printf '%s' "${label%%$'\n'*}" ;;
+  esac
+}
+
 for f in "$SNAPSHOTS_DIR"/*.sh; do
   scanned=$(( scanned + 1 ))
   # A directory can match the glob and a binary blob defeats a line read; neither
@@ -219,7 +237,12 @@ for f in "$SNAPSHOTS_DIR"/*.sh; do
   fi
 
   reason="missing-dir"
-  if [[ "$known" == "1" ]]; then reason="known-marker"; fi
+  if [[ "$known" == "1" ]]; then
+    reason="known-marker"
+  else
+    refined="$(classified_reason "${f##*/}")" || refined=""
+    if [[ -n "$refined" ]]; then reason="$refined"; fi
+  fi
   candidates=$(( candidates + 1 ))
 
   if [[ "$DRY_RUN" == "1" ]]; then

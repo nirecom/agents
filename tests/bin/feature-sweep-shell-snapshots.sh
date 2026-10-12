@@ -379,7 +379,7 @@ T6_second_run_is_a_no_op() {
 }
 
 # T7-T9 (age/flag guards), T12-T14 (exact age boundary + I/O failures), T15-T16
-# (CLI and PATH classifier tables), T17-T19 (adversarial inputs) and T20 (marker
+# and T22 (CLI and PATH classifier tables, #2221 reasons), T17-T19 (adversarial inputs) and T20 (marker
 # SSOT mutation) live in sibling part files — rules/coding/file-split.md
 # Pattern A. Each self-invokes its cases at source time.
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-sweep-shell-snapshots/age-and-flag-guards.sh"
